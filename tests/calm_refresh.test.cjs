@@ -160,10 +160,10 @@ test('a refresh leaves Today, an open site and Supply standing as they were', as
   assert.deepEqual(depot.now, still);
   assert.deepEqual(depot.later, still);
 
-  await page.evaluate(() => { showPage('supply'); showSub('supply', 'checks'); });
+  await page.evaluate(() => { showPage('supply'); showSub('supply', 'shops'); });
   await settle(page);
-  const supply = await refresh(page, '#stockHead > *');
-  assert.ok(supply.rebuilt, 'the refresh rebuilt the stock checks');
+  const supply = await refresh(page, '#secShops > *');
+  assert.ok(supply.rebuilt, 'the refresh rebuilt the Shops tab');
   assert.deepEqual(supply.now, still);
   assert.deepEqual(supply.later, still);
 });
@@ -189,9 +189,9 @@ test('going somewhere new and opening a site still arrive', async t => {
   await settle(page);
   await deliver(page);
   // A page not visited yet: its sections slide in.
-  await page.evaluate(() => { showPage('supply'); showSub('supply', 'orders'); });
+  await page.evaluate(() => { showPage('supply'); showSub('supply', 'warehouses'); });
   const supply = await motion(page);
-  assert.ok(supply.moving.some(m => /^opacity on section#secLogistics\.sec\.rv\.in$/.test(m)), supply.moving.join('\n'));
+  assert.ok(supply.moving.some(m => /^opacity on section#secWarehouses\.sec\.rv\.sb-tab\.in$/.test(m)), supply.moving.join('\n'));
   await settle(page);
   // A site opened: its head and blocks arrive, staggered.
   await page.evaluate(key => openSite(key, false), GIFTS);
@@ -218,9 +218,9 @@ async function asRedrawn(page) {
 
 test('a refresh on Today draws Today; every other page waits for its visit and opens on the new numbers', async t => {
   const page = await board(t);
-  // Every view seen once, Company last on Payroll and Supply on Checks.
+  // Every view seen once, Company last on Payroll and Supply on Shops.
   await page.evaluate(() => {
-    for (const [p, v] of [['growth', 'market'], ['supply', 'orders'], ['supply', 'checks'], ['company', 'results'], ['company', 'payroll']]) {
+    for (const [p, v] of [['growth', 'market'], ['supply', 'warehouses'], ['supply', 'shops'], ['company', 'results'], ['company', 'payroll']]) {
       showPage(p); showSub(p, v);
     }
   });
@@ -229,7 +229,7 @@ test('a refresh on Today draws Today; every other page waits for its visit and o
   // Blocks of each page as they stand now, to tell a redraw from none.
   const mark = () => page.evaluate(() => {
     window.calmOld = {kpis: '#kpis > *', payroll: '#secPayroll > *', portfolio: '#portfolio tbody',
-      stock: '#stockHead > *', market: '#market > *'};
+      stock: '#secShops > *', market: '#market > *'};
     for (const k in calmOld) calmOld[k] = document.querySelector(calmOld[k]);
   });
   const standing = () => page.evaluate(() =>
@@ -269,7 +269,7 @@ test('a refresh on Today draws Today; every other page waits for its visit and o
   assert.equal((await standing()).stock, true);
   await page.goBack();
   await page.waitForFunction(() => page === 'supply');
-  assert.equal((await standing()).stock, false, 'the checks were drawn on the way back');
+  assert.equal((await standing()).stock, false, 'the Shops tab was drawn on the way back');
   [shown, redrawn] = await asRedrawn(page);
   assert.equal(shown, redrawn);
 

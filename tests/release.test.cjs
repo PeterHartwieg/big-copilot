@@ -64,8 +64,8 @@ test('release preserves the redesigned map, interactive ball and dismissible bad
     assert.equal(await page.locator('[data-new-feature="wiki"]:not([hidden])').count(),0);
     await page.evaluate(() => {
       D.businesses = [{name:'Release Gifts',typeSlug:'ba:businesstype_giftshop',status:'retail',
-        neighbourhood:'Midtown',lines:[{slug:'ba:itemname_cheapgift',configuredPrice:30.27}]}];
-      D.market = {rows:[{slug:'ba:itemname_cheapgift',cells:[{hood:'Midtown',marketPrice:25.63}]}]};
+        neighbourhood:'ba:neighborhood_midtown',lines:[{slug:'ba:itemname_cheapgift',configuredPrice:30.27}]}];
+      D.market = {rows:[{slug:'ba:itemname_cheapgift',cells:[{hood:'ba:neighborhood_midtown',marketPrice:25.63}]}]};
       window.BigCopilotWiki.route('wiki/businesstypes-giftshop');
     });
     await page.getByRole('heading', {name:'Prices in your save',exact:true}).waitFor();

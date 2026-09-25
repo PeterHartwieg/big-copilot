@@ -36,18 +36,20 @@ async function factory(page) {
     const off = 'Mon 12-24; Tue 12-24; Wed 12-24; Thu 12-24; Fri 12-24; Sat 12-24; Sun 12-24';
     const line = {item: 'Clothing (Classic Expensive Male)', slug: 'clothing', basis: 'table',
       workstation: 'Clothing Workstation', slots: [7, 8, 9, 10], machines: 4, rate: 30,
-      hoursWeek: 336, fullWeek: 672, gaps: [7, 8, 9, 10].map(slot => ({slot, off})),
+      hoursWeek: 336, fullWeek: 672, gaps: [7, 8, 9, 10].map(slot => ({slot, hours: 84, off})),
       makes: 2880, atRoster: 1440, ships: 1440, stock: 12345, toCity: 1234, toPier: 500};
-    D = {meta: {character: 'layout-fixture'},
-      businesses: [{name: 'Z-Clothing Factory', type: 'Factory', lines: []}],
-      supply: {factories: {sites: [{s: 0, lines: [line], unnamed: [], needs: []}], machines: 4, unnamed: 0}}};
-    stockView = 'lines';
-    drawStock();
+    D = {meta: {character: 'layout-fixture', locale: true},
+      businesses: [{key: 'f0', name: 'Z-Clothing Factory', type: 'Factory', status: 'support', lines: []}],
+      supply: {shops: [], idle: [], imports: [], facts: {}, graph: {nodes: [], links: []},
+        factories: {sites: [{s: 0, machines: 4, lines: [line], unnamed: [], needs: []}], machines: 4, unnamed: 0}}};
+    sbWhich = 'all'; supplyAuto = false; sub.supply = 'factories';
     document.querySelectorAll('.page').forEach(el => { el.hidden = el.id !== 'pageSupply'; });
-    document.querySelectorAll('#pageSupply section').forEach(el => { el.hidden = el.id !== 'secStock'; });
-    document.querySelector('#secStock').classList.add('measured');
+    document.querySelectorAll('#pageSupply section').forEach(el => { el.hidden = el.id !== 'secFactories'; });
+    document.querySelector('#secFactories').classList.add('measured');
+    drawSupplyStrip(); drawFactoriesTab();
   });
 }
+const LINES = '#secFactories [data-sb-table="factory-lines"] table';
 
 test('table lines show their source and unresolved recipes offer a picker', async () => {
   const page = await board(1280);
@@ -59,19 +61,19 @@ test('table lines show their source and unresolved recipes offer a picker', asyn
         slots: [11], machines: 1, idle: false, hoursWeek: 0, fullWeek: 168, gaps: [],
         candidates: [{slug: 'clothing', item: 'Clothing (Classic Expensive Male)'}]}];
       f.unnamed = 1;
-      drawStock();
+      sbStamp++; drawSupplyStrip(); drawFactoriesTab();
     });
     assert.equal(await page.locator('.linepick').count(), 1);
     assert.equal(await page.locator('.linepick').getAttribute('data-rid'), 'future-id');
-    assert.match(await page.locator('#secStock').innerText(), /Recipe table/);
-    assert.doesNotMatch(await page.locator('#secStock').innerText(), /paired|earlier build|named from what they eat/);
+    assert.match(await page.locator('#secFactories').innerText(), /Recipe table/);
+    assert.doesNotMatch(await page.locator('#secFactories').innerText(), /paired|earlier build|named from what they eat/);
     assert.equal(await page.locator('.unname').count(), 0);
   } finally {
     await page.close();
   }
 });
 
-test('feed and top-up labels count all machines making the same product', async () => {
+test("a factory input's label counts all machines making the same product", async () => {
   const page = await board(1280);
   try {
     await factory(page);
@@ -80,17 +82,15 @@ test('feed and top-up labels count all machines making the same product', async 
       site.lines = [{...site.lines[0], machines: 2},
         {...site.lines[0], machines: 3, basis: 'you'}];
       D.supply.factories.machines = 5;
-      site.needs = [{item: 'Fabric', slug: 'fabric', lines: [site.lines[0].item],
+      site.needs = [{item: 'Fabric', slug: 'fabric', lines: [site.lines[0].item], lineSlugs: [site.lines[0].slug],
         perDay: 1200, perWeek: 8400, target: 0, from: null, known: false,
         importWeekly: null, depotNeed: 0, depotStock: 0, status: 'noplan', level: 'critical'}];
       // Python's verdict on the input: on no plan, with the top-up to set.
       D.supply.facts = {[site.s]: {fabric: {st: 'noplan', why: null, lvl: 'critical', role: 'input', cad: 'daily',
         use: 1200, need: 1380, have: 0, setTo: 1380, parts: {lines: 8400, sites: 0, route: 0}}}};
-      stockView = 'feed';
-      drawStock();
-      drawLogistics();
+      sbStamp++; drawSupplyStrip(); drawFactoriesTab();
     });
-    for (const selector of ['#stock', '#topupPlan']) {
+    for (const selector of ['#secFactories [data-sb-table="factory-inputs"]']) {
       assert.match(await page.locator(selector).textContent(), /Clothing \(Classic Expensive Male\) ×5/);
       assert.doesNotMatch(await page.locator(selector).textContent(), /×[23]/);
     }
@@ -103,7 +103,7 @@ test('factory metrics fit at desktop widths without crushing line names', async 
     try {
       await factory(page);
       const sizes = await page.evaluate(() => {
-        const table = document.querySelector('#stock');
+        const table = document.querySelector('#secFactories [data-sb-table="factory-lines"] table');
         return {viewport: innerWidth, wrap: document.querySelector('.wrap').clientWidth,
           table: table.getBoundingClientRect().width, container: table.parentElement.clientWidth,
           line: table.rows[1].cells[1].getBoundingClientRect().width,
@@ -146,49 +146,25 @@ test('planner controls wrap without squeezing the title or overflowing the page'
   }
 });
 
-test('off-hours disclosure works by keyboard and keeps every machine without widening the table', async () => {
+test('each machine says its rostered hours and the hours nobody is on it, escaped', async () => {
   const page = await board(1280);
   try {
     await factory(page);
-    const summary = page.locator('#stock .staff-hours summary');
-    await summary.focus();
-    await page.keyboard.press('Enter');
-    assert.equal(await page.locator('#stock details').getAttribute('open'), '');
-    const details = await page.locator('#stock .staff-gaps').innerText();
-    assert.match(details, /Machines #7, #8, #9, #10 off/);
-    assert.equal((details.match(/Mon 12-24/g) || []).length, 1);
-    const fits = await page.evaluate(() => {
-      const table = document.querySelector('#stock');
-      return table.getBoundingClientRect().width <= table.parentElement.clientWidth + 1;
+    const reads = await page.$$eval(`${LINES} .sp-m`, ms => ms.map(m => m.dataset.read));
+    assert.equal(reads.length, 4);
+    assert.match(reads[0], /^Machine 7 · <b>84 of 168 h<\/b> rostered: nobody on it Mon 12-24/);
+    await page.evaluate(() => {
+      D.supply.factories.sites[0].lines[0].gaps[0].off = '<img src=x onerror="alert(1)">';
+      sbStamp++; drawSupplyStrip(); drawFactoriesTab();
     });
+    const read = await page.$eval(`${LINES} .sp-m`, m => m.dataset.read);
+    assert.match(read, /nobody on it &lt;img/);
+    assert.doesNotMatch(read, /<img/);
+    const fits = await page.evaluate(sel => {
+      const table = document.querySelector(sel);
+      return table.getBoundingClientRect().width <= table.parentElement.clientWidth + 1;
+    }, LINES);
     assert.ok(fits);
-    await page.keyboard.press('Space');
-    assert.equal(await page.locator('#stock details').getAttribute('open'), null);
-  } finally { await page.close(); }
-});
-
-test('staffing handles full coverage, missing details, distinct schedules, and escaped text', async () => {
-  const page = await board(1280);
-  try {
-    const rendered = await page.evaluate(() => ({
-      none: staffCell({}),
-      full: staffCell({fullWeek: 168, hoursWeek: 168}),
-      missing: staffCell({fullWeek: 168, hoursWeek: 84}),
-      mixed: staffCell({fullWeek: 168 * 5, hoursWeek: 400, gaps: [
-        {slot: 1, off: 'Mon-Sun 12-24'}, {slot: 2, off: 'Tue 14-24'},
-        {slot: 3, off: 'Mon-Sun 12-24'}, {slot: 4, off: 'Wed 8-24'},
-        {slot: 5, off: '<img src=x onerror="alert(1)">'},
-      ]}),
-    }));
-    assert.equal(rendered.none, '—');
-    assert.match(rendered.full, /100%/);
-    assert.doesNotMatch(rendered.full, /details/);
-    assert.match(rendered.missing, /50%/);
-    assert.match(rendered.mixed, /Machines #1, #3 off Mon-Sun 12-24/);
-    assert.match(rendered.mixed, /Machine #2 off Tue 14-24/);
-    assert.match(rendered.mixed, /Machine #4 off Wed 8-24/);
-    assert.match(rendered.mixed, /Machine #5 off &lt;img/);
-    assert.doesNotMatch(rendered.mixed, /<img/);
   } finally { await page.close(); }
 });
 
@@ -197,7 +173,7 @@ test('narrow screens can scroll the factory table inside its own container', asy
   try {
     await factory(page);
     const sizes = await page.evaluate(() => {
-      const container = document.querySelector('#stock').parentElement;
+      const container = document.querySelector('#secFactories [data-sb-table="factory-lines"] table').parentElement;
       container.scrollLeft = 10000;
       return {width: container.clientWidth, scroll: container.scrollLeft, right: container.getBoundingClientRect().right};
     });

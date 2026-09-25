@@ -145,7 +145,7 @@
     {
      "slug": "bags",
      "item": "Paper Bag",
-     "units": 90,
+     "units": 3000,
      "rate": 90,
      "price": 0
     }
@@ -169,6 +169,13 @@
      "units": 60,
      "rate": 30,
      "price": 9
+    },
+    {
+     "slug": "bags",
+     "item": "Paper Bag",
+     "units": 1500,
+     "rate": 20,
+     "price": 0
     }
    ],
    "opened": 26,
@@ -190,10 +197,36 @@
      "units": 30,
      "rate": 53,
      "price": 3
+    },
+    {
+     "slug": "bags",
+     "item": "Paper Bag",
+     "units": 1400,
+     "rate": 20,
+     "price": 0
     }
    ],
    "opened": 5,
    "tradeDays": 24
+  },
+  {
+   "key": "dist#6",
+   "name": "[CD] Cake Distr.",
+   "code": "CD",
+   "neighbourhood": "",
+   "type": "Warehouse",
+   "typeSlug": "warehouse",
+   "status": "support",
+   "address": "6 Canal Street",
+   "lines": [
+    {
+     "slug": "cake",
+     "item": "Cake",
+     "units": 180,
+     "rate": 0,
+     "price": 0
+    }
+   ]
   }
  ],
  "supply": {
@@ -468,15 +501,15 @@
       {
        "item": "Paper Bag",
        "slug": "bags",
-       "st": "covered",
-       "stock": 90,
-       "need": 100,
-       "cycleNeed": 100,
-       "provision": 150,
+       "st": "idle",
+       "stock": 3000,
+       "need": 99,
+       "cycleNeed": 99,
+       "provision": 3000,
        "cadence": "daily",
        "made": false,
        "keeps": false,
-       "why": null,
+       "why": "targetHigh",
        "fit": "ok",
        "short": false,
        "low": false
@@ -512,6 +545,22 @@
        "fit": "ok",
        "short": false,
        "low": false
+      },
+      {
+       "item": "Paper Bag",
+       "slug": "bags",
+       "st": "idle",
+       "stock": 1500,
+       "need": 22,
+       "cycleNeed": 22,
+       "provision": 1500,
+       "cadence": "daily",
+       "made": false,
+       "keeps": false,
+       "why": "targetHigh",
+       "fit": "ok",
+       "short": false,
+       "low": false
       }
      ],
      "site": 3,
@@ -544,10 +593,58 @@
        "fit": "short",
        "short": true,
        "low": false
+      },
+      {
+       "item": "Paper Bag",
+       "slug": "bags",
+       "st": "idle",
+       "stock": 1400,
+       "need": 22,
+       "cycleNeed": 22,
+       "provision": 1400,
+       "cadence": "daily",
+       "made": false,
+       "keeps": false,
+       "why": "targetHigh",
+       "fit": "ok",
+       "short": false,
+       "low": false
       }
      ],
      "site": 4,
      "stock": 30,
+     "short": 1,
+     "tight": 0,
+     "low": 0
+    },
+    {
+     "id": "dist#6",
+     "name": "[CD] Cake Distr.",
+     "kind": "depot",
+     "col": 2,
+     "tag": "CD",
+     "hood": "",
+     "sub": "Warehouse",
+     "items": [
+      {
+       "item": "Cake",
+       "slug": "cake",
+       "st": "short",
+       "stock": 180,
+       "need": 250,
+       "cycleNeed": 250,
+       "provision": 200,
+       "cadence": "daily",
+       "made": false,
+       "keeps": false,
+       "why": "target",
+       "fit": "short",
+       "short": true,
+       "low": false
+      }
+     ],
+     "site": 5,
+     "stock": 180,
      "short": 1,
      "tight": 0,
      "low": 0
@@ -598,6 +695,15 @@
      "cadence": "daily",
      "paused": false,
      "arrives": null
+    },
+    {
+     "from": "factory#2",
+     "to": "dist#6",
+     "perDay": 200,
+     "items": 1,
+     "cadence": "daily",
+     "paused": false,
+     "arrives": null
     }
    ]
   },
@@ -638,11 +744,11 @@
     "item": "Paper Bag",
     "slug": "bags",
     "sold": 90,
-    "peakSold": 100,
+    "peakSold": 99,
     "peakDay": "Saturday",
-    "target": 150,
-    "pressure": 67,
-    "stock": 90,
+    "target": 3000,
+    "pressure": 3,
+    "stock": 3000,
     "from": 0,
     "level": "ok"
    },
@@ -671,6 +777,32 @@
     "stock": 30,
     "from": null,
     "level": "critical"
+   },
+   {
+    "s": 3,
+    "item": "Paper Bag",
+    "slug": "bags",
+    "sold": 20,
+    "peakSold": 22,
+    "peakDay": "Saturday",
+    "target": 1500,
+    "pressure": 1,
+    "stock": 1500,
+    "from": 0,
+    "level": "ok"
+   },
+   {
+    "s": 4,
+    "item": "Paper Bag",
+    "slug": "bags",
+    "sold": 20,
+    "peakSold": 22,
+    "peakDay": "Saturday",
+    "target": 1400,
+    "pressure": 2,
+    "stock": 1400,
+    "from": 0,
+    "level": "ok"
    }
   ],
   "imports": [
@@ -1030,6 +1162,60 @@
      "cap",
      "dem"
     ]
+   },
+   {
+    "s": 3,
+    "item": "Paper Bag",
+    "slug": "bags",
+    "stock": 1500,
+    "perWeek": 140,
+    "weeks": 10.7,
+    "target": 1500,
+    "price": 0,
+    "value": 0,
+    "dead": false,
+    "level": "warn",
+    "why": "targetHigh",
+    "modes": [
+     "cap",
+     "dem"
+    ]
+   },
+   {
+    "s": 4,
+    "item": "Paper Bag",
+    "slug": "bags",
+    "stock": 1400,
+    "perWeek": 140,
+    "weeks": 10.0,
+    "target": 1400,
+    "price": 0,
+    "value": 0,
+    "dead": false,
+    "level": "warn",
+    "why": "targetHigh",
+    "modes": [
+     "cap",
+     "dem"
+    ]
+   },
+   {
+    "s": 2,
+    "item": "Paper Bag",
+    "slug": "bags",
+    "stock": 3000,
+    "perWeek": 630,
+    "weeks": 4.8,
+    "target": 3000,
+    "price": 0,
+    "value": 0,
+    "dead": false,
+    "level": "warn",
+    "why": "targetHigh",
+    "modes": [
+     "cap",
+     "dem"
+    ]
    }
   ],
   "idleWeeks": 4.0,
@@ -1058,12 +1244,39 @@
        "toPier": 0,
        "basis": "table",
        "piling": false,
-       "atRoster": 480,
-       "hoursWeek": 336,
+       "atRoster": 240,
+       "hoursWeek": 168,
        "fullWeek": 336,
-       "gaps": [],
+       "gaps": [
+        {
+         "slot": 1,
+         "hours": 84,
+         "off": "12:00-24:00"
+        },
+        {
+         "slot": 2,
+         "hours": 84,
+         "off": "12:00-24:00"
+        }
+       ],
        "limit": 600,
-       "limitHeld": true
+       "limitHeld": true,
+       "hoursNow": 12,
+       "needHours": {
+        "cap": 24,
+        "dem": 10
+       },
+       "demBasis": "sales",
+       "running": 2,
+       "status": "short",
+       "why": "hours",
+       "level": "warn",
+       "dem": {
+        "status": "covered",
+        "why": null,
+        "level": "ok",
+        "lower": 10
+       }
       },
       {
        "rid": "r-bread",
@@ -1089,7 +1302,22 @@
        "fullWeek": 336,
        "gaps": [],
        "limit": null,
-       "limitHeld": false
+       "limitHeld": false,
+       "hoursNow": 24,
+       "needHours": {
+        "cap": 24,
+        "dem": 24
+       },
+       "demBasis": "none",
+       "running": 2,
+       "status": "covered",
+       "why": null,
+       "level": "ok",
+       "dem": {
+        "status": "covered",
+        "why": null,
+        "level": "ok"
+       }
       }
      ],
      "unnamed": [],
@@ -1102,6 +1330,10 @@
        "lines": [
         "Cake",
         "Bread"
+       ],
+       "lineSlugs": [
+        "cake",
+        "bread"
        ],
        "waitingOn": [],
        "target": 1400,
@@ -1159,6 +1391,9 @@
        "lines": [
         "Cake"
        ],
+       "lineSlugs": [
+        "cake"
+       ],
        "waitingOn": [],
        "target": 500,
        "from": 0,
@@ -1207,6 +1442,9 @@
        "perWeek": 2100,
        "lines": [
         "Cake"
+       ],
+       "lineSlugs": [
+        "cake"
        ],
        "waitingOn": [],
        "target": 300,
@@ -1272,7 +1510,8 @@
       "flour": 1400,
       "sugar": 300,
       "milk": 20
-     }
+     },
+     "running": 4
     }
    ],
    "machines": 4,
@@ -1769,16 +2008,17 @@
      "imp": false
     },
     "bags": {
-     "st": "covered",
-     "why": null,
-     "lvl": "ok",
+     "st": "idle",
+     "why": "targetHigh",
+     "lvl": "warn",
      "role": "shelf",
      "cad": "daily",
-     "use": 100,
-     "need": 115,
-     "have": 150,
-     "setTo": null,
-     "imp": false
+     "use": 99,
+     "need": 114,
+     "have": 3000,
+     "setTo": 120,
+     "imp": false,
+     "lowers": true
     }
    },
    "3": {
@@ -1793,6 +2033,19 @@
      "have": 100,
      "setTo": null,
      "imp": false
+    },
+    "bags": {
+     "st": "idle",
+     "why": "targetHigh",
+     "lvl": "warn",
+     "role": "shelf",
+     "cad": "daily",
+     "use": 22,
+     "need": 26,
+     "have": 1500,
+     "setTo": 30,
+     "imp": false,
+     "lowers": true
     }
    },
    "4": {
@@ -1808,6 +2061,34 @@
      "setTo": 70,
      "imp": false,
      "via": 0
+    },
+    "bags": {
+     "st": "idle",
+     "why": "targetHigh",
+     "lvl": "warn",
+     "role": "shelf",
+     "cad": "daily",
+     "use": 22,
+     "need": 26,
+     "have": 1400,
+     "setTo": 30,
+     "imp": false,
+     "lowers": true
+    }
+   },
+   "5": {
+    "cake": {
+     "st": "short",
+     "why": "target",
+     "lvl": "critical",
+     "role": "depot",
+     "cad": "daily",
+     "use": 250,
+     "need": 288,
+     "have": 200,
+     "setTo": 290,
+     "imp": false,
+     "from": 1
     }
    }
   }
@@ -1922,6 +2203,20 @@
    "ev": {
     "slug": "bags"
    }
+  },
+  {
+   "level": "warn",
+   "site": "[FB] Bakery Factory",
+   "group": "staff",
+   "text": "Cake runs 12 of the 24 hours a day it is sized for; post workers for the other 12",
+   "detail": null,
+   "worth": null,
+   "unit": "",
+   "id": "r13hours",
+   "siteKey": "factory#2",
+   "ev": {
+    "slug": "cake"
+   }
   }
  ],
  "minor": {
@@ -1995,5 +2290,121 @@
    "worth": 0,
    "rows": []
   }
+ },
+ "factoryStaffing": {
+  "cap": [
+   {
+    "key": "factory#2",
+    "s": 1,
+    "name": "[FB] Bakery Factory",
+    "lines": [
+     {
+      "slug": "cake",
+      "item": "Cake",
+      "machines": 2,
+      "hoursNow": 12,
+      "hours": 24,
+      "from": 0,
+      "to": 24,
+      "cuts": [
+       [
+        0,
+        12
+       ],
+       [
+        12,
+        24
+       ]
+      ]
+     },
+     {
+      "slug": "bread",
+      "item": "Bread",
+      "machines": 2,
+      "hoursNow": 24,
+      "hours": 24,
+      "from": 0,
+      "to": 24,
+      "cuts": [
+       [
+        0,
+        12
+       ],
+       [
+        12,
+        24
+       ]
+      ]
+     }
+    ],
+    "headcount": {
+     "needed": 672,
+     "min": 14,
+     "have": 12,
+     "spare": 0,
+     "hire": 2
+    },
+    "wageDay": 180,
+    "delta": {
+     "workers": 2,
+     "perDay": 360
+    }
+   }
+  ],
+  "dem": [
+   {
+    "key": "factory#2",
+    "s": 1,
+    "name": "[FB] Bakery Factory",
+    "lines": [
+     {
+      "slug": "cake",
+      "item": "Cake",
+      "machines": 2,
+      "hoursNow": 12,
+      "hours": 10,
+      "from": 6,
+      "to": 16,
+      "cuts": [
+       [
+        6,
+        16
+       ]
+      ]
+     },
+     {
+      "slug": "bread",
+      "item": "Bread",
+      "machines": 2,
+      "hoursNow": 24,
+      "hours": 24,
+      "from": 0,
+      "to": 24,
+      "cuts": [
+       [
+        0,
+        12
+       ],
+       [
+        12,
+        24
+       ]
+      ]
+     }
+    ],
+    "headcount": {
+     "needed": 476,
+     "min": 10,
+     "have": 12,
+     "spare": 2,
+     "hire": 0
+    },
+    "wageDay": 180,
+    "delta": {
+     "workers": -2,
+     "perDay": -360
+    }
+   }
+  ]
  }
 }

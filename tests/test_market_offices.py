@@ -37,9 +37,9 @@ HELP = {
         "Employees with the following skills can be assigned:\n\n* [Projectionist](skill-projectionist)"),
 }
 BUILDINGS = {
-    ("s", 1): {"h": "Midtown", "t": "office"},
-    ("s", 2): {"h": "Hell's Kitchen", "t": "office"},
-    ("s", 3): {"h": "Industry City", "t": "retail"},
+    ("s", 1): {"h": "midtown", "t": "office"},
+    ("s", 2): {"h": "hellskitchen", "t": "office"},
+    ("s", 3): {"h": "industrycity", "t": "retail"},
 }
 
 
@@ -52,7 +52,7 @@ def entry(item, readings):
     return {"itemName": item, "demandValues": {"$items": readings}}
 
 
-def firm(status="office", hood="Hell's Kitchen"):
+def firm(status="office", hood="ba:neighborhood_hellskitchen"):
     return {"name": "HART. &Partners", "status": status, "typeSlug": LAW, "type": "Law Firm",
             "neighbourhood": hood, "opened": 1, "lines": [{"slug": FEE, "price": 288.9}]}
 
@@ -85,7 +85,7 @@ class MarketOfficeTests(unittest.TestCase):
         self.assertEqual((cinema["slug"], cinema["products"]), (CINEMA, 1))
         # Popcorn is an extra ("can additionally sell"), so its 10 never drags
         # the cinema's Midtown reading down from the ticket's 80.
-        self.assertEqual(dict(zip(market["hoods"], cinema["cells"]))["Midtown"]["demand"], 80)
+        self.assertEqual(dict(zip(market["hoods"], cinema["cells"]))["ba:neighborhood_midtown"]["demand"], 80)
 
     def test_every_shop_type_ranks_on_the_average_demand_of_its_range(self):
         market = self.market()
@@ -94,12 +94,12 @@ class MarketOfficeTests(unittest.TestCase):
         self.assertEqual([t["slug"] for t in market["types"]], [CINEMA, SHOP])
         self.assertNotIn("typesHidden", market)
         cinema, shop = (dict(zip(market["hoods"], t["cells"])) for t in market["types"])
-        self.assertEqual((cinema["Midtown"]["demand"], cinema["Midtown"]["count"]), (80, 1))
+        self.assertEqual((cinema["ba:neighborhood_midtown"]["demand"], cinema["ba:neighborhood_midtown"]["count"]), (80, 1))
         self.assertEqual(market["types"][0]["peak"], 80)
         # 70, 64 and 58 average 64, and that average is the whole reading: no
         # count of products over the 60 line travels with it.
-        self.assertEqual((shop["Midtown"]["demand"], shop["Midtown"]["count"]), (64, 3))
-        self.assertNotIn("strong", shop["Midtown"])
+        self.assertEqual((shop["ba:neighborhood_midtown"]["demand"], shop["ba:neighborhood_midtown"]["count"]), (64, 3))
+        self.assertNotIn("strong", shop["ba:neighborhood_midtown"])
         self.assertEqual(market["types"][1]["peak"], 64)
 
     def test_offices_are_their_own_band_read_from_the_fee(self):
@@ -109,11 +109,11 @@ class MarketOfficeTests(unittest.TestCase):
         self.assertEqual((office["type"], office["fees"], office["mine"]),
                          ("Law Firm", ["Lawyer Fee (Hourly)"], False))
         by_hood = dict(zip(market["hoods"], office["cells"]))
-        self.assertEqual((by_hood["Midtown"]["demand"], by_hood["Midtown"]["providers"]), (66, 1))
-        self.assertEqual((by_hood["Hell's Kitchen"]["demand"], by_hood["Hell's Kitchen"]["providers"]), (33, 2))
-        self.assertNotIn("strong", by_hood["Midtown"])
-        self.assertIsNone(by_hood["Industry City"])
-        self.assertEqual(market["noOffices"], ["Industry City"])
+        self.assertEqual((by_hood["ba:neighborhood_midtown"]["demand"], by_hood["ba:neighborhood_midtown"]["providers"]), (66, 1))
+        self.assertEqual((by_hood["ba:neighborhood_hellskitchen"]["demand"], by_hood["ba:neighborhood_hellskitchen"]["providers"]), (33, 2))
+        self.assertNotIn("strong", by_hood["ba:neighborhood_midtown"])
+        self.assertIsNone(by_hood["ba:neighborhood_industrycity"])
+        self.assertEqual(market["noOffices"], ["ba:neighborhood_industrycity"])
         fee_rows = {r["slug"]: r["office"] for r in market["rows"]}
         self.assertEqual((fee_rows[FEE], fee_rows[TICKET]), (True, False))
 
@@ -122,11 +122,11 @@ class MarketOfficeTests(unittest.TestCase):
         [office] = market["offices"]
         by_hood = dict(zip(market["hoods"], office["cells"]))
         self.assertTrue(office["mine"])
-        self.assertTrue(by_hood["Hell's Kitchen"]["here"])
-        self.assertFalse(by_hood["Midtown"]["here"])
+        self.assertTrue(by_hood["ba:neighborhood_hellskitchen"]["here"])
+        self.assertFalse(by_hood["ba:neighborhood_midtown"]["here"])
         [row] = [r for r in market["rows"] if r["slug"] == FEE]
         self.assertTrue(row["sell"])
-        self.assertEqual([c["hood"] for c in row["cells"] if c and c["sell"]], ["Hell's Kitchen"])
+        self.assertEqual([c["hood"] for c in row["cells"] if c and c["sell"]], ["ba:neighborhood_hellskitchen"])
 
     def test_a_vacant_lease_is_not_an_office(self):
         market = self.market([firm(status="vacant")])

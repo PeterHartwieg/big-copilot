@@ -212,20 +212,21 @@ test('a cut at a comma leaves the variant bracket whole in the detail', () => {
    what a stored switch is keyed by, so a player's choices carry over. */
 test('idle stock has one name, and a renamed kind keeps its id', () => {
   const kind = id => (source.match(new RegExp(`\\{id:"${id}",\\s*label:"([^"]+)"`)) || [])[1];
-  const view = (source.match(/\r?\n  idle: \{\r?\n    label: "([^"]+)"/) || [])[1];
+  // A depot's idle group on Supply (R13) and the finding kind share one name.
+  const group = (source.match(/slug: null, item: "([^"]+)", fact: kids\[0\]\.fact/) || [])[1];
   assert.equal(kind('dead'), 'Idle stock');
-  assert.equal(view, kind('dead'), 'the Checks view and the finding kind share one name');
+  assert.equal(group, kind('dead'), 'the idle group and the finding kind share one name');
   assert.equal(kind('staff'), 'Nobody on shift');
 });
 
 /* R8: stock a depot holds that no plan sends on, while the company's own
    sites sell or need it, is a kind of its own, and every map that routes a
    kind knows it. */
-test('Not routed is a kind, on by default, linked to Idle stock and the depot\'s Stock', () => {
+test('Not routed is a kind, on by default, linked to the site\'s Supply tab and the depot\'s Stock', () => {
   const g = run('ALERT_GROUPS').find(x => x.id === 'notrouted');
   assert.deepEqual([g.label, g.on], ['Not routed', true]);
   const links = source.slice(source.indexOf('const ALERT_LINKS = {'), source.indexOf('const SEC_PAGE ='));
-  assert.match(links, /notrouted: \{sec:"secStock", view:"idle"\}/);
+  assert.match(links, /notrouted: \{sec:"secWarehouses", tab:"site"\}/);
   const evidence = source.slice(source.indexOf('const ALERT_EVIDENCE = {'), source.indexOf('const SEV_KIND ='));
   assert.match(evidence, /notrouted: \{block: "stock"\}/);
   assert.match(source, /depot: \{[^}]*notrouted: "stock"/);
@@ -292,4 +293,24 @@ test('Today, the kinds popover and the map read the list of the sizing on screen
   assert.match(DRAW, /alertLines\(\), alertMinor\(\)\.rows/);
   const map = fs.readFileSync(path.join(__dirname, '..', 'web', 'map.js'), 'utf8');
   assert.match(map, /\.\.\.alertLines\(\), \.\.\.\(alertMinor\(\)\.rows/);
+});
+
+/* R13: every supply kind lands on a Supply tab: the one named, or with tab
+   "site" the tab of the site's own kind (a shop's Shops, a factory's
+   Factories, every other site's Warehouses). */
+test('the supply kinds land on the Supply tab of their object', () => {
+  const ctx = vm.createContext({});
+  vm.runInContext(source.slice(source.indexOf('const ALERT_LINKS = {'), source.indexOf('/* Put something at the top of the window')) +
+    '; this.out = JSON.stringify({ALERT_LINKS, SEC_PAGE, SEC_MOVED});', ctx);
+  const got = JSON.parse(ctx.out), links = got.ALERT_LINKS;
+  const tabs = Object.fromEntries(Object.entries(links).filter(([, l]) => l.tab).map(([id, l]) => [id, l.tab]));
+  assert.deepEqual(tabs, {shortfall: 'site', order: 'site', paused: 'site',
+    outruns: 'shops', unplanned: 'shops', dead: 'site', target: 'site', notrouted: 'site',
+    feed: 'factories', staff: 'factories', unnamed: 'factories', unset: 'factories'});
+  const pages = got.SEC_PAGE;
+  for (const l of Object.values(links)) if (l.tab) assert.equal(pages[l.sec][0], 'supply');
+  assert.deepEqual([...pages.secShops], ['supply', 'shops']);
+  assert.deepEqual([...pages.secFactories], ['supply', 'factories']);
+  const moved = got.SEC_MOVED;
+  assert.deepEqual([moved.secLogistics, moved.secStock, moved.secFlow], ['secWarehouses', 'secShops', 'secWarehouses']);
 });

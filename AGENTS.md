@@ -32,7 +32,9 @@ Everything else:
 - static wiki pages for search engines (`/wiki/...`, the sitemap, robots.txt):
   `tools/wiki_pages.py`, from `web/wiki-data.json`
 - location finder: `web/map.js` hosts it as a mode of the Map page, over the `premises`
-  payload key from `_premises()` in `ba_dashboard.py`
+  payload key from `_premises()` in `ba_dashboard.py`; its floor plans are
+  `web/maps/floor-plans.json` from `make_floor_plans.py`, keyed by each building's
+  `layout` (size code plus version)
 - community API: `server/`, `migrations/`, `web/community.js`
 - changelog: `web/changelog.json`
 - game link: the wire contract is `docs/game-link-api.md`; the mod is `mod/BigCopilotLink/`
@@ -51,7 +53,8 @@ side and rebuild — the rebuild is the resolution.
 | `web/py/gametext.json`, `web/wiki-data.json` | `python build_web.py`, which needs the installed game |
 | `web/wiki/**/index.html`, `web/sitemap.xml`, `web/robots.txt` | `python build_web.py`, from the committed `web/wiki-data.json` through `tools/wiki_pages.py`; `python tools/wiki_pages.py` alone needs no game |
 | `web/maps/locations.json`, `web/maps/map-background.svg` | `export_map.py`, from private geometry; owner only |
-| `ba_buildings.json` | `make_buildings.py` |
+| `ba_buildings.json` | `make_buildings.py`; the `v` (version) key comes from `make_buildings.py --versions`, which reads the installed game's buildings bundle with UnityPy; owner only |
+| `web/maps/floor-plans.json` | `make_floor_plans.py`, which draws the building shells out of the installed game's Addressables bundles with UnityPy; owner only. `build_web.py` refuses a set that misses a layout `ba_buildings.json` uses |
 | `ba_demand_curves.json` | `make_demand_curves.py`, which reads the installed game's Addressables bundles with UnityPy; owner only |
 | `mockup/*/*.dc.html` and `mockup/*/canvas.json` | the `mockup/*/build_*.py` generators, such as `mockup/revamp/build_canvas.py` |
 | `mockup/find-location/data.json` | `mockup/find-location/make_data.py`, which reads a real save and a session-scratchpad `hart.json` at hard-coded paths, so it does not run as committed; owner only. Every other file under `mockup/` is hand-made or owner-supplied, `mockup/ui-mockup.html` and the `city.jpg` backdrops included |
@@ -64,10 +67,11 @@ side and rebuild — the rebuild is the resolution.
 | `ba_save.py`, `ba_dashboard.py` (extraction) | `python -m unittest discover -s tests`, then `python build_web.py`. Premises extraction is `tests/test_premises.py` |
 | The `TEMPLATE` markup, CSS or board script | `python -m unittest discover -s tests` and `node --test tests/*.test.cjs`, then `python build_web.py` |
 | `web/app.js`, `web/worker.js`, `web/update.js` | `node --test tests/*.test.cjs`, then `python build_web.py` |
-| `web/map.js`, `web/map.css` | `node --test tests/map.test.cjs tests/finder.test.cjs` and `python -m unittest discover -s tests -p test_map_assets.py`, then `python build_web.py`. The finder lives in `web/map.js`; `tests/finder.test.cjs` also covers `drawFindLocation` in `ba_dashboard.py`, and `findPremisesLink` indirectly, through the rendered "find premises" link |
+| `web/map.js`, `web/map.css` | `node --test tests/map.test.cjs tests/finder.test.cjs` and `python -m unittest discover -s tests -p test_map_assets.py`, then `python build_web.py`. The finder lives in `web/map.js`; `tests/finder.test.cjs` also covers `drawFindLocation` in `ba_dashboard.py`, and `finderPreset`, through a Growth › Demand cell opening the finder |
 | `tools/*.py`, `tools/wiki_sample.json`, `tools/wiki_topics.json`, `web/wiki.js`, `web/wiki.css` | `python -m unittest discover -s tests -p "test_wiki*.py"` (the hand-written articles are `tests/test_wiki_build.py`) and `node --test tests/wiki*.test.cjs`, then `python build_web.py` |
 | `server/`, `migrations/` | `npm run test:community` and `npm run check:worker` |
 | `web/community.js`, `web/community.css` | those two npm commands, then `python build_web.py` — both files are cache-busted by the build stamp |
+| `make_buildings.py`, `make_floor_plans.py` or what they write | `python -m unittest tests.test_floor_plans tests.test_premises`, then `python build_web.py` |
 | `tools/Invoke-ZaiClaude.ps1` | `python -m unittest tests.test_agent_cli` |
 | `tools/game_link_mock.py`, `docs/game-link-api.md` | `python -m unittest tests.test_game_link_mock tests.test_watch_game` and `node --test tests/game_link.test.cjs`; a contract change bumps `schemaVersion` in the doc, the mock, the mod and both clients in one commit |
 | `mod/BigCopilotLink/` | nothing runs here: Peter builds it in the SDK's Unity project on the Mac (its README) and checks `curl http://127.0.0.1:8322/health` |

@@ -19,11 +19,15 @@ const CINEMA = 'ba:businesstype_cinema';
 /* A business name is the player's or a rival's own text, so one of them is markup. */
 const HOSTILE = '<img src=x onerror=window.__x=1>';
 const HK_NAME = "Hell's Kitchen";
+/* The payload names a neighbourhood by the game's key; the exported map data
+   by its English name, which is the key's id with the spaces and marks put in. */
+const hoodKey = name => `ba:neighborhood_${name.toLowerCase().replace(/[^a-z]/g, '')}`;
+const HK_HOOD = hoodKey(HK_NAME), MT_HOOD = hoodKey('Midtown');
 
 /* The deposit is what signing costs on the day; it follows the rent unless a
    row names its own, and a building with no rent estimate has none either. */
 const site = (key, over) => {
-  const b = {key, address: at(key).address, hood: at(key).hood, type: 'retail',
+  const b = {key, address: at(key).address, hood: hoodKey(at(key).hood), type: 'retail',
     size: 'C', m2: 225, traffic: 50, cap: 30, rent: 100, status: 'vacant', occupant: null, ...over};
   return {deposit: b.rent == null ? null : b.rent * 6, ...b};
 };
@@ -57,19 +61,19 @@ const PREMISES = {
       occupant: {name: 'HART. Gym', type: 'Gym', typeSlug: 'ba:businesstype_gym'}}),
   ],
   forSale: [
-    {key: MT[2], address: at(MT[2]).address, hood: 'Midtown', type: 'retail', size: 'M', m2: 1000, price: 4200000},
+    {key: MT[2], address: at(MT[2]).address, hood: MT_HOOD, type: 'retail', size: 'M', m2: 1000, price: 4200000},
     // A tower on a mature save runs past a billion.
-    {key: MT[3], address: at(MT[3]).address, hood: 'Midtown', type: 'cinema', size: 'S', m2: 1200, price: 5584228352},
-    {key: HK[0], address: at(HK[0]).address, hood: "Hell's Kitchen", type: 'retail', size: 'C', m2: 225, price: 750000},
+    {key: MT[3], address: at(MT[3]).address, hood: MT_HOOD, type: 'cinema', size: 'S', m2: 1200, price: 5584228352},
+    {key: HK[0], address: at(HK[0]).address, hood: HK_HOOD, type: 'retail', size: 'C', m2: 225, price: 750000},
   ],
   demand: {
-    "Hell's Kitchen": [
+    [HK_HOOD]: [
       {slug: CLOTHES, type: 'Clothing Store', demand: 77, providers: 2, mine: false, category: 'retail'},
       {slug: COFFEE, type: 'Coffee Shop', demand: 40, providers: 1, mine: false, category: 'retail'},
       {slug: LAW, type: 'Law Firm', demand: 60, providers: 0, mine: false, category: 'office'},
       {slug: CINEMA, type: 'Cinema', demand: 50, providers: 0, mine: false, category: 'cinema'},
     ],
-    Midtown: [
+    [MT_HOOD]: [
       {slug: CLOTHES, type: 'Clothing Store', demand: 50, providers: 3, mine: false, category: 'retail'},
       {slug: COFFEE, type: 'Coffee Shop', demand: 90, providers: 1, mine: false, category: 'retail'},
     ],
@@ -81,12 +85,12 @@ const PREMISES = {
   caps: {retail: {C: 30, D: 40, M: 75}, office: {J: 10}, cinema: {S: [100, 150]}, theater: {R: [150, 200]}},
 };
 const MARKET = {
-  hoods: ["Hell's Kitchen", 'Midtown'], rows: [], trendDays: 0, movers: [], hype: [], noOffices: [], catalogue: {},
+  hoods: [HK_HOOD, MT_HOOD], rows: [], trendDays: 0, movers: [], hype: [], noOffices: [], catalogue: {},
   types: [{type: 'Clothing Store', slug: CLOTHES, products: 2, mine: false, peak: 77, cells: [
-    {hood: "Hell's Kitchen", demand: 77, count: 2, providers: 2, sell: 0, here: false},
-    {hood: 'Midtown', demand: 50, count: 2, providers: 3, sell: 0, here: false}]}],
+    {hood: HK_HOOD, demand: 77, count: 2, providers: 2, sell: 0, here: false},
+    {hood: MT_HOOD, demand: 50, count: 2, providers: 3, sell: 0, here: false}]}],
   offices: [{type: 'Law Firm', slug: LAW, fees: ['Legal advice'], mine: false, peak: 60, cells: [
-    {hood: "Hell's Kitchen", demand: 60, providers: 0, hype: null, delta: null, here: false}, null]}],
+    {hood: HK_HOOD, demand: 60, providers: 0, hype: null, delta: null, here: false}, null]}],
 };
 
 let browser, server, url, html;
@@ -98,7 +102,8 @@ before(async () => {
   server = http.createServer((req, res) => {
     const route = req.url.split('?')[0];
     const files = {'/maps/locations.json': ['locations.json', 'application/json'],
-      '/maps/map-background.svg': ['map-background.svg', 'image/svg+xml']};
+      '/maps/map-background.svg': ['map-background.svg', 'image/svg+xml'],
+      '/maps/floor-plans.json': ['floor-plans.json', 'application/json']};
     if(files[route]){ res.setHeader('Content-Type', files[route][1]); res.end(fs.readFileSync(path.join(root, 'web/maps', files[route][0]))); }
     else { res.setHeader('Content-Type', 'text/html'); res.end(html); }
   });
@@ -180,7 +185,8 @@ test('the switch is in the map window; every filter lives in the panel', async (
     assert.equal(await page.locator('#cityMapPage [data-stage] .fswitch .ibtn').count(), 1);
     assert.equal(await page.locator(chip).isVisible(), true);
     // A chip with its name on it, not a bare pin that only a tooltip names.
-    assert.equal((await page.locator(chip).innerText()).trim(), 'Find a location');
+    // The New badge beside the name is not part of it (it is aria-hidden).
+    assert.equal((await page.locator(`${chip} > span:not(.feature-new)`).innerText()).trim(), 'Find a location');
     assert.equal(await page.getByRole('button', {name: 'Find a location', exact: true}).count(), 1);
     assert.equal(await page.locator(chip).getAttribute('aria-pressed'), 'false');
     assert.equal(await page.locator('#cityMapPage .map-head').isVisible(), true);
@@ -197,7 +203,7 @@ test('the switch is in the map window; every filter lives in the panel', async (
     assert.equal(await page.locator('#cityMapPage .places .filters').evaluate(
       f => f.nextElementSibling.classList.contains('list')), true);
     assert.deepEqual(await page.$$eval('#cityMapPage .filters .lab', l => l.map(x => x.textContent)),
-      ['Kind', 'Type', 'Show', 'Where', 'Size', 'Capacity', 'Traffic', 'Saved']);
+      ['Kind', 'Type', 'Show', 'Where', 'Size', 'Capacity', 'Traffic', 'Layout', 'Saved']);
     // The "ranked by…" line is gone; the formula lives in the ? alone.
     assert.equal(await page.locator('#cityMapPage .fnote').count(), 0);
     assert.match(await page.locator('#cityMapPage .filters .why').getAttribute('data-tip'), /÷ 100/);
@@ -224,7 +230,7 @@ test('the defaults are visibly chosen on first open, and nothing is ever dimmed'
       chips.map(c => ({what: c.dataset.cat || c.dataset.show || c.dataset.h || c.querySelector('input')?.dataset.f,
         on: c.classList.contains('on'), opacity: getComputedStyle(c).opacity})));
     const on = state.filter(s => s.on).map(s => s.what).sort();
-    assert.deepEqual(on, [HK_NAME, 'Midtown', 'rent', 'retail'].sort());
+    assert.deepEqual(on, [HK_HOOD, MT_HOOD, 'rent', 'retail'].sort());
     // "Any type" is the default, so the type picker reads as unchosen.
     assert.equal(await page.locator('#cityMapPage .fsel.on').count(), 0);
     assert.equal(await page.locator('#cityMapPage .fsel select').inputValue(), '');
@@ -327,7 +333,7 @@ test('a type filter re-scores every row, and a neighbourhood chip drops one', as
     // Hell's Kitchen wants coffee far less than clothes, so Midtown leads.
     assert.deepEqual(await rowKeys(page), [MT[0], HK[0], MT[1]]);
     assert.deepEqual(await page.$$eval('#cityMapPage .place.fr .v.sc', v => v.map(x => x.textContent)), ['45', '24', '18']);
-    await page.locator('#cityMapPage .fchip.hd[data-h="Midtown"]').click();
+    await page.locator(`#cityMapPage .fchip.hd[data-h="${MT_HOOD}"]`).click();
     assert.deepEqual(await rowKeys(page), [HK[0]]);
     // A minimum on traffic empties it entirely.
     await page.locator('#cityMapPage .fchip.num input[data-f="minTraffic"]').fill('70');
@@ -391,7 +397,7 @@ test('for sale is a plain list, cheapest first, and the neighbourhood chips stil
     assert.equal(await page.locator('#cityMapPage .location.fp.buy').count(), 0);
     await pick(page, MT[2]);
     assert.equal(await page.locator('#cityMapPage .site h3').textContent(), at(MT[2]).address);
-    await page.locator('#cityMapPage .fchip.hd[data-h="Midtown"]').click();
+    await page.locator(`#cityMapPage .fchip.hd[data-h="${MT_HOOD}"]`).click();
     assert.deepEqual(await rowKeys(page), [HK[0]]);
     assert.equal(await page.locator('#cityMapPage .location.fp.cand').count(), 1);
     assert.deepEqual(errors, []);
@@ -407,7 +413,7 @@ test('the filters come back with the character; the switch lasts only the sessio
     await page.locator('#cityMapPage .fchip.num input[data-f="minCap"]').fill('5');
     await page.locator('#cityMapPage .fchip.num input[data-f="maxCap"]').fill('60');
     await page.locator('#cityMapPage .fchip.num input[data-f="maxM2"]').fill('300');
-    await page.locator('#cityMapPage .fchip.hd[data-h="Midtown"]').click();
+    await page.locator(`#cityMapPage .fchip.hd[data-h="${MT_HOOD}"]`).click();
     const {page: again} = await fixture(context);
     try{
       // A new load opens the plain map, however the last session left the switch.
@@ -425,8 +431,8 @@ test('the filters come back with the character; the switch lasts only the sessio
       assert.equal(await again.locator('#cityMapPage .fchip.num input[data-f="maxM2"]').inputValue(), '300');
       // A minimum that is set shows as set, like any other chosen control.
       assert.equal(await again.locator('#cityMapPage .fchip.num.on input[data-f="minCap"]').count(), 1);
-      assert.equal(await again.locator('#cityMapPage .fchip.hd[data-h="Midtown"]').evaluate(c => c.classList.contains('on')), false);
-      assert.equal(await again.locator(`#cityMapPage .fchip.hd[data-h="${HK_NAME}"]`).evaluate(c => c.classList.contains('on')), true);
+      assert.equal(await again.locator(`#cityMapPage .fchip.hd[data-h="${MT_HOOD}"]`).evaluate(c => c.classList.contains('on')), false);
+      assert.equal(await again.locator(`#cityMapPage .fchip.hd[data-h="${HK_HOOD}"]`).evaluate(c => c.classList.contains('on')), true);
       // A different character starts from the defaults, never another company's.
       await again.evaluate(() => { D.meta.character = 'finder-b'; refreshCityMaps(); });
       assert.equal(await again.locator('#cityMapPage .filters').isVisible(), false);
@@ -482,7 +488,7 @@ test('a saved search comes back in one click, for every character and after a re
     await openMap(page); await turnOn(page);
     await page.locator('#cityMapPage .fchip.cat[data-cat="office"]').click();
     await page.locator('#cityMapPage .fchip.num input[data-f="minCap"]').fill('5');
-    await page.locator('#cityMapPage .fchip.hd[data-h="Midtown"]').click();
+    await page.locator(`#cityMapPage .fchip.hd[data-h="${MT_HOOD}"]`).click();
     // The name on offer says what the search looks for.
     await page.locator(`${saved} [data-f="save"]`).click();
     assert.match(await page.locator(`${saved} [data-f="name"]`).inputValue(), /^Office · /);
@@ -552,19 +558,47 @@ test('a saved search is read against this save: what it does not know falls away
   const context = await browser.newContext();
   const {page} = await fixture(context);
   try{
-    await page.evaluate(() => localStorage.setItem('ba_finder_saved_v1', JSON.stringify([
-      {name: 'Elsewhere', filters: {cat: 'retail', show: 'rent', hoods: ['Midtown', 'Nowhere'],
+    await page.evaluate(mt => localStorage.setItem('ba_finder_saved_v1', JSON.stringify([
+      {name: 'Elsewhere', filters: {cat: 'retail', show: 'rent', hoods: [mt, 'ba:neighborhood_nowhere'],
         minCap: 'lots', maxCap: -5, sort: 'score', extra: 1}},
-      {name: 'No filters'}, 'junk'])));
+      {name: 'No filters'}, 'junk'])), MT_HOOD);
     const {page: again, errors} = await fixture(context);
     try{
       await openMap(again); await turnOn(again);
       assert.deepEqual(await savedNames(again), ['Elsewhere']);
       await again.locator(`${saved} [data-saved="Elsewhere"]`).click();
       assert.deepEqual(await rowKeys(again), [MT[0], MT[1]]);
-      assert.equal(await again.locator(`#cityMapPage .fchip.hd[data-h="${HK_NAME}"]`).getAttribute('aria-pressed'), 'false');
+      assert.equal(await again.locator(`#cityMapPage .fchip.hd[data-h="${HK_HOOD}"]`).getAttribute('aria-pressed'), 'false');
       assert.equal(await again.locator('#cityMapPage .fchip.num input[data-f="minCap"]').inputValue(), '0');
       assert.equal(await again.locator(`${saved} [data-saved="Elsewhere"]`).getAttribute('aria-pressed'), 'true');
+      assert.deepEqual(errors, []);
+    } finally { await again.close(); }
+  } finally { await page.close(); await context.close(); }
+});
+
+test('neighbourhoods stored by their English name read back as the game key they name', async () => {
+  const context = await browser.newContext();
+  const {page} = await fixture(context);
+  try{
+    // What the finder stored before it kept neighbourhoods by key.
+    await page.evaluate(name => {
+      localStorage.setItem('ba_finder_saved_v1', JSON.stringify([
+        {name: 'Old', filters: {cat: 'retail', show: 'rent', hoods: ['Midtown', 'Nowhere'], sort: 'score'}}]));
+      localStorage.setItem('ba_finder_v1:finder-a', JSON.stringify({cat: 'retail', type: '', show: 'rent',
+        hoods: [name], minCap: 0, maxCap: 0, minTraffic: 0, sort: 'score'}));
+    }, HK_NAME);
+    const {page: again, errors} = await fixture(context);
+    try{
+      await openMap(again); await turnOn(again);
+      // The filters kept for the character: Hell's Kitchen alone.
+      assert.equal(await again.locator(`#cityMapPage .fchip.hd[data-h="${HK_HOOD}"]`).getAttribute('aria-pressed'), 'true');
+      assert.equal(await again.locator(`#cityMapPage .fchip.hd[data-h="${MT_HOOD}"]`).getAttribute('aria-pressed'), 'false');
+      // The saved search: Midtown, and a name no neighbourhood has falls away.
+      await again.locator(`${saved} [data-saved="Old"]`).click();
+      assert.deepEqual(await rowKeys(again), [MT[0], MT[1]]);
+      // Written back in keys, once, so the old names are gone from storage.
+      assert.deepEqual(await again.evaluate(() => JSON.parse(localStorage.getItem('ba_finder_saved_v1'))[0].filters.hoods),
+        [MT_HOOD]);
       assert.deepEqual(errors, []);
     } finally { await again.close(); }
   } finally { await page.close(); await context.close(); }
@@ -1405,20 +1439,428 @@ test('a Growth cell opens the finder on its own type and neighbourhood', async (
   const {page, errors} = await fixture();
   try{
     await page.evaluate(() => { showPage('growth'); drawMarket(); wireHeat(); });
-    await page.locator(`#market .cell[data-slug="${CLOTHES}"][data-hood="Hell\\'s Kitchen"]`).click();
-    assert.match(await page.locator('#cellDetail').textContent(), /find premises/);
-    await page.locator('#cellDetail .link.pin').click();
+    await page.locator(`#market .cell[data-slug="${CLOTHES}"][data-hood="${HK_HOOD}"]`).click();
     await page.locator('#cityMapPage .place.fr').first().waitFor();
+    // The cell is on a hidden page now, so the keyboard lands on the first result.
+    await page.waitForFunction(() => document.activeElement?.matches('#cityMapPage .place.fr'));
     assert.equal(await page.locator('#cityMapPage .fchip.cat.on').textContent(), 'Retail');
     assert.equal(await page.locator('#cityMapPage [data-f="type"]').inputValue(), CLOTHES);
     assert.deepEqual(await rowKeys(page), [HK[0]]);   // Midtown is switched off
-    // An office row asks for office buildings instead.
+    // An office row asks for office buildings instead, and the keyboard does
+    // what the mouse does.
     await page.evaluate(() => showPage('growth'));
-    await page.locator(`#market .cell[data-slug="${LAW}"]`).click();
-    await page.locator('#cellDetail .link.pin').click();
+    await page.locator(`#market .cell[data-slug="${LAW}"]`).first().focus();
+    await page.keyboard.press('Enter');
     await page.locator('#cityMapPage .place.fr').first().waitFor();
     assert.equal(await page.locator('#cityMapPage .fchip.cat.on').textContent(), 'Office');
     assert.deepEqual(await rowKeys(page), [HK[4]]);
+    // Nothing is drawn under the grid any more.
+    assert.equal(await page.locator('#cellDetail').count(), 0);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+/* Enough vacant shops in Hell's Kitchen that the preset's list still scrolls.
+   On a wide map the list is the scroller; on a narrow one it is the whole
+   panel, with the filters above the results. */
+async function scrolledFinderToGrowthCell(width, scroller){
+  const extra = geometry.buildings.filter(b => b.hood === HK_NAME && b.path && !HK.includes(b.key))
+    .slice(0, 30).map(b => site(b.key, {traffic: 30}));
+  assert.equal(extra.length, 30);
+  const {page, errors} = await fixture(null, {premises: {...PREMISES, buildings: [...PREMISES.buildings, ...extra]}});
+  try{
+    await page.setViewportSize({width, height: 600});
+    await openMap(page); await turnOn(page);
+    await page.$eval(scroller, el => { el.scrollTop = el.scrollHeight; });
+    const before = await page.$eval(scroller, el => el.scrollTop);
+    assert.ok(before > 0, 'the panel scrolls');
+    await page.evaluate(() => { showPage('growth'); drawMarket(); wireHeat(); });
+    await page.locator(`#market .cell[data-slug="${CLOTHES}"][data-hood="${HK_HOOD}"]`).click();
+    await page.waitForFunction(() => document.activeElement?.matches('#cityMapPage .place.fr'));
+    await page.waitForTimeout(100);
+    assert.ok(await page.$eval(scroller, el => el.scrollTop) < before, 'the panel went back up');
+    const [first, box, isFirst] = await page.evaluate(sel => {
+      const el = document.activeElement.getBoundingClientRect(), panel = document.querySelector(sel).getBoundingClientRect();
+      return [{top: el.top, bottom: el.bottom}, {top: Math.max(panel.top, 0), bottom: Math.min(panel.bottom, innerHeight)},
+        document.activeElement === document.querySelector('#cityMapPage .place.fr')];
+    }, scroller);
+    assert.equal(isFirst, true);
+    assert.ok(first.top >= box.top - 1 && first.bottom <= box.bottom + 1,
+      `the focused first result (${first.top}-${first.bottom}) is inside the visible panel (${box.top}-${box.bottom})`);
+    assert.ok(await page.locator('#cityMapPage .place.fr').count() > 10);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+}
+test('a Growth cell opens the finder at the top of its list, however far it was scrolled', async () => {
+  await scrolledFinderToGrowthCell(1440, '#cityMapPage .places .list');
+});
+test('on a narrow map the panel goes back up and the focused first result is in view', async () => {
+  await scrolledFinderToGrowthCell(760, '#cityMapPage .places');
+});
+
+test('a finder the player left while it loaded never reaches for the focus', async () => {
+  const {page, errors} = await fixture();
+  try{
+    await page.evaluate(() => { showPage('growth'); drawMarket(); wireHeat(); });
+    // A hidden page cannot take the focus anyway, so the spy counts the tries.
+    await page.evaluate(async () => {
+      window.focusTries = 0;
+      const focus = HTMLElement.prototype.focus;
+      HTMLElement.prototype.focus = function(...args){
+        if(this.closest('#cityMapPage')) window.focusTries++;
+        return focus.apply(this, args);
+      };
+      // Leave for Today before the map has loaded, then let it finish.
+      document.querySelector('#market .cell[role=button]').click();
+      showPage('today');
+      await cityMapPage.ready;
+      await new Promise(r => setTimeout(r, 50));
+    });
+    assert.equal(await page.evaluate(() => window.focusTries), 0);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a cell with no reading is no button and opens nothing', async () => {
+  const {page, errors} = await fixture();
+  try{
+    await page.evaluate(() => { showPage('growth'); drawMarket(); wireHeat(); });
+    // The Law Firm has no reading in Midtown.
+    const none = page.locator('#market .cell.none');
+    assert.equal(await none.count(), 1);
+    assert.equal(await none.getAttribute('role'), null);
+    await none.click();
+    assert.equal(await page.locator('#pageGrowth').isVisible(), true);
+    assert.equal(await page.locator('#cityMapPage .place.fr').count(), 0);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test("the finder's demand figure leads back to that type's Growth row", async () => {
+  const {page, errors} = await fixture();
+  try{
+    await openMap(page); await turnOn(page);
+    await page.locator('#cityMapPage [data-f="type"]').selectOption(CLOTHES);
+    await pick(page, HK[0]);
+    const back = page.locator('#cityMapPage .site .mf-grow');
+    assert.equal((await back.locator('b').textContent()).trim(), '77');
+    assert.match(await back.getAttribute('data-tip'), /Clothing Store in every neighbourhood, on Growth › Demand/);
+    // From the product views too: the link switches the grid back to By type.
+    await page.evaluate(() => showPage('growth'));
+    await page.locator('#marketTools a[data-id="mine"]').click();
+    assert.equal(await page.locator('#marketTools a.on').textContent(), 'What I sell');
+    await page.evaluate(() => showPage('map'));
+    // A live refresh repaints the card and the link keeps the focus.
+    await back.focus();
+    await page.evaluate(() => refreshCityMaps());
+    assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('mf-grow')), true);
+    await back.click();
+    assert.equal(await page.locator('#pageGrowth').isVisible(), true);
+    assert.equal(await page.evaluate(() => marketView), 'types');
+    assert.equal(await page.locator('#marketTools a.on').textContent(), 'By type');
+    const row = page.locator(`#market .r[data-slug="${CLOTHES}"]`);
+    assert.match(await row.getAttribute('class'), /\bmk-arrive\b/);
+    const r = await row.getAttribute('data-r');
+    const ringed = await page.$$eval(`#market .cell[data-r="${r}"]`, cs => cs.every(c => c.classList.contains('mk-arrive')));
+    assert.equal(ringed, true);
+    assert.equal(await page.locator('#market .mk-arrive').count(), 3);   // the label and its two cells
+    // The keyboard lands on the row's first cell that opens the finder.
+    assert.equal(await page.evaluate(() => document.activeElement?.matches('#market .cell[role=button][data-r="0"][data-c="0"]')), true);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a row the demand figure leads back to clears the sticky masthead', async () => {
+  const {page, errors} = await fixture();
+  try{
+    await page.setViewportSize({width: 1440, height: 500});
+    await page.evaluate(() => { document.body.style.paddingBottom = '3000px'; });   // room to scroll the row up
+    await openMap(page); await turnOn(page);
+    await page.locator('#cityMapPage .fchip.cat[data-cat="office"]').click();
+    await pick(page, HK[4]);
+    await page.locator('#cityMapPage .site .mf-grow').click();
+    // The Law Firm is the second row, so the page has to scroll to it.
+    const row = page.locator(`#market .r[data-slug="${LAW}"]`);
+    assert.equal(await row.getAttribute('data-r'), '1');
+    await page.waitForTimeout(600);   // settleScroll keeps the row in place for a few frames
+    const [top, mast] = await page.evaluate(sel => [document.querySelector(sel).getBoundingClientRect().top,
+      document.getElementById('mast').getBoundingClientRect().bottom], `#market .r[data-slug="${LAW}"]`);
+    assert.ok(top >= mast, `row top ${top} is under the masthead (${mast})`);
+    assert.ok(await page.evaluate(() => scrollY) > 0, 'the page scrolled');
+    // The focus follows, to the office row's cell that opens the finder.
+    assert.equal(await page.evaluate(() => document.activeElement?.matches('#market .cell[role=button][data-r="1"]')), true);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+/* Floor plans (issue #70): the game's own layout for each building. The plans
+   are the committed web/maps/floor-plans.json; the rows name their layout. */
+const PLANNED = {...PREMISES, buildings: PREMISES.buildings.map(b =>
+  b.key === HK[0] ? {...b, layout: 'C1'} : b.key === HK[1] ? {...b, layout: 'C2'}
+  : b.key === MT[0] ? {...b, layout: 'D2', size: 'D'} : b.key === HK[4] ? {...b, layout: 'J1'}
+  : b.type === 'retail' || b.type === 'office' ? {...b, layout: null} : b)};
+const dock = '#cityMapPage .lp-dock';
+const tags = page => page.$$eval('#cityMapPage .place.fr', rows => rows.map(r => r.querySelector('.lp-tag')?.textContent || ''));
+
+test('each row names its layout and the dock shows the kind\'s layouts at one scale', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await openMap(page);
+    assert.equal(await page.locator(dock).isVisible(), false);
+    await turnOn(page);
+    await page.locator(`${dock} .lp-tile`).first().waitFor();
+    // The list reads [HK0 C1, MT0 D2, MT1 with no layout]: a row with no plan has no tag.
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
+    assert.deepEqual(await tags(page), ['C1', 'D2', '']);
+    // Every retail layout, each saying how many listed rows have it.
+    assert.deepEqual(await page.$$eval(`${dock} .lp-tile`, t => t.map(x => x.dataset.lpTile)), ['A1', 'A2', 'C1', 'C2', 'D2', 'M1']);
+    assert.deepEqual(await page.$$eval(`${dock} .lp-tilen`, t => t.map(x => x.textContent)),
+      ['none listed', 'none listed', '1 listed', 'none listed', '1 listed', 'none listed']);
+    // One scale: the same number of pixels a metre on every tile.
+    const perMetre = await page.$$eval(`${dock} .lp-svg`, s => s.map(x => +x.getAttribute('width') / x.viewBox.baseVal.width));
+    assert.ok(perMetre.every(k => Math.abs(k - perMetre[0]) < 1e-3), perMetre.join());
+    assert.match(await page.locator(`${dock} .lp-detail`).textContent(), /Hover a row/);
+    // Hovering a row lights its layout and describes it; leaving the list goes back.
+    await page.locator(`#cityMapPage .place[data-pick="${MT[0]}"]`).hover();
+    assert.match(await page.locator(`${dock} .lp-detail`).textContent(), /HoveredD2Retail, size D/);
+    assert.equal(await page.locator(`${dock} .lp-tile.hover`).getAttribute('data-lp-tile'), 'D2');
+    await pick(page, HK[0]);
+    await page.mouse.move(5, 5);
+    await page.waitForFunction(() => /Picked/.test(document.querySelector('#cityMapPage .lp-detail').textContent));
+    assert.match(await page.locator(`${dock} .lp-detail`).textContent(), /PickedC1Retail, size C/);
+    assert.equal(await page.locator(`${dock} .lp-detail .lp-nums`).textContent(), '225m²30cap1entrance');
+    assert.equal(await page.locator(`${dock} .lp-tile.lit`).getAttribute('data-lp-tile'), 'C1');
+    // Hovering a row with no plan leaves the pick on show.
+    await page.locator(`#cityMapPage .place[data-pick="${MT[1]}"]`).hover();
+    assert.match(await page.locator(`${dock} .lp-detail`).textContent(), /PickedC1/);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a layout on the shelf lists only that layout until it is cleared', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await openMap(page); await turnOn(page);
+    await page.locator(`${dock} .lp-tile[data-lp-tile="C1"]`).click();
+    assert.deepEqual(await rowKeys(page), [HK[0]]);
+    assert.equal(await page.locator(`${dock} .lp-tile[data-lp-tile="C1"]`).getAttribute('aria-pressed'), 'true');
+    // The filter names itself in the panel; the counts still count every layout.
+    assert.equal(await page.locator('#cityMapPage .frow.flayout').isVisible(), true);
+    assert.equal((await page.locator('#cityMapPage [data-lp-clear]').textContent()).trim(), 'Layout C1×');
+    assert.equal(await page.locator(`${dock} .lp-tile[data-lp-tile="D2"] .lp-tilen`).textContent(), '1 listed');
+    await page.locator('#cityMapPage [data-lp-clear]').click();
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
+    assert.equal(await page.locator('#cityMapPage .frow.flayout').isVisible(), false);
+    // A second click on the tile clears it too, and a new kind drops it.
+    await page.locator(`${dock} .lp-tile[data-lp-tile="D2"]`).click();
+    assert.deepEqual(await rowKeys(page), [MT[0]]);
+    await page.locator(`${dock} .lp-tile[data-lp-tile="D2"]`).click();
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
+    await page.locator(`${dock} .lp-tile[data-lp-tile="D2"]`).click();
+    await page.locator('#cityMapPage .fchip.cat[data-cat="office"]').click();
+    assert.deepEqual(await rowKeys(page), [HK[4]]);
+    assert.deepEqual(await tags(page), ['J1']);
+    assert.deepEqual(await page.$$eval(`${dock} .lp-tile`, t => t.map(x => x.dataset.lpTile)), ['A3', 'C1', 'C2', 'D2', 'J1', 'K1']);
+    // Cinemas have no plans: no shelf and no tags.
+    await page.locator('#cityMapPage .fchip.cat[data-cat="cinema"]').click();
+    assert.equal(await page.locator(dock).isVisible(), false);
+    assert.deepEqual(await tags(page), ['', '']);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a picked row and its card keep clear of the dock', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await openMap(page); await turnOn(page);
+    await page.locator(`${dock} .lp-tile`).first().waitFor();
+    await pick(page, HK[0]);
+    await page.waitForTimeout(900);   // the glide
+    const card = await page.locator('#cityMapPage .site').boundingBox();
+    const shelf = await page.locator(dock).boundingBox();
+    assert.ok(card.y + card.height <= shelf.y, `card ends at ${card.y + card.height}, dock starts at ${shelf.y}`);
+    const fp = await page.locator(`#cityMapPage [data-location="${HK[0]}"]`).boundingBox();
+    assert.ok(fp.y + fp.height / 2 < shelf.y, 'the footprint lands above the dock');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('on a phone a Map / Plan switch shows the picked row\'s plan', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await page.setViewportSize({width: 390, height: 844});
+    await openMap(page); await turnOn(page);
+    const seg = '#cityMapPage .lp-seg';
+    assert.equal(await page.locator(dock).isVisible(), false);
+    assert.equal(await page.locator(seg).isVisible(), false);
+    await pick(page, HK[0]);
+    await page.locator(seg).waitFor();
+    await page.locator(`${seg} [data-lp-view="plan"]`).click();
+    assert.equal(await page.locator(`${seg} [data-lp-view="plan"]`).getAttribute('aria-pressed'), 'true');
+    assert.equal(await page.locator('#cityMapPage .lp-phoneplan .lp-svg').isVisible(), true);
+    assert.match(await page.locator('#cityMapPage .lp-phoneplan').textContent(), /C1/);
+    await page.locator(`${seg} [data-lp-view="map"]`).click();
+    assert.equal(await page.locator('#cityMapPage .lp-phoneplan').isVisible(), false);
+    // A row with no plan has no switch.
+    await page.locator(`#cityMapPage .place[data-pick="${MT[1]}"]`).click();
+    await page.waitForFunction(() => document.querySelector('#cityMapPage .lp-seg').hidden);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a live refresh keeps the hover and the pick and never rebuilds the shelf', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await openMap(page); await turnOn(page);
+    await page.locator(`${dock} .lp-tile`).first().waitFor();
+    await pick(page, HK[0]);
+    await page.locator(`#cityMapPage .place[data-pick="${MT[0]}"]`).hover();
+    assert.match(await page.locator(`${dock} .lp-detail`).textContent(), /HoveredD2/);
+    // Mark the tiles and the ?, then refresh as a live save does.
+    await page.evaluate(() => document.querySelectorAll('#cityMapPage .lp-tile, #cityMapPage .lp-why').forEach(t => { t.dataset.marker = '1'; }));
+    await page.locator('#cityMapPage .lp-why').focus();
+    await page.evaluate(() => { D = {...D}; refreshCityMaps(); cityMapPage.update(); });
+    assert.equal(await page.locator('#cityMapPage .lp-tile[data-marker], #cityMapPage .lp-why[data-marker]').count(), 7);
+    assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('lp-why')), true);
+    assert.match(await page.locator(`${dock} .lp-detail`).textContent(), /HoveredD2/);
+    assert.equal(await page.locator(`${dock} .lp-tile.lit`).getAttribute('data-lp-tile'), 'C1');
+    assert.equal(await page.locator(`${dock} .lp-tile.hover`).getAttribute('data-lp-tile'), 'D2');
+    // A tile click changes the counts and the filter in place, focus included.
+    await page.locator(`${dock} .lp-tile[data-lp-tile="C1"]`).focus();
+    await page.keyboard.press('Enter');
+    assert.deepEqual(await rowKeys(page), [HK[0]]);
+    assert.equal(await page.locator('#cityMapPage .lp-tile[data-marker]').count(), 6);
+    assert.equal(await page.evaluate(() => document.activeElement?.dataset.lpTile), 'C1');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a preset or a saved search starts without the layout filter', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await openMap(page); await turnOn(page);
+    await page.evaluate(() => cityMapPage.saveSearch('Shops'));
+    await page.locator(`${dock} .lp-tile[data-lp-tile="C1"]`).click();
+    assert.deepEqual(await rowKeys(page), [HK[0]]);
+    await page.evaluate(() => cityMapPage.applySaved('Shops'));
+    await page.waitForFunction(() => document.querySelectorAll('#cityMapPage .place.fr').length === 3);
+    assert.equal(await page.locator('#cityMapPage .frow.flayout').isVisible(), false);
+    await page.locator(`${dock} .lp-tile[data-lp-tile="C1"]`).click();
+    assert.deepEqual(await rowKeys(page), [HK[0]]);
+    await page.evaluate(() => openFinder({cat: 'retail'}));
+    await page.waitForFunction(() => document.querySelectorAll('#cityMapPage .place.fr').length === 3);
+    assert.equal(await page.locator('#cityMapPage .frow.flayout').isVisible(), false);
+    assert.equal(await page.locator(`${dock} .lp-tile[aria-pressed="true"]`).count(), 0);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a stage the panel nearly fills gets the Map / Plan switch, not the dock', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await page.setViewportSize({width: 900, height: 1000});
+    await openMap(page); await turnOn(page);
+    await pick(page, HK[0]);
+    const seg = '#cityMapPage .lp-seg';
+    await page.locator(seg).waitFor();
+    assert.equal(await page.locator(dock).isVisible(), false);
+    await page.locator(`${seg} [data-lp-view="plan"]`).click();
+    // The plan fills the map area left of the panel, not the space under it.
+    const plan = await page.locator('#cityMapPage .lp-phoneplan').boundingBox();
+    const panel = await page.locator('#cityMapPage .places').boundingBox();
+    assert.ok(plan.x + plan.width <= panel.x + 1, `plan ends at ${plan.x + plan.width}, panel starts at ${panel.x}`);
+    assert.equal(await page.locator('#cityMapPage .lp-phoneplan .lp-svg').isVisible(), true);
+    // The site card steps aside with the map, so it never covers the plan.
+    assert.equal(await page.locator('#cityMapPage .site').isVisible(), false);
+    // Widening the window hands the stage to the dock; narrowing it again
+    // comes back to the plan the player chose.
+    await page.setViewportSize({width: 1440, height: 1000});
+    await page.locator(dock).waitFor();
+    assert.equal(await page.locator('#cityMapPage .lp-phoneplan').isVisible(), false);
+    await page.setViewportSize({width: 900, height: 1000});
+    await page.locator('#cityMapPage .lp-phoneplan .lp-svg').waitFor();
+    assert.equal(await page.locator(`${seg} [data-lp-view="plan"]`).getAttribute('aria-pressed'), 'true');
+    // Back to the map: the card, placed while it was out of layout, is placed
+    // again inside the map area, clear of the panel.
+    await page.locator(`${seg} [data-lp-view="map"]`).click();
+    await page.waitForFunction(() => {
+      const c = document.querySelector('#cityMapPage .site').getBoundingClientRect(), p = document.querySelector('#cityMapPage .places').getBoundingClientRect();
+      return c.width > 0 && c.right <= p.left;
+    }, null, {timeout: 5000});
+    const back = await page.locator('#cityMapPage .site').boundingBox(), box = await page.locator('#cityMapPage [data-stage]').boundingBox();
+    assert.ok(back.x >= box.x && back.y >= box.y && back.y + back.height <= box.y + box.height + 1, `card ${JSON.stringify(back)} stage ${JSON.stringify(box)}`);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a hover the list no longer holds ends; a footprint hover does not', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await openMap(page); await turnOn(page);
+    await page.locator(`${dock} .lp-tile`).first().waitFor();
+    await page.locator(`#cityMapPage .place[data-pick="${MT[0]}"]`).hover();
+    assert.match(await page.locator(`${dock} .lp-detail`).textContent(), /HoveredD2/);
+    // The pointer stays on the list while a filter takes the row away (M1: none listed).
+    await page.evaluate(() => { cityMapPage.layoutPick = 'M1'; cityMapPage.update(); });
+    assert.match(await page.locator(`${dock} .lp-detail`).textContent(), /Hover a row/);
+    await page.evaluate(() => { cityMapPage.layoutPick = null; cityMapPage.update(); });
+    // A footprint hovered on the map keeps its hover through a rebuild, and its
+    // row is marked, not its footprint lit as a list hover would. The pointer
+    // is on the map, as it is for a real footprint hover, so the rebuilt list
+    // has nothing under the pointer to hover.
+    const stage = await page.locator('#cityMapPage [data-stage]').boundingBox();
+    await page.mouse.move(stage.x + 300, stage.y + 60);
+    await page.evaluate(key => { cityMapPage.light(key, false); cityMapPage.update(); }, MT[0]);
+    assert.match(await page.locator(`${dock} .lp-detail`).textContent(), /HoveredD2/);
+    assert.equal(await page.locator(`#cityMapPage .place[data-pick="${MT[0]}"]`).evaluate(r => r.classList.contains('hot')), true);
+    assert.equal(await page.locator(`#cityMapPage [data-location="${MT[0]}"]`).evaluate(p => p.classList.contains('hot')), false);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a card the zoom buttons push aside still keeps clear of the dock', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await openMap(page); await turnOn(page);
+    await page.locator(`${dock} .lp-tile`).first().waitFor();
+    await pick(page, HK[0]);
+    await page.waitForTimeout(900);   // the glide
+    // The case: the card first lands just right of the dock, low enough to meet
+    // the zoom buttons, which push it left over the dock. That needs a stage
+    // where the card fits between the dock and the panel and the zoom buttons
+    // sit less than a card's width from the dock; find one.
+    // Past about 1300 px the shelf has its full room, so the dock's width is
+    // fixed and the width wanted follows from the element sizes.
+    const fits = () => {
+      const v = cityMapPage, sr = v.stage.getBoundingClientRect();
+      const z = v.root.querySelector('.zoomer').getBoundingClientRect();
+      const dockRight = 16 + v.dock.offsetWidth, cw = v.card.offsetWidth, zl = z.left - sr.left - 8;
+      const limit = sr.width - PANEL_W - 14;
+      return !v.dock.hidden && dockRight + 1 + cw <= limit && zl - cw < dockRight;
+    };
+    await page.setViewportSize({width: 1500, height: 1000});
+    await page.waitForFunction(() => { const v = cityMapPage; return !v.dock.hidden && v.stage.getBoundingClientRect().width > 1300; });
+    const width = await page.evaluate(() => {
+      const v = cityMapPage, sr = v.stage.getBoundingClientRect();
+      // The card fits between the dock and the panel from this stage width on.
+      const stage = 16 + v.dock.offsetWidth + 1 + v.card.offsetWidth + PANEL_W + 14;
+      return Math.ceil(stage + (window.innerWidth - sr.width));
+    });
+    await page.setViewportSize({width, height: 1000});
+    await page.waitForFunction(fits, null, {timeout: 5000});
+    // Move the camera, as a drag does, so the card lands there.
+    await page.evaluate(key => {
+      const v = cityMapPage; v.rect = null;
+      const r = v.stageRect(), s = v.scale(), [x, y, w, h] = v.assets.byKey.get(key).bounds;
+      const px = 16 + v.dock.offsetWidth + 1 - 40, py = r.height - 40;
+      v.box = [x + w / 2 - px / s, y + h / 2 - py / s, r.width / s, r.height / s];
+      v.drawView();
+    }, HK[0]);
+    const card = await page.locator('#cityMapPage .site').boundingBox();
+    const shelf = await page.locator(dock).boundingBox();
+    const meet = card.x < shelf.x + shelf.width && card.x + card.width > shelf.x
+      && card.y < shelf.y + shelf.height && card.y + card.height > shelf.y;
+    assert.equal(meet, false, `card ${JSON.stringify(card)} dock ${JSON.stringify(shelf)}`);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

@@ -1,0 +1,154 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-09-25T09:00:00Z"
+ },
+ "title": "Big Copilot Floor Plans",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [],
+ "boards": {
+  "Main.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 880,
+   "title": "1 · A row picked, another hovered",
+   "is_interactive": true
+  },
+  "CompareTray.dc.html": {
+   "x": 0,
+   "y": 1300,
+   "w": 1440,
+   "h": 880,
+   "title": "2A · Compare: pin plans side by side",
+   "is_interactive": true
+  },
+  "CompareShelf.dc.html": {
+   "x": 1560,
+   "y": 1300,
+   "w": 1440,
+   "h": 1300,
+   "title": "2B · Compare: the kind's layouts on a shelf",
+   "is_interactive": true
+  },
+  "NoPlan.dc.html": {
+   "x": 0,
+   "y": 3020,
+   "w": 1440,
+   "h": 880,
+   "title": "3 · A row with no plan",
+   "is_interactive": true
+  },
+  "PhonePlan.dc.html": {
+   "x": 1560,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "4A · Phone: Map / Plan in the map window",
+   "is_interactive": true
+  },
+  "PhoneRow.dc.html": {
+   "x": 2030,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "4B · Phone: the plan opens in the picked row",
+   "is_interactive": true
+  },
+  "Legend.dc.html": {
+   "x": 1560,
+   "y": 3020,
+   "w": 1440,
+   "h": 900,
+   "title": "5 · Legend, scale, orientation, themes",
+   "is_interactive": true
+  },
+  "Layouts.dc.html": {
+   "x": 0,
+   "y": 3940,
+   "w": 1440,
+   "h": 1180,
+   "title": "Reference · the 24 finder layouts",
+   "is_interactive": true
+  }
+ },
+ "order": [
+  "Main.dc.html",
+  "CompareTray.dc.html",
+  "CompareShelf.dc.html",
+  "NoPlan.dc.html",
+  "PhonePlan.dc.html",
+  "PhoneRow.dc.html",
+  "Legend.dc.html",
+  "Layouts.dc.html"
+ ],
+ "notes": {
+  "try-main": {
+   "x": 0,
+   "y": -250,
+   "w": 560,
+   "maxH": 190,
+   "text": "Hover a row: the plan card bottom-left shows its layout (hollow dot = hovered), and falls back to the picked row when you leave the list. Click a row: the map pans it into the free area above the card and its site card opens. The layout code also sits at the start of each row's second line."
+  },
+  "try-comparetray": {
+   "x": 0,
+   "y": 1050,
+   "w": 560,
+   "maxH": 190,
+   "text": "Option A. Pinned plans sit side by side at ONE scale, so an A1 really is a third of a C1. The dashed slot is whatever you hover or picked; Pin keeps it (up to 3). The x unpins. Pinned rows wear a pin after the address."
+  },
+  "try-compareshelf": {
+   "x": 1560,
+   "y": 1050,
+   "w": 560,
+   "maxH": 190,
+   "text": "Option B (recommended). The kind has only 6 retail / 6 office / 12 warehouse layouts, so the dock shows all of them at one scale. Hover a row: its layout lights up. Click a tile: the list keeps only that layout (a Layout chip appears in the filters); click again to clear."
+  },
+  "try-noplan": {
+   "x": 0,
+   "y": 2770,
+   "w": 560,
+   "maxH": 190,
+   "text": "The picked row (54 Fifth Avenue here, as if its version were unknown) has no plan: no card, no layout tag, no placeholder. Hover a row that has one and its card appears; leave the list and it goes again. Cinemas and theatres always look like this."
+  },
+  "try-phoneplan": {
+   "x": 1560,
+   "y": -250,
+   "w": 390,
+   "maxH": 190,
+   "text": "Option A (recommended). No hover on a phone. Once a row is picked, a Map / Plan switch sits in the map window; Plan fills the window with the plan and its numbers. Tap Plan."
+  },
+  "try-phonerow": {
+   "x": 2030,
+   "y": -250,
+   "w": 390,
+   "maxH": 190,
+   "text": "Option B. The picked row opens in the list and carries its plan. Costs list height; keeps the map for the map."
+  },
+  "try-legend": {
+   "x": 1560,
+   "y": 2770,
+   "w": 560,
+   "maxH": 190,
+   "text": "Five colours from the board's tokens. Orientation vs the street is unverified: the plans are in the prefab's own frame."
+  },
+  "try-layouts": {
+   "x": 0,
+   "y": 3690,
+   "w": 560,
+   "maxH": 190,
+   "text": "All 24 plans at one scale per kind, with what the card would show. Useful for checking the renders against the game."
+  },
+  "title-row1": {
+   "x": 0,
+   "y": -560,
+   "text": "Floor plans in the finder (issue #70)",
+   "kind": "title1",
+   "maxW": 2400
+  }
+ },
+ "designSystems": []
+}

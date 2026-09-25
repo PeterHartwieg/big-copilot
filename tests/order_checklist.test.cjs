@@ -22,17 +22,27 @@ const businesses = [
   {key:'factory#2', name:'Factory', address:'2 Factory Street'},
   {key:'shop#3', name:'Shop', address:'3 Shop Street'},
 ];
+// Every row Python sends carries its item's key beside the name; a fixture
+// that names only the item gets the key it would have had.
+const keyed = r => r.slug ? r : {...r, slug: keyOf(r.item)};
 const build = (overrides = {}) => {
   const args = {imports:[], loose:[], sites:[], shops:[], checks:[], businesses, ...overrides};
   return JSON.parse(JSON.stringify(context.buildOrderChecklist(
-    args.imports, args.loose, args.sites, args.shops, args.checks, args.businesses)));
+    args.imports.map(d => ({...d, rows: d.rows.map(keyed)})), args.loose.map(keyed),
+    args.sites.map(s => ({...s, rows: s.rows.map(keyed)})), args.shops.map(keyed), args.checks.map(keyed),
+    args.businesses)));
 };
 // A fact as Python sends it, with only the fields a test cares about.
 const fact = (st, extra = {}) => ({st, why: null, lvl: st === 'covered' ? 'ok' : 'warn', setTo: null,
   use: 1300, need: 1500, parts: {lines: 1000, sites: 300, route: 0}, ...extra});
-// A Weekly imports row as drawLogistics() builds it: the fact's figures, then the setting.
-const order = changes => ({s:0, item:'Sugar', current:1000, inGame:1000, setTo:1500, value:1500,
-  fit:'short', use:1300, parts:{lines:1000, sites:300, route:0}, margin:0.15, ...changes});
+// The item's key, as Python sends it beside every name.
+const keyOf = item => `ba:itemname_${item.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
+// A Weekly imports row as supplyChecklistRows() builds it: the fact's figures, then the setting.
+const order = changes => {
+  const row = {s:0, item:'Sugar', current:1000, inGame:1000, setTo:1500, value:1500,
+    fit:'short', use:1300, parts:{lines:1000, sites:300, route:0}, margin:0.15, ...changes};
+  return {slug: keyOf(row.item), ...row};
+};
 
 test('a paused contract beside a top-up that falls short is resumed; one the top-up covers is left alone', () => {
   const paused = lvl => order({item: 'Water', fit: 'paused', paused: true, pausedWeekly: 1000, current: 0,
@@ -135,6 +145,20 @@ test('incomplete data preserves saved marks until a complete snapshot can reconc
   assert.equal(marks.size, 0, 'a complete snapshot can remove resolved actions');
 });
 
+test('a row is keyed by its item key, and a tick stored under the item name still counts', () => {
+  const [row] = build({imports:[{s:0, rows:[order({slug: 'ba:itemname_sugar'})]}]});
+  assert.equal(row.key, JSON.stringify(['Weekly imports', 'depot#1', 'ba:itemname_sugar', 1000, 1500, null]));
+  // The key a tick was stored under before: the same row, by the item's name.
+  const stored = JSON.stringify(['Weekly imports', 'depot#1', 'Sugar', 1000, 1500, null]);
+  assert.deepEqual([...context.reconcileOrderMarks(new Set([stored]), [row], true)], [row.key]);
+  assert.deepEqual([...context.reconcileOrderMarks(new Set([stored]), [row], false)], [row.key]);
+  // A same-named item under another key is another row: its tick is not this one's.
+  const [twin] = build({imports:[{s:0, rows:[order({slug: 'ba:itemname_rawsugar'})]}]});
+  assert.notEqual(twin.key, row.key);
+  // A stored name no row carries any more is dropped like any resolved tick.
+  assert.equal(context.reconcileOrderMarks(new Set([stored]), [], true).size, 0);
+});
+
 test('a paused order or delivery gap is a review action, not an invented quantity', () => {
   const rows = build({checks:[
     {s:0, item:'Flour', paused:true, from:'Importer', fact:fact('paused')},
@@ -217,7 +241,7 @@ const heldNow = c => c.smart && Number.isFinite(c.target) ? c.target : c.weekly 
 const typed = (contract, edit) => typeof edit === 'number' ? {value: edit, inGame: heldNow(contract)} : edit;
 const setting = (f, contract, edit) => JSON.parse(JSON.stringify(
   context.importSetting(f, contract, typed(contract, edit))));
-// A row as drawLogistics builds it: the fact's figures, then the setting.
+// A row as supplyChecklistRows builds it: the fact's figures, then the setting.
 const row = (f, contract, edit, extra = {}) => ({s:0, item:'Sugar', use:f.use, parts:f.parts, margin:0.15,
   need:f.need, ...setting(f, contract, edit), ...extra});
 
@@ -371,13 +395,33 @@ test('the Plan imports card has four states, and counts what the checklist has t
 });
 
 test('tight never reaches Today: with only margin changes left, the card says nothing falls short', () => {
-  // drawOrderChecklist() hands the card the rows that are not tight, and how many are.
+  // drawSupplyStrip() hands the card the rows that are not tight, and how many are.
   assert.deepEqual(card([], [], {complete: true, unnamed: 0, margin: 2}), {badge:'ALL SET', live:false,
-    what:'Nothing falls short. Supply › Orders lists 2 changes that would restore the margin.'});
+    what:'Nothing falls short. Supply lists 2 changes that would restore the margin.'});
   assert.doesNotMatch(card([], [], {complete: true, unnamed: 0, margin: 1}).what, /tight/i);
-  const drawn = source.slice(source.indexOf('function drawOrderChecklist('), source.indexOf('/* The Set to figures the player typed'));
-  assert.match(drawn, /const urgent = rows\.filter\(r => !r\.tight\);/);
+  const drawn = source.slice(source.indexOf('function drawSupplyStrip('), source.indexOf('/* The Set to figures the player typed'));
+  assert.match(drawn, /const urgent = rows\.filter\(r => !r\.tight && !r\.lower\);/);
   assert.match(drawn, /planImportsState\(urgent,/);
+});
+
+test('a top-up target set too high is a change to lower, never tight and never on Today', () => {
+  const [row] = build({shops:[{s:2, item:'Paper Bag', target:3000, sold:90, peakSold:99, peakDay:'Saturday', from:0,
+    fact:fact('idle', {why:'targetHigh', role:'shelf', cad:'daily', use:99, need:114, have:3000, setTo:120, lowers:true})}]});
+  assert.deepEqual([row.kind, row.current, row.proposed, row.lower, row.tight], ['Shop daily top-ups', 3000, 120, true, undefined]);
+  assert.match(row.reason, /^From Depot · 1 Depot Street\. Lower the top-up: it holds 33 days of sales\./);
+  // An idle shelf without the figure asks for nothing.
+  assert.deepEqual(build({shops:[{s:2, item:'Paper Bag', target:3000, sold:90, peakSold:99, from:0,
+    fact:fact('idle', {why:'targetHigh', setTo:null})}]}), []);
+  // With only a top-up to lower left, Today's card says nothing falls short.
+  assert.deepEqual(card([], [], {complete: true, unnamed: 0, lower: 1}), {badge:'ALL SET', live:false,
+    what:'Nothing falls short. Supply lists one top-up to lower.'});
+  assert.equal(card([], [], {complete: true, unnamed: 0, margin: 1, lower: 3}).what,
+    'Nothing falls short. Supply lists one change that would restore the margin and 3 top-ups to lower.');
+  // Beside changes to type, the card says what else Supply lists, so its count and the strip's add up.
+  const one = build({imports:[{s:0, rows:[order({})]}]});
+  assert.match(card(one, [], {complete: true, unnamed: 0, margin: 1, lower: 2}).what, / 3 more on Supply only restore the margin or lower a target\.$/);
+  assert.match(card(one, [one[0].key], {complete: true, unnamed: 0, lower: 2}).what, /next save\. 2 more on Supply only lower a target\.$/);
+  assert.doesNotMatch(card(one, [], {complete: true, unnamed: 0}).what, /more on Supply/);
 });
 
 test('an empty checklist that could not see everything does not say ALL SET', () => {
@@ -422,4 +466,22 @@ test('the board keeps no verdict engine of its own', () => {
   for(const name of ['function feedVerdict(', 'function feedRoute(', 'const feedFit =', 'function importLevelFor(',
                      'const importRaise =', 'function importWeek(', 'const ceil100 ='])
     assert.equal(source.indexOf(name), -1, name);
+});
+
+test('a factory line short of its hours is one "Factory run hours" row; more hours than needed is none', () => {
+  const lines = [
+    {s: 1, item: 'Cake', slug: 'ba:itemname_cake', fact: {st: 'short', why: 'hours', lvl: 'warn'}, hoursNow: 12, need: 24, machines: 2,
+     sizedFor: 'Full-rate input requirement'},
+    {s: 1, item: 'Bread', slug: 'ba:itemname_bread', fact: {st: 'covered', why: null, lvl: 'ok', lower: 10}, hoursNow: 24, need: 10, machines: 2},
+  ];
+  const rows = JSON.parse(JSON.stringify(context.buildOrderChecklist([], [], [], [], [], businesses, [], [], lines)));
+  assert.deepEqual(rows.map(r => [r.kind, r.item, r.current, r.proposed, r.mode]),
+    [['Factory run hours', 'Cake', 12, 24, 'hours']]);
+  assert.match(rows[0].reason, /24 hours a day, on each of its 2 machines; the roster has them 12\. Sized 24\/7/);
+  // Keyed by the item's key, as every checklist row is.
+  assert.equal(rows[0].key, JSON.stringify(['Factory run hours', 'factory#2', 'ba:itemname_cake', 12, 24, null]));
+  assert.match(context.orderChecklistText(rows, 'Company'), /Cake: run 12 -> 24 hours\/day/);
+  assert.match(context.orderChecklistText(rows, 'Company', 'dem'), /sized for what the shops at the end of each chain use/);
+  assert.match(context.orderChecklistText(rows, 'Company'), /assume the lines run round the clock/);
+  assert.equal(card(rows).what, '<b>Cake</b> at Factory: run hours 12 \u2192 24 a day.');
 });

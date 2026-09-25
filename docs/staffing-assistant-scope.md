@@ -656,6 +656,17 @@ alert. It is also the worst offender on `HART. YT`: 497 shifts a week on eight
 machines, 400 of them two hours, against 112 for a 12-hour roster. Cheapest
 follow-up of the three.
 
+*Update (R13, Supply by object):* factories now get a roster, `factoryStaffing`,
+from the same placer. `_factory_staffing()` hands `_place_week()` one Factory
+Worker station per machine, open around the clock with no cleaning or security,
+and each machine's hours directly (the `stations` seam in `_place_week()`) in
+place of a need curve: every line runs its needed hours a day, 24 sized 24/7 or
+`needHours.dem` sized for demand, as one run that `_factory_run_start()` places
+around the workers' blackout windows (06:00 when nothing decides) and
+`_cut_run()` cuts at 12 hours. The pool is the factory's own staff; nobody
+unassigned is drawn. It is built for both sizings and shown on Supply's
+Factories tab, not on the factory's site page. Retail's `staffing` is unchanged.
+
 **Opening hours.** The same curves say when a site is worth opening at all. A
 24-hour shop whose 00–06 ceiling is a handful of customers an hour is paying four
 staff-shifts a week for it. A bigger lever than rostering those hours well, but it
