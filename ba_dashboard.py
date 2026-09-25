@@ -7657,7 +7657,13 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
         skill = role["skill"]
         posts = [s for s in grid["stations"] if s["skill"] == skill]
         role_wages[skill] = _role_wage(people, business, bench, skill)
-        wanted[skill] = _cover_runs(
+        # A factory hands each machine's hours over itself (`stations`, see
+        # _factory_staffing()); a shop's come from its need curve. Copied,
+        # because the bridging below writes into them.
+        stations = need[skill].get("stations")
+        wanted[skill] = {
+            index: [set(hours) for hours in days] for index, days in stations.items()
+        } if stations else _cover_runs(
             need[skill]["need"], [s["rate"] for s in posts], open_hours
         )
     required = sum(
