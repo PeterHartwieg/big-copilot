@@ -295,7 +295,12 @@ class CityMapView {
       if(tile){ this.layoutPick = this.layoutPick === tile.dataset.lpTile ? null : tile.dataset.lpTile; this.showAll = false; this.update(); return; }
       if(e.target.closest('[data-lp-clear]')){ this.layoutPick = null; this.showAll = false; this.update(); return; }
       const view = e.target.closest('[data-lp-view]');
-      if(view){ this.planView = view.dataset.lpView === 'plan'; this.paintPlans(); return; }
+      if(view){
+        this.planView = view.dataset.lpView === 'plan'; this.paintPlans();
+        // The card was out of layout under the plan; place it again now the map is back.
+        if(!this.planView) this.paintView();
+        return;
+      }
       const action = e.target.closest('[data-action]')?.dataset.action;
       if(action === 'in' || action === 'out') this.zoom(action === 'in' ? .65 : 1.5);
       if(action === 'reset') this.reset(true);
@@ -1421,7 +1426,7 @@ class CityMapView {
       const focusedKey=this.list.contains(document.activeElement)?document.activeElement.dataset.pick:null, listScroll=this.list.scrollTop;
       // Rebuilding the rows under the pointer fires a leave; the hover survives
       // a live refresh as long as its row does.
-      const hovered = this.hoverKey;
+      const hovered = this.hoverKey, hoveredFromList = this.hoverFromList;
       const all = this.matches;
       const some = this.showAll ? all : all.slice(0, 80);
       this.list.innerHTML = (this.saleView() ? this.saleList(some) : this.finderList(some))
@@ -1432,7 +1437,7 @@ class CityMapView {
       // A list hover whose row the change took away ends with it; a footprint
       // hovered on the map stays hovered, whatever the list now holds.
       const row = hovered && this.list.querySelector(`[data-pick="${CSS.escape(hovered)}"]`);
-      if(hovered && this.hoverFromList){ if(row){ this.light(hovered); row.classList.add('hot'); } else this.light(null); }
+      if(hovered && hoveredFromList){ if(row){ this.light(hovered); row.classList.add('hot'); } else this.light(null); }
       else if(hovered) this.light(hovered, false);
     }
     // The dock first, so the card is placed against the dock as it now stands.

@@ -1612,6 +1612,15 @@ test('a stage the panel nearly fills gets the Map / Plan switch, not the dock', 
     await page.setViewportSize({width: 900, height: 1000});
     await page.locator('#cityMapPage .lp-phoneplan .lp-svg').waitFor();
     assert.equal(await page.locator(`${seg} [data-lp-view="plan"]`).getAttribute('aria-pressed'), 'true');
+    // Back to the map: the card, placed while it was out of layout, is placed
+    // again inside the map area, clear of the panel.
+    await page.locator(`${seg} [data-lp-view="map"]`).click();
+    await page.waitForFunction(() => {
+      const c = document.querySelector('#cityMapPage .site').getBoundingClientRect(), p = document.querySelector('#cityMapPage .places').getBoundingClientRect();
+      return c.width > 0 && c.right <= p.left;
+    }, null, {timeout: 5000});
+    const back = await page.locator('#cityMapPage .site').boundingBox(), box = await page.locator('#cityMapPage [data-stage]').boundingBox();
+    assert.ok(back.x >= box.x && back.y >= box.y && back.y + back.height <= box.y + box.height + 1, `card ${JSON.stringify(back)} stage ${JSON.stringify(box)}`);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
@@ -1628,10 +1637,15 @@ test('a hover the list no longer holds ends; a footprint hover does not', async 
     assert.match(await page.locator(`${dock} .lp-detail`).textContent(), /Hover a row/);
     await page.evaluate(() => { cityMapPage.layoutPick = null; cityMapPage.update(); });
     // A footprint hovered on the map keeps its hover through a rebuild, and its
-    // row is marked, not its footprint lit as a list hover would.
+    // row is marked, not its footprint lit as a list hover would. The pointer
+    // is on the map, as it is for a real footprint hover, so the rebuilt list
+    // has nothing under the pointer to hover.
+    const stage = await page.locator('#cityMapPage [data-stage]').boundingBox();
+    await page.mouse.move(stage.x + 300, stage.y + 60);
     await page.evaluate(key => { cityMapPage.light(key, false); cityMapPage.update(); }, MT[0]);
     assert.match(await page.locator(`${dock} .lp-detail`).textContent(), /HoveredD2/);
     assert.equal(await page.locator(`#cityMapPage .place[data-pick="${MT[0]}"]`).evaluate(r => r.classList.contains('hot')), true);
+    assert.equal(await page.locator(`#cityMapPage [data-location="${MT[0]}"]`).evaluate(p => p.classList.contains('hot')), false);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
@@ -1647,20 +1661,25 @@ test('a card the zoom buttons push aside still keeps clear of the dock', async (
     // the zoom buttons, which push it left over the dock. That needs a stage
     // where the card fits between the dock and the panel and the zoom buttons
     // sit less than a card's width from the dock; find one.
-    const fits = () => page.evaluate(() => {
-      const v = cityMapPage, r = v.stageRect(), sr = v.stage.getBoundingClientRect();
+    // Past about 1300 px the shelf has its full room, so the dock's width is
+    // fixed and the width wanted follows from the element sizes.
+    const fits = () => {
+      const v = cityMapPage, sr = v.stage.getBoundingClientRect();
       const z = v.root.querySelector('.zoomer').getBoundingClientRect();
       const dockRight = 16 + v.dock.offsetWidth, cw = v.card.offsetWidth, zl = z.left - sr.left - 8;
-      const limit = r.width - PANEL_W - 14;
+      const limit = sr.width - PANEL_W - 14;
       return !v.dock.hidden && dockRight + 1 + cw <= limit && zl - cw < dockRight;
+    };
+    await page.setViewportSize({width: 1500, height: 1000});
+    await page.waitForFunction(() => { const v = cityMapPage; return !v.dock.hidden && v.stage.getBoundingClientRect().width > 1300; });
+    const width = await page.evaluate(() => {
+      const v = cityMapPage, sr = v.stage.getBoundingClientRect();
+      // The card fits between the dock and the panel from this stage width on.
+      const stage = 16 + v.dock.offsetWidth + 1 + v.card.offsetWidth + PANEL_W + 14;
+      return Math.ceil(stage + (window.innerWidth - sr.width));
     });
-    let found = false;
-    for(let width = 1400; width <= 1900 && !found; width += 10){
-      await page.setViewportSize({width, height: 1000});
-      await page.waitForTimeout(80);
-      found = await fits();
-    }
-    assert.ok(found, 'no stage width puts the card between the dock and the zoom buttons');
+    await page.setViewportSize({width, height: 1000});
+    await page.waitForFunction(fits, null, {timeout: 5000});
     // Move the camera, as a drag does, so the card lands there.
     await page.evaluate(key => {
       const v = cityMapPage; v.rect = null;
