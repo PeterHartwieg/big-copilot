@@ -23009,6 +23009,9 @@ function hrQuickReview(){
        write is still under way (onDone or onFailed ends the hold then). */
     dlg.addEventListener("close", () => {
       if(dlg.dataset.phase !== "applying") return release();
+      /* The close event comes after close(): an answer may have released
+         this confirm already, and then nothing is pending. */
+      if(hrUi.quickHold !== token) return;
       hrUi.quickPending = token;
       if($("secStaff")) drawStaff(["hsQuick"]);
     });

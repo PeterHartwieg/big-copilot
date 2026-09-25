@@ -1236,7 +1236,8 @@ async function closedWhileApplying(page) {
   await page.locator('dialog.gw-dlg .gw-foot [data-gw-b="apply"]').click();
   await phase(page, 'applying');
   await page.evaluate(() => document.querySelector('dialog.gw-dlg').close());
-  await page.waitForFunction(() => !document.querySelector('dialog.gw-dlg[open]'));
+  // The close event (which removes the dialog) has run, not only close().
+  await page.waitForFunction(() => !document.querySelector('dialog.gw-dlg'));
   // The write is still under way: the week stays held.
   assert.ok(await page.evaluate(() => hrUi.quickHold));
   assert.deepEqual((await model(page)).weeks[0], [G, 'demand', ['move:SPARE1', 'quick:c2']]);
@@ -1278,6 +1279,30 @@ test('while a closed Quick hire confirm still applies, the button waits and no s
   // The write fails: nobody hired, the form as it was, the button back.
   await page.evaluate(() => window.release(false));
   await page.waitForFunction(() => !hrUi.quickHold && !hrUi.quickPending);
+  assert.equal((await go.textContent()).trim(), 'Hire 1');
+  assert.equal(await go.getAttribute('aria-disabled'), null);
+});
+
+test('an answer that lands before the close event leaves nothing pending', async (t) => {
+  const page = await board(t);
+  await page.evaluate(src => {
+    window.answerFor = eval(src);
+    window.hrAnswer = (kind, body, o) => o.dryRun ? Promise.resolve({status: 200, error: null, body: window.answerFor(body)})
+      : new Promise(r => { window.release = () => r({status: 409, error: 'cannot_write', body: {error: 'cannot_write', reason: 'myemployees'}}); });
+  }, `(${answerFor.toString()})`);
+  const box = page.locator('#hsQuick');
+  await box.locator('[data-hq-role]').selectOption(CS);
+  await box.locator('[data-hq-site]').selectOption(G);
+  await box.locator('[data-hq-go]').click();
+  await phase(page, 'ready');
+  await page.locator('dialog.gw-dlg .gw-foot [data-gw-b="apply"]').click();
+  await phase(page, 'applying');
+  // close() queues its event; the write's answer runs first, in microtasks.
+  await page.evaluate(() => { document.querySelector('dialog.gw-dlg').close(); window.release(); });
+  await page.waitForFunction(() => !document.querySelector('dialog.gw-dlg'));
+  await page.evaluate(() => new Promise(r => setTimeout(r, 50)));
+  assert.deepEqual(await page.evaluate(() => [hrUi.quickHold, !!hrUi.quickPending]), [false, false]);
+  const go = page.locator('#hsQuick [data-hq-go]');
   assert.equal((await go.textContent()).trim(), 'Hire 1');
   assert.equal(await go.getAttribute('aria-disabled'), null);
 });
