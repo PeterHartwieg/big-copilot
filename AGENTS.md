@@ -29,9 +29,9 @@ Everything else:
 - Pyodide worker: `web/worker.js`
 - update banner: `web/update.js`
 - map: `web/map.js`, `web/map.css`, with assets from `export_map.py`
-- wiki pipeline: the `.py` files directly in `tools/` (not `tools/game_update/`), with the
-  authored wording in `tools/wiki_sample.json` and the hand-written articles in
-  `tools/wiki_topics.json`. `tools/` also holds the GLM launcher,
+- wiki pipeline: the `.py` files directly in `tools/` (not `tools/game_update/` or
+  `tools/game_link_mock.py`), with the authored wording in `tools/wiki_sample.json` and the
+  hand-written articles in `tools/wiki_topics.json`. `tools/` also holds the GLM launcher,
   `tools/Invoke-ZaiClaude.ps1`, which is nothing to do with the wiki
 - static wiki pages for search engines (`/wiki/...`, the sitemap, robots.txt):
   `tools/wiki_pages.py`, from `web/wiki-data.json`
@@ -68,6 +68,7 @@ The board's words and the code's ids often differ, so grep the id, not the word.
 | Promotion (site panel block) | block `pull`, drawn by `spPull()` |
 | At capacity, building capacity | finding kind `atcap`; the capacities are `_door_caps()` and `FALLBACK_CAPS` |
 | Milestones | `secGoals`, drawn by `drawGoals()` |
+| Staffing for factory lines | `drawFactoryStaffing()`, over the `factoryStaffing` payload key from `_factory_staffing()` |
 
 Words the board does not use, in UI text, wiki text and docs alike (code ids keep their
 names):
@@ -112,7 +113,7 @@ side and rebuild — the rebuild is the resolution.
 | `web/changelog.json` | `python -m unittest tests.test_release_latest`, then `python build_web.py`: the file is a build stamp input |
 | A new finding kind, view, payload key, finder filter, footer link or news item | the matching checklist in the Registries section of `docs/architecture.md`, and the tests it names |
 | `web/map.js`, `web/map.css` | `node --test tests/map.test.cjs tests/finder.test.cjs` and `python -m unittest discover -s tests -p test_map_assets.py`, then `python build_web.py`. The finder lives in `web/map.js`; `tests/finder.test.cjs` also covers `drawFindLocation` in `ba_dashboard.py`, and `finderPreset`, through a Growth › Demand cell opening the finder |
-| `tools/*.py` (the wiki pipeline, not `tools/game_update/`), `tools/wiki_sample.json`, `tools/wiki_topics.json`, `web/wiki.js`, `web/wiki.css` | `python -m unittest discover -s tests -p "test_wiki*.py"` (the hand-written articles are `tests/test_wiki_build.py`) and `node --test tests/wiki*.test.cjs`, then `python build_web.py` |
+| `tools/*.py` (the wiki pipeline, not `tools/game_update/` or `tools/game_link_mock.py`), `tools/wiki_sample.json`, `tools/wiki_topics.json`, `web/wiki.js`, `web/wiki.css` | `python -m unittest discover -s tests -p "test_wiki*.py"` (the hand-written articles are `tests/test_wiki_build.py`) and `node --test tests/wiki*.test.cjs`, then `python build_web.py` |
 | `server/`, `migrations/` | `npm run test:community` and `npm run check:worker` |
 | `web/community.js`, `web/community.css` | those two npm commands, then `python build_web.py` — both files are cache-busted by the build stamp |
 | `make_buildings.py`, `make_floor_plans.py` or what they write | `python -m unittest tests.test_floor_plans tests.test_premises`, then `python build_web.py` |

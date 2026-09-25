@@ -542,7 +542,7 @@ says otherwise; "board script" means the last `<script>` block of its `TEMPLATE`
 | `def _condense(` | *Only if* the kind merges and a field of its own must survive the merge. A merged row is built fresh: it keeps `group`, the key the rows were merged on; from the worst row it keeps `level`, `site`, `siteKey`, `detail` (that row's `text`) and `ev` when present; `text` is the `SUMMARIES` line, `worth` the sum of the rows' non-null worths (or `None` when there are none), `unit` from `ALERT_UNITS`, `id` a new `_alert_id("summary", …)`, and `always` is true if any row's is. Every other field is dropped. Every row, merged or not, also loses `rank` and `subject`, and `always` once the materiality gate has used it | none |
 | `const ALERT_GROUPS = [` (board script) | `{id, label, note, on}`. The settings panel, `kindLabel`, `kindCounts`, search and the map's `kindOff` all read it. Keep a noisy kind `on: false` | `tests/alert_kinds.test.cjs`, "At capacity is on by default" and the per-kind tests |
 | `const ALERT_DEFAULTS_V1 =` (board script) | Never add to it: it is the frozen migration of old settings | `tests/alert_kinds.test.cjs`, "a stored whole map keeps only …" |
-| `const ALERT_LINKS = {` (board script) | Where a click lands: `{sec, tab?, site?, port?}`, where `tab` is a Supply tab (`shops`, `warehouses`, `factories`) or `"site"` for the tab of the site's own kind. Without it `goToAlert()` does nothing | `tests/alert_kinds.test.cjs` per-kind tests; `tests/job_demands.test.cjs`, "both demand findings can be filtered and link somewhere" |
+| `const ALERT_LINKS = {` (board script) | Where a click lands: `{sec, tab?, site?, port?}`, where `tab` is a Supply tab (`shops`, `warehouses`, `factories`) or `"site"` for the tab of the site's own kind. Without it `goToAlert()` does nothing | `tests/alert_kinds.test.cjs` per-kind tests and "the supply kinds land on the Supply tab of their object"; `tests/job_demands.test.cjs`, "both demand findings can be filtered and link somewhere" |
 | `const ALERT_SITE_PICK = {` (board script) | *Only if* the kind is company-wide, with no site of its own | `tests/job_demands.test.cjs` |
 | `const ALERT_LANDS_ON_ROW = new Set(` (board script) | *Only if* the finding is about one shelf, stock or input row | none |
 | `const ALERT_EVIDENCE = {` (board script) | The site panel block it lights, `{block, hit?}` | `tests/site_panel.test.cjs`, "the findings here are the ones about this site, and each lights its block" |
@@ -564,11 +564,11 @@ Today `vacant` has no `ALERT_EVIDENCE` entry, most kinds have no `SS_KIND_SYN` e
 | `const PAGES = [` (board script) | *Only for a page*: `{id, label, host, newFeature?}` | `tests/navigation.test.cjs`, "the top row is Today, Company, Supply, Growth, Map, Wiki" |
 | `const ICON = {` (board script) | *Only for a page*: its nav icon, keyed by page id | none |
 | `const SUBS = {` (board script) | *Only for a view*: its `[id, label, section]` item; a new page with views needs the whole entry | `tests/navigation.test.cjs`, "Company carries Results, Products, Payroll and Milestones" |
-| `const SEC_PAGE = {` (board script) | `secX: [page, view]` for every section. Without it `reveal()`, the sub-nav and `pageFromHash()` fail | `tests/navigation.test.cjs`, "every Company section deep link opens the view that holds it" |
+| `const SEC_PAGE = {` (board script) | `secX: [page, view]` for every section. Without it `reveal()`, the sub-nav and `pageFromHash()` fail | `tests/navigation.test.cjs`, "every Company section deep link opens the view that holds it"; `tests/alert_kinds.test.cjs`, "the supply kinds land on the Supply tab of their object" |
 | `const PAGE_DRAWS = [` (board script) | `["page/view", () => drawX()]`, tagged with every view whose markup it writes | `tests/calm_refresh.test.cjs`, "a refresh on Today draws Today …" |
 | `const SS_VIEWS = [` (board script) | `{id, t, p, ic, syn, go}`, so search can open it | `tests/search.test.cjs`, "the index holds every group …" |
 | `function showPage(` (board script) | *Only if* the page loads or draws when shown, as the Map does | none |
-| `const SB_SEC =`, `const SB_LABEL =`, `const SB_TAB_ICON =` (board script) | *Only for* a new Supply tab: its section, label and icon, keyed by the tab id, beside its `SUBS` item and its `draw…Tab()` function | `tests/navigation.test.cjs`, "Supply is three tabs, one per object"; `tests/import_routes.test.cjs` |
+| `const SB_SEC =`, `const SB_LABEL =`, `const SB_TAB_ICON =` (board script) | *Only for* a new Supply tab: its section, label and icon, keyed by the tab id. Also its `supply` item in `SUBS`; its draw function in `drawSupplyTab()`'s dispatch map (a missing tab draws Shops); `sbTabOf()`, which sorts a site onto a tab; and the tab-keyed objects in `sbData()` (`byTab`), `sbUpdateStrip()` (`sbLeft`) and `ssIdleTab()` | `tests/navigation.test.cjs`, "Supply is three tabs, one per object"; `tests/import_routes.test.cjs` |
 | `const PAGE_ALIASES =`, `const SEC_MOVED =` (board script) | *Only when* renaming or moving an old page or section | `tests/navigation.test.cjs` |
 | `const quietRender =` in `tests/search.test.cjs` | A new draw function, in the list the test stubs | that test |
 | `tests/milestones.test.cjs` | Nothing, but mind its four slices, which it runs in a VM: `const fmt =` to `const compact =`, `const attr =` to `/* Tooltips are plain text`, `const plural =` to `/* A rival per dot`, and `function drawGoals(){` to `/* Next moves: the Plan imports card`. A function declared inside one is harmless; a top-level statement there runs in the test, and moving or rewording a start or end anchor breaks the slice | that test |
@@ -590,8 +590,10 @@ watch server, `web/worker.js` and `web/app.js` all pass the whole dict through.
 
 All in `web/map.js`, covered by `tests/finder.test.cjs`. `saveFinder()` and `loadFinder()`
 keep the filters per character in `localStorage`, under `finderStore()`'s
-`FINDER_KEY:<character>`. Only the on/off switch, `fs.on`, is not stored: every load opens
-the plain map. Saved searches are a separate list under `FINDER_SAVED_KEY`.
+`FINDER_KEY:<character>`. Two things are not stored: the on/off switch, `fs.on` (every load
+opens the plain map), and the floor-plan layout pick, `layoutPick`, which a preset or a
+saved search clears. The layout pick does not follow the checklist below. Saved searches
+are a separate list under `FINDER_SAVED_KEY`.
 
 | Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
@@ -605,7 +607,7 @@ the plain map. Saved searches are a separate list under `FINDER_SAVED_KEY`.
 | `savedTip(s){` and `const finderRange =` | Its part of a saved search's summary | none for most filters |
 | `sortKeys(`, `const FINDER_SORT_NAMES =`, `finderList(`, and the grid columns in `web/map.css` | *Only if* it is also a sortable column | "the Cap column sits between m² and Upfront …" |
 | `def _premises(` in `ba_dashboard.py`, and the fixtures in `tests/finder.test.cjs` | *Only if* it needs a new field on each row | `tests/test_premises.py` (exact row dicts) |
-| `function ssFinder(` and the `openFinder({…})` callers (board script) | *Only if* a caller should preset it | `tests/search.test.cjs` |
+| `function ssFinder(` and the `openFinder({…})` callers (board script), and `function finderPreset(`, which turns a Growth › Demand cell into a preset for `openFinder(go, true)` | *Only if* a caller should preset it | `tests/search.test.cjs`; `tests/finder.test.cjs`, "a Growth cell opens the finder on its own type and neighbourhood" |
 
 A new filter is a user-facing change, so it also gets a `web/changelog.json` entry.
 

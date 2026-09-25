@@ -12,7 +12,8 @@ one line per script. Run every command from the repository root.
 
 1. What changed: find the build number, read the patch notes, and hash the game's text
    files to see whether the help text changed.
-2. Static checks: save fields, presets, building capacity, the game tables.
+2. Static checks: save fields, presets, building capacity, the game tables, layout
+   versions and floor plans.
 3. Rebuild against the new install and read what changed.
 4. Check a real save (owner: needs the game running): load and save a game once in the
    new build, then run `check_saves.py` on that save, and read the rent fit and the office
@@ -150,9 +151,10 @@ A non-zero exit says why:
   generated files under `web/`.
 - No size rows parsed for a category: the page's wording changed. If the category's
   heading shows under `other headings` with a new name, ask the owner: `_door_caps()`
-  matches the lower-case heading against `CAP_CATEGORIES`, and those keys, the
-  `FALLBACK_CAPS` keys and the `VENUE_TYPES` values are also the building table's `t`, so
-  renaming them drops that type's capacity from every building. A size row counts only
+  matches the lower-case heading against `CAP_CATEGORIES`, and those keys and the
+  `FALLBACK_CAPS` keys are also the building table's `t`, so renaming them drops that
+  type's capacity from every building. The `VENUE_TYPES` values must equal `t` too,
+  because they are the finder's demand category (`_premises_demand()`). A size row counts only
   when `_CAP_SECTION_RE` captures that same key: if the heading is no longer a bold line
   of letters, spaces and slashes, widen `_CAP_SECTION_RE` so the capture is still the key;
   if the heading still captures the key and the count is zero, fix `_CAP_SIZE_RE`.
@@ -231,6 +233,14 @@ The arrival curves in `ba_demand_curves.json` come from the same bundles. With U
 `PYTHONPATH`, run `python make_demand_curves.py` and then `git diff --stat
 ba_demand_curves.json`. No diff means the curves did not change. If they did, the file is
 the change: commit it and rebuild.
+
+Layout versions and floor plans come from the same bundles, and both scripts are
+owner-only. With UnityPy on `PYTHONPATH`, run `python make_buildings.py --versions` (the
+`v` column of `ba_buildings.json`), then `python make_floor_plans.py`
+(`web/maps/floor-plans.json`), then `git diff --stat ba_buildings.json
+web/maps/floor-plans.json`. No diff means neither changed. `build_web.py` refuses a
+floor-plan set that is missing a layout `ba_buildings.json` uses
+(`tests/test_floor_plans.py`).
 
 ### Values measured from saves
 
