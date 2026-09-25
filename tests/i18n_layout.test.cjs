@@ -27,7 +27,12 @@ const WIDTHS = [360, 768, 1280, 1500, 1501, 1920];
    A conversion pull request adds its row; from then on English left on
    screen there fails the sweep. */
 const CONVERTED = {
-  // nav: '#nav, .subnav',
+  /* The masthead's own lines: its live dot's word is community.js's. */
+  nav: '#nav, #companyNav, #supplyNav, #growthNav, #clock > b, #clock > small:not(.fv-diffline), #clock .flag, '
+    + '#clock .fv-diff, #ssField, .ss-ask, #ssAskMini',
+  foot: '.sitefoot',
+  /* A finding's headline and its detail, on Today and in the site panel. */
+  f: '.find .what, .find .more, .sp-find .what, .sp-find .more',
   land: '#welcomeLede, #drop, #entryRow, .lg-wiki, #saveLocation, #srcSlot, #help',
   app: '#srcStrip, #srcNote, #srcMenu, #live em',
   upd: '#releaseBanner, #newsStrip',
@@ -195,16 +200,28 @@ async function measure(page){
   return page.evaluate(([sel, converted, skip]) => {
     const root = document.documentElement;
     const shown = el => el.offsetParent !== null || el.getClientRects().length > 0;
+    /* A New badge hangs off its control's edge on purpose (the search icon's
+       does), so its words are left out of what an overflow is known by. */
+    const own = el => [...el.querySelectorAll('.feature-new')].reduce((s, b) => s.replace(b.textContent, ''), el.textContent);
     const over = [...document.querySelectorAll(sel)]
       .filter(el => shown(el) && el.scrollWidth > el.clientWidth + 1)
-      .map(el => `${el.tagName.toLowerCase()}${el.className ? '.' + String(el.className).split(' ')[0] : ''}: ${el.textContent.trim().slice(0, 40)}`);
+      .map(el => `${el.tagName.toLowerCase()}${el.className ? '.' + String(el.className).split(' ')[0] : ''}: ${own(el).trim().slice(0, 40)}`);
     const english = [];
     for(const [area, where] of Object.entries(converted)){
       document.querySelectorAll(where).forEach(host => {
         const walk = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
         for(let n = walk.nextNode(); n; n = walk.nextNode()){
           if(!n.parentElement || !shown(n.parentElement) || n.parentElement.closest(skip)) continue;
-          const outside = n.textContent.replace(/\[[^\]]*\]/g, '').replace(/[\d\s.,:;$%+\-–—×·/()!?%'"‹›…#]+/g, '');
+          /* A name (Big Copilot, YouTube, the studio) is marked translate="no". */
+          if(n.parentElement.closest('[translate="no"]')) continue;
+          /* A finding's sentence is cut into headline and detail, so its
+             brackets can open in one text node and close in the next; and a
+             message nests others (a list, a weekday, a finding's detail),
+             so brackets nest. Matched pairs go innermost first; what is left
+             before a lone "]" opened earlier, and after a lone "[" closes later. */
+          let outside = n.textContent;
+          for(let was = ''; was !== outside;){ was = outside; outside = outside.replace(/\[[^\[\]]*\]/g, ''); }
+          outside = outside.replace(/^[^]*\]/, '').replace(/\[[^]*$/, '').replace(/[\d\s.,:;$%+\-–—×·/()!?%'"‹›…#]+/g, '');
           if(outside.length > 1) english.push(`${area}: ${n.textContent.trim().slice(0, 60)}`);
         }
       });
@@ -238,13 +255,24 @@ test('the pseudo-locale fits at every width, on every page, view and site panel'
    earlier visit, which the page reopens and builds the fixture board from. */
 const LINK_HEALTH = {schemaVersion: 1, stamp: 's1', busy: false, company: 'Costy Co', character: 'alice',
   day: 12, hour: 9, minute: 5, refreshedAt: '2026-09-25T09:05:00Z', writes: []};
-async function shell(t, {ui = '', width = 1280, remembered = false, permission = 'granted'} = {}){
+async function shell(t, {ui = '', width = 1280, remembered = false, permission = 'granted', held = false} = {}){
   const context = await browser.newContext({viewport: {width, height: 900}, locale: 'en-US', reducedMotion: 'reduce'});
   t.after(() => context.close());
-  await context.addInitScript(({remembered, permission}) => {
+  await context.addInitScript(({remembered, permission, held}) => {
+    // `held`: the first read of a save waits for readSave(fail), which lets
+    // it go on or fail it the way a file the game rewrote meanwhile does.
+    let hold = held ? new Promise(resolve => { window.readSave = resolve; }) : null;
     const file = (name, time) => {
       const value = new File(['save'], name, {lastModified: time});
-      value.arrayBuffer = async () => new ArrayBuffer(8);
+      value.arrayBuffer = async () => {
+        if(hold){
+          window.reading = true;
+          const fail = await hold;
+          hold = null;
+          if(fail) throw new DOMException('The file changed', 'NotReadableError');
+        }
+        return new ArrayBuffer(8);
+      };
       return {kind: 'file', name, getFile: async () => value};
     };
     const folder = (name, entries) => ({name, kind: 'directory',
@@ -264,7 +292,7 @@ async function shell(t, {ui = '', width = 1280, remembered = false, permission =
     }};
     window.indexedDB.open = () => { const req = {}; setTimeout(() => { req.result = db; req.onsuccess?.(); }); return req; };
     window.Worker = class { constructor(){ window.reader = this; this.messages = []; } postMessage(m){ this.messages.push(m); } terminate(){} };
-  }, {remembered, permission});
+  }, {remembered, permission, held});
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
@@ -291,7 +319,7 @@ async function shell(t, {ui = '', width = 1280, remembered = false, permission =
   await page.goto(`http://i18n.test/${ui ? `?ui=${ui}` : ''}`);
   if(ui) await page.waitForFunction(() => ttLang === 'de');
   await page.waitForFunction(() => !document.getElementById('releaseBanner').hidden);
-  if(remembered && permission === 'granted'){
+  if(remembered && permission === 'granted' && !held){
     await page.waitForFunction(() => window.reader && window.reader.messages.length > 0);
     await page.evaluate(raw => {
       const m = window.reader.messages[0];
@@ -407,6 +435,57 @@ test('a change of language writes the strip\'s file line again, for a save and f
   assert.match(await meta(), /^Costy Co · \[dáý 12, 09:05·+\] · \[gámé líñk·+\] · \[búílt íñ /);
   await page.evaluate(() => ttSetTable('en', null));
   assert.equal(await meta(), linked);
+  assert.deepEqual(errors, []);
+});
+
+/* A build that fails while another is asked for: the strip says why, in
+   words, and the build asked for meanwhile still runs. The second request is
+   the game's en.json, chosen while the first build is under way. */
+const EN_JSON = {name: 'en.json', mimeType: 'application/json',
+  buffer: Buffer.from(JSON.stringify({'ba:neighborhood_global': 'Global', menu_options_others_language: 'Language'}))};
+async function askAgain(page){
+  await page.setInputFiles('#localePick', EN_JSON);
+  await page.waitForFunction(() => !!localStorage.getItem('ledger_locale'));
+}
+const stripText = page => page.evaluate(() => [document.getElementById('srcStatus').textContent, document.getElementById('srcMeta').textContent]);
+/* Everything the strip's headline says from now on: the failure is said and
+   then replaced at once by the queued build's "Reading …". */
+const listen = page => page.evaluate(() => {
+  const el = document.getElementById('srcStatus');
+  window.heard = [];
+  new MutationObserver(records => records.forEach(r => r.addedNodes.forEach(n => window.heard.push(n.textContent))))
+    .observe(el, {childList: true});
+});
+const heard = page => page.evaluate(() => window.heard);
+
+test('a save the game rewrote mid-read says so, and the build asked for meanwhile still runs', async t => {
+  const {page, errors} = await shell(t, {remembered: true, held: true});
+  await page.waitForFunction(() => window.reading);
+  await askAgain(page);
+  await listen(page);
+  await page.evaluate(() => window.readSave(true));
+  // The failed read never reached the reader; the one asked for meanwhile does.
+  await page.waitForFunction(() => window.reader.messages.length === 1);
+  assert.ok((await heard(page)).includes('Could not read the save: the game has rewritten this file since it was chosen'),
+    (await heard(page)).join(' | '));
+  assert.deepEqual(errors, []);
+});
+
+test('a reader that answers nonsense says so, and the build asked for meanwhile still runs', async t => {
+  const {page, errors} = await shell(t, {remembered: true, permission: 'granted', held: true});
+  await page.evaluate(() => window.readSave(false));
+  await page.waitForFunction(() => window.reader && window.reader.messages.length === 1);
+  await askAgain(page);
+  await listen(page);
+  await page.evaluate(() => { const m = window.reader.messages[0]; window.reader.onmessage({data: {kind: 'nonsense', id: m.id}}); });
+  await page.waitForFunction(() => window.reader.messages.length === 2);
+  assert.ok((await heard(page)).includes('Could not read the save: Invalid reader response'), (await heard(page)).join(' | '));
+  // The queued build fails the same way, and stays on screen: in a new
+  // language it is said again from the error's own words.
+  await page.evaluate(() => { const m = window.reader.messages[1]; window.reader.onmessage({data: {kind: 'nonsense', id: m.id}}); });
+  await page.waitForFunction(() => document.getElementById('srcStatus').textContent === 'Could not read the save: Invalid reader response');
+  await page.evaluate(table => ttSetTable('de', table), TABLE);
+  assert.match((await stripText(page))[0], /^\[.*\]: \[Íñválíd réádér réšpóñšé·+\]$/);
   assert.deepEqual(errors, []);
 });
 

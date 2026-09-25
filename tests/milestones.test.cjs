@@ -23,6 +23,9 @@ const board = (goals = {typesRun: 1, typesTotal: 3}) => {
     compact: n => String(n),
     D: {goals, meta: {}},
   });
+  /* web/i18n.js runs ahead of the board script on the page: the difficulty's
+     words are read through its tt(). */
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8'), context);
   vm.runInContext(slice('const fmt =', 'const compact =') + slice('const attr =', '/* Tooltips are plain text')
     + slice('\nconst plural =', '/* A rival per dot')
     + slice('function drawGoals(){', '/* Next moves: the Plan imports card'), context);

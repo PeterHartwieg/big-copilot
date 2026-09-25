@@ -60,7 +60,12 @@
   // as a folder's name), so a change of UI language can write them again:
   // relabel() calls them once more. An error this file raises carries its
   // own such function, `say`; one from the browser has only its message.
-  const say = (v) => (typeof v === "function" ? v() : v) || "";
+  // A function that hands back another function is followed too, a few
+  // levels deep, so a slip there still shows words rather than throwing.
+  const say = (v) => {
+    for (let i = 0; i < 4 && typeof v === "function"; i++) v = v();
+    return typeof v === "string" ? v : v == null ? "" : String(v);
+  };
   const failure = (words) => Object.assign(new Error(words()), {say: words});
   const errWords = (err) => (err && typeof err.say === "function" ? err.say : err ? err.message : "");
 
@@ -1431,7 +1436,7 @@
         () => tt("app.build.attempted", "{name} · attempted {when}", {name: file.name, when: fmtTime(at)}));
       const rewritten = err.name === "NotReadableError";
       note("bad",
-        () => rewritten ? () => tt("app.build.rewritten", "the game has rewritten this file since it was chosen") : errWords(err),
+        rewritten ? () => tt("app.build.rewritten", "the game has rewritten this file since it was chosen") : errWords(err),
         () => [kept ? tt("app.build.kept", "Last good board kept · saved {when}", {when: fmtTime(kept.lastModified)}) : "",
           paused ? tt("app.build.paused", "Automatic updates are paused. Click Update to retry.") : ""].filter(Boolean).join(" · "),
         true);
