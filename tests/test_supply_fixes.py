@@ -201,6 +201,15 @@ class IngredientPriceTests(unittest.TestCase):
         prices = _ingredient_prices(self.save(spend, logs), Names({}), {"factories": {}}, [])
         self.assertEqual(prices["unit"], {WATER: 2.0})
 
+    def test_a_weekly_import_straight_to_the_factory_prices_the_week_against_it(self):
+        # The factory uses 100 water a day at $2 and books it daily; its one
+        # delivery in the window is a weekly import of 700, most days its log
+        # holds nothing, and today's round (a shipment out) has run.
+        spend = {d: [(FACTORY, WATER, 200.0)] for d in range(11, 20)}
+        logs = {FACTORY: [tx(15, {WATER: 700}), tx(20, {BEER: -50})]}
+        prices = _ingredient_prices(self.save(spend, logs), Names({}), {"factories": {}}, [])
+        self.assertEqual(prices["unit"], {WATER: 2.0})
+
     def test_a_shop_with_no_log_and_something_made_in_house_have_no_price(self):
         spend = {d: [(SHOP_A, SODA, 50.0), (FACTORY, BEER, 80.0)] for d in range(11, 20)}
         logs = {FACTORY: [tx(d, {BEER: 40}) for d in range(11, 20)]}

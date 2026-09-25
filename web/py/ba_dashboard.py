@@ -10162,9 +10162,11 @@ def _ingredient_prices(save: Save, names: Names, supply: dict, businesses: list)
     the company makes itself reaches its users at no cost, so it has no price
     here. Guessing the rest would be inventing a price list.
 
-    A known limit: a weekly import delivered straight to a factory lands once,
-    so its price is the week's use against that one delivery, right only where
-    the delivery matches the week.
+    Every cost day the site's log covers counts, whether or not a round came
+    the next day, so a weekly import delivered straight to a factory is the
+    week's cost against its one delivery. A known limit: that is right only
+    where the delivery matches the week's use, and a window holding two such
+    deliveries, or none, misprices it.
     """
     summaries = sorted(save.items(save.root["financialSummaries"]), key=lambda s: s["dayNumber"])
     if not summaries:
@@ -10178,9 +10180,12 @@ def _ingredient_prices(save: Save, names: Names, supply: dict, businesses: list)
                 if line.get("ItemName") and line.get("Amount"):
                     spend[(key, line["ItemName"])][summary["dayNumber"]] += line["Amount"]
 
-    # What reached each site, day by day, on the days after a cost day in the
-    # window. A log at its full length has lost part of its oldest day, so
-    # that day is left out.
+    # Each site's cost days: every window day whose next day its log covers,
+    # a day with nothing delivered included (it brought 0). A log short of
+    # its full length holds everything; a full one has lost part of its
+    # oldest day, so it covers from the day after. Today's round, not yet
+    # logged, covers nothing yet, so the last cost day waits on both sides.
+    today = save.root.get("Day")
     arrived = collections.defaultdict(lambda: collections.defaultdict(float))
     covered = collections.defaultdict(set)
     for building in save.items(save.root["BuildingRegistrations"]):
@@ -10189,12 +10194,15 @@ def _ingredient_prices(save: Save, names: Names, supply: dict, businesses: list)
         key = site_key((building["StreetName"], building["StreetNumber"]))
         log = save.items(building.get("deliveryTransactions"))
         days = {t.get("dayOfDelivery") for t in log if isinstance(t.get("dayOfDelivery"), int)}
-        if days and len(log) >= DELIVERY_LOG_SIZE:
-            days.discard(min(days))
-        covered[key] = {a for a in days if a - 1 in window}
+        if not days:
+            continue  # no log, so nothing to divide by: a shop
+        reach = min(days) + 1 if len(log) >= DELIVERY_LOG_SIZE else None
+        covered[key] = {d for d in window
+                        if (reach is None or d + 1 >= reach)
+                        and (d + 1 != today or today in days)}
         for transaction in log:
             when = transaction.get("dayOfDelivery")
-            if when not in covered[key]:
+            if not isinstance(when, int) or when - 1 not in covered[key]:
                 continue
             for entry in save.items(transaction.get("deliveryItems")):
                 amount = entry.get("amountDelivered") or 0
@@ -10208,14 +10216,13 @@ def _ingredient_prices(save: Save, names: Names, supply: dict, businesses: list)
     for (key, slug), by_day in spend.items():
         if slug in made:
             continue
-        # Only the days this site's log covers, and only where goods came in:
-        # a shop keeps no log, and cost there has no units to divide by. Each
-        # arrival day a pays for the cost booked on a - 1.
+        # Only the cost days this site's log covers, each against the next
+        # day's arrivals, and only where goods came in at all.
         days = covered.get(key, ())
-        got = sum(arrived[(key, slug)].get(d, 0.0) for d in days)
+        got = sum(arrived[(key, slug)].get(d + 1, 0.0) for d in days)
         if got <= 0:
             continue
-        paid[slug] += sum(by_day.get(a - 1, 0.0) for a in days)
+        paid[slug] += sum(by_day.get(d, 0.0) for d in days)
         units[slug] += got
     return {
         "unit": {slug: round(paid[slug] / units[slug], 4)
