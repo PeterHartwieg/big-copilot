@@ -8,7 +8,7 @@ draw. A depot fed by imports alone reads exactly as before.
 """
 import unittest
 
-from ba_dashboard import (SUMMARIES, TEMPLATE, WEEKDAYS, History, Names, _alerts, _factories,
+from ba_dashboard import (plain, SUMMARIES, TEMPLATE, WEEKDAYS, History, Names, _alerts, _factories,
                           _import_notes, _supply, _supply_facts, site_key)
 from test_recipe_identity import BEER, RID, WATER
 from test_recipe_identity import SaveStub as FactoryStub
@@ -305,7 +305,7 @@ class RoutedSupplyTests(unittest.TestCase):
         self.assertEqual((supply["facts"]["1"][FOOD]["st"], supply["facts"]["1"][FOOD]["why"]),
                          ("short", "shortfall"))
         result = _alerts(SupplyOnly(businesses), supply, [], [], [], [], [], DAY, 0.0)
-        texts = [a["text"] for a in result["lines"] + result["minor"]["rows"]]
+        texts = [plain(a["text"]) for a in result["lines"] + result["minor"]["rows"]]
         [text] = [t for t in texts if "Frozen Food" in t]
         self.assertIn("a route brings the week's draw (3,600/day)", text)
         # The headline is cut at the first comma: when it runs dry, and why.
@@ -487,7 +487,7 @@ class RoutedFactoryViewTests(unittest.TestCase):
         self.assertEqual((fact["st"], fact["use"], fact["parts"]),
                          ("noplan", 840, {"lines": 1680, "sites": 0, "route": 840}))
         self.assertIn("holds 400, 0.5 weeks of the 840 a week the factories eat "
-                      "beyond the 840 a week a route brings", note["text"])
+                      "beyond the 840 a week a route brings", plain(note["text"]))
 
     def test_the_no_import_finding_names_what_the_route_leaves_of_everything(self):
         """The depot also sends the shops 840 a week, and the route goes to the
@@ -497,10 +497,10 @@ class RoutedFactoryViewTests(unittest.TestCase):
         self.assertEqual((fact["use"], fact["parts"]),
                          (520, {"lines": 1680, "sites": 840, "route": 2000}))
         self.assertIn("of the 520 a week the factories and other sites draw beyond the "
-                      "2,000 a week a route brings", note["text"])
+                      "2,000 a week a route brings", plain(note["text"]))
         fact, [note] = self.route_fact((0, False, 0), shops_week=840)
-        self.assertIn("of the 2,520 a week the factories and other sites draw", note["text"])
-        self.assertNotIn("route", note["text"])
+        self.assertIn("of the 2,520 a week the factories and other sites draw", plain(note["text"]))
+        self.assertNotIn("route", plain(note["text"]))
         # A route bringing all of it leaves nothing to say.
         fact, notes = self.route_fact((1680, True, 1680))
         self.assertEqual((fact["st"], fact["why"], notes), ("covered", "route", []))

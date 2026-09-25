@@ -405,7 +405,7 @@ class ContractTests(FixtureCase):
         )
         self.assertEqual(
             set(sample["PRODUCTS"]["cheapgift"]),
-            {"name", "slug", "src", "rank", "alsoSoldBy", "fixtures", "wholesale",
+            {"name", "slug", "src", "rank", "alsoSoldBy", "alsoSoldByKeys", "fixtures", "wholesale",
              "importers", "recipe", "crosscheck"},
         )
         self.assertEqual(
@@ -414,7 +414,7 @@ class ContractTests(FixtureCase):
         )
         self.assertEqual(
             set(sample["BUSINESS"]),
-            {"slug", "name", "nameSrc", "src", "building", "serving", "skills",
+            {"slug", "name", "nameSrc", "src", "building", "serving", "skills", "skillKeys",
              "hiring", "primary", "extras", "requirements"},
         )
         self.assertEqual(
@@ -641,7 +641,7 @@ class FactsFollowSourceTests(FixtureCase):
         self.assertEqual(sample["BUSINESS"]["building"], "Retail")
         self.assertEqual(sample["BUSINESS"]["primary"], ["cheapgift"])
         self.assertEqual(sample["RECIPES"]["cheapgiftrecipe"]["inputs"],
-                         [{"item": "Clay", "per": 50, "from": ["ba:street_pier#9"]}])
+                         [{"item": "Clay", "slug": "ba:itemname_clay", "per": 50, "from": ["ba:street_pier#9"]}])
 
 
 # --- gaps are honest -----------------------------------------------------

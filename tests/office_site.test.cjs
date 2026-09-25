@@ -81,7 +81,9 @@ async function theatre() {
   await page.setContent(html, {waitUntil: 'load'});
   await page.evaluate(([grid, findings]) => {
     document.body.classList.add('has-board');
-    D = {
+    /* Through the page's own door, as every board arrives: the findings name
+       their roles as game-name tokens, which takeData() resolves. */
+    takeData({
       meta: {character: 'theatre-fixture', day: 29},
       rhythm: null,
       supply: {shops: []},
@@ -95,7 +97,7 @@ async function theatre() {
       }],
       hours: [grid],
       hourFindings: findings,
-    };
+    });
     siteKey = grid.key; siteOpen = true;
     drawSite();
   }, [THEATRE.grid, THEATRE.findings]);
@@ -261,8 +263,9 @@ test('two findings of one kind on different roles do not light each other\'s hou
     // 10:00 is held partly by the ticket booths' staffing and 12:00 wholly by
     // projection's. Both are "short of people", so a cell stamped with the
     // kind alone belonged to both chips and hovering either lit both hours.
+    // Python names the role as a game-name token; the page reads it in English.
     const kinds = THEATRE.findings.filter(f => f.kind === 'cap')
-      .map(f => f.limit);
+      .map(f => f.limit.replace(/⟦[^|⟧]*\|([^⟧]*)⟧/g, '$1'));
     assert.deepEqual(kinds, ['staffing and projection booths', 'Projectionist staffing']);
     const chips = await capChips(page);
     assert.equal(await chips[1].getAttribute('data-show'), 'staff:ba:skill_projectionist');

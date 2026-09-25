@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=fc49b59d22">
+<link rel="stylesheet" href="community.css?v=1481bf141d">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -14,7 +14,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=fc49b59d22">
+<link rel="stylesheet" href="fonts/fonts.css?v=1481bf141d">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -1988,7 +1988,7 @@ g[data-series].off{opacity:0}
 
 /* heat grid --------------------------------------------------------------- */
 .heat{display:grid;grid-template-columns:200px repeat(7,minmax(0,1fr));gap:4px;align-items:center}
-.heat .h{font:500 10px/1.3 "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);text-align:center;padding-bottom:6px;transition:color .15s}
+.heat .h{font:500 10px/1.3 "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);text-align:center;padding-bottom:6px;transition:color .15s;min-width:0;overflow-wrap:anywhere}
 .heat .h.hl{color:var(--ink)}
 .heat .mk-tag{display:none}
 .heat .r{font-size:13px;font-weight:500;padding-right:12px;transition:color .15s}
@@ -2911,6 +2911,21 @@ tr.ss-ring > td{animation:ss-flash 2.4s ease-out}
 .sf-ic{fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 /* The theme control keeps the right edge of the row, as on the canvas. */
 .sf-theme{align-items:flex-end}
+/* The game-names picker sits just left of it, the two settings together. */
+.sf-gn{margin-left:auto}
+.gn-pick{height:42px;max-width:220px;padding:0 12px;border:1px solid var(--rule);border-radius:999px;background:var(--surface);
+  color:var(--ink);font:500 13px/1 Archivo,"Helvetica Neue",Arial,sans-serif;cursor:pointer}
+.gn-pick:hover{border-color:var(--ink-3)}
+/* The one-time offer of the player's own language, hung off <body>. */
+.gn-offer{position:fixed;right:16px;bottom:16px;z-index:60;display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;
+  max-width:min(420px,calc(100vw - 32px));padding:12px 14px;border:1px solid var(--rule);border-radius:10px;
+  background:var(--surface);color:var(--ink);box-shadow:0 12px 32px color-mix(in srgb,var(--ink) 16%,transparent);font-size:13px}
+.gn-offer p{margin:0;flex:1 1 180px;line-height:1.5}
+.gn-offer-acts{display:flex;gap:8px;flex:none}
+.gn-offer button{height:30px;padding:0 12px;border-radius:6px;font:500 12px/1 Archivo,"Helvetica Neue",Arial,sans-serif;cursor:pointer}
+.gn-offer .gn-yes{border:1px solid var(--accent);background:var(--accent);color:var(--on-accent)}
+.gn-offer .gn-no{border:1px solid var(--rule);background:transparent;color:var(--ink-2)}
+.gn-offer button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .sf-seg{display:inline-flex;gap:2px;padding:3px;border:1px solid var(--rule);border-radius:999px;background:var(--surface)}
 .sf-segbtn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;padding:0;
   border:0;border-radius:999px;background:transparent;color:var(--ink-2);cursor:pointer}
@@ -2950,6 +2965,8 @@ tr.ss-ring > td{animation:ss-flash 2.4s ease-out}
   .sf-cols{flex-direction:column;gap:20px}
   .sf-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 16px;width:100%}
   .sf-theme{align-items:flex-start}
+  .sf-gn{margin-left:0}
+  .gn-pick{height:44px}
   .sf-segbtn{width:44px;height:44px}
   .sf-link,.sf-legal a{min-height:44px}
   .sf-base{flex-direction:column;align-items:flex-start;gap:10px}
@@ -3421,6 +3438,10 @@ details.help[open] summary::after{content:"\2013"}
       <!-- Marked by attribute rather than id, and wired by the board script for
            whichever copies are in the page: the landing's footer and the board's
            are both here until the board replaces the landing. -->
+      <div class="sf-col sf-gn">
+        <h2 class="sf-head" id="gnHeadL">Game names</h2>
+        <select class="gn-pick" data-gn-pick aria-labelledby="gnHeadL" title="The game&#39;s own names for items, business types, neighbourhoods, stations and skills, in the language you play in. Everything else on the page stays English."><option value="en" lang="en">English</option><option value="cs" lang="cs">Čeština</option><option value="da" lang="da">Dansk</option><option value="de" lang="de">Deutsch</option><option value="es" lang="es">Español</option><option value="fr" lang="fr">Français</option><option value="it" lang="it">Italiano</option><option value="lt" lang="lt">Lietuvių</option><option value="hu" lang="hu">Magyar</option><option value="nl" lang="nl">Nederlands</option><option value="pl" lang="pl">Polski</option><option value="pt" lang="pt">Português (Brasil)</option><option value="ro" lang="ro">Română</option><option value="fi" lang="fi">Suomi</option><option value="tr" lang="tr">Türkçe</option><option value="el" lang="el">Ελληνικά</option><option value="ru" lang="ru">Русский</option><option value="uk" lang="uk">Українська</option><option value="ja" lang="ja">日本語</option><option value="ko" lang="ko">한국어</option><option value="zh-cn" lang="zh-cn">简体中文</option><option value="zh-tw" lang="zh-tw">繁體中文</option></select>
+      </div>
       <div class="sf-col sf-theme">
         <h2 class="sf-head" id="themeHeadL">Theme</h2>
         <div class="sf-seg" role="group" aria-labelledby="themeHeadL">
@@ -3672,6 +3693,10 @@ details.help[open] summary::after{content:"\2013"}
       <!-- Marked by attribute rather than id, and wired by the board script for
            whichever copies are in the page: the landing's footer and the board's
            are both here until the board replaces the landing. -->
+      <div class="sf-col sf-gn">
+        <h2 class="sf-head" id="gnHead">Game names</h2>
+        <select class="gn-pick" data-gn-pick aria-labelledby="gnHead" title="The game&#39;s own names for items, business types, neighbourhoods, stations and skills, in the language you play in. Everything else on the page stays English."><option value="en" lang="en">English</option><option value="cs" lang="cs">Čeština</option><option value="da" lang="da">Dansk</option><option value="de" lang="de">Deutsch</option><option value="es" lang="es">Español</option><option value="fr" lang="fr">Français</option><option value="it" lang="it">Italiano</option><option value="lt" lang="lt">Lietuvių</option><option value="hu" lang="hu">Magyar</option><option value="nl" lang="nl">Nederlands</option><option value="pl" lang="pl">Polski</option><option value="pt" lang="pt">Português (Brasil)</option><option value="ro" lang="ro">Română</option><option value="fi" lang="fi">Suomi</option><option value="tr" lang="tr">Türkçe</option><option value="el" lang="el">Ελληνικά</option><option value="ru" lang="ru">Русский</option><option value="uk" lang="uk">Українська</option><option value="ja" lang="ja">日本語</option><option value="ko" lang="ko">한국어</option><option value="zh-cn" lang="zh-cn">简体中文</option><option value="zh-tw" lang="zh-tw">繁體中文</option></select>
+      </div>
       <div class="sf-col sf-theme">
         <h2 class="sf-head" id="themeHead">Theme</h2>
         <div class="sf-seg" role="group" aria-labelledby="themeHead">
@@ -3695,7 +3720,7 @@ details.help[open] summary::after{content:"\2013"}
 </div>
 <dialog class="changelog-dialog" id="changelogDialog" aria-labelledby="changelogTitle" aria-describedby="changelogIntro">
   <div class="changelog-head"><div><h2 id="changelogTitle">Changelog</h2><p id="changelogIntro">What's changed in Big Copilot.</p></div><button type="button" class="btn2" id="closeChangelog" autofocus>Close</button></div>
-  <ol class="changelog-list"><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-25">25 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/114" target="_blank" rel="noopener" aria-label="View pull request 114">PR #114 ↗</a></div><h3>Supply by shop, warehouse and factory, and staffing for factory lines</h3><p>Supply is now three tabs, one per object: Shops, Warehouses and Factories. Each opens on what needs a change, with the figure to type beside the setting it changes and a tick at the head of the row; one checklist under the tabs counts your ticks across all three and copies what is left. Idle stock folds into one row per warehouse or per cause, a shelf topped up far above what it sells gets a lower target to type, and the goods-flow diagram is a view of each tab: click a site to see its rows. Factories shows the hours each line is rostered against the hours it needs, 24/7 or for what your shops use, and too few hours is a change to type. A new Staffing for factory lines block gives each line&#x27;s shifts, the factory workers the plan needs against those you have, and what the difference does to your wages. This answers the voted request &quot;Supply chain for factories not running 24/7&quot;.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-25">25 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/113" target="_blank" rel="noopener" aria-label="View pull request 113">PR #113 ↗</a></div><h3>Floor plans for every building, and a Layout filter</h3><p>Each building the finder lists now names its layout, the game&#x27;s short code for its shape, such as C1 or H3. Click a building on the map or in the list and its card shows the game&#x27;s own floor plan for it, with its entrances (loading bays for a warehouse). A new Layout filter in Find a location lists only the layouts you pick, and a saved search keeps it.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-24">24 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/94" target="_blank" rel="noopener" aria-label="View pull request 94">PR #94 ↗</a></div><h3>Size supply for 24/7 or for demand, and find stock no plan sends on</h3><p>Supply now judges every item once and uses the same word for it everywhere: covered, tight, short, no plan, paused, stalled, idle, made here or new. A Sizing switch on Orders, on the factory and import checks and on each warehouse and factory page sizes your factory lines, top-ups and imports for 24/7 rated output or for what your shops actually use, with one 15% margin over the whole chain from import to sale and figures rounded up to tens. Under Demand, a shop open less than a week is projected forward and marked &quot;may still be ramping&quot;. Tight means an order covers the use but not the margin; it shows on Supply and never on Today. Shops and warehouses stocked by a repeating wholesale contract are judged against it. A new Not routed finding points at stock in a warehouse or factory that no plan sends on while your own shops sell it.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-24">24 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/83" target="_blank" rel="noopener" aria-label="View pull request 83">PR #83 ↗</a></div><h3>Fix: warehouses fed by your own factory no longer read as short</h3><p>A warehouse your own factory tops up every morning on a logistics route was flagged as a critical import shortfall for every item the factory delivers, often with an alert that weekly orders cannot cover their week and a large one-off to bring in. The board now counts what your factories bring on routes before it judges the import, so a backup import next to such a route no longer raises the alarm, paused or not. If a route brings only part of what leaves, the import is sized on the rest, and a busy day that could still empty the shelf before the next morning&#x27;s round is still flagged. The Factories page takes the same routes into account.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-24">24 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/82" target="_blank" rel="noopener" aria-label="View pull request 82">PR #82 ↗</a></div><h3>Write to the game from the board (Big Copilot Link 0.2.0)</h3><p>With the Big Copilot Link mod 0.2.0, the board can now make three changes in your game for you: set uniforms where roles have none, apply the import amounts from Plan imports, and write a shop&#x27;s staffing plan, for one shop or a run of shops. Every change shows what the game will do before you apply it, can be undone once, and is refused, with nothing written, if the game has moved on since the board last read it. The first write from a browser asks for approval in the game; after that it is remembered.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-24">24 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/81" target="_blank" rel="noopener" aria-label="View pull request 81">PR #81 ↗</a></div><h3>Every site has its own page, and you can search the board</h3><p>Each shop, warehouse, factory and office now opens as its own page with an address, so a reload keeps it and Back and Forward walk between sites; a crumb takes you back to where you came from, and site names on Today, Supply and the map link to it. Press / or Ctrl+K to search the whole board: pages, your sites, products, kinds of finding, location presets and the game&#x27;s help pages, with everyday words like hire, debt or difficulty. Today has an Ask the board row whose questions land on the answer. The difficulty you play on sits beside the clock, and Company › Results can show your week by weekday.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-23">23 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/77" target="_blank" rel="noopener" aria-label="View pull request 77">PR #77 ↗</a></div><h3>Full cover for a new shop, and a demand plan after 9 days</h3><p>A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game&#x27;s rules allow, and a step to open every day 0 to 24. Nine days after the shop&#x27;s first customer the board has the shop&#x27;s own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-23">23 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/76" target="_blank" rel="noopener" aria-label="View pull request 76">PR #76 ↗</a></div><h3>Imports that read Smart Delivery, and your own order figures</h3><p>The weekly imports now understand the purchasing agent&#x27;s Smart Delivery setting: its amount is a stock level the agent tops up to each Monday, not a delivery, and the board judges it that way, in the order the game delivers your contracts. The imports table shows what arrived last week, what is set in game (&quot;in stock&quot; or &quot;a week&quot;), and a Set to box with the board&#x27;s suggestion that you can change. Your figures carry into the Plan imports checklist, which names the importer to change when a material has more than one contract. For Smart Delivery the suggestion is the stock that runs everything the depot feeds at full capacity for a week, so it only moves when your capacity does.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-23">23 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/75" target="_blank" rel="noopener" aria-label="View pull request 75">PR #75 ↗</a></div><h3>No more gas station tips</h3><p>Big Copilot will no longer tell you to open a gas station. Or a wholesaler. Or a casino. The city runs those itself and is not selling, however good the numbers look. Market demand and Find a location now suggest only business types you can actually open, straight from the game&#x27;s own F1 help, including ones nobody in your city runs yet.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-22">22 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/68" target="_blank" rel="noopener" aria-label="View pull request 68">PR #68 ↗</a></div><h3>Link to the game</h3><p>A third way in beside the save folder and the single file: with the Big Copilot Link mod from the Steam Workshop enabled, click Link to the game and the board reads the running game itself. No folder to pick, and the board follows the game as you play: it refreshes on the game hour, after a game save, and whenever you click Update. The mod serves the game&#x27;s own save to this page on your computer and to nothing else; Chrome and Edge ask once to allow the site to reach it. The local watcher learnt the same trick as --game.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-21">21 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/64" target="_blank" rel="noopener" aria-label="View pull request 64">PR #64 ↗</a></div><h3>Contributions welcome</h3><p>Help improve Big Copilot with fixes, features, docs or tests. The GitHub README now has a short contribution guide: focused PRs, mockups to discuss bigger ideas, test results and agent review for AI-written code.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-20">20 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/61" target="_blank" rel="noopener" aria-label="View pull request 61">PR #61 ↗</a></div><h3>Staffing, in hours and days you can act on</h3><p>The staffing plan now builds a week one person can really work. Nobody is spread across two businesses, hours stay inside the full-time band the game pays for, and somebody who asked for four days a week gets four, not five. A shop the board cannot read yet says so and covers its cleaning and security in the meantime, instead of offering to clear a schedule that nothing here could put back. The block is now called Staffing and speaks the game&#x27;s own language: hours and days rather than shifts, entries you copy into BizMan one day at a time, stations by name with the short codes on hover, and people to hire rather than posts, each sized at the 30 hours a week a full-time employee is owed. It also says what makes its numbers worth reading, which is two weeks with every station staffed. Building capacity replaces &quot;door cap&quot; on the board and in the location finder.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-19">19 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/58" target="_blank" rel="noopener" aria-label="View pull request 58">PR #58 ↗</a></div><h3>A page for every site, and a week of staffing to copy in</h3><p>Every site&#x27;s page now leads with the warnings about that site, and hovering one lights the part of the page that shows why. Shops and offices gain a profit rank among your trading sites, trend sparks and a cost bar, satisfaction against the 80 line with a lamp for each amenity, what pulls customers in, the ceiling each busy hour ran into, and a crew view that folds big rosters into one row per role. Depots and factories get pages of their own for the first time: a seven-day rail for each item with its delivery truck, what each depot feeds, a square for every machine filled by how much of the week it is staffed, and the inputs each line eats. A home opens from its map card. Shops also get Staffing: a week of hours to copy into BizMan, cut so that nobody works more than the 12 hours a day the game allows, people placed where their schedule demands hold, cleaning and security covered, and how many to hire for each station. Tick each entry off as you set it. The Optimize staffing card on Today opens the shop where it saves the most work. Gyms, hairdressers, theatres and nightclubs now get at-the-ceiling and overstaffed warnings, and switching a warning kind off moves its smaller findings to the bottom of the list and says so.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-19">19 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/56" target="_blank" rel="noopener" aria-label="View pull request 56">PR #56 ↗</a></div><h3>A Discord to talk it over in</h3><p>The footer&#x27;s Follow column now links a Discord server for Big Ambitions and Big Copilot: somewhere to ask what a number means, compare saves and strategies, and say what the board should show next. The invite is in the footer on the landing screen and on the board, beside YouTube and the subreddit.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-18">18 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/50" target="_blank" rel="noopener" aria-label="View pull request 50">PR #50 ↗</a></div><h3>Choose light or dark</h3><p>The footer now has a theme control: match your system, or pin the board to light or dark. The choice is remembered in your browser and is applied before the page draws, so returning to it never flashes the other palette. Scrollbars and drop-downs follow the theme you picked instead of staying with your operating system&#x27;s.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-17">17 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/43" target="_blank" rel="noopener" aria-label="View pull request 43">PR #43 ↗</a></div><h3>Warnings for unmet staff demands</h3><p>Needs attention now tells you when your employees&#x27; demands are not met, at every kind of site: the schedule they asked for, equipment at their desk, a water cooler or fridge in the building, a clean workplace. Each site gets one line naming what is missing and for how many staff, and health insurance and a happy boss go on one company line. The line turns critical once someone with an unmet demand has warned they will quit, and a site&#x27;s page lists the demands under its crew.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-16">16 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/40" target="_blank" rel="noopener" aria-label="View pull request 40">PR #40 ↗</a></div><h3>Staffing by the hour for offices</h3><p>Law firms, travel agencies and the other office businesses now get the same Customers by hour grid as shops, with staff at computers as their capacity, and the same warnings when they sit at the ceiling or have staff standing idle. Offices form their own chain in the Portfolio and list their fee instead of shelves. The at-the-ceiling warning for shops and offices now names the right limit for each hour.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-16">16 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/34" target="_blank" rel="noopener" aria-label="View pull request 34">PR #34 ↗</a></div><h3>Save your location searches</h3><p>The location finder can keep its filters and sort as a named search. Saved searches sit in a new Saved row, are shared by all your characters and apply in one click. The finder also stays open when you visit another page and come back.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-16">16 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/34" target="_blank" rel="noopener" aria-label="View pull request 34">PR #34 ↗</a></div><h3>Sort the Supply tables</h3><p>Click a column header in Supply&#x27;s stock checks, weekly imports or daily top-ups to sort by it, click again to reverse, or pick &quot;usual order&quot; to put the rows back. Imports and top-ups sort within each depot or factory.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-15">15 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/32" target="_blank" rel="noopener" aria-label="View pull request 32">PR #32 ↗</a></div><h3>Sort and filter premises by size</h3><p>The location finder shows each building&#x27;s floor area as a sortable m² column, and a new Size filter narrows the rent, take-over and for-sale lists to a minimum and maximum m².</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-15">15 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/28" target="_blank" rel="noopener" aria-label="View pull request 28">PR #28 ↗</a></div><h3>Find a location on the map</h3><p>The map gains a location finder: pick a kind and type, choose to rent, take over or buy, and get every available building ranked by neighbourhood demand and foot traffic, with estimated rent, deposit, door cap and rivals. Any building&#x27;s card now shows its owner, renter, size, cap, traffic and rent. The Today card counts vacant units, a Growth cell jumps to premises for its type, and the Wiki explains how rent works.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/27" target="_blank" rel="noopener" aria-label="View pull request 27">PR #27 ↗</a></div><h3>Offices and fairer rankings in Market demand</h3><p>The By type grid now shows each business&#x27;s average demand across its main products instead of a count of strong ones, so florists, cinemas and theaters are listed and ranked on the same scale. Law firms, travel agencies and the other office businesses appear in their own band, read from their hourly fee, with your own office outlined.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/26" target="_blank" rel="noopener" aria-label="View pull request 26">PR #26 ↗</a></div><h3>Compare your shop prices in the Wiki</h3><p>Business guides now show each shop&#x27;s configured prices alongside neighbourhood market minimums, including products and services. Missing comparisons are explained, expired supply events no longer hide prices, and shops without a known neighbourhood keep their prices visible.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/25" target="_blank" rel="noopener" aria-label="View pull request 25">PR #25 ↗</a></div><h3>Explore guides for every shop</h3><p>All 21 customer-facing businesses now have setup checklists, product or service cards, supplier locations and relevant production recipes. Secondary products have their own cards and recipe sections, with business-specific equipment requirements and improved keyboard and mobile navigation.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/22" target="_blank" rel="noopener" aria-label="View pull request 22">PR #22 ↗</a></div><h3>Explore the game-backed Wiki</h3><p>Search 851 game help pages and explore a visual Gift Shop guide with setup checklists, production recipes and supplier locations. Wiki content refreshes from installed game files when the site is built. Results now lives inside Company to keep the top navigation compact.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/21" target="_blank" rel="noopener" aria-label="View pull request 21">PR #21 ↗</a></div><h3>Missing uniform lockers now trigger a warning</h3><p>Gyms and other retail businesses now warn when no Uniform Locker is installed, even if the save marks uniforms as satisfied. Gym lockers and boxed uniform lockers do not count.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/20" target="_blank" rel="noopener" aria-label="View pull request 20">PR #20 ↗</a></div><h3>Import deliveries count where they arrive</h3><p>Active importer contracts now count toward warehouse and factory supply, including new orders with no previous delivery. Mixed supply routes, paused contracts and staggered deliveries show clearer shortages and next steps.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/19" target="_blank" rel="noopener" aria-label="View pull request 19">PR #19 ↗</a></div><h3>See who is online and vote on what comes next</h3><p>An approximate online count now sits beside the green dot. Vote for Optimize staffing or Find a location from the footer, with one vote per connection IP for each feature.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/16" target="_blank" rel="noopener" aria-label="View pull request 16">PR #16 ↗</a></div><h3>Your rented homes, on the map</h3><p>A dedicated map layer shows rented homes with their addresses and daily rent, alongside your businesses and owned properties.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/15" target="_blank" rel="noopener" aria-label="View pull request 15">PR #15 ↗</a></div><h3>A clearer view of the city</h3><p>The redesigned map adds layer toggles, a floating places list, location cards and a full-screen view. Search and explore with smoother camera movement.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/14" target="_blank" rel="noopener" aria-label="View pull request 14">PR #14 ↗</a></div><h3>Explore your company on the map</h3><p>An interactive city map brings together businesses, purchased properties and searchable addresses. Location shortcuts open a map overlay without leaving your current page.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/13" target="_blank" rel="noopener" aria-label="View pull request 13">PR #13 ↗</a></div><h3>Factory lines get their names sooner</h3><p>Known recipe IDs now identify factory products immediately, so ingredient planning no longer needs delivery history. Manual naming remains available for unknown recipes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/12" target="_blank" rel="noopener" aria-label="View pull request 12">PR #12 ↗</a></div><h3>Know when your previous save is loading</h3><p>A visible loading indicator explains when a remembered save is being restored. Clear recovery actions help when loading fails, and your previous page and selection return with your save.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/11" target="_blank" rel="noopener" aria-label="View pull request 11">PR #11 ↗</a></div><h3>Find saves on Windows and Mac</h3><p>Save help now shows a copyable path for your operating system, with a manual selector. Setup instructions are shorter and include native Steam saves on macOS.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/10" target="_blank" rel="noopener" aria-label="View pull request 10">PR #10 ↗</a></div><h3>More room for your dashboard</h3><p>The board uses the available screen width, crowded controls wrap, and repeated factory downtime sits in an expandable view. Remembered saves reopen automatically when folder access is still granted.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/8" target="_blank" rel="noopener" aria-label="View pull request 8">PR #8 ↗</a></div><h3>Turn supply plans into a checklist</h3><p>Supply Orders groups proposed quantities and estimated top-ups by location, with expandable checklists and copyable actions. Checkmarks stay in your browser as notes for changes to make in-game.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/6" target="_blank" rel="noopener" aria-label="View pull request 6">PR #6 ↗</a></div><h3>Better shared-ingredient planning</h3><p>Import planning now adds active contracts together and keeps orders needed by other product ranges. Hairdresser consumables and service fees are handled correctly in supply plans.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/5" target="_blank" rel="noopener" aria-label="View pull request 5">PR #5 ↗</a></div><h3>A lighter touch for the clock</h3><p>A subtle glow keeps the masthead clock readable as the balls roll behind it, replacing the darker background pane in both themes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/4" target="_blank" rel="noopener" aria-label="View pull request 4">PR #4 ↗</a></div><h3>Smoother little interactions</h3><p>Masthead balls can roll behind the clock on narrower windows. Next moves cards have consistent spacing and respond promptly when you hover and tilt them.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/3" target="_blank" rel="noopener" aria-label="View pull request 3">PR #3 ↗</a></div><h3>Meet the redesigned Big Copilot</h3><p>A new look across the landing page and every dashboard view brings cleaner charts, clearer findings, detailed business cards and refined supply and growth tools, with light and dark themes.</p></li></ol>
+  <ol class="changelog-list"><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-25">25 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/118" target="_blank" rel="noopener" aria-label="View pull request 118">PR #118 ↗</a></div><h3>Game names in the language you play in</h3><p>A new Game names setting in the footer, beside Theme, shows the game&#x27;s own names in any language the game ships: items, business types, neighbourhoods, stations, skills and staff demands, on the board, inside its findings and in the wiki, so the board reads like your game. The rest of the page stays English. Search finds a name in either language, and lists sort in the language you picked. If your browser prefers one of the game&#x27;s languages, the board asks once whether to use it.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-25">25 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/114" target="_blank" rel="noopener" aria-label="View pull request 114">PR #114 ↗</a></div><h3>Supply by shop, warehouse and factory, and staffing for factory lines</h3><p>Supply is now three tabs, one per object: Shops, Warehouses and Factories. Each opens on what needs a change, with the figure to type beside the setting it changes and a tick at the head of the row; one checklist under the tabs counts your ticks across all three and copies what is left. Idle stock folds into one row per warehouse or per cause, a shelf topped up far above what it sells gets a lower target to type, and the goods-flow diagram is a view of each tab: click a site to see its rows. Factories shows the hours each line is rostered against the hours it needs, 24/7 or for what your shops use, and too few hours is a change to type. A new Staffing for factory lines block gives each line&#x27;s shifts, the factory workers the plan needs against those you have, and what the difference does to your wages. This answers the voted request &quot;Supply chain for factories not running 24/7&quot;.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-25">25 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/113" target="_blank" rel="noopener" aria-label="View pull request 113">PR #113 ↗</a></div><h3>Floor plans for every building, and a Layout filter</h3><p>Each building the finder lists now names its layout, the game&#x27;s short code for its shape, such as C1 or H3. Click a building on the map or in the list and its card shows the game&#x27;s own floor plan for it, with its entrances (loading bays for a warehouse). A new Layout filter in Find a location lists only the layouts you pick, and a saved search keeps it.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-24">24 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/94" target="_blank" rel="noopener" aria-label="View pull request 94">PR #94 ↗</a></div><h3>Size supply for 24/7 or for demand, and find stock no plan sends on</h3><p>Supply now judges every item once and uses the same word for it everywhere: covered, tight, short, no plan, paused, stalled, idle, made here or new. A Sizing switch on Orders, on the factory and import checks and on each warehouse and factory page sizes your factory lines, top-ups and imports for 24/7 rated output or for what your shops actually use, with one 15% margin over the whole chain from import to sale and figures rounded up to tens. Under Demand, a shop open less than a week is projected forward and marked &quot;may still be ramping&quot;. Tight means an order covers the use but not the margin; it shows on Supply and never on Today. Shops and warehouses stocked by a repeating wholesale contract are judged against it. A new Not routed finding points at stock in a warehouse or factory that no plan sends on while your own shops sell it.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-24">24 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/83" target="_blank" rel="noopener" aria-label="View pull request 83">PR #83 ↗</a></div><h3>Fix: warehouses fed by your own factory no longer read as short</h3><p>A warehouse your own factory tops up every morning on a logistics route was flagged as a critical import shortfall for every item the factory delivers, often with an alert that weekly orders cannot cover their week and a large one-off to bring in. The board now counts what your factories bring on routes before it judges the import, so a backup import next to such a route no longer raises the alarm, paused or not. If a route brings only part of what leaves, the import is sized on the rest, and a busy day that could still empty the shelf before the next morning&#x27;s round is still flagged. The Factories page takes the same routes into account.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-24">24 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/82" target="_blank" rel="noopener" aria-label="View pull request 82">PR #82 ↗</a></div><h3>Write to the game from the board (Big Copilot Link 0.2.0)</h3><p>With the Big Copilot Link mod 0.2.0, the board can now make three changes in your game for you: set uniforms where roles have none, apply the import amounts from Plan imports, and write a shop&#x27;s staffing plan, for one shop or a run of shops. Every change shows what the game will do before you apply it, can be undone once, and is refused, with nothing written, if the game has moved on since the board last read it. The first write from a browser asks for approval in the game; after that it is remembered.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-24">24 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/81" target="_blank" rel="noopener" aria-label="View pull request 81">PR #81 ↗</a></div><h3>Every site has its own page, and you can search the board</h3><p>Each shop, warehouse, factory and office now opens as its own page with an address, so a reload keeps it and Back and Forward walk between sites; a crumb takes you back to where you came from, and site names on Today, Supply and the map link to it. Press / or Ctrl+K to search the whole board: pages, your sites, products, kinds of finding, location presets and the game&#x27;s help pages, with everyday words like hire, debt or difficulty. Today has an Ask the board row whose questions land on the answer. The difficulty you play on sits beside the clock, and Company › Results can show your week by weekday.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-23">23 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/77" target="_blank" rel="noopener" aria-label="View pull request 77">PR #77 ↗</a></div><h3>Full cover for a new shop, and a demand plan after 9 days</h3><p>A new shop can now run a demand test: the Staffing block offers Full cover 24/7 beside its usual plan, every serving station staffed every hour with the fewest people the game&#x27;s rules allow, and a step to open every day 0 to 24. Nine days after the shop&#x27;s first customer the board has the shop&#x27;s own week and gives it the demand plan, without waiting two weeks. Hours nobody came count as no customers. When the data is in and the shop is still fully staffed, the Staffing block and Today say to switch to the demand plan. Plans now say in one step how many people to add: who to assign from your unassigned staff and how many to hire, and hire counts are the true minimum.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-23">23 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/76" target="_blank" rel="noopener" aria-label="View pull request 76">PR #76 ↗</a></div><h3>Imports that read Smart Delivery, and your own order figures</h3><p>The weekly imports now understand the purchasing agent&#x27;s Smart Delivery setting: its amount is a stock level the agent tops up to each Monday, not a delivery, and the board judges it that way, in the order the game delivers your contracts. The imports table shows what arrived last week, what is set in game (&quot;in stock&quot; or &quot;a week&quot;), and a Set to box with the board&#x27;s suggestion that you can change. Your figures carry into the Plan imports checklist, which names the importer to change when a material has more than one contract. For Smart Delivery the suggestion is the stock that runs everything the depot feeds at full capacity for a week, so it only moves when your capacity does.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-23">23 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/75" target="_blank" rel="noopener" aria-label="View pull request 75">PR #75 ↗</a></div><h3>No more gas station tips</h3><p>Big Copilot will no longer tell you to open a gas station. Or a wholesaler. Or a casino. The city runs those itself and is not selling, however good the numbers look. Market demand and Find a location now suggest only business types you can actually open, straight from the game&#x27;s own F1 help, including ones nobody in your city runs yet.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-22">22 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/68" target="_blank" rel="noopener" aria-label="View pull request 68">PR #68 ↗</a></div><h3>Link to the game</h3><p>A third way in beside the save folder and the single file: with the Big Copilot Link mod from the Steam Workshop enabled, click Link to the game and the board reads the running game itself. No folder to pick, and the board follows the game as you play: it refreshes on the game hour, after a game save, and whenever you click Update. The mod serves the game&#x27;s own save to this page on your computer and to nothing else; Chrome and Edge ask once to allow the site to reach it. The local watcher learnt the same trick as --game.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-21">21 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/64" target="_blank" rel="noopener" aria-label="View pull request 64">PR #64 ↗</a></div><h3>Contributions welcome</h3><p>Help improve Big Copilot with fixes, features, docs or tests. The GitHub README now has a short contribution guide: focused PRs, mockups to discuss bigger ideas, test results and agent review for AI-written code.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-20">20 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/61" target="_blank" rel="noopener" aria-label="View pull request 61">PR #61 ↗</a></div><h3>Staffing, in hours and days you can act on</h3><p>The staffing plan now builds a week one person can really work. Nobody is spread across two businesses, hours stay inside the full-time band the game pays for, and somebody who asked for four days a week gets four, not five. A shop the board cannot read yet says so and covers its cleaning and security in the meantime, instead of offering to clear a schedule that nothing here could put back. The block is now called Staffing and speaks the game&#x27;s own language: hours and days rather than shifts, entries you copy into BizMan one day at a time, stations by name with the short codes on hover, and people to hire rather than posts, each sized at the 30 hours a week a full-time employee is owed. It also says what makes its numbers worth reading, which is two weeks with every station staffed. Building capacity replaces &quot;door cap&quot; on the board and in the location finder.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-19">19 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/58" target="_blank" rel="noopener" aria-label="View pull request 58">PR #58 ↗</a></div><h3>A page for every site, and a week of staffing to copy in</h3><p>Every site&#x27;s page now leads with the warnings about that site, and hovering one lights the part of the page that shows why. Shops and offices gain a profit rank among your trading sites, trend sparks and a cost bar, satisfaction against the 80 line with a lamp for each amenity, what pulls customers in, the ceiling each busy hour ran into, and a crew view that folds big rosters into one row per role. Depots and factories get pages of their own for the first time: a seven-day rail for each item with its delivery truck, what each depot feeds, a square for every machine filled by how much of the week it is staffed, and the inputs each line eats. A home opens from its map card. Shops also get Staffing: a week of hours to copy into BizMan, cut so that nobody works more than the 12 hours a day the game allows, people placed where their schedule demands hold, cleaning and security covered, and how many to hire for each station. Tick each entry off as you set it. The Optimize staffing card on Today opens the shop where it saves the most work. Gyms, hairdressers, theatres and nightclubs now get at-the-ceiling and overstaffed warnings, and switching a warning kind off moves its smaller findings to the bottom of the list and says so.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-19">19 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/56" target="_blank" rel="noopener" aria-label="View pull request 56">PR #56 ↗</a></div><h3>A Discord to talk it over in</h3><p>The footer&#x27;s Follow column now links a Discord server for Big Ambitions and Big Copilot: somewhere to ask what a number means, compare saves and strategies, and say what the board should show next. The invite is in the footer on the landing screen and on the board, beside YouTube and the subreddit.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-18">18 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/50" target="_blank" rel="noopener" aria-label="View pull request 50">PR #50 ↗</a></div><h3>Choose light or dark</h3><p>The footer now has a theme control: match your system, or pin the board to light or dark. The choice is remembered in your browser and is applied before the page draws, so returning to it never flashes the other palette. Scrollbars and drop-downs follow the theme you picked instead of staying with your operating system&#x27;s.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-17">17 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/43" target="_blank" rel="noopener" aria-label="View pull request 43">PR #43 ↗</a></div><h3>Warnings for unmet staff demands</h3><p>Needs attention now tells you when your employees&#x27; demands are not met, at every kind of site: the schedule they asked for, equipment at their desk, a water cooler or fridge in the building, a clean workplace. Each site gets one line naming what is missing and for how many staff, and health insurance and a happy boss go on one company line. The line turns critical once someone with an unmet demand has warned they will quit, and a site&#x27;s page lists the demands under its crew.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-16">16 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/40" target="_blank" rel="noopener" aria-label="View pull request 40">PR #40 ↗</a></div><h3>Staffing by the hour for offices</h3><p>Law firms, travel agencies and the other office businesses now get the same Customers by hour grid as shops, with staff at computers as their capacity, and the same warnings when they sit at the ceiling or have staff standing idle. Offices form their own chain in the Portfolio and list their fee instead of shelves. The at-the-ceiling warning for shops and offices now names the right limit for each hour.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-16">16 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/34" target="_blank" rel="noopener" aria-label="View pull request 34">PR #34 ↗</a></div><h3>Save your location searches</h3><p>The location finder can keep its filters and sort as a named search. Saved searches sit in a new Saved row, are shared by all your characters and apply in one click. The finder also stays open when you visit another page and come back.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-16">16 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/34" target="_blank" rel="noopener" aria-label="View pull request 34">PR #34 ↗</a></div><h3>Sort the Supply tables</h3><p>Click a column header in Supply&#x27;s stock checks, weekly imports or daily top-ups to sort by it, click again to reverse, or pick &quot;usual order&quot; to put the rows back. Imports and top-ups sort within each depot or factory.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-15">15 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/32" target="_blank" rel="noopener" aria-label="View pull request 32">PR #32 ↗</a></div><h3>Sort and filter premises by size</h3><p>The location finder shows each building&#x27;s floor area as a sortable m² column, and a new Size filter narrows the rent, take-over and for-sale lists to a minimum and maximum m².</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-15">15 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/28" target="_blank" rel="noopener" aria-label="View pull request 28">PR #28 ↗</a></div><h3>Find a location on the map</h3><p>The map gains a location finder: pick a kind and type, choose to rent, take over or buy, and get every available building ranked by neighbourhood demand and foot traffic, with estimated rent, deposit, door cap and rivals. Any building&#x27;s card now shows its owner, renter, size, cap, traffic and rent. The Today card counts vacant units, a Growth cell jumps to premises for its type, and the Wiki explains how rent works.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/27" target="_blank" rel="noopener" aria-label="View pull request 27">PR #27 ↗</a></div><h3>Offices and fairer rankings in Market demand</h3><p>The By type grid now shows each business&#x27;s average demand across its main products instead of a count of strong ones, so florists, cinemas and theaters are listed and ranked on the same scale. Law firms, travel agencies and the other office businesses appear in their own band, read from their hourly fee, with your own office outlined.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/26" target="_blank" rel="noopener" aria-label="View pull request 26">PR #26 ↗</a></div><h3>Compare your shop prices in the Wiki</h3><p>Business guides now show each shop&#x27;s configured prices alongside neighbourhood market minimums, including products and services. Missing comparisons are explained, expired supply events no longer hide prices, and shops without a known neighbourhood keep their prices visible.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/25" target="_blank" rel="noopener" aria-label="View pull request 25">PR #25 ↗</a></div><h3>Explore guides for every shop</h3><p>All 21 customer-facing businesses now have setup checklists, product or service cards, supplier locations and relevant production recipes. Secondary products have their own cards and recipe sections, with business-specific equipment requirements and improved keyboard and mobile navigation.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-14">14 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/22" target="_blank" rel="noopener" aria-label="View pull request 22">PR #22 ↗</a></div><h3>Explore the game-backed Wiki</h3><p>Search 851 game help pages and explore a visual Gift Shop guide with setup checklists, production recipes and supplier locations. Wiki content refreshes from installed game files when the site is built. Results now lives inside Company to keep the top navigation compact.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/21" target="_blank" rel="noopener" aria-label="View pull request 21">PR #21 ↗</a></div><h3>Missing uniform lockers now trigger a warning</h3><p>Gyms and other retail businesses now warn when no Uniform Locker is installed, even if the save marks uniforms as satisfied. Gym lockers and boxed uniform lockers do not count.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/20" target="_blank" rel="noopener" aria-label="View pull request 20">PR #20 ↗</a></div><h3>Import deliveries count where they arrive</h3><p>Active importer contracts now count toward warehouse and factory supply, including new orders with no previous delivery. Mixed supply routes, paused contracts and staggered deliveries show clearer shortages and next steps.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/19" target="_blank" rel="noopener" aria-label="View pull request 19">PR #19 ↗</a></div><h3>See who is online and vote on what comes next</h3><p>An approximate online count now sits beside the green dot. Vote for Optimize staffing or Find a location from the footer, with one vote per connection IP for each feature.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/16" target="_blank" rel="noopener" aria-label="View pull request 16">PR #16 ↗</a></div><h3>Your rented homes, on the map</h3><p>A dedicated map layer shows rented homes with their addresses and daily rent, alongside your businesses and owned properties.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-13">13 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/15" target="_blank" rel="noopener" aria-label="View pull request 15">PR #15 ↗</a></div><h3>A clearer view of the city</h3><p>The redesigned map adds layer toggles, a floating places list, location cards and a full-screen view. Search and explore with smoother camera movement.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/14" target="_blank" rel="noopener" aria-label="View pull request 14">PR #14 ↗</a></div><h3>Explore your company on the map</h3><p>An interactive city map brings together businesses, purchased properties and searchable addresses. Location shortcuts open a map overlay without leaving your current page.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/13" target="_blank" rel="noopener" aria-label="View pull request 13">PR #13 ↗</a></div><h3>Factory lines get their names sooner</h3><p>Known recipe IDs now identify factory products immediately, so ingredient planning no longer needs delivery history. Manual naming remains available for unknown recipes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/12" target="_blank" rel="noopener" aria-label="View pull request 12">PR #12 ↗</a></div><h3>Know when your previous save is loading</h3><p>A visible loading indicator explains when a remembered save is being restored. Clear recovery actions help when loading fails, and your previous page and selection return with your save.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-12">12 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/11" target="_blank" rel="noopener" aria-label="View pull request 11">PR #11 ↗</a></div><h3>Find saves on Windows and Mac</h3><p>Save help now shows a copyable path for your operating system, with a manual selector. Setup instructions are shorter and include native Steam saves on macOS.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/10" target="_blank" rel="noopener" aria-label="View pull request 10">PR #10 ↗</a></div><h3>More room for your dashboard</h3><p>The board uses the available screen width, crowded controls wrap, and repeated factory downtime sits in an expandable view. Remembered saves reopen automatically when folder access is still granted.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/8" target="_blank" rel="noopener" aria-label="View pull request 8">PR #8 ↗</a></div><h3>Turn supply plans into a checklist</h3><p>Supply Orders groups proposed quantities and estimated top-ups by location, with expandable checklists and copyable actions. Checkmarks stay in your browser as notes for changes to make in-game.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/6" target="_blank" rel="noopener" aria-label="View pull request 6">PR #6 ↗</a></div><h3>Better shared-ingredient planning</h3><p>Import planning now adds active contracts together and keeps orders needed by other product ranges. Hairdresser consumables and service fees are handled correctly in supply plans.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/5" target="_blank" rel="noopener" aria-label="View pull request 5">PR #5 ↗</a></div><h3>A lighter touch for the clock</h3><p>A subtle glow keeps the masthead clock readable as the balls roll behind it, replacing the darker background pane in both themes.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/4" target="_blank" rel="noopener" aria-label="View pull request 4">PR #4 ↗</a></div><h3>Smoother little interactions</h3><p>Masthead balls can roll behind the clock on narrower windows. Next moves cards have consistent spacing and respond promptly when you hover and tilt them.</p></li><li class="changelog-entry"><div class="changelog-meta"><time datetime="2026-09-11">11 Sep 2026</time><a href="https://github.com/PeterHartwieg/big-copilot/pull/3" target="_blank" rel="noopener" aria-label="View pull request 3">PR #3 ↗</a></div><h3>Meet the redesigned Big Copilot</h3><p>A new look across the landing page and every dashboard view brings cleaner charts, clearer findings, detailed business cards and refined supply and growth tools, with light and dark themes.</p></li></ol>
 </dialog>
 <script>
 /* Shared feature discovery: stable IDs persist across releases and saves. */
@@ -3782,8 +3807,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "fc49b59d22";</script>
-<script>window.LEDGER_RELEASE = {"version":"fc49b59d22","latest":{"pr":113,"date":"2026-09-25","title":"Floor plans for every building, and a Layout filter","summary":"Each building the finder lists now names its layout, the game's short code for its shape, such as C1 or H3. Click a building on the map or in the list and its card shows the game's own floor plan for it, with its entrances (loading bays for a warehouse). A new Layout filter in Find a location lists only the layouts you pick, and a saved search keeps it."}};</script>
+<script>window.LEDGER_BUILD = "1481bf141d";</script>
+<script>window.LEDGER_RELEASE = {"version":"1481bf141d","latest":{"pr":118,"date":"2026-09-25","title":"Game names in the language you play in","summary":"A new Game names setting in the footer, beside Theme, shows the game's own names in any language the game ships: items, business types, neighbourhoods, stations, skills and staff demands, on the board, inside its findings and in the wiki, so the board reads like your game. The rest of the page stays English. Search finds a name in either language, and lists sort in the language you picked. If your browser prefers one of the game's languages, the board asks once whether to use it."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -3867,8 +3892,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=fc49b59d22"></script>
-<script src="community.js?v=fc49b59d22"></script>
+<script src="app.js?v=1481bf141d"></script>
+<script src="community.js?v=1481bf141d"></script>
 
 <script>
 
@@ -4087,8 +4112,270 @@ const HOOD_NAMES = {"ba:neighborhood_midtown":"Midtown","ba:neighborhood_hellski
 /* A game name by its key. Everything that identifies an item, a business type
    or a neighbourhood carries the game's key; the words are looked up only to be
    shown, from the payload's `names`, which the game text fills. */
-const gameName = key => key ? ((D && D.names) || {})[key] || HOOD_NAMES[key] || "" : "";
+const gameName = key => key ? (gnTable && gnTable[key]) || ((D && D.names) || {})[key] || HOOD_NAMES[key] || "" : "";
 const hoodName = key => gameName(key) || String(key || "").replace(/^ba:neighborhood_/, "");
+
+/* --- game names in the player's language -------------------------------
+   Python writes every name in English, and the page lays one language's table
+   (web/names/<lang>.json, keyed like `names`) over the payload once, when it
+   arrives and when the footer's "Game names" changes: D = localiseNames(the
+   English payload). Every draw then reads D as before, and a join inside the
+   payload still holds because both of its sides were swapped alike. The
+   English payload rides along on D, unenumerated; dataEn() gives it back, for
+   the search's English words, and englishName() reads a name from it. Nothing
+   Python worked out is recomputed: switching never re-runs Python. A key the
+   table lacks keeps its English name.
+   The walk is gnWalk(), and every string in the payload passes through
+   gnString() on the way, which is where a name Python wrote inside a sentence,
+   as a token (U+27E6 key|English U+27E7), becomes the name in the language on
+   screen. */
+const GN_KEY = "ba_dash_names";
+const GN_OFFER_KEY = "ba_dash_names_offer";
+/* A local page built with --lang carries its table: {lang, names}. */
+const GN_EMBED = null;
+const GN_SRC = typeof Symbol === "function" ? Symbol("english payload") : "__gnEnglish";
+let gnLang = "en", gnTable = null, gnSeq = 0;
+const gnTables = new Map();
+if(GN_EMBED && GN_EMBED.lang && GN_EMBED.names){ gnLang = GN_EMBED.lang; gnTable = GN_EMBED.names; }
+const dataEn = () => (D && D[GN_SRC]) || D;
+const englishName = key => key ? ((dataEn() || {}).names || {})[key] || HOOD_NAMES[key] || "" : "";
+/* The name in the language picked, or "" while it is English or the table has
+   no word for it: what the wiki asks before it shows its own English. */
+const gnLocal = key => (key && gnTable && gnTable[key]) || "";
+/* One English name for every key of a kind that carries it, where every such
+   key reads the same in the language too; a name two keys share and the
+   language tells apart ("Bag of Lettuce") is left in English. For the few
+   payload fields Python sends a name in without its key. */
+function gnByName(T, EN, prefix){
+  const out = new Map(), split = new Set();
+  Object.keys(EN).forEach(k => {
+    if(!k.startsWith(prefix)) return;
+    const en = EN[k], here = T[k] || en;
+    if(out.has(en) && out.get(en) !== here) split.add(en); else out.set(en, here);
+  });
+  split.forEach(en => out.delete(en));
+  return out;
+}
+/* The swap for one name beside its key. `loose` is for a field that only
+   ever holds the game's name for the key, though Python may have worded it
+   its own way (a recipe's "Apple" for the item "Bag of Apples"); any other
+   field is swapped only while it reads as the key's English name, so a
+   player's own words beside a key are never touched. */
+const gnSwap = (T, EN, key, english, loose) =>
+  typeof key === "string" && typeof english === "string" && (loose || english === EN[key]) && T[key] ? T[key] : null;
+/* Which field names a key, and the fields beside it that show that key's name
+   (loose ones first, then strict ones). A field left out here stays English;
+   gnUnkeyed() takes the few with no key. */
+const GN_PAIRS = [["slug", ["item", "type", "demand"], ["name"]], ["typeSlug", ["type"], ["sub"]],
+  ["skill", ["label", "role"], []], ["demand", ["label"], []], ["hood", [], ["where"]],
+  ["workstationKey", ["workstation"], []]];
+/* Lists of names with their keys in a list beside them, index for index. */
+const GN_LISTS = [["items", "slugs"], ["fees", "feeSlugs"], ["lines", "lineSlugs"], ["uniformGaps", "uniformGapSkills"],
+  ["missing", "missingSlugs"], ["waitingOn", "waitingOnSlugs"]];
+/* Every string of the payload passes here, the table or not. Python writes
+   a game name inside a sentence as a token, U+27E6 key|English U+27E7 (tok()
+   in Python), and it reads as that key's name in the language on screen, or
+   as the English Python wrote where there is no table or the table has no
+   word for it. Nothing else of the string moves, so a sentence the board
+   parses (spLimitRole(), splitFinding()) reads as it did, names swapped. */
+const GN_TOKEN = /\u27e6(ba:[^\u27e7|\s]+)(?:\|([^\u27e7]*))?\u27e7/g;
+function gnString(s, T, EN){
+  if(s.indexOf("\u27e6") < 0) return s;
+  return s.replace(GN_TOKEN, (m, key, english) =>
+    (T && T[key]) || english || EN[key] || HOOD_NAMES[key] || prettySlug(key));
+}
+/* A copy of the English payload with its names swapped; `at` is the key the
+   value sits under, which names the thing when it is a game key itself
+   (plan.catalogue, plan.items, names, skillNames). */
+function gnWalk(v, T, EN, at){
+  if(typeof v === "string") return gnString(v, T, EN);
+  if(Array.isArray(v)) return v.map(x => gnWalk(x, T, EN, ""));
+  if(!v || typeof v !== "object") return v;
+  const o = {};
+  for(const k of Object.keys(v)) o[k] = gnWalk(v[k], T, EN, k);
+  if(!T) return o;
+  for(const [k, loose, strict] of GN_PAIRS){
+    const key = typeof v[k] === "string" && /^ba:/.test(v[k]) ? v[k] : null;
+    if(!key) continue;
+    loose.forEach(f => { const s = gnSwap(T, EN, key, v[f], true); if(s) o[f] = s; });
+    strict.forEach(f => { const s = gnSwap(T, EN, key, v[f]); if(s) o[f] = s; });
+  }
+  if(/^ba:/.test(at) && typeof v.slug !== "string" && typeof v.typeSlug !== "string")
+    ["type", "item", "name"].forEach(f => { const s = gnSwap(T, EN, at, v[f], f !== "name"); if(s) o[f] = s; });
+  for(const [names, keys] of GN_LISTS)
+    if(Array.isArray(v[names]) && Array.isArray(v[keys]))
+      o[names] = v[names].map((s, i) => gnSwap(T, EN, v[keys][i], s) || o[names][i]);
+  /* A table of names by key (names, skillNames, plan.items). */
+  for(const k of Object.keys(v))
+    if(k.startsWith("ba:")){ const s = gnSwap(T, EN, k, v[k], true); if(s) o[k] = s; }
+  return o;
+}
+/* The fields Python sends a name in with no key beside it, by the kind of
+   name each holds. */
+function gnUnkeyed(o, T, EN){
+  const skill = gnByName(T, EN, "ba:skill_"), item = gnByName(T, EN, "ba:itemname_"),
+    type = gnByName(T, EN, "ba:businesstype_"), station = gnByName(T, EN, "ba:factoryworkstationtype_");
+  const swap = (m, s) => typeof s === "string" && m.has(s) ? m.get(s) : s;
+  const each = (list, fn) => { if(Array.isArray(list)) list.forEach(fn); };
+  each(o.businesses, b => {
+    each(b.crew, r => { r.role = swap(skill, r.role); });
+    each(b.people, p => { p.role = swap(skill, p.role); });
+  });
+  each((o.staff || {}).roles, r => { r.role = swap(skill, r.role); });
+  each(o.hours, h => each(h.roles, r => { r.station = swap(item, r.station); }));
+  each(o.staffing, r => each(r.stations, s => { s.name = swap(item, s.name); }));
+  each(o.hypeExposure, h => { if(Array.isArray(h.items)) h.items = h.items.map(s => swap(item, s)); });
+  Object.values((o.plan || {}).workstations || {}).forEach(w => {
+    if(!w || typeof w !== "object") return;
+    w.name = swap(station, w.name);
+    ["machines", "assembly", "makes"].forEach(k => { if(Array.isArray(w[k])) w[k] = w[k].map(s => swap(item, s)); });
+  });
+  const supply = o.supply || {};
+  each((supply.factories || {}).sites, f => each(f.lines, l => { l.workstation = swap(station, l.workstation); }));
+  each((supply.graph || {}).nodes, n => { n.sub = swap(type, n.sub); });
+}
+/* The payload in the language picked: always a fresh copy of the English one,
+   which it carries along. Handing it a board already swapped starts from that
+   board's English, so a language change never swaps a swapped name. */
+function localiseNames(raw){
+  if(!raw || typeof raw !== "object") return raw;
+  const en = raw[GN_SRC] || raw;
+  const EN = en.names || {};
+  const out = gnWalk(en, gnTable, EN, "");
+  if(gnTable) gnUnkeyed(out, gnTable, EN);
+  Object.defineProperty(out, GN_SRC, {value: en});
+  return out;
+}
+/* Every board that arrives comes in through here. */
+function takeData(raw){ D = localiseNames(raw); return D; }
+/* Names sort in the language they are shown in; English keeps the order it
+   always had. */
+let gnCollator = null;
+function gnCompare(a, b){
+  a = String(a); b = String(b);
+  if(gnLang === "en") return a.localeCompare(b);
+  if(!gnCollator || gnCollator.lang !== gnLang){
+    let c;
+    try{ c = new Intl.Collator(gnLang); }catch(e){ c = {compare: (x, y) => x.localeCompare(y)}; }
+    gnCollator = {lang: gnLang, c};
+  }
+  return gnCollator.c.compare(a, b);
+}
+/* The languages this page can show: the picker's options, English first. */
+const gnPickers = () => [...document.querySelectorAll("[data-gn-pick]")];
+const gnLangs = () => {
+  const p = gnPickers()[0];
+  return p ? [...p.options].map(o => [o.value, o.textContent]) : GN_EMBED ? [["en", "English"], [GN_EMBED.lang, GN_EMBED.lang]] : [["en", "English"]];
+};
+const gnKnown = lang => gnLangs().some(([code]) => code === lang);
+function gnStored(){
+  try{ return localStorage.getItem(GN_KEY) || ""; }catch(e){ return ""; }
+}
+function gnRemember(lang){
+  try{ localStorage.setItem(GN_KEY, lang); }catch(e){}
+}
+/* A language's table: fetched once beside the page, with the build stamp so a
+   deploy busts it. */
+function gnLoad(lang){
+  if(gnTables.has(lang)) return gnTables.get(lang);
+  const v = encodeURIComponent(window.LEDGER_BUILD || "");
+  const got = fetch(`names/${encodeURIComponent(lang)}.json${v ? `?v=${v}` : ""}`)
+    .then(r => { if(!r.ok) throw new Error(`names/${lang}.json: ${r.status}`); return r.json(); });
+  gnTables.set(lang, got);
+  got.catch(() => gnTables.delete(lang));
+  return got;
+}
+function gnPaint(){
+  gnPickers().forEach(p => { p.value = gnLang; });
+}
+/* Switch the game names: the whole board is drawn again, as for another save,
+   from the English payload it already holds. A table that will not load leaves
+   the names as they were. */
+async function setGameNames(lang){
+  if(!gnKnown(lang)) lang = "en";
+  const seq = ++gnSeq;
+  let table = null;
+  if(lang !== "en"){
+    try{ table = await gnLoad(lang); }catch(e){ if(seq === gnSeq) gnPaint(); return false; }
+  }
+  if(seq !== gnSeq) return false;
+  gnLang = lang; gnTable = table && typeof table === "object" ? table : null;
+  gnPaint();
+  gnRedraw();
+  return true;
+}
+function gnRedraw(){
+  if(typeof hasData === "function" && hasData()){
+    D = localiseNames(D);
+    renderCalm(false);
+  } else if(typeof page !== "undefined" && page === "wiki" && typeof wikiVisit === "function"){
+    wikiVisit();
+  }
+}
+/* The browser's languages, first to last, to the game's code: the first that
+   is English or one the game has decides, so a reader who puts English first is
+   never offered anything. */
+function gnBrowserLang(list){
+  const langs = gnLangs().map(([code]) => code);
+  for(const tag of list || []){
+    const t = String(tag || "").toLowerCase();
+    if(!t) continue;
+    const base = t.split("-")[0];
+    if(base === "en") return "en";
+    if(base === "zh"){
+      if(/^zh-(hant|tw|hk|mo)\b/.test(t)) return langs.includes("zh-tw") ? "zh-tw" : null;
+      return langs.includes("zh-cn") ? "zh-cn" : null;
+    }
+    if(langs.includes(base)) return base;
+  }
+  return "en";
+}
+function gnOfferDone(){
+  try{ return !!localStorage.getItem(GN_OFFER_KEY); }catch(e){ return false; }
+}
+function gnOfferClose(el, answer){
+  try{ localStorage.setItem(GN_OFFER_KEY, answer); }catch(e){}
+  el.remove();
+}
+/* Once, ever: a reader whose browser prefers a language the game has is asked
+   whether the game's names should follow it. Either answer is kept, and a
+   choice already made in the footer counts as one. */
+function gnOffer(){
+  if(!gnPickers().length || gnStored() || gnOfferDone() || document.querySelector(".gn-offer")) return null;
+  const lang = gnBrowserLang(navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language]);
+  if(!lang || lang === "en") return null;
+  const word = (gnLangs().find(([code]) => code === lang) || [])[1];
+  if(!word) return null;
+  const el = document.createElement("div");
+  el.className = "gn-offer";
+  el.setAttribute("role", "dialog");
+  el.setAttribute("aria-label", "Game names");
+  el.innerHTML = `<p>Show game names in <span lang="${attr(lang)}">${spEsc(word)}</span>?</p>
+    <div class="gn-offer-acts"><button type="button" class="gn-yes">Yes</button><button type="button" class="gn-no">No thanks</button></div>`;
+  el.querySelector(".gn-yes").onclick = () => { gnOfferClose(el, "yes"); gnRemember(lang); setGameNames(lang); };
+  el.querySelector(".gn-no").onclick = () => gnOfferClose(el, "no");
+  document.body.appendChild(el);
+  return el;
+}
+function wireGameNames(){
+  gnPickers().forEach(p => {
+    if(p.dataset.gnWired) return;
+    p.dataset.gnWired = "1";
+    p.addEventListener("change", () => {
+      gnRemember(p.value);
+      const offer = document.querySelector(".gn-offer");
+      if(offer) gnOfferClose(offer, "picked");
+      setGameNames(p.value);
+    });
+  });
+  gnPaint();
+}
+/* Width in the units shortText() counts: a wide (CJK) character is two. */
+const gnWide = ch => /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]/.test(ch)
+  || (ch.codePointAt(0) >= 0x20000 && ch.codePointAt(0) <= 0x3fffd);
+/* ` lang="xx"` for a name the page uppercases, so a Turkish dotted i or a Greek
+   accent is cased by the language's own rules. */
+const gnLangAttr = () => gnLang === "en" ? "" : ` lang="${gnLang}"`;
 /* A neighbourhood as a key, from either a key or an English name: what map
    data exported by name and filters stored before keys hold. Null for neither. */
 const hoodKeyOf = v => typeof v !== "string" || !v ? null
@@ -4474,7 +4761,8 @@ function drawFlow(){
         ? `<rect x="${x + 10}" y="${y + 13}" width="24" height="18" rx="3" fill="var(--raised)" stroke="var(--rule)"></rect>
            <text x="${x + 22}" y="${y + 26}" text-anchor="middle" class="s" style="font-weight:600;fill:var(--ink-2)">${hood}</text>` : ""}
       <text x="${tx}" y="${y + 19}">${attr(shortText(node.name, hood ? 19 : 24))}</text>
-      <text class="s" x="${tx}" y="${y + 34}">${node.stock ? node.stock.toLocaleString("en-US") + " held" : attr(node.sub)}</text></g>`);
+      <text class="s" x="${tx}" y="${y + 34}">${node.stock ? node.stock.toLocaleString("en-US") + " held"
+        : `${attr(shortText(node.sub || "", hood ? 21 : 26, true))}<title>${attr(node.sub || "")}</title>`}</text></g>`);
     if(flag) dots.push(`<circle class="${flag[0]}" cx="${x + NODE_W - 10}" cy="${y + 10}" r="4"><title>${flag[1]}</title></circle>`);
   });
 
@@ -4497,7 +4785,23 @@ function flowCountText(facts){
     .map(([st, k]) => `${k} ${SZ_WORD[st] || st}`).join(", ");
 }
 
-const shortText = (t, n) => t.replace(/^\[[^\]]*\]\s*/, "").slice(0, n);
+/* A node's name cut to fit its box: n is a width in Latin letters, and a wide
+   (CJK) character takes two of them. */
+const shortText = (t, n, ellipsis = false) => {
+  const s = String(t || "").replace(/^\[[^\]]*\]\s*/, "");
+  const width = ch => gnWide(ch) ? 2 : 1;
+  let w = 0, out = "";
+  for(const ch of s) w += width(ch);
+  /* Cut with an ellipsis, the ellipsis takes one unit of the width itself. */
+  const room = ellipsis && w > n ? n - 1 : n;
+  w = 0;
+  for(const ch of s){
+    w += width(ch);
+    if(w > room) break;
+    out += ch;
+  }
+  return ellipsis && out.length < s.length ? `${out.trimEnd()}\u2026` : out;
+};
 
 /* --- one verdict per supply fact ---------------------------------------
    Python judges every (site, item) the company holds, needs or plans once,
@@ -4632,7 +4936,7 @@ function supplySorted(rows, cols, state){
   return rows.slice().sort((a, b) => {
     const x = key(a), y = key(b);
     if(x == null || y == null) return (x == null) - (y == null);
-    return (typeof x === "string" ? x.localeCompare(y) : (x > y) - (x < y)) * state.dir;
+    return (typeof x === "string" ? gnCompare(x, y) : (x > y) - (x < y)) * state.dir;
   });
 }
 function supplyHead(cols, state){
@@ -4751,7 +5055,7 @@ function nameLine(rid, slug){
   const again = () => { sbStamp++; drawSupplyStrip(); drawSupplyTab(sub.supply); drawSite(); wireAll(); };
   if(!LIVE){ again(); return; }
   SOURCE.name(rid, slug)
-    .then(data => { if(data){ D = data; renderCalm(); } else again(); })
+    .then(data => { if(data){ takeData(data); renderCalm(); } else again(); })
     .catch(again);
 }
 /* A name kept in this browser that the live board does not yet have — the
@@ -4765,7 +5069,7 @@ function syncLocalNames(view){
   if(!missing.length) return;
   missing.forEach(u => syncedNames.add(u.rid));
   Promise.all(missing.map(u => SOURCE.name(u.rid, names[u.rid])))
-    .then(results => { const last = results.filter(Boolean).pop(); if(last){ D = last; renderCalm(); } })
+    .then(results => { const last = results.filter(Boolean).pop(); if(last){ takeData(last); renderCalm(); } })
     .catch(() => {});
 }
 
@@ -5168,14 +5472,48 @@ const SEV_WORD = {crit: "urgent", watch: "watch", opp: "opportunity"};
    (three of a kind at one site) carries its worst member's sentence as detail. */
 const HEADLINE_MAX = 60;
 const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/* The game names in the language on screen that hold a mark a finding is cut
+   at (a comma, a bracket, a colon, a stop): "Kleidung (klassisch, günstig,
+   Damen)", "Blume (günstig)". A finding is never cut inside one of them. Read
+   off the names the board shows, so it holds in every language. */
+const FINDING_CUT_MARKS = /[,(:;.]/;
+let findingNamesFor = null, findingNamesList = [];
+function findingNames(){
+  const names = (typeof D !== "undefined" && D && D.names) || null;
+  if(names !== findingNamesFor){
+    findingNamesFor = names;
+    findingNamesList = [...new Set(Object.values(names || {}))]
+      .filter(n => typeof n === "string" && n.length > 2 && FINDING_CUT_MARKS.test(n))
+      .sort((x, y) => y.length - x.length);
+  }
+  return findingNamesList;
+}
+/* Where in `t` a game name stands, as [from, to) pairs. */
+function findingNameSpans(t){
+  const spans = [];
+  if(!FINDING_CUT_MARKS.test(t)) return spans;
+  for(const name of findingNames()){
+    for(let at = t.indexOf(name); at >= 0; at = t.indexOf(name, at + name.length))
+      if(!spans.some(([f, e]) => at < e && at + name.length > f)) spans.push([at, at + name.length]);
+  }
+  return spans;
+}
+const inFindingName = (spans, i) => spans.some(([f, e]) => i > f && i < e);
 function splitFinding(a){
   let t = String(a.text || "");
   if(a.site && t.startsWith(a.site)){
     t = t.slice(a.site.length).replace(/^[\s,:;-]+/, "").replace(/^(is|are)\s+/, "");
   }
-  /* A colon between digits is a time of day, not a break. */
-  const m = t.match(/^(.*?)(?:(?<!\d):(?!\d)|;|\.\s)\s*(.*)$/s);
-  let what = m ? m[1] : t, more = m ? m[2] : "";
+  /* A colon between digits is a time of day, not a break, and a mark inside
+     a game name is part of the name. */
+  const whole = findingNameSpans(t);
+  let what = t, more = "";
+  for(const m of t.matchAll(/(?<!\d):(?!\d)|;|\.\s/g)){
+    if(inFindingName(whole, m.index)) continue;
+    what = t.slice(0, m.index);
+    more = t.slice(m.index + m[0].length).replace(/^\s+/, "");
+    break;
+  }
   /* "at <site>" inside the headline is the pill again. */
   if(a.site) what = what.replace(new RegExp(`\\s+at ${escapeRe(a.site)}\\b`), "");
   const lead = rest => { more = more ? `${rest.replace(/[.\s]+$/, "")}. ${more}` : rest; };
@@ -5185,7 +5523,8 @@ function splitFinding(a){
   let r;
   if((r = what.match(/^(\d+) (machines?) at (.+?) (runs? a recipe the board cannot name.*)$/))){
     what = `${r[1]} ${r[2]} ${r[4]}`; lead(`At ${r[3]}`);
-  } else if((r = what.match(/^(.+?) (top-up target of .+)$/)) && r[1].includes(", ")){
+  } else if((r = what.match(/^(.+?) (top-up target of .+)$/))
+      && [...r[1].matchAll(/, /g)].some(c => !inFindingName(findingNameSpans(r[1]), c.index))){
     what = r[2]; lead(r[1]);
   }
   /* Still long: the last comma or bracket inside the limit ends the headline
@@ -5195,8 +5534,8 @@ function splitFinding(a){
      cut there named the item without its variant: two rows read "Fabric".
      Only a bracket of words ("(important)", "(3 at peak)") is a place to cut. */
   if(what.length > HEADLINE_MAX){
-    const cuts = [];
-    for(const m of what.matchAll(/, | \((?![A-Z])/g)) cuts.push(m.index);
+    const cuts = [], names = findingNameSpans(what);
+    for(const m of what.matchAll(/, | \((?![A-Z])/g)) if(!inFindingName(names, m.index)) cuts.push(m.index);
     let at = Math.max(-1, ...cuts.filter(i => i <= HEADLINE_MAX));
     if(at < 20) at = Math.min(...cuts.filter(i => i > 0));
     if(isFinite(at) && at > 0){
@@ -5532,7 +5871,9 @@ function xlMembers(c){
     if(!b) return;
     const word = b.status === "retail" ? "shop" : b.status === "office" ? "office"
       : b.status === "vacant" ? "vacant lease"
-      : factories.has(i) ? "factory" : String(b.type || "site").toLowerCase();
+      /* The sentence is English and pluralised in English, so the kind is the
+         type's English name whatever language the names are shown in. */
+      : factories.has(i) ? "factory" : String(englishName(b.typeSlug) || b.type || "site").toLowerCase();
     counts.set(word, (counts.get(word) || 0) + 1);
   });
   if(!counts.size) return `${c.count} site${c.count === 1 ? "" : "s"}`;
@@ -6015,7 +6356,9 @@ function spLimitRole(part, roles){
   if(SP_PLAIN_LIMIT[part]) return (roles || []).find(r => !r.noun) || null;
   const staffing = /\bstaffing$/.test(part);
   const want = part.replace(/\s*staffing$/, "");
-  return (roles || []).find(r => staffing ? r.label === want : r.noun === part) || null;
+  /* The finding is Python's English; the role's label may be in the player's
+     language, so its English name is asked as well. */
+  return (roles || []).find(r => staffing ? r.label === want || englishName(r.skill) === want : r.noun === part) || null;
 }
 /* The cells one cap chip is about, in the cells' own tokens. A finding naming
    two tied answers -- "Gym Trainer staffing and registers" -- is about the
@@ -8602,8 +8945,9 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
                                       .concat(mode === "smart" ? ["smart"] : []));
     const key = id(slug);
     // The key a tick was stored under while rows were keyed by the item's
-    // name, for reconcileOrderMarks to carry over.
-    const legacyKey = id(item);
+    // name, for reconcileOrderMarks to carry over. That name was English, so
+    // with the names in another language it is the key's English name.
+    const legacyKey = id(typeof gnLang !== "undefined" && gnLang !== "en" ? englishName(slug) || item : item);
     rows.push({key, legacyKey, group, item, slug, current, proposed, reason, kind, site: s, source, mode,
                ...(paused ? {paused: true} : {}), ...(tight ? {tight: true} : {}), ...(lower ? {lower: true} : {})});
   };
@@ -9425,7 +9769,10 @@ function drawShopsTab(){
   /* Worst first, then the tightest shelf. */
   const usual = (all ? shelves : kept).slice().sort((a, b) => szRank(a.fact) - szRank(b.fact) || (b.pressure ?? -1) - (a.pressure ?? -1));
   const units = sbGroup(usual, r => r.fact.st === "idle" ? `${r.slug}|${r.fact.why}` : null, kids => {
-    const types = new Set(kids.map(k => (D.businesses[k.s] || {}).type).filter(Boolean));
+    /* An English phrase ("3 clothing store shops"), so the kind is the type's
+       English name, lowercased, whatever language the names are shown in. */
+    const types = new Set(kids.map(k => { const b = D.businesses[k.s] || {}; return englishName(b.typeSlug) || b.type; })
+      .filter(Boolean));
     return {s: null, item: kids[0].item, slug: kids[0].slug, fact: kids[0].fact, sold: kids.reduce((t, k) => t + (k.sold || 0), 0),
       stock: kids.reduce((t, k) => t + (k.stock || 0), 0), pressure: null, peakSold: null, target: null,
       shops: types.size === 1 ? `${kids.length} ${[...types][0].toLowerCase()} shops` : `${kids.length} shops`,
@@ -10211,7 +10558,7 @@ function drawMarket(){
      a phone shows; the full name stays in its tip. */
   grid.innerHTML = any
     ? `<div></div>` + m.hoods.map((h, j) => `<div class="h${h === marketSortHood ? " sort" : ""}${HOOD_TAGS[h] ? " mk-tagged" : ""}" data-c="${j}" data-hood="${attr(h)}" data-tip="${
-        attr(`${hoodName(h)}: click to sort by demand here`)}"><span class="mk-long">${shortHood(hoodName(h))}</span>${
+        attr(`${hoodName(h)}: click to sort by demand here`)}"><span class="mk-long"${gnLangAttr()}>${shortHood(hoodName(h))}</span>${
         HOOD_TAGS[h] ? `<span class="mk-tag">${HOOD_TAGS[h]}</span>` : ""}</div>`).join("")
       + shown.map((r, i) => types ? typeRow(r, i, m.hoods) : productRow(r, i, m.hoods, m.trendDays)).join("")
       + (offices.length ? `<div class="band">Offices<small>customers served online · each cell is the demand for its hourly fee</small></div>`
@@ -10255,7 +10602,7 @@ function planTypes(){
   const cat = D.plan.catalogue || {};
   return Object.keys(cat)
     .filter(k => (cat[k].products || []).length >= 1)
-    .sort((a,b) => cat[a].type.localeCompare(cat[b].type));
+    .sort((a,b) => gnCompare(cat[a].type, cat[b].type));
 }
 
 /* What one shop actually shifts is measured where the owner runs the type, so
@@ -11088,6 +11435,8 @@ const GLIDE_MS = 700;
 const FINDER_CATS = [["retail","Retail"],["office","Office"],["warehouse","Warehouse"],["cinema","Cinema"],["theater","Theater"]];
 const FINDER_KEY = "ba_finder_v1";
 const premises = () => D?.premises || null;
+/* Names sort in the language the board shows them in (gnCompare()). */
+const mapCompare = (a, b) => typeof gnCompare === 'function' ? gnCompare(a, b) : String(a).localeCompare(String(b));
 const mapCharacter = () => D?.meta?.character || D?.supply?.factories?.character || D?.meta?.save || "";
 /* A size letter whose layouts disagree carries [min, max] rather than a number. */
 const capText = c => c == null ? "—" : Array.isArray(c) ? `${c[0]}–${c[1]}` : String(c);
@@ -11376,7 +11725,7 @@ class CityMapView {
   hoodList(){
     const P = premises(); if(!P) return [];
     return [...new Set(P.buildings.map(b => b.hood).filter(Boolean))]
-      .sort((a, b) => hoodName(a).localeCompare(hoodName(b)));
+      .sort((a, b) => mapCompare(hoodName(a), hoodName(b)));
   }
   hoodOn(hood){ return !this.fs.hoods || this.fs.hoods.includes(hood); }
   /* The header carries the switch and nothing else; everything the finder asks
@@ -11931,7 +12280,7 @@ class CityMapView {
     this.root.querySelectorAll('.fchip.cat').forEach(chip => mark(chip, chip.dataset.cat === this.fs.cat));
     const select = this.root.querySelector('[data-f="type"]');
     const types = this.catTypes(this.fs.cat);
-    const options = [...types].sort((a, b) => a[1].localeCompare(b[1]));
+    const options = [...types].sort((a, b) => mapCompare(a[1], b[1]));
     if(this.fs.type && !types.has(this.fs.type)) this.fs.type = "";
     select.innerHTML = `<option value="">Any type</option>` + options.map(([slug, label]) =>
       `<option value="${attr(slug)}"${slug === this.fs.type ? ' selected' : ''}>${mapText(label)}</option>`).join('');
@@ -12711,6 +13060,7 @@ function wikiIndex(raw){
   const topicById = new Map(topics.map(t => [wikiTopicId(t.slug), t]));
   const search = pages.map(p => ({
     id: String(p.id),
+    key: String(p.key || ""),
     title: String(p.title || p.id),
     lower: String(p.title || p.id).toLowerCase(),
     categoryId: String(p.categoryId || ""),
@@ -12867,6 +13217,11 @@ function wikiLink(label, target, ctx){
   const address = /^address\s*:/i.test(to) ? to.replace(/^address\s*:/i, "").trim() : "";
   if(address)
     return `<span class="wk-addr" data-addr="${attr(address)}">${wikiText(label)}</span>`;
+  /* A link worded exactly as its page's game name is that name, shown in the
+     language picked; any other wording ("Nightclubs") stays as the help wrote it. */
+  const page = wikiData && wikiData.byId && wikiData.byId.get(to);
+  if(page && page.key && String(label).trim() === String(page.title || "").trim())
+    label = wikiName(page.key, label);
   if(wikiData && wikiData.has(to) && to !== (ctx && ctx.id))
     return `<a class="wk-link" href="${attr(wikiHref({kind: "page", id: to}))}">${wikiText(label)}</a>`;
   return wikiText(label);
@@ -12977,7 +13332,8 @@ function wikiCrumb(trail){
 /* A findings-style row: the shape the board already uses for a list of things
    you can open. */
 function wikiRow(entry, mark, withCategory = true, badge = ""){
-  const title = mark ? wikiMark(entry.title, mark) : wikiText(entry.title);
+  const shown = wikiName(entry.key, entry.title);
+  const title = mark ? wikiMark(shown, mark) : wikiText(shown);
   return `<a class="wk-hit" href="${attr(wikiHref({kind: "page", id: entry.id}))}">`
     + `<i class="wk-mark"></i><span class="wk-what">${title}${badge}</span>`
     + `<span class="wk-cat2">${withCategory ? wikiText(entry.category || "") : ""}</span>`
@@ -12996,12 +13352,15 @@ function wikiFind(query){
   if(!q || !wikiData) return [];
   const hits = [];
   wikiData.search.forEach(entry => {
-    const at = entry.lower.indexOf(q);
+    /* A page named in the player's language answers to either name. */
+    const at = [entry.lower, wikiName(entry.key, "").toLowerCase()].filter(Boolean)
+      .map(t => t.indexOf(q)).filter(i => i >= 0).sort((x, y) => x - y)[0];
     if(at === 0) hits.push({entry, rank: 0});
     else if(at > 0) hits.push({entry, rank: 1});
     else if(entry.category.toLowerCase().includes(q)) hits.push({entry, rank: 2});
   });
-  hits.sort((a, b) => a.rank - b.rank || a.entry.title.localeCompare(b.entry.title));
+  const cmp = typeof gnCompare === "function" ? gnCompare : (x, y) => x.localeCompare(y);
+  hits.sort((a, b) => a.rank - b.rank || cmp(wikiName(a.entry.key, a.entry.title), wikiName(b.entry.key, b.entry.title)));
   return hits.map(h => h.entry);
 }
 
@@ -13068,7 +13427,10 @@ function wikiTopicShelf(){
 function wikiCategoryView(){
   const cat = wikiData.catById.get(String(wikiRoute.id));
   if(!cat) return wikiMissing(`No category called “${wikiRoute.id}”.`);
-  const entries = wikiData.search.filter(e => e.categoryId === String(cat.id));
+  /* In the order of the names as shown, which the footer's "Game names" can change. */
+  const cmp = typeof gnCompare === "function" ? gnCompare : (x, y) => x.localeCompare(y);
+  const entries = wikiData.search.filter(e => e.categoryId === String(cat.id))
+    .map(e => [wikiName(e.key, e.title), e]).sort((x, y) => cmp(x[0], y[0])).map(([, e]) => e);
   const shown = wikiShowAll ? entries : entries.slice(0, WIKI_SHOWN);
   const listed = Number(cat.count) || entries.length;
   return `
@@ -13100,9 +13462,9 @@ function wikiPageView(){
   return `
 ${wikiCrumb([{label: "Wiki", href: "#wiki"},
   ...(cat ? [{label: wikiCatLabel(cat), href: wikiHref({kind: "category", id: cat.id})}] : []),
-  {label: page.title || page.id}])}
+  {label: wikiName(page.key, page.title || page.id)}])}
 <div class="wk-titlerow">
-  <h1>${wikiText(page.title || page.id)}</h1>
+  <h1>${wikiText(wikiName(page.key, page.title || page.id))}</h1>
   <span class="chips">${wikiChip("help")}</span>
 </div>
 <div class="wk-read rv">${wikiBody(page.body, ctx)}</div>
@@ -13291,6 +13653,27 @@ const wikiG = () => wikiActive || (wikiData && wikiData.sample) || {};
 const wikiSup = (key, g) => ((g || wikiG()).SUPPLIERS || {})[key] || null;
 const wikiFix = (key, g) => ((g || wikiG()).FIXTURES || {})[key] || null;
 const wikiProd = (key, g) => ((g || wikiG()).PRODUCTS || {})[key] || null;
+/* A game name in the language the footer's "Game names" picked (gnLocal() in
+   the board), by the game's key; the catalogue's English where English is
+   picked or the language has no word. Only what is shown: the articles stay
+   English, and every match against the help's own words keeps the English
+   name, which is why a record's `name` is never overwritten. */
+const wikiName = (key, english) => (key && typeof gnLocal === "function" && gnLocal(key)) || english;
+/* An offering's name as shown, and a fixture's, by the key its record holds. */
+const wikiShown = p => wikiName(p && (p.slug || p.nameSrc), (p && p.name) || "");
+const wikiFixName = f => wikiName((/^help_(ba:itemname_.+)_content$/.exec((f && f.src) || "") || [])[1], (f && f.name) || "");
+/* A fixture as a kind of thing, without its variant: "Bookshelf" for
+   "Bookshelf (Small)", in the language shown. */
+const wikiFixKind = f => wikiFixName(f).split(/\s*[(（]/)[0];
+/* A business's staff skills in the language shown, by the keys beside them
+   (skillKeys, index for index); the English where there is no key. */
+const wikiSkillName = (b, skill) => {
+  const i = (b.skills || []).indexOf(skill);
+  return wikiName(((b.skillKeys || [])[i]) || null, skill);
+};
+/* A workstation by the key its recipe names. */
+const wikiStationName = (r, station) => wikiName(r && r.workstationKey
+  ? `ba:factoryworkstationtype_${r.workstationKey}` : null, (r && r.workstation) || (station && station.name) || "");
 
 /* The short labels and hints the page wears. The words are authored beside the
    payload and travel with it; what stands in below is the label this page has
@@ -13458,7 +13841,7 @@ function wikiRecipeRows(offers, g){
     wikiRecipeKeys(p).forEach(key => {
       const row = rows.get(key)
         || {key, recipe: (g.RECIPES || {})[key] || null, users: []};
-      row.users.push({name: p.name, group: p.group});
+      row.users.push({name: wikiShown(p), group: p.group});
       rows.set(key, row);
     });
   });
@@ -13497,9 +13880,9 @@ function wikiGuidePage(g, page, cat){
   return `
 ${wikiCrumb([{label: "Wiki", href: "#wiki"},
   ...(cat ? [{label: wikiCatLabel(cat), href: wikiHref({kind: "category", id: cat.id})}] : []),
-  {label: b.name || page.title}])}
+  {label: wikiName(b.nameSrc || page.key, b.name || page.title)}])}
 <div class="wk-titlerow">
-  <h1>${wikiText(b.name || page.title)}</h1>
+  <h1>${wikiText(wikiName(b.nameSrc || page.key, b.name || page.title))}</h1>
   <span class="chips">${wikiChip("help", "game help",
     "This page is the game's own help for this business, and the help pages for the products, fixtures and recipes it names.")}${
     placed ? wikiChip("asset", "fixtures counted in shipped shops",
@@ -13541,7 +13924,7 @@ function wikiGuideLede(g, primary, ctx){
     : none.length ? `${wikiNum(yes.length)} of its ${wikiNum(primary.length)} products can be ordered from any wholesaler.`
     : `Every one of its ${wikiNum(primary.length)} products can be ordered from any wholesaler.`;
   const tail = !authored && none.length === 1
-    ? ` <b>${wikiText(none[0].name)} is on no wholesaler's list.</b>` : "";
+    ? ` <b>${wikiText(wikiShown(none[0]))} is on no wholesaler's list.</b>` : "";
   return `<p class="wk-lede rv">${authored ? wikiInline(authored, ctx) : wikiText(counted)}${tail}</p>`
     + (notes.length ? `<ul class="wk-notes rv">${notes.map(n =>
         `<li>${wikiInline(n, ctx)}</li>`).join("")}</ul>` : "");
@@ -13560,10 +13943,10 @@ function wikiGuideTiles(g, offers){
   const hiring = wikiHiring(b).map(k => wikiSup(k, g)).filter(Boolean);
   const said = wikiCopy("rangeHint");
   const range = (said ? `${said} ` : "") + (primary.length
-    ? `Its own range: ${primary.map(p => p.name).join(", ")}.`
-      + (other.length ? ` Also carried, and drawn in full below: ${other.map(p => p.name).join(", ")}.`
+    ? `Its own range: ${primary.map(wikiShown).join(", ")}.`
+      + (other.length ? ` Also carried, and drawn in full below: ${other.map(wikiShown).join(", ")}.`
         : extras.length ? ` ${extras.length} more may be carried on the side; each belongs to another type's page.` : "")
-    : other.length ? `Carried here: ${other.map(p => p.name).join(", ")}.`
+    : other.length ? `Carried here: ${other.map(wikiShown).join(", ")}.`
     : "The help page names no range for this type.");
   return `<div class="kpis wk-tiles">
   <div class="kpi rv" data-tip="${attr(sizes.length
@@ -13580,11 +13963,16 @@ function wikiGuideTiles(g, offers){
   <div class="kpi rv" data-tip="${attr(skills.length
     /* The agencies are named, not assigned: the payload's list is the business's,
        gathered across its skills, and this tile says no more than that. */
-    ? `${skills.join(" and ")}.${hiring.length
+    ? `${skills.map(k => wikiSkillName(b, k)).join(" and ")}.${hiring.length
       ? ` ${wikiCopy("recruitmentTitle")}: ${hiring.map(s => `${s.name}, ${s.street}`).join("; ")}.` : ""}`
     : "The help page names no staff skills for this type.")}">
     <span class="lab">Staff skills</span><span class="v">${skills.length}</span>
-    ${skills.length ? `<span class="sub">${wikiText(skills.join(" · ").toLowerCase())}</span>` : ""}</div>
+    ${skills.length ? `<span class="sub">${wikiText(skills.map(k => {
+      /* The tile's own style lowercases the English; a name in another
+         language keeps its case. */
+      const shown = wikiSkillName(b, k);
+      return shown === k ? k.toLowerCase() : shown;
+    }).join(" · "))}</span>` : ""}</div>
 </div>`;
 }
 
@@ -13626,8 +14014,8 @@ function wikiGuideSetup(g, page, offers, ctx){
     return `<div class="wk-item${o.req ? " req" : ""}${done ? " done" : ""}"${
       o.tip ? ` data-tip="${attr(o.tip)}"` : ""}>
     <button type="button" class="wk-tick" role="checkbox" aria-checked="${done ? "true" : "false"}"
-      data-tick="${attr(id)}"${o.mark ? " data-wiki-more" : ""} aria-label="${attr(o.name)}"></button>
-    <span><strong>${o.html || wikiText(o.name)}${o.catch
+      data-tick="${attr(id)}"${o.mark ? " data-wiki-more" : ""} aria-label="${attr(o.shown || o.name)}"></button>
+    <span><strong>${o.html || wikiText(o.shown || o.name)}${o.catch
       ? `<i class="wk-catch" aria-label="named by another page, not by this one"></i>` : ""}</strong>
     <span class="wk-m">${o.meta || ""}</span></span></div>`;
   };
@@ -13669,7 +14057,7 @@ function wikiGuideSetup(g, page, offers, ctx){
 
   /* Each kind of thing named once, with what its own page says about it. */
   const eachNamed = list => [...new Map(list.map(k => [fixtures[k].name.split(" (")[0],
-    `${wikiText(fixtures[k].name.split(" (")[0])}${Number.isFinite(fixtures[k].customers)
+    `${wikiText(wikiFixKind(fixtures[k]))}${Number.isFinite(fixtures[k].customers)
       ? ` <b>${wikiNum(fixtures[k].customers)}</b>/h` : ""}`])).values()].join(" · ");
   /* Which pieces a requirement names. Where the help links its requirement, the
      link is the help's own answer and is taken exactly: the fixture whose key,
@@ -13712,6 +14100,7 @@ function wikiGuideSetup(g, page, offers, ctx){
     const exact = one && wikiKey(plain) === wikiKey(one.name);
     return item({
       id: `req-${members.length ? members.join("+") : i}`, req: true, name: exact ? one.name : plain,
+      shown: exact ? wikiFixName(one) : plain,
       html: exact ? null : wikiInline(line, ctx),
       meta: one
         ? `${Number.isFinite(one.customers) ? `serves <b>${wikiNum(one.customers)}</b>/h · ` : ""}${vendorCount(one.vendors)}`
@@ -13719,7 +14108,7 @@ function wikiGuideSetup(g, page, offers, ctx){
            kind of till is named once. */
         : members.length ? eachNamed(members) : "",
       tip: one ? `${wikiFixTip(one)}${one.vendors && one.vendors.length ? ` Sold by ${vendorLine(one.vendors)}.` : ""}`
-        : members.length ? members.map(k => `${fixtures[k].name}: ${wikiFixTip(fixtures[k])}`).join(" ")
+        : members.length ? members.map(k => `${wikiFixName(fixtures[k])}: ${wikiFixTip(fixtures[k])}`).join(" ")
         : "Listed on this business's own page under what it requires to function.",
     });
   });
@@ -13764,7 +14153,7 @@ function wikiGuideSetup(g, page, offers, ctx){
         meta: one
           ? `${Number.isFinite(one.customers) ? `serves <b>${wikiNum(one.customers)}</b>/h · ` : ""}${vendorCount(one.vendors)}`
           : eachNamed(members),
-        tip: `${fixtures[k].name} requires this on its own help page: “${wikiPlain(line)}”. `
+        tip: `${wikiFixName(fixtures[k])} requires this on its own help page: “${wikiPlain(line)}”. `
           + wikiCopy("linkedRequirementsHint", "Required when using the named equipment or service."),
       }));
       members.forEach(m => covered.add(m));
@@ -13782,7 +14171,7 @@ function wikiGuideSetup(g, page, offers, ctx){
   const optionalFixtures = shownSpare.map((k, i) => {
     const caps = (fixtures[k].capacity || []).filter(c => c && Number.isFinite(c.value));
     return item({
-      id: `fix-${k}`, req: false, name: fixtures[k].name,
+      id: `fix-${k}`, req: false, name: fixtures[k].name, shown: wikiFixName(fixtures[k]),
       /* The first piece the control revealed, so the reader who pressed it is
          put down on what it produced rather than at the top of the page. */
       mark: wikiShowFix && i === WIKI_SPARE,
@@ -13801,10 +14190,13 @@ function wikiGuideSetup(g, page, offers, ctx){
   /* What a fixture consumes is a list on the fixture's own page. Where the
      business page does not carry it too, the square says whose page it is. */
   const needs = [];
-  keys.forEach(k => [].concat(fixtures[k].needs || []).filter(Boolean).forEach(need => {
-    if(needs.some(n => wikiKey(n.need) === wikiKey(need))) return;
+  keys.forEach(k => [].concat(fixtures[k].needs || []).forEach((need, i) => {
+    if(!need || needs.some(n => wikiKey(n.need) === wikiKey(need))) return;
     const missed = !mentions(page.body || "", need) && !isRequired(need);
-    needs.push({need: String(need), from: fixtures[k].name, missed});
+    /* `need` stays English for the matching above; `shown` and `from` are what
+       the page prints, in the language picked. */
+    needs.push({need: String(need), shown: wikiName((fixtures[k].needKeys || [])[i], String(need)),
+      from: wikiFixName(fixtures[k]), missed});
   }));
   /* A service's own requirements. The card for the service shows all of them,
      always; this list only adds what the shop would otherwise not know it has
@@ -13852,8 +14244,8 @@ function wikiGuideSetup(g, page, offers, ctx){
   }));
   const linked = [
     ...needs.map((n, i) => item({
-      id: `stock-need-${i}`, req: true, name: n.need, meta: "the fixture's own page", catch: n.missed,
-      tip: `${n.from} requires ${n.need}, according to its help page. `
+      id: `stock-need-${i}`, req: true, name: n.need, shown: n.shown, meta: "the fixture's own page", catch: n.missed,
+      tip: `${n.from} requires ${n.shown}, according to its help page. `
         + (n.missed ? "The business page does not mention this requirement. " : "")
         + wikiCopy("linkedRequirementsHint", "Required when using the named equipment or service."),
     })),
@@ -13882,7 +14274,7 @@ function wikiGuideSetup(g, page, offers, ctx){
     ...(b.skills || []).map(skill => {
       const own = forSkill(skill);
       return item({
-        id: `skill-${skill}`, req: isRequired(skill), name: skill,
+        id: `skill-${skill}`, req: isRequired(skill), name: skill, shown: wikiSkillName(b, skill),
         meta: own.length ? wikiText(own.map(s => s.name).join(" · ")) : "",
         tip: "The page says these skills can be assigned, not that the shop cannot open without them.",
       });
@@ -14004,7 +14396,7 @@ const wikiPill = (text, n, cls, tip) => `<span class="wk-pill${cls ? ` ${cls}` :
 /* A card's own title, and a link to the item's own help page where this build
    carries one. */
 function wikiCardTitle(p){
-  const name = wikiText(p.name);
+  const name = wikiText(wikiShown(p));
   return p.pageId && wikiData.has(p.pageId)
     ? `<a class="wk-link" href="${attr(wikiHref({kind: "page", id: p.pageId}))}">${name}</a>`
     : name;
@@ -14018,7 +14410,7 @@ function wikiGoodsCard(p, g){
     const f = wikiFix(k, g);
     if(!f) return "";
     const caps = wikiCaps(p, k, f);
-    return wikiPill(f.name, caps.length ? wikiCapText(caps) : "", "", wikiFixTip(f));
+    return wikiPill(wikiFixName(f), caps.length ? wikiCapText(caps) : "", "", wikiFixTip(f));
   }).join("");
   const state = wikiWholesale(p);
   const from = [
@@ -14039,7 +14431,7 @@ function wikiGoodsCard(p, g){
     }),
     wikiRecipeKeys(p).length ? wikiPill("Your factory", "", "", "Made in a factory; the recipe is below.") : "",
   ].join("");
-  const also = (p.alsoSoldBy || []).map(n => wikiPill(n)).join("") || `<span class="quiet">${wikiText(wikiCopy("noOtherSellers"))}</span>`;
+  const also = (p.alsoSoldBy || []).map((n, i) => wikiPill(wikiName((p.alsoSoldByKeys || [])[i], n))).join("") || `<span class="quiet">${wikiText(wikiCopy("noOtherSellers"))}</span>`;
   return `<div class="wk-card rv"><div class="wk-cardtop"><h3>${wikiCardTitle(p)}</h3>${
     p.group === "additional" ? wikiChip("dim", wikiCopy("alsoCarried"), wikiCopy("alsoCarriedTip")) : ""}</div>
     <dl><dt${wikiCopy("capacityHint") ? ` data-tip="${attr(wikiCopy("capacityHint"))}" tabindex="0"` : ""}>Goes on</dt>
@@ -14073,7 +14465,7 @@ function wikiGuideServices(g, fees, plan, ctx){
        line does. */
     const lines = (p.requirementsRaw || []).map(line =>
       `<div class="wk-need">${wikiInline(wikiBullet(line), ctx)}</div>`).join("");
-    const also = (p.alsoSoldBy || []).map(n => wikiPill(n)).join("") || `<span class="quiet">${wikiText(wikiCopy("noOtherSellers"))}</span>`;
+    const also = (p.alsoSoldBy || []).map((n, i) => wikiPill(wikiName((p.alsoSoldByKeys || [])[i], n))).join("") || `<span class="quiet">${wikiText(wikiCopy("noOtherSellers"))}</span>`;
     return `<div class="wk-card svc rv"><div class="wk-cardtop"><h3>${wikiCardTitle(p)}</h3>${
       p.automatic === true ? wikiChip("help", wikiCopy("automaticFee"), wikiCopy("automaticFeeTip")) : ""}${
       p.group === "additional" ? wikiChip("dim", wikiCopy("alsoOffered"), wikiCopy("alsoOfferedTip")) : ""}</div>
@@ -14110,12 +14502,12 @@ function wikiGraphModel(primary, g){
   };
   let anyWholesale = false;
   primary.forEach(p => {
-    add("product", `p:${p.key}`, p.name, "");
+    add("product", `p:${p.key}`, wikiShown(p), "");
     (p.fixtures || []).forEach(k => {
       const f = wikiFix(k, guide);
       if(!f) return;
       const caps = wikiCaps(p, k, f);
-      add("fixture", `f:${k}`, f.name, [
+      add("fixture", `f:${k}`, wikiFixName(f), [
         caps.length ? `holds ${wikiCapText(caps)}` : "",
         Number.isFinite(f.customers) ? `${wikiNum(f.customers)}/h` : "",
       ].filter(Boolean).join(" · "));
@@ -14133,10 +14525,12 @@ function wikiGraphModel(primary, g){
     /* A shop's products may be made on more than one workstation, so each
        recipe brings its own rather than the page assuming a single line. */
     wikiRecipeKeys(p).forEach(key => {
-      const station = wikiStation((guide.RECIPES || {})[key], guide);
+      const recipe = (guide.RECIPES || {})[key];
+      const station = wikiStation(recipe, guide);
       if(!station.name) return;
       const id = `s:ws:${wikiKey(station.name)}`;
-      add("source", id, station.name, "your factory");
+      add("source", id, wikiName(recipe && recipe.workstationKey
+        ? `ba:factoryworkstationtype_${recipe.workstationKey}` : null, station.name), "your factory");
       edges.push([`p:${p.key}`, id, "hop"]);
     });
   });
@@ -14175,7 +14569,7 @@ function wikiGuideGraph(g, goods){
   const picker = broad ? `<div class="wk-picker" role="group" aria-label="${attr(wikiCopy("chooseProduct"))}">
     <span class="wk-pickerlab">${wikiText(wikiCopy("chooseProduct"))}</span>${goods.map(p =>
       `<button type="button" class="wk-tab${p === held ? " on" : ""}" data-focus="${attr(p.key)}"
-        aria-pressed="${p === held ? "true" : "false"}">${wikiText(p.name)}</button>`).join("")}</div>` : "";
+        aria-pressed="${p === held ? "true" : "false"}">${wikiText(wikiShown(p))}</button>`).join("")}</div>` : "";
   return `
 <section class="sec">
   <div class="sechead"><h2>${wikiText(wikiCopy("graphTitle"))}</h2>
@@ -14231,7 +14625,7 @@ function wikiRecipeFlow(row, g){
     /* A rate the recipe page does not give stays a dash: a zero would read as
        a measurement. */
     const rate = Number.isFinite(i.per) ? `${wikiNum(i.per)}/h` : "—";
-    return `<div class="wk-ing"><span>${wikiText(i.item)}${froms ? `<span class="wk-from">${wikiText(froms)}</span>` : ""}</span>`
+    return `<div class="wk-ing"><span>${wikiText(wikiName(i.slug, i.item))}${froms ? `<span class="wk-from">${wikiText(froms)}</span>` : ""}</span>`
       + `<span class="wk-r"${Number.isFinite(i.per) ? "" : ' data-tip="The recipe page gives no hourly rate for this input."'}>${rate}</span></div>`;
   }).join("");
   const per = (r.out || {}).per;
@@ -14239,16 +14633,17 @@ function wikiRecipeFlow(row, g){
   return `<div class="wk-recipe rv">${roles}<div class="wk-flow">
     <div class="wk-box">${ings || `<span class="quiet">no ingredient stated</span>`}</div>
     <span class="wk-arrow" aria-hidden="true"><i></i><i></i><i></i></span>
-    <div class="wk-box mid" data-tip="${attr(`${station.assembly || "An assembly machine"}`
-      + `${(station.production || []).length ? ` with ${station.production.join(", ")}` : ""}`
+    <div class="wk-box mid" data-tip="${attr(`${station.assembly ? wikiName(station.assemblyKey, station.assembly) : "An assembly machine"}`
+      + `${(station.production || []).length
+        ? ` with ${station.production.map((n, i) => wikiName((station.productionKeys || [])[i], n)).join(", ")}` : ""}`
       + `${(station.runs || []).length ? `. The same workstation runs ${station.runs.length} recipes.` : ""}`)}">
-      <b>${wikiText(r.workstation || station.name || "Workstation")}</b>
+      <b>${wikiText(wikiStationName(r, station) || "Workstation")}</b>
       ${(station.runs || []).length
         ? `<small>${wikiNum(station.runs.length)} ${wikiCount(station.runs.length, "recipe")}</small>` : ""}</div>
     <span class="wk-arrow" aria-hidden="true"><i></i><i></i><i></i></span>
     <div class="wk-out">${rated
       ? `<b>${wikiNum(per)}<small>/h</small></b>` : `<b class="none">—</b>`}
-      <span>${wikiText((r.out || {}).item || "")}</span>
+      <span>${wikiText(wikiName((r.out || {}).slug, (r.out || {}).item || ""))}</span>
       ${rated
         ? wikiChip("model", `${wikiNum(per * 24)}/day`, wikiCopy("fullDayHint"))
         : wikiChip("gap", "rate not stated", "This recipe page gives no maximum hourly rate, so there is no day figure to take from it.")}</div>
@@ -14378,7 +14773,7 @@ function wikiGuidePrices(g, offers){
       }).join("") || "No matching shop";
       const cell = (rows.get(p.slug)?.cells || []).find(c => c && c.hood === hood);
       const market = price(cell?.marketPrice);
-      return `<tr><th scope="row">${wikiText(p.name)}</th><td data-label="Your configured price">${own}</td><td data-label="Lowest market price">${
+      return `<tr><th scope="row">${wikiText(wikiShown(p))}</th><td data-label="Your configured price">${own}</td><td data-label="Lowest market price">${
         market === null ? `<span class="quiet">Unavailable</span><small>${wikiText(cell?.marketPriceNote || "Not available in this save")}</small>`
           : wikiText(market)}</td></tr>`;
     }).join("");
@@ -16121,7 +16516,7 @@ function ssTopType(){
     by[b.typeSlug] = by[b.typeSlug] || {slug: b.typeSlug, type: b.type, revenue: 0};
     by[b.typeSlug].revenue += b.revenue || 0;
   });
-  return Object.values(by).sort((a, z) => z.revenue - a.revenue || a.type.localeCompare(z.type))[0] || null;
+  return Object.values(by).sort((a, z) => z.revenue - a.revenue || gnCompare(a.type, z.type))[0] || null;
 }
 function ssPrices(){
   const t = ssTopType();
@@ -16388,8 +16783,11 @@ window.addEventListener("hashchange", ssAfter);
    site's address (its name is a link to it), land where Enter goes (said in
    the footer), go what Enter does. */
 function ssEntry(o){
-  const e = Object.assign({syn: [], kw: [], tag: "", dot: "", hood: "", map: "", mapLabel: "", land: "", href: ""}, o);
+  const e = Object.assign({syn: [], kw: [], tag: "", dot: "", hood: "", map: "", mapLabel: "", land: "", href: "", en: ""}, o);
   e.lt = e.t.toLowerCase(); e.lp = e.p.toLowerCase();
+  /* A game name shown in another language answers to its English name too. */
+  if(e.en === e.t) e.en = "";
+  e.le = e.en.toLowerCase();
   e.kwRaw = e.kw.map(s => String(s));
   e.syn = e.syn.map(s => s.toLowerCase()); e.kw = e.kwRaw.map(s => s.toLowerCase());
   if(!e.land) e.land = e.p;
@@ -16523,6 +16921,9 @@ function ssKindGo(id){
     if(row){ row.scrollIntoView({block: "nearest"}); ssRing(row); }
   }, 450);
 }
+/* The English names of some game keys, where the page shows them in another
+   language: extra words a search answers to. */
+const ssEnglish = keys => gnLang === "en" ? [] : keys.filter(Boolean).map(k => englishName(k)).filter(Boolean);
 /* The tab holding the most idle rows. */
 function ssIdleTab(){
   const n = {shops: 0, warehouses: 0, factories: 0};
@@ -16550,7 +16951,8 @@ function ssBuild(){
     const fac = D.supply && D.supply.factories;
     const facSites = (fac && fac.sites) || [];
     const eats = {};
-    facSites.forEach(f => { eats[f.s] = (f.needs || []).map(n => n.item); });
+    const eatSlugs = {};
+    facSites.forEach(f => { eats[f.s] = (f.needs || []).map(n => n.item); eatSlugs[f.s] = (f.needs || []).map(n => n.slug); });
     /* A site's dot is the worst finding the list reads out for it: a kind
        switched off does not colour it. */
     const siteRows = {};
@@ -16560,7 +16962,8 @@ function ssBuild(){
       out.push(ssEntry({id: `site:${b.key}`, g: "sites", t: shortName(b),
         p: b.status === "vacant" ? `Vacant lease · ${b.address || ""}`
           : `${b.type} · ${b.address || ""}${inputs.length ? ` · eats ${inputs.join(" and ")}` : ""}`,
-        ic: "building", hood: b.code || "", kw: [b.address, b.neighbourhood && hoodName(b.neighbourhood), b.type, b.name, ...inputs].filter(Boolean),
+        ic: "building", hood: b.code || "", kw: [b.address, b.neighbourhood && hoodName(b.neighbourhood), b.type, b.name, ...inputs,
+          ...ssEnglish([b.neighbourhood, b.typeSlug, ...(eatSlugs[i] || [])])].filter(Boolean),
         dot: ssWorst(siteRows[b.key] || []), map: b.key, mapLabel: b.name, land: b.name, href: siteHref(b.key),
         go: () => ssOpenSite(b.key)}));
     });
@@ -16614,7 +17017,7 @@ function ssBuild(){
       if(!it.kind) Object.assign(it, {kind: "idle", ic: "crate", land: `Supply › ${SB_LABEL[sbTabOf(r.s)]} · Idle stock`,
         go: () => sbLand(sbTabOf(r.s), r.s, r.slug, "")});
     });
-    items.forEach((it, slug) => out.push(ssEntry({id: `product:${slug}`, g: "products", t: it.name,
+    items.forEach((it, slug) => out.push(ssEntry({id: `product:${slug}`, g: "products", t: it.name, en: englishName(slug),
       p: it.parts.slice(0, 2).join(" · "), ic: it.ic, dot: it.dot || "", land: it.land, go: it.go})));
     const counts = kindCounts();
     ALERT_GROUPS.forEach(g => {
@@ -16632,8 +17035,9 @@ function ssBuild(){
       const had = best.get(d.slug);
       if(!had || d.demand > had.demand) best.set(d.slug, {...d, hood});
     }));
-    [...best.values()].sort((a, z) => z.demand - a.demand || a.type.localeCompare(z.type)).forEach(d => {
+    [...best.values()].sort((a, z) => z.demand - a.demand || gnCompare(a.type, z.type)).forEach(d => {
       out.push(ssEntry({id: `finder:${d.slug}`, g: "finder", t: `Open ${/^[AEIOU]/i.test(d.type) ? "an" : "a"} ${d.type}`,
+        kw: ssEnglish([d.slug, d.hood]),
         p: `best fit: ${hoodName(d.hood)} · demand ${d.demand}`, ic: "pin",
         syn: ["new shop", "new business", "open", "expand"], land: `Map › Find a location · ${d.type}`,
         go: () => ssFinder({cat: d.category, type: d.slug, hoods: [d.hood]})}));
@@ -16643,10 +17047,14 @@ function ssBuild(){
       go: () => ssFinder({cat: "warehouse", type: "", hoods: null})}));
   }
   /* The wiki's own index (wikiIndex() in web/wiki.js), once its file is in. */
-  if(typeof wikiData !== "undefined" && wikiData && wikiData.search) wikiData.search.forEach(w =>
-    out.push(ssEntry({id: `wiki:${w.id}`, g: "wiki", t: w.title, p: `Wiki › ${w.category || "the game's help"}`, ic: "wiki",
-      syn: SS_WIKI_SYN[w.title] || [], land: `Wiki › ${w.title}`,
-      go: () => ssHash(wikiHref({kind: "page", id: w.id}))})));
+  /* A page titled with a game name is listed under the name as shown, and
+     answers to its English title too (`en`), as the wiki's own search does. */
+  if(typeof wikiData !== "undefined" && wikiData && wikiData.search) wikiData.search.forEach(w => {
+    const shown = typeof wikiName === "function" ? wikiName(w.key, w.title) : w.title;
+    out.push(ssEntry({id: `wiki:${w.id}`, g: "wiki", t: shown, en: w.title, p: `Wiki › ${w.category || "the game's help"}`, ic: "wiki",
+      syn: SS_WIKI_SYN[w.title] || [], land: `Wiki › ${shown}`,
+      go: () => ssHash(wikiHref({kind: "page", id: w.id}))}));
+  });
   return out;
 }
 
@@ -16661,6 +17069,8 @@ function ssScore(e, qq, ws){
   if(e.lt.startsWith(qq)) return [100, "t", ""];
   if(ws.test(e.lt)) return [85, "t", ""];
   if(e.lt.includes(qq)) return [60, "t", ""];
+  if(e.le && (e.le.startsWith(qq) || ws.test(e.le))) return [80, "kw", e.en];
+  if(e.le && e.le.includes(qq)) return [55, "kw", e.en];
   for(const s of e.syn) if(s.startsWith(qq) || (qq.length >= 4 && s.includes(qq))) return [70, "syn", s];
   const k = e.kw.findIndex(w => ws.test(w));
   if(e.g === "sites" && k >= 0) return [75, "kw", e.kwRaw[k]];
@@ -19408,7 +19818,17 @@ function boot(){
 }
 /* A page written with its numbers boots now. One that receives them later,
    as the in-browser board does, boots on the first delivery. */
+if(D) takeData(D);
 if(D) boot();
+/* The footer's "Game names": a choice kept from an earlier visit is fetched
+   now, and a board that arrives first is drawn in English and again once the
+   table is in. A page built with --lang has its table already and no picker. */
+wireGameNames();
+if(!GN_EMBED && gnPickers().length){
+  const want = gnStored();
+  if(want && want !== "en" && gnKnown(want)) setGameNames(want);
+  else if(!want) gnOffer();
+}
 
 /* What a host page may ask of the board. The web front door offers the wiki
    from its landing, before any save is open; everything else waits for one. */
@@ -19440,7 +19860,7 @@ function startWatching(){
          rest to be drawn as it is opened; another company or save redraws it
          all. */
       const same = !first && sameCompany(D, data);
-      D = data;
+      takeData(data);
       gwTerms.clear();  // what the game said of caps belongs to the board it was said about
       gwReadStuck = false;
       if(gwOpen && gwOpen._gwGate) gwOpen._gwBuilt = true;  // an undo's gate: a board built since
