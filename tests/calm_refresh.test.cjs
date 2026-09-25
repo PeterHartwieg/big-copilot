@@ -549,10 +549,13 @@ test('a refresh settles the board, not an open dialog', async t => {
 test('a refresh with the search palette open does not make its lit row hop again', async t => {
   const page = await board(t);
   await settle(page);
+  await page.evaluate(() => ssOpen());
+  // The palette's own drop and the first row's hop, played out: a row is lit
+  // and neither animation still runs.
+  await page.waitForFunction(() => ssPal.querySelectorAll('.ss-q2.on').length > 0
+    && !document.getAnimations().some(a => ['ss-drop', 'ss-hop'].includes(a.animationName) && a.playState === 'running'),
+  null, {polling: 50});
   const hop = await page.evaluate(async p => {
-    ssOpen();
-    // The palette's own drop and the first row's hop, played out.
-    await new Promise(r => setTimeout(r, 900));
     const hopping = () => document.getAnimations()
       .filter(a => a.animationName === 'ss-hop' && a.playState === 'running').length;
     const lit = ssPal.querySelectorAll('.ss-q2.on').length, before = hopping();

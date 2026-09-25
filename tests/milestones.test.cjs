@@ -29,6 +29,7 @@ const board = (goals = {typesRun: 1, typesTotal: 3}) => {
   vm.runInContext(slice('const fmt =', 'const compact =') + slice('const attr =', '/* Tooltips are plain text')
     + slice('\nconst plural =', '/* A rival per dot')
     + slice('function drawGoals(){', '/* Next moves: the Plan imports card'), context);
+  require('./_payload_contract.cjs').assertPayloadShape(context.D, 'milestones');
   return {context, section};
 };
 const draw = goals => { const b = board(goals); b.context.drawGoals(); return b.section.innerHTML; };

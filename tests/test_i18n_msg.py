@@ -84,11 +84,16 @@ CONVERTED = {
        ("data", "supply.factories.sites.lines.gaps", "off")],
     # Today writes its own words in the page (tt()); Python sends it numbers only.
     "today": [],
+    # Supply's chrome, and the imports and schedule write dialogs, write their
+    # own words in the page (tt()); Python sends the supply facts as codes.
+    "sb": [],
     # Growth writes its own words in the page (tt()); Python sends it names, numbers
     # and the supplier-event kinds, which the page words by their English.
     "gr": [],
     # The Company page: each chain's name in the Portfolio.
     "co": [("es3", "chains", "name")],
+    # The Wiki writes its own words in the page (tt()); Python sends it none.
+    "wiki": [],
 }
 
 
@@ -533,6 +538,21 @@ class Coverage(unittest.TestCase):
                     self.assertTrue(rows_at(payloads[name], path), f"{name} has nothing at {path}")
                     self.assertEqual(uncovered(payloads[name], path, field, *which), [],
                                      "a sentence of a converted area lost its message (a + or .replace()?)")
+
+    def test_a_level_contract_is_named_by_a_message_with_its_ordinal(self):
+        # Supply (sb): "1 Pier, its 2nd of 3 contracts here", the ordinal a
+        # message of its own; one importer alone is just its name.
+        line = [{"importer": "1 Pier", "order": o} for o in (4, 7, 9)] + [{"importer": "X", "order": 1}]
+        for order, nth in ((4, "1st"), (7, "2nd"), (9, "3rd")):
+            name = ba_dashboard._level_name(line, "1 Pier", order)
+            self.assertEqual(name, f"1 Pier, its {nth} of 3 contracts here")
+            self.assertEqual(name.wire()[0], "sb.py.levelName")
+            self.assertEqual(name.wire()[1]["nth"]["m"][2], nth)
+        self.assertEqual([str(ba_dashboard._ordinal_msg(n)) for n in (11, 12, 13, 21, 22, 23, 104, 111)],
+                         ["11th", "12th", "13th", "21st", "22nd", "23rd", "104th", "111th"])
+        self.assertEqual(ba_dashboard._level_name(line, "X", 1), "X")
+        wired = _wire_msgs({"levelName": ba_dashboard._level_name(line, "1 Pier", 7)})
+        self.assertEqual(wired["i18n"]["levelName"][0], "sb.py.levelName")
 
     def test_the_coverage_check_finds_a_sentence_that_lost_its_message(self):
         # The guard itself: a row edited after msg() is reported, a wired one is not.

@@ -48,6 +48,7 @@ async function factory(page) {
     document.querySelector('#secFactories').classList.add('measured');
     drawSupplyStrip(); drawFactoriesTab();
   });
+  require('./_payload_contract.cjs').assertPayloadShape(await page.evaluate(() => D), 'layout');
 }
 const LINES = '#secFactories [data-sb-table="factory-lines"] table';
 

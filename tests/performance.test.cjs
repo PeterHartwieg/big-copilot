@@ -44,12 +44,31 @@ async function fixture(t, landing = false, reducedMotion = 'no-preference', widt
 }
 
 async function idleFrames(page) {
-  // Observe a fixed interval after the entrance/easing has finished.
-  await page.waitForTimeout(3500);
+  // Wait for the entrance or easing to finish: every live ball at full size
+  // where it rests (the entrance's last frame), and then no frame requested
+  // through half a second. A loop that never goes to sleep never gets there,
+  // and the wait fails instead of the count.
+  await page.evaluate(() => { window.idleMark = null; });
+  await page.waitForFunction(() => {
+    const now = performance.now();
+    const orbs = [...document.querySelectorAll('#lgOrb.live, .mast .orb.live')];
+    const entered = orbs.length > 0 && orbs.every(o => /scale\(1(\.0+)?\)$/.test(o.style.transform));  // the browser writes "scale(1)"
+    if (!entered || !window.idleMark || window.idleMark.calls !== animationCalls) {
+      window.idleMark = {calls: animationCalls, at: now};
+      return false;
+    }
+    return now - window.idleMark.at >= 500;
+  }, null, {polling: 50});
+  // Then observe a fixed interval at rest: a loop that wakes itself again
+  // (in bursts, or on a timer) still counts here.
   const before = await page.evaluate(() => animationCalls);
   await page.waitForTimeout(300);
   return (await page.evaluate(() => animationCalls)) - before;
 }
+
+// Waits until the ball's transform differs from `was`.
+const moved = (page, selector, was) => page.waitForFunction(({selector, was}) =>
+  document.querySelector(selector).style.transform !== was, {selector, was}, {polling: 20});
 
 for (const landing of [false, true]) {
   for (const motion of ['no-preference', 'reduce']) {
@@ -60,7 +79,7 @@ for (const landing of [false, true]) {
       const orb = page.locator(landing ? '#lgOrb' : '#orb');
       const transform = await orb.evaluate(el => el.style.transform);
       await page.mouse.move(120, 260);
-      await page.waitForTimeout(400);
+      await moved(page, landing ? '#lgOrb' : '#orb', transform);
       assert.notEqual(await orb.evaluate(el => el.style.transform), transform, 'pointer movement wakes the ball');
       assert.equal(await idleFrames(page), 0, 'pointer easing goes back to sleep');
     });
@@ -78,7 +97,7 @@ test('dashboard motion wakes for new balls and scrolling, and pauses while hidde
     document.body.style.minHeight = '3000px';
     window.scrollTo(0, 100);
   });
-  await page.waitForTimeout(200);
+  await moved(page, '#orb', before);
   assert.notEqual(await page.locator('#orb').evaluate(el => el.style.transform), before);
   await page.evaluate(() => {
     Object.defineProperty(document, 'hidden', {configurable:true, value:true});

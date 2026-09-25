@@ -15,7 +15,10 @@ The English is never kept in a file: it stays at the call site, beside its key
   and web/*.js;
 - markup: data-tt="key" around English, and data-tt-title, -aria-label,
   -placeholder and -tip beside the attribute they fill;
-- Python: msg("key", "English", ...) in ba_dashboard.py.
+- Python: msg("key", "English", ...) in ba_dashboard.py;
+- the Wiki guides' labels: `guideUi` in tools/wiki_sample.json, one key
+  `wiki.ui.<name>` per entry, the one source whose keys are not literals at
+  the call site (guide_ui_calls()).
 
 A translation lives in i18n/<lang>.json (flat; plurals as key_one, key_other,
 in the language's CLDR categories), and i18n/<lang>.base.json keeps the English
@@ -394,7 +397,37 @@ def calls() -> list[dict]:
             with open(path, encoding="utf-8") as fh:
                 found += js_calls(fh.read(), rel)
     found += python_calls(os.path.join(ROOT, "ba_dashboard.py"))
+    found += guide_ui_calls()
     return found
+
+
+GUIDE_UI = "tools/wiki_sample.json"
+
+
+def guide_ui_calls(path: str | None = None) -> list[dict]:
+    """The Wiki guides' interface labels: one key per entry of `guideUi` in
+    tools/wiki_sample.json, `wiki.ui.<name>`, whose English is the entry.
+
+    The one exception to the literal-key rule. The labels travel in the wiki
+    payload (each guide's COPY), so web/wiki.js cannot name them as literals:
+    wikiCopy() looks each up with ttText(`wiki.ui.${name}`, <the payload's
+    English>). The key set is read here, from the same JSON the payload is
+    built from, so the catalogue checks hold for these keys as for any other.
+    Article prose, topic texts and the gap and source notes are not labels
+    and stay English."""
+    rel = GUIDE_UI if path is None else os.path.relpath(path, ROOT).replace(os.sep, "/")
+    full = os.path.join(ROOT, GUIDE_UI) if path is None else path
+    if not os.path.isfile(full):
+        return []
+    with open(full, encoding="utf-8") as fh:
+        ui = (json.load(fh) or {}).get("guideUi") or {}
+    line = _file_line(rel, '"guideUi"') if path is None else 1
+    out = []
+    for name, en in ui.items():
+        if not isinstance(en, str) or not en:
+            continue
+        out.append({"key": f"wiki.ui.{name}", "en": en, "where": f"{rel}:{line}", "params": set()})
+    return out
 
 
 def check_call(c: dict) -> None:

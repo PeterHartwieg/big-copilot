@@ -63,6 +63,7 @@ const fixture = () => ({
 });
 
 async function board({width = 1280, view = 'all', storage = true, page: given, data = fixture(), before = null} = {}){
+  require('./_payload_contract.cjs').assertPayloadShape(data, 'import_setto');
   const page = given || await browser.newPage({viewport: {width, height: 1000}});
   if(!given){
     await page.route('https://**', route => route.abort());
