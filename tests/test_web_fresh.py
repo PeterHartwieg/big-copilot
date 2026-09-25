@@ -32,7 +32,8 @@ CLI_INPUTS = tuple(dict.fromkeys(
     + ("ba_save.py", "ba_dashboard.py", "web/changelog.json", "web/map.js", "web/map.css",
        "web/wiki.js", "web/wiki.css", "web/wiki-data.json", "web/sitemap.xml", "web/robots.txt")
 ))
-CLI_TREES = ("tools/*.py", "tools/wiki_sample.json", "web/py/*", "web/maps/*", "web/wiki/**/*")
+# The translations under i18n/ are the source of web/i18n/, which --check rebuilds.
+CLI_TREES = ("tools/*.py", "tools/wiki_sample.json", "web/py/*", "web/maps/*", "web/wiki/**/*", "i18n/*.json")
 
 
 def place(root, name, data):

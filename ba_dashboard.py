@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import collections
 import datetime as dt
+import decimal
 import fractions
 import hashlib
 import http.client
@@ -26,6 +27,7 @@ import http.server
 import itertools
 import json
 import math
+import numbers
 import os
 import re
 import statistics
@@ -290,6 +292,114 @@ def tok(key, english) -> str:
 def plain(text):
     """Text with every game-name token back in its English."""
     return NAME_TOKEN.sub(lambda m: m.group(2), text) if isinstance(text, str) else text
+
+
+# Big Copilot's own sentences in the reader's language (docs/architecture.md,
+# "UI text"). Python keeps writing English: msg() returns that English as a
+# str, which every reader, test and plain() sees as before, and which also
+# carries the key and the params the page needs to write the sentence in
+# another language. _wire_msgs() hands those to the page at the end of
+# extract(). Concatenating or .replace()-ing a Msg gives a plain str: that
+# sentence then stays English on every page, which the coverage test in
+# tests/test_i18n_msg.py catches for a converted area.
+MSG_FIELD = re.compile(r"\{(\w+)(?::([^{}]+))?\}")
+MSG_FIXED = re.compile(r"(,)?\.(\d)f")
+
+
+class Msg(str):
+    """An English sentence that knows its catalogue key and params."""
+
+    def __new__(cls, text, key=None, p=None):
+        self = super().__new__(cls, text)
+        self.key = key
+        self.p = dict(p or {})
+        return self
+
+    def __reduce__(self):
+        return (Msg, (str(self), self.key, self.p))
+
+    def wire(self) -> list:
+        """[key, params] for the page: numbers raw, game names as tokens, a
+        nested Msg as {"m": [key, params, english]}."""
+        return [self.key, {k: _wire_value(v) for k, v in self.p.items()}]
+
+
+def _wire_value(v):
+    if isinstance(v, Msg):
+        return {"m": [v.key, {k: _wire_value(x) for k, x in v.p.items()}, str(v)]}
+    if isinstance(v, (list, tuple)):
+        return [_wire_value(x) for x in v]
+    if isinstance(v, bool) or v is None or isinstance(v, (int, float)):
+        return v
+    if isinstance(v, (numbers.Real, decimal.Decimal)):
+        return float(v)  # a Fraction or Decimal travels as JSON's number
+    return str(v)
+
+
+def _js_round(x: float) -> int:
+    """Math.round(): halves go up, as the page's compact() rounds."""
+    return int(math.floor(x + 0.5))
+
+
+def _msg_format(v, spec: str | None) -> str:
+    """One placeholder's English, by the spec tt() in web/i18n.js shares. Each
+    writes exactly what the f-string it replaces wrote: {x} as f"{x}", {x:,}
+    as f"{x:,}", {x:.1f} / {x:,.0f} as the same f-string spec, {w:$} as the
+    board's fmt() ("-$1,234"; f"${x:,.0f}", which writes "$-1,234", becomes
+    "${x:,.0f}" instead), {w:$c} as compact(), {d:day} a weekday name."""
+    if isinstance(v, Msg) or spec is None:
+        return str(v)
+    if spec == "day":
+        return WEEKDAYS[int(v) % 7]
+    if spec == ",":
+        return format(v, ",")
+    if spec == "$":
+        return ("-" if v < 0 else "") + "$" + format(abs(v), ",.0f")
+    if spec == "$c":
+        a, s = abs(v), "-" if v < 0 else ""
+        if a >= 1e6:
+            places = "0.1" if a >= 1e7 else "0.01"
+            return s + "$" + str(decimal.Decimal(a / 1e6).quantize(decimal.Decimal(places), decimal.ROUND_HALF_UP)) + "M"
+        if a >= 1e3:
+            return s + "$" + str(_js_round(a / 1e3)) + "k"
+        return s + "$" + str(_js_round(a))
+    if MSG_FIXED.fullmatch(spec):
+        return format(v, spec)
+    raise ValueError(f"msg(): unknown placeholder spec {spec!r}")
+
+
+def msg(key: str, en, **p) -> Msg:
+    """A sentence the page can translate: its English, with {name} and
+    {name:spec} filled from p. `en` is a string, or {"one": ..., "other": ...}
+    chosen by the param n. The specs (_msg_format()): {n:,} grouped, {x:.1f}
+    and {x:,.0f} fixed decimals, {w:$} money with the sign first, {w:$c}
+    compact money, {d:day} a weekday index (0 Sunday). A game name goes in as a token (tok()), a nested
+    sentence as another msg()."""
+    if isinstance(en, dict):
+        en = en["one"] if p.get("n") == 1 else en["other"]
+
+    def fill(m):
+        if m.group(1) not in p:
+            raise KeyError(f"msg({key!r}): no param {m.group(1)!r}")
+        return _msg_format(p[m.group(1)], m.group(2))
+
+    return Msg(MSG_FIELD.sub(fill, en), key, p)
+
+
+def _wire_msgs(payload):
+    """Every field holding a Msg gets row["i18n"][field] = [key, params] beside
+    it, so the page can write the sentence in the UI language. One pass over
+    the whole payload, at the end of extract()."""
+    if isinstance(payload, dict):
+        wires = {k: v.wire() for k, v in payload.items() if isinstance(v, Msg) and v.key}
+        for v in payload.values():
+            _wire_msgs(v)
+        if wires:
+            payload.setdefault("i18n", {}).update(wires)
+    elif isinstance(payload, list):
+        for v in payload:
+            _wire_msgs(v)
+    return payload
 
 
 # The display names the page is sent, by key prefix. build_web.py ships the
@@ -1650,7 +1760,9 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         businesses, supply, chains, trends, hype, hour_findings, grids, day, gate, "dem"
     )
 
-    return {
+    # Every sentence written with msg() carries its key and params to the page
+    # in the row's "i18n" field, in one pass at the end.
+    return _wire_msgs({
         "meta": {
             "character": character,
             "save": root.get("SaveGameName") or "Save",
@@ -1723,7 +1835,7 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         "alertsDemand": {"lines": alerts_demand["lines"], "minor": alerts_demand["minor"]},
         "goals": _goals(save, names, businesses),
         "weekly": _weekly(save),
-    }
+    })
 
 
 def _net_worth(root: dict, history, character: str) -> dict:
@@ -10383,12 +10495,12 @@ def _alerts(
                 "critical" if b["profit"] < -1000 else "warn",
                 b["name"],
                 "loss",
-                f"Lost ${abs(b['profit']):,.0f} yesterday",
+                msg("f.loss", "Lost {w:$} yesterday", w=abs(b["profit"])),
                 worth=abs(b["profit"]),
                 key=b["key"],
             )
         if b["status"] in ("retail", "office") and b["staff"] == 0:
-            note("critical", b["name"], "staff", "No staff assigned", always=True, key=b["key"])
+            note("critical", b["name"], "staff", msg("f.staff.none", "No staff assigned"), always=True, key=b["key"])
         sat = b["satisfaction"]["overall"]
         if sat is not None and b["customers"] and sat < 80:
             note("warn", b["name"], "satisfaction", f"Customer satisfaction at {sat}%", key=b["key"])
@@ -11344,6 +11456,7 @@ def render(
     map_external: bool = False,
     site: bool = False,
     names: dict | None = None,
+    ui: dict | None = None,
 ) -> str:
     """The page. With live=True it asks its data source for fresh numbers.
 
@@ -11363,8 +11476,11 @@ def render(
 
     ``names`` is ``{"lang": code, "names": table}``, a name_table() the page
     lays over the payload's names (``--lang``); None keeps them English.
+    ``ui`` is ``{"lang": code, "table": table}``, Big Copilot's own text in
+    that language (web/i18n/<code>.json, ``--lang``); None keeps it English.
     """
     names_json = "null" if not names else json.dumps(names, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+    ui_json = "null" if not ui else json.dumps(ui, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     if data is None:
         payload, title = "null", "Big Copilot"
     else:
@@ -11403,6 +11519,14 @@ def render(
 
     wiki_script = optional_asset("wiki.js")
     wiki_css = optional_asset("wiki.css")
+    # Big Copilot's own text in another language (docs/architecture.md, "UI
+    # text"): tt() and the table loader, at the end of the head (after the
+    # stylesheets), ahead of every script that may call it, with the table a --lang page carries. It is spliced
+    # last, and only at the first marker (the head's), so no other
+    # placeholder's .replace() runs over the table, and a marker inside the
+    # payload is left alone.
+    with open(os.path.join(asset_root, "i18n.js"), encoding="utf-8") as fh:
+        i18n_script = fh.read().replace("/*__UI_TABLE__*/null", ui_json)
     map_payload = ""
     if data is not None and not live and not map_external:
         import base64
@@ -11452,6 +11576,7 @@ def render(
         .replace("<!--__FOOTER__-->", footer_html(site=site))
         .replace("<!--__BANNER__-->", banner)
         .replace("<!--__BEFORE_SCRIPT__-->", before_script)
+        .replace("/*__I18N_SCRIPT__*/", i18n_script, 1)
     )
 
 
@@ -13818,6 +13943,9 @@ body:has(#changelogDialog[open]){overflow:hidden}
   #sp-shelves td.l{white-space:nowrap}
 }
 </style>
+<script>
+/*__I18N_SCRIPT__*/
+</script>
 <!--__BANNER__-->
 <div class="wrap">
   <header class="mast" id="mast">
@@ -14085,9 +14213,11 @@ const LINE_COLOURS = {MT:"#f07a1f", HK:"#e0362c", MH:"#a83bb0", LM:"#0c5ec4",
 const fmt = n => (n<0?"-":"") + "$" + num(Math.abs(Math.round(n)));
 /* Every number on the board goes through num(), in the UI's number locale, so
    a German browser never shows "1.234 units" beside "$1,234". English is
-   always en-US; the language switch will set NUM_LOCALE. Never call a bare
-   toLocaleString(): it follows the browser. */
-let NUM_LOCALE = "en-US";
+   always en-US; German is de-DE. The UI language is web/i18n.js's: this starts
+   at its ttNumLocale() (a --lang page carries German from the first draw) and
+   its language switch sets it again (the ttOnChange() listener beside
+   gnRedraw()). Never call a bare toLocaleString(): it follows the browser. */
+let NUM_LOCALE = typeof ttNumLocale === "function" ? ttNumLocale() : "en-US";
 const num = (n, opts) => Number(n).toLocaleString(NUM_LOCALE, opts);
 const compact = n => {
   const a = Math.abs(n), s = n<0?"-":"";
@@ -14386,13 +14516,17 @@ function gnUnkeyed(o, T, EN){
 }
 /* The payload in the language picked: always a fresh copy of the English one,
    which it carries along. Handing it a board already swapped starts from that
-   board's English, so a language change never swaps a swapped name. */
+   board's English, so a language change never swaps a swapped name. With a UI
+   table loaded (web/i18n.js), every sentence Python sent as a message is
+   written in the UI language too: ttPayload() swaps each field its row's
+   `i18n` names, and enOf() gives back the English it showed. */
 function localiseNames(raw){
   if(!raw || typeof raw !== "object") return raw;
   const en = raw[GN_SRC] || raw;
   const EN = en.names || {};
   const out = gnWalk(en, gnTable, EN, "");
   if(gnTable) gnUnkeyed(out, gnTable, EN);
+  if(typeof ttPayload === "function") ttPayload(out);
   Object.defineProperty(out, GN_SRC, {value: en});
   return out;
 }
@@ -14462,6 +14596,9 @@ function gnRedraw(){
     wikiVisit();
   }
 }
+/* A change of the UI language (web/i18n.js): numbers follow it (English is
+   always en-US, German de-DE), and the board redraws the same way. */
+if(typeof ttOnChange === "function") ttOnChange(() => { NUM_LOCALE = ttNumLocale(); gnRedraw(); });
 /* The browser's languages, first to last, to the game's code: the first that
    is English or one the game has decides, so a reader who puts English first is
    never offered anything. */
@@ -15669,11 +15806,13 @@ function splitFinding(a){
   const lead = rest => { more = more ? `${rest.replace(/[.\s]+$/, "")}. ${more}` : rest; };
   /* Two sentences lead with a list. The list is detail; the verb is the
      headline: "3 machines run a recipe the board cannot name", "Top-up target
-     of 3,000 is 43x daily sales in 1 shop". */
+     of 3,000 is 43x daily sales in 1 shop". Both are Python's English, so
+     they are only looked for while the row is shown in English (enOf()). */
+  const english = typeof enOf !== "function" || enOf(a, "text") === a.text;
   let r;
-  if((r = what.match(/^(\d+) (machines?) at (.+?) (runs? a recipe the board cannot name.*)$/))){
+  if(english && (r = what.match(/^(\d+) (machines?) at (.+?) (runs? a recipe the board cannot name.*)$/))){
     what = `${r[1]} ${r[2]} ${r[4]}`; lead(`At ${r[3]}`);
-  } else if((r = what.match(/^(.+?) (top-up target of .+)$/))
+  } else if(english && (r = what.match(/^(.+?) (top-up target of .+)$/))
       && [...r[1].matchAll(/, /g)].some(c => !inFindingName(findingNameSpans(r[1]), c.index))){
     what = r[2]; lead(r[1]);
   }
@@ -15719,7 +15858,8 @@ const amtHtml = (n, unit) => `${n}<small>${unit || ""}</small>`;
 function findingAmount(a){
   if(typeof a.worth === "number")
     return amtHtml(Math.abs(a.worth) >= 1e6 ? money(a.worth) : fmt(a.worth), a.unit);
-  const t = String(a.text || "");
+  /* Python's English, whatever language the row is shown in. */
+  const t = String((typeof enOf === "function" ? enOf(a, "text") : a.text) || "");
   let m;
   if(a.detail && (m = t.match(/^(\d+) (weekly orders?|orders?|holdings?|shops?|lines?)?/)))
     return amtHtml(m[1], m[2] ? m[2].replace(/^weekly /, "") : "findings");
@@ -16444,7 +16584,9 @@ const spTrend = key => (D.trends || []).find(t => t.key === key) || null;
    day is held by staffing then and by the door later — so the panel lights
    each of them and draws a chip apiece. */
 const spCapNotes = key => (D.hourFindings || []).filter(f => f.key === key && f.kind === "cap");
-const spBindingLimits = key => spCapNotes(key).map(f => f.limit);
+/* Python's English limit, whatever language the chip's words are in
+   (enOf(), web/i18n.js): spCeiling() and spLimitIcons() compare it. */
+const spBindingLimits = key => spCapNotes(key).map(f => typeof enOf === "function" ? enOf(f, "limit") : f.limit);
 /* This site's overstaffed week, in the words of its Today line (_alerts() in
    the Python): the spare staff-hours of every idle run, their wages summed,
    who was on and when, and the weekday-hours named. A finding written before
@@ -16514,8 +16656,9 @@ function spLimitRole(part, roles){
    two tied answers -- "Gym Trainer staffing and registers" -- is about the
    hours where both held at once, so it asks for both and the grid lights the
    overlap alone. */
-const spLimitShow = (n, g) => n.limit === "the building" ? "door"
-  : String(n.limit).split(" and ").map(part => {
+const spLimitShow = (n, g, lim = typeof enOf === "function" ? enOf(n, "limit") : n.limit) =>
+  lim === "the building" ? "door"
+  : String(lim).split(" and ").map(part => {
       const role = spLimitRole(part, (g || {}).roles);
       return spRoleToken(/\bstaffing$/.test(part) ? "staff" : "post",
         role ? role.skill : "");
@@ -18594,7 +18737,10 @@ function drawSite(){
   const idleNote = (D.hourFindings || []).find(f => f.key === b.key && f.kind !== "cap");
   /* The building's own capacity is no warning: plenty of good sites run at it,
      and there is nothing to fix, so its sentence only says how much. */
-  const capSentence = n => n.limit === "the building"
+  /* A cap's limit as Python wrote it: what the chips compare and key on,
+     whatever language the words on screen are in (enOf(), web/i18n.js). */
+  const limitEn = n => typeof enOf === "function" ? enOf(n, "limit") : n.limit;
+  const capSentence = n => limitEn(n) === "the building"
     ? `At the building's capacity ${n.hours} hours a week (${n.when}); ${fmt(n.throughput)}/day of trade goes through those hours.`
     : `At the ceiling ${n.hours} hours a week (${n.when}); ${n.limit} ${n.limits > 1 ? "are" : "is"} the limit, so
          the answer is ${n.fix}. ${fmt(n.throughput)}/day of trade goes through those
@@ -18802,9 +18948,9 @@ function drawSite(){
      held by staffing at night and by its door by day — and one for idle
      capacity. Hovering one picks its hours out of the grid. */
   const hourChips = !sp ? "" : `<div class="sp-hchips">${
-    capNotes.map(n => `<span class="sp-hchip cap${n.limit === "the building" ? " sp-bcap" : ""}" data-show="${attr(spLimitShow(n, grid))}" data-limit="${attr(n.limit)}" data-tip="${
+    capNotes.map(n => `<span class="sp-hchip cap${limitEn(n) === "the building" ? " sp-bcap" : ""}" data-show="${attr(spLimitShow(n, grid))}" data-limit="${attr(limitEn(n))}" data-tip="${
       attr(capSentence(n).replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
-      spLimitIcons(n.limit, office).map(spI).join("")}<b>${n.hours} h/wk</b> at ${n.limit === "the building" ? "building capacity" : "the ceiling"} · ${n.when} · ${
+      spLimitIcons(limitEn(n), office).map(spI).join("")}<b>${n.hours} h/wk</b> at ${limitEn(n) === "the building" ? "building capacity" : "the ceiling"} · ${n.when} · ${
       fmt(n.throughput)}/day through it${n.fix ? `<span class="fix">${spI("right")}${n.fix}</span>` : ""}</span>`).join("") +
     (idleWeek ? `<span class="sp-hchip idle" data-show="idle" data-tip="${attr(idleSentence.replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
       spI(idleNote.office ? "monitor" : "counter")}${idleRead}</span>` : "")}</div>`;
@@ -26604,6 +26750,7 @@ class Board:
         self.locale_source, locale = game_text()
         self.names = Names(locale)
         self.lang_names = cli_names(lang, self.locale_source, locale)
+        self.lang_ui = cli_ui_table(lang)
         self.history = os.path.join(os.path.dirname(out) or ".", "market_history.json")
         self.lock = threading.Lock()
         self.html = b""
@@ -26666,6 +26813,8 @@ class Board:
             data = safe_extract(load_save(path), self.names, self.history)
             # names= only for --lang: an English board renders as it always has.
             lang = {"names": self.lang_names} if self.lang_names else {}
+            if self.lang_ui:
+                lang["ui"] = self.lang_ui
             live_page = render(data, live=True, **lang).encode("utf-8")
             static_page = render(data, **lang).encode("utf-8")
         except Exception as exc:
@@ -26924,6 +27073,22 @@ def cli_names(lang: str | None, source: str | None, english: dict[str, str]) -> 
     return {"lang": lang, "names": name_table(english, other)}
 
 
+def cli_ui_table(lang: str | None) -> dict | None:
+    """--lang: Big Copilot's own text in that language, for render(ui=...),
+    from the table the site ships (web/i18n/<lang>.json, which
+    `python build_web.py` writes). None for English, or for a language with
+    no table or an empty one: the page's own words then stay English."""
+    if not lang or lang == "en":
+        return None
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web", "i18n", f"{lang}.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            table = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    return {"lang": lang, "table": table} if isinstance(table, dict) and table else None
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -26974,7 +27139,8 @@ def main() -> None:
         metavar="CODE",
         help="show the game's own names (items, business types, neighbourhoods, "
         "skills) in one of the game's languages, e.g. de, fr, ja, zh-cn; the rest "
-        "of the page stays English",
+        "of the page stays English, unless Big Copilot's own text has a "
+        "translation into that language (web/i18n/<code>.json)",
     )
     ap.add_argument(
         "--backfill",
@@ -27047,7 +27213,7 @@ def main() -> None:
     lang_names = cli_names(args.lang, locale_source, locale)
     data = safe_extract(load_save(path), names, history)
     with open(out, "w", encoding="utf-8") as fh:
-        fh.write(render(data, names=lang_names))
+        fh.write(render(data, names=lang_names, ui=cli_ui_table(args.lang)))
 
     k = data["kpi"]
     minor = data["minor"]
