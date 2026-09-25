@@ -14718,7 +14718,7 @@ body:has(#changelogDialog[open]){overflow:hidden}
        the wiki files shows instead. -->
   <div class="page" id="pageWiki" hidden>
     <div class="wiki" id="wikiRoot">
-      <p class="quiet" style="margin-top:44px">The wiki is not part of this build.</p>
+      <p class="quiet" style="margin-top:44px" data-tt="wiki.absent">The wiki is not part of this build.</p>
     </div>
   </div>
 <!--__FOOTER__-->

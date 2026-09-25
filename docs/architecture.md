@@ -318,6 +318,16 @@ leer"). Where Python pluralises a name today, pass the count and let the key say
 translated: word order is the translation's. One key per sentence, with its numbers and
 names as params.
 
+**One exception to literal keys: the Wiki guides' labels.** Their English is `guideUi`
+in `tools/wiki_sample.json`, and it reaches the page inside the wiki payload (each
+guide's `COPY`), so `web/wiki.js` cannot write it at the call site. `extract` reads
+`guideUi` itself (`guide_ui_calls()` in `tools/i18n.py`) and emits one key per entry,
+`wiki.ui.<name>`, with the entry as its English; `wikiCopy()` looks each label up with
+``ttText(`wiki.ui.${name}`, english)`` (the payload's English), which the extractor does not read
+as a call. The key set is the JSON's, so the catalogue checks hold for these keys too.
+Nothing else may build a key. The guides' article prose, the topics and the gap and
+source notes are not labels and stay English.
+
 ### How it runs
 
 - `web/i18n.js` is spliced by `render()` into a `<script>` at the end of the head, at
