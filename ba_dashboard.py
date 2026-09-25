@@ -19145,6 +19145,14 @@ function sbShown(tab){
   if(sbArrive && sbArrive.tab !== tab) sbArrive = null;
   sbPlaceFlow();
 }
+/* A tab section is replaced whole: the one svg#flow is taken home first, so
+   the redraw never throws it away with the old markup (sbPlaceFlow() puts it
+   back where it belongs). */
+function sbFill(sec, html){
+  const box = $("sbFlowBox"), home = $("sbFlowHome");
+  if(box && home && sec.contains(box)) home.appendChild(box);
+  sec.innerHTML = html;
+}
 /* What a tab section holds: its verdict, the diagram's place, the list. */
 function sbSection(tab, head, list){
   const diagram = sbViewMode() === "diagram";
@@ -19167,6 +19175,9 @@ function sbAfterDraw(tab, rows, kept){
    crumb back. */
 function sbLand(tab, s, slug, crumb){
   sbArrive = {tab, s: s ?? null, slug: slug ?? null, crumb: crumb || ""};
+  /* A row lit under the diagram would stay out of sight: landing on one
+     brings the list back. */
+  if(s !== null && s !== undefined && sbViewMode() === "diagram"){ sbViewOn = "list"; remember(SB_VIEW_KEY, "list"); }
   /* An earlier landing's light goes out, on whichever tab it was. */
   $$("#pageSupply [data-sb-at]").forEach(el => { el.removeAttribute("data-sb-at"); el.classList.remove("sb-arrived", "lit"); });
   $$("#pageSupply .sb-crumb").forEach(el => el.remove());
@@ -19294,7 +19305,7 @@ function drawShopsTab(){
         edge.length === 1 ? "one" : edge.length} closest to the edge:</div>${sbTable("shops", SB_SHOP_COLS, edge, row)}` : "";
   const more = !all && shelves.length > kept.length
     ? `<p class="sb-more"><span>${plural(shelves.length - kept.length, "more shelf is", "more shelves are")} fine</span><a class="link" href="#" data-sb-mode="all">Everything</a></p>` : "";
-  sec.innerHTML = sbSection("shops", sbVerdict("shops", verdict, calm), table + more + sbOthers(d, "shops", claimed));
+  sbFill(sec, sbSection("shops", sbVerdict("shops", verdict, calm), table + more + sbOthers(d, "shops", claimed)));
   if(sbAfterDraw("shops", shelves, kept)) return;
   sbWire(sec, [["shops", SB_SHOP_COLS]], "shops");
 }
@@ -19520,7 +19531,7 @@ function drawWarehousesTab(){
   const more = !all && every.length > kept.length
     ? `<p class="sb-more"><span>${plural(every.length - kept.length, "more line is", "more lines are")} fine</span><a class="link" href="#" data-sb-mode="all">Everything</a></p>` : "";
   const head = sbVerdict("warehouses", verdict, calm) + sbSizingRow("sbSizingW") + ctx.applyHere(ctx.toGame.length, null);
-  sec.innerHTML = sbSection("warehouses", head, blocks.join("") + more + sbOthers(d, "warehouses", claimed));
+  sbFill(sec, sbSection("warehouses", head, blocks.join("") + more + sbOthers(d, "warehouses", claimed)));
   if(sbAfterDraw("warehouses", every, kept)) return;
   szSwitch("sbSizingW");
   sbWire(sec, [["warehouses", SB_WH_COLS]], "warehouses");
@@ -19683,7 +19694,7 @@ function drawFactoriesTab(){
   const ramp = sizing === "dem" && names.length ? `<div class="sb-ramp"><span class="ic">${spIcon("alert")}</span><span><b>${plural(names.length, "shop")} downstream ${
     names.length === 1 ? "has" : "have"} traded under a week</b>: ${names.join(", ")}. Their use is a straight line through the days they have traded, so the figures below <b>may still be ramping</b>.</span></div>` : "";
   const head = sbVerdict("factories", verdict, calm) + sbSizingRow("sbSizingF") + ramp;
-  sec.innerHTML = sbSection("factories", head, blocks.join("") + sbOthers(d, "factories", claimed) + drawFactoryStaffing());
+  sbFill(sec, sbSection("factories", head, blocks.join("") + sbOthers(d, "factories", claimed) + drawFactoryStaffing()));
   if(sbAfterDraw("factories", every.filter(r => r.slug), keptAll)) return;
   szSwitch("sbSizingF");
   sbWire(sec, [["factory-lines", SB_LINE_COLS], ["factory-inputs", SB_INPUT_COLS], ["warehouses", SB_WH_COLS]], "factories");

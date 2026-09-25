@@ -481,6 +481,34 @@ test('the tabs, Goods flow and Today read the same facts, by sizing', async () =
   } finally { await page.close(); }
 });
 
+test('the diagram survives a redraw of its tab: a sizing switch or Needs a change / Everything', async () => {
+  const page = await board(fixture(), {which: 'changes', tab: 'warehouses'});
+  try {
+    await page.locator('#sbView a[data-id="diagram"]').click();
+    await page.evaluate(() => drawFlow());
+    assert.equal(await page.locator('#secWarehouses .sb-diag #flow').count(), 1);
+    await page.locator('#sbMode a[data-id="all"]').click();
+    assert.equal(await page.locator('#secWarehouses .sb-diag #flow').count(), 1, 'Everything keeps the diagram');
+    await page.locator('#sbSizingW').getByText('Demand').click();
+    assert.equal(await page.locator('#flow').count(), 1, 'a sizing switch keeps the one svg');
+    assert.equal(await page.locator('#secWarehouses .sb-diag #flow').count(), 1);
+    // A later draw still finds it.
+    assert.equal(await page.evaluate(() => { drawFlow(); return document.querySelectorAll('#flow .node').length > 0; }), true);
+  } finally { await page.close(); }
+});
+
+test('a finding reached while the diagram is on brings the list back, on its row', async () => {
+  const page = await board(fixture(), {which: 'changes', tab: 'shops'});
+  try {
+    await page.locator('#sbView a[data-id="diagram"]').click();
+    await page.evaluate(() => goToAlert(D.alerts.find(a => a.id === 'r8notrouted')));
+    assert.equal(await page.evaluate(() => sbViewMode()), 'list');
+    assert.equal(await page.locator('#secWarehouses .sb-list').isHidden(), false);
+    assert.equal(await page.locator('#secWarehouses tr.sb-arrived').isVisible(), true);
+    assert.equal(await page.locator('#sbFlowHome #flow').count(), 1);
+  } finally { await page.close(); }
+});
+
 test('a finding lands on its tab and row, lit, with a crumb back', async () => {
   const page = await board(fixture(), {which: 'changes', tab: 'shops'});
   try {
