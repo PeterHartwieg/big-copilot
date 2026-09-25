@@ -27,7 +27,29 @@ const WIDTHS = [360, 768, 1280, 1500, 1501, 1920];
    A conversion pull request adds its row; from then on English left on
    screen there fails the sweep. */
 const CONVERTED = {
-  // nav: '#nav, .subnav',
+  /* The masthead's own lines: its live dot's word is community.js's. */
+  nav: '#nav, #companyNav, #supplyNav, #growthNav, #clock > b, #clock > small:not(.fv-diffline), #clock .flag, '
+    + '#clock .fv-diff, #ssField, .ss-ask, #ssAskMini',
+  foot: '.sitefoot',
+  /* A finding's headline and its detail, on Today and in the site panel. */
+  f: '.find .what, .find .more, .sp-find .what, .sp-find .more',
+  /* The map's own controls and the finder's; the card's facts and fit line
+     carry names and layout codes, so only its numbers' labels and its link. */
+  map: '#cityMapPage .map-head .layers, #cityMapPage .fswitch, #cityMapPage .filters .lab, #cityMapPage .fchip.cat, '
+    + '#cityMapPage .fchip.show, #cityMapPage .fchip.num, #cityMapPage .fnew, #cityMapPage .fhead, #cityMapPage .places .empty, '
+    + '#cityMapPage .site .nums, #cityMapPage .site .go2',
+  /* Today's own words: the tiles, the list's head and count lines, each
+     finding's figure, the silenced line and the Next moves cards. The
+     finding sentences are Python's (f); the kinds panel is left out, as its
+     rows are the kinds' names (nav) and it redraws each time it opens, and so
+     is Ask the board under Next moves (the search palette's). */
+  today: '#kpis, #alertHead, #alerts .amt, #alertMinor .td-count, #silenced, #secMoves h2, #secMoves .moves',
+  /* The Company page, but for the names on it: sites, products and roles
+     (the cells of class l, the payroll's roles) and the site panel (sp). */
+  co: '#secDaily .sechead, #dailyBox .chartbox, #rhythmSites thead, #rhythmSites td:not(.l), #rhythmSites td.l + td.l, '
+    + '#secPortfolio .sechead, #portfolio thead, #portfolio tfoot, #portfolio tr.chain, #portfolio tr.kid td:not(.l), '
+    + '#secProducts .sechead, #secProducts thead, #secProducts td:not(.l), #secProducts > p, '
+    + '#secPayroll .sechead, #secPayroll > p, #secGoals',
   /* The site panel's own chrome: headings, tile labels, table heads, the
      roster's steps, tabs and counters, the notes' labels and the empty
      states. Its read-outs and chips carry site, people and game names, and
@@ -114,7 +136,8 @@ test('?ui=de reaches the board: Python\'s messages in the table, and their Engli
     const cap = ttPayload({limit: 'the building', i18n: wire});
     return [row.text !== enOf(row, 'text'), findingAmount(row), cap.limit !== 'the building', spLimitShow(cap, {})];
   });
-  assert.deepEqual(read, [true, '1,500<small>units short</small>', true, 'door']);
+  // The figure is read out of the English and written in the page's numbers.
+  assert.deepEqual(read, [true, `1.500<small>${TABLE['today.amt.unitsShort']}</small>`, true, 'door']);
   // Numbers follow the UI language, on the board and in tt(); back in English, en-US again.
   assert.deepEqual(await page.evaluate(() => [NUM_LOCALE, fmt(1234.4), tt('f.x', '{n:,}', {n: 1234})]),
     ['de-DE', '$1.234', '1.234']);
@@ -167,13 +190,24 @@ async function views(page){
       else out.push([p.id, null, null]);
     });
     (D.businesses || []).forEach(b => out.push(['company', 'results', b.key]));
+    // The map with the finder on, its first result's card open.
+    if(D.premises) out.push(['map', 'finder', null]);
     return out;
   });
 }
 async function show(page, [pageId, sub, site]){
-  await page.evaluate(([pageId, sub, site]) => {
+  await page.evaluate(async ([pageId, sub, site]) => {
     showPage(pageId, false);
-    if(sub) showSub(pageId, sub);
+    /* The map draws once its geometry has loaded. */
+    if(pageId === 'map' && typeof cityMapPage !== 'undefined' && cityMapPage){
+      await cityMapPage.ready;
+      if(sub === 'finder'){
+        openFinder({});
+        await cityMapPage.ready;
+        const first = document.querySelector('#cityMapPage .place.fr');
+        if(first) await cityMapPage.select(first.dataset.pick, false);
+      }
+    } else if(sub) showSub(pageId, sub);
     if(site) openSite(site, false);
   }, [pageId, sub, site]);
   await page.waitForTimeout(50);
@@ -183,16 +217,28 @@ async function measure(page){
   return page.evaluate(([sel, converted]) => {
     const root = document.documentElement;
     const shown = el => el.offsetParent !== null || el.getClientRects().length > 0;
+    /* A New badge hangs off its control's edge on purpose (the search icon's
+       does), so its words are left out of what an overflow is known by. */
+    const own = el => [...el.querySelectorAll('.feature-new')].reduce((s, b) => s.replace(b.textContent, ''), el.textContent);
     const over = [...document.querySelectorAll(sel)]
       .filter(el => shown(el) && el.scrollWidth > el.clientWidth + 1)
-      .map(el => `${el.tagName.toLowerCase()}${el.className ? '.' + String(el.className).split(' ')[0] : ''}: ${el.textContent.trim().slice(0, 40)}`);
+      .map(el => `${el.tagName.toLowerCase()}${el.className ? '.' + String(el.className).split(' ')[0] : ''}: ${own(el).trim().slice(0, 40)}`);
     const english = [];
     for(const [area, where] of Object.entries(converted)){
       document.querySelectorAll(where).forEach(host => {
         const walk = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
         for(let n = walk.nextNode(); n; n = walk.nextNode()){
           if(!n.parentElement || !shown(n.parentElement)) continue;
-          const outside = n.textContent.replace(/\[[^\]]*\]/g, '').replace(/[\d\s.,:;$%+\-–—×·/()!?%'"‹›…#]+/g, '');
+          /* A name (Big Copilot, YouTube, the studio) is marked translate="no". */
+          if(n.parentElement.closest('[translate="no"]')) continue;
+          /* A finding's sentence is cut into headline and detail, so its
+             brackets can open in one text node and close in the next; and a
+             message nests others (a list, a weekday, a finding's detail),
+             so brackets nest. Matched pairs go innermost first; what is left
+             before a lone "]" opened earlier, and after a lone "[" closes later. */
+          let outside = n.textContent;
+          for(let was = ''; was !== outside;){ was = outside; outside = outside.replace(/\[[^\[\]]*\]/g, ''); }
+          outside = outside.replace(/^[^]*\]/, '').replace(/\[[^]*$/, '').replace(/[\d\s.,:;$%+\-–—×·/()!?%'"‹›…#]+/g, '');
           if(outside.length > 1) english.push(`${area}: ${n.textContent.trim().slice(0, 60)}`);
         }
       });
