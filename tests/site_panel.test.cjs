@@ -34,6 +34,13 @@ const finding = (id, group, site = 'HART. Gifts', siteKey = KEY, level = 'warn',
 // A shop panel, over a fixture whose every field the panel may read is filled
 // in. `shop` overrides the site that opens, `alerts` and `minor.rows` the two
 // finding lists it reads.
+// A finding's landing is over once a row in `table` is lit and the page has
+// not scrolled for three frames; what the landing shows is then asserted.
+const landingSettled = (page, table) => page.waitForFunction(table => {
+  const mark = window.landingMark;
+  window.landingMark = {y: scrollY, frames: mark && mark.y === scrollY ? mark.frames + 1 : 0};
+  return !!document.querySelector(`${table} tbody tr.sp-hit`) && window.landingMark.frames >= 3;
+}, table, {polling: 'raf'});
 async function site(overrides = {}) {
   const page = await browser.newPage({viewport: overrides.viewport || {width: 1280, height: 1100}});
   await page.route('https://**', route => route.abort());
@@ -854,8 +861,7 @@ test('a wholesale finding opens its shop on the shelf row, lit, and a depot on i
       const r = row ? row.getBoundingClientRect() : null;
       return {row: !!row, lit: !!row && row.classList.contains('sp-hit'), inView: !!r && r.top >= 0 && r.bottom <= innerHeight};
     };
-    // The landing's end state: the row lit, scrolled into view.
-    await page.waitForFunction(`(${landing})().lit && (${landing})().inView`, null, {polling: 50});
+    await landingSettled(page, '#sp-shelves');
     const landed = await page.evaluate(landing);
     // The drink sits in the folded odds and ends: the fold opens for it.
     assert.deepEqual(landed, {row: true, lit: true, inView: true});
@@ -891,8 +897,7 @@ for (const width of [1440, 390]) {
           return {lit: lit.map(tr => tr.cells[0].textContent.replace(/\s+/g, ' ').trim()),
                   inView: !!r && r.top >= 0 && r.bottom <= innerHeight};
         };
-        // The landing's end state: a row lit, scrolled into view.
-        await page.waitForFunction(`(${landing})().inView`, null, {polling: 50});
+        await landingSettled(page, '#sp-stock');
         const landed = await page.evaluate(landing);
         assert.equal(landed.lit.length, 1, `${group}: ${JSON.stringify(landed)}`);
         assert.match(landed.lit[0], /short$/);

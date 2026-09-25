@@ -34,8 +34,10 @@ class WatchServer(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.save = os.path.join(self.tmp.name, "Link Co.hsg")
-        self.write_save(day=34)
-        os.utime(self.save, (1_700_000_000, 1_700_000_000))
+        # Held by the poll thread while it reads and by write_save() while it
+        # rewrites, so a poll never sees a half-written save or the old mtime.
+        self.lock = threading.Lock()
+        self.write_save(day=34, mtime=1_700_000_000)
         self.out = os.path.join(self.tmp.name, "dashboard.html")
         self.board = ba_dashboard.Board(self.save, self.out)
         self.assertTrue(self.board.refresh(settle=False))
@@ -58,7 +60,8 @@ class WatchServer(unittest.TestCase):
         def poll():
             while not self.stop.is_set():
                 try:
-                    board.refresh(settle=False)
+                    with self.lock:
+                        board.refresh(settle=False)
                 except Exception as exc:  # noqa: BLE001 -- reported by the test
                     self.failures.append(exc)
                 self.stop.wait(0.05)
@@ -74,11 +77,14 @@ class WatchServer(unittest.TestCase):
         self.serving.join()
         self.tmp.cleanup()
 
-    def write_save(self, day: int) -> None:
+    def write_save(self, day: int, mtime: int) -> None:
         root = es3_fixture.link_company()
         root["Day"] = day
-        with open(self.save, "wb") as fh:
-            fh.write(es3_fixture.encode(root))
+        data = es3_fixture.encode(root)
+        with self.lock:
+            with open(self.save, "wb") as fh:
+                fh.write(data)
+            os.utime(self.save, (mtime, mtime))
 
     def get(self, route: str):
         with urllib.request.urlopen(self.base + route) as response:
@@ -118,8 +124,7 @@ class WatchServer(unittest.TestCase):
         self.assertTrue(os.path.exists(self.out), "the static board was not written")
 
         # A newer save: other bytes and a later modification time.
-        self.write_save(day=35)
-        os.utime(self.save, (1_700_000_100, 1_700_000_100))
+        self.write_save(day=35, mtime=1_700_000_100)
         second = self.wait_for_stamp_other_than(first)
         self.assertEqual(second, "Link Co.hsg@1700000100#0")
         self.assertEqual(self.day(), 35)

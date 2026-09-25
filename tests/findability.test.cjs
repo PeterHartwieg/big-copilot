@@ -482,8 +482,9 @@ test('every finding is reached from the keyboard, a synthetic one too, and lands
     // Its name says whose finding it is, and the row opens its detail as it
     // does under the pointer.
     assert.equal(await page.getByRole('button', {name: /^Company: 1 staff with demands only you can meet/}).count(), 1);
-    // The detail fades in under the focus: its end state is fully shown.
-    await page.waitForFunction(() => getComputedStyle(document.querySelector('#alertSection .find[data-id="c1"] .more')).opacity === '1',
+    // The detail fades in under the focus: wait for the fade to finish, then
+    // say what it shows.
+    await page.waitForFunction(() => !document.querySelector('#alertSection .find[data-id="c1"] .more').getAnimations().length,
       null, {polling: 50});
     assert.equal(await page.locator('#alertSection .find[data-id="c1"] .more').evaluate(m => getComputedStyle(m).opacity), '1');
     await page.keyboard.press('Space');

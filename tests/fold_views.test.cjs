@@ -332,9 +332,11 @@ test('a resize that swaps the chip closes the popover; focus goes only where it 
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 
-  // Focus on the open popover's own chip, which the resize hides: the browser
-  // drops it to the page before the handler runs, and it stays there (both
-  // directions). The popover closes and nothing reads as open.
+  // Focus on the open popover's own chip, which the resize hides. Either the
+  // browser drops it to the page before the handler runs and it stays there,
+  // or the handler finds it still on the hidden chip and sends it to the
+  // footer's chip, which is in the window. The popover closes and nothing
+  // reads as open.
   ({page, errors} = await board({width: 1600, ...LONG_PAGE}));
   try {
     await page.evaluate(() => { showSub('company', 'products'); window.scrollTo(0, document.body.scrollHeight); });
