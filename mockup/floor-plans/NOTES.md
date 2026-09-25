@@ -51,6 +51,14 @@ file, they win.
   than naming a colour that differs by theme.
 - A `New` badge (id `floor-plans`) sits on the Find a location switch until it is used.
 
+## Simplified after release (Peter, 25 Sep 2026)
+
+The dock took too much of the map. It is gone, with the shelf, the hover lighting and the
+Map / Plan switch. A picked building's plan now sits in its site card, under the facts:
+one plan with its layout code and entrances (loading bays for a warehouse), scaled to the
+card's width and at most 160 px tall. Find a location gained a Layout filter: a chip for
+each layout key of the kind, several at once, saved with the other filters.
+
 ## The idea in one line
 
 The empty map area left of the panel gets one docked card, bottom-left, that shows the plan
