@@ -61,7 +61,7 @@ test('table lines show their source and unresolved recipes offer a picker', asyn
         slots: [11], machines: 1, idle: false, hoursWeek: 0, fullWeek: 168, gaps: [],
         candidates: [{slug: 'clothing', item: 'Clothing (Classic Expensive Male)'}]}];
       f.unnamed = 1;
-      drawSupplyStrip(); drawFactoriesTab();
+      sbStamp++; drawSupplyStrip(); drawFactoriesTab();
     });
     assert.equal(await page.locator('.linepick').count(), 1);
     assert.equal(await page.locator('.linepick').getAttribute('data-rid'), 'future-id');
