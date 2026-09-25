@@ -42,6 +42,7 @@ async function fixture(width=1280, media=null){
       alerts:[{siteKey:place.key,level:'critical',text:'Check staffing',id:'map-alert'}],minor:{rows:[]},supply:{shops:[]},daily:[]};
     refreshCityMaps();
   },{place:{...place,neighbourhood:hoodKey(place.hood)},other:{...other,neighbourhood:hoodKey(other.hood)}});
+  require('./_payload_contract.cjs').assertPayloadShape(await page.evaluate(()=>D),'map');
   return {page,errors};
 }
 async function ready(page,selector='#cityMapPage'){
@@ -477,11 +478,11 @@ test('selecting results and resetting the camera keep the count and the selectio
   }finally{await page.close();}
 });
 
-test('the ball sits inside Central Park at every zoom',async t=>{
+test('the ball sits inside Central Park at every zoom',async()=>{
   const {page,errors}=await fixture();
   try{
     await openPage(page);
-    if(!await page.locator('#cityMapPage .layer .ball').count())return t.skip('the map ball is not in this checkout');
+    assert.equal(await page.locator('#cityMapPage .layer .ball').count(),1,'the map ball is drawn');
     assert.equal(await page.locator('#cityMapPage .layer .shadow').count(),1);
     // The ball rect converted back to map units: it lives in the park and is
     // exactly orb-size however close the camera is.
@@ -512,18 +513,22 @@ test('the ball sits inside Central Park at every zoom',async t=>{
   }finally{await page.close();}
 });
 
-test('clicking the ball swallows the masthead balls',async t=>{
+test('clicking the ball swallows the masthead balls',async()=>{
   const {page,errors}=await fixture();
   try{
     await openPage(page);
-    if(!await page.locator('#cityMapPage .layer .ball').count())return t.skip('the map ball is not in this checkout');
+    assert.equal(await page.locator('#cityMapPage .layer .ball').count(),1,'the map ball is drawn');
     // A bare board never boots, so the sphere is wired by hand, as elsewhere.
     await page.evaluate(()=>{ $('title').textContent='Big Copilot'; wireSphere(); });
-    try{await page.waitForSelector('.orb.live',{timeout:5000});}
-    catch{return t.skip('the masthead never produced a live ball');}
-    if(await page.evaluate(()=>typeof window.__consumeBalls!=='function'))return t.skip('window.__consumeBalls is not in this checkout');
-    // The masthead ball finishes its entrance first; the hook refuses while it is busy.
-    await page.waitForTimeout(2000);
+    await page.waitForSelector('.orb.live');
+    assert.equal(await page.evaluate(()=>typeof window.__consumeBalls),'function','the shelf offers its balls');
+    // The masthead ball finishes its entrance first; the hook refuses while it
+    // is busy. The entrance's last frame puts every ball at full size exactly
+    // where it rests (scale alone rounds to 1 a few frames early).
+    await page.waitForFunction(()=>{
+      const orbs=[...document.querySelectorAll('.orb')];
+      return orbs.length>0&&orbs.every(o=>/^translate\(-?0px, -?0px\) scale\(1\)$/.test(o.style.transform));
+    },null,{polling:50});
     const before=await page.evaluate(()=>document.querySelector('#cityMapPage .layer .ball').getBoundingClientRect().width);
     await page.evaluate(()=>document.querySelector('#cityMapPage .layer .ball').click());
     await page.waitForFunction(()=>document.querySelectorAll('.orb').length===0,null,{timeout:2500});
@@ -532,11 +537,11 @@ test('clicking the ball swallows the masthead balls',async t=>{
   }finally{await page.close();}
 });
 
-test('clicking the ball with nothing to swallow pays out coins',async t=>{
+test('clicking the ball with nothing to swallow pays out coins',async()=>{
   const {page,errors}=await fixture();
   try{
     await openPage(page);
-    if(!await page.locator('#cityMapPage .layer .ball').count())return t.skip('the map ball is not in this checkout');
+    assert.equal(await page.locator('#cityMapPage .layer .ball').count(),1,'the map ball is drawn');
     // No orb on the shelf and nothing that can be swallowed: the ball spins and pays out.
     await page.evaluate(()=>{document.querySelectorAll('.orb').forEach(o=>o.remove());delete window.__consumeBalls;});
     await page.evaluate(()=>document.querySelector('#cityMapPage .layer .ball').click());

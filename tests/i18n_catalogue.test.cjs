@@ -141,6 +141,23 @@ print(json.dumps([
   assert.match(fstring, /literal English/);
 });
 
+/* The one source whose keys are not literals at the call site: the Wiki
+   guides' labels, guideUi in tools/wiki_sample.json, which wikiCopy() looks
+   up as wiki.ui.<name> with the payload's English. */
+test("the Wiki guides' labels are keyed from guideUi, one wiki.ui key per entry, the entry its English", () => {
+  const ui = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools', 'wiki_sample.json'), 'utf8')).guideUi;
+  assert.ok(Object.keys(ui).length > 10);
+  const out = spawnSync(PY, [path.join('tools', 'i18n.py'), 'extract'], {cwd: ROOT, maxBuffer: 16 * 1024 * 1024});
+  assert.equal(out.status, 0, out.stderr.toString());
+  const cat = JSON.parse(out.stdout.toString('utf8'));
+  for(const [name, en] of Object.entries(ui)) if(en) assert.equal(cat[`wiki.ui.${name}`], en, name);
+  assert.deepEqual(Object.keys(cat).filter(k => k.startsWith('wiki.ui.')).sort(),
+    Object.keys(ui).filter(k => ui[k]).map(k => `wiki.ui.${k}`).sort());
+  // web/wiki.js builds exactly that key, through ttText() so no tt() call is left unreadable.
+  const wiki = fs.readFileSync(path.join(ROOT, 'web', 'wiki.js'), 'utf8');
+  assert.match(wiki, /ttText\(`wiki\.ui\.\$\{key\}`, given\)/);
+});
+
 /* The translations: flat JSON of strings, and every key that is translated
    carries the placeholders and plural forms of the English it came from. */
 const LANGS = fs.readdirSync(path.join(ROOT, 'i18n')).filter(n => n.endsWith('.json') && !n.endsWith('.base.json'))
