@@ -1,5 +1,5 @@
-// The Weekly imports table: Smart Delivery levels, the editable Set to box,
-// and how a typed figure reaches the Plan imports checklist.
+// The import lines on Supply › Warehouses: Smart Delivery levels, the
+// editable Set to box, and how a typed figure reaches the change checklist.
 // Browser regressions: install Playwright and its Chromium browser to run.
 // NODE_PATH may point at an existing Playwright installation.
 const {test, before, after} = require('node:test');
@@ -72,35 +72,48 @@ async function board({width = 1280, view = 'all', storage = true, page: given, d
   await page.evaluate(([data, view, storage, before]) => {
     if(!storage) Object.defineProperty(window, 'localStorage', {get(){ throw new Error('denied'); }});
     if(before) localStorage.setItem(before[0], before[1]);
-    D = data; logisticsView = view; supplySort = {};
+    D = data; sbWhich = view; supplySort = {}; supplyAuto = false; sub.supply = 'warehouses';
     document.body.classList.add('has-board');
     document.querySelectorAll('.page').forEach(el => { el.hidden = el.id !== 'pageSupply'; });
     document.querySelectorAll('#pageSupply section').forEach(el => { el.hidden = false; el.classList.add('measured'); });
-    const draw = drawOrderChecklist;
-    drawOrderChecklist = (rows, f) => { window.fixtureActions = rows; draw(rows, f); };
-    drawLogistics(); wireAll();
+    drawSupplyStrip(); drawWarehousesTab(); wireAll();
   }, [data, view, storage, before]);
   return page;
 }
-const cells = page => page.$$eval('#importPlan tbody tr', rows => rows.map(r => ({
-  item: r.cells[0].firstChild.textContent.trim(),
-  inGame: r.cells[3].textContent.replace(/\s+/g, ' ').trim(),
-  box: r.cells[4].querySelector('input')?.value ?? null,
-  verdict: r.cells[4].textContent.replace(/\s+/g, ' ').trim(),
-  changed: r.classList.contains('imp-changed'),
-})));
-const actions = page => page.evaluate(() => window.fixtureActions
+/* A Warehouses row: its product, the figure in game and what is said around
+   the box (the Order / top-up cell, less its chips and contract list), the
+   box, and the cell with the row's word. */
+const cells = page => page.$$eval('#secWarehouses tr[data-slug]', rows => rows.map(r => {
+  const text = (el, drop = '') => {
+    const c = el.cloneNode(true);
+    if(drop) c.querySelectorAll(drop).forEach(x => x.remove());
+    const w = document.createTreeWalker(c, NodeFilter.SHOW_TEXT), bits = [];
+    while(w.nextNode()) bits.push(w.currentNode.textContent);
+    return bits.join(' ').replace(/\s+/g, ' ').trim();
+  };
+  return {
+    item: r.cells[1].firstChild.textContent.trim(),
+    inGame: text(r.cells[6], '.imp-contracts, .chip, .up, .gw-short'),
+    box: r.cells[6].querySelector('input')?.value ?? null,
+    verdict: `${text(r.cells[6])} ${text(r.cells[8])}`,
+    changed: r.classList.contains('imp-changed'),
+  };
+}));
+const actions = page => page.evaluate(() => sbData().rows
   .filter(a => a.kind === 'Weekly imports').map(a => [a.item, a.current, a.proposed, a.mode]));
-const box = (page, item) => page.locator('#importPlan tbody tr', {hasText: item}).locator('input');
+const box = (page, item) => page.locator('#secWarehouses tr[data-slug]', {hasText: item}).locator('input');
 
 test('the table reads a Smart Delivery level apart from a weekly order', async () => {
   const page = await board();
   try{
-    const heads = await page.$$eval('#importPlan thead th', th => th.slice(0, 6).map(x => x.textContent.trim()));
-    assert.deepEqual(heads, ['Material', 'Used / week', 'Arrived last week', 'Set in game', 'Set to', 'At depot']);
+    const heads = await page.$$eval('#secWarehouses thead th', th => th.slice(1).map(x => x.textContent.trim()));
+    assert.deepEqual(heads, ['Product', 'On hand', 'Draw / day', 'Busiest', 'Cover', 'Order / top-up', 'Uses / week', 'Status']);
     const rows = Object.fromEntries((await cells(page)).map(r => [r.item, r]));
+    // The figure in game, the arrow, the box: a level is kept in stock, an order is a week's.
     assert.match(rows.Sugar.inGame, /^900 in stock$/);
-    assert.match(rows.Salt.inGame, /^700 a week$/);
+    // Nothing to change: the box alone holds the figure in game.
+    assert.match(rows.Salt.inGame, /^a week$/);
+    assert.equal(rows.Salt.box, '700');
     // Sugar's level is short of its week: the box holds the suggestion.
     assert.equal(rows.Sugar.box, '1400');
     assert.equal(rows.Sugar.changed, true);
@@ -109,12 +122,12 @@ test('the table reads a Smart Delivery level apart from a weekly order', async (
     assert.equal(rows.Flour.box, '5000');
     assert.equal(rows.Flour.changed, false);
     assert.match(rows.Flour.verdict, /covered/);
-    assert.doesNotMatch(await page.locator('#importPlan').textContent(), /could lower/);
+    assert.doesNotMatch(await page.locator('#secWarehouses').textContent(), /could lower/);
     // Two contracts on one line are listed in plan order under the material.
-    const sugar = await page.locator('#importPlan tbody tr', {hasText: 'Sugar'}).locator('.imp-contracts').textContent();
+    const sugar = await page.locator('#secWarehouses tr[data-slug]', {hasText: 'Sugar'}).locator('.imp-contracts').textContent();
     assert.match(sugar, /1\. Pier 1 · keeps 900 in stock\s*2\. Pier 2 · 500 a week · paused/);
     assert.deepEqual(await actions(page), [['Sugar', 900, 1400, 'smart']]);
-    assert.match(await page.locator('#orderChecklistBody').textContent(), /in stock/);
+    assert.match(await page.evaluate(() => orderChecklistText(sbData().rows, 'Fixture')), /Smart Delivery stock 900 -> 1400 units/);
   } finally { await page.close(); }
 });
 
@@ -123,15 +136,15 @@ for(const storage of [true, false]){
     const page = await board({view: 'changes', storage});
     try{
       assert.deepEqual((await cells(page)).map(r => r.item), ['Sugar']);
-      await page.locator('#logisticsTools').getByText('Everything').click();
+      await page.locator('#sbMode').getByText('Everything').click();
       await box(page, 'Flour').fill('6000');
       await box(page, 'Flour').press('Enter');
-      await page.waitForFunction(() => document.querySelector('#importPlan .imp-reset'));
+      await page.waitForFunction(() => document.querySelector('#secWarehouses .imp-reset'));
       const flour = (await cells(page)).find(r => r.item === 'Flour');
       assert.deepEqual([flour.box, flour.changed], ['6000', true]);
       assert.deepEqual(await actions(page), [['Sugar', 900, 1400, 'smart'], ['Flour', 5000, 6000, 'smart']]);
       // The edited row stays in the "Needs a change" view.
-      await page.locator('#logisticsTools').getByText('Needs a change').click();
+      await page.locator('#sbMode').getByText('Needs a change').click();
       assert.deepEqual((await cells(page)).map(r => r.item), ['Sugar', 'Flour']);
       if(storage){
         const saved = await page.evaluate(() => localStorage.getItem('ba_import_set_v2:set-fixture'));
@@ -139,7 +152,7 @@ for(const storage of [true, false]){
         assert.deepEqual(JSON.parse(saved), {'["depot#0","flour"]': {value: 6000, inGame: 5000}});
       }
       // Reset puts the suggestion back and the row leaves the view.
-      await page.locator('#importPlan .imp-reset').click();
+      await page.locator('#secWarehouses .imp-reset').click();
       assert.deepEqual((await cells(page)).map(r => r.item), ['Sugar']);
       assert.deepEqual(await actions(page), [['Sugar', 900, 1400, 'smart']]);
     } finally { await page.close(); }
@@ -151,14 +164,14 @@ test('a typed figure survives a reload, and typing the suggestion is no edit', a
   try{
     await box(page, 'Sugar').fill('1800');
     await box(page, 'Sugar').press('Enter');
-    await page.waitForFunction(() => document.querySelector('#importPlan .imp-reset'));
+    await page.waitForFunction(() => document.querySelector('#secWarehouses .imp-reset'));
     await page.reload();
     await board({page});
     assert.equal((await cells(page)).find(r => r.item === 'Sugar').box, '1800');
     assert.deepEqual((await actions(page))[0], ['Sugar', 900, 1800, 'smart']);
     await box(page, 'Sugar').fill('1400');
     await box(page, 'Sugar').press('Enter');
-    await page.waitForFunction(() => !document.querySelector('#importPlan .imp-reset'));
+    await page.waitForFunction(() => !document.querySelector('#secWarehouses .imp-reset'));
     assert.equal(await page.evaluate(() => localStorage.getItem('ba_import_set_v2:set-fixture')), '{}');
   } finally { await page.close(); }
 });
@@ -266,7 +279,7 @@ test('a mixed line shows its level, and only a plain amount after it comes on to
     assert.equal(rows.Yeast.box, '300');
     const hops = (await actions(page)).find(a => a[0] === 'Hops');
     assert.deepEqual(hops, ['Hops', 1000, 1400, 'smart']);
-    const reason = await page.evaluate(() => window.fixtureActions.find(a => a.item === 'Hops').reason);
+    const reason = await page.evaluate(() => sbData().rows.find(a => a.item === 'Hops').reason);
     assert.match(reason, /^Set Smart Delivery stock at Pier 1 to 1,?400\./);
     assert.match(await box(page, 'Rye').getAttribute('data-tip'), /The board suggests 2,?000: the level at Pier 1/);
   } finally { await page.close(); }
@@ -291,12 +304,12 @@ test('typing the figure in game turns the suggestion down and it stays down', as
   try{
     await box(page, 'Sugar').fill('900');
     await box(page, 'Sugar').press('Enter');
-    await page.waitForFunction(() => document.querySelector('#importPlan .imp-reset'));
+    await page.waitForFunction(() => document.querySelector('#secWarehouses .imp-reset'));
     let sugar = (await cells(page)).find(r => r.item === 'Sugar');
     assert.deepEqual([sugar.box, sugar.changed], ['900', false]);
     assert.deepEqual(await actions(page), []);
     // A redraw keeps it: the game has not moved since it was typed.
-    await page.evaluate(() => { drawLogistics(); wireAll(); });
+    await page.evaluate(() => { drawWarehousesTab(); wireAll(); });
     sugar = (await cells(page)).find(r => r.item === 'Sugar');
     assert.equal(sugar.box, '900');
     assert.deepEqual(JSON.parse(await page.evaluate(key => localStorage.getItem(key), KEY)),
@@ -330,16 +343,16 @@ test('the box and its reset say what they hold in each state', async () => {
     assert.match(await tip('Flour'), /^The figure in game/);
     await box(page, 'Flour').fill('6000');
     await box(page, 'Flour').press('Enter');
-    await page.waitForFunction(() => document.querySelector('#importPlan .imp-reset'));
+    await page.waitForFunction(() => document.querySelector('#secWarehouses .imp-reset'));
     assert.match(await tip('Flour'), /^Your own figure\. The game holds 5,?000/);
-    const reset = page.locator('#importPlan .imp-reset');
+    const reset = page.locator('#secWarehouses .imp-reset');
     assert.match(await reset.getAttribute('aria-label'), /^Back to the figure in game, 5,?000, for Flour$/);
     await box(page, 'Sugar').fill('2000');
     await box(page, 'Sugar').press('Enter');
-    await page.waitForFunction(() => document.querySelectorAll('#importPlan .imp-reset').length === 2);
-    const sugarReset = page.locator('#importPlan tbody tr', {hasText: 'Sugar'}).locator('.imp-reset');
+    await page.waitForFunction(() => document.querySelectorAll('#secWarehouses .imp-reset').length === 2);
+    const sugarReset = page.locator('#secWarehouses tr[data-slug]', {hasText: 'Sugar'}).locator('.imp-reset');
     assert.match(await sugarReset.getAttribute('aria-label'), /^Back to the board's suggestion, 1,?400, for Sugar$/);
-    assert.match(await page.locator('#importPlan thead th', {hasText: 'Set to'}).first().getAttribute('data-tip'), /Enter your own figure/);
+    assert.match(await page.locator('#secWarehouses thead th', {hasText: 'Order / top-up'}).first().getAttribute('data-tip'), /the figure to type/);
   } finally { await page.close(); }
 });
 
@@ -352,7 +365,7 @@ test('the imports table scrolls inside its box, not the page, on a phone', async
 });
 
 // Today's Plan imports card is painted by the checklist from the same rows and
-// ticks, so its count is always the checklist's "to do".
+// ticks, so its count is always what the strip has left to type.
 test('the Plan imports card counts what the checklist has to do', async () => {
   const page = await board();
   try{
@@ -360,25 +373,22 @@ test('the Plan imports card counts what the checklist has to do', async () => {
       document.querySelector('#planImportsCard .soon').textContent,
       document.querySelector('#planImportsCard .soon').className,
       document.querySelector('#planImportsCard .what').textContent,
-      document.querySelector('#orderChecklistTitle .order-count').textContent]);
+      document.querySelector('#sbTrayText').textContent]);
     const [badge, cls, what, todo] = await card();
-    assert.deepEqual([badge, cls, todo], ['1 TO CHANGE', 'soon live', '1 to do']);
+    assert.deepEqual([badge, cls, todo], ['1 TO CHANGE', 'soon live', '0 of 1 typed in']);
     assert.match(what, /^Sugar at North Depot: Smart Delivery stock 900 → 1[.,]?400\.$/);
     await box(page, 'Flour').fill('6000');
     await box(page, 'Flour').press('Enter');
-    await page.waitForFunction(() => document.querySelector('#importPlan .imp-reset'));
-    assert.deepEqual((await card()).filter((_, i) => i !== 1), ['2 TO CHANGE', '2 changes at North Depot, starting with Sugar.', '2 to do']);
-    const tick = i => page.evaluate(i => {
-      const input = document.querySelectorAll('#orderChecklistBody input[data-order-mark]')[i];
-      input.checked = true; input.dispatchEvent(new Event('change'));
-    }, i);
-    await tick(0);
+    await page.waitForFunction(() => document.querySelector('#secWarehouses .imp-reset'));
+    assert.deepEqual((await card()).filter((_, i) => i !== 1), ['2 TO CHANGE', '2 changes at North Depot, starting with Sugar.', '0 of 2 typed in']);
+    const tick = item => page.locator('#secWarehouses tr[data-slug]', {hasText: item}).locator('.sb-tick').click();
+    await tick('Sugar');
     const one = await card();
-    assert.deepEqual([one[0], one[3]], ['1 TO CHANGE', '1 to do']);
+    assert.deepEqual([one[0], one[3]], ['1 TO CHANGE', '1 of 2 typed in']);
     assert.match(one[2], /^Flour at North Depot: Smart Delivery stock 5[.,]?000 → 6[.,]?000\.$/);
-    await tick(1);
+    await tick('Flour');
     const [done, quiet, doneWhat, doneTodo] = await card();
-    assert.deepEqual([done, quiet, doneTodo], ['ALL TICKED', 'soon', 'All checked']);
+    assert.deepEqual([done, quiet, doneTodo], ['ALL TICKED', 'soon', '2 of 2 typed in']);
     assert.match(doneWhat, /^You ticked all 2\./);
   } finally { await page.close(); }
 });

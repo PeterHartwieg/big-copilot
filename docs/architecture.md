@@ -332,9 +332,9 @@ three of them. Each page is a `div.page` that `showPage()` unhides.
 
 | Page (`id`) | Host element | Drawn by |
 | --- | --- | --- |
-| Today (`today`) | `pageToday` | `drawKpis` (`#kpis`), `drawAlerts` (`#alertSection`), `drawFindLocation` and `drawOptimizeStaffing` (each card's live count, its sentence about this save and the line naming where it goes); the "Plan imports" card is painted by `paintPlanImports` from `drawOrderChecklist`, with `planImportsState()` counting the same rows and ticks as the checklist |
+| Today (`today`) | `pageToday` | `drawKpis` (`#kpis`), `drawAlerts` (`#alertSection`), `drawFindLocation` and `drawOptimizeStaffing` (each card's live count, its sentence about this save and the line naming where it goes); the "Plan imports" card is painted by `paintPlanImports` from `drawSupplyStrip` (the change checklist's strip on Supply, drawn on Today too), with `planImportsState()` counting the same rows and ticks as the checklist |
 | Company (`company`) | `pageCompany` | one view at a time — see below |
-| Supply (`supply`) | `pageSupply` | one view at a time — see below |
+| Supply (`supply`) | `pageSupply` | one tab at a time — see below |
 | Growth (`growth`) | `pageGrowth` | one view at a time — see below |
 | Map (`map`) | `pageMap` | `showCityMap` / `refreshCityMaps` in `web/map.js`, which also hosts the location finder as a mode of the page — `openFinder()` switches it on, and `CityMapView` ranks the `premises` rows beside the map |
 | Wiki (`wiki`) | `pageWiki` | `wikiVisit` → `showWikiRoute` in `web/wiki.js`; the entry is omitted when `showWikiRoute` is undefined |
@@ -348,13 +348,36 @@ Company's views:
 | Payroll | `secPayroll` | `drawPayroll` |
 | Milestones | `secGoals` | `drawGoals`; the difficulty is not here but a chip at the end of the clock's last line at 1501 px and over (`drawMast`) and, at 1500 px and under, the footer stamp (`drawFooter`, `#footDiff`), built by `fvDiffChip()`, with a body-level popover (`#fvDiffPop`) from `drawDifficulty()` |
 
-Supply's views:
+Supply's views are three tabs, one per object (R13):
 
 | View | Section | Drawn by |
 | --- | --- | --- |
-| Orders | `secLogistics` | `drawLogistics`, plus `drawOrderChecklist` for the change checklist |
-| Checks | `secStock` | `drawStock`, which renders whichever entry of `SUPPLY_VIEWS` is selected (`shops`, `imports`, `idle`, `lines`, `feed`) |
-| Goods flow | `secFlow` | `drawFlow`, plus `drawFlowDetail` for the panel under the diagram |
+| Shops | `secShops` | `drawShopsTab`: every shelf against tomorrow morning's round |
+| Warehouses | `secWarehouses` | `drawWarehousesTab`: every depot, second tier included, with each import line's Set to box (`sbImportCtx()`); a factory input no depot brings is its "No depot" block |
+| Factories | `secFactories` | `drawFactoriesTab`: each factory's lines and their hours, its factory inputs and its own imports, then `drawFactoryStaffing()` from `factoryStaffing[sizing]` |
+
+Above the three, `#sbStrip` is the one change checklist (`drawSupplyStrip()`): the done
+count, Copy remaining and the reset, over the rows of every tab. It also paints each tab's
+badge (`sbBadge()`, through `SUBS.supply.badge`) and Today's Plan imports card, so its
+`PAGE_DRAWS` row is tagged for Today and all three tabs. Every tab reads the same rows
+through `sbData()`: `supplyChecklistRows()` gathers the facts into the rows each table shows
+and hands them to `buildOrderChecklist()`, the single source of what to change (it also
+leaves `gwImportRows` for the game link's write-back); the result is kept per board, sizing
+and browser-side change (`sbStamp`). A table row carries the tick for the checklist rows about
+its site and item (`sbChk()`); any row no table claims is listed under "Other changes" on its
+tab, so every change is tickable. A site's tab is `sbTabOf()`: a shop's Shops, a factory's
+Factories, every other site's Warehouses.
+
+Needs a change and Everything (`sbWhich`, in memory) and list or diagram (`sbViewMode()`,
+`ba_dash_supply_view`) sit in the subhead. The goods-flow diagram is a view of the tab on
+screen: `sbPlaceFlow()` moves the one `svg#flow` into that tab's `.sb-diag`, and a click on a
+site (`sbNodeOpen()`) goes back to the list on that site's rows. A finding's link, the search
+and a diagram click land through `sbLand()`: the tab, Everything where the row is no change, its
+group opened, `[data-sb-at]` lit, and a crumb back. Supply's old views still resolve: a
+remembered `ba_dash_supply` of `checks` opens Shops, `map` Warehouses with the diagram on, and
+`orders` (or none) the tab with the most still to type (`SUPPLY_WAS`, `supplyAuto`); the old
+`#secLogistics`, `#secStock` and `#secFlow` links reach their tab through `SEC_PAGE` and
+`SEC_MOVED`.
 
 Growth's views:
 
@@ -434,7 +457,7 @@ name and its own text, so every finding is reached from the keyboard; a silenced
 `inert`. A modified click is left to the browser and opens the address in a new tab.
 
 A plain click on a site's name records where it was clicked, as a finding, a search and a
-question do: the crumb reads "‹ Today", "‹ Checks" or "‹ Map", or names the other site's page
+question do: the crumb reads "‹ Today", "‹ Shops" or "‹ Map", or names the other site's page
 the name sat on, and that is the browser's Back. Two places keep the portfolio as the way back:
 the Portfolio's own names and a site page's picker. The crumb row's own "‹ OtherSite" link is
 left to `wireSiteCrumbs()` and goes Back rather than opening a new visit. The map's
