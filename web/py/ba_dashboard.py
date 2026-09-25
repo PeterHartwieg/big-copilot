@@ -10332,10 +10332,13 @@ ALERT_UNITS = {
 
 def _msg_list(items: list):
     """Several names or phrases as one list, "a, b, c", that stays a message:
-    a nested "{a}, {b}" per comma, so a translation can join its own way. One
-    item is itself."""
+    a nested "{a}, {b}" per comma, the last pair under a key of its own
+    (f.list.last), so a translation can join that one with its "and". One item
+    is itself."""
     if len(items) == 1:
         return items[0]
+    if len(items) == 2:
+        return msg("f.list.last", "{a}, {b}", a=items[0], b=items[1])
     return msg("f.list", "{a}, {b}", a=items[0], b=_msg_list(items[1:]))
 
 
@@ -10351,9 +10354,11 @@ def _worked_over(d: dict):
             return msg("f.jobdemand.over.days", "worked over {max} days this week", max=w["max"])
         return msg("f.jobdemand.over.hours", "worked over {max} hours this week", max=w["max"])
     if w["unit"] == "days":
-        return msg("f.jobdemand.over.days.some", "{n} worked over {max} days this week",
+        return msg("f.jobdemand.over.days.some", {"one": "{n} worked over {max} days this week",
+                                                    "other": "{n} worked over {max} days this week"},
                    n=w["count"], max=w["max"])
-    return msg("f.jobdemand.over.hours.some", "{n} worked over {max} hours this week",
+    return msg("f.jobdemand.over.hours.some", {"one": "{n} worked over {max} hours this week",
+                                                "other": "{n} worked over {max} hours this week"},
                n=w["count"], max=w["max"])
 
 
@@ -10722,13 +10727,17 @@ def _alerts(
             for i, wave in enumerate(waves):
                 left, n = wave["daysLeft"], wave["count"]
                 if left <= 0:
-                    parts.append(msg("f.hype.part.today", "{n} end today", n=n))
+                    parts.append(msg("f.hype.part.today", {"one": "{n} end today",
+                                                           "other": "{n} end today"}, n=n))
                 elif left == 1:
-                    parts.append(msg("f.hype.part.tomorrow", "{n} end tomorrow", n=n))
+                    parts.append(msg("f.hype.part.tomorrow", {"one": "{n} end tomorrow",
+                                                              "other": "{n} end tomorrow"}, n=n))
                 elif i == 0:
-                    parts.append(msg("f.hype.part.first", "{n} end in {days} days", n=n, days=left))
+                    parts.append(msg("f.hype.part.first", {"one": "{n} end in {days} days",
+                                                           "other": "{n} end in {days} days"}, n=n, days=left))
                 else:
-                    parts.append(msg("f.hype.part.later", "{n} in {days} days", n=n, days=left))
+                    parts.append(msg("f.hype.part.later", {"one": "{n} in {days} days",
+                                                           "other": "{n} in {days} days"}, n=n, days=left))
             lines = msg("f.hype.lines.waves", "{n} lines ({waves})",
                         n=sum(w["count"] for w in waves), waves=_msg_list(parts))
         one = len(waves) == 1
