@@ -71,6 +71,15 @@ const CONVERTED = {
     + '#secPortfolio .sechead, #portfolio thead, #portfolio tfoot, #portfolio tr.chain, #portfolio tr.kid td:not(.l), '
     + '#secProducts .sechead, #secProducts thead, #secProducts td:not(.l), #secProducts > p, '
     + '#secPayroll .sechead, #secPayroll > p, #secGoals',
+  /* The site panel's own chrome: headings, tile labels, table heads, the
+     roster's steps, tabs and counters, the notes' labels and the empty
+     states. Its read-outs and chips carry site, people and game names, and
+     Python's sentences (f, and the staffing prose), so they are left out. */
+  sp: '#sitePanel .ss-crumb:not(.from), #sitePanel .sechead h2, #sitePanel .sstat .lab, #sitePanel .sstat small:not(.sp-tname), '
+    + '#sitePanel thead, #sitePanel .sp-step:not(.sp-add), #sitePanel .sp-nowplan, #sitePanel .sp-daytabs, '
+    + '#sitePanel .sp-typed, #sitePanel .sp-ba .lab, #sitePanel .sp-findmore, #sitePanel .sp-pick, '
+    + '#sitePanel .sp-nhead .lab, #sitePanel .sp-nmore summary, #sitePanel .hours .dd, #sitePanel .sp-days, '
+    + '#sitePanel p.quiet, #sitePanel .sp-read:not(.sp-readout), #sitePanel .sp-noplan',
 };
 /* Text that is not Big Copilot's own words even inside a converted area:
    paths and file names in code, the save's own words (the strip's file line,
