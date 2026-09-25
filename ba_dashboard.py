@@ -10901,7 +10901,15 @@ def render(
             locations = json.load(fh)
         with open(os.path.join(asset_root, "maps", locations["image"]), "rb") as fh:
             image = "data:image/svg+xml;base64," + base64.b64encode(fh.read()).decode("ascii")
-        map_payload = "window.BIG_COPILOT_MAP=" + json.dumps({"data": locations, "image": image}, separators=(",", ":")).replace("</", "<\\/") + ";"
+        embedded = {"data": locations, "image": image}
+        # The finder's floor plans travel with the map in a page opened from a
+        # file; without them the finder simply shows no plan.
+        try:
+            with open(os.path.join(asset_root, "maps", "floor-plans.json"), encoding="utf-8") as fh:
+                embedded["plans"] = json.load(fh)
+        except (OSError, ValueError):
+            pass
+        map_payload = "window.BIG_COPILOT_MAP=" + json.dumps(embedded, separators=(",", ":")).replace("</", "<\\/") + ";"
     # A page that is saved and opened from a file has nowhere to fetch the help
     # from, so an export carries it. The hosted build fetches it instead, with
     # the build stamp on it, and would only be made heavier by a copy. The wiki
@@ -25319,6 +25327,7 @@ class BoardHandler(http.server.BaseHTTPRequestHandler):
         map_assets = {
             "/maps/locations.json": "application/json",
             "/maps/map-background.svg": "image/svg+xml",
+            "/maps/floor-plans.json": "application/json",
             "/wiki-data.json": "application/json",
         }
         if route in map_assets:

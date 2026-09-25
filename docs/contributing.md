@@ -13,6 +13,7 @@ For setup, see the [README](../README.md). File paths below are relative to the 
 | `web/map.js`, `web/map.css` | Shared map/overlay code, embedded by `render()` into browser and local output. |
 | `web/maps/locations.json`, `web/maps/map-background.svg` | Generated address hit geometry and zoomable background. The approved poster exports remain unchanged. |
 | `export_map.py` | Builds runtime assets from approved canonical geometry, its recipe and the poster SVG. Extraction snapshots are retained privately. |
+| `web/maps/floor-plans.json`, `make_floor_plans.py` | The finder's floor plans, one for each building layout, drawn from the installed game's building shells. |
 | `check_saves.py` | Parses and extracts every save under the save root and prints a table, plus spot-checks of known numbers. Run `python check_saves.py [folder]`. |
 | `wrangler.jsonc` | Cloudflare assets and community Worker config. `npx wrangler deploy` publishes the server and `web/`. |
 | `server/`, `migrations/` | Community presence/voting API, curated feature list, and D1 schema. Server code stays outside public assets. |
@@ -147,10 +148,29 @@ no player save or installed-game access is required for this export.
 Run `python build_web.py` after map UI or asset changes. Browser and local watch
 views load the same runtime assets lazily; standalone HTML embeds them so opening
 it through `file://` works. A standalone file is therefore larger than the browser
-shell. The watch server allowlists the two runtime asset routes.
+shell. The watch server allowlists the three runtime asset routes.
 The decoded background and a 3600-pixel bitmap are shared by both viewers.
 Dragging and zooming use the bitmap with animation-frame updates; after movement
 settles, the original SVG returns for sharp detail. Filters only update overlays.
+
+### Floor plans
+
+The finder shows each building's layout: its size code plus its version ("C2"),
+which is how the game picks the interior. Both steps are owner-side and need the
+installed game and UnityPy
+(`py -m pip install --target <scratch folder outside the repo> UnityPy`, then put
+that folder on `PYTHONPATH`):
+
+1. `python make_buildings.py --versions` writes each building's version into
+   `ba_buildings.json` as `v`, from the game's buildings bundle. It stops if the
+   game and the table disagree on a building's type or size.
+2. `python make_floor_plans.py` draws one plan for each layout the retail, office
+   and warehouse buildings use (21 at build 3680; an office C1, C2 or D2 is the
+   same shell as a shop's) into `web/maps/floor-plans.json`, about 55 KB.
+
+Rerun both after a game update that adds a building or a layout, then
+`python build_web.py`, which refuses a plan set that misses a layout the table
+uses. The plans are shown as the game stores them, not turned to the street.
 
 Map regressions: `node --test tests/map.test.cjs` and
 `python -m unittest discover -s tests -p test_map_assets.py`. Use the browser channel

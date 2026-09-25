@@ -21,7 +21,7 @@ import json
 import os
 import shutil
 
-from ba_dashboard import VERIFIED_BUILD, footer_html, render
+from ba_dashboard import FLOOR_PLAN_KINDS, VERIFIED_BUILD, footer_html, render
 from ba_save import NotEnglishText, bundled_locale, load_game_locale, locale_search_paths
 from tools.build_wiki_data import write_public_wiki
 from tools import wiki_pages
@@ -416,8 +416,37 @@ STAMP_INPUTS = (
     "build_web.py", "web/app.js", "web/community.js", "web/community.css", "web/update.js", "web/_headers", "web/worker.js", "web/map.js", "web/map.css", "web/maps/locations.json", "web/maps/map-background.svg", "web/changelog.json", "ba_save.py", "ba_dashboard.py", "web/py/gametext.json", "web/py/ba_buildings.json", "web/py/ba_demand_curves.json",
     "web/wiki.js", "web/wiki.css", "web/wiki-data.json",
     "tools/build_wiki_data.py", "tools/wiki_data.py", "tools/extract_wiki.py", "tools/wiki_sample.json",
-    "tools/wiki_topics.json", "web/fonts/fonts.css",
+    "tools/wiki_topics.json", "web/fonts/fonts.css", "web/maps/floor-plans.json",
 )
+
+
+def floor_plan_gaps(root: str = HERE) -> list[str]:
+    """Layouts the building table uses that web/maps/floor-plans.json cannot draw.
+
+    make_floor_plans.py writes the plans straight into web/ from the installed
+    game, so the build cannot make them; it can only refuse a set that no longer
+    covers ba_buildings.json (a new layout, or versions added after the plans).
+    A missing or unreadable file is one gap. The finder shows nothing for a row
+    it has no plan for, so a gap is never a broken page, only a stale one.
+    """
+    try:
+        with open(os.path.join(root, "web", "maps", "floor-plans.json"), encoding="utf-8") as fh:
+            plans = json.load(fh)
+        with open(os.path.join(root, "ba_buildings.json"), encoding="utf-8") as fh:
+            rows = json.load(fh)
+    except (OSError, ValueError):
+        return ["web/maps/floor-plans.json"]
+    if plans.get("schema") != 1:
+        return ["web/maps/floor-plans.json"]
+    have = plans.get("plans") or {}
+    kinds = plans.get("kinds") or {}
+    gaps = set()
+    for r in rows:
+        if r.get("t") in FLOOR_PLAN_KINDS and r.get("v") is not None:
+            code = f"{r['z']}{r['v']}"
+            if code not in have or code not in kinds.get(r["t"], []):
+                gaps.add(f"{r['t']} {code}")
+    return sorted(gaps)
 
 
 def stamp(root: str = HERE) -> str:
@@ -543,11 +572,21 @@ def check(root: str = HERE) -> list[str]:
     # The static wiki pages, the sitemap and robots.txt, from the committed
     # wiki-data.json: a missing, edited or orphaned page is stale.
     stale.extend("web/" + rel for rel in wiki_pages.check(os.path.join(root, "web")))
+    if floor_plan_gaps(root):
+        stale.append("web/maps/floor-plans.json")
     return stale
 
 
 def main() -> None:
     os.makedirs(os.path.join(WEB, "py"), exist_ok=True)
+    # The floor plans come from the game through make_floor_plans.py, not from
+    # this build; a set that misses a layout the table uses stops it here.
+    gaps = floor_plan_gaps()
+    if gaps:
+        raise SystemExit(
+            "web/maps/floor-plans.json does not cover every layout in ba_buildings.json ("
+            + ", ".join(gaps[:8]) + "); run make_floor_plans.py (owner-side, needs the game)"
+        )
     # Resolve the game text before anything else is written. Every step below
     # needs it, and the wiki reads helpstructure.json beside it, so a path that
     # is not the game's own has to stop the build here with a message that says
@@ -618,7 +657,8 @@ if __name__ == "__main__":
     if parser.parse_args().check:
         stale = check()
         for path in stale:
-            print(f"stale: {path} (run python build_web.py)")
+            fix = "make_floor_plans.py" if path == "web/maps/floor-plans.json" else "python build_web.py"
+            print(f"stale: {path} (run {fix})")
         if stale:
             raise SystemExit(1)
         print("web/ is up to date")
