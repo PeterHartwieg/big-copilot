@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=07858a945a">
+<link rel="stylesheet" href="community.css?v=a91216a400">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -14,7 +14,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=07858a945a">
+<link rel="stylesheet" href="fonts/fonts.css?v=a91216a400">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -3650,7 +3650,7 @@ details.help[open] summary::after{content:"\2013"}
     </section>
     <section class="sec rv" id="secIngredients" data-sub="plan">
       <div class="sechead"><h2>Ingredients</h2>
-        <span class="why" data-tip="What the machines above eat, added up across every line that shares an ingredient. Per day and per week are this range's own figures. Company target is the order for the whole company once the plan runs: never less than a week of this range, and beyond that what the range adds over what your factories already eat, on top of every contract already active, with one 15% margin for the whole chain and rounded up to tens. The plan always runs every machine 24/7, whatever the sizing switch on Supply says. Save as plan puts each change on Supply's checklist, at the warehouse that imports the ingredient for the factory the plan is built at. Hover an ingredient for what is on order today, and Used by for every line that eats it. A cash column appears once the company already buys one of these ingredients, at the price it last paid." tabindex="0"><i>?</i></span></div>
+        <span class="why" data-tip="What the machines above eat, added up across every line that shares an ingredient. Per day and per week are this range's own figures. Company target is the order for the whole company once the plan runs: never less than a week of this range, and beyond that what the range adds over what the factory it is built at already eats, on top of every contract already active, with one 15% margin for the whole chain and rounded up to tens. The plan always runs every machine 24/7, whatever the sizing switch on Supply says. Save as plan puts each change on Supply's checklist, at the warehouse that imports the ingredient for the factory the plan is built at. Hover an ingredient for what is on order today, and Used by for every line that eats it. A cash column appears once the company already buys one of these ingredients, at the price it last paid." tabindex="0"><i>?</i></span></div>
       <table class="ingtable" id="ingTable">
         <thead><tr><th>Ingredient</th><th class="l">Used by</th><th>Per day</th><th>Per week</th><th>Company target</th>
           <th>On order now</th><th>Change</th><th class="cash">Cash / week</th></tr></thead>
@@ -3864,8 +3864,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "07858a945a";</script>
-<script>window.LEDGER_RELEASE = {"version":"07858a945a","latest":{"pr":116,"date":"2026-09-25","title":"Order ahead for a factory still being built","summary":"Plan a chain can now save a plan. Pick the factory it is built at, or a new one, step each product to the finished layout and press Save as plan: the weekly imports and the factory's daily top-ups it needs go on Supply's change checklist, so the next Monday's delivery lands as the factory opens, with a one-off first fill for the days before it from the opening day you choose. The plan shows how many machines are planned, placed and running, and while it is saved its ingredients read new, ordered ahead, instead of idle on Supply, the site pages and Today. A plan always sizes every machine 24/7. It is kept on this device and clears itself once every planned machine runs, or when you remove it."}};</script>
+<script>window.LEDGER_BUILD = "a91216a400";</script>
+<script>window.LEDGER_RELEASE = {"version":"a91216a400","latest":{"pr":116,"date":"2026-09-25","title":"Order ahead for a factory still being built","summary":"Plan a chain can now save a plan. Pick the factory it is built at, or a new one, step each product to the finished layout and press Save as plan: the weekly imports and the factory's daily top-ups it needs go on Supply's change checklist, so the next Monday's delivery lands as the factory opens, with a one-off first fill for the days before it from the opening day you choose. The plan shows how many machines are planned, placed and running, and while it is saved its ingredients read new, ordered ahead, instead of idle on Supply, the site pages and Today. A plan always sizes every machine 24/7. It is kept on this device and clears itself once every planned machine runs, or when you remove it."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -3949,8 +3949,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=07858a945a"></script>
-<script src="community.js?v=07858a945a"></script>
+<script src="app.js?v=a91216a400"></script>
+<script src="community.js?v=a91216a400"></script>
 
 <script>
 
@@ -4690,24 +4690,30 @@ function planFill(inputs, opens, importDay, held, step){
    plan uses counts toward whichever product still has room, at the factory
    the plan is built at (`at`, a site index), or for a new factory at any
    factory the company did not have when the plan was saved (`known`). */
+/* The factory a layout is built at: the site `at`, or for a new factory
+   (null) any factory the company did not have when the plan was saved
+   (`known`); -1, a factory that is gone, is none. */
+function planSites(at, known){
+  const view = D.supply && D.supply.factories && D.supply.factories.sites ? factoryView() : {sites: []};
+  return view.sites.filter(site => Number.isInteger(at) ? site.s === at
+    : at === null || at === undefined ? !!D.businesses[site.s] && !(known || []).includes(D.businesses[site.s].key) : false);
+}
 function planPlacement(counts, at, known){
   const recipes = {};
   ((D.plan || {}).recipes || []).forEach(r => recipes[r.slug] = r);
   const stations = (D.plan || {}).workstations || {};
   const by = {};
   Object.keys(counts).filter(p => counts[p] > 0 && recipes[p]).forEach(p => by[p] = {planned: counts[p], placed: 0, run: 0});
-  const view = D.supply && D.supply.factories && D.supply.factories.sites ? factoryView() : {sites: []};
-  const here = site => at !== null && at !== undefined ? site.s === at
-    : !!D.businesses[site.s] && !(known || []).includes(D.businesses[site.s].key);
+  /* The chosen factory's own machines only: the layout is that factory's. */
   let spare = [];
-  view.sites.forEach(site => {
+  planSites(at, known).forEach(site => {
     site.lines.forEach(l => {
       const b = by[l.slug];
       if(!b) return;
       b.placed += l.machines || 0;
       b.run += Number.isFinite(l.running) ? l.running : l.named && l.hoursWeek > 0 ? l.machines || 0 : 0;
     });
-    if(here(site)) (site.unnamed || []).forEach(u => spare.push(u));
+    (site.unnamed || []).forEach(u => spare.push(u));
   });
   /* The empty machines fill the products with room, first come first. */
   Object.keys(by).forEach(p => {
@@ -4761,15 +4767,16 @@ function planBuild(plan){
   const facts = D.supply.facts || {}, depots = (D.supply.factories || {}).depots || {};
   const sources = (D.plan || {}).sources || {};
   const view = factoryView(), site = fs !== null ? view.sites.find(x => x.s === fs) || null : null;
-  /* The layout is the company's finished total; what the factory it is
-     built at still has to take is the increase over the machines placed on
-     each product now, company-wide. Its daily need is what its own lines eat
-     now, other ranges' included, plus that increase's day. */
+  /* The layout is the chosen factory's finished one; what it still has to
+     take is the increase over the machines it has placed on each product.
+     Its daily need is what its own lines eat now, other ranges' included,
+     plus that increase's day. */
   const recipes = {};
   ((D.plan || {}).recipes || []).forEach(r => recipes[r.slug] = r);
   const alias = view.aliases || {}, norm = slug => alias[slug] || slug;
   const placedOn = {};
-  view.sites.forEach(x => x.lines.forEach(l => { placedOn[l.slug] = (placedOn[l.slug] || 0) + (l.machines || 0); }));
+  planSites(plan.factory ? fs ?? -1 : null, plan.known || []).forEach(x => x.lines.forEach(l => {
+    placedOn[l.slug] = (placedOn[l.slug] || 0) + (l.machines || 0); }));
   const addDay = {}, eatenBy = {};
   Object.keys(plan.counts).forEach(p => {
     const r = recipes[p], more = Math.max(0, (plan.counts[p] || 0) - (placedOn[p] || 0));
@@ -10750,22 +10757,20 @@ function planOrder(week, baseline, ordered, margin, roundTo, used){
   const target = Math.ceil(Math.round(raw * 1e6) / 1e6 / step) * step;
   return {target, gap: target - have};
 }
-/* A line starts as the factories the player already runs: the machines on
-   that product across every factory, and none for a product nobody makes, so
-   the ingredient table on first paint is the logistics view's own figure.
-   Where no factory makes anything of the type, every line starts at one
-   machine, as a sketch. A stepped line keeps its count until the type changes. */
-function factoryCounts(type){
+/* A line starts as the factory it is built at runs it: that factory's
+   machines on the product, and none at a new factory. The steppers are that
+   factory's finished layout. A stepped line keeps its count until the type
+   or the factory changes. */
+function factoryCounts(type, at = null, known = []){
   const made = {};
-  factoryView().sites.forEach(s => s.lines.forEach(l => { made[l.slug] = (made[l.slug] || 0) + (l.machines || 0); }));
+  planSites(at, known).forEach(s => s.lines.forEach(l => { made[l.slug] = (made[l.slug] || 0) + (l.machines || 0); }));
   const products = ((D.plan.catalogue || {})[type] || {}).products || [];
-  const any = products.some(p => made[p]);
   const out = {};
-  products.forEach(p => out[p] = any ? (made[p] || 0) : 1);
+  products.forEach(p => out[p] = made[p] || 0);
   return out;
 }
 let planSeed = {};
-const machinesOn = slug => Math.max(0, planCounts[slug] ?? planSeed[slug] ?? 1);
+const machinesOn = slug => Math.max(0, planCounts[slug] ?? planSeed[slug] ?? 0);
 /* What the company's imports feed of an item a week now, sized 24/7: the
    week each importing site's fact is sized on, summed. */
 function planUsed(slug){
@@ -10847,7 +10852,7 @@ function planInputs(counts, at){
       o.day += m * i.per * HOURS; o.week += m * i.per * HOURS * 7;
     });
   });
-  view.sites.forEach(s => s.lines.forEach(l => {
+  planSites(Number.isInteger(at) ? at : null, Number.isInteger(at) ? [] : planFactoryKeys()).forEach(s => s.lines.forEach(l => {
     const r = RECIPE_BY[l.slug];
     if(!r || !range.includes(l.slug)) return;
     r.ingredients.forEach(i => { const slug = norm(i.slug); base[slug] = (base[slug] || 0) + (l.machines || 0) * i.per * HOURS * 7; });
@@ -10996,10 +11001,14 @@ function drawPlan(){
     planType = saved && types.includes(saved.type) ? saved.type
       : types.includes("ba:businesstype_supermarket") ? "ba:businesstype_supermarket" : types[0];
   const cat = D.plan.catalogue, own = (D.plan.own || {})[planType];
-  planSeed = saved && saved.type === planType ? {...factoryCounts(planType), ...saved.counts} : factoryCounts(planType);
   if(planWhereType !== planType){ planWhere = planWhereDefault(planType); planWhereType = planType; planOpens = null; }
   const factories = planView().sites.map(x => D.businesses[x.s]).filter(Boolean);
   if(planWhere !== "new" && !factories.some(b => b.key === planWhere)) planWhere = "new";
+  /* The steppers are the chosen factory's layout: what it runs now, or the
+     saved plan's layout for it. */
+  const whereAt = planWhereAt(planWhere), whereKnown = planWhere === "new" ? planFactoryKeys() : [];
+  planSeed = {...factoryCounts(planType, whereAt, whereKnown),
+    ...(saved && saved.type === planType && (saved.factory || "new") === planWhere ? saved.counts : {})};
   const kind = cat[planType].type, low = kind.toLowerCase();
   const shops = own ? (own.shops ?? own.sites) || 0 : 0;
   const perShop = defaultRate(planType) || 0;
@@ -11023,17 +11032,17 @@ function drawPlan(){
      machines × rate × 24 × 7 × factor is the same figure the logistics table
      draws for a running line. */
   const ws = D.plan.workstations || {}, sources = D.plan.sources || {}, prices = D.plan.prices || {};
-  /* changed for growth: what the factories the player already runs eat of each
-     material, read from the machines actually on the floor — never from the
-     one-machine sketch this page seeds for a range nobody makes yet. Only lines
-     of the selected range count, so an untouched range reproduces the company's
-     standing orders (week equals baseline, the target keeps them) and a machine
-     added here raises the target by exactly what it eats. */
+  /* changed for growth: what the factory the plan is built at already eats of
+     each material, read from its machines on the floor (none at a new
+     factory). Only lines of the selected range count, so an untouched layout
+     reproduces the company's standing orders (week equals baseline, the
+     target keeps them) and a machine added here raises the target by exactly
+     what it eats. */
   const view = factoryView(), alias = view.aliases || {};
   const norm = slug => alias[slug] || slug;  // a recipe input to the product actually traded
   const range = new Set(cat[planType].products);
   const baseline = {};
-  view.sites.forEach(s => s.lines.forEach(l => {
+  planSites(whereAt, whereKnown).forEach(s => s.lines.forEach(l => {
     const r = RECIPE_BY[l.slug];
     if(!r || !range.has(l.slug)) return;
     r.ingredients.forEach(i => { baseline[i.item] = (baseline[i.item] || 0) + (l.machines || 0) * i.per * HOURS * 7; });
@@ -11114,7 +11123,7 @@ function drawPlan(){
           b.address ? ` · ${spEsc(b.address)}` : ""}</option>`).join("")}<option value="new"${planWhere === "new" ? " selected" : ""}>A new factory</option></select>
       <span class="pl-state" id="plState"></span>
       <span class="pl-leg"><span><span class="pl-pm"><i class="run"></i></span>running</span><span data-tip="Placed in the factory, but no recipe chosen or nobody posted to it yet"><span class="pl-pm"><i class="placed"></i></span>placed, not running</span><span><span class="pl-pm"><i class="todo"></i></span>to place</span></span>
-      ${why("The steppers set the finished layout. Machines already placed count as built; a placed machine with no recipe or nobody posted counts as built but not running, so a half-built factory reads right without anything to type.")}
+      ${why("The steppers set the finished layout of the factory it is built at, starting from what it runs now, or from nothing at a new factory. Machines already placed there count as built; a placed machine with no recipe or nobody posted counts as built but not running, so a half-built factory reads right without anything to type.")}
     </div>
     <div class="planstats">
       <div class="planstat"><span class="lab">Machines</span><div class="v" id="vMachines"></div></div>
@@ -11133,7 +11142,8 @@ function drawPlan(){
           : `You do not run a ${low} yet, so nothing here is measured: everything made, <b id="vSurplus"></b> units a week, is surplus for export until the shops exist.`}<span id="vShort"></span></p>
     <div class="pl-save" id="plSave"></div>
     <div class="pl-fill" id="plFill"></div>`;
-  $("plWhere").onchange = e => { planWhere = e.target.value; planPaintSave(); };
+  /* Another factory is another layout: its own machines seed the steppers. */
+  $("plWhere").onchange = e => { planWhere = e.target.value; planCounts = {}; planOpens = null; drawPlan(); wireAll(); };
   planDraw();
   wireTips();
 }
