@@ -346,7 +346,7 @@ test('the box and its reset say what they hold in each state', async () => {
 test('the imports table scrolls inside its box, not the page, on a phone', async () => {
   const page = await board({width: 390});
   try{
-    const sizes = await page.evaluate(() => ({page: document.documentElement.scrollWidth, view: innerWidth}));
+    const sizes = await page.evaluate(() => ({page: document.documentElement.scrollWidth, view: document.documentElement.clientWidth}));
     assert.ok(sizes.page <= sizes.view, JSON.stringify(sizes));
   } finally { await page.close(); }
 });
