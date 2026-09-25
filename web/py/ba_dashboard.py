@@ -14738,8 +14738,19 @@ dialog.hs-sheet::backdrop{background:#000;opacity:.45}
   .hs-quick{order:2}
   .hs-fsum{margin-left:0;flex-basis:100%}
   .hs-t .opt{display:none}
-  .hs-t td.act .hs-btn{padding:0 9px}
-  .hs-t td.act .hs-btn .t{display:none}
+  /* Open places on a phone: a card a role, its action under it. */
+  .hs-roles thead{display:none}
+  .hs-roles,.hs-roles tbody,.hs-roles tfoot{display:block;width:100%}
+  .hs-roles tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px 12px;padding:12px 0;border-bottom:1px solid var(--rule-soft)}
+  .hs-roles tr.has-sub{border-bottom:0;padding-bottom:6px}
+  .hs-roles tr.hs-subrow{display:block;padding:0 0 12px}
+  .hs-roles td{display:block;padding:0;border:0;text-align:left;white-space:normal;min-width:0}
+  .hs-roles td.hs-rn{grid-column:1/-1}
+  .hs-roles td[data-l]::before{content:attr(data-l);display:block;margin-bottom:3px;font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+  .hs-roles td.act{grid-column:1/-1;width:auto;padding:2px 0 0;text-align:left}
+  .hs-roles td.act:empty,.hs-roles tfoot td:empty{display:none}
+  .hs-roles tfoot tr{border-bottom:0}
+  .hs-roles tfoot td.l{grid-column:1/-1}
   .hs-t th,.hs-t td{padding:10px 8px}
   .hs-re label{margin-left:0}
   .hs-pay{grid-template-columns:minmax(0,1fr);gap:24px}
@@ -22458,8 +22469,8 @@ function hrRoleRow(m, r, lines){
     <td class="l hs-rn"><b>${hrRole(r.skill)}</b><small>${hrWhere(sites)}</small></td>
     <td class="num opt">${hrNum(r.weeks.length)}</td>
     <td class="${r.moved ? "num" : "dim"} opt">${r.moved ? hrNum(r.moved) : "–"}</td>
-    <td class="${people.length ? "num" : r.short ? "warn" : "dim"}">${hrNum(people.length)}${people.length ? `<small>${Math.round(avg(c => hrLevel(c, r.skill)))}% · ${hrWage(Math.round(avg(c => Number(c.wage) || 0)))}/h</small>` : ""}</td>
-    <td class="${r.short ? "warn" : "dim"}">${r.short ? hrNum(r.short) : "–"}</td>
+    <td class="${people.length ? "num" : r.short ? "warn" : "dim"}" data-l="New hires">${hrNum(people.length)}${people.length ? `<small>${Math.round(avg(c => hrLevel(c, r.skill)))}% · ${hrWage(Math.round(avg(c => Number(c.wage) || 0)))}/h</small>` : ""}</td>
+    <td class="${r.short ? "warn" : "dim"}" data-l="Stays open">${r.short ? hrNum(r.short) : "–"}</td>
     <td class="${bill ? "num" : "dim"} opt">${bill ? `+${fmt(bill)}` : "–"}</td>${act}</tr>`;
   return row + (lines ? `<tr class="hs-subrow"><td class="l" colspan="7">${lines}</td></tr>` : "");
 }
@@ -22502,7 +22513,7 @@ function hrOpenHtml(m){
   return `${head}${hrFbar("", f, `<b>${hrNum(match)}</b> match`)}${shopPt ? `<p class="hs-note hs-shops">Part-time is left out for shop roles only.</p>` : ""}
     <div class="hs-scroll"><table class="hs-t hs-roles"><thead><tr><th class="l">Role</th><th class="opt">Open</th><th class="opt">Own staff</th><th>New hires</th><th>Stays open</th><th class="opt">Wages/day</th><th><span class="gw-sr">Change picks</span></th></tr></thead>
     <tbody>${m.roles.map(r => hrRoleRow(m, r, lines(r.skill))).join("")}${stray ? `<tr class="hs-subrow"><td class="l" colspan="7">${stray}</td></tr>` : ""}</tbody>
-    <tfoot><tr><td class="l">Total</td><td class="opt">${hrNum(t.needed)}</td><td class="opt">${hrNum(own)}</td><td>${hrNum(t.hire)}</td><td class="${t.short ? "warn" : ""}">${hrNum(t.short)}</td><td class="opt">+${fmt(t.bill)}</td><td></td></tr></tfoot></table></div>
+    <tfoot><tr><td class="l">Total</td><td class="opt">${hrNum(t.needed)}</td><td class="opt">${hrNum(own)}</td><td data-l="New hires">${hrNum(t.hire)}</td><td class="${t.short ? "warn" : ""}" data-l="Stays open">${hrNum(t.short)}</td><td class="opt">+${fmt(t.bill)}</td><td></td></tr></tfoot></table></div>
     ${facts}`;
 }
 /* "When you hire": what the button does, in numbers, then the button, then

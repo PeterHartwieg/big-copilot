@@ -1174,6 +1174,25 @@ test('Part-time is left out by default for shop roles only', async (t) => {
   assert.deepEqual(kept, [['ba:jobdemand_nonights', PT], []]);
 });
 
+test('at 390 px every role, its Change picks and its reassign line are on screen', async (t) => {
+  const page = await board(t, {viewport: {width: 390, height: 844}});
+  const out = await page.evaluate(() => {
+    const vw = document.documentElement.clientWidth;
+    const off = el => { const r = el.getBoundingClientRect(); return r.left < 0 || r.right > vw; };
+    const rows = [...document.querySelectorAll('#hsOpen tr[data-hr-role]')];
+    return {rows: rows.length, buttons: document.querySelectorAll('#hsOpen [data-hr-open]').length,
+      off: [...document.querySelectorAll('#hsOpen [data-hr-open], #hsOpen .hs-re, #hsOpen td.hs-rn, #hsOpen td.act')].filter(off).map(e => e.outerHTML.slice(0, 60)),
+      table: (() => { const s = document.querySelector('#hsOpen .hs-scroll'); return s.scrollWidth - s.clientWidth; })()};
+  });
+  assert.equal(out.rows, 4);
+  assert.equal(out.buttons, 4);
+  assert.deepEqual(out.off, [], 'nothing past the right edge');
+  assert.ok(out.table <= 0, `the table scrolls sideways by ${out.table}px`);
+  // The button is the role's own, under it, and opens its Change picks.
+  await page.locator(`[data-hr-open="${CS}"]`).click();
+  assert.equal(await page.locator('#hsSheet').getAttribute('data-hr-drawer'), CS);
+});
+
 test('at phone width the page has no sideways scroll, Change picks open', async (t) => {
   const page = await board(t, {viewport: {width: 375, height: 812}});
   const wide = () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
