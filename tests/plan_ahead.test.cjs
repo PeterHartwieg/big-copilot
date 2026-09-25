@@ -331,7 +331,7 @@ test('once the import has landed there is no first fill, on Supply or on the pla
   } finally { await page.close(); }
 });
 
-test('extending one of two factories tops it up for the increase, other ranges included', async () => {
+test('extending one of two factories counts that factory alone and tops it up for its increase', async () => {
   const data = fixture();
   const TWO = 'ba:street_mill#3';
   data.businesses.push(site(TWO, 'Factory Two', 'support', 'Factory', []));
@@ -344,11 +344,21 @@ test('extending one of two factories tops it up for the increase, other ranges i
   f.sites[0].needs[0].perDay = 3880;
   const page = await board({data});
   try{
-    await planPage(page);
+    // The steppers are the chosen factory's: Factory Two's four machines seed it.
+    await page.evaluate(() => { document.querySelectorAll('.page').forEach(el => { el.hidden = el.id !== 'pageGrowth'; });
+      planType = 'ba:businesstype_electronicsstore'; planCounts = {}; planWhere = null; planWhereType = null; drawPlan(); wireAll(); });
+    await page.selectOption('#plWhere', 'ba:street_mill#3');
+    assert.equal(await page.getAttribute('tr.line[data-slug="watch"]', 'data-m'), '4');
+    assert.equal((await page.textContent('#plState')).replace(/\s+/g, ' ').trim(), '4 planned · 4 placed · 4 running');
+    // Back at the first factory: its own two, its own three empty machines.
     await page.selectOption('#plWhere', FACTORY);
+    assert.equal(await page.getAttribute('tr.line[data-slug="watch"]', 'data-m'), '2');
+    await page.evaluate(() => { planCounts = {watch: 12}; drawPlan(); wireAll(); });
+    assert.equal((await page.textContent('#plState')).replace(/\s+/g, ' ').trim(), '12 planned · 5 placed · 2 running');
     await page.click('#plSaveBtn');
-    // Twelve in all, six placed across both: the first factory takes six more.
-    assert.deepEqual(await rowsOf(page, 'Factory daily top-ups'), [['Capacitors', 1, 3000, 14400], ['Battery', 1, 1500, 6630]]);
+    // Twelve at the first factory, two placed there: it takes ten more, on top of
+    // what its lines eat now (another range's 1,000 capacitors included).
+    assert.deepEqual(await rowsOf(page, 'Factory daily top-ups'), [['Capacitors', 1, 3000, 21030], ['Battery', 1, 1500, 9940]]);
     assert.equal(await page.evaluate(() => supplyFact(2, 'cap')), null);
   } finally { await page.close(); }
 });
@@ -607,5 +617,36 @@ test('a factory importing an input itself keeps its own contract beside a larger
     assert.deepEqual(f, [50000, raised]);
     assert.deepEqual((await rowsOf(page, 'Weekly imports')).filter(r => r[0] === 'Capacitors'), [['Capacitors', 1, 50000, raised]]);
     assert.deepEqual((await rowsOf(page, 'Factory daily top-ups')).filter(r => r[0] === 'Capacitors'), []);
+  } finally { await page.close(); }
+});
+
+/* The QA round: the steppers are the chosen factory's layout. */
+test('a new factory starts at nothing and counts only its own machines', async () => {
+  const page = await board();
+  try{
+    await planPage(page);
+    await page.selectOption('#plWhere', 'new');
+    assert.equal(await page.getAttribute('tr.line[data-slug="watch"]', 'data-m'), '0');
+    assert.equal((await page.textContent('#plState')).replace(/\s+/g, ' ').trim(), '0 planned · 0 placed · 0 running');
+    assert.equal(await page.isDisabled('#plSaveBtn'), true);
+    for(let i = 0; i < 9; i++) await page.click('tr.line[data-slug="watch"] .step a[data-d="1"]');
+    // The company's existing factory runs two: none of them is this one's.
+    assert.equal((await page.textContent('#plState')).replace(/\s+/g, ' ').trim(), '9 planned · 0 placed · 0 running');
+    assert.equal(await page.isDisabled('#plSaveBtn'), false);
+    await page.click('#plSaveBtn');
+    const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key))[0], STORE);
+    assert.deepEqual([saved.factory, saved.counts, saved.inputs.cap.week], [null, {watch: 9}, 90720]);
+    // No factory yet, so no top-ups: the imports and the first fill only.
+    assert.deepEqual(await rowsOf(page, 'Factory daily top-ups'), []);
+    assert.deepEqual((await planRows(page)).map(r => r[0]), ['Weekly imports', 'Before the next delivery']);
+    // A factory built after saving runs all nine: the plan clears.
+    const after = fixture();
+    after.businesses.push(site('ba:street_new#9', 'Factory New', 'support', 'Factory', []));
+    const built = JSON.parse(JSON.stringify(after.supply.factories.sites[0]));
+    Object.assign(built, {s: 2, machines: 9, running: 9, unnamed: [], needs: [], targets: {}});
+    Object.assign(built.lines[0], {machines: 9, running: 9});
+    after.supply.factories.sites.push(built);
+    const cleared = await page.evaluate(data => { D = data; sbStamp++; return [planOverlay(), planSaved()]; }, after);
+    assert.deepEqual(cleared, [null, null]);
   } finally { await page.close(); }
 });

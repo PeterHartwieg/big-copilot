@@ -198,7 +198,10 @@ for(const smart of [true, false]){
       const water = await page.evaluate(plan => {
         D = {meta: {character: 'plan-fixture', save: 'Fixture', day: 10}, businesses: [],
           supply: {shops: [], idle: [], imports: [], factories: {sites: [], depots: {}, depotOther: {}}}, plan};
-        planType = 'ba:businesstype_gym'; drawPlan();
+        // A new factory starts at nothing: one machine on each line to plan.
+        planType = 'ba:businesstype_gym';
+        planCounts = Object.fromEntries(plan.catalogue['ba:businesstype_gym'].products.map(p => [p, 1]));
+        drawPlan();
         const meta = JSON.parse(document.querySelector('[data-ingmeta]').dataset.ingmeta);
         const row = [...document.querySelectorAll('#ingBody tr')].find(tr => tr.dataset.name === 'Water');
         return {tip: meta.Water.tip, cell: row ? row.cells[5].textContent.replace(/\s+/g, ' ').trim() : null};
