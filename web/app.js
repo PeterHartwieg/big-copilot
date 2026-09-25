@@ -1894,6 +1894,7 @@
     // which choice of source the board is from, new with each.
     link: () => (linkUrl && linkHealth ? {writes: linkWrites(), character: linkHealth.character || "",
       company: linkHealth.company || "", day: linkHealth.day, hour: linkHealth.hour, minute: linkHealth.minute,
+      mod: typeof linkHealth.modVersion === "string" ? linkHealth.modVersion : "",
       approved: !!approvalToken(linkUrl), stamp: lastLinkStamp, source: sourceGen} : null),
     // Resolves to {status, error, body}; see gameWrite().
     write: (kind, body, opts) => gameWrite(kind, body, opts),

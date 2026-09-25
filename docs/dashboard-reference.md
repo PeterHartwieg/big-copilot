@@ -183,11 +183,16 @@ the map.
     met is a warning, never a reason to skip the person.
   - A site accepts the roles the game lets you assign there: the business type's own,
     cleaning in a shop, office, cinema or theatre, security where theft is possible.
+  - *Part-time* is left out by default for every role hired into a shop: a shop's plan
+    gives full weeks. The filter bar's "Leave out who asks for" list takes it back.
+  - *Quick hire* hires the best matches for one role at any site (headquarters and
+    warehouses included), from the candidates the open places have not picked. At a site
+    with a plan they get the plan's open weeks in that role; past those, and at a site
+    with no plan, they join with no hours.
 
-  Payroll's tables stay at the foot of Staff. They name two wage figures: "at today's
-  rates" is every hourly wage times its assigned weekly hours over seven, "booked
-  yesterday" is what the statements recorded (the Portfolio's Wages total); its ? names
-  the sites where the two differ. There is no debt page; loans cap at $2M, which is
+  *Current staff* (Payroll) stays at the foot of Staff. It names two wage figures:
+  "Wages a day" is every hourly wage times its assigned weekly hours over seven,
+  "Booked yesterday" is what the statements recorded (the Portfolio's Wages total). There is no debt page; loans cap at $2M, which is
   beside the point at this stage.
 
 - **Wiki**: browse the game's help without loading a save, starting with a shelf

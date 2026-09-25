@@ -102,15 +102,36 @@ Both themes: the `dark` Tweak on every artboard.
 Vocabulary: "reassign", never "move"; "expire", never "leave the list"; "open" / "stays open",
 never "short"; "match", never "pass".
 
+## Peter's decisions on top of the canvas (25 Sep 2026)
+
+1. **Order panel layout**, minimal text: numbers and a few words; no paragraphs, no "?" hovers,
+   no pills.
+2. **Change picks** is a panel over the page.
+3. **Quick hire** replaces the Headquarters and warehouses table: Role · At (any site: HQ,
+   warehouse, office, factory, shop) · How many · Skill at least · Leave out who asks for. Live
+   match count; the best N are picked automatically (the list opens on demand). Fewer matches
+   than asked: the button drops to the match count ("Hire 3") and the line says how many short.
+   No wage field. Same `/write/hire` call; no mod change.
+4. **Quick hire hours**: at a shop (or any site with a staffing plan) people get hours from that
+   site's plan, the plan's open hours for that role, by the same mechanism as planned hires'
+   `hireWeeks`. No open hours for that role in the plan, or no plan at the site (HQ,
+   warehouse): assigned with no hours.
+5. **Default demand filter**: Part-time left out for every role hired into a shop, pre-selected
+   in the dropdown, with the one short line saying so.
+6. **Wording**: the table above, exactly.
+7. **Also fixed**: the `#staff` hash (and search) open Company > Staff; the hash used to land on
+   Today (`PAGE_ALIASES` had no `staff`).
+
 ## Still open
 
-1. **Quick hire at a shop**: hours from the plan (drawn in the decision above), or always no
-   hours, like HQ?
-2. **Quick hire fewer than asked**: "Hire 3" when only 3 match (proposed), or keep "Hire 5"
-   disabled?
-3. **Wage filter in Quick hire**: left out as Peter's example needs none. Add "Wage at most"?
-4. **Part-time default for shops**: does "shop roles" mean every role at a shop, or only
-   Customer Service and Cleaning? Drawn as every role hired into a shop.
+Nothing. Answered on 25 Sep 2026:
+
+- Quick hire at a shop: hours from the plan's open hours for that role; none when there are
+  none (decision 4).
+- Fewer than asked: "Hire 3", with how many short (decision 3).
+- Wage filter in Quick hire: not added (decision 3).
+- Part-time default: every role hired into a shop, not only Customer Service and Cleaning
+  (decision 5).
 
 ## Porting note
 

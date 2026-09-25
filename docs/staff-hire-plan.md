@@ -305,6 +305,12 @@ are written only for people this call assigns; "Not planned" opens the HQ/wareho
 even for a skill a planned site hires; a body over 2 MiB (the mod's hire cap) is named before
 anything is sent.
 
+Second design (25 Sep 2026, mockup/staff-hire-v2): the page is an "Open places" table and a
+"When you hire" panel with one button; Change picks opens one role over the page; the "Not
+planned" table and the hand pick are replaced by Quick hire (any role, any site, the best N
+matches, plan hours at a planned site, none at HQ/warehouses) on the same `/write/hire` call;
+Part-time is left out by default for shop roles. The page's classes are `hs-`.
+
 New classes are `hr-`; `web/app.js` needs no change for a new kind (`gameWrite`, `wellFormed`
 are generic); the board's `GW_DOES`, `GW_NOUN`, `GW_REFUSE` tables get the `hire` entries.
 

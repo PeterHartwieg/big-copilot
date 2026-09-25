@@ -116,6 +116,17 @@ test('the old #payroll hash, #secPayroll and a remembered Payroll open Staff', (
   assert.equal(b.sub('company'), 'staff');
 });
 
+/* Staff is a Company view, so its own name as a hash opens it rather than
+   leaving the board on Today. */
+test('the #staff hash opens Company on Staff', () => {
+  const b = board();
+  b.context.location.hash = '#staff';
+  b.boot();
+  assert.equal(b.page(), 'company');
+  assert.equal(b.sub('company'), 'staff');
+  assert.equal(vm.runInContext('pageFromHash("staff")', b.context), 'company');
+});
+
 test('the site panel decides its own visibility when a Company view arrives', () => {
   const b = board();
   const before = b.sitePanels();

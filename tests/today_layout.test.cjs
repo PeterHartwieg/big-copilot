@@ -117,22 +117,22 @@ test('below the gate and switched off are two lines, each with its own show', as
 test('Payroll, at the foot of Staff, says what was booked yesterday, $0 included, once a day has finished', async () => {
   const page = await today(1440);
   try {
-    const quiet = await page.evaluate(() => {
+    const facts = await page.evaluate(() => {
       Object.assign(D.staff, {total: 2, roles: [{role: 'Cashier', count: 2, cost: 8800}],
                               avgSatisfaction: 90, unhappy: 0, absent: 0, complaining: 0});
       const read = wageBill => {
         D.kpi.wageBill = wageBill; drawStaff();
-        return document.querySelector('#hrPayroll .sechead .quiet').textContent;
+        return [...document.querySelectorAll('#hrPayroll .facts > div')].slice(0, 3).map(r => r.textContent).join(' · ');
       };
       const out = [read(9000), read(0)];
       D.daily = []; out.push(read(0));
       return out;
     });
-    assert.deepEqual(quiet, [
-      "2 people · $8,800/day at today's rates · $9,000 booked yesterday",
-      "2 people · $8,800/day at today's rates · $0 booked yesterday",
+    assert.deepEqual(facts, [
+      'People2 · Wages a day$8,800 · Booked yesterday$9,000',
+      'People2 · Wages a day$8,800 · Booked yesterday$0',
       // No finished day: there is no yesterday to have booked anything.
-      "2 people · $8,800/day at today's rates",
+      'People2 · Wages a day$8,800 · Satisfaction90%',
     ]);
   } finally { await page.close(); }
 });

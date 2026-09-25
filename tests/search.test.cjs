@@ -1019,6 +1019,18 @@ test('By weekday is found by the old section\'s name and opens the chart on it',
   } finally { await page.close(); }
 });
 
+test('Staff is found by its name and opens Company on Staff, not Today', async () => {
+  const page = await board();
+  try {
+    await page.keyboard.press('/');
+    await typed(page, 'staff');
+    assert.equal(await lit(page), 'Staff');
+    await page.keyboard.press('Enter');
+    assert.deepEqual(await page.evaluate(() => [page, sub.company, $('secStaff').hidden]), ['company', 'staff', false]);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
 // --- integration review round 1 ---------------------------------------------------------
 
 test("a site's page opened from the map over the palette takes the palette down, and the crumb names the page under it", async () => {

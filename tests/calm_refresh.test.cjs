@@ -173,7 +173,8 @@ test('what a refresh redraws on a view out of sight is there on the way back', a
   // Staff has been seen: its Payroll role cards arrived.
   await page.evaluate(() => { showPage('company'); showSub('company', 'staff'); });
   await settle(page);
-  assert.ok(await page.locator('#secStaff .role.rv.in').count() > 0, 'the fixture has role cards');
+  assert.ok(await page.locator('#secStaff #hrPayroll .role').count() > 0, 'the fixture has role cards');
+  assert.equal(await page.locator('#secStaff .rv:not(.in)').count(), 0, 'everything on Staff has arrived');
   await page.evaluate(() => showPage('today'));
   await settle(page);
   await page.evaluate(() => { window.calmOld = document.querySelector('#secStaff .role'); });
@@ -235,17 +236,17 @@ test('a refresh on Today draws Today; every other page waits for its visit and o
   const standing = () => page.evaluate(() =>
     Object.fromEntries(Object.entries(calmOld).map(([k, el]) => [k, !!el && el.isConnected])));
   await mark();
-  assert.match(await page.locator('#hrPayroll').textContent(), /\b3 people\b/);
+  assert.match(await page.locator('#hrPayroll .facts').textContent(), /^People3Wages a day/);
 
   // (a) The refresh redraws Today and leaves the other pages' markup alone.
   await deliver(page, later);
   assert.match(await page.locator('#kpis').innerText(), /25,000/, 'Today has the new cash');
   assert.deepEqual(await standing(), {kpis: false, payroll: true, portfolio: true, stock: true, market: true});
-  assert.match(await page.locator('#hrPayroll').textContent(), /\b3 people\b/, 'Staff waits for its visit');
+  assert.match(await page.locator('#hrPayroll .facts').textContent(), /^People3Wages a day/, 'Staff waits for its visit');
 
   // (b) By the nav: Company opens on Staff, drawn for the new numbers.
   await page.click('#nav a[data-id="company"]');
-  assert.match(await page.locator('#hrPayroll').textContent(), /\b4 people\b/);
+  assert.match(await page.locator('#hrPayroll .facts').textContent(), /^People4Wages a day/);
   assert.deepEqual(await motion(page), still, 'a view seen before comes back already arrived');
   let [shown, redrawn] = await asRedrawn(page);
   assert.equal(shown, redrawn);
@@ -338,7 +339,7 @@ test('a draw that throws on the way in leaves the view out of date, not the read
   assert.equal(await page.locator('#pageToday').isHidden(), true);
   assert.equal(await stale(), true, 'the view is still out of date');
   assert.ok(messages.some(m => /payroll broke/.test(m)), messages.join('\n'));
-  assert.match(await page.locator('#hrPayroll').textContent(), /\b3 people\b/);
+  assert.match(await page.locator('#hrPayroll .facts').textContent(), /^People3Wages a day/);
   // The view shows the save before; the Live dot says so.
   assert.deepEqual(await liveDot(page), {stale: true, says: 'Stale', why: 'payroll broke'});
 
@@ -346,7 +347,7 @@ test('a draw that throws on the way in leaves the view out of date, not the read
   await page.click('#nav a[data-id="today"]');
   await page.click('#nav a[data-id="company"]');
   assert.equal(await stale(), false);
-  assert.match(await page.locator('#hrPayroll').textContent(), /\b4 people\b/, 'drawn on the next visit');
+  assert.match(await page.locator('#hrPayroll .facts').textContent(), /^People4Wages a day/, 'drawn on the next visit');
   assert.deepEqual(await liveDot(page), {stale: false, says: 'LIVE', why: ''});
 });
 
