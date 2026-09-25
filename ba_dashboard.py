@@ -3001,18 +3001,32 @@ def _ordinal(n: int) -> str:
     return f"{n}{last}"
 
 
-def _smart_words(level, plain_after, plain_before=0) -> str:
-    """A Smart Delivery setting in words, as the findings say it. A plain
-    amount delivered first that already reaches the level leaves the level
-    nothing to bring, and says so."""
-    before = (
-        f", but the {plain_before:,} a week delivered before it already "
-        f"{'passes' if plain_before > level else 'reaches'} the {level:,} level"
-        if plain_before >= level
-        else f", counting the {plain_before:,} a week delivered before it"
-    ) if plain_before else ""
-    return (f"Smart Delivery keeps {level:,} in stock" + before
-            + (f", plus {plain_after:,} a week on top" if plain_after else ""))
+def _smart_words(level, plain_after, plain_before=0):
+    """A Smart Delivery setting in words, as the findings say it (a msg()). A
+    plain amount delivered first that already reaches the level leaves the
+    level nothing to bring, and says so."""
+    said = dict(level=level, before=plain_before, after=plain_after)
+    if plain_before and plain_before > level:
+        if plain_after:
+            return msg("f.smart.passes.plus", "Smart Delivery keeps {level:,} in stock, but the {before:,} a week "
+                       "delivered before it already passes the {level:,} level, plus {after:,} a week on top", **said)
+        return msg("f.smart.passes", "Smart Delivery keeps {level:,} in stock, but the {before:,} a week "
+                   "delivered before it already passes the {level:,} level", **said)
+    if plain_before and plain_before == level:
+        if plain_after:
+            return msg("f.smart.reaches.plus", "Smart Delivery keeps {level:,} in stock, but the {before:,} a week "
+                       "delivered before it already reaches the {level:,} level, plus {after:,} a week on top", **said)
+        return msg("f.smart.reaches", "Smart Delivery keeps {level:,} in stock, but the {before:,} a week "
+                   "delivered before it already reaches the {level:,} level", **said)
+    if plain_before:
+        if plain_after:
+            return msg("f.smart.counting.plus", "Smart Delivery keeps {level:,} in stock, counting the {before:,} a "
+                       "week delivered before it, plus {after:,} a week on top", **said)
+        return msg("f.smart.counting", "Smart Delivery keeps {level:,} in stock, counting the {before:,} a week "
+                   "delivered before it", **said)
+    if plain_after:
+        return msg("f.smart.plus", "Smart Delivery keeps {level:,} in stock, plus {after:,} a week on top", **said)
+    return msg("f.smart", "Smart Delivery keeps {level:,} in stock", **said)
 
 
 def _import_drop(stock, drops):
@@ -10935,6 +10949,15 @@ def _shelf_notes(businesses: list, supply: dict, silent: set, mode: str = "cap")
     return notes
 
 
+def _msg_list(items: list):
+    """Several names or phrases as one list, "a, b, c", that stays a message:
+    a nested "{a}, {b}" per comma, so a translation can join its own way. One
+    item is itself."""
+    if len(items) == 1:
+        return items[0]
+    return msg("f.list", "{a}, {b}", a=items[0], b=_msg_list(items[1:]))
+
+
 def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap") -> list:
     """A line an import brings, when its week or its stock falls short.
 
@@ -10966,9 +10989,9 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
                     named = tok(slug, item)
                     notes.append(_finding(
                         "critical", b["name"], "topup",
-                        f"{named} is topped up to {fact['have']:,} a day against the "
-                        f"{fact['use']:,} its busiest day sends on; raise the top-up to "
-                        f"{fact['setTo']:,}",
+                        msg("f.topup", "{item} is topped up to {have:,} a day against the {use:,} its busiest day "
+                            "sends on; raise the top-up to {set:,}",
+                            item=named, have=fact["have"], use=fact["use"], set=fact["setTo"]),
                         key=b["key"], rank=round(fact["have"] / fact["use"], 2) if fact["use"] else 0,
                         subject=item, named=named, ev={"slug": slug}))
                 continue
@@ -10995,13 +11018,23 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
             if st == "short" and fact["role"] == "depot" and fact.get("wholesale"):
                 # A depot a wholesale store delivers to: its contract, said on
                 # the depot's own page (Weekly imports does not list it).
+                said = dict(item=named, have=fact["have"], use=fact["use"], route=parts.get("route"),
+                            set=fact.get("setTo"))
+                if parts.get("route") and fact.get("setTo"):
+                    text = msg("f.depot.wholesale.route.raise", "{item}'s wholesale delivery brings {have:,} a week "
+                               "against {use:,} used beyond the {route:,} a week a route brings; raise the contract "
+                               "to {set:,}", **said)
+                elif parts.get("route"):
+                    text = msg("f.depot.wholesale.route", "{item}'s wholesale delivery brings {have:,} a week "
+                               "against {use:,} used beyond the {route:,} a week a route brings", **said)
+                elif fact.get("setTo"):
+                    text = msg("f.depot.wholesale.raise", "{item}'s wholesale delivery brings {have:,} a week "
+                               "against {use:,} used; raise the contract to {set:,}", **said)
+                else:
+                    text = msg("f.depot.wholesale", "{item}'s wholesale delivery brings {have:,} a week against "
+                               "{use:,} used", **said)
                 notes.append(_finding(
-                    fact["lvl"], site, "wholesale",
-                    f"{named}'s wholesale delivery brings {fact['have']:,} a week against "
-                    f"{fact['use']:,} used"
-                    + (f" beyond the {parts['route']:,} a week a route brings"
-                       if parts.get("route") else "")
-                    + (f"; raise the contract to {fact['setTo']:,}" if fact.get("setTo") else ""),
+                    fact["lvl"], site, "wholesale", text,
                     key=key, rank=round(fact["have"] / fact["use"], 2) if fact["use"] else 0,
                     subject=item, named=named, ev=ev))
                 continue
@@ -11009,24 +11042,51 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
                                  entry.get("plainBefore", 0)) if entry.get("smart") else ""
             if parts.get("lines") or fact["role"] == "input":
                 if st == "paused":
-                    text = f"{named} import is paused; resume the contract supplying {site}"
+                    text = msg("f.import.paused.resume", "{item} import is paused; resume the contract supplying "
+                               "{site}", item=named, site=site)
                 elif st == "noplan":
                     stock = next((l["units"] for l in b["lines"] if l["slug"] == slug), 0)
-                    weeks = stock / fact["use"] if fact["use"] else 0
-                    who = "the factories eat" if not parts.get("sites") else "the factories and other sites draw"
-                    text = (f"{named} has no standing import; {site} holds {stock:,}, "
-                            f"{weeks:.1f} weeks of the {fact['use']:,} a week {who}"
-                            + (f" beyond the {parts['route']:,} a week a route brings"
-                               if parts.get("route") else ""))
+                    said = dict(item=named, site=site, stock=stock, use=fact["use"], route=parts.get("route"),
+                                weeks=stock / fact["use"] if fact["use"] else 0)
+                    # The factories alone, or other sites drawing on it too;
+                    # and a route bringing part of the week, or not.
+                    if not parts.get("sites") and parts.get("route"):
+                        text = msg("f.import.noplan.route", "{item} has no standing import; {site} holds {stock:,}, "
+                                   "{weeks:.1f} weeks of the {use:,} a week the factories eat beyond the {route:,} a "
+                                   "week a route brings", **said)
+                    elif not parts.get("sites"):
+                        text = msg("f.import.noplan", "{item} has no standing import; {site} holds {stock:,}, "
+                                   "{weeks:.1f} weeks of the {use:,} a week the factories eat", **said)
+                    elif parts.get("route"):
+                        text = msg("f.import.noplan.sites.route", "{item} has no standing import; {site} holds "
+                                   "{stock:,}, {weeks:.1f} weeks of the {use:,} a week the factories and other sites "
+                                   "draw beyond the {route:,} a week a route brings", **said)
+                    else:
+                        text = msg("f.import.noplan.sites", "{item} has no standing import; {site} holds {stock:,}, "
+                                   "{weeks:.1f} weeks of the {use:,} a week the factories and other sites draw",
+                                   **said)
                 elif entry.get("smart"):
-                    text = (f"{named}: this import needs to cover {fact['use']:,} a week and "
-                            f"{smart}; raise the Smart Delivery stock"
-                            + (f" at {entry['levelName']}" if entry.get("levelName") else "")
-                            + (f" to {fact['setTo']:,}" if fact.get("setTo") else ""))
+                    said = dict(item=named, use=fact["use"], smart=smart, at=entry.get("levelName"),
+                                set=fact.get("setTo"))
+                    if entry.get("levelName") and fact.get("setTo"):
+                        text = msg("f.import.smart.at.raise", "{item}: this import needs to cover {use:,} a week and "
+                                   "{smart}; raise the Smart Delivery stock at {at} to {set:,}", **said)
+                    elif entry.get("levelName"):
+                        text = msg("f.import.smart.at", "{item}: this import needs to cover {use:,} a week and "
+                                   "{smart}; raise the Smart Delivery stock at {at}", **said)
+                    elif fact.get("setTo"):
+                        text = msg("f.import.smart.raise", "{item}: this import needs to cover {use:,} a week and "
+                                   "{smart}; raise the Smart Delivery stock to {set:,}", **said)
+                    else:
+                        text = msg("f.import.smart", "{item}: this import needs to cover {use:,} a week and "
+                                   "{smart}; raise the Smart Delivery stock", **said)
+                elif fact.get("setTo"):
+                    text = msg("f.import.order.raise", "{item}: this import needs to cover {use:,} a week and the "
+                               "import order is {order:,}; raise it to {set:,}",
+                               item=named, use=fact["use"], order=entry.get("weekly", 0), set=fact["setTo"])
                 else:
-                    text = (f"{named}: this import needs to cover {fact['use']:,} a week and the "
-                            f"import order is {entry.get('weekly', 0):,}"
-                            + (f"; raise it to {fact['setTo']:,}" if fact.get("setTo") else ""))
+                    text = msg("f.import.order", "{item}: this import needs to cover {use:,} a week and the import "
+                               "order is {order:,}", item=named, use=fact["use"], order=entry.get("weekly", 0))
                 notes.append(_finding(fact["lvl"], site, "feed", text, key=key,
                                       rank=-round(fact["use"] / 7), subject=item, named=named, ev=ev))
                 continue
@@ -11034,43 +11094,65 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
                 continue  # a depot only shops draw on: their shelves say it
             cover = row["cover"] if row else 0
             if st == "paused":
-                text = (f"{named} import is paused: {cover:.0f} days left at "
-                        f"{row.get('importPerDay', row['perDay']):,}/day"
-                        if row else f"{named} import is paused")
+                # round() is what {cover:.0f} printed, and a whole number
+                # picks the plural a translation needs.
+                text = (msg("f.paused", {"one": "{item} import is paused: {n} days left at {rate:,}/day",
+                                         "other": "{item} import is paused: {n} days left at {rate:,}/day"},
+                            item=named, n=round(cover), rate=row.get("importPerDay", row["perDay"]))
+                        if row else msg("f.paused.bare", "{item} import is paused", item=named))
                 notes.append(_finding(fact["lvl"], site, "paused", text,
                                       key=key, rank=cover, subject=item, named=named, ev=ev))
                 continue
             brought = entry.get("weekly", 0)
-            text = ((f"{named}: {smart} against a " if entry.get("smart")
-                     else f"{named} orders {brought:,} a week against a ")
-                    + f"{fact['use']:,} week of use, {fact['use'] - brought:,} short")
+            said = dict(item=named, smart=smart, brought=brought, use=fact["use"], short=fact["use"] - brought)
             if row and row["coverFit"] == "short":
-                arrives = weekday(row.get("coverageUntil", row["arrives"])) or "the next"
-                when = f"on {row['runsOut']}" if row["runsOut"] else f"in {row['cover']} days"
-                text += (f"; already runs dry {when}, {row['shortBy']:.1f} days before "
-                         f"{arrives}'s import")
+                said.update(when=_runs_dry_when(row), by=row["shortBy"],
+                            arrives=row.get("coverageUntil", row["arrives"]))
+                text = (msg("f.order.smart.dry", "{item}: {smart} against a {use:,} week of use, {short:,} short; "
+                            "already runs dry {when}, {by:.1f} days before {arrives:day}'s import", **said)
+                        if entry.get("smart") else
+                        msg("f.order.dry", "{item} orders {brought:,} a week against a {use:,} week of use, "
+                            "{short:,} short; already runs dry {when}, {by:.1f} days before {arrives:day}'s import",
+                            **said))
+            elif entry.get("smart"):
+                text = msg("f.order.smart", "{item}: {smart} against a {use:,} week of use, {short:,} short", **said)
+            else:
+                text = msg("f.order", "{item} orders {brought:,} a week against a {use:,} week of use, {short:,} "
+                           "short", **said)
             notes.append(_finding("critical", site, "order", text,
                                   key=key, rank=cover, subject=item, named=named, ev=ev))
     return notes
 
 
+def _runs_dry_when(row: dict):
+    """When an import row's stock runs dry, as the findings say it: on its
+    weekday, or in so many days."""
+    if row["runsOut"]:
+        return msg("f.dry.on", "on {d:day}", d=WEEKDAYS.index(row["runsOut"]))
+    return msg("f.dry.in", {"one": "in {n} days", "other": "in {n} days"}, n=row["cover"])
+
+
 def _shortfall_note(row: dict, item: str, site: str, key: str) -> dict:
     """A depot's stock that will not reach its next drop, or, where a route
     brings the week, a busy day the shelf cannot carry to the next round."""
-    arrives = weekday(row.get("coverageUntil", row["arrives"])) or "the next"
-    when = f"on {row['runsOut']}" if row["runsOut"] else f"in {row['cover']} days"
     named = tok(row["slug"], item)
     # The draw the import answers for; a route's share is named, not hidden.
-    rate = f"{row.get('importPerDay', row['perDay']):,}/day" + (
-        f" beyond the {row['routed']:,}/day a route brings" if row.get("routed") else "")
+    said = dict(item=named, when=_runs_dry_when(row), routed=row.get("routed"),
+                rate=row.get("importPerDay", row["perDay"]))
     if row.get("covered"):
-        text = (f"{named} runs dry {when}, before the route's next round; a route brings "
-                f"the week's draw ({row['routed']:,}/day) but a busy day outruns the shelf"
-                + ("; the import is paused" if row["paused"] else ""))
+        text = (msg("f.shortfall.route.paused", "{item} runs dry {when}, before the route's next round; a route "
+                    "brings the week's draw ({routed:,}/day) but a busy day outruns the shelf; the import is paused",
+                    **said)
+                if row["paused"] else
+                msg("f.shortfall.route", "{item} runs dry {when}, before the route's next round; a route brings the "
+                    "week's draw ({routed:,}/day) but a busy day outruns the shelf", **said))
     else:
-        text = (f"{named} runs dry {when}, {row['shortBy']:.1f} days before "
-                f"{arrives}'s import ("
-                + (rate if row.get("routed") else f"{rate}, {row['peakPerDay']:,} at peak") + ")")
+        said.update(by=row["shortBy"], arrives=row.get("coverageUntil", row["arrives"]))
+        text = (msg("f.shortfall.routed", "{item} runs dry {when}, {by:.1f} days before {arrives:day}'s import "
+                    "({rate:,}/day beyond the {routed:,}/day a route brings)", **said)
+                if row.get("routed") else
+                msg("f.shortfall", "{item} runs dry {when}, {by:.1f} days before {arrives:day}'s import ({rate:,}/day, "
+                    "{peak:,} at peak)", peak=row["peakPerDay"], **said))
     return _finding("critical", site, "shortfall", text,
                     key=key, rank=row["cover"], subject=item, named=named, ev={"slug": row["slug"]})
 
@@ -11094,26 +11176,27 @@ def _unnamed_notes(businesses: list, factories: dict, silent: set) -> list:
             machines = sum(u["machines"] for u in rows)
             if not machines:
                 continue
-            many = machines != 1
             where = ", ".join(
                 sorted({f"{u['workstation']} #{s}" for u in rows for s in u["slots"]})
             )
             # The same places in the same order, their workstation a token.
-            spots = {f"{u['workstation']} #{s}": f"{tok(u.get('workstationKey'), u['workstation'])} #{s}"
+            spots = {f"{u['workstation']} #{s}": msg("f.unnamed.spot", "{station} #{slot}",
+                                                       station=tok(u.get("workstationKey"), u["workstation"]),
+                                                       slot=s)
                      for u in rows for s in u["slots"]}
-            shown = ", ".join(spots[w] for w in sorted(spots))
+            shown = _msg_list([spots[w] for w in sorted(spots)]) if spots else ""
             if kind == "idle":
-                text = (
-                    f"{machines} machine{'s' if many else ''} at {shown} "
-                    f"{'have' if many else 'has'} no recipe set: staffed and rented, making nothing"
-                )
+                text = msg("f.unset", {
+                    "one": "{n} machine at {spots} has no recipe set: staffed and rented, making nothing",
+                    "other": "{n} machines at {spots} have no recipe set: staffed and rented, making nothing",
+                }, n=machines, spots=shown)
             else:
-                text = (
-                    f"{machines} machine{'s' if many else ''} at {shown} "
-                    f"{'run' if many else 'runs'} a recipe without usable details. "
-                    f"Its inputs are missing from the totals; name unknown recipes or "
-                    f"load matching game text to include them"
-                )
+                text = msg("f.unnamed", {
+                    "one": "{n} machine at {spots} runs a recipe without usable details. Its inputs are missing "
+                           "from the totals; name unknown recipes or load matching game text to include them",
+                    "other": "{n} machines at {spots} run a recipe without usable details. Its inputs are missing "
+                             "from the totals; name unknown recipes or load matching game text to include them",
+                }, n=machines, spots=shown)
             notes.append(
                 _finding(
                     level, business["name"], group, text,
@@ -11186,35 +11269,48 @@ def _feed_notes(businesses: list, factories: dict, silent: set, mode: str = "cap
             row = {**base, **base["dem"]} if mode == "dem" and base.get("dem") else base
             status, why = row["status"], row.get("why")
             per_day = row.get("use", base["perDay"])
-            depot = businesses[row["from"]]["name"] if row["from"] is not None else "the depot"
+            depot = (businesses[row["from"]]["name"] if row["from"] is not None
+                     else msg("f.feed.depot", "the depot"))
             slugs = row.get("lineSlugs") or []
-            lines = ", ".join(tok(slugs[i] if i < len(slugs) else None, line)
-                              for i, line in enumerate(row["lines"][:3]))
+            lines = [tok(slugs[i] if i < len(slugs) else None, line) for i, line in enumerate(row["lines"][:3])]
             item = tok(row.get("slug"), row["item"])
+            # The paused own import is offered as the other way out, after
+            # whatever the sentence says first.
+            own = bool(row.get("ownPaused"))
+            said = dict(item=item, per=per_day, depot=depot, site=business["name"])
             if status == "noplan":
-                text = (f"{item} feeds {lines} at {per_day:,}/day "
-                        f"but no depot tops it up")
+                said.update(lines=_msg_list(lines) if lines else "")
+                text = (msg("f.feed.noplan.resume", "{item} feeds {lines} at {per:,}/day but no depot tops it up; "
+                            "or resume the paused {item} import to {site}", **said)
+                        if own else
+                        msg("f.feed.noplan", "{item} feeds {lines} at {per:,}/day but no depot tops it up", **said))
             elif status == "short" and why == "target":
-                hours = row["target"] / per_day * 24 if per_day else 0
                 raise_to = row.get("setTo", base.get("raiseTarget"))
-                text = (f"{item} top-up of {row['target']:,} covers {hours:.0f} hours "
-                        f"of a {per_day:,}/day line"
-                        + (f"; raise it to {raise_to:,}" if raise_to else ""))
+                # round() is what {hours:.0f} printed, and a whole number
+                # picks the plural a translation needs.
+                said.update(target=row["target"], n=round(row["target"] / per_day * 24 if per_day else 0),
+                            set=raise_to)
                 if row.get("stalled"):
-                    text += (f"; and none arrived last week though {depot} holds "
-                             f"{row['depotStock']:,}")
+                    said.update(stock=row["depotStock"])
+                text = _feed_target_text(bool(raise_to), bool(row.get("stalled")), own, said)
             elif status == "short" and why == "dry":
-                text = (f"{item} arrives at {row['arrives']:,}/day against "
-                        f"{per_day:,} needed and {depot} holds {row['depotStock']:,}; "
-                        f"the import is not keeping up")
+                said.update(arrives=row["arrives"], stock=row["depotStock"])
+                text = (msg("f.feed.dry.resume", "{item} arrives at {arrives:,}/day against {per:,} needed and "
+                            "{depot} holds {stock:,}; the import is not keeping up; or resume the paused {item} "
+                            "import to {site}", **said)
+                        if own else
+                        msg("f.feed.dry", "{item} arrives at {arrives:,}/day against {per:,} needed and {depot} "
+                            "holds {stock:,}; the import is not keeping up", **said))
             elif status == "stalled" and why == "notDrawn":
-                text = (f"{item} arrives at {row['arrives']:,}/day against "
-                        f"{per_day:,} needed while {depot} holds {row['depotStock']:,}; "
-                        f"the line is not drawing it")
+                said.update(arrives=row["arrives"], stock=row["depotStock"])
+                text = (msg("f.feed.notdrawn.resume", "{item} arrives at {arrives:,}/day against {per:,} needed "
+                            "while {depot} holds {stock:,}; the line is not drawing it; or resume the paused {item} "
+                            "import to {site}", **said)
+                        if own else
+                        msg("f.feed.notdrawn", "{item} arrives at {arrives:,}/day against {per:,} needed while "
+                            "{depot} holds {stock:,}; the line is not drawing it", **said))
             else:
                 continue
-            if row.get("ownPaused"):
-                text += f"; or resume the paused {item} import to {business['name']}"
             notes.append(
                 _finding(
                     row["level"], business["name"], "feed", text,
@@ -11223,6 +11319,87 @@ def _feed_notes(businesses: list, factories: dict, silent: set, mode: str = "cap
                 )
             )
     return notes
+
+
+def _feed_target_text(raise_it: bool, stalled: bool, own: bool, said: dict):
+    """_feed_notes()'s sentence for a top-up short of the line: the number to
+    raise it to, the week nothing arrived and the paused own import, each
+    where it applies. `said` holds item, target, n (the hours covered), per,
+    set, depot, stock and site."""
+    if raise_it and stalled and own:
+        return msg("f.feed.target.raise.stalled.resume", {
+            "one": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}; and none "
+                   "arrived last week though {depot} holds {stock:,}; or resume the paused {item} import to {site}",
+            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}; and "
+                     "none arrived last week though {depot} holds {stock:,}; or resume the paused {item} import to "
+                     "{site}"}, **said)
+    if raise_it and stalled:
+        return msg("f.feed.target.raise.stalled", {
+            "one": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}; and none "
+                   "arrived last week though {depot} holds {stock:,}",
+            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}; and "
+                     "none arrived last week though {depot} holds {stock:,}"}, **said)
+    if raise_it and own:
+        return msg("f.feed.target.raise.resume", {
+            "one": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}; or "
+                   "resume the paused {item} import to {site}",
+            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}; or "
+                     "resume the paused {item} import to {site}"}, **said)
+    if raise_it:
+        return msg("f.feed.target.raise", {
+            "one": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}",
+            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}"},
+            **said)
+    if stalled and own:
+        return msg("f.feed.target.stalled.resume", {
+            "one": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; and none arrived last week "
+                   "though {depot} holds {stock:,}; or resume the paused {item} import to {site}",
+            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; and none arrived last week "
+                     "though {depot} holds {stock:,}; or resume the paused {item} import to {site}"}, **said)
+    if stalled:
+        return msg("f.feed.target.stalled", {
+            "one": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; and none arrived last week "
+                   "though {depot} holds {stock:,}",
+            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; and none arrived last week "
+                     "though {depot} holds {stock:,}"}, **said)
+    if own:
+        return msg("f.feed.target.resume", {
+            "one": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; or resume the paused {item} "
+                   "import to {site}",
+            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; or resume the paused {item} "
+                     "import to {site}"}, **said)
+    return msg("f.feed.target", {
+        "one": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line",
+        "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line"}, **said)
+
+
+def _notrouted_text(one: bool, needs: bool, held: bool, said: dict):
+    """_idle_notes()'s Not routed sentence: one site or several (`who`), that
+    sell it or, with no shop among them, need it, and how long what they hold
+    lasts where that is known. `said` holds site, stock, item, who, per and
+    days."""
+    if one and needs and held:
+        return msg("f.notrouted.one.needs.held", "{site} holds {stock:,} {item} no plan sends on; {who} needs "
+                   "{per:,}/day and holds {days}", **said)
+    if one and needs:
+        return msg("f.notrouted.one.needs", "{site} holds {stock:,} {item} no plan sends on; {who} needs {per:,}/day",
+                   **said)
+    if one and held:
+        return msg("f.notrouted.one.sells.held", "{site} holds {stock:,} {item} no plan sends on; {who} sells "
+                   "{per:,}/day and holds {days}", **said)
+    if one:
+        return msg("f.notrouted.one.sells", "{site} holds {stock:,} {item} no plan sends on; {who} sells {per:,}/day",
+                   **said)
+    if needs and held:
+        return msg("f.notrouted.need.held", "{site} holds {stock:,} {item} no plan sends on; {who} need {per:,}/day "
+                   "and hold {days}", **said)
+    if needs:
+        return msg("f.notrouted.need", "{site} holds {stock:,} {item} no plan sends on; {who} need {per:,}/day",
+                   **said)
+    if held:
+        return msg("f.notrouted.sell.held", "{site} holds {stock:,} {item} no plan sends on; {who} sell {per:,}/day "
+                   "and hold {days}", **said)
+    return msg("f.notrouted.sell", "{site} holds {stock:,} {item} no plan sends on; {who} sell {per:,}/day", **said)
 
 
 def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") -> list:
@@ -11263,50 +11440,59 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
             unfed = row.get("unfed") or []
             sites = [businesses[s] for s, _per_day, _days in unfed]
             types = {b["type"] for b in sites}
-            who = (sites[0]["name"] if len(sites) == 1
-                   else f"{len(sites)} {_plural(types.pop()).lower()}" if len(types) == 1
-                   else f"{len(sites)} sites")
-            per_day = sum(u[1] for u in unfed)
+            if len(sites) == 1:
+                who = sites[0]["name"]
+            elif len(types) == 1:
+                # Several of one type: the count and the type's name, which a
+                # translation writes its own way ("Geschenkladen × 3").
+                who = msg("f.notrouted.type", {"one": "{n} {type}", "other": "{n} {type}"}, n=len(sites),
+                          type=tok(sites[0].get("typeSlug"), _plural(types.pop()).lower()))
+            else:
+                who = msg("f.notrouted.sites", {"one": "{n} sites", "other": "{n} sites"}, n=len(sites))
             days = [u[2] for u in unfed if u[2] is not None]
-            one = len(sites) == 1
-            held_for = (f" and hold{'s' if one else ''} ~{round(sum(days) / len(days)):,} days"
-                        if days else "")
-            verb = "sells" if one else "sell"
-            if all(b["status"] != "retail" for b in sites):
-                verb = "needs" if one else "need"
+            said = dict(site=name, stock=row["stock"], item=item, who=who,
+                        per=sum(u[1] for u in unfed),
+                        days=msg("f.notrouted.days", {"one": "~{n:,} days", "other": "~{n:,} days"},
+                                 n=round(sum(days) / len(days))) if days else "")
+            text = _notrouted_text(len(sites) == 1, all(b["status"] != "retail" for b in sites), bool(days), said)
             notes.append(_finding(
-                "warn", name, "notrouted",
-                f"{name} holds {row['stock']:,} {item} no plan sends on; "
-                f"{who} {verb} {per_day:,}/day{held_for}",
+                "warn", name, "notrouted", text,
                 key=key, rank=-row["stock"], subject=row["item"], named=item, ev=ev))
         elif why == "notMoving":
             # Brought here by a top-up target, with no shelf, onward route or
             # line here to use it: most likely a target set on the wrong route.
             # The stock may be meant for sites no plan reaches yet, so the
             # finding offers both ways out.
-            route = (
-                f"; {businesses[row['routedFrom']]['name']} tops it up to "
-                f"{row['target']:,} here and no plan sends it on: add a plan to the "
-                f"shops that should get it, or stop the top-up"
-                if row.get("routedFrom") is not None else ""
+            text = (
+                msg("f.dead.route", "{stock:,} {item} held with nothing moving out; {src} tops it up to {target:,} "
+                    "here and no plan sends it on: add a plan to the shops that should get it, or stop the top-up",
+                    stock=row["stock"], item=item, target=row["target"], src=businesses[row["routedFrom"]]["name"])
+                if row.get("routedFrom") is not None else
+                msg("f.dead", "{stock:,} {item} held with nothing moving out", stock=row["stock"], item=item)
             )
             notes.append(_finding(
-                "info", name, "dead",
-                f"{row['stock']:,} {item} held with nothing moving out{route}",
+                "info", name, "dead", text,
                 key=key, rank=-row["stock"], subject=row["item"], named=item, worth=worth_of(row), ev=ev))
         elif why == "importHigh":
-            level = row.get("importLevel") or 0
-            setting = (f"Smart Delivery keeps {level:,} in stock" if row.get("smart")
-                       else f"the import brings {level:,} a week")
+            # Idle stock is IDLE_WEEKS or more of what draws on it, so neither
+            # count of weeks is ever one.
+            said = dict(stock=row["stock"], item=item, weeks=row["weeks"], level=row.get("importLevel") or 0,
+                        of=(row.get("importLevel") or 0) / max(row["perWeek"], 1))
+            text = (
+                msg("f.dead.import.smart", "{stock:,} {item} is {weeks:.0f} weeks of what it feeds; Smart Delivery "
+                    "keeps {level:,} in stock, {of:.0f} weeks of it, so lower the import", **said)
+                if row.get("smart") else
+                msg("f.dead.import", "{stock:,} {item} is {weeks:.0f} weeks of what it feeds; the import brings "
+                    "{level:,} a week, {of:.0f} weeks of it, so lower the import", **said)
+            )
             notes.append(_finding(
-                "info", name, "dead",
-                f"{row['stock']:,} {item} is {row['weeks']:.0f} weeks of what it feeds; "
-                f"{setting}, {level / max(row['perWeek'], 1):.0f} weeks of it, so lower the import",
+                "info", name, "dead", text,
                 key=key, rank=-row["stock"], subject=row["item"], named=item, worth=worth_of(row), ev=ev))
         else:
             notes.append(_finding(
                 "info", name, "dead",
-                f"{row['stock']:,} {item} is {row['weeks']:.0f} weeks of what leaves",
+                msg("f.dead.weeks", "{stock:,} {item} is {weeks:.0f} weeks of what leaves",
+                    stock=row["stock"], item=item, weeks=row["weeks"]),
                 key=key, rank=-row["stock"], subject=row["item"], named=item, worth=worth_of(row), ev=ev))
 
     # A top-up target set too high groups by the target behind it: the same
@@ -11319,7 +11505,7 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
     for target, rows in by_target.items():
         items = sorted({r["item"] for r in rows})
         slug_of = {r["item"]: r["slug"] for r in rows}
-        shown = ", ".join(tok(slug_of[i], i) for i in items)
+        shown = _msg_list([tok(slug_of[i], i) for i in items])
         sites = len({r["s"] for r in rows})
         daily = sum(r["perWeek"] for r in rows) / 7 / len(rows)
         stock = sum(r["stock"] for r in rows)
@@ -11329,19 +11515,18 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
             r["value"] / max(1.0, r["weeks"] * 7) for r in rows if r["price"]
         ) or None
         if target and daily:
-            text = (
-                f"{shown} top-up target of {target:,} is "
-                f"{target / daily:.0f}x daily sales in {sites} "
-                f"shop{'s' if sites > 1 else ''}; lower the target"
-            )
+            text = msg("f.target", {
+                "one": "{items} top-up target of {target:,} is {x:.0f}x daily sales in {n} shop; lower the target",
+                "other": "{items} top-up target of {target:,} is {x:.0f}x daily sales in {n} shops; lower the target",
+            }, items=shown, target=target, x=target / daily, n=sites)
         else:
-            text = (
-                f"{stock:,} units of {shown} across {sites} "
-                f"site{'s' if sites > 1 else ''} is "
-                f"{stock / max(sum(r['perWeek'] for r in rows), 1):.0f} weeks of supply"
-            )
+            # Idle stock is IDLE_WEEKS or more of what draws on it: never one week.
+            text = msg("f.target.units", {
+                "one": "{units:,} units of {items} across {n} site is {weeks:.0f} weeks of supply",
+                "other": "{units:,} units of {items} across {n} sites is {weeks:.0f} weeks of supply",
+            }, units=stock, items=shown, n=sites, weeks=stock / max(sum(r["perWeek"] for r in rows), 1))
         one = businesses[rows[0]["s"]] if sites == 1 else None
-        site = one["name"] if one else f"{sites} shops"
+        site = one["name"] if one else msg("f.target.site", {"one": "{n} shop", "other": "{n} shops"}, n=sites)
         notes.append(
             _finding(
                 "info", site, "target", text,

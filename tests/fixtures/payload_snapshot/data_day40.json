@@ -15,6 +15,17 @@
     "slug": "ba:itemname_water"
    },
    "group": "feed",
+   "i18n": {
+    "text": [
+     "f.import.order.raise",
+     {
+      "item": "⟦ba:itemname_water|Water⟧",
+      "order": 3000,
+      "set": 8400,
+      "use": 8400
+     }
+    ]
+   },
    "id": "eba27cb1f8",
    "level": "critical",
    "site": "HART. Hub",
@@ -28,6 +39,20 @@
     "slug": "ba:itemname_water"
    },
    "group": "feed",
+   "i18n": {
+    "text": [
+     "f.feed.target.raise",
+     {
+      "depot": "HART. Hub",
+      "item": "⟦ba:itemname_water|Water⟧",
+      "n": 16,
+      "per": 1200,
+      "set": 1200,
+      "site": "HART. Brewery",
+      "target": 800
+     }
+    ]
+   },
    "id": "d303753fba",
    "level": "critical",
    "site": "HART. Brewery",
