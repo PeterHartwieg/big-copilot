@@ -3830,12 +3830,21 @@ def _supply(
     for (s, item), (_units, depot) in via.items():
         extra[(businesses[s]["key"], item)]["via"] = depot
 
+    def round_gap(key: str) -> int:
+        """The most days a site's logistics rounds leave between two of them,
+        read off the weekdays a round left in the last SHIPPED_WINDOW days;
+        1 (a round every morning) where too few rounds are logged to say."""
+        weekdays = sorted({d % 7 for d in round_days.get(key, ())})
+        if len(weekdays) < SHIPPED_MIN_DAYS:
+            return 1
+        return max((b - a) % 7 or 7 for a, b in zip(weekdays, weekdays[1:] + weekdays[:1]))
+
     # --- 3c. one fact per (site, item), with one status word, read by every
     # view of the board and by the findings (_supply_facts)
     facts = _supply_facts({
         "businesses": businesses, "index": index, "factories": factories,
         "targets": target_at, "import_rows": import_rows, "peak": peak_of, "wholesale": wholesale,
-        "idle": idle_facts, "extra": extra,
+        "idle": idle_facts, "extra": extra, "roundGap": round_gap,
     })
     factories.pop("_need", None)
     factories.pop("_ramp", None)
@@ -4545,6 +4554,22 @@ def _supply_facts(ctx: dict) -> dict:
         return p, {"use": use, "need": need, "have": target or line["units"],
                    "setTo": set_to, "imp": False}, "daily"
 
+    def lower_target(business, line, key, slug, fields):
+        """The top-up target a shelf whose target is set too high could come
+        down to: its busiest day for every day to the source's next round
+        (round_gap), plus the chain margin once, rounded up to
+        SUPPLY_ROUND_TO, and never below what the shelf needs. None where
+        that is not below the target it has."""
+        rate = line.get("tradeRate", line["rate"])
+        target, source = target_at.get((key, slug), (0, None))
+        if not target or rate <= 0:
+            return None
+        factor, _day = ctx["peak"](business)
+        days = ctx.get("roundGap", lambda _key: 1)(source) if source else 1
+        lowered = max(_ceil_ten(rate * factor * days * (1 + SUPPLY_MARGIN)),
+                      _ceil_ten(fields.get("need") or 0))
+        return lowered if 0 < lowered < target else None
+
     held = {}
     keys = set()
     for business in businesses:
@@ -4601,6 +4626,13 @@ def _supply_facts(ctx: dict) -> dict:
             # line waits for its history, an idle one for its stock to run down.
             if st not in SET_WORDS:
                 fact["setTo"] = None
+            # The one exception: a shelf whose top-up target holds weeks of its
+            # sales (targetHigh) carries the lower target to type, marked
+            # `lowers`: a lowering change, never tight and never on Today.
+            if role == "shelf" and st == "idle" and why == "targetHigh" and cad == "daily":
+                lowered = lower_target(business, line, key, slug, fields)
+                if lowered is not None:
+                    fact["setTo"], fact["lowers"] = lowered, True
             if st != "short":
                 fact.pop("catchUp", None)
             fact.update(extra.get((key, slug), {}))
@@ -18411,14 +18443,14 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
   const site = s => businesses[s];
   const address = s => site(s) ? `${site(s).name} · ${site(s).address}` : "Choose a depot";
   const set = f => f && Number.isFinite(f.setTo);
-  const add = (kind, s, item, current, proposed, reason, source = null, mode = null, paused = false, tight = false) => {
+  const add = (kind, s, item, current, proposed, reason, source = null, mode = null, paused = false, tight = false, lower = false) => {
     const group = `${kind} · ${address(s)}`;
     // Indexes can move when a different save is loaded; addresses do not.
     const key = JSON.stringify([kind, site(s)?.key ?? null, item, current, proposed,
                                source === null ? null : site(source)?.key ?? source]
                                .concat(mode === "smart" ? ["smart"] : []));
     rows.push({key, group, item, current, proposed, reason, kind, site: s, source, mode,
-               ...(paused ? {paused: true} : {}), ...(tight ? {tight: true} : {})});
+               ...(paused ? {paused: true} : {}), ...(tight ? {tight: true} : {}), ...(lower ? {lower: true} : {})});
   };
   /* What a figure was sized on, in the words of the sizing on screen. */
   const margin = m => Number.isFinite(m) ? `, plus a ${Math.round(m * 100)}% margin` : ", plus the margin";
@@ -18482,7 +18514,13 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     const from = r.from ?? f.via ?? null;
     /* A shelf a wholesale store delivers to is the wholesale rows' (below). */
     if(f.wholesale) return;
-    if(from !== null && r.peakSold > 0 && set(f)) add("Shop daily top-ups", r.s, r.item, r.target || 0,
+    /* A top-up target set far above what sells (idle, `lowers`): the lower
+       target to type, a change that is never tight and never on Today. */
+    if(from !== null && r.peakSold > 0 && set(f) && f.lowers) add("Shop daily top-ups", r.s, r.item, r.target || 0,
+      f.setTo, `From ${address(from)}. Lower the top-up: it holds ${r.sold > 0 ? `${Math.round((r.target || 0) / r.sold).toLocaleString()} days` : "weeks"} of sales. `
+        + `Peak sales ${r.peakSold.toLocaleString()} units/day${r.peakDay ? ` on ${r.peakDay}` : " (no weekday profile)"} until the next round${margin(r.margin)}.`,
+      from, null, false, false, true);
+    else if(from !== null && r.peakSold > 0 && set(f)) add("Shop daily top-ups", r.s, r.item, r.target || 0,
       f.setTo, `From ${address(from)}. `
         + `Peak sales ${r.peakSold.toLocaleString()} units/day${r.peakDay ? ` on ${r.peakDay}` : " (no weekday profile)"}${margin(r.margin)}; check shelf space.`,
       from, null, false, f.st === "tight");
@@ -18578,9 +18616,11 @@ function planImportsState(rows, marks, nameOf, gaps = {}){
       gaps.complete === false ? "factory lines need the game's text to be included" : "",
     ].filter(Boolean).join(", and ");
     return missing ? {badge: "NONE FOUND", live: false, what: `No changes found, but ${missing}.`}
-      /* Only margin changes are left: nothing falls short, and Orders has them. */
-      : gaps.margin ? {badge: "ALL SET", live: false, what: `Nothing falls short. Supply lists ${
-          gaps.margin === 1 ? "one change" : `${gaps.margin} changes`} that would restore the margin.`}
+      /* Only margin changes and top-ups to lower are left: nothing falls
+         short, and Supply has them. */
+      : gaps.margin || gaps.lower ? {badge: "ALL SET", live: false, what: `Nothing falls short. Supply lists ${[
+          gaps.margin ? `${gaps.margin === 1 ? "one change" : `${gaps.margin} changes`} that would restore the margin` : "",
+          gaps.lower ? `${gaps.lower === 1 ? "one top-up" : `${gaps.lower} top-ups`} to lower` : ""].filter(Boolean).join(" and ")}.`}
       : {badge: "ALL SET", live: false, what: "No changes found in the supply data."};
   }
   if(!left.length) return {badge: "ALL TICKED", live: false,
@@ -18763,11 +18803,11 @@ function sbUpdateStrip(){
   $("sbCopyStatus").textContent = "";
   if(typeof paintSubNav === "function") paintSubNav("supply");
   /* Tight never reaches Today: a change that only restores the margin stays
-     on Supply, and the card counts the rest. */
+     on Supply, and so does a top-up to lower; the card counts the rest. */
   const unnamed = d.f.sites.reduce((n, s) => n + (s.unnamed || []).length, 0);
-  const urgent = rows.filter(r => !r.tight);
+  const urgent = rows.filter(r => !r.tight && !r.lower);
   paintPlanImports(planImportsState(urgent, d.marks, s => D.businesses[s] ? shortName(D.businesses[s]) : null,
-    {complete: d.complete, unnamed, margin: rows.length - urgent.length}));
+    {complete: d.complete, unnamed, margin: rows.filter(r => r.tight).length, lower: rows.filter(r => r.lower).length}));
 }
 /* A tab's badge: what is left to type there, or a tick once nothing is. */
 function sbBadge(tab){
@@ -19653,7 +19693,7 @@ function drawFactoriesTab(){
    person per machine per hour, 12 hours the longest shift, and a site's
    factory workers counted from its machine-hours a week. Python builds it for
    both sizings (factoryStaffing); this reads the one on screen. */
-const SB_STAFF_WHY = "The same rules as a shop's Staffing: one person per machine per hour, one shift per person at a time, 12 hours the longest shift. A line needs its machines × the hours it must run: 24 when sized 24/7, else the hours downstream demand plus the chain margin takes. Each run is cut into shifts of at most 12 hours, placed around the workers' own demands. A site needs its machine-hours a week ÷ 50 factory workers, rounded up; only factory workers already at that factory count. Too few hours is a change to type; fewer workers is a suggestion.";
+const SB_STAFF_WHY = "The same rules as a shop's Staffing: one person per machine per hour, one shift per person at a time, 12 hours the longest shift. A line needs its machines × the hours it must run: 24 when sized 24/7, else the hours downstream demand plus the chain margin takes. Each run is cut into shifts of at most 12 hours, placed around the workers' own demands. A factory is given the fewest of its own factory workers that cover the week: its machine-hours a week ÷ 50, rounded up, and one more while a shift stays open; the rest could go. Only factory workers already at that factory count. Too few hours is a change to type; fewer workers is a suggestion.";
 function drawFactoryStaffing(){
   const rows = ((D.factoryStaffing || {})[sizing]) || [];
   if(!rows.length) return "";
@@ -19667,8 +19707,11 @@ function drawFactoryStaffing(){
     const hc = r.headcount || {}, dl = r.delta || {};
     workers += dl.workers || 0; perDay += dl.perDay || 0;
     const chip = dl.workers ? `<span class="d ${dl.workers > 0 ? "up" : "dn"}">${dl.workers > 0 ? `hire +${dl.workers}` : `−${-dl.workers}`}</span>` : "";
-    const small = hc.spare ? `<small>${plural(hc.spare, "worker has", "workers have")} no hours in this plan: post ${hc.spare === 1 ? "them" : "them"} elsewhere</small>`
-      : hc.hire ? `<small>hire ${hc.hire} to fill this plan</small>` : "";
+    /* The week needs the workers the plan gives shifts, and any it hires. */
+    const week = (hc.have ?? 0) - (hc.spare || 0) + (hc.hire || 0);
+    const small = hc.spare ? `<small>${hc.spare} could go: the week needs ${week}</small>`
+      : hc.hire ? `<small>hire ${hc.hire}: the week needs ${week}</small>`
+      : hc.have ? `<small>the week needs all ${hc.have}</small>` : "";
     const wage = dl.perDay ? `<span class="sb-wage ${dl.perDay > 0 ? "up" : "dn"}">${dl.perDay > 0 ? "+" : "−"}${fmt(Math.abs(dl.perDay))}<small>a day in wages</small></span>` : "<span></span>";
     const lines = (r.lines || []).map(l => {
       const chips = (l.cuts || []).map(([a, z]) => `<span class="sb-shift">${h(a)}–${h(z)}<small>${z - a} h</small></span>`).join("");
@@ -19676,8 +19719,8 @@ function drawFactoryStaffing(){
         Number.isFinite(l.hoursNow) && l.hoursNow !== l.hours ? sbChg(l.hoursNow, l.hours, "h") : `<b>${l.hours} h</b>`}</span><span class="shifts">${chips}${
         l.machines > 1 ? `<small class="sb-per">× ${l.machines} machines</small>` : ""}</span></div>`;
     }).join("");
-    return `<div class="sb-sfac"><div class="sb-sfh"><span>${name}</span><span class="sb-hc"><b>${hc.min ?? "—"}</b> factory workers for ${
-      (hc.needed ?? 0).toLocaleString()} machine-hours a week, you have <b>${hc.have ?? 0}</b>${chip}${small}</span>${wage}${go}</div>${lines}</div>`;
+    return `<div class="sb-sfac"><div class="sb-sfh"><span>${name}</span><span class="sb-hc">${
+      (hc.needed ?? 0).toLocaleString()} machine-hours a week; you have <b>${hc.have ?? 0}</b> factory workers${chip}${small}</span>${wage}${go}</div>${lines}</div>`;
   });
   const lead = sizing === "dem" ? "Sized for demand" : "Sized 24/7";
   const tot = workers || perDay ? `<div class="sb-stot"><span>${lead}:</span>${workers ? `<b class="${workers > 0 ? "up" : "dn"}">${workers > 0 ? "+" : "−"}${plural(Math.abs(workers), "factory worker")}</b>` : ""}${
