@@ -44,7 +44,7 @@ async function site(status) {
       supply: {shops: []},
       businesses: [{
         key, status: office ? 'office' : 'retail', name: 'HART. &Partners', code: 'HK',
-        type: office ? 'Law Firm' : 'Supermarket', address: '10 Second Avenue', neighbourhood: "Hell's Kitchen",
+        type: office ? 'Law Firm' : 'Supermarket', address: '10 Second Avenue', neighbourhood: 'ba:neighborhood_hellskitchen',
         opened: 12, revenue: 3491, customers: 9, basket: 387.89, profit: 1200, margin: 34.4,
         cogs: 0, wages: 2000, rent: 291, marketing: 0, theft: 0, licensing: 0,
         staff: 3, staffCost: 2100, crew: [{role: 'Lawyer', count: 3, daily: 2100, absent: 0}], people: [],
@@ -87,7 +87,7 @@ async function theatre() {
       supply: {shops: []},
       businesses: [{
         key: grid.key, status: 'retail', name: 'Playhouse', code: 'PH', type: 'Theatre',
-        address: '7 Second Avenue', neighbourhood: "Hell's Kitchen",
+        address: '7 Second Avenue', neighbourhood: 'ba:neighborhood_hellskitchen',
         opened: 12, revenue: 3000, customers: 180, basket: 20, profit: 500, margin: 16.6,
         cogs: 0, wages: 1200, rent: 400, marketing: 0, theft: 0, licensing: 0,
         staff: 6, staffCost: 1200, crew: [], people: [], lines: [],

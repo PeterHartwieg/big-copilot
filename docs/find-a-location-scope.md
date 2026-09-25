@@ -66,8 +66,8 @@ regardless of demand, and the feature does not try to model that.
   in an office building than in a retail one, so the lookup key is
   (building type, size letter). Rival shops in the save often show a lower
   `customerCapacity` than the table; the table is the number the player gets.
-- `ba_buildings.json` rows: `s` street slug, `n` number, `h` neighbourhood display
-  name, `t` building type (`retail`, `office`, `warehouse`, `residential`,
+- `ba_buildings.json` rows: `s` street slug, `n` number, `h` neighbourhood id
+  (the `<id>` of `ba:neighborhood_<id>`), `t` building type (`retail`, `office`, `warehouse`, `residential`,
   `special`, `cinema`, `theater`), `z` size letter, `m` m², `x` traffic index
   (10 to 84). `z` maps 1:1 to `m`.
 - `buildingsForSale` (31 on day 16, 572 on day 20 in HART. YT; the list grows, so the for-sale table needs a sort and a neighbourhood filter): `address {streetName, streetNumber}`,

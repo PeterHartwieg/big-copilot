@@ -66,7 +66,7 @@ const copy = row => JSON.parse(JSON.stringify(row));
 function business(){
   return {
     key: KEY, status: 'retail', name: 'HART. Test 12', code: 'HK', type: 'Clothing Store',
-    address: '12 Second Avenue', neighbourhood: "Hell's Kitchen",
+    address: '12 Second Avenue', neighbourhood: 'ba:neighborhood_hellskitchen',
     opened: 12, revenue: 3491, customers: 90, basket: 38.79, profit: 1200, margin: 34.4,
     cogs: 100, wages: 2000, rent: 291, marketing: 0, theft: 0, licensing: 0,
     staff: 2, staffCost: 400, uniformGaps: [], crew: [{role: 'Cashier', count: 2, daily: 400, absent: 0}],

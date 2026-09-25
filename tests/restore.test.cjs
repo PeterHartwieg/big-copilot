@@ -31,7 +31,7 @@ async function setup(t, options = {}) {
     if (!sessionStorage.seeded) {
       localStorage.setItem('ledger_pick', JSON.stringify(options.pick || {dir:'alice', name:'chosen.hsg'}));
       localStorage.setItem('ba_dash_page', 'supply');
-      localStorage.setItem('ba_dash_supply', 'checks');
+      localStorage.setItem('ba_dash_supply', 'shops');
       localStorage.setItem('ledger_history', 'original-history');
       sessionStorage.seeded = 'yes';
     }
@@ -132,7 +132,7 @@ test('loading is prominent until data arrives, including runtime ready; remember
   await page.evaluate(() => fixture.complete());
   assert.equal(await hasBoard(page), true);
   assert.equal(await page.locator('#pageSupply').isVisible(), true);
-  assert.equal(await page.locator('#supplyNav a.on').innerText(), 'Checks');
+  assert.equal(await page.locator('#supplyNav a.on > span').first().innerText(), 'Shops');
   assert.equal(await page.evaluate(() => history.length), historyLength);
   assert.equal(await page.locator('#landing').count(), 0);
   assert.equal(await page.locator('#folderBtn').count(), 1);

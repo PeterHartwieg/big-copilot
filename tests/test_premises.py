@@ -75,19 +75,19 @@ PIER = ("ba:street_fifthavenue", 99)
 CLOSED_SHOP = ("ba:street_fifthavenue", 14)
 
 BUILDINGS = {
-    HK_SHOP: {"s": HK_SHOP[0], "n": 2, "h": "Hell's Kitchen", "t": "retail",
+    HK_SHOP: {"s": HK_SHOP[0], "n": 2, "h": "hellskitchen", "t": "retail",
               "z": "C", "m": 225, "x": 50, "v": 2},
-    MT_SHOP: {"s": MT_SHOP[0], "n": 8, "h": "Midtown", "t": "retail",
+    MT_SHOP: {"s": MT_SHOP[0], "n": 8, "h": "midtown", "t": "retail",
               "z": "M", "m": 1000, "x": 47, "v": 1},
-    LM_OFFICE: {"s": LM_OFFICE[0], "n": 12, "h": "Lower Manhattan", "t": "office",
+    LM_OFFICE: {"s": LM_OFFICE[0], "n": 12, "h": "lowermanhattan", "t": "office",
                 "z": "K", "m": 660, "x": 37, "v": 1},
-    FLAT: {"s": FLAT[0], "n": 72, "h": "Lower Manhattan", "t": "residential",
+    FLAT: {"s": FLAT[0], "n": 72, "h": "lowermanhattan", "t": "residential",
            "z": "B", "m": 54, "x": 21, "v": 1},
-    DEPOT: {"s": DEPOT[0], "n": 90, "h": "Industry City", "t": "warehouse",
+    DEPOT: {"s": DEPOT[0], "n": 90, "h": "industrycity", "t": "warehouse",
             "z": "H", "m": 690, "x": 14, "v": 3},
-    PIER: {"s": PIER[0], "n": 99, "h": "Midtown", "t": "special",
+    PIER: {"s": PIER[0], "n": 99, "h": "midtown", "t": "special",
            "z": "O", "m": 500, "x": 60, "v": 1},
-    CLOSED_SHOP: {"s": CLOSED_SHOP[0], "n": 14, "h": "Midtown", "t": "retail",
+    CLOSED_SHOP: {"s": CLOSED_SHOP[0], "n": 14, "h": "midtown", "t": "retail",
                   "z": "A", "m": 75, "x": 30},
 }
 
@@ -167,7 +167,7 @@ class RentTests(unittest.TestCase):
         self.assertIsNone(_rent_estimate(BUILDINGS[FLAT]))
 
     def test_an_unknown_neighbourhood_has_no_rate(self):
-        self.assertIsNone(_rent_estimate({"h": "Queens", "t": "retail", "m": 100, "x": 40}))
+        self.assertIsNone(_rent_estimate({"h": "queens", "t": "retail", "m": 100, "x": 40}))
 
     def test_the_check_reports_the_worst_deviation_of_the_players_own_leases(self):
         payload = premises([
@@ -184,7 +184,7 @@ class RentTests(unittest.TestCase):
         self.assertEqual(payload["rent"]["check"]["worst"], round(4 / 280, 4))
         self.assertEqual(payload["rent"]["constant"], 30)
         self.assertEqual(payload["rent"]["officeFactor"], 1.033)
-        self.assertEqual(payload["rent"]["rates"]["Midtown"], 0.02482)
+        self.assertEqual(payload["rent"]["rates"]["ba:neighborhood_midtown"], 0.02482)
 
     def test_no_leases_is_a_zero_check_not_a_missing_one(self):
         self.assertEqual(premises([reg(HK_SHOP, AvailableForRent=True)])["rent"]["check"],
@@ -350,8 +350,9 @@ class StatusTests(unittest.TestCase):
                          ["ba:street_fifthavenue#8", "ba:street_secondavenue#2"])
         self.assertEqual(payload["buildings"][1], {
             "key": "ba:street_secondavenue#2", "address": "2 Second Avenue",
-            "hood": "Hell's Kitchen", "type": "retail", "size": "C",
-            "layout": "C2", "m2": 225, "traffic": 50, "cap": 30, "rent": 264, "deposit": 16590,
+            "hood": "ba:neighborhood_hellskitchen", "type": "retail", "size": "C",
+            "layout": "C2", "m2": 225,
+            "traffic": 50, "cap": 30, "rent": 264, "deposit": 16590,
             "status": "vacant", "occupant": None, "owner": "city",
             "ownerRival": None, "occupantRival": None,
         })
@@ -520,11 +521,11 @@ class ForSaleTests(unittest.TestCase):
                                      sale(FLAT, 79_850_000.4, 54)])
         self.assertEqual(payload["forSale"], [
             {"key": "ba:street_fifthavenue#72", "address": "72 Fifth Avenue",
-             "hood": "Lower Manhattan", "type": "residential", "size": "B",
+             "hood": "ba:neighborhood_lowermanhattan", "type": "residential", "size": "B",
              "layout": None, "m2": 54, "price": 79850000},
             {"key": "ba:street_fifthavenue#8", "address": "8 Fifth Avenue",
-             "hood": "Midtown", "type": "retail", "size": "M", "layout": "M1",
-             "m2": 1000, "price": 4250000},
+             "hood": "ba:neighborhood_midtown", "type": "retail", "size": "M", "layout": "M1", "m2": 1000,
+             "price": 4250000},
         ])
 
     def test_an_unmatched_listing_is_skipped(self):
@@ -534,7 +535,7 @@ class ForSaleTests(unittest.TestCase):
 
 class DemandTests(unittest.TestCase):
     MARKET = {
-        "hoods": ["Hell's Kitchen", "Midtown", "The Hamptons"],
+        "hoods": ["ba:neighborhood_hellskitchen", "ba:neighborhood_midtown", "ba:neighborhood_thehamptons"],
         "types": [
             band(SHOP, "Supermarket", [cell(40, 4), cell(64, 3, here=True), None]),
             band(CINEMA, "Cinema", [None, cell(80, 1), None]),
@@ -546,8 +547,8 @@ class DemandTests(unittest.TestCase):
     def test_the_grid_is_turned_inside_out_by_neighbourhood(self):
         demand = _premises_demand(self.MARKET)
         # A neighbourhood with no reading at all is left out entirely.
-        self.assertEqual(sorted(demand), ["Hell's Kitchen", "Midtown"])
-        self.assertEqual(demand["Midtown"], [
+        self.assertEqual(sorted(demand), ["ba:neighborhood_hellskitchen", "ba:neighborhood_midtown"])
+        self.assertEqual(demand["ba:neighborhood_midtown"], [
             {"slug": SHOP, "type": "Supermarket", "demand": 64, "providers": 3,
              "mine": True, "category": "retail"},
             {"slug": CINEMA, "type": "Cinema", "demand": 80, "providers": 1,
@@ -555,12 +556,12 @@ class DemandTests(unittest.TestCase):
             {"slug": LAW, "type": "Law Firm", "demand": 66, "providers": 1,
              "mine": False, "category": "office"},
         ])
-        self.assertEqual([r["category"] for r in demand["Hell's Kitchen"]],
+        self.assertEqual([r["category"] for r in demand["ba:neighborhood_hellskitchen"]],
                          ["retail", "theater", "office"])
 
     def test_an_empty_market_reshapes_to_nothing(self):
         self.assertEqual(_premises_demand({}), {})
-        self.assertEqual(premises(market=self.MARKET)["demand"]["Midtown"][1]["demand"], 80)
+        self.assertEqual(premises(market=self.MARKET)["demand"]["ba:neighborhood_midtown"][1]["demand"], 80)
 
 
 if __name__ == "__main__":

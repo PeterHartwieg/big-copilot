@@ -70,7 +70,10 @@ async function loadCityMap(){
         }
         canvas.width=canvas.height=0;
       } catch(error){ /* Vector rendering remains available if caching fails. */ }
-      return {...data, imageUrl, previewUrl, byKey:new Map(data.buildings.map(b => [b.key,b]))};
+      /* The exported data names each building's neighbourhood in English; the
+         board knows a neighbourhood by the game's key, so it is read as one here. */
+      const buildings = data.buildings.map(b => b.hood ? {...b, hood: hoodKeyOf(b.hood) || b.hood} : b);
+      return {...data, buildings, imageUrl, previewUrl, byKey:new Map(buildings.map(b => [b.key,b]))};
     })().catch(error => { cityMapAssets = null; throw error; });
   }
   return cityMapAssets;
@@ -111,7 +114,7 @@ function mapAddress(label, key){ return `${mapText(label)}${mapButton(key || map
    anything else takes the board's table, and only a place the table does not
    name falls back to initials. The card and the list read the same tag. */
 const hoodCode = (b, hood) => b?.code || (typeof HOOD_TAGS === "object" && HOOD_TAGS[hood])
-  || String(hood || "").split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
+  || hoodName(hood).split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
 const PANEL_W = 501;   // the finder's panel plus its margin
 const PICK_ZOOM = 2.6; // how far in a pick goes, relative to the whole city
 const GLIDE_MS = 700;
@@ -203,18 +206,27 @@ const finderPick = fs => Object.fromEntries(Object.keys(finderDefaults()).filter
    change, so a browser that refuses to store still keeps this session's
    searches. Another tab's changes arrive through the storage event. */
 let finderSavedList = null;
+/* Neighbourhoods are stored by the game's key. Filters stored before that
+   named them in English; those read back as keys, and a name no neighbourhood
+   has is dropped, as a neighbourhood this save lacks already was. */
+const finderHoodKeys = hoods => hoods.map(hoodKeyOf).filter(Boolean);
+const finderOldHoods = hoods => Array.isArray(hoods) && hoods.some(h => hoodKeyOf(h) !== h);
 function finderReadSaved(raw){
   let list = null;
   try{ list = JSON.parse(raw); }catch(e){}
   return (Array.isArray(list) ? list : [])
     .filter(s => s && typeof s.name === "string" && s.name.trim() && s.filters && typeof s.filters === "object")
-    .slice(0, FINDER_SAVED_MAX);
+    .slice(0, FINDER_SAVED_MAX)
+    .map(s => Array.isArray(s.filters.hoods) ? {...s, filters: {...s.filters, hoods: finderHoodKeys(s.filters.hoods)}} : s);
 }
 function finderSaved(){
   if(!finderSavedList){
-    let raw = null;
+    let raw = null, old = false;
     try{ raw = localStorage.getItem(FINDER_SAVED_KEY); }catch(e){}
+    try{ old = (JSON.parse(raw) || []).some(s => finderOldHoods(s?.filters?.hoods)); }catch(e){}
     finderSavedList = finderReadSaved(raw);
+    // Written back once in keys, so the old names are gone from storage.
+    if(old) finderKeepSaved(finderSavedList);
   }
   return finderSavedList;
 }
@@ -423,7 +435,8 @@ class CityMapView {
      their place (class fonly), both switched by CSS off .city-map.finder. */
   hoodList(){
     const P = premises(); if(!P) return [];
-    return [...new Set(P.buildings.map(b => b.hood).filter(Boolean))].sort();
+    return [...new Set(P.buildings.map(b => b.hood).filter(Boolean))]
+      .sort((a, b) => hoodName(a).localeCompare(hoodName(b)));
   }
   hoodOn(hood){ return !this.fs.hoods || this.fs.hoods.includes(hood); }
   /* The header carries the switch and nothing else; everything the finder asks
@@ -443,7 +456,7 @@ class CityMapView {
     const kinds = FINDER_CATS.map(([c, label]) =>
       `<button type="button" class="fchip cat" data-cat="${c}" aria-pressed="false">${label}</button>`).join('');
     const hoods = this.hoodList().map(h =>
-      `<button type="button" class="fchip hd" data-h="${attr(h)}" aria-pressed="true" data-tip="${attr(h)}">${mapText(hoodTag(h))}</button>`).join('');
+      `<button type="button" class="fchip hd" data-h="${attr(h)}" aria-pressed="true" data-tip="${attr(hoodName(h))}">${mapText(hoodTag(h))}</button>`).join('');
     return `<div class="filters fonly">
       ${row('Kind', kinds)}
       ${row('Type', `<label class="fsel"><select data-f="type" aria-label="Business type"><option value="">Any type</option></select><i class="fchev">${ICON.chev}</i></label>`, ' ftype')}
@@ -555,7 +568,7 @@ class CityMapView {
     try{
       const saved = JSON.parse(localStorage.getItem(store));
       if(saved && typeof saved === "object") this.fs = {...this.fs, ...saved,
-        hoods: Array.isArray(saved.hoods) ? saved.hoods : null,
+        hoods: Array.isArray(saved.hoods) ? finderHoodKeys(saved.hoods) : null,
         // Availability used to be two switches; a state saved then opens on
         // whichever list it was reading.
         show: saved.show || (saved.buy ? "takeover" : "rent")};
@@ -855,7 +868,7 @@ class CityMapView {
       // Floor area and cap have columns of their own, so a row with nothing
       // else to say names its neighbourhood in full, as a for-sale row does.
       const what = b.status === 'rival' && b.occupant ? `${b.occupant.name} · ${b.occupant.type}${company ? ` · ${company}` : ''}`
-        : f.fit && !fs.type ? `best fit: ${f.fit}` : b.hood;
+        : f.fit && !fs.type ? `best fit: ${f.fit}` : hoodName(b.hood);
       const sub = what + (f.rivals != null ? ` · ${f.rivals} rival${f.rivals === 1 ? '' : 's'}` : '');
       // Floor area is not shaded, like the cap: bigger is not better for every business.
       const numbers = wh
@@ -868,11 +881,11 @@ class CityMapView {
   }
   saleList(rows){
     return `<div class="fhead sale"><span></span><span>Address</span><span>Type</span><span>m²</span><span>Price</span></div>`
-      + rows.map(s => `<button type="button" class="place fr sale${s.key === this.selected ? ' on' : ''}" data-pick="${mapText(s.key)}" aria-pressed="${s.key === this.selected}"><span class="hood">${mapText(hoodTag(s.hood))}</span><span class="nm">${mapText(s.address)}<small>${this.layoutTag(s)}${mapText(s.hood)}</small></span><span class="v t">${mapText(typeLabel(s.type))}</span><span class="v">${s.m2.toLocaleString('en-US')}</span><span class="v">${mapText(askingPrice(s.price))}</span></button>`).join('');
+      + rows.map(s => `<button type="button" class="place fr sale${s.key === this.selected ? ' on' : ''}" data-pick="${mapText(s.key)}" aria-pressed="${s.key === this.selected}"><span class="hood">${mapText(hoodTag(s.hood))}</span><span class="nm">${mapText(s.address)}<small>${this.layoutTag(s)}${mapText(hoodName(s.hood))}</small></span><span class="v t">${mapText(typeLabel(s.type))}</span><span class="v">${s.m2.toLocaleString('en-US')}</span><span class="v">${mapText(askingPrice(s.price))}</span></button>`).join('');
   }
   /* The facts every address carries, finder on or off: what the place is, what
      it would cost and whether it is free. */
-  paintFacts(key){
+  paintFacts(key, focusGrow = false){
     const card = this.card, st = card.querySelector('.st'), facts = card.querySelector('.facts'), fit = card.querySelector('.fit');
     const b = this.sites?.get(key);
     st.hidden = facts.hidden = fit.hidden = card.querySelector('.why').hidden = true;
@@ -891,15 +904,24 @@ class CityMapView {
     if(!this.finderOn() || this.saleView() || b.type !== this.fs.cat || !this.candidate(b)) return;
     const f = this.fitFor(b);
     fit.hidden = false;
-    fit.innerHTML = f.fit ? `<b>${mapText(f.fit)}</b> in ${mapText(b.hood)}`
+    fit.innerHTML = f.fit ? `<b>${mapText(f.fit)}</b> in ${mapText(hoodName(b.hood))}`
       : 'No demand reading for this category here.';
     const why = card.querySelector('.why');
     why.hidden = !f.fit;
     if(f.fit) why.textContent = this.whyRanked(b, f);
     const num = (v, lab, cls = "") => `<div class="num"><b class="mono${cls}">${v}</b><span>${lab}</span></div>`;
+    // The demand is the Growth grid's own reading, so it leads back to that
+    // type's row there.
+    const demand = f.slug
+      ? `<a class="num mf-grow" href="#secMarket" data-grow="${mapText(f.slug)}" data-tip="${
+          mapText(`${f.fit} in every neighbourhood, on Growth › Demand`)}"><b class="mono">${f.demand}</b><span>demand ›</span></a>`
+      : num(f.demand, 'demand');
     card.querySelector('.nums').innerHTML = f.score != null
-      ? num(f.score, 'score', ' sc') + num(b.traffic, 'traffic') + num(f.demand, 'demand')
+      ? num(f.score, 'score', ' sc') + num(b.traffic, 'traffic') + demand
       : num(b.m2.toLocaleString('en-US'), 'm²') + num(b.traffic, 'traffic');
+    const grow = card.querySelector('.mf-grow');
+    if(grow) grow.onclick = e => { e.preventDefault(); showGrowthRow(grow.dataset.grow); };
+    if(grow && focusGrow) grow.focus({preventScroll: true});
   }
   /* Who the building belongs to, and who trades from it. Both name the rival
      company where the save knows its name. */
@@ -927,8 +949,8 @@ class CityMapView {
     const shops = n => plural(n, `rival ${f.fit}`, `rival ${f.fit}s`);
     const mine = f.mine ? ` and ${f.mine} of your own` : '';
     const first = this.fs.type
-      ? `${f.fit} demand in ${b.hood} is ${f.demand} (${f.rank} of ${plural(f.list.length, `${this.fs.cat} type`)} here), with ${shops(f.rivals)}${mine} in the neighbourhood.`
-      : `${f.fit} is the strongest ${this.fs.cat} demand in ${b.hood} at ${f.demand}, with ${shops(f.rivals)}${mine} there${
+      ? `${f.fit} demand in ${hoodName(b.hood)} is ${f.demand} (${f.rank} of ${plural(f.list.length, `${this.fs.cat} type`)} here), with ${shops(f.rivals)}${mine} in the neighbourhood.`
+      : `${f.fit} is the strongest ${this.fs.cat} demand in ${hoodName(b.hood)} at ${f.demand}, with ${shops(f.rivals)}${mine} there${
           f.list.length > 1 ? `; next: ${f.list.slice(1, 3).map(d => `${d.type} ${d.demand}`).join(', ')}` : ''}.`;
     return `${first} Score ${f.score} = traffic ${b.traffic} × demand ${f.demand} ÷ 100.`;
   }
@@ -1380,7 +1402,7 @@ class CityMapView {
     if(this.layers.home) for(const h of this.homes.values()) add({key:h.key, address:h.address, hood:this.assets.byKey.get(h.key)?.hood, home:h, region:this.assets.byKey.get(h.key)?.region, bounds:this.assets.byKey.get(h.key)?.bounds});
     if(this.layers.all) this.assets.buildings.forEach(b => add({key:b.key, address:b.address, hood:b.hood, business:this.businesses.get(b.key), region:b.region, bounds:b.bounds}));
     const q = this.query.trim().toLowerCase();
-    return q ? rows.filter(r => `${r.address} ${r.hood || ''} ${r.business?.name || ''} ${r.business?.type || ''}`.toLowerCase().includes(q)) : rows;
+    return q ? rows.filter(r => `${r.address} ${r.hood ? hoodName(r.hood) : ''} ${r.business?.name || ''} ${r.business?.type || ''}`.toLowerCase().includes(q)) : rows;
   }
   update(){
     if(!this.svg) return;
@@ -1448,6 +1470,8 @@ class CityMapView {
   fillCard(){
     const card = this.card; if(!card) return;
     const key = this.selected, b = this.businesses.get(key), loc = this.assets.byKey.get(key), owned = this.owned.get(key), home = this.homes.get(key);
+    // A live refresh repaints the card; its Demand link keeps the focus it had.
+    const focusGrow = !!document.activeElement?.classList?.contains('mf-grow') && card.contains(document.activeElement);
     if(!key){ card.hidden = true; card.classList.remove('in'); this.paintFacts(null); return; }
     // Filled now, shown by showCard() once the camera has settled: until then
     // it stays out of the tab order and out of the live region.
@@ -1458,9 +1482,9 @@ class CityMapView {
     const siteAddr = (b || home) && typeof siteHref === 'function' ? siteHref(key) : '';
     const shown = mapText(title.replace(/^\[\w+\]\s*/, ''));
     card.querySelector('h3').innerHTML = siteAddr ? `<a class="ss-sl" href="${attr(siteAddr)}" data-tip="Open its page">${shown}</a>` : shown;
-    const sub = b ? `${mapText(b.address)} · ${mapText(b.type)}` : owned ? `Owned building${owned.purchaseDay != null ? ` · bought day ${mapText(owned.purchaseDay)}` : ''}` : home ? `Home${loc?.hood ? ` · ${mapText(loc.hood)}` : ''}`
+    const sub = b ? `${mapText(b.address)} · ${mapText(b.type)}` : owned ? `Owned building${owned.purchaseDay != null ? ` · bought day ${mapText(owned.purchaseDay)}` : ''}` : home ? `Home${loc?.hood ? ` · ${mapText(hoodName(loc.hood))}` : ''}`
       // The title is already the address; a bare location adds its neighbourhood.
-      : mapText(loc?.hood || loc?.address || '');
+      : mapText((loc?.hood && hoodName(loc.hood)) || loc?.address || '');
     card.querySelector('.sub').innerHTML = `<span class="hood">${mapText(hoodCode(b, loc?.hood || b?.neighbourhood))}</span><span>${sub}${!loc ? ' · no map position' : ''}</span>`;
     const num = (v, lab) => `<div class="num"><b class="mono">${v}</b><span>${lab}</span></div>`;
     card.querySelector('.nums').innerHTML = trading
@@ -1478,7 +1502,7 @@ class CityMapView {
     const go = card.querySelector('.go2');
     go.hidden = !b && !home;
     go.setAttribute('href', siteAddr || '#detail');
-    this.paintFacts(key);
+    this.paintFacts(key, focusGrow);
     if(card.classList.contains('in')) this.placeCard();
   }
   showCard(){
@@ -1571,12 +1595,30 @@ function showCityMap(){
   else cityMapPage.paintView();
 }
 /* Today's card and a Growth cell both open the map with the finder on and a
-   category, a type and a neighbourhood already chosen. */
-function openFinder(preset = {}){
+   category, a type and a neighbourhood already chosen. `focus` hands the
+   keyboard to the first result (the switch when nothing matches), since the
+   control that opened the finder is on a page now hidden. */
+function openFinder(preset = {}, focus = false){
   if(!premises()) return;
   showPage("map");
   showCityMap();
-  cityMapPage.setFinder(preset);
+  const view = cityMapPage;
+  // A Growth cell's question starts at the top of its answers, whatever the
+  // list was scrolled to before; on a narrow map the whole panel scrolls.
+  const toTop = () => view.root.querySelectorAll('.places, .places .list').forEach(el => { el.scrollTop = 0; });
+  if(focus) toTop();
+  view.setFinder(preset);
+  if(focus) view.ready.then(ok => {
+    // The player may have left while the map loaded; the focus stays where they went.
+    if(!ok || page !== "map") return;
+    toTop();
+    const to = view.root.querySelector('.place.fr') || view.root.querySelector('[data-f="tog"]');
+    if(!to) return;
+    to.focus({preventScroll: true});
+    // Narrow, the filters sit above the results in the same scroller, so the
+    // first result may still be below what the panel shows.
+    if(view.narrow) to.scrollIntoView({block: "nearest"});
+  });
 }
 function refreshCityMaps(){
   const character=D?.meta?.character || D?.supply?.factories?.character || D?.meta?.save;
