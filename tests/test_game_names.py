@@ -136,13 +136,17 @@ class Build(unittest.TestCase):
 class Picker(unittest.TestCase):
     def test_only_the_site_offers_the_picker(self):
         # The markup, not the selector: the board script names [data-gn-pick].
-        self.assertNotIn('<select class="gn-pick"', footer_html())
-        self.assertNotIn('<select class="gn-pick"', render(None))
+        self.assertNotIn('class="gn-pick"', footer_html())
+        self.assertNotIn('class="gn-pick"', render(None))
         for landing in (False, True):
             with self.subTest(landing=landing):
                 markup = footer_html(landing=landing, site=True)
                 self.assertIn(">Game names</h2>", markup)
-                options = re.findall(r'<option value="([^"]+)" lang="\1">([^<]+)</option>', markup)
+                self.assertIn('<div class="gn-pick" data-gn-pick data-value="en">', markup)
+                self.assertIn('aria-haspopup="listbox"', markup)
+                # The button shows the first choice until the script paints the kept one.
+                self.assertIn('<span class="gn-cur" lang="en" translate="no">English</span>', markup)
+                options = re.findall(r'<li data-value="([^"]+)" lang="\1" translate="no">([^<]+)</li>', markup)
                 self.assertEqual([c for c, _ in options], list(GAME_NAME_LANGS))
                 self.assertEqual(options[0], ("en", "English"))
                 self.assertIn(("de", "Deutsch"), options)
@@ -150,9 +154,9 @@ class Picker(unittest.TestCase):
 
     def test_the_two_pickers_label_themselves_apart(self):
         # Both footers are in the page until the board replaces the landing.
-        landing = re.search(r'aria-labelledby="(gnHead\w*)"', footer_html(landing=True, site=True)).group(1)
-        board = re.search(r'aria-labelledby="(gnHead\w*)"', footer_html(site=True)).group(1)
-        self.assertNotEqual(landing, board)
+        landing = re.search(r'aria-labelledby="(gnHead\w*) (gnHead\w*)"', footer_html(landing=True, site=True)).groups()
+        board = re.search(r'aria-labelledby="(gnHead\w*) (gnHead\w*)"', footer_html(site=True)).groups()
+        self.assertTrue(set(landing).isdisjoint(board), (landing, board))
 
 
 class Lang(unittest.TestCase):

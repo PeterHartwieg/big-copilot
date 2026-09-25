@@ -101,18 +101,25 @@ COLOPHON = (
 _ARROW = '<svg class="sf-ic sf-ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 16l8-8M9.5 8H16v6.5"/></svg>'
 
 
-def _sf_out(href: str, text: str, icon: str = "", title: str = "", feature: str = "") -> str:
+def _sf_out(href: str, text: str, icon: str = "", title: str = "", feature: str = "",
+            key: str = "", attrs: str = "") -> str:
     """One outbound footer link, with the little corner arrow.
 
     ``feature`` gives it the New badge of that feature id, which following the
-    link dismisses, as every other entry point of the feature does."""
+    link dismisses, as every other entry point of the feature does. ``key`` is
+    the link's translation key: ``key.text`` its words, ``key.tip`` its title; a link without one
+    is a name (YouTube, the studio) and is marked translate="no"."""
     tip = f' title="{title}"' if title else ""
+    if title and key:
+        tip = f' data-tt-title="{key}.tip"' + tip
     badge = visit = ""
     if feature:
         visit = f' data-visit-feature="{feature}"'
-        badge = f'<span class="feature-new" data-new-feature="{feature}" hidden>New</span>'
-    return (f'<a class="sf-link" href="{href}" target="_blank" rel="noopener"{tip}{visit}>'
-            f"{icon}{text}{badge}{_ARROW}</a>")
+        badge = f'<span class="feature-new" data-new-feature="{feature}" data-tt="nav.new" hidden>New</span>'
+    words = f'<span data-tt="{key}.text">{text}</span>' if key else text
+    name = "" if key else ' translate="no"'
+    return (f'<a class="sf-link" href="{href}" target="_blank" rel="noopener"{tip}{visit}{name}{attrs}>'
+            f"{icon}{words}{badge}{_ARROW}</a>")
 
 
 def footer_html(landing: bool = False, site: bool = False) -> str:
@@ -126,11 +133,11 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
     rather than two that 404. This is not the same split as ``landing``, which
     both site pages share.
     """
-    legal = ('<a href="impressum.html" target="_blank" rel="noopener">Impressum</a>'
-             '<a href="privacy.html" target="_blank" rel="noopener">Privacy</a>') if site else ""
+    legal = ('<a href="impressum.html" target="_blank" rel="noopener" data-tt="foot.impressum">Impressum</a>'
+             '<a href="privacy.html" target="_blank" rel="noopener" data-tt="foot.privacy">Privacy</a>') if site else ""
     # Carries its own indent so that leaving it out does not strand a line of
     # whitespace in the page; the board's footer has no help to toggle.
-    saves = ('<a class="sf-link" id="helpLink" href="#help">Where saves live</a>\n        '
+    saves = ('<a class="sf-link" id="helpLink" href="#help" data-tt="foot.saves">Where saves live</a>\n        '
              if landing else "")
     # The board's script writes the save's name and the game build into these two.
     # The landing has no save yet, so it states the build the page was checked on.
@@ -140,17 +147,31 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
     # The game's names in another language: the tables sit beside the site's
     # page (web/names/), so only the site offers the choice; a local page gets
     # its language from --lang instead. The board script wires every copy.
+    # The control is a button and a listbox the board script hangs off <body>
+    # (gnOpen()), drawn like the Theme switch beside it. The choices are the
+    # hidden list inside it, one per entry of GAME_NAME_LANGS: the script reads
+    # them from there, so a choice is added here and nowhere else.
     names = ""
     if site:
         head = f"gnHead{'L' if landing else ''}"
-        options = "".join(f'<option value="{code}" lang="{code}">{html_escape(word)}</option>'
+        options = "".join(f'<li data-value="{code}" lang="{code}" translate="no">{html_escape(word)}</li>'
                           for code, word in GAME_NAME_LANGS.items())
-        names = (f'<div class="sf-col sf-gn">\n        <h2 class="sf-head" id="{head}">Game names</h2>\n'
-                 f'        <select class="gn-pick" data-gn-pick aria-labelledby="{head}" title="The game&#39;s own '
+        code, word = next(iter(GAME_NAME_LANGS.items()))
+        names = (f'<div class="sf-col sf-gn">\n        <h2 class="sf-head" id="{head}" data-tt="foot.names.head">Game names</h2>\n'
+                 f'        <div class="gn-pick" data-gn-pick data-value="{code}">'
+                 f'<button type="button" class="gn-btn" id="{head}Btn" aria-haspopup="listbox" aria-expanded="false" '
+                 f'aria-labelledby="{head} {head}Btn" data-tt-title="foot.names.tip" title="The game&#39;s own '
                  'names for items, business types, neighbourhoods, stations and skills, in the language you '
                  'play in. Everything else on the page stays English.">'
-                 f'{options}</select>\n      </div>\n      ')
-    build = (f'<span class="sf-meta">Game build {VERIFIED_BUILD}</span>' if landing
+                 '<span class="gn-glyph" aria-hidden="true"><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16">'
+                 '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.3 3.6 5.1 3.6 8.5s-1.2 6.2-3.6 8.5'
+                 'c-2.4-2.3-3.6-5.1-3.6-8.5s1.2-6.2 3.6-8.5z"/></svg></span>'
+                 f'<span class="gn-cur" lang="{code}" translate="no">{html_escape(word)}</span>'
+                 '<svg class="sf-ic gn-chev" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg>'
+                 f'</button><ul class="gn-opts" hidden>{options}</ul></div>\n      </div>\n      ')
+    # The board script writes the words (tt("foot.build")) into every
+    # [data-foot-build], so the landing's follows the UI language too.
+    build = (f'<span class="sf-meta" data-foot-build="{VERIFIED_BUILD}">Game build {VERIFIED_BUILD}</span>' if landing
              else '<span class="sf-meta" id="footBuild"></span>'
                   # The difficulty chip, shown here at 1500 px and under; wider
                   # than that it ends the masthead clock's last line.
@@ -172,41 +193,41 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
         <div class="sf-card-head">
           <span class="sf-badge"><svg class="sf-ic sf-nudge" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8 13.5l4-4 4 4"/></svg></span>
           <div class="sf-card-copy">
-            <span class="sf-card-title">Vote on what comes next<span class="feature-new" data-new-feature="community-voting" hidden>New</span></span>
-            <span class="sf-card-note">Pick the features Big Copilot gets next.</span>
+            <span class="sf-card-title"><span data-tt="foot.vote.title">Vote on what comes next</span><span class="feature-new" data-new-feature="community-voting" data-tt="nav.new" hidden>New</span></span>
+            <span class="sf-card-note" data-tt="foot.vote.note">Pick the features Big Copilot gets next.</span>
           </div>
         </div>
-        <button type="button" class="sf-cta sf-fill" data-community-open aria-haspopup="dialog">Vote on features</button>
+        <button type="button" class="sf-cta sf-fill" data-community-open aria-haspopup="dialog" data-tt="foot.vote.cta">Vote on features</button>
       </div>
       <div class="sf-card">
         <div class="sf-card-head">
           <span class="sf-badge"><svg class="sf-ic sf-beat" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/></svg></span>
           <div class="sf-card-copy">
-            <span class="sf-card-title">Support the project</span>
-            <span class="sf-card-note">A small thank-you keeps this and future {GAME_NAME} projects going.</span>
+            <span class="sf-card-title" data-tt="foot.support.title">Support the project</span>
+            <span class="sf-card-note" data-tt="foot.support.note">A small thank-you keeps this and future {GAME_NAME} projects going.</span>
           </div>
         </div>
-        <a class="sf-cta sf-line" href="{DONATE_URL}" target="_blank" rel="noopener"><svg class="sf-ic sf-beat" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/></svg>Donate via PayPal</a>
+        <a class="sf-cta sf-line" href="{DONATE_URL}" target="_blank" rel="noopener"><svg class="sf-ic sf-beat" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/></svg><span data-tt="foot.support.cta">Donate via PayPal</span></a>
       </div>
     </div>
     <div class="sf-cols">
-      <nav class="sf-nav" aria-label="About Big Copilot">
+      <nav class="sf-nav" aria-label="About Big Copilot" data-tt-aria-label="foot.nav.label">
       <div class="sf-col">
-        <h2 class="sf-head">Big Copilot</h2>
-        {saves}<button type="button" class="sf-link sf-btn" data-changelog aria-haspopup="dialog">Changelog<span class="feature-new" data-new-feature="changelog" hidden>New</span></button>
-        {_sf_out(WORKSHOP_URL, "Game link mod", title="Big Copilot Link on the Steam Workshop: the board reads the game you are playing.", feature="game-link")}
-        {_sf_out(FEEDBACK_URL, "Bugs and feedback", title="The Discord's support channel: a save that will not build, a wrong number, or something the board should show, all welcome.")}
-        {_sf_out(REPO_URL, "Source code", title="MIT-licensed")}
+        <h2 class="sf-head" translate="no">Big Copilot</h2>
+        {saves}<button type="button" class="sf-link sf-btn" data-changelog aria-haspopup="dialog"><span data-tt="foot.changelog">Changelog</span><span class="feature-new" data-new-feature="changelog" data-tt="nav.new" hidden>New</span></button>
+        {_sf_out(WORKSHOP_URL, "Game link mod", title="Big Copilot Link on the Steam Workshop: the board reads the game you are playing.", feature="game-link", key="foot.mod")}
+        {_sf_out(FEEDBACK_URL, "Bugs and feedback", title="The Discord's support channel: a save that will not build, a wrong number, or something the board should show, all welcome.", key="foot.feedback", attrs=" data-sf-feedback")}
+        {_sf_out(REPO_URL, "Source code", title="MIT-licensed", key="foot.source")}
       </div>
       <div class="sf-col">
-        <h2 class="sf-head">Follow</h2>
+        <h2 class="sf-head" data-tt="foot.follow">Follow</h2>
         {_sf_out(YOUTUBE_URL, "YouTube", '<svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="4"/><path d="M10.2 9.4l4.4 2.6-4.4 2.6z"/></svg>')}
         {_sf_out(SUBREDDIT_URL, "r/bigambitions", '<svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H11l-4.5 4v-4A2.5 2.5 0 0 1 4 13.5z"/></svg>')}
         {_sf_out(DISCORD_URL, "Discord", '<svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M7.4 18.4 5.6 9.3c-.2-1.2.5-2.3 1.7-2.6A16.4 16.4 0 0 1 12 6.1c1.6 0 3.2.2 4.7.6 1.2.3 1.9 1.4 1.7 2.6l-1.8 9.1a10.6 10.6 0 0 1-2.8 1.3l-.8-1.5c-.7.1-1.3.1-2 0l-.8 1.5a10.6 10.6 0 0 1-2.8-1.3z"/><path d="M9.7 12.4v.5M14.3 12.4v.5"/></svg>')}
       </div>
       <div class="sf-col">
-        <h2 class="sf-head">{GAME_NAME} &middot; official</h2>
-        {_sf_out(GAME_URL, "Steam store page")}
+        <h2 class="sf-head" data-tt="foot.official">{GAME_NAME} &middot; official</h2>
+        {_sf_out(GAME_URL, "Steam store page", key="foot.steam")}
         {_sf_out(GAME_MAKER_URL, GAME_MAKER)}
       </div>
       </nav>
@@ -214,18 +235,18 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
            whichever copies are in the page: the landing's footer and the board's
            are both here until the board replaces the landing. -->
       {names}<div class="sf-col sf-theme">
-        <h2 class="sf-head" id="themeHead{'L' if landing else ''}">Theme</h2>
+        <h2 class="sf-head" id="themeHead{'L' if landing else ''}" data-tt="foot.theme.head">Theme</h2>
         <div class="sf-seg" role="group" aria-labelledby="themeHead{'L' if landing else ''}">
-          <button type="button" class="sf-segbtn" data-theme-set="auto" aria-pressed="false"><span class="sf-sr">Match system</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9 20.5h6M12 16.5v4"/></svg></button>
-          <button type="button" class="sf-segbtn" data-theme-set="light" aria-pressed="false"><span class="sf-sr">Light</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="3.8"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></svg></button>
-          <button type="button" class="sf-segbtn" data-theme-set="dark" aria-pressed="false"><span class="sf-sr">Dark</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.2 8.2 0 1 0 10.2 10.2z"/></svg></button>
+          <button type="button" class="sf-segbtn" data-theme-set="auto" aria-pressed="false"><span class="sf-sr" data-tt="foot.theme.auto">Match system</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9 20.5h6M12 16.5v4"/></svg></button>
+          <button type="button" class="sf-segbtn" data-theme-set="light" aria-pressed="false"><span class="sf-sr" data-tt="foot.theme.light">Light</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="3.8"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></svg></button>
+          <button type="button" class="sf-segbtn" data-theme-set="dark" aria-pressed="false"><span class="sf-sr" data-tt="foot.theme.dark">Dark</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.2 8.2 0 1 0 10.2 10.2z"/></svg></button>
         </div>
       </div>
     </div>
     <div class="sf-base">
       <div class="sf-who">
-        <span class="sf-mark"><span class="sf-dot"></span>Big Copilot</span>
-        <span class="sf-said">{COLOPHON}</span>
+        <span class="sf-mark" translate="no"><span class="sf-dot"></span>Big Copilot</span>
+        <span class="sf-said" data-tt="foot.fanmade">{COLOPHON}</span>
       </div>
       <div class="sf-legal">
         {legal}{file_slot}{build}
@@ -3016,18 +3037,32 @@ def _ordinal(n: int) -> str:
     return f"{n}{last}"
 
 
-def _smart_words(level, plain_after, plain_before=0) -> str:
-    """A Smart Delivery setting in words, as the findings say it. A plain
-    amount delivered first that already reaches the level leaves the level
-    nothing to bring, and says so."""
-    before = (
-        f", but the {plain_before:,} a week delivered before it already "
-        f"{'passes' if plain_before > level else 'reaches'} the {level:,} level"
-        if plain_before >= level
-        else f", counting the {plain_before:,} a week delivered before it"
-    ) if plain_before else ""
-    return (f"Smart Delivery keeps {level:,} in stock" + before
-            + (f", plus {plain_after:,} a week on top" if plain_after else ""))
+def _smart_words(level, plain_after, plain_before=0):
+    """A Smart Delivery setting in words, as the findings say it (a msg()). A
+    plain amount delivered first that already reaches the level leaves the
+    level nothing to bring, and says so."""
+    said = dict(level=level, before=plain_before, after=plain_after)
+    if plain_before and plain_before > level:
+        if plain_after:
+            return msg("f.smart.passes.plus", "Smart Delivery keeps {level:,} in stock, but the {before:,} a week "
+                       "delivered before it already passes the {level:,} level, plus {after:,} a week on top", **said)
+        return msg("f.smart.passes", "Smart Delivery keeps {level:,} in stock, but the {before:,} a week "
+                   "delivered before it already passes the {level:,} level", **said)
+    if plain_before and plain_before == level:
+        if plain_after:
+            return msg("f.smart.reaches.plus", "Smart Delivery keeps {level:,} in stock, but the {before:,} a week "
+                       "delivered before it already reaches the {level:,} level, plus {after:,} a week on top", **said)
+        return msg("f.smart.reaches", "Smart Delivery keeps {level:,} in stock, but the {before:,} a week "
+                   "delivered before it already reaches the {level:,} level", **said)
+    if plain_before:
+        if plain_after:
+            return msg("f.smart.counting.plus", "Smart Delivery keeps {level:,} in stock, counting the {before:,} a "
+                       "week delivered before it, plus {after:,} a week on top", **said)
+        return msg("f.smart.counting", "Smart Delivery keeps {level:,} in stock, counting the {before:,} a week "
+                   "delivered before it", **said)
+    if plain_after:
+        return msg("f.smart.plus", "Smart Delivery keeps {level:,} in stock, plus {after:,} a week on top", **said)
+    return msg("f.smart", "Smart Delivery keeps {level:,} in stock", **said)
 
 
 def _import_drop(stock, drops):
@@ -4990,18 +5025,114 @@ HYPE_TIGHT = 0.90  # a wave arriving at a shop already this full is being turned
 PHRASE_SHAPES = 2  # how many weekday-hour patterns to name before counting the rest
 
 
-def _hour_phrase(hours_by_day: dict, sep: str = "; ") -> str:
+# The staffing and hour-grid words (docs/architecture.md, "UI text"): every
+# phrase below is a message whose English is what these functions always
+# wrote, so the page can say it in the reader's language, and the board code
+# that reads a limit's English reads enOf(). Keys are sp.py.*: the site panel's
+# own script owns sp.*, so the two never write the same key.
+def _sp_list(items: list, sep: str):
+    """Phrases joined as `sep.join(items)` joined them, still a message: a
+    nested "{a}, {b}", "{a}; {b}" or "{a} and {b}" per separator, so a
+    translation joins its own way. One item is itself, none is ""."""
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    rest = _sp_list(items[1:], sep)
+    if sep == ", ":
+        return msg("sp.py.list.comma", "{a}, {b}", a=items[0], b=rest)
+    if sep == "; ":
+        return msg("sp.py.list.semi", "{a}; {b}", a=items[0], b=rest)
+    if sep == " and ":
+        return msg("sp.py.list.and", "{a} and {b}", a=items[0], b=rest)
+    raise ValueError(f"_sp_list(): no message joins by {sep!r}")
+
+
+def _sp_weekday(wd: int):
+    """A weekday's first three letters, 0 Sunday, as WEEKDAYS[wd][:3] wrote them."""
+    return (
+        msg("sp.py.wd.0", "Sun") if wd == 0 else msg("sp.py.wd.1", "Mon") if wd == 1
+        else msg("sp.py.wd.2", "Tue") if wd == 2 else msg("sp.py.wd.3", "Wed") if wd == 3
+        else msg("sp.py.wd.4", "Thu") if wd == 4 else msg("sp.py.wd.5", "Fri") if wd == 5
+        else msg("sp.py.wd.6", "Sat")
+    )
+
+
+def _sp_hours(start: int, end: int):
+    """One run of hours, "8-11", or "8" for a single hour."""
+    if end - start > 1:
+        return msg("sp.py.when.hours", "{a}-{b}", a=start, b=end)
+    return msg("sp.py.when.hour", "{h}", h=start)
+
+
+def _sp_days(first: int, last: int):
+    """A run of weekdays, "Mon-Wed"."""
+    return msg("sp.py.when.days", "{a}-{b}", a=_sp_weekday(first), b=_sp_weekday(last))
+
+
+def _sp_counters(office: bool):
+    """What a site's serving posts are called where no station names them."""
+    return msg("sp.py.workstations", "workstations") if office else msg("sp.py.counters", "counters")
+
+
+def _sp_station_noun(words: dict):
+    """A role's stations by their English plural, as _role_words() says them,
+    with the station's name as a token beside it (`station_name`); None where
+    the role has no station word of its own. The grid's role["noun"] stays
+    the plain str, which the page compares against a limit's English."""
+    if not words["noun"]:
+        return None
+    return msg("sp.py.noun.station", "{stations}", stations=words["noun"], station_name=words["stationName"])
+
+
+def _cap_first(text):
+    """A cap finding's limit opening a sentence ("{limit} is the limit" in
+    _alerts()): its first character upper case, as `limit[:1].upper() +
+    limit[1:]` writes it, and still a message. Call this instead of slicing,
+    which gives a plain str that stays English on every page.
+
+    A limit that already starts upper case (a role's "{role} staffing" leads
+    with a game name's token) comes back as it is. The three that start lower
+    case have a sentence-initial key of their own (sp.py.*.first: "Staffing",
+    "Registers", "Workstations"), and a join capitalises its first part only:
+    "Staffing and projection booths". A station's own plural keeps its
+    `station_name` token beside the capitalised English. German capitalises
+    its nouns anyway, so a .first key's translation is usually its plain key's."""
+    if text[:1].upper() == text[:1]:
+        return text
+    if isinstance(text, Msg):
+        rest = {k: v for k, v in text.p.items() if k != "a"}
+        if text.key == "sp.py.list.and":
+            return msg("sp.py.list.and", "{a} and {b}", a=_cap_first(text.p["a"]), **rest)
+        if text.key == "sp.py.list.comma":
+            return msg("sp.py.list.comma", "{a}, {b}", a=_cap_first(text.p["a"]), **rest)
+        if text.key == "sp.py.list.semi":
+            return msg("sp.py.list.semi", "{a}; {b}", a=_cap_first(text.p["a"]), **rest)
+        if text.key == "sp.py.limit.staffing":
+            return msg("sp.py.limit.staffing.first", "Staffing")
+        if text.key == "sp.py.limit.registers":
+            return msg("sp.py.limit.registers.first", "Registers")
+        if text.key == "sp.py.workstations":
+            return msg("sp.py.workstations.first", "Workstations")
+        if text.key == "sp.py.limit.station":
+            return msg("sp.py.limit.station.first", "{stations}", stations=_cap_first(text.p["stations"]),
+                       station_name=text.p["station_name"])
+    return text[:1].upper() + text[1:]
+
+
+def _hour_phrase(hours_by_day: dict, sep: str = "; "):
     """"Mon-Sun 8-11, 18-20" — the shape of a set of weekday-hours in words.
 
     `sep` joins one day shape to the next ("Mon-Wed 8-20; Sat 10-14"); a caller
-    that lists several phrases apart by "; " passes " and " instead."""
+    that lists several phrases apart by "; " passes " and " instead. A message
+    (sp.py.when.*), or "" for no hours."""
     def runs(hours):
         out, start = [], None
         for h in range(25):
             if h in hours and start is None:
                 start = h
             elif h not in hours and start is not None:
-                out.append(f"{start}-{h}" if h - start > 1 else f"{start}")
+                out.append(_sp_hours(start, h))
                 start = None
         return out
 
@@ -5017,24 +5148,28 @@ def _hour_phrase(hours_by_day: dict, sep: str = "; ") -> str:
             spare += sum(len(h) for d, h in hours_by_day.items() if d in picked)
             continue
         if len(picked) == 7:
-            label = "every day"
+            label = msg("sp.py.when.everyday", "every day")
         elif len(picked) > 2 and [order.index(d) for d in picked] == list(
             range(order.index(picked[0]), order.index(picked[0]) + len(picked))
         ):
-            label = f"{WEEKDAYS[picked[0]][:3]}-{WEEKDAYS[picked[-1]][:3]}"
+            label = _sp_days(picked[0], picked[-1])
         else:
-            label = ", ".join(WEEKDAYS[d][:3] for d in picked)
-        parts.append(f"{label} {', '.join(shape)}")
-    phrase = sep.join(parts)
+            label = _sp_list([_sp_weekday(d) for d in picked], ", ")
+        parts.append(msg("sp.py.when.part", "{days} {hours}", days=label, hours=_sp_list(list(shape), ", ")))
+    phrase = _sp_list(parts, sep)
     # A list of every scattered hour is not a shape. Name the pattern and count
-    # the rest.
-    return f"{phrase} and {spare} scattered hours" if spare else phrase
+    # the rest. The English has always said "hours", one or many.
+    if spare:
+        return msg("sp.py.when.scattered", {"one": "{when} and {n} scattered hours",
+                                            "other": "{when} and {n} scattered hours"}, when=phrase, n=spare)
+    return phrase
 
 
-def _off_hours(covered: set) -> str:
-    """Group identical gaps, preserving exception days and split shifts."""
+def _off_hours(covered: set):
+    """Group identical gaps, preserving exception days and split shifts. A
+    message in _hour_phrase()'s words, or "" for none."""
     weekdays = (1, 2, 3, 4, 5, 6, 0)
-    groups = {}
+    groups, said = {}, {}
     for day, wd in enumerate(weekdays):
         gaps = [h for h in range(24) if (wd, h) not in covered]
         if not gaps:
@@ -5042,25 +5177,27 @@ def _off_hours(covered: set) -> str:
         runs, start, prev = [], gaps[0], gaps[0]
         for h in gaps[1:]:
             if h != prev + 1:
-                runs.append(f"{start}-{prev + 1}")
+                runs.append(msg("sp.py.when.hours", "{a}-{b}", a=start, b=prev + 1))
                 start = h
             prev = h
-        runs.append(f"{start}-{prev + 1}")
-        groups.setdefault(', '.join(runs), []).append(day)
+        runs.append(msg("sp.py.when.hours", "{a}-{b}", a=start, b=prev + 1))
+        hours = _sp_list(runs, ", ")
+        groups.setdefault(str(hours), []).append(day)
+        said.setdefault(str(hours), hours)
     parts = []
     for hours, days in groups.items():
         ranges, start, prev = [], days[0], days[0]
         def day_range(first, last):
-            a, b = (WEEKDAYS[weekdays[d]][:3] for d in (first, last))
-            return a if first == last else f"{a}-{b}"
+            a, b = (weekdays[d] for d in (first, last))
+            return _sp_weekday(a) if first == last else _sp_days(a, b)
         for day in days[1:]:
             if day != prev + 1:
                 ranges.append(day_range(start, prev))
                 start = day
             prev = day
         ranges.append(day_range(start, prev))
-        parts.append(f"{', '.join(ranges)} {hours}")
-    return "; ".join(parts)
+        parts.append(msg("sp.py.when.part", "{days} {hours}", days=_sp_list(ranges, ", "), hours=said[hours]))
+    return _sp_list(parts, "; ")
 
 
 def _ceil_ten(value: float) -> int:
@@ -6026,6 +6163,9 @@ def _hourly(
                 # The station of this role worth adding another of: the
                 # largest, ties broken by name so the words do not move.
                 "station": biggest,
+                # Its game key, so a sentence can carry the station's name
+                # as a token beside the English words made of it.
+                "stationKey": min(slugs[p] for p in by_skill[skill] if labels[p] == biggest),
                 "counters": sum(by_skill[skill].values()),
                 "stationCount": len(by_skill[skill]),
                 "staffed": [[0] * 24 for _ in range(7)],
@@ -7932,7 +8072,8 @@ def _factory_site_plan(site, business, posts_of, pool, people, mode, label, name
         now = line.get("hoursNow") or 0
         todo.append((line, posts_of.get(("unnamed", site["s"], i)) or [],
                      24 if mode == "cap" or not now else now,
-                     f"{tok(line.get('workstationKey'), line['workstation'])}, recipe not named", True))
+                     msg("sp.py.factory.unnamed", "{workstation}, recipe not named",
+                         workstation=tok(line.get("workstationKey"), line["workstation"])), True))
     for line, posts, hours, item, unnamed in todo:
         if not posts or not hours:
             continue
@@ -7942,7 +8083,8 @@ def _factory_site_plan(site, business, posts_of, pool, people, mode, label, name
         for position, post in zip(line["slots"], posts):
             runs[len(stations)] = [set(range(start, start + hours)) for _ in range(7)]
             stations.append({"id": post, "skill": FACTORY_SKILL, "rate": 1,
-                             "name": f"{plain(item)}, position {position}"})
+                             "name": msg("sp.py.factory.station", "{item}, position {slot}",
+                                         item=plain(item), slot=position, item_name=item)})
         lines.append({
             "slug": line.get("slug"), "item": item, "machines": line["machines"],
             "hoursNow": line.get("hoursNow"), "hours": hours, "from": start, "to": start + hours,
@@ -8815,26 +8957,37 @@ def _role_words(role: dict, office: bool) -> dict:
     if office:
         return {
             "noun": None,
-            "staffing": ("staffing", "more staff at the computers on those hours"),
-            "posts": ("workstations", "another computer workstation"),
+            "staffing": (msg("sp.py.limit.staffing", "staffing"),
+                         msg("sp.py.fix.office.staff", "more staff at the computers on those hours")),
+            "posts": (msg("sp.py.workstations", "workstations"),
+                      msg("sp.py.fix.office.post", "another computer workstation")),
         }
     if role["skill"] == SERVICE_SKILL:
         return {
             "noun": None,
-            "staffing": ("staffing", "more service staff on those hours"),
-            "posts": ("registers", "another counter"),
+            "staffing": (msg("sp.py.limit.staffing", "staffing"),
+                         msg("sp.py.fix.service.staff", "more service staff on those hours")),
+            "posts": (msg("sp.py.limit.registers", "registers"), msg("sp.py.fix.service.post", "another counter")),
         }
     station = _lower_first(role["station"])
+    role_name = tok(role["skill"], role["label"])
+    # The station's own words are the game's name, lowered and pluralised in
+    # English, and stay English: a token cannot be declined or pluralised. So
+    # every message holding them also carries the name as a token,
+    # `station_name`, for a translation to write instead.
+    station_name = tok(role.get("stationKey"), role["station"])
     return {
         "noun": _plural(station),
+        "stationName": station_name,
         # Two different answers, two different limits, the way a shop's
         # "staffing" and "registers" are two: one line is about people, the
         # other about posts. The posts limit names the station itself, so two
         # shops short of two different stations of one role never collide --
         # the id hashes the limit, and nothing but the limit.
-        "staffing": (f"{tok(role['skill'], role['label'])} staffing",
-                     f"another {tok(role['skill'], role['label'])} on those hours"),
-        "posts": (_plural(station), f"another {station}"),
+        "staffing": (msg("sp.py.limit.role", "{role} staffing", role=role_name),
+                     msg("sp.py.fix.role.staff", "another {role} on those hours", role=role_name)),
+        "posts": (msg("sp.py.limit.station", "{stations}", stations=_plural(station), station_name=station_name),
+                  msg("sp.py.fix.role.post", "another {station}", station=station, station_name=station_name)),
     }
 
 
@@ -8933,7 +9086,7 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                 # has no advice for it: the finding names the ceiling and what
                 # goes through it, and no fix. _alerts() raises no line for it;
                 # it shows on the site page's hour grid and chip only.
-                finding["limit"] = "the building"
+                finding["limit"] = msg("sp.py.limit.building", "the building")
                 finding["fix"] = ""
             else:
                 # One role reads exactly as it always has, which is what keeps
@@ -8947,14 +9100,13 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                     )
                     for kind, skill in limits
                 ]
-                finding["limit"] = " and ".join(w[part][0] for w, part in said)
-                finding["fix"] = " and ".join(w[part][1] for w, part in said)
+                finding["limit"] = _sp_list([w[part][0] for w, part in said], " and ")
+                finding["fix"] = _sp_list([w[part][1] for w, part in said], " and ")
                 finding["limits"] = len(said)
-                default = "workstations" if office else "counters"
                 finding["noun"] = (
-                    said[0][0]["noun"]
+                    _sp_station_noun(said[0][0])
                     if len(said) == 1
-                    else " and ".join(w["noun"] or default for w, _ in said)
+                    else _sp_list([_sp_station_noun(w) or _sp_counters(office) for w, _ in said], " and ")
                 )
             out.append(finding)
 
@@ -9000,7 +9152,7 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                             spare = sum(r[1] for r in piece)
                             runs_here.append(
                                 {
-                                    "noun": _role_words(role, office)["noun"],
+                                    "noun": _sp_station_noun(_role_words(role, office)),
                                     "wd": wd,
                                     "hours": [r[0] for r in piece],
                                     "staff": piece[0][3],
@@ -9029,7 +9181,7 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                     "key": grid["key"],
                     "site": grid["name"],
                     "office": office,
-                    "noun": _role_words(best["role"], office)["noun"],
+                    "noun": _sp_station_noun(_role_words(best["role"], office)),
                     "day": WEEKDAYS[best["wd"]],
                     "from": best["from"],
                     "to": best["to"],
@@ -9086,7 +9238,7 @@ def _idle_week(runs: list) -> dict:
 IDLE_PARTS = 2  # how many parts of an overstaffed week the line names
 
 
-def _idle_parts(parts: list, default: str) -> str:
+def _idle_parts(parts: list, default):
     """The overstaffed week's parts as the line says them: the IDLE_PARTS with
     the most spare staff-hours, in the week's own order, then "(and N more)" --
     in brackets, since "; and 2 more for 10 customers an hour" would read as
@@ -9094,14 +9246,21 @@ def _idle_parts(parts: list, default: str) -> str:
 
     A part's hours can end "and 5 scattered hours" and join day shapes with
     "and", so the parts are kept apart by a semicolon. spIdleWeek() on the
-    site page says them the same way."""
+    site page says them the same way. A message (sp.py.idle.*); `default`,
+    the noun of a part whose role has none, is best _sp_counters(office), so
+    it is a message too."""
     ranked = sorted(range(len(parts)), key=lambda i: (-(parts[i].get("spare") or 0), i))
     named = sorted(ranked[:IDLE_PARTS])
-    said = "; ".join(
-        f"{parts[i]['staff']} {parts[i]['noun'] or default} {parts[i]['when']}" for i in named
-    )
+    said = _sp_list([
+        msg("sp.py.idle.part", {"one": "{n} {noun} {when}", "other": "{n} {noun} {when}"},
+            n=parts[i]["staff"], noun=parts[i]["noun"] or default, when=parts[i]["when"])
+        for i in named
+    ], "; ")
     more = len(parts) - len(named)
-    return f"{said} (and {more} more)" if more else said
+    if more:
+        return msg("sp.py.idle.more", {"one": "{parts} (and {n} more)", "other": "{parts} (and {n} more)"},
+                   parts=said, n=more)
+    return said
 
 
 GLOBAL_HOOD = "ba:neighborhood_global"
@@ -9957,11 +10116,15 @@ def _chains(save: Save, businesses: list, trends: list) -> list:
     for key, members in groups.items():
         shops = [b for b in members if b["status"] in ENDS_A_CHAIN]
         if key == "\0vacant":
-            name = "Vacant leases"
+            name = msg("co.chain.name.vacant", "Vacant leases")
         elif key == "\0support":
-            name = "Head office and support"
+            name = msg("co.chain.name.support", "Head office and support")
         else:
-            name = _plural(shops[0]["type"]) if shops else members[0]["type"]
+            # The English plural is English's; another language names the
+            # chain by its type's game name, {type}.
+            b = shops[0] if shops else members[0]
+            name = msg("co.chain.name.type", "{chain}", chain=_plural(b["type"]) if shops else b["type"],
+                       type=tok(b.get("typeSlug"), b["type"]))
         chains.append(_chain(name, members, fed_by, by_key, by_trend))
     chains.sort(key=lambda c: -c["profit"])
     return chains
@@ -10991,11 +11154,11 @@ def _alerts(
             where=where, when=when, n=per_week, worth=worth, fix=group[0]["fix"],
             rate=msg("f.atcap.rate", "{n}/h", n=cap) if cap == top
             else msg("f.atcap.range", "{low}-{high}/h", low=cap, high=top),
-            noun=group[0].get("noun") or (msg("f.atcap.noun.office", "workstations") if office
-                                          else msg("f.atcap.noun.shop", "counters")),
+            noun=group[0].get("noun") or _sp_counters(office),
             # Only the first character: a tie joins two limits, and
             # str.capitalize() would lowercase "DJ booths" in the second.
-            limit=limit[:1].upper() + limit[1:],
+            # _cap_first() does that and keeps the limit a message.
+            limit=_cap_first(limit),
         )
         several = group[0].get("limits", 1) > 1
         if len(group) == 1:
@@ -11045,7 +11208,7 @@ def _alerts(
         if finding["key"] in silent or finding["kind"] != "idle":
             continue
         site = finding["site"]
-        default = "workstations" if finding.get("office") else "counters"
+        default = _sp_counters(finding.get("office", False))
         week = finding.get("week") or {
             "spare": finding["spare"],
             "worth": finding["worth"],
@@ -11205,9 +11368,9 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
                     named = tok(slug, item)
                     notes.append(_finding(
                         "critical", b["name"], "topup",
-                        f"{named} is topped up to {fact['have']:,} a day against the "
-                        f"{fact['use']:,} its busiest day sends on; raise the top-up to "
-                        f"{fact['setTo']:,}",
+                        msg("f.topup", "{item} is topped up to {have:,} a day against the {use:,} its busiest day "
+                            "sends on; raise the top-up to {set:,}",
+                            item=named, have=fact["have"], use=fact["use"], set=fact["setTo"]),
                         key=b["key"], rank=round(fact["have"] / fact["use"], 2) if fact["use"] else 0,
                         subject=item, named=named, ev={"slug": slug}))
                 continue
@@ -11234,13 +11397,23 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
             if st == "short" and fact["role"] == "depot" and fact.get("wholesale"):
                 # A depot a wholesale store delivers to: its contract, said on
                 # the depot's own page (Weekly imports does not list it).
+                said = dict(item=named, have=fact["have"], use=fact["use"], route=parts.get("route"),
+                            set=fact.get("setTo"))
+                if parts.get("route") and fact.get("setTo"):
+                    text = msg("f.depot.wholesale.route.raise", "{item}'s wholesale delivery brings {have:,} a week "
+                               "against {use:,} used beyond the {route:,} a week a route brings; raise the contract "
+                               "to {set:,}", **said)
+                elif parts.get("route"):
+                    text = msg("f.depot.wholesale.route", "{item}'s wholesale delivery brings {have:,} a week "
+                               "against {use:,} used beyond the {route:,} a week a route brings", **said)
+                elif fact.get("setTo"):
+                    text = msg("f.depot.wholesale.raise", "{item}'s wholesale delivery brings {have:,} a week "
+                               "against {use:,} used; raise the contract to {set:,}", **said)
+                else:
+                    text = msg("f.depot.wholesale", "{item}'s wholesale delivery brings {have:,} a week against "
+                               "{use:,} used", **said)
                 notes.append(_finding(
-                    fact["lvl"], site, "wholesale",
-                    f"{named}'s wholesale delivery brings {fact['have']:,} a week against "
-                    f"{fact['use']:,} used"
-                    + (f" beyond the {parts['route']:,} a week a route brings"
-                       if parts.get("route") else "")
-                    + (f"; raise the contract to {fact['setTo']:,}" if fact.get("setTo") else ""),
+                    fact["lvl"], site, "wholesale", text,
                     key=key, rank=round(fact["have"] / fact["use"], 2) if fact["use"] else 0,
                     subject=item, named=named, ev=ev))
                 continue
@@ -11248,24 +11421,51 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
                                  entry.get("plainBefore", 0)) if entry.get("smart") else ""
             if parts.get("lines") or fact["role"] == "input":
                 if st == "paused":
-                    text = f"{named} import is paused; resume the contract supplying {site}"
+                    text = msg("f.import.paused.resume", "{item} import is paused; resume the contract supplying "
+                               "{site}", item=named, site=site)
                 elif st == "noplan":
                     stock = next((l["units"] for l in b["lines"] if l["slug"] == slug), 0)
-                    weeks = stock / fact["use"] if fact["use"] else 0
-                    who = "the factories eat" if not parts.get("sites") else "the factories and other sites draw"
-                    text = (f"{named} has no standing import; {site} holds {stock:,}, "
-                            f"{weeks:.1f} weeks of the {fact['use']:,} a week {who}"
-                            + (f" beyond the {parts['route']:,} a week a route brings"
-                               if parts.get("route") else ""))
+                    said = dict(item=named, site=site, stock=stock, use=fact["use"], route=parts.get("route"),
+                                weeks=stock / fact["use"] if fact["use"] else 0)
+                    # The factories alone, or other sites drawing on it too;
+                    # and a route bringing part of the week, or not.
+                    if not parts.get("sites") and parts.get("route"):
+                        text = msg("f.import.noplan.route", "{item} has no standing import; {site} holds {stock:,}, "
+                                   "{weeks:.1f} weeks of the {use:,} a week the factories eat beyond the {route:,} a "
+                                   "week a route brings", **said)
+                    elif not parts.get("sites"):
+                        text = msg("f.import.noplan", "{item} has no standing import; {site} holds {stock:,}, "
+                                   "{weeks:.1f} weeks of the {use:,} a week the factories eat", **said)
+                    elif parts.get("route"):
+                        text = msg("f.import.noplan.sites.route", "{item} has no standing import; {site} holds "
+                                   "{stock:,}, {weeks:.1f} weeks of the {use:,} a week the factories and other sites "
+                                   "draw beyond the {route:,} a week a route brings", **said)
+                    else:
+                        text = msg("f.import.noplan.sites", "{item} has no standing import; {site} holds {stock:,}, "
+                                   "{weeks:.1f} weeks of the {use:,} a week the factories and other sites draw",
+                                   **said)
                 elif entry.get("smart"):
-                    text = (f"{named}: this import needs to cover {fact['use']:,} a week and "
-                            f"{smart}; raise the Smart Delivery stock"
-                            + (f" at {entry['levelName']}" if entry.get("levelName") else "")
-                            + (f" to {fact['setTo']:,}" if fact.get("setTo") else ""))
+                    said = dict(item=named, use=fact["use"], smart=smart, at=entry.get("levelName"),
+                                set=fact.get("setTo"))
+                    if entry.get("levelName") and fact.get("setTo"):
+                        text = msg("f.import.smart.at.raise", "{item}: this import needs to cover {use:,} a week and "
+                                   "{smart}; raise the Smart Delivery stock at {at} to {set:,}", **said)
+                    elif entry.get("levelName"):
+                        text = msg("f.import.smart.at", "{item}: this import needs to cover {use:,} a week and "
+                                   "{smart}; raise the Smart Delivery stock at {at}", **said)
+                    elif fact.get("setTo"):
+                        text = msg("f.import.smart.raise", "{item}: this import needs to cover {use:,} a week and "
+                                   "{smart}; raise the Smart Delivery stock to {set:,}", **said)
+                    else:
+                        text = msg("f.import.smart", "{item}: this import needs to cover {use:,} a week and "
+                                   "{smart}; raise the Smart Delivery stock", **said)
+                elif fact.get("setTo"):
+                    text = msg("f.import.order.raise", "{item}: this import needs to cover {use:,} a week and the "
+                               "import order is {order:,}; raise it to {set:,}",
+                               item=named, use=fact["use"], order=entry.get("weekly", 0), set=fact["setTo"])
                 else:
-                    text = (f"{named}: this import needs to cover {fact['use']:,} a week and the "
-                            f"import order is {entry.get('weekly', 0):,}"
-                            + (f"; raise it to {fact['setTo']:,}" if fact.get("setTo") else ""))
+                    text = msg("f.import.order", "{item}: this import needs to cover {use:,} a week and the import "
+                               "order is {order:,}", item=named, use=fact["use"], order=entry.get("weekly", 0))
                 notes.append(_finding(fact["lvl"], site, "feed", text, key=key,
                                       rank=-round(fact["use"] / 7), subject=item, named=named, ev=ev))
                 continue
@@ -11273,43 +11473,65 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
                 continue  # a depot only shops draw on: their shelves say it
             cover = row["cover"] if row else 0
             if st == "paused":
-                text = (f"{named} import is paused: {cover:.0f} days left at "
-                        f"{row.get('importPerDay', row['perDay']):,}/day"
-                        if row else f"{named} import is paused")
+                # round() is what {cover:.0f} printed, and a whole number
+                # picks the plural a translation needs.
+                text = (msg("f.paused", {"one": "{item} import is paused: {n} days left at {rate:,}/day",
+                                         "other": "{item} import is paused: {n} days left at {rate:,}/day"},
+                            item=named, n=round(cover), rate=row.get("importPerDay", row["perDay"]))
+                        if row else msg("f.paused.bare", "{item} import is paused", item=named))
                 notes.append(_finding(fact["lvl"], site, "paused", text,
                                       key=key, rank=cover, subject=item, named=named, ev=ev))
                 continue
             brought = entry.get("weekly", 0)
-            text = ((f"{named}: {smart} against a " if entry.get("smart")
-                     else f"{named} orders {brought:,} a week against a ")
-                    + f"{fact['use']:,} week of use, {fact['use'] - brought:,} short")
+            said = dict(item=named, smart=smart, brought=brought, use=fact["use"], short=fact["use"] - brought)
             if row and row["coverFit"] == "short":
-                arrives = weekday(row.get("coverageUntil", row["arrives"])) or "the next"
-                when = f"on {row['runsOut']}" if row["runsOut"] else f"in {row['cover']} days"
-                text += (f"; already runs dry {when}, {row['shortBy']:.1f} days before "
-                         f"{arrives}'s import")
+                said.update(when=_runs_dry_when(row), by=row["shortBy"],
+                            arrives=row.get("coverageUntil", row["arrives"]))
+                text = (msg("f.order.smart.dry", "{item}: {smart} against a {use:,} week of use, {short:,} short; "
+                            "already runs dry {when}, {by:.1f} days before {arrives:day}'s import", **said)
+                        if entry.get("smart") else
+                        msg("f.order.dry", "{item} orders {brought:,} a week against a {use:,} week of use, "
+                            "{short:,} short; already runs dry {when}, {by:.1f} days before {arrives:day}'s import",
+                            **said))
+            elif entry.get("smart"):
+                text = msg("f.order.smart", "{item}: {smart} against a {use:,} week of use, {short:,} short", **said)
+            else:
+                text = msg("f.order", "{item} orders {brought:,} a week against a {use:,} week of use, {short:,} "
+                           "short", **said)
             notes.append(_finding("critical", site, "order", text,
                                   key=key, rank=cover, subject=item, named=named, ev=ev))
     return notes
 
 
+def _runs_dry_when(row: dict):
+    """When an import row's stock runs dry, as the findings say it: on its
+    weekday, or in so many days."""
+    if row["runsOut"]:
+        return msg("f.dry.on", "on {d:day}", d=WEEKDAYS.index(row["runsOut"]))
+    return msg("f.dry.in", {"one": "in {n} days", "other": "in {n} days"}, n=row["cover"])
+
+
 def _shortfall_note(row: dict, item: str, site: str, key: str) -> dict:
     """A depot's stock that will not reach its next drop, or, where a route
     brings the week, a busy day the shelf cannot carry to the next round."""
-    arrives = weekday(row.get("coverageUntil", row["arrives"])) or "the next"
-    when = f"on {row['runsOut']}" if row["runsOut"] else f"in {row['cover']} days"
     named = tok(row["slug"], item)
     # The draw the import answers for; a route's share is named, not hidden.
-    rate = f"{row.get('importPerDay', row['perDay']):,}/day" + (
-        f" beyond the {row['routed']:,}/day a route brings" if row.get("routed") else "")
+    said = dict(item=named, when=_runs_dry_when(row), routed=row.get("routed"),
+                rate=row.get("importPerDay", row["perDay"]))
     if row.get("covered"):
-        text = (f"{named} runs dry {when}, before the route's next round; a route brings "
-                f"the week's draw ({row['routed']:,}/day) but a busy day outruns the shelf"
-                + ("; the import is paused" if row["paused"] else ""))
+        text = (msg("f.shortfall.route.paused", "{item} runs dry {when}, before the route's next round; a route "
+                    "brings the week's draw ({routed:,}/day) but a busy day outruns the shelf; the import is paused",
+                    **said)
+                if row["paused"] else
+                msg("f.shortfall.route", "{item} runs dry {when}, before the route's next round; a route brings the "
+                    "week's draw ({routed:,}/day) but a busy day outruns the shelf", **said))
     else:
-        text = (f"{named} runs dry {when}, {row['shortBy']:.1f} days before "
-                f"{arrives}'s import ("
-                + (rate if row.get("routed") else f"{rate}, {row['peakPerDay']:,} at peak") + ")")
+        said.update(by=row["shortBy"], arrives=row.get("coverageUntil", row["arrives"]))
+        text = (msg("f.shortfall.routed", "{item} runs dry {when}, {by:.1f} days before {arrives:day}'s import "
+                    "({rate:,}/day beyond the {routed:,}/day a route brings)", **said)
+                if row.get("routed") else
+                msg("f.shortfall", "{item} runs dry {when}, {by:.1f} days before {arrives:day}'s import ({rate:,}/day, "
+                    "{peak:,} at peak)", peak=row["peakPerDay"], **said))
     return _finding("critical", site, "shortfall", text,
                     key=key, rank=row["cover"], subject=item, named=named, ev={"slug": row["slug"]})
 
@@ -11333,26 +11555,27 @@ def _unnamed_notes(businesses: list, factories: dict, silent: set) -> list:
             machines = sum(u["machines"] for u in rows)
             if not machines:
                 continue
-            many = machines != 1
             where = ", ".join(
                 sorted({f"{u['workstation']} #{s}" for u in rows for s in u["slots"]})
             )
             # The same places in the same order, their workstation a token.
-            spots = {f"{u['workstation']} #{s}": f"{tok(u.get('workstationKey'), u['workstation'])} #{s}"
+            spots = {f"{u['workstation']} #{s}": msg("f.unnamed.spot", "{station} #{slot}",
+                                                       station=tok(u.get("workstationKey"), u["workstation"]),
+                                                       slot=s)
                      for u in rows for s in u["slots"]}
-            shown = ", ".join(spots[w] for w in sorted(spots))
+            shown = _msg_list([spots[w] for w in sorted(spots)]) if spots else ""
             if kind == "idle":
-                text = (
-                    f"{machines} machine{'s' if many else ''} at {shown} "
-                    f"{'have' if many else 'has'} no recipe set: staffed and rented, making nothing"
-                )
+                text = msg("f.unset", {
+                    "one": "{n} machine at {spots} has no recipe set: staffed and rented, making nothing",
+                    "other": "{n} machines at {spots} have no recipe set: staffed and rented, making nothing",
+                }, n=machines, spots=shown)
             else:
-                text = (
-                    f"{machines} machine{'s' if many else ''} at {shown} "
-                    f"{'run' if many else 'runs'} a recipe without usable details. "
-                    f"Its inputs are missing from the totals; name unknown recipes or "
-                    f"load matching game text to include them"
-                )
+                text = msg("f.unnamed", {
+                    "one": "{n} machine at {spots} runs a recipe without usable details. Its inputs are missing "
+                           "from the totals; name unknown recipes or load matching game text to include them",
+                    "other": "{n} machines at {spots} run a recipe without usable details. Its inputs are missing "
+                             "from the totals; name unknown recipes or load matching game text to include them",
+                }, n=machines, spots=shown)
             notes.append(
                 _finding(
                     level, business["name"], group, text,
@@ -11387,19 +11610,33 @@ def _staff_notes(businesses: list, factories: dict, silent: set, mode: str = "ca
                 share = machine["hours"] / week
                 lost = round((week - machine["hours"]) / 7 * line.get("rate", 0))
                 subject = f"{name} at position {machine['slot']}"
-                text = (
-                    f"{named} machine at list position {machine['slot']} is staffed "
-                    f"{machine['hours']} of {week} hours"
-                    + (" needed" if week < STAFF_HOURS else "")
-                    + f"; nobody on it {machine['off']}"
-                    + (f"; {lost:,} a day not made" if lost else "")
-                )
+                said = dict(item=named, slot=machine["slot"], hours=machine["hours"], week=week,
+                            off=machine["off"])
+                if week < STAFF_HOURS:
+                    text = (
+                        msg("sp.py.staff.needed.lost", "{item} machine at list position {slot} is staffed "
+                            "{hours} of {week} hours needed; nobody on it {off}; {lost:,} a day not made",
+                            lost=lost, **said)
+                        if lost else
+                        msg("sp.py.staff.needed", "{item} machine at list position {slot} is staffed "
+                            "{hours} of {week} hours needed; nobody on it {off}", **said)
+                    )
+                else:
+                    text = (
+                        msg("sp.py.staff.lost", "{item} machine at list position {slot} is staffed "
+                            "{hours} of {week} hours; nobody on it {off}; {lost:,} a day not made",
+                            lost=lost, **said)
+                        if lost else
+                        msg("sp.py.staff", "{item} machine at list position {slot} is staffed "
+                            "{hours} of {week} hours; nobody on it {off}", **said)
+                    )
                 notes.append(
                     _finding(
                         "critical" if share < STAFF_CRITICAL else "warn",
                         business["name"], "staff", text,
                         key=business["key"], rank=machine["hours"], subject=subject,
-                        named=f"{named} at position {machine['slot']}",
+                        named=msg("sp.py.staff.named", "{item} at position {slot}",
+                                  item=named, slot=machine["slot"]),
                         ev={"slot": machine["slot"], "slug": line.get("slug")},
                     )
                 )
@@ -11425,37 +11662,50 @@ def _feed_notes(businesses: list, factories: dict, silent: set, mode: str = "cap
             row = {**base, **base["dem"]} if mode == "dem" and base.get("dem") else base
             status, why = row["status"], row.get("why")
             per_day = row.get("use", base["perDay"])
-            depot = businesses[row["from"]]["name"] if row["from"] is not None else "the depot"
+            depot = (businesses[row["from"]]["name"] if row["from"] is not None
+                     else msg("f.feed.depot", "the depot"))
             slugs = row.get("lineSlugs") or []
-            lines = ", ".join(tok(slugs[i] if i < len(slugs) else None, line)
-                              for i, line in enumerate(row["lines"][:3]))
+            lines = [tok(slugs[i] if i < len(slugs) else None, line) for i, line in enumerate(row["lines"][:3])]
             item = tok(row.get("slug"), row["item"])
             if status == "noplan" and row.get("via") is not None:
                 continue  # said once, by the depot's Not routed finding
+            # The paused own import is offered as the other way out, after
+            # whatever the sentence says first.
+            own = bool(row.get("ownPaused"))
+            said = dict(item=item, per=per_day, depot=depot, site=business["name"])
             if status == "noplan":
-                text = (f"{item} feeds {lines} at {per_day:,}/day "
-                        f"but no depot tops it up")
+                said.update(lines=_msg_list(lines) if lines else "")
+                text = (msg("f.feed.noplan.resume", "{item} feeds {lines} at {per:,}/day but no depot tops it up; "
+                            "or resume the paused {item} import to {site}", **said)
+                        if own else
+                        msg("f.feed.noplan", "{item} feeds {lines} at {per:,}/day but no depot tops it up", **said))
             elif status == "short" and why == "target":
-                hours = row["target"] / per_day * 24 if per_day else 0
                 raise_to = row.get("setTo", base.get("raiseTarget"))
-                text = (f"{item} top-up of {row['target']:,} covers {hours:.0f} hours "
-                        f"of a {per_day:,}/day line"
-                        + (f"; raise it to {raise_to:,}" if raise_to else ""))
+                # round() is what {hours:.0f} printed, and a whole number
+                # picks the plural a translation needs.
+                said.update(target=row["target"], n=round(row["target"] / per_day * 24 if per_day else 0),
+                            set=raise_to)
                 if row.get("stalled"):
-                    text += (f"; and none arrived last week though {depot} holds "
-                             f"{row['depotStock']:,}")
+                    said.update(stock=row["depotStock"])
+                text = _feed_target_text(bool(raise_to), bool(row.get("stalled")), own, said)
             elif status == "short" and why == "dry":
-                text = (f"{item} arrives at {row['arrives']:,}/day against "
-                        f"{per_day:,} needed and {depot} holds {row['depotStock']:,}; "
-                        f"the import is not keeping up")
+                said.update(arrives=row["arrives"], stock=row["depotStock"])
+                text = (msg("f.feed.dry.resume", "{item} arrives at {arrives:,}/day against {per:,} needed and "
+                            "{depot} holds {stock:,}; the import is not keeping up; or resume the paused {item} "
+                            "import to {site}", **said)
+                        if own else
+                        msg("f.feed.dry", "{item} arrives at {arrives:,}/day against {per:,} needed and {depot} "
+                            "holds {stock:,}; the import is not keeping up", **said))
             elif status == "stalled" and why == "notDrawn":
-                text = (f"{item} arrives at {row['arrives']:,}/day against "
-                        f"{per_day:,} needed while {depot} holds {row['depotStock']:,}; "
-                        f"the line is not drawing it")
+                said.update(arrives=row["arrives"], stock=row["depotStock"])
+                text = (msg("f.feed.notdrawn.resume", "{item} arrives at {arrives:,}/day against {per:,} needed "
+                            "while {depot} holds {stock:,}; the line is not drawing it; or resume the paused {item} "
+                            "import to {site}", **said)
+                        if own else
+                        msg("f.feed.notdrawn", "{item} arrives at {arrives:,}/day against {per:,} needed while "
+                            "{depot} holds {stock:,}; the line is not drawing it", **said))
             else:
                 continue
-            if row.get("ownPaused"):
-                text += f"; or resume the paused {item} import to {business['name']}"
             notes.append(
                 _finding(
                     row["level"], business["name"], "feed", text,
@@ -11464,6 +11714,87 @@ def _feed_notes(businesses: list, factories: dict, silent: set, mode: str = "cap
                 )
             )
     return notes
+
+
+def _feed_target_text(raise_it: bool, stalled: bool, own: bool, said: dict):
+    """_feed_notes()'s sentence for a top-up short of the line: the number to
+    raise it to, the week nothing arrived and the paused own import, each
+    where it applies. `said` holds item, target, n (the hours covered), per,
+    set, depot, stock and site."""
+    if raise_it and stalled and own:
+        return msg("f.feed.target.raise.stalled.resume", {
+            "one": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}; and none "
+                   "arrived last week though {depot} holds {stock:,}; or resume the paused {item} import to {site}",
+            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}; and "
+                     "none arrived last week though {depot} holds {stock:,}; or resume the paused {item} import to "
+                     "{site}"}, **said)
+    if raise_it and stalled:
+        return msg("f.feed.target.raise.stalled", {
+            "one": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}; and none "
+                   "arrived last week though {depot} holds {stock:,}",
+            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}; and "
+                     "none arrived last week though {depot} holds {stock:,}"}, **said)
+    if raise_it and own:
+        return msg("f.feed.target.raise.resume", {
+            "one": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}; or "
+                   "resume the paused {item} import to {site}",
+            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}; or "
+                     "resume the paused {item} import to {site}"}, **said)
+    if raise_it:
+        return msg("f.feed.target.raise", {
+            "one": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}",
+            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}"},
+            **said)
+    if stalled and own:
+        return msg("f.feed.target.stalled.resume", {
+            "one": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; and none arrived last week "
+                   "though {depot} holds {stock:,}; or resume the paused {item} import to {site}",
+            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; and none arrived last week "
+                     "though {depot} holds {stock:,}; or resume the paused {item} import to {site}"}, **said)
+    if stalled:
+        return msg("f.feed.target.stalled", {
+            "one": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; and none arrived last week "
+                   "though {depot} holds {stock:,}",
+            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; and none arrived last week "
+                     "though {depot} holds {stock:,}"}, **said)
+    if own:
+        return msg("f.feed.target.resume", {
+            "one": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; or resume the paused {item} "
+                   "import to {site}",
+            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; or resume the paused {item} "
+                     "import to {site}"}, **said)
+    return msg("f.feed.target", {
+        "one": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line",
+        "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line"}, **said)
+
+
+def _notrouted_text(one: bool, needs: bool, held: bool, said: dict):
+    """_idle_notes()'s Not routed sentence: one site or several (`who`), that
+    sell it or, with no shop among them, need it, and how long what they hold
+    lasts where that is known. `said` holds site, stock, item, who, per and
+    days."""
+    if one and needs and held:
+        return msg("f.notrouted.one.needs.held", "{site} holds {stock:,} {item} no plan sends on; {who} needs "
+                   "{per:,}/day and holds {days}", **said)
+    if one and needs:
+        return msg("f.notrouted.one.needs", "{site} holds {stock:,} {item} no plan sends on; {who} needs {per:,}/day",
+                   **said)
+    if one and held:
+        return msg("f.notrouted.one.sells.held", "{site} holds {stock:,} {item} no plan sends on; {who} sells "
+                   "{per:,}/day and holds {days}", **said)
+    if one:
+        return msg("f.notrouted.one.sells", "{site} holds {stock:,} {item} no plan sends on; {who} sells {per:,}/day",
+                   **said)
+    if needs and held:
+        return msg("f.notrouted.need.held", "{site} holds {stock:,} {item} no plan sends on; {who} need {per:,}/day "
+                   "and hold {days}", **said)
+    if needs:
+        return msg("f.notrouted.need", "{site} holds {stock:,} {item} no plan sends on; {who} need {per:,}/day",
+                   **said)
+    if held:
+        return msg("f.notrouted.sell.held", "{site} holds {stock:,} {item} no plan sends on; {who} sell {per:,}/day "
+                   "and hold {days}", **said)
+    return msg("f.notrouted.sell", "{site} holds {stock:,} {item} no plan sends on; {who} sell {per:,}/day", **said)
 
 
 def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") -> list:
@@ -11504,50 +11835,59 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
             unfed = row.get("unfed") or []
             sites = [businesses[s] for s, _per_day, _days in unfed]
             types = {b["type"] for b in sites}
-            who = (sites[0]["name"] if len(sites) == 1
-                   else f"{len(sites)} {_plural(types.pop()).lower()}" if len(types) == 1
-                   else f"{len(sites)} sites")
-            per_day = sum(u[1] for u in unfed)
+            if len(sites) == 1:
+                who = sites[0]["name"]
+            elif len(types) == 1:
+                # Several of one type: the count and the type's name, which a
+                # translation writes its own way ("Geschenkladen × 3").
+                who = msg("f.notrouted.type", {"one": "{n} {type}", "other": "{n} {type}"}, n=len(sites),
+                          type=tok(sites[0].get("typeSlug"), _plural(types.pop()).lower()))
+            else:
+                who = msg("f.notrouted.sites", {"one": "{n} sites", "other": "{n} sites"}, n=len(sites))
             days = [u[2] for u in unfed if u[2] is not None]
-            one = len(sites) == 1
-            held_for = (f" and hold{'s' if one else ''} ~{round(sum(days) / len(days)):,} days"
-                        if days else "")
-            verb = "sells" if one else "sell"
-            if all(b["status"] != "retail" for b in sites):
-                verb = "needs" if one else "need"
+            said = dict(site=name, stock=row["stock"], item=item, who=who,
+                        per=sum(u[1] for u in unfed),
+                        days=msg("f.notrouted.days", {"one": "~{n:,} days", "other": "~{n:,} days"},
+                                 n=round(sum(days) / len(days))) if days else "")
+            text = _notrouted_text(len(sites) == 1, all(b["status"] != "retail" for b in sites), bool(days), said)
             notes.append(_finding(
-                "warn", name, "notrouted",
-                f"{name} holds {row['stock']:,} {item} no plan sends on; "
-                f"{who} {verb} {per_day:,}/day{held_for}",
+                "warn", name, "notrouted", text,
                 key=key, rank=-row["stock"], subject=row["item"], named=item, ev=ev))
         elif why == "notMoving":
             # Brought here by a top-up target, with no shelf, onward route or
             # line here to use it: most likely a target set on the wrong route.
             # The stock may be meant for sites no plan reaches yet, so the
             # finding offers both ways out.
-            route = (
-                f"; {businesses[row['routedFrom']]['name']} tops it up to "
-                f"{row['target']:,} here and no plan sends it on: add a plan to the "
-                f"shops that should get it, or stop the top-up"
-                if row.get("routedFrom") is not None else ""
+            text = (
+                msg("f.dead.route", "{stock:,} {item} held with nothing moving out; {src} tops it up to {target:,} "
+                    "here and no plan sends it on: add a plan to the shops that should get it, or stop the top-up",
+                    stock=row["stock"], item=item, target=row["target"], src=businesses[row["routedFrom"]]["name"])
+                if row.get("routedFrom") is not None else
+                msg("f.dead", "{stock:,} {item} held with nothing moving out", stock=row["stock"], item=item)
             )
             notes.append(_finding(
-                "info", name, "dead",
-                f"{row['stock']:,} {item} held with nothing moving out{route}",
+                "info", name, "dead", text,
                 key=key, rank=-row["stock"], subject=row["item"], named=item, worth=worth_of(row), ev=ev))
         elif why == "importHigh":
-            level = row.get("importLevel") or 0
-            setting = (f"Smart Delivery keeps {level:,} in stock" if row.get("smart")
-                       else f"the import brings {level:,} a week")
+            # Idle stock is IDLE_WEEKS or more of what draws on it, so neither
+            # count of weeks is ever one.
+            said = dict(stock=row["stock"], item=item, weeks=row["weeks"], level=row.get("importLevel") or 0,
+                        of=(row.get("importLevel") or 0) / max(row["perWeek"], 1))
+            text = (
+                msg("f.dead.import.smart", "{stock:,} {item} is {weeks:.0f} weeks of what it feeds; Smart Delivery "
+                    "keeps {level:,} in stock, {of:.0f} weeks of it, so lower the import", **said)
+                if row.get("smart") else
+                msg("f.dead.import", "{stock:,} {item} is {weeks:.0f} weeks of what it feeds; the import brings "
+                    "{level:,} a week, {of:.0f} weeks of it, so lower the import", **said)
+            )
             notes.append(_finding(
-                "info", name, "dead",
-                f"{row['stock']:,} {item} is {row['weeks']:.0f} weeks of what it feeds; "
-                f"{setting}, {level / max(row['perWeek'], 1):.0f} weeks of it, so lower the import",
+                "info", name, "dead", text,
                 key=key, rank=-row["stock"], subject=row["item"], named=item, worth=worth_of(row), ev=ev))
         else:
             notes.append(_finding(
                 "info", name, "dead",
-                f"{row['stock']:,} {item} is {row['weeks']:.0f} weeks of what leaves",
+                msg("f.dead.weeks", "{stock:,} {item} is {weeks:.0f} weeks of what leaves",
+                    stock=row["stock"], item=item, weeks=row["weeks"]),
                 key=key, rank=-row["stock"], subject=row["item"], named=item, worth=worth_of(row), ev=ev))
 
     # A top-up target set too high groups by the target behind it: the same
@@ -11560,7 +11900,7 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
     for target, rows in by_target.items():
         items = sorted({r["item"] for r in rows})
         slug_of = {r["item"]: r["slug"] for r in rows}
-        shown = ", ".join(tok(slug_of[i], i) for i in items)
+        shown = _msg_list([tok(slug_of[i], i) for i in items])
         sites = len({r["s"] for r in rows})
         daily = sum(r["perWeek"] for r in rows) / 7 / len(rows)
         stock = sum(r["stock"] for r in rows)
@@ -11570,19 +11910,18 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
             r["value"] / max(1.0, r["weeks"] * 7) for r in rows if r["price"]
         ) or None
         if target and daily:
-            text = (
-                f"{shown} top-up target of {target:,} is "
-                f"{target / daily:.0f}x daily sales in {sites} "
-                f"shop{'s' if sites > 1 else ''}; lower the target"
-            )
+            text = msg("f.target", {
+                "one": "{items} top-up target of {target:,} is {x:.0f}x daily sales in {n} shop; lower the target",
+                "other": "{items} top-up target of {target:,} is {x:.0f}x daily sales in {n} shops; lower the target",
+            }, items=shown, target=target, x=target / daily, n=sites)
         else:
-            text = (
-                f"{stock:,} units of {shown} across {sites} "
-                f"site{'s' if sites > 1 else ''} is "
-                f"{stock / max(sum(r['perWeek'] for r in rows), 1):.0f} weeks of supply"
-            )
+            # Idle stock is IDLE_WEEKS or more of what draws on it: never one week.
+            text = msg("f.target.units", {
+                "one": "{units:,} units of {items} across {n} site is {weeks:.0f} weeks of supply",
+                "other": "{units:,} units of {items} across {n} sites is {weeks:.0f} weeks of supply",
+            }, units=stock, items=shown, n=sites, weeks=stock / max(sum(r["perWeek"] for r in rows), 1))
         one = businesses[rows[0]["s"]] if sites == 1 else None
-        site = one["name"] if one else f"{sites} shops"
+        site = one["name"] if one else msg("f.target.site", {"one": "{n} shop", "other": "{n} shops"}, n=sites)
         notes.append(
             _finding(
                 "info", site, "target", text,
@@ -12167,6 +12506,11 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .seg a{padding:6px 12px;border-radius:5px;font-size:12.5px;font-weight:500;color:var(--ink-2);text-decoration:none;transition:background .15s,color .15s}
 .seg a:hover{color:var(--ink)}
 .seg a.on{background:var(--ink);color:var(--ground)}
+/* A translated view label longer than a phone's share of the row wraps in its
+   cell rather than spilling out of it (docs/architecture.md, "UI text"). */
+@media(max-width:760px){
+  :lang(de) #pageSupply .sb-tabs a > span:not([class]){min-width:0;white-space:normal;overflow-wrap:anywhere;hyphens:auto;text-align:center}
+}
 /* The sizing switch (supplyFact): the seg with its name in front, and the
    note a figure built on a shop open under a week carries under Demand. */
 .sz-switch::before{content:"Sizing";align-self:center;padding:0 4px 0 8px;font-size:11px;font-weight:500;color:var(--ink-3)}
@@ -14018,9 +14362,35 @@ tr.ss-ring > td{animation:ss-flash 2.4s ease-out}
 .sf-theme{align-items:flex-end}
 /* The game-names picker sits just left of it, the two settings together. */
 .sf-gn{margin-left:auto}
-.gn-pick{height:42px;max-width:220px;padding:0 12px;border:1px solid var(--rule);border-radius:999px;background:var(--surface);
-  color:var(--ink);font:500 13px/1 Archivo,"Helvetica Neue",Arial,sans-serif;cursor:pointer}
-.gn-pick:hover{border-color:var(--ink-3)}
+/* Drawn as the Theme switch is: the same pill, border, surface and inner 3px
+   inset, with the globe in a round well the size of a theme button. */
+.gn-pick{display:inline-flex}
+.gn-btn{display:inline-flex;align-items:center;gap:10px;box-sizing:border-box;height:42px;max-width:240px;padding:3px 14px 3px 3px;
+  border:1px solid var(--rule);border-radius:999px;background:var(--surface);color:var(--ink);cursor:pointer;
+  font:500 13px/1 Archivo,"Helvetica Neue",Arial,sans-serif;transition:border-color .15s ease}
+.gn-btn:hover,.gn-btn[aria-expanded="true"]{border-color:var(--accent)}
+.gn-glyph{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;flex:none;border-radius:999px;
+  background:var(--accent-soft);color:var(--accent)}
+.gn-cur{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gn-chev{color:var(--ink-2);transition:transform .15s ease}
+.gn-btn:hover .gn-chev{color:var(--ink)}
+.gn-btn[aria-expanded="true"] .gn-chev{transform:rotate(180deg)}
+/* The list, hung off <body> by gnOpen() and placed against the button. */
+.gn-pop{position:fixed;left:0;top:0;z-index:60;box-sizing:border-box;min-width:200px;max-width:calc(100vw - 24px);max-height:340px;
+  overflow-y:auto;overscroll-behavior:contain;padding:6px;border:1px solid var(--rule);border-radius:12px;background:var(--surface);
+  color:var(--ink);box-shadow:0 12px 32px color-mix(in srgb,var(--ink) 16%,transparent);scrollbar-width:thin;
+  scrollbar-color:var(--rule) transparent;animation:gnpop .14s cubic-bezier(.2,.7,.2,1)}
+.gn-pop[hidden]{display:none}
+.gn-pop:focus{outline:none}
+.gn-opt{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:36px;padding:0 10px 0 12px;
+  border-radius:8px;font:500 13px/1.2 Archivo,"Helvetica Neue",Arial,sans-serif;cursor:pointer;white-space:nowrap}
+.gn-opt .sf-ic{visibility:hidden;color:var(--accent);stroke-width:2.1}
+.gn-opt.gn-on{background:var(--accent-soft)}
+.gn-pop:focus-visible .gn-opt.gn-on{box-shadow:inset 0 0 0 1px var(--accent)}
+.gn-opt[aria-selected="true"]{color:var(--accent);font-weight:600}
+.gn-opt[aria-selected="true"] .sf-ic{visibility:visible}
+@keyframes gnpop{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.gn-pop,.gn-chev{animation:none;transition:none}}
 /* The one-time offer of the player's own language, hung off <body>. */
 .gn-offer{position:fixed;right:16px;bottom:16px;z-index:60;display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;
   max-width:min(420px,calc(100vw - 32px));padding:12px 14px;border:1px solid var(--rule);border-radius:10px;
@@ -14071,7 +14441,10 @@ tr.ss-ring > td{animation:ss-flash 2.4s ease-out}
   .sf-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 16px;width:100%}
   .sf-theme{align-items:flex-start}
   .sf-gn{margin-left:0}
-  .gn-pick{height:44px}
+  /* The pill keeps the Theme switch's height here too: 44px wells and a 3px inset. */
+  .gn-btn{height:52px;padding-right:16px}
+  .gn-glyph{width:44px;height:44px}
+  .gn-opt{min-height:44px}
   .sf-segbtn{width:44px;height:44px}
   .sf-link,.sf-legal a{min-height:44px}
   .sf-base{flex-direction:column;align-items:flex-start;gap:10px}
@@ -14223,7 +14596,7 @@ body:has(#changelogDialog[open]){overflow:hidden}
 <div class="wrap">
   <header class="mast" id="mast">
     <div class="brand" id="brand"><span class="wordmark" id="title"></span><span class="dot" id="dot"></span></div>
-    <nav class="nav" id="nav" aria-label="Board pages"></nav>
+    <nav class="nav" id="nav" aria-label="Board pages" data-tt-aria-label="nav.label"></nav>
     <div class="clock tr" id="clock" tabindex="0"
       data-tip="Game time when the save was written. Day 1 was a Monday."></div>
     <div class="orb" id="orb" aria-hidden="true"><i></i><u></u></div>
@@ -14242,10 +14615,10 @@ body:has(#changelogDialog[open]){overflow:hidden}
            is moved into each fresh head rather than rebuilt. -->
       <div id="alertHead">
         <button type="button" class="ibtn tr" id="alertKindsToggle" aria-expanded="false"
-          data-tip="Which kinds of finding make the list"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg></button>
+          data-tip="Which kinds of finding make the list" data-tt-tip="today.kinds.toggle"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg></button>
       </div>
       <div class="finds" id="alerts"></div>
-      <p class="silenced" id="silenced"><b></b> · <a class="link" href="#">undo</a></p>
+      <p class="silenced" id="silenced"><b></b> · <a class="link" href="#" data-tt="today.silenced.undo">undo</a></p>
       <div class="td-minor" id="alertMinor"></div>
     </section>
 
@@ -14253,12 +14626,12 @@ body:has(#changelogDialog[open]){overflow:hidden}
          by paintPlanImports() (from the change checklist), drawFindLocation()
          and drawOptimizeStaffing(). The cards tilt from wireCards(). -->
     <section class="sec rv" id="secMoves">
-      <div class="sechead"><h2>Next moves</h2>
-        <span class="why" data-tip="Tools for the decisions you make each week, each one opening the page that does the work. Plan imports opens the change checklist on Supply; Optimize staffing opens Staffing on the shop with the most work to save, a week to copy into BizMan &rsaquo; Schedule; Find a location opens the finder on the Map." tabindex="0"><i>?</i></span></div>
+      <div class="sechead"><h2 data-tt="today.moves.title">Next moves</h2>
+        <span class="why" data-tt-tip="today.moves.why" data-tip="Tools for the decisions you make each week, each one opening the page that does the work. Plan imports opens the change checklist on Supply; Optimize staffing opens Staffing on the shop with the most work to save, a week to copy into BizMan &rsaquo; Schedule; Find a location opens the finder on the Map." tabindex="0"><i>?</i></span></div>
       <div class="moves">
-        <a class="move rv" href="#supply" id="planImportsCard"><span class="soon"></span><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4M8 14h3M13 14h3M8 18h3"></path></svg></span><b>Plan imports</b><span class="what"></span><span class="go">Opens the change checklist</span></a>
-        <a class="move rv" href="#secDetail" id="optimizeStaffingCard"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg></span><b>Optimize staffing</b><span class="what">Hours built from your customer count: registers, building capacity and the schedule each person asked for.</span><span class="go">Opens the shop&#39;s Staffing</span></a>
-        <a class="move rv" href="#map" id="findLocationCard"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"></path><circle cx="12" cy="10" r="2.2"></circle></svg></span><b>Find a location</b><span class="what">Free buildings ranked by demand, rivals and the building capacity you would get.</span><span class="go">Opens the finder on the map</span></a>
+        <a class="move rv" href="#supply" id="planImportsCard"><span class="soon"></span><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4M8 14h3M13 14h3M8 18h3"></path></svg></span><b data-tt="today.moves.plan.title">Plan imports</b><span class="what"></span><span class="go" data-tt="today.moves.plan.go">Opens the change checklist</span></a>
+        <a class="move rv" href="#secDetail" id="optimizeStaffingCard"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg></span><b data-tt="today.moves.staff.title">Optimize staffing</b><span class="what">Hours built from your customer count: registers, building capacity and the schedule each person asked for.</span><span class="go">Opens the shop&#39;s Staffing</span></a>
+        <a class="move rv" href="#map" id="findLocationCard"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"></path><circle cx="12" cy="10" r="2.2"></circle></svg></span><b data-tt="today.moves.find.title">Find a location</b><span class="what">Free buildings ranked by demand, rivals and the building capacity you would get.</span><span class="go" data-tt="today.moves.find.go">Opens the finder on the map</span></a>
       </div>
     </section>
   </div>
@@ -14270,7 +14643,7 @@ body:has(#changelogDialog[open]){overflow:hidden}
        is a view of the tab on screen, its one svg#flow moved into that tab's
        .sb-diag (sbPlaceFlow()). -->
   <div class="page" id="pageSupply" hidden>
-    <div class="sechead subhead sb-sub"><nav class="seg sb-tabs" id="supplyNav" aria-label="Supply"></nav>
+    <div class="sechead subhead sb-sub"><nav class="seg sb-tabs" id="supplyNav" aria-label="Supply" data-tt-aria-label="nav.sub.supply"></nav>
       <div class="aside"><span class="seg sb-mode" id="sbMode" aria-label="Which rows to list"></span><span class="seg sb-view" id="sbView" aria-label="List or diagram"></span></div></div>
     <div id="sbStrip"></div>
 
@@ -14282,7 +14655,7 @@ body:has(#changelogDialog[open]){overflow:hidden}
   </div>
 
   <div class="page" id="pageGrowth" hidden>
-    <div class="sechead subhead"><nav class="seg" id="growthNav" aria-label="Growth views"></nav></div>
+    <div class="sechead subhead"><nav class="seg" id="growthNav" aria-label="Growth views" data-tt-aria-label="nav.sub.growth"></nav></div>
 
     <section class="sec rv" id="secMarket" data-sub="market">
       <div class="sechead"><h2>Market demand</h2>
@@ -14317,7 +14690,7 @@ body:has(#changelogDialog[open]){overflow:hidden}
        at a time behind the secondary nav. Each section's head and body are
        drawn by its own draw*(). -->
   <div class="page" id="pageCompany" hidden>
-    <div class="sechead subhead"><nav class="seg" id="companyNav" aria-label="Company views"></nav></div>
+    <div class="sechead subhead"><nav class="seg" id="companyNav" aria-label="Company views" data-tt-aria-label="nav.sub.company"></nav></div>
 
     <section class="sec rv" id="secDaily" data-sub="results">
       <div id="dailyHead"></div>
@@ -14351,7 +14724,7 @@ body:has(#changelogDialog[open]){overflow:hidden}
 <!--__FOOTER__-->
 </div>
 <dialog class="changelog-dialog" id="changelogDialog" aria-labelledby="changelogTitle" aria-describedby="changelogIntro">
-  <div class="changelog-head"><div><h2 id="changelogTitle">Changelog</h2><p id="changelogIntro">What's changed in Big Copilot.</p></div><button type="button" class="btn2" id="closeChangelog" autofocus>Close</button></div>
+  <div class="changelog-head"><div><h2 id="changelogTitle" data-tt="nav.dlg.changelog.title">Changelog</h2><p id="changelogIntro" data-tt="nav.dlg.changelog.intro">What's changed in Big Copilot.</p></div><button type="button" class="btn2" id="closeChangelog" autofocus data-tt="nav.dlg.close">Close</button></div>
   <ol class="changelog-list"><!--__CHANGELOG__--></ol>
 </dialog>
 <script>
@@ -14436,7 +14809,7 @@ document.addEventListener('click', event => {
 })();
 </script>
 <dialog class="map-dialog" id="locationMapDialog" aria-labelledby="locationMapTitle">
-  <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
+  <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
 <!--__BEFORE_SCRIPT__-->
@@ -14452,7 +14825,7 @@ const LIVE = /*__LIVE__*/false;
    a factory-line name and resolves to the data that follows, and watch() is
    handed the callbacks changed(data), stale(why) and lost(). */
 const SOURCE = window.LEDGER_SOURCE || {
-  label: "Live",
+  get label(){ return tt("nav.live", "Live"); },
   data: async () => (await fetch("data.json", {cache:"no-store"})).json(),
   name: async (rid, slug) => {
     await fetch("name", {method:"POST", headers:{"Content-Type":"application/json"},
@@ -14525,14 +14898,14 @@ const siteCell = b => `<div class="site">${bullet(b)}<span><b>${b.name}</b>
 /* The tile sparkline, the generator's spark(): an area under the line, the
    line, a point and a read-out that follow the pointer (wireTiles). x runs
    0..100 so the wiring can find the nearest point from the pointer's share of
-   the width; the labels are what it prints, one per point, comma-separated,
-   so they must not carry commas themselves (compact money does not). */
+   the width; the labels are what it prints, one per point, separated by "|",
+   which no number carries in any language (German money has commas). */
 function sparkHtml(values, labels){
   if(values.length < 2) return "";
   const lo = Math.min(...values), hi = Math.max(...values), span = (hi - lo) || 1;
   const pts = values.map((v, i) => [i / (values.length - 1) * 100, 30 - (v - lo) / span * 26]);
   const poly = pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
-  return `<div class="spark" data-vals="${attr(labels.join(","))}">
+  return `<div class="spark" data-vals="${attr(labels.join("|"))}">
     <svg viewBox="0 0 100 34" preserveAspectRatio="none" aria-hidden="true">
       <polygon class="area" points="0,34 ${poly} 100,34"></polygon>
       <polyline points="${poly}" vector-effect="non-scaling-stroke"></polyline>
@@ -14820,9 +15193,14 @@ function gnCompare(a, b){
 }
 /* The languages this page can show: the picker's options, English first. */
 const gnPickers = () => [...document.querySelectorAll("[data-gn-pick]")];
+/* A picker's choices: the hidden list footer_html() writes inside it. Its
+   value is its data-value. */
+const gnOpts = p => [...p.querySelectorAll(".gn-opts [data-value]")];
+/* The open list and the picker it belongs to; gnOpen() below. */
+let gnPop = null, gnPopFor = null, gnAt = -1, gnTyped = "", gnTypedAt = 0, gnSpace = false;
 const gnLangs = () => {
   const p = gnPickers()[0];
-  return p ? [...p.options].map(o => [o.value, o.textContent]) : GN_EMBED ? [["en", "English"], [GN_EMBED.lang, GN_EMBED.lang]] : [["en", "English"]];
+  return p ? gnOpts(p).map(o => [o.dataset.value, o.textContent]) : GN_EMBED ? [["en", "English"], [GN_EMBED.lang, GN_EMBED.lang]] : [["en", "English"]];
 };
 const gnKnown = lang => gnLangs().some(([code]) => code === lang);
 function gnStored(){
@@ -14842,8 +15220,20 @@ function gnLoad(lang){
   got.catch(() => gnTables.delete(lang));
   return got;
 }
-function gnPaint(){
-  gnPickers().forEach(p => { p.value = gnLang; });
+/* Every picker shows `lang`: the language on screen, or one just chosen while
+   its table loads. */
+function gnPaint(lang = gnLang){
+  gnPickers().forEach(p => {
+    p.dataset.value = lang;
+    const o = gnOpts(p).find(o => o.dataset.value === lang), cur = p.querySelector(".gn-cur");
+    if(!o || !cur) return;
+    cur.textContent = o.textContent;
+    cur.setAttribute("lang", o.getAttribute("lang") || lang);
+    /* An autonym is a name, left as it is; a choice worded in the UI's own
+       language would drop the mark. */
+    if(o.getAttribute("translate") === "no") cur.setAttribute("translate", "no"); else cur.removeAttribute("translate");
+  });
+  if(gnPopFor) gnMark();
 }
 /* Switch the game names: the whole board is drawn again, as for another save,
    from the English payload it already holds. A table that will not load leaves
@@ -14917,18 +15307,181 @@ function gnOffer(){
   document.body.appendChild(el);
   return el;
 }
+/* A language picked in the footer: kept, the offer answered, the names switched. */
+function gnChoose(lang){
+  gnRemember(lang);
+  const offer = document.querySelector(".gn-offer");
+  if(offer) gnOfferClose(offer, "picked");
+  gnPaint(lang);
+  return setGameNames(lang);
+}
 function wireGameNames(){
   gnPickers().forEach(p => {
     if(p.dataset.gnWired) return;
     p.dataset.gnWired = "1";
-    p.addEventListener("change", () => {
-      gnRemember(p.value);
-      const offer = document.querySelector(".gn-offer");
-      if(offer) gnOfferClose(offer, "picked");
-      setGameNames(p.value);
+    const btn = p.querySelector(".gn-btn");
+    if(!btn) return;
+    /* Enter and Space click the button; the arrows open the list as well. */
+    btn.addEventListener("click", () => { if(gnPopFor === p) gnClose(true); else gnOpen(p); });
+    btn.addEventListener("keydown", e => {
+      if(!["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) return;
+      e.preventDefault();
+      gnOpen(p, e.key);
     });
   });
   gnPaint();
+}
+/* The picker's list: one listbox hung off <body>, as #alertPop is, so no
+   section's paint containment clips it, and placed against the button that
+   opened it. Focus sits on the list and aria-activedescendant names the row
+   the keys move over: the listbox-button pattern. */
+const GN_TICK = '<svg class="sf-ic" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+const gnRows = () => gnPop ? [...gnPop.querySelectorAll(".gn-opt")] : [];
+function gnMark(){
+  const want = gnPopFor && gnPopFor.dataset.value;
+  gnRows().forEach(r => r.setAttribute("aria-selected", String(r.dataset.value === want)));
+}
+function gnActive(i, scroll = true){
+  const rows = gnRows();
+  if(!rows.length) return;
+  gnAt = Math.max(0, Math.min(rows.length - 1, i));
+  rows.forEach((r, k) => r.classList.toggle("gn-on", k === gnAt));
+  gnPop.setAttribute("aria-activedescendant", rows[gnAt].id);
+  if(scroll) rows[gnAt].scrollIntoView({block: "nearest"});
+}
+/* Under the button while the list fits there, else above it (the footer is the
+   foot of the page), on whichever side has more room; the rows scroll. */
+function gnPlace(){
+  const btn = gnPopFor && gnPopFor.querySelector(".gn-btn");
+  if(!btn || !btn.isConnected){ gnClose(false); return; }
+  const r = btn.getBoundingClientRect();
+  const vw = document.documentElement.clientWidth || window.innerWidth;
+  const vh = document.documentElement.clientHeight || window.innerHeight;
+  gnPop.style.minWidth = Math.round(r.width) + "px";
+  gnPop.style.maxHeight = "";
+  const h = gnPop.offsetHeight, below = vh - 12 - (r.bottom + 6), above = r.top - 6 - 12;
+  const down = h <= below || below >= above;
+  const fit = Math.max(120, Math.min(h, down ? below : above));
+  gnPop.style.maxHeight = fit + "px";
+  gnPop.style.top = Math.max(12, down ? r.bottom + 6 : r.top - 6 - fit) + "px";
+  gnPop.style.left = Math.max(12, Math.min(r.left, vw - gnPop.offsetWidth - 12)) + "px";
+}
+function gnClose(focus){
+  if(!gnPopFor) return;
+  const btn = gnPopFor.querySelector(".gn-btn");
+  gnPop.hidden = true;
+  gnPop.removeAttribute("aria-activedescendant");
+  gnPopFor = null; gnTyped = ""; gnSpace = false;
+  if(btn){ btn.setAttribute("aria-expanded", "false"); if(focus) btn.focus(); }
+}
+function gnPick(i){
+  const row = gnRows()[i], p = gnPopFor;
+  if(!row || !p) return;
+  const lang = row.dataset.value, was = p.dataset.value;
+  gnClose(true);
+  if(lang !== was) gnChoose(lang);
+}
+/* Type-ahead: letters typed within half a second of each other find the next
+   row that starts with them; one letter pressed again steps through its rows. */
+/* Whether letters typed are still being gathered; past the half second the
+   gathered ones are dropped, so Space picks again. */
+function gnTyping(){
+  if(gnTyped && Date.now() - gnTypedAt > 500) gnTyped = "";
+  return !!gnTyped;
+}
+function gnFind(ch){
+  const now = Date.now();
+  gnTyped = (gnTyping() ? gnTyped : "") + ch.toLocaleLowerCase();
+  gnTypedAt = now;
+  const rows = gnRows(), same = [...gnTyped].every(c => c === gnTyped[0]);
+  const word = same ? gnTyped[0] : gnTyped, from = same || gnTyped.length === 1 ? gnAt + 1 : gnAt;
+  for(let k = 0; k < rows.length; k++){
+    const i = (from + k) % rows.length;
+    if(rows[i].textContent.trim().toLocaleLowerCase().startsWith(word)){ gnActive(i); return; }
+  }
+}
+function gnKey(e){
+  const n = gnRows().length;
+  if(e.key === "ArrowDown") gnActive(gnAt + 1);
+  else if(e.key === "ArrowUp") gnActive(gnAt - 1);
+  else if(e.key === "Home") gnActive(0);
+  else if(e.key === "End") gnActive(n - 1);
+  else if(e.key === "PageDown") gnActive(gnAt + 8);
+  else if(e.key === "PageUp") gnActive(gnAt - 8);
+  else if(e.key === "Enter") gnPick(gnAt);
+  /* Space picks on its keyup: picked on the keydown, focus would be back on
+     the button when the key comes up, and the button would open again. */
+  else if(e.key === " " && !gnTyping()) gnSpace = true;
+  else if(e.key === "Escape"){ e.stopPropagation(); gnClose(true); }
+  else if(e.key === "Tab"){ gnClose(true); return; }
+  else if(e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) gnFind(e.key);
+  else return;
+  e.preventDefault();
+}
+function gnBuild(){
+  gnPop = document.createElement("div");
+  gnPop.className = "gn-pop";
+  gnPop.id = "gnPop";
+  gnPop.setAttribute("role", "listbox");
+  gnPop.tabIndex = -1;
+  gnPop.hidden = true;
+  document.body.appendChild(gnPop);
+  gnPop.addEventListener("keydown", gnKey);
+  gnPop.addEventListener("keyup", e => {
+    if(e.key !== " " || !gnSpace) return;
+    gnSpace = false;
+    e.preventDefault();
+    gnPick(gnAt);
+  });
+  gnPop.addEventListener("click", e => {
+    const row = e.target.closest && e.target.closest(".gn-opt");
+    if(row) gnPick(gnRows().indexOf(row));
+  });
+  gnPop.addEventListener("mousemove", e => {
+    const row = e.target.closest && e.target.closest(".gn-opt"), i = gnRows().indexOf(row);
+    if(row && i !== gnAt) gnActive(i, false);
+  });
+  /* A press outside closes it; one on its own button is left to the click. */
+  document.addEventListener("pointerdown", e => {
+    if(!gnPopFor || gnPop.contains(e.target) || gnPopFor.contains(e.target)) return;
+    gnClose(false);
+  }, true);
+  gnPop.addEventListener("focusout", e => {
+    const to = e.relatedTarget;
+    if(gnPopFor && to && !gnPop.contains(to) && !gnPopFor.contains(to)) gnClose(false);
+  });
+  window.addEventListener("resize", () => { if(gnPopFor) gnPlace(); });
+  window.addEventListener("scroll", e => {
+    if(!gnPopFor || (e.target && e.target.nodeType === 1 && gnPop.contains(e.target))) return;
+    gnPlace();
+  }, true);
+}
+function gnOpen(p, key){
+  if(gnPopFor) gnClose(false);
+  if(!gnPop) gnBuild();
+  const btn = p.querySelector(".gn-btn"), head = p.closest(".sf-gn") && p.closest(".sf-gn").querySelector(".sf-head");
+  if(head && head.id) gnPop.setAttribute("aria-labelledby", head.id);
+  gnPop.textContent = "";
+  gnOpts(p).forEach((o, i) => {
+    const row = document.createElement("div");
+    row.className = "gn-opt";
+    row.id = `gnOpt${i}`;
+    row.setAttribute("role", "option");
+    row.dataset.value = o.dataset.value;
+    ["lang", "translate"].forEach(a => { if(o.getAttribute(a)) row.setAttribute(a, o.getAttribute(a)); });
+    row.innerHTML = `<span class="gn-word"></span>${GN_TICK}`;
+    row.firstChild.textContent = o.textContent;
+    gnPop.appendChild(row);
+  });
+  gnPopFor = p; gnTyped = "";
+  gnMark();
+  btn.setAttribute("aria-expanded", "true");
+  btn.setAttribute("aria-controls", "gnPop");
+  gnPop.hidden = false;
+  gnPlace();
+  const rows = gnRows(), on = Math.max(0, rows.findIndex(r => r.dataset.value === p.dataset.value));
+  gnActive(key === "Home" ? 0 : key === "End" ? rows.length - 1 : on);
+  gnPop.focus({preventScroll: true});
 }
 /* Width in the units shortText() counts: a wide (CJK) character is two. */
 const gnWide = ch => /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]/.test(ch)
@@ -15012,11 +15565,11 @@ let chartRows=[];
 /* The five lines of the daily chart. Two are on until the reader says
    otherwise; the choice lives in seriesState across renders. */
 const SERIES = {
-  avg:     {label:"7-day profit", colour:"var(--accent)", key:"profit7", on:true, width:2},
-  net:     {label:"Net profit",   colour:"var(--ink-3)",  key:"profit",  on:true, bars:true},
-  revenue: {label:"Revenue",      colour:"var(--info)",   key:"revenue"},
-  goods:   {label:"Goods",        colour:"var(--warn)",   key:"cogs"},
-  wages:   {label:"Wages",        colour:"var(--ink-2)",  key:"wages", width:1.2, dash:"3 3"},
+  avg:     {get label(){ return tt("co.series.avg", "7-day profit"); }, colour:"var(--accent)", key:"profit7", on:true, width:2},
+  net:     {get label(){ return tt("co.series.net", "Net profit"); },   colour:"var(--ink-3)",  key:"profit",  on:true, bars:true},
+  revenue: {get label(){ return tt("co.series.revenue", "Revenue"); },  colour:"var(--info)",   key:"revenue"},
+  goods:   {get label(){ return tt("co.series.goods", "Goods"); },      colour:"var(--warn)",   key:"cogs"},
+  wages:   {get label(){ return tt("co.series.wages", "Wages"); },      colour:"var(--ink-2)",  key:"wages", width:1.2, dash:"3 3"},
 };
 const seriesOn = id => id in seriesState ? !!seriesState[id] : !!SERIES[id].on;
 
@@ -15030,32 +15583,37 @@ const pct = v => `${v>0?"+":""}${(v*100).toFixed(0)}%`;
 /* The two weeks behind the percentage sit in its tooltip. */
 const wow = (change, last7, prev7, empty) => change === null || change === undefined
   ? `<span class="sub" data-tip="${empty}">—</span>`
-  : `<span class="${sign(change)}" data-tip="${compact(last7)} this week against ${compact(prev7)} the week before">${pct(change)}</span>`;
+  : `<span class="${sign(change)}" data-tip="${attr(tt("co.wow.tip", "{now:$c} this week against {before:$c} the week before",
+      {now: +last7, before: +prev7}))}">${pct(change)}</span>`;
 const wowCell = b => {
   const t = TREND[b.key];
-  return wow(t && t.ready ? t.change : null, t && t.last7, t && t.prev7, "Needs two full weeks of trading");
+  return wow(t && t.ready ? t.change : null, t && t.last7, t && t.prev7, tt("co.wow.new", "Needs two full weeks of trading"));
 };
 
+/* A column is [header, cell, class, sort key, hook]. The headers are read at
+   each draw, in the UI language; the hook names a column other code looks for
+   (the search's "Why did profit move?" sorts by "wow"), whatever its header
+   says. */
 const VIEWS = {
   pnl: {
-    label: "Profit & loss",
-    note: "Yesterday's income statement, by chain",
-    cols: [
-      ["Business", b=>kidCell(b), "l", null],
-      ["Revenue", b=>fmt(b.revenue), "", b=>b.revenue],
-      ["Wk / wk", b=>wowCell(b), "", b=>(TREND[b.key]||{}).change ?? -999],
-      ["Goods", b=>fmt(-b.cogs), "", b=>b.cogs],
-      ["Wages", b=>fmt(-b.wages), "", b=>b.wages],
-      ["Rent", b=>fmt(-b.rent), "", b=>b.rent],
-      ["Marketing", b=>fmt(-b.marketing), "", b=>b.marketing],
-      ["Theft", b=>b.theft?fmt(-b.theft):"—", "", b=>b.theft],
-      ["Profit", b=>`<span class="${sign(b.profit)}">${fmt(b.profit)}</span>`, "", b=>b.profit],
-      ["Margin", b=>b.margin===null?"—":`${b.margin.toFixed(1)}%`, "", b=>b.margin??-999],
-    ],
+    get label(){ return tt("co.pnl.label", "Profit & loss"); },
+    get note(){ return tt("co.pnl.note", "Yesterday's income statement, by chain"); },
+    get cols(){ return [
+      [tt("co.col.business", "Business"), b=>kidCell(b), "l", null],
+      [tt("co.col.revenue", "Revenue"), b=>fmt(b.revenue), "", b=>b.revenue],
+      [tt("co.col.wow", "Wk / wk"), b=>wowCell(b), "", b=>(TREND[b.key]||{}).change ?? -999, "wow"],
+      [tt("co.col.goods", "Goods"), b=>fmt(-b.cogs), "", b=>b.cogs],
+      [tt("co.col.wages", "Wages"), b=>fmt(-b.wages), "", b=>b.wages],
+      [tt("co.col.rent", "Rent"), b=>fmt(-b.rent), "", b=>b.rent],
+      [tt("co.col.marketing", "Marketing"), b=>fmt(-b.marketing), "", b=>b.marketing],
+      [tt("co.col.theft", "Theft"), b=>b.theft?fmt(-b.theft):"—", "", b=>b.theft],
+      [tt("co.col.profit", "Profit"), b=>`<span class="${sign(b.profit)}">${fmt(b.profit)}</span>`, "", b=>b.profit],
+      [tt("co.col.margin", "Margin"), b=>b.margin===null?"—":`${b.margin.toFixed(1)}%`, "", b=>b.margin??-999],
+    ]; },
     /* The point of the chain row: revenue, every cost, and the margin the whole
        operation actually runs at. */
     chain: c => [null, fmt(c.revenue),
-                 wow(c.change, c.last7, c.prev7, "A site here has under two weeks of trading"),
+                 wow(c.change, c.last7, c.prev7, tt("co.wow.chain.new", "A site here has under two weeks of trading")),
                  fmt(-c.cogs), fmt(-c.wages), fmt(-c.rent),
                  fmt(-c.marketing), c.theft?fmt(-c.theft):"—",
                  `<b class="${sign(c.profit)}">${fmt(c.profit)}</b>`,
@@ -15066,21 +15624,22 @@ const VIEWS = {
                   `<span class="${sign(sum(bs,"profit"))}">${fmt(sum(bs,"profit"))}</span>`, ""],
   },
   ops: {
-    label: "Operations",
-    note: "Who shops here, and what pulls them in",
-    cols: [
-      ["Business", b=>kidCell(b), "l", null],
-      ["Opened", b=>`day ${b.opened}`, "", b=>b.opened],
-      ["Staff", b=>b.staff||"—", "", b=>b.staff],
-      ["Customers", b=>b.customers?num(b.customers):"—", "", b=>b.customers],
+    get label(){ return tt("co.ops.label", "Operations"); },
+    get note(){ return tt("co.ops.note", "Who shops here, and what pulls them in"); },
+    get cols(){ return [
+      [tt("co.col.business", "Business"), b=>kidCell(b), "l", null],
+      [tt("co.col.opened", "Opened"), b=>tt("co.ops.opened", "day {d}", {d: b.opened}), "", b=>b.opened],
+      [tt("co.col.staff", "Staff"), b=>b.staff||"—", "", b=>b.staff],
+      [tt("co.col.customers", "Customers"), b=>b.customers?num(b.customers):"—", "", b=>b.customers],
       // An office's customer is an hour billed, so its spend is per hour.
-      ["Spend / visit", b=>b.basket===null?"—":`$${b.basket.toFixed(2)}${b.status==="office"?"/hour":""}`, "", b=>b.basket??-1],
-      ["Satisfaction", b=>b.satisfaction.overall===null?"—":meter(b.satisfaction.overall), "gauge", b=>b.satisfaction.overall??-1],
-      ["Promotion", b=>b.customers?meter(b.promotion):"—", "gauge", b=>b.promotion],
-      ["Foot traffic", b=>b.customers?gauge(b.traffic):"—", "gauge", b=>b.traffic],
-      ["Marketing", b=>b.customers?meter(b.marketingIndex):"—", "gauge", b=>b.marketingIndex],
-      ["Security", b=>b.security?`${b.security}%`:"—", "", b=>b.security],
-    ],
+      [tt("co.col.basket", "Spend / visit"), b=>b.basket===null?"—":b.status==="office"
+        ? tt("co.ops.basket.hour", "${x:.2f}/hour", {x: b.basket}) : `$${b.basket.toFixed(2)}`, "", b=>b.basket??-1],
+      [tt("co.col.satisfaction", "Satisfaction"), b=>b.satisfaction.overall===null?"—":meter(b.satisfaction.overall), "gauge", b=>b.satisfaction.overall??-1],
+      [tt("co.col.promotion", "Promotion"), b=>b.customers?meter(b.promotion):"—", "gauge", b=>b.promotion],
+      [tt("co.col.traffic", "Foot traffic"), b=>b.customers?gauge(b.traffic):"—", "gauge", b=>b.traffic],
+      [tt("co.col.marketing", "Marketing"), b=>b.customers?meter(b.marketingIndex):"—", "gauge", b=>b.marketingIndex],
+      [tt("co.col.security", "Security"), b=>b.security?`${b.security}%`:"—", "", b=>b.security],
+    ]; },
     chain: c => [null, "", c.staff||"—", "", "", "", "", "", "", ""],
     // Staff is the only aggregate printed here; blank columns retain chain order.
     chainKey: (c, i) => i === 2 ? c.staff : 0,
@@ -15090,6 +15649,23 @@ const VIEWS = {
 
 /* --- the weekly cycle ------------------------------------------------- */
 const weeksOf = p => p ? Math.min(...p.map(d => d.n)) : 0;
+/* A weekday Python names in English ("Monday"), in the UI language; the
+   English stays what the code compares. coDayShort() is its three letters. */
+const coDay = name => { const i = WEEKDAY_NAMES.indexOf(name); return i < 0 ? name : ttDay(i); };
+function coDayShort(name){
+  switch(WEEKDAY_NAMES.indexOf(name)){
+    case 0: return tt("co.day.short.0", "Sun");
+    case 1: return tt("co.day.short.1", "Mon");
+    case 2: return tt("co.day.short.2", "Tue");
+    case 3: return tt("co.day.short.3", "Wed");
+    case 4: return tt("co.day.short.4", "Thu");
+    case 5: return tt("co.day.short.5", "Fri");
+    case 6: return tt("co.day.short.6", "Sat");
+    default: return String(name || "").slice(0, 3);
+  }
+}
+/* A swing in points, "+27 pts". */
+const coPts = v => tt("co.wd.pts", "{n} pts", {n: String(v)});
 
 /* Seven columns either side of a midline. Height is distance from a normal
    day in both directions, so a trough reads as clearly as a peak; the figure
@@ -15102,23 +15678,25 @@ function weekHtml(profile, todayName){
     /* 44 px keeps a downward bar's pill clear of the weekday label. */
     const h = Math.max(2, Math.round(Math.min(Math.abs(off) / span, 1) * 44));
     /* A read-out line above the bars (By weekday has one) spells the column out. */
-    const read = `${d.day} <b>${d.index}%</b> of a normal day · from ${d.n} week${d.n === 1 ? "" : "s"}`;
+    const read = tt("co.wd.read", {one: "{day} {pct} of a normal day · from {n} week", other: "{day} {pct} of a normal day · from {n} weeks"},
+      {day: coDay(d.day), pct: `<b>${d.index}%</b>`, n: d.n});
     return `<div class="wd${d.day === todayName ? " now" : ""}" data-read="${attr(read)}"><div class="track">
       <i class="bar2${up ? "" : " down"}" style="height:${h}px;${side}:50%"></i>
-      <span class="n" style="${side}:calc(50% + ${h + 8}px)">${off > 0 ? "+" : ""}${off} pts</span>
-      </div><span class="d"><span>${d.short.toUpperCase()}</span><b>${d.day}</b></span></div>`;
+      <span class="n" style="${side}:calc(50% + ${h + 8}px)">${coPts(`${off > 0 ? "+" : ""}${off}`)}</span>
+      </div><span class="d"><span>${coDayShort(d.day).toUpperCase()}</span><b>${coDay(d.day)}</b></span></div>`;
   }).join("")}</div>`;
 }
 /* The same week at table-row size. */
 function miniWeek(profile){
-  if(!profile) return `<span class="quiet">not enough history</span>`;
+  if(!profile) return `<span class="quiet">${tt("co.wd.nohistory", "not enough history")}</span>`;
   const span = Math.max(...profile.map(d => Math.abs(d.index - 100)), 12);
   return `<svg viewBox="0 0 140 28" style="width:140px;height:28px" aria-hidden="true">
     <line x1="0" x2="140" y1="14" y2="14" stroke="var(--rule)"/>
     ${profile.map((d, i) => {
       const off = d.index - 100, h = Math.max(1, Math.abs(off) / span * 12);
       return `<rect x="${i * 20 + 4}" y="${(off >= 0 ? 14 - h : 14).toFixed(1)}" width="12" height="${h.toFixed(1)}" rx="1.5"
-        fill="${off >= 0 ? "var(--accent)" : "var(--warn)"}"><title>${d.day}: ${d.index}% of a normal day, from ${d.n} weeks</title></rect>`;
+        fill="${off >= 0 ? "var(--accent)" : "var(--warn)"}"><title>${
+          tt("co.wd.mini", "{day}: {pct}% of a normal day, from {n} weeks", {day: coDay(d.day), pct: d.index, n: d.n})}</title></rect>`;
     }).join("")}
   </svg>`;
 }
@@ -15128,9 +15706,12 @@ function miniWeek(profile){
    that does not clear the weekly-cycle test has no chip; with none clearing it
    the option is not offered at all. */
 const WEEK_SERIES = {
-  revenue:   {label:"Revenue",   what:"Company revenue",   scope:"every site", colour:"var(--info)"},
-  profit:    {label:"Profit",    what:"Company profit",    scope:"every site", colour:"var(--accent)"},
-  customers: {label:"Customers", what:"Company customers", scope:"every shop", colour:"var(--ink-2)"},
+  revenue:   {get label(){ return tt("co.wd.revenue", "Revenue"); },   get what(){ return tt("co.wd.revenue.what", "Company revenue"); },
+              get scope(){ return tt("co.wd.scope.sites", "every site"); }, colour:"var(--info)"},
+  profit:    {get label(){ return tt("co.wd.profit", "Profit"); },     get what(){ return tt("co.wd.profit.what", "Company profit"); },
+              get scope(){ return tt("co.wd.scope.sites", "every site"); }, colour:"var(--accent)"},
+  customers: {get label(){ return tt("co.wd.customers", "Customers"); }, get what(){ return tt("co.wd.customers.what", "Company customers"); },
+              get scope(){ return tt("co.wd.scope.shops", "every shop"); }, colour:"var(--ink-2)"},
 };
 const signedPct = v => `${v > 0 ? "+" : ""}${v}%`;
 const weekdaySeries = () => {
@@ -15150,14 +15731,16 @@ function rhythmVerdict(swingy){
   const spread = swings.length ? Math.max(...swings) - Math.min(...swings) : 0;
   const rest = ranked.slice(1);
   return (pack.length >= 7 && spread <= 15)
-    ? `${pack.length} site${pack.length===1?"":"s"} peak ${topDay}, +${Math.min(...swings)} to +${
-        Math.max(...swings)} points between their best and worst day. ${rest.length
-          ? rest.map(([d,bs]) => `${bs.map(b => shortName(b)).join(", ")} peak${
-              bs.length===1?"s":""} ${d}`).join("; ") + "."
-          : "Nothing runs the other way."}`
+    ? `${tt("co.wd.verdict.pack", {one: "{n} site peaks {day}, +{lo} to +{hi} points between their best and worst day.",
+        other: "{n} sites peak {day}, +{lo} to +{hi} points between their best and worst day."},
+        {n: pack.length, day: coDay(topDay), lo: Math.min(...swings), hi: Math.max(...swings)})} ${rest.length
+          ? tt("co.wd.verdict.rest", "{groups}.", {groups: rest.map(([d,bs]) => tt("co.wd.verdict.others",
+              {one: "{sites} peaks {day}", other: "{sites} peak {day}"},
+              {n: bs.length, sites: bs.map(b => shortName(b)).join(", "), day: coDay(d)})).join("; ")})
+          : tt("co.wd.verdict.none", "Nothing runs the other way.")}`
     : swingy.length
-      ? `${swingy.length} site${swingy.length===1?"":"s"} clear the noise test.`
-      : "No site has enough history to separate a weekly cycle from noise yet.";
+      ? tt("co.wd.verdict.clear", {one: "{n} site clear the noise test.", other: "{n} sites clear the noise test."}, {n: swingy.length})
+      : tt("co.wd.verdict.nohistory", "No site has enough history to separate a weekly cycle from noise yet.");
 }
 const WEEKDAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 function drawWeekday(series, tools){
@@ -15172,18 +15755,21 @@ function drawWeekday(series, tools){
   /* The line above the bars names the series and how much history it reads;
      its tooltip carries what the old section's ? did: the sites' verdict, and
      what today and yesterday are normally worth. */
-  const tip = [`${s.what} against a normal day, from ${weeks} week${weeks===1?"":"s"} of daily results.`,
+  const tip = [tt("co.wd.basis.tip", {one: "{what} against a normal day, from {n} week of daily results.",
+      other: "{what} against a normal day, from {n} weeks of daily results."}, {what: s.what, n: weeks}),
     rhythmVerdict(swingy),
-    today && at(today) ? `Today is ${today}, normally ${signedPct(at(today) - 100)}.` : "",
-    yest && at(yest) ? `Yesterday was ${yest}, normally ${signedPct(at(yest) - 100)}.` : "",
+    today && at(today) ? tt("co.wd.today", "Today is {day}, normally {pct}.", {day: coDay(today), pct: signedPct(at(today) - 100)}) : "",
+    yest && at(yest) ? tt("co.wd.yesterday", "Yesterday was {day}, normally {pct}.", {day: coDay(yest), pct: signedPct(at(yest) - 100)}) : "",
   ].filter(Boolean).join(" ");
   const hi = profile.reduce((a, p) => p.index > a.index ? p : a);
   const lo = profile.reduce((a, p) => p.index < a.index ? p : a);
   const pts = v => `${v > 0 ? "+" : v < 0 ? "\u2212" : ""}${Math.abs(v)}`;
-  const peaks = `Peaks <b>${hi.day}</b> ${pts(hi.index - 100)} · lowest <b>${lo.day}</b> ${pts(lo.index - 100)}`;
+  const peaks = tt("co.wd.peaks", "Peaks {hi} {hiPts} · lowest {lo} {loPts}", {hi: `<b>${coDay(hi.day)}</b>`,
+    hiPts: pts(hi.index - 100), lo: `<b>${coDay(lo.day)}</b>`, loPts: pts(lo.index - 100)});
   const span = Math.round(((D.rhythm && D.rhythm.recent && D.rhythm.recent.days) || 28) / 7);
-  $("dailyHead").innerHTML = sechead("Daily result", {
-    why: `Each weekday against a normal day, from the company's last ${span} week${span === 1 ? "" : "s"} of daily results. Point at a weekday for its figure.`,
+  $("dailyHead").innerHTML = sechead(tt("co.daily.title", "Daily result"), {
+    why: tt("co.wd.why", {one: "Each weekday against a normal day, from the company's last {n} week of daily results. Point at a weekday for its figure.",
+      other: "Each weekday against a normal day, from the company's last {n} weeks of daily results. Point at a weekday for its figure."}, {n: span}),
     aside: `<span class="seg" id="chartTools"></span>`,
   });
   seg($("chartTools"), tools, () => chartWindow, v => chartWindow = v, drawChart);
@@ -15191,7 +15777,7 @@ function drawWeekday(series, tools){
     <div class="chartbox chart fv-wd" data-readzone>
       <div class="fv-top">
         <span class="fv-basis" style="--fv-s:${s.colour}" data-tip="${attr(tip)}"><span class="dot"></span><b>${s.what}</b> · ${
-          s.scope} · ${weeks} week${weeks===1?"":"s"}</span>
+          s.scope} · ${tt("co.wd.weeks", {one: "{n} week", other: "{n} weeks"}, {n: weeks})}</span>
         <span class="readout fv-readout"><span class="sp-readout">${peaks}</span></span>
       </div>
       <div class="fv-week">${weekHtml(profile, today)}</div>
@@ -15199,15 +15785,16 @@ function drawWeekday(series, tools){
         `<a class="${k === id ? "on" : ""}" data-week="${k}" href="#"><i style="background:${WEEK_SERIES[k].colour}"></i>${
           WEEK_SERIES[k].label}</a>`).join("")}</div>${swingy.length
         ? `<a class="link" href="#" id="rhythmToggle" aria-expanded="${showRhythmSites}">${
-            showRhythmSites ? "hide the table" : "site by site"}</a>` : ""}</div>
+            showRhythmSites ? tt("co.wd.hide", "hide the table") : tt("co.wd.sites", "site by site")}</a>` : ""}</div>
     </div>
     <div class="fv-sites"${showRhythmSites && swingy.length ? "" : " hidden"}>${swingy.length ? `<table id="rhythmSites">
-      <thead><tr><th>Business</th><th class="l">Peaks</th><th>Swing</th>
-        <th class="l" style="width:38%">Across the week</th></tr></thead>
+      <thead><tr><th>${tt("co.col.business", "Business")}</th><th class="l">${tt("co.wd.col.peaks", "Peaks")}</th><th>${
+        tt("co.wd.col.swing", "Swing")}</th>
+        <th class="l" style="width:38%">${tt("co.wd.col.week", "Across the week")}</th></tr></thead>
       <tbody>${swingy.map(b => `<tr data-key="${attr(b.key)}" style="cursor:pointer">
         <td class="l">${siteLabel(b)}</td>
-        <td class="l">${b.peakDay}</td>
-        <td>${b.swing} pts</td>
+        <td class="l">${coDay(b.peakDay)}</td>
+        <td>${coPts(b.swing)}</td>
         <td class="l">${miniWeek(b.rhythm)}</td></tr>`).join("")}</tbody></table>` : ""}</div>`;
   $$("#dailyBox [data-week]").forEach(a => a.onclick = e => { e.preventDefault(); weekSeries = a.dataset.week; drawChart(); });
   const toggle = $("rhythmToggle");
@@ -15688,13 +16275,25 @@ seg($("marketTools"), [["types","By type"],["mine","What I sell"],["new","Not ye
   () => marketView, v => { marketView = v; showAllMarket = false; }, () => drawMarket());
 
 /* --- draw ----------------------------------------------------------- */
+/* A weekday's short name, 0 Monday (the masthead counts from day 1, a Monday). */
+function navShortDay(i){
+  switch(i){
+    case 0: return tt("nav.wd.mon", "Mon");
+    case 1: return tt("nav.wd.tue", "Tue");
+    case 2: return tt("nav.wd.wed", "Wed");
+    case 3: return tt("nav.wd.thu", "Thu");
+    case 4: return tt("nav.wd.fri", "Fri");
+    case 5: return tt("nav.wd.sat", "Sat");
+    default: return tt("nav.wd.sun", "Sun");
+  }
+}
 function drawMast(){
   const m = D.meta, k = D.kpi;
   /* The save name is the player's own text: set it as text, never as markup.
      The green dot after it is the brand's one flourish (and the coin). */
   $("title").textContent = m.save.trim();
   /* Day 1 was a Monday; the year comes from the save's own calendar. */
-  const wd = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][((m.day - 1) % 7 + 7) % 7];
+  const wd = navShortDay(((m.day - 1) % 7 + 7) % 7);
   const year = ((m.cityDate || "").match(/Year (\d+)/) || [])[1];
   /* Two things the reader should know before trusting a number: whether the
      game's own text was available (without it names are slugs and recipes and
@@ -15703,19 +16302,22 @@ function drawMast(){
   /* Written in capitals, as the artboard has it, so the rule carries no
      text-transform. */
   const bits = [];
-  if(year) bits.push(`YEAR ${year}`);
-  bits.push(`${k.businesses} SITES`, `${num(k.employees)} STAFF`);
+  if(year) bits.push(tt("nav.mast.year", "YEAR {y}", {y: year}));
+  bits.push(tt("nav.mast.sites", {one: "{n} SITES", other: "{n} SITES"}, {n: k.businesses}),
+    tt("nav.mast.staff", {one: "{s} STAFF", other: "{s} STAFF"}, {n: k.employees, s: num(k.employees)}));
   /* The flags go on a line of their own so the first line stays short enough
      for the sphere to rest between the nav and the clock. */
   const flags = [];
   if(m.locale === false)
-    flags.push(`<span class="flag" data-tip="Load the game's en.json for recipes and station capacities; without it the factory and capacity views cannot be filled">NAMES ONLY</span>`);
+    flags.push(`<span class="flag" data-tip="${attr(tt("nav.mast.namesonly.tip", "Load the game's en.json for recipes and station capacities; without it the factory and capacity views cannot be filled"))}">${
+      tt("nav.mast.namesonly.text", "NAMES ONLY")}</span>`);
   if(m.verifiedBuild && m.build > m.verifiedBuild)
-    flags.push(`<span class="flag" data-tip="This board was checked on build ${m.verifiedBuild}; a newer game may have changed what the save records">BUILD ${m.build} UNCHECKED</span>`);
+    flags.push(`<span class="flag" data-tip="${attr(tt("nav.mast.unchecked.tip", "This board was checked on build {v}; a newer game may have changed what the save records", {v: m.verifiedBuild}))}">${
+      tt("nav.mast.unchecked.text", "BUILD {b} UNCHECKED", {b: m.build})}</span>`);
   if(LIVE) flags.push(`<span class="live" id="live"><b></b><em>${String(SOURCE.label).toUpperCase()}</em></span>`);
   const clock = $("clock");
   clock.innerHTML =
-    `<b>Day ${m.day}<i>·</i>${wd} ${String(m.hour).padStart(2,"0")}:${String(m.minute).padStart(2,"0")}</b>`
+    `<b>${tt("nav.mast.day", "Day {d}", {d: m.day})}<i>·</i>${wd} ${String(m.hour).padStart(2,"0")}:${String(m.minute).padStart(2,"0")}</b>`
     /* The difficulty chip (fold-views, R15) ends the clock's last line: the
        flags line when there is one, else the sites and staff. A line of its
        own made the sticky masthead taller wherever it wraps. The line's text
@@ -15724,8 +16326,10 @@ function drawMast(){
       const chip = i === all.length - 1 ? fvDiffChip(m.houseRules, "mast", m.difficulty) : "";
       return chip ? `<small class="fv-diffline"><span class="fv-glow">${line}</span>${chip}</small>` : `<small>${line}</small>`;
     }).join("");
-  clock.dataset.tip = `Game time when the save was written: ${m.cityDate}. Day 1 was a Monday.`
-    + (k.vacant ? ` ${k.vacant} lease${k.vacant === 1 ? "" : "s"} vacant on top of the ${k.businesses} sites.` : "");
+  clock.dataset.tip = tt("nav.clock.tip", "Game time when the save was written: {date}. Day 1 was a Monday.", {date: m.cityDate})
+    + (k.vacant ? " " + tt("nav.clock.vacant", {one: "{n} lease vacant on top of the {b}.",
+        other: "{n} leases vacant on top of the {b}."}, {n: k.vacant,
+        b: tt("nav.clock.sites", {one: "{n} sites", other: "{n} sites"}, {n: k.businesses})}) : "");
   window.BigCopilotCommunity?.paintOnline();
 }
 
@@ -15739,8 +16343,10 @@ function drawKpis(){
      pace metric once the game reports it again — until then, the cost base.
      Site and staff counts sit in the masthead; debt only appears when there is any. */
   const fixed = k.rentBill + D.staff.dailyCost;
+  /* A clause of its own after the chip's note, set off by a middle dot. */
   const owed = k.debt > 0
-    ? ` · ${fmt(k.debt)} owed on ${D.loans.length} loan${D.loans.length===1?"":"s"}` : "";
+    ? ` · ${tt("today.kpi.owed", {one: "{debt:$} owed on {n} loan", other: "{debt:$} owed on {n} loans"},
+        {n: D.loans.length, debt: k.debt})}` : "";
   /* A tile is a number, one chip, a short sub line and the whole daily history
      as a sparkline. The sentence the tile used to print is the chip's tooltip.
      The arrow chips read ▲/▼ with the size of the move; the dim ones carry a
@@ -15750,54 +16356,73 @@ function drawKpis(){
      that it stays in the chip's note. */
   const heavyDebt = k.debt > 0 && k.debt > Math.max(0, k.profitSum7 || 0);
   const vs7 = k.profitAvg7 ? (k.profitYesterday - k.profitAvg7) / Math.abs(k.profitAvg7) : 0;
+  /* A rise carries its "+"; a fall's "-" comes with the money. */
+  const plus = n => n >= 0 ? "+" : "";
   const cashTile = cf
     ? {chip: chipHtml(cf.cashChange >= 0 ? "ok" : "bad", `${cf.cashChange >= 0 ? "▲" : "▼"} ${compact(Math.abs(cf.cashChange))}`,
-         `${cf.days} days: ${compact(cf.profit)} profit, cash ${cf.cashChange>=0?"+":""}${compact(cf.cashChange)}; ${
-           cf.reinvested>=0
-             ? `${compact(cf.reinvested)} went into set-up and stock`
-             : `${compact(-cf.reinvested)} more than the books earned`}${owed}`),
-       sub: cf.days === 7 ? "this week" : `over ${cf.days} day${cf.days===1?"":"s"}`}
-    : {chip: chipHtml("dim", `${compact(k.profitSum7)} profit`,
-         `${fmt(k.profitSum7)} profit over 7 days; no cash history yet, it starts building today${owed}`),
-       sub: "no cash history"};
+         (cf.reinvested >= 0
+           /* Plural forms, though the English says "days" even for one. */
+           ? tt("today.kpi.cash.tip.spent", {one: "{n} days: {profit:$c} profit, cash {sign}{change:$c}; {spent:$c} went into set-up and stock",
+               other: "{n} days: {profit:$c} profit, cash {sign}{change:$c}; {spent:$c} went into set-up and stock"},
+               {n: cf.days, profit: cf.profit, sign: plus(cf.cashChange), change: cf.cashChange, spent: cf.reinvested})
+           : tt("today.kpi.cash.tip.over", {one: "{n} days: {profit:$c} profit, cash {sign}{change:$c}; {over:$c} more than the books earned",
+               other: "{n} days: {profit:$c} profit, cash {sign}{change:$c}; {over:$c} more than the books earned"},
+               {n: cf.days, profit: cf.profit, sign: plus(cf.cashChange), change: cf.cashChange, over: -cf.reinvested})) + owed),
+       sub: cf.days === 7 ? tt("today.kpi.cash.week", "this week")
+         : tt("today.kpi.cash.days", {one: "over {n} day", other: "over {n} days"}, {n: cf.days})}
+    : {chip: chipHtml("dim", tt("today.kpi.cash.chip.profit", "{w:$c} profit", {w: k.profitSum7}),
+         tt("today.kpi.cash.tip.none", "{w:$} profit over 7 days; no cash history yet, it starts building today", {w: k.profitSum7}) + owed),
+       sub: tt("today.kpi.cash.none", "no cash history")};
+  /* Each tile has an id (data-kpi): the search palette finds Cash on hand by
+     it, whatever language its label is in. */
   const tiles = [
-    {l: "Profit yesterday", v: fmt(k.profitYesterday),
+    {id: "profit", l: tt("today.kpi.profit", "Profit yesterday"), v: fmt(k.profitYesterday),
      chip: D.daily.length
        ? chipHtml(vs7 >= 0 ? "ok" : "bad", `${vs7 >= 0 ? "▲" : "▼"} ${Math.abs(vs7 * 100).toFixed(0)}%`,
-           `7-day average ${fmt(k.profitAvg7)}, ${trend>=0?"+":""}${fmt(trend)} vs the previous 7`)
-       : chipHtml("dim", "no history", "No finished day in this save yet; there is no profit comparison to show"),
-     sub: D.daily.length ? "vs 7-day" : "no finished day", spark: hist(d => d.profit),
+           tt("today.kpi.profit.tip", "7-day average {avg:$}, {sign}{trend:$} vs the previous 7",
+             {avg: k.profitAvg7, sign: plus(trend), trend}))
+       : chipHtml("dim", tt("today.kpi.profit.none", "no history"),
+           tt("today.kpi.profit.none.tip", "No finished day in this save yet; there is no profit comparison to show")),
+     sub: D.daily.length ? tt("today.kpi.profit.vs", "vs 7-day") : tt("today.kpi.profit.noDay", "no finished day"),
+     spark: hist(d => d.profit),
      /* The day's result has a page of its own; the tile is the way in. */
-     go: "secDaily", goTip: "Open Company › Results, the daily result"},
-    {l: "Revenue yesterday", v: fmt(k.revenue),
-     chip: chipHtml("dim", num(k.customers), `${num(k.customers)} customers served yesterday`),
-     sub: "customers", spark: hist(d => d.revenue)},
+     go: "secDaily", goTip: tt("today.kpi.profit.go", "Open Company › Results, the daily result")},
+    {id: "revenue", l: tt("today.kpi.revenue", "Revenue yesterday"), v: fmt(k.revenue),
+     chip: chipHtml("dim", num(k.customers), tt("today.kpi.revenue.tip",
+       {one: "{n:,} customers served yesterday", other: "{n:,} customers served yesterday"}, {n: k.customers})),
+     sub: tt("today.kpi.revenue.sub", "customers"), spark: hist(d => d.revenue)},
     /* Cash has no day-by-day history in the save, so this tile has no line. */
-    {l: "Cash on hand", v: fmt(k.cash), chip: cashTile.chip,
-     sub: heavyDebt ? `${cashTile.sub} · ${compact(k.debt)} owed on loans` : cashTile.sub},
+    {id: "cash", l: tt("today.kpi.cash", "Cash on hand"), v: fmt(k.cash), chip: cashTile.chip,
+     sub: heavyDebt ? `${cashTile.sub} · ${tt("today.kpi.cash.debt", "{debt:$c} owed on loans", {debt: k.debt})}` : cashTile.sub},
     k.netWorth === null
-      ? {l: "Fixed cost / day", v: fmt(fixed),
-         chip: chipHtml("dim", `rent ${compact(k.rentBill)}`, `${fmt(k.rentBill)} rent, ${fmt(D.staff.dailyCost)} payroll`),
-         sub: `payroll ${compact(D.staff.dailyCost)}`,
+      ? {id: "fixed", l: tt("today.kpi.fixed", "Fixed cost / day"), v: fmt(fixed),
+         chip: chipHtml("dim", tt("today.kpi.fixed.chip", "rent {w:$c}", {w: k.rentBill}),
+           tt("today.kpi.fixed.tip", "{rent:$} rent, {payroll:$} payroll", {rent: k.rentBill, payroll: D.staff.dailyCost})),
+         sub: tt("today.kpi.fixed.sub", "payroll {w:$c}", {w: D.staff.dailyCost}),
          /* What the days actually paid in rent and wages; the number above is
             today's contracted rate, which is why the last point can sit below it. */
          spark: hist(d => (d.rent || 0) + (d.wages || 0))}
       /* Build 3672 stopped reporting net worth. Rather than quietly showing a
          stale number as if it were today's, the tile says which day it is from. */
-      : {l: "Net worth", v: fmt(k.netWorth),
+      : {id: "worth", l: tt("today.kpi.worth", "Net worth"), v: fmt(k.netWorth),
          chip: k.netWorthAsOf
-           ? chipHtml("dim", `day ${k.netWorthAsOf}`, `As of day ${k.netWorthAsOf}; the game stopped reporting it`)
+           ? chipHtml("dim", tt("today.kpi.worth.day", "day {day}", {day: k.netWorthAsOf}),
+               tt("today.kpi.worth.day.tip", "As of day {day}; the game stopped reporting it", {day: k.netWorthAsOf}))
            : cf && cf.netWorthChange !== null
            ? chipHtml(cf.netWorthChange >= 0 ? "ok" : "bad", `${cf.netWorthChange>=0?"▲":"▼"} ${compact(Math.abs(cf.netWorthChange))}`,
-               `${cf.netWorthChange>=0?"+":""}${fmt(cf.netWorthChange)} over ${cf.days} day${cf.days===1?"":"s"}`)
-           : chipHtml("dim", "new", "No net worth history yet; starts building today"),
-         sub: k.netWorthAsOf ? "stale" : cf && cf.netWorthChange !== null ? `over ${cf.days} days` : "no history yet"},
+               tt("today.kpi.worth.tip", {one: "{sign}{w:$} over {n} day", other: "{sign}{w:$} over {n} days"},
+                 {n: cf.days, sign: plus(cf.netWorthChange), w: cf.netWorthChange}))
+           : chipHtml("dim", tt("today.kpi.worth.new", "new"),
+               tt("today.kpi.worth.new.tip", "No net worth history yet; starts building today")),
+         sub: k.netWorthAsOf ? tt("today.kpi.worth.stale", "stale")
+           : cf && cf.netWorthChange !== null ? tt("today.kpi.worth.over", {one: "over {n} days", other: "over {n} days"}, {n: cf.days})
+           : tt("today.kpi.worth.none", "no history yet")},
   ];
   /* The tiles are rebuilt on every render; the entrance plays only the first time. */
   const seen = !!q("#kpis .kpi.in");
   const tag = t => t.go ? "a" : "div";
   $("kpis").innerHTML = tiles.map(t => `
-    <${tag(t)} class="kpi rv${seen ? " in" : ""}${t.go ? " td-go" : ""}"${t.go ? ` href="#${t.go}" data-go="${t.go}" aria-label="${attr(`${t.l} ${t.v}. ${t.goTip}`)}"` : ""}>
+    <${tag(t)} class="kpi rv${seen ? " in" : ""}${t.go ? " td-go" : ""}" data-kpi="${t.id}"${t.go ? ` href="#${t.go}" data-go="${t.go}" aria-label="${attr(`${t.l} ${t.v}. ${t.goTip}`)}"` : ""}>
       <span class="lab">${t.l}${t.go ? `<span class="td-go-ic" data-tip="${attr(t.goTip)}">${icon("go")}</span>` : ""}</span>
       <span class="v" style="--n:${String(t.v).replace(/<[^>]*>/g, "").length}">${t.v}</span>
       <div class="row">${t.chip}<span class="sub">${t.sub}</span></div>
@@ -15931,7 +16556,8 @@ function goToAlert(a){
     const s = b ? D.businesses.indexOf(b) : -1;
     const tab = link.tab === "site" ? (s >= 0 ? sbTabOf(s) : "warehouses") : link.tab;
     const g = ALERT_GROUPS.find(x => x.id === a.group);
-    sbLand(tab, s >= 0 ? s : null, (a.ev || {}).slug || null, `from Today · ${g ? g.label : "a finding"}`);
+    sbLand(tab, s >= 0 ? s : null, (a.ev || {}).slug || null,
+      g ? tt("today.crumb", "from Today · {kind}", {kind: g.label}) : tt("today.crumb.any", "from Today · a finding"));
     return;
   }
   if(link.port){
@@ -16021,9 +16647,13 @@ const ALERT_EVIDENCE = {
 };
 
 /* The three severities of the list: the alert levels Python assigns, in the
-   design's words. */
+   design's words, as each counter's tooltip says them. */
 const SEV_KIND = {critical: "crit", warn: "watch", info: "opp"};
-const SEV_WORD = {crit: "urgent", watch: "watch", opp: "opportunity"};
+const sevTip = (kind, n) => kind === "crit"
+  ? tt("today.sev.crit", {one: "{n} urgent; click to hide or show them", other: "{n} urgent; click to hide or show them"}, {n})
+  : kind === "watch"
+  ? tt("today.sev.watch", {one: "{n} watch; click to hide or show them", other: "{n} watch; click to hide or show them"}, {n})
+  : tt("today.sev.opp", {one: "{n} opportunity; click to hide or show them", other: "{n} opportunity; click to hide or show them"}, {n});
 
 /* A finding is a short verb phrase; the rest of the sentence unfolds on hover.
    Python's sentences often lead with the site, which the row already names, so
@@ -16127,58 +16757,104 @@ function splitFinding(a){
    unnamed line, the multiple a target is over — so that comes out of the
    sentence, in its unit; only a row with no number at all leaves the column
    empty. A condensed row with no money shows how many findings it stands for. */
-const amtHtml = (n, unit) => `${n}<small>${unit || ""}</small>`;
+/* The unit under a figure read out of Python's English sentence, in the UI
+   language; a word this does not know is shown as it came. */
+function amtUnit(u){
+  switch(u){
+    case "findings": return tt("today.amt.findings", "findings");
+    case "order": return tt("today.amt.order", "order");
+    case "orders": return tt("today.amt.orders", "orders");
+    case "holding": return tt("today.amt.holding", "holding");
+    case "holdings": return tt("today.amt.holdings", "holdings");
+    case "shop": return tt("today.amt.shop", "shop");
+    case "shops": return tt("today.amt.shops", "shops");
+    case "line": return tt("today.amt.line", "line");
+    case "lines": return tt("today.amt.lines", "lines");
+    case "machine": return tt("today.amt.machine", "machine");
+    case "machines": return tt("today.amt.machines", "machines");
+    case "hours staffed": return tt("today.amt.hoursStaffed", "hours staffed");
+    case "daily sales": return tt("today.amt.dailySales", "daily sales");
+    case "units short": return tt("today.amt.unitsShort", "units short");
+    case "days early": return tt("today.amt.daysEarly", "days early");
+    case "/week used": return tt("today.amt.weekUsed", "/week used");
+    case "left": return tt("today.amt.left", "left");
+    case "/day under hype": return tt("today.amt.dayHype", "/day under hype");
+    case "/day needed": return tt("today.amt.dayNeeded", "/day needed");
+    case "hours covered": return tt("today.amt.hoursCovered", "hours covered");
+    case "/week eaten": return tt("today.amt.weekEaten", "/week eaten");
+    case "satisfied": return tt("today.amt.satisfied", "satisfied");
+    case "staff": return tt("today.amt.staff", "staff");
+    case "promotion": return tt("today.amt.promotion", "promotion");
+    case "/day": return tt("today.amt.day", "/day");
+    case "units": return tt("today.amt.units", "units");
+    case "days": return tt("today.amt.days", "days");
+    case "hours": return tt("today.amt.hours", "hours");
+    case "weeks": return tt("today.amt.weeks", "weeks");
+    case "customers": return tt("today.amt.customers", "customers");
+    default: return u;
+  }
+}
+/* A figure read out of Python's English ("1,500", "3.5") in the UI
+   language's numbers; in English it is shown exactly as Python wrote it. */
+const amtNum = s => {
+  if(typeof ttLang === "undefined" || ttLang === "en") return s;
+  const v = Number(String(s).replace(/,/g, ""));
+  return Number.isFinite(v) ? num(v) : s;
+};
+const amtHtml = (n, unit) => `${n}<small>${unit ? amtUnit(unit) : ""}</small>`;
 function findingAmount(a){
   if(typeof a.worth === "number")
-    return amtHtml(Math.abs(a.worth) >= 1e6 ? money(a.worth) : fmt(a.worth), a.unit);
+    /* Python's unit (ALERT_UNITS) is a message of its own (f.unit.*), already
+       in the UI language. */
+    return `${Math.abs(a.worth) >= 1e6 ? money(a.worth) : fmt(a.worth)}<small>${a.unit || ""}</small>`;
   /* Python's English, whatever language the row is shown in. */
   const t = String((typeof enOf === "function" ? enOf(a, "text") : a.text) || "");
   let m;
   if(a.detail && (m = t.match(/^(\d+) (weekly orders?|orders?|holdings?|shops?|lines?)?/)))
-    return amtHtml(m[1], m[2] ? m[2].replace(/^weekly /, "") : "findings");
+    return amtHtml(amtNum(m[1]), m[2] ? m[2].replace(/^weekly /, "") : "findings");
   switch(a.group){
     case "unnamed": case "unset":
-      if((m = t.match(/^(\d+) machines?/))) return amtHtml(m[1], m[1] === "1" ? "machine" : "machines");
+      if((m = t.match(/^(\d+) machines?/))) return amtHtml(amtNum(m[1]), m[1] === "1" ? "machine" : "machines");
       break;
     case "staff":
-      if((m = t.match(/staffed (\d+) of (\d+) hours/))) return amtHtml(`${m[1]}/${m[2]}`, "hours staffed");
+      if((m = t.match(/staffed (\d+) of (\d+) hours/))) return amtHtml(`${amtNum(m[1])}/${amtNum(m[2])}`, "hours staffed");
       break;
     case "target":
-      if((m = t.match(/(\d+)x daily sales/))) return amtHtml(`${m[1]}x`, "daily sales");
+      if((m = t.match(/(\d+)x daily sales/))) return amtHtml(`${amtNum(m[1])}x`, "daily sales");
       break;
     case "order":
-      if((m = t.match(/([\d,]+) short/))) return amtHtml(m[1], "units short");
+      if((m = t.match(/([\d,]+) short/))) return amtHtml(amtNum(m[1]), "units short");
       break;
     case "shortfall":
-      if((m = t.match(/([\d.]+) days before/))) return amtHtml(m[1], "days early");
+      if((m = t.match(/([\d.]+) days before/))) return amtHtml(amtNum(m[1]), "days early");
       break;
     case "wholesale":
-      if((m = t.match(/against (?:the )?([\d,]+)/))) return amtHtml(m[1], "/week used");
-      if((m = t.match(/([\d,]+) left/))) return amtHtml(m[1], "left");
+      if((m = t.match(/against (?:the )?([\d,]+)/))) return amtHtml(amtNum(m[1]), "/week used");
+      if((m = t.match(/([\d,]+) left/))) return amtHtml(amtNum(m[1]), "left");
       break;
     case "hype":
-      if((m = t.match(/\$([\d,]+)\/day/))) return amtHtml(`$${m[1]}`, "/day under hype");
+      if((m = t.match(/\$([\d,]+)\/day/))) return amtHtml(`$${amtNum(m[1])}`, "/day under hype");
       break;
     case "feed":
-      if((m = t.match(/against ([\d,]+) (?:needed|the machines)/))) return amtHtml(m[1], "/day needed");
-      if((m = t.match(/covers (\d+) hours/))) return amtHtml(m[1], "hours covered");
-      if((m = t.match(/eat ([\d,]+) a week/))) return amtHtml(m[1], "/week eaten");
+      if((m = t.match(/against ([\d,]+) (?:needed|the machines)/))) return amtHtml(amtNum(m[1]), "/day needed");
+      if((m = t.match(/covers (\d+) hours/))) return amtHtml(amtNum(m[1]), "hours covered");
+      if((m = t.match(/eat ([\d,]+) a week/))) return amtHtml(amtNum(m[1]), "/week eaten");
       break;
     case "satisfaction":
-      if((m = t.match(/(\d+)%/))) return amtHtml(`${m[1]}%`, "satisfied");
+      if((m = t.match(/(\d+)%/))) return amtHtml(`${amtNum(m[1])}%`, "satisfied");
       break;
     case "jobdemand": case "companydemand":
-      if((m = t.match(/^(\d+) staff/))) return amtHtml(m[1], "staff");
+      if((m = t.match(/^(\d+) staff/))) return amtHtml(amtNum(m[1]), "staff");
       break;
     case "promotion":
-      if((m = t.match(/(\d+)%/))) return amtHtml(`${m[1]}%`, "promotion");
+      if((m = t.match(/(\d+)%/))) return amtHtml(`${amtNum(m[1])}%`, "promotion");
       break;
   }
-  if((m = t.match(/\$([\d,]+)(\/day)?/))) return amtHtml(`$${m[1]}`, m[2] || "");
-  if((m = t.match(/([\d,]+)\/day/))) return amtHtml(m[1], "/day");
+  if((m = t.match(/\$([\d,]+)(\/day)?/))) return amtHtml(`$${amtNum(m[1])}`, m[2] || "");
+  if((m = t.match(/([\d,]+)\/day/))) return amtHtml(amtNum(m[1]), "/day");
   if((m = t.match(/(\d[\d,]*(?:\.\d+)?) (units|days|hours|machines|shops|lines|orders|weeks|customers)\b/)))
-    return amtHtml(m[1], m[2]);
-  if((m = t.match(/\b(\d+)x\b/))) return amtHtml(`${m[1]}x`, "");
+    return amtHtml(amtNum(m[1]), m[2]);
+  if((m = t.match(/\b(\d+)x\b/))) return amtHtml(`${amtNum(m[1])}x`, "");
   return "";
 }
 /* A finding whose kind is switched off still shows, under the list, wearing
@@ -16205,10 +16881,10 @@ function findingRow(a){
   const site = !b ? spEsc(a.site) : `${hoodHtml(b)}${siteLink(b, b.code ? baseName(b) : shortName(b))}${mapButton(b.key,b.name)}`;
   const n = ++ssFindSeq;
   return `<div class="find ${SEV_KIND[a.level] || "opp"}" data-id="${attr(a.id)}">
-    <span class="mark" data-tip="Silence this finding"></span>
+    <span class="mark" data-tip="${attr(tt("today.find.silence", "Silence this finding"))}"></span>
     <span class="site">${site}</span>
     <span hidden id="ss-fn${n}">${spEsc(b ? shortName(b) : a.site)}:</span>
-    <button type="button" class="what" id="ss-fw${n}" aria-labelledby="ss-fn${n} ss-fw${n}">${what}${kindOff(a) ? ` ${chipHtml("dim", kindLabel(a.group), "This kind is switched off in the list; it is counted here instead")}` : ""}</button>${
+    <button type="button" class="what" id="ss-fw${n}" aria-labelledby="ss-fn${n} ss-fw${n}">${what}${kindOff(a) ? ` ${chipHtml("dim", kindLabel(a.group), tt("today.find.off", "This kind is switched off in the list; it is counted here instead"))}` : ""}</button>${
       /* The game link's buttons sit under the sentence, beside the row's own
          button rather than inside it. */
       writes ? `
@@ -16259,8 +16935,17 @@ function switchedOffKinds(rows, label, money, order = []){
     by.set(r.group, k);
   });
   const rank = id => { const i = order.indexOf(id); return i < 0 ? order.length : i; };
-  return [...by.entries()].sort((a, z) => rank(a[0]) - rank(z[0])).map(([id, k]) =>
-    `${label(id)} (${k.n}${k.worth >= 1 ? `, ${money(k.worth)}/day` : ""})`).join(", ");
+  return todayList([...by.entries()].sort((a, z) => rank(a[0]) - rank(z[0])).map(([id, k]) => k.worth >= 1
+    ? tt("today.minor.offKind.worth", "{kind} ({n}, {worth}/day)", {kind: label(id), n: k.n, worth: money(k.worth)})
+    : tt("today.minor.offKind", "{kind} ({n})", {kind: label(id), n: k.n})));
+}
+/* A list as one message, as Python's _msg_list() writes one: the last pair is
+   its own key (today.list.last), so a translation can join it with its "and";
+   in English every pair is joined with a comma. */
+function todayList(items){
+  if(items.length < 2) return items.length ? items[0] : "";
+  if(items.length === 2) return tt("today.list.last", "{a}, {b}", {a: items[0], b: items[1]});
+  return tt("today.list", "{a}, {b}", {a: items[0], b: todayList(items.slice(1))});
 }
 
 let showSwitchedOff = false;
@@ -16275,11 +16960,11 @@ function drawAlerts(){
      that filter the list, and the tune button. That button is bound once at
      boot, so it is carried over into the fresh head rather than rebuilt. */
   const tune = $("alertKindsToggle");
-  $("alertHead").innerHTML = sechead("Needs attention", {
-    why: `A site that is not trading always makes the list. Everything else needs to be worth ${
-      fmt(gate)}/day; smaller findings are counted below, and so are the kinds switched off.`,
+  $("alertHead").innerHTML = sechead(tt("today.alerts.title", "Needs attention"), {
+    why: tt("today.alerts.why", "A site that is not trading always makes the list. Everything else needs to be worth {gate:$}/day; smaller findings are counted below, and so are the kinds switched off.",
+      {gate}),
     aside: ["crit", "watch", "opp"].map(k =>
-      `<span class="sev ${k}" data-kind="${k}" data-tip="${attr(`${counts[k]} ${SEV_WORD[k]}; click to hide or show them`)}"><i></i>${counts[k]}</span>`
+      `<span class="sev ${k}" data-kind="${k}" data-tip="${attr(sevTip(k, counts[k]))}"><i></i>${counts[k]}</span>`
     ).join("") + `<span id="alertTuneSlot"></span>`,
   });
   $("alertTuneSlot").replaceWith(tune);
@@ -16288,7 +16973,7 @@ function drawAlerts(){
      silenced, the smaller findings included, so it is on the page once. */
   gwUniformAllId = ([...list, ...smaller].find(x => gwDressable(x) && !silencedIds.has(x.id)) || {}).id ?? null;
   $("alerts").innerHTML = list.length ? list.map(a => findingRow(a)).join("")
-    : `<span class="quiet" style="display:block;padding:12px 0">Nothing to flag here.</span>`;
+    : `<span class="quiet" style="display:block;padding:12px 0">${tt("today.alerts.none", "Nothing to flag here.")}</span>`;
   bindFindingRows($("alerts"), list);
 
   /* Nothing leaves the screen: under the list, one line counts what the
@@ -16298,14 +16983,15 @@ function drawAlerts(){
   const host = $("alertMinor");
   const block = (rows, open, toggle, line) => !rows.length ? "" :
     `<p class="quiet td-count">${line} &nbsp;<a class="link" href="#" data-td-toggle="${toggle}" aria-expanded="${open}">${
-      open ? "hide" : "show"}</a></p>` + (open ? `<div class="finds td-rows" data-td-rows="${toggle}">${rows.map(a => findingRow(a)).join("")}</div>` : "");
+      open ? tt("today.minor.hide", "hide") : tt("today.minor.show", "show")}</a></p>` + (open ? `<div class="finds td-rows" data-td-rows="${toggle}">${rows.map(a => findingRow(a)).join("")}</div>` : "");
   const worth = below.reduce((s,r) => s + (r.worth || 0), 0);
   host.innerHTML =
-    block(below, showMinor, "below",
-      `${below.length} below the ${fmt(gate)}/day line${worth >= 1 ? ` · ${fmt(worth)}/day` : ""}`)
+    block(below, showMinor, "below", worth >= 1
+      ? tt("today.minor.below.worth", "{n} below the {gate:$}/day line · {worth:$}/day", {n: below.length, gate, worth})
+      : tt("today.minor.below", "{n} below the {gate:$}/day line", {n: below.length, gate}))
     + block(switchedOff, showSwitchedOff, "off",
-      `${switchedOff.length} in kinds switched off: ${
-        switchedOffKinds(switchedOff, kindLabel, compact, ALERT_GROUPS.map(g => g.id))}`);
+      tt("today.minor.off", "{n} in kinds switched off: {kinds}", {n: switchedOff.length,
+        kinds: switchedOffKinds(switchedOff, kindLabel, compact, ALERT_GROUPS.map(g => g.id))}));
   $$("[data-td-toggle]", host).forEach(a => a.onclick = e => {
     e.preventDefault();
     if(a.dataset.tdToggle === "below") showMinor = !showMinor; else showSwitchedOff = !showSwitchedOff;
@@ -16331,7 +17017,8 @@ function drawChart(){
   /* A save that stops clearing the test (a reload, another save) falls back to
      the default window rather than keeping an option that is not offered. */
   if(chartWindow === "wd" && !weekly.length) chartWindow = 30;
-  const tools = [[30,"30 days"],[0,"All"]].concat(weekly.length ? [["wd","By weekday"]] : []);
+  const tools = [[30,tt("co.daily.tool.30", "30 days")],[0,tt("co.daily.tool.all", "All")]]
+    .concat(weekly.length ? [["wd",tt("co.daily.tool.wd", "By weekday")]] : []);
   if(chartWindow === "wd"){ chartRows = []; drawWeekday(weekly, tools); return; }
   chartRows = chartWindow ? D.daily.slice(-chartWindow) : D.daily;
   const rows = chartRows, n = rows.length;
@@ -16340,17 +17027,18 @@ function drawChart(){
      left standing. */
   if(!n){
     chartRows = [];
-    $("dailyHead").innerHTML = sechead("Daily result");
-    $("dailyBox").innerHTML = `<p class="quiet" style="margin:0">No finished day in this save yet; the chart starts tomorrow</p>`;
+    $("dailyHead").innerHTML = sechead(tt("co.daily.title", "Daily result"));
+    $("dailyBox").innerHTML = `<p class="quiet" style="margin:0">${
+      tt("co.daily.empty", "No finished day in this save yet; the chart starts tomorrow")}</p>`;
     return;
   }
   const first = rows[0], last = rows[n - 1];
   /* Daily profit swings by a million between a weekend and a Tuesday purely
      because that is when the week's goods are paid for. The rolling line is the
      one that says whether trading moved. */
-  $("dailyHead").innerHTML = sechead("Daily result", {
-    why: `Daily profit follows the purchase calendar, so the 7-day line is the trend. Day ${
-      first.day} to ${last.day}. Click a legend chip to add or drop a line.`,
+  $("dailyHead").innerHTML = sechead(tt("co.daily.title", "Daily result"), {
+    why: tt("co.daily.why", "Daily profit follows the purchase calendar, so the 7-day line is the trend. Day {first} to {last}. Click a legend chip to add or drop a line.",
+      {first: first.day, last: last.day}),
     aside: `<span class="seg" id="chartTools"></span>`,
   });
   seg($("chartTools"), tools, () => chartWindow, v => chartWindow = v, drawChart);
@@ -16381,8 +17069,8 @@ function drawChart(){
     const body = s.bars
       ? rows.map((r, i) => { const v = r[s.key], yy = Y(v);
           return `<rect x="${(X(i) - bw / 2).toFixed(1)}" y="${Math.min(yy, y0).toFixed(1)}" width="${bw.toFixed(1)}" height="${
-            Math.abs(yy - y0).toFixed(1)}" rx="2" fill="${v < 0 ? "var(--neg)" : "var(--ink-3)"}" opacity=".45"><title>Day ${
-            r.day}: net ${money(v)}</title></rect>`; }).join("")
+            Math.abs(yy - y0).toFixed(1)}" rx="2" fill="${v < 0 ? "var(--neg)" : "var(--ink-3)"}" opacity=".45"><title>${
+            tt("co.daily.bar", "Day {day}: net {w:$c}", {day: r.day, w: v})}</title></rect>`; }).join("")
       : line(s.key, s.colour, s.width, s.dash);
     out.push(`<g data-series="${id}"${seriesOn(id) ? "" : ' class="off"'}>${body}</g>`);
   });
@@ -16393,7 +17081,8 @@ function drawChart(){
   out.push(`<g class="xh"><line x1="${X(k).toFixed(1)}" x2="${X(k).toFixed(1)}" y1="${T}" y2="${H - B}" stroke="var(--ink-3)" stroke-dasharray="3 4"></line>
     <circle cx="${X(k).toFixed(1)}" cy="${Y(last.profit7).toFixed(1)}" r="4" fill="var(--accent)" stroke="var(--ground)" stroke-width="2"></circle></g>`);
 
-  const readout = r => `<i></i>Day ${r.day} <b>${money(r.profit)}</b> net <b>${money(r.profit7)}</b> 7-day <b>${money(r.revenue)}</b> revenue`;
+  const readout = r => `<i></i>${tt("co.daily.readout", "Day {day} {net} net {avg} 7-day {revenue} revenue", {day: r.day,
+    net: `<b>${money(r.profit)}</b>`, avg: `<b>${money(r.profit7)}</b>`, revenue: `<b>${money(r.revenue)}</b>`})}`;
   const xs = JSON.stringify(rows.map((r, i) => +X(i).toFixed(1)));
   const ys = JSON.stringify(rows.map(r => +Y(r.profit7).toFixed(1)));
   const labels = JSON.stringify(rows.map(readout));
@@ -16434,25 +17123,40 @@ function xlMembers(c){
     if(!b) return;
     const word = b.status === "retail" ? "shop" : b.status === "office" ? "office"
       : b.status === "vacant" ? "vacant lease"
-      /* The sentence is English and pluralised in English, so the kind is the
-         type's English name whatever language the names are shown in. */
+      /* The English is pluralised in English, so the kind is the type's
+         English name whatever language the names are shown in; another UI
+         language has the type's game name, {type}, beside its count. */
       : factories.has(i) ? "factory" : String(englishName(b.typeSlug) || b.type || "site").toLowerCase();
-    counts.set(word, (counts.get(word) || 0) + 1);
+    const had = counts.get(word);
+    counts.set(word, {n: had ? had.n + 1 : 1, slug: had ? had.slug : b.typeSlug});
   });
-  if(!counts.size) return `${c.count} site${c.count === 1 ? "" : "s"}`;
+  if(!counts.size) return tt("co.chain.sites", {one: "{n} site", other: "{n} sites"}, {n: c.count});
   const rank = w => { const at = XL_KIND_ORDER.indexOf(w); return at < 0 ? XL_KIND_ORDER.length : at; };
-  const many = w => /quarters$/.test(w) ? w : /[^aeiou]y$/.test(w) ? w.slice(0, -1) + "ies" : `${w}s`;
-  return [...counts].sort((a, z) => rank(a[0]) - rank(z[0]) || z[1] - a[1] || a[0].localeCompare(z[0]))
-    .map(([w, n]) => `${n} ${n === 1 ? w : many(w)}`).join(", ");
+  return [...counts].sort((a, z) => rank(a[0]) - rank(z[0]) || z[1].n - a[1].n || a[0].localeCompare(z[0]))
+    .map(([w, {n, slug}]) => xlKind(w, n, slug)).join(", ");
+}
+/* "7 shops", "1 warehouse": one kind of site in a chain, counted. */
+function xlKind(w, n, slug){
+  switch(w){
+    case "shop": return tt("co.chain.shops", {one: "{n} shop", other: "{n} shops"}, {n});
+    case "office": return tt("co.chain.offices", {one: "{n} office", other: "{n} offices"}, {n});
+    case "vacant lease": return tt("co.chain.vacant", {one: "{n} vacant lease", other: "{n} vacant leases"}, {n});
+    case "factory": return tt("co.chain.factories", {one: "{n} factory", other: "{n} factories"}, {n});
+  }
+  const many = /quarters$/.test(w) ? w : /[^aeiou]y$/.test(w) ? w.slice(0, -1) + "ies" : `${w}s`;
+  const type = /^ba:/.test(slug || "") ? `\u27e6${slug}|${w}\u27e7` : w;
+  return tt("co.chain.kind", {one: "{n} {kind}", other: "{n} {kinds}"}, {n, kind: w, kinds: many, type});
 }
 function chainRow(c, v){
   const cells = v.chain(c);
   const note = c.external
-    ? `${compact(c.external)} of it sold outside the company by its factory`
-    : c.suppliedBy.length ? `supplied from ${c.suppliedBy.join(", ")}` : "";
+    ? tt("co.chain.external", "{w:$c} of it sold outside the company by its factory", {w: c.external})
+    : c.suppliedBy.length ? tt("co.chain.supplied", "supplied from {sites}", {sites: c.suppliedBy.join(", ")}) : "";
   const name = `${CHEV()}${c.name}<span class="sub" style="padding-left:16px">${xlMembers(c)}${
     note ? ` · ${note}` : ""}</span>`;
-  return `<tr class="chain" data-chain="${attr(c.name)}">${
+  /* A chain is known by its English name, so the chains a reader opened stay
+     open when the UI language changes the name on screen. */
+  return `<tr class="chain" data-chain="${attr(enOf(c, "name"))}">${
     cells.map((cell, i) => `<td class="${i ? "" : "l"}">${i === 0 ? name : cell}</td>`).join("")}</tr>`;
 }
 
@@ -16469,29 +17173,39 @@ function outsideRows(span){
   if(!last) return "";
   const outside = (last.business || 0) - last.profit;
   if(Math.abs(outside) < 1) return "";
-  const parts = [["loans", last.loans], ["health insurance", last.insurance],
+  const parts = [["loans", last.loans], ["insurance", last.insurance],
                  ["homes", last.homes], ["parking", last.parking]].filter(([, n]) => n >= 1);
   const other = outside - parts.reduce((s, [, n]) => s + n, 0);
   if(Math.abs(other) >= 1) parts.push(["other", other]);
-  const tip = `Day ${last.day}: ${parts.map(([l, n]) => `${l} ${fmt(n)}`).join(", ")}. The company pays these, no site does.`;
+  const part = (id, w) => id === "loans" ? tt("co.outside.loans", "loans {w:$}", {w})
+    : id === "insurance" ? tt("co.outside.insurance", "health insurance {w:$}", {w})
+    : id === "homes" ? tt("co.outside.homes", "homes {w:$}", {w})
+    : id === "parking" ? tt("co.outside.parking", "parking {w:$}", {w})
+    : tt("co.outside.other", "other {w:$}", {w});
+  const tip = tt("co.outside.tip", "Day {day}: {parts}. The company pays these, no site does.",
+    {day: last.day, parts: parts.map(([id, n]) => part(id, n)).join(", ")});
   const row = (label, n, cls, t) => `<tr class="td-outside${cls}"><td class="l" colspan="${span - 2}"${
     t ? ` data-tip="${attr(t)}" tabindex="0"` : ""}>${label}</td><td><span class="${sign(n)}">${fmt(n)}</span></td><td></td></tr>`;
-  return row("Company costs outside sites", -outside, "", tip)
-    + row("Company profit", last.profit, " td-net", "The same figure as Today's Profit yesterday");
+  return row(tt("co.outside.costs", "Company costs outside sites"), -outside, "", tip)
+    + row(tt("co.outside.profit", "Company profit"), last.profit, " td-net",
+      tt("co.outside.profit.tip", "The same figure as Today's Profit yesterday"));
 }
 
 function drawPortfolio(){
   const v = VIEWS[view];
-  $("portHead").innerHTML = sechead("Portfolio", {
-    why: `${v.note}. Click a chain to open its sites, a site to open its detail. Click a column to sort chains and their sites by it.`,
+  $("portHead").innerHTML = sechead(tt("co.port.title", "Portfolio"), {
+    why: tt("co.port.why", "{note}. Click a chain to open its sites, a site to open its detail. Click a column to sort chains and their sites by it.",
+      {note: v.note}),
     aside: `<span class="seg" id="portTools"></span>`,
   });
   seg($("portTools"), Object.entries(VIEWS).map(([id, o]) => [id, o.label]),
     () => view, id => { view = id; sortKey = null; }, drawPortfolio);
   const byKey = {};
   D.businesses.forEach(b => byKey[b.key] = b);
-  const sorter = (sortKey !== null && v.cols[sortKey] && v.cols[sortKey][3])
-    ? (a,z) => (v.cols[sortKey][3](a) - v.cols[sortKey][3](z)) * sortDir : null;
+  /* The columns once per draw: each read of v.cols words its headers afresh. */
+  const cols = v.cols;
+  const sorter = (sortKey !== null && cols[sortKey] && cols[sortKey][3])
+    ? (a,z) => (cols[sortKey][3](a) - cols[sortKey][3](z)) * sortDir : null;
 
   /* Every site row is in the table; wirePortfolio() shows the ones whose
      chain is open, from the openChains set, so a refresh keeps them open. */
@@ -16503,22 +17217,22 @@ function drawPortfolio(){
     let kids = c.sites.map(k => byKey[k]).filter(Boolean);
     if(sorter) kids = kids.slice().sort(sorter);
     kids.forEach(b => body.push(`<tr class="kid${siteOpen && b.key === siteKey ? " on" : ""}" data-parent="${
-      attr(c.name)}" data-key="${attr(b.key)}" title="Open this site's detail">${v.cols.map(([,f,cls]) =>
+      attr(enOf(c, "name"))}" data-key="${attr(b.key)}" title="${attr(tt("co.port.kid.title", "Open this site's detail"))}">${cols.map(([,f,cls]) =>
       `<td class="${cls||""}">${f(b)}</td>`).join("")}</tr>`));
   });
 
   const t = $("portfolio");
   if(!D.businesses.length){
-    t.innerHTML = `<tbody><tr><td class="l quiet">No businesses in this save yet.</td></tr></tbody>`;
+    t.innerHTML = `<tbody><tr><td class="l quiet">${tt("co.port.empty", "No businesses in this save yet.")}</td></tr></tbody>`;
     return;
   }
-  t.innerHTML = `<thead><tr>${v.cols.map(([h,,cls,key],i) =>
+  t.innerHTML = `<thead><tr>${cols.map(([h,,cls,key],i) =>
       `<th class="${cls||""}"${key ? ` data-i="${i}"` : ""}${i===sortKey?` data-dir="${sortDir<0?"desc":"asc"}"`:""}>${h}${
         i===sortKey ? SORT_ICON : ""}</th>`).join("")}</tr></thead>
     <tbody>${body.join("")}</tbody>
     ${v.total ? `<tfoot><tr>${v.total(D.businesses).map((c,i) =>
-      `<td class="${i?"":"l"}">${i===0?D.businesses.length+" sites":c}</td>`).join("")}</tr>${
-      view === "pnl" ? outsideRows(v.cols.length) : ""}</tfoot>` : ""}`;
+      `<td class="${i?"":"l"}">${i===0?tt("co.port.total", {one: "{n} sites", other: "{n} sites"}, {n: D.businesses.length}):c}</td>`).join("")}</tr>${
+      view === "pnl" ? outsideRows(cols.length) : ""}</tfoot>` : ""}`;
   t.querySelectorAll("thead th[data-i]").forEach(th => th.onclick = () => {
     const i = +th.dataset.i;
     if(sortKey===i) sortDir = -sortDir; else { sortKey=i; sortDir=-1; }
@@ -16592,7 +17306,7 @@ function siteCrumbs(key, name, picker){
   const chain = (D.chains || []).find(c => (c.sites || []).includes(key));
   const trail = [
     siteFrom ? `<a href="#secPortfolio" data-ss="portfolio">Portfolio</a>` : "",
-    chain ? `<a href="#secPortfolio" data-ss="chain" data-chain="${attr(chain.name)}">${spEsc(chain.name)}</a>` : "",
+    chain ? `<a href="#secPortfolio" data-ss="chain" data-chain="${attr(enOf(chain, "name"))}">${spEsc(chain.name)}</a>` : "",
     `<span aria-current="page">${spEsc(name)}</span>`].filter(Boolean).join("<i>›</i>");
   return `<nav class="ss-crumbs" aria-label="Where this page sits">${back}<span class="ss-trail">${trail}</span>${
     picker ? `<div class="ss-pick" id="sitePick"></div>` : ""}</nav>`;
@@ -19689,45 +20403,70 @@ function planImportsState(rows, marks, nameOf, gaps = {}){
      its words, and with what it could not look at (the game's text missing,
      recipes still unnamed), in which case the badge does not say ALL SET. */
   if(!rows.length){
-    const missing = [
-      gaps.unnamed ? `${gaps.unnamed} factory recipe${gaps.unnamed === 1 ? " is" : "s are"} still unnamed and not included` : "",
-      gaps.complete === false ? "factory lines need the game's text to be included" : "",
-    ].filter(Boolean).join(", and ");
-    return missing ? {badge: "NONE FOUND", live: false, what: `No changes found, but ${missing}.`}
-      /* Only margin changes and top-ups to lower are left: nothing falls
-         short, and Supply has them. */
-      : gaps.margin || gaps.lower ? {badge: "ALL SET", live: false, what: `Nothing falls short. Supply lists ${[
-          gaps.margin ? `${gaps.margin === 1 ? "one change" : `${gaps.margin} changes`} that would restore the margin` : "",
-          gaps.lower ? `${gaps.lower === 1 ? "one top-up" : `${gaps.lower} top-ups`} to lower` : ""].filter(Boolean).join(" and ")}.`}
-      : {badge: "ALL SET", live: false, what: "No changes found in the supply data."};
+    const unnamed = gaps.unnamed ? tt("today.moves.plan.unnamed",
+      {one: "{n} factory recipe is still unnamed and not included", other: "{n} factory recipes are still unnamed and not included"},
+      {n: gaps.unnamed}) : "";
+    const noText = gaps.complete === false;
+    const missing = unnamed && noText
+      ? tt("today.moves.plan.none.both", "No changes found, but {unnamed}, and factory lines need the game's text to be included.", {unnamed})
+      : unnamed ? tt("today.moves.plan.none.unnamed", "No changes found, but {unnamed}.", {unnamed})
+      : noText ? tt("today.moves.plan.none.text", "No changes found, but factory lines need the game's text to be included.") : "";
+    /* Only margin changes and top-ups to lower are left: nothing falls
+       short, and Supply has them. */
+    const margin = gaps.margin ? tt("today.moves.plan.margin",
+      {one: "one change that would restore the margin", other: "{n} changes that would restore the margin"}, {n: gaps.margin}) : "";
+    const lower = gaps.lower ? tt("today.moves.plan.lower",
+      {one: "one top-up to lower", other: "{n} top-ups to lower"}, {n: gaps.lower}) : "";
+    return missing ? {badge: tt("today.moves.plan.badge.none", "NONE FOUND"), live: false, what: missing}
+      : margin || lower ? {badge: tt("today.moves.plan.badge.set", "ALL SET"), live: false, what: margin && lower
+          ? tt("today.moves.plan.short.both", "Nothing falls short. Supply lists {margin} and {lower}.", {margin, lower})
+          : tt("today.moves.plan.short", "Nothing falls short. Supply lists {changes}.", {changes: margin || lower})}
+      : {badge: tt("today.moves.plan.badge.set", "ALL SET"), live: false, what: tt("today.moves.plan.clear", "No changes found in the supply data.")};
   }
   /* Tight and lowering rows stay off Today by rule; the card still says how
      many Supply lists beside these, so its count and the strip's add up. */
-  const also = [gaps.margin ? "restore the margin" : "", gaps.lower ? "lower a target" : ""].filter(Boolean);
-  const more = also.length ? ` ${(gaps.margin || 0) + (gaps.lower || 0)} more on Supply only ${also.join(" or ")}.` : "";
-  if(!left.length) return {badge: "ALL TICKED", live: false,
-    what: `You ticked ${rows.length === 1 ? "the one change" : `all ${rows.length}`}. A change the game has taken leaves the list with the next save.${more}`};
-  const n = v => v === null || v === undefined ? "not set" : num(v);
+  const also = (gaps.margin || 0) + (gaps.lower || 0);
+  const moreText = gaps.margin && gaps.lower
+    ? tt("today.moves.plan.more.both", "{n} more on Supply only restore the margin or lower a target.", {n: also})
+    : gaps.margin ? tt("today.moves.plan.more.margin", "{n} more on Supply only restore the margin.", {n: also})
+    : gaps.lower ? tt("today.moves.plan.more.lower", "{n} more on Supply only lower a target.", {n: also}) : "";
+  const more = moreText ? ` ${moreText}` : "";
+  if(!left.length) return {badge: tt("today.moves.plan.badge.ticked", "ALL TICKED"), live: false,
+    what: tt("today.moves.plan.ticked", {one: "You ticked the one change. A change the game has taken leaves the list with the next save.",
+      other: "You ticked all {n}. A change the game has taken leaves the list with the next save."}, {n: rows.length}) + more};
+  const n = v => v === null || v === undefined ? tt("today.moves.plan.notSet", "not set") : num(v);
   /* A paused import the player gave a figure has no current setting: it is
      a resume, not an order going from "not set". */
   const resume = r => !!r.paused;
   const change = r => r.proposed !== null && resume(r)
-    ? `resume the paused import, ${r.mode === "smart" ? `Smart Delivery stock ${n(r.proposed)}` : `${n(r.proposed)}/week`}`
+    ? (r.mode === "smart"
+      ? tt("today.moves.plan.resume.smart", "resume the paused import, Smart Delivery stock {to}", {to: n(r.proposed)})
+      : tt("today.moves.plan.resume.week", "resume the paused import, {to}/week", {to: n(r.proposed)}))
     : r.proposed === null
+    /* The checklist's own reason, as it gives it. */
     ? String(r.reason || "").split(". ")[0].replace(/\.$/, "").replace(/^./, c => c.toLowerCase())
-    : r.kind === "Before the next delivery" ? `add ${n(r.proposed)} units before the next delivery`
-    : `${r.mode === "smart" ? "Smart Delivery stock" : r.mode === "weekly" ? "weekly order" : r.mode === "hours" ? "run hours" : "daily top-up"} ${
-        n(r.current)} \u2192 ${n(r.proposed)}${r.mode === "hours" ? " a day" : ""}`;
+    : r.kind === "Before the next delivery" ? tt("today.moves.plan.once", "add {to} units before the next delivery", {to: n(r.proposed)})
+    : r.mode === "smart" ? tt("today.moves.plan.smart", "Smart Delivery stock {from} \u2192 {to}", {from: n(r.current), to: n(r.proposed)})
+    : r.mode === "weekly" ? tt("today.moves.plan.weekly", "weekly order {from} \u2192 {to}", {from: n(r.current), to: n(r.proposed)})
+    : r.mode === "hours" ? tt("today.moves.plan.hours", "run hours {from} \u2192 {to} a day", {from: n(r.current), to: n(r.proposed)})
+    : tt("today.moves.plan.daily", "daily top-up {from} \u2192 {to}", {from: n(r.current), to: n(r.proposed)});
   const where = r => r.site === null || r.site === undefined ? null : nameOf(r.site);
   if(left.length === 1){
-    const r = left[0], at = where(r);
-    return {badge: "1 TO CHANGE", live: true, what: `<b>${esc(r.item)}</b>${at ? ` at ${esc(at)}` : ""}: ${esc(change(r))}.${more}`};
+    const r = left[0], at = where(r), item = `<b>${esc(r.item)}</b>`;
+    return {badge: tt("today.moves.plan.badge.one", "1 TO CHANGE"), live: true, what: (at
+      ? tt("today.moves.plan.one.at", "{item} at {site}: {change}.", {item, site: esc(at), change: esc(change(r))})
+      : tt("today.moves.plan.one", "{item}: {change}.", {item, change: esc(change(r))})) + more};
   }
-  const places = [...new Set(left.map(where).filter(Boolean))];
-  const at = !places.length ? "" : places.length <= 2 ? ` at ${places.map(esc).join(" and ")}`
-    : ` at ${places.slice(0, 2).map(esc).join(", ")} and ${places.length - 2} more`;
-  return {badge: `${left.length} TO CHANGE`, live: true,
-    what: `<b>${left.length} changes</b>${at}, starting with ${esc(left[0].item)}.${more}`};
+  const places = [...new Set(left.map(where).filter(Boolean))].map(esc);
+  const changes = `<b>${tt("today.moves.plan.changes", {one: "{n} change", other: "{n} changes"}, {n: left.length})}</b>`;
+  const first = esc(left[0].item);
+  return {badge: tt("today.moves.plan.badge.many", "{n} TO CHANGE", {n: left.length}), live: true, what: (
+    !places.length ? tt("today.moves.plan.many", "{changes}, starting with {item}.", {changes, item: first})
+    : places.length === 1 ? tt("today.moves.plan.many.at", "{changes} at {site}, starting with {item}.", {changes, site: places[0], item: first})
+    : places.length === 2 ? tt("today.moves.plan.many.at2", "{changes} at {site} and {other}, starting with {item}.",
+        {changes, site: places[0], other: places[1], item: first})
+    : tt("today.moves.plan.many.atMore", "{changes} at {site}, {other} and {rest} more, starting with {item}.",
+        {changes, site: places[0], other: places[1], rest: places.length - 2, item: first})) + more};
 }
 
 const orderMarkCache = new Map();
@@ -21368,8 +22107,8 @@ const PRODUCTS_TOP = 14;
 function drawProducts(){
   const TOP = PRODUCTS_TOP, all = D.products;
   if(!all.length){
-    $("secProducts").innerHTML = sechead("Products")
-      + `<p class="quiet">No products sold in this save yet.</p>`;
+    $("secProducts").innerHTML = sechead(tt("co.prod.title", "Products"))
+      + `<p class="quiet">${tt("co.prod.empty", "No products sold in this save yet.")}</p>`;
     return;
   }
   const rows = showAllProducts ? all : all.slice(0, TOP);
@@ -21383,33 +22122,45 @@ function drawProducts(){
   /* Units, not revenue, and across every store that sells the line: said at
      each place a peak is named, so the product's Saturday is not read against
      the company's own week, which is revenue. */
-  const peakTip = p => p.peak
-    ? `Units sold across ${plural(p.stores, "store")}${p.weeks ? `, last ${plural(p.weeks, "week")}` : ""}: peaks ${
-        p.peak}, ${p.swing} points between best and worst day`
-    : "No weekly cycle clears the noise test";
+  const peakTip = p => {
+    if(!p.peak) return tt("co.prod.peak.none", "No weekly cycle clears the noise test");
+    const stores = tt("co.prod.stores", {one: "{n} store", other: "{n} stores"}, {n: p.stores});
+    return p.weeks
+      ? tt("co.prod.peak.tip.weeks", {one: "Units sold across {stores}, last {weeks}: peaks {day}, {n} points between best and worst day",
+        other: "Units sold across {stores}, last {weeks}: peaks {day}, {n} points between best and worst day"},
+        {stores, weeks: tt("co.prod.weeks", {one: "{n} week", other: "{n} weeks"}, {n: p.weeks}), day: coDay(p.peak), n: p.swing})
+      : tt("co.prod.peak.tip", {one: "Units sold across {stores}: peaks {day}, {n} points between best and worst day",
+        other: "Units sold across {stores}: peaks {day}, {n} points between best and worst day"},
+        {stores, day: coDay(p.peak), n: p.swing});
+  };
   /* Each product's peak reads its own weeks of sales (its cell says how many);
      the header gives the range across the rows. */
   const peakWeeks = rows.filter(p => p.peak && p.weeks).map(p => p.weeks);
   const lo = Math.min(...peakWeeks), hi = Math.max(...peakWeeks);
-  const weekRange = !peakWeeks.length ? "" : lo === hi ? `the last ${plural(hi, "week")}` : `the last ${lo} to ${hi} weeks`;
-  const fromWeeks = weekRange ? `, from ${weekRange},` : "";
+  const weekRange = !peakWeeks.length ? "" : lo === hi
+    ? tt("co.prod.range.one", {one: "the last {n} week", other: "the last {n} weeks"}, {n: hi})
+    : tt("co.prod.range", "the last {lo} to {hi} weeks", {lo, hi});
   const more = all.length > TOP
     ? `<a class="link" href="#" id="productsToggle" aria-expanded="${showAllProducts}">${
-        showAllProducts ? `top ${TOP} only` : `all ${all.length}`}</a>`
-    : `<span class="quiet">all ${all.length}</span>`;
-  $("secProducts").innerHTML = sechead("Products", {
-    why: `Revenue and units are a day's, averaged over the last seven days and summed over every store that sells the line;`
-      + ` units a week is the last seven days, and stores is how many carry it.`
-      + (showPeak
-        ? ` Peaks names the weekday that sells the most units${fromWeeks} and the points between best and worst day.`
-        : ` Weekday peaks are on the product's own note; ${withPeak} of ${rows.length} have one.`),
-    quiet: "by revenue a day, last 7 days",
+        showAllProducts ? tt("co.prod.top", "top {n} only", {n: TOP}) : tt("co.prod.all", "all {n}", {n: all.length})}</a>`
+    : `<span class="quiet">${tt("co.prod.all", "all {n}", {n: all.length})}</span>`;
+  $("secProducts").innerHTML = sechead(tt("co.prod.title", "Products"), {
+    why: tt("co.prod.why", "Revenue and units are a day's, averaged over the last seven days and summed over every store that sells the line; units a week is the last seven days, and stores is how many carry it.")
+      + " " + (showPeak
+        ? (weekRange
+          ? tt("co.prod.why.peaks.range", "Peaks names the weekday that sells the most units, from {range}, and the points between best and worst day.", {range: weekRange})
+          : tt("co.prod.why.peaks", "Peaks names the weekday that sells the most units and the points between best and worst day."))
+        : tt("co.prod.why.notes", "Weekday peaks are on the product's own note; {n} of {total} have one.", {n: withPeak, total: rows.length})),
+    quiet: tt("co.prod.quiet", "by revenue a day, last 7 days"),
     aside: more,
   }) + `<table>
-    <thead><tr><th class="l">Product</th><th>Revenue / day</th><th>Units / day</th>
-      <th data-tip="Sales across all stores over the last 7 days">Units / week</th>
-      <th>Avg price</th><th>Stores</th>${showPeak?`<th data-tip="${attr(`The weekday each product sells most units, across every store that carries it${
-        weekRange ? `, from ${weekRange} of sales` : ""}`)}">Peaks · units</th>`:""}</tr></thead>
+    <thead><tr><th class="l">${tt("co.prod.col.product", "Product")}</th><th>${tt("co.prod.col.revenue", "Revenue / day")}</th><th>${
+      tt("co.prod.col.units", "Units / day")}</th>
+      <th data-tip="${attr(tt("co.prod.col.week.tip", "Sales across all stores over the last 7 days"))}">${tt("co.prod.col.week", "Units / week")}</th>
+      <th>${tt("co.prod.col.price", "Avg price")}</th><th>${tt("co.prod.col.stores", "Stores")}</th>${showPeak?`<th data-tip="${attr(weekRange
+        ? tt("co.prod.col.peaks.tip.range", "The weekday each product sells most units, across every store that carries it, from {range} of sales", {range: weekRange})
+        : tt("co.prod.col.peaks.tip", "The weekday each product sells most units, across every store that carries it"))}">${
+        tt("co.prod.col.peaks", "Peaks · units")}</th>`:""}</tr></thead>
     <tbody>${rows.map(p=>{
       /* The product opens the store that sells the most of it, Shelves lit,
          or with nothing sold yet one that stocks it: the Portfolio has no
@@ -21418,8 +22169,10 @@ function drawProducts(){
          scale; the store is `seller`. */
       const seller = xlSellers(p.slug)[0];
       const opens = !seller ? ""
-        : seller.line.revenue ? `Open ${shortName(seller.b)}, the store that sells the most of it${p.stores > 1 ? `, one of ${p.stores}` : ""}`
-        : `Open ${shortName(seller.b)}, which stocks it; no store sold any in the last seven days`;
+        : seller.line.revenue ? (p.stores > 1
+          ? tt("co.prod.open.top.of", "Open {site}, the store that sells the most of it, one of {n}", {site: shortName(seller.b), n: p.stores})
+          : tt("co.prod.open.top", "Open {site}, the store that sells the most of it", {site: shortName(seller.b)}))
+        : tt("co.prod.open.stocks", "Open {site}, which stocks it; no store sold any in the last seven days", {site: shortName(seller.b)});
       const name = seller ? `<a class="link xl-sells" href="#company" data-xl-item="${attr(p.slug)}" data-tip="${attr(opens)}">${p.item}</a>` : p.item;
       return `<tr data-slug="${attr(p.slug)}">
       <td class="l"${showPeak?"":` data-tip="${attr(peakTip(p))}"`}>${name}</td>
@@ -21429,7 +22182,7 @@ function drawProducts(){
       <td>$${num(p.price, {minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       <td>${p.stores}</td>
       ${showPeak?`<td class="${p.peak?"pos":""}" data-tip="${attr(peakTip(p))}">${
-        p.peak ? `${p.peak.slice(0,3)} +${p.swing}` : "—"}</td>`:""}</tr>`;}).join("")}</tbody></table>`;
+        p.peak ? `${coDayShort(p.peak)} +${p.swing}` : "—"}</td>`:""}</tr>`;}).join("")}</tbody></table>`;
   $$("#secProducts [data-xl-item]").forEach(a => a.onclick = e => { e.preventDefault(); xlOpenSeller(a.dataset.xlItem); });
   const toggle = $("productsToggle");
   if(toggle) toggle.onclick = () => { showAllProducts = !showAllProducts; drawProducts(); };
@@ -21443,18 +22196,21 @@ function payrollWhy(){
     .map(b => [b, (b.wages || 0) - (b.staffCost || 0)])
     .filter(([b, d]) => Math.abs(d) >= Math.max(100, (b.staffCost || 0) * .05))
     .sort((a, z) => Math.abs(z[1]) - Math.abs(a[1]));
-  return "At today's rates: each person's hourly wage times their assigned weekly hours, over seven days. "
-    + "Booked yesterday: the wages yesterday's statements recorded, the Wages total of the Portfolio."
-    + (off.length ? ` They differ at ${off.slice(0, 4).map(([b, d]) => `${b.name} (${d > 0 ? "+" : ""}${fmt(d)})`).join(", ")}${
-        off.length > 4 ? ` and ${off.length - 4} more` : ""}.` : "");
+  const sites = off.slice(0, 4).map(([b, d]) => `${b.name} (${d > 0 ? "+" : ""}${fmt(d)})`).join(", ");
+  return tt("co.pay.why.rates", "At today's rates: each person's hourly wage times their assigned weekly hours, over seven days.")
+    + " " + tt("co.pay.why.booked", "Booked yesterday: the wages yesterday's statements recorded, the Wages total of the Portfolio.")
+    + (!off.length ? "" : " " + (off.length > 4
+      ? tt("co.pay.why.differ.more", "They differ at {sites} and {n} more.", {sites, n: off.length - 4})
+      : tt("co.pay.why.differ", "They differ at {sites}.", {sites})));
 }
 function drawPayroll(){
   const st = D.staff;
-  const trouble = [["unhappy", st.unhappy, "Satisfaction below 70%"],
-                   ["out", st.absent, "Absent today"],
-                   ["complaining", st.complaining, "With an open complaint"]].filter(([,v]) => v);
+  const trouble = [[n => tt("co.pay.unhappy", "{n} unhappy", {n}), st.unhappy, tt("co.pay.unhappy.tip", "Satisfaction below 70%")],
+                   [n => tt("co.pay.out", "{n} out", {n}), st.absent, tt("co.pay.out.tip", "Absent today")],
+                   [n => tt("co.pay.complaining", "{n} complaining", {n}), st.complaining,
+                    tt("co.pay.complaining.tip", "With an open complaint")]].filter(([,v]) => v);
   const max = Math.max(...st.roles.map(r => r.count), 1);
-  $("secPayroll").innerHTML = sechead("Payroll", {
+  $("secPayroll").innerHTML = sechead(tt("co.pay.title", "Payroll"), {
     /* Two wage figures that legitimately differ, each saying what it is: the
        rate is every hourly wage times its assigned weekly hours, over seven;
        the books are what yesterday's statements recorded, the Portfolio's
@@ -21463,17 +22219,18 @@ function drawPayroll(){
     why: payrollWhy(),
     /* Booked yesterday is said whenever there was a yesterday: $0 booked
        against a payroll is exactly the gap the ? explains. */
-    quiet: `${st.total} people · ${fmt(st.dailyCost)}/day at today's rates${
-      D.kpi && (D.daily || []).length ? ` · ${fmt(D.kpi.wageBill || 0)} booked yesterday` : ""}`,
+    quiet: `${tt("co.pay.people", {one: "{n} people", other: "{n} people"}, {n: st.total})} · ${
+      tt("co.pay.rate", "{w:$}/day at today's rates", {w: st.dailyCost})}${
+      D.kpi && (D.daily || []).length ? ` · ${tt("co.pay.booked", "{w:$} booked yesterday", {w: D.kpi.wageBill || 0})}` : ""}`,
     aside: st.total ? chipHtml(st.avgSatisfaction >= 70 ? "ok tr" : "warn tr", `${st.avgSatisfaction}%`,
-        `Average satisfaction across ${st.total} staff`)
-      + trouble.map(([l, v, tip]) => chipHtml("warn tr", `${v} ${l}`, tip)).join("") : "",
+        tt("co.pay.avg.tip", "Average satisfaction across {n} staff", {n: st.total}))
+      + trouble.map(([l, v, tip]) => chipHtml("warn tr", l(v), tip)).join("") : "",
   }) + (st.total ? `<div class="roles">${st.roles.map(r => `<div class="role rv">
       <span>${r.role}</span>
       <span class="tr"><i style="width:${(r.count / max * 100).toFixed(0)}%"></i></span>
       <span class="c">${r.cost != null
         ? `<span>${r.count}</span><b>${money(r.cost)}</b>`
-        : r.count}</span></div>`).join("")}</div>` : `<p class="quiet">No staff hired yet.</p>`);
+        : r.count}</span></div>`).join("")}</div>` : `<p class="quiet">${tt("co.pay.empty", "No staff hired yet.")}</p>`);
 }
 
 /* The career totals as a checklist, and the running totals under it. The
@@ -21489,19 +22246,21 @@ function drawGoals(){
      buildings is not a goal anybody plays for. */
   const count = n => num(n || 0);
   const ofAll = (label, n, total) => total > 0 ? [[label, n >= total, `${count(n)} / ${count(total)}`]] : [];
+  const goals = tt("co.goals.personal", "Personal goals done");
   const miles = [
-    ...ofAll("Every business type run", g.typesRun, g.typesTotal),
-    ...ofAll("Rivals taken over", g.rivalsDefeated, g.rivalsTotal),
-    ...(g.goalsTotal > 0 ? ofAll("Personal goals done", g.goalsDone ?? g.completed, g.goalsTotal)
-      : [["Personal goals done", false, `${count(g.goalsDone ?? g.completed)} done`]]),
-    ...ofAll("Diplomas earned", g.diplomas, g.diplomasTotal),
+    ...ofAll(tt("co.goals.types", "Every business type run"), g.typesRun, g.typesTotal),
+    ...ofAll(tt("co.goals.rivals", "Rivals taken over"), g.rivalsDefeated, g.rivalsTotal),
+    ...(g.goalsTotal > 0 ? ofAll(goals, g.goalsDone ?? g.completed, g.goalsTotal)
+      : [[goals, false, tt("co.goals.done", "{n:,} done", {n: g.goalsDone ?? g.completed ?? 0})]]),
+    ...ofAll(tt("co.goals.diplomas", "Diplomas earned"), g.diplomas, g.diplomasTotal),
   ];
-  $("secGoals").innerHTML = sechead("Milestones", {quiet: "career totals"})
+  $("secGoals").innerHTML = sechead(tt("co.goals.title", "Milestones"), {quiet: tt("co.goals.quiet", "career totals")})
     + `<div class="miles">${miles.map(([label, done, text]) =>
       `<div class="mile${done ? " done" : ""}"><span class="box">${icon("tick")}</span>${
         label}<span class="c">${text}</span></div>`).join("")}</div>`
-    + `<p class="quiet">${count(g.goodsProduced)} goods produced · ${compact(g.taxesPaid || 0)} in tax paid · ${
-      plural(g.buildingsOwned || 0, "building")} owned</p>`;
+    + `<p class="quiet">${tt("co.goals.goods", "{n:,} goods produced", {n: g.goodsProduced || 0})} · ${
+      tt("co.goals.tax", "{w:$c} in tax paid", {w: g.taxesPaid || 0})} · ${
+      tt("co.goals.buildings", {one: "{n} building owned", other: "{n} buildings owned"}, {n: g.buildingsOwned || 0})}</p>`;
 }
 
 /* The difficulty, as one chip and a popover with every setting that differs
@@ -21512,24 +22271,49 @@ function drawGoals(){
    build markup only;
    drawDifficulty() places and wires the popover. */
 const FV_PRESETS = ["Easy", "Normal", "Hard"];
+/* A difficulty's name in the UI language: the presets, Custom and Unknown;
+   any other name the save gives is shown as it is. */
+function fvDiffName(label){
+  switch(label){
+    case "Easy": return tt("nav.diff.easy", "Easy");
+    case "Normal": return tt("nav.diff.normal", "Normal");
+    case "Hard": return tt("nav.diff.hard", "Hard");
+    case "Custom": return tt("nav.diff.custom", "Custom");
+    case "Unknown": return tt("nav.diff.unknown", "Unknown");
+    default: return String(label ?? "");
+  }
+}
+/* "2 harder", "1 easier": a count of settings one way. */
+const fvDiffWay = (n, way) => way === "harder" ? tt("nav.diff.harder", "{n} harder", {n})
+  : tt("nav.diff.easier", "{n} easier", {n});
 function fvDiffWords(h){
   const counts = [[h.harder, "harder"], [h.easier, "easier"]].filter(([n]) => n);
   const preset = FV_PRESETS.includes(h.label);
   /* A preset is its name; a custom game (or one the board does not know) says
      how far it moved from Normal. */
   const label = preset ? h.label : h.label === "Custom" ? "Custom" : "Unknown";
-  return {label, preset, counts,
-    chip: [label, ...(preset ? [] : counts.map(([n, way]) => `${n} ${way}`))].join(" · "),
-    vsNormal: counts.map(([n, way], i) => `${i ? n : plural(n, "setting")} ${way}`).join(" and ")};
+  const name = fvDiffName(label);
+  /* How far from Normal, harder first: "2 settings harder and 1 easier". */
+  const harder = h.harder || 0, easier = h.easier || 0;
+  const vsNormal = harder && easier
+    ? tt("nav.diff.vs.both", {one: "{n} setting harder and {e} easier", other: "{n} settings harder and {e} easier"}, {n: harder, e: easier})
+    : harder ? tt("nav.diff.vs.harder", {one: "{n} setting harder", other: "{n} settings harder"}, {n: harder})
+    : easier ? tt("nav.diff.vs.easier", {one: "{n} setting easier", other: "{n} settings easier"}, {n: easier}) : "";
+  return {label, name, preset, counts,
+    chip: [name, ...(preset ? [] : counts.map(([n, way]) => fvDiffWay(n, way)))].join(" · "),
+    vsNormal};
 }
 function fvDiffChip(h, place, named){
   /* A board built before the house rules still knows the difficulty's name:
      said, with nothing to open. */
-  if(!h) return named ? `<span class="fv-diff fv-plain" data-fv-at="${place}" data-tip="${attr(`Difficulty: ${named}`)}"><span>${
-    attr(place === "mast" ? String(named).toUpperCase() : named)}</span></span>` : "";
+  if(!h) return named ? `<span class="fv-diff fv-plain" data-fv-at="${place}" data-tip="${attr(tt("nav.diff.named", "Difficulty: {name}", {name: fvDiffName(named)}))}"><span>${
+    attr(place === "mast" ? String(fvDiffName(named)).toUpperCase() : fvDiffName(named))}</span></span>` : "";
   const w = fvDiffWords(h);
-  const tip = (w.preset ? `The game's ${w.label} preset` : w.label === "Custom" ? "Custom difficulty" : "A difficulty the board does not recognise")
-    + (w.vsNormal ? `: ${w.vsNormal} than Normal` : "") + ". Click for each setting.";
+  const what = w.preset ? tt("nav.diff.what.preset", "The game's {name} preset", {name: w.name})
+    : w.label === "Custom" ? tt("nav.diff.what.custom", "Custom difficulty")
+    : tt("nav.diff.what.unknown", "A difficulty the board does not recognise");
+  const tip = w.vsNormal ? tt("nav.diff.tip.vs", "{what}: {vs} than Normal. Click for each setting.", {what, vs: w.vsNormal})
+    : tt("nav.diff.tip.plain", "{what}. Click for each setting.", {what});
   const text = place === "mast" ? w.chip.toUpperCase() : w.chip[0] + w.chip.slice(1).toLowerCase();
   return `<button type="button" class="fv-diff" data-fv-at="${place}" aria-expanded="false" aria-controls="fvDiffPop" aria-haspopup="dialog" data-tip="${
     attr(tip)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg><span>${
@@ -21539,16 +22323,17 @@ function fvDiffPopHtml(h){
   const w = fvDiffWords(h);
   const moved = (h.rules || []).filter(r => r.lean !== "level");
   const setting = (unit, v) => unit === "%" ? `${v}%` : `×${v}`;
-  const title = w.preset || w.label === "Custom" ? `${w.label} difficulty` : "Unrecognised difficulty";
+  const title = w.preset || w.label === "Custom" ? tt("nav.diff.pop.title", "{name} difficulty", {name: w.name})
+    : tt("nav.diff.pop.unknown", "Unrecognised difficulty");
   /* What the ? on Milestones said about presets, now the popover's first line. */
-  const lead = w.label === "Normal" ? "The game's Normal preset, the yardstick every other difficulty is read against."
-    : w.preset ? `${w.label} is one of the game's presets: every setting where it differs from Normal.`
-    : w.label === "Custom" ? "Every setting that differs from the game's Normal preset."
-    : "A difficulty this board does not recognise: every setting that differs from the game's Normal preset.";
-  const started = Number.isFinite(h.startingMoney) ? ` Started with ${fmt(h.startingMoney)}.` : "";
+  const lead = w.label === "Normal" ? tt("nav.diff.lead.normal", "The game's Normal preset, the yardstick every other difficulty is read against.")
+    : w.preset ? tt("nav.diff.lead.preset", "{name} is one of the game's presets: every setting where it differs from Normal.", {name: w.name})
+    : w.label === "Custom" ? tt("nav.diff.lead.custom", "Every setting that differs from the game's Normal preset.")
+    : tt("nav.diff.lead.unknown", "A difficulty this board does not recognise: every setting that differs from the game's Normal preset.");
+  const started = Number.isFinite(h.startingMoney) ? " " + tt("nav.diff.started", "Started with {w}.", {w: fmt(h.startingMoney)}) : "";
   /* Nothing moved on a game that is not Normal itself: say that, not "every
      setting that differs" over an empty list. */
-  const lead2 = !moved.length && w.label !== "Normal" ? "No setting differs from the game's Normal preset." : lead;
+  const lead2 = !moved.length && w.label !== "Normal" ? tt("nav.diff.lead.none", "No setting differs from the game's Normal preset.") : lead;
   /* One slider a setting, like the game's own: Normal is the tick, this game
      the knob, and right is always harder -- so a setting where a lower number
      is harder (Export price, Resale value) runs the other way. How far is the
@@ -21561,13 +22346,20 @@ function fvDiffPopHtml(h){
     return `<span class="fv-slide" aria-hidden="true"><span class="run${cls}" style="left:${lo.toFixed(0)}%;width:${
       Math.abs(me - 50).toFixed(0)}%"></span><span class="nm" style="left:50%"></span><span class="me${cls}" style="left:${me.toFixed(0)}%"></span></span>`;
   };
-  const chips = w.counts.map(([n, way]) => `<span class="chip ${way === "harder" ? "warn" : "ok"}">${n} ${way}</span>`).join("");
+  /* A setting's tip: what it does, then where Normal is and which way this
+     game leans (harder or easier: a level setting is not listed). */
+  const ruleTip = r => {
+    const what = `${r.what[0].toUpperCase()}${r.what.slice(1)}`, normal = setting(r.unit, r.normal);
+    return r.lean === "harder" ? tt("nav.diff.rule.harder", "{what}. Normal is {normal}, so this game is harder.", {what, normal})
+      : tt("nav.diff.rule.easier", "{what}. Normal is {normal}, so this game is easier.", {what, normal});
+  };
+  const chips = w.counts.map(([n, way]) => `<span class="chip ${way === "harder" ? "warn" : "ok"}">${fvDiffWay(n, way)}</span>`).join("");
   return `<h3>${title}${chips ? `<span class="fv-popchips">${chips}</span>` : ""}</h3><p>${lead2}${started}</p>`
     + (moved.length ? `<div class="fv-rules">${moved.map(r =>
-        `<div class="fv-rule" data-tip="${attr(`${r.what[0].toUpperCase()}${r.what.slice(1)}. Normal is ${
-          setting(r.unit, r.normal)}, so this game is ${r.lean}.`)}"><span class="n">${r.name}<small>${r.what}</small></span>${
-          slider(r)}<span class="v">${setting(r.unit, r.value)}<small>Normal ${setting(r.unit, r.normal)}</small></span></div>`).join("")}</div>`
-      + `<div class="fv-popfoot"><span class="lg"><i></i> Normal <u></u> this game</span><span>right is harder</span></div>` : "");
+        `<div class="fv-rule" data-tip="${attr(ruleTip(r))}"><span class="n">${r.name}<small>${r.what}</small></span>${
+          slider(r)}<span class="v">${setting(r.unit, r.value)}<small>${tt("nav.diff.rule.normal", "Normal {v}", {v: setting(r.unit, r.normal)})}</small></span></div>`).join("")}</div>`
+      + `<div class="fv-popfoot"><span class="lg"><i></i> ${tt("nav.diff.leg.normal", "Normal")} <u></u> ${tt("nav.diff.leg.game", "this game")}</span><span>${
+        tt("nav.diff.leg.right", "right is harder")}</span></div>` : "");
 }
 
 /* Next moves: the Plan imports card, painted by the change checklist each time
@@ -21590,16 +22382,18 @@ function drawFindLocation(){
   const vacant = (D.premises?.buildings || []).filter(b => b.type === "retail" && b.status === "vacant");
   if(!vacant.length){
     badge.className = "soon";
-    badge.textContent = D.premises ? "NONE FREE" : "SOON";
-    text.textContent = D.premises ? "No vacant retail unit in the city right now."
-      : "Free buildings ranked by demand, rivals and the building capacity you would get.";
+    badge.textContent = D.premises ? tt("today.moves.find.badge.none", "NONE FREE") : tt("today.moves.soon", "SOON");
+    text.textContent = D.premises ? tt("today.moves.find.none", "No vacant retail unit in the city right now.")
+      : tt("today.moves.find.soon", "Free buildings ranked by demand, rivals and the building capacity you would get.");
     return;
   }
   const best = vacant.reduce((a, b) => b.traffic > a.traffic ? b : a);
   badge.className = "soon live";
-  badge.textContent = `${vacant.length} VACANT`;
-  text.textContent = `${plural(vacant.length, "vacant retail unit")} right now. Best foot traffic: ${
-    best.address}, ${hoodName(best.hood)} (${best.traffic}).`;
+  badge.textContent = tt("today.moves.find.badge", "{n} VACANT", {n: vacant.length});
+  text.textContent = tt("today.moves.find.what", {
+    one: "{n} vacant retail unit right now. Best foot traffic: {address}, {hood} ({traffic}).",
+    other: "{n} vacant retail units right now. Best foot traffic: {address}, {hood} ({traffic})."},
+    {n: vacant.length, address: best.address, hood: hoodName(best.hood), traffic: best.traffic});
 }
 
 /* Next moves: the Optimize staffing card opens the roster with most to gain,
@@ -21665,24 +22459,26 @@ function drawOptimizeStaffing(){
   if(done.length){
     const row = spPickRoster(done, () => 0);
     badge.className = "soon live";
-    badge.textContent = "DATA COMPLETE";
-    text.textContent = `Demand data complete at ${row.name}${
-      done.length > 1 ? ` and ${done.length - 1} more` : ""}: switch to the demand plan.`;
-    go.textContent = `Opens ${row.name} › Staffing`;
+    badge.textContent = tt("today.moves.staff.badge.done", "DATA COMPLETE");
+    text.textContent = done.length > 1
+      ? tt("today.moves.staff.done.more", "Demand data complete at {site} and {n} more: switch to the demand plan.",
+          {site: row.name, n: done.length - 1})
+      : tt("today.moves.staff.done", "Demand data complete at {site}: switch to the demand plan.", {site: row.name});
+    go.textContent = tt("today.moves.staff.go", "Opens {site} › Staffing", {site: row.name});
     card.dataset.site = row.key;
     return;
   }
   const best = spBestRoster();
   if(!best){
     badge.className = "soon";
-    badge.textContent = D.staffing ? "NO PLAN" : "SOON";
+    badge.textContent = D.staffing ? tt("today.moves.staff.badge.none", "NO PLAN") : tt("today.moves.soon", "SOON");
     text.textContent = D.staffing
-      ? "No shop has been measured long enough to plan a week for yet."
-      : "Hours built from your customer count: registers, building capacity and the schedule each person asked for.";
+      ? tt("today.moves.staff.none", "No shop has been measured long enough to plan a week for yet.")
+      : tt("today.moves.staff.soon", "Hours built from your customer count: registers, building capacity and the schedule each person asked for.");
     /* Both arms open the site list: with no plan to point at, wireCards() has
        no site to open, and the line exists because the card used to be vague
        about exactly this. */
-    go.textContent = "Opens the sites";
+    go.textContent = tt("today.moves.staff.go.sites", "Opens the sites");
     /* Nothing to open: a live reload that leaves no usable plan must not keep
        sending the player to the site the last one named. */
     delete card.dataset.site;
@@ -21696,8 +22492,8 @@ function drawOptimizeStaffing(){
   /* The hires belong beside the week wherever it is quoted: a card that says
      "108 shifts become 65" and stops has described a schedule the player
      cannot finish until four more people are on the books. */
-  const alsoHire = !hiring && counts.hire
-    ? `, and ${plural(spPlanPosts(row), "person", "people")} to hire` : "";
+  const people = !hiring && counts.hire
+    ? tt("today.moves.staff.people", {one: "{n} person", other: "{n} people"}, {n: spPlanPosts(row)}) : "";
   /* A shop with no hour reports of its own is compared on the shifts this plan
      would really replace, and says why: its registers are not in the plan, so
      they are not in the number beside it either. Against its whole schedule
@@ -21706,21 +22502,45 @@ function drawOptimizeStaffing(){
   const measured = !spCoverOnly(row);
   badge.className = "soon live";
   badge.textContent = best.saves
-    ? `\u2212${spRosterNow(row) - week} ENTRIES`
-    : `${spPlanHours(row)} HOURS`;
+    ? tt("today.moves.staff.badge.saves", "\u2212{n} ENTRIES", {n: spRosterNow(row) - week})
+    : tt("today.moves.staff.badge.hours", "{n} HOURS", {n: spPlanHours(row)});
+  const site = row.name, hours = spPlanHours(row);
+  const entries = tt("today.moves.staff.entries", {one: "{n} entry", other: "{n} entries"}, {n: lines});
+  const registersMeasured = spRosterMeasured(row);
   text.textContent = best.saves
     ? (measured
-        ? `${row.name}: ${counts.now} entries become ${week}${alsoHire}.`
-        : `${row.name}: ${counts.nowCover} cleaning and security entries become ${
-            week}${alsoHire}, and ${spRosterMeasured(row)
-              ? `its measured hours ask for nobody at the registers`
-              : `its registers wait on the shop\u2019s first measured week`}.`)
+        ? (people
+          ? tt("today.moves.staff.saves.hire", "{site}: {now} entries become {week}, and {people} to hire.", {site, now: counts.now, week, people})
+          : tt("today.moves.staff.saves", "{site}: {now} entries become {week}.", {site, now: counts.now, week}))
+        : registersMeasured
+        ? (people
+          ? tt("today.moves.staff.cover.saves.hire.none",
+              "{site}: {now} cleaning and security entries become {week}, and {people} to hire, and its measured hours ask for nobody at the registers.",
+              {site, now: counts.nowCover, week, people})
+          : tt("today.moves.staff.cover.saves.none",
+              "{site}: {now} cleaning and security entries become {week}, and its measured hours ask for nobody at the registers.",
+              {site, now: counts.nowCover, week}))
+        : (people
+          ? tt("today.moves.staff.cover.saves.hire.wait",
+              "{site}: {now} cleaning and security entries become {week}, and {people} to hire, and its registers wait on the shop\u2019s first measured week.",
+              {site, now: counts.nowCover, week, people})
+          : tt("today.moves.staff.cover.saves.wait",
+              "{site}: {now} cleaning and security entries become {week}, and its registers wait on the shop\u2019s first measured week.",
+              {site, now: counts.nowCover, week})))
     : (measured
-        ? `${row.name}: a week of ${spPlanHours(row)} hours to set, in ${plural(lines, "entry", "entries")}${
-          hiring ? `, every one of them waiting on a hire` : alsoHire}.`
-        : `${row.name}: a week of ${spPlanHours(row)} cleaning and security hours to set, in ${plural(lines, "entry", "entries")}${
-          hiring ? `, every one of them waiting on a hire` : alsoHire}.`);
-  go.textContent = `Opens ${row.name} \u203a Staffing`;
+        ? (hiring
+          ? tt("today.moves.staff.week.hiring", "{site}: a week of {hours} hours to set, in {entries}, every one of them waiting on a hire.", {site, hours, entries})
+          : people
+          ? tt("today.moves.staff.week.hire", "{site}: a week of {hours} hours to set, in {entries}, and {people} to hire.", {site, hours, entries, people})
+          : tt("today.moves.staff.week", "{site}: a week of {hours} hours to set, in {entries}.", {site, hours, entries}))
+        : (hiring
+          ? tt("today.moves.staff.cover.week.hiring",
+              "{site}: a week of {hours} cleaning and security hours to set, in {entries}, every one of them waiting on a hire.", {site, hours, entries})
+          : people
+          ? tt("today.moves.staff.cover.week.hire",
+              "{site}: a week of {hours} cleaning and security hours to set, in {entries}, and {people} to hire.", {site, hours, entries, people})
+          : tt("today.moves.staff.cover.week", "{site}: a week of {hours} cleaning and security hours to set, in {entries}.", {site, hours, entries})));
+  go.textContent = tt("today.moves.staff.go", "Opens {site} › Staffing", {site: row.name});
   card.dataset.site = row.key;
 }
 
@@ -21728,10 +22548,10 @@ function drawFooter(){
   const m = D.meta;
   const f = $("footFile");  // the CLI's page only: the site names the save in its source strip
   if(f){
-    f.textContent = `${m.source} · saved ${m.saved}`;
-    f.dataset.tip = `Board built ${m.generated}`;
+    f.textContent = tt("foot.file.text", "{file} · saved {when}", {file: m.source, when: m.saved});
+    f.dataset.tip = tt("foot.file.tip", "Board built {when}", {when: m.generated});
   }
-  $("footBuild").textContent = `Game build ${m.build}`;
+  $("footBuild").textContent = tt("foot.build", "Game build {n}", {n: m.build});
   /* At 1500 px and under, where the masthead has no room to spare, the
      difficulty chip stands beside the game build instead; the stylesheet shows
      one or the other. */
@@ -21981,15 +22801,27 @@ function renderCalm(lazy = true){
    help. Which page and which view are remembered on this device and mirrored in
    the hash. */
 const PAGES = [
-  {id:"today",   label:"Today",   host:"pageToday"},
-  {id:"company", label:"Company", host:"pageCompany"},
-  {id:"supply",  label:"Supply",  host:"pageSupply"},
-  {id:"growth",  label:"Growth",  host:"pageGrowth"},
-  {id:"map", label:"Map", host:"pageMap", newFeature:"map"},
+  /* Each label is read in the UI language every time it is asked for. */
+  {id:"today",   get label(){ return tt("nav.page.today", "Today"); },     host:"pageToday"},
+  {id:"company", get label(){ return tt("nav.page.company", "Company"); }, host:"pageCompany"},
+  {id:"supply",  get label(){ return tt("nav.page.supply", "Supply"); },   host:"pageSupply"},
+  {id:"growth",  get label(){ return tt("nav.page.growth", "Growth"); },   host:"pageGrowth"},
+  {id:"map", get label(){ return tt("nav.page.map", "Map"); }, host:"pageMap", newFeature:"map"},
   /* A build without the wiki files carries no Wiki tab: an empty page is worse
      than no page at all. */
-  ...(typeof showWikiRoute === "function" ? [{id:"wiki", label:"Wiki", host:"pageWiki", newFeature:"wiki"}] : []),
+  ...(typeof showWikiRoute === "function" ? [{id:"wiki", get label(){ return tt("nav.page.wiki", "Wiki"); }, host:"pageWiki", newFeature:"wiki"}] : []),
 ];
+/* A view of a page, [id, label, anchor], its label (index 1) read in the UI
+   language every time. navSubLabel() is a view's label by its id. */
+function navView(id, label, anchor){
+  const v = [id, "", anchor];
+  Object.defineProperty(v, 1, {get: label, enumerable: true});
+  return v;
+}
+function navSubLabel(pageId, id){
+  const v = SUBS[pageId] && SUBS[pageId].items.find(([k]) => k === id);
+  return v ? v[1] : id;
+}
 /* Hashes that named a page which has since become a view of another. Every link
    already saved, printed or shared keeps working, without a page behind it. */
 const PAGE_ALIASES = {results: ["company", "results"]};
@@ -21998,19 +22830,24 @@ const PAGE_ALIASES = {results: ["company", "results"]};
 const hasData = () => typeof D !== "undefined" && !!D;
 const SUBS = {
   company: {host:"pageCompany", nav:"companyNav", key:"ba_dash_company", start:"results",
-            items:[["results","Results","secDaily"],["products","Products","secProducts"],
-                   ["payroll","Payroll","secPayroll"],["milestones","Milestones","secGoals"]]},
+            items:[navView("results", () => tt("nav.sub.results", "Results"), "secDaily"),
+                   navView("products", () => tt("nav.sub.products", "Products"), "secProducts"),
+                   navView("payroll", () => tt("nav.sub.payroll", "Payroll"), "secPayroll"),
+                   navView("milestones", () => tt("nav.sub.milestones", "Milestones"), "secGoals")]},
   /* Supply by object (R13): a tab each for shops, warehouses and factories,
      each with an icon and a badge of what is left to type there (sbBadge()),
      and the diagram following the tab on screen (sbShown()). */
   supply: {host:"pageSupply", nav:"supplyNav", key:"ba_dash_supply", start:"shops",
-           items:[["shops","Shops","secShops"],["warehouses","Warehouses","secWarehouses"],["factories","Factories","secFactories"]],
+           items:[navView("shops", () => tt("nav.sub.shops", "Shops"), "secShops"),
+                  navView("warehouses", () => tt("nav.sub.warehouses", "Warehouses"), "secWarehouses"),
+                  navView("factories", () => tt("nav.sub.factories", "Factories"), "secFactories")],
            lead: k => typeof sbTabIcon === "function" ? sbTabIcon(k) : "",
            badge: k => typeof sbBadge === "function" ? sbBadge(k) : "",
            shown: k => { if(typeof sbShown === "function") sbShown(k); }},
   // changed for growth: Expand is gone; Growth is Demand and Plan a chain.
   growth: {host:"pageGrowth", nav:"growthNav", key:"ba_dash_growth", start:"market",
-           items:[["market","Demand","secMarket"],["plan","Plan a chain","secPlan"]]},
+           items:[navView("market", () => tt("nav.sub.market", "Demand"), "secMarket"),
+                  navView("plan", () => tt("nav.sub.plan", "Plan a chain"), "secPlan")]},
 };
 const PAGE_KEY = "ba_dash_page";
 const remembered = key => { try{ return localStorage.getItem(key); }catch(e){ return null; } };
@@ -22081,9 +22918,9 @@ function paintStale(){
   const drew = staleDraws.size ? [...staleDraws.values()][0] : "";
   const stale = !!(staleSource || drew);
   dot.classList.toggle("stale", stale);
-  dot.querySelector("em").textContent = stale ? "Stale" : String(SOURCE.label).toUpperCase();
-  dot.title = staleSource ? "The save moved on but the board would not rebuild: " + staleSource
-    : drew ? "A page could not be drawn with the latest numbers and shows older ones: " + drew : "";
+  dot.querySelector("em").textContent = stale ? tt("nav.stale.word", "Stale") : String(SOURCE.label).toUpperCase();
+  dot.title = staleSource ? tt("nav.stale.source", "The save moved on but the board would not rebuild: {why}", {why: staleSource})
+    : drew ? tt("nav.stale.draw", "A page could not be drawn with the latest numbers and shows older ones: {why}", {why: drew}) : "";
   window.BigCopilotCommunity?.paintOnline();
 }
 /* The page, with its view where it has views: "today", "company/payroll". */
@@ -22183,7 +23020,7 @@ function showPage(id, scroll = true, historyMode = "push"){
   requestAnimationFrame(inkHome);
 }
 $("nav").innerHTML = PAGES.map(p =>
-  `<a href="#${p.id}" data-id="${p.id}">${icon(p.id)}<span>${p.label}</span>${p.newFeature ? `<span class="feature-new" data-new-feature="${p.newFeature}" hidden>New</span>` : ''}</a>`).join("") + '<i class="ink"></i>';
+  `<a href="#${p.id}" data-id="${p.id}">${icon(p.id)}<span>${p.label}</span>${p.newFeature ? `<span class="feature-new" data-new-feature="${p.newFeature}" hidden>${tt("nav.new", "New")}</span>` : ''}</a>`).join("") + '<i class="ink"></i>';
 featureDiscovery.refresh();
 /* Which pages a reader can be on. Without a save only the Wiki has anything to
    show, so the rest say so rather than opening blank. */
@@ -22193,10 +23030,33 @@ function paintNav(){
     const off = !open && a.dataset.id !== "wiki";
     a.classList.toggle("off", off);
     a.setAttribute("aria-disabled", String(off));
-    if(off) a.dataset.tip = "Open a save to see this page";
+    if(off) a.dataset.tip = tt("nav.off.tip", "Open a save to see this page");
     else delete a.dataset.tip;
   });
 }
+/* The chrome written once at load, written again in the UI language when it
+   changes (web/i18n.js): the page tabs, their views, the tabs' tips and the
+   New badges the script wrote, the landing footer's game build, and the
+   masthead clock's tip before a save is open. A board with a save redraws the
+   masthead and the footer itself (renderAll()). */
+function navRelabel(){
+  document.querySelectorAll("#nav a[data-id]").forEach(a => {
+    const p = PAGES.find(x => x.id === a.dataset.id);
+    const words = p && a.querySelector("span:not(.feature-new)");
+    if(words) words.textContent = p.label;
+  });
+  document.querySelectorAll("#nav .feature-new, #ssField .feature-new, #ssFieldBtn .feature-new")
+    .forEach(b => { b.textContent = tt("nav.new", "New"); });
+  Object.keys(SUBS).forEach(paintSubNav);
+  paintNav();
+  document.querySelectorAll("[data-foot-build]").forEach(el => {
+    el.textContent = tt("foot.build", "Game build {n}", {n: el.dataset.footBuild});
+  });
+  if(!hasData() && $("clock")) $("clock").dataset.tip = tt("nav.clock.tip0", "Game time when the save was written. Day 1 was a Monday.");
+  if(typeof ssChrome === "function") ssChrome();
+  if(typeof inkHome === "function") requestAnimationFrame(inkHome);
+}
+if(typeof ttOnChange === "function") ttOnChange(navRelabel);
 $("nav").addEventListener("click", e => {
   const a = e.target.closest("a[data-id]");
   if(!a || e.button > 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
@@ -22479,37 +23339,38 @@ window.addEventListener("hashchange", () => {
    and _idle_notes() in the Python build. Kept in sync by hand since the two
    sides only share the group key, not a label. */
 const ALERT_GROUPS = [
-  {id:"notrading",    label:"Not trading yet",        note:"Temporarily closed, or open but with no staff, no prices, no stock or no trading day", on:true},
-  {id:"vacant",       label:"Vacant leases",          note:"A lease still paying rent with no business in it", on:true},
-  {id:"loss",         label:"Losing money",           note:"A business that lost money yesterday", on:true},
-  {id:"staff",        label:"Nobody staffed",         note:"A shop or office with nobody working, or a machine nobody staffs", on:true},
-  {id:"satisfaction", label:"Low satisfaction",       note:"Customer satisfaction under 80%", on:true},
-  {id:"promotion",    label:"Promotion below cap",    note:"A shop under the 100% cap with campaigns left to run", on:true},
-  {id:"uniform",      label:"Uniforms / locker",      note:"Missing uniform locker or staff uniforms", on:true},
-  {id:"bathroom",     label:"No customer bathroom",   note:"Customers here expect a bathroom and there is none", on:true},
-  {id:"toiletprivacy",label:"Bathroom has no privacy",note:"A customer bathroom with no stall or door", on:true},
-  {id:"sink",         label:"No customer sink",       note:"Nowhere for customers to wash their hands", on:true},
-  {id:"music",        label:"No music playing",       note:"A shop trading in silence", on:true},
-  {id:"interior",     label:"Interior design too low",note:"Interior design below what customers expect here", on:true},
-  {id:"jobdemand",    label:"Staff demands",          note:"Schedule, desk or building demands of a site's staff not met", on:true},
-  {id:"companydemand",label:"Insurance / happy boss", note:"Staff demands only the owner can meet", on:true},
-  {id:"hype",         label:"Demand wave ending",     note:"A wave with days left and a site trading under it", on:false},
-  {id:"trend",        label:"Revenue trend",          note:"A shop's or office's week up or down by more than 15%", on:true},
-  {id:"unplanned",    label:"No distribution plan",   note:"A shelf selling goods no plan tops up", on:true},
-  {id:"outruns",      label:"Outsells its top-up",    note:"A peak day that empties the shelf before the next drop", on:true},
-  {id:"paused",       label:"Import paused",          note:"An import switched off, not covered by a route, with the depot still drawing", on:true},
-  {id:"feed",         label:"Factory inputs",         note:"An input arriving short of what the machines need", on:true},
-  {id:"unnamed",      label:"Unnamed factory line",   note:"A machine running a recipe the board cannot name", on:true},
-  {id:"unset",        label:"Machine with no recipe", note:"A machine staffed and rented, making nothing", on:true},
-  {id:"shortfall",    label:"Import shortfall",       note:"A depot that runs dry before the next import or route round", on:true},
-  {id:"topup",        label:"Depot top-up too low",   note:"A depot fed only by a route from your own site, whose busiest day outruns its daily top-up", on:true},
-  {id:"wholesale",    label:"Wholesale delivery too low", note:"A shop or depot a wholesale store delivers to each week, whose delivery brings less than a week's use or runs out before the next one", on:true},
-  {id:"order",        label:"Weekly order too small", note:"An import that cannot cover its own week", on:true},
-  {id:"atcap",        label:"At capacity",            note:"Hours a week the staff, registers or workstations turn people away", on:true},
-  {id:"idlestaff",    label:"Overstaffed hours",      note:"Counters or workstations staffed through hours that buy nothing", on:false},
-  {id:"dead",         label:"Idle stock",             note:"Goods sitting in a depot no line draws from", on:true},
-  {id:"notrouted",    label:"Not routed",             note:"Stock a depot or factory holds that no plan sends on, while your own sites sell or need it", on:true},
-  {id:"target",       label:"Top-up target too high", note:"A top-up target far above what the shops sell", on:true},
+  /* Each label and note is read in the UI language every time. */
+  {id:"notrading", get label(){ return tt("nav.kind.notrading.label", "Not trading yet"); }, get note(){ return tt("nav.kind.notrading.note", "Temporarily closed, or open but with no staff, no prices, no stock or no trading day"); }, on:true},
+  {id:"vacant", get label(){ return tt("nav.kind.vacant.label", "Vacant leases"); }, get note(){ return tt("nav.kind.vacant.note", "A lease still paying rent with no business in it"); }, on:true},
+  {id:"loss", get label(){ return tt("nav.kind.loss.label", "Losing money"); }, get note(){ return tt("nav.kind.loss.note", "A business that lost money yesterday"); }, on:true},
+  {id:"staff", get label(){ return tt("nav.kind.staff.label", "Nobody staffed"); }, get note(){ return tt("nav.kind.staff.note", "A shop or office with nobody working, or a machine nobody staffs"); }, on:true},
+  {id:"satisfaction", get label(){ return tt("nav.kind.satisfaction.label", "Low satisfaction"); }, get note(){ return tt("nav.kind.satisfaction.note", "Customer satisfaction under 80%"); }, on:true},
+  {id:"promotion", get label(){ return tt("nav.kind.promotion.label", "Promotion below cap"); }, get note(){ return tt("nav.kind.promotion.note", "A shop under the 100% cap with campaigns left to run"); }, on:true},
+  {id:"uniform", get label(){ return tt("nav.kind.uniform.label", "Uniforms / locker"); }, get note(){ return tt("nav.kind.uniform.note", "Missing uniform locker or staff uniforms"); }, on:true},
+  {id:"bathroom", get label(){ return tt("nav.kind.bathroom.label", "No customer bathroom"); }, get note(){ return tt("nav.kind.bathroom.note", "Customers here expect a bathroom and there is none"); }, on:true},
+  {id:"toiletprivacy", get label(){ return tt("nav.kind.toiletprivacy.label", "Bathroom has no privacy"); }, get note(){ return tt("nav.kind.toiletprivacy.note", "A customer bathroom with no stall or door"); }, on:true},
+  {id:"sink", get label(){ return tt("nav.kind.sink.label", "No customer sink"); }, get note(){ return tt("nav.kind.sink.note", "Nowhere for customers to wash their hands"); }, on:true},
+  {id:"music", get label(){ return tt("nav.kind.music.label", "No music playing"); }, get note(){ return tt("nav.kind.music.note", "A shop trading in silence"); }, on:true},
+  {id:"interior", get label(){ return tt("nav.kind.interior.label", "Interior design too low"); }, get note(){ return tt("nav.kind.interior.note", "Interior design below what customers expect here"); }, on:true},
+  {id:"jobdemand", get label(){ return tt("nav.kind.jobdemand.label", "Staff demands"); }, get note(){ return tt("nav.kind.jobdemand.note", "Schedule, desk or building demands of a site's staff not met"); }, on:true},
+  {id:"companydemand", get label(){ return tt("nav.kind.companydemand.label", "Insurance / happy boss"); }, get note(){ return tt("nav.kind.companydemand.note", "Staff demands only the owner can meet"); }, on:true},
+  {id:"hype", get label(){ return tt("nav.kind.hype.label", "Demand wave ending"); }, get note(){ return tt("nav.kind.hype.note", "A wave with days left and a site trading under it"); }, on:false},
+  {id:"trend", get label(){ return tt("nav.kind.trend.label", "Revenue trend"); }, get note(){ return tt("nav.kind.trend.note", "A shop's or office's week up or down by more than 15%"); }, on:true},
+  {id:"unplanned", get label(){ return tt("nav.kind.unplanned.label", "No distribution plan"); }, get note(){ return tt("nav.kind.unplanned.note", "A shelf selling goods no plan tops up"); }, on:true},
+  {id:"outruns", get label(){ return tt("nav.kind.outruns.label", "Outsells its top-up"); }, get note(){ return tt("nav.kind.outruns.note", "A peak day that empties the shelf before the next drop"); }, on:true},
+  {id:"paused", get label(){ return tt("nav.kind.paused.label", "Import paused"); }, get note(){ return tt("nav.kind.paused.note", "An import switched off, not covered by a route, with the depot still drawing"); }, on:true},
+  {id:"feed", get label(){ return tt("nav.kind.feed.label", "Factory inputs"); }, get note(){ return tt("nav.kind.feed.note", "An input arriving short of what the machines need"); }, on:true},
+  {id:"unnamed", get label(){ return tt("nav.kind.unnamed.label", "Unnamed factory line"); }, get note(){ return tt("nav.kind.unnamed.note", "A machine running a recipe the board cannot name"); }, on:true},
+  {id:"unset", get label(){ return tt("nav.kind.unset.label", "Machine with no recipe"); }, get note(){ return tt("nav.kind.unset.note", "A machine staffed and rented, making nothing"); }, on:true},
+  {id:"shortfall", get label(){ return tt("nav.kind.shortfall.label", "Import shortfall"); }, get note(){ return tt("nav.kind.shortfall.note", "A depot that runs dry before the next import or route round"); }, on:true},
+  {id:"topup", get label(){ return tt("nav.kind.topup.label", "Depot top-up too low"); }, get note(){ return tt("nav.kind.topup.note", "A depot fed only by a route from your own site, whose busiest day outruns its daily top-up"); }, on:true},
+  {id:"wholesale", get label(){ return tt("nav.kind.wholesale.label", "Wholesale delivery too low"); }, get note(){ return tt("nav.kind.wholesale.note", "A shop or depot a wholesale store delivers to each week, whose delivery brings less than a week's use or runs out before the next one"); }, on:true},
+  {id:"order", get label(){ return tt("nav.kind.order.label", "Weekly order too small"); }, get note(){ return tt("nav.kind.order.note", "An import that cannot cover its own week"); }, on:true},
+  {id:"atcap", get label(){ return tt("nav.kind.atcap.label", "At capacity"); }, get note(){ return tt("nav.kind.atcap.note", "Hours a week the staff, registers or workstations turn people away"); }, on:true},
+  {id:"idlestaff", get label(){ return tt("nav.kind.idlestaff.label", "Overstaffed hours"); }, get note(){ return tt("nav.kind.idlestaff.note", "Counters or workstations staffed through hours that buy nothing"); }, on:false},
+  {id:"dead", get label(){ return tt("nav.kind.dead.label", "Idle stock"); }, get note(){ return tt("nav.kind.dead.note", "Goods sitting in a depot no line draws from"); }, on:true},
+  {id:"notrouted", get label(){ return tt("nav.kind.notrouted.label", "Not routed"); }, get note(){ return tt("nav.kind.notrouted.note", "Stock a depot or factory holds that no plan sends on, while your own sites sell or need it"); }, on:true},
+  {id:"target", get label(){ return tt("nav.kind.target.label", "Top-up target too high"); }, get note(){ return tt("nav.kind.target.note", "A top-up target far above what the shops sell"); }, on:true},
 ];
 const ALERT_SETTINGS_KEY = "ba_dash_alert_groups";
 /* What is stored is only what the player switched: {v: 2, set: {kind: on}}, so
@@ -22568,14 +23429,27 @@ function drawKindRows(){
   const host = kindsPop && kindsPop.querySelector(".kinds");
   if(!host) return;
   const n = kindCounts(), at = host.scrollTop;
+  kindsChrome();
   host.innerHTML = ALERT_GROUPS.map(g => {
     const on = !!alertGroupPrefs[g.id];
     return `<div class="kind"><div><b>${g.label}</b><small>${g.note}</small></div>`
-      + `<span class="c">${n[g.id] || 0} today</span>`
+      + `<span class="c">${tt("today.kinds.count", "{n} today", {n: n[g.id] || 0})}</span>`
       + `<span class="sw${on ? " on" : ""}" data-kind="${g.id}" role="switch"`
       + ` aria-checked="${on}" aria-label="${attr(g.label)}" tabindex="0"></span></div>`;
   }).join("");
   host.scrollTop = at;
+}
+/* The panel's own words, written each time its rows are, so it opens in the
+   language on screen. */
+function kindsChrome(){
+  if(!kindsPop) return;
+  const title = tt("today.kinds.title", "Which kinds make the list");
+  kindsPop.setAttribute("aria-label", title);
+  kindsPop.querySelector("h3").textContent = title;
+  kindsPop.querySelector("p").textContent = tt("today.kinds.lead",
+    "Off is counted, never dropped: the kind leaves the list, and its findings are counted in the \"kinds switched off\" line under it, with \"show\" to read them. Saved on this device.");
+  kindsPop.querySelector("[data-kinds-reset]").textContent = tt("today.kinds.reset", "reset to the board's defaults");
+  kindsPop.querySelector("[data-kinds-done]").textContent = tt("today.kinds.done", "Done");
 }
 /* Where the panel sits: under the button that opened it, its right edge in
    line with the button's, clamped into the window. With no button on the page
@@ -22649,12 +23523,11 @@ function buildAlertSettingsPanel(){
   kindsPop.className = "pop";
   kindsPop.id = "alertPop";
   kindsPop.setAttribute("role", "dialog");
-  kindsPop.setAttribute("aria-label", "Which kinds make the list");
-  kindsPop.innerHTML = `<h3>Which kinds make the list</h3>
-    <p>Off is counted, never dropped: the kind leaves the list, and its findings are counted in the "kinds switched off" line under it, with "show" to read them. Saved on this device.</p>
+  kindsPop.innerHTML = `<h3></h3>
+    <p></p>
     <div class="kinds"></div>
-    <div class="foot2"><a class="link" href="#" data-kinds-reset>reset to the board's defaults</a>`
-    + `<a class="btn2 primary" href="#" data-kinds-done>Done</a></div>`;
+    <div class="foot2"><a class="link" href="#" data-kinds-reset></a>`
+    + `<a class="btn2 primary" href="#" data-kinds-done></a></div>`;
   document.body.appendChild(kindsPop);
   drawKindRows();
 
@@ -22738,7 +23611,7 @@ buildAlertSettingsPanel();
 
    Today — wireTiles, wireSev, wireFinds, wireCards:
      .kpi                 spotlight under the pointer (--mx/--my); inside it
-                          .spark[data-vals="l1,l2,…"] with a <polyline points>
+                          .spark[data-vals="l1|l2|…"] with a <polyline points>
                           in a 0..100 x space, circle.pt and span.scrub.
      .sev[data-kind=crit|watch|opp]   click toggles .off and hides .find.<kind>.
      .find.crit|watch|opp[data-id]    a row; its .mark silences the row, data-id
@@ -23108,8 +23981,33 @@ function wireSphere(){
 
    The board script, web/map.js and web/wiki.js share one scope, so every
    top-level name here starts with ss or SS. */
-const SS_GROUPS = [["views", "Pages & views"], ["sites", "Sites"], ["products", "Products"],
-  ["kinds", "Finding kinds"], ["finder", "Find a location"], ["wiki", "Wiki"]];
+const SS_GROUPS = [navView("views", () => tt("nav.search.group.views", "Pages & views")),
+  navView("sites", () => tt("nav.search.group.sites", "Sites")),
+  navView("products", () => tt("nav.search.group.products", "Products")),
+  navView("kinds", () => tt("nav.search.group.kinds", "Finding kinds")),
+  navView("finder", () => tt("nav.search.group.finder", "Find a location")),
+  navView("wiki", () => tt("nav.search.group.wiki", "Wiki"))];
+/* "4 more sites ›" under a group cut short, and where that row goes. */
+function ssGroupMore(g, n){
+  switch(g){
+    case "views": return tt("nav.search.more.views", {one: "{n} more pages & views ›", other: "{n} more pages & views ›"}, {n});
+    case "sites": return tt("nav.search.more.sites", {one: "{n} more sites ›", other: "{n} more sites ›"}, {n});
+    case "products": return tt("nav.search.more.products", {one: "{n} more products ›", other: "{n} more products ›"}, {n});
+    case "kinds": return tt("nav.search.more.kinds", {one: "{n} more finding kinds ›", other: "{n} more finding kinds ›"}, {n});
+    case "finder": return tt("nav.search.more.finder", {one: "{n} more find a location ›", other: "{n} more find a location ›"}, {n});
+    default: return tt("nav.search.more.wiki", {one: "{n} more wiki ›", other: "{n} more wiki ›"}, {n});
+  }
+}
+function ssGroupEvery(g){
+  switch(g){
+    case "views": return tt("nav.search.every.views", "every pages & views");
+    case "sites": return tt("nav.search.every.sites", "every sites");
+    case "products": return tt("nav.search.every.products", "every products");
+    case "kinds": return tt("nav.search.every.kinds", "every finding kinds");
+    case "finder": return tt("nav.search.every.finder", "every find a location");
+    default: return tt("nav.search.every.wiki", "every wiki");
+  }
+}
 /* Your own sites lead a tie; the wiki is reference, and waits. */
 const SS_BIAS = {sites: 10, wiki: -15};
 const SS_PER = 4, SS_PER_PHONE = 3;
@@ -23230,32 +24128,39 @@ function ssRing(el){
    hire?" move once the factory pages (R8) and the company-wide Staff list (R14)
    exist. */
 const SS_QUESTIONS = [
-  {id: "profit", q: "Why did profit move?", lands: "Company › Results · the portfolio sorted by week on week", page: "company",
+  {id: "profit", get q(){ return tt("nav.ask.profit.q", "Why did profit move?"); },
+   lands: () => tt("nav.ask.profit.lands", "Company › Results · the portfolio sorted by week on week"), page: "company",
    go(){
      view = "pnl";
-     const i = VIEWS.pnl.cols.findIndex(c => c[0] === "Wk / wk");
+     const i = VIEWS.pnl.cols.findIndex(c => c[4] === "wow");
      sortKey = i >= 0 ? i : null; sortDir = -1;
      drawPortfolio();
      reveal("secPortfolio");
    },
    lit: "#secPortfolio", holds: () => view === "pnl"},
-  {id: "open", q: "Where should I open next?", lands: "Map › Find a location · ranked by demand", page: "map",
+  {id: "open", get q(){ return tt("nav.ask.open.q", "Where should I open next?"); },
+   lands: () => tt("nav.ask.open.lands", "Map › Find a location · ranked by demand"), page: "map",
    go: () => ssFinder({cat: "retail", type: "", hoods: null}), lit: "#cityMapPage .places", dim: false, wait: true,
    holds: () => !!(cityMapPage && cityMapPage.finderOn())},
-  {id: "fed", q: "Is my factory fed?", lands: "Supply › Factories · lines and factory inputs", page: "supply",
+  {id: "fed", get q(){ return tt("nav.ask.fed.q", "Is my factory fed?"); },
+   lands: () => tt("nav.ask.fed.lands", "Supply › Factories · lines and factory inputs"), page: "supply",
    go: () => ssSupply("factories"), lit: "#secFactories", holds: () => sub.supply === "factories"},
-  {id: "hire", q: "Whom should I hire?", page: "company",
+  {id: "hire", get q(){ return tt("nav.ask.hire.q", "Whom should I hire?"); }, page: "company",
    lands: () => { const b = D.businesses.find(x => x.key === ssStaffingSite());
-     return b ? `Staffing on ${b.name} · hiring lines` : "Company › Results · the sites"; },
+     return b ? tt("nav.ask.hire.lands.site", "Staffing on {site} · hiring lines", {site: b.name})
+       : tt("nav.ask.hire.lands.none", "Company › Results · the sites"); },
    go: () => ssOpenSite(ssStaffingSite(), "#sp-roster"),
    lit: () => siteOpen && ssStaffingSite() && siteKey === ssStaffingSite() ? $("sp-roster") : $("secPortfolio"),
    holds: a => a.site === (siteOpen ? siteKey : null)},
-  {id: "prices", q: "Are my prices right?", page: "wiki",
-   lands: () => { const t = ssTopType(); return t ? `Wiki › ${t.type} › Prices in your save` : "Wiki"; },
+  {id: "prices", get q(){ return tt("nav.ask.prices.q", "Are my prices right?"); }, page: "wiki",
+   lands: () => { const t = ssTopType();
+     return t ? tt("nav.ask.prices.lands.type", "Wiki › {type} › Prices in your save", {type: t.type}) : tt("nav.ask.prices.lands.none", "Wiki"); },
    go: ssPrices, lit: "#wk-prices", wait: true, holds: a => location.hash === a.hash},
-  {id: "import", q: "What should I import this week?", lands: "Supply › Change checklist", page: "supply",
+  {id: "import", get q(){ return tt("nav.ask.import.q", "What should I import this week?"); },
+   lands: () => tt("nav.ask.import.lands", "Supply › Change checklist"), page: "supply",
    go: ssChecklist, lit: "#sbStrip", holds: () => page === "supply"},
-  {id: "playing", q: "What am I playing on?", lands: "Difficulty · every setting against Normal", page: "",
+  {id: "playing", get q(){ return tt("nav.ask.playing.q", "What am I playing on?"); },
+   lands: () => tt("nav.ask.playing.lands", "Difficulty · every setting against Normal"), page: "",
    go: ssDifficulty, lit: () => fvShownChip(), dim: false, holds: () => ssDiffOpen()},
 ];
 const ssLands = qn => typeof qn.lands === "function" ? qn.lands() : qn.lands;
@@ -23267,15 +24172,16 @@ function ssAskMount(){
   const sec = $("secMoves");
   if(!sec || $("ssAsk")) return;
   const row = document.createElement("nav");
-  row.className = "ss-ask"; row.id = "ssAsk"; row.setAttribute("aria-label", "Ask the board");
-  row.innerHTML = `<span class="ss-asklead"><i></i>Ask the board</span>${SS_QUESTIONS.map(x =>
+  row.className = "ss-ask"; row.id = "ssAsk"; row.setAttribute("aria-label", tt("nav.ask.label", "Ask the board"));
+  row.innerHTML = `<span class="ss-asklead"><i></i>${tt("nav.ask.label", "Ask the board")}</span>${SS_QUESTIONS.map(x =>
     `<a class="ss-aq" href="#" data-ask="${x.id}">${ssEsc(x.q)}</a>`).join("")}<span class="ss-roll" aria-hidden="true"></span>`;
   sec.appendChild(row);
   const head = q(".sechead", sec);
   if(head){
     const aside = document.createElement("div");
     aside.className = "aside"; aside.id = "ssAskMini";
-    aside.innerHTML = `<button type="button" class="ss-askmini" aria-label="Ask the board (press /)" aria-keyshortcuts="/"><i></i>Ask the board<span class="ss-kbd" aria-hidden="true">/</span></button>`;
+    aside.innerHTML = `<button type="button" class="ss-askmini" aria-label="${attr(tt("nav.ask.mini.label", "Ask the board (press /)"))}" aria-keyshortcuts="/"><i></i>${
+      tt("nav.ask.label", "Ask the board")}<span class="ss-kbd" aria-hidden="true">/</span></button>`;
     head.appendChild(aside);
     q("button", aside).addEventListener("click", () => ssOpen());
   }
@@ -23357,10 +24263,11 @@ function ssLand(qn, from, ticket, tries = 0){
      (the site was open already) the portfolio. */
   const onSite = siteOpen && page === "company";
   const viaSite = onSite && siteFrom ? siteFrom : null;
-  const backLabel = viaSite ? viaSite.label : onSite ? "Portfolio" : back.label;
-  strip.innerHTML = `<span class="ic" aria-hidden="true">?</span><span><small>YOU ASKED</small><br><b>${ssEsc(qn.q)}</b></span>`
-    + `<span class="quiet">${ssEsc(ssLands(qn))}</span><span class="go"><button type="button" data-ss="back">‹ Back to ${ssEsc(backLabel)}</button>`
-    + `<button type="button" data-ss="another">Ask another</button></span>`;
+  const backLabel = viaSite ? viaSite.label : onSite ? tt("nav.ask.portfolio", "Portfolio") : back.label;
+  strip.innerHTML = `<span class="ic" aria-hidden="true">?</span><span><small>${tt("nav.ask.asked", "YOU ASKED")}</small><br><b>${ssEsc(qn.q)}</b></span>`
+    + `<span class="quiet">${ssEsc(ssLands(qn))}</span><span class="go"><button type="button" data-ss="back">${
+      ssEsc(tt("nav.ask.back", "‹ Back to {page}", {page: backLabel}))}</button>`
+    + `<button type="button" data-ss="another">${tt("nav.ask.another", "Ask another")}</button></span>`;
   strip.addEventListener("click", e => {
     const b = e.target.closest("[data-ss]");
     if(!b) return;
@@ -23478,87 +24385,121 @@ const ssWorst = rows => rows.map(r => SS_SEV[r.level] || "opp")
 /* The board's pages and views, and the words players use for them. Kept by
    hand, next to what they name: `need` is false for what works without a save. */
 const SS_VIEWS = [
-  {id: "alerts", t: "Needs attention", p: "Today", ic: "today", syn: ["problems", "alerts", "warnings", "findings", "to do"],
+  {id: "alerts", get t(){ return tt("nav.search.alerts.title", "Needs attention"); },
+   get p(){ return tt("nav.search.alerts.line", "Today"); }, ic: "today", syn: ["problems", "alerts", "warnings", "findings", "to do"],
    /* What the list reads out, for the sizing on screen: above the gate, and of a kind still on. */
-   live: () => ({tag: `${alertLines().filter(a => !kindOff(a)).length} today`}), go: () => reveal("alertSection")},
-  {id: "moves", t: "Next moves", p: "Today", ic: "today", syn: ["tools", "what next"],
+   live: () => ({tag: tt("nav.search.today", "{n} today", {n: alertLines().filter(a => !kindOff(a)).length})}), go: () => reveal("alertSection")},
+  {id: "moves", get t(){ return tt("nav.search.moves.title", "Next moves"); },
+   get p(){ return tt("nav.search.moves.line", "Today"); }, ic: "today", syn: ["tools", "what next"],
    go(){ showPage("today", false); settleScroll($("secMoves")); }},
-  {id: "cash", t: "Cash on hand", p: "Today", ic: "coin", syn: ["debt", "loans", "money", "owe", "bank", "cash"],
+  {id: "cash", get t(){ return tt("nav.search.cash.title", "Cash on hand"); },
+   get p(){ return tt("nav.search.cash.line", "Today"); }, ic: "coin", syn: ["debt", "loans", "money", "owe", "bank", "cash"],
    live(){ const debt = (D.loans || []).reduce((s, l) => s + (l.remaining || 0), 0);
-     return debt ? {p: `Today · ${compact(debt)} owed on loans`} : {}; },
-   go(){ showPage("today"); ssRing($$("#kpis .kpi").find(k => /cash on hand/i.test(k.textContent))); }},
-  {id: "daily", t: "Daily result", p: "Company › Results", ic: "profit", syn: ["profit", "revenue", "chart", "income", "why did profit move"],
+     return debt ? {p: tt("nav.search.cash.owed", "Today · {w} owed on loans", {w: compact(debt)})} : {}; },
+   go(){ showPage("today"); ssRing(q('#kpis [data-kpi="cash"]')); }},
+  {id: "daily", get t(){ return tt("nav.search.daily.title", "Daily result"); },
+   get p(){ return tt("nav.search.daily.line", "Company › Results"); }, ic: "profit", syn: ["profit", "revenue", "chart", "income", "why did profit move"],
    go: () => reveal("secDaily")},
-  {id: "portfolio", t: "Portfolio", p: "Company › Results · profit and loss by chain", ic: "company",
+  {id: "portfolio", get t(){ return tt("nav.search.portfolio.title", "Portfolio"); },
+   get p(){ return tt("nav.search.portfolio.line", "Company › Results · profit and loss by chain"); }, ic: "company",
    syn: ["sites", "chains", "margin", "break even", "payback", "losing money"],
    /* The board has no break-even figure yet, and says so rather than land the
       player on a table that looks as if it should hold one. */
-   synP: {"break even": "no break-even figure yet · Company › Results · profit and loss by chain",
-          "payback": "no payback figure yet · Company › Results · profit and loss by chain"},
+   synP: {get "break even"(){ return tt("nav.search.portfolio.breakeven", "no break-even figure yet · Company › Results · profit and loss by chain"); },
+          get "payback"(){ return tt("nav.search.portfolio.payback", "no payback figure yet · Company › Results · profit and loss by chain"); }},
    go(){ view = "pnl"; sortKey = null; drawPortfolio(); reveal("secPortfolio"); }},
-  {id: "ops", t: "Portfolio · Operations", p: "Company › Results · satisfaction, promotion, traffic", ic: "company",
+  {id: "ops", get t(){ return tt("nav.search.ops.title", "Portfolio · Operations"); },
+   get p(){ return tt("nav.search.ops.line", "Company › Results · satisfaction, promotion, traffic"); }, ic: "company",
    syn: ["satisfaction", "promotion", "foot traffic", "marketing", "security", "standards", "pull"],
    go(){ view = "ops"; sortKey = null; drawPortfolio(); reveal("secPortfolio"); }},
   /* Weekly rhythm is By weekday in the Daily result chart now (R15). */
-  {id: "rhythm", t: "By weekday", p: "Company › Results · Daily result", ic: "week",
+  {id: "rhythm", get t(){ return tt("nav.search.rhythm.title", "By weekday"); },
+   get p(){ return tt("nav.search.rhythm.line", "Company › Results · Daily result"); }, ic: "week",
    syn: ["weekly rhythm", "weekday", "busiest day", "peak day", "rhythm"],
    go(){ if(weekdaySeries().length) chartWindow = "wd"; reveal("secDaily"); }},
-  {id: "products", t: "Products", p: "Company › Products", ic: "shelves", syn: ["sales", "units", "total sales", "best sellers", "what sells"],
-   live: () => ({p: `Company › Products · ${(D.products || []).length} sold`}), go: () => reveal("secProducts")},
-  {id: "payroll", t: "Payroll", p: "Company › Payroll", ic: "people", syn: ["wages", "salary", "salaries", "employees", "headcount", "staff"],
-   live: () => D.staff && D.staff.total ? {p: `Company › Payroll · ${ssNum(D.staff.total)} people`} : {}, go: () => reveal("secPayroll")},
-  {id: "milestones", t: "Milestones", p: "Company › Milestones · career totals", ic: "flag",
+  {id: "products", get t(){ return tt("nav.search.products.title", "Products"); },
+   get p(){ return tt("nav.search.products.line", "Company › Products"); }, ic: "shelves", syn: ["sales", "units", "total sales", "best sellers", "what sells"],
+   live: () => ({p: tt("nav.search.products.sold", "Company › Products · {n} sold", {n: (D.products || []).length})}), go: () => reveal("secProducts")},
+  {id: "payroll", get t(){ return tt("nav.search.payroll.title", "Payroll"); },
+   get p(){ return tt("nav.search.payroll.line", "Company › Payroll"); }, ic: "people", syn: ["wages", "salary", "salaries", "employees", "headcount", "staff"],
+   live: () => D.staff && D.staff.total ? {p: tt("nav.search.payroll.people", {one: "Company › Payroll · {s} people", other: "Company › Payroll · {s} people"},
+     {n: D.staff.total, s: ssNum(D.staff.total)})} : {}, go: () => reveal("secPayroll")},
+  {id: "milestones", get t(){ return tt("nav.search.milestones.title", "Milestones"); },
+   get p(){ return tt("nav.search.milestones.line", "Company › Milestones · career totals"); }, ic: "flag",
    syn: ["goals", "diplomas", "rivals", "career", "buildings owned", "tax paid"], go: () => reveal("secGoals")},
   /* The game's settings are the difficulty chip and its popover (R15). */
-  {id: "difficulty", t: "Difficulty", p: "every setting against Normal", ic: "tune",
+  {id: "difficulty", get t(){ return tt("nav.search.difficulty.title", "Difficulty"); },
+   get p(){ return tt("nav.search.difficulty.line", "every setting against Normal"); }, ic: "tune",
    syn: ["settings", "game settings", "house rules", "custom", "tax rate", "what am i playing on"],
-   live: () => D.meta && D.meta.difficulty ? {p: `${D.meta.difficulty} · every setting against Normal`} : {}, go: ssDifficulty},
-  {id: "checklist", t: "Change checklist", p: "Supply · every tab", ic: "calendar", syn: ["orders", "what to type", "import plan", "checklist"],
+   live: () => D.meta && D.meta.difficulty ? {p: tt("nav.search.difficulty.named", "{name} · every setting against Normal", {name: fvDiffName(D.meta.difficulty)})} : {}, go: ssDifficulty},
+  {id: "checklist", get t(){ return tt("nav.search.checklist.title", "Change checklist"); },
+   get p(){ return tt("nav.search.checklist.line", "Supply · every tab"); }, ic: "calendar", syn: ["orders", "what to type", "import plan", "checklist"],
    live(){ const d = sbData(), n = d.rows.filter(r => !d.marks.has(r.key)).length;
-     return d.rows.length ? {p: `Supply · ${n ? `${plural(n, "change")} to type` : "all ticked"}`} : {}; },
+     return d.rows.length ? {p: n ? tt("nav.search.checklist.left", {one: "Supply · {n} change to type", other: "Supply · {n} changes to type"}, {n})
+       : tt("nav.search.checklist.done", "Supply · all ticked")} : {}; },
    go: ssChecklist},
-  {id: "imports", t: "Weekly imports", p: "Supply › Warehouses", ic: "truck", syn: ["import", "importer", "contracts", "weekly order", "what should i import", "orders"],
+  {id: "imports", get t(){ return tt("nav.search.imports.title", "Weekly imports"); },
+   get p(){ return tt("nav.search.imports.line", "Supply › Warehouses"); }, ic: "truck", syn: ["import", "importer", "contracts", "weekly order", "what should i import", "orders"],
    go: () => ssSupply("warehouses")},
   /* Top-ups are on every tab (a shelf's, a depot's, a factory input's): the
      tab with the most still to type, else Shops. */
-  {id: "topups", t: "Daily top-ups", p: "Supply › Shops, Warehouses and Factories", ic: "route", syn: ["top-up", "distribution", "logistics", "delivery plan"],
+  {id: "topups", get t(){ return tt("nav.search.topups.title", "Daily top-ups"); },
+   get p(){ return tt("nav.search.topups.line", "Supply › Shops, Warehouses and Factories"); }, ic: "route", syn: ["top-up", "distribution", "logistics", "delivery plan"],
    go: () => ssSupply(ssTopupTab())},
-  {id: "shops", t: "Shops", p: "Supply › Shops · every shelf against tomorrow's round", ic: "shelves", syn: ["shelves", "run out", "stock out", "empty shelf", "before the drop"],
+  {id: "shops", get t(){ return tt("nav.search.shops.title", "Shops"); },
+   get p(){ return tt("nav.search.shops.line", "Supply › Shops · every shelf against tomorrow's round"); }, ic: "shelves", syn: ["shelves", "run out", "stock out", "empty shelf", "before the drop"],
    go: () => ssSupply("shops")},
-  {id: "warehouses", t: "Warehouses", p: "Supply › Warehouses · every depot", ic: "crate", syn: ["warehouse", "depot", "cover", "second-tier", "before the import"],
+  {id: "warehouses", get t(){ return tt("nav.search.warehouses.title", "Warehouses"); },
+   get p(){ return tt("nav.search.warehouses.line", "Supply › Warehouses · every depot"); }, ic: "crate", syn: ["warehouse", "depot", "cover", "second-tier", "before the import"],
    go: () => ssSupply("warehouses")},
-  {id: "idle", t: "Idle stock", p: "Supply · grouped on each tab", ic: "crate", syn: ["dead stock", "not moving", "overstock", "too much stock"],
+  {id: "idle", get t(){ return tt("nav.search.idle.title", "Idle stock"); },
+   get p(){ return tt("nav.search.idle.line", "Supply · grouped on each tab"); }, ic: "crate", syn: ["dead stock", "not moving", "overstock", "too much stock"],
    go: () => ssSupply(ssIdleTab())},
-  {id: "lines", t: "Factory lines", p: "Supply › Factories · machines and the hours they run", ic: "gear", syn: ["machines", "recipes", "24/7", "staffed hours", "run hours"],
+  {id: "lines", get t(){ return tt("nav.search.lines.title", "Factory lines"); },
+   get p(){ return tt("nav.search.lines.line", "Supply › Factories · machines and the hours they run"); }, ic: "gear", syn: ["machines", "recipes", "24/7", "staffed hours", "run hours"],
    go: () => ssSupply("factories")},
-  {id: "feed", t: "Factory inputs", p: "Supply › Factories", ic: "pipe", syn: ["inputs", "ingredients", "fed", "factory inputs", "is my factory fed", "feed the factories"],
+  {id: "feed", get t(){ return tt("nav.search.feed.title", "Factory inputs"); },
+   get p(){ return tt("nav.search.feed.line", "Supply › Factories"); }, ic: "pipe", syn: ["inputs", "ingredients", "fed", "factory inputs", "is my factory fed", "feed the factories"],
    live(){ const short = alertLines().filter(a => a.group === "feed");
-     return short.length ? {p: `Supply › Factories · ${plural(short.length, "input")} short`, dot: ssWorst(short), kw: ssShortInputs()} : {}; },
+     return short.length ? {p: tt("nav.search.feed.short", {one: "Supply › Factories · {n} input short", other: "Supply › Factories · {n} inputs short"}, {n: short.length}),
+       dot: ssWorst(short), kw: ssShortInputs()} : {}; },
    go: () => ssSupply("factories")},
-  {id: "factorystaff", t: "Staffing for factory lines", p: "Supply › Factories", ic: "roster", syn: ["factory workers", "factory staffing", "factory shifts", "run hours"],
+  {id: "factorystaff", get t(){ return tt("nav.search.factorystaff.title", "Staffing for factory lines"); },
+   get p(){ return tt("nav.search.factorystaff.line", "Supply › Factories"); }, ic: "roster", syn: ["factory workers", "factory staffing", "factory shifts", "run hours"],
    go(){ ssSupply("factories"); setTimeout(() => { const el = $("sbStaff"); if(el) settleScroll(el); }, 60); }},
-  {id: "flow", t: "Goods flow", p: "Supply · the diagram view of each tab", ic: "route", syn: ["diagram", "supply chain", "routes", "pipes"],
+  {id: "flow", get t(){ return tt("nav.search.flow.title", "Goods flow"); },
+   get p(){ return tt("nav.search.flow.line", "Supply · the diagram view of each tab"); }, ic: "route", syn: ["diagram", "supply chain", "routes", "pipes"],
    go(){ sbViewOn = "diagram"; remember(SB_VIEW_KEY, "diagram"); drawSupplyTab(sub.supply); wireAll(); ssSupply(sub.supply, true); }},
-  {id: "market", t: "Market demand", p: "Growth › Demand", ic: "growth", syn: ["demand", "hype", "waves", "neighbourhood"],
+  {id: "market", get t(){ return tt("nav.search.market.title", "Market demand"); },
+   get p(){ return tt("nav.search.market.line", "Growth › Demand"); }, ic: "growth", syn: ["demand", "hype", "waves", "neighbourhood"],
    go: () => reveal("secMarket")},
-  {id: "plan", t: "Plan a chain", p: "Growth › Plan a chain", ic: "growth", syn: ["new factory", "recipe plan", "expand"],
+  {id: "plan", get t(){ return tt("nav.search.plan.title", "Plan a chain"); },
+   get p(){ return tt("nav.search.plan.line", "Growth › Plan a chain"); }, ic: "growth", syn: ["new factory", "recipe plan", "expand"],
    go: () => reveal("secPlan")},
-  {id: "finder", t: "Find a location", p: "Map", ic: "pin", syn: ["rent", "premises", "building", "floor size", "m²", "vacant", "where should i open", "size"],
+  {id: "finder", get t(){ return tt("nav.search.finder.title", "Find a location"); },
+   get p(){ return tt("nav.search.finder.line", "Map"); }, ic: "pin", syn: ["rent", "premises", "building", "floor size", "m²", "vacant", "where should i open", "size"],
    live(){ const n = ((D.premises || {}).buildings || []).filter(b => b.type === "retail" && b.status === "vacant").length;
-     return n ? {p: `Map · ${n} vacant`} : {}; },
+     return n ? {p: tt("nav.search.finder.vacant", "Map · {n} vacant", {n})} : {}; },
    go: () => ssFinder({cat: "retail", type: "", hoods: null})},
-  {id: "map", t: "Map", p: "Map · the city", ic: "map", syn: ["city", "address", "where is"], go: () => showPage("map")},
-  {id: "staffing", t: "Staffing", p: "each shop's page", ic: "roster",
+  {id: "map", get t(){ return tt("nav.search.map.title", "Map"); },
+   get p(){ return tt("nav.search.map.line", "Map · the city"); }, ic: "map", syn: ["city", "address", "where is"], go: () => showPage("map")},
+  {id: "staffing", get t(){ return tt("nav.search.staffing.title", "Staffing"); },
+   get p(){ return tt("nav.search.staffing.line", "each shop's page"); }, ic: "roster",
    syn: ["hire", "hiring", "schedule", "shifts", "roster", "bizman", "overstaffed", "whom should i hire"],
    live(){ const b = D.businesses.find(x => x.key === ssStaffingSite());
-     return b ? {p: `each shop's page · first: ${b.name}`, land: `${b.name} › Staffing`} : {}; },
+     return b ? {p: tt("nav.search.staffing.first", "each shop's page · first: {site}", {site: b.name}),
+       land: tt("nav.search.staffing.land", "{site} › Staffing", {site: b.name})} : {}; },
    go: () => ssOpenSite(ssStaffingSite(), "#sp-roster")},
-  {id: "crew", t: "Crew", p: "each site's page · who works there, what they want", ic: "crew", syn: ["hire", "demands", "quit", "people"],
+  {id: "crew", get t(){ return tt("nav.search.crew.title", "Crew"); },
+   get p(){ return tt("nav.search.crew.line", "each site's page · who works there, what they want"); }, ic: "crew", syn: ["hire", "demands", "quit", "people"],
    go: () => ssOpenSite(ssCrewSite(), "#sp-crew")},
-  {id: "prices", t: "Prices in your save", p: "Wiki", ic: "tag", syn: ["prices", "pricing", "market price", "too expensive", "are my prices right"],
-   live(){ const t = ssTopType(); return t ? {p: `Wiki › ${t.type} guide`} : {}; }, go: ssPrices},
-  {id: "wiki", t: "Wiki", p: "the game's own help", ic: "wiki", syn: ["help", "guide", "manual"], need: false, go: () => showPage("wiki")},
-  {id: "changelog", t: "Changelog", p: "footer · what is new", ic: "list", syn: ["new", "updates", "release notes"], need: false,
+  {id: "prices", get t(){ return tt("nav.search.prices.title", "Prices in your save"); },
+   get p(){ return tt("nav.search.prices.line", "Wiki"); }, ic: "tag", syn: ["prices", "pricing", "market price", "too expensive", "are my prices right"],
+   live(){ const t = ssTopType(); return t ? {p: tt("nav.search.prices.guide", "Wiki › {type} guide", {type: t.type})} : {}; }, go: ssPrices},
+  {id: "wiki", get t(){ return tt("nav.search.wiki.title", "Wiki"); },
+   get p(){ return tt("nav.search.wiki.line", "the game's own help"); }, ic: "wiki", syn: ["help", "guide", "manual"], need: false, go: () => showPage("wiki")},
+  {id: "changelog", get t(){ return tt("nav.search.changelog.title", "Changelog"); },
+   get p(){ return tt("nav.search.changelog.line", "footer · what is new"); }, ic: "list", syn: ["new", "updates", "release notes"], need: false,
    go(){ const d = $("changelogDialog"); if(d && !d.open){ d.showModal(); featureDiscovery.visit("changelog"); d.scrollTop = 0; } }},
 ];
 /* The words players use for a kind of finding. */
@@ -23578,10 +24519,13 @@ const SS_WIKI_SYN = {"MyEmployees App": ["hire", "hiring", "fire"], "Headhunter"
 /* Where a kind of finding is spelt out, in the words of the page it opens. */
 function ssKindLands(id){
   const link = ALERT_LINKS[id] || {};
-  if(link.site) return "its site's page";
-  if(link.tab) return link.tab === "site" ? "Supply · the tab of the site it is about" : `Supply › ${SB_LABEL[link.tab]}`;
-  if(link.port) return "Company › Portfolio › Operations";
-  return {secMarket: "Growth › Demand", secPortfolio: "Company › Portfolio"}[link.sec] || "Today";
+  if(link.site) return tt("nav.search.kind.site", "its site's page");
+  if(link.tab) return link.tab === "site" ? tt("nav.search.kind.sitetab", "Supply · the tab of the site it is about")
+    : tt("nav.search.kind.tab", "Supply › {tab}", {tab: navSubLabel("supply", link.tab)});
+  if(link.port) return tt("nav.search.kind.ops", "Company › Portfolio › Operations");
+  if(link.sec === "secMarket") return tt("nav.search.kind.market", "Growth › Demand");
+  if(link.sec === "secPortfolio") return tt("nav.search.kind.portfolio", "Company › Portfolio");
+  return tt("nav.search.kind.today", "Today");
 }
 function ssKindGo(id){
   const rows = [...alertLines(), ...(alertMinor().rows || [])].filter(a => a.group === id);
@@ -23638,8 +24582,10 @@ function ssBuild(){
     D.businesses.forEach((b, i) => {
       const inputs = eats[i] || [];
       out.push(ssEntry({id: `site:${b.key}`, g: "sites", t: shortName(b),
-        p: b.status === "vacant" ? `Vacant lease · ${b.address || ""}`
-          : `${b.type} · ${b.address || ""}${inputs.length ? ` · eats ${inputs.join(" and ")}` : ""}`,
+        p: b.status === "vacant" ? tt("nav.search.site.vacant", "Vacant lease · {address}", {address: b.address || ""})
+          : inputs.length ? tt("nav.search.site.eats", "{type} · {address} · eats {inputs}", {type: b.type, address: b.address || "",
+              inputs: inputs.reduce((x, y) => tt("nav.search.and", "{a} and {b}", {a: x, b: y}))})
+          : tt("nav.search.site.line", "{type} · {address}", {type: b.type, address: b.address || ""}),
         ic: "building", hood: b.code || "", kw: [b.address, b.neighbourhood && hoodName(b.neighbourhood), b.type, b.name, ...inputs,
           ...ssEnglish([b.neighbourhood, b.typeSlug, ...(eatSlugs[i] || [])])].filter(Boolean),
         dot: ssWorst(siteRows[b.key] || []), map: b.key, mapLabel: b.name, land: b.name, href: siteHref(b.key),
@@ -23658,15 +24604,16 @@ function ssBuild(){
         const it = item(n.slug, n.item);
         if(it.kind) return;
         Object.assign(it, {kind: "input", ic: "pipe", dot: got < n.perDay ? "watch" : "",
-          land: `${shortName(site)} › Inputs`, go: () => ssOpenSite(site.key, "#sp-inputs")});
-        it.parts.unshift(`Input · ${shortName(site)} eats ${ssNum(n.perDay)}/day · ${ssNum(got)} arrive`);
+          land: tt("nav.search.item.inputs", "{site} › Inputs", {site: shortName(site)}), go: () => ssOpenSite(site.key, "#sp-inputs")});
+        it.parts.unshift(tt("nav.search.item.input", "Input · {site} eats {a}/day · {b} arrive", {site: shortName(site), a: ssNum(n.perDay), b: ssNum(got)}));
       });
     });
     (D.products || []).forEach(p => {
       if(!p.stores && !p.units) return;
       const it = item(p.slug, p.item);
-      it.parts.push(`Sold in ${plural(p.stores, "store")} · ${ssNum(p.units)} a day · ${compact(p.revenue)}`);
-      if(!it.kind) Object.assign(it, {kind: "sold", ic: "shelves", land: `Company › Products · ${p.item}`, go(){
+      it.parts.push(tt("nav.search.item.sold", {one: "Sold in {n} store · {u} a day · {w}", other: "Sold in {n} stores · {u} a day · {w}"},
+        {n: p.stores, u: ssNum(p.units), w: compact(p.revenue)}));
+      if(!it.kind) Object.assign(it, {kind: "sold", ic: "shelves", land: tt("nav.search.item.products", "Company › Products · {item}", {item: p.item}), go(){
         const at = D.products.findIndex(x => x.slug === p.slug);
         if(at >= PRODUCTS_TOP && !showAllProducts){ showAllProducts = true; drawProducts(); }
         reveal("secProducts");
@@ -23681,8 +24628,8 @@ function ssBuild(){
         const it = item(l.slug, l.item);
         if(it.made) return;
         it.made = true;
-        it.parts.push(`Made in ${shortName(site)}`);
-        if(!it.kind) Object.assign(it, {kind: "made", ic: "gear", land: `${shortName(site)} › Lines`,
+        it.parts.push(tt("nav.search.item.made", "Made in {site}", {site: shortName(site)}));
+        if(!it.kind) Object.assign(it, {kind: "made", ic: "gear", land: tt("nav.search.item.lines", "{site} › Lines", {site: shortName(site)}),
           go: () => ssOpenSite(site.key, "#sp-lines")});
       });
     });
@@ -23690,9 +24637,9 @@ function ssBuild(){
       const site = D.businesses[r.s];
       if(!site || !r.item) return;
       const it = item(r.slug, r.item);
-      it.parts.push(`${ssNum(r.stock)} idle at ${shortName(site)}`);
+      it.parts.push(tt("nav.search.item.idle", "{s} idle at {site}", {s: ssNum(r.stock), site: shortName(site)}));
       if(!it.dot) it.dot = "opp";
-      if(!it.kind) Object.assign(it, {kind: "idle", ic: "crate", land: `Supply › ${SB_LABEL[sbTabOf(r.s)]} · Idle stock`,
+      if(!it.kind) Object.assign(it, {kind: "idle", ic: "crate", land: tt("nav.search.item.idleland", "Supply › {tab} · Idle stock", {tab: navSubLabel("supply", sbTabOf(r.s))}),
         go: () => sbLand(sbTabOf(r.s), r.s, r.slug, "")});
     });
     items.forEach((it, slug) => out.push(ssEntry({id: `product:${slug}`, g: "products", t: it.name, en: englishName(slug),
@@ -23701,9 +24648,10 @@ function ssBuild(){
     ALERT_GROUPS.forEach(g => {
       const n = counts[g.id] || 0, on = !!alertGroupPrefs[g.id];
       const rows = [...alertLines(), ...(alertMinor().rows || [])].filter(a => a.group === g.id);
-      out.push(ssEntry({id: `kind:${g.id}`, g: "kinds", t: g.label, p: `lands on ${ssKindLands(g.id)}`, ic: "list",
+      out.push(ssEntry({id: `kind:${g.id}`, g: "kinds", t: g.label, p: tt("nav.search.kind.lands", "lands on {where}", {where: ssKindLands(g.id)}), ic: "list",
         syn: SS_KIND_SYN[g.id] || [], kw: g.id === "feed" ? ssShortInputs() : [],
-        tag: !on ? `switched off${n ? ` · ${n}` : ""}` : n ? `${n} today` : "",
+        tag: !on ? (n ? tt("nav.search.kind.offn", "switched off · {n}", {n}) : tt("nav.search.kind.off", "switched off"))
+          : n ? tt("nav.search.today", "{n} today", {n}) : "",
         dot: !on ? "off" : n ? ssWorst(rows) : "", go: () => ssKindGo(g.id)}));
     });
     /* A preset per business type the save reports demand for: the
@@ -23714,14 +24662,16 @@ function ssBuild(){
       if(!had || d.demand > had.demand) best.set(d.slug, {...d, hood});
     }));
     [...best.values()].sort((a, z) => z.demand - a.demand || gnCompare(a.type, z.type)).forEach(d => {
-      out.push(ssEntry({id: `finder:${d.slug}`, g: "finder", t: `Open ${/^[AEIOU]/i.test(d.type) ? "an" : "a"} ${d.type}`,
+      /* English puts "an" before a vowel; the UI language decides for itself. */
+      out.push(ssEntry({id: `finder:${d.slug}`, g: "finder",
+        t: /^[AEIOU]/i.test(d.type) ? tt("nav.search.finder.an", "Open an {type}", {type: d.type}) : tt("nav.search.finder.a", "Open a {type}", {type: d.type}),
         kw: ssEnglish([d.slug, d.hood]),
-        p: `best fit: ${hoodName(d.hood)} · demand ${d.demand}`, ic: "pin",
-        syn: ["new shop", "new business", "open", "expand"], land: `Map › Find a location · ${d.type}`,
+        p: tt("nav.search.finder.fit", "best fit: {hood} · demand {n}", {hood: hoodName(d.hood), n: d.demand}), ic: "pin",
+        syn: ["new shop", "new business", "open", "expand"], land: tt("nav.search.finder.land", "Map › Find a location · {type}", {type: d.type}),
         go: () => ssFinder({cat: d.category, type: d.slug, hoods: [d.hood]})}));
     });
-    if(D.premises) out.push(ssEntry({id: "finder:warehouse", g: "finder", t: "Rent a warehouse",
-      p: "Map › Find a location · Warehouse · by m²", ic: "crate", syn: ["depot", "storage", "floor size", "warehouse"],
+    if(D.premises) out.push(ssEntry({id: "finder:warehouse", g: "finder", t: tt("nav.search.finder.rent.title", "Rent a warehouse"),
+      p: tt("nav.search.finder.rent.line", "Map › Find a location · Warehouse · by m²"), ic: "crate", syn: ["depot", "storage", "floor size", "warehouse"],
       go: () => ssFinder({cat: "warehouse", type: "", hoods: null})}));
   }
   /* The wiki's own index (wikiIndex() in web/wiki.js), once its file is in. */
@@ -23729,8 +24679,9 @@ function ssBuild(){
      answers to its English title too (`en`), as the wiki's own search does. */
   if(typeof wikiData !== "undefined" && wikiData && wikiData.search) wikiData.search.forEach(w => {
     const shown = typeof wikiName === "function" ? wikiName(w.key, w.title) : w.title;
-    out.push(ssEntry({id: `wiki:${w.id}`, g: "wiki", t: shown, en: w.title, p: `Wiki › ${w.category || "the game's help"}`, ic: "wiki",
-      syn: SS_WIKI_SYN[w.title] || [], land: `Wiki › ${shown}`,
+    out.push(ssEntry({id: `wiki:${w.id}`, g: "wiki", t: shown, en: w.title,
+      p: w.category ? tt("nav.search.wiki.cat", "Wiki › {cat}", {cat: w.category}) : tt("nav.search.wiki.help", "Wiki › the game's help"), ic: "wiki",
+      syn: SS_WIKI_SYN[w.title] || [], land: tt("nav.search.wiki.land", "Wiki › {page}", {page: shown}),
       go: () => ssHash(wikiHref({kind: "page", id: w.id}))}));
   });
   return out;
@@ -23821,17 +24772,17 @@ function ssDistance(a, b){
 /* --- the masthead field and the palette ------------------------------------------ */
 const ssField = document.createElement("button");
 ssField.type = "button"; ssField.className = "ss-q"; ssField.id = "ssField";
-ssField.setAttribute("aria-label", "Search the board (/ or Ctrl+K)");
+ssField.setAttribute("aria-label", tt("nav.search.field.label", "Search the board (/ or Ctrl+K)"));
 ssField.setAttribute("aria-keyshortcuts", "/ Control+K");
 /* Search is new: both forms of the control wear the New badge until the
    palette has been opened once (featureDiscovery, id "board-search"). The
    badge hangs off the control's edge, so it takes no room the masthead fit
    (ssFitMast()) measures. */
-const SS_NEW = `<span class="feature-new ss-new" data-new-feature="board-search" aria-hidden="true" hidden>New</span>`;
-ssField.innerHTML = `<span class="ss-lens">${ssSvg("search")}</span><span class="ss-ql">Search the board</span><span class="ss-kbd" aria-hidden="true">/</span>${SS_NEW}`;
+const SS_NEW = `<span class="feature-new ss-new" data-new-feature="board-search" aria-hidden="true" hidden>${tt("nav.new", "New")}</span>`;
+ssField.innerHTML = `<span class="ss-lens">${ssSvg("search")}</span><span class="ss-ql">${tt("nav.search.field.text", "Search the board")}</span><span class="ss-kbd" aria-hidden="true">/</span>${SS_NEW}`;
 const ssFieldBtn = document.createElement("button");
 ssFieldBtn.type = "button"; ssFieldBtn.className = "ibtn ss-qbtn"; ssFieldBtn.id = "ssFieldBtn";
-ssFieldBtn.setAttribute("aria-label", "Search the board");
+ssFieldBtn.setAttribute("aria-label", tt("nav.search.field.text", "Search the board"));
 ssFieldBtn.innerHTML = ssSvg("search") + SS_NEW;
 if($("mast")){ $("mast").insertBefore(ssField, $("clock")); $("mast").insertBefore(ssFieldBtn, $("clock")); }
 featureDiscovery.refresh();
@@ -23876,19 +24827,57 @@ const ssScrim = document.createElement("div");
 ssScrim.className = "ss-scrim"; ssScrim.hidden = true;
 const ssPal = document.createElement("div");
 ssPal.className = "ss-pal"; ssPal.id = "ssPal"; ssPal.hidden = true;
-ssPal.setAttribute("role", "dialog"); ssPal.setAttribute("aria-modal", "true"); ssPal.setAttribute("aria-label", "Search the board");
-ssPal.innerHTML = `<div class="ss-in"><button type="button" class="ss-back" aria-label="Close search">${ssSvg("back")}</button>`
+ssPal.setAttribute("role", "dialog"); ssPal.setAttribute("aria-modal", "true"); ssPal.setAttribute("aria-label", tt("nav.search.field.text", "Search the board"));
+/* The keys under the list; written again, like the rest of the palette's
+   chrome, when the UI language changes (ssChrome()). */
+const ssKeysHtml = () => `<span><span class="ss-kbd">↑</span><span class="ss-kbd">↓</span>${tt("nav.search.key.move", "move")}</span>`
+  + `<span><span class="ss-kbd">↵</span>${tt("nav.search.key.open", "open")}</span><span><span class="ss-kbd">⇧↵</span>${tt("nav.search.key.map", "on the map")}</span>`
+  + `<span><span class="ss-kbd">esc</span>${tt("nav.search.key.close", "close")}</span>`;
+ssPal.innerHTML = `<div class="ss-in"><button type="button" class="ss-back" aria-label="${attr(tt("nav.search.back", "Close search"))}">${ssSvg("back")}</button>`
   + `<span class="ss-lens">${ssSvg("search")}</span>`
-  + `<input type="search" id="ssInput" aria-label="Search the board" placeholder="Search sites, products, findings, pages and the wiki"`
+  + `<input type="search" id="ssInput" aria-label="${attr(tt("nav.search.field.text", "Search the board"))}" placeholder="${
+    attr(tt("nav.search.placeholder", "Search sites, products, findings, pages and the wiki"))}"`
   + ` autocomplete="off" spellcheck="false" role="combobox" aria-expanded="true" aria-controls="ssRes" aria-autocomplete="list">`
   + `<span class="ss-count" id="ssCount"></span><span class="ss-kbd" aria-hidden="true">esc</span>`
-  + `<button type="button" class="ss-cancel">Cancel</button></div>`
-  + `<div class="ss-res" id="ssRes" role="listbox" aria-label="Results"></div>`
-  + `<div class="ss-foot"><span><span class="ss-kbd">↑</span><span class="ss-kbd">↓</span>move</span>`
-  + `<span><span class="ss-kbd">↵</span>open</span><span><span class="ss-kbd">⇧↵</span>on the map</span>`
-  + `<span><span class="ss-kbd">esc</span>close</span><span class="ss-say" id="ssSay"></span></div>`;
+  + `<button type="button" class="ss-cancel">${tt("nav.search.cancel", "Cancel")}</button></div>`
+  + `<div class="ss-res" id="ssRes" role="listbox" aria-label="${attr(tt("nav.search.results", "Results"))}"></div>`
+  + `<div class="ss-foot">${ssKeysHtml()}<span class="ss-say" id="ssSay"></span></div>`;
 document.body.append(ssScrim, ssPal);
 const ssInput = $("ssInput"), ssRes = $("ssRes");
+/* The words of an element that also holds icons: its own first text. */
+function ssSetWords(el, words){
+  const n = el && [...el.childNodes].find(c => c.nodeType === 3 && c.nodeValue.trim());
+  if(n) n.nodeValue = words;
+}
+/* Everything the search wrote once at load, in the UI language again: the
+   masthead field, the palette's chrome and the Ask the board row. The list
+   itself is drawn again when the palette is open. navRelabel() calls it. */
+function ssChrome(){
+  ssField.setAttribute("aria-label", tt("nav.search.field.label", "Search the board (/ or Ctrl+K)"));
+  const ql = q(".ss-ql", ssField);
+  if(ql) ql.textContent = tt("nav.search.field.text", "Search the board");
+  ssFieldBtn.setAttribute("aria-label", tt("nav.search.field.text", "Search the board"));
+  ssPal.setAttribute("aria-label", tt("nav.search.field.text", "Search the board"));
+  q(".ss-back", ssPal).setAttribute("aria-label", tt("nav.search.back", "Close search"));
+  ssInput.setAttribute("aria-label", tt("nav.search.field.text", "Search the board"));
+  ssInput.setAttribute("placeholder", tt("nav.search.placeholder", "Search sites, products, findings, pages and the wiki"));
+  q(".ss-cancel", ssPal).textContent = tt("nav.search.cancel", "Cancel");
+  ssRes.setAttribute("aria-label", tt("nav.search.results", "Results"));
+  const say = $("ssSay"), foot = q(".ss-foot", ssPal);
+  if(foot && say){ foot.innerHTML = ssKeysHtml(); foot.appendChild(say); }
+  const row = $("ssAsk");
+  if(row){
+    row.setAttribute("aria-label", tt("nav.ask.label", "Ask the board"));
+    ssSetWords(q(".ss-asklead", row), tt("nav.ask.label", "Ask the board"));
+    $$("[data-ask]", row).forEach(a => { const x = SS_QUESTIONS.find(y => y.id === a.dataset.ask); if(x) a.textContent = x.q; });
+  }
+  const mini = q("#ssAskMini button");
+  if(mini){
+    mini.setAttribute("aria-label", tt("nav.ask.mini.label", "Ask the board (press /)"));
+    ssSetWords(mini, tt("nav.ask.label", "Ask the board"));
+  }
+  if(ssIsOpen()) ssRender(true);
+}
 
 let ssIndex = [], ssRows = [], ssWhole = {}, ssReturn = null, ssWikiWait = null, ssPointer = null;
 const ssIsOpen = () => !ssPal.hidden;
@@ -23992,7 +24981,7 @@ function ssRecentEntries(){
     const live = ssIndex.find(e => e.id === r.id);
     if(live) return live;
     if(r.id.startsWith("wiki:") && typeof wikiHref === "function") return ssEntry({id: r.id, g: "wiki", t: String(r.t || ""),
-      p: String(r.p || "Wiki"), ic: "wiki", go: () => ssHash(wikiHref({kind: "page", id: r.id.slice(5)}))});
+      p: String(r.p || tt("nav.search.recent.wiki", "Wiki")), ic: "wiki", go: () => ssHash(wikiHref({kind: "page", id: r.id.slice(5)}))});
     return null;
   }).filter(Boolean);
 }
@@ -24001,12 +24990,12 @@ function ssRecentEntries(){
 function ssRow(item, qq){
   const k = ssRows.push(item) - 1;
   if(item.more) return `<button type="button" class="ss-more" id="ssr-${k}" data-k="${k}" role="option" aria-selected="false">${
-    item.more} more ${ssEsc(item.label.toLowerCase())} ›</button>`;
+    ssEsc(ssGroupMore(item.g, item.more))}</button>`;
   if(item.ask){
     const x = item.ask;
     return `<div class="ss-row ss-q2" id="ssr-${k}" data-k="${k}" role="option" aria-selected="false"><span class="ic" aria-hidden="true">?</span>`
       + `<span><span class="t">${ssEsc(x.q)}</span><span class="p">${ssEsc(ssLands(x))}</span></span>`
-      + `<span class="ss-side"><span class="ss-go">${ssSvg("enter")}open</span></span></div>`;
+      + `<span class="ss-side"><span class="ss-go">${ssSvg("enter")}${tt("nav.search.open", "open")}</span></span></div>`;
   }
   const {e, where, syn} = item;
   let title = where === "t" ? ssMark(e.t, qq, true) : ssEsc(e.t);
@@ -24017,7 +25006,7 @@ function ssRow(item, qq){
      from a hidden copy. */
   if(e.href) title = `<a class="ss-sl" href="${ssEsc(e.href)}" tabindex="-1" aria-hidden="true">${title}</a>`;
   const said = e.href ? `<span class="sf-sr">${ssEsc(e.t)}</span>` : "";
-  if(where === "syn") title += `<span class="ss-syn" title="${ssEsc(`The word you typed; the board calls it ${e.t}`)}"><b>≈</b> ${ssMark(syn, qq, true)}</span>`;
+  if(where === "syn") title += `<span class="ss-syn" title="${ssEsc(tt("nav.search.syn", "The word you typed; the board calls it {name}", {name: e.t}))}"><b>≈</b> ${ssMark(syn, qq, true)}</span>`;
   let line = where === "syn" && e.synP && e.synP[syn] ? e.synP[syn] : e.p;
   /* A word the line does not show (a neighbourhood, say) joins it, so the
      reader sees what matched. */
@@ -24027,7 +25016,7 @@ function ssRow(item, qq){
   let side = "";
   if(e.tag || e.dot) side += `<span class="ss-tag">${e.dot ? `<i class="ss-dot ${e.dot}"></i>` : ""}${ssEsc(e.tag)}</span>`;
   if(e.map && typeof mapButton === "function") side += mapButton(e.map, e.mapLabel || e.t);
-  side += `<span class="ss-go">${ssSvg("enter")}open</span>`;
+  side += `<span class="ss-go">${ssSvg("enter")}${tt("nav.search.open", "open")}</span>`;
   return `<div class="ss-row" id="ssr-${k}" data-k="${k}" role="option" aria-selected="false">${ic}`
     + `<span>${said}<span class="t">${title}</span><span class="p">${sub}</span></span><span class="ss-side">${side}</span></div>`;
 }
@@ -24045,33 +25034,41 @@ function ssRender(keep = false){
   if(!qq){
     const ask = asks();
     const recent = ssRecentEntries().map(e => ssRow({e, where: "", syn: ""}, qq)).join("");
-    html = (ask ? `<div class="ss-grp" role="group" aria-label="Ask the board"><div class="ss-gh">Ask the board</div>${ask}</div>` : "")
-      + (recent ? `<div class="ss-grp" role="group" aria-label="Where you were"><div class="ss-gh">Where you were</div>${recent}</div>` : "")
-      + (data ? `<p class="ss-hint">Type a site, a product, a finding, a page, or a word the game uses: <b>hire</b>, <b>debt</b>, <b>difficulty</b>.</p>`
-          : `<p class="ss-hint">Open a save to search your sites, products and findings. The wiki is here without one: try <b>rent</b>, <b>hire</b> or <b>gym</b>.</p>`);
+    const askHead = tt("nav.ask.label", "Ask the board"), wasHead = tt("nav.search.recent.head", "Where you were");
+    /* The example words are the UI language's own: each is a word the board answers to. */
+    const b = w => `<b>${ssEsc(w)}</b>`;
+    html = (ask ? `<div class="ss-grp" role="group" aria-label="${ssEsc(askHead)}"><div class="ss-gh">${ssEsc(askHead)}</div>${ask}</div>` : "")
+      + (recent ? `<div class="ss-grp" role="group" aria-label="${ssEsc(wasHead)}"><div class="ss-gh">${ssEsc(wasHead)}</div>${recent}</div>` : "")
+      + (data ? `<p class="ss-hint">${tt("nav.search.hint.data", "Type a site, a product, a finding, a page, or a word the game uses: {a}, {b}, {c}.",
+            {a: b(tt("nav.search.hint.hire", "hire")), b: b(tt("nav.search.hint.debt", "debt")), c: b(tt("nav.search.hint.difficulty", "difficulty"))})}</p>`
+          : `<p class="ss-hint">${tt("nav.search.hint.nosave", "Open a save to search your sites, products and findings. The wiki is here without one: try {a}, {b} or {c}.",
+            {a: b(tt("nav.search.hint.rent", "rent")), b: b(tt("nav.search.hint.hire", "hire")), c: b(tt("nav.search.hint.gym", "gym"))})}</p>`);
   } else {
     const groups = ssSearch(qq, ssIndex, per, ssWhole);
     const total = groups.reduce((s, g) => s + g.n, 0);
-    count = `${total} found`;
+    count = tt("nav.search.found", "{n} found", {n: total});
     groups.forEach(g => {
       html += `<div class="ss-grp" role="group" aria-label="${ssEsc(names[g.g])}"><div class="ss-gh">${ssEsc(names[g.g])}<em>${
-        g.hits.length < g.n ? `${g.hits.length} of ${g.n}` : g.n}</em></div>`;
+        g.hits.length < g.n ? ssEsc(tt("nav.search.of", "{a} of {b}", {a: g.hits.length, b: g.n})) : g.n}</em></div>`;
       g.hits.forEach(h => { html += ssRow(h, qq); });
       if(g.hits.length < g.n) html += ssRow({more: g.n - g.hits.length, label: names[g.g], g: g.g}, qq);
       html += "</div>";
     });
     if(!total){
       const near = ssNear(qq, ssIndex);
-      const feedback = $$("a").find(a => /bugs and feedback/i.test(a.textContent || ""));
+      /* The footer's own Bugs and feedback link, by its mark rather than its words. */
+      const feedback = $$("a[data-sf-feedback]")[0];
       html = `<div class="ss-none"><div class="ss-ball" aria-hidden="true"><i></i></div>`
-        + `<p>Nothing on the board or in the wiki is called <b>${ssEsc(ssInput.value.trim())}</b>.</p><div class="ss-sugg">`
-        + (near ? `<button type="button" class="ss-chip" data-near="${ssEsc(near)}">${ssSvg("search")}<span>Did you mean <mark>${ssEsc(near)}</mark>?</span></button>` : "")
-        + (typeof showWikiRoute === "function" ? `<button type="button" class="ss-chip" data-wiki>${ssSvg("wiki")}Browse the wiki</button>` : "")
-        + (feedback ? `<a class="ss-chip" href="${ssEsc(feedback.href)}" target="_blank" rel="noopener">${ssSvg("flag")}Tell us what you looked for</a>` : "")
+        + `<p>${tt("nav.search.none", "Nothing on the board or in the wiki is called {q}.", {q: `<b>${ssEsc(ssInput.value.trim())}</b>`})}</p><div class="ss-sugg">`
+        + (near ? `<button type="button" class="ss-chip" data-near="${ssEsc(near)}">${ssSvg("search")}<span>${
+          tt("nav.search.near", "Did you mean {word}?", {word: `<mark>${ssEsc(near)}</mark>`})}</span></button>` : "")
+        + (typeof showWikiRoute === "function" ? `<button type="button" class="ss-chip" data-wiki>${ssSvg("wiki")}${tt("nav.search.browse", "Browse the wiki")}</button>` : "")
+        + (feedback ? `<a class="ss-chip" href="${ssEsc(feedback.href)}" target="_blank" rel="noopener">${ssSvg("flag")}${tt("nav.search.tell", "Tell us what you looked for")}</a>` : "")
         + `</div></div>`;
       const ask = asks();
-      if(ask) html += `<div class="ss-grp" role="group" aria-label="Or ask the board"><div class="ss-gh">Or ask the board</div>${ask}</div>`;
-      say = "nothing to open";
+      const orAsk = tt("nav.search.orask", "Or ask the board");
+      if(ask) html += `<div class="ss-grp" role="group" aria-label="${ssEsc(orAsk)}"><div class="ss-gh">${ssEsc(orAsk)}</div>${ask}</div>`;
+      say = tt("nav.search.nothing", "nothing to open");
     }
   }
   ssRes.innerHTML = html;
@@ -24094,8 +25091,9 @@ function ssPick(k, scroll = true){
   ssInput.setAttribute("aria-activedescendant", el.id);
   if(scroll) el.scrollIntoView({block: "nearest"});
   const item = ssRows[k];
-  const land = item.more ? `every ${item.label.toLowerCase()}` : item.ask ? ssLands(item.ask) : item.e.land;
-  say.innerHTML = `${item.more ? "↵ shows" : "↵ opens"} <b>${ssEsc(land)}</b>`;
+  const land = item.more ? ssGroupEvery(item.g) : item.ask ? ssLands(item.ask) : item.e.land;
+  const what = `<b>${ssEsc(land)}</b>`;
+  say.innerHTML = item.more ? tt("nav.search.shows", "↵ shows {what}", {what}) : tt("nav.search.opens", "↵ opens {what}", {what});
 }
 function ssGoTo(k, onMap = false){
   const item = ssRows[k];
@@ -24197,6 +25195,10 @@ document.addEventListener("keydown", e => {
   }
 });
 ssAskMount();
+/* A UI table already in force before this script ran (a fast fetch, or the
+   CLI's --lang page) wrote the chrome above in its language; the landing's
+   footer and the clock's first tip still need it. */
+if(typeof ttLang !== "undefined" && ttLang !== "en") navRelabel();
 
 /* nav underline follows the pointer, then goes home --------------------------- */
 function inkHome(){
@@ -24244,7 +25246,7 @@ const wireTiles = once(() => {
     const pl = q("polyline", sp), pt = q(".pt", sp), lab = q(".scrub", sp);
     if(!pl || !pt || !lab) return;
     const pts = pl.getAttribute("points").trim().split(/\s+/).map(p => p.split(",").map(Number));
-    const vals = (sp.dataset.vals || "").split(",");
+    const vals = (sp.dataset.vals || "").split("|");
     const sr = sp.getBoundingClientRect(), x = (e.clientX - sr.left) / sr.width * 100;
     let k = 0; for(let i = 1; i < pts.length; i++) if(Math.abs(pts[i][0] - x) < Math.abs(pts[k][0] - x)) k = i;
     pt.setAttribute("cx", pts[k][0]); pt.setAttribute("cy", pts[k][1]);
@@ -24317,7 +25319,7 @@ function silencedLine(){
   const n = $$(".find.gone").length;
   line.classList.toggle("on", n > 0);
   const b = line.querySelector("b");
-  if(b) b.textContent = n + (n === 1 ? " finding silenced" : " findings silenced");
+  if(b) b.textContent = tt("today.silenced", {one: "{n} finding silenced", other: "{n} findings silenced"}, {n});
 }
 /* A silenced row folds away, and leaves the Tab order with it. */
 function findGone(f, on){ f.classList.toggle("gone", on); f.inert = on; }
@@ -24839,8 +25841,20 @@ function wireKinds(){
    Outside linked mode SOURCE.link is missing or answers null, and nothing here
    draws. */
 const gwLink = () => (typeof SOURCE.link === "function" && SOURCE.link()) || null;
-const GW_DOES = {uniforms: "set uniforms", imports: "change imports", schedule: "write schedules"};
-const GW_NOUN = {uniforms: "uniform", imports: "imports", schedule: "schedule"};
+/* A mod too old for a kind of write, said on its button. */
+function gwUpdateMod(kind){
+  if(kind === "uniforms") return tt("nav.dlg.mod.uniforms", "Update the Big Copilot Link mod to set uniforms from here");
+  if(kind === "imports") return tt("nav.dlg.mod.imports", "Update the Big Copilot Link mod to change imports from here");
+  if(kind === "schedule") return tt("nav.dlg.mod.schedule", "Update the Big Copilot Link mod to write schedules from here");
+  return tt("nav.dlg.mod.other", "Update the Big Copilot Link mod to {kind} from here", {kind});
+}
+/* How long an apply's Undo lasts, by the kind of write (no full stop). */
+function gwUndoStays(kind){
+  if(kind === "uniforms") return tt("nav.dlg.stays.uniforms", "Undo stays until your next uniform change");
+  if(kind === "imports") return tt("nav.dlg.stays.imports", "Undo stays until your next imports change");
+  if(kind === "schedule") return tt("nav.dlg.stays.schedule", "Undo stays until your next schedule change");
+  return tt("nav.dlg.stays.other", "Undo stays until your next {kind} change", {kind});
+}
 const gwUndoable = {};  // kind -> {spec, text, sub, character, at}: its last apply, until undone or replaced
 let gwOpen = null;      // the dialog on screen
 
@@ -24889,7 +25903,7 @@ const gwWire = state => `<span class="gw-w ${state}" aria-hidden="true"><span cl
 function gwClock(day, hour, minute){
   const d = Number(day), h = Number(hour), m = Math.floor(Number(minute) || 0);
   if(!Number.isFinite(d) || !Number.isFinite(h)) return "";
-  return `${WEEK_FULL[((d % 7) + 7) % 7].slice(0, 3)} ${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  return `${navShortDay((((d - 1) % 7) + 7) % 7)} ${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 const gwNow = () => { const l = gwLink() || {}; return gwClock(l.day, l.hour, l.minute); };
 const gwBoardRead = () => { const m = (D && D.meta) || {}; return gwClock(m.day, m.hour, m.minute); };
@@ -24906,12 +25920,12 @@ function gwButton(kind, label, data, blocked, o = {}){
   const link = gwLink();
   if(!link) return "";
   const old = !(link.writes || []).includes(kind);
-  const why = old ? `Update the Big Copilot Link mod to ${GW_DOES[kind]} from here` : blocked || "";
+  const why = old ? gwUpdateMod(kind) : blocked || "";
   const name = o.name || label;
   /* A browser the game has not approved yet is asked on the game's screen. */
-  const tip = why || (link.approved === false ? "The game asks you once, on its screen, when you first use this" : "");
+  const tip = why || (link.approved === false ? tt("nav.dlg.firstuse", "The game asks you once, on its screen, when you first use this") : "");
   return `<button type="button" class="gw-btn${o.alt ? " alt" : ""}${why ? " off" : ""}" data-gw="${kind}" ${data}${
-    why ? ` aria-disabled="true"` : ""}${tip ? ` data-tip="${attr(tip)}"` : ""} aria-label="${attr(why ? `${name}: ${why}` : name)}">${
+    why ? ` aria-disabled="true"` : ""}${tip ? ` data-tip="${attr(tip)}"` : ""} aria-label="${attr(why ? tt("nav.dlg.offlabel", "{name}: {why}", {name, why}) : name)}">${
     why ? gwSvg(old ? "plug" : o.icon || "lock") : `<span class="gw-mw" aria-hidden="true"><i></i><b></b></span>`}<span class="gw-l">${label}</span>${
     o.count ? `<span class="n" aria-hidden="true">${o.count}</span>` : ""}</button>`;
 }
@@ -24948,7 +25962,7 @@ function gwRelabelAll(){
 const gwAddress = key => ({street: key.slice(0, key.lastIndexOf("#")), number: Number(key.slice(key.lastIndexOf("#") + 1))});
 const gwKeyOf = address => address ? `${address.street}#${address.number}` : "";
 const gwSiteOf = address => address && (D.businesses || []).find(b => b.key === gwKeyOf(address)) || null;
-const gwSiteName = row => { const b = gwSiteOf(row.address); return spEsc(b ? shortName(b) : row.business || "A shop"); };
+const gwSiteName = row => { const b = gwSiteOf(row.address); return spEsc(b ? shortName(b) : row.business || tt("nav.dlg.ashop", "A shop")); };
 /* Where a dialog is: the shop's pill, its name and its neighbourhood. */
 const gwWhere = b => b ? `${hoodHtml(b)}<span>${spEsc(baseName(b))}${b.neighbourhood ? ` · ${spEsc(hoodName(b.neighbourhood))}` : ""}</span>` : "";
 /* The game's name for a skill, from wherever the payload carries one: the
@@ -25108,44 +26122,45 @@ const gwFixable = answer => {
    be a function of the row, for a refusal that carries its own numbers. */
 const GW_REFUSE = {
   any: {
-    not_found: {rule: "No building at this address any more", fix: "Refresh the board: the shop may have closed or moved."},
-    not_rented: {rule: "You no longer rent this building", fix: "Refresh the board."},
-    changed: {rule: "Changed in the game since this board was read", fix: "Refresh the board, then try again."},
-    screen_open: {rule: "Open in BizMan right now", fix: "Close that BizMan screen in the game, then try again."},
+    not_found: {get rule(){ return tt("nav.dlg.refuse.notfound.rule", "No building at this address any more"); }, get fix(){ return tt("nav.dlg.refuse.notfound.fix", "Refresh the board: the shop may have closed or moved."); }},
+    not_rented: {get rule(){ return tt("nav.dlg.refuse.notrented.rule", "You no longer rent this building"); }, get fix(){ return tt("nav.dlg.refuse.notrented.fix", "Refresh the board."); }},
+    changed: {get rule(){ return tt("nav.dlg.refuse.changed.rule", "Changed in the game since this board was read"); }, get fix(){ return tt("nav.dlg.refuse.changed.fix", "Refresh the board, then try again."); }},
+    screen_open: {get rule(){ return tt("nav.dlg.refuse.screen.rule", "Open in BizMan right now"); }, get fix(){ return tt("nav.dlg.refuse.screen.fix", "Close that BizMan screen in the game, then try again."); }},
   },
   uniforms: {
-    no_business: {rule: "No business is set up here", fix: "Set one up in BizMan first."},
-    no_locker: {rule: "No uniform locker: the game sets uniforms only where one stands", fix: "Place a uniform locker in the shop, then try again."},
-    no_preset: {rule: "The game has no uniform to set", fix: "Create one in the game's uniform settings, then try again."},
+    no_business: {get rule(){ return tt("nav.dlg.refuse.nobusiness.rule", "No business is set up here"); }, get fix(){ return tt("nav.dlg.refuse.nobusiness.fix", "Set one up in BizMan first."); }},
+    no_locker: {get rule(){ return tt("nav.dlg.refuse.nolocker.rule", "No uniform locker: the game sets uniforms only where one stands"); }, get fix(){ return tt("nav.dlg.refuse.nolocker.fix", "Place a uniform locker in the shop, then try again."); }},
+    no_preset: {get rule(){ return tt("nav.dlg.refuse.nopreset.rule", "The game has no uniform to set"); }, get fix(){ return tt("nav.dlg.refuse.nopreset.fix", "Create one in the game's uniform settings, then try again."); }},
   },
   imports: {
-    no_agent: {rule: "No purchasing agent runs this contract", fix: "Assign a purchasing agent at the headquarters, then try again."},
-    no_amounts: {rule: "Every amount on this contract would be 0, and the game runs no contract with nothing to order",
-      fix: "Give it an amount, or stop it in BizMan."},
+    no_agent: {get rule(){ return tt("nav.dlg.refuse.noagent.rule", "No purchasing agent runs this contract"); }, get fix(){ return tt("nav.dlg.refuse.noagent.fix", "Assign a purchasing agent at the headquarters, then try again."); }},
+    no_amounts: {get rule(){ return tt("nav.dlg.refuse.noamounts.rule", "Every amount on this contract would be 0, and the game runs no contract with nothing to order"); }, get fix(){ return tt("nav.dlg.refuse.noamounts.fix", "Give it an amount, or stop it in BizMan."); }},
     locked: r => {
       const day = Number((r.reopens || {}).day);
-      return {rule: "Orders for Monday's delivery closed Sunday 20:00; they reopen Monday 08:00",
-        fix: r.reopens && Number.isFinite(day) ? `That is day ${day}, 08:00 game time: try again then.` : "Try again then."};
+      return {rule: tt("nav.dlg.refuse.locked.rule", "Orders for Monday's delivery closed Sunday 20:00; they reopen Monday 08:00"),
+        fix: r.reopens && Number.isFinite(day) ? tt("nav.dlg.refuse.locked.day", "That is day {day}, 08:00 game time: try again then.", {day})
+          : tt("nav.dlg.refuse.locked.fix", "Try again then.")};
     },
-    no_warehouse: {rule: "A product on this contract has no warehouse to deliver to", fix: "Pick a warehouse for it on the contract in BizMan."},
-    backorder: {rule: "The item is on backorder at the importer this week", fix: "Try again once the market event is over."},
+    no_warehouse: {get rule(){ return tt("nav.dlg.refuse.nowarehouse.rule", "A product on this contract has no warehouse to deliver to"); }, get fix(){ return tt("nav.dlg.refuse.nowarehouse.fix", "Pick a warehouse for it on the contract in BizMan."); }},
+    backorder: {get rule(){ return tt("nav.dlg.refuse.backorder.rule", "The item is on backorder at the importer this week"); }, get fix(){ return tt("nav.dlg.refuse.backorder.fix", "Try again once the market event is over."); }},
     /* The contract row repeats its product's error; the figure is on the product. */
     over_cap: r => {
       const p = (r.products || []).find(x => x && x.error === "over_cap") || r;
       const max = p.max === null || p.max === undefined ? NaN : Number(p.max);
-      return {rule: `More than the importer still allows this week${Number.isFinite(max) ? ` (${num(max)})` : ""}`,
-        fix: "Lower the amount, or bring the rest through another importer."};
+      return {rule: Number.isFinite(max) ? tt("nav.dlg.refuse.overcap.max", "More than the importer still allows this week ({n})", {n: num(max)})
+          : tt("nav.dlg.refuse.overcap.rule", "More than the importer still allows this week"),
+        fix: tt("nav.dlg.refuse.overcap.fix", "Lower the amount, or bring the rest through another importer.")};
     },
-    bad_amount: {rule: "An amount is not a whole number of 0 or more", fix: "Correct it, then try again."},
+    bad_amount: {get rule(){ return tt("nav.dlg.refuse.badamount.rule", "An amount is not a whole number of 0 or more"); }, get fix(){ return tt("nav.dlg.refuse.badamount.fix", "Correct it, then try again."); }},
   },
   schedule: {
-    headquarters: {rule: "A headquarters' schedule is not written from here", fix: "Change it in BizMan in the game."},
-    not_assigned: {rule: "Someone on the plan is not assigned to this business", fix: "Assign them in BizMan, or refresh the board."},
-    no_station: {rule: "A station on the plan is no longer here", fix: "Refresh the board."},
-    no_skill: {rule: "Someone on the plan lacks the skill for their station", fix: "Refresh the board."},
-    bad_hours: {rule: "A shift is not whole hours, at most 12, within the day", fix: "Refresh the board."},
-    overlap_person: {rule: "Someone would work two shifts at once", fix: "Refresh the board."},
-    overlap_station: {rule: "Two people would share one station", fix: "Refresh the board."},
+    headquarters: {get rule(){ return tt("nav.dlg.refuse.hq.rule", "A headquarters' schedule is not written from here"); }, get fix(){ return tt("nav.dlg.refuse.hq.fix", "Change it in BizMan in the game."); }},
+    not_assigned: {get rule(){ return tt("nav.dlg.refuse.notassigned.rule", "Someone on the plan is not assigned to this business"); }, get fix(){ return tt("nav.dlg.refuse.notassigned.fix", "Assign them in BizMan, or refresh the board."); }},
+    no_station: {get rule(){ return tt("nav.dlg.refuse.nostation.rule", "A station on the plan is no longer here"); }, get fix(){ return tt("nav.dlg.refuse.nostation.fix", "Refresh the board."); }},
+    no_skill: {get rule(){ return tt("nav.dlg.refuse.noskill.rule", "Someone on the plan lacks the skill for their station"); }, get fix(){ return tt("nav.dlg.refuse.noskill.fix", "Refresh the board."); }},
+    bad_hours: {get rule(){ return tt("nav.dlg.refuse.badhours.rule", "A shift is not whole hours, at most 12, within the day"); }, get fix(){ return tt("nav.dlg.refuse.badhours.fix", "Refresh the board."); }},
+    overlap_person: {get rule(){ return tt("nav.dlg.refuse.overlapperson.rule", "Someone would work two shifts at once"); }, get fix(){ return tt("nav.dlg.refuse.overlapperson.fix", "Refresh the board."); }},
+    overlap_station: {get rule(){ return tt("nav.dlg.refuse.overlapstation.rule", "Two people would share one station"); }, get fix(){ return tt("nav.dlg.refuse.overlapstation.fix", "Refresh the board."); }},
   },
 };
 /* The lock window, Sunday 16:00 to Monday 09:00 an hour a cell: shut from
@@ -25155,8 +26170,10 @@ function gwLockStrip(){
   const d = ((Number(l.day) % 7) + 7) % 7, h = Number(l.hour);
   const at = d === 0 && h >= 16 ? h - 16 : d === 1 && h < 10 ? h + 8 : -1;
   const cells = [...Array(18).keys()].map(k => `<i class="${k >= 4 && k < 16 ? "x" : ""}${k === at ? " now" : ""}"></i>`).join("");
-  const now = at >= 0 ? `<span class="n" style="grid-row:2;grid-column:${Math.min(at, 14) + 1}/span 4">now ${gwNow().slice(4)}</span>` : "";
-  return `<div class="gw-lock" aria-hidden="true"><div class="cells">${cells}</div><div class="labs"><span style="grid-column:1/span 4">Sun 16</span><span style="grid-column:5/span 3">20:00</span><span class="r" style="grid-column:15/span 4">Mon 08:00</span>${now}</div></div>`;
+  /* gwNow() is "Sun 14:02": its time, after the weekday and a space. */
+  const time = gwNow().replace(/^\S+ /, "");
+  const now = at >= 0 ? `<span class="n" style="grid-row:2;grid-column:${Math.min(at, 14) + 1}/span 4">${tt("nav.dlg.lock.now", "now {t}", {t: time})}</span>` : "";
+  return `<div class="gw-lock" aria-hidden="true"><div class="cells">${cells}</div><div class="labs"><span style="grid-column:1/span 4">${navShortDay(6)} 16</span><span style="grid-column:5/span 3">20:00</span><span class="r" style="grid-column:15/span 4">${navShortDay(0)} 08:00</span>${now}</div></div>`;
 }
 /* A dry run the game refused because the board's figures are no longer the
    game's. */
@@ -25172,7 +26189,7 @@ function gwRefusals(spec, answer){
   const groups = new Map();
   site.concat(answer.rows || []).filter(r => r && r.error).forEach(r => {
     const known = (GW_REFUSE[spec.kind] || {})[r.error] || GW_REFUSE.any[r.error];
-    const say = typeof known === "function" ? known(r) : known || {rule: `The game refused this (${spEsc(r.error)})`, fix: ""};
+    const say = typeof known === "function" ? known(r) : known || {rule: tt("nav.dlg.refused.code", "The game refused this ({code})", {code: spEsc(r.error)}), fix: ""};
     const key = `${say.rule}|${say.fix}`;
     if(!groups.has(key)) groups.set(key, {say, error: r.error, chips: []});
     const chip = spec.object ? spec.object(r) : "";
@@ -25183,62 +26200,80 @@ function gwRefusals(spec, answer){
     say.fix ? `<div class="fix">${gwSvg("right")}<span>${say.fix}</span></div>` : ""}${error === "locked" ? gwLockStrip() : ""}</div>`).join("");
 }
 const GW_CANNOT = {
-  saving: ["The game is saving right now", "Try again in a moment.", "save"],
-  placement: ["The game takes no changes while you are placing items", "Finish placing in the game, then try again.", "clock"],
-  interior: ["The game takes no changes while the interior designer is open", "Close it in the game, then try again.", "sofa"],
-  casino: ["The game takes no changes on the casino boat", "Leave the boat in the game, then try again.", "clock"],
-  other: ["The game takes no changes right now", "Try again in a moment.", "clock"],
+  get saving(){ return [tt("nav.dlg.cannot.saving.text", "The game is saving right now"), tt("nav.dlg.moment", "Try again in a moment."), "save"]; },
+  get placement(){ return [tt("nav.dlg.cannot.placement.text", "The game takes no changes while you are placing items"),
+    tt("nav.dlg.cannot.placement.fix", "Finish placing in the game, then try again."), "clock"]; },
+  get interior(){ return [tt("nav.dlg.cannot.interior.text", "The game takes no changes while the interior designer is open"),
+    tt("nav.dlg.cannot.interior.fix", "Close it in the game, then try again."), "sofa"]; },
+  get casino(){ return [tt("nav.dlg.cannot.casino.text", "The game takes no changes on the casino boat"),
+    tt("nav.dlg.cannot.casino.fix", "Leave the boat in the game, then try again."), "clock"]; },
+  get other(){ return [tt("nav.dlg.cannot.other.text", "The game takes no changes right now"), tt("nav.dlg.moment", "Try again in a moment."), "clock"]; },
 };
 /* What a failed write says, and what the dialog offers next: `wire` and
    `say` for the verdict, `text` (and `sub`), or `box` [icon, tone] to set the
    text beside an icon; `retry` with its label `again`, `refresh`, `wait` (s). */
 function gwProblem(res){
   const body = res.body || {};
-  const ask = "Ask again";
+  const ask = tt("nav.dlg.askagain", "Ask again");
   const cannot = reason => GW_CANNOT[reason] || GW_CANNOT.other;
+  /* A verdict is a few words in bold; a sentence in bold leads the text. */
+  const say = words => `<b>${words}</b>`;
+  const unchanged = tt("nav.dlg.unchanged", "Nothing was changed."), unsent = tt("nav.dlg.unsent", "Nothing was sent.");
   switch(res.error){
-    case "changed": return {wire: "moved", say: "<b>The game moved on</b>", text: "The game has moved on since this board was read. Nothing was changed.",
-      drift: true, sub: "Something was hired, set or sold in the game meanwhile. Refresh, and the board plans again from what the game holds.", refresh: true};
+    case "changed": return {wire: "moved", say: say(tt("nav.dlg.say.moved", "The game moved on")),
+      text: tt("nav.dlg.moved.text", "The game has moved on since this board was read. Nothing was changed."),
+      drift: true, sub: tt("nav.dlg.moved.sub", "Something was hired, set or sold in the game meanwhile. Refresh, and the board plans again from what the game holds."), refresh: true};
     /* A refusal the player fixes in the game (a BizMan screen closed, a
        locker placed) can be tried again from here; see gwFixable(). */
-    case "refused": return {wire: "no", say: "<b>The game refuses this</b>", text: "The game refused this. Nothing was changed.", retry: gwFixable(body)};
+    case "refused": return {wire: "no", say: say(tt("nav.dlg.say.refuses", "The game refuses this")),
+      text: tt("nav.dlg.refused.text", "The game refused this. Nothing was changed."), retry: gwFixable(body)};
     case "cannot_write": { const [text, fix, icon] = cannot(body.reason);
-      return {wire: "busy", say: "<b>Not now</b>", box: [icon, "dim"], text: `<b>${text}.</b> Nothing was changed. ${fix}`, retry: true}; }
-    case "busy": return {wire: "busy", say: "<b>The game is busy</b>", text: "The game stayed busy saving its state. Nothing was changed.",
-      sub: `<span class="gw-tries" aria-hidden="true"><i></i><i></i><i></i></span>tried 3 times, a second apart`, retry: true};
-    case "main_thread_unavailable": return {wire: "busy", say: "<b>No city loaded</b>", text: "The game did not take the change: no city is loaded.", retry: true};
-    case "nothing_to_undo": return {wire: "no", say: "<b>Nothing to undo</b>", box: ["info", "dim"],
-      text: "There is nothing left to undo: a later change replaced it, or the city was loaded again."};
+      return {wire: "busy", say: say(tt("nav.dlg.say.notnow", "Not now")), box: [icon, "dim"], text: `<b>${text}.</b> ${unchanged} ${fix}`, retry: true}; }
+    case "busy": return {wire: "busy", say: say(tt("nav.dlg.say.busy", "The game is busy")), text: tt("nav.dlg.busy.text", "The game stayed busy saving its state. Nothing was changed."),
+      sub: `<span class="gw-tries" aria-hidden="true"><i></i><i></i><i></i></span>${tt("nav.dlg.busy.tries", "tried {n} times, a second apart", {n: 3})}`, retry: true};
+    case "main_thread_unavailable": return {wire: "busy", say: say(tt("nav.dlg.say.nocity", "No city loaded")),
+      text: tt("nav.dlg.nocity.text", "The game did not take the change: no city is loaded."), retry: true};
+    case "nothing_to_undo": return {wire: "no", say: say(tt("nav.dlg.say.noundo", "Nothing to undo")), box: ["info", "dim"],
+      text: tt("nav.dlg.noundo.text", "There is nothing left to undo: a later change replaced it, or the city was loaded again.")};
     /* The game's approval of this browser, asked for on the first write. */
-    case "cancelled": return {wire: "no", say: "<b>Not approved</b>", box: ["close", "no"],
-      text: "<b>Not approved in the game, so nothing was sent.</b> Its question may still be open there: asking again picks it up.", retry: true, again: ask};
-    case "denied": return {wire: "no", say: "<b>Not allowed</b>", box: ["close", "no"],
-      text: "<b>The game said no.</b> Nothing was sent. The board changes the game only with your yes, and asks again when you try.", retry: true, again: ask};
-    case "expired": return {wire: "wait", say: "<b>No answer in the game</b>", box: ["clock", "wait"],
-      text: "<b>No answer from the game.</b> Nothing was sent. Is the game paused in a menu, or minimised? It closes its question after a minute.", retry: true, again: ask};
+    case "cancelled": return {wire: "no", say: say(tt("nav.dlg.say.notapproved", "Not approved")), box: ["close", "no"],
+      text: `<b>${tt("nav.dlg.cancelled.lead", "Not approved in the game, so nothing was sent.")}</b> ${
+        tt("nav.dlg.cancelled.text", "Its question may still be open there: asking again picks it up.")}`, retry: true, again: ask};
+    case "denied": return {wire: "no", say: say(tt("nav.dlg.say.notallowed", "Not allowed")), box: ["close", "no"],
+      text: `<b>${tt("nav.dlg.denied.lead", "The game said no.")}</b> ${unsent} ${
+        tt("nav.dlg.denied.text", "The board changes the game only with your yes, and asks again when you try.")}`, retry: true, again: ask};
+    case "expired": return {wire: "wait", say: say(tt("nav.dlg.say.noanswergame", "No answer in the game")), box: ["clock", "wait"],
+      text: `<b>${tt("nav.dlg.expired.lead", "No answer from the game.")}</b> ${unsent} ${
+        tt("nav.dlg.expired.text", "Is the game paused in a menu, or minimised? It closes its question after a minute.")}`, retry: true, again: ask};
     case "throttled": { const wait = Number(res.retryAfter) || 10;
-      return {wire: "wait", say: "<b>Asked a moment ago</b>", text: `The game asked you a moment ago. Ask again in ${wait} s.`, retry: true, again: ask, wait}; }
-    case "lost": return {wire: "no", say: "<b>Answer lost</b>", text: "Approved, but the game's answer was lost: click again.", retry: true, again: ask};
-    case "not_taken": return {wire: "busy", say: "<b>Not taken</b>", text: "The game did not take the request. Nothing was sent.", sub: "Try again in a moment.", retry: true, again: ask};
-    case "reapproved": return {wire: "ok", say: "<b>Allowed</b>", text: "This browser is approved again. Nothing was changed yet.", sub: "Try again to send it.", retry: true};
-    case "origin_not_allowed": return {wire: "no", say: "<b>Not this site</b>", text: "The mod does not take changes from this site. Nothing was sent."};
-    case "not_paired": return {wire: "no", say: "<b>Not allowed</b>", text: "The game no longer knows this browser's approval. Nothing was changed.",
-      sub: "Ask again, and the game asks you once more.", retry: true, again: ask};
-    case "cannot_pair": return {wire: "busy", say: "<b>The game cannot ask now</b>", again: ask, retry: true,
-      text: res.reason === "popup_open" ? "Close the open question in the game first."
-        : res.reason === "no_ui" ? "The game cannot ask you right now. Nothing was sent." : `${cannot(res.reason)[0]}. Nothing was sent.`,
-      sub: res.reason === "no_ui" ? "Go back into the game, then try again." : ""};
-    case "unreachable": return {wire: "no", say: "<b>No answer</b>", text: spEsc(res.message || "The game did not answer."), retry: true};
-    case "uncertain": return {uncertain: true, text: "The game did not answer, so this may or may not have been applied."};
-    case "not_linked": return {wire: "no", say: "<b>Not linked</b>", text: "The board is no longer linked to the same game. Nothing was sent."};
-    default: return {wire: "no", say: "<b>Refused</b>", text: `The game answered ${res.status}${body.detail ? ` (${spEsc(body.detail)})` : ""}. Nothing was changed.`};
+      return {wire: "wait", say: say(tt("nav.dlg.say.asked", "Asked a moment ago")),
+        text: tt("nav.dlg.throttled.text", "The game asked you a moment ago. Ask again in {n} s.", {n: wait}), retry: true, again: ask, wait}; }
+    case "lost": return {wire: "no", say: say(tt("nav.dlg.say.lost", "Answer lost")), text: tt("nav.dlg.lost.text", "Approved, but the game's answer was lost: click again."), retry: true, again: ask};
+    case "not_taken": return {wire: "busy", say: say(tt("nav.dlg.say.nottaken", "Not taken")), text: tt("nav.dlg.nottaken.text", "The game did not take the request. Nothing was sent."),
+      sub: tt("nav.dlg.moment", "Try again in a moment."), retry: true, again: ask};
+    case "reapproved": return {wire: "ok", say: say(tt("nav.dlg.say.allowedword", "Allowed")), text: tt("nav.dlg.reapproved.text", "This browser is approved again. Nothing was changed yet."),
+      sub: tt("nav.dlg.reapproved.sub", "Try again to send it."), retry: true};
+    case "origin_not_allowed": return {wire: "no", say: say(tt("nav.dlg.say.notsite", "Not this site")), text: tt("nav.dlg.origin.text", "The mod does not take changes from this site. Nothing was sent.")};
+    case "not_paired": return {wire: "no", say: say(tt("nav.dlg.say.notallowed", "Not allowed")),
+      text: tt("nav.dlg.notpaired.text", "The game no longer knows this browser's approval. Nothing was changed."),
+      sub: tt("nav.dlg.notpaired.sub", "Ask again, and the game asks you once more."), retry: true, again: ask};
+    case "cannot_pair": return {wire: "busy", say: say(tt("nav.dlg.say.cannotask", "The game cannot ask now")), again: ask, retry: true,
+      text: res.reason === "popup_open" ? tt("nav.dlg.pair.popup", "Close the open question in the game first.")
+        : res.reason === "no_ui" ? tt("nav.dlg.pair.noui.text", "The game cannot ask you right now. Nothing was sent.") : `${cannot(res.reason)[0]}. ${unsent}`,
+      sub: res.reason === "no_ui" ? tt("nav.dlg.pair.noui.sub", "Go back into the game, then try again.") : ""};
+    case "unreachable": return {wire: "no", say: say(tt("nav.dlg.say.noanswer", "No answer")), text: spEsc(res.message || tt("nav.dlg.unreachable.text", "The game did not answer.")), retry: true};
+    case "uncertain": return {uncertain: true, text: tt("nav.dlg.uncertain.text", "The game did not answer, so this may or may not have been applied.")};
+    case "not_linked": return {wire: "no", say: say(tt("nav.dlg.say.notlinked", "Not linked")), text: tt("nav.dlg.notlinked.text", "The board is no longer linked to the same game. Nothing was sent.")};
+    default: return {wire: "no", say: say(tt("nav.dlg.say.refused", "Refused")),
+      text: body.detail ? tt("nav.dlg.status.detail", "The game answered {status} ({detail}). Nothing was changed.", {status: res.status, detail: spEsc(body.detail)})
+        : tt("nav.dlg.status.text", "The game answered {status}. Nothing was changed.", {status: res.status})};
   }
 }
 /* A sentence beside a round icon; tone no, wait or dim (plain is green). */
 const gwBox = (icon, tone, html) => `<div class="gw-ok${tone ? ` ${tone}` : ""}"><span class="ic">${gwSvg(icon)}</span><p>${html}</p></div>`;
 const gwReread = done => done
-  ? `<div class="gw-reread done">${gwSvg("tick")}<span>The board shows the game as it now stands</span></div>`
-  : `<div class="gw-reread"><span>Reading the game again</span><div class="gw-prog"><i></i></div></div>`;
+  ? `<div class="gw-reread done">${gwSvg("tick")}<span>${tt("nav.dlg.reread.done", "The board shows the game as it now stands")}</span></div>`
+  : `<div class="gw-reread"><span>${tt("nav.dlg.reread.now", "Reading the game again")}</span><div class="gw-prog"><i></i></div></div>`;
 /* The game's screen, sketched: its popup and a cursor heading for Allow. */
 const GW_SCENE = `<div class="gw-scene" aria-hidden="true"><div class="gw-sbar"><i></i><i></i><i></i><span>BIG AMBITIONS</span></div><div class="city">${
   [26, 40, 18, 48, 30, 22, 44, 34, 20, 38, 28].map(h => `<i style="height:${h}px"></i>`).join("")}</div><div class="gw-pop"><b><i></i>Allow Big Copilot to change your game?</b><div class="bt"><span>Deny</span><span class="y">Allow</span></div></div>${
@@ -25269,7 +26304,7 @@ function gwDialog(icon, title, where){
   dlg.className = "gw-dlg";
   dlg.tabIndex = -1;  // where focus goes when the control that held it is drawn away
   dlg.setAttribute("aria-labelledby", "gwTitle");
-  dlg.innerHTML = `<div class="gw-grab" aria-hidden="true"></div><div class="gw-head"><span class="gw-kind" aria-hidden="true">${gwSvg(icon)}</span><div><h2 id="gwTitle"></h2><div class="gw-where"></div></div><button type="button" class="gw-x" data-gw-close aria-label="Close">${gwSvg("close")}</button></div>
+  dlg.innerHTML = `<div class="gw-grab" aria-hidden="true"></div><div class="gw-head"><span class="gw-kind" aria-hidden="true">${gwSvg(icon)}</span><div><h2 id="gwTitle"></h2><div class="gw-where"></div></div><button type="button" class="gw-x" data-gw-close aria-label="${attr(tt("nav.dlg.close", "Close"))}">${gwSvg("close")}</button></div>
     <div class="gw-verdict"></div><div class="gw-fix" aria-live="polite"></div><div class="gw-body" aria-live="polite"></div><div class="gw-foot"></div>`;
   gwHead(dlg, title, where);
   dlg.querySelector("[data-gw-close]").onclick = () => dlg.close();
@@ -25380,21 +26415,24 @@ function gwPaint(dlg, v){
 /* The permission, asked in the game while the dialog waits: the states
    web/app.js reports, drawn in the write's own dialog. */
 function gwAsking(dlg, state, info){
-  const cancel = ["Cancel", () => info.cancel && info.cancel(), {kind: "ghost"}];
-  const hint = "Nothing changes until you allow it and then apply.";
-  if(state === "retry") return gwPaint(dlg, {phase: "approval", wire: "busy", say: "<b>The game is busy with a question</b>",
-    body: `<p class="gw-said">The game is still answering an earlier request. Asking again in ${Number(info.wait) || 1} s…</p>`, hint, buttons: [cancel]});
-  if(state !== "waiting") return gwPaint(dlg, {phase: "approval", wire: "ask", say: "<b>Asking the game…</b>",
-    body: `${GW_SCENE}<p class="gw-lead">The game is about to ask you, on its own screen, whether this browser may change it.</p>`, hint, buttons: [cancel]});
+  const cancel = [tt("nav.dlg.cancel", "Cancel"), () => info.cancel && info.cancel(), {kind: "ghost"}];
+  const hint = tt("nav.dlg.allow.hint", "Nothing changes until you allow it and then apply.");
+  if(state === "retry") return gwPaint(dlg, {phase: "approval", wire: "busy", say: `<b>${tt("nav.dlg.say.question", "The game is busy with a question")}</b>`,
+    body: `<p class="gw-said">${tt("nav.dlg.retry.text", "The game is still answering an earlier request. Asking again in {n} s…", {n: Number(info.wait) || 1})}</p>`, hint, buttons: [cancel]});
+  if(state !== "waiting") return gwPaint(dlg, {phase: "approval", wire: "ask", say: `<b>${tt("nav.dlg.say.asking", "Asking the game…")}</b>`,
+    body: `${GW_SCENE}<p class="gw-lead">${tt("nav.dlg.about.text", "The game is about to ask you, on its own screen, whether this browser may change it.")}</p>`, hint, buttons: [cancel]});
   const since = info.since || Date.now();
   const clock = () => { const s = Math.max(0, Math.floor((Date.now() - since) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
-  const waiting = () => gwPaint(dlg, {phase: "approval", wire: "wait", say: "<b>Waiting for you in the game</b>", meta: clock(),
-    body: `${GW_SCENE}<p class="gw-lead">${info.resumed ? "The question is still open in the game. " : ""}The game is asking you on its screen. <b>Switch to Big Ambitions and choose Allow.</b> It asks once for this browser.</p>`,
+  const waiting = () => gwPaint(dlg, {phase: "approval", wire: "wait", say: `<b>${tt("nav.dlg.say.waiting", "Waiting for you in the game")}</b>`, meta: clock(),
+    body: `${GW_SCENE}<p class="gw-lead">${info.resumed ? tt("nav.dlg.waiting.open", "The question is still open in the game.") + " " : ""}${
+      tt("nav.dlg.waiting.text", "The game is asking you on its screen.")} <b>${tt("nav.dlg.waiting.do", "Switch to Big Ambitions and choose Allow.")}</b> ${
+      tt("nav.dlg.waiting.once", "It asks once for this browser.")}</p>`,
     hint, buttons: [cancel]});
   /* The game closes its question after a minute; halfway, the dialog asks
      whether the game is where the player can see it. The clock keeps going. */
-  const quiet = keepTick => gwPaint(dlg, {phase: "approval", wire: "wait", say: "<b>Still waiting</b>", meta: clock(), keepTick,
-    body: gwBox("clock", "wait", "<b>No answer from the game yet.</b> Is the game paused in a menu, or minimised? Its question waits there, and closes itself after a minute."),
+  const quiet = keepTick => gwPaint(dlg, {phase: "approval", wire: "wait", say: `<b>${tt("nav.dlg.say.still", "Still waiting")}</b>`, meta: clock(), keepTick,
+    body: gwBox("clock", "wait", `<b>${tt("nav.dlg.quiet.lead", "No answer from the game yet.")}</b> ${
+      tt("nav.dlg.quiet.text", "Is the game paused in a menu, or minimised? Its question waits there, and closes itself after a minute.")}`),
     hint, buttons: [cancel]});
   const late = () => Date.now() - since >= 30000;
   let shown = late() ? "quiet" : "waiting";
@@ -25424,33 +26462,35 @@ function gwApprovalView(dlg, allowed){
    the shop as not written. */
 function gwFailed(dlg, spec, res, retry, recheck){
   const p = gwProblem(res);
-  const next = spec.next ? [[spec.next.go ? spec.next.label : "End the run", () => spec.next.pass("not written"),
+  const next = spec.next ? [[spec.next.go ? spec.next.label : tt("nav.dlg.endrun", "End the run"), () => spec.next.pass("not written"),
     {kind: "go", icon: "right", key: "next"}]] : [];
-  const close = ["Close", () => dlg.close(), {kind: "ghost"}];
+  const close = [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "ghost"}];
   if(p.uncertain){
-    gwPaint(dlg, {phase: "uncertain", wire: "wait", say: "<b>No answer</b>", meta: gwNow(),
-      body: `<p class="gw-said gw-warn">${p.text}</p><div class="gw-reread"><span>Reading the game again before anything else is offered</span><div class="gw-prog gw-warn"><i></i></div></div>`,
-      hint: "No Undo: what it would restore is unknown.", buttons: [close]});
+    gwPaint(dlg, {phase: "uncertain", wire: "wait", say: `<b>${tt("nav.dlg.say.noanswer", "No answer")}</b>`, meta: gwNow(),
+      body: `<p class="gw-said gw-warn">${p.text}</p><div class="gw-reread"><span>${tt("nav.dlg.reread.first", "Reading the game again before anything else is offered")}</span><div class="gw-prog gw-warn"><i></i></div></div>`,
+      hint: tt("nav.dlg.noundo.hint", "No Undo: what it would restore is unknown."), buttons: [close]});
     Promise.resolve(res.reread).catch(() => {}).then(() => {
       if(!dlg.open) return;
       if(recheck) return recheck();
-      gwPaint(dlg, {phase: "uncertain", wire: "ok", say: "<b>The board is up to date</b>", meta: gwNow(),
-        body: `<p class="gw-said gw-warn">${p.text}</p>${gwBox("refresh", "dim", "<b>The board now shows what the game holds.</b> Check it there: the warning is gone if it went through.")}`,
-        buttons: ["|", ["Close", () => dlg.close(), {kind: next.length ? "ghost" : "go"}], ...next]});
+      gwPaint(dlg, {phase: "uncertain", wire: "ok", say: `<b>${tt("nav.dlg.say.uptodate", "The board is up to date")}</b>`, meta: gwNow(),
+        body: `<p class="gw-said gw-warn">${p.text}</p>${gwBox("refresh", "dim", `<b>${tt("nav.dlg.uptodate.lead", "The board now shows what the game holds.")}</b> ${
+          tt("nav.dlg.uptodate.text", "Check it there: the warning is gone if it went through.")}`)}`,
+        buttons: ["|", [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: next.length ? "ghost" : "go"}], ...next]});
     });
     return;
   }
   const refused = res.error === "refused" && res.body;
   const text = p.box ? gwBox(p.box[0], p.box[1], p.text) : `<p class="gw-said${p.wire === "no" ? " gw-neg" : ""}">${p.text}</p>`;
-  const drift = p.drift ? `<div class="gw-drift"><div><span class="gw-lab">Board read</span><b>${gwBoardRead() || "—"}</b></div><span class="ar" aria-hidden="true"></span><div class="now"><span class="gw-lab">Game now</span><b>${gwNow() || "—"}</b></div></div>` : "";
+  const drift = p.drift ? `<div class="gw-drift"><div><span class="gw-lab">${tt("nav.dlg.drift.read", "Board read")}</span><b>${gwBoardRead() || "—"}</b></div><span class="ar" aria-hidden="true"></span><div class="now"><span class="gw-lab">${
+    tt("nav.dlg.drift.now", "Game now")}</span><b>${gwNow() || "—"}</b></div></div>` : "";
   /* A refusal is said once: as cards, or in the drawing where the kind says it there. */
   const body = (refused ? (spec.inline ? "" : gwRefusals(spec, res.body)) + (spec.draw ? spec.draw(res.body, "refused") : "")
     : `${text}${p.sub && !p.drift ? `<p class="gw-sub">${p.sub}</p>` : ""}${drift}${p.drift ? `<p class="gw-lead">${p.sub}</p>` : ""}`);
   /* A wait the game named keeps the button off until it has run out. */
-  const again = p.again || "Try again";
-  gwPaint(dlg, {phase: "failed", wire: p.wire, say: p.say, meta: gwNow(), body, hint: refused ? "Nothing was changed." : "",
+  const again = p.again || tt("nav.dlg.tryagain", "Try again");
+  gwPaint(dlg, {phase: "failed", wire: p.wire, say: p.say, meta: gwNow(), body, hint: refused ? tt("nav.dlg.unchanged", "Nothing was changed.") : "",
     buttons: [close, "|",
-      ...(p.refresh ? [["Refresh the board", () => spec.refreshBoard ? spec.refreshBoard() : (dlg.close(), typeof SOURCE.refresh === "function" && SOURCE.refresh()), {kind: "go", icon: "refresh"}]]
+      ...(p.refresh ? [[tt("nav.dlg.refresh", "Refresh the board"), () => spec.refreshBoard ? spec.refreshBoard() : (dlg.close(), typeof SOURCE.refresh === "function" && SOURCE.refresh()), {kind: "go", icon: "refresh"}]]
         : p.retry && retry ? [[again, retry, {kind: "go", icon: p.again ? "key" : "refresh", disabled: !!p.wait, why: p.wait ? p.text : "", again: true}]] : []),
       ...next]});
   if(p.wait && p.retry && retry) setTimeout(() => {
@@ -25500,9 +26540,9 @@ function gwConfirm(spec){
   const title = () => typeof spec.title === "function" ? spec.title() : spec.title;
   const where = () => typeof spec.where === "function" ? spec.where() : spec.where || "";
   const dlg = gwDialog(spec.icon, title(), where());
-  const noun = GW_NOUN[spec.kind] || spec.kind;
-  const cancel = ["Cancel", () => dlg.close(), {kind: "ghost"}];
-  const skip = what => spec.next ? [[spec.next.skip || "Skip", () => spec.next.pass(what), {kind: "ghost", icon: "skip"}]] : [];
+  const stays = () => gwUndoStays(spec.kind);
+  const cancel = [tt("nav.dlg.cancel", "Cancel"), () => dlg.close(), {kind: "ghost"}];
+  const skip = what => spec.next ? [[spec.next.skip || tt("nav.dlg.skip", "Skip"), () => spec.next.pass(what), {kind: "ghost", icon: "skip"}]] : [];
   const left = spec.next ? [...skip("skipped"), "|"] : [cancel];
   let applying = false;  // one apply per go: a second click must not send a second write
   let judged = "";       // the body the answer on screen judged, as sent
@@ -25511,14 +26551,16 @@ function gwConfirm(spec){
   let seq = 0;           // the newest dry run: an older one's late answer is dropped
   let allowed = false;   // the game approved this browser for the dry run under way
   const view = gwApprovalView(dlg, () => { allowed = true; asking(); });
-  const nothing = none => gwPaint(dlg, {phase: "nothing", wire: "ok", say: "<b>Nothing to write</b>", meta: gwNow(),
+  const nothing = none => gwPaint(dlg, {phase: "nothing", wire: "ok", say: `<b>${tt("nav.dlg.say.nothing", "Nothing to write")}</b>`, meta: gwNow(),
     body: `<p class="gw-said">${none}</p>`,
-    buttons: ["|", ["Close", () => dlg.close(), {kind: spec.next ? "ghost" : "go"}], ...skip("nothing to write")]});
+    buttons: ["|", [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: spec.next ? "ghost" : "go"}], ...skip("nothing to write")]});
   const asking = () => gwPaint(dlg, {phase: "asking", wire: "ask",
-    say: allowed ? "<b>Allowed.</b> Asking the game what it would do…" : "<b>Asking the game…</b>", meta: allowed ? "" : "dry run",
-    body: (allowed ? gwBox("tick", "", "<b>This browser may now change your game.</b> The game remembers it and will not ask again; “Forget approved browsers” in the Big Copilot Link options takes it back.") : "")
+    say: allowed ? `<b>${tt("nav.dlg.say.allowed.lead", "Allowed.")}</b> ${tt("nav.dlg.say.allowed.asking", "Asking the game what it would do…")}`
+      : `<b>${tt("nav.dlg.say.asking", "Asking the game…")}</b>`, meta: allowed ? "" : tt("nav.dlg.dryrun", "dry run"),
+    body: (allowed ? gwBox("tick", "", `<b>${tt("nav.dlg.approved.lead", "This browser may now change your game.")}</b> ${
+        tt("nav.dlg.approved.text", "The game remembers it and will not ask again; “Forget approved browsers” in the Big Copilot Link options takes it back.")}`) : "")
       + `<div class="gw-skel" aria-hidden="true"><i></i><i></i>${allowed ? "" : "<i></i>"}</div>`,
-    hint: allowed ? "Next: the game's answer." : "Apply waits for the game's answer.",
+    hint: allowed ? tt("nav.dlg.next.hint", "Next: the game's answer.") : tt("nav.dlg.wait.hint", "Apply waits for the game's answer."),
     buttons: [...left, [spec.applyLabel(null), null, {kind: "go", icon: "right", disabled: true, key: "apply"}]]});
   /* How plan() runs: `asked`, the approval the game gave for an Apply just
      now, so the dry run that follows it does not ask a second time; `soft`,
@@ -25548,15 +26590,15 @@ function gwConfirm(spec){
     if(spec.learn) spec.learn(answer);
     gwPaint(dlg, {phase: "ready", wire: answer.ok ? "ok" : "no", say: spec.verdict(answer), meta: spec.meta ? spec.meta(answer) : gwNow(),
       body: (answer.ok || spec.inline ? "" : gwRefusals(spec, answer)) + spec.draw(answer, "ready"),
-      hint: answer.ok ? spec.hint || "Nothing changes until you apply." : spec.refusedHint ? spec.refusedHint(answer) : "Nothing was changed.",
+      hint: answer.ok ? spec.hint || tt("nav.dlg.apply.hint", "Nothing changes until you apply.") : spec.refusedHint ? spec.refusedHint(answer) : tt("nav.dlg.unchanged", "Nothing was changed."),
       warn: !answer.ok && !!spec.refusedHint,
       /* Refused, nothing is left to cancel: the dialog closes. */
-      buttons: [...(answer.ok || spec.next ? left : [["Close", () => dlg.close(), {kind: "ghost"}]]),
+      buttons: [...(answer.ok || spec.next ? left : [[tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "ghost"}]]),
         /* The game moved on since the board was read: the way on is to read it again. */
-        ...(gwMovedOn(answer) ? [["Refresh the board", () => spec.refreshBoard(), {kind: "go", icon: "refresh"}]]
+        ...(gwMovedOn(answer) ? [[tt("nav.dlg.refresh", "Refresh the board"), () => spec.refreshBoard(), {kind: "go", icon: "refresh"}]]
           /* Refused: fixed in the game, the game is asked again from here. */
-          : [...(answer.ok || !gwFixable(answer) ? [] : [["Try again", () => plan(), {kind: "ghost", icon: "refresh", key: "retry"}]]),
-             [spec.applyLabel(answer), apply, {kind: "go", icon: "right", disabled: !answer.ok, why: "The game would refuse this; see above", key: "apply"}]])]});
+          : [...(answer.ok || !gwFixable(answer) ? [] : [[tt("nav.dlg.tryagain", "Try again"), () => plan(), {kind: "ghost", icon: "refresh", key: "retry"}]]),
+             [spec.applyLabel(answer), apply, {kind: "go", icon: "right", disabled: !answer.ok, why: tt("nav.dlg.wouldrefuse", "The game would refuse this; see above"), key: "apply"}]])]});
     allowed = false;
     if(spec.bind) spec.bind(dlg, from => plan({soft: true, from}));
   };
@@ -25567,10 +26609,10 @@ function gwConfirm(spec){
     gwKeepFocus(dlg, '.gw-foot [data-gw-b="apply"]');
     dlg._gwSoft = true;
     dlg.dataset.phase = "asking";
-    dlg.querySelector(".gw-verdict").innerHTML = `${gwWire("ask")}<span><b>Asking the game…</b></span><span class="gw-meta">dry run</span>`;
+    dlg.querySelector(".gw-verdict").innerHTML = `${gwWire("ask")}<span><b>${tt("nav.dlg.say.asking", "Asking the game…")}</b></span><span class="gw-meta">${tt("nav.dlg.dryrun", "dry run")}</span>`;
     dlg.querySelector(".gw-body").setAttribute("aria-busy", "true");
     const go = dlg.querySelector('.gw-foot [data-gw-b="apply"]');
-    if(go){ go.disabled = true; go.title = "Apply waits for the game's answer"; }
+    if(go){ go.disabled = true; go.title = tt("nav.dlg.wait.title", "Apply waits for the game's answer"); }
     dlg.querySelectorAll(".gw-busy").forEach(x => x.classList.remove("gw-busy"));
     if(from && from.classList) from.classList.add("gw-busy");
   };
@@ -25585,7 +26627,7 @@ function gwConfirm(spec){
     if(!judged || JSON.stringify(spec.body()) !== judged || gwWhose() !== whose) return plan({soft: true});
     applying = true;
     gwPaint(dlg, {phase: "applying", wire: "ask", say: `<b>${spec.applying}</b>`, body: spec.draw(last || {}, "applying"),
-      buttons: ["|", ["Applying", null, {kind: "go", busy: true, disabled: true}]]});
+      buttons: ["|", [tt("nav.dlg.applying", "Applying"), null, {kind: "go", busy: true, disabled: true}]]});
     const res = await SOURCE.write(spec.kind, JSON.parse(judged), {dryRun: false, approval: view});
     if(res.error){
       /* No answer: whether the game holds it is unknown, and so is what an
@@ -25602,7 +26644,7 @@ function gwConfirm(spec){
     const answer = res.body || {};
     /* An apply replaces its kind's undo, with nothing when it changed nothing. */
     const undoable = !spec.changed || spec.changed(answer);
-    if(undoable) gwUndoable[spec.kind] = {spec, text: spec.done(answer), sub: `Undo stays until your next ${noun} change`,
+    if(undoable) gwUndoable[spec.kind] = {spec, text: spec.done(answer), sub: stays(),
                                            whose: gwWhose(), at: Date.now()};
     else delete gwUndoable[spec.kind];
     if(spec.onDone) spec.onDone(answer);
@@ -25611,11 +26653,11 @@ function gwConfirm(spec){
     /* The board reads the game again; the line under the drawing says when it has. */
     dlg._gwBoard = D;
     const hint = spec.undoHint ? spec.undoHint() : null;
-    gwPaint(dlg, {phase: "done", wire: "ok", say: "<b>Done in the game</b>", meta: gwNow(),
+    gwPaint(dlg, {phase: "done", wire: "ok", say: `<b>${tt("nav.dlg.say.done", "Done in the game")}</b>`, meta: gwNow(),
       body: (spec.doneBody ? spec.doneBody(answer, spec) : `<p class="gw-said ok">${spec.done(answer)}</p>${spec.draw(answer, "done")}`) + gwReread(false),
-      hint: !undoable ? "" : typeof hint === "string" ? hint : `Undo stays until your next ${noun} change.`,
-      buttons: [...(undoable ? [[spec.undoLabel ? spec.undoLabel() : "Undo", () => gwUndo(spec, dlg), {kind: "undo", icon: "undo", key: "undo"}]] : []), "|",
-        spec.next && spec.next.go ? [spec.next.label, spec.next.go, {kind: "go", icon: "right", key: "next"}] : ["Close", () => dlg.close(), {kind: "go"}]]});
+      hint: !undoable ? "" : typeof hint === "string" ? hint : `${stays()}.`,
+      buttons: [...(undoable ? [[spec.undoLabel ? spec.undoLabel() : tt("nav.dlg.undo.button", "Undo"), () => gwUndo(spec, dlg), {kind: "undo", icon: "undo", key: "undo"}]] : []), "|",
+        spec.next && spec.next.go ? [spec.next.label, spec.next.go, {kind: "go", icon: "right", key: "next"}] : [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "go"}]]});
   };
   /* After an undo in this dialog: the undo said, and the write offered
      again once a board has been built since the undo answered, from the same
@@ -25642,15 +26684,16 @@ function gwConfirm(spec){
       const key = `${same}|${fresh}|${stuck}`;
       if(key === shown && force !== true) return;
       shown = key;
-      gwPaint(dlg, {phase: "undone", wire: "ok", say: "<b>Undone in the game</b>", meta: gwNow(),
+      gwPaint(dlg, {phase: "undone", wire: "ok", say: `<b>${tt("nav.dlg.say.undone", "Undone in the game")}</b>`, meta: gwNow(),
         body: `<div class="gw-reread done">${gwSvg("undo")}<span>${undone}</span></div>${fresh ? gwReread(true)
-          : !same ? `<p class="gw-sub">The board is no longer linked to the game this was undone in.</p>`
-          : stuck ? `<p class="gw-sub">The board could not read the game after the undo. Refresh it to go on.</p>` : gwReread(false)}`,
-        hint: fresh || !same ? "" : "Offered again once the board has read the game.",
+          : !same ? `<p class="gw-sub">${tt("nav.dlg.undone.unlinked", "The board is no longer linked to the game this was undone in.")}</p>`
+          : stuck ? `<p class="gw-sub">${tt("nav.dlg.undone.stuck", "The board could not read the game after the undo. Refresh it to go on.")}</p>` : gwReread(false)}`,
+        hint: fresh || !same ? "" : tt("nav.dlg.undone.hint", "Offered again once the board has read the game."),
         buttons: [...left,
-          ...(stuck ? [["Refresh the board", () => { if(typeof SOURCE.refresh === "function") SOURCE.refresh(); }, {kind: "ghost", icon: "refresh", key: "refresh"}]] : []),
-          [spec.againLabel || "Apply again", () => { dlg._gwGate = null; plan(); },
-           {kind: "go", icon: "right", disabled: !fresh, why: !same ? "The board is no longer linked to this game" : "Reading the game again…", key: "again"}]]});
+          ...(stuck ? [[tt("nav.dlg.refresh", "Refresh the board"), () => { if(typeof SOURCE.refresh === "function") SOURCE.refresh(); }, {kind: "ghost", icon: "refresh", key: "refresh"}]] : []),
+          [spec.againLabel || tt("nav.dlg.applyagain", "Apply again"), () => { dlg._gwGate = null; plan(); },
+           {kind: "go", icon: "right", disabled: !fresh, why: !same ? tt("nav.dlg.unlinked", "The board is no longer linked to this game")
+             : tt("nav.dlg.rereading", "Reading the game again…"), key: "again"}]]});
     };
     dlg._gwGate = gate;
     gate(true);
@@ -25670,16 +26713,17 @@ function gwConfirm(spec){
    was undone and closes. */
 async function gwUndo(spec, dlg){
   if(!(dlg && dlg.open)){
-    dlg = gwDialog(spec.icon, `Undo: ${typeof spec.title === "function" ? spec.title() : spec.title}`,
+    dlg = gwDialog(spec.icon, tt("nav.dlg.undo.title", "Undo: {title}", {title: typeof spec.title === "function" ? spec.title() : spec.title}),
       typeof spec.where === "function" ? spec.where() : spec.where || "");
   }
   if(dlg._gwReplan && dlg.dataset.phase){
     /* In the write's own dialog the drawing stays while the game undoes it. */
     gwKeepFocus(dlg, ".gw-foot button");
     dlg.dataset.phase = "applying";
-    dlg.querySelector(".gw-verdict").innerHTML = `${gwWire("ask")}<span><b>Undoing in the game…</b></span>`;
+    dlg.querySelector(".gw-verdict").innerHTML = `${gwWire("ask")}<span><b>${tt("nav.dlg.say.undoing", "Undoing in the game…")}</b></span>`;
     dlg.querySelectorAll(".gw-foot button").forEach(b => { b.disabled = true; });
-  } else gwPaint(dlg, {phase: "applying", wire: "ask", say: "<b>Undoing in the game…</b>", buttons: ["|", ["Undoing", null, {kind: "go", busy: true, disabled: true}]]});
+  } else gwPaint(dlg, {phase: "applying", wire: "ask", say: `<b>${tt("nav.dlg.say.undoing", "Undoing in the game…")}</b>`,
+    buttons: ["|", [tt("nav.dlg.undoing", "Undoing"), null, {kind: "go", busy: true, disabled: true}]]});
   /* The game and source the undo is sent to: its gate opens only on a board of the same. */
   const sentTo = {source: (gwLink() || {}).source, whose: gwWhose()};
   gwReadStuck = false;  // an earlier write's failed read is not this undo's
@@ -25695,7 +26739,7 @@ async function gwUndo(spec, dlg){
        answer, and the run goes on from it; reopened from the end of the
        run, it goes back there. */
     if(res.error === "uncertain" && spec.onUndoUnknown) spec.onUndoUnknown();
-    const onward = spec.backToRun ? {label: "Back to the run", go: spec.backToRun, pass: spec.backToRun}
+    const onward = spec.backToRun ? {label: tt("nav.dlg.backtorun", "Back to the run"), go: spec.backToRun, pass: spec.backToRun}
       : spec.next ? {label: spec.next.label, go: spec.next.go, pass: () => spec.next.go()} : null;
     /* A refresh after a failed undo reads the game and leaves the write as it
        stands: the dialog is not asked about the write again, so in a run the
@@ -25710,9 +26754,9 @@ async function gwUndo(spec, dlg){
   if(spec.onUndo) spec.onUndo();
   if(dlg._gwReplan) return dlg._gwReplan(spec.done(answer), sentTo);
   dlg._gwBoard = D;
-  gwPaint(dlg, {phase: "undone", wire: "ok", say: "<b>Undone in the game</b>", meta: gwNow(),
+  gwPaint(dlg, {phase: "undone", wire: "ok", say: `<b>${tt("nav.dlg.say.undone", "Undone in the game")}</b>`, meta: gwNow(),
     body: `<p class="gw-said ok">${spec.done(answer)}</p>${spec.draw ? spec.draw(answer, "undone") : ""}${gwReread(false)}`,
-    buttons: ["|", ["Close", () => dlg.close(), {kind: "go"}]]});
+    buttons: ["|", [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "go"}]]});
 }
 /* Undo, once the dialog is closed: a strip at the foot of the window until
    the next write of that kind, or until the board is another character's or
@@ -25732,7 +26776,7 @@ function gwToast(){
   }
   const {spec, text, sub} = last;
   bar.innerHTML = `<span class="ic" aria-hidden="true">${gwSvg("tick")}</span><span class="t">${text}<small>${sub || ""}</small></span><button type="button" class="gw-b undo" data-gw-undo>${
-    gwSvg("undo")}<span>Undo</span></button><button type="button" class="gw-x" data-gw-dismiss aria-label="Dismiss">${gwSvg("close")}</button>`;
+    gwSvg("undo")}<span>${tt("nav.toast.undo", "Undo")}</span></button><button type="button" class="gw-x" data-gw-dismiss aria-label="${attr(tt("nav.toast.dismiss", "Dismiss"))}">${gwSvg("close")}</button>`;
   bar.querySelector("[data-gw-undo]").onclick = () => gwUndo(spec);
   bar.querySelector("[data-gw-dismiss]").onclick = () => { delete gwUndoable[spec.kind]; gwToast(); };
 }

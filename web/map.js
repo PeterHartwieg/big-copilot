@@ -14,9 +14,11 @@ ICON.x = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6
 ICON.full = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"></path></svg>';
 ICON.home = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z"></path></svg>';
 ICON.pin = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"></path><circle cx="12" cy="10" r="2.2"></circle></svg>';
-function mapButton(key, label = "this building"){
+function mapButton(key, label){
   if(!key) return "";
-  return `<button type="button" class="map-shortcut" data-map-key="${attr(key)}" aria-label="${attr(`Show ${label} on map`)}" title="Show on map">${MAP_ICON}</button>`;
+  const name = label === undefined ? tt("map.btn.show.this", "Show this building on map")
+    : tt("map.btn.show", "Show {name} on map", {name: String(label)});
+  return `<button type="button" class="map-shortcut" data-map-key="${attr(key)}" aria-label="${attr(name)}" title="${attr(tt("map.btn.title", "Show on map"))}">${MAP_ICON}</button>`;
 }
 function mapRef(b, label){
   return b ? `${label === undefined ? shortName(b) : label}${mapButton(b.key, b.name || b.address)}` : "—";
@@ -29,7 +31,7 @@ function siteLink(b, label){
   if(!b) return "—";
   const text = mapText(label === undefined ? shortName(b) : label);
   const href = typeof siteHref === "function" ? siteHref(b.key) : "";
-  return href ? `<a class="ss-sl" href="${attr(href)}" data-tip="Open its page">${text}</a>` : text;
+  return href ? `<a class="ss-sl" href="${attr(href)}" data-tip="${attr(tt("map.site.open", "Open its page"))}">${text}</a>` : text;
 }
 /* The labelled way to a site's page where a name alone would be easy to miss:
    the map card, the goods-flow panel. */
@@ -42,19 +44,19 @@ async function loadCityMap(){
     cityMapAssets = (async () => {
       const embedded = window.BIG_COPILOT_MAP;
       const response = embedded ? null : await fetch(`maps/locations.json?v=${window.LEDGER_BUILD || "1"}`);
-      if(response && !response.ok) throw new Error("Map data could not be loaded.");
+      if(response && !response.ok) throw new Error(tt("map.err.data", "Map data could not be loaded."));
       const data = embedded?.data || await response.json();
-      if(data.schema !== 1 || !Array.isArray(data.buildings)) throw new Error("Unsupported map data.");
+      if(data.schema !== 1 || !Array.isArray(data.buildings)) throw new Error(tt("map.err.schema", "Unsupported map data."));
       let imageUrl = embedded?.image;
       if(!imageUrl){
         const image = await fetch(`maps/${data.image}?v=${data.imageHash}`);
-        if(!image.ok) throw new Error("Map background could not be loaded.");
+        if(!image.ok) throw new Error(tt("map.err.bg", "Map background could not be loaded."));
         imageUrl = URL.createObjectURL(await image.blob());
       }
       const image = new Image(); image.src = imageUrl;
       try { await image.decode(); } catch(error){
         if(!embedded) URL.revokeObjectURL(imageUrl);
-        throw new Error("Map background could not be displayed.");
+        throw new Error(tt("map.err.bgshow", "Map background could not be displayed."));
       }
       // Repainting the detailed SVG on every drag frame is expensive. Share a
       // decoded bitmap while moving; restore the original vector when settled.
@@ -125,7 +127,32 @@ const GLIDE_MS = 700;
    ranking and the panel says so. Everything it needs is in D.premises, which a
    board built before the feature does not carry: without it the chip is absent
    and the map is exactly what it was. */
-const FINDER_CATS = [["retail","Retail"],["office","Office"],["warehouse","Warehouse"],["cinema","Cinema"],["theater","Theater"]];
+const FINDER_CATS = ["retail", "office", "warehouse", "cinema", "theater"];
+/* A building's kind as the board names it: the finder's five, and the two it
+   never offers. A kind the list does not know is shown with a capital. */
+function mapKindName(t){
+  switch(t){
+    case "retail": return tt("map.kind.retail", "Retail");
+    case "office": return tt("map.kind.office", "Office");
+    case "warehouse": return tt("map.kind.warehouse", "Warehouse");
+    case "cinema": return tt("map.kind.cinema", "Cinema");
+    case "theater": return tt("map.kind.theater", "Theater");
+    case "residential": return tt("map.kind.residential", "Residential");
+    case "special": return tt("map.kind.special", "Special");
+    default: return `${String(t || "").charAt(0).toUpperCase()}${String(t || "").slice(1)}`;
+  }
+}
+/* The same, inside a sentence ("the strongest retail demand"). */
+function mapKindWord(t){
+  switch(t){
+    case "retail": return tt("map.kindw.retail", "retail");
+    case "office": return tt("map.kindw.office", "office");
+    case "warehouse": return tt("map.kindw.warehouse", "warehouse");
+    case "cinema": return tt("map.kindw.cinema", "cinema");
+    case "theater": return tt("map.kindw.theater", "theater");
+    default: return String(t);
+  }
+}
 const FINDER_KEY = "ba_finder_v1";
 const premises = () => D?.premises || null;
 /* Names sort in the language the board shows them in (gnCompare()). */
@@ -143,53 +170,78 @@ const finderFits = (v, lo, hi) => !(lo && (v == null || v < lo)) && !(hi && (v =
 const hoodTag = hood => hoodCode(null, hood);
 /* What the list is a list of. One of the three is always chosen: premises to
    rent, rival businesses to take over, or whole buildings on sale. */
-const FINDER_SHOWS = [
-  ["rent", "To rent", "Buildings the save marks as available for rent."],
-  ["takeover", "To take over", "Rival businesses you can make an offer to in-game; the price is not in the save. Game services like banks and wholesalers are not for sale."],
-  ["sale", "For sale", "Whole buildings the game offers for sale, cheapest first. Buying one is an investment, not an opening, so it is not scored."],
-];
+const FINDER_SHOWS = ["rent", "takeover", "sale"];
+function finderShowName(k){
+  switch(k){
+    case "rent": return tt("map.show.rent", "To rent");
+    case "takeover": return tt("map.show.takeover", "To take over");
+    case "sale": return tt("map.show.sale", "For sale");
+    default: return undefined;
+  }
+}
+function finderShowTip(k){
+  switch(k){
+    case "rent": return tt("map.show.rent.tip", "Buildings the save marks as available for rent.");
+    case "takeover": return tt("map.show.takeover.tip", "Rival businesses you can make an offer to in-game; the price is not in the save. Game services like banks and wholesalers are not for sale.");
+    default: return tt("map.show.sale.tip", "Whole buildings the game offers for sale, cheapest first. Buying one is an investment, not an opening, so it is not scored.");
+  }
+}
 const finderDefaults = () => ({on:false, cat:"retail", type:"", show:"rent",
   hoods:null, layouts:[], minM2:0, maxM2:0, minCap:0, maxCap:0, minTraffic:0, sort:"score", sortPicked:false});
 /* Buildings run past a billion on a mature save, where the board's compact form
    would say "$5584.2M". An asking price gets its own scale. */
 const askingPrice = n => n == null ? "—"
-  : n >= 1e9 ? `$${(n / 1e9).toFixed(n >= 1e10 ? 1 : 2)}bn` : money(n);
-const finderStatus = b => b.status === "vacant" ? "Vacant · for rent"
-  : b.status === "rival" ? `Rival: ${b.occupant?.name || "unnamed"} · ${b.occupant?.type || "business"}`
+  : n >= 1e9 ? tt("map.price.bn", "${x}bn", {x: (n / 1e9).toFixed(n >= 1e10 ? 1 : 2)}) : money(n);
+/* A rival's or the game's occupant, by name and business type; the save does
+   not always have them. */
+const mapUnnamed = () => tt("map.unnamed", "unnamed");
+const mapBusiness = () => tt("map.business", "business");
+const finderStatus = b => b.status === "vacant" ? tt("map.status.vacant", "Vacant · for rent")
+  : b.status === "rival" ? tt("map.status.rival", "Rival: {name} · {type}", {name: b.occupant?.name || mapUnnamed(), type: b.occupant?.type || mapBusiness()})
   // A bank or a wholesaler is the game's own: occupied, but never for sale.
-  : b.status === "service" ? `Game service · ${b.occupant?.name || "unnamed"} · ${b.occupant?.type || "business"}`
-  : b.status === "mine" ? "Yours"
-  : b.type === "residential" ? "Residential" : "Not for rent";
+  : b.status === "service" ? tt("map.status.service", "Game service · {name} · {type}", {name: b.occupant?.name || mapUnnamed(), type: b.occupant?.type || mapBusiness()})
+  : b.status === "mine" ? tt("map.status.mine", "Yours")
+  : b.type === "residential" ? tt("map.status.residential", "Residential") : tt("map.status.na", "Not for rent");
 /* The save numbers rival companies and names only the ones that have opened a
    business, so a card shows the name when it has one and the number when it
-   does not. The number is stable either way. */
-const RIVAL_TIP = "The save names a rival company once it has opened a business; until then only its number is stable.";
+   does not. The number is stable either way. `lead` says where the tag
+   stands: "start" at the head of a line, "inline" inside one. */
 const rivalName = n => n == null ? null : (premises()?.rivalNames || {})[n] || null;
 const rivalTag = (n, lead) => {
-  if(n == null) return lead;
+  const start = lead === "start";
+  if(n == null) return start ? tt("map.rival.co", "Rival company") : tt("map.rival.co.inline", "rival company");
   const name = rivalName(n);
-  return name ? mapText(name) : `<span data-tip="${attr(RIVAL_TIP)}">${lead} ${n}</span>`;
+  return name ? mapText(name) : `<span data-tip="${attr(tt("map.rival.tip", "The save names a rival company once it has opened a business; until then only its number is stable."))}">${
+    start ? tt("map.rival.co.n", "Rival company {n}", {n}) : tt("map.rival.co.inline.n", "rival company {n}", {n})}</span>`;
 };
-const typeLabel = t => `${String(t || "").charAt(0).toUpperCase()}${String(t || "").slice(1)}`;
+const typeLabel = t => mapKindName(t);
 /* The rent estimate is a fitted formula, so it says how it did against the
    leases the player is billed for today. */
 function rentNote(){
   const rent = premises()?.rent, check = rent?.check, deposit = rent?.deposit?.check;
   const tail = deposit && deposit.deposits
-    ? ` Deposits matched your ${deposit.deposits} within ${(deposit.worst * 100).toFixed(1)}%.` : "";
-  if(!check || !check.leases) return "Est. rent is fitted to observed leases; the save stores no rent for a vacant building, and you have no current lease to check against." + tail;
-  return `Est. rent is fitted to observed leases; the save stores no rent for a vacant building. It matches your ${
-    plural(check.leases, "current lease")} within ${(check.worst * 100).toFixed(1)}%.${tail}`;
+    ? " " + tt("map.rent.deposits", "Deposits matched your {n} within {p:.1f}%.", {n: deposit.deposits, p: deposit.worst * 100}) : "";
+  if(!check || !check.leases) return tt("map.rent.nocheck", "Est. rent is fitted to observed leases; the save stores no rent for a vacant building, and you have no current lease to check against.") + tail;
+  return tt("map.rent.check", {
+    one: "Est. rent is fitted to observed leases; the save stores no rent for a vacant building. It matches your {n} current lease within {p:.1f}%.",
+    other: "Est. rent is fitted to observed leases; the save stores no rent for a vacant building. It matches your {n} current leases within {p:.1f}%."},
+    {n: check.leases, p: check.worst * 100}) + tail;
 }
 /* What signing costs on the day. The game asks the same multiple of the rent
    every time, so the note names the multiple rather than this building's sum;
    a warehouse is its own, steeper, one. */
 function depositNote(b){
-  if(b.deposit == null) return "No deposit estimate for this building.";
+  if(b.deposit == null) return tt("map.deposit.none", "No deposit estimate for this building.");
   const factors = premises()?.rent?.deposit?.factors || {};
   const days = b.type === "warehouse" ? factors.warehouse : factors.lease;
-  return `Estimated deposit${days ? `, about ${plural(Math.round(days), "day")} of rent` : ""}${
-    b.rent != null ? `; est. rent ${fmt(b.rent)}/day` : ""}.`;
+  const n = days ? Math.round(days) : 0;
+  if(days && b.rent != null) return tt("map.deposit.days.rent", {
+    one: "Estimated deposit, about {n} day of rent; est. rent {r:$}/day.",
+    other: "Estimated deposit, about {n} days of rent; est. rent {r:$}/day."}, {n, r: b.rent});
+  if(days) return tt("map.deposit.days", {one: "Estimated deposit, about {n} day of rent.",
+    other: "Estimated deposit, about {n} days of rent."}, {n});
+  if(b.rent != null) return tt("map.deposit.rent", "Estimated deposit; est. rent {r:$}/day.", {r: b.rent});
+  return tt("map.deposit.plain", "Estimated deposit.");
 }
 /* The ranked columns shade the way the market grid does: the board's accent
    mixed into the surface. The leading column carries most of it, the supporting
@@ -197,7 +249,7 @@ function depositNote(b){
 const SHADE_LEAD = 46, SHADE_SIDE = 18;
 const shadeScore = (t, top) =>
   `color-mix(in oklab, var(--accent) ${Math.round(4 + Math.max(0, Math.min(1, t)) * (top - 4))}%, var(--surface))`;
-const FINDER_WHY = "Score = foot traffic × the neighbourhood's demand for the type ÷ 100. Both numbers are the game's own. Rent, rivals, size and capacity are shown but do not change the score; click a column to sort by it instead. Any type takes the neighbourhood's strongest type of the category.";
+const finderWhy = () => tt("map.finder.why", "Score = foot traffic × the neighbourhood's demand for the type ÷ 100. Both numbers are the game's own. Rent, rivals, size and capacity are shown but do not change the score; click a column to sort by it instead. Any type takes the neighbourhood's strongest type of the category.");
 /* Saved searches: named sets of filters, shared by every character because the
    city and its neighbourhoods are the same in every save. A search carries the
    filters and the sort, never the switch. Eight fit the panel. */
@@ -243,8 +295,26 @@ window.addEventListener("storage", e => {
 });
 /* The column a search is sorted by, for its tooltip: two searches that differ
    only in their sort should not read the same. */
-const FINDER_SORT_NAMES = {score:"score", traffic:"traffic", demand:"demand", m2:"m²", cap:"cap", deposit:"upfront"};
-const finderRange = (label, lo, hi) => lo && hi ? `${label} ${lo}–${hi}` : lo ? `${label} ≥ ${lo}` : hi ? `${label} ≤ ${hi}` : "";
+function finderSortName(s){
+  switch(s){
+    case "score": return tt("map.sortname.score", "score");
+    case "traffic": return tt("map.sortname.traffic", "traffic");
+    case "demand": return tt("map.sortname.demand", "demand");
+    case "m2": return tt("map.sortname.m2", "m²");
+    case "cap": return tt("map.sortname.cap", "cap");
+    case "deposit": return tt("map.sortname.deposit", "upfront");
+    default: return s;
+  }
+}
+/* A number filter in a search's tooltip: floor area or capacity, from, up to
+   or between. */
+function finderRange(what, lo, hi){
+  if(!lo && !hi) return "";
+  if(what === "m2") return lo && hi ? tt("map.range.m2", "m² {lo}–{hi}", {lo, hi})
+    : lo ? tt("map.range.m2.min", "m² ≥ {lo}", {lo}) : tt("map.range.m2.max", "m² ≤ {hi}", {hi});
+  return lo && hi ? tt("map.range.cap", "capacity {lo}–{hi}", {lo, hi})
+    : lo ? tt("map.range.cap.min", "capacity ≥ {lo}", {lo}) : tt("map.range.cap.max", "capacity ≤ {hi}", {hi});
+}
 
 /* floor plans: the game's own layout for each building ------------------------
    A layout is the building's size and version ("C2"); make_floor_plans.py
@@ -265,7 +335,7 @@ function loadFloorPlans(){
   return floorPlanAssets;
 }
 const FLOOR_PLAN_PX = 24;
-const FLOOR_PLAN_TIP = "The game's own layout for the building, seen from above and shown the way the game stores it, so the top is not necessarily north or the street. Walls are grey, windows blue and doors green; a door on the outside wall is an entrance. In a warehouse, the gaps in the floor are the loading bays. m² and cap are the game's figures for the size.";
+const floorPlanTip = () => tt("map.plan.tip", "The game's own layout for the building, seen from above and shown the way the game stores it, so the top is not necessarily north or the street. Walls are grey, windows blue and doors green; a door on the outside wall is an entrance. In a warehouse, the gaps in the floor are the loading bays. m² and cap are the game's figures for the size.");
 /* One plan at s pixels a metre, painted in the board's colours by class. */
 function floorPlanSvg(plan, s, label){
   const k = s / FLOOR_PLAN_PX;
@@ -275,8 +345,97 @@ function floorPlanSvg(plan, s, label){
 /* The first of 1, 2, 5, 10, 20 or 50 m that is at least 36 px long. */
 function floorPlanScale(s){
   const m = [1, 2, 5, 10, 20, 50].find(n => n * s >= 36) || 50;
-  return `<span class="lp-scale" aria-label="Scale: ${m} metres"><i style="width:${(m * s).toFixed(1)}px"></i><span>${m} m</span></span>`;
+  return `<span class="lp-scale" aria-label="${attr(tt("map.plan.scale", {one: "Scale: {n} metres", other: "Scale: {n} metres"}, {n: m}))}"><i style="width:${(m * s).toFixed(1)}px"></i><span>${
+    mapText(tt("map.plan.metres", "{n} m", {n: m}))}</span></span>`;
 }
+
+/* The words build() writes once. A change of language does not build the map
+   again (the camera, the search and a half-typed name would go), so each of
+   these is written again in place: data-mw names the word an element's own
+   text starts with, and data-mw-tip, -aria and -ph the one in its data-tip,
+   aria-label or placeholder. Every entry is read afresh, in the UI language. */
+const MAP_WORDS = {
+  get loading(){ return tt("map.loading", "Loading map…"); },
+  get retry(){ return tt("map.retry", "Retry map"); },
+  get layers(){ return tt("map.layers", "Layers"); },
+  get mine(){ return tt("map.layer.mine", "Mine"); },
+  get mineTip(){ return tt("map.layer.mine.tip", "Your businesses. Click to hide them."); },
+  get own(){ return tt("map.layer.own", "Owned"); },
+  get ownTip(){ return tt("map.layer.own.tip", "Buildings you own, dashed blue on the map."); },
+  get home(){ return tt("map.layer.home", "Homes"); },
+  get homeTip(){ return tt("map.layer.home.tip", "Homes you rent, white on the map."); },
+  get fnd(){ return tt("map.layer.fnd", "Findings"); },
+  get fndTip(){ return tt("map.layer.fnd.tip", "Sites with a finding from Today. Red is critical, amber is worth a look, grey is for information. The dots show once you zoom in."); },
+  get all(){ return tt("map.layer.all", "All"); },
+  get allTip(){ return tt("map.layer.all.tip", "Every address in the city, as faint outlines. Off by default."); },
+  get layersWhy(){ return tt("map.layers.why", "The chips are layers: your businesses, buildings you own, homes you rent, sites with a finding, every address. Click one to switch it off; off is dimmed, never gone. Pick a place from the list or on the map and its card opens beside the building. Drag to pan, wheel to zoom."); },
+  get findPlace(){ return tt("map.search.aria", "Find a place"); },
+  get search(){ return tt("map.search.ph", "Search"); },
+  get canvas(){ return tt("map.canvas.aria", "City map. Select a building or use the places list."); },
+  get close(){ return tt("map.card.close", "Close"); },
+  get itsPage(){ return tt("map.card.page", "its page"); },
+  get zoom(){ return tt("map.zoom.aria", "Map zoom"); },
+  get zoomIn(){ return tt("map.zoom.in", "Zoom in"); },
+  get zoomOut(){ return tt("map.zoom.out", "Zoom out"); },
+  get city(){ return tt("map.zoom.city", "Whole city"); },
+  get full(){ return tt("map.zoom.full", "Full screen"); },
+  get found(){ return tt("map.places.aria", "Premises found"); },
+  get finder(){ return tt("map.finder.name", "Find a location"); },
+  get isNew(){ return tt("map.new", "New"); },
+  get rowKind(){ return tt("map.row.kind", "Kind"); },
+  get rowType(){ return tt("map.row.type", "Type"); },
+  get rowShow(){ return tt("map.row.show", "Show"); },
+  get rowWhere(){ return tt("map.row.where", "Where"); },
+  get rowSize(){ return tt("map.row.size", "Size"); },
+  get rowCap(){ return tt("map.row.cap", "Capacity"); },
+  get rowTraffic(){ return tt("map.row.traffic", "Traffic"); },
+  get rowLayout(){ return tt("map.row.layout", "Layout"); },
+  get rowSaved(){ return tt("map.row.saved", "Saved"); },
+  get typeAria(){ return tt("map.type.aria", "Business type"); },
+  get anyType(){ return tt("map.type.any", "Any type"); },
+  get min(){ return tt("map.num.min", "min"); },
+  get max(){ return tt("map.num.max", "max"); },
+  get m2(){ return tt("map.unit.m2", "m²"); },
+  get minM2(){ return tt("map.num.minm2", "Smallest floor area in square metres"); },
+  get maxM2(){ return tt("map.num.maxm2", "Largest floor area in square metres"); },
+  get minCap(){ return tt("map.num.mincap", "Smallest building capacity"); },
+  get maxCap(){ return tt("map.num.maxcap", "Largest building capacity"); },
+  get minTraffic(){ return tt("map.num.mintraffic", "Least foot traffic"); },
+  get layouts(){ return tt("map.layouts.aria", "Layouts"); },
+  get saved(){ return tt("map.saved.aria", "Saved searches"); },
+  get nameAria(){ return tt("map.saved.name", "Name for this search"); },
+  get save(){ return tt("map.saved.save", "Save"); },
+  get saveTip(){ return tt("map.saved.save.tip", "Save these filters and the sort under a name. Every character shares the saved searches; a name already taken is replaced."); },
+  get cancel(){ return tt("map.saved.cancel", "Cancel saving"); },
+  get catRetail(){ return mapKindName("retail"); },
+  get catOffice(){ return mapKindName("office"); },
+  get catWarehouse(){ return mapKindName("warehouse"); },
+  get catCinema(){ return mapKindName("cinema"); },
+  get catTheater(){ return mapKindName("theater"); },
+  get showRent(){ return finderShowName("rent"); },
+  get showRentTip(){ return finderShowTip("rent"); },
+  get showTakeover(){ return finderShowName("takeover"); },
+  get showTakeoverTip(){ return finderShowTip("takeover"); },
+  get showSale(){ return finderShowName("sale"); },
+  get showSaleTip(){ return finderShowTip("sale"); },
+};
+/* The MAP_WORDS key of a finder category or list. */
+const mapWordKey = (lead, k) => lead + k.charAt(0).toUpperCase() + k.slice(1);
+const MAP_WORD_ATTRS = [["data-mw-tip", "data-tip"], ["data-mw-aria", "aria-label"], ["data-mw-ph", "placeholder"]];
+function mapRelabel(root){
+  root.querySelectorAll('[data-mw]').forEach(el => {
+    const word = MAP_WORDS[el.dataset.mw];
+    if(word === undefined) return;
+    // The words are the element's first text; an icon or a count beside them stays.
+    const text = [...el.childNodes].find(n => n.nodeType === 3 && n.textContent.trim());
+    if(text) text.textContent = word; else if(!el.children.length) el.textContent = word;
+  });
+  MAP_WORD_ATTRS.forEach(([a, target]) => root.querySelectorAll(`[${a}]`).forEach(el => {
+    const word = MAP_WORDS[el.getAttribute(a)];
+    if(word !== undefined) el.setAttribute(target, word);
+  }));
+}
+if(typeof ttOnChange === "function") ttOnChange(() => mapViews.forEach(view => mapRelabel(view.root)));
 
 class CityMapView {
   /* options.panel: the page shows chips, search and the places panel; the
@@ -321,7 +480,7 @@ class CityMapView {
       e.preventDefault();
       this.sortBy(sorter.dataset.s);
     });
-    root.innerHTML = `<p class="map-status" role="status">Loading map…</p>`;
+    root.innerHTML = `<p class="map-status" role="status" data-mw="loading">${mapText(MAP_WORDS.loading)}</p>`;
     mapViews.add(this);
     this.ready = this.load();
   }
@@ -331,7 +490,7 @@ class CityMapView {
       this.build(); this.update();
       return true;
     } catch(error){
-      this.root.innerHTML = `<p class="map-status" role="status">${mapText(error.message)}</p><button type="button" class="btn2">Retry map</button>`;
+      this.root.innerHTML = `<p class="map-status" role="status">${mapText(error.message)}</p><button type="button" class="btn2" data-mw="retry">${mapText(MAP_WORDS.retry)}</button>`;
       this.root.querySelector('button').onclick = () => {
         this.ready = this.load();
         this.ready.then(ok=>{if(ok && this.selected)this.select(this.selected,true,this.freshSelection);});
@@ -347,28 +506,28 @@ class CityMapView {
     // is what it shows, "Mine 2", so a spoken command matches the word on it;
     // the note says the rest.
     const head = this.panel ? `<div class="sechead map-head moff">
-      <span class="layers" role="group" aria-label="Layers">
-        <button type="button" class="sev lay mine" data-l="mine" aria-pressed="true" data-tip="Your businesses. Click to hide them."><i></i><span class="lw">Mine</span><span class="n">0</span></button>
-        <button type="button" class="sev lay own" data-l="own" aria-pressed="true" data-tip="Buildings you own, dashed blue on the map."><i></i><span class="lw">Owned</span><span class="n">0</span></button>
-        <button type="button" class="sev lay home" data-l="home" aria-pressed="true" data-tip="Homes you rent, white on the map."><i></i><span class="lw">Homes</span><span class="n">0</span></button>
-        <button type="button" class="sev lay fnd" data-l="fnd" aria-pressed="true" data-tip="Sites with a finding from Today. Red is critical, amber is worth a look, grey is for information. The dots show once you zoom in."><i></i><span class="lw">Findings</span><span class="n">0</span></button>
-        <button type="button" class="sev lay all off" data-l="all" aria-pressed="false" data-tip="Every address in the city, as faint outlines. Off by default."><i></i><span class="lw">All</span><span class="n">${a.buildings.length}</span></button>
+      <span class="layers" role="group" aria-label="${attr(MAP_WORDS.layers)}" data-mw-aria="layers">
+        <button type="button" class="sev lay mine" data-l="mine" aria-pressed="true" data-tip="${attr(MAP_WORDS.mineTip)}" data-mw-tip="mineTip"><i></i><span class="lw" data-mw="mine">${mapText(MAP_WORDS.mine)}</span><span class="n">0</span></button>
+        <button type="button" class="sev lay own" data-l="own" aria-pressed="true" data-tip="${attr(MAP_WORDS.ownTip)}" data-mw-tip="ownTip"><i></i><span class="lw" data-mw="own">${mapText(MAP_WORDS.own)}</span><span class="n">0</span></button>
+        <button type="button" class="sev lay home" data-l="home" aria-pressed="true" data-tip="${attr(MAP_WORDS.homeTip)}" data-mw-tip="homeTip"><i></i><span class="lw" data-mw="home">${mapText(MAP_WORDS.home)}</span><span class="n">0</span></button>
+        <button type="button" class="sev lay fnd" data-l="fnd" aria-pressed="true" data-tip="${attr(MAP_WORDS.fndTip)}" data-mw-tip="fndTip"><i></i><span class="lw" data-mw="fnd">${mapText(MAP_WORDS.fnd)}</span><span class="n">0</span></button>
+        <button type="button" class="sev lay all off" data-l="all" aria-pressed="false" data-tip="${attr(MAP_WORDS.allTip)}" data-mw-tip="allTip"><i></i><span class="lw" data-mw="all">${mapText(MAP_WORDS.all)}</span><span class="n">${a.buildings.length}</span></button>
       </span>
-      <span class="why" data-tip="The chips are layers: your businesses, buildings you own, homes you rent, sites with a finding, every address. Click one to switch it off; off is dimmed, never gone. Pick a place from the list or on the map and its card opens beside the building. Drag to pan, wheel to zoom."><i>?</i></span>
-      <span class="aside"><label class="srch">${ICON.search}<input id="${id}-search" type="search" aria-label="Find a place" data-control="search" placeholder="Search" autocomplete="off"><span class="cnt mono" aria-live="polite"></span></label></span>
+      <span class="why" data-tip="${attr(MAP_WORDS.layersWhy)}" data-mw-tip="layersWhy"><i>?</i></span>
+      <span class="aside"><label class="srch">${ICON.search}<input id="${id}-search" type="search" aria-label="${attr(MAP_WORDS.findPlace)}" data-mw-aria="findPlace" data-control="search" placeholder="${attr(MAP_WORDS.search)}" data-mw-ph="search" autocomplete="off"><span class="cnt mono" aria-live="polite"></span></label></span>
     </div>` : "";
     this.root.innerHTML = `${head}<div class="citymap${this.narrow ? " narrow" : ""}"><div class="stage" data-stage>
-      <svg class="map-canvas" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="City map. Select a building or use the places list.">
+      <svg class="map-canvas" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${attr(MAP_WORDS.canvas)}" data-mw-aria="canvas">
       <defs><clipPath id="${clipId}"><rect class="map-region-clip" x="0" y="0" width="${a.viewBox[2]}" height="${a.viewBox[3]}"/></clipPath></defs><g clip-path="url(#${clipId})"><image class="map-detail-background" x="0" y="0" width="${a.viewBox[2]}" height="${a.viewBox[3]}" href="${a.imageUrl}"/><image class="map-fast-background" x="0" y="0" width="${a.viewBox[2]}" height="${a.viewBox[3]}" href="${a.previewUrl}"/>
       <g class="map-footprints">${a.buildings.map(b => `<path class="location fp" data-location="${mapText(b.key)}" d="${b.path}" fill-rule="evenodd"><title>${mapText(b.address)}</title></path>`).join('')}</g>
       <g class="map-pips"></g></g></svg>
       <div class="layer">${(a.districtLabels || []).map(l=>`<span class="dlabel" data-x="${l.anchor[0]}" data-y="${l.anchor[1]}">${mapText(l.label)}</span>`).join('')}
         <div class="shadow" aria-hidden="true"></div><div class="ball" aria-hidden="true"><i></i><u></u></div>
-        <div class="site" role="region" aria-live="polite" hidden><span class="tail"></span><button type="button" class="x" aria-label="Close">${ICON.x}</button><h3></h3><div class="sub"></div><div class="nums"></div><div class="st" hidden></div><div class="facts" hidden></div><div class="lp-plan" hidden></div><div class="fit" hidden></div><p class="why" hidden></p><div class="finds2"></div><a class="go2 ss-pagego" href="#detail" data-action="details">${SS_PAGE}its page</a></div>
+        <div class="site" role="region" aria-live="polite" hidden><span class="tail"></span><button type="button" class="x" aria-label="${attr(MAP_WORDS.close)}" data-mw-aria="close">${ICON.x}</button><h3></h3><div class="sub"></div><div class="nums"></div><div class="st" hidden></div><div class="facts" hidden></div><div class="lp-plan" hidden></div><div class="fit" hidden></div><p class="why" hidden></p><div class="finds2"></div><a class="go2 ss-pagego" href="#detail" data-action="details" data-mw="itsPage">${SS_PAGE}${mapText(MAP_WORDS.itsPage)}</a></div>
       </div>
       ${this.panel ? this.finderControls() : ""}
-      <div class="zoomer" role="group" aria-label="Map zoom"><button type="button" class="ibtn" data-action="in" aria-label="Zoom in">+</button><button type="button" class="ibtn" data-action="out" aria-label="Zoom out">−</button><button type="button" class="ibtn" data-action="reset" aria-label="Whole city"${this.panel ? ' data-tip="Whole city"' : ''}>${ICON.home}</button>${this.panel && document.fullscreenEnabled ? `<button type="button" class="ibtn" data-action="full" aria-label="Full screen" data-tip="Full screen">${ICON.full}</button>` : ''}</div>
-    </div>${this.panel ? `<aside class="places fonly" aria-label="Premises found">${this.finderPanel()}<div class="list"></div></aside>` : ""}</div>`;
+      <div class="zoomer" role="group" aria-label="${attr(MAP_WORDS.zoom)}" data-mw-aria="zoom"><button type="button" class="ibtn" data-action="in" aria-label="${attr(MAP_WORDS.zoomIn)}" data-mw-aria="zoomIn">+</button><button type="button" class="ibtn" data-action="out" aria-label="${attr(MAP_WORDS.zoomOut)}" data-mw-aria="zoomOut">−</button><button type="button" class="ibtn" data-action="reset" aria-label="${attr(MAP_WORDS.city)}" data-mw-aria="city"${this.panel ? ` data-tip="${attr(MAP_WORDS.city)}" data-mw-tip="city"` : ''}>${ICON.home}</button>${this.panel && document.fullscreenEnabled ? `<button type="button" class="ibtn" data-action="full" aria-label="${attr(MAP_WORDS.full)}" data-mw-aria="full" data-tip="${attr(MAP_WORDS.full)}" data-mw-tip="full">${ICON.full}</button>` : ''}</div>
+    </div>${this.panel ? `<aside class="places fonly" aria-label="${attr(MAP_WORDS.found)}" data-mw-aria="found">${this.finderPanel()}<div class="list"></div></aside>` : ""}</div>`;
     this.svg = this.root.querySelector('.map-canvas');
     this.stage = this.root.querySelector('[data-stage]');
     this.citymap = this.root.querySelector('.citymap');
@@ -428,33 +587,36 @@ class CityMapView {
     if(!premises()) return "";
     /* A chip with its name on it: a bare pin in the corner was the most
        hidden way into a headline feature. */
-    return `<div class="fswitch"><button type="button" class="ibtn" data-f="tog" aria-pressed="false" data-visit-feature="floor-plans" data-tip="Rank the buildings you could take for a business type">${ICON.pin}<span>Find a location</span><span class="feature-new" data-new-feature="floor-plans" aria-hidden="true" hidden>New</span></button></div>`;
+    return `<div class="fswitch"><button type="button" class="ibtn" data-f="tog" aria-pressed="false" data-visit-feature="floor-plans">${ICON.pin}<span data-mw="finder">${mapText(MAP_WORDS.finder)}</span><span class="feature-new" data-new-feature="floor-plans" aria-hidden="true" data-mw="isNew" hidden>${mapText(MAP_WORDS.isNew)}</span></button></div>`;
   }
   /* Every control is the same chip: outlined when it is not chosen, filled when
      it is. Nothing is ever dimmed, so nothing reads as unavailable. */
   finderPanel(){
     const P = premises(); if(!P) return "";
-    const row = (label, body, cls = "") => `<div class="frow${cls}"><span class="lab">${label}</span>${body}</div>`;
-    const kinds = FINDER_CATS.map(([c, label]) =>
-      `<button type="button" class="fchip cat" data-cat="${c}" aria-pressed="false">${label}</button>`).join('');
+    const row = (word, body, cls = "") => `<div class="frow${cls}"><span class="lab" data-mw="${word}">${mapText(MAP_WORDS[word])}</span>${body}</div>`;
+    const kinds = FINDER_CATS.map(c =>
+      `<button type="button" class="fchip cat" data-cat="${c}" aria-pressed="false" data-mw="${mapWordKey("cat", c)}">${mapText(mapKindName(c))}</button>`).join('');
     const hoods = this.hoodList().map(h =>
       `<button type="button" class="fchip hd" data-h="${attr(h)}" aria-pressed="true" data-tip="${attr(hoodName(h))}">${mapText(hoodTag(h))}</button>`).join('');
+    const numChip = (f, aria, unit = false) => `<label class="fchip num" data-mw="${f.startsWith("min") ? "min" : "max"}">${
+      mapText(f.startsWith("min") ? MAP_WORDS.min : MAP_WORDS.max)}<input type="number" min="0" data-f="${f}" value="0" aria-label="${attr(MAP_WORDS[aria])}" data-mw-aria="${aria}">${
+      unit ? `<b data-mw="m2">${mapText(MAP_WORDS.m2)}</b>` : ""}</label>`;
     return `<div class="filters fonly">
-      ${row('Kind', kinds)}
-      ${row('Type', `<label class="fsel"><select data-f="type" aria-label="Business type"><option value="">Any type</option></select><i class="fchev">${ICON.chev}</i></label>`, ' ftype')}
-      ${row('Show', FINDER_SHOWS.map(([key, label, tip]) =>
-        `<button type="button" class="fchip show" data-show="${key}" aria-pressed="false" data-tip="${attr(tip)}">${label}<b>0</b></button>`).join('')
+      ${row('rowKind', kinds)}
+      ${row('rowType', `<label class="fsel"><select data-f="type" aria-label="${attr(MAP_WORDS.typeAria)}" data-mw-aria="typeAria"><option value="">${mapText(MAP_WORDS.anyType)}</option></select><i class="fchev">${ICON.chev}</i></label>`, ' ftype')}
+      ${row('rowShow', FINDER_SHOWS.map(key =>
+        `<button type="button" class="fchip show" data-show="${key}" aria-pressed="false" data-tip="${attr(finderShowTip(key))}" data-mw-tip="${mapWordKey("show", key)}Tip" data-mw="${mapWordKey("show", key)}">${mapText(finderShowName(key))}<b>0</b></button>`).join('')
         + `<span class="why" tabindex="0" data-tip=""><i>?</i></span>`)}
-      ${row('Where', hoods)}
-      ${row('Size', `<label class="fchip num">min<input type="number" min="0" data-f="minM2" value="0" aria-label="Smallest floor area in square metres"><b>m²</b></label>
-        <label class="fchip num">max<input type="number" min="0" data-f="maxM2" value="0" aria-label="Largest floor area in square metres"><b>m²</b></label>`)}
-      ${row('Capacity', `<label class="fchip num">min<input type="number" min="0" data-f="minCap" value="0" aria-label="Smallest building capacity"></label>
-        <label class="fchip num">max<input type="number" min="0" data-f="maxCap" value="0" aria-label="Largest building capacity"></label>`)}
-      ${row('Traffic', `<label class="fchip num">min<input type="number" min="0" data-f="minTraffic" value="0" aria-label="Least foot traffic"></label>`)}
-      ${row('Layout', '<span class="flays" role="group" aria-label="Layouts"></span>', ' flayout')}
-      ${row('Saved', `<span class="fsaved" role="group" aria-label="Saved searches"><span class="fsaved-list"></span><span class="fsaved-new">
-        <label class="fchip fname" hidden><input type="text" maxlength="24" data-f="name" aria-label="Name for this search"></label>
-        <span class="fsave"><button type="button" class="fchip fnew" data-f="save" data-tip="Save these filters and the sort under a name. Every character shares the saved searches; a name already taken is replaced.">${ICON.plus}Save</button><button type="button" class="fdel" data-f="cancel" aria-label="Cancel saving" hidden>${ICON.x}</button></span>
+      ${row('rowWhere', hoods)}
+      ${row('rowSize', `${numChip("minM2", "minM2", true)}
+        ${numChip("maxM2", "maxM2", true)}`)}
+      ${row('rowCap', `${numChip("minCap", "minCap")}
+        ${numChip("maxCap", "maxCap")}`)}
+      ${row('rowTraffic', `${numChip("minTraffic", "minTraffic")}`)}
+      ${row('rowLayout', `<span class="flays" role="group" aria-label="${attr(MAP_WORDS.layouts)}" data-mw-aria="layouts"></span>`, ' flayout')}
+      ${row('rowSaved', `<span class="fsaved" role="group" aria-label="${attr(MAP_WORDS.saved)}" data-mw-aria="saved"><span class="fsaved-list"></span><span class="fsaved-new">
+        <label class="fchip fname" hidden><input type="text" maxlength="24" data-f="name" aria-label="${attr(MAP_WORDS.nameAria)}" data-mw-aria="nameAria"></label>
+        <span class="fsave"><button type="button" class="fchip fnew" data-f="save" data-tip="${attr(MAP_WORDS.saveTip)}" data-mw-tip="saveTip" data-mw="save">${ICON.plus}${mapText(MAP_WORDS.save)}</button><button type="button" class="fdel" data-f="cancel" aria-label="${attr(MAP_WORDS.cancel)}" data-mw-aria="cancel" hidden>${ICON.x}</button></span>
       </span></span>`, ' fsaves')}
     </div>`;
   }
@@ -604,14 +766,14 @@ class CityMapView {
     if(hoods && hoods.length === all.length) hoods = null;
     // A limit that is not a number, or one with no end to it, is no limit.
     const limit = v => { const n = Math.max(0, +v || 0); return Number.isFinite(n) ? n : 0; };
-    const cat = FINDER_CATS.some(([c]) => c === f.cat) ? f.cat : "retail";
+    const cat = FINDER_CATS.includes(f.cat) ? f.cat : "retail";
     // The type and the sort fall back here exactly as paintControls makes the
     // live ones fall back, so a search this save cannot honour in full still
     // matches the list it opens.
     const keys = this.sortKeys(cat), sort = keys.includes(f.sort) ? f.sort : keys[0];
     return {...f, hoods, cat, sort, sortPicked: sort === keys[0] ? false : !!f.sortPicked,
       type: this.catTypes(cat).has(f.type) ? f.type : "",
-      show: FINDER_SHOWS.some(([k]) => k === f.show) ? f.show : "rent",
+      show: FINDER_SHOWS.includes(f.show) ? f.show : "rent",
       minM2: limit(f.minM2), maxM2: limit(f.maxM2), minCap: limit(f.minCap), maxCap: limit(f.maxCap),
       minTraffic: limit(f.minTraffic),
       // A layout this save's buildings of the kind do not have is dropped, and a
@@ -674,7 +836,7 @@ class CityMapView {
      already taken gets a number, so accepting the offer never replaces a search. */
   savedName(){
     const f = this.fs, taken = new Set(finderSaved().map(s => s.name.toLowerCase()));
-    const base = `${this.typeName(f.type) || FINDER_CATS.find(([c]) => c === f.cat)?.[1] || "Search"}${
+    const base = `${this.typeName(f.type) || (FINDER_CATS.includes(f.cat) ? mapKindName(f.cat) : "") || tt("map.saved.search", "Search")}${
       f.hoods && f.hoods.length ? ` · ${f.hoods.map(hoodTag).join(" ")}` : ""}`.slice(0, 20);
     let name = base;
     for(let n = 2; taken.has(name.toLowerCase()); n++) name = `${base} ${n}`;
@@ -682,14 +844,14 @@ class CityMapView {
   }
   savedTip(s){
     const f = this.savedFilters(s), type = this.typeName(f.type);
-    return [`${FINDER_CATS.find(([c]) => c === f.cat)?.[1]}${type ? `: ${type}` : ""}`,
-      FINDER_SHOWS.find(([k]) => k === f.show)?.[1],
-      f.hoods ? f.hoods.map(hoodTag).join(" ") || "no neighbourhood" : "every neighbourhood",
-      finderRange("m²", f.minM2, f.maxM2), finderRange("capacity", f.minCap, f.maxCap),
-      f.minTraffic ? `traffic ≥ ${f.minTraffic}` : "",
-      f.layouts.length ? `layout ${f.layouts.join(" ")}` : "",
+    return [type ? tt("map.saved.tip.type", "{kind}: {type}", {kind: mapKindName(f.cat), type}) : mapKindName(f.cat),
+      finderShowName(f.show),
+      f.hoods ? f.hoods.map(hoodTag).join(" ") || tt("map.saved.tip.nohood", "no neighbourhood") : tt("map.saved.tip.allhoods", "every neighbourhood"),
+      finderRange("m2", f.minM2, f.maxM2), finderRange("cap", f.minCap, f.maxCap),
+      f.minTraffic ? tt("map.saved.tip.traffic", "traffic ≥ {n}", {n: f.minTraffic}) : "",
+      f.layouts.length ? tt("map.saved.tip.layout", "layout {codes}", {codes: f.layouts.join(" ")}) : "",
       // For sale is always cheapest first, so only a ranked list names its sort.
-      f.show === "sale" ? "" : `by ${FINDER_SORT_NAMES[f.sort] || f.sort}`].filter(Boolean).join(" · ");
+      f.show === "sale" ? "" : tt("map.saved.tip.sort", "by {sort}", {sort: finderSortName(f.sort)})].filter(Boolean).join(" · ");
   }
   /* The name field is open while its label is shown; its value is the name. */
   naming(){ const f = this.root.querySelector('.fsaved .fname'); return !!f && !f.hidden; }
@@ -751,16 +913,17 @@ class CityMapView {
     const warn = full && naming && !!typed && !list.some(s => s.name.toLowerCase() === typed);
     field.classList.toggle('full', warn);
     if(warn){
-      field.dataset.tip = "Eight searches at most. Delete one to save a new name, or reuse a name to replace that search.";
+      field.dataset.tip = tt("map.saved.full", "Eight searches at most. Delete one to save a new name, or reuse a name to replace that search.");
       input.setAttribute('aria-invalid', 'true');
     } else {
       delete field.dataset.tip; input.removeAttribute('aria-invalid');
       if(typeof hideTip === "function") hideTip(field);
     }
-    const sig = JSON.stringify([list.map(s => [s.name, this.savedTip(s)]), on]);
+    // The language is part of it: a switch words the tips and the delete buttons anew.
+    const sig = JSON.stringify([list.map(s => [s.name, this.savedTip(s)]), on, ttLang]);
     if(host === this.savedHost && sig === this.savedSig) return;
     this.savedHost = host; this.savedSig = sig;
-    host.innerHTML = list.map((s, i) => `<span class="fsave"><button type="button" class="fchip${i === on ? ' on' : ''}" data-saved="${attr(s.name)}" aria-pressed="${i === on}" data-tip="${attr(this.savedTip(s))}">${mapText(s.name)}</button><button type="button" class="fdel" data-unsave="${attr(s.name)}" aria-label="${attr(`Delete the saved search ${s.name}`)}">${ICON.x}</button></span>`).join('');
+    host.innerHTML = list.map((s, i) => `<span class="fsave"><button type="button" class="fchip${i === on ? ' on' : ''}" data-saved="${attr(s.name)}" aria-pressed="${i === on}" data-tip="${attr(this.savedTip(s))}">${mapText(s.name)}</button><button type="button" class="fdel" data-unsave="${attr(s.name)}" aria-label="${attr(tt("map.saved.delete", "Delete the saved search {name}", {name: s.name}))}">${ICON.x}</button></span>`).join('');
   }
   /* The type demand this row is scored on: the chosen type, or the strongest
      type of the category in that neighbourhood when "any type" is picked. */
@@ -845,11 +1008,13 @@ class CityMapView {
     // A warehouse ranks by floor area already, so its list has no second m²
     // column and keeps the narrower grid (class wh).
     const fs = this.fs, wh = fs.cat === 'warehouse', grid = wh ? ' wh' : '';
-    const cols = wh ? [["","#"],["",""],["","Address"],["m2","m²"],["traffic","Traffic"],["",""],["cap","Cap"],["deposit","Upfront"]]
-                    : [["","#"],["",""],["","Address"],["score","Score"],["traffic","Traffic"],["demand","Demand"],["m2","m²"],["cap","Cap"],["deposit","Upfront"]];
+    const address = tt("map.col.address", "Address"), m2 = tt("map.unit.m2", "m²"), traffic = tt("map.col.traffic", "Traffic");
+    const cap = tt("map.col.cap", "Cap"), upfront = tt("map.col.upfront", "Upfront");
+    const cols = wh ? [["","#"],["",""],["",address],["m2",m2],["traffic",traffic],["",""],["cap",cap],["deposit",upfront]]
+                    : [["","#"],["",""],["",address],["score",tt("map.col.score", "Score")],["traffic",traffic],["demand",tt("map.col.demand", "Demand")],["m2",m2],["cap",cap],["deposit",upfront]];
     const head = `<div class="fhead${grid}">${cols.map(([key, label]) => key
-      ? `<span data-s="${key}" role="button" tabindex="0" class="${key === fs.sort ? 'on' : ''}">${label}</span>`
-      : `<span>${label}</span>`).join('')}</div>`;
+      ? `<span data-s="${key}" role="button" tabindex="0" class="${key === fs.sort ? 'on' : ''}">${mapText(label)}</span>`
+      : `<span>${mapText(label)}</span>`).join('')}</div>`;
     // Each shaded column is stretched over the values actually on screen, so a
     // field of close scores still reads. Rent is never shaded: high is not good.
     const scale = pick => {
@@ -864,8 +1029,8 @@ class CityMapView {
       // Floor area and cap have columns of their own, so a row with nothing
       // else to say names its neighbourhood in full, as a for-sale row does.
       const what = b.status === 'rival' && b.occupant ? `${b.occupant.name} · ${b.occupant.type}${company ? ` · ${company}` : ''}`
-        : f.fit && !fs.type ? `best fit: ${f.fit}` : hoodName(b.hood);
-      const sub = what + (f.rivals != null ? ` · ${f.rivals} rival${f.rivals === 1 ? '' : 's'}` : '');
+        : f.fit && !fs.type ? tt("map.list.bestfit", "best fit: {type}", {type: f.fit}) : hoodName(b.hood);
+      const sub = what + (f.rivals != null ? ` · ${tt("map.list.rivals", {one: "{n} rival", other: "{n} rivals"}, {n: f.rivals})}` : '');
       // Floor area is not shaded, like the cap: bigger is not better for every business.
       const numbers = wh
         ? `<span class="v sc sh"${lead(b.m2, SHADE_LEAD)}>${num(b.m2)}</span><span class="v sh"${byTraffic(b.traffic, SHADE_SIDE)}>${b.traffic}</span><span class="v"></span>`
@@ -876,7 +1041,8 @@ class CityMapView {
     }).join('');
   }
   saleList(rows){
-    return `<div class="fhead sale"><span></span><span>Address</span><span>Type</span><span>m²</span><span>Price</span></div>`
+    return `<div class="fhead sale"><span></span><span>${mapText(tt("map.col.address", "Address"))}</span><span>${mapText(tt("map.col.type", "Type"))}</span><span>${
+      mapText(tt("map.unit.m2", "m²"))}</span><span>${mapText(tt("map.col.price", "Price"))}</span></div>`
       + rows.map(s => `<button type="button" class="place fr sale${s.key === this.selected ? ' on' : ''}" data-pick="${mapText(s.key)}" aria-pressed="${s.key === this.selected}"><span class="hood">${mapText(hoodTag(s.hood))}</span><span class="nm">${mapText(s.address)}<small>${this.layoutTag(s)}${mapText(hoodName(s.hood))}</small></span><span class="v t">${mapText(typeLabel(s.type))}</span><span class="v">${num(s.m2)}</span><span class="v">${mapText(askingPrice(s.price))}</span></button>`).join('');
   }
   /* The facts every address carries, finder on or off: what the place is, what
@@ -889,32 +1055,35 @@ class CityMapView {
     st.hidden = facts.hidden = false;
     st.className = `st ${b.status === 'rival' ? 'rival' : b.status === 'mine' ? 'mine' : b.status === 'vacant' ? 'vacant' : 'na'}`;
     st.innerHTML = `<i></i>${mapText(finderStatus(b))}`;
-    facts.innerHTML = `<span class="wide">Owner<b>${this.ownerOf(b)}</b></span>`
-      + `<span class="wide">Renter<b>${this.renterOf(b)}</b></span>`
-      + `<span>${mapText(`${typeLabel(b.type)} ${b.size || ''}`.trim())}<b>${num(b.m2)} m²</b></span>`
-      + `<span>Foot traffic<b>${b.traffic}</b></span>`
-      + `<span>Building capacity<b>${mapText(capText(b.cap))}</b></span>`
-      + `<span>Est. rent / day<b>${b.rent != null ? mapText(fmt(b.rent)) : '—'}</b></span>`
-      + `<span>Deposit<b>${b.deposit != null ? mapText(fmt(b.deposit)) : '—'}</b></span>`;
+    const fact = (label, value, cls = "") => `<span${cls}>${mapText(label)}<b>${value}</b></span>`;
+    facts.innerHTML = fact(tt("map.fact.owner", "Owner"), this.ownerOf(b), ' class="wide"')
+      + fact(tt("map.fact.renter", "Renter"), this.renterOf(b), ' class="wide"')
+      + fact(`${typeLabel(b.type)} ${b.size || ''}`.trim(), mapText(tt("map.fact.m2", "{n:,} m²", {n: Number(b.m2)})))
+      + fact(tt("map.fact.traffic", "Foot traffic"), b.traffic)
+      + fact(tt("map.fact.cap", "Building capacity"), mapText(capText(b.cap)))
+      + fact(tt("map.fact.rent", "Est. rent / day"), b.rent != null ? mapText(fmt(b.rent)) : '—')
+      + fact(tt("map.fact.deposit", "Deposit"), b.deposit != null ? mapText(fmt(b.deposit)) : '—');
     // Only a candidate reads as one: your own shop keeps its business numbers.
     if(!this.finderOn() || this.saleView() || b.type !== this.fs.cat || !this.candidate(b)) return;
     const f = this.fitFor(b);
     fit.hidden = false;
-    fit.innerHTML = f.fit ? `<b>${mapText(f.fit)}</b> in ${mapText(hoodName(b.hood))}`
-      : 'No demand reading for this category here.';
+    fit.innerHTML = f.fit ? tt("map.fit.in", "<b>{type}</b> in {hood}", {type: mapText(f.fit), hood: mapText(hoodName(b.hood))})
+      : mapText(tt("map.fit.none", "No demand reading for this category here."));
     const why = card.querySelector('.why');
     why.hidden = !f.fit;
     if(f.fit) why.textContent = this.whyRanked(b, f);
-    const stat = (v, lab, cls = "") => `<div class="num"><b class="mono${cls}">${v}</b><span>${lab}</span></div>`;
+    const stat = (v, lab, cls = "") => `<div class="num"><b class="mono${cls}">${v}</b><span>${mapText(lab)}</span></div>`;
     // The demand is the Growth grid's own reading, so it leads back to that
     // type's row there.
     const demand = f.slug
       ? `<a class="num mf-grow" href="#secMarket" data-grow="${mapText(f.slug)}" data-tip="${
-          mapText(`${f.fit} in every neighbourhood, on Growth › Demand`)}"><b class="mono">${f.demand}</b><span>demand ›</span></a>`
-      : stat(f.demand, 'demand');
+          mapText(tt("map.demand.tip", "{type} in every neighbourhood, on Growth › Demand", {type: f.fit}))}"><b class="mono">${f.demand}</b><span>${
+          mapText(tt("map.stat.demandgo", "demand ›"))}</span></a>`
+      : stat(f.demand, tt("map.stat.demand", "demand"));
+    const traffic = tt("map.stat.traffic", "traffic");
     card.querySelector('.nums').innerHTML = f.score != null
-      ? stat(f.score, 'score', ' sc') + stat(b.traffic, 'traffic') + demand
-      : stat(num(b.m2), 'm²') + stat(b.traffic, 'traffic');
+      ? stat(f.score, tt("map.stat.score", "score"), ' sc') + stat(b.traffic, traffic) + demand
+      : stat(num(b.m2), tt("map.unit.m2", "m²")) + stat(b.traffic, traffic);
     const grow = card.querySelector('.mf-grow');
     if(grow) grow.onclick = e => { e.preventDefault(); showGrowthRow(grow.dataset.grow); };
     if(grow && focusGrow) grow.focus({preventScroll: true});
@@ -922,33 +1091,40 @@ class CityMapView {
   /* Who the building belongs to, and who trades from it. Both name the rival
      company where the save knows its name. */
   ownerOf(b){
-    return b.owner === 'you' ? 'You'
-      : b.owner === 'rival' ? rivalTag(b.ownerRival, 'Rival company')
-      : b.owner === 'city' ? 'The city' : '—';
+    return b.owner === 'you' ? mapText(tt("map.owner.you", "You"))
+      : b.owner === 'rival' ? rivalTag(b.ownerRival, 'start')
+      : b.owner === 'city' ? mapText(tt("map.owner.city", "The city")) : '—';
   }
   renterOf(b){
     const who = b.occupant;
     // A place you rent is yours whether or not a business trades from it.
     // Your own is named by a way to its page.
-    if(b.status === 'mine') return who?.name ? `${siteLink({key: b.key, name: who.name}, who.name)} (you)` : 'You';
-    if(!who) return 'Nobody';
+    if(b.status === 'mine') return who?.name ? tt("map.renter.mine", "{name} (you)", {name: siteLink({key: b.key, name: who.name}, who.name)})
+      : mapText(tt("map.owner.you", "You"));
+    if(!who) return mapText(tt("map.renter.none", "Nobody"));
     // A hospital or a casino is occupied while still being unavailable, so the
     // occupant is named whatever the status says about taking the place.
-    const name = mapText(who.name || 'unnamed'), kind = mapText(who.type || 'business');
-    return b.status === 'rival' ? `${name} · ${kind} (${rivalTag(b.occupantRival, 'rival company')})`
-      : b.status === 'service' ? `${name} · ${kind} (game service)`
+    const name = mapText(who.name || mapUnnamed()), kind = mapText(who.type || mapBusiness());
+    return b.status === 'rival' ? tt("map.renter.rival", "{name} · {type} ({company})", {name, type: kind, company: rivalTag(b.occupantRival, 'inline')})
+      : b.status === 'service' ? tt("map.renter.service", "{name} · {type} (game service)", {name, type: kind})
       : `${name} · ${kind}`;
   }
   /* Why this row sits where it does, in sentences: what the neighbourhood wants
      most of this category, what else it wants, and the arithmetic of the score. */
   whyRanked(b, f){
-    const shops = n => plural(n, `rival ${f.fit}`, `rival ${f.fit}s`);
-    const mine = f.mine ? ` and ${f.mine} of your own` : '';
+    // The rivals, and the player's own shops of the type where there are any.
+    const rivals = f.mine
+      ? tt("map.why.rivals.mine", {one: "{n} rival {type} and {m} of your own", other: "{n} rival {type}s and {m} of your own"}, {n: f.rivals, type: f.fit, m: f.mine})
+      : tt("map.why.rivals", {one: "{n} rival {type}", other: "{n} rival {type}s"}, {n: f.rivals, type: f.fit});
+    const hood = hoodName(b.hood), kind = mapKindWord(this.fs.cat);
     const first = this.fs.type
-      ? `${f.fit} demand in ${hoodName(b.hood)} is ${f.demand} (${f.rank} of ${plural(f.list.length, `${this.fs.cat} type`)} here), with ${shops(f.rivals)}${mine} in the neighbourhood.`
-      : `${f.fit} is the strongest ${this.fs.cat} demand in ${hoodName(b.hood)} at ${f.demand}, with ${shops(f.rivals)}${mine} there${
-          f.list.length > 1 ? `; next: ${f.list.slice(1, 3).map(d => `${d.type} ${d.demand}`).join(', ')}` : ''}.`;
-    return `${first} Score ${f.score} = traffic ${b.traffic} × demand ${f.demand} ÷ 100.`;
+      ? tt("map.why.type", "{type} demand in {hood} is {d} ({rank}), with {rivals} in the neighbourhood.", {type: f.fit, hood, d: f.demand, rivals,
+          rank: tt("map.why.rank", {one: "{r} of {n} {kind} type here", other: "{r} of {n} {kind} types here"}, {r: f.rank, n: f.list.length, kind})})
+      : f.list.length > 1
+        ? tt("map.why.best.next", "{type} is the strongest {kind} demand in {hood} at {d}, with {rivals} there; next: {next}.", {type: f.fit, kind, hood, d: f.demand, rivals,
+            next: f.list.slice(1, 3).map(d => `${d.type} ${d.demand}`).join(', ')})
+        : tt("map.why.best", "{type} is the strongest {kind} demand in {hood} at {d}, with {rivals} there.", {type: f.fit, kind, hood, d: f.demand, rivals});
+    return `${first} ${tt("map.why.score", "Score {s} = traffic {t} × demand {d} ÷ 100.", {s: f.score, t: b.traffic, d: f.demand})}`;
   }
   finderOn(){ return !!(this.panel && premises() && this.fs.on); }
   /* Chips, select and inputs read back from the state, so a preset from Today
@@ -966,16 +1142,16 @@ class CityMapView {
     const mark = (el, chosen) => { if(!el) return; el.classList.toggle('on', !!chosen); el.setAttribute('aria-pressed', String(!!chosen)); };
     const tog = this.root.querySelector('[data-f="tog"]');
     mark(tog, on);
-    tog.dataset.tip = on ? "Find a location is on: the list ranks premises you could take. Click to go back to the plain map."
-      : "Find a location: rank premises you could take by the neighbourhood's demand and the building's foot traffic. Click to switch it on.";
+    tog.dataset.tip = on ? tt("map.finder.tip.on", "Find a location is on: the list ranks premises you could take. Click to go back to the plain map.")
+      : tt("map.finder.tip.off", "Find a location: rank premises you could take by the neighbourhood's demand and the building's foot traffic. Click to switch it on.");
     // The rent check comes from the payload, so it is written on every update.
-    this.root.querySelector('.filters .why').dataset.tip = `${FINDER_WHY} ${rentNote()}`;
+    this.root.querySelector('.filters .why').dataset.tip = `${finderWhy()} ${rentNote()}`;
     this.root.querySelectorAll('.fchip.cat').forEach(chip => mark(chip, chip.dataset.cat === this.fs.cat));
     const select = this.root.querySelector('[data-f="type"]');
     const types = this.catTypes(this.fs.cat);
     const options = [...types].sort((a, b) => mapCompare(a[1], b[1]));
     if(this.fs.type && !types.has(this.fs.type)) this.fs.type = "";
-    select.innerHTML = `<option value="">Any type</option>` + options.map(([slug, label]) =>
+    select.innerHTML = `<option value="">${mapText(MAP_WORDS.anyType)}</option>` + options.map(([slug, label]) =>
       `<option value="${attr(slug)}"${slug === this.fs.type ? ' selected' : ''}>${mapText(label)}</option>`).join('');
     select.disabled = !options.length;
     select.closest('.fsel').classList.toggle('on', !!this.fs.type);
@@ -1259,12 +1435,14 @@ class CityMapView {
     const code = this.planOf(b);
     box.hidden = !code;
     if(!code){ box.innerHTML = ''; box.dataset.sig = ''; return; }
-    if(box.dataset.sig === code) return;
-    box.dataset.sig = code;
+    // Drawn again for another plan, or in another language.
+    if(box.dataset.sig === code && box.dataset.lang === ttLang) return;
+    box.dataset.sig = code; box.dataset.lang = ttLang;
     const plan = this.plans.plans[code], wh = b.type === 'warehouse', n = wh ? plan.bays : plan.doors;
-    const what = wh ? (n === 1 ? 'loading bay' : 'loading bays') : (n === 1 ? 'entrance' : 'entrances');
-    box.innerHTML = `<div class="lp-planhead"><span class="lp-lab" tabindex="0" data-tip="${attr(FLOOR_PLAN_TIP)}">Layout</span><b>${mapText(code)}</b><span class="lp-count">${n} ${what}</span><span class="lp-scalehost"></span></div>`
-      + `<div class="lp-planbox">${floorPlanSvg(plan, 10, `Floor plan ${code}`)}</div>`;
+    const count = wh ? tt("map.plan.bays", {one: "{n} loading bay", other: "{n} loading bays"}, {n})
+      : tt("map.plan.doors", {one: "{n} entrance", other: "{n} entrances"}, {n});
+    box.innerHTML = `<div class="lp-planhead"><span class="lp-lab" tabindex="0" data-tip="${attr(floorPlanTip())}">${mapText(MAP_WORDS.rowLayout)}</span><b>${mapText(code)}</b><span class="lp-count">${mapText(count)}</span><span class="lp-scalehost"></span></div>`
+      + `<div class="lp-planbox">${floorPlanSvg(plan, 10, tt("map.plan.aria", "Floor plan {code}", {code}))}</div>`;
   }
   /* The plan takes the card's width and what height the stage leaves it, up to
      160 px; the scale bar follows the size it is drawn at. A card that still
@@ -1353,8 +1531,8 @@ class CityMapView {
       const all = this.matches;
       const some = this.showAll ? all : all.slice(0, 80);
       this.list.innerHTML = (this.saleView() ? this.saleList(some) : this.finderList(some))
-        + (all.length > some.length ? `<button type="button" class="more" data-more aria-label="Show the remaining places">+${all.length - some.length}</button>` : '')
-        + (all.length ? '' : '<div class="empty">Nothing matches.</div>');
+        + (all.length > some.length ? `<button type="button" class="more" data-more aria-label="${attr(tt("map.list.more", "Show the remaining places"))}">+${all.length - some.length}</button>` : '')
+        + (all.length ? '' : `<div class="empty">${mapText(tt("map.list.empty", "Nothing matches."))}</div>`);
       if(focusedKey) [...this.list.children].find(b=>b.dataset.pick===focusedKey)?.focus({preventScroll:true});
       this.list.scrollTop=listScroll;
     }
@@ -1371,22 +1549,25 @@ class CityMapView {
     // Filled now, shown by showCard() once the camera has settled: until then
     // it stays out of the tab order and out of the live region.
     const trading = b && b.status !== 'vacant';
-    const title = owned && (!b || b.status === 'vacant') ? owned.address : b?.name || home?.address || loc?.address || owned?.address || 'Location unavailable';
+    const title = owned && (!b || b.status === 'vacant') ? owned.address : b?.name || home?.address || loc?.address || owned?.address || tt("map.card.unavailable", "Location unavailable");
     /* A business's or a home's name is a way to its own page, as it is
        everywhere else on the board. */
     const siteAddr = (b || home) && typeof siteHref === 'function' ? siteHref(key) : '';
     const shown = mapText(title.replace(/^\[\w+\]\s*/, ''));
-    card.querySelector('h3').innerHTML = siteAddr ? `<a class="ss-sl" href="${attr(siteAddr)}" data-tip="Open its page">${shown}</a>` : shown;
-    const sub = b ? `${mapText(b.address)} · ${mapText(b.type)}` : owned ? `Owned building${owned.purchaseDay != null ? ` · bought day ${mapText(owned.purchaseDay)}` : ''}` : home ? `Home${loc?.hood ? ` · ${mapText(hoodName(loc.hood))}` : ''}`
+    card.querySelector('h3').innerHTML = siteAddr ? `<a class="ss-sl" href="${attr(siteAddr)}" data-tip="${attr(tt("map.site.open", "Open its page"))}">${shown}</a>` : shown;
+    const sub = b ? `${mapText(b.address)} · ${mapText(b.type)}`
+      : owned ? mapText(owned.purchaseDay != null ? tt("map.card.owned.day", "Owned building · bought day {d}", {d: owned.purchaseDay}) : tt("map.card.owned", "Owned building"))
+      : home ? mapText(tt("map.card.home", "Home")) + (loc?.hood ? ` · ${mapText(hoodName(loc.hood))}` : '')
       // The title is already the address; a bare location adds its neighbourhood.
       : mapText((loc?.hood && hoodName(loc.hood)) || loc?.address || '');
-    card.querySelector('.sub').innerHTML = `<span class="hood">${mapText(hoodCode(b, loc?.hood || b?.neighbourhood))}</span><span>${sub}${!loc ? ' · no map position' : ''}</span>`;
-    const stat = (v, lab) => `<div class="num"><b class="mono">${v}</b><span>${lab}</span></div>`;
+    card.querySelector('.sub').innerHTML = `<span class="hood">${mapText(hoodCode(b, loc?.hood || b?.neighbourhood))}</span><span>${sub}${!loc ? ` · ${mapText(tt("map.card.nopos", "no map position"))}` : ''}</span>`;
+    const stat = (v, lab) => `<div class="num"><b class="mono">${v}</b><span>${mapText(lab)}</span></div>`;
+    const perDay = tt("map.stat.rent", "rent / day");
     card.querySelector('.nums').innerHTML = trading
-      ? stat(`<span class="${(b.profit || 0) >= 0 ? 'pos' : 'neg'}">${mapText(fmt(b.profit || 0))}</span>`, 'yesterday') + stat(mapText(fmt(b.rent || 0)), 'rent / day') + stat(mapText(b.staff ?? '—'), 'staff')
-      : b ? stat(mapText(fmt(b.rent || 0)), 'rent / day') + stat('—', 'not trading')
-      : owned ? stat(owned.purchasePrice != null ? mapText(money(owned.purchasePrice)) : '—', 'paid')
-      : home ? stat(mapText(fmt(home.rent || 0)), 'rent / day') : '';
+      ? stat(`<span class="${(b.profit || 0) >= 0 ? 'pos' : 'neg'}">${mapText(fmt(b.profit || 0))}</span>`, tt("map.stat.yesterday", "yesterday")) + stat(mapText(fmt(b.rent || 0)), perDay) + stat(mapText(b.staff ?? '—'), tt("map.stat.staff", "staff"))
+      : b ? stat(mapText(fmt(b.rent || 0)), perDay) + stat('—', tt("map.stat.closed", "not trading"))
+      : owned ? stat(owned.purchasePrice != null ? mapText(money(owned.purchasePrice)) : '—', tt("map.stat.paid", "paid"))
+      : home ? stat(mapText(fmt(home.rent || 0)), perDay) : '';
     const findings = this.findings.get(key) || [];
     const f = card.querySelector('.finds2');
     f.innerHTML = findings.map(a => `<div class="f ${mapKind([a])}"><i></i><span>${mapText(splitFinding(a).what)}<span class="fa">${findingAmount(a)}</span></span></div>`).join('');
@@ -1532,7 +1713,7 @@ function openLocationMap(key, trigger){
        carries a map pin, so a home key reaches this dialog too. */
     const address = b?.address || (D?.ownedBuildings || []).find(o => o.key === key)?.address
       || (D?.homes || []).find(h => h.key === key)?.address || '';
-    title.textContent = b ? `${b.name.replace(/^\[\w+\]\s*/, '')} · ${address}` : address || 'Location map';
+    title.textContent = b ? `${b.name.replace(/^\[\w+\]\s*/, '')} · ${address}` : address || tt("map.dialog.title", "Location map");
   }
   if(!cityMapOverlay) cityMapOverlay=new CityMapView($('cityMapOverlay'), {panel:false});
   cityMapOverlay.select(key,true,true);

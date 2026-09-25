@@ -56,6 +56,7 @@ def role(skill, label, station, noun, rate, stations):
         "skill": skill,
         "label": label,
         "station": station,
+        "stationKey": "ba:itemname_" + station.lower().replace(" ", ""),
         "noun": noun,
         "one": station.lower(),
         "many": station.lower() + "s",

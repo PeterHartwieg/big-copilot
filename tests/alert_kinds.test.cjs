@@ -9,6 +9,9 @@ const vm = require('node:vm');
 const path = require('node:path');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'ba_dashboard.py'), 'utf8');
+/* The board's words go through tt() (web/i18n.js), which every slice that
+   writes them needs beside it. */
+const I18N = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8');
 /* The comment above the function is the slice's opening anchor: rewording it is
    a change to this test as well. */
 const START = '/* Where a finding shows is decided twice over';
@@ -17,6 +20,7 @@ const DRAW = source.slice(
   source.indexOf('function drawAlerts()'), source.indexOf('/* A round step for the y axis'));
 
 const context = vm.createContext({});
+vm.runInContext(I18N, context);
 vm.runInContext(PARTITION, context);
 const split = (alerts, minorRows, prefs) =>
   vm.runInContext('partitionFindings', context)(alerts, minorRows, prefs);
@@ -111,7 +115,7 @@ test('the switched-off line lists its kinds in the tune panel order', () => {
 
 test('the count lines say which is which', () => {
   assert.match(DRAW, /partitionFindings\(/);
-  assert.match(DRAW, /below the \$\{fmt\(gate\)\}\/day line/);
+  assert.match(DRAW, /below the \{gate:\$\}\/day line/);
   // Overstaffed hours is off by default, so the line cannot say "you".
   assert.match(DRAW, /in kinds switched off: /);
   assert.doesNotMatch(DRAW, /you switched off/);
@@ -123,6 +127,9 @@ test('the count lines say which is which', () => {
 const KINDS = source.slice(source.indexOf('const ALERT_GROUPS = ['),
   source.indexOf('/* The control that opens the panel'));
 const kinds = vm.createContext({});
+/* web/i18n.js runs ahead of the board script on the page: the kinds' labels
+   are read through its tt(). */
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8'), kinds);
 vm.runInContext(KINDS, kinds);
 const run = expr => JSON.parse(vm.runInContext(`JSON.stringify(${expr})`, kinds));
 
@@ -211,7 +218,8 @@ test('a cut at a comma leaves the variant bracket whole in the detail', () => {
 /* The renames of R12 change what a kind is called, never its id: the id is
    what a stored switch is keyed by, so a player's choices carry over. */
 test('idle stock has one name, and a renamed kind keeps its id', () => {
-  const kind = id => (source.match(new RegExp(`\\{id:"${id}",\\s*label:"([^"]+)"`)) || [])[1];
+  // The label's English, beside its key: get label(){ return tt("nav.kind.dead.label", "Idle stock"); }
+  const kind = id => (source.match(new RegExp(`\\{id:"${id}",\\s*get label\\(\\)\\{ return tt\\("[^"]+", "([^"]+)"`)) || [])[1];
   // A depot's idle group on Supply (R13) and the finding kind share one name.
   const group = (source.match(/slug: null, item: "([^"]+)", fact: kids\[0\]\.fact/) || [])[1];
   assert.equal(kind('dead'), 'Idle stock');
@@ -262,9 +270,10 @@ test('Wholesale delivery too low is a kind of its own, landing on the shelves or
 });
 
 test('a wholesale finding shows the week used, or the units left, in the amount column', () => {
-  const at = source.indexOf('const amtHtml =');
+  const at = source.indexOf('/* The figure on the right');
   const ctx = vm.createContext({money: String, fmt: String});
-  vm.runInContext(source.slice(at, source.indexOf('/* A finding whose kind is switched off', at)), ctx);
+  vm.runInContext(I18N, ctx);
+  vm.runInContext(source.slice(at,source.indexOf('/* A finding whose kind is switched off', at)), ctx);
   const amount = a => vm.runInContext('findingAmount', ctx)(a);
   assert.equal(amount({group: 'wholesale', text: "Soda's wholesale delivery brings 600 a week against the 700 it sells"}),
     '700<small>/week used</small>');

@@ -4,6 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
+// The page's tt(), which app.js writes every word through.
+const i18n = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8');
 const help = source.slice(source.indexOf('  function savePlatform('), source.indexOf('  const stored ='));
 
 function setup(nav, remembered = '', missing = false, blockedStorage = false) {
@@ -19,6 +21,7 @@ function setup(nav, remembered = '', missing = false, blockedStorage = false) {
       if (blockedStorage) throw new Error('Storage blocked');
       saved[key] = value;
     }}});
+  vm.runInContext(i18n, context);
   vm.runInContext(help + '\nwireSaveLocation();', context);
   return {nodes, saved};
 }
