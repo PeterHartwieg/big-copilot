@@ -32,6 +32,8 @@ SUPPLY = {"graph": {"links": []}, "shops": [], "idle": [], "imports": []}
 # with f.loss and f.staff.none as its worked example (tested on their own).
 CONVERTED = {
     # "f": [("es3", "alerts", "text"), ("es3", "alerts", "detail"), ...],
+    # Today writes its own words in the page (tt()); Python sends it numbers only.
+    "today": [],
 }
 
 
