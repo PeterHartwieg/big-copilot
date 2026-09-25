@@ -438,7 +438,7 @@ function wikiPins(){
       if(!key || !assets.byKey || !assets.byKey.has(key)) return;
       const building = assets.byKey.get(key);
       mark.insertAdjacentHTML("beforeend", mapButton(key, building.address || mark.dataset.addr));
-      if(building.hood) mark.dataset.tip = `${building.address} · ${building.hood}`;
+      if(building.hood) mark.dataset.tip = `${building.address} · ${hoodName(building.hood)}`;
     });
     wireTips();
   }).catch(() => { /* No map data, no pins. The addresses still read. */ });
@@ -703,12 +703,14 @@ function wikiStamp(){
 /* A unit price is cents, and the board's money rounds to whole dollars, so a
    small one is written out rather than rounded into a lie. */
 const wikiMoney = n => Number.isFinite(n) && n > 0 ? (n < 100 ? `$${n.toFixed(2)}` : fmt(n)) : null;
-function wikiOwn(title){
-  if(!hasData()) return null;
-  const name = String(title || "").trim().toLowerCase();
-  const product = (D.products || []).find(p => String(p.item).trim().toLowerCase() === name);
-  const sites = (D.businesses || []).filter(b => String(b.type || "").trim().toLowerCase() === name);
-  const row = ((D.market || {}).rows || []).find(r => String(r.item).trim().toLowerCase() === name);
+/* A page is matched to the save by the game key it documents (an item or a
+   business type), never by its title: the words may differ, the key does not. */
+function wikiOwn(page){
+  const key = page && page.key;
+  if(!hasData() || !key) return null;
+  const product = (D.products || []).find(p => p.slug === key);
+  const sites = (D.businesses || []).filter(b => b.typeSlug === key);
+  const row = ((D.market || {}).rows || []).find(r => r.slug === key);
   let best = null;
   if(row) (row.cells || []).forEach(c => { if(c && (!best || c.demand > best.demand)) best = c; });
   return (product || sites.length || best) ? {product, sites, best} : null;
@@ -719,10 +721,10 @@ function wikiSlot(label, value, tip){
     + `<span class="wk-v${value === null ? " none" : ""}">${value === null ? "—" : wikiText(value)}</span></div>`;
 }
 function wikiYours(page, extra){
-  const own = wikiOwn(page.title);
+  const own = wikiOwn(page);
   const slots = [];
   if(own && own.best)
-    slots.push(wikiSlot("Demand", `${own.best.demand} in ${own.best.hood}`,
+    slots.push(wikiSlot("Demand", `${own.best.demand} in ${hoodName(own.best.hood)}`,
       "The strongest neighbourhood for this product in your save's own demand snapshot, 0 to 100."));
   if(own && own.product){
     slots.push(wikiSlot("You sell it", `${own.product.stores} shop${own.product.stores === 1 ? "" : "s"}`,
@@ -1520,7 +1522,7 @@ function wikiGoodsCard(p, g){
       const sup = wikiSup(k, g);
       /* The address is the point of the pill: 4 Pier and 9 Pier are different
          buildings, so the number stays on. */
-      return sup ? wikiPill(sup.name, sup.street, "", `${sup.kind}. ${sup.street}, ${sup.hood}.`) : "";
+      return sup ? wikiPill(sup.name, sup.street, "", `${sup.kind}. ${sup.street}, ${hoodName(sup.hood)}.`) : "";
     }),
     wikiRecipeKeys(p).length ? wikiPill("Your factory", "", "", "Made in a factory; the recipe is below.") : "",
   ].join("");
@@ -1779,9 +1781,9 @@ function wikiGuidePlaces(g){
        own invention: The Hamptons is HA here as it is everywhere else. */
     const code = (typeof HOOD_TAGS === "object" && HOOD_TAGS[sup.hood]) || "";
     return `<div class="wk-place">
-      ${code ? `<span class="hood" data-tip="${attr(sup.hood)}">${wikiText(code)}</span>` : `<span></span>`}
+      ${code ? `<span class="hood" data-tip="${attr(hoodName(sup.hood))}">${wikiText(code)}</span>` : `<span></span>`}
       <span class="wk-nm">${wikiText(sup.name)}${sup.flag ? `<i class="wk-flag" data-tip="${attr(sup.flag)}"></i>` : ""}
-        <small class="wk-addr" data-addr="${attr(sup.street)}"${mapId} data-tip="${attr(`${sup.hood}${facts ? ` · ${facts}` : ""}`)}">${wikiText(sup.street)}</small></span>
+        <small class="wk-addr" data-addr="${attr(sup.street)}"${mapId} data-tip="${attr(`${sup.hood ? hoodName(sup.hood) : ""}${facts ? ` · ${facts}` : ""}`)}">${wikiText(sup.street)}</small></span>
       <span class="wk-role">${wikiText([...roles[key]].join(" · "))}</span></div>`;
   }).join("");
   if(!rows) return "";
@@ -1843,7 +1845,10 @@ function wikiGuidePrices(g, offers){
   if(!hasData()) return `<section class="sec" id="${WIKI_SECTIONS.prices}">${heading}
     <p class="quiet">Open a save to see your configured prices and neighbourhood market prices.</p></section>`;
   const mine = (D.businesses || []).filter(b => b.typeSlug === g.BUSINESS.nameSrc && b.status !== "vacant");
-  const hoodOf = b => b.neighbourhood || "Unknown neighbourhood";
+  /* By the neighbourhood's key; a shop with none is grouped under a word. */
+  const UNKNOWN = "Unknown neighbourhood";
+  const hoodOf = b => b.neighbourhood || UNKNOWN;
+  const hoodWords = h => h === UNKNOWN ? h : hoodName(h);
   const rows = new Map(((D.market || {}).rows || []).map(r => [r.slug, r]));
   const hoods = [...new Set([
     ...mine.map(hoodOf),
@@ -1865,9 +1870,9 @@ function wikiGuidePrices(g, offers){
           : wikiText(market)}</td></tr>`;
     }).join("");
     return `<details class="wk-prices"${index === 0 ? " open" : ""}>
-      <summary>${wikiText(hood)}</summary>
-      <div class="wk-price-scroll" role="region" aria-label="${attr(hood + " prices")}" tabindex="0">
-      <table aria-label="${attr(hood + " prices per unit or service")}">
+      <summary>${wikiText(hoodWords(hood))}</summary>
+      <div class="wk-price-scroll" role="region" aria-label="${attr(hoodWords(hood) + " prices")}" tabindex="0">
+      <table aria-label="${attr(hoodWords(hood) + " prices per unit or service")}">
         <thead><tr><th scope="col">Product or service</th><th scope="col">Your configured price</th>
         <th scope="col">Lowest market price</th></tr></thead><tbody>${lines}</tbody></table></div></details>`;
   }).join("");
@@ -1884,7 +1889,7 @@ function wikiGuideOwn(g, goods){
   const slots = [];
   if(mine.length) slots.push(wikiSlot("Your shops", `${mine.length}`,
     `Businesses of this type in your company: ${mine.slice(0, 4).map(x => x.name).join(", ")}.`));
-  const sold = (D.products || []).filter(p => goods.some(x => x.name === p.item));
+  const sold = (D.products || []).filter(p => goods.some(x => x.slug === p.slug));
   if(sold.length && goods.length) slots.push(wikiSlot("Its range, sold", `${sold.length} of ${goods.length}`,
     `${sold.map(p => p.item).join(", ")} moved in your shops yesterday.`));
   return slots;

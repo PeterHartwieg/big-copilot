@@ -29,11 +29,11 @@ async function grid() {
   await page.setContent(html, {waitUntil: 'load'});
   await page.evaluate(() => {
     document.body.classList.add('has-board');
-    const hoods = ['Hell\'s Kitchen', 'Industry City', 'Midtown'];
+    const hoods = ['ba:neighborhood_hellskitchen', 'ba:neighborhood_industrycity', 'ba:neighborhood_midtown'];
     const shopCell = (hood, demand, count, providers) => ({hood, demand, count, providers, sell: 0, here: false});
     const fee = (hood, demand, providers, here = false) => ({hood, demand, providers, hype: null, delta: null, here});
     D = {meta: {character: 'market-fixture'}, market: {
-      hoods, trendDays: 0, noOffices: ['Industry City'], rows: [
+      hoods, trendDays: 0, noOffices: ['ba:neighborhood_industrycity'], rows: [
         {item: 'Lawyer Fee (Hourly)', slug: 'ba:itemname_hourlylawyerfee', sell: true, make: false, office: true,
           cells: [{hood: hoods[0], demand: 33, providers: 2, sell: true}, null, {hood: hoods[2], demand: 66, providers: 1}]}],
       // Python ranks rows by their best neighbourhood; the fixture is in that order.
@@ -111,32 +111,59 @@ test('sorting by a neighbourhood orders each band by demand, the emptier market 
   const page = await grid();
   try {
     // Midtown: Cinema and Supermarket both read 64; the supermarket has one rival, the cinema three.
-    await page.locator('#market .h[data-hood="Midtown"]').click();
+    await page.locator('#market .h[data-hood="ba:neighborhood_midtown"]').click();
     assert.deepEqual(await rowNames(page), ['Supermarket', 'Cinema', 'Law Firm', 'Travel Agency']);
     assert.match(await page.locator('#marketNote').innerText(), /Sorted by demand in Midtown, highest first/);
     // A second click reverses the whole order, ties included: the least
     // inviting cell (equal demand, more sellers) leads.
-    await page.locator('#market .h[data-hood="Midtown"]').click();
+    await page.locator('#market .h[data-hood="ba:neighborhood_midtown"]').click();
     assert.deepEqual(await rowNames(page), ['Cinema', 'Supermarket', 'Travel Agency', 'Law Firm']);
-    await page.locator('#market .h[data-hood="Hell\'s Kitchen"]').click();
+    await page.locator('#market .h[data-hood="ba:neighborhood_hellskitchen"]').click();
     assert.deepEqual(await rowNames(page), ['Supermarket', 'Cinema', 'Travel Agency', 'Law Firm']);
   } finally { await page.close(); }
 });
 
-test('an office cell pins its story without offering Plan a chain, in every view', async () => {
+test('a shop row carries its own way into Plan a chain; an office row has none, in every view', async () => {
   const page = await grid();
   try {
-    await page.locator('#market .cell[data-office][data-r="2"][data-c="0"]').click();
-    const detail = await page.locator('#cellDetail').innerText();
-    assert.match(detail, /Travel Agency in Hell's Kitchen/);
-    assert.doesNotMatch(detail, /Plan a chain/);
-    await cell(page, 1, 0).click();
-    assert.match(await page.locator('#cellDetail').innerText(), /Plan a chain/);
-    // The same fee in a product view is still an office's, so still nothing to plan.
+    await page.evaluate(() => {
+      D.plan = {catalogue: {
+        'ba:businesstype_cinema': {type: 'Cinema', products: ['ba:itemname_popcorn']},
+        'ba:businesstype_supermarket': {type: 'Supermarket', products: ['ba:itemname_apple', 'ba:itemname_bread']}}};
+      D.market.rows.push({item: 'Apple', slug: 'ba:itemname_apple', sell: true, make: false, office: false,
+        cells: [{hood: 'ba:neighborhood_midtown', demand: 50, providers: 1, sell: true}, null, null]});
+      drawMarket();
+      window.drawPlan = () => { window.planned = planType; };   // the plan page itself is not under test
+    });
+    const plans = () => page.$$eval('#market .r', rs => rs.map(r => r.querySelector('.mk-plan')?.dataset.plan || null));
+    assert.deepEqual(await plans(), ['ba:businesstype_cinema', 'ba:businesstype_supermarket', null, null]);
+    assert.equal(await page.locator('#market .r[data-r="0"] small').innerText(), '1 product · Setup guide › · Plan a chain ›');
+    // Nothing is drawn under the grid.
+    assert.equal(await page.locator('#cellDetail').count(), 0);
+    await page.locator('#market .r[data-r="1"] .mk-plan').click();
+    assert.equal(await page.evaluate(() => window.planned), 'ba:businesstype_supermarket');
+    assert.equal(await page.evaluate(() => planType), 'ba:businesstype_supermarket');
+    // A second click on the type already open keeps the machines the player stepped.
+    await page.evaluate(() => { planCounts = {'ba:itemname_apple': 4}; showPage('growth'); showSub('growth', 'market'); });
+    await page.locator('#market .r[data-r="1"] .mk-plan').click();
+    assert.deepEqual(await page.evaluate(() => planCounts), {'ba:itemname_apple': 4});
+    await page.evaluate(() => showSub('growth', 'market'));
+    await page.locator('#market .r[data-r="0"] .mk-plan').click();
+    assert.deepEqual(await page.evaluate(() => [planType, planCounts]), ['ba:businesstype_cinema', {}]);
+    // A product row plans the type that sells it; the office fee still plans nothing.
     await page.evaluate(() => { marketView = 'mine'; drawMarket(); });
-    await cell(page, 0, 0).click();
-    assert.match(await page.locator('#cellDetail').innerText(), /Lawyer Fee \(Hourly\) in Hell's Kitchen/);
-    assert.doesNotMatch(await page.locator('#cellDetail').innerText(), /Plan a chain/);
+    assert.deepEqual(await plans(), [null, 'ba:businesstype_supermarket']);
+    assert.equal(await page.locator('#market .r[data-r="0"] small').innerText(), 'you sell it');
+    assert.equal(await page.locator('#market .r[data-r="1"] small').innerText(), 'you sell it · Plan a chain ›');
+  } finally { await page.close(); }
+});
+
+test('without the premises payload a cell is no button and a click stays on the grid', async () => {
+  const page = await grid();
+  try {
+    assert.equal(await page.locator('#market .cell[role=button]').count(), 0);
+    await cell(page, 1, 0).click();
+    assert.equal(await page.locator('#secMarket').isVisible(), true);
   } finally { await page.close(); }
 });
 

@@ -33,7 +33,7 @@ async function site(demands, quit = 0) {
       meta: {character: 'demand-fixture', day: 29}, rhythm: null, supply: {shops: []}, hours: [], hourFindings: [],
       businesses: [{
         key, status: 'retail', name: 'HART. Gifts', code: 'HK', type: 'Gift Shop', address: '10 Second Avenue',
-        neighbourhood: "Hell's Kitchen", opened: 3, revenue: 900, customers: 30, basket: 30, profit: 200, margin: 22.2,
+        neighbourhood: 'ba:neighborhood_hellskitchen', opened: 3, revenue: 900, customers: 30, basket: 30, profit: 200, margin: 22.2,
         cogs: 0, wages: 300, rent: 100, marketing: 0, theft: 0, licensing: 0, staff: 2, staffCost: 300,
         crew: [{role: 'Customer Service', count: 2, daily: 300, absent: 0}], people: [], lines: [],
         series: [], rhythm: null, peakDay: null, swing: 0, staffDemands: demands, quitWarnings: quit,

@@ -188,8 +188,8 @@ test('at 390 px the Growth grid narrows its names, never its cells or the page',
     await page.emulateMedia({reducedMotion: 'reduce'});
     const draw = () => page.evaluate(() => {
       document.body.classList.add('has-board');
-      const hoods = ['Garment District', "Hell's Kitchen", 'Industry City', 'Lower Manhattan',
-                     'Midtown', 'Murray Hill', 'The Hamptons'];
+      const hoods = ['garmentdistrict', 'hellskitchen', 'industrycity', 'lowermanhattan',
+                     'midtown', 'murrayhill', 'thehamptons'].map(id => `ba:neighborhood_${id}`);
       // "100" and ten sellers in every cell: the widest a cell's contents get.
       const cells = () => hoods.map(hood => ({hood, demand: 100, count: 1, providers: 10, sell: 0, here: false}));
       D = {meta: {character: 'growth-fixture', day: 30}, market: {
@@ -216,7 +216,7 @@ test('at 390 px the Growth grid narrows its names, never its cells or the page',
           return d.left >= o.left && d.right <= o.right; }),
         heads: heads.map(h => h.innerText.trim()),
         tips: heads.map(h => h.dataset.tip.split(':')[0]),
-        short: shortHood(hoods[0]),
+        short: shortHood(hoodName(hoods[0])),
         nameWhole: name.scrollHeight <= name.clientHeight + 1 && name.textContent === 'Fruit And Vegetable Store',
       };
     });
