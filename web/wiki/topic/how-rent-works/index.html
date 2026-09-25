@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How rent works · Big Ambitions wiki</title>
+<meta name="description" content="Rent on a commercial building is not a number the game picks at random.">
+<link rel="canonical" href="https://bigcopilot.com/wiki/topic/how-rent-works/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/fonts/fonts.css">
+<style>
+:root{--ground:#0d100f;--panel:#141816;--ink:#e9ece6;--ink-2:#9aa39d;--rule:#262c28;--accent:#43c07a;--on-accent:#0d100f;color-scheme:dark}
+@media (prefers-color-scheme:light){:root{--ground:#eef0ea;--panel:#f7f8f4;--ink:#15181a;--ink-2:#5b6469;--rule:#d2d6cd;--accent:#00703a;--on-accent:#fff;color-scheme:light}}
+body{margin:0;background:var(--ground);color:var(--ink);font:16px/1.6 Archivo,"Helvetica Neue",Arial,sans-serif}
+.wp-top,main,.wp-foot{max-width:720px;margin:0 auto;padding:0 16px}
+.wp-top{display:flex;gap:16px;align-items:center;justify-content:space-between;padding-top:16px;padding-bottom:16px;border-bottom:1px solid var(--rule)}
+.wp-brand{font-weight:600;color:var(--ink);text-decoration:none}
+main{padding-top:24px;padding-bottom:40px}
+h1{font-size:30px;line-height:1.2;margin:4px 0 12px}
+h2{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2);margin:32px 0 8px}
+h3{font-size:16px;margin:20px 0 4px}
+p,ul{margin:0 0 12px}
+a{color:var(--accent);overflow-wrap:anywhere}
+.wp-crumb{font-size:14px;color:var(--ink-2)}
+.wp-crumb a{color:var(--ink-2)}
+.wp-lede{font-size:18px;color:var(--ink-2)}
+.wp-cta{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;margin:16px 0 28px}
+.wp-btn{display:inline-block;padding:10px 16px;border-radius:8px;background:var(--accent);color:var(--on-accent);font-weight:600;text-decoration:none}
+.wp-list{columns:2 240px;column-gap:32px;padding-left:18px}
+.wp-list li{break-inside:avoid}
+.wp-src{font-size:14px;color:var(--ink-2);margin-top:28px;padding-top:12px;border-top:1px solid var(--rule)}
+.wp-tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;vertical-align:top;padding:6px 10px 6px 0;border-bottom:1px solid var(--rule)}
+thead th{color:var(--ink-2);font-weight:500}
+.wp-foot{display:flex;flex-wrap:wrap;gap:8px 20px;padding-top:16px;padding-bottom:32px;border-top:1px solid var(--rule);font-size:14px}
+.wp-foot a{color:var(--ink-2)}
+</style>
+</head>
+<body>
+<header class="wp-top"><a class="wp-brand" href="/">Big Copilot</a><a href="/wiki/">Big Ambitions wiki</a></header>
+<main>
+<nav class="wp-crumb" aria-label="Breadcrumb"><a href="/wiki/">Wiki</a> › Big Copilot topics</nav>
+<h1>How rent works</h1>
+<p class="wp-cta"><a class="wp-btn" href="/">Open your save in Big Copilot</a><a href="/#wiki/topic/how-rent-works">Open in the app</a></p>
+<p class="wp-lede">Rent on a commercial building is not a number the game picks at random. It follows the floor area, the foot traffic at the door, and the district the building stands in.</p>
+<h2>What a listing charges</h2>
+<p>A rental listing states a rent per day and a deposit. The rent is billed daily for as long as you hold the lease. The deposit is paid once, when you sign.</p>
+<p>The deposit is the larger number, and it is due the day you sign. For a shop or an office it comes to about two months of rent; for a warehouse, about three. Big Copilot estimates it from the rent and shows it in the location finder as <b>Upfront</b>, so a cheap-looking building that you cannot afford to open is visible before you take it.</p>
+<p>A residential listing adds a charge for appliances on top of those two.</p>
+<p>Those numbers are the game&#39;s own. Big Copilot reads them; it does not set them.</p>
+<h2>The formula</h2>
+<p>For a commercial building the daily rent is:</p>
+<p><b>rent per day = floor area × (30 + traffic index) × district rate</b></p>
+<p>Floor area is the building&#39;s square metres and the traffic index is the foot traffic the game shows for that address. In an office building the result is multiplied by <b>1.033</b>.</p>
+<p>The district rate is the part the game never shows. These seven are what the leases give:</p>
+<div class="wp-tbl"><table aria-label="District rates"><thead><tr><th scope="col">District</th><th scope="col">Rate</th></tr></thead><tbody><tr><th scope="row">Midtown</th><td>0.02482</td></tr><tr><th scope="row">Hell&#39;s Kitchen</th><td>0.01468</td></tr><tr><th scope="row">Murray Hill</th><td>0.01020</td></tr><tr><th scope="row">Garment District</th><td>0.00734</td></tr><tr><th scope="row">Lower Manhattan</th><td>0.00621</td></tr><tr><th scope="row">The Hamptons</th><td>0.00568</td></tr><tr><th scope="row">Industry City</th><td>0.00566</td></tr></tbody></table></div>
+<h2>How well it holds</h2>
+<p>The rates were fitted on 15 September 2026 against 48 player leases across three characters, on game build 3675. Every one of those leases matches the formula to within 0.6%, which is integer rounding.</p>
+<p>Residential leases do not follow it. A home is shown with no estimate rather than a wrong one.</p>
+<p>A game patch can rebalance rents. That is why the date is stated: if the numbers stop matching what a lease charges, the fit is what went stale, not the lease.</p>
+<h2>Where Big Copilot uses it</h2>
+<p>The map shows this estimate on every building&#39;s card, so a vacant building can be compared with an occupied one before you sign anything.</p>
+<p>The location finder ranks buildings by demand and traffic, not by rent. Rent is shown beside each candidate as a cost to weigh, and it does not move a building up or down the list.</p>
+<p class="wp-src">Big Copilot&#39;s own fit, 15 September 2026: 48 non-residential leases across three characters on game build 3675, worst residual 0.6%. Not stated anywhere in the game&#39;s help.</p>
+</main>
+<footer class="wp-foot"><a href="/wiki/">Wiki index</a><a href="/">Big Copilot</a><a href="/impressum">Impressum</a><a href="/privacy">Privacy</a></footer>
+</body>
+</html>

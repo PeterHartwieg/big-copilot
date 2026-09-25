@@ -6,7 +6,7 @@ from ba_save import Names
 
 # Two rows of the static building table, keyed the way load_buildings() keys it.
 TABLE = {
-    ('ba:street_tenthstreet', 2): {'s': 'ba:street_tenthstreet', 'n': 2, 'h': 'Greenwich Village',
+    ('ba:street_tenthstreet', 2): {'s': 'ba:street_tenthstreet', 'n': 2, 'h': 'greenwichvillage',
                                    't': 'residential', 'z': 'A1', 'm': 204, 'x': 3},
 }
 
@@ -29,7 +29,7 @@ class HomesTests(unittest.TestCase):
             'address': '2 Tenth Street',
             'rent': 34.0,
             'm': 204,
-            'hood': 'Greenwich Village',
+            'hood': 'ba:neighborhood_greenwichvillage',
         }])
 
     def test_building_missing_from_the_table_reads_unknown_not_zero(self):

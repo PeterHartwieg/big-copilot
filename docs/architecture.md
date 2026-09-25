@@ -75,7 +75,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `supply` | `_supply()`; its `facts` from `_supply_facts()`, each fact's status word from `_supply_status()`; `margin` and `roundTo` are `SUPPLY_MARGIN` and `SUPPLY_ROUND_TO` | `supplyChecklistRows`, `sbData`, the tab drawers `drawShopsTab`, `drawWarehousesTab`, `drawFactoriesTab` (with `sbDepotRows`, `sbTabOf`, `sbNodeOpen`), `drawSite`, `drawFlow`, `flowLayout`, `factoryView`; `web/map.js` `refreshCityMaps`. `supply.facts` only through `supplyFact()` (below), and `supply.idle` only through `idleRows()`, which keeps the rows idle under the sizing on screen (`modes`) with their `dem` laid over |
 | `rhythm` | `_chain_rhythm()`; its `recent` key holds the same three series over the last `RHYTHM_RECENT_DAYS` (28) calendar days before the last finished day, which the chart draws, while the full-length ones feed `_supply()` | `weekdaySeries` (which `drawChart` asks), `drawSite` |
 | `market` | `_market()`; its `catalogue` key is popped out and handed to `_plan()` | `drawMovers`, `drawMarket`; `web/wiki.js` `wikiOwn`, `wikiGuidePrices` |
-| `premises` | `_premises()`, with `_premises_status()`, `_premises_demand()`, `_rent_estimate()`, `_deposit_estimate()`, `_deposit_check()`, `_door_caps()`, `_rival_numbers()`, `_rival_names()` | `drawFindLocation`, `findPremisesLink`, `wireCards`; `web/map.js` `premises` |
+| `premises` | `_premises()`, with `_premises_status()`, `_premises_demand()`, `_rent_estimate()`, `_deposit_estimate()`, `_deposit_check()`, `_door_caps()`, `_rival_numbers()`, `_rival_names()` | `drawFindLocation`, `finderPreset`, `wireCards`; `web/map.js` `premises` |
 | `chains` | `_chains()` | `drawPortfolio`, `siteCrumbs` |
 | `trends` | `_site_trends()` | `indexTrends` |
 | `hypeExposure` | `_hype_exposure()` | no reader — but see below |
@@ -84,7 +84,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `staffing` | `_staffing()`, with `_plan_site()`, `_need_curve()`, `_arrival_ceiling()`, `_cut_run()`, `_bridge_troughs()`, `_hires_for()`, `_plan_people()`, `_current_roster()`, `_index_table()`, `_shift_row()` | `drawSite` through `spRosterBlock`, and `drawOptimizeStaffing` for the Next-moves card |
 | `factoryStaffing` | `_factory_staffing()`, once per sizing (`{cap, dem}`), with `_factory_site_plan()`, `_factory_run_start()` and the shop placer `_place_week()`; its hours come from each factory line's `needHours`, `hoursNow` and `_posts` (the machines' ids, set by `_line_hours()` in `_factories()` on each line and on each unnamed line with a recipe, and taken off the payload here, by the line's place in its list) | `drawFactoryStaffing`, through `drawFactoriesTab` |
 | `plan` | `_plan()` | `drawPlan`, `planDraw`, `indexPlan`, `factoryView`, `factoryCounts`, `planTypes`, `defaultRate`, `itemName`; `web/wiki.js` `wikiCanPlan` |
-| `itemNames` | `extract()` inline, every `ba:itemname_` key of `names.locale` | `itemName` |
+| `names` | `_game_names()`: every `NAME_PREFIXES` key of `names.locale` but the `_description`s, plus `HOOD_LABEL` for a neighbourhood the text lacks | `itemName`, `gameName` (and through it `hoodName`) |
 | `skillNames` | `extract()` inline, every skill in `STATION_SKILLS` through `names.label()` | `gwSkillName` |
 | `cashFlow` | `_cash_flow()` | `drawKpis` |
 | `ledgerDays` | `extract()` inline, `len(ledger)` | no reader — but see below |
@@ -123,8 +123,8 @@ Four indirect routes an agent would otherwise miss:
   has not judged. `tests/fixtures/r8_supply.json` is the board's synthetic payload, and
   `tests/test_supply_facts.py` holds its keys, units and reasons to what `extract()`
   sends.
-- `#cellDetail`, the site panel and the map cards are filled from data already in hand, so
-  they do not appear above.
+- The site panel and the map cards are filled from data already in hand, so they do not
+  appear above.
 
 Three keys have no reader, and only one of them is dead end to end:
 
@@ -222,9 +222,18 @@ that reaches the payload, sort it through `_in_order()` — which puts `None` la
 real saves hold items with no name. Business lines, factory `arrivals` and `depotOther`
 already go through it.
 
+Game names are words; the game's keys are identities. Every payload row that shows an
+item, a business type, a skill or a neighbourhood carries its key beside the name
+(`slug`, `typeSlug`, `skill`, and a neighbourhood's `hood` or `neighbourhood` *is* its key,
+`ba:neighborhood_<id>`), and the page joins, stores and matches on the key only: a name is
+looked up to be shown (`gameName()`, `hoodName()`, `itemName()`). The building table
+stores the bare `<id>` as `h`; `hood_key()` makes the key. Python's own English sentences
+and the few English tables it wrote by name (`RENT_RATES`, the demand history's snapshot
+keys) read the English name through `HOOD_LABEL`, and stay as they are.
+
 ## Template placeholders
 
-`TEMPLATE` carries fourteen tokens. All fourteen are substituted by `render()`, but the
+`TEMPLATE` carries fifteen tokens. All fifteen are substituted by `render()`, but the
 text for two of them is supplied by the caller.
 
 | Token | Filled with |
@@ -242,7 +251,8 @@ text for two of them is supplied by the caller.
 | `/*__WIKI_CSS__*/` | `render()`, from `web/wiki.css` if present |
 | `/*__WIKI_SCRIPT__*/` | `render()`, from `web/wiki.js` if present |
 | `/*__WIKI_PAYLOAD__*/` | `render()`, from `web/wiki-data.json`; skipped when `live=True`, because the hosted build fetches it with the build stamp instead |
-| `/*__HOOD_TAGS__*/{}` | `render()`, from `HOOD_TAG` — one neighbourhood-tag table shared by the board and the wiki |
+| `/*__HOOD_TAGS__*/{}` | `render()`, from `HOOD_TAG` — one neighbourhood-tag table shared by the board and the wiki, keyed by the game's neighbourhood key |
+| `/*__HOOD_NAMES__*/{}` | `render()`, from `HOOD_LABEL` — each neighbourhood's English name by the same key: `hoodName()`'s fallback and `hoodKeyOf()`'s way back from a stored name |
 
 Only the wiki files are optional. `render()` reads them through `optional_asset()`, so a
 checkout without `web/wiki.js` still renders a whole board and the Wiki tab is left out of

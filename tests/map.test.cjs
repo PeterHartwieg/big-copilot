@@ -11,6 +11,9 @@ const place = geometry.buildings.find(b=>b.key==='ba:street_fifthavenue#57');
 const other = geometry.buildings.find(b=>b.region==='industry-city' && b.path);
 const property = geometry.buildings.find(b=>b.key==='ba:street_harborstreet#5');
 const edge = geometry.buildings.find(b=>b.key==='ba:street_fifthavenue#1'); // far east side
+// The payload names a neighbourhood by the game's key; the exported map data by
+// its English name, which is the key's id with the spaces and marks put in.
+const hoodKey = name => `ba:neighborhood_${String(name).toLowerCase().replace(/[^a-z]/g, '')}`;
 let browser,server,url,html;
 before(async()=>{
   const rendered=spawnSync(process.env.PYTHON || 'python',['-c','from ba_dashboard import render; import sys; sys.stdout.buffer.write(render(None).encode("utf-8"))'],{cwd:root,maxBuffer:4*1024*1024});
@@ -32,13 +35,13 @@ async function fixture(width=1280, media=null){
   await page.route('https://**',r=>r.abort());
   await page.goto(url);
   await page.evaluate(({place,other})=>{
-    const business=(p,name)=>({key:p.key,name,address:p.address,neighbourhood:p.hood,code:'',type:'Shop',typeSlug:'shop',
+    const business=(p,name)=>({key:p.key,name,address:p.address,neighbourhood:p.neighbourhood,code:'',type:'Shop',typeSlug:'shop',
       profit:100,rent:40,lines:[],crew:[],people:[],basket:null,margin:null,customers:30,revenue:120,status:'open',
       series:[{profit:80},{profit:120}]});
     D={meta:{character:'map-a',day:190},businesses:[business(place,'Test shop'),business(other,'Industrial shop')],
       alerts:[{siteKey:place.key,level:'critical',text:'Check staffing',id:'map-alert'}],minor:{rows:[]},supply:{shops:[]},daily:[]};
     refreshCityMaps();
-  },{place,other});
+  },{place:{...place,neighbourhood:hoodKey(place.hood)},other:{...other,neighbourhood:hoodKey(other.hood)}});
   return {page,errors};
 }
 async function ready(page,selector='#cityMapPage'){
@@ -302,6 +305,10 @@ test('search lights what it finds on the map itself, and Enter takes the first',
     await search().press('Enter');
     await page.locator('#cityMapPage .site.in').waitFor();
     assert.equal(await page.locator('#cityMapPage .location.fp.sel').getAttribute('data-location'),place.key);
+    // A business is found by its neighbourhood's name, though it carries the key.
+    await search().fill(place.hood);
+    assert.equal(await page.locator('#cityMapPage .srch .cnt').textContent(),'1');
+    assert.equal(await page.locator('#cityMapPage .location.fp.hot').getAttribute('data-location'),place.key);
     await search().fill('does not exist');
     assert.equal(await page.locator('#cityMapPage .srch .cnt').textContent(),'0');
     assert.equal(await page.locator('#cityMapPage .location.fp.hot').count(),0);
@@ -382,11 +389,11 @@ test('the card opens beside the picked footprint, inside the stage, and closes f
   try{
     await openPage(page);
     await page.evaluate(b=>{
-      D.businesses=[...D.businesses,{key:b.key,name:'Edge shop',address:b.address,neighbourhood:b.hood,code:'',type:'Shop',typeSlug:'shop',
+      D.businesses=[...D.businesses,{key:b.key,name:'Edge shop',address:b.address,neighbourhood:b.neighbourhood,code:'',type:'Shop',typeSlug:'shop',
         profit:100,rent:40,lines:[],crew:[],people:[],basket:null,margin:null,customers:30,revenue:120,status:'open',
         series:[{profit:80},{profit:120}]}];
       refreshCityMaps();
-    },edge);
+    },{...edge,neighbourhood:hoodKey(edge.hood)});
     await pickRow(page,place.key);
     const card=page.locator('#cityMapPage .site');
     assert.equal(await card.locator('h3').innerText(),'Test shop');
@@ -762,7 +769,7 @@ test("the home panel's map pin titles the dialog with the flat's address",async(
   try{
     const home=geometry.buildings.find(b=>b.key==='ba:street_tenthstreet#2' && b.path) || geometry.buildings.find(b=>b.region==='mainland' && b.path && b.key!==place.key);
     await page.evaluate(h=>{
-      D.homes=[{key:h.key,address:h.address,rent:34,m:96,hood:"Hell's Kitchen"}];
+      D.homes=[{key:h.key,address:h.address,rent:34,m:96,hood:'ba:neighborhood_hellskitchen'}];
       refreshCityMaps();showPage('company');openSite(h.key,false);
     },home);
     assert.equal(await page.locator('#sitePanel .sp-house').count(),1);

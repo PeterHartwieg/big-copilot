@@ -42,7 +42,7 @@ async function board(o = {}) {
     const shop = {
       key: 'ba:street_secondavenue#10', status: 'retail', name: 'HART. Gifts', code: 'HK',
       type: 'Gift Shop', typeSlug: 'ba:businesstype_giftshop', address: '10 Second Avenue',
-      neighbourhood: "Hell's Kitchen", opened: 3, revenue: 900, customers: 30, basket: 30, profit: 200,
+      neighbourhood: 'ba:neighborhood_hellskitchen', opened: 3, revenue: 900, customers: 30, basket: 30, profit: 200,
       margin: 22.2, cogs: 0, wages: 300, rent: 100, marketing: 0, theft: 0, licensing: 0,
       staff: 2, staffCost: 300, crew: [{role: 'Customer service', count: 2, daily: 300, absent: 0}],
       people: [], lines: [], series: [], rhythm: null, peakDay: null, swing: 0,
@@ -161,11 +161,11 @@ const FACTORY_SITE = {
      candidates: [], hoursWeek: 168, fullWeek: 168, gaps: []},
   ],
   needs: [
-    {item: 'Grapes', slug: 'grapes', perDay: 2400, perWeek: 16800, lines: ['Bottle of Wine'],
+    {item: 'Grapes', slug: 'grapes', perDay: 2400, perWeek: 16800, lines: ['Bottle of Wine'], lineSlugs: ['wine'],
      target: 2400, raiseTarget: null, dailyNeed: 2400, arrives: 2380, known: true, stock: 3000,
      from: 1, directImport: false, stalled: false, waitingOn: [], importWeekly: null,
      depotNeed: 16800, staffedShare: 1, madeAt: [], depotStock: 900, status: 'ok', level: 'ok'},
-    {item: 'Ground Beef', slug: 'gb', perDay: 9600, perWeek: 67200, lines: ['Burger'],
+    {item: 'Ground Beef', slug: 'gb', perDay: 9600, perWeek: 67200, lines: ['Burger'], lineSlugs: ['burger'],
      target: 8000, raiseTarget: 9600, dailyNeed: 9600, arrives: 1900, known: true, stock: 1900,
      from: 1, directImport: false, stalled: false, waitingOn: [], importWeekly: null,
      depotNeed: 67200, staffedShare: 1, madeAt: [], depotStock: 4000, status: 'target', level: 'critical'},
@@ -232,11 +232,11 @@ test('a Growth type row and the Plan a chain type link to the setup guide', asyn
   const page = await board();
   try {
     const rows = await page.evaluate(() => {
-      const cell = {hood: 'Midtown', demand: 50, count: 1, providers: 1, here: false};
+      const cell = {hood: 'ba:neighborhood_midtown', demand: 50, count: 1, providers: 1, here: false};
       return [
-        typeRow({type: 'Cinema', slug: 'ba:businesstype_cinema', products: 1, mine: false, cells: [cell]}, 0, ['Midtown']),
+        typeRow({type: 'Cinema', slug: 'ba:businesstype_cinema', products: 1, mine: false, cells: [cell]}, 0, ['ba:neighborhood_midtown']),
         officeRow({type: 'Law Firm', slug: 'ba:businesstype_lawfirm', fees: ['Lawyer Fee'], mine: true, cells: [cell]},
-          1, ['Midtown'], 0, []),
+          1, ['ba:neighborhood_midtown'], 0, []),
       ];
     });
     assert.match(rows[0], /<small>1 product · <a class="link xl-guide" href="#wiki\/businesstypes-cinema">Setup guide ›<\/a><\/small>/);
@@ -254,11 +254,11 @@ test('a Growth type row and the Plan a chain type link to the setup guide', asyn
 test('a Products row opens the store that sells the most of it, Shelves lit', async () => {
   const line = (item, slug, revenue) => ({item, slug, revenue, rate: 5, units: 40, price: 30, soldPerDay: 5});
   const page = await board({
-    shop: {lines: [line('Cheap Gift', 'cheapgift', 100), line('Paper Bag', 'bag', 2), line('Mug', 'mug', 400)]},
+    shop: {lines: [line('Cheap Gift', 'cheapgift', 100), line('Paper Bag', 'ba:itemname_paperbag', 2), line('Mug', 'mug', 400)]},
     peer: {lines: [line('Cheap Gift', 'cheapgift', 300)]},
     products: [
-      {item: 'Cheap Gift', revenue: 400, units: 10, week: 70, stock: 80, stores: 2, price: 40, peak: null},
-      {item: 'Paper Bag', revenue: 2, units: 5, week: 35, stock: 40, stores: 1, price: 0.4, peak: null},
+      {item: 'Cheap Gift', slug: 'cheapgift', revenue: 400, units: 10, week: 70, stock: 80, stores: 2, price: 40, peak: null},
+      {item: 'Paper Bag', slug: 'ba:itemname_paperbag', revenue: 2, units: 5, week: 35, stock: 40, stores: 1, price: 0.4, peak: null},
     ],
   });
   try {
@@ -276,7 +276,7 @@ test('a Products row opens the store that sells the most of it, Shelves lit', as
     await page.evaluate(() => { showSub('company', 'products'); });
     await page.locator('#secProducts .xl-sells', {hasText: 'Paper Bag'}).click();
     assert.equal(await page.evaluate(() => [siteKey, showAllShelves].join(' ')), `${KEY} true`);
-    assert.equal(await page.locator(`#sp-shelves tr[data-el~="${tok('s-bag')}"].sp-hit`).count(), 1);
+    assert.equal(await page.locator(`#sp-shelves tr[data-el~="${tok('s-ba:itemname_paperbag')}"].sp-hit`).count(), 1);
   } finally { await page.close(); }
 });
 
@@ -286,8 +286,8 @@ test('a product stocked but not sold yet still opens a store that stocks it', as
     shop: {lines: [line('Mug', 'mug', 400, 20), line('New Gift', 'newgift', 0, 10)]},
     peer: {lines: [line('New Gift', 'newgift', 0, 60)]},
     products: [
-      {item: 'Mug', revenue: 400, units: 10, week: 70, stock: 20, stores: 1, price: 40, peak: null},
-      {item: 'New Gift', revenue: 0, units: 0, week: 0, stock: 70, stores: 0, price: 0, peak: null},
+      {item: 'Mug', slug: 'mug', revenue: 400, units: 10, week: 70, stock: 20, stores: 1, price: 40, peak: null},
+      {item: 'New Gift', slug: 'newgift', revenue: 0, units: 0, week: 0, stock: 70, stores: 0, price: 0, peak: null},
     ],
   });
   try {
@@ -303,7 +303,7 @@ test('a product stocked but not sold yet still opens a store that stocks it', as
 
 test('a depot or factory holding a product is never where its Products row lands', async () => {
   const line = (item, slug, revenue, units) => ({item, slug, revenue, rate: 0, units, price: 30, soldPerDay: 0});
-  const product = {item: 'New Gift', revenue: 0, units: 0, week: 0, stock: 5000, stores: 0, price: 0, peak: null};
+  const product = {item: 'New Gift', slug: 'newgift', revenue: 0, units: 0, week: 0, stock: 5000, stores: 0, price: 0, peak: null};
   // The depot holds far more than the shop; the shop is still the one with Shelves.
   let page = await board({
     shop: {lines: [line('New Gift', 'newgift', 0, 10)]},
@@ -338,8 +338,8 @@ test('an office fee opens its office with the Fees row lit, and office cargo is 
     shop: {lines: [phone]},
     peer: {status: 'office', type: 'Law Firm', typeSlug: 'ba:businesstype_lawfirm', lines: [fee, cargo]},
     products: [
-      {item: 'Lawyer Fee', revenue: 900, units: 3, week: 21, stock: 0, stores: 1, price: 300, peak: null},
-      {item: 'Phone', revenue: 0, units: 0, week: 0, stock: 46, stores: 0, price: 0, peak: null},
+      {item: 'Lawyer Fee', slug: 'lawyerfee', revenue: 900, units: 3, week: 21, stock: 0, stores: 1, price: 300, peak: null},
+      {item: 'Phone', slug: 'phone', revenue: 0, units: 0, week: 0, stock: 46, stores: 0, price: 0, peak: null},
     ],
   });
   try {

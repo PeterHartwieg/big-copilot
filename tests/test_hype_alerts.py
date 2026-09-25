@@ -21,13 +21,13 @@ def site(key, name, revenue):
 
 def wave(count, left, start, sites, baseline):
     top = max(sites, key=lambda s: s["revenue"])
-    return {"hood": "Industry City", "daysLeft": left, "startDay": start, "count": count,
+    return {"hood": "ba:neighborhood_industrycity", "daysLeft": left, "startDay": start, "count": count,
             "items": [], "sites": sites, "top": top["key"],
             "revenue": sum(s["revenue"] for s in sites), "profit": 0, "baseline": baseline}
 
 
 def baseline(revenue, basis="the no-hype [GD] HART. Electro"):
-    return {"name": "[GD] HART. Electro", "hood": "Garment District", "revenue": revenue,
+    return {"name": "[GD] HART. Electro", "hood": "ba:neighborhood_garmentdistrict", "revenue": revenue,
             "basis": basis}
 
 

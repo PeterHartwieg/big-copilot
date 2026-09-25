@@ -219,20 +219,81 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
   </div>
 </footer>'''
 
-# The player tags each business with its neighbourhood, e.g. "[MT] Costco 38 1stAV".
-NEIGHBOURHOODS = {
-    "MT": "Midtown",
-    "HK": "Hell's Kitchen",
-    "MH": "Murray Hill",
-    "LM": "Lower Manhattan",
-    "GD": "Garment District",
-    "IC": "Industry City",
-    "HA": "The Hamptons",
+# A neighbourhood is known by the game's own key, ba:neighborhood_<id>, which is
+# what the save names and what the payload carries; the building table stores
+# the <id> alone (its "h"). The name a player reads is the page's business, so
+# nothing that identifies a neighbourhood depends on the words for it. The
+# player tags each business with its neighbourhood, e.g. "[MT] Costco 38 1stAV".
+HOOD_PREFIX = "ba:neighborhood_"
+HOOD_IDS = {
+    "MT": "midtown",
+    "HK": "hellskitchen",
+    "MH": "murrayhill",
+    "LM": "lowermanhattan",
+    "GD": "garmentdistrict",
+    "IC": "industrycity",
+    "HA": "thehamptons",
+}
+# Tag -> key, for a shop only its name prefix places.
+NEIGHBOURHOODS = {tag: HOOD_PREFIX + hood for tag, hood in HOOD_IDS.items()}
+
+# Key -> the English name, for Python's own sentences and for the English
+# tables written by name (RENT_RATES, the demand history's snapshot keys). The
+# page reads a name from the payload's `names`, with this as its fallback.
+HOOD_LABEL = {
+    NEIGHBOURHOODS["MT"]: "Midtown",
+    NEIGHBOURHOODS["HK"]: "Hell's Kitchen",
+    NEIGHBOURHOODS["MH"]: "Murray Hill",
+    NEIGHBOURHOODS["LM"]: "Lower Manhattan",
+    NEIGHBOURHOODS["GD"]: "Garment District",
+    NEIGHBOURHOODS["IC"]: "Industry City",
+    NEIGHBOURHOODS["HA"]: "The Hamptons",
 }
 
-# A neighbourhood's display name back to its tag, so a shop the building table
-# places can wear the same two letters and colour a prefix would have given it.
-HOOD_TAG = {name: tag for tag, name in NEIGHBOURHOODS.items()}
+# A neighbourhood's key back to its tag, so a shop the building table places
+# can wear the same two letters and colour a prefix would have given it.
+HOOD_TAG = {key: tag for tag, key in NEIGHBOURHOODS.items()}
+
+
+# The display names the page is sent, by key prefix. build_web.py ships the
+# same keys of the locale in gametext.json.
+NAME_PREFIXES = (
+    "ba:itemname_",
+    "ba:businesstype_",
+    "ba:neighborhood_",
+    "ba:factoryworkstationtype_",
+    "ba:skill_",
+    "ba:jobdemand_",
+)
+
+
+def _game_names(names) -> dict:
+    """{key: name} for every display name in the text, descriptions left out.
+
+    A neighbourhood the text does not name (no game text at all) still gets
+    its English name, since the page reads every neighbourhood by key.
+    """
+    out = {
+        k: v
+        for k, v in sorted(names.locale.items())
+        if k.startswith(NAME_PREFIXES) and not k.endswith("_description") and v
+    }
+    for key, label in HOOD_LABEL.items():
+        out.setdefault(key, label)
+    return out
+
+
+def hood_key(row: dict | None) -> str | None:
+    """A building-table row's neighbourhood as the game's key, or None."""
+    hood = row.get("h") if row else None
+    return HOOD_PREFIX + hood if hood else None
+
+
+def hood_label(key: str | None, default: str = "") -> str:
+    """A neighbourhood key's English name, for Python's own sentences."""
+    if not key:
+        return default
+    return HOOD_LABEL.get(key) or key.removeprefix(HOOD_PREFIX)
 
 # Every building in the city, from the game's fixed map: make_buildings.py
 # generates ba_buildings.json beside this file, and the browser worker writes it
@@ -1082,7 +1143,8 @@ def _door_caps(names: Names) -> dict:
 
 def _rent_estimate(row: dict) -> int | None:
     """Estimated rent per day for one building, from the static table's row."""
-    rate = RENT_RATES.get(row.get("h"))
+    # The rates were fitted and written down by neighbourhood name.
+    rate = RENT_RATES.get(HOOD_LABEL.get(hood_key(row)))
     # The casino boat is the one row with no floor area: the table does not
     # know how big it is, so there is nothing to price.
     if rate is None or not row.get("m") or row.get("t") == "residential":
@@ -1300,7 +1362,7 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
             {
                 "key": site_key(addr),
                 "address": f"{addr[1]} {names.street(addr[0])}",
-                "hood": row["h"],
+                "hood": hood_key(row),
                 "type": row["t"],
                 "size": row["z"],
                 "m2": row["m"],
@@ -1331,7 +1393,7 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
             {
                 "key": site_key(addr),
                 "address": f"{addr[1]} {names.street(addr[0])}",
-                "hood": row["h"],
+                "hood": hood_key(row),
                 "type": row["t"],
                 "size": row["z"],
                 "m2": row["m"],
@@ -1350,7 +1412,8 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
         "demand": _premises_demand(market),
         "rent": {
             "constant": RENT_TRAFFIC_OFFSET,
-            "rates": dict(RENT_RATES),
+            # By the neighbourhood's key, as everything the page reads is.
+            "rates": {key: RENT_RATES[label] for key, label in HOOD_LABEL.items() if label in RENT_RATES},
             "officeFactor": RENT_OFFICE_FACTOR,
             "check": {
                 "leases": len(deviations),
@@ -1405,9 +1468,9 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
     character = root.get("characterId") or "default"
     rhythm = _chain_rhythm(save, buildings, daily, day)
     supply = _supply(save, names, businesses, day, rhythm, recipes, history, character)
-    product_rhythm = _product_rhythm(save, buildings, names)
+    product_rhythm = _product_rhythm(save, buildings)
     for entry in products:
-        beat = product_rhythm.get(entry["item"])
+        beat = product_rhythm.get(entry["slug"])
         entry["peak"] = beat["peak"] if beat else None
         entry["swing"] = beat["swing"] if beat else 0
         # How many weeks of sales the peak is read from, which the Products
@@ -1547,9 +1610,11 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         "staffing": staffing,
         "factoryStaffing": factory_staffing,
         "plan": plan,
-        # Every item name the text knows, so a material that no recipe or shop
-        # line mentions is still named where the tables list it.
-        "itemNames": {k: v for k, v in names.locale.items() if k.startswith("ba:itemname_")},
+        # Every game name the text knows -- items, business types,
+        # neighbourhoods, stations, skills, job demands -- by the game's own
+        # key, so the page names anything the payload identifies by key, and a
+        # material no recipe or shop line mentions is still named.
+        "names": _game_names(names),
         # The game's name for every skill a station can ask for, so the write
         # dialogs never spell a role from its slug ("Securityguard").
         "skillNames": {skill: names.label(skill) for skill in sorted({s for v in STATION_SKILLS.values() for s in v})},
@@ -1976,7 +2041,7 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
     # The city is fixed, so the building table knows the neighbourhood from the
     # address alone; the name prefix only covers an address it does not list.
     building = load_buildings().get(addr)
-    neighbourhood = building["h"] if building else NEIGHBOURHOODS.get(tag, "")
+    neighbourhood = hood_key(building) if building else NEIGHBOURHOODS.get(tag, "")
 
     orders = save.items(b["orderHistory"])
     # Every day the order history still holds, zeros included: a shop that
@@ -2298,8 +2363,9 @@ def _chain_rhythm(save: Save, buildings: list, daily: list, day: int) -> dict:
     return profiles
 
 
-def _product_rhythm(save: Save, buildings: list, names: Names) -> dict:
-    """Which weekday each product peaks on, across every shop that sells it."""
+def _product_rhythm(save: Save, buildings: list) -> dict:
+    """Which weekday each product peaks on, across every shop that sells it,
+    by the item's key."""
     units = collections.defaultdict(collections.Counter)
     for b in buildings:
         for entry in save.items(b["orderHistory"]):
@@ -2309,7 +2375,7 @@ def _product_rhythm(save: Save, buildings: list, names: Names) -> dict:
     for item, by_day in units.items():
         profile = _weekday_profile(sorted(by_day.items()))
         if profile:
-            out[names.label(item)] = {
+            out[item] = {
                 "profile": profile,
                 "peak": _peak_day(profile),
                 "swing": _swing(profile),
@@ -2379,13 +2445,16 @@ def _products(businesses: list) -> list:
         for line in b["lines"]:
             if not line["revenue"] and not line["units"]:
                 continue
-            rec = agg[line["item"]]
+            # By key: two items can share a name, and the page names a row
+            # from its key.
+            rec = agg[line["slug"]]
+            rec["item"] = line["item"]
             rec["revenue"] += line["revenue"]
             rec["units"] += line["soldPerDay"]
             rec["week"] += line["soldPerWeek"]
             rec["stock"] += line["units"]
             rec["stores"] += 1 if line["revenue"] else 0
-    out = [{"item": k, **v} for k, v in agg.items()]
+    out = [{"item": v.pop("item"), "slug": k, **v} for k, v in agg.items()]
     for rec in out:
         rec["revenue"] = money(rec["revenue"])
         rec["price"] = round(rec["revenue"] / rec["units"], 2) if rec["units"] else 0
@@ -2484,7 +2553,7 @@ def _homes(buildings: list, residential: set, names: Names) -> list[dict]:
                 "address": f"{b['StreetNumber']} {names.street(b['StreetName'])}",
                 "rent": money(b.get("RentPerDay") or 0),
                 "m": row.get("m") or None,
-                "hood": row.get("h") or None,
+                "hood": hood_key(row),
             })
     return result
 
@@ -5315,14 +5384,17 @@ def _factories(
                 item = resolve(ing)
                 row = needs.setdefault(
                     item,
-                    {"item": ing["item"], "slug": item, "perDay": 0.0, "lines": [], "staffedDay": 0.0,
+                    {"item": ing["item"], "slug": item, "perDay": 0.0, "lines": [], "lineSlugs": [],
+                     "staffedDay": 0.0,
                      "demDay": 0.0, "ramp": set()},
                 )
                 row["perDay"] += n * ing["per"] * 24
                 row["staffedDay"] += n * ing["per"] * 24 * share
                 row["demDay"] += n * ing["per"] * 24 * (dem_makes / makes if makes else 1.0)
                 row["ramp"] |= set(ramp)
-                if rec["item"] not in row["lines"]:
+                # The lines that eat it: their keys, and beside each its name.
+                if slug not in row["lineSlugs"]:
+                    row["lineSlugs"].append(slug)
                     row["lines"].append(rec["item"])
         # Held by its limit too: a line whose machines all have Produce up to
         # set, making well under its roster's output while every input it eats
@@ -8796,7 +8868,7 @@ def _wiki_market_prices(save, day):
         if not b or b.get("temporarilyClosed") or not b.get("BusinessName"):
             continue
         building = buildings.get((b.get("StreetName"), b.get("StreetNumber")))
-        hood = building.get("h") if building else None
+        hood = hood_key(building)
         for line in save.items(b.get("retailPrices")):
             if not line or not line.get("itemName"):
                 continue
@@ -8822,8 +8894,6 @@ def _market(
     next to the dashboard. Until that fills up, the game's own hype events are
     the trend signal — they are authoritative about what just rose.
     """
-    hood_of = {v: k for k, v in NEIGHBOURHOODS.items()}
-
     # Shops and offices both sell into a neighbourhood's market: an office's
     # hourly fee has a demand reading there like any product on a shelf.
     trading = [
@@ -8858,17 +8928,20 @@ def _market(
             continue
         item = event.get("itemName")
         if event["type"] == HYPE_EVENT and item:
-            hood = names.label(event.get("neighbourhood"), "")
+            hood = event.get("neighbourhood") or ""
             hype[(item, hood)] = left
             starts[(item, hood)] = start
         elif event["type"] in SUPPLIER_EVENTS and item:
             shortages.append(
                 {
                     "item": names.label(item),
+                    "slug": item,
                     "kind": SUPPLIER_EVENTS[event["type"]],
                     "where": names.addr(save.address(event.get("address")))
                     if event.get("address")
                     else names.label(event.get("neighbourhood"), "-"),
+                    # The neighbourhood `where` names, by key; None for an address.
+                    "hood": None if event.get("address") else event.get("neighbourhood") or None,
                     "daysLeft": left,
                     "mine": item in sells or item in makes,
                 }
@@ -8884,10 +8957,11 @@ def _market(
         for value in save.items(entry["demandValues"]):
             if value["neighborhood"] == GLOBAL_HOOD:
                 continue
-            hood = names.label(value["neighborhood"])
+            hood = value["neighborhood"]
             if hood not in hoods:
                 hoods.append(hood)
-            today_snapshot[f"{item}|{hood}"] = value["demand"]
+            # The history on disk was keyed by the English name; it stays so.
+            today_snapshot[f"{item}|{names.label(hood)}"] = value["demand"]
             market_price = None if item in price_gaps else market_prices.get((item, hood))
             price_note = price_gaps.get(item) or (
                 "No eligible seller; game fallback unavailable" if market_price is None else "")
@@ -8926,10 +9000,11 @@ def _market(
     span = seen["span"]
     for row in rows:
         for cell in row["cells"]:
-            was = seen["was"].get(f"{row['slug']}|{cell['hood']}")
+            was = seen["was"].get(f"{row['slug']}|{names.label(cell['hood'])}")
             cell["delta"] = (cell["demand"] - was) if was is not None else None
 
-    hoods.sort()
+    # Columns in the order of their English names, as they always were.
+    hoods.sort(key=names.label)
     for row in rows:
         by_hood = {c["hood"]: c for c in row["cells"]}
         row["cells"] = [by_hood.get(h) for h in hoods]
@@ -8962,6 +9037,7 @@ def _market(
             gaps.append(
                 {
                     "item": row["item"],
+                    "slug": row["slug"],
                     "hood": cell["hood"],
                     "demand": cell["demand"],
                     "providers": cell["providers"],
@@ -9007,7 +9083,7 @@ def _market(
     types = _type_demand(shops, by_item_hood, hoods, names, mine_types, stores)
     # Where the city has no office building at all, the game keeps no reading
     # for a fee either, and the grid can say why the cell is empty.
-    office_hoods = {r["h"] for r in load_buildings().values() if r.get("t") == "office"}
+    office_hoods = {hood_key(r) for r in load_buildings().values() if r.get("t") == "office"}
     return {
         "hoods": hoods,
         "rows": rows,
@@ -9201,6 +9277,7 @@ def _office_demand(
                 "type": names.label(kind),
                 "slug": kind,
                 "fees": [names.label(fee) for fee in sorted(fees)],
+                "feeSlugs": sorted(fees),
                 "mine": kind in mine,
                 "cells": cells,
                 "peak": max(c["demand"] for c in live),
@@ -9236,7 +9313,7 @@ def _group_shortages(shortages: list) -> list:
     """One product short at three suppliers is one problem, not three."""
     grouped = collections.OrderedDict()
     for row in shortages:
-        key = (row["item"], row["kind"])
+        key = (row["slug"], row["kind"])
         if key in grouped:
             grouped[key]["count"] += 1
             grouped[key]["daysLeft"] = max(grouped[key]["daysLeft"], row["daysLeft"])
@@ -10008,7 +10085,8 @@ def _plan(
         "priceDay": prices["day"],
         "priceCount": len(prices["unit"]),
         "peak": round(uplift, 3),
-        "stations": {names.label(s): rate for s, (_skill, rate) in stations.items()},
+        # By the workstation's key, never its name.
+        "stations": {s: rate for s, (_skill, rate) in stations.items()},
     }
 
 
@@ -10387,7 +10465,7 @@ def _alerts(
                 "critical" if soonest <= 2 else "warn",
                 top["name"],
                 "hype",
-                f"{waves[0]['hood']} hype on {lines}; "
+                f"{hood_label(waves[0]['hood'])} hype on {lines}; "
                 f"{top['name']} does ${top['revenue']:,.0f}/day under it against "
                 f"${base['revenue']:,.0f} for {base['basis']}; "
                 f"about ${drop:,.0f}/day of revenue rides on {wave_word}.{queue}",
@@ -10399,7 +10477,7 @@ def _alerts(
                 "warn",
                 top["name"],
                 "hype",
-                f"{waves[0]['hood']} hype on {lines}; "
+                f"{hood_label(waves[0]['hood'])} hype on {lines}; "
                 f"{top['name']} does ${top['revenue']:,.0f}/day under it. There is no "
                 f"shop of the same kind trading without a wave and no trading days "
                 f"before {'this one' if len(waves) == 1 else 'the first of them'} "
@@ -11215,6 +11293,8 @@ def render(
         # One table of neighbourhood tags, written once here, so a wiki address
         # wears the same two letters a business does.
         .replace("/*__HOOD_TAGS__*/{}", json.dumps(HOOD_TAG, separators=(",", ":")))
+        # And their English names by the same keys, for a board without game text.
+        .replace("/*__HOOD_NAMES__*/{}", json.dumps(HOOD_LABEL, separators=(",", ":")))
         .replace("<!--__CHANGELOG__-->", changelog)
         .replace("/*__LIVE__*/false", "true" if live else "false")
         .replace("__TITLE__", html_escape(title))
@@ -11297,8 +11377,7 @@ svg{display:block}
 /* The board runs to a dozen screens, most of it off-view at any moment, and it
    is read on a second monitor while the game has the GPU. Sections that are not
    on screen are skipped entirely; the reserved height keeps the scrollbar
-   honest. The daily chart opts out because it sizes its viewBox from its own
-   rendered width, which is zero while skipped. */
+   honest. */
 section{content-visibility:auto; contain-intrinsic-size:auto 620px}
 section.measured{content-visibility:visible}
 /* A finding's link scrolls to a section; the sticky masthead must not cover it. */
@@ -12417,6 +12496,7 @@ td.gauge.low i b{background:var(--neg)}
 .legend a:hover i{transform:scaleX(1.4)}
 .xh{opacity:0;transition:opacity .12s}
 .chartbox:hover .xh{opacity:1}
+.chartbox.chart-miss .xh{opacity:0}
 g[data-series]{transition:opacity .25s}
 g[data-series].off{opacity:0}
 .chart rect{transition:opacity .15s}
@@ -12478,14 +12558,17 @@ g[data-series].off{opacity:0}
   transition:transform .18s cubic-bezier(.34,1.56,.64,1),box-shadow .18s,outline-color .15s,filter .15s;
 }
 .cell.hl{filter:brightness(1.18)}
-.cell:hover{transform:scale(1.12);box-shadow:0 8px 24px #0006;z-index:3}
-.cell.picked{outline:2px solid var(--ink);outline-offset:-2px}
+.heat .cell[role=button]:hover{transform:scale(1.12);box-shadow:0 8px 24px #0006;z-index:3}
+.heat .cell:not([role=button]){cursor:default}
+.heat .cell:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
 .cell .rv2{position:absolute;right:6px;bottom:5px;display:flex;gap:2px}
 .cell .rv2 i{width:3px;height:3px;border-radius:50%;background:var(--ink);opacity:.5}
 .cell.mine{outline:1.5px solid var(--accent);outline-offset:-1.5px}
-.celldetail{margin-top:14px;min-height:22px;font-size:13px;color:var(--ink-2)}
-.celldetail b{color:var(--ink);font-weight:600}
-.celldetail .link{margin-left:10px}
+/* a row's way into Plan a chain sits beside its setup guide; the row the
+   finder's Demand figure lands on rings once */
+.heat .r .mk-plan{font-size:11px;white-space:nowrap}
+.heat .mk-arrive{border-radius:6px;animation:sp-arrive 2.4s ease-out}
+.heat .r{scroll-margin-top:116px}  /* clears the sticky masthead, as a section does */
 
 /* waves ------------------------------------------------------------------ */
 .waves{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px}
@@ -13502,6 +13585,7 @@ body:has(#changelogDialog[open]){overflow:hidden}
   .heat .r{min-width:0;padding-right:6px;font-size:12px;line-height:1.25;overflow-wrap:anywhere}
   .heat .r .mk-name{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden}
   .heat .r small{font-size:10px}
+  .heat .r .mk-plan{white-space:normal}
   .heat .cell .rv2{left:2px;right:2px;gap:1px;justify-content:flex-end;overflow:hidden}
   .heat .cell .rv2 i{width:2px;height:2px}
   .planstats{grid-template-columns:minmax(0,1fr);gap:10px}
@@ -13638,7 +13722,6 @@ body:has(#changelogDialog[open]){overflow:hidden}
         <div class="aside"><span class="seg" id="marketTools" aria-label="Market views"></span></div></div>
       <div class="waves" id="movers"></div>
       <div class="heat" id="market"></div>
-      <p class="celldetail" id="cellDetail">Click a cell</p>
     </section>
 
     <section class="sec rv" id="secPlan" data-sub="plan">
@@ -13858,7 +13941,7 @@ const gauge = v => graded(v, "ink-3");
 /* A neighbourhood badge: the player's [XX] prefix, or the canonical code for a
    shop the building table places. With neither, no badge. */
 const bullet = b => b.code ? `<span class="bullet" style="background:${LINE_COLOURS[b.code]||LINE_COLOURS[""]}"
-  title="${attr(b.neighbourhood||"Unassigned")}">${spEsc(b.code)}</span>` : "";
+  title="${attr(hoodName(b.neighbourhood)||"Unassigned")}">${spEsc(b.code)}</span>` : "";
 const siteCell = b => `<div class="site">${bullet(b)}<span><b>${b.name}</b>
   <span class="sub">${b.type} · ${b.address}${mapButton(b.key,b.name)}</span></span></div>`;
 
@@ -13995,9 +14078,23 @@ function spPruneHits(panel){
     else f.removeAttribute("data-hit");
   });
 }
-/* The board's own two letters for each neighbourhood, filled in from the one
-   table Python keeps. A place it does not name wears no pill. */
+/* The board's own two letters for each neighbourhood, by the game's key
+   (ba:neighborhood_<id>), filled in from the one table Python keeps. A place it
+   does not name wears no pill. */
 const HOOD_TAGS = /*__HOOD_TAGS__*/{};
+/* Their English names by the same keys: the fallback when the payload's own
+   `names` has none (no game text), and the way an old stored name reads back. */
+const HOOD_NAMES = /*__HOOD_NAMES__*/{};
+/* A game name by its key. Everything that identifies an item, a business type
+   or a neighbourhood carries the game's key; the words are looked up only to be
+   shown, from the payload's `names`, which the game text fills. */
+const gameName = key => key ? ((D && D.names) || {})[key] || HOOD_NAMES[key] || "" : "";
+const hoodName = key => gameName(key) || String(key || "").replace(/^ba:neighborhood_/, "");
+/* A neighbourhood as a key, from either a key or an English name: what map
+   data exported by name and filters stored before keys hold. Null for neither. */
+const hoodKeyOf = v => typeof v !== "string" || !v ? null
+  : Object.prototype.hasOwnProperty.call(HOOD_NAMES, v) || /^ba:neighborhood_/.test(v) ? v
+  : Object.keys(HOOD_NAMES).find(k => HOOD_NAMES[k] === v) || null;
 /* Text that lands in an attribute (a tooltip, a data-id) is escaped once, here. */
 const attr = s => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 /* Tooltips are plain text: do not pass button/link markup into why(). */
@@ -14634,9 +14731,11 @@ const slotText = r => r.slots && r.slots.length
    Table identities arrive from Python. Local choices apply only to unnamed
    rows whose workstation offers that recipe, including static HTML output. */
 const LINE_NAMES_KEY = "ba_line_names";
+/* An input's lines by key (lineSlugs), each named by the label beside it. */
 function factoryLineText(site, need){
-  return need.lines.map(item => {
-    const machines = (site?.lines || []).reduce((n, line) => n + (line.item === item ? line.machines : 0), 0);
+  return (need.lineSlugs || []).map((slug, i) => {
+    const item = need.lines[i];
+    const machines = (site?.lines || []).reduce((n, line) => n + (line.slug === slug ? line.machines : 0), 0);
     return machines > 1 ? `${item} ×${machines}` : item;
   }).join(", ");
 }
@@ -14700,14 +14799,16 @@ function factoryView(){
         let row = s.needs.find(n => n.slug === islug);
         if(!row){
           const t = (s.targets || {})[islug];
-          row = {item: ing.item, slug: islug, perDay: 0, perWeek: 0, lines: [], waitingOn: [], madeAt: [],
+          row = {item: ing.item, slug: islug, perDay: 0, perWeek: 0, lines: [], lineSlugs: [], waitingOn: [], madeAt: [],
             target: t ? t[0] : 0, from: t ? t[1] : null, directImport: false, importSite: t ? t[1] : null,
             known: false, arrives: (s.arrivals || {})[islug] || 0, stock: held(s.s, islug),
             depotStock: t && t[1] !== null ? held(t[1], islug) : 0, importWeekly: null};
           s.needs.push(row);
         }
         row.perDay += perDay; row.perWeek += perDay * 7;
-        if(!row.lines.includes(rec.item)) row.lines.push(rec.item);
+        // The line by its key, its name beside it, as _factories() writes them.
+        row.lineSlugs = row.lineSlugs || [];
+        if(!row.lineSlugs.includes(slug)){ row.lineSlugs.push(slug); row.lines.push(rec.item); }
         row.named = true;
       });
       return false;
@@ -15396,7 +15497,8 @@ function drawChart(){
   const ys = JSON.stringify(rows.map(r => +Y(r.profit7).toFixed(1)));
   const labels = JSON.stringify(rows.map(readout));
   $("dailyBox").innerHTML = `
-    <div class="chartbox chart" data-chart="1" data-xs="${attr(xs)}" data-ys="${attr(ys)}" data-labels="${attr(labels)}">
+    <div class="chartbox chart" data-chart="1" data-xs="${attr(xs)}" data-ys="${attr(ys)}" data-labels="${attr(labels)}"
+      data-plot="${(X(0) - bw / 2).toFixed(1)},${(X(n - 1) + bw / 2).toFixed(1)}">
       <div class="readout">${readout(last)}</div>
       <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px;overflow:visible">${out.join("\n")}</svg>
       <div class="legend">${Object.entries(SERIES).map(([id, s]) =>
@@ -15539,7 +15641,7 @@ const nameUses = () => {
   return NAME_USES;
 };
 const shortName = b => nameUses()[baseName(b)] > 1 && b.neighbourhood
-  ? `${baseName(b)} · ${b.neighbourhood}`
+  ? `${baseName(b)} · ${hoodName(b.neighbourhood)}`
   : baseName(b);
 
 /* A warehouse has no customers, no basket and no shelves worth reading; it is a
@@ -15780,13 +15882,15 @@ function hourGrid(g, todayWd, lead = null, idle = []){
 /* A vending-machine side item earns a rounding error next to a store's real
    line — this is the cutoff, as a share of the best-selling line's revenue. */
 const SHELF_MAIN_SHARE = 0.02;
+/* The bag, by its key: a name is only ever shown, never matched. */
+const PAPER_BAG = "ba:itemname_paperbag";
 /* Whether a shelf sits among the folded odds and ends: a bag, or a line
    selling under SHELF_MAIN_SHARE of the best-selling listed shelf. One rule
    for drawSite(), a finding's landing and the Products link. */
 const spShelfPeak = b => Math.max(0, ...((b && b.lines) || [])
-  .filter(l => spShelfListed(b, l) && l.item !== "Paper Bag").map(l => l.revenue || 0));
+  .filter(l => spShelfListed(b, l) && l.slug !== PAPER_BAG).map(l => l.revenue || 0));
 function spShelfFolded(b, line, peak = spShelfPeak(b)){
-  return line.item === "Paper Bag" || (line.revenue || 0) < peak * SHELF_MAIN_SHARE;
+  return line.slug === PAPER_BAG || (line.revenue || 0) < peak * SHELF_MAIN_SHARE;
 }
 /* Whether a line gets a row in a site's Shelves block at all (folded or not):
    an office lists the fees it prices or bills, and not the phones and monitors
@@ -16479,7 +16583,7 @@ function spPull(b){
     <div class="sp-minis">
       <span data-read="${attr(`Security <b>${b.security}%</b>`)}">${spI("shield")}${b.security}%</span>
       <span data-read="${attr(`<b>${b.capacity}</b> shoppers fit inside at once`)}">${spI("person")}${b.capacity}</span></div>
-    ${hype ? `<div class="sp-wave" data-el="wave" data-read="${attr(`${spEsc(hype.wave.hood)} wave over this shop · <b>${
+    ${hype ? `<div class="sp-wave" data-el="wave" data-read="${attr(`${spEsc(hoodName(hype.wave.hood))} wave over this shop · <b>${
         hype.site.share}%</b> of its takings rides on it · ends in ${hype.wave.daysLeft} day${
         hype.wave.daysLeft === 1 ? "" : "s"}${hype.wave.baseline ? "" : " · no baseline to measure it against"}`)}">${
       spI("wave")}
@@ -17796,12 +17900,12 @@ function spNeedRead(n, f){
     default: return spEsc(szTip(f));
   }
 }
-/* An input's lines are named by their labels, and the line rows are keyed by
-   their slugs, so the map between them is made here rather than guessed. */
+/* An input's lines by key (lineSlugs), matched to the site's line rows by
+   the same key; the label beside each is only its fallback token. */
 function spNeedLines(site, n){
-  return (n.lines || []).map(item => {
-    const line = (site.lines || []).find(l => l.item === item);
-    return spKeyTok(line && line.slug, item);
+  return (n.lineSlugs || []).map((slug, i) => {
+    const line = (site.lines || []).find(l => l.slug === slug);
+    return spKeyTok(line && line.slug, n.lines[i]);
   }).join(" ");
 }
 function spInputs(site){
@@ -17871,7 +17975,7 @@ function spHomePanel(home){
     <div class="sitehead rv">
       ${code ? `<span class="bullet">${spEsc(code)}</span>` : ""}
       <div><h2>${spEsc(home.address)}${mapButton(home.key, home.address)}</h2><span class="sub">Home${
-        home.hood ? ` · ${spEsc(home.hood)}` : ""}</span></div>
+        home.hood ? ` · ${spEsc(hoodName(home.hood))}` : ""}</span></div>
     </div>
     <div class="sp-home rv" data-block="home">
       <div class="sp-house">${spHouse()}</div>
@@ -17889,21 +17993,21 @@ const xlGuideLink = (typeSlug, label, section = "") => {
   return href ? `<a class="link xl-guide" href="${attr(href)}">${label} ›</a>` : "";
 };
 /* The stores carrying a product, the biggest seller yesterday first: the same
-   lines, by item name, that _products() adds up for the Products table. A line
+   lines, by item key, that _products() adds up for the Products table. A line
    stocked but not sold yet is on that table too, so a store that only stocks
    it follows the sellers, the most units on the shelf first, and a newly
    stocked product still opens somewhere. Only a shop or an office draws a
    Shelves block to land on: a depot or a factory holding the goods is never
    the answer, and with no such store the product is not a link. */
-const xlSellers = item => D.businesses.filter(b => b.status === "retail" || b.status === "office")
-  .map(b => ({b, line: (b.lines || []).find(l => l.item === item && (l.revenue || l.units) && spShelfListed(b, l))}))
+const xlSellers = slug => D.businesses.filter(b => b.status === "retail" || b.status === "office")
+  .map(b => ({b, line: (b.lines || []).find(l => l.slug === slug && (l.revenue || l.units) && spShelfListed(b, l))}))
   .filter(x => x.line)
   .sort((x, y) => ((y.line.revenue || 0) - (x.line.revenue || 0)) || ((y.line.units || 0) - (x.line.units || 0)));
 /* Open that store on its Shelves with the product's row pulsing. A bag or a
    drink sits among the folded odds and ends (drawSite's SHELF_MAIN_SHARE
    rule), so the fold is opened first or the row would not be there. */
-function xlOpenSeller(item){
-  const top = xlSellers(item)[0];
+function xlOpenSeller(slug){
+  const top = xlSellers(slug)[0];
   if(!top) return;
   const {b, line} = top;
   if(spShelfFolded(b, line)) showAllShelves = true;
@@ -17966,7 +18070,7 @@ function drawSite(){
   paintSiteUp(true);
 
   const targets = {};
-  D.supply.shops.forEach(r => { if(r.s === siteTab) targets[r.item] = r; });
+  D.supply.shops.forEach(r => { if(r.s === siteTab) targets[r.slug] = r; });
   const feeds = D.supply.shops.find(r => r.s === siteTab && r.from !== null);
   const depot = feeds ? D.businesses[feeds.from] : null;
   /* An office sells billed hours, not goods: its line is a fee with nothing to
@@ -18134,7 +18238,7 @@ function drawSite(){
       <thead><tr><th>Product</th><th>Sells / day</th><th>Busiest</th><th>Revenue / day</th>
         <th>Top-up</th><th>Pressure</th><th>On hand</th></tr></thead>
       <tbody>${shelves.map(l => {
-        const t = targets[l.item], f = shelfFact(l);
+        const t = targets[l.slug], f = shelfFact(l);
         /* A top-up the fact says to raise is the shelf emptying before the
            next drop: red, with the fact's figure to change it to. Nothing
            planned is a chip, not a dash, because it is a fix the player
@@ -18187,7 +18291,7 @@ function drawSite(){
       plural(b.quitWarnings, "person", "people")} here ${b.quitWarnings === 1 ? "has" : "have"} warned they will quit`)}">${
       spI("exit")}<b>${b.quitWarnings}</b></span>` : ""}</div>` : "";
 
-  const sub = [b.type, b.address, b.neighbourhood, `opened day ${b.opened}`,
+  const sub = [b.type, b.address, b.neighbourhood && hoodName(b.neighbourhood), `opened day ${b.opened}`,
     depot ? `supplied from ${siteLink(depot)}` : ""].filter(Boolean).join(" · ");
   /* The head marks: whether the doors are open, and — where they are not — the
      six pre-flight checks that say why, and the site's place by the profit of
@@ -18489,13 +18593,19 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
   const site = s => businesses[s];
   const address = s => site(s) ? `${site(s).name} · ${site(s).address}` : "Choose a depot";
   const set = f => f && Number.isFinite(f.setTo);
-  const add = (kind, s, item, current, proposed, reason, source = null, mode = null, paused = false, tight = false, lower = false) => {
-    const group = `${kind} · ${address(s)}`;
+  /* `line` is the row the change is about: its item's key identifies the
+     change, its name is only what the checklist prints. */
+  const add = (kind, s, line, current, proposed, reason, source = null, mode = null, paused = false, tight = false, lower = false) => {
+    const group = `${kind} · ${address(s)}`, item = line.item, slug = line.slug ?? null;
     // Indexes can move when a different save is loaded; addresses do not.
-    const key = JSON.stringify([kind, site(s)?.key ?? null, item, current, proposed,
-                               source === null ? null : site(source)?.key ?? source]
-                               .concat(mode === "smart" ? ["smart"] : []));
-    rows.push({key, group, item, current, proposed, reason, kind, site: s, source, mode,
+    const id = what => JSON.stringify([kind, site(s)?.key ?? null, what, current, proposed,
+                                      source === null ? null : site(source)?.key ?? source]
+                                      .concat(mode === "smart" ? ["smart"] : []));
+    const key = id(slug);
+    // The key a tick was stored under while rows were keyed by the item's
+    // name, for reconcileOrderMarks to carry over.
+    const legacyKey = id(item);
+    rows.push({key, legacyKey, group, item, slug, current, proposed, reason, kind, site: s, source, mode,
                ...(paused ? {paused: true} : {}), ...(tight ? {tight: true} : {}), ...(lower ? {lower: true} : {})});
   };
   /* What a figure was sized on, in the words of the sizing on screen. */
@@ -18518,38 +18628,38 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     if(r.fit === "paused" && ((r.need || 0) > 0 || r.edited || importResumes(r))){
       const now = r.smart ? `set to keep ${(r.inGame ?? r.pausedWeekly).toLocaleString()} in stock`
         : `configured for ${r.pausedWeekly.toLocaleString()} units/week`;
-      add("Weekly imports", r.s, r.item, null, r.edited ? value : null,
+      add("Weekly imports", r.s, r, null, r.edited ? value : null,
         `Resume the paused import contract. It is ${now}. ${r.edited ? `${setting(value)} ${yours}`
           : (r.need || 0) > 0 ? `${sized}: ${(r.setTo ?? r.need).toLocaleString()} a week. Review the quantity after resuming.`
           : "The top-up beside it falls short without it; resume it, or raise the top-up."}`,
         null, mode, true);
     } else if(r.edited ? r.changed : r.setTo !== null && r.setTo !== undefined){
       const why = r.edited ? yours : `${sized}${r.fit === "tight" ? "; the order covers the use but not the margin" : ""}.`;
-      add("Weekly imports", r.s, r.item, r.inGame ?? r.current ?? null, value,
+      add("Weekly imports", r.s, r, r.inGame ?? r.current ?? null, value,
         `${setting(value)} ${why}`, null, mode, false, !r.edited && r.fit === "tight");
     }
   }));
-  looseRows.forEach(r => add("Weekly imports", null, r.item, null, null,
+  looseRows.forEach(r => add("Weekly imports", null, r, null, null,
     `Choose a supplying depot before setting an order. The factory lines use ${Math.round(r.week).toLocaleString()} units/week.`));
   imports.forEach(r => {
     const f = r.fact || {};
     const catchUp = Number.isFinite(r.catchUp) && r.catchUp > 0 ? r.catchUp : null;
-    if(f.st === "paused" && !rows.some(x => x.kind === "Weekly imports" && x.site === r.s && x.item === r.item)) add("Weekly imports", r.s, r.item, null, null,
+    if(f.st === "paused" && !rows.some(x => x.kind === "Weekly imports" && x.site === r.s && x.slug === r.slug)) add("Weekly imports", r.s, r, null, null,
       `Review the paused import from ${r.from || "the supplier"}; resume it in-game if still needed.`);
-    else if(f.st === "short" && f.why === "shortfall" && r.covered) add("Before the next delivery", r.s, r.item, null, catchUp,
+    else if(f.st === "short" && f.why === "shortfall" && r.covered) add("Before the next delivery", r.s, r, null, catchUp,
       `${catchUp ? `Bring in ${catchUp.toLocaleString()} extra units${r.runsOut ? ` before ${r.runsOut}` : ""}. ` : ""}A route brings the week's draw, but a busy day may empty the shelf before its next round${r.paused
         ? `, and the backup import from ${r.from || "the supplier"} is paused. Arrange a one-off supply, raise the route's stock target, or resume the import.`
         : `. Arrange a one-off supply, or raise the route's stock target.`}`);
-    else if(f.st === "short" && f.why === "shortfall") add("Before the next delivery", r.s, r.item, null, catchUp,
+    else if(f.st === "short" && f.why === "shortfall") add("Before the next delivery", r.s, r, null, catchUp,
       `${catchUp ? `Bring in ${catchUp.toLocaleString()} extra units${r.runsOut ? ` before ${r.runsOut}` : ""}. Estimated demand minus current stock and scheduled incoming deliveries, rounded up to whole units. ` : ""}Stock may run out ${r.shortBy} days before a scheduled delivery. Arrange a one-off supply; a weekly order change alone will not bridge this gap.`);
   });
   sites.forEach(s => s.rows.forEach(r => {
     const f = r.fact || {};
-    if(set(f)) add("Factory daily top-ups", s.s, r.item, r.target || 0, f.setTo,
+    if(set(f)) add("Factory daily top-ups", s.s, r, r.target || 0, f.setTo,
       `${r.from === null || r.from === undefined ? "Choose a supplying depot" : `From ${address(r.from)}`}. ${
         r.sizedFor || "Full-rate input requirement"}${margin(r.margin)}; confirm staffing and output limits.`,
       r.from ?? null, null, false, f.st === "tight");
-    if(f.st === "stalled" && f.why !== "waiting") add("Check the delivery route", s.s, r.item, null, null,
+    if(f.st === "stalled" && f.why !== "waiting") add("Check the delivery route", s.s, r, null, null,
       `No delivery was recorded despite stock at ${address(r.from)}. Check the route and transport in-game.`, r.from ?? null);
   }));
   shops.forEach(r => {
@@ -18562,11 +18672,11 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     if(f.wholesale) return;
     /* A top-up target set far above what sells (idle, `lowers`): the lower
        target to type, a change that is never tight and never on Today. */
-    if(from !== null && r.peakSold > 0 && set(f) && f.lowers) add("Shop daily top-ups", r.s, r.item, r.target || 0,
+    if(from !== null && r.peakSold > 0 && set(f) && f.lowers) add("Shop daily top-ups", r.s, r, r.target || 0,
       f.setTo, `From ${address(from)}. Lower the top-up: it holds ${r.sold > 0 ? `${Math.round((r.target || 0) / r.sold).toLocaleString()} days` : "weeks"} of sales. `
         + `Peak sales ${r.peakSold.toLocaleString()} units/day${r.peakDay ? ` on ${r.peakDay}` : " (no weekday profile)"} until the next round${margin(r.margin)}.`,
       from, null, false, false, true);
-    else if(from !== null && r.peakSold > 0 && set(f)) add("Shop daily top-ups", r.s, r.item, r.target || 0,
+    else if(from !== null && r.peakSold > 0 && set(f)) add("Shop daily top-ups", r.s, r, r.target || 0,
       f.setTo, `From ${address(from)}. `
         + `Peak sales ${r.peakSold.toLocaleString()} units/day${r.peakDay ? ` on ${r.peakDay}` : " (no weekday profile)"}${margin(r.margin)}; check shelf space.`,
       from, null, false, f.st === "tight");
@@ -18582,12 +18692,12 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
        take none, so its need is its use and no margin is claimed. */
     const sized = Number.isFinite(f.need) && Number.isFinite(f.use) && f.need > f.use
       ? `${margin(r.margin)}, ${f.need.toLocaleString()} in all` : "";
-    if(set(f)) add("Wholesale deliveries", r.s, r.item, Number.isFinite(f.have) ? f.have : null, f.setTo,
+    if(set(f)) add("Wholesale deliveries", r.s, r, Number.isFinite(f.have) ? f.have : null, f.setTo,
       `${f.role === "depot" ? "Uses" : "Sells"} ${(f.use || 0).toLocaleString()} a week${sized}. Change the amount on the wholesale delivery contract in-game.`,
       null, "weekly", false, f.st === "tight");
     /* Independent of the contract: stock that runs out before the delivery
        is brought in by hand, whether or not the contract is raised too. */
-    if(f.st === "short" && Number.isFinite(f.catchUp) && f.catchUp > 0) add("Before the next delivery", r.s, r.item, null, f.catchUp,
+    if(f.st === "short" && Number.isFinite(f.catchUp) && f.catchUp > 0) add("Before the next delivery", r.s, r, null, f.catchUp,
       `Bring in ${f.catchUp.toLocaleString()} extra units by hand before ${when} wholesale delivery: the stock on hand runs out before it lands.`);
   });
   /* A depot only a route from your own site feeds: the top-up that route's
@@ -18596,7 +18706,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     const f = r.fact || {};
     if(!set(f)) return;
     const from = Number.isInteger(f.from) ? f.from : null;
-    add("Depot daily top-ups", r.s, r.item, Number.isFinite(f.have) ? f.have : 0, f.setTo,
+    add("Depot daily top-ups", r.s, r, Number.isFinite(f.have) ? f.have : 0, f.setTo,
       `${from !== null ? `Set on the plan of ${address(from)}. ` : ""}Its busiest day sends on ${
         (f.use || 0).toLocaleString()} units${margin(r.margin)}.`,
       from, null, false, f.st === "tight");
@@ -18608,7 +18718,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     const f = r.fact || {};
     if(f.st !== "short" || f.why !== "hours" || !Number.isFinite(r.need)) return;
     const now = Number.isFinite(r.hoursNow) ? r.hoursNow : null;
-    add("Factory run hours", r.s, r.item, now, r.need,
+    add("Factory run hours", r.s, r, now, r.need,
       `Post factory workers on ${r.item} for ${r.need} hours a day${r.machines > 1 ? `, on each of its ${r.machines} machines` : ""}; the roster has them ${
         now ?? 0}${r.thinDay ? ` (${r.thinDay.day} ${r.thinDay.hours} h)` : ""}. ${r.sizedFor === "What the shops at the end of the chain use" ? "Sized for what the shops at the end of the chain use, plus the margin." : "Sized 24/7: round the clock."}`,
       null, "hours");
@@ -18642,11 +18752,18 @@ function orderChecklistText(rows, title, mode = "cap"){
 }
 
 function reconcileOrderMarks(saved, rows, complete){
+  /* A tick stored while rows were keyed by the item's name reads back as the
+     same row's key-based one: the checklist names items by key now, and a
+     tick the player made is not dropped for it. */
+  const kept = new Set(saved);
+  rows.forEach(r => {
+    if(r.legacyKey && r.legacyKey !== r.key && kept.has(r.legacyKey)){ kept.delete(r.legacyKey); kept.add(r.key); }
+  });
   // Missing game text hides factory recommendations; absence then is not
   // evidence that an action was resolved. Keep those notes for the next load.
-  if(!complete) return new Set(saved);
+  if(!complete) return kept;
   const valid = new Set(rows.map(r => r.key));
-  return new Set([...saved].filter(key => valid.has(key)));
+  return new Set([...kept].filter(key => valid.has(key)));
 }
 
 /* Today's Plan imports card counts what the change checklist still has to do,
@@ -18762,7 +18879,7 @@ function sbData(){
   c.rows.forEach((r, i) => {
     r.i = i;
     byTab[r.site === null || r.site === undefined ? "warehouses" : sbTabOf(r.site)].push(r);
-    const k = `${r.site ?? ""}|${r.item}`;
+    const k = `${r.site ?? ""}|${r.slug ?? r.item}`;  // by the item's key
     if(!at.has(k)) at.set(k, []);
     at.get(k).push(r);
   });
@@ -18770,11 +18887,11 @@ function sbData(){
   return sbCache;
 }
 const sbSaveMarks = d => { if(d.storageKey) try{ localStorage.setItem(d.storageKey, JSON.stringify([...d.marks])); }catch(e){} };
-/* The checklist rows about one row of a table: its site and item, of the
+/* The checklist rows about one row of a table: its site and item (by key), of the
    kinds that table sets. Each is claimed once, so a row no table shows still
    gets a tick of its own (sbOthers()). */
-function sbChk(d, claimed, s, item, kinds, line){
-  const rows = (d.at.get(`${s ?? ""}|${item}`) || []).filter(r => kinds.includes(r.kind) && !claimed.has(r.i)
+function sbChk(d, claimed, s, slug, kinds, line){
+  const rows = (d.at.get(`${s ?? ""}|${slug}`) || []).filter(r => kinds.includes(r.kind) && !claimed.has(r.i)
     && (line === undefined || r.line === undefined || r.line === line));
   rows.forEach(r => claimed.add(r.i));
   return rows;
@@ -19301,7 +19418,7 @@ function drawShopsTab(){
     .forEach(r => shelves.push({s: r.s, item: r.item, slug: r.slug, sold: r.perWeek ? Math.round(r.perWeek / 7) : 0, peakSold: null,
       peakDay: null, target: r.target || 0, pressure: null, stock: r.stock, from: r.routedFrom ?? null, fact: szFact(r.s, r.slug)}));
   shelves.forEach(r => {
-    r.chk = sbChk(d, claimed, r.s, r.item, SB_SHOP_KINDS);
+    r.chk = sbChk(d, claimed, r.s, r.slug, SB_SHOP_KINDS);
     r.keep = sbWorth(r.fact, r.chk);
   });
   const kept = shelves.filter(r => r.keep);
@@ -19470,7 +19587,7 @@ function sbDepotRows(d, claimed, s, slugs){
       busy: ir ? ir.peakPerDay : f.cad === "daily" && Number.isFinite(f.use) ? f.use : null,
       // Nothing used a week is no figure to rank, a dash, not a nought.
       week: szWeekly(f) && f.use > 0 ? f.use : null};
-    r.chk = sbChk(d, claimed, s, item, SB_WH_KINDS);
+    r.chk = sbChk(d, claimed, s, slug, SB_WH_KINDS);
     r.keep = sbWorth(f, r.chk, i && i.edited);
     return r;
   });
@@ -19565,7 +19682,7 @@ function drawWarehousesTab(){
   });
   /* A factory input no depot brings: nothing to set until one is chosen. */
   if(d.looseRows.length){
-    const chk = d.looseRows.map(r => sbChk(d, claimed, null, r.item, ["Weekly imports"]));
+    const chk = d.looseRows.map(r => sbChk(d, claimed, null, r.slug, ["Weekly imports"]));
     const left = chk.flat().filter(c => !d.marks.has(c.key)).length;
     blocks.push(sbObject("warehouses", null, {icon: "crate", name: "No depot", left, open: true,
       how: "<span><em>factory inputs no depot imports or tops up</em></span>",
@@ -19707,13 +19824,13 @@ function drawFactoriesTab(){
     site.lines.forEach(l => { makers[l.slug] = (makers[l.slug] || 0) + 1; });
     const lines = site.lines.map(l => {
       const r = {...l, s, fact: sbLineFact(l), makers: makers[l.slug]};
-      r.chk = sbChk(d, claimed, s, l.item, SB_LINE_KINDS, l.rid);
+      r.chk = sbChk(d, claimed, s, l.slug, SB_LINE_KINDS, l.rid);
       r.keep = sbWorth(r.fact, r.chk);
       return r;
     }).concat(site.unnamed.map(u => ({...u, s, unnamed: true, slug: null, fact: null, chk: [], keep: true})));
     const inputs = site.needs.map(n => {
       const r = {...n, s, fact: szNeed(site, n)};
-      r.chk = sbChk(d, claimed, s, n.item, SB_INPUT_KINDS);
+      r.chk = sbChk(d, claimed, s, n.slug, SB_INPUT_KINDS);
       r.keep = sbWorth(r.fact, r.chk);
       (r.fact.ramp || []).forEach(x => ramping.add(x));
       return r;
@@ -19908,9 +20025,10 @@ function drawMovers(){
   m.hype.slice(0,5).forEach(h => {
     const what = (h.count > 1 ? `${h.count} products` : h.items[0])
       + (h.sellHere ? " you sell here" : h.mine ? " you stock" : "");
-    const tip = `Hype in ${h.hood} since day ${h.startDay}, ${plural(h.daysLeft, "day")} left: ${
-      h.items.join(", ")}. Click to sort the grid by ${h.hood}.`;
-    out.push(waveHtml("up", h.hood, what, days(h.daysLeft), tip, h.hood));
+    const place = hoodName(h.hood);
+    const tip = `Hype in ${place} since day ${h.startDay}, ${plural(h.daysLeft, "day")} left: ${
+      h.items.join(", ")}. Click to sort the grid by ${place}.`;
+    out.push(waveHtml("up", place, what, days(h.daysLeft), tip, h.hood));
   });
   /* Python already folds one product short at several suppliers into one
      entry (count = suppliers). The entries that share a place fold again
@@ -19920,11 +20038,13 @@ function drawMovers(){
   const trouble = k => k.toLowerCase().replace(/^product /, "");
   const byPlace = new Map();
   m.shortages.forEach(x => {
-    const where = x.count > 1 ? `${x.count} suppliers` : x.where;
-    const g = byPlace.get(where) || {where, rows: [], mine: 0, lo: Infinity, hi: 0};
+    // Folded by the place's identity: a neighbourhood's key, or the address.
+    const where = x.count > 1 ? `${x.count} suppliers` : x.hood ? hoodName(x.hood) : x.where;
+    const id = x.count > 1 ? where : x.hood || x.where;
+    const g = byPlace.get(id) || {where, rows: [], mine: 0, lo: Infinity, hi: 0};
     g.rows.push(x); g.mine += x.mine ? 1 : 0;
     g.lo = Math.min(g.lo, x.daysLeft); g.hi = Math.max(g.hi, x.daysLeft);
-    byPlace.set(where, g);
+    byPlace.set(id, g);
   });
   [...byPlace.values()].slice(0,5).forEach(g => {
     const n = g.rows.length, one = g.rows[0];
@@ -19943,9 +20063,10 @@ function drawMovers(){
   (m.movers || []).slice(0,6).forEach(x => {
     const what = (x.count > 1 ? `${x.count} ${x.family.toLowerCase()} lines` : x.items[0]) + (x.sell ? " you sell here" : "");
     const delta = `${x.delta > 0 ? "+" : ""}${x.delta}`;
-    const tip = `${x.hood}: ${x.items.join(", ")}${x.count > x.items.length ? "…" : ""} moved ${delta} on average over ${
-      plural(m.trendDays, "day")}${x.openedHere ? `; ${x.openedHere} opened day ${x.openedDay}, inside this window` : ""}. Click to sort the grid by ${x.hood}.`;
-    out.push(waveHtml(x.up ? "up" : "dn", x.hood, what, delta, tip, x.hood));
+    const place = hoodName(x.hood);
+    const tip = `${place}: ${x.items.join(", ")}${x.count > x.items.length ? "…" : ""} moved ${delta} on average over ${
+      plural(m.trendDays, "day")}${x.openedHere ? `; ${x.openedHere} opened day ${x.openedDay}, inside this window` : ""}. Click to sort the grid by ${place}.`;
+    out.push(waveHtml(x.up ? "up" : "dn", place, what, delta, tip, x.hood));
   });
   $("movers").innerHTML = out.length ? out.join("")
     : `<span class="quiet">No demand events running right now${m.trendDays ? "" : "; trend history starts building from today"}.</span>`;
@@ -19960,20 +20081,20 @@ function drawMovers(){
    products, which is the number the grid ranks by, so a one-product type shows
    that product's own demand. */
 function typeRow(r, i, hoods){
-  const guide = xlGuideLink(r.slug, "Setup guide");
-  let h = `<div class="r" data-r="${i}"><span class="mk-name">${r.type}</span><small>${plural(r.products, "product")}${r.mine ? " · you run one" : ""}${
-    guide ? ` · ${guide}` : ""}</small></div>`;
+  const guide = xlGuideLink(r.slug, "Setup guide"), plan = growthPlanLink(growthPlanType(r.slug, true));
+  let h = `<div class="r" data-r="${i}" data-slug="${attr(r.slug)}"><span class="mk-name">${r.type}</span><small>${plural(r.products, "product")}${r.mine ? " · you run one" : ""}${
+    guide ? ` · ${guide}` : ""}${plan ? ` · ${plan}` : ""}</small></div>`;
   r.cells.forEach((c, j) => {
-    if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}" data-tip="${attr(`${r.type} in ${hoods[j]}: no reading`)}">—</div>`; return; }
+    if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}" data-tip="${attr(`${r.type} in ${hoodName(hoods[j])}: no reading`)}">—</div>`; return; }
     const range = r.products === 1 ? `demand ${c.demand} for its one product`
       : c.count < r.products ? `average demand ${c.demand} across the ${c.count} of its ${r.products} products with a reading here`
       : `average demand ${c.demand} across its ${c.count} products`;
     // The game counts every seller there, the player's own shop included.
     const sellers = `${plural(c.providers, "seller")}${c.count > 1 ? " on average" : ""}${
       c.here ? (c.providers ? ", yours among them" : ", you have a store here") : ""}`;
-    const tip = `${r.type} in ${c.hood}: ${range}, ${sellers}`;
+    const tip = `${r.type} in ${hoodName(c.hood)}: ${range}, ${sellers}`;
     h += `<div class="cell${c.here ? " mine" : ""}" data-r="${i}" data-c="${j}" data-slug="${attr(r.slug)}" data-hood="${
-      attr(c.hood)}" style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
+      attr(c.hood)}"${cellGo(r.slug, c.hood)} style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
       c.demand}${rivalDots(c.providers)}</div>`;
   });
   return h;
@@ -19984,18 +20105,18 @@ function typeRow(r, i, hoods){
    say so. */
 function officeRow(r, i, hoods, trendDays, noOffices){
   const guide = xlGuideLink(r.slug, "Setup guide");
-  let h = `<div class="r" data-r="${i}"><span class="mk-name">${r.type}</span><small>${r.fees.join(", ")}${r.mine ? " · you run one" : ""}${
+  let h = `<div class="r" data-r="${i}" data-slug="${attr(r.slug)}"><span class="mk-name">${r.type}</span><small>${r.fees.join(", ")}${r.mine ? " · you run one" : ""}${
     guide ? ` · ${guide}` : ""}</small></div>`;
   r.cells.forEach((c, j) => {
-    if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}" data-office data-tip="${attr(`${r.type} in ${hoods[j]}: ${
+    if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}" data-office data-tip="${attr(`${r.type} in ${hoodName(hoods[j])}: ${
       noOffices.includes(hoods[j]) ? "no office buildings here" : "no reading"}`)}">—</div>`; return; }
     const firms = c.here ? `${plural(c.providers, "firm")} charging it, yours among them`
       : c.providers ? plural(c.providers, "rival firm") : "no firm charging it yet";
-    const tip = `${r.type} in ${c.hood}: demand ${c.demand} for ${r.fees.join(" and ")}, ${firms}${
+    const tip = `${r.type} in ${hoodName(c.hood)}: demand ${c.demand} for ${r.fees.join(" and ")}, ${firms}${
       c.hype ? `, hype for ${plural(c.hype, "more day")}` : ""}${
       c.delta ? `, ${c.delta > 0 ? "+" : ""}${c.delta} over ${plural(trendDays, "day")}` : ""}`;
     h += `<div class="cell${c.here ? " mine" : ""}" data-r="${i}" data-c="${j}" data-office data-slug="${
-      attr(r.slug)}" data-hood="${attr(c.hood)}" style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
+      attr(r.slug)}" data-hood="${attr(c.hood)}"${cellGo(r.slug, c.hood)} style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
       c.demand}${rivalDots(c.providers)}</div>`;
   });
   return h;
@@ -20003,10 +20124,11 @@ function officeRow(r, i, hoods, trendDays, noOffices){
 function productRow(r, i, hoods, trendDays){
   const tag = r.make && !r.sell ? "you make this, not sold" : r.make ? "you make and sell it" : r.sell ? "you sell it" : "";
   const office = r.office ? " data-office" : "";  // an office fee: nothing to plan
-  let h = `<div class="r" data-r="${i}"><span class="mk-name">${r.item}</span><small>${tag}</small></div>`;
+  const plan = r.office ? "" : growthPlanLink(growthPlanType(r.slug, false));
+  let h = `<div class="r" data-r="${i}"><span class="mk-name">${r.item}</span><small>${[tag, plan].filter(Boolean).join(" · ")}</small></div>`;
   r.cells.forEach((c, j) => {
-    if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}"${office} data-tip="${attr(`${r.item} in ${hoods[j]}: no reading`)}">—</div>`; return; }
-    const tip = `${r.item} in ${c.hood}: demand ${c.demand}, ${c.monopoly ? "only you sell it" : plural(c.providers, "seller")}${
+    if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}"${office} data-tip="${attr(`${r.item} in ${hoodName(hoods[j])}: no reading`)}">—</div>`; return; }
+    const tip = `${r.item} in ${hoodName(c.hood)}: demand ${c.demand}, ${c.monopoly ? "only you sell it" : plural(c.providers, "seller")}${
       c.hype ? `, hype for ${plural(c.hype, "more day")}` : ""}${
       c.delta ? `, ${c.delta > 0 ? "+" : ""}${c.delta} over ${plural(trendDays, "day")}` : ""}${
       c.sell && !c.monopoly ? ", you sell it here" : ""}`;
@@ -20068,7 +20190,7 @@ function drawMarket(){
   const offices = types ? hoodSorted(m.offices || [], m.hoods) : [];
 
   const notes = [];
-  if(marketSortHood) notes.push(`Sorted by demand in ${marketSortHood}, ${
+  if(marketSortHood) notes.push(`Sorted by demand in ${hoodName(marketSortHood)}, ${
       marketSortDir < 0 ? "highest" : "lowest"} first · <a class="link" href="#" id="marketUsual">usual order</a>`);
   else if(types) notes.push("Ranked by each type's best neighbourhood");
   else if(marketView === "new") notes.push("Strongest unserved demand first");
@@ -20078,8 +20200,8 @@ function drawMarket(){
     : `${limit} of ${rows.length} · <a class="link" href="#" id="marketMore">show all ${rows.length}</a>`);
   $("marketNote").innerHTML = notes.join(" · ");
   $("marketWhy").dataset.tip = types
-    ? `Each cell is the average demand, 0 to 100, across a type's primary products in that neighbourhood, so a one-product type shows that product's own demand. Rows rank by their best neighbourhood. Dots count sellers, yours included, ten at most. An outlined cell is where you already run one. Offices, below the shops, sell one hourly fee each, so their cell is that fee's demand and the dots count the firms charging it, yours included. Hover to light a row and a column, click a cell to pin its story below, click a neighbourhood to sort by it.`
-    : `Each cell is the demand for a product in that neighbourhood, 0 to 100, shaded to match. Dots count sellers; no dots means only you. An outlined cell is where you already sell it. Hover to light a row and a column, click a cell to pin its story below, click a neighbourhood to sort by it.`;
+    ? `Each cell is the average demand, 0 to 100, across a type's primary products in that neighbourhood, so a one-product type shows that product's own demand. Rows rank by their best neighbourhood. Dots count sellers, yours included, ten at most. An outlined cell is where you already run one. Offices, below the shops, sell one hourly fee each, so their cell is that fee's demand and the dots count the firms charging it, yours included. Hover to light a row and a column, click a cell to find premises for that type there, click a neighbourhood to sort by it.`
+    : `Each cell is the demand for a product in that neighbourhood, 0 to 100, shaded to match. Dots count sellers; no dots means only you. An outlined cell is where you already sell it. Hover to light a row and a column, click a neighbourhood to sort by it.`;
 
   const grid = $("market");
   /* The label column is 200px on a desk; a phone narrows it (--mk-label, in
@@ -20090,13 +20212,12 @@ function drawMarket(){
      a phone shows; the full name stays in its tip. */
   grid.innerHTML = any
     ? `<div></div>` + m.hoods.map((h, j) => `<div class="h${h === marketSortHood ? " sort" : ""}${HOOD_TAGS[h] ? " mk-tagged" : ""}" data-c="${j}" data-hood="${attr(h)}" data-tip="${
-        attr(`${h}: click to sort by demand here`)}"><span class="mk-long">${shortHood(h)}</span>${
+        attr(`${hoodName(h)}: click to sort by demand here`)}"><span class="mk-long">${shortHood(hoodName(h))}</span>${
         HOOD_TAGS[h] ? `<span class="mk-tag">${HOOD_TAGS[h]}</span>` : ""}</div>`).join("")
       + shown.map((r, i) => types ? typeRow(r, i, m.hoods) : productRow(r, i, m.hoods, m.trendDays)).join("")
       + (offices.length ? `<div class="band">Offices<small>customers served online · each cell is the demand for its hourly fee</small></div>`
         + offices.map((r, k) => officeRow(r, shown.length + k, m.hoods, m.trendDays, m.noOffices || [])).join("") : "")
     : `<span class="quiet" style="grid-column:1/-1">${types ? "No business type matched." : "Nothing here."}</span>`;
-  $("cellDetail").textContent = any ? "Click a cell" : "";
   wireMarketSort();
   wireTips();
 }
@@ -20125,7 +20246,7 @@ function indexPlan(){
    then, if nobody named it, the slug made readable. */
 const prettySlug = slug => slug.replace(/^ba:[a-z]+_/, "").replace(/([a-z])(\d)/g, "$1 $2")
   .replace(/^./, c => c.toUpperCase());
-const itemName = slug => ((D.plan || {}).items || {})[slug] || (D.itemNames || {})[slug] || prettySlug(slug);
+const itemName = slug => ((D.plan || {}).items || {})[slug] || (D.names || {})[slug] || prettySlug(slug);
 const HOURS = 24;  // a workstation keeps running while the shops are shut
 
 /* changed for growth: one physical product is enough to plan — the hairdresser
@@ -20374,12 +20495,12 @@ function drawProducts(){
          product filter, and the site panel already has the landing and the lit
          row, so one click costs no new machinery. `top`, above, is the bars'
          scale; the store is `seller`. */
-      const seller = xlSellers(p.item)[0];
+      const seller = xlSellers(p.slug)[0];
       const opens = !seller ? ""
         : seller.line.revenue ? `Open ${shortName(seller.b)}, the store that sells the most of it${p.stores > 1 ? `, one of ${p.stores}` : ""}`
         : `Open ${shortName(seller.b)}, which stocks it; no store sold any yesterday`;
-      const name = seller ? `<a class="link xl-sells" href="#company" data-xl-item="${attr(p.item)}" data-tip="${attr(opens)}">${p.item}</a>` : p.item;
-      return `<tr>
+      const name = seller ? `<a class="link xl-sells" href="#company" data-xl-item="${attr(p.slug)}" data-tip="${attr(opens)}">${p.item}</a>` : p.item;
+      return `<tr data-slug="${attr(p.slug)}">
       <td class="l"${showPeak?"":` data-tip="${attr(peakTip(p))}"`}>${name}</td>
       <td><span class="bar"><i style="width:${(p.revenue / top * 100).toFixed(0)}%"></i></span>${fmt(p.revenue)}</td>
       <td>${p.units.toLocaleString()}</td>
@@ -20557,7 +20678,7 @@ function drawFindLocation(){
   badge.className = "soon live";
   badge.textContent = `${vacant.length} VACANT`;
   text.textContent = `${plural(vacant.length, "vacant retail unit")} right now. Best foot traffic: ${
-    best.address}, ${best.hood} (${best.traffic}).`;
+    best.address}, ${hoodName(best.hood)} (${best.traffic}).`;
 }
 
 /* Next moves: the Optimize staffing card opens the roster with most to gain,
@@ -21129,8 +21250,8 @@ function showPage(id, scroll = true, historyMode = "push"){
       history[historyMode === "replace" ? "replaceState" : "pushState"](
         siteHistoryState(historyMode === "replace"), "", hash);
   }catch(e){}
-  /* The chart sizes itself from its rendered width, which was zero while its
-     page was hidden. */
+  /* The chart is drawn again when its page shows, since it may have been
+     drawn into a hidden container. */
   if(id === "company" && sub.company === "results" && !siteOpen && hasData()) drawChart();
   if(id === "map") showCityMap();
   if(id === "wiki") wikiVisit(from !== "wiki");
@@ -21722,7 +21843,8 @@ buildAlertSettingsPanel();
 
    Results — wireChart, wirePortfolio, wireSiteReads, wireSiteFinds, wireSiteChips:
      .chartbox[data-chart][data-xs][data-ys][data-labels]  JSON arrays, one per
-                          day; inside it an svg with <g class="xh"><line/><circle/></g>,
+                          day, and data-plot "left,right", the hover bounds
+                          (first and last bar's outer edge) in viewBox units; inside it an svg with <g class="xh"><line/><circle/></g>,
                           a .readout line, and .legend a[data-series] toggling
                           g[data-series] (choices kept in seriesState across renders).
      tr.chain[data-chain]  click toggles .open and .show on tr.kid[data-parent=…];
@@ -21750,10 +21872,13 @@ buildAlertSettingsPanel();
                           node click opens the site's rows (sbNodeOpen()).
 
    Growth — wireHeat, wirePlan:
-     .heat                .h[data-c], .r[data-r], .cell[data-r][data-c][data-tip]:
-                          hover lights row and column, click pins the story into
-                          #cellDetail ("Name: rest" splits at the first colon);
-                          a .cell[data-office] gets no Plan a chain link.
+     .heat                .h[data-c], .r[data-r][data-slug], .cell[data-r][data-c][data-tip]:
+                          hover lights row and column; a cell with a finder
+                          preset (role=button) opens the Map finder on its type
+                          and neighbourhood, by click, Enter or Space;
+                          .r .mk-plan[data-plan] opens Plan a chain on that
+                          type, and an office row has none; showGrowthRow()
+                          rings a type's row (.mk-arrive).
      tr.line[data-m][data-rate][data-ing="Name:factor,…"][data-kit][data-slug][data-max]
                           with .step a[data-d=-1|1], .step b, .machines, .made,
                           .covers, .ing; totals in #vMachines #vMade #vTake #vRaw
@@ -22587,20 +22712,21 @@ function ssBuild(){
       out.push(ssEntry({id: `site:${b.key}`, g: "sites", t: shortName(b),
         p: b.status === "vacant" ? `Vacant lease · ${b.address || ""}`
           : `${b.type} · ${b.address || ""}${inputs.length ? ` · eats ${inputs.join(" and ")}` : ""}`,
-        ic: "building", hood: b.code || "", kw: [b.address, b.neighbourhood, b.type, b.name, ...inputs].filter(Boolean),
+        ic: "building", hood: b.code || "", kw: [b.address, b.neighbourhood && hoodName(b.neighbourhood), b.type, b.name, ...inputs].filter(Boolean),
         dot: ssWorst(siteRows[b.key] || []), map: b.key, mapLabel: b.name, land: b.name, href: siteHref(b.key),
         go: () => ssOpenSite(b.key)}));
     });
     /* One entry per item: what the factories eat first, then what sells, then
        what they make, with anything sitting idle said after it. */
+    /* By the item's key; the name is only the entry's title. */
     const items = new Map();
-    const item = name => { if(!items.has(name)) items.set(name, {parts: []}); return items.get(name); };
+    const item = (slug, name) => { if(!items.has(slug)) items.set(slug, {name, parts: []}); return items.get(slug); };
     facSites.forEach(f => {
       const site = D.businesses[f.s];
       if(!site) return;
       (f.needs || []).forEach(n => {
         const got = (f.arrivals || {})[n.slug] || 0;
-        const it = item(n.item);
+        const it = item(n.slug, n.item);
         if(it.kind) return;
         Object.assign(it, {kind: "input", ic: "pipe", dot: got < n.perDay ? "watch" : "",
           land: `${shortName(site)} › Inputs`, go: () => ssOpenSite(site.key, "#sp-inputs")});
@@ -22609,13 +22735,13 @@ function ssBuild(){
     });
     (D.products || []).forEach(p => {
       if(!p.stores && !p.units) return;
-      const it = item(p.item);
+      const it = item(p.slug, p.item);
       it.parts.push(`Sold in ${plural(p.stores, "store")} · ${ssNum(p.units)} a day · ${compact(p.revenue)}`);
       if(!it.kind) Object.assign(it, {kind: "sold", ic: "shelves", land: `Company › Products · ${p.item}`, go(){
-        const at = D.products.findIndex(x => x.item === p.item);
+        const at = D.products.findIndex(x => x.slug === p.slug);
         if(at >= PRODUCTS_TOP && !showAllProducts){ showAllProducts = true; drawProducts(); }
         reveal("secProducts");
-        ssRing($$("#secProducts tbody tr").find(tr => (tr.querySelector("td") || {}).textContent === p.item));
+        ssRing($$("#secProducts tbody tr").find(tr => tr.dataset.slug === p.slug));
       }});
     });
     facSites.forEach(f => {
@@ -22623,7 +22749,7 @@ function ssBuild(){
       if(!site) return;
       (f.lines || []).forEach(l => {
         if(!l.item) return;
-        const it = item(l.item);
+        const it = item(l.slug, l.item);
         if(it.made) return;
         it.made = true;
         it.parts.push(`Made in ${shortName(site)}`);
@@ -22634,13 +22760,13 @@ function ssBuild(){
     (D.supply ? idleRows() : []).forEach(r => {
       const site = D.businesses[r.s];
       if(!site || !r.item) return;
-      const it = item(r.item);
+      const it = item(r.slug, r.item);
       it.parts.push(`${ssNum(r.stock)} idle at ${shortName(site)}`);
       if(!it.dot) it.dot = "opp";
       if(!it.kind) Object.assign(it, {kind: "idle", ic: "crate", land: `Supply › ${SB_LABEL[sbTabOf(r.s)]} · Idle stock`,
         go: () => sbLand(sbTabOf(r.s), r.s, r.slug, "")});
     });
-    items.forEach((it, name) => out.push(ssEntry({id: `product:${name}`, g: "products", t: name,
+    items.forEach((it, slug) => out.push(ssEntry({id: `product:${slug}`, g: "products", t: it.name,
       p: it.parts.slice(0, 2).join(" · "), ic: it.ic, dot: it.dot || "", land: it.land, go: it.go})));
     const counts = kindCounts();
     ALERT_GROUPS.forEach(g => {
@@ -22660,7 +22786,7 @@ function ssBuild(){
     }));
     [...best.values()].sort((a, z) => z.demand - a.demand || a.type.localeCompare(z.type)).forEach(d => {
       out.push(ssEntry({id: `finder:${d.slug}`, g: "finder", t: `Open ${/^[AEIOU]/i.test(d.type) ? "an" : "a"} ${d.type}`,
-        p: `best fit: ${d.hood} · demand ${d.demand}`, ic: "pin",
+        p: `best fit: ${hoodName(d.hood)} · demand ${d.demand}`, ic: "pin",
         syn: ["new shop", "new business", "open", "expand"], land: `Map › Find a location · ${d.type}`,
         go: () => ssFinder({cat: d.category, type: d.slug, hoods: [d.hood]})}));
     });
@@ -23303,12 +23429,25 @@ const bindChart = once(() => {
     if(!line || !dotc || !out) return;
     let xs, ys, labels;
     try{ xs = JSON.parse(cb.dataset.xs); ys = JSON.parse(cb.dataset.ys); labels = JSON.parse(cb.dataset.labels); }catch(err){ return; }
-    const r = svg.getBoundingClientRect(); const vb = svg.viewBox.baseVal;
-    const x = (e.clientX - r.left) / r.width * vb.width;
+    /* The viewBox is fixed; preserveAspectRatio scales it down in a narrow box
+       and centres it at 1:1 in a wide one, so the pointer goes through the
+       svg's own screen transform. Beside the first and last bars (the y axis,
+       the empty margins) no day is read. */
+    const ctm = svg.getScreenCTM(); if(!ctm) return;
+    const x = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse()).x;
+    const [lo, hi] = (cb.dataset.plot || "").split(",").map(Number);
+    const miss = !(x >= lo && x <= hi) || !xs.length;
+    cb.classList.toggle("chart-miss", miss);
+    if(miss){ out.innerHTML = labels[labels.length - 1] || ""; return; }
     let k = 0; for(let i = 1; i < xs.length; i++) if(Math.abs(xs[i] - x) < Math.abs(xs[k] - x)) k = i;
     line.setAttribute("x1", xs[k]); line.setAttribute("x2", xs[k]);
     dotc.setAttribute("cx", xs[k]); dotc.setAttribute("cy", ys[k]);
     out.innerHTML = labels[k];
+  });
+  /* Leaving the chart ends where leaving through a margin does: on the last day. */
+  onLeave(".chartbox[data-chart]", cb => {
+    const out = q(".readout", cb);
+    try{ const labels = JSON.parse(cb.dataset.labels); if(out && labels.length) out.innerHTML = labels[labels.length - 1]; }catch(err){}
   });
   on("click", ".chartbox[data-chart] .legend a[data-series]", (a, e) => {
     e.preventDefault();
@@ -23356,39 +23495,76 @@ const bindFlow = once(() => {
 });
 function wireFlow(){ bindFlow(); applyFlow(); }
 
-/* demand grid: rows and columns light up together; a click pins a cell's story -- */
+/* demand grid: rows and columns light up together; a cell opens the finder ---- */
 const wireHeat = once(() => {
   onEnter(".heat .cell", c => {
     $$(`.cell[data-r="${CSS.escape(c.dataset.r)}"], .cell[data-c="${CSS.escape(c.dataset.c)}"]`).forEach(x => x.classList.add("hl"));
     $$(`.heat .h[data-c="${CSS.escape(c.dataset.c)}"], .heat .r[data-r="${CSS.escape(c.dataset.r)}"]`).forEach(x => x.classList.add("hl"));
   });
   onLeave(".heat .cell", () => $$(".hl").forEach(x => x.classList.remove("hl")));
+  /* A cell opens the map with the finder on, this type chosen and only this
+     neighbourhood left standing; Enter and Space do what a click does. */
   on("click", ".heat .cell", c => {
-    $$(".cell.picked").forEach(x => x.classList.remove("picked")); c.classList.add("picked");
-    const detail = $("cellDetail"), tip = c.dataset.tip || "";
-    if(!detail) return;
-    const i = tip.indexOf(":");
-    // An office has no line to plan; its fee is served, not made.
-    detail.innerHTML = (i > 0 ? `<b>${tip.slice(0, i)}</b>${tip.slice(i + 1)}` : tip)
-      + findPremisesLink(c)
-      + (c.hasAttribute("data-office") ? "" : ` <a class="link" href="#secPlan">open in Plan a chain</a>`);
+    const go = finderPreset(c.dataset.slug, c.dataset.hood);
+    if(go) openFinder(go, true);
   });
-  /* The pin opens the map with the finder on, this type chosen and only this
-     neighbourhood left standing. */
-  on("click", "#cellDetail .link.pin", (a, e) => {
+  on("keydown", ".heat .cell[role=button]", (c, e) => {
+    if(e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault(); c.click();
+  });
+  on("click", "#market .mk-plan[data-plan]", (a, e) => {
     e.preventDefault();
-    openFinder({cat:a.dataset.cat, type:a.dataset.slug, hoods:[a.dataset.hood]});
+    // The type already open keeps the machines the player stepped.
+    if(planType !== a.dataset.plan){ planType = a.dataset.plan; planCounts = {}; }
+    drawPlan();
+    reveal("secPlan");
   });
 });
-/* A cell with no demand reading has no type to look for, and a board built
-   before the premises payload has nowhere to send the click. */
-function findPremisesLink(cell){
-  const slug = cell.dataset.slug, hood = cell.dataset.hood;
-  if(!slug || !hood || !D.premises) return "";
+/* The finder preset a Growth cell opens: its type, the type's category and
+   only its neighbourhood. A cell with no demand reading has no type to look
+   for, and a board built before the premises payload has nowhere to send it. */
+function finderPreset(slug, hood){
+  if(!slug || !hood || !D.premises) return null;
   const cat = (D.premises.demand[hood] || []).find(d => d.slug === slug)?.category;
-  if(!cat) return "";
-  return ` <a class="link pin" href="#map" data-cat="${attr(cat)}" data-slug="${attr(slug)}" data-hood="${
-    attr(hood)}">${icon("pin")}find premises</a>`;
+  return cat ? {cat, type: slug, hoods: [hood]} : null;
+}
+/* A cell that opens the finder is a button to the keyboard as well. */
+const cellGo = (slug, hood) => finderPreset(slug, hood) ? ` role="button" tabindex="0"` : "";
+/* The type a Growth row plans: a type row its own, a product row the type that
+   sells it (the one already open in Plan a chain first, then one the player
+   runs). Office fees are served, not made, so an office row plans nothing, and
+   a type with no physical product has no line to plan either. */
+function growthPlanType(slug, isType){
+  if(!D.plan || !D.plan.catalogue) return "";
+  const types = planTypes();
+  if(isType) return types.includes(slug) ? slug : "";
+  const holds = types.filter(k => (D.plan.catalogue[k].products || []).includes(slug));
+  return holds.find(k => k === planType) || holds.find(k => (D.plan.own || {})[k]) || holds[0] || "";
+}
+const growthPlanLink = kind => kind
+  ? `<a class="link mk-plan" href="#secPlan" data-plan="${attr(kind)}">Plan a chain ›</a>` : "";
+/* The finder's Demand figure comes back here: the By type view, the type's row
+   scrolled to and ringed once, its cells with it. A type the grid has no row
+   for lands on the grid itself. */
+function showGrowthRow(slug){
+  const sel = `#market .r[data-slug="${CSS.escape(slug || "")}"]`;
+  if(marketView !== "types"){
+    marketView = "types"; showAllMarket = false;
+    $$("#marketTools a[data-id]").forEach(a => a.classList.toggle("on", a.dataset.id === "types"));
+    drawMarket();
+  } else if(!q(sel)) drawMarket();
+  reveal("secMarket", "push", q(sel) ? sel : null);
+  const row = q(sel); if(!row) return;
+  const cells = $$(`#market .cell[data-r="${CSS.escape(row.dataset.r)}"]`);
+  [row, ...cells].forEach(el => {
+    el.classList.remove("mk-arrive"); void el.offsetWidth; el.classList.add("mk-arrive");
+    setTimeout(() => el.classList.remove("mk-arrive"), 2600);
+  });
+  /* The link that brought the player here is on a hidden page now; the
+     keyboard lands on the row it came for. */
+  const to = cells.find(c => c.getAttribute("role") === "button") || row;
+  if(!to.hasAttribute("tabindex")) to.setAttribute("tabindex", "-1");
+  to.focus({preventScroll: true});
 }
 
 /* plan a chain: every line runs 24/7; step a line's machines and everything follows */
@@ -23838,7 +24014,7 @@ const gwKeyOf = address => address ? `${address.street}#${address.number}` : "";
 const gwSiteOf = address => address && (D.businesses || []).find(b => b.key === gwKeyOf(address)) || null;
 const gwSiteName = row => { const b = gwSiteOf(row.address); return spEsc(b ? shortName(b) : row.business || "A shop"); };
 /* Where a dialog is: the shop's pill, its name and its neighbourhood. */
-const gwWhere = b => b ? `${hoodHtml(b)}<span>${spEsc(baseName(b))}${b.neighbourhood ? ` · ${spEsc(b.neighbourhood)}` : ""}</span>` : "";
+const gwWhere = b => b ? `${hoodHtml(b)}<span>${spEsc(baseName(b))}${b.neighbourhood ? ` · ${spEsc(hoodName(b.neighbourhood))}` : ""}</span>` : "";
 /* The game's name for a skill, from wherever the payload carries one: the
    uniform gaps, then the roles of the hour grid and the staffing plan. */
 function gwSkillName(skill){

@@ -324,14 +324,17 @@ def build_pages(help_pages: list[dict], locale: dict[str, str]) -> tuple[list[di
             without_content.append({"slug": slug, "prefix": prefix})
             continue
         seen.add(slug)
-        pages.append(
-            {
-                "id": slug,
-                "categoryId": entry.get("category"),
-                "title": locale.get(prefix) or slug,
-                "body": body,
-            }
-        )
+        record = {
+            "id": slug,
+            "categoryId": entry.get("category"),
+            "title": locale.get(prefix) or slug,
+            "body": body,
+        }
+        # The game key the page documents (an item, a business type), which
+        # the board matches a save against; its title is only words.
+        if prefix.startswith("ba:"):
+            record["key"] = prefix
+        pages.append(record)
     return pages, duplicates, without_content
 
 
@@ -490,7 +493,7 @@ def collect_suppliers(
             "name": name,
             "raw": "address:" + entry["raw"],
             "street": street_label(address) if address else None,
-            "hood": row["h"] if row else None,
+            "hood": hood_key(row),
             "kind": " + ".join(labels) or kinds.get("_fallback", "Named in help"),
             "size": row["z"] if row else None,
             "area": row["m"] if row else None,
@@ -502,14 +505,25 @@ def collect_suppliers(
     return suppliers, issues
 
 
-def pier_flag(suppliers: dict) -> dict[str, str]:
+def hood_key(row: dict | None) -> str | None:
+    """A building row's neighbourhood as the game's key (ba:neighborhood_<id>).
+
+    The payload names neighbourhoods by key, as the board does; the page
+    looks the words up.
+    """
+    hood = row.get("h") if row else None
+    return "ba:neighborhood_" + hood if hood else None
+
+
+def pier_flag(suppliers: dict, locale: dict[str, str] | None = None) -> dict[str, str]:
     """A note for the piers, whose neighbourhoods the building table splits.
 
     The help treats the import piers alike; the table puts them in three
     neighbourhoods. That disagreement is worth a sentence, and only while it
     is true - when the table ever settles on one neighbourhood, no note ships.
     """
-    hoods = sorted({s["hood"] for key, s in suppliers.items()
+    names = locale or {}
+    hoods = sorted({names.get(s["hood"]) or s["hood"] for key, s in suppliers.items()
                     if key.startswith("ba:street_pier#") and s["hood"]})
     if len(hoods) < 2:
         return {}
@@ -531,7 +545,7 @@ def collect_wholesalers(locale: dict[str, str], buildings: dict) -> list[dict]:
                 "name": match.group(1),
                 "raw": "address:" + match.group(3).strip(),
                 "street": street_label(address) if address else None,
-                "hood": row["h"] if row else None,
+                "hood": hood_key(row),
                 "traffic": row["x"] if row else None,
             }
         )
@@ -2277,7 +2291,7 @@ def build_public_wiki(data_dir: str | None = None, buildings_path: str | None = 
     importer_names = canonical_importer_names(help_pages, locale)
     importer_pages = importer_page_by_key(help_pages, locale)
     suppliers, supplier_issues = collect_suppliers(locale, buildings, records, importer_names)
-    flags = pier_flag(suppliers)
+    flags = pier_flag(suppliers, locale)
     for key, detail in flags.items():
         suppliers[key]["flag"] = detail
 

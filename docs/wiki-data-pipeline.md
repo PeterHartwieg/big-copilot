@@ -204,8 +204,11 @@ The contract (`schemaVersion: 1`):
 
 Supplier keys are the same `ba:street_<slug>#<number>` site keys the map page
 uses, so cross-references join. `ba_buildings.json` gives each address its
-neighbourhood, size code, area and traffic; without it those fields are null
-and the miss is listed, not guessed.
+neighbourhood (as the game's key, `ba:neighborhood_<id>`, which the page names
+through `hoodName()`), size code, area and traffic; without it those fields are
+null and the miss is listed, not guessed. A page record whose help prefix is a
+game key (an item, a business type) carries it as `key`, which is what the
+page's "Yours" strip matches the open save on; the title is only words.
 
 What the payload deliberately does not carry, each as a gap that is only
 written while its check still holds: prices for the sample (the pages the
@@ -240,3 +243,40 @@ A bad required source — locale or helpstructure — exits with code 2, prints
 `error: …` on stderr, and leaves the previous payload standing. The optional
 sources (`ba_buildings.json`, shipped layouts, the Steam manifest) are recorded
 as absent instead.
+
+## Static pages for search engines
+
+The in-app wiki draws every entry inside the board, so a search engine sees one
+URL and none of the text. `tools/wiki_pages.py` writes the same entries as
+plain, script-free HTML from the committed `web/wiki-data.json`:
+
+| Path | What |
+| --- | --- |
+| `/wiki/` | the index: every topic, category and entry |
+| `/wiki/c/<category id>/` | one per category |
+| `/wiki/<page id>/` | one per help page |
+| `/wiki/topic/<slug>/` | one per hand-written topic |
+| `/sitemap.xml`, `/robots.txt` | `/`, and every page above; robots allows all and names the sitemap |
+
+- **Furniture is left to the app.** Its 521 entries of equipment stats get no
+  page, its category gets none, and a link to one goes to `/#wiki/<id>`.
+- **Slugs are the payload's ids, unchanged**, because they are linked from
+  outside. An id that could not stand as a path segment (or would shadow `c`
+  or `topic`) stops the build rather than being rewritten.
+- **The markdown follows `web/wiki.js`**: `wikiInline`'s bold and link rules,
+  `wikiBody`'s bullets, label headings and paragraphs. A link to a page that
+  does not exist, or to the page itself, is plain text; an address is text.
+- Each page has its own title, a meta description (the body's first sentence,
+  or the topic's lede), a canonical `https://bigcopilot.com/wiki/.../` URL, an
+  "Open your save in Big Copilot" link to `/` and an "Open in the app" link to
+  the same entry under `/#wiki`. A business guide adds one table of what it
+  sells, where it is sold from and who supplies it.
+- Styles are inline; the only request is `/fonts/fonts.css`. No script, no
+  third-party request, so the privacy notice holds.
+
+`python build_web.py` writes them after the payload, and removes pages the
+payload no longer has. `python build_web.py --check` rebuilds them in memory
+from the committed payload and reports a missing, edited or orphaned page or a
+stale sitemap. Neither step needs the installed game for this part, and
+`python tools/wiki_pages.py` (or `--check`) runs it alone. Tests:
+`tests/test_wiki_pages.py`.

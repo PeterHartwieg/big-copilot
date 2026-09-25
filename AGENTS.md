@@ -29,6 +29,8 @@ Everything else:
   `tools/wiki_sample.json` and the hand-written articles in `tools/wiki_topics.json`.
   `tools/` also holds the GLM launcher, `tools/Invoke-ZaiClaude.ps1`, which is nothing to do
   with the wiki
+- static wiki pages for search engines (`/wiki/...`, the sitemap, robots.txt):
+  `tools/wiki_pages.py`, from `web/wiki-data.json`
 - location finder: `web/map.js` hosts it as a mode of the Map page, over the `premises`
   payload key from `_premises()` in `ba_dashboard.py`
 - community API: `server/`, `migrations/`, `web/community.js`
@@ -47,6 +49,7 @@ side and rebuild — the rebuild is the resolution.
 | --- | --- |
 | `web/index.html`, `web/version.json`, `web/py/ba_dashboard.py`, `web/py/ba_save.py`, `web/py/ba_buildings.json`, `web/py/ba_demand_curves.json` | `python build_web.py` |
 | `web/py/gametext.json`, `web/wiki-data.json` | `python build_web.py`, which needs the installed game |
+| `web/wiki/**/index.html`, `web/sitemap.xml`, `web/robots.txt` | `python build_web.py`, from the committed `web/wiki-data.json` through `tools/wiki_pages.py`; `python tools/wiki_pages.py` alone needs no game |
 | `web/maps/locations.json`, `web/maps/map-background.svg` | `export_map.py`, from private geometry; owner only |
 | `ba_buildings.json` | `make_buildings.py` |
 | `ba_demand_curves.json` | `make_demand_curves.py`, which reads the installed game's Addressables bundles with UnityPy; owner only |
@@ -61,7 +64,7 @@ side and rebuild — the rebuild is the resolution.
 | `ba_save.py`, `ba_dashboard.py` (extraction) | `python -m unittest discover -s tests`, then `python build_web.py`. Premises extraction is `tests/test_premises.py` |
 | The `TEMPLATE` markup, CSS or board script | `python -m unittest discover -s tests` and `node --test tests/*.test.cjs`, then `python build_web.py` |
 | `web/app.js`, `web/worker.js`, `web/update.js` | `node --test tests/*.test.cjs`, then `python build_web.py` |
-| `web/map.js`, `web/map.css` | `node --test tests/map.test.cjs tests/finder.test.cjs` and `python -m unittest discover -s tests -p test_map_assets.py`, then `python build_web.py`. The finder lives in `web/map.js`; `tests/finder.test.cjs` also covers `drawFindLocation` in `ba_dashboard.py`, and `findPremisesLink` indirectly, through the rendered "find premises" link |
+| `web/map.js`, `web/map.css` | `node --test tests/map.test.cjs tests/finder.test.cjs` and `python -m unittest discover -s tests -p test_map_assets.py`, then `python build_web.py`. The finder lives in `web/map.js`; `tests/finder.test.cjs` also covers `drawFindLocation` in `ba_dashboard.py`, and `finderPreset`, through a Growth › Demand cell opening the finder |
 | `tools/*.py`, `tools/wiki_sample.json`, `tools/wiki_topics.json`, `web/wiki.js`, `web/wiki.css` | `python -m unittest discover -s tests -p "test_wiki*.py"` (the hand-written articles are `tests/test_wiki_build.py`) and `node --test tests/wiki*.test.cjs`, then `python build_web.py` |
 | `server/`, `migrations/` | `npm run test:community` and `npm run check:worker` |
 | `web/community.js`, `web/community.css` | those two npm commands, then `python build_web.py` — both files are cache-busted by the build stamp |

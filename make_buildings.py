@@ -7,7 +7,7 @@ the city, sorted by street then number. The city map is fixed, so the file only
 needs regenerating when the game adds a street or a neighbourhood.
 
 Keys are single letters to keep the file under 100 KB:
-  s street slug · n number · h neighbourhood · t building type
+  s street slug · n number · h neighbourhood id · t building type
   z size code   · m square metres · x traffic index
 """
 
@@ -17,18 +17,17 @@ import json
 import os
 import sys
 
-# The game's neighbourhood ids (ba:neighborhood_<id>) as the display names the
-# board matches on. Keep the spellings in step with NEIGHBOURHOODS in
-# ba_dashboard.py: the demand grid and the name-prefix fallback compare them
-# verbatim.
+# The game's neighbourhood ids (ba:neighborhood_<id>), stored as they are: the
+# board knows a neighbourhood by its key and looks the words up. Keep the set in
+# step with HOOD_IDS in ba_dashboard.py.
 HOODS = {
-    "midtown": "Midtown",
-    "hellskitchen": "Hell's Kitchen",
-    "murrayhill": "Murray Hill",
-    "lowermanhattan": "Lower Manhattan",
-    "garmentdistrict": "Garment District",
-    "industrycity": "Industry City",
-    "thehamptons": "The Hamptons",
+    "midtown",
+    "hellskitchen",
+    "murrayhill",
+    "lowermanhattan",
+    "garmentdistrict",
+    "industrycity",
+    "thehamptons",
 }
 
 
@@ -40,8 +39,8 @@ def main() -> None:
 
     rows = []
     for b in city:
-        hood = HOODS.get(b["neighborhood_id"])
-        if hood is None:
+        hood = b["neighborhood_id"]
+        if hood not in HOODS:
             raise SystemExit(
                 f"unknown neighbourhood id {b['neighborhood_id']!r} on {b['id']}; "
                 "add it to HOODS"

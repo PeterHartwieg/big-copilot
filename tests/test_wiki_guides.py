@@ -531,7 +531,7 @@ class RecruiterTests(GuideCase):
                           "Hair Styling": ["ba:street_fifthavenue#16"]})
         salon = self.guide("salon")
         self.assertIn("ba:street_pier#4", salon["SUPPLIERS"])
-        self.assertEqual(salon["SUPPLIERS"]["ba:street_pier#4"]["hood"], "Murray Hill")
+        self.assertEqual(salon["SUPPLIERS"]["ba:street_pier#4"]["hood"], "ba:neighborhood_murrayhill")
 
     def test_an_agency_two_skills_share_is_not_listed_twice(self):
         self.write_locale(dict(LOCALE, **dict(SALON_PAGES, **{

@@ -82,7 +82,7 @@ test("a factory input's label counts all machines making the same product", asyn
       site.lines = [{...site.lines[0], machines: 2},
         {...site.lines[0], machines: 3, basis: 'you'}];
       D.supply.factories.machines = 5;
-      site.needs = [{item: 'Fabric', slug: 'fabric', lines: [site.lines[0].item],
+      site.needs = [{item: 'Fabric', slug: 'fabric', lines: [site.lines[0].item], lineSlugs: [site.lines[0].slug],
         perDay: 1200, perWeek: 8400, target: 0, from: null, known: false,
         importWeekly: null, depotNeed: 0, depotStock: 0, status: 'noplan', level: 'critical'}];
       // Python's verdict on the input: on no plan, with the top-up to set.

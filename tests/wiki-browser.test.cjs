@@ -701,8 +701,8 @@ test('save pricing is readable at desktop and phone widths and clears with the s
     await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
     await page.evaluate(() => {
       D = {meta:{day:190}, businesses:[{name:'My Gifts', typeSlug:'ba:businesstype_giftshop',
-        neighbourhood:'Midtown', lines:[{slug:'ba:itemname_cheapgift', configuredPrice:30.27}]}],
-        market:{rows:[{slug:'ba:itemname_cheapgift', cells:[{hood:'Midtown',marketPrice:25.63}]}]}};
+        neighbourhood:'ba:neighborhood_midtown', lines:[{slug:'ba:itemname_cheapgift', configuredPrice:30.27}]}],
+        market:{rows:[{slug:'ba:itemname_cheapgift', cells:[{hood:'ba:neighborhood_midtown',marketPrice:25.63}]}]}};
       drawWiki();
     });
     const section = page.locator('section').filter({has:page.getByRole('heading',{name:'Prices in your save',exact:true})});

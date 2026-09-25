@@ -1331,6 +1331,10 @@
         "Cake",
         "Bread"
        ],
+       "lineSlugs": [
+        "cake",
+        "bread"
+       ],
        "waitingOn": [],
        "target": 1400,
        "from": 0,
@@ -1387,6 +1391,9 @@
        "lines": [
         "Cake"
        ],
+       "lineSlugs": [
+        "cake"
+       ],
        "waitingOn": [],
        "target": 500,
        "from": 0,
@@ -1435,6 +1442,9 @@
        "perWeek": 2100,
        "lines": [
         "Cake"
+       ],
+       "lineSlugs": [
+        "cake"
        ],
        "waitingOn": [],
        "target": 300,

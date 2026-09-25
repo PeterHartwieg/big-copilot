@@ -17,6 +17,16 @@ const vm = require('node:vm');
 const path = require('node:path');
 
 const WIKI = fs.readFileSync(path.join(__dirname, '..', 'web', 'wiki.js'), 'utf8');
+/* The board's neighbourhood tables, as render() writes them in: keyed by the
+   game's key, the words looked up only to be shown. */
+const HOOD_EN = {midtown: 'Midtown', hellskitchen: "Hell's Kitchen", murrayhill: 'Murray Hill',
+  lowermanhattan: 'Lower Manhattan', garmentdistrict: 'Garment District', industrycity: 'Industry City',
+  thehamptons: 'The Hamptons'};
+const HOOD_TAGS = Object.fromEntries(Object.entries({midtown: 'MT', hellskitchen: 'HK', murrayhill: 'MH',
+  lowermanhattan: 'LM', garmentdistrict: 'GD', industrycity: 'IC', thehamptons: 'HA'})
+  .map(([id, tag]) => [`ba:neighborhood_${id}`, tag]));
+const hoodName = key => HOOD_EN[String(key || '').replace(/^ba:neighborhood_/, '')] || String(key || '').replace(/^ba:neighborhood_/, '');
+
 const LOCATIONS = JSON.parse(
   fs.readFileSync(path.join(__dirname, '..', 'web', 'maps', 'locations.json'), 'utf8'));
 
@@ -59,20 +69,20 @@ const SAMPLE = {
       caveat: "Steam's depot build id. It is not the build number a save carries."}]},
   CATEGORIES: [],
   SUPPLIERS: {
-    [PEDERSON]: {name: 'AJ Pederson & Son', raw: 'address:13 5a', street: '13 Fifth Avenue', hood: 'Garment District',
+    [PEDERSON]: {name: 'AJ Pederson & Son', raw: 'address:13 5a', street: '13 Fifth Avenue', hood: 'ba:neighborhood_garmentdistrict',
       kind: 'Furniture vendor', size: 'M', area: 1000, traffic: 45},
-    [BLUESTONE]: {name: 'Bluestone Imports', raw: 'address: 4 pier', street: '4 Pier', hood: 'Murray Hill',
+    [BLUESTONE]: {name: 'Bluestone Imports', raw: 'address: 4 pier', street: '4 Pier', hood: 'ba:neighborhood_murrayhill',
       kind: 'Importer - retail inventory', size: 'H', area: 690, traffic: 18,
       flag: 'The building table puts 4 Pier in Murray Hill while 7, 8 and 9 Pier are Lower Manhattan.'},
-    [HARVEST]: {name: 'Global Harvest Traders', raw: 'address: 9 pier', street: '9 Pier', hood: 'Lower Manhattan',
+    [HARVEST]: {name: 'Global Harvest Traders', raw: 'address: 9 pier', street: '9 Pier', hood: 'ba:neighborhood_lowermanhattan',
       kind: 'Importer - factory raw goods', size: 'H', area: 690, traffic: 18},
-    [DEPOT]: {name: 'Factory Supply Depot', raw: 'address:2 25s', street: '2 Twenty-fifth Street', hood: 'Industry City',
+    [DEPOT]: {name: 'Factory Supply Depot', raw: 'address:2 25s', street: '2 Twenty-fifth Street', hood: 'ba:neighborhood_industrycity',
       kind: 'Factory machine vendor', size: 'M', area: 1000, traffic: 37},
     [ANDERSON]: {name: 'Anderson Recruitment Corp.', raw: 'address: 16 5a', street: '16 Fifth Avenue',
-      hood: 'The Hamptons', kind: 'Recruitment', size: 'C', area: 225, traffic: 50},
+      hood: 'ba:neighborhood_thehamptons', kind: 'Recruitment', size: 'C', area: 225, traffic: 50},
   },
-  WHOLESALERS: [{name: 'Hudson Wholesale', street: '13 Twelfth Street', hood: 'Lower Manhattan'},
-                {name: 'Metro Wholesale', street: '18 First Street', hood: "Hell's Kitchen"}],
+  WHOLESALERS: [{name: 'Hudson Wholesale', street: '13 Twelfth Street', hood: 'ba:neighborhood_lowermanhattan'},
+                {name: 'Metro Wholesale', street: '18 First Street', hood: 'ba:neighborhood_hellskitchen'}],
   FIXTURES: {
     roundedshelf: {name: 'Rounded Shelf', sells: ['cheapgift'], customers: 15, vendors: [PEDERSON],
       capacity: [{label: 'Gifts', value: 300, unit: 'units'}], station: null, needs: null, mount: null,
@@ -145,10 +155,12 @@ const DATA = {
     {id: 'wholesalers-locations', categoryId: 'help_importers', title: 'Wholesale Locations',
       body: 'Wholesalers are found at [Hudson Wholesale](address:13 12s).'},
     {id: 'businesstypes-giftshop', categoryId: 'common_business_types', title: 'Gift Shop', body: GIFT_BODY,
+      key: 'ba:businesstype_giftshop',
       sourceKey: 'help_ba:businesstype_giftshop_content'},
-    {id: 'businesstypes-florist', categoryId: 'common_business_types', title: 'Florist',
+    {id: 'businesstypes-florist', categoryId: 'common_business_types', title: 'Florist', key: 'ba:businesstype_florist',
       body: 'A **Florist** sells [Gift (Cheap)](products-cheapgift).'},
-    {id: 'products-cheapgift', categoryId: 'common_sellable_products', title: 'Gift (Cheap)', body: CHEAP_BODY},
+    {id: 'products-cheapgift', categoryId: 'common_sellable_products', title: 'Gift (Cheap)', body: CHEAP_BODY,
+      key: 'ba:itemname_cheapgift'},
     // A page whose title is hostile on purpose: the source text is data.
     {id: 'products-giftwrap', title: '<img src=x onerror="alert(1)">Gift Wrap',
       body: 'Sold by [Gift Shops](businesstypes-giftshop) and <b>nobody</b> else.\n\nSee [Exercise](common_exercise).'},
@@ -213,8 +225,7 @@ function wiki({data = DATA, fetchImpl, save = null, seen = {}} = {}) {
     wireTips(){}, wireReveal(){},
     hideTip(){ tipsDropped.push(1); },
     // The board's own neighbourhood tags, as render() writes them in.
-    HOOD_TAGS: {"Midtown": "MT", "Hell's Kitchen": "HK", "Murray Hill": "MH", "Lower Manhattan": "LM",
-      "Garment District": "GD", "Industry City": "IC", "The Hamptons": "HA"},
+    HOOD_TAGS, hoodName,
     requestAnimationFrame(){}, cancelAnimationFrame(){}, setTimeout(){},
     history: {replaceState(){}},
     matchMedia: () => ({matches: false, addEventListener(){}}),
@@ -650,7 +661,7 @@ test('an address becomes a pin only once the map confirms the building', async (
   ];
   w.root.querySelectorAll = () => marks;
   w.context.loadCityMap = async () => ({byKey: new Map([['ba:street_fifthavenue#13',
-    {key: 'ba:street_fifthavenue#13', address: '13 Fifth Avenue', hood: 'Garment District'}]])});
+    {key: 'ba:street_fifthavenue#13', address: '13 Fifth Avenue', hood: 'ba:neighborhood_garmentdistrict'}]])});
   w.context.mapButton = (key, label) => `<button data-map-key="${key}" aria-label="Show ${label} on map"></button>`;
   w.run('wikiPins');
   await new Promise(r => setImmediate(r));
@@ -1088,11 +1099,12 @@ test('with no save open the page says what it would show, and shows no number', 
   assert.doesNotMatch(html, /wk-slot/, 'and invents nothing to fill the strip with');
 });
 
-test('with a save open the strip is that save\'s own numbers, matched by name', async () => {
+test('with a save open the strip is that save\'s own numbers, matched by the page\'s key', async () => {
   const w = wiki({save: {
-    products: [{item: 'Gift (Cheap)', revenue: 500, units: 40, week: 280, stock: 100, stores: 2, price: 12.5}],
-    businesses: [{name: 'Gifts R Us', type: 'Gift Shop', key: 'k1'}],
-    market: {rows: [{item: 'Gift (Cheap)', cells: [{hood: 'Midtown', demand: 72}, {hood: 'Hamptons', demand: 30}]}]},
+    products: [{item: 'Gift (Cheap)', slug: 'ba:itemname_cheapgift', revenue: 500, units: 40, week: 280, stock: 100, stores: 2, price: 12.5}],
+    businesses: [{name: 'Gifts R Us', type: 'Gift Shop', typeSlug: 'ba:businesstype_giftshop', key: 'k1'}],
+    market: {rows: [{item: 'Gift (Cheap)', slug: 'ba:itemname_cheapgift',
+      cells: [{hood: 'ba:neighborhood_midtown', demand: 72}, {hood: 'ba:neighborhood_thehamptons', demand: 30}]}]},
   }});
   const html = await w.load('wiki/products-cheapgift');
   assert.match(html, /from your save/);
@@ -1100,6 +1112,17 @@ test('with a save open the strip is that save\'s own numbers, matched by name', 
   assert.match(html, /2 shops/);
   assert.match(html, /\$12\.50/, 'a unit price is written out rather than rounded into a lie');
   assert.doesNotMatch(html, /\$13</);
+});
+
+test('a save row that only shares the page\'s name is not the page\'s thing', async () => {
+  // Two items can share a name; the page is matched on the key it documents.
+  const w = wiki({save: {
+    products: [{item: 'Gift (Cheap)', slug: 'ba:itemname_cheapgiftother', revenue: 500, units: 40, stores: 2, price: 12.5}],
+    businesses: [], market: {rows: [{item: 'Gift (Cheap)', slug: 'ba:itemname_cheapgiftother',
+      cells: [{hood: 'ba:neighborhood_midtown', demand: 72}]}]},
+  }});
+  const html = await w.load('wiki/products-cheapgift');
+  assert.match(html, /Nothing in the open save matches this page/);
 });
 
 test('a save that says nothing about this page leaves the strip empty and says why', async () => {
