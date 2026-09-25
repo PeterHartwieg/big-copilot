@@ -219,7 +219,7 @@ test('idle stock has one name, and a renamed kind keeps its id', () => {
   // The label's English, beside its key: get label(){ return tt("nav.kind.dead.label", "Idle stock"); }
   const kind = id => (source.match(new RegExp(`\\{id:"${id}",\\s*get label\\(\\)\\{ return tt\\("[^"]+", "([^"]+)"`)) || [])[1];
   // A depot's idle group on Supply (R13) and the finding kind share one name.
-  const group = (source.match(/slug: null, item: "([^"]+)", fact: kids\[0\]\.fact/) || [])[1];
+  const group = (source.match(/slug: null, item: tt\("[^"]+", "([^"]+)"\), fact: kids\[0\]\.fact/) || [])[1];
   assert.equal(kind('dead'), 'Idle stock');
   assert.equal(group, kind('dead'), 'the idle group and the finding kind share one name');
   assert.equal(kind('staff'), 'Nobody staffed');

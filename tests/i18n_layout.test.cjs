@@ -51,6 +51,17 @@ const CONVERTED = {
      rows are the kinds' names (nav) and it redraws each time it opens, and so
      is Ask the board under Next moves (the search palette's). */
   today: '#kpis, #alertHead, #alerts .amt, #alertMinor .td-count, #silenced, #secMoves h2, #secMoves .moves',
+  /* Supply's own words: the switches, the checklist strip's chrome, each
+     tab's verdict, sizing row, headers, status words, reasons, counts, units
+     and notes, the factory staffing block, and the diagram's legend and
+     column heads. Left out: the names (sites, products, the diagram's boxes)
+     and the order checklist's own reasons (the "Other changes" Why cells),
+     which are sb.ck's. */
+  sb: '#sbMode, #sbView, #sbStrip, #pageSupply .sb-verdict, #pageSupply .sb-sizing, #pageSupply .sb-ramp, '
+    + '#pageSupply .sb-more, #pageSupply .sb-part, #pageSupply .sb-clear, #pageSupply thead, #pageSupply .sb-v, '
+    + '#pageSupply .sb-why, #pageSupply .sb-stats, #pageSupply .cnt, #pageSupply .how, #pageSupply .sb-chg small, '
+    + '#pageSupply .sb-unit, #pageSupply td .sub, #pageSupply .chip, #pageSupply .sb-staff .sechead, #pageSupply .sb-hc, '
+    + '#pageSupply .sb-stot, #pageSupply .sb-flowleg, #pageSupply svg text.col, #pageSupply .imp-unit, #pageSupply .up',
   /* The Growth page below its view switch (nav's): the demand grid, the waves,
      Plan a chain and its Ingredients. */
   gr: '#secMarket, #secPlan, #secIngredients',
