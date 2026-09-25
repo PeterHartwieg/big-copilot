@@ -204,6 +204,7 @@ function element(id) {
    before it draws anything: the nav's NEW badge and the Wiki's own marks share
    its keys. */
 function wiki({data = DATA, fetchImpl, save = null, seen = {}} = {}) {
+  if (save) require('./_payload_contract.cjs').assertPayloadShape(save, 'wiki');
   const root = element('wikiRoot');
   const nodes = new Map([['wikiRoot', root]]);
   const drawn = [];

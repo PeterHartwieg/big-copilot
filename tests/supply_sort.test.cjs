@@ -72,6 +72,7 @@ const fixture = () => ({
 });
 
 async function board(data = fixture()){
+  require('./_payload_contract.cjs').assertPayloadShape(data, 'supply_sort');
   const page = await browser.newPage({viewport: {width: 1280, height: 1100}});
   await page.route('https://**', route => route.abort());
   await page.setContent(html, {waitUntil: 'load'});
