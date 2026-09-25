@@ -45,12 +45,13 @@ DASHBOARD = read("ba_dashboard.py")
 TOKEN = re.compile(r"__[A-Z_]+__")
 
 
-def diff_message(what: str, doc: set, code: set) -> str:
-    lines = [what]
+def diff_message(what: str, doc: set, code: set, doc_side: str = "in the doc",
+                 code_side: str = "in the code") -> str:
+    lines = [what]  # each side says where its extra names are
     if code - doc:
-        lines.append(f"  in the code, missing from the doc: {', '.join(sorted(code - doc))}")
+        lines.append(f"  {code_side} but not {doc_side}: {', '.join(sorted(code - doc))}")
     if doc - code:
-        lines.append(f"  in the doc, gone from the code: {', '.join(sorted(doc - code))}")
+        lines.append(f"  {doc_side} but not {code_side}: {', '.join(sorted(doc - code))}")
     return "\n".join(lines)
 
 
@@ -104,16 +105,19 @@ class BuildTokenTests(unittest.TestCase):
 
 def _produced_groups() -> set:
     """Every finding group the Python build can emit: the literal group of each
-    note() in _alerts() and each _finding() anywhere, the groups of
-    AMENITY_DEMANDS, and a group taken from a literal tuple a for loop runs over.
+    note() in _alerts() and each _finding() anywhere, a group taken from a
+    literal tuple a for loop runs over, and the groups of AMENITY_DEMANDS, but
+    only where a note() or _finding() call takes its group from an
+    AMENITY_DEMANDS lookup: drop that call and the amenity kinds count as gone.
     A group held in any other variable fails, so a new way of naming one is
     noticed here rather than skipped."""
     tree = ast.parse(DASHBOARD)
     groups, unresolved = set(), []
+    amenity = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign) and any(
                 isinstance(t, ast.Name) and t.id == "AMENITY_DEMANDS" for t in node.targets):
-            groups |= {v.elts[0].value for v in node.value.values}
+            amenity = {v.elts[0].value for v in node.value.values}
     for fn in ast.walk(tree):
         if not isinstance(fn, ast.FunctionDef) or fn.name == "note":
             continue  # note() is _alerts()'s wrapper round _finding(): its group is the caller's
@@ -130,7 +134,7 @@ def _produced_groups() -> set:
                 elif isinstance(arg, ast.Name) and _from_loop(arg.id, loops, groups):
                     pass
                 elif isinstance(arg, ast.Name) and _amenity_unpack(arg.id, own):
-                    pass  # `group, text = AMENITY_DEMANDS[slug]`, counted above
+                    groups |= amenity  # `group, text = AMENITY_DEMANDS[slug]`
                 else:
                     unresolved.append(f"{fn.name}: {ast.unparse(call)[:80]}")
     if unresolved:
@@ -185,8 +189,8 @@ class FindingGroupTests(unittest.TestCase):
         board, python = self.board_kinds(), _produced_groups()
         self.assertTrue(board, "no ids read out of ALERT_GROUPS")
         self.assertEqual(board, python, diff_message(
-            "ALERT_GROUPS (the doc side) does not match the groups note()/_finding() emit (the code side):",
-            board, python))
+            "ALERT_GROUPS does not match the finding groups Python emits:", board, python,
+            doc_side="on the board (ALERT_GROUPS)", code_side="emitted by Python (note()/_finding())"))
 
 
 if __name__ == "__main__":

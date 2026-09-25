@@ -471,7 +471,7 @@ test('renderAll asks which chip has focus before the chips are replaced', () => 
   // drawMast() and drawFooter(), and handed to drawDifficulty().
   const src = fs.readFileSync(path.join(__dirname, '..', 'ba_dashboard.py'), 'utf8');
   // The function up to its closing brace, the first "\n}" after the anchor.
-  const body = require('./_slice.cjs').between(src, 'function renderAll(){', '\n}', {ordered: false});
+  const body = require('./_slice.cjs').between(src, 'function renderAll(){', '\n}');
   const at = needle => { const i = body.indexOf(needle); assert.ok(i >= 0, needle); return i; };
   assert.ok(at('const diffFocus = fvChipFocus();') < at('drawMast();'));
   assert.ok(at('drawMast();') < at('drawFooter();'));

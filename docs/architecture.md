@@ -506,7 +506,8 @@ opened directly: delete either and `render()` raises.
 
 `build_web.py` has a second, private set of tokens — `__STAMP__`, `__RELEASE__`,
 `__UPDATE_SCRIPT__`, `__BUILD__`, `__ICON_FOLDER__`, `__ICON_LINK__`, `__ICON_MORE__`
-(`tests/test_doc_registries.py` holds this list to `build_web.py`). Those are substituted inside `BANNER` and `BEFORE_SCRIPT` before either string reaches
+(`tests/test_doc_registries.py` holds this list to `build_web.py`). Those are substituted
+inside `BANNER` and `BEFORE_SCRIPT` before either string reaches
 `render()`, so they never appear in `TEMPLATE`. `BANNER` also carries the template's own
 `<!--__FOOTER__-->`, which `build_web.py` fills with `footer_html(landing=True, site=True)`.
 

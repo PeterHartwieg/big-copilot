@@ -348,6 +348,8 @@ const registryGaps = (name, keys, exempt = []) => {
   const stale = keys.filter(id => !GROUP_IDS.includes(id));
   assert.deepEqual(missing, [], `ALERT_GROUPS kinds with no ${name} entry: ${missing.join(', ')}`);
   assert.deepEqual(stale, [], `${name} entries for kinds ALERT_GROUPS does not list: ${stale.join(', ')}`);
+  const gone = exempt.filter(id => !GROUP_IDS.includes(id));
+  assert.deepEqual(gone, [], `exempt from ${name} but no longer an ALERT_GROUPS kind: ${gone.join(', ')}`);
 };
 
 test('every finding kind has an ALERT_LINKS entry, so a click lands somewhere', () => {
@@ -364,10 +366,29 @@ test('every finding kind with a site panel has an ALERT_EVIDENCE entry', () => {
 
 test('every finding kind has an ALERT_UNITS unit or is listed as carrying no money', () => {
   // The Python dict, from its opening line to its closing brace at column 0.
-  const table = between(source, 'ALERT_UNITS = {', '\n}', {ordered: false});
+  const table = between(source, 'ALERT_UNITS = {', '\n}');
   const keys = [...table.matchAll(/^\s+"(\w+)":/gm)].map(m => m[1]);
   assert.ok(keys.length, 'no keys read out of ALERT_UNITS');
   registryGaps('ALERT_UNITS', keys, NOT_MONEY);
   const both = NOT_MONEY.filter(id => keys.includes(id));
   assert.deepEqual(both, [], `in ALERT_UNITS and NOT_MONEY at once: ${both.join(', ')}`);
+});
+
+/* NOT_MONEY checked against real extract() output: in the committed payload
+   snapshots (tests/test_payload_snapshot.py), no finding of such a kind
+   carries a worth, which is the amount ALERT_UNITS would give a unit to. */
+test('in the payload snapshots, no NOT_MONEY finding carries a worth', () => {
+  const dir = path.join(__dirname, 'fixtures', 'payload_snapshot');
+  const rowsOf = list => (Array.isArray(list) ? list : (list && list.rows) || []);
+  let seen = 0;
+  for (const file of fs.readdirSync(dir).filter(f => f.endsWith('.json'))) {
+    const d = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'));
+    const rows = [...rowsOf(d.alerts), ...rowsOf(d.minor),
+      ...rowsOf(d.alertsDemand && d.alertsDemand.lines), ...rowsOf(d.alertsDemand && d.alertsDemand.minor)];
+    for (const r of rows.filter(r => NOT_MONEY.includes(r.group))) {
+      seen++;
+      assert.equal(r.worth, null, `${file}: a ${r.group} finding has worth ${r.worth}; it is money, so give it an ALERT_UNITS unit`);
+    }
+  }
+  assert.ok(seen, 'the snapshots hold no NOT_MONEY finding to check');
 });

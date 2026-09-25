@@ -27,17 +27,20 @@ function at(src, anchor, {from = 0, once = true} = {}){
 }
 
 /* The text from `a` up to (not including) `b`. `a` is found exactly once
-   unless once is false; `b` is its first occurrence after `a`, and with
-   ordered (the default) it must not also occur before `a`, which is what a
-   plain src.slice(src.indexOf(a), src.indexOf(b)) relied on. */
-function between(src, a, b, {once = true, ordered = true, from = 0} = {}){
+   unless once is false. `b` is its first occurrence after `a`, or with
+   endAfter its first occurrence after that anchor (itself found once, after
+   `a`), or with last its last occurrence in the source, which must lie
+   after `a`. */
+function between(src, a, b, {once = true, from = 0, endAfter = null, last = false} = {}){
   const start = at(src, a, {from, once});
-  const end = src.indexOf(b, start + a.length);
-  if (end < 0) throw new Error(`slice end anchor not found after ${show(a)}: ${show(b)}`);
-  if (ordered) {
-    const first = src.indexOf(b, from);
-    if (first < start) throw new Error(`slice end anchor ${show(b)} comes before its start anchor ${show(a)}`);
+  let searchFrom = start + a.length;
+  if (endAfter !== null) {
+    const mid = at(src, endAfter, {from: searchFrom});
+    searchFrom = mid + endAfter.length;
   }
+  const end = last ? src.lastIndexOf(b) : src.indexOf(b, searchFrom);
+  if (end < searchFrom)
+    throw new Error(`slice end anchor not found after ${show(endAfter ?? a)}: ${show(b)}`);
   return src.slice(start, end);
 }
 

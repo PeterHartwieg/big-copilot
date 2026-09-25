@@ -11,7 +11,7 @@ const {between} = require('./_slice.cjs');
 // The page's tt(), which app.js writes every word through.
 const i18n = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8');
 // How app.js hands the strip its words: say(), failure() and errWords().
-const sayHelpers = source.slice(source.indexOf('  const say = (v)'), source.indexOf('\n', source.indexOf('  const errWords')));
+const sayHelpers = between(source, '  const say = (v)', '\n', {endAfter: '  const errWords'});
 const words = (v) => (typeof v === 'function' ? v() : v);
 const section = between(source, '  /* --- the game link (docs/game-link-api.md)', '  /* --- building');
 const updater = between(source, '  async function update()', '  /* --- watching the folder');
