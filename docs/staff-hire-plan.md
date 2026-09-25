@@ -155,10 +155,11 @@ A `<site>` for every business the player runs (the `businesses` order):
   written. The Staff page uses the sizing the Supply switch shows.
 - **Offices** (no planner on main): new `officeStaffing`, built like `_factory_staffing()`: the
   shop placer over a synthetic grid, one role (the office's professional skill from
-  `STATION_SKILLS`, the computer post), one station per computer, open in the office's own
-  opening hours from the save, every station staffed every open hour. Same 12 h shift, 14 h day,
-  50 h week, 30 h floor rules, same `headcount`/`addPeople`/`hireWeeks` fields. This is "the office
-  default" until Peter says otherwise (question 1 in section 7).
+  `STATION_SKILLS`, the computer post), one station per computer. **Peter's office default
+  (25 Sep 2026):** an office at 24/7 needs 3 people per computer at 50 capacity, proportionally
+  fewer below that, minimum 1; weekdays every computer staffed 8-22; weekends half the computers
+  8-22. Same 12 h shift, 14 h day, 50 h week, 30 h floor rules, same `headcount`/`addPeople`/
+  `hireWeeks` fields.
 - Shops: nothing new beyond `hireWeeks`, `spare`, `bench` on both variants.
 
 ### 2.5 Tests (extraction)
@@ -441,13 +442,11 @@ Changelog (integrator, one entry, with the PR number):
 
 Questions (blocking only where said):
 
-1. **The office default.** No office planner exists; section 2.4 plans every computer staffed in
-   every hour the office is open now, with the shop's shift rules. Right, or should an office
-   default to something else (a fixed number per computer, weekdays only)? Blocks only the
-   office numbers; A builds 2.4 as written unless told otherwise.
-2. **Rewriting a move's source week.** Section 1 writes the source site's plan when a moved
-   person has shifts there. The alternative is to move only people who have no shifts now.
-   Not blocking; the review shows it either way.
+1. **The office default: answered** (25 Sep 2026): Peter's office default in section 2.4.
+2. **Moving someone with shifts: answered.** A person can only belong to one business in the game,
+   so a move always takes them off the source site; the source site's week is rewritten without
+   them (the game's own UnassignEmployeeFromAllWorkshifts does this) and the review shows it. Only
+   people the source site's plan does not need (spare) are offered as moves.
 
 Risks:
 
