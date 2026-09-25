@@ -1105,19 +1105,20 @@ test('names from the game are shown as text, never as markup', async (t) => {
 /* --- imports -------------------------------------------------------------- */
 const DEPOT_ADDRESS = {street: 'ba:street_pier', number: 9};
 async function supply(page) {
-  await page.evaluate(() => { showPage('supply'); logisticsView = 'all'; drawLogistics(); wireAll(); });
-  return page.locator('#importPlan');
+  await page.evaluate(() => { showPage('supply'); showSub('supply', 'warehouses'); sbWhich = 'all';
+    drawSupplyStrip(); drawWarehousesTab(); wireAll(); });
+  return page.locator('#secWarehouses');
 }
-const importRow = (page, text) => page.locator('#importPlan tbody tr', {hasText: text});
+const importRow = (page, text) => page.locator('#secWarehouses tr[data-slug]', {hasText: text});
 async function setTo(page, text, value) {
   const box = importRow(page, text).locator('input[data-imp]');
   await box.fill(String(value));
   await box.press('Enter');
-  await page.waitForFunction(({text, value}) => [...document.querySelectorAll('#importPlan tbody tr')]
+  await page.waitForFunction(({text, value}) => [...document.querySelectorAll('#secWarehouses tr[data-slug]')]
     .some((tr) => tr.textContent.includes(text) && tr.classList.contains('imp-changed')
       && tr.querySelector('input[data-imp]').value === String(value)), {text, value});
 }
-const applyImports = (page) => page.locator('#importPlan [data-gw="imports"]');
+const applyImports = (page) => page.locator('#secWarehouses [data-gw="imports"]');
 
 test('imports: the Set to figure is written, and undone', async (t) => {
   const page = await linked(t, {approved: true});
@@ -1503,7 +1504,7 @@ test('imports: Apply sends only what the dry run judged', async (t) => {
   await page.evaluate(() => {
     const r = gwImportRows.find((x) => x.slug === 'ba:itemname_paperbag');
     impSetKeep(r.impId, {value: 4300, inGame: 3800});
-    drawLogistics();
+    drawSupplyStrip(); drawWarehousesTab();
   });
   await dialog(page).getByRole('button', {name: 'Apply 1 change'}).click();
   await dialog(page).locator('.gw-line .gw-num', {hasText: '4,300'}).waitFor();
@@ -1648,7 +1649,7 @@ test('imports: a week the caps leave short with nothing to write is said, and no
   await applyImports(page).click();
   await dialog(page).getByText('Nothing to write. 600 a week of Candle at HART. Depot not covered: the importers\' caps are reached.').waitFor();
   await dialog(page).getByRole('button', {name: 'Close'}).last().click();
-  await page.evaluate(() => { drawLogistics(); wireAll(); });
+  await page.evaluate(() => { drawSupplyStrip(); drawWarehousesTab(); wireAll(); });
   assert.equal(await applyImports(page).count(), 0);
   // The row keeps the reason once the cap is known.
   assert.equal(await importRow(page, 'Candle').locator('.gw-short').textContent(),

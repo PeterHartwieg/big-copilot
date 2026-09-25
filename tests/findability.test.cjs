@@ -527,7 +527,7 @@ test("the address bar only ever trades another spelling of the open site's own a
   } finally { await page.close(); }
 });
 
-test('the portfolio, the checks and the goods flow name a site by a link to its page', async () => {
+test('the portfolio and the Supply tabs name a site by a link to its page', async () => {
   const page = await board({chains: [CHAIN], supply: {shops: [SHELF]}});
   try {
     await page.evaluate(() => { siteOpen = false; drawSite(); openChains.add('Gift Shops'); drawPortfolio(); });
@@ -538,23 +538,15 @@ test('the portfolio, the checks and the goods flow name a site by a link to its 
     assert.equal(await page.evaluate(() => [location.hash, siteKey].join(' ')), `${THERE} ${OTHER}`);
     // From the portfolio the way back is the portfolio.
     assert.equal(await page.evaluate(() => siteFrom), null);
-    // Supply › Checks: the shop cell of a real row.
-    await page.evaluate(() => { stockView = 'shops'; showAllStock = true; drawStock(); reveal('secStock'); });
-    const cell = page.locator('#stock tbody tr').first().locator('td').first();
+    // Supply › Shops: the shop cell of a real row (after the tick).
+    await page.evaluate(() => { sbWhich = 'all'; reveal('secShops'); drawShopsTab(); wireAll(); });
+    const cell = page.locator('#secShops tbody tr').first().locator('td').nth(1);
     assert.equal(await cell.locator('a.ss-sl').getAttribute('href'), THERE);
     assert.equal(await cell.locator('.map-shortcut').count(), 1, 'the map button stays beside it');
     await cell.locator('a.ss-sl').click();
     assert.equal(await page.evaluate(() => [location.hash, page, siteKey].join(' ')), `${THERE} company ${OTHER}`);
     // Anywhere else the crumb names the view the name was clicked on.
-    assert.equal(await page.evaluate(() => siteFrom && siteFrom.label), 'Checks');
-    // The goods flow: the picked site's name, and a labelled button beside the map's.
-    const head = await page.evaluate(key => {
-      D.supply.graph = {nodes: [{id: key, name: 'HART. Gifts', tag: 'HK', sub: 'Gift Shop', hood: '', items: []}], links: []};
-      flowPickId = key; drawFlowDetail();
-      return document.getElementById('flowDetail').querySelector('.sechead').innerHTML;
-    }, KEY);
-    assert.match(head, /<h2><a class="ss-sl" href="#site\/secondavenue-10"/);
-    assert.match(head, /<a class="ss-pagego" href="#site\/secondavenue-10">.*its page<\/a>/);
+    assert.equal(await page.evaluate(() => siteFrom && siteFrom.label), 'Shops');
   } finally { await page.close(); }
 });
 

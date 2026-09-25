@@ -14245,14 +14245,15 @@ function supplySortNote(cols, state){
 }
 /* The headers and the note under host share one order, kept in supplySort[id].
    A table redrawn from the keyboard hands focus back to the header it left. */
-function wireSupplySort(host, id, cols, redraw){
+function wireSupplySort(host, id, cols, redraw, live = () => host){
   host.querySelectorAll("thead th[data-i]").forEach(th => th.onclick = () => {
     const i = +th.dataset.i, s = supplySort[id];
     supplySort[id] = s?.col === i ? {col: i, dir: -s.dir} : {col: i, dir: cols[i][2] === "l" ? 1 : -1};
     const button = th.querySelector("button.supply-sort");
     const at = document.activeElement === button ? [...host.querySelectorAll("button.supply-sort")].indexOf(button) : -1;
     redraw();
-    if(at >= 0) host.querySelectorAll("button.supply-sort")[at]?.focus({preventScroll: true});
+    /* A redraw may replace the host itself: `live` finds the one now on screen. */
+    if(at >= 0) live().querySelectorAll("button.supply-sort")[at]?.focus({preventScroll: true});
   });
   host.querySelectorAll("[data-usual]").forEach(a => a.onclick = e => {
     e.preventDefault();
@@ -14262,14 +14263,13 @@ function wireSupplySort(host, id, cols, redraw){
     const at = e.detail === 0 ? supplySort[id]?.col : null;
     supplySort[id] = null; redraw();
     if(at == null) return;
-    /* Orders repeats its header once per group, so the copy to focus is the one
-       whose <details> is open (a folded group's contents still report a layout
-       parent, so nothing short of that test finds it). With every group folded
-       the focus goes to the first group's own summary instead of the page. Focus
-       is not held back from scrolling: a header out of view is brought in. */
-    ([...host.querySelectorAll(`thead th[data-i="${at}"] button`)]
+    const now = live();
+    /* The header of the column it un-sorted, where it is open to read; in a
+       folded object block, that block's own head instead of the page. Focus is
+       not held back from scrolling: a header out of view is brought in. */
+    ([...now.querySelectorAll(`thead th[data-i="${at}"] button`)]
       .find(b => !b.closest("details:not([open])"))
-      || host.querySelector("details.supply-location > summary"))?.focus();
+      || now.closest("details")?.querySelector("summary"))?.focus();
   });
 }
 /* How many rows of a view stand at each status word. */
@@ -18592,6 +18592,8 @@ function impSetEdits(){
 }
 function impSetKeep(id, entry){
   const {key, edits} = impSetEdits();
+  // The supply rows read the figures: they are built again (sbData()).
+  if(typeof sbStamp !== "undefined") sbStamp++;
   if(entry === null) delete edits[id]; else edits[id] = entry;
   if(key) try{ localStorage.setItem(key, JSON.stringify(edits)); }catch(e){}
 }
@@ -18756,7 +18758,7 @@ function sbObject(tab, s, o){
   const b = D.businesses[s];
   const key = `${tab}|${b ? b.key : "none"}`;
   const arrived = !!sbArrive && sbArrive.tab === tab && sbArrive.s === s;
-  const open = arrived || (sbOpenObj.has(key) ? sbOpenObj.get(key) : o.open);
+  const open = arrived || (sbOpenObj.has(key) ? sbOpenObj.get(key) : o.open || sbWhich === "all");
   return `<details class="sb-obj${arrived && sbArrive.slug === null ? " lit" : ""}" data-sb-obj="${attr(key)}"${
     arrived && sbArrive.slug === null ? " data-sb-at" : ""}${open ? " open" : ""}>
     <summary><span class="ic">${spIcon(o.icon)}</span>
@@ -18931,7 +18933,8 @@ function bindSupply(){
    is drawn. */
 function sbWire(sec, tables, tab){
   const redraw = () => { drawSupplyTab(tab); wireAll(); };
-  tables.forEach(([id, cols]) => sec.querySelectorAll(`[data-sb-table="${id}"]`).forEach(el => wireSupplySort(el, id, cols, redraw)));
+  tables.forEach(([id, cols]) => sec.querySelectorAll(`[data-sb-table="${id}"]`).forEach((el, k) =>
+    wireSupplySort(el, id, cols, redraw, () => sec.querySelectorAll(`[data-sb-table="${id}"]`)[k] || el)));
   wireImportSet(sec, () => { sbStamp++; drawSupplyStrip(); redraw(); });
   sec.querySelectorAll("select.linepick").forEach(sel => { sel.onchange = () => nameLine(sel.dataset.rid, sel.value || null); });
   sec.querySelectorAll("button.unname").forEach(b => { b.onclick = () => nameLine(b.dataset.rid, null); });
@@ -19121,7 +19124,8 @@ function sbDepotRows(d, claimed, s, slugs){
     const r = {s, slug, item, fact: f, imp: i || null, ir, stock: lineOf(slug).units ?? (i ? i.stock : 0),
       draw: ir ? ir.perDay : szWeekly(f) && f.use ? Math.round(f.use / 7) : null,
       busy: ir ? ir.peakPerDay : f.cad === "daily" && Number.isFinite(f.use) ? f.use : null,
-      week: szWeekly(f) && Number.isFinite(f.use) ? f.use : null};
+      // Nothing used a week is no figure to rank, a dash, not a nought.
+      week: szWeekly(f) && f.use > 0 ? f.use : null};
     r.chk = sbChk(d, claimed, s, item, SB_WH_KINDS);
     r.keep = sbWorth(f, r.chk, i && i.edited);
     return r;
@@ -22085,7 +22089,7 @@ const SS_VIEWS = [
    live(){ const short = alertLines().filter(a => a.group === "feed");
      return short.length ? {p: `Supply › Factories · ${plural(short.length, "input")} short`, dot: ssWorst(short), kw: ssShortInputs()} : {}; },
    go: () => ssSupply("factories")},
-  {id: "factorystaff", t: "Staffing for factory lines", p: "Supply › Factories", ic: "roster", syn: ["factory workers", "factory staffing", "shifts", "hire", "run hours"],
+  {id: "factorystaff", t: "Staffing for factory lines", p: "Supply › Factories", ic: "roster", syn: ["factory workers", "factory staffing", "factory shifts", "run hours"],
    go(){ ssSupply("factories"); setTimeout(() => { const el = $("sbStaff"); if(el) settleScroll(el); }, 60); }},
   {id: "flow", t: "Goods flow", p: "Supply · the diagram view of each tab", ic: "route", syn: ["diagram", "supply chain", "routes", "pipes"],
    go(){ sbViewOn = "diagram"; remember(SB_VIEW_KEY, "diagram"); drawSupplyTab(sub.supply); wireAll(); ssSupply(sub.supply); }},
