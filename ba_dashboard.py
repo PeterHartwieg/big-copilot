@@ -8786,47 +8786,62 @@ ASSIGN_SKILLS = {
 }
 FACTORY_TYPES = COST_CENTRE_TYPES - OVERHEAD_TYPES
 
-# Peter's office default (25 Sep 2026). An office open around the clock staffs
-# a share of its computers every hour: all of them at a door cap of
-# OFFICE_FULL_DOOR (about three people a computer, his "3 per computer at 50
-# capacity"), proportionally fewer below it, never fewer than a third (about
-# one person a computer, his minimum of 1). Any other office staffs every
-# computer OFFICE_DAY on weekdays and half of them (rounded up) on weekends,
-# inside the hours it opens.
-OFFICE_FULL_DOOR = 50
+# Peter's office default (25 Sep 2026, docs/mod-write-back-scope.md): "computers
+# staffed 24/7 = 3 in a 50-capacity building, proportionally fewer in smaller
+# ones (at least 1); every computer 8 to 22 on weekdays; half the computers 8 to
+# 22 on weekends." For every office: round(3 x door / 50) computers, at least 1
+# and at most all of them, are staffed around the clock every day; on weekdays
+# every computer is also staffed OFFICE_DAY; on weekends ceil(C / 2) computers
+# are, the always-on ones counting among them. The door is the building's
+# customerCapacity, the office grid's `door`.
+OFFICE_ALWAYS_ON = 3  # computers around the clock ...
+OFFICE_FULL_DOOR = 50  # ... in a building of this capacity
 OFFICE_DAY = (8, 22)
 OFFICE_WEEKEND = (6, 0)  # Saturday and Sunday, as day % 7
+
+
+def _office_always_on(computers: int, door: int) -> int:
+    """How many computers the office default staffs around the clock."""
+    wanted = math.floor(OFFICE_ALWAYS_ON * (door or 0) / OFFICE_FULL_DOOR + 0.5)
+    return min(computers, max(1, wanted))
 
 
 def _office_runs(computers: int, open_hours: list, door: int) -> tuple:
     """Which hours each computer is staffed by the office default.
 
-    Returns ({station index: [hours per weekday]}, rule), rule "allday" for an
-    office open every hour of the week and "day" otherwise. Computers are
-    staffed in station order, so the first ones are the always-on ones.
+    Returns ({station index: [hours per weekday]}, always-on count). Computers
+    are staffed in station order, so the first ones are the always-on ones.
+
+    An hour the office is shut in the save is left out: nobody works a closed
+    office, and the write does not change opening hours. So an office open 9
+    to 17 gets every computer 9 to 17 on weekdays and its always-on computers
+    only 9 to 17 as well, and a day it is shut gets nobody. A save that holds
+    no opening hours at all for the office is not clipped.
     """
     if not computers:
-        return {}, "day"
-    if _open_all_hours(open_hours):
-        share = min(door, OFFICE_FULL_DOOR) / OFFICE_FULL_DOOR if door else 1.0
-        staffed = min(computers, max(1, math.ceil(computers / 3),
-                                     math.floor(computers * share + 0.5)))
-        return {i: [set(range(24)) for _ in range(7)] for i in range(staffed)}, "allday"
+        return {}, 0
+    always = _office_always_on(computers, door)
     opened = [
         {hour for start, end in open_hours[wd] for hour in range(max(0, start), min(24, end))}
         for wd in range(7)
     ]
+    if not any(opened):
+        opened = [set(range(24)) for _ in range(7)]
     day = set(range(*OFFICE_DAY))
+    weekend = math.ceil(computers / 2)
     runs = {}
     for index in range(computers):
-        week = [
-            (day & opened[wd])
-            if wd not in OFFICE_WEEKEND or index < math.ceil(computers / 2) else set()
-            for wd in range(7)
-        ]
+        week = []
+        for wd in range(7):
+            hours = set()
+            if index < always:
+                hours = set(range(24))
+            elif wd not in OFFICE_WEEKEND or index < weekend:
+                hours = set(day)
+            week.append(hours & opened[wd])
         if any(week):
             runs[index] = week
-    return runs, "day"
+    return runs, always
 
 
 def _office_staffing(save: Save, names, businesses: list, grids: list, staff: list,
@@ -8843,8 +8858,8 @@ def _office_staffing(save: Save, names, businesses: list, grids: list, staff: li
 
     The row has the shop row's fields a write reads (`stations`, `people`,
     `shifts`, `current`, `roles`, `open`, `openAllHours` false) and its plan
-    fields (`need`, `headcount`, `addPeople`, `shortHours`, ...), plus `rule`,
-    `computers` and `staffedComputers`.
+    fields (`need`, `headcount`, `addPeople`, `shortHours`, ...), plus
+    `alwaysOn`, `computers` and `staffedComputers`.
     """
     by_key = {b["key"]: b for b in businesses}
     buildings = {
@@ -8897,8 +8912,8 @@ def _office_site_plan(save, names, business, building, grid, skill, pool, people
          "rate": OFFICE_POST_RATE}
         for s in grid["stations"]
     ]
-    runs, rule = _office_runs(len(stations), grid["open"], grid["door"])
-    slots_open = ALL_DAY_OPEN if rule == "allday" else grid["open"]
+    runs, always = _office_runs(len(stations), grid["open"], grid["door"])
+    slots_open = grid["open"] if any(grid["open"]) else ALL_DAY_OPEN
     need = {skill: {
         "need": [[sum(1 for days in runs.values() if hour in days[wd]) for hour in range(24)]
                  for wd in range(7)],
@@ -8927,12 +8942,13 @@ def _office_site_plan(save, names, business, building, grid, skill, pool, people
         "typeSlug": business["typeSlug"],
         "skill": skill,
         "label": label,
-        "rule": rule,
+        # Computers staffed around the clock by the office default.
+        "alwaysOn": always,
         "computers": len(stations),
         "staffedComputers": len(runs),
-        # The hours the plan staffs against: the office's own, or around the
-        # clock where it already opens around the clock. The write never
-        # changes them (`openAllHours` false).
+        # The hours the plan staffs against: the office's own (around the
+        # clock where the save holds none). The write never changes them
+        # (`openAllHours` false).
         "open": slots_open,
         "openAllHours": False,
         "stations": table["stations"],

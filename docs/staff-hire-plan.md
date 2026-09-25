@@ -159,7 +159,17 @@ A `<site>` for every business the player runs (the `businesses` order):
   (25 Sep 2026):** an office at 24/7 needs 3 people per computer at 50 capacity, proportionally
   fewer below that, minimum 1; weekdays every computer staffed 8-22; weekends half the computers
   8-22. Same 12 h shift, 14 h day, 50 h week, 30 h floor rules, same `headcount`/`addPeople`/
-  `hireWeeks` fields.
+  `hireWeeks` fields. **As a formula**, for every office with C computers and door capacity
+  `cap` (the building's `customerCapacity`, the office grid's `door`):
+  - `N24 = min(C, max(1, round(3 * cap / 50)))` computers (half rounds up) are staffed
+    00-24 every day;
+  - on weekdays (Mon-Fri) every computer is staffed 08-22;
+  - on weekends `ceil(C / 2)` computers are staffed 08-22, the N24 always-on ones counting
+    among them (computers are taken in station order, so the always-on ones come first);
+  - an hour the office is shut in the save is left out (the write never changes opening
+    hours): an office open 09-17 gets every staffed computer 09-17 only, always-on ones
+    included, and a closed day gets nobody. An office whose save holds no opening hours at
+    all is not clipped.
 - Shops: nothing new beyond `hireWeeks`, `spare`, `bench` on both variants.
 
 ### 2.4a As built (extraction worker, 25 Sep 2026)
@@ -199,14 +209,10 @@ Where the build differs from or adds to 2.1-2.4; the board worker reads these to
   a warehouse.
 - **Factory rows** now ship `stations`, `people`, `shifts` and `addPeople` (`placed` and
   `shortHours` stay test-only).
-- **The office default as built** (`_office_runs()`): an office open every hour of every
-  day staffs `min(C, max(ceil(C/3), round(C * min(door, 50) / 50)))` of its C computers
-  around the clock (all at door 50, about 3.4 people a computer; never under a third,
-  about 1 a computer). Any other office staffs every computer 08-22 on weekdays and
-  `ceil(C/2)` of them on weekends, clipped to its own opening hours, so no shift falls
-  on a closed day. Offices draw on the unassigned people no shop plan (either variant)
-  counts on, in office order. `officeStaffing` rows are described in
-  `docs/architecture.md`.
+- **The office default as built** (`_office_runs()`, `_office_always_on()`): the formula in
+  2.4, for every office. The row says `alwaysOn` (N24). Offices draw on the unassigned
+  people no shop plan (either variant) counts on, in office order. `officeStaffing` rows
+  are described in `docs/architecture.md`.
 
 ### 2.5 Tests (extraction)
 

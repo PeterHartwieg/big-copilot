@@ -169,10 +169,10 @@ the map.
     switch shows, an office's by the office default. Each hire week is a week one new
     person could work under the game's rules (12-hour shifts, 14 hours a day, 50 a week),
     so the count is people, not hours divided by 40.
-  - *The office default*: an office open around the clock staffs a share of its computers
-    every hour, all of them at a door cap of 50 (about three people a computer),
-    proportionally fewer below that, never fewer than a third; any other office staffs
-    every computer 08-22 on weekdays and half of them on weekends, inside its own hours.
+  - *The office default*: three computers staffed around the clock in a building with a
+    door capacity of 50, proportionally fewer in smaller ones (at least one); every
+    computer 08-22 on weekdays; half the computers 08-22 on weekends, the round-the-clock
+    ones among them. Hours the office is shut are left out.
   - *Spare* people are a site's own staff its plan gives no hours, in a role the plan
     staffs. A cashier at a shop whose serving hours are not measured yet is not spare.
   - *Candidates* are the game's list as of the save: best top skill first, then the

@@ -166,13 +166,13 @@ hours where it is under that; `demBasis` is `none` where nothing is drawn and De
 sizes the line at 24. `supply.factories.sites[]` counts `running` machines (a recipe and
 somebody posted) beside the placed ones (`machines`).
 
-An `officeStaffing` row is one office planned by Peter's office default (25 Sep 2026):
-an office open every hour of the week staffs a share of its computers around the clock,
-all of them at a door cap of 50, proportionally fewer below it, never fewer than a third;
-any other office staffs every computer 08-22 on weekdays and half of them (rounded up) on
-weekends, inside its own opening hours (`_office_runs()`). One role, the type's
+An `officeStaffing` row is one office planned by Peter's office default (25 Sep 2026,
+`_office_runs()`): `round(3 * door / 50)` computers (at least 1, at most all; `door` the
+building's `customerCapacity`) staffed around the clock every day, every computer 08-22
+on weekdays, half of them (rounded up, the always-on ones counting) 08-22 on weekends,
+all clipped to the hours the office opens in the save. One role, the type's
 professional skill (`ASSIGN_SKILLS[type][0]`), one station per computer. The row is
-`{key, name, typeSlug, skill, label, rule ("allday" | "day"), computers,
+`{key, name, typeSlug, skill, label, alwaysOn, computers,
 staffedComputers, open, openAllHours: false, stations, people, roles, need, shifts,
 headcount, shortHours, shortDays, placed, bench, slack, cost, addPeople, current}`, the
 shop row's shape where the two share a field; an office the placer falls over on is
