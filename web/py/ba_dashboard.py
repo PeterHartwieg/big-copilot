@@ -18040,6 +18040,10 @@ const SP_SAT_WORD = {get service(){ return tt("sp.sat.service", "Service"); }, g
 const SP_AMENITY_WORD = {get bathroom(){ return tt("sp.amenity.bathroom", "Bathroom"); },
   get toiletprivacy(){ return tt("sp.amenity.toiletprivacy", "Bathroom stall or door"); }, get sink(){ return tt("sp.amenity.sink", "Sink"); },
   get music(){ return tt("sp.amenity.music", "Music"); }, get interior(){ return tt("sp.amenity.interior", "Interior design"); }};
+/* The same words inside a sentence, lower case as the language writes them. */
+const SP_AMENITY_LOWER = {get bathroom(){ return tt("sp.amenity.lc.bathroom", "bathroom"); },
+  get toiletprivacy(){ return tt("sp.amenity.lc.toiletprivacy", "bathroom stall or door"); }, get sink(){ return tt("sp.amenity.lc.sink", "sink"); },
+  get music(){ return tt("sp.amenity.lc.music", "music"); }, get interior(){ return tt("sp.amenity.lc.interior", "interior design"); }};
 /* The four parts as an equaliser against the 80 line the game marks good at,
    and the overall score beside it. An unscored part draws an empty dashed
    column, never a full one. */
@@ -18071,7 +18075,7 @@ function spStandards(b){
     if(amenities[slug] === undefined) return "";
     const state = unknown ? "unk" : amenities[slug] ? "ok" : "miss";
     const read = unknown ? tt("sp.sat.unscored", "{what} <b>not scored yet</b>", {what: label})
-      : amenities[slug] ? tt("sp.amenity.ok", "{what} in place", {what: label}) : tt("sp.amenity.miss", "<b>no</b> {what}", {what: label.toLowerCase()});
+      : amenities[slug] ? tt("sp.amenity.ok", "{what} in place", {what: label}) : tt("sp.amenity.miss", "<b>no</b> {what}", {what: SP_AMENITY_LOWER[slug]});
     return `<span class="sp-lampb ${state} ${slug}" data-el="${slug}" data-amenity="${slug}" data-state="${state}" data-read="${attr(read)}" role="img" aria-label="${
       attr(label)}">${spIcon(SP_AMENITY_ICON[slug])}</span>`;
   };
@@ -18166,8 +18170,11 @@ function spRoster(people, gaps, pairs){
    thing a row of dots hides, or that nobody is. */
 function spCrewRead(people, roles){
   const off = people.filter(p => p.absent);
-  if(!off.length) return tt("sp.crew.read", {one: "<b>{people}</b> people in {n} role · nobody off today",
-    other: "<b>{people}</b> people in {n} roles · nobody off today"}, {people: people.length, n: roles});
+  /* English says "people" whatever the count; the plural is there for a
+     language that does not. */
+  if(!off.length) return tt("sp.crew.read", {one: "{people} in {n} role · nobody off today",
+    other: "{people} in {n} roles · nobody off today"}, {n: roles,
+    people: tt("sp.crew.people", {one: "<b>{n}</b> people", other: "<b>{n}</b> people"}, {n: people.length})});
   const named = off.slice(0, 2).map(p => `<b>${spEsc(p.name)}</b>`).join(", ");
   return off.length > 2 ? tt("sp.crew.offmore", "Off today · {names} and {n} more", {names: named, n: off.length - 2})
     : tt("sp.crew.offread", "Off today · {names}", {names: named});
@@ -19012,7 +19019,7 @@ function spRosterBlock(b){
             figure beside it and does not redraw the block, so a number in here
             would be the one thing on the widget that never changed. */""}
       <div class="sp-typed"${counts.staffed > c.tickable.length ? ` tabindex="0" data-read="${attr(
-        `${tt("sp.ba.ring", "The ring counts the {n} entries the board can mark", {n: c.tickable.length})} · ${
+        `${tt("sp.ba.ring", {one: "The ring counts the {n} entries the board can mark", other: "The ring counts the {n} entries the board can mark"}, {n: c.tickable.length})} · ${
           tt("sp.ba.ring.more", {one: "{n} more is an entry to set that it cannot: the save gives their station or their person no id to tick against",
             other: "{n} more are entries to set that it cannot: the save gives their station or their person no id to tick against"},
             {n: counts.staffed - c.tickable.length})}`)}"` : ""}><span class="sp-ring" style="--p:${
@@ -19091,6 +19098,9 @@ const spMeter = (pct, bad) => `<div class="sp-meter${bad ? " bad" : ""}"><i styl
   Math.max(0, Math.min(100, Math.round(pct || 0)))}%"></i></div>`;
 /* A figure the payload does not carry is a dash, never a nought. */
 const spNum = n => Number.isFinite(n) ? num(Math.round(n)) : "—";
+/* The same figure as a param: the whole number for {n:,} (which prints it as
+   spNum() does, and picks the plural by it), or the dash. */
+const spWhole = n => Number.isFinite(n) ? Math.round(n) : "—";
 /* The total of one key over some rows, or nothing at all when no row carries
    it: a factory whose every machine runs a recipe the board cannot name has an
    unknown output, not an output of zero. */
@@ -19230,7 +19240,7 @@ function spStockRows(b){
       : order && Number.isFinite(f.setTo) ? spUp(spNum(shown), spNum(f.setTo), f.st === "short")
       : spNum(shown)) + (r.smart ? `<small ${SMALL}>${plainAfter
         ? tt("sp.level.plus", "in stock +{n}/wk", {n: spNum(plainAfter)}) : tt("sp.level", "in stock")}</small>` : "");
-    const read = paused ? tt("sp.stock.read.paused", "Import <b>paused</b>; <b>{n}</b> days left", {n: spNum(r.cover)})
+    const read = paused ? tt("sp.stock.read.paused", {one: "Import <b>paused</b>; <b>{n:,}</b> days left", other: "Import <b>paused</b>; <b>{n:,}</b> days left"}, {n: spWhole(r.cover)})
       : dry && r.runsOut
         ? r.covered ? tt("sp.stock.read.dryroute", "Runs dry <b>{day}</b>, before the route's next round", {day: spEsc(r.runsOut)})
         : truck !== null ? tt("sp.stock.read.drytruck", "Runs dry <b>{day}</b>, the truck lands <b>{lands:day}</b>", {day: spEsc(r.runsOut), lands: today + truck})
@@ -19247,7 +19257,7 @@ function spStockRows(b){
       : f.st === "new" ? tt("sp.stock.read.new", "<b>New</b> · {tip}", {tip: spEsc(szTip(f))})
       : f.st === "idle" ? tt("sp.stock.read.idletip", "<b>Idle stock</b> · {tip}", {tip: spEsc(szTip(f))})
       : Number.isFinite(r.cover) && r.cover >= SP_RAIL_DAYS ? tt("sp.stock.read.week", "Covered through the week")
-      : tt("sp.stock.read.days", "<b>{n}</b> days on hand", {n: spNum(r.cover)});
+      : tt("sp.stock.read.days", {one: "<b>{n:,}</b> days on hand", other: "<b>{n:,}</b> days on hand"}, {n: spWhole(r.cover)});
     const draw = spItemDraw(r.slug, r.item);
     rows.push({chip: spWord(r.slug), item: r.item, hand: r.stock, draw: spNum(r.perDay),
                cover: paused || !Number.isFinite(r.cover) ? null : r.cover,
@@ -19265,7 +19275,7 @@ function spStockRows(b){
       el: [spKeyTok(r.slug, r.item), szEl(f) || (still ? "dead" : "target")],
       read: f.why === "notRouted" ? tt("sp.stock.read.notrouted", "<b>Not routed</b> · no plan sends these on")
         : still ? tt("sp.stock.read.still", "<b>Idle stock</b> · nothing draws on these")
-        : tt("sp.stock.read.weeks", "<b>Idle stock</b> · <b>{n}</b> weeks on hand", {n: spNum(r.weeks)}),
+        : tt("sp.stock.read.weeks", {one: "<b>Idle stock</b> · <b>{n:,}</b> weeks on hand", other: "<b>Idle stock</b> · <b>{n:,}</b> weeks on hand"}, {n: spWhole(r.weeks)}),
     });
   });
   /* Everything else on the floor. A line nothing imports is made in-house or
@@ -19580,7 +19590,7 @@ function spHomePanel(home){
   const tiles = spTile(tt("sp.home.rentday", "Rent / day"), fmt(day))
     + spTile(tt("sp.home.rentweek", "Rent / week"), fmt(day * 7))
     + spTile(tt("sp.home.size", "Size"), m === null ? "—" : `${num(m)}<small>m²</small>`)
-    + spTile(tt("sp.home.perm2", "Per m²"), m === null || !rent ? "—" : `$${(rent / m).toFixed(2)}<small>${tt("sp.perday", "/day")}</small>`);
+    + spTile(tt("sp.home.perm2", "Per m²"), m === null || !rent ? "—" : `${tt("sp.home.perm2.v", "${x:.2f}", {x: rent / m})}<small>${tt("sp.perday", "/day")}</small>`);
   return `${siteCrumbs(home.key, home.address, false)}
     <div class="sitehead rv">
       ${code ? `<span class="bullet">${spEsc(code)}</span>` : ""}
@@ -19774,12 +19784,12 @@ function drawSite(){
     <div class="sstat"><span class="lab">${tt("sp.tile.revenue", "Revenue yesterday")}</span><div class="v">${fmt(b.revenue)}${trendChip}</div>${
       sp ? spSpark(b.series, "revenue", true, tone) : ""}</div>
     <div class="sstat"><span class="lab">${tt("sp.tile.customers", "Customers")}</span><div class="v">${b.customers ? num(b.customers) : "—"}${
-      b.basket === null ? "" : `<small ${SMALL}>${office ? tt("sp.tile.basket.hour", "${x}/hour billed", {x: b.basket.toFixed(2)})
-        : tt("sp.tile.basket", "${x}/visit", {x: b.basket.toFixed(2)})}</small>`}</div>${
+      b.basket === null ? "" : `<small ${SMALL}>${office ? tt("sp.tile.basket.hour", "${x:.2f}/hour billed", {x: b.basket})
+        : tt("sp.tile.basket", "${x:.2f}/visit", {x: b.basket})}</small>`}</div>${
       sp ? spSpark(b.series, "customers", false, "") : ""}</div>
     <div class="sstat"${sp ? "" : ` data-tip="${attr(costTip)}"`}><span class="lab">${tt("sp.tile.profit", "Profit")}</span>${
       sp && b.profit < 0 ? `<i class="sp-flag"></i>` : ""}<div class="v ${sign(b.profit)}">${fmt(b.profit)}${
-      b.margin === null ? "" : `<small ${SMALL}>${tt("sp.tile.margin", "{x}% margin", {x: b.margin.toFixed(1)})}</small>`}</div>${
+      b.margin === null ? "" : `<small ${SMALL}>${tt("sp.tile.margin", "{x:.1f}% margin", {x: b.margin})}</small>`}</div>${
       sp ? spCostBar(costs, b.profit) : ""}</div>
     <div class="sstat"><span class="lab">${capLabel}</span><div class="v">${capTile}</div>${
       sp ? spCeiling(office, limits) : ""}</div>`;
@@ -27358,7 +27368,8 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
   const pass = (what = "skipped") => {
     run[i] = {name: b ? spEsc(shortName(b)) : tt("sp.gw.ashop", "A shop"), plain: b ? shortName(b) : tt("sp.gw.ashop", "A shop"),
       what: what === "skipped" ? tt("sp.gw.run.skipped", "skipped") : what === "gone" ? tt("sp.gw.run.gone", "gone")
-        : what === "not written" ? tt("sp.gw.run.notwritten", "not written") : what, ok: false};
+        : what === "not written" ? tt("sp.gw.run.notwritten", "not written")
+        : what === "nothing to write" ? tt("sp.gw.run.nothing", "nothing to write") : what, ok: false};
     if(!lastOne) gwSchedule(keys, after, run); else gwRunEnd(keys, run);
   };
   /* On from a shop written: the next one not seen yet, or the end of the run. */
