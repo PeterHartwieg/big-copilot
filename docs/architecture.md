@@ -288,17 +288,24 @@ owns it; they are the CSS prefixes: `nav`, `land`, `app`, `foot`, `today`, `f` (
 weekday names in `web/i18n.js`. `AREAS` in `tools/i18n.py` is the list. A key never ends in
 `_one`, `_other` or another plural category: the catalogue writes plurals that way.
 
-**Placeholders** are `{name}` with a small spec that `tt()` and `msg()` both implement, and
-`tests/i18n_runtime.test.cjs` holds them to the same English:
+**Placeholders** are `{name}` with a small spec that `tt()` and `msg()` both implement. Each
+spec writes, in English, exactly what the code it replaces wrote on that side
+(`tests/i18n_runtime.test.cjs` against the board's `num()`, `fmt()`, `compact()` and
+`toFixed()`; `tests/test_i18n_msg.py` against the f-strings, fractional and negative
+values included):
 
-| Spec | English | German |
-| --- | --- | --- |
-| `{n}` | as is | as is, decimal comma |
-| `{n:,}` | `1,234` (whole) | `1.234` |
-| `{x:.1f}`, `{x:,.1f}` | `3.5`, `12,345.7` | `3,5`, `12.345,7` |
-| `{w:$}` | `$1,234`, as `fmt()` | `$1.234` |
-| `{w:$c}` | `$3.57M`, as `compact()` | `$3,57M` |
-| `{d:day}` | `Monday` for 1 (0 is Sunday) | the table's `day.1` |
+| Spec | English in a script (`tt`) | English in Python (`msg`) | German |
+| --- | --- | --- | --- |
+| `{x}` | `String(x)` | `f"{x}"` | decimal comma, up to 3 decimals, no grouping |
+| `{x:,}` | `num(x)`: grouped, up to 3 decimals, `-1,234.5` | `f"{x:,}"`: `-1,234.5`; a float keeps every digit `repr` shows | `-1.234,5` |
+| `{x:.1f}` (any digit) | `num(x, {min = max = 1 decimal, no grouping})`, as `x.toFixed(1)` | `f"{x:.1f}"` | `3,5` |
+| `{x:,.0f}` (any digit) | `num(x, {min = max = 0 decimals})` | `f"{x:,.0f}"` | `1.234` |
+| `{w:$}` | `fmt(w)`: `-$1,234` | `"-$" + f"{abs(w):,.0f}"` for a negative, `$1,234` otherwise | `-$1.234` |
+| `{w:$c}` | `compact(w)`: `$3.57M`, `$751k` | the same, halves rounded up as `Math.round` does | `$3,57M` |
+| `{d:day}` | `Monday` for 1 (0 is Sunday) | the same | the table's `day.1` |
+
+The two sides differ only where the old code did: a float with more than three decimals
+(`{x:,}`), and a tie at an exact half (Python rounds half to even, `Intl` away from zero).
 
 Numbers follow the UI language: English is always en-US. `tt()` formats through the
 board's `num()` once it exists, and through `Intl` in `ttNumLocale()` before it does (the
@@ -317,15 +324,18 @@ names as params.
 
 ### How it runs
 
-- `web/i18n.js` is spliced by `render()` into a `<script>` in the head at
-  `/*__I18N_SCRIPT__*/`, ahead of every other script, so `app.js`, `update.js`,
+- `web/i18n.js` is spliced by `render()` into a `<script>` at the end of the head, at
+  `/*__I18N_SCRIPT__*/`: after the stylesheets, so the browser finds those first, and
+  before the landing, the board and every other script but the theme's, so `app.js`, `update.js`,
   `community.js`, the board script, `map.js`, `wiki.js` and the local `dashboard.html` can
   all call `tt()`. Its top-level names start `tt`/`TT_`, or are `tApply`, `enOf`,
   `setUiLocale` and `setUiLang`.
 - The site's table is `web/i18n/<lang>.json`, fetched with the build stamp
   (`window.LEDGER_BUILD`, which `page_html()` now sets in the head for that reason). Until
   the footer picker ships, the only switch is the developer flag `?ui=de`, which is not
-  remembered. While it loads, `html.tt-wait` hides the page for at most 400 ms.
+  remembered. While it loads, `html.tt-wait` hides the page for at most 400 ms. A table
+  with no keys (the German is empty until its translation lands) counts as English,
+  numbers included.
   `document.documentElement.lang` follows the UI language.
 - The CLI's `--lang de` carries `web/i18n/de.json` in the page (`cli_ui_table()`, filling
   `/*__UI_TABLE__*/null` inside `web/i18n.js`) when that table is not empty, as it carries
@@ -354,14 +364,16 @@ area. Ids, `subject`, the history, anything sent to the game and CLI output neve
 
 On the page, `localiseNames()` hands its fresh copy to `ttPayload()`, which, while a table
 is loaded, swaps each field its row's `i18n` names and keeps the English it showed on the
-row, unenumerated. **Code that reads Python's words reads `enOf(row, field)`**: the English,
-whatever the page shows. `findingAmount()` and `spLimitShow()` (and through it
-`spLimitRole()`) do; `splitFinding()` only looks for its two English sentence shapes while
+row under a symbol key (so `{...row}` copies keep it, and JSON and `Object.keys()` never
+see it). **Code that reads Python's words reads `enOf(row, field)`**: the English,
+whatever the page shows. `findingAmount()`, `spLimitShow()` (and through it
+`spLimitRole()`), the site panel's cap chips (`limitEn()` in `drawSite()`: the
+`"the building"` tests, `capSentence`, `spLimitIcons()` and `data-limit`) and its ceiling
+strip (`spBindingLimits()`, which `spCeiling()` reads) do; `splitFinding()` only looks for its two English sentence shapes while
 the row is shown in English, and its generic cut (`:`, `;`, `. `, the comma within
 `HEADLINE_MAX`) works in any language, so a translation puts its headline first and the
-detail after `: ` or `; `. Another comparison against Python's English (`capSentence`,
-`spLimitIcons()`, the `"the building"` tests in the site panel) has to move to `enOf()` in
-the pull request that converts its sentence.
+detail after `: ` or `; `. Any other comparison against Python's English has to move to
+`enOf()` in the pull request that converts its sentence.
 
 ### The catalogue and the translations
 
@@ -369,7 +381,7 @@ the pull request that converts its sentence.
 | --- | --- |
 | `i18n/de.json` | The German, hand-reviewed: flat, `"key": "text"`, plurals as `key_one`/`key_other` |
 | `i18n/de.base.json` | The English each German string was translated from, per key. Staleness is measured against it; `python tools/i18n.py accept de [key …]` records it |
-| `web/i18n/de.json` | Generated by `python build_web.py` (`tools/i18n.py ship`): `i18n/de.json` minus orphans and placeholder mismatches. In `STAMP_INPUTS`, and compared by `--check` |
+| `web/i18n/de.json` | Generated by `python build_web.py` (`tools/i18n.py ship`): `i18n/de.json` minus orphans, placeholder mismatches and stale keys (whose English changed since `de.base.json` recorded it, or was never recorded), which show English until redone and `accept`ed. In `STAMP_INPUTS`, and compared by `--check` |
 | `tools/i18n.py` | `extract` (the English catalogue, read off the call sites: a JS lexer over the scripts, an HTML parser over the markup, `ast` over `msg(`), `status [--strict]`, `ship`, `accept`, `glossary`, `draft-sheet` |
 
 No English catalogue is committed: it would conflict on every English edit. `extract` builds
@@ -380,7 +392,8 @@ never breaks anybody. `status --strict` fails on them, for a translation pull re
 
 `glossary de --out <path>` and `draft-sheet de --out <path>` read the installed game's
 `en.json` and `de.json` for the game's own words (address form: du, as the game's German
-uses). That text is the game's, so both refuse a path inside the repository.
+uses). That text is the game's, so both refuse a path inside this checkout (with or
+without its `.git`) or inside any other git work tree.
 
 ### Converting an area
 
@@ -390,7 +403,21 @@ uses). That text is the game's, so both refuse a path inside the repository.
    or names become one key with params. Markup: `data-tt` on the innermost element that
    holds only the words, `data-tt-title` and friends beside attributes. Python: the
    f-string becomes `msg("f.thing", "…{n:,}…", n=…)` with the same English, and any board
-   code that parses that sentence reads `enOf(row, field)`.
+   code that parses that sentence reads `enOf(row, field)`. Pick each spec from the old
+   code, so the English stays byte for byte:
+
+   | Old code | Template |
+   | --- | --- |
+   | `${x}` in a script, `f"{x}"` | `{x}` |
+   | `num(x)`, `f"{x:,}"` | `{x:,}` |
+   | `x.toFixed(1)`, `f"{x:.1f}"` | `{x:.1f}` |
+   | `num(x, {minimumFractionDigits: 2, maximumFractionDigits: 2})`, `f"{x:,.2f}"` | `{x:,.2f}` |
+   | `num(Math.round(x))` | `{x:,.0f}` for a value that is never an exact half; otherwise round in the caller and pass the whole number as `{x:,}` |
+   | `fmt(x)`, `f"${abs(x):,.0f}"`, or `f"${x:,.0f}"` with `x` never negative | `{x:$}` |
+   | `f"${x:,.0f}"` where `x` can be negative (writes `$-1,234`) | `${x:,.0f}`: a literal dollar before the placeholder |
+   | `compact(x)` / `money(x)` | `{x:$c}` |
+   | `WEEKDAY_NAMES[d]`, `WEEKDAYS[d]` | `{d:day}` |
+   | a game name, `tok(key, name)` | `{item}` with the token as the param |
 3. Prove the English unchanged: the area's existing tests pass untouched, and a fixture
    board rendered before and after shows the same text.
 4. Add the area to `CONVERTED` in `tests/test_i18n_msg.py` (Python fields) and in
@@ -422,7 +449,7 @@ text for three of them is supplied by the caller.
 | `/*__HOOD_TAGS__*/{}` | `render()`, from `HOOD_TAG` — one neighbourhood-tag table shared by the board and the wiki, keyed by the game's neighbourhood key |
 | `/*__HOOD_NAMES__*/{}` | `render()`, from `HOOD_LABEL` — each neighbourhood's English name by the same key: `hoodName()`'s fallback and `hoodKeyOf()`'s way back from a stored name |
 | `/*__NAMES__*/null` | `render()`'s `names=` argument, `{lang, names}` from `cli_names()` for `--lang`; `null` elsewhere, where the site fetches `web/names/<lang>.json` instead |
-| `/*__I18N_SCRIPT__*/` | `render()`, from `web/i18n.js`, in a `<script>` of its own in the head, before any other script ([UI text](#ui-text)) |
+| `/*__I18N_SCRIPT__*/` | `render()`, from `web/i18n.js`, in a `<script>` of its own at the end of the head, after the stylesheets and before the landing and every script but the theme's ([UI text](#ui-text)). Spliced last, at the first marker only, so no other placeholder runs over it |
 
 `web/i18n.js` carries one more, `/*__UI_TABLE__*/null`, which `render()` fills before the
 splice from its `ui=` argument: `{lang, table}` from `cli_ui_table()` for `--lang`, `null`

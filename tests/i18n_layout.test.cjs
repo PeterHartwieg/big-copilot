@@ -80,7 +80,7 @@ sys.stdout.buffer.write(json.dumps(_wire_msgs(fixture()["payload"]), ensure_asci
 after(async () => { await browser?.close(); });
 
 /* web/index.html served from web/, the pseudo table standing in for German. */
-async function site(t, {ui = '', width = 1280} = {}){
+async function site(t, {ui = '', width = 1280, payload = PAYLOAD} = {}){
   const context = await browser.newContext({viewport: {width, height: 900}, locale: 'en-US', reducedMotion: 'reduce'});
   t.after(() => context.close());
   const page = await context.newPage();
@@ -98,7 +98,7 @@ async function site(t, {ui = '', width = 1280} = {}){
   });
   await page.goto(`http://i18n.test/${ui ? `?ui=${ui}` : ''}`);
   if(ui) await page.waitForFunction(() => ttLang === 'de');
-  await page.evaluate(raw => { document.body.classList.add('has-board'); takeData(raw); boot(); }, PAYLOAD);
+  await page.evaluate(raw => { document.body.classList.add('has-board'); takeData(raw); boot(); }, payload);
   return {page, errors, fetched};
 }
 
@@ -131,6 +131,30 @@ test('?ui=de reaches the board: Python\'s messages in the table, and their Engli
     return [NUM_LOCALE, fmt(1234.4), document.documentElement.lang, D.alerts.find(a => a.group === 'staff').text]; }),
     ['en-US', '$1,234', 'en', 'No staff assigned']);
   assert.deepEqual(errors, []);
+});
+
+test('a cap chip keys on the English limit, whatever language its words are in', async t => {
+  const payload = JSON.parse(JSON.stringify(PAYLOAD));
+  const findings = payload.hourFindings.filter(f => f.limit);
+  assert.ok(findings.length, 'the fixture has capped hours');
+  findings.forEach(f => { f.i18n = {...(f.i18n || {}), limit: ['f.staff.none', {}]}; });
+  const chips = async ui => {
+    const {page, errors} = await site(t, {ui, payload});
+    const got = await page.evaluate(key => {
+      openSite(key, false);
+      const chips = [...document.querySelectorAll('#sitePanel .sp-hchip.cap')].map(e =>
+        [e.dataset.limit, e.dataset.show, e.classList.contains('sp-bcap'), e.querySelectorAll('svg').length]);
+      // The ceiling strip lights the door, counter or person each limit names.
+      const ceiling = [...document.querySelectorAll('#sitePanel .sp-ceil > span')].map(e => e.className);
+      return {chips, ceiling};
+    }, findings[0].key);
+    assert.deepEqual(errors, []);
+    return got;
+  };
+  const en = await chips(''), de = await chips('de');
+  assert.ok(en.chips.length);
+  assert.ok(en.ceiling.some(c => c.split(" ").includes("on")), `the fixture lights part of the ceiling: ${JSON.stringify(en.ceiling)}`);
+  assert.deepEqual(de, en);
 });
 
 test('with no ?ui the page asks for no table and shows the English', async t => {
