@@ -269,9 +269,32 @@ test('under Demand the Factories verdict says, plainly, that fewer hours and wor
   const page = await board(fixture(), {mode: 'dem'});
   try {
     const verdict = await text(page, '#secFactories .sb-verdict');
-    assert.match(verdict, /1 line could run fewer hours and 2 factory workers could go \(Staffing for factory lines below\)/);
+    assert.match(verdict, /Current rosters cover the needed hours; 1 line could run fewer hours and 2 factory workers could go \(Staffing for factory lines below\)/);
     assert.doesNotMatch(await page.locator('#secFactories .sb-verdict b').allTextContents().then(t => t.join(' ')), /could/);
   } finally { await page.close(); }
+  // At 24/7 the bakery has to hire: named, and no "Current rosters cover".
+  const cap = await board(fixture());
+  try {
+    const verdict = await text(cap, '#secFactories .sb-verdict');
+    assert.match(verdict, /2 to hire at .*Bakery Factory \(Staffing for factory lines below\)/);
+    assert.doesNotMatch(verdict, /Current rosters cover/);
+  } finally { await cap.close(); }
+  // Spares are counted, never netted against another factory's hires.
+  const data = fixture();
+  data.factoryStaffing.dem.push({...data.factoryStaffing.dem[0], key: 'dist#6', s: 5, name: 'Other',
+    headcount: {needed: 700, min: 14, have: 10, spare: 0, hire: 4}, delta: {workers: 4, perDay: 720}});
+  const mixed = await board(data, {mode: 'dem'});
+  try {
+    assert.match(await text(mixed, '#secFactories .sb-verdict'), /2 factory workers could go and 4 to hire at/);
+  } finally { await mixed.close(); }
+  // No staffing card, no pointer to it.
+  delete data.factoryStaffing;
+  const none = await board(data, {mode: 'dem'});
+  try {
+    const verdict = await text(none, '#secFactories .sb-verdict');
+    assert.match(verdict, /1 line could run fewer hours/);
+    assert.doesNotMatch(verdict, /Staffing for factory lines below/);
+  } finally { await none.close(); }
 });
 
 test('a line with a day off reads its week, and names the thin day', async () => {
@@ -299,6 +322,12 @@ test('two lines making one item at a factory each keep their own change and tick
     assert.equal(await ticks.count(), 2);
     await ticks.first().click();
     assert.deepEqual(await ticks.evaluateAll(b => b.map(x => x.getAttribute('aria-pressed'))), ['true', 'false']);
+    // The product's ships and held are shown once, on the first line.
+    const cells = await page.$$eval('#secFactories tr[data-slug="cake"]', trs => trs.map(t => t.innerText.replace(/\s+/g, ' ')));
+    assert.match(cells[0], /tops up to 270/);
+    assert.match(cells[0], /all 2 Cake lines/);
+    assert.match(cells[1], /shared with the Cake line above/);
+    assert.doesNotMatch(cells[1], /tops up to/);
   } finally { await page.close(); }
 });
 
@@ -306,9 +335,9 @@ test('Ships / day says what a line tops up to your own sites and what it exports
   const page = await board(fixture(), {which: 'all'});
   try {
     const lines = await bySlug(page, 'secFactories', 1);
-    assert.match(lines.cake.cells[5], /top-up out 270/);
+    assert.match(lines.cake.cells[5], /tops up to 270/);
     assert.match(lines.bread.cells[5], /\+960 export/);
-    assert.doesNotMatch(lines.bread.cells[5], /top-up out/);
+    assert.doesNotMatch(lines.bread.cells[5], /tops up to/);
   } finally { await page.close(); }
 });
 

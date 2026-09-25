@@ -4988,8 +4988,8 @@ def _line_hours(posted: list, machines: int, rate: float, dem_makes: float, basi
 
     `hoursNow` is the week of its least-rostered machine as whole hours a
     day (rounded down), so a machine off one day reads 20, not 0; `thinDay`
-    names the weekday with the fewest hours on any machine where that is
-    under `hoursNow`. 24/7 needs every machine all 24; Demand the hours that
+    names that machine's weekday with the fewest hours where that is under
+    `hoursNow`. 24/7 needs every machine all 24; Demand the hours that
     make what the ends draw plus the margin once (`dem_makes` a day), never
     past 24, and 24 where nothing is drawn (`demBasis` "none"). A line is
     judged on the week, as _staff_notes() judges a machine: short (why hours:
@@ -5000,9 +5000,10 @@ def _line_hours(posted: list, machines: int, rate: float, dem_makes: float, basi
     _factory_staffing() and leaves the payload there.
     """
     posted = sorted(posted, key=lambda m: (m["slot"], str(m["id"])))
-    weekly = min((sum(m["days"]) for m in posted), default=0)
+    least = min(posted, key=lambda m: sum(m["days"]), default=None)
+    weekly = sum(least["days"]) if least else 0
     now = weekly // 7
-    thin = min(((min(m["days"]), m["days"].index(min(m["days"]))) for m in posted), default=None)
+    thin = (min(least["days"]), least["days"].index(min(least["days"]))) if least else None
     dem = 24
     if basis == "sales" and rate and machines:
         dem = min(24, math.ceil(round(dem_makes * (1 + SUPPLY_MARGIN) / (rate * machines), 6)))
@@ -19642,10 +19643,12 @@ function sbLineRow(d, r, site){
     <td class="l">${hours}</td>
     <td>${(r.makes ?? 0).toLocaleString()}${r.missing && r.missing.length ? `<span class="sub">stopped: no ${r.missing.map(spEsc).join(", ")}</span>`
       : r.fullWeek && r.hoursWeek < r.fullWeek ? `<span class="sub">${(r.atRoster ?? 0).toLocaleString()} at this roster</span>` : ""}</td>
-    <td>${(r.ships ?? 0).toLocaleString()}${r.piling ? ` <span class="chip warn">piling up</span>` : ""}${r.toCity > 0
-      ? `<span class="sub" data-tip="What the plans from this factory top your own sites up to each morning">top-up out ${r.toCity.toLocaleString()}</span>` : ""}${r.toPier > 0
-      ? `<span class="sub" data-tip="What the plans from this factory send to a pier for export">+${r.toPier.toLocaleString()} export</span>` : ""}</td>
-    <td>${(r.stock ?? 0).toLocaleString()}${Number.isFinite(r.limit) ? `<span class="sub">of ${r.limit.toLocaleString()}</span>` : ""}</td>
+    ${r.later ? `<td colspan="2"><span class="sub" data-tip="${attr(`Ships, held and what the plans take are ${r.item}'s, shared by every line making it; they are shown on the first`)}">shared with the ${
+      r.item} line above</span></td>` : `<td>${(r.ships ?? 0).toLocaleString()}${r.piling ? ` <span class="chip warn">piling up</span>` : ""}${r.toCity > 0
+      ? `<span class="sub" data-tip="The target the line's delivery plans top your own sites up to">tops up to ${r.toCity.toLocaleString()}</span>` : ""}${r.toPier > 0
+      ? `<span class="sub" data-tip="What the plans from this factory send to a pier for export">+${r.toPier.toLocaleString()} export</span>` : ""}${r.makers > 1
+      ? `<span class="sub" data-tip="${attr(`Shared by the ${r.makers} lines making ${r.item}`)}">all ${r.makers} ${spEsc(r.item)} lines</span>` : ""}</td>
+    <td>${(r.stock ?? 0).toLocaleString()}${Number.isFinite(r.limit) ? `<span class="sub">of ${r.limit.toLocaleString()}</span>` : ""}</td>`}
     <td class="l st">${f ? sbStatus(f, reason, tip) : "—"}</td></tr>`;
 }
 function sbInputRow(d, r, site){
@@ -19678,8 +19681,14 @@ function drawFactoriesTab(){
   const ramping = new Set();
   const blocks = f.sites.map(site => {
     const s = site.s, b = D.businesses[s];
+    /* Ships, held and what the plans take are the product's, not a line's:
+       where two lines make one item they are shown once, on the first. */
+    const makers = {};
+    site.lines.forEach(l => { makers[l.slug] = (makers[l.slug] || 0) + 1; });
+    const firstOf = new Set();
     const lines = site.lines.map(l => {
-      const r = {...l, s, fact: sbLineFact(l)};
+      const r = {...l, s, fact: sbLineFact(l), makers: makers[l.slug], later: firstOf.has(l.slug)};
+      firstOf.add(l.slug);
       r.chk = sbChk(d, claimed, s, l.item, SB_LINE_KINDS, l.rid);
       r.keep = sbWorth(r.fact, r.chk);
       return r;
@@ -19741,10 +19750,14 @@ function drawFactoriesTab(){
     unnamed ? `${plural(unnamed, "machine")} without usable recipe details` : ""].filter(Boolean);
   /* Fewer hours or fewer workers would do: said plainly, never a problem. */
   const fewer = everyLine.filter(r => r.fact && Number.isFinite(r.fact.lower)).length;
-  const couldGo = -(((D.factoryStaffing || {})[sizing] || []).reduce((t, r) => t + ((r.delta || {}).workers || 0), 0));
-  const slack = fewer || couldGo > 0 ? `${hoursShort ? "" : "Current rosters cover the needed hours; "}${[
+  const staffRows = ((D.factoryStaffing || {})[sizing] || []).filter(r => !r.failed);
+  const couldGo = staffRows.reduce((t, r) => t + ((r.headcount || {}).spare || 0), 0);
+  const hires = staffRows.filter(r => (r.headcount || {}).hire > 0);
+  const hireAt = hires.map(r => `${r.headcount.hire} to hire at ${spEsc(D.businesses[r.s] ? shortName(D.businesses[r.s]) : r.name)}`);
+  const slack = fewer || couldGo > 0 || hires.length ? `${hoursShort || hires.length ? "" : "Current rosters cover the needed hours; "}${[
       fewer ? `${plural(fewer, "line")} could run fewer hours` : "",
-      couldGo > 0 ? `${plural(couldGo, "factory worker")} could go` : ""].filter(Boolean).join(" and ")} (Staffing for factory lines below)` : "";
+      couldGo > 0 ? `${plural(couldGo, "factory worker")} could go` : "", ...hireAt].filter(Boolean).join(" and ")}${
+      staffRows.length ? " (Staffing for factory lines below)" : ""}` : "";
   const verdict = !f.sites.length ? (D.meta.locale === false
       ? "Factory lines need the game's recipe pages: load en.json (More menu) to see them." : "No factory is set up.")
     : `${problems.length ? `<b>${problems.join("; ")}</b>` : slack ? "" : `Every line runs the hours it needs and every factory input covers what the lines need`}${

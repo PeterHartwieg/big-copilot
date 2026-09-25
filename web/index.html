@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=e02c10fe64">
+<link rel="stylesheet" href="community.css?v=528e919714">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -14,7 +14,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=e02c10fe64">
+<link rel="stylesheet" href="fonts/fonts.css?v=528e919714">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -3742,8 +3742,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "e02c10fe64";</script>
-<script>window.LEDGER_RELEASE = {"version":"e02c10fe64","latest":{"pr":98,"date":"2026-09-25","title":"Supply by shop, warehouse and factory, and staffing for factory lines","summary":"Supply is now three tabs, one per object: Shops, Warehouses and Factories. Each opens on what needs a change, with the figure to type beside the setting it changes and a tick at the head of the row; one checklist under the tabs counts your ticks across all three and copies what is left. Idle stock folds into one row per warehouse or per cause, a shelf topped up far above what it sells gets a lower target to type, and the goods-flow diagram is a view of each tab: click a site to see its rows. Factories shows the hours each line is rostered against the hours it needs, 24/7 or for what your shops use, and too few hours is a change to type. A new Staffing for factory lines block gives each line's shifts, the factory workers the plan needs against those you have, and what the difference does to your wages. This answers the voted request \"Supply chain for factories not running 24/7\"."}};</script>
+<script>window.LEDGER_BUILD = "528e919714";</script>
+<script>window.LEDGER_RELEASE = {"version":"528e919714","latest":{"pr":98,"date":"2026-09-25","title":"Supply by shop, warehouse and factory, and staffing for factory lines","summary":"Supply is now three tabs, one per object: Shops, Warehouses and Factories. Each opens on what needs a change, with the figure to type beside the setting it changes and a tick at the head of the row; one checklist under the tabs counts your ticks across all three and copies what is left. Idle stock folds into one row per warehouse or per cause, a shelf topped up far above what it sells gets a lower target to type, and the goods-flow diagram is a view of each tab: click a site to see its rows. Factories shows the hours each line is rostered against the hours it needs, 24/7 or for what your shops use, and too few hours is a change to type. A new Staffing for factory lines block gives each line's shifts, the factory workers the plan needs against those you have, and what the difference does to your wages. This answers the voted request \"Supply chain for factories not running 24/7\"."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -3827,8 +3827,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=e02c10fe64"></script>
-<script src="community.js?v=e02c10fe64"></script>
+<script src="app.js?v=528e919714"></script>
+<script src="community.js?v=528e919714"></script>
 
 <script>
 
@@ -9685,10 +9685,12 @@ function sbLineRow(d, r, site){
     <td class="l">${hours}</td>
     <td>${(r.makes ?? 0).toLocaleString()}${r.missing && r.missing.length ? `<span class="sub">stopped: no ${r.missing.map(spEsc).join(", ")}</span>`
       : r.fullWeek && r.hoursWeek < r.fullWeek ? `<span class="sub">${(r.atRoster ?? 0).toLocaleString()} at this roster</span>` : ""}</td>
-    <td>${(r.ships ?? 0).toLocaleString()}${r.piling ? ` <span class="chip warn">piling up</span>` : ""}${r.toCity > 0
-      ? `<span class="sub" data-tip="What the plans from this factory top your own sites up to each morning">top-up out ${r.toCity.toLocaleString()}</span>` : ""}${r.toPier > 0
-      ? `<span class="sub" data-tip="What the plans from this factory send to a pier for export">+${r.toPier.toLocaleString()} export</span>` : ""}</td>
-    <td>${(r.stock ?? 0).toLocaleString()}${Number.isFinite(r.limit) ? `<span class="sub">of ${r.limit.toLocaleString()}</span>` : ""}</td>
+    ${r.later ? `<td colspan="2"><span class="sub" data-tip="${attr(`Ships, held and what the plans take are ${r.item}'s, shared by every line making it; they are shown on the first`)}">shared with the ${
+      r.item} line above</span></td>` : `<td>${(r.ships ?? 0).toLocaleString()}${r.piling ? ` <span class="chip warn">piling up</span>` : ""}${r.toCity > 0
+      ? `<span class="sub" data-tip="The target the line's delivery plans top your own sites up to">tops up to ${r.toCity.toLocaleString()}</span>` : ""}${r.toPier > 0
+      ? `<span class="sub" data-tip="What the plans from this factory send to a pier for export">+${r.toPier.toLocaleString()} export</span>` : ""}${r.makers > 1
+      ? `<span class="sub" data-tip="${attr(`Shared by the ${r.makers} lines making ${r.item}`)}">all ${r.makers} ${spEsc(r.item)} lines</span>` : ""}</td>
+    <td>${(r.stock ?? 0).toLocaleString()}${Number.isFinite(r.limit) ? `<span class="sub">of ${r.limit.toLocaleString()}</span>` : ""}</td>`}
     <td class="l st">${f ? sbStatus(f, reason, tip) : "—"}</td></tr>`;
 }
 function sbInputRow(d, r, site){
@@ -9721,8 +9723,14 @@ function drawFactoriesTab(){
   const ramping = new Set();
   const blocks = f.sites.map(site => {
     const s = site.s, b = D.businesses[s];
+    /* Ships, held and what the plans take are the product's, not a line's:
+       where two lines make one item they are shown once, on the first. */
+    const makers = {};
+    site.lines.forEach(l => { makers[l.slug] = (makers[l.slug] || 0) + 1; });
+    const firstOf = new Set();
     const lines = site.lines.map(l => {
-      const r = {...l, s, fact: sbLineFact(l)};
+      const r = {...l, s, fact: sbLineFact(l), makers: makers[l.slug], later: firstOf.has(l.slug)};
+      firstOf.add(l.slug);
       r.chk = sbChk(d, claimed, s, l.item, SB_LINE_KINDS, l.rid);
       r.keep = sbWorth(r.fact, r.chk);
       return r;
@@ -9784,10 +9792,14 @@ function drawFactoriesTab(){
     unnamed ? `${plural(unnamed, "machine")} without usable recipe details` : ""].filter(Boolean);
   /* Fewer hours or fewer workers would do: said plainly, never a problem. */
   const fewer = everyLine.filter(r => r.fact && Number.isFinite(r.fact.lower)).length;
-  const couldGo = -(((D.factoryStaffing || {})[sizing] || []).reduce((t, r) => t + ((r.delta || {}).workers || 0), 0));
-  const slack = fewer || couldGo > 0 ? `${hoursShort ? "" : "Current rosters cover the needed hours; "}${[
+  const staffRows = ((D.factoryStaffing || {})[sizing] || []).filter(r => !r.failed);
+  const couldGo = staffRows.reduce((t, r) => t + ((r.headcount || {}).spare || 0), 0);
+  const hires = staffRows.filter(r => (r.headcount || {}).hire > 0);
+  const hireAt = hires.map(r => `${r.headcount.hire} to hire at ${spEsc(D.businesses[r.s] ? shortName(D.businesses[r.s]) : r.name)}`);
+  const slack = fewer || couldGo > 0 || hires.length ? `${hoursShort || hires.length ? "" : "Current rosters cover the needed hours; "}${[
       fewer ? `${plural(fewer, "line")} could run fewer hours` : "",
-      couldGo > 0 ? `${plural(couldGo, "factory worker")} could go` : ""].filter(Boolean).join(" and ")} (Staffing for factory lines below)` : "";
+      couldGo > 0 ? `${plural(couldGo, "factory worker")} could go` : "", ...hireAt].filter(Boolean).join(" and ")}${
+      staffRows.length ? " (Staffing for factory lines below)" : ""}` : "";
   const verdict = !f.sites.length ? (D.meta.locale === false
       ? "Factory lines need the game's recipe pages: load en.json (More menu) to see them." : "No factory is set up.")
     : `${problems.length ? `<b>${problems.join("; ")}</b>` : slack ? "" : `Every line runs the hours it needs and every factory input covers what the lines need`}${

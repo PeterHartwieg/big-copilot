@@ -271,6 +271,13 @@ class LineHoursTests(unittest.TestCase):
         self.assertEqual((line["status"], line["why"]), ("short", "hours"))
         # Demand needs 8 a day, 56 a week: the week covers it, fewer would do.
         self.assertEqual(line["dem"], {"status": "covered", "why": None, "level": "ok", "lower": 8})
+        # The thin day is the least-rostered machine's: a fuller machine off on
+        # Monday does not name Monday.
+        pair = [{**week[0], "days": [8] * 7}, {"slot": 2, "id": "m-1", "days": [24, 0, 24, 24, 24, 24, 24], "running": True}]
+        self.assertNotIn("thinDay", _line_hours(pair, 2, 30, 0, "none"))
+        pair[0]["days"] = [8, 8, 8, 8, 8, 8, 2]
+        got = _line_hours(pair, 2, 30, 0, "none")
+        self.assertEqual((got["hoursNow"], got["thinDay"]), (7, {"day": "Sat", "hours": 2}))
         # Every day alike: no day named.
         self.assertNotIn("thinDay", _line_hours([{**week[0], "days": [20] * 7}], 1, 30, 0, "none"))
 
