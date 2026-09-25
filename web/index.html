@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=fb780ac104">
+<link rel="stylesheet" href="community.css?v=24a5fcb081">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -14,7 +14,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=fb780ac104">
+<link rel="stylesheet" href="fonts/fonts.css?v=24a5fcb081">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -3793,8 +3793,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "fb780ac104";</script>
-<script>window.LEDGER_RELEASE = {"version":"fb780ac104","latest":{"pr":0,"date":"2026-09-25","title":"Order ahead for a factory still being built","summary":"Plan a chain can now save a plan. Pick the factory it is built at, or a new one, step each product to the finished layout and press Save as plan: the weekly imports and the factory's daily top-ups it needs go on Supply's change checklist, so the next Monday's delivery lands as the factory opens, with a one-off first fill for the days before it from the opening day you choose. The plan shows how many machines are planned, placed and running, and while it is saved its ingredients read new, ordered ahead, instead of idle on Supply, the site pages and Today. A plan always sizes every machine 24/7. It is kept on this device and clears itself once every planned machine runs, or when you remove it."}};</script>
+<script>window.LEDGER_BUILD = "24a5fcb081";</script>
+<script>window.LEDGER_RELEASE = {"version":"24a5fcb081","latest":{"pr":0,"date":"2026-09-25","title":"Order ahead for a factory still being built","summary":"Plan a chain can now save a plan. Pick the factory it is built at, or a new one, step each product to the finished layout and press Save as plan: the weekly imports and the factory's daily top-ups it needs go on Supply's change checklist, so the next Monday's delivery lands as the factory opens, with a one-off first fill for the days before it from the opening day you choose. The plan shows how many machines are planned, placed and running, and while it is saved its ingredients read new, ordered ahead, instead of idle on Supply, the site pages and Today. A plan always sizes every machine 24/7. It is kept on this device and clears itself once every planned machine runs, or when you remove it."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -3878,8 +3878,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=fb780ac104"></script>
-<script src="community.js?v=fb780ac104"></script>
+<script src="app.js?v=24a5fcb081"></script>
+<script src="community.js?v=24a5fcb081"></script>
 
 <script>
 
@@ -4710,6 +4710,8 @@ function planBuild(plan){
     });
   });
   const at = new Map(), loose = [], planned = [];
+  /* What the factory's own contract brings a week: its level, or its amount. */
+  const ownLevel = slug => { const c = (depots[fs] || {})[slug]; return !c ? null : c.smart && Number.isFinite(c.target) ? c.target : c.weekly ?? null; };
   const put = (s, slug, o) => {
     if(!Number.isInteger(s) || !bs[s]) return;
     const k = `${s}|${slug}`;
@@ -4760,7 +4762,7 @@ function planBuild(plan){
     /* A direct import has no daily top-up: the weekly contract is its figure. */
     put(fs, slug, own ? {week: inp.week, daily: null,
         fact: {st: "new", why: "plan", lvl: "info", role: "input", cad: "weekly", use: inp.week,
-               need: planUp(inp.week * (1 + margin)), have: null, setTo: null, from: null, parts: null}}
+               need: planUp(inp.week * (1 + margin)), have: ownLevel(slug), setTo: null, from: null, parts: null}}
       : {week: inp.week, daily: setTo > target ? setTo : null,
         fact: {st: "new", why: "plan", lvl: "info", role: "input", cad: "daily", use: Math.round(day),
                need: setTo, have: target, setTo: setTo > target ? setTo : null, from, parts: null}});
@@ -4794,9 +4796,10 @@ function planApply(fact, ov){
     if(f.st === "paused") return f;
     const want = Number.isFinite(setTo) ? setTo : null;
     const own = Number.isFinite(f.setTo) && !f.lowers;
-    /* No figure of the plan's, and one of Python's that does not lower (a
-       tight margin to restore): its word and reason stand, the plan named. */
-    if(PLAN_QUIET.includes(f.st) && want === null && own) return {...f, plan: ov.name, planWeek: ov.week};
+    /* Python's own figure, not a lowering, and at least the plan's (a tight
+       margin to restore): its word, reason and figure stand, the plan named.
+       "Ordered ahead" is said only where the plan's figure wins. */
+    if(PLAN_QUIET.includes(f.st) && own && (want === null || f.setTo >= want)) return {...f, plan: ov.name, planWeek: ov.week};
     if(PLAN_QUIET.includes(f.st))
       return {...f, st: "new", why: "plan", lvl: "info", plan: ov.name, planWeek: ov.week, lower: null, lowers: false,
               setTo: want === null ? null : own ? Math.max(f.setTo, want) : want};
@@ -10751,6 +10754,8 @@ function planDepot(slug, at, view = planView()){
   }
   const facts = (D.supply || {}).facts || {}, depots = ((D.supply || {}).factories || {}).depots || {};
   const level = s => { const c = (depots[s] || {})[slug] || {}; return c.smart && Number.isFinite(c.target) ? c.target : c.weekly || 0; };
+  /* A factory that imports it itself keeps its own contract. */
+  if(Number.isInteger(at) && facts[at] && facts[at][slug] && facts[at][slug].imp && D.businesses[at]) return at;
   const found = Object.keys(facts).map(Number).filter(s => D.businesses[s] && facts[s][slug] && facts[s][slug].imp)
     .sort((a, b) => level(b) - level(a) || a - b);
   return found.length ? found[0] : null;
