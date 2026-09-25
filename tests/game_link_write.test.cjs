@@ -99,7 +99,13 @@ async function linked(t, {writes = ['uniforms', 'imports', 'schedule'], approved
                    tokens: approved ? {[TOKEN]: ORIGIN} : {}});
   const code = approved ? {link: mockUrl, token: TOKEN} : stored;
   const context = await browser.newContext({viewport, reducedMotion: 'reduce'});
-  t.after(() => context.close());
+  // A route handler still waiting on route.fetch() when the scenario ends
+  // would reject into the next test; drop every handler before closing.
+  t.after(async () => {
+    for (const p of context.pages()) await p.unrouteAll({behavior: 'ignoreErrors'});
+    await context.unrouteAll({behavior: 'ignoreErrors'});
+    await context.close();
+  });
   await context.addInitScript(({data, code}) => {
     window.builds = 0;
     // What the fake worker builds: the test's payload, or what a test says
