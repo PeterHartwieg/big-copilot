@@ -179,15 +179,27 @@ class IngredientPriceTests(unittest.TestCase):
     def test_the_cost_at_the_factory_over_what_reached_it(self):
         # The hub imports water and books no cost; the factory is topped up
         # from it and books the cost, which swings day to day with the round.
+        # The round logged on day d + 1 restocks what day d's cost paid for.
         spend = {d: [(FACTORY, WATER, 2.0 * (100 if d % 2 else 300))] for d in range(11, 20)}
         logs = {
-            HUB: [tx(d, {WATER: 1400 if d == 14 else 0}) for d in range(11, 20)]
-                 + [tx(d, {WATER: -(100 if d % 2 else 300)}) for d in range(11, 20)],
-            FACTORY: [tx(d, {WATER: 100 if d % 2 else 300}) for d in range(11, 20)],
+            HUB: [tx(d, {WATER: 1400 if d == 14 else 0}) for d in range(11, 21)]
+                 + [tx(d + 1, {WATER: -(100 if d % 2 else 300)}) for d in range(11, 20)],
+            FACTORY: [tx(d + 1, {WATER: 100 if d % 2 else 300}) for d in range(11, 20)],
         }
         prices = _ingredient_prices(self.save(spend, logs), Names({}), {"factories": {}}, [])
         self.assertEqual(prices["unit"], {WATER: 2.0})
         self.assertEqual((prices["from"], prices["day"]), (13, 19))
+
+    def test_a_week_of_growing_rounds_pairs_each_cost_with_the_next_round(self):
+        # The line grows every day: paired with its own day's arrivals the cost
+        # would read dear; paired with the round after it, it is $2 a unit.
+        # Today's round has not run yet, so the last cost day drops out on
+        # both sides.
+        vol = {d: 100 * (d - 10) for d in range(11, 20)}
+        spend = {d: [(FACTORY, WATER, 2.0 * vol[d])] for d in range(11, 20)}
+        logs = {FACTORY: [tx(d + 1, {WATER: vol[d]}) for d in range(11, 19)]}
+        prices = _ingredient_prices(self.save(spend, logs), Names({}), {"factories": {}}, [])
+        self.assertEqual(prices["unit"], {WATER: 2.0})
 
     def test_a_shop_with_no_log_and_something_made_in_house_have_no_price(self):
         spend = {d: [(SHOP_A, SODA, 50.0), (FACTORY, BEER, 80.0)] for d in range(11, 20)}

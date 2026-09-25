@@ -982,7 +982,7 @@
    "capacity": 0,
    "closed": false,
    "code": "IC",
-   "cogs": 200.0,
+   "cogs": 0.0,
    "costCentre": true,
    "crew": [],
    "customerRhythm": null,
@@ -1016,7 +1016,7 @@
    "opened": 3,
    "peakDay": null,
    "people": [],
-   "profit": -660.0,
+   "profit": -460.0,
    "promotion": 0,
    "quitWarnings": 0,
    "rent": 460.0,
@@ -1035,127 +1035,127 @@
     {
      "customers": null,
      "day": 19,
-     "profit": -660.0,
+     "profit": -460.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 20,
-     "profit": -660.0,
+     "profit": -460.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 21,
-     "profit": -660.0,
+     "profit": -460.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 22,
-     "profit": -660.0,
+     "profit": -460.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 23,
-     "profit": -660.0,
+     "profit": -460.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 24,
-     "profit": -660.0,
+     "profit": -460.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 25,
-     "profit": -660.0,
+     "profit": -460.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 26,
-     "profit": -660.0,
+     "profit": -460.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 27,
-     "profit": -660.0,
+     "profit": -460.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 28,
-     "profit": -660.0,
+     "profit": -460.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 29,
-     "profit": -660.0,
+     "profit": -460.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 30,
-     "profit": -660.0,
+     "profit": -460.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 31,
-     "profit": -660.0,
+     "profit": -460.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 32,
-     "profit": -660.0,
+     "profit": -460.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 33,
-     "profit": -660.0,
+     "profit": -460.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 34,
-     "profit": -660.0,
+     "profit": -460.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 35,
-     "profit": -660.0,
+     "profit": -460.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 36,
-     "profit": -660.0,
+     "profit": -460.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 37,
-     "profit": -660.0,
+     "profit": -460.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 38,
-     "profit": -660.0,
+     "profit": -460.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 39,
-     "profit": -660.0,
+     "profit": -460.0,
      "revenue": 0.0
     }
    ],
@@ -1185,7 +1185,7 @@
    "capacity": 0,
    "closed": false,
    "code": "IC",
-   "cogs": 60.0,
+   "cogs": 260.0,
    "costCentre": true,
    "crew": [
     {
@@ -1248,7 +1248,7 @@
      "role": "Factory Worker"
     }
    ],
-   "profit": -697.0,
+   "profit": -897.0,
    "promotion": 0,
    "quitWarnings": 0,
    "rent": 445.0,
@@ -1267,127 +1267,127 @@
     {
      "customers": null,
      "day": 19,
-     "profit": -697.0,
+     "profit": -897.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 20,
-     "profit": -697.0,
+     "profit": -897.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 21,
-     "profit": -697.0,
+     "profit": -897.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 22,
-     "profit": -697.0,
+     "profit": -897.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 23,
-     "profit": -697.0,
+     "profit": -897.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 24,
-     "profit": -697.0,
+     "profit": -897.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 25,
-     "profit": -697.0,
+     "profit": -897.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 26,
-     "profit": -697.0,
+     "profit": -897.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 27,
-     "profit": -697.0,
+     "profit": -897.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 28,
-     "profit": -697.0,
+     "profit": -897.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 29,
-     "profit": -697.0,
+     "profit": -897.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 30,
-     "profit": -697.0,
+     "profit": -897.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 31,
-     "profit": -697.0,
+     "profit": -897.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 32,
-     "profit": -697.0,
+     "profit": -897.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 33,
-     "profit": -697.0,
+     "profit": -897.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 34,
-     "profit": -697.0,
+     "profit": -897.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 35,
-     "profit": -697.0,
+     "profit": -897.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 36,
-     "profit": -697.0,
+     "profit": -897.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 37,
-     "profit": -697.0,
+     "profit": -897.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 38,
-     "profit": -697.0,
+     "profit": -897.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 39,
-     "profit": -697.0,
+     "profit": -897.0,
      "revenue": 0.0
     }
    ],
@@ -5336,7 +5336,7 @@
   "priceDay": 39,
   "priceFrom": 33,
   "prices": {
-   "ba:itemname_water": 0.4667
+   "ba:itemname_water": 0.5
   },
   "recipes": [
    {

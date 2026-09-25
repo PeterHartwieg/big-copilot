@@ -10152,13 +10152,18 @@ def _ingredient_prices(save: Save, names: Names, supply: dict, businesses: list)
     an item, an amount and a warehouse, and nothing about money. What it does
     carry is what was paid: each site's goods cost per item, booked where the
     goods are used (a factory, not the depot that imported them), and the
-    units the delivery log shows reaching that site. Over the last PRICE_DAYS
-    days, company-wide, the one divided by the other gives a real unit price
-    for every material this company already buys, and nothing at all for one
-    it does not. A day's cost swings with the morning round, so a single day
-    is never divided by a week's average. Something the company makes itself
-    reaches its users at no cost, so it has no price here. Guessing the rest
-    would be inventing a price list.
+    units the delivery log shows reaching that site. The round logged on day
+    d + 1 restocks what day d's cost paid for, so each cost day is paired with
+    the next day's arrivals; a cost day whose round has not run yet drops out
+    on both sides. Over the last PRICE_DAYS cost days, company-wide, the one
+    divided by the other gives a real unit price for every material this
+    company already buys, and nothing at all for one it does not. Something
+    the company makes itself reaches its users at no cost, so it has no price
+    here. Guessing the rest would be inventing a price list.
+
+    A known limit: a weekly import delivered straight to a factory lands once,
+    so its price is the week's use against that one delivery, right only where
+    the delivery matches the week.
     """
     summaries = sorted(save.items(save.root["financialSummaries"]), key=lambda s: s["dayNumber"])
     if not summaries:
@@ -10172,8 +10177,9 @@ def _ingredient_prices(save: Save, names: Names, supply: dict, businesses: list)
                 if line.get("ItemName") and line.get("Amount"):
                     spend[(key, line["ItemName"])][summary["dayNumber"]] += line["Amount"]
 
-    # What reached each site, day by day. A log at its full length has lost
-    # part of its oldest day, so that day is left out.
+    # What reached each site, day by day, on the days after a cost day in the
+    # window. A log at its full length has lost part of its oldest day, so
+    # that day is left out.
     arrived = collections.defaultdict(lambda: collections.defaultdict(float))
     covered = collections.defaultdict(set)
     for building in save.items(save.root["BuildingRegistrations"]):
@@ -10184,7 +10190,7 @@ def _ingredient_prices(save: Save, names: Names, supply: dict, businesses: list)
         days = {t.get("dayOfDelivery") for t in log if isinstance(t.get("dayOfDelivery"), int)}
         if days and len(log) >= DELIVERY_LOG_SIZE:
             days.discard(min(days))
-        covered[key] = days & window
+        covered[key] = {a for a in days if a - 1 in window}
         for transaction in log:
             when = transaction.get("dayOfDelivery")
             if when not in covered[key]:
@@ -10202,12 +10208,13 @@ def _ingredient_prices(save: Save, names: Names, supply: dict, businesses: list)
         if slug in made:
             continue
         # Only the days this site's log covers, and only where goods came in:
-        # a shop keeps no log, and cost there has no units to divide by.
+        # a shop keeps no log, and cost there has no units to divide by. Each
+        # arrival day a pays for the cost booked on a - 1.
         days = covered.get(key, ())
         got = sum(arrived[(key, slug)].get(d, 0.0) for d in days)
         if got <= 0:
             continue
-        paid[slug] += sum(by_day.get(d, 0.0) for d in days)
+        paid[slug] += sum(by_day.get(a - 1, 0.0) for a in days)
         units[slug] += got
     return {
         "unit": {slug: round(paid[slug] / units[slug], 4)
