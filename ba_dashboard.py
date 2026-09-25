@@ -245,7 +245,8 @@ def load_buildings() -> dict:
     """ba_buildings.json as {(street slug, number): row}, read once.
 
     Row keys are single letters to keep the file small: s street slug, n number,
-    h neighbourhood, t building type, z size code, m square metres, x traffic.
+    h neighbourhood, t building type, z size code, m square metres, x traffic,
+    v building version (absent from a table made before versions were read).
     """
     global _buildings
     if _buildings is None:
@@ -1259,6 +1260,21 @@ def _premises_demand(market: dict) -> dict:
     return {hood: rows for hood, rows in out.items() if rows}
 
 
+# The kinds whose buildings the finder shows a floor plan for. A layout is the
+# building's size code plus its version ("C2"), which is how the game picks the
+# interior (BuildingSizeInfo(size, version)); the type is not part of it, so an
+# office C2 is the same shell as a shop C2. make_floor_plans.py draws one plan
+# for each layout these kinds use.
+FLOOR_PLAN_KINDS = ("retail", "office", "warehouse")
+
+
+def _layout(row: dict) -> str | None:
+    """A building's layout code, or None when it has no plan or no version."""
+    if row.get("t") not in FLOOR_PLAN_KINDS or row.get("v") is None:
+        return None
+    return f"{row['z']}{row['v']}"
+
+
 def _premises(save: Save, names: Names, market: dict) -> dict:
     """Every building in the city, with what it would cost and what it holds.
 
@@ -1303,6 +1319,7 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
                 "hood": row["h"],
                 "type": row["t"],
                 "size": row["z"],
+                "layout": _layout(row),
                 "m2": row["m"],
                 "traffic": row["x"],
                 "cap": caps.get(row["t"], {}).get(row["z"]),
@@ -1334,6 +1351,7 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
                 "hood": row["h"],
                 "type": row["t"],
                 "size": row["z"],
+                "layout": _layout(row),
                 "m2": row["m"],
                 "price": int(round(entry.get("buildingPrice") or 0)),
             }
