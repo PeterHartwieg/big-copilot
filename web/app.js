@@ -662,11 +662,11 @@
     // checked again right before each request goes out. Only ever an address
     // on this computer: a token must never go to "null/write/..." on the
     // site's own server. A failure thrown before any request left carries
-    // `unsent`, and `moved` where the binding no longer held. `init.body`
+    // `unsent`, and `moved` where the binding no longer held. `init.read`
     // reads a 2xx answer's bytes into `res.bytes` under the same timer: a
     // game that quits mid-download, or stalls, fails the call like one that
     // never answered.
-    const {wait, link, bound, body, ...rest} = init || {};
+    const {wait, link, bound, read, ...rest} = init || {};
     const base = link || linkUrl;
     const moved = () => Object.assign(failure(() => tt("app.link.moved", "The board is no longer linked to the same game.")), {unsent: true, moved: true});
     if (!loopbackOrigin(base || "")) throw Object.assign(failure(() => tt("app.link.local", "Not linked to the game on this computer.")), {unsent: true});
@@ -694,7 +694,7 @@
         if (err.name === "TypeError" && space && linkSpace === null) continue;
         throw await linkFailure();
       }
-      if (body && res.ok) {
+      if (read && res.ok) {
         try { res.bytes = await res.arrayBuffer(); }
         catch (err) { clearTimeout(timer); throw await linkFailure(); }
       }
@@ -850,7 +850,7 @@
       let res;
       // The bytes are read inside linkFetch, under its timer: a save is a few
       // MB even on loopback, so it gets longer than a health check.
-      try { res = await linkFetch("/save", {headers: lastLinkStamp ? {"If-None-Match": `"${lastLinkStamp}"`} : {}, wait: SAVE_WAIT_MS, body: true}); }
+      try { res = await linkFetch("/save", {headers: lastLinkStamp ? {"If-None-Match": `"${lastLinkStamp}"`} : {}, wait: SAVE_WAIT_MS, read: true}); }
       catch (err) { linkDown(gen, err); return; }
       if (gen !== sourceGen) return;
       if (res.status === 304) {  // a newer stamp was announced and then overtaken
