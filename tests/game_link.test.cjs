@@ -7,6 +7,11 @@ const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
 // The game-link section, plus the two functions it drives: update()'s first
 // branch hands it the refresh, checkFolder() hands it the watch.
+// The page's tt(), which app.js writes every word through.
+const i18n = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8');
+// How app.js hands the strip its words: say(), failure() and errWords().
+const sayHelpers = source.slice(source.indexOf('  const say = (v)'), source.indexOf('\n', source.indexOf('  const errWords')));
+const words = (v) => (typeof v === 'function' ? v() : v);
 const section = source.slice(
   source.indexOf('  /* --- the game link (docs/game-link-api.md)'),
   source.indexOf('  /* --- building'));
@@ -63,9 +68,14 @@ function harness({routes = {}} = {}) {
     company: 'Costy Co', sourceGen: 1, busy: false, attempt: null, readerError: null, handlers: null,
     lastGood: {}, lastCheck: null, lastEntries: null, watchChecking: false,
     savePicker: {hidden: false},
-    state(tone, head, meta) { seen.states.push([tone, head, meta]); strip.tone = tone; },
+    // app.js hands state() and note() its words as text or as a function
+    // that writes them; the stand-ins write them out, as the real ones do.
+    state(tone, head, meta) { seen.states.push([tone, words(head), words(meta)]); strip.tone = tone; },
     noted: {tone: '', text: '', sub: ''},
-    note(...args) { seen.notes.push(args); context.noted.tone = args[0] || ''; context.noted.text = args[1] || ''; context.noted.sub = args[2] || ''; },
+    note(...given) {
+      const args = given.map((a, i) => (i === 1 || i === 2 ? words(a) : a));
+      seen.notes.push(args); context.noted.tone = args[0] || ''; context.noted.text = args[1] || ''; context.noted.sub = args[2] || '';
+    },
     stored: {get: (key) => remembered[key] || '', set: (key, value) => { remembered[key] = value; return true; }},
     onBoard: () => true,
     supersede: () => ++context.sourceGen,
@@ -84,7 +94,8 @@ function harness({routes = {}} = {}) {
       return 'status' in give ? give : reply(200, give);
     },
   });
-  vm.runInContext(section + '\n' + updater + '\n' + watcher, context);
+  vm.runInContext(i18n, context);
+  vm.runInContext(sayHelpers + '\n' + section + '\n' + updater + '\n' + watcher, context);
   vm.runInContext('linkWait = (ms) => { __waits.push(ms); __advance(ms); return Promise.resolve(); };', context);
   // linkFetch only ever reaches an address on this computer; the tests that
   // call it directly talk to the default one.

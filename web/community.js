@@ -34,7 +34,6 @@
   const JITTER_MS = 5000;
   const RETRY_MIN_MS = 60000, RETRY_MAX_MS = 900000;  // failed-fetch backoff, Retry-After honoured
   const STALE_MS = 600000;  // a count older than this reads as unavailable
-  const ONLINE_TIP = "Open dashboard tabs in the last 10 minutes. Approximate count; updates every five minutes.";
 
   const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 
@@ -164,14 +163,14 @@
     const at = presence.receivedAt || 0;
     if (typeof presence.count === "number" && at && Date.now() - at < STALE_MS) {
       live.classList.remove("community-unavailable");
-      em.textContent = presence.count + " online";
-      live.title = ONLINE_TIP;
+      em.textContent = tt("comm.online", "{n} online", {n: presence.count});
+      live.title = tt("comm.online.tip", "Open dashboard tabs in the last {minutes} minutes. Approximate count; updates every five minutes.", {minutes: 10});
       // One chained timeout flips the line when the count expires; the next
       // heartbeat normally replaces it long before that.
       staleTimer = setTimeout(() => { staleTimer = null; paintOnline(); }, at + STALE_MS - Date.now() + 1000);
     } else {
       live.classList.add("community-unavailable");
-      em.textContent = "Online count unavailable";
+      em.textContent = tt("comm.online.none", "Online count unavailable");
       live.removeAttribute("title");
     }
   }
@@ -211,9 +210,20 @@
     const retry = document.createElement("button");
     retry.type = "button";
     retry.className = "btn2 community-retry";
-    retry.textContent = "Retry";
+    retry.textContent = tt("comm.retry", "Retry");
     retry.addEventListener("click", loadFeatures);
     statusEl.appendChild(retry);
+  }
+
+  // The dialog's own words, written when it is built and again when the UI
+  // language changes.
+  let dialogText = null;
+  function labelDialog() {
+    if (!dialogText) return;
+    dialogText.title.textContent = tt("comm.title", "Vote on upcoming features");
+    dialogText.intro.textContent = tt("comm.intro", "Help choose what comes next. One vote per IP address for each feature. People sharing a connection may share a vote; votes are advisory.");
+    dialogText.close.textContent = tt("comm.close", "Close");
+    dialogText.privacy.textContent = tt("comm.privacy", "The online count sends a random ID that is new on every page load. Votes use a protected hash of your IP address. Your save and company data stay on your computer.");
   }
 
   function buildDialog() {
@@ -226,15 +236,12 @@
     const heading = document.createElement("div");
     const title = document.createElement("h2");
     title.id = "communityTitle";
-    title.textContent = "Vote on upcoming features";
     const intro = document.createElement("p");
     intro.id = "communityIntro";
-    intro.textContent = "Help choose what comes next. One vote per IP address for each feature. People sharing a connection may share a vote; votes are advisory.";
     heading.append(title, intro);
     const close = document.createElement("button");
     close.type = "button";
     close.className = "btn2";
-    close.textContent = "Close";
     close.setAttribute("autofocus", "");
     close.addEventListener("click", () => dialog.close());
     head.append(heading, close);
@@ -256,7 +263,8 @@
     });
     const privacy = document.createElement("p");
     privacy.className = "community-privacy";
-    privacy.textContent = "The online count sends a random ID that is new on every page load. Votes use a protected hash of your IP address. Your save and company data stay on your computer.";
+    dialogText = {title, intro, close, privacy};
+    labelDialog();
     body.append(statusEl, cardsEl, privacy);
     dialog.append(head, body);
     // Backdrop click, taken the way the changelog dialog takes it.
@@ -283,7 +291,7 @@
 
   async function loadFeatures() {
     const seq = ++loadSeq;
-    setStatus("Loading features…");
+    setStatus(tt("comm.loading", "Loading features…"));
     cardsEl.replaceChildren();
     let list = null;
     try {
@@ -296,8 +304,8 @@
       list = data && Array.isArray(data.features) ? data.features.map(parseFeature).filter(Boolean) : null;
     } catch (e) { list = null; }
     if (seq !== loadSeq || !dialog.open) return;
-    if (list === null) return errorState("Could not load the features.");
-    if (!list.length) { setStatus("No features are open for voting right now."); return; }
+    if (list === null) return errorState(tt("comm.error", "Could not load the features."));
+    if (!list.length) { setStatus(tt("comm.empty", "No features are open for voting right now.")); return; }
     setStatus("");
     renderCards(list);
   }
@@ -328,10 +336,10 @@
   }
 
   function paintRow(row) {
-    row.votesEl.textContent = row.votes + (row.votes === 1 ? " vote" : " votes");
-    row.button.textContent = row.voted ? "Voted" : "Vote";
+    row.votesEl.textContent = tt("comm.votes", {one: "{n} vote", other: "{n} votes"}, {n: row.votes});
+    row.button.textContent = row.voted ? tt("comm.voted", "Voted") : tt("comm.vote", "Vote");
     row.button.disabled = row.voted;
-    row.button.title = row.voted ? "One vote per connection for each feature" : "";
+    row.button.title = row.voted ? tt("comm.voted.title", "One vote per connection for each feature") : "";
   }
 
   async function vote(featureId) {
@@ -339,7 +347,7 @@
     if (!row || row.voted || voteBusy.has(featureId)) return;
     voteBusy.add(featureId);
     row.button.disabled = true;
-    row.button.textContent = "Voting…";
+    row.button.textContent = tt("comm.voting", "Voting…");
     const seq = loadSeq;
     try {
       const res = await fetch(API + "/vote", {
@@ -359,12 +367,12 @@
         setStatus("");
       }
     } catch (e) {
-      if (seq === loadSeq && dialog.open) setStatus("Could not record that vote.");
+      if (seq === loadSeq && dialog.open) setStatus(tt("comm.vote.error", "Could not record that vote."));
     }
     voteBusy.delete(featureId);
     if (seq === loadSeq && dialog.open && !row.voted) {
       row.button.disabled = false;
-      row.button.textContent = "Vote";
+      row.button.textContent = tt("comm.vote", "Vote");
     }
   }
 
@@ -394,6 +402,14 @@
     if (typeof featureDiscovery !== "undefined") featureDiscovery.refresh();
     else document.querySelectorAll('[data-new-feature="community-voting"]').forEach((badge) => { badge.hidden = false; });
     if (document.body.classList.contains("has-board")) start();
+    // A change of UI language: the dialog's words, the open list's buttons and
+    // the online line are written again.
+    // After the board's listener has set the number locale the count is written in.
+    if (typeof ttOnChange === "function") ttOnChange(() => queueMicrotask(() => {
+      labelDialog();
+      if (dialog && dialog.open) rows.forEach((row) => { if (!voteBusy.has(row.id)) paintRow(row); });
+      paintOnline();
+    }));
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
