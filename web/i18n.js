@@ -85,7 +85,7 @@ function ttFormat(v, spec){
   if(typeof v !== "number") return String(v ?? "");
   if(!spec) return ttLang === "en" ? String(v) : ttNum(v, {useGrouping: false, maximumFractionDigits: 3});
   if(spec === ",") return ttNum(v);
-  if(spec === "$") return (v < 0 ? "-" : "") + "$" + ttNum(Math.abs(Math.round(v)));
+  if(spec === "$") return (v < 0 ? "-" : "") + "$" + ttNum(Math.round(Math.abs(v)));
   if(spec === "$c"){
     const a = Math.abs(v), s = v < 0 ? "-" : "";
     if(a >= 1e6){

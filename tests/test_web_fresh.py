@@ -89,6 +89,17 @@ class WebFresh(unittest.TestCase):
                 edited.write_bytes(edited.read_bytes() + b"\n")
                 self.assertIn("web/version.json", build_web.check(tmp))
 
+    def test_an_edited_article_names_the_wiki_payload(self):
+        # Not only the stamp: the payload that carries the articles is named.
+        with tempfile.TemporaryDirectory() as tmp:
+            copy_inputs(tmp, CHECK_INPUTS)
+            edited = Path(tmp, "tools/wiki_topics.json")
+            edited.write_text(edited.read_text(encoding="utf-8").replace(
+                "0.02482", "0.02483", 1), encoding="utf-8")
+            stale = build_web.check(tmp)
+            self.assertIn("web/wiki-data.json", stale)
+            self.assertIn("web/version.json", stale)
+
     def test_stamp_ignores_line_endings(self):
         with tempfile.TemporaryDirectory() as lf, tempfile.TemporaryDirectory() as crlf, \
                 tempfile.TemporaryDirectory() as svg_crlf:
