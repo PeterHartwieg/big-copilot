@@ -1560,6 +1560,12 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
     # Staffing for factory lines, in each sizing; takes the lines' _posts.
     factory_staffing = _factory_staffing(
         save, names, businesses, supply.get("factories", {}), staff)
+    # Offices by Peter's office default, drawing on the unassigned people no
+    # shop's plan counts on; then the Staff page's key, which takes every
+    # plan's private `_hire` part off its row.
+    office_staffing = _office_staffing(
+        save, names, businesses, all_grids, staff, _bench_claimed(staffing))
+    hiring = _hiring(save, businesses, staffing, factory_staffing, office_staffing)
     alerts = _alerts(
         businesses, supply, chains, trends, hype, hour_findings, grids, day, gate
     )
@@ -1627,6 +1633,11 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         "hourFindings": hour_findings,
         "staffing": staffing,
         "factoryStaffing": factory_staffing,
+        "officeStaffing": office_staffing,
+        # The Staff page: the headhunters' candidates, best first, and what
+        # every site still needs by role. See _candidates() and _hiring().
+        "candidates": _candidates(save),
+        "hiring": hiring,
         "plan": plan,
         # Every game name the text knows -- items, business types,
         # neighbourhoods, stations, skills, job demands -- by the game's own
@@ -1765,16 +1776,38 @@ def _statement_history(save: Save, summaries: list) -> list:
     return history
 
 
+def _character(save: Save, instance: dict) -> dict:
+    """Who an employee or a candidate is: name, age in days and skills.
+
+    Current saves keep these on the instance's `characterData`; older ones keep
+    `name`, `ageInDays` and `skills` on the instance itself. One reader for both,
+    so a name never reads "?" only because the save is older. `skills` is in the
+    save's order, each `{"skill", "level"}`, and a skill the save has without a
+    value counts at 0.
+    """
+    char = save.deref(instance.get("characterData"))
+    source = char if isinstance(char, dict) else instance
+    return {
+        "name": source.get("name"),
+        "ageDays": source.get("ageInDays"),
+        "skills": [
+            {"skill": s.get("name"), "level": s.get("value") or 0}
+            for s in save.items(source.get("skills"))
+            if isinstance(s, dict)
+        ],
+    }
+
+
 def _staff(save: Save, names: Names):
     by_addr = collections.defaultdict(list)
     staff = []
     for e in save.items(save.root["EmployeeInstances"]):
-        char = save.deref(e.get("characterData")) or {}
-        skills = save.items(char.get("skills"))
+        char = _character(save, e)
+        skills = [{"name": s["skill"], "value": s["level"]} for s in char["skills"]]
         top = max(skills, key=lambda s: s["value"], default=None)
         rec = {
             "id": e.get("id"),
-            "name": char.get("name", "?"),
+            "name": char["name"] if char["name"] is not None else "?",
             "role": names.label(top["name"]) if top else "-",
             "skill": top["name"] if top else None,
             # Every skill, not just the top one: a character carries one or two,
@@ -1797,6 +1830,64 @@ def _staff(save: Save, names: Names):
     return by_addr, staff
 
 
+def _skill_rows(char: dict) -> list:
+    """A character's skills, highest first, levels rounded as _staff() rounds them.
+
+    Ties keep the save's order, which is a list and so a promise.
+    """
+    ordered = sorted(enumerate(char["skills"]), key=lambda e: (-e[1]["level"], e[0]))
+    return [{"skill": s["skill"], "level": int(round(s["level"]))} for _i, s in ordered]
+
+
+def _candidate_source(save: Save, info: dict) -> str:
+    """Where a candidate came from: a headhunter, the job board, an agency."""
+    if info.get("sourceHeadhunterId"):
+        return "headhunter"
+    if info.get("fromJobBoard"):
+        return "jobboard"
+    if save.address(info.get("sourceAddress")):
+        return "agency"
+    return "other"
+
+
+def _candidates(save: Save) -> list:
+    """The people the game offers to hire, one row each, best first.
+
+    From GameInstance.CandidateEmployeeInstances; an older save marks a finished
+    offer `hired` or `declined` rather than dropping it, and those are left out.
+    Ordered by top skill level (highest first), then wage (cheapest first),
+    then id, so the list is the same on every run. `hoursLeft` is the game's
+    countdown as of the save; a candidate leaves the list at 0. `age` is in the
+    game's years (ageInDays over gameVariables.daysPerYear, as the game counts
+    retirement), None when the save has no year length.
+    """
+    root = save.root
+    per_year = (save.deref(root.get("gameVariables")) or {}).get("daysPerYear")
+    rows = []
+    for c in save.items(root.get("CandidateEmployeeInstances")):
+        if not isinstance(c, dict) or c.get("hired") or c.get("declined"):
+            continue
+        char = _character(save, c)
+        skills = _skill_rows(char)
+        info = save.deref(c.get("candidateInfo")) or {}
+        age = char["ageDays"]
+        rows.append({
+            "id": c.get("id"),
+            "name": char["name"],
+            "age": int(age // per_year) if age is not None and per_year else None,
+            "skill": skills[0]["skill"] if skills else None,
+            "level": skills[0]["level"] if skills else 0,
+            "skills": skills,
+            "wage": money(c.get("hourlyWage") or 0),
+            "demands": _in_order(
+                {d for d in save.items(c.get("demands")) if isinstance(d, str)}),
+            "hoursLeft": info.get("hoursUntilExpiring"),
+            "source": _candidate_source(save, info),
+        })
+    rows.sort(key=lambda r: (-r["level"], r["wage"], str(r["id"])))
+    return rows
+
+
 def _cleanliness(save: Save, building: dict) -> float:
     """A building's cleanliness as the game scores it, from its saved dirt spots.
 
@@ -1809,6 +1900,29 @@ def _cleanliness(save: Save, building: dict) -> float:
     if not dirt or not visible:
         return 100.0
     return float(max(0, int(100 - sum(dirt) / len(dirt) - visible / len(dirt))))
+
+
+def _items_by_name(save: Save, registration: dict) -> dict:
+    """A building's items, as lists by item name."""
+    held = collections.defaultdict(list)
+    for holder in save.items(registration.get("itemInstances")):
+        item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
+        if item and item.get("itemName"):
+            held[item["itemName"]].append(item)
+    return held
+
+
+def _holds_demanded_item(save: Save, here: dict, setting) -> bool:
+    """Whether a building holds one of a "building" demand's items, as the game
+    counts it: an item that displays products only while it holds some."""
+    for slug in setting:
+        for item in here.get("ba:itemname_" + slug, ()):
+            if item["itemName"] not in DISPLAY_ITEMS or any(
+                c.get("itemName") and (c.get("amount") or 0) > 0
+                for c in save.items(item.get("cargoInstances"))
+            ):
+                return True
+    return False
 
 
 def _job_demands(save: Save, names: Names, businesses: list) -> None:
@@ -1839,11 +1953,7 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
 
     def items_at(key):
         if key not in held:
-            held[key] = collections.defaultdict(list)
-            for holder in save.items(regs[key].get("itemInstances")):
-                item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
-                if item and item.get("itemName"):
-                    held[key][item["itemName"]].append(item)
+            held[key] = _items_by_name(save, regs[key])
         return held[key]
 
     def shifts(key, employee_id):
@@ -1885,15 +1995,7 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
             desk = set(save.items(e.get("assignedWorkStationItems")))
             return any("ba:itemname_" + slug in desk for slug in setting)
         if kind == "building":
-            here = items_at(key)
-            for slug in setting:
-                for item in here.get("ba:itemname_" + slug, ()):
-                    if item["itemName"] not in DISPLAY_ITEMS or any(
-                        c.get("itemName") and (c.get("amount") or 0) > 0
-                        for c in save.items(item.get("cargoInstances"))
-                    ):
-                        return True
-            return False
+            return _holds_demanded_item(save, items_at(key), setting)
         if kind == "insurance":
             plan = plans.get(e.get("assignedHrManagerPlanId")) or {}
             cover = save.deref(plan.get("healthInsurancePlan")) or {}
@@ -6473,24 +6575,26 @@ HIRE_ORDERS = (
 )
 
 
-def _pack_hires(slots: list, count: int | None, order=HIRE_ORDERS[1]) -> int | None:
-    """Pack slots onto hires; how many it took, or None if `count` hires cannot.
+def _pack_hire_weeks(slots: list, count: int | None, order=HIRE_ORDERS[1]) -> list | None:
+    """Pack slots onto hires; each hire's week, or None if `count` hires cannot.
 
     With `count` None it is first fit, opening a hire whenever none has room:
     always succeeds, and was the whole count once. With a `count` it is the
     balanced packing: every slot goes to the emptiest hire who may take it, so
     the week spreads over all of them instead of filling the first few to their
     ceiling and leaving the last days to people who may take one shift a day.
+    Each hire is `{"hours", "busy", "slots"}`, the slots in the order placed.
     """
     order = sorted(slots, key=order)
-    hires = [{"hours": 0.0, "busy": [set() for _ in range(7)]} for _ in range(count or 0)]
+    fresh = lambda: {"hours": 0.0, "busy": [set() for _ in range(7)], "slots": []}  # noqa: E731
+    hires = [fresh() for _ in range(count or 0)]
     for slot in order:
         able = [i for i, hire in enumerate(hires) if _hire_fits(slot, hire)]
         if count is None:
             if able:
                 index = able[0]
             else:
-                hires.append({"hours": 0.0, "busy": [set() for _ in range(7)]})
+                hires.append(fresh())
                 index = len(hires) - 1
         elif able:
             index = min(able, key=lambda i: (hires[i]["hours"], i))
@@ -6499,11 +6603,18 @@ def _pack_hires(slots: list, count: int | None, order=HIRE_ORDERS[1]) -> int | N
         hire = hires[index]
         hire["hours"] += slot["to"] - slot["from"]
         hire["busy"][slot["wd"]].update(range(slot["from"], slot["to"]))
-    return len(hires)
+        hire["slots"].append(slot)
+    return hires
 
 
-def _hires_for(slots: list) -> int:
-    """How many new people the slots nobody here may work would actually take.
+def _pack_hires(slots: list, count: int | None, order=HIRE_ORDERS[1]) -> int | None:
+    """How many hires _pack_hire_weeks() took, or None if `count` hires cannot."""
+    hires = _pack_hire_weeks(slots, count, order)
+    return None if hires is None else len(hires)
+
+
+def _hire_weeks(slots: list) -> list:
+    """The weeks the new people the slots nobody here may work would take.
 
     Dividing the hours by a full week understates it: four uncovered twelve-hour
     weekend shifts are 48 hours, but two of them fall on the same day and the
@@ -6519,10 +6630,14 @@ def _hires_for(slots: list) -> int:
     what seven can work at 48 hours each. First fit in either order is kept as
     the ceiling, the clock's being the count as it always was, so the answer
     is never worse than it was. Deterministic throughout.
+
+    The Staff page puts one hired or moved person on each of these weeks, so
+    the packing itself is kept, not only its size.
     """
     if not slots:
-        return 0
-    worst = min(_pack_hires(slots, None, order) for order in HIRE_ORDERS)
+        return []
+    firsts = [_pack_hire_weeks(slots, None, order) for order in HIRE_ORDERS]
+    worst = min(firsts, key=len)  # the first order wins a tie, as min() always did
     total = sum(s["to"] - s["from"] for s in slots)
     floor = math.ceil(total / FULL_TIME[1])
     for wd in range(7):
@@ -6532,10 +6647,17 @@ def _hires_for(slots: list) -> int:
         floor = max(floor, math.ceil(sum(s["to"] - s["from"] for s in day) / OVERWORK_HOURS))
         for hour in range(24):
             floor = max(floor, sum(1 for s in day if s["from"] <= hour < s["to"]))
-    for count in range(floor, worst):
-        if any(_pack_hires(slots, count, order) is not None for order in HIRE_ORDERS):
-            return count
+    for count in range(floor, len(worst)):
+        for order in HIRE_ORDERS:
+            packed = _pack_hire_weeks(slots, count, order)
+            if packed is not None:
+                return packed
     return worst
+
+
+def _hires_for(slots: list) -> int:
+    """How many new people the slots nobody here may work would take: _hire_weeks()."""
+    return len(_hire_weeks(slots))
 
 
 def _current_roster(save: Save, building: dict, stations: dict) -> dict:
@@ -7659,7 +7781,9 @@ def _factory_staffing(save: Save, names, businesses: list, factories: dict, staf
                 row = {"key": business["key"], "s": site["s"], "name": business["name"],
                        "failed": True}
             if row is not None and not detail and not row.get("failed"):
-                for field in ("stations", "people", "shifts", "placed", "shortHours"):
+                # The week itself stays (stations, people, shifts), so the Staff
+                # page can write it; the placer's own tables go.
+                for field in ("placed", "shortHours"):
                     row.pop(field, None)
             if row is not None:
                 out[mode].append(row)
@@ -7734,6 +7858,10 @@ def _factory_site_plan(site, business, posts_of, pool, people, mode, label, name
     headcount = {"needed": count["needed"], "min": count["min"], "have": len(pool),
                  "spare": len(pool) - len(worked), "hire": count["hire"]}
     workers = headcount["hire"] - headcount["spare"]
+    # The whole pool's spare, not only the trial's: everybody here the week
+    # gives no hours. The week was placed on its own trial, so its own ids
+    # are overwritten.
+    week["spareIds"] = _in_order({p["id"] for p in pool} - worked)
     return {
         "key": business["key"],
         "s": site["s"],
@@ -7757,6 +7885,9 @@ def _factory_site_plan(site, business, posts_of, pool, people, mode, label, name
              "planned": r["planned"]}
             for r in week["shortHours"]
         ],
+        "addPeople": _add_people(week, people, names),
+        # The Staff page's part, taken off by _hiring(). See _hire_fields().
+        "_hire": _hire_fields(week),
     }
 
 
@@ -8174,8 +8305,28 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
     # e. The residue is a hiring line, never a broken demand, and a person the
     # plan leaves short of what their contract demands is a jobdemand warning
     # the player is about to earn, so it is said rather than bent away.
-    for skill, slots_left in uncovered.items():
-        headcount[skill]["hire"] = max(headcount[skill]["hire"], _hires_for(slots_left))
+    # The packing itself is kept per role (hireWeeks, for the Staff page): one
+    # week per person hired. `hire` can only exceed the packing where `min -
+    # have` says so with nothing left open, which the arithmetic rules out (the
+    # people working a role's slots are all counted in its `have`); an empty
+    # week pads it anyway, so the page's count and the weeks always agree.
+    hire_weeks = {}
+    for skill in _in_order(uncovered):
+        hire_weeks[skill] = _hire_weeks(uncovered[skill])
+        headcount[skill]["hire"] = max(headcount[skill]["hire"], len(hire_weeks[skill]))
+    for skill in _in_order(headcount):
+        weeks = hire_weeks.setdefault(skill, [])
+        while len(weeks) < headcount[skill]["hire"]:
+            weeks.append({"hours": 0.0, "busy": [set() for _ in range(7)], "slots": []})
+    # The site's own people this plan gives no hours in a role it plans: the
+    # ones a move may take elsewhere. Only roles the plan has, so a cashier at a
+    # shop whose serving hours are not measured yet is not offered away.
+    spare_ids = _in_order({
+        person["id"]
+        for person in pool
+        if person["addr"] and person["id"] not in worked
+        and any(_usable(person, skill, entry["kind"]) for skill, entry in headcount.items())
+    })
     for entry in headcount.values():
         entry["hireHours"] = entry["hire"] * FULL_TIME[0]
     short_hours, short_days = [], []
@@ -8260,6 +8411,8 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
         "slack": (slack_hours, slack_cost, budget),
         "weekly": weekly,
         "took": [person for person in bench if person["id"] in worked],
+        "hireWeeks": hire_weeks,
+        "spareIds": spare_ids,
     }
 
 
@@ -8300,6 +8453,46 @@ def _add_people(week: dict, people: dict, names) -> dict:
             for s in week["shifts"]
             if s["employee"] is None or s.get("fromBench")
         ),
+    }
+
+
+def _hire_fields(week: dict) -> dict:
+    """What the Staff page needs from one plan on top of the plan itself.
+
+    `hireWeeks`: one entry per person the plan hires, its role, hours, days and
+    the open entries (`p: null`) it would work, each by its index in the plan's
+    `shifts`, so the page can put a person's id on it. The fullest weeks first
+    within a role, so the best candidate gets the most hours. `spare`: the
+    site's own people this plan gives no hours in a role it plans. `bench`: the
+    unassigned people the plan already counts on (addPeople.assign).
+
+    Carried on the plan row as `_hire` and taken off it by _hiring().
+    """
+    index = {id(shift): i for i, shift in enumerate(week["shifts"])}
+    slot_key = lambda s: (s["wd"], s["from"], s["to"], str(s["station"]))  # noqa: E731
+    weeks = []
+    for skill in _in_order(week["hireWeeks"]):
+        packed = [
+            (sorted(hire["slots"], key=slot_key), hire)
+            for hire in week["hireWeeks"][skill]
+        ]
+        packed.sort(key=lambda e: (-sum(s["to"] - s["from"] for s in e[0]),
+                                   [slot_key(s) for s in e[0]]))
+        for slots, _hire in packed:
+            weeks.append({
+                "skill": skill,
+                "hours": sum(s["to"] - s["from"] for s in slots),
+                "days": len({s["wd"] for s in slots}),
+                "slots": [
+                    {"shift": index[id(s)], "d": s["wd"], "f": s["from"], "t": s["to"],
+                     "station": s["station"]}
+                    for s in slots
+                ],
+            })
+    return {
+        "hireWeeks": weeks,
+        "spare": list(week["spareIds"]),
+        "bench": [row["employee"] for row in week["bench"]],
     }
 
 
@@ -8366,6 +8559,8 @@ def _plan_fields(week: dict, table: dict, names, people: dict, cost: dict) -> di
         # Who the player has to add before the plan can be filled: bench people
         # to assign here and people to hire. See _add_people().
         "addPeople": add,
+        # The Staff page's part, taken off by _hiring(). See _hire_fields().
+        "_hire": _hire_fields(week),
     }
 
 
@@ -8539,6 +8734,417 @@ def _finish_site(site, full, names, people) -> dict:
             "need": HOUR_WEEKS_THIN,
             "open": business.get("daysOpen"),
         },
+    }
+
+
+# --- hiring: the Staff page (issue #89, docs/staff-hire-plan.md section 2)
+#
+# The skills a business accepts when the player assigns somebody to it, as the
+# game's own check has them (AssignToBusinessAndHireMassAction and
+# AssignBusinessMassAction): the business type's employeePrimarySkills, plus
+# Cleaning where the building type's requiredBuildingSkills holds it
+# (BuildingTypeData.NeedsCleaning), Security Guard where the type carries the
+# allowtheft tag, and Delivery Driver where the building type requires it. Read
+# from the businesstypes and buildingtypes Addressables bundles at build 3682:
+# retail, office, cinema and theatre buildings need cleaning; warehouses (which
+# factories use) need nothing, and no building type requires a driver. A type
+# missing here accepts nobody, so the page proposes no hire there rather than
+# one the mod refuses (`no_skill`); the game-update checklist re-reads the
+# bundles.
+_SHOP_SKILLS = ("ba:skill_customerservice", "ba:skill_securityguard", CLEANING_SKILL)
+ASSIGN_SKILLS = {
+    "ba:businesstype_bookstore": _SHOP_SKILLS,
+    "ba:businesstype_clothingstore": _SHOP_SKILLS,
+    "ba:businesstype_electronicsstore": _SHOP_SKILLS,
+    "ba:businesstype_florist": _SHOP_SKILLS,
+    "ba:businesstype_fruitandvegetablestore": _SHOP_SKILLS,
+    "ba:businesstype_giftshop": _SHOP_SKILLS,
+    "ba:businesstype_jewelrystore": _SHOP_SKILLS,
+    "ba:businesstype_liquorstore": _SHOP_SKILLS,
+    "ba:businesstype_supermarket": _SHOP_SKILLS,
+    "ba:businesstype_coffeeshop": ("ba:skill_customerservice", CLEANING_SKILL),
+    "ba:businesstype_fastfoodrestaurant": ("ba:skill_customerservice", CLEANING_SKILL),
+    "ba:businesstype_gym": ("ba:skill_gymtrainer", "ba:skill_securityguard", CLEANING_SKILL),
+    "ba:businesstype_hairdresser": (
+        "ba:skill_hairstylist", "ba:skill_customerservice", "ba:skill_securityguard",
+        CLEANING_SKILL),
+    "ba:businesstype_nightclub": ("ba:skill_dj", "ba:skill_customerservice", CLEANING_SKILL),
+    "ba:businesstype_cinema": (
+        "ba:skill_projectionist", "ba:skill_customerservice", CLEANING_SKILL),
+    "ba:businesstype_theater": (
+        "ba:skill_actor", "ba:skill_stagecrew", "ba:skill_customerservice", CLEANING_SKILL),
+    "ba:businesstype_eventplanningagency": ("ba:skill_eventplanner", CLEANING_SKILL),
+    "ba:businesstype_graphicdesigner": ("ba:skill_graphicdesigner", CLEANING_SKILL),
+    "ba:businesstype_lawfirm": ("ba:skill_lawyer", CLEANING_SKILL),
+    "ba:businesstype_travelagency": ("ba:skill_travelagent", CLEANING_SKILL),
+    "ba:businesstype_webdevelopmentagency": ("ba:skill_programmer", CLEANING_SKILL),
+    "ba:businesstype_headquarters": (
+        "ba:skill_purchasingagent", "ba:skill_logisticsmanager", "ba:skill_hrmanager",
+        "ba:skill_headhunter", "ba:skill_pricingmanager", CLEANING_SKILL),
+    "ba:businesstype_warehouse": ("ba:skill_deliverydriver",),
+    "ba:businesstype_factory": ("ba:skill_deliverydriver", "ba:skill_factoryworker"),
+}
+FACTORY_TYPES = COST_CENTRE_TYPES - OVERHEAD_TYPES
+
+# Peter's office default (25 Sep 2026). An office open around the clock staffs
+# a share of its computers every hour: all of them at a door cap of
+# OFFICE_FULL_DOOR (about three people a computer, his "3 per computer at 50
+# capacity"), proportionally fewer below it, never fewer than a third (about
+# one person a computer, his minimum of 1). Any other office staffs every
+# computer OFFICE_DAY on weekdays and half of them (rounded up) on weekends,
+# inside the hours it opens.
+OFFICE_FULL_DOOR = 50
+OFFICE_DAY = (8, 22)
+OFFICE_WEEKEND = (6, 0)  # Saturday and Sunday, as day % 7
+
+
+def _office_runs(computers: int, open_hours: list, door: int) -> tuple:
+    """Which hours each computer is staffed by the office default.
+
+    Returns ({station index: [hours per weekday]}, rule), rule "allday" for an
+    office open every hour of the week and "day" otherwise. Computers are
+    staffed in station order, so the first ones are the always-on ones.
+    """
+    if not computers:
+        return {}, "day"
+    if _open_all_hours(open_hours):
+        share = min(door, OFFICE_FULL_DOOR) / OFFICE_FULL_DOOR if door else 1.0
+        staffed = min(computers, max(1, math.ceil(computers / 3),
+                                     math.floor(computers * share + 0.5)))
+        return {i: [set(range(24)) for _ in range(7)] for i in range(staffed)}, "allday"
+    opened = [
+        {hour for start, end in open_hours[wd] for hour in range(max(0, start), min(24, end))}
+        for wd in range(7)
+    ]
+    day = set(range(*OFFICE_DAY))
+    runs = {}
+    for index in range(computers):
+        week = [
+            (day & opened[wd])
+            if wd not in OFFICE_WEEKEND or index < math.ceil(computers / 2) else set()
+            for wd in range(7)
+        ]
+        if any(week):
+            runs[index] = week
+    return runs, "day"
+
+
+def _office_staffing(save: Save, names, businesses: list, grids: list, staff: list,
+                     claimed: set) -> list:
+    """A week for every office by Peter's office default, one row per office.
+
+    The shop placer (_place_week) over a synthetic grid, as a factory's is: one
+    role, the office's professional skill (its type's first accepted skill),
+    one station per computer, the hours _office_runs() gives each. The pool is
+    the office's own staff with that skill, then the unassigned people no
+    shop's plan counts on (`claimed` are the ones some shop plan does), handed
+    out in office order the way _staffing() hands out the bench. An office the
+    placer falls over on is one `failed` row.
+
+    The row has the shop row's fields a write reads (`stations`, `people`,
+    `shifts`, `current`, `roles`, `open`, `openAllHours` false) and its plan
+    fields (`need`, `headcount`, `addPeople`, `shortHours`, ...), plus `rule`,
+    `computers` and `staffedComputers`.
+    """
+    by_key = {b["key"]: b for b in businesses}
+    buildings = {
+        site_key(_address_of(b)): b
+        for b in save.items(save.root.get("BuildingRegistrations"))
+        if b.get("RentedByPlayer")
+    }
+    people = _plan_people(save, staff)
+    bench = [
+        people[pid] for pid in _in_order(people)
+        if not people[pid]["addr"] and pid not in claimed
+    ]
+    state = {pid: _fresh_state() for pid in people}
+    offices = sorted(
+        (
+            (by_key[g["key"]], buildings[g["key"]], g)
+            for g in grids
+            if g["key"] in by_key and g["key"] in buildings
+            and by_key[g["key"]]["status"] == "office"
+        ),
+        key=lambda row: (row[0]["name"] or "", row[0]["key"]),
+    )
+    out = []
+    for business, building, grid in offices:
+        skill = next(iter(ASSIGN_SKILLS.get(business["typeSlug"], ())), None)
+        if not skill or not grid["stations"]:
+            continue
+        pool = [p for p in _site_pool(people, business, bench) if _usable(p, skill, "serve")]
+        scratch = {p["id"]: _copy_state(state[p["id"]]) for p in pool}
+        try:
+            row, took = _office_site_plan(save, names, business, building, grid, skill,
+                                          pool, people, bench, scratch)
+        except Exception:
+            out.append({"key": business["key"], "name": business["name"],
+                        "typeSlug": business["typeSlug"], "failed": True})
+            continue
+        state.update(scratch)
+        taken = {p["id"] for p in took}
+        bench = [p for p in bench if p["id"] not in taken]
+        out.append(row)
+    return out
+
+
+def _office_site_plan(save, names, business, building, grid, skill, pool, people, bench,
+                      state) -> tuple:
+    """One office's row of _office_staffing(), and who it drew off the bench."""
+    label = names.label(skill) if names else skill
+    stations = [
+        {"id": s["id"], "slug": s["slug"], "name": s["name"], "skill": skill,
+         "rate": OFFICE_POST_RATE}
+        for s in grid["stations"]
+    ]
+    runs, rule = _office_runs(len(stations), grid["open"], grid["door"])
+    slots_open = ALL_DAY_OPEN if rule == "allday" else grid["open"]
+    need = {skill: {
+        "need": [[sum(1 for days in runs.values() if hour in days[wd]) for hour in range(24)]
+                 for wd in range(7)],
+        "basis": [["office"] * 24 for _ in range(7)],
+        "stations": runs,
+    }}
+    fake = {"roles": [{"skill": skill, "label": label}], "stations": stations}
+    usable_bench = [p for p in bench if _usable(p, skill, "serve")]
+    week = _place_week(fake, need, slots_open, [], pool, people, business, usable_bench,
+                       state)
+    current = _current_roster(save, building, {s["id"]: s for s in stations})
+    lists = (week["shifts"], week["shortHours"], week["shortDays"], week["placed"],
+             week["bench"])
+    table = _index_table(stations, (week["shifts"], current["list"]),
+                         (current["list"],) + lists, people)
+    wage_of = {
+        pid: person["wage"] for pid, person in people.items()
+        if person["addr"] and site_key(person["addr"]) == business["key"]
+    }
+    cost = {"current": money(_current_cost(current, wage_of)), "currentCover": 0.0}
+    fields = _plan_fields(week, table, names, people, cost)
+    fields.pop("basis", None)
+    row = {
+        "key": business["key"],
+        "name": business["name"],
+        "typeSlug": business["typeSlug"],
+        "skill": skill,
+        "label": label,
+        "rule": rule,
+        "computers": len(stations),
+        "staffedComputers": len(runs),
+        # The hours the plan staffs against: the office's own, or around the
+        # clock where it already opens around the clock. The write never
+        # changes them (`openAllHours` false).
+        "open": slots_open,
+        "openAllHours": False,
+        "stations": table["stations"],
+        "people": table["people"],
+        "roles": [{"skill": skill, "label": label,
+                   "stations": [table["station"][s["id"]] for s in stations]}],
+        **fields,
+        "current": {
+            "shifts": current["shifts"],
+            "fragments": current["fragments"],
+            "list": [_shift_row(r, table) for r in current["list"]],
+        },
+    }
+    return row, week["took"]
+
+
+def _business_kind(business: dict) -> str | None:
+    """The Staff page's kind of site, or None for one it has nothing to say about."""
+    slug = business.get("typeSlug")
+    if business.get("status") == "vacant" or slug == EMPTY_TYPE:
+        return None
+    if business.get("status") == "retail":
+        return "shop"
+    if business.get("status") == "office":
+        return "office"
+    if slug in FACTORY_TYPES:
+        return "factory"
+    if slug == "ba:businesstype_headquarters":
+        return "hq"
+    if slug in OVERHEAD_TYPES:
+        return "warehouse"
+    return None
+
+
+# How the Staff page judges each kind of demand a candidate holds: `schedule`
+# against the hire week the person gets, `site` against the site's facts,
+# `company` once for everybody.
+DEMAND_SCOPE = {
+    "hours": "schedule", "days": "schedule", "daysoff": "schedule", "noshift": "schedule",
+    "nocleaning": "schedule",
+    "desk": "site", "building": "site", "clean": "site",
+    "insurance": "company", "happiness": "company",
+}
+
+
+def _site_facts(save: Save, registration: dict) -> dict:
+    """Whether a site meets each site-level demand, as _job_demands() judges it.
+
+    A desk demand is about the person's own desk, which a hire does not have
+    yet, so it reads whether the site holds such an item anywhere.
+    """
+    here = _items_by_name(save, registration)
+    clean = None
+    out = {}
+    for slug in sorted(JOB_DEMANDS):
+        kind, setting, _priority = JOB_DEMANDS[slug]
+        if DEMAND_SCOPE.get(kind) != "site":
+            continue
+        if kind == "clean":
+            if clean is None:
+                clean = _cleanliness(save, registration)
+            out[slug] = clean >= setting
+        elif kind == "building":
+            out[slug] = _holds_demanded_item(save, here, setting)
+        else:
+            out[slug] = any(here.get("ba:itemname_" + item) for item in setting)
+    return out
+
+
+def _company_facts(save: Save) -> dict:
+    """Whether the company meets each company-level demand for a new hire.
+
+    Health insurance: some HR manager's plan offers that tier or better, with its
+    manager in place (not being replaced), as _job_demands() judges a person's
+    own plan. A happy boss: the player's happiness.
+    """
+    root = save.root
+    by_id = {e.get("id"): e for e in save.items(root.get("EmployeeInstances"))}
+    best = -1
+    for plan in save.items(root.get("hrManagerPlans")):
+        cover = save.deref(plan.get("healthInsurancePlan")) or {}
+        manager = by_id.get(plan.get("assignedEmployeeId")) or {}
+        if cover and manager and not manager.get("isBeingReplaced"):
+            best = max(best, cover.get("planType") or 0)
+    happiness = root.get("Happiness") or 0
+    out = {}
+    for slug in sorted(JOB_DEMANDS):
+        kind, setting, _priority = JOB_DEMANDS[slug]
+        if kind == "insurance":
+            out[slug] = best >= setting
+        elif kind == "happiness":
+            out[slug] = happiness >= setting
+    return out
+
+
+def _full_offered(row: dict) -> bool:
+    """The board's spOffersFull: a full-cover plan with a station to staff."""
+    return bool(row and not row.get("failed") and row.get("fullCover")
+                and any(r.get("stations") for r in row.get("roles") or ()))
+
+
+def _bench_claimed(staffing: list) -> set:
+    """The unassigned people some shop's plan (either variant) counts on."""
+    out = set()
+    for row in staffing:
+        for plan in (row, row.get("fullCover") or {}):
+            out.update((plan.get("_hire") or {}).get("bench", ()))
+    return out
+
+
+def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict,
+            office_staffing: list) -> dict:
+    """The Staff page's payload key `hiring` (docs/staff-hire-plan.md, 2.3).
+
+    Takes each plan row's `_hire` off it. One site per business the player runs,
+    in the `businesses` order; `people` describes everybody a site's `spare` or
+    `bench`, or the top-level `bench`, names, so the page can place them.
+    """
+    regs = {
+        site_key(_address_of(b)): b
+        for b in save.items(save.root.get("BuildingRegistrations"))
+        if b.get("RentedByPlayer")
+    }
+    shops = {row["key"]: row for row in staffing}
+    factories = collections.defaultdict(dict)
+    for mode in SIZING_MODES:
+        for row in factory_staffing.get(mode, []):
+            factories[row["key"]][mode] = row
+    offices = {row["key"]: row for row in office_staffing}
+
+    def take(row):
+        return (row or {}).pop("_hire", None)
+
+    sites = []
+    for business in businesses:
+        kind = _business_kind(business)
+        reg = regs.get(business["key"])
+        if kind is None or reg is None:
+            continue
+        plans = {}
+        if kind == "shop":
+            row = shops.get(business["key"])
+            demand = take(row)
+            full = take((row or {}).get("fullCover"))
+            if row and not row.get("failed") and demand is not None:
+                plans["demand"] = demand
+                if _full_offered(row) and full is not None:
+                    plans["full"] = full
+        elif kind == "factory":
+            for mode, row in factories.get(business["key"], {}).items():
+                found = take(row)
+                if found is not None:
+                    plans[mode] = found
+        elif kind == "office":
+            found = take(offices.get(business["key"]))
+            if found is not None:
+                plans["office"] = found
+        sites.append({
+            "key": business["key"],
+            "name": business["name"],
+            "kind": kind,
+            "address": {"street": reg.get("StreetName"), "number": reg.get("StreetNumber")},
+            "planned": kind in ("shop", "office", "factory"),
+            "new": not business.get("staff"),
+            "accepts": list(ASSIGN_SKILLS.get(business["typeSlug"], ())),
+            "plans": {mode: plans[mode] for mode in _in_order(plans)},
+            "facts": _site_facts(save, reg),
+        })
+    # Rows of sites the list above skips still lose their private field.
+    for row in staffing:
+        take(row)
+        take(row.get("fullCover"))
+    for rows in factories.values():
+        for row in rows.values():
+            take(row)
+    for row in office_staffing:
+        take(row)
+
+    employees = [e for e in save.items(save.root.get("EmployeeInstances")) if isinstance(e, dict)]
+    bench = _in_order({
+        e.get("id") for e in employees if not save.address(e.get("assignedAddress"))
+    })
+    named = set(bench)
+    for site in sites:
+        for plan in site["plans"].values():
+            named.update(plan["spare"])
+            named.update(plan["bench"])
+    people = {}
+    for e in employees:
+        if e.get("id") not in named:
+            continue
+        char = _character(save, e)
+        addr = save.address(e.get("assignedAddress"))
+        people[e.get("id")] = {
+            "name": char["name"],
+            "skills": _skill_rows(char),
+            "wage": money(e.get("hourlyWage") or 0),
+            "site": site_key(addr) if addr else None,
+            "hours": e.get("assignedWeeklyHours") or 0,
+            "demands": _in_order(
+                {d for d in save.items(e.get("demands")) if isinstance(d, str)}),
+        }
+    return {
+        "sites": sites,
+        "bench": bench,
+        "people": {pid: people[pid] for pid in _in_order(people)},
+        "demandKinds": {
+            slug: DEMAND_SCOPE[JOB_DEMANDS[slug][0]]
+            for slug in sorted(JOB_DEMANDS)
+            if JOB_DEMANDS[slug][0] in DEMAND_SCOPE
+        },
+        "company": _company_facts(save),
     }
 
 

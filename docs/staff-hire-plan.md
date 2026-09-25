@@ -162,6 +162,52 @@ A `<site>` for every business the player runs (the `businesses` order):
   `hireWeeks` fields.
 - Shops: nothing new beyond `hireWeeks`, `spare`, `bench` on both variants.
 
+### 2.4a As built (extraction worker, 25 Sep 2026)
+
+Where the build differs from or adds to 2.1-2.4; the board worker reads these too.
+
+- **`hiring.people`** (new): `{<employeeId>: {name, skills: [{skill, level}], wage, site,
+  hours, demands}}` for everybody a site's `spare` or `bench`, or the top-level `bench`,
+  names. The page needs a moved or bench person's skills, level and wage and had no other
+  source (`staff` is only a summary). `site` is the business key or null.
+- `candidates`: `level` and each `skills[].level` are whole numbers; `age` is in the game's
+  years, `ageInDays // gameVariables.daysPerYear` (60 on every save here; retirement is at
+  67 such years), null without the field. `demands` is sorted.
+- **Size**: 1,590 candidates on the late test save are 453 KB of compact JSON (the full
+  payload 2.25 MB), not 250 KB. No candidate holds more than two skills, so the "drop
+  `skills` below the second" fallback saves nothing; left as is for the integrator.
+- The older character layout (name/skills on the instance) exists only in saves of builds
+  1714-1718, far below `MIN_BUILD`, where skill names are integers. `_character()` reads it
+  anyway; nothing supported depends on it.
+- `plans.full` is present only where the board's `spOffersFull` holds (a station to staff);
+  a failed shop row gives `plans: {}`.
+- `hireWeeks` within a role: fullest first. A role's `hire` equals its weeks by
+  construction; an empty week (`slots: []`) pads it if `min - have` ever exceeds the
+  packing, which the arithmetic rules out and no save showed.
+- `spare` counts only people usable in a role the plan staffs, so an unmeasured shop's
+  cashiers are never offered as moves.
+- `facts` covers every `site` demand: `building` and `clean` as `_job_demands()` judges
+  them, and `desk` (classed `site`, not listed in 2.3) as "the site holds such an item
+  anywhere", since a hire has no desk yet.
+- `company`: insurance tiers are met when some HR manager plan with a manager in place
+  offers that tier or better; a happy boss is `Happiness >= 50`.
+- `accepts` is the table `ASSIGN_SKILLS`, read from the businesstypes and buildingtypes
+  bundles at build 3682 (retail, office, cinema and theatre buildings need cleaning;
+  warehouses need nothing; no building requires a driver). Gym and hairdresser list
+  security among their own primary skills.
+- Sites: vacant rows and `businesstype_empty` are left out; a distribution centre counts as
+  a warehouse.
+- **Factory rows** now ship `stations`, `people`, `shifts` and `addPeople` (`placed` and
+  `shortHours` stay test-only).
+- **The office default as built** (`_office_runs()`): an office open every hour of every
+  day staffs `min(C, max(ceil(C/3), round(C * min(door, 50) / 50)))` of its C computers
+  around the clock (all at door 50, about 3.4 people a computer; never under a third,
+  about 1 a computer). Any other office staffs every computer 08-22 on weekdays and
+  `ceil(C/2)` of them on weekends, clipped to its own opening hours, so no shift falls
+  on a closed day. Offices draw on the unassigned people no shop plan (either variant)
+  counts on, in office order. `officeStaffing` rows are described in
+  `docs/architecture.md`.
+
 ### 2.5 Tests (extraction)
 
 New `tests/test_staff_hire.py`, synthetic saves only: both character layouts for `_staff` and
