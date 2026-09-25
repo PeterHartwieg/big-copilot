@@ -7,8 +7,8 @@
    i18n/<lang>.json by `python build_web.py`) is flat: "key": "text", plurals
    as key_one / key_other (the language's CLDR categories).
 
-   This file is spliced into the head of the page by render(), ahead of every
-   other script, so app.js, update.js, community.js, the board script, map.js
+   This file is spliced into the end of the page's head by render(), after the
+   stylesheets and ahead of every other script but the theme's, so app.js, update.js, community.js, the board script, map.js
    and wiki.js can all call tt(). Its top-level names share the page's one
    global scope: every one starts tt, TT_, or is one of tt(), tApply(),
    enOf() and setUiLocale(). */
@@ -24,8 +24,10 @@ const TT_SPEC = /\{(\w+)(?::([^{}]+))?\}/g;
 /* A game name inside a sentence (tok() in Python), for a page without the
    board script's gnString(). */
 const TT_TOKEN = /⟦(ba:[^⟧|\s]+)(?:\|([^⟧]*))?⟧/g;
-/* The English a localised payload row showed, per field; enOf() reads it. */
-const TT_EN = typeof Symbol === "function" ? Symbol("english text") : "__ttEnglish";
+/* The English a localised payload row showed, per field; enOf() reads it. A
+   symbol key, enumerable, so a row copied with {...row} (idleRows(), the
+   supply rows) keeps it, while JSON and Object.keys() never see it. */
+const TT_EN = Symbol("english text");
 /* Markup attributes tApply() fills, and the attribute each one names. */
 const TT_ATTRS = [["data-tt-title", "title"], ["data-tt-aria-label", "aria-label"],
   ["data-tt-placeholder", "placeholder"], ["data-tt-tip", "data-tip"]];
@@ -56,7 +58,7 @@ function ttCategory(lang, n){
    NUM_LOCALE), and the same Intl call before it does. */
 function ttNum(v, opts){
   try{ if(typeof num === "function") return num(v, opts); }catch(e){}
-  return Number(v).toLocaleString(ttNumLocale(), opts);
+  return new Intl.NumberFormat(ttNumLocale(), opts).format(Number(v));
 }
 /* A weekday index, 0 Sunday as the game counts it, as its name. */
 function ttDay(d){
@@ -70,16 +72,19 @@ function ttDay(d){
     default: return tt("day.6", "Saturday");
   }
 }
-/* One placeholder's value, by its spec. The same specs as Python's msg():
-   {n} as is, {n:,} grouped whole, {x:.1f} and {x:,.1f} fixed decimals,
-   {w:$} money like fmt(), {w:$c} compact money like compact(), {d:day} a
-   weekday. A param {m: [key, params, english]} is a nested message. */
+/* One placeholder's value, by its spec. The same specs as Python's msg(),
+   each writing in English exactly what the code it replaces wrote
+   (docs/architecture.md, "UI text"): {n} as is (String()), {n:,} as num()
+   (grouped, up to three decimals), {x:.1f} and {x:,.0f} fixed decimals, ungrouped
+   or grouped, {w:$} money as fmt() ("-$1,234"), {w:$c} compact money as
+   compact(), {d:day} a weekday. A param {m: [key, params, english]} is a
+   nested message. */
 function ttFormat(v, spec){
   if(v && typeof v === "object" && Array.isArray(v.m)) return ttWire(v.m);
   if(spec === "day") return ttDay(v);
   if(typeof v !== "number") return String(v ?? "");
   if(!spec) return ttLang === "en" ? String(v) : ttNum(v, {useGrouping: false, maximumFractionDigits: 3});
-  if(spec === ",") return ttNum(v, {maximumFractionDigits: 0});
+  if(spec === ",") return ttNum(v);
   if(spec === "$") return (v < 0 ? "-" : "") + "$" + ttNum(Math.abs(Math.round(v)));
   if(spec === "$c"){
     const a = Math.abs(v), s = v < 0 ? "-" : "";
@@ -176,8 +181,7 @@ function ttPayload(v){
       const s = ttWire(wires[f], v[f]);
       if(s === v[f]) continue;
       if(!en){
-        en = v[TT_EN] || {};
-        if(!v[TT_EN]) Object.defineProperty(v, TT_EN, {value: en, configurable: true});
+        en = v[TT_EN] || (v[TT_EN] = {});
       }
       if(!ttOwn(en, f)) en[f] = v[f];
       v[f] = s;
@@ -241,7 +245,9 @@ function ttOnChange(fn){ if(typeof fn === "function") ttListeners.push(fn); }
    pseudo-locale "xx"; it is English for numbers and <html lang>. */
 function ttSetTable(lang, table){
   ttLang = lang || "en";
-  ttTable = ttLang !== "en" && table && typeof table === "object" ? table : null;
+  /* A table with no keys is no translation: English, numbers included, so
+     "$1.234" never stands beside an English sentence (as cli_ui_table()). */
+  ttTable = ttLang !== "en" && table && typeof table === "object" && Object.keys(table).length ? table : null;
   if(!ttTable) ttLang = "en";
   setUiLocale(ttLang);
   ttWhenDom(() => tApply());

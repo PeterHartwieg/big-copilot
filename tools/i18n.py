@@ -20,9 +20,10 @@ The English is never kept in a file: it stays at the call site, beside its key
 A translation lives in i18n/<lang>.json (flat; plurals as key_one, key_other,
 in the language's CLDR categories), and i18n/<lang>.base.json keeps the English
 each one was translated from, which is how a changed English shows up as stale.
-The build ships i18n/<lang>.json minus orphans and placeholder mismatches as
-web/i18n/<lang>.json. Missing and stale translations never fail the build: the
-page falls back to English per key. `status --strict` fails on them, for a
+The build ships i18n/<lang>.json minus orphans, placeholder mismatches and
+stale keys (English changed, or none recorded) as web/i18n/<lang>.json.
+Missing and stale translations never fail the build: the page falls back to
+English per key. `status --strict` fails on them, for a
 translation pull request.
 
 `glossary` and `draft-sheet` read the installed game's text. That text is the
@@ -366,11 +367,12 @@ def check_call(c: dict) -> None:
         raise CatalogueError(f"{c['where']}: key {key!r} is not <area>.<thing> with an area of {', '.join(AREAS)}")
     if PLURAL_SUFFIX.search(key):
         raise CatalogueError(f"{c['where']}: key {key!r} ends in a plural suffix, which the catalogue reserves")
-    if isinstance(en, dict) and ("other" not in en or set(en) - set(PLURALS["en"])):
+    if isinstance(en, dict) and set(en) != set(PLURALS["en"]):
         raise CatalogueError(f"{c['where']}: {key!r}: plural English takes one and other")
+    # A template literal with ${} never gets this far: js_calls() refuses it.
+    # A plain "${x:,.0f}" is a literal dollar before a placeholder, which is
+    # how Python's f"${x:,.0f}" converts (docs/architecture.md, "UI text").
     for text in _forms(en):
-        if "${" in text:
-            raise CatalogueError(f"{c['where']}: {key!r}: English holds ${{}}")
         for m in FIELD.finditer(text):
             if m.group(2) and not SPECS.fullmatch(m.group(2)):
                 raise CatalogueError(f"{c['where']}: {key!r}: unknown placeholder spec {m.group(2)!r}")
@@ -488,10 +490,14 @@ def _english_text(key: str, english: dict) -> str | None:
 
 
 def shipped(lang: str, english: dict, root: str = ROOT) -> dict:
-    """The table the page gets: the translation minus orphans and mismatches."""
-    table, _ = load(lang, root)
+    """The table the page gets: the translation minus orphans, mismatches and
+    stale keys (whose English changed since, or which have no recorded
+    English in <lang>.base.json). Those show their English until the
+    translation is redone and `accept`ed."""
+    table, base = load(lang, root)
     return {k: v for k, v in sorted(table.items())
-            if _english_for(k, english)[0] is not None and fits(k, v, english, lang)}
+            if _english_for(k, english)[0] is not None and fits(k, v, english, lang)
+            and base.get(k) == _english_text(k, english)}
 
 
 def _dump(table: dict) -> str:
@@ -559,12 +565,27 @@ def accept(lang: str, keys: list[str], english: dict | None = None) -> list[str]
 
 
 # -------------------------------------------------------- the game's words
+def work_tree(path: str) -> str | None:
+    """The git work tree a path lies in (a folder holding .git, a directory
+    or a worktree's file), resolving links; None outside any."""
+    here = os.path.realpath(os.path.abspath(path))
+    while True:
+        if os.path.exists(os.path.join(here, ".git")):
+            return here
+        up = os.path.dirname(here)
+        if up == here:
+            return None
+        here = up
+
+
 def _outside_repo(path: str) -> str:
-    full = os.path.abspath(path)
-    if os.path.normcase(full).startswith(os.path.normcase(ROOT + os.sep)) or os.path.normcase(full) == os.path.normcase(ROOT):
-        raise SystemExit(f"{path} is inside the repository; the game's text is not ours to commit. "
-                         "Write it to a scratch folder instead.")
-    return full
+    """The path, refused when it is inside any git work tree: the game's text
+    is not ours to commit, in this checkout or any other."""
+    tree = work_tree(path)
+    if tree is not None:
+        raise SystemExit(f"{path} is inside the git work tree {tree}; the game's text is not ours to "
+                         "commit. Write it to a scratch folder instead.")
+    return os.path.realpath(os.path.abspath(path))
 
 
 def glossary(lang: str, english: dict | None = None) -> dict:

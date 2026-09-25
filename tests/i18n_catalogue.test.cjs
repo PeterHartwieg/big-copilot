@@ -86,6 +86,9 @@ test('one key with two English defaults fails, and so does a malformed key or sp
   assert.match(read('js_calls', 'tt("nav.x_one", "Today")').error, /plural suffix/);
   assert.match(read('js_calls', 'tt("nav.x", "{n:%}")').error, /spec/);
   assert.match(read('js_calls', 'tt("nav.x", {one: "a"})').error, /one and other/);
+  assert.match(read('js_calls', 'tt("nav.x", {other: "a"})').error, /one and other/);
+  // A plain string's "$" before a placeholder is a literal dollar, not ${}.
+  assert.deepEqual(read('js_calls', 'tt("nav.x", "${w:,.0f}/day")').ok, [['nav.x', '${w:,.0f}/day']]);
 });
 
 test('markup: data-tt around English, data-tt-* beside the attribute, and nothing with children', () => {
@@ -176,6 +179,15 @@ function mismatches(lang, table, base){
   return bad;
 }
 
+test('every translated key records the English it was made from', () => {
+  for(const lang of LANGS){
+    const table = JSON.parse(fs.readFileSync(path.join(ROOT, 'i18n', `${lang}.json`), 'utf8'));
+    const base = JSON.parse(fs.readFileSync(path.join(ROOT, 'i18n', `${lang}.base.json`), 'utf8'));
+    assert.deepEqual(Object.keys(table).filter(k => !(k in base)), [],
+      `${lang}: run python tools/i18n.py accept ${lang} <key> after translating`);
+  }
+});
+
 test('every translation carries the placeholders and plural forms of the English it was made from', () => {
   for(const lang of LANGS){
     const table = JSON.parse(fs.readFileSync(path.join(ROOT, 'i18n', `${lang}.json`), 'utf8'));
@@ -200,20 +212,47 @@ test('web/i18n/ is what the build ships from i18n/', () => {
   for(const lang of LANGS) assert.ok(fs.existsSync(path.join(ROOT, 'web', 'i18n', `${lang}.json`)), lang);
 });
 
-test('the build drops orphans and mismatches, and keeps a stale translation', () => {
+test('the build drops orphans, mismatches and stale keys, and status lists each', () => {
   const out = python(`
 import json
 from tools import i18n
-english = {"f.a": "Lost {w:$} yesterday", "f.b": "No staff", "f.m_one": "{n} machine", "f.m_other": "{n} machines"}
-table = {"f.a": "Verlust: {w:$}", "f.b": "Niemand {x}", "f.gone": "Weg", "f.m_one": "ein Automat",
-         "f.m_other": "{n} Automaten", "f.m_few": "{n} Automaty"}
-i18n.load = lambda lang, root=i18n.ROOT: (table, {"f.a": "Lost {w:$} the day before"})
+english = {"f.a": "Lost {w:$} yesterday", "f.b": "No staff", "f.c": "Fresh", "f.d": "Unrecorded",
+           "f.m_one": "{n} machine", "f.m_other": "{n} machines"}
+table = {"f.a": "Verlust: {w:$}", "f.b": "Niemand {x}", "f.c": "Frisch", "f.d": "Ohne Basis", "f.gone": "Weg",
+         "f.m_one": "ein Automat", "f.m_other": "{n} Automaten", "f.m_few": "{n} Automaty"}
+base = {"f.a": "Lost {w:$} the day before", "f.b": "No staff", "f.c": "Fresh", "f.gone": "Gone",
+        "f.m_one": "{n} machine", "f.m_other": "{n} machines", "f.m_few": "{n} machines"}
+i18n.load = lambda lang, root=i18n.ROOT: (table, base)
 print(json.dumps([i18n.shipped("de", english), i18n.status("de", english)]))`);
   assert.equal(out.status, 0, out.stderr);
   const [shipped, status] = JSON.parse(out.stdout);
-  assert.deepEqual(shipped, {'f.a': 'Verlust: {w:$}', 'f.m_one': 'ein Automat', 'f.m_other': '{n} Automaten'});
+  // f.a's English changed and f.d has none recorded: both show English until redone.
+  assert.deepEqual(shipped, {'f.c': 'Frisch', 'f.m_one': 'ein Automat', 'f.m_other': '{n} Automaten'});
   assert.deepEqual(status.orphan, ['f.gone']);
   assert.deepEqual(status.mismatch.sort(), ['f.b', 'f.m_few']);
-  assert.ok(status.stale.includes('f.a'));
+  assert.deepEqual(status.stale.filter(k => !status.mismatch.includes(k)).sort(), ['f.a', 'f.d']);
   assert.deepEqual(status.missing, []);
+});
+
+test("the game's words are never written into a git work tree, this one or another", () => {
+  const out = python(`
+import json, os, tempfile
+from tools import i18n
+res = []
+with tempfile.TemporaryDirectory() as tmp:
+    other = os.path.join(tmp, "other-checkout")
+    os.makedirs(os.path.join(other, ".git", "x"))
+    worktree = os.path.join(tmp, "a-worktree")
+    os.makedirs(os.path.join(worktree, "deep"))
+    open(os.path.join(worktree, ".git"), "w").write("gitdir: elsewhere")
+    for path in (os.path.join(i18n.ROOT, "glossary.json"), os.path.join(other, "sub", "g.json"),
+                 os.path.join(worktree, "deep", "g.json"), os.path.join(tmp, "free", "g.json")):
+        try:
+            i18n._outside_repo(path)
+            res.append("ok")
+        except SystemExit:
+            res.append("refused")
+print(json.dumps(res))`);
+  assert.equal(out.status, 0, out.stderr);
+  assert.deepEqual(JSON.parse(out.stdout), ['refused', 'refused', 'refused', 'ok']);
 });
