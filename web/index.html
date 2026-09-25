@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "6cfafa2a31";</script>
-<link rel="stylesheet" href="community.css?v=6cfafa2a31">
+<script>window.LEDGER_BUILD = "d03c5ce090";</script>
+<link rel="stylesheet" href="community.css?v=d03c5ce090">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=6cfafa2a31">
+<link rel="stylesheet" href="fonts/fonts.css?v=d03c5ce090">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -144,25 +144,25 @@ try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "d
 .map-canvas .fp.cand.buy{fill:#e0b84a;fill-opacity:.18;stroke:#f2cf6b}
 .stage.finder .map-canvas .fp.mine{fill-opacity:.1;stroke-opacity:.45}
 .stage.finder .map-canvas .fp.dim.mine{fill-opacity:.06}
-.site .st{display:inline-flex;align-items:center;gap:5px;font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin-top:10px}
-.site .st[hidden],.site .facts[hidden],.site .fit[hidden],.site .why[hidden]{display:none}
-.site .st i{flex:none;width:7px;height:7px;border-radius:50%;background:var(--accent)}
-.site .st.rival i{background:var(--warn)}.site .st.na i{background:var(--ink-3)}
-.site .facts{display:grid;grid-template-columns:1fr 1fr;gap:5px 14px;margin-top:8px;font-size:11.5px;color:var(--ink-3)}
-.site .facts b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink);float:right}
+.city-map .site .st{display:inline-flex;align-items:center;gap:5px;font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin-top:10px}
+.city-map .site .st[hidden],.city-map .site .facts[hidden],.city-map .site .fit[hidden],.city-map .site .why[hidden]{display:none}
+.city-map .site .st i{flex:none;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.city-map .site .st.rival i{background:var(--warn)}.city-map .site .st.na i{background:var(--ink-3)}
+.city-map .site .facts{display:grid;grid-template-columns:1fr 1fr;gap:5px 14px;margin-top:8px;font-size:11.5px;color:var(--ink-3)}
+.city-map .site .facts b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink);float:right}
 /* Who owns the place and who trades from it are names, not figures: they take
    the card's own type and the full width. */
-.site .facts .wide{grid-column:1/-1;display:flex;align-items:baseline;gap:10px;justify-content:space-between}
-.site .facts .wide b{float:none;font-family:inherit;text-align:right;min-width:0}
-.site .facts [data-tip]{cursor:help;border-bottom:1px dotted var(--rule)}
-.site .fit{margin-top:8px;font-size:12px;color:var(--ink-2);padding-right:28px}
-.site .fit b{color:var(--ink);font-weight:500}
+.city-map .site .facts .wide{grid-column:1/-1;display:flex;align-items:baseline;gap:10px;justify-content:space-between}
+.city-map .site .facts .wide b{float:none;font-family:inherit;text-align:right;min-width:0}
+.city-map .site .facts [data-tip]{cursor:help;border-bottom:1px dotted var(--rule)}
+.city-map .site .fit{margin-top:8px;font-size:12px;color:var(--ink-2);padding-right:28px}
+.city-map .site .fit b{color:var(--ink);font-weight:500}
 /* The board's ? badge is a circle; inside the card the same class is the
    paragraph that explains the ranking. */
-.site .why{width:auto;height:auto;display:block;border:0;border-radius:0;cursor:default;overflow:visible;
+.city-map .site .why{width:auto;height:auto;display:block;border:0;border-radius:0;cursor:default;overflow:visible;
   margin:6px 0 0;padding-right:28px;font:400 11.5px/1.45 Archivo,"Helvetica Neue",Arial,sans-serif;
   color:var(--ink-3);text-align:left}
-.site .nums .num b.sc{color:var(--accent)}
+.city-map .site .nums .num b.sc{color:var(--accent)}
 /* Growth: the pin beside a cell's story opens the finder on that cell. */
 .celldetail .link.pin{display:inline-flex;align-items:center;gap:5px;margin-left:10px}
 .celldetail .link.pin svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
@@ -240,36 +240,36 @@ try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "d
 /* the site card: opens beside the footprint. Scoped to the map views: the
    board's finding rows wrap business names in a .site span of their own. */
 .city-map .site{position:absolute;left:0;top:0;width:290px;z-index:6;border-radius:10px;border:1px solid var(--rule);background:var(--surface);box-shadow:0 12px 40px #0008;padding:14px 16px 14px;opacity:0;pointer-events:none;transition:opacity .25s}
-.site.in{opacity:1;pointer-events:auto}
-.site[hidden]{display:none}
-.site h3{margin:0;font-size:16px;font-weight:600;letter-spacing:-.01em;padding-right:26px}
-.site .sub{display:flex;align-items:center;gap:6px;margin-top:5px;font-size:12px;color:var(--ink-2)}
-.site .x{position:absolute;top:10px;right:10px;width:24px;height:24px;border-radius:6px;border:0;background:none;display:grid;place-items:center;color:var(--ink-3);cursor:pointer;padding:0}
-.site .x:hover{color:var(--ink);background:var(--raised)}
-.site .x svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round}
-.site .nums{display:flex;gap:18px;margin-top:12px}
-.site .nums:empty{display:none}
-.site .num{display:flex;flex-direction:column;gap:3px}
-.site .num b{font-family:"IBM Plex Mono",monospace;font-size:17px;font-weight:500;letter-spacing:-.02em}
-.site .num span{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.city-map .site.in{opacity:1;pointer-events:auto}
+.city-map .site[hidden]{display:none}
+.city-map .site h3{margin:0;font-size:16px;font-weight:600;letter-spacing:-.01em;padding-right:26px}
+.city-map .site .sub{display:flex;align-items:center;gap:6px;margin-top:5px;font-size:12px;color:var(--ink-2)}
+.city-map .site .x{position:absolute;top:10px;right:10px;width:24px;height:24px;border-radius:6px;border:0;background:none;display:grid;place-items:center;color:var(--ink-3);cursor:pointer;padding:0}
+.city-map .site .x:hover{color:var(--ink);background:var(--raised)}
+.city-map .site .x svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round}
+.city-map .site .nums{display:flex;gap:18px;margin-top:12px}
+.city-map .site .nums:empty{display:none}
+.city-map .site .num{display:flex;flex-direction:column;gap:3px}
+.city-map .site .num b{font-family:"IBM Plex Mono",monospace;font-size:17px;font-weight:500;letter-spacing:-.02em}
+.city-map .site .num span{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
 /* the finder's demand figure is a way back to the type's Growth row */
-.site a.mf-grow{color:inherit;text-decoration:none;cursor:pointer}
-.site a.mf-grow:hover span,.site a.mf-grow:focus-visible span{color:var(--ink)}
-.site .finds2{margin-top:12px;display:flex;flex-direction:column;gap:6px}
-.site .finds2[hidden]{display:none}
-.site .f{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--ink-2);line-height:1.4;padding-right:28px}
-.site .f i{flex:none;width:7px;height:7px;border-radius:50%;margin-top:5px}
-.site .f.crit i{background:var(--neg)}.site .f.watch i{background:var(--warn)}.site .f.info i{background:var(--ink-3)}
-.site .f .fa{display:inline-block;font-family:"IBM Plex Mono",monospace;color:var(--ink);margin-left:6px;white-space:nowrap}
-.site .f .fa small{font-size:9.5px;letter-spacing:.08em;color:var(--ink-3);margin-left:3px}
-.site .num b .pos{color:var(--pos)}.site .num b .neg{color:var(--neg)}
+.city-map .site a.mf-grow{color:inherit;text-decoration:none;cursor:pointer}
+.city-map .site a.mf-grow:hover span,.city-map .site a.mf-grow:focus-visible span{color:var(--ink)}
+.city-map .site .finds2{margin-top:12px;display:flex;flex-direction:column;gap:6px}
+.city-map .site .finds2[hidden]{display:none}
+.city-map .site .f{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--ink-2);line-height:1.4;padding-right:28px}
+.city-map .site .f i{flex:none;width:7px;height:7px;border-radius:50%;margin-top:5px}
+.city-map .site .f.crit i{background:var(--neg)}.city-map .site .f.watch i{background:var(--warn)}.city-map .site .f.info i{background:var(--ink-3)}
+.city-map .site .f .fa{display:inline-block;font-family:"IBM Plex Mono",monospace;color:var(--ink);margin-left:6px;white-space:nowrap}
+.city-map .site .f .fa small{font-size:9.5px;letter-spacing:.08em;color:var(--ink-3);margin-left:3px}
+.city-map .site .num b .pos{color:var(--pos)}.city-map .site .num b .neg{color:var(--neg)}
 /* "its page": the labelled way to the site's own page, under what the card
    says, so it never sits on a finding's last line. The button's look is the
    board's .ss-pagego. */
-.site .go2{display:flex;width:max-content;margin:12px 0 0 auto}
-.site .go2[hidden]{display:none}
-.site .tail{position:absolute;left:-7px;top:22px;width:12px;height:12px;background:var(--surface);border-left:1px solid var(--rule);border-bottom:1px solid var(--rule);transform:rotate(45deg)}
-.site.flip .tail{left:auto;right:-7px;transform:rotate(-135deg)}
+.city-map .site .go2{display:flex;width:max-content;margin:12px 0 0 auto}
+.city-map .site .go2[hidden]{display:none}
+.city-map .site .tail{position:absolute;left:-7px;top:22px;width:12px;height:12px;background:var(--surface);border-left:1px solid var(--rule);border-bottom:1px solid var(--rule);transform:rotate(45deg)}
+.city-map .site.flip .tail{left:auto;right:-7px;transform:rotate(-135deg)}
 
 .map-status{font-size:12px;color:var(--ink-2);line-height:1.5;margin:8px 0}
 
@@ -349,8 +349,8 @@ body.map-modal-open{overflow:hidden}
 .fswitch .feature-new{margin-left:2px}
 /* the picked building's plan, in its card under the facts: the card's width,
    and what height the stage leaves it (--lp-plan-max, set by sizeCardPlan) */
-.site .lp-plan{margin-top:10px;padding-top:10px;border-top:1px solid var(--rule-soft)}
-.site .lp-plan[hidden]{display:none}
+.city-map .site .lp-plan{margin-top:10px;padding-top:10px;border-top:1px solid var(--rule-soft)}
+.city-map .site .lp-plan[hidden]{display:none}
 .lp-planhead{display:flex;align-items:baseline;gap:8px;margin-bottom:7px}
 .lp-planhead .lp-lab{cursor:help;border-bottom:1px dotted var(--rule)}
 .lp-planhead b{font:500 14px/1 "IBM Plex Mono",monospace;color:var(--ink)}
@@ -4145,7 +4145,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"6cfafa2a31","latest":{"pr":118,"date":"2026-09-25","title":"Game names in the language you play in","summary":"A new Game names setting in the footer, beside Theme, shows the game's own names in any language the game ships: items, business types, neighbourhoods, stations, skills and staff demands, on the board, inside its findings and in the wiki, so the board reads like your game. The rest of the page stays English. Search finds a name in either language, and lists sort in the language you picked. If your browser prefers one of the game's languages, the board asks once whether to use it."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"d03c5ce090","latest":{"pr":118,"date":"2026-09-25","title":"Game names in the language you play in","summary":"A new Game names setting in the footer, beside Theme, shows the game's own names in any language the game ships: items, business types, neighbourhoods, stations, skills and staff demands, on the board, inside its findings and in the wiki, so the board reads like your game. The rest of the page stays English. Search finds a name in either language, and lists sort in the language you picked. If your browser prefers one of the game's languages, the board asks once whether to use it."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -4233,8 +4233,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=6cfafa2a31"></script>
-<script src="community.js?v=6cfafa2a31"></script>
+<script src="app.js?v=d03c5ce090"></script>
+<script src="community.js?v=d03c5ce090"></script>
 
 <script>
 
@@ -11683,7 +11683,7 @@ function drawMovers(){
     const where = x.count > 1 ? tt("gr.short.suppliers", {one: "{n} supplier", other: "{n} suppliers"}, {n: x.count})
       : x.hood ? hoodName(x.hood) : x.where;
     const id = x.count > 1 ? where : x.hood || x.where;
-    const g = byPlace.get(id) || {where, rows: [], mine: 0, lo: Infinity, hi: 0};
+    const g = byPlace.get(id) || {where, key: x.count > 1 || x.hood ? null : x.siteKey || null, rows: [], mine: 0, lo: Infinity, hi: 0};
     g.rows.push(x); g.mine += x.mine ? 1 : 0;
     g.lo = Math.min(g.lo, x.daysLeft); g.hi = Math.max(g.hi, x.daysLeft);
     byPlace.set(id, g);
@@ -11701,7 +11701,7 @@ function drawMovers(){
         {item: x.item, kind: grTroubleWord(x.kind), n: x.daysLeft})))});
     /* Whether it touches the player's own shelves is in the sentence on
        hover; the chip itself stays as short as the design's. */
-    const place = mapAddress(g.where);
+    const place = mapAddress(g.where, g.key);
     if(n === 1) out.push(waveHtml("dn", spEsc(one.item),
       kind === "shortage" ? tt("gr.wave.shortAt", "shortage at {place}", {place})
       : kind === "strain" ? tt("gr.wave.strainAt", "supplier strain at {place}", {place})
@@ -12855,16 +12855,10 @@ function mapKind(findings){
   if(findings.some(a => a.level === "warn")) return "watch";
   return "info";
 }
-function mapAddressKey(label){
-  // Only explicit address labels, never business names or free-text matching.
-  const found = /^(\d+)\s+(.+)$/.exec(label || "");
-  if(!found) return null;
-  if(!/(?:Street|Avenue|Road|Lane|Way|Turnpike|Pier)$/i.test(found[2])) return null;
-  const street = found[2].toLowerCase().replace(/[^a-z0-9]/g, "");
-  const normalized = {'21st':'twentyfirst','22nd':'twentysecond','23rd':'twentythird','24th':'twentyfourth','25th':'twentyfifth','26th':'twentysixth'};
-  return `ba:street_${street.replace(/^(21st|22nd|23rd|24th|25th|26th)/, s => normalized[s])}#${+found[1]}`;
-}
-function mapAddress(label, key){ return `${mapText(label)}${mapButton(key || mapAddressKey(label),label)}`; }
+/* An address and its map pin. The pin comes from the key the payload carries
+   beside the words: the words may be in any language, so they are never read
+   back into a key. */
+function mapAddress(label, key){ return `${mapText(label)}${mapButton(key,label)}`; }
 /* One source for a neighbourhood's two letters: a business carries its own,
    anything else takes the board's table, and only a place the table does not
    name falls back to initials. The card and the list read the same tag. */
@@ -13732,12 +13726,15 @@ class CityMapView {
     const value = r => fs.sort === 'traffic' ? r.bld.traffic : fs.sort === 'demand' ? r.f.demand
       : fs.sort === 'cap' ? capMin(r.bld.cap) : fs.sort === 'deposit' ? r.bld.deposit
       : fs.sort === 'm2' ? r.bld.m2 : r.f.score;
+    // Every column reads best-first: the most of anything good, but the least
+    // money up front, since the deposit decides whether a player can sign at all.
     // A row with nothing to sort on stays at the bottom whichever way the
     // column points; it is not the smallest value, it is no value at all.
+    const dir = fs.sort === 'deposit' ? -1 : 1;
     out.sort((a, b) => {
       const x = value(a), y = value(b);
       if(x == null || y == null) return (x == null) - (y == null) || b.bld.traffic - a.bld.traffic;
-      return (y - x) || b.bld.traffic - a.bld.traffic;
+      return dir * (y - x) || b.bld.traffic - a.bld.traffic;
     });
     return out;
   }
@@ -13904,8 +13901,12 @@ class CityMapView {
     const types = this.catTypes(this.fs.cat);
     const options = [...types].sort((a, b) => mapCompare(a[1], b[1]));
     if(this.fs.type && !types.has(this.fs.type)) this.fs.type = "";
-    select.innerHTML = `<option value="">${mapText(MAP_WORDS.anyType)}</option>` + options.map(([slug, label]) =>
+    // Rebuilt only when the list changed: replacing the options closes a list
+    // the player has open, and a live refresh rarely changes them.
+    const html = `<option value="">${mapText(MAP_WORDS.anyType)}</option>` + options.map(([slug, label]) =>
       `<option value="${attr(slug)}"${slug === this.fs.type ? ' selected' : ''}>${mapText(label)}</option>`).join('');
+    if(select.typesHtml !== html){ select.innerHTML = html; select.typesHtml = html; }
+    if(select.value !== this.fs.type) select.value = this.fs.type;
     select.disabled = !options.length;
     select.closest('.fsel').classList.toggle('on', !!this.fs.type);
     this.root.querySelector('.frow.ftype').hidden = this.saleView();
@@ -14102,14 +14103,27 @@ class CityMapView {
     if(REDUCED){ this.lift = 0; return; } // drawView paints it still, once per camera move
     if(this.ballHover) document.removeEventListener('mousemove', this.ballHover);
     document.addEventListener('mousemove', this.ballHover = e => {
+      // Only while the ball is on screen: measuring it forces a layout.
+      if(this.ballLoop !== this.buildToken) return;
       const r = this.ball.getBoundingClientRect();
       const dx = e.clientX - (r.left + r.width/2), dy = e.clientY - (r.top + r.height/2), d = Math.hypot(dx, dy) || 1;
       this.ball.style.setProperty('--hx', (34 + dx/d * 20) + '%'); this.ball.style.setProperty('--hy', (32 + dy/d * 20) + '%');
     });
-    const token = this.buildToken;
+    this.wakeBall();
+  }
+  /* The breathing runs only while the ball is on screen: a hidden map page or a
+     closed dialog stops the loop, and showing it again (showCityMap(),
+     openLocationMap()) wakes it. ballLoop names the build the running loop
+     belongs to, so a rebuild starts its own. */
+  wakeBall(){
+    if(!this.ball || REDUCED || this.ballLoop === this.buildToken) return;
+    const token = this.ballLoop = this.buildToken;
     const loop = t => {
-      if(token !== this.buildToken || !this.svg.isConnected) return;
-      if(!document.hidden && this.stage.offsetParent){
+      if(token !== this.buildToken || !this.svg.isConnected || !this.stage.offsetParent){
+        if(this.ballLoop === token) this.ballLoop = null;
+        return;
+      }
+      if(!document.hidden){
         const px = this.orb.size * this.scale();
         this.lift = (1 + Math.sin(t/700)) * px * .012;
         this.paintBall();
@@ -14240,6 +14254,7 @@ class CityMapView {
   }
   update(){
     if(!this.svg) return;
+    this.stale = false;
     // A view built before a save was open has no finder controls; the first
     // payload that carries premises brings them in.
     if(this.panel && premises() && !this.root.querySelector('[data-f="tog"]')) this.build();
@@ -14415,8 +14430,11 @@ function showCityMap(){
   // A fresh view starts plain. One that is already here keeps the finder as the
   // player left it, so a trip to another page and back finds the list still up.
   // openFinder() switches it on afterwards.
-  if(!cityMapPage) cityMapPage=new CityMapView($('cityMapPage'));
-  else cityMapPage.paintView();
+  if(!cityMapPage){ cityMapPage=new CityMapView($('cityMapPage')); return; }
+  // A live refresh while the page was hidden only marked it (refreshCityMaps).
+  if(cityMapPage.stale) cityMapPage.update();
+  cityMapPage.paintView();
+  cityMapPage.wakeBall();
 }
 /* Today's card and a Growth cell both open the map with the finder on and a
    category, a type and a neighbourhood already chosen. `focus` hands the
@@ -14451,7 +14469,10 @@ function refreshCityMaps(){
     mapViews.forEach(view=>view.resetCharacter());
   }
   cityMapCharacter=character;
-  mapViews.forEach(view=>view.update());
+  // A view off screen is only marked, and takes the new numbers when it is
+  // shown, as a PAGE_DRAWS row does; one on screen keeps an open Type list open
+  // unless its types changed (paintControls).
+  mapViews.forEach(view=>{ if(view.root.getClientRects().length) view.update(); else view.stale = true; });
 }
 function openLocationMap(key, trigger){
   const dialog=$('locationMapDialog');
@@ -14470,6 +14491,7 @@ function openLocationMap(key, trigger){
   }
   if(!cityMapOverlay) cityMapOverlay=new CityMapView($('cityMapOverlay'), {panel:false});
   cityMapOverlay.select(key,true,true);
+  cityMapOverlay.wakeBall();
 }
 document.addEventListener('click', e=>{
   const button=e.target.closest('[data-map-key]');
@@ -14832,7 +14854,12 @@ function showWikiRoute(hash, entered = false){
      the top instead when the page turns out not to have that section. */
   if((moved || (entered && !land)) && window.scrollY > 0) window.scrollTo(0, 0);
   if(wikiStatus === "idle"){ loadWikiData(); return; }
+  /* The same route drawn again with nowhere to land is a live refresh (a new
+     save, the game names in another language): the reader stays with what
+     they had opened, focused and scrolled to. */
+  const keep = moved || entered || land ? null : wikiKeep();
   drawWiki();
+  wikiKeepRestore(keep);
 }
 
 /* --- the markdown the game writes --------------------------------------- */
@@ -15426,8 +15453,11 @@ const wikiFixHolds = f => ((f.capacity || []).find(c => c && Number.isFinite(c.v
    nothing says which line is this product's, every labelled row is shown. The
    largest is never picked: that would be a number the help does not give. */
 function wikiCaps(p, key, f){
-  const given = ((p || {}).fixtureCapacities || {})[key];
-  if(Array.isArray(given) && given.length) return given.filter(c => c && Number.isFinite(c.value));
+  /* A supplied answer is checked like the fallback: a row with no number is no
+     answer, and the fixture's own rows are read instead. */
+  const raw = ((p || {}).fixtureCapacities || {})[key];
+  const given = Array.isArray(raw) ? raw.filter(c => c && Number.isFinite(c.value)) : [];
+  if(given.length) return given;
   const caps = (f.capacity || []).filter(c => c && Number.isFinite(c.value));
   if(caps.length < 2) return caps;
   /* The product's own first word may name its line ("Gifts 300, flowers 100").
@@ -16560,6 +16590,59 @@ function wikiRestore(hold){
   try{ found.focus({preventScroll: true}); }catch(e){ try{ found.focus(); }catch(err){} }
   /* A section the browser has not painted yet is measured from its estimate,
      so the same correction is made once more when the new layout has settled. */
+  if(typeof requestAnimationFrame === "function") requestAnimationFrame(settle);
+}
+/* What a live refresh must hand back, taken before the redraw. Nothing in the
+   page has an id to find it by, so a thing is known by what it says: a
+   <details> by its summary, a focused control by its tag, text and link, each
+   with its place among the ones that read the same. The scroll is held by the
+   first section still on screen, which content-visibility would otherwise
+   leave at an estimated height once it is replaced. */
+const wikiKeepSel = "a[href],button,input,select,textarea,summary,[tabindex]";
+function wikiKeepId(el){
+  const text = String(el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 120);
+  return `${el.tagName}|${el.getAttribute("href") || ""}|${text}`;
+}
+function wikiKeepFind(list, id, nth){
+  return list.filter(el => wikiKeepId(el) === id)[nth] || null;
+}
+function wikiKeepPlace(list, el){
+  const id = wikiKeepId(el);
+  return {id, nth: list.filter(other => wikiKeepId(other) === id).indexOf(el)};
+}
+function wikiKeep(){
+  const host = wikiRoot();
+  if(!host || typeof host.querySelectorAll !== "function" || wikiStatus !== "ready") return null;
+  const summaries = [...host.querySelectorAll("details > summary")];
+  const open = summaries.map(sum => ({...wikiKeepPlace(summaries, sum), open: !!sum.parentElement.open}));
+  const active = typeof document !== "undefined" ? document.activeElement : null;
+  const controls = [...host.querySelectorAll(wikiKeepSel)];
+  const focus = active && active.id !== "wikiSearch" && host.contains(active) && controls.includes(active)
+    ? wikiKeepPlace(controls, active) : null;
+  const secs = [...host.querySelectorAll("section.sec")];
+  const at = secs.findIndex(sec => sec.getBoundingClientRect().bottom > 0);
+  const anchor = at < 0 ? null : {at, top: secs[at].getBoundingClientRect().top};
+  return {open, focus, anchor};
+}
+function wikiKeepRestore(keep){
+  const host = wikiRoot();
+  if(!keep || !host || typeof host.querySelectorAll !== "function") return;
+  const summaries = [...host.querySelectorAll("details > summary")];
+  keep.open.forEach(was => {
+    const sum = wikiKeepFind(summaries, was.id, was.nth);
+    if(sum && sum.parentElement.open !== was.open) sum.parentElement.open = was.open;
+  });
+  const settle = () => {
+    const sec = keep.anchor && host.querySelectorAll("section.sec")[keep.anchor.at];
+    if(!sec) return;
+    const by = sec.getBoundingClientRect().top - keep.anchor.top;
+    if(Math.abs(by) > 1 && typeof window.scrollBy === "function") window.scrollBy(0, by);
+  };
+  settle();
+  if(keep.focus){
+    const el = wikiKeepFind([...host.querySelectorAll(wikiKeepSel)], keep.focus.id, keep.focus.nth);
+    if(el){ try{ el.focus({preventScroll: true}); }catch(e){} }
+  }
   if(typeof requestAnimationFrame === "function") requestAnimationFrame(settle);
 }
 function drawWiki(hold){
@@ -18291,17 +18374,26 @@ function ssHash(h){
   if(location.hash === h) openHash(h.slice(1), "none");
   else location.hash = h;
 }
-/* The shop type with the most revenue: its guide is where prices are read. */
-function ssTopType(){
+/* The company's own shop types, the best-selling first: each has its own
+   price guide in the wiki. */
+function ssOwnTypes(){
   const by = {};
   (hasData() ? D.businesses : []).filter(b => b.status === "retail" && b.typeSlug).forEach(b => {
     by[b.typeSlug] = by[b.typeSlug] || {slug: b.typeSlug, type: b.type, revenue: 0};
     by[b.typeSlug].revenue += b.revenue || 0;
   });
-  return Object.values(by).sort((a, z) => z.revenue - a.revenue || gnCompare(a.type, z.type))[0] || null;
+  return Object.values(by).sort((a, z) => z.revenue - a.revenue || gnCompare(a.type, z.type));
 }
-function ssPrices(){
-  const t = ssTopType();
+/* The type "Are my prices right?" answers for: the one last picked on its
+   strip while the company still runs it, else the best-selling one. */
+let ssPricesPick = "";
+function ssPricesType(){
+  const own = ssOwnTypes();
+  return own.find(t => t.slug === ssPricesPick) || own[0] || null;
+}
+/* A company with no shop lands on the wiki itself. */
+function ssPrices(slug){
+  const t = (slug && ssOwnTypes().find(x => x.slug === slug)) || ssPricesType();
   const href = t && typeof wikiTypeHref === "function" ? wikiTypeHref(t.slug, "prices") : "";
   if(href) ssHash(href); else showPage("wiki");
 }
@@ -18327,12 +18419,14 @@ function ssRing(el){
    returning the element), `wait` gives a block drawn after a file loads time to
    appear, `dim: false` keeps the page around it at full strength, and `holds`,
    given the landing ({hash, site}), says whether what is lit is still the
-   answer to it (see ssLandingHolds()). A question with no `page` answers
-   outside every page, where the reader already is: "What am I playing on?" is
-   the difficulty chip (R15) and its popover, and needs no strip. One table, so
-   a question can move in one place: "Is my factory fed?" and "Whom should I
-   hire?" move once the factory pages (R8) and the company-wide Staff list (R14)
-   exist. */
+   answer to it (see ssLandingHolds()). `choices`, where a question can answer
+   for more than one thing, lists them ({id, label, on}) for its strip, and
+   `choose(id)` takes the pick before the question is asked again. A question
+   with no `page` answers outside every page, where the reader already is:
+   "What am I playing on?" is the difficulty chip (R15) and its popover, and
+   needs no strip. One table, so a question can move in one place: "Is my
+   factory fed?" and "Whom should I hire?" move once the factory pages (R8) and
+   the company-wide Staff list (R14) exist. */
 const SS_QUESTIONS = [
   {id: "profit", get q(){ return tt("nav.ask.profit.q", "Why did profit move?"); },
    lands: () => tt("nav.ask.profit.lands", "Company › Results · the portfolio sorted by week on week"), page: "company",
@@ -18359,9 +18453,13 @@ const SS_QUESTIONS = [
    lit: () => siteOpen && ssStaffingSite() && siteKey === ssStaffingSite() ? $("sp-roster") : $("secPortfolio"),
    holds: a => a.site === (siteOpen ? siteKey : null)},
   {id: "prices", get q(){ return tt("nav.ask.prices.q", "Are my prices right?"); }, page: "wiki",
-   lands: () => { const t = ssTopType();
+   lands: () => { const t = ssPricesType();
      return t ? tt("nav.ask.prices.lands.type", "Wiki › {type} › Prices in your save", {type: t.type}) : tt("nav.ask.prices.lands.none", "Wiki"); },
-   go: ssPrices, lit: "#wk-prices", wait: true, holds: a => location.hash === a.hash},
+   go: () => ssPrices(), lit: "#wk-prices", wait: true, holds: a => location.hash === a.hash,
+   /* A company with several kinds of shop picks which one's prices to read. */
+   choices(){ const own = ssOwnTypes(), t = ssPricesType();
+     return own.length > 1 ? own.map(x => ({id: x.slug, label: x.type, on: !!t && x.slug === t.slug})) : null; },
+   choose(slug){ ssPricesPick = slug; }},
   {id: "import", get q(){ return tt("nav.ask.import.q", "What should I import this week?"); },
    lands: () => tt("nav.ask.import.lands", "Supply › Change checklist"), page: "supply",
    go: ssChecklist, lit: "#sbStrip", holds: () => page === "supply"},
@@ -18421,10 +18519,9 @@ function ssAskPaint(){
 /* The landing on screen ({qn, strip, lit, litId, host, hash, site}), and the
    landing still on its way, with the address its question opened. */
 let ssAsked = null, ssTicket = 0, ssPending = null;
-function ssAsk(id){
+function ssAsk(id, from = page){
   const qn = SS_QUESTIONS.find(x => x.id === id);
   if(!qn || !hasData()) return;
-  const from = page;
   try{ localStorage.setItem(SS_ASK_KEY, "1"); }catch(e){}
   ssAskPaint();
   ssClearAsked();
@@ -18470,14 +18567,21 @@ function ssLand(qn, from, ticket, tries = 0){
   const onSite = siteOpen && page === "company";
   const viaSite = onSite && siteFrom ? siteFrom : null;
   const backLabel = viaSite ? viaSite.label : onSite ? tt("nav.ask.portfolio", "Portfolio") : back.label;
+  const choices = qn.choices ? qn.choices() : null;
+  const pickLabel = tt("nav.ask.pick", "Answer for");
   strip.innerHTML = `<span class="ic" aria-hidden="true">?</span><span><small>${tt("nav.ask.asked", "YOU ASKED")}</small><br><b>${ssEsc(qn.q)}</b></span>`
-    + `<span class="quiet">${ssEsc(ssLands(qn))}</span><span class="go"><button type="button" data-ss="back">${
+    + `<span class="quiet">${ssEsc(ssLands(qn))}</span>`
+    + (choices ? `<span class="seg ss-pick" role="group" aria-label="${attr(pickLabel)}">${choices.map(c =>
+      `<a href="#" data-ss="pick" data-pick="${attr(c.id)}"${c.on ? ` class="on" aria-current="true"` : ""}>${ssEsc(c.label)}</a>`).join("")}</span>` : "")
+    + `<span class="go"><button type="button" data-ss="back">${
       ssEsc(tt("nav.ask.back", "‹ Back to {page}", {page: backLabel}))}</button>`
     + `<button type="button" data-ss="another">${tt("nav.ask.another", "Ask another")}</button></span>`;
   strip.addEventListener("click", e => {
     const b = e.target.closest("[data-ss]");
     if(!b) return;
     if(b.dataset.ss === "another"){ ssOpen(); return; }
+    /* Another of the question's answers: asked again, with the same way back. */
+    if(b.dataset.ss === "pick"){ e.preventDefault(); qn.choose(b.dataset.pick); ssAsk(qn.id, from); return; }
     ssClearAsked();
     /* The crumb's own rule: Back while the entry carries the way back, else
        its address, else the portfolio. */
@@ -18589,7 +18693,9 @@ const SS_SEV_RANK = {crit: 3, watch: 2, opp: 1};
 const ssWorst = rows => rows.map(r => SS_SEV[r.level] || "opp")
   .sort((a, z) => SS_SEV_RANK[z] - SS_SEV_RANK[a])[0] || "";
 /* The board's pages and views, and the words players use for them. Kept by
-   hand, next to what they name: `need` is false for what works without a save. */
+   hand, next to what they name: `need` is false for what works without a save,
+   and `each`, where one view answers for several things, gives one entry per
+   thing (its own id, line and go) in place of the view's single one. */
 const SS_VIEWS = [
   {id: "alerts", get t(){ return tt("nav.search.alerts.title", "Needs attention"); },
    get p(){ return tt("nav.search.alerts.line", "Today"); }, ic: "today", syn: ["problems", "alerts", "warnings", "findings", "to do"],
@@ -18701,7 +18807,9 @@ const SS_VIEWS = [
    go: () => ssOpenSite(ssCrewSite(), "#sp-crew")},
   {id: "prices", get t(){ return tt("nav.search.prices.title", "Prices in your save"); },
    get p(){ return tt("nav.search.prices.line", "Wiki"); }, ic: "tag", syn: ["prices", "pricing", "market price", "too expensive", "are my prices right"],
-   live(){ const t = ssTopType(); return t ? {p: tt("nav.search.prices.guide", "Wiki › {type} guide", {type: t.type})} : {}; }, go: ssPrices},
+   /* One entry for each kind of shop the company runs, each opening its own guide. */
+   each: () => ssOwnTypes().map(t => ({id: `view:prices:${t.slug}`, p: tt("nav.search.prices.guide", "Wiki › {type} guide", {type: t.type}),
+     kw: [t.type, ...ssEnglish([t.slug])], go: () => ssPrices(t.slug)})), go: () => ssPrices()},
   {id: "wiki", get t(){ return tt("nav.search.wiki.title", "Wiki"); },
    get p(){ return tt("nav.search.wiki.line", "the game's own help"); }, ic: "wiki", syn: ["help", "guide", "manual"], need: false, go: () => showPage("wiki")},
   {id: "changelog", get t(){ return tt("nav.search.changelog.title", "Changelog"); },
@@ -18773,7 +18881,9 @@ function ssBuild(){
     if(v.need !== false && !data) return;
     const e = {id: `view:${v.id}`, g: "views", t: v.t, p: v.p, ic: v.ic, syn: v.syn, synP: v.synP || null, go: v.go};
     if(v.live) try{ Object.assign(e, v.live() || {}); }catch(err){}
-    out.push(ssEntry(e));
+    const each = v.each ? v.each() : [];
+    if(each.length) each.forEach(x => out.push(ssEntry({...e, ...x})));
+    else out.push(ssEntry(e));
   });
   if(data){
     const fac = D.supply && D.supply.factories;

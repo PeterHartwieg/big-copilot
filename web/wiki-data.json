@@ -27994,21 +27994,7 @@
           "automatic": false,
           "pageId": "products-beer",
           "fixtureCapacities": {
-            "cocktailbarbeershelf": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
             "drinksshelf": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
-            "woodencocktailbarbeershelf": [
               {
                 "label": "Products",
                 "value": 50,
@@ -28182,21 +28168,7 @@
           "automatic": false,
           "pageId": "products-whisky",
           "fixtureCapacities": {
-            "cocktailbardrinkscounter": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
             "drinksshelf": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
-            "woodencocktailbardrinkscounter": [
               {
                 "label": "Products",
                 "value": 50,
@@ -28233,21 +28205,7 @@
           "automatic": false,
           "pageId": "products-margarita",
           "fixtureCapacities": {
-            "cocktailbardrinkscounter": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
             "drinksshelf": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
-            "woodencocktailbardrinkscounter": [
               {
                 "label": "Products",
                 "value": 50,
@@ -28286,21 +28244,7 @@
           "automatic": false,
           "pageId": "products-martini",
           "fixtureCapacities": {
-            "cocktailbardrinkscounter": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
             "drinksshelf": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
-            "woodencocktailbardrinkscounter": [
               {
                 "label": "Products",
                 "value": 50,
@@ -29781,13 +29725,6 @@
                 "unit": "units"
               }
             ],
-            "drinksshelf": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
             "woodencocktailbarbeershelf": [
               {
                 "label": "Products",
@@ -29877,13 +29814,6 @@
                 "unit": "units"
               }
             ],
-            "drinksshelf": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
             "woodencocktailbardrinkscounter": [
               {
                 "label": "Products",
@@ -29931,13 +29861,6 @@
                 "unit": "units"
               }
             ],
-            "drinksshelf": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
             "woodencocktailbardrinkscounter": [
               {
                 "label": "Products",
@@ -29979,13 +29902,6 @@
           "pageId": "products-whisky",
           "fixtureCapacities": {
             "cocktailbardrinkscounter": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
-            "drinksshelf": [
               {
                 "label": "Products",
                 "value": 50,
@@ -33771,13 +33687,6 @@
                 "unit": "units"
               }
             ],
-            "drinksshelf": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
             "woodencocktailbardrinkscounter": [
               {
                 "label": "Products",
@@ -33856,13 +33765,6 @@
           "pageId": "products-whisky",
           "fixtureCapacities": {
             "cocktailbardrinkscounter": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
-            "drinksshelf": [
               {
                 "label": "Products",
                 "value": 50,
