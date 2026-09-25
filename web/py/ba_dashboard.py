@@ -22878,7 +22878,8 @@ function hrQuickHtml(m){
     : `<details class="hs-match" data-hq-list${q.open ? " open" : ""}><summary><b>${hrNum(n)}</b> match · ${
         Q.short ? `<span class="warn">only ${hrNum(n)} ${n === 1 ? "matches" : "match"}</span>` : k === n ? (k === 1 ? "picked" : `all ${hrNum(k)} are picked`) : k === 1 ? "the best is picked" : `the best ${hrNum(k)} are picked`}${hrChev()}</summary>
       <ul>${Q.picks.map(({c, misfit}) => `<li><span>${spEsc(c.name || "?")}${hrQuickMisfit(misfit)}</span><span class="m">${Math.round(hrLevel(c, q.skill))}%</span><span class="m">${hrWage(c.wage)}/h</span></li>`).join("")}</ul></details>`;
-  const dis = !Q.ready || !k || off;
+  const busy = !!hrUi.quickPending;
+  const dis = !Q.ready || !k || off || busy;
   return `<div class="qh"><span class="hs-i">${hrSvg("hire")}</span><h3>Quick hire</h3><span class="sub">any site</span></div>
     <div class="qf">
       <label class="fld wide"><span>Role</span><span class="hs-sel"><select data-hq-role aria-label="Role" class="${q.skill ? "" : "empty"}"><option value="">Choose a role</option>${
@@ -22892,16 +22893,24 @@ function hrQuickHtml(m){
     </div>
     ${Q.shop && Q.ex.includes(HR_PT) ? `<p class="hs-note hs-shops">Part-time is left out for shop roles only.</p>` : ""}
     ${match}
-    <button type="button" class="hs-cta wide" data-hq-go${dis ? ` aria-disabled="true"` : ""}>${k ? `Hire ${hrNum(k)}` : "Hire"}${dis ? "" : gwSvg("right")}</button>`;
+    <button type="button" class="hs-cta wide" data-hq-go${dis ? ` aria-disabled="true"` : ""}>${busy ? "Hiring…" : k ? `Hire ${hrNum(k)}` : "Hire"}${dis ? "" : gwSvg("right")}</button>`;
 }
 
 /* The confirm: the game is asked first, then one Hire. No undo. */
 let hrQuickLast = null;  // {Q, req}
+let hrQuickSeq = 0;
 function hrQuickReview(){
-  hrUi.quickHold = true;
+  /* Each confirm owns its hold (a token): a late release from an earlier
+     one never clears a newer confirm's. hrUi.quickPending is the token of a
+     confirm closed while its write is still under way; Quick hire's button
+     says "Hiring…" and is off until that write ends. */
+  if(hrUi.quickPending) return;
+  const token = ++hrQuickSeq;
+  hrUi.quickHold = token;
   let dlg = null;
   const release = () => {
-    hrUi.quickHold = false;
+    if(hrUi.quickHold === token) hrUi.quickHold = false;
+    if(hrUi.quickPending === token) hrUi.quickPending = false;
     if(!$("secStaff")) return;
     drawStaff(["hsOpen", "hsOrder", "hsQuick"]);
     const at = document.activeElement;
@@ -22998,7 +23007,11 @@ function hrQuickReview(){
     dlg.classList.add("hr-wide");
     /* Closed, however: the held weeks go back to Open places, unless the
        write is still under way (onDone or onFailed ends the hold then). */
-    dlg.addEventListener("close", () => { if(dlg.dataset.phase !== "applying") release(); });
+    dlg.addEventListener("close", () => {
+      if(dlg.dataset.phase !== "applying") return release();
+      hrUi.quickPending = token;
+      if($("secStaff")) drawStaff(["hsQuick"]);
+    });
   }
   /* Quick hire's own markup does not change with the hold: its Hire button
      stays, for the keyboard to come back to. */
@@ -27403,7 +27416,9 @@ function gwFailed(dlg, spec, res, retry, recheck){
      more                      optional, {label, go}: a second way on
                                beside Close once an apply went through
      onDone(answer)            optional: heard once an apply went through
-     onFailed(res)             optional: heard when an apply fails
+     onFailed(res)             optional: heard when an apply fails (not
+                               when the game approved afresh in an open
+                               dialog, which asks the game again)
      onUndo()                  optional: heard once its undo went through
      startUndo                 optional: the dialog opens by undoing the
                                kind's last write, then asks the game afresh
@@ -27505,10 +27520,10 @@ function gwConfirm(spec){
          undo would restore. */
       if(res.error === "uncertain") delete gwUndoable[spec.kind];
       applying = false;
-      if(spec.onFailed) spec.onFailed(res);
       /* Approved again mid-apply: the apply was not sent twice; the player
          reviews the game's answer afresh first, on the same approval. */
       if(res.error === "reapproved" && dlg.open) return plan({asked: res.asked});
+      if(spec.onFailed) spec.onFailed(res);
       allowed = false;
       return dlg.open ? gwFailed(dlg, spec, res, () => plan(), () => plan()) : gwToast();
     }

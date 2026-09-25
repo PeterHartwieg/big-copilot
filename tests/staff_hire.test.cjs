@@ -1238,7 +1238,7 @@ async function closedWhileApplying(page) {
   await page.evaluate(() => document.querySelector('dialog.gw-dlg').close());
   await page.waitForFunction(() => !document.querySelector('dialog.gw-dlg[open]'));
   // The write is still under way: the week stays held.
-  assert.equal(await page.evaluate(() => hrUi.quickHold), true);
+  assert.ok(await page.evaluate(() => hrUi.quickHold));
   assert.deepEqual((await model(page)).weeks[0], [G, 'demand', ['move:SPARE1', 'quick:c2']]);
 }
 
@@ -1265,4 +1265,51 @@ test('a Quick hire confirm closed while it applies releases its hold when the wr
   assert.equal(await page.locator('#hsOrder .hs-held').count(), 0);
   // Nobody was hired: the form keeps its role.
   assert.equal(await page.locator('#hsQuick [data-hq-role]').inputValue(), CS);
+});
+
+test('while a closed Quick hire confirm still applies, the button waits and no second confirm opens', async (t) => {
+  const page = await board(t);
+  await closedWhileApplying(page);
+  const go = page.locator('#hsQuick [data-hq-go]');
+  assert.equal((await go.textContent()).trim(), 'Hiring…');
+  assert.equal(await go.getAttribute('aria-disabled'), 'true');
+  await page.evaluate(() => hrQuickReview());
+  assert.equal(await page.locator('dialog.gw-dlg[open]').count(), 0);
+  // The write fails: nobody hired, the form as it was, the button back.
+  await page.evaluate(() => window.release(false));
+  await page.waitForFunction(() => !hrUi.quickHold && !hrUi.quickPending);
+  assert.equal((await go.textContent()).trim(), 'Hire 1');
+  assert.equal(await go.getAttribute('aria-disabled'), null);
+});
+
+test("a late answer to a closed Quick hire confirm leaves the next confirm's hold alone", async (t) => {
+  const page = await board(t);
+  await closedWhileApplying(page);
+  const a = await page.evaluate(() => hrUi.quickHold);
+  // Past the waiting button: a second confirm, B, opens while A applies.
+  await page.evaluate(() => { hrUi.quickPending = false; hrQuickReview(); });
+  await phase(page, 'ready');
+  const b = await page.evaluate(() => hrUi.quickHold);
+  assert.ok(b && b !== a, `B holds its own token (${a}, ${b})`);
+  // A's answer lands: its release is stale and B keeps its hold.
+  await page.evaluate(() => window.release(true));
+  await page.waitForFunction(() => hrUi.hired && hrUi.hired.ids.has('c2'));
+  assert.equal(await page.evaluate(() => hrUi.quickHold), b);
+  assert.equal(await page.locator('dialog.gw-dlg[open]').count(), 1);
+});
+
+test('a plan week whose slots are all unusable is no clash: no open hours', async (t) => {
+  const d = JSON.parse(payload);
+  // Gifts' second week points at days the game does not have.
+  d.hiring.sites[0].plans.demand.hireWeeks[1].slots = [slot(4, 7, 8, 20, 'REG-G'), slot(5, 9, 8, 20, 'REG-G')];
+  const page = await board(t, {data: JSON.stringify(d)});
+  const box = page.locator('#hsQuick');
+  await box.locator('[data-hq-role]').selectOption(CS);
+  await box.locator('[data-hq-site]').selectOption(G);
+  const r = await page.evaluate(() => { const r = hrQuickRequest(hrQuickModel(hrModel())); return {sites: r.body.sites, given: r.given, clashed: r.clashed}; });
+  assert.deepEqual(r, {sites: [{address: addr(G), expect: null, days: null}], given: 0, clashed: 0});
+  const dlg = await quickConfirm(page);
+  const text = await dlg.locator('.gw-body').textContent();
+  assert.match(text, /No open hours in HART\. Gifts's plan: they join with no hours\./);
+  assert.doesNotMatch(text, /meet shifts already there/);
 });
