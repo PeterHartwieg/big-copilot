@@ -221,11 +221,6 @@ class HistoryExtractTests(unittest.TestCase):
                 if c:
                     self.assertEqual(c["delta"], now[(row["slug"], c["hood"])] - was[(row["slug"], c["hood"])])
 
-    # EX-2 in #109 (ledger future days): the ledger hands back every day on record, and
-    # _cash_flow takes its last entry as "today", so a save reloaded after a later
-    # one reads the later day's cash as its own: on day N + 4 after N + 7, cashTo
-    # is day N + 7's cash, not the save's. Remove expectedFailure once #109 is fixed.
-    @unittest.expectedFailure
     def test_an_older_save_reads_its_cash_flow_up_to_its_own_day(self):
         between = self.runs[BETWEEN]
         flow = between["cashFlow"]

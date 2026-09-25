@@ -1524,7 +1524,11 @@ The save stores only today: today's demand, today's cash, today's net worth. Any
 that compares one day with another has to be remembered somewhere else, so the board
 keeps its own record, up to 60 days, kept separately per character, because each
 character is a different generated city and a different company. Locally that record is
-`market_history.json`; in the browser it is localStorage.
+`market_history.json`; in the browser it is localStorage, which holds a few MB for the
+whole site, so there the record keeps two weeks of demand snapshots (the trend needs about
+one) and the 60 days of ledger, for the 8 characters opened most recently. Opening an older
+save of a character reads only the days up to its own; the later days stay on record for
+when the newer save is opened again.
 
 Two records live side by side under each character:
 
