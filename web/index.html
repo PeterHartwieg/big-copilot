@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=78817a2043">
+<link rel="stylesheet" href="community.css?v=552d92848c">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -14,7 +14,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=78817a2043">
+<link rel="stylesheet" href="fonts/fonts.css?v=552d92848c">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -4056,8 +4056,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "78817a2043";</script>
-<script>window.LEDGER_RELEASE = {"version":"78817a2043","latest":{"pr":113,"date":"2026-09-25","title":"Floor plans in Find a location","summary":"Each building the finder lists now names its layout, and the map window shows the game's own floor plan for it: hover a row to see its layout light up on a shelf of every shop, office or warehouse layout drawn at one scale, with its floor area, capacity and entrances (loading bays for a warehouse). Click a layout on the shelf to list only buildings with that layout. On a phone, pick a row and switch the map window to Plan."}};</script>
+<script>window.LEDGER_BUILD = "552d92848c";</script>
+<script>window.LEDGER_RELEASE = {"version":"552d92848c","latest":{"pr":113,"date":"2026-09-25","title":"Floor plans in Find a location","summary":"Each building the finder lists now names its layout, and the map window shows the game's own floor plan for it: hover a row to see its layout light up on a shelf of every shop, office or warehouse layout drawn at one scale, with its floor area, capacity and entrances (loading bays for a warehouse). Click a layout on the shelf to list only buildings with that layout. On a phone, pick a row and switch the map window to Plan."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -4141,8 +4141,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=78817a2043"></script>
-<script src="community.js?v=78817a2043"></script>
+<script src="app.js?v=552d92848c"></script>
+<script src="community.js?v=552d92848c"></script>
 
 <script>
 
@@ -11102,8 +11102,10 @@ function hrTotals(m){
    as the game has them, except for anyone this call moves away: a
    cover-only shop plan's serving entries, and at a factory or an office
    every shift on a station the plan does not staff (the drivers', the
-   cleaners'). The plan's entries win where one of those overlaps them. */
-function hrWeek(S, fill, away, arriving){
+   cleaners'). The plan's entries win where one of those overlaps them: the
+   kept shift is cut around them, and the hours cut off are added to
+   `lost.hours` for the review. */
+function hrWeek(S, fill, away, arriving, lost){
   const row = S.row || {};
   const days = new Map();
   const put = (d, f, t, employeeId, itemInstanceId) => {
@@ -11125,10 +11127,18 @@ function hrWeek(S, fill, away, arriving){
     put(sl.d, sl.f, sl.t, id, sl.station || (st && st.id));
   }));
   const planned = [...days].flatMap(([d, list]) => list.map(x => Object.assign({d}, x)));
-  const clashes = (d, f, t, id, post) => planned.some(x => x.d === d && x.f < t && f < x.t && (x.employeeId === id || x.itemInstanceId === post));
   const keep = s => {
     const st = (row.stations || [])[s.s], who = (row.people || [])[s.p];
-    if(st && who && !away.has(who.id) && !clashes(s.d, s.f, s.t, who.id, st.id)) put(s.d, s.f, s.t, who.id, st.id);
+    if(!st || !who || away.has(who.id)) return;
+    /* The parts of the shift no planned entry for the same person or
+       station covers. */
+    let parts = [[s.f, s.t]];
+    planned.filter(x => x.d === s.d && (x.employeeId === who.id || x.itemInstanceId === st.id)).forEach(x => {
+      parts = parts.flatMap(([f, t]) => x.t <= f || t <= x.f ? [[f, t]] : [[f, Math.min(t, x.f)], [Math.max(f, x.t), t]].filter(([a, b]) => a < b));
+    });
+    const kept = parts.reduce((n, [f, t]) => n + t - f, 0);
+    if(lost && kept < s.t - s.f) lost.hours = (lost.hours || 0) + (s.t - s.f - kept);
+    parts.forEach(([f, t]) => put(s.d, f, t, who.id, st.id));
   };
   const now = (row.current || {}).list || [];
   if(S.site.kind === "shop"){
@@ -11183,8 +11193,9 @@ function hrRequest(m, only){
   const sites = m.sites.filter(S => touched.has(S.key)).map(S => {
     const at = touched.get(S.key);
     if(!S.planned || !S.row) return {address: gwAddress(S.key), expect: null, days: null};
+    at.lost = {hours: 0};
     const out = {address: gwAddress(S.key), expect: S.b && typeof S.b.shiftPrint === "string" ? S.b.shiftPrint : null,
-                 openAllHours: !!(S.row.full && !S.row.openNow), days: hrWeek(S, at.fill, away, arriving)};
+                 openAllHours: !!(S.row.full && !S.row.openNow), days: hrWeek(S, at.fill, away, arriving, at.lost)};
     return out;
   });
   return {body: {sites, hires, moves}, names, touched};
@@ -11784,6 +11795,9 @@ function hrReview(o = {}){
         `<b>${gwSiteName(s)}</b> (${Number(s.removed) || 0} entries out, ${Number(s.added) || 0} in${s.openedHours ? ", open 0 to 24" : ""})`).join(", ")}.</div></div>` : "";
       const left = rewritten.flatMap(s => (s.leftWithout || []).map(p => `<span class="person"><i>${spEsc(gwInitials(p.name))}</i>${spEsc(p.name || "someone")}</span>`));
       const emptied = hrLeftEmpty(req, answer);
+      const displaced = [...req.touched.values()].filter(at => at.lost && at.lost.hours > 0);
+      const displacedCall = displaced.length ? `<div class="gw-call">${gwI("roster")}<div><b>Hours the plan takes over</b>: shifts the plan does not own that overlap its own are cut to fit, ${
+        displaced.map(at => `${spEsc(at.S.b ? shortName(at.S.b) : "a site")} ${plural(at.lost.hours, "hour")} a week`).join(", ")}. The people on them keep the rest of their hours.</div></div>` : "";
       const emptyCall = emptied.length ? `<div class="gw-call gw-warn">${gwI("alert")}<div><b>Hours left empty</b> where a move takes someone away and the week is not replaced: ${
         emptied.map(({x, n}) => `${spEsc(x.p.name || "someone")} (${plural(n, "shift")} at ${spEsc(x.from.b ? shortName(x.from.b) : "a site")})`).join(", ")}. The game clears their shifts there and adds a to-do; nobody takes those hours.</div></div>` : "";
       const goneCall = gone.size ? `<div class="gw-call gw-warn">${gwI("alert")}<div><b>${plural(gone.size, "candidate", "candidates")} left the headhunter's list</b> since this board was read: ${
@@ -11800,7 +11814,7 @@ function hrReview(o = {}){
       const blocked = answer.blocked === "myemployees" ? `<div class="gw-no"><span class="ic">${hrSvg("phone")}</span><div class="rule">MyEmployees is open in the game.</div><div class="fix">${gwSvg("right")}<span>Close the MyEmployees app on your phone in the game, then try again.</span></div></div>` : "";
       return `${blocked}${gwTiles([["Hire", null, `${c.hire}<small class="hr-u"> of ${t.needed - m.moves.filter(x => x.week && !x.off).length}</small>`], ["Move", null, c.move], ["Wage bill", null, `+${fmt(bill)}<small class="hr-u"> a day</small>`]])}
         <p class="gw-lead">Filled dots are hires, hollow ones people moved in, dashed ones places nobody fills. Open a site for each person's days and hours.</p>
-        ${sites}${goneCall}${said}${emptyCall}${left.length ? `<div class="gw-box">${gwCall("", "exit", "<b>No hours after this</b> for these people at the sites whose week is replaced. The game takes them off their work there and adds a to-do.")}<div class="gw-pills">${left.join("")}</div></div>` : ""}
+        ${sites}${goneCall}${said}${emptyCall}${displacedCall}${left.length ? `<div class="gw-box">${gwCall("", "exit", "<b>No hours after this</b> for these people at the sites whose week is replaced. The game takes them off their work there and adds a to-do.")}<div class="gw-pills">${left.join("")}</div></div>` : ""}
         ${gapText ? `<div class="gw-call gw-warn">${gwI("alert")}<div>${gapText}. Loosen a filter, or hire them when the headhunters find more.</div></div>` : ""}
         ${warned.length ? `<div class="gw-call">${gwI("info")}<div>${plural(warned.length, "person asks", "people ask")} for something their site does not give (marked on the Staff page). It never stops a hire; the next plan works with it.</div></div>` : ""}`;
     },
