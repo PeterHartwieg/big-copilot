@@ -1,0 +1,65 @@
+# Tests only: nothing here builds for release or deploys.
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Several Python tests execute the board's embedded JS.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: python -m unittest discover -s tests
+
+  node:
+    name: Node suites
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Some suites write fixture saves and serve the game-link mock with Python.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright install --with-deps chromium
+      # tests/*.test.cjs includes the community suites (npm run test:community).
+      - run: node --test --test-concurrency=2 tests/*.test.cjs
+      - run: npm run check:worker
+
+  web-fresh:
+    name: web/ matches its sources
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Needs no installed game: it compares web/ with a build of the committed sources.
+      - run: python build_web.py --check
