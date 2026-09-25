@@ -18724,7 +18724,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
       null, "hours");
     /* Two lines can make one item: the row is this line's, by its recipe. */
     const row = rows[rows.length - 1];
-    if(r.rid !== undefined){ row.line = r.rid; row.key = JSON.stringify(JSON.parse(row.key).concat([r.rid])); }
+    if(r.rid !== undefined){ row.line = r.rid; row.key = JSON.stringify(JSON.parse(row.key).concat([r.rid])); row.legacyKey = row.key; }
   });
   const groups = new Map();
   rows.forEach(r => {
@@ -18879,7 +18879,7 @@ function sbData(){
   c.rows.forEach((r, i) => {
     r.i = i;
     byTab[r.site === null || r.site === undefined ? "warehouses" : sbTabOf(r.site)].push(r);
-    const k = `${r.site ?? ""}|${r.slug ?? r.item}`;  // by the item's key
+    const k = `${r.site ?? ""}|${r.slug}`;  // by the item's key
     if(!at.has(k)) at.set(k, []);
     at.get(k).push(r);
   });

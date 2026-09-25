@@ -136,6 +136,22 @@ test('every change on the checklist is a fact\'s figure, and sits on its object\
   } finally { await page.close(); }
 });
 
+test('a tick stored under the old name-keyed form carries over to the key-based row', async () => {
+  const page = await board(fixture(), {which: 'changes', tab: 'warehouses'});
+  try {
+    const legacy = JSON.stringify(['Weekly imports', 'hub#1', 'Flour', 14000, 14420, null]);
+    const now = JSON.stringify(['Weekly imports', 'hub#1', 'flour', 14000, 14420, null]);
+    await page.evaluate(legacy => {
+      localStorage.setItem('ba_order_marks_v1:r8-fixture', JSON.stringify([legacy]));
+      orderMarkCache.clear(); sbStamp++;
+      drawSupplyStrip(); drawShopsTab(); drawWarehousesTab(); drawFactoriesTab(); wireAll();
+    }, legacy);
+    assert.equal(await page.locator('#secWarehouses tr[data-slug="flour"] .sb-tick').getAttribute('aria-pressed'), 'true');
+    assert.equal(await page.locator('#sbTrayText').textContent(), '1 of 10 typed in');
+    assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('ba_order_marks_v1:r8-fixture'))), [now]);
+  } finally { await page.close(); }
+});
+
 test('the strip counts the ticks on every tab, and the tab badges what is left', async () => {
   const page = await board(fixture(), {which: 'changes'});
   try {
