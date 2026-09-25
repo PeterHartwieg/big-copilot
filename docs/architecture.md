@@ -467,15 +467,20 @@ a save of another character arriving under an open site's page (`siteFor` agains
 A registry is a table kept by hand that a new thing has to be added to. Nothing generates
 them, and a missing row often fails quietly: a finding that goes nowhere when clicked, a
 view search cannot find. Each checklist below names the anchor to grep, what goes in it,
-and the test that fails when the row is missing ("none" means nothing does). Rows marked
+and the test that covers the table ("none" means no test reads it). Most of those tests
+check the entries that exist today, so none of them fails yet when a new entry is
+missing; Change C of issue #100 adds those checks. Until then, extend the covering test
+for the new entry. Rows marked
 *only if* apply to some entries, not all. All anchors are in `ba_dashboard.py` unless a row
 says otherwise; "board script" means the last `<script>` block of its `TEMPLATE`.
 
 ### A finding kind
 
-| Anchor | What goes in it | Guarded by |
+| Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
+| The inputs of `def _alerts(` (called twice in `extract()`): `businesses`, `supply`, `chains`, `trends`, `hype`, `hours`, `grids` | Where the finding's numbers come from. A business's single fields (`revenue`, `profit`, `theft`) are its last day only; its `series`, built in the `series.append(` loop of `def _business(`, holds up to 30 days, and `_site_trends()` shows how to sum a week from it. A new per-day figure goes into that loop | the kind's own Python test |
 | `note(` in `def _alerts(`, or `_finding(` in one of the `_*_notes` helpers (`_shelf_notes`, `_import_notes`, `_idle_notes`, `_feed_notes`, `_staff_notes`, `_unnamed_notes`) | The finding itself, with its group id | the kind's own Python test, such as `tests/test_routed_supply.py` |
+| `def stub(` in `tests/test_site_panel_fields.py` | The business fixture `tests/test_site_panel_fields.py` and `tests/test_hype_alerts.py` pass to `_alerts()`. It has no `series`: add any field the new finding reads there, or read it with `.get()` and a default, or every test that uses it breaks | those two files |
 | `AMENITY_DEMANDS = {` | *Only if* it is an amenity kind: `slug: (group, text)` | `tests/test_uniform_alerts.py`, "test_an_empty_cache_means_every_demand_failed" |
 | `ALERT_UNITS = {` | *Only if* its `worth` is money: the unit, such as `"/day rent"` | none |
 | `SUMMARIES = {`, and `WORST_FIRST =` for mixed severities | *Only if* three or more at one site should merge into one counted line | none; a missing entry just stops the merge |
@@ -488,7 +493,7 @@ says otherwise; "board script" means the last `<script>` block of its `TEMPLATE`
 | `const SP_EVIDENCE_KIND = {`, `const SP_EVIDENCE_HIT = {` (board script) | *Only if* a depot or factory keeps it in another block, or the hit depends on the site | `tests/alert_kinds.test.cjs` for the first; none for the second |
 | `function findingAmount(` (board script) | *Only if* the generic number patterns miss its amount | `tests/alert_kinds.test.cjs`, `tests/job_demands.test.cjs` |
 | `const SS_KIND_SYN = {` (board script) | The players' own words for it, for search | `tests/search.test.cjs`, "the index holds every group …" |
-| `function ssKindLands(` (board script) | *Only if* its `ALERT_LINKS` section is outside Growth's market and the portfolio, or it lands on Today | none |
+| `function ssKindLands(` (board script) | *Only if* the kind's `ALERT_LINKS` entry has no `site`, no Checks `view` and no `port`, and its `sec` is not `secMarket` or `secPortfolio` (a finding that lands on Orders, Payroll or Milestones, say); every other kind already lands where it should | none |
 | "What counts as a finding" in `docs/dashboard-reference.md` | The player-facing description | none |
 
 The map colours a finding by its `level` and `kindOff()`, so `web/map.js` needs nothing.
@@ -497,7 +502,7 @@ Today `vacant` has no `ALERT_EVIDENCE` entry, most kinds have no `SS_KIND_SYN` e
 
 ### A view or a page
 
-| Anchor | What goes in it | Guarded by |
+| Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
 | The markup: `<div class="page" id="page…">` for a page, or `<section class="sec rv" id="sec…" data-sub="…">` inside its page for a view; a page with views also gets its `<nav class="seg" id="…Nav">` | The host element | the navigation tests, indirectly |
 | `const PAGES = [` (board script) | *Only for a page*: `{id, label, host, newFeature?}` | `tests/navigation.test.cjs`, "the top row is Today, Company, Supply, Growth, Map, Wiki" |
@@ -510,13 +515,15 @@ Today `vacant` has no `ALERT_EVIDENCE` entry, most kinds have no `SS_KIND_SYN` e
 | `const SUPPLY_VIEWS = {` (board script) | *Only for* a Supply > Checks view | `tests/alert_kinds.test.cjs` |
 | `const PAGE_ALIASES =`, `const SEC_MOVED =` (board script) | *Only when* renaming or moving an old page or section | `tests/navigation.test.cjs` |
 | `const quietRender =` in `tests/search.test.cjs` | A new draw function, in the list the test stubs | that test |
+| `tests/milestones.test.cjs` | Nothing, but mind its slice: it runs the source from `function drawGoals(){` to `/* Next moves: the Plan imports card`. Put a new draw function outside that range, or the slice picks it up | that test |
+| The `later()` change in `const MOVED =` in `tests/calm_refresh.test.cjs` | *Only if* the view should prove it redraws on a refresh: the fixture save is `tests/es3_fixture.py`'s `link_company()`, whose lists are often empty (`"Loans": []`), so `later()` has to add the data the view shows | `tests/calm_refresh.test.cjs` |
 
 ### A payload key
 
 Nothing between `extract()` and the board filters keys: `browser_build()`, `render()`, the
 watch server, `web/worker.js` and `web/app.js` all pass the whole dict through.
 
-| Anchor | What goes in it | Guarded by |
+| Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
 | The `return {` at the end of `def extract(` | `"key": _producer(...)`. It must be JSON-serialisable, with any set ordered through `_in_order()` | only JSON-serialisability: `tests/test_supply_facts.py`, "test_the_payload_carries_the_facts_and_both_passes_of_findings" |
 | The payload table in [The payload contract](#the-payload-contract) | A row that follows the reader convention | none |
@@ -525,10 +532,12 @@ watch server, `web/worker.js` and `web/app.js` all pass the whole dict through.
 
 ### A finder filter
 
-All in `web/map.js`, guarded by `tests/finder.test.cjs`. The finder keeps its state in
-memory, and its switch lasts only for the session; saved searches store the filters.
+All in `web/map.js`, covered by `tests/finder.test.cjs`. `saveFinder()` and `loadFinder()`
+keep the filters per character in `localStorage`, under `finderStore()`'s
+`FINDER_KEY:<character>`. Only the on/off switch, `fs.on`, is not stored: every load opens
+the plain map. Saved searches are a separate list under `FINDER_SAVED_KEY`.
 
-| Anchor | What goes in it | Guarded by |
+| Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
 | `const finderDefaults = () =>` | The key and its "no limit" default. `finderPick`, `saveFinder`, `resetCharacter` and `savedKey` follow it | "the defaults are visibly chosen on first open …" |
 | `setFinder(preset = {}){` | The key in the reset literal | "a preset lands on the column its category ranks by …" |
@@ -546,7 +555,7 @@ A new filter is a user-facing change, so it also gets a `web/changelog.json` ent
 
 ### A footer link
 
-| Anchor | What goes in it | Guarded by |
+| Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
 | The URL constants (`REPO_URL =` to `GAME_MAKER_URL =`) | `NEW_URL = "…"`. Never put a URL in `web/*.js` | `tests/test_privacy_promises.py`, "test_scripts_fetch_only_from_this_site" |
 | `def footer_html(` | `{_sf_out(URL, "Label", icon, title=, feature=)}` in its column. One function fills both the board and the landing screen | `tests/test_footer.py`, "test_the_two_homes_do_not_share_an_id"; `tests/restore.test.cjs`, "the board footer offers the game, the channel and the Discord …" (exact link counts) |
@@ -557,7 +566,7 @@ Then `python build_web.py`.
 
 ### A news item
 
-| Anchor | What goes in it | Guarded by |
+| Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
 | `<aside class="news-strip" id="newsStrip" data-news-id="…">` in `BANNER` in `build_web.py` | A new `data-news-id`, so it shows again to anyone who dismissed the last one; the `.news-copy` text; the `#newsLink` href, which is written out rather than taken from `WORKSHOP_URL` | `tests/news.test.cjs`, "the strip shows on first load with its text, Workshop link and named Dismiss" |
 | `.news-strip{` in `BANNER`'s `<style>` | *Only for* a layout change | `tests/news.test.cjs`, the "stack without overlap" tests |

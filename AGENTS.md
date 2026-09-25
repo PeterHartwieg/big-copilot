@@ -24,14 +24,15 @@ Everything else:
 - landing screen markup and CSS, the news strip included: `BANNER` in `build_web.py`;
   `BEFORE_SCRIPT` beside it lists the scripts loaded ahead of the board's
 - browser shell behaviour (save picking, the three sources, owns the worker): `web/app.js`.
-  It holds no landing markup
+  It holds no static landing markup, but at runtime it builds the save picker and fills in
+  the recover and folder buttons and the link button's New badge
 - Pyodide worker: `web/worker.js`
 - update banner: `web/update.js`
 - map: `web/map.js`, `web/map.css`, with assets from `export_map.py`
-- wiki pipeline: the `.py` files in `tools/`, with the authored wording in
-  `tools/wiki_sample.json` and the hand-written articles in `tools/wiki_topics.json`.
-  `tools/` also holds the GLM launcher, `tools/Invoke-ZaiClaude.ps1`, which is nothing to do
-  with the wiki
+- wiki pipeline: the `.py` files directly in `tools/` (not `tools/game_update/`), with the
+  authored wording in `tools/wiki_sample.json` and the hand-written articles in
+  `tools/wiki_topics.json`. `tools/` also holds the GLM launcher,
+  `tools/Invoke-ZaiClaude.ps1`, which is nothing to do with the wiki
 - static wiki pages for search engines (`/wiki/...`, the sitemap, robots.txt):
   `tools/wiki_pages.py`, from `web/wiki-data.json`
 - location finder: `web/map.js` hosts it as a mode of the Map page, over the `premises`
@@ -76,6 +77,10 @@ names):
 - Never advise opening a second location or a bigger site because one is at building
   capacity. Being at capacity is normal in a good setup, not a finding.
 
+Older text still uses these words (the `staff` finding kind's label, the Door cap section
+of `docs/dashboard-reference.md`). Follow the rule in new text; renaming old text is its
+own task.
+
 ## Sources and generated files
 
 Change the source, then rebuild. After a merge conflict in a generated file, take either
@@ -100,14 +105,15 @@ side and rebuild — the rebuild is the resolution.
 | `ba_save.py`, `ba_dashboard.py` (extraction) | `python -m unittest discover -s tests`, then `python build_web.py`. Premises extraction is `tests/test_premises.py` |
 | The `TEMPLATE` markup, CSS or board script | `python -m unittest discover -s tests` and `node --test tests/*.test.cjs`, then `python build_web.py` |
 | `web/app.js`, `web/worker.js`, `web/update.js` | `node --test tests/*.test.cjs`, then `python build_web.py` |
-| `build_web.py` `BANNER` or `BEFORE_SCRIPT` (landing screen, news strip) | `node --test tests/news.test.cjs tests/release.test.cjs tests/update.test.cjs`, then `python build_web.py` |
+| `build_web.py` `BANNER` or `BEFORE_SCRIPT` (landing screen, news strip) | `python build_web.py` first, since these tests read the built page; then `node --test tests/news.test.cjs tests/release.test.cjs tests/update.test.cjs` and `python -m unittest tests.test_privacy_promises tests.test_footer` |
 | `web/changelog.json` | `python -m unittest tests.test_release_latest`, then `python build_web.py`: the file is a build stamp input |
 | A new finding kind, view, payload key, finder filter, footer link or news item | the matching checklist in the Registries section of `docs/architecture.md`, and the tests it names |
 | `web/map.js`, `web/map.css` | `node --test tests/map.test.cjs tests/finder.test.cjs` and `python -m unittest discover -s tests -p test_map_assets.py`, then `python build_web.py`. The finder lives in `web/map.js`; `tests/finder.test.cjs` also covers `drawFindLocation` in `ba_dashboard.py`, and `findPremisesLink` indirectly, through the rendered "find premises" link |
-| `tools/*.py`, `tools/wiki_sample.json`, `tools/wiki_topics.json`, `web/wiki.js`, `web/wiki.css` | `python -m unittest discover -s tests -p "test_wiki*.py"` (the hand-written articles are `tests/test_wiki_build.py`) and `node --test tests/wiki*.test.cjs`, then `python build_web.py` |
+| `tools/*.py` (the wiki pipeline, not `tools/game_update/`), `tools/wiki_sample.json`, `tools/wiki_topics.json`, `web/wiki.js`, `web/wiki.css` | `python -m unittest discover -s tests -p "test_wiki*.py"` (the hand-written articles are `tests/test_wiki_build.py`) and `node --test tests/wiki*.test.cjs`, then `python build_web.py` |
 | `server/`, `migrations/` | `npm run test:community` and `npm run check:worker` |
 | `web/community.js`, `web/community.css` | those two npm commands, then `python build_web.py` — both files are cache-busted by the build stamp |
 | `tools/Invoke-ZaiClaude.ps1` | `python -m unittest tests.test_agent_cli` |
+| `tools/game_update/` | no tests: run the script you changed against the installed game (`docs/game-update.md`) |
 | `tools/game_link_mock.py`, `docs/game-link-api.md` | `python -m unittest tests.test_game_link_mock tests.test_watch_game` and `node --test tests/game_link.test.cjs`; a contract change bumps `schemaVersion` in the doc, the mock, the mod and both clients in one commit |
 | `mod/BigCopilotLink/` | nothing runs here: Peter builds it in the SDK's Unity project on the Mac (its README) and checks `curl http://127.0.0.1:8322/health` |
 
@@ -152,7 +158,10 @@ and never attach one to an issue.
   `tests/order_checklist.test.cjs`, `tests/search.test.cjs`. In `web/app.js`:
   `tests/game_link.test.cjs`, `tests/game_text.test.cjs`, `tests/performance.test.cjs`,
   `tests/resume.test.cjs`, `tests/save_location.test.cjs`. `tests/alert_kinds.test.cjs` also
-  matches one line of `web/map.js` word for word. No Python test slices source.
+  matches a fragment of the findings loop in `mapFindings()` in `web/map.js` with a regex.
+  Two Python tests read `TEMPLATE` as text: `tests/test_plan_orders.py` cuts
+  `function planOrder(` out of it, and `tests/test_routed_supply.py` checks the line with
+  `id:"shortfall"`.
 - Set iteration order follows Python's per-process hash seed, so when a set decides the
   order of anything that reaches the payload, iterate it through `_in_order()`, which sorts
   `None` last because real saves hold items with no name. When a set decides a winner

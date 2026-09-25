@@ -1,14 +1,16 @@
 """List every $type and field name the newest saves hold, as JSON for dllfields.ps1.
 
-    python tools/game_update/savekeys.py OUT.json
-    python tools/game_update/savekeys.py OUT.json --root FOLDER --min-build 3680 --saves 4
+    python tools/game_update/savekeys.py <scratch>/keys.json
+    python tools/game_update/savekeys.py <scratch>/keys.json --root FOLDER --min-build 3680 --saves 4
+
+<scratch> is a folder outside the repository.
 
 Walks the save root newest first and takes the newest save per character folder
 whose buildNumberAtLastSave is at least --min-build (default: VERIFIED_BUILD in
 ba_dashboard.py), up to --saves of them (default 4). Every object with a $type
 adds its field names under "typed"; the rest go under "untyped". The output
 holds type and field names only, no values, but the lines printed on the way
-name the save files, so keep them out of issues.
+name the character folders and save files, so never paste them into an issue.
 
 The save root defaults to SAVE_ROOT in ba_dashboard.py, the one check_saves.py
 walks. See docs/game-update.md.

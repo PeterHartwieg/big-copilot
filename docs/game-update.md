@@ -10,12 +10,16 @@ one line per script. Run every command from the repository root.
 
 ## The short version
 
-1. Find the build number and read the patch notes.
-2. Hash the game's text files to see whether the help text changed.
-3. Run the static checks: save fields, presets, building capacity, the game tables.
-4. Rebuild against the new install and read what changed.
-5. Load and save a game once in the new build, then run `check_saves.py` on that save.
-6. Bump `VERIFIED_BUILD` and the README line, fix any pinned test, run the tests.
+1. What changed: find the build number, read the patch notes, and hash the game's text
+   files to see whether the help text changed.
+2. Static checks: save fields, presets, building capacity, the game tables.
+3. Rebuild against the new install and read what changed.
+4. Check a real save (owner: needs the game running): load and save a game once in the
+   new build, then run `check_saves.py` on that save and read the rent fit.
+5. Bump `VERIFIED_BUILD` and the README line.
+6. Fix any pinned test and run the tests.
+
+Each step is the section of the same number below.
 
 A bump that changes nothing else is a compatibility bump. It gets no changelog entry.
 
@@ -38,6 +42,11 @@ Steam's own build id is in `steamapps/appmanifest_1331550.acf` (`"buildid"`). Th
 build records the one it last read as `provenance.steam.buildId` in `web/wiki-data.json`.
 A new Steam build id tells you the install changed, not which game build it is.
 
+The game has to be detected for everything below. `python -c "import ba_save;
+print(ba_save.find_game_locale())"` prints the `en.json` it found. If it prints `None`,
+set `BA_LOCALE` to the install's `StreamingAssets/locale/en.json` (see the Environment
+section of `AGENTS.md`).
+
 **Did the help text change?** Steam rewrites nearly every file on an update, so file dates
 say nothing. Hash `en.json` and `helpstructure.json` instead, and compare with the hashes
 the committed `web/wiki-data.json` recorded at the last rebuild:
@@ -47,11 +56,6 @@ python -c "import hashlib, json, os, ba_save; loc = ba_save.find_game_locale(); 
 ```
 
 `False` means that file changed. Build 3680 and build 3682 both changed `en.json` only.
-
-The game has to be detected for everything below. `python -c "import ba_save;
-print(ba_save.find_game_locale())"` prints the `en.json` it found. If it prints `None`,
-set `BA_LOCALE` to the install's `StreamingAssets/locale/en.json` (see the Environment
-section of `AGENTS.md`).
 
 ## 2. Static checks
 
@@ -65,13 +69,17 @@ the reader. Collect the field names the newest saves hold, then look each one up
 new build's assemblies:
 
 ```
-python tools/game_update/savekeys.py keys.json
-powershell -File tools/game_update/dllfields.ps1 -KeysPath keys.json -OutPath fields.txt
+python tools/game_update/savekeys.py <scratch>/keys.json
+powershell -File tools/game_update/dllfields.ps1 -KeysPath <scratch>/keys.json -OutPath <scratch>/fields.txt
 ```
 
-Keep `keys.json` and `fields.txt` outside the repository, for example in a scratch folder.
-`savekeys.py` reads the newest save of up to four character folders at `VERIFIED_BUILD` or
-later. In `fields.txt`:
+`<scratch>` is a folder outside the repository; do not write these files into the
+repository root. `savekeys.py` reads the newest save of up to four character folders at
+`VERIFIED_BUILD` or later. What it prints on the way names the character folders and save
+files, so never paste its output into an issue; `keys.json` itself holds only type and
+field names. `dllfields.ps1` finds the game through `BA_LOCALE`; without it, it tries
+only the default Steam library, so pass `-ManagedDir` for a game installed elsewhere. In
+`fields.txt`:
 
 - `NOFIELD` is a field the save holds that the type no longer has: a rename or a removal.
   Find the new name in the assembly, then check whether `ba_save.py` or `ba_dashboard.py`
@@ -119,15 +127,25 @@ tooltip against its row too. Build 3680 added the Resale value slider
 
 The customer capacity each building size allows is parsed from the game's help page
 `help_building_types_content` by `_door_caps()`. `FALLBACK_CAPS` is the same table, used
-only when there is no game text at all. Check that the new help page still yields it:
+only when there is no game text at all. `_door_caps()` starts from `FALLBACK_CAPS` and
+overwrites what the page yields, so a page that no longer parses still returns the old
+table. Check that the page parsed before comparing:
 
 ```
-python -c "from ba_save import Names, load_locale; from ba_dashboard import FALLBACK_CAPS, _door_caps; caps = _door_caps(Names(load_locale())); print(caps == FALLBACK_CAPS or caps)"
+python -c "import ba_dashboard as d; from ba_save import Names, load_game_locale; src, loc = load_game_locale(); page = [l.strip() for l in (loc.get('help_building_types_content') or '').split(chr(10))]; heads = {m.group(1).strip().lower() for m in map(d._CAP_SECTION_RE.match, page) if m}; print('text:', src); print('missing sections:', sorted(set(d.CAP_CATEGORIES) - heads)); print('size rows:', sum(1 for l in page if d._CAP_SIZE_RE.match(l))); print('same as FALLBACK_CAPS:', d._door_caps(Names(loc)) == d.FALLBACK_CAPS)"
 ```
 
-`True` means unchanged. Anything else prints the new table: update `FALLBACK_CAPS` and its
-comment, and check `CAPS_HELP` in `tests/test_premises.py`, which is the page as build 3675
-wrote it.
+`load_game_locale()` reads the installed game only, never the bundled text. At build 3682
+it prints the install's `en.json`, `missing sections: []`, `size rows: 18` and
+`same as FALLBACK_CAPS: True`.
+
+- A missing section, or 0 size rows, means the page's wording changed and the parse
+  fell back to `FALLBACK_CAPS`: fix `_CAP_SECTION_RE` or `_CAP_SIZE_RE` first, then check
+  again.
+- Another row count with `True` means a size was added or dropped in a category the
+  table already has; read the page.
+- `False` means the capacities changed: update `FALLBACK_CAPS` and its comment, and check
+  `CAPS_HELP` in `tests/test_premises.py`, which is the page as build 3675 wrote it.
 
 ### The game tables
 
@@ -149,12 +167,20 @@ difference. It needs UnityPy, which is an owner-side dependency installed outsid
 repository, the same way `make_demand_curves.py` asks for it:
 
 ```
-py -m pip install --target <scratch folder outside this repo> UnityPy
-set PYTHONPATH=<that folder>
+python -m pip install --target <scratch> UnityPy
+$env:PYTHONPATH = '<scratch>'       # PowerShell
+export PYTHONPATH=<scratch>         # bash
 python tools/game_update/bundles.py
 ```
 
-It ends with a count, `0 difference(s)` when all three match. Its `note:` lines list
+It also reports every business type in the bundle that the board does not know: one in
+none of `RETAIL_TYPES`, `OFFICE_TYPES` and `COST_CENTRE_TYPES`, nor in the script's own
+`OTHER_TYPES`, the 19 city businesses (banks, wholesalers, the IRS and the like) the board
+does not model at build 3682. A new retail type goes into `RETAIL_TYPES` with its
+`DEMANDS_NOT_MADE` row, a new office into `OFFICE_TYPES`, anything else into `OTHER_TYPES`.
+
+It ends with a count. `0 difference(s)` means all three tables match and the game has no
+business type the board has not classified. Its `note:` lines list
 demands a type makes beyond the six the board models (seating, workout variety); they are
 expected. It compares `JOB_DEMANDS` names, priorities and item lists only. When a demand
 changes, read the rest of its fields (`betweenHours`, `shiftPeriod`, `daysWorkingPerWeek`,
@@ -175,9 +201,11 @@ A few numbers were fitted to real saves rather than read from a file, so a patch
 them without any file saying so:
 
 - the rent formula (`RENT_RATES`, `RENT_TRAFFIC_OFFSET`, `RENT_OFFICE_FACTOR`) and the
-  deposit factors (`DEPOSIT_FACTORS`), fitted at build 3675. Check them in step 4.
+  deposit factors (`DEPOSIT_FACTORS`), fitted at build 3675. Check them in section 4.
 - `OFFICE_POST_RATE`, one office customer per professional per hour, measured on a law
-  firm at build 3680. Re-measure it only when the patch notes touch offices.
+  firm at build 3680. Re-check it after every update, as its comment asks: on a real
+  save from the new build (section 4), an office's hour reports should still match the
+  professionals at computers one for one.
 
 ## 3. Rebuild against the new install
 
@@ -188,7 +216,9 @@ python tools/game_update/textdiff.py
 
 `build_web.py` needs the installed game, and refuses the bundled text. It regenerates
 `web/py/gametext.json` and `web/wiki-data.json` from the new `en.json` and
-`helpstructure.json`, then `web/index.html`, `web/version.json` and the `web/py/` copies.
+`helpstructure.json`, then `web/index.html`, `web/version.json`, the `web/py/` copies,
+and the static wiki pages built from `web/wiki-data.json`: `web/wiki/**/index.html`,
+`web/sitemap.xml` and `web/robots.txt`. Commit them all.
 
 A line diff of `web/wiki-data.json` runs to hundreds of lines for one changed fact.
 `textdiff.py` compares both files with `HEAD` by key and by page instead, and prints the
@@ -210,7 +240,7 @@ Read each change:
 `textdiff.py --rev A --to B` compares two commits, which is how the worked examples below
 were read.
 
-## 4. Check a real save
+## 4. Check a real save (owner: needs the game running)
 
 Load a game in the new build and save it once, or wait for an autosave. Loading alone only
 migrates the save in memory; no `.hsg` at the new build exists until the game writes one.
@@ -268,26 +298,6 @@ a Workshop upload sets **Target Build** to the build it was built against; see t
 README. In the 3682 bump the board moved first; the mod's text followed with its next
 release.
 
-## Pinned tests
-
-These tests pin counts or tables that a content change breaks on purpose, so a patch
-cannot change them silently. When one fails after a rebuild, check the game first, then
-update the table and the test together.
-
-| Test | What it pins | Breaks when |
-| --- | --- | --- |
-| `tests/test_uniform_alerts.py` | `test_every_retail_type_was_checked_against_the_games_own_table`: the sixteen `RETAIL_TYPES` whose demands were read, and `DEMANDS_NOT_MADE` only naming them. `test_the_station_table_holds_every_station_the_game_has`: `len(STATION_SKILLS) == 33`. `test_only_the_desk_stations_list_more_than_one_skill`: `OFFICE_SKILLS` and its order | a retail type is added, or a station is added to the table |
-| `tests/test_job_demands.py` | `test_every_demand_the_game_ships_has_a_known_kind_and_priority`: `len(JOB_DEMANDS) == 35` (the 35 `JobDemand` assets), and each kind and priority | a demand is added or removed |
-| `tests/test_recipe_identity.py` | `test_bundled_catalogue_covers_the_pinned_identity_table`: `len(RECIPE_ITEMS) == 62`, and the same items as the recipes in the shipped `web/py/gametext.json` | the rebuilt game text gains or loses a recipe |
-| `tests/test_stations.py` | `test_every_station_with_a_customer_capacity_is_in_the_shipped_table`: the 17 serving stations, each with its skill and rate, from the shipped game text | a station, its skill or its customer capacity changes in the help text |
-| `tests/test_house_rules.py` | `PRESETS`, the three stock presets | a preset changes (only if you update `PRESETS` from `presets.py`) |
-| `tests/test_premises.py` | `CAPS_HELP`, the building types help page as build 3675 wrote it, and `FALLBACK_CAPS` matching it | `FALLBACK_CAPS` changes |
-| `tests/fold_views.test.cjs` | the fixture board's `meta.build` and `meta.verifiedBuild` (both 3682), and `FLAGS.build` (3683), one above, which draws the `BUILD N UNCHECKED` flag in the masthead layout tests | nothing in a bump: these are literals, not `VERIFIED_BUILD`. If you move the fixture to the new build, keep `FLAGS.build` above it |
-
-`tests/search.test.cjs` and `tests/chart_hover.test.cjs` set the same 3682 literals in
-their fixtures, and `tests/fixtures/r8_supply.json` still says 3680. None of them reads
-`VERIFIED_BUILD`, so none needs to move.
-
 ## 6. Run the tests
 
 A bump edits `ba_dashboard.py` and regenerates the wiki data, so run the extraction row
@@ -306,6 +316,27 @@ browser suites from saturating the machine.
 
 Releasing is the usual deploy in the Deployment baseline section of
 `docs/contributing.md`, including `tests/release.test.cjs` against the live domain.
+
+### Pinned tests
+
+These tests pin counts or tables that a content change breaks on purpose, so a patch
+cannot change them silently. When one fails after a rebuild, check the game first, then
+update the table and the test together.
+
+| Test | What it pins | Breaks when |
+| --- | --- | --- |
+| `tests/test_uniform_alerts.py` | `test_every_retail_type_was_checked_against_the_games_own_table`: the sixteen `RETAIL_TYPES` whose demands were read, and `DEMANDS_NOT_MADE` only naming them. `test_the_station_table_holds_every_station_the_game_has`: `len(STATION_SKILLS) == 33`. `test_only_the_desk_stations_list_more_than_one_skill`: `OFFICE_SKILLS` and its order | a retail type is added, or a station is added to the table |
+| `tests/test_job_demands.py` | `test_every_demand_the_game_ships_has_a_known_kind_and_priority`: `len(JOB_DEMANDS) == 35` (the 35 `JobDemand` assets), and each kind and priority | a demand is added or removed |
+| `tests/test_recipe_identity.py` | `test_bundled_catalogue_covers_the_pinned_identity_table`: `len(RECIPE_ITEMS) == 62`, and the same items as the recipes in the shipped `web/py/gametext.json` | the rebuilt game text gains or loses a recipe |
+| `tests/test_stations.py` | `test_every_station_with_a_customer_capacity_is_in_the_shipped_table`: the 17 serving stations, each with its skill and rate, from the shipped game text | a station, its skill or its customer capacity changes in the help text |
+| `tests/test_house_rules.py` | `PRESETS`, the three stock presets | a preset changes (only if you update `PRESETS` from `presets.py`) |
+| `tests/test_premises.py` | `CAPS_HELP`, the building types help page as build 3675 wrote it, and `FALLBACK_CAPS` matching it | `FALLBACK_CAPS` changes |
+| `tests/fold_views.test.cjs` | the fixture board's `meta.build` and `meta.verifiedBuild` (both 3682), and `FLAGS.build` (3683), one above, which draws the `BUILD N UNCHECKED` flag in the masthead layout tests | nothing in a bump: these are literals, not `VERIFIED_BUILD`. If you move the fixture to the new build, keep `FLAGS.build` above it |
+
+`tests/search.test.cjs` and `tests/chart_hover.test.cjs` set the same 3682 literals in
+their fixtures, and `tests/fixtures/r8_supply.json` and the mock health in
+`tests/game_link.test.cjs` (`build: 3680`) still say 3680. None of them reads
+`VERIFIED_BUILD`, so none needs to move.
 
 ## Reading the game's code
 
@@ -361,21 +392,25 @@ to "builds 3675 and 3680". No changelog entry for either.
 
 Steam build id 25482473. Each step, and what it gives against the 3682 install:
 
-1. The news feed title "Big Ambitions Build 3682 - Hotfix" and the `Player.log` line
-   `Loaded Big Ambitions (Build 3682)` give the build.
-2. The hashes: `en.json` changed, `helpstructure.json` did not.
-3. `savekeys.py` and `dllfields.ps1`: no `NOFIELD`, `NOTYPE` or `NOASM`, only
-   `NEWFIELD?` lines. `presets.py`: the table above, unchanged. The building capacity
-   check prints `True`. `bundles.py` reports 0 differences, and `make_demand_curves.py`
+1. What changed: the news feed title "Big Ambitions Build 3682 - Hotfix" and the
+   `Player.log` line `Loaded Big Ambitions (Build 3682)` give the build. The hashes:
+   `en.json` changed, `helpstructure.json` did not.
+2. Static checks: `savekeys.py` and `dllfields.ps1` find no `NOFIELD`, `NOTYPE` or
+   `NOASM`, only `NEWFIELD?` lines. `presets.py`: the table above, unchanged. The
+   building capacity check finds every section and 18 size rows, the same as
+   `FALLBACK_CAPS`. `bundles.py` reports 0 differences, and `make_demand_curves.py`
    writes the committed `ba_demand_curves.json` byte for byte. (These two were added to
    the checklist after the bump; they come out clean on 3682.)
-4. `python build_web.py`, then `textdiff.py --rev 92c3ef8~1 --to 92c3ef8`:
+3. Rebuild: `python build_web.py`, then `textdiff.py --rev 92c3ef8~1 --to 92c3ef8`:
    `web/py/gametext.json` identical, and one wiki change, the Glass page listing Global
-   Harvest Traders as an importer.
-5. The game was loaded and saved once, and `check_saves.py` passed on the 3682 save. The
-   rent check reads under 1% off.
-6. `VERIFIED_BUILD` 3680 to 3682 in `ba_dashboard.py`, the README line to 3682, then
-   `python build_web.py` again, then the tests.
+   Harvest Traders as an importer. The static wiki pages (`web/wiki/**/index.html`,
+   `web/sitemap.xml`, `web/robots.txt`) did not exist yet; they came later, in 1ca9e7f,
+   and a bump now regenerates them too.
+4. Real save (owner): the game was loaded and saved once, and `check_saves.py` passed on
+   the 3682 save. The rent check reads under 1% off.
+5. Bump: `VERIFIED_BUILD` 3680 to 3682 in `ba_dashboard.py`, the README line to 3682,
+   then `python build_web.py` again.
+6. Tests: the suites above; no pinned test moved.
 
 The commit touched `README.md`, `ba_dashboard.py`, `web/index.html`,
 `web/py/ba_dashboard.py`, `web/version.json` and `web/wiki-data.json`, nothing else. No

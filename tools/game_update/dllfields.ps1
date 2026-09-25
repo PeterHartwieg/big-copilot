@@ -1,7 +1,9 @@
 # Check the field names savekeys.py found against the installed game's assemblies.
 #
-#   powershell -File tools/game_update/dllfields.ps1 -KeysPath keys.json -OutPath fields.txt
-#   powershell -File tools/game_update/dllfields.ps1 -KeysPath keys.json -OutPath fields.txt -ManagedDir <Big Ambitions_Data>\Managed
+#   powershell -File tools/game_update/dllfields.ps1 -KeysPath <scratch>\keys.json -OutPath <scratch>\fields.txt
+#   powershell -File tools/game_update/dllfields.ps1 -KeysPath <scratch>\keys.json -OutPath <scratch>\fields.txt -ManagedDir <Big Ambitions_Data>\Managed
+#
+# <scratch> is a folder outside the repository.
 #
 # Loads each $type's assembly from Managed/ by reflection (Windows PowerShell 5.1,
 # no dotnet SDK) and writes one tab-separated line per finding:
@@ -14,7 +16,10 @@
 # System.* types are skipped.
 #
 # -ManagedDir defaults to the Managed folder beside the en.json that BA_LOCALE
-# names, else the usual Steam install. See docs/game-update.md.
+# names. Without BA_LOCALE it tries one place only, the default Steam library
+# (Program Files (x86)\Steam\steamapps\common\Big Ambitions); it does not search
+# other Steam libraries the way ba_save.find_game_locale() does. For a game
+# installed elsewhere, set BA_LOCALE or pass -ManagedDir. See docs/game-update.md.
 param(
   [Parameter(Mandatory = $true)][string]$KeysPath,
   [Parameter(Mandatory = $true)][string]$OutPath,

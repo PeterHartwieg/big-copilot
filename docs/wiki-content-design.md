@@ -129,7 +129,7 @@ changes what a reader should believe:
 **The Steam buildid is not the game build number.** It is a depot revision
 counter that changes for reasons unrelated to game versioning, and it is not
 comparable with the build a save reports — the number `ba_dashboard.py` tracks
-as `MIN_BUILD = 3540` and `VERIFIED_BUILD = 3675` (3682 today). Nothing should print them
+as `MIN_BUILD = 3540` and `VERIFIED_BUILD = 3675`, its value then. Nothing should print them
 side by side or infer one from the other. The install carries no readable game
 version, so an extraction cannot self-report which build it belongs to; only
 file hashes can.
@@ -359,7 +359,7 @@ inventory. A prose reword should not raise anything; a rate change from 50 to
 60 clay should. The diff is the release note for the wiki.
 
 **Carry the extraction date and the checked-against build on the page.** The
-board already prints "board checked on build 3675" (3682 today) using `VERIFIED_BUILD`. The
+board already prints "board checked on build 3675" (its value then) using `VERIFIED_BUILD`. The
 wiki should print the same kind of line, sourced the same way — from a save the
 extraction was checked against, not from the installation. When a loaded save
 reports a build newer than the wiki's, say so on the page rather than staying

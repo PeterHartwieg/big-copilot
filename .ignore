@@ -1,10 +1,14 @@
-# Search noise for rg and editor search: generated copies and design canvases.
-# Git ignores this file's rules; `rg -uu` searches everything again.
-# Each path is generated from a source elsewhere (AGENTS.md, "Sources and generated files").
+# Search noise for rg and editor search. Git does not read this file; `rg -uu`
+# searches everything again.
+# Generated copies, listed in AGENTS.md "Sources and generated files": edit the source.
 web/py/
 web/index.html
 web/wiki-data.json
 web/wiki/
-web/maps/full-map.svg
-mockup/**/project/
+# Design canvases the mockup/*/build_*.py generators write, top level and project/
+# folders alike: edit the generator.
 mockup/*/*.dc.html
+mockup/**/project/
+# Not generated: the 8 MB city map export_map.py reads. Large and rarely what a
+# search is after.
+web/maps/full-map.svg

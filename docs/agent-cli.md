@@ -14,7 +14,7 @@ single entry point here, and `CLAUDE.md` points at it.
 | --- | --- |
 | Interactive Claude Code and `claude -p` | user and project `CLAUDE.md`, plus auto memory |
 | Claude subagents | project `CLAUDE.md`, but not the parent's auto memory |
-| GLM via the launcher | no settings or `CLAUDE.md`; `AGENTS.md` injected by the launcher (smoke run pending) |
+| GLM via the launcher | no settings or `CLAUDE.md`; `AGENTS.md` injected by the launcher (untested in a live run; GLM runs only on request) |
 | Codex | `AGENTS.md` natively |
 
 The GLM row follows from the launcher excluding every settings source: the
@@ -150,9 +150,10 @@ claude -p $taskPrompt --model claude-opus-5-5 --permission-mode acceptEdits --no
 
 Use `--add-dir` for authorized source directories outside the project, and specify
 appropriate `--tools`/`--allowedTools` for the task. Keep file ownership disjoint
-from concurrent agents. `claude-opus-5-5` replaced `claude-opus-5` on 2026-09-22 and
-was confirmed in API message metadata that day. If a model is unavailable, report it
-instead of substituting.
+from concurrent agents. `claude-opus-5-5` replaced `claude-opus-5` on 2026-09-22. On
+2026-09-25 six `claude -p --model claude-opus-5-5` runs reported `claude-opus-5-5` in both
+`system/init` and `assistant.message.model`. If a model is unavailable, report it instead
+of substituting.
 
 ## Inspecting runs
 
