@@ -156,6 +156,34 @@ class GameLinkAgainstMock(unittest.TestCase):
         finally:
             ba_dashboard.load_save, ba_dashboard.safe_extract, ba_dashboard.render = real
 
+    def test_a_line_named_while_the_game_is_closed_rebuilds_from_the_downloaded_bytes(self):
+        """EX-7 in #109: the name reaches the board without waiting for the game."""
+        seen = []
+        real = (ba_dashboard.load_save, ba_dashboard.safe_extract, ba_dashboard.render)
+        ba_dashboard.load_save = lambda path: path
+        ba_dashboard.safe_extract = lambda path, names, history: (
+            seen.append(path) or {"meta": {"day": 7, "save": "Mock Co"}, "supply": {"factories": {"character": "abc"}}})
+        ba_dashboard.render = lambda data, live=False: "<html>"
+        try:
+            out = os.path.join(self.out, "board.html")
+            board = ba_dashboard.Board(None, out, link=ba_dashboard.GameLink(self.server.url, self.out))
+            self.mock.refresh(force=True)
+            self.assertTrue(board.refresh(settle=False))
+            revision = board.revision
+
+            def closed():
+                raise ba_dashboard.LinkUnavailable("the game link did not answer")
+            board.link.poll = closed
+            board.name_line("rid", "beer")
+            self.assertEqual(seen, [board.link.path, board.link.path])
+            self.assertEqual(board.revision, revision + 1)
+            self.assertIn(f"#{revision + 1}", board.stamp.decode())
+            # With nothing to rebuild the closed game is still reported.
+            with self.assertRaises(ba_dashboard.LinkUnavailable):
+                board.refresh(settle=False)
+        finally:
+            ba_dashboard.load_save, ba_dashboard.safe_extract, ba_dashboard.render = real
+
     def test_wait_for_save_waits_for_the_refresh_it_asked_for(self):
         """A 202 names the stamp being replaced; the bytes returned are newer.
 
