@@ -51,7 +51,7 @@ namespace BigCopilotLink
         }
 
         /// <summary>A shift as the print sees it: a live one, a planned one or a remembered one.</summary>
-        private struct Line
+        internal struct Line
         {
             public int D;
             public int From;
@@ -75,7 +75,7 @@ namespace BigCopilotLink
             internal string PrintAfter;
         }
 
-        private sealed class ShiftCheck
+        internal sealed class ShiftCheck
         {
             public int D;
             public int Index;
@@ -94,17 +94,27 @@ namespace BigCopilotLink
                 Expect = JsonReader.Str(root, "expect", "body", true),
                 OpenAllHours = JsonReader.Bool(root, "openAllHours", "body", false)
             };
+            ParseDays(root, "body", req);
+            return req;
+        }
+
+        /// <summary>
+        /// The "days" of <paramref name="obj"/> into <paramref name="req"/>: the body of
+        /// /write/schedule (at "body"), or one site of /write/hire.
+        /// </summary>
+        internal static void ParseDays(Dictionary<string, object> obj, string at, Request req)
+        {
             var seen = new HashSet<int>();
-            var days = JsonReader.OptArr(root, "days", "body");
+            var days = JsonReader.OptArr(obj, "days", at);
             for (var i = 0; i < days.Count; i++)
             {
-                var path = "body.days[" + i + "]";
-                var obj = JsonReader.Obj(days[i], path);
-                var d = JsonReader.Num(obj, "d", path);
+                var path = at + ".days[" + i + "]";
+                var dobj = JsonReader.Obj(days[i], path);
+                var d = JsonReader.Num(dobj, "d", path);
                 if (!JsonReader.IsWhole(d, 0, 6)) throw new BadRequestException(path + ".d must be 0 to 6");
                 var day = new DayReq { D = (int)d };
                 if (!seen.Add(day.D)) throw new BadRequestException(path + ".d repeats a day");
-                var shifts = JsonReader.OptArr(obj, "shifts", path);
+                var shifts = JsonReader.OptArr(dobj, "shifts", path);
                 for (var j = 0; j < shifts.Count; j++)
                 {
                     var spath = path + ".shifts[" + j + "]";
@@ -120,7 +130,6 @@ namespace BigCopilotLink
                 }
                 req.Days.Add(day);
             }
-            return req;
         }
 
         // ---- main thread -----------------------------------------------------------
@@ -143,42 +152,22 @@ namespace BigCopilotLink
             else if (reg.businessTypeName == HeadquartersType) siteError = "headquarters";
             else if (WriteService.ScheduleScreenOpenOn(reg)) siteError = "screen_open";
 
-            var dayByD = new Dictionary<int, ScheduleDay>();
-            foreach (var sd in liveDays)
-                if (sd != null && !dayByD.ContainsKey(DayIndex(sd))) dayByD[DayIndex(sd)] = sd;
+            var dayByD = DaysByIndex(liveDays);
             if (reg != null)
                 foreach (var day in req.Days)
                     if (!dayByD.ContainsKey(day.D))
                         return WriteAnswer.BadRequest("the business has no schedule day " + day.D.ToString(CultureInfo.InvariantCulture));
 
-            var checks = reg != null ? CheckShifts(reg, req) : new List<ShiftCheck>();
+            var checks = reg != null ? CheckShifts(reg, req, null) : new List<ShiftCheck>();
             var failed = siteError != null || checks.Exists(c => c.Error != null);
 
-            var after = new List<Line>();
-            foreach (var c in checks)
-            {
-                if (c.Error != null) continue;
-                after.Add(new Line
-                {
-                    D = c.D, From = (int)c.Req.F, To = (int)c.Req.T, Employee = c.Req.EmployeeId,
-                    Item = c.Req.ItemInstanceId ?? "", Type = (int)c.Type
-                });
-            }
-            // Which days the write opens: with openAllHours, those not open 0 to 24 already.
-            // Only those are the write's; a day already open stays the player's.
-            var opens = new HashSet<int>();
-            var openAfter = new Dictionary<int, bool>();
-            foreach (var pair in dayByD)
-            {
-                if (req.OpenAllHours && !IsOpenAllDay(pair.Value)) opens.Add(pair.Key);
-                openAfter[pair.Key] = req.OpenAllHours || pair.Value.isOpen;
-            }
+            var after = Passed(checks);
+            Dictionary<int, bool> openAfter;
+            var opens = Opens(dayByD, req.OpenAllHours, out openAfter);
 
             // A no-op, decided before anything is touched: the same shifts (types
             // included) on the days the write owns, and no hours to open.
-            var owned = new List<Line>();
-            foreach (var pair in dayByD) owned.AddRange(Lines(new List<ScheduleDay> { pair.Value }));
-            var noOp = !failed && opens.Count == 0 && Print(owned) == Print(after);
+            var noOp = !failed && opens.Count == 0 && Print(Owned(dayByD)) == Print(after);
 
             if (dryRun || failed)
                 return Answer(req.Address, reg, dryRun, failed, false, null, siteError, checks, before, after, openAfter, !failed && opens.Count > 0);
@@ -201,8 +190,74 @@ namespace BigCopilotLink
                 DayRecord(undo, sd, dayByD.ContainsValue(sd) && opens.Contains(DayIndex(sd)));
             }
 
-            // One entry per weekday (a save should hold exactly seven); a duplicate
-            // entry, should one exist, is left as it is rather than given the shifts twice.
+            ReplaceDays(dayByD, checks, opens);
+
+            undo.PrintAfter = Print(Lines(liveDays));
+            ws.ScheduleUndo = undo;
+            AfterShiftChange(reg, Employees(before, after));
+            var stamp = ws.Applied("bigcopilotlink_notify_schedule", reg.BusinessName);
+            return Answer(req.Address, reg, false, false, false, stamp, null, checks, before, after, openAfter, undo.OpenedHours);
+        }
+
+        /// <summary>The business's schedule days by weekday, the first entry of each.</summary>
+        private static Dictionary<int, ScheduleDay> DaysByIndex(List<ScheduleDay> liveDays)
+        {
+            var dayByD = new Dictionary<int, ScheduleDay>();
+            foreach (var sd in liveDays)
+                if (sd != null && !dayByD.ContainsKey(DayIndex(sd))) dayByD[DayIndex(sd)] = sd;
+            return dayByD;
+        }
+
+        /// <summary>The shifts that passed every check, as the print sees them.</summary>
+        private static List<Line> Passed(List<ShiftCheck> checks)
+        {
+            var after = new List<Line>();
+            foreach (var c in checks)
+            {
+                if (c.Error != null) continue;
+                after.Add(new Line
+                {
+                    D = c.D, From = (int)c.Req.F, To = (int)c.Req.T, Employee = c.Req.EmployeeId,
+                    Item = c.Req.ItemInstanceId ?? "", Type = (int)c.Type
+                });
+            }
+            return after;
+        }
+
+        /// <summary>
+        /// Which days a write opens: with openAllHours, those not open 0 to 24 already.
+        /// Only those are the write's; a day already open stays the player's.
+        /// <paramref name="openAfter"/>: whether each day is open once written.
+        /// </summary>
+        private static HashSet<int> Opens(Dictionary<int, ScheduleDay> dayByD, bool openAllHours, out Dictionary<int, bool> openAfter)
+        {
+            var opens = new HashSet<int>();
+            openAfter = new Dictionary<int, bool>();
+            foreach (var pair in dayByD)
+            {
+                if (openAllHours && !IsOpenAllDay(pair.Value)) opens.Add(pair.Key);
+                openAfter[pair.Key] = openAllHours || pair.Value.isOpen;
+            }
+            return opens;
+        }
+
+        /// <summary>The live shifts on the days a write owns.</summary>
+        private static List<Line> Owned(Dictionary<int, ScheduleDay> dayByD)
+        {
+            var owned = new List<Line>();
+            foreach (var pair in dayByD) owned.AddRange(Lines(new List<ScheduleDay> { pair.Value }));
+            return owned;
+        }
+
+        /// <summary>
+        /// The write itself: each owned day's shifts replaced by the ones that passed,
+        /// and the days in <paramref name="opens"/> opened 0 to 24. A write only gets
+        /// here with every check passed. One entry per weekday (a save should hold
+        /// exactly seven); a duplicate entry, should one exist, is left as it is rather
+        /// than given the shifts twice.
+        /// </summary>
+        private static void ReplaceDays(Dictionary<int, ScheduleDay> dayByD, List<ShiftCheck> checks, HashSet<int> opens)
+        {
             foreach (var pair in dayByD)
             {
                 var sd = pair.Value;
@@ -223,12 +278,6 @@ namespace BigCopilotLink
                 }
                 if (opens.Contains(d)) OpenAllDay(sd);
             }
-
-            undo.PrintAfter = Print(Lines(liveDays));
-            ws.ScheduleUndo = undo;
-            AfterShiftChange(reg, Employees(before, after));
-            var stamp = ws.Applied("bigcopilotlink_notify_schedule", reg.BusinessName);
-            return Answer(req.Address, reg, false, false, false, stamp, null, checks, before, after, openAfter, undo.OpenedHours);
         }
 
         /// <summary>One day's before-state; <paramref name="opened"/>: the write opens this day's hours.</summary>
@@ -294,9 +343,100 @@ namespace BigCopilotLink
             return Answer(state.Address, reg, false, false, true, stamp, null, noChecks, current, restored, openAfter, state.OpenedHours);
         }
 
+        // ---- for the hire write -----------------------------------------------------
+
+        /// <summary>
+        /// The hire write's own assignments, which its shift checks see in place of the
+        /// live ones: the people it hires or moves (by id) and where each will work, and
+        /// the gone candidates whose shifts it drops.
+        /// </summary>
+        internal sealed class Assignments
+        {
+            internal readonly Dictionary<string, EmployeeInstance> People = new Dictionary<string, EmployeeInstance>(StringComparer.Ordinal);
+            internal readonly Dictionary<string, Address> Where = new Dictionary<string, Address>(StringComparer.Ordinal);
+            internal readonly HashSet<string> Dropped = new HashSet<string>(StringComparer.Ordinal);
+        }
+
+        /// <summary>One site's week in a hire write: checked on the main thread, then written.</summary>
+        internal sealed class Week
+        {
+            internal BuildingRegistration Reg;
+            internal Request Req;
+            internal List<Line> Before;
+            internal Dictionary<int, ScheduleDay> DayByD;
+            internal List<ShiftCheck> Checks;
+            internal List<Line> After;
+            internal HashSet<int> Opens;
+            internal Dictionary<int, bool> OpenAfter;
+
+            internal bool Failed
+            {
+                get { return Checks.Exists(c => c.Error != null); }
+            }
+        }
+
+        /// <summary>Main thread: the business's live shift print, what a site's expect is compared with.</summary>
+        internal static string LivePrint(BuildingRegistration reg)
+        {
+            return Print(Lines(reg.scheduleDays ?? new List<ScheduleDay>()));
+        }
+
+        /// <summary>Main thread: a weekday the request names that the business has no schedule day for, else -1.</summary>
+        internal static int MissingDay(BuildingRegistration reg, Request req)
+        {
+            var dayByD = DaysByIndex(reg.scheduleDays ?? new List<ScheduleDay>());
+            foreach (var day in req.Days)
+                if (!dayByD.ContainsKey(day.D)) return day.D;
+            return -1;
+        }
+
+        /// <summary>
+        /// Main thread: a site's week checked with /write/schedule's rules, as if the
+        /// hire write's moves and hires had happened. The site's own rules (found, the
+        /// print, rented, headquarters, screen open) are the caller's.
+        /// </summary>
+        internal static Week CheckWeek(BuildingRegistration reg, Request req, Assignments calls)
+        {
+            var liveDays = reg.scheduleDays ?? new List<ScheduleDay>();
+            var week = new Week { Reg = reg, Req = req, Before = Lines(liveDays), DayByD = DaysByIndex(liveDays) };
+            week.Checks = CheckShifts(reg, req, calls);
+            week.After = Passed(week.Checks);
+            week.Opens = Opens(week.DayByD, req.OpenAllHours, out week.OpenAfter);
+            return week;
+        }
+
+        /// <summary>The week's answer fields; <paramref name="ok"/> says whether the site would be written.</summary>
+        internal static void WriteWeek(JsonWriter w, Week week, bool ok, HashSet<string> away)
+        {
+            WeekFields(w, week.Before, week.After, week.OpenAfter, ok && week.Opens.Count > 0, away);
+        }
+
+        /// <summary>
+        /// Main thread, every check passed: the schedule write's apply for one site of a
+        /// hire write, after its moves and hires. Decided against the days as they are
+        /// now, since a move may have cleared shifts here: a week that would come out as
+        /// it stands, with no hours to open, is left alone. False when nothing changed.
+        /// The undo of the schedule kind is the caller's.
+        /// </summary>
+        internal static bool ApplyWeek(Week week)
+        {
+            var current = Owned(week.DayByD);
+            if (week.Opens.Count == 0 && Print(current) == Print(week.After)) return false;
+            ReplaceDays(week.DayByD, week.Checks, week.Opens);
+            var ids = Employees(week.Before, current);
+            foreach (var l in week.After) if (!string.IsNullOrEmpty(l.Employee)) ids.Add(l.Employee);
+            AfterShiftChange(week.Reg, ids);
+            return true;
+        }
+
         // ---- the grid's rules ------------------------------------------------------
 
-        private static List<ShiftCheck> CheckShifts(BuildingRegistration reg, Request req)
+        /// <summary>
+        /// Every shift of the request against the grid's rules. <paramref name="calls"/>
+        /// is null for /write/schedule, which judges who works here from the live game;
+        /// the hire write passes its own hires and moves, and the shifts it drops.
+        /// </summary>
+        private static List<ShiftCheck> CheckShifts(BuildingRegistration reg, Request req, Assignments calls)
         {
             var site = new Site(reg);
             var checks = new List<ShiftCheck>();
@@ -307,6 +447,9 @@ namespace BigCopilotLink
                 for (var i = 0; i < day.Shifts.Count; i++)
                 {
                     var s = day.Shifts[i];
+                    // A gone candidate's shift is dropped, not checked: its hours stay
+                    // empty. The others keep their index, which the rows point at.
+                    if (calls != null && s.EmployeeId != null && calls.Dropped.Contains(s.EmployeeId)) continue;
                     var c = new ShiftCheck { D = day.D, Index = i, Req = s, Type = WorkShiftType.Default };
                     dayChecks.Add(c);
 
@@ -317,7 +460,7 @@ namespace BigCopilotLink
                     }
 
                     WorkShiftType type;
-                    c.Error = CheckPost(site, s.EmployeeId, s.ItemInstanceId, out type);
+                    c.Error = CheckPost(site, s.EmployeeId, s.ItemInstanceId, calls, out type);
                     c.Type = type;
                 }
 
@@ -367,13 +510,28 @@ namespace BigCopilotLink
         /// The rules one shift must pass apart from its hours and overlaps: the person is
         /// assigned here, the item is a workstation here, the person has a skill for it.
         /// Null when it passes; <paramref name="type"/> is then the shift type the game's
-        /// GetWorkShiftType gives the station.
+        /// GetWorkShiftType gives the station. With <paramref name="calls"/> (the hire
+        /// write), someone that call hires or moves counts as working where it sends
+        /// them, and a candidate it does not hire works nowhere.
         /// </summary>
-        private static string CheckPost(Site site, string employeeId, string itemInstanceId, out WorkShiftType type)
+        private static string CheckPost(Site site, string employeeId, string itemInstanceId, Assignments calls, out WorkShiftType type)
         {
             type = WorkShiftType.Default;
-            var employee = string.IsNullOrEmpty(employeeId) ? null : Helpers.EmployeeHelper.GetEmployeeById(employeeId, false);
-            if (employee == null || !WriteService.SameAddress(employee.assignedAddress, site.Address)) return "not_assigned";
+            EmployeeInstance employee = null;
+            Address assigned = null;
+            if (calls != null && employeeId != null && calls.People.TryGetValue(employeeId, out employee))
+            {
+                assigned = calls.Where[employeeId];
+            }
+            else
+            {
+                employee = string.IsNullOrEmpty(employeeId) ? null : Helpers.EmployeeHelper.GetEmployeeById(employeeId, false);
+                // The employee dictionary holds the candidates too (DiscardCandidate
+                // removes them from it); one not hired by this call is nobody's staff.
+                if (employee != null && calls != null && employee.IsCandidate) employee = null;
+                if (employee != null) assigned = employee.assignedAddress;
+            }
+            if (employee == null || !WriteService.SameAddress(assigned, site.Address)) return "not_assigned";
 
             // A theater's actors work the stage, not an item: the game keeps a ""
             // station for them (ScheduleHelper.FetchWorkstations).
@@ -400,7 +558,7 @@ namespace BigCopilotLink
             foreach (var ws in shifts)
             {
                 WorkShiftType type;
-                if (CheckPost(site, ws.employeeId, ws.itemInstanceId, out type) != null) return false;
+                if (CheckPost(site, ws.employeeId, ws.itemInstanceId, null, out type) != null) return false;
             }
             return true;
         }
@@ -642,7 +800,40 @@ namespace BigCopilotLink
             if (stamp != null) w.Prop("stamp", stamp);
             WriteService.WriteAddress(w, "address", address.Street, address.Number);
             w.Prop("business", reg != null ? reg.BusinessName : null);
+            WeekFields(w, before, after, openAfter, openedHours, null);
 
+            w.BeginArray("rows");
+            var refused = status == 409;
+            if (refused && siteError != null && siteError != "changed")
+            {
+                w.BeginObject();
+                w.Prop("error", siteError);
+                w.EndObject();
+            }
+            // A changed business is re-planned whole, so its shift errors mean nothing.
+            foreach (var c in checks)
+            {
+                if (c.Error == null || (refused && siteError == "changed")) continue;
+                w.BeginObject();
+                w.Prop("d", c.D);
+                w.Prop("i", c.Index);
+                w.Prop("error", c.Error);
+                w.EndObject();
+            }
+            w.EndArray();
+            w.EndObject();
+            return new WriteAnswer(status, w.ToString());
+        }
+
+        /// <summary>
+        /// The answer's week: before and after, removed and added, openedHours,
+        /// leftWithout and the overworked warnings. <paramref name="away"/> (the hire
+        /// write) holds the people the call moves or hires somewhere: a person moved away
+        /// has not been left without work here.
+        /// </summary>
+        private static void WeekFields(JsonWriter w, List<Line> before, List<Line> after, Dictionary<int, bool> openAfter,
+            bool openedHours, HashSet<string> away)
+        {
             w.BeginObject("before");
             w.Prop("shifts", before.Count);
             w.Prop("print", Print(before));
@@ -658,7 +849,9 @@ namespace BigCopilotLink
             var afterIds = Employees(after, new List<Line>());
             var left = new List<string>();
             foreach (var l in before)
-                if (!string.IsNullOrEmpty(l.Employee) && !afterIds.Contains(l.Employee) && !left.Contains(l.Employee)) left.Add(l.Employee);
+                if (!string.IsNullOrEmpty(l.Employee) && !afterIds.Contains(l.Employee) && !left.Contains(l.Employee)
+                    && (away == null || !away.Contains(l.Employee)))
+                    left.Add(l.Employee);
             w.BeginArray("leftWithout");
             foreach (var id in left)
             {
@@ -697,28 +890,6 @@ namespace BigCopilotLink
                 w.EndObject();
             }
             w.EndArray();
-
-            w.BeginArray("rows");
-            var refused = status == 409;
-            if (refused && siteError != null && siteError != "changed")
-            {
-                w.BeginObject();
-                w.Prop("error", siteError);
-                w.EndObject();
-            }
-            // A changed business is re-planned whole, so its shift errors mean nothing.
-            foreach (var c in checks)
-            {
-                if (c.Error == null || (refused && siteError == "changed")) continue;
-                w.BeginObject();
-                w.Prop("d", c.D);
-                w.Prop("i", c.Index);
-                w.Prop("error", c.Error);
-                w.EndObject();
-            }
-            w.EndArray();
-            w.EndObject();
-            return new WriteAnswer(status, w.ToString());
         }
 
         private static string NameOf(string employeeId)
