@@ -10165,8 +10165,9 @@ def _ingredient_prices(save: Save, names: Names, supply: dict, businesses: list)
     Every cost day the site's log covers counts, whether or not a round came
     the next day, so a weekly import delivered straight to a factory is the
     week's cost against its one delivery. A known limit: that is right only
-    where the delivery matches the week's use, and a window holding two such
-    deliveries, or none, misprices it.
+    where the delivery matches the week's use; a window holding two such
+    deliveries misprices it, and one holding none leaves that site out, since
+    nothing arrived there to divide by.
     """
     summaries = sorted(save.items(save.root["financialSummaries"]), key=lambda s: s["dayNumber"])
     if not summaries:
@@ -10182,8 +10183,9 @@ def _ingredient_prices(save: Save, names: Names, supply: dict, businesses: list)
 
     # Each site's cost days: every window day whose next day its log covers,
     # a day with nothing delivered included (it brought 0). A log short of
-    # its full length holds everything; a full one has lost part of its
-    # oldest day, so it covers from the day after. Today's round, not yet
+    # its full length holds everything since its first delivery, so it covers
+    # from that day (what came before it was never logged); a full one has
+    # lost part of its oldest day, so it covers from the day after. Today's round, not yet
     # logged, covers nothing yet, so the last cost day waits on both sides.
     today = save.root.get("Day")
     arrived = collections.defaultdict(lambda: collections.defaultdict(float))
@@ -10196,10 +10198,9 @@ def _ingredient_prices(save: Save, names: Names, supply: dict, businesses: list)
         days = {t.get("dayOfDelivery") for t in log if isinstance(t.get("dayOfDelivery"), int)}
         if not days:
             continue  # no log, so nothing to divide by: a shop
-        reach = min(days) + 1 if len(log) >= DELIVERY_LOG_SIZE else None
+        reach = min(days) + 1 if len(log) >= DELIVERY_LOG_SIZE else min(days)
         covered[key] = {d for d in window
-                        if (reach is None or d + 1 >= reach)
-                        and (d + 1 != today or today in days)}
+                        if d + 1 >= reach and (d + 1 != today or today in days)}
         for transaction in log:
             when = transaction.get("dayOfDelivery")
             if not isinstance(when, int) or when - 1 not in covered[key]:

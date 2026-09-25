@@ -5,7 +5,7 @@ needs, and the unit prices the Plan page reads.
 """
 import unittest
 
-from ba_dashboard import RECIPE_ITEMS, Names, _ingredient_prices, plain, site_key
+from ba_dashboard import DELIVERY_LOG_SIZE, RECIPE_ITEMS, Names, _ingredient_prices, plain, site_key
 from test_supply_facts import (BEER, DISTRIB, FACTORY, HUB, RECIPES, RID, SHOP_A, SODA, WATER,
                                Company, Stub, tx)
 import test_supply_facts
@@ -203,11 +203,29 @@ class IngredientPriceTests(unittest.TestCase):
 
     def test_a_weekly_import_straight_to_the_factory_prices_the_week_against_it(self):
         # The factory uses 100 water a day at $2 and books it daily; its one
-        # delivery in the window is a weekly import of 700, most days its log
-        # holds nothing, and today's round (a shipment out) has run.
+        # delivery in the window is a weekly import of 700 (the week before's
+        # landed on day 8, before the window), most days its log holds
+        # nothing, and today's round (a shipment out) has run.
         spend = {d: [(FACTORY, WATER, 200.0)] for d in range(11, 20)}
-        logs = {FACTORY: [tx(15, {WATER: 700}), tx(20, {BEER: -50})]}
+        logs = {FACTORY: [tx(8, {WATER: 700}), tx(15, {WATER: 700}), tx(20, {BEER: -50})]}
         prices = _ingredient_prices(self.save(spend, logs), Names({}), {"factories": {}}, [])
+        self.assertEqual(prices["unit"], {WATER: 2.0})
+
+    def test_a_log_that_starts_mid_window_counts_only_the_days_it_covers(self):
+        # A new factory stocked by hand until day 16: its cost runs from the
+        # window's start, $1 a unit before the first logged round, $2 after.
+        spend = {d: [(FACTORY, WATER, 100.0 if d < 15 else 200.0)] for d in range(11, 20)}
+        logs = {FACTORY: [tx(d, {WATER: 100}) for d in range(16, 21)]}
+        prices = _ingredient_prices(self.save(spend, logs), Names({}), {"factories": {}}, [])
+        self.assertEqual(prices["unit"], {WATER: 2.0})
+
+    def test_a_full_logs_oldest_day_is_partial_so_its_cost_day_is_left_out(self):
+        # Sixty transactions: the oldest day, 14, has lost part of its round,
+        # so cost day 13 (which it would pair with) is left out.
+        spend = {d: [(FACTORY, WATER, 200.0 if d != 13 else 999.0)] for d in range(11, 20)}
+        log = [tx(14, {WATER: 1})] + [tx(d, {WATER: 100}) for d in range(15, 21)]
+        log += [tx(20, {BEER: -1})] * (DELIVERY_LOG_SIZE - len(log))
+        prices = _ingredient_prices(self.save(spend, {FACTORY: log}), Names({}), {"factories": {}}, [])
         self.assertEqual(prices["unit"], {WATER: 2.0})
 
     def test_a_shop_with_no_log_and_something_made_in_house_have_no_price(self):
