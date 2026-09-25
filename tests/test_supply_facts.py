@@ -742,6 +742,7 @@ class ExtractTests(unittest.TestCase):
                 self.assertLessEqual(set(fact), FACT_KEYS)
         self.assertEqual(set(data["alertsDemand"]), {"lines", "minor"})
         self.assertEqual(set(data["alertsDemand"]["minor"]), set(data["minor"]))
+        self.assertEqual(set(data["factoryStaffing"]), {"cap", "dem"})
         json.dumps(data)
 
     def test_tight_is_never_a_finding_in_either_mode(self):
@@ -1342,6 +1343,29 @@ class FixtureKeyTests(unittest.TestCase):
                 with self.subTest(kind=kind, row=row.get("slug") or row.get("item")):
                     self.assertLessEqual(always, set(row))
                     self.assertLessEqual(set(row), always | optional)
+
+    # What a factoryStaffing row carries (_factory_staffing()), and a line of it.
+    STAFFING_ROW = {"key", "s", "name", "lines", "headcount", "wageDay", "delta", "stations",
+                    "people", "shifts", "placed", "shortHours"}
+    STAFFING_LINE = {"slug", "item", "machines", "hoursNow", "hours", "from", "to", "cuts"}
+
+    def test_the_fixtures_factory_staffing_matches_when_it_carries_one(self):
+        with open(os.path.join(HERE, "fixtures", "r8_supply.json"), encoding="utf-8") as fh:
+            fixture = json.load(fh)
+        if "factoryStaffing" not in fixture:
+            self.skipTest("the fixture carries no factoryStaffing yet")
+        self.assertEqual(set(fixture["factoryStaffing"]), {"cap", "dem"})
+        for mode, rows in fixture["factoryStaffing"].items():
+            for row in rows:
+                with self.subTest(mode=mode, row=row.get("name")):
+                    if row.get("failed"):
+                        self.assertEqual(set(row), {"key", "s", "name", "failed"})
+                        continue
+                    self.assertEqual(set(row), self.STAFFING_ROW)
+                    self.assertEqual(set(row["headcount"]), {"needed", "min", "have", "spare", "hire"})
+                    self.assertEqual(set(row["delta"]), {"workers", "perDay"})
+                    for line in row["lines"]:
+                        self.assertEqual(set(line), self.STAFFING_LINE)
 
 
 if __name__ == "__main__":

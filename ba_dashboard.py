@@ -7270,8 +7270,8 @@ def _staffing(
 ) -> list:
     """A roster the player can type in, one row per retail site.
 
-    Retail only in v1: an office's need is exact and a factory's is already
-    modelled, and both are deferred (scope section 9). The plan replaces a
+    Retail only: an office's need is exact and deferred (scope section 9); a
+    factory's roster is _factory_staffing(), through the same placer. The plan replaces a
     site's whole schedule rather than patching it, which is why cleaning and
     security shifts are reproduced here too — clearing wipes them, and the
     player would otherwise lose cleanliness and security without being told.
@@ -7535,13 +7535,36 @@ def _factory_site_plan(site, business, posts_of, pool, people, mode, label, name
                  for wd in range(7)],
         "stations": runs,
     }}
-    state = {person["id"]: _fresh_state() for person in pool}
-    week = _place_week(grid, need, ALL_DAY_OPEN, [], pool, people, business, [], state)
+    # The fewest of the factory's own workers that cover the week. The placer
+    # spreads a week over everybody it is given, so it is given the least
+    # ceil(machine-hours / 50) first, and one more while a line is left with
+    # nobody on it: whoever it is not given is spare. Those whose blackout
+    # windows touch the fewest shifts are kept first, then the pool's order.
+    pieces = [cut for line in lines for cut in line["cuts"]]
+    ranked = sorted(
+        enumerate(pool),
+        key=lambda entry: (
+            sum(1 for low, high in pieces for a, b in entry[1]["blackouts"]
+                if a < high and low < b),
+            entry[1]["weekendsOff"],
+            entry[1]["days"] is not None,
+            entry[0],
+        ),
+    )
+    ranked = [person for _index, person in ranked]
+    needed = sum(len(hours) for days in runs.values() for hours in days)
+    for count in range(min(math.ceil(needed / FULL_TIME[1]), len(ranked)), len(ranked) + 1):
+        trial = ranked[:count]
+        state = {person["id"]: _fresh_state() for person in trial}
+        week = _place_week(grid, need, ALL_DAY_OPEN, [], trial, people, business, [], state)
+        if all(shift["employee"] is not None for shift in week["shifts"]):
+            break
     table = _index_table(stations, (week["shifts"],),
                          (week["shifts"], week["shortHours"], week["placed"]), people)
-    count = week["headcount"].get(FACTORY_SKILL) or {"needed": 0, "min": 0, "have": len(pool),
-                                                      "spare": len(pool), "hire": 0}
-    headcount = {k: count[k] for k in ("needed", "min", "have", "spare", "hire")}
+    count = week["headcount"][FACTORY_SKILL]
+    worked = {shift["employee"] for shift in week["shifts"] if shift["employee"] is not None}
+    headcount = {"needed": count["needed"], "min": count["min"], "have": len(pool),
+                 "spare": len(pool) - len(worked), "hire": count["hire"]}
     workers = headcount["hire"] - headcount["spare"]
     return {
         "key": business["key"],
