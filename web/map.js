@@ -485,13 +485,13 @@ class CityMapView {
       this.fs.hoods = picked.length === all.length ? null : picked;
       changed();
     });
-    // None chosen lists every layout; each chip chosen narrows the list to the
-    // layouts chosen. The chips are drawn again with the kind, so the row
-    // answers through a handler on itself.
+    // None chosen lists every layout. From there a click keeps only that
+    // layout; after that each click adds or drops one. The chips are drawn
+    // again with the kind, so the row answers through a handler on itself.
     this.root.querySelector('.flays').addEventListener('click', e => {
       const chip = e.target.closest('[data-flay]'); if(!chip) return;
       const code = chip.dataset.flay, now = this.fs.layouts || [];
-      const next = now.includes(code) ? now.filter(c => c !== code) : [...now, code];
+      const next = !now.length ? [code] : now.includes(code) ? now.filter(c => c !== code) : [...now, code];
       // Every key chosen is no filter at all, as with the neighbourhoods, so a
       // building with no layout is not dropped by choosing them all.
       this.fs.layouts = this.layoutKeys().every(c => next.includes(c)) ? [] : next;
@@ -998,7 +998,9 @@ class CityMapView {
       host.dataset.sig = sig;
       host.innerHTML = keys.map(c => `<button type="button" class="fchip flay" data-flay="${attr(c)}" aria-pressed="false">${mapText(c)}</button>`).join('');
     }
-    host.querySelectorAll('.flay').forEach(chip => mark(chip, this.fs.layouts.includes(chip.dataset.flay)));
+    // Lit while listed, as a neighbourhood chip is: with no layout chosen every
+    // chip is lit, because every layout is listed.
+    host.querySelectorAll('.flay').forEach(chip => mark(chip, this.layoutOn(chip.dataset.flay)));
     this.root.querySelectorAll('.fchip.show').forEach(chip => {
       const key = chip.dataset.show;
       chip.querySelector('b').textContent = key === 'sale'
@@ -1254,15 +1256,18 @@ class CityMapView {
      does not fit (a phone) scrolls rather than leave the stage. */
   sizeCardPlan(r){
     const card = this.card, box = card.querySelector('.lp-plan');
-    // In a content-box card max-height leaves out the padding and border, so
-    // they come off it; the outer edge is what has to stay on the stage.
-    const cs = getComputedStyle(card), frame = cs.boxSizing === 'border-box' ? 0
-      : ['paddingTop', 'paddingBottom', 'borderTopWidth', 'borderBottomWidth'].reduce((t, k) => t + (parseFloat(cs[k]) || 0), 0);
-    card.style.maxHeight = `${Math.max(120, r.height - 24 - frame)}px`;
+    // Everything is reckoned on the card's outer edge, the one that has to stay
+    // on the stage: max-height in whichever box the card sizes, and the room
+    // for the plan from the card's natural outer height (scrollHeight is the
+    // padding box's, so the borders go back on).
+    const cs = getComputedStyle(card), px = k => parseFloat(cs[k]) || 0;
+    const borderY = px('borderTopWidth') + px('borderBottomWidth'), padY = px('paddingTop') + px('paddingBottom');
+    const outer = Math.max(120, r.height - 24);
+    card.style.maxHeight = `${cs.boxSizing === 'border-box' ? outer : outer - borderY - padY}px`;
     if(box && !box.hidden && box.dataset.sig){
       const svg = box.querySelector('svg'), plan = this.plans.plans[box.dataset.sig];
-      const others = card.scrollHeight - svg.getBoundingClientRect().height;
-      box.style.setProperty('--lp-plan-max', `${Math.max(90, Math.min(160, r.height - 24 - others))}px`);
+      const others = card.scrollHeight + borderY - svg.getBoundingClientRect().height;
+      box.style.setProperty('--lp-plan-max', `${Math.max(90, Math.min(160, Math.floor(outer - others)))}px`);
       const sr = svg.getBoundingClientRect(), s = Math.min(sr.width / (plan.w / FLOOR_PLAN_PX), sr.height / (plan.h / FLOOR_PLAN_PX));
       const bar = floorPlanScale(s), host = box.querySelector('.lp-scalehost');
       if(s > 0 && host.dataset.sig !== bar){ host.dataset.sig = bar; host.innerHTML = bar; }

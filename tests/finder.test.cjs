@@ -1612,8 +1612,9 @@ test('the Layout filter offers the kind\'s layout keys and lists by them', async
     // The list reads [HK0 C1, MT0 D2, MT1 with no layout]: a row with no layout has no tag.
     assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
     assert.deepEqual(await tags(page), ['C1', 'D2', '']);
-    // Every retail layout the city's buildings have, none chosen: every row listed.
-    assert.deepEqual(await layChips(page), ['C1', 'C2', 'D2']);
+    // Every retail layout the city's buildings have, none chosen: every row
+    // listed and every chip lit, as the neighbourhood chips are.
+    assert.deepEqual(await layChips(page), ['C1*', 'C2*', 'D2*']);
     await page.locator(layChip('C1')).click();
     assert.deepEqual(await rowKeys(page), [HK[0]]);
     assert.deepEqual(await layChips(page), ['C1*', 'C2', 'D2']);
@@ -1628,7 +1629,7 @@ test('the Layout filter offers the kind\'s layout keys and lists by them', async
     // A layout belongs to its kind: another kind starts with none chosen.
     await page.locator(layChip('C1')).click();
     await page.locator('#cityMapPage .fchip.cat[data-cat="office"]').click();
-    assert.deepEqual(await layChips(page), ['J1']);
+    assert.deepEqual(await layChips(page), ['J1*']);
     assert.deepEqual(await rowKeys(page), [HK[4]]);
     // Cinemas have no layouts: no row for them.
     await page.locator('#cityMapPage .fchip.cat[data-cat="cinema"]').click();
@@ -1658,7 +1659,7 @@ test('the Layout filter is kept, saved with a search and cleared by a preset', a
     // A preset (Today's card, a Growth cell) is a fresh question.
     await page.evaluate(() => openFinder({cat: 'retail'}));
     await page.waitForFunction(() => document.querySelectorAll('#cityMapPage .place.fr').length === 3);
-    assert.deepEqual(await layChips(page), ['C1', 'C2', 'D2']);
+    assert.deepEqual(await layChips(page), ['C1*', 'C2*', 'D2*']);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
@@ -1714,10 +1715,11 @@ test('a Layout chip keeps the focus, and choosing every layout is no filter', as
     assert.equal(await page.evaluate(() => document.activeElement?.dataset.flay), 'C1');
     assert.equal(await page.locator(layChip('C1')).getAttribute('aria-pressed'), 'true');
     assert.deepEqual(await rowKeys(page), [HK[0]]);
-    // All three chosen is every layout, the row with none included.
+    // All three chosen is every layout, the row with none included: every chip
+    // stays lit, the one just clicked with them.
     await page.locator(layChip('C2')).click();
     await page.locator(layChip('D2')).click();
-    assert.deepEqual(await layChips(page), ['C1', 'C2', 'D2']);
+    assert.deepEqual(await layChips(page), ['C1*', 'C2*', 'D2*']);
     assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
@@ -1735,7 +1737,7 @@ test('a search saved before the Layout filter still matches and clears it', asyn
     await page.locator(layChip('C1')).click();
     assert.equal(await page.locator('#cityMapPage .fsaved-list .fchip.on').count(), 0);
     await page.locator('#cityMapPage .fsaved-list [data-saved="Old"]').click();
-    assert.deepEqual(await layChips(page), ['C1', 'C2', 'D2']);
+    assert.deepEqual(await layChips(page), ['C1*', 'C2*', 'D2*']);
     assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
@@ -1774,6 +1776,30 @@ test('on a short phone the card scrolls inside the map and its close button stay
     assert.equal(await page.evaluate(({x, y}) => !!document.elementFromPoint(x, y)?.closest('.site .x'), {x: x.x + x.width / 2, y: x.y + x.height / 2}), true);
     await page.locator('#cityMapPage .site .x').click();
     await page.waitForFunction(() => document.querySelector('#cityMapPage .site').hidden);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a card whose plan shrinks to fit the stage does not scroll', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    // A phone tall enough that the card fits once the plan gives up some of
+    // its 160 px, but not all of it: find that height from the card itself.
+    await page.setViewportSize({width: 390, height: 900});
+    await openMap(page); await turnOn(page);
+    await pick(page, HK[0]);
+    await page.locator(`${plan} .lp-svg`).waitFor();
+    const planHeight = () => page.evaluate(() => { const v = cityMapPage; v.rect = null; v.placeCard();
+      return document.querySelector('#cityMapPage .site .lp-svg').getBoundingClientRect().height; });
+    let h = 0;
+    for(let height = 900; height <= 1800 && !(h > 95 && h < 155); height += 20){
+      await page.setViewportSize({width: 390, height});
+      h = await planHeight();
+    }
+    assert.ok(h > 95 && h < 155, `no phone height shrinks the plan into 90-160 px: ${h}`);
+    assert.equal(await page.locator('#cityMapPage .site').evaluate(c => c.classList.contains('lp-scroll')), false);
+    const card = await page.locator('#cityMapPage .site').boundingBox(), stage = await page.locator('#cityMapPage [data-stage]').boundingBox();
+    assert.ok(card.y + card.height <= stage.y + stage.height + 1, `card ${JSON.stringify(card)} stage ${JSON.stringify(stage)}`);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

@@ -344,3 +344,5 @@ body.map-modal-open{overflow:hidden}
 .city-map .site.lp-scroll .tail{display:none}
 /* and its close button stays in reach while it scrolls */
 .city-map .site.lp-scroll .x{position:sticky;top:0;float:right;margin:-4px -6px 0 8px;z-index:1;background:var(--surface)}
+.city-map .site.lp-scroll .x:hover{background:var(--raised)}
+.city-map .site.lp-scroll h3{padding-right:0}
