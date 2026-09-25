@@ -26,7 +26,7 @@ from ba_dashboard import (
     name_coverage, name_table, render,
 )
 from ba_save import NotEnglishText, bundled_locale, load_game_locale, load_locale, locale_search_paths
-from tools.build_wiki_data import write_public_wiki
+from tools.build_wiki_data import topics as wiki_topics, write_public_wiki
 from tools import i18n as ui_text
 from tools import wiki_pages
 from tools.extract_wiki import game_data_dir
@@ -638,6 +638,17 @@ def check(root: str = HERE) -> list[str]:
     missing += ui_text.ship(check=True, root=root)
     if missing:
         return stale + missing
+    # The hand-written articles travel into wiki-data.json as they stand, so an
+    # edit to tools/wiki_topics.json names the payload, not only the stamp.
+    # (An edit to tools/wiki_sample.json shows through the stamp alone: what the
+    # wording does to the payload cannot be known without the installed game.)
+    try:
+        with open(os.path.join(root, "web", "wiki-data.json"), encoding="utf-8") as fh:
+            shipped_topics = json.load(fh).get("topics")
+    except (OSError, ValueError):
+        shipped_topics = None
+    if shipped_topics != wiki_topics(os.path.join(root, "tools", "wiki_topics.json")):
+        stale.append("web/wiki-data.json")
     release = release_info(root)
     if differs("web/version.json", release_json(release) + "\n"):
         stale.append("web/version.json")
