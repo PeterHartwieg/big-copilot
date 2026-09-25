@@ -5002,18 +5002,114 @@ HYPE_TIGHT = 0.90  # a wave arriving at a shop already this full is being turned
 PHRASE_SHAPES = 2  # how many weekday-hour patterns to name before counting the rest
 
 
-def _hour_phrase(hours_by_day: dict, sep: str = "; ") -> str:
+# The staffing and hour-grid words (docs/architecture.md, "UI text"): every
+# phrase below is a message whose English is what these functions always
+# wrote, so the page can say it in the reader's language, and the board code
+# that reads a limit's English reads enOf(). Keys are sp.py.*: the site panel's
+# own script owns sp.*, so the two never write the same key.
+def _sp_list(items: list, sep: str):
+    """Phrases joined as `sep.join(items)` joined them, still a message: a
+    nested "{a}, {b}", "{a}; {b}" or "{a} and {b}" per separator, so a
+    translation joins its own way. One item is itself, none is ""."""
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    rest = _sp_list(items[1:], sep)
+    if sep == ", ":
+        return msg("sp.py.list.comma", "{a}, {b}", a=items[0], b=rest)
+    if sep == "; ":
+        return msg("sp.py.list.semi", "{a}; {b}", a=items[0], b=rest)
+    if sep == " and ":
+        return msg("sp.py.list.and", "{a} and {b}", a=items[0], b=rest)
+    raise ValueError(f"_sp_list(): no message joins by {sep!r}")
+
+
+def _sp_weekday(wd: int):
+    """A weekday's first three letters, 0 Sunday, as WEEKDAYS[wd][:3] wrote them."""
+    return (
+        msg("sp.py.wd.0", "Sun") if wd == 0 else msg("sp.py.wd.1", "Mon") if wd == 1
+        else msg("sp.py.wd.2", "Tue") if wd == 2 else msg("sp.py.wd.3", "Wed") if wd == 3
+        else msg("sp.py.wd.4", "Thu") if wd == 4 else msg("sp.py.wd.5", "Fri") if wd == 5
+        else msg("sp.py.wd.6", "Sat")
+    )
+
+
+def _sp_hours(start: int, end: int):
+    """One run of hours, "8-11", or "8" for a single hour."""
+    if end - start > 1:
+        return msg("sp.py.when.hours", "{a}-{b}", a=start, b=end)
+    return msg("sp.py.when.hour", "{h}", h=start)
+
+
+def _sp_days(first: int, last: int):
+    """A run of weekdays, "Mon-Wed"."""
+    return msg("sp.py.when.days", "{a}-{b}", a=_sp_weekday(first), b=_sp_weekday(last))
+
+
+def _sp_counters(office: bool):
+    """What a site's serving posts are called where no station names them."""
+    return msg("sp.py.workstations", "workstations") if office else msg("sp.py.counters", "counters")
+
+
+def _sp_station_noun(words: dict):
+    """A role's stations by their English plural, as _role_words() says them,
+    with the station's name as a token beside it (`station_name`); None where
+    the role has no station word of its own. The grid's role["noun"] stays
+    the plain str, which the page compares against a limit's English."""
+    if not words["noun"]:
+        return None
+    return msg("sp.py.noun.station", "{stations}", stations=words["noun"], station_name=words["stationName"])
+
+
+def _cap_first(text):
+    """A cap finding's limit opening a sentence ("{limit} is the limit" in
+    _alerts()): its first character upper case, as `limit[:1].upper() +
+    limit[1:]` writes it, and still a message. Call this instead of slicing,
+    which gives a plain str that stays English on every page.
+
+    A limit that already starts upper case (a role's "{role} staffing" leads
+    with a game name's token) comes back as it is. The three that start lower
+    case have a sentence-initial key of their own (sp.py.*.first: "Staffing",
+    "Registers", "Workstations"), and a join capitalises its first part only:
+    "Staffing and projection booths". A station's own plural keeps its
+    `station_name` token beside the capitalised English. German capitalises
+    its nouns anyway, so a .first key's translation is usually its plain key's."""
+    if text[:1].upper() == text[:1]:
+        return text
+    if isinstance(text, Msg):
+        rest = {k: v for k, v in text.p.items() if k != "a"}
+        if text.key == "sp.py.list.and":
+            return msg("sp.py.list.and", "{a} and {b}", a=_cap_first(text.p["a"]), **rest)
+        if text.key == "sp.py.list.comma":
+            return msg("sp.py.list.comma", "{a}, {b}", a=_cap_first(text.p["a"]), **rest)
+        if text.key == "sp.py.list.semi":
+            return msg("sp.py.list.semi", "{a}; {b}", a=_cap_first(text.p["a"]), **rest)
+        if text.key == "sp.py.limit.staffing":
+            return msg("sp.py.limit.staffing.first", "Staffing")
+        if text.key == "sp.py.limit.registers":
+            return msg("sp.py.limit.registers.first", "Registers")
+        if text.key == "sp.py.workstations":
+            return msg("sp.py.workstations.first", "Workstations")
+        if text.key == "sp.py.limit.station":
+            return msg("sp.py.limit.station.first", "{stations}", stations=_cap_first(text.p["stations"]),
+                       station_name=text.p["station_name"])
+    return text[:1].upper() + text[1:]
+
+
+def _hour_phrase(hours_by_day: dict, sep: str = "; "):
     """"Mon-Sun 8-11, 18-20" — the shape of a set of weekday-hours in words.
 
     `sep` joins one day shape to the next ("Mon-Wed 8-20; Sat 10-14"); a caller
-    that lists several phrases apart by "; " passes " and " instead."""
+    that lists several phrases apart by "; " passes " and " instead. A message
+    (sp.py.when.*), or "" for no hours."""
     def runs(hours):
         out, start = [], None
         for h in range(25):
             if h in hours and start is None:
                 start = h
             elif h not in hours and start is not None:
-                out.append(f"{start}-{h}" if h - start > 1 else f"{start}")
+                out.append(_sp_hours(start, h))
                 start = None
         return out
 
@@ -5029,24 +5125,28 @@ def _hour_phrase(hours_by_day: dict, sep: str = "; ") -> str:
             spare += sum(len(h) for d, h in hours_by_day.items() if d in picked)
             continue
         if len(picked) == 7:
-            label = "every day"
+            label = msg("sp.py.when.everyday", "every day")
         elif len(picked) > 2 and [order.index(d) for d in picked] == list(
             range(order.index(picked[0]), order.index(picked[0]) + len(picked))
         ):
-            label = f"{WEEKDAYS[picked[0]][:3]}-{WEEKDAYS[picked[-1]][:3]}"
+            label = _sp_days(picked[0], picked[-1])
         else:
-            label = ", ".join(WEEKDAYS[d][:3] for d in picked)
-        parts.append(f"{label} {', '.join(shape)}")
-    phrase = sep.join(parts)
+            label = _sp_list([_sp_weekday(d) for d in picked], ", ")
+        parts.append(msg("sp.py.when.part", "{days} {hours}", days=label, hours=_sp_list(list(shape), ", ")))
+    phrase = _sp_list(parts, sep)
     # A list of every scattered hour is not a shape. Name the pattern and count
-    # the rest.
-    return f"{phrase} and {spare} scattered hours" if spare else phrase
+    # the rest. The English has always said "hours", one or many.
+    if spare:
+        return msg("sp.py.when.scattered", {"one": "{when} and {n} scattered hours",
+                                            "other": "{when} and {n} scattered hours"}, when=phrase, n=spare)
+    return phrase
 
 
-def _off_hours(covered: set) -> str:
-    """Group identical gaps, preserving exception days and split shifts."""
+def _off_hours(covered: set):
+    """Group identical gaps, preserving exception days and split shifts. A
+    message in _hour_phrase()'s words, or "" for none."""
     weekdays = (1, 2, 3, 4, 5, 6, 0)
-    groups = {}
+    groups, said = {}, {}
     for day, wd in enumerate(weekdays):
         gaps = [h for h in range(24) if (wd, h) not in covered]
         if not gaps:
@@ -5054,25 +5154,27 @@ def _off_hours(covered: set) -> str:
         runs, start, prev = [], gaps[0], gaps[0]
         for h in gaps[1:]:
             if h != prev + 1:
-                runs.append(f"{start}-{prev + 1}")
+                runs.append(msg("sp.py.when.hours", "{a}-{b}", a=start, b=prev + 1))
                 start = h
             prev = h
-        runs.append(f"{start}-{prev + 1}")
-        groups.setdefault(', '.join(runs), []).append(day)
+        runs.append(msg("sp.py.when.hours", "{a}-{b}", a=start, b=prev + 1))
+        hours = _sp_list(runs, ", ")
+        groups.setdefault(str(hours), []).append(day)
+        said.setdefault(str(hours), hours)
     parts = []
     for hours, days in groups.items():
         ranges, start, prev = [], days[0], days[0]
         def day_range(first, last):
-            a, b = (WEEKDAYS[weekdays[d]][:3] for d in (first, last))
-            return a if first == last else f"{a}-{b}"
+            a, b = (weekdays[d] for d in (first, last))
+            return _sp_weekday(a) if first == last else _sp_days(a, b)
         for day in days[1:]:
             if day != prev + 1:
                 ranges.append(day_range(start, prev))
                 start = day
             prev = day
         ranges.append(day_range(start, prev))
-        parts.append(f"{', '.join(ranges)} {hours}")
-    return "; ".join(parts)
+        parts.append(msg("sp.py.when.part", "{days} {hours}", days=_sp_list(ranges, ", "), hours=said[hours]))
+    return _sp_list(parts, "; ")
 
 
 def _ceil_ten(value: float) -> int:
@@ -6011,6 +6113,9 @@ def _hourly(
                 # The station of this role worth adding another of: the
                 # largest, ties broken by name so the words do not move.
                 "station": biggest,
+                # Its game key, so a sentence can carry the station's name
+                # as a token beside the English words made of it.
+                "stationKey": min(slugs[p] for p in by_skill[skill] if labels[p] == biggest),
                 "counters": sum(by_skill[skill].values()),
                 "stationCount": len(by_skill[skill]),
                 "staffed": [[0] * 24 for _ in range(7)],
@@ -7917,7 +8022,8 @@ def _factory_site_plan(site, business, posts_of, pool, people, mode, label, name
         now = line.get("hoursNow") or 0
         todo.append((line, posts_of.get(("unnamed", site["s"], i)) or [],
                      24 if mode == "cap" or not now else now,
-                     f"{tok(line.get('workstationKey'), line['workstation'])}, recipe not named", True))
+                     msg("sp.py.factory.unnamed", "{workstation}, recipe not named",
+                         workstation=tok(line.get("workstationKey"), line["workstation"])), True))
     for line, posts, hours, item, unnamed in todo:
         if not posts or not hours:
             continue
@@ -7927,7 +8033,8 @@ def _factory_site_plan(site, business, posts_of, pool, people, mode, label, name
         for position, post in zip(line["slots"], posts):
             runs[len(stations)] = [set(range(start, start + hours)) for _ in range(7)]
             stations.append({"id": post, "skill": FACTORY_SKILL, "rate": 1,
-                             "name": f"{plain(item)}, position {position}"})
+                             "name": msg("sp.py.factory.station", "{item}, position {slot}",
+                                         item=plain(item), slot=position, item_name=item)})
         lines.append({
             "slug": line.get("slug"), "item": item, "machines": line["machines"],
             "hoursNow": line.get("hoursNow"), "hours": hours, "from": start, "to": start + hours,
@@ -8800,26 +8907,37 @@ def _role_words(role: dict, office: bool) -> dict:
     if office:
         return {
             "noun": None,
-            "staffing": ("staffing", "more staff at the computers on those hours"),
-            "posts": ("workstations", "another computer workstation"),
+            "staffing": (msg("sp.py.limit.staffing", "staffing"),
+                         msg("sp.py.fix.office.staff", "more staff at the computers on those hours")),
+            "posts": (msg("sp.py.workstations", "workstations"),
+                      msg("sp.py.fix.office.post", "another computer workstation")),
         }
     if role["skill"] == SERVICE_SKILL:
         return {
             "noun": None,
-            "staffing": ("staffing", "more service staff on those hours"),
-            "posts": ("registers", "another counter"),
+            "staffing": (msg("sp.py.limit.staffing", "staffing"),
+                         msg("sp.py.fix.service.staff", "more service staff on those hours")),
+            "posts": (msg("sp.py.limit.registers", "registers"), msg("sp.py.fix.service.post", "another counter")),
         }
     station = _lower_first(role["station"])
+    role_name = tok(role["skill"], role["label"])
+    # The station's own words are the game's name, lowered and pluralised in
+    # English, and stay English: a token cannot be declined or pluralised. So
+    # every message holding them also carries the name as a token,
+    # `station_name`, for a translation to write instead.
+    station_name = tok(role.get("stationKey"), role["station"])
     return {
         "noun": _plural(station),
+        "stationName": station_name,
         # Two different answers, two different limits, the way a shop's
         # "staffing" and "registers" are two: one line is about people, the
         # other about posts. The posts limit names the station itself, so two
         # shops short of two different stations of one role never collide --
         # the id hashes the limit, and nothing but the limit.
-        "staffing": (f"{tok(role['skill'], role['label'])} staffing",
-                     f"another {tok(role['skill'], role['label'])} on those hours"),
-        "posts": (_plural(station), f"another {station}"),
+        "staffing": (msg("sp.py.limit.role", "{role} staffing", role=role_name),
+                     msg("sp.py.fix.role.staff", "another {role} on those hours", role=role_name)),
+        "posts": (msg("sp.py.limit.station", "{stations}", stations=_plural(station), station_name=station_name),
+                  msg("sp.py.fix.role.post", "another {station}", station=station, station_name=station_name)),
     }
 
 
@@ -8918,7 +9036,7 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                 # has no advice for it: the finding names the ceiling and what
                 # goes through it, and no fix. _alerts() raises no line for it;
                 # it shows on the site page's hour grid and chip only.
-                finding["limit"] = "the building"
+                finding["limit"] = msg("sp.py.limit.building", "the building")
                 finding["fix"] = ""
             else:
                 # One role reads exactly as it always has, which is what keeps
@@ -8932,14 +9050,13 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                     )
                     for kind, skill in limits
                 ]
-                finding["limit"] = " and ".join(w[part][0] for w, part in said)
-                finding["fix"] = " and ".join(w[part][1] for w, part in said)
+                finding["limit"] = _sp_list([w[part][0] for w, part in said], " and ")
+                finding["fix"] = _sp_list([w[part][1] for w, part in said], " and ")
                 finding["limits"] = len(said)
-                default = "workstations" if office else "counters"
                 finding["noun"] = (
-                    said[0][0]["noun"]
+                    _sp_station_noun(said[0][0])
                     if len(said) == 1
-                    else " and ".join(w["noun"] or default for w, _ in said)
+                    else _sp_list([_sp_station_noun(w) or _sp_counters(office) for w, _ in said], " and ")
                 )
             out.append(finding)
 
@@ -8985,7 +9102,7 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                             spare = sum(r[1] for r in piece)
                             runs_here.append(
                                 {
-                                    "noun": _role_words(role, office)["noun"],
+                                    "noun": _sp_station_noun(_role_words(role, office)),
                                     "wd": wd,
                                     "hours": [r[0] for r in piece],
                                     "staff": piece[0][3],
@@ -9014,7 +9131,7 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                     "key": grid["key"],
                     "site": grid["name"],
                     "office": office,
-                    "noun": _role_words(best["role"], office)["noun"],
+                    "noun": _sp_station_noun(_role_words(best["role"], office)),
                     "day": WEEKDAYS[best["wd"]],
                     "from": best["from"],
                     "to": best["to"],
@@ -9071,7 +9188,7 @@ def _idle_week(runs: list) -> dict:
 IDLE_PARTS = 2  # how many parts of an overstaffed week the line names
 
 
-def _idle_parts(parts: list, default: str) -> str:
+def _idle_parts(parts: list, default):
     """The overstaffed week's parts as the line says them: the IDLE_PARTS with
     the most spare staff-hours, in the week's own order, then "(and N more)" --
     in brackets, since "; and 2 more for 10 customers an hour" would read as
@@ -9079,14 +9196,21 @@ def _idle_parts(parts: list, default: str) -> str:
 
     A part's hours can end "and 5 scattered hours" and join day shapes with
     "and", so the parts are kept apart by a semicolon. spIdleWeek() on the
-    site page says them the same way."""
+    site page says them the same way. A message (sp.py.idle.*); `default`,
+    the noun of a part whose role has none, is best _sp_counters(office), so
+    it is a message too."""
     ranked = sorted(range(len(parts)), key=lambda i: (-(parts[i].get("spare") or 0), i))
     named = sorted(ranked[:IDLE_PARTS])
-    said = "; ".join(
-        f"{parts[i]['staff']} {parts[i]['noun'] or default} {parts[i]['when']}" for i in named
-    )
+    said = _sp_list([
+        msg("sp.py.idle.part", {"one": "{n} {noun} {when}", "other": "{n} {noun} {when}"},
+            n=parts[i]["staff"], noun=parts[i]["noun"] or default, when=parts[i]["when"])
+        for i in named
+    ], "; ")
     more = len(parts) - len(named)
-    return f"{said} (and {more} more)" if more else said
+    if more:
+        return msg("sp.py.idle.more", {"one": "{parts} (and {n} more)", "other": "{parts} (and {n} more)"},
+                   parts=said, n=more)
+    return said
 
 
 GLOBAL_HOOD = "ba:neighborhood_global"
@@ -10923,11 +11047,11 @@ def _alerts(
             where=where, when=when, n=per_week, worth=worth, fix=group[0]["fix"],
             rate=msg("f.atcap.rate", "{n}/h", n=cap) if cap == top
             else msg("f.atcap.range", "{low}-{high}/h", low=cap, high=top),
-            noun=group[0].get("noun") or (msg("f.atcap.noun.office", "workstations") if office
-                                          else msg("f.atcap.noun.shop", "counters")),
+            noun=group[0].get("noun") or _sp_counters(office),
             # Only the first character: a tie joins two limits, and
             # str.capitalize() would lowercase "DJ booths" in the second.
-            limit=limit[:1].upper() + limit[1:],
+            # _cap_first() does that and keeps the limit a message.
+            limit=_cap_first(limit),
         )
         several = group[0].get("limits", 1) > 1
         if len(group) == 1:
@@ -10977,7 +11101,7 @@ def _alerts(
         if finding["key"] in silent or finding["kind"] != "idle":
             continue
         site = finding["site"]
-        default = "workstations" if finding.get("office") else "counters"
+        default = _sp_counters(finding.get("office", False))
         week = finding.get("week") or {
             "spare": finding["spare"],
             "worth": finding["worth"],
@@ -11379,19 +11503,33 @@ def _staff_notes(businesses: list, factories: dict, silent: set, mode: str = "ca
                 share = machine["hours"] / week
                 lost = round((week - machine["hours"]) / 7 * line.get("rate", 0))
                 subject = f"{name} at position {machine['slot']}"
-                text = (
-                    f"{named} machine at list position {machine['slot']} is staffed "
-                    f"{machine['hours']} of {week} hours"
-                    + (" needed" if week < STAFF_HOURS else "")
-                    + f"; nobody on it {machine['off']}"
-                    + (f"; {lost:,} a day not made" if lost else "")
-                )
+                said = dict(item=named, slot=machine["slot"], hours=machine["hours"], week=week,
+                            off=machine["off"])
+                if week < STAFF_HOURS:
+                    text = (
+                        msg("sp.py.staff.needed.lost", "{item} machine at list position {slot} is staffed "
+                            "{hours} of {week} hours needed; nobody on it {off}; {lost:,} a day not made",
+                            lost=lost, **said)
+                        if lost else
+                        msg("sp.py.staff.needed", "{item} machine at list position {slot} is staffed "
+                            "{hours} of {week} hours needed; nobody on it {off}", **said)
+                    )
+                else:
+                    text = (
+                        msg("sp.py.staff.lost", "{item} machine at list position {slot} is staffed "
+                            "{hours} of {week} hours; nobody on it {off}; {lost:,} a day not made",
+                            lost=lost, **said)
+                        if lost else
+                        msg("sp.py.staff", "{item} machine at list position {slot} is staffed "
+                            "{hours} of {week} hours; nobody on it {off}", **said)
+                    )
                 notes.append(
                     _finding(
                         "critical" if share < STAFF_CRITICAL else "warn",
                         business["name"], "staff", text,
                         key=business["key"], rank=machine["hours"], subject=subject,
-                        named=f"{named} at position {machine['slot']}",
+                        named=msg("sp.py.staff.named", "{item} at position {slot}",
+                                  item=named, slot=machine["slot"]),
                         ev={"slot": machine["slot"], "slug": line.get("slug")},
                     )
                 )

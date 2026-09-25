@@ -33,6 +33,9 @@ const CONVERTED = {
   foot: '.sitefoot',
   /* A finding's headline and its detail, on Today and in the site panel. */
   f: '.find .what, .find .more, .sp-find .what, .sp-find .more',
+  /* The answer on a site's cap chip: _role_words()'s fix, said by the Python
+     alone. The chip's other words are the site panel script's (sp). */
+  'sp.py': '#sitePanel .sp-hchip .fix',
   land: '#welcomeLede, #drop, #entryRow, .lg-wiki, #saveLocation, #srcSlot, #help',
   app: '#srcStrip, #srcNote, #srcMenu, #live em',
   upd: '#releaseBanner, #newsStrip',

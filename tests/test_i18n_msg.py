@@ -74,6 +74,14 @@ CONVERTED = {
           for name in ("es3", "game_names") for field in ("text", "unit")]
     + [(name, "alerts", field, findings_5b)
        for name in ("data", "game_names") for field in ("text", "detail", "site")],
+    # The hour grid's words (_hour_findings(), _hour_phrase(), _idle_week()).
+    # A cap's noun, and the limit of a role short of posts, is the station's
+    # own plural: the game's name in English, not a sentence, so not here.
+    "sp.py": [("theatre", "hourFindings", field) for field in ("limit", "fix", "when")]
+    + [("theatre", "hourFindings.week.parts", "when")]
+    # A factory machine short of staff (_staff_notes()), and the hours nobody is on it.
+    + [("data", "alerts", "text", lambda row, field: row.get("group") == "staff" and "detail" not in row),
+       ("data", "supply.factories.sites.lines.gaps", "off")],
     # Today writes its own words in the page (tt()); Python sends it numbers only.
     "today": [],
     # The Company page: each chain's name in the Portfolio.
