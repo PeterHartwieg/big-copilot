@@ -664,7 +664,7 @@ test('#link= only moves the port on this machine', () => {
   assert.equal(h.run('linkBase()'), 'http://127.0.0.1:8323');
   h.context.location.hash = '#link=http://localhost:8325/';
   assert.equal(h.run('linkBase()'), 'http://localhost:8325');
-  for (const bad of ['#link=https://evil.example', '#link=http://10.0.0.5:8322', '#link=ftp://127.0.0.1', '#link=not a url']) {
+  for (const bad of ['#link=https://evil.example', '#link=http://10.0.0.5:8322', '#link=ftp://127.0.0.1', '#link=not a url', '#link=http://[::1]:8325']) {
     h.context.location.hash = bad;
     assert.equal(h.run('linkBase()'), 'http://127.0.0.1:8322', bad);
   }
