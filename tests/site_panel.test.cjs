@@ -1202,6 +1202,11 @@ test('naming a line on the factory panel redraws it named', async () => {
     assert.equal(await page.locator('#sp-lines select.linepick').count(), 0);
     // Its input followed it in, and its output is a figure now.
     assert.match(await page.locator('#sp-inputs tbody tr').first().innerText(), /Dough/);
+    // The input names the line that eats it by the line's key, as a line
+    // Python named does, so the input row points at the Pizza line.
+    assert.equal(await page.locator('#sp-inputs tbody tr').first().getAttribute('data-lines'), tok('s-pizza'));
+    assert.deepEqual(await page.evaluate(() => factoryView().sites[0].needs.map(n => [n.lines, n.lineSlugs])),
+      [[['Pizza'], ['pizza']]]);
     assert.match(await page.locator('#sp-tiles .sstat', {hasText: 'Made / day'}).innerText(),
       /960\s*of 960 rated/);
     // And the choice really went to the store the Supply page reads.

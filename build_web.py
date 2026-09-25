@@ -6,7 +6,9 @@
 Writes web/index.html from the same template the local server uses, with the
 landing screen above the board and the worker data source wired in ahead of
 the board's script, and copies the two Python files into web/py/ for the
-worker to fetch. web/app.js and web/worker.js are kept by hand. Nothing else
+worker to fetch. It also writes the static wiki pages under web/wiki/,
+web/sitemap.xml and web/robots.txt from web/wiki-data.json (tools/wiki_pages.py).
+web/app.js and web/worker.js are kept by hand. Nothing else
 is needed: the folder is a static site.
 
 --check writes nothing and needs no installed game: it reports the files under
@@ -25,6 +27,7 @@ from ba_dashboard import (
 )
 from ba_save import NotEnglishText, bundled_locale, load_game_locale, load_locale, locale_search_paths
 from tools.build_wiki_data import write_public_wiki
+from tools import wiki_pages
 from tools.extract_wiki import game_data_dir
 
 # The game text shipped with the page: the display names of items, business
@@ -595,6 +598,9 @@ def check(root: str = HERE) -> list[str]:
         stale.append("web/version.json")
     if differs("web/index.html", page_html(release, root)):
         stale.append("web/index.html")
+    # The static wiki pages, the sitemap and robots.txt, from the committed
+    # wiki-data.json: a missing, edited or orphaned page is stale.
+    stale.extend("web/" + rel for rel in wiki_pages.check(os.path.join(root, "web")))
     return stale
 
 
@@ -635,6 +641,9 @@ def main() -> None:
     # Refresh reference content before stamping assets, so a game update also
     # invalidates browser caches for the Wiki catalogue.
     write_public_wiki(os.path.join(WEB, "wiki-data.json"))
+    # The static wiki pages, sitemap.xml and robots.txt follow the payload.
+    pages = wiki_pages.write(WEB)
+    print(f"web/wiki/: {pages} static pages, sitemap.xml and robots.txt")
     for name in ("ba_save.py", "ba_dashboard.py"):
         shutil.copyfile(os.path.join(HERE, name), os.path.join(WEB, "py", name))
     # The building table and the arrival curves travel with the code;

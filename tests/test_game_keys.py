@@ -7,7 +7,6 @@ payload carries where it used to carry only a name.
 import json
 import os
 import unittest
-from unittest.mock import patch
 
 from ba_dashboard import (
     HOOD_IDS,
