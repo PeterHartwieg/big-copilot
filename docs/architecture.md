@@ -63,16 +63,16 @@ this column is where to look when you change a key's shape — not a complete ca
 
 | Key | Produced by | Read by |
 | --- | --- | --- |
-| `meta` | `extract()` inline, with `_city_date()` and `_difficulty()` | `drawMast`, `drawWeekday`, `drawSite`, `drawOrderChecklist`, `drawLogistics`, `drawFooter`, `fvOpenDiff`, `drawDifficulty`; `web/map.js` `refreshCityMaps`; `web/wiki.js` `wikiGuidePrices` |
+| `meta` | `extract()` inline, with `_city_date()` and `_difficulty()` | `drawMast`, `drawWeekday`, `drawSite`, `sbData`, `drawSupplyStrip`, `drawFactoriesTab`, `drawFooter`, `fvOpenDiff`, `drawDifficulty`; `web/map.js` `refreshCityMaps`; `web/wiki.js` `wikiGuidePrices` |
 | `kpi` | `extract()` inline, with `_net_worth()` | `drawMast`, `drawKpis` |
 | `daily` | `_daily_series()`, plus the rolling `profit7` added in `extract()` | `drawChart`, `drawKpis`, `drawKpis/hist` |
-| `businesses` | `_business()` per rented non-residential building | `drawPortfolio`, `drawSitePicker`, `openSite`, `siteKeys`, `drawSite`, `drawFlowDetail`, `drawWeekday`, `drawOrderChecklist`, `drawLogistics` and its locals `held`, `label`, `users`, `factoryView/held`, `alertSite`, `nameUses`, `supplyLocation`, and the `SUPPLY_VIEWS` callbacks `shops.row`, `shops.verdict`, `imports.row`, `imports.verdict`, `idle.row`, `idle.verdict`, `lines.row`, `feed.row`, `feed.verdict`; `web/map.js` `mapBusinesses`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn`, `wikiGuidePrices` |
+| `businesses` | `_business()` per rented non-residential building | `drawPortfolio`, `drawSitePicker`, `openSite`, `siteKeys`, `drawSite`, `drawWeekday`, `supplyChecklistRows` and its locals `lineOf`, `held`, `label`, `factoryView/held`, `alertSite`, `nameUses`, the tab drawers `drawShopsTab`, `drawWarehousesTab`, `drawFactoriesTab` and their row helpers (`sbObject`, `sbDepotRow`, `sbLineRow`, `sbInputRow`, `sbTabOf`), and `drawFactoryStaffing`; `web/map.js` `mapBusinesses`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn`, `wikiGuidePrices` |
 | `ownedBuildings` | `_owned_buildings()` | `web/map.js` only: `CityMapView.update`, `openLocationMap` |
 | `homes` | `_homes()`, with `m` and `hood` from `load_buildings()` | `spHome`, `siteKeys`; `web/map.js` `CityMapView.update`, `openLocationMap` |
 | `products` | `_products()`, with `peak`/`swing`/`weeks` from `_product_rhythm()` | `drawProducts`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn` |
 | `staff` | `_staff_summary()` | `drawKpis`, `drawPayroll` |
 | `loans` | `_loans()` | `drawKpis` |
-| `supply` | `_supply()`; its `facts` from `_supply_facts()`, each fact's status word from `_supply_status()`; `margin` and `roundTo` are `SUPPLY_MARGIN` and `SUPPLY_ROUND_TO` | `drawLogistics`, `drawOrderChecklist`, `drawSite`, `drawFlow`, `drawFlowDetail`, `flowLayout`, `supplyLocation`, `factoryView`, and the `SUPPLY_VIEWS` callbacks `shops.rows`, `imports.rows`, `imports.note`, `imports.verdict`, `idle.rows`, `idle.verdict`; `web/map.js` `refreshCityMaps`. `supply.facts` only through `supplyFact()` (below), and `supply.idle` only through `idleRows()`, which keeps the rows idle under the sizing on screen (`modes`) with their `dem` laid over |
+| `supply` | `_supply()`; its `facts` from `_supply_facts()`, each fact's status word from `_supply_status()`; `margin` and `roundTo` are `SUPPLY_MARGIN` and `SUPPLY_ROUND_TO` | `supplyChecklistRows`, `sbData`, the tab drawers `drawShopsTab`, `drawWarehousesTab`, `drawFactoriesTab` (with `sbDepotRows`, `sbTabOf`, `sbNodeOpen`), `drawSite`, `drawFlow`, `flowLayout`, `factoryView`; `web/map.js` `refreshCityMaps`. `supply.facts` only through `supplyFact()` (below), and `supply.idle` only through `idleRows()`, which keeps the rows idle under the sizing on screen (`modes`) with their `dem` laid over |
 | `rhythm` | `_chain_rhythm()`; its `recent` key holds the same three series over the last `RHYTHM_RECENT_DAYS` (28) calendar days before the last finished day, which the chart draws, while the full-length ones feed `_supply()` | `weekdaySeries` (which `drawChart` asks), `drawSite` |
 | `market` | `_market()`; its `catalogue` key is popped out and handed to `_plan()` | `drawMovers`, `drawMarket`; `web/wiki.js` `wikiOwn`, `wikiGuidePrices` |
 | `premises` | `_premises()`, with `_premises_status()`, `_premises_demand()`, `_rent_estimate()`, `_deposit_estimate()`, `_deposit_check()`, `_door_caps()`, `_rival_numbers()`, `_rival_names()` | `drawFindLocation`, `findPremisesLink`, `wireCards`; `web/map.js` `premises` |
@@ -96,17 +96,19 @@ this column is where to look when you change a key's shape — not a complete ca
 
 Four indirect routes an agent would otherwise miss:
 
-- `drawStock` references no key of its own. The Checks view gets its rows through the
-  `SUPPLY_VIEWS` entry selected by `stockView`, and those callbacks do the reading. Change a
-  shape in `supply` or `businesses` and it is `SUPPLY_VIEWS` you have to follow, not
-  `drawStock`.
+- The Supply page's change checklist has one source. `supplyChecklistRows()` gathers the rows
+  from `supply`, `businesses` and the plan, `sbData()` caches them with the player's ticks,
+  and `drawSupplyStrip()` (the strip under the tabs, Today's Plan imports card, the tab
+  badges) and the three tab drawers all read `sbData()` rather than the payload. Change a
+  shape in `supply` or `businesses` and it is `supplyChecklistRows()` you have to follow;
+  it also fills `gwImportRows`, which the game link's write-back reads.
 - The whole location finder reads `premises` through one accessor,
   `const premises = () => D?.premises || null` in `web/map.js`. Every `CityMapView` method
   that ranks, filters or describes a building goes through it, so that one line is the seam
   to follow when the key's shape changes.
 - Every supply verdict on the board reads `supply.facts` through one accessor,
   `supplyFact(s, slug)`: the fact for a site index and an item, its 24/7 fields with the
-  fact's `dem` laid over them when the sizing switch reads Demand. Checks, Orders, Goods
+  fact's `dem` laid over them when the sizing switch reads Demand. The three Supply tabs, the checklist, Goods
   flow and the site page all ask it, so none of them computes a verdict of its own; the
   Python twin is `_supply_fact()`, which the findings use. The findings themselves come
   twice, `alerts`/`minor` and `alertsDemand`, and `alertLines()` picks the pair by the same
