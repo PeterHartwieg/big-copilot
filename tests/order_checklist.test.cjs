@@ -22,7 +22,7 @@ assert.ok(settingStart < start);
 vm.runInContext(between(source, 'let NUM_LOCALE', 'const compact ='), context);
 // The weekday names and Supply's word helpers (sbDay, sbDayShort) the reasons use.
 vm.runInContext(between(source, 'const WEEKDAY_NAMES', 'function drawWeekday('), context);
-vm.runInContext(between(source, '/* A list as one message', "/* A node's name cut to fit"), context);
+vm.runInContext(between(source, '/* A list as one message: the last pair is its own key (sb.list.last)', "/* A node's name cut to fit"), context);
 vm.runInContext(source.slice(settingStart, end), context);
 const businesses = [
   {key:'depot#1', name:'Depot', address:'1 Depot Street'},
