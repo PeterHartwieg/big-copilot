@@ -11710,11 +11710,11 @@ def _feed_notes(businesses: list, factories: dict, silent: set, mode: str = "cap
             elif status == "stalled" and why == "notDrawn":
                 said.update(arrives=row["arrives"], stock=row["depotStock"])
                 text = (msg("f.feed.notdrawn.resume", "{item} arrives at {arrives:,}/day against {per:,} needed "
-                            "while {depot} holds {stock:,}; the line is not drawing it; or resume the paused {item} "
+                            "while {depot} holds {stock:,}; it isn't reaching the line; or resume the paused {item} "
                             "import to {site}", **said)
                         if own else
                         msg("f.feed.notdrawn", "{item} arrives at {arrives:,}/day against {per:,} needed while "
-                            "{depot} holds {stock:,}; the line is not drawing it", **said))
+                            "{depot} holds {stock:,}; it isn't reaching the line", **said))
             else:
                 continue
             notes.append(
@@ -16092,7 +16092,7 @@ const SZ_WHY = {
   get "short:shortfall"(){ return tt("sb.why.short.shortfall", "Runs dry before the next delivery lands"); },
   get "short:target"(){ return tt("sb.why.short.target", "The daily top-up is less than a day's need"); },
   get "short:dry"(){ return tt("sb.why.short.dry", "The depot it comes from is out of it"); },
-  get "stalled:notDrawn"(){ return tt("sb.why.stalled.notDrawn", "The source holds it, yet under three quarters of the need arrived per day over the last week (the last round alone while the log is under a week old): the line is not drawing it"); },
+  get "stalled:notDrawn"(){ return tt("sb.why.stalled.notDrawn", "The source holds it, yet under three quarters of the need arrived per day over the last week (the last round alone while the log is under a week old): it isn't reaching the line"); },
   get "stalled:waiting"(){ return tt("sb.why.stalled.waiting", "The line stands still for want of another input"); },
   get "idle:notMoving"(){ return tt("sb.why.idle.notMoving", "Nothing draws on it"); },
   get "idle:notRouted"(){ return tt("sb.why.idle.notRouted", "No plan sends it on, though your own sites sell or need it"); },
@@ -19741,7 +19741,7 @@ function spNeedRead(n, f){
       return spEsc(szTip(f));
     case "stalled":
       if(f.why === "waiting") return tt("sp.need.waiting", "Waiting on <b>{items}</b>", {items: spEsc((n.waitingOn || []).join(", "))});
-      return tt("sp.need.stalled", "<b>{n}</b>/day arrives; the line is <b>not drawing it</b>", {n: spNum(n.arrives)});
+      return tt("sp.need.stalled", "<b>{n}</b>/day arrives; <b>not reaching the line</b>", {n: spNum(n.arrives)});
     case "covered":
       if(f.why === "staffing") return tt("sp.need.staffing", "Your staffing runs these machines <b>{pct}%</b> of the week", {pct: Math.round((n.staffedShare || 0) * 100)});
       if(f.why === "limit") return tt("sp.need.limit", "Held back by <b>Produce up to</b>");
