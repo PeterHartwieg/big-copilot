@@ -2,8 +2,8 @@
   {
     "pr": 113,
     "date": "2026-09-25",
-    "title": "Floor plans in Find a location",
-    "summary": "Each building the finder lists now names its layout, and the map window shows the game's own floor plan for it: hover a row to see its layout light up on a shelf of every shop, office or warehouse layout drawn at one scale, with its floor area, capacity and entrances (loading bays for a warehouse). Click a layout on the shelf to list only buildings with that layout. On a phone, pick a row and switch the map window to Plan."
+    "title": "Floor plans for every building, and a Layout filter",
+    "summary": "Each building the finder lists now names its layout, the game's short code for its shape, such as C1 or H3. Click a building on the map or in the list and its card shows the game's own floor plan for it, with its entrances (loading bays for a warehouse). A new Layout filter in Find a location lists only the layouts you pick, and a saved search keeps it."
   },
   {
     "pr": 114,
