@@ -339,6 +339,21 @@ test('a factory in round trips with two depots sits below both, both returns dra
   backs.forEach(p => assert.match(p.cls, /\bback\b/));
 });
 
+test('two factories supplying each other: only one of the pair is the way back', async t => {
+  const data = roundTrip();
+  const g = data.supply.graph;
+  const f = g.nodes.find(n => n.id === 'factory#2');
+  g.nodes.push({...f, id: 'factory#9', name: '[FX] Factory X', tag: 'FX', site: null, items: []});
+  const link = (from, to) => ({from, to, perDay: 200, items: 1, slugs: ['cake'], cadence: 'daily', paused: false, arrives: null});
+  g.links.push(link('factory#2', 'factory#9'), link('factory#9', 'factory#2'));
+  const page = await board(t, data, 390);
+  const s = await state(page);
+  const pair = s.pipes.filter(p => p.a.startsWith('factory#') && p.b.startsWith('factory#'));
+  assert.equal(pair.length, 2);
+  assert.equal(pair.filter(p => /\bback\b/.test(p.cls)).length, 1, JSON.stringify(pair));
+  assert.match(s.pipes.find(p => p.a === 'factory#2' && p.b === 'hub#1').cls, /\bback\b/);
+});
+
 test('every pipe back up has a lane of its own, and a paused one a red arrow', async t => {
   const data = roundTrips(4);
   data.supply.graph.links.find(l => l.from === 'factory#2' && l.to === 'dep#2').paused = true;

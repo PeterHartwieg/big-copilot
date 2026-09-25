@@ -16260,7 +16260,7 @@ function flowStages(g){
      a depot filled by a wholesale contract or by hand has no importer on the
      diagram, and its round trip with the factory must not make it downstream. */
   const kindIs = (id, k) => byId.get(id).n.kind === k;
-  const ret = l => kindIs(l.from, "factory") && links.some(r => r.from === l.to && r.to === l.from);
+  const ret = l => kindIs(l.from, "factory") && kindIs(l.to, "depot") && links.some(r => r.from === l.to && r.to === l.from);
   const imported = new Set(links.filter(l => kindIs(l.from, "import")).map(l => l.to));
   const fedBy = new Set(links.filter(l => !ret(l)).map(l => l.to));
   const role = id => {
