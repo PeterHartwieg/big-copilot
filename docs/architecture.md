@@ -75,7 +75,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `supply` | `_supply()`; its `facts` from `_supply_facts()`, each fact's status word from `_supply_status()`; `margin` and `roundTo` are `SUPPLY_MARGIN` and `SUPPLY_ROUND_TO` | `drawLogistics`, `drawOrderChecklist`, `drawSite`, `drawFlow`, `drawFlowDetail`, `flowLayout`, `supplyLocation`, `factoryView`, and the `SUPPLY_VIEWS` callbacks `shops.rows`, `imports.rows`, `imports.note`, `imports.verdict`, `idle.rows`, `idle.verdict`; `web/map.js` `refreshCityMaps`. `supply.facts` only through `supplyFact()` (below), and `supply.idle` only through `idleRows()`, which keeps the rows idle under the sizing on screen (`modes`) with their `dem` laid over |
 | `rhythm` | `_chain_rhythm()`; its `recent` key holds the same three series over the last `RHYTHM_RECENT_DAYS` (28) calendar days before the last finished day, which the chart draws, while the full-length ones feed `_supply()` | `weekdaySeries` (which `drawChart` asks), `drawSite` |
 | `market` | `_market()`; its `catalogue` key is popped out and handed to `_plan()` | `drawMovers`, `drawMarket`; `web/wiki.js` `wikiOwn`, `wikiGuidePrices` |
-| `premises` | `_premises()`, with `_premises_status()`, `_premises_demand()`, `_rent_estimate()`, `_deposit_estimate()`, `_deposit_check()`, `_door_caps()`, `_rival_numbers()`, `_rival_names()` | `drawFindLocation`, `findPremisesLink`, `wireCards`; `web/map.js` `premises` |
+| `premises` | `_premises()`, with `_premises_status()`, `_premises_demand()`, `_rent_estimate()`, `_deposit_estimate()`, `_deposit_check()`, `_door_caps()`, `_rival_numbers()`, `_rival_names()` | `drawFindLocation`, `finderPreset`, `wireCards`; `web/map.js` `premises` |
 | `chains` | `_chains()` | `drawPortfolio`, `siteCrumbs` |
 | `trends` | `_site_trends()` | `indexTrends` |
 | `hypeExposure` | `_hype_exposure()` | no reader — but see below |
@@ -120,8 +120,8 @@ Four indirect routes an agent would otherwise miss:
   has not judged. `tests/fixtures/r8_supply.json` is the board's synthetic payload, and
   `tests/test_supply_facts.py` holds its keys, units and reasons to what `extract()`
   sends.
-- `#cellDetail`, the site panel and the map cards are filled from data already in hand, so
-  they do not appear above.
+- The site panel and the map cards are filled from data already in hand, so they do not
+  appear above.
 
 Three keys have no reader, and only one of them is dead end to end:
 

@@ -1406,19 +1406,155 @@ test('a Growth cell opens the finder on its own type and neighbourhood', async (
   try{
     await page.evaluate(() => { showPage('growth'); drawMarket(); wireHeat(); });
     await page.locator(`#market .cell[data-slug="${CLOTHES}"][data-hood="Hell\\'s Kitchen"]`).click();
-    assert.match(await page.locator('#cellDetail').textContent(), /find premises/);
-    await page.locator('#cellDetail .link.pin').click();
     await page.locator('#cityMapPage .place.fr').first().waitFor();
+    // The cell is on a hidden page now, so the keyboard lands on the first result.
+    await page.waitForFunction(() => document.activeElement?.matches('#cityMapPage .place.fr'));
     assert.equal(await page.locator('#cityMapPage .fchip.cat.on').textContent(), 'Retail');
     assert.equal(await page.locator('#cityMapPage [data-f="type"]').inputValue(), CLOTHES);
     assert.deepEqual(await rowKeys(page), [HK[0]]);   // Midtown is switched off
-    // An office row asks for office buildings instead.
+    // An office row asks for office buildings instead, and the keyboard does
+    // what the mouse does.
     await page.evaluate(() => showPage('growth'));
-    await page.locator(`#market .cell[data-slug="${LAW}"]`).click();
-    await page.locator('#cellDetail .link.pin').click();
+    await page.locator(`#market .cell[data-slug="${LAW}"]`).first().focus();
+    await page.keyboard.press('Enter');
     await page.locator('#cityMapPage .place.fr').first().waitFor();
     assert.equal(await page.locator('#cityMapPage .fchip.cat.on').textContent(), 'Office');
     assert.deepEqual(await rowKeys(page), [HK[4]]);
+    // Nothing is drawn under the grid any more.
+    assert.equal(await page.locator('#cellDetail').count(), 0);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+/* Enough vacant shops in Hell's Kitchen that the preset's list still scrolls.
+   On a wide map the list is the scroller; on a narrow one it is the whole
+   panel, with the filters above the results. */
+async function scrolledFinderToGrowthCell(width, scroller){
+  const extra = geometry.buildings.filter(b => b.hood === HK_NAME && b.path && !HK.includes(b.key))
+    .slice(0, 30).map(b => site(b.key, {traffic: 30}));
+  assert.equal(extra.length, 30);
+  const {page, errors} = await fixture(null, {premises: {...PREMISES, buildings: [...PREMISES.buildings, ...extra]}});
+  try{
+    await page.setViewportSize({width, height: 600});
+    await openMap(page); await turnOn(page);
+    await page.$eval(scroller, el => { el.scrollTop = el.scrollHeight; });
+    const before = await page.$eval(scroller, el => el.scrollTop);
+    assert.ok(before > 0, 'the panel scrolls');
+    await page.evaluate(() => { showPage('growth'); drawMarket(); wireHeat(); });
+    await page.locator(`#market .cell[data-slug="${CLOTHES}"][data-hood="${HK_NAME}"]`).click();
+    await page.waitForFunction(() => document.activeElement?.matches('#cityMapPage .place.fr'));
+    await page.waitForTimeout(100);
+    assert.ok(await page.$eval(scroller, el => el.scrollTop) < before, 'the panel went back up');
+    const [first, box, isFirst] = await page.evaluate(sel => {
+      const el = document.activeElement.getBoundingClientRect(), panel = document.querySelector(sel).getBoundingClientRect();
+      return [{top: el.top, bottom: el.bottom}, {top: Math.max(panel.top, 0), bottom: Math.min(panel.bottom, innerHeight)},
+        document.activeElement === document.querySelector('#cityMapPage .place.fr')];
+    }, scroller);
+    assert.equal(isFirst, true);
+    assert.ok(first.top >= box.top - 1 && first.bottom <= box.bottom + 1,
+      `the focused first result (${first.top}-${first.bottom}) is inside the visible panel (${box.top}-${box.bottom})`);
+    assert.ok(await page.locator('#cityMapPage .place.fr').count() > 10);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+}
+test('a Growth cell opens the finder at the top of its list, however far it was scrolled', async () => {
+  await scrolledFinderToGrowthCell(1440, '#cityMapPage .places .list');
+});
+test('on a narrow map the panel goes back up and the focused first result is in view', async () => {
+  await scrolledFinderToGrowthCell(760, '#cityMapPage .places');
+});
+
+test('a finder the player left while it loaded never reaches for the focus', async () => {
+  const {page, errors} = await fixture();
+  try{
+    await page.evaluate(() => { showPage('growth'); drawMarket(); wireHeat(); });
+    // A hidden page cannot take the focus anyway, so the spy counts the tries.
+    await page.evaluate(async () => {
+      window.focusTries = 0;
+      const focus = HTMLElement.prototype.focus;
+      HTMLElement.prototype.focus = function(...args){
+        if(this.closest('#cityMapPage')) window.focusTries++;
+        return focus.apply(this, args);
+      };
+      // Leave for Today before the map has loaded, then let it finish.
+      document.querySelector('#market .cell[role=button]').click();
+      showPage('today');
+      await cityMapPage.ready;
+      await new Promise(r => setTimeout(r, 50));
+    });
+    assert.equal(await page.evaluate(() => window.focusTries), 0);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a cell with no reading is no button and opens nothing', async () => {
+  const {page, errors} = await fixture();
+  try{
+    await page.evaluate(() => { showPage('growth'); drawMarket(); wireHeat(); });
+    // The Law Firm has no reading in Midtown.
+    const none = page.locator('#market .cell.none');
+    assert.equal(await none.count(), 1);
+    assert.equal(await none.getAttribute('role'), null);
+    await none.click();
+    assert.equal(await page.locator('#pageGrowth').isVisible(), true);
+    assert.equal(await page.locator('#cityMapPage .place.fr').count(), 0);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test("the finder's demand figure leads back to that type's Growth row", async () => {
+  const {page, errors} = await fixture();
+  try{
+    await openMap(page); await turnOn(page);
+    await page.locator('#cityMapPage [data-f="type"]').selectOption(CLOTHES);
+    await pick(page, HK[0]);
+    const back = page.locator('#cityMapPage .site .mf-grow');
+    assert.equal((await back.locator('b').textContent()).trim(), '77');
+    assert.match(await back.getAttribute('data-tip'), /Clothing Store in every neighbourhood, on Growth › Demand/);
+    // From the product views too: the link switches the grid back to By type.
+    await page.evaluate(() => showPage('growth'));
+    await page.locator('#marketTools a[data-id="mine"]').click();
+    assert.equal(await page.locator('#marketTools a.on').textContent(), 'What I sell');
+    await page.evaluate(() => showPage('map'));
+    // A live refresh repaints the card and the link keeps the focus.
+    await back.focus();
+    await page.evaluate(() => refreshCityMaps());
+    assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('mf-grow')), true);
+    await back.click();
+    assert.equal(await page.locator('#pageGrowth').isVisible(), true);
+    assert.equal(await page.evaluate(() => marketView), 'types');
+    assert.equal(await page.locator('#marketTools a.on').textContent(), 'By type');
+    const row = page.locator(`#market .r[data-slug="${CLOTHES}"]`);
+    assert.match(await row.getAttribute('class'), /\bmk-arrive\b/);
+    const r = await row.getAttribute('data-r');
+    const ringed = await page.$$eval(`#market .cell[data-r="${r}"]`, cs => cs.every(c => c.classList.contains('mk-arrive')));
+    assert.equal(ringed, true);
+    assert.equal(await page.locator('#market .mk-arrive').count(), 3);   // the label and its two cells
+    // The keyboard lands on the row's first cell that opens the finder.
+    assert.equal(await page.evaluate(() => document.activeElement?.matches('#market .cell[role=button][data-r="0"][data-c="0"]')), true);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a row the demand figure leads back to clears the sticky masthead', async () => {
+  const {page, errors} = await fixture();
+  try{
+    await page.setViewportSize({width: 1440, height: 500});
+    await page.evaluate(() => { document.body.style.paddingBottom = '3000px'; });   // room to scroll the row up
+    await openMap(page); await turnOn(page);
+    await page.locator('#cityMapPage .fchip.cat[data-cat="office"]').click();
+    await pick(page, HK[4]);
+    await page.locator('#cityMapPage .site .mf-grow').click();
+    // The Law Firm is the second row, so the page has to scroll to it.
+    const row = page.locator(`#market .r[data-slug="${LAW}"]`);
+    assert.equal(await row.getAttribute('data-r'), '1');
+    await page.waitForTimeout(600);   // settleScroll keeps the row in place for a few frames
+    const [top, mast] = await page.evaluate(sel => [document.querySelector(sel).getBoundingClientRect().top,
+      document.getElementById('mast').getBoundingClientRect().bottom], `#market .r[data-slug="${LAW}"]`);
+    assert.ok(top >= mast, `row top ${top} is under the masthead (${mast})`);
+    assert.ok(await page.evaluate(() => scrollY) > 0, 'the page scrolled');
+    // The focus follows, to the office row's cell that opens the finder.
+    assert.equal(await page.evaluate(() => document.activeElement?.matches('#market .cell[role=button][data-r="1"]')), true);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
