@@ -115,7 +115,7 @@ test('dashboard motion wakes for new balls and scrolling, and pauses while hidde
 });
 
 test('folder timer and visibility wake cannot overlap an unfinished scan', async () => {
-  const source = app.slice(app.indexOf('  async function checkFolder()'), app.indexOf('  function armWatch()'));
+  const source = require('./_slice.cjs').between(app, '  async function checkFolder()', '  function armWatch()');
   let release, scans = 0;
   const gate = new Promise(resolve => { release = resolve; });
   const context = vm.createContext({

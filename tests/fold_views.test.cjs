@@ -470,7 +470,8 @@ test('renderAll asks which chip has focus before the chips are replaced', () => 
   // The order the refresh test above stands in for: fvChipFocus() read before
   // drawMast() and drawFooter(), and handed to drawDifficulty().
   const src = fs.readFileSync(path.join(__dirname, '..', 'ba_dashboard.py'), 'utf8');
-  const body = src.slice(src.indexOf('function renderAll(){'), src.indexOf('\n}', src.indexOf('function renderAll(){')));
+  // The function up to its closing brace, the first "\n}" after the anchor.
+  const body = require('./_slice.cjs').between(src, 'function renderAll(){', '\n}');
   const at = needle => { const i = body.indexOf(needle); assert.ok(i >= 0, needle); return i; };
   assert.ok(at('const diffFocus = fvChipFocus();') < at('drawMast();'));
   assert.ok(at('drawMast();') < at('drawFooter();'));

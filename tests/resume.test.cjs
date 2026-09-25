@@ -4,13 +4,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
-const startup = source.slice(source.indexOf('    // A folder chosen on an earlier visit:'), source.lastIndexOf('  });'));
+const {between} = require('./_slice.cjs');
+const startup = between(source, '    // A folder chosen on an earlier visit:', '  });', {last: true});
 // The page's tt(), which app.js writes every word through.
 const i18n = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8');
 // How app.js hands the strip its words: say(), failure() and errWords().
-const sayHelpers = source.slice(source.indexOf('  const say = (v)'), source.indexOf('\n', source.indexOf('  const errWords')));
+const sayHelpers = between(source, '  const say = (v)', '\n', {endAfter: '  const errWords'});
 // The loopback check a remembered link goes through, as app.js has it.
-const loopback = source.slice(source.indexOf('  function loopbackOrigin('), source.indexOf('  // Chrome and Edge hold a public page'));
+const loopback = between(source, '  function loopbackOrigin(', '  // Chrome and Edge hold a public page');
 
 async function resume(permission, options = {}) {
   const loads = [];

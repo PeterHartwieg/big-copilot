@@ -9,20 +9,20 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '..', 'ba_dashboard.py'), 'utf8');
-const start = source.indexOf('function buildOrderChecklist(');
-const end = source.indexOf('const orderMarkCache', start);
-assert.ok(start >= 0 && end > start);
+const {at, between} = require('./_slice.cjs');
+const start = at(source, 'function buildOrderChecklist(');
+const end = at(source, 'const orderMarkCache', {from: start});
 const context = vm.createContext({});
 // tt(), which the Plan imports card's wording goes through (web/i18n.js).
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8'), context);
 // The row setting the imports table computes, which feeds the checklist.
-const settingStart = source.indexOf('function importSetting(');
-assert.ok(settingStart >= 0 && settingStart < start);
+const settingStart = at(source, 'function importSetting(');
+assert.ok(settingStart < start);
 // The board's number formatter, which the checklist's wording goes through.
-vm.runInContext(source.slice(source.indexOf('let NUM_LOCALE'), source.indexOf('const compact =')), context);
+vm.runInContext(between(source, 'let NUM_LOCALE', 'const compact ='), context);
 // The weekday names and Supply's word helpers (sbDay, sbDayShort) the reasons use.
-vm.runInContext(source.slice(source.indexOf('const WEEKDAY_NAMES'), source.indexOf('function drawWeekday(')), context);
-vm.runInContext(source.slice(source.indexOf('/* A list as one message'), source.indexOf("/* A node's name cut to fit")), context);
+vm.runInContext(between(source, 'const WEEKDAY_NAMES', 'function drawWeekday('), context);
+vm.runInContext(between(source, '/* A list as one message: the last pair is its own key (sb.list.last)', "/* A node's name cut to fit"), context);
 vm.runInContext(source.slice(settingStart, end), context);
 const businesses = [
   {key:'depot#1', name:'Depot', address:'1 Depot Street'},
@@ -421,7 +421,7 @@ test('tight never reaches Today: with only margin changes left, the card says no
   assert.deepEqual(card([], [], {complete: true, unnamed: 0, margin: 2}), {badge:'ALL SET', live:false,
     what:'Nothing falls short. Supply lists 2 changes that would restore the margin.'});
   assert.doesNotMatch(card([], [], {complete: true, unnamed: 0, margin: 1}).what, /tight/i);
-  const drawn = source.slice(source.indexOf('function drawSupplyStrip('), source.indexOf('/* The Set to figures the player typed'));
+  const drawn = between(source, 'function drawSupplyStrip(', '/* The Set to figures the player typed');
   assert.match(drawn, /const urgent = rows\.filter\(r => !r\.tight && !r\.lower\);/);
   assert.match(drawn, /planImportsState\(urgent,/);
 });

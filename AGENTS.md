@@ -118,7 +118,7 @@ side and rebuild — the rebuild is the resolution.
 | `web/app.js`, `web/worker.js`, `web/update.js` | `node --test tests/*.test.cjs`, then `python build_web.py` |
 | `build_web.py` `BANNER` or `BEFORE_SCRIPT` (landing screen, news strip) | `python build_web.py` first, since the Node tests and `tests.test_privacy_promises` read the built page; then `node --test tests/news.test.cjs tests/release.test.cjs tests/update.test.cjs` and `python -m unittest tests.test_privacy_promises tests.test_footer` |
 | `web/changelog.json` | `python -m unittest tests.test_release_latest`, then `python build_web.py`: the file is a build stamp input |
-| A new finding kind, view, payload key, finder filter, footer link or news item | the matching checklist in the Registries section of `docs/architecture.md`, and the tests it names |
+| A new finding kind, view, payload key, finder filter, footer link or news item | the matching checklist in the Registries section of `docs/architecture.md`, and the tests it names. `python -m unittest tests.test_doc_registries` holds the doc's payload table and private build tokens, and the finding groups, to the code; `node --test tests/alert_kinds.test.cjs tests/navigation.test.cjs` holds the finding-kind and view tables to each other |
 | `web/map.js`, `web/map.css` | `node --test tests/map.test.cjs tests/finder.test.cjs` and `python -m unittest discover -s tests -p test_map_assets.py`, then `python build_web.py`. The finder lives in `web/map.js`; `tests/finder.test.cjs` also covers `drawFindLocation` in `ba_dashboard.py`, and `finderPreset`, through a Growth › Demand cell opening the finder |
 | `tools/*.py` (the wiki pipeline, not `tools/game_update/` or `tools/game_link_mock.py`), `tools/wiki_sample.json`, `tools/wiki_topics.json`, `web/wiki.js`, `web/wiki.css` | `python -m unittest discover -s tests -p "test_wiki*.py"` (the hand-written articles are `tests/test_wiki_build.py`) and `node --test tests/wiki*.test.cjs`, then `python build_web.py` |
 | `server/`, `migrations/` | `npm run test:community` and `npm run check:worker` |
@@ -173,9 +173,17 @@ and never attach one to an issue.
   `tests/game_link.test.cjs`, `tests/game_text.test.cjs`, `tests/performance.test.cjs`,
   `tests/resume.test.cjs`, `tests/save_location.test.cjs`. `tests/alert_kinds.test.cjs` also
   matches a fragment of the findings loop in `mapFindings()` in `web/map.js` with a regex.
-  Two Python tests read `TEMPLATE` as text: `tests/test_plan_orders.py` cuts
-  `function planOrder(` out of it, and `tests/test_routed_supply.py` checks the line with
-  `id:"shortfall"`.
+  The tests above find their anchors through `between()` and `at()` in `tests/_slice.cjs`.
+  They throw naming a start anchor that is missing or no longer unique, or an end anchor
+  missing after it, so a reworded anchor fails loudly rather than slicing the wrong span.
+  End anchors are not checked for uniqueness: the first one after the start wins.
+  `tests/game_names.test.cjs`, `tests/i18n_runtime.test.cjs` and
+  `tests/number_locale.test.cjs` also slice `ba_dashboard.py`, still with a bare `indexOf`.
+  Three Python tests read `ba_dashboard.py` as text: `tests/test_plan_orders.py`
+  cuts `function planOrder(` out of `TEMPLATE`, `tests/test_routed_supply.py` checks the
+  line with `id:"shortfall"`, and `tests/test_doc_registries.py` reads the `ALERT_GROUPS`
+  ids and `TEMPLATE`'s tokens, and parses `_alerts()` and the `_*_notes` helpers for the
+  finding groups they emit.
 - Text on the page is `tt("area.thing", "English")`, `data-tt="area.thing"` or
   `msg("area.thing", "English", ...)` once its area is converted, one key per sentence,
   never a sentence built from pieces (docs/architecture.md, "UI text"). A `Msg` that is
