@@ -481,9 +481,39 @@ test('Enter keeps a Set to figure put back by a refresh', async t => {
     box.focus(); box.value = '4321';
     return box.dataset.imp;
   });
+  await page.evaluate(() => {
+    window.calmKept = 0;
+    const keep = window.impSetKeep;
+    window.impSetKeep = (...a) => { calmKept++; return keep(...a); };
+  });
   await deliver(page, later);
   await page.keyboard.press('Enter');
   assert.equal(await page.evaluate(id => (impSetEdits().edits[id] || {}).value, typed), 4321);
+  // Leaving the box after Enter commits nothing twice.
+  await page.evaluate(() => new Promise(r => setTimeout(r)));
+  await page.evaluate(() => document.activeElement && document.activeElement.blur());
+  assert.equal(await page.evaluate(() => calmKept), 1, 'one commit');
+});
+
+test('a Set to figure put back by a refresh and edited again is committed once', async t => {
+  const page = await board(t);
+  await page.evaluate(() => { showPage('supply'); showSub('supply', 'warehouses'); sbWhich = 'all'; drawSupplyTab('warehouses'); wireAll(); });
+  const typed = await page.evaluate(() => {
+    const box = document.querySelector('#secWarehouses input[data-imp]');
+    box.focus(); box.value = '432';
+    window.calmKept = 0;
+    const keep = window.impSetKeep;
+    window.impSetKeep = (...a) => { calmKept++; return keep(...a); };
+    return box.dataset.imp;
+  });
+  await deliver(page, later);
+  await page.keyboard.press('End');
+  await page.keyboard.type('1');
+  await page.keyboard.press('Enter');
+  await page.evaluate(() => new Promise(r => setTimeout(r)));
+  await page.evaluate(() => document.activeElement && document.activeElement.blur());
+  assert.equal(await page.evaluate(id => (impSetEdits().edits[id] || {}).value, typed), 4321);
+  assert.equal(await page.evaluate(() => calmKept), 1, 'one commit');
 });
 
 test('a render keeps a Stale mark on the fresh dot, and a lost source replaces it', async t => {

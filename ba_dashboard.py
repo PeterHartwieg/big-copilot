@@ -14753,7 +14753,9 @@ const SOURCE = window.LEDGER_SOURCE || {
         const body = await res.json();
         misses = 0;
         h.stale(body.error);
-        if(stamp === null){ stamp = body.stamp; return; }
+        /* A page opened before any board built (watch()'s shell) loads the
+           first one as soon as it exists. */
+        if(stamp === null){ stamp = body.stamp; if(!D && stamp) h.changed(await SOURCE.data()); return; }
         if(body.stamp === stamp) return;
         stamp = body.stamp;
         h.changed(await SOURCE.data());
@@ -14949,7 +14951,9 @@ const HOOD_NAMES = /*__HOOD_NAMES__*/{};
    or a neighbourhood carries the game's key; the words are looked up only to be
    shown, from the payload's `names`, which the game text fills. */
 const gameName = key => key ? (gnTable && gnTable[key]) || ((D && D.names) || {})[key] || HOOD_NAMES[key] || "" : "";
-const hoodName = key => gameName(key) || String(key || "").replace(/^ba:neighborhood_/, "");
+/* A key the game has no name for comes from a crafted save: its fallback keeps
+   only what ba_save._plain() keeps, so it is text wherever it lands. */
+const hoodName = key => gameName(key) || String(key || "").replace(/^ba:neighborhood_/, "").replace(/[^A-Za-z0-9 '.&-]/g, "");
 
 /* --- game names in the player's language -------------------------------
    Python writes every name in English, and the page lays one language's table
@@ -17064,7 +17068,7 @@ function xlKind(w, n, slug){
     case "factory": return tt("co.chain.factories", {one: "{n} factory", other: "{n} factories"}, {n});
   }
   const many = /quarters$/.test(w) ? w : /[^aeiou]y$/.test(w) ? w.slice(0, -1) + "ies" : `${w}s`;
-  const type = /^ba:/.test(slug || "") ? `\u27e6${slug}|${w}\u27e7` : w;
+  const type = /^ba:[a-z0-9_]+$/i.test(slug || "") ? `\u27e6${slug}|${w}\u27e7` : w;
   return tt("co.chain.kind", {one: "{n} {kind}", other: "{n} {kinds}"}, {n, kind: w, kinds: many, type});
 }
 function chainRow(c, v){
@@ -21572,11 +21576,12 @@ function impDraft(){
     if(!typed) return;
     next.value = value;
     /* The browser owes no change event for a value a script put back, so it
-       is committed on leaving the box or on Enter, unless an edit of the
-       player's own has fired one meanwhile. */
+       is committed on leaving the box or on Enter, unless the player has
+       edited it since: then the browser's own change event commits it. */
     let done = false;
     const commit = () => { if(!done && next.value !== next.defaultValue && next.onchange){ done = true; next.onchange(); } };
-    next.addEventListener("change", () => { done = true; }, {once: true});
+    /* Once the player edits the box, the browser owes its own change event. */
+    next.addEventListener("input", () => { done = true; }, {once: true});
     next.addEventListener("blur", commit, {once: true});
     next.addEventListener("keydown", e => { if(e.key === "Enter") commit(); });
   };

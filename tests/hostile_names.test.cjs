@@ -92,8 +92,11 @@ test('every page, view and site page prints the names as text', async t => {
   for (const v of ['types', 'mine', 'new']) {
     await page.evaluate(v => { showPage('growth'); showSub('growth', 'market'); marketView = v; showAllMarket = true; drawMarket(); }, v);
     assert.deepEqual(await injected(page), clean, `market ${v}`);
+    // The neighbourhood with no name in the game reads as its key, less the markup.
+    assert.ok((await page.locator('#market').textContent()).toLowerCase().replace(/[^a-z]/g, '').includes('bcxssxy'), `market ${v} names the neighbourhood`);
     if (v === 'mine') assert.ok((await page.locator('#market').textContent()).includes(NAMES.PRODUCT), `market ${v} names the product`);
   }
+  assert.ok((await page.locator('#movers').textContent()).toLowerCase().replace(/[^a-z]/g, '').includes('bcxssxy'), 'the demand wave names the neighbourhood');
   // Plan a chain for the liquor store, with a machine on each line, so the
   // ingredient table fills in.
   await page.evaluate(() => {

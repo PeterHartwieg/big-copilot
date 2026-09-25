@@ -38,6 +38,8 @@ INGREDIENT = "Water <bc-xss> & <img src=x onerror=window.__xss=8>"
 STREET = "ba:street_broadway<bc-xss>street"
 HOUSE = "19<bc-xss>"
 TYPE = "ba:businesstype_<bc-xss>giftshop"
+# A neighbourhood key the game has no name for, in the market and a demand wave.
+HOOD = "ba:neighborhood_<bc-xss>x&y"
 RECIPE = "<bc-xss>\" onmouseover=\"window.__xss=9"
 NAMES = {f.LIQUOR: SHOP, f.GIFTS: GIFTS, f.HUB: DEPOT, f.BREWERY: FACTORY, f.RIVAL: RIVAL_SHOP}
 
@@ -75,6 +77,11 @@ def hostile_company(day: int = f.DAY) -> dict:
         if event.get("rivalName"):
             event.update(rivalName=RIVAL, businessName=RIVAL_SHOP)
     company["employeePresets"][0]["name"] = UNIFORM
+    for entry in company["productMarketEntries"]:
+        entry["demandValues"].append(
+            {"neighborhood": HOOD, "demand": 70, "providers": 1, "hasPlayerMonopoly": False})
+    company["marketEvents"].append({"type": 2, "itemName": f.BEER, "neighbourhood": HOOD,
+                                    "startDay": f.DAY - 2, "durationInDays": 9, "stopped": False})
     company["SaveGameName"] = "Hostile <bc-xss> & </script> Co"
     return company
 

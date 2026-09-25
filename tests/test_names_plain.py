@@ -23,6 +23,7 @@ class SlugFallbacks(unittest.TestCase):
         for slug in ("ba:businesstype_<img src=x onerror=alert(1)>", 'ba:itemname_"><svg/onload=x>'):
             self.assertRegex(self.names.label(slug), r"^[A-Za-z0-9 '.&-]+$")
         self.assertEqual(self.names.label("ba:itemname_smartphone1"), "Smartphone 1")
+        self.assertEqual(self.names.label("ba:jobdemand_fulltime_description"), "Fulltime Description")
 
     def test_a_street_drops_markup_and_keeps_known_names(self):
         self.assertEqual(self.names.street("ba:street_fifthavenue"), "Fifth Avenue")
@@ -32,6 +33,7 @@ class SlugFallbacks(unittest.TestCase):
 
     def test_a_street_number_is_digits(self):
         self.assertEqual(house_number(19), "19")
+        self.assertEqual(house_number(19.0), "19")
         self.assertEqual(house_number("19<img src=x>"), "19")
         self.assertEqual(house_number("<b>"), "-")
         self.assertEqual(self.names.addr(("ba:street_broadway", "7<i>")), "7 Broadway")
