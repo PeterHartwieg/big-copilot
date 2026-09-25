@@ -21534,9 +21534,18 @@ function hrPlanRow(site, variant){
   const list = Array.isArray(offices) ? offices : ((offices || {})[variant] || []);
   return list.find(r => r.key === site.key && !r.failed) || null;
 }
-/* Who a person is: the hiring payload's own table, else the plan's. */
-const hrPerson = (id, row) => ((D.hiring || {}).people || {})[id]
-  || Object.assign({id}, ((row || {}).people || []).find(p => p.id === id) || {});
+/* Who a person is: the hiring payload's own table ({name, skills, wage,
+   site, hours, demands}), else the plan's (a name). Their role is their
+   best skill, and a move keeps to it. */
+const hrPerson = (id, row) => {
+  const had = ((D.hiring || {}).people || {})[id];
+  const p = Object.assign({id}, had || ((row || {}).people || []).find(x => x.id === id) || {});
+  if(!p.skill){
+    const top = (p.skills || []).filter(x => x && x.skill).sort((a, b) => (Number(b.level) || 0) - (Number(a.level) || 0))[0];
+    if(top){ p.skill = top.skill; p.level = Number(top.level) || 0; }
+  }
+  return p;
+};
 
 /* The page's whole answer, deterministic for one payload, one set of
    filters and one set of ticks:

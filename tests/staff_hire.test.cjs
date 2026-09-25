@@ -118,7 +118,8 @@ function withHiring(text) {
   d.candidates = CANDS;
   d.hiring = {
     bench: ['BENCH1'],
-    people: {SPARE1: {name: 'Sam Spare', skill: CS, level: 66, wage: 21}, BENCH1: {name: 'Bo Bench', skill: CLEAN, level: 55, wage: 17}},
+    people: {SPARE1: {name: 'Sam Spare', skills: [{skill: CS, level: 66}], wage: 21, site: C, hours: 12, demands: []},
+      BENCH1: {name: 'Bo Bench', skills: [{skill: CLEAN, level: 55}, {skill: CS, level: 20}], wage: 17, site: null, hours: 0, demands: []}},
     demandKinds: {'ba:jobdemand_freeweekends': 'schedule', 'ba:jobdemand_nonights': 'schedule', 'ba:jobdemand_fulltime': 'schedule',
       'ba:jobdemand_coffeemachine': 'site', 'ba:jobdemand_goldhealthinsurance': 'company'},
     company: {'ba:jobdemand_goldhealthinsurance': false},
