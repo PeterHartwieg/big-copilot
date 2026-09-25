@@ -238,7 +238,8 @@ Layout versions come from the game's buildings bundle and floor plans from its
 building-structure bundles; both scripts are owner-only. With UnityPy on `PYTHONPATH`, run `python make_buildings.py --versions` (the
 `v` column of `ba_buildings.json`), then `python make_floor_plans.py`
 (`web/maps/floor-plans.json`), then `git diff --stat ba_buildings.json
-web/maps/floor-plans.json`. No diff means neither changed. `build_web.py` refuses a
+web/maps/floor-plans.json`. No diff means neither changed; if either
+changed, commit both and rebuild. `build_web.py` refuses a
 floor-plan set that is missing a layout `ba_buildings.json` uses
 (`tests/test_floor_plans.py`).
 
