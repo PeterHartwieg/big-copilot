@@ -1450,6 +1450,9 @@ class Guide:
             for ref in sellers.values():
                 self.touch(ref.get("slug") or "")
             self.page_id(prefix)
+            # The capacities travel only for the fixtures this guide lists for
+            # the product: a holder scoped to another business stays behind.
+            carried = set(fixtures) | set(fee_fixtures)
             out[slug] = {
                 "name": record["name"],
                 "slug": prefix,
@@ -1458,7 +1461,7 @@ class Guide:
                 "kind": kind,
                 "alsoSoldBy": [ref["name"] for ref in sellers.values()],
                 "alsoSoldByKeys": [ref.get("slug") for ref in sellers.values()],
-                "fixtures": sorted(set(fixtures) | set(fee_fixtures)),
+                "fixtures": sorted(carried),
                 "wholesale": page_wholesale if page_wholesale == list_wholesale else None,
                 "importers": [key for key in (
                     self.supplier_key(ref.get("address"))
@@ -1472,7 +1475,7 @@ class Guide:
                 "automatic": bool(_AUTOMATIC_FEE_RE.search(text)),
                 "pageId": self.page_id(prefix),
                 "fixtureCapacities": self.fixture_capacities(
-                    record.get("name") or "", sorted(set(named) | set(holders))),
+                    record.get("name") or "", sorted((set(named) | set(holders)) & carried)),
             }
         return out
 

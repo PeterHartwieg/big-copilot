@@ -189,6 +189,9 @@ class PayloadSnapshotTests(unittest.TestCase):
         later = json.loads(self.texts["data_day47_history"])
         self.assertTrue(day40["daily"] and day40["loans"] and day40["homes"] and day40["ownedBuildings"])
         self.assertTrue(day40["hypeExposure"] and day40["market"]["rows"] and day40["market"]["shortages"])
+        # A supplier event at an address carries the map's key beside its words.
+        self.assertIn(("1 Pier", "ba:street_pier#1"),
+                      [(s["where"], s["siteKey"]) for s in day40["market"]["shortages"]])
         self.assertTrue(day40["supply"]["factories"]["sites"] and day40["supply"]["imports"])
         self.assertTrue(day40["alerts"] and day40["staffing"] and day40["hourFindings"])
         self.assertTrue(day40["factoryStaffing"]["cap"] and day40["factoryStaffing"]["dem"])

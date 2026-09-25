@@ -1131,3 +1131,13 @@ test('a shelf that counts two kinds of goods shows both rows, never the larger',
   const also = section(html, 'Also sells');
   assert.match(also, /Cake Stand<b>60<\/b>/);
 });
+
+test('a supplied capacity with no number falls back to the fixture\'s own rows', () => {
+  const w = wiki();
+  const shelf = {capacity: [{label: 'Cakes', value: 60, unit: 'units'}]};
+  const caps = p => JSON.parse(JSON.stringify(w.context.wikiCaps(p, 'cakestand', shelf)));
+  assert.deepEqual(caps({name: 'Cake', fixtureCapacities: {cakestand: [{label: 'Cakes', value: 40}, {label: 'x', value: null}]}}),
+    [{label: 'Cakes', value: 40}]);
+  assert.deepEqual(caps({name: 'Cake', fixtureCapacities: {cakestand: [{label: 'Cakes', value: null}]}}),
+    [{label: 'Cakes', value: 60, unit: 'units'}]);
+});

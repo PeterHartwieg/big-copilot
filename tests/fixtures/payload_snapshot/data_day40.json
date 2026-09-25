@@ -5681,8 +5681,20 @@
     "item": "Umbrella",
     "kind": "Product shortage",
     "mine": true,
+    "siteKey": null,
     "slug": "ba:itemname_umbrella",
     "where": "Lower Manhattan"
+   },
+   {
+    "count": 1,
+    "daysLeft": 13,
+    "hood": null,
+    "item": "Water",
+    "kind": "Backorder",
+    "mine": false,
+    "siteKey": "ba:street_pier#1",
+    "slug": "ba:itemname_water",
+    "where": "1 Pier"
    }
   ],
   "trackedDays": 1,

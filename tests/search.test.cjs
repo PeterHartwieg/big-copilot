@@ -507,6 +507,34 @@ test('"Are my prices right?" lands on the wiki guide every time it is asked', as
   } finally { await page.close(); }
 });
 
+test('"Are my prices right?" answers for each kind of shop the company runs', async () => {
+  const page = await board();
+  try {
+    // Two kinds of shop: the best-selling one first, the other one click away.
+    await page.evaluate(() => ssAsk('prices'));
+    await page.waitForFunction(() => document.querySelector('#pageWiki .ss-asked'), null, {timeout: 5000});
+    assert.match(await page.evaluate(() => location.hash), /businesstypes-clothingstore\/prices$/);
+    const picks = () => page.$$eval('.ss-asked .ss-askpick a', a => a.map(x => x.textContent + (x.classList.contains('on') ? '*' : '')));
+    assert.deepEqual(await picks(), ['Clothing Store*', 'Gym']);
+    await page.click('.ss-asked .ss-askpick a[data-pick="ba:businesstype_gym"]');
+    await page.waitForFunction(() => /businesstypes-gym\/prices$/.test(location.hash) && document.querySelector('.ss-asked .ss-askpick a.on')?.textContent === 'Gym');
+    assert.equal(await page.locator('.ss-asked').count(), 1);
+    // The way back is still the page the question was asked on.
+    assert.match(await page.locator('.ss-asked [data-ss="back"]').innerText(), /Today/);
+    // The palette offers each type's guide; the question remembers the pick.
+    const index = await page.evaluate(() => ssBuild().filter(e => e.id.startsWith('view:prices')).map(e => [e.id, e.p]));
+    assert.deepEqual(index, [['view:prices:ba:businesstype_clothingstore', 'Wiki › Clothing Store guide'],
+      ['view:prices:ba:businesstype_gym', 'Wiki › Gym guide']]);
+    assert.equal(await page.evaluate(() => ssLands(SS_QUESTIONS.find(x => x.id === 'prices'))), 'Wiki › Gym › Prices in your save');
+    // One kind of shop has nothing to pick between; none at all lands on the wiki.
+    await page.evaluate(() => { D.businesses = D.businesses.filter(b => b.typeSlug !== 'ba:businesstype_gym'); });
+    assert.equal(await page.evaluate(() => SS_QUESTIONS.find(x => x.id === 'prices').choices()), null);
+    await page.evaluate(() => { D.businesses = D.businesses.filter(b => b.status !== 'retail'); ssPrices(); });
+    assert.equal(await page.evaluate(() => [page, ssBuild().filter(e => e.id.startsWith('view:prices')).map(e => e.id).join()].join('|')), 'wiki|view:prices');
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
 test('"Why did profit move?" and "Whom should I hire?" light a block whose tag is not clipped', async () => {
   const page = await board();
   try {
@@ -891,7 +919,7 @@ test('where to open: switching the finder off takes the landing down', async () 
     await page.evaluate(() => {
       // The finder beside the map, as far as the landing needs it.
       $('cityMapPage').innerHTML = '<div class="citymap"><aside class="places" style="position:relative">finder</aside></div>';
-      cityMapPage = {fs: {on: false}, finderOn(){ return this.fs.on; }, paintView(){}};
+      cityMapPage = {fs: {on: false}, finderOn(){ return this.fs.on; }, paintView(){}, wakeBall(){}};
       openFinder = () => { showPage('map'); cityMapPage.fs.on = true; };
     });
     await page.click('#ssAsk .ss-aq[data-ask="open"]');

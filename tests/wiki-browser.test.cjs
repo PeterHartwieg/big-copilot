@@ -753,3 +753,31 @@ test('a payload with no guides falls back to the sample it does carry', async t 
   assert.match(await card.innerText(), /Wholesale not stated/);
   assert.deepEqual(errors, []);
 });
+
+/* A live refresh (a new save, every 30 s while watching) draws the same guide
+   again: what the reader opened, closed and focused stays as it was. */
+test('a live refresh keeps the open sections and the focus', async t => {
+  const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-giftshop'});
+  await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
+  await page.evaluate(() => {
+    D = {meta:{day:190}, businesses:[{name:'My Gifts', typeSlug:'ba:businesstype_giftshop',
+      neighbourhood:'ba:neighborhood_midtown', lines:[{slug:'ba:itemname_cheapgift', configuredPrice:30.27}]}],
+      market:{rows:[{slug:'ba:itemname_cheapgift', cells:[{hood:'ba:neighborhood_midtown',marketPrice:25.63},
+        {hood:'ba:neighborhood_hellskitchen',marketPrice:24.10}]}]}};
+    drawWiki();
+  });
+  const prices = page.locator('details.wk-prices');
+  assert.equal(await prices.count(), 2);
+  await prices.nth(0).locator('summary').click();   // closes the one open by default
+  await prices.nth(1).locator('summary').click();   // opens the second
+  await prices.nth(1).locator('summary').focus();
+  const state = () => page.evaluate(() => ({
+    open: Array.from(document.querySelectorAll('details.wk-prices')).map(d => d.open),
+    focus: document.activeElement?.textContent.trim()}));
+  const before = await state();
+  assert.deepEqual(before.open, [false, true]);
+  await page.evaluate(() => { D = {...D, meta:{day:191}}; wikiVisit(); });
+  assert.deepEqual(await state(), before);
+  assert.match(await page.locator('#wikiRoot').innerText(), /save day 191/);
+  assert.deepEqual(errors, []);
+});

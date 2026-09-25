@@ -713,6 +713,13 @@ class FixtureTests(GuideCase):
         self.assertEqual(capacities,
                          {"roundedshelf": [{"label": "Gifts", "value": 300, "unit": "units"}]})
 
+    def test_capacities_travel_only_for_the_products_own_fixtures(self):
+        for business in ("giftshop", "salon"):
+            for key, product in self.guide(business)["PRODUCTS"].items():
+                with self.subTest(business=business, product=key):
+                    self.assertLessEqual(set(product["fixtureCapacities"]),
+                                         set(product["fixtures"]))
+
     def test_ambiguous_capacity_rows_are_left_to_the_fixture(self):
         self.write_locale(dict(LOCALE, **dict(SALON_PAGES, **{
             "ba:itemname_salonchair": "Salon Chair",

@@ -805,38 +805,58 @@ test('config: absent D1 tables yield a generic JSON 503 and static keeps working
 
 test('rate limit: vote hammering eventually returns 429 and stops database writes', async () => {
   const origin = originFor('rate-limit-votes');
-  const ip = nextIp(); // dedicated IP: the limiter budget is not shared with other tests
-  const [feature] = await getFeatures(origin, ip);
-  const featureId = feature.id;
-
-  let sawLimited = false;
-  let accepted = 0;
-  for (let attempt = 0; attempt < 200; attempt++) {
-    const res = await postJSON(mf, origin, '/api/community/vote', { featureId }, ip);
-    if (res.status === 429) {
-      sawLimited = true;
-      break;
+  // Miniflare's simulated limiter counts in fixed windows aligned to the wall
+  // clock (its RateLimiterObject keys a bucket by floor(now / period)), so
+  // every key's budget refills at the same instant. A run that straddles that
+  // instant starts a fresh budget halfway through and proves nothing either
+  // way: it is discarded and run again inside one window, on a fresh IP.
+  const PERIOD_MS = 60 * 1000; // baseOptions(): simple.period is 60 s
+  const windowOf = () => Math.floor(Date.now() / PERIOD_MS);
+  let run = null;
+  for (let tries = 1; !run; tries++) {
+    await db.prepare(`DELETE FROM "${SCHEMA.votesTable}"`).run();
+    const startWindow = windowOf();
+    const ip = nextIp(); // dedicated IP: the limiter budget is not shared with other tests
+    const [feature] = await getFeatures(origin, ip);
+    const featureId = feature.id;
+    let accepted = 0;
+    let sawLimited = false;
+    let rowsAtLimit = null;
+    for (let attempt = 0; attempt < 200; attempt++) {
+      const res = await postJSON(mf, origin, '/api/community/vote', { featureId }, ip);
+      if (res.status === 429) {
+        sawLimited = true;
+        break;
+      }
+      // Any other answer than 200 is wrong whichever window it fell in.
+      await expectJSON(res, 200, `vote #${attempt + 1}`);
+      accepted += 1;
     }
-    await expectJSON(res, 200, `vote #${attempt + 1}`);
-    accepted += 1;
+    if (sawLimited) rowsAtLimit = await tableRowCount(SCHEMA.votesTable);
+    const after = [];
+    if (sawLimited) {
+      for (let i = 0; i < 5; i++) {
+        after.push((await postJSON(mf, origin, '/api/community/vote', { featureId }, ip)).status);
+      }
+    }
+    const rowsAfter = await tableRowCount(SCHEMA.votesTable);
+    if (windowOf() === startWindow) {
+      run = { accepted, sawLimited, rowsAtLimit, after, rowsAfter };
+    } else {
+      // A run takes about a second and a window is a minute, so a second
+      // straddle in a row means a run slower than a window: an error, not a retry.
+      assert.ok(tries < 3, 'three runs in a row straddled a limiter window');
+    }
   }
-  assert.ok(sawLimited, 'the limiter must eventually answer 429 (no exact attempt asserted)');
-  assert.ok(accepted > 0, 'limiting kicks in only after real traffic');
+
+  assert.ok(run.sawLimited, 'the limiter must eventually answer 429 (no exact attempt asserted)');
+  assert.ok(run.accepted > 0, 'limiting kicks in only after real traffic');
 
   // Same IP + same feature: insert-if-absent means exactly one row, no matter how
   // many votes were accepted before limiting kicked in.
-  const rowsAtLimit = await tableRowCount(SCHEMA.votesTable);
-  assert.equal(rowsAtLimit, 1, 'hammering duplicates stores exactly one vote row');
-
-  for (let i = 0; i < 5; i++) {
-    const res = await postJSON(mf, origin, '/api/community/vote', { featureId }, ip);
-    assert.equal(res.status, 429, 'still limited while the window lasts');
-  }
-  assert.equal(
-    await tableRowCount(SCHEMA.votesTable),
-    rowsAtLimit,
-    'limited requests must not write rows (no unlimited writes)',
-  );
+  assert.equal(run.rowsAtLimit, 1, 'hammering duplicates stores exactly one vote row');
+  assert.deepEqual(run.after, [429, 429, 429, 429, 429], 'still limited while the window lasts');
+  assert.equal(run.rowsAfter, run.rowsAtLimit, 'limited requests must not write rows (no unlimited writes)');
 });
 
 test('rate limit: presence has its own budget, so a heartbeat loop stops early and voting still works', async () => {
