@@ -651,17 +651,6 @@ COST_CENTRE_TYPES = OVERHEAD_TYPES | {
 
 STOCK_COVER_DAYS = 7  # window used for the average daily sales rate
 
-# Vending-machine drinks and the free checkout bag ride along in almost every
-# business's price list regardless of what it actually specialises in. Left in,
-# they pad every business type's product count by the same handful and drown
-# out what the type is actually built around.
-AMENITY_ITEMS = {
-    "ba:itemname_paperbag",
-    "ba:itemname_sodacan",
-    "ba:itemname_energydrink",
-    "ba:itemname_cupofcoffee",
-}
-
 # The per-type product range used to live here as a hand-typed table. It now
 # comes straight from the game's own F1 help pages instead — see
 # _type_catalogue_from_help() — so there is nothing to maintain by hand.
@@ -1111,9 +1100,6 @@ SHIPPED_WINDOW = 7
 DELIVERY_LOG_SIZE = 60  # transactions a site's log keeps before the oldest go
 PRICE_DAYS = 7  # days of goods cost and deliveries a unit price is read over
 SHIPPED_MIN_DAYS = 3
-# A factory input topped up every morning and holding less than this many
-# rounds' worth is a buffer the machines eat through, not a pile.
-BUFFER_DAYS = 2
 LINE_STARVED = 0.75  # a line fed less than this share of its need is losing hours
 # The week's arrivals are measured backwards; the need is counted from the
 # machines standing there today. A recipe switched on yesterday has six days of
@@ -2843,32 +2829,20 @@ def _deepest_use(per_day, weekly, day, until, left_today, rounds=False):
 
     A day's use can be negative (a route's surplus beyond it stays on the
     shelf), so this is the deepest the running total goes, not where it ends:
-    a quiet Sunday does not refill a shelf emptied on Saturday. With `rounds`
-    the walk is a depot's morning rounds (_import_need): the delivery day's
-    round is charged too.
+    a quiet Sunday does not refill a shelf emptied on Saturday.
+
+    Shop-style (`rounds` False): the rest of today, charged for the hours it
+    has left, then whole days up to `until`, whose drop supplies that day. A
+    depot served by a morning logistics round (`rounds` True) is emptied a
+    round at a time, not an hour at a time: `left_today` is then 1 or 0 (0
+    once today's round is in the log), and the delivery day's own round is
+    charged too, because it leaves before the import lands.
     """
     used = deepest = 0.0
     for ahead in range(max(0, until - day + (1 if rounds else 0))):
         used += per_day * weekly[(day + ahead) % 7] * (left_today if ahead == 0 else 1)
         deepest = max(deepest, used)
     return deepest
-
-
-def _import_need(per_day, weekly, day, arrives, left_today, rounds=False):
-    """Units the draw takes from now until the delivery on day `arrives`.
-
-    Shop-style (`rounds` False): the rest of today, charged for the hours it
-    has left, then whole days up to the delivery day, which the drop supplies.
-    A depot served by a morning logistics round (`rounds` True) is emptied a
-    round at a time, not an hour at a time: `left_today` is then 1 or 0 (0
-    once today's round is in the log), and the delivery day's own round is
-    charged too, because it leaves before the import lands.
-    """
-    last = arrives - day + (1 if rounds else 0)
-    return sum(
-        per_day * weekly[(day + ahead) % 7] * (left_today if ahead == 0 else 1)
-        for ahead in range(max(0, last))
-    )
 
 
 def _import_catch_up(stock, per_day, weekly, day, arrives, left_today, rounds=False):
@@ -3107,7 +3081,7 @@ def _scheduled_import_gap(stock, per_day, weekly, day, deliveries, left_today, r
     extra stock brought in now makes that drop smaller: the one-off amount is
     then the least that keeps every day of the walk above zero, found by search.
 
-    With `rounds` the depot is emptied by a morning round, as in _import_need:
+    With `rounds` the depot is emptied by a morning round, as in _deepest_use:
     each day's round leaves before that day's drop lands, so the walk charges
     the round first, and the last delivery day's round is part of it.
     """
@@ -14972,8 +14946,6 @@ const SOURCE = window.LEDGER_SOURCE || {
   }
 };
 
-const LINE_COLOURS = {MT:"#f07a1f", HK:"#e0362c", MH:"#a83bb0", LM:"#0c5ec4",
-                      GD:"#7a8f27", IC:"#5c6f7a", HA:"#0f8f86", "":"#8b9499"};
 const fmt = n => (n<0?"-":"") + "$" + num(Math.abs(Math.round(n)));
 /* Every number on the board goes through num(), in the UI's number locale, so
    a German browser never shows "1.234 units" beside "$1,234". English is
@@ -15005,13 +14977,6 @@ const meter = v => graded(v, v >= 85 ? "" : v >= 60 ? "warn" : "neg");
 /* Neutral gauge: for numbers that describe a situation rather than grade it,
    like how busy a street is. */
 const gauge = v => graded(v, "ink-3");
-
-/* A neighbourhood badge: the player's [XX] prefix, or the canonical code for a
-   shop the building table places. With neither, no badge. */
-const bullet = b => b.code ? `<span class="bullet" style="background:${LINE_COLOURS[b.code]||LINE_COLOURS[""]}"
-  title="${attr(hoodName(b.neighbourhood)||"Unassigned")}">${spEsc(b.code)}</span>` : "";
-const siteCell = b => `<div class="site">${bullet(b)}<span><b>${spEsc(b.name)}</b>
-  <span class="sub">${spEsc(b.type)} · ${spEsc(b.address)}${mapButton(b.key,b.name)}</span></span></div>`;
 
 /* The tile sparkline, the generator's spark(): an area under the line, the
    line, a point and a read-out that follow the pointer (wireTiles). x runs
