@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import collections
 import datetime as dt
+import decimal
 import fractions
 import hashlib
 import http.client
@@ -26,6 +27,7 @@ import http.server
 import itertools
 import json
 import math
+import numbers
 import os
 import re
 import statistics
@@ -290,6 +292,114 @@ def tok(key, english) -> str:
 def plain(text):
     """Text with every game-name token back in its English."""
     return NAME_TOKEN.sub(lambda m: m.group(2), text) if isinstance(text, str) else text
+
+
+# Big Copilot's own sentences in the reader's language (docs/architecture.md,
+# "UI text"). Python keeps writing English: msg() returns that English as a
+# str, which every reader, test and plain() sees as before, and which also
+# carries the key and the params the page needs to write the sentence in
+# another language. _wire_msgs() hands those to the page at the end of
+# extract(). Concatenating or .replace()-ing a Msg gives a plain str: that
+# sentence then stays English on every page, which the coverage test in
+# tests/test_i18n_msg.py catches for a converted area.
+MSG_FIELD = re.compile(r"\{(\w+)(?::([^{}]+))?\}")
+MSG_FIXED = re.compile(r"(,)?\.(\d)f")
+
+
+class Msg(str):
+    """An English sentence that knows its catalogue key and params."""
+
+    def __new__(cls, text, key=None, p=None):
+        self = super().__new__(cls, text)
+        self.key = key
+        self.p = dict(p or {})
+        return self
+
+    def __reduce__(self):
+        return (Msg, (str(self), self.key, self.p))
+
+    def wire(self) -> list:
+        """[key, params] for the page: numbers raw, game names as tokens, a
+        nested Msg as {"m": [key, params, english]}."""
+        return [self.key, {k: _wire_value(v) for k, v in self.p.items()}]
+
+
+def _wire_value(v):
+    if isinstance(v, Msg):
+        return {"m": [v.key, {k: _wire_value(x) for k, x in v.p.items()}, str(v)]}
+    if isinstance(v, (list, tuple)):
+        return [_wire_value(x) for x in v]
+    if isinstance(v, bool) or v is None or isinstance(v, (int, float)):
+        return v
+    if isinstance(v, (numbers.Real, decimal.Decimal)):
+        return float(v)  # a Fraction or Decimal travels as JSON's number
+    return str(v)
+
+
+def _js_round(x: float) -> int:
+    """Math.round(): halves go up, as the page's compact() rounds."""
+    return int(math.floor(x + 0.5))
+
+
+def _msg_format(v, spec: str | None) -> str:
+    """One placeholder's English, by the spec tt() in web/i18n.js shares. Each
+    writes exactly what the f-string it replaces wrote: {x} as f"{x}", {x:,}
+    as f"{x:,}", {x:.1f} / {x:,.0f} as the same f-string spec, {w:$} as the
+    board's fmt() ("-$1,234"; f"${x:,.0f}", which writes "$-1,234", becomes
+    "${x:,.0f}" instead), {w:$c} as compact(), {d:day} a weekday name."""
+    if isinstance(v, Msg) or spec is None:
+        return str(v)
+    if spec == "day":
+        return WEEKDAYS[int(v) % 7]
+    if spec == ",":
+        return format(v, ",")
+    if spec == "$":
+        return ("-" if v < 0 else "") + "$" + format(abs(v), ",.0f")
+    if spec == "$c":
+        a, s = abs(v), "-" if v < 0 else ""
+        if a >= 1e6:
+            places = "0.1" if a >= 1e7 else "0.01"
+            return s + "$" + str(decimal.Decimal(a / 1e6).quantize(decimal.Decimal(places), decimal.ROUND_HALF_UP)) + "M"
+        if a >= 1e3:
+            return s + "$" + str(_js_round(a / 1e3)) + "k"
+        return s + "$" + str(_js_round(a))
+    if MSG_FIXED.fullmatch(spec):
+        return format(v, spec)
+    raise ValueError(f"msg(): unknown placeholder spec {spec!r}")
+
+
+def msg(key: str, en, **p) -> Msg:
+    """A sentence the page can translate: its English, with {name} and
+    {name:spec} filled from p. `en` is a string, or {"one": ..., "other": ...}
+    chosen by the param n. The specs (_msg_format()): {n:,} grouped, {x:.1f}
+    and {x:,.0f} fixed decimals, {w:$} money with the sign first, {w:$c}
+    compact money, {d:day} a weekday index (0 Sunday). A game name goes in as a token (tok()), a nested
+    sentence as another msg()."""
+    if isinstance(en, dict):
+        en = en["one"] if p.get("n") == 1 else en["other"]
+
+    def fill(m):
+        if m.group(1) not in p:
+            raise KeyError(f"msg({key!r}): no param {m.group(1)!r}")
+        return _msg_format(p[m.group(1)], m.group(2))
+
+    return Msg(MSG_FIELD.sub(fill, en), key, p)
+
+
+def _wire_msgs(payload):
+    """Every field holding a Msg gets row["i18n"][field] = [key, params] beside
+    it, so the page can write the sentence in the UI language. One pass over
+    the whole payload, at the end of extract()."""
+    if isinstance(payload, dict):
+        wires = {k: v.wire() for k, v in payload.items() if isinstance(v, Msg) and v.key}
+        for v in payload.values():
+            _wire_msgs(v)
+        if wires:
+            payload.setdefault("i18n", {}).update(wires)
+    elif isinstance(payload, list):
+        for v in payload:
+            _wire_msgs(v)
+    return payload
 
 
 # The display names the page is sent, by key prefix. build_web.py ships the
@@ -978,7 +1088,6 @@ COVER_NOISE_DAYS = 0.5
 # this many days it is an anecdote.
 SHIPPED_WINDOW = 7
 DELIVERY_LOG_SIZE = 60  # transactions a site's log keeps before the oldest go
-PRICE_DAYS = 7  # days of goods cost and deliveries a unit price is read over
 SHIPPED_MIN_DAYS = 3
 # A factory input topped up every morning and holding less than this many
 # rounds' worth is a buffer the machines eat through, not a pile.
@@ -1305,10 +1414,8 @@ OPENING_EVENT = 0  # "{rival} opened {business} at {address}"
 def _rival_names(save: Save, numbers: dict) -> dict:
     """{rival number: name} for every rival company the save lets us name.
 
-    Two sources. The four story rivals are named by their fixed ids, and a
-    story rival the table lacks by the message keys it has sent: a rival's list
-    can hold another rival's keys, so the first match is only a fallback.
-    Everybody else is named by their own opening announcement: a market
+    Two sources. The four story rivals are named by the message keys they have
+    sent. Everybody else is named by their own opening announcement: a market
     event of type 0 carries the rival's name, the business's name and its
     address, and the registration still standing at that address, opened on the
     same day and under the same name, carries the owner's id. A name is kept
@@ -1319,9 +1426,6 @@ def _rival_names(save: Save, numbers: dict) -> dict:
     for state in save.items(save.root.get("specialRivalStates")):
         rival = state.get("rivalId")
         if not rival:
-            continue
-        if rival in SPECIAL_RIVAL_NAMES:
-            found[rival] = SPECIAL_RIVAL_NAMES[rival]
             continue
         for key in save.items(state.get("sentMessageKeys")):
             match = _RIVAL_MESSAGE_RE.match(key or "")
@@ -1547,11 +1651,8 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
     stations = _service_stations(names)
     recipes = _recipes(names)
     staff_by_addr, staff = _staff(save, names)
-    # Every skill a person holds, the top one first: a station is held by
-    # anyone with its skill, not only by those whose best skill it is.
-    crew_skill = {p["id"]: [p["skill"], *(s for s in p.get("skills", ()) if s != p["skill"])]
-                  for p in staff}
-    residential = _residential_addresses(save, summaries, buildings)
+    crew_skill = {p["id"]: p["skill"] for p in staff}
+    residential = _residential_addresses(save, summaries)
     stmt_history = _statement_history(save, summaries)
     latest = stmt_history[-1][1] if stmt_history else {}
 
@@ -1659,7 +1760,9 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         businesses, supply, chains, trends, hype, hour_findings, grids, day, gate, "dem"
     )
 
-    return {
+    # Every sentence written with msg() carries its key and params to the page
+    # in the row's "i18n" field, in one pass at the end.
+    return _wire_msgs({
         "meta": {
             "character": character,
             "save": root.get("SaveGameName") or "Save",
@@ -1731,7 +1834,8 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         "minor": alerts["minor"],
         "alertsDemand": {"lines": alerts_demand["lines"], "minor": alerts_demand["minor"]},
         "goals": _goals(save, names, businesses),
-    }
+        "weekly": _weekly(save),
+    })
 
 
 def _net_worth(root: dict, history, character: str) -> dict:
@@ -1830,18 +1934,9 @@ def _difficulty(save: Save) -> dict:
     }
 
 
-def _residential_addresses(save: Save, summaries: list, buildings: list = ()) -> set:
-    """Apartments are billed as residences, not businesses.
-
-    A home rented today, or a new character's first one, has no statement
-    yet, so a rented building the building table calls residential is a home
-    too: nobody can run a business in one.
-    """
-    table = load_buildings() if buildings else {}
-    out = {
-        (b["StreetName"], b["StreetNumber"]) for b in buildings
-        if (table.get((b["StreetName"], b["StreetNumber"])) or {}).get("t") == "residential"
-    }
+def _residential_addresses(save: Save, summaries: list) -> set:
+    """Apartments are billed as residences, not businesses."""
+    out = set()
     for s in summaries[-5:]:
         for r in save.items(s.get("residentialStatements")):
             addr = save.address(r.get("Address"))
@@ -2257,10 +2352,6 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
                 "revenue": money(revenue_by_item[item] / span),
                 "soldPerDay": round(units_sold[item] / span),
                 "soldPerWeek": round(units_sold[item] / span * 7),
-                # Unrounded, for _products() alone, which takes them off the
-                # payload: a price from rounded units is no price.
-                "_sold": units_sold[item] / span,
-                "_takings": revenue_by_item[item] / span,
             }
         )
     lines.sort(key=lambda x: (x["cover"] is None, x["cover"] if x["cover"] else 0))
@@ -2558,30 +2649,25 @@ def _loans(save: Save, names: Names) -> list:
 
 def _products(businesses: list) -> list:
     agg = collections.defaultdict(
-        lambda: {"revenue": 0.0, "units": 0.0, "week": 0, "stock": 0, "stores": 0}
+        lambda: {"revenue": 0.0, "units": 0, "week": 0, "stock": 0, "stores": 0}
     )
     for b in businesses:
         for line in b["lines"]:
-            # The day's takings and units before rounding: a line selling 0.4
-            # a day is not nothing, and its share of the average price is not
-            # free. _business() leaves them for this and nothing else.
-            sold, takings = line.pop("_sold", None), line.pop("_takings", None)
             if not line["revenue"] and not line["units"]:
                 continue
             # By key: two items can share a name, and the page names a row
             # from its key.
             rec = agg[line["slug"]]
             rec["item"] = line["item"]
-            rec["revenue"] += line["revenue"] if takings is None else takings
-            rec["units"] += line.get("rate", line["soldPerDay"]) if sold is None else sold
+            rec["revenue"] += line["revenue"]
+            rec["units"] += line["soldPerDay"]
             rec["week"] += line["soldPerWeek"]
             rec["stock"] += line["units"]
             rec["stores"] += 1 if line["revenue"] else 0
     out = [{"item": v.pop("item"), "slug": k, **v} for k, v in agg.items()]
     for rec in out:
-        rec["price"] = round(rec["revenue"] / rec["units"], 2) if rec["units"] else 0
         rec["revenue"] = money(rec["revenue"])
-        rec["units"] = round(rec["units"])
+        rec["price"] = round(rec["revenue"] / rec["units"], 2) if rec["units"] else 0
     return sorted(out, key=lambda x: -x["revenue"])
 
 
@@ -2590,12 +2676,9 @@ def _staff_summary(staff: list, businesses: list) -> dict:
     cost_by_role = collections.Counter()
     for s in staff:
         cost_by_role[s["role"]] += s["daily"]
-    # By site key, not name: two shops can share a name.
     by_site = collections.Counter()
-    site_name = {}
     for b in businesses:
-        by_site[b["key"]] += b["staff"]
-        site_name[b["key"]] = b["name"]
+        by_site[b["name"]] = b["staff"]
     return {
         "total": len(staff),
         "dailyCost": sum(s["daily"] for s in staff),
@@ -2610,10 +2693,24 @@ def _staff_summary(staff: list, businesses: list) -> dict:
             key=lambda x: -x["count"],
         ),
         "sites": sorted(
-            ({"site": site_name[k], "key": k, "count": c} for k, c in by_site.items() if c),
+            ({"site": s, "count": c} for s, c in by_site.items() if c),
             key=lambda x: -x["count"],
         ),
     }
+
+
+def _weekly(save: Save) -> list:
+    income = {
+        t["m_Item1"]: t["m_Item2"] for t in save.items(save.root["playerWeeklyIncomeHistory"])
+    }
+    count = {
+        t["m_Item1"]: t["m_Item2"]
+        for t in save.items(save.root["playerNumberOfBusinessesHistory"])
+    }
+    return [
+        {"day": d, "income": money(income[d]), "businesses": count.get(d, 0)}
+        for d in sorted(income)
+    ]
 
 
 def _openable_types(names: Names) -> list[str]:
@@ -4038,11 +4135,6 @@ def _supply(
             if not fact:
                 continue
             row["status"], row["why"], row["level"] = fact["st"], fact["why"], fact["lvl"]
-            # A depot of yours holds it and no plan sends it on: Not routed
-            # says so, naming this factory, and the input's own finding gives
-            # way to it, as a shelf's does.
-            if fact.get("via") is not None:
-                row["via"] = fact["via"]
             row["raiseTarget"] = (fact["setTo"] if row["target"] and fact["cad"] == "daily"
                                   else None)
             # The factory's own contract, paused while the top-up falls short
@@ -4314,7 +4406,7 @@ def _supply(
                 need = cycle_need = 0
                 provision, cadence = ordered, "weekly"
             else:
-                out = draw(business["key"], line["slug"])
+                out = draw(business["key"], line["item"])
                 if out <= 0 and line["units"] <= 0:
                     continue
                 target = next(
@@ -4403,9 +4495,6 @@ def _supply(
         else None,
         "leftToday": round(left_today, 3),
         "shops": shop_rows,
-        # The shops a repeating wholesale contract delivers to: a standing
-        # supply that draws no link on the graph.
-        "wholesaleShops": sorted({index[shop] for shop, _item in wholesale}),
         "imports": import_rows,
         "idle": idle_rows,
         "idleWeeks": IDLE_WEEKS,
@@ -5512,13 +5601,9 @@ def _factories(
                     item,
                     {"item": ing["item"], "slug": item, "perDay": 0.0, "lines": [], "lineSlugs": [],
                      "staffedDay": 0.0,
-                     "demDay": 0.0, "ramp": set(), "_shipDraw": 0.0, "_allLimit": True},
+                     "demDay": 0.0, "ramp": set()},
                 )
                 row["perDay"] += n * ing["per"] * 24
-                # What the lines' shipped output took of it: a line held by its
-                # limit makes what leaves, and eats for that, not for capacity.
-                row["_shipDraw"] += n * ing["per"] * 24 * (min(makes, ships) / makes if makes else 0.0)
-                row["_allLimit"] = row["_allLimit"] and limit is not None
                 row["staffedDay"] += n * ing["per"] * 24 * share
                 row["demDay"] += n * ing["per"] * 24 * (dem_makes / makes if makes else 1.0)
                 row["ramp"] |= set(ramp)
@@ -5550,15 +5635,6 @@ def _factories(
         held_lines = collections.defaultdict(lambda: True)
         for line in lines:
             held_lines[line["item"]] = held_lines[line["item"]] and line["limitHeld"]
-        # What the lines not yet held by their limit would eat of each input
-        # at full rate: a starved line ships little, so its shipped output is
-        # no measure of what it has to have on hand.
-        free_draw = collections.defaultdict(float)
-        for line in lines:
-            if line["limitHeld"]:
-                continue
-            for ing in recipes[line["slug"]]["ingredients"]:
-                free_draw[resolve(ing)] += line["machines"] * ing["per"] * 24
         for slug, row in needs.items():
             target, source = flow["targets"].get((key, slug), (0, None))
             # A factory can itself be an import destination. Weekly deliveries
@@ -5589,19 +5665,8 @@ def _factories(
             row["waitingOnSlugs"] = [slug for _name, slug in waiting]
             # Every line eating it held by its limit, with some of it on hand:
             # the machines are not waiting for it, they have nothing to make.
-            # Or every such line has Produce up to set, what arrives covers
-            # what their shipped output ate, and enough is on hand to run the
-            # lines not yet held at full rate for the rest of the day: one
-            # line held at its limit all day and another only late in the day
-            # still draw no more than they ship, whatever the hour's stock
-            # test says. A line that could not run flat out on what it holds
-            # is starved, not held.
-            ship_draw, all_limit = row.pop("_shipDraw"), row.pop("_allLimit")
             row["limited"] = bool(
-                row["lines"] and held(key, slug) > 0 and (
-                    all(held_lines[line] for line in row["lines"])
-                    or (all_limit and ship_draw > 0 and arrives(key, slug) >= ship_draw * 0.85
-                        and held(key, slug) >= free_draw[slug] * rest_of_day))
+                row["lines"] and all(held_lines[line] for line in row["lines"]) and held(key, slug) > 0
             )
             row["target"] = target
             row["source"] = import_source
@@ -5641,6 +5706,8 @@ def _factories(
             ramp = row.pop("ramp")
             if ramp:
                 ramp_at[(key, slug)] |= ramp
+                if own_import:
+                    ramp_at[(key, slug)] |= ramp
                 if source:
                     ramp_at[(import_source, slug)] |= ramp
             row["demDay"] = round(row["demDay"])
@@ -5798,11 +5865,8 @@ def _factories(
     }
 
 
-def _serves(status: str | None, skill, needed: str | None = None) -> bool:
+def _serves(status: str | None, skill: str | None, needed: str | None = None) -> bool:
     """Whether someone with this skill can hold the post a station is.
-
-    `skill` is one skill, or every skill the person holds with the top one
-    first: a shop's station takes anyone holding its skill.
 
     A shop's queue is served at whichever station the shift posts to, and the
     station names its own skill: the fitness planning board wants a Gym Trainer,
@@ -5810,11 +5874,9 @@ def _serves(status: str | None, skill, needed: str | None = None) -> bool:
     office's customers are served by the professional the agency employs, which
     is everyone there but the cleaners, so its computers name no skill at all.
     """
-    held = [skill] if skill is None or isinstance(skill, str) else list(skill)
     if status == "office":
-        top = held[0] if held else None
-        return bool(top) and top != CLEANING_SKILL
-    return needed is not None and needed in held
+        return bool(skill) and skill != CLEANING_SKILL
+    return skill is not None and skill == needed
 
 
 def _service_wages(staff: list, status_of: dict) -> dict:
@@ -10038,70 +10100,33 @@ def _ingredient_prices(save: Save, names: Names, supply: dict, businesses: list)
 
     The save carries no importer price list — `importPartnerships.products` holds
     an item, an amount and a warehouse, and nothing about money. What it does
-    carry is what was paid: each site's goods cost per item, booked where the
-    goods are used (a factory, not the depot that imported them), and the
-    units the delivery log shows reaching that site. Over the last PRICE_DAYS
-    days, company-wide, the one divided by the other gives a real unit price
-    for every material this company already buys, and nothing at all for one
-    it does not. A day's cost swings with the morning round, so a single day
-    is never divided by a week's average. Something the company makes itself
-    reaches its users at no cost, so it has no price here. Guessing the rest
-    would be inventing a price list.
+    carry is what was paid: yesterday's goods cost per line, against the units
+    drawn that day. Dividing one by the other gives a real unit price for every
+    material this company already buys, and nothing at all for one it does not.
+    Guessing the rest would be inventing a price list.
     """
     summaries = sorted(save.items(save.root["financialSummaries"]), key=lambda s: s["dayNumber"])
     if not summaries:
-        return {"unit": {}, "day": None, "from": None}
-    window = {s["dayNumber"] for s in summaries[-PRICE_DAYS:]}
-    spend = collections.defaultdict(lambda: collections.defaultdict(float))
-    for summary in summaries[-PRICE_DAYS:]:
-        for statement in save.items(summary["businessIncomeStatements"]):
-            key = site_key(save.address(statement.get("Address")))
-            for line in save.items(statement.get("Resources")):
-                if line.get("ItemName") and line.get("Amount"):
-                    spend[(key, line["ItemName"])][summary["dayNumber"]] += line["Amount"]
+        return {"unit": {}, "day": None}
+    spend = collections.defaultdict(float)
+    for statement in save.items(summaries[-1]["businessIncomeStatements"]):
+        addr = save.address(statement.get("Address"))
+        for line in save.items(statement.get("Resources")):
+            if line.get("Amount"):
+                spend[(site_key(addr), line["ItemName"])] += line["Amount"]
 
-    # What reached each site, day by day. A log at its full length has lost
-    # part of its oldest day, so that day is left out.
-    arrived = collections.defaultdict(lambda: collections.defaultdict(float))
-    covered = collections.defaultdict(set)
-    for building in save.items(save.root["BuildingRegistrations"]):
-        if not building.get("RentedByPlayer"):
-            continue
-        key = site_key((building["StreetName"], building["StreetNumber"]))
-        log = save.items(building.get("deliveryTransactions"))
-        days = {t.get("dayOfDelivery") for t in log if isinstance(t.get("dayOfDelivery"), int)}
-        if days and len(log) >= DELIVERY_LOG_SIZE:
-            days.discard(min(days))
-        covered[key] = days & window
-        for transaction in log:
-            when = transaction.get("dayOfDelivery")
-            if when not in covered[key]:
-                continue
-            for entry in save.items(transaction.get("deliveryItems")):
-                amount = entry.get("amountDelivered") or 0
-                if entry.get("itemName") and amount > 0:
-                    arrived[(key, entry["itemName"])][when] += amount
+    by_label = {b["key"]: {} for b in businesses}
+    for row in supply["imports"]:
+        by_label[businesses[row["s"]]["key"]][row["item"]] = row["perDay"]
 
-    made = {line["slug"] for site in (supply.get("factories") or {}).get("sites", [])
-            for line in site.get("lines", [])}
-    paid = collections.defaultdict(float)
-    units = collections.defaultdict(float)
-    for (key, slug), by_day in spend.items():
-        if slug in made:
-            continue
-        # Only the days this site's log covers, and only where goods came in:
-        # a shop keeps no log, and cost there has no units to divide by.
-        days = covered.get(key, ())
-        got = sum(arrived[(key, slug)].get(d, 0.0) for d in days)
-        if got <= 0:
-            continue
-        paid[slug] += sum(by_day.get(d, 0.0) for d in days)
-        units[slug] += got
+    prices = {}
+    for (key, slug), paid in spend.items():
+        units = by_label.get(key, {}).get(names.label(slug))
+        if units and units > 0:
+            prices.setdefault(slug, []).append(paid / units)
     return {
-        "unit": {slug: round(paid[slug] / units[slug], 4)
-                 for slug in _in_order(units) if paid[slug] > 0},
+        "unit": {s: round(sum(v) / len(v), 4) for s, v in prices.items()},
         "day": summaries[-1]["dayNumber"],
-        "from": min(window),
     }
 
 
@@ -10281,7 +10306,6 @@ def _plan(
         "own": own,
         "prices": prices["unit"],
         "priceDay": prices["day"],
-        "priceFrom": prices.get("from"),
         "priceCount": len(prices["unit"]),
         "peak": round(uplift, 3),
         # By the workstation's key, never its name.
@@ -10398,11 +10422,7 @@ def _alerts(
                      worth=worth, always=always, ev=ev, named=named)
         )
 
-    # A delivery plan: a route or an import into the site, or a repeating
-    # wholesale contract to it.
     planned = {link["to"] for link in supply["graph"]["links"]}
-    planned |= {businesses[s]["key"] for s in supply.get("wholesaleShops", ())
-                if 0 <= s < len(businesses)}
 
     # --- a site that has not started trading is one finding, not four
     silent = set()
@@ -10475,12 +10495,12 @@ def _alerts(
                 "critical" if b["profit"] < -1000 else "warn",
                 b["name"],
                 "loss",
-                f"Lost ${abs(b['profit']):,.0f} yesterday",
+                msg("f.loss", "Lost {w:$} yesterday", w=abs(b["profit"])),
                 worth=abs(b["profit"]),
                 key=b["key"],
             )
         if b["status"] in ("retail", "office") and b["staff"] == 0:
-            note("critical", b["name"], "staff", "No staff assigned", always=True, key=b["key"])
+            note("critical", b["name"], "staff", msg("f.staff.none", "No staff assigned"), always=True, key=b["key"])
         sat = b["satisfaction"]["overall"]
         if sat is not None and b["customers"] and sat < 80:
             note("warn", b["name"], "satisfaction", f"Customer satisfaction at {sat}%", key=b["key"])
@@ -11171,8 +11191,6 @@ def _feed_notes(businesses: list, factories: dict, silent: set, mode: str = "cap
             lines = ", ".join(tok(slugs[i] if i < len(slugs) else None, line)
                               for i, line in enumerate(row["lines"][:3]))
             item = tok(row.get("slug"), row["item"])
-            if status == "noplan" and row.get("via") is not None:
-                continue  # said once, by the depot's Not routed finding
             if status == "noplan":
                 text = (f"{item} feeds {lines} at {per_day:,}/day "
                         f"but no depot tops it up")
@@ -11438,6 +11456,7 @@ def render(
     map_external: bool = False,
     site: bool = False,
     names: dict | None = None,
+    ui: dict | None = None,
 ) -> str:
     """The page. With live=True it asks its data source for fresh numbers.
 
@@ -11457,8 +11476,11 @@ def render(
 
     ``names`` is ``{"lang": code, "names": table}``, a name_table() the page
     lays over the payload's names (``--lang``); None keeps them English.
+    ``ui`` is ``{"lang": code, "table": table}``, Big Copilot's own text in
+    that language (web/i18n/<code>.json, ``--lang``); None keeps it English.
     """
     names_json = "null" if not names else json.dumps(names, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+    ui_json = "null" if not ui else json.dumps(ui, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     if data is None:
         payload, title = "null", "Big Copilot"
     else:
@@ -11497,6 +11519,14 @@ def render(
 
     wiki_script = optional_asset("wiki.js")
     wiki_css = optional_asset("wiki.css")
+    # Big Copilot's own text in another language (docs/architecture.md, "UI
+    # text"): tt() and the table loader, at the end of the head (after the
+    # stylesheets), ahead of every script that may call it, with the table a --lang page carries. It is spliced
+    # last, and only at the first marker (the head's), so no other
+    # placeholder's .replace() runs over the table, and a marker inside the
+    # payload is left alone.
+    with open(os.path.join(asset_root, "i18n.js"), encoding="utf-8") as fh:
+        i18n_script = fh.read().replace("/*__UI_TABLE__*/null", ui_json)
     map_payload = ""
     if data is not None and not live and not map_external:
         import base64
@@ -11546,6 +11576,7 @@ def render(
         .replace("<!--__FOOTER__-->", footer_html(site=site))
         .replace("<!--__BANNER__-->", banner)
         .replace("<!--__BEFORE_SCRIPT__-->", before_script)
+        .replace("/*__I18N_SCRIPT__*/", i18n_script, 1)
     )
 
 
@@ -13912,6 +13943,9 @@ body:has(#changelogDialog[open]){overflow:hidden}
   #sp-shelves td.l{white-space:nowrap}
 }
 </style>
+<script>
+/*__I18N_SCRIPT__*/
+</script>
 <!--__BANNER__-->
 <div class="wrap">
   <header class="mast" id="mast">
@@ -14179,9 +14213,11 @@ const LINE_COLOURS = {MT:"#f07a1f", HK:"#e0362c", MH:"#a83bb0", LM:"#0c5ec4",
 const fmt = n => (n<0?"-":"") + "$" + num(Math.abs(Math.round(n)));
 /* Every number on the board goes through num(), in the UI's number locale, so
    a German browser never shows "1.234 units" beside "$1,234". English is
-   always en-US; the language switch will set NUM_LOCALE. Never call a bare
-   toLocaleString(): it follows the browser. */
-let NUM_LOCALE = "en-US";
+   always en-US; German is de-DE. The UI language is web/i18n.js's: this starts
+   at its ttNumLocale() (a --lang page carries German from the first draw) and
+   its language switch sets it again (the ttOnChange() listener beside
+   gnRedraw()). Never call a bare toLocaleString(): it follows the browser. */
+let NUM_LOCALE = typeof ttNumLocale === "function" ? ttNumLocale() : "en-US";
 const num = (n, opts) => Number(n).toLocaleString(NUM_LOCALE, opts);
 const compact = n => {
   const a = Math.abs(n), s = n<0?"-":"";
@@ -14480,13 +14516,17 @@ function gnUnkeyed(o, T, EN){
 }
 /* The payload in the language picked: always a fresh copy of the English one,
    which it carries along. Handing it a board already swapped starts from that
-   board's English, so a language change never swaps a swapped name. */
+   board's English, so a language change never swaps a swapped name. With a UI
+   table loaded (web/i18n.js), every sentence Python sent as a message is
+   written in the UI language too: ttPayload() swaps each field its row's
+   `i18n` names, and enOf() gives back the English it showed. */
 function localiseNames(raw){
   if(!raw || typeof raw !== "object") return raw;
   const en = raw[GN_SRC] || raw;
   const EN = en.names || {};
   const out = gnWalk(en, gnTable, EN, "");
   if(gnTable) gnUnkeyed(out, gnTable, EN);
+  if(typeof ttPayload === "function") ttPayload(out);
   Object.defineProperty(out, GN_SRC, {value: en});
   return out;
 }
@@ -14556,6 +14596,9 @@ function gnRedraw(){
     wikiVisit();
   }
 }
+/* A change of the UI language (web/i18n.js): numbers follow it (English is
+   always en-US, German de-DE), and the board redraws the same way. */
+if(typeof ttOnChange === "function") ttOnChange(() => { NUM_LOCALE = ttNumLocale(); gnRedraw(); });
 /* The browser's languages, first to last, to the game's code: the first that
    is English or one the game has decides, so a reader who puts English first is
    never offered anything. */
@@ -15096,7 +15139,7 @@ const SZ_WHY = {
   "short:shortfall": "Runs dry before the next delivery lands",
   "short:target": "The daily top-up is less than a day's need",
   "short:dry": "The depot it comes from is out of it",
-  "stalled:notDrawn": "The source holds it, yet under three quarters of the need arrived per day over the last week (the last round alone while the log is under a week old): the line is not drawing it",
+  "stalled:notDrawn": "The source holds it, yet little or nothing arrives",
   "stalled:waiting": "The line stands still for want of another input",
   "idle:notMoving": "Nothing draws on it",
   "idle:notRouted": "No plan sends it on, though your own sites sell or need it",
@@ -15108,8 +15151,8 @@ const SZ_WHY = {
   "tight:target": "The daily top-up covers a day's use, not the margin",
   "covered:route": "A route from your own site brings it",
   "covered:limit": "Produce up to holds the line back, not the supply",
-  "covered:staffing": "Your staffing runs the machines only part of the week",
-  "short:hours": "Staffed fewer hours a day than the line needs",
+  "covered:staffing": "The roster runs the machines only part of the week",
+  "short:hours": "Rostered fewer hours a day than the line needs",
 };
 const SZ_STATE = {
   covered: "Covers the use and the margin", tight: "Covers the use, not the margin",
@@ -15254,9 +15297,9 @@ function szSays(f, r, depot){
     case "tight": return f.setTo !== null ? `${num(f.setTo)} would carry the margin` : "";
     case "stalled":
       if(f.why === "waiting") return `${lines.join(", ")} stand${lines.length === 1 ? "s" : ""} still for want of ${(r.waitingOn || []).join(", ")}`;
-      return `${depot} holds ${num(r.depotStock || 0)}, yet only ${pct}% of the need arrived per day over the last week`;
+      return `${depot} holds ${num(r.depotStock || 0)} but the line takes ${pct}% of its need`;
     case "covered":
-      if(f.why === "staffing") return `your staffing runs these machines ${Math.round((r.staffedShare ?? 1) * 100)}% of the week`;
+      if(f.why === "staffing") return `the roster runs these machines ${Math.round((r.staffedShare ?? 1) * 100)}% of the week`;
       if(f.why === "limit") return "Produce up to holds the line back";
       if(f.why === "route") return "a route from your own site brings it";
       return "";
@@ -15763,11 +15806,13 @@ function splitFinding(a){
   const lead = rest => { more = more ? `${rest.replace(/[.\s]+$/, "")}. ${more}` : rest; };
   /* Two sentences lead with a list. The list is detail; the verb is the
      headline: "3 machines run a recipe the board cannot name", "Top-up target
-     of 3,000 is 43x daily sales in 1 shop". */
+     of 3,000 is 43x daily sales in 1 shop". Both are Python's English, so
+     they are only looked for while the row is shown in English (enOf()). */
+  const english = typeof enOf !== "function" || enOf(a, "text") === a.text;
   let r;
-  if((r = what.match(/^(\d+) (machines?) at (.+?) (runs? a recipe the board cannot name.*)$/))){
+  if(english && (r = what.match(/^(\d+) (machines?) at (.+?) (runs? a recipe the board cannot name.*)$/))){
     what = `${r[1]} ${r[2]} ${r[4]}`; lead(`At ${r[3]}`);
-  } else if((r = what.match(/^(.+?) (top-up target of .+)$/))
+  } else if(english && (r = what.match(/^(.+?) (top-up target of .+)$/))
       && [...r[1].matchAll(/, /g)].some(c => !inFindingName(findingNameSpans(r[1]), c.index))){
     what = r[2]; lead(r[1]);
   }
@@ -15813,7 +15858,8 @@ const amtHtml = (n, unit) => `${n}<small>${unit || ""}</small>`;
 function findingAmount(a){
   if(typeof a.worth === "number")
     return amtHtml(Math.abs(a.worth) >= 1e6 ? money(a.worth) : fmt(a.worth), a.unit);
-  const t = String(a.text || "");
+  /* Python's English, whatever language the row is shown in. */
+  const t = String((typeof enOf === "function" ? enOf(a, "text") : a.text) || "");
   let m;
   if(a.detail && (m = t.match(/^(\d+) (weekly orders?|orders?|holdings?|shops?|lines?)?/)))
     return amtHtml(m[1], m[2] ? m[2].replace(/^weekly /, "") : "findings");
@@ -16538,7 +16584,9 @@ const spTrend = key => (D.trends || []).find(t => t.key === key) || null;
    day is held by staffing then and by the door later — so the panel lights
    each of them and draws a chip apiece. */
 const spCapNotes = key => (D.hourFindings || []).filter(f => f.key === key && f.kind === "cap");
-const spBindingLimits = key => spCapNotes(key).map(f => f.limit);
+/* Python's English limit, whatever language the chip's words are in
+   (enOf(), web/i18n.js): spCeiling() and spLimitIcons() compare it. */
+const spBindingLimits = key => spCapNotes(key).map(f => typeof enOf === "function" ? enOf(f, "limit") : f.limit);
 /* This site's overstaffed week, in the words of its Today line (_alerts() in
    the Python): the spare staff-hours of every idle run, their wages summed,
    who was on and when, and the weekday-hours named. A finding written before
@@ -16608,8 +16656,9 @@ function spLimitRole(part, roles){
    two tied answers -- "Gym Trainer staffing and registers" -- is about the
    hours where both held at once, so it asks for both and the grid lights the
    overlap alone. */
-const spLimitShow = (n, g) => n.limit === "the building" ? "door"
-  : String(n.limit).split(" and ").map(part => {
+const spLimitShow = (n, g, lim = typeof enOf === "function" ? enOf(n, "limit") : n.limit) =>
+  lim === "the building" ? "door"
+  : String(lim).split(" and ").map(part => {
       const role = spLimitRole(part, (g || {}).roles);
       return spRoleToken(/\bstaffing$/.test(part) ? "staff" : "post",
         role ? role.skill : "");
@@ -18479,7 +18528,7 @@ function spNeedRead(n, f){
       if(f.why === "waiting") return `Waiting on <b>${spEsc((n.waitingOn || []).join(", "))}</b>`;
       return `<b>${spNum(n.arrives)}</b>/day arrives; the line is <b>not drawing it</b>`;
     case "covered":
-      if(f.why === "staffing") return `Your staffing runs these machines <b>${Math.round((n.staffedShare || 0) * 100)}%</b> of the week`;
+      if(f.why === "staffing") return `The roster runs these machines <b>${Math.round((n.staffedShare || 0) * 100)}%</b> of the week`;
       if(f.why === "limit") return "Held back by <b>Produce up to</b>";
       return "In step";
     case "made": return "Made in-house";
@@ -18688,7 +18737,10 @@ function drawSite(){
   const idleNote = (D.hourFindings || []).find(f => f.key === b.key && f.kind !== "cap");
   /* The building's own capacity is no warning: plenty of good sites run at it,
      and there is nothing to fix, so its sentence only says how much. */
-  const capSentence = n => n.limit === "the building"
+  /* A cap's limit as Python wrote it: what the chips compare and key on,
+     whatever language the words on screen are in (enOf(), web/i18n.js). */
+  const limitEn = n => typeof enOf === "function" ? enOf(n, "limit") : n.limit;
+  const capSentence = n => limitEn(n) === "the building"
     ? `At the building's capacity ${n.hours} hours a week (${n.when}); ${fmt(n.throughput)}/day of trade goes through those hours.`
     : `At the ceiling ${n.hours} hours a week (${n.when}); ${n.limit} ${n.limits > 1 ? "are" : "is"} the limit, so
          the answer is ${n.fix}. ${fmt(n.throughput)}/day of trade goes through those
@@ -18896,9 +18948,9 @@ function drawSite(){
      held by staffing at night and by its door by day — and one for idle
      capacity. Hovering one picks its hours out of the grid. */
   const hourChips = !sp ? "" : `<div class="sp-hchips">${
-    capNotes.map(n => `<span class="sp-hchip cap${n.limit === "the building" ? " sp-bcap" : ""}" data-show="${attr(spLimitShow(n, grid))}" data-limit="${attr(n.limit)}" data-tip="${
+    capNotes.map(n => `<span class="sp-hchip cap${limitEn(n) === "the building" ? " sp-bcap" : ""}" data-show="${attr(spLimitShow(n, grid))}" data-limit="${attr(limitEn(n))}" data-tip="${
       attr(capSentence(n).replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
-      spLimitIcons(n.limit, office).map(spI).join("")}<b>${n.hours} h/wk</b> at ${n.limit === "the building" ? "building capacity" : "the ceiling"} · ${n.when} · ${
+      spLimitIcons(limitEn(n), office).map(spI).join("")}<b>${n.hours} h/wk</b> at ${limitEn(n) === "the building" ? "building capacity" : "the ceiling"} · ${n.when} · ${
       fmt(n.throughput)}/day through it${n.fix ? `<span class="fix">${spI("right")}${n.fix}</span>` : ""}</span>`).join("") +
     (idleWeek ? `<span class="sp-hchip idle" data-show="idle" data-tip="${attr(idleSentence.replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
       spI(idleNote.office ? "monitor" : "counter")}${idleRead}</span>` : "")}</div>`;
@@ -20311,8 +20363,8 @@ const SB_LINE_COLS = [["Line", r => r.item || r.workstation, "l"],
   ["Status", r => r.fact ? szRank(r.fact) : null, "l"]];
 const SB_INPUT_COLS = [["Factory input", r => r.item, "l"],
   ["Eats / day", r => szUse(r.fact, r.perDay), "", "At full rate under 24/7; what the shops at the end of the chain use under Demand"],
-  ["On hand", r => r.stock ?? null], ["Arrived / day", r => r.known ? r.arrives : null, "", "Measured: what reached the factory a day over the last week, from its delivery log (only the last round while its log is under a week old)"],
-  ["Daily top-up", r => r.directImport ? null : r.target || null, "", "Planned: what the round brings each morning. With a change, the figure to type in the sending site's plan."],
+  ["On hand", r => r.stock ?? null], ["Arrived / day", r => r.known ? r.arrives : null],
+  ["Daily top-up", r => r.directImport ? null : r.target || null, "", "What the round brings each morning. With a change, the figure to type in the sending site's plan."],
   ["Status", r => szRank(r.fact), "l"]];
 /* The sizing switch, with what it means; remembered on this device. */
 function sbSizingRow(id){
@@ -20887,12 +20939,6 @@ function factoryCounts(type){
   return out;
 }
 let planSeed = {};
-/* The days the unit prices were read over (_ingredient_prices()): a week of
-   goods cost against the units delivered, or the one day there is. */
-const priceSpan = () => {
-  const {priceFrom: from, priceDay: to} = D.plan || {};
-  return from != null && from !== to ? `over days ${from}–${to}` : `on day ${to}`;
-};
 const machinesOn = slug => Math.max(0, planCounts[slug] ?? planSeed[slug] ?? 1);
 
 function drawPlan(){
@@ -20996,7 +21042,7 @@ function drawPlan(){
       meta[i.item] = {
         tip: on
           + (base ? `; your factories already eat ${num(base)} of it a week` : "")
-          + (unit !== undefined ? `; ${fmt(unit)} each ${priceSpan()}` : ""),
+          + (unit !== undefined ? `; ${fmt(unit)} each on day ${D.plan.priceDay}` : ""),
         ordered: src ? src.ordered : null, active: src ? src.active : false,
         smart: !!(src && src.smart), paused, contracts, from: src ? src.from : null, baseline: base,
         unit: unit === undefined ? null : unit,
@@ -21073,12 +21119,12 @@ function drawProducts(){
         showAllProducts ? `top ${TOP} only` : `all ${all.length}`}</a>`
     : `<span class="quiet">all ${all.length}</span>`;
   $("secProducts").innerHTML = sechead("Products", {
-    why: `Revenue and units are a day's, averaged over the last seven days and summed over every store that sells the line;`
+    why: `Revenue and units are yesterday summed over every store that sells the line;`
       + ` units a week is the last seven days, and stores is how many carry it.`
       + (showPeak
         ? ` Peaks names the weekday that sells the most units${fromWeeks} and the points between best and worst day.`
         : ` Weekday peaks are on the product's own note; ${withPeak} of ${rows.length} have one.`),
-    quiet: "by revenue a day, last 7 days",
+    quiet: "by revenue yesterday",
     aside: more,
   }) + `<table>
     <thead><tr><th class="l">Product</th><th>Revenue / day</th><th>Units / day</th>
@@ -21094,7 +21140,7 @@ function drawProducts(){
       const seller = xlSellers(p.slug)[0];
       const opens = !seller ? ""
         : seller.line.revenue ? `Open ${shortName(seller.b)}, the store that sells the most of it${p.stores > 1 ? `, one of ${p.stores}` : ""}`
-        : `Open ${shortName(seller.b)}, which stocks it; no store sold any in the last seven days`;
+        : `Open ${shortName(seller.b)}, which stocks it; no store sold any yesterday`;
       const name = seller ? `<a class="link xl-sells" href="#company" data-xl-item="${attr(p.slug)}" data-tip="${attr(opens)}">${p.item}</a>` : p.item;
       return `<tr data-slug="${attr(p.slug)}">
       <td class="l"${showPeak?"":` data-tip="${attr(peakTip(p))}"`}>${name}</td>
@@ -24303,7 +24349,7 @@ function planDraw(){
       : `Company targets are company-wide: you type each one across your importer contracts in the game; the board adds them up and never guesses a split per warehouse.`
         + (!priced ? "" : ` A week costs ${fmt(cash)} across the ${priced} of ${total} ingredients this company already buys.`
           + (priced < total
-            ? ` Unit prices are what you paid ${priceSpan()}; the other ${total - priced} show quantities only.` : ""));
+            ? ` Unit prices are what you paid on day ${D.plan.priceDay}; the other ${total - priced} show quantities only.` : ""));
   }
 }
 const bindPlan = once(() => on("click", "tr.line .step a[data-d]", (a, e) => {
@@ -26704,6 +26750,7 @@ class Board:
         self.locale_source, locale = game_text()
         self.names = Names(locale)
         self.lang_names = cli_names(lang, self.locale_source, locale)
+        self.lang_ui = cli_ui_table(lang)
         self.history = os.path.join(os.path.dirname(out) or ".", "market_history.json")
         self.lock = threading.Lock()
         self.html = b""
@@ -26766,6 +26813,8 @@ class Board:
             data = safe_extract(load_save(path), self.names, self.history)
             # names= only for --lang: an English board renders as it always has.
             lang = {"names": self.lang_names} if self.lang_names else {}
+            if self.lang_ui:
+                lang["ui"] = self.lang_ui
             live_page = render(data, live=True, **lang).encode("utf-8")
             static_page = render(data, **lang).encode("utf-8")
         except Exception as exc:
@@ -27024,6 +27073,22 @@ def cli_names(lang: str | None, source: str | None, english: dict[str, str]) -> 
     return {"lang": lang, "names": name_table(english, other)}
 
 
+def cli_ui_table(lang: str | None) -> dict | None:
+    """--lang: Big Copilot's own text in that language, for render(ui=...),
+    from the table the site ships (web/i18n/<lang>.json, which
+    `python build_web.py` writes). None for English, or for a language with
+    no table or an empty one: the page's own words then stay English."""
+    if not lang or lang == "en":
+        return None
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web", "i18n", f"{lang}.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            table = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    return {"lang": lang, "table": table} if isinstance(table, dict) and table else None
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -27074,7 +27139,8 @@ def main() -> None:
         metavar="CODE",
         help="show the game's own names (items, business types, neighbourhoods, "
         "skills) in one of the game's languages, e.g. de, fr, ja, zh-cn; the rest "
-        "of the page stays English",
+        "of the page stays English, unless Big Copilot's own text has a "
+        "translation into that language (web/i18n/<code>.json)",
     )
     ap.add_argument(
         "--backfill",
@@ -27147,7 +27213,7 @@ def main() -> None:
     lang_names = cli_names(args.lang, locale_source, locale)
     data = safe_extract(load_save(path), names, history)
     with open(out, "w", encoding="utf-8") as fh:
-        fh.write(render(data, names=lang_names))
+        fh.write(render(data, names=lang_names, ui=cli_ui_table(args.lang)))
 
     k = data["kpi"]
     minor = data["minor"]

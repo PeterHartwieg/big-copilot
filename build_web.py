@@ -27,6 +27,7 @@ from ba_dashboard import (
 )
 from ba_save import NotEnglishText, bundled_locale, load_game_locale, load_locale, locale_search_paths
 from tools.build_wiki_data import write_public_wiki
+from tools import i18n as ui_text
 from tools import wiki_pages
 from tools.extract_wiki import game_data_dir
 
@@ -469,6 +470,9 @@ STAMP_INPUTS = (
     "tools/build_wiki_data.py", "tools/wiki_data.py", "tools/extract_wiki.py", "tools/wiki_sample.json",
     "tools/wiki_topics.json", "web/fonts/fonts.css", "web/maps/floor-plans.json",
     *(f"{NAMES_DIR}/{code}.json" for code in NAME_LANGS),
+    # Big Copilot's own text: tt() (inlined in the page) and each language's
+    # table, which the page fetches (tools/i18n.py ship writes them).
+    "web/i18n.js", *(f"web/i18n/{lang}.json" for lang in ui_text.languages()),
 )
 
 
@@ -527,10 +531,11 @@ def read_text(path: str) -> str:
 
 
 # app.js is fetched with the build stamp, and hands the same stamp to the
-# worker, which hands it to the Python files: one deploy, one version.
+# worker, which hands it to the Python files: one deploy, one version. The
+# stamp itself is set in the head (page_html()), because web/i18n.js runs there
+# and fetches the UI language's table with it.
 BEFORE_SCRIPT = (
-    '<script>window.LEDGER_BUILD = "__STAMP__";</script>' + chr(10)
-    + '<script>window.LEDGER_RELEASE = __RELEASE__;</script>' + chr(10)
+    '<script>window.LEDGER_RELEASE = __RELEASE__;</script>' + chr(10)
     + '<script>__UPDATE_SCRIPT__</script>' + chr(10)
     + '<script src="app.js?v=__STAMP__"></script>' + chr(10)
     + '<script src="community.js?v=__STAMP__"></script>' + chr(10)
@@ -569,6 +574,9 @@ def page_html(release: dict, root: str = HERE) -> str:
     # No analytics script: the privacy notice says the site runs none, and
     # Cloudflare's automatic Web Analytics injection is off for this domain.
     head = '<meta name="viewport" content="width=device-width, initial-scale=1">' + chr(10)
+    # The stamp comes first, ahead of the template's head scripts: web/i18n.js
+    # runs there and fetches a language's table with it.
+    head += '<script>window.LEDGER_BUILD = "' + release["version"] + '";</script>' + chr(10)
     head += '<link rel="stylesheet" href="community.css?v=' + release["version"] + '">' + chr(10)
     with open(os.path.join(root, "web", "update.js"), encoding="utf-8") as fh:
         update_script = fh.read()
@@ -620,6 +628,10 @@ def check(root: str = HERE) -> list[str]:
     # one that is missing leaves nothing to stamp, so it is all that is said.
     missing = [f"{NAMES_DIR}/{code}.json" for code in NAME_LANGS
                if not os.path.isfile(os.path.join(root, NAMES_DIR, f"{code}.json"))]
+    # The UI tables are rebuilt from i18n/ without the game, so they are
+    # compared; one that is missing or stale also leaves the stamp unreadable
+    # or wrong, so it is all that is said.
+    missing += ui_text.ship(check=True, root=root)
     if missing:
         return stale + missing
     release = release_info(root)
@@ -696,6 +708,9 @@ def main() -> None:
     print(f"gametext.json: {len(text)} entries")
     tables = write_name_tables(locale_path, locale)
     print(f"names: {len(tables)} languages under {NAMES_DIR}/")
+    # Big Copilot's own text in other languages, from i18n/ (tools/i18n.py).
+    ui_text.ship()
+    print(f"web/i18n/: {', '.join(ui_text.languages()) or 'no'} UI tables")
     # Everything the stamp reads is now in place, so the page and version.json
     # describe the folder as it stands.
     release = release_info()
