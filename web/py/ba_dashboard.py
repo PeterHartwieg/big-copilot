@@ -1109,6 +1109,7 @@ COVER_NOISE_DAYS = 0.5
 # this many days it is an anecdote.
 SHIPPED_WINDOW = 7
 DELIVERY_LOG_SIZE = 60  # transactions a site's log keeps before the oldest go
+PRICE_DAYS = 7  # days of goods cost and deliveries a unit price is read over
 SHIPPED_MIN_DAYS = 3
 # A factory input topped up every morning and holding less than this many
 # rounds' worth is a buffer the machines eat through, not a pile.
@@ -1435,8 +1436,10 @@ OPENING_EVENT = 0  # "{rival} opened {business} at {address}"
 def _rival_names(save: Save, numbers: dict) -> dict:
     """{rival number: name} for every rival company the save lets us name.
 
-    Two sources. The four story rivals are named by the message keys they have
-    sent. Everybody else is named by their own opening announcement: a market
+    Two sources. The four story rivals are named by their fixed ids, and a
+    story rival the table lacks by the message keys it has sent: a rival's list
+    can hold another rival's keys, so the first match is only a fallback.
+    Everybody else is named by their own opening announcement: a market
     event of type 0 carries the rival's name, the business's name and its
     address, and the registration still standing at that address, opened on the
     same day and under the same name, carries the owner's id. A name is kept
@@ -1447,6 +1450,9 @@ def _rival_names(save: Save, numbers: dict) -> dict:
     for state in save.items(save.root.get("specialRivalStates")):
         rival = state.get("rivalId")
         if not rival:
+            continue
+        if rival in SPECIAL_RIVAL_NAMES:
+            found[rival] = SPECIAL_RIVAL_NAMES[rival]
             continue
         for key in save.items(state.get("sentMessageKeys")):
             match = _RIVAL_MESSAGE_RE.match(key or "")
@@ -1672,8 +1678,11 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
     stations = _service_stations(names)
     recipes = _recipes(names)
     staff_by_addr, staff = _staff(save, names)
-    crew_skill = {p["id"]: p["skill"] for p in staff}
-    residential = _residential_addresses(save, summaries)
+    # Every skill a person holds, the top one first: a station is held by
+    # anyone with its skill, not only by those whose best skill it is.
+    crew_skill = {p["id"]: [p["skill"], *(s for s in p.get("skills", ()) if s != p["skill"])]
+                  for p in staff}
+    residential = _residential_addresses(save, summaries, buildings)
     stmt_history = _statement_history(save, summaries)
     latest = stmt_history[-1][1] if stmt_history else {}
 
@@ -1855,7 +1864,6 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         "minor": alerts["minor"],
         "alertsDemand": {"lines": alerts_demand["lines"], "minor": alerts_demand["minor"]},
         "goals": _goals(save, names, businesses),
-        "weekly": _weekly(save),
     })
 
 
@@ -1955,9 +1963,18 @@ def _difficulty(save: Save) -> dict:
     }
 
 
-def _residential_addresses(save: Save, summaries: list) -> set:
-    """Apartments are billed as residences, not businesses."""
-    out = set()
+def _residential_addresses(save: Save, summaries: list, buildings: list = ()) -> set:
+    """Apartments are billed as residences, not businesses.
+
+    A home rented today, or a new character's first one, has no statement
+    yet, so a rented building the building table calls residential is a home
+    too: nobody can run a business in one.
+    """
+    table = load_buildings() if buildings else {}
+    out = {
+        (b["StreetName"], b["StreetNumber"]) for b in buildings
+        if (table.get((b["StreetName"], b["StreetNumber"])) or {}).get("t") == "residential"
+    }
     for s in summaries[-5:]:
         for r in save.items(s.get("residentialStatements")):
             addr = save.address(r.get("Address"))
@@ -2373,6 +2390,10 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
                 "revenue": money(revenue_by_item[item] / span),
                 "soldPerDay": round(units_sold[item] / span),
                 "soldPerWeek": round(units_sold[item] / span * 7),
+                # Unrounded, for _products() alone, which takes them off the
+                # payload: a price from rounded units is no price.
+                "_sold": units_sold[item] / span,
+                "_takings": revenue_by_item[item] / span,
             }
         )
     lines.sort(key=lambda x: (x["cover"] is None, x["cover"] if x["cover"] else 0))
@@ -2670,25 +2691,30 @@ def _loans(save: Save, names: Names) -> list:
 
 def _products(businesses: list) -> list:
     agg = collections.defaultdict(
-        lambda: {"revenue": 0.0, "units": 0, "week": 0, "stock": 0, "stores": 0}
+        lambda: {"revenue": 0.0, "units": 0.0, "week": 0, "stock": 0, "stores": 0}
     )
     for b in businesses:
         for line in b["lines"]:
+            # The day's takings and units before rounding: a line selling 0.4
+            # a day is not nothing, and its share of the average price is not
+            # free. _business() leaves them for this and nothing else.
+            sold, takings = line.pop("_sold", None), line.pop("_takings", None)
             if not line["revenue"] and not line["units"]:
                 continue
             # By key: two items can share a name, and the page names a row
             # from its key.
             rec = agg[line["slug"]]
             rec["item"] = line["item"]
-            rec["revenue"] += line["revenue"]
-            rec["units"] += line["soldPerDay"]
+            rec["revenue"] += line["revenue"] if takings is None else takings
+            rec["units"] += line.get("rate", line["soldPerDay"]) if sold is None else sold
             rec["week"] += line["soldPerWeek"]
             rec["stock"] += line["units"]
             rec["stores"] += 1 if line["revenue"] else 0
     out = [{"item": v.pop("item"), "slug": k, **v} for k, v in agg.items()]
     for rec in out:
-        rec["revenue"] = money(rec["revenue"])
         rec["price"] = round(rec["revenue"] / rec["units"], 2) if rec["units"] else 0
+        rec["revenue"] = money(rec["revenue"])
+        rec["units"] = round(rec["units"])
     return sorted(out, key=lambda x: -x["revenue"])
 
 
@@ -2697,9 +2723,12 @@ def _staff_summary(staff: list, businesses: list) -> dict:
     cost_by_role = collections.Counter()
     for s in staff:
         cost_by_role[s["role"]] += s["daily"]
+    # By site key, not name: two shops can share a name.
     by_site = collections.Counter()
+    site_name = {}
     for b in businesses:
-        by_site[b["name"]] = b["staff"]
+        by_site[b["key"]] += b["staff"]
+        site_name[b["key"]] = b["name"]
     return {
         "total": len(staff),
         "dailyCost": sum(s["daily"] for s in staff),
@@ -2714,24 +2743,10 @@ def _staff_summary(staff: list, businesses: list) -> dict:
             key=lambda x: -x["count"],
         ),
         "sites": sorted(
-            ({"site": s, "count": c} for s, c in by_site.items() if c),
+            ({"site": site_name[k], "key": k, "count": c} for k, c in by_site.items() if c),
             key=lambda x: -x["count"],
         ),
     }
-
-
-def _weekly(save: Save) -> list:
-    income = {
-        t["m_Item1"]: t["m_Item2"] for t in save.items(save.root["playerWeeklyIncomeHistory"])
-    }
-    count = {
-        t["m_Item1"]: t["m_Item2"]
-        for t in save.items(save.root["playerNumberOfBusinessesHistory"])
-    }
-    return [
-        {"day": d, "income": money(income[d]), "businesses": count.get(d, 0)}
-        for d in sorted(income)
-    ]
 
 
 def _openable_types(names: Names) -> list[str]:
@@ -4170,6 +4185,11 @@ def _supply(
             if not fact:
                 continue
             row["status"], row["why"], row["level"] = fact["st"], fact["why"], fact["lvl"]
+            # A depot of yours holds it and no plan sends it on: Not routed
+            # says so, naming this factory, and the input's own finding gives
+            # way to it, as a shelf's does.
+            if fact.get("via") is not None:
+                row["via"] = fact["via"]
             row["raiseTarget"] = (fact["setTo"] if row["target"] and fact["cad"] == "daily"
                                   else None)
             # The factory's own contract, paused while the top-up falls short
@@ -4441,7 +4461,7 @@ def _supply(
                 need = cycle_need = 0
                 provision, cadence = ordered, "weekly"
             else:
-                out = draw(business["key"], line["item"])
+                out = draw(business["key"], line["slug"])
                 if out <= 0 and line["units"] <= 0:
                     continue
                 target = next(
@@ -4530,6 +4550,9 @@ def _supply(
         else None,
         "leftToday": round(left_today, 3),
         "shops": shop_rows,
+        # The shops a repeating wholesale contract delivers to: a standing
+        # supply that draws no link on the graph.
+        "wholesaleShops": sorted({index[shop] for shop, _item in wholesale}),
         "imports": import_rows,
         "idle": idle_rows,
         "idleWeeks": IDLE_WEEKS,
@@ -5738,9 +5761,13 @@ def _factories(
                     item,
                     {"item": ing["item"], "slug": item, "perDay": 0.0, "lines": [], "lineSlugs": [],
                      "staffedDay": 0.0,
-                     "demDay": 0.0, "ramp": set()},
+                     "demDay": 0.0, "ramp": set(), "_shipDraw": 0.0, "_allLimit": True},
                 )
                 row["perDay"] += n * ing["per"] * 24
+                # What the lines' shipped output took of it: a line held by its
+                # limit makes what leaves, and eats for that, not for capacity.
+                row["_shipDraw"] += n * ing["per"] * 24 * (min(makes, ships) / makes if makes else 0.0)
+                row["_allLimit"] = row["_allLimit"] and limit is not None
                 row["staffedDay"] += n * ing["per"] * 24 * share
                 row["demDay"] += n * ing["per"] * 24 * (dem_makes / makes if makes else 1.0)
                 row["ramp"] |= set(ramp)
@@ -5772,6 +5799,15 @@ def _factories(
         held_lines = collections.defaultdict(lambda: True)
         for line in lines:
             held_lines[line["item"]] = held_lines[line["item"]] and line["limitHeld"]
+        # What the lines not yet held by their limit would eat of each input
+        # at full rate: a starved line ships little, so its shipped output is
+        # no measure of what it has to have on hand.
+        free_draw = collections.defaultdict(float)
+        for line in lines:
+            if line["limitHeld"]:
+                continue
+            for ing in recipes[line["slug"]]["ingredients"]:
+                free_draw[resolve(ing)] += line["machines"] * ing["per"] * 24
         for slug, row in needs.items():
             target, source = flow["targets"].get((key, slug), (0, None))
             # A factory can itself be an import destination. Weekly deliveries
@@ -5802,8 +5838,19 @@ def _factories(
             row["waitingOnSlugs"] = [slug for _name, slug in waiting]
             # Every line eating it held by its limit, with some of it on hand:
             # the machines are not waiting for it, they have nothing to make.
+            # Or every such line has Produce up to set, what arrives covers
+            # what their shipped output ate, and enough is on hand to run the
+            # lines not yet held at full rate for the rest of the day: one
+            # line held at its limit all day and another only late in the day
+            # still draw no more than they ship, whatever the hour's stock
+            # test says. A line that could not run flat out on what it holds
+            # is starved, not held.
+            ship_draw, all_limit = row.pop("_shipDraw"), row.pop("_allLimit")
             row["limited"] = bool(
-                row["lines"] and all(held_lines[line] for line in row["lines"]) and held(key, slug) > 0
+                row["lines"] and held(key, slug) > 0 and (
+                    all(held_lines[line] for line in row["lines"])
+                    or (all_limit and ship_draw > 0 and arrives(key, slug) >= ship_draw * 0.85
+                        and held(key, slug) >= free_draw[slug] * rest_of_day))
             )
             row["target"] = target
             row["source"] = import_source
@@ -5843,8 +5890,6 @@ def _factories(
             ramp = row.pop("ramp")
             if ramp:
                 ramp_at[(key, slug)] |= ramp
-                if own_import:
-                    ramp_at[(key, slug)] |= ramp
                 if source:
                     ramp_at[(import_source, slug)] |= ramp
             row["demDay"] = round(row["demDay"])
@@ -6002,8 +6047,11 @@ def _factories(
     }
 
 
-def _serves(status: str | None, skill: str | None, needed: str | None = None) -> bool:
+def _serves(status: str | None, skill, needed: str | None = None) -> bool:
     """Whether someone with this skill can hold the post a station is.
+
+    `skill` is one skill, or every skill the person holds with the top one
+    first: a shop's station takes anyone holding its skill.
 
     A shop's queue is served at whichever station the shift posts to, and the
     station names its own skill: the fitness planning board wants a Gym Trainer,
@@ -6011,9 +6059,11 @@ def _serves(status: str | None, skill: str | None, needed: str | None = None) ->
     office's customers are served by the professional the agency employs, which
     is everyone there but the cleaners, so its computers name no skill at all.
     """
+    held = [skill] if skill is None or isinstance(skill, str) else list(skill)
     if status == "office":
-        return bool(skill) and skill != CLEANING_SKILL
-    return skill is not None and skill == needed
+        top = held[0] if held else None
+        return bool(top) and top != CLEANING_SKILL
+    return needed is not None and needed in held
 
 
 def _service_wages(staff: list, status_of: dict) -> dict:
@@ -10264,33 +10314,85 @@ def _ingredient_prices(save: Save, names: Names, supply: dict, businesses: list)
 
     The save carries no importer price list — `importPartnerships.products` holds
     an item, an amount and a warehouse, and nothing about money. What it does
-    carry is what was paid: yesterday's goods cost per line, against the units
-    drawn that day. Dividing one by the other gives a real unit price for every
-    material this company already buys, and nothing at all for one it does not.
-    Guessing the rest would be inventing a price list.
+    carry is what was paid: each site's goods cost per item, booked where the
+    goods are used (a factory, not the depot that imported them), and the
+    units the delivery log shows reaching that site. The round logged on day
+    d + 1 restocks what day d's cost paid for, so each cost day is paired with
+    the next day's arrivals; a cost day whose round has not run yet drops out
+    on both sides. Over the last PRICE_DAYS cost days, company-wide, the one
+    divided by the other gives a real unit price for every material this
+    company already buys, and nothing at all for one it does not. Something
+    the company makes itself reaches its users at no cost, so it has no price
+    here. Guessing the rest would be inventing a price list.
+
+    Every cost day the site's log covers counts, whether or not a round came
+    the next day, so a weekly import delivered straight to a factory is the
+    week's cost against its one delivery. A known limit: that is right only
+    where the delivery matches the week's use; a window holding two such
+    deliveries misprices it, and one holding none leaves that site out, since
+    nothing arrived there to divide by.
     """
     summaries = sorted(save.items(save.root["financialSummaries"]), key=lambda s: s["dayNumber"])
     if not summaries:
-        return {"unit": {}, "day": None}
-    spend = collections.defaultdict(float)
-    for statement in save.items(summaries[-1]["businessIncomeStatements"]):
-        addr = save.address(statement.get("Address"))
-        for line in save.items(statement.get("Resources")):
-            if line.get("Amount"):
-                spend[(site_key(addr), line["ItemName"])] += line["Amount"]
+        return {"unit": {}, "day": None, "from": None}
+    window = {s["dayNumber"] for s in summaries[-PRICE_DAYS:]}
+    spend = collections.defaultdict(lambda: collections.defaultdict(float))
+    for summary in summaries[-PRICE_DAYS:]:
+        for statement in save.items(summary["businessIncomeStatements"]):
+            key = site_key(save.address(statement.get("Address")))
+            for line in save.items(statement.get("Resources")):
+                if line.get("ItemName") and line.get("Amount"):
+                    spend[(key, line["ItemName"])][summary["dayNumber"]] += line["Amount"]
 
-    by_label = {b["key"]: {} for b in businesses}
-    for row in supply["imports"]:
-        by_label[businesses[row["s"]]["key"]][row["item"]] = row["perDay"]
+    # Each site's cost days: every window day whose next day its log covers,
+    # a day with nothing delivered included (it brought 0). A log short of
+    # its full length holds everything since its first delivery, so it covers
+    # from that day (what came before it was never logged); a full one has
+    # lost part of its oldest day, so it covers from the day after. Today's round, not yet
+    # logged, covers nothing yet, so the last cost day waits on both sides.
+    today = save.root.get("Day")
+    arrived = collections.defaultdict(lambda: collections.defaultdict(float))
+    covered = collections.defaultdict(set)
+    for building in save.items(save.root["BuildingRegistrations"]):
+        if not building.get("RentedByPlayer"):
+            continue
+        key = site_key((building["StreetName"], building["StreetNumber"]))
+        log = save.items(building.get("deliveryTransactions"))
+        days = {t.get("dayOfDelivery") for t in log if isinstance(t.get("dayOfDelivery"), int)}
+        if not days:
+            continue  # no log, so nothing to divide by: a shop
+        reach = min(days) + 1 if len(log) >= DELIVERY_LOG_SIZE else min(days)
+        covered[key] = {d for d in window
+                        if d + 1 >= reach and (d + 1 != today or today in days)}
+        for transaction in log:
+            when = transaction.get("dayOfDelivery")
+            if not isinstance(when, int) or when - 1 not in covered[key]:
+                continue
+            for entry in save.items(transaction.get("deliveryItems")):
+                amount = entry.get("amountDelivered") or 0
+                if entry.get("itemName") and amount > 0:
+                    arrived[(key, entry["itemName"])][when] += amount
 
-    prices = {}
-    for (key, slug), paid in spend.items():
-        units = by_label.get(key, {}).get(names.label(slug))
-        if units and units > 0:
-            prices.setdefault(slug, []).append(paid / units)
+    made = {line["slug"] for site in (supply.get("factories") or {}).get("sites", [])
+            for line in site.get("lines", [])}
+    paid = collections.defaultdict(float)
+    units = collections.defaultdict(float)
+    for (key, slug), by_day in spend.items():
+        if slug in made:
+            continue
+        # Only the cost days this site's log covers, each against the next
+        # day's arrivals, and only where goods came in at all.
+        days = covered.get(key, ())
+        got = sum(arrived[(key, slug)].get(d + 1, 0.0) for d in days)
+        if got <= 0:
+            continue
+        paid[slug] += sum(by_day.get(d, 0.0) for d in days)
+        units[slug] += got
     return {
-        "unit": {s: round(sum(v) / len(v), 4) for s, v in prices.items()},
+        "unit": {slug: round(paid[slug] / units[slug], 4)
+                 for slug in _in_order(units) if paid[slug] > 0},
         "day": summaries[-1]["dayNumber"],
+        "from": min(window),
     }
 
 
@@ -10470,6 +10572,7 @@ def _plan(
         "own": own,
         "prices": prices["unit"],
         "priceDay": prices["day"],
+        "priceFrom": prices.get("from"),
         "priceCount": len(prices["unit"]),
         "peak": round(uplift, 3),
         # By the workstation's key, never its name.
@@ -10618,7 +10721,11 @@ def _alerts(
                      worth=worth, always=always, ev=ev, named=named)
         )
 
+    # A delivery plan: a route or an import into the site, or a repeating
+    # wholesale contract to it.
     planned = {link["to"] for link in supply["graph"]["links"]}
+    planned |= {businesses[s]["key"] for s in supply.get("wholesaleShops", ())
+                if 0 <= s < len(businesses)}
 
     # --- a site that has not started trading is one finding, not four
     silent = set()
@@ -11560,6 +11667,8 @@ def _feed_notes(businesses: list, factories: dict, silent: set, mode: str = "cap
             slugs = row.get("lineSlugs") or []
             lines = [tok(slugs[i] if i < len(slugs) else None, line) for i, line in enumerate(row["lines"][:3])]
             item = tok(row.get("slug"), row["item"])
+            if status == "noplan" and row.get("via") is not None:
+                continue  # said once, by the depot's Not routed finding
             # The paused own import is offered as the other way out, after
             # whatever the sentence says first.
             own = bool(row.get("ownPaused"))
@@ -14609,7 +14718,7 @@ body:has(#changelogDialog[open]){overflow:hidden}
        the wiki files shows instead. -->
   <div class="page" id="pageWiki" hidden>
     <div class="wiki" id="wikiRoot">
-      <p class="quiet" style="margin-top:44px">The wiki is not part of this build.</p>
+      <p class="quiet" style="margin-top:44px" data-tt="wiki.absent">The wiki is not part of this build.</p>
     </div>
   </div>
 <!--__FOOTER__-->
@@ -14889,6 +14998,9 @@ const spIcon = name => SP_ICON[name] ? `<svg viewBox="0 0 24 24" aria-hidden="tr
    A data-tip is not one of those places: showTip() sets it as textContent, so
    attr() alone carries it and escaping it here would print the entities. */
 const spEsc = s => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+/* A figure for tt() exactly as a template literal wrote it: a number stays a
+   number, and a missing one reads "undefined" as it always did. */
+const spRaw = v => typeof v === "number" ? v : String(v);
 /* The same drawing wrapped so it sits on a text line. */
 const spI = name => `<span class="sp-i">${spIcon(name)}</span>`;
 /* Every character that is not a letter, a digit or a hyphen becomes a
@@ -15894,7 +16006,7 @@ const SZ_WHY = {
   "short:shortfall": "Runs dry before the next delivery lands",
   "short:target": "The daily top-up is less than a day's need",
   "short:dry": "The depot it comes from is out of it",
-  "stalled:notDrawn": "The source holds it, yet little or nothing arrives",
+  "stalled:notDrawn": "The source holds it, yet under three quarters of the need arrived per day over the last week (the last round alone while the log is under a week old): the line is not drawing it",
   "stalled:waiting": "The line stands still for want of another input",
   "idle:notMoving": "Nothing draws on it",
   "idle:notRouted": "No plan sends it on, though your own sites sell or need it",
@@ -15906,8 +16018,8 @@ const SZ_WHY = {
   "tight:target": "The daily top-up covers a day's use, not the margin",
   "covered:route": "A route from your own site brings it",
   "covered:limit": "Produce up to holds the line back, not the supply",
-  "covered:staffing": "The roster runs the machines only part of the week",
-  "short:hours": "Rostered fewer hours a day than the line needs",
+  "covered:staffing": "Your staffing runs the machines only part of the week",
+  "short:hours": "Staffed fewer hours a day than the line needs",
 };
 const SZ_STATE = {
   covered: "Covers the use and the margin", tight: "Covers the use, not the margin",
@@ -16052,9 +16164,9 @@ function szSays(f, r, depot){
     case "tight": return f.setTo !== null ? `${num(f.setTo)} would carry the margin` : "";
     case "stalled":
       if(f.why === "waiting") return `${lines.join(", ")} stand${lines.length === 1 ? "s" : ""} still for want of ${(r.waitingOn || []).join(", ")}`;
-      return `${depot} holds ${num(r.depotStock || 0)} but the line takes ${pct}% of its need`;
+      return `${depot} holds ${num(r.depotStock || 0)}, yet only ${pct}% of the need arrived per day over the last week`;
     case "covered":
-      if(f.why === "staffing") return `the roster runs these machines ${Math.round((r.staffedShare ?? 1) * 100)}% of the week`;
+      if(f.why === "staffing") return `your staffing runs these machines ${Math.round((r.staffedShare ?? 1) * 100)}% of the week`;
       if(f.why === "limit") return "Produce up to holds the line back";
       if(f.why === "route") return "a route from your own site brings it";
       return "";
@@ -17185,11 +17297,13 @@ function drawSitePicker(){
   const step = b => b ? `<span><a href="${href(b)}" data-key="${attr(b.key)}">${spEsc(shortName(b))}</a>${mapButton(b.key,b.name)}</span>` : "";
   /* A phone has no room for the neighbours' names: two arrows stand in for
      them, either side of the list (the stylesheet swaps one for the other). */
-  const arrow = (b, word, path) => `<a class="ibtn"${b ? ` href="${href(b)}" data-key="${attr(b.key)}" aria-label="${
-    attr(`${word} site: ${shortName(b)}`)}"` : ` aria-disabled="true" aria-label="No ${word.toLowerCase()} site"`}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg></a>`;
-  host.innerHTML = `${arrow(prev, "Previous", "M15 6l-6 6 6 6")}<span class="seg">${step(prev)}<select class="sitepick" aria-label="Which site">${trading.map(opt).join("")}${
-    support.length ? `<optgroup label="Support sites">${support.map(opt).join("")}</optgroup>` : ""}</select>${step(next)}</span>${
-    arrow(next, "Next", "M9 6l6 6-6 6")}`;
+  const arrow = (b, words, path) => `<a class="ibtn"${b ? ` href="${href(b)}" data-key="${attr(b.key)}" aria-label="${
+    attr(words.to(shortName(b)))}"` : ` aria-disabled="true" aria-label="${attr(words.none())}"`}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg></a>`;
+  const prevWords = {to: name => tt("sp.pick.prev", "Previous site: {name}", {name}), none: () => tt("sp.pick.noprev", "No previous site")};
+  const nextWords = {to: name => tt("sp.pick.next", "Next site: {name}", {name}), none: () => tt("sp.pick.nonext", "No next site")};
+  host.innerHTML = `${arrow(prev, prevWords, "M15 6l-6 6 6 6")}<span class="seg">${step(prev)}<select class="sitepick" aria-label="${attr(tt("sp.pick.which", "Which site"))}">${trading.map(opt).join("")}${
+    support.length ? `<optgroup label="${attr(tt("sp.pick.support", "Support sites"))}">${support.map(opt).join("")}</optgroup>` : ""}</select>${step(next)}</span>${
+    arrow(next, nextWords, "M9 6l6 6-6 6")}`;
   host.onclick = e => { const a = e.target.closest("a[data-key]"); if(a && !inSiteLink(e)){ e.preventDefault(); openSite(a.dataset.key); } };
   q("select", host).onchange = e => openSite(e.target.value);
 }
@@ -17203,13 +17317,13 @@ const SS_BACK = `<span class="ss-i"><svg viewBox="0 0 24 24" aria-hidden="true">
 function siteCrumbs(key, name, picker){
   const back = siteFrom
     ? `<a class="ss-crumb from" href="${attr(siteFrom.hash)}" data-ss="back">${SS_BACK}${spEsc(siteFrom.label)}</a>`
-    : `<a class="ss-crumb" href="#secPortfolio" data-ss="portfolio">${SS_BACK}Portfolio</a>`;
+    : `<a class="ss-crumb" href="#secPortfolio" data-ss="portfolio">${SS_BACK}${tt("sp.crumb.portfolio", "Portfolio")}</a>`;
   const chain = (D.chains || []).find(c => (c.sites || []).includes(key));
   const trail = [
-    siteFrom ? `<a href="#secPortfolio" data-ss="portfolio">Portfolio</a>` : "",
+    siteFrom ? `<a href="#secPortfolio" data-ss="portfolio">${tt("sp.crumb.portfolio", "Portfolio")}</a>` : "",
     chain ? `<a href="#secPortfolio" data-ss="chain" data-chain="${attr(enOf(chain, "name"))}">${spEsc(chain.name)}</a>` : "",
     `<span aria-current="page">${spEsc(name)}</span>`].filter(Boolean).join("<i>›</i>");
-  return `<nav class="ss-crumbs" aria-label="Where this page sits">${back}<span class="ss-trail">${trail}</span>${
+  return `<nav class="ss-crumbs" aria-label="${attr(tt("sp.crumb.where", "Where this page sits"))}">${back}<span class="ss-trail">${trail}</span>${
     picker ? `<div class="ss-pick" id="sitePick"></div>` : ""}</nav>`;
 }
 function wireSiteCrumbs(){
@@ -17255,7 +17369,7 @@ const spHome = key => key === null ? null : (D.homes || []).find(h => h.key === 
    and draws each one's daily average across it; `o.dash` is the line a site
    with under a fortnight behind it gets, because there is no trend to read. */
 function miniChart(series, key, colour, o = {}){
-  if(series.length < 2) return `<p class="quiet">Not enough history yet.</p>`;
+  if(series.length < 2) return `<p class="quiet">${tt("sp.chart.nohistory", "Not enough history yet.")}</p>`;
   const W = 540, H = 108, P = {t:8, r:6, b:16, l:4};
   const vals = series.map(d => d[key]);
   let lo = Math.min(...vals, 0), hi = Math.max(...vals, 1);
@@ -17281,9 +17395,9 @@ function miniChart(series, key, colour, o = {}){
     <circle cx="${x(last).toFixed(1)}" cy="${y(series[last][key]).toFixed(1)}" r="3.2"
       fill="var(--surface)" stroke="${colour}" stroke-width="2"/>
     <text x="${P.l}" y="${H-4}" fill="var(--ink-3)" font-family="IBM Plex Mono, monospace"
-      font-size="10">day ${series[0].day}</text>
+      font-size="10">${tt("sp.chart.day", "day {d}", {d: series[0].day})}</text>
     <text x="${W-P.r}" y="${H-4}" text-anchor="end" fill="var(--ink-3)" font-family="IBM Plex Mono, monospace"
-      font-size="10">day ${series[last].day}</text>
+      font-size="10">${tt("sp.chart.day", "day {d}", {d: series[last].day})}</text>
   </svg>`;
 }
 
@@ -17300,6 +17414,23 @@ function miniChart(series, key, colour, o = {}){
 const HOUR_ROWS = [1,2,3,4,5,6,0];
 const WEEK_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const WEEK_FULL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+/* WEEK_SHORT[wd] in the UI language, for the site panel's own labels. The
+   arrays stay English: spIdleWeek() reads Python's English weekday off them. */
+function spWd(wd){
+  switch(((Math.trunc(Number(wd)) % 7) + 7) % 7){
+    case 0: return tt("sp.wd.0", "Sun");
+    case 1: return tt("sp.wd.1", "Mon");
+    case 2: return tt("sp.wd.2", "Tue");
+    case 3: return tt("sp.wd.3", "Wed");
+    case 4: return tt("sp.wd.4", "Thu");
+    case 5: return tt("sp.wd.5", "Fri");
+    default: return tt("sp.wd.6", "Sat");
+  }
+}
+/* A weekday's hour as the grid's read-outs head it: "Monday 09:00". */
+const spWhen = (wd, h) => tt("sp.hour.when", "{d:day} {h}:00", {d: wd, h: String(h).padStart(2, "0")});
+/* The same with the short weekday: "Mon 09:00". */
+const spWhenShort = (wd, h) => tt("sp.hour.whenshort", "{d} {h}:00", {d: spWd(wd), h: String(h).padStart(2, "0")});
 /* Mirrors AT_CAP in the Python: this close to the ceiling is at the ceiling,
    so the outlined cells are the ones capHours counts. */
 const AT_CAP = 0.95;
@@ -17320,8 +17451,9 @@ function hourRoles(g, wd, h){
    of them were manned, then what they were worth an hour. */
 function roleRead(r, wd, h){
   const n = r.posts ? r.posts[wd][h] : 0;
-  const many = r.many || r.noun || "stations";
-  return `${n} of ${r.stationCount} ${r.stationCount === 1 ? (r.one || many) : many} · ${r.staffed[wd][h]}/h`;
+  const many = r.many || r.noun || tt("sp.hour.stations", "stations");
+  return tt("sp.hour.role", "{n} of {of} {noun} · {rate}/h",
+    {n, of: r.stationCount, noun: r.stationCount === 1 ? (r.one || many) : many, rate: r.staffed[wd][h]});
 }
 
 /* The hour the grid's read-out opens on before one is pointed at: the busiest
@@ -17350,11 +17482,11 @@ function hourGrid(g, todayWd, lead = null, idle = []){
   const week = new Set(idle.map(([wd, h]) => `${wd}:${h}`));
   let cells = `<div></div>${[...Array(24).keys()].map(h => `<div class="hh">${h % 3 === 0 ? h : ""}</div>`).join("")}`;
   HOUR_ROWS.forEach(wd => {
-    cells += `<div class="dd${wd === todayWd ? " now" : ""}">${WEEK_SHORT[wd].toUpperCase()}${g.thin[wd] ? "*" : ""}</div>`;
+    cells += `<div class="dd${wd === todayWd ? " now" : ""}">${spWd(wd).toUpperCase()}${g.thin[wd] ? "*" : ""}</div>`;
     for(let h = 0; h < 24; h++){
       const seen = g.customers[wd][h], cap = g.effective[wd][h];
-      const when = `<b>${WEEK_FULL[wd]} ${String(h).padStart(2, "0")}:00</b>`;
-      if(seen === null){ cells += `<div class="hc" data-read="${attr(`${when} no reading`)}"></div>`; continue; }
+      const when = `<b>${spWhen(wd, h)}</b>`;
+      if(seen === null){ cells += `<div class="hc" data-read="${attr(tt("sp.hour.noreading", "{when} no reading", {when}))}"></div>`; continue; }
       const a = seen ? 6 + Math.round(Math.min(seen / peak, 1) * 70) : 0;
       const bg = seen ? `color-mix(in oklab, var(--accent) ${a}%, var(--surface))` : "var(--raised)";
       const atCap = !g.thin[wd] && cap && seen >= cap * AT_CAP;
@@ -17373,23 +17505,23 @@ function hourGrid(g, todayWd, lead = null, idle = []){
          the binding roles speak for themselves. */
       const binding = g.office ? [] : hourRoles(g, wd, h);
       const on = g.office
-        ? `${Math.round(g.staffed[wd][h] / g.postRate)} of ${g.stationCount} workstations staffed`
+        ? tt("sp.hour.desks", "{n} of {of} workstations staffed", {n: Math.round(g.staffed[wd][h] / g.postRate), of: g.stationCount})
         : roles.length > 1
-          ? `${binding.map(r => roleRead(r, wd, h)).join(" + ")} · slowest of ${roles.length} roles`
+          ? tt("sp.hour.slowest", "{roles} · slowest of {n} roles", {roles: binding.map(r => roleRead(r, wd, h)).join(" + "), n: roles.length})
           : binding.length && binding[0].noun
             ? roleRead(binding[0], wd, h)
-            : `${g.staffed[wd][h]} of ${g.counters} register capacity on`;
+            : tt("sp.hour.registers", "{n} of {of} register capacity on", {n: g.staffed[wd][h], of: g.counters});
       const idleWord = roles.length > 1 && idle.length
-        ? `${idle.map(r => r.label || "capacity").join(", ")} idle`
-        : "capacity idle";
+        ? tt("sp.hour.idle.roles", "{roles} idle", {roles: idle.map(r => r.label || tt("sp.hour.capacity", "capacity")).join(", ")})
+        : tt("sp.hour.idle", "capacity idle");
       /* The ceilings this hour stood at, as `<kind>:<skill>` tokens, so a chip
          can ask for its own hours by kind and role together. */
       const held = atCap ? spCellLimit(g, wd, h) : "";
       /* Held by the building's own capacity: a busy hour, not a bad one. */
       const bcap = held === "door";
-      const read = `${when} ${Math.round(seen)} customer${Math.round(seen) === 1 ? "" : "s"} · ${on}${
-        atCap ? ` · <b>${bcap ? "at building capacity" : "at the ceiling"}</b>` : slack ? ` · ${idleWord}` : ""}`;
-      if(top && top.wd === wd && top.h === h){ lead.read = read; lead.label = atCap && !bcap ? "Worst hour" : "Busiest hour"; }
+      const read = `${when} ${tt("sp.hour.customers", {one: "{n} customer", other: "{n} customers"}, {n: Math.round(seen)})} · ${on}${
+        atCap ? ` · <b>${bcap ? tt("sp.hour.atdoor", "at building capacity") : tt("sp.hour.atceiling", "at the ceiling")}</b>` : slack ? ` · ${idleWord}` : ""}`;
+      if(top && top.wd === wd && top.h === h){ lead.read = read; lead.label = atCap && !bcap ? tt("sp.hour.worst", "Worst hour") : tt("sp.hour.busiest", "Busiest hour"); }
       cells += `<div class="hc${atCap ? ` cap${bcap ? " sp-bcap" : ""}` : slack && !atCap ? " slack" : ""}"${
         held ? ` data-caps="${attr(held)}"` : ""}${week.has(`${wd}:${h}`) ? ` data-el="idle"` : ""} style="background:${bg}" data-read="${attr(read)}"></div>`;
     }
@@ -17460,8 +17592,8 @@ const spLadder = rank => `<span class="ladder">${
   [...Array(rank.of).keys()].map(k => `<i${k === rank.place - 1 ? ` class="me"` : ""} style="--t:${
     rank.of > 1 ? (1 - k / (rank.of - 1)).toFixed(2) : 1};--k:${k}"></i>`).join("")}</span>`;
 const spRankHtml = rank => rank.place === null
-  ? `<span class="sp-rank none" data-tip="No place yet: a rank needs seven days of trading"><span>–<small>/${rank.of}</small></span></span>`
-  : `<span class="sp-rank${rank.place <= 3 ? " top" : ""}" data-tip="${attr(`${rank.place} of the ${rank.of} sites that trade, by profit over the last 7 days`)}"><span>${
+  ? `<span class="sp-rank none" data-tip="${attr(tt("sp.rank.none", "No place yet: a rank needs seven days of trading"))}"><span>–<small>/${rank.of}</small></span></span>`
+  : `<span class="sp-rank${rank.place <= 3 ? " top" : ""}" data-tip="${attr(tt("sp.rank.tip", "{place} of the {of} sites that trade, by profit over the last 7 days", {place: rank.place, of: rank.of}))}"><span>${
       rank.place}<small>/${rank.of}</small></span>${spLadder(rank)}</span>`;
 
 /* This site's week on week, the limit its busiest hours ran into, and its
@@ -17487,17 +17619,17 @@ function spIdleParts(parts, noun){
   const named = parts.map((p, i) => i)
     .sort((a, z) => ((parts[z].spare || 0) - (parts[a].spare || 0)) || a - z)
     .slice(0, SP_IDLE_PARTS).sort((a, z) => a - z);
-  const said = named.map(i => `${parts[i].staff} ${parts[i].noun || noun} ${parts[i].when}`).join("; ");
+  const said = named.map(i => tt("sp.idle.part", "{n} {noun} {when}", {n: parts[i].staff, noun: parts[i].noun || noun, when: parts[i].when})).join("; ");
   const more = parts.length - named.length;
-  return more ? `${said} (and ${more} more)` : said;
+  return more ? tt("sp.idle.more", "{said} (and {n} more)", {said, n: more}) : said;
 }
 function spIdleWeek(n){
   const wd = WEEK_FULL.indexOf(n.day), long = n.to - n.from;
   const w = n.week || {spare: n.spare, worth: n.worth, seen: n.seen,
     cells: [...Array(Math.max(long, 0)).keys()].map(k => [wd, n.from + k]),
     parts: [{noun: n.noun, staff: n.staff,
-             when: `${WEEK_SHORT[wd]} ${long > 1 ? `${n.from}-${n.to}` : n.from}`}]};
-  const noun = n.office ? "workstations" : "counters";
+             when: `${spWd(wd)} ${long > 1 ? `${n.from}-${n.to}` : n.from}`}]};
+  const noun = n.office ? tt("sp.idle.desks", "workstations") : tt("sp.idle.counters", "counters");
   return {spare: w.spare, worth: w.worth, seen: w.seen, cells: w.cells || [],
           runs: spIdleParts(w.parts || [], noun)};
 }
@@ -17746,12 +17878,12 @@ const spTickKey = row => !row.full ? row.key
    hiring are the player's to do, and a week can only be set for people
    already working here. */
 function spAddWords(add, nameHtml = r => spEsc(r.name || "?")){
-  const parts = [];
-  if((add.assign || []).length)
-    parts.push(`assign ${add.assign.map(nameHtml).join(", ")} (unassigned)`);
-  if((add.hire || []).length)
-    parts.push(`hire ${add.hire.map(h => `${h.people} ${spEsc(h.role || "")}`).join(", ")}`);
-  return parts.join(" and ");
+  const assign = (add.assign || []).length ? add.assign.map(nameHtml).join(", ") : "";
+  const hire = (add.hire || []).length
+    ? add.hire.map(h => tt("sp.add.hireone", "{n} {role}", {n: h.people, role: spEsc(h.role || "")})).join(", ") : "";
+  return assign && hire ? tt("sp.add.both", "assign {assign} (unassigned) and hire {hire}", {assign, hire})
+    : assign ? tt("sp.add.assign", "assign {assign} (unassigned)", {assign})
+    : hire ? tt("sp.add.hire", "hire {hire}", {hire}) : "";
 }
 /* What the week costs to type, against what is in the game now. `fragments`
    is how much of what is there now is a two-hour scrap.
@@ -17841,10 +17973,10 @@ const spStationKind = (row, st) => ((row.headcount || {})[st.skill] || {}).kind 
    reading for is not drawn at all -- an unknown is never a zero. */
 const SP_BASIS_CLASS = {censored: "sp-cens", scaled: "sp-scaled", measured: ""};
 const SP_BASIS_READ = {
-  censored: " · <b>measured at the ceiling</b>: the hour was full, so this is a floor, not a target",
-  scaled: " · <b>scaled from the best measured day</b> through the game's day curve; this weekday rests on under two weeks",
-  measured: " · measured",
-  full: " · <b>full cover</b>: every station, every hour, to measure demand",
+  get censored(){ return " · " + tt("sp.basis.censored", "<b>measured at the ceiling</b>: the hour was full, so this is a floor, not a target"); },
+  get scaled(){ return " · " + tt("sp.basis.scaled", "<b>scaled from the best measured day</b> through the game's day curve; this weekday rests on under two weeks"); },
+  get measured(){ return " · " + tt("sp.basis.measured", "measured"); },
+  get full(){ return " · " + tt("sp.basis.full", "<b>full cover</b>: every station, every hour, to measure demand"); },
 };
 function spNeedAt(row, wd, h){
   let n = 0, basis = null;
@@ -17885,16 +18017,19 @@ function spPreflight(b){
       : stops >= 0 && chain.indexOf(s) > stops ? "unk" : "ok"}));
 }
 const SP_CHECK_WORD = {
-  closed: "open", staff: "staffed", prices: "prices set", stock: "stock on the shelves",
-  shelves: "shelves filled", plan: "delivery plan",
+  get closed(){ return tt("sp.check.closed", "open"); }, get staff(){ return tt("sp.check.staff", "staffed"); },
+  get prices(){ return tt("sp.check.prices", "prices set"); }, get stock(){ return tt("sp.check.stock", "stock on the shelves"); },
+  get shelves(){ return tt("sp.check.shelves", "shelves filled"); }, get plan(){ return tt("sp.check.plan", "delivery plan"); },
 };
 /* A failing check that reads better as its own words than as "missing: ". */
-const SP_CHECK_NO = {closed: "temporarily closed"};
+const SP_CHECK_NO = {get closed(){ return tt("sp.check.closed.no", "temporarily closed"); }};
 /* What the lamp's own state adds to that word, and the drawing it wears. */
-const SP_CHECK_STATE = {ok: "", no: "missing: ", unk: "not checked yet: "};
+const spCheckTip = (state, what) => state === "no" ? tt("sp.check.no", "missing: {what}", {what})
+  : state === "unk" ? tt("sp.check.unk", "not checked yet: {what}", {what}) : what;
 const SP_CHECK_ICON = {closed: "door", staff: "person", prices: "tag", stock: "crate", shelves: "shelves", plan: "route"};
 /* Mirrors JOB_DEMAND_PRIORITY in the Python, which reads it off the game. */
-const SP_PRIORITY = ["nice to have", "important", "critical"];
+const SP_PRIORITY = {get 0(){ return tt("sp.pri.0", "nice to have"); }, get 1(){ return tt("sp.pri.1", "important"); },
+  get 2(){ return tt("sp.pri.2", "critical"); }};
 /* Mirrors TREND_MIN_DAYS in the Python: two full weeks make a trend. */
 const SP_TREND_MIN = 14;
 /* What a demand is about, read off its own slug: when they work, what they
@@ -18009,7 +18144,8 @@ const spFinds = (finds, b, kind) => {
   /* The list itself carries no data-block: it must stay lit while one of its
      own rows dims everything else. */
   return `<div class="sp-finds rv">${shown.map(a => spFindRow(a, b, kind)).join("")}</div>${
-    rest > 0 ? `<p class="sp-findmore">${rest} more · <a class="link" href="#" data-allfinds>show all</a></p>` : ""}`;
+    rest > 0 ? `<p class="sp-findmore">${tt("sp.finds.more", "{n} more", {n: rest})} · <a class="link" href="#" data-allfinds>${
+      tt("sp.finds.all", "show all")}</a></p>` : ""}`;
 };
 
 /* What customers find when they walk in: one lamp an amenity the type asks
@@ -18017,10 +18153,16 @@ const spFinds = (finds, b, kind) => {
    looked for and missed. A site the game has not scored yet — no revenue —
    draws every lamp dashed and none lit, which is the whole never-scored rule;
    data-amenity and data-state carry the reading so the markup stays plain. */
-const SP_SAT_PARTS = [["service", "Service", "person"], ["pricing", "Pricing", "tag"],
-                      ["cleanliness", "Cleanliness", "sparkle"], ["facility", "Facility", "building"]];
-const SP_AMENITY_WORD = {bathroom: "Bathroom", toiletprivacy: "Bathroom stall or door", sink: "Sink",
-                         music: "Music", interior: "Interior design"};
+const SP_SAT_PARTS = [["service", "person"], ["pricing", "tag"], ["cleanliness", "sparkle"], ["facility", "building"]];
+const SP_SAT_WORD = {get service(){ return tt("sp.sat.service", "Service"); }, get pricing(){ return tt("sp.sat.pricing", "Pricing"); },
+  get cleanliness(){ return tt("sp.sat.cleanliness", "Cleanliness"); }, get facility(){ return tt("sp.sat.facility", "Facility"); }};
+const SP_AMENITY_WORD = {get bathroom(){ return tt("sp.amenity.bathroom", "Bathroom"); },
+  get toiletprivacy(){ return tt("sp.amenity.toiletprivacy", "Bathroom stall or door"); }, get sink(){ return tt("sp.amenity.sink", "Sink"); },
+  get music(){ return tt("sp.amenity.music", "Music"); }, get interior(){ return tt("sp.amenity.interior", "Interior design"); }};
+/* The same words inside a sentence, lower case as the language writes them. */
+const SP_AMENITY_LOWER = {get bathroom(){ return tt("sp.amenity.lc.bathroom", "bathroom"); },
+  get toiletprivacy(){ return tt("sp.amenity.lc.toiletprivacy", "bathroom stall or door"); }, get sink(){ return tt("sp.amenity.lc.sink", "sink"); },
+  get music(){ return tt("sp.amenity.lc.music", "music"); }, get interior(){ return tt("sp.amenity.lc.interior", "interior design"); }};
 /* The four parts as an equaliser against the 80 line the game marks good at,
    and the overall score beside it. An unscored part draws an empty dashed
    column, never a full one. */
@@ -18029,10 +18171,10 @@ function spStandards(b){
   const sat = b.satisfaction || {};
   /* A shop the game has not scored has no revenue: nothing here is known. */
   const unknown = !b.revenue;
-  const bars = SP_SAT_PARTS.map(([key, label, ic]) => {
-    const v = sat[key];
+  const bars = SP_SAT_PARTS.map(([key, ic]) => {
+    const v = sat[key], label = SP_SAT_WORD[key];
     const blank = unknown || v === null || v === undefined;
-    const read = blank ? `${label} <b>not scored yet</b>` : `${label} <b>${v}%</b>`;
+    const read = blank ? tt("sp.sat.unscored", "{what} <b>not scored yet</b>", {what: label}) : tt("sp.sat.read", "{what} <b>{v}%</b>", {what: label, v});
     return `<div class="sp-eqb ${blank ? "unk" : spBand(v)}" data-sat="${key}" data-value="${v ?? ""}" data-read="${attr(read)}">
       <span class="t"><b style="--v:${blank ? 0 : v}%"></b></span>${spI(ic)}</div>`;
   }).join("");
@@ -18045,14 +18187,14 @@ function spStandards(b){
     const low = unknown ? null : SP_SAT_PARTS.filter(([key]) => Number.isFinite(sat[key]))
       .reduce((w, p) => !w || sat[p[0]] < sat[w[0]] ? p : w, null);
     return `${eq}</div><div class="sp-read sp-readout">${low
-      ? `Lowest · ${low[1]} <b>${sat[low[0]]}%</b>` : "Not scored yet"}</div>`;
+      ? tt("sp.sat.lowest", "Lowest · {what} <b>{v}%</b>", {what: SP_SAT_WORD[low[0]], v: sat[low[0]]}) : tt("sp.sat.none", "Not scored yet")}</div>`;
   }
   const amenities = b.amenities || {};
   const lamp = (slug, label) => {
     if(amenities[slug] === undefined) return "";
     const state = unknown ? "unk" : amenities[slug] ? "ok" : "miss";
-    const read = unknown ? `${label} <b>not scored yet</b>`
-      : amenities[slug] ? `${label} in place` : `<b>no</b> ${label.toLowerCase()}`;
+    const read = unknown ? tt("sp.sat.unscored", "{what} <b>not scored yet</b>", {what: label})
+      : amenities[slug] ? tt("sp.amenity.ok", "{what} in place", {what: label}) : tt("sp.amenity.miss", "<b>no</b> {what}", {what: SP_AMENITY_LOWER[slug]});
     return `<span class="sp-lampb ${state} ${slug}" data-el="${slug}" data-amenity="${slug}" data-state="${state}" data-read="${attr(read)}" role="img" aria-label="${
       attr(label)}">${spIcon(SP_AMENITY_ICON[slug])}</span>`;
   };
@@ -18066,25 +18208,26 @@ function spStandards(b){
   const lamps = `<div class="sp-lamprow">${
     ["bathroom", "toiletprivacy", "sink", "music", "interior"].map(s => lamp(s, SP_AMENITY_WORD[s])).join("")}</div><div class="sp-lamprow">`
     + `<span class="sp-lampb ${lockerState} locker" data-el="locker" data-state="${lockerState}" data-read="${attr(
-        b.missingUniformLocker ? "<b>No uniform locker</b> installed" : "Uniform locker installed")}" role="img" aria-label="Uniform locker">${
+        b.missingUniformLocker ? tt("sp.locker.miss", "<b>No uniform locker</b> installed") : tt("sp.locker.ok", "Uniform locker installed"))}" role="img" aria-label="${attr(tt("sp.locker.label", "Uniform locker"))}">${
         spIcon("locker")}</span>`
     /* Without the locker there is nowhere to set a uniform, so the shirt was
        never looked for: dashed, not struck. */
     + (roles.length ? `<span class="sp-lampb ${b.missingUniformLocker ? "unk" : "miss"} shirt" data-el="uniform" data-state="${
         b.missingUniformLocker ? "unk" : "miss"}" data-read="${attr(b.missingUniformLocker
-        ? "Uniforms <b>need the locker first</b>"
-        : `<b>No uniform</b> set for ${roles.length} role${roles.length === 1 ? "" : "s"}`)}" role="img" aria-label="Uniforms">${
+        ? tt("sp.uniform.locker", "Uniforms <b>need the locker first</b>")
+        : tt("sp.uniform.none", {one: "<b>No uniform</b> set for {n} role", other: "<b>No uniform</b> set for {n} roles"}, {n: roles.length}))}" role="img" aria-label="${attr(tt("sp.uniform.label", "Uniforms"))}">${
         spIcon("shirt")}</span>` : "");
   /* What the read line says when nothing is under the pointer. */
   const asked = Object.keys(amenities).length;
   const met = Object.values(amenities).filter(Boolean).length;
-  const read = unknown ? "Not scored yet"
-    : `${asked} asked · <b>${asked - met} unmet</b>${roles.length ? ` · ${roles.length} role${roles.length === 1 ? "" : "s"} without a uniform` : ""}`;
+  const read = unknown ? tt("sp.sat.none", "Not scored yet")
+    : `${tt("sp.amenity.read", "{asked} asked · <b>{unmet} unmet</b>", {asked, unmet: asked - met})}${roles.length
+      ? ` · ${tt("sp.uniform.count", {one: "{n} role without a uniform", other: "{n} roles without a uniform"}, {n: roles.length})}` : ""}`;
   /* In linked mode, the write that dresses them. */
   const writes = roles.length && !b.missingUniformLocker && (b.uniformGapSkills || []).length ? gwUniformButtons(b, false) : "";
   return `${eq}
     <div class="sp-lamps">${lamps}${roles.map(r => `<span class="sp-role" data-el="uniform" data-read="${attr(
-      `${spEsc(r)} <b>has no uniform set</b>`)}">${spEsc(roleCode(r))}</span>`).join("")}</div></div></div>
+      tt("sp.uniform.role", "{role} <b>has no uniform set</b>", {role: spEsc(r)}))}">${spEsc(roleCode(r))}</span>`).join("")}</div></div></div>
     <div class="sp-read sp-readout">${read}</div>${writes ? `<div class="gw-acts gw-panel">${writes}</div>` : ""}`;
 }
 const SP_AMENITY_ICON = {bathroom: "toilet", toiletprivacy: "door", sink: "sink",
@@ -18098,24 +18241,27 @@ function spPull(b){
   const total = Math.min(100, traffic + marketing);
   return `<div class="sp-promorow">
       <div class="sp-promo">
-        <i class="tr" style="width:${traffic}%" data-read="${attr(`Foot traffic <b>${traffic}</b>`)}"></i>${
-        marketing ? `<i class="mk" style="width:${marketing}%" data-read="${attr(`Marketing <b>${marketing}</b>`)}"></i>` : ""}
+        <i class="tr" style="width:${traffic}%" data-read="${attr(tt("sp.pull.traffic", "Foot traffic <b>{n}</b>", {n: traffic}))}"></i>${
+        marketing ? `<i class="mk" style="width:${marketing}%" data-read="${attr(tt("sp.pull.marketing", "Marketing <b>{n}</b>", {n: marketing}))}"></i>` : ""}
         <u></u><u></u><u></u>
       </div>
       <div class="sp-big" style="font-size:26px">${total}<small>/100</small></div></div>
     <div class="sp-minis">
-      <span data-read="${attr(`Security <b>${b.security}%</b>`)}">${spI("shield")}${b.security}%</span>
-      <span data-read="${attr(`<b>${b.capacity}</b> shoppers fit inside at once`)}">${spI("person")}${b.capacity}</span></div>
-    ${hype ? `<div class="sp-wave" data-el="wave" data-read="${attr(`${spEsc(hoodName(hype.wave.hood))} wave over this shop · <b>${
-        hype.site.share}%</b> of its takings rides on it · ends in ${hype.wave.daysLeft} day${
-        hype.wave.daysLeft === 1 ? "" : "s"}${hype.wave.baseline ? "" : " · no baseline to measure it against"}`)}">${
+      <span data-read="${attr(tt("sp.pull.security", "Security <b>{n}%</b>", {n: spRaw(b.security)}))}">${spI("shield")}${b.security}%</span>
+      <span data-read="${attr(tt("sp.pull.capacity", "<b>{n}</b> shoppers fit inside at once", {n: spRaw(b.capacity)}))}">${spI("person")}${b.capacity}</span></div>
+    ${hype ? `<div class="sp-wave" data-el="wave" data-read="${attr(`${tt("sp.pull.wave",
+        {one: "{hood} wave over this shop · <b>{share}%</b> of its takings rides on it · ends in {n} day",
+         other: "{hood} wave over this shop · <b>{share}%</b> of its takings rides on it · ends in {n} days"},
+        {hood: spEsc(hoodName(hype.wave.hood)), share: hype.site.share, n: hype.wave.daysLeft})}${
+        hype.wave.baseline ? "" : ` · ${tt("sp.pull.nobaseline", "no baseline to measure it against")}`}`)}">${
       spI("wave")}
       <div class="sp-wavebar${hype.wave.baseline ? "" : " unk"}">${hype.wave.baseline
         ? `<i class="base" style="width:${100 - hype.site.share}%"></i><i class="lift" style="width:${hype.site.share}%"></i>` : ""}</div>
       <span><span class="sp-pips">${[...Array(7).keys()].map(k =>
-        `<i${k < hype.wave.daysLeft ? ` class="on"` : ""}></i>`).join("")}</span>&nbsp; ${hype.wave.daysLeft}d</span></div>` : ""}
-    <div class="sp-read sp-readout">Foot traffic <b>${traffic}</b> + marketing <b>${marketing}</b> · ${
-      total >= 100 ? "<b>at the cap</b>" : `<b>${100 - total}</b> short of the cap`}</div>`;
+        `<i${k < hype.wave.daysLeft ? ` class="on"` : ""}></i>`).join("")}</span>&nbsp; ${tt("sp.pull.days", "{n}d", {n: hype.wave.daysLeft})}</span></div>` : ""}
+    <div class="sp-read sp-readout">${total >= 100
+      ? tt("sp.pull.read.cap", "Foot traffic <b>{traffic}</b> + marketing <b>{marketing}</b> · <b>at the cap</b>", {traffic, marketing})
+      : tt("sp.pull.read", "Foot traffic <b>{traffic}</b> + marketing <b>{marketing}</b> · <b>{short}</b> short of the cap", {traffic, marketing, short: 100 - total})}</div>`;
 }
 
 /* The crew of a big site: one row a role, one dot a person, the pills one
@@ -18131,11 +18277,11 @@ function spRoster(people, gaps, pairs){
     <div class="sp-rrow">
       <button type="button" class="sp-rbtn" aria-expanded="false"><i>${spEsc(roleCode(r.role))}</i>${spEsc(r.role)}${spI("chev")}</button>
       <span class="sp-dots">${r.people.map((p, k) => `<i class="sp-dot${p.absent ? " off" : ""}" style="--k:${k}" data-read="${attr(
-        `<b>${spEsc(p.name)}</b> · ${spEsc(p.role)}${p.absent ? " · off today" : ""}`)}"></i>`).join("")}</span>
+        `<b>${spEsc(p.name)}</b> · ${spEsc(p.role)}${p.absent ? ` · ${tt("sp.crew.offtoday", "off today")}` : ""}`)}"></i>`).join("")}</span>
       <span class="sp-rcount"><b>${r.people.length}</b>${
         /* No-break before each dot: a count that wraps never starts a line on one. */
-        r.people.some(p => p.absent) ? `&nbsp;· ${r.people.filter(p => p.absent).length} off` : ""}${
-        r.people.every(p => typeof p.daily === "number") ? `&nbsp;· ${fmt(r.people.reduce((t, p) => t + p.daily, 0))}/day` : ""}</span>
+        r.people.some(p => p.absent) ? `&nbsp;· ${tt("sp.crew.off", "{n} off", {n: r.people.filter(p => p.absent).length})}` : ""}${
+        r.people.every(p => typeof p.daily === "number") ? `&nbsp;· ${tt("sp.crew.perday", "{w:$}/day", {w: r.people.reduce((t, p) => t + p.daily, 0)})}` : ""}</span>
       <div class="sp-rpeople"><div class="crew">${r.people.map(p => spPersonPill(p, gaps, pairs)).join("")}</div></div>
     </div>`).join("")}</div><div class="sp-read sp-readout">${spCrewRead(people, roles.length)}</div></div>`;
 }
@@ -18143,9 +18289,14 @@ function spRoster(people, gaps, pairs){
    thing a row of dots hides, or that nobody is. */
 function spCrewRead(people, roles){
   const off = people.filter(p => p.absent);
-  if(!off.length) return `<b>${people.length}</b> people in ${plural(roles, "role")} · nobody off today`;
+  /* English says "people" whatever the count; the plural is there for a
+     language that does not. */
+  if(!off.length) return tt("sp.crew.read", {one: "{people} in {n} role · nobody off today",
+    other: "{people} in {n} roles · nobody off today"}, {n: roles,
+    people: tt("sp.crew.people", {one: "<b>{n}</b> people", other: "<b>{n}</b> people"}, {n: people.length})});
   const named = off.slice(0, 2).map(p => `<b>${spEsc(p.name)}</b>`).join(", ");
-  return `Off today · ${named}${off.length > 2 ? ` and ${off.length - 2} more` : ""}`;
+  return off.length > 2 ? tt("sp.crew.offmore", "Off today · {names} and {n} more", {names: named, n: off.length - 2})
+    : tt("sp.crew.offread", "Off today · {names}", {names: named});
 }
 /* Name → the roster's index for that person, for the names that pick out
    exactly one person on each side. A save permits two people with one name,
@@ -18167,8 +18318,8 @@ function spRosterPairs(b, people){
 /* A person, with the shirt mark when nobody in their role has a uniform set. */
 const spPersonPill = (p, gaps, pairs) => `<span class="person${p.absent ? " off" : ""}"${
   pairs && pairs[p.name] !== undefined ? ` data-p="${pairs[p.name]}"` : ""}><i>${spEsc(roleCode(p.role))}</i>${spEsc(p.name)}<small>${
-  spEsc(p.role)}${p.absent ? " · off today" : ""}</small>${
-  (gaps || []).includes(p.role) ? `<span class="sp-i" data-el="uniform" data-tip="No uniform set for this role">${spIcon("shirt")}</span>` : ""}</span>`;
+  spEsc(p.role)}${p.absent ? ` · ${tt("sp.crew.offtoday", "off today")}` : ""}</small>${
+  (gaps || []).includes(p.role) ? `<span class="sp-i" data-el="uniform" data-tip="${attr(tt("sp.crew.nouniform", "No uniform set for this role"))}">${spIcon("shirt")}</span>` : ""}</span>`;
 
 /* The tiles' second line ------------------------------------------------------
    A fortnight of the figure above, the week before it in grey and the last
@@ -18186,26 +18337,38 @@ const spSpark = (series, key, money, tone) => {
   const lo = Math.min(...vals), top = Math.max(...vals);
   return `<div data-readzone><div class="sp-spark ${tone || ""}">${days.map((d, k) => {
     const last7 = k >= days.length - 7;
-    if(read(d)) return `<i class="none" style="--v:4%" data-read="${attr(`day ${d.day} <b>no reading</b>`)}"></i>`;
+    if(read(d)) return `<i class="none" style="--v:4%" data-read="${attr(tt("sp.spark.none", "day {d} <b>no reading</b>", {d: d.day}))}"></i>`;
     return `<i class="${last7 ? "l" : ""}" style="--v:${
-      (25 + (d[key] - lo) / ((top - lo) || 1) * 75).toFixed(0)}%" data-read="${attr(`day ${d.day} <b>${
-      money ? fmt(d[key]) : num(Math.round(d[key]))}</b>`)}"></i>`;
+      (25 + (d[key] - lo) / ((top - lo) || 1) * 75).toFixed(0)}%" data-read="${attr(tt("sp.spark.read", "day {d} <b>{v}</b>",
+      {d: d.day, v: money ? fmt(d[key]) : num(Math.round(d[key]))}))}"></i>`;
   }).join("")}</div><div class="sp-tread sp-readout"></div></div>`;
 };
 /* How dark each cost sits in the bar: the big ones darkest, so the shape of a
    day's spending reads without a legend. */
-const SP_COST_SHADE = {Goods: 62, Wages: 46, Rent: 32, Marketing: 24, Theft: 18, Licensing: 14};
+const SP_COST_SHADE = {goods: 62, wages: 46, rent: 32, marketing: 24, theft: 18, licensing: 14};
+/* Each cost's word, capitalised for the bar and lower case inside the tip. */
+const SP_COST_WORD = {
+  get goods(){ return tt("sp.cost.goods", "Goods"); }, get wages(){ return tt("sp.cost.wages", "Wages"); },
+  get rent(){ return tt("sp.cost.rent", "Rent"); }, get marketing(){ return tt("sp.cost.marketing", "Marketing"); },
+  get theft(){ return tt("sp.cost.theft", "Theft"); }, get licensing(){ return tt("sp.cost.licensing", "Licensing"); },
+  get profit(){ return tt("sp.cost.profit", "Profit"); }, get loss(){ return tt("sp.cost.loss", "Loss"); },
+};
+const SP_COST_LOWER = {
+  get goods(){ return tt("sp.cost.lc.goods", "goods"); }, get wages(){ return tt("sp.cost.lc.wages", "wages"); },
+  get rent(){ return tt("sp.cost.lc.rent", "rent"); }, get marketing(){ return tt("sp.cost.lc.marketing", "marketing"); },
+  get theft(){ return tt("sp.cost.lc.theft", "theft"); }, get licensing(){ return tt("sp.cost.lc.licensing", "licensing"); },
+};
 const spCostBar = (costs, profit) => {
   /* A depot and a factory book no sale of their own, so their bar is the
      spending alone: there is no profit to close it with. */
   const parts = costs.concat(profit === null ? []
-    : [[profit < 0 ? "Loss" : "Profit", Math.abs(profit)]]).filter(([, v]) => v > 0);
+    : [[profit < 0 ? "loss" : "profit", Math.abs(profit)]]).filter(([, v]) => v > 0);
   const total = parts.reduce((t, [, v]) => t + v, 0);
   if(!total) return "";
-  return `<div data-readzone><div class="sp-cost">${parts.map(([label, v]) =>
-    `<i class="${label === "Profit" ? "p" : label === "Loss" ? "l" : ""}" style="flex:${
-      (v / total).toFixed(4)} 0 0;--k:${SP_COST_SHADE[label] || 40}%" data-read="${attr(
-      `${label} <b>${fmt(v)}</b>`)}"></i>`).join("")}</div><div class="sp-tread sp-readout"></div></div>`;
+  return `<div data-readzone><div class="sp-cost">${parts.map(([id, v]) =>
+    `<i class="${id === "profit" ? "p" : id === "loss" ? "l" : ""}" style="flex:${
+      (v / total).toFixed(4)} 0 0;--k:${SP_COST_SHADE[id] || 40}%" data-read="${attr(
+      tt("sp.cost.read", "{what} <b>{w:$}</b>", {what: SP_COST_WORD[id], w: v}))}"></i>`).join("")}</div><div class="sp-tread sp-readout"></div></div>`;
 };
 /* The limits an hour at the ceiling is held by, drawn. A finding names them in
    its own words, and since the staffing track those words belong to the role:
@@ -18229,8 +18392,8 @@ function spDesks(grid){
     }
   const manned = best ? Math.min(grid.stationCount, Math.round(grid.staffed[best.wd][best.h] / grid.postRate)) : 0;
   const squares = [...Array(grid.stationCount).keys()].map(k => k < manned
-    ? `<span class="sp-m" style="--h:100%" data-read="${attr(`Workstation ${k + 1} · <b>staffed</b> at the busiest hour`)}">${spIcon("monitor")}</span>`
-    : `<span class="sp-m sp-z" data-read="${attr(`Workstation ${k + 1} · <b>nobody posted</b>`)}">${spIcon("monitor")}</span>`).join("");
+    ? `<span class="sp-m" style="--h:100%" data-read="${attr(tt("sp.desk.on", "Workstation {n} · <b>staffed</b> at the busiest hour", {n: k + 1}))}">${spIcon("monitor")}</span>`
+    : `<span class="sp-m sp-z" data-read="${attr(tt("sp.desk.off", "Workstation {n} · <b>nobody posted</b>", {n: k + 1}))}">${spIcon("monitor")}</span>`).join("");
   return {manned, html: `<div class="sp-mach">${squares}</div>`};
 }
 /* --- the roster block --------------------------------------------------------
@@ -18249,12 +18412,12 @@ function spRosterNone(row, pick){
   /* A shop with no cover station and nothing measured still has its demand
      test to offer, so the pick sits here too and the section carries its site. */
   return `<section class="sec rv" data-block="roster" id="sp-roster"${pick ? ` data-site="${attr(row.key)}"` : ""}>
-    ${sechead("Staffing", {icon: "roster", why: failed
-      ? `This site's schedule or stations could not be read, so no week is suggested for it. Nothing else on the board is affected.`
-      : `A week is cut from the hours this site has already served, and there is no cleaning or security station here to cover in the meantime. The game's own arrival ceiling over-predicts a shop like this fourfold, so nothing is suggested from it.`})}
+    ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster", why: failed
+      ? tt("sp.roster.failed.why", "This site's schedule or stations could not be read, so no week is suggested for it. Nothing else on the board is affected.")
+      : tt("sp.roster.none.why", "A week is cut from the hours this site has already served, and there is no cleaning or security station here to cover in the meantime. The game's own arrival ceiling over-predicts a shop like this fourfold, so nothing is suggested from it.")})}
     ${pick || ""}
     <div class="chartbox sp-gantt sp-empty">${rows}</div>
-    <div class="sp-read">${failed ? "Plan unavailable" : "Nothing to schedule"}</div>
+    <div class="sp-read">${failed ? tt("sp.roster.failed", "Plan unavailable") : tt("sp.roster.none", "Nothing to schedule")}</div>
   </section>`;
 }
 
@@ -18281,8 +18444,7 @@ function spRosterDay(c, wd, on){
     if(!spOpenAt(slots, h)) continue;
     const need = spNeedAt(c.row, wd, h);
     if(!need) continue;
-    const read = `<b>${WEEK_SHORT[wd]} ${String(h).padStart(2, "0")}:00</b> ${need.n} station${
-      need.n === 1 ? "" : "s"}${SP_BASIS_READ[need.basis] || ""}`;
+    const read = `<b>${spWhenShort(wd, h)}</b> ${tt("sp.need.stations", {one: "{n} station", other: "{n} stations"}, {n: need.n})}${SP_BASIS_READ[need.basis] || ""}`;
     cells.push(`<i class="sp-need ${SP_BASIS_CLASS[need.basis] || ""}" style="grid-column:${h + 2};--n:${
       need.n}" data-read="${attr(read)}"></i>`);
   }
@@ -18295,23 +18457,23 @@ function spRosterDay(c, wd, on){
   const unmeasured = [];
   if(!c.full) ((c.row.unmeasured || [])[wd] || []).forEach(h => {
     unmeasured.push(`<i class="sp-unmh" style="grid-column:${h + 2}" data-read="${attr(
-      `<b>${WEEK_SHORT[wd]} ${String(h).padStart(2, "0")}:00</b> no customers on file: counted as none`)}"></i>`);
+      tt("sp.need.unmeasured", "<b>{when}</b> no customers on file: counted as none", {when: spWhenShort(wd, h)}))}"></i>`);
   });
   const bases = Object.values(c.row.basis || {}).flatMap(days => (days || [])[wd] || []);
   const readDay = bases.some(b => b === "measured" || b === "censored") ? "measured"
     : bases.some(b => b === "scaled") ? "scaled" : "none";
   let out = `<div class="sp-grow sp-needrow${cells.length ? "" : " sp-unmeas"}"><span class="lab" tabindex="0" data-read="${attr(
-    c.full ? `Every station, every hour: the demand test, ${WEEK_FULL[wd]}`
-      : cells.length ? `Stations the measured hours ask for, ${WEEK_FULL[wd]}`
+    c.full ? tt("sp.need.full", "Every station, every hour: the demand test, {d:day}", {d: wd})
+      : cells.length ? tt("sp.need.asks", "Stations the measured hours ask for, {d:day}", {d: wd})
       /* The doors decide before the measurement does, here as everywhere else
          in the block: a shop shut on Sunday has not measured nothing, it has
          measured no Sunday. */
-      : !slots.length ? `The doors do not open on ${WEEK_FULL[wd]}`
+      : !slots.length ? tt("sp.need.shut", "The doors do not open on {d:day}", {d: wd})
       : readDay === "measured"
-        ? `Measured, and these hours ask for nobody on the serving stations`
+        ? tt("sp.need.nobody", "Measured, and these hours ask for nobody on the serving stations")
         : readDay === "scaled"
-          ? `Read off the best measured weekday through the game's day curve, and it asks for nobody here`
-          : `Not enough hour reports to read this weekday yet, so nothing is asked for`)}">${
+          ? tt("sp.need.scaled", "Read off the best measured weekday through the game's day curve, and it asks for nobody here")
+          : tt("sp.need.thin", "Not enough hour reports to read this weekday yet, so nothing is asked for"))}">${
     spI("person")}</span>${cells.join("")}${unmeasured.join("")}</div>`;
   /* The hours the doors are shut, marked once and reused down the lanes: a
      two-slot day used to paint the whole 00-24 lane as trading. */
@@ -18329,8 +18491,8 @@ function spRosterDay(c, wd, on){
     /* The lane is labelled with two letters and a number, which says nothing
        on its own, so the station's own name is on the label both ways: as a
        tooltip under the pointer and in the read-out for a keyboard. */
-    const what = `${spEsc(st.name || "?")}${
-      st.rate ? ` · serves ${st.rate} an hour` : " · covered every open hour"}`;
+    const what = st.rate ? tt("sp.station.serves", "{name} · serves {n} an hour", {name: spEsc(st.name || "?"), n: st.rate})
+      : tt("sp.station.cover", "{name} · covered every open hour", {name: spEsc(st.name || "?")});
     out += `<div class="sp-grow${slots.length ? "" : " sp-shut"}"><span class="lab" tabindex="0" data-tip="${
       attr(what)}" data-read="${attr(what)}">${spEsc(c.codes[si])}</span>${shutMarks}`;
     /* The schedule as it stands, behind the plan: one block a fragment, so
@@ -18351,17 +18513,17 @@ function spRosterDay(c, wd, on){
 function spShiftBar(c, s, st, kind){
   const span = `grid-column:${s.f + 2}/${s.t + 2}`;
   const hrs = `${String(s.f).padStart(2, "0")}–${String(s.t).padStart(2, "0")}`;
-  const when = `${WEEK_SHORT[s.d]} ${hrs} · ${spEsc(st.name || "?")}`;
+  const when = `${spWd(s.d)} ${hrs} · ${spEsc(st.name || "?")}`;
   if(s.p === null || s.p === undefined)
     return `<span class="sp-shift sp-hire" style="${span}" data-read="${attr(
-      `<b>${when}</b> · <b>nobody to work it</b>. The week wants these hours and no one here can take them. Hire for this station, counted below, and this becomes an entry to set.`
-      )}"><span class="sp-lbl">to hire</span><small>${hrs}</small></span>`;
+      tt("sp.shift.hire", "<b>{when}</b> · <b>nobody to work it</b>. The week wants these hours and no one here can take them. Hire for this station, counted below, and this becomes an entry to set.", {when})
+      )}"><span class="sp-lbl">${tt("sp.shift.tohire", "to hire")}</span><small>${hrs}</small></span>`;
   const who = c.people[s.p].name || "?";
   const why = (c.placed[s.p] || []).find(r => r.wd === s.d && r.from < s.t && r.to > s.f);
   const benched = c.bench.has(s.p);
   let read = `<b>${spEsc(who)}</b> · ${when}`;
-  if(why) read += ` · ${spEsc(why.label || why.demand)}: the plan works around it`;
-  else if(benched) read += ` · <b>from the bench</b>: assign them here in MyEmployees first`;
+  if(why) read += ` · ${tt("sp.shift.around", "{demand}: the plan works around it", {demand: spEsc(why.label || why.demand)})}`;
+  else if(benched) read += ` · ${tt("sp.shift.bench", "<b>from the bench</b>: assign them here in MyEmployees first")}`;
   const marks = (why ? `<span class="sp-i sp-pin">${spIcon("pinned")}</span>` : "")
     + (benched ? spI("bench") : "");
   const body = `${marks}<span class="sp-lbl">${spEsc(who)}</span><small>${hrs}</small>`;
@@ -18371,7 +18533,7 @@ function spShiftBar(c, s, st, kind){
      and still worth typing, so it is drawn -- it simply cannot be marked. */
   if(!spTickable(c.row, s))
     return `<span class="${cls}" style="${span}" data-p="${s.p}" data-read="${attr(
-      `${read} · <b>no id to tick against</b>: set it in the game, but the board cannot mark it done`
+      `${read} · ${tt("sp.shift.noid", "<b>no id to tick against</b>: set it in the game, but the board cannot mark it done")}`
       )}">${body}</span>`;
   const id = spTickId(c.row, s);
   return `<button type="button" class="${cls}${
@@ -18408,11 +18570,12 @@ function spRosterCount(c){
        nobody may work more than fifty, and has a full week for only one of
        them. Printed as a range it read "2 to 1", which looks like a fault in
        the board rather than the shape of the job. */
-    const band = h.max > h.min ? `${h.min} to ${h.max} people`
-      : h.max === h.min ? plural(h.min, "person", "people")
-      : `${plural(h.min, "person", "people")}, with a full week for ${h.max || "none"} of them`;
-    const words = [`${have}`, bench ? `${bench} bench` : "",
-      h.hire ? `hire ${h.hire}` : "", h.spare ? `${h.spare} spare` : ""].filter(Boolean).join(" · ");
+    const band = h.max > h.min ? tt("sp.hc.band.range", "{min} to {max} people", {min: h.min, max: h.max})
+      : h.max === h.min ? tt("sp.hc.band", {one: "{n} person", other: "{n} people"}, {n: h.min})
+      : tt("sp.hc.band.thin", {one: "{n} person, with a full week for {max} of them", other: "{n} people, with a full week for {max} of them"},
+        {n: h.min, max: h.max || tt("sp.hc.none", "none")});
+    const words = [`${have}`, bench ? tt("sp.hc.bench", "{n} bench", {n: bench}) : "",
+      h.hire ? tt("sp.hc.hire", "hire {n}", {n: h.hire}) : "", h.spare ? tt("sp.hc.spare", "{n} spare", {n: h.spare}) : ""].filter(Boolean).join(" · ");
     /* `spare` is the people here this week has no hours for. It earns a word of
        its own because an employee works one business: the plan cannot hand them
        a few hours and leave another site to make up their thirty, so the answer
@@ -18423,32 +18586,39 @@ function spRosterCount(c){
        people are needed for hours that would pay three of them a full week.
        Side by side with nothing said, "want 3 people ... 4 to hire" reads as
        the board contradicting itself. */
-    const read = `${spEsc(label)} · ${h.needed} hour${h.needed === 1 ? "" : "s"} a week to cover, which takes ${
-      band} · <b>${have} here${bench ? `, ${bench} from the bench` : ""}${
-      h.hire ? `, ${h.hire} to hire` : ""}</b>${h.hire > h.max && h.max >= h.min
-        ? `: more people than those hours would pay a full week, because nobody may work more than twelve hours in a day` : ""}${h.spare
-        ? ` · <b>${h.spare} with no hours in this plan</b>: this site has no week for them` : ""}${isNew
-        ? ` · <b>${h.hireHours} h a week of new wages</b>, the least a full-time hire may be given: nobody covers this locker today` : ""}`;
+    const here = bench && h.hire ? tt("sp.hc.here.both", "{n} here, {bench} from the bench, {hire} to hire", {n: have, bench, hire: h.hire})
+      : bench ? tt("sp.hc.here.bench", "{n} here, {bench} from the bench", {n: have, bench})
+      : h.hire ? tt("sp.hc.here.hire", "{n} here, {hire} to hire", {n: have, hire: h.hire})
+      : tt("sp.hc.here", "{n} here", {n: have});
+    const read = `${tt("sp.hc.read", {one: "{label} · {n} hour a week to cover, which takes {band}", other: "{label} · {n} hours a week to cover, which takes {band}"},
+      {label: spEsc(label), n: h.needed, band})} · <b>${here}</b>${h.hire > h.max && h.max >= h.min
+        ? `: ${tt("sp.hc.over", "more people than those hours would pay a full week, because nobody may work more than twelve hours in a day")}` : ""}${h.spare
+        ? ` · ${tt("sp.hc.spare.read", "<b>{n} with no hours in this plan</b>: this site has no week for them", {n: h.spare})}` : ""}${isNew
+        ? ` · ${tt("sp.hc.new", "<b>{n} h a week of new wages</b>, the least a full-time hire may be given: nobody covers this locker today", {n: h.hireHours})}` : ""}`;
     return `<span${isNew ? ` class="sp-new"` : ""} tabindex="0" data-tip="${attr(spEsc(label))}" data-read="${
       attr(read)}"><span class="sp-code">${
       spEsc(codes[si])}</span><span class="sp-dots">${dots(have)}${dots(bench, "sp-bench")}${
-      dots(h.hire, "sp-hire")}</span>${words}${isNew ? ` · <b>+${h.hireHours} h/wk</b>` : ""}</span>`;
+      dots(h.hire, "sp-hire")}</span>${words}${isNew ? ` · <b>${tt("sp.hc.newshort", "+{n} h/wk", {n: h.hireHours})}</b>` : ""}</span>`;
   }).join("");
   /* Nobody works two businesses, so a week short here is short full stop. Which
      answer that calls for depends on whether they work here at all: somebody
      the plan gives nothing is a person to post elsewhere, but somebody on a
      partial week is covering hours that would go uncovered if the player took
      the advice meant for the first. */
-  const hoursWords = r => [`${r.hours}`, `${r.min} h`,
-    `<b>${spEsc(c.name(r.p))}</b> is given ${r.hours ? `${r.hours} hour${
-      r.hours === 1 ? "" : "s"}` : "no hours"} here; their demand asks for ${r.min}. ${r.hours
-      ? `They work one business, so there is nowhere to make the rest up, and the plan could not rearrange this week to reach ${r.min}. Moving them would only uncover the hours they do work`
-      : `This site has no week for them: post them to a site with the hours, or let them go`}`];
-  const daysWords = r => [`${r.days}`, `${r.want} days`,
-    `<b>${spEsc(c.name(r.p))}</b> works ${r.days ? `${r.days} day${
-      r.days === 1 ? "" : "s"}` : "no days"} here; their demand asks for ${r.want}, and the game counts exactly that, not at least. ${r.days
-      ? `The plan could not share this week's hours into ${r.want} days for them`
-      : `This site has no week for them: post them to a site with the days, or let them go`}`];
+  const hoursWords = r => [`${r.hours}`, tt("sp.hc.h", "{n} h", {n: r.min}), r.hours
+    ? tt("sp.short.hours", {
+      one: "<b>{name}</b> is given {n} hour here; their demand asks for {min}. They work one business, so there is nowhere to make the rest up, and the plan could not rearrange this week to reach {min}. Moving them would only uncover the hours they do work",
+      other: "<b>{name}</b> is given {n} hours here; their demand asks for {min}. They work one business, so there is nowhere to make the rest up, and the plan could not rearrange this week to reach {min}. Moving them would only uncover the hours they do work"},
+      {name: spEsc(c.name(r.p)), n: r.hours, min: r.min})
+    : tt("sp.short.nohours", "<b>{name}</b> is given no hours here; their demand asks for {min}. This site has no week for them: post them to a site with the hours, or let them go",
+      {name: spEsc(c.name(r.p)), min: r.min})];
+  const daysWords = r => [`${r.days}`, tt("sp.hc.days", "{n} days", {n: r.want}), r.days
+    ? tt("sp.short.days", {
+      one: "<b>{name}</b> works {n} day here; their demand asks for {want}, and the game counts exactly that, not at least. The plan could not share this week's hours into {want} days for them",
+      other: "<b>{name}</b> works {n} days here; their demand asks for {want}, and the game counts exactly that, not at least. The plan could not share this week's hours into {want} days for them"},
+      {name: spEsc(c.name(r.p)), n: r.days, want: r.want})
+    : tt("sp.short.nodays", "<b>{name}</b> works no days here; their demand asks for {want}, and the game counts exactly that, not at least. This site has no week for them: post them to a site with the days, or let them go",
+      {name: spEsc(c.name(r.p)), want: r.want})];
   /* On a shop with no measured hour those answers are only right for somebody
      the plan could have used: a guard with no shifts in a cover week it really
      did work out is spare, and "post them elsewhere, or let them go" is what to
@@ -18489,15 +18659,16 @@ function spShortNew(c){
      their days being counted twice. */
   const names = [...new Set(short.map(r => r.p))].map(p => c.name(p));
   if(!names.length) return "";
-  return `<span class="sp-new" tabindex="0" data-read="${attr(
-    `<b>${names.length} of the staff here ${names.length === 1 ? "has" : "have"} no week in this plan</b>: it covers cleaning and security only, and ${
-      names.length === 1 ? "this one holds" : "these hold"} no role it could plan${
-      c.measured
-        ? `. The hours this shop has served ask for nobody on the stations they could work, so their week arrives with its first customers`
-        : `, so their week waits on the shop's first measured one`}. Nothing to do about it here · ${
-      names.map(spEsc).join(", ")}`)}">${spI("clock")}<span>${
-    names.length} ${c.measured ? "with no week in this plan"
-      : `waiting on the shop's first measured week`}</span></span>`;
+  const p = {n: names.length, names: names.map(spEsc).join(", ")};
+  return `<span class="sp-new" tabindex="0" data-read="${attr(c.measured
+    ? tt("sp.new.read.measured", {
+      one: "<b>{n} of the staff here has no week in this plan</b>: it covers cleaning and security only, and this one holds no role it could plan. The hours this shop has served ask for nobody on the stations they could work, so their week arrives with its first customers. Nothing to do about it here · {names}",
+      other: "<b>{n} of the staff here have no week in this plan</b>: it covers cleaning and security only, and these hold no role it could plan. The hours this shop has served ask for nobody on the stations they could work, so their week arrives with its first customers. Nothing to do about it here · {names}"}, p)
+    : tt("sp.new.read", {
+      one: "<b>{n} of the staff here has no week in this plan</b>: it covers cleaning and security only, and this one holds no role it could plan, so their week waits on the shop's first measured one. Nothing to do about it here · {names}",
+      other: "<b>{n} of the staff here have no week in this plan</b>: it covers cleaning and security only, and these hold no role it could plan, so their week waits on the shop's first measured one. Nothing to do about it here · {names}"}, p))}">${spI("clock")}<span>${
+    c.measured ? tt("sp.new.chip.measured", "{n} with no week in this plan", p)
+      : tt("sp.new.chip", "{n} waiting on the shop's first measured week", p)}</span></span>`;
 }
 
 /* The first three of a demand the plan would fail, then a count of the rest:
@@ -18512,7 +18683,8 @@ function spShortChips(c, rows, words){
   }).join("");
   const rest = rows.length - SP_SHORT_SHOWN;
   return shown + (rest > 0 ? `<span class="sp-new" tabindex="0" data-read="${attr(
-    `Also short: ${rows.slice(SP_SHORT_SHOWN).map(r => spEsc(c.name(r.p))).join(", ")}`)}">+${rest} more</span>` : "");
+    tt("sp.short.also", "Also short: {names}", {names: rows.slice(SP_SHORT_SHOWN).map(r => spEsc(c.name(r.p))).join(", ")}))}">${
+    tt("sp.short.more", "+{n} more", {n: rest})}</span>` : "");
 }
 
 /* A shop with no hour reports of its own, in the three things a player needs
@@ -18535,48 +18707,60 @@ function spRosterNew(c, counts){
   const kept = counts.now - counts.nowCover;
   /* How new and how measured, or nothing: a row that does not say has not said
      the shop is new, and the note must not answer for it. */
-  const age = m.open ? `Open ${plural(m.open, "day")}` : "";
-  const seen = m.days === undefined ? ""
-    : `${age ? ", " : "This shop has "}${
-      m.days ? plural(m.days, "hour report") : "no hour reports"} on file`;
+  const reports = m.days ? tt("sp.new.reports", {one: "{n} hour report", other: "{n} hour reports"}, {n: m.days}) : "";
+  const ageSeen = m.open
+    ? m.days === undefined ? tt("sp.new.age", {one: "Open {n} day", other: "Open {n} days"}, {n: m.open})
+      : reports ? tt("sp.new.ageseen", {one: "Open {n} day, {reports} on file", other: "Open {n} days, {reports} on file"}, {n: m.open, reports})
+      : tt("sp.new.agenone", {one: "Open {n} day, no hour reports on file", other: "Open {n} days, no hour reports on file"}, {n: m.open})
+    : m.days === undefined ? ""
+    : reports ? tt("sp.new.seen", "This shop has {reports} on file", {reports})
+    : tt("sp.new.seennone", "This shop has no hour reports on file");
   /* The lines to type, and the ones there is nobody to type yet: a shop with
      no staff at all had twenty-one hiring lines under the words "0 lines". */
   const lines = counts.staffed
-    ? `${plural(counts.staffed, "entry", "entries")}${counts.hire
-        ? `, and ${counts.hire} more waiting on a hire` : ""}`
-    : `${plural(counts.hire, "entry", "entries")}, every one of them waiting on a hire`;
-  const cover = `${c.measured ? "This week is" : "Until then this is"} <b>cleaning and security cover only</b>: ${
-    lines}${counts.nowCover ? `, against the ${counts.nowCover} in the game` : ""}. The registers stay yours to set.`;
+    ? counts.hire
+      ? tt("sp.new.lines.hire", {one: "{n} entry, and {hire} more waiting on a hire", other: "{n} entries, and {hire} more waiting on a hire"},
+        {n: counts.staffed, hire: counts.hire})
+      : tt("sp.n.entries", {one: "{n} entry", other: "{n} entries"}, {n: counts.staffed})
+    : tt("sp.new.lines.allhire", {one: "{n} entry, every one of them waiting on a hire", other: "{n} entries, every one of them waiting on a hire"}, {n: counts.hire});
+  const cover = c.measured
+    ? counts.nowCover
+      ? tt("sp.new.cover.now", "This week is <b>cleaning and security cover only</b>: {lines}, against the {now} in the game. The registers stay yours to set.", {lines, now: counts.nowCover})
+      : tt("sp.new.cover", "This week is <b>cleaning and security cover only</b>: {lines}. The registers stay yours to set.", {lines})
+    : counts.nowCover
+      ? tt("sp.new.cover.until.now", "Until then this is <b>cleaning and security cover only</b>: {lines}, against the {now} in the game. The registers stay yours to set.", {lines, now: counts.nowCover})
+      : tt("sp.new.cover.until", "Until then this is <b>cleaning and security cover only</b>: {lines}. The registers stay yours to set.", {lines});
   /* Four states, and the wrong words for any of them cost the player a week of
      their own typing. "Nothing to enter yet" comes first: it is true whatever
      else is in the schedule, and a week nobody can be put on is not a week to
      delete anything for. Then shifts the plan cannot replace, then a schedule
      it replaces whole, then no schedule at all. */
+  const keptHead = tt("sp.care.keep.head", "<b>Do not clear the whole schedule.</b>");
   const care = counts.now && !counts.staffed
-    ? `<b>Hire before you clear.</b> Every entry here waits on somebody, so clearing the schedule now would leave the shop with ${
-      counts.nowCover ? `neither the cover it has nor the week below` : `nothing at all`}.${
-      kept ? ` The ${plural(kept, "serving entry", "serving entries")} in the game ${
-        kept === 1 ? "is" : "are"} not in this plan either, and ${
-        kept === 1 ? "it stays" : "they stay"} where ${kept === 1 ? "it is" : "they are"}.` : ""}`
+    ? `${counts.nowCover
+      ? tt("sp.care.hire.cover", "<b>Hire before you clear.</b> Every entry here waits on somebody, so clearing the schedule now would leave the shop with neither the cover it has nor the week below.")
+      : tt("sp.care.hire", "<b>Hire before you clear.</b> Every entry here waits on somebody, so clearing the schedule now would leave the shop with nothing at all.")}${
+      kept ? ` ${tt("sp.care.hire.kept", {one: "The {n} serving entry in the game is not in this plan either, and it stays where it is.",
+        other: "The {n} serving entries in the game are not in this plan either, and they stay where they are."}, {n: kept})}` : ""}`
     : kept
-      ? `<b>Do not clear the whole schedule.</b> The ${plural(kept, "serving entry", "serving entries")} in the game ${
-        kept === 1 ? "is" : "are"} not in this plan, and nothing here can put ${
-        kept === 1 ? "it" : "them"} back${counts.hire
-          ? `. Delete the cleaning and security hours the solid entries replace and set those, and leave what is under the ${
-            plural(counts.hire, "dashed entry", "dashed entries")} where it is until ${
-            counts.hire === 1 ? "its hire is" : "their hires are"} made: nothing here can cover ${
-            counts.hire === 1 ? "that hour" : "those hours"} yet`
-          : `: delete the cleaning and security hours and set these instead`}.`
+      ? `${keptHead} ${counts.hire
+        ? `${tt("sp.care.keep.back", {one: "The {n} serving entry in the game is not in this plan, and nothing here can put it back.",
+            other: "The {n} serving entries in the game are not in this plan, and nothing here can put them back."}, {n: kept})} ${
+          tt("sp.care.keep.hire", {one: "Delete the cleaning and security hours the solid entries replace and set those, and leave what is under the {n} dashed entry where it is until its hire is made: nothing here can cover that hour yet.",
+            other: "Delete the cleaning and security hours the solid entries replace and set those, and leave what is under the {n} dashed entries where it is until their hires are made: nothing here can cover those hours yet."}, {n: counts.hire})}`
+        : tt("sp.care.keep", {one: "The {n} serving entry in the game is not in this plan, and nothing here can put it back: delete the cleaning and security hours and set these instead.",
+            other: "The {n} serving entries in the game are not in this plan, and nothing here can put them back: delete the cleaning and security hours and set these instead."}, {n: kept})}`
       : counts.now
-        ? `Everything scheduled here is cleaning or security, so clearing it loses nothing this week does not put back${
-          counts.hire ? `, once the ${plural(spPlanPosts(c.row), "hire")} ${
-            spPlanPosts(c.row) === 1 ? "is" : "are"} made` : ""}.`
-        : `Nothing is scheduled here yet, so there is nothing to lose by clearing.`;
+        ? counts.hire
+          ? tt("sp.care.cover.hire", {one: "Everything scheduled here is cleaning or security, so clearing it loses nothing this week does not put back, once the {n} hire is made.",
+              other: "Everything scheduled here is cleaning or security, so clearing it loses nothing this week does not put back, once the {n} hires are made."}, {n: spPlanPosts(c.row)})
+          : tt("sp.care.cover", "Everything scheduled here is cleaning or security, so clearing it loses nothing this week does not put back.")
+        : tt("sp.care.empty", "Nothing is scheduled here yet, so there is nothing to lose by clearing.");
   /* Three states, three labels and three reasons: measured and asking for
      nobody, too new to be read yet, and old enough but never traded. */
-  const label = c.measured ? "Cover only"
-    : m.open == null ? "Not measured"
-    : fresh ? "New shop" : "Never measured";
+  const label = c.measured ? tt("sp.new.label.cover", "Cover only")
+    : m.open == null ? tt("sp.new.label.unmeasured", "Not measured")
+    : fresh ? tt("sp.new.label.new", "New shop") : tt("sp.new.label.never", "Never measured");
   /* Each row opens on the words that carry it, so the bold alone reads as the
      whole note: when the shop's own week arrives, what to do until then, what
      the plan below is, and what clearing would cost. */
@@ -18588,14 +18772,14 @@ function spRosterNew(c, counts){
   const days = (c.row.fullCover || {}).daysNeeded || 9;
   const so_far = (c.row.fullCover || {}).daysMeasured;
   const progress = Number.isFinite(so_far)
-    ? `Demand data: ${Math.min(so_far, days)} of ${days} days` : "";
+    ? tt("sp.new.progress", "Demand data: {n} of {of} days", {n: Math.min(so_far, days), of: days}) : "";
   const why = c.measured
-    ? [["clock", `<b>The hours this shop has served ask for nobody on its serving stations</b>, so there are no serving hours to suggest. Its own week arrives with its first customers.`]]
-    : [["clock", `<b>Its own week arrives ${days} days after its first customer, closed days included${
-        progress ? ` (${progress})` : ""}.</b> Until then a weekday's hours are only read once the save holds ${
-        need} reports of that same weekday.`],
-       ["crew", `<b>Staff every station for those ${days} days</b>, around the clock where the doors allow it. An hour with nobody on a station teaches the board nothing.${
-         spOffersFull(c.row) ? ` Full cover 24/7, above, is that week.` : ""}`]];
+    ? [["clock", tt("sp.new.why.measured", "<b>The hours this shop has served ask for nobody on its serving stations</b>, so there are no serving hours to suggest. Its own week arrives with its first customers.")]]
+    : [["clock", progress
+        ? tt("sp.new.why.arrives.progress", "<b>Its own week arrives {days} days after its first customer, closed days included ({progress}).</b> Until then a weekday's hours are only read once the save holds {need} reports of that same weekday.", {days, progress, need})
+        : tt("sp.new.why.arrives", "<b>Its own week arrives {days} days after its first customer, closed days included.</b> Until then a weekday's hours are only read once the save holds {need} reports of that same weekday.", {days, need})],
+       ["crew", `${tt("sp.new.why.staff", "<b>Staff every station for those {days} days</b>, around the clock where the doors allow it. An hour with nobody on a station teaches the board nothing.", {days})}${
+         spOffersFull(c.row) ? ` ${tt("sp.new.why.full", "Full cover 24/7, above, is that week.")}` : ""}`]];
   /* The border marks a note the player has to read before they touch the
      game's own schedule, which is either of the two warnings above. */
   const care_ = kept || (counts.now && !counts.staffed);
@@ -18605,23 +18789,23 @@ function spRosterNew(c, counts){
      reasons and the longer instructions fold away under them, because a note
      that has to be read in full is a note that is not read. */
   const sum = c.measured
-    ? `No serving hours to suggest yet, so this plan is <b>cleaning and security only</b>.`
+    ? tt("sp.new.sum.measured", "No serving hours to suggest yet, so this plan is <b>cleaning and security only</b>.")
     : progress
-      ? `${progress}. Until then the plan is <b>cleaning and security only</b>.`
-      : `Until ${days} days after this shop's first customer, the plan is <b>cleaning and security only</b>.`;
+      ? tt("sp.new.sum.progress", "{progress}. Until then the plan is <b>cleaning and security only</b>.", {progress})
+      : tt("sp.new.sum", "Until {days} days after this shop's first customer, the plan is <b>cleaning and security only</b>.", {days});
   const head = counts.now && !counts.staffed
-    ? `<b>Hire before you clear.</b> Every entry here waits on somebody.`
+    ? tt("sp.care.hire.head", "<b>Hire before you clear.</b> Every entry here waits on somebody.")
     : kept
-      ? `<b>Do not clear the whole schedule.</b> The ${plural(kept, "serving entry", "serving entries")} in the game ${
-        kept === 1 ? "is" : "are"} not in this plan.`
+      ? `${keptHead} ${tt("sp.care.keep.short", {one: "The {n} serving entry in the game is not in this plan.",
+        other: "The {n} serving entries in the game are not in this plan."}, {n: kept})}`
       : "";
   return `<div class="sp-note${care_ ? " sp-care" : ""}">
     <div class="sp-nhead"><span class="lab">${spI("person")}${label}</span>${
-      !c.measured && (age || seen) ? `<span class="sp-nage">${age}${seen}</span>` : ""}${
+      !c.measured && ageSeen ? `<span class="sp-nage">${ageSeen}</span>` : ""}${
       c.measured ? "" : spRosterWeekdays(c.row.key, need)}</div>
     <p class="sp-nsum">${sum}</p>${head ? `
     <p class="sp-nwarn">${spI("alert")}<span>${head}</span></p>` : ""}
-    <details class="sp-nmore"><summary>Why, and what to do</summary><ul class="sp-nrows">${rows}</ul></details></div>`;
+    <details class="sp-nmore"><summary>${tt("sp.new.more", "Why, and what to do")}</summary><ul class="sp-nrows">${rows}</ul></details></div>`;
 }
 
 /* The fortnight, drawn: a weekday is read once it has `need` hour reports, so
@@ -18632,9 +18816,10 @@ function spRosterWeekdays(key, need){
   const grid = (D.hours || []).find(h => h.key === key);
   if(!grid || !Array.isArray(grid.weeks)) return "";
   const read = HOUR_ROWS.filter(wd => grid.weeks[wd] >= need).length;
-  return `<div class="sp-wk" role="img" data-tip="${attr(`${read} of 7 weekdays at ${plural(need, "report")}. A weekday's hours are read once it has ${need}.`)}" aria-label="${attr(
-    HOUR_ROWS.map(wd => `${WEEK_FULL[wd]} ${grid.weeks[wd] || 0} of ${need}`).join(", "))}">${
-    HOUR_ROWS.map(wd => `<span${grid.weeks[wd] >= need ? ` class="full"` : ""}>${WEEK_SHORT[wd][0]}${
+  return `<div class="sp-wk" role="img" data-tip="${attr(tt("sp.wk.tip", {one: "{read} of 7 weekdays at {n} report. A weekday's hours are read once it has {n}.",
+    other: "{read} of 7 weekdays at {n} reports. A weekday's hours are read once it has {n}."}, {read, n: need}))}" aria-label="${attr(
+    HOUR_ROWS.map(wd => tt("sp.wk.day", "{d:day} {n} of {of}", {d: wd, n: grid.weeks[wd] || 0, of: need})).join(", "))}">${
+    HOUR_ROWS.map(wd => `<span${grid.weeks[wd] >= need ? ` class="full"` : ""}>${spWd(wd)[0]}${
       [...Array(need).keys()].map(k => `<i${k < (grid.weeks[wd] || 0) ? ` class="on"` : ""}></i>`).join("")}</span>`).join("")}</div>`;
 }
 
@@ -18680,13 +18865,13 @@ function spUnmeasuredLine(row){
     if(same) same.days.push(wd); else groups.push({key, hours, days: [wd]});
   });
   /* Only hours that hold every day may run across midnight. */
-  const words = groups.map(g => g.days.length === 7 ? `every day ${spHourRanges(g.hours)}`
-    : `${g.days.map(wd => WEEK_SHORT[wd]).join(", ")} ${g.key}`).join("; ");
-  return `<p class="sp-unmline">${spI("clock")}<span><b>No customers on file: ${words}.</b> Counted as none.</span></p>`;
+  const words = groups.map(g => g.days.length === 7 ? tt("sp.unm.every", "every day {hours}", {hours: spHourRanges(g.hours)})
+    : `${g.days.map(spWd).join(", ")} ${g.key}`).join("; ");
+  return `<p class="sp-unmline">${spI("clock")}<span>${tt("sp.unm.line", "<b>No customers on file: {words}.</b> Counted as none.", {words})}</span></p>`;
 }
 
 function spPlanPick(base, full){
-  const first = spCoverOnly(base) ? "Cover only" : "Demand plan";
+  const first = spCoverOnly(base) ? tt("sp.new.label.cover", "Cover only") : tt("sp.pick.demand", "Demand plan");
   /* Progress, on the test's own view: finished days since the shop first
      opened, against the days that make the data complete. */
   const fc = base.fullCover || {};
@@ -18700,21 +18885,22 @@ function spPlanPick(base, full){
     ([a, b]) => [...Array(Math.max(0, Math.min(24, b) - Math.max(0, a))).keys()].map(k => a + k))).size, 0);
   const ownFull = openHours * (base.roles || []).reduce((n, r) => n + (r.stations || []).length, 0);
   const done = base.demandDataComplete
-    ? `<span class="sp-handover" data-tip="${attr(`Read from the days since the shop's first customer, as they were staffed. An hour with no customers files no report and counts as none.`)}">${spI("tick")}<span><b>Demand data complete:</b> ${full
-      ? `<a href="#" data-plan="demand">switch to the demand plan</a>` : `switch to the demand plan`}</span></span>`
+    ? `<span class="sp-handover" data-tip="${attr(tt("sp.pick.done.tip", "Read from the days since the shop's first customer, as they were staffed. An hour with no customers files no report and counts as none."))}">${spI("tick")}<span>${
+      tt("sp.pick.done", "<b>Demand data complete:</b> {switch}", {switch: full
+      ? `<a href="#" data-plan="demand">${tt("sp.pick.switch", "switch to the demand plan")}</a>` : tt("sp.pick.switch", "switch to the demand plan")})}</span></span>`
     : !full ? ""
     /* Complete data and no hand-over: either the demand plan wants every
        station every open hour too, or the game does not staff every station
        every open hour, so the count was taken with stations empty. */
     : complete && fc.inGame && serving(base.shifts) >= ownFull
-      ? `<span class="sp-pickwhy">The demand plan also needs every station every hour: keep this staffing.</span>`
+      ? `<span class="sp-pickwhy">${tt("sp.pick.keep", "The demand plan also needs every station every hour: keep this staffing.")}</span>`
     : complete && !fc.inGame
-      ? `<span class="sp-pickwhy">Demand data complete, as staffed: an empty station may have turned customers away.</span>`
-    : `<span class="sp-pickwhy">Run it until ${needed} days after the shop's first customer, then switch to the demand plan.${
-      Number.isFinite(measured) ? ` <b class="sp-progress">Demand data: ${Math.min(measured, needed)} of ${needed} days.</b>` : ""}</span>`;
-  return `<div class="sp-pick"><span class="seg sp-plans" role="group" aria-label="Plan"><a href="#" data-plan="demand"${
+      ? `<span class="sp-pickwhy">${tt("sp.pick.asstaffed", "Demand data complete, as staffed: an empty station may have turned customers away.")}</span>`
+    : `<span class="sp-pickwhy">${tt("sp.pick.run", "Run it until {n} days after the shop's first customer, then switch to the demand plan.", {n: needed})}${
+      Number.isFinite(measured) ? ` <b class="sp-progress">${tt("sp.pick.progress", "Demand data: {n} of {of} days.", {n: Math.min(measured, needed), of: needed})}</b>` : ""}</span>`;
+  return `<div class="sp-pick"><span class="seg sp-plans" role="group" aria-label="${attr(tt("sp.pick.plan", "Plan"))}"><a href="#" data-plan="demand"${
     full ? "" : ` class="sp-on" aria-current="true"`}>${first}</a><a href="#" data-plan="full"${
-    full ? ` class="sp-on" aria-current="true"` : ""}>Full cover 24/7</a></span>${done}</div>`;
+    full ? ` class="sp-on" aria-current="true"` : ""}>${tt("sp.pick.full", "Full cover 24/7")}</a></span>${done}</div>`;
 }
 
 function spRosterBlock(b){
@@ -18774,10 +18960,11 @@ function spRosterBlock(b){
      not an improvement on it, so the tile says nothing instead. */
   const costKnown = Number.isFinite(againstCost);
   const keptWords = kept
-    ? ` · the ${plural(kept, "serving entry", "serving entries")} in the game ${
-      kept === 1 ? "is" : "are"} not in this plan and stay${kept === 1 ? "s" : ""} as ${
-      kept === 1 ? "it is" : "they are"}`
+    ? ` · ${tt("sp.ba.kept", {one: "the {n} serving entry in the game is not in this plan and stays as it is",
+      other: "the {n} serving entries in the game are not in this plan and stay as they are"}, {n: kept})}`
     : "";
+  /* "5 entries", the count phrase the tiles and read-outs share. */
+  const entries = n => tt("sp.n.entries", {one: "{n} entry", other: "{n} entries"}, {n});
   /* A number struck out beside the same number reads as a fault in the board.
      Where the plan lands on the figure the schedule already has -- the same
      198 cover hours, re-cut into 42 shifts, cost the same wages -- the old one
@@ -18785,7 +18972,7 @@ function spRosterBlock(b){
   /* Nothing is struck through where the figure beside it is nothing: on a week
      whose every line waits on a hire, "56" struck out beside "0" offers the
      saving the note under it is warning the player away from. */
-  const spWas = (was, now) => was === now || !now ? "" : `<s>${was} h</s>`;
+  const spWas = (was, now) => was === now || !now ? "" : `<s>${tt("sp.hc.h", "{n} h", {n: was})}</s>`;
   /* Wages are struck through on the figures rather than on what they render
      as: at $1,600 against $2,400 both read "$2k", and dropping the strike
      would say they match when the tooltip beside it says they do not. */
@@ -18821,18 +19008,19 @@ function spRosterBlock(b){
        the player to keep, pasting over them would undo the warning above -- and
        on one whose every line waits on a hire there is nothing to copy yet. */
     const read = copy === null
-      ? `<b>${WEEK_FULL[wd]}</b> · ${plural(c.plan[wd].reduce((n, s) => n + s.length, 0), "entry", "entries")}`
+      ? tt("sp.tab.read", {one: "<b>{d:day}</b> · {n} entry", other: "<b>{d:day}</b> · {n} entries"}, {d: wd, n: c.plan[wd].reduce((n, s) => n + s.length, 0)})
       : kept
-        ? `<b>${WEEK_FULL[wd]}</b> · the same cover as ${WEEK_FULL[copy]}${
-          dayStaffed(wd) ? `, people and all` : ""}. Copy schedule pastes the whole day, and this shop's serving hours are not in the plan, so set these by hand`
+        ? dayStaffed(wd)
+          ? tt("sp.tab.kept.people", "<b>{d:day}</b> · the same cover as {c:day}, people and all. Copy schedule pastes the whole day, and this shop's serving hours are not in the plan, so set these by hand", {d: wd, c: copy})
+          : tt("sp.tab.kept", "<b>{d:day}</b> · the same cover as {c:day}. Copy schedule pastes the whole day, and this shop's serving hours are not in the plan, so set these by hand", {d: wd, c: copy})
         : !dayStaffed(wd)
-          ? `<b>${WEEK_FULL[wd]}</b> · the same as ${WEEK_FULL[copy]}. Something to copy and paste once there is somebody on it`
-          : `<b>${WEEK_FULL[wd]}</b> · the same as ${WEEK_FULL[copy]}, people and all: copy schedule, paste schedule`;
+          ? tt("sp.tab.empty", "<b>{d:day}</b> · the same as {c:day}. Something to copy and paste once there is somebody on it", {d: wd, c: copy})
+          : tt("sp.tab.copy", "<b>{d:day}</b> · the same as {c:day}, people and all: copy schedule, paste schedule", {d: wd, c: copy});
     /* The dash is the offer of a copy and a paste of the whole day, so it
        waits until there is a line on the day to copy -- and stays away
        entirely from a shop whose serving shifts that paste would overwrite. */
     return `<a href="#" class="${wd === first ? "sp-on" : ""}" data-day="${wd}" data-read="${attr(read)}">${
-      copy === null || kept || !dayStaffed(wd) ? "" : "<u></u>"}${WEEK_SHORT[wd].toUpperCase()}</a>`;
+      copy === null || kept || !dayStaffed(wd) ? "" : "<u></u>"}${spWd(wd).toUpperCase()}</a>`;
   }).join("");
   const hours = `<div class="sp-grow sp-needrow" style="min-height:0;margin:0"><span></span>${
     [...Array(24).keys()].map(h => `<div class="hh" style="grid-column:${h + 2}">${h % 3 === 0 ? h : ""}</div>`).join("")}</div>`;
@@ -18854,8 +19042,8 @@ function spRosterBlock(b){
      rather than at the hours drawn without a name. */
   const hireFor = Object.keys(row.headcount || {})
     .filter(skill => (row.headcount[skill] || {}).hire)
-    .map(skill => `${row.headcount[skill].hire} for the ${
-      spEsc(spSkillLabel(row, c.stations, skill))}`).join(", ");
+    .map(skill => tt("sp.step.hirefor", "{n} for the {role}", {n: row.headcount[skill].hire,
+      role: spEsc(spSkillLabel(row, c.stations, skill))})).join(", ");
   /* One step for everybody the plan counts on who does not work here yet: the
      unassigned staff it draws on and the people to hire, in one sentence. The
      week's entries for them can only be set once they are assigned here, so
@@ -18869,43 +19057,51 @@ function spRosterBlock(b){
   const adding = (add.assign || []).length + (add.hire || []).reduce((n, h) => n + (h.people || 0), 0);
   const addStep = adding
     ? `<button type="button" class="sp-step sp-add"${add.hoursUncovered || counts.hire ? ` data-tip="${attr(
-      `${add.hoursUncovered ? `${add.hoursUncovered} h a week stay empty until they are added: a week can only be set for people already working here. ` : ""}${
-      counts.hire ? `${hireFor}. A full-time employee works 30 to 50 hours a week, so each hire adds at least 30 hours of wages.` : ""}`)}"` : ""}><span class="sp-box">${
-      spIcon("tick")}</span><span>Add ${plural(adding, "person", "people")} to fill this plan: ${
-      spAddWords(add, r => `<b data-p="${r.p}">${spEsc(r.name || c.name(r.p))}</b>`)}<small>MyEmployees · before you set the week</small></span></button>`
+      `${add.hoursUncovered ? `${tt("sp.step.empty", "{n} h a week stay empty until they are added: a week can only be set for people already working here.", {n: add.hoursUncovered})} ` : ""}${
+      counts.hire ? tt("sp.step.hiretip", "{hirefor}. A full-time employee works 30 to 50 hours a week, so each hire adds at least 30 hours of wages.", {hirefor: hireFor}) : ""}`)}"` : ""}><span class="sp-box">${
+      spIcon("tick")}</span><span>${tt("sp.step.add", {one: "Add {n} person to fill this plan: {who}", other: "Add {n} people to fill this plan: {who}"},
+      {n: adding, who: spAddWords(add, r => `<b data-p="${r.p}">${spEsc(r.name || c.name(r.p))}</b>`)})}<small>${
+      tt("sp.step.add.where", "MyEmployees · before you set the week")}</small></span></button>`
     : "";
   const clearStep = counts.staffed
-    ? step(kept ? `Clear the cleaning and security hours` : `Clear entire schedule`,
-      `BizMan › Schedule${kept ? ` · leave the rest` : ""}`)
+    ? step(kept ? tt("sp.step.clear.cover", "Clear the cleaning and security hours") : tt("sp.step.clear", "Clear entire schedule"),
+      kept ? tt("sp.step.where.rest", "BizMan › Schedule · leave the rest") : tt("sp.step.where", "BizMan › Schedule"))
     : "";
   /* The demand test measures only the hours the doors are open, so opening
      around the clock is its first step wherever the shop is not already. */
   const openStep = c.full && !row.openNow
-    ? step(`Open every day 0 to 24`, `BizMan › Schedule`,
-      `An hour the shop is closed is an hour the test never measures.`)
+    ? step(tt("sp.step.open", "Open every day 0 to 24"), tt("sp.step.where", "BizMan › Schedule"),
+      tt("sp.step.open.tip", "An hour the shop is closed is an hour the test never measures."))
     : "";
   const steps = openStep + (adding && counts.now ? addStep + clearStep : clearStep + addStep);
   return `<section class="sec rv" data-block="roster" id="sp-roster" data-readzone data-site="${
     attr(row.key)}" data-ticks="${attr(spTickKey(row))}" data-tickable="${c.tickable.length}">
-    ${sechead("Staffing", {icon: "roster", quiet: spEsc(shortName(b)),
+    ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster", quiet: spEsc(shortName(b)),
       why: `${c.full
-        ? `A demand test: every station staffed every hour of every day, so no customer is turned away by an empty station and the count that comes back is the demand. The demand data is complete 9 days after the shop's first customer, closed days included; then switch to the demand plan, which is cut from what those days measured. An hour the shop is shut, or no one comes, counts as no customers.`
-        : `A week to copy into BizMan › Schedule, one day at a time.`} One entry is one person at one station for a run of hours. Nobody is given more than the 12 hours a day the game allows, and nobody is put inside a window they asked to keep free. Tick an entry once it is in the game. The ticks stay in this browser and change nothing in the save.${c.full ? "" : ` The need above the week is read from customers already served, so keep every station staffed until 9 days after the shop's first customer, and the count stops being a count of what you turned away.`}`})}
+        ? tt("sp.roster.why.full", "A demand test: every station staffed every hour of every day, so no customer is turned away by an empty station and the count that comes back is the demand. The demand data is complete 9 days after the shop's first customer, closed days included; then switch to the demand plan, which is cut from what those days measured. An hour the shop is shut, or no one comes, counts as no customers.")
+        : tt("sp.roster.why.demand", "A week to copy into BizMan › Schedule, one day at a time.")} ${
+        tt("sp.roster.why.entries", "One entry is one person at one station for a run of hours. Nobody is given more than the 12 hours a day the game allows, and nobody is put inside a window they asked to keep free. Tick an entry once it is in the game. The ticks stay in this browser and change nothing in the save.")}${c.full ? ""
+        : ` ${tt("sp.roster.why.keep", "The need above the week is read from customers already served, so keep every station staffed until 9 days after the shop's first customer, and the count stops being a count of what you turned away.")}`}`})}
     ${/* Which shop it is about rides in the heading: the Optimize staffing
           card lands here with the shop's own heading scrolled off the top. */""}
     ${pick}
     ${c.full ? "" : spUnmeasuredLine(row)}
     ${c.cover ? spRosterNew(c, counts) : ""}
     <div class="sp-ba">
-      <div tabindex="0" data-read="${attr(`${c.cover ? "Cleaning and security hours" : "Hours"
-        } to set for the week: <b>${planHours} h</b> in ${plural(counts.staffed, "entry", "entries")}, against <b>${
-        againstHours} h</b> in ${plural(against, "entry", "entries")} today${
+      <div tabindex="0" data-read="${attr(`${(() => {
         /* The scraps on the side of the schedule this plan replaces: the whole
            schedule's, or the cleaning and security half of it. */
-        ""}${(c.cover ? counts.coverFragments : counts.fragments)
-          ? `, ${c.cover ? counts.coverFragments : counts.fragments} of them two hours long` : ""}${counts.hire
-          ? ` · ${plural(posts, "person", "people")} to hire for the ${plural(counts.hire, "entry", "entries")} drawn without a name, at 30 hours a week or more each` : ""}${
-        keptWords}`)}"><span class="lab">${c.cover ? "Cover hours" : "Hours"} / week</span><div class="v">${
+        const frag = c.cover ? counts.coverFragments : counts.fragments;
+        const p = {h: planHours, entries: entries(counts.staffed), was: againstHours, wasEntries: entries(against), frag};
+        return c.cover
+          ? frag ? tt("sp.ba.hours.cover.frag", "Cleaning and security hours to set for the week: <b>{h} h</b> in {entries}, against <b>{was} h</b> in {wasEntries} today, {frag} of them two hours long", p)
+            : tt("sp.ba.hours.cover", "Cleaning and security hours to set for the week: <b>{h} h</b> in {entries}, against <b>{was} h</b> in {wasEntries} today", p)
+          : frag ? tt("sp.ba.hours.frag", "Hours to set for the week: <b>{h} h</b> in {entries}, against <b>{was} h</b> in {wasEntries} today, {frag} of them two hours long", p)
+            : tt("sp.ba.hours", "Hours to set for the week: <b>{h} h</b> in {entries}, against <b>{was} h</b> in {wasEntries} today", p);
+        })()}${counts.hire
+          ? ` · ${tt("sp.ba.hire", "{people} to hire for the {entries} drawn without a name, at 30 hours a week or more each",
+            {people: tt("sp.n.people", {one: "{n} person", other: "{n} people"}, {n: posts}), entries: entries(counts.hire)})}` : ""}${
+        keptWords}`)}"><span class="lab">${c.cover ? tt("sp.ba.lab.cover", "Cover hours / week") : tt("sp.ba.lab", "Hours / week")}</span><div class="v">${
         spI("list")}${spWas(againstHours, planHours)}${planHours}<small style="font-size:12px;color:var(--ink-3)"> h</small>${
         /* The hours are the week; the blocks beside them are the dragging,
            and on a cover week re-cut from the same hours they are the whole
@@ -18913,22 +19109,27 @@ function spRosterBlock(b){
            living in the read-out alone. */
         counts.staffed ? `<small style="font-size:12px;color:var(--ink-3)">${
           against === counts.staffed ? "" : `<s>${against}</s> `}${
-          plural(counts.staffed, "entry", "entries")}</small>` : ""}${counts.hire
-          ? `<small style="font-size:12px;color:var(--warn)">+${posts} to hire</small>` : ""}</div></div>
+          entries(counts.staffed)}</small>` : ""}${counts.hire
+          ? `<small style="font-size:12px;color:var(--warn)">${tt("sp.ba.tohire", "+{n} to hire", {n: posts})}</small>` : ""}</div></div>
       <div tabindex="0" data-read="${attr(`${costKnown
-        ? `<b>${fmt(againstCost)}</b> a week for the ${
-          c.cover ? "cleaning and security hours as they stand" : "schedule as it stands"}, `
-        : `What the hours this plan replaces cost is not in this board's figures. `}<b>${
-        fmt(cost.weekly)}</b> for the plan, for the staff the save prices${counts.hire
-          ? ` · the ${plural(posts, "person", "people")} still to hire ${posts === 1 ? "is" : "are"} not priced, because nobody is on ${
-            counts.hire === 1 ? "that entry" : "those entries"} yet` : ""}${sameCost
-          ? ` · the same bill either way: what the plan saves here is setup work, not wages` : ""}${
-        keptWords}`)}"><span class="lab">Wages / week</span><div class="v">${
+        ? c.cover
+          ? tt("sp.ba.cost.cover", "<b>{was}</b> a week for the cleaning and security hours as they stand, <b>{w}</b> for the plan, for the staff the save prices",
+            {was: fmt(againstCost), w: fmt(cost.weekly)})
+          : tt("sp.ba.cost", "<b>{was}</b> a week for the schedule as it stands, <b>{w}</b> for the plan, for the staff the save prices",
+            {was: fmt(againstCost), w: fmt(cost.weekly)})
+        : tt("sp.ba.cost.unknown", "What the hours this plan replaces cost is not in this board's figures. <b>{w}</b> for the plan, for the staff the save prices",
+          {w: fmt(cost.weekly)})}${counts.hire
+          ? ` · ${tt("sp.ba.cost.hire", {one: "the {n} person still to hire is not priced, because nobody is on {which} yet",
+            other: "the {n} people still to hire are not priced, because nobody is on {which} yet"},
+            {n: posts, which: tt("sp.ba.cost.which", {one: "that entry", other: "those entries"}, {n: counts.hire})})}` : ""}${sameCost
+          ? ` · ${tt("sp.ba.cost.same", "the same bill either way: what the plan saves here is setup work, not wages")}` : ""}${
+        keptWords}`)}"><span class="lab">${tt("sp.ba.lab.wages", "Wages / week")}</span><div class="v">${
         spI("coin")}${costKnown ? wasCost(againstCost, cost.weekly) : ""}${
         counts.hire && !cost.weekly ? "—" : money(cost.weekly)}</div></div>
-      ${!slack.hours ? "" : `<div tabindex="0" data-read="${attr(`<b>${slack.hours} h</b> overstaffed: somebody kept on through a quiet gap, so their day stays one entry instead of two. The plan allows up to <b>${
-        slack.budget} h</b>${slack.cost ? ` · ${fmt(slack.cost)} a week` : ""}`)}"><span class="lab">Overstaffed hours</span><div class="v" style="font-size:14px">${
-        slack.hours}<small style="color:var(--ink-3)">/ ${slack.budget} h</small><span class="sp-meter"><i style="--w:${
+      ${!slack.hours ? "" : `<div tabindex="0" data-read="${attr(`${tt("sp.ba.slack", "<b>{n} h</b> overstaffed: somebody kept on through a quiet gap, so their day stays one entry instead of two. The plan allows up to <b>{budget} h</b>",
+        {n: slack.hours, budget: slack.budget})}${slack.cost ? ` · ${tt("sp.ba.slack.cost", "{w} a week", {w: fmt(slack.cost)})}` : ""}`)}"><span class="lab">${
+        tt("sp.ba.lab.slack", "Overstaffed hours")}</span><div class="v" style="font-size:14px">${
+        slack.hours}<small style="color:var(--ink-3)">${tt("sp.ba.slack.of", "/ {n} h", {n: slack.budget})}</small><span class="sp-meter"><i style="--w:${
         Math.min(100, slack.budget ? slack.hours / slack.budget * 100 : 0).toFixed(0)}%"></i></span></div></div>`}
       ${/* The ring counts the narrower set: a line whose station or person the
             save does not name is a line to type and not a line the board can
@@ -18937,25 +19138,27 @@ function spRosterBlock(b){
             figure beside it and does not redraw the block, so a number in here
             would be the one thing on the widget that never changed. */""}
       <div class="sp-typed"${counts.staffed > c.tickable.length ? ` tabindex="0" data-read="${attr(
-        `The ring counts the ${c.tickable.length} entries the board can mark · ${
-          counts.staffed - c.tickable.length} more ${
-          counts.staffed - c.tickable.length === 1 ? "is an entry" : "are entries"} to set that it cannot: the save gives their station or their person no id to tick against`)}"` : ""}><span class="sp-ring" style="--p:${
-        c.tickable.length ? (typed / c.tickable.length * 100).toFixed(0) : 0}"></span><span><b class="sp-count">${
-        typed}</b> of ${c.tickable.length} copied</span>${
+        `${tt("sp.ba.ring", {one: "The ring counts the {n} entries the board can mark", other: "The ring counts the {n} entries the board can mark"}, {n: c.tickable.length})} · ${
+          tt("sp.ba.ring.more", {one: "{n} more is an entry to set that it cannot: the save gives their station or their person no id to tick against",
+            other: "{n} more are entries to set that it cannot: the save gives their station or their person no id to tick against"},
+            {n: counts.staffed - c.tickable.length})}`)}"` : ""}><span class="sp-ring" style="--p:${
+        c.tickable.length ? (typed / c.tickable.length * 100).toFixed(0) : 0}"></span><span>${
+        tt("sp.ba.copied", "{typed} of {n} copied", {typed: `<b class="sp-count">${typed}</b>`, n: c.tickable.length})}</span>${
         /* Nothing to clear until something is ticked, and the line has no room
            to carry a dead link across every site that has never been typed. */
-        ""}<a href="#" class="sp-clear"${typed ? "" : " hidden"}>clear ticks</a></div>
+        ""}<a href="#" class="sp-clear"${typed ? "" : " hidden"}>${tt("sp.ba.clear", "clear ticks")}</a></div>
     </div>
     ${/* The switch sits on the week it switches: up in the heading it changed
           a grid that had often scrolled off the bottom of the screen. */""}
-    <div class="sp-steps">${steps}<span class="seg sp-nowplan" style="margin-left:auto"><a href="#" data-view="now">now</a><a href="#" class="sp-on" data-view="plan">plan</a></span><span class="seg sp-daytabs">${tabs}</span></div>
+    <div class="sp-steps">${steps}<span class="seg sp-nowplan" style="margin-left:auto"><a href="#" data-view="now">${tt("sp.view.now", "now")}</a><a href="#" class="sp-on" data-view="plan">${tt("sp.view.plan", "plan")}</a></span><span class="seg sp-daytabs">${tabs}</span></div>
     ${gwRosterButtons(b.key)}
     <div class="chartbox sp-gantt">${hours}${
       HOUR_ROWS.map(wd => spRosterDay(c, wd, wd === first)).join("")}</div>
     ${spRosterCount(c)}
     <div class="sp-read sp-readout">${/* What the week asks for, until an entry is pointed at. */""}${
-      c.cover ? "Cover" : "The week"} · <b>${planHours} h</b> to set in ${plural(counts.staffed, "entry", "entries")}${
-      counts.hire ? ` · <b>${posts}</b> to hire` : ""}</div>
+      c.cover ? tt("sp.ba.read.cover", "Cover · <b>{h} h</b> to set in {entries}", {h: planHours, entries: entries(counts.staffed)})
+        : tt("sp.ba.read", "The week · <b>{h} h</b> to set in {entries}", {h: planHours, entries: entries(counts.staffed)})}${
+      counts.hire ? ` · ${tt("sp.ba.read.hire", "<b>{n}</b> to hire", {n: posts})}` : ""}</div>
   </section>`;
 }
 
@@ -18980,7 +19183,6 @@ const spCeiling = (office, limits) => {
 /* Mirrors STAFF_HOURS in the Python: a machine posted every hour of the week. */
 const SP_STAFF_HOURS = 168;
 const SP_RAIL_DAYS = 7;
-const SP_DAY_LETTER = ["S", "M", "T", "W", "T", "F", "S"];
 
 /* The seven days from today, left to right: a cell a day, filled while the
    holding covers it, hatched once it is dry, and the truck sitting on the day
@@ -18995,18 +19197,19 @@ const SP_DAY_LETTER = ["S", "M", "T", "W", "T", "F", "S"];
    those days are unknown rather than dry: nothing says when it is topped up
    again. */
 function spRail(cover, truck, held, dead, early, known){
-  if(dead) return `<span class="sp-rail">${"<i></i>".repeat(SP_RAIL_DAYS)}</span> <span class="sp-zz" data-tip="Idle stock: nothing draws on this">zzz</span>`;
+  if(dead) return `<span class="sp-rail">${"<i></i>".repeat(SP_RAIL_DAYS)}</span> <span class="sp-zz" data-tip="${attr(tt("sp.rail.idle", "Idle stock: nothing draws on this"))}">zzz</span>`;
   const c = Math.max(0, Math.min(SP_RAIL_DAYS, Math.floor(cover || 0)));
   const end = truck === null ? (held || known ? SP_RAIL_DAYS : c) : held ? SP_RAIL_DAYS : truck;
   const cells = [...Array(SP_RAIL_DAYS).keys()].map(k =>
     `<i class="${k < c || (!held && truck !== null && k >= truck) ? "sp-c" : k < end ? "sp-d" : ""}"></i>`).join("");
   const lorry = (d, cls, tip) => `<span class="sp-trk${cls}" style="--d:${d}" data-tip="${attr(tip)}">${spIcon("truck")}</span>`;
   return `<span class="sp-rail">${cells}${
-    early === null || early === undefined ? "" : lorry(early, " sp-early", "An earlier delivery; the numbers beside this line are about the last one")}${
-    truck === null ? "" : lorry(truck, held ? " sp-held" : "", held ? "The delivery this contract had before it was paused" : "The delivery the cover is measured against")}</span>`;
+    early === null || early === undefined ? "" : lorry(early, " sp-early", tt("sp.rail.early", "An earlier delivery; the numbers beside this line are about the last one"))}${
+    truck === null ? "" : lorry(truck, held ? " sp-held" : "", held ? tt("sp.rail.held", "The delivery this contract had before it was paused")
+      : tt("sp.rail.truck", "The delivery the cover is measured against"))}</span>`;
 }
 const spDays = today => `<span class="sp-days">${[...Array(SP_RAIL_DAYS).keys()].map(k =>
-  `<b class="${k ? "" : "sp-now"}">${SP_DAY_LETTER[((today || 0) + k) % 7]}</b>`).join("")}</span>`;
+  `<b class="${k ? "" : "sp-now"}">${spWd(((today || 0) + k) % 7)[0]}</b>`).join("")}</span>`;
 /* What a figure should be set to, beside what it is now. */
 const spUp = (now, to, bad) => `<span class="sp-up${bad ? " bad" : ""}">${spEsc(now)} ${
   spIcon("right")} <b>${spEsc(to)}</b></span>`;
@@ -19014,6 +19217,9 @@ const spMeter = (pct, bad) => `<div class="sp-meter${bad ? " bad" : ""}"><i styl
   Math.max(0, Math.min(100, Math.round(pct || 0)))}%"></i></div>`;
 /* A figure the payload does not carry is a dash, never a nought. */
 const spNum = n => Number.isFinite(n) ? num(Math.round(n)) : "—";
+/* The same figure as a param: the whole number for {n:,} (which prints it as
+   spNum() does, and picks the plural by it), or the dash. */
+const spWhole = n => Number.isFinite(n) ? Math.round(n) : "—";
 /* The total of one key over some rows, or nothing at all when no row carries
    it: a factory whose every machine runs a recipe the board cannot name has an
    unknown output, not an output of zero. */
@@ -19066,9 +19272,6 @@ function spMadeAt(slug, item){
   return null;
 }
 
-/* The weekday a day number falls on, spelt out; WEEK_FULL is indexed the way
-   the hour grid indexes it. */
-const SP_WEEK_FULL_DAY = day => WEEK_FULL[((day % 7) + 7) % 7];
 /* Which day of the seven a delivery falls on, or nothing when it is not in
    the week ahead — a paused contract's delivery day is usually in the past. */
 const spTruckDay = (arrives, today) => {
@@ -19079,18 +19282,21 @@ const spTruckDay = (arrives, today) => {
 
 /* A Smart Delivery setting on the panel: the level kept in stock, and any
    plain amount delivered after it, which comes on top. */
-const spKeeps = (level, after, before) => `Smart Delivery keeps <b>${spNum(level)}</b> in stock${
-  !before ? "" : before >= level
-    ? `, but the <b>${spNum(before)}</b> a week delivered before it already ${before > level ? "passes" : "reaches"} the <b>${spNum(level)}</b> level`
-    : `, counting the <b>${spNum(before)}</b> a week delivered before it`}${
-  after ? `, plus <b>${spNum(after)}</b> a week on top` : ""}`;
-const spLevelCell = (level, after, small) => `${spNum(level)}<small ${small}>in stock${
-  after ? ` +${spNum(after)}/wk` : ""}</small>`;
+const spKeeps = (level, after, before) => {
+  const p = {level: spNum(level), before: spNum(before), after: spNum(after)};
+  const head = !before ? tt("sp.keeps", "Smart Delivery keeps <b>{level}</b> in stock", p)
+    : before > level ? tt("sp.keeps.passes", "Smart Delivery keeps <b>{level}</b> in stock, but the <b>{before}</b> a week delivered before it already passes the <b>{level}</b> level", p)
+    : before === level ? tt("sp.keeps.reaches", "Smart Delivery keeps <b>{level}</b> in stock, but the <b>{before}</b> a week delivered before it already reaches the <b>{level}</b> level", p)
+    : tt("sp.keeps.counting", "Smart Delivery keeps <b>{level}</b> in stock, counting the <b>{before}</b> a week delivered before it", p);
+  return after ? tt("sp.keeps.plus", "{keeps}, plus <b>{after}</b> a week on top", {keeps: head, after: p.after}) : head;
+};
+const spLevelCell = (level, after, small) => `${spNum(level)}<small ${small}>${after
+  ? tt("sp.level.plus", "in stock +{n}/wk", {n: spNum(after)}) : tt("sp.level", "in stock")}</small>`;
 /* What a week asks of the import: all of the draw, or what is left of it after
    the route from the company's own site. */
 const spImportWeek = r => r.routed
-  ? `The import's week is <b>${spNum(r.weekNeed)}</b>, after <b>${spNum(r.routed)}</b> a day by route`
-  : `A week draws <b>${spNum(r.weekNeed)}</b>`;
+  ? tt("sp.import.routed", "The import's week is <b>{n}</b>, after <b>{route}</b> a day by route", {n: spNum(r.weekNeed), route: spNum(r.routed)})
+  : tt("sp.import.week", "A week draws <b>{n}</b>", {n: spNum(r.weekNeed)});
 /* The mark a row carries for a fact, in the words the finding hits and the
    read-outs have always used: what the fact says is wrong, or nothing. */
 function szEl(f){
@@ -19139,9 +19345,9 @@ function spStockRows(b){
     const known = !r.paused && Number.isFinite(due) && Number.isFinite(today) && due >= today;
     const el = [spKeyTok(r.slug, r.item), szEl(f)].filter(Boolean);
     const act = paused
-      ? `<span class="sp-up bad">${spIcon("pause")}paused</span>`
+      ? `<span class="sp-up bad">${spIcon("pause")}${tt("sp.stock.paused", "paused")}</span>`
       : dry && r.catchUp > 0
-        ? spUp(`+${spNum(r.catchUp)}`, r.runsOut ? `by ${r.runsOut}` : "now", true)
+        ? spUp(`+${spNum(r.catchUp)}`, r.runsOut ? tt("sp.stock.by", "by {day}", {day: r.runsOut}) : tt("sp.stock.now", "now"), true)
         : "";
     /* A paused contract orders nothing this week; what it used to bring is the
        only figure there is, and the chip beside it says it is not coming. A
@@ -19151,25 +19357,26 @@ function spStockRows(b){
     const shown = r.smart && Number.isFinite(r.target) ? r.target : r.weekly;
     const orderCell = (paused ? spNum(r.smart && Number.isFinite(r.target) ? r.target : r.weekly || r.lastWeek)
       : order && Number.isFinite(f.setTo) ? spUp(spNum(shown), spNum(f.setTo), f.st === "short")
-      : spNum(shown)) + (r.smart ? `<small ${SMALL}>in stock${plainAfter ? ` +${spNum(plainAfter)}/wk` : ""}</small>` : "");
-    const read = paused ? `Import <b>paused</b>; <b>${spNum(r.cover)}</b> days left`
+      : spNum(shown)) + (r.smart ? `<small ${SMALL}>${plainAfter
+        ? tt("sp.level.plus", "in stock +{n}/wk", {n: spNum(plainAfter)}) : tt("sp.level", "in stock")}</small>` : "");
+    const read = paused ? tt("sp.stock.read.paused", {one: "Import <b>paused</b>; <b>{n:,}</b> days left", other: "Import <b>paused</b>; <b>{n:,}</b> days left"}, {n: spWhole(r.cover)})
       : dry && r.runsOut
-        ? r.covered ? `Runs dry <b>${spEsc(r.runsOut)}</b>, before the route's next round`
-        : `Runs dry <b>${spEsc(r.runsOut)}</b>${truck !== null ? `, the truck lands <b>${
-            SP_WEEK_FULL_DAY(today + truck)}</b>` : ""}`
+        ? r.covered ? tt("sp.stock.read.dryroute", "Runs dry <b>{day}</b>, before the route's next round", {day: spEsc(r.runsOut)})
+        : truck !== null ? tt("sp.stock.read.drytruck", "Runs dry <b>{day}</b>, the truck lands <b>{lands:day}</b>", {day: spEsc(r.runsOut), lands: today + truck})
+        : tt("sp.stock.read.dry", "Runs dry <b>{day}</b>", {day: spEsc(r.runsOut)})
       : f.st === "short" && order && r.smart
-        ? `${spImportWeek(r)}; ${spKeeps(shown, plainAfter, r.plainBefore)}`
+        ? tt("sp.stock.read.smart", "{week}; {keeps}", {week: spImportWeek(r), keeps: spKeeps(shown, plainAfter, r.plainBefore)})
       : f.st === "short" && order
-        ? `${spImportWeek(r)}; the order brings <b>${spNum(r.weekly)}</b>`
+        ? tt("sp.stock.read.brings", "{week}; the order brings <b>{n}</b>", {week: spImportWeek(r), n: spNum(r.weekly)})
       : f.st === "tight" && order
-        ? `${spImportWeek(r)}; the order covers it, not the margin`
+        ? tt("sp.stock.read.margin", "{week}; the order covers it, not the margin", {week: spImportWeek(r)})
       : close && r.covered && r.runsOut
-        ? `Runs close on <b>${spEsc(r.runsOut)}</b>, before the route's next round`
-      : covered ? `A route brings what leaves; the import is a backup`
-      : f.st === "new" ? `<b>New</b> · ${spEsc(szTip(f))}`
-      : f.st === "idle" ? `<b>Idle stock</b> · ${spEsc(szTip(f))}`
-      : Number.isFinite(r.cover) && r.cover >= SP_RAIL_DAYS ? "Covered through the week"
-      : `<b>${spNum(r.cover)}</b> days on hand`;
+        ? tt("sp.stock.read.close", "Runs close on <b>{day}</b>, before the route's next round", {day: spEsc(r.runsOut)})
+      : covered ? tt("sp.stock.read.backup", "A route brings what leaves; the import is a backup")
+      : f.st === "new" ? tt("sp.stock.read.new", "<b>New</b> · {tip}", {tip: spEsc(szTip(f))})
+      : f.st === "idle" ? tt("sp.stock.read.idletip", "<b>Idle stock</b> · {tip}", {tip: spEsc(szTip(f))})
+      : Number.isFinite(r.cover) && r.cover >= SP_RAIL_DAYS ? tt("sp.stock.read.week", "Covered through the week")
+      : tt("sp.stock.read.days", {one: "<b>{n:,}</b> days on hand", other: "<b>{n:,}</b> days on hand"}, {n: spWhole(r.cover)});
     const draw = spItemDraw(r.slug, r.item);
     rows.push({chip: spWord(r.slug), item: r.item, hand: r.stock, draw: spNum(r.perDay),
                cover: paused || !Number.isFinite(r.cover) ? null : r.cover,
@@ -19185,8 +19392,9 @@ function spStockRows(b){
       rail: spRail(Number.isFinite(r.weeks) ? r.weeks * 7 : 0, null, false, still, null, false),
       act: "", order: "—", feeds: spItemDraw(r.slug, r.item).sites, cover: null, short: false,
       el: [spKeyTok(r.slug, r.item), szEl(f) || (still ? "dead" : "target")],
-      read: f.why === "notRouted" ? `<b>Not routed</b> · no plan sends these on`
-        : still ? "<b>Idle stock</b> · nothing draws on these" : `<b>Idle stock</b> · <b>${spNum(r.weeks)}</b> weeks on hand`,
+      read: f.why === "notRouted" ? tt("sp.stock.read.notrouted", "<b>Not routed</b> · no plan sends these on")
+        : still ? tt("sp.stock.read.still", "<b>Idle stock</b> · nothing draws on these")
+        : tt("sp.stock.read.weeks", {one: "<b>Idle stock</b> · <b>{n:,}</b> weeks on hand", other: "<b>Idle stock</b> · <b>{n:,}</b> weeks on hand"}, {n: spWhole(r.weeks)}),
     });
   });
   /* Everything else on the floor. A line nothing imports is made in-house or
@@ -19205,15 +19413,15 @@ function spStockRows(b){
       cover: perDay ? cover : null, short: !!f && f.st === "short",
       rail: spRail(cover, null, false, !!f && !perDay, null, false),
       act: "", feeds: spItemDraw(l.slug, l.item).sites,
-      order: made ? `<span class="quiet">made at ${spEsc(shortName(made))}</span>`
-        : f && f.wholesale && Number.isFinite(f.have) ? `${spNum(f.have)}<small ${SMALL}>/wk wholesale</small>` : "—",
+      order: made ? `<span class="quiet">${tt("sp.stock.madeat", "made at {site}", {site: spEsc(shortName(made))})}</span>`
+        : f && f.wholesale && Number.isFinite(f.have) ? `${spNum(f.have)}<small ${SMALL}>${tt("sp.stock.wholesale", "/wk wholesale")}</small>` : "—",
       el: [spKeyTok(l.slug, l.item), f ? szEl(f) : ""].filter(Boolean),
       /* No fact is no verdict: the next refresh judges the line. */
-      read: !f ? "Not judged yet"
-        : f.st === "idle" && !perDay ? "<b>Idle stock</b> · nothing draws on these"
-        : f && f.st !== "covered" && f.st !== "made" ? `<b>${spEsc(SZ_WORD[f.st] || f.st)}</b> · ${spEsc(szTip(f))}`
-        : cover >= SP_RAIL_DAYS ? "Covered through the week"
-        : `<b>${cover.toFixed(1)}</b> days on hand`,
+      read: !f ? tt("sp.stock.read.unjudged", "Not judged yet")
+        : f.st === "idle" && !perDay ? tt("sp.stock.read.still", "<b>Idle stock</b> · nothing draws on these")
+        : f && f.st !== "covered" && f.st !== "made" ? tt("sp.stock.read.fact", "<b>{word}</b> · {tip}", {word: spEsc(SZ_WORD[f.st] || f.st), tip: spEsc(szTip(f))})
+        : cover >= SP_RAIL_DAYS ? tt("sp.stock.read.week", "Covered through the week")
+        : tt("sp.stock.read.days1", "<b>{n:.1f}</b> days on hand", {n: cover}),
     });
   });
   /* And what the depot is expected to hold and does not. A factory input
@@ -19233,20 +19441,20 @@ function spStockRows(b){
     const importing = Number.isFinite(n.importWeekly) && n.importWeekly > 0;
     const made = f.st === "made" ? spMadeAt(n.slug, n.item) : null;
     const order = f.st === "paused"
-      ? `<span class="sp-up bad">${spIcon("pause")}paused</span>`
+      ? `<span class="sp-up bad">${spIcon("pause")}${tt("sp.stock.paused", "paused")}</span>`
       : importing && n.importSmart ? spLevelCell(n.importTarget ?? n.importWeekly, n.importPlainAfter, SMALL)
-      : importing ? `${spNum(n.importWeekly)}<small ${SMALL}>/wk</small>`
-      : made ? `<span class="quiet">made at ${spEsc(shortName(made))}</span>`
-      : f.st === "noplan" ? `<span class="sp-noplan">${spIcon("route")}no import</span>`
+      : importing ? `${spNum(n.importWeekly)}<small ${SMALL}>${tt("sp.stock.perweek", "/wk")}</small>`
+      : made ? `<span class="quiet">${tt("sp.stock.madeat", "made at {site}", {site: spEsc(shortName(made))})}</span>`
+      : f.st === "noplan" ? `<span class="sp-noplan">${spIcon("route")}${tt("sp.stock.noimport", "no import")}</span>`
       : "—";
     const read = f.st === "paused"
-      ? `Import <b>paused</b>; <b>nothing</b> on hand`
+      ? tt("sp.stock.read.pausednone", "Import <b>paused</b>; <b>nothing</b> on hand")
       : importing && n.importSmart
-        ? `${spKeeps(n.importTarget ?? n.importWeekly, n.importPlainAfter, n.importPlainBefore)}; <b>nothing</b> on hand yet`
+        ? tt("sp.stock.read.keepsnone", "{keeps}; <b>nothing</b> on hand yet", {keeps: spKeeps(n.importTarget ?? n.importWeekly, n.importPlainAfter, n.importPlainBefore)})
       : importing
-        ? `<b>${spNum(n.importWeekly)}</b> a week is on order; <b>nothing</b> on hand yet`
-      : made ? `Made at <b>${spEsc(shortName(made))}</b>; <b>nothing</b> on hand here`
-      : `<b>Nothing on hand</b>; <b>${spNum(perDay)}</b>/day is drawn from here`;
+        ? tt("sp.stock.read.ordered", "<b>{n}</b> a week is on order; <b>nothing</b> on hand yet", {n: spNum(n.importWeekly)})
+      : made ? tt("sp.stock.read.made", "Made at <b>{site}</b>; <b>nothing</b> on hand here", {site: spEsc(shortName(made))})
+      : tt("sp.stock.read.none", "<b>Nothing on hand</b>; <b>{n}</b>/day is drawn from here", {n: spNum(perDay)});
     rows.push({chip: spWord(n.slug),
       item: n.item, hand: 0, draw: spNum(perDay),
       rail: spRail(0, null, f.st === "paused", false, null, importing),
@@ -19267,9 +19475,9 @@ function spStockRows(b){
       chip: spWord(slug), item, hand: 0, draw: perDay ? spNum(perDay) : "—",
       rail: spRail(0, null, f.st === "paused", !perDay, null, false),
       act: "", feeds: spItemDraw(slug, item).sites, cover: perDay ? 0 : null, short: f.st === "short",
-      order: f.wholesale && Number.isFinite(f.have) ? `${spNum(f.have)}<small ${SMALL}>/wk wholesale</small>` : "—",
+      order: f.wholesale && Number.isFinite(f.have) ? `${spNum(f.have)}<small ${SMALL}>${tt("sp.stock.wholesale", "/wk wholesale")}</small>` : "—",
       el: [spKeyTok(slug, item), szEl(f)].filter(Boolean),
-      read: `<b>${spEsc(SZ_WORD[f.st] || f.st)}</b> · ${spEsc(szTip(f))}; <b>nothing</b> on hand`,
+      read: tt("sp.stock.read.factnone", "<b>{word}</b> · {tip}; <b>nothing</b> on hand", {word: spEsc(SZ_WORD[f.st] || f.st), tip: spEsc(szTip(f))}),
     });
   });
   rows.sort((x, y) => (y.feeds || 0) - (x.feeds || 0));
@@ -19301,9 +19509,12 @@ const spFactorySite = () => spFactorySites().find(r => r.s === siteTab) || null;
    own list position, which is what a staffing finding names. */
 function spMachineRead(slot, gap){
   const hours = gap ? gap.hours : SP_STAFF_HOURS;
-  return `Machine ${spEsc(slot)} · ${Number.isFinite(hours)
-    ? `<b>${hours} of ${SP_STAFF_HOURS} h</b> rostered` : `hours <b>not known</b>`}${
-    gap && gap.off ? `: nobody on it ${spEsc(gap.off)}` : ""}`;
+  const p = {slot: spEsc(slot), hours, of: SP_STAFF_HOURS, off: gap && gap.off ? spEsc(gap.off) : ""};
+  return Number.isFinite(hours)
+    ? p.off ? tt("sp.mach.read.off", "Machine {slot} · <b>{hours} of {of} h</b> rostered: nobody on it {off}", p)
+      : tt("sp.mach.read", "Machine {slot} · <b>{hours} of {of} h</b> rostered", p)
+    : p.off ? tt("sp.mach.unknown.off", "Machine {slot} · hours <b>not known</b>: nobody on it {off}", p)
+      : tt("sp.mach.unknown", "Machine {slot} · hours <b>not known</b>", p);
 }
 /* The Lines block's read-out before a machine is pointed at: one staffed and
    rented that makes nothing, else the machine rostered for the fewest hours,
@@ -19312,15 +19523,17 @@ function spLinesRead(site){
   const idle = (site.unnamed || []).find(u => u.idle);
   if(idle){
     const slot = (idle.slots || [])[0];
-    return `Making nothing · ${slot !== undefined ? `Machine ${spEsc(slot)}` : "a machine"} is staffed and rented with <b>no recipe</b>`;
+    return slot !== undefined
+      ? tt("sp.lines.idle", "Making nothing · Machine {slot} is staffed and rented with <b>no recipe</b>", {slot: spEsc(slot)})
+      : tt("sp.lines.idle.any", "Making nothing · a machine is staffed and rented with <b>no recipe</b>");
   }
   let worst = null;
   (site.lines || []).forEach(l => (l.gaps || []).forEach((g, k) => {
     if(g && Number.isFinite(g.hours) && (!worst || g.hours < worst.g.hours))
       worst = {l, g, slot: Number.isFinite(g.slot) ? g.slot : (l.slots || [])[k] ?? k + 1};
   }));
-  if(worst) return `Least staffed · <b>${spEsc(worst.l.item)}</b> · ${spMachineRead(worst.slot, worst.g)}`;
-  return (site.lines || []).length ? `Every machine is rostered all <b>${SP_STAFF_HOURS} h</b> of the week` : "&nbsp;";
+  if(worst) return tt("sp.lines.least", "Least staffed · <b>{item}</b> · {read}", {item: spEsc(worst.l.item), read: spMachineRead(worst.slot, worst.g)});
+  return (site.lines || []).length ? tt("sp.lines.all", "Every machine is rostered all <b>{n} h</b> of the week", {n: SP_STAFF_HOURS}) : "&nbsp;";
 }
 /* The Inputs block's read-out before a row is pointed at: the input whose
    fact is worst, by how soon it stops the line. */
@@ -19333,14 +19546,16 @@ function spInputsRead(site){
        says so: the inputs arrive as the lines make, not as they could. */
     const held = (site.needs || []).map(n => [n, szNeed(site, n)])
       .find(([, g]) => g.st === "covered" && (g.why === "limit" || g.why === "staffing"));
-    if(!held) return "Every input arrives in step";
+    if(!held) return tt("sp.inputs.step", "Every input arrives in step");
     if(held[1].why === "limit"){
       const n = (site.lines || []).filter(l => l.limitHeld).length;
-      return `<b>Produce up to</b> holds ${n ? `${n} line${n === 1 ? "" : "s"}` : "the lines"} back; the inputs arrive as they make`;
+      return n ? tt("sp.inputs.limit", {one: "<b>Produce up to</b> holds {n} line back; the inputs arrive as they make",
+          other: "<b>Produce up to</b> holds {n} lines back; the inputs arrive as they make"}, {n})
+        : tt("sp.inputs.limit.all", "<b>Produce up to</b> holds the lines back; the inputs arrive as they make");
     }
-    return `<b>${spEsc(held[0].item)}</b> · ${spNeedRead(held[0], held[1])}`;
+    return tt("sp.inputs.read", "<b>{item}</b> · {read}", {item: spEsc(held[0].item), read: spNeedRead(held[0], held[1])});
   }
-  return `<b>${spEsc(worst.item)}</b> · ${spNeedRead(worst, f)}`;
+  return tt("sp.inputs.read", "<b>{item}</b> · {read}", {item: spEsc(worst.item), read: spNeedRead(worst, f)});
 }
 function spMachines(count, gaps, slots){
   const bySlot = new Map((gaps || []).filter(g => g && Number.isFinite(g.slot)).map(g => [g.slot, g]));
@@ -19358,22 +19573,22 @@ function spMachines(count, gaps, slots){
       : `<span class="sp-m sp-u" data-el="${attr(spSlotTok(slot))}" data-read="${attr(read)}"></span>`;
   }).join("")}</div>`;
 }
-const SP_LINE_HEAD = `<div class="sp-line sp-head"><span>Line</span><span>Machines</span><span></span>${
-  ["Makes / day", "Ships / day", "On hand"].map(t => `<span class="sp-n">${t}</span>`).join("")}</div>`;
+const spLineHead = () => `<div class="sp-line sp-head"><span>${tt("sp.lines.col.line", "Line")}</span><span>${tt("sp.lines.col.machines", "Machines")}</span><span></span>${
+  [tt("sp.lines.col.makes", "Makes / day"), tt("sp.lines.col.ships", "Ships / day"), tt("sp.lines.col.onhand", "On hand")].map(t => `<span class="sp-n">${t}</span>`).join("")}</div>`;
 /* The lines, then the machines the board cannot read: one running a recipe it
    cannot name, which the player can name here as on the Supply page, and one
    with no recipe set at all. */
 function spLines(site){
   const where = r => `${spEsc(r.workstation)}${(r.slots || []).length
     ? ` · ${r.slots.map(s => `#${spEsc(s)}`).join(" ")}` : ""}`;
-  let html = SP_LINE_HEAD;
+  let html = spLineHead();
   (site.lines || []).forEach(l => {
     const stop = !l.atRoster || (l.missing || []).length;
     html += `<div class="sp-line" data-line="${attr(spKeyTok(l.slug, l.item))}" data-el="${attr(spKeyTok(l.slug, l.item))}">
       <div>${spEsc(l.item)}<span class="sub">${where(l)}</span></div>
       ${spMachines(l.machines, l.gaps, l.slots)}
       <div class="sp-belt${stop ? " sp-stop" : ""}"></div>
-      <div class="sp-n">${spNum(l.atRoster)}<small>of ${spNum(l.makes)} rated</small></div>
+      <div class="sp-n">${spNum(l.atRoster)}<small>${tt("sp.lines.rated", "of {n} rated", {n: spNum(l.makes)})}</small></div>
       <div class="sp-n">${spNum(l.ships)}</div>
       <div class="sp-n">${l.piling
         ? `<span class="sp-pile">${spIcon("crate")}${spNum(l.stock)}</span>` : spNum(l.stock)}</div></div>`;
@@ -19383,14 +19598,14 @@ function spLines(site){
     const mach = `<div class="sp-mach">${(u.slots && u.slots.length ? u.slots
       : [...Array(Math.max(Number.isFinite(u.machines) ? u.machines : 0, 0)).keys()].map(i => i + 1)).map(slot =>
       `<span class="sp-m ${idle ? "sp-z" : "sp-q"}" data-el="${attr(spSlotTok(slot))}" data-read="${attr(idle
-        ? `Machine ${spEsc(slot)} · staffed and rented, <b>making nothing</b>`
-        : `Machine ${spEsc(slot)} · running a recipe <b>the board cannot name</b>`)}">${idle ? "zz" : "?"}</span>`).join("")}</div>`;
+        ? tt("sp.mach.idle", "Machine {slot} · staffed and rented, <b>making nothing</b>", {slot: spEsc(slot)})
+        : tt("sp.mach.unnamed", "Machine {slot} · running a recipe <b>the board cannot name</b>", {slot: spEsc(slot)}))}">${idle ? "zz" : "?"}</span>`).join("")}</div>`;
     /* The picker is offered on the same terms the Supply page offers it: a
        recipe id to attach the choice to, and candidates to choose from. */
     const pick = !idle && u.rid && (u.candidates || []).length
-      ? `<select class="linepick sp-pick" data-rid="${attr(u.rid)}" aria-label="Name this line"><option value="">Which recipe is this?</option>${
+      ? `<select class="linepick sp-pick" data-rid="${attr(u.rid)}" aria-label="${attr(tt("sp.lines.name", "Name this line"))}"><option value="">${tt("sp.lines.which", "Which recipe is this?")}</option>${
           u.candidates.map(c => `<option value="${attr(c.slug)}">${spEsc(c.item)}</option>`).join("")}</select>`
-      : `<span class="quiet">${idle ? "No recipe" : "Unnamed recipe"}</span>`;
+      : `<span class="quiet">${idle ? tt("sp.lines.norecipe", "No recipe") : tt("sp.lines.unnamed", "Unnamed recipe")}</span>`;
     html += `<div class="sp-line" data-line="sp-unnamed-${k}" data-el="${idle ? "unset" : "unnamed"}">
       <div>${pick}<span class="sub">${where(u)}</span></div>${mach}
       <div class="sp-belt${idle ? " sp-stop" : ""}"></div>
@@ -19404,22 +19619,23 @@ function spLines(site){
 function spNeedRead(n, f){
   const use = szUse(f, n.dailyNeed ?? n.perDay);
   switch(f.st){
-    case "noplan": return "<b>No plan</b> tops this up";
-    case "paused": return "Import <b>paused</b>";
+    case "noplan": return tt("sp.need.noplan", "<b>No plan</b> tops this up");
+    case "paused": return tt("sp.need.paused", "Import <b>paused</b>");
     case "short": case "tight":
-      if(f.why === "target") return `Tops up to <b>${spNum(n.target)}</b>, the machines eat <b>${spNum(use)}</b>${
-        f.st === "tight" ? ", with no margin" : ""}`;
-      if(f.why === "dry") return `<b>${spNum(n.arrives)}</b>/day arrives against <b>${spNum(use)}</b> needed`;
-      if(f.why === "order") return `The import brings <b>${spNum(n.importWeekly)}</b> of the <b>${spNum(f.need)}</b> a week`;
+      if(f.why === "target") return f.st === "tight"
+        ? tt("sp.need.target.tight", "Tops up to <b>{target}</b>, the machines eat <b>{use}</b>, with no margin", {target: spNum(n.target), use: spNum(use)})
+        : tt("sp.need.target", "Tops up to <b>{target}</b>, the machines eat <b>{use}</b>", {target: spNum(n.target), use: spNum(use)});
+      if(f.why === "dry") return tt("sp.need.dry", "<b>{n}</b>/day arrives against <b>{use}</b> needed", {n: spNum(n.arrives), use: spNum(use)});
+      if(f.why === "order") return tt("sp.need.order", "The import brings <b>{n}</b> of the <b>{need}</b> a week", {n: spNum(n.importWeekly), need: spNum(f.need)});
       return spEsc(szTip(f));
     case "stalled":
-      if(f.why === "waiting") return `Waiting on <b>${spEsc((n.waitingOn || []).join(", "))}</b>`;
-      return `<b>${spNum(n.arrives)}</b>/day arrives; the line is <b>not drawing it</b>`;
+      if(f.why === "waiting") return tt("sp.need.waiting", "Waiting on <b>{items}</b>", {items: spEsc((n.waitingOn || []).join(", "))});
+      return tt("sp.need.stalled", "<b>{n}</b>/day arrives; the line is <b>not drawing it</b>", {n: spNum(n.arrives)});
     case "covered":
-      if(f.why === "staffing") return `The roster runs these machines <b>${Math.round((n.staffedShare || 0) * 100)}%</b> of the week`;
-      if(f.why === "limit") return "Held back by <b>Produce up to</b>";
-      return "In step";
-    case "made": return "Made in-house";
+      if(f.why === "staffing") return tt("sp.need.staffing", "Your staffing runs these machines <b>{pct}%</b> of the week", {pct: Math.round((n.staffedShare || 0) * 100)});
+      if(f.why === "limit") return tt("sp.need.limit", "Held back by <b>Produce up to</b>");
+      return tt("sp.need.instep", "In step");
+    case "made": return tt("sp.need.made", "Made in-house");
     default: return spEsc(szTip(f));
   }
 }
@@ -19437,15 +19653,15 @@ function spInputs(site){
     const el = [spKeyTok(n.slug, n.item), szEl(f)].filter(Boolean);
     const top = n.directImport
       ? (Number.isFinite(n.importWeekly) ? n.importSmart ? spLevelCell(n.importTarget ?? n.importWeekly, n.importPlainAfter, "")
-        : `${spNum(n.importWeekly)}<small>/wk</small>` : "—")
-      : !n.target ? `<span class="sp-noplan">${spIcon("route")}no plan</span>`
+        : `${spNum(n.importWeekly)}<small>${tt("sp.stock.perweek", "/wk")}</small>` : "—")
+      : !n.target ? `<span class="sp-noplan">${spIcon("route")}${tt("sp.noplan", "no plan")}</span>`
       : Number.isFinite(f.setTo) ? spUp(spNum(n.target), spNum(f.setTo), f.st === "short")
       : spNum(n.target);
     /* Nothing arrived is only a reading where the delivery log is long enough
        to be read; otherwise the column is blank, not zero. */
     const arrived = !n.known ? "—"
       : n.arrives ? spNum(n.arrives) : `<span class="sp-red">0</span>`;
-    const from = n.directImport ? "direct import"
+    const from = n.directImport ? tt("sp.inputs.direct", "direct import")
       : n.from === null || n.from === undefined ? "—" : siteLink(D.businesses[n.from]);
     return `<tr data-lines="${attr(spNeedLines(site, n))}" data-el="${attr(el.join(" "))}" data-read="${
       attr(spNeedRead(n, f))}"><td class="l">${spEsc(n.item)} ${szChip(f)}</td><td>${spNum(szUse(f, n.perDay))}${szRamp(f)}</td><td>${top}</td>
@@ -19466,7 +19682,7 @@ function spHouse(){
     const cls = SP_HOUSE_ON.includes(at) ? "sp-win sp-win-on" : SP_HOUSE_LATE.includes(at) ? "sp-win sp-win-late" : "sp-win";
     wins += `<rect class="${cls}" x="${130 + c * 40}" y="${48 + r * 34}" width="22" height="22" rx="2" style="transition-delay:${(r * 3 + c) * 45}ms"></rect>`;
   }
-  return `<svg viewBox="0 0 360 230" role="img" aria-label="An apartment block at night">
+  return `<svg viewBox="0 0 360 230" role="img" aria-label="${attr(tt("sp.home.house", "An apartment block at night"))}">
     <circle class="sp-moon" cx="292" cy="46" r="15"></circle>
     <circle class="sp-star" cx="60" cy="40" r="1.6"></circle><circle class="sp-star" cx="96" cy="76" r="1.2"></circle>
     <circle class="sp-star" cx="250" cy="92" r="1.4"></circle><circle class="sp-star" cx="326" cy="112" r="1.2"></circle>
@@ -19490,14 +19706,14 @@ function spHomePanel(home){
   const rent = home.rent || 0;
   const day = Math.round(rent);
   const code = HOOD_TAGS[home.hood] || "";
-  const tiles = spTile("Rent / day", fmt(day))
-    + spTile("Rent / week", fmt(day * 7))
-    + spTile("Size", m === null ? "—" : `${num(m)}<small>m²</small>`)
-    + spTile("Per m²", m === null || !rent ? "—" : `$${(rent / m).toFixed(2)}<small>/day</small>`);
+  const tiles = spTile(tt("sp.home.rentday", "Rent / day"), fmt(day))
+    + spTile(tt("sp.home.rentweek", "Rent / week"), fmt(day * 7))
+    + spTile(tt("sp.home.size", "Size"), m === null ? "—" : `${num(m)}<small>m²</small>`)
+    + spTile(tt("sp.home.perm2", "Per m²"), m === null || !rent ? "—" : `${tt("sp.home.perm2.v", "${x:.2f}", {x: rent / m})}<small>${tt("sp.perday", "/day")}</small>`);
   return `${siteCrumbs(home.key, home.address, false)}
     <div class="sitehead rv">
       ${code ? `<span class="bullet">${spEsc(code)}</span>` : ""}
-      <div><h2>${spEsc(home.address)}${mapButton(home.key, home.address)}</h2><span class="sub">Home${
+      <div><h2>${spEsc(home.address)}${mapButton(home.key, home.address)}</h2><span class="sub">${tt("sp.home.kind", "Home")}${
         home.hood ? ` · ${spEsc(hoodName(home.hood))}` : ""}</span></div>
     </div>
     <div class="sp-home rv" data-block="home">
@@ -19629,35 +19845,39 @@ function drawSite(){
      whatever language the words on screen are in (enOf(), web/i18n.js). */
   const limitEn = n => typeof enOf === "function" ? enOf(n, "limit") : n.limit;
   const capSentence = n => limitEn(n) === "the building"
-    ? `At the building's capacity ${n.hours} hours a week (${n.when}); ${fmt(n.throughput)}/day of trade goes through those hours.`
-    : `At the ceiling ${n.hours} hours a week (${n.when}); ${n.limit} ${n.limits > 1 ? "are" : "is"} the limit, so
-         the answer is ${n.fix}. ${fmt(n.throughput)}/day of trade goes through those
-         hours; the save records nothing about what is turned away above them.`;
+    ? tt("sp.cap.door", "At the building's capacity {hours} hours a week ({when}); {w}/day of trade goes through those hours.",
+      {hours: n.hours, when: n.when, w: fmt(n.throughput)})
+    : tt("sp.cap.ceiling", {
+      one: "At the ceiling {hours} hours a week ({when}); {limit} is the limit, so the answer is {fix}. {w}/day of trade goes through those hours; the save records nothing about what is turned away above them.",
+      other: "At the ceiling {hours} hours a week ({when}); {limit} are the limit, so the answer is {fix}. {w}/day of trade goes through those hours; the save records nothing about what is turned away above them."},
+      {n: n.limits > 1 ? 2 : 1, hours: n.hours, when: n.when, limit: n.limit, fix: n.fix, w: fmt(n.throughput)});
   /* The idle chip reads the whole week, as the site's Today line does: the
      same staff-hours, the same hours and the same wages. */
   const idleWeek = idleNote ? spIdleWeek(idleNote) : null;
-  const idleSentence = idleWeek ? `${idleWeek.spare} staff-hours a week that buy nothing: ${idleWeek.runs} for ${
-         idleWeek.seen} customers an hour; about ${fmt(idleWeek.worth)}/day of wages.` : "";
-  const idleRead = idleWeek ? `<b>${idleWeek.spare} staff-hours a week</b> · ${spEsc(idleWeek.runs)} · ${
-    fmt(idleWeek.worth)}/day of wages` : "";
+  const idleSentence = idleWeek ? tt("sp.idle.sentence", "{n} staff-hours a week that buy nothing: {runs} for {seen} customers an hour; about {w}/day of wages.",
+    {n: idleWeek.spare, runs: idleWeek.runs, seen: idleWeek.seen, w: fmt(idleWeek.worth)}) : "";
+  const idleRead = idleWeek ? tt("sp.idle.read", "<b>{n} staff-hours a week</b> · {runs} · {w}/day of wages",
+    {n: idleWeek.spare, runs: spEsc(idleWeek.runs), w: fmt(idleWeek.worth)}) : "";
   /* Arrived from that line, the hours block opens on the week it names. */
   const idleArrived = !!idleWeek && finds.some(a => a.id === spArrived && a.group === "idlestaff");
 
   /* The costs behind the profit tile, on hover. */
   const costs = [
-    ["Goods", b.cogs], ["Wages", b.wages], ["Rent", b.rent],
-    ["Marketing", b.marketing], ["Theft", b.theft], ["Licensing", b.licensing],
+    ["goods", b.cogs], ["wages", b.wages], ["rent", b.rent],
+    ["marketing", b.marketing], ["theft", b.theft], ["licensing", b.licensing],
   ].filter(([, v]) => v);
   const costTip = costs.length
-    ? `Yesterday's costs: ${costs.map(([l, v]) => `${l.toLowerCase()} ${fmt(v)}`).join(", ")}.`
-    : "No costs recorded yesterday.";
+    ? tt("sp.cost.tip", "Yesterday's costs: {items}.", {items: costs.map(([id, v]) =>
+      tt("sp.cost.tipitem", "{what} {w}", {what: SP_COST_LOWER[id], w: fmt(v)})).join(", ")})
+    : tt("sp.cost.none", "No costs recorded yesterday.");
   /* An office is not held by a door but by the workstations it has, so its
      fourth tile counts those instead. */
-  const capLabel = sp && office ? "Workstations" : "Building capacity";
+  const capLabel = sp && office ? tt("sp.tile.desks", "Workstations") : tt("sp.tile.door", "Building capacity");
   const capTile = !grid ? "—"
-    : sp && office ? `${grid.stationCount}<small ${SMALL}>${grid.capHours ? `· ${grid.capHours} h/wk full` : ""}</small>`
-    : grid.cap ? `${grid.cap}<small ${SMALL}>/h · ${grid.capHours} h/wk at the ceiling</small>`
-    : `—<small ${SMALL}>no building capacity${grid.capHours ? ` · ${grid.capHours} h/wk at the ceiling` : ""}</small>`;
+    : sp && office ? `${grid.stationCount}<small ${SMALL}>${grid.capHours ? tt("sp.tile.full", "· {n} h/wk full", {n: grid.capHours}) : ""}</small>`
+    : grid.cap ? `${grid.cap}<small ${SMALL}>${tt("sp.tile.cap", "/h · {n} h/wk at the ceiling", {n: grid.capHours})}</small>`
+    : `—<small ${SMALL}>${grid.capHours ? tt("sp.tile.nodoor.cap", "no building capacity · {n} h/wk at the ceiling", {n: grid.capHours})
+      : tt("sp.tile.nodoor", "no building capacity")}</small>`;
   /* Week on week when two full weeks stand behind it. A ready trend whose
      previous week took nothing has no percentage to show, as wow() has it, so
      it reads as a dash. Not ready: how far into the fortnight this site is
@@ -19667,27 +19887,28 @@ function drawSite(){
   const trendChip = !sp ? ""
     : ready && trend.change !== null && trend.change !== undefined
       ? chipHtml(trend.change < 0 ? "bad" : "dim", `${icon(trend.change < 0 ? "trend_dn" : "trend_up")}${pct(trend.change)}`,
-          `${compact(trend.last7)} this week against ${compact(trend.prev7)} the week before`)
+          tt("sp.trend.tip", "{now} this week against {before} the week before", {now: compact(trend.last7), before: compact(trend.prev7)}))
     : ready
-      ? chipHtml("none", "—", `${compact(trend.last7)} this week; the week before took nothing to compare it with`)
+      ? chipHtml("none", "—", tt("sp.trend.nothing", "{now} this week; the week before took nothing to compare it with", {now: compact(trend.last7)}))
     : b.daysOpen < SP_TREND_MIN
-      ? chipHtml("none", `day ${b.daysOpen} of ${SP_TREND_MIN}`,
-          "A trend needs two full weeks. The first days are a ramp, not a trend.")
-      : chipHtml("none", "—", "No full fortnight of trading history here yet");
+      ? chipHtml("none", tt("sp.trend.ramp", "day {n} of {of}", {n: b.daysOpen, of: SP_TREND_MIN}),
+          tt("sp.trend.ramp.tip", "A trend needs two full weeks. The first days are a ramp, not a trend."))
+      : chipHtml("none", "—", tt("sp.trend.none", "No full fortnight of trading history here yet"));
   /* On the shop and office panel the tiles carry their own second line: two
      fortnight sparks, the cost bar that replaces the profit tooltip, and the
      ceilings. A day in the red flags the profit tile. */
   const tone = ready && trend.change ? (trend.change < 0 ? "dn" : "up") : "";
   /* A depot and a factory carry their own tiles inside spBody. */
   const stats = !shelved ? "" : `
-    <div class="sstat"><span class="lab">Revenue yesterday</span><div class="v">${fmt(b.revenue)}${trendChip}</div>${
+    <div class="sstat"><span class="lab">${tt("sp.tile.revenue", "Revenue yesterday")}</span><div class="v">${fmt(b.revenue)}${trendChip}</div>${
       sp ? spSpark(b.series, "revenue", true, tone) : ""}</div>
-    <div class="sstat"><span class="lab">Customers</span><div class="v">${b.customers ? num(b.customers) : "—"}${
-      b.basket === null ? "" : `<small ${SMALL}>$${b.basket.toFixed(2)}/${office ? "hour billed" : "visit"}</small>`}</div>${
+    <div class="sstat"><span class="lab">${tt("sp.tile.customers", "Customers")}</span><div class="v">${b.customers ? num(b.customers) : "—"}${
+      b.basket === null ? "" : `<small ${SMALL}>${office ? tt("sp.tile.basket.hour", "${x:.2f}/hour billed", {x: b.basket})
+        : tt("sp.tile.basket", "${x:.2f}/visit", {x: b.basket})}</small>`}</div>${
       sp ? spSpark(b.series, "customers", false, "") : ""}</div>
-    <div class="sstat"${sp ? "" : ` data-tip="${attr(costTip)}"`}><span class="lab">Profit</span>${
+    <div class="sstat"${sp ? "" : ` data-tip="${attr(costTip)}"`}><span class="lab">${tt("sp.tile.profit", "Profit")}</span>${
       sp && b.profit < 0 ? `<i class="sp-flag"></i>` : ""}<div class="v ${sign(b.profit)}">${fmt(b.profit)}${
-      b.margin === null ? "" : `<small ${SMALL}>${b.margin.toFixed(1)}% margin</small>`}</div>${
+      b.margin === null ? "" : `<small ${SMALL}>${tt("sp.tile.margin", "{x:.1f}% margin", {x: b.margin})}</small>`}</div>${
       sp ? spCostBar(costs, b.profit) : ""}</div>
     <div class="sstat"><span class="lab">${capLabel}</span><div class="v">${capTile}</div>${
       sp ? spCeiling(office, limits) : ""}</div>`;
@@ -19700,9 +19921,14 @@ function drawSite(){
   const people = b.people || [];
   const offToday = people.filter(p => p.absent).length;
   const roleTip = b.crew.length
-    ? `${b.crew.map(c => `${c.role} ${c.count > 1 ? `×${c.count} · ` : "· "}${fmt(c.daily)}/day${
-        c.absent ? ` (${c.absent} off)` : ""}`).join("; ")}.${offToday ? ` ${plural(offToday, "person", "people")} off today.` : ""}`
+    ? `${b.crew.map(c => `${c.count > 1 ? tt("sp.crew.tip.many", "{role} ×{n} · {w}/day", {role: c.role, n: c.count, w: fmt(c.daily)})
+        : tt("sp.crew.tip.one", "{role} · {w}/day", {role: c.role, w: fmt(c.daily)})}${
+        c.absent ? ` (${tt("sp.crew.off", "{n} off", {n: c.absent})})` : ""}`).join("; ")}.${offToday
+        ? ` ${tt("sp.crew.tip.offtoday", {one: "{n} person off today.", other: "{n} people off today."}, {n: offToday})}` : ""}`
     : "";
+  /* The Crew heading's aside: how many, and what they cost a day. */
+  const crewQuiet = b.staff ? tt("sp.crew.quiet", {one: "{n} person · {w}/day", other: "{n} people · {w}/day"}, {n: b.staff, w: fmt(b.staffCost)})
+    : tt("sp.crew.quiet.none", "no people");
   const uniformGaps = sp ? b.uniformGaps : null;
   /* The Crew pills and the Roster's people are two different lists out of the
      save -- one folded into roles for the page, the other indexed for the
@@ -19718,14 +19944,17 @@ function drawSite(){
   const pills = !spAny && people.length > CREW_MAX
     /* A tip is set as textContent, so attr() alone carries it: escaping the
        name for markup first would show the entities. */
-    ? people.slice(0, CREW_MAX).map(personPill).join("") + `<span class="person more" data-tip="${attr(people.slice(CREW_MAX).map(p => `${p.name} (${p.role}${p.absent ? ", off today" : ""})`).join(", "))}"><i>+</i>${
-        people.length - CREW_MAX} more</span>`
+    ? people.slice(0, CREW_MAX).map(personPill).join("") + `<span class="person more" data-tip="${attr(people.slice(CREW_MAX).map(p => p.absent
+        ? tt("sp.crew.more.off", "{name} ({role}, off today)", {name: p.name, role: p.role})
+        : tt("sp.crew.more.person", "{name} ({role})", {name: p.name, role: p.role})).join(", "))}"><i>+</i>${
+        tt("sp.crew.moren", "{n} more", {n: people.length - CREW_MAX})}</span>`
     : people.length
       ? people.map(personPill).join("")
       : b.crew.length
         ? b.crew.map(c => `<span class="person${c.absent && c.absent >= c.count ? " off" : ""}"><i>${spEsc(roleCode(c.role))}</i>${spEsc(c.role)}<small>${
-            c.count > 1 ? `${c.count} · ` : ""}${fmt(c.daily)}/day${c.absent ? ` · <span class="off">${c.absent} off</span>` : ""}</small></span>`).join("")
-        : `<span class="quiet">Nobody assigned.</span>`;
+            c.count > 1 ? `${c.count} · ` : ""}${tt("sp.crew.daily", "{w}/day", {w: fmt(c.daily)})}${c.absent
+            ? ` · <span class="off">${tt("sp.crew.off", "{n} off", {n: c.absent})}</span>` : ""}</small></span>`).join("")
+        : `<span class="quiet">${tt("sp.crew.nobody", "Nobody assigned.")}</span>`;
   const crew = folded ? spRoster(people, uniformGaps, rosterPeople) : `<div class="crew">${pills}</div>`;
 
   /* A store's real shelves are what its type is built around; the paper bag
@@ -19754,15 +19983,15 @@ function drawSite(){
   };
   const products = !shelved ? "" : office ? (shelves.length ? `
     <table>
-      <thead><tr><th>Fee</th><th>Hours billed / day</th><th>Revenue / day</th></tr></thead>
+      <thead><tr><th>${tt("sp.fees.col.fee", "Fee")}</th><th>${tt("sp.fees.col.hours", "Hours billed / day")}</th><th>${tt("sp.shelf.col.revenue", "Revenue / day")}</th></tr></thead>
       <tbody>${shelves.map(l => `<tr data-el="${attr(spKeyTok(l.slug, l.item))}">
-          <td class="l">${l.item}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
+          <td class="l">${l.item}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : tt("sp.shelf.noprice", "no price")}</span></td>
           <td>${num(l.soldPerDay)}</td>
-          <td>${fmt(l.revenue)}</td></tr>`).join("")}</tbody></table>` : `<p class="quiet">Nothing billed here yet.</p>`)
+          <td>${fmt(l.revenue)}</td></tr>`).join("")}</tbody></table>` : `<p class="quiet">${tt("sp.fees.none", "Nothing billed here yet.")}</p>`)
     : shelves.length ? `
     <table>
-      <thead><tr><th>Product</th><th>Sells / day</th><th>Busiest</th><th>Revenue / day</th>
-        <th>Top-up</th><th>Pressure</th><th>On hand</th></tr></thead>
+      <thead><tr><th>${tt("sp.shelf.col.product", "Product")}</th><th>${tt("sp.shelf.col.sells", "Sells / day")}</th><th>${tt("sp.shelf.col.busiest", "Busiest")}</th><th>${tt("sp.shelf.col.revenue", "Revenue / day")}</th>
+        <th>${tt("sp.shelf.col.topup", "Top-up")}</th><th>${tt("sp.shelf.col.pressure", "Pressure")}</th><th>${tt("sp.shelf.col.onhand", "On hand")}</th></tr></thead>
       <tbody>${shelves.map(l => {
         const t = targets[l.slug], f = shelfFact(l);
         /* A top-up the fact says to raise is the shelf emptying before the
@@ -19772,26 +20001,29 @@ function drawSite(){
         const over = sp && t && (t.target || t.wholesale) && Number.isFinite(f.setTo) && (f.st === "short" || f.st === "tight");
         /* A wholesale store's weekly delivery feeds the shelf where no top-up does. */
         const deal = t && !t.target && t.wholesale ? t.wholesale : null;
-        const busiest = t && t.peakDay ? `${t.peakDay.slice(0, 3)} ${num(t.peakSold)}` : "—";
+        /* Python names the day in English: shown as the UI's own short weekday. */
+        const peakWd = t && t.peakDay ? WEEK_FULL.indexOf(t.peakDay) : -1;
+        const busiest = t && t.peakDay ? `${peakWd >= 0 ? spWd(peakWd) : t.peakDay.slice(0, 3)} ${num(t.peakSold)}` : "—";
         /* The shelf's word, as Checks says it; a shelf Python did not judge has none. */
         const word = sp && supplyFact(siteTab, l.slug) ? ` ${szChip(f)}` : "";
         return `<tr data-el="${attr(spKeyTok(l.slug, l.item))}${over ? " outruns" : ""}">
-          <td class="l">${l.item}${word}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
+          <td class="l">${l.item}${word}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : tt("sp.shelf.noprice", "no price")}</span></td>
           <td>${num(l.soldPerDay)}</td>
           <td>${over && !deal ? `<span class="sp-red">${busiest}</span>` : busiest}</td>
           <td>${fmt(l.revenue)}</td>
           <td>${deal ? `${over ? `<span class="sp-up${f.st === "short" ? " bad" : ""}" data-el="raise">${num(deal)} ${spIcon("right")} <b>${
-                num(f.setTo)}</b></span>` : num(deal)}<small ${SMALL} data-tip="${attr(`Delivered by a wholesale store${
-                t.wholesaleDay ? ` each ${t.wholesaleDay}` : " each week"}`)}">/wk wholesale</small>`
-            : !t || !t.target ? (sp ? `<span class="sp-noplan" data-el="noplan">${spIcon("route")}no plan</span>` : "—")
+                num(f.setTo)}</b></span>` : num(deal)}<small ${SMALL} data-tip="${attr(t.wholesaleDay
+                ? tt("sp.shelf.wholesale.day", "Delivered by a wholesale store each {day}", {day: WEEK_FULL.includes(t.wholesaleDay) ? ttDay(WEEK_FULL.indexOf(t.wholesaleDay)) : t.wholesaleDay})
+                : tt("sp.shelf.wholesale.week", "Delivered by a wholesale store each week"))}">${tt("sp.stock.wholesale", "/wk wholesale")}</small>`
+            : !t || !t.target ? (sp ? `<span class="sp-noplan" data-el="noplan">${spIcon("route")}${tt("sp.noplan", "no plan")}</span>` : "—")
             : over ? `<span class="sp-up${f.st === "short" ? " bad" : ""}" data-el="raise">${num(t.target)} ${spIcon("right")} <b>${
                 num(f.setTo)}</b></span>` : num(t.target)}</td>
           <td class="gauge${f.st === "short" ? " low" : ""}">${gauge(t, f)}</td>
           <td>${sp && !l.units ? `<span class="sp-red">${num(l.units)}</span>` : num(l.units)}</td></tr>`;
-      }).join("")}</tbody></table>` : `<p class="quiet">Nothing stocked here.</p>`;
+      }).join("")}</tbody></table>` : `<p class="quiet">${tt("sp.shelf.none", "Nothing stocked here.")}</p>`;
   const shelfMore = shelved && !office && sideShelves.length ? `
     <p class="quiet" style="margin:12px 0 0"><a class="link" href="#" id="shelfToggle" aria-expanded="${showAllShelves}">${
-      showAllShelves ? "hide the odds and ends" : `show ${sideShelves.length} more: bags, drinks, odds and ends`}</a></p>` : "";
+      showAllShelves ? tt("sp.shelf.hide", "hide the odds and ends") : tt("sp.shelf.show", "show {n} more: bags, drinks, odds and ends", {n: sideShelves.length})}</a></p>` : "";
 
   /* The staff's own demands the site does not meet, each with how many hold it;
      health insurance and a happy boss are among them, settled company-wide.
@@ -19800,37 +20032,39 @@ function drawSite(){
      passed says so, or the player sees a right roster and a wrong board. */
   const wants = b.staffDemands || [];
   const spWorkedOver = d => { const w = d.workedOver; return w
-    ? `${w.count === d.count ? "" : w.count + " "}worked over ${w.max} ${w.unit} this week` : ""; };
-  const demandNote = wants.length ? `<p class="quiet" style="margin:12px 0 0">Unmet staff demands: ${
-    wants.map(d => `${d.demand} ×${d.count}${d.company ? " (company-wide)" : ""}${
-      spWorkedOver(d) ? ` (${spWorkedOver(d)})` : ""}`).join(" · ")}${
-    b.quitWarnings ? ` · <b>${b.quitWarnings} ${b.quitWarnings === 1 ? "has" : "have"} warned they will quit</b>` : ""}</p>` : "";
+    ? w.count === d.count ? tt("sp.dem.worked.all", "worked over {max} {unit} this week", {max: w.max, unit: w.unit})
+      : tt("sp.dem.worked", "{n} worked over {max} {unit} this week", {n: w.count, max: w.max, unit: w.unit}) : ""; };
+  const demandNote = wants.length ? `<p class="quiet" style="margin:12px 0 0">${tt("sp.dem.note", "Unmet staff demands: {list}", {list:
+    wants.map(d => `${d.demand} ×${d.count}${d.company ? ` (${tt("sp.dem.companywide", "company-wide")})` : ""}${
+      spWorkedOver(d) ? ` (${spWorkedOver(d)})` : ""}`).join(" · ")})}${
+    b.quitWarnings ? ` · <b>${tt("sp.dem.quit", {one: "{n} has warned they will quit", other: "{n} have warned they will quit"}, {n: b.quitWarnings})}</b>` : ""}</p>` : "";
   const demandChips = !spAny ? "" : wants.length || b.quitWarnings ? `<div class="sp-dems">${
     /* The tip lands as textContent: attr() alone, no markup escaping. */
-    wants.map(d => `<span class="sp-dem" data-el="demand${d.company ? " company" : ""}" data-tip="${attr(`${d.demand} for ${d.count} · ${
-      SP_PRIORITY[d.priority] || "priority " + d.priority}${d.company ? " · settled company-wide, not here" : ""}${
+    wants.map(d => `<span class="sp-dem" data-el="demand${d.company ? " company" : ""}" data-tip="${attr(`${tt("sp.dem.tip", "{demand} for {n} · {priority}",
+      {demand: d.demand, n: d.count, priority: SP_PRIORITY[d.priority] || tt("sp.pri.n", "priority {n}", {n: d.priority})})}${
+      d.company ? ` · ${tt("sp.dem.settled", "settled company-wide, not here")}` : ""}${
       spWorkedOver(d) ? " · " + spWorkedOver(d) : ""}`)}">${
       spI(spDemandIcon(d.slug))}${spEsc(d.demand)} <b>×${d.count}</b>${spPri(d.priority)}${
       d.company ? `<span class="sp-i sp-co">${icon("company")}</span>` : ""}</span>`).join("")}${
     /* The mark and the count; the sentence is the chip's tip, not the page's. */
-    b.quitWarnings ? `<span class="sp-dem quit" data-el="quit" data-tip="${attr(`${
-      plural(b.quitWarnings, "person", "people")} here ${b.quitWarnings === 1 ? "has" : "have"} warned they will quit`)}">${
+    b.quitWarnings ? `<span class="sp-dem quit" data-el="quit" data-tip="${attr(tt("sp.dem.quit.tip",
+      {one: "{n} person here has warned they will quit", other: "{n} people here have warned they will quit"}, {n: b.quitWarnings}))}">${
       spI("exit")}<b>${b.quitWarnings}</b></span>` : ""}</div>` : "";
 
-  const sub = [b.type, b.address, b.neighbourhood && hoodName(b.neighbourhood), `opened day ${b.opened}`,
-    depot ? `supplied from ${siteLink(depot)}` : ""].filter(Boolean).join(" · ");
+  const sub = [b.type, b.address, b.neighbourhood && hoodName(b.neighbourhood), tt("sp.sub.opened", "opened day {n}", {n: b.opened}),
+    depot ? tt("sp.sub.from", "supplied from {site}", {site: siteLink(depot)}) : ""].filter(Boolean).join(" · ");
   /* The head marks: whether the doors are open, and — where they are not — the
      six pre-flight checks that say why, and the site's place by the profit of
      its last seven days. */
   const headMarks = !sp ? "" : `
-      <span class="sp-lamp${b.revenue ? "" : " off"}" data-tip="${b.revenue ? "Trading" : "Not trading"}"></span>${
+      <span class="sp-lamp${b.revenue ? "" : " off"}" data-tip="${attr(b.revenue ? tt("sp.head.trading", "Trading") : tt("sp.head.nottrading", "Not trading"))}"></span>${
       /* The checks belong to the not-trading finding, so they are drawn only
          where that finding looked: a site young enough for _alerts() to have
          written the list. An older silent shop has no list and no lamps. */
       b.notTrading === undefined ? "" : `<span class="sp-pre">${spPreflight(b).map(p =>
         `<span class="${p.state}" data-check="${p.slug}" data-tip="${attr(
           p.state === "no" && SP_CHECK_NO[p.slug]
-          || SP_CHECK_STATE[p.state] + SP_CHECK_WORD[p.slug])}">${spIcon(SP_CHECK_ICON[p.slug])}</span>`).join("")}</span>`}
+          || spCheckTip(p.state, SP_CHECK_WORD[p.slug]))}">${spIcon(SP_CHECK_ICON[p.slug])}</span>`).join("")}</span>`}
       ${spRankHtml(rank)}`;
   /* The hour chips: one per ceiling the busy hours ran into — the site can be
      held by staffing at night and by its door by day — and one for idle
@@ -19838,8 +20072,10 @@ function drawSite(){
   const hourChips = !sp ? "" : `<div class="sp-hchips">${
     capNotes.map(n => `<span class="sp-hchip cap${limitEn(n) === "the building" ? " sp-bcap" : ""}" data-show="${attr(spLimitShow(n, grid))}" data-limit="${attr(limitEn(n))}" data-tip="${
       attr(capSentence(n).replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
-      spLimitIcons(limitEn(n), office).map(spI).join("")}<b>${n.hours} h/wk</b> at ${limitEn(n) === "the building" ? "building capacity" : "the ceiling"} · ${n.when} · ${
-      fmt(n.throughput)}/day through it${n.fix ? `<span class="fix">${spI("right")}${n.fix}</span>` : ""}</span>`).join("") +
+      spLimitIcons(limitEn(n), office).map(spI).join("")}${limitEn(n) === "the building"
+        ? tt("sp.chip.door", "<b>{n} h/wk</b> at building capacity · {when} · {w}/day through it", {n: n.hours, when: n.when, w: fmt(n.throughput)})
+        : tt("sp.chip.ceiling", "<b>{n} h/wk</b> at the ceiling · {when} · {w}/day through it", {n: n.hours, when: n.when, w: fmt(n.throughput)})}${
+      n.fix ? `<span class="fix">${spI("right")}${n.fix}</span>` : ""}</span>`).join("") +
     (idleWeek ? `<span class="sp-hchip idle" data-show="idle" data-tip="${attr(idleSentence.replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
       spI(idleNote.office ? "monitor" : "counter")}${idleRead}</span>` : "")}</div>`;
   /* An office's own second block: the workstations beside its standards. */
@@ -19853,8 +20089,8 @@ function drawSite(){
   const sevens = sp ? spSevens(b.series, D.meta.day) : null;
   const bands = ready && sevens && sevens.last && sevens.prev ? sevens : null;
   const profitRead = !bands ? ""
-    : `<b>${fmt(bands.last.avg)}</b>/day over the last 7 against <b>${fmt(bands.prev.avg)}</b>/day the week before`;
-  const bandRead = w => `<b>days ${b.series[w.at].day}–${b.series[w.to].day}</b> ${fmt(w.avg)} a day`;
+    : tt("sp.profit.read", "<b>{now}</b>/day over the last 7 against <b>{before}</b>/day the week before", {now: fmt(bands.last.avg), before: fmt(bands.prev.avg)});
+  const bandRead = w => tt("sp.profit.band", "<b>days {from}–{to}</b> {w} a day", {from: b.series[w.at].day, to: b.series[w.to].day, w: fmt(w.avg)});
   const profitChart = !sp ? {} : bands
     ? {bands: [{from: bands.prev.at, to: bands.prev.to, avg: bands.prev.avg, cls: "", read: bandRead(bands.prev)},
                {from: bands.last.at, to: bands.last.to, avg: bands.last.avg, cls: "last", read: bandRead(bands.last)}]}
@@ -19876,43 +20112,42 @@ function drawSite(){
       .reduce((w, r) => !w || r.cover < w.cover ? r : w, null);
     spBody = `
     <div class="sstats rv" data-block="tiles" id="sp-tiles">
-      ${spTile("Cost / day", costs.length ? fmt(spend) : "—", spCostBar(costs, null))}
-      ${spTile("On the floor", `${spNum(onFloor)}<small ${SMALL}>${
-        plural(((b.lines) || []).length, "line")}</small>`)}
-      ${thin ? spTile("Thinnest", `<span class="${thin.short ? "neg" : ""}">${thin.cover.toFixed(1)} d</span><small class="sp-tname" ${
+      ${spTile(tt("sp.tile.cost", "Cost / day"), costs.length ? fmt(spend) : "—", spCostBar(costs, null))}
+      ${spTile(tt("sp.tile.floor", "On the floor"), `${spNum(onFloor)}<small ${SMALL}>${
+        tt("sp.n.lines", {one: "{n} line", other: "{n} lines"}, {n: ((b.lines) || []).length})}</small>`)}
+      ${thin ? spTile(tt("sp.tile.thinnest", "Thinnest"), `<span class="${thin.short ? "neg" : ""}">${tt("sp.tile.days", "{x:.1f} d", {x: thin.cover})}</span><small class="sp-tname" ${
         SMALL}>${spEsc(thin.item)}</small>`, spMeter(thin.cover / SP_RAIL_DAYS * 100, thin.short), thin.short)
-        : spTile("Thinnest", "—")}
-      ${spTile("Feeds", `${feedRows.length}<small ${SMALL}>${feedRows.length === 1 ? "site" : "sites"} · ${
-        spNum(perDay)}/day</small>`)}
+        : spTile(tt("sp.tile.thinnest", "Thinnest"), "—")}
+      ${spTile(tt("sp.tile.feeds", "Feeds"), `${feedRows.length}<small ${SMALL}>${
+        tt("sp.tile.feeds.sub", {one: "site · {rate}/day", other: "sites · {rate}/day"}, {n: feedRows.length, rate: spNum(perDay)})}</small>`)}
     </div>
     <section class="sec rv" data-block="stock" id="sp-stock" data-readzone>
-      ${sechead("Stock", {icon: "crate", why: `The next seven days, left to right from today. A filled cell is a day covered, red hatching is a day dry, and the truck sits on the day it lands.${
-        rows.length ? "" : " Nothing is held or imported here yet."}`, aside: `<span class="seg" id="spSizing"></span>`})}
+      ${sechead(tt("sp.stock.title", "Stock"), {icon: "crate", why: `${tt("sp.stock.why", "The next seven days, left to right from today. A filled cell is a day covered, red hatching is a day dry, and the truck sits on the day it lands.")}${
+        rows.length ? "" : ` ${tt("sp.stock.why.none", "Nothing is held or imported here yet.")}`}`, aside: `<span class="seg" id="spSizing"></span>`})}
       ${rows.length ? `<div class="scrollx"><table>
-        <thead><tr><th>Line</th><th>On hand</th><th>Draw / day</th><th class="l">${
-          spDays(D.meta.day % 7)}</th><th></th><th>Weekly order</th><th>Feeds</th></tr></thead>
+        <thead><tr><th>${tt("sp.stock.col.line", "Line")}</th><th>${tt("sp.stock.col.onhand", "On hand")}</th><th>${tt("sp.stock.col.draw", "Draw / day")}</th><th class="l">${
+          spDays(D.meta.day % 7)}</th><th></th><th>${tt("sp.stock.col.order", "Weekly order")}</th><th>${tt("sp.stock.col.feeds", "Feeds")}</th></tr></thead>
         <tbody>${rows.map(r => `<tr data-el="${attr(r.el.join(" "))}" data-read="${attr(r.read)}">
           <td class="l">${spEsc(r.item)}${r.chip ? ` ${r.chip}` : ""}</td><td>${r.hand === 0
             ? `<span class="sp-red">0</span>` : spNum(r.hand)}</td><td>${r.draw}</td>
           <td class="l">${r.rail}</td><td>${r.act}</td><td>${r.order}</td>
           <td>${r.feeds || "—"}</td></tr>`).join("")}</tbody></table></div>`
-        : spNone("No stock")}
-      <div class="sp-read sp-readout">${thin ? `Thinnest · <b>${spEsc(thin.item)}</b> · ${thin.read}`
-        : rows.length ? "Nothing here is drawn down" : "&nbsp;"}</div>
+        : spNone(tt("sp.stock.none", "No stock"))}
+      <div class="sp-read sp-readout">${thin ? tt("sp.stock.thinnest", "Thinnest · <b>{item}</b> · {read}", {item: spEsc(thin.item), read: thin.read})
+        : rows.length ? tt("sp.stock.nodraw", "Nothing here is drawn down") : "&nbsp;"}</div>
     </section>
     <div class="duo sec" style="grid-template-columns:1fr 1fr">
       <section class="rv" data-block="feeds" id="sp-feeds">
-        ${sechead("Feeds", {icon: "pipe", quiet: perDay ? `${spNum(perDay)}/day` : "",
-          why: feedRows.length ? null : "Nothing on a plan draws out of this site."})}
+        ${sechead(tt("sp.feeds.title", "Feeds"), {icon: "pipe", quiet: perDay ? tt("sp.perday.n", "{n}/day", {n: spNum(perDay)}) : "",
+          why: feedRows.length ? null : tt("sp.feeds.why.none", "Nothing on a plan draws out of this site.")})}
         ${feedRows.length ? `<div class="sp-feeds">${feedRows.map(r => {
           const site = D.businesses[r.s];
           return `<div class="sp-feed">${hoodHtml(site)}<span>${spEsc(shortName(site))}</span><span class="sp-tr"><i style="--w:${
-            (r.perDay / feedRows[0].perDay * 100).toFixed(0)}%"></i></span><span class="sp-rate">${spNum(r.perDay)}/day</span></div>`;
-        }).join("")}</div>` : spNone("No feeds")}
+            (r.perDay / feedRows[0].perDay * 100).toFixed(0)}%"></i></span><span class="sp-rate">${tt("sp.perday.n", "{n}/day", {n: spNum(r.perDay)})}</span></div>`;
+        }).join("")}</div>` : spNone(tt("sp.feeds.none", "No feeds"))}
       </section>
       <section class="rv" data-block="crew" id="sp-crew">
-        ${sechead("Crew", {icon: "crew", why: roleTip || null, quiet: `${b.staff || "no"} ${
-          b.staff === 1 ? "person" : "people"}${b.staff ? ` · ${fmt(b.staffCost)}/day` : ""}`})}
+        ${sechead(tt("sp.crew.title", "Crew"), {icon: "crew", why: roleTip || null, quiet: crewQuiet})}
         ${crew}${demandChips}
       </section>
     </div>`;
@@ -19932,35 +20167,35 @@ function drawSite(){
     const blind = unnamed.reduce((t, u) => t + (Number.isFinite(u.machines) ? u.machines : 0), 0);
     spBody = `
     <div class="sstats rv" data-block="tiles" id="sp-tiles">
-      ${spTile("Machines", `${spNum(site.machines)}${running === null ? "" : `<small ${SMALL}>· ${
-        running} running</small>`}`)}
-      ${spTile("Made / day", `${spNum(made)}${rated === null ? "" : `<small ${SMALL}>of ${
-        spNum(rated)} rated</small>`}`, rated ? spMeter(made / rated * 100) : "")}
-      ${spTile("Shipped / day", spNum(ships), made && ships !== null ? spMeter(ships / made * 100) : "")}
-      ${spTile("Cost / day", costs.length ? fmt(spend) : "—", spCostBar(costs, null))}
+      ${spTile(tt("sp.tile.machines", "Machines"), `${spNum(site.machines)}${running === null ? "" : `<small ${SMALL}>${
+        tt("sp.tile.running", "· {n} running", {n: running})}</small>`}`)}
+      ${spTile(tt("sp.tile.made", "Made / day"), `${spNum(made)}${rated === null ? "" : `<small ${SMALL}>${
+        tt("sp.lines.rated", "of {n} rated", {n: spNum(rated)})}</small>`}`, rated ? spMeter(made / rated * 100) : "")}
+      ${spTile(tt("sp.tile.shipped", "Shipped / day"), spNum(ships), made && ships !== null ? spMeter(ships / made * 100) : "")}
+      ${spTile(tt("sp.tile.cost", "Cost / day"), costs.length ? fmt(spend) : "—", spCostBar(costs, null))}
     </div>
     <section class="sec rv" data-block="lines" id="sp-lines" data-readzone>
-      ${sechead("Lines", {icon: "gear", why: `A machine runs only while someone is posted to it. The fill of each square is the share of the week it is staffed.${
-        blind ? " A machine running a recipe the board cannot name is in none of the totals; name it here and it joins them." : ""}${
-        lines.length || unnamed.length ? "" : " No machine could be read at this site."}`})}
+      ${sechead(tt("sp.lines.title", "Lines"), {icon: "gear", why: `${tt("sp.lines.why", "A machine runs only while someone is posted to it. The fill of each square is the share of the week it is staffed.")}${
+        blind ? ` ${tt("sp.lines.why.blind", "A machine running a recipe the board cannot name is in none of the totals; name it here and it joins them.")}` : ""}${
+        lines.length || unnamed.length ? "" : ` ${tt("sp.lines.why.none", "No machine could be read at this site.")}`}`})}
       ${lines.length || unnamed.length ? `<div class="scrollx">${spLines(site)}</div>`
-        : spNone("No machines")}
+        : spNone(tt("sp.lines.none", "No machines"))}
       <div class="sp-read sp-readout">${spLinesRead(site)}</div>
     </section>
     <section class="sec rv" data-block="inputs" id="sp-inputs" data-readzone>
-      ${sechead("Inputs", {icon: "pipe", why: `What the machines eat, ${sizing === "dem"
-        ? "sized for what the shops at the end of the chain use" : "at full rate"}, against the daily top-up set to feed them.${
-        (site.needs || []).length ? "" : " No named line here draws on anything yet."}`, aside: `<span class="seg" id="spSizing"></span>`})}
+      ${sechead(tt("sp.inputs.title", "Inputs"), {icon: "pipe", why: `${sizing === "dem"
+        ? tt("sp.inputs.why.dem", "What the machines eat, sized for what the shops at the end of the chain use, against the daily top-up set to feed them.")
+        : tt("sp.inputs.why.cap", "What the machines eat, at full rate, against the daily top-up set to feed them.")}${
+        (site.needs || []).length ? "" : ` ${tt("sp.inputs.why.none", "No named line here draws on anything yet.")}`}`, aside: `<span class="seg" id="spSizing"></span>`})}
       ${(site.needs || []).length ? `<div class="scrollx"><table>
-        <thead><tr><th>Input</th><th>Eats / day</th><th>Top-up</th><th>Arrived / day</th>
-          <th>On hand</th><th class="l">From</th></tr></thead>
+        <thead><tr><th>${tt("sp.inputs.col.input", "Input")}</th><th>${tt("sp.inputs.col.eats", "Eats / day")}</th><th>${tt("sp.inputs.col.topup", "Top-up")}</th><th>${tt("sp.inputs.col.arrived", "Arrived / day")}</th>
+          <th>${tt("sp.inputs.col.onhand", "On hand")}</th><th class="l">${tt("sp.inputs.col.from", "From")}</th></tr></thead>
         <tbody>${spInputs(site)}</tbody></table></div>`
-        : spNone("No inputs")}
+        : spNone(tt("sp.inputs.none", "No inputs"))}
       <div class="sp-read sp-readout">${spInputsRead(site)}</div>
     </section>
     <section class="sec rv" data-block="crew" id="sp-crew">
-      ${sechead("Crew", {icon: "crew", why: roleTip || null, quiet: `${b.staff || "no"} ${
-        b.staff === 1 ? "person" : "people"}${b.staff ? ` · ${fmt(b.staffCost)}/day` : ""}`})}
+      ${sechead(tt("sp.crew.title", "Crew"), {icon: "crew", why: roleTip || null, quiet: crewQuiet})}
       ${crew}${demandChips}
     </section>`;
   }
@@ -19974,42 +20209,48 @@ function drawSite(){
     <div class="sstats rv" data-block="tiles" id="sp-tiles">${stats}</div>
     ${sp ? `<div class="duo sec"${kind === "retail" ? ` style="grid-template-columns:3fr 2fr"` : ""}>
       <section class="rv" data-block="standards" id="sp-standards" data-readzone>
-        ${sechead("Satisfaction", {icon: "standards", why: office
-          ? "What clients make of the firm. Offices are not asked about bathrooms, music or uniforms."
-          : "What customers find when they walk in. A lit lamp was found in place, a struck one was looked for and missed, and a dashed one is not known: the game scores a shop only once customers have walked it."})}
+        ${sechead(tt("sp.sat.title", "Satisfaction"), {icon: "standards", why: office
+          ? tt("sp.sat.why.office", "What clients make of the firm. Offices are not asked about bathrooms, music or uniforms.")
+          : tt("sp.sat.why", "What customers find when they walk in. A lit lamp was found in place, a struck one was looked for and missed, and a dashed one is not known: the game scores a shop only once customers have walked it.")})}
         ${spStandards(b)}
       </section>${
         kind === "retail" ? `
       <section class="rv" data-block="pull" id="sp-pull" data-readzone>
-        ${sechead("Promotion", {icon: "magnet", iconCls: "magnet", why: "Foot traffic and marketing against the game's 100% cap: what the street brings, and what campaigns add."})}
+        ${sechead(tt("sp.pull.title", "Promotion"), {icon: "magnet", iconCls: "magnet", why: tt("sp.pull.why", "Foot traffic and marketing against the game's 100% cap: what the street brings, and what campaigns add.")})}
         ${spPull(b)}
       </section>` : desks ? `
       <section class="rv" data-block="desks" id="sp-desks" data-readzone>
-        ${sechead("Desks", {icon: "monitor", quiet: `${grid.postRate} client${grid.postRate === 1 ? "" : "s"}/h each`,
-          why: `A workstation bills ${grid.postRate} client${grid.postRate === 1 ? "" : "s"} an hour while somebody sits at it.`})}
+        ${sechead(tt("sp.desks.title", "Desks"), {icon: "monitor", quiet: tt("sp.desks.rate", {one: "{n} client/h each", other: "{n} clients/h each"}, {n: grid.postRate}),
+          why: tt("sp.desks.why", {one: "A workstation bills {n} client an hour while somebody sits at it.", other: "A workstation bills {n} clients an hour while somebody sits at it."}, {n: grid.postRate})})}
         ${desks.html}
-        <div class="sp-read sp-readout">${desks.manned} of ${grid.stationCount} staffed at the busiest hour</div>
+        <div class="sp-read sp-readout">${tt("sp.desks.read", "{n} of {of} staffed at the busiest hour", {n: desks.manned, of: grid.stationCount})}</div>
       </section>` : ""}
     </div>` : ""}
     ${/* Only a shop and an office have an hourly grid, so this block is always
           the shop and office one. */""}
     ${grid ? `<section class="sec rv" data-block="hours" id="sp-hours">
-      ${sechead("Customers by hour", {icon: "hours", why: `${
-        Math.min(...grid.weeks.filter(w => w))} week${
-        Math.min(...grid.weeks.filter(w => w)) === 1 ? "" : "s"} of hour reports${
-        grid.thin.some(Boolean) ? "; starred days rest on under 2 weeks" : ""}. Shade is customers against the busiest hour, ${
-        Math.round(grid.peak)}. An outlined cell is an hour at the ceiling that was on: ${grid.office
-          ? `${grid.stationCount} workstation${grid.stationCount === 1 ? "" : "s"}, each billing ${
-              grid.postRate} customer${grid.postRate === 1 ? "" : "s"} an hour when staffed`
+      ${sechead(tt("sp.hours.title", "Customers by hour"), {icon: "hours", why: (() => {
+        const weeks = Math.min(...grid.weeks.filter(w => w));
+        const what = grid.office
+          ? tt("sp.hours.what.desks", {one: "{n} workstation, each billing {rate} an hour when staffed",
+              other: "{n} workstations, each billing {rate} an hour when staffed"},
+              {n: grid.stationCount, rate: tt("sp.hour.customers", {one: "{n} customer", other: "{n} customers"}, {n: grid.postRate})})
           : (grid.roles || []).length > 1
-            ? `${grid.roles.length} roles, the slowest ${grid.counters} an hour`
+            ? tt("sp.hours.what.roles", "{n} roles, the slowest {rate} an hour", {n: grid.roles.length, rate: grid.counters})
             : grid.roles && grid.roles[0] && grid.roles[0].noun
-              ? `${grid.roles[0].stationCount} ${grid.roles[0].noun}, ${grid.counters} an hour between them`
-              : `${grid.counters} register capacity across ${grid.stationCount} counter${grid.stationCount === 1 ? "" : "s"}`}${
-        grid.door ? `, ${grid.door}/h building capacity` : ", no building capacity"}`})}
+              ? tt("sp.hours.what.noun", "{n} {noun}, {rate} an hour between them", {n: grid.roles[0].stationCount, noun: grid.roles[0].noun, rate: grid.counters})
+              : tt("sp.hours.what.registers", {one: "{rate} register capacity across {n} counter", other: "{rate} register capacity across {n} counters"},
+                  {n: grid.stationCount, rate: grid.counters});
+        return `${grid.thin.some(Boolean)
+          ? tt("sp.hours.why.weeks.thin", {one: "{n} week of hour reports; starred days rest on under 2 weeks.", other: "{n} weeks of hour reports; starred days rest on under 2 weeks."}, {n: weeks})
+          : tt("sp.hours.why.weeks", {one: "{n} week of hour reports.", other: "{n} weeks of hour reports."}, {n: weeks})} ${
+          tt("sp.hours.why.shade", "Shade is customers against the busiest hour, {n}.", {n: Math.round(grid.peak)})} ${grid.door
+          ? tt("sp.hours.why.cap.door", "An outlined cell is an hour at the ceiling that was on: {what}, {door}/h building capacity", {what, door: grid.door})
+          : tt("sp.hours.why.cap", "An outlined cell is an hour at the ceiling that was on: {what}, no building capacity", {what})}`;
+      })()})}
       <div class="chartbox" data-readzone>${hourGrid(grid, D.meta.day % 7, hourLead, idleWeek ? idleWeek.cells : [])}<div class="sp-read sp-readout" id="hourRead">${
-        idleArrived ? `Overstaffed · ${idleRead}`
-        : hourLead.read ? `${hourLead.label} · ${hourLead.read}` : "No hour reported yet"}</div></div>
+        idleArrived ? tt("sp.hours.read.idle", "Overstaffed · {read}", {read: idleRead})
+        : hourLead.read ? `${hourLead.label} · ${hourLead.read}` : tt("sp.hours.read.none", "No hour reported yet")}</div></div>
       ${hourChips}
     </section>` : ""}
     ${/* Only a shop is planned: an office bills hours rather than serving a
@@ -20017,31 +20258,33 @@ function drawSite(){
     ${kind === "retail" ? spRosterBlock(b) : ""}
     <div class="duo sec" style="grid-template-columns:1fr 2fr">
       <section class="rv" data-block="crew" id="sp-crew">
-        ${sechead("Crew", {icon: spAny ? "crew" : null, why: roleTip || null, quiet: `${b.staff || "no"} ${b.staff === 1 ? "person" : "people"}${b.staff ? ` · ${fmt(b.staffCost)}/day` : ""}`})}
+        ${sechead(tt("sp.crew.title", "Crew"), {icon: spAny ? "crew" : null, why: roleTip || null, quiet: crewQuiet})}
         ${crew}${spAny ? demandChips : demandNote}
       </section>
       <section class="rv" data-block="shelves" id="sp-shelves">
-        ${office ? sechead("Fees", {icon: sp ? "fees" : null, aside: xlGuideLink(b.typeSlug, "Compare with market prices", "prices")})
-          : sechead("Shelves", {icon: sp ? "shelves" : null, quiet: "before tomorrow's top-up",
-              aside: xlGuideLink(b.typeSlug, "Compare with market prices", "prices")})}
+        ${office ? sechead(tt("sp.fees.title", "Fees"), {icon: sp ? "fees" : null, aside: xlGuideLink(b.typeSlug, tt("sp.shelf.compare", "Compare with market prices"), "prices")})
+          : sechead(tt("sp.shelf.title", "Shelves"), {icon: sp ? "shelves" : null, quiet: tt("sp.shelf.quiet", "before tomorrow's top-up"),
+              aside: xlGuideLink(b.typeSlug, tt("sp.shelf.compare", "Compare with market prices"), "prices")})}
         ${products}${shelfMore}
       </section>
     </div>
     <div class="duo sec">
       <section class="rv" data-block="profit" id="sp-profit"${sp ? ` data-readzone` : ""}>
-        ${sechead(`Profit, last ${b.series.length} days`, {icon: sp ? "profit" : null, aside: sp ? trendChip : null})}
+        ${sechead(tt("sp.profit.title", "Profit, last {n} days", {n: b.series.length}), {icon: sp ? "profit" : null, aside: sp ? trendChip : null})}
         <div class="chartbox">${miniChart(b.series, "profit", "var(--accent)", sp ? profitChart : {})}${
           sp ? `<div class="sp-read sp-readout">${profitRead || "&nbsp;"}</div>` : ""}</div>
       </section>
       <section class="rv" data-block="week" id="sp-week">
-        ${sechead("Its week", {icon: sp ? "week" : null, quiet: b.rhythm ? `peaks ${b.peakDay}, ${b.swing} points between best and worst` : ""})}
+        ${sechead(tt("sp.week.title", "Its week"), {icon: sp ? "week" : null, quiet: b.rhythm ? tt("sp.week.peaks", "peaks {day}, {n} points between best and worst",
+          {day: WEEK_FULL.includes(b.peakDay) ? ttDay(WEEK_FULL.indexOf(b.peakDay)) : b.peakDay, n: b.swing}) : ""})}
         <div class="chartbox" style="padding-bottom:16px">${b.rhythm
           /* Named, like the company's By weekday, so the two stop reading as
              two answers to one question: this is this site's revenue alone. */
-          ? `<div class="fv-top"><span class="fv-basis" style="--fv-s:var(--info)"><span class="dot"></span><b>This ${
-              b.status === "retail" ? "shop" : b.status === "office" ? "office" : "site"}’s revenue</b> · ${
-              weeksOf(b.rhythm)} week${weeksOf(b.rhythm) === 1 ? "" : "s"}</span></div>${weekHtml(b.rhythm, todayName)}`
-          : `<p class="quiet" style="margin:0">Not enough trading history here yet.</p>`}</div>
+          ? `<div class="fv-top"><span class="fv-basis" style="--fv-s:var(--info)"><span class="dot"></span>${
+              b.status === "retail" ? tt("sp.week.basis.shop", {one: "<b>This shop’s revenue</b> · {n} week", other: "<b>This shop’s revenue</b> · {n} weeks"}, {n: weeksOf(b.rhythm)})
+              : b.status === "office" ? tt("sp.week.basis.office", {one: "<b>This office’s revenue</b> · {n} week", other: "<b>This office’s revenue</b> · {n} weeks"}, {n: weeksOf(b.rhythm)})
+              : tt("sp.week.basis.site", {one: "<b>This site’s revenue</b> · {n} week", other: "<b>This site’s revenue</b> · {n} weeks"}, {n: weeksOf(b.rhythm)})}</span></div>${weekHtml(b.rhythm, todayName)}`
+          : `<p class="quiet" style="margin:0">${tt("sp.week.none", "Not enough trading history here yet.")}</p>`}</div>
       </section>
     </div>`}`;
   spPruneHits($("sitePanel"));
@@ -21276,8 +21519,8 @@ const SB_LINE_COLS = [["Line", r => r.item || r.workstation, "l"],
   ["Status", r => r.fact ? szRank(r.fact) : null, "l"]];
 const SB_INPUT_COLS = [["Factory input", r => r.item, "l"],
   ["Eats / day", r => szUse(r.fact, r.perDay), "", "At full rate under 24/7; what the shops at the end of the chain use under Demand"],
-  ["On hand", r => r.stock ?? null], ["Arrived / day", r => r.known ? r.arrives : null],
-  ["Daily top-up", r => r.directImport ? null : r.target || null, "", "What the round brings each morning. With a change, the figure to type in the sending site's plan."],
+  ["On hand", r => r.stock ?? null], ["Arrived / day", r => r.known ? r.arrives : null, "", "Measured: what reached the factory a day over the last week, from its delivery log (only the last round while its log is under a week old)"],
+  ["Daily top-up", r => r.directImport ? null : r.target || null, "", "Planned: what the round brings each morning. With a change, the figure to type in the sending site's plan."],
   ["Status", r => szRank(r.fact), "l"]];
 /* The sizing switch, with what it means; remembered on this device. */
 function sbSizingRow(id){
@@ -21937,6 +22180,13 @@ function factoryCounts(type){
   return out;
 }
 let planSeed = {};
+/* The days the unit prices were read over (_ingredient_prices()): a week of
+   goods cost against the units delivered, or the one day there is. */
+const priceSpan = () => {
+  const {priceFrom: from, priceDay: to} = D.plan || {};
+  return from != null && from !== to ? tt("gr.price.over", "over days {from}–{to}", {from, to})
+    : tt("gr.price.on", "on day {day}", {day: to});
+};
 const machinesOn = slug => Math.max(0, planCounts[slug] ?? planSeed[slug] ?? 1);
 
 function drawPlan(){
@@ -22048,7 +22298,7 @@ function drawPlan(){
       meta[i.item] = {
         tip: grSemis([on,
           base ? tt("gr.src.eat", "your factories already eat {n:,} of it a week", {n: base}) : "",
-          unit !== undefined ? tt("gr.src.price", "{w:$} each on day {day}", {w: unit, day: D.plan.priceDay}) : ""]),
+          unit !== undefined ? tt("gr.src.price", "{w:$} each {span}", {w: unit, span: priceSpan()}) : ""]),
         ordered: src ? src.ordered : null, active: src ? src.active : false,
         smart: !!(src && src.smart), paused, contracts, from: src ? src.from : null, baseline: base,
         unit: unit === undefined ? null : unit,
@@ -22141,13 +22391,13 @@ function drawProducts(){
         showAllProducts ? tt("co.prod.top", "top {n} only", {n: TOP}) : tt("co.prod.all", "all {n}", {n: all.length})}</a>`
     : `<span class="quiet">${tt("co.prod.all", "all {n}", {n: all.length})}</span>`;
   $("secProducts").innerHTML = sechead(tt("co.prod.title", "Products"), {
-    why: tt("co.prod.why", "Revenue and units are yesterday summed over every store that sells the line; units a week is the last seven days, and stores is how many carry it.")
+    why: tt("co.prod.why", "Revenue and units are a day's, averaged over the last seven days and summed over every store that sells the line; units a week is the last seven days, and stores is how many carry it.")
       + " " + (showPeak
         ? (weekRange
           ? tt("co.prod.why.peaks.range", "Peaks names the weekday that sells the most units, from {range}, and the points between best and worst day.", {range: weekRange})
           : tt("co.prod.why.peaks", "Peaks names the weekday that sells the most units and the points between best and worst day."))
         : tt("co.prod.why.notes", "Weekday peaks are on the product's own note; {n} of {total} have one.", {n: withPeak, total: rows.length})),
-    quiet: tt("co.prod.quiet", "by revenue yesterday"),
+    quiet: tt("co.prod.quiet", "by revenue a day, last 7 days"),
     aside: more,
   }) + `<table>
     <thead><tr><th class="l">${tt("co.prod.col.product", "Product")}</th><th>${tt("co.prod.col.revenue", "Revenue / day")}</th><th>${
@@ -22168,7 +22418,7 @@ function drawProducts(){
         : seller.line.revenue ? (p.stores > 1
           ? tt("co.prod.open.top.of", "Open {site}, the store that sells the most of it, one of {n}", {site: shortName(seller.b), n: p.stores})
           : tt("co.prod.open.top", "Open {site}, the store that sells the most of it", {site: shortName(seller.b)}))
-        : tt("co.prod.open.stocks", "Open {site}, which stocks it; no store sold any yesterday", {site: shortName(seller.b)});
+        : tt("co.prod.open.stocks", "Open {site}, which stocks it; no store sold any in the last seven days", {site: shortName(seller.b)});
       const name = seller ? `<a class="link xl-sells" href="#company" data-xl-item="${attr(p.slug)}" data-tip="${attr(opens)}">${p.item}</a>` : p.item;
       return `<tr data-slug="${attr(p.slug)}">
       <td class="l"${showPeak?"":` data-tip="${attr(peakTip(p))}"`}>${name}</td>
@@ -25634,9 +25884,9 @@ function planDraw(){
       : [tt("gr.ing.note", "Company targets are company-wide: you type each one across your importer contracts in the game; the board adds them up and never guesses a split per warehouse."),
         priced ? tt("gr.ing.cost", {one: "A week costs {w:$} across the {priced} of {n} ingredients this company already buys.",
           other: "A week costs {w:$} across the {priced} of {n} ingredients this company already buys."}, {w: cash, priced, n: total}) : "",
-        priced && priced < total ? tt("gr.ing.prices", {one: "Unit prices are what you paid on day {day}; the other {n} show quantities only.",
-          other: "Unit prices are what you paid on day {day}; the other {n} show quantities only."},
-          {day: D.plan.priceDay, n: total - priced}) : ""].filter(Boolean).join(" ");
+        priced && priced < total ? tt("gr.ing.prices", {one: "Unit prices are what you paid {span}; the other {n} show quantities only.",
+          other: "Unit prices are what you paid {span}; the other {n} show quantities only."},
+          {span: priceSpan(), n: total - priced}) : ""].filter(Boolean).join(" ");
   }
 }
 const bindPlan = once(() => on("click", "tr.line .step a[data-d]", (a, e) => {
@@ -25948,9 +26198,9 @@ function gwUniformAll(){
   return [...new Set(finds.map(alertSite))];
 }
 function gwUniformButtons(b, all){
-  const one = gwButton("uniforms", "Set Default uniforms", `data-gw-sites="${attr(JSON.stringify([b.key]))}"`);
+  const one = gwButton("uniforms", tt("sp.gw.uni.button", "Set Default uniforms"), `data-gw-sites="${attr(JSON.stringify([b.key]))}"`);
   const sites = all ? gwUniformAll() : [];
-  return one + (one && sites.length > 1 ? gwButton("uniforms", `Set for all ${sites.length} shops`,
+  return one + (one && sites.length > 1 ? gwButton("uniforms", tt("sp.gw.uni.all", "Set for all {n} shops", {n: sites.length}),
     `data-gw-all data-gw-sites="${attr(JSON.stringify(sites.map(s => s.key)))}"`, "", {alt: true}) : "");
 }
 /* A finding silenced since the list was drawn leaves "Set for all" at once. */
@@ -25958,9 +26208,9 @@ function gwRelabelAll(){
   const sites = gwUniformAll();
   document.querySelectorAll("[data-gw-all]").forEach(btn => {
     if(sites.length < 2) return btn.remove();
-    const label = `Set for all ${sites.length} shops`;
+    const label = tt("sp.gw.uni.all", "Set for all {n} shops", {n: sites.length});
     btn.querySelector(".gw-l").textContent = label;
-    btn.setAttribute("aria-label", btn.getAttribute("aria-disabled") === "true" ? `${label}: ${btn.dataset.tip || ""}` : label);
+    btn.setAttribute("aria-label", btn.getAttribute("aria-disabled") === "true" ? tt("nav.dlg.offlabel", "{name}: {why}", {name: label, why: btn.dataset.tip || ""}) : label);
     btn.dataset.gwSites = JSON.stringify(sites.map(s => s.key));
   });
 }
@@ -25991,24 +26241,25 @@ function gwSkillName(skill){
    is-done ticks the cards that were dressed. */
 function gwRole(name, state, preset){
   if(state === "kept" || state === "off"){
-    const said = state === "kept" ? "has one · kept" : "not offered here";
-    return `<div class="gw-role kept" tabindex="0" data-read="${attr(`<b>${name}</b> ${state === "kept"
-      ? "has a uniform already: the write never changes it" : "is not in this shop's Uniforms window"}`)}"><span class="gw-shirt">${
+    const said = state === "kept" ? tt("sp.gw.role.kept", "has one · kept") : tt("sp.gw.role.off", "not offered here");
+    return `<div class="gw-role kept" tabindex="0" data-read="${attr(state === "kept"
+      ? tt("sp.gw.role.kept.read", "<b>{role}</b> has a uniform already: the write never changes it", {role: name})
+      : tt("sp.gw.role.off.read", "<b>{role}</b> is not in this shop's Uniforms window", {role: name}))}"><span class="gw-shirt">${
       gwSvg("shirt")}<span class="gw-badge">${gwSvg("lock")}</span></span><div><b>${name}</b><small>${said}</small></div></div>`;
   }
-  if(state === "back") return `<div class="gw-role to" tabindex="0" data-read="${attr(`<b>${name}</b>: back to no uniform`)}"><span class="gw-shirt">${
-    gwSvg("shirt")}</span><div><b>${name}</b><small><span>${preset} ${gwSvg("right")}</span>none</small></div></div>`;
-  return `<div class="gw-role to" tabindex="0" data-read="${attr(`<b>${name}</b>: no uniform now, <em>${preset}</em> after`)}"><span class="gw-shirt">${
-    gwSvg("shirt")}<span class="gw-badge gw-tk">${gwSvg("tick")}</span></span><div><b>${name}</b><small><span class="gw-was">none ${
+  if(state === "back") return `<div class="gw-role to" tabindex="0" data-read="${attr(tt("sp.gw.role.back.read", "<b>{role}</b>: back to no uniform", {role: name}))}"><span class="gw-shirt">${
+    gwSvg("shirt")}</span><div><b>${name}</b><small><span>${preset} ${gwSvg("right")}</span>${tt("sp.gw.role.none", "none")}</small></div></div>`;
+  return `<div class="gw-role to" tabindex="0" data-read="${attr(tt("sp.gw.role.to.read", "<b>{role}</b>: no uniform now, <em>{preset}</em> after", {role: name, preset}))}"><span class="gw-shirt">${
+    gwSvg("shirt")}<span class="gw-badge gw-tk">${gwSvg("tick")}</span></span><div><b>${name}</b><small><span class="gw-was">${tt("sp.gw.role.none", "none")} ${
     gwSvg("right")}</span><span class="gw-now">${gwSvg("tick")}</span><em>${preset}</em></small></div></div>`;
 }
 /* The game's uniforms as pills: one is the usual case, and says so. */
 function gwPresets(answer, on){
   const ps = (answer.presets || []).filter(p => p && p.id !== undefined);
   if(!ps.length) return "";
-  if(ps.length === 1) return `<div class="gw-pick"><span class="gw-lab">Uniform</span><span class="gw-presets"><span class="gw-preset only"><span class="ic">${
-    gwSvg("shirt")}</span>${spEsc(ps[0].name)}</span></span><span class="gw-only">the only one in your game</span></div>`;
-  return `<div class="gw-pick"><span class="gw-lab" id="gwPresetLab">Uniform</span><span class="gw-presets" role="group" aria-labelledby="gwPresetLab">${
+  if(ps.length === 1) return `<div class="gw-pick"><span class="gw-lab">${tt("sp.gw.uni.label", "Uniform")}</span><span class="gw-presets"><span class="gw-preset only"><span class="ic">${
+    gwSvg("shirt")}</span>${spEsc(ps[0].name)}</span></span><span class="gw-only">${tt("sp.gw.uni.only", "the only one in your game")}</span></div>`;
+  return `<div class="gw-pick"><span class="gw-lab" id="gwPresetLab">${tt("sp.gw.uni.label", "Uniform")}</span><span class="gw-presets" role="group" aria-labelledby="gwPresetLab">${
     ps.map(p => `<button type="button" class="gw-preset" aria-pressed="${p.id === on ? "true" : "false"}" data-gw-preset="${attr(p.id)}"><span class="ic">${
       gwSvg("shirt")}</span>${spEsc(p.name)}</button>`).join("")}</span></div>`;
 }
@@ -26023,42 +26274,46 @@ function gwUniforms(keys){
   const out = new Set();  // shops left out
   let presetId = null;
   const kept = () => sites.filter(b => !out.has(b.key));
-  const presetOf = answer => spEsc((answer.rows || []).find(r => r.presetName)?.presetName || "Default");
+  const presetOf = answer => spEsc((answer.rows || []).find(r => r.presetName)?.presetName || tt("sp.gw.uni.default", "Default"));
   const toSet = answer => (answer.rows || []).reduce((n, r) => n + (r.set || []).length, 0);
   const refusal = r => {
     const known = GW_REFUSE.uniforms[r.error] || GW_REFUSE.any[r.error];
-    return known || {rule: `The game refused this (${spEsc(r.error)})`, fix: ""};
+    return known || {rule: tt("sp.gw.uni.refused", "The game refused this ({code})", {code: spEsc(r.error)}), fix: ""};
   };
   /* A row a shop, a small shirt a role: outlined gets the uniform, grey keeps its own. */
   const shopRow = (r, phase) => {
     const b = gwSiteOf(r.address), key = gwKeyOf(r.address);
-    const name = gwSiteName(r), preset = spEsc(r.presetName || "Default");
+    const name = gwSiteName(r), preset = spEsc(r.presetName || tt("sp.gw.uni.default", "Default"));
     const set = r.set || [], skipped = (r.skipped || []).map(s => s.skill);
     const minis = [...set.map(s => ["to", s]), ...skipped.map(s => ["k", s])].map(([k, s], i) =>
       `<i class="${k === "k" ? "k" : ""}" style="--k:${i}">${gwSvg(k !== "k" && phase === "done" ? "tick" : "shirt")}</i>`).join("");
-    const roles = `${set.length ? `${set.map(gwSkillName).join(", ")} <em>${phase === "undone" ? "→ none" : `→ ${preset}`}</em>` : "nothing to set"}${
-      skipped.length ? ` · ${skipped.map(gwSkillName).join(", ")} kept` : ""}`;
+    const roles = `${set.length ? `${set.map(gwSkillName).join(", ")} <em>${phase === "undone" ? tt("sp.gw.uni.tonone", "→ none") : `→ ${preset}`}</em>`
+      : tt("sp.gw.uni.nothing", "nothing to set")}${
+      skipped.length ? ` · ${tt("sp.gw.uni.kept", "{roles} kept", {roles: skipped.map(gwSkillName).join(", ")})}` : ""}`;
     const read = `<b>${name}</b> · ${roles}`;
     const say = r.error ? refusal(r) : null;
     return `<div class="gw-shop${r.error ? " bad" : ""}" tabindex="0" data-read="${attr(read)}"><div class="nm">${b ? hoodHtml(b) : ""}<span>${name}</span></div><span class="gw-sr">: ${roles}</span>${
       `<span class="gw-minis" aria-hidden="true">${minis}</span><span class="c">${r.error ? "" : set.length}</span>`}${say ? `<div class="gw-why"><span><b>${
       say.rule}</b>.${say.fix ? ` ${say.fix}` : ""}</span>${phase === "ready" && kept().length > 1 ? `<button type="button" class="gw-mini-b" data-gw-leave="${
-      attr(key)}" aria-label="${attr(`Leave it out: ${b ? shortName(b) : r.business || "this shop"}`)}">${gwSvg("skip")}Leave it out</button>` : ""}</div>` : ""}</div>`;
+      attr(key)}" aria-label="${attr(tt("sp.gw.uni.leave.label", "Leave it out: {name}", {name: b ? shortName(b) : r.business || tt("sp.gw.uni.thisshop", "this shop")}))}">${
+      gwSvg("skip")}${tt("sp.gw.uni.leave", "Leave it out")}</button>` : ""}</div>` : ""}</div>`;
   };
-  const outRow = b => `<div class="gw-shop out"><div class="nm">${hoodHtml(b)}<span>${spEsc(shortName(b))}</span></div><span class="gw-minis"></span><span class="c">out</span></div>`;
+  const outRow = b => `<div class="gw-shop out"><div class="nm">${hoodHtml(b)}<span>${spEsc(shortName(b))}</span></div><span class="gw-minis"></span><span class="c">${tt("sp.gw.uni.out", "out")}</span></div>`;
   gwConfirm({
-    kind: "uniforms", icon: "shirt", againLabel: "Set again",
-    title: () => many ? `Set uniforms at ${kept().length} shops` : "Set uniforms",
+    kind: "uniforms", icon: "shirt", againLabel: tt("sp.gw.uni.again", "Set again"),
+    title: () => many ? tt("sp.gw.uni.title.many", "Set uniforms at {n} shops", {n: kept().length}) : tt("sp.gw.uni.title", "Set uniforms"),
     where: () => !many ? gwWhere(sites[0])
-      : out.size ? `<span>${[...out].map(k => spEsc(shortName(sites.find(b => b.key === k)))).join(", ")} left out</span>`
-      : "<span>Every shop the alert names</span>",
+      : out.size ? `<span>${tt("sp.gw.uni.leftout", "{names} left out", {names: [...out].map(k => spEsc(shortName(sites.find(b => b.key === k)))).join(", ")})}</span>`
+      : `<span>${tt("sp.gw.uni.every", "Every shop the alert names")}</span>`,
     /* skills null: every skill the shop's Uniforms window offers, not only the
        roles on shift now, so the warning cannot come back with the roster. */
     body: () => ({sites: kept().map(b => ({address: gwAddress(b.key), skills: null, presetId}))}),
     verdict: answer => {
       const bad = (answer.rows || []).filter(r => r.error).length, n = toSet(answer);
-      if(bad) return many ? `<b>The game refuses ${bad} of ${(answer.rows || []).length} shops</b>` : "<b>The game refuses this</b>";
-      return n ? `<b>The game will dress ${plural(n, "role")}</b>` : "<b>Every role already has a uniform</b>";
+      if(bad) return many ? `<b>${tt("sp.gw.uni.refuses", "The game refuses {n} of {of} shops", {n: bad, of: (answer.rows || []).length})}</b>`
+        : `<b>${tt("sp.gw.refuses", "The game refuses this")}</b>`;
+      return n ? `<b>${tt("sp.gw.uni.dress", {one: "The game will dress {n} role", other: "The game will dress {n} roles"}, {n})}</b>`
+        : `<b>${tt("sp.gw.uni.dressed", "Every role already has a uniform")}</b>`;
     },
     /* The refused shops say why in their own row. */
     inline: many,
@@ -26070,18 +26325,18 @@ function gwUniforms(keys){
         const r = rows[0] || {};
         const cards = [...(r.set || []).map(s => gwRole(gwSkillName(s), phase === "undone" ? "back" : "to", preset)),
           ...(r.skipped || []).map(s => gwRole(gwSkillName(s.skill), s.reason === "already_set" ? "kept" : "off", preset))];
-        const lead = phase === "ready" ? `<p class="gw-lead">Every role this shop can dress gets a uniform. One already set stays as it is.</p>` : "";
-        return lead + pick + (cards.length ? `<div data-readzone><div class="gw-roles">${cards.join("")}</div><div class="gw-read sp-readout">Hover a role</div></div>` : "");
+        const lead = phase === "ready" ? `<p class="gw-lead">${tt("sp.gw.uni.lead", "Every role this shop can dress gets a uniform. One already set stays as it is.")}</p>` : "";
+        return lead + pick + (cards.length ? `<div data-readzone><div class="gw-roles">${cards.join("")}</div><div class="gw-read sp-readout">${tt("sp.gw.uni.hover", "Hover a role")}</div></div>` : "");
       }
       const set = toSet(answer), keptN = rows.reduce((n, r) => n + (r.skipped || []).length, 0);
       const bad = rows.filter(r => r.error).length;
-      const tally = phase === "ready" ? `<div class="gw-tally"><div><span class="gw-lab">Get ${preset}</span><span class="gw-big">${gwSvg("shirt")}${set}</span></div>
-        <div><span class="gw-lab">Kept</span><span class="gw-big dim">${gwSvg("lock")}${keptN}</span></div>
-        <div><span class="gw-lab">Shops</span><span class="gw-big dim">${rows.length - bad}${bad ? `<small>+${bad}</small>` : ""}</span></div></div>` : "";
+      const tally = phase === "ready" ? `<div class="gw-tally"><div><span class="gw-lab">${tt("sp.gw.uni.get", "Get {preset}", {preset})}</span><span class="gw-big">${gwSvg("shirt")}${set}</span></div>
+        <div><span class="gw-lab">${tt("sp.gw.uni.keptlab", "Kept")}</span><span class="gw-big dim">${gwSvg("lock")}${keptN}</span></div>
+        <div><span class="gw-lab">${tt("sp.gw.uni.shops", "Shops")}</span><span class="gw-big dim">${rows.length - bad}${bad ? `<small>+${bad}</small>` : ""}</span></div></div>` : "";
       return pick + tally + `<div data-readzone><div class="gw-shops">${rows.map(r => shopRow(r, phase)).join("")}${
-        [...out].map(k => sites.find(b => b.key === k)).filter(Boolean).map(outRow).join("")}</div><div class="gw-read sp-readout">Hover a shop for its roles</div></div>`;
+        [...out].map(k => sites.find(b => b.key === k)).filter(Boolean).map(outRow).join("")}</div><div class="gw-read sp-readout">${tt("sp.gw.uni.hovershop", "Hover a shop for its roles")}</div></div>`;
     },
-    refusedHint: answer => many ? "Every shop is set, or none: leave a refused shop out, or fix it first." : "Nothing was changed.",
+    refusedHint: answer => many ? tt("sp.gw.uni.refusedmany", "Every shop is set, or none: leave a refused shop out, or fix it first.") : tt("sp.gw.unchanged", "Nothing was changed."),
     bind: (dlg, replan) => {
       dlg.querySelectorAll("[data-gw-preset]").forEach(b => { b.onclick = () => {
         if(b.getAttribute("aria-pressed") === "true" || b.classList.contains("gw-busy")) return;
@@ -26099,16 +26354,20 @@ function gwUniforms(keys){
       }; });
     },
     object: gwSiteName,
-    applyLabel: answer => { const n = answer ? toSet(answer) : 0; return n ? `Set ${plural(n, "uniform")}` : "Set uniforms"; },
-    applying: "Setting uniforms in the game…",
-    undoHint: () => many && kept().length > 1 ? `Undo takes back all ${kept().length} shops at once.` : null,
+    applyLabel: answer => { const n = answer ? toSet(answer) : 0;
+      return n ? tt("sp.gw.uni.apply", {one: "Set {n} uniform", other: "Set {n} uniforms"}, {n}) : tt("sp.gw.uni.title", "Set uniforms"); },
+    applying: tt("sp.gw.uni.applying", "Setting uniforms in the game…"),
+    undoHint: () => many && kept().length > 1 ? tt("sp.gw.uni.undohint", "Undo takes back all {n} shops at once.", {n: kept().length}) : null,
     changed: answer => (answer.rows || []).some(r => (r.set || []).length),
     done: answer => {
       const rows = (answer.rows || []).filter(r => (r.set || []).length);
       const n = rows.reduce((s, r) => s + r.set.length, 0);
-      if(answer.undo) return n ? `Undone: ${plural(n, "role")} back to no uniform.` : "Undone.";
-      if(!n) return "Nothing to set: every role already has a uniform.";
-      return `${presetOf(answer)} is on ${plural(n, "role")} at ${rows.length === 1 ? `${gwSiteName(rows[0])}` : `${rows.length} shops`}.`;
+      if(answer.undo) return n ? tt("sp.gw.uni.undone", {one: "Undone: {n} role back to no uniform.", other: "Undone: {n} roles back to no uniform."}, {n})
+        : tt("sp.gw.undone", "Undone.");
+      if(!n) return tt("sp.gw.uni.none", "Nothing to set: every role already has a uniform.");
+      return rows.length === 1
+        ? tt("sp.gw.uni.done.one", {one: "{preset} is on {n} role at {shop}.", other: "{preset} is on {n} roles at {shop}."}, {preset: presetOf(answer), n, shop: gwSiteName(rows[0])})
+        : tt("sp.gw.uni.done.many", {one: "{preset} is on {n} role at {shops} shops.", other: "{preset} is on {n} roles at {shops} shops."}, {preset: presetOf(answer), n, shops: rows.length});
     },
   });
 }
@@ -27278,20 +27537,21 @@ function gwRosterButtons(key){
   if(!gwLink()) return "";
   const row = gwRosterPlan(key);
   if(!row) return "";
-  const one = gwButton("schedule", "Write this roster to the game", `data-gw-sites="${attr(JSON.stringify([key]))}"`,
-    gwRosterWeek(row).sent ? "" : "Every entry in this plan waits on somebody who does not work here yet: add them first", {icon: "hire"});
+  const one = gwButton("schedule", tt("sp.gw.sch.one", "Write this roster to the game"), `data-gw-sites="${attr(JSON.stringify([key]))}"`,
+    gwRosterWeek(row).sent ? "" : tt("sp.gw.sch.blocked", "Every entry in this plan waits on somebody who does not work here yet: add them first"), {icon: "hire"});
   const all = gwScheduleSites();
   const many = all.length > 1
-    ? gwButton("schedule", `Write all ${all.length} planned sites`, `data-gw-sites="${attr(JSON.stringify(all))}"`, "", {alt: true}) : "";
+    ? gwButton("schedule", tt("sp.gw.sch.all", "Write all {n} planned sites", {n: all.length}), `data-gw-sites="${attr(JSON.stringify(all))}"`, "", {alt: true}) : "";
   const add = row.addPeople || {};
   return one ? `<div class="gw-acts gw-panel">${one}${many}${add.people ? `<span class="gw-note">${gwSvg("hire")}${
-    add.hoursUncovered || 0} h a week stay empty until ${plural(add.people, "person is", "people are")} added</span>` : ""}</div>` : "";
+    tt("sp.gw.sch.empty", {one: "{h} h a week stay empty until {n} person is added", other: "{h} h a week stay empty until {n} people are added"},
+      {h: add.hoursUncovered || 0, n: add.people})}</span>` : ""}</div>` : "";
 }
 const gwInitials = name => String(name || "?").split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase();
 const gwHours = list => list.reduce((n, s) => n + s.t - s.f, 0);
 /* Three figures, now → after. */
 const gwTiles = items => `<div class="gw-tiles">${items.map(([label, a, b]) => `<div class="gw-tile"><span class="gw-lab">${label}</span><div class="v">${
-  a === b || a === null ? b : `<span class="gw-sr">from </span><s>${a}</s>${gwSvg("right")}<span class="gw-sr"> to </span>${b}`}</div></div>`).join("")}</div>`;
+  a === b || a === null ? b : `<span class="gw-sr">${tt("sp.gw.tile.from", "from")} </span><s>${a}</s>${gwSvg("right")}<span class="gw-sr"> ${tt("sp.gw.tile.to", "to")} </span>${b}`}</div></div>`).join("")}</div>`;
 /* The week a write sends, against the one the board read: a pair of bars a day. */
 function gwWeek(now, days){
   const per = HOUR_ROWS.map(d => {
@@ -27302,24 +27562,30 @@ function gwWeek(now, days){
   const h = v => `${Math.max(v / top * 64, 2).toFixed(0)}px`;
   const cols = per.map(({d, a, b, ah, bh}) => {
     const delta = bh - ah;
-    const dl = delta > 0 ? `<span class="dl gw-up">+${delta} h</span>` : delta < 0 ? `<span class="dl gw-dn">−${-delta} h</span>` : `<span class="dl">=</span>`;
-    const said = `${WEEK_FULL[d]}: ${plural(a.length, "entry", "entries")}, ${ah} h → ${plural(b.length, "entry", "entries")}, ${bh} h`;
-    return `<div class="gw-wd${delta === 0 && a.length === b.length ? " same" : ""}" tabindex="0" data-read="${attr(`<b>${WEEK_FULL[d]}</b> · ${
-      plural(a.length, "entry", "entries")}, ${ah} h <em>→ ${plural(b.length, "entry", "entries")}, ${bh} h</em>`)}"><span class="gw-sr">${said}</span>${dl}<div class="bars" aria-hidden="true"><i class="n" style="--h:${
-      h(ah)}"></i><i class="a" style="--h:${h(bh)}"></i></div><span class="d" aria-hidden="true">${WEEK_FULL[d].slice(0, 3).toUpperCase()}</span></div>`;
+    const dl = delta > 0 ? `<span class="dl gw-up">${tt("sp.gw.week.up", "+{n} h", {n: delta})}</span>` : delta < 0 ? `<span class="dl gw-dn">${tt("sp.gw.week.dn", "−{n} h", {n: -delta})}</span>` : `<span class="dl">=</span>`;
+    const entries = n => tt("sp.n.entries", {one: "{n} entry", other: "{n} entries"}, {n});
+    const p = {d, was: entries(a.length), wasH: ah, now: entries(b.length), nowH: bh};
+    const said = tt("sp.gw.week.said", "{d:day}: {was}, {wasH} h → {now}, {nowH} h", p);
+    return `<div class="gw-wd${delta === 0 && a.length === b.length ? " same" : ""}" tabindex="0" data-read="${attr(tt("sp.gw.week.read",
+      "<b>{d:day}</b> · {was}, {wasH} h <em>→ {now}, {nowH} h</em>", p))}"><span class="gw-sr">${said}</span>${dl}<div class="bars" aria-hidden="true"><i class="n" style="--h:${
+      h(ah)}"></i><i class="a" style="--h:${h(bh)}"></i></div><span class="d" aria-hidden="true">${spWd(d).toUpperCase()}</span></div>`;
   }).join("");
-  return `<div data-readzone><div class="gw-week">${cols}</div><div class="gw-keyrow"><div class="gw-read sp-readout">Hover a day</div><div class="gw-key" aria-hidden="true"><span><i></i>now</span><span><i class="a"></i>after</span></div></div></div>`;
+  return `<div data-readzone><div class="gw-week">${cols}</div><div class="gw-keyrow"><div class="gw-read sp-readout">${tt("sp.gw.week.hover", "Hover a day")}</div><div class="gw-key" aria-hidden="true"><span><i></i>${
+    tt("sp.gw.now", "now")}</span><span><i class="a"></i>${tt("sp.gw.after", "after")}</span></div></div></div>`;
 }
 /* The add-people box: who to assign and whom to hire, and the hours written
    now against the hours that wait for them. */
 function gwAddBox(add, staffed){
-  const pills = (add.assign || []).map(p => `<span class="person bench"><i>${spEsc(gwInitials(p.name))}</i>${spEsc(p.name || "?")}<small>unassigned</small></span>`)
-    .concat((add.hire || []).map(h => `<span class="person hire"><i>${gwSvg("plus")}</i>${h.people} × ${spEsc(h.role || "")}<small>to hire</small></span>`));
+  const pills = (add.assign || []).map(p => `<span class="person bench"><i>${spEsc(gwInitials(p.name))}</i>${spEsc(p.name || "?")}<small>${tt("sp.gw.add.unassigned", "unassigned")}</small></span>`)
+    .concat((add.hire || []).map(h => `<span class="person hire"><i>${gwSvg("plus")}</i>${h.people} × ${spEsc(h.role || "")}<small>${tt("sp.gw.add.tohire", "to hire")}</small></span>`));
   const empty = Number(add.hoursUncovered) || 0, total = staffed + empty;
-  return `<div class="gw-box gw-warn gw-lift">${gwCall("warn", "hire", `<b>Add ${plural(add.people, "person", "people")} to fill this plan</b>: ${
-    spAddWords(add)}; ${empty} h a week stay empty until then.`)}${pills.length ? `<div class="gw-pills">${pills.join("")}</div>` : ""}${
+  return `<div class="gw-box gw-warn gw-lift">${gwCall("warn", "hire", tt("sp.gw.add", {
+    one: "<b>Add {n} person to fill this plan</b>: {who}; {h} h a week stay empty until then.",
+    other: "<b>Add {n} people to fill this plan</b>: {who}; {h} h a week stay empty until then."}, {n: add.people, who: spAddWords(add), h: empty}))}${
+    pills.length ? `<div class="gw-pills">${pills.join("")}</div>` : ""}${
     total > 0 ? `<div class="gw-cover" aria-hidden="true"><i class="c" style="flex:${(staffed / total).toFixed(3)}"></i><i class="e" style="flex:${
-      (empty / total).toFixed(3)}"></i></div><div class="gw-coverk"><span><b>${staffed} h</b> written now</span><span class="w">${empty} h wait for them</span></div>` : ""}</div>`;
+      (empty / total).toFixed(3)}"></i></div><div class="gw-coverk"><span>${tt("sp.gw.add.written", "<b>{h} h</b> written now", {h: staffed})}</span><span class="w">${
+      tt("sp.gw.add.wait", "{h} h wait for them", {h: empty})}</span></div>` : ""}</div>`;
 }
 
 /* One shop's schedule, and with several keys a run of dialogs, one shop
@@ -27337,21 +27603,25 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
   /* Leaving this shop (skipped, not written, nothing to write) goes on to
      the next, or after the last to the end of the run. */
   const pass = (what = "skipped") => {
-    run[i] = {name: b ? spEsc(shortName(b)) : "A shop", plain: b ? shortName(b) : "A shop", what, ok: false};
+    run[i] = {name: b ? spEsc(shortName(b)) : tt("sp.gw.ashop", "A shop"), plain: b ? shortName(b) : tt("sp.gw.ashop", "A shop"),
+      what: what === "skipped" ? tt("sp.gw.run.skipped", "skipped") : what === "gone" ? tt("sp.gw.run.gone", "gone")
+        : what === "not written" ? tt("sp.gw.run.notwritten", "not written")
+        : what === "nothing to write" ? tt("sp.gw.run.nothing", "nothing to write") : what, ok: false};
     if(!lastOne) gwSchedule(keys, after, run); else gwRunEnd(keys, run);
   };
   /* On from a shop written: the next one not seen yet, or the end of the run. */
-  const next = many ? {label: lastOne ? "See the run" : `Next shop · ${after + 1} of ${keys.length}`, skip: "Skip this shop", pass,
+  const next = many ? {label: lastOne ? tt("sp.gw.run.see", "See the run") : tt("sp.gw.run.next", "Next shop · {n} of {of}", {n: after + 1, of: keys.length}),
+                       skip: tt("sp.gw.run.skip", "Skip this shop"), pass,
                        go: lastOne ? () => gwRunEnd(keys, run) : () => gwSchedule(keys, after, run)} : null;
   if(!b) return next && pass("gone");
   const name = spEsc(shortName(b));
   let openAll = true, last = null;
   gwConfirm({
-    kind: "schedule", icon: "roster", againLabel: "Write again",
-    title: many ? `Write all ${keys.length} planned sites` : "Write this roster to the game",
-    where: () => many ? `${gwSteps(keys, run, i)}<span>${i + 1} of ${keys.length} · ${name}</span>` : gwWhere(b),
-    nothing: () => !gwRosterPlan(key) ? "This shop has no plan to write any more."
-      : typeof (site() || {}).shiftPrint !== "string" ? "Read the game again first: this board does not know the shop's schedule well enough to replace it."
+    kind: "schedule", icon: "roster", againLabel: tt("sp.gw.sch.again", "Write again"),
+    title: many ? tt("sp.gw.sch.all", "Write all {n} planned sites", {n: keys.length}) : tt("sp.gw.sch.one", "Write this roster to the game"),
+    where: () => many ? `${gwSteps(keys, run, i)}<span>${tt("sp.gw.run.where", "{n} of {of} · {name}", {n: i + 1, of: keys.length, name})}</span>` : gwWhere(b),
+    nothing: () => !gwRosterPlan(key) ? tt("sp.gw.sch.noplan", "This shop has no plan to write any more.")
+      : typeof (site() || {}).shiftPrint !== "string" ? tt("sp.gw.sch.reread", "Read the game again first: this board does not know the shop's schedule well enough to replace it.")
       : "",
     body: () => {
       const row = gwRosterPlan(key), week = gwRosterWeek(row);
@@ -27359,12 +27629,13 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
       return {address: gwAddress(key), expect: site().shiftPrint,
               openAllHours: !!(row.full && !row.openNow && openAll), days: week.days};
     },
-    verdict: answer => answer.ok ? "<b>The game takes the week</b>" : "<b>The game refuses this</b>",
+    verdict: answer => answer.ok ? `<b>${tt("sp.gw.sch.takes", "The game takes the week")}</b>` : `<b>${tt("sp.gw.refuses", "The game refuses this")}</b>`,
     object: row => {
       if(row.d === undefined) return name;
       const s = last && ((last.week.days.find(x => x.d === row.d) || {}).shifts || [])[row.i];
       const who = s && (last.row.people || []).find(p => p.id === s.employeeId);
-      return `${WEEK_FULL[row.d] || "A day"}${s ? ` ${s.f}-${s.t}, ${spEsc((who || {}).name || "someone")}` : ""}`;
+      const day = WEEK_FULL[row.d] ? ttDay(row.d) : tt("sp.gw.aday.cap", "A day");
+      return s ? tt("sp.gw.sch.object", "{day} {f}-{t}, {who}", {day, f: s.f, t: s.t, who: spEsc((who || {}).name || tt("sp.gw.someone", "someone"))}) : day;
     },
     draw: (answer, phase) => {
       if(!last) return "";
@@ -27375,14 +27646,21 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
       const afterPeople = people(sentList.map(s => s.employeeId));
       if(phase === "undone"){
         const a = Number((answer.before || {}).shifts) || 0, z = Number((answer.after || {}).shifts) || 0;
-        return gwTiles([["Entries", a, z]]);
+        return gwTiles([[tt("sp.gw.tile.entries", "Entries"), a, z]]);
       }
-      if(phase === "done") return gwTiles([["Entries", null, sentList.length], ["Hours / week", null, gwHours(sentList)], ["People", null, afterPeople]])
-        + (add.people ? gwLiftCall("warn", "hire", `<b>${add.hoursUncovered || 0} h a week stay empty</b> until you add ${plural(add.people, "person", "people")}. Write the roster again then: the board keeps this note on the roster until it is full.`) : "");
-      const which = row.full ? `<span class="gw-plan full">${gwSvg("sun")}Full cover 24/7</span><span class="gw-only">every station, every hour</span>`
-        : spCoverOnly(row) ? `<span class="gw-plan">${gwSvg("roster")}Cleaning and security</span><span class="gw-only">replaces the whole week</span>`
-        : `<span class="gw-plan">${gwSvg("roster")}Demand plan</span><span class="gw-only">replaces the whole week</span>`;
-      const kept = week.kept ? gwCall("info", "info", `The ${plural(week.kept, "serving entry", "serving entries")} in the game ${week.kept === 1 ? "stays" : "stay"} as ${week.kept === 1 ? "it stands" : "they stand"}: this plan covers cleaning and security only.`) : "";
+      const labels = [tt("sp.gw.tile.entries", "Entries"), tt("sp.gw.tile.hours", "Hours / week"), tt("sp.gw.tile.people", "People")];
+      if(phase === "done") return gwTiles([[labels[0], null, sentList.length], [labels[1], null, gwHours(sentList)], [labels[2], null, afterPeople]])
+        + (add.people ? gwLiftCall("warn", "hire", tt("sp.gw.sch.doneempty", {
+          one: "<b>{h} h a week stay empty</b> until you add {n} person. Write the roster again then: the board keeps this note on the roster until it is full.",
+          other: "<b>{h} h a week stay empty</b> until you add {n} people. Write the roster again then: the board keeps this note on the roster until it is full."},
+          {h: add.hoursUncovered || 0, n: add.people})) : "");
+      const whole = tt("sp.gw.plan.whole", "replaces the whole week");
+      const which = row.full ? `<span class="gw-plan full">${gwSvg("sun")}${tt("sp.pick.full", "Full cover 24/7")}</span><span class="gw-only">${tt("sp.gw.plan.every", "every station, every hour")}</span>`
+        : spCoverOnly(row) ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.gw.plan.cover", "Cleaning and security")}</span><span class="gw-only">${whole}</span>`
+        : `<span class="gw-plan">${gwSvg("roster")}${tt("sp.pick.demand", "Demand plan")}</span><span class="gw-only">${whole}</span>`;
+      const kept = week.kept ? gwCall("info", "info", tt("sp.gw.sch.kept", {
+        one: "The {n} serving entry in the game stays as it stands: this plan covers cleaning and security only.",
+        other: "The {n} serving entries in the game stay as they stand: this plan covers cleaning and security only."}, {n: week.kept})) : "";
       /* Full cover opens the shop around the clock, unless the player opts out. */
       let toggle = "";
       if(row.full && !row.openNow && phase === "ready"){
@@ -27390,22 +27668,25 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
           [...Array(Math.max(0, Math.min(24, z) - Math.max(0, a))).keys()].map(k => a + k))));
         const strip = (label, all) => `<span>${label}</span><div class="h">${[...Array(24).keys()].map(hr =>
           `<i class="${all || open.has(hr) ? "o" : ""}${all && !open.has(hr) ? " new" : ""}"></i>`).join("")}</div>`;
-        toggle = `<div class="gw-toggle${openAll ? "" : " off"}"><div><b id="gwOpenLab">Also open every day 0 to 24</b><small>An hour the shop is closed is an hour the demand test never measures.</small></div><button type="button" class="sw${
-          openAll ? " on" : ""}" role="switch" aria-checked="${openAll ? "true" : "false"}" aria-labelledby="gwOpenLab" data-gw-open></button><div class="gw-hrs" aria-hidden="true">${strip("now", false)}${strip("after", true)}</div></div>`;
+        toggle = `<div class="gw-toggle${openAll ? "" : " off"}"><div><b id="gwOpenLab">${tt("sp.gw.open", "Also open every day 0 to 24")}</b><small>${
+          tt("sp.gw.open.why", "An hour the shop is closed is an hour the demand test never measures.")}</small></div><button type="button" class="sw${
+          openAll ? " on" : ""}" role="switch" aria-checked="${openAll ? "true" : "false"}" aria-labelledby="gwOpenLab" data-gw-open></button><div class="gw-hrs" aria-hidden="true">${
+          strip(tt("sp.gw.now", "now"), false)}${strip(tt("sp.gw.after", "after"), true)}</div></div>`;
       }
       const roleOf = id => {
         const p = (row.people || []).findIndex(x => x.id === id);
         const s = now.find(x => x.p === p), st = s && (row.stations || [])[s.s];
         return st ? gwSkillName(st.skill) : "";
       };
-      const left = (answer.leftWithout || []).map(p => `<span class="person"><i>${spEsc(gwInitials(p.name))}</i>${spEsc(p.name || "someone")}${
+      const left = (answer.leftWithout || []).map(p => `<span class="person"><i>${spEsc(gwInitials(p.name))}</i>${spEsc(p.name || tt("sp.gw.someone", "someone"))}${
         roleOf(p.employeeId) ? `<small>${roleOf(p.employeeId)}</small>` : ""}</span>`);
       const over = (answer.warnings || []).filter(w => w.type === "overworked").map(w =>
-        gwCall("warn", "flame", `<b>${spEsc(w.name || "Someone")}</b> works ${Number(w.hours)} h on ${WEEK_FULL[w.d] || "a day"}. The game allows it.`));
+        gwCall("warn", "flame", tt("sp.gw.over", "<b>{name}</b> works {n} h on {day}. The game allows it.",
+          {name: spEsc(w.name || tt("sp.gw.someone.cap", "Someone")), n: Number(w.hours), day: WEEK_FULL[w.d] ? ttDay(w.d) : tt("sp.gw.aday", "a day")})));
       return `<div class="gw-planrow">${which}</div>`
-        + gwTiles([["Entries", now.length, sentList.length], ["Hours / week", gwHours(now), gwHours(sentList)], ["People", nowPeople, afterPeople]])
+        + gwTiles([[labels[0], now.length, sentList.length], [labels[1], gwHours(now), gwHours(sentList)], [labels[2], nowPeople, afterPeople]])
         + gwWeek(now, week.days) + kept + toggle
-        + (left.length ? `<div class="gw-box">${gwCall("", "exit", "<b>No shift here after this</b>. The game takes them off their work here and adds a to-do, as its own schedule does.")}<div class="gw-pills">${left.join("")}</div></div>` : "")
+        + (left.length ? `<div class="gw-box">${gwCall("", "exit", tt("sp.gw.left", "<b>No shift here after this</b>. The game takes them off their work here and adds a to-do, as its own schedule does."))}<div class="gw-pills">${left.join("")}</div></div>` : "")
         + (add.people ? gwAddBox(add, gwHours(sentList)) : "") + over.join("");
     },
     bind: (dlg, replan) => {
@@ -27420,44 +27701,51 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
         replan(sw);
       };
     },
-    applyLabel: () => "Write the week",
-    applying: "Writing the week in the game…",
+    applyLabel: () => tt("sp.gw.sch.apply", "Write the week"),
+    applying: tt("sp.gw.sch.applying", "Writing the week in the game…"),
     changed: answer => (answer.before || {}).print !== (answer.after || {}).print || !!answer.openedHours,
     startUndo: !!o.startUndo,
     /* Undone, the shop is back to be written, in the run too. */
     onUndo: () => { delete run[i]; },
-    onDone: answer => { run[i] = {name, plain: shortName(b), what: plural(Number(answer.added) || 0, "entry", "entries"), ok: true}; },
+    onDone: answer => { run[i] = {name, plain: shortName(b), what: tt("sp.n.entries", {one: "{n} entry", other: "{n} entries"}, {n: Number(answer.added) || 0}), ok: true}; },
     doneBody: (answer, spec) => {
       const shop = name;  // the board's name for it: the game's carries the [code] prefix
-      const said = `<p class="gw-said ok">${shop}: ${plural(Number(answer.added) || 0, "entry", "entries")} set in place of ${Number(answer.removed) || 0}${
-        answer.openedHours ? ", open 0 to 24 every day" : ""}.</p>`;
+      const said = `<p class="gw-said ok">${gwScheduleSaid(shop, answer)}</p>`;
       return said + spec.draw(answer, "done");
     },
-    undoHint: () => many ? "Undo holds only the last shop written." : null,
+    undoHint: () => many ? tt("sp.gw.sch.undohint", "Undo holds only the last shop written.") : null,
     /* Where this shop sits in its run, so the end of the run offers Undo for
        it and for no other; and, reopened from there to be undone, the way
        back when the undo fails. */
     runOf: many ? run : null,
     runAt: i,
     backToRun: many && o.startUndo ? () => gwRunEnd(keys, run) : null,
-    onUndoUnknown: () => { if(run[i]) run[i] = Object.assign({}, run[i], {what: "unknown, see the board", ok: false}); },
+    onUndoUnknown: () => { if(run[i]) run[i] = Object.assign({}, run[i], {what: tt("sp.gw.run.unknown", "unknown, see the board"), ok: false}); },
     done: answer => {
       const shop = name;  // the board's name for it: the game's carries the [code] prefix
-      if(answer.undo) return `Undone: the schedule at ${shop} is back as it was${answer.openedHours ? ", opening hours too" : ""}.`;
+      if(answer.undo) return answer.openedHours
+        ? tt("sp.gw.sch.undone.hours", "Undone: the schedule at {shop} is back as it was, opening hours too.", {shop})
+        : tt("sp.gw.sch.undone", "Undone: the schedule at {shop} is back as it was.", {shop});
       const add = (last && last.row.addPeople) || {};
-      return `${shop}: ${plural(Number(answer.added) || 0, "entry", "entries")} set in place of ${Number(answer.removed) || 0}${
-        answer.openedHours ? ", open 0 to 24 every day" : ""}.${add.people ? ` ${add.hoursUncovered || 0} h a week stay empty until you add ${
-        plural(add.people, "person", "people")}; write it again then.` : ""}`;
+      return `${gwScheduleSaid(shop, answer)}${add.people ? ` ${tt("sp.gw.sch.stillempty", {
+        one: "{h} h a week stay empty until you add {n} person; write it again then.",
+        other: "{h} h a week stay empty until you add {n} people; write it again then."}, {h: add.hoursUncovered || 0, n: add.people})}` : ""}`;
     },
     next,
   });
 }
 
+/* What one shop's write did, as the dialog and its toast say it. */
+const gwScheduleSaid = (shop, answer) => answer.openedHours
+  ? tt("sp.gw.sch.said.open", {one: "{shop}: {n} entry set in place of {was}, open 0 to 24 every day.",
+      other: "{shop}: {n} entries set in place of {was}, open 0 to 24 every day."}, {shop, n: Number(answer.added) || 0, was: Number(answer.removed) || 0})
+  : tt("sp.gw.sch.said", {one: "{shop}: {n} entry set in place of {was}.", other: "{shop}: {n} entries set in place of {was}."},
+      {shop, n: Number(answer.added) || 0, was: Number(answer.removed) || 0});
 /* The run's dots: green written, hollow left, ringed the one on screen; and
    the same in words for a screen reader. */
 function gwSteps(keys, run, at){
   const done = run.filter(x => x && x.ok).length, left = run.filter(x => x && !x.ok).length;
-  return `<span class="gw-steps" role="img" aria-label="${attr(`${done} written, ${left} left out, ${keys.length - done - left} to go`)}">${
+  return `<span class="gw-steps" role="img" aria-label="${attr(tt("sp.gw.run.steps", "{done} written, {left} left out, {togo} to go", {done, left, togo: keys.length - done - left}))}">${
     keys.map((k, j) => `<i class="${run[j] ? (run[j].ok ? "d" : "s") : j === at ? "c" : ""}"></i>`).join("")}</span>`;
 }
 /* Every shop and what became of it, as a list. */
@@ -27466,19 +27754,21 @@ const gwRunList = (keys, run) => `<div class="gw-run">${keys.map((k, j) => run[j
 /* The end of a run that did not end on a shop written: its summary, and Undo
    for the last shop written in it while the game still holds that undo. */
 function gwRunEnd(keys, run){
-  const dlg = gwDialog("roster", `Write all ${keys.length} planned sites`, `${gwSteps(keys, run, -1)}<span>the end of the run</span>`);
+  const dlg = gwDialog("roster", tt("sp.gw.sch.all", "Write all {n} planned sites", {n: keys.length}), `${gwSteps(keys, run, -1)}<span>${tt("sp.gw.run.end", "the end of the run")}</span>`);
   const written = run.filter(x => x && x.ok), left = run.filter(x => x && !x.ok).length;
   /* The game keeps one schedule undo: offered here only while it is this
      run's, for the shop it belongs to. */
   const u = gwUndoable.schedule;
   const at = u && u.spec.runOf === run && run[u.spec.runAt] && run[u.spec.runAt].ok ? u.spec.runAt : -1;
-  gwPaint(dlg, {phase: "done", wire: written.length ? "ok" : "no", say: `<b>All ${keys.length} seen</b>`, meta: gwNow(),
-    body: `<p class="gw-said${written.length ? " ok" : ""}">${plural(written.length, "shop")} written${left ? `, ${left} left out` : ""}.</p>${gwRunList(keys, run)}${
-      at >= 0 ? gwLiftCall("info", "undo", `Undo holds the last shop written, <b>${run[at].name}</b>: the game keeps one schedule change to take back.`) : ""}`,
+  gwPaint(dlg, {phase: "done", wire: written.length ? "ok" : "no", say: `<b>${tt("sp.gw.run.seen", "All {n} seen", {n: keys.length})}</b>`, meta: gwNow(),
+    body: `<p class="gw-said${written.length ? " ok" : ""}">${left
+      ? tt("sp.gw.run.written.left", {one: "{n} shop written, {left} left out.", other: "{n} shops written, {left} left out."}, {n: written.length, left})
+      : tt("sp.gw.run.written", {one: "{n} shop written.", other: "{n} shops written."}, {n: written.length})}</p>${gwRunList(keys, run)}${
+      at >= 0 ? gwLiftCall("info", "undo", tt("sp.gw.run.undo", "Undo holds the last shop written, <b>{name}</b>: the game keeps one schedule change to take back.", {name: run[at].name})) : ""}`,
     /* Undo reopens that shop inside the run, undone and asked afresh. */
-    buttons: [...(at >= 0 ? [[`Undo ${run[at].plain}`, () => gwSchedule(keys, at, run, {startUndo: true}),
+    buttons: [...(at >= 0 ? [[tt("sp.gw.run.undoshop", "Undo {name}", {name: run[at].plain}), () => gwSchedule(keys, at, run, {startUndo: true}),
       {kind: "undo", icon: "undo", key: "undo"}]] : []), "|",
-      ["Close", () => dlg.close(), {kind: "go"}]]});
+      [tt("sp.gw.close", "Close"), () => dlg.close(), {kind: "go"}]]});
 }
 
 const bindWrites = once(() => {

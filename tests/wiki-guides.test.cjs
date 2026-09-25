@@ -16,6 +16,9 @@ const vm = require('node:vm');
 const path = require('node:path');
 
 const WIKI = fs.readFileSync(path.join(__dirname, '..', 'web', 'wiki.js'), 'utf8');
+/* web/i18n.js runs ahead of wiki.js on the page: the Wiki's own words go
+   through its tt(). */
+const I18N = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8');
 /* The board's neighbourhood tables, as render() writes them in: keyed by the
    game's key, the words looked up only to be shown. */
 const HOOD_EN = {midtown: 'Midtown', hellskitchen: "Hell's Kitchen", murrayhill: 'Murray Hill',
@@ -313,6 +316,7 @@ function wiki({data = DATA, save = null} = {}) {
     fetch: async () => ({ok: true, status: 200, json: async () => data}),
   });
   context.window.window = context.window;
+  vm.runInContext(I18N, context);
   vm.runInContext(WIKI, context);
   return {
     context, root, drawn,
@@ -989,6 +993,12 @@ test('the labels the payload carries are the ones the page wears', async () => {
   assert.ok(headings(html).includes('Making it'));
   const hair = await w.go('wiki/businesstypes-hairdresser');
   assert.ok(headings(hair).includes('What it charges for'));
+  // In another language the same label is looked up as wiki.ui.<name>; a
+  // label the table does not carry keeps the payload's English.
+  w.call(`ttSetTable("de", {"wiki.ui.primaryTitle": "In den Regalen"})`);
+  const de = await w.go('wiki/businesstypes-coffeeshop');
+  assert.ok(headings(de).includes('In den Regalen'));
+  assert.ok(headings(de).includes('Also on the shelves'));
 });
 
 /* --- the catalogue this checkout has, once it carries guides ---------------- */
@@ -1034,7 +1044,7 @@ test('the range sold in your shops is matched by the item key, never by its name
     {item: 'Coffee', slug: 'ba:itemname_coffeebeans', price: 3, stores: 1, units: 2}]}});
   const html = await w.load('wiki/businesstypes-coffeeshop');
   assert.match(html, /Its range, sold/);
-  assert.match(html, /Coffee moved in your shops yesterday\./);
+  assert.match(html, /Coffee moved in your shops in the last seven days\./);
   assert.doesNotMatch(html, /Coffee, Coffee moved/);
 });
 

@@ -60,6 +60,25 @@ const CONVERTED = {
     + '#secPortfolio .sechead, #portfolio thead, #portfolio tfoot, #portfolio tr.chain, #portfolio tr.kid td:not(.l), '
     + '#secProducts .sechead, #secProducts thead, #secProducts td:not(.l), #secProducts > p, '
     + '#secPayroll .sechead, #secPayroll > p, #secGoals',
+  /* The Wiki's own words: the home view's search row, legend, topic shelf
+     heading and states; a guide's section headings, checklist cards and
+     captions (its labels are guideUi's, keyed wiki.ui.*), tiles, card and lane
+     labels, pills, graph key, save strip and prices. The articles and the
+     categories' names stay English. */
+  wiki: '#wikiRoot .wk-top, #wikiRoot .wk-legend, #wikiRoot .sechead h2, #wikiRoot .wk-group > h3, #wikiRoot .wk-sub, #wikiRoot .wk-state, #wikiRoot .wk-foot, '
+    + '#wikiRoot .wk-crumb > a:first-child, #wikiRoot .wk-titlerow .chips, #wikiRoot .wk-tiles .lab, #wikiRoot .wk-tiles .kpi:nth-child(3) .sub, '
+    + '#wikiRoot .wk-card:not(.svc) dt, #wikiRoot .wk-pill.on, #wikiRoot .wk-pill.no, #wikiRoot .wk-pill.unknown, '
+    + '#wikiRoot .wk-lane h3, #wikiRoot .wk-key, #wikiRoot .wk-savebox .wk-lab, #wikiRoot .wk-savebox.empty, '
+    + '#wikiRoot #wk-prices > .sechead, #wikiRoot #wk-prices > p, #wikiRoot .wk-prices thead',
+  /* The site panel's own chrome: headings, tile labels, table heads, the
+     roster's steps, tabs and counters, the notes' labels and the empty
+     states. Its read-outs and chips carry site, people and game names, and
+     Python's sentences (f, and the staffing prose), so they are left out. */
+  sp: '#sitePanel .ss-crumb:not(.from), #sitePanel .sechead h2, #sitePanel .sstat .lab, #sitePanel .sstat small:not(.sp-tname), '
+    + '#sitePanel thead, #sitePanel .sp-step:not(.sp-add), #sitePanel .sp-nowplan, #sitePanel .sp-daytabs, '
+    + '#sitePanel .sp-typed, #sitePanel .sp-ba .lab, #sitePanel .sp-findmore, #sitePanel .sp-pick, '
+    + '#sitePanel .sp-nhead .lab, #sitePanel .sp-nmore summary, #sitePanel .hours .dd, #sitePanel .sp-days, '
+    + '#sitePanel p.quiet, #sitePanel .sp-read:not(.sp-readout), #sitePanel .sp-noplan',
 };
 /* Text that is not Big Copilot's own words even inside a converted area:
    paths and file names in code, the save's own words (the strip's file line,
@@ -210,6 +229,8 @@ async function views(page){
     (D.businesses || []).forEach(b => out.push(['company', 'results', b.key]));
     // The map with the finder on, its first result's card open.
     if(D.premises) out.push(['map', 'finder', null]);
+    // One of the Wiki's guides, beside its home view.
+    if(typeof showWikiRoute === 'function') out.push(['wiki', 'guide', null]);
     return out;
   });
 }
@@ -225,6 +246,10 @@ async function show(page, [pageId, sub, site]){
         const first = document.querySelector('#cityMapPage .place.fr');
         if(first) await cityMapPage.select(first.dataset.pick, false);
       }
+    } else if(pageId === 'wiki' && typeof wikiStatus !== 'undefined'){
+      /* The wiki draws once its catalogue has loaded. */
+      for(let i = 0; i < 400 && wikiStatus !== 'ready' && wikiStatus !== 'error'; i++) await new Promise(r => setTimeout(r, 25));
+      showWikiRoute(sub === 'guide' ? 'wiki/businesstypes-bookstore' : 'wiki');
     } else if(sub) showSub(pageId, sub);
     if(site) openSite(site, false);
   }, [pageId, sub, site]);
