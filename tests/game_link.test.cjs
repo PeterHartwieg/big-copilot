@@ -7,6 +7,8 @@ const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
 // The game-link section, plus the two functions it drives: update()'s first
 // branch hands it the refresh, checkFolder() hands it the watch.
+// The page's tt(), which app.js writes every word through.
+const i18n = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8');
 const section = source.slice(
   source.indexOf('  /* --- the game link (docs/game-link-api.md)'),
   source.indexOf('  /* --- building'));
@@ -84,6 +86,7 @@ function harness({routes = {}} = {}) {
       return 'status' in give ? give : reply(200, give);
     },
   });
+  vm.runInContext(i18n, context);
   vm.runInContext(section + '\n' + updater + '\n' + watcher, context);
   vm.runInContext('linkWait = (ms) => { __waits.push(ms); __advance(ms); return Promise.resolve(); };', context);
   // linkFetch only ever reaches an address on this computer; the tests that

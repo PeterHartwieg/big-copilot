@@ -28,17 +28,35 @@ const WIDTHS = [360, 768, 1280, 1500, 1501, 1920];
    screen there fails the sweep. */
 const CONVERTED = {
   // nav: '#nav, .subnav',
+  land: '#welcomeLede, #drop, #entryRow, .lg-wiki, #saveLocation, #srcSlot, #help',
+  app: '#srcStrip, #srcNote, #srcMenu, #live em',
+  upd: '#releaseBanner, #newsStrip',
+  comm: '.community-dialog',
 };
+/* Text that is not Big Copilot's own words even inside a converted area:
+   paths and file names in code, the save's own words (the strip's file line,
+   the save menu's characters, saves and dates), the changelog entry the
+   update banner opens to, and the feature list the community API sends. */
+const UNTRANSLATED = 'code, #srcMeta, #releaseDetails, .save-current, .save-group-label, .save-option-title, .save-option-meta, .community-card h3, .community-card p';
 const MEASURED = 'button, .chip, .seg a, th, .tile .lab';
 
 /* The pseudo text: accents on the letters, 40% longer, in brackets; the
-   placeholders and game-name tokens untouched, so the page fills them. */
+   placeholders and game-name tokens untouched, so the page fills them. The
+   few tags a sentence may hold (<b>, <code>, <a>) stay tags, and each run of
+   text between them gets its own brackets, as each is its own text node. */
 const ACCENT = {a: 'á', e: 'é', i: 'í', o: 'ó', u: 'ú', A: 'Å', E: 'É', I: 'Í', O: 'Ó', U: 'Ú', c: 'ç', n: 'ñ', s: 'š', y: 'ý'};
+const TAG = /(<\/?(?:b|code|a)>)/;
 function pseudo(en){
-  const parts = String(en).split(/(\{[^{}]+\}|⟦[^⟧]*⟧)/);
-  const text = parts.map((p, i) => i % 2 ? p : p.replace(/[A-Za-z]/g, ch => ACCENT[ch] || ch)).join('');
-  const letters = String(en).replace(/\{[^{}]+\}/g, '').length;
-  return `[${text}${'·'.repeat(Math.ceil(letters * 0.4))}]`;
+  const runs = String(en).split(TAG);
+  const last = runs.length - 1;
+  return runs.map((run, r) => {
+    if(r % 2) return run;
+    if(!run && r !== last) return run;
+    const parts = run.split(/(\{[^{}]+\}|⟦[^⟧]*⟧)/);
+    const text = parts.map((p, i) => i % 2 ? p : p.replace(/[A-Za-z]/g, ch => ACCENT[ch] || ch)).join('');
+    const letters = (r === last ? runs.filter((x, i) => i % 2 === 0).join('') : run).replace(/\{[^{}]+\}/g, '').length;
+    return `[${text}${r === last ? '·'.repeat(Math.ceil(letters * 0.4)) : ''}]`;
+  }).join('');
 }
 
 let browser, TABLE, PAYLOAD;
@@ -147,7 +165,7 @@ async function show(page, [pageId, sub, site]){
 }
 /* What overflows on screen, and the visible English in converted areas. */
 async function measure(page){
-  return page.evaluate(([sel, converted]) => {
+  return page.evaluate(([sel, converted, skip]) => {
     const root = document.documentElement;
     const shown = el => el.offsetParent !== null || el.getClientRects().length > 0;
     const over = [...document.querySelectorAll(sel)]
@@ -158,14 +176,14 @@ async function measure(page){
       document.querySelectorAll(where).forEach(host => {
         const walk = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
         for(let n = walk.nextNode(); n; n = walk.nextNode()){
-          if(!n.parentElement || !shown(n.parentElement)) continue;
+          if(!n.parentElement || !shown(n.parentElement) || n.parentElement.closest(skip)) continue;
           const outside = n.textContent.replace(/\[[^\]]*\]/g, '').replace(/[\d\s.,:;$%+\-–—×·/()!?%'"‹›…#]+/g, '');
           if(outside.length > 1) english.push(`${area}: ${n.textContent.trim().slice(0, 60)}`);
         }
       });
     }
     return {scroll: root.scrollWidth > root.clientWidth + 1, over, english};
-  }, [MEASURED, CONVERTED]);
+  }, [MEASURED, CONVERTED, UNTRANSLATED]);
 }
 
 test('the pseudo-locale fits at every width, on every page, view and site panel', async t => {
@@ -184,4 +202,115 @@ test('the pseudo-locale fits at every width, on every page, view and site panel'
     }
     assert.deepEqual(xx.errors, [], `${width}px`);
   }
+});
+
+/* The landing and the shell around the board, as a player reaches them:
+   app.js with a stand-in for the reader, the folder handle and IndexedDB
+   (so no Python runs), a newer version.json (so the update banner shows)
+   and the community API. `remembered` starts from a folder chosen on an
+   earlier visit, which the page reopens and builds the fixture board from. */
+async function shell(t, {ui = '', width = 1280, remembered = false} = {}){
+  const context = await browser.newContext({viewport: {width, height: 900}, locale: 'en-US', reducedMotion: 'reduce'});
+  t.after(() => context.close());
+  await context.addInitScript(remembered => {
+    const file = (name, time) => {
+      const value = new File(['save'], name, {lastModified: time});
+      value.arrayBuffer = async () => new ArrayBuffer(8);
+      return {kind: 'file', name, getFile: async () => value};
+    };
+    const folder = (name, entries) => ({name, kind: 'directory',
+      async queryPermission(){ return 'granted'; }, async requestPermission(){ return 'granted'; },
+      async *values(){ yield* entries; }});
+    const meta = {kind: 'file', name: 'first.hsg.meta', getFile: async () => ({name: 'first.hsg.meta', lastModified: 1,
+      async text(){ return JSON.stringify({characterData: {name: 'Alice'}, day: 4}); }})};
+    const handle = folder('Saves', [folder('alice', [file('first.hsg', 1000), file('Recover #3.hsg', 2000), meta]),
+      folder('bob', [file('other.hsg', 500)])]);
+    window.showDirectoryPicker = async () => handle;
+    const db = {close(){}, transaction(){
+      return {objectStore: () => ({get(){
+        const req = {};
+        setTimeout(() => { req.result = remembered ? handle : null; req.onsuccess?.(); });
+        return req;
+      }, put(){}})};
+    }};
+    window.indexedDB.open = () => { const req = {}; setTimeout(() => { req.result = db; req.onsuccess?.(); }); return req; };
+    window.Worker = class { constructor(){ window.reader = this; this.messages = []; } postMessage(m){ this.messages.push(m); } terminate(){} };
+  }, remembered);
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  const json = (route, body) => route.fulfill({contentType: 'application/json', body: JSON.stringify(body)});
+  await page.route('**/*', route => {
+    const url = new URL(route.request().url());
+    if(url.hostname !== 'i18n.test' || url.pathname.startsWith('/fonts/')) return route.abort();
+    if(url.pathname === '/version.json')
+      return json(route, {version: 'ffffffffff', latest: {pr: 1, date: '2999-01-01', title: 'A newer page', summary: 'What changed.'}});
+    if(url.pathname === '/api/community/presence') return json(route, {count: 12, nextHeartbeatIn: 300});
+    if(url.pathname === '/api/community/features') return json(route, {features: [
+      {id: 'a', title: 'A feature', description: 'What it does.', votes: 1},
+      {id: 'b', title: 'Another feature', description: 'What that does.', votes: 12, voted: true}]});
+    if(url.pathname === '/i18n/de.json') return json(route, TABLE);
+    const file = path.join(WEB, url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname));
+    if(!fs.existsSync(file)) return route.fulfill({status: 404, body: ''});
+    return route.fulfill({path: file});
+  });
+  await page.goto(`http://i18n.test/${ui ? `?ui=${ui}` : ''}`);
+  if(ui) await page.waitForFunction(() => ttLang === 'de');
+  await page.waitForFunction(() => !document.getElementById('releaseBanner').hidden);
+  if(remembered){
+    await page.waitForFunction(() => window.reader && window.reader.messages.length > 0);
+    await page.evaluate(raw => {
+      const m = window.reader.messages[0];
+      window.reader.onmessage({data: {kind: 'built', id: m.id, history: '', data: JSON.stringify(raw)}});
+    }, PAYLOAD);
+    await page.waitForFunction(() => document.body.classList.contains('has-board'));
+  }
+  return {page, errors};
+}
+
+/* What a player sees of the landing and the shell, one view at a time. */
+const SHELL_VIEWS = {
+  landing: async page => { await page.evaluate(() => { document.getElementById('help').open = true; }); },
+  menu: async page => {
+    await page.evaluate(() => { document.getElementById('menuBtn').click(); document.getElementById('help').open = true; });
+    await page.evaluate(() => document.querySelector('.save-trigger').click());
+  },
+  vote: async page => {
+    await page.evaluate(() => document.querySelector('[data-community-open]').click());
+    await page.waitForSelector('.community-vote');
+  },
+};
+
+test('the pseudo-locale fits the landing and the shell at every width', async t => {
+  for(const width of WIDTHS){
+    for(const remembered of [false, true]){
+      const en = await shell(t, {width, remembered});
+      const xx = await shell(t, {ui: 'de', width, remembered});
+      for(const [name, open] of Object.entries(SHELL_VIEWS)){
+        if((name === 'landing') === remembered) continue;
+        await open(en.page);
+        await open(xx.page);
+        const before = await measure(en.page), now = await measure(xx.page);
+        const where = `${width}px ${name}`;
+        assert.ok(!now.scroll || before.scroll, `${where}: the page scrolls sideways`);
+        const fresh = now.over.filter(o => o.includes('[') && !before.over.includes(o));
+        assert.deepEqual(fresh, [], `${where}: text wider than its box`);
+        assert.deepEqual(now.english, [], `${where}: English in a converted area`);
+      }
+      assert.deepEqual(en.errors, [], `${width}px, English`);
+      assert.deepEqual(xx.errors, [], `${width}px`);
+    }
+  }
+});
+
+test('the landing\'s sentences with markup are the markup\'s English when no table is loaded', async t => {
+  const {page, errors} = await shell(t);
+  const html = fs.readFileSync(path.join(WEB, 'index.html'), 'utf8');
+  const markup = await page.evaluate(html => {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    return ['lgHelpFolder', 'lgHelpFind', 'lgHelpAutosave', 'lgHelpLinked', 'localeOther']
+      .map(id => [id, doc.getElementById(id).innerHTML, document.getElementById(id).innerHTML]);
+  }, html);
+  for(const [id, before, now] of markup) assert.equal(now, before, id);
+  assert.deepEqual(errors, []);
 });

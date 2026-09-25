@@ -5,6 +5,8 @@ const path = require('node:path');
 const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
 const startup = source.slice(source.indexOf('    // A folder chosen on an earlier visit:'), source.lastIndexOf('  });'));
+// The page's tt(), which app.js writes every word through.
+const i18n = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8');
 // The loopback check a remembered link goes through, as app.js has it.
 const loopback = source.slice(source.indexOf('  function loopbackOrigin('), source.indexOf('  // Chrome and Edge hold a public page'));
 
@@ -29,6 +31,7 @@ async function resume(permission, options = {}) {
     async loadFromHandle(value){loads.push(value);},
     async loadFromLink(why, gen){links.push([why, gen]);},
   });
+  vm.runInContext(i18n, context);
   await vm.runInContext(`(async () => {${loopback}\n${startup}\n})()`, context);
   return {loads, links, notes, handle, context};
 }
