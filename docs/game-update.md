@@ -136,29 +136,26 @@ table. `tools/game_update/caps.py` checks that the page parsed before it compare
 python tools/game_update/caps.py
 ```
 
-It reads the installed game's own text only (`load_game_locale()`, never the bundled
-copy). At build 3682 it prints `rows: {'retail': 6, 'office': 6, 'cinema': 3,
-'theater': 3}`, `other headings: ['warehouse / factory', 'residential']` and
-`same as FALLBACK_CAPS: True`.
+It reads the installed game's own text only and refuses the bundled copy. It exits 0 only
+when every category parsed and the table equals `FALLBACK_CAPS`; at build 3682 it prints
+`rows: {'retail': 6, 'office': 6, 'cinema': 3, 'theater': 3}`,
+`other headings: ['warehouse / factory', 'residential']` and `same as FALLBACK_CAPS: True`.
+`other headings` is every bold line on the page that is not one of `CAP_CATEGORIES`.
+A non-zero exit says why:
 
-- It stops with an error when the game is not found (set `BA_LOCALE`), when the game text
-  has no `help_building_types_content` page at all, or when a category in
-  `CAP_CATEGORIES` parsed no rows. A missing page or a category with no rows means the
-  game's text changed and the board fell back to `FALLBACK_CAPS`. Find the page's new key
-  and update it in `_door_caps()` and in `ships()` in `build_web.py`, or fix `_CAP_SECTION_RE` or `_CAP_SIZE_RE`, then run
-  it again.
-- `False` means the parsed table differs. First compare the printed row counts with the
-  page: fewer rows than the page lists under a heading means the regex lost rows (fix
-  `_CAP_SIZE_RE`). Otherwise a capacity changed or a size letter was added or dropped:
-  update `FALLBACK_CAPS` and its comment, and check `CAPS_HELP` in `tests/test_premises.py`,
-  which is the page as build 3675 wrote it.
-- It also prints `other headings:`, the bold headings on the page outside
-  `CAP_CATEGORIES`; at 3682 those are `warehouse / factory` and `residential`, which the
-  board does not rate. Any other one may be a new building class, such as a new kind of
-  venue; see the classification rule under The game tables.
-- `True` with other row counts means the collapsed table did not change: another layout
-  of a letter the table already has, since the codes collapse to their letter. Read the
-  page to be sure.
+- Game or page not found: set `BA_LOCALE`. A renamed page key: update every use of the
+  old key (`git grep help_building_types_content`, and `RETAIL_SIZES_PAGE` in
+  `tools/build_wiki_data.py`).
+- No size rows parsed for a category: the page's wording changed. If the category's
+  heading shows under `other headings` with a new name, rename the key in
+  `CAP_CATEGORIES`, `FALLBACK_CAPS` and the `VENUE_TYPES` value (each is the lower-case
+  page heading), not the regexes; otherwise fix `_CAP_SECTION_RE` or `_CAP_SIZE_RE`.
+- The table differs: compare the printed row counts with the page. Fewer rows than the
+  page lists means `_CAP_SIZE_RE` lost rows; otherwise update `FALLBACK_CAPS` and its
+  comment, and check `CAPS_HELP` in `tests/test_premises.py`.
+
+A new heading under `other headings` may be a new building class; see the classification
+rule under The game tables.
 
 ### The game tables
 
@@ -301,15 +298,15 @@ compared with and `worst` the largest relative miss (0.0097 is 0.97%). At build 
 was under 1% off on every current lease, and under 2% on the deposits. A jump to several
 percent means the patch rebalanced rents: refit `RENT_RATES` against current leases.
 
-Then the office post rate, if the company runs an office: load the new save into the
-board and open the office's own page. Its hour grid shows the customers each hour, and
-hovering an hour reads "N of M workstations staffed", where N is the professionals at
-computers (`staffed / postRate`), whatever the rate. Customers equal N only when demand
-outruns the staff, so compare only such hours: the busiest ones, or one marked at the
-staffing ceiling, and not one capped by building capacity. There, with `OFFICE_POST_RATE`
-at 1, customers should equal N. More customers than N, or customers stuck below N while
-demand is higher, means the game changed the rate: re-measure it and update the constant
-and its comment.
+Then the office post rate, if the company runs an office: open the office's own page on
+the board. Hovering an hour reads "N of M workstations staffed", where N is
+`staffed / postRate`, so it assumes the current rate. Compare the hours marked "at the
+ceiling", skip any marked "at building capacity", and not the hour labelled "Busiest
+hour" (that label means it did not reach the ceiling). There, customers should equal N.
+A lower real rate can hide the "at the ceiling" mark altogether: it shows as customers
+stuck at the same fraction of N across hours with different N. The fee's demand is in the
+Offices band of the market demand grid (Growth > Demand), not in the tooltip. If the
+numbers do not settle it, ask the owner before changing `OFFICE_POST_RATE`.
 
 ## 5. Bump the build
 

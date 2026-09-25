@@ -18,10 +18,10 @@ repository, never the repository root.
   beside `BA_LOCALE`'s en.json; without `BA_LOCALE` it tries only the default Steam library.
 - `presets.py [--data-dir DIR]`: prints the Easy, Normal and Hard difficulty presets from
   `sharedassets1.assets`, for `HOUSE_RULES` and `tests/test_house_rules.py`.
-- `caps.py`: checks that the game's building types help page still parses into the
-  building capacity table. It fails with a message when the game or the page is missing or
-  a category yields no rows, lists the page's other headings, and says whether the table
-  still equals `FALLBACK_CAPS`.
+- `caps.py`: checks that the installed game's building types help page (never the
+  bundled copy) still parses into the building capacity table. It prints the row counts
+  and the page's other bold lines, and exits non-zero with a message when the game or the
+  page is missing, a category yields no rows, or the table differs from `FALLBACK_CAPS`.
 - `bundles.py`: compares `DEMANDS_NOT_MADE`, `STATION_SKILLS` and `JOB_DEMANDS` with the
   game's Addressables bundles, and reports any business type the board does not know.
   Needs UnityPy on `PYTHONPATH`, as `make_demand_curves.py` does:
