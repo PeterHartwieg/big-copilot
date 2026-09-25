@@ -24,12 +24,26 @@ class CompanyOrderRegressions(unittest.TestCase):
             ("existing line with only paused orders", 25200, 25200, 0, 28980, 28980),
             ("empty plan", 0, 0, None, 0, 0),
         ]
+        # With what the imports feed now (`used`): stock ordered beyond that and
+        # its margin is ordered ahead, and an added layout draws on it first.
+        with_use = [
+            ("ordered ahead covers the plan", 120960, 20160, 151300, 21600, 151300, 0),
+            ("ordered ahead covers part", 60480, 10080, 20200, 3000, 69560, 49360),
+            ("nothing ahead: the whole addition", 42000, 0, 262000, 262000, 310300, 48300),
+            ("untouched range keeps the order", 168000, 168000, 262000, 100000, 262000, 0),
+        ]
         script = match.group(0) + "\nconst cases = " + json.dumps(cases) + ";\n"
         script += "console.log(JSON.stringify(cases.map(c => planOrder(c[1], c[2], c[3], 0.15, 10))));"
         output = subprocess.run(["node", "-e", script], check=True, text=True, capture_output=True)
         for case, actual in zip(cases, json.loads(output.stdout)):
             with self.subTest(case=case[0]):
                 self.assertEqual(actual, {"target": case[4], "gap": case[5]})
+        script = match.group(0) + "\nconst cases = " + json.dumps(with_use) + ";\n"
+        script += "console.log(JSON.stringify(cases.map(c => planOrder(c[1], c[2], c[3], 0.15, 10, c[4]))));"
+        output = subprocess.run(["node", "-e", script], check=True, text=True, capture_output=True)
+        for case, actual in zip(with_use, json.loads(output.stdout)):
+            with self.subTest(case=case[0]):
+                self.assertEqual(actual, {"target": case[5], "gap": case[6]})
 
 
 if __name__ == "__main__":
