@@ -31,6 +31,9 @@ const CONVERTED = {
   nav: '#nav, #companyNav, #supplyNav, #growthNav, #clock > b, #clock > small:not(.fv-diffline), #clock .flag, '
     + '#clock .fv-diff, #ssField, .ss-ask, #ssAskMini',
   foot: '.sitefoot',
+  /* A finding's headline, on Today and in the site panel. Its detail (.more)
+     joins once the helpers after _shelf_notes() are converted too (PR 5b). */
+  f: '.find .what, .sp-find .what',
 };
 const MEASURED = 'button, .chip, .seg a, th, .tile .lab';
 
@@ -191,7 +194,9 @@ async function measure(page){
           if(!n.parentElement || !shown(n.parentElement)) continue;
           /* A name (Big Copilot, YouTube, the studio) is marked translate="no". */
           if(n.parentElement.closest('[translate="no"]')) continue;
-          const outside = n.textContent.replace(/\[[^\]]*\]/g, '').replace(/[\d\s.,:;$%+\-–—×·/()!?%'"‹›…#]+/g, '');
+          /* A finding's sentence is cut into headline and detail, so its
+             brackets can open in one text node and close in the next. */
+          const outside = n.textContent.replace(/^[^\[]*\]/, '').replace(/\[[^\]]*(\]|$)/g, '').replace(/[\d\s.,:;$%+\-–—×·/()!?%'"‹›…#]+/g, '');
           if(outside.length > 1) english.push(`${area}: ${n.textContent.trim().slice(0, 60)}`);
         }
       });
