@@ -30,9 +30,9 @@ CHECK_INPUTS = tuple(dict.fromkeys(
 CLI_INPUTS = tuple(dict.fromkeys(
     CHECK_INPUTS
     + ("ba_save.py", "ba_dashboard.py", "web/changelog.json", "web/map.js", "web/map.css",
-       "web/wiki.js", "web/wiki.css", "web/wiki-data.json")
+       "web/wiki.js", "web/wiki.css", "web/wiki-data.json", "web/sitemap.xml", "web/robots.txt")
 ))
-CLI_TREES = ("tools/*.py", "tools/wiki_sample.json", "web/py/*", "web/maps/*")
+CLI_TREES = ("tools/*.py", "tools/wiki_sample.json", "web/py/*", "web/maps/*", "web/wiki/**/*")
 
 
 def place(root, name, data):
