@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "71de0f853a";</script>
-<link rel="stylesheet" href="community.css?v=71de0f853a">
+<script>window.LEDGER_BUILD = "f465472db2";</script>
+<link rel="stylesheet" href="community.css?v=f465472db2">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=71de0f853a">
+<link rel="stylesheet" href="fonts/fonts.css?v=f465472db2">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -4113,7 +4113,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"71de0f853a","latest":{"pr":118,"date":"2026-09-25","title":"Game names in the language you play in","summary":"A new Game names setting in the footer, beside Theme, shows the game's own names in any language the game ships: items, business types, neighbourhoods, stations, skills and staff demands, on the board, inside its findings and in the wiki, so the board reads like your game. The rest of the page stays English. Search finds a name in either language, and lists sort in the language you picked. If your browser prefers one of the game's languages, the board asks once whether to use it."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"f465472db2","latest":{"pr":118,"date":"2026-09-25","title":"Game names in the language you play in","summary":"A new Game names setting in the footer, beside Theme, shows the game's own names in any language the game ships: items, business types, neighbourhoods, stations, skills and staff demands, on the board, inside its findings and in the wiki, so the board reads like your game. The rest of the page stays English. Search finds a name in either language, and lists sort in the language you picked. If your browser prefers one of the game's languages, the board asks once whether to use it."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -4197,8 +4197,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=71de0f853a"></script>
-<script src="community.js?v=71de0f853a"></script>
+<script src="app.js?v=f465472db2"></script>
+<script src="community.js?v=f465472db2"></script>
 
 <script>
 
@@ -6279,7 +6279,9 @@ function chainRow(c, v){
     : c.suppliedBy.length ? tt("co.chain.supplied", "supplied from {sites}", {sites: c.suppliedBy.join(", ")}) : "";
   const name = `${CHEV()}${c.name}<span class="sub" style="padding-left:16px">${xlMembers(c)}${
     note ? ` · ${note}` : ""}</span>`;
-  return `<tr class="chain" data-chain="${attr(c.name)}">${
+  /* A chain is known by its English name, so the chains a reader opened stay
+     open when the UI language changes the name on screen. */
+  return `<tr class="chain" data-chain="${attr(enOf(c, "name"))}">${
     cells.map((cell, i) => `<td class="${i ? "" : "l"}">${i === 0 ? name : cell}</td>`).join("")}</tr>`;
 }
 
@@ -6340,7 +6342,7 @@ function drawPortfolio(){
     let kids = c.sites.map(k => byKey[k]).filter(Boolean);
     if(sorter) kids = kids.slice().sort(sorter);
     kids.forEach(b => body.push(`<tr class="kid${siteOpen && b.key === siteKey ? " on" : ""}" data-parent="${
-      attr(c.name)}" data-key="${attr(b.key)}" title="${attr(tt("co.port.kid.title", "Open this site's detail"))}">${cols.map(([,f,cls]) =>
+      attr(enOf(c, "name"))}" data-key="${attr(b.key)}" title="${attr(tt("co.port.kid.title", "Open this site's detail"))}">${cols.map(([,f,cls]) =>
       `<td class="${cls||""}">${f(b)}</td>`).join("")}</tr>`));
   });
 
@@ -6429,7 +6431,7 @@ function siteCrumbs(key, name, picker){
   const chain = (D.chains || []).find(c => (c.sites || []).includes(key));
   const trail = [
     siteFrom ? `<a href="#secPortfolio" data-ss="portfolio">Portfolio</a>` : "",
-    chain ? `<a href="#secPortfolio" data-ss="chain" data-chain="${attr(chain.name)}">${spEsc(chain.name)}</a>` : "",
+    chain ? `<a href="#secPortfolio" data-ss="chain" data-chain="${attr(enOf(chain, "name"))}">${spEsc(chain.name)}</a>` : "",
     `<span aria-current="page">${spEsc(name)}</span>`].filter(Boolean).join("<i>›</i>");
   return `<nav class="ss-crumbs" aria-label="Where this page sits">${back}<span class="ss-trail">${trail}</span>${
     picker ? `<div class="ss-pick" id="sitePick"></div>` : ""}</nav>`;
@@ -11218,9 +11220,11 @@ function drawProducts(){
     if(!p.peak) return tt("co.prod.peak.none", "No weekly cycle clears the noise test");
     const stores = tt("co.prod.stores", {one: "{n} store", other: "{n} stores"}, {n: p.stores});
     return p.weeks
-      ? tt("co.prod.peak.tip.weeks", "Units sold across {stores}, last {weeks}: peaks {day}, {n} points between best and worst day",
+      ? tt("co.prod.peak.tip.weeks", {one: "Units sold across {stores}, last {weeks}: peaks {day}, {n} points between best and worst day",
+        other: "Units sold across {stores}, last {weeks}: peaks {day}, {n} points between best and worst day"},
         {stores, weeks: tt("co.prod.weeks", {one: "{n} week", other: "{n} weeks"}, {n: p.weeks}), day: coDay(p.peak), n: p.swing})
-      : tt("co.prod.peak.tip", "Units sold across {stores}: peaks {day}, {n} points between best and worst day",
+      : tt("co.prod.peak.tip", {one: "Units sold across {stores}: peaks {day}, {n} points between best and worst day",
+        other: "Units sold across {stores}: peaks {day}, {n} points between best and worst day"},
         {stores, day: coDay(p.peak), n: p.swing});
   };
   /* Each product's peak reads its own weeks of sales (its cell says how many);
@@ -11309,7 +11313,7 @@ function drawPayroll(){
     why: payrollWhy(),
     /* Booked yesterday is said whenever there was a yesterday: $0 booked
        against a payroll is exactly the gap the ? explains. */
-    quiet: `${tt("co.pay.people", "{n} people", {n: st.total})} · ${
+    quiet: `${tt("co.pay.people", {one: "{n} people", other: "{n} people"}, {n: st.total})} · ${
       tt("co.pay.rate", "{w:$}/day at today's rates", {w: st.dailyCost})}${
       D.kpi && (D.daily || []).length ? ` · ${tt("co.pay.booked", "{w:$} booked yesterday", {w: D.kpi.wageBill || 0})}` : ""}`,
     aside: st.total ? chipHtml(st.avgSatisfaction >= 70 ? "ok tr" : "warn tr", `${st.avgSatisfaction}%`,

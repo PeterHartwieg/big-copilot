@@ -16428,7 +16428,9 @@ function chainRow(c, v){
     : c.suppliedBy.length ? tt("co.chain.supplied", "supplied from {sites}", {sites: c.suppliedBy.join(", ")}) : "";
   const name = `${CHEV()}${c.name}<span class="sub" style="padding-left:16px">${xlMembers(c)}${
     note ? ` · ${note}` : ""}</span>`;
-  return `<tr class="chain" data-chain="${attr(c.name)}">${
+  /* A chain is known by its English name, so the chains a reader opened stay
+     open when the UI language changes the name on screen. */
+  return `<tr class="chain" data-chain="${attr(enOf(c, "name"))}">${
     cells.map((cell, i) => `<td class="${i ? "" : "l"}">${i === 0 ? name : cell}</td>`).join("")}</tr>`;
 }
 
@@ -16489,7 +16491,7 @@ function drawPortfolio(){
     let kids = c.sites.map(k => byKey[k]).filter(Boolean);
     if(sorter) kids = kids.slice().sort(sorter);
     kids.forEach(b => body.push(`<tr class="kid${siteOpen && b.key === siteKey ? " on" : ""}" data-parent="${
-      attr(c.name)}" data-key="${attr(b.key)}" title="${attr(tt("co.port.kid.title", "Open this site's detail"))}">${cols.map(([,f,cls]) =>
+      attr(enOf(c, "name"))}" data-key="${attr(b.key)}" title="${attr(tt("co.port.kid.title", "Open this site's detail"))}">${cols.map(([,f,cls]) =>
       `<td class="${cls||""}">${f(b)}</td>`).join("")}</tr>`));
   });
 
@@ -16578,7 +16580,7 @@ function siteCrumbs(key, name, picker){
   const chain = (D.chains || []).find(c => (c.sites || []).includes(key));
   const trail = [
     siteFrom ? `<a href="#secPortfolio" data-ss="portfolio">Portfolio</a>` : "",
-    chain ? `<a href="#secPortfolio" data-ss="chain" data-chain="${attr(chain.name)}">${spEsc(chain.name)}</a>` : "",
+    chain ? `<a href="#secPortfolio" data-ss="chain" data-chain="${attr(enOf(chain, "name"))}">${spEsc(chain.name)}</a>` : "",
     `<span aria-current="page">${spEsc(name)}</span>`].filter(Boolean).join("<i>›</i>");
   return `<nav class="ss-crumbs" aria-label="Where this page sits">${back}<span class="ss-trail">${trail}</span>${
     picker ? `<div class="ss-pick" id="sitePick"></div>` : ""}</nav>`;
@@ -21367,9 +21369,11 @@ function drawProducts(){
     if(!p.peak) return tt("co.prod.peak.none", "No weekly cycle clears the noise test");
     const stores = tt("co.prod.stores", {one: "{n} store", other: "{n} stores"}, {n: p.stores});
     return p.weeks
-      ? tt("co.prod.peak.tip.weeks", "Units sold across {stores}, last {weeks}: peaks {day}, {n} points between best and worst day",
+      ? tt("co.prod.peak.tip.weeks", {one: "Units sold across {stores}, last {weeks}: peaks {day}, {n} points between best and worst day",
+        other: "Units sold across {stores}, last {weeks}: peaks {day}, {n} points between best and worst day"},
         {stores, weeks: tt("co.prod.weeks", {one: "{n} week", other: "{n} weeks"}, {n: p.weeks}), day: coDay(p.peak), n: p.swing})
-      : tt("co.prod.peak.tip", "Units sold across {stores}: peaks {day}, {n} points between best and worst day",
+      : tt("co.prod.peak.tip", {one: "Units sold across {stores}: peaks {day}, {n} points between best and worst day",
+        other: "Units sold across {stores}: peaks {day}, {n} points between best and worst day"},
         {stores, day: coDay(p.peak), n: p.swing});
   };
   /* Each product's peak reads its own weeks of sales (its cell says how many);
@@ -21458,7 +21462,7 @@ function drawPayroll(){
     why: payrollWhy(),
     /* Booked yesterday is said whenever there was a yesterday: $0 booked
        against a payroll is exactly the gap the ? explains. */
-    quiet: `${tt("co.pay.people", "{n} people", {n: st.total})} · ${
+    quiet: `${tt("co.pay.people", {one: "{n} people", other: "{n} people"}, {n: st.total})} · ${
       tt("co.pay.rate", "{w:$}/day at today's rates", {w: st.dailyCost})}${
       D.kpi && (D.daily || []).length ? ` · ${tt("co.pay.booked", "{w:$} booked yesterday", {w: D.kpi.wageBill || 0})}` : ""}`,
     aside: st.total ? chipHtml(st.avgSatisfaction >= 70 ? "ok tr" : "warn tr", `${st.avgSatisfaction}%`,
