@@ -25607,7 +25607,7 @@ function gwImportView(lines, answer, phase){
     const now = Number.isFinite(r.inGame) ? r.inGame : 0;
     const target = Number.isFinite(r.value) ? r.value : 0;
     const after = smart ? target : Math.max(0, target - (l.uncovered || 0));
-    const num = done || now === after
+    const figure = done || now === after
       ? `<span class="gw-num">${gwN(after)}<small>${unit}</small></span>`
       : `<span class="gw-num"><span class="gw-sr">from </span><s>${gwN(now)}</s>${gwSvg("right")}<span class="gw-sr"> to </span>${gwN(after)}<small>${unit}</small></span>`;
     const mode = smart ? `<span class="gw-mode smart" title="Smart Delivery: keeps this much in stock">${gwSvg("tank")}<span class="gw-sr">Smart Delivery</span></span>`
@@ -25681,7 +25681,7 @@ function gwImportView(lines, answer, phase){
       });
     }
     return `<div class="gw-line${dim ? " dim" : ""}${done ? " ticked" : ""}"><div class="gw-lt"><span class="gw-mat" aria-hidden="true">${gwSvg("crate")}</span><b>${
-      spEsc(r.item)}</b>${mode}${num}</div>${bar}${pills.length ? `<div class="gw-imps">${pills.join("")}</div>` : ""}${notes.join("")}</div>`;
+      spEsc(r.item)}</b>${mode}${figure}</div>${bar}${pills.length ? `<div class="gw-imps">${pills.join("")}</div>` : ""}${notes.join("")}</div>`;
   };
   const depots = new Map();
   lines.forEach(l => { if(!depots.has(l.depot.key)) depots.set(l.depot.key, []); depots.get(l.depot.key).push(l); });
