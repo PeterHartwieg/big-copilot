@@ -1,4 +1,4 @@
-// The one-time news strip under the update banner (NEWS in web/update.js).
+// The one-time news strip under the update banner (#newsStrip in build_web.py; web/update.js shows it).
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');

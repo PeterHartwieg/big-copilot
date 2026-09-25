@@ -1,5 +1,8 @@
 # Community features implementation plan
 
+Status: implemented (PR #19, 13 September 2026). Kept because `tests/community-api.test.cjs`
+cites its API contract; the current description is [community-features.md](community-features.md).
+
 ## Outcome
 
 Add an approximate online dashboard count and curated feature voting to the hosted

@@ -1,5 +1,7 @@
 # Visual Wiki guides for all shops
 
+Status: archived. Shipped as PR #25 (14 September 2026).
+
 Simplified implementation plan, 14 September 2026.
 
 Extend the existing Gift Shop implementation to the other **20 customer-facing businesses**. All their help pages already exist; this work gives them the same useful visual treatment.

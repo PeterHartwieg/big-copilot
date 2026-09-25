@@ -1,5 +1,8 @@
 # Find a location: scope and implementation contract
 
+Status: archived. Shipped as PR #28 (15 September 2026), with follow-ups in PRs #32 and #34.
+The finder now lives in `web/map.js`; see [docs/architecture.md](../architecture.md).
+
 Scoped 15 September 2026 with Peter after a grilling session. This document is the
 contract for the implementation agents; the decisions here are settled and are not
 to be reopened by workers. Build number and save used for validation: HART. YT
