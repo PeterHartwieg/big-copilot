@@ -121,6 +121,14 @@ class Site:
         # The pages that get a static page of their own: every help page outside furniture.
         self.static = [p for p in self.pages if p.get("categoryId") != FURNITURE]
         self.static_ids = {str(p["id"]) for p in self.static}
+        # Two entries the game names alike ("Bag of Lettuce" as a product and as
+        # a factory ingredient) get their category in the <title>, so no two
+        # pages share one.
+        names: dict[str, int] = {}
+        for p in self.static:
+            key = str(p.get("title") or p["id"]).casefold()
+            names[key] = names.get(key, 0) + 1
+        self.clashes = {k for k, n in names.items() if n > 1}
         for ident in sorted(self.static_ids | {str(c["id"]) for c in self.categories}
                             | {str(t["slug"]) for t in self.topics}):
             if not SAFE_ID.match(ident) or ident in RESERVED:
@@ -217,22 +225,44 @@ def markdown_blocks(raw) -> list[tuple[str, object]]:
     return blocks
 
 
-def plain(raw) -> str:
-    """The body as one line of words: links keep their label, markup goes."""
-    source = "" if raw is None else str(raw)
-    source = re.sub(r"\[([^\]\n]+)\]\(([^)\n]*)\)", r"\1", source)
-    source = source.replace("**", "")
-    lines = []
-    for line in source.splitlines():
-        line = line.strip()
-        bullet = BULLET.match(line)
-        lines.append(bullet.group(1) if bullet else line)
-    return re.sub(r"\s+", " ", " ".join(lines)).strip()
+def unmark(line: str) -> str:
+    """One line as words: links keep their label, **bold** and *emphasis* go."""
+    line = re.sub(r"\[([^\]\n]+)\]\(([^)\n]*)\)", r"\1", line).replace("**", "")
+    line = re.sub(r"(?<!\w)\*(?=\S)([^*\n]+?)\*(?!\w)", r"\1", line)
+    return re.sub(r"\s+", " ", line).strip()
+
+
+TITLE_LINE = re.compile(r"\*\*[^*\n]+\*\*\Z")
+
+
+def sentences(raw) -> list[str]:
+    """The body as sentences, for the meta description.
+
+    A label line (wikiBlocks makes it a heading) is kept only as the lead-in to
+    the list below it, and dropped otherwise. Leading bold lines with
+    no sentence end are titles ("**Character Movement**") and go too. A line
+    that ends in a colon takes the list below it ("adding: A, B."); every other
+    line or list item is a sentence of its own, closed with a full stop if it
+    has none.
+    """
+    units: list[list[str]] = []   # [source line, words]
+    for kind, value in markdown_blocks(raw):
+        if kind == "h":
+            units.append(["", unmark(value)])   # kept only if a list follows it
+            continue
+        if kind == "ul" and units and units[-1][1].endswith(":"):
+            units[-1][1] += " " + ", ".join(unmark(i) for i in value) + "."
+            continue
+        units.extend([line, unmark(line)] for line in value)
+    units = [u for u in units if u[1] and (u[0] or not u[1].endswith(":"))]
+    while len(units) > 1 and TITLE_LINE.match(units[0][0]) and not re.search(r"[.!?:]", units[0][1]):
+        units.pop(0)
+    return [w if re.search(r"[.!?]$", w) else w.rstrip(":;,") + "." for _src, w in units]
 
 
 def description(raw, fallback: str) -> str:
     """The first sentence, cut at a word under 160 characters when it runs long."""
-    words = plain(raw)
+    words = " ".join(sentences(raw))
     m = re.match(r"(.+?[.!?])(?:\s|$)", words)
     first = m.group(1) if m else words
     if len(first) > 160:
@@ -285,22 +315,24 @@ def guide_table(site: Site, guide: dict, here: str) -> str:
     suppliers = guide.get("SUPPLIERS") if isinstance(guide.get("SUPPLIERS"), dict) else {}
     if not products:
         return ""
-    order = {"primary": 0, "secondary": 1}
+    order = {"primary": 0, "additional": 1}
     rows = []
     for key, prod in sorted(products.items(), key=lambda kv: (order.get(kv[1].get("rank"), 2),
                                                               str(kv[1].get("name") or kv[0]).casefold(), kv[0])):
         name = str(prod.get("name") or key)
         page = str(prod.get("pageId") or "")
         cell = site.link(name, page, here) if page else text(name)
-        rank = "Primary" if prod.get("rank") == "primary" else "Secondary"
+        rank = "Primary" if prod.get("rank") == "primary" else "Additional"
         if prod.get("kind") == "fee":
             rank += " (fee)"
         sold = ", ".join(str((fixtures.get(f) or {}).get("name") or f) for f in prod.get("fixtures") or [])
         supply = (["Wholesalers"] if prod.get("wholesale") else []) + [
             str((suppliers.get(k) or {}).get("name") or k) for k in prod.get("importers") or []]
+        if prod.get("recipes") or prod.get("recipe"):
+            supply.append("Own production")
         if not supply:
             supply = ["Collected automatically"] if prod.get("automatic") else (
-                ["Service"] if prod.get("kind") == "fee" else ["Own production"] if prod.get("recipes") else [])
+                ["Service"] if prod.get("kind") == "fee" else [])
         rows.append(f"<tr><th scope=\"row\">{cell}</th><td>{text(rank)}</td>"
                     f"<td>{text(sold or '—')}</td><td>{text(', '.join(supply) or '—')}</td></tr>")
     return ("<h2>What it sells</h2>\n<div class=\"wp-tbl\"><table>"
@@ -337,7 +369,10 @@ def entry_page(site: Site, page: dict) -> str:
     if isinstance(guide, dict):
         main += "\n" + guide_table(site, guide, pid)
     main += "\n" + HELP_SOURCE
-    return document(path=f"/wiki/{pid}/", title=f"{title} · Big Ambitions wiki",
+    head = title
+    if title.casefold() in site.clashes and cat:
+        head = f"{title} ({cat_label(cat)})"
+    return document(path=f"/wiki/{pid}/", title=f"{head} · Big Ambitions wiki",
                     desc=description(page.get("body"), f"{title}, from Big Ambitions' in-game help."),
                     app=f"#wiki/{pid}", crumb=crumb, heading=title, main=main)
 

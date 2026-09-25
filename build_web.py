@@ -7,7 +7,8 @@ Writes web/index.html from the same template the local server uses, with the
 landing screen above the board and the worker data source wired in ahead of
 the board's script, and copies the two Python files into web/py/ for the
 worker to fetch. It also writes the static wiki pages under web/wiki/,
-web/sitemap.xml and web/robots.txt from web/wiki-data.json (tools/wiki_pages.py). web/app.js and web/worker.js are kept by hand. Nothing else
+web/sitemap.xml and web/robots.txt from web/wiki-data.json (tools/wiki_pages.py).
+web/app.js and web/worker.js are kept by hand. Nothing else
 is needed: the folder is a static site.
 
 --check writes nothing and needs no installed game: it reports the files under

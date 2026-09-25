@@ -63,6 +63,24 @@ class ExpectedPages(unittest.TestCase):
                 self.assertIn("Open in the app</a>", body)
                 self.assertIn('href="/impressum"', body)
 
+    def test_no_two_pages_share_a_title(self):
+        titles = {}
+        for rel, body in HTML.items():
+            title = re.search(r"<title>([^<]+)</title>", body).group(1)
+            self.assertNotIn(title, titles, f"{rel} and {titles.get(title)}")
+            titles[title] = rel
+        self.assertIn("<title>Bag of Lettuce (Factory Ingredients) · Big Ambitions wiki</title>",
+                      HTML["wiki/products-rawlettuce/index.html"])
+
+    def test_guide_table_ranks_and_supply(self):
+        body = HTML["wiki/businesstypes-bookstore/index.html"]
+        table = body[body.index("<h2>What it sells</h2>"):]
+        self.assertNotIn("Secondary", table)
+        self.assertIn("<td>Additional</td>", table)
+        # Sold by importers and made from a recipe: both are listed.
+        self.assertRegex(table, r"Novel</a></th><td>Primary</td><td>[^<]*</td><td>[^<]*Own production</td>")
+        self.assertLess(table.index("Youth Novel"), table.index("Flower (Cheap)"))
+
     def test_guides_carry_their_table(self):
         for pid in DATA["guides"]:
             with self.subTest(id=pid):
@@ -147,6 +165,28 @@ class Markdown(unittest.TestCase):
     def test_description_is_the_first_sentence(self):
         html = self.page("The **first** [sentence](b). The second.")
         self.assertIn('<meta name="description" content="The first sentence.">', html)
+
+    def test_description_skips_titles_and_labels(self):
+        cases = {
+            "**Movement**\n* You move with *WASD* keys\n* Shift walks": "You move with WASD keys.",
+            "**Title**\n\nThe text here!": "The text here!",
+            "**Needs**:\n\nA line without an end": "A line without an end.",
+            "Made by adding machines:\n* [One](b)\n* Two\n\nMore.": "Made by adding machines: One, Two.",
+        }
+        for body, want in cases.items():
+            with self.subTest(body=body):
+                self.assertEqual(wiki_pages.description(body, "fallback"), want)
+        self.assertEqual(wiki_pages.description("**Only a title**", "fallback"), "Only a title.")
+        self.assertEqual(wiki_pages.description("", "fallback"), "fallback")
+
+    def test_real_descriptions_start_with_a_sentence(self):
+        for rel, body in HTML.items():
+            desc = re.search(r'<meta name="description" content="([^"]+)">', body).group(1)
+            with self.subTest(rel=rel):
+                self.assertNotIn("*", desc)
+                self.assertRegex(desc, r"[.!?…]$")
+        self.assertIn('content="Your character moves using mouse',
+                      HTML["wiki/general-movement/index.html"])
 
     def test_an_id_that_is_not_a_path_segment_is_refused(self):
         for bad in ("Has Space", "c", "topic", "a/b"):
