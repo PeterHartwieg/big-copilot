@@ -20,7 +20,7 @@ import os
 import shutil
 
 from ba_dashboard import VERIFIED_BUILD, footer_html, render
-from ba_save import bundled_locale, load_game_locale, locale_search_paths
+from ba_save import NotEnglishText, bundled_locale, load_game_locale, locale_search_paths
 from tools.build_wiki_data import write_public_wiki
 from tools.extract_wiki import game_data_dir
 
@@ -478,7 +478,7 @@ def page_html(release: dict, root: str = HERE) -> str:
     board. For check() that is the intent -- the shared board is the one under
     review -- but it makes page_html unfit for rendering a foreign checkout.
     """
-    # render() writes the doctype and the charset tag itself and places head
+    # render() writes the doctype, <html lang="en"> and the charset tag itself and places head
     # straight after them. The template carries the inline SVG favicon, so this
     # door never asks for /favicon.ico either; a viewport tag is all this page
     # adds.
@@ -546,7 +546,10 @@ def main() -> None:
     # needs it, and the wiki reads helpstructure.json beside it, so a path that
     # is not the game's own has to stop the build here with a message that says
     # what is wrong, rather than surface as a missing file two steps later.
-    locale_path, locale = load_game_locale()
+    try:
+        locale_path, locale = load_game_locale()
+    except NotEnglishText as exc:  # gametext.json and the wiki are built from English
+        raise SystemExit(str(exc)) from None
     if not locale_path:
         raise SystemExit(
             "no game text found; gametext.json cannot be built. Set BA_LOCALE to the "
