@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "6cfafa2a31";</script>
-<link rel="stylesheet" href="community.css?v=6cfafa2a31">
+<script>window.LEDGER_BUILD = "acbe3f1165";</script>
+<link rel="stylesheet" href="community.css?v=acbe3f1165">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=6cfafa2a31">
+<link rel="stylesheet" href="fonts/fonts.css?v=acbe3f1165">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -3659,6 +3659,7 @@ details.help[open] summary::after{content:"\2013"}
 .menu-hint{font-size:11px;color:var(--ink-2);margin:4px 10px 10px}
 .menu-divider{border-top:1px solid var(--rule);margin:6px 0 12px}
 .menu-panel .lg-chip{margin-left:9px}
+.menu-panel #localeReset{margin-left:10px}
 .menu-panel details.help{margin-top:12px;border-top:1px solid var(--rule);padding:0 10px}
 .menu-panel details.help summary{padding:12px 0}
 .menu-panel .help-content{padding-bottom:12px}
@@ -3809,7 +3810,7 @@ details.help[open] summary::after{content:"\2013"}
       <p id="lgHelpLinked"><b>Linked to the game.</b> With the <a href="https://steamcommunity.com/sharedfiles/filedetails/?id=3806322395" target="_blank" rel="noopener">Big Copilot Link mod</a> from the Steam Workshop enabled, click <b>Link to the game</b> and the board reads the running game itself. Chrome and Edge ask once to allow the site to reach your computer; the data still never leaves it.</p>
       <div class="lg-gametext">
         <div class="path-label" id="asideEyebrow">Game text</div>
-        <div id="asideChip"><button type="button" class="lg-chip" id="localeChip" data-state="ok"><i></i><span>Game text built in</span></button></div>
+        <div id="asideChip"><button type="button" class="lg-chip" id="localeChip" data-state="ok"><i></i><span>Game text built in</span></button> <button type="button" class="lg-text" id="localeReset" hidden title="Forget your en.json and use the game text that comes with the page" data-tt-title="land.gametext.reset.title" data-tt="land.gametext.reset">Use the built-in text</button></div>
         <p id="asideText">Names, recipes and station capacities come with the page, from game build 3682.</p>
         <p class="quiet" id="asideQuiet">If your game is newer, click the chip and choose its <code>en.json</code>; it is remembered in this browser and wins over the built-in text.</p>
         <div id="localeWindows" hidden><div class="path-label" data-tt="land.gametext.where">en.json lives here &middot; default Windows Steam installation</div>
@@ -3817,7 +3818,7 @@ details.help[open] summary::after{content:"\2013"}
         </div>
         <p id="localeOther" class="quiet">To find your game's <code>en.json</code>, open Steam &rarr; Manage &rarr; Browse local files. On macOS, search that folder for <code>en.json</code>; use Show Package Contents if the game files are inside an app bundle.</p>
       </div>
-      <p class="lg-quiet"><button type="button" class="lg-text" id="forgetHistory" title="Sixty days of demand and cash history are kept in this browser for the trends. Forgetting them starts a fresh record." data-tt-title="land.forget.title" data-tt="land.forget">Forget history</button> <span data-tt="land.forget.after">&middot; the page only reads your saves, from a folder or from the running game.</span></p>
+      <p class="lg-quiet"><button type="button" class="lg-text" id="forgetHistory" title="Two weeks of demand and sixty days of cash history are kept in this browser for the trends. Forgetting them starts a fresh record." data-tt-title="land.forget.title" data-tt="land.forget">Forget history</button> <span data-tt="land.forget.after">&middot; the page only reads your saves, from a folder or from the running game.</span></p>
     </div>
   </details>
   <div class="orb" id="lgOrb" aria-hidden="true"><i></i><u></u></div>
@@ -4145,7 +4146,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"6cfafa2a31","latest":{"pr":118,"date":"2026-09-25","title":"Game names in the language you play in","summary":"A new Game names setting in the footer, beside Theme, shows the game's own names in any language the game ships: items, business types, neighbourhoods, stations, skills and staff demands, on the board, inside its findings and in the wiki, so the board reads like your game. The rest of the page stays English. Search finds a name in either language, and lists sort in the language you picked. If your browser prefers one of the game's languages, the board asks once whether to use it."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"acbe3f1165","latest":{"pr":118,"date":"2026-09-25","title":"Game names in the language you play in","summary":"A new Game names setting in the footer, beside Theme, shows the game's own names in any language the game ships: items, business types, neighbourhoods, stations, skills and staff demands, on the board, inside its findings and in the wiki, so the board reads like your game. The rest of the page stays English. Search finds a name in either language, and lists sort in the language you picked. If your browser prefers one of the game's languages, the board asks once whether to use it."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -4233,8 +4234,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=6cfafa2a31"></script>
-<script src="community.js?v=6cfafa2a31"></script>
+<script src="app.js?v=acbe3f1165"></script>
+<script src="community.js?v=acbe3f1165"></script>
 
 <script>
 
