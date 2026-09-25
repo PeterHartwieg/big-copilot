@@ -143,13 +143,15 @@ when every category parsed and the table equals `FALLBACK_CAPS`; at build 3682 i
 `other headings` is every bold line on the page that is not one of `CAP_CATEGORIES`.
 A non-zero exit says why:
 
-- Game or page not found: set `BA_LOCALE`. A renamed page key: update every use of the
-  old key (`git grep help_building_types_content`, and `RETAIL_SIZES_PAGE` in
-  `tools/build_wiki_data.py`).
-- No size rows parsed for a category: the page's wording changed. If the category's
-  heading shows under `other headings` with a new name, rename the key in
-  `CAP_CATEGORIES`, `FALLBACK_CAPS` and the `VENUE_TYPES` value (each is the lower-case
-  page heading), not the regexes; otherwise fix `_CAP_SECTION_RE` or `_CAP_SIZE_RE`.
+- Game not found: set `BA_LOCALE`.
+- Page missing from that file: the page key was renamed. Update every use of the old key
+  (`git grep help_building_types_content`, and `RETAIL_SIZES_PAGE` in
+  `tools/build_wiki_data.py`), then rebuild `web/`; don't hand-edit the copies in `web/py/`.
+- No size rows parsed for a category: the page's wording changed. The keys in
+  `CAP_CATEGORIES`, `FALLBACK_CAPS` and the `VENUE_TYPES` values are the building table's
+  `t`, not the heading text, so do not rename them; ask the owner. A heading that is no
+  longer a bold line of letters, spaces and slashes needs `_CAP_SECTION_RE`; otherwise fix
+  `_CAP_SIZE_RE`.
 - The table differs: compare the printed row counts with the page. Fewer rows than the
   page lists means `_CAP_SIZE_RE` lost rows; otherwise update `FALLBACK_CAPS` and its
   comment, and check `CAPS_HELP` in `tests/test_premises.py`.
@@ -299,10 +301,12 @@ was under 1% off on every current lease, and under 2% on the deposits. A jump to
 percent means the patch rebalanced rents: refit `RENT_RATES` against current leases.
 
 Then the office post rate, if the company runs an office: open the office's own page on
-the board. Hovering an hour reads "N of M workstations staffed", where N is
-`staffed / postRate`, so it assumes the current rate. Compare the hours marked "at the
-ceiling", skip any marked "at building capacity", and not the hour labelled "Busiest
-hour" (that label means it did not reach the ceiling). There, customers should equal N.
+the board. Hovering an hour reads "N of M workstations staffed", where N is the
+professionals posted (`staffed / postRate`), whatever the rate. The ceiling behind the
+"at the ceiling" mark is N × `OFFICE_POST_RATE`, so the mark is what assumes the current
+rate. Compare the hours marked "at the ceiling", skip any marked "at building capacity",
+and not the hour labelled "Busiest hour" (that label means the lead hour is not marked
+"at the ceiling"). There, customers should equal N.
 A lower real rate can hide the "at the ceiling" mark altogether: it shows as customers
 stuck at the same fraction of N across hours with different N. The fee's demand is in the
 Offices band of the market demand grid (Growth > Demand), not in the tooltip. If the
