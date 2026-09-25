@@ -42,6 +42,58 @@
     "slug": "ba:itemname_beer"
    },
    "group": "staff",
+   "i18n": {
+    "text": [
+     "sp.py.staff.lost",
+     {
+      "hours": 0,
+      "item": "⟦ba:itemname_beer|Beer⟧",
+      "lost": 600,
+      "off": {
+       "m": [
+        "sp.py.when.part",
+        {
+         "days": {
+          "m": [
+           "sp.py.when.days",
+           {
+            "a": {
+             "m": [
+              "sp.py.wd.1",
+              {},
+              "Mon"
+             ]
+            },
+            "b": {
+             "m": [
+              "sp.py.wd.0",
+              {},
+              "Sun"
+             ]
+            }
+           },
+           "Mon-Sun"
+          ]
+         },
+         "hours": {
+          "m": [
+           "sp.py.when.hours",
+           {
+            "a": 0,
+            "b": 24
+           },
+           "0-24"
+          ]
+         }
+        },
+        "Mon-Sun 0-24"
+       ]
+      },
+      "slot": 2,
+      "week": 168
+     }
+    ]
+   },
    "id": "a532237a76",
    "level": "critical",
    "site": "HART. Brewery",
@@ -182,6 +234,76 @@
     "slug": "ba:itemname_beer"
    },
    "group": "staff",
+   "i18n": {
+    "text": [
+     "sp.py.staff.lost",
+     {
+      "hours": 84,
+      "item": "⟦ba:itemname_beer|Beer⟧",
+      "lost": 300,
+      "off": {
+       "m": [
+        "sp.py.when.part",
+        {
+         "days": {
+          "m": [
+           "sp.py.when.days",
+           {
+            "a": {
+             "m": [
+              "sp.py.wd.1",
+              {},
+              "Mon"
+             ]
+            },
+            "b": {
+             "m": [
+              "sp.py.wd.0",
+              {},
+              "Sun"
+             ]
+            }
+           },
+           "Mon-Sun"
+          ]
+         },
+         "hours": {
+          "m": [
+           "sp.py.list.comma",
+           {
+            "a": {
+             "m": [
+              "sp.py.when.hours",
+              {
+               "a": 0,
+               "b": 8
+              },
+              "0-8"
+             ]
+            },
+            "b": {
+             "m": [
+              "sp.py.when.hours",
+              {
+               "a": 20,
+               "b": 24
+              },
+              "20-24"
+             ]
+            }
+           },
+           "0-8, 20-24"
+          ]
+         }
+        },
+        "Mon-Sun 0-8, 20-24"
+       ]
+      },
+      "slot": 1,
+      "week": 168
+     }
+    ]
+   },
    "id": "da4b709001",
    "level": "warn",
    "site": "HART. Brewery",
@@ -209,6 +331,58 @@
      "slug": "ba:itemname_beer"
     },
     "group": "staff",
+    "i18n": {
+     "text": [
+      "sp.py.staff.needed.lost",
+      {
+       "hours": 0,
+       "item": "⟦ba:itemname_beer|Beer⟧",
+       "lost": 175,
+       "off": {
+        "m": [
+         "sp.py.when.part",
+         {
+          "days": {
+           "m": [
+            "sp.py.when.days",
+            {
+             "a": {
+              "m": [
+               "sp.py.wd.1",
+               {},
+               "Mon"
+              ]
+             },
+             "b": {
+              "m": [
+               "sp.py.wd.0",
+               {},
+               "Sun"
+              ]
+             }
+            },
+            "Mon-Sun"
+           ]
+          },
+          "hours": {
+           "m": [
+            "sp.py.when.hours",
+            {
+             "a": 0,
+             "b": 24
+            },
+            "0-24"
+           ]
+          }
+         },
+         "Mon-Sun 0-24"
+        ]
+       },
+       "slot": 2,
+       "week": 49
+      }
+     ]
+    },
     "id": "a532237a76",
     "level": "critical",
     "site": "HART. Brewery",
@@ -1911,6 +2085,38 @@
    "capTop": 20,
    "fix": "another counter",
    "hours": 14,
+   "i18n": {
+    "fix": [
+     "sp.py.fix.service.post",
+     {}
+    ],
+    "limit": [
+     "sp.py.limit.registers",
+     {}
+    ],
+    "when": [
+     "sp.py.when.part",
+     {
+      "days": {
+       "m": [
+        "sp.py.when.everyday",
+        {},
+        "every day"
+       ]
+      },
+      "hours": {
+       "m": [
+        "sp.py.when.hours",
+        {
+         "a": 17,
+         "b": 19
+        },
+        "17-19"
+       ]
+      }
+     }
+    ]
+   },
    "key": "ba:street_eighthstreet#5",
    "kind": "cap",
    "limit": "registers",
@@ -8079,11 +8285,107 @@
        "gaps": [
         {
          "hours": 0,
+         "i18n": {
+          "off": [
+           "sp.py.when.part",
+           {
+            "days": {
+             "m": [
+              "sp.py.when.days",
+              {
+               "a": {
+                "m": [
+                 "sp.py.wd.1",
+                 {},
+                 "Mon"
+                ]
+               },
+               "b": {
+                "m": [
+                 "sp.py.wd.0",
+                 {},
+                 "Sun"
+                ]
+               }
+              },
+              "Mon-Sun"
+             ]
+            },
+            "hours": {
+             "m": [
+              "sp.py.when.hours",
+              {
+               "a": 0,
+               "b": 24
+              },
+              "0-24"
+             ]
+            }
+           }
+          ]
+         },
          "off": "Mon-Sun 0-24",
          "slot": 2
         },
         {
          "hours": 84,
+         "i18n": {
+          "off": [
+           "sp.py.when.part",
+           {
+            "days": {
+             "m": [
+              "sp.py.when.days",
+              {
+               "a": {
+                "m": [
+                 "sp.py.wd.1",
+                 {},
+                 "Mon"
+                ]
+               },
+               "b": {
+                "m": [
+                 "sp.py.wd.0",
+                 {},
+                 "Sun"
+                ]
+               }
+              },
+              "Mon-Sun"
+             ]
+            },
+            "hours": {
+             "m": [
+              "sp.py.list.comma",
+              {
+               "a": {
+                "m": [
+                 "sp.py.when.hours",
+                 {
+                  "a": 0,
+                  "b": 8
+                 },
+                 "0-8"
+                ]
+               },
+               "b": {
+                "m": [
+                 "sp.py.when.hours",
+                 {
+                  "a": 20,
+                  "b": 24
+                 },
+                 "20-24"
+                ]
+               }
+              },
+              "0-8, 20-24"
+             ]
+            }
+           }
+          ]
+         },
          "off": "Mon-Sun 0-8, 20-24",
          "slot": 1
         }

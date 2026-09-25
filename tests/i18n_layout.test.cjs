@@ -28,6 +28,9 @@ const WIDTHS = [360, 768, 1280, 1500, 1501, 1920];
    screen there fails the sweep. */
 const CONVERTED = {
   // nav: '#nav, .subnav',
+  /* The answer on a site's cap chip: _role_words()'s fix, said by the Python
+     alone. The chip's other words are the site panel script's (sp). */
+  'sp.py': '#sitePanel .sp-hchip .fix',
 };
 const MEASURED = 'button, .chip, .seg a, th, .tile .lab';
 
@@ -183,7 +186,11 @@ async function measure(page){
         const walk = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
         for(let n = walk.nextNode(); n; n = walk.nextNode()){
           if(!n.parentElement || !shown(n.parentElement)) continue;
-          const outside = n.textContent.replace(/\[[^\]]*\]/g, '').replace(/[\d\s.,:;$%+\-–—×·/()!?%'"‹›…#]+/g, '');
+          /* A nested message brackets inside brackets ("[[Mon] [8-11]]"), so
+             the innermost go first. */
+          let bare = n.textContent;
+          for(let was = null; was !== bare;){ was = bare; bare = bare.replace(/\[[^\[\]]*\]/g, ''); }
+          const outside = bare.replace(/[\d\s.,:;$%+\-–—×·/()!?%'"‹›…#]+/g, '');
           if(outside.length > 1) english.push(`${area}: ${n.textContent.trim().slice(0, 60)}`);
         }
       });

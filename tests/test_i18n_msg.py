@@ -32,6 +32,11 @@ SUPPLY = {"graph": {"links": []}, "shops": [], "idle": [], "imports": []}
 # with f.loss and f.staff.none as its worked example (tested on their own).
 CONVERTED = {
     # "f": [("es3", "alerts", "text"), ("es3", "alerts", "detail"), ...],
+    # The hour grid's words (_hour_findings(), _hour_phrase(), _idle_week()).
+    # A cap's noun, and the limit of a role short of posts, is the station's
+    # own plural: the game's name in English, not a sentence, so not here.
+    "sp.py": [("theatre", "hourFindings", field) for field in ("limit", "fix", "when")]
+    + [("theatre", "hourFindings.week.parts", "when")],
 }
 
 

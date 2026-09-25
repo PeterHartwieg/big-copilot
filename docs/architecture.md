@@ -356,6 +356,13 @@ before. At the end of `extract()`, `_wire_msgs()` walks the payload once and, fo
 field holding a `Msg`, adds `row["i18n"][field] = [key, params]` (numbers raw, names as
 tokens, a nested `Msg` as `{"m": [key, params, english]}`).
 
+A message that opens a sentence cannot be capitalised by slicing (`limit[:1].upper() +
+limit[1:]` is a plain `str`). A cap finding's limit goes through `_cap_first(limit)`
+instead: it gives the same English and stays a message, through a sentence-initial key of
+its own for the limits that start lower case (`sp.py.limit.staffing.first`, "Staffing";
+`registers` and `workstations` likewise), and by capitalising only the first part of a
+join. A new lower-case word that can open a sentence gets its `.first` key there.
+
 Concatenating or `.replace()`-ing a `Msg` gives a plain `str`: that row then has no
 `i18n` entry and stays English on every page. The loss is visible, not wrong, and the
 per-area coverage in `tests/test_i18n_msg.py` (`CONVERTED`) catches it for a converted
