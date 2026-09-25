@@ -6,7 +6,7 @@ saying the whole of that shop's lift rides on it.
 """
 import unittest
 
-from ba_dashboard import _alerts, site_key
+from ba_dashboard import plain, _alerts, site_key
 from test_site_panel_fields import stub
 
 ELECTRO = site_key(("ba:street_industry", 1))
@@ -45,7 +45,7 @@ class HypeLineTests(unittest.TestCase):
     def test_one_wave_reads_as_it_always_has(self):
         [line], _ = hype_lines([wave(7, 4, 50, [site(ELECTRO, "[IC] HART. Electro", 137636)],
                                      baseline(63012))])
-        self.assertEqual(line["text"],
+        self.assertEqual(plain(line["text"]),
                          "Industry City hype on 7 lines has 4 days left; [IC] HART. Electro "
                          "does $137,636/day under it against $63,012 for the no-hype "
                          "[GD] HART. Electro; about $74,624/day of revenue rides on the wave.")
@@ -58,7 +58,7 @@ class HypeLineTests(unittest.TestCase):
                                wave(3, 13, 58, electro, baseline(90000, "its own 7 days before day 58"))])
         self.assertEqual(len(lines), 1)
         [line] = lines
-        self.assertEqual(line["text"],
+        self.assertEqual(plain(line["text"]),
                          "Industry City hype on 10 lines (7 end in 2 days, 3 in 13 days); "
                          "[IC] HART. Electro does $137,636/day under it against $63,012 for "
                          "the no-hype [GD] HART. Electro; about $74,624/day of revenue rides "
@@ -72,7 +72,7 @@ class HypeLineTests(unittest.TestCase):
         electro = [site(ELECTRO, "[IC] HART. Electro", 137636)]
         [line], _ = hype_lines([wave(7, 13, 50, electro, baseline(63012)),
                                 wave(3, 2, 58, electro, baseline(90000, "its own 7 days before day 58"))])
-        self.assertEqual(line["text"],
+        self.assertEqual(plain(line["text"]),
                          "Industry City hype on 10 lines (3 end in 2 days, 7 in 13 days); "
                          "[IC] HART. Electro does $137,636/day under it against $63,012 for "
                          "the no-hype [GD] HART. Electro; about $74,624/day of revenue rides "
@@ -82,10 +82,10 @@ class HypeLineTests(unittest.TestCase):
     def test_two_waves_on_one_shop_without_a_baseline_say_so_once(self):
         electro = [site(ELECTRO, "[IC] HART. Electro", 137636)]
         [line], _ = hype_lines([wave(7, 1, 50, electro, None), wave(3, 13, 58, electro, None)])
-        self.assertTrue(line["text"].startswith(
+        self.assertTrue(plain(line["text"]).startswith(
             "Industry City hype on 10 lines (7 end tomorrow, 3 in 13 days); "
             "[IC] HART. Electro does $137,636/day under it. There is no shop"))
-        self.assertIn("before the first of them started", line["text"])
+        self.assertIn("before the first of them started", plain(line["text"]))
 
     def test_two_waves_on_different_shops_keep_a_line_each(self):
         lines, _ = hype_lines([
@@ -94,8 +94,8 @@ class HypeLineTests(unittest.TestCase):
         ])
         self.assertEqual([l["siteKey"] for l in lines], [ELECTRO, GIFTS])
         self.assertEqual(len({l["id"] for l in lines}), 2)
-        self.assertIn("rides on the wave.", lines[1]["text"])
-        self.assertIn("on 3 lines has 13 days left", lines[1]["text"])
+        self.assertIn("rides on the wave.", plain(lines[1]["text"]))
+        self.assertIn("on 3 lines has 13 days left", plain(lines[1]["text"]))
 
     def test_a_shop_up_under_its_waves_raises_no_revenue_up_line(self):
         electro = [site(ELECTRO, "[IC] HART. Electro", 137636)]

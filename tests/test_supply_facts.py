@@ -11,7 +11,7 @@ import subprocess
 import sys
 import unittest
 
-from ba_dashboard import (Names, RECIPE_ITEMS, SUPPLY_MARGIN, _alerts, _business, _coming_week,
+from ba_dashboard import (plain, Names, RECIPE_ITEMS, SUPPLY_MARGIN, _alerts, _business, _coming_week,
                           _supply, _supply_fact, _supply_status, site_key)
 from ba_save import Save
 
@@ -354,7 +354,7 @@ class WholesaleTests(unittest.TestCase):
         # The stock reaches the drop, so the order under the week warns.
         self.assertEqual((fact["st"], fact["why"], fact["lvl"]), ("short", "order", "warn"))
         [finding] = [f for f in c.findings() if f["siteKey"] == site_key(GYM)]
-        self.assertEqual((finding["group"], finding["text"]),
+        self.assertEqual((finding["group"], plain(finding["text"])),
                          ("wholesale", "Soda's wholesale delivery brings 600 a week against the 700 it sells"))
 
     def test_stock_that_runs_out_before_the_drop_is_short(self):
@@ -365,7 +365,7 @@ class WholesaleTests(unittest.TestCase):
         # hand before Tuesday's delivery.
         self.assertEqual((fact["setTo"], fact["catchUp"], fact["day"]), (None, 100, "Tuesday"))
         [finding] = [f for f in c.findings() if f["siteKey"] == site_key(GYM)]
-        self.assertIn("runs out before Tuesday's wholesale delivery", finding["text"])
+        self.assertIn("runs out before Tuesday's wholesale delivery", plain(finding["text"]))
         self.assertEqual(finding["group"], "wholesale")
 
     def test_a_shelf_on_a_wholesale_contract_is_never_not_routed(self):
@@ -512,7 +512,7 @@ class IdleRuleTests(unittest.TestCase):
         self.assertEqual((gym["st"], gym["via"]), ("noplan", c.index(HUB)))
         [finding] = self.found(c, HUB)
         self.assertEqual(finding["group"], "notrouted")
-        self.assertEqual(finding["text"],
+        self.assertEqual(plain(finding["text"]),
                          "Import Hub holds 3,000 Soda no plan sends on; Gym sells 120/day "
                          "and holds ~10 days")
         # The gym's own no-plan finding gives way to it, and nothing is dead.
@@ -595,7 +595,7 @@ class IdleRuleTests(unittest.TestCase):
         [finding] = self.found(c, HUB)
         self.assertEqual(finding["group"], "dead")
         self.assertIn("Smart Delivery keeps 11,760 in stock, 7 weeks of it, so lower the import",
-                      finding["text"])
+                      plain(finding["text"]))
         c = self.smart_hub(1.15)
         self.assertEqual((self.idle(c, HUB, WATER), self.found(c, HUB)), ([], []))
 
@@ -810,7 +810,7 @@ class RoundOneFixTests(unittest.TestCase):
         self.assertEqual((c.fact(HUB, WATER)["st"], c.fact(HUB, WATER)["use"]), ("short", 1680))
         # One finding, with the input, naming both ways out.
         [feed] = [f for f in c.findings() if f["siteKey"] == site_key(FACTORY) and f["group"] == "feed"]
-        self.assertEqual(feed["text"], "Water top-up of 200 covers 20 hours of a 240/day line; raise it "
+        self.assertEqual(plain(feed["text"]), "Water top-up of 200 covers 20 hours of a 240/day line; raise it "
                                        "to 240; or resume the paused Water import to Mill")
         self.assertFalse([f for f in c.findings() if f["group"] == "paused"])
 
@@ -977,7 +977,7 @@ class RoundTwoFixTests(unittest.TestCase):
                 self.assertEqual(len(notes), found, notes)
                 if found:
                     self.assertEqual((notes[0]["level"], notes[0]["group"]), ("critical", "topup"))
-                    self.assertIn("raise the top-up to 120", notes[0]["text"])
+                    self.assertIn("raise the top-up to 120", plain(notes[0]["text"]))
 
     def test_stock_a_factory_holds_that_a_depots_plans_need_is_not_routed(self):
         # The factory is topped up with soda nothing there uses; the Distrib
@@ -999,7 +999,7 @@ class RoundTwoFixTests(unittest.TestCase):
         [note] = [f for f in c.findings() if f["siteKey"] == site_key(FACTORY)
                   and f["group"] in ("notrouted", "dead")]
         self.assertEqual(note["group"], "notrouted")
-        self.assertIn("Distrib needs 100/day", note["text"])
+        self.assertIn("Distrib needs 100/day", plain(note["text"]))
 
     def test_a_top_up_nothing_uses_offers_a_plan_or_stopping_it(self):
         c = Company()
@@ -1012,8 +1012,8 @@ class RoundTwoFixTests(unittest.TestCase):
         [note] = [f for f in c.findings() if f["siteKey"] == site_key(FACTORY)
                   and f["group"] in ("notrouted", "dead")]
         self.assertIn("no plan sends it on: add a plan to the shops that should get it, "
-                      "or stop the top-up", note["text"])
-        self.assertNotIn("remove", note["text"])
+                      "or stop the top-up", plain(note["text"]))
+        self.assertNotIn("remove", plain(note["text"]))
 
 
 class RoundThreeFixTests(unittest.TestCase):
@@ -1084,10 +1084,10 @@ class RoundThreeFixTests(unittest.TestCase):
         fact = c.fact(DISTRIB, WATER)
         self.assertEqual((fact["st"], fact["why"], fact["cad"], fact["have"], fact["use"]),
                          ("short", "order", "weekly", 1000, 1680))
-        self.assertFalse([f for f in c.findings() if "no standing import" in f["text"]])
+        self.assertFalse([f for f in c.findings() if "no standing import" in plain(f["text"])])
         # Said from the fact, on the depot's page by way of its factory lines.
         [note] = [f for f in c.findings() if f["siteKey"] == site_key(DISTRIB)]
-        self.assertEqual((note["group"], note["text"]), (
+        self.assertEqual((note["group"], plain(note["text"])), (
             "wholesale", "Water's wholesale delivery brings 1,000 a week against 1,680 used; "
             "raise the contract to 1,680"))
         self.assertEqual(run(2000).fact(DISTRIB, WATER)["st"], "covered")
@@ -1118,7 +1118,7 @@ class RoundThreeFixTests(unittest.TestCase):
         fact = c.fact(DISTRIB, SODA)
         self.assertEqual((fact["st"], fact["have"], fact["use"], fact["setTo"]), ("short", 100, 700, 810))
         [note] = [f for f in c.findings() if f["siteKey"] == site_key(DISTRIB)]
-        self.assertEqual((note["group"], note["text"]), (
+        self.assertEqual((note["group"], plain(note["text"])), (
             "wholesale", "Soda's wholesale delivery brings 100 a week against 700 used; "
             "raise the contract to 810"))
 
@@ -1132,7 +1132,7 @@ class RoundThreeFixTests(unittest.TestCase):
         # Short beside the route: the route's week is named.
         c = self.wholesale_distrib(200, top_up=200)
         [note] = [f for f in c.findings() if f["siteKey"] == site_key(DISTRIB)]
-        self.assertEqual((note["group"], note["text"]), (
+        self.assertEqual((note["group"], plain(note["text"])), (
             "wholesale", "Soda's wholesale delivery brings 200 a week against 350 used beyond the "
             "350 a week a route brings; raise the contract to 460"))
 
@@ -1169,7 +1169,7 @@ class RoundSixFixTests(unittest.TestCase):
         self.assertEqual((own["st"], own["why"], own["lvl"]), ("paused", "topup", "info"))
         need = next(n for s in c.supply["factories"]["sites"] for n in s["needs"] if n["slug"] == WATER)
         self.assertNotIn("ownPaused", need)
-        self.assertFalse([f for f in c.findings() if "resume" in f["text"]])
+        self.assertFalse([f for f in c.findings() if "resume" in plain(f["text"])])
 
     def test_the_paused_own_import_is_named_in_the_sizing_where_the_top_up_falls_short(self):
         # In 24/7 the 200 top-up is short of the 240 a day the line eats; the
@@ -1201,7 +1201,7 @@ class RoundSixFixTests(unittest.TestCase):
         fact = c.fact(GYM, SODA)
         self.assertEqual((fact["st"], fact["why"], fact["lvl"], fact["setTo"]), ("short", "shortfall", "critical", 810))
         [note] = [f for f in c.findings() if f["group"] == "wholesale"]
-        self.assertEqual(note["text"], "Soda runs out before Tuesday's wholesale delivery, and the delivery "
+        self.assertEqual(plain(note["text"]), "Soda runs out before Tuesday's wholesale delivery, and the delivery "
                                        "brings 600 a week against the 700 it sells; raise the contract to 810")
 
     def test_a_wholesale_shop_reads_out_the_delivery_that_runs_out_first(self):
@@ -1215,9 +1215,9 @@ class RoundSixFixTests(unittest.TestCase):
         c.run()
         [line] = [f for f in c.findings() if f["group"] == "wholesale"]
         self.assertEqual(line["level"], "critical")
-        self.assertEqual(line["text"], "3 products' wholesale deliveries fall short or arrive too late; "
+        self.assertEqual(plain(line["text"]), "3 products' wholesale deliveries fall short or arrive too late; "
                                        "worst Beer")
-        self.assertIn("runs out before", line["detail"])
+        self.assertIn("runs out before", plain(line["detail"]))
 
 
 class RoundTenFixTests(unittest.TestCase):

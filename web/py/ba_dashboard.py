@@ -268,6 +268,30 @@ HOOD_LABEL = {
 HOOD_TAG = {key: tag for tag, key in NEIGHBOURHOODS.items()}
 
 
+# A game name inside a sentence the page shows travels as a token,
+# U+27E6 <key>|<English> U+27E7, so the page can write it in the language the player picked
+# (gnString() in the board script) and in English otherwise. Only text that
+# reaches the page carries one: ids, subjects, history keys and anything sent to
+# the game stay plain English, and plain() turns a token back into its English
+# for Python's own reading (the CLI, the tests). A plural or a lowercased name
+# cannot be a token, since the page swaps the whole name: those stay English.
+NAME_TOKEN = re.compile("\u27e6(ba:[^\u27e7|\\s]+)\\|([^\u27e7]*)\u27e7")
+
+
+def tok(key, english) -> str:
+    """A game name for a sentence: a token where it has a game key, else as is."""
+    if not english:
+        return english or ""
+    if not isinstance(key, str) or not key.startswith("ba:") or "\u27e7" in english or "|" in key:
+        return english
+    return f"\u27e6{key}|{english}\u27e7"
+
+
+def plain(text):
+    """Text with every game-name token back in its English."""
+    return NAME_TOKEN.sub(lambda m: m.group(2), text) if isinstance(text, str) else text
+
+
 # The display names the page is sent, by key prefix. build_web.py ships the
 # same keys of the locale in gametext.json.
 NAME_PREFIXES = (
@@ -5269,6 +5293,7 @@ def _factories(
                     {
                         "rid": rid,
                         "workstation": station_name(station),
+                        "workstationKey": f"ba:factoryworkstationtype_{station}",
                         "slots": sorted(slots[key][(station, rid)]),
                         "machines": n,
                         "idle": rid is None,
@@ -8320,7 +8345,8 @@ def _role_words(role: dict, office: bool) -> dict:
         # other about posts. The posts limit names the station itself, so two
         # shops short of two different stations of one role never collide --
         # the id hashes the limit, and nothing but the limit.
-        "staffing": (f"{role['label']} staffing", f"another {role['label']} on those hours"),
+        "staffing": (f"{tok(role['skill'], role['label'])} staffing",
+                     f"another {tok(role['skill'], role['label'])} on those hours"),
         "posts": (_plural(station), f"another {station}"),
     }
 
@@ -9894,6 +9920,7 @@ def _finding(
     worth=None,
     always: bool = False,
     ev: dict | None = None,
+    named: str | None = None,
 ) -> dict:
     """One row of the list.
 
@@ -9908,6 +9935,9 @@ def _finding(
     item's `slug`, or a machine's list position as `slot`. It is left off
     entirely where the panel has a fixed mark to pulse instead, because it
     travels in every payload.
+
+    `subject` is English, since the id hashes it; `named` is how a summary
+    line of several rows names it (_condense()), with its game names as tokens.
     """
     return {
         "level": level,
@@ -9916,6 +9946,7 @@ def _finding(
         "text": text,
         "rank": rank,
         "subject": subject,
+        "named": subject if named is None else named,
         "worth": worth,
         "unit": ALERT_UNITS.get(group, ""),
         "id": _alert_id(group, key or site, subject),
@@ -9948,10 +9979,10 @@ def _alerts(
     found = []
 
     def note(level, site, group, text, rank=0.0, subject="", worth=None, always=False,
-             key=None, ev=None):
+             key=None, ev=None, named=None):
         found.append(
             _finding(level, site, group, text, key=key, rank=rank, subject=subject,
-                     worth=worth, always=always, ev=ev)
+                     worth=worth, always=always, ev=ev, named=named)
         )
 
     planned = {link["to"] for link in supply["graph"]["links"]}
@@ -10045,7 +10076,9 @@ def _alerts(
                 always=True, key=b["key"],
             )
         elif b.get("uniformGaps"):
-            roles = ", ".join(b["uniformGaps"])
+            skills = b.get("uniformGapSkills") or []
+            roles = ", ".join(tok(skills[i] if i < len(skills) else None, role)
+                              for i, role in enumerate(b["uniformGaps"]))
             note(
                 "warn", b["name"], "uniform",
                 f"No uniform set for {roles}; customers judge every role on a "
@@ -10075,7 +10108,7 @@ def _alerts(
         else:
             continue
         text = f"{count} staff with unmet demands: " + ", ".join(
-            f"{d['demand']} for {d['count']} ("
+            f"{tok(d.get('slug'), d['demand'])} for {d['count']} ("
             + ("company-wide" if d["company"] else JOB_DEMAND_PRIORITY[d["priority"]].lower())
             + _worked_over(d, ", ")
             + ")"
@@ -10106,7 +10139,7 @@ def _alerts(
         note(
             "warn", "Company", "companydemand",
             f"{lacking} staff with demands only you can meet: "
-            + ", ".join(f"{d['demand']} for {d['count']}" for d in rows)
+            + ", ".join(f"{tok(d.get('slug'), d['demand'])} for {d['count']}" for d in rows)
             + (". Health insurance comes through an HR manager's plan" if insured else ""),
             always=True,
         )
@@ -10225,7 +10258,7 @@ def _alerts(
                 "critical" if soonest <= 2 else "warn",
                 top["name"],
                 "hype",
-                f"{hood_label(waves[0]['hood'])} hype on {lines}; "
+                f"{tok(waves[0]['hood'], hood_label(waves[0]['hood']))} hype on {lines}; "
                 f"{top['name']} does ${top['revenue']:,.0f}/day under it against "
                 f"${base['revenue']:,.0f} for {base['basis']}; "
                 f"about ${drop:,.0f}/day of revenue rides on {wave_word}.{queue}",
@@ -10237,7 +10270,7 @@ def _alerts(
                 "warn",
                 top["name"],
                 "hype",
-                f"{hood_label(waves[0]['hood'])} hype on {lines}; "
+                f"{tok(waves[0]['hood'], hood_label(waves[0]['hood']))} hype on {lines}; "
                 f"{top['name']} does ${top['revenue']:,.0f}/day under it. There is no "
                 f"shop of the same kind trading without a wave and no trading days "
                 f"before {'this one' if len(waves) == 1 else 'the first of them'} "
@@ -10335,7 +10368,7 @@ def _alerts(
         # hashed, and it is the string main hashed too, so a shop's and an
         # office's silences survive this change.
         note(
-            "warn", where, "atcap", text, subject=limit, worth=worth,
+            "warn", where, "atcap", text, subject=plain(limit), named=limit, worth=worth,
             key=group[0]["key"] if len(group) == 1 else None,
         )
 
@@ -10417,14 +10450,15 @@ def _shelf_notes(businesses: list, supply: dict, silent: set, mode: str = "cap")
             line = next((l for l in b["lines"] if l["slug"] == slug), None)
             if not line:
                 continue
+            item = tok(slug, line["item"])
             if (fact["st"] == "noplan" and fact["lvl"] in ("warn", "critical")
                     and fact.get("via") is None):
                 rate = round(line.get("tradeRate", line["rate"]))
                 notes.append(_finding(
                     fact["lvl"], b["name"], "unplanned",
-                    f"{line['item']} is on no distribution plan: {line['units']:,} left "
+                    f"{item} is on no distribution plan: {line['units']:,} left "
                     f"at {rate:,}/day",
-                    key=b["key"], rank=-line["units"], subject=line["item"], ev={"slug": slug}))
+                    key=b["key"], rank=-line["units"], subject=line["item"], named=item, ev={"slug": slug}))
             elif fact["st"] == "short" and fact["cad"] == "weekly":
                 # Fed by a weekly wholesale delivery, not a top-up.
                 rate = round(line.get("tradeRate", line["rate"]))
@@ -10434,15 +10468,15 @@ def _shelf_notes(businesses: list, supply: dict, silent: set, mode: str = "cap")
                 if fact["why"] == "shortfall" and also_short:
                     # Both at once: the stock does not reach the drop, and the
                     # delivery would not carry the week if it did.
-                    text = (f"{line['item']} runs out before {day}'s wholesale delivery, and the "
+                    text = (f"{item} runs out before {day}'s wholesale delivery, and the "
                             f"delivery brings {fact['have']:,} a week against the {fact['use']:,} "
                             f"it sells"
                             + (f"; raise the contract to {fact['setTo']:,}" if fact.get("setTo") else ""))
                 elif fact["why"] == "shortfall":
-                    text = (f"{line['item']} runs out before {day}'s wholesale delivery: "
+                    text = (f"{item} runs out before {day}'s wholesale delivery: "
                             f"{line['units']:,} left at {rate:,}/day")
                 else:
-                    text = (f"{line['item']}'s wholesale delivery brings {fact['have']:,} a week "
+                    text = (f"{item}'s wholesale delivery brings {fact['have']:,} a week "
                             f"against the {fact['use']:,} it sells")
                 # Running out before the delivery ranks ahead of an order
                 # short of the week; the ratio breaks ties among each.
@@ -10450,17 +10484,17 @@ def _shelf_notes(businesses: list, supply: dict, silent: set, mode: str = "cap")
                 notes.append(_finding(
                     fact["lvl"], b["name"], "wholesale", text, key=b["key"],
                     rank=ratio - 10 if fact["why"] == "shortfall" else ratio,
-                    subject=line["item"], ev={"slug": slug}))
+                    subject=line["item"], named=item, ev={"slug": slug}))
             elif fact["st"] == "short" and fact["why"] == "target":
                 peak = (rows.get((s, slug)) or {}).get("peakDay")
                 notes.append(_finding(
                     "critical", b["name"], "outruns",
-                    f"{line['item']} sells {fact['use']:,} on "
+                    f"{item} sells {fact['use']:,} on "
                     f"{'a ' + peak if peak else 'its busiest day'} against a "
                     f"{fact['have']:,} top-up; empties before the next drop",
                     key=b["key"],
                     rank=-round(fact["use"] / fact["have"] * 100) if fact["have"] else 0,
-                    subject=line["item"], ev={"slug": slug}))
+                    subject=line["item"], named=item, ev={"slug": slug}))
     return notes
 
 
@@ -10492,13 +10526,14 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
             if fact["role"] == "depot" and fact["cad"] == "daily":
                 if fact["st"] == "short" and fact["why"] == "target":
                     item = labels.get((s, slug), slug)
+                    named = tok(slug, item)
                     notes.append(_finding(
                         "critical", b["name"], "topup",
-                        f"{item} is topped up to {fact['have']:,} a day against the "
+                        f"{named} is topped up to {fact['have']:,} a day against the "
                         f"{fact['use']:,} its busiest day sends on; raise the top-up to "
                         f"{fact['setTo']:,}",
                         key=b["key"], rank=round(fact["have"] / fact["use"], 2) if fact["use"] else 0,
-                        subject=item, ev={"slug": slug}))
+                        subject=item, named=named, ev={"slug": slug}))
                 continue
             if fact["cad"] != "weekly" or fact["role"] not in ("depot", "input"):
                 continue
@@ -10511,6 +10546,7 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
                     or (st == "noplan" and fact["lvl"] != "info")):
                 continue
             item = labels.get((s, slug), slug)
+            named = tok(slug, item)
             row = rows.get((s, slug))
             entry = depots.get(s, {}).get(slug) or {}
             parts = fact.get("parts") or {}
@@ -10524,52 +10560,52 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
                 # the depot's own page (Weekly imports does not list it).
                 notes.append(_finding(
                     fact["lvl"], site, "wholesale",
-                    f"{item}'s wholesale delivery brings {fact['have']:,} a week against "
+                    f"{named}'s wholesale delivery brings {fact['have']:,} a week against "
                     f"{fact['use']:,} used"
                     + (f" beyond the {parts['route']:,} a week a route brings"
                        if parts.get("route") else "")
                     + (f"; raise the contract to {fact['setTo']:,}" if fact.get("setTo") else ""),
                     key=key, rank=round(fact["have"] / fact["use"], 2) if fact["use"] else 0,
-                    subject=item, ev=ev))
+                    subject=item, named=named, ev=ev))
                 continue
             smart = _smart_words(entry.get("target") or 0, entry.get("plainAfter", 0),
                                  entry.get("plainBefore", 0)) if entry.get("smart") else ""
             if parts.get("lines") or fact["role"] == "input":
                 if st == "paused":
-                    text = f"{item} import is paused; resume the contract supplying {site}"
+                    text = f"{named} import is paused; resume the contract supplying {site}"
                 elif st == "noplan":
                     stock = next((l["units"] for l in b["lines"] if l["slug"] == slug), 0)
                     weeks = stock / fact["use"] if fact["use"] else 0
                     who = "the factories eat" if not parts.get("sites") else "the factories and other sites draw"
-                    text = (f"{item} has no standing import; {site} holds {stock:,}, "
+                    text = (f"{named} has no standing import; {site} holds {stock:,}, "
                             f"{weeks:.1f} weeks of the {fact['use']:,} a week {who}"
                             + (f" beyond the {parts['route']:,} a week a route brings"
                                if parts.get("route") else ""))
                 elif entry.get("smart"):
-                    text = (f"{item}: this import needs to cover {fact['use']:,} a week and "
+                    text = (f"{named}: this import needs to cover {fact['use']:,} a week and "
                             f"{smart}; raise the Smart Delivery stock"
                             + (f" at {entry['levelName']}" if entry.get("levelName") else "")
                             + (f" to {fact['setTo']:,}" if fact.get("setTo") else ""))
                 else:
-                    text = (f"{item}: this import needs to cover {fact['use']:,} a week and the "
+                    text = (f"{named}: this import needs to cover {fact['use']:,} a week and the "
                             f"import order is {entry.get('weekly', 0):,}"
                             + (f"; raise it to {fact['setTo']:,}" if fact.get("setTo") else ""))
                 notes.append(_finding(fact["lvl"], site, "feed", text, key=key,
-                                      rank=-round(fact["use"] / 7), subject=item, ev=ev))
+                                      rank=-round(fact["use"] / 7), subject=item, named=named, ev=ev))
                 continue
             if st == "noplan":
                 continue  # a depot only shops draw on: their shelves say it
             cover = row["cover"] if row else 0
             if st == "paused":
-                text = (f"{item} import is paused: {cover:.0f} days left at "
+                text = (f"{named} import is paused: {cover:.0f} days left at "
                         f"{row.get('importPerDay', row['perDay']):,}/day"
-                        if row else f"{item} import is paused")
+                        if row else f"{named} import is paused")
                 notes.append(_finding(fact["lvl"], site, "paused", text,
-                                      key=key, rank=cover, subject=item, ev=ev))
+                                      key=key, rank=cover, subject=item, named=named, ev=ev))
                 continue
             brought = entry.get("weekly", 0)
-            text = ((f"{item}: {smart} against a " if entry.get("smart")
-                     else f"{item} orders {brought:,} a week against a ")
+            text = ((f"{named}: {smart} against a " if entry.get("smart")
+                     else f"{named} orders {brought:,} a week against a ")
                     + f"{fact['use']:,} week of use, {fact['use'] - brought:,} short")
             if row and row["coverFit"] == "short":
                 arrives = weekday(row.get("coverageUntil", row["arrives"])) or "the next"
@@ -10577,7 +10613,7 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
                 text += (f"; already runs dry {when}, {row['shortBy']:.1f} days before "
                          f"{arrives}'s import")
             notes.append(_finding("critical", site, "order", text,
-                                  key=key, rank=cover, subject=item, ev=ev))
+                                  key=key, rank=cover, subject=item, named=named, ev=ev))
     return notes
 
 
@@ -10586,19 +10622,20 @@ def _shortfall_note(row: dict, item: str, site: str, key: str) -> dict:
     brings the week, a busy day the shelf cannot carry to the next round."""
     arrives = weekday(row.get("coverageUntil", row["arrives"])) or "the next"
     when = f"on {row['runsOut']}" if row["runsOut"] else f"in {row['cover']} days"
+    named = tok(row["slug"], item)
     # The draw the import answers for; a route's share is named, not hidden.
     rate = f"{row.get('importPerDay', row['perDay']):,}/day" + (
         f" beyond the {row['routed']:,}/day a route brings" if row.get("routed") else "")
     if row.get("covered"):
-        text = (f"{item} runs dry {when}, before the route's next round; a route brings "
+        text = (f"{named} runs dry {when}, before the route's next round; a route brings "
                 f"the week's draw ({row['routed']:,}/day) but a busy day outruns the shelf"
                 + ("; the import is paused" if row["paused"] else ""))
     else:
-        text = (f"{item} runs dry {when}, {row['shortBy']:.1f} days before "
+        text = (f"{named} runs dry {when}, {row['shortBy']:.1f} days before "
                 f"{arrives}'s import ("
                 + (rate if row.get("routed") else f"{rate}, {row['peakPerDay']:,} at peak") + ")")
     return _finding("critical", site, "shortfall", text,
-                    key=key, rank=row["cover"], subject=item, ev={"slug": row["slug"]})
+                    key=key, rank=row["cover"], subject=item, named=named, ev={"slug": row["slug"]})
 
 
 def _unnamed_notes(businesses: list, factories: dict, silent: set) -> list:
@@ -10624,14 +10661,18 @@ def _unnamed_notes(businesses: list, factories: dict, silent: set) -> list:
             where = ", ".join(
                 sorted({f"{u['workstation']} #{s}" for u in rows for s in u["slots"]})
             )
+            # The same places in the same order, their workstation a token.
+            spots = {f"{u['workstation']} #{s}": f"{tok(u.get('workstationKey'), u['workstation'])} #{s}"
+                     for u in rows for s in u["slots"]}
+            shown = ", ".join(spots[w] for w in sorted(spots))
             if kind == "idle":
                 text = (
-                    f"{machines} machine{'s' if many else ''} at {where} "
+                    f"{machines} machine{'s' if many else ''} at {shown} "
                     f"{'have' if many else 'has'} no recipe set: staffed and rented, making nothing"
                 )
             else:
                 text = (
-                    f"{machines} machine{'s' if many else ''} at {where} "
+                    f"{machines} machine{'s' if many else ''} at {shown} "
                     f"{'run' if many else 'runs'} a recipe without usable details. "
                     f"Its inputs are missing from the totals; name unknown recipes or "
                     f"load matching game text to include them"
@@ -10639,7 +10680,7 @@ def _unnamed_notes(businesses: list, factories: dict, silent: set) -> list:
             notes.append(
                 _finding(
                     level, business["name"], group, text,
-                    key=business["key"], rank=-machines, subject=where,
+                    key=business["key"], rank=-machines, subject=where, named=shown,
                 )
             )
     return notes
@@ -10654,12 +10695,14 @@ def _staff_notes(businesses: list, factories: dict, silent: set) -> list:
             continue
         for line in site["lines"] + site["unnamed"]:
             name = line.get("item") or line["workstation"]
+            named = (tok(line.get("slug"), line["item"]) if line.get("item")
+                     else tok(line.get("workstationKey"), line["workstation"]))
             for machine in line.get("gaps", []):
                 share = machine["hours"] / STAFF_HOURS
                 lost = round((STAFF_HOURS - machine["hours"]) / 7 * line.get("rate", 0))
                 subject = f"{name} at position {machine['slot']}"
                 text = (
-                    f"{name} machine at list position {machine['slot']} is staffed "
+                    f"{named} machine at list position {machine['slot']} is staffed "
                     f"{machine['hours']} of {STAFF_HOURS} hours; nobody on it {machine['off']}"
                     + (f"; {lost:,} a day not made" if lost else "")
                 )
@@ -10668,6 +10711,7 @@ def _staff_notes(businesses: list, factories: dict, silent: set) -> list:
                         "critical" if share < STAFF_CRITICAL else "warn",
                         business["name"], "staff", text,
                         key=business["key"], rank=machine["hours"], subject=subject,
+                        named=f"{named} at position {machine['slot']}",
                         ev={"slot": machine["slot"], "slug": line.get("slug")},
                     )
                 )
@@ -10694,35 +10738,38 @@ def _feed_notes(businesses: list, factories: dict, silent: set, mode: str = "cap
             status, why = row["status"], row.get("why")
             per_day = row.get("use", base["perDay"])
             depot = businesses[row["from"]]["name"] if row["from"] is not None else "the depot"
-            lines = ", ".join(row["lines"][:3])
+            slugs = row.get("lineSlugs") or []
+            lines = ", ".join(tok(slugs[i] if i < len(slugs) else None, line)
+                              for i, line in enumerate(row["lines"][:3]))
+            item = tok(row.get("slug"), row["item"])
             if status == "noplan":
-                text = (f"{row['item']} feeds {lines} at {per_day:,}/day "
+                text = (f"{item} feeds {lines} at {per_day:,}/day "
                         f"but no depot tops it up")
             elif status == "short" and why == "target":
                 hours = row["target"] / per_day * 24 if per_day else 0
                 raise_to = row.get("setTo", base.get("raiseTarget"))
-                text = (f"{row['item']} top-up of {row['target']:,} covers {hours:.0f} hours "
+                text = (f"{item} top-up of {row['target']:,} covers {hours:.0f} hours "
                         f"of a {per_day:,}/day line"
                         + (f"; raise it to {raise_to:,}" if raise_to else ""))
                 if row.get("stalled"):
                     text += (f"; and none arrived last week though {depot} holds "
                              f"{row['depotStock']:,}")
             elif status == "short" and why == "dry":
-                text = (f"{row['item']} arrives at {row['arrives']:,}/day against "
+                text = (f"{item} arrives at {row['arrives']:,}/day against "
                         f"{per_day:,} needed and {depot} holds {row['depotStock']:,}; "
                         f"the import is not keeping up")
             elif status == "stalled" and why == "notDrawn":
-                text = (f"{row['item']} arrives at {row['arrives']:,}/day against "
+                text = (f"{item} arrives at {row['arrives']:,}/day against "
                         f"{per_day:,} needed while {depot} holds {row['depotStock']:,}; "
                         f"the line is not drawing it")
             else:
                 continue
             if row.get("ownPaused"):
-                text += f"; or resume the paused {row['item']} import to {business['name']}"
+                text += f"; or resume the paused {item} import to {business['name']}"
             notes.append(
                 _finding(
                     row["level"], business["name"], "feed", text,
-                    key=business["key"], rank=-base["perDay"], subject=row["item"],
+                    key=business["key"], rank=-base["perDay"], subject=row["item"], named=item,
                     ev={"slug": row["slug"]},
                 )
             )
@@ -10762,6 +10809,7 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
             continue
         name, key = businesses[row["s"]]["name"], businesses[row["s"]]["key"]
         ev = {"slug": row["slug"]}
+        item = tok(row["slug"], row["item"])
         if why == "notRouted":
             unfed = row.get("unfed") or []
             sites = [businesses[s] for s, _per_day, _days in unfed]
@@ -10779,9 +10827,9 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
                 verb = "needs" if one else "need"
             notes.append(_finding(
                 "warn", name, "notrouted",
-                f"{name} holds {row['stock']:,} {row['item']} no plan sends on; "
+                f"{name} holds {row['stock']:,} {item} no plan sends on; "
                 f"{who} {verb} {per_day:,}/day{held_for}",
-                key=key, rank=-row["stock"], subject=row["item"], ev=ev))
+                key=key, rank=-row["stock"], subject=row["item"], named=item, ev=ev))
         elif why == "notMoving":
             # Brought here by a top-up target, with no shelf, onward route or
             # line here to use it: most likely a target set on the wrong route.
@@ -10795,22 +10843,22 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
             )
             notes.append(_finding(
                 "info", name, "dead",
-                f"{row['stock']:,} {row['item']} held with nothing moving out{route}",
-                key=key, rank=-row["stock"], subject=row["item"], worth=worth_of(row), ev=ev))
+                f"{row['stock']:,} {item} held with nothing moving out{route}",
+                key=key, rank=-row["stock"], subject=row["item"], named=item, worth=worth_of(row), ev=ev))
         elif why == "importHigh":
             level = row.get("importLevel") or 0
             setting = (f"Smart Delivery keeps {level:,} in stock" if row.get("smart")
                        else f"the import brings {level:,} a week")
             notes.append(_finding(
                 "info", name, "dead",
-                f"{row['stock']:,} {row['item']} is {row['weeks']:.0f} weeks of what it feeds; "
+                f"{row['stock']:,} {item} is {row['weeks']:.0f} weeks of what it feeds; "
                 f"{setting}, {level / max(row['perWeek'], 1):.0f} weeks of it, so lower the import",
-                key=key, rank=-row["stock"], subject=row["item"], worth=worth_of(row), ev=ev))
+                key=key, rank=-row["stock"], subject=row["item"], named=item, worth=worth_of(row), ev=ev))
         else:
             notes.append(_finding(
                 "info", name, "dead",
-                f"{row['stock']:,} {row['item']} is {row['weeks']:.0f} weeks of what leaves",
-                key=key, rank=-row["stock"], subject=row["item"], worth=worth_of(row), ev=ev))
+                f"{row['stock']:,} {item} is {row['weeks']:.0f} weeks of what leaves",
+                key=key, rank=-row["stock"], subject=row["item"], named=item, worth=worth_of(row), ev=ev))
 
     # A top-up target set too high groups by the target behind it: the same
     # number in the same plan, repeated across shops, is one setting to change.
@@ -10821,6 +10869,8 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
             by_target.setdefault(row["target"] or 0, []).append(row)
     for target, rows in by_target.items():
         items = sorted({r["item"] for r in rows})
+        slug_of = {r["item"]: r["slug"] for r in rows}
+        shown = ", ".join(tok(slug_of[i], i) for i in items)
         sites = len({r["s"] for r in rows})
         daily = sum(r["perWeek"] for r in rows) / 7 / len(rows)
         stock = sum(r["stock"] for r in rows)
@@ -10831,13 +10881,13 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
         ) or None
         if target and daily:
             text = (
-                f"{', '.join(items)} top-up target of {target:,} is "
+                f"{shown} top-up target of {target:,} is "
                 f"{target / daily:.0f}x daily sales in {sites} "
                 f"shop{'s' if sites > 1 else ''}; lower the target"
             )
         else:
             text = (
-                f"{stock:,} units of {', '.join(items)} across {sites} "
+                f"{stock:,} units of {shown} across {sites} "
                 f"site{'s' if sites > 1 else ''} is "
                 f"{stock / max(sum(r['perWeek'] for r in rows), 1):.0f} weeks of supply"
             )
@@ -10846,7 +10896,8 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
         notes.append(
             _finding(
                 "info", site, "target", text,
-                key=one["key"] if one else None, rank=-stock, subject=items[0], worth=worth,
+                key=one["key"] if one else None, rank=-stock, subject=items[0],
+                named=tok(slug_of[items[0]], items[0]), worth=worth,
                 # One target set too high can span several shops; the panel can
                 # only point at a row when a single site owns the finding, and
                 # the row it points at is the one the sentence names.
@@ -10903,7 +10954,7 @@ def _condense(found: list, gate: float) -> dict:
                 "site": worst["site"],
                 "siteKey": worst["siteKey"],
                 "group": group,
-                "text": SUMMARIES[group].format(n=len(rows), subject=worst["subject"]),
+                "text": SUMMARIES[group].format(n=len(rows), subject=worst.get("named", worst["subject"])),
                 "detail": worst["text"],
                 "worth": sum(worths) if worths else None,
                 "unit": ALERT_UNITS.get(group, ""),
@@ -10920,7 +10971,7 @@ def _condense(found: list, gate: float) -> dict:
     order = {"critical": 0, "warn": 1, "info": 2}
     lines, minor = [], []
     for row in out:
-        for key in ("rank", "subject"):
+        for key in ("rank", "subject", "named"):
             row.pop(key, None)
         small = (
             not row["always"]
@@ -13749,7 +13800,8 @@ const hoodName = key => gameName(key) || String(key || "").replace(/^ba:neighbor
    table lacks keeps its English name.
    The walk is gnWalk(), and every string in the payload passes through
    gnString() on the way, which is where a name Python wrote inside a sentence,
-   as a ⟦ba:key⟧ token, becomes the name in the language on screen. */
+   as a token (U+27E6 key|English U+27E7), becomes the name in the language on
+   screen. */
 const GN_KEY = "ba_dash_names";
 const GN_OFFER_KEY = "ba_dash_names_offer";
 /* A local page built with --lang carries its table: {lang, names}. */
@@ -13788,16 +13840,21 @@ const gnSwap = (T, EN, key, english, loose) =>
    (loose ones first, then strict ones). A field left out here stays English;
    gnUnkeyed() takes the few with no key. */
 const GN_PAIRS = [["slug", ["item", "type", "demand"], ["name"]], ["typeSlug", ["type"], ["sub", "name"]],
-  ["skill", ["label", "role"], []], ["demand", ["label"], []], ["hood", [], ["where"]]];
+  ["skill", ["label", "role"], []], ["demand", ["label"], []], ["hood", [], ["where"]],
+  ["workstationKey", ["workstation"], []]];
 /* Lists of names with their keys in a list beside them, index for index. */
 const GN_LISTS = [["items", "slugs"], ["fees", "feeSlugs"], ["lines", "lineSlugs"], ["uniformGaps", "uniformGapSkills"]];
-/* Every string of the payload passes here, the table or not. Python's
-   sentences name nothing this way yet; a ⟦ba:key⟧ token reads as that key's
-   name in the language on screen, English where the table has none. */
-const GN_TOKEN = /⟦(ba:[^⟧\s]+)⟧/g;
+/* Every string of the payload passes here, the table or not. Python writes
+   a game name inside a sentence as a token, U+27E6 key|English U+27E7 (tok()
+   in Python), and it reads as that key's name in the language on screen, or
+   as the English Python wrote where there is no table or the table has no
+   word for it. Nothing else of the string moves, so a sentence the board
+   parses (spLimitRole(), splitFinding()) reads as it did, names swapped. */
+const GN_TOKEN = /\u27e6(ba:[^\u27e7|\s]+)(?:\|([^\u27e7]*))?\u27e7/g;
 function gnString(s, T, EN){
-  if(s.indexOf("⟦") < 0) return s;
-  return s.replace(GN_TOKEN, (m, key) => (T && T[key]) || EN[key] || HOOD_NAMES[key] || prettySlug(key));
+  if(s.indexOf("\u27e6") < 0) return s;
+  return s.replace(GN_TOKEN, (m, key, english) =>
+    (T && T[key]) || english || EN[key] || HOOD_NAMES[key] || prettySlug(key));
 }
 /* A copy of the English payload with its names swapped; `at` is the key the
    value sits under, which names the thing when it is a game key itself

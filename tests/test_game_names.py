@@ -183,3 +183,61 @@ class Lang(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Tokens(unittest.TestCase):
+    """Game names inside Python's sentences travel as tokens the page resolves;
+    what Python keeps for itself stays plain English."""
+
+    def test_a_token_carries_its_key_and_its_english(self):
+        from ba_dashboard import plain, tok
+        said = f"{tok('ba:itemname_paperbag', 'Paper Bag')} runs dry"
+        self.assertEqual(said, "⟦ba:itemname_paperbag|Paper Bag⟧ runs dry")
+        self.assertEqual(plain(said), "Paper Bag runs dry")
+        # No key, no token: the words stay as they are.
+        self.assertEqual(tok(None, "the depot"), "the depot")
+        self.assertEqual(tok("7 Pier", "7 Pier"), "7 Pier")
+        self.assertEqual(plain(None), None)
+
+    def test_ids_hash_the_english_they_always_hashed(self):
+        from ba_dashboard import _alert_id, _condense, _shortfall_note
+        row = {"slug": "ba:itemname_paperbag", "arrives": 36, "runsOut": "Tuesday", "cover": 2,
+               "shortBy": 1.5, "importPerDay": 120, "perDay": 120, "peakPerDay": 180,
+               "covered": False, "paused": False, "routed": 0}
+        note = _shortfall_note(row, "Paper Bag", "Depot", "ba:street_pier#9")
+        self.assertEqual(note["id"], _alert_id("shortfall", "ba:street_pier#9", "Paper Bag"))
+        self.assertEqual(note["subject"], "Paper Bag")
+        self.assertTrue(note["text"].startswith("⟦ba:itemname_paperbag|Paper Bag⟧ runs dry"))
+        rows = [dict(row, slug=s, cover=2 + n) for n, s in
+                enumerate(("ba:itemname_paperbag", "ba:itemname_sodacan", "ba:itemname_energydrink"))]
+        merged = _condense([_shortfall_note(r, r["slug"][12:], "Depot", "ba:street_pier#9") for r in rows], 0.0)
+        [line] = merged["lines"]
+        self.assertEqual(line["id"], _alert_id("summary", "shortfall", "ba:street_pier#9"))
+        self.assertTrue(line["text"].endswith("soonest ⟦ba:itemname_paperbag|paperbag⟧"))
+        self.assertNotIn("named", line)
+
+    def test_an_hour_limit_names_its_role_and_keeps_its_id(self):
+        from ba_dashboard import _alert_id, _alerts, plain
+        from tests.game_names_fixture import fixture
+        payload = fixture()["payload"]
+        finding = next(f for f in payload["hourFindings"] if f["kind"] == "cap" and "⟦" in f["limit"])
+        self.assertEqual(plain(finding["limit"]), "Projectionist staffing")
+        line = next(a for a in payload["alerts"] if a["group"] == "atcap" and "⟦" in a["text"])
+        self.assertIn("⟦ba:skill_projectionist|Projectionist⟧ staffing is the limit", line["text"])
+        self.assertEqual(line["id"], _alert_id("atcap", finding["key"], "Projectionist staffing"))
+
+    def test_nothing_python_keeps_carries_a_token(self):
+        import ba_dashboard
+        from ba_save import Names, load_save
+        from tests.es3_fixture import write_link_save
+        from tests.game_names_fixture import english
+        with tempfile.TemporaryDirectory() as tmp:
+            save, history = os.path.join(tmp, "Link Co.hsg"), os.path.join(tmp, "market_history.json")
+            write_link_save(save)
+            data = ba_dashboard.extract(load_save(save), Names(english()), history)
+            self.assertIn("⟦", json.dumps(data, ensure_ascii=False))
+            for name in os.listdir(tmp):
+                if name != "Link Co.hsg":
+                    self.assertNotIn("⟦", Path(tmp, name).read_text(encoding="utf-8"), name)
+        for row in data["alerts"] + data["minor"]["rows"]:
+            self.assertNotIn("⟦", row["id"] + row["site"] + (row["siteKey"] or ""))

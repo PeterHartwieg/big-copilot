@@ -12,6 +12,7 @@ import sys
 import unittest
 
 from ba_dashboard import (
+    plain,
     SERVICE_SKILL,
     _alerts,
     _business,
@@ -277,14 +278,14 @@ class GymGridTests(unittest.TestCase):
     def test_full_boards_name_the_board_and_never_a_counter(self):
         grid = self.gym(boards=2, customers=40)
         [finding] = _hour_findings([grid], [site()], {})
-        self.assertEqual((finding["limit"], finding["noun"]),
+        self.assertEqual((plain(finding["limit"]), finding["noun"]),
                          ("fitness planning boards", "fitness planning boards"))
-        self.assertEqual(finding["fix"], "another fitness planning board")
+        self.assertEqual(plain(finding["fix"]), "another fitness planning board")
 
     def test_short_of_trainers_ask_for_a_trainer_and_not_a_counter(self):
         grid = self.gym(boards=3, on=2, customers=40)
         [finding] = _hour_findings([grid], [site()], {})
-        self.assertEqual((finding["limit"], finding["fix"]),
+        self.assertEqual((plain(finding["limit"]), plain(finding["fix"])),
                          ("Gym Trainer staffing", "another Gym Trainer on those hours"))
 
     def test_spare_trainers_are_overstaffing_in_their_own_wage(self):
@@ -304,7 +305,7 @@ class GymGridTests(unittest.TestCase):
         [line] = [a for a in _alerts([business], EMPTY_SUPPLY, [], [], [], [idle], [], 3, 0.0)
                   ["lines"] if a["group"] == "idlestaff"]
         self.assertIn("Pump runs 24 staff-hours a week that buy nothing: "
-                      "3 fitness planning boards Mon 8-20", line["text"])
+                      "3 fitness planning boards Mon 8-20", plain(line["text"]))
 
     def test_one_trainer_then_two_give_two_findings_with_two_ids(self):
         """Mornings are short of a trainer, afternoons short of a board.
@@ -319,7 +320,7 @@ class GymGridTests(unittest.TestCase):
         b = building(items, shifts, hourly, 100)
         grid = grid_of(b, crew, _service_stations(NAMES))
         findings = _hour_findings([grid], [site()], {})
-        self.assertEqual([(f["limit"], f["fix"]) for f in findings], [
+        self.assertEqual([(plain(f["limit"]), plain(f["fix"])) for f in findings], [
             ("Gym Trainer staffing", "another Gym Trainer on those hours"),
             ("fitness planning boards", "another fitness planning board"),
         ])
@@ -330,8 +331,8 @@ class GymGridTests(unittest.TestCase):
                  ["lines"] if a["group"] == "atcap"]
         self.assertEqual(len(lines), 2)
         self.assertEqual(len({a["id"] for a in lines}), 2)
-        self.assertTrue(any("another Gym Trainer" in a["text"] for a in lines))
-        self.assertTrue(any("another fitness planning board" in a["text"] for a in lines))
+        self.assertTrue(any("another Gym Trainer" in plain(a["text"]) for a in lines))
+        self.assertTrue(any("another fitness planning board" in plain(a["text"]) for a in lines))
 
 
 class BindingRoleTests(unittest.TestCase):
@@ -360,7 +361,7 @@ class BindingRoleTests(unittest.TestCase):
         # the trade through those hours is one sum, not one per role.
         [finding] = findings
         self.assertEqual(
-            (finding["limit"], finding["fix"], finding["noun"], finding["limits"]),
+            (plain(finding["limit"]), plain(finding["fix"]), finding["noun"], finding["limits"]),
             ("Gym Trainer staffing and registers",
              "another Gym Trainer on those hours and another counter",
              "fitness planning boards and counters", 2),
@@ -389,8 +390,8 @@ class BindingRoleTests(unittest.TestCase):
                  ["lines"] if a["group"] == "atcap"]
         self.assertEqual(len(lines), 1)
         self.assertEqual(sum(a["worth"] for a in lines), whole)
-        self.assertIn("Gym Trainer staffing and registers are the limit", lines[0]["text"])
-        self.assertIn("fills the fitness planning boards and counters", lines[0]["text"])
+        self.assertIn("Gym Trainer staffing and registers are the limit", plain(lines[0]["text"]))
+        self.assertIn("fills the fitness planning boards and counters", plain(lines[0]["text"]))
 
     def test_a_tie_keeps_the_capitals_inside_it(self):
         """A nightclub: a coat check and a DJ booth, both at 50 and both manned.
@@ -405,15 +406,15 @@ class BindingRoleTests(unittest.TestCase):
         hourly = {h: 50 if 20 <= h < 24 else 0 for h in range(24)}
         grid = grid_of(building(items, shifts, hourly, 200), crew, _service_stations(NAMES))
         [finding] = _hour_findings([grid], [site()], {})
-        self.assertEqual((finding["limit"], finding["fix"]),
+        self.assertEqual((plain(finding["limit"]), plain(finding["fix"])),
                          ("registers and DJ booths", "another counter and another DJ booth"))
         business = _business(Save({}, {}, ""), NAMES,
                              building([], [], {9: 1}, 200), (STREET, 3),
                              {(STREET, 3): {"TotalSales": 1000}}, [], {}, 3)
         [line] = [a for a in _alerts([business], EMPTY_SUPPLY, [], [], [], [finding], [], 3, 0.0)
                   ["lines"] if a["group"] == "atcap"]
-        self.assertIn("Registers and DJ booths are the limit", line["text"])
-        self.assertNotIn("dj booths", line["text"])
+        self.assertIn("Registers and DJ booths are the limit", plain(line["text"]))
+        self.assertNotIn("dj booths", plain(line["text"]))
 
     def test_an_untied_site_keeps_the_numbers_it_had(self):
         """Two boards, one trainer, no register: one role, one line, one sum."""
@@ -424,7 +425,7 @@ class BindingRoleTests(unittest.TestCase):
         grid = grid_of(building(items, shifts, hourly, 100), crew, _service_stations(NAMES))
         [finding] = _hour_findings([grid], [site()], {})
         self.assertEqual(
-            (finding["limit"], finding["fix"], finding["noun"], finding["limits"]),
+            (plain(finding["limit"]), plain(finding["fix"]), finding["noun"], finding["limits"]),
             ("Gym Trainer staffing", "another Gym Trainer on those hours",
              "fitness planning boards", 1),
         )
@@ -440,7 +441,7 @@ class BindingRoleTests(unittest.TestCase):
         grid = grid_of(building(items, shifts, hourly, 100), crew, _service_stations(NAMES))
         self.assertEqual(grid["staffed"][MONDAY][10], 20)  # the trainer's 20 of 40
         findings = _hour_findings([grid], [site()], {})
-        self.assertEqual([(f["limit"], f["fix"]) for f in findings],
+        self.assertEqual([(plain(f["limit"]), plain(f["fix"])) for f in findings],
                          [("Gym Trainer staffing", "another Gym Trainer on those hours")])
 
 
@@ -471,7 +472,7 @@ class AlertIdTests(unittest.TestCase):
         self.assertEqual(len(lines), 1)
         # The limit is the string the id hashes, so the pair pins both.
         self.assertEqual(len(findings), 1)
-        return lines[0]["id"], findings[0]["limit"]
+        return lines[0]["id"], plain(findings[0]["limit"])
 
     def shop(self, registers, staff):
         items = [(i + 1, REGISTER) for i in range(registers)]
@@ -518,7 +519,7 @@ class AlertIdTests(unittest.TestCase):
             findings = _hour_findings([grid], [business], {})
             lines = [a for a in _alerts([business], EMPTY_SUPPLY, [], [], [], findings,
                                         [], 3, 0.0)["lines"] if a["group"] == "atcap"]
-            self.assertEqual([f["limit"] for f in findings], [subject])
+            self.assertEqual([plain(f["limit"]) for f in findings], [subject])
             self.assertEqual(lines[0]["id"], want)
 
     def test_a_new_per_role_limit_names_its_station(self):
@@ -529,7 +530,7 @@ class AlertIdTests(unittest.TestCase):
         hourly = {h: 45 if 8 <= h < 20 else 0 for h in range(24)}
         grid = grid_of(building(items, shifts, hourly, 100), crew, _service_stations(NAMES))
         [finding] = _hour_findings([grid], [site()], {})
-        self.assertEqual(finding["limit"], "fitness planning boards")
+        self.assertEqual(plain(finding["limit"]), "fitness planning boards")
         got, _ = self.alert_id(grid, self.business())
         self.assertNotEqual(got, "17bc0800b3")
 
@@ -578,9 +579,9 @@ class TheatreGridTests(unittest.TestCase):
         """Two projection booths and one projectionist: the ceiling is his."""
         grid = self.theatre(projectionists=1, booths=2)
         [finding] = _hour_findings([grid], [site("Playhouse", number=7, basket=20.0)], {})
-        self.assertEqual((finding["limit"], finding["hours"]),
+        self.assertEqual((plain(finding["limit"]), finding["hours"]),
                          ("Projectionist staffing", 12))
-        self.assertEqual((finding["fix"], finding["noun"]),
+        self.assertEqual((plain(finding["fix"]), finding["noun"]),
                          ("another Projectionist on those hours", "projection booths"))
 
     def test_a_role_faster_than_the_binding_one_is_not_the_limit(self):
@@ -595,9 +596,9 @@ class TheatreGridTests(unittest.TestCase):
         self.assertEqual((service["counters"], service["staffed"][MONDAY][10]), (100, 50))
         self.assertEqual(grid["staffed"][MONDAY][10], 25)
         [finding] = _hour_findings([grid], [site("Playhouse", number=7, basket=20.0)], {})
-        self.assertEqual((finding["limit"], finding["fix"]),
+        self.assertEqual((plain(finding["limit"]), plain(finding["fix"])),
                          ("projection booths", "another projection booth"))
-        self.assertNotIn("Customer Service", finding["fix"])
+        self.assertNotIn("Customer Service", plain(finding["fix"]))
 
     def test_the_words_do_not_move_between_runs(self):
         """The same fixture under two hash seeds names the roles in one order."""
@@ -645,7 +646,7 @@ class HairdresserTests(unittest.TestCase):
         self.assertEqual((role["label"], role["station"], role["counters"]),
                          ("Hair Stylist", "Hairdresser Headwash", 15))
         [finding] = _hour_findings([grid], [site("Curls", number=9, basket=30.0)], {})
-        self.assertEqual((finding["limit"], finding["fix"]),
+        self.assertEqual((plain(finding["limit"]), plain(finding["fix"])),
                          ("hairdresser headwashes", "another hairdresser headwash"))
         self.assertEqual(finding["noun"], "hairdresser headwashes")
 
@@ -663,7 +664,7 @@ class HairdresserTests(unittest.TestCase):
             [site("Curls", number=9, basket=30.0), site("Braids", number=11, basket=30.0)],
             {},
         )
-        self.assertEqual([(f["site"], f["fix"], f["noun"]) for f in findings], [
+        self.assertEqual([(f["site"], plain(f["fix"]), f["noun"]) for f in findings], [
             ("Curls", "another hairdresser chair", "hairdresser chairs"),
             ("Braids", "another hairdresser headwash", "hairdresser headwashes"),
         ])
@@ -679,8 +680,8 @@ class HairdresserTests(unittest.TestCase):
                  ["lines"] if a["group"] == "atcap"]
         self.assertEqual(len(lines), 2)
         self.assertEqual([a["site"] for a in lines], ["Curls", "Braids"])
-        self.assertIn("another hairdresser chair", lines[0]["text"])
-        self.assertIn("another hairdresser headwash", lines[1]["text"])
+        self.assertIn("another hairdresser chair", plain(lines[0]["text"]))
+        self.assertIn("another hairdresser headwash", plain(lines[1]["text"]))
 
 
 if __name__ == "__main__":

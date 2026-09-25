@@ -220,8 +220,16 @@ beside `slug`, `type`/`sub` beside `typeSlug`, `label`/`role` beside `skill`, `l
 beside `demand`; `GN_LISTS` for parallel lists; any string under a `ba:` key) is
 swapped only while it still reads as that key's English name, and `gnUnkeyed()` takes
 the few fields Python sends with no key, by the kind of name each holds. Every string
-passes `gnString()` on the way, the one place a `⟦ba:key⟧` token inside a sentence
-becomes a name. A key the table lacks stays English. `setGameNames(lang)` fetches
+passes `gnString()` on the way, the one place a name inside a sentence is swapped.
+Python writes such a name as a token, `tok(key, english)` → U+27E6 `key|English`
+U+27E7 (the findings, their summaries, an hour grid's `limit` and `fix`), and
+`gnString()` reads it as the table's word or else the English it carries; `plain()`
+turns a token back into its English for Python's own reading. Only text that reaches
+the page carries one: an alert's `subject` and so its id, the history files and
+anything sent to the game stay plain English. A name Python pluralises or lowercases
+("the projection booths", "3 gift shops", a chain's "Gift Shops") cannot be a token and
+stays English. A board handed to the page anywhere but `takeData()` would show the
+tokens raw, which is why every door goes through it. A key the table lacks stays English. `setGameNames(lang)` fetches
 `web/names/<lang>.json` with the build stamp and redraws the whole board through
 `renderCalm(false)`, the path another save takes; Python never runs again. A join
 between a swapped name and Python's English prose (`spLimitRole()`) asks

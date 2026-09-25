@@ -133,7 +133,9 @@ test('English is the identity, and a swapped board goes back to English whole', 
   const {context, run} = seam();
   context.__raw = clone(FIX.payload);
   run('takeData(__raw)');
-  assert.deepEqual(clone(context.D), FIX.payload);
+  // Python's tokens read as the English Python wrote, and nothing else moves.
+  assert.deepEqual(clone(context.D), FIX.english);
+  assert.deepEqual(clone(run('dataEn()')), FIX.payload);
   context.__table = FIX.de;
   run('gnTable = __table; gnLang = "de"; D = localiseNames(D);');
   assert.equal(context.D.businesses[0].type, 'Geschenkeladen');
@@ -141,7 +143,7 @@ test('English is the identity, and a swapped board goes back to English whole', 
   run('D = localiseNames(D);');
   assert.equal(context.D.businesses[0].type, 'Geschenkeladen');
   run('gnTable = null; gnLang = "en"; D = localiseNames(D);');
-  assert.deepEqual(clone(context.D), FIX.payload);
+  assert.deepEqual(clone(context.D), FIX.english);
 });
 
 test('a name two keys share stays English where it comes without its key', () => {
@@ -159,13 +161,20 @@ test('a name two keys share stays English where it comes without its key', () =>
 
 test('a name written into a sentence as a token reads in the language on screen', () => {
   const {context, run} = seam({table: FIX.de});
-  context.__raw = {names: FIX.payload.names, alerts: [{text: '2 ⟦ba:skill_customerservice⟧ short at HART. Gifts'}]};
+  const said = '2 ⟦ba:skill_customerservice|Customer Service⟧ short at HART. Gifts';
+  // A key the table lacks keeps the English Python wrote, not the game text's.
+  const own = 'fills ⟦ba:itemname_nosuchthing|Widget⟧';
+  context.__raw = {names: FIX.payload.names, alerts: [{text: said}, {text: own}]};
   run('takeData(__raw)');
   assert.equal(context.D.alerts[0].text, '2 Kundendienst short at HART. Gifts');
+  assert.equal(context.D.alerts[1].text, 'fills Widget');
   run('gnTable = null; gnLang = "en"; D = localiseNames(D);');
   assert.equal(context.D.alerts[0].text, '2 Customer Service short at HART. Gifts');
-  assert.equal(context.D[Object.getOwnPropertySymbols(context.D)[0]].alerts[0].text,
-    '2 ⟦ba:skill_customerservice⟧ short at HART. Gifts');
+  assert.equal(run('dataEn()').alerts[0].text, said);
+  // The payload's own findings, from the real Python, name things this way.
+  const tokens = JSON.stringify(FIX.payload).match(/⟦ba:[a-z]+_[^|⟧]+\|[^⟧]+⟧/g) || [];
+  for(const kind of ['skill', 'itemname', 'neighborhood'])
+    assert.ok(tokens.some(t => t.startsWith(`⟦ba:${kind}_`)), `no ${kind} token in the fixture`);
 });
 
 test('names sort by the rules of the language they are shown in', () => {
@@ -352,5 +361,55 @@ test('a Japanese goods-flow node and a German heat-grid header stay inside their
   assert.ok(long, JSON.stringify(heads));
   assert.equal(long.lang, 'de');
   heads.forEach(h => assert.ok(h.over <= 0, `${h.text} overflows by ${h.over}px`));
+  assert.deepEqual(errors, []);
+});
+
+/* No token is ever seen: every page and view, every site's own page and the
+   findings, in English and in German, with the fixture's findings naming
+   roles, items and a neighbourhood inside their sentences. */
+test('no game-name token reaches the page, in English or in German', async t => {
+  const {page, errors} = await site(t);
+  await boardOn(page);
+  const sweep = () => page.evaluate(async () => {
+    const seen = [];
+    const look = where => {
+      const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+      for(let n = walk.currentNode; n; n = walk.nextNode()){
+        if(n.nodeType === 3){
+          const host = n.parentElement;
+          if(host && host.closest('script,style,template')) continue;
+          if(/[⟦⟧]/.test(n.data)) seen.push(`${where}: text ${n.data.trim().slice(0, 80)}`);
+        } else {
+          for(const a of n.attributes) if(/[⟦⟧]/.test(a.value)) seen.push(`${where}: ${n.tagName}[${a.name}] ${a.value.slice(0, 80)}`);
+        }
+      }
+    };
+    const wait = () => new Promise(r => setTimeout(r, 30));
+    for(const p of PAGES.map(p => p.id)){
+      showPage(p); await wait(); look(p);
+      for(const [view] of (SUBS[p] || {items: []}).items){ showSub(p, view); await wait(); look(`${p}/${view}`); }
+    }
+    for(const b of D.businesses){ openSite(b.key); await wait(); look(`site ${b.name}`); }
+    showPage('today'); await wait();
+    const index = ssBuild();
+    index.forEach(e => { if(/[⟦⟧]/.test([e.t, e.p, ...(e.kw || [])].join(' '))) seen.push(`search ${e.id}`); });
+    return seen;
+  });
+  assert.deepEqual(await sweep(), []);
+  const english = await page.evaluate(() => alertLines().map(a => a.text).join('\n'));
+  assert.match(english, /Garment District hype/);
+  assert.match(english, /Projectionist staffing is the limit/);
+  assert.match(english, /soonest Paper Bag/);
+  await page.evaluate(async () => { await setGameNames('de'); });
+  assert.deepEqual(await sweep(), []);
+  const german = await page.evaluate(() => alertLines().map(a => a.text).join('\n'));
+  assert.ok(german.includes(`${FIX.longHoodName} hype`), german);
+  assert.ok(german.includes('Projectionist (DE) staffing is the limit'), german);
+  assert.ok(german.includes('soonest Papiertüte'), german);
+  // The composite limit still reads back to its role once it is in German, so
+  // the site page's cap chip lights that role's hours.
+  const shows = await page.evaluate(key => { openSite(key);
+    return [...document.querySelectorAll('#sitePanel [data-show]')].map(e => e.dataset.show); }, FIX.payload.businesses[0].key);
+  assert.ok(shows.some(s => s.includes('staff:ba:skill_projectionist')), JSON.stringify(shows));
   assert.deepEqual(errors, []);
 });

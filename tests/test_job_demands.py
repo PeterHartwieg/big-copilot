@@ -3,7 +3,7 @@ import os
 import sys
 import unittest
 
-from ba_dashboard import JOB_DEMANDS, _alerts, _business, _cleanliness, _job_demands
+from ba_dashboard import plain, JOB_DEMANDS, _alerts, _business, _cleanliness, _job_demands
 from ba_save import Names, Save
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -200,17 +200,17 @@ class JobDemandFindingTests(unittest.TestCase):
                  employee(["ba:jobdemand_hasmousepad"], eid="b")]
         [line] = self.alerts(evaluate(staff))
         self.assertEqual((line["level"], line["group"], line["siteKey"]), ("warn", "jobdemand", KEY))
-        self.assertEqual(line["text"], "2 staff with unmet demands: "
+        self.assertEqual(plain(line["text"]), "2 staff with unmet demands: "
                          "Full-time for 1 (critical), Mouse Pad for 2 (nice to have)")
 
     def test_a_quit_warning_makes_the_line_critical(self):
         staff = [employee(["ba:jobdemand_hasmousepad"], hasSendQuitWarning=True)]
         [line] = self.alerts(evaluate(staff))
         self.assertEqual(line["level"], "critical")
-        self.assertTrue(line["text"].endswith("; 1 of them has warned they will quit"))
+        self.assertTrue(plain(line["text"]).endswith("; 1 of them has warned they will quit"))
         two = [employee(["ba:jobdemand_hasmousepad"], eid=e, hasSendQuitWarning=True) for e in "ab"]
         [line] = self.alerts(evaluate(two))
-        self.assertTrue(line["text"].endswith("; 2 of them have warned they will quit"))
+        self.assertTrue(plain(line["text"]).endswith("; 2 of them have warned they will quit"))
 
     def test_a_quit_warning_from_somebody_with_every_demand_met_is_not_counted(self):
         staff = [employee(["ba:jobdemand_hasmousepad"], eid="a"),
@@ -232,7 +232,7 @@ class JobDemandFindingTests(unittest.TestCase):
         b = evaluate(staff)
         self.assertEqual(b["staffDemands"][0]["workedOver"], {"count": 2, "max": 50, "unit": "hours"})
         [line] = self.alerts(b)
-        self.assertEqual(line["text"], "2 staff with unmet demands: "
+        self.assertEqual(plain(line["text"]), "2 staff with unmet demands: "
                          "Full-time for 2 (critical, worked over 50 hours this week)")
 
     def test_a_roster_outside_the_band_is_a_roster_failure_whatever_was_worked(self):
@@ -242,7 +242,7 @@ class JobDemandFindingTests(unittest.TestCase):
         b = evaluate(staff)
         self.assertNotIn("workedOver", b["staffDemands"][0])
         [line] = self.alerts(b)
-        self.assertEqual(line["text"], "2 staff with unmet demands: Full-time for 2 (critical)")
+        self.assertEqual(plain(line["text"]), "2 staff with unmet demands: Full-time for 2 (critical)")
 
     def test_mixed_causes_count_the_ones_that_only_worked_over(self):
         full = "ba:jobdemand_fulltime"
@@ -250,7 +250,7 @@ class JobDemandFindingTests(unittest.TestCase):
                  employee([full], eid="b", workedHoursThisWeek=51),
                  employee([full], eid="c", workedHoursThisWeek=58)]
         [line] = self.alerts(evaluate(staff))
-        self.assertEqual(line["text"], "3 staff with unmet demands: "
+        self.assertEqual(plain(line["text"]), "3 staff with unmet demands: "
                          "Full-time for 3 (critical, 2 worked over 50 hours this week)")
 
     def test_a_days_demand_names_the_days_worked(self):
@@ -259,7 +259,7 @@ class JobDemandFindingTests(unittest.TestCase):
         b = evaluate(staff)
         self.assertEqual(b["staffDemands"][0]["workedOver"], {"count": 1, "max": 5, "unit": "days"})
         [line] = self.alerts(b)
-        self.assertEqual(line["text"], "1 staff with unmet demands: "
+        self.assertEqual(plain(line["text"]), "1 staff with unmet demands: "
                          "Five days a week for 1 (important, worked over 5 days this week)")
 
     def test_staff_at_no_site_or_somewhere_else_are_not_counted(self):
@@ -272,16 +272,16 @@ class JobDemandFindingTests(unittest.TestCase):
         staff = [employee(["ba:jobdemand_goldhealthinsurance", "ba:jobdemand_peacefulworkenvironment"])]
         [line] = self.alerts(evaluate(staff, happiness=10))
         self.assertEqual((line["group"], line["site"], line["siteKey"]), ("companydemand", "Company", None))
-        self.assertTrue(line["text"].startswith("1 staff with demands only you can meet: "))
-        self.assertIn("Gold Health Insurance for 1", line["text"])
-        self.assertIn("Happy boss for 1", line["text"])
-        self.assertIn("HR manager's plan", line["text"])
+        self.assertTrue(plain(line["text"]).startswith("1 staff with demands only you can meet: "))
+        self.assertIn("Gold Health Insurance for 1", plain(line["text"]))
+        self.assertIn("Happy boss for 1", plain(line["text"]))
+        self.assertIn("HR manager's plan", plain(line["text"]))
 
     def test_a_quit_warning_over_company_demands_alone_still_raises_the_site(self):
         staff = [employee(["ba:jobdemand_goldhealthinsurance"], hasSendQuitWarning=True)]
         lines = {a["group"]: a for a in self.alerts(evaluate(staff))}
         self.assertEqual(lines["jobdemand"]["level"], "critical")
-        self.assertEqual(lines["jobdemand"]["text"], "1 staff with unmet demands: "
+        self.assertEqual(plain(lines["jobdemand"]["text"]), "1 staff with unmet demands: "
                          "Gold Health Insurance for 1 (company-wide); 1 of them has warned they will quit")
         self.assertIn("companydemand", lines)
 
@@ -290,7 +290,7 @@ class JobDemandFindingTests(unittest.TestCase):
                  employee(["ba:jobdemand_goldhealthinsurance"], eid="y", hasSendQuitWarning=True),
                  employee(["ba:jobdemand_goldhealthinsurance"], eid="z", hasSendQuitWarning=True)]
         [line] = [a for a in self.alerts(evaluate(staff)) if a["group"] == "jobdemand"]
-        self.assertEqual(line["text"], "3 staff with unmet demands: Gold Health Insurance for 2 "
+        self.assertEqual(plain(line["text"]), "3 staff with unmet demands: Gold Health Insurance for 2 "
                          "(company-wide), Mouse Pad for 1 (nice to have); 2 of them have warned they will quit")
 
     def test_a_site_not_trading_yet_still_reports_its_staff(self):
