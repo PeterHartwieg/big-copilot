@@ -14750,6 +14750,8 @@ function planBuild(plan){
     });
   });
   const at = new Map(), loose = [], planned = [];
+  /* What the factory's own contract brings a week: its level, or its amount. */
+  const ownLevel = slug => { const c = (depots[fs] || {})[slug]; return !c ? null : c.smart && Number.isFinite(c.target) ? c.target : c.weekly ?? null; };
   const put = (s, slug, o) => {
     if(!Number.isInteger(s) || !bs[s]) return;
     const k = `${s}|${slug}`;
@@ -14800,7 +14802,7 @@ function planBuild(plan){
     /* A direct import has no daily top-up: the weekly contract is its figure. */
     put(fs, slug, own ? {week: inp.week, daily: null,
         fact: {st: "new", why: "plan", lvl: "info", role: "input", cad: "weekly", use: inp.week,
-               need: planUp(inp.week * (1 + margin)), have: null, setTo: null, from: null, parts: null}}
+               need: planUp(inp.week * (1 + margin)), have: ownLevel(slug), setTo: null, from: null, parts: null}}
       : {week: inp.week, daily: setTo > target ? setTo : null,
         fact: {st: "new", why: "plan", lvl: "info", role: "input", cad: "daily", use: Math.round(day),
                need: setTo, have: target, setTo: setTo > target ? setTo : null, from, parts: null}});
@@ -14834,9 +14836,10 @@ function planApply(fact, ov){
     if(f.st === "paused") return f;
     const want = Number.isFinite(setTo) ? setTo : null;
     const own = Number.isFinite(f.setTo) && !f.lowers;
-    /* No figure of the plan's, and one of Python's that does not lower (a
-       tight margin to restore): its word and reason stand, the plan named. */
-    if(PLAN_QUIET.includes(f.st) && want === null && own) return {...f, plan: ov.name, planWeek: ov.week};
+    /* Python's own figure, not a lowering, and at least the plan's (a tight
+       margin to restore): its word, reason and figure stand, the plan named.
+       "Ordered ahead" is said only where the plan's figure wins. */
+    if(PLAN_QUIET.includes(f.st) && own && (want === null || f.setTo >= want)) return {...f, plan: ov.name, planWeek: ov.week};
     if(PLAN_QUIET.includes(f.st))
       return {...f, st: "new", why: "plan", lvl: "info", plan: ov.name, planWeek: ov.week, lower: null, lowers: false,
               setTo: want === null ? null : own ? Math.max(f.setTo, want) : want};
@@ -20791,6 +20794,8 @@ function planDepot(slug, at, view = planView()){
   }
   const facts = (D.supply || {}).facts || {}, depots = ((D.supply || {}).factories || {}).depots || {};
   const level = s => { const c = (depots[s] || {})[slug] || {}; return c.smart && Number.isFinite(c.target) ? c.target : c.weekly || 0; };
+  /* A factory that imports it itself keeps its own contract. */
+  if(Number.isInteger(at) && facts[at] && facts[at][slug] && facts[at][slug].imp && D.businesses[at]) return at;
   const found = Object.keys(facts).map(Number).filter(s => D.businesses[s] && facts[s][slug] && facts[s][slug].imp)
     .sort((a, b) => level(b) - level(a) || a - b);
   return found.length ? found[0] : null;

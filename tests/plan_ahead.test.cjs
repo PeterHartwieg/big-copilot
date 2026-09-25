@@ -480,10 +480,11 @@ test('a fact the plan quiets keeps its own figure where the plan has none, unles
       const tight = planApply({st: 'tight', why: 'target', cad: 'daily', setTo: 3500}, ov);
       return [[tight.st, tight.why, tight.plan, tight.setTo],
               planApply({st: 'idle', cad: 'daily', setTo: 800, lowers: true}, ov).setTo,
-              planApply({st: 'tight', cad: 'daily', setTo: 3500}, {...ov, daily: 3000}).setTo,
+              (f => [f.st, f.why, f.plan, f.setTo])(planApply({st: 'tight', why: 'target', cad: 'daily', setTo: 3500}, {...ov, daily: 3000})),
               planApply({st: 'tight', cad: 'daily', setTo: 3500}, {...ov, daily: 4000}).setTo];
     });
-    assert.deepEqual(out, [['tight', 'target', 'P', 3500], null, 3500, 4000]);
+    // Python's figure above the plan's: tight, its reason and figure, the plan named.
+    assert.deepEqual(out, [['tight', 'target', 'P', 3500], null, ['tight', 'target', 'P', 3500], 4000]);
   } finally { await page.close(); }
 });
 
@@ -564,6 +565,10 @@ test('a tight figure the plan does not set stays tight, off Today', async () => 
       return [f.st, f.plan, row.tight, row.reason.includes('Ordered ahead')];
     });
     assert.deepEqual(out, ['tight', 'Factory Electronics, 12 machines', true, false]);
+    // Today counts it apart, as a change that only restores the margin.
+    const card = await page.evaluate(() => { drawSupplyStrip(); return document.querySelector('#planImportsCard .what').textContent; });
+    assert.match(card, /1 more on Supply only restore the margin\.$/);
+    assert.doesNotMatch(card, /starting with Capacitors/);
   } finally { await page.close(); }
 });
 
@@ -576,5 +581,31 @@ test('Today names a first fill\'s depots beside the other changes', async () => 
        fill: [{item: 'Glue', amount: 5, to: 'North Depot'}]},
     ], new Set(), s => ['Import Hub', 'Factory Electronics'][s]).what);
     assert.equal(what, '<b>2 changes</b> at Import Hub and North Depot, starting with Battery.');
+  } finally { await page.close(); }
+});
+
+/* Review round 4. */
+test('a factory importing an input itself keeps its own contract beside a larger importer', async () => {
+  const data = fixture({running: 0, placed: 0, empty: 5});
+  const fs = data.supply.factories.sites[0];
+  fs.lines = []; fs.needs = []; fs.targets = {}; fs.arrivals = {};
+  data.supply.facts[1] = {cap: {st: 'idle', why: 'importHigh', lvl: 'info', role: 'depot', cad: 'weekly', use: 0, need: 0,
+    have: 300, setTo: null, imp: true, parts: {lines: 0, sites: 0, route: 0}}};
+  data.supply.factories.depots[1] = {cap: {weekly: 50000, pausedWeekly: 0, smart: true, target: 50000, plain: 0,
+    arrivedLastWeek: 0, contracts: [contractOf(3, '1 Pier', true, 50000)]}};
+  // The hub's level (151,300) is larger than the factory's own 50,000; the
+  // company's active orders come to 70,000 this week.
+  data.plan.sources.cap = {ordered: 70000, active: true, smart: true, contracts: [{}, {}]};
+  const page = await board({data});
+  try{
+    await savePlan(page);
+    const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key))[0].inputs.cap, STORE);
+    assert.equal(saved.depot, FACTORY);
+    const raised = 50000 + saved.target - 70000;
+    assert.ok(raised > 50000);
+    const f = await page.evaluate(() => { const f = supplyFact(1, 'cap'); return [f.have, f.import.setTo]; });
+    assert.deepEqual(f, [50000, raised]);
+    assert.deepEqual((await rowsOf(page, 'Weekly imports')).filter(r => r[0] === 'Capacitors'), [['Capacitors', 1, 50000, raised]]);
+    assert.deepEqual((await rowsOf(page, 'Factory daily top-ups')).filter(r => r[0] === 'Capacitors'), []);
   } finally { await page.close(); }
 });
