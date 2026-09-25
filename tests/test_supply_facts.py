@@ -1310,7 +1310,7 @@ class FixtureKeyTests(unittest.TestCase):
         "needs": {"dem", "ownPaused"}, "idle": {"unfed", "routedFrom", "importLevel", "smart", "dem"},
         "shops": {"wholesale", "wholesaleDay"},
         # R13's line hours: accepted whether or not the fixture carries them yet.
-        "lines": {"hoursNow", "needHours", "demBasis", "running", "status", "why", "level",
+        "lines": {"hoursNow", "thinDay", "needHours", "demBasis", "running", "status", "why", "level",
                   "dem"},
     }
 
@@ -1384,8 +1384,7 @@ class FixtureKeyTests(unittest.TestCase):
                     self.assertLessEqual(set(row), always | optional)
 
     # What a factoryStaffing row carries (_factory_staffing()), and a line of it.
-    STAFFING_ROW = {"key", "s", "name", "lines", "headcount", "wageDay", "delta", "stations",
-                    "people", "shifts", "placed", "shortHours"}
+    STAFFING_ROW = {"key", "s", "name", "lines", "headcount", "wageDay", "delta"}
     STAFFING_LINE = {"slug", "item", "machines", "hoursNow", "hours", "from", "to", "cuts"}
 
     def test_the_fixtures_factory_staffing_matches_when_it_carries_one(self):
@@ -1400,11 +1399,11 @@ class FixtureKeyTests(unittest.TestCase):
                     if row.get("failed"):
                         self.assertEqual(set(row), {"key", "s", "name", "failed"})
                         continue
-                    self.assertEqual(set(row), self.STAFFING_ROW)
+                    self.assertEqual(set(row) - {"unnamedMachines"}, self.STAFFING_ROW)
                     self.assertEqual(set(row["headcount"]), {"needed", "min", "have", "spare", "hire"})
                     self.assertEqual(set(row["delta"]), {"workers", "perDay"})
                     for line in row["lines"]:
-                        self.assertEqual(set(line), self.STAFFING_LINE)
+                        self.assertEqual(set(line) - {"unnamed"}, self.STAFFING_LINE)
 
 
 if __name__ == "__main__":

@@ -1196,12 +1196,15 @@ worth reading: one with a change to type, or a word other than covered, made her
 reading.
 
 **Hours a factory line runs.** Each line shows, a cell an hour, the hours a day its
-machines are rostered (the fewest over its machines and weekdays) against the hours the
+machines are rostered (the week of its least-rostered machine, as hours a day, with the
+thinnest weekday named where it is lower: *12 (Sun 0 h)*) against the hours the
 sizing needs: 24 under 24/7; under Demand, what the shops at the end of the chain use plus
 the margin, divided by what the machines make an hour, never past 24 (a line whose output
-nothing draws is sized at 24 there too). Too few hours is **short**, a change to type: post
-factory workers for the hours it needs. More than it needs stays **covered**, with the hours
-that would do as a suggestion, never a change.
+nothing draws is sized at 24 there too). Too few hours over the week is **short**, a change
+to type: post factory workers for the hours it needs. More than it needs stays **covered**,
+with the hours that would do as a suggestion, never a change; the tab's verdict says how
+many lines could run fewer hours and how many factory workers could go. *Ships / day* adds
+what the line tops your own sites up to (*top-up out*) and what goes to a pier (*export*).
 
 **Staffing for factory lines.** Under the factories, the same rules as a shop's Staffing:
 one person per machine per hour, 12 hours the longest shift. Each line's run for the sizing
@@ -1210,8 +1213,9 @@ demands. Each factory is given the fewest of its own factory workers that cover 
 its machine-hours a week ÷ 50, rounded up, and one more while a shift stays open (cleaners,
 security and unassigned staff do not count). The rest *could go*: *2 could go: the week
 needs 10*; too few reads *hire 2: the week needs 14*, with what the difference does to the
-wage bill a day. *Staffing on its page* opens
-the factory.
+wage bill a day. Machines on a recipe the board cannot name yet are rostered too (24 h
+under 24/7, their hours now under Demand), and the card says how many it includes. *Open
+factory page* opens the factory on its lines.
 
 The **weekly order** column is judged against what the coming week actually takes, not
 against what last week took. You order once a week and top up daily; an order that

@@ -87,7 +87,7 @@ def factory_rows(c, people, names=None):
     """_factory_staffing() on company `c` with `people` on staff."""
     stub = c.save()
     stub.root["EmployeeInstances"] = people.save_rows
-    return _factory_staffing(stub, names, c.business_list, c.supply["factories"], people.staff)
+    return _factory_staffing(stub, names, c.business_list, c.supply["factories"], people.staff, detail=True)
 
 
 def hand_factory(lines):
@@ -114,7 +114,7 @@ class Bare:
 
 def hand_rows(lines, people):
     business = [{"key": KEY, "name": "Brewery", "status": "support"}]
-    return _factory_staffing(Bare(people), None, business, hand_factory(lines), people.staff)
+    return _factory_staffing(Bare(people), None, business, hand_factory(lines), people.staff, detail=True)
 
 
 def line_of(c, addr=FACTORY):
@@ -263,12 +263,72 @@ class LineHoursTests(unittest.TestCase):
         _site, line = line_of(rostered_chain([24, 10]))
         self.assertEqual(line["hoursNow"], 10)
 
+    def test_a_day_off_is_judged_on_the_week_and_named(self):
+        # 24 h Monday to Saturday, nothing on Sunday: 144 of the week's 168.
+        week = [{"slot": 1, "id": "m-0", "days": [0, 24, 24, 24, 24, 24, 24], "running": True}]
+        line = _line_hours(week, 1, 30, 30 * 8 / 1.15, "sales")
+        self.assertEqual((line["hoursNow"], line["thinDay"]), (20, {"day": "Sun", "hours": 0}))
+        self.assertEqual((line["status"], line["why"]), ("short", "hours"))
+        # Demand needs 8 a day, 56 a week: the week covers it, fewer would do.
+        self.assertEqual(line["dem"], {"status": "covered", "why": None, "level": "ok", "lower": 8})
+        # Every day alike: no day named.
+        self.assertNotIn("thinDay", _line_hours([{**week[0], "days": [20] * 7}], 1, 30, 0, "none"))
+
     def test_placed_against_running(self):
         # Three placed: one with no recipe, one nobody is posted to, one running.
         c = rostered_chain([24, 0, 24], machines=[RID, RID, None])
         site, line = line_of(c)
         self.assertEqual((site["machines"], site["running"]), (3, 1))
         self.assertEqual((line["machines"], line["running"]), (2, 1))
+
+
+class UnnamedAndSharedLineTests(unittest.TestCase):
+    def test_machines_on_a_recipe_the_board_cannot_name_are_rostered_too(self):
+        # Two beer machines and two on a recipe no table names, all 24 h, and
+        # 14 workers: 672 machine-hours need all 14, none spare.
+        c = rostered_chain([24, 24, 24, 24], machines=[RID, RID, "rid-unknown", "rid-unknown"])
+        site, _line = line_of(c)
+        self.assertEqual([u["machines"] for u in site["unnamed"]], [2])
+        rows = factory_rows(c, People().add(14))
+        cap, dem = rows["cap"][0], rows["dem"][0]
+        self.assertEqual((cap["headcount"]["needed"], cap["headcount"]["spare"], cap["unnamedMachines"]), (672, 0, 2))
+        [unnamed] = [l for l in cap["lines"] if l.get("unnamed")]
+        self.assertEqual((unnamed["hours"], unnamed["slug"], unnamed["machines"]), (24, None, 2))
+        self.assertIn("recipe not named", unnamed["item"])
+        # Under Demand its use is unknown: it keeps the hours it has now.
+        [unnamed] = [l for l in dem["lines"] if l.get("unnamed")]
+        self.assertEqual(unnamed["hours"], 24)
+        self.assertEqual(dem["unnamedMachines"], 2)
+        self.assertEqual(dem["headcount"]["needed"], 2 * _line["needHours"]["dem"] * 7 + 2 * 24 * 7)
+        for site in c.supply["factories"]["sites"]:
+            for u in site["unnamed"]:
+                self.assertNotIn("_posts", u)
+
+    def test_a_machine_with_no_recipe_stays_out(self):
+        c = rostered_chain([24, 24], machines=[RID, None])
+        cap = factory_rows(c, People().add(4))["cap"][0]
+        self.assertNotIn("unnamedMachines", cap)
+        self.assertEqual(cap["headcount"]["needed"], 168)
+
+    def test_two_lines_making_one_item_keep_their_own_machines(self):
+        business = [{"key": KEY, "name": "Brewery", "status": "support"}]
+        factories = {"sites": [{"s": 0, "machines": 4, "lines": [
+            {"slug": "beer", "item": "Beer", "machines": 2, "slots": [1, 2], "hoursNow": 24,
+             "needHours": {"cap": 24, "dem": 24}, "_posts": ["a-0", "a-1"]},
+            {"slug": "beer", "item": "Beer", "machines": 2, "slots": [3, 4], "hoursNow": 24,
+             "needHours": {"cap": 24, "dem": 24}, "_posts": ["b-0", "b-1"]}]}]}
+        people = People().add(14)
+        [row] = _factory_staffing(Bare(people), None, business, factories, people.staff, detail=True)["cap"]
+        self.assertEqual(sorted(st["id"] for st in row["stations"]), ["a-0", "a-1", "b-0", "b-1"])
+        self.assertEqual(row["headcount"]["needed"], 672)
+
+    def test_the_payload_row_carries_only_what_the_board_reads(self):
+        c = rostered_chain([24])
+        stub = c.save()
+        people = People().add(4)
+        stub.root["EmployeeInstances"] = people.save_rows
+        [row] = _factory_staffing(stub, None, c.business_list, c.supply["factories"], people.staff)["cap"]
+        self.assertEqual(set(row), {"key", "s", "name", "lines", "headcount", "wageDay", "delta"})
 
 
 class StaffFindingTests(unittest.TestCase):

@@ -304,7 +304,7 @@ test('the supply kinds land on the Supply tab of their object', () => {
     '; this.out = JSON.stringify({ALERT_LINKS, SEC_PAGE, SEC_MOVED});', ctx);
   const got = JSON.parse(ctx.out), links = got.ALERT_LINKS;
   const tabs = Object.fromEntries(Object.entries(links).filter(([, l]) => l.tab).map(([id, l]) => [id, l.tab]));
-  assert.deepEqual(tabs, {shortfall: 'warehouses', order: 'warehouses', paused: 'warehouses',
+  assert.deepEqual(tabs, {shortfall: 'site', order: 'site', paused: 'site',
     outruns: 'shops', unplanned: 'shops', dead: 'site', target: 'site', notrouted: 'site',
     feed: 'factories', staff: 'factories', unnamed: 'factories', unset: 'factories'});
   const pages = got.SEC_PAGE;
