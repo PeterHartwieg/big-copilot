@@ -612,8 +612,10 @@ class CityMapView {
       show: FINDER_SHOWS.some(([k]) => k === f.show) ? f.show : "rent",
       minM2: num(f.minM2), maxM2: num(f.maxM2), minCap: num(f.minCap), maxCap: num(f.maxCap),
       minTraffic: num(f.minTraffic),
-      // A layout this save's buildings of the kind do not have is dropped.
-      layouts: Array.isArray(f.layouts) ? f.layouts.filter(c => this.layoutKeys(cat).includes(c)) : []};
+      // A layout this save's buildings of the kind do not have is dropped, and a
+      // kind with fewer than two layouts has no layout filter at all, as on screen.
+      layouts: this.layoutKeys(cat).length < 2 || !Array.isArray(f.layouts) ? []
+        : f.layouts.filter(c => this.layoutKeys(cat).includes(c))};
   }
   /* Two states are the same search when everything the player can see matches,
      the sort included, since a search is saved with its sort. */

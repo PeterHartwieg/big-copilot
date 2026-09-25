@@ -1726,9 +1726,9 @@ test('Layout chips pick to filter, keep the focus, and all lit or none lit is no
     // Unlighting one filters again, to the two still lit.
     await page.locator(layChip('C2')).click();
     assert.deepEqual(await rowKeys(page), [HK[0], MT[0]]);
-    // Clearing the last lit chip leaves none lit and the full list.
     await page.locator(layChip('C1')).click();
     assert.deepEqual(await rowKeys(page), [MT[0]]);
+    // Clearing the last lit chip leaves none lit and the full list.
     await page.locator(layChip('D2')).click();
     assert.deepEqual(await layChips(page), ['C1', 'C2', 'D2']);
     assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
@@ -1811,6 +1811,24 @@ test('a card whose plan shrinks to fit the stage does not scroll', async () => {
     assert.equal(await page.locator('#cityMapPage .site').evaluate(c => c.classList.contains('lp-scroll')), false);
     const card = await page.locator('#cityMapPage .site').boundingBox(), stage = await page.locator('#cityMapPage [data-stage]').boundingBox();
     assert.ok(card.y + card.height <= stage.y + stage.height + 1, `card ${JSON.stringify(card)} stage ${JSON.stringify(stage)}`);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a search saved with a layout matches a save whose kind has only that one', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await openMap(page); await turnOn(page);
+    // Saved where offices had several layouts; here they have J1 only, which
+    // is no filter, so the search is the one on screen and names no layout.
+    await page.evaluate(() => finderKeepSaved([{name: 'Offices', filters: {cat: 'office', type: '', show: 'rent', hoods: null,
+      layouts: ['J1'], minM2: 0, maxM2: 0, minCap: 0, maxCap: 0, minTraffic: 0, sort: 'score', sortPicked: false}}]));
+    await page.locator('#cityMapPage .fchip.cat[data-cat="office"]').click();
+    assert.equal(await page.locator('#cityMapPage .fsaved-list .fchip.on').textContent(), 'Offices');
+    assert.doesNotMatch(await page.evaluate(() => cityMapPage.savedTip(finderSaved()[0])), /layout/);
+    await page.locator('#cityMapPage .fsaved-list [data-saved="Offices"]').click();
+    assert.deepEqual(await rowKeys(page), [HK[4]]);
+    assert.equal(await page.locator('#cityMapPage .fsaved-list .fchip.on').textContent(), 'Offices');
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
