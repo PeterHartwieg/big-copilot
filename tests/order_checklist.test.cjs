@@ -20,6 +20,9 @@ const settingStart = source.indexOf('function importSetting(');
 assert.ok(settingStart >= 0 && settingStart < start);
 // The board's number formatter, which the checklist's wording goes through.
 vm.runInContext(source.slice(source.indexOf('let NUM_LOCALE'), source.indexOf('const compact =')), context);
+// The weekday names and Supply's word helpers (sbDay, sbDayShort) the reasons use.
+vm.runInContext(source.slice(source.indexOf('const WEEKDAY_NAMES'), source.indexOf('function drawWeekday(')), context);
+vm.runInContext(source.slice(source.indexOf('/* A list as one message'), source.indexOf("/* A node's name cut to fit")), context);
 vm.runInContext(source.slice(settingStart, end), context);
 const businesses = [
   {key:'depot#1', name:'Depot', address:'1 Depot Street'},
@@ -203,7 +206,7 @@ test('unassigned factories require depot selection; a top-up is the input fact\'
   assert.match(rows[1].reason, /Full-rate input requirement, plus the margin; confirm staffing and output limits/);
   // Under Demand the reason says what the figure was sized for.
   const [dem] = build({sites:[{s:1, rows:[{item:'Flour', target:100, perDay:215, from:0, margin:0.15,
-    sizedFor:'What the shops at the end of the chain use', fact:fact('short', {setTo:250})}]}]});
+    sizedFor:'dem', fact:fact('short', {setTo:250})}]}]});
   assert.match(dem.reason, /^From Depot · 1 Depot Street\. What the shops at the end of the chain use, plus a 15% margin/);
 });
 
@@ -478,6 +481,27 @@ test('the card says a review in the checklist’s own words, and escapes a save�
     what:'<b>&lt;Glue></b>: choose a supplying depot before setting an order.'});
 });
 
+test("in another language the words change, and the kinds, tick keys and Today's wording stay whole", () => {
+  // A row's kind is its id: the tabs pick rows by it and every tick's key holds it.
+  const input = {loose:[{item:'Glue', week:700}], imports:[{s:0, rows:[order({})]}]};
+  const en = build(input);
+  context.ttSetTable('de', {'sb.ck.kind.imports': 'Wochenimporte', 'sb.ck.loose': 'Wähle ein Depot.',
+    'sb.ck.lead.loose': 'wähle ein Depot', 'sb.ck.copy.row': '[ ] {item} – {change} – {reason}'});
+  try {
+    const de = build(input);
+    assert.deepEqual(de.map(r => [r.kind, r.key, r.legacyKey]), en.map(r => [r.kind, r.key, r.legacyKey]));
+    assert.match(de[0].group, /^Wochenimporte · Depot · 1 Depot Street$/);
+    const review = de.find(r => r.proposed === null);
+    assert.match(review.reason, /^Wähle ein Depot\. /);
+    // Today's card takes the review's own first sentence, not a slice of the reason.
+    assert.equal(card([review]).what, '<b>Glue</b>: wähle ein Depot.');
+    // The copied checklist follows the UI language.
+    assert.match(context.orderChecklistText(de, 'Company'), /\n\[ \] Glue – Review – Wähle ein Depot\./);
+  } finally {
+    context.ttSetTable('en', null);
+  }
+});
+
 test('the board keeps no verdict engine of its own', () => {
   // Python is the only judge (supplyFact); the JS engine that recomputed
   // factory inputs and import levels is gone.
@@ -489,7 +513,7 @@ test('the board keeps no verdict engine of its own', () => {
 test('a factory line short of its hours is one "Factory run hours" row; more hours than needed is none', () => {
   const lines = [
     {s: 1, item: 'Cake', slug: 'ba:itemname_cake', fact: {st: 'short', why: 'hours', lvl: 'warn'}, hoursNow: 12, need: 24, machines: 2,
-     sizedFor: 'Full-rate input requirement'},
+     sizedFor: 'cap'},
     {s: 1, item: 'Bread', slug: 'ba:itemname_bread', fact: {st: 'covered', why: null, lvl: 'ok', lower: 10}, hoursNow: 24, need: 10, machines: 2},
   ];
   const rows = JSON.parse(JSON.stringify(context.buildOrderChecklist([], [], [], [], [], businesses, [], [], lines)));

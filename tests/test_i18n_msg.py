@@ -87,6 +87,9 @@ CONVERTED = {
     # Supply's chrome, and the imports and schedule write dialogs, write their
     # own words in the page (tt()); Python sends the supply facts as codes.
     "sb": [],
+    # The order checklist words its reasons in the page (tt()); Python sends
+    # the facts, names and weekday names it reads them from.
+    "sb.ck": [],
     # Growth writes its own words in the page (tt()); Python sends it names, numbers
     # and the supplier-event kinds, which the page words by their English.
     "gr": [],
