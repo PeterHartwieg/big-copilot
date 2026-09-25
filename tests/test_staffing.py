@@ -928,6 +928,8 @@ class PayloadTest(unittest.TestCase):
                 "shortHours", "shortDays", "placed", "bench", "slack", "cost",
                 "current", "measure", "addPeople", "fullCover", "demandDataComplete",
                 "unmeasured",
+                # The Staff page's part, which _hiring() takes off in extract().
+                "_hire",
             },
         )
         # The full-cover plan is the same shape as the demand plan, less the need
@@ -939,6 +941,7 @@ class PayloadTest(unittest.TestCase):
                 "shifts", "headcount", "shortHours", "shortDays",
                 "placed", "bench", "slack", "cost", "addPeople",
                 "open", "openAllHours", "openNow", "inGame", "daysMeasured", "daysNeeded",
+                "_hire",
             },
         )
 
