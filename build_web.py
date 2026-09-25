@@ -430,7 +430,7 @@ details.help[open] summary::after{content:"\2013"}
         </div>
         <p id="localeOther" class="quiet">To find your game's <code>en.json</code>, open Steam &rarr; Manage &rarr; Browse local files. On macOS, search that folder for <code>en.json</code>; use Show Package Contents if the game files are inside an app bundle.</p>
       </div>
-      <p class="lg-quiet"><button type="button" class="lg-text" id="forgetHistory" title="Sixty days of demand and cash history are kept in this browser for the trends. Forgetting them starts a fresh record." data-tt-title="land.forget.title" data-tt="land.forget">Forget history</button> <span data-tt="land.forget.after">&middot; the page only reads your saves, from a folder or from the running game.</span></p>
+      <p class="lg-quiet"><button type="button" class="lg-text" id="forgetHistory" title="Two weeks of demand and sixty days of cash history are kept in this browser for the trends. Forgetting them starts a fresh record." data-tt-title="land.forget.title" data-tt="land.forget">Forget history</button> <span data-tt="land.forget.after">&middot; the page only reads your saves, from a folder or from the running game.</span></p>
     </div>
   </details>
   <div class="orb" id="lgOrb" aria-hidden="true"><i></i><u></u></div>

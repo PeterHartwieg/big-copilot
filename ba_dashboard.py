@@ -9274,6 +9274,11 @@ SUPPLIER_EVENTS = {
 }
 HISTORY_DAYS = 60  # how much demand history to keep on disk
 TREND_WINDOW = 7  # compare against this many days back when the history reaches it
+# The browser's history lives in localStorage (about 5 MB for the site, the
+# player's en.json included; a day's demand snapshot is about 22 KB), so it
+# keeps two weeks of demand for the characters opened most recently.
+BROWSER_HISTORY_DAYS = 14
+BROWSER_HISTORY_CHARACTERS = 8
 
 
 def _market_event_active(event, day):
@@ -9791,7 +9796,8 @@ class History:
             return {}
         try:
             with open(self.path, encoding="utf-8") as fh:
-                book = json.load(fh).get("characters", {})
+                whole = json.load(fh)
+            book = whole.get("characters", {}) if isinstance(whole, dict) else None
             if not isinstance(book, dict):
                 raise ValueError("no characters table")
             return book
@@ -9801,7 +9807,7 @@ class History:
                 os.replace(self.path, self.path + ".bad")
             except OSError:
                 pass
-        except (OSError, AttributeError):
+        except OSError:
             self.writable = False
         return {}
 
@@ -9856,6 +9862,23 @@ class History:
             else:
                 store.pop(rid, None)
         return dict(store)
+
+    def keep_recent(self, character: str, days: int, characters: int) -> None:
+        """Bound the book, for a store with a small quota (the browser's).
+
+        ``character`` becomes the most recent; only the ``characters`` most
+        recently built are kept, each with its last ``days`` demand snapshots.
+        The trend compares with about a week back, so two weeks of snapshots
+        lose nothing the board shows; the ledger is small and keeps its 60.
+        """
+        if character in self.book:
+            self.book[character] = self.book.pop(character)
+        for old in list(self.book)[:-characters]:
+            del self.book[old]
+        for record in self.book.values():
+            store = record.get("days", {})
+            for old in sorted(store, key=int)[:-days]:
+                del store[old]
 
     def write(self) -> None:
         if not self.path or not self.writable:
@@ -28171,8 +28194,14 @@ def browser_build(
             f"read ({type(exc).__name__}: {exc})"
         ) from exc
     data = safe_extract(save, names, history_path)
+    character = save.root.get("characterId") or "default"
+    # The page keeps this file in localStorage, a few MB for the whole site:
+    # sixty days of demand for every character ever opened would fill it.
+    history = History(history_path)
+    history.keep_recent(character, BROWSER_HISTORY_DAYS, BROWSER_HISTORY_CHARACTERS)
+    history.write()
     with open(history_path + ".character", "w", encoding="utf-8") as fh:
-        fh.write(save.root.get("characterId") or "default")
+        fh.write(character)
     return json.dumps(data, separators=(",", ":"))
 
 
