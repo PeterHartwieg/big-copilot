@@ -1207,3 +1207,62 @@ test('old Payroll links land on Staff, with Payroll at its foot', async (t) => {
   await page.evaluate(() => { showPage('today'); reveal('secPayroll'); });
   assert.equal(await page.evaluate(() => `${page}/${sub.company}`), 'company/staff');
 });
+
+test('closing the Quick hire confirm gives the focus back to its Hire button', async (t) => {
+  const page = await board(t);
+  const box = page.locator('#hsQuick');
+  await box.locator('[data-hq-role]').selectOption(CS);
+  await box.locator('[data-hq-site]').selectOption(G);
+  await quickConfirm(page);
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('dialog.gw-dlg[open]') && !hrUi.quickHold);
+  assert.equal(await page.evaluate(() => document.activeElement.matches('#hsQuick [data-hq-go]')), true);
+});
+
+// Quick hire at Gifts whose apply waits until window.release(answer) is
+// called, with the dialog closed while it is under way.
+async function closedWhileApplying(page) {
+  await page.evaluate(src => {
+    window.answerFor = eval(src);
+    window.hrAnswer = (kind, body, o) => o.dryRun ? Promise.resolve({status: 200, error: null, body: window.answerFor(body)})
+      : new Promise(r => { window.release = ok => r(ok ? {status: 200, error: null, body: window.answerFor(body, {dryRun: false})}
+        : {status: 409, error: 'cannot_write', body: {error: 'cannot_write', reason: 'myemployees'}}); });
+  }, `(${answerFor.toString()})`);
+  const box = page.locator('#hsQuick');
+  await box.locator('[data-hq-role]').selectOption(CS);
+  await box.locator('[data-hq-site]').selectOption(G);
+  await box.locator('[data-hq-go]').click();
+  await phase(page, 'ready');
+  await page.locator('dialog.gw-dlg .gw-foot [data-gw-b="apply"]').click();
+  await phase(page, 'applying');
+  await page.evaluate(() => document.querySelector('dialog.gw-dlg').close());
+  await page.waitForFunction(() => !document.querySelector('dialog.gw-dlg[open]'));
+  // The write is still under way: the week stays held.
+  assert.equal(await page.evaluate(() => hrUi.quickHold), true);
+  assert.deepEqual((await model(page)).weeks[0], [G, 'demand', ['move:SPARE1', 'quick:c2']]);
+}
+
+test('a Quick hire confirm closed while it applies keeps its hold until the game answers', async (t) => {
+  const page = await board(t);
+  await closedWhileApplying(page);
+  await page.evaluate(() => window.release(true));
+  await page.waitForFunction(() => !hrUi.quickHold);
+  // Bram is staff now: Open places does not list him, and the form is reset.
+  assert.deepEqual(await page.evaluate(() => [...hrUi.hired.ids]), ['c2']);
+  const m = await model(page);
+  assert.deepEqual(m.weeks[0], [G, 'demand', ['move:SPARE1', 'hire:c1']]);
+  assert.ok(!m.roles[0].picked.includes('c2'));
+  assert.equal(await page.locator('#hsQuick [data-hq-role]').inputValue(), '');
+  assert.equal(await page.locator('#hsOrder .hs-held').count(), 0);
+});
+
+test('a Quick hire confirm closed while it applies releases its hold when the write fails', async (t) => {
+  const page = await board(t);
+  await closedWhileApplying(page);
+  await page.evaluate(() => window.release(false));
+  await page.waitForFunction(() => !hrUi.quickHold);
+  assert.deepEqual((await model(page)).weeks[0], [G, 'demand', ['move:SPARE1', 'hire:c2']]);
+  assert.equal(await page.locator('#hsOrder .hs-held').count(), 0);
+  // Nobody was hired: the form keeps its role.
+  assert.equal(await page.locator('#hsQuick [data-hq-role]').inputValue(), CS);
+});

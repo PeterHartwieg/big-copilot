@@ -22600,7 +22600,7 @@ function hrRepaint(focus, parts){
 }
 const hrKey = el => {
   for(const a of ["data-hr-open", "data-hr-pick", "data-hr-move", "data-hr-scope", "data-hs-dem-open", "data-hr-min", "data-hr-max",
-                  "data-hq-role", "data-hq-site", "data-hq-min", "data-hq-less", "data-hq-more", "data-hq-n"])
+                  "data-hq-role", "data-hq-site", "data-hq-min", "data-hq-less", "data-hq-more", "data-hq-n", "data-hq-go"])
     if(el.hasAttribute(a)){
       const v = el.getAttribute(a);
       const box = el.closest("[data-hr-filters]");
@@ -22836,24 +22836,26 @@ function hrQuickRequest(Q){
     const st = (row.stations || [])[s.s], who = (row.people || [])[s.p];
     if(st && who && spHasId(st.id) && spHasId(who.id) && s.d >= 0 && s.d < 7) week.push({d: s.d, f: s.f, t: s.t, employeeId: who.id, itemInstanceId: st.id});
   });
+  const clash = new Set();  // picks left with no hours because a slot met a shift already there
   const meets = (a, b) => a.d === b.d && a.f < b.t && b.f < a.t && (a.itemInstanceId === b.itemInstanceId || a.employeeId === b.employeeId);
   Q.picks.forEach(({c, w}) => {
     hires.push({candidateId: c.id, address: gwAddress(S.key), expect: {wage: c.wage}, seenHoursLeft: c.hoursLeft ?? null});
     names.set(c.id, {name: c.name, skill: Q.q.skill, c});
-    let kept = 0;
+    let kept = 0, met = false;
     if(now && w) (w.slots || []).forEach(sl => {
       const sh = (row.shifts || [])[sl.shift];
       const st = sh ? (row.stations || [])[sh.s] : null;
       const x = {d: sl.d, f: sl.f, t: sl.t, employeeId: c.id, itemInstanceId: sl.station || (st && st.id)};
-      if(!(x.d >= 0 && x.d < 7) || !spHasId(x.itemInstanceId) || week.some(y => meets(x, y))) return;
+      if(!(x.d >= 0 && x.d < 7) || !spHasId(x.itemInstanceId)) return;
+      if(week.some(y => meets(x, y))){ met = true; return; }
       week.push(x);
       kept += x.t - x.f;
     });
     hours.set(c.id, kept);
+    if(met && !kept) clash.add(c.id);
   });
   const given = [...hours.values()].filter(h => h > 0).length;
-  /* Picks whose plan week was there but met shifts already in the game. */
-  const clashed = Q.picks.filter(({c, w}) => now && w && !hours.get(c.id)).length;
+  const clashed = clash.size;
   const days = [];
   week.forEach(({d, ...x}) => { let day = days.find(y => y.d === d); if(!day) days.push(day = {d, shifts: []}); day.shifts.push(x); });
   days.sort((a, b) => a.d - b.d).forEach(day => day.shifts.sort((a, b) => a.f - b.f || a.t - b.t));
@@ -22897,6 +22899,17 @@ function hrQuickHtml(m){
 let hrQuickLast = null;  // {Q, req}
 function hrQuickReview(){
   hrUi.quickHold = true;
+  let dlg = null;
+  const release = () => {
+    hrUi.quickHold = false;
+    if(!$("secStaff")) return;
+    drawStaff(["hsOpen", "hsOrder", "hsQuick"]);
+    const at = document.activeElement;
+    if(!at || at === document.body || !at.isConnected){
+      const b = document.querySelector("#hsQuick [data-hq-go]");
+      if(b) b.focus({preventScroll: true});
+    }
+  };
   const build = () => { const Q = hrQuickModel(hrModel()); hrQuickLast = {Q, req: hrQuickRequest(Q)}; return hrQuickLast; };
   build();
   const n = () => hrQuickLast.req.body.hires.length;
@@ -22966,19 +22979,30 @@ function hrQuickReview(){
        board reads the game again, so Hire more never offers them. */
     /* Done: the form starts again (its weeks go back to Open places when the
        confirm closes). */
-    onDone: answer => { hrHiredAdd((answer.hired || []).map(h => h && h.candidateId)); hrUi.quick = hrQuickNew(); },
+    onDone: answer => {
+      hrHiredAdd((answer.hired || []).map(h => h && h.candidateId));
+      hrUi.quick = hrQuickNew();
+      /* Closed while it applied: the hold ends here, with the hires. */
+      if(dlg && !dlg.open) release();
+    },
+    /* Failed after the confirm was closed mid-apply: the hold ends too. */
+    onFailed: () => { if(dlg && !dlg.open) release(); },
     more: {label: "Hire more", go: () => {
       if(gwOpen) gwOpen.close();
       const el = document.querySelector("#hsQuick [data-hq-role]");
       if(el) el.focus({preventScroll: true});
     }},
   });
-  if(gwOpen){
-    gwOpen.classList.add("hr-wide");
-    /* Closed, however: the held weeks go back to Open places. */
-    gwOpen.addEventListener("close", () => { hrUi.quickHold = false; if($("secStaff")) drawStaff(["hsOpen", "hsOrder", "hsQuick"]); });
+  dlg = gwOpen;
+  if(dlg){
+    dlg.classList.add("hr-wide");
+    /* Closed, however: the held weeks go back to Open places, unless the
+       write is still under way (onDone or onFailed ends the hold then). */
+    dlg.addEventListener("close", () => { if(dlg.dataset.phase !== "applying") release(); });
   }
-  drawStaff(["hsOpen", "hsOrder", "hsQuick"]);
+  /* Quick hire's own markup does not change with the hold: its Hire button
+     stays, for the keyboard to come back to. */
+  drawStaff(["hsOpen", "hsOrder"]);
 }
 /* The filters a control changes: Change picks' role (its own set, when it has
    one), or the company's. */
@@ -27379,6 +27403,7 @@ function gwFailed(dlg, spec, res, retry, recheck){
      more                      optional, {label, go}: a second way on
                                beside Close once an apply went through
      onDone(answer)            optional: heard once an apply went through
+     onFailed(res)             optional: heard when an apply fails
      onUndo()                  optional: heard once its undo went through
      startUndo                 optional: the dialog opens by undoing the
                                kind's last write, then asks the game afresh
@@ -27480,6 +27505,7 @@ function gwConfirm(spec){
          undo would restore. */
       if(res.error === "uncertain") delete gwUndoable[spec.kind];
       applying = false;
+      if(spec.onFailed) spec.onFailed(res);
       /* Approved again mid-apply: the apply was not sent twice; the player
          reviews the game's answer afresh first, on the same approval. */
       if(res.error === "reapproved" && dlg.open) return plan({asked: res.asked});
