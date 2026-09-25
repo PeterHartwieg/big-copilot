@@ -1430,6 +1430,15 @@
    "cost": 910.0,
    "count": 1,
    "external": 0.0,
+   "i18n": {
+    "name": [
+     "co.chain.name.type",
+     {
+      "chain": "Gift Shops",
+      "type": "⟦ba:businesstype_giftshop|Gift Shop⟧"
+     }
+    ]
+   },
    "last7": 9450.0,
    "licensing": 0.0,
    "margin": 27.8,
@@ -1454,6 +1463,15 @@
    "cost": 2398.0,
    "count": 3,
    "external": 0.0,
+   "i18n": {
+    "name": [
+     "co.chain.name.type",
+     {
+      "chain": "Liquor Stores",
+      "type": "⟦ba:businesstype_liquorstore|Liquor Store⟧"
+     }
+    ]
+   },
    "last7": 13500.0,
    "licensing": 0.0,
    "margin": -33.2,

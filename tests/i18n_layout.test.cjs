@@ -28,6 +28,12 @@ const WIDTHS = [360, 768, 1280, 1500, 1501, 1920];
    screen there fails the sweep. */
 const CONVERTED = {
   // nav: '#nav, .subnav',
+  /* The Company page, but for the names on it: sites, products and roles
+     (the cells of class l, the payroll's roles) and the site panel (sp). */
+  co: '#secDaily .sechead, #dailyBox .chartbox, #rhythmSites thead, #rhythmSites td:not(.l), #rhythmSites td.l + td.l, '
+    + '#secPortfolio .sechead, #portfolio thead, #portfolio tfoot, #portfolio tr.chain, #portfolio tr.kid td:not(.l), '
+    + '#secProducts .sechead, #secProducts thead, #secProducts td:not(.l), #secProducts > p, '
+    + '#secPayroll .sechead, #secPayroll > p, #secGoals',
 };
 const MEASURED = 'button, .chip, .seg a, th, .tile .lab';
 

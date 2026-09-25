@@ -9907,11 +9907,15 @@ def _chains(save: Save, businesses: list, trends: list) -> list:
     for key, members in groups.items():
         shops = [b for b in members if b["status"] in ENDS_A_CHAIN]
         if key == "\0vacant":
-            name = "Vacant leases"
+            name = msg("co.chain.name.vacant", "Vacant leases")
         elif key == "\0support":
-            name = "Head office and support"
+            name = msg("co.chain.name.support", "Head office and support")
         else:
-            name = _plural(shops[0]["type"]) if shops else members[0]["type"]
+            # The English plural is English's; another language names the
+            # chain by its type's game name, {type}.
+            b = shops[0] if shops else members[0]
+            name = msg("co.chain.name.type", "{chain}", chain=_plural(b["type"]) if shops else b["type"],
+                       type=tok(b.get("typeSlug"), b["type"]))
         chains.append(_chain(name, members, fed_by, by_key, by_trend))
     chains.sort(key=lambda c: -c["profit"])
     return chains
@@ -14739,11 +14743,11 @@ let chartRows=[];
 /* The five lines of the daily chart. Two are on until the reader says
    otherwise; the choice lives in seriesState across renders. */
 const SERIES = {
-  avg:     {label:"7-day profit", colour:"var(--accent)", key:"profit7", on:true, width:2},
-  net:     {label:"Net profit",   colour:"var(--ink-3)",  key:"profit",  on:true, bars:true},
-  revenue: {label:"Revenue",      colour:"var(--info)",   key:"revenue"},
-  goods:   {label:"Goods",        colour:"var(--warn)",   key:"cogs"},
-  wages:   {label:"Wages",        colour:"var(--ink-2)",  key:"wages", width:1.2, dash:"3 3"},
+  avg:     {get label(){ return tt("co.series.avg", "7-day profit"); }, colour:"var(--accent)", key:"profit7", on:true, width:2},
+  net:     {get label(){ return tt("co.series.net", "Net profit"); },   colour:"var(--ink-3)",  key:"profit",  on:true, bars:true},
+  revenue: {get label(){ return tt("co.series.revenue", "Revenue"); },  colour:"var(--info)",   key:"revenue"},
+  goods:   {get label(){ return tt("co.series.goods", "Goods"); },      colour:"var(--warn)",   key:"cogs"},
+  wages:   {get label(){ return tt("co.series.wages", "Wages"); },      colour:"var(--ink-2)",  key:"wages", width:1.2, dash:"3 3"},
 };
 const seriesOn = id => id in seriesState ? !!seriesState[id] : !!SERIES[id].on;
 
@@ -14757,32 +14761,37 @@ const pct = v => `${v>0?"+":""}${(v*100).toFixed(0)}%`;
 /* The two weeks behind the percentage sit in its tooltip. */
 const wow = (change, last7, prev7, empty) => change === null || change === undefined
   ? `<span class="sub" data-tip="${empty}">—</span>`
-  : `<span class="${sign(change)}" data-tip="${compact(last7)} this week against ${compact(prev7)} the week before">${pct(change)}</span>`;
+  : `<span class="${sign(change)}" data-tip="${attr(tt("co.wow.tip", "{now:$c} this week against {before:$c} the week before",
+      {now: +last7, before: +prev7}))}">${pct(change)}</span>`;
 const wowCell = b => {
   const t = TREND[b.key];
-  return wow(t && t.ready ? t.change : null, t && t.last7, t && t.prev7, "Needs two full weeks of trading");
+  return wow(t && t.ready ? t.change : null, t && t.last7, t && t.prev7, tt("co.wow.new", "Needs two full weeks of trading"));
 };
 
+/* A column is [header, cell, class, sort key, hook]. The headers are read at
+   each draw, in the UI language; the hook names a column other code looks for
+   (the search's "Why did profit move?" sorts by "wow"), whatever its header
+   says. */
 const VIEWS = {
   pnl: {
-    label: "Profit & loss",
-    note: "Yesterday's income statement, by chain",
-    cols: [
-      ["Business", b=>kidCell(b), "l", null],
-      ["Revenue", b=>fmt(b.revenue), "", b=>b.revenue],
-      ["Wk / wk", b=>wowCell(b), "", b=>(TREND[b.key]||{}).change ?? -999],
-      ["Goods", b=>fmt(-b.cogs), "", b=>b.cogs],
-      ["Wages", b=>fmt(-b.wages), "", b=>b.wages],
-      ["Rent", b=>fmt(-b.rent), "", b=>b.rent],
-      ["Marketing", b=>fmt(-b.marketing), "", b=>b.marketing],
-      ["Theft", b=>b.theft?fmt(-b.theft):"—", "", b=>b.theft],
-      ["Profit", b=>`<span class="${sign(b.profit)}">${fmt(b.profit)}</span>`, "", b=>b.profit],
-      ["Margin", b=>b.margin===null?"—":`${b.margin.toFixed(1)}%`, "", b=>b.margin??-999],
-    ],
+    get label(){ return tt("co.pnl.label", "Profit & loss"); },
+    get note(){ return tt("co.pnl.note", "Yesterday's income statement, by chain"); },
+    get cols(){ return [
+      [tt("co.col.business", "Business"), b=>kidCell(b), "l", null],
+      [tt("co.col.revenue", "Revenue"), b=>fmt(b.revenue), "", b=>b.revenue],
+      [tt("co.col.wow", "Wk / wk"), b=>wowCell(b), "", b=>(TREND[b.key]||{}).change ?? -999, "wow"],
+      [tt("co.col.goods", "Goods"), b=>fmt(-b.cogs), "", b=>b.cogs],
+      [tt("co.col.wages", "Wages"), b=>fmt(-b.wages), "", b=>b.wages],
+      [tt("co.col.rent", "Rent"), b=>fmt(-b.rent), "", b=>b.rent],
+      [tt("co.col.marketing", "Marketing"), b=>fmt(-b.marketing), "", b=>b.marketing],
+      [tt("co.col.theft", "Theft"), b=>b.theft?fmt(-b.theft):"—", "", b=>b.theft],
+      [tt("co.col.profit", "Profit"), b=>`<span class="${sign(b.profit)}">${fmt(b.profit)}</span>`, "", b=>b.profit],
+      [tt("co.col.margin", "Margin"), b=>b.margin===null?"—":`${b.margin.toFixed(1)}%`, "", b=>b.margin??-999],
+    ]; },
     /* The point of the chain row: revenue, every cost, and the margin the whole
        operation actually runs at. */
     chain: c => [null, fmt(c.revenue),
-                 wow(c.change, c.last7, c.prev7, "A site here has under two weeks of trading"),
+                 wow(c.change, c.last7, c.prev7, tt("co.wow.chain.new", "A site here has under two weeks of trading")),
                  fmt(-c.cogs), fmt(-c.wages), fmt(-c.rent),
                  fmt(-c.marketing), c.theft?fmt(-c.theft):"—",
                  `<b class="${sign(c.profit)}">${fmt(c.profit)}</b>`,
@@ -14793,21 +14802,22 @@ const VIEWS = {
                   `<span class="${sign(sum(bs,"profit"))}">${fmt(sum(bs,"profit"))}</span>`, ""],
   },
   ops: {
-    label: "Operations",
-    note: "Who shops here, and what pulls them in",
-    cols: [
-      ["Business", b=>kidCell(b), "l", null],
-      ["Opened", b=>`day ${b.opened}`, "", b=>b.opened],
-      ["Staff", b=>b.staff||"—", "", b=>b.staff],
-      ["Customers", b=>b.customers?num(b.customers):"—", "", b=>b.customers],
+    get label(){ return tt("co.ops.label", "Operations"); },
+    get note(){ return tt("co.ops.note", "Who shops here, and what pulls them in"); },
+    get cols(){ return [
+      [tt("co.col.business", "Business"), b=>kidCell(b), "l", null],
+      [tt("co.col.opened", "Opened"), b=>tt("co.ops.opened", "day {d}", {d: b.opened}), "", b=>b.opened],
+      [tt("co.col.staff", "Staff"), b=>b.staff||"—", "", b=>b.staff],
+      [tt("co.col.customers", "Customers"), b=>b.customers?num(b.customers):"—", "", b=>b.customers],
       // An office's customer is an hour billed, so its spend is per hour.
-      ["Spend / visit", b=>b.basket===null?"—":`$${b.basket.toFixed(2)}${b.status==="office"?"/hour":""}`, "", b=>b.basket??-1],
-      ["Satisfaction", b=>b.satisfaction.overall===null?"—":meter(b.satisfaction.overall), "gauge", b=>b.satisfaction.overall??-1],
-      ["Promotion", b=>b.customers?meter(b.promotion):"—", "gauge", b=>b.promotion],
-      ["Foot traffic", b=>b.customers?gauge(b.traffic):"—", "gauge", b=>b.traffic],
-      ["Marketing", b=>b.customers?meter(b.marketingIndex):"—", "gauge", b=>b.marketingIndex],
-      ["Security", b=>b.security?`${b.security}%`:"—", "", b=>b.security],
-    ],
+      [tt("co.col.basket", "Spend / visit"), b=>b.basket===null?"—":b.status==="office"
+        ? tt("co.ops.basket.hour", "${x:.2f}/hour", {x: b.basket}) : `$${b.basket.toFixed(2)}`, "", b=>b.basket??-1],
+      [tt("co.col.satisfaction", "Satisfaction"), b=>b.satisfaction.overall===null?"—":meter(b.satisfaction.overall), "gauge", b=>b.satisfaction.overall??-1],
+      [tt("co.col.promotion", "Promotion"), b=>b.customers?meter(b.promotion):"—", "gauge", b=>b.promotion],
+      [tt("co.col.traffic", "Foot traffic"), b=>b.customers?gauge(b.traffic):"—", "gauge", b=>b.traffic],
+      [tt("co.col.marketing", "Marketing"), b=>b.customers?meter(b.marketingIndex):"—", "gauge", b=>b.marketingIndex],
+      [tt("co.col.security", "Security"), b=>b.security?`${b.security}%`:"—", "", b=>b.security],
+    ]; },
     chain: c => [null, "", c.staff||"—", "", "", "", "", "", "", ""],
     // Staff is the only aggregate printed here; blank columns retain chain order.
     chainKey: (c, i) => i === 2 ? c.staff : 0,
@@ -14817,6 +14827,23 @@ const VIEWS = {
 
 /* --- the weekly cycle ------------------------------------------------- */
 const weeksOf = p => p ? Math.min(...p.map(d => d.n)) : 0;
+/* A weekday Python names in English ("Monday"), in the UI language; the
+   English stays what the code compares. coDayShort() is its three letters. */
+const coDay = name => { const i = WEEKDAY_NAMES.indexOf(name); return i < 0 ? name : ttDay(i); };
+function coDayShort(name){
+  switch(WEEKDAY_NAMES.indexOf(name)){
+    case 0: return tt("co.day.short.0", "Sun");
+    case 1: return tt("co.day.short.1", "Mon");
+    case 2: return tt("co.day.short.2", "Tue");
+    case 3: return tt("co.day.short.3", "Wed");
+    case 4: return tt("co.day.short.4", "Thu");
+    case 5: return tt("co.day.short.5", "Fri");
+    case 6: return tt("co.day.short.6", "Sat");
+    default: return String(name || "").slice(0, 3);
+  }
+}
+/* A swing in points, "+27 pts". */
+const coPts = v => tt("co.wd.pts", "{n} pts", {n: String(v)});
 
 /* Seven columns either side of a midline. Height is distance from a normal
    day in both directions, so a trough reads as clearly as a peak; the figure
@@ -14829,23 +14856,25 @@ function weekHtml(profile, todayName){
     /* 44 px keeps a downward bar's pill clear of the weekday label. */
     const h = Math.max(2, Math.round(Math.min(Math.abs(off) / span, 1) * 44));
     /* A read-out line above the bars (By weekday has one) spells the column out. */
-    const read = `${d.day} <b>${d.index}%</b> of a normal day · from ${d.n} week${d.n === 1 ? "" : "s"}`;
+    const read = tt("co.wd.read", {one: "{day} {pct} of a normal day · from {n} week", other: "{day} {pct} of a normal day · from {n} weeks"},
+      {day: coDay(d.day), pct: `<b>${d.index}%</b>`, n: d.n});
     return `<div class="wd${d.day === todayName ? " now" : ""}" data-read="${attr(read)}"><div class="track">
       <i class="bar2${up ? "" : " down"}" style="height:${h}px;${side}:50%"></i>
-      <span class="n" style="${side}:calc(50% + ${h + 8}px)">${off > 0 ? "+" : ""}${off} pts</span>
-      </div><span class="d"><span>${d.short.toUpperCase()}</span><b>${d.day}</b></span></div>`;
+      <span class="n" style="${side}:calc(50% + ${h + 8}px)">${coPts(`${off > 0 ? "+" : ""}${off}`)}</span>
+      </div><span class="d"><span>${coDayShort(d.day).toUpperCase()}</span><b>${coDay(d.day)}</b></span></div>`;
   }).join("")}</div>`;
 }
 /* The same week at table-row size. */
 function miniWeek(profile){
-  if(!profile) return `<span class="quiet">not enough history</span>`;
+  if(!profile) return `<span class="quiet">${tt("co.wd.nohistory", "not enough history")}</span>`;
   const span = Math.max(...profile.map(d => Math.abs(d.index - 100)), 12);
   return `<svg viewBox="0 0 140 28" style="width:140px;height:28px" aria-hidden="true">
     <line x1="0" x2="140" y1="14" y2="14" stroke="var(--rule)"/>
     ${profile.map((d, i) => {
       const off = d.index - 100, h = Math.max(1, Math.abs(off) / span * 12);
       return `<rect x="${i * 20 + 4}" y="${(off >= 0 ? 14 - h : 14).toFixed(1)}" width="12" height="${h.toFixed(1)}" rx="1.5"
-        fill="${off >= 0 ? "var(--accent)" : "var(--warn)"}"><title>${d.day}: ${d.index}% of a normal day, from ${d.n} weeks</title></rect>`;
+        fill="${off >= 0 ? "var(--accent)" : "var(--warn)"}"><title>${
+          tt("co.wd.mini", "{day}: {pct}% of a normal day, from {n} weeks", {day: coDay(d.day), pct: d.index, n: d.n})}</title></rect>`;
     }).join("")}
   </svg>`;
 }
@@ -14855,9 +14884,12 @@ function miniWeek(profile){
    that does not clear the weekly-cycle test has no chip; with none clearing it
    the option is not offered at all. */
 const WEEK_SERIES = {
-  revenue:   {label:"Revenue",   what:"Company revenue",   scope:"every site", colour:"var(--info)"},
-  profit:    {label:"Profit",    what:"Company profit",    scope:"every site", colour:"var(--accent)"},
-  customers: {label:"Customers", what:"Company customers", scope:"every shop", colour:"var(--ink-2)"},
+  revenue:   {get label(){ return tt("co.wd.revenue", "Revenue"); },   get what(){ return tt("co.wd.revenue.what", "Company revenue"); },
+              get scope(){ return tt("co.wd.scope.sites", "every site"); }, colour:"var(--info)"},
+  profit:    {get label(){ return tt("co.wd.profit", "Profit"); },     get what(){ return tt("co.wd.profit.what", "Company profit"); },
+              get scope(){ return tt("co.wd.scope.sites", "every site"); }, colour:"var(--accent)"},
+  customers: {get label(){ return tt("co.wd.customers", "Customers"); }, get what(){ return tt("co.wd.customers.what", "Company customers"); },
+              get scope(){ return tt("co.wd.scope.shops", "every shop"); }, colour:"var(--ink-2)"},
 };
 const signedPct = v => `${v > 0 ? "+" : ""}${v}%`;
 const weekdaySeries = () => {
@@ -14877,14 +14909,16 @@ function rhythmVerdict(swingy){
   const spread = swings.length ? Math.max(...swings) - Math.min(...swings) : 0;
   const rest = ranked.slice(1);
   return (pack.length >= 7 && spread <= 15)
-    ? `${pack.length} site${pack.length===1?"":"s"} peak ${topDay}, +${Math.min(...swings)} to +${
-        Math.max(...swings)} points between their best and worst day. ${rest.length
-          ? rest.map(([d,bs]) => `${bs.map(b => shortName(b)).join(", ")} peak${
-              bs.length===1?"s":""} ${d}`).join("; ") + "."
-          : "Nothing runs the other way."}`
+    ? `${tt("co.wd.verdict.pack", {one: "{n} site peaks {day}, +{lo} to +{hi} points between their best and worst day.",
+        other: "{n} sites peak {day}, +{lo} to +{hi} points between their best and worst day."},
+        {n: pack.length, day: coDay(topDay), lo: Math.min(...swings), hi: Math.max(...swings)})} ${rest.length
+          ? tt("co.wd.verdict.rest", "{groups}.", {groups: rest.map(([d,bs]) => tt("co.wd.verdict.others",
+              {one: "{sites} peaks {day}", other: "{sites} peak {day}"},
+              {n: bs.length, sites: bs.map(b => shortName(b)).join(", "), day: coDay(d)})).join("; ")})
+          : tt("co.wd.verdict.none", "Nothing runs the other way.")}`
     : swingy.length
-      ? `${swingy.length} site${swingy.length===1?"":"s"} clear the noise test.`
-      : "No site has enough history to separate a weekly cycle from noise yet.";
+      ? tt("co.wd.verdict.clear", {one: "{n} site clear the noise test.", other: "{n} sites clear the noise test."}, {n: swingy.length})
+      : tt("co.wd.verdict.nohistory", "No site has enough history to separate a weekly cycle from noise yet.");
 }
 const WEEKDAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 function drawWeekday(series, tools){
@@ -14899,18 +14933,21 @@ function drawWeekday(series, tools){
   /* The line above the bars names the series and how much history it reads;
      its tooltip carries what the old section's ? did: the sites' verdict, and
      what today and yesterday are normally worth. */
-  const tip = [`${s.what} against a normal day, from ${weeks} week${weeks===1?"":"s"} of daily results.`,
+  const tip = [tt("co.wd.basis.tip", {one: "{what} against a normal day, from {n} week of daily results.",
+      other: "{what} against a normal day, from {n} weeks of daily results."}, {what: s.what, n: weeks}),
     rhythmVerdict(swingy),
-    today && at(today) ? `Today is ${today}, normally ${signedPct(at(today) - 100)}.` : "",
-    yest && at(yest) ? `Yesterday was ${yest}, normally ${signedPct(at(yest) - 100)}.` : "",
+    today && at(today) ? tt("co.wd.today", "Today is {day}, normally {pct}.", {day: coDay(today), pct: signedPct(at(today) - 100)}) : "",
+    yest && at(yest) ? tt("co.wd.yesterday", "Yesterday was {day}, normally {pct}.", {day: coDay(yest), pct: signedPct(at(yest) - 100)}) : "",
   ].filter(Boolean).join(" ");
   const hi = profile.reduce((a, p) => p.index > a.index ? p : a);
   const lo = profile.reduce((a, p) => p.index < a.index ? p : a);
   const pts = v => `${v > 0 ? "+" : v < 0 ? "\u2212" : ""}${Math.abs(v)}`;
-  const peaks = `Peaks <b>${hi.day}</b> ${pts(hi.index - 100)} · lowest <b>${lo.day}</b> ${pts(lo.index - 100)}`;
+  const peaks = tt("co.wd.peaks", "Peaks {hi} {hiPts} · lowest {lo} {loPts}", {hi: `<b>${coDay(hi.day)}</b>`,
+    hiPts: pts(hi.index - 100), lo: `<b>${coDay(lo.day)}</b>`, loPts: pts(lo.index - 100)});
   const span = Math.round(((D.rhythm && D.rhythm.recent && D.rhythm.recent.days) || 28) / 7);
-  $("dailyHead").innerHTML = sechead("Daily result", {
-    why: `Each weekday against a normal day, from the company's last ${span} week${span === 1 ? "" : "s"} of daily results. Point at a weekday for its figure.`,
+  $("dailyHead").innerHTML = sechead(tt("co.daily.title", "Daily result"), {
+    why: tt("co.wd.why", {one: "Each weekday against a normal day, from the company's last {n} week of daily results. Point at a weekday for its figure.",
+      other: "Each weekday against a normal day, from the company's last {n} weeks of daily results. Point at a weekday for its figure."}, {n: span}),
     aside: `<span class="seg" id="chartTools"></span>`,
   });
   seg($("chartTools"), tools, () => chartWindow, v => chartWindow = v, drawChart);
@@ -14918,7 +14955,7 @@ function drawWeekday(series, tools){
     <div class="chartbox chart fv-wd" data-readzone>
       <div class="fv-top">
         <span class="fv-basis" style="--fv-s:${s.colour}" data-tip="${attr(tip)}"><span class="dot"></span><b>${s.what}</b> · ${
-          s.scope} · ${weeks} week${weeks===1?"":"s"}</span>
+          s.scope} · ${tt("co.wd.weeks", {one: "{n} week", other: "{n} weeks"}, {n: weeks})}</span>
         <span class="readout fv-readout"><span class="sp-readout">${peaks}</span></span>
       </div>
       <div class="fv-week">${weekHtml(profile, today)}</div>
@@ -14926,15 +14963,16 @@ function drawWeekday(series, tools){
         `<a class="${k === id ? "on" : ""}" data-week="${k}" href="#"><i style="background:${WEEK_SERIES[k].colour}"></i>${
           WEEK_SERIES[k].label}</a>`).join("")}</div>${swingy.length
         ? `<a class="link" href="#" id="rhythmToggle" aria-expanded="${showRhythmSites}">${
-            showRhythmSites ? "hide the table" : "site by site"}</a>` : ""}</div>
+            showRhythmSites ? tt("co.wd.hide", "hide the table") : tt("co.wd.sites", "site by site")}</a>` : ""}</div>
     </div>
     <div class="fv-sites"${showRhythmSites && swingy.length ? "" : " hidden"}>${swingy.length ? `<table id="rhythmSites">
-      <thead><tr><th>Business</th><th class="l">Peaks</th><th>Swing</th>
-        <th class="l" style="width:38%">Across the week</th></tr></thead>
+      <thead><tr><th>${tt("co.col.business", "Business")}</th><th class="l">${tt("co.wd.col.peaks", "Peaks")}</th><th>${
+        tt("co.wd.col.swing", "Swing")}</th>
+        <th class="l" style="width:38%">${tt("co.wd.col.week", "Across the week")}</th></tr></thead>
       <tbody>${swingy.map(b => `<tr data-key="${attr(b.key)}" style="cursor:pointer">
         <td class="l">${siteLabel(b)}</td>
-        <td class="l">${b.peakDay}</td>
-        <td>${b.swing} pts</td>
+        <td class="l">${coDay(b.peakDay)}</td>
+        <td>${coPts(b.swing)}</td>
         <td class="l">${miniWeek(b.rhythm)}</td></tr>`).join("")}</tbody></table>` : ""}</div>`;
   $$("#dailyBox [data-week]").forEach(a => a.onclick = e => { e.preventDefault(); weekSeries = a.dataset.week; drawChart(); });
   const toggle = $("rhythmToggle");
@@ -16058,7 +16096,8 @@ function drawChart(){
   /* A save that stops clearing the test (a reload, another save) falls back to
      the default window rather than keeping an option that is not offered. */
   if(chartWindow === "wd" && !weekly.length) chartWindow = 30;
-  const tools = [[30,"30 days"],[0,"All"]].concat(weekly.length ? [["wd","By weekday"]] : []);
+  const tools = [[30,tt("co.daily.tool.30", "30 days")],[0,tt("co.daily.tool.all", "All")]]
+    .concat(weekly.length ? [["wd",tt("co.daily.tool.wd", "By weekday")]] : []);
   if(chartWindow === "wd"){ chartRows = []; drawWeekday(weekly, tools); return; }
   chartRows = chartWindow ? D.daily.slice(-chartWindow) : D.daily;
   const rows = chartRows, n = rows.length;
@@ -16067,17 +16106,18 @@ function drawChart(){
      left standing. */
   if(!n){
     chartRows = [];
-    $("dailyHead").innerHTML = sechead("Daily result");
-    $("dailyBox").innerHTML = `<p class="quiet" style="margin:0">No finished day in this save yet; the chart starts tomorrow</p>`;
+    $("dailyHead").innerHTML = sechead(tt("co.daily.title", "Daily result"));
+    $("dailyBox").innerHTML = `<p class="quiet" style="margin:0">${
+      tt("co.daily.empty", "No finished day in this save yet; the chart starts tomorrow")}</p>`;
     return;
   }
   const first = rows[0], last = rows[n - 1];
   /* Daily profit swings by a million between a weekend and a Tuesday purely
      because that is when the week's goods are paid for. The rolling line is the
      one that says whether trading moved. */
-  $("dailyHead").innerHTML = sechead("Daily result", {
-    why: `Daily profit follows the purchase calendar, so the 7-day line is the trend. Day ${
-      first.day} to ${last.day}. Click a legend chip to add or drop a line.`,
+  $("dailyHead").innerHTML = sechead(tt("co.daily.title", "Daily result"), {
+    why: tt("co.daily.why", "Daily profit follows the purchase calendar, so the 7-day line is the trend. Day {first} to {last}. Click a legend chip to add or drop a line.",
+      {first: first.day, last: last.day}),
     aside: `<span class="seg" id="chartTools"></span>`,
   });
   seg($("chartTools"), tools, () => chartWindow, v => chartWindow = v, drawChart);
@@ -16108,8 +16148,8 @@ function drawChart(){
     const body = s.bars
       ? rows.map((r, i) => { const v = r[s.key], yy = Y(v);
           return `<rect x="${(X(i) - bw / 2).toFixed(1)}" y="${Math.min(yy, y0).toFixed(1)}" width="${bw.toFixed(1)}" height="${
-            Math.abs(yy - y0).toFixed(1)}" rx="2" fill="${v < 0 ? "var(--neg)" : "var(--ink-3)"}" opacity=".45"><title>Day ${
-            r.day}: net ${money(v)}</title></rect>`; }).join("")
+            Math.abs(yy - y0).toFixed(1)}" rx="2" fill="${v < 0 ? "var(--neg)" : "var(--ink-3)"}" opacity=".45"><title>${
+            tt("co.daily.bar", "Day {day}: net {w:$c}", {day: r.day, w: v})}</title></rect>`; }).join("")
       : line(s.key, s.colour, s.width, s.dash);
     out.push(`<g data-series="${id}"${seriesOn(id) ? "" : ' class="off"'}>${body}</g>`);
   });
@@ -16120,7 +16160,8 @@ function drawChart(){
   out.push(`<g class="xh"><line x1="${X(k).toFixed(1)}" x2="${X(k).toFixed(1)}" y1="${T}" y2="${H - B}" stroke="var(--ink-3)" stroke-dasharray="3 4"></line>
     <circle cx="${X(k).toFixed(1)}" cy="${Y(last.profit7).toFixed(1)}" r="4" fill="var(--accent)" stroke="var(--ground)" stroke-width="2"></circle></g>`);
 
-  const readout = r => `<i></i>Day ${r.day} <b>${money(r.profit)}</b> net <b>${money(r.profit7)}</b> 7-day <b>${money(r.revenue)}</b> revenue`;
+  const readout = r => `<i></i>${tt("co.daily.readout", "Day {day} {net} net {avg} 7-day {revenue} revenue", {day: r.day,
+    net: `<b>${money(r.profit)}</b>`, avg: `<b>${money(r.profit7)}</b>`, revenue: `<b>${money(r.revenue)}</b>`})}`;
   const xs = JSON.stringify(rows.map((r, i) => +X(i).toFixed(1)));
   const ys = JSON.stringify(rows.map(r => +Y(r.profit7).toFixed(1)));
   const labels = JSON.stringify(rows.map(readout));
@@ -16161,22 +16202,35 @@ function xlMembers(c){
     if(!b) return;
     const word = b.status === "retail" ? "shop" : b.status === "office" ? "office"
       : b.status === "vacant" ? "vacant lease"
-      /* The sentence is English and pluralised in English, so the kind is the
-         type's English name whatever language the names are shown in. */
+      /* The English is pluralised in English, so the kind is the type's
+         English name whatever language the names are shown in; another UI
+         language has the type's game name, {type}, beside its count. */
       : factories.has(i) ? "factory" : String(englishName(b.typeSlug) || b.type || "site").toLowerCase();
-    counts.set(word, (counts.get(word) || 0) + 1);
+    const had = counts.get(word);
+    counts.set(word, {n: had ? had.n + 1 : 1, slug: had ? had.slug : b.typeSlug});
   });
-  if(!counts.size) return `${c.count} site${c.count === 1 ? "" : "s"}`;
+  if(!counts.size) return tt("co.chain.sites", {one: "{n} site", other: "{n} sites"}, {n: c.count});
   const rank = w => { const at = XL_KIND_ORDER.indexOf(w); return at < 0 ? XL_KIND_ORDER.length : at; };
-  const many = w => /quarters$/.test(w) ? w : /[^aeiou]y$/.test(w) ? w.slice(0, -1) + "ies" : `${w}s`;
-  return [...counts].sort((a, z) => rank(a[0]) - rank(z[0]) || z[1] - a[1] || a[0].localeCompare(z[0]))
-    .map(([w, n]) => `${n} ${n === 1 ? w : many(w)}`).join(", ");
+  return [...counts].sort((a, z) => rank(a[0]) - rank(z[0]) || z[1].n - a[1].n || a[0].localeCompare(z[0]))
+    .map(([w, {n, slug}]) => xlKind(w, n, slug)).join(", ");
+}
+/* "7 shops", "1 warehouse": one kind of site in a chain, counted. */
+function xlKind(w, n, slug){
+  switch(w){
+    case "shop": return tt("co.chain.shops", {one: "{n} shop", other: "{n} shops"}, {n});
+    case "office": return tt("co.chain.offices", {one: "{n} office", other: "{n} offices"}, {n});
+    case "vacant lease": return tt("co.chain.vacant", {one: "{n} vacant lease", other: "{n} vacant leases"}, {n});
+    case "factory": return tt("co.chain.factories", {one: "{n} factory", other: "{n} factories"}, {n});
+  }
+  const many = /quarters$/.test(w) ? w : /[^aeiou]y$/.test(w) ? w.slice(0, -1) + "ies" : `${w}s`;
+  const type = /^ba:/.test(slug || "") ? `\u27e6${slug}|${w}\u27e7` : w;
+  return tt("co.chain.kind", {one: "{n} {kind}", other: "{n} {kinds}"}, {n, kind: w, kinds: many, type});
 }
 function chainRow(c, v){
   const cells = v.chain(c);
   const note = c.external
-    ? `${compact(c.external)} of it sold outside the company by its factory`
-    : c.suppliedBy.length ? `supplied from ${c.suppliedBy.join(", ")}` : "";
+    ? tt("co.chain.external", "{w:$c} of it sold outside the company by its factory", {w: c.external})
+    : c.suppliedBy.length ? tt("co.chain.supplied", "supplied from {sites}", {sites: c.suppliedBy.join(", ")}) : "";
   const name = `${CHEV()}${c.name}<span class="sub" style="padding-left:16px">${xlMembers(c)}${
     note ? ` · ${note}` : ""}</span>`;
   return `<tr class="chain" data-chain="${attr(c.name)}">${
@@ -16196,29 +16250,39 @@ function outsideRows(span){
   if(!last) return "";
   const outside = (last.business || 0) - last.profit;
   if(Math.abs(outside) < 1) return "";
-  const parts = [["loans", last.loans], ["health insurance", last.insurance],
+  const parts = [["loans", last.loans], ["insurance", last.insurance],
                  ["homes", last.homes], ["parking", last.parking]].filter(([, n]) => n >= 1);
   const other = outside - parts.reduce((s, [, n]) => s + n, 0);
   if(Math.abs(other) >= 1) parts.push(["other", other]);
-  const tip = `Day ${last.day}: ${parts.map(([l, n]) => `${l} ${fmt(n)}`).join(", ")}. The company pays these, no site does.`;
+  const part = (id, w) => id === "loans" ? tt("co.outside.loans", "loans {w:$}", {w})
+    : id === "insurance" ? tt("co.outside.insurance", "health insurance {w:$}", {w})
+    : id === "homes" ? tt("co.outside.homes", "homes {w:$}", {w})
+    : id === "parking" ? tt("co.outside.parking", "parking {w:$}", {w})
+    : tt("co.outside.other", "other {w:$}", {w});
+  const tip = tt("co.outside.tip", "Day {day}: {parts}. The company pays these, no site does.",
+    {day: last.day, parts: parts.map(([id, n]) => part(id, n)).join(", ")});
   const row = (label, n, cls, t) => `<tr class="td-outside${cls}"><td class="l" colspan="${span - 2}"${
     t ? ` data-tip="${attr(t)}" tabindex="0"` : ""}>${label}</td><td><span class="${sign(n)}">${fmt(n)}</span></td><td></td></tr>`;
-  return row("Company costs outside sites", -outside, "", tip)
-    + row("Company profit", last.profit, " td-net", "The same figure as Today's Profit yesterday");
+  return row(tt("co.outside.costs", "Company costs outside sites"), -outside, "", tip)
+    + row(tt("co.outside.profit", "Company profit"), last.profit, " td-net",
+      tt("co.outside.profit.tip", "The same figure as Today's Profit yesterday"));
 }
 
 function drawPortfolio(){
   const v = VIEWS[view];
-  $("portHead").innerHTML = sechead("Portfolio", {
-    why: `${v.note}. Click a chain to open its sites, a site to open its detail. Click a column to sort chains and their sites by it.`,
+  $("portHead").innerHTML = sechead(tt("co.port.title", "Portfolio"), {
+    why: tt("co.port.why", "{note}. Click a chain to open its sites, a site to open its detail. Click a column to sort chains and their sites by it.",
+      {note: v.note}),
     aside: `<span class="seg" id="portTools"></span>`,
   });
   seg($("portTools"), Object.entries(VIEWS).map(([id, o]) => [id, o.label]),
     () => view, id => { view = id; sortKey = null; }, drawPortfolio);
   const byKey = {};
   D.businesses.forEach(b => byKey[b.key] = b);
-  const sorter = (sortKey !== null && v.cols[sortKey] && v.cols[sortKey][3])
-    ? (a,z) => (v.cols[sortKey][3](a) - v.cols[sortKey][3](z)) * sortDir : null;
+  /* The columns once per draw: each read of v.cols words its headers afresh. */
+  const cols = v.cols;
+  const sorter = (sortKey !== null && cols[sortKey] && cols[sortKey][3])
+    ? (a,z) => (cols[sortKey][3](a) - cols[sortKey][3](z)) * sortDir : null;
 
   /* Every site row is in the table; wirePortfolio() shows the ones whose
      chain is open, from the openChains set, so a refresh keeps them open. */
@@ -16230,22 +16294,22 @@ function drawPortfolio(){
     let kids = c.sites.map(k => byKey[k]).filter(Boolean);
     if(sorter) kids = kids.slice().sort(sorter);
     kids.forEach(b => body.push(`<tr class="kid${siteOpen && b.key === siteKey ? " on" : ""}" data-parent="${
-      attr(c.name)}" data-key="${attr(b.key)}" title="Open this site's detail">${v.cols.map(([,f,cls]) =>
+      attr(c.name)}" data-key="${attr(b.key)}" title="${attr(tt("co.port.kid.title", "Open this site's detail"))}">${cols.map(([,f,cls]) =>
       `<td class="${cls||""}">${f(b)}</td>`).join("")}</tr>`));
   });
 
   const t = $("portfolio");
   if(!D.businesses.length){
-    t.innerHTML = `<tbody><tr><td class="l quiet">No businesses in this save yet.</td></tr></tbody>`;
+    t.innerHTML = `<tbody><tr><td class="l quiet">${tt("co.port.empty", "No businesses in this save yet.")}</td></tr></tbody>`;
     return;
   }
-  t.innerHTML = `<thead><tr>${v.cols.map(([h,,cls,key],i) =>
+  t.innerHTML = `<thead><tr>${cols.map(([h,,cls,key],i) =>
       `<th class="${cls||""}"${key ? ` data-i="${i}"` : ""}${i===sortKey?` data-dir="${sortDir<0?"desc":"asc"}"`:""}>${h}${
         i===sortKey ? SORT_ICON : ""}</th>`).join("")}</tr></thead>
     <tbody>${body.join("")}</tbody>
     ${v.total ? `<tfoot><tr>${v.total(D.businesses).map((c,i) =>
-      `<td class="${i?"":"l"}">${i===0?D.businesses.length+" sites":c}</td>`).join("")}</tr>${
-      view === "pnl" ? outsideRows(v.cols.length) : ""}</tfoot>` : ""}`;
+      `<td class="${i?"":"l"}">${i===0?tt("co.port.total", {one: "{n} sites", other: "{n} sites"}, {n: D.businesses.length}):c}</td>`).join("")}</tr>${
+      view === "pnl" ? outsideRows(cols.length) : ""}</tfoot>` : ""}`;
   t.querySelectorAll("thead th[data-i]").forEach(th => th.onclick = () => {
     const i = +th.dataset.i;
     if(sortKey===i) sortDir = -sortDir; else { sortKey=i; sortDir=-1; }
@@ -21089,8 +21153,8 @@ const PRODUCTS_TOP = 14;
 function drawProducts(){
   const TOP = PRODUCTS_TOP, all = D.products;
   if(!all.length){
-    $("secProducts").innerHTML = sechead("Products")
-      + `<p class="quiet">No products sold in this save yet.</p>`;
+    $("secProducts").innerHTML = sechead(tt("co.prod.title", "Products"))
+      + `<p class="quiet">${tt("co.prod.empty", "No products sold in this save yet.")}</p>`;
     return;
   }
   const rows = showAllProducts ? all : all.slice(0, TOP);
@@ -21104,33 +21168,43 @@ function drawProducts(){
   /* Units, not revenue, and across every store that sells the line: said at
      each place a peak is named, so the product's Saturday is not read against
      the company's own week, which is revenue. */
-  const peakTip = p => p.peak
-    ? `Units sold across ${plural(p.stores, "store")}${p.weeks ? `, last ${plural(p.weeks, "week")}` : ""}: peaks ${
-        p.peak}, ${p.swing} points between best and worst day`
-    : "No weekly cycle clears the noise test";
+  const peakTip = p => {
+    if(!p.peak) return tt("co.prod.peak.none", "No weekly cycle clears the noise test");
+    const stores = tt("co.prod.stores", {one: "{n} store", other: "{n} stores"}, {n: p.stores});
+    return p.weeks
+      ? tt("co.prod.peak.tip.weeks", "Units sold across {stores}, last {weeks}: peaks {day}, {n} points between best and worst day",
+        {stores, weeks: tt("co.prod.weeks", {one: "{n} week", other: "{n} weeks"}, {n: p.weeks}), day: coDay(p.peak), n: p.swing})
+      : tt("co.prod.peak.tip", "Units sold across {stores}: peaks {day}, {n} points between best and worst day",
+        {stores, day: coDay(p.peak), n: p.swing});
+  };
   /* Each product's peak reads its own weeks of sales (its cell says how many);
      the header gives the range across the rows. */
   const peakWeeks = rows.filter(p => p.peak && p.weeks).map(p => p.weeks);
   const lo = Math.min(...peakWeeks), hi = Math.max(...peakWeeks);
-  const weekRange = !peakWeeks.length ? "" : lo === hi ? `the last ${plural(hi, "week")}` : `the last ${lo} to ${hi} weeks`;
-  const fromWeeks = weekRange ? `, from ${weekRange},` : "";
+  const weekRange = !peakWeeks.length ? "" : lo === hi
+    ? tt("co.prod.range.one", {one: "the last {n} week", other: "the last {n} weeks"}, {n: hi})
+    : tt("co.prod.range", "the last {lo} to {hi} weeks", {lo, hi});
   const more = all.length > TOP
     ? `<a class="link" href="#" id="productsToggle" aria-expanded="${showAllProducts}">${
-        showAllProducts ? `top ${TOP} only` : `all ${all.length}`}</a>`
-    : `<span class="quiet">all ${all.length}</span>`;
-  $("secProducts").innerHTML = sechead("Products", {
-    why: `Revenue and units are yesterday summed over every store that sells the line;`
-      + ` units a week is the last seven days, and stores is how many carry it.`
-      + (showPeak
-        ? ` Peaks names the weekday that sells the most units${fromWeeks} and the points between best and worst day.`
-        : ` Weekday peaks are on the product's own note; ${withPeak} of ${rows.length} have one.`),
-    quiet: "by revenue yesterday",
+        showAllProducts ? tt("co.prod.top", "top {n} only", {n: TOP}) : tt("co.prod.all", "all {n}", {n: all.length})}</a>`
+    : `<span class="quiet">${tt("co.prod.all", "all {n}", {n: all.length})}</span>`;
+  $("secProducts").innerHTML = sechead(tt("co.prod.title", "Products"), {
+    why: tt("co.prod.why", "Revenue and units are yesterday summed over every store that sells the line; units a week is the last seven days, and stores is how many carry it.")
+      + " " + (showPeak
+        ? (weekRange
+          ? tt("co.prod.why.peaks.range", "Peaks names the weekday that sells the most units, from {range}, and the points between best and worst day.", {range: weekRange})
+          : tt("co.prod.why.peaks", "Peaks names the weekday that sells the most units and the points between best and worst day."))
+        : tt("co.prod.why.notes", "Weekday peaks are on the product's own note; {n} of {total} have one.", {n: withPeak, total: rows.length})),
+    quiet: tt("co.prod.quiet", "by revenue yesterday"),
     aside: more,
   }) + `<table>
-    <thead><tr><th class="l">Product</th><th>Revenue / day</th><th>Units / day</th>
-      <th data-tip="Sales across all stores over the last 7 days">Units / week</th>
-      <th>Avg price</th><th>Stores</th>${showPeak?`<th data-tip="${attr(`The weekday each product sells most units, across every store that carries it${
-        weekRange ? `, from ${weekRange} of sales` : ""}`)}">Peaks · units</th>`:""}</tr></thead>
+    <thead><tr><th class="l">${tt("co.prod.col.product", "Product")}</th><th>${tt("co.prod.col.revenue", "Revenue / day")}</th><th>${
+      tt("co.prod.col.units", "Units / day")}</th>
+      <th data-tip="${attr(tt("co.prod.col.week.tip", "Sales across all stores over the last 7 days"))}">${tt("co.prod.col.week", "Units / week")}</th>
+      <th>${tt("co.prod.col.price", "Avg price")}</th><th>${tt("co.prod.col.stores", "Stores")}</th>${showPeak?`<th data-tip="${attr(weekRange
+        ? tt("co.prod.col.peaks.tip.range", "The weekday each product sells most units, across every store that carries it, from {range} of sales", {range: weekRange})
+        : tt("co.prod.col.peaks.tip", "The weekday each product sells most units, across every store that carries it"))}">${
+        tt("co.prod.col.peaks", "Peaks · units")}</th>`:""}</tr></thead>
     <tbody>${rows.map(p=>{
       /* The product opens the store that sells the most of it, Shelves lit,
          or with nothing sold yet one that stocks it: the Portfolio has no
@@ -21139,8 +21213,10 @@ function drawProducts(){
          scale; the store is `seller`. */
       const seller = xlSellers(p.slug)[0];
       const opens = !seller ? ""
-        : seller.line.revenue ? `Open ${shortName(seller.b)}, the store that sells the most of it${p.stores > 1 ? `, one of ${p.stores}` : ""}`
-        : `Open ${shortName(seller.b)}, which stocks it; no store sold any yesterday`;
+        : seller.line.revenue ? (p.stores > 1
+          ? tt("co.prod.open.top.of", "Open {site}, the store that sells the most of it, one of {n}", {site: shortName(seller.b), n: p.stores})
+          : tt("co.prod.open.top", "Open {site}, the store that sells the most of it", {site: shortName(seller.b)}))
+        : tt("co.prod.open.stocks", "Open {site}, which stocks it; no store sold any yesterday", {site: shortName(seller.b)});
       const name = seller ? `<a class="link xl-sells" href="#company" data-xl-item="${attr(p.slug)}" data-tip="${attr(opens)}">${p.item}</a>` : p.item;
       return `<tr data-slug="${attr(p.slug)}">
       <td class="l"${showPeak?"":` data-tip="${attr(peakTip(p))}"`}>${name}</td>
@@ -21150,7 +21226,7 @@ function drawProducts(){
       <td>$${num(p.price, {minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       <td>${p.stores}</td>
       ${showPeak?`<td class="${p.peak?"pos":""}" data-tip="${attr(peakTip(p))}">${
-        p.peak ? `${p.peak.slice(0,3)} +${p.swing}` : "—"}</td>`:""}</tr>`;}).join("")}</tbody></table>`;
+        p.peak ? `${coDayShort(p.peak)} +${p.swing}` : "—"}</td>`:""}</tr>`;}).join("")}</tbody></table>`;
   $$("#secProducts [data-xl-item]").forEach(a => a.onclick = e => { e.preventDefault(); xlOpenSeller(a.dataset.xlItem); });
   const toggle = $("productsToggle");
   if(toggle) toggle.onclick = () => { showAllProducts = !showAllProducts; drawProducts(); };
@@ -21164,18 +21240,21 @@ function payrollWhy(){
     .map(b => [b, (b.wages || 0) - (b.staffCost || 0)])
     .filter(([b, d]) => Math.abs(d) >= Math.max(100, (b.staffCost || 0) * .05))
     .sort((a, z) => Math.abs(z[1]) - Math.abs(a[1]));
-  return "At today's rates: each person's hourly wage times their assigned weekly hours, over seven days. "
-    + "Booked yesterday: the wages yesterday's statements recorded, the Wages total of the Portfolio."
-    + (off.length ? ` They differ at ${off.slice(0, 4).map(([b, d]) => `${b.name} (${d > 0 ? "+" : ""}${fmt(d)})`).join(", ")}${
-        off.length > 4 ? ` and ${off.length - 4} more` : ""}.` : "");
+  const sites = off.slice(0, 4).map(([b, d]) => `${b.name} (${d > 0 ? "+" : ""}${fmt(d)})`).join(", ");
+  return tt("co.pay.why.rates", "At today's rates: each person's hourly wage times their assigned weekly hours, over seven days.")
+    + " " + tt("co.pay.why.booked", "Booked yesterday: the wages yesterday's statements recorded, the Wages total of the Portfolio.")
+    + (!off.length ? "" : " " + (off.length > 4
+      ? tt("co.pay.why.differ.more", "They differ at {sites} and {n} more.", {sites, n: off.length - 4})
+      : tt("co.pay.why.differ", "They differ at {sites}.", {sites})));
 }
 function drawPayroll(){
   const st = D.staff;
-  const trouble = [["unhappy", st.unhappy, "Satisfaction below 70%"],
-                   ["out", st.absent, "Absent today"],
-                   ["complaining", st.complaining, "With an open complaint"]].filter(([,v]) => v);
+  const trouble = [[n => tt("co.pay.unhappy", "{n} unhappy", {n}), st.unhappy, tt("co.pay.unhappy.tip", "Satisfaction below 70%")],
+                   [n => tt("co.pay.out", "{n} out", {n}), st.absent, tt("co.pay.out.tip", "Absent today")],
+                   [n => tt("co.pay.complaining", "{n} complaining", {n}), st.complaining,
+                    tt("co.pay.complaining.tip", "With an open complaint")]].filter(([,v]) => v);
   const max = Math.max(...st.roles.map(r => r.count), 1);
-  $("secPayroll").innerHTML = sechead("Payroll", {
+  $("secPayroll").innerHTML = sechead(tt("co.pay.title", "Payroll"), {
     /* Two wage figures that legitimately differ, each saying what it is: the
        rate is every hourly wage times its assigned weekly hours, over seven;
        the books are what yesterday's statements recorded, the Portfolio's
@@ -21184,17 +21263,18 @@ function drawPayroll(){
     why: payrollWhy(),
     /* Booked yesterday is said whenever there was a yesterday: $0 booked
        against a payroll is exactly the gap the ? explains. */
-    quiet: `${st.total} people · ${fmt(st.dailyCost)}/day at today's rates${
-      D.kpi && (D.daily || []).length ? ` · ${fmt(D.kpi.wageBill || 0)} booked yesterday` : ""}`,
+    quiet: `${tt("co.pay.people", "{n} people", {n: st.total})} · ${
+      tt("co.pay.rate", "{w:$}/day at today's rates", {w: st.dailyCost})}${
+      D.kpi && (D.daily || []).length ? ` · ${tt("co.pay.booked", "{w:$} booked yesterday", {w: D.kpi.wageBill || 0})}` : ""}`,
     aside: st.total ? chipHtml(st.avgSatisfaction >= 70 ? "ok tr" : "warn tr", `${st.avgSatisfaction}%`,
-        `Average satisfaction across ${st.total} staff`)
-      + trouble.map(([l, v, tip]) => chipHtml("warn tr", `${v} ${l}`, tip)).join("") : "",
+        tt("co.pay.avg.tip", "Average satisfaction across {n} staff", {n: st.total}))
+      + trouble.map(([l, v, tip]) => chipHtml("warn tr", l(v), tip)).join("") : "",
   }) + (st.total ? `<div class="roles">${st.roles.map(r => `<div class="role rv">
       <span>${r.role}</span>
       <span class="tr"><i style="width:${(r.count / max * 100).toFixed(0)}%"></i></span>
       <span class="c">${r.cost != null
         ? `<span>${r.count}</span><b>${money(r.cost)}</b>`
-        : r.count}</span></div>`).join("")}</div>` : `<p class="quiet">No staff hired yet.</p>`);
+        : r.count}</span></div>`).join("")}</div>` : `<p class="quiet">${tt("co.pay.empty", "No staff hired yet.")}</p>`);
 }
 
 /* The career totals as a checklist, and the running totals under it. The
@@ -21210,19 +21290,21 @@ function drawGoals(){
      buildings is not a goal anybody plays for. */
   const count = n => num(n || 0);
   const ofAll = (label, n, total) => total > 0 ? [[label, n >= total, `${count(n)} / ${count(total)}`]] : [];
+  const goals = tt("co.goals.personal", "Personal goals done");
   const miles = [
-    ...ofAll("Every business type run", g.typesRun, g.typesTotal),
-    ...ofAll("Rivals taken over", g.rivalsDefeated, g.rivalsTotal),
-    ...(g.goalsTotal > 0 ? ofAll("Personal goals done", g.goalsDone ?? g.completed, g.goalsTotal)
-      : [["Personal goals done", false, `${count(g.goalsDone ?? g.completed)} done`]]),
-    ...ofAll("Diplomas earned", g.diplomas, g.diplomasTotal),
+    ...ofAll(tt("co.goals.types", "Every business type run"), g.typesRun, g.typesTotal),
+    ...ofAll(tt("co.goals.rivals", "Rivals taken over"), g.rivalsDefeated, g.rivalsTotal),
+    ...(g.goalsTotal > 0 ? ofAll(goals, g.goalsDone ?? g.completed, g.goalsTotal)
+      : [[goals, false, tt("co.goals.done", "{n:,} done", {n: g.goalsDone ?? g.completed ?? 0})]]),
+    ...ofAll(tt("co.goals.diplomas", "Diplomas earned"), g.diplomas, g.diplomasTotal),
   ];
-  $("secGoals").innerHTML = sechead("Milestones", {quiet: "career totals"})
+  $("secGoals").innerHTML = sechead(tt("co.goals.title", "Milestones"), {quiet: tt("co.goals.quiet", "career totals")})
     + `<div class="miles">${miles.map(([label, done, text]) =>
       `<div class="mile${done ? " done" : ""}"><span class="box">${icon("tick")}</span>${
         label}<span class="c">${text}</span></div>`).join("")}</div>`
-    + `<p class="quiet">${count(g.goodsProduced)} goods produced · ${compact(g.taxesPaid || 0)} in tax paid · ${
-      plural(g.buildingsOwned || 0, "building")} owned</p>`;
+    + `<p class="quiet">${tt("co.goals.goods", "{n:,} goods produced", {n: g.goodsProduced || 0})} · ${
+      tt("co.goals.tax", "{w:$c} in tax paid", {w: g.taxesPaid || 0})} · ${
+      tt("co.goals.buildings", {one: "{n} building owned", other: "{n} buildings owned"}, {n: g.buildingsOwned || 0})}</p>`;
 }
 
 /* The difficulty, as one chip and a popover with every setting that differs
@@ -22954,7 +23036,7 @@ const SS_QUESTIONS = [
   {id: "profit", q: "Why did profit move?", lands: "Company › Results · the portfolio sorted by week on week", page: "company",
    go(){
      view = "pnl";
-     const i = VIEWS.pnl.cols.findIndex(c => c[0] === "Wk / wk");
+     const i = VIEWS.pnl.cols.findIndex(c => c[4] === "wow");
      sortKey = i >= 0 ? i : null; sortDir = -1;
      drawPortfolio();
      reveal("secPortfolio");
