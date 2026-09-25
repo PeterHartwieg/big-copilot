@@ -13448,6 +13448,7 @@ html:has(dialog:modal){overflow:hidden}
 #pageSupply .sb-fc-pipes path.lit{stroke:var(--accent);stroke-opacity:1}
 #pageSupply .sb-fc-pipes path.warn{stroke:var(--warn);stroke-opacity:.95}
 #pageSupply .sb-fc-pipes path.bad{stroke:var(--neg);stroke-opacity:.95}
+#pageSupply .sb-fc-pipes marker path{fill:var(--ink-3);stroke:none}
 #pageSupply .sb-fc-band{display:grid;grid-template-columns:16px minmax(0,1fr);gap:8px;align-items:stretch}
 #pageSupply .sb-fc-rail{writing-mode:vertical-rl;transform:rotate(180deg);text-align:center;font:500 9.5px/16px "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap;border-left:1px solid var(--rule-soft);overflow:hidden;text-overflow:ellipsis}
 #pageSupply .sb-fc-cards{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
@@ -16093,8 +16094,9 @@ function drawFlow(){
   /* A pick outlives a re-render; one that names a node this save no longer
      has is dropped, so nothing is dimmed and the detail shows the prompt. */
   if(flowPickId && !g.nodes.some(n => n.id === flowPickId)) flowPickId = null;
-  /* A box narrower than FLOW_CHAIN_MAX gets the chain; with no site on the
-     diagram it says so at any width, rather than standing empty. */
+  /* A box narrower than FLOW_CHAIN_MAX gets the chain. With no pipe at all
+     (no site, or sites no plan or import joins) the box says so at any
+     width, rather than standing empty or drawing loose boxes. */
   const narrow = flowNarrow(), empty = !flowHasPipes(g);
   /* The chain's focus and open group are the chain's: the picture the box
      grows into starts whole, not dimmed round a site it cannot unpick. */
@@ -16176,7 +16178,7 @@ function drawFlow(){
    drawFlow() draws #flowChain instead: the stages down the page in the order
    the goods travel, pipes between them, and a tap follows one site (its
    focus is flowPickId, which the desktop picture lights as its pick). */
-const FLOW_CHAIN_MAX = 950, FLOW_FOLD = 4, FLOW_GUT = 36, FLOW_LANE = 20;
+const FLOW_CHAIN_MAX = 950, FLOW_FOLD = 4, FLOW_GUT = 36, FLOW_LANE = 20, FLOW_BACK_LANE = 6;
 const FLOW_KIND_ORDER = {import: 0, factory: 1, depot: 2, shop: 3};
 const SB_FC_ICON = {
   import: '<path d="M4 15l1.5 5h13L20 15z"></path><path d="M6 15V9h12v6M12 9V4M9 6h6"></path>',
@@ -16246,12 +16248,22 @@ function flowStages(g){
   /* Back edges (a factory sending its output to the depot that feeds it, a
      common round trip) are found by a depth-first walk from the sources in
      node order, and left out of the ranking; they are still drawn. */
+  /* The walk goes by stage role, then node order, so which link of a cycle
+     is the way back never depends on how the save lists its sites: importer,
+     a depot an importer fills, factory, any other depot, shop. In a depot's
+     round trip with its factory the factory's return is the back edge. */
   const order = id => byId.get(id).i;
+  const imported = new Set(links.filter(l => byId.get(l.from).n.kind === "import").map(l => l.to));
+  const role = id => {
+    const k = byId.get(id).n.kind;
+    return k === "import" ? 0 : k === "depot" ? (imported.has(id) ? 1 : 3) : k === "factory" ? 2 : k === "shop" ? 4 : 5;
+  };
+  const byRole = (a, b) => role(a) - role(b) || order(a) - order(b);
   const outOf = new Map();
   links.forEach(l => { if(!outOf.has(l.from)) outOf.set(l.from, []); outOf.get(l.from).push(l); });
-  outOf.forEach(ls => ls.sort((a, b) => order(a.to) - order(b.to)));
+  outOf.forEach(ls => ls.sort((a, b) => byRole(a.to, b.to)));
   const hasIn = new Set(links.map(l => l.to));
-  const starts = g.nodes.filter(n => linked.has(n.id)).sort((a, b) => (hasIn.has(a.id) ? 1 : 0) - (hasIn.has(b.id) ? 1 : 0) || order(a.id) - order(b.id));
+  const starts = g.nodes.filter(n => linked.has(n.id)).sort((a, b) => (hasIn.has(a.id) ? 1 : 0) - (hasIn.has(b.id) ? 1 : 0) || byRole(a.id, b.id));
   const seen = new Set(), onPath = new Set(), back = new Set(), post = [];
   const walk = id => {
     seen.add(id); onPath.add(id);
@@ -16523,6 +16535,14 @@ function flowChainPipes(){
     at.set(el.dataset.fcCard, {cx: r.left - base.left + r.width / 2, top: r.top - base.top, bottom: r.bottom - base.top, band: bi});
   }));
   const list = flowChainPipeList.filter(p => at.has(p.from) && at.has(p.to) && p.from !== p.to);
+  /* A pipe back up (a factory's output returning to its depot) runs down the
+     right-hand side with an arrowhead, apart from the left lane the forward
+     pipes that skip a stage take; one leaving the last stage needs room
+     under it. */
+  const isBack = p => at.get(p.to).band <= at.get(p.from).band;
+  const last = bandsEl.length - 1;
+  const room = list.some(p => isBack(p) && at.get(p.from).band === last) ? `${FLOW_GUT}px` : "";
+  if(host.style.paddingBottom !== room){ host.style.paddingBottom = room; return flowChainPipes(); }
   const heaviest = Math.max(1, ...list.map(p => p.perDay));
   const spread = (key, other) => {
     const off = new Map(), by = new Map();
@@ -16535,15 +16555,17 @@ function flowChainPipes(){
   const f = v => v.toFixed(1), G = FLOW_GUT;
   svg.setAttribute("width", f(base.width));
   svg.setAttribute("height", f(base.height));
-  svg.innerHTML = list.map(p => {
+  const backLane = base.width + FLOW_BACK_LANE;
+  svg.innerHTML = `<defs><marker id="sbFcArrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z"></path></marker></defs>` + list.map(p => {
     const a = at.get(p.from), b = at.get(p.to);
     const x1 = a.cx + offA.get(p), y1 = a.bottom, x2 = b.cx + offB.get(p), y2 = b.top;
-    const h = y2 - y1;
+    const h = y2 - y1, back = isBack(p);
+    const lx = back ? f(backLane) : FLOW_LANE;
     const d = b.band === a.band + 1
       ? `M${f(x1)},${f(y1)} C${f(x1)},${f(y1 + h * .55)} ${f(x2)},${f(y2 - h * .45)} ${f(x2)},${f(y2)}`
-      : `M${f(x1)},${f(y1)} C${f(x1)},${f(y1 + G * .55)} ${FLOW_LANE},${f(y1 + G * .45)} ${FLOW_LANE},${f(y1 + G)} L${FLOW_LANE},${f(y2 - G)} C${FLOW_LANE},${f(y2 - G * .55)} ${f(x2)},${f(y2 - G * .45)} ${f(x2)},${f(y2)}`;
+      : `M${f(x1)},${f(y1)} C${f(x1)},${f(y1 + G * .55)} ${lx},${f(y1 + G * .45)} ${lx},${f(y1 + G)} L${lx},${f(y2 - G)} C${lx},${f(y2 - G * .55)} ${f(x2)},${f(y2 - G * .45)} ${f(x2)},${f(y2)}`;
     const w = 1 + Math.sqrt(p.perDay / heaviest) * 2.5;
-    return `<path class="${p.cadence}${p.paused ? " paused" : ""}${p.cls ? ` ${p.cls}` : ""}" data-a="${attr(p.from)}" data-b="${attr(p.to)}" stroke-width="${f(w)}" d="${d}"></path>`;
+    return `<path class="${p.cadence}${p.paused ? " paused" : ""}${back ? " back" : ""}${p.cls ? ` ${p.cls}` : ""}" data-a="${attr(p.from)}" data-b="${attr(p.to)}" data-lane="${back ? f(backLane) : b.band === a.band + 1 ? "" : FLOW_LANE}" stroke-width="${f(w)}" d="${d}"${back ? ` marker-end="url(#sbFcArrow)"` : ""}></path>`;
   }).join("");
 }
 /* No pipe yet: say so, and where the first one comes from. */

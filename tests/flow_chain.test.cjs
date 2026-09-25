@@ -55,7 +55,7 @@ const state = page => page.evaluate(() => ({
   svgNodes: document.querySelectorAll('#flow .node').length,
   rails: [...document.querySelectorAll('#flowChain .sb-fc-rail')].map(r => r.textContent),
   cards: [...document.querySelectorAll('#flowChain .sb-fc-band [data-fc-card]')].map(c => c.dataset.fcCard),
-  pipes: [...document.querySelectorAll('#flowChain .sb-fc-pipes path')].map(p => ({a: p.dataset.a, b: p.dataset.b, cls: p.getAttribute('class')})),
+  pipes: [...document.querySelectorAll('#flowChain .sb-fc-pipes path[data-a]')].map(p => ({a: p.dataset.a, b: p.dataset.b, cls: p.getAttribute('class'), lane: p.dataset.lane})),
   overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
 }));
 /* A depot feeding `k` shops, fed by one pier: the shop count decides the fold. */
@@ -148,7 +148,7 @@ test('shops no pipe reaches share one line at the bottom', async t => {
 });
 
 test('no pipe at all: the box says so and links the wiki, at any width', async t => {
-  for(const [width, keep] of [[390, false], [1280, false], [390, true]]){
+  for(const [width, keep] of [[390, false], [1280, false], [390, true], [1280, true]]){
     const data = fixture();
     // No site at all, or one stocked shop no delivery plan reaches.
     data.supply.graph = {nodes: keep ? data.supply.graph.nodes.filter(n => n.id === 'shop#3') : [], links: []};
@@ -261,7 +261,38 @@ test('a depot that feeds a factory and takes its output back stays above the sho
   assert.deepEqual(s.rails, ['Importers', 'Depots', 'Factories', 'Shops']);
   assert.deepEqual(s.cards, ['import:pier', 'hub#1', 'factory#2', 'shop#3', 'shop#4']);
   assert.equal(s.pipes.length, 5, 'every link is a pipe, the one back up too');
-  assert.ok(s.pipes.some(p => p.a === 'factory#2' && p.b === 'hub#1'));
+  const back = s.pipes.find(p => p.a === 'factory#2' && p.b === 'hub#1');
+  assert.match(back.cls, /\bback\b/);
+  // The hub's pipes to the shops skip the factory band down the left lane;
+  // the way back has its own lane, so the two never read as one line.
+  const skip = s.pipes.filter(p => p.a === 'hub#1' && p.b.startsWith('shop#'));
+  assert.ok(skip.length && skip.every(p => p.lane), JSON.stringify(skip));
+  skip.forEach(p => assert.notEqual(p.lane, back.lane));
+  assert.equal(await page.locator('#flowChain .sb-fc-pipes path.back[marker-end]').count(), 1, 'an arrowhead says which way');
+});
+
+test("which link of a round trip is the way back does not depend on the save's site order", async t => {
+  const data = roundTrip();
+  const g = data.supply.graph;
+  // The factory listed before the hub, and a second importer straight to it.
+  const f = g.nodes.find(n => n.id === 'factory#2');
+  g.nodes = [g.nodes[0], f, ...g.nodes.filter(n => n !== f && n !== g.nodes[0])];
+  g.links.push({from: 'import:pier', to: 'factory#2', perDay: 100, items: 1, slugs: ['milk'], cadence: 'weekly', paused: false, arrives: 34});
+  const page = await board(t, data, 390);
+  const s = await state(page);
+  assert.deepEqual(s.rails, ['Importers', 'Depots', 'Factories', 'Shops']);
+  assert.match(s.pipes.find(p => p.a === 'factory#2' && p.b === 'hub#1').cls, /\bback\b/);
+});
+
+test('a way back leaving the last stage has room under it', async t => {
+  const data = roundTrip();
+  // A shop cannot send, so the last stage here is the factories: no shops.
+  const g = data.supply.graph;
+  g.nodes = g.nodes.filter(n => n.kind !== 'shop');
+  g.links = g.links.filter(l => !l.to.startsWith('shop#'));
+  const page = await board(t, data, 390);
+  const pad = await page.$eval('#flowChain .sb-fc-chain', el => parseFloat(getComputedStyle(el).paddingBottom));
+  assert.equal(pad, 36);
 });
 
 test('a factory fed by its own depot shows the depot in and out, each with its own pipe', async t => {
