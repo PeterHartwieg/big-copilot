@@ -432,6 +432,22 @@ test('a row that throws while the board is drawn leaves the rest drawn, wired an
   assert.equal(await page.evaluate(() => [...pageStale].some(row => /drawAlerts/.test(String(row[1])))), false);
 });
 
+test('a row drawn on every page that threw is tried again on the next page opened', async t => {
+  const page = await board(t);
+  const messages = [];
+  page.on('console', m => { if (m.type() === 'error') messages.push(m.text()); });
+  await page.evaluate(() => {
+    window.calmDraw = window.drawFindLocation;
+    window.drawFindLocation = () => { throw new Error('finder line broke'); };
+  });
+  await deliver(page, later);
+  assert.deepEqual(await liveDot(page), {stale: true, says: 'Stale', why: 'finder line broke'});
+  await page.evaluate(() => { window.drawFindLocation = window.calmDraw; });
+  await page.click('#nav a[data-id="company"]');
+  assert.deepEqual(await liveDot(page), {stale: false, says: 'LIVE', why: ''});
+  assert.equal(await page.evaluate(() => [...pageStale].some(row => /drawFindLocation/.test(String(row[1])))), false);
+});
+
 test('a refresh keeps a Set to figure being typed, and the focus on its box', async t => {
   const page = await board(t);
   // Every line shown: the depot's lines are all covered, so none would be by default.
@@ -451,6 +467,23 @@ test('a refresh keeps a Set to figure being typed, and the focus on its box', as
     return {id: el.dataset.imp ?? null, value: el.value, rebuilt: el !== window.calmBox && !window.calmBox.isConnected};
   });
   assert.deepEqual(now, {id: typed, value: '1234', rebuilt: true});
+  // Leaving the box keeps the figure, as it would have without the refresh.
+  await page.evaluate(() => document.activeElement.blur());
+  assert.equal(await page.evaluate(id => (impSetEdits().edits[id] || {}).value, typed), 1234);
+  assert.match(await page.evaluate(() => localStorage.getItem(impSetEdits().key) || ''), /"value":1234/);
+});
+
+test('Enter keeps a Set to figure put back by a refresh', async t => {
+  const page = await board(t);
+  await page.evaluate(() => { showPage('supply'); showSub('supply', 'warehouses'); sbWhich = 'all'; drawSupplyTab('warehouses'); wireAll(); });
+  const typed = await page.evaluate(() => {
+    const box = document.querySelector('#secWarehouses input[data-imp]');
+    box.focus(); box.value = '4321';
+    return box.dataset.imp;
+  });
+  await deliver(page, later);
+  await page.keyboard.press('Enter');
+  assert.equal(await page.evaluate(id => (impSetEdits().edits[id] || {}).value, typed), 4321);
 });
 
 test('a render keeps a Stale mark on the fresh dot, and a lost source replaces it', async t => {

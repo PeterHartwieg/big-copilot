@@ -20,7 +20,7 @@ const root = path.join(__dirname, '..');
 const PYTHON = process.env.PYTHON || 'python';
 const NAMES = JSON.parse(spawnSync(PYTHON, ['-c',
   'import json, sys; sys.path.insert(0, "tests"); import hostile_names_fixture as h; '
-  + 'print(json.dumps({k: getattr(h, k) for k in ["SHOP", "GIFTS", "DEPOT", "FACTORY", "PRODUCT", "PERSON", "RIVAL_SHOP"]}))'],
+  + 'print(json.dumps({k: getattr(h, k) for k in ["SHOP", "GIFTS", "DEPOT", "FACTORY", "PRODUCT", "PERSON", "RIVAL_SHOP", "INGREDIENT"]}))'],
 {cwd: root}).stdout.toString());
 const base = name => name.replace(/^\[[^\]]*\]\s*/, '');
 
@@ -52,7 +52,7 @@ async function board(t){
 }
 // Anything a name grew, and whether a handler ran.
 const injected = page => page.evaluate(() => ({
-  grown: [...document.querySelectorAll('bc-xss, img[src="x"]')].map(el => {
+  grown: [...document.querySelectorAll('bc-xss, img[src="x"], [onmouseover]')].map(el => {
     const host = el.closest('[id]');
     return `${el.tagName.toLowerCase()} in #${host ? host.id : '?'}`;
   }),
@@ -88,6 +88,29 @@ test('every page, view and site page prints the names as text', async t => {
   await page.evaluate(() => { showPage('company'); showSub('company', 'results'); });
   await page.$$eval('#secPortfolio tr.chain', rows => rows.forEach(r => r.click()));
   assert.deepEqual(await injected(page), clean, 'chains unfolded');
+  // Growth › Demand in each of its views.
+  for (const v of ['types', 'mine', 'new']) {
+    await page.evaluate(v => { showPage('growth'); showSub('growth', 'market'); marketView = v; showAllMarket = true; drawMarket(); }, v);
+    assert.deepEqual(await injected(page), clean, `market ${v}`);
+    if (v === 'mine') assert.ok((await page.locator('#market').textContent()).includes(NAMES.PRODUCT), `market ${v} names the product`);
+  }
+  // Plan a chain for the liquor store, with a machine on each line, so the
+  // ingredient table fills in.
+  await page.evaluate(() => {
+    showPage('growth'); showSub('growth', 'plan'); planType = 'ba:businesstype_liquorstore'; planCounts = {}; drawPlan();
+  });
+  await page.$$eval('#planBody a[data-d="1"]', links => links.forEach(a => a.click()));
+  assert.deepEqual(await injected(page), clean, 'plan a chain');
+  // The planner names its lines and inputs from the game's recipe table, not
+  // the save, so the names here are the game's; the table is drawn all the same.
+  assert.ok(await page.locator('#ingBody tr').count() >= 1, 'the ingredient table is drawn');
+  // The factory's line with a recipe the board cannot name: its picker.
+  await page.evaluate(() => { showPage('supply'); sbWhich = 'all'; showSub('supply', 'factories'); drawSupplyTab('factories'); wireAll(); });
+  assert.deepEqual(await injected(page), clean, 'factory lines');
+  assert.ok(await page.locator('#secFactories select.linepick').count() >= 1, 'the picker is drawn');
+  // A factory's inputs are named from the recipe table; the depot's lines from the save.
+  await page.evaluate(() => { showSub('supply', 'warehouses'); drawSupplyTab('warehouses'); wireAll(); });
+  assert.ok((await page.locator('#secWarehouses').textContent()).includes(NAMES.INGREDIENT), 'the depot line is named');
   // Each site's own page: a shop, a second shop, the depot and the factory.
   const sites = await page.evaluate(() => D.businesses.filter(b => b.status !== 'home').map(b => b.key));
   const heads = [];
@@ -109,6 +132,10 @@ test('every page, view and site page prints the names as text', async t => {
   has('company/results', NAMES.DEPOT.split(' <img')[0]);
   has(sites[0], NAMES.PRODUCT);
   has(sites[0], NAMES.PERSON);
+  // Text made from a slug the game never wrote: the type and street lose their
+  // markup in Python, and the number keeps its digits.
+  has(sites[1], 'Bc XssGiftshop');
+  has(sites[1], '19 Broadway bc-xssstreet');
   // The factory's hood tag, a player's "[...]" prefix, in the goods-flow boxes.
   assert.ok((await page.locator('#flow').textContent()).includes('<bc-xss>'), 'the flow box names the tag');
   assert.deepEqual(await injected(page), clean);

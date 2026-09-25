@@ -247,7 +247,7 @@ class WatchSurvivesAFailingFirstBuild(unittest.TestCase):
             locale_source, names, link = None, mock.Mock(locale={}), None
 
             def __init__(self, *args, **kwargs):
-                pass
+                self.html = b""
 
             def refresh(self, settle=True):
                 raise KeyError("NetWorth")
@@ -278,6 +278,10 @@ class WatchSurvivesAFailingFirstBuild(unittest.TestCase):
                 mock.patch("sys.stdout"), mock.patch("sys.stderr"):
             ba_dashboard.watch("saves", "out.html", 0, 30, open_browser=False)
         self.assertEqual(len(started), 1, "the poll loop runs, to retry on the next save")
+        # The page served meanwhile is the live shell, which loads the first good build.
+        page = ba_dashboard.BoardHandler.board.html.decode("utf-8")
+        self.assertIn("const LIVE = true", page)
+        self.assertIn("let D = null", page)
 
 
 if __name__ == "__main__":

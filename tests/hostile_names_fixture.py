@@ -31,15 +31,43 @@ PERSON = "Ana <bc-xss> & <img src=x onerror=window.__xss=5>"
 RIVAL_SHOP = "Corner <bc-xss> & <img src=x onerror=window.__xss=6>"
 RIVAL = "Holdings <bc-xss> & Co"
 UNIFORM = "Black <bc-xss> & <img src=x onerror=window.__xss=7>"
+# A factory input, drawn on Supply, the factory's page and the chain planner.
+INGREDIENT = "Water <bc-xss> & <img src=x onerror=window.__xss=8>"
+# Text the board makes from a slug rather than game text: the gift shop's
+# street, house number and business type are ones the game never wrote.
+STREET = "ba:street_broadway<bc-xss>street"
+HOUSE = "19<bc-xss>"
+TYPE = "ba:businesstype_<bc-xss>giftshop"
+RECIPE = "<bc-xss>\" onmouseover=\"window.__xss=9"
 NAMES = {f.LIQUOR: SHOP, f.GIFTS: GIFTS, f.HUB: DEPOT, f.BREWERY: FACTORY, f.RIVAL: RIVAL_SHOP}
+
+
+def _move_gifts(node):
+    """Every reference to the gift shop's address, to the hostile one."""
+    if isinstance(node, dict):
+        if node.get("streetName") == f.GIFTS[0] and node.get("streetNumber") == f.GIFTS[1]:
+            node.update(streetName=STREET, streetNumber=HOUSE)
+        for v in node.values():
+            _move_gifts(v)
+    elif isinstance(node, list):
+        for v in node:
+            _move_gifts(v)
 
 
 def hostile_company(day: int = f.DAY) -> dict:
     company = f.data_company(day)
+    _move_gifts(company)
     for site in company["BuildingRegistrations"]:
         at = (site.get("StreetName"), site.get("StreetNumber"))
         if at in NAMES:
             site["BusinessName"] = NAMES[at]
+        if at == f.GIFTS:
+            site.update(StreetName=STREET, StreetNumber=HOUSE, businessTypeName=TYPE)
+        if at == f.BREWERY:
+            # A machine on a recipe the board cannot name: the line picker.
+            site["itemInstances"].append(f._item(
+                "MACHINEthree", "ba:itemname_bottlingmachine", priority=2, selectedRecipeId=RECIPE,
+                workstationType="ba:factoryworkstationtype_bottledgoodsworkstation"))
     for person in company["EmployeeInstances"]:
         if person["id"] == "EMPana":
             person["characterData"]["name"] = PERSON
@@ -54,6 +82,7 @@ def hostile_company(day: int = f.DAY) -> dict:
 def hostile_names() -> dict:
     names = dict(f.data_names())
     names[f.BEER] = PRODUCT
+    names[f.WATER] = INGREDIENT
     return names
 
 

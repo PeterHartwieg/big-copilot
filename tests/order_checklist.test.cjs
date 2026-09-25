@@ -324,6 +324,9 @@ test('the player\'s figure replaces the suggestion; typing the suggestion is no 
   // While the line still asks for an import, the figure stands.
   const adding = setting(fact('noplan', {setTo:1610}), {}, {value:600, inGame:null});
   assert.deepEqual([adding.stale, adding.edited, adding.value], [false, true, 600]);
+  // Nothing suggested only because nothing is used right now: the figure stays.
+  const idle = setting(fact('noplan', {setTo:null, use:0, need:0}), {}, {value:600, inGame:null});
+  assert.deepEqual([idle.stale, idle.edited, idle.value], [false, true, 600]);
   // Not a number, or below zero, is not a figure.
   assert.equal(setting(f, {weekly:900}, -5).edited, false);
   assert.equal(setting(f, {weekly:900}, NaN).edited, false);
