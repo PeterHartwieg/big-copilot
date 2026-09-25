@@ -4986,24 +4986,29 @@ def _recipe_identity(rid: str | None, station: str, recipes: dict, chosen: dict)
 def _line_hours(posted: list, machines: int, rate: float, dem_makes: float, basis: str) -> dict:
     """A factory line's hours: rostered now, and needed in each sizing.
 
-    `hoursNow` is the fewest hours a day any of its machines is rostered on
-    any weekday. 24/7 needs every machine all 24; Demand the hours that make
-    what the ends draw plus the margin once (`dem_makes` a day), never past
-    24, and 24 where nothing is drawn (`demBasis` "none"). Too few hours is
-    short (why hours: critical below STAFF_CRITICAL of the week on its
-    least-staffed machine, else warn). More than Demand needs is covered, with
-    `lower` as a suggestion, never a change. `_posts`, the machines' item ids
-    by list position, is for _factory_staffing() and leaves the payload there.
+    `hoursNow` is the week of its least-rostered machine as whole hours a
+    day (rounded down), so a machine off one day reads 20, not 0; `thinDay`
+    names the weekday with the fewest hours on any machine where that is
+    under `hoursNow`. 24/7 needs every machine all 24; Demand the hours that
+    make what the ends draw plus the margin once (`dem_makes` a day), never
+    past 24, and 24 where nothing is drawn (`demBasis` "none"). A line is
+    judged on the week, as _staff_notes() judges a machine: short (why hours:
+    critical below STAFF_CRITICAL of the week on its least-staffed machine,
+    else warn) where that machine's week is under the need's. More than
+    Demand needs is covered, with `lower` as a suggestion, never a change.
+    `_posts`, the machines' item ids by list position, is for
+    _factory_staffing() and leaves the payload there.
     """
     posted = sorted(posted, key=lambda m: (m["slot"], str(m["id"])))
-    now = min((min(m["days"]) for m in posted), default=0)
     weekly = min((sum(m["days"]) for m in posted), default=0)
+    now = weekly // 7
+    thin = min(((min(m["days"]), m["days"].index(min(m["days"]))) for m in posted), default=None)
     dem = 24
     if basis == "sales" and rate and machines:
         dem = min(24, math.ceil(round(dem_makes * (1 + SUPPLY_MARGIN) / (rate * machines), 6)))
 
     def verdict(need):
-        if now < need:
+        if weekly < need * 7:
             level = "critical" if weekly < need * 7 * STAFF_CRITICAL else "warn"
             return {"status": "short", "why": "hours", "level": level}
         out = {"status": "covered", "why": None, "level": "ok"}
@@ -5013,6 +5018,8 @@ def _line_hours(posted: list, machines: int, rate: float, dem_makes: float, basi
 
     return {
         "hoursNow": now,
+        **({"thinDay": {"day": WEEKDAYS[thin[1]][:3], "hours": thin[0]}}
+           if thin is not None and thin[0] < now else {}),
         "needHours": {"cap": 24, "dem": dem},
         "demBasis": basis,
         "running": sum(m["running"] for m in posted),
@@ -5204,6 +5211,11 @@ def _factories(
             site = behind
         return site
 
+    def unnamed_hours(machines_posted):
+        """An unnamed line's hours now and its machines' ids, as a line's."""
+        got = _line_hours(machines_posted, 1, 1, 0, "none")
+        return {"hoursNow": got["hoursNow"], "_posts": got["_posts"]}
+
     for key, counter in machines.items():
         lines, unnamed, needs = [], [], {}
         # Every named line's capacity by product, so a product two lines make
@@ -5237,6 +5249,9 @@ def _factories(
                             for c in by_station.get(station, [])
                         ] if rid else [],
                         **staffing,
+                        # A recipe the board cannot name still runs: its
+                        # machines are rostered like any line's (_factory_staffing).
+                        **(unnamed_hours(posted[key][(station, rid)]) if rid else {}),
                     }
                 )
                 continue
@@ -7499,7 +7514,8 @@ def _factory_run_start(hours: int, pool: list) -> int:
     return best[1]
 
 
-def _factory_staffing(save: Save, names, businesses: list, factories: dict, staff: list) -> dict:
+def _factory_staffing(save: Save, names, businesses: list, factories: dict, staff: list,
+                      detail: bool = False) -> dict:
     """Staffing for factory lines, once per sizing: {cap: [row], dem: [row]}.
 
     The shop roster's placer (_place_week) over a synthetic grid: one role,
@@ -7513,13 +7529,25 @@ def _factory_staffing(save: Save, names, businesses: list, factories: dict, staf
     does to the headcount and the day's wage bill. A factory the placer falls
     over on is one `failed` row, as a shop is in _staffing().
 
-    Takes each line's `_posts` (its machines' item ids) off the payload.
+    A line whose recipe the board cannot name (`unnamed`, a recipe set) is
+    rostered too, all 24 hours sized 24/7 and its hours now sized for demand
+    (24 where nobody is on it), since what it makes is unknown; the row counts
+    its machines in `unnamedMachines`. A machine with no recipe stays out.
+
+    The payload row is what the board reads: `lines`, `headcount`, `wageDay`,
+    `delta` (and `unnamedMachines`). `detail` keeps the placer's own tables
+    (`stations`, `people`, `shifts`, `placed`, `shortHours`) for the tests.
+
+    Takes each line's `_posts` (its machines' item ids) off the payload, keyed
+    by the line's place in its list, so two lines making one item keep theirs.
     """
     sites = factories.get("sites", [])
     posts_of = {}
     for site in sites:
-        for line in site["lines"]:
-            posts_of[(site["s"], line["slug"])] = line.pop("_posts", [])
+        for i, line in enumerate(site["lines"]):
+            posts_of[("line", site["s"], i)] = line.pop("_posts", [])
+        for i, line in enumerate(site.get("unnamed", [])):
+            posts_of[("unnamed", site["s"], i)] = line.pop("_posts", [])
     people = _plan_people(save, staff)
     label = names.label(FACTORY_SKILL) if names else FACTORY_SKILL
     out = {mode: [] for mode in SIZING_MODES}
@@ -7539,6 +7567,9 @@ def _factory_staffing(save: Save, names, businesses: list, factories: dict, staf
             except Exception:
                 row = {"key": business["key"], "s": site["s"], "name": business["name"],
                        "failed": True}
+            if row is not None and not detail and not row.get("failed"):
+                for field in ("stations", "people", "shifts", "placed", "shortHours"):
+                    row.pop(field, None)
             if row is not None:
                 out[mode].append(row)
     return out
@@ -7547,20 +7578,31 @@ def _factory_staffing(save: Save, names, businesses: list, factories: dict, staf
 def _factory_site_plan(site, business, posts_of, pool, people, mode, label, names, wage_day):
     """One factory's row of _factory_staffing() in one sizing, or None with no line."""
     stations, runs, lines = [], {}, []
-    for line in site["lines"]:
-        posts = posts_of.get((site["s"], line["slug"])) or []
-        hours = line["needHours"][mode]
+    unnamed_machines = 0
+    todo = [(line, posts_of.get(("line", site["s"], i)) or [], line["needHours"][mode], line["item"], False)
+            for i, line in enumerate(site["lines"])]
+    for i, line in enumerate(site.get("unnamed", [])):
+        if line.get("rid") is None:
+            continue
+        now = line.get("hoursNow") or 0
+        todo.append((line, posts_of.get(("unnamed", site["s"], i)) or [],
+                     24 if mode == "cap" or not now else now,
+                     f"{line['workstation']}, recipe not named", True))
+    for line, posts, hours, item, unnamed in todo:
         if not posts or not hours:
             continue
+        if unnamed:
+            unnamed_machines += len(posts)
         start = _factory_run_start(hours, pool)
         for position, post in zip(line["slots"], posts):
             runs[len(stations)] = [set(range(start, start + hours)) for _ in range(7)]
             stations.append({"id": post, "skill": FACTORY_SKILL, "rate": 1,
-                             "name": f"{line['item']}, position {position}"})
+                             "name": f"{item}, position {position}"})
         lines.append({
-            "slug": line["slug"], "item": line["item"], "machines": line["machines"],
-            "hoursNow": line["hoursNow"], "hours": hours, "from": start, "to": start + hours,
+            "slug": line.get("slug"), "item": item, "machines": line["machines"],
+            "hoursNow": line.get("hoursNow"), "hours": hours, "from": start, "to": start + hours,
             "cuts": [list(cut) for cut in _cut_run(start, start + hours)],
+            **({"unnamed": True} if unnamed else {}),
         })
     if not lines:
         return None
@@ -7609,6 +7651,7 @@ def _factory_site_plan(site, business, posts_of, pool, people, mode, label, name
         "headcount": headcount,
         "wageDay": wage_day,
         "delta": {"workers": workers, "perDay": money(workers * wage_day)},
+        **({"unnamedMachines": unnamed_machines} if unnamed_machines else {}),
         "stations": table["stations"],
         "people": table["people"],
         "shifts": [_shift_row(shift, table) for shift in week["shifts"]],
@@ -14807,8 +14850,10 @@ function drawKpis(){
    site's own page. A finding is a headline; the link is the rest of the
    story. */
 const ALERT_LINKS = {
-  shortfall: {sec:"secWarehouses", tab:"warehouses"}, order: {sec:"secWarehouses", tab:"warehouses"},
-  paused: {sec:"secWarehouses", tab:"warehouses"},
+  /* An import finding lands on the tab of the site that imports: a depot's
+     on Warehouses, a factory's own contract on Factories. */
+  shortfall: {sec:"secWarehouses", tab:"site"}, order: {sec:"secWarehouses", tab:"site"},
+  paused: {sec:"secWarehouses", tab:"site"},
   outruns: {sec:"secShops", tab:"shops"}, unplanned: {sec:"secShops", tab:"shops"},
   dead: {sec:"secWarehouses", tab:"site"}, target: {sec:"secWarehouses", tab:"site"},
   notrouted: {sec:"secWarehouses", tab:"site"},
@@ -18564,8 +18609,11 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     const now = Number.isFinite(r.hoursNow) ? r.hoursNow : null;
     add("Factory run hours", r.s, r.item, now, r.need,
       `Post factory workers on ${r.item} for ${r.need} hours a day${r.machines > 1 ? `, on each of its ${r.machines} machines` : ""}; the roster has them ${
-        now ?? 0}. ${r.sizedFor === "What the shops at the end of the chain use" ? "Sized for what the shops at the end of the chain use, plus the margin." : "Sized 24/7: round the clock."}`,
+        now ?? 0}${r.thinDay ? ` (${r.thinDay.day} ${r.thinDay.hours} h)` : ""}. ${r.sizedFor === "What the shops at the end of the chain use" ? "Sized for what the shops at the end of the chain use, plus the margin." : "Sized 24/7: round the clock."}`,
       null, "hours");
+    /* Two lines can make one item: the row is this line's, by its recipe. */
+    const row = rows[rows.length - 1];
+    if(r.rid !== undefined){ row.line = r.rid; row.key = JSON.stringify(JSON.parse(row.key).concat([r.rid])); }
   });
   const groups = new Map();
   rows.forEach(r => {
@@ -18720,8 +18768,9 @@ const sbSaveMarks = d => { if(d.storageKey) try{ localStorage.setItem(d.storageK
 /* The checklist rows about one row of a table: its site and item, of the
    kinds that table sets. Each is claimed once, so a row no table shows still
    gets a tick of its own (sbOthers()). */
-function sbChk(d, claimed, s, item, kinds){
-  const rows = (d.at.get(`${s ?? ""}|${item}`) || []).filter(r => kinds.includes(r.kind) && !claimed.has(r.i));
+function sbChk(d, claimed, s, item, kinds, line){
+  const rows = (d.at.get(`${s ?? ""}|${item}`) || []).filter(r => kinds.includes(r.kind) && !claimed.has(r.i)
+    && (line === undefined || r.line === undefined || r.line === line));
   rows.forEach(r => claimed.add(r.i));
   return rows;
 }
@@ -18964,8 +19013,8 @@ function supplyChecklistRows(){
   const depotTopups = factRows(fc => fc.role === "depot" && fc.cad === "daily" && Number.isFinite(fc.setTo));
   const wholesaleRows = factRows(fc => !!fc.wholesale);
   /* The hours each factory line should run, under the sizing on screen. */
-  const lines = f.sites.flatMap(site => site.lines.map(l => ({s: site.s, item: l.item, slug: l.slug, fact: sbLineFact(l),
-    hoursNow: l.hoursNow, need: (l.needHours || {})[sizing], machines: l.machines, sizedFor})));
+  const lines = f.sites.flatMap(site => site.lines.map(l => ({s: site.s, item: l.item, slug: l.slug, rid: l.rid, fact: sbLineFact(l),
+    hoursNow: l.hoursNow, thinDay: l.thinDay || null, need: (l.needHours || {})[sizing], machines: l.machines, sizedFor})));
   const rows = buildOrderChecklist(importRows, looseRows, allSites,
     (D.supply.shops || []).map(r => ({...r, fact: szFact(r.s, r.slug), margin})),
     (D.supply.imports || []).map(r => ({...r, fact: szFact(r.s, r.slug)})), D.businesses, depotTopups, wholesaleRows, lines);
@@ -19014,10 +19063,11 @@ function sbGauge(pct, cls){
 }
 /* A factory's day: a cell an hour. Solid while staffed and needed, hatched
    where staffed beyond the need, outlined red where needed and not staffed. */
-function sbDayStrip(now, need, tip){
+function sbDayStrip(now, need, tip, at = 0){
   const a = Math.max(0, Math.min(24, Number.isFinite(now) ? now : 0));
   const b = Math.max(0, Math.min(24, Number.isFinite(need) ? need : a));
-  const cells = [...Array(24).keys()].map(k => k < Math.min(a, b) ? `<i class="on"></i>`
+  /* `at`: the hour the run starts, so a run from 06:00 is drawn from 06:00. */
+  const cells = [...Array(24).keys()].map(h => (h - at + 24) % 24).map(k => k < Math.min(a, b) ? `<i class="on"></i>`
     : k < a ? `<i class="slack"></i>` : k < b ? `<i class="miss"></i>` : "<i></i>").join("");
   return `<span class="sb-day"${tip ? ` data-tip="${attr(tip)}"` : ""}>${cells}</span>`;
 }
@@ -19145,6 +19195,14 @@ function sbShown(tab){
   if(sbArrive && sbArrive.tab !== tab) sbArrive = null;
   sbPlaceFlow();
 }
+/* A tab section is replaced whole: the one svg#flow is taken home first, so
+   the redraw never throws it away with the old markup (sbPlaceFlow() puts it
+   back where it belongs). */
+function sbFill(sec, html){
+  const box = $("sbFlowBox"), home = $("sbFlowHome");
+  if(box && home && sec.contains(box)) home.appendChild(box);
+  sec.innerHTML = html;
+}
 /* What a tab section holds: its verdict, the diagram's place, the list. */
 function sbSection(tab, head, list){
   const diagram = sbViewMode() === "diagram";
@@ -19167,6 +19225,9 @@ function sbAfterDraw(tab, rows, kept){
    crumb back. */
 function sbLand(tab, s, slug, crumb){
   sbArrive = {tab, s: s ?? null, slug: slug ?? null, crumb: crumb || ""};
+  /* A row lit under the diagram would stay out of sight: landing on one
+     brings the list back. */
+  if(s !== null && s !== undefined && sbViewMode() === "diagram"){ sbViewOn = "list"; remember(SB_VIEW_KEY, "list"); }
   /* An earlier landing's light goes out, on whichever tab it was. */
   $$("#pageSupply [data-sb-at]").forEach(el => { el.removeAttribute("data-sb-at"); el.classList.remove("sb-arrived", "lit"); });
   $$("#pageSupply .sb-crumb").forEach(el => el.remove());
@@ -19199,6 +19260,7 @@ function bindSupply(){
     if(b) b.setAttribute("aria-expanded", String(open));
     $$(`#pageSupply tr[data-kid="${CSS.escape(gid)}"]`).forEach(k => k.classList.toggle("sb-open", open));
   });
+  on("click", "#pageSupply [data-sb-lines]", (a, e) => { e.preventDefault(); ssOpenSite(a.dataset.sbLines, "#sp-lines"); });
   on("click", "#pageSupply [data-sb-crumb]", (b, e) => { e.preventDefault(); const tab = sbArrive ? sbArrive.tab : sub.supply; sbArrive = null; drawSupplyTab(tab); wireAll(); });
   on("click", "#pageSupply [data-sb-mode]", (a, e) => { e.preventDefault(); sbWhich = a.dataset.sbMode; drawSupplyTab(sub.supply); wireAll(); });
   document.addEventListener("toggle", e => {
@@ -19294,7 +19356,7 @@ function drawShopsTab(){
         edge.length === 1 ? "one" : edge.length} closest to the edge:</div>${sbTable("shops", SB_SHOP_COLS, edge, row)}` : "";
   const more = !all && shelves.length > kept.length
     ? `<p class="sb-more"><span>${plural(shelves.length - kept.length, "more shelf is", "more shelves are")} fine</span><a class="link" href="#" data-sb-mode="all">Everything</a></p>` : "";
-  sec.innerHTML = sbSection("shops", sbVerdict("shops", verdict, calm), table + more + sbOthers(d, "shops", claimed));
+  sbFill(sec, sbSection("shops", sbVerdict("shops", verdict, calm), table + more + sbOthers(d, "shops", claimed)));
   if(sbAfterDraw("shops", shelves, kept)) return;
   sbWire(sec, [["shops", SB_SHOP_COLS]], "shops");
 }
@@ -19520,7 +19582,7 @@ function drawWarehousesTab(){
   const more = !all && every.length > kept.length
     ? `<p class="sb-more"><span>${plural(every.length - kept.length, "more line is", "more lines are")} fine</span><a class="link" href="#" data-sb-mode="all">Everything</a></p>` : "";
   const head = sbVerdict("warehouses", verdict, calm) + sbSizingRow("sbSizingW") + ctx.applyHere(ctx.toGame.length, null);
-  sec.innerHTML = sbSection("warehouses", head, blocks.join("") + more + sbOthers(d, "warehouses", claimed));
+  sbFill(sec, sbSection("warehouses", head, blocks.join("") + more + sbOthers(d, "warehouses", claimed)));
   if(sbAfterDraw("warehouses", every, kept)) return;
   szSwitch("sbSizingW");
   sbWire(sec, [["warehouses", SB_WH_COLS]], "warehouses");
@@ -19560,10 +19622,11 @@ function sbLineRow(d, r, site){
   const set = chk.find(c => c.kind === "Factory run hours");
   const sized = sizing === "dem" ? (r.demBasis === "none" ? "nothing downstream is drawn, so Demand sizes it round the clock too" : "for what the shops use, plus the chain margin") : "sized 24/7";
   const hours = now === null ? "—" : `<span class="sb-hrs">${sbDayStrip(now, Number.isFinite(need) ? need : now,
-      `Rostered ${now} h a day${Number.isFinite(need) ? `; needs ${need} h ${sized}` : ""}`)}<span class="n">${set
+      `Rostered ${now} h a day${r.thinDay ? ` on average; ${r.thinDay.day} has ${r.thinDay.hours} h` : ""}${Number.isFinite(need) ? `; needs ${need} h ${sized}` : ""}`)}<span class="n">${set
       ? sbChg(now, set.proposed, "h")
       : `<b>${now} h</b>${Number.isFinite(need) && need !== now ? ` · needs ${need}` : ""}`}</span></span>`;
-  const reason = !f ? "" : f.st === "short" && f.why === "hours" ? `rostered ${now} of the ${need} hours a day it needs, ${sized}`
+  const thin = r.thinDay ? ` (${r.thinDay.day} ${r.thinDay.hours} h)` : "";
+  const reason = !f ? "" : f.st === "short" && f.why === "hours" ? `rostered ${now}${thin} of the ${need} hours a day it needs, ${sized}`
     : f.st === "covered" && Number.isFinite(f.lower) ? `needs ${f.lower} of its ${now} hours: fewer would do`
     : f.st === "covered" && Number.isFinite(need) ? (sizing === "cap" ? "runs 24/7, as sized" : `runs the ${need} hours a day it needs`)
     : spEsc(szTip(f));
@@ -19579,7 +19642,9 @@ function sbLineRow(d, r, site){
     <td class="l">${hours}</td>
     <td>${(r.makes ?? 0).toLocaleString()}${r.missing && r.missing.length ? `<span class="sub">stopped: no ${r.missing.map(spEsc).join(", ")}</span>`
       : r.fullWeek && r.hoursWeek < r.fullWeek ? `<span class="sub">${(r.atRoster ?? 0).toLocaleString()} at this roster</span>` : ""}</td>
-    <td>${(r.ships ?? 0).toLocaleString()}${r.piling ? ` <span class="chip warn">piling up</span>` : ""}</td>
+    <td>${(r.ships ?? 0).toLocaleString()}${r.piling ? ` <span class="chip warn">piling up</span>` : ""}${r.toCity > 0
+      ? `<span class="sub" data-tip="What the plans from this factory top your own sites up to each morning">top-up out ${r.toCity.toLocaleString()}</span>` : ""}${r.toPier > 0
+      ? `<span class="sub" data-tip="What the plans from this factory send to a pier for export">+${r.toPier.toLocaleString()} export</span>` : ""}</td>
     <td>${(r.stock ?? 0).toLocaleString()}${Number.isFinite(r.limit) ? `<span class="sub">of ${r.limit.toLocaleString()}</span>` : ""}</td>
     <td class="l st">${f ? sbStatus(f, reason, tip) : "—"}</td></tr>`;
 }
@@ -19615,7 +19680,7 @@ function drawFactoriesTab(){
     const s = site.s, b = D.businesses[s];
     const lines = site.lines.map(l => {
       const r = {...l, s, fact: sbLineFact(l)};
-      r.chk = sbChk(d, claimed, s, l.item, SB_LINE_KINDS);
+      r.chk = sbChk(d, claimed, s, l.item, SB_LINE_KINDS, l.rid);
       r.keep = sbWorth(r.fact, r.chk);
       return r;
     }).concat(site.unnamed.map(u => ({...u, s, unnamed: true, slug: null, fact: null, chk: [], keep: true})));
@@ -19674,16 +19739,23 @@ function drawFactoriesTab(){
     inN.tight ? `${inN.tight} sit${inN.tight === 1 ? "s" : ""} inside the margin` : "",
     inN.stalled ? `${plural(inN.stalled, "input is", "inputs are")} stalled` : "",
     unnamed ? `${plural(unnamed, "machine")} without usable recipe details` : ""].filter(Boolean);
+  /* Fewer hours or fewer workers would do: said plainly, never a problem. */
+  const fewer = everyLine.filter(r => r.fact && Number.isFinite(r.fact.lower)).length;
+  const couldGo = -(((D.factoryStaffing || {})[sizing] || []).reduce((t, r) => t + ((r.delta || {}).workers || 0), 0));
+  const slack = fewer || couldGo > 0 ? `${hoursShort ? "" : "Current rosters cover the needed hours; "}${[
+      fewer ? `${plural(fewer, "line")} could run fewer hours` : "",
+      couldGo > 0 ? `${plural(couldGo, "factory worker")} could go` : ""].filter(Boolean).join(" and ")} (Staffing for factory lines below)` : "";
   const verdict = !f.sites.length ? (D.meta.locale === false
       ? "Factory lines need the game's recipe pages: load en.json (More menu) to see them." : "No factory is set up.")
-    : `${problems.length ? `<b>${problems.join("; ")}</b>` : `Every line runs the hours it needs and every factory input covers what the lines need`}${
+    : `${problems.length ? `<b>${problems.join("; ")}</b>` : slack ? "" : `Every line runs the hours it needs and every factory input covers what the lines need`}${
+        slack ? `${problems.length ? ". " : ""}${slack.replace(/^./, c => c.toUpperCase())}` : ""}${
         young ? `. ${plural(young, "row is", "rows are")} too new to judge` : ""}.`;
   const calm = !every.some(r => r.fact && ["critical", "warn"].includes(r.fact.lvl)) && !unnamed;
   const names = [...ramping].map(x => D.businesses[x] ? spEsc(shortName(D.businesses[x])) : null).filter(Boolean);
   const ramp = sizing === "dem" && names.length ? `<div class="sb-ramp"><span class="ic">${spIcon("alert")}</span><span><b>${plural(names.length, "shop")} downstream ${
     names.length === 1 ? "has" : "have"} traded under a week</b>: ${names.join(", ")}. Their use is a straight line through the days they have traded, so the figures below <b>may still be ramping</b>.</span></div>` : "";
   const head = sbVerdict("factories", verdict, calm) + sbSizingRow("sbSizingF") + ramp;
-  sec.innerHTML = sbSection("factories", head, blocks.join("") + sbOthers(d, "factories", claimed) + drawFactoryStaffing());
+  sbFill(sec, sbSection("factories", head, blocks.join("") + sbOthers(d, "factories", claimed) + drawFactoryStaffing()));
   if(sbAfterDraw("factories", every.filter(r => r.slug), keptAll)) return;
   szSwitch("sbSizingF");
   sbWire(sec, [["factory-lines", SB_LINE_COLS], ["factory-inputs", SB_INPUT_COLS], ["warehouses", SB_WH_COLS]], "factories");
@@ -19702,7 +19774,8 @@ function drawFactoryStaffing(){
   const facs = rows.map(r => {
     const b = D.businesses[r.s] || D.businesses.find(x => x.key === r.key);
     const name = b ? `<span class="nm">${hoodHtml(b)}${siteLink(b)}</span>` : spEsc(r.name || "");
-    const go = b ? `<a class="link go ss-sl" href="${attr(siteHref(b.key))}">Staffing on its page ›</a>` : "";
+    /* The factory's own page has its lines and inputs, not a staffing block. */
+    const go = b ? `<a class="link go" href="${attr(siteHref(b.key))}" data-sb-lines="${attr(b.key)}">Open factory page ›</a>` : "";
     if(r.failed) return `<div class="sb-sfac"><div class="sb-sfh"><span>${name}</span><span class="sb-hc">No plan could be built for this factory's workers.</span><span></span>${go}</div></div>`;
     const hc = r.headcount || {}, dl = r.delta || {};
     workers += dl.workers || 0; perDay += dl.perDay || 0;
@@ -19712,15 +19785,17 @@ function drawFactoryStaffing(){
     const small = hc.spare ? `<small>${hc.spare} could go: the week needs ${week}</small>`
       : hc.hire ? `<small>hire ${hc.hire}: the week needs ${week}</small>`
       : hc.have ? `<small>the week needs all ${hc.have}</small>` : "";
+    const unnamedNote = r.unnamedMachines ? `<small>includes ${plural(r.unnamedMachines, "machine")} whose recipe isn't named yet</small>` : "";
     const wage = dl.perDay ? `<span class="sb-wage ${dl.perDay > 0 ? "up" : "dn"}">${dl.perDay > 0 ? "+" : "−"}${fmt(Math.abs(dl.perDay))}<small>a day in wages</small></span>` : "<span></span>";
     const lines = (r.lines || []).map(l => {
       const chips = (l.cuts || []).map(([a, z]) => `<span class="sb-shift">${h(a)}–${h(z)}<small>${z - a} h</small></span>`).join("");
-      return `<div class="sb-sln"><span class="nm">${spEsc(l.item)}</span><span class="hrs">${sbDayStrip(l.hoursNow, l.hours, `${l.hoursNow ?? 0} h rostered, ${l.hours} h needed`)}${
+      return `<div class="sb-sln"><span class="nm">${spEsc(l.item)}</span><span class="hrs">${sbDayStrip(l.hoursNow, l.hours,
+        `${l.hoursNow ?? 0} h rostered, ${l.hours} h needed, from ${h(l.from || 0)}:00`, l.from || 0)}${
         Number.isFinite(l.hoursNow) && l.hoursNow !== l.hours ? sbChg(l.hoursNow, l.hours, "h") : `<b>${l.hours} h</b>`}</span><span class="shifts">${chips}${
         l.machines > 1 ? `<small class="sb-per">× ${l.machines} machines</small>` : ""}</span></div>`;
     }).join("");
     return `<div class="sb-sfac"><div class="sb-sfh"><span>${name}</span><span class="sb-hc">${
-      (hc.needed ?? 0).toLocaleString()} machine-hours a week; you have <b>${hc.have ?? 0}</b> factory workers${chip}${small}</span>${wage}${go}</div>${lines}</div>`;
+      (hc.needed ?? 0).toLocaleString()} machine-hours a week; you have <b>${hc.have ?? 0}</b> factory workers${chip}${small}${unnamedNote}</span>${wage}${go}</div>${lines}</div>`;
   });
   const lead = sizing === "dem" ? "Sized for demand" : "Sized 24/7";
   const tot = workers || perDay ? `<div class="sb-stot"><span>${lead}:</span>${workers ? `<b class="${workers > 0 ? "up" : "dn"}">${workers > 0 ? "+" : "−"}${plural(Math.abs(workers), "factory worker")}</b>` : ""}${
@@ -21988,6 +22063,12 @@ function ssOpenSite(key, into = "", o = {}){
   if(into) xlArrive(into, o.hit || "");
   return true;
 }
+/* The tab whose daily top-ups have the most still to type, else Shops. */
+function ssTopupTab(){
+  const d = hasData() && D.supply ? sbData() : null;
+  const left = t => d ? d.byTab[t].filter(r => /daily top-ups$/.test(r.kind) && !d.marks.has(r.key)).length : 0;
+  return ["shops", "warehouses", "factories"].reduce((a, t) => left(t) > left(a) ? t : a, "shops");
+}
 /* One of the Supply tabs, from the top. */
 function ssSupply(tab){
   sbArrive = null;
@@ -22355,8 +22436,10 @@ const SS_VIEWS = [
    go: ssChecklist},
   {id: "imports", t: "Weekly imports", p: "Supply › Warehouses", ic: "truck", syn: ["import", "importer", "contracts", "weekly order", "what should i import", "orders"],
    go: () => ssSupply("warehouses")},
-  {id: "topups", t: "Daily top-ups", p: "Supply › Shops and Factories", ic: "route", syn: ["top-up", "distribution", "logistics", "delivery plan"],
-   go: () => ssSupply("factories")},
+  /* Top-ups are on every tab (a shelf's, a depot's, a factory input's): the
+     tab with the most still to type, else Shops. */
+  {id: "topups", t: "Daily top-ups", p: "Supply › Shops, Warehouses and Factories", ic: "route", syn: ["top-up", "distribution", "logistics", "delivery plan"],
+   go: () => ssSupply(ssTopupTab())},
   {id: "shops", t: "Shops", p: "Supply › Shops · every shelf against tomorrow's round", ic: "shelves", syn: ["shelves", "run out", "stock out", "empty shelf", "before the drop"],
    go: () => ssSupply("shops")},
   {id: "warehouses", t: "Warehouses", p: "Supply › Warehouses · every depot", ic: "crate", syn: ["warehouse", "depot", "cover", "second-tier", "before the import"],
