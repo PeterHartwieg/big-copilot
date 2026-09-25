@@ -329,6 +329,7 @@ test('a language switch tells the board, which redraws', async () => {
   b.run('ttSetTable("en", null)');
   assert.deepEqual(seen, ['de', 'en']);
   // The board registers its listener with a guard, so a page without i18n.js
-  // still runs: numbers follow the language, then the board redraws.
-  assert.match(BOARD, /if\(typeof ttOnChange === "function"\) ttOnChange\(\(\) => \{ NUM_LOCALE = ttNumLocale\(\); gnRedraw\(\); \}\);/);
+  // still runs: numbers follow the language, the footer's picker words its
+  // choices in it, then the board redraws.
+  assert.match(BOARD, /if\(typeof ttOnChange === "function"\) ttOnChange\(\(\) => \{ NUM_LOCALE = ttNumLocale\(\); gnPaint\(\); gnRedraw\(\); \}\);/);
 });

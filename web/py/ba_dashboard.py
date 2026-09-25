@@ -144,25 +144,42 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
     # On the site the source strip under the masthead already names the save, so
     # only the CLI's page, which has no strip, repeats it down here.
     file_slot = "" if landing or site else '<span class="sf-meta" id="footFile"></span>'
-    # The game's names in another language: the tables sit beside the site's
-    # page (web/names/), so only the site offers the choice; a local page gets
+    # The footer's "Language": Big Copilot's own words and the game's names.
+    # The name tables sit beside the site's page (web/names/), as do the UI
+    # tables (web/i18n/), so only the site offers the choice; a local page gets
     # its language from --lang instead. The board script wires every copy.
     # The control is a button and a listbox the board script hangs off <body>
     # (gnOpen()), drawn like the Theme switch beside it. The choices are the
-    # hidden list inside it, one per entry of GAME_NAME_LANGS: the script reads
-    # them from there, so a choice is added here and nowhere else.
+    # hidden list inside it, one per {ui, names} pair, data-value "ui/names":
+    # English; each language with a UI table (ui_languages()) twice, whole and
+    # names only; and every other game language names only. Each holds its
+    # autonym, and the script words a names-only choice in the UI's language
+    # (gnLabel()). The script reads the list from here, so a choice is added
+    # here and nowhere else.
     names = ""
     if site:
         head = f"gnHead{'L' if landing else ''}"
-        options = "".join(f'<li data-value="{code}" lang="{code}" translate="no">{html_escape(word)}</li>'
-                          for code, word in GAME_NAME_LANGS.items())
+        full = [c for c in ui_languages() if c != "en" and c in GAME_NAME_LANGS]
+
+        def choice(ui: str, code: str) -> str:
+            only = " data-names-only" if ui == "en" and code != "en" else ""
+            # A names-only choice of a language with a UI table is worded in
+            # that language ("Deutsch – nur Spielnamen"), from its own table;
+            # the script words every other one in the UI's language.
+            own = ui_text(code, "foot.names.only") if only and code in full else None
+            if own and "{lang}" in own:
+                only += f' data-only="{html_escape(own)}"'
+            return (f'<li data-value="{ui}/{code}" data-ui="{ui}" data-names="{code}"{only} lang="{code}" '
+                    f'translate="no">{html_escape(GAME_NAME_LANGS[code])}</li>')
+        options = "".join([choice("en", "en")] + [choice(c, c) + choice("en", c) for c in full]
+                          + [choice("en", c) for c in GAME_NAME_LANGS if c != "en" and c not in full])
         code, word = next(iter(GAME_NAME_LANGS.items()))
-        names = (f'<div class="sf-col sf-gn">\n        <h2 class="sf-head" id="{head}" data-tt="foot.names.head">Game names</h2>\n'
-                 f'        <div class="gn-pick" data-gn-pick data-value="{code}">'
+        names = (f'<div class="sf-col sf-gn">\n        <h2 class="sf-head" id="{head}" data-tt="foot.names.head">Language</h2>\n'
+                 f'        <div class="gn-pick" data-gn-pick data-value="{code}/{code}">'
                  f'<button type="button" class="gn-btn" id="{head}Btn" aria-haspopup="listbox" aria-expanded="false" '
-                 f'aria-labelledby="{head} {head}Btn" data-tt-title="foot.names.tip" title="The game&#39;s own '
-                 'names for items, business types, neighbourhoods, stations and skills, in the language you '
-                 'play in. Everything else on the page stays English.">'
+                 f'aria-labelledby="{head} {head}Btn" data-tt-title="foot.names.tip" title="Big Copilot&#39;s own '
+                 'words where they are translated, and the game&#39;s names for items, business types, '
+                 'neighbourhoods, stations and skills. The other languages change only the game&#39;s names.">'
                  '<span class="gn-glyph" aria-hidden="true"><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16">'
                  '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.3 3.6 5.1 3.6 8.5s-1.2 6.2-3.6 8.5'
                  'c-2.4-2.3-3.6-5.1-3.6-8.5s1.2-6.2 3.6-8.5z"/></svg></span>'
@@ -452,12 +469,13 @@ def _game_names(names) -> dict:
 
 
 # The languages the game ships besides its English, by the code of their locale
-# file, each named in its own words for the "Game names" picker, English first.
-# The page swaps the game's own names (items, business types, neighbourhoods,
-# stations, skills, job demands) for one of these; everything the board writes
-# itself stays English. build_web.py writes web/names/<code>.json for every
-# language here but English, and stops when the game's locale.json lists a
-# language this table has no autonym for, or one falls under NAME_COVERAGE.
+# file, each named in its own words for the footer's "Language" picker, English
+# first. The page swaps the game's own names (items, business types,
+# neighbourhoods, stations, skills, job demands) for one of these; the board's
+# own words follow only where a UI table exists (ui_languages()).
+# build_web.py writes web/names/<code>.json for every language here but English,
+# and stops when the game's locale.json lists a language this table has no
+# autonym for, or one falls under NAME_COVERAGE.
 GAME_NAME_LANGS = {
     "en": "English", "cs": "Čeština", "da": "Dansk", "de": "Deutsch", "es": "Español",
     "fr": "Français", "it": "Italiano", "lt": "Lietuvių", "hu": "Magyar",
@@ -468,6 +486,36 @@ GAME_NAME_LANGS = {
 # A language whose file names fewer of the English name keys than this is left
 # out rather than shown half in English (the game's ar.json names none).
 NAME_COVERAGE = 0.5
+
+
+def ui_languages(asset_root: str | None = None) -> list[str]:
+    """The languages Big Copilot's own text comes in: English, then every
+    language with a UI table the site ships (web/i18n/<code>.json, which
+    `python build_web.py` writes from i18n/), in GAME_NAME_LANGS order and then
+    by code. A new table makes its language "full UI" in the footer's picker
+    and in web/i18n.js with no change to code. Read when called, never at
+    import: the Pyodide worker has no web/i18n/ beside this file."""
+    folder = os.path.join(asset_root or os.path.join(os.path.dirname(os.path.abspath(__file__)), "web"), "i18n")
+    try:
+        found = {n[:-5] for n in os.listdir(folder) if n.endswith(".json")} - {"en"}
+    except OSError:
+        found = set()
+    order = list(GAME_NAME_LANGS)
+    return ["en"] + sorted(found, key=lambda c: (order.index(c) if c in order else len(order), c))
+
+
+def ui_text(lang: str, key: str, asset_root: str | None = None) -> str | None:
+    """One string of a UI table the site ships (web/i18n/<lang>.json), or None.
+    Read when called, as ui_languages() is."""
+    path = os.path.join(asset_root or os.path.join(os.path.dirname(os.path.abspath(__file__)), "web"),
+                        "i18n", f"{lang}.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            table = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    word = table.get(key) if isinstance(table, dict) else None
+    return word if isinstance(word, str) else None
 
 
 def _name_keys(english: dict[str, str]) -> list[str]:
@@ -12149,7 +12197,8 @@ def render(
     # placeholder's .replace() runs over the table, and a marker inside the
     # payload is left alone.
     with open(os.path.join(asset_root, "i18n.js"), encoding="utf-8") as fh:
-        i18n_script = fh.read().replace("/*__UI_TABLE__*/null", ui_json)
+        i18n_script = (fh.read().replace("/*__UI_TABLE__*/null", ui_json)
+                       .replace('/*__UI_LANGS__*/["en", "de"]', json.dumps(ui_languages(asset_root))))
     map_payload = ""
     if data is not None and not live and not map_external:
         import base64
@@ -12371,6 +12420,18 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
     overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
   .nav a.on > span:not(.feature-new){position:static;width:auto;height:auto;margin:0;clip-path:none}
 }
+/* Longer words than English's (German's) can push the clock past the row's
+   end at desktop widths: ssFitMast() closes the row's gaps, then hides the
+   nav's words but the current page's, as the phone rule above does. */
+.mast.mast-snug{gap:20px}
+.mast.mast-snug .nav a{padding:10px 8px}
+.mast.mast-icons .nav a > span:not(.feature-new){position:absolute;width:1px;height:1px;margin:-1px;padding:0;
+  overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+.mast.mast-icons .nav a.on > span:not(.feature-new){position:static;width:auto;height:auto;margin:0;clip-path:none}
+/* German runs about a third longer than English, and its compounds do not
+   wrap. Under a German page (<html lang> follows the UI language) a word that
+   meets a narrow box breaks at its syllables, and anywhere as the last resort. */
+:lang(de) :is(.chip, .kpi .lab, .sstat .lab, .wk-tiles .lab, th, .seg a){-webkit-hyphens:auto;hyphens:auto;overflow-wrap:anywhere}
 /* Narrower than this the six icons and the wordmark take the whole rule, and
    the clock would be squeezed into two lines of nothing, so it steps out as the
    canvas has it. The sphere is absolutely positioned and takes no room, so it
@@ -14376,7 +14437,7 @@ tr.ss-ring > td{animation:ss-flash 2.4s ease-out}
 /* Drawn as the Theme switch is: the same pill, border, surface and inner 3px
    inset, with the globe in a round well the size of a theme button. */
 .gn-pick{display:inline-flex}
-.gn-btn{display:inline-flex;align-items:center;gap:10px;box-sizing:border-box;height:42px;max-width:240px;padding:3px 14px 3px 3px;
+.gn-btn{display:inline-flex;align-items:center;gap:10px;box-sizing:border-box;height:42px;max-width:min(300px,100%);padding:3px 14px 3px 3px;
   border:1px solid var(--rule);border-radius:999px;background:var(--surface);color:var(--ink);cursor:pointer;
   font:500 13px/1 Archivo,"Helvetica Neue",Arial,sans-serif;transition:border-color .15s ease}
 .gn-btn:hover,.gn-btn[aria-expanded="true"]{border-color:var(--accent)}
@@ -15058,7 +15119,7 @@ const hoodName = key => gameName(key) || String(key || "").replace(/^ba:neighbor
 /* --- game names in the player's language -------------------------------
    Python writes every name in English, and the page lays one language's table
    (web/names/<lang>.json, keyed like `names`) over the payload once, when it
-   arrives and when the footer's "Game names" changes: D = localiseNames(the
+   arrives and when the footer's "Language" changes: D = localiseNames(the
    English payload). Every draw then reads D as before, and a join inside the
    payload still holds because both of its sides were swapped alike. The
    English payload rides along on D, unenumerated; dataEn() gives it back, for
@@ -15069,8 +15130,11 @@ const hoodName = key => gameName(key) || String(key || "").replace(/^ba:neighbor
    gnString() on the way, which is where a name Python wrote inside a sentence,
    as a token (U+27E6 key|English U+27E7), becomes the name in the language on
    screen. */
-const GN_KEY = "ba_dash_names";
+/* The two one-time offers: the game's names in the browser's language, and
+   Big Copilot's own words in it where a UI table exists. The choice itself is
+   kept by web/i18n.js's ttRememberLang() as {ui, names}. */
 const GN_OFFER_KEY = "ba_dash_names_offer";
+const GN_UI_OFFER_KEY = "ba_dash_lang_offer";
 /* A local page built with --lang carries its table: {lang, names}. */
 const GN_EMBED = /*__NAMES__*/null;
 const GN_SRC = typeof Symbol === "function" ? Symbol("english payload") : "__gnEnglish";
@@ -15207,22 +15271,30 @@ function gnCompare(a, b){
 }
 /* The languages this page can show: the picker's options, English first. */
 const gnPickers = () => [...document.querySelectorAll("[data-gn-pick]")];
-/* A picker's choices: the hidden list footer_html() writes inside it. Its
-   value is its data-value. */
+/* A picker's choices: the hidden list footer_html() writes inside it, one per
+   {ui, names} pair. Its value is its data-value, "ui/names". */
 const gnOpts = p => [...p.querySelectorAll(".gn-opts [data-value]")];
+const gnChoice = o => ({value: o.dataset.value, ui: o.dataset.ui || "en", names: o.dataset.names || o.dataset.value,
+  word: o.textContent, only: o.hasAttribute("data-names-only"), own: o.dataset.only || ""});
 /* The open list and the picker it belongs to; gnOpen() below. */
 let gnPop = null, gnPopFor = null, gnAt = -1, gnTyped = "", gnTypedAt = 0, gnSpace = false;
+/* The game-names languages, [code, autonym], each once, English first. */
 const gnLangs = () => {
   const p = gnPickers()[0];
-  return p ? gnOpts(p).map(o => [o.dataset.value, o.textContent]) : GN_EMBED ? [["en", "English"], [GN_EMBED.lang, GN_EMBED.lang]] : [["en", "English"]];
+  if(!p) return GN_EMBED ? [["en", "English"], [GN_EMBED.lang, GN_EMBED.lang]] : [["en", "English"]];
+  const seen = new Map();
+  gnOpts(p).map(gnChoice).forEach(c => { if(!seen.has(c.names)) seen.set(c.names, c.word); });
+  return [...seen];
 };
 const gnKnown = lang => gnLangs().some(([code]) => code === lang);
-function gnStored(){
-  try{ return localStorage.getItem(GN_KEY) || ""; }catch(e){ return ""; }
-}
-function gnRemember(lang){
-  try{ localStorage.setItem(GN_KEY, lang); }catch(e){}
-}
+/* Whether the picker offers Big Copilot's own words in a language: a UI table
+   ships for it (ui_languages() in Python). */
+const gnHasUi = lang => lang !== "en" && gnPickers().slice(0, 1).some(p => gnOpts(p).some(o => o.dataset.ui === lang));
+/* The choice kept from an earlier visit, {ui, names}, or null (web/i18n.js). */
+const gnStored = () => typeof ttStoredLang === "function" ? ttStoredLang() : null;
+function gnRemember(ui, names){ if(typeof ttRememberLang === "function") ttRememberLang(ui, names); }
+/* The UI language on screen. */
+const gnUi = () => typeof ttLang === "string" ? ttLang : "en";
 /* A language's table: fetched once beside the page, with the build stamp so a
    deploy busts it. */
 function gnLoad(lang){
@@ -15234,25 +15306,38 @@ function gnLoad(lang){
   got.catch(() => gnTables.delete(lang));
   return got;
 }
-/* Every picker shows `lang`: the language on screen, or one just chosen while
-   its table loads. */
-function gnPaint(lang = gnLang){
+/* A choice as markup: its autonym, marked as the name it is, and for a
+   names-only choice the words around it, one sentence with the name as its
+   param. A language Big Copilot's own words come in says them itself
+   (data-only, from its own table: "Deutsch – nur Spielnamen"); any other is
+   worded in the UI's language ("Français – game names only"). */
+function gnLabel(c){
+  const word = `<span lang="${attr(c.names)}" translate="no">${spEsc(c.word)}</span>`;
+  if(!c.only) return word;
+  if(c.own) return `<span lang="${attr(c.names)}">${spEsc(c.own).replace("{lang}", word)}</span>`;
+  return spEsc(tt("foot.names.only", "{lang} – game names only", {lang: "\u0001"})).replace("\u0001", word);
+}
+/* Every picker shows `value` ("ui/names"): the languages on screen, or a
+   choice just made while its tables load. A pair the list does not hold (the
+   ?ui= switch over names picked apart) shows its names. */
+function gnPaint(value = `${gnUi()}/${gnLang}`){
+  const names = value.split("/")[1];
   gnPickers().forEach(p => {
-    p.dataset.value = lang;
-    const o = gnOpts(p).find(o => o.dataset.value === lang), cur = p.querySelector(".gn-cur");
+    const opts = gnOpts(p), cur = p.querySelector(".gn-cur");
+    const o = opts.find(o => o.dataset.value === value) || opts.find(o => o.dataset.names === names);
     if(!o || !cur) return;
-    cur.textContent = o.textContent;
-    cur.setAttribute("lang", o.getAttribute("lang") || lang);
-    /* An autonym is a name, left as it is; a choice worded in the UI's own
-       language would drop the mark. */
-    if(o.getAttribute("translate") === "no") cur.setAttribute("translate", "no"); else cur.removeAttribute("translate");
+    p.dataset.value = o.dataset.value;
+    cur.removeAttribute("lang");
+    cur.removeAttribute("translate");
+    cur.innerHTML = gnLabel(gnChoice(o));
   });
   if(gnPopFor) gnMark();
 }
 /* Switch the game names: the whole board is drawn again, as for another save,
-   from the English payload it already holds. A table that will not load leaves
-   the names as they were. */
-async function setGameNames(lang){
+   from the English payload it already holds, unless `redraw` is false because
+   a change of the UI language follows and draws it. A table that will not
+   load leaves the names as they were. */
+async function setGameNames(lang, redraw = true){
   if(!gnKnown(lang)) lang = "en";
   const seq = ++gnSeq;
   let table = null;
@@ -15261,9 +15346,19 @@ async function setGameNames(lang){
   }
   if(seq !== gnSeq) return false;
   gnLang = lang; gnTable = table && typeof table === "object" ? table : null;
-  gnPaint();
-  gnRedraw();
+  if(redraw){ gnPaint(); gnRedraw(); }
   return true;
+}
+/* Switch both: the names first, without a redraw, then the UI language, whose
+   change draws the board once with both. A UI table that will not load leaves
+   the words as they were and draws the names. */
+let gnLangSeq = 0;
+async function setLanguage(ui, names){
+  const seq = ++gnLangSeq;
+  if(!await setGameNames(names, false) || seq !== gnLangSeq) return false;
+  if(typeof setUiLang === "function" && await setUiLang(ui)) return true;
+  if(seq === gnLangSeq){ gnPaint(); gnRedraw(); }
+  return false;
 }
 function gnRedraw(){
   if(typeof hasData === "function" && hasData()){
@@ -15274,8 +15369,9 @@ function gnRedraw(){
   }
 }
 /* A change of the UI language (web/i18n.js): numbers follow it (English is
-   always en-US, German de-DE), and the board redraws the same way. */
-if(typeof ttOnChange === "function") ttOnChange(() => { NUM_LOCALE = ttNumLocale(); gnRedraw(); });
+   always en-US, German de-DE), the picker words its choices in it, and the
+   board redraws the same way. */
+if(typeof ttOnChange === "function") ttOnChange(() => { NUM_LOCALE = ttNumLocale(); gnPaint(); gnRedraw(); });
 /* The browser's languages, first to last, to the game's code: the first that
    is English or one the game has decides, so a reader who puts English first is
    never offered anything. */
@@ -15294,40 +15390,82 @@ function gnBrowserLang(list){
   }
   return "en";
 }
-function gnOfferDone(){
-  try{ return !!localStorage.getItem(GN_OFFER_KEY); }catch(e){ return false; }
+const gnNavLangs = () => navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language];
+function gnOfferDone(key = GN_OFFER_KEY){
+  try{ return !!localStorage.getItem(key); }catch(e){ return false; }
 }
 function gnOfferClose(el, answer){
-  try{ localStorage.setItem(GN_OFFER_KEY, answer); }catch(e){}
+  try{ localStorage.setItem(el.dataset.offerKey || GN_OFFER_KEY, answer); }catch(e){}
   el.remove();
 }
-/* Once, ever: a reader whose browser prefers a language the game has is asked
-   whether the game's names should follow it. Either answer is kept, and a
-   choice already made in the footer counts as one. */
-function gnOffer(){
-  if(!gnPickers().length || gnStored() || gnOfferDone() || document.querySelector(".gn-offer")) return null;
-  const lang = gnBrowserLang(navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language]);
-  if(!lang || lang === "en") return null;
-  const word = (gnLangs().find(([code]) => code === lang) || [])[1];
-  if(!word) return null;
+/* An offer's card, hung off <body>: the question (markup) and its two answers. */
+function gnOfferCard(key, label, question, yes, no, onYes){
   const el = document.createElement("div");
   el.className = "gn-offer";
+  el.dataset.offerKey = key;
   el.setAttribute("role", "dialog");
-  el.setAttribute("aria-label", "Game names");
-  el.innerHTML = `<p>Show game names in <span lang="${attr(lang)}">${spEsc(word)}</span>?</p>
-    <div class="gn-offer-acts"><button type="button" class="gn-yes">Yes</button><button type="button" class="gn-no">No thanks</button></div>`;
-  el.querySelector(".gn-yes").onclick = () => { gnOfferClose(el, "yes"); gnRemember(lang); setGameNames(lang); };
+  el.setAttribute("aria-label", label);
+  el.innerHTML = `<p>${question}</p>
+    <div class="gn-offer-acts"><button type="button" class="gn-yes"></button><button type="button" class="gn-no"></button></div>`;
+  el.querySelector(".gn-yes").textContent = yes;
+  el.querySelector(".gn-no").textContent = no;
+  el.querySelector(".gn-yes").onclick = () => { gnOfferClose(el, "yes"); onYes(); };
   el.querySelector(".gn-no").onclick = () => gnOfferClose(el, "no");
   document.body.appendChild(el);
   return el;
 }
-/* A language picked in the footer: kept, the offer answered, the names switched. */
-function gnChoose(lang){
-  gnRemember(lang);
-  const offer = document.querySelector(".gn-offer");
-  if(offer) gnOfferClose(offer, "picked");
-  gnPaint(lang);
-  return setGameNames(lang);
+/* The offer of Big Copilot's own words is put in the language it offers: the
+   reader it is for may not read the English around it. A language with a UI
+   table and no words here is asked in the UI's language. */
+const GN_UI_OFFER = {de: {ask: "Big Copilot auf Deutsch anzeigen?", yes: "Ja", no: "Nein danke"}};
+/* Once, ever: a reader whose browser prefers a language Big Copilot's own
+   words come in, or who kept that language's game names before, is asked
+   whether the whole page should follow it. Either answer is kept, and a
+   choice made in the footer counts as one. */
+function gnUiOffer(){
+  if(!gnPickers().length || gnOfferDone(GN_UI_OFFER_KEY) || document.querySelector(".gn-offer")) return null;
+  const kept = gnStored();
+  const lang = kept ? (kept.ui === "en" ? kept.names : null) : gnBrowserLang(gnNavLangs());
+  if(!lang || !gnHasUi(lang) || gnUi() === lang) return null;
+  const word = (gnLangs().find(([code]) => code === lang) || [])[1];
+  if(!word) return null;
+  const own = GN_UI_OFFER[lang], yes = () => gnChoose(`${lang}/${lang}`, false);
+  const name = `<span lang="${attr(lang)}" translate="no">${spEsc(word)}</span>`;
+  const el = own
+    ? gnOfferCard(GN_UI_OFFER_KEY, own.ask, spEsc(own.ask), own.yes, own.no, yes)
+    : gnOfferCard(GN_UI_OFFER_KEY, tt("foot.offer.label", "Language"),
+      spEsc(tt("foot.offer.ui", "Show Big Copilot in {lang}?", {lang: "\u0001"})).replace("\u0001", name),
+      tt("foot.offer.yes", "Yes"), tt("foot.offer.no", "No thanks"), yes);
+  if(own) el.setAttribute("lang", lang);
+  return el;
+}
+/* Once, ever: a reader whose browser prefers a language the game has, and
+   Big Copilot's own words do not come in, is asked whether the game's names
+   should follow it. Either answer is kept, and a choice already made in the
+   footer counts as one. */
+function gnOffer(){
+  if(!gnPickers().length || gnStored() || gnOfferDone() || document.querySelector(".gn-offer")) return null;
+  const lang = gnBrowserLang(gnNavLangs());
+  if(!lang || lang === "en" || gnHasUi(lang)) return null;
+  const word = (gnLangs().find(([code]) => code === lang) || [])[1];
+  if(!word) return null;
+  const name = `<span lang="${attr(lang)}" translate="no">${spEsc(word)}</span>`;
+  return gnOfferCard(GN_OFFER_KEY, tt("foot.offer.names.label", "Game names"),
+    spEsc(tt("foot.offer.names", "Show game names in {lang}?", {lang: "\u0001"})).replace("\u0001", name),
+    tt("foot.offer.yes", "Yes"), tt("foot.offer.no", "No thanks"), () => gnChoose(`en/${lang}`, false));
+}
+/* A choice ("ui/names"), from the footer or an offer: kept, the page
+   switched. One made in the footer answers both offers, so neither asks
+   again. */
+function gnChoose(value, picked = true){
+  const [ui, names] = String(value).split("/");
+  gnRemember(ui, names);
+  if(picked){
+    document.querySelectorAll(".gn-offer").forEach(el => gnOfferClose(el, "picked"));
+    try{ localStorage.setItem(GN_UI_OFFER_KEY, "picked"); }catch(e){}
+  }
+  gnPaint(value);
+  return setLanguage(ui, names);
 }
 function wireGameNames(){
   gnPickers().forEach(p => {
@@ -15391,9 +15529,9 @@ function gnClose(focus){
 function gnPick(i){
   const row = gnRows()[i], p = gnPopFor;
   if(!row || !p) return;
-  const lang = row.dataset.value, was = p.dataset.value;
+  const value = row.dataset.value, was = p.dataset.value;
   gnClose(true);
-  if(lang !== was) gnChoose(lang);
+  if(value !== was) gnChoose(value);
 }
 /* Type-ahead: letters typed within half a second of each other find the next
    row that starts with them; one letter pressed again steps through its rows. */
@@ -15482,9 +15620,7 @@ function gnOpen(p, key){
     row.id = `gnOpt${i}`;
     row.setAttribute("role", "option");
     row.dataset.value = o.dataset.value;
-    ["lang", "translate"].forEach(a => { if(o.getAttribute(a)) row.setAttribute(a, o.getAttribute(a)); });
-    row.innerHTML = `<span class="gn-word"></span>${GN_TICK}`;
-    row.firstChild.textContent = o.textContent;
+    row.innerHTML = `<span class="gn-word">${gnLabel(gnChoice(o))}</span>${GN_TICK}`;
     gnPop.appendChild(row);
   });
   gnPopFor = p; gnTyped = "";
@@ -25403,7 +25539,31 @@ const ssMastControl = () => [ssField, ssFieldBtn].find(el => el.isConnected && e
    and below that it steps down to its icon. Measured at full width each time,
    whatever the last measure decided. */
 const SS_BALL_ROOM = 40 + 100 + 12, SS_FIELD_MIN = 180, SS_ICON_GAP = 12;
+/* The whole row: the field fitted first. Where longer words than English's
+   (German's) still leave the clock too little room for its lines, unwrapped,
+   the row's gaps close up (.mast-snug), and then the nav keeps only the
+   current page's word, as on a phone (.mast-icons), each step taken only
+   while the clock is still short of room. */
 function ssFitMast(){
+  const mast = $("mast"), clock = $("clock");
+  if(!mast) return;
+  mast.classList.remove("mast-snug", "mast-icons");
+  ssFitField();
+  /* The clock at its own width, unshrunk, ends past the row. */
+  const past = () => {
+    if(!clock || !clock.getClientRects().length) return false;
+    clock.style.flexShrink = "0";
+    const over = clock.getBoundingClientRect().right > mast.getBoundingClientRect().right + 1;
+    clock.style.flexShrink = "";
+    return over;
+  };
+  for(const step of ["mast-snug", "mast-icons"]){
+    if(!past()) return;
+    mast.classList.add(step);
+    ssFitField();
+  }
+}
+function ssFitField(){
   const mast = $("mast"), nav = $("nav");
   if(!mast || !nav) return;
   mast.classList.remove("ss-tight");
@@ -28227,14 +28387,16 @@ function boot(){
    as the in-browser board does, boots on the first delivery. */
 if(D) takeData(D);
 if(D) boot();
-/* The footer's "Game names": a choice kept from an earlier visit is fetched
-   now, and a board that arrives first is drawn in English and again once the
-   table is in. A page built with --lang has its table already and no picker. */
+/* The footer's "Language": the game names kept from an earlier visit are
+   fetched now (web/i18n.js has already asked for the kept UI language), and a
+   board that arrives first is drawn in English and again once the table is
+   in. Else one of the two offers, the whole page's before the names'. A page
+   built with --lang has its tables already and no picker. */
 wireGameNames();
 if(!GN_EMBED && gnPickers().length){
   const want = gnStored();
-  if(want && want !== "en" && gnKnown(want)) setGameNames(want);
-  else if(!want) gnOffer();
+  if(want && want.names !== "en" && gnKnown(want.names)) setGameNames(want.names);
+  if(!gnUiOffer() && !want) gnOffer();
 }
 
 /* What a host page may ask of the board. The web front door offers the wiki

@@ -1,5 +1,11 @@
 [
   {
+    "pr": 0,
+    "date": "2026-09-25",
+    "title": "Big Copilot in German",
+    "summary": "The footer's Game names setting is now Language. Pick Deutsch and the whole board reads in German: its own words, the game's names and the numbers (1.234 and 3,5). Deutsch – nur Spielnamen keeps the page in English with the game's German names, and the game's other languages still change only the names. If your browser prefers German, or you already chose German game names, the board asks once whether to switch."
+  },
+  {
     "pr": 118,
     "date": "2026-09-25",
     "title": "Game names in the language you play in",

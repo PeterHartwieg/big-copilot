@@ -62,7 +62,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "web")
 
 # The game names in every other language the game ships, one table each under
-# web/names/, which the page fetches when the footer's "Game names" picks it.
+# web/names/, which the page fetches when the footer's "Language" picks it.
 # The list is ba_dashboard's GAME_NAME_LANGS, which also names each language in
 # the picker, so --check knows the files without the game; the build stops when
 # the installed game's locale.json no longer agrees with it.
@@ -457,7 +457,7 @@ details.help[open] summary::after{content:"\2013"}
     </div>
   </div>
 </template>
-""".replace("__ICON_FOLDER__", ICON_FOLDER).replace("__ICON_LINK__", ICON_LINK).replace("__ICON_MORE__", ICON_MORE).replace("__BUILD__", str(VERIFIED_BUILD)).replace("<!--__FOOTER__-->", footer_html(landing=True, site=True))
+""".replace("__ICON_FOLDER__", ICON_FOLDER).replace("__ICON_LINK__", ICON_LINK).replace("__ICON_MORE__", ICON_MORE).replace("__BUILD__", str(VERIFIED_BUILD))
 
 # Everything the page fetches, together with the build inputs that shape it:
 # build_web.py itself, and the wiki generator (code, authored wording and
@@ -587,7 +587,10 @@ def page_html(release: dict, root: str = HERE) -> str:
         "__RELEASE__", release_json(release).replace("<", "\\u003c")
     ).replace("__UPDATE_SCRIPT__", update_script)
     page = render(
-        None, live=True, banner=BANNER, before_script=scripts,
+        # The footer is written here, not with BANNER: it reads the UI tables
+        # (ui_languages(), the names-only labels), which main() ships first.
+        None, live=True, banner=BANNER.replace("<!--__FOOTER__-->", footer_html(landing=True, site=True)),
+        before_script=scripts,
         head=head, site=True,
     )
     # The board template loads its fonts from Google, which is fine for a local

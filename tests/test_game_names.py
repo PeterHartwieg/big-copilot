@@ -11,11 +11,12 @@ import re
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import build_web
 from ba_dashboard import (
     GAME_NAME_LANGS, NAME_COVERAGE, NAME_PREFIXES, cli_names, footer_html, name_coverage, name_table,
-    render,
+    render, ui_languages,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -139,18 +140,58 @@ class Picker(unittest.TestCase):
         self.assertNotIn('class="gn-pick"', footer_html())
         self.assertNotIn('class="gn-pick"', render(None))
         for landing in (False, True):
-            with self.subTest(landing=landing):
+            with self.subTest(landing=landing), mock.patch("ba_dashboard.ui_languages", return_value=["en", "de"]):
                 markup = footer_html(landing=landing, site=True)
-                self.assertIn(">Game names</h2>", markup)
-                self.assertIn('<div class="gn-pick" data-gn-pick data-value="en">', markup)
+                self.assertIn(">Language</h2>", markup)
+                self.assertIn('<div class="gn-pick" data-gn-pick data-value="en/en">', markup)
                 self.assertIn('aria-haspopup="listbox"', markup)
                 # The button shows the first choice until the script paints the kept one.
                 self.assertIn('<span class="gn-cur" lang="en" translate="no">English</span>', markup)
-                options = re.findall(r'<li data-value="([^"]+)" lang="\1" translate="no">([^<]+)</li>', markup)
-                self.assertEqual([c for c, _ in options], list(GAME_NAME_LANGS))
-                self.assertEqual(options[0], ("en", "English"))
-                self.assertIn(("de", "Deutsch"), options)
-                self.assertIn(("ja", "日本語"), options)
+                options = re.findall(r'<li data-value="([^"/]+)/([^"]+)" data-ui="\1" data-names="\2"( data-names-only)?'
+                                     r'(?: data-only="[^"]*")? lang="\2" translate="no">([^<]+)</li>', markup)
+                # English; German whole and names only; every other language names only.
+                self.assertEqual([(ui, names, bool(only)) for ui, names, only, _ in options[:3]],
+                                 [("en", "en", False), ("de", "de", False), ("en", "de", True)])
+                self.assertEqual([names for _, names, _, _ in options[3:]], [c for c in GAME_NAME_LANGS if c not in ("en", "de")])
+                self.assertTrue(all(ui == "en" and only for ui, _, only, _ in options[3:]))
+                self.assertEqual([word for *_, word in options[:3]], ["English", "Deutsch", "Deutsch"])
+                self.assertIn(("en", "ja", " data-names-only", "日本語"), options)
+
+    def test_german_names_only_is_worded_in_german_from_its_own_table(self):
+        with mock.patch("ba_dashboard.ui_languages", return_value=["en", "de"]), \
+                mock.patch("ba_dashboard.ui_text", return_value="{lang} – nur Spielnamen") as said:
+            markup = footer_html(site=True)
+        said.assert_called_with("de", "foot.names.only")
+        self.assertIn('data-value="en/de" data-ui="en" data-names="de" data-names-only data-only="{lang} – nur Spielnamen"', markup)
+        # Every other names-only choice is worded by the script, in the UI's language.
+        self.assertEqual(markup.count("data-only="), 1)
+        # A table without the words leaves the choice to the script too.
+        with mock.patch("ba_dashboard.ui_languages", return_value=["en", "de"]), \
+                mock.patch("ba_dashboard.ui_text", return_value=None):
+            self.assertNotIn("data-only=", footer_html(site=True))
+
+    def test_a_ui_table_makes_a_language_whole_with_no_change_to_code(self):
+        with mock.patch("ba_dashboard.ui_languages", return_value=["en"]):
+            markup = footer_html(site=True)
+        self.assertNotIn('data-value="de/de"', markup)
+        self.assertIn('data-value="en/de" data-ui="en" data-names="de" data-names-only', markup)
+        with mock.patch("ba_dashboard.ui_languages", return_value=["en", "de", "fr"]):
+            values = re.findall(r'data-value="([^"]+)"', footer_html(site=True))
+        self.assertEqual(values[:6], ["en/en", "en/en", "de/de", "en/de", "fr/fr", "en/fr"])
+        self.assertEqual(len(values), 1 + len(GAME_NAME_LANGS) + 2)
+
+    def test_the_ui_languages_are_the_tables_the_site_ships(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(ui_languages(tmp), ["en"])
+            os.makedirs(os.path.join(tmp, "i18n"))
+            for name in ("fr.json", "de.json", "xx.json", "notes.txt"):
+                Path(tmp, "i18n", name).write_text("{}", encoding="utf-8")
+            # The game's order first, then any other code.
+            self.assertEqual(ui_languages(tmp), ["en", "de", "fr", "xx"])
+        # render() writes the list into web/i18n.js's TT_LANGS.
+        page = render(None)
+        self.assertNotIn("__UI_LANGS__", page)
+        self.assertIn(f"const TT_LANGS = {json.dumps(ui_languages())};", page)
 
     def test_the_two_pickers_label_themselves_apart(self):
         # Both footers are in the page until the board replaces the landing.

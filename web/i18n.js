@@ -15,10 +15,19 @@
 
 /* A local page built with `--lang de` carries its table: {lang, table}. */
 const TT_EMBED = /*__UI_TABLE__*/null;
-/* The languages Big Copilot's own text comes in, English first. */
-const TT_LANGS = ["en", "de"];
-/* Numbers follow the UI language: English is always en-US. */
+/* The languages Big Copilot's own text comes in, English first: render()
+   writes the list of UI tables the site ships (ui_languages() in
+   ba_dashboard.py), so a new table needs no change here. */
+const TT_LANGS = /*__UI_LANGS__*/["en", "de"];
+/* Numbers follow the UI language: English is always en-US; a language not
+   listed here formats as its own code does. */
 const TT_NUM_LOCALES = {en: "en-US", de: "de-DE"};
+/* The reader's choice in the footer's Language picker, {ui, names}: kept by
+   the board script (gnChoose()), read here first so a kept UI language is
+   fetched before the page paints. */
+const TT_LANG_KEY = "ba_dash_lang";
+/* Where the picker kept a game-names language before it offered the UI's. */
+const TT_NAMES_KEY = "ba_dash_names";
 /* A placeholder: {name} or {name:spec}; single braces, as SUMMARIES writes them. */
 const TT_SPEC = /\{(\w+)(?::([^{}]+))?\}/g;
 /* A game name inside a sentence (tok() in Python), for a page without the
@@ -43,7 +52,25 @@ const ttOrig = typeof WeakMap === "function" ? new WeakMap() : new Map();
 const ttOwn = (o, k) => !!o && Object.prototype.hasOwnProperty.call(o, k);
 const ttKnown = lang => TT_LANGS.includes(lang);
 /* The number locale of the UI language on screen. */
-const ttNumLocale = () => TT_NUM_LOCALES[ttLang] || "en-US";
+const ttNumLocale = () => TT_NUM_LOCALES[ttLang] || (ttLang !== "en" && ttKnown(ttLang) ? ttLang : "en-US");
+/* The language choice kept from an earlier visit, {ui, names}, or null. A
+   game-names language kept before the picker had the UI's reads as names
+   only, so nobody's page turns to another language unasked. */
+function ttStoredLang(){
+  try{
+    const raw = localStorage.getItem(TT_LANG_KEY);
+    if(raw){
+      const v = JSON.parse(raw);
+      if(v && typeof v.ui === "string" && typeof v.names === "string") return {ui: v.ui, names: v.names};
+    }
+    const names = localStorage.getItem(TT_NAMES_KEY);
+    if(names) return {ui: "en", names};
+  }catch(e){}
+  return null;
+}
+function ttRememberLang(ui, names){
+  try{ localStorage.setItem(TT_LANG_KEY, JSON.stringify({ui, names})); }catch(e){}
+}
 /* Which plural form a count takes in a language. A tag Intl does not know
    reads as English. */
 function ttCategory(lang, n){
@@ -236,7 +263,7 @@ function ttWhenDom(fn){
 function setUiLocale(lang){
   const code = ttKnown(lang) ? lang : "en";
   try{ document.documentElement.lang = code; }catch(e){}
-  return TT_NUM_LOCALES[code] || "en-US";
+  return TT_NUM_LOCALES[code] || code;
 }
 /* Called with the language whenever the table changes; the board redraws. */
 function ttOnChange(fn){ if(typeof fn === "function") ttListeners.push(fn); }
@@ -272,9 +299,10 @@ async function setUiLang(lang){
   ttSetTable(lang, table);
   return true;
 }
-/* At load: a table the page carries, or the ?ui=de developer switch, which
-   is not remembered. While a table loads the page stays hidden, for at most
-   TT_WAIT_MS, so it does not paint in English first. */
+/* At load: a table the page carries; else the ?ui=de developer switch, which
+   is not remembered; else the UI language kept from the footer's picker.
+   While a table loads the page stays hidden, for at most TT_WAIT_MS, so it
+   does not paint in English first. */
 (function ttBoot(){
   if(typeof document === "undefined" || typeof location === "undefined") return;
   let want = null;
@@ -282,6 +310,10 @@ async function setUiLang(lang){
   if(TT_EMBED && TT_EMBED.lang && TT_EMBED.table && want !== "en"){
     ttSetTable(TT_EMBED.lang, TT_EMBED.table);
     return;
+  }
+  if(!want && !TT_EMBED){
+    const kept = ttStoredLang();
+    if(kept) want = kept.ui;
   }
   if(!want || want === "en" || !ttKnown(want)) return;
   const html = document.documentElement;

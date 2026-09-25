@@ -308,6 +308,35 @@ async function measure(page){
   }, [MEASURED, CONVERTED, UNTRANSLATED]);
 }
 
+/* German as a reader turns it on: Deutsch in the footer's Language picker,
+   with the pseudo text standing in for the German table (the translation is
+   drafted elsewhere). On the fixture board and on the day-47 snapshot (a
+   market, a plan, a masthead with a long clock), at a desktop and a phone
+   width, no page, view or site panel scrolls sideways at all. */
+test('Deutsch from the footer: no page scrolls sideways at 1280 and 375 px', async t => {
+  const day47 = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests', 'fixtures', 'payload_snapshot', 'data_day47_history.json'), 'utf8'));
+  const wide = [];
+  for(const width of [1280, 375]){
+    for(const [name, payload] of [['fixture', PAYLOAD], ['day 47', day47]]){
+      const {page, errors} = await site(t, {width, payload});
+      const btn = page.locator('.sitefoot:not(.sf-landing) .gn-btn');
+      await btn.scrollIntoViewIfNeeded();
+      await btn.click();
+      await page.locator('#gnPop [role="option"][data-value="de/de"]').click();
+      await page.evaluate(() => scrollTo(0, 0));
+      await page.waitForFunction(() => ttLang === 'de' && gnLang === 'de');
+      assert.equal(await page.evaluate(() => document.documentElement.lang), 'de');
+      for(const view of await views(page)){
+        await show(page, view);
+        const got = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
+        if(got[0] > got[1] + 1) wide.push(`${width}px ${name} ${view.filter(Boolean).join(' › ')}: ${got[0]} > ${got[1]}`);
+      }
+      assert.deepEqual(errors, [], `${width}px ${name}`);
+    }
+  }
+  assert.deepEqual(wide, []);
+});
+
 test('the pseudo-locale fits at every width, on every page, view and site panel', async t => {
   for(const width of WIDTHS){
     const en = await site(t, {width});
