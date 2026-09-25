@@ -405,6 +405,28 @@ test('the picker works from the keyboard alone', async t => {
   await page.keyboard.press('Tab');
   assert.equal((await popState(page)).open, false);
   assert.equal(await page.evaluate(() => gnLang), 'en');
+  // Space picks again once a type-ahead's half second is over.
+  await btn.focus();
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('d');
+  assert.equal((await popState(page)).active, 'da');
+  await page.waitForTimeout(600);
+  await page.keyboard.press('Space');
+  await page.waitForFunction(() => gnLang === 'da');
+  assert.equal((await popState(page)).open, false);
+  assert.deepEqual(errors, []);
+});
+
+test('a language whose table will not load leaves the picker on the one before', async t => {
+  const {page, errors} = await site(t);
+  await page.route('**/names/fr.json*', route => route.fulfill({status: 404, body: ''}));
+  await choose(page, 'fr');
+  await page.waitForFunction(() => !gnTables.has('fr'));
+  await page.waitForFunction(() => document.querySelector('.sf-landing [data-gn-pick]').dataset.value === 'en');
+  assert.equal(await page.evaluate(() => gnLang), 'en');
+  assert.deepEqual(await page.$$eval('[data-gn-pick]', els => els.map(e => e.dataset.value)), ['en', 'en']);
+  assert.deepEqual(await page.$$eval('[data-gn-pick] .gn-cur', els => els.map(e => [e.textContent, e.getAttribute('lang')])),
+    [['English', 'en'], ['English', 'en']]);
   assert.deepEqual(errors, []);
 });
 

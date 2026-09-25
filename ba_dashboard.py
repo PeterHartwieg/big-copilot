@@ -3022,18 +3022,32 @@ def _ordinal(n: int) -> str:
     return f"{n}{last}"
 
 
-def _smart_words(level, plain_after, plain_before=0) -> str:
-    """A Smart Delivery setting in words, as the findings say it. A plain
-    amount delivered first that already reaches the level leaves the level
-    nothing to bring, and says so."""
-    before = (
-        f", but the {plain_before:,} a week delivered before it already "
-        f"{'passes' if plain_before > level else 'reaches'} the {level:,} level"
-        if plain_before >= level
-        else f", counting the {plain_before:,} a week delivered before it"
-    ) if plain_before else ""
-    return (f"Smart Delivery keeps {level:,} in stock" + before
-            + (f", plus {plain_after:,} a week on top" if plain_after else ""))
+def _smart_words(level, plain_after, plain_before=0):
+    """A Smart Delivery setting in words, as the findings say it (a msg()). A
+    plain amount delivered first that already reaches the level leaves the
+    level nothing to bring, and says so."""
+    said = dict(level=level, before=plain_before, after=plain_after)
+    if plain_before and plain_before > level:
+        if plain_after:
+            return msg("f.smart.passes.plus", "Smart Delivery keeps {level:,} in stock, but the {before:,} a week "
+                       "delivered before it already passes the {level:,} level, plus {after:,} a week on top", **said)
+        return msg("f.smart.passes", "Smart Delivery keeps {level:,} in stock, but the {before:,} a week "
+                   "delivered before it already passes the {level:,} level", **said)
+    if plain_before and plain_before == level:
+        if plain_after:
+            return msg("f.smart.reaches.plus", "Smart Delivery keeps {level:,} in stock, but the {before:,} a week "
+                       "delivered before it already reaches the {level:,} level, plus {after:,} a week on top", **said)
+        return msg("f.smart.reaches", "Smart Delivery keeps {level:,} in stock, but the {before:,} a week "
+                   "delivered before it already reaches the {level:,} level", **said)
+    if plain_before:
+        if plain_after:
+            return msg("f.smart.counting.plus", "Smart Delivery keeps {level:,} in stock, counting the {before:,} a "
+                       "week delivered before it, plus {after:,} a week on top", **said)
+        return msg("f.smart.counting", "Smart Delivery keeps {level:,} in stock, counting the {before:,} a week "
+                   "delivered before it", **said)
+    if plain_after:
+        return msg("f.smart.plus", "Smart Delivery keeps {level:,} in stock, plus {after:,} a week on top", **said)
+    return msg("f.smart", "Smart Delivery keeps {level:,} in stock", **said)
 
 
 def _import_drop(stock, drops):
@@ -11119,9 +11133,9 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
                     named = tok(slug, item)
                     notes.append(_finding(
                         "critical", b["name"], "topup",
-                        f"{named} is topped up to {fact['have']:,} a day against the "
-                        f"{fact['use']:,} its busiest day sends on; raise the top-up to "
-                        f"{fact['setTo']:,}",
+                        msg("f.topup", "{item} is topped up to {have:,} a day against the {use:,} its busiest day "
+                            "sends on; raise the top-up to {set:,}",
+                            item=named, have=fact["have"], use=fact["use"], set=fact["setTo"]),
                         key=b["key"], rank=round(fact["have"] / fact["use"], 2) if fact["use"] else 0,
                         subject=item, named=named, ev={"slug": slug}))
                 continue
@@ -11148,13 +11162,23 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
             if st == "short" and fact["role"] == "depot" and fact.get("wholesale"):
                 # A depot a wholesale store delivers to: its contract, said on
                 # the depot's own page (Weekly imports does not list it).
+                said = dict(item=named, have=fact["have"], use=fact["use"], route=parts.get("route"),
+                            set=fact.get("setTo"))
+                if parts.get("route") and fact.get("setTo"):
+                    text = msg("f.depot.wholesale.route.raise", "{item}'s wholesale delivery brings {have:,} a week "
+                               "against {use:,} used beyond the {route:,} a week a route brings; raise the contract "
+                               "to {set:,}", **said)
+                elif parts.get("route"):
+                    text = msg("f.depot.wholesale.route", "{item}'s wholesale delivery brings {have:,} a week "
+                               "against {use:,} used beyond the {route:,} a week a route brings", **said)
+                elif fact.get("setTo"):
+                    text = msg("f.depot.wholesale.raise", "{item}'s wholesale delivery brings {have:,} a week "
+                               "against {use:,} used; raise the contract to {set:,}", **said)
+                else:
+                    text = msg("f.depot.wholesale", "{item}'s wholesale delivery brings {have:,} a week against "
+                               "{use:,} used", **said)
                 notes.append(_finding(
-                    fact["lvl"], site, "wholesale",
-                    f"{named}'s wholesale delivery brings {fact['have']:,} a week against "
-                    f"{fact['use']:,} used"
-                    + (f" beyond the {parts['route']:,} a week a route brings"
-                       if parts.get("route") else "")
-                    + (f"; raise the contract to {fact['setTo']:,}" if fact.get("setTo") else ""),
+                    fact["lvl"], site, "wholesale", text,
                     key=key, rank=round(fact["have"] / fact["use"], 2) if fact["use"] else 0,
                     subject=item, named=named, ev=ev))
                 continue
@@ -11162,24 +11186,51 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
                                  entry.get("plainBefore", 0)) if entry.get("smart") else ""
             if parts.get("lines") or fact["role"] == "input":
                 if st == "paused":
-                    text = f"{named} import is paused; resume the contract supplying {site}"
+                    text = msg("f.import.paused.resume", "{item} import is paused; resume the contract supplying "
+                               "{site}", item=named, site=site)
                 elif st == "noplan":
                     stock = next((l["units"] for l in b["lines"] if l["slug"] == slug), 0)
-                    weeks = stock / fact["use"] if fact["use"] else 0
-                    who = "the factories eat" if not parts.get("sites") else "the factories and other sites draw"
-                    text = (f"{named} has no standing import; {site} holds {stock:,}, "
-                            f"{weeks:.1f} weeks of the {fact['use']:,} a week {who}"
-                            + (f" beyond the {parts['route']:,} a week a route brings"
-                               if parts.get("route") else ""))
+                    said = dict(item=named, site=site, stock=stock, use=fact["use"], route=parts.get("route"),
+                                weeks=stock / fact["use"] if fact["use"] else 0)
+                    # The factories alone, or other sites drawing on it too;
+                    # and a route bringing part of the week, or not.
+                    if not parts.get("sites") and parts.get("route"):
+                        text = msg("f.import.noplan.route", "{item} has no standing import; {site} holds {stock:,}, "
+                                   "{weeks:.1f} weeks of the {use:,} a week the factories eat beyond the {route:,} a "
+                                   "week a route brings", **said)
+                    elif not parts.get("sites"):
+                        text = msg("f.import.noplan", "{item} has no standing import; {site} holds {stock:,}, "
+                                   "{weeks:.1f} weeks of the {use:,} a week the factories eat", **said)
+                    elif parts.get("route"):
+                        text = msg("f.import.noplan.sites.route", "{item} has no standing import; {site} holds "
+                                   "{stock:,}, {weeks:.1f} weeks of the {use:,} a week the factories and other sites "
+                                   "draw beyond the {route:,} a week a route brings", **said)
+                    else:
+                        text = msg("f.import.noplan.sites", "{item} has no standing import; {site} holds {stock:,}, "
+                                   "{weeks:.1f} weeks of the {use:,} a week the factories and other sites draw",
+                                   **said)
                 elif entry.get("smart"):
-                    text = (f"{named}: this import needs to cover {fact['use']:,} a week and "
-                            f"{smart}; raise the Smart Delivery stock"
-                            + (f" at {entry['levelName']}" if entry.get("levelName") else "")
-                            + (f" to {fact['setTo']:,}" if fact.get("setTo") else ""))
+                    said = dict(item=named, use=fact["use"], smart=smart, at=entry.get("levelName"),
+                                set=fact.get("setTo"))
+                    if entry.get("levelName") and fact.get("setTo"):
+                        text = msg("f.import.smart.at.raise", "{item}: this import needs to cover {use:,} a week and "
+                                   "{smart}; raise the Smart Delivery stock at {at} to {set:,}", **said)
+                    elif entry.get("levelName"):
+                        text = msg("f.import.smart.at", "{item}: this import needs to cover {use:,} a week and "
+                                   "{smart}; raise the Smart Delivery stock at {at}", **said)
+                    elif fact.get("setTo"):
+                        text = msg("f.import.smart.raise", "{item}: this import needs to cover {use:,} a week and "
+                                   "{smart}; raise the Smart Delivery stock to {set:,}", **said)
+                    else:
+                        text = msg("f.import.smart", "{item}: this import needs to cover {use:,} a week and "
+                                   "{smart}; raise the Smart Delivery stock", **said)
+                elif fact.get("setTo"):
+                    text = msg("f.import.order.raise", "{item}: this import needs to cover {use:,} a week and the "
+                               "import order is {order:,}; raise it to {set:,}",
+                               item=named, use=fact["use"], order=entry.get("weekly", 0), set=fact["setTo"])
                 else:
-                    text = (f"{named}: this import needs to cover {fact['use']:,} a week and the "
-                            f"import order is {entry.get('weekly', 0):,}"
-                            + (f"; raise it to {fact['setTo']:,}" if fact.get("setTo") else ""))
+                    text = msg("f.import.order", "{item}: this import needs to cover {use:,} a week and the import "
+                               "order is {order:,}", item=named, use=fact["use"], order=entry.get("weekly", 0))
                 notes.append(_finding(fact["lvl"], site, "feed", text, key=key,
                                       rank=-round(fact["use"] / 7), subject=item, named=named, ev=ev))
                 continue
@@ -11187,43 +11238,65 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
                 continue  # a depot only shops draw on: their shelves say it
             cover = row["cover"] if row else 0
             if st == "paused":
-                text = (f"{named} import is paused: {cover:.0f} days left at "
-                        f"{row.get('importPerDay', row['perDay']):,}/day"
-                        if row else f"{named} import is paused")
+                # round() is what {cover:.0f} printed, and a whole number
+                # picks the plural a translation needs.
+                text = (msg("f.paused", {"one": "{item} import is paused: {n} days left at {rate:,}/day",
+                                         "other": "{item} import is paused: {n} days left at {rate:,}/day"},
+                            item=named, n=round(cover), rate=row.get("importPerDay", row["perDay"]))
+                        if row else msg("f.paused.bare", "{item} import is paused", item=named))
                 notes.append(_finding(fact["lvl"], site, "paused", text,
                                       key=key, rank=cover, subject=item, named=named, ev=ev))
                 continue
             brought = entry.get("weekly", 0)
-            text = ((f"{named}: {smart} against a " if entry.get("smart")
-                     else f"{named} orders {brought:,} a week against a ")
-                    + f"{fact['use']:,} week of use, {fact['use'] - brought:,} short")
+            said = dict(item=named, smart=smart, brought=brought, use=fact["use"], short=fact["use"] - brought)
             if row and row["coverFit"] == "short":
-                arrives = weekday(row.get("coverageUntil", row["arrives"])) or "the next"
-                when = f"on {row['runsOut']}" if row["runsOut"] else f"in {row['cover']} days"
-                text += (f"; already runs dry {when}, {row['shortBy']:.1f} days before "
-                         f"{arrives}'s import")
+                said.update(when=_runs_dry_when(row), by=row["shortBy"],
+                            arrives=row.get("coverageUntil", row["arrives"]))
+                text = (msg("f.order.smart.dry", "{item}: {smart} against a {use:,} week of use, {short:,} short; "
+                            "already runs dry {when}, {by:.1f} days before {arrives:day}'s import", **said)
+                        if entry.get("smart") else
+                        msg("f.order.dry", "{item} orders {brought:,} a week against a {use:,} week of use, "
+                            "{short:,} short; already runs dry {when}, {by:.1f} days before {arrives:day}'s import",
+                            **said))
+            elif entry.get("smart"):
+                text = msg("f.order.smart", "{item}: {smart} against a {use:,} week of use, {short:,} short", **said)
+            else:
+                text = msg("f.order", "{item} orders {brought:,} a week against a {use:,} week of use, {short:,} "
+                           "short", **said)
             notes.append(_finding("critical", site, "order", text,
                                   key=key, rank=cover, subject=item, named=named, ev=ev))
     return notes
 
 
+def _runs_dry_when(row: dict):
+    """When an import row's stock runs dry, as the findings say it: on its
+    weekday, or in so many days."""
+    if row["runsOut"]:
+        return msg("f.dry.on", "on {d:day}", d=WEEKDAYS.index(row["runsOut"]))
+    return msg("f.dry.in", {"one": "in {n} days", "other": "in {n} days"}, n=row["cover"])
+
+
 def _shortfall_note(row: dict, item: str, site: str, key: str) -> dict:
     """A depot's stock that will not reach its next drop, or, where a route
     brings the week, a busy day the shelf cannot carry to the next round."""
-    arrives = weekday(row.get("coverageUntil", row["arrives"])) or "the next"
-    when = f"on {row['runsOut']}" if row["runsOut"] else f"in {row['cover']} days"
     named = tok(row["slug"], item)
     # The draw the import answers for; a route's share is named, not hidden.
-    rate = f"{row.get('importPerDay', row['perDay']):,}/day" + (
-        f" beyond the {row['routed']:,}/day a route brings" if row.get("routed") else "")
+    said = dict(item=named, when=_runs_dry_when(row), routed=row.get("routed"),
+                rate=row.get("importPerDay", row["perDay"]))
     if row.get("covered"):
-        text = (f"{named} runs dry {when}, before the route's next round; a route brings "
-                f"the week's draw ({row['routed']:,}/day) but a busy day outruns the shelf"
-                + ("; the import is paused" if row["paused"] else ""))
+        text = (msg("f.shortfall.route.paused", "{item} runs dry {when}, before the route's next round; a route "
+                    "brings the week's draw ({routed:,}/day) but a busy day outruns the shelf; the import is paused",
+                    **said)
+                if row["paused"] else
+                msg("f.shortfall.route", "{item} runs dry {when}, before the route's next round; a route brings the "
+                    "week's draw ({routed:,}/day) but a busy day outruns the shelf", **said))
     else:
-        text = (f"{named} runs dry {when}, {row['shortBy']:.1f} days before "
-                f"{arrives}'s import ("
-                + (rate if row.get("routed") else f"{rate}, {row['peakPerDay']:,} at peak") + ")")
+        said.update(by=row["shortBy"], arrives=row.get("coverageUntil", row["arrives"]))
+        text = (msg("f.shortfall.routed", "{item} runs dry {when}, {by:.1f} days before {arrives:day}'s import "
+                    "({rate:,}/day beyond the {routed:,}/day a route brings)", **said)
+                if row.get("routed") else
+                msg("f.shortfall", "{item} runs dry {when}, {by:.1f} days before {arrives:day}'s import ({rate:,}/day, "
+                    "{peak:,} at peak)", peak=row["peakPerDay"], **said))
     return _finding("critical", site, "shortfall", text,
                     key=key, rank=row["cover"], subject=item, named=named, ev={"slug": row["slug"]})
 
@@ -11247,26 +11320,27 @@ def _unnamed_notes(businesses: list, factories: dict, silent: set) -> list:
             machines = sum(u["machines"] for u in rows)
             if not machines:
                 continue
-            many = machines != 1
             where = ", ".join(
                 sorted({f"{u['workstation']} #{s}" for u in rows for s in u["slots"]})
             )
             # The same places in the same order, their workstation a token.
-            spots = {f"{u['workstation']} #{s}": f"{tok(u.get('workstationKey'), u['workstation'])} #{s}"
+            spots = {f"{u['workstation']} #{s}": msg("f.unnamed.spot", "{station} #{slot}",
+                                                       station=tok(u.get("workstationKey"), u["workstation"]),
+                                                       slot=s)
                      for u in rows for s in u["slots"]}
-            shown = ", ".join(spots[w] for w in sorted(spots))
+            shown = _msg_list([spots[w] for w in sorted(spots)]) if spots else ""
             if kind == "idle":
-                text = (
-                    f"{machines} machine{'s' if many else ''} at {shown} "
-                    f"{'have' if many else 'has'} no recipe set: staffed and rented, making nothing"
-                )
+                text = msg("f.unset", {
+                    "one": "{n} machine at {spots} has no recipe set: staffed and rented, making nothing",
+                    "other": "{n} machines at {spots} have no recipe set: staffed and rented, making nothing",
+                }, n=machines, spots=shown)
             else:
-                text = (
-                    f"{machines} machine{'s' if many else ''} at {shown} "
-                    f"{'run' if many else 'runs'} a recipe without usable details. "
-                    f"Its inputs are missing from the totals; name unknown recipes or "
-                    f"load matching game text to include them"
-                )
+                text = msg("f.unnamed", {
+                    "one": "{n} machine at {spots} runs a recipe without usable details. Its inputs are missing "
+                           "from the totals; name unknown recipes or load matching game text to include them",
+                    "other": "{n} machines at {spots} run a recipe without usable details. Its inputs are missing "
+                             "from the totals; name unknown recipes or load matching game text to include them",
+                }, n=machines, spots=shown)
             notes.append(
                 _finding(
                     level, business["name"], group, text,
@@ -11339,35 +11413,48 @@ def _feed_notes(businesses: list, factories: dict, silent: set, mode: str = "cap
             row = {**base, **base["dem"]} if mode == "dem" and base.get("dem") else base
             status, why = row["status"], row.get("why")
             per_day = row.get("use", base["perDay"])
-            depot = businesses[row["from"]]["name"] if row["from"] is not None else "the depot"
+            depot = (businesses[row["from"]]["name"] if row["from"] is not None
+                     else msg("f.feed.depot", "the depot"))
             slugs = row.get("lineSlugs") or []
-            lines = ", ".join(tok(slugs[i] if i < len(slugs) else None, line)
-                              for i, line in enumerate(row["lines"][:3]))
+            lines = [tok(slugs[i] if i < len(slugs) else None, line) for i, line in enumerate(row["lines"][:3])]
             item = tok(row.get("slug"), row["item"])
+            # The paused own import is offered as the other way out, after
+            # whatever the sentence says first.
+            own = bool(row.get("ownPaused"))
+            said = dict(item=item, per=per_day, depot=depot, site=business["name"])
             if status == "noplan":
-                text = (f"{item} feeds {lines} at {per_day:,}/day "
-                        f"but no depot tops it up")
+                said.update(lines=_msg_list(lines) if lines else "")
+                text = (msg("f.feed.noplan.resume", "{item} feeds {lines} at {per:,}/day but no depot tops it up; "
+                            "or resume the paused {item} import to {site}", **said)
+                        if own else
+                        msg("f.feed.noplan", "{item} feeds {lines} at {per:,}/day but no depot tops it up", **said))
             elif status == "short" and why == "target":
-                hours = row["target"] / per_day * 24 if per_day else 0
                 raise_to = row.get("setTo", base.get("raiseTarget"))
-                text = (f"{item} top-up of {row['target']:,} covers {hours:.0f} hours "
-                        f"of a {per_day:,}/day line"
-                        + (f"; raise it to {raise_to:,}" if raise_to else ""))
+                # round() is what {hours:.0f} printed, and a whole number
+                # picks the plural a translation needs.
+                said.update(target=row["target"], n=round(row["target"] / per_day * 24 if per_day else 0),
+                            set=raise_to)
                 if row.get("stalled"):
-                    text += (f"; and none arrived last week though {depot} holds "
-                             f"{row['depotStock']:,}")
+                    said.update(stock=row["depotStock"])
+                text = _feed_target_text(bool(raise_to), bool(row.get("stalled")), own, said)
             elif status == "short" and why == "dry":
-                text = (f"{item} arrives at {row['arrives']:,}/day against "
-                        f"{per_day:,} needed and {depot} holds {row['depotStock']:,}; "
-                        f"the import is not keeping up")
+                said.update(arrives=row["arrives"], stock=row["depotStock"])
+                text = (msg("f.feed.dry.resume", "{item} arrives at {arrives:,}/day against {per:,} needed and "
+                            "{depot} holds {stock:,}; the import is not keeping up; or resume the paused {item} "
+                            "import to {site}", **said)
+                        if own else
+                        msg("f.feed.dry", "{item} arrives at {arrives:,}/day against {per:,} needed and {depot} "
+                            "holds {stock:,}; the import is not keeping up", **said))
             elif status == "stalled" and why == "notDrawn":
-                text = (f"{item} arrives at {row['arrives']:,}/day against "
-                        f"{per_day:,} needed while {depot} holds {row['depotStock']:,}; "
-                        f"the line is not drawing it")
+                said.update(arrives=row["arrives"], stock=row["depotStock"])
+                text = (msg("f.feed.notdrawn.resume", "{item} arrives at {arrives:,}/day against {per:,} needed "
+                            "while {depot} holds {stock:,}; the line is not drawing it; or resume the paused {item} "
+                            "import to {site}", **said)
+                        if own else
+                        msg("f.feed.notdrawn", "{item} arrives at {arrives:,}/day against {per:,} needed while "
+                            "{depot} holds {stock:,}; the line is not drawing it", **said))
             else:
                 continue
-            if row.get("ownPaused"):
-                text += f"; or resume the paused {item} import to {business['name']}"
             notes.append(
                 _finding(
                     row["level"], business["name"], "feed", text,
@@ -11376,6 +11463,87 @@ def _feed_notes(businesses: list, factories: dict, silent: set, mode: str = "cap
                 )
             )
     return notes
+
+
+def _feed_target_text(raise_it: bool, stalled: bool, own: bool, said: dict):
+    """_feed_notes()'s sentence for a top-up short of the line: the number to
+    raise it to, the week nothing arrived and the paused own import, each
+    where it applies. `said` holds item, target, n (the hours covered), per,
+    set, depot, stock and site."""
+    if raise_it and stalled and own:
+        return msg("f.feed.target.raise.stalled.resume", {
+            "one": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}; and none "
+                   "arrived last week though {depot} holds {stock:,}; or resume the paused {item} import to {site}",
+            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}; and "
+                     "none arrived last week though {depot} holds {stock:,}; or resume the paused {item} import to "
+                     "{site}"}, **said)
+    if raise_it and stalled:
+        return msg("f.feed.target.raise.stalled", {
+            "one": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}; and none "
+                   "arrived last week though {depot} holds {stock:,}",
+            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}; and "
+                     "none arrived last week though {depot} holds {stock:,}"}, **said)
+    if raise_it and own:
+        return msg("f.feed.target.raise.resume", {
+            "one": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}; or "
+                   "resume the paused {item} import to {site}",
+            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}; or "
+                     "resume the paused {item} import to {site}"}, **said)
+    if raise_it:
+        return msg("f.feed.target.raise", {
+            "one": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}",
+            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}"},
+            **said)
+    if stalled and own:
+        return msg("f.feed.target.stalled.resume", {
+            "one": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; and none arrived last week "
+                   "though {depot} holds {stock:,}; or resume the paused {item} import to {site}",
+            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; and none arrived last week "
+                     "though {depot} holds {stock:,}; or resume the paused {item} import to {site}"}, **said)
+    if stalled:
+        return msg("f.feed.target.stalled", {
+            "one": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; and none arrived last week "
+                   "though {depot} holds {stock:,}",
+            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; and none arrived last week "
+                     "though {depot} holds {stock:,}"}, **said)
+    if own:
+        return msg("f.feed.target.resume", {
+            "one": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; or resume the paused {item} "
+                   "import to {site}",
+            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; or resume the paused {item} "
+                     "import to {site}"}, **said)
+    return msg("f.feed.target", {
+        "one": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line",
+        "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line"}, **said)
+
+
+def _notrouted_text(one: bool, needs: bool, held: bool, said: dict):
+    """_idle_notes()'s Not routed sentence: one site or several (`who`), that
+    sell it or, with no shop among them, need it, and how long what they hold
+    lasts where that is known. `said` holds site, stock, item, who, per and
+    days."""
+    if one and needs and held:
+        return msg("f.notrouted.one.needs.held", "{site} holds {stock:,} {item} no plan sends on; {who} needs "
+                   "{per:,}/day and holds {days}", **said)
+    if one and needs:
+        return msg("f.notrouted.one.needs", "{site} holds {stock:,} {item} no plan sends on; {who} needs {per:,}/day",
+                   **said)
+    if one and held:
+        return msg("f.notrouted.one.sells.held", "{site} holds {stock:,} {item} no plan sends on; {who} sells "
+                   "{per:,}/day and holds {days}", **said)
+    if one:
+        return msg("f.notrouted.one.sells", "{site} holds {stock:,} {item} no plan sends on; {who} sells {per:,}/day",
+                   **said)
+    if needs and held:
+        return msg("f.notrouted.need.held", "{site} holds {stock:,} {item} no plan sends on; {who} need {per:,}/day "
+                   "and hold {days}", **said)
+    if needs:
+        return msg("f.notrouted.need", "{site} holds {stock:,} {item} no plan sends on; {who} need {per:,}/day",
+                   **said)
+    if held:
+        return msg("f.notrouted.sell.held", "{site} holds {stock:,} {item} no plan sends on; {who} sell {per:,}/day "
+                   "and hold {days}", **said)
+    return msg("f.notrouted.sell", "{site} holds {stock:,} {item} no plan sends on; {who} sell {per:,}/day", **said)
 
 
 def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") -> list:
@@ -11416,50 +11584,59 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
             unfed = row.get("unfed") or []
             sites = [businesses[s] for s, _per_day, _days in unfed]
             types = {b["type"] for b in sites}
-            who = (sites[0]["name"] if len(sites) == 1
-                   else f"{len(sites)} {_plural(types.pop()).lower()}" if len(types) == 1
-                   else f"{len(sites)} sites")
-            per_day = sum(u[1] for u in unfed)
+            if len(sites) == 1:
+                who = sites[0]["name"]
+            elif len(types) == 1:
+                # Several of one type: the count and the type's name, which a
+                # translation writes its own way ("Geschenkladen × 3").
+                who = msg("f.notrouted.type", {"one": "{n} {type}", "other": "{n} {type}"}, n=len(sites),
+                          type=tok(sites[0].get("typeSlug"), _plural(types.pop()).lower()))
+            else:
+                who = msg("f.notrouted.sites", {"one": "{n} sites", "other": "{n} sites"}, n=len(sites))
             days = [u[2] for u in unfed if u[2] is not None]
-            one = len(sites) == 1
-            held_for = (f" and hold{'s' if one else ''} ~{round(sum(days) / len(days)):,} days"
-                        if days else "")
-            verb = "sells" if one else "sell"
-            if all(b["status"] != "retail" for b in sites):
-                verb = "needs" if one else "need"
+            said = dict(site=name, stock=row["stock"], item=item, who=who,
+                        per=sum(u[1] for u in unfed),
+                        days=msg("f.notrouted.days", {"one": "~{n:,} days", "other": "~{n:,} days"},
+                                 n=round(sum(days) / len(days))) if days else "")
+            text = _notrouted_text(len(sites) == 1, all(b["status"] != "retail" for b in sites), bool(days), said)
             notes.append(_finding(
-                "warn", name, "notrouted",
-                f"{name} holds {row['stock']:,} {item} no plan sends on; "
-                f"{who} {verb} {per_day:,}/day{held_for}",
+                "warn", name, "notrouted", text,
                 key=key, rank=-row["stock"], subject=row["item"], named=item, ev=ev))
         elif why == "notMoving":
             # Brought here by a top-up target, with no shelf, onward route or
             # line here to use it: most likely a target set on the wrong route.
             # The stock may be meant for sites no plan reaches yet, so the
             # finding offers both ways out.
-            route = (
-                f"; {businesses[row['routedFrom']]['name']} tops it up to "
-                f"{row['target']:,} here and no plan sends it on: add a plan to the "
-                f"shops that should get it, or stop the top-up"
-                if row.get("routedFrom") is not None else ""
+            text = (
+                msg("f.dead.route", "{stock:,} {item} held with nothing moving out; {src} tops it up to {target:,} "
+                    "here and no plan sends it on: add a plan to the shops that should get it, or stop the top-up",
+                    stock=row["stock"], item=item, target=row["target"], src=businesses[row["routedFrom"]]["name"])
+                if row.get("routedFrom") is not None else
+                msg("f.dead", "{stock:,} {item} held with nothing moving out", stock=row["stock"], item=item)
             )
             notes.append(_finding(
-                "info", name, "dead",
-                f"{row['stock']:,} {item} held with nothing moving out{route}",
+                "info", name, "dead", text,
                 key=key, rank=-row["stock"], subject=row["item"], named=item, worth=worth_of(row), ev=ev))
         elif why == "importHigh":
-            level = row.get("importLevel") or 0
-            setting = (f"Smart Delivery keeps {level:,} in stock" if row.get("smart")
-                       else f"the import brings {level:,} a week")
+            # Idle stock is IDLE_WEEKS or more of what draws on it, so neither
+            # count of weeks is ever one.
+            said = dict(stock=row["stock"], item=item, weeks=row["weeks"], level=row.get("importLevel") or 0,
+                        of=(row.get("importLevel") or 0) / max(row["perWeek"], 1))
+            text = (
+                msg("f.dead.import.smart", "{stock:,} {item} is {weeks:.0f} weeks of what it feeds; Smart Delivery "
+                    "keeps {level:,} in stock, {of:.0f} weeks of it, so lower the import", **said)
+                if row.get("smart") else
+                msg("f.dead.import", "{stock:,} {item} is {weeks:.0f} weeks of what it feeds; the import brings "
+                    "{level:,} a week, {of:.0f} weeks of it, so lower the import", **said)
+            )
             notes.append(_finding(
-                "info", name, "dead",
-                f"{row['stock']:,} {item} is {row['weeks']:.0f} weeks of what it feeds; "
-                f"{setting}, {level / max(row['perWeek'], 1):.0f} weeks of it, so lower the import",
+                "info", name, "dead", text,
                 key=key, rank=-row["stock"], subject=row["item"], named=item, worth=worth_of(row), ev=ev))
         else:
             notes.append(_finding(
                 "info", name, "dead",
-                f"{row['stock']:,} {item} is {row['weeks']:.0f} weeks of what leaves",
+                msg("f.dead.weeks", "{stock:,} {item} is {weeks:.0f} weeks of what leaves",
+                    stock=row["stock"], item=item, weeks=row["weeks"]),
                 key=key, rank=-row["stock"], subject=row["item"], named=item, worth=worth_of(row), ev=ev))
 
     # A top-up target set too high groups by the target behind it: the same
@@ -11472,7 +11649,7 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
     for target, rows in by_target.items():
         items = sorted({r["item"] for r in rows})
         slug_of = {r["item"]: r["slug"] for r in rows}
-        shown = ", ".join(tok(slug_of[i], i) for i in items)
+        shown = _msg_list([tok(slug_of[i], i) for i in items])
         sites = len({r["s"] for r in rows})
         daily = sum(r["perWeek"] for r in rows) / 7 / len(rows)
         stock = sum(r["stock"] for r in rows)
@@ -11482,19 +11659,18 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
             r["value"] / max(1.0, r["weeks"] * 7) for r in rows if r["price"]
         ) or None
         if target and daily:
-            text = (
-                f"{shown} top-up target of {target:,} is "
-                f"{target / daily:.0f}x daily sales in {sites} "
-                f"shop{'s' if sites > 1 else ''}; lower the target"
-            )
+            text = msg("f.target", {
+                "one": "{items} top-up target of {target:,} is {x:.0f}x daily sales in {n} shop; lower the target",
+                "other": "{items} top-up target of {target:,} is {x:.0f}x daily sales in {n} shops; lower the target",
+            }, items=shown, target=target, x=target / daily, n=sites)
         else:
-            text = (
-                f"{stock:,} units of {shown} across {sites} "
-                f"site{'s' if sites > 1 else ''} is "
-                f"{stock / max(sum(r['perWeek'] for r in rows), 1):.0f} weeks of supply"
-            )
+            # Idle stock is IDLE_WEEKS or more of what draws on it: never one week.
+            text = msg("f.target.units", {
+                "one": "{units:,} units of {items} across {n} site is {weeks:.0f} weeks of supply",
+                "other": "{units:,} units of {items} across {n} sites is {weeks:.0f} weeks of supply",
+            }, units=stock, items=shown, n=sites, weeks=stock / max(sum(r["perWeek"] for r in rows), 1))
         one = businesses[rows[0]["s"]] if sites == 1 else None
-        site = one["name"] if one else f"{sites} shops"
+        site = one["name"] if one else msg("f.target.site", {"one": "{n} shop", "other": "{n} shops"}, n=sites)
         notes.append(
             _finding(
                 "info", site, "target", text,
@@ -14188,10 +14364,10 @@ body:has(#changelogDialog[open]){overflow:hidden}
            is moved into each fresh head rather than rebuilt. -->
       <div id="alertHead">
         <button type="button" class="ibtn tr" id="alertKindsToggle" aria-expanded="false"
-          data-tip="Which kinds of finding make the list"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg></button>
+          data-tip="Which kinds of finding make the list" data-tt-tip="today.kinds.toggle"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg></button>
       </div>
       <div class="finds" id="alerts"></div>
-      <p class="silenced" id="silenced"><b></b> · <a class="link" href="#">undo</a></p>
+      <p class="silenced" id="silenced"><b></b> · <a class="link" href="#" data-tt="today.silenced.undo">undo</a></p>
       <div class="td-minor" id="alertMinor"></div>
     </section>
 
@@ -14199,12 +14375,12 @@ body:has(#changelogDialog[open]){overflow:hidden}
          by paintPlanImports() (from the change checklist), drawFindLocation()
          and drawOptimizeStaffing(). The cards tilt from wireCards(). -->
     <section class="sec rv" id="secMoves">
-      <div class="sechead"><h2>Next moves</h2>
-        <span class="why" data-tip="Tools for the decisions you make each week, each one opening the page that does the work. Plan imports opens the change checklist on Supply; Optimize staffing opens Staffing on the shop with the most work to save, a week to copy into BizMan &rsaquo; Schedule; Find a location opens the finder on the Map." tabindex="0"><i>?</i></span></div>
+      <div class="sechead"><h2 data-tt="today.moves.title">Next moves</h2>
+        <span class="why" data-tt-tip="today.moves.why" data-tip="Tools for the decisions you make each week, each one opening the page that does the work. Plan imports opens the change checklist on Supply; Optimize staffing opens Staffing on the shop with the most work to save, a week to copy into BizMan &rsaquo; Schedule; Find a location opens the finder on the Map." tabindex="0"><i>?</i></span></div>
       <div class="moves">
-        <a class="move rv" href="#supply" id="planImportsCard"><span class="soon"></span><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4M8 14h3M13 14h3M8 18h3"></path></svg></span><b>Plan imports</b><span class="what"></span><span class="go">Opens the change checklist</span></a>
-        <a class="move rv" href="#secDetail" id="optimizeStaffingCard"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg></span><b>Optimize staffing</b><span class="what">Hours built from your customer count: registers, building capacity and the schedule each person asked for.</span><span class="go">Opens the shop&#39;s Staffing</span></a>
-        <a class="move rv" href="#map" id="findLocationCard"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"></path><circle cx="12" cy="10" r="2.2"></circle></svg></span><b>Find a location</b><span class="what">Free buildings ranked by demand, rivals and the building capacity you would get.</span><span class="go">Opens the finder on the map</span></a>
+        <a class="move rv" href="#supply" id="planImportsCard"><span class="soon"></span><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4M8 14h3M13 14h3M8 18h3"></path></svg></span><b data-tt="today.moves.plan.title">Plan imports</b><span class="what"></span><span class="go" data-tt="today.moves.plan.go">Opens the change checklist</span></a>
+        <a class="move rv" href="#secDetail" id="optimizeStaffingCard"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg></span><b data-tt="today.moves.staff.title">Optimize staffing</b><span class="what">Hours built from your customer count: registers, building capacity and the schedule each person asked for.</span><span class="go">Opens the shop&#39;s Staffing</span></a>
+        <a class="move rv" href="#map" id="findLocationCard"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"></path><circle cx="12" cy="10" r="2.2"></circle></svg></span><b data-tt="today.moves.find.title">Find a location</b><span class="what">Free buildings ranked by demand, rivals and the building capacity you would get.</span><span class="go" data-tt="today.moves.find.go">Opens the finder on the map</span></a>
       </div>
     </section>
   </div>
@@ -14471,14 +14647,14 @@ const siteCell = b => `<div class="site">${bullet(b)}<span><b>${b.name}</b>
 /* The tile sparkline, the generator's spark(): an area under the line, the
    line, a point and a read-out that follow the pointer (wireTiles). x runs
    0..100 so the wiring can find the nearest point from the pointer's share of
-   the width; the labels are what it prints, one per point, comma-separated,
-   so they must not carry commas themselves (compact money does not). */
+   the width; the labels are what it prints, one per point, separated by "|",
+   which no number carries in any language (German money has commas). */
 function sparkHtml(values, labels){
   if(values.length < 2) return "";
   const lo = Math.min(...values), hi = Math.max(...values), span = (hi - lo) || 1;
   const pts = values.map((v, i) => [i / (values.length - 1) * 100, 30 - (v - lo) / span * 26]);
   const poly = pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
-  return `<div class="spark" data-vals="${attr(labels.join(","))}">
+  return `<div class="spark" data-vals="${attr(labels.join("|"))}">
     <svg viewBox="0 0 100 34" preserveAspectRatio="none" aria-hidden="true">
       <polygon class="area" points="0,34 ${poly} 100,34"></polygon>
       <polyline points="${poly}" vector-effect="non-scaling-stroke"></polyline>
@@ -14956,9 +15132,15 @@ function gnPick(i){
 }
 /* Type-ahead: letters typed within half a second of each other find the next
    row that starts with them; one letter pressed again steps through its rows. */
+/* Whether letters typed are still being gathered; past the half second the
+   gathered ones are dropped, so Space picks again. */
+function gnTyping(){
+  if(gnTyped && Date.now() - gnTypedAt > 500) gnTyped = "";
+  return !!gnTyped;
+}
 function gnFind(ch){
   const now = Date.now();
-  gnTyped = (now - gnTypedAt > 500 ? "" : gnTyped) + ch.toLocaleLowerCase();
+  gnTyped = (gnTyping() ? gnTyped : "") + ch.toLocaleLowerCase();
   gnTypedAt = now;
   const rows = gnRows(), same = [...gnTyped].every(c => c === gnTyped[0]);
   const word = same ? gnTyped[0] : gnTyped, from = same || gnTyped.length === 1 ? gnAt + 1 : gnAt;
@@ -14978,7 +15160,7 @@ function gnKey(e){
   else if(e.key === "Enter") gnPick(gnAt);
   /* Space picks on its keyup: picked on the keydown, focus would be back on
      the button when the key comes up, and the button would open again. */
-  else if(e.key === " " && !gnTyped) gnSpace = true;
+  else if(e.key === " " && !gnTyping()) gnSpace = true;
   else if(e.key === "Escape"){ e.stopPropagation(); gnClose(true); }
   else if(e.key === "Tab"){ gnClose(true); return; }
   else if(e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) gnFind(e.key);
@@ -15876,8 +16058,10 @@ function drawKpis(){
      pace metric once the game reports it again — until then, the cost base.
      Site and staff counts sit in the masthead; debt only appears when there is any. */
   const fixed = k.rentBill + D.staff.dailyCost;
+  /* A clause of its own after the chip's note, set off by a middle dot. */
   const owed = k.debt > 0
-    ? ` · ${fmt(k.debt)} owed on ${D.loans.length} loan${D.loans.length===1?"":"s"}` : "";
+    ? ` · ${tt("today.kpi.owed", {one: "{debt:$} owed on {n} loan", other: "{debt:$} owed on {n} loans"},
+        {n: D.loans.length, debt: k.debt})}` : "";
   /* A tile is a number, one chip, a short sub line and the whole daily history
      as a sparkline. The sentence the tile used to print is the chip's tooltip.
      The arrow chips read ▲/▼ with the size of the move; the dim ones carry a
@@ -15887,54 +16071,73 @@ function drawKpis(){
      that it stays in the chip's note. */
   const heavyDebt = k.debt > 0 && k.debt > Math.max(0, k.profitSum7 || 0);
   const vs7 = k.profitAvg7 ? (k.profitYesterday - k.profitAvg7) / Math.abs(k.profitAvg7) : 0;
+  /* A rise carries its "+"; a fall's "-" comes with the money. */
+  const plus = n => n >= 0 ? "+" : "";
   const cashTile = cf
     ? {chip: chipHtml(cf.cashChange >= 0 ? "ok" : "bad", `${cf.cashChange >= 0 ? "▲" : "▼"} ${compact(Math.abs(cf.cashChange))}`,
-         `${cf.days} days: ${compact(cf.profit)} profit, cash ${cf.cashChange>=0?"+":""}${compact(cf.cashChange)}; ${
-           cf.reinvested>=0
-             ? `${compact(cf.reinvested)} went into set-up and stock`
-             : `${compact(-cf.reinvested)} more than the books earned`}${owed}`),
-       sub: cf.days === 7 ? "this week" : `over ${cf.days} day${cf.days===1?"":"s"}`}
-    : {chip: chipHtml("dim", `${compact(k.profitSum7)} profit`,
-         `${fmt(k.profitSum7)} profit over 7 days; no cash history yet, it starts building today${owed}`),
-       sub: "no cash history"};
+         (cf.reinvested >= 0
+           /* Plural forms, though the English says "days" even for one. */
+           ? tt("today.kpi.cash.tip.spent", {one: "{n} days: {profit:$c} profit, cash {sign}{change:$c}; {spent:$c} went into set-up and stock",
+               other: "{n} days: {profit:$c} profit, cash {sign}{change:$c}; {spent:$c} went into set-up and stock"},
+               {n: cf.days, profit: cf.profit, sign: plus(cf.cashChange), change: cf.cashChange, spent: cf.reinvested})
+           : tt("today.kpi.cash.tip.over", {one: "{n} days: {profit:$c} profit, cash {sign}{change:$c}; {over:$c} more than the books earned",
+               other: "{n} days: {profit:$c} profit, cash {sign}{change:$c}; {over:$c} more than the books earned"},
+               {n: cf.days, profit: cf.profit, sign: plus(cf.cashChange), change: cf.cashChange, over: -cf.reinvested})) + owed),
+       sub: cf.days === 7 ? tt("today.kpi.cash.week", "this week")
+         : tt("today.kpi.cash.days", {one: "over {n} day", other: "over {n} days"}, {n: cf.days})}
+    : {chip: chipHtml("dim", tt("today.kpi.cash.chip.profit", "{w:$c} profit", {w: k.profitSum7}),
+         tt("today.kpi.cash.tip.none", "{w:$} profit over 7 days; no cash history yet, it starts building today", {w: k.profitSum7}) + owed),
+       sub: tt("today.kpi.cash.none", "no cash history")};
+  /* Each tile has an id (data-kpi): the search palette finds Cash on hand by
+     it, whatever language its label is in. */
   const tiles = [
-    {l: "Profit yesterday", v: fmt(k.profitYesterday),
+    {id: "profit", l: tt("today.kpi.profit", "Profit yesterday"), v: fmt(k.profitYesterday),
      chip: D.daily.length
        ? chipHtml(vs7 >= 0 ? "ok" : "bad", `${vs7 >= 0 ? "▲" : "▼"} ${Math.abs(vs7 * 100).toFixed(0)}%`,
-           `7-day average ${fmt(k.profitAvg7)}, ${trend>=0?"+":""}${fmt(trend)} vs the previous 7`)
-       : chipHtml("dim", "no history", "No finished day in this save yet; there is no profit comparison to show"),
-     sub: D.daily.length ? "vs 7-day" : "no finished day", spark: hist(d => d.profit),
+           tt("today.kpi.profit.tip", "7-day average {avg:$}, {sign}{trend:$} vs the previous 7",
+             {avg: k.profitAvg7, sign: plus(trend), trend}))
+       : chipHtml("dim", tt("today.kpi.profit.none", "no history"),
+           tt("today.kpi.profit.none.tip", "No finished day in this save yet; there is no profit comparison to show")),
+     sub: D.daily.length ? tt("today.kpi.profit.vs", "vs 7-day") : tt("today.kpi.profit.noDay", "no finished day"),
+     spark: hist(d => d.profit),
      /* The day's result has a page of its own; the tile is the way in. */
-     go: "secDaily", goTip: "Open Company › Results, the daily result"},
-    {l: "Revenue yesterday", v: fmt(k.revenue),
-     chip: chipHtml("dim", num(k.customers), `${num(k.customers)} customers served yesterday`),
-     sub: "customers", spark: hist(d => d.revenue)},
+     go: "secDaily", goTip: tt("today.kpi.profit.go", "Open Company › Results, the daily result")},
+    {id: "revenue", l: tt("today.kpi.revenue", "Revenue yesterday"), v: fmt(k.revenue),
+     chip: chipHtml("dim", num(k.customers), tt("today.kpi.revenue.tip",
+       {one: "{n:,} customers served yesterday", other: "{n:,} customers served yesterday"}, {n: k.customers})),
+     sub: tt("today.kpi.revenue.sub", "customers"), spark: hist(d => d.revenue)},
     /* Cash has no day-by-day history in the save, so this tile has no line. */
-    {l: "Cash on hand", v: fmt(k.cash), chip: cashTile.chip,
-     sub: heavyDebt ? `${cashTile.sub} · ${compact(k.debt)} owed on loans` : cashTile.sub},
+    {id: "cash", l: tt("today.kpi.cash", "Cash on hand"), v: fmt(k.cash), chip: cashTile.chip,
+     sub: heavyDebt ? `${cashTile.sub} · ${tt("today.kpi.cash.debt", "{debt:$c} owed on loans", {debt: k.debt})}` : cashTile.sub},
     k.netWorth === null
-      ? {l: "Fixed cost / day", v: fmt(fixed),
-         chip: chipHtml("dim", `rent ${compact(k.rentBill)}`, `${fmt(k.rentBill)} rent, ${fmt(D.staff.dailyCost)} payroll`),
-         sub: `payroll ${compact(D.staff.dailyCost)}`,
+      ? {id: "fixed", l: tt("today.kpi.fixed", "Fixed cost / day"), v: fmt(fixed),
+         chip: chipHtml("dim", tt("today.kpi.fixed.chip", "rent {w:$c}", {w: k.rentBill}),
+           tt("today.kpi.fixed.tip", "{rent:$} rent, {payroll:$} payroll", {rent: k.rentBill, payroll: D.staff.dailyCost})),
+         sub: tt("today.kpi.fixed.sub", "payroll {w:$c}", {w: D.staff.dailyCost}),
          /* What the days actually paid in rent and wages; the number above is
             today's contracted rate, which is why the last point can sit below it. */
          spark: hist(d => (d.rent || 0) + (d.wages || 0))}
       /* Build 3672 stopped reporting net worth. Rather than quietly showing a
          stale number as if it were today's, the tile says which day it is from. */
-      : {l: "Net worth", v: fmt(k.netWorth),
+      : {id: "worth", l: tt("today.kpi.worth", "Net worth"), v: fmt(k.netWorth),
          chip: k.netWorthAsOf
-           ? chipHtml("dim", `day ${k.netWorthAsOf}`, `As of day ${k.netWorthAsOf}; the game stopped reporting it`)
+           ? chipHtml("dim", tt("today.kpi.worth.day", "day {day}", {day: k.netWorthAsOf}),
+               tt("today.kpi.worth.day.tip", "As of day {day}; the game stopped reporting it", {day: k.netWorthAsOf}))
            : cf && cf.netWorthChange !== null
            ? chipHtml(cf.netWorthChange >= 0 ? "ok" : "bad", `${cf.netWorthChange>=0?"▲":"▼"} ${compact(Math.abs(cf.netWorthChange))}`,
-               `${cf.netWorthChange>=0?"+":""}${fmt(cf.netWorthChange)} over ${cf.days} day${cf.days===1?"":"s"}`)
-           : chipHtml("dim", "new", "No net worth history yet; starts building today"),
-         sub: k.netWorthAsOf ? "stale" : cf && cf.netWorthChange !== null ? `over ${cf.days} days` : "no history yet"},
+               tt("today.kpi.worth.tip", {one: "{sign}{w:$} over {n} day", other: "{sign}{w:$} over {n} days"},
+                 {n: cf.days, sign: plus(cf.netWorthChange), w: cf.netWorthChange}))
+           : chipHtml("dim", tt("today.kpi.worth.new", "new"),
+               tt("today.kpi.worth.new.tip", "No net worth history yet; starts building today")),
+         sub: k.netWorthAsOf ? tt("today.kpi.worth.stale", "stale")
+           : cf && cf.netWorthChange !== null ? tt("today.kpi.worth.over", {one: "over {n} days", other: "over {n} days"}, {n: cf.days})
+           : tt("today.kpi.worth.none", "no history yet")},
   ];
   /* The tiles are rebuilt on every render; the entrance plays only the first time. */
   const seen = !!q("#kpis .kpi.in");
   const tag = t => t.go ? "a" : "div";
   $("kpis").innerHTML = tiles.map(t => `
-    <${tag(t)} class="kpi rv${seen ? " in" : ""}${t.go ? " td-go" : ""}"${t.go ? ` href="#${t.go}" data-go="${t.go}" aria-label="${attr(`${t.l} ${t.v}. ${t.goTip}`)}"` : ""}>
+    <${tag(t)} class="kpi rv${seen ? " in" : ""}${t.go ? " td-go" : ""}" data-kpi="${t.id}"${t.go ? ` href="#${t.go}" data-go="${t.go}" aria-label="${attr(`${t.l} ${t.v}. ${t.goTip}`)}"` : ""}>
       <span class="lab">${t.l}${t.go ? `<span class="td-go-ic" data-tip="${attr(t.goTip)}">${icon("go")}</span>` : ""}</span>
       <span class="v" style="--n:${String(t.v).replace(/<[^>]*>/g, "").length}">${t.v}</span>
       <div class="row">${t.chip}<span class="sub">${t.sub}</span></div>
@@ -16068,7 +16271,8 @@ function goToAlert(a){
     const s = b ? D.businesses.indexOf(b) : -1;
     const tab = link.tab === "site" ? (s >= 0 ? sbTabOf(s) : "warehouses") : link.tab;
     const g = ALERT_GROUPS.find(x => x.id === a.group);
-    sbLand(tab, s >= 0 ? s : null, (a.ev || {}).slug || null, `from Today · ${g ? g.label : "a finding"}`);
+    sbLand(tab, s >= 0 ? s : null, (a.ev || {}).slug || null,
+      g ? tt("today.crumb", "from Today · {kind}", {kind: g.label}) : tt("today.crumb.any", "from Today · a finding"));
     return;
   }
   if(link.port){
@@ -16158,9 +16362,13 @@ const ALERT_EVIDENCE = {
 };
 
 /* The three severities of the list: the alert levels Python assigns, in the
-   design's words. */
+   design's words, as each counter's tooltip says them. */
 const SEV_KIND = {critical: "crit", warn: "watch", info: "opp"};
-const SEV_WORD = {crit: "urgent", watch: "watch", opp: "opportunity"};
+const sevTip = (kind, n) => kind === "crit"
+  ? tt("today.sev.crit", {one: "{n} urgent; click to hide or show them", other: "{n} urgent; click to hide or show them"}, {n})
+  : kind === "watch"
+  ? tt("today.sev.watch", {one: "{n} watch; click to hide or show them", other: "{n} watch; click to hide or show them"}, {n})
+  : tt("today.sev.opp", {one: "{n} opportunity; click to hide or show them", other: "{n} opportunity; click to hide or show them"}, {n});
 
 /* A finding is a short verb phrase; the rest of the sentence unfolds on hover.
    Python's sentences often lead with the site, which the row already names, so
@@ -16264,58 +16472,104 @@ function splitFinding(a){
    unnamed line, the multiple a target is over — so that comes out of the
    sentence, in its unit; only a row with no number at all leaves the column
    empty. A condensed row with no money shows how many findings it stands for. */
-const amtHtml = (n, unit) => `${n}<small>${unit || ""}</small>`;
+/* The unit under a figure read out of Python's English sentence, in the UI
+   language; a word this does not know is shown as it came. */
+function amtUnit(u){
+  switch(u){
+    case "findings": return tt("today.amt.findings", "findings");
+    case "order": return tt("today.amt.order", "order");
+    case "orders": return tt("today.amt.orders", "orders");
+    case "holding": return tt("today.amt.holding", "holding");
+    case "holdings": return tt("today.amt.holdings", "holdings");
+    case "shop": return tt("today.amt.shop", "shop");
+    case "shops": return tt("today.amt.shops", "shops");
+    case "line": return tt("today.amt.line", "line");
+    case "lines": return tt("today.amt.lines", "lines");
+    case "machine": return tt("today.amt.machine", "machine");
+    case "machines": return tt("today.amt.machines", "machines");
+    case "hours staffed": return tt("today.amt.hoursStaffed", "hours staffed");
+    case "daily sales": return tt("today.amt.dailySales", "daily sales");
+    case "units short": return tt("today.amt.unitsShort", "units short");
+    case "days early": return tt("today.amt.daysEarly", "days early");
+    case "/week used": return tt("today.amt.weekUsed", "/week used");
+    case "left": return tt("today.amt.left", "left");
+    case "/day under hype": return tt("today.amt.dayHype", "/day under hype");
+    case "/day needed": return tt("today.amt.dayNeeded", "/day needed");
+    case "hours covered": return tt("today.amt.hoursCovered", "hours covered");
+    case "/week eaten": return tt("today.amt.weekEaten", "/week eaten");
+    case "satisfied": return tt("today.amt.satisfied", "satisfied");
+    case "staff": return tt("today.amt.staff", "staff");
+    case "promotion": return tt("today.amt.promotion", "promotion");
+    case "/day": return tt("today.amt.day", "/day");
+    case "units": return tt("today.amt.units", "units");
+    case "days": return tt("today.amt.days", "days");
+    case "hours": return tt("today.amt.hours", "hours");
+    case "weeks": return tt("today.amt.weeks", "weeks");
+    case "customers": return tt("today.amt.customers", "customers");
+    default: return u;
+  }
+}
+/* A figure read out of Python's English ("1,500", "3.5") in the UI
+   language's numbers; in English it is shown exactly as Python wrote it. */
+const amtNum = s => {
+  if(typeof ttLang === "undefined" || ttLang === "en") return s;
+  const v = Number(String(s).replace(/,/g, ""));
+  return Number.isFinite(v) ? num(v) : s;
+};
+const amtHtml = (n, unit) => `${n}<small>${unit ? amtUnit(unit) : ""}</small>`;
 function findingAmount(a){
   if(typeof a.worth === "number")
-    return amtHtml(Math.abs(a.worth) >= 1e6 ? money(a.worth) : fmt(a.worth), a.unit);
+    /* Python's unit (ALERT_UNITS) is a message of its own (f.unit.*), already
+       in the UI language. */
+    return `${Math.abs(a.worth) >= 1e6 ? money(a.worth) : fmt(a.worth)}<small>${a.unit || ""}</small>`;
   /* Python's English, whatever language the row is shown in. */
   const t = String((typeof enOf === "function" ? enOf(a, "text") : a.text) || "");
   let m;
   if(a.detail && (m = t.match(/^(\d+) (weekly orders?|orders?|holdings?|shops?|lines?)?/)))
-    return amtHtml(m[1], m[2] ? m[2].replace(/^weekly /, "") : "findings");
+    return amtHtml(amtNum(m[1]), m[2] ? m[2].replace(/^weekly /, "") : "findings");
   switch(a.group){
     case "unnamed": case "unset":
-      if((m = t.match(/^(\d+) machines?/))) return amtHtml(m[1], m[1] === "1" ? "machine" : "machines");
+      if((m = t.match(/^(\d+) machines?/))) return amtHtml(amtNum(m[1]), m[1] === "1" ? "machine" : "machines");
       break;
     case "staff":
-      if((m = t.match(/staffed (\d+) of (\d+) hours/))) return amtHtml(`${m[1]}/${m[2]}`, "hours staffed");
+      if((m = t.match(/staffed (\d+) of (\d+) hours/))) return amtHtml(`${amtNum(m[1])}/${amtNum(m[2])}`, "hours staffed");
       break;
     case "target":
-      if((m = t.match(/(\d+)x daily sales/))) return amtHtml(`${m[1]}x`, "daily sales");
+      if((m = t.match(/(\d+)x daily sales/))) return amtHtml(`${amtNum(m[1])}x`, "daily sales");
       break;
     case "order":
-      if((m = t.match(/([\d,]+) short/))) return amtHtml(m[1], "units short");
+      if((m = t.match(/([\d,]+) short/))) return amtHtml(amtNum(m[1]), "units short");
       break;
     case "shortfall":
-      if((m = t.match(/([\d.]+) days before/))) return amtHtml(m[1], "days early");
+      if((m = t.match(/([\d.]+) days before/))) return amtHtml(amtNum(m[1]), "days early");
       break;
     case "wholesale":
-      if((m = t.match(/against (?:the )?([\d,]+)/))) return amtHtml(m[1], "/week used");
-      if((m = t.match(/([\d,]+) left/))) return amtHtml(m[1], "left");
+      if((m = t.match(/against (?:the )?([\d,]+)/))) return amtHtml(amtNum(m[1]), "/week used");
+      if((m = t.match(/([\d,]+) left/))) return amtHtml(amtNum(m[1]), "left");
       break;
     case "hype":
-      if((m = t.match(/\$([\d,]+)\/day/))) return amtHtml(`$${m[1]}`, "/day under hype");
+      if((m = t.match(/\$([\d,]+)\/day/))) return amtHtml(`$${amtNum(m[1])}`, "/day under hype");
       break;
     case "feed":
-      if((m = t.match(/against ([\d,]+) (?:needed|the machines)/))) return amtHtml(m[1], "/day needed");
-      if((m = t.match(/covers (\d+) hours/))) return amtHtml(m[1], "hours covered");
-      if((m = t.match(/eat ([\d,]+) a week/))) return amtHtml(m[1], "/week eaten");
+      if((m = t.match(/against ([\d,]+) (?:needed|the machines)/))) return amtHtml(amtNum(m[1]), "/day needed");
+      if((m = t.match(/covers (\d+) hours/))) return amtHtml(amtNum(m[1]), "hours covered");
+      if((m = t.match(/eat ([\d,]+) a week/))) return amtHtml(amtNum(m[1]), "/week eaten");
       break;
     case "satisfaction":
-      if((m = t.match(/(\d+)%/))) return amtHtml(`${m[1]}%`, "satisfied");
+      if((m = t.match(/(\d+)%/))) return amtHtml(`${amtNum(m[1])}%`, "satisfied");
       break;
     case "jobdemand": case "companydemand":
-      if((m = t.match(/^(\d+) staff/))) return amtHtml(m[1], "staff");
+      if((m = t.match(/^(\d+) staff/))) return amtHtml(amtNum(m[1]), "staff");
       break;
     case "promotion":
-      if((m = t.match(/(\d+)%/))) return amtHtml(`${m[1]}%`, "promotion");
+      if((m = t.match(/(\d+)%/))) return amtHtml(`${amtNum(m[1])}%`, "promotion");
       break;
   }
-  if((m = t.match(/\$([\d,]+)(\/day)?/))) return amtHtml(`$${m[1]}`, m[2] || "");
-  if((m = t.match(/([\d,]+)\/day/))) return amtHtml(m[1], "/day");
+  if((m = t.match(/\$([\d,]+)(\/day)?/))) return amtHtml(`$${amtNum(m[1])}`, m[2] || "");
+  if((m = t.match(/([\d,]+)\/day/))) return amtHtml(amtNum(m[1]), "/day");
   if((m = t.match(/(\d[\d,]*(?:\.\d+)?) (units|days|hours|machines|shops|lines|orders|weeks|customers)\b/)))
-    return amtHtml(m[1], m[2]);
-  if((m = t.match(/\b(\d+)x\b/))) return amtHtml(`${m[1]}x`, "");
+    return amtHtml(amtNum(m[1]), m[2]);
+  if((m = t.match(/\b(\d+)x\b/))) return amtHtml(`${amtNum(m[1])}x`, "");
   return "";
 }
 /* A finding whose kind is switched off still shows, under the list, wearing
@@ -16342,10 +16596,10 @@ function findingRow(a){
   const site = !b ? spEsc(a.site) : `${hoodHtml(b)}${siteLink(b, b.code ? baseName(b) : shortName(b))}${mapButton(b.key,b.name)}`;
   const n = ++ssFindSeq;
   return `<div class="find ${SEV_KIND[a.level] || "opp"}" data-id="${attr(a.id)}">
-    <span class="mark" data-tip="Silence this finding"></span>
+    <span class="mark" data-tip="${attr(tt("today.find.silence", "Silence this finding"))}"></span>
     <span class="site">${site}</span>
     <span hidden id="ss-fn${n}">${spEsc(b ? shortName(b) : a.site)}:</span>
-    <button type="button" class="what" id="ss-fw${n}" aria-labelledby="ss-fn${n} ss-fw${n}">${what}${kindOff(a) ? ` ${chipHtml("dim", kindLabel(a.group), "This kind is switched off in the list; it is counted here instead")}` : ""}</button>${
+    <button type="button" class="what" id="ss-fw${n}" aria-labelledby="ss-fn${n} ss-fw${n}">${what}${kindOff(a) ? ` ${chipHtml("dim", kindLabel(a.group), tt("today.find.off", "This kind is switched off in the list; it is counted here instead"))}` : ""}</button>${
       /* The game link's buttons sit under the sentence, beside the row's own
          button rather than inside it. */
       writes ? `
@@ -16396,8 +16650,17 @@ function switchedOffKinds(rows, label, money, order = []){
     by.set(r.group, k);
   });
   const rank = id => { const i = order.indexOf(id); return i < 0 ? order.length : i; };
-  return [...by.entries()].sort((a, z) => rank(a[0]) - rank(z[0])).map(([id, k]) =>
-    `${label(id)} (${k.n}${k.worth >= 1 ? `, ${money(k.worth)}/day` : ""})`).join(", ");
+  return todayList([...by.entries()].sort((a, z) => rank(a[0]) - rank(z[0])).map(([id, k]) => k.worth >= 1
+    ? tt("today.minor.offKind.worth", "{kind} ({n}, {worth}/day)", {kind: label(id), n: k.n, worth: money(k.worth)})
+    : tt("today.minor.offKind", "{kind} ({n})", {kind: label(id), n: k.n})));
+}
+/* A list as one message, as Python's _msg_list() writes one: the last pair is
+   its own key (today.list.last), so a translation can join it with its "and";
+   in English every pair is joined with a comma. */
+function todayList(items){
+  if(items.length < 2) return items.length ? items[0] : "";
+  if(items.length === 2) return tt("today.list.last", "{a}, {b}", {a: items[0], b: items[1]});
+  return tt("today.list", "{a}, {b}", {a: items[0], b: todayList(items.slice(1))});
 }
 
 let showSwitchedOff = false;
@@ -16412,11 +16675,11 @@ function drawAlerts(){
      that filter the list, and the tune button. That button is bound once at
      boot, so it is carried over into the fresh head rather than rebuilt. */
   const tune = $("alertKindsToggle");
-  $("alertHead").innerHTML = sechead("Needs attention", {
-    why: `A site that is not trading always makes the list. Everything else needs to be worth ${
-      fmt(gate)}/day; smaller findings are counted below, and so are the kinds switched off.`,
+  $("alertHead").innerHTML = sechead(tt("today.alerts.title", "Needs attention"), {
+    why: tt("today.alerts.why", "A site that is not trading always makes the list. Everything else needs to be worth {gate:$}/day; smaller findings are counted below, and so are the kinds switched off.",
+      {gate}),
     aside: ["crit", "watch", "opp"].map(k =>
-      `<span class="sev ${k}" data-kind="${k}" data-tip="${attr(`${counts[k]} ${SEV_WORD[k]}; click to hide or show them`)}"><i></i>${counts[k]}</span>`
+      `<span class="sev ${k}" data-kind="${k}" data-tip="${attr(sevTip(k, counts[k]))}"><i></i>${counts[k]}</span>`
     ).join("") + `<span id="alertTuneSlot"></span>`,
   });
   $("alertTuneSlot").replaceWith(tune);
@@ -16425,7 +16688,7 @@ function drawAlerts(){
      silenced, the smaller findings included, so it is on the page once. */
   gwUniformAllId = ([...list, ...smaller].find(x => gwDressable(x) && !silencedIds.has(x.id)) || {}).id ?? null;
   $("alerts").innerHTML = list.length ? list.map(a => findingRow(a)).join("")
-    : `<span class="quiet" style="display:block;padding:12px 0">Nothing to flag here.</span>`;
+    : `<span class="quiet" style="display:block;padding:12px 0">${tt("today.alerts.none", "Nothing to flag here.")}</span>`;
   bindFindingRows($("alerts"), list);
 
   /* Nothing leaves the screen: under the list, one line counts what the
@@ -16435,14 +16698,15 @@ function drawAlerts(){
   const host = $("alertMinor");
   const block = (rows, open, toggle, line) => !rows.length ? "" :
     `<p class="quiet td-count">${line} &nbsp;<a class="link" href="#" data-td-toggle="${toggle}" aria-expanded="${open}">${
-      open ? "hide" : "show"}</a></p>` + (open ? `<div class="finds td-rows" data-td-rows="${toggle}">${rows.map(a => findingRow(a)).join("")}</div>` : "");
+      open ? tt("today.minor.hide", "hide") : tt("today.minor.show", "show")}</a></p>` + (open ? `<div class="finds td-rows" data-td-rows="${toggle}">${rows.map(a => findingRow(a)).join("")}</div>` : "");
   const worth = below.reduce((s,r) => s + (r.worth || 0), 0);
   host.innerHTML =
-    block(below, showMinor, "below",
-      `${below.length} below the ${fmt(gate)}/day line${worth >= 1 ? ` · ${fmt(worth)}/day` : ""}`)
+    block(below, showMinor, "below", worth >= 1
+      ? tt("today.minor.below.worth", "{n} below the {gate:$}/day line · {worth:$}/day", {n: below.length, gate, worth})
+      : tt("today.minor.below", "{n} below the {gate:$}/day line", {n: below.length, gate}))
     + block(switchedOff, showSwitchedOff, "off",
-      `${switchedOff.length} in kinds switched off: ${
-        switchedOffKinds(switchedOff, kindLabel, compact, ALERT_GROUPS.map(g => g.id))}`);
+      tt("today.minor.off", "{n} in kinds switched off: {kinds}", {n: switchedOff.length,
+        kinds: switchedOffKinds(switchedOff, kindLabel, compact, ALERT_GROUPS.map(g => g.id))}));
   $$("[data-td-toggle]", host).forEach(a => a.onclick = e => {
     e.preventDefault();
     if(a.dataset.tdToggle === "below") showMinor = !showMinor; else showSwitchedOff = !showSwitchedOff;
@@ -19826,45 +20090,70 @@ function planImportsState(rows, marks, nameOf, gaps = {}){
      its words, and with what it could not look at (the game's text missing,
      recipes still unnamed), in which case the badge does not say ALL SET. */
   if(!rows.length){
-    const missing = [
-      gaps.unnamed ? `${gaps.unnamed} factory recipe${gaps.unnamed === 1 ? " is" : "s are"} still unnamed and not included` : "",
-      gaps.complete === false ? "factory lines need the game's text to be included" : "",
-    ].filter(Boolean).join(", and ");
-    return missing ? {badge: "NONE FOUND", live: false, what: `No changes found, but ${missing}.`}
-      /* Only margin changes and top-ups to lower are left: nothing falls
-         short, and Supply has them. */
-      : gaps.margin || gaps.lower ? {badge: "ALL SET", live: false, what: `Nothing falls short. Supply lists ${[
-          gaps.margin ? `${gaps.margin === 1 ? "one change" : `${gaps.margin} changes`} that would restore the margin` : "",
-          gaps.lower ? `${gaps.lower === 1 ? "one top-up" : `${gaps.lower} top-ups`} to lower` : ""].filter(Boolean).join(" and ")}.`}
-      : {badge: "ALL SET", live: false, what: "No changes found in the supply data."};
+    const unnamed = gaps.unnamed ? tt("today.moves.plan.unnamed",
+      {one: "{n} factory recipe is still unnamed and not included", other: "{n} factory recipes are still unnamed and not included"},
+      {n: gaps.unnamed}) : "";
+    const noText = gaps.complete === false;
+    const missing = unnamed && noText
+      ? tt("today.moves.plan.none.both", "No changes found, but {unnamed}, and factory lines need the game's text to be included.", {unnamed})
+      : unnamed ? tt("today.moves.plan.none.unnamed", "No changes found, but {unnamed}.", {unnamed})
+      : noText ? tt("today.moves.plan.none.text", "No changes found, but factory lines need the game's text to be included.") : "";
+    /* Only margin changes and top-ups to lower are left: nothing falls
+       short, and Supply has them. */
+    const margin = gaps.margin ? tt("today.moves.plan.margin",
+      {one: "one change that would restore the margin", other: "{n} changes that would restore the margin"}, {n: gaps.margin}) : "";
+    const lower = gaps.lower ? tt("today.moves.plan.lower",
+      {one: "one top-up to lower", other: "{n} top-ups to lower"}, {n: gaps.lower}) : "";
+    return missing ? {badge: tt("today.moves.plan.badge.none", "NONE FOUND"), live: false, what: missing}
+      : margin || lower ? {badge: tt("today.moves.plan.badge.set", "ALL SET"), live: false, what: margin && lower
+          ? tt("today.moves.plan.short.both", "Nothing falls short. Supply lists {margin} and {lower}.", {margin, lower})
+          : tt("today.moves.plan.short", "Nothing falls short. Supply lists {changes}.", {changes: margin || lower})}
+      : {badge: tt("today.moves.plan.badge.set", "ALL SET"), live: false, what: tt("today.moves.plan.clear", "No changes found in the supply data.")};
   }
   /* Tight and lowering rows stay off Today by rule; the card still says how
      many Supply lists beside these, so its count and the strip's add up. */
-  const also = [gaps.margin ? "restore the margin" : "", gaps.lower ? "lower a target" : ""].filter(Boolean);
-  const more = also.length ? ` ${(gaps.margin || 0) + (gaps.lower || 0)} more on Supply only ${also.join(" or ")}.` : "";
-  if(!left.length) return {badge: "ALL TICKED", live: false,
-    what: `You ticked ${rows.length === 1 ? "the one change" : `all ${rows.length}`}. A change the game has taken leaves the list with the next save.${more}`};
-  const n = v => v === null || v === undefined ? "not set" : num(v);
+  const also = (gaps.margin || 0) + (gaps.lower || 0);
+  const moreText = gaps.margin && gaps.lower
+    ? tt("today.moves.plan.more.both", "{n} more on Supply only restore the margin or lower a target.", {n: also})
+    : gaps.margin ? tt("today.moves.plan.more.margin", "{n} more on Supply only restore the margin.", {n: also})
+    : gaps.lower ? tt("today.moves.plan.more.lower", "{n} more on Supply only lower a target.", {n: also}) : "";
+  const more = moreText ? ` ${moreText}` : "";
+  if(!left.length) return {badge: tt("today.moves.plan.badge.ticked", "ALL TICKED"), live: false,
+    what: tt("today.moves.plan.ticked", {one: "You ticked the one change. A change the game has taken leaves the list with the next save.",
+      other: "You ticked all {n}. A change the game has taken leaves the list with the next save."}, {n: rows.length}) + more};
+  const n = v => v === null || v === undefined ? tt("today.moves.plan.notSet", "not set") : num(v);
   /* A paused import the player gave a figure has no current setting: it is
      a resume, not an order going from "not set". */
   const resume = r => !!r.paused;
   const change = r => r.proposed !== null && resume(r)
-    ? `resume the paused import, ${r.mode === "smart" ? `Smart Delivery stock ${n(r.proposed)}` : `${n(r.proposed)}/week`}`
+    ? (r.mode === "smart"
+      ? tt("today.moves.plan.resume.smart", "resume the paused import, Smart Delivery stock {to}", {to: n(r.proposed)})
+      : tt("today.moves.plan.resume.week", "resume the paused import, {to}/week", {to: n(r.proposed)}))
     : r.proposed === null
+    /* The checklist's own reason, as it gives it. */
     ? String(r.reason || "").split(". ")[0].replace(/\.$/, "").replace(/^./, c => c.toLowerCase())
-    : r.kind === "Before the next delivery" ? `add ${n(r.proposed)} units before the next delivery`
-    : `${r.mode === "smart" ? "Smart Delivery stock" : r.mode === "weekly" ? "weekly order" : r.mode === "hours" ? "run hours" : "daily top-up"} ${
-        n(r.current)} \u2192 ${n(r.proposed)}${r.mode === "hours" ? " a day" : ""}`;
+    : r.kind === "Before the next delivery" ? tt("today.moves.plan.once", "add {to} units before the next delivery", {to: n(r.proposed)})
+    : r.mode === "smart" ? tt("today.moves.plan.smart", "Smart Delivery stock {from} \u2192 {to}", {from: n(r.current), to: n(r.proposed)})
+    : r.mode === "weekly" ? tt("today.moves.plan.weekly", "weekly order {from} \u2192 {to}", {from: n(r.current), to: n(r.proposed)})
+    : r.mode === "hours" ? tt("today.moves.plan.hours", "run hours {from} \u2192 {to} a day", {from: n(r.current), to: n(r.proposed)})
+    : tt("today.moves.plan.daily", "daily top-up {from} \u2192 {to}", {from: n(r.current), to: n(r.proposed)});
   const where = r => r.site === null || r.site === undefined ? null : nameOf(r.site);
   if(left.length === 1){
-    const r = left[0], at = where(r);
-    return {badge: "1 TO CHANGE", live: true, what: `<b>${esc(r.item)}</b>${at ? ` at ${esc(at)}` : ""}: ${esc(change(r))}.${more}`};
+    const r = left[0], at = where(r), item = `<b>${esc(r.item)}</b>`;
+    return {badge: tt("today.moves.plan.badge.one", "1 TO CHANGE"), live: true, what: (at
+      ? tt("today.moves.plan.one.at", "{item} at {site}: {change}.", {item, site: esc(at), change: esc(change(r))})
+      : tt("today.moves.plan.one", "{item}: {change}.", {item, change: esc(change(r))})) + more};
   }
-  const places = [...new Set(left.map(where).filter(Boolean))];
-  const at = !places.length ? "" : places.length <= 2 ? ` at ${places.map(esc).join(" and ")}`
-    : ` at ${places.slice(0, 2).map(esc).join(", ")} and ${places.length - 2} more`;
-  return {badge: `${left.length} TO CHANGE`, live: true,
-    what: `<b>${left.length} changes</b>${at}, starting with ${esc(left[0].item)}.${more}`};
+  const places = [...new Set(left.map(where).filter(Boolean))].map(esc);
+  const changes = `<b>${tt("today.moves.plan.changes", {one: "{n} change", other: "{n} changes"}, {n: left.length})}</b>`;
+  const first = esc(left[0].item);
+  return {badge: tt("today.moves.plan.badge.many", "{n} TO CHANGE", {n: left.length}), live: true, what: (
+    !places.length ? tt("today.moves.plan.many", "{changes}, starting with {item}.", {changes, item: first})
+    : places.length === 1 ? tt("today.moves.plan.many.at", "{changes} at {site}, starting with {item}.", {changes, site: places[0], item: first})
+    : places.length === 2 ? tt("today.moves.plan.many.at2", "{changes} at {site} and {other}, starting with {item}.",
+        {changes, site: places[0], other: places[1], item: first})
+    : tt("today.moves.plan.many.atMore", "{changes} at {site}, {other} and {rest} more, starting with {item}.",
+        {changes, site: places[0], other: places[1], rest: places.length - 2, item: first})) + more};
 }
 
 const orderMarkCache = new Map();
@@ -21754,16 +22043,18 @@ function drawFindLocation(){
   const vacant = (D.premises?.buildings || []).filter(b => b.type === "retail" && b.status === "vacant");
   if(!vacant.length){
     badge.className = "soon";
-    badge.textContent = D.premises ? "NONE FREE" : "SOON";
-    text.textContent = D.premises ? "No vacant retail unit in the city right now."
-      : "Free buildings ranked by demand, rivals and the building capacity you would get.";
+    badge.textContent = D.premises ? tt("today.moves.find.badge.none", "NONE FREE") : tt("today.moves.soon", "SOON");
+    text.textContent = D.premises ? tt("today.moves.find.none", "No vacant retail unit in the city right now.")
+      : tt("today.moves.find.soon", "Free buildings ranked by demand, rivals and the building capacity you would get.");
     return;
   }
   const best = vacant.reduce((a, b) => b.traffic > a.traffic ? b : a);
   badge.className = "soon live";
-  badge.textContent = `${vacant.length} VACANT`;
-  text.textContent = `${plural(vacant.length, "vacant retail unit")} right now. Best foot traffic: ${
-    best.address}, ${hoodName(best.hood)} (${best.traffic}).`;
+  badge.textContent = tt("today.moves.find.badge", "{n} VACANT", {n: vacant.length});
+  text.textContent = tt("today.moves.find.what", {
+    one: "{n} vacant retail unit right now. Best foot traffic: {address}, {hood} ({traffic}).",
+    other: "{n} vacant retail units right now. Best foot traffic: {address}, {hood} ({traffic})."},
+    {n: vacant.length, address: best.address, hood: hoodName(best.hood), traffic: best.traffic});
 }
 
 /* Next moves: the Optimize staffing card opens the roster with most to gain,
@@ -21829,24 +22120,26 @@ function drawOptimizeStaffing(){
   if(done.length){
     const row = spPickRoster(done, () => 0);
     badge.className = "soon live";
-    badge.textContent = "DATA COMPLETE";
-    text.textContent = `Demand data complete at ${row.name}${
-      done.length > 1 ? ` and ${done.length - 1} more` : ""}: switch to the demand plan.`;
-    go.textContent = `Opens ${row.name} › Staffing`;
+    badge.textContent = tt("today.moves.staff.badge.done", "DATA COMPLETE");
+    text.textContent = done.length > 1
+      ? tt("today.moves.staff.done.more", "Demand data complete at {site} and {n} more: switch to the demand plan.",
+          {site: row.name, n: done.length - 1})
+      : tt("today.moves.staff.done", "Demand data complete at {site}: switch to the demand plan.", {site: row.name});
+    go.textContent = tt("today.moves.staff.go", "Opens {site} › Staffing", {site: row.name});
     card.dataset.site = row.key;
     return;
   }
   const best = spBestRoster();
   if(!best){
     badge.className = "soon";
-    badge.textContent = D.staffing ? "NO PLAN" : "SOON";
+    badge.textContent = D.staffing ? tt("today.moves.staff.badge.none", "NO PLAN") : tt("today.moves.soon", "SOON");
     text.textContent = D.staffing
-      ? "No shop has been measured long enough to plan a week for yet."
-      : "Hours built from your customer count: registers, building capacity and the schedule each person asked for.";
+      ? tt("today.moves.staff.none", "No shop has been measured long enough to plan a week for yet.")
+      : tt("today.moves.staff.soon", "Hours built from your customer count: registers, building capacity and the schedule each person asked for.");
     /* Both arms open the site list: with no plan to point at, wireCards() has
        no site to open, and the line exists because the card used to be vague
        about exactly this. */
-    go.textContent = "Opens the sites";
+    go.textContent = tt("today.moves.staff.go.sites", "Opens the sites");
     /* Nothing to open: a live reload that leaves no usable plan must not keep
        sending the player to the site the last one named. */
     delete card.dataset.site;
@@ -21860,8 +22153,8 @@ function drawOptimizeStaffing(){
   /* The hires belong beside the week wherever it is quoted: a card that says
      "108 shifts become 65" and stops has described a schedule the player
      cannot finish until four more people are on the books. */
-  const alsoHire = !hiring && counts.hire
-    ? `, and ${plural(spPlanPosts(row), "person", "people")} to hire` : "";
+  const people = !hiring && counts.hire
+    ? tt("today.moves.staff.people", {one: "{n} person", other: "{n} people"}, {n: spPlanPosts(row)}) : "";
   /* A shop with no hour reports of its own is compared on the shifts this plan
      would really replace, and says why: its registers are not in the plan, so
      they are not in the number beside it either. Against its whole schedule
@@ -21870,21 +22163,45 @@ function drawOptimizeStaffing(){
   const measured = !spCoverOnly(row);
   badge.className = "soon live";
   badge.textContent = best.saves
-    ? `\u2212${spRosterNow(row) - week} ENTRIES`
-    : `${spPlanHours(row)} HOURS`;
+    ? tt("today.moves.staff.badge.saves", "\u2212{n} ENTRIES", {n: spRosterNow(row) - week})
+    : tt("today.moves.staff.badge.hours", "{n} HOURS", {n: spPlanHours(row)});
+  const site = row.name, hours = spPlanHours(row);
+  const entries = tt("today.moves.staff.entries", {one: "{n} entry", other: "{n} entries"}, {n: lines});
+  const registersMeasured = spRosterMeasured(row);
   text.textContent = best.saves
     ? (measured
-        ? `${row.name}: ${counts.now} entries become ${week}${alsoHire}.`
-        : `${row.name}: ${counts.nowCover} cleaning and security entries become ${
-            week}${alsoHire}, and ${spRosterMeasured(row)
-              ? `its measured hours ask for nobody at the registers`
-              : `its registers wait on the shop\u2019s first measured week`}.`)
+        ? (people
+          ? tt("today.moves.staff.saves.hire", "{site}: {now} entries become {week}, and {people} to hire.", {site, now: counts.now, week, people})
+          : tt("today.moves.staff.saves", "{site}: {now} entries become {week}.", {site, now: counts.now, week}))
+        : registersMeasured
+        ? (people
+          ? tt("today.moves.staff.cover.saves.hire.none",
+              "{site}: {now} cleaning and security entries become {week}, and {people} to hire, and its measured hours ask for nobody at the registers.",
+              {site, now: counts.nowCover, week, people})
+          : tt("today.moves.staff.cover.saves.none",
+              "{site}: {now} cleaning and security entries become {week}, and its measured hours ask for nobody at the registers.",
+              {site, now: counts.nowCover, week}))
+        : (people
+          ? tt("today.moves.staff.cover.saves.hire.wait",
+              "{site}: {now} cleaning and security entries become {week}, and {people} to hire, and its registers wait on the shop\u2019s first measured week.",
+              {site, now: counts.nowCover, week, people})
+          : tt("today.moves.staff.cover.saves.wait",
+              "{site}: {now} cleaning and security entries become {week}, and its registers wait on the shop\u2019s first measured week.",
+              {site, now: counts.nowCover, week})))
     : (measured
-        ? `${row.name}: a week of ${spPlanHours(row)} hours to set, in ${plural(lines, "entry", "entries")}${
-          hiring ? `, every one of them waiting on a hire` : alsoHire}.`
-        : `${row.name}: a week of ${spPlanHours(row)} cleaning and security hours to set, in ${plural(lines, "entry", "entries")}${
-          hiring ? `, every one of them waiting on a hire` : alsoHire}.`);
-  go.textContent = `Opens ${row.name} \u203a Staffing`;
+        ? (hiring
+          ? tt("today.moves.staff.week.hiring", "{site}: a week of {hours} hours to set, in {entries}, every one of them waiting on a hire.", {site, hours, entries})
+          : people
+          ? tt("today.moves.staff.week.hire", "{site}: a week of {hours} hours to set, in {entries}, and {people} to hire.", {site, hours, entries, people})
+          : tt("today.moves.staff.week", "{site}: a week of {hours} hours to set, in {entries}.", {site, hours, entries}))
+        : (hiring
+          ? tt("today.moves.staff.cover.week.hiring",
+              "{site}: a week of {hours} cleaning and security hours to set, in {entries}, every one of them waiting on a hire.", {site, hours, entries})
+          : people
+          ? tt("today.moves.staff.cover.week.hire",
+              "{site}: a week of {hours} cleaning and security hours to set, in {entries}, and {people} to hire.", {site, hours, entries, people})
+          : tt("today.moves.staff.cover.week", "{site}: a week of {hours} cleaning and security hours to set, in {entries}.", {site, hours, entries})));
+  go.textContent = tt("today.moves.staff.go", "Opens {site} › Staffing", {site: row.name});
   card.dataset.site = row.key;
 }
 
@@ -22773,14 +23090,27 @@ function drawKindRows(){
   const host = kindsPop && kindsPop.querySelector(".kinds");
   if(!host) return;
   const n = kindCounts(), at = host.scrollTop;
+  kindsChrome();
   host.innerHTML = ALERT_GROUPS.map(g => {
     const on = !!alertGroupPrefs[g.id];
     return `<div class="kind"><div><b>${g.label}</b><small>${g.note}</small></div>`
-      + `<span class="c">${n[g.id] || 0} today</span>`
+      + `<span class="c">${tt("today.kinds.count", "{n} today", {n: n[g.id] || 0})}</span>`
       + `<span class="sw${on ? " on" : ""}" data-kind="${g.id}" role="switch"`
       + ` aria-checked="${on}" aria-label="${attr(g.label)}" tabindex="0"></span></div>`;
   }).join("");
   host.scrollTop = at;
+}
+/* The panel's own words, written each time its rows are, so it opens in the
+   language on screen. */
+function kindsChrome(){
+  if(!kindsPop) return;
+  const title = tt("today.kinds.title", "Which kinds make the list");
+  kindsPop.setAttribute("aria-label", title);
+  kindsPop.querySelector("h3").textContent = title;
+  kindsPop.querySelector("p").textContent = tt("today.kinds.lead",
+    "Off is counted, never dropped: the kind leaves the list, and its findings are counted in the \"kinds switched off\" line under it, with \"show\" to read them. Saved on this device.");
+  kindsPop.querySelector("[data-kinds-reset]").textContent = tt("today.kinds.reset", "reset to the board's defaults");
+  kindsPop.querySelector("[data-kinds-done]").textContent = tt("today.kinds.done", "Done");
 }
 /* Where the panel sits: under the button that opened it, its right edge in
    line with the button's, clamped into the window. With no button on the page
@@ -22854,12 +23184,11 @@ function buildAlertSettingsPanel(){
   kindsPop.className = "pop";
   kindsPop.id = "alertPop";
   kindsPop.setAttribute("role", "dialog");
-  kindsPop.setAttribute("aria-label", "Which kinds make the list");
-  kindsPop.innerHTML = `<h3>Which kinds make the list</h3>
-    <p>Off is counted, never dropped: the kind leaves the list, and its findings are counted in the "kinds switched off" line under it, with "show" to read them. Saved on this device.</p>
+  kindsPop.innerHTML = `<h3></h3>
+    <p></p>
     <div class="kinds"></div>
-    <div class="foot2"><a class="link" href="#" data-kinds-reset>reset to the board's defaults</a>`
-    + `<a class="btn2 primary" href="#" data-kinds-done>Done</a></div>`;
+    <div class="foot2"><a class="link" href="#" data-kinds-reset></a>`
+    + `<a class="btn2 primary" href="#" data-kinds-done></a></div>`;
   document.body.appendChild(kindsPop);
   drawKindRows();
 
@@ -22943,7 +23272,7 @@ buildAlertSettingsPanel();
 
    Today — wireTiles, wireSev, wireFinds, wireCards:
      .kpi                 spotlight under the pointer (--mx/--my); inside it
-                          .spark[data-vals="l1,l2,…"] with a <polyline points>
+                          .spark[data-vals="l1|l2|…"] with a <polyline points>
                           in a 0..100 x space, circle.pt and span.scrub.
      .sev[data-kind=crit|watch|opp]   click toggles .off and hides .find.<kind>.
      .find.crit|watch|opp[data-id]    a row; its .mark silences the row, data-id
@@ -23728,7 +24057,7 @@ const SS_VIEWS = [
    get p(){ return tt("nav.search.cash.line", "Today"); }, ic: "coin", syn: ["debt", "loans", "money", "owe", "bank", "cash"],
    live(){ const debt = (D.loans || []).reduce((s, l) => s + (l.remaining || 0), 0);
      return debt ? {p: tt("nav.search.cash.owed", "Today · {w} owed on loans", {w: compact(debt)})} : {}; },
-   go(){ showPage("today"); ssRing($$("#kpis .kpi").find(k => /cash on hand/i.test(k.textContent))); }},
+   go(){ showPage("today"); ssRing(q('#kpis [data-kpi="cash"]')); }},
   {id: "daily", get t(){ return tt("nav.search.daily.title", "Daily result"); },
    get p(){ return tt("nav.search.daily.line", "Company › Results"); }, ic: "profit", syn: ["profit", "revenue", "chart", "income", "why did profit move"],
    go: () => reveal("secDaily")},
@@ -24578,7 +24907,7 @@ const wireTiles = once(() => {
     const pl = q("polyline", sp), pt = q(".pt", sp), lab = q(".scrub", sp);
     if(!pl || !pt || !lab) return;
     const pts = pl.getAttribute("points").trim().split(/\s+/).map(p => p.split(",").map(Number));
-    const vals = (sp.dataset.vals || "").split(",");
+    const vals = (sp.dataset.vals || "").split("|");
     const sr = sp.getBoundingClientRect(), x = (e.clientX - sr.left) / sr.width * 100;
     let k = 0; for(let i = 1; i < pts.length; i++) if(Math.abs(pts[i][0] - x) < Math.abs(pts[k][0] - x)) k = i;
     pt.setAttribute("cx", pts[k][0]); pt.setAttribute("cy", pts[k][1]);
@@ -24651,7 +24980,7 @@ function silencedLine(){
   const n = $$(".find.gone").length;
   line.classList.toggle("on", n > 0);
   const b = line.querySelector("b");
-  if(b) b.textContent = n + (n === 1 ? " finding silenced" : " findings silenced");
+  if(b) b.textContent = tt("today.silenced", {one: "{n} finding silenced", other: "{n} findings silenced"}, {n});
 }
 /* A silenced row folds away, and leaves the Tab order with it. */
 function findGone(f, on){ f.classList.toggle("gone", on); f.inert = on; }

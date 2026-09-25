@@ -31,9 +31,19 @@ const CONVERTED = {
   nav: '#nav, #companyNav, #supplyNav, #growthNav, #clock > b, #clock > small:not(.fv-diffline), #clock .flag, '
     + '#clock .fv-diff, #ssField, .ss-ask, #ssAskMini',
   foot: '.sitefoot',
-  /* A finding's headline, on Today and in the site panel. Its detail (.more)
-     joins once the helpers after _shelf_notes() are converted too (PR 5b). */
-  f: '.find .what, .sp-find .what',
+  /* A finding's headline and its detail, on Today and in the site panel. */
+  f: '.find .what, .find .more, .sp-find .what, .sp-find .more',
+  /* The map's own controls and the finder's; the card's facts and fit line
+     carry names and layout codes, so only its numbers' labels and its link. */
+  map: '#cityMapPage .map-head .layers, #cityMapPage .fswitch, #cityMapPage .filters .lab, #cityMapPage .fchip.cat, '
+    + '#cityMapPage .fchip.show, #cityMapPage .fchip.num, #cityMapPage .fnew, #cityMapPage .fhead, #cityMapPage .places .empty, '
+    + '#cityMapPage .site .nums, #cityMapPage .site .go2',
+  /* Today's own words: the tiles, the list's head and count lines, each
+     finding's figure, the silenced line and the Next moves cards. The
+     finding sentences are Python's (f); the kinds panel is left out, as its
+     rows are the kinds' names (nav) and it redraws each time it opens, and so
+     is Ask the board under Next moves (the search palette's). */
+  today: '#kpis, #alertHead, #alerts .amt, #alertMinor .td-count, #silenced, #secMoves h2, #secMoves .moves',
 };
 const MEASURED = 'button, .chip, .seg a, th, .tile .lab';
 
@@ -111,7 +121,8 @@ test('?ui=de reaches the board: Python\'s messages in the table, and their Engli
     const cap = ttPayload({limit: 'the building', i18n: wire});
     return [row.text !== enOf(row, 'text'), findingAmount(row), cap.limit !== 'the building', spLimitShow(cap, {})];
   });
-  assert.deepEqual(read, [true, '1,500<small>units short</small>', true, 'door']);
+  // The figure is read out of the English and written in the page's numbers.
+  assert.deepEqual(read, [true, `1.500<small>${TABLE['today.amt.unitsShort']}</small>`, true, 'door']);
   // Numbers follow the UI language, on the board and in tt(); back in English, en-US again.
   assert.deepEqual(await page.evaluate(() => [NUM_LOCALE, fmt(1234.4), tt('f.x', '{n:,}', {n: 1234})]),
     ['de-DE', '$1.234', '1.234']);
@@ -164,13 +175,24 @@ async function views(page){
       else out.push([p.id, null, null]);
     });
     (D.businesses || []).forEach(b => out.push(['company', 'results', b.key]));
+    // The map with the finder on, its first result's card open.
+    if(D.premises) out.push(['map', 'finder', null]);
     return out;
   });
 }
 async function show(page, [pageId, sub, site]){
-  await page.evaluate(([pageId, sub, site]) => {
+  await page.evaluate(async ([pageId, sub, site]) => {
     showPage(pageId, false);
-    if(sub) showSub(pageId, sub);
+    /* The map draws once its geometry has loaded. */
+    if(pageId === 'map' && typeof cityMapPage !== 'undefined' && cityMapPage){
+      await cityMapPage.ready;
+      if(sub === 'finder'){
+        openFinder({});
+        await cityMapPage.ready;
+        const first = document.querySelector('#cityMapPage .place.fr');
+        if(first) await cityMapPage.select(first.dataset.pick, false);
+      }
+    } else if(sub) showSub(pageId, sub);
     if(site) openSite(site, false);
   }, [pageId, sub, site]);
   await page.waitForTimeout(50);
@@ -195,8 +217,13 @@ async function measure(page){
           /* A name (Big Copilot, YouTube, the studio) is marked translate="no". */
           if(n.parentElement.closest('[translate="no"]')) continue;
           /* A finding's sentence is cut into headline and detail, so its
-             brackets can open in one text node and close in the next. */
-          const outside = n.textContent.replace(/^[^\[]*\]/, '').replace(/\[[^\]]*(\]|$)/g, '').replace(/[\d\s.,:;$%+\-–—×·/()!?%'"‹›…#]+/g, '');
+             brackets can open in one text node and close in the next; and a
+             message nests others (a list, a weekday, a finding's detail),
+             so brackets nest. Matched pairs go innermost first; what is left
+             before a lone "]" opened earlier, and after a lone "[" closes later. */
+          let outside = n.textContent;
+          for(let was = ''; was !== outside;){ was = outside; outside = outside.replace(/\[[^\[\]]*\]/g, ''); }
+          outside = outside.replace(/^[^]*\]/, '').replace(/\[[^]*$/, '').replace(/[\d\s.,:;$%+\-–—×·/()!?%'"‹›…#]+/g, '');
           if(outside.length > 1) english.push(`${area}: ${n.textContent.trim().slice(0, 60)}`);
         }
       });
