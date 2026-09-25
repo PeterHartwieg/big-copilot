@@ -1338,9 +1338,15 @@ function openFinder(preset = {}, focus = false){
   showPage("map");
   showCityMap();
   const view = cityMapPage;
+  // A fresh question starts at the top of its answers, whatever the list was
+  // scrolled to before; on a narrow map the whole panel is what scrolls.
+  const toTop = () => view.root.querySelectorAll('.places, .places .list').forEach(el => { el.scrollTop = 0; });
+  if(focus) toTop();
   view.setFinder(preset);
   if(focus) view.ready.then(ok => {
-    if(!ok) return;
+    // The player may have left while the map loaded; the focus stays where they went.
+    if(!ok || page !== "map") return;
+    toTop();
     const to = view.root.querySelector('.place.fr') || view.root.querySelector('[data-f="tog"]');
     to?.focus({preventScroll: true});
   });

@@ -1426,6 +1426,45 @@ test('a Growth cell opens the finder on its own type and neighbourhood', async (
   } finally { await page.close(); }
 });
 
+test('a Growth cell opens the finder at the top of its list, however far it was scrolled', async () => {
+  // Enough vacant shops in Hell's Kitchen that the preset's list still scrolls.
+  const extra = geometry.buildings.filter(b => b.hood === HK_NAME && b.path && !HK.includes(b.key))
+    .slice(0, 30).map(b => site(b.key, {traffic: 30}));
+  assert.equal(extra.length, 30);
+  const {page, errors} = await fixture(null, {premises: {...PREMISES, buildings: [...PREMISES.buildings, ...extra]}});
+  try{
+    await page.setViewportSize({width: 1440, height: 600});
+    await openMap(page); await turnOn(page);
+    const list = '#cityMapPage .places .list';
+    await page.$eval(list, el => { el.scrollTop = el.scrollHeight; });
+    assert.ok(await page.$eval(list, el => el.scrollTop) > 0, 'the list scrolls');
+    await page.evaluate(() => { showPage('growth'); drawMarket(); wireHeat(); });
+    await page.locator(`#market .cell[data-slug="${CLOTHES}"][data-hood="${HK_NAME.replace("'", "\'")}"]`).click();
+    await page.waitForFunction(() => document.activeElement?.matches('#cityMapPage .place.fr'));
+    assert.equal(await page.$eval(list, el => el.scrollTop), 0);
+    const [first, box] = await page.evaluate(sel => [document.querySelector(sel + ' .place.fr').getBoundingClientRect().top,
+      document.querySelector(sel).getBoundingClientRect()], list);
+    assert.ok(first >= box.top && first < box.bottom, 'the first result is in view');
+    assert.ok(await page.locator(list + ' .place.fr').count() > 10);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a finder the player left while it loaded does not take the focus', async () => {
+  const {page, errors} = await fixture();
+  try{
+    await page.evaluate(() => { showPage('growth'); drawMarket(); wireHeat(); });
+    // Leave for Today before the map has loaded, then let it finish.
+    await page.evaluate(async () => {
+      document.querySelector(`#market .cell[role=button]`).click();
+      showPage('today');
+      await cityMapPage.ready;
+    });
+    assert.equal(await page.evaluate(() => !!document.activeElement?.closest('#cityMapPage')), false);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
 test('a cell with no reading is no button and opens nothing', async () => {
   const {page, errors} = await fixture();
   try{
