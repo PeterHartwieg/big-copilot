@@ -138,15 +138,24 @@ python tools/game_update/caps.py
 
 It reads the installed game's own text only (`load_game_locale()`, never the bundled
 copy). At build 3682 it prints `rows: {'retail': 6, 'office': 6, 'cinema': 3,
-'theater': 3}` and `same as FALLBACK_CAPS: True`.
+'theater': 3}`, `other headings: ['warehouse / factory', 'residential']` and
+`same as FALLBACK_CAPS: True`.
 
-- It stops with an error when the game is not found (set `BA_LOCALE`) or when a category
-  in `CAP_CATEGORIES` parsed no rows. The second means the page's wording changed and
-  the board fell back to `FALLBACK_CAPS`: fix `_CAP_SECTION_RE` or `_CAP_SIZE_RE`, then
-  run it again.
-- `False` means the parsed table differs, a capacity changed or a size letter was added
-  or dropped: update `FALLBACK_CAPS` and its comment, and check `CAPS_HELP` in
-  `tests/test_premises.py`, which is the page as build 3675 wrote it.
+- It stops with an error when the game is not found (set `BA_LOCALE`), when the game text
+  has no `help_building_types_content` page at all, or when a category in
+  `CAP_CATEGORIES` parsed no rows. A missing page or a category with no rows means the
+  game's text changed and the board fell back to `FALLBACK_CAPS`. Find the page's new key
+  and update it in `_door_caps()` and in `ships()` in `build_web.py`, or fix `_CAP_SECTION_RE` or `_CAP_SIZE_RE`, then run
+  it again.
+- `False` means the parsed table differs. First compare the printed row counts with the
+  page: fewer rows than the page lists under a heading means the regex lost rows (fix
+  `_CAP_SIZE_RE`). Otherwise a capacity changed or a size letter was added or dropped:
+  update `FALLBACK_CAPS` and its comment, and check `CAPS_HELP` in `tests/test_premises.py`,
+  which is the page as build 3675 wrote it.
+- It also prints `other headings:`, the bold headings on the page outside
+  `CAP_CATEGORIES`; at 3682 those are `warehouse / factory` and `residential`, which the
+  board does not rate. Any other one may be a new building class, such as a new kind of
+  venue; see the classification rule under The game tables.
 - `True` with other row counts means the collapsed table did not change: another layout
   of a letter the table already has, since the codes collapse to their letter. Read the
   page to be sure.
@@ -191,10 +200,15 @@ none of `RETAIL_TYPES`, `OFFICE_TYPES` and `COST_CENTRE_TYPES`, nor in the scrip
 `OTHER_TYPES`, the 19 city businesses (banks, wholesalers, the IRS and the like) the board
 does not model at build 3682. Classify a new one by what the player can do with it:
 
-- a walk-in shop the player runs: `RETAIL_TYPES`, with its `DEMANDS_NOT_MADE` row;
+- a walk-in shop the player runs: `RETAIL_TYPES`, with its `DEMANDS_NOT_MADE` row. If it
+  sells a service or tickets rather than stock, also add it to the exclusions in
+  `RESELLER_TYPES` (`RETAIL_TYPES` minus cinema, gym, hairdresser and theater today). If
+  it has a building class of its own, as the cinema and the theater do, it also needs a
+  `VENUE_TYPES` entry and a `CAP_CATEGORIES` category (with its `FALLBACK_CAPS` row);
 - an office the player runs: `OFFICE_TYPES`;
-- a factory, warehouse or headquarters-like site the player runs: `COST_CENTRE_TYPES`,
-  and `OVERHEAD_TYPES` as well for an overhead site such as a warehouse;
+- a factory the player runs: the literal set in the `COST_CENTRE_TYPES` definition;
+- a warehouse, distribution centre or headquarters-like overhead site: `OVERHEAD_TYPES`
+  only, since `COST_CENTRE_TYPES` already includes it;
 - only a city business the player cannot run: `OTHER_TYPES` in `bundles.py`.
 
 A type that disappears from the bundle is reported only for `RETAIL_TYPES`.
@@ -289,10 +303,13 @@ percent means the patch rebalanced rents: refit `RENT_RATES` against current lea
 
 Then the office post rate, if the company runs an office: load the new save into the
 board and open the office's own page. Its hour grid shows the customers each hour, and
-hovering an hour reads "N of M workstations staffed". With `OFFICE_POST_RATE` at 1, the
-customers in a fully staffed hour should equal the professionals at computers. A steady
-gap means the game changed the rate: re-measure it and update the constant and its
-comment.
+hovering an hour reads "N of M workstations staffed", where N is the professionals at
+computers (`staffed / postRate`), whatever the rate. Customers equal N only when demand
+outruns the staff, so compare only such hours: the busiest ones, or one marked at the
+staffing ceiling, and not one capped by building capacity. There, with `OFFICE_POST_RATE`
+at 1, customers should equal N. More customers than N, or customers stuck below N while
+demand is higher, means the game changed the rate: re-measure it and update the constant
+and its comment.
 
 ## 5. Bump the build
 

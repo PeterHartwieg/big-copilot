@@ -7,10 +7,13 @@ from the help page help_building_types_content, and starts from FALLBACK_CAPS, s
 page that no longer parses would still hand back the old table. This reads the
 installed game's own text (load_game_locale(), never the bundled copy), counts the
 size rows under each of CAP_CATEGORIES, and fails with a message when the game is
-not found or a category yields no rows. Otherwise it prints the row counts and
-whether the parsed table equals FALLBACK_CAPS. At build 3682:
+not found, the page is missing, or a category yields no rows. Otherwise it prints
+the row counts, the bold headings on the page outside CAP_CATEGORIES (a new one
+may be a new building class), and whether the parsed table equals FALLBACK_CAPS.
+At build 3682:
 
     rows: {'retail': 6, 'office': 6, 'cinema': 3, 'theater': 3}
+    other headings: ['warehouse / factory', 'residential']
     same as FALLBACK_CAPS: True
 
 Nothing is written. See docs/game-update.md.
@@ -36,16 +39,20 @@ def main() -> int:
     if not page:
         sys.exit(f"{source} has no help_building_types_content page")
     rows = {category: 0 for category in d.CAP_CATEGORIES}
+    others = []
     section = None
     for line in page.split("\n"):
         line = line.strip()
         head = d._CAP_SECTION_RE.match(line)
         if head:
             section = head.group(1).strip().lower()
+            if section not in rows and section not in others:
+                others.append(section)
             continue
         if section in rows and d._CAP_SIZE_RE.match(line):
             rows[section] += 1
     print("rows:", rows)
+    print("other headings:", others)
     missing = [category for category, n in rows.items() if not n]
     if missing:
         sys.exit(f"no size rows parsed for {missing}: fix _CAP_SECTION_RE / _CAP_SIZE_RE")

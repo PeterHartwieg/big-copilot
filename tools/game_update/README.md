@@ -19,8 +19,9 @@ repository, never the repository root.
 - `presets.py [--data-dir DIR]`: prints the Easy, Normal and Hard difficulty presets from
   `sharedassets1.assets`, for `HOUSE_RULES` and `tests/test_house_rules.py`.
 - `caps.py`: checks that the game's building types help page still parses into the
-  building capacity table, fails with a message when a category yields no rows, and says
-  whether the table still equals `FALLBACK_CAPS`.
+  building capacity table. It fails with a message when the game or the page is missing or
+  a category yields no rows, lists the page's other headings, and says whether the table
+  still equals `FALLBACK_CAPS`.
 - `bundles.py`: compares `DEMANDS_NOT_MADE`, `STATION_SKILLS` and `JOB_DEMANDS` with the
   game's Addressables bundles, and reports any business type the board does not know.
   Needs UnityPy on `PYTHONPATH`, as `make_demand_curves.py` does:
