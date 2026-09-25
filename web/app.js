@@ -55,6 +55,20 @@
   const REDUCED = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
   const ICON_FOLDER = '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>';
 
+  // The page's tt() (web/i18n.js), which also remembers the call behind each
+  // text it gave this file, so the strip's headline and note, held as text,
+  // can be said again in a new language (retell(), from relabel()). Only the
+  // latest few hundred are kept.
+  const said = new Map();
+  const keep = (text, call) => {
+    said.delete(text);
+    said.set(text, call);
+    if (said.size > 300) said.delete(said.keys().next().value);
+    return text;
+  };
+  const tt = (key, en, params) => keep(window.tt(key, en, params), [key, en, params]);
+  const retell = (text) => (said.has(text) ? keep(window.tt(...said.get(text)), said.get(text)) : text);
+
   // Every word this file writes goes through tt() (web/i18n.js, which the
   // page loads first; docs/architecture.md, "UI text"). A sentence that holds
   // markup (a bold word, a file name in code, the mod's link) keeps its tags
@@ -62,20 +76,28 @@
   // are let through, and everything else is escaped. The one link such a
   // sentence holds is the mod's, and its address is the markup's (#modLink),
   // so this file names no host but the game's own loopback.
-  function richHtml(text) {
+  // A param never becomes markup: richParams() hands tt() a private-use token
+  // for each value, and richHtml() puts the value back, escaped, only after
+  // the tags are restored.
+  const escHtml = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const richParams = (params) => Object.fromEntries(Object.keys(params).map((k, i) => [k, `\uE000${i}\uE001`]));
+  function richHtml(text, params) {
     const mod = $("modLink") ? $("modLink").getAttribute("href") : "";
+    const values = Object.values(params || {});
     return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
       .replace(/&lt;(\/?)(b|code)&gt;/g, "<$1$2>")
-      .replace(/&lt;a&gt;/g, `<a href="${mod.replace(/"/g, "&quot;")}" target="_blank" rel="noopener">`).replace(/&lt;\/a&gt;/g, "</a>");
+      .replace(/&lt;a&gt;/g, `<a href="${escHtml(mod)}" target="_blank" rel="noopener">`).replace(/&lt;\/a&gt;/g, "</a>")
+      .replace(/\uE000(\d+)\uE001/g, (m, i) => escHtml(values[i] ?? ""));
   }
   // The landing's help paragraphs that hold markup: their English is the
   // markup's (build_web.py, BANNER), written again here for the key.
   function landingRich() {
-    const fill = (id, text) => { const el = $(id); if (el) el.innerHTML = richHtml(text); };
+    const fill = (id, text, params) => { const el = $(id); if (el) el.innerHTML = richHtml(text, params); };
     fill("lgHelpFolder", tt("land.help.folder", "Choose the <b>Big Ambitions</b> folder inside <b>SaveGames</b>; the page finds the newest save across the company folders inside it."));
     fill("lgHelpFind", tt("land.help.find", "If you cannot find it, the game shows you: on its <b>Load Game</b> screen, click <b>Browse savegame folder…</b> and the folder opens in a file window."));
     const build = $("lgHelpAutosave") && $("lgHelpAutosave").dataset.build;
-    if (build) fill("lgHelpAutosave", tt("land.help.autosave", "The game autosaves every five minutes. Your browser may call folder access an \"upload\" or ask to \"let this site view files\"; the save stays on your computer. Checked on game build {build}; the Python runtime the page needs is about {mb} MB, fetched once and cached.", {build, mb: 6}));
+    const about = {build, mb: 6};
+    if (build) fill("lgHelpAutosave", tt("land.help.autosave", "The game autosaves every five minutes. Your browser may call folder access an \"upload\" or ask to \"let this site view files\"; the save stays on your computer. Checked on game build {build}; the Python runtime the page needs is about {mb} MB, fetched once and cached.", richParams(about)), about);
     fill("lgHelpLinked", tt("land.help.linked", "<b>Linked to the game.</b> With the <a>Big Copilot Link mod</a> from the Steam Workshop enabled, click <b>Link to the game</b> and the board reads the running game itself. Chrome and Edge ask once to allow the site to reach your computer; the data still never leaves it."));
     fill("localeOther", tt("land.gametext.find", "To find your game's <code>en.json</code>, open Steam → Manage → Browse local files. On macOS, search that folder for <code>en.json</code>; use Show Package Contents if the game files are inside an app bundle."));
   }
@@ -1676,7 +1698,17 @@
     }
     const total = groups.reduce((n, g) => n + g.saves.length, 0);
     savePicker.hidden = total < 2;
+    saveGroups = savePicker.hidden ? null : groups;
     if (savePicker.hidden) { closeSavePicker(); return moved; }
+    fillSaveMenu(groups);
+    return moved;
+  }
+  // The groups the menu was last built from, so a change of UI language can
+  // write its entries again without a scan.
+  let saveGroups = null;
+  // The menu's entries, in the UI language, with the pick selected.
+  function fillSaveMenu(groups) {
+    const home = groups.find((g) => g.dir === pick.dir);
     saveSel.textContent = "";
     const opt = (parent, value, title, detail, current = title) => {
       const o = document.createElement("option");
@@ -1704,7 +1736,6 @@
     // Nothing in the menu stands for the pick: the rule follows the menu.
     if (saveSel.selectedIndex < 0) { setPick("", ""); saveSel.value = pickKey("", ""); }
     paintSavePicker();
-    return moved;
   }
   // Whatever was asked for while a build ran; the latest request wins.
   let queued = null;
@@ -2220,13 +2251,20 @@
   // The strip's current headline and note keep the language they were said
   // in until the next one.
   function relabel() {
+    strip.head = retell(strip.head);
+    strip.meta = retell(strip.meta);
+    const port = portNoteUp();
+    noted.text = retell(noted.text);
+    noted.sub = retell(noted.sub);
+    if (port) portNote = noted.text;
     landingRich();
     if ($("savePlatform")) showSaveLocation($("savePlatform").value);
     localeState();
     labelSnapshot();
     labelControls();
     labelSavePicker();
-    if (saveSel.options.length) paintSavePicker();
+    if (saveGroups && !savePicker.hidden) fillSaveMenu(saveGroups);
+    else if (saveSel.options.length) paintSavePicker();
     labelWikiOffer(document.querySelector(".lg-wiki"));
     labelCopy();
     syncWatchBtn();

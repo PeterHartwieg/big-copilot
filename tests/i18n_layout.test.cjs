@@ -35,9 +35,12 @@ const CONVERTED = {
 };
 /* Text that is not Big Copilot's own words even inside a converted area:
    paths and file names in code, the save's own words (the strip's file line,
-   the save menu's characters, saves and dates), the changelog entry the
-   update banner opens to, and the feature list the community API sends. */
-const UNTRANSLATED = 'code, #srcMeta, #releaseDetails, .save-current, .save-group-label, .save-option-title, .save-option-meta, .community-card h3, .community-card p';
+   the save menu's character names, the trigger that names the character, and
+   an entry's detail, which ends in a date), the changelog entry the update
+   banner opens to, and the feature list the community API sends. The save
+   menu's entries themselves are checked: the shell fixture's saves are all
+   autosaves, whose titles are ours ("Autosave 3"). */
+const UNTRANSLATED = 'code, #srcMeta, #releaseDetails, .save-current, .save-group-label, .save-option-meta, .community-card h3, .community-card p';
 const MEASURED = 'button, .chip, .seg a, th, .tile .lab';
 
 /* The pseudo text: accents on the letters, 40% longer, in brackets; the
@@ -245,10 +248,10 @@ async function shell(t, {ui = '', width = 1280, remembered = false} = {}){
     const folder = (name, entries) => ({name, kind: 'directory',
       async queryPermission(){ return 'granted'; }, async requestPermission(){ return 'granted'; },
       async *values(){ yield* entries; }});
-    const meta = {kind: 'file', name: 'first.hsg.meta', getFile: async () => ({name: 'first.hsg.meta', lastModified: 1,
-      async text(){ return JSON.stringify({characterData: {name: 'Alice'}, day: 4}); }})};
-    const handle = folder('Saves', [folder('alice', [file('first.hsg', 1000), file('Recover #3.hsg', 2000), meta]),
-      folder('bob', [file('other.hsg', 500)])]);
+    const meta = {kind: 'file', name: 'Recover #4.hsg.meta', getFile: async () => ({name: 'Recover #4.hsg.meta', lastModified: 1,
+      async text(){ return JSON.stringify({characterData: {name: 'Alice'}, day: 4, isRecoverSave: true}); }})};
+    const handle = folder('Saves', [folder('alice', [file('Recover #4.hsg', 1000), file('Recover #3.hsg', 2000), meta]),
+      folder('bob', [file('Recover #1.hsg', 500)])]);
     window.showDirectoryPicker = async () => handle;
     const db = {close(){}, transaction(){
       return {objectStore: () => ({get(){
@@ -325,6 +328,51 @@ test('the pseudo-locale fits the landing and the shell at every width', async t 
       assert.deepEqual(xx.errors, [], `${width}px`);
     }
   }
+});
+
+test('a change of language rewrites the save menu that was built before it, and back', async t => {
+  const {page, errors} = await shell(t, {remembered: true});
+  await SHELL_VIEWS.menu(page);
+  const menu = () => page.evaluate(() => ({
+    titles: [...document.querySelectorAll('.save-option-title')].map(el => el.textContent),
+    days: [...document.querySelectorAll('.save-option-meta')].map(el => el.textContent.split(' · ')[0]).filter(s => /\d/.test(s) && !/:/.test(s)),
+    trigger: document.querySelector('.save-trigger').getAttribute('aria-label'),
+  }));
+  const english = await menu();
+  assert.deepEqual(english.titles.slice(0, 2), ['Newest save anywhere', 'Newest for this character']);
+  assert.ok(english.titles.includes('Autosave 4'), english.titles.join(' | '));
+  assert.ok(english.days.includes('Day 4'), english.days.join(' | '));
+  assert.match(english.trigger, /^Which save to read: /);
+  await page.evaluate(table => ttSetTable('de', table), TABLE);
+  const pseudo = await menu();
+  assert.equal(pseudo.titles.length, english.titles.length);
+  for(const title of pseudo.titles) assert.match(title, /^\[.*\]$/, `untranslated entry: ${title}`);
+  assert.ok(pseudo.days.length && pseudo.days.every(d => /^\[.*\]$/.test(d)), pseudo.days.join(' | '));
+  assert.match(pseudo.trigger, /^\[/);
+  await page.evaluate(() => ttSetTable('en', null));
+  assert.deepEqual(await menu(), english);
+  assert.deepEqual(errors, []);
+});
+
+test('a change of language says the strip\'s headline and note again, and a param never becomes markup', async t => {
+  const {page, errors} = await shell(t, {remembered: true});
+  await page.evaluate(() => document.getElementById('forgetHistory').click());
+  const strip = () => page.evaluate(() => [document.getElementById('srcStatus').textContent, document.getElementById('srcNote').textContent]);
+  const english = await strip();
+  assert.deepEqual(english, ['Up to date', 'History forgotten. The next save starts a fresh record.']);
+  // The build number reaches a sentence with markup as a param.
+  await page.evaluate(() => { document.getElementById('lgHelpAutosave').dataset.build = '<img src=x>&amp;'; });
+  await page.evaluate(table => ttSetTable('de', table), TABLE);
+  for(const text of await strip()) assert.match(text, /^\[.*\]$/, text);
+  const help = await page.evaluate(() => {
+    const el = document.getElementById('lgHelpAutosave');
+    return {img: el.querySelectorAll('img').length, text: el.textContent};
+  });
+  assert.equal(help.img, 0);
+  assert.ok(help.text.includes('<img src=x>&amp;'), help.text);
+  await page.evaluate(() => ttSetTable('en', null));
+  assert.deepEqual(await strip(), english);
+  assert.deepEqual(errors, []);
 });
 
 test('the landing\'s sentences with markup are the markup\'s English when no table is loaded', async t => {
