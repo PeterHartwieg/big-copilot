@@ -1050,7 +1050,7 @@ test('on a phone the address keeps its room and the numbers stay on the card', a
     assert.deepEqual(shown, ['#', '', 'Address', 'Score', 'Upfront']);
     const nm = await page.locator(`#cityMapPage .place.fr .nm`).first().boundingBox();
     assert.ok(nm.width > 120, `address column starved at ${nm.width}px`);
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1), false);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.getBoundingClientRect().width + 1), false);
     // The panel flows under the map rather than floating over it.
     assert.equal(await page.locator('#cityMapPage .places').evaluate(e => getComputedStyle(e).position), 'static');
     // The card is still the place every number lives.
