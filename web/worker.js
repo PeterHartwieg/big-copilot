@@ -74,8 +74,9 @@ function writeText(path, text) {
   else { try { py.FS.unlink(path); } catch (e) {} }
 }
 
-function readText(path) {
-  try { return py.FS.readFile(path, {encoding: "utf8"}); } catch (e) { return ""; }
+// The history file as text, or null when there is none to hand back.
+function heldHistory() {
+  try { return py.FS.readFile(HISTORY, {encoding: "utf8"}); } catch (e) { return null; }
 }
 
 function placeSave(name, bytes, mtime) {
@@ -110,7 +111,9 @@ onmessage = (e) => {
         say("build", `Reading ${msg.name}`);
         const t = performance.now();
         const data = build(path);
-        postMessage({kind: "built", id: msg.id, data, history: readText(HISTORY),
+        // No file after a build: Python set a damaged copy aside and wrote
+        // nothing, so the page keeps what it has stored (null, not "").
+        postMessage({kind: "built", id: msg.id, data, history: heldHistory(),
                      ms: Math.round(performance.now() - t)});
       } else if (msg.kind === "name") {
         if (!lastSave) throw new Error("no save loaded yet");
@@ -122,7 +125,7 @@ onmessage = (e) => {
         const pySlug = msg.slug == null ? "None" : JSON.stringify(msg.slug);
         py.runPython(`ba_dashboard.browser_name(${JSON.stringify(HISTORY)}, ${JSON.stringify(msg.rid)}, ${pySlug})`);
         const data = build(`${SAVE_DIR}/${lastSave.name}`);
-        postMessage({kind: "built", id: msg.id, data, history: readText(HISTORY), ms: 0});
+        postMessage({kind: "built", id: msg.id, data, history: heldHistory(), ms: 0});
       } else if (msg.kind === "forget") {
         writeText(HISTORY, "");
       }

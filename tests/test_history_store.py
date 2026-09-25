@@ -130,6 +130,18 @@ class OlderSave(Tmp):
         flow = ba_dashboard._cash_flow(run, [], 44)
         self.assertEqual((flow["fromDay"], flow["days"], flow["cashFrom"], flow["cashTo"]), (40, 4, 40000, 5))
 
+    def test_a_save_more_than_sixty_days_behind_keeps_its_own_reading(self):
+        history = History(None)
+        for day in range(100, 160):
+            history.ledger("c", day, {"cash": day, "profit": 0})
+            history.demand("c", day, snapshot(day))
+        run = history.ledger("c", 30, {"cash": 30, "profit": 0})
+        self.assertEqual([e["day"] for e in run], [30])
+        history.demand("c", 30, snapshot(30))
+        self.assertIn("30", history.book["c"]["days"])
+        # The later save's days are all still there for when it is opened again.
+        self.assertEqual(len(history.book["c"]["ledger"]), 61)
+
     def test_net_worth_carried_forward_is_never_from_a_later_save(self):
         history = History(None)
         history.ledger("c", 40, {"cash": 0, "profit": 0, "netWorth": 400})
@@ -174,6 +186,18 @@ class BrowserBound(Tmp):
             ba_dashboard.browser_build("x.hsg", "", self.path, None)
         self.assertFalse(os.path.exists(self.path))
         self.assertEqual(self.read(self.path + ".bad"), '{"characters": {"x"')
+
+    def test_a_browser_reload_twenty_days_back_keeps_its_own_two_weeks(self):
+        history = History(self.path)
+        for day in range(1, 61):
+            history.demand("c", day, snapshot(day))
+        history.write()
+        save = mock.Mock(root={"characterId": "c", "Day": 40})
+        with mock.patch.object(ba_dashboard, "load_save", return_value=save),                 mock.patch.object(ba_dashboard, "safe_extract", return_value={}):
+            ba_dashboard.browser_build("x.hsg", "", self.path, None)
+        days = sorted(map(int, json.loads(self.read())["characters"]["c"]["days"]))
+        self.assertEqual(days, list(range(27, 41)) + list(range(41, 61)),
+                         "its own two weeks up to day 40, and the later save's days")
 
     def test_the_cli_keeps_its_sixty_days(self):
         history = History(self.path)

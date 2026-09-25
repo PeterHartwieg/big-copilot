@@ -40,6 +40,8 @@ function worker() {
         files.set(hist, JSON.stringify(book));
         return undefined;
       }
+      // A history that does not parse is set aside and none is written.
+      if ((files.get(hist) || '').startsWith('{damaged')) files.delete(hist);
       return JSON.stringify({history: files.get(hist) || ''});
     },
   };
@@ -103,4 +105,13 @@ test('a new en.json of the same length replaces the old one; the same text is no
   assert.equal(w.writes.filter((p) => p === LOCALE).length, 2);
   await w.send(build(4, '', ''));
   assert.equal(w.files.has(LOCALE), false, 'the built-in text again: the file is gone');
+});
+
+test('a build that wrote no history hands back none, so the page keeps its stored copy', async () => {
+  const w = worker();
+  await w.send(build(1, '{damaged'));
+  assert.equal(w.posted.at(-1).kind, 'built');
+  assert.strictEqual(w.posted.at(-1).history, null);
+  await w.send(build(2, JSON.stringify({names: []})));
+  assert.equal(w.posted.at(-1).history, JSON.stringify({names: []}));
 });

@@ -9760,6 +9760,21 @@ def _group_shortages(shortages: list) -> list:
     return sorted(grouped.values(), key=lambda s: (not s["mine"], -s["daysLeft"]))
 
 
+def _prune_days(store: dict, keep: int, day: int | None = None) -> None:
+    """Keep the ``keep`` latest days of a day-keyed record.
+
+    With ``day`` (the save being read), the count is taken up to that day and
+    every later day stays too: an older save reloaded after a newer one keeps
+    its own day and the days before it, and the newer save's days are there
+    for when it is opened again.
+    """
+    keys = sorted(store, key=int)
+    if day is not None:
+        keys = [k for k in keys if int(k) <= day]
+    for old in keys[:-keep]:
+        del store[old]
+
+
 class History:
     """The on-disk record the save itself does not keep.
 
@@ -9817,8 +9832,7 @@ class History:
     def demand(self, character: str, day: int, snapshot: dict) -> dict:
         store = self._for(character).setdefault("days", {})
         store[str(day)] = snapshot
-        for old in sorted(store, key=int)[:-HISTORY_DAYS]:
-            del store[old]
+        _prune_days(store, HISTORY_DAYS, day)
 
         earlier = [d for d in sorted(store, key=int) if int(d) < day]
         if not earlier:
@@ -9845,8 +9859,7 @@ class History:
         """
         store = self._for(character).setdefault("ledger", {})
         store[str(day)] = {**store.get(str(day), {}), **entry}
-        for old in sorted(store, key=int)[:-HISTORY_DAYS]:
-            del store[old]
+        _prune_days(store, HISTORY_DAYS, day)
         # Days after today are from a later save of this character: the player
         # reloaded an older one, or picked it to look back. They are kept for
         # when that later save is opened again, but never read as today's run.
@@ -9863,22 +9876,22 @@ class History:
                 store.pop(rid, None)
         return dict(store)
 
-    def keep_recent(self, character: str, days: int, characters: int) -> None:
+    def keep_recent(self, character: str, days: int, characters: int, day: int | None = None) -> None:
         """Bound the book, for a store with a small quota (the browser's).
 
         ``character`` becomes the most recent; only the ``characters`` most
         recently built are kept, each with its last ``days`` demand snapshots.
         The trend compares with about a week back, so two weeks of snapshots
         lose nothing the board shows; the ledger is small and keeps its 60.
+        ``day`` is the save just built: an older save of ``character`` keeps
+        its own two weeks up to that day, as well as the later days on record.
         """
         if character in self.book:
             self.book[character] = self.book.pop(character)
         for old in list(self.book)[:-characters]:
             del self.book[old]
-        for record in self.book.values():
-            store = record.get("days", {})
-            for old in sorted(store, key=int)[:-days]:
-                del store[old]
+        for name, record in self.book.items():
+            _prune_days(record.get("days", {}), days, day if name == character else None)
 
     def write(self) -> None:
         if not self.path or not self.writable:
@@ -28201,7 +28214,7 @@ def browser_build(
     # aside), and this run writes nothing either.
     if os.path.exists(history_path):
         history = History(history_path)
-        history.keep_recent(character, BROWSER_HISTORY_DAYS, BROWSER_HISTORY_CHARACTERS)
+        history.keep_recent(character, BROWSER_HISTORY_DAYS, BROWSER_HISTORY_CHARACTERS, save.root.get("Day"))
         history.write()
     with open(history_path + ".character", "w", encoding="utf-8") as fh:
         fh.write(character)
@@ -28456,6 +28469,10 @@ class Board:
             history = History(self.history)
             history.named(self.character or "default", {rid: slug})
             history.write()
+            if not history.writable:
+                print(f"The line name was not kept: {self.history} could not be read "
+                      "(a damaged copy is set aside as .bad; the next build starts a fresh one).",
+                      flush=True)
             with self.lock:
                 self.revision += 1
                 self._fingerprint = None
