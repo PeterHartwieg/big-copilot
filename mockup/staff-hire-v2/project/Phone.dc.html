@@ -1221,36 +1221,74 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 .hs-phone h2{margin:0;font-size:16px;font-weight:600}
 .hs-pbar{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;gap:6px;padding:12px 16px 20px;background:var(--surface);border-top:1px solid var(--rule)}
 .hs-pbar .hs-note{text-align:center}
+
+/* round 2: less copy, quick hire ------------------------------------------------------ */
+.hs-head{align-items:center}
+.hs-right{display:flex;flex-direction:column;gap:18px;position:sticky;top:20px}
+.hs-right .hs-order{position:static}
+.hs-shops{margin:-6px 0 12px}
+.hs-facts2{margin:14px 0 0;font-size:13px;color:var(--ink-3)}
+.hs-facts2 b{font:500 13.5px/1 "IBM Plex Mono",monospace;color:var(--ink)}
+.hs-facts2 b.warn{color:var(--warn)}
+.hs-scope{display:flex;gap:18px;align-items:center;margin:-2px 0 6px;font-size:12.5px;color:var(--ink-3)}
+.hs-legend{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font:400 12px/1 Archivo,sans-serif!important;color:var(--warn)!important}
+.hs-legend i{width:8px;height:8px;border-radius:2px;background:var(--warn)}
+.hs-sel.empty b{color:var(--ink-3);font-weight:500}
+.hs-quick{display:flex;flex-direction:column;gap:14px;padding:18px 20px 20px;border-radius:14px;background:var(--surface);border:1px solid var(--rule-soft)}
+.hs-quick .qh{display:flex;align-items:center;gap:10px}
+.hs-quick .qh .hs-i{width:28px;height:28px;border-radius:8px;background:var(--raised);color:var(--ink-2)}
+.hs-quick .qh h3{margin:0;font-size:15px;font-weight:600}
+.hs-quick .qh .sub{margin-left:auto;font-size:12px;color:var(--ink-3)}
+.hs-quick .qf{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.hs-quick .fld{display:flex;flex-direction:column;gap:5px;min-width:0}
+.hs-quick .fld.wide{grid-column:1/-1}
+.hs-quick .fld>span:first-child{font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.hs-quick .hs-sel{width:100%;justify-content:space-between;background:var(--ground)}
+.hs-quick .hs-sel b{overflow:hidden;text-overflow:ellipsis}
+.hs-popw.full{display:flex;width:100%}
+.hs-popw.full .hs-pop{width:100%}
+.hs-num{display:grid;grid-template-columns:34px minmax(0,1fr) 34px;height:34px;border-radius:9px;border:1px solid var(--rule);background:var(--ground);overflow:hidden}
+.hs-num button{border:0;background:none;color:var(--ink-2);font:500 16px/1 Archivo,sans-serif;cursor:pointer}
+.hs-num button:hover{background:var(--raised);color:var(--ink)}
+.hs-num b{display:grid;place-items:center;font:500 14px/1 "IBM Plex Mono",monospace}
+.hs-match{font-size:13px;color:var(--ink-2)}
+.hs-match.none{margin:0;color:var(--ink-3)}
+.hs-match summary{display:flex;align-items:center;gap:6px;cursor:pointer;list-style:none}
+.hs-match summary::-webkit-details-marker{display:none}
+.hs-match summary b{font:500 15px/1 "IBM Plex Mono",monospace;color:var(--accent)}
+.hs-match summary svg{width:12px;height:12px;color:var(--ink-3);margin-left:auto;transition:transform .2s}
+.hs-match[open] summary svg{transform:rotate(90deg)}
+.hs-match ul,.hs-qlist{margin:8px 0 0;padding:0;list-style:none;display:flex;flex-direction:column}
+.hs-match li,.hs-qlist li{display:grid;grid-template-columns:minmax(0,1fr) 44px 64px;gap:8px;padding:6px 0;border-bottom:1px solid var(--rule-soft);font-size:12.5px;color:var(--ink)}
+.hs-match .m,.hs-qlist .m{font:500 12px/1.4 "IBM Plex Mono",monospace;color:var(--ink-2);text-align:right}
+.hs-quick.ph{border:0;background:none;padding:0}
+.hs-pcard .hs-ol li b{font-size:18px}
 </style>
 </helmet>
-<div class="board hs-page {{theme}}" style="width: 390px; height: 1080px;">
+<div class="board hs-page {{theme}}" style="width: 390px; height: 1000px;">
 
 <div class="hs-phone">
   <div class="pm"><span class="wordmark">Halden</span><span class="dot"></span><span class="sp">Company · Staff</span></div>
   <div class="pc">
-    <div><h1>Staff</h1><p class="intro">Fill the open places in your staffing plans. People are picked for you.</p></div>
-    <div class="hs-pcard"><ul class="hs-plan">
-      <li><b>2</b><span><strong>reassigned</strong> from your own staff</span></li>
-      <li><b>42</b><span><strong>hired</strong>: 22 Lawyers, 20 Security Guards</span></li>
-      <li class="short"><b>1</b><span><strong>stays open</strong>: Gym Trainer, no candidates</span></li></ul>
-      <p class="hs-note" style="margin:12px 0 0">Added wages <b>+$11,178 a day</b> · 249 applications expire within 24 h</p></div>
-    <div><h2>Open places</h2>
-    <div class="hs-plist" style="margin-top:8px">
-      <a class="hs-prow" href="ChangePicks.dc.html"><span><b>Lawyer</b><small>Park Avenue 88 · Change picks</small></span><span class="v">22<small class="hs-u"> new</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a>
-      <a class="hs-prow" href="ChangePicks.dc.html"><span><b>Security Guard</b><small>4 shops · 2 reassigned · Change picks</small></span><span class="v">20<small class="hs-u"> new</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a>
-      <div class="hs-prow"><span><b>Gym Trainer</b><small>Canal Street 5 · no candidates yet</small></span><span class="v warn">0/1</span><span></span></div>
-    </div></div>
-    <div class="hs-re" style="align-items:flex-start"><span class="hs-i"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h13M13 4l4 4-4 4"></path><path d="M20 16H7M11 12l-4 4 4 4"></path></svg></span><span><b>2 Security Guards</b> with no hours at 7th Avenue 3 go to Wall Street 9.</span></div>
+    <h1>Staff</h1>
+    <div class="hs-pcard"><ul class="hs-ol">
+      <li><span>Reassign</span><b>2</b><small>7th Avenue 3 → Wall Street 9</small></li>
+      <li><span>Hire</span><b>42</b><small>22 Lawyers · 20 Security Guards</small></li>
+      <li class="short"><span>Stays open</span><b>1</b><small>Gym Trainer: no candidates</small></li></ul>
+      <div class="hs-sum" style="margin-top:14px"><span>Added wages</span><b>+$11,178/day</b></div></div>
     <div class="hs-plist">
-      <a class="hs-prow" href="#"><span><b>Headquarters and warehouses</b><small>7 roles · pick by hand</small></span><span class="v">555</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a>
-      <a class="hs-prow" href="#"><span><b>Payroll</b><small>Current staff</small></span><span class="v">639</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a>
+      <a class="hs-prow" href="ChangePicks.dc.html"><span><b>Lawyer</b><small>Park Avenue 88</small></span><span class="v">22</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a>
+      <a class="hs-prow" href="ChangePicks.dc.html"><span><b>Security Guard</b><small>4 shops · 2 reassigned</small></span><span class="v">20</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a>
+      <div class="hs-prow"><span><b>Gym Trainer</b><small>Canal Street 5 · no candidates</small></span><span class="v warn">0/1</span><span></span></div>
     </div>
+    <a class="hs-btn" href="PhoneQuick.dc.html" style="height:44px;justify-content:center"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="8" r="3.500"></circle><path d="M3.500 20a6.500 6.500 0 0 1 13 0M19 8v6M16 11h6"></path></svg>Quick hire for any site</a>
+    <div class="hs-plist"><a class="hs-prow" href="#"><span><b>Payroll</b><small>Current staff</small></span><span class="v">639</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a></div>
   </div>
-  <div class="hs-pbar"><a class="hs-cta wide" href="Review.dc.html"><span>Review and hire 42</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><span class="hs-note">Nothing happens until you confirm.</span></div>
+  <div class="hs-pbar"><a class="hs-cta wide" href="Review.dc.html"><span>Review and hire 42</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><span class="hs-note">Picked for you. You confirm next.</span></div>
 </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":true,"section":"Theme"},"$preview":{"width":390,"height":1080}}'>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":true,"section":"Theme"},"$preview":{"width":390,"height":1000}}'>
 class Component extends DCLogic {
   renderVals() { return { theme: (this.props.dark ?? true) ? 'dark' : 'light' }; }
   componentDidMount() {

@@ -290,6 +290,48 @@ HS_CSS = r"""
 .hs-phone h2{margin:0;font-size:16px;font-weight:600}
 .hs-pbar{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;gap:6px;padding:12px 16px 20px;background:var(--surface);border-top:1px solid var(--rule)}
 .hs-pbar .hs-note{text-align:center}
+
+/* round 2: less copy, quick hire ------------------------------------------------------ */
+.hs-head{align-items:center}
+.hs-right{display:flex;flex-direction:column;gap:18px;position:sticky;top:20px}
+.hs-right .hs-order{position:static}
+.hs-shops{margin:-6px 0 12px}
+.hs-facts2{margin:14px 0 0;font-size:13px;color:var(--ink-3)}
+.hs-facts2 b{font:500 13.5px/1 "IBM Plex Mono",monospace;color:var(--ink)}
+.hs-facts2 b.warn{color:var(--warn)}
+.hs-scope{display:flex;gap:18px;align-items:center;margin:-2px 0 6px;font-size:12.5px;color:var(--ink-3)}
+.hs-legend{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font:400 12px/1 Archivo,sans-serif!important;color:var(--warn)!important}
+.hs-legend i{width:8px;height:8px;border-radius:2px;background:var(--warn)}
+.hs-sel.empty b{color:var(--ink-3);font-weight:500}
+.hs-quick{display:flex;flex-direction:column;gap:14px;padding:18px 20px 20px;border-radius:14px;background:var(--surface);border:1px solid var(--rule-soft)}
+.hs-quick .qh{display:flex;align-items:center;gap:10px}
+.hs-quick .qh .hs-i{width:28px;height:28px;border-radius:8px;background:var(--raised);color:var(--ink-2)}
+.hs-quick .qh h3{margin:0;font-size:15px;font-weight:600}
+.hs-quick .qh .sub{margin-left:auto;font-size:12px;color:var(--ink-3)}
+.hs-quick .qf{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.hs-quick .fld{display:flex;flex-direction:column;gap:5px;min-width:0}
+.hs-quick .fld.wide{grid-column:1/-1}
+.hs-quick .fld>span:first-child{font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.hs-quick .hs-sel{width:100%;justify-content:space-between;background:var(--ground)}
+.hs-quick .hs-sel b{overflow:hidden;text-overflow:ellipsis}
+.hs-popw.full{display:flex;width:100%}
+.hs-popw.full .hs-pop{width:100%}
+.hs-num{display:grid;grid-template-columns:34px minmax(0,1fr) 34px;height:34px;border-radius:9px;border:1px solid var(--rule);background:var(--ground);overflow:hidden}
+.hs-num button{border:0;background:none;color:var(--ink-2);font:500 16px/1 Archivo,sans-serif;cursor:pointer}
+.hs-num button:hover{background:var(--raised);color:var(--ink)}
+.hs-num b{display:grid;place-items:center;font:500 14px/1 "IBM Plex Mono",monospace}
+.hs-match{font-size:13px;color:var(--ink-2)}
+.hs-match.none{margin:0;color:var(--ink-3)}
+.hs-match summary{display:flex;align-items:center;gap:6px;cursor:pointer;list-style:none}
+.hs-match summary::-webkit-details-marker{display:none}
+.hs-match summary b{font:500 15px/1 "IBM Plex Mono",monospace;color:var(--accent)}
+.hs-match summary svg{width:12px;height:12px;color:var(--ink-3);margin-left:auto;transition:transform .2s}
+.hs-match[open] summary svg{transform:rotate(90deg)}
+.hs-match ul,.hs-qlist{margin:8px 0 0;padding:0;list-style:none;display:flex;flex-direction:column}
+.hs-match li,.hs-qlist li{display:grid;grid-template-columns:minmax(0,1fr) 44px 64px;gap:8px;padding:6px 0;border-bottom:1px solid var(--rule-soft);font-size:12.5px;color:var(--ink)}
+.hs-match .m,.hs-qlist .m{font:500 12px/1.4 "IBM Plex Mono",monospace;color:var(--ink-2);text-align:right}
+.hs-quick.ph{border:0;background:none;padding:0}
+.hs-pcard .hs-ol li b{font-size:18px}
 """
 
 # --------------------------------------------------------------------------
@@ -390,15 +432,6 @@ CANDS, EXPIRING, OTHER_ROLES = 1_542, 249, 344
 SITE_COUNT = 7  # sites with an open place: law, 4 hire shops, gym... and 7th Avenue loses two
 HIRE_SITES = 6  # sites people are hired or reassigned into, gym excluded
 
-UNPLANNED = [  # role, where, found, best skill, wage range, expiring within 24 h
-    ("Cleaning", "HQ and 2 warehouses", 304, 94, "$14–$22", 51),
-    ("Delivery Driver", "2 warehouses", 160, 91, "$17–$26", 29),
-    ("Headhunter", "HQ", 41, 88, "$34–$58", 7),
-    ("Logistics Manager", "2 warehouses", 23, 83, "$38–$55", 4),
-    ("Purchasing Agent", "HQ", 18, 79, "$31–$47", 3),
-    ("HR Manager", "HQ", 9, 86, "$42–$61", 2),
-    ("Pricing Manager", "HQ", 0, None, None, 0),
-]
 PAYROLL = [("Customer Service", 214, 26_310), ("Cleaning", 118, 9_480), ("Security Guard", 96, 13_020), ("Lawyer", 58, 21_870),
            ("Delivery Driver", 41, 6_150), ("Factory Worker", 38, 7_210), ("Gym Trainer", 27, 5_060), ("Headhunter", 12, 3_190),
            ("HR Manager", 9, 1_880), ("Logistics Manager", 8, 1_310), ("Programmer", 8, 1_240), ("Purchasing Agent", 6, 650)]
@@ -453,6 +486,7 @@ def guards() -> list[dict]:
 
 GUARDS = guards()
 MOVERS = [{"name": name(), "skill": 81, "wage": 27}, {"name": name(), "skill": 74, "wage": 25}]
+HRM = [{"name": name(), "skill": 100, "wage": w} for w in (52, 54, 55, 57, 61, 58, 60)]  # quick hire: HR Managers at 100%
 
 # --------------------------------------------------------------------------
 # page chrome
@@ -478,16 +512,13 @@ def subnav() -> str:
 
 def link_state(state: str) -> str:
     return {"on": '<span class="hs-link"><i></i>Game linked</span>',
-            "off": '<span class="hs-link off"><i></i>Reading a save file · game not linked</span>',
-            "old": '<span class="hs-link old"><i></i>Game linked · mod 0.2.0 is too old to hire</span>'}[state]
+            "off": '<span class="hs-link off"><i></i>Save file · game not linked</span>',
+            "old": '<span class="hs-link old"><i></i>Mod 0.2.0 · too old to hire</span>'}[state]
 
 
 def page_head(state: str = "on") -> str:
     return f"""{subnav()}
-<div class="hs-head">
-  <div><h1>Staff</h1><p>Fill the open places in your staffing plans. People are picked for you: check them, change any you like, then hire them all at once.</p></div>
-  <div class="aside">{link_state(state)}</div>
-</div>"""
+<div class="hs-head"><h1>Staff</h1><div class="aside">{link_state(state)}</div></div>"""
 
 
 def cta(label: str = f"Review and hire {HIRE}", state: str = "on", wide: bool = False, href: str = "Review.dc.html") -> str:
@@ -497,55 +528,38 @@ def cta(label: str = f"Review and hire {HIRE}", state: str = "on", wide: bool = 
     return f'<a class="hs-cta{w}" href="{href}"><span>{label}</span>{svg("right")}</a>'
 
 
-CTA_NOTE = "The picks are made for you and you can change any of them. Nothing happens until you confirm on the next screen."
+CTA_NOTE = "Picked for you. You confirm next."
 
 
 # --------------------------------------------------------------------------
 # shared blocks
 # --------------------------------------------------------------------------
-def filter_bar(sel: int = 0, open_: bool = False, scope: str = "", count: str = "") -> str:
-    """The one control for who can be picked: a demand list in a popover, skill and wage."""
-    chosen = {"Part-time", "No weekends"} if sel else set()
+def dem_pop(chosen: set, open_: bool = False, cls: str = "") -> str:
+    """The compact demand control: the chosen demands' names, or how many; a list in a popover."""
     opts = "".join(
         f'<label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem{" checked" if d in chosen else ""}><span>{d}</span><small>{n}</small></label>'
         for d, n in DEMANDS[:10])
-    label = f'<b class="set" data-dem-n>{sel} selected</b>' if sel else '<b data-dem-n>nobody</b>'
-    pop = f"""<div class="hs-pop{" open" if open_ else ""}" data-popover>
-  <div class="ph">Tick a demand to leave out every candidate who asks for it. The number is how many ask.</div>
+    shown = ", ".join(d for d, _ in DEMANDS if d in chosen) if 0 < len(chosen) <= 2 else f"{len(chosen)} demands" if chosen else "nobody"
+    label = f'<b class="{"set" if chosen else ""}" data-dem-n>{shown}</b>'
+    return f"""<span class="hs-popw{cls}"><button type="button" class="hs-sel" data-pop aria-expanded="{"true" if open_ else "false"}">Leave out who asks for: {label}{svg("chev")}</button>
+<div class="hs-pop{" open" if open_ else ""}" data-popover>
+  <div class="ph">Leave out anyone asking for:</div>
   {opts}
-  <div class="pf"><a class="link" href="#">Show all 20 demands</a><a class="link" href="#">Clear</a></div>
-</div>"""
+  <div class="pf"><a class="link" href="#">All 20 demands</a><a class="link" href="#">Clear</a></div>
+</div></span>"""
+
+
+def filter_bar(chosen: set = frozenset(), open_: bool = False, count: str = "", skill: str = "any", wage: str = "any") -> str:
     return f"""<div class="hs-fbar">
-  <span class="lab">{scope or "Who can be picked"}</span>
-  <span class="hs-popw"><button type="button" class="hs-sel" data-pop aria-expanded="{"true" if open_ else "false"}">Leave out who asks for: {label}{svg("chev")}</button>{pop}</span>
-  <button type="button" class="hs-sel">Skill at least: <b{' class="set"' if sel else ""}>{"60%" if sel else "any"}</b>{svg("chev")}</button>
-  <button type="button" class="hs-sel">Wage at most: <b{' class="set"' if sel else ""}>{"$32/h" if sel else "any"}</b>{svg("chev")}</button>
+  {dem_pop(set(chosen), open_)}
+  <button type="button" class="hs-sel">Skill at least: <b{' class="set"' if skill != "any" else ""}>{skill}</b>{svg("chev")}</button>
+  <button type="button" class="hs-sel">Wage at most: <b{' class="set"' if wage != "any" else ""}>{wage}</b>{svg("chev")}</button>
   {f'<span class="hs-fsum">{count}</span>' if count else ""}
 </div>"""
 
 
 def sec_where() -> str:
-    return ", ".join(f'<em>{SITES[k][1]}</em> ({n})' for k, n in SEC_AT)
-
-
-def unplanned_block(num: str = "3") -> str:
-    rows = ""
-    for role, where, found, best, wage, soon in UNPLANNED:
-        if found:
-            act = f'<a class="hs-btn" href="ChangePicks.dc.html">Pick by hand{svg("chev")}</a>'
-            rows += (f'<tr><td class="l hs-rn"><b>{role}</b></td><td class="l txt">{where}</td><td class="num">{found}</td>'
-                     f'<td>{best}%</td><td>{wage}</td><td class="{"warn" if soon else "dim"}">{soon or "–"}</td><td class="act">{act}</td></tr>')
-        else:
-            rows += (f'<tr><td class="l hs-rn"><b>{role}</b></td><td class="l txt">{where}</td><td class="dim">0</td>'
-                     f'<td class="dim">–</td><td class="dim">–</td><td class="dim">–</td><td class="act dim l txt">none found</td></tr>')
-    return f"""
-<section class="hs-step">
-  <div class="hs-shead"><span class="n">{num}</span><h2>Headquarters and warehouses</h2><span class="count">optional</span></div>
-  <p class="hs-lead">Big Copilot plans no hours for these, so it picks nobody here. Hire by hand if you need someone: they join with no hours, and you set them in the game.</p>
-  <div class="hs-body"><table class="hs-t"><thead><tr><th class="l">Role</th><th class="l">Works at</th><th>Candidates</th><th>Best skill</th><th>Wage/h</th><th>Expire within 24 h</th><th></th></tr></thead>
-  <tbody>{rows}</tbody></table>
-  <p class="hs-note" style="margin:10px 0 0">{OTHER_ROLES} more candidates are for roles none of your sites use.</p></div>
-</section>"""
+    return ", ".join(f'{SITES[k][1]} ({n})' for k, n in SEC_AT)
 
 
 def payroll() -> str:
@@ -556,145 +570,105 @@ def payroll() -> str:
 <section class="hs-apart">
   <span class="kick">Current staff</span>
   <div class="hs-pay">
-    <div><h2>Payroll</h2><p class="hs-note" style="margin:0">Who you employ today, by role.</p><div class="roles">{roles}</div></div>
+    <div><h2>Payroll</h2><div class="roles">{roles}</div></div>
     <div class="facts">
-      <div><span>People employed</span><b>639</b></div>
-      <div><span>Wages a day at today's rates</span><b>{money(TODAY)}</b></div>
-      <div><span>Wages booked yesterday</span><b>$95,870</b></div>
-      <div><span>Average satisfaction</span><b>81%</b></div>
-      <div><span>Unhappy (below 70%)</span><b class="warn">14</b></div>
+      <div><span>People</span><b>639</b></div>
+      <div><span>Wages a day</span><b>{money(TODAY)}</b></div>
+      <div><span>Booked yesterday</span><b>$95,870</b></div>
+      <div><span>Satisfaction</span><b>81%</b></div>
+      <div><span>Unhappy</span><b class="warn">14</b></div>
       <div><span>Absent today</span><b class="warn">3</b></div>
-      <p class="hs-note" style="margin:0">Today's rate is each person's hourly wage × their weekly hours ÷ 7. Booked is what yesterday's statements recorded; the two differ when hours changed during the day.</p>
     </div>
   </div>
 </section>"""
 
 
 # --------------------------------------------------------------------------
-# option A: three steps under a summary with the button
-# --------------------------------------------------------------------------
-def hero(state: str = "on") -> str:
-    gate = ""
-    if state == "off":
-        gate = gate_box("off")
-    elif state == "old":
-        gate = gate_box("old")
-    return f"""
-<div class="hs-hero">
-  <div>
-    <h2>{OPEN_} places are open at {SITE_COUNT} sites</h2>
-    <ul class="hs-plan">
-      <li><b>{REASSIGN}</b><span><strong>reassigned</strong> from your own staff: Security Guards who have no hours at their shop</span></li>
-      <li><b>{HIRE}</b><span><strong>hired</strong> from your headhunters' candidates: 22 Lawyers, 20 Security Guards</span></li>
-      <li class="short"><b>{SHORT}</b><span><strong>stays open</strong>: Gym Trainer at Canal Street 5. There are no candidates for it yet</span></li>
-    </ul>
-  </div>
-  <div class="hs-act">{cta(state=state, wide=True)}{gate or f'<span class="hs-note">{CTA_NOTE}</span>'}</div>
-</div>
-<div class="hs-facts">
-  <div class="hs-fact"><span>Added wages</span><b>+{money(BILL)} a day</b><small>today {money(TODAY)} a day</small></div>
-  <div class="hs-fact"><span>Candidates</span><b>{CANDS:,}</b><small>found by your headhunters</small></div>
-  <div class="hs-fact"><span>Applications expiring</span><b>{EXPIRING}</b><small class="warn">within 24 hours{", as of the save" if state == "off" else ""}</small></div>
-</div>"""
-
-
-def reassign_a() -> str:
-    rows = "".join(f"""<tr><td class="l act"><input type="checkbox" class="hs-cb" data-reassign checked aria-label="Reassign {esc(p['name'])}"></td>
-<td class="l hs-rn"><b>{esc(p['name'])}</b></td><td class="l txt">Security Guard</td><td>{p['skill']}%</td><td>${p['wage']}</td>
-<td class="l txt">7th Avenue 3 <span class="dim">· no hours there</span></td><td class="l txt">Wall Street 9</td></tr>""" for p in MOVERS)
-    return f"""
-<section class="hs-step">
-  <div class="hs-shead"><span class="n go">1</span><h2>Reassign staff who have no hours</h2><span class="count">2 people</span></div>
-  <p class="hs-lead"><b>2 Security Guards at 7th Avenue 3 get no hours in that shop's plan.</b> They go to Wall Street 9, which needs Security Guards. Nobody new is paid for those 2 places. Untick someone to leave them where they are; their place at Wall Street 9 is then hired instead.</p>
-  <div class="hs-body"><table class="hs-t"><thead><tr><th class="l">Reassign</th><th class="l">Person</th><th class="l">Role</th><th>Skill</th><th>Wage/h</th><th class="l">Now at</th><th class="l">Goes to</th></tr></thead>
-  <tbody>{rows}</tbody></table></div>
-</section>"""
-
-
-def hire_a() -> str:
-    return f"""
-<section class="hs-step">
-  <div class="hs-shead"><span class="n go">2</span><h2>Hire new staff</h2><span class="count">{HIRE} people · 3 roles</span></div>
-  <p class="hs-lead">For each role, Big Copilot picked the most skilled candidates who pass the filters below; equal skill goes to the lower wage. <b>Change picks</b> shows who was picked and lets you swap anyone.</p>
-  <div class="hs-body">{filter_bar(count=f"<b>1,198</b> can be picked · <b>0</b> left out")}
-  <table class="hs-t"><thead><tr><th class="l">Role</th><th class="l">Where</th><th>Needed</th><th>Picked</th><th>Avg skill</th><th>Avg wage/h</th><th>Added wages/day</th><th></th></tr></thead>
-  <tbody>
-    <tr><td class="l hs-rn"><b>Lawyer</b><small>212 candidates</small></td><td class="l txt hs-where"><em>Halden Legal, Park Avenue 88</em> (22)<span class="hs-tag">new office</span></td>
-      <td class="num">22</td><td class="num">22</td><td>84%</td><td>$62</td><td class="num">+{money(BILL_LAW)}</td><td class="act"><a class="hs-btn" href="ChangePicks.dc.html">Change picks{svg("chev")}</a></td></tr>
-    <tr><td class="l hs-rn"><b>Security Guard</b><small>431 candidates</small></td><td class="l txt hs-where">4 Halden Wear shops: {sec_where()}</td>
-      <td class="num">20<small>+2 reassigned</small></td><td class="num">20</td><td>81%</td><td>$28</td><td class="num">+{money(BILL_SEC)}</td><td class="act"><a class="hs-btn" href="ChangePicks.dc.html">Change picks{svg("chev")}</a></td></tr>
-    <tr><td class="l hs-rn"><b>Gym Trainer</b><small class="warn">0 candidates</small></td><td class="l txt hs-where"><em>Halden Fit, Canal Street 5</em> (1)</td>
-      <td class="num">1</td><td class="warn">0</td><td class="dim">–</td><td class="dim">–</td><td class="dim">–</td><td class="act l txt warn">Stays open until your headhunters find one</td></tr>
-  </tbody>
-  <tfoot><tr><td class="l">Total</td><td></td><td>43</td><td>42</td><td></td><td></td><td>+{money(BILL)}</td><td></td></tr></tfoot></table></div>
-</section>"""
-
-
-def overview_a() -> str:
-    return f"""{page_head()}{hero()}{reassign_a()}{hire_a()}{unplanned_block()}{payroll()}"""
-
-
-# --------------------------------------------------------------------------
-# option B: one table, the order and its button in a panel on the right
+# the overview: one table, the order and its button in a panel on the right,
+# quick hire under it
 # --------------------------------------------------------------------------
 def order_panel(state: str = "on") -> str:
     gate = gate_box(state) if state != "on" else f'<span class="hs-note">{CTA_NOTE}</span>'
     return f"""
-<aside class="hs-order" aria-label="Your hiring order">
-  <h3>What happens when you hire</h3>
+<aside class="hs-order" aria-label="When you hire">
+  <h3>When you hire</h3>
   <ul class="hs-ol">
-    <li><span>Reassign</span><b>{REASSIGN}</b><small>Security Guards with no hours at 7th Avenue 3 go to Wall Street 9</small></li>
-    <li><span>Hire</span><b>{HIRE}</b><small>22 Lawyers, 20 Security Guards, at 5 sites</small></li>
-    <li class="short"><span>Stays open</span><b>{SHORT}</b><small>Gym Trainer at Canal Street 5: no candidates yet</small></li>
+    <li><span>Reassign</span><b>{REASSIGN}</b><small>7th Avenue 3 → Wall Street 9</small></li>
+    <li><span>Hire</span><b>{HIRE}</b><small>22 Lawyers · 20 Security Guards</small></li>
+    <li class="short"><span>Stays open</span><b>{SHORT}</b><small>Gym Trainer: no candidates</small></li>
   </ul>
-  <div class="hs-sum"><span>Added wages</span><b class="big">+{money(BILL)}/day</b><span>Wages after hiring</span><b>{money(TODAY + BILL)}/day</b></div>
+  <div class="hs-sum"><span>Added wages</span><b class="big">+{money(BILL)}/day</b></div>
   {cta(state=state, wide=True)}
   {gate}
 </aside>"""
 
 
-def roles_b() -> str:
+def roles_table() -> str:
     return f"""
-<table class="hs-t"><thead><tr><th class="l">Role and where</th><th>Open places</th><th>From your staff</th><th>New hires</th><th>Stays open</th><th>Wages/day</th><th></th></tr></thead>
+<table class="hs-t"><thead><tr><th class="l">Role</th><th>Open</th><th>Own staff</th><th>New hires</th><th>Stays open</th><th>Wages/day</th><th></th></tr></thead>
 <tbody>
-  <tr><td class="l hs-rn"><b>Lawyer</b><small>Halden Legal, Park Avenue 88 <span class="hs-tag">new office</span></small></td>
-    <td class="num">22</td><td class="dim">–</td><td class="num">22<small class="ln">avg 84% · $62/h</small></td><td class="dim">–</td><td class="num">+{money(BILL_LAW)}</td>
+  <tr><td class="l hs-rn"><b>Lawyer</b><small>Park Avenue 88 <span class="hs-tag">new</span></small></td>
+    <td class="num">22</td><td class="dim">–</td><td class="num">22<small class="ln">84% · $62/h</small></td><td class="dim">–</td><td class="num">+{money(BILL_LAW)}</td>
     <td class="act"><a class="hs-btn" href="ChangePicks.dc.html">Change picks{svg("chev")}</a></td></tr>
-  <tr class="has-sub"><td class="l hs-rn"><b>Security Guard</b><small>4 Halden Wear shops: {sec_where().replace("<em>", "").replace("</em>", "")}</small></td>
-    <td class="num">22</td><td class="num">2</td><td class="num">20<small class="ln">avg 81% · $28/h</small></td><td class="dim">–</td><td class="num">+{money(BILL_SEC)}</td>
+  <tr class="has-sub"><td class="l hs-rn"><b>Security Guard</b><small>4 shops</small></td>
+    <td class="num">22</td><td class="num">2</td><td class="num">20<small class="ln">81% · $28/h</small></td><td class="dim">–</td><td class="num">+{money(BILL_SEC)}</td>
     <td class="act"><a class="hs-btn" href="ChangePicks.dc.html">Change picks{svg("chev")}</a></td></tr>
   <tr class="hs-subrow" data-re-row><td class="l" colspan="7"><div class="hs-re"><span class="hs-i">{svg("move")}</span>
-    <span><b>{esc(MOVERS[0]['name'])} and {esc(MOVERS[1]['name'])}</b> have no hours in 7th Avenue 3's plan. They move to Wall Street 9 instead of 2 new hires.</span>
-    <label><input type="checkbox" class="hs-cb" data-reassign checked>Reassign them</label></div></td></tr>
-  <tr><td class="l hs-rn"><b>Gym Trainer</b><small>Halden Fit, Canal Street 5</small></td>
+    <span><b>Reassign 2</b> · 7th Avenue 3 (no hours) → Wall Street 9</span>
+    <label><input type="checkbox" class="hs-cb" data-reassign checked>Reassign</label></div></td></tr>
+  <tr><td class="l hs-rn"><b>Gym Trainer</b><small>Canal Street 5</small></td>
     <td class="num">1</td><td class="dim">–</td><td class="warn">0</td><td class="warn">1</td><td class="dim">–</td>
-    <td class="act l txt warn">No candidates yet</td></tr>
+    <td class="act l txt warn">No candidates</td></tr>
 </tbody>
 <tfoot><tr><td class="l">Total</td><td>45</td><td>2</td><td>42</td><td>1</td><td>+{money(BILL)}</td><td></td></tr></tfoot></table>"""
 
 
-def left_b(state: str = "on") -> str:
+def left(state: str = "on") -> str:
+    exp = f'<b class="warn">{EXPIRING}</b> expire within 24 h' + (" (as of the save)" if state == "off" else "")
     return f"""
 <div>
-  <div class="hs-shead"><h2>Open places and who fills them</h2></div>
-  <p class="hs-lead" style="margin-left:0">One row a role, over every site with a staffing plan. Your own staff with no hours fill a place first; the rest are new hires, picked for you: the most skilled who pass the filters, equal skill to the lower wage.</p>
-  {filter_bar(count="<b>1,198</b> can be picked")}
-  {roles_b()}
-  <div class="hs-cand">
-    <div><span>Candidates</span><b>{CANDS:,}</b><small>found by your headhunters</small></div>
-    <div><span>Applications expiring</span><b class="warn">{EXPIRING}</b><small>within 24 hours{", as of the save" if state == "off" else ""}. They then leave the list</small></div>
-  </div>
+  <div class="hs-shead"><h2>Open places</h2></div>
+  {filter_bar({"Part-time"}, count="<b>1,198</b> match")}
+  <p class="hs-note hs-shops">Part-time is left out for shop roles only.</p>
+  {roles_table()}
+  <p class="hs-facts2"><b>{CANDS:,}</b> candidates · {exp}</p>
 </div>"""
 
 
-def overview_b(state: str = "on") -> str:
+def quick_card(step: str = "empty", phone_: bool = False) -> str:
+    """Quick hire: any role, any site, how many, skill, demands; the best matches, one button."""
+    f = step != "empty"
+    role = "HR Manager" if f else "Choose a role"
+    site = "Halden HQ, Madison Avenue 200" if f else "Choose a site"
+    ex = {"Gold Health Insurance"} if f else set()
+    match = ""
+    if f:
+        rows = "".join(f'<li><span>{esc(c["name"])}</span><span class="m">{c["skill"]}%</span><span class="m">${c["wage"]}/h</span></li>' for c in HRM[:5])
+        match = (f'<details class="hs-match"{" open" if step == "open" else ""}><summary><b>{len(HRM)}</b> match · the best 5 are picked{svg("chev")}</summary>'
+                 f'<ul>{rows}</ul></details>')
+    else:
+        match = '<p class="hs-match none">Pick a role and a site to see who matches.</p>'
+    btn = (f'<a class="hs-cta wide" href="QuickHire.dc.html"><span>Hire 5</span>{svg("right")}</a>' if f
+           else '<a class="hs-cta wide" aria-disabled="true" href="#"><span>Hire</span></a>')
+    return f"""
+<section class="hs-quick{" ph" if phone_ else ""}" aria-label="Quick hire">
+  <div class="qh"><span class="hs-i">{svg("hire")}</span><h3>Quick hire</h3><span class="sub">any site</span></div>
+  <div class="qf">
+    <div class="fld wide"><span>Role</span><button type="button" class="hs-sel{" empty" if not f else ""}"><b>{role}</b>{svg("chev")}</button></div>
+    <div class="fld wide"><span>At</span><button type="button" class="hs-sel{" empty" if not f else ""}"><b>{site}</b>{svg("chev")}</button></div>
+    <div class="fld"><span>How many</span><span class="hs-num"><button type="button" aria-label="Fewer">−</button><b>{5 if f else 1}</b><button type="button" aria-label="More">+</button></span></div>
+    <div class="fld"><span>Skill at least</span><button type="button" class="hs-sel"><b{' class="set"' if f else ""}>{"100%" if f else "any"}</b>{svg("chev")}</button></div>
+    <div class="fld wide"><span>Leave out who asks for</span>{dem_pop(ex, cls=" full").replace("Leave out who asks for: ", "")}</div>
+  </div>
+  {match}
+  {btn}
+</section>"""
+
+
+def overview(state: str = "on") -> str:
     return f"""{page_head(state)}
-<div class="hs-split">{left_b(state)}{order_panel(state)}</div>
-{unplanned_block_b()}{payroll()}"""
-
-
-def unplanned_block_b() -> str:
-    return unplanned_block("").replace('<span class="n"></span>', "").replace('class="hs-lead"', 'class="hs-lead" style="margin-left:0"').replace('class="hs-body"', 'class="hs-body" style="margin-left:0;max-width:calc(100% - 368px)"')
+<div class="hs-split">{left(state)}<div class="hs-right">{order_panel(state)}{quick_card()}</div></div>
+{payroll()}"""
 
 
 # --------------------------------------------------------------------------
@@ -702,22 +676,19 @@ def unplanned_block_b() -> str:
 # --------------------------------------------------------------------------
 def gate_box(state: str) -> str:
     if state == "off":
-        return """<div class="hs-gate"><b>Hiring goes through the game.</b><ol>
-<li>Subscribe to Big Copilot Link on the Steam Workshop.</li><li>Start Big Ambitions and load this company.</li>
-<li>Link the game from Big Copilot's start screen.</li></ol>
-<span>Until then you can check and change the picks here; they are read from your save.</span></div>"""
-    return """<div class="hs-gate warn"><b>Update Big Copilot Link to hire.</b>
-<span>You have 0.2.0; hiring needs 0.3.0. Steam updates Workshop items when the game restarts: quit Big Ambitions, start it again, and link again.</span></div>"""
+        return """<div class="hs-gate"><b>Link the game to hire</b><ol>
+<li>Subscribe to Big Copilot Link (Steam Workshop)</li><li>Load this company in the game</li><li>Link from the start screen</li></ol></div>"""
+    return """<div class="hs-gate warn"><b>Update Big Copilot Link to 0.3.0</b><span>You have 0.2.0. Restart the game, then link again.</span></div>"""
 
 
 def gates() -> str:
     def clip(state: str, label: str, sub: str) -> str:
         return (f'<div class="hs-state"><b>{label}</b><span>{sub}</span></div>'
-                f'<div class="hs-clip" style="height: 900px;"><div class="wrap">{page_head(state)}<div class="hs-split">{left_b(state)}{order_panel(state)}</div></div></div>')
+                f'<div class="hs-clip" style="height: 820px;"><div class="wrap">{page_head(state)}<div class="hs-split">{left(state)}<div class="hs-right">{order_panel(state)}</div></div></div></div>')
     return (f'<div style="padding:36px 40px 0">'
-            + clip("off", "D1 · GAME NOT LINKED", "The page works from the save; the button is disabled and says how to link.")
+            + clip("off", "D1 · GAME NOT LINKED", "Picks still work from the save; only the button is off.")
             + '<div style="height:56px"></div>'
-            + clip("old", "D2 · MOD TOO OLD", "Linked, but the mod predates hiring: the button is disabled and says which version is needed.")
+            + clip("old", "D2 · MOD TOO OLD", "Linked, but the mod predates hiring.")
             + "</div>")
 
 
@@ -732,47 +703,74 @@ def cand_row(r: dict, on: bool) -> str:
         else:
             dem.append(esc(d))
     to = SITES[r["site"]][1] if r["site"] else '<span class="dim">–</span>'
-    left = r["left"]
-    exp = f"in {left} h" if left < 24 else ("in 1 day" if left < 48 else f"in {left // 24} days")
+    left_ = r["left"]
+    exp = f"{left_} h" if left_ < 24 else ("1 day" if left_ < 48 else f"{left_ // 24} days")
+    none = '<span class="dim">–</span>'
     return (f'<tr class="{"on" if on else ""}" data-cand><td class="l"><input type="checkbox" class="hs-cb" data-pick{" checked" if on else ""} aria-label="Pick {esc(r["name"])}"></td>'
             f'<td class="nm"><b>{esc(r["name"])}</b></td><td class="l"><span class="hs-sk" style="--w:{r["skill"]}%"><i></i></span>{r["skill"]}%</td>'
-            f'<td>${r["wage"]}</td><td class="to">{to}</td><td class="dem">{", ".join(dem) or '<span class="dim">nothing</span>'}</td>'
-            f'<td class="exp{" warn" if left < 24 else ""}">{exp}</td></tr>')
+            f'<td>${r["wage"]}</td><td class="to">{to}</td><td class="dem">{", ".join(dem) or none}</td>'
+            f'<td class="exp{" warn" if left_ < 24 else ""}">{exp}</td></tr>')
 
 
 def sheet() -> str:
     picked = GUARDS[:10]
     nxt = GUARDS[20:25]
-    head = ('<thead><tr><th class="l" style="width:34px"><span class="gw-sr">Pick</span></th><th class="l">Candidate</th><th class="l">Security skill</th>'
-            '<th>Wage/h</th><th class="l">Goes to</th><th class="l">Asks for</th><th>Application expires</th></tr></thead>')
+    head = ('<thead><tr><th class="l" style="width:34px"><span class="gw-sr">Pick</span></th><th class="l">Candidate</th><th class="l">Skill</th>'
+            '<th>Wage/h</th><th class="l">Goes to</th><th class="l">Asks for</th><th>Expires in</th></tr></thead>')
     body = "".join(cand_row(r, True) for r in picked)
     more = "".join(cand_row(r, False) for r in nxt)
     return f"""
 <div class="hs-scrim"></div>
 <aside class="hs-sheet" role="dialog" aria-label="Change picks: Security Guard">
-  <div class="hs-sh"><div><h2>Security Guard: change picks</h2><p>20 new hires for 4 Halden Wear shops: {sec_where().replace("<em>", "").replace("</em>", "")}. 2 more places are filled by reassigned staff.</p></div>
+  <div class="hs-sh"><div><h2>Security Guard</h2><p>20 new hires · {sec_where()}</p></div>
     <button type="button" class="gw-x" aria-label="Close">{svg("close")}</button></div>
   <div class="hs-sb">
-    <p class="hs-lead">Picked for you: the most skilled who pass the filters, equal skill to the lower wage. Untick someone and the next best takes the place. Tick someone else to add them. <b>Orange</b> marks a demand their site does not meet; they can still be hired.</p>
-    {filter_bar(sel=2, open_=True, scope="Who can be picked", count="<b>367</b> can be picked · <b>64</b> left out")}
-    <div style="display:flex;gap:18px;align-items:center;margin:-4px 0 6px"><span class="hs-note">Apply these filters to</span>
-      <label class="hs-radio"><input type="radio" name="scope" checked>all roles</label><label class="hs-radio"><input type="radio" name="scope">Security Guard only</label></div>
-    <div class="hs-grp"><b>Picked</b><span data-picked-n>20 of 20</span></div>
+    {filter_bar({"Part-time"}, open_=True, count="<b>389</b> match · <b>42</b> left out", skill="60%")}
+    <div class="hs-scope"><span>Filters for</span>
+      <label class="hs-radio"><input type="radio" name="scope" checked>all shop roles</label><label class="hs-radio"><input type="radio" name="scope">Security Guard only</label></div>
+    <div class="hs-grp"><b>Picked</b><span data-picked-n>20 of 20</span><span class="hs-legend"><i></i>site lacks it</span></div>
     <table class="hs-t hs-c">{head}<tbody>{body}
-      <tr><td></td><td class="l txt" colspan="6"><a class="link" href="#">Show the other 10 picked</a></td></tr></tbody></table>
-    <div class="hs-grp"><b>Next best, not picked</b><span>347 more can be picked</span></div>
+      <tr><td></td><td class="l txt" colspan="6"><a class="link" href="#">10 more picked</a></td></tr></tbody></table>
+    <div class="hs-grp"><b>Next best</b><span>369 more</span></div>
     <table class="hs-t hs-c">{head}<tbody>{more}</tbody></table>
-    <div class="hs-more"><a class="link" href="#">Show all 347</a><a class="link" href="#">Show the 64 left out by the filters</a><span style="margin-left:auto">Find a name</span></div>
+    <div class="hs-more"><a class="link" href="#">Show all</a><a class="link" href="#">Show the 42 left out</a></div>
   </div>
   <div class="hs-sf">
     <div class="tot"><div><span>Picked</span><b data-picked-n2>20 of 20</b></div><div><span>Added wages</span><b>+{money(BILL_SEC)}/day</b></div></div>
-    <div class="end"><a class="link" href="#">Back to automatic picks</a><a class="hs-cta" href="Main.dc.html">Done</a></div>
+    <div class="end"><a class="link" href="#">Reset to automatic</a><a class="hs-cta" href="Main.dc.html">Done</a></div>
   </div>
 </aside>"""
 
 
 def change_picks() -> str:
-    return f'<div class="wrap" style="opacity:.9">{masthead()}{overview_b()}</div>{sheet()}'
+    return f'<div class="wrap" style="opacity:.9">{masthead()}{overview()}</div>{sheet()}'
+
+
+# --------------------------------------------------------------------------
+# quick hire: the card's states, its confirm and done
+# --------------------------------------------------------------------------
+def quick_confirm() -> str:
+    rows = "".join(f'<li><span>{esc(c["name"])}</span><span class="m">{c["skill"]}%</span><span class="m">${c["wage"]}/h</span></li>' for c in HRM[:5])
+    body = f"""{tiles(("Hire", "5"), ("Role", '<span class="hs-u" style="font-size:14px;color:var(--ink)">HR Manager</span>'), ("Wages", '$52–61<small class="hs-u">/h</small>'))}
+<ul class="hs-qlist">{rows}</ul>
+<div class="gw-call"><span class="hs-i">{svg("clock")}</span><span>No hours yet: set them in the game.</span></div>
+{lock("No undo.")}"""
+    return dialog("Hire 5 HR Managers", '<div class="gw-where"><span>Halden HQ · Madison Avenue 200</span></div>',
+                  verdict("ok", "<b>The game can take all 5</b>", "checked 21:06"), body, gbtn("Back", "ghost") + gbtn("Hire 5", "go", "right"))
+
+
+def quick_done() -> str:
+    body = f"""<p class="gw-lead"><b>5 HR Managers</b> now work at Halden HQ, with no hours.</p>
+{lock("No undo. To let someone go, use MyEmployees in the game.")}"""
+    return dialog("Done", '<div class="gw-where"><span>Halden HQ · Madison Avenue 200</span></div>',
+                  verdict("ok", "<b>5 hired</b>", "21:06"), body, gbtn("Hire more", "ghost") + gbtn("Close", "go"))
+
+
+def quick() -> str:
+    return (top("Quick hire", "Any role, any site: HQ, warehouse, office, factory or shop. The best matches are picked; one confirm hires them.")
+            + stage([col("Q1", "Empty", quick_card(), 340), col("Q2", "Filled · 7 match", quick_card("filled"), 340),
+                     col("Q3", "Filled · matches opened", quick_card("open"), 340),
+                     col("Q4", "Confirm", quick_confirm()), col("Q5", "Done", quick_done())]))
 
 
 # --------------------------------------------------------------------------
@@ -873,30 +871,41 @@ def review() -> str:
 # --------------------------------------------------------------------------
 # phone
 # --------------------------------------------------------------------------
+def phone_top() -> str:
+    return f'<div class="pm"><span class="wordmark">{COMPANY}</span><span class="dot"></span><span class="sp">Company · Staff</span></div>'
+
+
 def phone() -> str:
     return f"""
 <div class="hs-phone">
-  <div class="pm"><span class="wordmark">{COMPANY}</span><span class="dot"></span><span class="sp">Company · Staff</span></div>
+  {phone_top()}
   <div class="pc">
-    <div><h1>Staff</h1><p class="intro">Fill the open places in your staffing plans. People are picked for you.</p></div>
-    <div class="hs-pcard"><ul class="hs-plan">
-      <li><b>{REASSIGN}</b><span><strong>reassigned</strong> from your own staff</span></li>
-      <li><b>{HIRE}</b><span><strong>hired</strong>: 22 Lawyers, 20 Security Guards</span></li>
-      <li class="short"><b>{SHORT}</b><span><strong>stays open</strong>: Gym Trainer, no candidates</span></li></ul>
-      <p class="hs-note" style="margin:12px 0 0">Added wages <b>+{money(BILL)} a day</b> · {EXPIRING} applications expire within 24 h</p></div>
-    <div><h2>Open places</h2>
-    <div class="hs-plist" style="margin-top:8px">
-      <a class="hs-prow" href="ChangePicks.dc.html"><span><b>Lawyer</b><small>Park Avenue 88 · Change picks</small></span><span class="v">22<small class="hs-u"> new</small></span>{svg("chev")}</a>
-      <a class="hs-prow" href="ChangePicks.dc.html"><span><b>Security Guard</b><small>4 shops · 2 reassigned · Change picks</small></span><span class="v">20<small class="hs-u"> new</small></span>{svg("chev")}</a>
-      <div class="hs-prow"><span><b>Gym Trainer</b><small>Canal Street 5 · no candidates yet</small></span><span class="v warn">0/1</span><span></span></div>
-    </div></div>
-    <div class="hs-re" style="align-items:flex-start"><span class="hs-i">{svg("move")}</span><span><b>2 Security Guards</b> with no hours at 7th Avenue 3 go to Wall Street 9.</span></div>
+    <h1>Staff</h1>
+    <div class="hs-pcard"><ul class="hs-ol">
+      <li><span>Reassign</span><b>{REASSIGN}</b><small>7th Avenue 3 → Wall Street 9</small></li>
+      <li><span>Hire</span><b>{HIRE}</b><small>22 Lawyers · 20 Security Guards</small></li>
+      <li class="short"><span>Stays open</span><b>{SHORT}</b><small>Gym Trainer: no candidates</small></li></ul>
+      <div class="hs-sum" style="margin-top:14px"><span>Added wages</span><b>+{money(BILL)}/day</b></div></div>
     <div class="hs-plist">
-      <a class="hs-prow" href="#"><span><b>Headquarters and warehouses</b><small>7 roles · pick by hand</small></span><span class="v">555</span>{svg("chev")}</a>
-      <a class="hs-prow" href="#"><span><b>Payroll</b><small>Current staff</small></span><span class="v">639</span>{svg("chev")}</a>
+      <a class="hs-prow" href="ChangePicks.dc.html"><span><b>Lawyer</b><small>Park Avenue 88</small></span><span class="v">22</span>{svg("chev")}</a>
+      <a class="hs-prow" href="ChangePicks.dc.html"><span><b>Security Guard</b><small>4 shops · 2 reassigned</small></span><span class="v">20</span>{svg("chev")}</a>
+      <div class="hs-prow"><span><b>Gym Trainer</b><small>Canal Street 5 · no candidates</small></span><span class="v warn">0/1</span><span></span></div>
     </div>
+    <a class="hs-btn" href="PhoneQuick.dc.html" style="height:44px;justify-content:center">{svg("hire")}Quick hire for any site</a>
+    <div class="hs-plist"><a class="hs-prow" href="#"><span><b>Payroll</b><small>Current staff</small></span><span class="v">639</span>{svg("chev")}</a></div>
   </div>
-  <div class="hs-pbar">{cta(wide=True)}<span class="hs-note">Nothing happens until you confirm.</span></div>
+  <div class="hs-pbar">{cta(wide=True)}<span class="hs-note">{CTA_NOTE}</span></div>
+</div>"""
+
+
+def phone_quick() -> str:
+    return f"""
+<div class="hs-phone">
+  {phone_top()}
+  <div class="pc">
+    <a class="hs-btn quiet" href="Phone.dc.html" style="align-self:flex-start;padding-left:0">{svg("back")}Staff</a>
+    {quick_card("open", phone_=True).replace('href="QuickHire.dc.html"', 'href="#"')}
+  </div>
 </div>"""
 
 
@@ -983,21 +992,23 @@ def cols_w(widths: list[int]) -> int:
 W = 1440
 # file, title, builder, kind, width, height
 BOARDS = [
-    ("Main.dc.html", "A2 · Overview, option B: the order panel (recommended)", page(overview_b), "hs-page", W, 2260),
-    ("OptionA.dc.html", "A1 · Overview, option A: three steps", page(overview_a), "hs-page", W, 2420),
+    ("Main.dc.html", "A · Overview", page(overview), "hs-page", W, 1720),
     ("ChangePicks.dc.html", "B · Change picks for one role", change_picks, "hs-page", W, 1500),
+    ("QuickHire.dc.html", "Q · Quick hire", quick, "gw-board", cols_w([340, 340, 340, 480, 480]), 760),
     ("Review.dc.html", "C · Review and confirm", review, "gw-board", cols_w([640, 480, 480, 480]), 1440),
-    ("Gates.dc.html", "D · Game not linked, mod too old", gates, "hs-page", W, 2060),
-    ("Phone.dc.html", "E · Phone", phone, "hs-page", 390, 1080),
+    ("Gates.dc.html", "D · Game not linked, mod too old", gates, "hs-page", W, 1860),
+    ("Phone.dc.html", "E · Phone", phone, "hs-page", 390, 1000),
+    ("PhoneQuick.dc.html", "E2 · Phone · quick hire", phone_quick, "hs-page", 390, 700),
 ]
 
 TIPS = {
-    "Main.dc.html": "OPTION B (recommended). Left: information, one row a role, reading left to right as the path (open places → from your staff → new hires → stays open). Right: what the button will do, in numbers, and the one button. The panel stays in view while you scroll. Click “Leave out who asks for” to open the demand list.",
-    "OptionA.dc.html": "OPTION A. A summary with the button at the top, then three numbered steps in the order they happen: reassign, hire, headquarters and warehouses (optional). Payroll sits apart at the foot.",
-    "ChangePicks.dc.html": "“Change picks” opens one role in a sheet over the page. Picked people first, then the next best. Tick or untick someone: the count updates. The demand list is shown open with two demands ticked.",
-    "Review.dc.html": "Click a site row to open or close its people. The confirm button repeats what it does; the footer says hiring has no undo.",
-    "Gates.dc.html": "Everything still reads from the save, and picks can be changed. Only the button is disabled, and the panel says exactly what to do.",
-    "Phone.dc.html": "One column: the summary card, the roles as rows (tap to change picks), the rest collapsed. The button sits in a bar at the bottom.",
+    "Main.dc.html": "Left: one row a role. Right: what the button does, the button, and Quick hire for any site. Click a “Leave out who asks for” control to open the demand list.",
+    "ChangePicks.dc.html": "“Change picks” opens one role over the page. Tick or untick someone: the count updates. Part-time is left out by default for shop roles.",
+    "QuickHire.dc.html": "Quick hire: role, site, how many, skill, demands to leave out. The best matches are picked; one confirm hires them. Replaces the HQ and warehouse table.",
+    "Review.dc.html": "Click a site row to open or close its people.",
+    "Gates.dc.html": "Picks still work from the save; only the button is disabled, with the fix beside it.",
+    "Phone.dc.html": "Summary card, roles as rows, Quick hire as a button, the main button in a bar at the bottom.",
+    "PhoneQuick.dc.html": "Quick hire at phone width: the same card as a page.",
 }
 
 
@@ -1011,9 +1022,9 @@ def build(preview: bool = False) -> None:
     ROOT.mkdir(parents=True, exist_ok=True)
     boards, order, notes = {}, [], {}
     gap = 160
-    pos = {"Main.dc.html": (0, 0), "OptionA.dc.html": (W + gap, 0), "Phone.dc.html": (2 * (W + gap), 0),
-           "ChangePicks.dc.html": (0, 2480 + 400), "Gates.dc.html": (W + gap, 2480 + 400),
-           "Review.dc.html": (0, 2480 + 400 + 2060 + 400)}
+    pos = {"Main.dc.html": (0, 0), "Phone.dc.html": (W + gap, 0), "PhoneQuick.dc.html": (W + gap + 390 + gap, 0),
+           "ChangePicks.dc.html": (0, 1900 + 400), "Gates.dc.html": (W + gap, 1900 + 400),
+           "QuickHire.dc.html": (0, 1900 + 400 + 1900 + 400), "Review.dc.html": (0, 1900 + 400 + 1900 + 400 + 760 + 400)}
     for name_, title, builder, kind, w, h in BOARDS:
         body = builder()
         props = {"dark": {"editor": "boolean", "default": True, "section": "Theme"}, "$preview": {"width": w, "height": h}}

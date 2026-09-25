@@ -1221,119 +1221,146 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 .hs-phone h2{margin:0;font-size:16px;font-weight:600}
 .hs-pbar{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;gap:6px;padding:12px 16px 20px;background:var(--surface);border-top:1px solid var(--rule)}
 .hs-pbar .hs-note{text-align:center}
+
+/* round 2: less copy, quick hire ------------------------------------------------------ */
+.hs-head{align-items:center}
+.hs-right{display:flex;flex-direction:column;gap:18px;position:sticky;top:20px}
+.hs-right .hs-order{position:static}
+.hs-shops{margin:-6px 0 12px}
+.hs-facts2{margin:14px 0 0;font-size:13px;color:var(--ink-3)}
+.hs-facts2 b{font:500 13.5px/1 "IBM Plex Mono",monospace;color:var(--ink)}
+.hs-facts2 b.warn{color:var(--warn)}
+.hs-scope{display:flex;gap:18px;align-items:center;margin:-2px 0 6px;font-size:12.5px;color:var(--ink-3)}
+.hs-legend{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font:400 12px/1 Archivo,sans-serif!important;color:var(--warn)!important}
+.hs-legend i{width:8px;height:8px;border-radius:2px;background:var(--warn)}
+.hs-sel.empty b{color:var(--ink-3);font-weight:500}
+.hs-quick{display:flex;flex-direction:column;gap:14px;padding:18px 20px 20px;border-radius:14px;background:var(--surface);border:1px solid var(--rule-soft)}
+.hs-quick .qh{display:flex;align-items:center;gap:10px}
+.hs-quick .qh .hs-i{width:28px;height:28px;border-radius:8px;background:var(--raised);color:var(--ink-2)}
+.hs-quick .qh h3{margin:0;font-size:15px;font-weight:600}
+.hs-quick .qh .sub{margin-left:auto;font-size:12px;color:var(--ink-3)}
+.hs-quick .qf{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.hs-quick .fld{display:flex;flex-direction:column;gap:5px;min-width:0}
+.hs-quick .fld.wide{grid-column:1/-1}
+.hs-quick .fld>span:first-child{font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.hs-quick .hs-sel{width:100%;justify-content:space-between;background:var(--ground)}
+.hs-quick .hs-sel b{overflow:hidden;text-overflow:ellipsis}
+.hs-popw.full{display:flex;width:100%}
+.hs-popw.full .hs-pop{width:100%}
+.hs-num{display:grid;grid-template-columns:34px minmax(0,1fr) 34px;height:34px;border-radius:9px;border:1px solid var(--rule);background:var(--ground);overflow:hidden}
+.hs-num button{border:0;background:none;color:var(--ink-2);font:500 16px/1 Archivo,sans-serif;cursor:pointer}
+.hs-num button:hover{background:var(--raised);color:var(--ink)}
+.hs-num b{display:grid;place-items:center;font:500 14px/1 "IBM Plex Mono",monospace}
+.hs-match{font-size:13px;color:var(--ink-2)}
+.hs-match.none{margin:0;color:var(--ink-3)}
+.hs-match summary{display:flex;align-items:center;gap:6px;cursor:pointer;list-style:none}
+.hs-match summary::-webkit-details-marker{display:none}
+.hs-match summary b{font:500 15px/1 "IBM Plex Mono",monospace;color:var(--accent)}
+.hs-match summary svg{width:12px;height:12px;color:var(--ink-3);margin-left:auto;transition:transform .2s}
+.hs-match[open] summary svg{transform:rotate(90deg)}
+.hs-match ul,.hs-qlist{margin:8px 0 0;padding:0;list-style:none;display:flex;flex-direction:column}
+.hs-match li,.hs-qlist li{display:grid;grid-template-columns:minmax(0,1fr) 44px 64px;gap:8px;padding:6px 0;border-bottom:1px solid var(--rule-soft);font-size:12.5px;color:var(--ink)}
+.hs-match .m,.hs-qlist .m{font:500 12px/1.4 "IBM Plex Mono",monospace;color:var(--ink-2);text-align:right}
+.hs-quick.ph{border:0;background:none;padding:0}
+.hs-pcard .hs-ol li b{font-size:18px}
 </style>
 </helmet>
-<div class="board hs-page {{theme}}" style="width: 1440px; height: 2060px;">
-<div style="padding:36px 40px 0"><div class="hs-state"><b>D1 · GAME NOT LINKED</b><span>The page works from the save; the button is disabled and says how to link.</span></div><div class="hs-clip" style="height: 900px;"><div class="wrap"><div class="hs-sub"><nav class="seg" aria-label="Company views"><a class="" href="#">Results</a><a class="" href="#">Products</a><a class="on" href="#">Staff</a><a class="" href="#">Milestones</a></nav></div>
-<div class="hs-head">
-  <div><h1>Staff</h1><p>Fill the open places in your staffing plans. People are picked for you: check them, change any you like, then hire them all at once.</p></div>
-  <div class="aside"><span class="hs-link off"><i></i>Reading a save file · game not linked</span></div>
-</div><div class="hs-split">
+<div class="board hs-page {{theme}}" style="width: 1440px; height: 1860px;">
+<div style="padding:36px 40px 0"><div class="hs-state"><b>D1 · GAME NOT LINKED</b><span>Picks still work from the save; only the button is off.</span></div><div class="hs-clip" style="height: 820px;"><div class="wrap"><div class="hs-sub"><nav class="seg" aria-label="Company views"><a class="" href="#">Results</a><a class="" href="#">Products</a><a class="on" href="#">Staff</a><a class="" href="#">Milestones</a></nav></div>
+<div class="hs-head"><h1>Staff</h1><div class="aside"><span class="hs-link off"><i></i>Save file · game not linked</span></div></div><div class="hs-split">
 <div>
-  <div class="hs-shead"><h2>Open places and who fills them</h2></div>
-  <p class="hs-lead" style="margin-left:0">One row a role, over every site with a staffing plan. Your own staff with no hours fill a place first; the rest are new hires, picked for you: the most skilled who pass the filters, equal skill to the lower wage.</p>
+  <div class="hs-shead"><h2>Open places</h2></div>
   <div class="hs-fbar">
-  <span class="lab">Who can be picked</span>
-  <span class="hs-popw"><button type="button" class="hs-sel" data-pop aria-expanded="false">Leave out who asks for: <b data-dem-n>nobody</b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button><div class="hs-pop" data-popover>
-  <div class="ph">Tick a demand to leave out every candidate who asks for it. The number is how many ask.</div>
-  <label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Full-time</span><small>301</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Silver Health Insurance</span><small>47</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Clean work environment</span><small>45</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Part-time</span><small>44</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>No weekends</span><small>41</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>No night shifts</span><small>38</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Four days week</span><small>33</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Coffee Machine</span><small>31</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Gold Health Insurance</span><small>27</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>No evening shifts</span><small>24</small></label>
-  <div class="pf"><a class="link" href="#">Show all 20 demands</a><a class="link" href="#">Clear</a></div>
+  <span class="hs-popw"><button type="button" class="hs-sel" data-pop aria-expanded="false">Leave out who asks for: <b class="set" data-dem-n>Part-time</b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+<div class="hs-pop" data-popover>
+  <div class="ph">Leave out anyone asking for:</div>
+  <label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Full-time</span><small>301</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Silver Health Insurance</span><small>47</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Clean work environment</span><small>45</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem checked><span>Part-time</span><small>44</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>No weekends</span><small>41</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>No night shifts</span><small>38</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Four days week</span><small>33</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Coffee Machine</span><small>31</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Gold Health Insurance</span><small>27</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>No evening shifts</span><small>24</small></label>
+  <div class="pf"><a class="link" href="#">All 20 demands</a><a class="link" href="#">Clear</a></div>
 </div></span>
   <button type="button" class="hs-sel">Skill at least: <b>any</b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
   <button type="button" class="hs-sel">Wage at most: <b>any</b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
-  <span class="hs-fsum"><b>1,198</b> can be picked</span>
+  <span class="hs-fsum"><b>1,198</b> match</span>
 </div>
+  <p class="hs-note hs-shops">Part-time is left out for shop roles only.</p>
   
-<table class="hs-t"><thead><tr><th class="l">Role and where</th><th>Open places</th><th>From your staff</th><th>New hires</th><th>Stays open</th><th>Wages/day</th><th></th></tr></thead>
+<table class="hs-t"><thead><tr><th class="l">Role</th><th>Open</th><th>Own staff</th><th>New hires</th><th>Stays open</th><th>Wages/day</th><th></th></tr></thead>
 <tbody>
-  <tr><td class="l hs-rn"><b>Lawyer</b><small>Halden Legal, Park Avenue 88 <span class="hs-tag">new office</span></small></td>
-    <td class="num">22</td><td class="dim">–</td><td class="num">22<small class="ln">avg 84% · $62/h</small></td><td class="dim">–</td><td class="num">+$7,842</td>
+  <tr><td class="l hs-rn"><b>Lawyer</b><small>Park Avenue 88 <span class="hs-tag">new</span></small></td>
+    <td class="num">22</td><td class="dim">–</td><td class="num">22<small class="ln">84% · $62/h</small></td><td class="dim">–</td><td class="num">+$7,842</td>
     <td class="act"><a class="hs-btn" href="ChangePicks.dc.html">Change picks<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a></td></tr>
-  <tr class="has-sub"><td class="l hs-rn"><b>Security Guard</b><small>4 Halden Wear shops: 5th Avenue 12 (6), Bleecker Street 40 (5), 2nd Avenue 31 (5), Wall Street 9 (4)</small></td>
-    <td class="num">22</td><td class="num">2</td><td class="num">20<small class="ln">avg 81% · $28/h</small></td><td class="dim">–</td><td class="num">+$3,336</td>
+  <tr class="has-sub"><td class="l hs-rn"><b>Security Guard</b><small>4 shops</small></td>
+    <td class="num">22</td><td class="num">2</td><td class="num">20<small class="ln">81% · $28/h</small></td><td class="dim">–</td><td class="num">+$3,336</td>
     <td class="act"><a class="hs-btn" href="ChangePicks.dc.html">Change picks<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a></td></tr>
   <tr class="hs-subrow" data-re-row><td class="l" colspan="7"><div class="hs-re"><span class="hs-i"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h13M13 4l4 4-4 4"></path><path d="M20 16H7M11 12l-4 4 4 4"></path></svg></span>
-    <span><b>Lena Castell and Vera Zeller</b> have no hours in 7th Avenue 3's plan. They move to Wall Street 9 instead of 2 new hires.</span>
-    <label><input type="checkbox" class="hs-cb" data-reassign checked>Reassign them</label></div></td></tr>
-  <tr><td class="l hs-rn"><b>Gym Trainer</b><small>Halden Fit, Canal Street 5</small></td>
+    <span><b>Reassign 2</b> · 7th Avenue 3 (no hours) → Wall Street 9</span>
+    <label><input type="checkbox" class="hs-cb" data-reassign checked>Reassign</label></div></td></tr>
+  <tr><td class="l hs-rn"><b>Gym Trainer</b><small>Canal Street 5</small></td>
     <td class="num">1</td><td class="dim">–</td><td class="warn">0</td><td class="warn">1</td><td class="dim">–</td>
-    <td class="act l txt warn">No candidates yet</td></tr>
+    <td class="act l txt warn">No candidates</td></tr>
 </tbody>
 <tfoot><tr><td class="l">Total</td><td>45</td><td>2</td><td>42</td><td>1</td><td>+$11,178</td><td></td></tr></tfoot></table>
-  <div class="hs-cand">
-    <div><span>Candidates</span><b>1,542</b><small>found by your headhunters</small></div>
-    <div><span>Applications expiring</span><b class="warn">249</b><small>within 24 hours, as of the save. They then leave the list</small></div>
-  </div>
-</div>
-<aside class="hs-order" aria-label="Your hiring order">
-  <h3>What happens when you hire</h3>
+  <p class="hs-facts2"><b>1,542</b> candidates · <b class="warn">249</b> expire within 24 h (as of the save)</p>
+</div><div class="hs-right">
+<aside class="hs-order" aria-label="When you hire">
+  <h3>When you hire</h3>
   <ul class="hs-ol">
-    <li><span>Reassign</span><b>2</b><small>Security Guards with no hours at 7th Avenue 3 go to Wall Street 9</small></li>
-    <li><span>Hire</span><b>42</b><small>22 Lawyers, 20 Security Guards, at 5 sites</small></li>
-    <li class="short"><span>Stays open</span><b>1</b><small>Gym Trainer at Canal Street 5: no candidates yet</small></li>
+    <li><span>Reassign</span><b>2</b><small>7th Avenue 3 → Wall Street 9</small></li>
+    <li><span>Hire</span><b>42</b><small>22 Lawyers · 20 Security Guards</small></li>
+    <li class="short"><span>Stays open</span><b>1</b><small>Gym Trainer: no candidates</small></li>
   </ul>
-  <div class="hs-sum"><span>Added wages</span><b class="big">+$11,178/day</b><span>Wages after hiring</span><b>$107,588/day</b></div>
+  <div class="hs-sum"><span>Added wages</span><b class="big">+$11,178/day</b></div>
   <a class="hs-cta wide" aria-disabled="true" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"></path></svg><span>Review and hire 42</span></a>
-  <div class="hs-gate"><b>Hiring goes through the game.</b><ol>
-<li>Subscribe to Big Copilot Link on the Steam Workshop.</li><li>Start Big Ambitions and load this company.</li>
-<li>Link the game from Big Copilot's start screen.</li></ol>
-<span>Until then you can check and change the picks here; they are read from your save.</span></div>
-</aside></div></div></div><div style="height:56px"></div><div class="hs-state"><b>D2 · MOD TOO OLD</b><span>Linked, but the mod predates hiring: the button is disabled and says which version is needed.</span></div><div class="hs-clip" style="height: 900px;"><div class="wrap"><div class="hs-sub"><nav class="seg" aria-label="Company views"><a class="" href="#">Results</a><a class="" href="#">Products</a><a class="on" href="#">Staff</a><a class="" href="#">Milestones</a></nav></div>
-<div class="hs-head">
-  <div><h1>Staff</h1><p>Fill the open places in your staffing plans. People are picked for you: check them, change any you like, then hire them all at once.</p></div>
-  <div class="aside"><span class="hs-link old"><i></i>Game linked · mod 0.2.0 is too old to hire</span></div>
-</div><div class="hs-split">
+  <div class="hs-gate"><b>Link the game to hire</b><ol>
+<li>Subscribe to Big Copilot Link (Steam Workshop)</li><li>Load this company in the game</li><li>Link from the start screen</li></ol></div>
+</aside></div></div></div></div><div style="height:56px"></div><div class="hs-state"><b>D2 · MOD TOO OLD</b><span>Linked, but the mod predates hiring.</span></div><div class="hs-clip" style="height: 820px;"><div class="wrap"><div class="hs-sub"><nav class="seg" aria-label="Company views"><a class="" href="#">Results</a><a class="" href="#">Products</a><a class="on" href="#">Staff</a><a class="" href="#">Milestones</a></nav></div>
+<div class="hs-head"><h1>Staff</h1><div class="aside"><span class="hs-link old"><i></i>Mod 0.2.0 · too old to hire</span></div></div><div class="hs-split">
 <div>
-  <div class="hs-shead"><h2>Open places and who fills them</h2></div>
-  <p class="hs-lead" style="margin-left:0">One row a role, over every site with a staffing plan. Your own staff with no hours fill a place first; the rest are new hires, picked for you: the most skilled who pass the filters, equal skill to the lower wage.</p>
+  <div class="hs-shead"><h2>Open places</h2></div>
   <div class="hs-fbar">
-  <span class="lab">Who can be picked</span>
-  <span class="hs-popw"><button type="button" class="hs-sel" data-pop aria-expanded="false">Leave out who asks for: <b data-dem-n>nobody</b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button><div class="hs-pop" data-popover>
-  <div class="ph">Tick a demand to leave out every candidate who asks for it. The number is how many ask.</div>
-  <label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Full-time</span><small>301</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Silver Health Insurance</span><small>47</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Clean work environment</span><small>45</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Part-time</span><small>44</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>No weekends</span><small>41</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>No night shifts</span><small>38</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Four days week</span><small>33</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Coffee Machine</span><small>31</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Gold Health Insurance</span><small>27</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>No evening shifts</span><small>24</small></label>
-  <div class="pf"><a class="link" href="#">Show all 20 demands</a><a class="link" href="#">Clear</a></div>
+  <span class="hs-popw"><button type="button" class="hs-sel" data-pop aria-expanded="false">Leave out who asks for: <b class="set" data-dem-n>Part-time</b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+<div class="hs-pop" data-popover>
+  <div class="ph">Leave out anyone asking for:</div>
+  <label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Full-time</span><small>301</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Silver Health Insurance</span><small>47</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Clean work environment</span><small>45</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem checked><span>Part-time</span><small>44</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>No weekends</span><small>41</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>No night shifts</span><small>38</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Four days week</span><small>33</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Coffee Machine</span><small>31</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Gold Health Insurance</span><small>27</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>No evening shifts</span><small>24</small></label>
+  <div class="pf"><a class="link" href="#">All 20 demands</a><a class="link" href="#">Clear</a></div>
 </div></span>
   <button type="button" class="hs-sel">Skill at least: <b>any</b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
   <button type="button" class="hs-sel">Wage at most: <b>any</b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
-  <span class="hs-fsum"><b>1,198</b> can be picked</span>
+  <span class="hs-fsum"><b>1,198</b> match</span>
 </div>
+  <p class="hs-note hs-shops">Part-time is left out for shop roles only.</p>
   
-<table class="hs-t"><thead><tr><th class="l">Role and where</th><th>Open places</th><th>From your staff</th><th>New hires</th><th>Stays open</th><th>Wages/day</th><th></th></tr></thead>
+<table class="hs-t"><thead><tr><th class="l">Role</th><th>Open</th><th>Own staff</th><th>New hires</th><th>Stays open</th><th>Wages/day</th><th></th></tr></thead>
 <tbody>
-  <tr><td class="l hs-rn"><b>Lawyer</b><small>Halden Legal, Park Avenue 88 <span class="hs-tag">new office</span></small></td>
-    <td class="num">22</td><td class="dim">–</td><td class="num">22<small class="ln">avg 84% · $62/h</small></td><td class="dim">–</td><td class="num">+$7,842</td>
+  <tr><td class="l hs-rn"><b>Lawyer</b><small>Park Avenue 88 <span class="hs-tag">new</span></small></td>
+    <td class="num">22</td><td class="dim">–</td><td class="num">22<small class="ln">84% · $62/h</small></td><td class="dim">–</td><td class="num">+$7,842</td>
     <td class="act"><a class="hs-btn" href="ChangePicks.dc.html">Change picks<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a></td></tr>
-  <tr class="has-sub"><td class="l hs-rn"><b>Security Guard</b><small>4 Halden Wear shops: 5th Avenue 12 (6), Bleecker Street 40 (5), 2nd Avenue 31 (5), Wall Street 9 (4)</small></td>
-    <td class="num">22</td><td class="num">2</td><td class="num">20<small class="ln">avg 81% · $28/h</small></td><td class="dim">–</td><td class="num">+$3,336</td>
+  <tr class="has-sub"><td class="l hs-rn"><b>Security Guard</b><small>4 shops</small></td>
+    <td class="num">22</td><td class="num">2</td><td class="num">20<small class="ln">81% · $28/h</small></td><td class="dim">–</td><td class="num">+$3,336</td>
     <td class="act"><a class="hs-btn" href="ChangePicks.dc.html">Change picks<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a></td></tr>
   <tr class="hs-subrow" data-re-row><td class="l" colspan="7"><div class="hs-re"><span class="hs-i"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h13M13 4l4 4-4 4"></path><path d="M20 16H7M11 12l-4 4 4 4"></path></svg></span>
-    <span><b>Lena Castell and Vera Zeller</b> have no hours in 7th Avenue 3's plan. They move to Wall Street 9 instead of 2 new hires.</span>
-    <label><input type="checkbox" class="hs-cb" data-reassign checked>Reassign them</label></div></td></tr>
-  <tr><td class="l hs-rn"><b>Gym Trainer</b><small>Halden Fit, Canal Street 5</small></td>
+    <span><b>Reassign 2</b> · 7th Avenue 3 (no hours) → Wall Street 9</span>
+    <label><input type="checkbox" class="hs-cb" data-reassign checked>Reassign</label></div></td></tr>
+  <tr><td class="l hs-rn"><b>Gym Trainer</b><small>Canal Street 5</small></td>
     <td class="num">1</td><td class="dim">–</td><td class="warn">0</td><td class="warn">1</td><td class="dim">–</td>
-    <td class="act l txt warn">No candidates yet</td></tr>
+    <td class="act l txt warn">No candidates</td></tr>
 </tbody>
 <tfoot><tr><td class="l">Total</td><td>45</td><td>2</td><td>42</td><td>1</td><td>+$11,178</td><td></td></tr></tfoot></table>
-  <div class="hs-cand">
-    <div><span>Candidates</span><b>1,542</b><small>found by your headhunters</small></div>
-    <div><span>Applications expiring</span><b class="warn">249</b><small>within 24 hours. They then leave the list</small></div>
-  </div>
-</div>
-<aside class="hs-order" aria-label="Your hiring order">
-  <h3>What happens when you hire</h3>
+  <p class="hs-facts2"><b>1,542</b> candidates · <b class="warn">249</b> expire within 24 h</p>
+</div><div class="hs-right">
+<aside class="hs-order" aria-label="When you hire">
+  <h3>When you hire</h3>
   <ul class="hs-ol">
-    <li><span>Reassign</span><b>2</b><small>Security Guards with no hours at 7th Avenue 3 go to Wall Street 9</small></li>
-    <li><span>Hire</span><b>42</b><small>22 Lawyers, 20 Security Guards, at 5 sites</small></li>
-    <li class="short"><span>Stays open</span><b>1</b><small>Gym Trainer at Canal Street 5: no candidates yet</small></li>
+    <li><span>Reassign</span><b>2</b><small>7th Avenue 3 → Wall Street 9</small></li>
+    <li><span>Hire</span><b>42</b><small>22 Lawyers · 20 Security Guards</small></li>
+    <li class="short"><span>Stays open</span><b>1</b><small>Gym Trainer: no candidates</small></li>
   </ul>
-  <div class="hs-sum"><span>Added wages</span><b class="big">+$11,178/day</b><span>Wages after hiring</span><b>$107,588/day</b></div>
+  <div class="hs-sum"><span>Added wages</span><b class="big">+$11,178/day</b></div>
   <a class="hs-cta wide" aria-disabled="true" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"></path></svg><span>Review and hire 42</span></a>
-  <div class="hs-gate warn"><b>Update Big Copilot Link to hire.</b>
-<span>You have 0.2.0; hiring needs 0.3.0. Steam updates Workshop items when the game restarts: quit Big Ambitions, start it again, and link again.</span></div>
-</aside></div></div></div></div>
+  <div class="hs-gate warn"><b>Update Big Copilot Link to 0.3.0</b><span>You have 0.2.0. Restart the game, then link again.</span></div>
+</aside></div></div></div></div></div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":true,"section":"Theme"},"$preview":{"width":1440,"height":2060}}'>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":true,"section":"Theme"},"$preview":{"width":1440,"height":1860}}'>
 class Component extends DCLogic {
   renderVals() { return { theme: (this.props.dark ?? true) ? 'dark' : 'light' }; }
   componentDidMount() {

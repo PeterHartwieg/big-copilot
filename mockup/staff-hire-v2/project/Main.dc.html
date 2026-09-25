@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Staff: A2 · Overview, option B: the order panel (recommended)</title>
+<title>Staff: A · Overview</title>
 <script src="./support.js"></script>
 </head>
 <body>
@@ -1221,93 +1221,138 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 .hs-phone h2{margin:0;font-size:16px;font-weight:600}
 .hs-pbar{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;gap:6px;padding:12px 16px 20px;background:var(--surface);border-top:1px solid var(--rule)}
 .hs-pbar .hs-note{text-align:center}
+
+/* round 2: less copy, quick hire ------------------------------------------------------ */
+.hs-head{align-items:center}
+.hs-right{display:flex;flex-direction:column;gap:18px;position:sticky;top:20px}
+.hs-right .hs-order{position:static}
+.hs-shops{margin:-6px 0 12px}
+.hs-facts2{margin:14px 0 0;font-size:13px;color:var(--ink-3)}
+.hs-facts2 b{font:500 13.5px/1 "IBM Plex Mono",monospace;color:var(--ink)}
+.hs-facts2 b.warn{color:var(--warn)}
+.hs-scope{display:flex;gap:18px;align-items:center;margin:-2px 0 6px;font-size:12.5px;color:var(--ink-3)}
+.hs-legend{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font:400 12px/1 Archivo,sans-serif!important;color:var(--warn)!important}
+.hs-legend i{width:8px;height:8px;border-radius:2px;background:var(--warn)}
+.hs-sel.empty b{color:var(--ink-3);font-weight:500}
+.hs-quick{display:flex;flex-direction:column;gap:14px;padding:18px 20px 20px;border-radius:14px;background:var(--surface);border:1px solid var(--rule-soft)}
+.hs-quick .qh{display:flex;align-items:center;gap:10px}
+.hs-quick .qh .hs-i{width:28px;height:28px;border-radius:8px;background:var(--raised);color:var(--ink-2)}
+.hs-quick .qh h3{margin:0;font-size:15px;font-weight:600}
+.hs-quick .qh .sub{margin-left:auto;font-size:12px;color:var(--ink-3)}
+.hs-quick .qf{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.hs-quick .fld{display:flex;flex-direction:column;gap:5px;min-width:0}
+.hs-quick .fld.wide{grid-column:1/-1}
+.hs-quick .fld>span:first-child{font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.hs-quick .hs-sel{width:100%;justify-content:space-between;background:var(--ground)}
+.hs-quick .hs-sel b{overflow:hidden;text-overflow:ellipsis}
+.hs-popw.full{display:flex;width:100%}
+.hs-popw.full .hs-pop{width:100%}
+.hs-num{display:grid;grid-template-columns:34px minmax(0,1fr) 34px;height:34px;border-radius:9px;border:1px solid var(--rule);background:var(--ground);overflow:hidden}
+.hs-num button{border:0;background:none;color:var(--ink-2);font:500 16px/1 Archivo,sans-serif;cursor:pointer}
+.hs-num button:hover{background:var(--raised);color:var(--ink)}
+.hs-num b{display:grid;place-items:center;font:500 14px/1 "IBM Plex Mono",monospace}
+.hs-match{font-size:13px;color:var(--ink-2)}
+.hs-match.none{margin:0;color:var(--ink-3)}
+.hs-match summary{display:flex;align-items:center;gap:6px;cursor:pointer;list-style:none}
+.hs-match summary::-webkit-details-marker{display:none}
+.hs-match summary b{font:500 15px/1 "IBM Plex Mono",monospace;color:var(--accent)}
+.hs-match summary svg{width:12px;height:12px;color:var(--ink-3);margin-left:auto;transition:transform .2s}
+.hs-match[open] summary svg{transform:rotate(90deg)}
+.hs-match ul,.hs-qlist{margin:8px 0 0;padding:0;list-style:none;display:flex;flex-direction:column}
+.hs-match li,.hs-qlist li{display:grid;grid-template-columns:minmax(0,1fr) 44px 64px;gap:8px;padding:6px 0;border-bottom:1px solid var(--rule-soft);font-size:12.5px;color:var(--ink)}
+.hs-match .m,.hs-qlist .m{font:500 12px/1.4 "IBM Plex Mono",monospace;color:var(--ink-2);text-align:right}
+.hs-quick.ph{border:0;background:none;padding:0}
+.hs-pcard .hs-ol li b{font-size:18px}
 </style>
 </helmet>
-<div class="board hs-page {{theme}}" style="width: 1440px; height: 2260px;">
+<div class="board hs-page {{theme}}" style="width: 1440px; height: 1720px;">
 <div class="wrap">
 <header class="mast">
   <div class="brand"><span class="wordmark">Halden</span><span class="dot"></span></div>
   <nav class="nav" aria-label="Board pages"><a class="" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.600 5.600l1.400 1.400M17 17l1.400 1.400M5.600 18.400 7 17M17 7l1.400-1.400"></path></svg><span>Today</span></a><a class="" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.500 8.500 12 4l8.500 4.500v8L12 21l-8.500-4.500z"></path><path d="M3.500 8.500 12 13l8.500-4.500M12 13v8"></path></svg><span>Supply</span></a><a class="" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18 10 12l4 4 6-7"></path><path d="M15 9h5v5"></path></svg><span>Growth</span></a><a class="on" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16"></path><path d="M14 10h5a1 1 0 0 1 1 1v10M4 21h17M8 8h2M8 12h2M8 16h2M17 14h1M17 18h1"></path></svg><span>Company</span></a><a class="" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z"></path><path d="M9 4v14M15 6v14"></path></svg><span>Map</span></a><a class="" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.500A1.500 1.500 0 0 1 6.500 3H19v15H6.500A1.500 1.500 0 0 0 5 19.500z"></path><path d="M5 19.500A1.500 1.500 0 0 0 6.500 21H19"></path></svg><span>Wiki</span></a></nav>
   <div class="clock tr"><b>Day 214<i>·</i>Tue 21:04</b><small>YEAR 3 · 23 SITES · 639 STAFF</small></div>
 </header><div class="hs-sub"><nav class="seg" aria-label="Company views"><a class="" href="#">Results</a><a class="" href="#">Products</a><a class="on" href="#">Staff</a><a class="" href="#">Milestones</a></nav></div>
-<div class="hs-head">
-  <div><h1>Staff</h1><p>Fill the open places in your staffing plans. People are picked for you: check them, change any you like, then hire them all at once.</p></div>
-  <div class="aside"><span class="hs-link"><i></i>Game linked</span></div>
-</div>
+<div class="hs-head"><h1>Staff</h1><div class="aside"><span class="hs-link"><i></i>Game linked</span></div></div>
 <div class="hs-split">
 <div>
-  <div class="hs-shead"><h2>Open places and who fills them</h2></div>
-  <p class="hs-lead" style="margin-left:0">One row a role, over every site with a staffing plan. Your own staff with no hours fill a place first; the rest are new hires, picked for you: the most skilled who pass the filters, equal skill to the lower wage.</p>
+  <div class="hs-shead"><h2>Open places</h2></div>
   <div class="hs-fbar">
-  <span class="lab">Who can be picked</span>
-  <span class="hs-popw"><button type="button" class="hs-sel" data-pop aria-expanded="false">Leave out who asks for: <b data-dem-n>nobody</b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button><div class="hs-pop" data-popover>
-  <div class="ph">Tick a demand to leave out every candidate who asks for it. The number is how many ask.</div>
-  <label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Full-time</span><small>301</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Silver Health Insurance</span><small>47</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Clean work environment</span><small>45</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Part-time</span><small>44</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>No weekends</span><small>41</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>No night shifts</span><small>38</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Four days week</span><small>33</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Coffee Machine</span><small>31</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Gold Health Insurance</span><small>27</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>No evening shifts</span><small>24</small></label>
-  <div class="pf"><a class="link" href="#">Show all 20 demands</a><a class="link" href="#">Clear</a></div>
+  <span class="hs-popw"><button type="button" class="hs-sel" data-pop aria-expanded="false">Leave out who asks for: <b class="set" data-dem-n>Part-time</b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+<div class="hs-pop" data-popover>
+  <div class="ph">Leave out anyone asking for:</div>
+  <label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Full-time</span><small>301</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Silver Health Insurance</span><small>47</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Clean work environment</span><small>45</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem checked><span>Part-time</span><small>44</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>No weekends</span><small>41</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>No night shifts</span><small>38</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Four days week</span><small>33</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Coffee Machine</span><small>31</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Gold Health Insurance</span><small>27</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>No evening shifts</span><small>24</small></label>
+  <div class="pf"><a class="link" href="#">All 20 demands</a><a class="link" href="#">Clear</a></div>
 </div></span>
   <button type="button" class="hs-sel">Skill at least: <b>any</b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
   <button type="button" class="hs-sel">Wage at most: <b>any</b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
-  <span class="hs-fsum"><b>1,198</b> can be picked</span>
+  <span class="hs-fsum"><b>1,198</b> match</span>
 </div>
+  <p class="hs-note hs-shops">Part-time is left out for shop roles only.</p>
   
-<table class="hs-t"><thead><tr><th class="l">Role and where</th><th>Open places</th><th>From your staff</th><th>New hires</th><th>Stays open</th><th>Wages/day</th><th></th></tr></thead>
+<table class="hs-t"><thead><tr><th class="l">Role</th><th>Open</th><th>Own staff</th><th>New hires</th><th>Stays open</th><th>Wages/day</th><th></th></tr></thead>
 <tbody>
-  <tr><td class="l hs-rn"><b>Lawyer</b><small>Halden Legal, Park Avenue 88 <span class="hs-tag">new office</span></small></td>
-    <td class="num">22</td><td class="dim">–</td><td class="num">22<small class="ln">avg 84% · $62/h</small></td><td class="dim">–</td><td class="num">+$7,842</td>
+  <tr><td class="l hs-rn"><b>Lawyer</b><small>Park Avenue 88 <span class="hs-tag">new</span></small></td>
+    <td class="num">22</td><td class="dim">–</td><td class="num">22<small class="ln">84% · $62/h</small></td><td class="dim">–</td><td class="num">+$7,842</td>
     <td class="act"><a class="hs-btn" href="ChangePicks.dc.html">Change picks<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a></td></tr>
-  <tr class="has-sub"><td class="l hs-rn"><b>Security Guard</b><small>4 Halden Wear shops: 5th Avenue 12 (6), Bleecker Street 40 (5), 2nd Avenue 31 (5), Wall Street 9 (4)</small></td>
-    <td class="num">22</td><td class="num">2</td><td class="num">20<small class="ln">avg 81% · $28/h</small></td><td class="dim">–</td><td class="num">+$3,336</td>
+  <tr class="has-sub"><td class="l hs-rn"><b>Security Guard</b><small>4 shops</small></td>
+    <td class="num">22</td><td class="num">2</td><td class="num">20<small class="ln">81% · $28/h</small></td><td class="dim">–</td><td class="num">+$3,336</td>
     <td class="act"><a class="hs-btn" href="ChangePicks.dc.html">Change picks<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a></td></tr>
   <tr class="hs-subrow" data-re-row><td class="l" colspan="7"><div class="hs-re"><span class="hs-i"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h13M13 4l4 4-4 4"></path><path d="M20 16H7M11 12l-4 4 4 4"></path></svg></span>
-    <span><b>Lena Castell and Vera Zeller</b> have no hours in 7th Avenue 3's plan. They move to Wall Street 9 instead of 2 new hires.</span>
-    <label><input type="checkbox" class="hs-cb" data-reassign checked>Reassign them</label></div></td></tr>
-  <tr><td class="l hs-rn"><b>Gym Trainer</b><small>Halden Fit, Canal Street 5</small></td>
+    <span><b>Reassign 2</b> · 7th Avenue 3 (no hours) → Wall Street 9</span>
+    <label><input type="checkbox" class="hs-cb" data-reassign checked>Reassign</label></div></td></tr>
+  <tr><td class="l hs-rn"><b>Gym Trainer</b><small>Canal Street 5</small></td>
     <td class="num">1</td><td class="dim">–</td><td class="warn">0</td><td class="warn">1</td><td class="dim">–</td>
-    <td class="act l txt warn">No candidates yet</td></tr>
+    <td class="act l txt warn">No candidates</td></tr>
 </tbody>
 <tfoot><tr><td class="l">Total</td><td>45</td><td>2</td><td>42</td><td>1</td><td>+$11,178</td><td></td></tr></tfoot></table>
-  <div class="hs-cand">
-    <div><span>Candidates</span><b>1,542</b><small>found by your headhunters</small></div>
-    <div><span>Applications expiring</span><b class="warn">249</b><small>within 24 hours. They then leave the list</small></div>
-  </div>
-</div>
-<aside class="hs-order" aria-label="Your hiring order">
-  <h3>What happens when you hire</h3>
+  <p class="hs-facts2"><b>1,542</b> candidates · <b class="warn">249</b> expire within 24 h</p>
+</div><div class="hs-right">
+<aside class="hs-order" aria-label="When you hire">
+  <h3>When you hire</h3>
   <ul class="hs-ol">
-    <li><span>Reassign</span><b>2</b><small>Security Guards with no hours at 7th Avenue 3 go to Wall Street 9</small></li>
-    <li><span>Hire</span><b>42</b><small>22 Lawyers, 20 Security Guards, at 5 sites</small></li>
-    <li class="short"><span>Stays open</span><b>1</b><small>Gym Trainer at Canal Street 5: no candidates yet</small></li>
+    <li><span>Reassign</span><b>2</b><small>7th Avenue 3 → Wall Street 9</small></li>
+    <li><span>Hire</span><b>42</b><small>22 Lawyers · 20 Security Guards</small></li>
+    <li class="short"><span>Stays open</span><b>1</b><small>Gym Trainer: no candidates</small></li>
   </ul>
-  <div class="hs-sum"><span>Added wages</span><b class="big">+$11,178/day</b><span>Wages after hiring</span><b>$107,588/day</b></div>
+  <div class="hs-sum"><span>Added wages</span><b class="big">+$11,178/day</b></div>
   <a class="hs-cta wide" href="Review.dc.html"><span>Review and hire 42</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a>
-  <span class="hs-note">The picks are made for you and you can change any of them. Nothing happens until you confirm on the next screen.</span>
-</aside></div>
+  <span class="hs-note">Picked for you. You confirm next.</span>
+</aside>
+<section class="hs-quick" aria-label="Quick hire">
+  <div class="qh"><span class="hs-i"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="8" r="3.500"></circle><path d="M3.500 20a6.500 6.500 0 0 1 13 0M19 8v6M16 11h6"></path></svg></span><h3>Quick hire</h3><span class="sub">any site</span></div>
+  <div class="qf">
+    <div class="fld wide"><span>Role</span><button type="button" class="hs-sel empty"><b>Choose a role</b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button></div>
+    <div class="fld wide"><span>At</span><button type="button" class="hs-sel empty"><b>Choose a site</b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button></div>
+    <div class="fld"><span>How many</span><span class="hs-num"><button type="button" aria-label="Fewer">−</button><b>1</b><button type="button" aria-label="More">+</button></span></div>
+    <div class="fld"><span>Skill at least</span><button type="button" class="hs-sel"><b>any</b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button></div>
+    <div class="fld wide"><span>Leave out who asks for</span><span class="hs-popw full"><button type="button" class="hs-sel" data-pop aria-expanded="false"><b class="" data-dem-n>nobody</b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+<div class="hs-pop" data-popover>
+  <div class="ph">Leave out anyone asking for:</div>
+  <label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Full-time</span><small>301</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Silver Health Insurance</span><small>47</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Clean work environment</span><small>45</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Part-time</span><small>44</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>No weekends</span><small>41</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>No night shifts</span><small>38</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Four days week</span><small>33</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Coffee Machine</span><small>31</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>Gold Health Insurance</span><small>27</small></label><label class="hs-opt"><input type="checkbox" class="hs-cb" data-dem><span>No evening shifts</span><small>24</small></label>
+  <div class="pf"><a class="link" href="#">All 20 demands</a><a class="link" href="#">Clear</a></div>
+</div></span></div>
+  </div>
+  <p class="hs-match none">Pick a role and a site to see who matches.</p>
+  <a class="hs-cta wide" aria-disabled="true" href="#"><span>Hire</span></a>
+</section></div></div>
 
-<section class="hs-step">
-  <div class="hs-shead"><h2>Headquarters and warehouses</h2><span class="count">optional</span></div>
-  <p class="hs-lead" style="margin-left:0">Big Copilot plans no hours for these, so it picks nobody here. Hire by hand if you need someone: they join with no hours, and you set them in the game.</p>
-  <div class="hs-body" style="margin-left:0;max-width:calc(100% - 368px)"><table class="hs-t"><thead><tr><th class="l">Role</th><th class="l">Works at</th><th>Candidates</th><th>Best skill</th><th>Wage/h</th><th>Expire within 24 h</th><th></th></tr></thead>
-  <tbody><tr><td class="l hs-rn"><b>Cleaning</b></td><td class="l txt">HQ and 2 warehouses</td><td class="num">304</td><td>94%</td><td>$14–$22</td><td class="warn">51</td><td class="act"><a class="hs-btn" href="ChangePicks.dc.html">Pick by hand<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a></td></tr><tr><td class="l hs-rn"><b>Delivery Driver</b></td><td class="l txt">2 warehouses</td><td class="num">160</td><td>91%</td><td>$17–$26</td><td class="warn">29</td><td class="act"><a class="hs-btn" href="ChangePicks.dc.html">Pick by hand<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a></td></tr><tr><td class="l hs-rn"><b>Headhunter</b></td><td class="l txt">HQ</td><td class="num">41</td><td>88%</td><td>$34–$58</td><td class="warn">7</td><td class="act"><a class="hs-btn" href="ChangePicks.dc.html">Pick by hand<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a></td></tr><tr><td class="l hs-rn"><b>Logistics Manager</b></td><td class="l txt">2 warehouses</td><td class="num">23</td><td>83%</td><td>$38–$55</td><td class="warn">4</td><td class="act"><a class="hs-btn" href="ChangePicks.dc.html">Pick by hand<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a></td></tr><tr><td class="l hs-rn"><b>Purchasing Agent</b></td><td class="l txt">HQ</td><td class="num">18</td><td>79%</td><td>$31–$47</td><td class="warn">3</td><td class="act"><a class="hs-btn" href="ChangePicks.dc.html">Pick by hand<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a></td></tr><tr><td class="l hs-rn"><b>HR Manager</b></td><td class="l txt">HQ</td><td class="num">9</td><td>86%</td><td>$42–$61</td><td class="warn">2</td><td class="act"><a class="hs-btn" href="ChangePicks.dc.html">Pick by hand<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a></td></tr><tr><td class="l hs-rn"><b>Pricing Manager</b></td><td class="l txt">HQ</td><td class="dim">0</td><td class="dim">–</td><td class="dim">–</td><td class="dim">–</td><td class="act dim l txt">none found</td></tr></tbody></table>
-  <p class="hs-note" style="margin:10px 0 0">344 more candidates are for roles none of your sites use.</p></div>
-</section>
 <section class="hs-apart">
   <span class="kick">Current staff</span>
   <div class="hs-pay">
-    <div><h2>Payroll</h2><p class="hs-note" style="margin:0">Who you employ today, by role.</p><div class="roles"><div class="role"><span>Customer Service</span><span class="tr"><i style="width:100%"></i></span><span class="c">214</span></div><div class="role"><span>Cleaning</span><span class="tr"><i style="width:55%"></i></span><span class="c">118</span></div><div class="role"><span>Security Guard</span><span class="tr"><i style="width:45%"></i></span><span class="c">96</span></div><div class="role"><span>Lawyer</span><span class="tr"><i style="width:27%"></i></span><span class="c">58</span></div><div class="role"><span>Delivery Driver</span><span class="tr"><i style="width:19%"></i></span><span class="c">41</span></div><div class="role"><span>Factory Worker</span><span class="tr"><i style="width:18%"></i></span><span class="c">38</span></div><div class="role"><span>Gym Trainer</span><span class="tr"><i style="width:13%"></i></span><span class="c">27</span></div><div class="role"><span>Headhunter</span><span class="tr"><i style="width:6%"></i></span><span class="c">12</span></div><div class="role"><span>HR Manager</span><span class="tr"><i style="width:4%"></i></span><span class="c">9</span></div><div class="role"><span>Logistics Manager</span><span class="tr"><i style="width:4%"></i></span><span class="c">8</span></div><div class="role"><span>Programmer</span><span class="tr"><i style="width:4%"></i></span><span class="c">8</span></div><div class="role"><span>Purchasing Agent</span><span class="tr"><i style="width:3%"></i></span><span class="c">6</span></div></div></div>
+    <div><h2>Payroll</h2><div class="roles"><div class="role"><span>Customer Service</span><span class="tr"><i style="width:100%"></i></span><span class="c">214</span></div><div class="role"><span>Cleaning</span><span class="tr"><i style="width:55%"></i></span><span class="c">118</span></div><div class="role"><span>Security Guard</span><span class="tr"><i style="width:45%"></i></span><span class="c">96</span></div><div class="role"><span>Lawyer</span><span class="tr"><i style="width:27%"></i></span><span class="c">58</span></div><div class="role"><span>Delivery Driver</span><span class="tr"><i style="width:19%"></i></span><span class="c">41</span></div><div class="role"><span>Factory Worker</span><span class="tr"><i style="width:18%"></i></span><span class="c">38</span></div><div class="role"><span>Gym Trainer</span><span class="tr"><i style="width:13%"></i></span><span class="c">27</span></div><div class="role"><span>Headhunter</span><span class="tr"><i style="width:6%"></i></span><span class="c">12</span></div><div class="role"><span>HR Manager</span><span class="tr"><i style="width:4%"></i></span><span class="c">9</span></div><div class="role"><span>Logistics Manager</span><span class="tr"><i style="width:4%"></i></span><span class="c">8</span></div><div class="role"><span>Programmer</span><span class="tr"><i style="width:4%"></i></span><span class="c">8</span></div><div class="role"><span>Purchasing Agent</span><span class="tr"><i style="width:3%"></i></span><span class="c">6</span></div></div></div>
     <div class="facts">
-      <div><span>People employed</span><b>639</b></div>
-      <div><span>Wages a day at today's rates</span><b>$96,410</b></div>
-      <div><span>Wages booked yesterday</span><b>$95,870</b></div>
-      <div><span>Average satisfaction</span><b>81%</b></div>
-      <div><span>Unhappy (below 70%)</span><b class="warn">14</b></div>
+      <div><span>People</span><b>639</b></div>
+      <div><span>Wages a day</span><b>$96,410</b></div>
+      <div><span>Booked yesterday</span><b>$95,870</b></div>
+      <div><span>Satisfaction</span><b>81%</b></div>
+      <div><span>Unhappy</span><b class="warn">14</b></div>
       <div><span>Absent today</span><b class="warn">3</b></div>
-      <p class="hs-note" style="margin:0">Today's rate is each person's hourly wage × their weekly hours ÷ 7. Booked is what yesterday's statements recorded; the two differ when hours changed during the day.</p>
     </div>
   </div>
 </section></div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":true,"section":"Theme"},"$preview":{"width":1440,"height":2260}}'>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":true,"section":"Theme"},"$preview":{"width":1440,"height":1720}}'>
 class Component extends DCLogic {
   renderVals() { return { theme: (this.props.dark ?? true) ? 'dark' : 'light' }; }
   componentDidMount() {
