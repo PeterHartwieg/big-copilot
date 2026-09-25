@@ -28,6 +28,9 @@ const WIDTHS = [360, 768, 1280, 1500, 1501, 1920];
    screen there fails the sweep. */
 const CONVERTED = {
   // nav: '#nav, .subnav',
+  /* A finding's headline, on Today and in the site panel. Its detail (.more)
+     joins once the helpers after _shelf_notes() are converted too (PR 5b). */
+  f: '.find .what, .sp-find .what',
 };
 const MEASURED = 'button, .chip, .seg a, th, .tile .lab';
 
@@ -183,7 +186,9 @@ async function measure(page){
         const walk = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
         for(let n = walk.nextNode(); n; n = walk.nextNode()){
           if(!n.parentElement || !shown(n.parentElement)) continue;
-          const outside = n.textContent.replace(/\[[^\]]*\]/g, '').replace(/[\d\s.,:;$%+\-–—×·/()!?%'"‹›…#]+/g, '');
+          /* A finding's sentence is cut into headline and detail, so its
+             brackets can open in one text node and close in the next. */
+          const outside = n.textContent.replace(/^[^\[]*\]/, '').replace(/\[[^\]]*(\]|$)/g, '').replace(/[\d\s.,:;$%+\-–—×·/()!?%'"‹›…#]+/g, '');
           if(outside.length > 1) english.push(`${area}: ${n.textContent.trim().slice(0, 60)}`);
         }
       });
