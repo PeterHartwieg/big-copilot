@@ -262,13 +262,17 @@ def street_label(address: tuple[str, int]) -> str:
 
 
 def source_meta(relative: str, path: str) -> dict:
-    """One source file as the payload records it: game-relative path and hash."""
+    """One source file as the payload records it: game-relative path and hash.
+
+    The mtime is left null, as for ba_buildings.json: Steam and a reinstall
+    touch unchanged files, and the hash already says whether the bytes moved.
+    """
     data = wiki_data.read_source(path)
     return {
         "path": relative,
         "bytes": len(data),
         "sha256": wiki_data.sha256_hex(data),
-        "mtime": wiki_data.modified_utc(path),
+        "mtime": None,
     }
 
 

@@ -224,7 +224,9 @@ literal `{count}` in the shipped file.
 The output is deterministic: sorted iteration, no run timestamp, `sourceDate`
 is the newest mtime of the game help and counted layouts rather than the moment this ran (the sample's
 SOURCES block repeats it as `sourceDate` and keeps the mockup's `extracted` key
-with the same value), and `write_public_wiki` skips the write when the bytes
+with the same value), each source row records its hash and size with a null `mtime`
+(Steam touches unchanged files, and the hash already says whether the bytes moved), and
+`write_public_wiki` skips the write when the bytes
 did not change. Source paths in the payload are game-relative; a privacy check
 rejects any build that would leak an absolute path, a user name or save data.
 

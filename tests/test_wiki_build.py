@@ -870,10 +870,23 @@ class DeterminismTests(FixtureCase):
         self.assertEqual(build.serialise(self.build()), build.serialise(self.build()))
 
     def test_touching_a_source_without_changing_it_changes_nothing(self):
+        # Pinned to midday, so the touch cannot carry sourceDate (a date, not a
+        # time) over midnight; any finer mtime must not reach the payload.
         path = os.path.join(self.root, "StreamingAssets/helpstructure.json")
+        noon = datetime(2026, 9, 1, 12, 0, 0, tzinfo=timezone.utc).timestamp()
+        os.utime(path, (noon, noon))
         before = build.serialise(self.build())
-        os.utime(path, None)  # a newer mtime, the same bytes
+        os.utime(path, (noon + 61, noon + 61))  # a newer mtime, the same bytes
         self.assertEqual(build.serialise(self.build()), before)
+
+    def test_no_source_row_carries_a_file_time(self):
+        # The hash says whether a file changed; its mtime only churns the payload.
+        payload = self.build()
+        rows = list(payload["sample"]["SOURCES"]["files"])
+        sources = payload["provenance"]["sources"]
+        rows += [sources["locale"], sources["helpStructure"], *sources["layouts"]]
+        for row in rows:
+            self.assertIsNone(row["mtime"], row["path"])
 
     def test_no_run_timestamp_is_written(self):
         payload = self.build()
