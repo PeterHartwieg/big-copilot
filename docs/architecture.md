@@ -322,6 +322,16 @@ leer"). Where Python pluralises a name today, pass the count and let the key say
 translated: word order is the translation's. One key per sentence, with its numbers and
 names as params.
 
+**One exception to literal keys: the Wiki guides' labels.** Their English is `guideUi`
+in `tools/wiki_sample.json`, and it reaches the page inside the wiki payload (each
+guide's `COPY`), so `web/wiki.js` cannot write it at the call site. `extract` reads
+`guideUi` itself (`guide_ui_calls()` in `tools/i18n.py`) and emits one key per entry,
+`wiki.ui.<name>`, with the entry as its English; `wikiCopy()` looks each label up with
+``ttText(`wiki.ui.${name}`, english)`` (the payload's English), which the extractor does not read
+as a call. The key set is the JSON's, so the catalogue checks hold for these keys too.
+Nothing else may build a key. The guides' article prose, the topics and the gap and
+source notes are not labels and stay English.
+
 ### How it runs
 
 - `web/i18n.js` is spliced by `render()` into a `<script>` at the end of the head, at
@@ -453,6 +463,9 @@ without its `.git`) or inside any other git work tree.
    A list joined with `", ".join(...)` in Python becomes `_msg_list(items)`: a nested
    `f.list` ("{a}, {b}") per comma and `f.list.last` for the final pair, both "{a}, {b}" in
    English, so a translation can end the list with its "and" ("a, b und c").
+   A game name the English runs into a sentence in lower case ("3 liquor store
+   lines") goes through `gnLower(name)`, never `.toLowerCase()`: it lowercases only
+   while the names are shown in English, so a German noun keeps its capital.
 3. Prove the English unchanged: the area's existing tests pass untouched, and a fixture
    board rendered before and after shows the same text.
 4. Add the area to `CONVERTED` in `tests/test_i18n_msg.py` (Python fields) and in

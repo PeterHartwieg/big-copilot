@@ -892,7 +892,13 @@ const wikiLinkedHint = () => tt("wiki.setup.linked.hint", "Required when using t
 function wikiCopy(key, fallback){
   const own = (wikiG().COPY || {})[key];
   const shared = (((wikiData && wikiData.raw) || {}).COPY || {})[key];
-  const value = own ?? shared ?? WIKI_COPY[key];
+  const given = own ?? shared;
+  /* The payload's labels are guideUi in tools/wiki_sample.json, and each is
+     keyed there as wiki.ui.<name> (tools/i18n.py guide_ui_calls()): the one
+     place a key is built rather than written, which is why this is ttText()
+     and not tt(). The payload's English is the English, as sent. */
+  if(typeof given === "string" && given) return ttText(`wiki.ui.${key}`, given);
+  const value = given ?? WIKI_COPY[key];
   return value === undefined || value === null ? (fallback ?? "") : String(value);
 }
 

@@ -992,6 +992,12 @@ test('the labels the payload carries are the ones the page wears', async () => {
   assert.ok(headings(html).includes('Making it'));
   const hair = await w.go('wiki/businesstypes-hairdresser');
   assert.ok(headings(hair).includes('What it charges for'));
+  // In another language the same label is looked up as wiki.ui.<name>; a
+  // label the table does not carry keeps the payload's English.
+  w.call(`ttSetTable("de", {"wiki.ui.primaryTitle": "In den Regalen"})`);
+  const de = await w.go('wiki/businesstypes-coffeeshop');
+  assert.ok(headings(de).includes('In den Regalen'));
+  assert.ok(headings(de).includes('Also on the shelves'));
 });
 
 /* --- the catalogue this checkout has, once it carries guides ---------------- */
