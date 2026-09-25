@@ -2,6 +2,12 @@
  "alerts": [
   {
    "group": "staff",
+   "i18n": {
+    "text": [
+     "f.staff.none",
+     {}
+    ]
+   },
    "id": "14c67b03be",
    "level": "critical",
    "site": "HART. Bare",
@@ -195,6 +201,12 @@
   "lines": [
    {
     "group": "staff",
+    "i18n": {
+     "text": [
+      "f.staff.none",
+      {}
+     ]
+    },
     "id": "14c67b03be",
     "level": "critical",
     "site": "HART. Bare",
