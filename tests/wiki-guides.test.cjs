@@ -299,7 +299,7 @@ function wiki({data = DATA, save = null} = {}) {
     $$: () => [],
     attr: s => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'),
     icon: name => `<svg data-icon="${name}"></svg>`,
-    fmt: n => (n < 0 ? '-' : '') + '$' + Math.abs(Math.round(n)).toLocaleString('en-US'),
+    fmt: n => (n < 0 ? '-' : '') + '$' + Math.round(Math.abs(n)).toLocaleString('en-US'),
     num: (n, opts) => Number(n).toLocaleString('en-US', opts),
     hasData: () => !!context.D,
     showPage(id){ drawn.push(['page', id]); },

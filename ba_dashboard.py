@@ -362,10 +362,26 @@ def _js_round(x: float) -> int:
     return int(math.floor(x + 0.5))
 
 
+def _half_away(v, places: int = 0) -> decimal.Decimal:
+    """v rounded to `places` decimals, halves away from zero.
+
+    The one rounding rule for numbers written into text, on both sides of the
+    payload: the page's fmt() and tt() round the size of a number and put the
+    sign back (Math.round(Math.abs(n))), and Intl.NumberFormat, which writes
+    every fixed-decimal number on the page, rounds halves away from zero too.
+    Python's format() rounds halves to even, so $2.50 would read "$2" in a
+    finding and "$3" on the tile beside it. A float is read at its shortest
+    decimal form (repr), as Intl reads it, so 2.675 is 2.68 on both sides.
+    """
+    shown = decimal.Decimal(v if isinstance(v, (int, decimal.Decimal)) else repr(float(v)))
+    return shown.quantize(decimal.Decimal(1).scaleb(-places), decimal.ROUND_HALF_UP)
+
+
 def _msg_format(v, spec: str | None) -> str:
     """One placeholder's English, by the spec tt() in web/i18n.js shares. Each
-    writes exactly what the f-string it replaces wrote: {x} as f"{x}", {x:,}
-    as f"{x:,}", {x:.1f} / {x:,.0f} as the same f-string spec, {w:$} as the
+    writes what the f-string it replaces wrote, with halves rounded away from
+    zero (_half_away()) as the page rounds them: {x} as f"{x}", {x:,} as
+    f"{x:,}", {x:.1f} / {x:,.0f} as the same f-string spec, {w:$} as the
     board's fmt() ("-$1,234"; f"${x:,.0f}", which writes "$-1,234", becomes
     "${x:,.0f}" instead), {w:$c} as compact(), {d:day} a weekday name."""
     if isinstance(v, Msg) or spec is None:
@@ -375,7 +391,7 @@ def _msg_format(v, spec: str | None) -> str:
     if spec == ",":
         return format(v, ",")
     if spec == "$":
-        return ("-" if v < 0 else "") + "$" + format(abs(v), ",.0f")
+        return ("-" if v < 0 else "") + "$" + format(_half_away(abs(v)), ",.0f")
     if spec == "$c":
         a, s = abs(v), "-" if v < 0 else ""
         if a >= 1e6:
@@ -384,8 +400,9 @@ def _msg_format(v, spec: str | None) -> str:
         if a >= 1e3:
             return s + "$" + str(_js_round(a / 1e3)) + "k"
         return s + "$" + str(_js_round(a))
-    if MSG_FIXED.fullmatch(spec):
-        return format(v, spec)
+    fixed = MSG_FIXED.fullmatch(spec)
+    if fixed:
+        return format(_half_away(v, int(fixed.group(2))), spec)
     raise ValueError(f"msg(): unknown placeholder spec {spec!r}")
 
 
@@ -14946,7 +14963,9 @@ const SOURCE = window.LEDGER_SOURCE || {
   }
 };
 
-const fmt = n => (n<0?"-":"") + "$" + num(Math.abs(Math.round(n)));
+/* Money: halves round away from zero, the size first and the sign put back,
+   as _half_away() rounds in Python and Intl rounds every fixed-decimal number. */
+const fmt = n => (n<0?"-":"") + "$" + num(Math.round(Math.abs(n)));
 /* Every number on the board goes through num(), in the UI's number locale, so
    a German browser never shows "1.234 units" beside "$1,234". English is
    always en-US; German is de-DE. The UI language is web/i18n.js's: this starts

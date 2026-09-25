@@ -95,7 +95,7 @@ test('numbers follow the UI language: en-US in English, German in German', () =>
     return [en.run(code), de.run(code)];
   });
   assert.deepEqual(both, [['1,234,567.4', '1.234.567,4'], ['3.5', '3,5'], ['12,345.68', '12.345,68'],
-    ['-$1,234', '-$1.234'], ['$3.57M', '$3,57M'], ['$12.3M', '$12,3M'], ['$751k', '$751k'], ['2.5', '2,5']]);
+    ['-$1,235', '-$1.235'], ['$3.57M', '$3,57M'], ['$12.3M', '$12,3M'], ['$751k', '$751k'], ['2.5', '2,5']]);
   assert.equal(de.run('ttNumLocale()'), 'de-DE');
   assert.equal(en.run('ttNumLocale()'), 'en-US');
 });
@@ -133,13 +133,16 @@ test("in English every spec writes what the board code it replaces wrote", () =>
 
 test("in English every spec writes what Python's msg() writes", () => {
   // Values where Python's repr and JS agree; each side is held to its own old
-  // code above and in tests/test_i18n_msg.py.
+  // code above and in tests/test_i18n_msg.py. Ties at an exact half round away
+  // from zero on both sides (_half_away() in Python).
   const cases = [['{n}', 7], ['{n}', 2.5], ['{n}', -1234.5], ['{n:,}', 1234567], ['{n:,}', 1234.4],
     ['{n:,}', -1234.5], ['{n:,}', 0.25], ['{x:,.0f}', 1234.4], ['{x:,.0f}', -1234.4], ['${x:,.0f}', -1234.4],
     ['{x:.1f}', -0.04], ['{x:.1f}', -3.14159], ['{w:$}', -1234.4], ['{x:.1f}', 3.14159],
     ['{x:.2f}', 1234.5], ['{x:,.1f}', 12345.67], ['{w:$}', 98.4], ['{w:$}', 1234567], ['{w:$}', -50],
     ['{w:$c}', 98], ['{w:$c}', 751400], ['{w:$c}', 3574000], ['{w:$c}', 12345678], ['{w:$c}', 1125000],
-    ['{w:$c}', -2500], ['{d:day}', 0], ['{d:day}', 3], ['{d:day}', 6]];
+    ['{w:$c}', -2500], ['{d:day}', 0], ['{d:day}', 3], ['{d:day}', 6],
+    ['{x:,.0f}', 1234.5], ['{x:,.0f}', -1234.5], ['${x:,.0f}', 2.5], ['{w:$}', 2.5], ['{w:$}', -2.5],
+    ['{w:$}', -1234.5], ['{x:.1f}', 2.25], ['{x:.1f}', -2.25], ['{x:,.2f}', 2.675]];
   const py = spawnSync(process.env.PYTHON || 'python', ['-c', `
 import json, sys
 from ba_dashboard import msg

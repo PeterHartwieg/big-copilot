@@ -148,7 +148,8 @@ class MsgIsTheEnglish(unittest.TestCase):
         profit = -1234.5
         m = msg("f.loss", "Lost {w:$} yesterday", w=abs(profit))
         self.assertIsInstance(m, str)
-        self.assertEqual(m, f"Lost ${abs(profit):,.0f} yesterday")
+        # 1234.5 is a tie: halves round away from zero, as the page's fmt() does
+        self.assertEqual(m, "Lost $1,235 yesterday")
         self.assertEqual((m.key, m.p), ("f.loss", {"w": 1234.5}))
         self.assertEqual(plain(m), m)
 
@@ -174,10 +175,27 @@ class MsgIsTheEnglish(unittest.TestCase):
                  ("{x:.1f}", lambda x: f"{x:.1f}"), ("{x:,.2f}", lambda x: f"{x:,.2f}"),
                  ("${x:,.0f}", lambda x: f"${x:,.0f}"),
                  ("{x:$}", lambda x: ("-" if x < 0 else "") + f"${abs(x):,.0f}")]
+        # format() rounds these half to even, and 2.675 at its exact binary
+        # value; see below
+        ties = {1234.5: ("{x:,.0f}", "${x:,.0f}", "{x:$}"), -1234.5: ("{x:,.0f}", "${x:,.0f}", "{x:$}"),
+                2.675: ("{x:,.2f}",)}
         for template, old in pairs:
             for x in values:
+                if template in ties.get(x, ()):
+                    continue
                 with self.subTest(template=template, x=x):
                     self.assertEqual(msg("f.x", template, x=x), old(x))
+        # A tie at an exact half rounds away from zero, as fmt(), compact()
+        # and Intl round it on the page (_half_away()); format() alone would
+        # round it to even. A float is read at its shortest form, as Intl
+        # reads it: 2.675 is a tie, where format() sees 2.67499...
+        for template, x, want in (("{x:,.0f}", 1234.5, "1,235"), ("{x:,.0f}", -1234.5, "-1,235"),
+                                  ("${x:,.0f}", 2.5, "$3"), ("${x:,.0f}", -2.5, "$-3"),
+                                  ("{x:$}", 2.5, "$3"), ("{x:$}", -2.5, "-$3"), ("{x:$}", 0.5, "$1"),
+                                  ("{x:.1f}", 2.25, "2.3"), ("{x:.1f}", -2.25, "-2.3"),
+                                  ("{x:,.2f}", 2.675, "2.68"), ("{x:,.0f}", 3, "3")):
+            with self.subTest(template=template, x=x):
+                self.assertEqual(msg("f.x", template, x=x), want)
         # Only a sign-first old string converts to {w:$}; "$-1,234" keeps its literal dollar.
         self.assertEqual(msg("f.x", "${x:,.0f}", x=-1234.4), "$-1,234")
         self.assertEqual(msg("f.x", "{x:$}", x=-1234.4), "-$1,234")
@@ -455,9 +473,9 @@ class FindingsHalfB(unittest.TestCase):
             "Item 18 import is paused: 1 day left at 40/day",
             "Item 19 import is paused: 2 days left at 40/day",
             "Item 22 orders 1,300 a week against a 2,800 week of use, 1,500 short; already runs dry on Tuesday, "
-            "2.2 days before Monday's import",
+            "2.3 days before Monday's import",
             "Item 26: Smart Delivery keeps 900 in stock, plus 50 a week on top against a 2,800 week of use, 2,800 "
-            "short; already runs dry in 1.0 days, 2.2 days before Monday's import",
+            "short; already runs dry in 1.0 days, 2.3 days before Monday's import",
             "3 machines at Oven #1, Oven #2, Oven #3 have no recipe set: staffed and rented, making nothing",
             "1 machine at Oven #1 runs a recipe without usable details. Its inputs are missing from the totals; "
             "name unknown recipes or load matching game text to include them",

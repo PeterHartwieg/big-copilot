@@ -294,14 +294,19 @@ values included):
 | --- | --- | --- | --- |
 | `{x}` | `String(x)` | `f"{x}"` | decimal comma, up to 3 decimals, no grouping |
 | `{x:,}` | `num(x)`: grouped, up to 3 decimals, `-1,234.5` | `f"{x:,}"`: `-1,234.5`; a float keeps every digit `repr` shows | `-1.234,5` |
-| `{x:.1f}` (any digit) | `num(x, {min = max = 1 decimal, no grouping})`, as `x.toFixed(1)` | `f"{x:.1f}"` | `3,5` |
-| `{x:,.0f}` (any digit) | `num(x, {min = max = 0 decimals})` | `f"{x:,.0f}"` | `1.234` |
-| `{w:$}` | `fmt(w)`: `-$1,234` | `"-$" + f"{abs(w):,.0f}"` for a negative, `$1,234` otherwise | `-$1.234` |
-| `{w:$c}` | `compact(w)`: `$3.57M`, `$751k` | the same, halves rounded up as `Math.round` does | `$3,57M` |
+| `{x:.1f}` (any digit) | `num(x, {min = max = 1 decimal, no grouping})`, as `x.toFixed(1)` | `f"{x:.1f}"`, halves away from zero | `3,5` |
+| `{x:,.0f}` (any digit) | `num(x, {min = max = 0 decimals})` | `f"{x:,.0f}"`, halves away from zero | `1.234` |
+| `{w:$}` | `fmt(w)`: `-$1,234` | `"-$" + f"{abs(w):,.0f}"` for a negative, `$1,234` otherwise, halves away from zero | `-$1.234` |
+| `{w:$c}` | `compact(w)`: `$3.57M`, `$751k` | the same | `$3,57M` |
 | `{d:day}` | `Monday` for 1 (0 is Sunday) | the same | the table's `day.1` |
 
 The two sides differ only where the old code did: a float with more than three decimals
-(`{x:,}`), and a tie at an exact half (Python rounds half to even, `Intl` away from zero).
+(`{x:,}`). A tie at an exact half rounds away from zero on both sides, the one rule for
+numbers in text: `Intl` and `toFixed()` do it natively, `fmt()` and `compact()` round the
+size (`Math.round(Math.abs(n))`) and put the sign back, and Python's `msg()` rounds through
+`_half_away()`, reading a float at its shortest form as `Intl` does (2.675 is 2.68).
+`format()` alone would round half to even, and write $2.50 as `$2` in a finding beside `$3`
+on a tile.
 
 Numbers follow the UI language: English is always en-US. `tt()` formats through the
 board's `num()` once it exists, and through `Intl` in `ttNumLocale()` before it does (the
