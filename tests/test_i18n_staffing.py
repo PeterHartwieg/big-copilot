@@ -55,7 +55,8 @@ def old_hour_phrase(hours_by_day, sep="; "):
             label = ", ".join(WEEKDAYS[d][:3] for d in picked)
         parts.append(f"{label} {', '.join(shape)}")
     phrase = sep.join(parts)
-    return f"{phrase} and {spare} scattered hours" if spare else phrase
+    # One scattered hour is singular now, a deliberate English fix.
+    return f"{phrase} and {spare} scattered hour{'' if spare == 1 else 's'}" if spare else phrase
 
 
 def old_off_hours(covered):

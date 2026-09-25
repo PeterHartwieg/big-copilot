@@ -345,7 +345,7 @@ function floorPlanSvg(plan, s, label){
 /* The first of 1, 2, 5, 10, 20 or 50 m that is at least 36 px long. */
 function floorPlanScale(s){
   const m = [1, 2, 5, 10, 20, 50].find(n => n * s >= 36) || 50;
-  return `<span class="lp-scale" aria-label="${attr(tt("map.plan.scale", {one: "Scale: {n} metres", other: "Scale: {n} metres"}, {n: m}))}"><i style="width:${(m * s).toFixed(1)}px"></i><span>${
+  return `<span class="lp-scale" aria-label="${attr(tt("map.plan.scale", {one: "Scale: {n} metre", other: "Scale: {n} metres"}, {n: m}))}"><i style="width:${(m * s).toFixed(1)}px"></i><span>${
     mapText(tt("map.plan.metres", "{n} m", {n: m}))}</span></span>`;
 }
 
