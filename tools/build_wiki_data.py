@@ -2546,6 +2546,31 @@ def serialise(payload: dict) -> str:
     return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
 
 
+_DATE_KEYS = ("sourceDate", "extracted")
+
+
+def _same_but_the_date(payload: dict, existing: str) -> bool:
+    """Whether `payload` is the standing file's text but for its source date."""
+    try:
+        before = json.loads(existing)
+        date = before["provenance"]["sourceDate"]
+    except (ValueError, KeyError, TypeError):
+        return False
+    now = payload["provenance"].get("sourceDate")
+    if not date or date == now:
+        return False
+
+    def redate(node):
+        if isinstance(node, dict):
+            return {key: date if key in _DATE_KEYS and value == now else redate(value)
+                    for key, value in node.items()}
+        if isinstance(node, list):
+            return [redate(item) for item in node]
+        return node
+
+    return serialise(redate(payload)) == existing
+
+
 def write_public_wiki(path: str, data_dir: str | None = None,
                       buildings_path: str | None = None) -> str:
     """Build, validate, then replace the payload; skip the write when unchanged.
@@ -2563,10 +2588,16 @@ def write_public_wiki(path: str, data_dir: str | None = None,
     if os.path.exists(path):
         try:
             with open(path, "rb") as fh:
-                if fh.read().decode("utf-8") == text:
-                    return text
+                existing = fh.read().decode("utf-8")
         except (OSError, ValueError):
-            pass
+            existing = None
+        if existing == text:
+            return text
+        # Steam touches files it did not change, which moves sourceDate to
+        # the day it did so. When the date is all that differs, the sources
+        # are the ones the standing payload was built from: keep it and its date.
+        if existing is not None and _same_but_the_date(payload, existing):
+            return existing
     import tempfile
 
     handle, temporary = tempfile.mkstemp(dir=directory, prefix=".wiki-data-", suffix=".tmp")

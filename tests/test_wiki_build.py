@@ -933,6 +933,37 @@ class WriteTests(FixtureCase):
         self.write_payload(out)
         self.assertNotEqual(self.read(out), before)
 
+    def _date_sources(self, when):
+        # Every file of the fixture install: the help and the counted layouts.
+        stamp = when.timestamp()
+        for folder, _, names in os.walk(self.root):
+            if os.path.basename(folder) != "web":
+                for name in names:
+                    os.utime(os.path.join(folder, name), (stamp, stamp))
+
+    def test_a_source_touched_on_a_later_day_leaves_the_file_and_its_date(self):
+        # Steam touches unchanged files; the date it did so is no news.
+        out = os.path.join(self.root, "web", "wiki-data.json")
+        self._date_sources(datetime(2026, 9, 1, 12, tzinfo=timezone.utc))
+        text = self.write_payload(out)
+        self.assertEqual(json.loads(text)["provenance"]["sourceDate"], "2026-09-01")
+        first = os.stat(out).st_mtime_ns
+        self._date_sources(datetime(2026, 9, 20, 12, tzinfo=timezone.utc))
+        self.assertEqual(self.write_payload(out), text)
+        self.assertEqual(self.read(out), text)
+        self.assertEqual(first, os.stat(out).st_mtime_ns)
+
+    def test_a_changed_source_on_a_later_day_takes_the_new_date(self):
+        out = os.path.join(self.root, "web", "wiki-data.json")
+        self._date_sources(datetime(2026, 9, 1, 12, tzinfo=timezone.utc))
+        self.write_payload(out)
+        self.write_locale(dict(LOCALE, **{"ba:itemname_roundedshelf": "Rounded Shelving"}))
+        self._date_sources(datetime(2026, 9, 20, 12, tzinfo=timezone.utc))
+        payload = json.loads(self.write_payload(out))
+        self.assertEqual(payload["provenance"]["sourceDate"], "2026-09-20")
+        self.assertEqual(payload["sample"]["SOURCES"]["sourceDate"], "2026-09-20")
+        self.assertEqual(json.loads(self.read(out)), payload)
+
     def test_the_cli_writes_the_payload_and_reports_it(self):
         out = os.path.join(self.root, "web", "wiki-data.json")
         with self.quiet() as stderr:
