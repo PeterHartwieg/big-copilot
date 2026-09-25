@@ -620,7 +620,7 @@ test('on a narrow screen the zoomer and the card stay inside the stage',async()=
     assert.equal(await page.evaluate(()=>{
       const w=document.documentElement.clientWidth;
       return [...document.querySelectorAll('#cityMapPage .map-head .lay')].every(l=>l.getBoundingClientRect().right<=w+1)
-        &&document.documentElement.scrollWidth<=innerWidth;
+        &&document.documentElement.scrollWidth<=w;
     }),true);
     await page.evaluate(key=>cityMapPage.select(key),place.key);
     await page.locator('#cityMapPage .site.in').waitFor();
@@ -631,7 +631,7 @@ test('on a narrow screen the zoomer and the card stay inside the stage',async()=
     }),true);
     // The dialog keeps the narrow viewport too.
     await page.evaluate(key=>openLocationMap(key),place.key);await ready(page,'#cityMapOverlay');
-    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),true);
     const fits=await page.evaluate(()=>{
       const d=document.getElementById('locationMapDialog').getBoundingClientRect();
       return d.left>=0&&d.right<=innerWidth;
