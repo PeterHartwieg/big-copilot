@@ -1102,11 +1102,7 @@ def guide_copy(wording_data: dict, locale: dict[str, str], short: str) -> tuple[
         return None, []
 
     def holds(clauses) -> bool:
-        for clause in clauses or []:
-            needle = clause.get("includes")
-            if not needle or needle not in locale.get(clause.get("src") or "", ""):
-                return False
-        return True
+        return not _copy_misses(clauses, locale)
 
     lede_entry = entry.get("lede") or {}
     lede = lede_entry.get("text") if holds(lede_entry.get("when")) else None
@@ -1116,6 +1112,43 @@ def guide_copy(wording_data: dict, locale: dict[str, str], short: str) -> tuple[
         if note.get("text") and note.get("src") and holds(note.get("when"))
     ]
     return lede, notes
+
+
+def _copy_misses(clauses, locale: dict[str, str]) -> list[dict]:
+    """The clauses of a `when` list whose phrase is not on the page it names."""
+    return [
+        clause for clause in clauses or []
+        if not clause.get("includes")
+        or clause["includes"] not in locale.get(clause.get("src") or "", "")
+    ]
+
+
+def dropped_copy(wording_data: dict, locale: dict[str, str], shorts) -> list[dict]:
+    """The authored ledes and notes `guide_copy()` leaves out, for the build to report.
+
+    A game patch that rewords a phrase a `when` clause quotes drops that copy
+    from the payload; each drop is named here so it is seen, not silent. Only
+    the guides that were built (`shorts`) are checked: a business with no guide
+    has no copy to lose.
+    """
+    rows = []
+    for short, entry in sorted(((wording_data or {}).get("guides") or {}).items()):
+        if short not in shorts:
+            continue
+        entry = entry or {}
+        pieces = [("lede", entry.get("lede") or {})]
+        pieces += [("notes[%d]" % index, note or {})
+                   for index, note in enumerate(entry.get("notes") or [])]
+        for where, piece in pieces:
+            if not piece.get("text"):
+                continue
+            for clause in _copy_misses(piece.get("when"), locale):
+                rows.append({
+                    "key": "guides.%s.%s" % (short, where),
+                    "reason": "%r is no longer in %s; the authored text is left out"
+                              % (clause.get("includes"), clause.get("src")),
+                })
+    return rows
 
 
 class Guide:
@@ -2375,6 +2408,8 @@ def build_public_wiki(data_dir: str | None = None, buildings_path: str | None = 
     provenance["sources"]["helpStructure"] = _structure_meta(paths)
     provenance["counts"]["categories"] = len(categories)
     provenance["counts"]["guides"] = len(guides)
+    built = {guide["BUSINESS"]["nameSrc"].removeprefix("ba:businesstype_") for guide in guides.values()}
+    copy_issues += dropped_copy(wording(), locale, built)
     if copy_issues:
         provenance["issues"]["copy"] = copy_issues
 
