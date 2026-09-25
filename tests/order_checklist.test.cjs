@@ -66,10 +66,10 @@ test('a wholesale contract short of the week that also runs dry gives two change
     ['Wholesale deliveries', 'Soda', 1200, 1420],
     ['Before the next delivery', 'Soda', null, 164],
     ['Wholesale deliveries', 'Syrup', 1000, 1680]]);
-  assert.match(rows[0].reason, /^Sells 1[,.]232 a week, plus a 15% margin, 1[,.]417 in all\./);
+  assert.match(rows[0].reason, /^Sells 1,232 a week, plus a 15% margin, 1,417 in all\./);
   assert.match(rows[1].reason, /^Bring in 164 extra units by hand before Monday's wholesale delivery/);
   // Factory lines sized 24/7 take no margin: need is use, and none is claimed.
-  assert.match(rows[2].reason, /^Uses 1[,.]680 a week\. Change the amount/);
+  assert.match(rows[2].reason, /^Uses 1,680 a week\. Change the amount/);
 });
 
 test('a depot only a route feeds gets its daily top-up, from the site whose plan sets it', () => {
@@ -90,7 +90,7 @@ test('weekly order changes propose the fact\'s figure and say what it was sized 
   assert.equal(rows.length, 1);
   assert.equal(rows[0].current, 1000);
   assert.equal(rows[0].proposed, 1500);
-  assert.match(rows[0].reason, /Uses 1[,.]300 a week \(factory lines and shops\), plus a 15% margin/);
+  assert.match(rows[0].reason, /Uses 1,300 a week \(factory lines and shops\), plus a 15% margin/);
 });
 
 test('a row whose fact asks for nothing is not on the list', () => {
@@ -196,7 +196,7 @@ test('unassigned factories require depot selection; a top-up is the input fact\'
   });
   assert.equal(rows[0].proposed, null);
   assert.match(rows[0].reason, /Choose a supplying depot/);
-  assert.match(rows[0].reason, /1[,.]501 units\/week/);
+  assert.match(rows[0].reason, /1,501 units\/week/);
   assert.equal(rows[1].proposed, 250);
   assert.match(rows[1].reason, /Full-rate input requirement, plus the margin; confirm staffing and output limits/);
   // Under Demand the reason says what the figure was sized for.
@@ -323,12 +323,12 @@ test('the checklist names a Smart Delivery stock level, not a weekly order', () 
   const rows = build({imports:[{s:0, rows:[row(f, {weekly:900, smart:true, target:900})]}]});
   assert.equal(rows.length, 1);
   assert.deepEqual([rows[0].current, rows[0].proposed, rows[0].mode], [900, 1400, 'smart']);
-  assert.match(rows[0].reason, /^Set Smart Delivery stock to 1[,.]400\./);
+  assert.match(rows[0].reason, /^Set Smart Delivery stock to 1,400\./);
   const text = context.orderChecklistText(rows, 'Company');
   assert.match(text, /Smart Delivery stock 900 -> 1400 units/);
   assert.doesNotMatch(text, /units\/week/);
   const plain = build({imports:[{s:0, rows:[row(f, {weekly:900})]}]});
-  assert.match(plain[0].reason, /^Set the weekly order to 1[,.]400\./);
+  assert.match(plain[0].reason, /^Set the weekly order to 1,400\./);
   assert.match(context.orderChecklistText(plain, 'Company'), /900 -> 1400 units\/week/);
   assert.notEqual(rows[0].key, plain[0].key, 'a level and an order are not the same mark');
 });
@@ -349,7 +349,7 @@ test('an edited figure feeds the checklist, including on a row the board finds c
   const f = fact('short', {setTo:1400});
   const short = build({imports:[{s:0, rows:[row(f, {weekly:900}, 2500)]}]});
   assert.equal(short[0].proposed, 2500);
-  assert.match(short[0].reason, /Your own figure; the board suggests 1[,.]400/);
+  assert.match(short[0].reason, /Your own figure; the board suggests 1,400/);
   // Typing the figure in game turns the suggestion down: nothing to do.
   assert.deepEqual(build({imports:[{s:0, rows:[row(f, {weekly:900}, 900)]}]}), []);
   // A new figure is a new action: an old tick does not carry over.
@@ -362,18 +362,18 @@ test('a paused contract resumes at a typed figure, or says the fact\'s week', ()
   const rows = build({imports:[{s:0, rows:[row(f, {weekly:0, pausedWeekly:3000, smart:true, target:3000}, 1600)]}]});
   assert.equal(rows.length, 1);
   assert.equal(rows[0].proposed, 1600);
-  assert.match(rows[0].reason, /Resume the paused import contract\. It is set to keep 3[,.]000 in stock\. Set Smart Delivery stock to 1[,.]600\./);
+  assert.match(rows[0].reason, /Resume the paused import contract\. It is set to keep 3,000 in stock\. Set Smart Delivery stock to 1,600\./);
   const [untouched] = build({imports:[{s:0, rows:[row(f, {weekly:0, pausedWeekly:13000})]}]});
   assert.equal(untouched.proposed, null);
   assert.match(untouched.reason,
-    /Resume the paused import contract\. It is configured for 13[,.]000 units\/week\. Uses 1[,.]300 a week \(factory lines and shops\), plus a 15% margin: 1[,.]610 a week\./);
+    /Resume the paused import contract\. It is configured for 13,000 units\/week\. Uses 1,300 a week \(factory lines and shops\), plus a 15% margin: 1,610 a week\./);
 });
 
 test('a route that brings part of the week is named once, off the week', () => {
   const f = fact('short', {setTo:14490, use:12600, parts:{lines:14000, sites:11200, route:12600}});
   const [action] = build({imports:[{s:0, rows:[row(f, {weekly:5000})]}]});
   assert.deepEqual([action.current, action.proposed], [5000, 14490]);
-  assert.match(action.reason, /less the 12[,.]600 a week a route brings, plus a 15% margin/);
+  assert.match(action.reason, /less the 12,600 a week a route brings, plus a 15% margin/);
   // A route that brings the whole week covers the line: nothing to ask of the import.
   assert.deepEqual(build({imports:[{s:0, rows:[row(fact('covered', {why:'route'}), {weekly:5000}, undefined, {covered:true, need:0})]}]}), []);
 });
