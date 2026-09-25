@@ -3,6 +3,8 @@
 How a save becomes a board, through either front door. Read this before you change how
 Python data reaches the page, add a key to the payload, add a page, or add a template
 placeholder. For where files live and what to run afterwards, see [AGENTS.md](../AGENTS.md).
+For every table a new finding kind, view, payload key, finder filter, footer link or news
+item has to be added to, see [Registries](#registries).
 
 Code is located by search anchor, not line number.
 
@@ -71,14 +73,14 @@ this column is where to look when you change a key's shape — not a complete ca
 | `homes` | `_homes()`, with `m` and `hood` from `load_buildings()` | `spHome`, `siteKeys`; `web/map.js` `CityMapView.update`, `openLocationMap` |
 | `products` | `_products()`, with `peak`/`swing`/`weeks` from `_product_rhythm()` | `drawProducts`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn` |
 | `staff` | `_staff_summary()` | `drawKpis`, `drawPayroll` |
-| `loans` | `_loans()` | `drawKpis` |
+| `loans` | `_loans()` | `drawKpis`, and the `SS_VIEWS` `cash` entry's `live()` |
 | `supply` | `_supply()`; its `facts` from `_supply_facts()`, each fact's status word from `_supply_status()`; `margin` and `roundTo` are `SUPPLY_MARGIN` and `SUPPLY_ROUND_TO` | `drawLogistics`, `drawOrderChecklist`, `drawSite`, `drawFlow`, `drawFlowDetail`, `flowLayout`, `supplyLocation`, `factoryView`, and the `SUPPLY_VIEWS` callbacks `shops.rows`, `imports.rows`, `imports.note`, `imports.verdict`, `idle.rows`, `idle.verdict`; `web/map.js` `refreshCityMaps`. `supply.facts` only through `supplyFact()` (below), and `supply.idle` only through `idleRows()`, which keeps the rows idle under the sizing on screen (`modes`) with their `dem` laid over |
 | `rhythm` | `_chain_rhythm()`; its `recent` key holds the same three series over the last `RHYTHM_RECENT_DAYS` (28) calendar days before the last finished day, which the chart draws, while the full-length ones feed `_supply()` | `weekdaySeries` (which `drawChart` asks), `drawSite` |
 | `market` | `_market()`; its `catalogue` key is popped out and handed to `_plan()` | `drawMovers`, `drawMarket`; `web/wiki.js` `wikiOwn`, `wikiGuidePrices` |
 | `premises` | `_premises()`, with `_premises_status()`, `_premises_demand()`, `_rent_estimate()`, `_deposit_estimate()`, `_deposit_check()`, `_door_caps()`, `_rival_numbers()`, `_rival_names()` | `drawFindLocation`, `findPremisesLink`, `wireCards`; `web/map.js` `premises` |
 | `chains` | `_chains()` | `drawPortfolio`, `siteCrumbs` |
 | `trends` | `_site_trends()` | `indexTrends` |
-| `hypeExposure` | `_hype_exposure()` | no reader — but see below |
+| `hypeExposure` | `_hype_exposure()`; `extract()` also passes the same list to `_alerts()`, where the `hype` findings come from | `spHypeRow` (a `const` arrow function, called from `spPull()` for the site panel's Promotion block) |
 | `hours` | `_hourly()`, the sites with hour reports behind them | `drawSite` |
 | `hourFindings` | `_hour_findings()` | `drawSite` |
 | `staffing` | `_staffing()`, with `_plan_site()`, `_need_curve()`, `_arrival_ceiling()`, `_cut_run()`, `_bridge_troughs()`, `_hires_for()`, `_plan_people()`, `_current_roster()`, `_index_table()`, `_shift_row()` | `drawSite` through `spRosterBlock`, and `drawOptimizeStaffing` for the Next-moves card |
@@ -123,9 +125,14 @@ Four indirect routes an agent would otherwise miss:
 - `#cellDetail`, the site panel and the map cards are filled from data already in hand, so
   they do not appear above.
 
-Three keys have no reader, and only one of them is dead end to end:
+Two keys have no reader, and only one of them is dead end to end:
 
 - `weekly` is genuinely unread. `_weekly()` feeds nothing else.
+- `ledgerDays`: the *key* is unread, but the `ledger` it counts is what `_cash_flow()`
+  reads. The history write and `history.ledger()` both have to stay.
+
+`hypeExposure` is read: do not delete it. `spHypeRow` draws the site panel's promotion row
+from it.
 
 `_hourly()` returns every trading site and flags each `reported`. `extract()` passes the
 whole list to `_staffing()` and only the reported ones to the `hours` key and
@@ -159,13 +166,16 @@ may refuse), and `spRosterCounts()`. `drawOptimizeStaffing()` reads the same key
 Next-moves card, through `spBestRoster()`.
 
 `shifts` carries the lines nobody at the site may legally work as well as the ones somebody
-can be put on: same row, `p: null`. The page draws those dashed and cannot tick them, so
-`spRosterCounts()` returns `{plan, tickable, hire, now, fragments}` and everything that
-means "the week to type" reads `tickable` — the *Shifts / week* tile, the ring (through
-`data-tickable`, which `spRosterBlock()` works out once for the retally to read back) and
-`spBestRoster()`, which both scores and sizes the Next-moves card on it. `spDrawn()` is the
-single rule for what reaches the page, shared by `spRosterRows()` and the counts, so the
-two cannot drift.
+can be put on: same row, `p: null`. The page draws those dashed and cannot tick them.
+`spRosterCounts()` returns `{plan, tickable, staffed, hire, now, nowCover, fragments,
+coverFragments}`. `staffed` is every drawn line with somebody on it: the new-shop note
+counts its entries from it, and `spBestRoster()` scores and sizes the Next-moves card on it.
+The progress ring counts `spTickableRows()` instead, as `c.tickable` and `data-tickable`,
+which `spRosterBlock()` works out once for the retally to read back. `now` and `fragments`
+describe the schedule already in the game, and `nowCover` and `coverFragments` its cleaning
+and security half, which is all a cover-only plan replaces. `spDrawn()` is the single rule
+for what reaches the page, shared by `spRosterRows()` and the counts, so the two cannot
+drift.
 
 A tick's id is the line the player typed — weekday, station id, `f`, `t`, person id — not
 the payload's indices, which are renumbered whenever the tables are rebuilt. It is a JSON
@@ -184,11 +194,6 @@ carries the same tokens, worked back out of the finding's own words by `spLimitS
 `spLimitRole()`. Hovering a chip lights the cells holding *every* token it names. Keying on
 the kind alone let two findings of one kind on two different roles light each other's
 hours, and a tie between people and posts light neither's.
-- `hypeExposure` — the *key* is unread, but `_hype_exposure()` is not dead. `extract()`
-  binds its result to `hype` and passes it to `_alerts()`, which is where hype findings come
-  from. Delete the payload key if you like; do not delete the function.
-- `ledgerDays` — likewise the *key* is unread, but the `ledger` it counts is what
-  `_cash_flow()` reads. The history write and `history.ledger()` both have to stay.
 
 The payload crosses the worker boundary as a JSON string: `browser_build()` returns
 `json.dumps(data)`. `render(data)` calls `json.dumps` too, so a value that is not
@@ -228,9 +233,10 @@ the navigation (`PAGES` tests for `showWikiRoute`). `web/map.js` and `web/map.cs
 opened directly: delete either and `render()` raises.
 
 `build_web.py` has a second, private set of tokens — `__STAMP__`, `__RELEASE__`,
-`__UPDATE_SCRIPT__`, `__BUILD__`, `__ICON_FOLDER__`, `__ICON_MORE__`. Those are
-substituted inside `BANNER` and
-`BEFORE_SCRIPT` before either string reaches `render()`, so they never appear in `TEMPLATE`.
+`__UPDATE_SCRIPT__`, `__BUILD__`, `__ICON_FOLDER__`, `__ICON_LINK__`, `__ICON_MORE__`.
+Those are substituted inside `BANNER` and `BEFORE_SCRIPT` before either string reaches
+`render()`, so they never appear in `TEMPLATE`. `BANNER` also carries the template's own
+`<!--__FOOTER__-->`, which `build_web.py` fills with `footer_html(landing=True, site=True)`.
 
 ## Assembly order of `web/index.html`
 
@@ -263,12 +269,13 @@ writes `web/py/gametext.json` from the installed locale — everything `stamp()`
 `ships()` decides what of the locale travels in `gametext.json`, and nothing else does. It
 keeps the display names (`NAME_PREFIXES`: items, business types, neighbourhoods,
 workstations, skills, and job demands with their descriptions), the `recipes_*` keys and the `help_recipes_*_content` pages, the
-workstation help pages, the business-type help pages, the item help pages whose body contains
-`Customer Capacity` or `employee station` (which is how cleaning, computer and security
-stations travel), and
-`help_building_types_content`, which is where the premises table gets its size-code-to-door-cap
-mapping. A page the analysis needs but `ships()` does not keep is simply absent in the
-browser, with no error — so adding a lookup means adding its key here and rebuilding.
+workstation help pages (every key under `help_factory_workstation_`), the business-type help
+pages, the item help pages whose body contains `Customer Capacity` or `employee station`
+(which is how cleaning, computer and security stations travel),
+`help_ba:itemname_computergroup_content` (the computers an office puts staff on;
+`COMPUTER_GROUP_HELP` in `ba_dashboard.py`), and `help_building_types_content`, which is
+where the premises table gets its size-code-to-building-capacity mapping. A page the
+analysis needs but `ships()` does not keep is simply absent in the browser, with no error — so adding a lookup means adding its key here and rebuilding.
 
 `python build_web.py --check` calls `check()`, which reuses the same `release_info()` and
 `page_html()` and compares their output against what is committed under `web/`. That is why
@@ -281,15 +288,22 @@ itself.
 
 The board script does not know which door it is behind. It reads
 `const SOURCE = window.LEDGER_SOURCE || { ... }`, and the fallback is the local watch
-server: `data()` fetches the `data.json` route, `name()` POSTs to `name`, and `watch()`
-polls `stamp` every 15 seconds and pulls fresh numbers only when the stamp moves.
+server, with four members: `label` ("Live"), `data()` fetches the `data.json` route,
+`name()` POSTs to `name`, and `watch()` polls `stamp` every 15 seconds and pulls fresh
+numbers only when the stamp moves.
 
-`web/app.js` sets `window.LEDGER_SOURCE` before the board script runs. Its three members
-satisfy the same contract: `data()` resolves to a fresh data object (by posting a `build`
-message to the worker), `name(rid, slug)` records a factory-line name and resolves to the
-data that follows, and `watch(h)` keeps the callbacks `changed(data)`, `stale(why)` and
-`lost()`. The bytes behind `data()` can come from the game link as well as from a folder
-handle or a file: when the player has linked the page to the running game, `app.js` fetches
+`web/app.js` sets `window.LEDGER_SOURCE` before the board script runs. It has seven
+members. Four satisfy the same contract: `label`, `data()` resolves to a fresh data object
+(by posting a `build` message to the worker), `name(rid, slug)` records a factory-line name
+and resolves to the data that follows, and `watch(h)` keeps the callbacks `changed(data)`,
+`stale(why)` and `lost()`. Three exist only in the browser: `link()` describes the game
+link (its writes and character) when one is up, `write(kind, body, opts)` sends a write to
+the game, and `refresh()` reads the source again. The board checks
+`typeof SOURCE.link === "function"` (and the same for `refresh`) before it calls either, so
+the local page runs without them.
+
+The bytes behind `data()` can come from the game link as well as from a folder handle or a
+file: when the player has linked the page to the running game, `app.js` fetches
 the save from the Big Copilot Link mod on the player's own loopback
 ([game-link-api.md](game-link-api.md)) and hands the worker the same kind of `File`.
 
@@ -368,8 +382,10 @@ Stale until that row draws or the next board arrives. The first boot and another
 or save draw every row.
 
 Adding a page means: a `div.page` in the markup, an entry in `PAGES` (with `newFeature` if
-it deserves a badge — see [contributing.md](contributing.md)), and a `PAGE_DRAWS` row for
-its draw function. The same goes for a new view or draw function. Tag the row with every
+it deserves a badge — see [contributing.md](contributing.md)) and in `ICON`, a `SEC_PAGE`
+row for each of its sections, an `SS_VIEWS` entry so search finds it, and a `PAGE_DRAWS`
+row for its draw function. A new view needs its `SUBS` item as well. The full checklist,
+with the test that guards each table, is under [Registries](#registries). Tag the row with every
 view whose DOM it writes; if other code reads state it computes from another page, tag it
 `""` so it is drawn on every refresh. A wrong tag shows old numbers until the next full
 redraw. A row calls its function by name, `() => drawX()`, not `drawX` itself, so a test
@@ -445,6 +461,109 @@ a new entry starts with only `ssFrom`. An address that answers nothing — a sit
 link from another save — lands on the portfolio and replaces the hash with `#company`; so does
 a save of another character arriving under an open site's page (`siteFor` against
 `siteCharacter()`), which drops the crumb's way back and the lit finding with it.
+
+## Registries
+
+A registry is a table kept by hand that a new thing has to be added to. Nothing generates
+them, and a missing row often fails quietly: a finding that goes nowhere when clicked, a
+view search cannot find. Each checklist below names the anchor to grep, what goes in it,
+and the test that fails when the row is missing ("none" means nothing does). Rows marked
+*only if* apply to some entries, not all. All anchors are in `ba_dashboard.py` unless a row
+says otherwise; "board script" means the last `<script>` block of its `TEMPLATE`.
+
+### A finding kind
+
+| Anchor | What goes in it | Guarded by |
+| --- | --- | --- |
+| `note(` in `def _alerts(`, or `_finding(` in one of the `_*_notes` helpers (`_shelf_notes`, `_import_notes`, `_idle_notes`, `_feed_notes`, `_staff_notes`, `_unnamed_notes`) | The finding itself, with its group id | the kind's own Python test, such as `tests/test_routed_supply.py` |
+| `AMENITY_DEMANDS = {` | *Only if* it is an amenity kind: `slug: (group, text)` | `tests/test_uniform_alerts.py`, "test_an_empty_cache_means_every_demand_failed" |
+| `ALERT_UNITS = {` | *Only if* its `worth` is money: the unit, such as `"/day rent"` | none |
+| `SUMMARIES = {`, and `WORST_FIRST =` for mixed severities | *Only if* three or more at one site should merge into one counted line | none; a missing entry just stops the merge |
+| `const ALERT_GROUPS = [` (board script) | `{id, label, note, on}`. The settings panel, `kindLabel`, `kindCounts`, search and the map's `kindOff` all read it. Keep a noisy kind `on: false` | `tests/alert_kinds.test.cjs`, "At capacity is on by default" and the per-kind tests |
+| `const ALERT_DEFAULTS_V1 =` (board script) | Never add to it: it is the frozen migration of old settings | `tests/alert_kinds.test.cjs`, "a stored whole map keeps only …" |
+| `const ALERT_LINKS = {` (board script) | Where a click lands: `{sec, view?, site?, port?}`. Without it `goToAlert()` does nothing | `tests/alert_kinds.test.cjs` per-kind tests; `tests/job_demands.test.cjs`, "both demand findings can be filtered and link somewhere" |
+| `const ALERT_SITE_PICK = {` (board script) | *Only if* the kind is company-wide, with no site of its own | `tests/job_demands.test.cjs` |
+| `const ALERT_LANDS_ON_ROW = new Set(` (board script) | *Only if* the finding is about one shelf, stock or input row | none |
+| `const ALERT_EVIDENCE = {` (board script) | The site panel block it lights, `{block, hit?}` | `tests/site_panel.test.cjs`, "the findings here are the ones about this site, and each lights its block" |
+| `const SP_EVIDENCE_KIND = {`, `const SP_EVIDENCE_HIT = {` (board script) | *Only if* a depot or factory keeps it in another block, or the hit depends on the site | `tests/alert_kinds.test.cjs` for the first; none for the second |
+| `function findingAmount(` (board script) | *Only if* the generic number patterns miss its amount | `tests/alert_kinds.test.cjs`, `tests/job_demands.test.cjs` |
+| `const SS_KIND_SYN = {` (board script) | The players' own words for it, for search | `tests/search.test.cjs`, "the index holds every group …" |
+| `function ssKindLands(` (board script) | *Only if* its `ALERT_LINKS` section is outside Growth's market and the portfolio, or it lands on Today | none |
+| "What counts as a finding" in `docs/dashboard-reference.md` | The player-facing description | none |
+
+The map colours a finding by its `level` and `kindOff()`, so `web/map.js` needs nothing.
+Today `vacant` has no `ALERT_EVIDENCE` entry, most kinds have no `SS_KIND_SYN` entry and
+`ALERT_UNITS` holds only the money kinds, so a completeness test has to allow for those.
+
+### A view or a page
+
+| Anchor | What goes in it | Guarded by |
+| --- | --- | --- |
+| The markup: `<div class="page" id="page…">` for a page, or `<section class="sec rv" id="sec…" data-sub="…">` inside its page for a view; a page with views also gets its `<nav class="seg" id="…Nav">` | The host element | the navigation tests, indirectly |
+| `const PAGES = [` (board script) | *Only for a page*: `{id, label, host, newFeature?}` | `tests/navigation.test.cjs`, "the top row is Today, Company, Supply, Growth, Map, Wiki" |
+| `const ICON = {` (board script) | *Only for a page*: its nav icon, keyed by page id | none |
+| `const SUBS = {` (board script) | *Only for a view*: its `[id, label, section]` item; a new page with views needs the whole entry | `tests/navigation.test.cjs`, "Company carries Results, Products, Payroll and Milestones" |
+| `const SEC_PAGE = {` (board script) | `secX: [page, view]` for every section. Without it `reveal()`, the sub-nav and `pageFromHash()` fail | `tests/navigation.test.cjs`, "every Company section deep link opens the view that holds it" |
+| `const PAGE_DRAWS = [` (board script) | `["page/view", () => drawX()]`, tagged with every view whose markup it writes | `tests/calm_refresh.test.cjs`, "a refresh on Today draws Today …" |
+| `const SS_VIEWS = [` (board script) | `{id, t, p, ic, syn, go}`, so search can open it | `tests/search.test.cjs`, "the index holds every group …" |
+| `function showPage(` (board script) | *Only if* the page loads or draws when shown, as the Map does | none |
+| `const SUPPLY_VIEWS = {` (board script) | *Only for* a Supply > Checks view | `tests/alert_kinds.test.cjs` |
+| `const PAGE_ALIASES =`, `const SEC_MOVED =` (board script) | *Only when* renaming or moving an old page or section | `tests/navigation.test.cjs` |
+| `const quietRender =` in `tests/search.test.cjs` | A new draw function, in the list the test stubs | that test |
+
+### A payload key
+
+Nothing between `extract()` and the board filters keys: `browser_build()`, `render()`, the
+watch server, `web/worker.js` and `web/app.js` all pass the whole dict through.
+
+| Anchor | What goes in it | Guarded by |
+| --- | --- | --- |
+| The `return {` at the end of `def extract(` | `"key": _producer(...)`. It must be JSON-serialisable, with any set ordered through `_in_order()` | only JSON-serialisability: `tests/test_supply_facts.py`, "test_the_payload_carries_the_facts_and_both_passes_of_findings" |
+| The payload table in [The payload contract](#the-payload-contract) | A row that follows the reader convention | none |
+| The reader, `D.<key>`, in the board script, `web/map.js` or `web/wiki.js` | A reader that survives a missing key (fall back to an empty value), because many Node tests build a partial `D` | indirect |
+| `class History:` and the `history.ledger(` / `history.write()` lines in `extract()` | *Only if* the value has to persist between saves | none |
+
+### A finder filter
+
+All in `web/map.js`, guarded by `tests/finder.test.cjs`. The finder keeps its state in
+memory, and its switch lasts only for the session; saved searches store the filters.
+
+| Anchor | What goes in it | Guarded by |
+| --- | --- | --- |
+| `const finderDefaults = () =>` | The key and its "no limit" default. `finderPick`, `saveFinder`, `resetCharacter` and `savedKey` follow it | "the defaults are visibly chosen on first open …" |
+| `setFinder(preset = {}){` | The key in the reset literal | "a preset lands on the column its category ranks by …" |
+| `loadFinder(){` | Usually nothing; a retired key goes on its `delete this.fs.` line | "the filters come back with the character …" |
+| `finderPanel(){` | A `row('Label', …)` control with `data-f="<key>"` | "the switch is in the map window; every filter lives in the panel" |
+| `wireFinder(){`, `paintControls(){` | Nothing for a numeric chip; a new kind of control needs its handler and read-back here | "floor area is a column that sorts, and a filter on every list" |
+| `finderRows(){` and `saleRows(){` | The predicate; `const finderFits = (v, lo, hi) =>` for a range | "a type filter re-scores every row …", "the for-sale list answers to the filters still on screen" |
+| `savedFilters(s){` | Validation of the stored value | "a saved search is read against this save …" |
+| `savedTip(s){` and `const finderRange =` | Its part of a saved search's summary | none for most filters |
+| `sortKeys(`, `const FINDER_SORT_NAMES =`, `finderList(`, and the grid columns in `web/map.css` | *Only if* it is also a sortable column | "the Cap column sits between m² and Upfront …" |
+| `def _premises(` in `ba_dashboard.py`, and the fixtures in `tests/finder.test.cjs` | *Only if* it needs a new field on each row | `tests/test_premises.py` (exact row dicts) |
+| `function ssFinder(` and the `openFinder({…})` callers (board script) | *Only if* a caller should preset it | `tests/search.test.cjs` |
+
+A new filter is a user-facing change, so it also gets a `web/changelog.json` entry.
+
+### A footer link
+
+| Anchor | What goes in it | Guarded by |
+| --- | --- | --- |
+| The URL constants (`REPO_URL =` to `GAME_MAKER_URL =`) | `NEW_URL = "…"`. Never put a URL in `web/*.js` | `tests/test_privacy_promises.py`, "test_scripts_fetch_only_from_this_site" |
+| `def footer_html(` | `{_sf_out(URL, "Label", icon, title=, feature=)}` in its column. One function fills both the board and the landing screen | `tests/test_footer.py`, "test_the_two_homes_do_not_share_an_id"; `tests/restore.test.cjs`, "the board footer offers the game, the channel and the Discord …" (exact link counts) |
+| Section 7, "External links and donations", in `web/privacy.html` | The provider's name in its list | none |
+| `feature=` on `_sf_out` | *Only for* a New badge; see [contributing.md](contributing.md) | none |
+
+Then `python build_web.py`.
+
+### A news item
+
+| Anchor | What goes in it | Guarded by |
+| --- | --- | --- |
+| `<aside class="news-strip" id="newsStrip" data-news-id="…">` in `BANNER` in `build_web.py` | A new `data-news-id`, so it shows again to anyone who dismissed the last one; the `.news-copy` text; the `#newsLink` href, which is written out rather than taken from `WORKSHOP_URL` | `tests/news.test.cjs`, "the strip shows on first load with its text, Workshop link and named Dismiss" |
+| `.news-strip{` in `BANNER`'s `<style>` | *Only for* a layout change | `tests/news.test.cjs`, the "stack without overlap" tests |
+| `/* One-time news strip (#newsStrip in build_web.py)` in `web/update.js` | Nothing; it shows and dismisses the strip, remembered under `bc_news_dismissed` | `tests/news.test.cjs`, "Dismiss hides the strip …" |
+
+`tests/news.test.cjs` reads the built `web/index.html`, so run `python build_web.py` before it.
 
 ## Pyodide
 

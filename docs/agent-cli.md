@@ -135,18 +135,24 @@ the user's preference against execution limits.
 
 ## Opus through the normal Claude login
 
+Opus 5.5 (`claude-opus-5-5`) is the default model for implementation workers. Start
+one as a Claude Code subagent with that model, or as a CLI run with
+`claude -p --model claude-opus-5-5`. GLM through the launcher above is still
+available when a task asks for it.
+
 Claude Code is installed and authenticated with the user's Claude subscription.
 Specify the exact requested model; do not infer it from model self-identification.
 
 ```powershell
 $taskPrompt = Get-Content -LiteralPath research/opus-task.md -Raw
-claude -p $taskPrompt --model claude-opus-5 --permission-mode acceptEdits --no-chrome --output-format stream-json --verbose
+claude -p $taskPrompt --model claude-opus-5-5 --permission-mode acceptEdits --no-chrome --output-format stream-json --verbose
 ```
 
 Use `--add-dir` for authorized source directories outside the project, and specify
 appropriate `--tools`/`--allowedTools` for the task. Keep file ownership disjoint
-from concurrent agents. The wiki work confirmed `claude-opus-5` in API message
-metadata on 2026-09-13. If a model is unavailable, report it instead of substituting.
+from concurrent agents. `claude-opus-5-5` replaced `claude-opus-5` on 2026-09-22 and
+was confirmed in API message metadata that day. If a model is unavailable, report it
+instead of substituting.
 
 ## Inspecting runs
 

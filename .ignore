@@ -1,0 +1,10 @@
+# Search noise for rg and editor search: generated copies and design canvases.
+# Git ignores this file's rules; `rg -uu` searches everything again.
+# Each path is generated from a source elsewhere (AGENTS.md, "Sources and generated files").
+web/py/
+web/index.html
+web/wiki-data.json
+web/wiki/
+web/maps/full-map.svg
+mockup/**/project/
+mockup/*/*.dc.html
