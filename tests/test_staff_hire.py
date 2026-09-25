@@ -273,6 +273,13 @@ class SpareTest(unittest.TestCase):
         for pid in hire["spare"]:
             self.assertEqual(hire["spareSkills"][pid], [SERVICE])
 
+    def test_nobody_in_training_is_counted_on_from_the_bench(self):
+        trainee = dict(ts.employee("p1", [SERVICE], here=False),
+                       trainingSession={"skill": SERVICE, "startDay": 30})
+        row = ts.plan([(1, ts.REGISTER)], [trainee], ts.FLAT, opens=((8, 12),))
+        self.assertEqual(row["_hire"]["bench"], [])
+        self.assertTrue(row["_hire"]["hireWeeks"], "the plan hires for those hours")
+
     def test_bench_is_whom_the_plan_counts_on(self):
         row = ts.plan(
             [(1, ts.REGISTER)],
@@ -305,6 +312,14 @@ class FactoryHireTest(unittest.TestCase):
         self.assertEqual(len(row["_hire"]["spare"]), row["headcount"]["spare"])
         self.assertFalse(set(row["_hire"]["spare"]) & worked)
         self.assertEqual(row["_hire"]["spareSkills"], {pid: [WORKER] for pid in row["_hire"]["spare"]})
+
+    def test_an_idle_line_s_machines_are_machines_in_the_table(self):
+        # Sized for demand, the wine line runs no hours: its machine has no
+        # plan entry but is listed as a factory worker's station.
+        [row] = hand_rows([("beer", 1, 24, 24, 24), ("wine", 1, 24, 0, 24)], People().add(2))["dem"]
+        wine = next(i for i, st in enumerate(row["stations"]) if st["id"] == "wine-0")
+        self.assertEqual(row["stations"][wine]["skill"], WORKER)
+        self.assertFalse(any(s["s"] == wine for s in row["shifts"]))
 
     def test_the_schedule_as_it_stands_ships_with_the_drivers(self):
         # A driver's shift on the van and a worker's on a machine: both in
@@ -477,6 +492,9 @@ class OfficeStaffingTest(unittest.TestCase):
         _save, _b, [row] = office_rows(2, self.WEEKDAYS_8_20, people)
         self.assertEqual(row["_hire"]["bench"], ["b1"])
         _save, _b, [row] = office_rows(2, self.WEEKDAYS_8_20, people, claimed={"b1"})
+        self.assertEqual(row["_hire"]["bench"], [])
+        trainee = dict(lawyer("b1", here=False), trainingSession={"skill": LAWYER, "startDay": 30})
+        _save, _b, [row] = office_rows(2, self.WEEKDAYS_8_20, [lawyer("l1"), trainee])
         self.assertEqual(row["_hire"]["bench"], [])
 
 

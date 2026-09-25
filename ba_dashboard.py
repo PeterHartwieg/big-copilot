@@ -6278,8 +6278,11 @@ def _plan_people(save: Save, staff: list) -> dict:
     person with no hours demand has **no band** — 225 of 227 on the reference
     save demand full time, but the plan may not invent one for the other two.
     """
-    demands = {}
+    demands, training = {}, set()
     for employee in save.items(save.root.get("EmployeeInstances")):
+        # Null, or the session (an object, or a reference to one).
+        if employee.get("trainingSession"):
+            training.add(employee.get("id"))
         demands[employee.get("id")] = [
             slug
             for slug in dict.fromkeys(save.items(employee.get("demands")))
@@ -6304,6 +6307,9 @@ def _plan_people(save: Save, staff: list) -> dict:
                 window for rule in rules if rule[0] == "noshift" for window in rule[1]
             ),
             "nocleaning": any(r[0] == "nocleaning" for r in rules),
+            # In training (trainingSession set): the game will not assign them
+            # to a business, so no plan counts on them from the bench.
+            "training": person["id"] in training,
         }
     return out
 
@@ -7557,7 +7563,8 @@ def _staffing(
         if b.get("RentedByPlayer")
     }
     people = _plan_people(save, staff)
-    bench = [people[pid] for pid in _in_order(people) if not people[pid]["addr"]]
+    bench = [people[pid] for pid in _in_order(people)
+             if not people[pid]["addr"] and not people[pid]["training"]]
     everyone_on_bench = list(bench)
     curves = load_demand_curves()
     table = load_buildings()
@@ -7805,7 +7812,7 @@ def _factory_site_plan(save, building, site, business, posts_of, pool, people, m
     delivery drivers' -- when it replaces the week, and can tell a move source
     whose people hold hours there.
     """
-    stations, runs, lines = [], {}, []
+    stations, runs, lines, idle = [], {}, [], []
     unnamed_machines = 0
     todo = [(line, posts_of.get(("line", site["s"], i)) or [], line["needHours"][mode], line["item"], False)
             for i, line in enumerate(site["lines"])]
@@ -7817,6 +7824,13 @@ def _factory_site_plan(save, building, site, business, posts_of, pool, people, m
                      24 if mode == "cap" or not now else now,
                      f"{line['workstation']}, recipe not named", True))
     for line, posts, hours, item, unnamed in todo:
+        if posts and not hours:
+            # A line this sizing leaves idle: its machines are still machines,
+            # listed with the factory worker's skill so the Staff page never
+            # keeps a live shift on one as it keeps a driver's.
+            idle.extend({"id": post, "skill": FACTORY_SKILL, "rate": 1,
+                         "name": f"{item}, position {position}"}
+                        for position, post in zip(line["slots"], posts))
         if not posts or not hours:
             continue
         if unnamed:
@@ -7865,10 +7879,10 @@ def _factory_site_plan(save, building, site, business, posts_of, pool, people, m
         if all(shift["employee"] is not None for shift in week["shifts"]):
             break
     current = (
-        _current_roster(save, building, {s["id"]: dict(s, slug=None) for s in stations})
+        _current_roster(save, building, {s["id"]: dict(s, slug=None) for s in stations + idle})
         if building is not None else {"shifts": 0, "fragments": 0, "list": []}
     )
-    table = _index_table(stations, (week["shifts"], current["list"]),
+    table = _index_table(stations + idle, (week["shifts"], current["list"]),
                          (current["list"], week["shifts"], week["shortHours"], week["placed"]),
                          people)
     count = week["headcount"][FACTORY_SKILL]
@@ -8906,7 +8920,7 @@ def _office_staffing(save: Save, names, businesses: list, grids: list, staff: li
     people = _plan_people(save, staff)
     bench = [
         people[pid] for pid in _in_order(people)
-        if not people[pid]["addr"] and pid not in claimed
+        if not people[pid]["addr"] and not people[pid]["training"] and pid not in claimed
     ]
     state = {pid: _fresh_state() for pid in people}
     offices = sorted(
@@ -21755,8 +21769,10 @@ function hrTotals(m){
    as the game has them, except for anyone this call moves away: a
    cover-only shop plan's serving entries, and at a factory or an office
    every shift on a station the plan does not staff (the drivers', the
-   cleaners'). The plan's entries win where one of those overlaps them. */
-function hrWeek(S, fill, away, arriving){
+   cleaners'). The plan's entries win where one of those overlaps them: the
+   kept shift is cut around them, and the hours cut off are added to
+   `lost.hours` for the review. */
+function hrWeek(S, fill, away, arriving, lost){
   const row = S.row || {};
   const days = new Map();
   const put = (d, f, t, employeeId, itemInstanceId) => {
@@ -21778,10 +21794,18 @@ function hrWeek(S, fill, away, arriving){
     put(sl.d, sl.f, sl.t, id, sl.station || (st && st.id));
   }));
   const planned = [...days].flatMap(([d, list]) => list.map(x => Object.assign({d}, x)));
-  const clashes = (d, f, t, id, post) => planned.some(x => x.d === d && x.f < t && f < x.t && (x.employeeId === id || x.itemInstanceId === post));
   const keep = s => {
     const st = (row.stations || [])[s.s], who = (row.people || [])[s.p];
-    if(st && who && !away.has(who.id) && !clashes(s.d, s.f, s.t, who.id, st.id)) put(s.d, s.f, s.t, who.id, st.id);
+    if(!st || !who || away.has(who.id)) return;
+    /* The parts of the shift no planned entry for the same person or
+       station covers. */
+    let parts = [[s.f, s.t]];
+    planned.filter(x => x.d === s.d && (x.employeeId === who.id || x.itemInstanceId === st.id)).forEach(x => {
+      parts = parts.flatMap(([f, t]) => x.t <= f || t <= x.f ? [[f, t]] : [[f, Math.min(t, x.f)], [Math.max(f, x.t), t]].filter(([a, b]) => a < b));
+    });
+    const kept = parts.reduce((n, [f, t]) => n + t - f, 0);
+    if(lost && kept < s.t - s.f) lost.hours = (lost.hours || 0) + (s.t - s.f - kept);
+    parts.forEach(([f, t]) => put(s.d, f, t, who.id, st.id));
   };
   const now = (row.current || {}).list || [];
   if(S.site.kind === "shop"){
@@ -21836,8 +21860,9 @@ function hrRequest(m, only){
   const sites = m.sites.filter(S => touched.has(S.key)).map(S => {
     const at = touched.get(S.key);
     if(!S.planned || !S.row) return {address: gwAddress(S.key), expect: null, days: null};
+    at.lost = {hours: 0};
     const out = {address: gwAddress(S.key), expect: S.b && typeof S.b.shiftPrint === "string" ? S.b.shiftPrint : null,
-                 openAllHours: !!(S.row.full && !S.row.openNow), days: hrWeek(S, at.fill, away, arriving)};
+                 openAllHours: !!(S.row.full && !S.row.openNow), days: hrWeek(S, at.fill, away, arriving, at.lost)};
     return out;
   });
   return {body: {sites, hires, moves}, names, touched};
@@ -22437,6 +22462,9 @@ function hrReview(o = {}){
         `<b>${gwSiteName(s)}</b> (${Number(s.removed) || 0} entries out, ${Number(s.added) || 0} in${s.openedHours ? ", open 0 to 24" : ""})`).join(", ")}.</div></div>` : "";
       const left = rewritten.flatMap(s => (s.leftWithout || []).map(p => `<span class="person"><i>${spEsc(gwInitials(p.name))}</i>${spEsc(p.name || "someone")}</span>`));
       const emptied = hrLeftEmpty(req, answer);
+      const displaced = [...req.touched.values()].filter(at => at.lost && at.lost.hours > 0);
+      const displacedCall = displaced.length ? `<div class="gw-call">${gwI("roster")}<div><b>Hours the plan takes over</b>: shifts the plan does not own that overlap its own are cut to fit, ${
+        displaced.map(at => `${spEsc(at.S.b ? shortName(at.S.b) : "a site")} ${plural(at.lost.hours, "hour")} a week`).join(", ")}. The people on them keep the rest of their hours.</div></div>` : "";
       const emptyCall = emptied.length ? `<div class="gw-call gw-warn">${gwI("alert")}<div><b>Hours left empty</b> where a move takes someone away and the week is not replaced: ${
         emptied.map(({x, n}) => `${spEsc(x.p.name || "someone")} (${plural(n, "shift")} at ${spEsc(x.from.b ? shortName(x.from.b) : "a site")})`).join(", ")}. The game clears their shifts there and adds a to-do; nobody takes those hours.</div></div>` : "";
       const goneCall = gone.size ? `<div class="gw-call gw-warn">${gwI("alert")}<div><b>${plural(gone.size, "candidate", "candidates")} left the headhunter's list</b> since this board was read: ${
@@ -22453,7 +22481,7 @@ function hrReview(o = {}){
       const blocked = answer.blocked === "myemployees" ? `<div class="gw-no"><span class="ic">${hrSvg("phone")}</span><div class="rule">MyEmployees is open in the game.</div><div class="fix">${gwSvg("right")}<span>Close the MyEmployees app on your phone in the game, then try again.</span></div></div>` : "";
       return `${blocked}${gwTiles([["Hire", null, `${c.hire}<small class="hr-u"> of ${t.needed - m.moves.filter(x => x.week && !x.off).length}</small>`], ["Move", null, c.move], ["Wage bill", null, `+${fmt(bill)}<small class="hr-u"> a day</small>`]])}
         <p class="gw-lead">Filled dots are hires, hollow ones people moved in, dashed ones places nobody fills. Open a site for each person's days and hours.</p>
-        ${sites}${goneCall}${said}${emptyCall}${left.length ? `<div class="gw-box">${gwCall("", "exit", "<b>No hours after this</b> for these people at the sites whose week is replaced. The game takes them off their work there and adds a to-do.")}<div class="gw-pills">${left.join("")}</div></div>` : ""}
+        ${sites}${goneCall}${said}${emptyCall}${displacedCall}${left.length ? `<div class="gw-box">${gwCall("", "exit", "<b>No hours after this</b> for these people at the sites whose week is replaced. The game takes them off their work there and adds a to-do.")}<div class="gw-pills">${left.join("")}</div></div>` : ""}
         ${gapText ? `<div class="gw-call gw-warn">${gwI("alert")}<div>${gapText}. Loosen a filter, or hire them when the headhunters find more.</div></div>` : ""}
         ${warned.length ? `<div class="gw-call">${gwI("info")}<div>${plural(warned.length, "person asks", "people ask")} for something their site does not give (marked on the Staff page). It never stops a hire; the next plan works with it.</div></div>` : ""}`;
     },

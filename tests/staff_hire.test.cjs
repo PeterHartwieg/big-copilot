@@ -373,11 +373,15 @@ test('a factory keeps its drivers and an office its cleaner when the week is rep
   const d = JSON.parse(payload);
   // The factory: a driver on the van (a station the plan does not staff) on
   // Tuesday and Wednesday, and Fay on a machine the plan leaves out, on
-  // Monday, when the plan has her on MACH-1: the plan wins there.
+  // Monday, when the plan has her on MACH-1: the plan wins there. On
+  // Saturday the plan puts her on MACH-1 8 to 12 and she drives 6 to 14:
+  // her driving is cut around the machine, 6 to 8 and 12 to 14.
   const fac = d.factoryStaffing.cap[0];
+  fac.shifts.push({d: 6, s: 0, f: 8, t: 12, p: 0});
   fac.stations.push({id: 'VAN-1', name: null, skill: null}, {id: 'MACH-9', name: null, skill: null});
   fac.people.push({id: 'DRV1', name: 'Dee Driver'});
-  fac.current = {shifts: 3, fragments: 0, list: [{d: 1, s: 2, f: 6, t: 10, p: 0}, {d: 2, s: 1, f: 0, t: 6, p: 1}, {d: 3, s: 1, f: 6, t: 14, p: 1}]};
+  fac.current = {shifts: 4, fragments: 0, list: [{d: 1, s: 2, f: 6, t: 10, p: 0}, {d: 2, s: 1, f: 0, t: 6, p: 1}, {d: 3, s: 1, f: 6, t: 14, p: 1},
+    {d: 6, s: 1, f: 6, t: 14, p: 0}]};
   // The office: a cleaner on Thursday.
   const law = d.officeStaffing[0];
   law.stations.push({id: 'CLN-O', name: null, skill: null});
@@ -391,7 +395,12 @@ test('a factory keeps its drivers and an office its cleaner when the week is rep
     {d: 2, shifts: [{f: 0, t: 6, employeeId: 'DRV1', itemInstanceId: 'VAN-1'}, {f: 0, t: 12, employeeId: 'f1', itemInstanceId: 'MACH-1'}]},
     {d: 3, shifts: [{f: 0, t: 12, employeeId: 'f1', itemInstanceId: 'MACH-1'}, {f: 6, t: 14, employeeId: 'DRV1', itemInstanceId: 'VAN-1'}]},
     {d: 4, shifts: [{f: 0, t: 12, employeeId: 'f2', itemInstanceId: 'MACH-1'}]},
-    {d: 5, shifts: [{f: 0, t: 12, employeeId: 'f2', itemInstanceId: 'MACH-1'}]}]);
+    {d: 5, shifts: [{f: 0, t: 12, employeeId: 'f2', itemInstanceId: 'MACH-1'}]},
+    {d: 6, shifts: [{f: 6, t: 8, employeeId: 'FW1', itemInstanceId: 'VAN-1'}, {f: 8, t: 12, employeeId: 'FW1', itemInstanceId: 'MACH-1'},
+      {f: 12, t: 14, employeeId: 'FW1', itemInstanceId: 'VAN-1'}]}]);
+  // What the plan took over is counted for the review: Monday's 4 hours and
+  // Saturday's 4.
+  assert.equal(await page.evaluate(k => hrRequest(hrModel()).touched.get(k).lost.hours, F), 8);
   assert.deepEqual(site(88).days.map(x => [x.d, x.shifts.map(s => `${s.employeeId}@${s.itemInstanceId} ${s.f}-${s.t}`)]),
     [[1, ['l1@DESK-1 8-22']], [2, ['l1@DESK-1 8-22']], [3, ['l1@DESK-1 8-22']], [4, ['CLN1@CLN-O 8-12']]]);
 });
