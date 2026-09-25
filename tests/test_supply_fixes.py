@@ -79,7 +79,7 @@ class LimitedInputTests(unittest.TestCase):
         [need] = c.supply["factories"]["sites"][0]["needs"]
         self.assertTrue(need["limited"])
         self.assertEqual((c.fact(FACTORY, WATER)["st"], c.fact(FACTORY, WATER)["why"]), ("covered", "limit"))
-        self.assertFalse([f for f in c.findings() if f["group"] == "feed" and "not drawing" in f["text"]])
+        self.assertFalse([f for f in c.findings() if f["group"] == "feed" and "reaching the line" in f["text"]])
         # The working keys stay off the payload.
         self.assertNotIn("_shipDraw", need)
         self.assertNotIn("_allLimit", need)
