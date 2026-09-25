@@ -1013,7 +1013,7 @@ first of these that fits is the word:
 | **no plan** | nothing brings it: a shelf with no top-up and no wholesale delivery contract, a factory input with no top-up, a depot line with no import |
 | **new** | too young to judge: a shop under five trading days, a factory input on its first fill, a depot with no round logged yet |
 | **short** | the figure in game is under what the week or the day uses, the stock runs out before the drop, or the depot behind a factory input has run dry |
-| **stalled** | planned, and the depot holds it, but little arrives, and neither a Produce up to limit nor the roster explains it |
+| **stalled** | planned, and the depot holds it, but little arrives, and neither a Produce up to limit nor your staffing explains it |
 | **idle** | stock not moving on (see *Idle stock* below) |
 | **tight** | covers the use, but not the 15% margin |
 | **covered** | everything else, with the reason where it is not the figure itself: a route brings it, the line is held by its Produce up to limit, or your staffing runs the machines part of the week |
@@ -1069,7 +1069,7 @@ stop the top-up.
 at the limit and starts again as the morning round takes its output away, so through the
 day what it holds sits anywhere under the limit, and what it eats matches what it makes,
 not what it could make. Its inputs read **covered**, held by Produce up to, rather than
-**stalled**, when the line makes well under its roster's output (under three quarters)
+**stalled**, when the line makes well under the output its staffing allows (under three quarters)
 while every input it eats is on hand for the rest of the day at the full rate, as well as
 when the output held is at the limit. An input several lines eat is covered when all of
 them are held that way, and also when every one of them has Produce up to set, what

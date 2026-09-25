@@ -15109,7 +15109,7 @@ const SZ_WHY = {
   "covered:route": "A route from your own site brings it",
   "covered:limit": "Produce up to holds the line back, not the supply",
   "covered:staffing": "Your staffing runs the machines only part of the week",
-  "short:hours": "Rostered fewer hours a day than the line needs",
+  "short:hours": "Staffed fewer hours a day than the line needs",
 };
 const SZ_STATE = {
   covered: "Covers the use and the margin", tight: "Covers the use, not the margin",
