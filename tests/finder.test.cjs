@@ -1539,3 +1539,69 @@ test('on a phone a Map / Plan switch shows the picked row\'s plan', async () => 
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
+
+test('a live refresh keeps the hover and the pick and never rebuilds the shelf', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await openMap(page); await turnOn(page);
+    await page.locator(`${dock} .lp-tile`).first().waitFor();
+    await pick(page, HK[0]);
+    await page.locator(`#cityMapPage .place[data-pick="${MT[0]}"]`).hover();
+    assert.match(await page.locator(`${dock} .lp-detail`).textContent(), /HoveredD2/);
+    // Mark the tiles and the ?, then refresh as a live save does.
+    await page.evaluate(() => document.querySelectorAll('#cityMapPage .lp-tile, #cityMapPage .lp-why').forEach(t => { t.dataset.marker = '1'; }));
+    await page.locator('#cityMapPage .lp-why').focus();
+    await page.evaluate(() => { D = {...D}; refreshCityMaps(); cityMapPage.update(); });
+    assert.equal(await page.locator('#cityMapPage .lp-tile[data-marker], #cityMapPage .lp-why[data-marker]').count(), 7);
+    assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('lp-why')), true);
+    assert.match(await page.locator(`${dock} .lp-detail`).textContent(), /HoveredD2/);
+    assert.equal(await page.locator(`${dock} .lp-tile.lit`).getAttribute('data-lp-tile'), 'C1');
+    assert.equal(await page.locator(`${dock} .lp-tile.hover`).getAttribute('data-lp-tile'), 'D2');
+    // A tile click changes the counts and the filter in place, focus included.
+    await page.locator(`${dock} .lp-tile[data-lp-tile="C1"]`).focus();
+    await page.keyboard.press('Enter');
+    assert.deepEqual(await rowKeys(page), [HK[0]]);
+    assert.equal(await page.locator('#cityMapPage .lp-tile[data-marker]').count(), 6);
+    assert.equal(await page.evaluate(() => document.activeElement?.dataset.lpTile), 'C1');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a preset or a saved search starts without the layout filter', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await openMap(page); await turnOn(page);
+    await page.evaluate(() => cityMapPage.saveSearch('Shops'));
+    await page.locator(`${dock} .lp-tile[data-lp-tile="C1"]`).click();
+    assert.deepEqual(await rowKeys(page), [HK[0]]);
+    await page.evaluate(() => cityMapPage.applySaved('Shops'));
+    await page.waitForFunction(() => document.querySelectorAll('#cityMapPage .place.fr').length === 3);
+    assert.equal(await page.locator('#cityMapPage .frow.flayout').isVisible(), false);
+    await page.locator(`${dock} .lp-tile[data-lp-tile="C1"]`).click();
+    assert.deepEqual(await rowKeys(page), [HK[0]]);
+    await page.evaluate(() => openFinder({cat: 'retail'}));
+    await page.waitForFunction(() => document.querySelectorAll('#cityMapPage .place.fr').length === 3);
+    assert.equal(await page.locator('#cityMapPage .frow.flayout').isVisible(), false);
+    assert.equal(await page.locator(`${dock} .lp-tile[aria-pressed="true"]`).count(), 0);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a stage the panel nearly fills gets the Map / Plan switch, not the dock', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await page.setViewportSize({width: 900, height: 1000});
+    await openMap(page); await turnOn(page);
+    await pick(page, HK[0]);
+    const seg = '#cityMapPage .lp-seg';
+    await page.locator(seg).waitFor();
+    assert.equal(await page.locator(dock).isVisible(), false);
+    await page.locator(`${seg} [data-lp-view="plan"]`).click();
+    // The plan fills the map area left of the panel, not the space under it.
+    const plan = await page.locator('#cityMapPage .lp-phoneplan').boundingBox();
+    const panel = await page.locator('#cityMapPage .places').boundingBox();
+    assert.ok(plan.x + plan.width <= panel.x + 1, `plan ends at ${plan.x + plan.width}, panel starts at ${panel.x}`);
+    assert.equal(await page.locator('#cityMapPage .lp-phoneplan .lp-svg').isVisible(), true);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});

@@ -63,6 +63,16 @@ class FloorPlans(unittest.TestCase):
                     else:
                         self.assertEqual(bays, 0)
 
+    def test_a_page_opened_from_a_file_carries_the_plans(self):
+        # dashboard.html has nowhere to fetch from, so render() embeds the plans
+        # beside the map; the hosted and watched pages fetch them instead.
+        from ba_dashboard import render
+        page = render({"meta": {"save": "Fixture"}}, live=False)
+        start = page.index("window.BIG_COPILOT_MAP=") + len("window.BIG_COPILOT_MAP=")
+        embedded = json.JSONDecoder().raw_decode(page[start:].replace("<\/", "</"))[0]
+        self.assertEqual(embedded["plans"], PLANS)
+        self.assertNotIn("window.BIG_COPILOT_MAP=", render(None, live=True))
+
     def test_the_file_stays_small(self):
         self.assertLess((ROOT / "web/maps/floor-plans.json").stat().st_size, 80_000)
 

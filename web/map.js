@@ -250,6 +250,8 @@ function loadFloorPlans(){
   return floorPlanAssets;
 }
 const FLOOR_PLAN_PX = 24;
+/* The map area left of the panel the dock needs; a narrower one gets the switch. */
+const FLOOR_PLAN_DOCK_MIN = 560;
 const FLOOR_PLAN_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="1"></rect><path d="M4 11h7v9M11 4v4M15 11h5"></path></svg>';
 const FLOOR_PLAN_TIP = "The game's own layout for the building, seen from above and shown the way the game stores it, so the top is not necessarily north or the street. Walls are grey, windows blue and doors green; a door on the outside wall is an entrance. In a warehouse, the gaps in the floor are the loading bays. m² and cap are the game's figures for the size.";
 /* One plan at s pixels a metre, painted in the board's colours by class. */
@@ -395,13 +397,15 @@ class CityMapView {
     this.wireFinder();
     if(this.list){
       this.list.addEventListener('mouseover', e => { const p = e.target.closest('[data-pick]'); if(p) this.light(p.dataset.pick); });
-      this.list.addEventListener('mouseout', e => { const p = e.target.closest('[data-pick]'); if(p) this.light(null); });
+      // A leave into the row's own children is no leave (onLeave's test).
+      this.list.addEventListener('mouseout', e => { const p = e.target.closest('[data-pick]');
+        if(p && !(e.relatedTarget && p.contains(e.relatedTarget))) this.light(null); });
     }
     this.buildToken++;
     this.wirePan();
     this.wireBall?.();
     this.resizeObserver?.disconnect();
-    this.resizeObserver = new ResizeObserver(() => {this.rect=null; if(!this.box) this.reset(); this.paintView(); this.paintPlans();});
+    this.resizeObserver = new ResizeObserver(() => {this.rect=null; if(!this.box) this.reset(); this.paintPlans(); this.paintView();});
     this.citymap.addEventListener('fullscreenchange', () => { this.rect = null; if(this.selected) this.select(this.selected, true); else this.reset(); });
     this.resizeObserver.observe(this.svg);
     this.reset();
@@ -574,6 +578,8 @@ class CityMapView {
     // It also lands on the column the category ranks by, never on a stale sort.
     this.fs.sort = this.fs.cat === 'warehouse' ? 'm2' : 'score'; this.fs.sortPicked = false;
     this.saveFinder();
+    // A layout picked on the shelf belonged to the last question, not this one.
+    this.layoutPick = null;
     this.selected = null; this.showAll = false;  // back to the 80-row cap
     this.ready.then(ok => { if(ok) this.update(); });
   }
@@ -625,6 +631,7 @@ class CityMapView {
     if(f.show === "sale"){ f.sort = this.fs.sort; f.sortPicked = this.fs.sortPicked; }
     this.fs = {...this.fs, ...f, on:true};
     this.clampSort();
+    this.layoutPick = null;   // a saved search carries no layout
     this.showAll = false; this.deselect(); this.saveFinder(); this.update();
   }
   /* A name already in the list replaces that search in place: the exact name if
@@ -962,6 +969,7 @@ class CityMapView {
     });
     // The layout filter shows only while a layout on the shelf is chosen.
     const layout = this.root.querySelector('.frow.flayout');
+    if(this.layoutPick && !this.planCodes().includes(this.layoutPick)) this.layoutPick = null;
     layout.hidden = !this.layoutPick;
     const chip = this.layoutPick ? `<button type="button" class="fchip on" data-lp-clear aria-label="${attr(`Layout ${this.layoutPick}: list every layout again`)}">Layout ${mapText(this.layoutPick)}<b aria-hidden="true">×</b></button>` : '';
     const host = layout.querySelector('.lp-laychip');
@@ -1227,17 +1235,27 @@ class CityMapView {
   }
   /* The height the dock takes from the bottom of the stage, 0 when it is away. */
   dockRoom(){ return this.dock && !this.dock.hidden ? this.dock.offsetHeight + 16 : 0; }
+  /* How this stage shows plans: the dock when the map area left of the panel
+     has room for the shelf, else (a phone, or a stage the panel nearly fills)
+     the Map / Plan switch. */
+  planMode(){
+    if(!this.finderOn() || !this.plans || !this.planCodes().length) return null;
+    return !this.narrow && this.freeWidth() >= FLOOR_PLAN_DOCK_MIN ? 'dock' : 'switch';
+  }
   paintPlans(){
     if(!this.dock || !this.svg) return;
-    const on = this.finderOn() && !!this.plans, codes = on ? this.planCodes() : [];
-    const desk = on && !this.narrow && codes.length > 0;
-    if(this.dock.hidden === desk){ this.dock.hidden = !desk; if(!desk) this.shelfSig = null; }
-    if(desk) this.paintShelf(codes);
-    this.paintPhonePlan(on);
+    const mode = this.planMode();
+    // Showing the dock again replays its entrance (CSS on .lp-dock); nothing
+    // else does.
+    if(this.dock.hidden === (mode === 'dock')) this.dock.hidden = mode !== 'dock';
+    if(mode === 'dock') this.paintShelf(this.planCodes());
+    this.paintPhonePlan(mode === 'switch');
   }
   /* The kind's layouts at one scale: one row, or two when there are more than
      six (the warehouses' twelve). The scale is the largest that fits the free
-     map area, never more than 10 px a metre. */
+     map area, never more than 10 px a metre. The tiles are built once for a
+     kind and a scale; counts, the filter and the lights change in place, so a
+     keystroke or a live refresh never redraws the shelf or moves the focus. */
   paintShelf(codes){
     const plans = this.plans.plans, wrap = codes.length > 6;
     const lines = wrap ? [codes.slice(0, Math.ceil(codes.length / 2)), codes.slice(Math.ceil(codes.length / 2))] : [codes];
@@ -1246,21 +1264,32 @@ class CityMapView {
     const tall = Math.max(...codes.map(c => plans[c].h)) / FLOOR_PLAN_PX;
     const wide = Math.max(...lines.map(l => l.reduce((t, c) => t + plans[c].w / FLOOR_PLAN_PX, 0)));
     const s = Math.max(.5, Math.min(10, boxH / tall, room / wide));
-    // Every building of a kind and size has the same floor area in the game.
-    const m2 = new Map();
-    (premises()?.buildings || []).forEach(b => { if(b.type === this.fs.cat && !m2.has(b.size)) m2.set(b.size, b.m2); });
-    const counts = this.layoutCounts || new Map();
-    const sig = JSON.stringify([this.fs.cat, codes, [...counts], this.layoutPick, s.toFixed(2)]);
+    const sig = JSON.stringify([this.fs.cat, codes, s.toFixed(2)]);
     if(sig !== this.shelfSig){
       this.shelfSig = sig;
+      // Every building of a kind and size has the same floor area in the game.
+      const m2 = new Map();
+      (premises()?.buildings || []).forEach(b => { if(b.type === this.fs.cat && !m2.has(b.size)) m2.set(b.size, b.m2); });
       const kind = FINDER_CATS.find(([c]) => c === this.fs.cat)?.[1] || "";
       const tile = code => {
-        const n = counts.get(code) || 0, area = m2.get(code.replace(/\d+$/, ''));
-        const picked = this.layoutPick === code;
-        return `<button type="button" class="lp-tile${n ? '' : ' none'}" data-lp-tile="${attr(code)}" aria-pressed="${picked}" aria-label="${attr(`Layout ${code}, ${n || 'none'} listed. ${picked ? 'List every layout again.' : 'List only this layout.'}`)}"><span class="lp-tilebox" style="height:${boxH}px">${floorPlanSvg(plans[code], s, `Floor plan ${code}`)}</span><span class="lp-tilecode"><b>${mapText(code)}</b>${area ? `${area.toLocaleString('en-US')} m²` : ''}</span><span class="lp-tilen">${n ? `${n} listed` : 'none listed'}</span></button>`;
+        const area = m2.get(code.replace(/\d+$/, ''));
+        return `<button type="button" class="lp-tile" data-lp-tile="${attr(code)}" aria-pressed="false"><span class="lp-tilebox" style="height:${boxH}px">${floorPlanSvg(plans[code], s, `Floor plan ${code}`)}</span><span class="lp-tilecode"><b>${mapText(code)}</b>${area ? `${area.toLocaleString('en-US')} m²` : ''}</span><span class="lp-tilen"></span></button>`;
       };
-      this.dock.innerHTML = `<div class="lp-shelf"><div class="lp-detail"></div><div class="lp-shelfhead"><span class="lp-lab">${mapText(kind)} layouts at one scale</span><span class="lp-note">${this.layoutPick ? 'click it again to list every layout' : 'click one to list only it'}</span>${floorPlanScale(s)}</div>${lines.map(l => `<div class="lp-tiles">${l.map(tile).join('')}</div>`).join('')}</div>`;
+      this.dock.innerHTML = `<div class="lp-shelf"><div class="lp-detail"><div class="lp-body"></div><span class="why lp-why" tabindex="0" data-tip="${attr(FLOOR_PLAN_TIP)}"><i>?</i></span></div><div class="lp-shelfhead"><span class="lp-lab">${mapText(kind)} layouts at one scale</span><span class="lp-note"></span>${floorPlanScale(s)}</div>${lines.map(l => `<div class="lp-tiles">${l.map(tile).join('')}</div>`).join('')}</div>`;
+      this.detailSig = null;
     }
+    const counts = this.layoutCounts || new Map();
+    this.dock.querySelectorAll('[data-lp-tile]').forEach(t => {
+      const code = t.dataset.lpTile, n = counts.get(code) || 0, picked = this.layoutPick === code;
+      const label = `Layout ${code}, ${n || 'none'} listed. ${picked ? 'List every layout again.' : 'List only this layout.'}`;
+      t.classList.toggle('none', !n);
+      if(t.getAttribute('aria-pressed') !== String(picked)) t.setAttribute('aria-pressed', String(picked));
+      if(t.getAttribute('aria-label') !== label) t.setAttribute('aria-label', label);
+      const count = t.querySelector('.lp-tilen'), text = n ? `${n} listed` : 'none listed';
+      if(count.textContent !== text) count.textContent = text;
+    });
+    const note = this.dock.querySelector('.lp-note'), noteText = this.layoutPick ? 'click it again to list every layout' : 'click one to list only it';
+    if(note.textContent !== noteText) note.textContent = noteText;
     this.paintDockState();
   }
   /* The row the dock describes: the hovered one if it has a plan, else the
@@ -1289,23 +1318,25 @@ class CityMapView {
       t.classList.toggle('hover', t.dataset.lpTile === hoverCode && hoverCode !== pickCode);
     });
     const detail = this.dock.querySelector('.lp-detail'); if(!detail) return;
-    const why = `<span class="why lp-why" tabindex="0" data-tip="${attr(FLOOR_PLAN_TIP)}"><i>?</i></span>`;
-    if(!shown){
-      detail.className = 'lp-detail empty';
-      detail.innerHTML = `<p class="lp-hint">Hover a row to light its layout here; pick one to keep it lit.</p>${why}`;
-      return;
+    // The ? stays put; only the words beside it change, and only when they do.
+    let cls = 'lp-detail empty', body = '<p class="lp-hint">Hover a row to light its layout here; pick one to keep it lit.</p>';
+    if(shown){
+      const {b, code, how} = shown;
+      const kind = FINDER_CATS.find(([c]) => c === b.type)?.[1] || typeLabel(b.type);
+      cls = `lp-detail ${how}`;
+      body = `<div class="lp-id"><div class="lp-state"><i></i><span>${how === 'hover' ? 'Hovered' : 'Picked'}</span></div>`
+        + `<div class="lp-code"><b>${mapText(code)}</b><span>${mapText(`${kind}, size ${b.size}`)}</span></div>`
+        + `<div class="lp-addr">${mapText(b.address)}</div></div>${this.planNumbers(b, code)}`;
     }
-    const {b, code, how} = shown;
-    const kind = FINDER_CATS.find(([c]) => c === b.type)?.[1] || typeLabel(b.type);
-    detail.className = `lp-detail ${how}`;
-    detail.innerHTML = `<div class="lp-id"><div class="lp-state"><i></i><span>${how === 'hover' ? 'Hovered' : 'Picked'}</span></div>`
-      + `<div class="lp-code"><b>${mapText(code)}</b><span>${mapText(`${kind}, size ${b.size}`)}</span></div>`
-      + `<div class="lp-addr">${mapText(b.address)}</div></div>${this.planNumbers(b, code)}${why}`;
+    if(detail.className !== cls) detail.className = cls;
+    if(this.detailSig !== body){ this.detailSig = body; detail.querySelector('.lp-body').innerHTML = body; }
   }
-  /* The phone's Map / Plan switch: there is no hover, so it shows the pick. */
+  /* The Map / Plan switch, on a phone or a stage too narrow for the dock: it
+     shows the pick, since a phone has no hover. The plan covers the map area
+     left of the panel, where there is one. */
   paintPhonePlan(on){
     if(!this.seg || !this.phonePlan) return;
-    const b = on && this.narrow ? this.planSite(this.selected) : null, code = this.planOf(b);
+    const b = on ? this.planSite(this.selected) : null, code = this.planOf(b);
     if(!code) this.planView = false;
     this.seg.hidden = !code;
     this.seg.querySelectorAll('[data-lp-view]').forEach(btn => {
@@ -1315,8 +1346,9 @@ class CityMapView {
     this.stage.classList.toggle('lp-planview', !!this.planView);
     this.phonePlan.hidden = !this.planView;
     if(!this.planView){ this.phonePlanSig = null; return; }
-    const r = this.stageRect(), plan = this.plans.plans[code];
-    const s = Math.max(.5, Math.min(14, (r.width - 44) / (plan.w / FLOOR_PLAN_PX), (r.height - 190) / (plan.h / FLOOR_PLAN_PX)));
+    const r = this.stageRect(), plan = this.plans.plans[code], panel = this.hasPanel() ? PANEL_W : 0;
+    this.phonePlan.style.right = `${panel}px`;
+    const s = Math.max(.5, Math.min(14, (r.width - panel - 44) / (plan.w / FLOOR_PLAN_PX), (r.height - 190) / (plan.h / FLOOR_PLAN_PX)));
     const sig = JSON.stringify([b.key, code, s.toFixed(2)]);
     if(sig === this.phonePlanSig) return;
     this.phonePlanSig = sig;
@@ -1383,6 +1415,9 @@ class CityMapView {
     const cnt = this.root.querySelector('.srch .cnt'); if(cnt) cnt.textContent = this.matches.length;
     if(this.list && this.finderOn()){
       const focusedKey=this.list.contains(document.activeElement)?document.activeElement.dataset.pick:null, listScroll=this.list.scrollTop;
+      // Rebuilding the rows under the pointer fires a leave; the hover survives
+      // a live refresh as long as its row does.
+      const hovered = this.hoverKey;
       const all = this.matches;
       const some = this.showAll ? all : all.slice(0, 80);
       this.list.innerHTML = (this.saleView() ? this.saleList(some) : this.finderList(some))
@@ -1390,8 +1425,11 @@ class CityMapView {
         + (all.length ? '' : '<div class="empty">Nothing matches.</div>');
       if(focusedKey) [...this.list.children].find(b=>b.dataset.pick===focusedKey)?.focus({preventScroll:true});
       this.list.scrollTop=listScroll;
+      const row = hovered && this.list.querySelector(`[data-pick="${CSS.escape(hovered)}"]`);
+      if(row){ this.light(hovered); row.classList.add('hot'); }
     }
-    this.fillCard(); this.paintPlans(); this.paintView();
+    // The dock first, so the card is placed against the dock as it now stands.
+    this.paintPlans(); this.fillCard(); this.paintView();
   }
   /* The card beside the picked footprint: name, one identity line, three mono
      numbers, the findings as dot + verb + amount, and the arrow to the site. */
@@ -1448,7 +1486,9 @@ class CityMapView {
     const cw = card.offsetWidth, ch = card.offsetHeight;
     let left = flip ? p.x - 40 - cw : p.x + 40;
     left = Math.max(12, Math.min(limit - cw, left)); // never under the panel, even after a drag
-    let top = Math.max(12, Math.min(r.height - ch - 12 - this.dockRoom(), p.y - 34));
+    // Only a card that reaches over the dock has to stay above it.
+    const dockRight = this.dock && !this.dock.hidden ? 16 + this.dock.offsetWidth : 0;
+    let top = Math.max(12, Math.min(r.height - ch - 12 - (left < dockRight ? this.dockRoom() : 0), p.y - 34));
     // the zoom buttons keep their corner: a card that would cover them moves aside
     const z = this.root.querySelector('.zoomer');
     if(z){
