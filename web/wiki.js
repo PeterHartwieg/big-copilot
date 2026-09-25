@@ -766,11 +766,11 @@ function wikiYours(page, extra){
       tt("wiki.yours.demand.tip", "The strongest neighbourhood for this product in your save's own demand snapshot, 0 to 100.")));
   if(own && own.product){
     slots.push(wikiSlot(tt("wiki.yours.sell", "You sell it"), tt("wiki.yours.sell.v", {one: "{n} shop", other: "{n} shops"}, {n: own.product.stores}),
-      tt("wiki.yours.sell.tip", "Your own sites with this product on a shelf, from yesterday's trading.")));
+      tt("wiki.yours.sell.tip", "Your own sites with this product on a shelf, from the last seven days' trading.")));
     slots.push(wikiSlot(tt("wiki.yours.sold", "Sold a day"), wikiNum(own.product.units),
-      tt("wiki.yours.sold.tip", "Units your shops sold yesterday, added up.")));
+      tt("wiki.yours.sold.tip", "Units your shops sold a day, averaged over the last seven days and added up.")));
     slots.push(wikiSlot(tt("wiki.yours.price", "Average sold price"), wikiMoney(own.product.price),
-      tt("wiki.yours.price.tip", "Your own average take per unit yesterday: revenue over units sold in your shops. Your save's figure, not a number from the game's help.")));
+      tt("wiki.yours.price.tip", "Your own average take per unit over the last seven days: revenue over units sold in your shops. Your save's figure, not a number from the game's help.")));
   }
   if(own && own.sites.length)
     slots.push(wikiSlot(tt("wiki.yours.sites", "Yours"), tt("wiki.yours.sites.v", {one: "{n} site", other: "{n} sites"}, {n: own.sites.length}),
@@ -2009,7 +2009,7 @@ function wikiGuideOwn(g, goods){
     tt("wiki.yours.shops.tip", "Businesses of this type in your company: {shops}.", {shops: mine.slice(0, 4).map(x => x.name).join(", ")})));
   const sold = (D.products || []).filter(p => goods.some(x => x.slug === p.slug));
   if(sold.length && goods.length) slots.push(wikiSlot(tt("wiki.yours.rangeSold", "Its range, sold"), tt("wiki.yours.rangeSold.v", "{n} of {total}", {n: sold.length, total: goods.length}),
-    tt("wiki.yours.rangeSold.tip", "{items} moved in your shops yesterday.", {items: sold.map(p => p.item).join(", ")})));
+    tt("wiki.yours.rangeSold.tip", "{items} moved in your shops in the last seven days.", {items: sold.map(p => p.item).join(", ")})));
   return slots;
 }
 
