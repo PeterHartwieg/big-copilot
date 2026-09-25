@@ -51,6 +51,9 @@ const CONVERTED = {
      rows are the kinds' names (nav) and it redraws each time it opens, and so
      is Ask the board under Next moves (the search palette's). */
   today: '#kpis, #alertHead, #alerts .amt, #alertMinor .td-count, #silenced, #secMoves h2, #secMoves .moves',
+  /* The Growth page below its view switch (nav's): the demand grid, the waves,
+     Plan a chain and its Ingredients. */
+  gr: '#secMarket, #secPlan, #secIngredients',
   /* The Company page, but for the names on it: sites, products and roles
      (the cells of class l, the payroll's roles) and the site panel (sp). */
   co: '#secDaily .sechead, #dailyBox .chartbox, #rhythmSites thead, #rhythmSites td:not(.l), #rhythmSites td.l + td.l, '
@@ -242,7 +245,12 @@ async function measure(page){
     for(const [area, where] of Object.entries(converted)){
       document.querySelectorAll(where).forEach(host => {
         const walk = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+        /* A sentence with markup inside it (a bold figure) is several text
+           nodes in one host: the brackets still open in the host carry over. */
+        let open = 0;
         for(let n = walk.nextNode(); n; n = walk.nextNode()){
+          const carried = open, text = n.textContent;
+          open = Math.max(0, open + (text.match(/\[/g) || []).length - (text.match(/\]/g) || []).length);
           if(!n.parentElement || !shown(n.parentElement) || n.parentElement.closest(skip)) continue;
           /* A name (Big Copilot, YouTube, the studio) is marked translate="no". */
           if(n.parentElement.closest('[translate="no"]')) continue;
@@ -251,7 +259,7 @@ async function measure(page){
              message nests others (a list, a weekday, a finding's detail),
              so brackets nest. Matched pairs go innermost first; what is left
              before a lone "]" opened earlier, and after a lone "[" closes later. */
-          let outside = n.textContent;
+          let outside = '['.repeat(carried) + text;
           for(let was = ''; was !== outside;){ was = outside; outside = outside.replace(/\[[^\[\]]*\]/g, ''); }
           outside = outside.replace(/^[^]*\]/, '').replace(/\[[^]*$/, '').replace(/[\d\s.,:;$%+\-–—×·/()!?%'"‹›…#]+/g, '');
           if(outside.length > 1) english.push(`${area}: ${n.textContent.trim().slice(0, 60)}`);
@@ -545,4 +553,55 @@ test('the landing\'s sentences with markup are the markup\'s English when no tab
   }, html);
   for(const [id, before, now] of markup) assert.equal(now, before, id);
   assert.deepEqual(errors, []);
+});
+
+/* The fixture board has no market and no catalogue, so the Growth page is
+   swept again on the day-47 payload snapshot: its market has hype, a
+   shortage and movers, its plan a recipe, a contract and a price. The game's
+   names stand alone in the grid, the waves and the plan, so a line that is
+   only a name is not English left behind. */
+test('the Growth page fits in the pseudo-locale, with a market and a plan', async t => {
+  const payload = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests', 'fixtures', 'payload_snapshot', 'data_day47_history.json'), 'utf8'));
+  for(const width of [360, 1280]){
+    const en = await site(t, {width, payload});
+    const xx = await site(t, {ui: 'de', width, payload});
+    for(const view of ['types', 'mine', 'new', 'plan']){
+      for(const {page} of [en, xx]) await page.evaluate(v => {
+        showPage('growth', false);
+        if(v === 'plan') showSub('growth', 'plan');
+        else { showSub('growth', 'market'); marketView = v; drawMovers(); drawMarket(); }
+      }, view);
+      await xx.page.waitForTimeout(50);
+      const before = await measure(en.page), now = await measure(xx.page);
+      const names = await xx.page.evaluate(() => {
+        const norm = s => String(s).replace(/[\d\s.,:;$%+\-–—×·/()!?%'"‹›…#]+/g, '');
+        const out = new Set(), add = s => { if(s) out.add(norm(s)); };
+        Object.values(D.names || {}).forEach(add);
+        const m = D.market, p = D.plan;
+        m.hoods.forEach(h => { add(hoodName(h)); add(shortHood(hoodName(h))); add(HOOD_TAGS[h]); });
+        [...m.types, ...(m.offices || [])].forEach(r => add(r.type));
+        m.rows.forEach(r => add(r.item));
+        m.hype.forEach(h => h.items.forEach(add));
+        m.shortages.forEach(s => { add(s.item); add(s.where); });
+        (m.movers || []).forEach(x => x.items.forEach(add));
+        Object.values(p.catalogue).forEach(c => add(c.type));
+        Object.values(p.items || {}).forEach(add);
+        p.recipes.forEach(r => { add(r.item); r.ingredients.forEach(i => add(i.item)); });
+        return [...out];
+      });
+      const norm = s => s.replace(/[\d\s.,:;$%+\-–—×·/()!?%'"‹›…#]+/g, '');
+      const where = `${width}px growth ${view}`;
+      /* The page's own sideways scroll is the sweep's above; here only what
+         the Growth page itself pushes past the window counts. */
+      const past = p => p.evaluate(() => [...document.querySelectorAll('#pageGrowth *')]
+        .filter(e => e.getClientRects().length && e.getBoundingClientRect().right > document.documentElement.clientWidth + 1)
+        .map(e => `${e.tagName.toLowerCase()}.${String(e.className).split(' ')[0]}`));
+      const wasPast = await past(en.page);
+      assert.deepEqual((await past(xx.page)).filter(e => !wasPast.includes(e)), [], `${where}: the page scrolls sideways`);
+      assert.deepEqual(now.over.filter(o => o.includes('[') && !before.over.includes(o)), [], `${where}: text wider than its box`);
+      assert.deepEqual(now.english.filter(e => e.startsWith('gr: ') && !names.includes(norm(e.slice(4)))), [],
+        `${where}: English in a converted area`);
+    }
+    assert.deepEqual(xx.errors, [], `${width}px`);
+  }
 });
