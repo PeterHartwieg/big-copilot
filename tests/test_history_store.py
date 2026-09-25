@@ -142,20 +142,26 @@ class OlderSave(Tmp):
         # The later save's days are all still there for when it is opened again.
         self.assertEqual(len(history.book["c"]["ledger"]), 61)
 
-    def test_stepping_back_through_older_saves_stays_bounded(self):
+    def test_stepping_back_to_an_older_save_stays_bounded(self):
+        # A record longer than any one save would leave, laid in directly:
+        # days 1 to 299, as stepping back through older saves used to pile up.
         history = History(None)
-        for day in range(100, 160):
-            history.demand("c", day, snapshot(day))
-            history.ledger("c", day, {"cash": day, "profit": 0})
-        for day in (140, 120, 100, 80, 60, 40, 20):
-            history.demand("c", day, snapshot(day))
-            run = history.ledger("c", day, {"cash": day, "profit": 0})
-            self.assertEqual(run[-1]["day"], day, "each save reads its own day")
-            for record in ("days", "ledger"):
-                self.assertLessEqual(len(history.book["c"][record]), 2 * ba_dashboard.HISTORY_DAYS, (day, record))
-        history.keep_recent("c", 14, 8, day=20)
-        self.assertLessEqual(len(history.book["c"]["days"]), 28)
-        self.assertIn("20", history.book["c"]["days"])
+        record = history._for("c")
+        record["days"] = {str(d): snapshot(d) for d in range(1, 300)}
+        record["ledger"] = {str(d): {"cash": d, "profit": 0} for d in range(1, 300)}
+        history.demand("c", 140, snapshot(140))
+        run = history.ledger("c", 140, {"cash": 140, "profit": 0})
+        self.assertEqual(run[-1]["day"], 140, "the save reads its own day")
+        for name in ("days", "ledger"):
+            with self.subTest(record=name):
+                store = record[name]
+                self.assertEqual(len(store), 2 * ba_dashboard.HISTORY_DAYS)
+                for day in ("81", "140", "240", "299"):
+                    self.assertIn(day, store)
+                for day in ("80", "200", "239"):
+                    self.assertNotIn(day, store)
+        history.keep_recent("c", 14, 8, day=140)
+        self.assertEqual(sorted(map(int, record["days"])), list(range(127, 141)) + list(range(286, 300)))
 
     def test_net_worth_carried_forward_is_never_from_a_later_save(self):
         history = History(None)

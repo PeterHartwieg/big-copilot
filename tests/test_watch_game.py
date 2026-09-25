@@ -3,6 +3,8 @@
 The bytes are dummy ones -- the mock never parses them and neither does
 GameLink; the board's parsing is the folder path's and is covered elsewhere.
 """
+import contextlib
+import io
 import os
 import socket
 import sys
@@ -181,6 +183,32 @@ class GameLinkAgainstMock(unittest.TestCase):
             # With nothing to rebuild the closed game is still reported.
             with self.assertRaises(ba_dashboard.LinkUnavailable):
                 board.refresh(settle=False)
+        finally:
+            ba_dashboard.load_save, ba_dashboard.safe_extract, ba_dashboard.render = real
+
+    def test_a_name_the_history_cannot_keep_is_said_and_the_board_still_rebuilds(self):
+        """#109: a damaged market_history.json loses the name, and says so."""
+        seen = []
+        real = (ba_dashboard.load_save, ba_dashboard.safe_extract, ba_dashboard.render)
+        ba_dashboard.load_save = lambda path: path
+        ba_dashboard.safe_extract = lambda path, names, history: (
+            seen.append(path) or {"meta": {"day": 7, "save": "Mock Co"}, "supply": {"factories": {"character": "abc"}}})
+        ba_dashboard.render = lambda data, live=False: "<html>"
+        try:
+            out = os.path.join(self.out, "board.html")
+            board = ba_dashboard.Board(None, out, link=ba_dashboard.GameLink(self.server.url, self.out))
+            self.mock.refresh(force=True)
+            self.assertTrue(board.refresh(settle=False))
+            with open(board.history, "w", encoding="utf-8") as fh:
+                fh.write('{"characters": {"abc"')  # cut off mid-write
+            revision = board.revision
+            said = io.StringIO()
+            with contextlib.redirect_stdout(said):
+                board.name_line("rid", "beer")
+            self.assertIn("The line name was not kept: market_history.json could not be read or written. "
+                          "Name the line again once the board has rebuilt.", said.getvalue())
+            self.assertEqual(board.revision, revision + 1)
+            self.assertEqual(len(seen), 2, "the board rebuilt all the same")
         finally:
             ba_dashboard.load_save, ba_dashboard.safe_extract, ba_dashboard.render = real
 

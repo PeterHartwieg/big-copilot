@@ -28480,7 +28480,7 @@ class Board:
             history.named(self.character or "default", {rid: slug})
             if not history.write():
                 print(f"The line name was not kept: {os.path.basename(self.history)} could not be "
-                      "read or written. Name the line again after the next update.", flush=True)
+                      "read or written. Name the line again once the board has rebuilt.", flush=True)
             with self.lock:
                 self.revision += 1
                 self._fingerprint = None

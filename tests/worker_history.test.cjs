@@ -116,6 +116,7 @@ test('a damaged history set aside is dropped by the page, and the next build sta
   await w.send(build(1, '{damaged'));
   assert.equal(w.posted.at(-1).kind, 'built');
   assert.strictEqual(w.posted.at(-1).history, '', 'the page drops its damaged copy');
+  assert.equal(w.files.has(HIST + '.bad'), false, 'said once: the set-aside copy is gone');
   // A page that still resent it (another tab) recovers the same way.
   await w.send(build(2, '{damaged'));
   assert.strictEqual(w.posted.at(-1).history, '');
