@@ -31,9 +31,14 @@ const CONVERTED = {
   nav: '#nav, #companyNav, #supplyNav, #growthNav, #clock > b, #clock > small:not(.fv-diffline), #clock .flag, '
     + '#clock .fv-diff, #ssField, .ss-ask, #ssAskMini',
   foot: '.sitefoot',
-  /* A finding's headline, on Today and in the site panel. Its detail (.more)
-     joins once the helpers after _shelf_notes() are converted too (PR 5b). */
-  f: '.find .what, .sp-find .what',
+  /* A finding's headline and its detail, on Today and in the site panel. */
+  f: '.find .what, .find .more, .sp-find .what, .sp-find .more',
+  /* Today's own words: the tiles, the list's head and count lines, each
+     finding's figure, the silenced line and the Next moves cards. The
+     finding sentences are Python's (f); the kinds panel is left out, as its
+     rows are the kinds' names (nav) and it redraws each time it opens, and so
+     is Ask the board under Next moves (the search palette's). */
+  today: '#kpis, #alertHead, #alerts .amt, #alertMinor .td-count, #silenced, #secMoves h2, #secMoves .moves',
   /* The Company page, but for the names on it: sites, products and roles
      (the cells of class l, the payroll's roles) and the site panel (sp). */
   co: '#secDaily .sechead, #dailyBox .chartbox, #rhythmSites thead, #rhythmSites td:not(.l), #rhythmSites td.l + td.l, '
@@ -117,7 +122,8 @@ test('?ui=de reaches the board: Python\'s messages in the table, and their Engli
     const cap = ttPayload({limit: 'the building', i18n: wire});
     return [row.text !== enOf(row, 'text'), findingAmount(row), cap.limit !== 'the building', spLimitShow(cap, {})];
   });
-  assert.deepEqual(read, [true, '1,500<small>units short</small>', true, 'door']);
+  // The figure is read out of the English and written in the page's numbers.
+  assert.deepEqual(read, [true, `1.500<small>${TABLE['today.amt.unitsShort']}</small>`, true, 'door']);
   // Numbers follow the UI language, on the board and in tt(); back in English, en-US again.
   assert.deepEqual(await page.evaluate(() => [NUM_LOCALE, fmt(1234.4), tt('f.x', '{n:,}', {n: 1234})]),
     ['de-DE', '$1.234', '1.234']);
@@ -201,8 +207,13 @@ async function measure(page){
           /* A name (Big Copilot, YouTube, the studio) is marked translate="no". */
           if(n.parentElement.closest('[translate="no"]')) continue;
           /* A finding's sentence is cut into headline and detail, so its
-             brackets can open in one text node and close in the next. */
-          const outside = n.textContent.replace(/^[^\[]*\]/, '').replace(/\[[^\]]*(\]|$)/g, '').replace(/[\d\s.,:;$%+\-–—×·/()!?%'"‹›…#]+/g, '');
+             brackets can open in one text node and close in the next; and a
+             message nests others (a list, a weekday, a finding's detail),
+             so brackets nest. Matched pairs go innermost first; what is left
+             before a lone "]" opened earlier, and after a lone "[" closes later. */
+          let outside = n.textContent;
+          for(let was = ''; was !== outside;){ was = outside; outside = outside.replace(/\[[^\[\]]*\]/g, ''); }
+          outside = outside.replace(/^[^]*\]/, '').replace(/\[[^]*$/, '').replace(/[\d\s.,:;$%+\-–—×·/()!?%'"‹›…#]+/g, '');
           if(outside.length > 1) english.push(`${area}: ${n.textContent.trim().slice(0, 60)}`);
         }
       });

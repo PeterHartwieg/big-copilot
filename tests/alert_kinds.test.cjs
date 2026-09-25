@@ -9,6 +9,9 @@ const vm = require('node:vm');
 const path = require('node:path');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'ba_dashboard.py'), 'utf8');
+/* The board's words go through tt() (web/i18n.js), which every slice that
+   writes them needs beside it. */
+const I18N = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8');
 /* The comment above the function is the slice's opening anchor: rewording it is
    a change to this test as well. */
 const START = '/* Where a finding shows is decided twice over';
@@ -17,6 +20,7 @@ const DRAW = source.slice(
   source.indexOf('function drawAlerts()'), source.indexOf('/* A round step for the y axis'));
 
 const context = vm.createContext({});
+vm.runInContext(I18N, context);
 vm.runInContext(PARTITION, context);
 const split = (alerts, minorRows, prefs) =>
   vm.runInContext('partitionFindings', context)(alerts, minorRows, prefs);
@@ -111,7 +115,7 @@ test('the switched-off line lists its kinds in the tune panel order', () => {
 
 test('the count lines say which is which', () => {
   assert.match(DRAW, /partitionFindings\(/);
-  assert.match(DRAW, /below the \$\{fmt\(gate\)\}\/day line/);
+  assert.match(DRAW, /below the \{gate:\$\}\/day line/);
   // Overstaffed hours is off by default, so the line cannot say "you".
   assert.match(DRAW, /in kinds switched off: /);
   assert.doesNotMatch(DRAW, /you switched off/);
@@ -266,9 +270,10 @@ test('Wholesale delivery too low is a kind of its own, landing on the shelves or
 });
 
 test('a wholesale finding shows the week used, or the units left, in the amount column', () => {
-  const at = source.indexOf('const amtHtml =');
+  const at = source.indexOf('/* The figure on the right');
   const ctx = vm.createContext({money: String, fmt: String});
-  vm.runInContext(source.slice(at, source.indexOf('/* A finding whose kind is switched off', at)), ctx);
+  vm.runInContext(I18N, ctx);
+  vm.runInContext(source.slice(at,source.indexOf('/* A finding whose kind is switched off', at)), ctx);
   const amount = a => vm.runInContext('findingAmount', ctx)(a);
   assert.equal(amount({group: 'wholesale', text: "Soda's wholesale delivery brings 600 a week against the 700 it sells"}),
     '700<small>/week used</small>');
