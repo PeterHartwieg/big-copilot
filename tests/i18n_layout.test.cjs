@@ -28,6 +28,15 @@ const WIDTHS = [360, 768, 1280, 1500, 1501, 1920];
    screen there fails the sweep. */
 const CONVERTED = {
   // nav: '#nav, .subnav',
+  /* The site panel's own chrome: headings, tile labels, table heads, the
+     roster's steps, tabs and counters, the notes' labels and the empty
+     states. Its read-outs and chips carry site, people and game names, and
+     Python's sentences (f, and the staffing prose), so they are left out. */
+  sp: '#sitePanel .ss-crumb:not(.from), #sitePanel .sechead h2, #sitePanel .sstat .lab, #sitePanel .sstat small:not(.sp-tname), '
+    + '#sitePanel thead, #sitePanel .sp-step:not(.sp-add), #sitePanel .sp-nowplan, #sitePanel .sp-daytabs, '
+    + '#sitePanel .sp-typed, #sitePanel .sp-ba .lab, #sitePanel .sp-findmore, #sitePanel .sp-pick, '
+    + '#sitePanel .sp-nhead .lab, #sitePanel .sp-nmore summary, #sitePanel .hours .dd, #sitePanel .sp-days, '
+    + '#sitePanel p.quiet, #sitePanel .sp-read:not(.sp-readout), #sitePanel .sp-noplan',
 };
 const MEASURED = 'button, .chip, .seg a, th, .tile .lab';
 
