@@ -234,8 +234,8 @@ The arrival curves in `ba_demand_curves.json` come from the same bundles. With U
 ba_demand_curves.json`. No diff means the curves did not change. If they did, the file is
 the change: commit it and rebuild.
 
-Layout versions and floor plans come from the same bundles, and both scripts are
-owner-only. With UnityPy on `PYTHONPATH`, run `python make_buildings.py --versions` (the
+Layout versions come from the game's buildings bundle and floor plans from its
+building-structure bundles; both scripts are owner-only. With UnityPy on `PYTHONPATH`, run `python make_buildings.py --versions` (the
 `v` column of `ba_buildings.json`), then `python make_floor_plans.py`
 (`web/maps/floor-plans.json`), then `git diff --stat ba_buildings.json
 web/maps/floor-plans.json`. No diff means neither changed. `build_web.py` refuses a
