@@ -317,7 +317,7 @@ class RoutedSupplyTests(unittest.TestCase):
         kind keeps what it meant; the kind's description, and the line three
         of them condense into, name the next import or route round, or the
         next delivery, rather than an import alone."""
-        self.assertNotIn("import", SUMMARIES["shortfall"])
+        self.assertNotIn("import", SUMMARIES["shortfall"](3, "Coffee"))
         [kind] = [line for line in TEMPLATE.splitlines() if 'id:"shortfall"' in line]
         self.assertIn("import or route round", kind)
 
