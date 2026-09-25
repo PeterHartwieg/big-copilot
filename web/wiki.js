@@ -549,7 +549,7 @@ function wikiHome(){
 <div class="sechead wk-top">
   <label class="wk-srch">${icon("search")}
     <input type="search" id="wikiSearch" autocomplete="off" spellcheck="false"
-      placeholder="${attr(tt("wiki.search.placeholder", {one: "Search {n:,} pages", other: "Search {n:,} pages"}, {n: held}))}" aria-label="${attr(tt("wiki.search.aria", "Search the wiki"))}"
+      placeholder="${attr(tt("wiki.search.placeholder", {one: "Search {n:,} page", other: "Search {n:,} pages"}, {n: held}))}" aria-label="${attr(tt("wiki.search.aria", "Search the wiki"))}"
       value="${attr(q)}">
     <span class="wk-cnt">${q ? wikiNum(hits.length) : ""}</span></label>
   ${wikiWhy(tt("wiki.search.tip", "Search the game's help by page title or category. No save needed."))}
@@ -567,7 +567,7 @@ ${q ? "" : wikiTopicShelf()}
 <div class="wk-legend">
   ${legend}${wikiWhy(tt("wiki.legend.tip", "Badges show where a fact comes from. Hover or focus a badge for its meaning."))}
 </div>
-${listed > held ? `<p class="quiet wk-foot">${wikiEsc(tt("wiki.shelf.held", {one: "{n:,} of the help menu's {total:,} pages are in this build.", other: "{n:,} of the help menu's {total:,} pages are in this build."}, {n: held, total: listed}))}</p>` : ""}`;
+${listed > held ? `<p class="quiet wk-foot">${wikiEsc(tt("wiki.shelf.held", {one: "{n:,} of the help menu's {total:,} pages is in this build.", other: "{n:,} of the help menu's {total:,} pages are in this build."}, {n: held, total: listed}))}</p>` : ""}`;
 }
 
 /* The articles Big Copilot writes itself, listed under the game's own shelf.
@@ -602,7 +602,7 @@ ${wikiCrumb([{label: wikiCrumbHome(), href: "#wiki"}, {label: wikiCatLabel(cat)}
   <h1>${wikiText(wikiCatLabel(cat))}</h1>
   <span class="chips">${wikiChip("help", tt("wiki.cat.pages", {one: "{n:,} page", other: "{n:,} pages"}, {n: entries.length}),
     listed > entries.length
-      ? tt("wiki.cat.pages.held", {one: "The game's help menu lists {total:,} pages in this category; {n:,} of them are in this build.",
+      ? tt("wiki.cat.pages.held", {one: "The game's help menu lists {total:,} pages in this category; {n:,} of them is in this build.",
         other: "The game's help menu lists {total:,} pages in this category; {n:,} of them are in this build."}, {n: entries.length, total: listed})
       : tt("wiki.cat.pages.all", "Every page the game's help menu lists in this category."))}</span>
 </div>
@@ -926,7 +926,7 @@ function wikiFixTip(f){
     .map(c => `${c.label} ${wikiNum(c.value)}${c.unit ? ` ${c.unit}` : ""}`);
   const bits = [];
   if(caps.length) bits.push(tt("wiki.fix.holds", "Holds {caps}.", {caps: caps.join("; ")}));
-  if(Number.isFinite(f.customers)) bits.push(tt("wiki.fix.serves", {one: "Serves {n:,} customers an hour.", other: "Serves {n:,} customers an hour."}, {n: f.customers}));
+  if(Number.isFinite(f.customers)) bits.push(tt("wiki.fix.serves", {one: "Serves {n:,} customer an hour.", other: "Serves {n:,} customers an hour."}, {n: f.customers}));
   if(f.observed) bits.push(tt("wiki.fix.observed", "Counted in the shops the game ships: {observed}", {observed: f.observed}));
   return bits.join(" ") || tt("wiki.fix.none", "Its help page gives no numbers for this one.");
 }
@@ -1086,12 +1086,12 @@ function wikiGuideLede(g, primary, ctx){
   /* The counted sentence is only written when the range is known either way; a
      product the extraction could not read is said out loud instead. */
   const counted = !primary.length ? ""
-    : unknown.length ? tt("wiki.guide.lede.unknown", {one: "{n:,} of its {total:,} products are named on a wholesaler's list; {unknown:,} the help does not say either way.",
+    : unknown.length ? tt("wiki.guide.lede.unknown", {one: "{n:,} of its {total:,} products is named on a wholesaler's list; {unknown:,} the help does not say either way.",
       other: "{n:,} of its {total:,} products are named on a wholesaler's list; {unknown:,} the help does not say either way."},
       {n: yes.length, total: primary.length, unknown: unknown.length})
     : none.length ? tt("wiki.guide.lede.some", {one: "{n:,} of its {total:,} products can be ordered from any wholesaler.",
       other: "{n:,} of its {total:,} products can be ordered from any wholesaler."}, {n: yes.length, total: primary.length})
-    : tt("wiki.guide.lede.all", {one: "Every one of its {n:,} products can be ordered from any wholesaler.",
+    : tt("wiki.guide.lede.all", {one: "Its {n:,} product can be ordered from any wholesaler.",
       other: "Every one of its {n:,} products can be ordered from any wholesaler."}, {n: primary.length});
   const tail = !authored && none.length === 1
     ? ` <b>${wikiEsc(tt("wiki.guide.lede.none", "{product} is on no wholesaler's list.", {product: wikiShown(none[0])}))}</b>` : "";
@@ -1115,7 +1115,7 @@ function wikiGuideTiles(g, offers){
   const range = (said ? `${said} ` : "") + (primary.length
     ? tt("wiki.tile.range.own", "Its own range: {list}.", {list: primary.map(wikiShown).join(", ")})
       + (other.length ? " " + tt("wiki.tile.range.also", "Also carried, and drawn in full below: {list}.", {list: other.map(wikiShown).join(", ")})
-        : extras.length ? " " + tt("wiki.tile.range.extras", {one: "{n} more may be carried on the side; each belongs to another type's page.",
+        : extras.length ? " " + tt("wiki.tile.range.extras", {one: "{n} more may be carried on the side; it belongs to another type's page.",
           other: "{n} more may be carried on the side; each belongs to another type's page."}, {n: extras.length}) : "")
     : other.length ? tt("wiki.tile.range.carried", "Carried here: {list}.", {list: other.map(wikiShown).join(", ")})
     : tt("wiki.tile.range.none", "The help page names no range for this type."));
@@ -1785,7 +1785,7 @@ function wikiStationTip(station){
       tools: station.production.map((n, i) => wikiName((station.productionKeys || [])[i], n)).join(", ")})
     : machine;
   return (station.runs || []).length
-    ? tt("wiki.recipe.machine.runs", {one: "{line}. The same workstation runs {n} recipes.", other: "{line}. The same workstation runs {n} recipes."},
+    ? tt("wiki.recipe.machine.runs", {one: "{line}. The same workstation runs {n} recipe.", other: "{line}. The same workstation runs {n} recipes."},
       {line, n: station.runs.length})
     : line;
 }

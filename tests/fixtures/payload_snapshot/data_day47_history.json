@@ -898,7 +898,7 @@
            "days": 3,
            "n": 1
           },
-          "1 lines has 3 days left"
+          "1 line has 3 days left"
          ]
         },
         "n": 14,
@@ -915,7 +915,7 @@
      "level": "warn",
      "site": "HART. Spirits",
      "siteKey": "ba:street_eighthstreet#5",
-     "text": "⟦ba:neighborhood_midtown|Midtown⟧ hype on 1 lines has 3 days left; HART. Spirits does $1,800/day under it against $1,607 for its own 7 days before day 35; about $193/day of revenue rides on the wave. It already runs within 10% of capacity for 14 hours of a normal week, so the door is turning part of the wave away.",
+     "text": "⟦ba:neighborhood_midtown|Midtown⟧ hype on 1 line has 3 days left; HART. Spirits does $1,800/day under it against $1,607 for its own 7 days before day 35; about $193/day of revenue rides on the wave. It already runs within 10% of capacity for 14 hours of a normal week, so the door is turning part of the wave away.",
      "unit": "/day revenue",
      "worth": 192.86
     }
@@ -6017,7 +6017,7 @@
           "days": 3,
           "n": 1
          },
-         "1 lines has 3 days left"
+         "1 line has 3 days left"
         ]
        },
        "n": 14,
@@ -6034,7 +6034,7 @@
     "level": "warn",
     "site": "HART. Spirits",
     "siteKey": "ba:street_eighthstreet#5",
-    "text": "⟦ba:neighborhood_midtown|Midtown⟧ hype on 1 lines has 3 days left; HART. Spirits does $1,800/day under it against $1,607 for its own 7 days before day 35; about $193/day of revenue rides on the wave. It already runs within 10% of capacity for 14 hours of a normal week, so the door is turning part of the wave away.",
+    "text": "⟦ba:neighborhood_midtown|Midtown⟧ hype on 1 line has 3 days left; HART. Spirits does $1,800/day under it against $1,607 for its own 7 days before day 35; about $193/day of revenue rides on the wave. It already runs within 10% of capacity for 14 hours of a normal week, so the door is turning part of the wave away.",
     "unit": "/day revenue",
     "worth": 192.86
    }
