@@ -374,6 +374,8 @@ def _half_away(v, places: int = 0) -> decimal.Decimal:
     decimal form (repr), as Intl reads it, so 2.675 is 2.68 on both sides.
     """
     shown = decimal.Decimal(v if isinstance(v, (int, decimal.Decimal)) else repr(float(v)))
+    if not shown.is_finite():  # inf and nan are written as they are
+        return shown
     return shown.quantize(decimal.Decimal(1).scaleb(-places), decimal.ROUND_HALF_UP)
 
 

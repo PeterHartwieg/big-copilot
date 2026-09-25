@@ -1040,8 +1040,8 @@ class TopicTests(FixtureCase):
         words = {2: "two", 3: "three", 4: "four"}
         months = {kind: round(factor / 30) for kind, factor in ba_dashboard.DEPOSIT_FACTORS.items()}
         self.assertIn("For a shop or an office it comes to about %s months of rent"
-                      % words[months["lease"]], prose)
-        self.assertIn("for a warehouse, about %s." % words[months["warehouse"]], prose)
+                      % words.get(months["lease"], str(months["lease"])), prose)
+        self.assertIn("for a warehouse, about %s." % words.get(months["warehouse"], str(months["warehouse"])), prose)
 
     def test_the_rent_topic_dates_its_fit_and_says_residential_is_not_covered(self):
         topic = self.topic()
