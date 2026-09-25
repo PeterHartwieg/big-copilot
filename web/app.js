@@ -55,19 +55,14 @@
   const REDUCED = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
   const ICON_FOLDER = '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>';
 
-  // The page's tt() (web/i18n.js), which also remembers the call behind each
-  // text it gave this file, so the strip's headline and note, held as text,
-  // can be said again in a new language (retell(), from relabel()). Only the
-  // latest few hundred are kept.
-  const said = new Map();
-  const keep = (text, call) => {
-    said.delete(text);
-    said.set(text, call);
-    if (said.size > 300) said.delete(said.keys().next().value);
-    return text;
-  };
-  const tt = (key, en, params) => keep(window.tt(key, en, params), [key, en, params]);
-  const retell = (text) => (said.has(text) ? keep(window.tt(...said.get(text)), said.get(text)) : text);
+  // The strip's headline and file line and the note under it are given to
+  // state() and note() as functions that write them (or as plain text, such
+  // as a folder's name), so a change of UI language can write them again:
+  // relabel() calls them once more. An error this file raises carries its
+  // own such function, `say`; one from the browser has only its message.
+  const say = (v) => (typeof v === "function" ? v() : v) || "";
+  const failure = (words) => Object.assign(new Error(words()), {say: words});
+  const errWords = (err) => (err && typeof err.say === "function" ? err.say : err ? err.message : "");
 
   // Every word this file writes goes through tt() (web/i18n.js, which the
   // page loads first; docs/architecture.md, "UI text"). A sentence that holds
@@ -78,7 +73,9 @@
   // so this file names no host but the game's own loopback.
   // A param never becomes markup: richParams() hands tt() a private-use token
   // for each value, and richHtml() puts the value back, escaped, only after
-  // the tags are restored.
+  // the tags are restored. So a value is put in as it is given, with no
+  // number formatting and no plural choice: a sentence with markup takes
+  // its params already written out as text.
   const escHtml = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   const richParams = (params) => Object.fromEntries(Object.keys(params).map((k, i) => [k, `\uE000${i}\uE001`]));
   function richHtml(text, params) {
@@ -96,7 +93,7 @@
     fill("lgHelpFolder", tt("land.help.folder", "Choose the <b>Big Ambitions</b> folder inside <b>SaveGames</b>; the page finds the newest save across the company folders inside it."));
     fill("lgHelpFind", tt("land.help.find", "If you cannot find it, the game shows you: on its <b>Load Game</b> screen, click <b>Browse savegame folder…</b> and the folder opens in a file window."));
     const build = $("lgHelpAutosave") && $("lgHelpAutosave").dataset.build;
-    const about = {build, mb: 6};
+    const about = {build, mb: "6"};
     if (build) fill("lgHelpAutosave", tt("land.help.autosave", "The game autosaves every five minutes. Your browser may call folder access an \"upload\" or ask to \"let this site view files\"; the save stays on your computer. Checked on game build {build}; the Python runtime the page needs is about {mb} MB, fetched once and cached.", richParams(about)), about);
     fill("lgHelpLinked", tt("land.help.linked", "<b>Linked to the game.</b> With the <a>Big Copilot Link mod</a> from the Steam Workshop enabled, click <b>Link to the game</b> and the board reads the running game itself. Chrome and Edge ask once to allow the site to reach your computer; the data still never leaves it."));
     fill("localeOther", tt("land.gametext.find", "To find your game's <code>en.json</code>, open Steam → Manage → Browse local files. On macOS, search that folder for <code>en.json</code>; use Show Package Contents if the game files are inside an app bundle."));
@@ -151,8 +148,8 @@
     set(key, value) {
       try { localStorage.setItem(key, value); return true; }
       catch (e) {
-        note("warn", key === HISTORY_KEY ? tt("app.store.history", "Could not remember history.") : tt("app.store.gametext", "Could not remember the game text."),
-          tt("app.store.full", "Browser storage is full or blocked."));
+        note("warn", () => key === HISTORY_KEY ? tt("app.store.history", "Could not remember history.") : tt("app.store.gametext", "Could not remember the game text."),
+          () => tt("app.store.full", "Browser storage is full or blocked."));
         return false;
       }
     },
@@ -226,7 +223,7 @@
     if (gen !== sourceGen || readerError) return false;
     if (!attempt) {
       attempt = {gen, restoring, timer: setTimeout(() => {
-        failReader(new Error(tt("app.reader.timeout", "Loading timed out. Reload the app to try again.")));
+        failReader(failure(() => tt("app.reader.timeout", "Loading timed out. Reload the app to try again.")));
       }, LOAD_TIMEOUT_MS)};
     }
     if (restoring) attempt.restoring = true;
@@ -256,7 +253,7 @@
     supersede();
     if (worker) worker.terminate();
     note("");
-    state("bad", tt("app.reader.failed", "The reader could not finish loading"), err.message);
+    state("bad", () => tt("app.reader.failed", "The reader could not finish loading"), errWords(err));
     if (handlers) handlers.stale(err.message);
   }
 
@@ -267,7 +264,7 @@
     worker.onmessage = (e) => {
       const msg = e.data;
       if (readerError) return;
-      if (!msg || typeof msg.kind !== "string") { failReader(new Error(tt("app.reader.invalid", "Invalid reader response."))); return; }
+      if (!msg || typeof msg.kind !== "string") { failReader(failure(() => tt("app.reader.invalid", "Invalid reader response."))); return; }
       if (msg.kind === "startup-failed") { failReader(new Error(msg.error)); return; }
       if (msg.kind === "progress") {
         if (msg.stage === "ready") {
@@ -281,17 +278,17 @@
       pending.delete(msg.id);
       try {
         if (p.gen !== sourceGen) throw new Error(tt("app.reader.superseded", "Save selection changed"));
-        if (msg.kind !== "built") throw new Error(msg.error || tt("app.reader.invalid.bare", "Invalid reader response"));
+        if (msg.kind !== "built") throw msg.error ? new Error(msg.error) : failure(() => tt("app.reader.invalid.bare", "Invalid reader response"));
         const data = JSON.parse(msg.data);
-        if (!data || typeof data !== "object") throw new Error(tt("app.reader.invalid.bare", "Invalid reader response"));
+        if (!data || typeof data !== "object") throw failure(() => tt("app.reader.invalid.bare", "Invalid reader response"));
         if (typeof msg.history === "string") stored.set(HISTORY_KEY, msg.history);
         p.resolve(data);
       } catch (err) {
         p.reject(err);
       }
     };
-    worker.onerror = (e) => { e.preventDefault(); failReader(new Error(e.message || tt("app.reader.stopped", "The reader stopped unexpectedly."))); };
-    worker.onmessageerror = () => failReader(new Error(tt("app.reader.unreadable", "The reader returned an unreadable response.")));
+    worker.onerror = (e) => { e.preventDefault(); failReader(e.message ? new Error(e.message) : failure(() => tt("app.reader.stopped", "The reader stopped unexpectedly."))); };
+    worker.onmessageerror = () => failReader(failure(() => tt("app.reader.unreadable", "The reader returned an unreadable response.")));
   }
 
   function ask(msg, transfer, gen = sourceGen) {
@@ -376,18 +373,19 @@
     n.className = "quiet lg-note" + (noted.tone === "warn" ? " warn" : "");
     n.textContent = showNote ? [noted.text, noted.sub].filter(Boolean).join(" ") : "";
   }
+  // `headline` and `meta` are text or a function that writes it (see say()).
   function state(tone, headline, meta) {
-    strip.tone = tone; strip.head = headline; strip.meta = meta || "";
+    strip.tone = tone; strip.words = [headline, meta]; strip.head = say(headline); strip.meta = say(meta);
     paintStrip();
   }
   function idleState() {
     if (readerError || attempt) return;
-    if (lastGood) state("ok", tt("app.state.current", "Up to date"), fileLine(lastGood));
-    else if (dirHandle) state("remembered", tt("app.state.remembered", "Folder remembered"), dirHandle.name);
-    else state("ready", tt("app.state.none", "No save loaded"), runtimeReady ? tt("app.state.ready", "ready to read") : "");
+    if (lastGood) state("ok", () => tt("app.state.current", "Up to date"), () => fileLine(lastGood));
+    else if (dirHandle) state("remembered", () => tt("app.state.remembered", "Folder remembered"), dirHandle.name);
+    else state("ready", () => tt("app.state.none", "No save loaded"), () => runtimeReady ? tt("app.state.ready", "ready to read") : "");
   }
   function note(tone, text, sub, recover) {
-    noted.tone = tone || ""; noted.text = text || ""; noted.sub = sub || ""; noted.recover = !!recover;
+    noted.tone = tone || ""; noted.words = [text, sub]; noted.text = say(text); noted.sub = say(sub); noted.recover = !!recover;
     paintStrip();
   }
 
@@ -594,8 +592,8 @@
     return states.includes("denied") ? "denied" : "prompt";
   }
   function linkBlocked() {
-    const err = new Error(tt("app.link.blocked", "Your browser is blocking this site from reaching the game."));
-    err.sub = tt("app.link.blocked.fix", "Allow local network access for this site in its site settings (the icon left of the address), then click Update.");
+    const err = failure(() => tt("app.link.blocked", "Your browser is blocking this site from reaching the game."));
+    err.sub = () => tt("app.link.blocked.fix", "Allow local network access for this site in its site settings (the icon left of the address), then click Update.");
     return err;
   }
 
@@ -615,13 +613,13 @@
     // `unsent`, and `moved` where the binding no longer held.
     const {wait, link, bound, ...rest} = init || {};
     const base = link || linkUrl;
-    const moved = () => Object.assign(new Error(tt("app.link.moved", "The board is no longer linked to the same game.")), {unsent: true, moved: true});
-    if (!loopbackOrigin(base || "")) throw Object.assign(new Error(tt("app.link.local", "Not linked to the game on this computer.")), {unsent: true});
+    const moved = () => Object.assign(failure(() => tt("app.link.moved", "The board is no longer linked to the same game.")), {unsent: true, moved: true});
+    if (!loopbackOrigin(base || "")) throw Object.assign(failure(() => tt("app.link.local", "Not linked to the game on this computer.")), {unsent: true});
     const permission = await loopbackPermission();
     if (permission === "denied") throw Object.assign(linkBlocked(), {unsent: true});
     const asking = permission === "prompt";
-    if (asking && attempt) state("busy", tt("app.link.allow", "Allow Big Copilot to reach the game"),
-      tt("app.link.allow.where", "your browser is asking, at the top of the window"));
+    if (asking && attempt) state("busy", () => tt("app.link.allow", "Allow Big Copilot to reach the game"),
+      () => tt("app.link.allow.where", "your browser is asking, at the top of the window"));
     const spaces = linkSpace === null ? ["loopback", "local", ""] : [linkSpace];
     for (const space of spaces) {
       const controller = new AbortController();
@@ -652,7 +650,7 @@
   // the permission tells them apart.
   async function linkFailure() {
     if (await loopbackPermission() === "denied") return linkBlocked();
-    return new Error(tt("app.link.down", "The game is not running, or the Big Copilot Link mod is not installed."));
+    return failure(() => tt("app.link.down", "The game is not running, or the Big Copilot Link mod is not installed."));
   }
 
   function linkLine(health, extra) {
@@ -670,8 +668,8 @@
     // and the watcher keep retrying.
     if (gen !== sourceGen) return;
     finishAttempt(gen);
-    state("bad", tt("app.link.unreached", "Could not reach the game"), linkUrl);
-    note("bad", err.message, err.sub || tt("app.link.start", "Start the game with the mod enabled and load a save, then click Update."), true);
+    state("bad", () => tt("app.link.unreached", "Could not reach the game"), linkUrl);
+    note("bad", errWords(err), err.sub || (() => tt("app.link.start", "Start the game with the mod enabled and load a save, then click Update.")), true);
   }
 
   function dropLink() {
@@ -703,7 +701,7 @@
     closeSavePicker();
     lastEntries = null;
     if (!onBoard()) place();
-    await loadFromLink(tt("app.link.linking", "Linking to the game"), gen);
+    await loadFromLink(() => tt("app.link.linking", "Linking to the game"), gen);
   }
 
   // The one answer this page makes up, for anything that is not a 200 with a
@@ -731,12 +729,12 @@
     finishAttempt(gen);
     if (health.schemaVersion == null) {
       // A JSON object with no version in it is not the mod's health at all.
-      state("bad", tt("app.link.notmod", "That address does not answer as the Big Copilot Link mod"), linkUrl);
-      note("bad", tt("app.link.notmod.why", "It answers, but not with the mod's health. Is another program on that port?"),
-        tt("app.link.port.check", "Check the port in the mod's options, then click Update."), true);
+      state("bad", () => tt("app.link.notmod", "That address does not answer as the Big Copilot Link mod"), linkUrl);
+      note("bad", () => tt("app.link.notmod.why", "It answers, but not with the mod's health. Is another program on that port?"),
+        () => tt("app.link.port.check", "Check the port in the mod's options, then click Update."), true);
     } else {
-      state("bad", tt("app.link.mismatch", "The Big Copilot Link mod and this page do not match"), linkUrl);
-      note("bad", tt("app.link.mismatch.why", "The mod speaks version {v}; this page needs version {need}. Update the mod (or the page) and try again.",
+      state("bad", () => tt("app.link.mismatch", "The Big Copilot Link mod and this page do not match"), linkUrl);
+      note("bad", () => tt("app.link.mismatch.why", "The mod speaks version {v}; this page needs version {need}. Update the mod (or the page) and try again.",
         {v: health.schemaVersion, need: 1}), "", true);
     }
     return true;
@@ -760,17 +758,17 @@
       // health: one real answer, busy or empty, means the mod is there.
       let sawHealth = health !== NOT_READY;
       while (health.stamp === "" || health.busy) {
-        state("busy", tt("app.link.serializing", "Waiting for the game to serialize its state"), linkUrl);
+        state("busy", () => tt("app.link.serializing", "Waiting for the game to serialize its state"), linkUrl);
         if (Date.now() >= deadline) {
           finishAttempt(gen);
           if (!sawHealth) {
             // Thirty seconds of answers that were never health: not the mod.
-            state("bad", tt("app.link.notmod", "That address does not answer as the Big Copilot Link mod"), linkUrl);
-            note("bad", tt("app.link.notmod.never", "It answers, but never with the mod's health. Is another program on that port?"),
-              tt("app.link.port.check", "Check the port in the mod's options, then click Update."), true);
+            state("bad", () => tt("app.link.notmod", "That address does not answer as the Big Copilot Link mod"), linkUrl);
+            note("bad", () => tt("app.link.notmod.never", "It answers, but never with the mod's health. Is another program on that port?"),
+              () => tt("app.link.port.check", "Check the port in the mod's options, then click Update."), true);
           } else {
-            state("bad", tt("app.link.nosave", "The game has not produced a save yet"), linkUrl);
-            note("bad", tt("app.link.nosave.why", "The mod has had nothing to serve for {s} seconds. Load a save in the game, then click Update.", {s: 30}), "", true);
+            state("bad", () => tt("app.link.nosave", "The game has not produced a save yet"), linkUrl);
+            note("bad", () => tt("app.link.nosave.why", "The mod has had nothing to serve for {s} seconds. Load a save in the game, then click Update.", {s: 30}), "", true);
           }
           return;
         }
@@ -787,7 +785,7 @@
     }
     if (health.stamp === lastLinkStamp && onBoard()) {
       finishAttempt(gen);
-      state("ok", tt("app.link.same", "No newer state from the game"), linkLine(health));
+      state("ok", () => tt("app.link.same", "No newer state from the game"), () => linkLine(health));
     } else {
       let res;
       try { res = await linkFetch("/save", {headers: lastLinkStamp ? {"If-None-Match": `"${lastLinkStamp}"`} : {}}); }
@@ -795,19 +793,21 @@
       if (gen !== sourceGen) return;
       if (res.status === 304) {  // a newer stamp was announced and then overtaken
         finishAttempt(gen);
-        state("ok", tt("app.link.same", "No newer state from the game"), linkLine(health));
+        state("ok", () => tt("app.link.same", "No newer state from the game"), () => linkLine(health));
       } else if (!res.ok) {
         // 503 no_save_yet when the city unloaded between the two calls, or a
         // wrong address answering with anything: the reason, not a parse error.
-        let why = tt("app.link.save.status", "The mod answered {status} for the save.", {status: res.status});
+        const status = res.status;
+        let why = () => tt("app.link.save.status", "The mod answered {status} for the save.", {status});
         try {
           const body = await res.json();
-          if (body && body.error) why = tt("app.link.save.error", "The mod answered {status} ({error}) for the save.", {status: res.status, error: body.error});
+          const error = body && body.error;
+          if (error) why = () => tt("app.link.save.error", "The mod answered {status} ({error}) for the save.", {status, error});
         } catch (e) {}
         if (gen !== sourceGen) return;
         finishAttempt(gen);
-        state("bad", tt("app.link.unread", "Could not read the game"), linkUrl);
-        note("bad", why, tt("app.link.loadsave", "Load a save in the game, then click Update."), true);
+        state("bad", () => tt("app.link.unread", "Could not read the game"), linkUrl);
+        note("bad", why, () => tt("app.link.loadsave", "Load a save in the game, then click Update."), true);
         return;
       } else {
         const bytes = await res.arrayBuffer();
@@ -846,7 +846,7 @@
     // brings the bytes anyway.
     const gen = sourceGen;
     if (!startAttempt(gen)) return;  // one Update at a time, like the folder's
-    state("busy", tt("app.link.asking", "Asking the game for its current state"), linkUrl);
+    state("busy", () => tt("app.link.asking", "Asking the game for its current state"), linkUrl);
     // Throttled (429) covers two cases: a refresh in flight, whose stamp
     // will move on its own, and the quiet window after one, where nothing
     // will. So a throttle is waited out and the request made once more;
@@ -868,9 +868,9 @@
         finishAttempt(gen);
         // Only a board the link built says "up to date": a folder board has no
         // game state to name, and its own line is still true.
-        if (lastLinkStamp) state("ok", tt("app.state.current", "Up to date"), linkLine(linkHealth));
+        if (lastLinkStamp) state("ok", () => tt("app.state.current", "Up to date"), () => linkLine(linkHealth));
         else idleState();
-        note("warn", linkRefused(reason));
+        note("warn", () => linkRefused(reason));
         return;
       }
       if (res.status === 429) {
@@ -878,8 +878,8 @@
         let retryAfter = 5;
         try { retryAfter = (await res.json()).retryAfter || 5; } catch (e) {}
         const wait = Math.min(20, Math.max(1, retryAfter));
-        state("busy", tt("app.link.already", "The game is already serializing"),
-          `${linkUrl} · ${tt("app.link.waiting", "waiting {s} s", {s: wait})}`);
+        state("busy", () => tt("app.link.already", "The game is already serializing"),
+          () => `${linkUrl} · ${tt("app.link.waiting", "waiting {s} s", {s: wait})}`);
         await linkWait(wait * 1000);
         if (gen !== sourceGen) return;
         continue;
@@ -887,9 +887,9 @@
       // 503 main_thread_unavailable, or anything else: the mod is there but
       // did not take the request. Not "the game is not running".
       finishAttempt(gen);
-      if (lastLinkStamp) state("ok", tt("app.state.current", "Up to date"), linkLine(linkHealth));
+      if (lastLinkStamp) state("ok", () => tt("app.state.current", "Up to date"), () => linkLine(linkHealth));
       else idleState();
-      note("warn", tt("app.link.refresh.refused", "The mod did not take the refresh (answered {status}). Try Update again in a moment.", {status: res.status}));
+      note("warn", () => tt("app.link.refresh.refused", "The mod did not take the refresh (answered {status}). Try Update again in a moment.", {status: res.status}));
       return;
     }
     await awaitNewStamp(before, gen);
@@ -917,23 +917,23 @@
       if (wrongVersion(health, gen)) return;
       if (health.stamp && health.stamp !== before && !health.busy) break;
       health = null;
-      state("busy", tt("app.link.serializing", "Waiting for the game to serialize its state"), linkUrl);
+      state("busy", () => tt("app.link.serializing", "Waiting for the game to serialize its state"), linkUrl);
       await linkWait(LINK_POLL_MS);
       if (gen !== sourceGen) return;
     }
     if (!health) {
       finishAttempt(gen);
       if (!sawHealth) {
-        state("bad", tt("app.link.notmod", "That address does not answer as the Big Copilot Link mod"), linkUrl);
-        note("bad", tt("app.link.notmod.never", "It answers, but never with the mod's health. Is another program on that port?"),
-          tt("app.link.port.check", "Check the port in the mod's options, then click Update."), true);
+        state("bad", () => tt("app.link.notmod", "That address does not answer as the Big Copilot Link mod"), linkUrl);
+        note("bad", () => tt("app.link.notmod.never", "It answers, but never with the mod's health. Is another program on that port?"),
+          () => tt("app.link.port.check", "Check the port in the mod's options, then click Update."), true);
       } else {
-        state("bad", tt("app.link.unfinished", "The game did not finish serializing"), linkUrl);
-        note("bad", tt("app.link.unfinished.why", "No new state from the mod in {s} seconds. Try Update again.", {s: 45}), "", true);
+        state("bad", () => tt("app.link.unfinished", "The game did not finish serializing"), linkUrl);
+        note("bad", () => tt("app.link.unfinished.why", "No new state from the mod in {s} seconds. Try Update again.", {s: 45}), "", true);
       }
       return;
     }
-    await loadFromLink(tt("app.link.reading", "Reading the game"), gen);
+    await loadFromLink(() => tt("app.link.reading", "Reading the game"), gen);
   }
 
   /* --- writes (docs/game-link-api.md, "Writes") ------------------------- */
@@ -1308,7 +1308,7 @@
     followBefore = null;
     if (gen !== sourceGen || !linkUrl) return;
     if (!startAttempt(gen)) { if (handlers && handlers.followFailed) handlers.followFailed(); return; }
-    state("busy", tt("app.link.follow", "Reading the game after the change"), linkUrl);
+    state("busy", () => tt("app.link.follow", "Reading the game after the change"), linkUrl);
     await awaitNewStamp(stamp, gen);
     if (gen !== sourceGen || !handlers) return;
     // Ended well: the board shows the game as it stands, whether this follow
@@ -1339,8 +1339,8 @@
       // again after the game is back if the port is still not the mod.
       if (linkGone || strip.tone !== "ok") return;
       linkGone = true;
-      note("warn", tt("app.link.gone", "The game is not reachable; the board shows its last state."),
-        tt("app.link.gone.back", "It reconnects on its own when the game is back."));
+      note("warn", () => tt("app.link.gone", "The game is not reachable; the board shows its last state."),
+        () => tt("app.link.gone.back", "It reconnects on its own when the game is back."));
       return;
     }
     if (gen !== sourceGen) return;
@@ -1352,8 +1352,9 @@
     if (health === NOT_READY) {
       linkNotReady++;
       if (linkNotReady >= 10 && !portNoteUp() && strip.tone === "ok") {
-        note("warn", portNote = portGone(),
-          tt("app.link.port.other", "Is another program on that port? Check the port in the mod's options, then click Update."));
+        note("warn", portGone,
+          () => tt("app.link.port.other", "Is another program on that port? Check the port in the mod's options, then click Update."));
+        portNote = noted.text;
       }
       return;
     }
@@ -1361,10 +1362,13 @@
       // A JSON object that is not this page's health: another program on the
       // port, or a mod of another version. Said while no such note is up,
       // under the board that stays; Update gives the full refusal.
-      const text = health.schemaVersion == null
-        ? portGone()
-        : tt("app.link.port.version", "The mod now speaks version {v}; this page needs version {need}.", {v: health.schemaVersion, need: 1});
-      if (noted.text !== text && strip.tone === "ok") note("warn", portNote = text, tt("app.link.port.details", "Click Update for the details."));
+      const v = health.schemaVersion;
+      const words = v == null ? portGone
+        : () => tt("app.link.port.version", "The mod now speaks version {v}; this page needs version {need}.", {v, need: 1});
+      if (noted.text !== words() && strip.tone === "ok") {
+        note("warn", words, () => tt("app.link.port.details", "Click Update for the details."));
+        portNote = noted.text;
+      }
       return;
     }
     // The port answers as the mod again: whatever the watcher said about it
@@ -1374,7 +1378,7 @@
     // Nothing yet, or mid-refresh: nothing to build from. The next tick, or
     // Update, looks again.
     if (!health.stamp || health.busy) return;
-    if (health.stamp !== lastLinkStamp) await loadFromLink(tt("app.link.reading", "Reading the game"), gen);
+    if (health.stamp !== lastLinkStamp) await loadFromLink(() => tt("app.link.reading", "Reading the game"), gen);
   }
 
   /* --- building ----------------------------------------------------------- */
@@ -1391,7 +1395,7 @@
     // not the generated file name.
     const line = (extra) => (file.linkStamp ? linkLine(linkHealth, extra) : fileLine(file, extra));
     note("");
-    state("busy", tt("app.build.reading", "Reading {name}", {name: file.name}), line());
+    state("busy", () => tt("app.build.reading", "Reading {name}", {name: file.name}), () => line());
     const t = performance.now();
     try {
       const bytes = await file.arrayBuffer();
@@ -1416,18 +1420,20 @@
       try { if (handlers) { handlers.stale(""); handlers.changed(data); } }
       catch (err) { lastLinkStamp = was; throw err; }
       enterBoard();
-      state("ok", tt("app.state.current", "Up to date"), line(tt("app.build.took", "built in {s:.1f} s", {s: (performance.now() - t) / 1000})));
+      const took = (performance.now() - t) / 1000;
+      state("ok", () => tt("app.state.current", "Up to date"), () => line(tt("app.build.took", "built in {s:.1f} s", {s: took})));
     } catch (err) {
       if (gen !== sourceGen) return;
       busy = false;
       finishAttempt(gen);
-      state("bad", tt("app.build.failed", "Could not read the save"),
-        tt("app.build.attempted", "{name} · attempted {when}", {name: file.name, when: fmtTime(Date.now())}));
+      const at = Date.now(), kept = lastGood, paused = !!(dirHandle && watching && !watchTimer);
+      state("bad", () => tt("app.build.failed", "Could not read the save"),
+        () => tt("app.build.attempted", "{name} · attempted {when}", {name: file.name, when: fmtTime(at)}));
       const rewritten = err.name === "NotReadableError";
       note("bad",
-        rewritten ? tt("app.build.rewritten", "the game has rewritten this file since it was chosen") : err.message,
-        [lastGood ? tt("app.build.kept", "Last good board kept · saved {when}", {when: fmtTime(lastGood.lastModified)}) : "",
-         dirHandle && watching && !watchTimer ? tt("app.build.paused", "Automatic updates are paused. Click Update to retry.") : ""].filter(Boolean).join(" · "),
+        () => rewritten ? () => tt("app.build.rewritten", "the game has rewritten this file since it was chosen") : errWords(err),
+        () => [kept ? tt("app.build.kept", "Last good board kept · saved {when}", {when: fmtTime(kept.lastModified)}) : "",
+          paused ? tt("app.build.paused", "Automatic updates are paused. Click Update to retry.") : ""].filter(Boolean).join(" · "),
         true);
       if (handlers) handlers.stale(err.message);
     }
@@ -1496,12 +1502,13 @@
     if (pick.dir) {
       const inDir = saves.filter((e) => e.dir === pick.dir);
       if (inDir.length) saves = inDir;
-      else fellBack = tt("app.pick.gone.folder", "Could not find the chosen character's folder; showing the newest save instead.");
+      else fellBack = () => tt("app.pick.gone.folder", "Could not find the chosen character's folder; showing the newest save instead.");
     }
     if (pick.name && !fellBack) {
       const named = saves.find((e) => e.file.name === pick.name);
       if (named) return {file: named.file, dir: named.dir, fellBack: ""};
-      fellBack = tt("app.pick.gone.save", "Could not find the save named {name}; showing the newest save instead.", {name: pick.name.replace(/\.hsg$/i, "")});
+      const name = pick.name.replace(/\.hsg$/i, "");
+      fellBack = () => tt("app.pick.gone.save", "Could not find the save named {name}; showing the newest save instead.", {name});
     }
     const best = saves.reduce((a, b) => (b.file.lastModified > a.file.lastModified ? b : a));
     return {file: best.file, dir: best.dir, fellBack};
@@ -1647,6 +1654,9 @@
     const what = auto ? tt("app.pick.autosave", "Autosave {n}", {n: base.replace(/^recover\s*#?/i, "")}) : base;
     return info && info.day != null ? tt("app.pick.day", "{save} · day {day}", {save: what, day: info.day}) : what;
   };
+  // A folder's character; a folder with no sidecar and no name to go by is
+  // "this folder", said in the UI language whenever the menu is filled.
+  const characterOf = (g) => g.character || tt("app.pick.thisfolder", "this folder");
   async function catalogueOf(entries) {
     const groups = new Map();
     for (const e of entries) {
@@ -1664,7 +1674,7 @@
       }
       if (!g.character) {
         const m = g.saves.map((s) => /^New (.+?) Save Game/i.exec(s.file.name)).find(Boolean);
-        g.character = m ? m[1].trim() : (g.dir || tt("app.pick.thisfolder", "this folder"));
+        g.character = m ? m[1].trim() : g.dir;
       }
     }
     return [...groups.values()].sort((a, b) => b.newest - a.newest);
@@ -1684,15 +1694,15 @@
     const home = groups.find((g) => g.dir === pick.dir);
     const pool = home ? home.saves : groups.flatMap((g) => g.saves);
     if (pick.dir && !home) {
-      moved = tt("app.pick.moved.folder", "Could not find the chosen character's folder; following the newest save anywhere instead.");
+      moved = () => tt("app.pick.moved.folder", "Could not find the chosen character's folder; following the newest save anywhere instead.");
       setPick("", "");
     } else if (pick.name && !pool.some((s) => s.file.name === pick.name)) {
       const name = pick.name.replace(/\.hsg$/i, "");
       if (home) {
-        moved = tt("app.pick.moved.character", "Could not find the save named {name}; following {character}'s newest save instead.", {name, character: home.character});
+        moved = () => tt("app.pick.moved.character", "Could not find the save named {name}; following {character}'s newest save instead.", {name, character: characterOf(home)});
         setPick(pick.dir, "");
       } else {
-        moved = tt("app.pick.moved.any", "Could not find the save named {name}; following the newest save anywhere instead.", {name});
+        moved = () => tt("app.pick.moved.any", "Could not find the save named {name}; following the newest save anywhere instead.", {name});
         setPick("", "");
       }
     }
@@ -1719,13 +1729,13 @@
     opt(saveSel, pickKey("", ""), tt("app.pick.any", "Newest save anywhere"), tt("app.pick.any.detail", "Follow the latest across all characters"));
     for (const g of groups) {
       const og = document.createElement("optgroup");
-      og.label = g.character;
+      og.label = characterOf(g);
       if (g.saves.length > 1) opt(og, pickKey(g.dir, ""), tt("app.pick.character", "Newest for this character"),
-        tt("app.pick.character.detail", "Follow new saves in this folder"), tt("app.pick.character.current", "{character} · newest", {character: g.character}));
+        tt("app.pick.character.detail", "Follow new saves in this folder"), tt("app.pick.character.current", "{character} · newest", {character: characterOf(g)}));
       for (const s of g.saves) {
         const title = saveLabel(s.file.name, s.info && {...s.info, day: null});
         const detail = [s.info?.day != null ? tt("app.pick.day.head", "Day {day}", {day: s.info.day}) : "", fmtTime(s.file.lastModified)].filter(Boolean).join(" · ");
-        opt(og, pickKey(g.dir, s.file.name), title, detail, `${g.character} · ${title}`);
+        opt(og, pickKey(g.dir, s.file.name), title, detail, `${characterOf(g)} · ${title}`);
       }
       saveSel.appendChild(og);
     }
@@ -1741,7 +1751,7 @@
   let queued = null;
   async function applyPick() {
     if (busy) { queued = applyPick; return; }
-    if (dirHandle) await loadFromHandle(dirHandle, tt("app.open.chosen", "Opening the chosen save"));
+    if (dirHandle) await loadFromHandle(dirHandle, () => tt("app.open.chosen", "Opening the chosen save"));
     else if (lastEntries) await loadFromEntries(lastEntries);
   }
   saveSel.addEventListener("change", () => {
@@ -1757,13 +1767,13 @@
     const {file, dir, fellBack} = chooseFrom(entries);
     if (!file) {
       finishAttempt(gen);
-      state("bad", tt("app.nosave", "No save found"), label || "");
-      note("bad", tt("app.nosave.why", "no .hsg save in that folder"), tt("app.nosave.fix", "Choose the folder named Big Ambitions inside SaveGames"), true);
+      state("bad", () => tt("app.nosave", "No save found"), label || "");
+      note("bad", () => tt("app.nosave.why", "no .hsg save in that folder"), () => tt("app.nosave.fix", "Choose the folder named Big Ambitions inside SaveGames"), true);
       return false;
     }
     if (onScreen(file, dir)) {
       finishAttempt(gen);
-      state("ok", tt("app.nonewer", "No newer save found"), fileLine(file));
+      state("ok", () => tt("app.nonewer", "No newer save found"), () => fileLine(file));
     } else {
       await buildFrom(file, dir, gen);
     }
@@ -1781,7 +1791,7 @@
     const gen = sourceGen;
     if (!startAttempt(gen)) return;
     note("");
-    state("busy", why || tt("app.open.looking", "Looking for the save to read"), handle.name);
+    state("busy", why || (() => tt("app.open.looking", "Looking for the save to read")), handle.name);
     // A scan that ends after another source was chosen is thrown away, so
     // a slow folder never overwrites a newer one.
     let entries;
@@ -1789,8 +1799,8 @@
     catch (err) {
       if (gen !== sourceGen) return;
       finishAttempt(gen);
-      state("bad", tt("app.folder.unread", "Could not read the folder"), handle.name);
-      note("bad", err.message, "", true);
+      state("bad", () => tt("app.folder.unread", "Could not read the folder"), handle.name);
+      note("bad", errWords(err), "", true);
       return;
     }
     if (gen !== sourceGen) return;
@@ -1820,7 +1830,7 @@
         handle = await window.showDirectoryPicker({id: "ba-saves", mode: "read"});
       } catch (e) { return; }  // the picker was dismissed
       if (gen !== sourceGen) return;
-      await takeHandle(handle, tt("app.open.walking", "Looking through the folder"));
+      await takeHandle(handle, () => tt("app.open.walking", "Looking through the folder"));
     } else {
       $("folderPick").click();
     }
@@ -1838,15 +1848,15 @@
         // Request from this explicit click, before awaiting unrelated work.
         const asked = await handle.requestPermission({mode: "read"});
         if (gen !== sourceGen || handle !== dirHandle) return;
-        if (asked !== "granted") { state("bad", tt("app.folder.denied", "Folder access was not granted"), handle.name); note("bad", "", "", true); return; }
+        if (asked !== "granted") { state("bad", () => tt("app.folder.denied", "Folder access was not granted"), handle.name); note("bad", "", "", true); return; }
       } catch (err) {
         if (gen !== sourceGen) return;
-        state("bad", tt("app.folder.noaccess", "Could not access the folder"), handle.name);
-        note("bad", err.message, tt("app.folder.noaccess.fix", "Choose the folder again to restore access."), true);
+        state("bad", () => tt("app.folder.noaccess", "Could not access the folder"), handle.name);
+        note("bad", errWords(err), () => tt("app.folder.noaccess.fix", "Choose the folder again to restore access."), true);
         return;
       }
       if (!onBoard()) startAttempt(gen, true);
-      await loadFromHandle(handle, tt("app.open.newer", "Checking for a newer save"));
+      await loadFromHandle(handle, () => tt("app.open.newer", "Checking for a newer save"));
     } else if (canHandle) {
       await pickFolder();
     } else {
@@ -1992,19 +2002,19 @@
       if (gen !== sourceGen) return;
       const parsed = JSON.parse(text);
       if (!parsed || typeof parsed !== "object" || !("ba:neighborhood_global" in parsed)) {
-        note("warn", tt("app.locale.wrong", "That file is not the game's en.json."), tt("app.locale.wrong.why", "No ba: keys inside."));
+        note("warn", () => tt("app.locale.wrong", "That file is not the game's en.json."), () => tt("app.locale.wrong.why", "No ba: keys inside."));
         return;
       }
       const language = gameTextLanguage(parsed, file.name);
       if (language !== null) {
-        note("warn", language ? tt("app.locale.language", "That is the game's {language} text.", {language})
+        note("warn", () => language ? tt("app.locale.language", "That is the game's {language} text.", {language})
           : tt("app.locale.notenglish", "That is not the game's English text."),
-          tt("app.locale.english", "Choose en.json — the board reads the English file."));
+          () => tt("app.locale.english", "Choose en.json — the board reads the English file."));
         return;
       }
     } catch (e) {
       if (gen !== sourceGen) return;
-      note("warn", tt("app.locale.notjson", "That file is not JSON."));
+      note("warn", () => tt("app.locale.notjson", "That file is not JSON."));
       return;
     }
     if (stored.set(LOCALE_KEY, text)) note("");
@@ -2247,15 +2257,13 @@
   }
 
   // A change of UI language (web/i18n.js calls this after it has refilled
-  // the markup's data-tt text): every word this file wrote is written again.
-  // The strip's current headline and note keep the language they were said
-  // in until the next one.
+  // the markup's data-tt text): every word this file wrote is written again,
+  // the strip's headline, file line and note included, from the functions
+  // state() and note() kept (see say()).
   function relabel() {
-    strip.head = retell(strip.head);
-    strip.meta = retell(strip.meta);
+    if (strip.words) { strip.head = say(strip.words[0]); strip.meta = say(strip.words[1]); }
     const port = portNoteUp();
-    noted.text = retell(noted.text);
-    noted.sub = retell(noted.sub);
+    if (noted.words) { noted.text = say(noted.words[0]); noted.sub = say(noted.words[1]); }
     if (port) portNote = noted.text;
     landingRich();
     if ($("savePlatform")) showSaveLocation($("savePlatform").value);
@@ -2269,7 +2277,9 @@
     labelCopy();
     syncWatchBtn();
   }
-  if (typeof ttOnChange === "function") ttOnChange(relabel);
+  // After the other listeners: the board's sets the number locale that
+  // tt() formats numbers in (NUM_LOCALE), and this file's lines hold numbers.
+  if (typeof ttOnChange === "function") ttOnChange(() => queueMicrotask(relabel));
 
   /* --- wiring ------------------------------------------------------------ */
   window.addEventListener("DOMContentLoaded", async () => {
@@ -2294,9 +2304,9 @@
         if (locale) takeLocale(locale.file);
         if (gen !== undefined && gen === sourceGen) {
           finishAttempt(gen);
-          state("bad", tt("app.nosave", "No save found"));
-          note("bad", tt("app.nosave.folder", "No .hsg save in that folder."), tt("app.nosave.other", "Choose another folder or a save file."), true);
-        } else if (!locale) note("warn", tt("app.drop.neither", "That is neither a .hsg save nor en.json."));
+          state("bad", () => tt("app.nosave", "No save found"));
+          note("bad", () => tt("app.nosave.folder", "No .hsg save in that folder."), () => tt("app.nosave.other", "Choose another folder or a save file."), true);
+        } else if (!locale) note("warn", () => tt("app.drop.neither", "That is neither a .hsg save nor en.json."));
         return;
       }
       if (gen === undefined) gen = supersede();  // a new set of files, whatever its shape
@@ -2305,7 +2315,7 @@
       dropLink();       // and a folder or file chosen here replaces the game link
       if (!onBoard()) place();
       if (!startAttempt(gen)) return;
-      state("busy", tt("app.open.selected", "Opening the selected save…"));
+      state("busy", () => tt("app.open.selected", "Opening the selected save…"));
       if (locale) await takeLocale(locale.file, false);
       if (gen !== sourceGen) return;
       if (fromFolder) {
@@ -2350,14 +2360,14 @@
       const gen = supersede(); // Own the drop before resolving its directory handle.
       if (!startAttempt(gen)) return;
       note("");
-      state("busy", tt("app.open.selected", "Opening the selected save…"));
+      state("busy", () => tt("app.open.selected", "Opening the selected save…"));
       const dirs = (await Promise.all(asked)).filter((h) => h && h.kind === "directory");
       if (gen !== sourceGen) return;
-      if (dirs.length && canHandle) { await takeHandle(dirs[0], tt("app.open.walking", "Looking through the folder"), gen); return; }
+      if (dirs.length && canHandle) { await takeHandle(dirs[0], () => tt("app.open.walking", "Looking through the folder"), gen); return; }
       const dirEntries = entries.filter((en) => en && en.isDirectory);
       if (dirEntries.length) {
         startAttempt(gen);
-        state("busy", tt("app.open.walking", "Looking through the folder"));
+        state("busy", () => tt("app.open.walking", "Looking through the folder"));
         const out = [];
         for (const en of dirEntries) await walkEntry(en, 0, out, "");
         if (gen !== sourceGen) return;
@@ -2412,7 +2422,7 @@
     }));
     $("forgetHistory").addEventListener("click", () => {
       try { localStorage.removeItem(HISTORY_KEY); } catch (e) {}
-      note("info", tt("app.history.forgotten", "History forgotten. The next save starts a fresh record."));
+      note("info", () => tt("app.history.forgotten", "History forgotten. The next save starts a fresh record."));
     });
 
     // A folder chosen on an earlier visit: resume when access is still
@@ -2420,7 +2430,7 @@
     const resumeGen = sourceGen;
     wireLanding();
     if (!startAttempt(resumeGen)) return;
-    state("busy", tt("app.open.previous", "Checking for a previous save…"));
+    state("busy", () => tt("app.open.previous", "Checking for a previous save…"));
     // A game link chosen on an earlier visit outranks the folder it set
     // aside: choosing a folder forgets the link, so a stored link is always
     // the source picked last. A probe that fails leaves the bad state and
@@ -2433,7 +2443,7 @@
       linkUrl = loopbackOrigin(rememberedLink) || LINK_DEFAULT;
       place();
       paintStrip();
-      await loadFromLink(tt("app.open.link", "Opening the game link"), resumeGen);
+      await loadFromLink(() => tt("app.open.link", "Opening the game link"), resumeGen);
       return;
     }
     const rememberedHandle = canHandle ? await handles.get("saves") : null;
@@ -2447,19 +2457,19 @@
       catch (e) {
         if (resumeGen !== sourceGen) return;
         finishAttempt(resumeGen);
-        state("bad", tt("app.folder.unchecked", "Could not check folder access"), rememberedHandle.name);
-        note("bad", e.message, tt("app.folder.unchecked.fix", "Open the save or choose the folder again."), true);
+        state("bad", () => tt("app.folder.unchecked", "Could not check folder access"), rememberedHandle.name);
+        note("bad", errWords(e), () => tt("app.folder.unchecked.fix", "Open the save or choose the folder again."), true);
         return;
       }
       if (resumeGen !== sourceGen || dirHandle !== rememberedHandle) return;
       if (permission === "granted") {
         startAttempt(resumeGen, true);
-        await loadFromHandle(rememberedHandle, tt("app.open.remembered", "Opening the remembered save"));
+        await loadFromHandle(rememberedHandle, () => tt("app.open.remembered", "Opening the remembered save"));
         return;
       }
       finishAttempt(resumeGen);
       idleState();
-      note("info", tt("app.folder.allow", "Allow folder access to reopen your save."));
+      note("info", () => tt("app.folder.allow", "Allow folder access to reopen your save."));
     } else {
       finishAttempt(resumeGen);
       idleState();

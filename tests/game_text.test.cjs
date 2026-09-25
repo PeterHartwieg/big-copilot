@@ -25,7 +25,8 @@ function setup(kept = '') {
     LOCALE_KEY: 'ledger_locale',
     localStorage: {removeItem(key) { delete storage[key]; }},
     stored: {get: (key) => storage[key] || '', set: (key, value) => { storage[key] = value; return true; }},
-    note: (...args) => notes.push(args),
+    // app.js hands note() its words as a function that writes them.
+    note: (...args) => notes.push(args.map((a) => (typeof a === 'function' ? a() : a))),
     localeState() {}, buildFrom() {},
     sourceGen: 0, lastFile: null, lastFileGen: -1,
   });

@@ -236,17 +236,19 @@ test('the pseudo-locale fits at every width, on every page, view and site panel'
    (so no Python runs), a newer version.json (so the update banner shows)
    and the community API. `remembered` starts from a folder chosen on an
    earlier visit, which the page reopens and builds the fixture board from. */
-async function shell(t, {ui = '', width = 1280, remembered = false} = {}){
+const LINK_HEALTH = {schemaVersion: 1, stamp: 's1', busy: false, company: 'Costy Co', character: 'alice',
+  day: 12, hour: 9, minute: 5, refreshedAt: '2026-09-25T09:05:00Z', writes: []};
+async function shell(t, {ui = '', width = 1280, remembered = false, permission = 'granted'} = {}){
   const context = await browser.newContext({viewport: {width, height: 900}, locale: 'en-US', reducedMotion: 'reduce'});
   t.after(() => context.close());
-  await context.addInitScript(remembered => {
+  await context.addInitScript(({remembered, permission}) => {
     const file = (name, time) => {
       const value = new File(['save'], name, {lastModified: time});
       value.arrayBuffer = async () => new ArrayBuffer(8);
       return {kind: 'file', name, getFile: async () => value};
     };
     const folder = (name, entries) => ({name, kind: 'directory',
-      async queryPermission(){ return 'granted'; }, async requestPermission(){ return 'granted'; },
+      async queryPermission(){ return permission; }, async requestPermission(){ return 'granted'; },
       async *values(){ yield* entries; }});
     const meta = {kind: 'file', name: 'Recover #4.hsg.meta', getFile: async () => ({name: 'Recover #4.hsg.meta', lastModified: 1,
       async text(){ return JSON.stringify({characterData: {name: 'Alice'}, day: 4, isRecoverSave: true}); }})};
@@ -262,13 +264,18 @@ async function shell(t, {ui = '', width = 1280, remembered = false} = {}){
     }};
     window.indexedDB.open = () => { const req = {}; setTimeout(() => { req.result = db; req.onsuccess?.(); }); return req; };
     window.Worker = class { constructor(){ window.reader = this; this.messages = []; } postMessage(m){ this.messages.push(m); } terminate(){} };
-  }, remembered);
+  }, {remembered, permission});
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   const json = (route, body) => route.fulfill({contentType: 'application/json', body: JSON.stringify(body)});
   await page.route('**/*', route => {
     const url = new URL(route.request().url());
+    // The Big Copilot Link mod on its default port, for the linked strip.
+    if(url.host === '127.0.0.1:8322' && url.pathname === '/health') return json(route, LINK_HEALTH);
+    if(url.host === '127.0.0.1:8322' && url.pathname === '/save')
+      return route.fulfill({body: 'save', headers: {'X-Game-Link-Stamp': LINK_HEALTH.stamp, 'Access-Control-Allow-Origin': '*',
+        'Access-Control-Expose-Headers': 'X-Game-Link-Stamp'}});
     if(url.hostname !== 'i18n.test' || url.pathname.startsWith('/fonts/')) return route.abort();
     if(url.pathname === '/version.json')
       return json(route, {version: 'ffffffffff', latest: {pr: 1, date: '2999-01-01', title: 'A newer page', summary: 'What changed.'}});
@@ -284,7 +291,7 @@ async function shell(t, {ui = '', width = 1280, remembered = false} = {}){
   await page.goto(`http://i18n.test/${ui ? `?ui=${ui}` : ''}`);
   if(ui) await page.waitForFunction(() => ttLang === 'de');
   await page.waitForFunction(() => !document.getElementById('releaseBanner').hidden);
-  if(remembered){
+  if(remembered && permission === 'granted'){
     await page.waitForFunction(() => window.reader && window.reader.messages.length > 0);
     await page.evaluate(raw => {
       const m = window.reader.messages[0];
@@ -361,17 +368,59 @@ test('a change of language says the strip\'s headline and note again, and a para
   const english = await strip();
   assert.deepEqual(english, ['Up to date', 'History forgotten. The next save starts a fresh record.']);
   // The build number reaches a sentence with markup as a param.
-  await page.evaluate(() => { document.getElementById('lgHelpAutosave').dataset.build = '<img src=x>&amp;'; });
+  await page.evaluate(() => { document.getElementById('lgHelpAutosave').dataset.build = '<b>x</b><a>y</a><img src=x>&amp;'; });
   await page.evaluate(table => ttSetTable('de', table), TABLE);
   for(const text of await strip()) assert.match(text, /^\[.*\]$/, text);
+  // The sentence has no tags of its own, so any element in it came from the param.
   const help = await page.evaluate(() => {
     const el = document.getElementById('lgHelpAutosave');
-    return {img: el.querySelectorAll('img').length, text: el.textContent};
+    return {tags: el.querySelectorAll('*').length, text: el.textContent};
   });
-  assert.equal(help.img, 0);
-  assert.ok(help.text.includes('<img src=x>&amp;'), help.text);
+  assert.equal(help.tags, 0);
+  assert.ok(help.text.includes('<b>x</b><a>y</a><img src=x>&amp;'), help.text);
   await page.evaluate(() => ttSetTable('en', null));
   assert.deepEqual(await strip(), english);
+  assert.deepEqual(errors, []);
+});
+
+test('a change of language writes the strip\'s file line again, for a save and for the game link', async t => {
+  const {page, errors} = await shell(t, {remembered: true});
+  const meta = () => page.locator('#srcMeta').textContent();
+  const folder = await meta();
+  assert.match(folder, / · autosave from .* · built in \d+\.\d s · watching$/);
+  await page.evaluate(table => ttSetTable('de', table), TABLE);
+  const pseudo = await meta();
+  assert.match(pseudo, /\[áútóšávé fróm .*\] · \[búílt íñ \d+,\d š·+\] · \[wátçhíñg·+\]$/, pseudo);
+  await page.evaluate(() => ttSetTable('en', null));
+  assert.equal(await meta(), folder);
+  // Linked to the game: the line names the game's day and the link.
+  await page.evaluate(() => document.getElementById('linkBtn').click());
+  await page.waitForFunction(() => window.reader.messages.length > 1);
+  await page.evaluate(raw => {
+    const m = window.reader.messages.at(-1);
+    window.reader.onmessage({data: {kind: 'built', id: m.id, history: '', data: JSON.stringify(raw)}});
+  }, PAYLOAD);
+  await page.waitForFunction(() => / · game link · /.test(document.getElementById('srcMeta').textContent));
+  const linked = await meta();
+  assert.match(linked, /^Costy Co · day 12, 09:05 · game link · built in /);
+  await page.evaluate(table => ttSetTable('de', table), TABLE);
+  assert.match(await meta(), /^Costy Co · \[dáý 12, 09:05·+\] · \[gámé líñk·+\] · \[búílt íñ /);
+  await page.evaluate(() => ttSetTable('en', null));
+  assert.equal(await meta(), linked);
+  assert.deepEqual(errors, []);
+});
+
+test('a folder named like a word of the page keeps its name in every language', async t => {
+  // The remembered folder is named "Saves", which is also the save menu's
+  // label (app.pick.list); waiting for a click, the strip names the folder.
+  const {page, errors} = await shell(t, {remembered: true, permission: 'prompt'});
+  const strip = () => page.evaluate(() => [document.getElementById('srcStatus').textContent, document.getElementById('srcMeta').textContent]);
+  await page.waitForFunction(() => document.getElementById('srcMeta').textContent === 'Saves');
+  assert.deepEqual(await strip(), ['Folder remembered', 'Saves']);
+  await page.evaluate(table => ttSetTable('de', table), TABLE);
+  const [head, folder] = await strip();
+  assert.match(head, /^\[.*\]$/);
+  assert.equal(folder, 'Saves');
   assert.deepEqual(errors, []);
 });
 

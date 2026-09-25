@@ -404,11 +404,12 @@
     if (document.body.classList.contains("has-board")) start();
     // A change of UI language: the dialog's words, the open list's buttons and
     // the online line are written again.
-    if (typeof ttOnChange === "function") ttOnChange(() => {
+    // After the board's listener has set the number locale the count is written in.
+    if (typeof ttOnChange === "function") ttOnChange(() => queueMicrotask(() => {
       labelDialog();
       if (dialog && dialog.open) rows.forEach((row) => { if (!voteBusy.has(row.id)) paintRow(row); });
       paintOnline();
-    });
+    }));
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
