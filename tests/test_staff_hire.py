@@ -21,6 +21,7 @@ from ba_dashboard import (
     _hourly,
     _office_always_on,
     _office_runs,
+    _factory_staffing,
     _office_staffing,
     _staff,
     _staffing,
@@ -29,7 +30,7 @@ from ba_dashboard import (
 from ba_save import Names, Save
 
 import test_staffing as ts
-from test_factory_staffing import People, hand_rows
+from test_factory_staffing import FACTORY as FACTORY_ADDR, Bare, People, hand_factory, hand_rows
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -258,6 +259,20 @@ class SpareTest(unittest.TestCase):
         )
         self.assertNotIn("p1", row["_hire"]["spare"])
 
+    def test_spare_skills_are_the_roles_they_are_spare_in(self):
+        # A cashier who also cleans is spare as a cashier only: the plan never
+        # puts customer service on a cleaning station, so a move keeps them there.
+        row = ts.plan(
+            [(1, ts.REGISTER), (8, ts.CLEAN_STATION)],
+            [ts.employee(f"p{i}", [SERVICE, CLEANING]) for i in range(5)],
+            ts.FLAT, opens=((8, 12),),
+        )
+        hire = row["_hire"]
+        self.assertTrue(hire["spare"])
+        self.assertEqual(sorted(hire["spareSkills"]), hire["spare"])
+        for pid in hire["spare"]:
+            self.assertEqual(hire["spareSkills"][pid], [SERVICE])
+
     def test_bench_is_whom_the_plan_counts_on(self):
         row = ts.plan(
             [(1, ts.REGISTER)],
@@ -289,6 +304,30 @@ class FactoryHireTest(unittest.TestCase):
         worked = {row["people"][s["p"]]["id"] for s in row["shifts"] if s["p"] is not None}
         self.assertEqual(len(row["_hire"]["spare"]), row["headcount"]["spare"])
         self.assertFalse(set(row["_hire"]["spare"]) & worked)
+        self.assertEqual(row["_hire"]["spareSkills"], {pid: [WORKER] for pid in row["_hire"]["spare"]})
+
+    def test_the_schedule_as_it_stands_ships_with_the_drivers(self):
+        # A driver's shift on the van and a worker's on a machine: both in
+        # `current`, so the Staff page can keep the driver's when it replaces
+        # the week.
+        people = People().add(2)
+        reg = {"StreetName": FACTORY_ADDR[0], "StreetNumber": FACTORY_ADDR[1], "RentedByPlayer": True,
+               "scheduleDays": [{"day": 1, "workShifts": [
+                   {"startingHour": 6, "endingHour": 14, "itemInstanceId": "van-1", "employeeId": "d1", "type": 1},
+                   {"startingHour": 6, "endingHour": 14, "itemInstanceId": "beer-0", "employeeId": "w00", "type": 1},
+               ]}]}
+        save = Bare(people)
+        save.root["BuildingRegistrations"] = [reg]
+        business = [{"key": site_key(FACTORY_ADDR), "name": "Brewery", "status": "support"}]
+        [row] = _factory_staffing(save, None, business, hand_factory([("beer", 1, 24, 24, 24)]),
+                                  people.staff)["cap"]
+        now = [(row["stations"][s["s"]]["id"], (row["people"][s["p"]] or {}).get("id"), s["d"], s["f"], s["t"])
+               for s in row["current"]["list"]]
+        self.assertEqual(sorted(now), [("beer-0", "w00", 1, 6, 14), ("van-1", "d1", 1, 6, 14)])
+        # The van is no station of the plan's: no skill, and no plan entry on it.
+        van = next(i for i, st in enumerate(row["stations"]) if st["id"] == "van-1")
+        self.assertIsNone(row["stations"][van]["skill"])
+        self.assertFalse(any(s["s"] == van for s in row["shifts"]))
 
 
 # --- offices --------------------------------------------------------------------
@@ -532,6 +571,14 @@ class HiringTest(unittest.TestCase):
                                             {"skill": SERVICE, "level": 20}])
         self.assertIsNone(person["site"])
         self.assertEqual(person["demands"], ["ba:jobdemand_nonights"])
+        self.assertFalse(person["training"])
+
+    def test_someone_in_training_says_so(self):
+        e3 = new_layout("e3", "Cy Moreau", [(SERVICE, 40.0)], assignedAddress=None,
+                        trainingSession={"skill": SERVICE, "startDay": 30})
+        save = save_of(dict(self.save.root, EmployeeInstances={"$items": [e3]}))
+        hiring = _hiring(save, self.businesses, [], {}, [])
+        self.assertTrue(hiring["people"]["e3"]["training"])
 
     def test_every_assign_table_type_is_one_the_board_knows(self):
         known = ts.ba_dashboard.RETAIL_TYPES | ts.ba_dashboard.OFFICE_TYPES | \

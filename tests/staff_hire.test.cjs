@@ -369,6 +369,126 @@ test('the request: a shop on its plan and on full cover, a factory, an office, a
   assert.deepEqual(site(1), {address: addr(Q), expect: null, days: null});
 });
 
+test('a factory keeps its drivers and an office its cleaner when the week is replaced', async (t) => {
+  const d = JSON.parse(payload);
+  // The factory: a driver on the van (a station the plan does not staff) on
+  // Tuesday and Wednesday, and Fay on a machine the plan leaves out, on
+  // Monday, when the plan has her on MACH-1: the plan wins there.
+  const fac = d.factoryStaffing.cap[0];
+  fac.stations.push({id: 'VAN-1', name: null, skill: null}, {id: 'MACH-9', name: null, skill: null});
+  fac.people.push({id: 'DRV1', name: 'Dee Driver'});
+  fac.current = {shifts: 3, fragments: 0, list: [{d: 1, s: 2, f: 6, t: 10, p: 0}, {d: 2, s: 1, f: 0, t: 6, p: 1}, {d: 3, s: 1, f: 6, t: 14, p: 1}]};
+  // The office: a cleaner on Thursday.
+  const law = d.officeStaffing[0];
+  law.stations.push({id: 'CLN-O', name: null, skill: null});
+  law.people.push({id: 'CLN1', name: 'Cora Clean'});
+  law.current = {shifts: 1, fragments: 0, list: [{d: 4, s: 1, f: 8, t: 12, p: 0, k: 'clean'}]};
+  const page = await board(t, {data: JSON.stringify(d)});
+  const body = await request(page);
+  const site = n => body.sites.find(s => s.address.number === n);
+  assert.deepEqual(site(3).days, [
+    {d: 1, shifts: [{f: 0, t: 12, employeeId: 'FW1', itemInstanceId: 'MACH-1'}]},
+    {d: 2, shifts: [{f: 0, t: 6, employeeId: 'DRV1', itemInstanceId: 'VAN-1'}, {f: 0, t: 12, employeeId: 'f1', itemInstanceId: 'MACH-1'}]},
+    {d: 3, shifts: [{f: 0, t: 12, employeeId: 'f1', itemInstanceId: 'MACH-1'}, {f: 6, t: 14, employeeId: 'DRV1', itemInstanceId: 'VAN-1'}]},
+    {d: 4, shifts: [{f: 0, t: 12, employeeId: 'f2', itemInstanceId: 'MACH-1'}]},
+    {d: 5, shifts: [{f: 0, t: 12, employeeId: 'f2', itemInstanceId: 'MACH-1'}]}]);
+  assert.deepEqual(site(88).days.map(x => [x.d, x.shifts.map(s => `${s.employeeId}@${s.itemInstanceId} ${s.f}-${s.t}`)]),
+    [[1, ['l1@DESK-1 8-22']], [2, ['l1@DESK-1 8-22']], [3, ['l1@DESK-1 8-22']], [4, ['CLN1@CLN-O 8-12']]]);
+});
+
+test('a factory that only sends a spare is rewritten without them', async (t) => {
+  const d = JSON.parse(payload);
+  const F2 = 'ba:street_industry#5';
+  const works = d.businesses.find(b => b.key === F);
+  d.businesses.push(Object.assign(JSON.parse(JSON.stringify(works)), {key: F2, name: 'HART. Mill', code: 'IM', shiftPrint: 'f2f2f2f2', address: 'HART. Mill'}));
+  // Works: Fay on the plan's Monday; Finn has Thursday now and no hours in
+  // the plan, spare as a factory worker. Mill wants one worker on Monday.
+  const fac = d.factoryStaffing.cap[0];
+  fac.people.push({id: 'FW2', name: 'Finn Spare'});
+  fac.current = {shifts: 2, fragments: 0, list: [{d: 1, s: 0, f: 0, t: 12, p: 0}, {d: 4, s: 0, f: 0, t: 12, p: 1}]};
+  d.factoryStaffing.cap.push({key: F2, s: d.businesses.length - 1, name: 'HART. Mill', lines: [],
+    headcount: {needed: 12, min: 1, have: 0, spare: 0, hire: 1}, wageDay: 200, delta: {workers: 1, perDay: 200},
+    stations: [{id: 'MACH-2', name: 'Machine', skill: FW}], people: [], shifts: [{d: 1, s: 0, f: 0, t: 12, p: null}]});
+  const works2 = d.hiring.sites.find(s => s.key === F);
+  works2.plans.cap.spare = ['FW2'];
+  works2.plans.cap.spareSkills = {FW2: [FW]};
+  d.hiring.people.FW2 = {name: 'Finn Spare', skills: [{skill: FW, level: 60}], wage: 25, site: F, hours: 12, demands: []};
+  d.hiring.sites.splice(d.hiring.sites.indexOf(works2) + 1, 0, {key: F2, name: 'HART. Mill', kind: 'factory', address: addr(F2),
+    planned: true, new: true, accepts: [FW], facts: {},
+    plans: {cap: {spare: [], bench: [], hireWeeks: [{skill: FW, hours: 12, days: 1, slots: [slot(0, 1, 0, 12, 'MACH-2')]}]}}});
+  const page = await board(t, {data: JSON.stringify(d)});
+  const body = await request(page);
+  assert.deepEqual(body.moves.find(m => m.employeeId === 'FW2'), {employeeId: 'FW2', from: addr(F), to: addr(F2)});
+  const works3 = body.sites.find(s => s.address.number === 3);
+  assert.equal(works3.expect, 'f00df00d');
+  assert.ok(!works3.days.some(x => x.shifts.some(s => s.employeeId === 'FW2')), 'Finn leaves Works');
+  assert.deepEqual(body.sites.find(s => s.address.number === 5).days,
+    [{d: 1, shifts: [{f: 0, t: 12, employeeId: 'FW2', itemInstanceId: 'MACH-2'}]}]);
+});
+
+test('a spare moves in the role they are spare in, not their best skill', async (t) => {
+  const d = JSON.parse(payload);
+  // Sam cleans better than he serves, but Corner has him spare as a cashier.
+  d.hiring.people.SPARE1.skills = [{skill: CLEAN, level: 90}, {skill: CS, level: 66}];
+  d.hiring.sites[1].plans.demand.spareSkills = {SPARE1: [CS]};
+  const page = await board(t, {data: JSON.stringify(d)});
+  const m = await model(page);
+  assert.deepEqual(m.moves[1], {id: 'SPARE1', from: C, to: G, fixed: false, off: false});
+  assert.equal(await page.evaluate(() => hrModel().moves[1].p.level), 66);
+});
+
+test('nobody in training is moved or assigned, and their planned hours stay empty', async (t) => {
+  const d = JSON.parse(payload);
+  d.hiring.people.BENCH1.training = true;
+  d.hiring.people.SPARE1.training = true;
+  const page = await board(t, {data: JSON.stringify(d)});
+  const m = await model(page);
+  assert.deepEqual(m.moves, []);
+  const body = await request(page);
+  assert.deepEqual(body.moves, []);
+  const bare = body.sites.find(s => s.address.number === 4);
+  assert.ok(!bare.days.some(x => x.shifts.some(s => s.employeeId === 'BENCH1')), 'no shift for someone not assigned here');
+});
+
+test('"Pick more" sends no move, and leaves the bench a plan counts on out of the week', async (t) => {
+  const page = await board(t);
+  const body = await page.evaluate(k => hrRequest(hrModel(), {[`${k}|ba:skill_customerservice`]: 1}).body, B);
+  assert.deepEqual(body.moves, []);
+  assert.deepEqual(body.hires.map(h => h.candidateId), ['c1']);
+  const bare = body.sites.find(s => s.address.number === 4);
+  assert.ok(!bare.days.some(x => x.shifts.some(s => s.employeeId === 'BENCH1')));
+});
+
+test('"Not planned" opens the hand pick for a skill a planned site also hires', async (t) => {
+  const d = JSON.parse(payload);
+  d.hiring.sites.find(s => s.key === Q).accepts = [HRM, CLEAN];
+  const page = await board(t, {data: JSON.stringify(d)});
+  await page.locator(`#hrFound [data-hr-browse="${CLEAN}"][data-hr-unplanned]`).click();
+  const box = page.locator('#hrBrowse');
+  assert.match(await box.locator('.hr-tbar').textContent(), /picked by hand/);
+  assert.equal(await box.locator(`[data-hr-browse="${CLEAN}"][data-hr-unplanned]`).getAttribute('aria-pressed'), 'true');
+  assert.equal(await box.locator(`[data-hr-browse="${CLEAN}"]:not([data-hr-unplanned])`).getAttribute('aria-pressed'), 'false');
+  await box.locator('[data-hr-pick="c8"][data-hr-hand]').check();
+  assert.deepEqual(await page.evaluate(() => hrModel().hand.map(o => [o.c.id, o.S.key, o.skill])), [['c8', Q, CLEAN]]);
+  // The planned role's table is still one click away on the rail.
+  await box.locator(`[data-hr-browse="${CLEAN}"]:not([data-hr-unplanned])`).click();
+  assert.match(await page.locator('#hrBrowse .hr-tbar').textContent(), /of 1 picked/);
+});
+
+test('a body over what the game link takes is named before anything is sent', async (t) => {
+  const d = JSON.parse(payload);
+  // Ana on 40,000 entries at Gifts: a week far past 2 MB.
+  const gifts = d.staffing.find(r => r.key === G);
+  for (let i = 0; i < 40000; i++) gifts.shifts.push({d: 1, s: 0, f: 8, t: 20, p: 0});
+  const page = await board(t, {data: JSON.stringify(d)});
+  await page.locator('#hrBar [data-gw="hire"]').click();
+  await page.waitForFunction(() => document.querySelector('dialog.gw-dlg')?.dataset.phase === 'nothing');
+  const dlg = page.locator('dialog.gw-dlg');
+  assert.match(await dlg.textContent(), /Too much for one go/);
+  assert.match(await dlg.textContent(), /the link takes 2 MB/);
+  assert.deepEqual(await page.evaluate(() => window.hrWrites.length), 0);
+});
+
 // A dry run's answer for the request the page sent, the game taking all of it
 // except anyone named in `gone`.
 const answerFor = (body, {dryRun = true, gone = [], ok = true, extra = {}} = {}) => Object.assign({
@@ -434,6 +554,27 @@ test('Review: the dry run, who goes where, one confirm with no undo, and a parti
   const last = await page.evaluate(() => window.hrWrites.at(-1).body);
   assert.deepEqual(last.moves, []);
   assert.deepEqual(last.hires.map(h => [h.candidateId, h.address.number]), [['c3', 4]]);
+});
+
+test('the review names the hours a move leaves empty where the week is not replaced', async (t) => {
+  const d = JSON.parse(payload);
+  // Corner's schedule as the board read it has no hours for Sam, so its week
+  // is not replaced; the game says the move clears two of his shifts there.
+  d.staffing.find(r => r.key === C).current.list = [{d: 1, s: 0, f: 8, t: 20, p: 0}];
+  const page = await board(t, {data: JSON.stringify(d)});
+  await page.evaluate(src => { window.answerFor = eval(src); }, `(${answerFor.toString()})`);
+  await page.evaluate(() => {
+    window.hrAnswer = async (kind, body, o) => {
+      const a = window.answerFor(body, {dryRun: !!o.dryRun});
+      a.moved.forEach(m => { if(m.employeeId === 'SPARE1') m.shiftsCleared = 2; });
+      return {status: 200, error: null, body: a};
+    };
+  });
+  const body = await request(page);
+  assert.ok(!body.sites.some(s => s.address.number === 2), 'Corner is not rewritten');
+  await page.locator('#hrBar [data-gw="hire"]').click();
+  await page.waitForFunction(() => document.querySelector('dialog.gw-dlg')?.dataset.phase === 'ready');
+  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), /Hours left empty.*Sam Spare \(2 shifts at HART\. Corner\)/);
 });
 
 test('refusals: a row the game refuses, and MyEmployees open', async (t) => {

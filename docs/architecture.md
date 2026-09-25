@@ -162,7 +162,9 @@ Factory Worker role), `wageDay` (the mean day's wage of the factory's factory wo
 `delta` (`workers` is `hire - spare`, `perDay` that times `wageDay`). The week itself ships
 too, in the shop row's shape, so the Staff page can write it: `stations` (each with the
 machine's item `id`), `people`, `shifts` (`d`/`s`/`f`/`t`/`p`, `p` null on an entry
-nobody here may work) and `addPeople`. The placer's other tables (`placed`, `shortHours`)
+nobody here may work), `addPeople`, and `current` (`{shifts, fragments, list}`, the
+factory's schedule as it stands, drivers' shifts included, so the Staff page keeps the
+shifts on stations the plan does not own when it replaces the week). The placer's other tables (`placed`, `shortHours`)
 stay in Python: `_factory_staffing(..., detail=True)` keeps them for the tests. A factory the placer falls
 over on is `{key, s, name, failed: true}`. Its lines carry the matching verdict themselves:
 `status`/`why`/`level` sized 24/7 (`short` with why `hours`, judged on the week of the
@@ -204,13 +206,15 @@ an office `office`; an HQ or warehouse `{}`), each `{hireWeeks, spare, bench}`:
 `hireWeeks` one entry per person the plan hires, `{skill, hours, days, slots: [{shift, d,
 f, t, station}]}`, where `shift` indexes the plan row's `shifts` (every `p: null` entry
 is in exactly one week, and a role's weeks number its `headcount.hire`); `spare` the
-site's own people the plan gives no hours in a role it plans (move candidates); `bench`
+site's own people the plan gives no hours in a role it plans (move candidates), with
+`spareSkills` the roles each is spare in (a move keeps to them); `bench`
 the unassigned people it already counts on. The plan rows carry this as `_hire` until
 `_hiring()` takes it off. `accepts` is the game's assign check (`ASSIGN_SKILLS`, read from
 the business and building type bundles). `facts` answers each site-level demand for that
 site (a desk demand: whether the site holds such an item anywhere). Top level: `bench`
-every unassigned employee id; `people` the name, `skills`, `wage`, `site`, `hours` and
-`demands` of everybody a `bench` or `spare` list names; `demandKinds` each demand as
+every unassigned employee id; `people` the name, `skills`, `wage`, `site`, `hours`,
+`demands` and `training` (in training: never moved) of everybody a `bench` or `spare` list
+names; `demandKinds` each demand as
 `schedule`, `site` or `company`; `company` whether the company meets each company-level
 demand for a new hire.
 

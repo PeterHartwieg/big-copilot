@@ -295,6 +295,16 @@ MyEmployees in the game"), partial (the `gone` candidates struck through; their 
 link). Review is disabled unless `/health.writes` includes `"hire"`, with "Update the mod to
 0.3.0" when it does not.
 
+After review round 1 (25 Sep 2026): the write replaces all seven days, so a factory's or an
+office's `days` also keeps the live shifts on stations its plan does not staff (drivers,
+cleaners; factory rows now carry `current`), the plan winning where one overlaps it; a move
+source whose week is not rewritten gets a "Hours left empty" line from the answer's
+`moved[].shiftsCleared`; a spare moves only in a role it is spare in (`plan.spareSkills`);
+nobody in training (`hiring.people[].training`) is moved or assigned, and a plan's bench entries
+are written only for people this call assigns; "Not planned" opens the HQ/warehouse hand pick
+even for a skill a planned site hires; a body over 2 MiB (the mod's hire cap) is named before
+anything is sent.
+
 New classes are `hr-`; `web/app.js` needs no change for a new kind (`gameWrite`, `wellFormed`
 are generic); the board's `GW_DOES`, `GW_NOUN`, `GW_REFUSE` tables get the `hire` entries.
 

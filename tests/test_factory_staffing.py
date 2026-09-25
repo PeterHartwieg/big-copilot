@@ -338,7 +338,7 @@ class UnnamedAndSharedLineTests(unittest.TestCase):
         # The week stays so the Staff page can write it; `_hire` is the Staff
         # page's part, which _hiring() takes off before the payload ships.
         self.assertEqual(set(row), {"key", "s", "name", "lines", "headcount", "wageDay", "delta",
-                                    "stations", "people", "shifts", "addPeople", "_hire"})
+                                    "stations", "people", "shifts", "current", "addPeople", "_hire"})
 
 
 class StaffFindingTests(unittest.TestCase):
