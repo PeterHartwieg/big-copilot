@@ -86,6 +86,8 @@ CONVERTED = {
     "today": [],
     # The Company page: each chain's name in the Portfolio.
     "co": [("es3", "chains", "name")],
+    # The Wiki writes its own words in the page (tt()); Python sends it none.
+    "wiki": [],
 }
 
 

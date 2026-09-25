@@ -16,6 +16,9 @@ const vm = require('node:vm');
 const path = require('node:path');
 
 const WIKI = fs.readFileSync(path.join(__dirname, '..', 'web', 'wiki.js'), 'utf8');
+/* web/i18n.js runs ahead of wiki.js on the page: the Wiki's own words go
+   through its tt(). */
+const I18N = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8');
 /* The board's neighbourhood tables, as render() writes them in: keyed by the
    game's key, the words looked up only to be shown. */
 const HOOD_EN = {midtown: 'Midtown', hellskitchen: "Hell's Kitchen", murrayhill: 'Murray Hill',
@@ -312,6 +315,7 @@ function wiki({data = DATA, save = null} = {}) {
     fetch: async () => ({ok: true, status: 200, json: async () => data}),
   });
   context.window.window = context.window;
+  vm.runInContext(I18N, context);
   vm.runInContext(WIKI, context);
   return {
     context, root, drawn,
