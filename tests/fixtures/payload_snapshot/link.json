@@ -2,6 +2,12 @@
  "alerts": [
   {
    "group": "staff",
+   "i18n": {
+    "text": [
+     "f.staff.none",
+     {}
+    ]
+   },
    "id": "14c67b03be",
    "level": "critical",
    "site": "HART. Bare",
@@ -12,6 +18,14 @@
   },
   {
    "group": "uniform",
+   "i18n": {
+    "text": [
+     "f.uniform.gaps",
+     {
+      "roles": "⟦ba:skill_customerservice|Customerservice⟧"
+     }
+    ]
+   },
    "id": "1c3a61868d",
    "level": "warn",
    "site": "HART. Gifts",
@@ -22,6 +36,12 @@
   },
   {
    "group": "bathroom",
+   "i18n": {
+    "text": [
+     "f.amenity.bathroom",
+     {}
+    ]
+   },
    "id": "86620bfd86",
    "level": "warn",
    "site": "HART. Gifts",
@@ -32,6 +52,12 @@
   },
   {
    "group": "toiletprivacy",
+   "i18n": {
+    "text": [
+     "f.amenity.toiletprivacy",
+     {}
+    ]
+   },
    "id": "4878c3a643",
    "level": "warn",
    "site": "HART. Gifts",
@@ -42,6 +68,12 @@
   },
   {
    "group": "sink",
+   "i18n": {
+    "text": [
+     "f.amenity.sink",
+     {}
+    ]
+   },
    "id": "357a8039e8",
    "level": "warn",
    "site": "HART. Gifts",
@@ -52,6 +84,12 @@
   },
   {
    "group": "music",
+   "i18n": {
+    "text": [
+     "f.amenity.music",
+     {}
+    ]
+   },
    "id": "6e763a0eae",
    "level": "warn",
    "site": "HART. Gifts",
@@ -62,6 +100,12 @@
   },
   {
    "group": "interior",
+   "i18n": {
+    "text": [
+     "f.amenity.interior",
+     {}
+    ]
+   },
    "id": "bfcd4ccb85",
    "level": "warn",
    "site": "HART. Gifts",
@@ -72,6 +116,14 @@
   },
   {
    "group": "uniform",
+   "i18n": {
+    "text": [
+     "f.uniform.gaps",
+     {
+      "roles": "⟦ba:skill_customerservice|Customerservice⟧"
+     }
+    ]
+   },
    "id": "7882c54f79",
    "level": "warn",
    "site": "HART. Corner",
@@ -82,6 +134,12 @@
   },
   {
    "group": "bathroom",
+   "i18n": {
+    "text": [
+     "f.amenity.bathroom",
+     {}
+    ]
+   },
    "id": "b79c3c62dc",
    "level": "warn",
    "site": "HART. Corner",
@@ -92,6 +150,12 @@
   },
   {
    "group": "toiletprivacy",
+   "i18n": {
+    "text": [
+     "f.amenity.toiletprivacy",
+     {}
+    ]
+   },
    "id": "387d6f50e8",
    "level": "warn",
    "site": "HART. Corner",
@@ -102,6 +166,12 @@
   },
   {
    "group": "sink",
+   "i18n": {
+    "text": [
+     "f.amenity.sink",
+     {}
+    ]
+   },
    "id": "8140d1fc27",
    "level": "warn",
    "site": "HART. Corner",
@@ -112,6 +182,12 @@
   },
   {
    "group": "music",
+   "i18n": {
+    "text": [
+     "f.amenity.music",
+     {}
+    ]
+   },
    "id": "57afc3e9c7",
    "level": "warn",
    "site": "HART. Corner",
@@ -122,6 +198,12 @@
   },
   {
    "group": "interior",
+   "i18n": {
+    "text": [
+     "f.amenity.interior",
+     {}
+    ]
+   },
    "id": "e72294f80d",
    "level": "warn",
    "site": "HART. Corner",
@@ -132,6 +214,12 @@
   },
   {
    "group": "uniform",
+   "i18n": {
+    "text": [
+     "f.uniform.locker",
+     {}
+    ]
+   },
    "id": "89eb7c8130",
    "level": "warn",
    "site": "HART. Bare",
@@ -142,6 +230,12 @@
   },
   {
    "group": "bathroom",
+   "i18n": {
+    "text": [
+     "f.amenity.bathroom",
+     {}
+    ]
+   },
    "id": "636517b3ad",
    "level": "warn",
    "site": "HART. Bare",
@@ -152,6 +246,12 @@
   },
   {
    "group": "toiletprivacy",
+   "i18n": {
+    "text": [
+     "f.amenity.toiletprivacy",
+     {}
+    ]
+   },
    "id": "a0f5fc86d4",
    "level": "warn",
    "site": "HART. Bare",
@@ -162,6 +262,12 @@
   },
   {
    "group": "sink",
+   "i18n": {
+    "text": [
+     "f.amenity.sink",
+     {}
+    ]
+   },
    "id": "c178947dee",
    "level": "warn",
    "site": "HART. Bare",
@@ -172,6 +278,12 @@
   },
   {
    "group": "music",
+   "i18n": {
+    "text": [
+     "f.amenity.music",
+     {}
+    ]
+   },
    "id": "0e5fc6dcc7",
    "level": "warn",
    "site": "HART. Bare",
@@ -182,6 +294,12 @@
   },
   {
    "group": "interior",
+   "i18n": {
+    "text": [
+     "f.amenity.interior",
+     {}
+    ]
+   },
    "id": "170d5a3b09",
    "level": "warn",
    "site": "HART. Bare",
@@ -195,6 +313,12 @@
   "lines": [
    {
     "group": "staff",
+    "i18n": {
+     "text": [
+      "f.staff.none",
+      {}
+     ]
+    },
     "id": "14c67b03be",
     "level": "critical",
     "site": "HART. Bare",
@@ -205,6 +329,14 @@
    },
    {
     "group": "uniform",
+    "i18n": {
+     "text": [
+      "f.uniform.gaps",
+      {
+       "roles": "⟦ba:skill_customerservice|Customerservice⟧"
+      }
+     ]
+    },
     "id": "1c3a61868d",
     "level": "warn",
     "site": "HART. Gifts",
@@ -215,6 +347,12 @@
    },
    {
     "group": "bathroom",
+    "i18n": {
+     "text": [
+      "f.amenity.bathroom",
+      {}
+     ]
+    },
     "id": "86620bfd86",
     "level": "warn",
     "site": "HART. Gifts",
@@ -225,6 +363,12 @@
    },
    {
     "group": "toiletprivacy",
+    "i18n": {
+     "text": [
+      "f.amenity.toiletprivacy",
+      {}
+     ]
+    },
     "id": "4878c3a643",
     "level": "warn",
     "site": "HART. Gifts",
@@ -235,6 +379,12 @@
    },
    {
     "group": "sink",
+    "i18n": {
+     "text": [
+      "f.amenity.sink",
+      {}
+     ]
+    },
     "id": "357a8039e8",
     "level": "warn",
     "site": "HART. Gifts",
@@ -245,6 +395,12 @@
    },
    {
     "group": "music",
+    "i18n": {
+     "text": [
+      "f.amenity.music",
+      {}
+     ]
+    },
     "id": "6e763a0eae",
     "level": "warn",
     "site": "HART. Gifts",
@@ -255,6 +411,12 @@
    },
    {
     "group": "interior",
+    "i18n": {
+     "text": [
+      "f.amenity.interior",
+      {}
+     ]
+    },
     "id": "bfcd4ccb85",
     "level": "warn",
     "site": "HART. Gifts",
@@ -265,6 +427,14 @@
    },
    {
     "group": "uniform",
+    "i18n": {
+     "text": [
+      "f.uniform.gaps",
+      {
+       "roles": "⟦ba:skill_customerservice|Customerservice⟧"
+      }
+     ]
+    },
     "id": "7882c54f79",
     "level": "warn",
     "site": "HART. Corner",
@@ -275,6 +445,12 @@
    },
    {
     "group": "bathroom",
+    "i18n": {
+     "text": [
+      "f.amenity.bathroom",
+      {}
+     ]
+    },
     "id": "b79c3c62dc",
     "level": "warn",
     "site": "HART. Corner",
@@ -285,6 +461,12 @@
    },
    {
     "group": "toiletprivacy",
+    "i18n": {
+     "text": [
+      "f.amenity.toiletprivacy",
+      {}
+     ]
+    },
     "id": "387d6f50e8",
     "level": "warn",
     "site": "HART. Corner",
@@ -295,6 +477,12 @@
    },
    {
     "group": "sink",
+    "i18n": {
+     "text": [
+      "f.amenity.sink",
+      {}
+     ]
+    },
     "id": "8140d1fc27",
     "level": "warn",
     "site": "HART. Corner",
@@ -305,6 +493,12 @@
    },
    {
     "group": "music",
+    "i18n": {
+     "text": [
+      "f.amenity.music",
+      {}
+     ]
+    },
     "id": "57afc3e9c7",
     "level": "warn",
     "site": "HART. Corner",
@@ -315,6 +509,12 @@
    },
    {
     "group": "interior",
+    "i18n": {
+     "text": [
+      "f.amenity.interior",
+      {}
+     ]
+    },
     "id": "e72294f80d",
     "level": "warn",
     "site": "HART. Corner",
@@ -325,6 +525,12 @@
    },
    {
     "group": "uniform",
+    "i18n": {
+     "text": [
+      "f.uniform.locker",
+      {}
+     ]
+    },
     "id": "89eb7c8130",
     "level": "warn",
     "site": "HART. Bare",
@@ -335,6 +541,12 @@
    },
    {
     "group": "bathroom",
+    "i18n": {
+     "text": [
+      "f.amenity.bathroom",
+      {}
+     ]
+    },
     "id": "636517b3ad",
     "level": "warn",
     "site": "HART. Bare",
@@ -345,6 +557,12 @@
    },
    {
     "group": "toiletprivacy",
+    "i18n": {
+     "text": [
+      "f.amenity.toiletprivacy",
+      {}
+     ]
+    },
     "id": "a0f5fc86d4",
     "level": "warn",
     "site": "HART. Bare",
@@ -355,6 +573,12 @@
    },
    {
     "group": "sink",
+    "i18n": {
+     "text": [
+      "f.amenity.sink",
+      {}
+     ]
+    },
     "id": "c178947dee",
     "level": "warn",
     "site": "HART. Bare",
@@ -365,6 +589,12 @@
    },
    {
     "group": "music",
+    "i18n": {
+     "text": [
+      "f.amenity.music",
+      {}
+     ]
+    },
     "id": "0e5fc6dcc7",
     "level": "warn",
     "site": "HART. Bare",
@@ -375,6 +605,12 @@
    },
    {
     "group": "interior",
+    "i18n": {
+     "text": [
+      "f.amenity.interior",
+      {}
+     ]
+    },
     "id": "170d5a3b09",
     "level": "warn",
     "site": "HART. Bare",

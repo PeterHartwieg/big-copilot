@@ -10500,7 +10500,7 @@ def _alerts(
             "critical",
             b["name"],
             "notrading",
-            msg("f.notrading", "{site} opened day {day}, not trading yet: {reasons}, {rent:$}/day rent",
+            msg("f.notrading", "{site} opened day {day}, not trading yet: {reasons}, ${rent:,.0f}/day rent",
                 site=b["name"], day=b["opened"], reasons=_msg_list(reasons), rent=b["rent"]),
             worth=b["rent"],
             always=True,
@@ -10514,8 +10514,8 @@ def _alerts(
             "warn",
             msg("f.site.leases", {"one": "{n} leases", "other": "{n} leases"}, n=len(vacant)),
             "vacant",
-            msg("f.vacant", {"one": "{n} vacant leases costing {rent:$}/day in rent",
-                             "other": "{n} vacant leases costing {rent:$}/day in rent"}, n=len(vacant), rent=rent),
+            msg("f.vacant", {"one": "{n} vacant leases costing ${rent:,.0f}/day in rent",
+                             "other": "{n} vacant leases costing ${rent:,.0f}/day in rent"}, n=len(vacant), rent=rent),
             worth=rent,
         )
 
@@ -10746,32 +10746,32 @@ def _alerts(
                         base=base["revenue"], basis=base["basis"], drop=drop)
             if full and one:
                 text = msg("f.hype.wave.full", {
-                    "one": "{hood} hype on {lines}; {site} does {revenue:$}/day under it against {base:$} for "
-                           "{basis}; about {drop:$}/day of revenue rides on the wave. It already runs within 10% "
+                    "one": "{hood} hype on {lines}; {site} does ${revenue:,.0f}/day under it against ${base:,.0f} for "
+                           "{basis}; about ${drop:,.0f}/day of revenue rides on the wave. It already runs within 10% "
                            "of capacity for {n} hour of a normal week, so the door is turning part of the wave "
                            "away.",
-                    "other": "{hood} hype on {lines}; {site} does {revenue:$}/day under it against {base:$} for "
-                             "{basis}; about {drop:$}/day of revenue rides on the wave. It already runs within "
+                    "other": "{hood} hype on {lines}; {site} does ${revenue:,.0f}/day under it against ${base:,.0f} for "
+                             "{basis}; about ${drop:,.0f}/day of revenue rides on the wave. It already runs within "
                              "10% of capacity for {n} hours of a normal week, so the door is turning part of the "
                              "wave away.",
                 }, n=full, **said)
             elif full:
                 text = msg("f.hype.waves.full", {
-                    "one": "{hood} hype on {lines}; {site} does {revenue:$}/day under it against {base:$} for "
-                           "{basis}; about {drop:$}/day of revenue rides on the waves. It already runs within "
+                    "one": "{hood} hype on {lines}; {site} does ${revenue:,.0f}/day under it against ${base:,.0f} for "
+                           "{basis}; about ${drop:,.0f}/day of revenue rides on the waves. It already runs within "
                            "10% of capacity for {n} hour of a normal week, so the door is turning part of the "
                            "waves away.",
-                    "other": "{hood} hype on {lines}; {site} does {revenue:$}/day under it against {base:$} for "
-                             "{basis}; about {drop:$}/day of revenue rides on the waves. It already runs within "
+                    "other": "{hood} hype on {lines}; {site} does ${revenue:,.0f}/day under it against ${base:,.0f} for "
+                             "{basis}; about ${drop:,.0f}/day of revenue rides on the waves. It already runs within "
                              "10% of capacity for {n} hours of a normal week, so the door is turning part of the "
                              "waves away.",
                 }, n=full, **said)
             elif one:
-                text = msg("f.hype.wave", "{hood} hype on {lines}; {site} does {revenue:$}/day under it against "
-                           "{base:$} for {basis}; about {drop:$}/day of revenue rides on the wave.", **said)
+                text = msg("f.hype.wave", "{hood} hype on {lines}; {site} does ${revenue:,.0f}/day under it against "
+                           "${base:,.0f} for {basis}; about ${drop:,.0f}/day of revenue rides on the wave.", **said)
             else:
-                text = msg("f.hype.waves", "{hood} hype on {lines}; {site} does {revenue:$}/day under it against "
-                           "{base:$} for {basis}; about {drop:$}/day of revenue rides on the waves.", **said)
+                text = msg("f.hype.waves", "{hood} hype on {lines}; {site} does ${revenue:,.0f}/day under it against "
+                           "${base:,.0f} for {basis}; about ${drop:,.0f}/day of revenue rides on the waves.", **said)
             note(
                 "critical" if soonest <= 2 else "warn",
                 top["name"],
@@ -10786,11 +10786,11 @@ def _alerts(
                 "warn",
                 top["name"],
                 "hype",
-                msg("f.hype.nobase", "{hood} hype on {lines}; {site} does {revenue:$}/day under it. There is no "
+                msg("f.hype.nobase", "{hood} hype on {lines}; {site} does ${revenue:,.0f}/day under it. There is no "
                     "shop of the same kind trading without a wave and no trading days before this one started, "
                     "so there is no baseline to say what the drop will be", **said)
                 if one else
-                msg("f.hype.nobase.waves", "{hood} hype on {lines}; {site} does {revenue:$}/day under it. There "
+                msg("f.hype.nobase.waves", "{hood} hype on {lines}; {site} does ${revenue:,.0f}/day under it. There "
                     "is no shop of the same kind trading without a wave and no trading days before the first of "
                     "them started, so there is no baseline to say what the drop will be", **said),
                 always=True,
@@ -10818,11 +10818,11 @@ def _alerts(
             "warn" if row["change"] < 0 else "info",
             b["name"],
             "trend",
-            msg("f.trend.up", "Revenue up {pct:.0f}% week on week: {now:$} over days {start}-{end} against "
-                "{before:$} the week before", **said)
+            msg("f.trend.up", "Revenue up {pct:.0f}% week on week: ${now:,.0f} over days {start}-{end} against "
+                "${before:,.0f} the week before", **said)
             if row["change"] > 0 else
-            msg("f.trend.down", "Revenue down {pct:.0f}% week on week: {now:$} over days {start}-{end} against "
-                "{before:$} the week before", **said),
+            msg("f.trend.down", "Revenue down {pct:.0f}% week on week: ${now:,.0f} over days {start}-{end} against "
+                "${before:,.0f} the week before", **said),
             worth=abs(row["last7"] - row["prev7"]) / 7,
             key=b["key"],
         )
@@ -10886,30 +10886,30 @@ def _alerts(
             text = (
                 msg("f.atcap.limits", {
                     "one": "{where} fills the {noun} {when}, {n} hours a week at {rate} and "
-                           "{worth:$}/day through the ceiling. {limit} are the limit, so the answer is {fix}",
+                           "${worth:,.0f}/day through the ceiling. {limit} are the limit, so the answer is {fix}",
                     "other": "{where} fills the {noun} {when}, {n} hours a week at {rate} and "
-                             "{worth:$}/day through the ceiling. {limit} are the limit, so the answer is {fix}"}, **said)
+                             "${worth:,.0f}/day through the ceiling. {limit} are the limit, so the answer is {fix}"}, **said)
                 if several else
                 msg("f.atcap", {
                     "one": "{where} fills the {noun} {when}, {n} hours a week at {rate} and "
-                           "{worth:$}/day through the ceiling. {limit} is the limit, so the answer is {fix}",
+                           "${worth:,.0f}/day through the ceiling. {limit} is the limit, so the answer is {fix}",
                     "other": "{where} fills the {noun} {when}, {n} hours a week at {rate} and "
-                             "{worth:$}/day through the ceiling. {limit} is the limit, so the answer is {fix}"}, **said)
+                             "${worth:,.0f}/day through the ceiling. {limit} is the limit, so the answer is {fix}"}, **said)
             )
         else:
             sites = _msg_list([f["site"] for f in group])
             text = (
                 msg("f.atcap.sites.limits", {
                     "one": "{where} fill the {noun} {when}, {n} hours a week at {rate} and "
-                           "{worth:$}/day through the ceiling. {limit} are the limit, so the answer is {fix}: {sites}",
+                           "${worth:,.0f}/day through the ceiling. {limit} are the limit, so the answer is {fix}: {sites}",
                     "other": "{where} fill the {noun} {when}, {n} hours a week at {rate} and "
-                             "{worth:$}/day through the ceiling. {limit} are the limit, so the answer is {fix}: {sites}"}, sites=sites, **said)
+                             "${worth:,.0f}/day through the ceiling. {limit} are the limit, so the answer is {fix}: {sites}"}, sites=sites, **said)
                 if several else
                 msg("f.atcap.sites", {
                     "one": "{where} fill the {noun} {when}, {n} hours a week at {rate} and "
-                           "{worth:$}/day through the ceiling. {limit} is the limit, so the answer is {fix}: {sites}",
+                           "${worth:,.0f}/day through the ceiling. {limit} is the limit, so the answer is {fix}: {sites}",
                     "other": "{where} fill the {noun} {when}, {n} hours a week at {rate} and "
-                             "{worth:$}/day through the ceiling. {limit} is the limit, so the answer is {fix}: {sites}"}, sites=sites, **said)
+                             "${worth:,.0f}/day through the ceiling. {limit} is the limit, so the answer is {fix}: {sites}"}, sites=sites, **said)
             )
         # One site can be at more than one ceiling, and the limit is what keeps
         # the ids apart: a role short of people says "Gym Trainer staffing" and
