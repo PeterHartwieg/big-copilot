@@ -919,7 +919,7 @@ test('where to open: switching the finder off takes the landing down', async () 
     await page.evaluate(() => {
       // The finder beside the map, as far as the landing needs it.
       $('cityMapPage').innerHTML = '<div class="citymap"><aside class="places" style="position:relative">finder</aside></div>';
-      cityMapPage = {fs: {on: false}, finderOn(){ return this.fs.on; }, paintView(){}};
+      cityMapPage = {fs: {on: false}, finderOn(){ return this.fs.on; }, paintView(){}, wakeBall(){}};
       openFinder = () => { showPage('map'); cityMapPage.fs.on = true; };
     });
     await page.click('#ssAsk .ss-aq[data-ask="open"]');
