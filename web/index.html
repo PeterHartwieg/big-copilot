@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=e37bdd0240">
+<link rel="stylesheet" href="community.css?v=29ef1364b8">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -14,7 +14,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=e37bdd0240">
+<link rel="stylesheet" href="fonts/fonts.css?v=29ef1364b8">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -3137,7 +3137,8 @@ body:has(#changelogDialog[open]){overflow:hidden}
 .hs-shead h3{margin:0;font-size:18px;font-weight:600;letter-spacing:-.01em}
 /* the split: open places left, the order and quick hire right */
 .hs-split{display:grid;grid-template-columns:minmax(0,1fr) 332px;gap:36px;align-items:start;margin-top:28px}
-.hs-right{display:flex;flex-direction:column;gap:18px;position:sticky;top:20px}
+.hs-right{display:flex;flex-direction:column;gap:18px}
+@media (min-height:960px){.hs-right{position:sticky;top:20px}}
 .hs-order{display:flex;flex-direction:column;gap:16px;padding:20px;border-radius:14px;background:var(--surface);border:1px solid var(--rule)}
 .hs-order h3,.hs-kick{margin:0;font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
 .hs-ol{display:flex;flex-direction:column;gap:12px;margin:0;padding:0;list-style:none}
@@ -3226,7 +3227,7 @@ body:has(#changelogDialog[open]){overflow:hidden}
 .hs-num button{border:0;background:none;color:var(--ink-2);font:500 16px/1 Archivo,sans-serif;cursor:pointer}
 .hs-num button:hover{background:var(--raised);color:var(--ink)}
 .hs-num button:disabled{opacity:.35;cursor:default;background:none}
-.hs-num b{display:grid;place-items:center;font:500 14px/1 "IBM Plex Mono",monospace}
+.hs-num b{display:grid;place-items:center;font:500 14px/1 "IBM Plex Mono",monospace;outline:none}
 .hs-match{font-size:13px;color:var(--ink-2)}
 .hs-match.none{margin:0;color:var(--ink-3)}
 .hs-match .warn{color:var(--warn)}
@@ -3236,6 +3237,10 @@ body:has(#changelogDialog[open]){overflow:hidden}
 .hs-match summary svg{width:12px;height:12px;color:var(--ink-3);margin-left:auto;transition:transform .2s}
 .hs-match[open] summary svg{transform:rotate(90deg)}
 .hs-match ul,.hs-qlist{margin:8px 0 0;padding:0;list-style:none;display:flex;flex-direction:column}
+.hs-match ul{max-height:220px;overflow:auto}
+.hs-match li small,.hs-qlist li small{display:block;font-size:11px;margin-top:2px}
+.hs-match li .warn,.hs-qlist .warn{color:var(--warn)}
+.hs-c td.nm .hs-why{display:none;font-family:Archivo,sans-serif;font-size:11.5px;font-weight:400;white-space:normal;margin-top:2px}
 .hs-match li,.hs-qlist li{display:grid;grid-template-columns:minmax(0,1fr) 44px 64px;gap:8px;padding:6px 0;border-bottom:1px solid var(--rule-soft);font-size:12.5px;color:var(--ink)}
 .hs-qlist li.h{grid-template-columns:minmax(0,1fr) 44px 64px 44px}
 .hs-match .m,.hs-qlist .m{font:500 12px/1.4 "IBM Plex Mono",monospace;color:var(--ink-2);text-align:right}
@@ -3359,6 +3364,8 @@ dialog.hs-sheet::backdrop{background:#000;opacity:.45}
   .hs-sf{padding:12px 16px 16px}
   .hs-sf .end{margin-left:0;width:100%;justify-content:space-between}
   .hs-c .opt{display:none}
+  .hs-c td.nm{white-space:normal}
+  .hs-c td.nm .hs-why{display:block}
   .hr-dhead{grid-template-columns:minmax(0,1fr) auto 14px}
   .hr-dhead .hr-dots{display:none}
   .hr-dp{grid-template-columns:minmax(0,1fr) 44px 90px}
@@ -4062,8 +4069,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "e37bdd0240";</script>
-<script>window.LEDGER_RELEASE = {"version":"e37bdd0240","latest":{"pr":121,"date":"2026-09-25","title":"Hire and place staff for every site at once","summary":"Company › Payroll is now Staff. It adds up what each shop, office and factory still needs by role, moves spare people between sites first, and picks the most skilled of your headhunters' candidates, with filters for the demands you want to avoid. One confirm hires them, puts them at their sites and writes their hours, through the Big Copilot Link mod 0.3.0. Hires cannot be undone."}};</script>
+<script>window.LEDGER_BUILD = "29ef1364b8";</script>
+<script>window.LEDGER_RELEASE = {"version":"29ef1364b8","latest":{"pr":121,"date":"2026-09-25","title":"Hire and place staff for every site at once","summary":"Company › Payroll is now Staff. It adds up what each shop, office and factory still needs by role, moves spare people between sites first, and picks the most skilled of your headhunters' candidates, with filters for the demands you want to avoid. One confirm hires them, puts them at their sites and writes their hours, through the Big Copilot Link mod 0.3.0. Hires cannot be undone."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -4147,8 +4154,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=e37bdd0240"></script>
-<script src="community.js?v=e37bdd0240"></script>
+<script src="app.js?v=29ef1364b8"></script>
+<script src="community.js?v=29ef1364b8"></script>
 
 <script>
 
@@ -11184,19 +11191,28 @@ function hrFiltersSave(){
   if(!f.who) return;
   try{ localStorage.setItem(HR_STORE + f.who, JSON.stringify({v: 2, company: f.company, roles: f.roles})); }catch(e){}
 }
-/* The filter a role is picked by: its own, else the company's, whose
-   Part-time counts only for a role hired into a shop (`shop`). */
-function hrFilterFor(skill, shop){
+/* The filter a role is picked by: its own, applied as it is, else the
+   company's without Part-time, with `pt` saying whether the company's
+   Part-time bars its askers from the role's shop weeks (never its other
+   sites': the default is per destination). */
+function hrFilterFor(skill){
   const f = hrFilters();
-  if(f.roles[skill]) return f.roles[skill];
-  return shop ? f.company : Object.assign({}, f.company, {ex: f.company.ex.filter(d => d !== HR_PT)});
+  if(f.roles[skill]) return {f: f.roles[skill], pt: false};
+  return {f: Object.assign({}, f.company, {ex: f.company.ex.filter(d => d !== HR_PT)}), pt: f.company.ex.includes(HR_PT)};
 }
+const hrAsksPt = c => (c.demands || []).includes(HR_PT);
 
 /* The player's own ticks on this page: a candidate left out (skip) or added
    over the plan (force), a reassign group unticked; the role open in Change
    picks, and the Quick hire form. Kept while the page is open, for one
    company. */
 const hrQuickNew = () => ({skill: "", site: "", n: 1, min: 0, ex: null});
+/* Candidates the game hired from this board: {board, ids}, for as long as
+   the board is the one they were hired on. */
+function hrHiredAdd(ids){
+  if(!hrUi.hired || hrUi.hired.board !== D) hrUi.hired = {board: D, ids: new Set()};
+  ids.filter(Boolean).forEach(id => hrUi.hired.ids.add(id));
+}
 const hrUi = {who: null, skip: new Set(), force: new Set(), moveOff: new Set(),
               sheet: null, all: false, out: false, quick: hrQuickNew()};
 function hrTicks(){
@@ -11292,7 +11308,11 @@ const hrPerson = (id, row) => {
      moves  the bench the plans count on (fixed), then spares and the
             unassigned moved to a week in their own role (group, off)
      roles  one per skill with hire weeks: pool, picked, short, pass, out,
-            shop (hired into a shop) and f, the filter it is picked by
+            shop / allShop (some / every week at a shop), f, the filter it
+            is picked by, pt (the company's Part-time bars its shop weeks)
+            and passes(c)
+     quick  Quick hire's plan (hrQuickPlan()), made before the roles: its
+            picks win, and its weeks are not the roles'
      overs  candidates ticked over the plan: {c, S, skill}
      used   candidate id -> the site they are picked for */
 function hrModel(){
@@ -11349,30 +11369,39 @@ function hrModel(){
     }
   });
   sites.forEach(S => S.weeks.forEach(x => { delete x.taken; }));
-  /* 3. The candidates: each role most skilled first, nobody picked twice. */
-  const cands = D.candidates || [];
+  /* 3. The candidates, less anyone the game has just hired from this board
+     (they are staff now, until the board reads the game again); Quick hire
+     first, then each role most skilled first, nobody picked twice. */
+  const hired = hrUi.hired && hrUi.hired.board === D ? hrUi.hired.ids : null;
+  const cands = (D.candidates || []).filter(c => !(hired && hired.has(c.id)));
   const byId = new Map(cands.map(c => [c.id, c]));
   const used = new Map();  // candidate id -> the site they are picked for
+  const quick = hrQuickPlan(sites, cands, used);
+  const mine = S => S.weeks.filter(x => !(x.who && x.who.type === "quick"));
   const skills = new Map();
-  sites.forEach(S => S.weeks.forEach(x => skills.set(x.w.skill, (skills.get(x.w.skill) || 0) + 1)));
+  sites.forEach(S => mine(S).forEach(x => skills.set(x.w.skill, (skills.get(x.w.skill) || 0) + 1)));
   const order = [...skills.keys()].sort((a, b) => skills.get(b) - skills.get(a) || (gameName(a) || a).localeCompare(gameName(b) || b));
   const overs = [];
   const roles = order.map(skill => {
-    const shop = sites.some(S => S.site.kind === "shop" && S.weeks.some(x => x.w.skill === skill));
-    const f = hrFilterFor(skill, shop);
+    const {f, pt} = hrFilterFor(skill);
     const pool = cands.filter(c => hrLevel(c, skill) !== null).sort(hrRank(skill));
-    const weeks = sites.flatMap(S => S.weeks.filter(x => x.w.skill === skill));
+    const weeks = sites.flatMap(S => mine(S).filter(x => x.w.skill === skill));
+    const atShop = x => x.S.site.kind === "shop";
+    const shop = weeks.some(atShop), allShop = weeks.every(atShop);
     const open = weeks.filter(x => !x.who);
-    const role = {skill, f, shop, own: !!hrFilters().roles[skill], pool, weeks, need: open.length, moved: weeks.length - open.length,
-                  picked: [], pass: 0, out: 0, at: new Map()};
+    /* A Part-time asker passes a role with a week they may take. */
+    const passes = c => hrPasses(c, skill, f) && !(pt && allShop && hrAsksPt(c));
+    const role = {skill, f, pt, shop, allShop, passes, own: !!hrFilters().roles[skill], pool, weeks, need: open.length,
+                  moved: weeks.length - open.length, picked: [], pass: 0, out: 0, at: new Map()};
     pool.forEach(c => {
       const forced = ui.force.has(c.id);
-      const pass = hrPasses(c, skill, f);
+      const pass = passes(c);
       if(pass) role.pass++; else role.out++;
       if(!pass && !forced) return;
       if(used.has(c.id)){ role.at.set(c.id, {elsewhere: used.get(c.id)}); return; }
       if(ui.skip.has(c.id)) return;
-      const free = open.filter(x => !x.who);
+      const barred = x => pt && !forced && hrAsksPt(c) && atShop(x);
+      const free = open.filter(x => !x.who && !barred(x));
       if(free.length){
         /* The first site in list order with a place left; there, the first
            week whose schedule demands they meet, else the first, warned. */
@@ -11396,7 +11425,7 @@ function hrModel(){
     role.short = open.filter(x => !x.who).length;
     return role;
   });
-  return {sites, moves, roles, overs, cands, byId, used};
+  return {sites, moves, roles, overs, cands, byId, used, quick};
 }
 
 /* A demand of someone going to a site, as the page judges it: "ok", "warn"
@@ -11586,9 +11615,9 @@ function hrGroups(m){
 function hrReLine(g){
   const {x, people} = g, n = people.length;
   const to = spEsc(hrSiteName(x.to));
-  if(x.fixed) return `<div class="hs-re"><span class="hs-i">${hrSvg("check2")}</span><span><b>Assign ${n}</b> · unassigned → ${to}</span></div>`;
+  if(x.fixed) return `<div class="hs-re"><span class="hs-i">${hrSvg("check2")}</span><span><b>Assign ${hrNum(n)}</b> · unassigned → ${to}</span></div>`;
   const from = x.from ? `${spEsc(hrSiteName(x.from))} (no hours)` : "unassigned";
-  return `<div class="hs-re${x.off ? " off" : ""}"><span class="hs-i">${hrSvg("move")}</span><span><b>Reassign ${n}</b> · ${from} → ${to}</span>
+  return `<div class="hs-re${x.off ? " off" : ""}"><span class="hs-i">${hrSvg("move")}</span><span><b>Reassign ${hrNum(n)}</b> · ${from} → ${to}</span>
     <label><input type="checkbox" class="hs-cb" data-hr-move="${attr(g.group)}"${x.off ? "" : " checked"} aria-label="${attr(`Reassign ${n} ${gameName(x.skill) || ""}`)}">Reassign</label></div>`;
 }
 /* A role's row: Open · Own staff · New hires · Stays open · Wages/day. */
@@ -11605,10 +11634,10 @@ function hrRoleRow(m, r, lines){
     : `<td class="act"><button type="button" class="hs-btn" data-hr-open="${attr(r.skill)}" aria-label="${attr(`Change picks: ${gameName(r.skill) || r.skill}`)}"><span class="t">Change picks</span>${hrChev()}</button></td>`;
   const row = `<tr class="${lines ? "has-sub" : ""}" data-hr-role="${attr(r.skill)}">
     <td class="l hs-rn"><b>${hrRole(r.skill)}</b><small>${hrWhere(sites)}</small></td>
-    <td class="num opt">${r.weeks.length}</td>
-    <td class="${r.moved ? "num" : "dim"} opt">${r.moved || "–"}</td>
-    <td class="${people.length ? "num" : r.short ? "warn" : "dim"}">${people.length}${people.length ? `<small>${Math.round(avg(c => hrLevel(c, r.skill)))}% · ${hrWage(Math.round(avg(c => Number(c.wage) || 0)))}/h</small>` : ""}</td>
-    <td class="${r.short ? "warn" : "dim"}">${r.short || "–"}</td>
+    <td class="num opt">${hrNum(r.weeks.length)}</td>
+    <td class="${r.moved ? "num" : "dim"} opt">${r.moved ? hrNum(r.moved) : "–"}</td>
+    <td class="${people.length ? "num" : r.short ? "warn" : "dim"}">${hrNum(people.length)}${people.length ? `<small>${Math.round(avg(c => hrLevel(c, r.skill)))}% · ${hrWage(Math.round(avg(c => Number(c.wage) || 0)))}/h</small>` : ""}</td>
+    <td class="${r.short ? "warn" : "dim"}">${r.short ? hrNum(r.short) : "–"}</td>
     <td class="${bill ? "num" : "dim"} opt">${bill ? `+${fmt(bill)}` : "–"}</td>${act}</tr>`;
   return row + (lines ? `<tr class="hs-subrow"><td class="l" colspan="7">${lines}</td></tr>` : "");
 }
@@ -11636,7 +11665,7 @@ function hrFbar(target, f, count){
    it, the total, and one line of candidate facts. */
 function hrOpenHtml(m){
   const f = hrFilters().company;
-  const match = new Set(m.roles.flatMap(r => r.pool.filter(c => hrPasses(c, r.skill, r.f)).map(c => c.id))).size;
+  const match = new Set(m.roles.flatMap(r => r.pool.filter(r.passes).map(c => c.id))).size;
   const groups = hrGroups(m);
   const lines = skill => groups.filter(g => g.x.skill === skill).map(hrReLine).join("");
   const skills = new Set(m.roles.map(r => r.skill));
@@ -11651,7 +11680,7 @@ function hrOpenHtml(m){
   return `${head}${hrFbar("", f, `<b>${hrNum(match)}</b> match`)}${shopPt ? `<p class="hs-note hs-shops">Part-time is left out for shop roles only.</p>` : ""}
     <div class="hs-scroll"><table class="hs-t hs-roles"><thead><tr><th class="l">Role</th><th class="opt">Open</th><th class="opt">Own staff</th><th>New hires</th><th>Stays open</th><th class="opt">Wages/day</th><th><span class="gw-sr">Change picks</span></th></tr></thead>
     <tbody>${m.roles.map(r => hrRoleRow(m, r, lines(r.skill))).join("")}${stray ? `<tr class="hs-subrow"><td class="l" colspan="7">${stray}</td></tr>` : ""}</tbody>
-    <tfoot><tr><td class="l">Total</td><td class="opt">${t.needed}</td><td class="opt">${own}</td><td>${t.hire}</td><td class="${t.short ? "warn" : ""}">${t.short}</td><td class="opt">+${fmt(t.bill)}</td><td></td></tr></tfoot></table></div>
+    <tfoot><tr><td class="l">Total</td><td class="opt">${hrNum(t.needed)}</td><td class="opt">${hrNum(own)}</td><td>${hrNum(t.hire)}</td><td class="${t.short ? "warn" : ""}">${hrNum(t.short)}</td><td class="opt">+${fmt(t.bill)}</td><td></td></tr></tfoot></table></div>
     ${facts}`;
 }
 /* "When you hire": what the button does, in numbers, then the button, then
@@ -11663,13 +11692,13 @@ function hrOrderHtml(m, t){
   const byRole = m.roles.map(r => [r, r.picked.length]).filter(([, n]) => n);
   const short = m.roles.filter(r => r.short);
   const items = [
-    t.move ? `<li><span>Reassign</span><b>${t.move}</b><small>${routes.slice(0, 2).join(" · ")}${routes.length > 2 ? ` · ${routes.length - 2} more` : ""}</small></li>` : "",
-    `<li><span>Hire</span><b>${t.hire}</b>${byRole.length ? `<small>${byRole.map(([r, n]) => `${n} ${hrRoles(r.skill, n)}`).join(" · ")}</small>` : ""}</li>`,
-    short.length ? `<li class="short"><span>Stays open</span><b>${t.short}</b><small>${short.map(r =>
-      `${hrRole(r.skill)}: ${r.pool.length ? `${r.short} open` : "no candidates"}`).join(" · ")}</small></li>` : "",
+    t.move ? `<li><span>Reassign</span><b>${hrNum(t.move)}</b><small>${routes.slice(0, 2).join(" · ")}${routes.length > 2 ? ` · ${routes.length - 2} more` : ""}</small></li>` : "",
+    `<li><span>Hire</span><b>${hrNum(t.hire)}</b>${byRole.length ? `<small>${byRole.map(([r, n]) => `${hrNum(n)} ${hrRoles(r.skill, n)}`).join(" · ")}</small>` : ""}</li>`,
+    short.length ? `<li class="short"><span>Stays open</span><b>${hrNum(t.short)}</b><small>${short.map(r =>
+      `${hrRole(r.skill)}: ${r.pool.length ? `${hrNum(r.short)} open` : "no candidates"}`).join(" · ")}</small></li>` : "",
   ].join("");
   const n = t.hire + t.move;
-  const label = t.hire ? `Review and hire ${t.hire}` : t.move ? `Review and reassign ${t.move}` : "Nothing to hire";
+  const label = t.hire ? `Review and hire ${hrNum(t.hire)}` : t.move ? `Review and reassign ${hrNum(t.move)}` : "Nothing to hire";
   const off = !l || old || !n;
   const why = !l ? "needs the game linked" : old ? "needs Big Copilot Link 0.3.0" : !n ? "nothing to hire or reassign" : "";
   /* Not linked, no data-gw: nothing on the board is a write while it reads a save. */
@@ -11710,6 +11739,9 @@ function drawStaff(parts){
   }
   const m = hrModel(), t = hrTotals(m);
   const html = {hsOpen: () => hrOpenHtml(m), hsOrder: () => hrOrderHtml(m, t), hsQuick: () => hrQuickHtml(m)};
+  /* A redraw (a live refresh among them) puts the keyboard back where it was. */
+  const had = document.activeElement, sheet = $("hsSheet");
+  const keep = had && ((sec.contains(had) && sec) || (sheet && sheet.contains(had) && sheet)) ? hrKey(had) : null;
   if(parts && sec.querySelector("#hsOpen")) parts.forEach(id => { const el = sec.querySelector(`#${id}`); if(el) el.innerHTML = html[id](); });
   else sec.innerHTML = `<div class="hs-head"><h2>Staff</h2><div class="aside">${hrLinkState()}</div></div>
     <div class="hs-split"><div class="hs-left" id="hsOpen">${html.hsOpen()}</div>
@@ -11719,6 +11751,15 @@ function drawStaff(parts){
   hrSheetPaint(m);
   if(hrPop) hrPopDraw(m);
   if(parts) wireTips();
+  if(keep && !(document.activeElement && document.activeElement !== document.body && document.activeElement.isConnected)){
+    const box = $("hsSheet") || sec, el = box.querySelector(keep) || sec.querySelector(keep);
+    if(el) el.focus({preventScroll: true});
+  }
+  const stuck = document.activeElement;
+  if(stuck && stuck.disabled && (stuck.hasAttribute("data-hq-less") || stuck.hasAttribute("data-hq-more"))){
+    const b = sec.querySelector("[data-hq-n]");
+    if(b) b.focus({preventScroll: true});
+  }
 }
 /* Repaint after a control changed, and put the keyboard back where it was:
    `focus` is a selector, looked for in Change picks first. */
@@ -11728,7 +11769,9 @@ function hrRepaint(focus, parts){
   if(focus){
     const sheet = $("hsSheet");
     const el = (sheet && sheet.querySelector(focus)) || $("secStaff").querySelector(focus);
-    if(el) el.focus({preventScroll: true});
+    /* The stepper's button at 1 or 99 is off: the keyboard goes to the number. */
+    const at = el && el.disabled ? $("secStaff").querySelector("[data-hq-n]") : el;
+    if(at) at.focus({preventScroll: true});
   }
 }
 const hrKey = el => {
@@ -11762,12 +11805,14 @@ function hrCandRow(m, r, c){
   const warned = new Map(picked ? hrWarns(m, c, S, wk) : []);
   const lv = hrLevel(c, r.skill);
   const dem = (c.demands || []).map(d => warned.has(d) ? `<span class="warn">${hrName(d)} (${hrWhy(m, d, S, wk)})</span>` : hrName(d)).join(", ");
+  /* On a phone Asks for is hidden: the unmet ones go under the name. */
+  const why = [...warned.keys()].map(d => `${hrName(d)} (${hrWhy(m, d, S, wk)})`).join(", ");
   const to = elsewhere ? `<span class="dim">picked for ${spEsc(hrSiteName(elsewhere))}</span>`
     : S ? `${spEsc(hrSiteName(S))}${at.over ? ` <span class="warn">over the plan</span>` : ""}` : `<span class="dim">–</span>`;
   const soon = Number(c.hoursLeft) < 24;
   return `<tr class="${picked ? "on" : ""}" data-hr-cand="${attr(c.id)}">
     <td class="l"><input type="checkbox" class="hs-cb" data-hr-pick="${attr(c.id)}" data-hr-skill="${attr(r.skill)}"${picked ? " checked" : ""}${elsewhere ? " disabled" : ""} aria-label="${attr(`Pick ${c.name || "this candidate"}`)}"></td>
-    <td class="nm"><b>${spEsc(c.name || "?")}</b></td>
+    <td class="nm"><b>${spEsc(c.name || "?")}</b>${why ? `<small class="hs-why warn">${why}</small>` : ""}</td>
     <td class="l"><span class="hs-sk" style="--w:${Math.max(0, Math.min(100, lv || 0))}%"><i></i></span>${Math.round(lv || 0)}%</td>
     <td>${hrWage(c.wage)}</td><td class="to">${to}</td>
     <td class="dem opt">${dem || `<span class="dim">–</span>`}</td>
@@ -11779,18 +11824,20 @@ function hrSheetHtml(m, r){
   const sites = [];
   r.weeks.forEach(x => { if(x.who && x.who.type === "move") return; const s = sites.find(y => y.S === x.S); if(s) s.n++; else sites.push({S: x.S, n: 1}); });
   const own = !!hrFilters().roles[r.skill];
-  const f = own ? hrFilters().roles[r.skill] : hrFilters().company;
+  /* The filter as it applies here: the company's Part-time shows only where
+     it bars a week of this role (a shop's). */
+  const f = own ? r.f : Object.assign({}, r.f, {ex: r.pt && r.shop ? [...r.f.ex, HR_PT] : r.f.ex});
   const placed = c => { const at = r.at.get(c.id); return !!(at && (at.week || at.over)); };
   const picked = r.pool.filter(placed);
-  const next = r.pool.filter(c => !placed(c) && hrPasses(c, r.skill, r.f));
-  const out = r.pool.filter(c => !placed(c) && !hrPasses(c, r.skill, r.f));
+  const next = r.pool.filter(c => !placed(c) && r.passes(c));
+  const out = r.pool.filter(c => !placed(c) && !r.passes(c));
   const cap = 200, shown = hrUi.all ? next.slice(0, cap) : next.slice(0, 10);
   const over = picked.length - need;
-  const count = `${picked.length} of ${need}${over > 0 ? ` · ${over} over the plan` : over < 0 ? ` · ${-over} open` : ""}`;
+  const count = `${hrNum(picked.length)} of ${hrNum(need)}${over > 0 ? ` · ${hrNum(over)} over the plan` : over < 0 ? ` · ${hrNum(-over)} open` : ""}`;
   const bill = r.weeks.reduce((n, x) => n + (x.who && x.who.type === "hire" ? Number(x.who.c.wage || 0) * Number(x.w.hours || 0) / 7 : 0), 0);
   const lacks = picked.some(c => { const at = r.at.get(c.id); return hrWarns(m, c, at.week ? at.week.S : at.over, at.week).length; });
   const table = rows => `<div class="hs-scroll"><table class="hs-t hs-c">${HR_CAND_HEAD}<tbody>${rows.map(c => hrCandRow(m, r, c)).join("")}</tbody></table></div>`;
-  return `<div class="hs-sh"><div><h2 id="hsSheetT">${hrRole(r.skill)}</h2><p>${plural(need, "new hire")} · ${sites.map(({S, n}) => `${spEsc(hrSiteName(S))} (${n})`).join(", ")}</p></div>
+  return `<div class="hs-sh"><div><h2 id="hsSheetT">${hrRole(r.skill)}</h2><p>${plural(need, "new hire")} · ${sites.map(({S, n}) => `${spEsc(hrSiteName(S))} (${hrNum(n)})`).join(", ")}</p></div>
       <button type="button" class="gw-x" data-hs-close aria-label="Close">${gwSvg("close")}</button></div>
     <div class="hs-sb">
       ${hrFbar(r.skill, f, `<b>${hrNum(r.pass)}</b> match · <b>${hrNum(r.out)}</b> left out`)}
@@ -11873,7 +11920,8 @@ function hrPopDraw(m){
   if(pop.parentElement !== host) host.appendChild(pop);
   const had = document.activeElement && pop.contains(document.activeElement) ? document.activeElement.getAttribute("data-hr-dem") : null;
   pop.innerHTML = `<div class="ph">Leave out anyone asking for:</div>${few.map(([d, n]) =>
-      `<label class="hs-opt"><input type="checkbox" class="hs-cb" data-hr-dem="${attr(d)}"${f.ex.includes(d) ? " checked" : ""}><span>${hrName(d)}</span><small>${hrNum(n)}</small></label>`).join("")
+      `<label class="hs-opt"><input type="checkbox" class="hs-cb" data-hr-dem="${attr(d)}"${f.ex.includes(d) ? " checked" : ""}><span>${hrName(d)}${
+        d === HR_PT && f === hrFilters().company ? ` <small>· shop roles only</small>` : ""}</span><small>${hrNum(n)}</small></label>`).join("")
     || `<p class="ph">Nobody asks for anything.</p>`}
     <div class="pf">${few.length < all.length ? `<button type="button" data-hs-dem-all>All ${all.length} demands</button>` : "<span></span>"}<button type="button" data-hs-dem-clear>Clear</button></div>`;
   pop.hidden = false;
@@ -11903,64 +11951,94 @@ function hrPopClose(back){
 /* --- Quick hire: the best matches for one role, at any site --------------- */
 /* Role, site (headquarters, warehouse, office, factory or shop), how many,
    the lowest skill and the demands to leave out; the best matches are picked
-   as the planned hires are (most skilled first, a tie to the lower wage), from
-   the candidates Open places has not picked. At a site with a staffing plan
-   each gets one of the plan's open weeks in that role, as a planned hire
-   does; past those, and at a site with no plan, they join with no hours. The
-   same /write/hire call as the order. Part-time is left out by default at a
-   shop. */
-function hrQuickModel(m){
+   as the planned hires are (most skilled first, a tie to the lower wage). Its
+   picks win over Open places: hrModel() plans them first (hrQuickPlan()), and
+   at a site with a staffing plan each takes one of the plan's weeks in that
+   role there, which Open places then leaves to it. Past those, and at a site
+   with no plan, they join with no hours. The write keeps the site's week as
+   the game has it and adds only the new people's shifts (hrQuickRequest()),
+   on the same /write/hire call as the order. Part-time is left out by default
+   at a shop. */
+function hrQuickPlan(sites, cands, used){
   const q = hrUi.quick, H = D.hiring || {};
   const skills = [...new Set((H.sites || []).flatMap(s => s.accepts || []))]
     .sort((a, b) => (gameName(a) || a).localeCompare(gameName(b) || b));
   if(q.skill && !skills.includes(q.skill)) q.skill = "";
-  const sites = m.sites.filter(S => !q.skill || (S.site.accepts || []).includes(q.skill));
-  if(q.site && !sites.some(S => S.key === q.site)) q.site = "";
-  const S = q.site ? sites.find(x => x.key === q.site) : null;
+  const at = sites.filter(S => !q.skill || (S.site.accepts || []).includes(q.skill));
+  if(q.site && !at.some(S => S.key === q.site)) q.site = "";
+  const S = q.site ? at.find(x => x.key === q.site) : null;
   const shop = !!S && S.site.kind === "shop";
   const ex = q.ex || (shop ? [HR_PT] : []);
-  const out = {q, skills, sites, S, shop, ex, ready: !!(q.skill && S), matches: [], picks: [], short: 0};
+  const out = {q, skills, sites: at, S, shop, ex, ready: !!(q.skill && S), plan: false, matches: [], picks: [], short: 0};
   if(!out.ready) return out;
-  out.matches = m.cands.filter(c => !m.used.has(c.id) && hrLevel(c, q.skill) !== null && hrLevel(c, q.skill) >= q.min
+  out.matches = cands.filter(c => hrLevel(c, q.skill) !== null && hrLevel(c, q.skill) >= q.min
     && !(c.demands || []).some(d => ex.includes(d))).sort(hrRank(q.skill));
-  /* The plan's weeks in this role that Open places leaves open. */
-  const open = S.planned && S.row ? S.weeks.filter(x => x.w.skill === q.skill && !x.who) : [];
+  /* The plan's weeks in this role here that nobody reassigned takes. */
+  out.plan = !!(S.planned && S.row);
+  const open = out.plan ? S.weeks.filter(x => x.w.skill === q.skill && !x.who) : [];
   out.picks = out.matches.slice(0, q.n).map(c => {
     const fails = x => (c.demands || []).filter(d => hrKind(d) === "schedule" && hrBreaks(d, x.w, S.row));
     const wk = open.find(x => !fails(x).length) || open[0] || null;
-    if(wk) open.splice(open.indexOf(wk), 1);
-    return {c, w: wk ? wk.w : null};
+    if(wk){ open.splice(open.indexOf(wk), 1); wk.who = {type: "quick", c}; }
+    used.set(c.id, S);
+    return {c, w: wk ? wk.w : null, misfit: wk ? fails(wk) : []};
   });
   out.short = Math.max(0, q.n - out.matches.length);
   return out;
 }
-/* The request: the hires, and the site's week when any of them gets hours
-   there (the plan's week, as a planned hire's; nobody is reassigned). */
+const hrQuickModel = m => m.quick;
+/* The request: the hires, and, when any of them gets hours, the site's week
+   as the game has it now plus their shifts. A shift that meets one already
+   there on the same station or for the same person is left out; nobody
+   else's hours change. `hours` is each hire's kept hours by id. */
 function hrQuickRequest(Q){
-  const S = Q.S, hires = [], names = new Map(), fill = [];
-  if(!S) return {body: {sites: [], hires: [], moves: []}, names, hours: 0};
+  const S = Q.S, hires = [], names = new Map(), hours = new Map();
+  if(!S) return {body: {sites: [], hires: [], moves: []}, names, hours, given: 0};
+  const row = S.row || {};
+  const now = Q.plan && row.current && Array.isArray(row.current.list) ? row.current.list : null;
+  const week = [];
+  if(now) now.forEach(s => {
+    const st = (row.stations || [])[s.s], who = (row.people || [])[s.p];
+    if(st && who && spHasId(st.id) && spHasId(who.id) && s.d >= 0 && s.d < 7) week.push({d: s.d, f: s.f, t: s.t, employeeId: who.id, itemInstanceId: st.id});
+  });
+  const meets = (a, b) => a.d === b.d && a.f < b.t && b.f < a.t && (a.itemInstanceId === b.itemInstanceId || a.employeeId === b.employeeId);
   Q.picks.forEach(({c, w}) => {
     hires.push({candidateId: c.id, address: gwAddress(S.key), expect: {wage: c.wage}, seenHoursLeft: c.hoursLeft ?? null});
     names.set(c.id, {name: c.name, skill: Q.q.skill, c});
-    if(w) fill.push({id: c.id, w});
+    let kept = 0;
+    if(now && w) (w.slots || []).forEach(sl => {
+      const sh = (row.shifts || [])[sl.shift];
+      const st = sh ? (row.stations || [])[sh.s] : null;
+      const x = {d: sl.d, f: sl.f, t: sl.t, employeeId: c.id, itemInstanceId: sl.station || (st && st.id)};
+      if(!(x.d >= 0 && x.d < 7) || !spHasId(x.itemInstanceId) || week.some(y => meets(x, y))) return;
+      week.push(x);
+      kept += x.t - x.f;
+    });
+    hours.set(c.id, kept);
   });
-  const site = fill.length && S.row
+  const given = [...hours.values()].filter(h => h > 0).length;
+  const days = [];
+  week.forEach(({d, ...x}) => { let day = days.find(y => y.d === d); if(!day) days.push(day = {d, shifts: []}); day.shifts.push(x); });
+  days.sort((a, b) => a.d - b.d).forEach(day => day.shifts.sort((a, b) => a.f - b.f || a.t - b.t));
+  const site = given
     ? {address: gwAddress(S.key), expect: S.b && typeof S.b.shiftPrint === "string" ? S.b.shiftPrint : null,
-       openAllHours: !!(S.row.full && !S.row.openNow), days: hrWeek(S, fill, new Set(), new Set(), {hours: 0})}
+       openAllHours: !!(row.full && !row.openNow), days}
     : {address: gwAddress(S.key), expect: null, days: null};
-  return {body: {sites: hires.length ? [site] : [], hires, moves: []}, names, hours: fill.length};
+  return {body: {sites: hires.length ? [site] : [], hires, moves: []}, names, hours, given};
 }
+/* A pick whose plan week breaks one of their schedule demands, in orange. */
+const hrQuickMisfit = misfit => misfit.length ? `<small class="warn">hours break ${misfit.map(hrName).join(", ")}</small>` : "";
 function hrQuickHtml(m){
   const Q = hrQuickModel(m), q = Q.q;
   const l = gwLink(), off = !l || !(l.writes || []).includes("hire");
   const kind = S => { const k = HR_KIND_WORDS[S.site.kind]; return S.b && S.b.type ? S.b.type : k ? k[0] : S.site.kind; };
   const skills = [...new Set([...HR_SKILLS, q.min])].sort((a, b) => a - b);
-  const k = Q.picks.length;
+  const k = Q.picks.length, n = Q.matches.length;
   const match = !Q.ready ? `<p class="hs-match none">Pick a role and a site to see who matches.</p>`
-    : !Q.matches.length ? `<p class="hs-match none">Nobody matches.</p>`
-    : `<details class="hs-match" data-hq-list${q.open ? " open" : ""}><summary><b>${hrNum(Q.matches.length)}</b> match · ${
-        Q.short ? `<span class="warn">${Q.short} short</span>` : k === Q.matches.length ? (k === 1 ? "picked" : `all ${k} are picked`) : k === 1 ? "the best is picked" : `the best ${k} are picked`}${hrChev()}</summary>
-      <ul>${Q.picks.map(({c}) => `<li><span>${spEsc(c.name || "?")}</span><span class="m">${Math.round(hrLevel(c, q.skill))}%</span><span class="m">${hrWage(c.wage)}/h</span></li>`).join("")}</ul></details>`;
+    : !n ? `<p class="hs-match none">Nobody matches.</p>`
+    : `<details class="hs-match" data-hq-list${q.open ? " open" : ""}><summary><b>${hrNum(n)}</b> match · ${
+        Q.short ? `<span class="warn">only ${hrNum(n)} ${n === 1 ? "matches" : "match"}</span>` : k === n ? (k === 1 ? "picked" : `all ${hrNum(k)} are picked`) : k === 1 ? "the best is picked" : `the best ${hrNum(k)} are picked`}${hrChev()}</summary>
+      <ul>${Q.picks.map(({c, misfit}) => `<li><span>${spEsc(c.name || "?")}${hrQuickMisfit(misfit)}</span><span class="m">${Math.round(hrLevel(c, q.skill))}%</span><span class="m">${hrWage(c.wage)}/h</span></li>`).join("")}</ul></details>`;
   const dis = !Q.ready || !k || off;
   return `<div class="qh"><span class="hs-i">${hrSvg("hire")}</span><h3>Quick hire</h3><span class="sub">any site</span></div>
     <div class="qf">
@@ -11968,14 +12046,14 @@ function hrQuickHtml(m){
         Q.skills.map(s => `<option value="${attr(s)}"${s === q.skill ? " selected" : ""}>${hrRole(s)}</option>`).join("")}</select>${hrChev()}</span></label>
       <label class="fld wide"><span>At</span><span class="hs-sel"><select data-hq-site aria-label="At" class="${q.site ? "" : "empty"}"><option value="">Choose a site</option>${
         Q.sites.map(S => `<option value="${attr(S.key)}"${S.key === q.site ? " selected" : ""}>${spEsc(hrSiteName(S))} · ${spEsc(kind(S))}</option>`).join("")}</select>${hrChev()}</span></label>
-      <div class="fld"><span>How many</span><span class="hs-num"><button type="button" data-hq-less aria-label="Fewer"${q.n <= 1 ? " disabled" : ""}>−</button><b data-hq-n aria-live="polite">${q.n}</b><button type="button" data-hq-more aria-label="More"${q.n >= 99 ? " disabled" : ""}>+</button></span></div>
+      <div class="fld"><span>How many</span><span class="hs-num"><button type="button" data-hq-less aria-label="Fewer"${q.n <= 1 ? " disabled" : ""}>−</button><b data-hq-n tabindex="-1" aria-live="polite">${hrNum(q.n)}</b><button type="button" data-hq-more aria-label="More"${q.n >= 99 ? " disabled" : ""}>+</button></span></div>
       <label class="fld"><span>Skill at least</span><span class="hs-sel"><select data-hq-min aria-label="Skill at least" class="${q.min ? "set" : ""}">${skills.map(v =>
         `<option value="${v}"${v === q.min ? " selected" : ""}>${v ? `${v}%` : "any"}</option>`).join("")}</select>${hrChev()}</span></label>
       <div class="fld wide"><span>Leave out who asks for</span><button type="button" class="hs-sel" data-hs-dem-open="quick" aria-haspopup="true" aria-expanded="${!!hrPop && hrPop.target === "quick"}">${hrDemLabel(Q.ex)}${hrChev()}</button></div>
     </div>
     ${Q.shop && Q.ex.includes(HR_PT) ? `<p class="hs-note hs-shops">Part-time is left out for shop roles only.</p>` : ""}
     ${match}
-    <button type="button" class="hs-cta wide" data-hq-go${dis ? ` aria-disabled="true"` : ""}>${k ? `Hire ${k}` : "Hire"}${dis ? "" : gwSvg("right")}</button>`;
+    <button type="button" class="hs-cta wide" data-hq-go${dis ? ` aria-disabled="true"` : ""}>${k ? `Hire ${hrNum(k)}` : "Hire"}${dis ? "" : gwSvg("right")}</button>`;
 }
 
 /* The confirm: the game is asked first, then one Hire. No undo. */
@@ -11984,19 +12062,24 @@ function hrQuickReview(){
   const build = () => { const Q = hrQuickModel(hrModel()); hrQuickLast = {Q, req: hrQuickRequest(Q)}; return hrQuickLast; };
   build();
   const n = () => hrQuickLast.req.body.hires.length;
-  const who = k => `${k} ${hrRoles(hrQuickLast.Q.q.skill, k)}`;
+  const who = k => `${hrNum(k)} ${hrRoles(hrQuickLast.Q.q.skill, k)}`;
   const at = () => spEsc(hrSiteName(hrQuickLast.Q.S));
   const goneOf = answer => new Set(((answer || {}).skipped || []).filter(s => s && s.reason === "gone").map(s => s.candidateId));
   const nameOf = id => ((hrQuickLast.req.names.get(id) || {}).name) || "someone";
   const list = gone => {
-    const {Q} = hrQuickLast;
-    return `<ul class="hs-qlist">${Q.picks.map(({c, w}) => `<li class="${hrQuickLast.req.hours ? "h" : ""}"><span>${gone.has(c.id) ? `<span class="hr-struck">${spEsc(c.name || "?")}</span>` : spEsc(c.name || "?")}</span><span class="m">${
-      Math.round(hrLevel(c, Q.q.skill))}%</span><span class="m">${hrWage(c.wage)}/h</span>${hrQuickLast.req.hours ? `<span class="m">${w ? `${w.hours || 0} h` : "–"}</span>` : ""}</li>`).join("")}</ul>`;
+    const {Q, req} = hrQuickLast;
+    return `<ul class="hs-qlist">${Q.picks.map(({c, misfit}) => { const h = req.hours.get(c.id) || 0; return `<li class="${req.given ? "h" : ""}"><span>${gone.has(c.id) ? `<span class="hr-struck">${spEsc(c.name || "?")}</span>` : spEsc(c.name || "?")}${h ? hrQuickMisfit(misfit) : ""}</span><span class="m">${
+      Math.round(hrLevel(c, Q.q.skill))}%</span><span class="m">${hrWage(c.wage)}/h</span>${req.given ? `<span class="m${h && misfit.length ? " warn" : ""}">${h ? `${hrNum(h)} h` : "–"}</span>` : ""}</li>`; }).join("")}</ul>`;
   };
+  /* What the hires' hours are, and that nobody else's change. */
   const hours = () => {
-    const {req} = hrQuickLast, k = n();
-    return req.hours ? gwCall("", "roster", `Hours from ${at()}'s plan${req.hours < k ? `; ${k - req.hours} with no hours yet` : ""}.`)
-      : gwCall("", "clock", "No hours yet: set them in the game.");
+    const {Q, req} = hrQuickLast, k = n();
+    if(!Q.plan) return gwCall("", "clock", "No hours yet: set them in the game.");
+    if(!req.given) return gwCall("", "clock", `No open hours in ${at()}'s plan: they join with no hours.`);
+    const hs = [...req.hours.values()].filter(h => h > 0), lo = Math.min(...hs), hi = Math.max(...hs);
+    const each = `${lo === hi ? hrNum(lo) : `${hrNum(lo)}–${hrNum(hi)}`} h a week${req.given > 1 ? " each" : ""}`;
+    const none = k - req.given;
+    return gwCall("", "roster", `Hours from ${at()}'s plan: ${each}; nobody else's hours change.${none ? ` ${hrNum(none)} ${none === 1 ? "joins" : "join"} with no hours.` : ""}`);
   };
   const goneCall = gone => gone.size ? gwCall("warn", "alert", `${plural(gone.size, "application")} expired before the game reached ${gone.size === 1 ? "it" : "them"}: ${
     [...gone].map(id => `<span class="hr-struck">${spEsc(nameOf(id))}</span>`).join(", ")}.`) : "";
@@ -12007,12 +12090,12 @@ function hrQuickReview(){
     nothing: () => {
       if(!n()) return "Nobody matches: change the role, the site or the filters.";
       if(hrQuickLast.req.body.sites.some(s => s.days && typeof s.expect !== "string"))
-        return "Read the game again first: this board does not know the site's schedule well enough to replace it.";
+        return "Read the game again first: this board does not know the site's schedule well enough to add to it.";
       if(hrBodyBytes(hrQuickLast.req.body) > HR_MAX_BODY) return "This is more than the game link takes in one go. Hire fewer at a time.";
       return "";
     },
     body: () => build().req.body,
-    verdict: answer => answer.ok ? (goneOf(answer).size ? `<b>The game can take ${n() - goneOf(answer).size} of ${n()}</b>` : `<b>The game can take ${n() === 1 ? "them" : `all ${n()}`}</b>`)
+    verdict: answer => answer.ok ? (goneOf(answer).size ? `<b>The game can take ${hrNum(n() - goneOf(answer).size)} of ${hrNum(n())}</b>` : `<b>The game can take ${n() === 1 ? "them" : `all ${hrNum(n())}`}</b>`)
       : answer.blocked === "myemployees" ? "<b>Close MyEmployees in the game</b>" : "<b>The game refuses this</b>",
     object: row => row.scope === "hire" ? spEsc(nameOf(row.id)) : at(),
     draw: (answer, phase) => {
@@ -12021,27 +12104,28 @@ function hrQuickReview(){
       if(phase === "applying") return `<div class="hr-prog"><i></i></div>${list(gone)}`;
       const wages = Q.picks.map(({c}) => Number(c.wage) || 0);
       const lo = Math.min(...wages), hi = Math.max(...wages);
-      const rewritten = (answer.sites || []).filter(s => s && s.before && s.after);
-      const said = rewritten.length ? gwCall("info", "roster", `The week is replaced at ${rewritten.map(s => `<b>${gwSiteName(s)}</b>`).join(", ")}.`) : "";
-      const left = rewritten.flatMap(s => (s.leftWithout || []).map(p => `<span class="person"><i>${spEsc(gwInitials(p.name))}</i>${spEsc(p.name || "someone")}</span>`));
+      const left = (answer.sites || []).flatMap(s => (s && s.leftWithout || []).map(p => `<span class="person"><i>${spEsc(gwInitials(p.name))}</i>${spEsc(p.name || "someone")}</span>`));
       const blocked = answer.blocked === "myemployees" ? `<div class="gw-no"><span class="ic">${hrSvg("phone")}</span><div class="rule">MyEmployees is open in the game.</div><div class="fix">${gwSvg("right")}<span>Close the MyEmployees app on your in-game phone, then try again.</span></div></div>` : "";
-      return `${blocked}${gwTiles([["Hire", null, n()], ["Role", null, `<span class="hr-u">${hrRole(Q.q.skill)}</span>`],
+      return `${blocked}${gwTiles([["Hire", null, hrNum(n())], ["Role", null, `<span class="hr-u">${hrRole(Q.q.skill)}</span>`],
           ["Wages", null, `${lo === hi ? hrWage(lo) : `${hrWage(lo)}–${hrWage(hi)}`}<small class="hr-u">/h</small>`]])}
-        ${list(gone)}${hours()}${goneCall(gone)}${said}${left.length ? `<div class="gw-box">${gwCall("", "exit", "<b>No hours after this</b> for these people here. The game takes them off their work and adds a to-do.")}<div class="gw-pills">${left.join("")}</div></div>` : ""}
+        ${list(gone)}${hours()}${goneCall(gone)}${left.length ? `<div class="gw-box">${gwCall("", "exit", "<b>No hours after this</b> for these people here, the game says. It takes them off their work and adds a to-do.")}<div class="gw-pills">${left.join("")}</div></div>` : ""}
         <p class="hr-lock">${gwSvg("lock")}<span>No undo.</span></p>`;
     },
     hint: "Nothing changes until you click Hire.",
     refusedHint: answer => answer.blocked === "myemployees" ? "The game cannot hire while you are in that app." : "Nothing was changed.",
-    applyLabel: () => `Hire ${n()}`,
+    applyLabel: () => `Hire ${hrNum(n())}`,
     applying: "Hiring…",
     changed: () => false,
     done: answer => `${plural((answer.hired || []).length, "person", "people")} hired in the game.`,
     doneBody: answer => {
       const k = (answer.hired || []).length, gone = goneOf(answer), {req} = hrQuickLast;
-      const hrs = req.hours ? (req.hours < n() ? "some with hours from its plan" : "with hours from its plan") : "with no hours";
-      return `<p class="gw-said ok">${k} hired</p><p class="gw-lead"><b>${who(k)}</b> now ${k === 1 ? "works" : "work"} at ${at()}, ${hrs}.</p>${goneCall(gone)}
+      const hrs = req.given ? (req.given < n() ? "some with hours from its plan" : "with hours from its plan") : "with no hours";
+      return `<p class="gw-said ok">${hrNum(k)} hired</p><p class="gw-lead"><b>${who(k)}</b> now ${k === 1 ? "works" : "work"} at ${at()}, ${hrs}.</p>${goneCall(gone)}
         <p class="hr-lock">${gwSvg("lock")}<span>No undo. To let someone go, use MyEmployees in the game.</span></p>`;
     },
+    /* Who the game hired is staff now: left out of both pickers until the
+       board reads the game again, so Hire more never offers them. */
+    onDone: answer => { hrHiredAdd((answer.hired || []).map(h => h && h.candidateId)); drawStaff(); },
     more: {label: "Hire more", go: () => {
       if(gwOpen) gwOpen.close();
       const el = document.querySelector("#hsQuick [data-hq-role]");
@@ -12087,7 +12171,10 @@ function bindStaff(){
   on("change", `${sheet} [data-hr-scope]`, el => {
     const skill = hrUi.sheet, f = hrFilters();
     if(!skill) return;
-    if(el.dataset.hrScope === "own"){ if(!f.roles[skill]) f.roles[skill] = hrCleanFilter(hrFilterFor(skill, true)); }
+    /* A role's own filter starts as the one it is picked by now: Part-time
+       only when every week of the role is at a shop. */
+    const r = hrModel().roles.find(x => x.skill === skill);
+    if(el.dataset.hrScope === "own"){ if(!f.roles[skill] && r) f.roles[skill] = hrCleanFilter(Object.assign({}, r.f, {ex: r.pt && r.allShop ? [...r.f.ex, HR_PT] : r.f.ex})); }
     else delete f.roles[skill];
     hrFiltersSave();
     hrRepaint(hrKey(el));
@@ -12123,7 +12210,7 @@ function bindStaff(){
     if(hrPop.target === "quick"){
       const q = hrUi.quick;
       q.ex = flip(hrQuickModel(hrModel()).ex);
-      hrRepaint(null, ["hsQuick"]);
+      hrRepaint(null);
     } else {
       const f = hrFilterTarget(document.querySelector(`[data-hs-dem-open="${CSS.escape(hrPop.target)}"]`) || el);
       f.ex = flip(f.ex);
@@ -12134,7 +12221,7 @@ function bindStaff(){
   on("click", "#hsDemPop [data-hs-dem-all]", () => { if(!hrPop) return; hrPop.all = true; hrPopDraw(); });
   on("click", "#hsDemPop [data-hs-dem-clear]", () => {
     if(!hrPop) return;
-    if(hrPop.target === "quick"){ hrUi.quick.ex = []; hrRepaint(null, ["hsQuick"]); }
+    if(hrPop.target === "quick"){ hrUi.quick.ex = []; hrRepaint(null); }
     else {
       hrFilterTarget(document.querySelector(`[data-hs-dem-open="${CSS.escape(hrPop.target)}"]`) || document.body).ex = [];
       hrFiltersSave();
@@ -12162,7 +12249,8 @@ function bindStaff(){
   window.addEventListener("resize", replace);
   window.addEventListener("scroll", replace, {passive: true});
   /* Quick hire. */
-  const quick = (el, set) => { set(hrUi.quick); hrRepaint(hrKey(el), ["hsQuick"]); };
+  /* A quick hire's picks take plan weeks from Open places: all of it again. */
+  const quick = (el, set) => { set(hrUi.quick); hrRepaint(hrKey(el)); };
   on("change", `${page} [data-hq-role]`, el => quick(el, q => { q.skill = el.value; }));
   on("change", `${page} [data-hq-site]`, el => quick(el, q => { q.site = el.value; q.ex = null; }));
   on("change", `${page} [data-hq-min]`, el => quick(el, q => { q.min = Number(el.value) || 0; }));
@@ -12361,6 +12449,7 @@ function hrReview(o = {}){
       hrUi.more = Object.keys(only).length ? {only, board: D} : null;
       /* Placed people leave the page's ticks: they are staff now. */
       hrLast.req.body.hires.forEach(h => { hrUi.force.delete(h.candidateId); hrUi.skip.delete(h.candidateId); });
+      hrHiredAdd((answer.hired || []).map(h => h && h.candidateId));
     },
   });
   if(gwOpen) gwOpen.classList.add("hr-wide");
