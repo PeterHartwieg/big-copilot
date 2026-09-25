@@ -12649,7 +12649,7 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 .pl-save .txt{font-size:13px;color:var(--ink-2);flex:1 1 320px}
 .pl-save .txt b{color:var(--ink);font-weight:600}
 .pl-save .btn2 svg,.pl-done svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.pl-save .btn2[disabled]{opacity:.5;cursor:default}
+.pl-save .btn2[disabled]{opacity:.5;cursor:default;pointer-events:none}
 .pl-done{display:inline-flex;align-items:center;gap:8px;font:500 12.5px/1 "IBM Plex Mono",monospace;color:var(--accent)}
 .pl-save .link{font-size:12.5px}
 .pl-fill{display:flex;align-items:center;gap:12px;margin-top:12px;padding:10px 14px;border-radius:8px;background:var(--surface);border:1px dashed var(--warn);font-size:13px;color:var(--ink-2)}
@@ -14568,7 +14568,12 @@ function supplyFact(s, slug){
   const ov = planAt(s, slug);
   /* Stock a factory already holds of an input no line eats yet is a depot
      line to Python; the plan's input fact is the one that counts there. */
-  if(ov && ov.fact && (!fact || fact.role !== "input")) return {...ov.fact, plan: ov.name, planWeek: ov.week};
+  if(ov && ov.fact && (!fact || fact.role === "depot")){
+    const planned = {...ov.fact, plan: ov.name, planWeek: ov.week};
+    /* Held and imported here too: the shape Python gives a factory input it
+       also imports, the weekly contract under `import`. */
+    return fact && fact.imp ? {...planned, imp: true, import: planApply(fact, {...ov, daily: undefined})} : planned;
+  }
   if(!fact) return null;
   const sized = sizing === "dem" && fact.dem ? {...fact, ...fact.dem} : fact;
   return ov ? planApply(sized, ov) : sized;
@@ -14780,19 +14785,25 @@ function planBuild(plan){
     /* An input the factory does not eat yet, empty workstations and all: a
        planned row of its own, topped up from the depot that already routes
        it here, else the one the plan orders it at. */
-    if(!(day > 0)) return;
+    /* An intermediate the factory makes itself stays made here. */
+    if(!(day > 0) || (site.lines || []).some(l => l.slug === slug)) return;
     const t = (site.targets || {})[slug];
-    const from = t && Number.isInteger(t[1]) ? t[1] : ds;
+    const own = !(t && Number.isInteger(t[1])) && ds === fs;  // imported straight to the factory
+    const from = own ? null : t && Number.isInteger(t[1]) ? t[1] : ds;
     const target = t ? t[0] || 0 : 0, setTo = planUp(day * (1 + margin));
     const held = s => s === null || !bs[s] ? 0 : ((bs[s].lines || []).find(l => l.slug === slug) || {}).units || 0;
     planned.push({item: inp.item, slug, perDay: Math.round(day), perWeek: Math.round(day * 7), lines: eatenBy[slug] || [],
       lineSlugs: Object.keys(plan.counts).filter(p => recipes[p] && plan.counts[p] > 0
         && recipes[p].ingredients.some(i => norm(i.slug) === slug)),
-      waitingOn: [], madeAt: [], target, from, directImport: false, importSite: ds, factoryImportSite: null,
+      waitingOn: [], madeAt: [], target, from, directImport: own, importSite: ds, factoryImportSite: own ? fs : null,
       known: false, arrives: 0, stock: held(fs), depotStock: held(from), importWeekly: null, planned: true});
-    put(fs, slug, {week: inp.week, daily: setTo > target ? setTo : null,
-      fact: {st: "new", why: "plan", lvl: "info", role: "input", cad: "daily", use: Math.round(day),
-             need: setTo, have: target, setTo: setTo > target ? setTo : null, from, parts: null}});
+    /* A direct import has no daily top-up: the weekly contract is its figure. */
+    put(fs, slug, own ? {week: inp.week, daily: null,
+        fact: {st: "new", why: "plan", lvl: "info", role: "input", cad: "weekly", use: inp.week,
+               need: planUp(inp.week * (1 + margin)), have: null, setTo: null, from: null, parts: null}}
+      : {week: inp.week, daily: setTo > target ? setTo : null,
+        fact: {st: "new", why: "plan", lvl: "info", role: "input", cad: "daily", use: Math.round(day),
+               need: setTo, have: target, setTo: setTo > target ? setTo : null, from, parts: null}});
     if(from !== null && from !== ds) put(from, slug, {week: inp.week});
   });
   /* The first fill, while the import it bridges to has not landed. */
@@ -14822,12 +14833,16 @@ function planApply(fact, ov){
     if(!f) return f;
     if(f.st === "paused") return f;
     const want = Number.isFinite(setTo) ? setTo : null;
+    const own = Number.isFinite(f.setTo) && !f.lowers;
+    /* No figure of the plan's, and one of Python's that does not lower (a
+       tight margin to restore): its word and reason stand, the plan named. */
+    if(PLAN_QUIET.includes(f.st) && want === null && own) return {...f, plan: ov.name, planWeek: ov.week};
     if(PLAN_QUIET.includes(f.st))
       return {...f, st: "new", why: "plan", lvl: "info", plan: ov.name, planWeek: ov.week, lower: null, lowers: false,
-              /* No figure of the plan's: Python's own stands, unless it lowers. */
-              setTo: want === null ? (f.lowers ? null : f.setTo) : Number.isFinite(f.setTo) ? Math.max(f.setTo, want) : want};
-    return {...f, plan: ov.name, planWeek: ov.week,
-      setTo: want !== null && !(Number.isFinite(f.setTo) && f.setTo >= want) ? want : f.setTo};
+              setTo: want === null ? null : own ? Math.max(f.setTo, want) : want};
+    /* Short or no plan: the larger figure, said as the plan's where it wins. */
+    const raised = want !== null && !(Number.isFinite(f.setTo) && f.setTo >= want);
+    return {...f, plan: ov.name, planWeek: ov.week, ...(raised ? {setTo: want, planRaised: true} : {})};
   };
   const out = one(fact, fact.cad === "weekly" ? ov.weekly : ov.daily);
   return fact.import ? {...out, import: one(fact.import, ov.weekly)} : out;
@@ -18964,6 +18979,8 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
                // A change a chain planned ahead asks for (planOverlay()).
                ...(line.plan || (line.fact && line.fact.plan) ? {plan: true} : {})});
   };
+  /* A figure the saved plan set, not Python's own (planApply()). */
+  const planFigure = f => !!f && !!f.plan && (f.why === "plan" || !!f.planRaised);
   /* The words for a figure a saved plan sets: its finished layout, 24/7. */
   const planned = (f, per) => `Ordered ahead for the plan ${f.plan}: its finished layout uses ${
     Math.round(per === "day" ? (f.planWeek || 0) / 7 : f.planWeek || 0).toLocaleString()} a ${per} at 24/7`;
@@ -18993,7 +19010,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
           : "The top-up beside it falls short without it; resume it, or raise the top-up."}`,
         null, mode, true);
     } else if(r.edited ? r.changed : r.setTo !== null && r.setTo !== undefined){
-      const why = r.edited ? yours : r.fact && r.fact.plan ? `${planned(r.fact, "week")}${margin(r.margin)}.`
+      const why = r.edited ? yours : planFigure(r.fact) ? `${planned(r.fact, "week")}${margin(r.margin)}.`
         : `${sized}${r.fit === "tight" ? "; the order covers the use but not the margin" : ""}.`;
       add("Weekly imports", r.s, r, r.inGame ?? r.current ?? null, value,
         `${setting(value)} ${why}`, null, mode, false, !r.edited && r.fit === "tight");
@@ -19020,7 +19037,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     const f = r.fact || {};
     if(set(f)) add("Factory daily top-ups", s.s, r, r.target || 0, f.setTo,
       `${r.from === null || r.from === undefined ? "Choose a supplying depot" : `From ${address(r.from)}`}. ${
-        f.plan ? planned(f, "day") : r.sizedFor || "Full-rate input requirement"}${margin(r.margin)}; confirm staffing and output limits.`,
+        planFigure(f) ? planned(f, "day") : r.sizedFor || "Full-rate input requirement"}${margin(r.margin)}; confirm staffing and output limits.`,
       r.from ?? null, null, false, f.st === "tight");
     if(f.st === "stalled" && f.why !== "waiting") add("Check the delivery route", s.s, r, null, null,
       `No delivery was recorded despite stock at ${address(r.from)}. Check the route and transport in-game.`, r.from ?? null);
@@ -19186,7 +19203,8 @@ function planImportsState(rows, marks, nameOf, gaps = {}){
     const r = left[0], at = where(r);
     return {badge: "1 TO CHANGE", live: true, what: `<b>${esc(r.item)}</b>${at ? ` at ${esc(at)}` : ""}: ${esc(change(r))}.${more}`};
   }
-  const places = [...new Set(left.map(where).filter(Boolean))];
+  /* A first fill goes to its items' depots, named one by one. */
+  const places = [...new Set(left.flatMap(r => r.fill ? r.fill.map(x => x.to) : [where(r)]).filter(Boolean))];
   const at = !places.length ? "" : places.length <= 2 ? ` at ${places.map(esc).join(" and ")}`
     : ` at ${places.slice(0, 2).map(esc).join(", ")} and ${places.length - 2} more`;
   return {badge: `${left.length} TO CHANGE`, live: true,
@@ -20865,7 +20883,7 @@ function planPaintSave(){
       was ? ` Saving replaces the plan for ${spEsc(was.name)}.` : ""}</span>
     ${same ? `<span class="pl-done" role="status">${icon("tick")}Saved · ${plural(changes, "change")} on Supply</span>`
       /* A disabled button takes no pointer, so its tip hangs on a span round it. */
-      : `<span class="pl-savewrap"${state.planned && !state.complete ? "" : ` data-tip="${
+      : `<span class="pl-savewrap"${state.planned && !state.complete ? "" : ` tabindex="0" data-tip="${
           state.planned ? "Every machine of this layout already runs: nothing to order ahead" : "No machines set"}"`}><button type="button" class="btn2 primary" id="plSaveBtn"${
           state.planned && !state.complete ? "" : " disabled"}>${icon("tick")}<span>Save as plan</span></button></span>`}
     ${saved ? `<a class="link" href="#" data-pl-remove>Remove plan</a>` : ""}`;
