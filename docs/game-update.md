@@ -15,7 +15,8 @@ one line per script. Run every command from the repository root.
 2. Static checks: save fields, presets, building capacity, the game tables.
 3. Rebuild against the new install and read what changed.
 4. Check a real save (owner: needs the game running): load and save a game once in the
-   new build, then run `check_saves.py` on that save and read the rent fit.
+   new build, then run `check_saves.py` on that save, and read the rent fit and the office
+   post rate.
 5. Bump `VERIFIED_BUILD` and the README line.
 6. Fix any pinned test and run the tests.
 
@@ -129,23 +130,26 @@ The customer capacity each building size allows is parsed from the game's help p
 `help_building_types_content` by `_door_caps()`. `FALLBACK_CAPS` is the same table, used
 only when there is no game text at all. `_door_caps()` starts from `FALLBACK_CAPS` and
 overwrites what the page yields, so a page that no longer parses still returns the old
-table. Check that the page parsed before comparing:
+table. `tools/game_update/caps.py` checks that the page parsed before it compares:
 
 ```
-python -c "import ba_dashboard as d; from ba_save import Names, load_game_locale; src, loc = load_game_locale(); page = [l.strip() for l in (loc.get('help_building_types_content') or '').split(chr(10))]; heads = {m.group(1).strip().lower() for m in map(d._CAP_SECTION_RE.match, page) if m}; print('text:', src); print('missing sections:', sorted(set(d.CAP_CATEGORIES) - heads)); print('size rows:', sum(1 for l in page if d._CAP_SIZE_RE.match(l))); print('same as FALLBACK_CAPS:', d._door_caps(Names(loc)) == d.FALLBACK_CAPS)"
+python tools/game_update/caps.py
 ```
 
-`load_game_locale()` reads the installed game only, never the bundled text. At build 3682
-it prints the install's `en.json`, `missing sections: []`, `size rows: 18` and
-`same as FALLBACK_CAPS: True`.
+It reads the installed game's own text only (`load_game_locale()`, never the bundled
+copy). At build 3682 it prints `rows: {'retail': 6, 'office': 6, 'cinema': 3,
+'theater': 3}` and `same as FALLBACK_CAPS: True`.
 
-- A missing section, or 0 size rows, means the page's wording changed and the parse
-  fell back to `FALLBACK_CAPS`: fix `_CAP_SECTION_RE` or `_CAP_SIZE_RE` first, then check
-  again.
-- Another row count with `True` means a size was added or dropped in a category the
-  table already has; read the page.
-- `False` means the capacities changed: update `FALLBACK_CAPS` and its comment, and check
-  `CAPS_HELP` in `tests/test_premises.py`, which is the page as build 3675 wrote it.
+- It stops with an error when the game is not found (set `BA_LOCALE`) or when a category
+  in `CAP_CATEGORIES` parsed no rows. The second means the page's wording changed and
+  the board fell back to `FALLBACK_CAPS`: fix `_CAP_SECTION_RE` or `_CAP_SIZE_RE`, then
+  run it again.
+- `False` means the parsed table differs, a capacity changed or a size letter was added
+  or dropped: update `FALLBACK_CAPS` and its comment, and check `CAPS_HELP` in
+  `tests/test_premises.py`, which is the page as build 3675 wrote it.
+- `True` with other row counts means the collapsed table did not change: another layout
+  of a letter the table already has, since the codes collapse to their letter. Read the
+  page to be sure.
 
 ### The game tables
 
@@ -166,18 +170,34 @@ The rules each `JOB_DEMANDS` kind repeats (`Fulfilled()` in
 difference. It needs UnityPy, which is an owner-side dependency installed outside the
 repository, the same way `make_demand_curves.py` asks for it:
 
+In PowerShell:
+
 ```
 python -m pip install --target <scratch> UnityPy
-$env:PYTHONPATH = '<scratch>'       # PowerShell
-export PYTHONPATH=<scratch>         # bash
+$env:PYTHONPATH = '<scratch>'
+python tools/game_update/bundles.py
+```
+
+In bash:
+
+```
+python -m pip install --target <scratch> UnityPy
+export PYTHONPATH=<scratch>
 python tools/game_update/bundles.py
 ```
 
 It also reports every business type in the bundle that the board does not know: one in
 none of `RETAIL_TYPES`, `OFFICE_TYPES` and `COST_CENTRE_TYPES`, nor in the script's own
 `OTHER_TYPES`, the 19 city businesses (banks, wholesalers, the IRS and the like) the board
-does not model at build 3682. A new retail type goes into `RETAIL_TYPES` with its
-`DEMANDS_NOT_MADE` row, a new office into `OFFICE_TYPES`, anything else into `OTHER_TYPES`.
+does not model at build 3682. Classify a new one by what the player can do with it:
+
+- a walk-in shop the player runs: `RETAIL_TYPES`, with its `DEMANDS_NOT_MADE` row;
+- an office the player runs: `OFFICE_TYPES`;
+- a factory, warehouse or headquarters-like site the player runs: `COST_CENTRE_TYPES`,
+  and `OVERHEAD_TYPES` as well for an overhead site such as a warehouse;
+- only a city business the player cannot run: `OTHER_TYPES` in `bundles.py`.
+
+A type that disappears from the bundle is reported only for `RETAIL_TYPES`.
 
 It ends with a count. `0 difference(s)` means all three tables match and the game has no
 business type the board has not classified. Its `note:` lines list
@@ -266,6 +286,13 @@ states under its rent estimate. `leases` is how many current leases the formula 
 compared with and `worst` the largest relative miss (0.0097 is 0.97%). At build 3682 it
 was under 1% off on every current lease, and under 2% on the deposits. A jump to several
 percent means the patch rebalanced rents: refit `RENT_RATES` against current leases.
+
+Then the office post rate, if the company runs an office: load the new save into the
+board and open the office's own page. Its hour grid shows the customers each hour, and
+hovering an hour reads "N of M workstations staffed". With `OFFICE_POST_RATE` at 1, the
+customers in a fully staffed hour should equal the professionals at computers. A steady
+gap means the game changed the rate: re-measure it and update the constant and its
+comment.
 
 ## 5. Bump the build
 
@@ -396,11 +423,11 @@ Steam build id 25482473. Each step, and what it gives against the 3682 install:
    `Player.log` line `Loaded Big Ambitions (Build 3682)` give the build. The hashes:
    `en.json` changed, `helpstructure.json` did not.
 2. Static checks: `savekeys.py` and `dllfields.ps1` find no `NOFIELD`, `NOTYPE` or
-   `NOASM`, only `NEWFIELD?` lines. `presets.py`: the table above, unchanged. The
-   building capacity check finds every section and 18 size rows, the same as
-   `FALLBACK_CAPS`. `bundles.py` reports 0 differences, and `make_demand_curves.py`
-   writes the committed `ba_demand_curves.json` byte for byte. (These two were added to
-   the checklist after the bump; they come out clean on 3682.)
+   `NOASM`, only `NEWFIELD?` lines. `presets.py`: the table above, unchanged. `caps.py`
+   parses 6, 6, 3 and 3 size rows and prints `same as FALLBACK_CAPS: True`.
+   `bundles.py` reports 0 differences, and `make_demand_curves.py` writes the committed
+   `ba_demand_curves.json` byte for byte. (`caps.py`, `bundles.py` and the curves check
+   were added to the checklist after the bump; they come out clean on 3682.)
 3. Rebuild: `python build_web.py`, then `textdiff.py --rev 92c3ef8~1 --to 92c3ef8`:
    `web/py/gametext.json` identical, and one wiki change, the Glass page listing Global
    Harvest Traders as an importer. The static wiki pages (`web/wiki/**/index.html`,

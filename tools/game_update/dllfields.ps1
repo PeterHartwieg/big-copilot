@@ -17,9 +17,10 @@
 #
 # -ManagedDir defaults to the Managed folder beside the en.json that BA_LOCALE
 # names. Without BA_LOCALE it tries one place only, the default Steam library
-# (Program Files (x86)\Steam\steamapps\common\Big Ambitions); it does not search
-# other Steam libraries the way ba_save.find_game_locale() does. For a game
-# installed elsewhere, set BA_LOCALE or pass -ManagedDir. See docs/game-update.md.
+# (Program Files (x86)\Steam\steamapps\common\Big Ambitions), as
+# ba_save.find_game_locale() does on Windows; neither searches other Steam
+# libraries. For a game installed elsewhere, set BA_LOCALE or pass -ManagedDir.
+# See docs/game-update.md.
 param(
   [Parameter(Mandatory = $true)][string]$KeysPath,
   [Parameter(Mandatory = $true)][string]$OutPath,

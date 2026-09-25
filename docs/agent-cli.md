@@ -14,7 +14,7 @@ single entry point here, and `CLAUDE.md` points at it.
 | --- | --- |
 | Interactive Claude Code and `claude -p` | user and project `CLAUDE.md`, plus auto memory |
 | Claude subagents | project `CLAUDE.md`, but not the parent's auto memory |
-| GLM via the launcher | no settings or `CLAUDE.md`; `AGENTS.md` injected by the launcher (untested in a live run; GLM runs only on request) |
+| GLM via the launcher | no settings or `CLAUDE.md`; `AGENTS.md` injected by the launcher (AGENTS.md injection untested in a live run; GLM runs only on request) |
 | Codex | `AGENTS.md` natively |
 
 The GLM row follows from the launcher excluding every settings source: the

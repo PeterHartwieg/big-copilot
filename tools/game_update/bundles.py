@@ -1,8 +1,15 @@
 """Compare DEMANDS_NOT_MADE, STATION_SKILLS and JOB_DEMANDS with the game's bundles.
 
+In PowerShell:
+
     python -m pip install --target <scratch folder outside this repo> UnityPy
-    $env:PYTHONPATH = '<that folder>'      # PowerShell
-    export PYTHONPATH=<that folder>        # bash
+    $env:PYTHONPATH = '<that folder>'
+    python tools/game_update/bundles.py
+
+In bash:
+
+    python -m pip install --target <scratch folder outside this repo> UnityPy
+    export PYTHONPATH=<that folder>
     python tools/game_update/bundles.py
 
 The three tables in ba_dashboard.py were read by hand from the installed game's
@@ -24,7 +31,9 @@ business type in the bundle that the board does not know is a difference too:
 RETAIL_TYPES, OFFICE_TYPES and COST_CENTRE_TYPES in ba_dashboard.py, plus
 OTHER_TYPES below, the types the game has but a player's company does not run as
 its own kind of site, read at build 3682. So 0 differences means the three
-tables match and the game has no new business type. Hour windows, day counts and the
+tables match and the game has no new business type. A type that disappears from
+the bundle is reported only for RETAIL_TYPES; the other sets are not checked for
+removals. Hour windows, day counts and the
 other JOB_DEMANDS settings are not compared: check the jobdemands fields
 (betweenHours, shiftPeriod, daysWorkingPerWeek, freeDays and the minimums) by
 eye when a demand changes. Nothing is written. See docs/game-update.md.
@@ -46,11 +55,14 @@ from ba_dashboard import (  # noqa: E402
 ITEM_PREFIX = "ba:itemname_"
 
 # Business types in the build-3682 bundle that the board has no set for: the
-# city's own businesses (banks, the wholesalers, the importers, the IRS) and the
-# ones it does not model. A new type the game adds lands in neither these nor
-# the board's sets, and is reported. Classify it: a walk-in business goes into
-# RETAIL_TYPES (and gets its DEMANDS_NOT_MADE row), an office into
-# OFFICE_TYPES; anything else is added here.
+# city's own businesses (banks, the wholesalers, the importers, the IRS), which
+# a player cannot run. A new type the game adds lands in neither these nor the
+# board's sets, and is reported. Classify it by what the player can do with it:
+#   a walk-in shop the player runs -> RETAIL_TYPES, with its DEMANDS_NOT_MADE row
+#   an office the player runs -> OFFICE_TYPES
+#   a factory, warehouse or headquarters-like site the player runs ->
+#       COST_CENTRE_TYPES, and OVERHEAD_TYPES too for an overhead site
+#   only a city business the player cannot run -> here
 OTHER_TYPES = {
     "ba:businesstype_appliancestore",
     "ba:businesstype_bank",
@@ -128,8 +140,10 @@ def main() -> None:
             if items != set(setting):
                 report("JOB_DEMANDS", slug, "items", sorted(items), "board", sorted(setting))
 
-    print(f"{len([n for n in types if n])} business types, {len(RETAIL_TYPES)} retail types, {len(stations)} stations, "
-          f"{len(demands)} job demands read; {differences} difference(s)")
+    named = len([n for n in types if n])
+    print(f"{named} business types, {len(RETAIL_TYPES)} retail types, "
+          f"{len(stations)} stations, {len(demands)} job demands read; "
+          f"{differences} difference(s)")
 
 
 if __name__ == "__main__":
