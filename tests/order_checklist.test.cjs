@@ -376,8 +376,23 @@ test('tight never reaches Today: with only margin changes left, the card says no
     what:'Nothing falls short. Supply lists 2 changes that would restore the margin.'});
   assert.doesNotMatch(card([], [], {complete: true, unnamed: 0, margin: 1}).what, /tight/i);
   const drawn = source.slice(source.indexOf('function drawSupplyStrip('), source.indexOf('/* The Set to figures the player typed'));
-  assert.match(drawn, /const urgent = rows\.filter\(r => !r\.tight\);/);
+  assert.match(drawn, /const urgent = rows\.filter\(r => !r\.tight && !r\.lower\);/);
   assert.match(drawn, /planImportsState\(urgent,/);
+});
+
+test('a top-up target set too high is a change to lower, never tight and never on Today', () => {
+  const [row] = build({shops:[{s:2, item:'Paper Bag', target:3000, sold:90, peakSold:99, peakDay:'Saturday', from:0,
+    fact:fact('idle', {why:'targetHigh', role:'shelf', cad:'daily', use:99, need:114, have:3000, setTo:120, lowers:true})}]});
+  assert.deepEqual([row.kind, row.current, row.proposed, row.lower, row.tight], ['Shop daily top-ups', 3000, 120, true, undefined]);
+  assert.match(row.reason, /^From Depot · 1 Depot Street\. Lower the top-up: it holds 33 days of sales\./);
+  // An idle shelf without the figure asks for nothing.
+  assert.deepEqual(build({shops:[{s:2, item:'Paper Bag', target:3000, sold:90, peakSold:99, from:0,
+    fact:fact('idle', {why:'targetHigh', setTo:null})}]}), []);
+  // With only a top-up to lower left, Today's card says nothing falls short.
+  assert.deepEqual(card([], [], {complete: true, unnamed: 0, lower: 1}), {badge:'ALL SET', live:false,
+    what:'Nothing falls short. Supply lists one top-up to lower.'});
+  assert.equal(card([], [], {complete: true, unnamed: 0, margin: 1, lower: 3}).what,
+    'Nothing falls short. Supply lists one change that would restore the margin and 3 top-ups to lower.');
 });
 
 test('an empty checklist that could not see everything does not say ALL SET', () => {

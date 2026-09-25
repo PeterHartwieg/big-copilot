@@ -46,7 +46,8 @@ async function board(data, {mode = 'cap', names = null, which = 'all', tab = 'wa
   return page;
 }
 const actions = page => page.evaluate(() => sbData().rows.map(a =>
-  ({kind: a.kind, item: a.item, current: a.current, proposed: a.proposed, tight: !!a.tight, paused: !!a.paused})));
+  ({kind: a.kind, item: a.item, current: a.current, proposed: a.proposed, tight: !!a.tight, paused: !!a.paused,
+    ...(a.lower ? {lower: true} : {})})));
 /* A tab's rows by product: every cell's text, the Set to box, the tick. */
 const rows = (page, sec) => page.$$eval(`#${sec} tr[data-slug]`, trs => trs.map(r => ({
   s: r.dataset.s, slug: r.dataset.slug,
@@ -111,19 +112,23 @@ test('every change on the checklist is a fact\'s figure, and sits on its object\
       // 24/7 sizes a line at capacity with no margin: a day of the machines.
       {kind: 'Factory daily top-ups', item: 'Flour', current: 1400, proposed: 1600, tight: false, paused: false},
       {kind: 'Check the delivery route', item: 'Milk', current: null, proposed: null, tight: false, paused: false},
+      // Paper Bag topped up far above its sales: the lower target, a change to lower.
+      {kind: 'Shop daily top-ups', item: 'Paper Bag', current: 3000, proposed: 120, tight: false, paused: false, lower: true},
       // The gym's shelf is on no plan; the hub that holds its soda could send it.
       {kind: 'Shop daily top-ups', item: 'Soda Can', current: 0, proposed: 70, tight: false, paused: false},
+      {kind: 'Shop daily top-ups', item: 'Paper Bag', current: 1400, proposed: 30, tight: false, paused: false, lower: true},
+      {kind: 'Shop daily top-ups', item: 'Paper Bag', current: 1500, proposed: 30, tight: false, paused: false, lower: true},
       {kind: 'Depot daily top-ups', item: 'Cake', current: 200, proposed: 290, tight: false, paused: false},
       // The cake line is rostered 12 of the 24 hours 24/7 sizes it for.
       {kind: 'Factory run hours', item: 'Cake', current: 12, proposed: 24, tight: false, paused: false},
     ]);
     const tabs = await page.evaluate(() => Object.fromEntries(Object.entries(sbData().byTab).map(([t, r]) => [t, r.length])));
-    assert.deepEqual(tabs, {shops: 1, warehouses: 3, factories: 3});
+    assert.deepEqual(tabs, {shops: 4, warehouses: 3, factories: 3});
     assert.match(await page.locator('#secFactories').textContent(), /1,400\s*1,600\s*a day/);
     // Every change has its tick; none is left to the "Other changes" list.
-    assert.equal(await page.locator('#pageSupply .sb-tick').count(), 7);
+    assert.equal(await page.locator('#pageSupply .sb-tick').count(), 10);
     assert.equal(await page.locator('#pageSupply .sb-part', {hasText: 'Other changes'}).count(), 0);
-    // Today's card leaves the tight Flour order out.
+    // Today's card leaves the tight Flour order and the three top-ups to lower out.
     assert.equal(await page.locator('#planImportsCard .soon').textContent(), '6 TO CHANGE');
   } finally { await page.close(); }
 });
@@ -133,22 +138,22 @@ test('the strip counts the ticks on every tab, and the tab badges what is left',
   try {
     const strip = () => page.locator('#sbTrayText').textContent();
     const badges = () => page.$$eval('#supplyNav a', as => as.map(a => [a.dataset.id, a.querySelector('.sb-n')?.textContent || '✓']));
-    assert.equal(await strip(), '0 of 7 typed in');
-    assert.deepEqual(await badges(), [['shops', '1'], ['warehouses', '3'], ['factories', '3']]);
+    assert.equal(await strip(), '0 of 10 typed in');
+    assert.deepEqual(await badges(), [['shops', '4'], ['warehouses', '3'], ['factories', '3']]);
     await page.locator('#secWarehouses tr[data-slug="flour"] .sb-tick').click();
     await page.locator('#secFactories tr[data-slug="cake"] .sb-tick').click();
     await page.locator('#secShops tr[data-slug="soda"] .sb-tick').click();
-    assert.equal(await strip(), '3 of 7 typed in');
-    assert.deepEqual(await badges(), [['shops', '✓'], ['warehouses', '2'], ['factories', '2']]);
+    assert.equal(await strip(), '3 of 10 typed in');
+    assert.deepEqual(await badges(), [['shops', '3'], ['warehouses', '2'], ['factories', '2']]);
     assert.match(await page.locator('#secWarehouses tr[data-slug="flour"]').getAttribute('class'), /sb-done/);
-    assert.equal(await page.locator('#sbCopyLeft').textContent(), '4');
+    assert.equal(await page.locator('#sbCopyLeft').textContent(), '7');
     // The ticks are kept on the device, per character, under the key the old checklist used.
     const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('ba_order_marks_v1:r8-fixture')));
     assert.equal(kept.length, 3);
     // The flour tick is Weekly imports only: its top-up into the factory is a row of its own.
     assert.equal(await page.locator('#secFactories tr[data-slug="flour"] .sb-tick').getAttribute('aria-pressed'), 'false');
     await page.locator('#sbReset').click();
-    assert.equal(await strip(), '0 of 7 typed in');
+    assert.equal(await strip(), '0 of 10 typed in');
     assert.equal(await page.locator('#secShops .sb-done').count(), 0);
   } finally { await page.close(); }
 });
@@ -162,6 +167,10 @@ test('idle rows fold into one group per cause, which opens on a click', async ()
     assert.match(await group.textContent(), /3 shops\s*Paper Bag/);
     const kids = page.locator('#secShops tr[data-kid]');
     assert.equal(await kids.count(), 3);
+    // Each shelf carries its lower target to type, and a tick; the group counts them.
+    assert.match(await group.textContent(), /3 to type/);
+    assert.equal(await kids.locator('.sb-tick').count(), 3);
+    assert.match(await kids.first().textContent(), /3,000\s*120\s*a day/);
     assert.equal(await page.locator('#secShops tr[data-kid].sb-open').count(), 0);
     await group.click();
     assert.equal(await page.locator('#secShops tr[data-kid].sb-open').count(), 3);
@@ -203,7 +212,8 @@ test('Demand sizing reads the facts\' Demand figures, and says where a shop is s
     assert.match(await page.locator('#secFactories').textContent(), /1,160\s*may still be ramping/);
     assert.match(await page.locator('#secFactories .sb-ramp').textContent(), /Cake Shop Midtown/);
     assert.deepEqual((await actions(page)).map(a => [a.kind, a.item]), [
-      ['Weekly imports', 'Sugar'], ['Check the delivery route', 'Milk'], ['Shop daily top-ups', 'Soda Can'],
+      ['Weekly imports', 'Sugar'], ['Check the delivery route', 'Milk'], ['Shop daily top-ups', 'Paper Bag'],
+      ['Shop daily top-ups', 'Soda Can'], ['Shop daily top-ups', 'Paper Bag'], ['Shop daily top-ups', 'Paper Bag'],
       ['Depot daily top-ups', 'Cake']]);
     // The switch sits on Warehouses and on Factories, both on Demand.
     assert.equal(await page.locator('#sbSizingW a.on').textContent(), 'Demand');
@@ -233,7 +243,7 @@ test('a line short of its hours is a change at 24/7; under Demand it only may ru
     // Line, Machines, Hours a day, Makes, Ships, Held, Status after the tick.
     assert.match(cake.cells[3], /^12 24 h$/);
     assert.match(cake.cells[7], /^short rostered 12 of the 24 hours a day it needs, sized 24\/7$/);
-    assert.match(await cap.locator('#sbStrip').textContent(), /0 of 7/);
+    assert.match(await cap.locator('#sbStrip').textContent(), /0 of 10/);
   } finally { await cap.close(); }
   const dem = await board(fixture(), {mode: 'dem'});
   try {

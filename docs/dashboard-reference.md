@@ -1125,7 +1125,10 @@ Supply tabs ask the questions that matter instead:
   a factory input is eaten at its machines' need in the chosen sizing, never judged on
   its first fill; a depot feeds the shelves and machines its plans reach, and only where
   they reach none is its measured outflow read instead. Four weeks or more is said by
-  cause: a **top-up target too high** (a target four weeks of the busiest day deep), an
+  cause: a **top-up target too high** (a target four weeks of the busiest day deep; on a
+  shelf, Shops offers the lower target to type: the busiest day for each day to the
+  depot's next round, plus the margin, rounded up to 10, a change with a tick that
+  Today's Plan imports card leaves out), an
   **import keeping too much** (a Smart Delivery level or weekly order worth four weeks of
   what the depot feeds), or plain overstock. Nothing drawing on it is **not moving**, or,
   where your own sites sell or need the item with no plan feeding them, **Not routed**:

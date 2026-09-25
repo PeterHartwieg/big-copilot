@@ -27,7 +27,7 @@ RECIPES = {BEER: {"slug": BEER, "item": "Beer", "out": 30, "workstation": "bottl
                   "ingredients": [{"slug": WATER, "item": "Water", "per": 10}]}}
 FACT_KEYS = {"st", "why", "lvl", "role", "cad", "use", "need", "have", "setTo", "parts",
              "lower", "imp", "ramp", "unfed", "via", "dem", "import", "from", "wholesale", "day",
-             "catchUp"}
+             "catchUp", "lowers"}
 BASE_KEYS = {"st", "why", "lvl", "role", "cad", "use", "need", "have", "setTo", "imp"}
 
 
@@ -607,6 +607,39 @@ class IdleRuleTests(unittest.TestCase):
         [row] = self.idle(c, SHOP_A, SODA)
         self.assertEqual((row["why"], row["weeks"]), ("targetHigh", 5.0))
         self.assertEqual([f["group"] for f in self.found(c, SHOP_A)], ["target"])
+
+    def test_11_a_top_up_target_too_high_carries_the_lower_target_to_type(self):
+        # 225 a day, a round every morning: the busiest day plus the margin,
+        # 259, rounded up to 260. Marked as a lowering change, not tight.
+        c = self.shop(6300, 28 * 225)
+        fact = c.fact(SHOP_A, SODA)
+        self.assertEqual((fact["st"], fact["why"], fact["setTo"], fact.get("lowers")),
+                         ("idle", "targetHigh", 260, True))
+        self.assertNotIn("dem", fact)
+        self.assertEqual(c.fact(SHOP_A, SODA, "dem")["setTo"], 260)
+        # Still one Today finding, the target's; the figure does not make it a raise.
+        self.assertEqual([f["group"] for f in self.found(c, SHOP_A)], ["target"])
+
+    def test_12_the_lower_target_covers_the_days_to_the_next_round(self):
+        # The hub's rounds leave on three weekdays, the longest gap three
+        # days: three busiest days plus the margin, 776.25, rounded up to 780.
+        c = Company(day=20)
+        c.site(HUB, "Import Hub")
+        c.shop(SHOP_A, "Soda Shop")
+        c.hold(HUB, SODA, 100)
+        c.hold(SHOP_A, SODA, 6300, 225)
+        c.plan(HUB, SHOP_A, SODA, 6300)
+        for d in (13, 15, 17):
+            c.ship(d, HUB, SHOP_A, {SODA: 10})
+        c.run()
+        fact = c.fact(SHOP_A, SODA)
+        self.assertEqual((fact["st"], fact["setTo"], fact.get("lowers")), ("idle", 780, True))
+
+    def test_13_other_idle_stock_carries_no_figure(self):
+        c = self.smart_hub(7)
+        fact = c.fact(HUB, WATER)
+        self.assertEqual((fact["st"], fact["why"], fact["setTo"]), ("idle", "importHigh", None))
+        self.assertNotIn("lowers", fact)
 
     def test_10_the_idle_facts_and_the_findings_are_one_set(self):
         c = Company()
@@ -1315,6 +1348,12 @@ class FixtureKeyTests(unittest.TestCase):
                         self.assertEqual("parts" in base, weekly)
                         if fact["role"] == "output":
                             self.assertEqual((fact["use"], fact["need"], fact["setTo"]), (0, 0, None))
+                        # A figure to lower is a shelf's too-high top-up, and below it.
+                        if fact.get("lowers"):
+                            self.assertEqual((fact["st"], fact["why"], fact["role"], fact["cad"]),
+                                             ("idle", "targetHigh", "shelf", "daily"))
+                            self.assertLess(fact["setTo"], fact["have"])
+                            self.assertGreaterEqual(fact["setTo"], fact["need"])
 
     def test_the_payload_keys_match_the_boards_fixture(self):
         with open(os.path.join(HERE, "fixtures", "r8_supply.json"), encoding="utf-8") as fh:

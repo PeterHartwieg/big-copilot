@@ -2006,8 +2006,9 @@
      "use": 99,
      "need": 114,
      "have": 3000,
-     "setTo": null,
-     "imp": false
+     "setTo": 120,
+     "imp": false,
+     "lowers": true
     }
    },
    "3": {
@@ -2032,8 +2033,9 @@
      "use": 22,
      "need": 26,
      "have": 1500,
-     "setTo": null,
-     "imp": false
+     "setTo": 30,
+     "imp": false,
+     "lowers": true
     }
    },
    "4": {
@@ -2059,8 +2061,9 @@
      "use": 22,
      "need": 26,
      "have": 1400,
-     "setTo": null,
-     "imp": false
+     "setTo": 30,
+     "imp": false,
+     "lowers": true
     }
    },
    "5": {
