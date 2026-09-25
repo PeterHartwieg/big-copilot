@@ -411,17 +411,54 @@ def bundled_locale(path: str | None) -> bool:
     return any(here == os.path.normcase(os.path.realpath(p)) for p in _BUNDLED_LOCALES)
 
 
+# The board reads the game's English: recipes, station capacities and door
+# caps are parsed out of the English help pages, so another language's file
+# gives translated names and silently loses all of those. Every locale file the
+# game ships (all 22, checked 25 Sep 2026) carries its menu's word for "Language" under
+# this key, and only English reads "Language". A table without the key -- the
+# bundled text, which keeps only names and help pages -- cannot be judged and
+# passes. web/app.js checks the same key before it keeps a player's file.
+LANGUAGE_KEY = "menu_options_others_language"
+ENGLISH_WORD = "Language"
+
+
+class NotEnglishText(ValueError):
+    """A locale file in another language, where the board needs English."""
+
+
+def english_text(table: dict[str, str]) -> bool:
+    """Whether this table is the game's English, or cannot be told apart from it."""
+    word = table.get(LANGUAGE_KEY)
+    return not isinstance(word, str) or word.strip().casefold() == ENGLISH_WORD.casefold()
+
+
+def not_english_message(path: str, table: dict[str, str]) -> str:
+    """The sentence that refuses a non-English file, naming what it holds."""
+    return (
+        f"{path} is the game's text in another language (its menu reads "
+        f"{table.get(LANGUAGE_KEY)!r} for {ENGLISH_WORD!r}). The board reads the "
+        "English help pages for recipes, station capacities and door caps; point "
+        "BA_LOCALE at the game's en.json"
+    )
+
+
 def _first_that_loads(paths) -> tuple[str | None, dict[str, str]]:
     """The first of these that yields entries, and what it yielded.
 
     A path that exists is not the same as text that loaded: a half-copied or
     truncated en.json reads as an empty table, and stopping there would lose
     every label while still naming a file.
+
+    A file in another language raises NotEnglishText rather than being passed
+    over: it is what BA_LOCALE named, and quietly reading a different file
+    would hide the mistake.
     """
     for path in paths:
         candidate = os.path.expanduser(path)
         table = load_locale(candidate) if os.path.isfile(candidate) else {}
         if table:
+            if not english_text(table):
+                raise NotEnglishText(not_english_message(candidate, table))
             return candidate, table
     return None, {}
 

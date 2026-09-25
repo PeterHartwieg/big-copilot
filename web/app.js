@@ -38,6 +38,10 @@
  */
 (function () {
   const LOCALE_KEY = "ledger_locale";
+  // The board reads the game's English help pages; ba_save.english_text()
+  // makes the same check with the same key and word for the CLI and the build.
+  const LANGUAGE_KEY = "menu_options_others_language";
+  const ENGLISH_WORD = "Language";
   const HISTORY_KEY = "ledger_history";
   const DB = "ledger";
   const STORE = "handles";
@@ -1818,6 +1822,32 @@
     if (hint) hint.textContent = has ? "your en.json is remembered · click to replace" : "built in · choose en.json only if your game is newer";
   }
 
+  // Which language a parsed locale table is in, when it is not English: its
+  // English name from the file's name ("de.json" -> "German"), "" when the
+  // name says nothing, and null for English or a table without the key (the
+  // text built into the page), which cannot be told apart from it.
+  function gameTextLanguage(parsed, fileName) {
+    const word = parsed && parsed[LANGUAGE_KEY];
+    if (typeof word !== "string" || word.trim().toLowerCase() === ENGLISH_WORD.toLowerCase()) return null;
+    const code = String(fileName || "").replace(/\.json$/i, "");
+    try {
+      const name = new Intl.DisplayNames(["en"], {type: "language"}).of(code);
+      // en.json holding another language names nothing useful either.
+      return name && !/^english\b/i.test(name) && name.toLowerCase() !== code.toLowerCase() ? name : "";
+    } catch (e) { return ""; }
+  }
+
+  // A file kept before the check above would still be sent to every build;
+  // drop it once, so only English is ever stored as the override.
+  function dropForeignLocale() {
+    const text = stored.get(LOCALE_KEY);
+    if (!text) return;
+    let parsed = null;
+    try { parsed = JSON.parse(text); } catch (e) { return; }
+    if (gameTextLanguage(parsed, "") === null) return;
+    try { localStorage.removeItem(LOCALE_KEY); } catch (e) {}
+  }
+
   async function takeLocale(file, rebuild = true) {
     const gen = sourceGen;
     let text;
@@ -1827,6 +1857,12 @@
       const parsed = JSON.parse(text);
       if (!parsed || typeof parsed !== "object" || !("ba:neighborhood_global" in parsed)) {
         note("warn", "That file is not the game's en.json.", "No ba: keys inside.");
+        return;
+      }
+      const language = gameTextLanguage(parsed, file.name);
+      if (language !== null) {
+        note("warn", language ? `That is the game's ${language} text.` : "That is not the game's English text.",
+          "Choose en.json — the board reads the English file.");
         return;
       }
     } catch (e) {
@@ -2047,6 +2083,7 @@
   /* --- wiring ------------------------------------------------------------ */
   window.addEventListener("DOMContentLoaded", async () => {
     wireSaveLocation();
+    dropForeignLocale();
     localeState();
     startWorker();
     if (!canHandle) {
