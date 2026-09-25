@@ -170,16 +170,16 @@ test('a refresh leaves Today, an open site and Supply standing as they were', as
 
 test('what a refresh redraws on a view out of sight is there on the way back', async t => {
   const page = await board(t);
-  // Payroll has been seen: its role cards arrived.
-  await page.evaluate(() => { showPage('company'); showSub('company', 'payroll'); });
+  // Staff has been seen: its Payroll role cards arrived.
+  await page.evaluate(() => { showPage('company'); showSub('company', 'staff'); });
   await settle(page);
-  assert.ok(await page.locator('#secPayroll .role.rv.in').count() > 0, 'the fixture has role cards');
+  assert.ok(await page.locator('#secStaff .role.rv.in').count() > 0, 'the fixture has role cards');
   await page.evaluate(() => showPage('today'));
   await settle(page);
-  await page.evaluate(() => { window.calmOld = document.querySelector('#secPayroll .role'); });
+  await page.evaluate(() => { window.calmOld = document.querySelector('#secStaff .role'); });
   await deliver(page);
   await page.evaluate(() => showPage('company'));
-  assert.ok(await page.evaluate(() => window.calmOld !== document.querySelector('#secPayroll .role')),
+  assert.ok(await page.evaluate(() => window.calmOld !== document.querySelector('#secStaff .role')),
     'the refresh rebuilt the role cards');
   assert.deepEqual(await motion(page), still);
 });
@@ -218,9 +218,9 @@ async function asRedrawn(page) {
 
 test('a refresh on Today draws Today; every other page waits for its visit and opens on the new numbers', async t => {
   const page = await board(t);
-  // Every view seen once, Company last on Payroll and Supply on Shops.
+  // Every view seen once, Company last on Staff and Supply on Shops.
   await page.evaluate(() => {
-    for (const [p, v] of [['growth', 'market'], ['supply', 'warehouses'], ['supply', 'shops'], ['company', 'results'], ['company', 'payroll']]) {
+    for (const [p, v] of [['growth', 'market'], ['supply', 'warehouses'], ['supply', 'shops'], ['company', 'results'], ['company', 'staff']]) {
       showPage(p); showSub(p, v);
     }
   });
@@ -228,24 +228,24 @@ test('a refresh on Today draws Today; every other page waits for its visit and o
   await settle(page);
   // Blocks of each page as they stand now, to tell a redraw from none.
   const mark = () => page.evaluate(() => {
-    window.calmOld = {kpis: '#kpis > *', payroll: '#secPayroll > *', portfolio: '#portfolio tbody',
+    window.calmOld = {kpis: '#kpis > *', payroll: '#secStaff > *', portfolio: '#portfolio tbody',
       stock: '#secShops > *', market: '#market > *'};
     for (const k in calmOld) calmOld[k] = document.querySelector(calmOld[k]);
   });
   const standing = () => page.evaluate(() =>
     Object.fromEntries(Object.entries(calmOld).map(([k, el]) => [k, !!el && el.isConnected])));
   await mark();
-  assert.match(await page.locator('#secPayroll').textContent(), /\b3 people\b/);
+  assert.match(await page.locator('#hrPayroll').textContent(), /\b3 people\b/);
 
   // (a) The refresh redraws Today and leaves the other pages' markup alone.
   await deliver(page, later);
   assert.match(await page.locator('#kpis').innerText(), /25,000/, 'Today has the new cash');
   assert.deepEqual(await standing(), {kpis: false, payroll: true, portfolio: true, stock: true, market: true});
-  assert.match(await page.locator('#secPayroll').textContent(), /\b3 people\b/, 'Payroll waits for its visit');
+  assert.match(await page.locator('#hrPayroll').textContent(), /\b3 people\b/, 'Staff waits for its visit');
 
-  // (b) By the nav: Company opens on Payroll, drawn for the new numbers.
+  // (b) By the nav: Company opens on Staff, drawn for the new numbers.
   await page.click('#nav a[data-id="company"]');
-  assert.match(await page.locator('#secPayroll').textContent(), /\b4 people\b/);
+  assert.match(await page.locator('#hrPayroll').textContent(), /\b4 people\b/);
   assert.deepEqual(await motion(page), still, 'a view seen before comes back already arrived');
   let [shown, redrawn] = await asRedrawn(page);
   assert.equal(shown, redrawn);
@@ -322,15 +322,15 @@ test('a view drawn on its visit is wired once', async t => {
 
 test('a draw that throws on the way in leaves the view out of date, not the reader stuck', async t => {
   const page = await board(t);
-  await page.evaluate(() => { showPage('company'); showSub('company', 'payroll'); showPage('today'); });
+  await page.evaluate(() => { showPage('company'); showSub('company', 'staff'); showPage('today'); });
   await deliver(page, later);
-  const stale = () => page.evaluate(() => [...pageStale].some(row => /drawPayroll/.test(String(row[1]))));
-  assert.equal(await stale(), true, 'Payroll waits for its visit');
+  const stale = () => page.evaluate(() => [...pageStale].some(row => /drawStaff/.test(String(row[1]))));
+  assert.equal(await stale(), true, 'Staff waits for its visit');
   const messages = [];
   page.on('console', m => { if (m.type() === 'error') messages.push(m.text()); });
   await page.evaluate(() => {
-    window.calmDraw = window.drawPayroll;
-    window.drawPayroll = () => { throw new Error('payroll broke'); };
+    window.calmDraw = window.drawStaff;
+    window.drawStaff = () => { throw new Error('payroll broke'); };
   });
   await page.click('#nav a[data-id="company"]');
   assert.equal(await page.evaluate(() => page), 'company', 'the nav click still opens Company');
@@ -338,15 +338,15 @@ test('a draw that throws on the way in leaves the view out of date, not the read
   assert.equal(await page.locator('#pageToday').isHidden(), true);
   assert.equal(await stale(), true, 'the view is still out of date');
   assert.ok(messages.some(m => /payroll broke/.test(m)), messages.join('\n'));
-  assert.match(await page.locator('#secPayroll').textContent(), /\b3 people\b/);
+  assert.match(await page.locator('#hrPayroll').textContent(), /\b3 people\b/);
   // The view shows the save before; the Live dot says so.
   assert.deepEqual(await liveDot(page), {stale: true, says: 'Stale', why: 'payroll broke'});
 
-  await page.evaluate(() => { window.drawPayroll = window.calmDraw; });
+  await page.evaluate(() => { window.drawStaff = window.calmDraw; });
   await page.click('#nav a[data-id="today"]');
   await page.click('#nav a[data-id="company"]');
   assert.equal(await stale(), false);
-  assert.match(await page.locator('#secPayroll').textContent(), /\b4 people\b/, 'drawn on the next visit');
+  assert.match(await page.locator('#hrPayroll').textContent(), /\b4 people\b/, 'drawn on the next visit');
   assert.deepEqual(await liveDot(page), {stale: false, says: 'LIVE', why: ''});
 });
 

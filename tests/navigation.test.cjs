@@ -92,14 +92,28 @@ test('the top row is Today, Company, Supply, Growth, Map, Wiki', () => {
   assert.match(b.$('nav').innerHTML, /data-id="company"/);
 });
 
-test('Company carries Results, Products, Payroll and Milestones', () => {
+test('Company carries Results, Products, Staff and Milestones', () => {
   const b = board();
   const items = vm.runInContext('SUBS.company.items', b.context);
-  assert.deepEqual([...items].map(([, label]) => label), ['Results', 'Products', 'Payroll', 'Milestones']);
-  assert.deepEqual([...items].map(([, , anchor]) => anchor), ['secDaily', 'secProducts', 'secPayroll', 'secGoals']);
+  assert.deepEqual([...items].map(([, label]) => label), ['Results', 'Products', 'Staff', 'Milestones']);
+  assert.deepEqual([...items].map(([, , anchor]) => anchor), ['secDaily', 'secProducts', 'secStaff', 'secGoals']);
   assert.equal(vm.runInContext('SUBS.company.start', b.context), 'results');
-  b.context.showSub('company', 'payroll');
-  assert.match(b.$('companyNav').innerHTML, /href="#secPayroll" data-id="payroll" class="on"/);
+  b.context.showSub('company', 'staff');
+  assert.match(b.$('companyNav').innerHTML, /href="#secStaff" data-id="staff" class="on"/);
+});
+
+/* Payroll became Staff: an old hash, an old section link and a view
+   remembered as Payroll all open Staff. */
+test('the old #payroll hash, #secPayroll and a remembered Payroll open Staff', () => {
+  for (const hash of ['#payroll', '#secPayroll']) {
+    const b = board();
+    b.context.location.hash = hash;
+    b.boot();
+    assert.equal(b.page(), 'company', hash);
+    assert.equal(b.sub('company'), 'staff', hash);
+  }
+  const b = board({saved: {ba_dash_company: 'payroll'}});
+  assert.equal(b.sub('company'), 'staff');
 });
 
 test('the site panel decides its own visibility when a Company view arrives', () => {
@@ -123,7 +137,7 @@ test('a Today finding opens Company on Results, and Back returns to Today', () =
 
 test('every Company section deep link opens the view that holds it', () => {
   for (const [hash, view] of [['#secDaily','results'], ['#secPortfolio','results'],
-                              ['#secProducts','products'], ['#secPayroll','payroll'], ['#secGoals','milestones']]) {
+                              ['#secProducts','products'], ['#secStaff','staff'], ['#secPayroll','staff'], ['#secGoals','milestones']]) {
     const b = board();
     b.context.location.hash = hash;
     b.boot();
@@ -164,7 +178,7 @@ test('the old #results hash still opens Company on its Results view', () => {
 /* The view Company was last left on is remembered, so an old link has to say
    which view it means — not just which page. */
 test('#results opens Results even when Company was last left on another view', () => {
-  for (const saved of ['products', 'payroll', 'milestones']) {
+  for (const saved of ['products', 'staff', 'milestones']) {
     const b = board({saved: {ba_dash_company: saved}});
     assert.equal(b.sub('company'), saved, 'the remembered view is where Company would open');
     b.context.location.hash = '#results';
@@ -261,7 +275,7 @@ for (const [pageId, view, anchor, nav] of [
   ['supply','shops','secShops','supplyNav'], ['supply','warehouses','secWarehouses','supplyNav'],
   ['supply','factories','secFactories','supplyNav'],
   ['growth','market','secMarket','growthNav'], ['growth','plan','secPlan','growthNav'],
-  ['company','products','secProducts','companyNav'], ['company','payroll','secPayroll','companyNav'],
+  ['company','products','secProducts','companyNav'], ['company','staff','secStaff','companyNav'],
   ['company','milestones','secGoals','companyNav'],
 ]) test(`modified-click destination boots ${pageId}/${view}`, () => {
   const b = board();
@@ -430,7 +444,7 @@ test('Company in the nav, and a Company hash, are the portfolio again', () => {
 });
 
 test('an address that answers nothing lands on the portfolio and says so', () => {
-  const b = board({data: sites(), saved: {ba_dash_company: 'payroll'}});
+  const b = board({data: sites(), saved: {ba_dash_company: 'staff'}});
   b.context.location.hash = '#site/nowhere-1';
   b.boot();
   assert.equal(b.page(), 'company');

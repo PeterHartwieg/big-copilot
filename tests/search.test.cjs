@@ -240,7 +240,8 @@ test('a synonym says so beside the real name, and "break even" says there is no 
     await page.keyboard.press('/');
     await typed(page, 'hire');
     const first = await page.$eval('#ssRes .ss-row.on', el => [el.querySelector('.t').textContent, el.querySelector('.ss-syn').textContent]);
-    assert.equal(first[0], 'Staffing≈ hire');
+    // Staff is where hiring happens now (issue #89), so it leads for "hire".
+    assert.equal(first[0], 'Staff≈ hire');
     assert.equal((await groups(page))[0], 'Pages & views');
     await typed(page, 'break even');
     const row = page.locator('#ssRes .ss-row', {hasText: 'Portfolio'}).first();
@@ -804,7 +805,7 @@ test('profit: switching the portfolio to Operations takes the landing down', asy
    test board draws itself: a live refresh then runs as the app runs it. */
 const quietRender = page => page.evaluate(() => {
   ['indexTrends', 'drawMast', 'drawKpis', 'drawAlerts', 'drawRhythm', 'drawSupplyStrip', 'drawShopsTab', 'drawWarehousesTab', 'drawFactoriesTab',
-   'drawFlow', 'drawMovers', 'drawMarket', 'drawPlan', 'drawProducts', 'drawPayroll', 'drawGoals', 'drawFindLocation',
+   'drawFlow', 'drawMovers', 'drawMarket', 'drawPlan', 'drawProducts', 'drawStaff', 'drawGoals', 'drawFindLocation',
    'drawOptimizeStaffing', 'drawFooter', 'wireAll', 'refreshCityMaps'].forEach(name => { window[name] = () => {}; });
 });
 
