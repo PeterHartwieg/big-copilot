@@ -159,6 +159,20 @@ test('a row is keyed by its item key, and a tick stored under the item name stil
   assert.equal(context.reconcileOrderMarks(new Set([stored]), [], true).size, 0);
 });
 
+test('with the names in German, a tick stored under the English name still counts', () => {
+  // The board's names in German: the row carries the German name, the tick was
+  // stored under the English one, before rows were keyed by the item's key.
+  const names = {'ba:itemname_sugar': 'Sugar'};
+  Object.assign(context, {gnLang: 'de', englishName: key => names[key] || ''});
+  try {
+    const [row] = build({imports:[{s:0, rows:[order({item: 'Zucker', slug: 'ba:itemname_sugar'})]}]});
+    const stored = JSON.stringify(['Weekly imports', 'depot#1', 'Sugar', 1000, 1500, null]);
+    assert.deepEqual([...context.reconcileOrderMarks(new Set([stored]), [row], true)], [row.key]);
+  } finally {
+    delete context.gnLang; delete context.englishName;
+  }
+});
+
 test('a paused order or delivery gap is a review action, not an invented quantity', () => {
   const rows = build({checks:[
     {s:0, item:'Flour', paused:true, from:'Importer', fact:fact('paused')},

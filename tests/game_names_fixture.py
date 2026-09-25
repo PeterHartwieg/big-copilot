@@ -43,6 +43,10 @@ LONG_HOOD = "ba:neighborhood_garmentdistrict"
 LONG_HOOD_NAME = "Bekleidungsgewerbeviertel"
 SAME_IN_GERMAN = "ba:itemname_cleaningstation"
 LETTUCE = {"ba:itemname_lettuce": "Beutel mit Salat", "ba:itemname_rawlettuce": "Beutel Salat"}
+# The game's own German for three items whose names hold the marks a finding
+# is cut at: a variant in lowercase brackets, and commas inside the brackets.
+MARKED = {"ba:itemname_cheapflower": "Blume (günstig)", "ba:itemname_expensiveflower": "Blume (teuer)",
+          "ba:itemname_classiccheapfemaleclothing": "Kleidung (klassisch, günstig, Damen)"}
 WORDS = {"ba:businesstype_giftshop": "Geschenkeladen", "ba:businesstype_warehouse": "Lagerhaus",
          "ba:skill_customerservice": "Kundendienst", "ba:itemname_paperbag": "Papiertüte"}
 
@@ -58,6 +62,7 @@ def german(text: dict) -> dict:
     out = {k: f"{v} (DE)" for k, v in text.items() if k.startswith(ba_dashboard.NAME_PREFIXES)}
     out.update(LETTUCE)
     out.update(WORDS)
+    out.update(MARKED)
     out[LONG_HOOD] = LONG_HOOD_NAME
     out[SAME_IN_GERMAN] = text[SAME_IN_GERMAN]
     return out
@@ -100,6 +105,25 @@ def resolved(value):
     return ba_dashboard.plain(value)
 
 
+def cut_findings(text: dict) -> list:
+    """Findings whose headline the page cuts, naming the MARKED items, from the
+    builders extract() runs: a top-up that one busy day outruns
+    (_shelf_notes), for each item, and a top-up target set far too high for
+    one of them (_idle_notes), whose sentence leads with the item's name."""
+    slugs = list(MARKED)
+    shop = {"key": "ba:street_secondavenue#10", "name": "HART. Gifts", "lines": [
+        {"slug": slug, "item": text[slug], "units": 400, "rate": 300} for slug in slugs]}
+    facts = {"0": {slug: {"role": "shelf", "st": "short", "why": "target", "cad": "daily", "lvl": "critical",
+                          "use": 1000, "have": 200} for slug in slugs}}
+    notes = ba_dashboard._shelf_notes([shop], {"facts": facts, "shops": [
+        {"s": 0, "slug": slug, "peakDay": "Saturday"} for slug in slugs]}, set())
+    clothing = slugs[2]
+    notes += ba_dashboard._idle_notes([shop], [{
+        "s": 0, "slug": clothing, "item": text[clothing], "why": "targetHigh", "target": 3000,
+        "perWeek": 490, "stock": 3000, "price": 0, "value": 0, "weeks": 6, "dead": False}], set())
+    return notes
+
+
 def fixture() -> dict:
     text = english()
     with tempfile.TemporaryDirectory() as tmp:
@@ -110,6 +134,7 @@ def fixture() -> dict:
     return {
         "payload": payload,
         "english": resolved(payload),
+        "cuts": cut_findings(text),
         "de": ba_dashboard.name_table(text, german(text)),
         "longHood": LONG_HOOD, "longHoodName": LONG_HOOD_NAME,
         "sameInGerman": SAME_IN_GERMAN,

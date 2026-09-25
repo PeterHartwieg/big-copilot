@@ -181,9 +181,6 @@ class Lang(unittest.TestCase):
             cli_names("de", None, ENGLISH)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class Tokens(unittest.TestCase):
     """Game names inside Python's sentences travel as tokens the page resolves;
@@ -241,3 +238,7 @@ class Tokens(unittest.TestCase):
                     self.assertNotIn("⟦", Path(tmp, name).read_text(encoding="utf-8"), name)
         for row in data["alerts"] + data["minor"]["rows"]:
             self.assertNotIn("⟦", row["id"] + row["site"] + (row["siteKey"] or ""))
+
+
+if __name__ == "__main__":
+    unittest.main()

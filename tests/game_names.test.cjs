@@ -72,6 +72,14 @@ test('the German table swaps every game name the board shows, and nothing the pl
     (b.uniformGaps || []).forEach((g, k) => assert.equal(g, want(b.uniformGapSkills[k])));
   });
   assert.equal(D.businesses[0].type, 'Geschenkeladen');
+  // A name beside a type key is a business somebody named: one called
+  // "Warehouse" keeps its name, though the type beside it is swapped.
+  context.__raw = {names: en.names, businesses: [
+    {name: 'Warehouse', type: 'Warehouse', typeSlug: 'ba:businesstype_warehouse'}],
+    staffing: [{key: 'k', name: 'Warehouse', typeSlug: 'ba:businesstype_warehouse', failed: true}]};
+  const named = run('localiseNames(__raw)');
+  assert.deepEqual([named.businesses[0].name, named.businesses[0].type, named.staffing[0].name],
+    ['Warehouse', 'Lagerhaus', 'Warehouse']);
   // A role with no key beside it: read by the kind of name it is.
   const roles = D.businesses.flatMap(b => (b.people || []).map(p => p.role));
   assert.ok(roles.length && roles.every(r => r === 'Kundendienst'), roles.join(', '));
@@ -346,6 +354,11 @@ test('a Japanese goods-flow node and a German heat-grid header stay inside their
   const jp = boxes.filter(b => /[぀-ヿ一-鿿]/.test(b.text));
   assert.ok(jp.length >= 2, JSON.stringify(boxes));
   jp.forEach(b => assert.ok(b.over <= 0, `${b.text} runs ${b.over.toFixed(1)}px past its box`));
+  // The type line carries its whole name as a title, and a cut says so.
+  const titles = await page.$$eval('#flow .node text.s title', ts => ts.map(t => t.textContent));
+  assert.ok(titles.includes(ja['ba:businesstype_warehouse']), JSON.stringify(titles));
+  assert.equal(await page.evaluate(() => shortText('Fruit and Vegetable Store', 21, true)), 'Fruit and Vegetable\u2026');
+  assert.equal(await page.evaluate(() => shortText('Electronics Store', 21, true)), 'Electronics Store');
 
   const hoods = ['ba:neighborhood_garmentdistrict', 'ba:neighborhood_hellskitchen', 'ba:neighborhood_industrycity',
     'ba:neighborhood_lowermanhattan', 'ba:neighborhood_midtown', 'ba:neighborhood_murrayhill', 'ba:neighborhood_thehamptons'];
@@ -412,4 +425,97 @@ test('no game-name token reaches the page, in English or in German', async t => 
     return [...document.querySelectorAll('#sitePanel [data-show]')].map(e => e.dataset.show); }, FIX.payload.businesses[0].key);
   assert.ok(shows.some(s => s.includes('staff:ba:skill_projectionist')), JSON.stringify(shows));
   assert.deepEqual(errors, []);
+});
+
+/* A headline is cut at a comma or a bracket of words; a mark inside a game
+   name is part of the name, in whatever language it is shown. The findings
+   are the real builders', naming the game's own German for its flowers and a
+   dress whose name holds commas. */
+test('a finding is never cut inside a game name, in German as in English', async t => {
+  const {page, errors} = await site(t);
+  await boardOn(page);
+  const heads = () => page.evaluate(cuts => localiseNames({names: dataEn().names, cuts}).cuts
+    .map(a => splitFinding(a).what), FIX.cuts);
+  const english = await heads();
+  assert.deepEqual(english.slice(0, 3), [
+    'Flower (Cheap) sells 1,000 on a Saturday against a 200 top-up',
+    'Clothing (Classic Cheap Female) sells 1,000 on a Saturday against a 200 top-up',
+    'Flower (Expensive) sells 1,000 on a Saturday against a 200 top-up']);
+  await page.evaluate(async () => { await setGameNames('de'); });
+  const [cheap, dress, dear, target] = await heads();
+  assert.ok(cheap.startsWith('Blume (günstig)'), cheap);
+  assert.ok(dear.startsWith('Blume (teuer)'), dear);
+  assert.ok(dress.startsWith('Kleidung (klassisch, günstig, Damen)'), dress);
+  // One name with commas before "top-up target of" is not a list of names.
+  assert.ok(target.startsWith('Kleidung (klassisch, günstig, Damen) top-up target'), target);
+  assert.deepEqual(errors, []);
+});
+
+/* The wiki names what it shows in the language picked, by the key beside each
+   name: staff skills, the recipe's inputs, output and workstation, and the
+   types a product is also sold by. */
+test('a wiki guide names its skills, recipes and sellers in the language picked', async t => {
+  const {page, errors} = await site(t);
+  const wiki = JSON.parse(fs.readFileSync(path.join(WEB, 'wiki-data.json'), 'utf8'));
+  const g = wiki.guides['businesstypes-florist'];
+  const recipe = Object.values(g.RECIPES)[0];
+  const product = Object.values(g.PRODUCTS).find(p => (p.alsoSoldByKeys || []).length);
+  await page.evaluate(async () => { await setGameNames('de'); BigCopilotBoard.browseWiki(); location.hash = '#wiki/businesstypes-florist'; });
+  await page.locator('#pageWiki h1').filter({hasText: FIX.de['ba:businesstype_florist']}).waitFor();
+  const text = await page.locator('#pageWiki').textContent();
+  const tips = await page.$$eval('#pageWiki [data-tip]', els => els.map(e => e.dataset.tip).join('\n'));
+  // The help's own page, quoted below the guide, stays English prose; the
+  // guide's staff tile and its checklist name the skill in German.
+  const staff = await page.$$eval('#pageWiki .wk-tiles .kpi, #pageWiki .wk-item strong',
+    els => els.map(e => e.textContent).join(' | '));
+  assert.ok(staff.includes('Kundendienst'), staff);
+  assert.ok(!/Customer Service/i.test(staff), staff);
+  assert.ok(tips.includes('Kundendienst and'), 'the staff tile tip');
+  for(const key of [recipe.inputs[0].slug, recipe.out.slug, `ba:factoryworkstationtype_${recipe.workstationKey}`,
+    ...product.alsoSoldByKeys])
+    assert.ok(text.includes(FIX.de[key]), `${key}: ${FIX.de[key]}`);
+  assert.deepEqual(errors, []);
+});
+
+test('the board search lists a wiki page under its name as shown, and finds it by the English', async t => {
+  const {page} = await site(t);
+  await boardOn(page);
+  // The wiki's catalogue loads with its first visit.
+  await page.evaluate(() => showPage('wiki'));
+  await page.waitForFunction(() => typeof wikiData !== 'undefined' && wikiData && wikiData.search);
+  await page.evaluate(async () => { await setGameNames('de'); });
+  const wiki = q => page.evaluate(q => (ssSearch(q, ssBuild()).find(g => g.g === 'wiki') || {hits: []})
+    .hits.map(h => [h.e.id, h.e.t]), q);
+  const page_ = 'wiki:businesstypes-giftshop';
+  assert.deepEqual((await wiki('geschenkeladen')).find(([id]) => id === page_), [page_, 'Geschenkeladen']);
+  assert.ok((await wiki('gift shop')).some(([id]) => id === page_));
+});
+
+test('a wiki category lists its pages in the order of the names shown', async t => {
+  const {page} = await site(t);
+  const listed = async () => {
+    await page.evaluate(() => { location.hash = '#wiki/c/common_business_types'; });
+    await page.waitForTimeout(150);
+    return page.$$eval('#pageWiki .wk-hit .wk-what', els => els.map(e => e.textContent));
+  };
+  await page.evaluate(() => BigCopilotBoard.browseWiki());
+  await page.evaluate(() => { wikiShowAll = true; });
+  await page.evaluate(async () => { await setGameNames('de'); });
+  const german = await listed();
+  assert.ok(german.includes('Lagerhaus'), german.join(', '));
+  const sorted = await page.evaluate(names => names.slice().sort(gnCompare), german);
+  assert.deepEqual(german, sorted);
+  await page.evaluate(async () => { await setGameNames('en'); });
+  const english = await listed();
+  assert.deepEqual(english, await page.evaluate(names => names.slice().sort(gnCompare), english));
+  assert.ok(english.indexOf('Warehouse') > english.indexOf('Gift Shop'));
+});
+
+test('a chain says what it is made of in English words, whatever the names are shown in', async t => {
+  const {page} = await site(t);
+  await boardOn(page);
+  await page.evaluate(async () => { await setGameNames('de'); });
+  const said = await page.evaluate(() => D.chains.map(c => xlMembers(c)));
+  assert.ok(said.some(s => /\b1 warehouse\b/.test(s)), said.join(' | '));
+  assert.ok(!said.some(s => /lagerhaus/i.test(s)), said.join(' | '));
 });

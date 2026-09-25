@@ -13842,7 +13842,7 @@ const gnSwap = (T, EN, key, english, loose) =>
 /* Which field names a key, and the fields beside it that show that key's name
    (loose ones first, then strict ones). A field left out here stays English;
    gnUnkeyed() takes the few with no key. */
-const GN_PAIRS = [["slug", ["item", "type", "demand"], ["name"]], ["typeSlug", ["type"], ["sub", "name"]],
+const GN_PAIRS = [["slug", ["item", "type", "demand"], ["name"]], ["typeSlug", ["type"], ["sub"]],
   ["skill", ["label", "role"], []], ["demand", ["label"], []], ["hood", [], ["where"]],
   ["workstationKey", ["workstation"], []]];
 /* Lists of names with their keys in a list beside them, index for index. */
@@ -14437,7 +14437,8 @@ function drawFlow(){
         ? `<rect x="${x + 10}" y="${y + 13}" width="24" height="18" rx="3" fill="var(--raised)" stroke="var(--rule)"></rect>
            <text x="${x + 22}" y="${y + 26}" text-anchor="middle" class="s" style="font-weight:600;fill:var(--ink-2)">${hood}</text>` : ""}
       <text x="${tx}" y="${y + 19}">${attr(shortText(node.name, hood ? 19 : 24))}</text>
-      <text class="s" x="${tx}" y="${y + 34}">${node.stock ? node.stock.toLocaleString() + " held" : attr(shortText(node.sub || "", hood ? 21 : 26))}</text></g>`);
+      <text class="s" x="${tx}" y="${y + 34}">${node.stock ? node.stock.toLocaleString() + " held"
+        : `${attr(shortText(node.sub || "", hood ? 21 : 26, true))}<title>${attr(node.sub || "")}</title>`}</text></g>`);
     if(flag) dots.push(`<circle class="${flag[0]}" cx="${x + NODE_W - 10}" cy="${y + 10}" r="4"><title>${flag[1]}</title></circle>`);
   });
 
@@ -14463,15 +14464,20 @@ function flowCountText(facts){
 
 /* A node's name cut to fit its box: n is a width in Latin letters, and a wide
    (CJK) character takes two of them. */
-const shortText = (t, n) => {
+const shortText = (t, n, ellipsis = false) => {
   const s = String(t || "").replace(/^\[[^\]]*\]\s*/, "");
+  const width = ch => gnWide(ch) ? 2 : 1;
   let w = 0, out = "";
+  for(const ch of s) w += width(ch);
+  /* Cut with an ellipsis, the ellipsis takes one unit of the width itself. */
+  const room = ellipsis && w > n ? n - 1 : n;
+  w = 0;
   for(const ch of s){
-    w += gnWide(ch) ? 2 : 1;
-    if(w > n) break;
+    w += width(ch);
+    if(w > room) break;
     out += ch;
   }
-  return out;
+  return ellipsis && out.length < s.length ? `${out.trimEnd()}\u2026` : out;
 };
 
 function drawFlowDetail(){
@@ -15499,14 +15505,48 @@ const SEV_WORD = {crit: "urgent", watch: "watch", opp: "opportunity"};
    (three of a kind at one site) carries its worst member's sentence as detail. */
 const HEADLINE_MAX = 60;
 const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/* The game names in the language on screen that hold a mark a finding is cut
+   at (a comma, a bracket, a colon, a stop): "Kleidung (klassisch, günstig,
+   Damen)", "Blume (günstig)". A finding is never cut inside one of them. Read
+   off the names the board shows, so it holds in every language. */
+const FINDING_CUT_MARKS = /[,(:;.]/;
+let findingNamesFor = null, findingNamesList = [];
+function findingNames(){
+  const names = (typeof D !== "undefined" && D && D.names) || null;
+  if(names !== findingNamesFor){
+    findingNamesFor = names;
+    findingNamesList = [...new Set(Object.values(names || {}))]
+      .filter(n => typeof n === "string" && n.length > 2 && FINDING_CUT_MARKS.test(n))
+      .sort((x, y) => y.length - x.length);
+  }
+  return findingNamesList;
+}
+/* Where in `t` a game name stands, as [from, to) pairs. */
+function findingNameSpans(t){
+  const spans = [];
+  if(!FINDING_CUT_MARKS.test(t)) return spans;
+  for(const name of findingNames()){
+    for(let at = t.indexOf(name); at >= 0; at = t.indexOf(name, at + name.length))
+      if(!spans.some(([f, e]) => at < e && at + name.length > f)) spans.push([at, at + name.length]);
+  }
+  return spans;
+}
+const inFindingName = (spans, i) => spans.some(([f, e]) => i > f && i < e);
 function splitFinding(a){
   let t = String(a.text || "");
   if(a.site && t.startsWith(a.site)){
     t = t.slice(a.site.length).replace(/^[\s,:;-]+/, "").replace(/^(is|are)\s+/, "");
   }
-  /* A colon between digits is a time of day, not a break. */
-  const m = t.match(/^(.*?)(?:(?<!\d):(?!\d)|;|\.\s)\s*(.*)$/s);
-  let what = m ? m[1] : t, more = m ? m[2] : "";
+  /* A colon between digits is a time of day, not a break, and a mark inside
+     a game name is part of the name. */
+  const whole = findingNameSpans(t);
+  let what = t, more = "";
+  for(const m of t.matchAll(/(?<!\d):(?!\d)|;|\.\s/g)){
+    if(inFindingName(whole, m.index)) continue;
+    what = t.slice(0, m.index);
+    more = t.slice(m.index + m[0].length).replace(/^\s+/, "");
+    break;
+  }
   /* "at <site>" inside the headline is the pill again. */
   if(a.site) what = what.replace(new RegExp(`\\s+at ${escapeRe(a.site)}\\b`), "");
   const lead = rest => { more = more ? `${rest.replace(/[.\s]+$/, "")}. ${more}` : rest; };
@@ -15516,7 +15556,8 @@ function splitFinding(a){
   let r;
   if((r = what.match(/^(\d+) (machines?) at (.+?) (runs? a recipe the board cannot name.*)$/))){
     what = `${r[1]} ${r[2]} ${r[4]}`; lead(`At ${r[3]}`);
-  } else if((r = what.match(/^(.+?) (top-up target of .+)$/)) && r[1].includes(", ")){
+  } else if((r = what.match(/^(.+?) (top-up target of .+)$/))
+      && [...r[1].matchAll(/, /g)].some(c => !inFindingName(findingNameSpans(r[1]), c.index))){
     what = r[2]; lead(r[1]);
   }
   /* Still long: the last comma or bracket inside the limit ends the headline
@@ -15526,8 +15567,8 @@ function splitFinding(a){
      cut there named the item without its variant: two rows read "Fabric".
      Only a bracket of words ("(important)", "(3 at peak)") is a place to cut. */
   if(what.length > HEADLINE_MAX){
-    const cuts = [];
-    for(const m of what.matchAll(/, | \((?![A-Z])/g)) cuts.push(m.index);
+    const cuts = [], names = findingNameSpans(what);
+    for(const m of what.matchAll(/, | \((?![A-Z])/g)) if(!inFindingName(names, m.index)) cuts.push(m.index);
     let at = Math.max(-1, ...cuts.filter(i => i <= HEADLINE_MAX));
     if(at < 20) at = Math.min(...cuts.filter(i => i > 0));
     if(isFinite(at) && at > 0){
@@ -15863,7 +15904,9 @@ function xlMembers(c){
     if(!b) return;
     const word = b.status === "retail" ? "shop" : b.status === "office" ? "office"
       : b.status === "vacant" ? "vacant lease"
-      : factories.has(i) ? "factory" : String(b.type || "site").toLowerCase();
+      /* The sentence is English and pluralised in English, so the kind is the
+         type's English name whatever language the names are shown in. */
+      : factories.has(i) ? "factory" : String(englishName(b.typeSlug) || b.type || "site").toLowerCase();
     counts.set(word, (counts.get(word) || 0) + 1);
   });
   if(!counts.size) return `${c.count} site${c.count === 1 ? "" : "s"}`;
@@ -19002,8 +19045,9 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
                                       .concat(mode === "smart" ? ["smart"] : []));
     const key = id(slug);
     // The key a tick was stored under while rows were keyed by the item's
-    // name, for reconcileOrderMarks to carry over.
-    const legacyKey = id(item);
+    // name, for reconcileOrderMarks to carry over. That name was English, so
+    // with the names in another language it is the key's English name.
+    const legacyKey = id(typeof gnLang !== "undefined" && gnLang !== "en" ? englishName(slug) || item : item);
     rows.push({key, legacyKey, group, item, slug, current, proposed, reason, kind, site: s, source, mode,
                ...(paused ? {paused: true} : {}), ...(tight ? {tight: true} : {})});
   };
@@ -22488,10 +22532,14 @@ function ssBuild(){
       go: () => ssFinder({cat: "warehouse", type: "", hoods: null})}));
   }
   /* The wiki's own index (wikiIndex() in web/wiki.js), once its file is in. */
-  if(typeof wikiData !== "undefined" && wikiData && wikiData.search) wikiData.search.forEach(w =>
-    out.push(ssEntry({id: `wiki:${w.id}`, g: "wiki", t: w.title, p: `Wiki › ${w.category || "the game's help"}`, ic: "wiki",
-      syn: SS_WIKI_SYN[w.title] || [], land: `Wiki › ${w.title}`,
-      go: () => ssHash(wikiHref({kind: "page", id: w.id}))})));
+  /* A page titled with a game name is listed under the name as shown, and
+     answers to its English title too (`en`), as the wiki's own search does. */
+  if(typeof wikiData !== "undefined" && wikiData && wikiData.search) wikiData.search.forEach(w => {
+    const shown = typeof wikiName === "function" ? wikiName(w.key, w.title) : w.title;
+    out.push(ssEntry({id: `wiki:${w.id}`, g: "wiki", t: shown, en: w.title, p: `Wiki › ${w.category || "the game's help"}`, ic: "wiki",
+      syn: SS_WIKI_SYN[w.title] || [], land: `Wiki › ${shown}`,
+      go: () => ssHash(wikiHref({kind: "page", id: w.id}))}));
+  });
   return out;
 }
 

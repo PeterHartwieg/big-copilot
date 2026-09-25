@@ -7776,6 +7776,10 @@
           "Florists",
           "Bookstore"
         ],
+        "alsoSoldByKeys": [
+          "ba:businesstype_florist",
+          "ba:businesstype_bookstore"
+        ],
         "fixtures": [
           "productpanel",
           "roundedshelf"
@@ -7794,6 +7798,9 @@
         "rank": "primary",
         "alsoSoldBy": [
           "Florists"
+        ],
+        "alsoSoldByKeys": [
+          "ba:businesstype_florist"
         ],
         "fixtures": [
           "roundedshelf"
@@ -7814,6 +7821,10 @@
           "Florists",
           "Bookstore"
         ],
+        "alsoSoldByKeys": [
+          "ba:businesstype_florist",
+          "ba:businesstype_bookstore"
+        ],
         "fixtures": [
           "productpanel"
         ],
@@ -7833,6 +7844,7 @@
         "inputs": [
           {
             "item": "Clay",
+            "slug": "ba:itemname_clay",
             "per": 50,
             "from": [
               "ba:street_pier#9"
@@ -7841,6 +7853,7 @@
         ],
         "out": {
           "item": "Gift (Cheap)",
+          "slug": "ba:itemname_cheapgift",
           "per": 100
         }
       },
@@ -7851,6 +7864,7 @@
         "inputs": [
           {
             "item": "Glass",
+            "slug": "ba:itemname_glass",
             "per": 100,
             "from": [
               "ba:street_pier#7"
@@ -7858,6 +7872,7 @@
           },
           {
             "item": "Plastic",
+            "slug": "ba:itemname_plastic",
             "per": 250,
             "from": [
               "ba:street_pier#7",
@@ -7866,6 +7881,7 @@
           },
           {
             "item": "Water",
+            "slug": "ba:itemname_water",
             "per": 100,
             "from": [
               "ba:street_pier#8",
@@ -7875,6 +7891,7 @@
         ],
         "out": {
           "item": "Gift (Expensive)",
+          "slug": "ba:itemname_expensivegift",
           "per": 100
         }
       },
@@ -7885,6 +7902,7 @@
         "inputs": [
           {
             "item": "Plastic",
+            "slug": "ba:itemname_plastic",
             "per": 50,
             "from": [
               "ba:street_pier#7",
@@ -7893,6 +7911,7 @@
           },
           {
             "item": "Metal Wire",
+            "slug": "ba:itemname_metalwire",
             "per": 100,
             "from": [
               "ba:street_pier#9"
@@ -7901,6 +7920,7 @@
         ],
         "out": {
           "item": "Umbrella",
+          "slug": "ba:itemname_umbrella",
           "per": 100
         }
       }
@@ -7938,6 +7958,10 @@
       "skills": [
         "Customer Service",
         "Cleaning"
+      ],
+      "skillKeys": [
+        "ba:skill_customerservice",
+        "ba:skill_cleaning"
       ],
       "hiring": "ba:street_fifthavenue#16",
       "primary": [
@@ -8059,6 +8083,10 @@
           "Customer Service",
           "Cleaning"
         ],
+        "skillKeys": [
+          "ba:skill_customerservice",
+          "ba:skill_cleaning"
+        ],
         "hiring": "ba:street_fifthavenue#16",
         "primary": [
           "limitededitionbook",
@@ -8109,6 +8137,7 @@
           "rank": "primary",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "largebookshelf",
             "singlebookshelf"
@@ -8134,6 +8163,7 @@
           "rank": "primary",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "largebookshelf",
             "singlebookshelf"
@@ -8159,6 +8189,7 @@
           "rank": "primary",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "largebookshelf",
             "singlebookshelf"
@@ -8186,6 +8217,9 @@
           "alsoSoldBy": [
             "Gift Shops"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_giftshop"
+          ],
           "fixtures": [
             "largebookshelf",
             "singlebookshelf"
@@ -8211,6 +8245,7 @@
           "rank": "primary",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "largebookshelf",
             "singlebookshelf"
@@ -8251,6 +8286,7 @@
           "rank": "primary",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "largebookshelf",
             "singlebookshelf"
@@ -8278,6 +8314,10 @@
           "alsoSoldBy": [
             "Gift Shops",
             "Florists"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_giftshop",
+            "ba:businesstype_florist"
           ],
           "fixtures": [
             "productpanel",
@@ -8322,6 +8362,10 @@
             "Florists",
             "Gift Shops"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_florist",
+            "ba:businesstype_giftshop"
+          ],
           "fixtures": [
             "productdisplaystandtiered",
             "roundedshelf"
@@ -8358,6 +8402,10 @@
             "Electronics Stores",
             "Gift Shops"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_electronicsstore",
+            "ba:businesstype_giftshop"
+          ],
           "fixtures": [
             "productdisplaytable"
           ],
@@ -8392,6 +8440,10 @@
           "alsoSoldBy": [
             "Gift Shops",
             "Florists"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_giftshop",
+            "ba:businesstype_florist"
           ],
           "fixtures": [
             "productpanel"
@@ -8428,6 +8480,7 @@
           "inputs": [
             {
               "item": "Paper Ream",
+              "slug": "ba:itemname_paper",
               "per": 2,
               "from": [
                 "ba:street_pier#9"
@@ -8435,6 +8488,7 @@
             },
             {
               "item": "Fabric (Expensive)",
+              "slug": "ba:itemname_fabricexpensive",
               "per": 100,
               "from": [
                 "ba:street_pier#7"
@@ -8443,6 +8497,7 @@
           ],
           "out": {
             "item": "Limited Edition Book",
+            "slug": "ba:itemname_limitededitionbook",
             "per": 100
           },
           "pageId": "recipes-limitededitionbookrecipe"
@@ -8455,6 +8510,7 @@
           "inputs": [
             {
               "item": "Paper Ream",
+              "slug": "ba:itemname_paper",
               "per": 3,
               "from": [
                 "ba:street_pier#9"
@@ -8462,6 +8518,7 @@
             },
             {
               "item": "Fabric (Cheap)",
+              "slug": "ba:itemname_fabriccheap",
               "per": 50,
               "from": [
                 "ba:street_pier#7"
@@ -8470,6 +8527,7 @@
           ],
           "out": {
             "item": "Motivational Book",
+            "slug": "ba:itemname_motivationalbook",
             "per": 100
           },
           "pageId": "recipes-motivationalbookrecipe"
@@ -8482,6 +8540,7 @@
           "inputs": [
             {
               "item": "Paper Ream",
+              "slug": "ba:itemname_paper",
               "per": 3,
               "from": [
                 "ba:street_pier#9"
@@ -8489,6 +8548,7 @@
             },
             {
               "item": "Fabric (Cheap)",
+              "slug": "ba:itemname_fabriccheap",
               "per": 50,
               "from": [
                 "ba:street_pier#7"
@@ -8497,6 +8557,7 @@
           ],
           "out": {
             "item": "Novel",
+            "slug": "ba:itemname_novel",
             "per": 100
           },
           "pageId": "recipes-novelrecipe"
@@ -8509,6 +8570,7 @@
           "inputs": [
             {
               "item": "Paper Ream",
+              "slug": "ba:itemname_paper",
               "per": 1,
               "from": [
                 "ba:street_pier#9"
@@ -8516,6 +8578,7 @@
             },
             {
               "item": "Fabric (Cheap)",
+              "slug": "ba:itemname_fabriccheap",
               "per": 20,
               "from": [
                 "ba:street_pier#7"
@@ -8524,6 +8587,7 @@
           ],
           "out": {
             "item": "Picture Book",
+            "slug": "ba:itemname_picturebook",
             "per": 100
           },
           "pageId": "recipes-picturebookrecipe"
@@ -8536,6 +8600,7 @@
           "inputs": [
             {
               "item": "Paper Ream",
+              "slug": "ba:itemname_paper",
               "per": 5,
               "from": [
                 "ba:street_pier#9"
@@ -8543,6 +8608,7 @@
             },
             {
               "item": "Fabric (Expensive)",
+              "slug": "ba:itemname_fabricexpensive",
               "per": 50,
               "from": [
                 "ba:street_pier#7"
@@ -8551,6 +8617,7 @@
           ],
           "out": {
             "item": "Technical Manual",
+            "slug": "ba:itemname_technicalmanual",
             "per": 100
           },
           "pageId": "recipes-technicalmanualrecipe"
@@ -8563,6 +8630,7 @@
           "inputs": [
             {
               "item": "Paper Ream",
+              "slug": "ba:itemname_paper",
               "per": 1,
               "from": [
                 "ba:street_pier#9"
@@ -8570,6 +8638,7 @@
             },
             {
               "item": "Fabric (Cheap)",
+              "slug": "ba:itemname_fabriccheap",
               "per": 20,
               "from": [
                 "ba:street_pier#7"
@@ -8578,6 +8647,7 @@
           ],
           "out": {
             "item": "Youth Novel",
+            "slug": "ba:itemname_youngnovel",
             "per": 100
           },
           "pageId": "recipes-youthnovelrecipe"
@@ -8590,6 +8660,7 @@
           "inputs": [
             {
               "item": "Clay",
+              "slug": "ba:itemname_clay",
               "per": 50,
               "from": [
                 "ba:street_pier#9"
@@ -8598,6 +8669,7 @@
           ],
           "out": {
             "item": "Gift (Cheap)",
+            "slug": "ba:itemname_cheapgift",
             "per": 100
           },
           "pageId": "recipes-cheapgiftrecipe"
@@ -8610,6 +8682,7 @@
           "inputs": [
             {
               "item": "Seeds (Flower Cheap)",
+              "slug": "ba:itemname_flowercheapseeds",
               "per": 100,
               "from": [
                 "ba:street_pier#9"
@@ -8617,6 +8690,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 100,
               "from": [
                 "ba:street_pier#8",
@@ -8626,6 +8700,7 @@
           ],
           "out": {
             "item": "Flower (Cheap)",
+            "slug": "ba:itemname_cheapflower",
             "per": 100
           },
           "pageId": "recipes-cheapflowerrecipe"
@@ -8638,6 +8713,7 @@
           "inputs": [
             {
               "item": "Capacitors",
+              "slug": "ba:itemname_capacitors",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -8645,6 +8721,7 @@
             },
             {
               "item": "Copper Clad Laminate",
+              "slug": "ba:itemname_coppercladlaminate",
               "per": 10,
               "from": [
                 "ba:street_pier#7"
@@ -8652,6 +8729,7 @@
             },
             {
               "item": "Integrated Circuits",
+              "slug": "ba:itemname_integratedcircuits",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -8659,6 +8737,7 @@
             },
             {
               "item": "Microphone",
+              "slug": "ba:itemname_microphone",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -8666,6 +8745,7 @@
             },
             {
               "item": "Plastic",
+              "slug": "ba:itemname_plastic",
               "per": 10,
               "from": [
                 "ba:street_pier#7",
@@ -8674,6 +8754,7 @@
             },
             {
               "item": "Resistors",
+              "slug": "ba:itemname_resistors",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -8681,6 +8762,7 @@
             },
             {
               "item": "Speaker",
+              "slug": "ba:itemname_speaker",
               "per": 120,
               "from": [
                 "ba:street_pier#7"
@@ -8688,6 +8770,7 @@
             },
             {
               "item": "Transistors",
+              "slug": "ba:itemname_transistors",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -8696,6 +8779,7 @@
           ],
           "out": {
             "item": "Noize Boss Earbuds",
+            "slug": "ba:itemname_earbuds01",
             "per": 60
           },
           "pageId": "recipes-earbuds01recipe"
@@ -8708,6 +8792,7 @@
           "inputs": [
             {
               "item": "Plastic",
+              "slug": "ba:itemname_plastic",
               "per": 50,
               "from": [
                 "ba:street_pier#7",
@@ -8716,6 +8801,7 @@
             },
             {
               "item": "Metal Wire",
+              "slug": "ba:itemname_metalwire",
               "per": 100,
               "from": [
                 "ba:street_pier#9"
@@ -8724,6 +8810,7 @@
           ],
           "out": {
             "item": "Umbrella",
+            "slug": "ba:itemname_umbrella",
             "per": 100
           },
           "pageId": "recipes-umbrellarecipe"
@@ -9567,6 +9654,11 @@
           "Customer Service",
           "Cleaning"
         ],
+        "skillKeys": [
+          "ba:skill_projectionist",
+          "ba:skill_customerservice",
+          "ba:skill_cleaning"
+        ],
         "hiring": [
           "ba:street_broadwaystreet#5",
           "ba:street_fifthavenue#16"
@@ -9629,6 +9721,7 @@
           "rank": "primary",
           "kind": "fee",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "ticketkiosk"
           ],
@@ -9651,6 +9744,7 @@
           "rank": "additional",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "concessionsdisplaycase"
           ],
@@ -9685,6 +9779,9 @@
           "alsoSoldBy": [
             "Theaters"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_theater"
+          ],
           "fixtures": [
             "concessionsdisplaycase"
           ],
@@ -9717,6 +9814,7 @@
           "rank": "additional",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "slushimachine"
           ],
@@ -9758,6 +9856,17 @@
             "Gift Shops",
             "Liquor Stores",
             "Night Clubs"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_fastfoodrestaurant",
+            "ba:businesstype_gym",
+            "ba:businesstype_supermarket",
+            "ba:businesstype_coffeeshop",
+            "ba:businesstype_electronicsstore",
+            "ba:businesstype_florist",
+            "ba:businesstype_giftshop",
+            "ba:businesstype_liquorstore",
+            "ba:businesstype_nightclub"
           ],
           "fixtures": [
             "drinksfridge",
@@ -9805,6 +9914,7 @@
           "inputs": [
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 200,
               "from": [
                 "ba:street_pier#8",
@@ -9814,6 +9924,7 @@
           ],
           "out": {
             "item": "Cotton Candy",
+            "slug": "ba:itemname_cottoncandy",
             "per": 200
           },
           "pageId": "recipes-cottoncandyrecipe"
@@ -9826,6 +9937,7 @@
           "inputs": [
             {
               "item": "Popcorn Kernels",
+              "slug": "ba:itemname_cornkernels",
               "per": 200,
               "from": [
                 "ba:street_pier#9"
@@ -9833,6 +9945,7 @@
             },
             {
               "item": "Butter",
+              "slug": "ba:itemname_butter",
               "per": 10,
               "from": [
                 "ba:street_pier#6"
@@ -9841,6 +9954,7 @@
           ],
           "out": {
             "item": "Popcorn",
+            "slug": "ba:itemname_popcorn",
             "per": 200
           },
           "pageId": "recipes-popcornrecipe"
@@ -9853,6 +9967,7 @@
           "inputs": [
             {
               "item": "Flavor Syrup",
+              "slug": "ba:itemname_flavorsyrup",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -9860,6 +9975,7 @@
             },
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -9868,6 +9984,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -9877,6 +9994,7 @@
           ],
           "out": {
             "item": "Slushie",
+            "slug": "ba:itemname_slushi",
             "per": 250
           },
           "pageId": "recipes-slushirecipe"
@@ -9889,6 +10007,7 @@
           "inputs": [
             {
               "item": "Carbon Dioxide",
+              "slug": "ba:itemname_carbondioxide",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -9896,6 +10015,7 @@
             },
             {
               "item": "Cola Flavoring",
+              "slug": "ba:itemname_colaflavoring",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -9903,6 +10023,7 @@
             },
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -9911,6 +10032,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -9920,6 +10042,7 @@
           ],
           "out": {
             "item": "Soda Can",
+            "slug": "ba:itemname_sodacan",
             "per": 250
           },
           "pageId": "recipes-sodarecipe"
@@ -10588,6 +10711,10 @@
           "Customer Service",
           "Cleaning"
         ],
+        "skillKeys": [
+          "ba:skill_customerservice",
+          "ba:skill_cleaning"
+        ],
         "hiring": "ba:street_fifthavenue#16",
         "primary": [
           "classiccheapfemaleclothing",
@@ -10639,6 +10766,7 @@
           "rank": "primary",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "clothingrack",
             "clothingrackangled"
@@ -10679,6 +10807,7 @@
           "rank": "primary",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "clothingrack",
             "clothingrackangled"
@@ -10719,6 +10848,7 @@
           "rank": "primary",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "clothingrack",
             "clothingrackangled"
@@ -10757,6 +10887,7 @@
           "rank": "primary",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "clothingrack",
             "clothingrackangled"
@@ -10795,6 +10926,7 @@
           "rank": "primary",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "clothingrack",
             "clothingrackangled"
@@ -10835,6 +10967,7 @@
           "rank": "primary",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "clothingrack",
             "clothingrackangled"
@@ -10875,6 +11008,7 @@
           "rank": "primary",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "clothingrack",
             "clothingrackangled"
@@ -10913,6 +11047,7 @@
           "rank": "primary",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "clothingrack",
             "clothingrackangled"
@@ -10953,6 +11088,9 @@
           "alsoSoldBy": [
             "Jewelry Stores"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_jewelrystore"
+          ],
           "fixtures": [
             "jewelryfloorshowcase"
           ],
@@ -10987,6 +11125,9 @@
           "alsoSoldBy": [
             "Jewelry Stores"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_jewelrystore"
+          ],
           "fixtures": [
             "jewelryfloorshowcase"
           ],
@@ -11020,6 +11161,7 @@
           "inputs": [
             {
               "item": "Fabric (Cheap)",
+              "slug": "ba:itemname_fabriccheap",
               "per": 120,
               "from": [
                 "ba:street_pier#7"
@@ -11028,6 +11170,7 @@
           ],
           "out": {
             "item": "Clothing (Classic Cheap Female)",
+            "slug": "ba:itemname_classiccheapfemaleclothing",
             "per": 60
           },
           "pageId": "recipes-classiccheapfemaleclothingrecipe"
@@ -11040,6 +11183,7 @@
           "inputs": [
             {
               "item": "Fabric (Cheap)",
+              "slug": "ba:itemname_fabriccheap",
               "per": 120,
               "from": [
                 "ba:street_pier#7"
@@ -11048,6 +11192,7 @@
           ],
           "out": {
             "item": "Clothing (Classic Cheap Male)",
+            "slug": "ba:itemname_classiccheapmaleclothing",
             "per": 60
           },
           "pageId": "recipes-classiccheapmaleclothingrecipe"
@@ -11060,6 +11205,7 @@
           "inputs": [
             {
               "item": "Fabric (Expensive)",
+              "slug": "ba:itemname_fabricexpensive",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -11068,6 +11214,7 @@
           ],
           "out": {
             "item": "Clothing (Classic Expensive Female)",
+            "slug": "ba:itemname_classicexpensivefemaleclothing",
             "per": 30
           },
           "pageId": "recipes-classicexpensivefemaleclothingrecipe"
@@ -11080,6 +11227,7 @@
           "inputs": [
             {
               "item": "Fabric (Expensive)",
+              "slug": "ba:itemname_fabricexpensive",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -11088,6 +11236,7 @@
           ],
           "out": {
             "item": "Clothing (Classic Expensive Male)",
+            "slug": "ba:itemname_classicexpensivemaleclothing",
             "per": 30
           },
           "pageId": "recipes-classicexpensivemaleclothingrecipe"
@@ -11100,6 +11249,7 @@
           "inputs": [
             {
               "item": "Fabric (Cheap)",
+              "slug": "ba:itemname_fabriccheap",
               "per": 120,
               "from": [
                 "ba:street_pier#7"
@@ -11108,6 +11258,7 @@
           ],
           "out": {
             "item": "Clothing (Modern Cheap Female)",
+            "slug": "ba:itemname_moderncheapfemaleclothing",
             "per": 60
           },
           "pageId": "recipes-moderncheapfemaleclothingrecipe"
@@ -11120,6 +11271,7 @@
           "inputs": [
             {
               "item": "Fabric (Cheap)",
+              "slug": "ba:itemname_fabriccheap",
               "per": 120,
               "from": [
                 "ba:street_pier#7"
@@ -11128,6 +11280,7 @@
           ],
           "out": {
             "item": "Clothing (Modern Cheap Male)",
+            "slug": "ba:itemname_moderncheapmaleclothing",
             "per": 60
           },
           "pageId": "recipes-moderncheapmaleclothingrecipe"
@@ -11140,6 +11293,7 @@
           "inputs": [
             {
               "item": "Fabric (Expensive)",
+              "slug": "ba:itemname_fabricexpensive",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -11148,6 +11302,7 @@
           ],
           "out": {
             "item": "Clothing (Modern Expensive Female)",
+            "slug": "ba:itemname_modernexpensivefemaleclothing",
             "per": 30
           },
           "pageId": "recipes-modernexpensivefemaleclothingrecipe"
@@ -11160,6 +11315,7 @@
           "inputs": [
             {
               "item": "Fabric (Expensive)",
+              "slug": "ba:itemname_fabricexpensive",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -11168,6 +11324,7 @@
           ],
           "out": {
             "item": "Clothing (Modern Expensive Male)",
+            "slug": "ba:itemname_modernexpensivemaleclothing",
             "per": 30
           },
           "pageId": "recipes-modernexpensivemaleclothingrecipe"
@@ -11180,6 +11337,7 @@
           "inputs": [
             {
               "item": "Uncut Gems (Cheap)",
+              "slug": "ba:itemname_uncutgemscheap",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -11187,6 +11345,7 @@
             },
             {
               "item": "Metal Band",
+              "slug": "ba:itemname_metalband",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -11195,6 +11354,7 @@
           ],
           "out": {
             "item": "Jewelry (Cheap)",
+            "slug": "ba:itemname_cheapjewelry",
             "per": 60
           },
           "pageId": "recipes-cheapjewelryrecipe"
@@ -11207,6 +11367,7 @@
           "inputs": [
             {
               "item": "Uncut Gems (Expensive)",
+              "slug": "ba:itemname_uncutgemsexpensive",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -11214,6 +11375,7 @@
             },
             {
               "item": "Metal Band",
+              "slug": "ba:itemname_metalband",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -11222,6 +11384,7 @@
           ],
           "out": {
             "item": "Jewelry (Expensive)",
+            "slug": "ba:itemname_expensivejewelry",
             "per": 30
           },
           "pageId": "recipes-expensivejewelryrecipe"
@@ -11890,6 +12053,10 @@
           "Customer Service",
           "Cleaning"
         ],
+        "skillKeys": [
+          "ba:skill_customerservice",
+          "ba:skill_cleaning"
+        ],
         "hiring": "ba:street_fifthavenue#16",
         "primary": [
           "croissant",
@@ -11940,6 +12107,9 @@
           "alsoSoldBy": [
             "Supermarkets"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_supermarket"
+          ],
           "fixtures": [
             "bakeryshowcase"
           ],
@@ -11972,6 +12142,7 @@
           "rank": "primary",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "industrialcoffeemachine"
           ],
@@ -12004,6 +12175,7 @@
           "rank": "primary",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "industrialcoffeemachine"
           ],
@@ -12038,6 +12210,9 @@
           "alsoSoldBy": [
             "Supermarkets"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_supermarket"
+          ],
           "fixtures": [
             "bakeryshowcase"
           ],
@@ -12071,6 +12246,9 @@
           "kind": "product",
           "alsoSoldBy": [
             "Supermarkets"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_supermarket"
           ],
           "fixtures": [
             "bakeryshowcase"
@@ -12108,6 +12286,11 @@
             "Fast Food Restaurants",
             "Supermarkets"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_fruitandvegetablestore",
+            "ba:businesstype_fastfoodrestaurant",
+            "ba:businesstype_supermarket"
+          ],
           "fixtures": [
             "fruitpallet",
             "woodenproductcrate"
@@ -12137,6 +12320,11 @@
             "Fast Food Restaurants",
             "Supermarkets"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_fruitandvegetablestore",
+            "ba:businesstype_fastfoodrestaurant",
+            "ba:businesstype_supermarket"
+          ],
           "fixtures": [
             "fruitpallet",
             "woodenproductcrate"
@@ -12164,6 +12352,10 @@
           "alsoSoldBy": [
             "Fast Food Restaurants",
             "Supermarkets"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_fastfoodrestaurant",
+            "ba:businesstype_supermarket"
           ],
           "fixtures": [
             "icecreamcounter",
@@ -12216,6 +12408,10 @@
             "Fast Food Restaurants",
             "Fruit and Vegetable Stores"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_fastfoodrestaurant",
+            "ba:businesstype_fruitandvegetablestore"
+          ],
           "fixtures": [
             "saladbar"
           ],
@@ -12257,6 +12453,17 @@
             "Gift Shops",
             "Liquor Stores",
             "Night Clubs"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_fastfoodrestaurant",
+            "ba:businesstype_gym",
+            "ba:businesstype_supermarket",
+            "ba:businesstype_cinema",
+            "ba:businesstype_electronicsstore",
+            "ba:businesstype_florist",
+            "ba:businesstype_giftshop",
+            "ba:businesstype_liquorstore",
+            "ba:businesstype_nightclub"
           ],
           "fixtures": [
             "drinksfridge",
@@ -12304,6 +12511,7 @@
           "inputs": [
             {
               "item": "Butter",
+              "slug": "ba:itemname_butter",
               "per": 100,
               "from": [
                 "ba:street_pier#6"
@@ -12311,6 +12519,7 @@
             },
             {
               "item": "Dough",
+              "slug": "ba:itemname_dough",
               "per": 200,
               "from": [
                 "ba:street_pier#6"
@@ -12319,6 +12528,7 @@
           ],
           "out": {
             "item": "Croissant",
+            "slug": "ba:itemname_croissant",
             "per": 200
           },
           "pageId": "recipes-croissantrecipe"
@@ -12331,6 +12541,7 @@
           "inputs": [
             {
               "item": "Ground Coffee Beans",
+              "slug": "ba:itemname_groundcoffeebeans",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -12338,6 +12549,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -12347,6 +12559,7 @@
           ],
           "out": {
             "item": "Cup of Coffee",
+            "slug": "ba:itemname_cupofcoffee",
             "per": 250
           },
           "pageId": "recipes-coffeerecipe"
@@ -12359,6 +12572,7 @@
           "inputs": [
             {
               "item": "Tea Leaves",
+              "slug": "ba:itemname_tealeaves",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -12366,6 +12580,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -12375,6 +12590,7 @@
           ],
           "out": {
             "item": "Cup of Tea",
+            "slug": "ba:itemname_cupoftea",
             "per": 250
           },
           "pageId": "recipes-tearecipe"
@@ -12387,6 +12603,7 @@
           "inputs": [
             {
               "item": "Baking Mix",
+              "slug": "ba:itemname_bakingmix",
               "per": 200,
               "from": [
                 "ba:street_pier#6"
@@ -12394,6 +12611,7 @@
             },
             {
               "item": "Milk",
+              "slug": "ba:itemname_milk",
               "per": 100,
               "from": [
                 "ba:street_pier#6"
@@ -12401,6 +12619,7 @@
             },
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 100,
               "from": [
                 "ba:street_pier#8",
@@ -12410,6 +12629,7 @@
           ],
           "out": {
             "item": "Cupcake",
+            "slug": "ba:itemname_cupcake",
             "per": 200
           },
           "pageId": "recipes-cupcakerecipe"
@@ -12422,6 +12642,7 @@
           "inputs": [
             {
               "item": "Dough",
+              "slug": "ba:itemname_dough",
               "per": 200,
               "from": [
                 "ba:street_pier#6"
@@ -12429,6 +12650,7 @@
             },
             {
               "item": "Milk",
+              "slug": "ba:itemname_milk",
               "per": 100,
               "from": [
                 "ba:street_pier#6"
@@ -12436,6 +12658,7 @@
             },
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 100,
               "from": [
                 "ba:street_pier#8",
@@ -12445,6 +12668,7 @@
           ],
           "out": {
             "item": "Donut",
+            "slug": "ba:itemname_donut",
             "per": 200
           },
           "pageId": "recipes-donutrecipe"
@@ -12457,6 +12681,7 @@
           "inputs": [
             {
               "item": "Seeds (Apple)",
+              "slug": "ba:itemname_appleseeds",
               "per": 50,
               "from": [
                 "ba:street_pier#9"
@@ -12464,6 +12689,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -12473,6 +12699,7 @@
           ],
           "out": {
             "item": "Apple",
+            "slug": "ba:itemname_apple",
             "per": 250
           },
           "pageId": "recipes-applerecipe"
@@ -12485,6 +12712,7 @@
           "inputs": [
             {
               "item": "Seeds (Banana)",
+              "slug": "ba:itemname_bananaseeds",
               "per": 50,
               "from": [
                 "ba:street_pier#9"
@@ -12492,6 +12720,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -12501,6 +12730,7 @@
           ],
           "out": {
             "item": "Banana",
+            "slug": "ba:itemname_banana",
             "per": 250
           },
           "pageId": "recipes-bananarecipe"
@@ -12513,6 +12743,7 @@
           "inputs": [
             {
               "item": "Milk",
+              "slug": "ba:itemname_milk",
               "per": 200,
               "from": [
                 "ba:street_pier#6"
@@ -12520,6 +12751,7 @@
             },
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 200,
               "from": [
                 "ba:street_pier#8",
@@ -12529,6 +12761,7 @@
           ],
           "out": {
             "item": "Ice Cream",
+            "slug": "ba:itemname_icecream",
             "per": 200
           },
           "pageId": "recipes-icecreamrecipe"
@@ -12541,6 +12774,7 @@
           "inputs": [
             {
               "item": "Bag of Lettuce",
+              "slug": "ba:itemname_rawlettuce",
               "per": 200,
               "from": [
                 "ba:street_pier#6"
@@ -12548,6 +12782,7 @@
             },
             {
               "item": "Onion",
+              "slug": "ba:itemname_onion",
               "per": 100,
               "from": [
                 "ba:street_pier#6"
@@ -12555,6 +12790,7 @@
             },
             {
               "item": "Pepper",
+              "slug": "ba:itemname_pepper",
               "per": 100,
               "from": [
                 "ba:street_pier#6"
@@ -12562,6 +12798,7 @@
             },
             {
               "item": "Bag of Tomatoes",
+              "slug": "ba:itemname_rawtomato",
               "per": 100,
               "from": [
                 "ba:street_pier#2",
@@ -12570,6 +12807,7 @@
             },
             {
               "item": "Vinaigrette",
+              "slug": "ba:itemname_vinaigrette",
               "per": 100,
               "from": [
                 "ba:street_pier#6"
@@ -12578,6 +12816,7 @@
           ],
           "out": {
             "item": "Salad",
+            "slug": "ba:itemname_salad",
             "per": 200
           },
           "pageId": "recipes-saladrecipe"
@@ -12590,6 +12829,7 @@
           "inputs": [
             {
               "item": "Carbon Dioxide",
+              "slug": "ba:itemname_carbondioxide",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -12597,6 +12837,7 @@
             },
             {
               "item": "Cola Flavoring",
+              "slug": "ba:itemname_colaflavoring",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -12604,6 +12845,7 @@
             },
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -12612,6 +12854,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -12621,6 +12864,7 @@
           ],
           "out": {
             "item": "Soda Can",
+            "slug": "ba:itemname_sodacan",
             "per": 250
           },
           "pageId": "recipes-sodarecipe"
@@ -13493,6 +13737,10 @@
           "Customer Service",
           "Cleaning"
         ],
+        "skillKeys": [
+          "ba:skill_customerservice",
+          "ba:skill_cleaning"
+        ],
         "hiring": "ba:street_fifthavenue#16",
         "primary": [
           "smartphone1",
@@ -13539,6 +13787,7 @@
           "rank": "primary",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "productdisplaytable"
           ],
@@ -13564,6 +13813,10 @@
             "Gift Shops",
             "Jewelry Stores"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_giftshop",
+            "ba:businesstype_jewelrystore"
+          ],
           "fixtures": [
             "productdisplaytable"
           ],
@@ -13588,6 +13841,10 @@
           "alsoSoldBy": [
             "Gift Shops",
             "Bookstore"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_giftshop",
+            "ba:businesstype_bookstore"
           ],
           "fixtures": [
             "productdisplaytable"
@@ -13623,6 +13880,9 @@
           "alsoSoldBy": [
             "Gift Shops"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_giftshop"
+          ],
           "fixtures": [
             "productdisplaytable"
           ],
@@ -13655,6 +13915,7 @@
           "rank": "primary",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "productdisplaytable"
           ],
@@ -13679,6 +13940,10 @@
           "alsoSoldBy": [
             "Gift Shops",
             "Jewelry Stores"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_giftshop",
+            "ba:businesstype_jewelrystore"
           ],
           "fixtures": [
             "productdisplaytable"
@@ -13708,6 +13973,14 @@
             "Gift Shops",
             "Liquor Stores",
             "Night Clubs"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_gym",
+            "ba:businesstype_supermarket",
+            "ba:businesstype_florist",
+            "ba:businesstype_giftshop",
+            "ba:businesstype_liquorstore",
+            "ba:businesstype_nightclub"
           ],
           "fixtures": [
             "drinksfridge",
@@ -13759,6 +14032,17 @@
             "Liquor Stores",
             "Night Clubs"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_fastfoodrestaurant",
+            "ba:businesstype_gym",
+            "ba:businesstype_supermarket",
+            "ba:businesstype_cinema",
+            "ba:businesstype_coffeeshop",
+            "ba:businesstype_florist",
+            "ba:businesstype_giftshop",
+            "ba:businesstype_liquorstore",
+            "ba:businesstype_nightclub"
+          ],
           "fixtures": [
             "drinksfridge",
             "largedrinksfridge"
@@ -13805,6 +14089,7 @@
           "inputs": [
             {
               "item": "Battery",
+              "slug": "ba:itemname_battery",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -13812,6 +14097,7 @@
             },
             {
               "item": "Capacitors",
+              "slug": "ba:itemname_capacitors",
               "per": 300,
               "from": [
                 "ba:street_pier#7"
@@ -13819,6 +14105,7 @@
             },
             {
               "item": "Copper Clad Laminate",
+              "slug": "ba:itemname_coppercladlaminate",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -13826,6 +14113,7 @@
             },
             {
               "item": "Glass",
+              "slug": "ba:itemname_glass",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -13833,6 +14121,7 @@
             },
             {
               "item": "Integrated Circuits",
+              "slug": "ba:itemname_integratedcircuits",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -13840,6 +14129,7 @@
             },
             {
               "item": "Microphone",
+              "slug": "ba:itemname_microphone",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -13847,6 +14137,7 @@
             },
             {
               "item": "Plastic",
+              "slug": "ba:itemname_plastic",
               "per": 30,
               "from": [
                 "ba:street_pier#7",
@@ -13855,6 +14146,7 @@
             },
             {
               "item": "Resistors",
+              "slug": "ba:itemname_resistors",
               "per": 300,
               "from": [
                 "ba:street_pier#7"
@@ -13862,6 +14154,7 @@
             },
             {
               "item": "Speaker",
+              "slug": "ba:itemname_speaker",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -13869,6 +14162,7 @@
             },
             {
               "item": "Transistors",
+              "slug": "ba:itemname_transistors",
               "per": 300,
               "from": [
                 "ba:street_pier#7"
@@ -13877,6 +14171,7 @@
           ],
           "out": {
             "item": "Arty Fish Phone",
+            "slug": "ba:itemname_smartphone1",
             "per": 30
           },
           "pageId": "recipes-smartphone1recipe"
@@ -13889,6 +14184,7 @@
           "inputs": [
             {
               "item": "Battery",
+              "slug": "ba:itemname_battery",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -13896,6 +14192,7 @@
             },
             {
               "item": "Capacitors",
+              "slug": "ba:itemname_capacitors",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -13903,6 +14200,7 @@
             },
             {
               "item": "Copper Clad Laminate",
+              "slug": "ba:itemname_coppercladlaminate",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -13910,6 +14208,7 @@
             },
             {
               "item": "Glass",
+              "slug": "ba:itemname_glass",
               "per": 5,
               "from": [
                 "ba:street_pier#7"
@@ -13917,6 +14216,7 @@
             },
             {
               "item": "Integrated Circuits",
+              "slug": "ba:itemname_integratedcircuits",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -13924,6 +14224,7 @@
             },
             {
               "item": "Microphone",
+              "slug": "ba:itemname_microphone",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -13931,6 +14232,7 @@
             },
             {
               "item": "Plastic",
+              "slug": "ba:itemname_plastic",
               "per": 5,
               "from": [
                 "ba:street_pier#7",
@@ -13939,6 +14241,7 @@
             },
             {
               "item": "Resistors",
+              "slug": "ba:itemname_resistors",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -13946,6 +14249,7 @@
             },
             {
               "item": "Speaker",
+              "slug": "ba:itemname_speaker",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -13953,6 +14257,7 @@
             },
             {
               "item": "Transistors",
+              "slug": "ba:itemname_transistors",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -13961,6 +14266,7 @@
           ],
           "out": {
             "item": "Arty Fish Smartwatch",
+            "slug": "ba:itemname_smartwatch2",
             "per": 30
           },
           "pageId": "recipes-smartwatch2recipe"
@@ -13973,6 +14279,7 @@
           "inputs": [
             {
               "item": "Capacitors",
+              "slug": "ba:itemname_capacitors",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -13980,6 +14287,7 @@
             },
             {
               "item": "Copper Clad Laminate",
+              "slug": "ba:itemname_coppercladlaminate",
               "per": 10,
               "from": [
                 "ba:street_pier#7"
@@ -13987,6 +14295,7 @@
             },
             {
               "item": "Integrated Circuits",
+              "slug": "ba:itemname_integratedcircuits",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -13994,6 +14303,7 @@
             },
             {
               "item": "Microphone",
+              "slug": "ba:itemname_microphone",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -14001,6 +14311,7 @@
             },
             {
               "item": "Plastic",
+              "slug": "ba:itemname_plastic",
               "per": 10,
               "from": [
                 "ba:street_pier#7",
@@ -14009,6 +14320,7 @@
             },
             {
               "item": "Resistors",
+              "slug": "ba:itemname_resistors",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -14016,6 +14328,7 @@
             },
             {
               "item": "Speaker",
+              "slug": "ba:itemname_speaker",
               "per": 120,
               "from": [
                 "ba:street_pier#7"
@@ -14023,6 +14336,7 @@
             },
             {
               "item": "Transistors",
+              "slug": "ba:itemname_transistors",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -14031,6 +14345,7 @@
           ],
           "out": {
             "item": "Noize Boss Earbuds",
+            "slug": "ba:itemname_earbuds01",
             "per": 60
           },
           "pageId": "recipes-earbuds01recipe"
@@ -14043,6 +14358,7 @@
           "inputs": [
             {
               "item": "Capacitors",
+              "slug": "ba:itemname_capacitors",
               "per": 120,
               "from": [
                 "ba:street_pier#7"
@@ -14050,6 +14366,7 @@
             },
             {
               "item": "Copper Clad Laminate",
+              "slug": "ba:itemname_coppercladlaminate",
               "per": 20,
               "from": [
                 "ba:street_pier#7"
@@ -14057,6 +14374,7 @@
             },
             {
               "item": "Integrated Circuits",
+              "slug": "ba:itemname_integratedcircuits",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -14064,6 +14382,7 @@
             },
             {
               "item": "Microphone",
+              "slug": "ba:itemname_microphone",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -14071,6 +14390,7 @@
             },
             {
               "item": "Plastic",
+              "slug": "ba:itemname_plastic",
               "per": 20,
               "from": [
                 "ba:street_pier#7",
@@ -14079,6 +14399,7 @@
             },
             {
               "item": "Resistors",
+              "slug": "ba:itemname_resistors",
               "per": 120,
               "from": [
                 "ba:street_pier#7"
@@ -14086,6 +14407,7 @@
             },
             {
               "item": "Speaker",
+              "slug": "ba:itemname_speaker",
               "per": 120,
               "from": [
                 "ba:street_pier#7"
@@ -14093,6 +14415,7 @@
             },
             {
               "item": "Transistors",
+              "slug": "ba:itemname_transistors",
               "per": 120,
               "from": [
                 "ba:street_pier#7"
@@ -14101,6 +14424,7 @@
           ],
           "out": {
             "item": "Rhythm By Tre",
+            "slug": "ba:itemname_headphones01",
             "per": 60
           },
           "pageId": "recipes-headphones01recipe"
@@ -14113,6 +14437,7 @@
           "inputs": [
             {
               "item": "Battery",
+              "slug": "ba:itemname_battery",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -14120,6 +14445,7 @@
             },
             {
               "item": "Capacitors",
+              "slug": "ba:itemname_capacitors",
               "per": 300,
               "from": [
                 "ba:street_pier#7"
@@ -14127,6 +14453,7 @@
             },
             {
               "item": "Copper Clad Laminate",
+              "slug": "ba:itemname_coppercladlaminate",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -14134,6 +14461,7 @@
             },
             {
               "item": "Glass",
+              "slug": "ba:itemname_glass",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -14141,6 +14469,7 @@
             },
             {
               "item": "Integrated Circuits",
+              "slug": "ba:itemname_integratedcircuits",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -14148,6 +14477,7 @@
             },
             {
               "item": "Microphone",
+              "slug": "ba:itemname_microphone",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -14155,6 +14485,7 @@
             },
             {
               "item": "Plastic",
+              "slug": "ba:itemname_plastic",
               "per": 30,
               "from": [
                 "ba:street_pier#7",
@@ -14163,6 +14494,7 @@
             },
             {
               "item": "Resistors",
+              "slug": "ba:itemname_resistors",
               "per": 300,
               "from": [
                 "ba:street_pier#7"
@@ -14170,6 +14502,7 @@
             },
             {
               "item": "Speaker",
+              "slug": "ba:itemname_speaker",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -14177,6 +14510,7 @@
             },
             {
               "item": "Transistors",
+              "slug": "ba:itemname_transistors",
               "per": 300,
               "from": [
                 "ba:street_pier#7"
@@ -14185,6 +14519,7 @@
           ],
           "out": {
             "item": "ZanaMan Phone",
+            "slug": "ba:itemname_smartphone2",
             "per": 30
           },
           "pageId": "recipes-smartphone2recipe"
@@ -14197,6 +14532,7 @@
           "inputs": [
             {
               "item": "Battery",
+              "slug": "ba:itemname_battery",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -14204,6 +14540,7 @@
             },
             {
               "item": "Capacitors",
+              "slug": "ba:itemname_capacitors",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -14211,6 +14548,7 @@
             },
             {
               "item": "Copper Clad Laminate",
+              "slug": "ba:itemname_coppercladlaminate",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -14218,6 +14556,7 @@
             },
             {
               "item": "Glass",
+              "slug": "ba:itemname_glass",
               "per": 5,
               "from": [
                 "ba:street_pier#7"
@@ -14225,6 +14564,7 @@
             },
             {
               "item": "Integrated Circuits",
+              "slug": "ba:itemname_integratedcircuits",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -14232,6 +14572,7 @@
             },
             {
               "item": "Microphone",
+              "slug": "ba:itemname_microphone",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -14239,6 +14580,7 @@
             },
             {
               "item": "Plastic",
+              "slug": "ba:itemname_plastic",
               "per": 5,
               "from": [
                 "ba:street_pier#7",
@@ -14247,6 +14589,7 @@
             },
             {
               "item": "Resistors",
+              "slug": "ba:itemname_resistors",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -14254,6 +14597,7 @@
             },
             {
               "item": "Speaker",
+              "slug": "ba:itemname_speaker",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -14261,6 +14605,7 @@
             },
             {
               "item": "Transistors",
+              "slug": "ba:itemname_transistors",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -14269,6 +14614,7 @@
           ],
           "out": {
             "item": "ZanaMan Smartwatch",
+            "slug": "ba:itemname_smartwatch1",
             "per": 30
           },
           "pageId": "recipes-smartwatch1recipe"
@@ -14281,6 +14627,7 @@
           "inputs": [
             {
               "item": "Caffeine Extract",
+              "slug": "ba:itemname_caffeineextract",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -14288,6 +14635,7 @@
             },
             {
               "item": "Carbon Dioxide",
+              "slug": "ba:itemname_carbondioxide",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -14295,6 +14643,7 @@
             },
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -14303,6 +14652,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -14312,6 +14662,7 @@
           ],
           "out": {
             "item": "Energy Drink",
+            "slug": "ba:itemname_energydrink",
             "per": 250
           },
           "pageId": "recipes-energydrinkrecipe"
@@ -14324,6 +14675,7 @@
           "inputs": [
             {
               "item": "Carbon Dioxide",
+              "slug": "ba:itemname_carbondioxide",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -14331,6 +14683,7 @@
             },
             {
               "item": "Cola Flavoring",
+              "slug": "ba:itemname_colaflavoring",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -14338,6 +14691,7 @@
             },
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -14346,6 +14700,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -14355,6 +14710,7 @@
           ],
           "out": {
             "item": "Soda Can",
+            "slug": "ba:itemname_sodacan",
             "per": 250
           },
           "pageId": "recipes-sodarecipe"
@@ -15114,6 +15470,10 @@
           "Event Planner",
           "Cleaning"
         ],
+        "skillKeys": [
+          "ba:skill_eventplanner",
+          "ba:skill_cleaning"
+        ],
         "hiring": [
           "ba:street_fourthavenue#41",
           "ba:street_fifthavenue#16"
@@ -15164,6 +15524,7 @@
           "rank": "primary",
           "kind": "fee",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "computerworkstation"
           ],
@@ -15966,6 +16327,10 @@
           "Customer Service",
           "Cleaning"
         ],
+        "skillKeys": [
+          "ba:skill_customerservice",
+          "ba:skill_cleaning"
+        ],
         "hiring": "ba:street_fifthavenue#16",
         "primary": [
           "burger",
@@ -16011,6 +16376,7 @@
           "rank": "primary",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "industrialgrill"
           ],
@@ -16043,6 +16409,7 @@
           "rank": "primary",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "industrialgrill"
           ],
@@ -16075,6 +16442,7 @@
           "rank": "primary",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "industrialfryermachine"
           ],
@@ -16107,6 +16475,7 @@
           "rank": "primary",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "hotdoggrill"
           ],
@@ -16141,6 +16510,10 @@
           "alsoSoldBy": [
             "Supermarkets",
             "Coffee Shops"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_supermarket",
+            "ba:businesstype_coffeeshop"
           ],
           "fixtures": [
             "icecreamcounter",
@@ -16190,6 +16563,7 @@
           "rank": "primary",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "pizzaoven"
           ],
@@ -16224,6 +16598,10 @@
           "alsoSoldBy": [
             "Coffee Shops",
             "Fruit and Vegetable Stores"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_coffeeshop",
+            "ba:businesstype_fruitandvegetablestore"
           ],
           "fixtures": [
             "saladbar"
@@ -16266,6 +16644,17 @@
             "Gift Shops",
             "Liquor Stores",
             "Night Clubs"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_gym",
+            "ba:businesstype_supermarket",
+            "ba:businesstype_cinema",
+            "ba:businesstype_coffeeshop",
+            "ba:businesstype_electronicsstore",
+            "ba:businesstype_florist",
+            "ba:businesstype_giftshop",
+            "ba:businesstype_liquorstore",
+            "ba:businesstype_nightclub"
           ],
           "fixtures": [
             "drinksfridge",
@@ -16314,6 +16703,11 @@
             "Coffee Shops",
             "Supermarkets"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_fruitandvegetablestore",
+            "ba:businesstype_coffeeshop",
+            "ba:businesstype_supermarket"
+          ],
           "fixtures": [
             "fruitpallet",
             "woodenproductcrate"
@@ -16343,6 +16737,11 @@
             "Coffee Shops",
             "Supermarkets"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_fruitandvegetablestore",
+            "ba:businesstype_coffeeshop",
+            "ba:businesstype_supermarket"
+          ],
           "fixtures": [
             "fruitpallet",
             "woodenproductcrate"
@@ -16371,6 +16770,7 @@
           "inputs": [
             {
               "item": "Cheese",
+              "slug": "ba:itemname_cheese",
               "per": 40,
               "from": [
                 "ba:street_pier#6"
@@ -16378,6 +16778,7 @@
             },
             {
               "item": "Dough",
+              "slug": "ba:itemname_dough",
               "per": 200,
               "from": [
                 "ba:street_pier#6"
@@ -16385,6 +16786,7 @@
             },
             {
               "item": "Ground Beef",
+              "slug": "ba:itemname_groundbeef",
               "per": 200,
               "from": [
                 "ba:street_pier#6"
@@ -16393,6 +16795,7 @@
           ],
           "out": {
             "item": "Burger",
+            "slug": "ba:itemname_burger",
             "per": 200
           },
           "pageId": "recipes-burgerrecipe"
@@ -16405,6 +16808,7 @@
           "inputs": [
             {
               "item": "Chicken Breast",
+              "slug": "ba:itemname_chickenbreast",
               "per": 200,
               "from": [
                 "ba:street_pier#6"
@@ -16412,6 +16816,7 @@
             },
             {
               "item": "Onion",
+              "slug": "ba:itemname_onion",
               "per": 100,
               "from": [
                 "ba:street_pier#6"
@@ -16419,6 +16824,7 @@
             },
             {
               "item": "Pepper",
+              "slug": "ba:itemname_pepper",
               "per": 100,
               "from": [
                 "ba:street_pier#6"
@@ -16426,6 +16832,7 @@
             },
             {
               "item": "Vinaigrette",
+              "slug": "ba:itemname_vinaigrette",
               "per": 100,
               "from": [
                 "ba:street_pier#6"
@@ -16434,6 +16841,7 @@
           ],
           "out": {
             "item": "Chicken Kabob Skewer",
+            "slug": "ba:itemname_kabob",
             "per": 200
           },
           "pageId": "recipes-kabobrecipe"
@@ -16446,6 +16854,7 @@
           "inputs": [
             {
               "item": "Russet Potatoes",
+              "slug": "ba:itemname_russetpotatoes",
               "per": 200,
               "from": [
                 "ba:street_pier#6"
@@ -16453,6 +16862,7 @@
             },
             {
               "item": "Bag of Tomatoes",
+              "slug": "ba:itemname_rawtomato",
               "per": 50,
               "from": [
                 "ba:street_pier#2",
@@ -16462,6 +16872,7 @@
           ],
           "out": {
             "item": "French Fries",
+            "slug": "ba:itemname_frenchfries",
             "per": 200
           },
           "pageId": "recipes-frenchfriesrecipe"
@@ -16474,6 +16885,7 @@
           "inputs": [
             {
               "item": "Dough",
+              "slug": "ba:itemname_dough",
               "per": 200,
               "from": [
                 "ba:street_pier#6"
@@ -16481,6 +16893,7 @@
             },
             {
               "item": "Raw Sausage",
+              "slug": "ba:itemname_rawsausage",
               "per": 200,
               "from": [
                 "ba:street_pier#6"
@@ -16488,6 +16901,7 @@
             },
             {
               "item": "Bag of Tomatoes",
+              "slug": "ba:itemname_rawtomato",
               "per": 50,
               "from": [
                 "ba:street_pier#2",
@@ -16497,6 +16911,7 @@
           ],
           "out": {
             "item": "Hotdog",
+            "slug": "ba:itemname_hotdog",
             "per": 200
           },
           "pageId": "recipes-hotdogrecipe"
@@ -16509,6 +16924,7 @@
           "inputs": [
             {
               "item": "Milk",
+              "slug": "ba:itemname_milk",
               "per": 200,
               "from": [
                 "ba:street_pier#6"
@@ -16516,6 +16932,7 @@
             },
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 200,
               "from": [
                 "ba:street_pier#8",
@@ -16525,6 +16942,7 @@
           ],
           "out": {
             "item": "Ice Cream",
+            "slug": "ba:itemname_icecream",
             "per": 200
           },
           "pageId": "recipes-icecreamrecipe"
@@ -16537,6 +16955,7 @@
           "inputs": [
             {
               "item": "Dough",
+              "slug": "ba:itemname_dough",
               "per": 200,
               "from": [
                 "ba:street_pier#6"
@@ -16544,6 +16963,7 @@
             },
             {
               "item": "Cheese",
+              "slug": "ba:itemname_cheese",
               "per": 200,
               "from": [
                 "ba:street_pier#6"
@@ -16551,6 +16971,7 @@
             },
             {
               "item": "Bag of Tomatoes",
+              "slug": "ba:itemname_rawtomato",
               "per": 100,
               "from": [
                 "ba:street_pier#2",
@@ -16560,6 +16981,7 @@
           ],
           "out": {
             "item": "Pizza",
+            "slug": "ba:itemname_pizza",
             "per": 200
           },
           "pageId": "recipes-pizzarecipe"
@@ -16572,6 +16994,7 @@
           "inputs": [
             {
               "item": "Bag of Lettuce",
+              "slug": "ba:itemname_rawlettuce",
               "per": 200,
               "from": [
                 "ba:street_pier#6"
@@ -16579,6 +17002,7 @@
             },
             {
               "item": "Onion",
+              "slug": "ba:itemname_onion",
               "per": 100,
               "from": [
                 "ba:street_pier#6"
@@ -16586,6 +17010,7 @@
             },
             {
               "item": "Pepper",
+              "slug": "ba:itemname_pepper",
               "per": 100,
               "from": [
                 "ba:street_pier#6"
@@ -16593,6 +17018,7 @@
             },
             {
               "item": "Bag of Tomatoes",
+              "slug": "ba:itemname_rawtomato",
               "per": 100,
               "from": [
                 "ba:street_pier#2",
@@ -16601,6 +17027,7 @@
             },
             {
               "item": "Vinaigrette",
+              "slug": "ba:itemname_vinaigrette",
               "per": 100,
               "from": [
                 "ba:street_pier#6"
@@ -16609,6 +17036,7 @@
           ],
           "out": {
             "item": "Salad",
+            "slug": "ba:itemname_salad",
             "per": 200
           },
           "pageId": "recipes-saladrecipe"
@@ -16621,6 +17049,7 @@
           "inputs": [
             {
               "item": "Carbon Dioxide",
+              "slug": "ba:itemname_carbondioxide",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -16628,6 +17057,7 @@
             },
             {
               "item": "Cola Flavoring",
+              "slug": "ba:itemname_colaflavoring",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -16635,6 +17065,7 @@
             },
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -16643,6 +17074,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -16652,6 +17084,7 @@
           ],
           "out": {
             "item": "Soda Can",
+            "slug": "ba:itemname_sodacan",
             "per": 250
           },
           "pageId": "recipes-sodarecipe"
@@ -16664,6 +17097,7 @@
           "inputs": [
             {
               "item": "Seeds (Apple)",
+              "slug": "ba:itemname_appleseeds",
               "per": 50,
               "from": [
                 "ba:street_pier#9"
@@ -16671,6 +17105,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -16680,6 +17115,7 @@
           ],
           "out": {
             "item": "Apple",
+            "slug": "ba:itemname_apple",
             "per": 250
           },
           "pageId": "recipes-applerecipe"
@@ -16692,6 +17128,7 @@
           "inputs": [
             {
               "item": "Seeds (Banana)",
+              "slug": "ba:itemname_bananaseeds",
               "per": 50,
               "from": [
                 "ba:street_pier#9"
@@ -16699,6 +17136,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -16708,6 +17146,7 @@
           ],
           "out": {
             "item": "Banana",
+            "slug": "ba:itemname_banana",
             "per": 250
           },
           "pageId": "recipes-bananarecipe"
@@ -17628,6 +18067,10 @@
           "Customer Service",
           "Cleaning"
         ],
+        "skillKeys": [
+          "ba:skill_customerservice",
+          "ba:skill_cleaning"
+        ],
         "hiring": "ba:street_fifthavenue#16",
         "primary": [
           "cheapflower",
@@ -17679,6 +18122,10 @@
             "Gift Shops",
             "Bookstore"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_giftshop",
+            "ba:businesstype_bookstore"
+          ],
           "fixtures": [
             "productdisplaystandtiered",
             "roundedshelf"
@@ -17713,6 +18160,9 @@
           "kind": "product",
           "alsoSoldBy": [
             "Gift Shops"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_giftshop"
           ],
           "fixtures": [
             "productdisplaystandtiered",
@@ -17749,6 +18199,10 @@
           "alsoSoldBy": [
             "Gift Shops",
             "Bookstore"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_giftshop",
+            "ba:businesstype_bookstore"
           ],
           "fixtures": [
             "productpanel",
@@ -17792,6 +18246,9 @@
           "alsoSoldBy": [
             "Gift Shops"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_giftshop"
+          ],
           "fixtures": [
             "roundedshelf"
           ],
@@ -17830,6 +18287,14 @@
             "Gift Shops",
             "Liquor Stores",
             "Night Clubs"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_gym",
+            "ba:businesstype_supermarket",
+            "ba:businesstype_electronicsstore",
+            "ba:businesstype_giftshop",
+            "ba:businesstype_liquorstore",
+            "ba:businesstype_nightclub"
           ],
           "fixtures": [
             "drinksfridge",
@@ -17881,6 +18346,17 @@
             "Liquor Stores",
             "Night Clubs"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_fastfoodrestaurant",
+            "ba:businesstype_gym",
+            "ba:businesstype_supermarket",
+            "ba:businesstype_cinema",
+            "ba:businesstype_coffeeshop",
+            "ba:businesstype_electronicsstore",
+            "ba:businesstype_giftshop",
+            "ba:businesstype_liquorstore",
+            "ba:businesstype_nightclub"
+          ],
           "fixtures": [
             "drinksfridge",
             "largedrinksfridge"
@@ -17927,6 +18403,10 @@
             "Gift Shops",
             "Bookstore"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_giftshop",
+            "ba:businesstype_bookstore"
+          ],
           "fixtures": [
             "productpanel"
           ],
@@ -17962,6 +18442,7 @@
           "inputs": [
             {
               "item": "Seeds (Flower Cheap)",
+              "slug": "ba:itemname_flowercheapseeds",
               "per": 100,
               "from": [
                 "ba:street_pier#9"
@@ -17969,6 +18450,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 100,
               "from": [
                 "ba:street_pier#8",
@@ -17978,6 +18460,7 @@
           ],
           "out": {
             "item": "Flower (Cheap)",
+            "slug": "ba:itemname_cheapflower",
             "per": 100
           },
           "pageId": "recipes-cheapflowerrecipe"
@@ -17990,6 +18473,7 @@
           "inputs": [
             {
               "item": "Seeds (Flower Expensive)",
+              "slug": "ba:itemname_flowerexpensiveseeds",
               "per": 100,
               "from": [
                 "ba:street_pier#9"
@@ -17997,6 +18481,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 100,
               "from": [
                 "ba:street_pier#8",
@@ -18006,6 +18491,7 @@
           ],
           "out": {
             "item": "Flower (Expensive)",
+            "slug": "ba:itemname_expensiveflower",
             "per": 100
           },
           "pageId": "recipes-expensiveflowerrecipe"
@@ -18018,6 +18504,7 @@
           "inputs": [
             {
               "item": "Clay",
+              "slug": "ba:itemname_clay",
               "per": 50,
               "from": [
                 "ba:street_pier#9"
@@ -18026,6 +18513,7 @@
           ],
           "out": {
             "item": "Gift (Cheap)",
+            "slug": "ba:itemname_cheapgift",
             "per": 100
           },
           "pageId": "recipes-cheapgiftrecipe"
@@ -18038,6 +18526,7 @@
           "inputs": [
             {
               "item": "Glass",
+              "slug": "ba:itemname_glass",
               "per": 100,
               "from": [
                 "ba:street_pier#7"
@@ -18045,6 +18534,7 @@
             },
             {
               "item": "Plastic",
+              "slug": "ba:itemname_plastic",
               "per": 250,
               "from": [
                 "ba:street_pier#7",
@@ -18053,6 +18543,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 100,
               "from": [
                 "ba:street_pier#8",
@@ -18062,6 +18553,7 @@
           ],
           "out": {
             "item": "Gift (Expensive)",
+            "slug": "ba:itemname_expensivegift",
             "per": 100
           },
           "pageId": "recipes-expensivegiftrecipe"
@@ -18074,6 +18566,7 @@
           "inputs": [
             {
               "item": "Caffeine Extract",
+              "slug": "ba:itemname_caffeineextract",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -18081,6 +18574,7 @@
             },
             {
               "item": "Carbon Dioxide",
+              "slug": "ba:itemname_carbondioxide",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -18088,6 +18582,7 @@
             },
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -18096,6 +18591,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -18105,6 +18601,7 @@
           ],
           "out": {
             "item": "Energy Drink",
+            "slug": "ba:itemname_energydrink",
             "per": 250
           },
           "pageId": "recipes-energydrinkrecipe"
@@ -18117,6 +18614,7 @@
           "inputs": [
             {
               "item": "Carbon Dioxide",
+              "slug": "ba:itemname_carbondioxide",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -18124,6 +18622,7 @@
             },
             {
               "item": "Cola Flavoring",
+              "slug": "ba:itemname_colaflavoring",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -18131,6 +18630,7 @@
             },
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -18139,6 +18639,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -18148,6 +18649,7 @@
           ],
           "out": {
             "item": "Soda Can",
+            "slug": "ba:itemname_sodacan",
             "per": 250
           },
           "pageId": "recipes-sodarecipe"
@@ -18160,6 +18662,7 @@
           "inputs": [
             {
               "item": "Plastic",
+              "slug": "ba:itemname_plastic",
               "per": 50,
               "from": [
                 "ba:street_pier#7",
@@ -18168,6 +18671,7 @@
             },
             {
               "item": "Metal Wire",
+              "slug": "ba:itemname_metalwire",
               "per": 100,
               "from": [
                 "ba:street_pier#9"
@@ -18176,6 +18680,7 @@
           ],
           "out": {
             "item": "Umbrella",
+            "slug": "ba:itemname_umbrella",
             "per": 100
           },
           "pageId": "recipes-umbrellarecipe"
@@ -19001,6 +19506,10 @@
           "Customer Service",
           "Cleaning"
         ],
+        "skillKeys": [
+          "ba:skill_customerservice",
+          "ba:skill_cleaning"
+        ],
         "hiring": "ba:street_fifthavenue#16",
         "primary": [
           "apple",
@@ -19052,6 +19561,11 @@
             "Fast Food Restaurants",
             "Supermarkets"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_coffeeshop",
+            "ba:businesstype_fastfoodrestaurant",
+            "ba:businesstype_supermarket"
+          ],
           "fixtures": [
             "fruitpallet",
             "woodenproductcrate"
@@ -19081,6 +19595,11 @@
             "Fast Food Restaurants",
             "Supermarkets"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_coffeeshop",
+            "ba:businesstype_fastfoodrestaurant",
+            "ba:businesstype_supermarket"
+          ],
           "fixtures": [
             "fruitpallet",
             "woodenproductcrate"
@@ -19108,6 +19627,9 @@
           "alsoSoldBy": [
             "Supermarkets"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_supermarket"
+          ],
           "fixtures": [
             "fruitpallet",
             "woodenproductcrate"
@@ -19134,6 +19656,9 @@
           "kind": "product",
           "alsoSoldBy": [
             "Supermarkets"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_supermarket"
           ],
           "fixtures": [
             "fruitpallet",
@@ -19178,6 +19703,9 @@
           "alsoSoldBy": [
             "Supermarkets"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_supermarket"
+          ],
           "fixtures": [
             "fruitpallet",
             "woodenproductcrate"
@@ -19204,6 +19732,9 @@
           "kind": "product",
           "alsoSoldBy": [
             "Supermarkets"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_supermarket"
           ],
           "fixtures": [
             "fruitpallet",
@@ -19233,6 +19764,10 @@
           "alsoSoldBy": [
             "Fast Food Restaurants",
             "Coffee Shops"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_fastfoodrestaurant",
+            "ba:businesstype_coffeeshop"
           ],
           "fixtures": [
             "saladbar"
@@ -19269,6 +19804,7 @@
           "inputs": [
             {
               "item": "Seeds (Apple)",
+              "slug": "ba:itemname_appleseeds",
               "per": 50,
               "from": [
                 "ba:street_pier#9"
@@ -19276,6 +19812,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -19285,6 +19822,7 @@
           ],
           "out": {
             "item": "Apple",
+            "slug": "ba:itemname_apple",
             "per": 250
           },
           "pageId": "recipes-applerecipe"
@@ -19297,6 +19835,7 @@
           "inputs": [
             {
               "item": "Seeds (Banana)",
+              "slug": "ba:itemname_bananaseeds",
               "per": 50,
               "from": [
                 "ba:street_pier#9"
@@ -19304,6 +19843,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -19313,6 +19853,7 @@
           ],
           "out": {
             "item": "Banana",
+            "slug": "ba:itemname_banana",
             "per": 250
           },
           "pageId": "recipes-bananarecipe"
@@ -19325,6 +19866,7 @@
           "inputs": [
             {
               "item": "Seeds (Carrot)",
+              "slug": "ba:itemname_carrotseeds",
               "per": 50,
               "from": [
                 "ba:street_pier#9"
@@ -19332,6 +19874,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -19341,6 +19884,7 @@
           ],
           "out": {
             "item": "Carrot",
+            "slug": "ba:itemname_carrot",
             "per": 250
           },
           "pageId": "recipes-carrotrecipe"
@@ -19353,6 +19897,7 @@
           "inputs": [
             {
               "item": "Seeds (Lettuce)",
+              "slug": "ba:itemname_lettuceseeds",
               "per": 50,
               "from": [
                 "ba:street_pier#9"
@@ -19360,6 +19905,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -19369,6 +19915,7 @@
           ],
           "out": {
             "item": "Lettuce",
+            "slug": "ba:itemname_lettuce",
             "per": 250
           },
           "pageId": "recipes-lettucerecipe"
@@ -19381,6 +19928,7 @@
           "inputs": [
             {
               "item": "Seeds (Pear)",
+              "slug": "ba:itemname_pearseeds",
               "per": 50,
               "from": [
                 "ba:street_pier#9"
@@ -19388,6 +19936,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -19397,6 +19946,7 @@
           ],
           "out": {
             "item": "Pear",
+            "slug": "ba:itemname_pear",
             "per": 250
           },
           "pageId": "recipes-pearrecipe"
@@ -19409,6 +19959,7 @@
           "inputs": [
             {
               "item": "Seeds (Tomato)",
+              "slug": "ba:itemname_tomatoseeds",
               "per": 50,
               "from": [
                 "ba:street_pier#9"
@@ -19416,6 +19967,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -19425,6 +19977,7 @@
           ],
           "out": {
             "item": "Tomato",
+            "slug": "ba:itemname_tomato",
             "per": 250
           },
           "pageId": "recipes-tomatorecipe"
@@ -19437,6 +19990,7 @@
           "inputs": [
             {
               "item": "Bag of Lettuce",
+              "slug": "ba:itemname_rawlettuce",
               "per": 200,
               "from": [
                 "ba:street_pier#6"
@@ -19444,6 +19998,7 @@
             },
             {
               "item": "Onion",
+              "slug": "ba:itemname_onion",
               "per": 100,
               "from": [
                 "ba:street_pier#6"
@@ -19451,6 +20006,7 @@
             },
             {
               "item": "Pepper",
+              "slug": "ba:itemname_pepper",
               "per": 100,
               "from": [
                 "ba:street_pier#6"
@@ -19458,6 +20014,7 @@
             },
             {
               "item": "Bag of Tomatoes",
+              "slug": "ba:itemname_rawtomato",
               "per": 100,
               "from": [
                 "ba:street_pier#2",
@@ -19466,6 +20023,7 @@
             },
             {
               "item": "Vinaigrette",
+              "slug": "ba:itemname_vinaigrette",
               "per": 100,
               "from": [
                 "ba:street_pier#6"
@@ -19474,6 +20032,7 @@
           ],
           "out": {
             "item": "Salad",
+            "slug": "ba:itemname_salad",
             "per": 200
           },
           "pageId": "recipes-saladrecipe"
@@ -20210,6 +20769,10 @@
           "Customer Service",
           "Cleaning"
         ],
+        "skillKeys": [
+          "ba:skill_customerservice",
+          "ba:skill_cleaning"
+        ],
         "hiring": "ba:street_fifthavenue#16",
         "primary": [
           "cheapgift",
@@ -20270,6 +20833,10 @@
             "Florists",
             "Bookstore"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_florist",
+            "ba:businesstype_bookstore"
+          ],
           "fixtures": [
             "productpanel",
             "roundedshelf"
@@ -20312,6 +20879,9 @@
           "alsoSoldBy": [
             "Florists"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_florist"
+          ],
           "fixtures": [
             "roundedshelf"
           ],
@@ -20346,6 +20916,10 @@
           "alsoSoldBy": [
             "Florists",
             "Bookstore"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_florist",
+            "ba:businesstype_bookstore"
           ],
           "fixtures": [
             "productpanel"
@@ -20382,6 +20956,10 @@
             "Electronics Stores",
             "Jewelry Stores"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_electronicsstore",
+            "ba:businesstype_jewelrystore"
+          ],
           "fixtures": [
             "productdisplaytable"
           ],
@@ -20410,6 +20988,14 @@
             "Florists",
             "Liquor Stores",
             "Night Clubs"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_gym",
+            "ba:businesstype_supermarket",
+            "ba:businesstype_electronicsstore",
+            "ba:businesstype_florist",
+            "ba:businesstype_liquorstore",
+            "ba:businesstype_nightclub"
           ],
           "fixtures": [
             "drinksfridge",
@@ -20454,6 +21040,10 @@
             "Florists",
             "Bookstore"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_florist",
+            "ba:businesstype_bookstore"
+          ],
           "fixtures": [
             "productdisplaystandtiered",
             "roundedshelf"
@@ -20488,6 +21078,9 @@
           "kind": "product",
           "alsoSoldBy": [
             "Florists"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_florist"
           ],
           "fixtures": [
             "productdisplaystandtiered",
@@ -20525,6 +21118,10 @@
             "Electronics Stores",
             "Bookstore"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_electronicsstore",
+            "ba:businesstype_bookstore"
+          ],
           "fixtures": [
             "productdisplaytable"
           ],
@@ -20559,6 +21156,9 @@
           "alsoSoldBy": [
             "Bookstores"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_bookstore"
+          ],
           "fixtures": [
             "largebookshelf",
             "singlebookshelf"
@@ -20585,6 +21185,9 @@
           "kind": "product",
           "alsoSoldBy": [
             "Electronics Stores"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_electronicsstore"
           ],
           "fixtures": [
             "productdisplaytable"
@@ -20627,6 +21230,17 @@
             "Florists",
             "Liquor Stores",
             "Night Clubs"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_fastfoodrestaurant",
+            "ba:businesstype_gym",
+            "ba:businesstype_supermarket",
+            "ba:businesstype_cinema",
+            "ba:businesstype_coffeeshop",
+            "ba:businesstype_electronicsstore",
+            "ba:businesstype_florist",
+            "ba:businesstype_liquorstore",
+            "ba:businesstype_nightclub"
           ],
           "fixtures": [
             "drinksfridge",
@@ -20674,6 +21288,10 @@
             "Electronics Stores",
             "Jewelry Stores"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_electronicsstore",
+            "ba:businesstype_jewelrystore"
+          ],
           "fixtures": [
             "productdisplaytable"
           ],
@@ -20699,6 +21317,7 @@
           "inputs": [
             {
               "item": "Clay",
+              "slug": "ba:itemname_clay",
               "per": 50,
               "from": [
                 "ba:street_pier#9"
@@ -20707,6 +21326,7 @@
           ],
           "out": {
             "item": "Gift (Cheap)",
+            "slug": "ba:itemname_cheapgift",
             "per": 100
           },
           "pageId": "recipes-cheapgiftrecipe"
@@ -20719,6 +21339,7 @@
           "inputs": [
             {
               "item": "Glass",
+              "slug": "ba:itemname_glass",
               "per": 100,
               "from": [
                 "ba:street_pier#7"
@@ -20726,6 +21347,7 @@
             },
             {
               "item": "Plastic",
+              "slug": "ba:itemname_plastic",
               "per": 250,
               "from": [
                 "ba:street_pier#7",
@@ -20734,6 +21356,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 100,
               "from": [
                 "ba:street_pier#8",
@@ -20743,6 +21366,7 @@
           ],
           "out": {
             "item": "Gift (Expensive)",
+            "slug": "ba:itemname_expensivegift",
             "per": 100
           },
           "pageId": "recipes-expensivegiftrecipe"
@@ -20755,6 +21379,7 @@
           "inputs": [
             {
               "item": "Plastic",
+              "slug": "ba:itemname_plastic",
               "per": 50,
               "from": [
                 "ba:street_pier#7",
@@ -20763,6 +21388,7 @@
             },
             {
               "item": "Metal Wire",
+              "slug": "ba:itemname_metalwire",
               "per": 100,
               "from": [
                 "ba:street_pier#9"
@@ -20771,6 +21397,7 @@
           ],
           "out": {
             "item": "Umbrella",
+            "slug": "ba:itemname_umbrella",
             "per": 100
           },
           "pageId": "recipes-umbrellarecipe"
@@ -20783,6 +21410,7 @@
           "inputs": [
             {
               "item": "Battery",
+              "slug": "ba:itemname_battery",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -20790,6 +21418,7 @@
             },
             {
               "item": "Capacitors",
+              "slug": "ba:itemname_capacitors",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -20797,6 +21426,7 @@
             },
             {
               "item": "Copper Clad Laminate",
+              "slug": "ba:itemname_coppercladlaminate",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -20804,6 +21434,7 @@
             },
             {
               "item": "Glass",
+              "slug": "ba:itemname_glass",
               "per": 5,
               "from": [
                 "ba:street_pier#7"
@@ -20811,6 +21442,7 @@
             },
             {
               "item": "Integrated Circuits",
+              "slug": "ba:itemname_integratedcircuits",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -20818,6 +21450,7 @@
             },
             {
               "item": "Microphone",
+              "slug": "ba:itemname_microphone",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -20825,6 +21458,7 @@
             },
             {
               "item": "Plastic",
+              "slug": "ba:itemname_plastic",
               "per": 5,
               "from": [
                 "ba:street_pier#7",
@@ -20833,6 +21467,7 @@
             },
             {
               "item": "Resistors",
+              "slug": "ba:itemname_resistors",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -20840,6 +21475,7 @@
             },
             {
               "item": "Speaker",
+              "slug": "ba:itemname_speaker",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -20847,6 +21483,7 @@
             },
             {
               "item": "Transistors",
+              "slug": "ba:itemname_transistors",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -20855,6 +21492,7 @@
           ],
           "out": {
             "item": "Arty Fish Smartwatch",
+            "slug": "ba:itemname_smartwatch2",
             "per": 30
           },
           "pageId": "recipes-smartwatch2recipe"
@@ -20867,6 +21505,7 @@
           "inputs": [
             {
               "item": "Caffeine Extract",
+              "slug": "ba:itemname_caffeineextract",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -20874,6 +21513,7 @@
             },
             {
               "item": "Carbon Dioxide",
+              "slug": "ba:itemname_carbondioxide",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -20881,6 +21521,7 @@
             },
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -20889,6 +21530,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -20898,6 +21540,7 @@
           ],
           "out": {
             "item": "Energy Drink",
+            "slug": "ba:itemname_energydrink",
             "per": 250
           },
           "pageId": "recipes-energydrinkrecipe"
@@ -20910,6 +21553,7 @@
           "inputs": [
             {
               "item": "Seeds (Flower Cheap)",
+              "slug": "ba:itemname_flowercheapseeds",
               "per": 100,
               "from": [
                 "ba:street_pier#9"
@@ -20917,6 +21561,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 100,
               "from": [
                 "ba:street_pier#8",
@@ -20926,6 +21571,7 @@
           ],
           "out": {
             "item": "Flower (Cheap)",
+            "slug": "ba:itemname_cheapflower",
             "per": 100
           },
           "pageId": "recipes-cheapflowerrecipe"
@@ -20938,6 +21584,7 @@
           "inputs": [
             {
               "item": "Seeds (Flower Expensive)",
+              "slug": "ba:itemname_flowerexpensiveseeds",
               "per": 100,
               "from": [
                 "ba:street_pier#9"
@@ -20945,6 +21592,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 100,
               "from": [
                 "ba:street_pier#8",
@@ -20954,6 +21602,7 @@
           ],
           "out": {
             "item": "Flower (Expensive)",
+            "slug": "ba:itemname_expensiveflower",
             "per": 100
           },
           "pageId": "recipes-expensiveflowerrecipe"
@@ -20966,6 +21615,7 @@
           "inputs": [
             {
               "item": "Capacitors",
+              "slug": "ba:itemname_capacitors",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -20973,6 +21623,7 @@
             },
             {
               "item": "Copper Clad Laminate",
+              "slug": "ba:itemname_coppercladlaminate",
               "per": 10,
               "from": [
                 "ba:street_pier#7"
@@ -20980,6 +21631,7 @@
             },
             {
               "item": "Integrated Circuits",
+              "slug": "ba:itemname_integratedcircuits",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -20987,6 +21639,7 @@
             },
             {
               "item": "Microphone",
+              "slug": "ba:itemname_microphone",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -20994,6 +21647,7 @@
             },
             {
               "item": "Plastic",
+              "slug": "ba:itemname_plastic",
               "per": 10,
               "from": [
                 "ba:street_pier#7",
@@ -21002,6 +21656,7 @@
             },
             {
               "item": "Resistors",
+              "slug": "ba:itemname_resistors",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -21009,6 +21664,7 @@
             },
             {
               "item": "Speaker",
+              "slug": "ba:itemname_speaker",
               "per": 120,
               "from": [
                 "ba:street_pier#7"
@@ -21016,6 +21672,7 @@
             },
             {
               "item": "Transistors",
+              "slug": "ba:itemname_transistors",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -21024,6 +21681,7 @@
           ],
           "out": {
             "item": "Noize Boss Earbuds",
+            "slug": "ba:itemname_earbuds01",
             "per": 60
           },
           "pageId": "recipes-earbuds01recipe"
@@ -21036,6 +21694,7 @@
           "inputs": [
             {
               "item": "Paper Ream",
+              "slug": "ba:itemname_paper",
               "per": 1,
               "from": [
                 "ba:street_pier#9"
@@ -21043,6 +21702,7 @@
             },
             {
               "item": "Fabric (Cheap)",
+              "slug": "ba:itemname_fabriccheap",
               "per": 20,
               "from": [
                 "ba:street_pier#7"
@@ -21051,6 +21711,7 @@
           ],
           "out": {
             "item": "Picture Book",
+            "slug": "ba:itemname_picturebook",
             "per": 100
           },
           "pageId": "recipes-picturebookrecipe"
@@ -21063,6 +21724,7 @@
           "inputs": [
             {
               "item": "Capacitors",
+              "slug": "ba:itemname_capacitors",
               "per": 120,
               "from": [
                 "ba:street_pier#7"
@@ -21070,6 +21732,7 @@
             },
             {
               "item": "Copper Clad Laminate",
+              "slug": "ba:itemname_coppercladlaminate",
               "per": 20,
               "from": [
                 "ba:street_pier#7"
@@ -21077,6 +21740,7 @@
             },
             {
               "item": "Integrated Circuits",
+              "slug": "ba:itemname_integratedcircuits",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -21084,6 +21748,7 @@
             },
             {
               "item": "Microphone",
+              "slug": "ba:itemname_microphone",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -21091,6 +21756,7 @@
             },
             {
               "item": "Plastic",
+              "slug": "ba:itemname_plastic",
               "per": 20,
               "from": [
                 "ba:street_pier#7",
@@ -21099,6 +21765,7 @@
             },
             {
               "item": "Resistors",
+              "slug": "ba:itemname_resistors",
               "per": 120,
               "from": [
                 "ba:street_pier#7"
@@ -21106,6 +21773,7 @@
             },
             {
               "item": "Speaker",
+              "slug": "ba:itemname_speaker",
               "per": 120,
               "from": [
                 "ba:street_pier#7"
@@ -21113,6 +21781,7 @@
             },
             {
               "item": "Transistors",
+              "slug": "ba:itemname_transistors",
               "per": 120,
               "from": [
                 "ba:street_pier#7"
@@ -21121,6 +21790,7 @@
           ],
           "out": {
             "item": "Rhythm By Tre",
+            "slug": "ba:itemname_headphones01",
             "per": 60
           },
           "pageId": "recipes-headphones01recipe"
@@ -21133,6 +21803,7 @@
           "inputs": [
             {
               "item": "Carbon Dioxide",
+              "slug": "ba:itemname_carbondioxide",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -21140,6 +21811,7 @@
             },
             {
               "item": "Cola Flavoring",
+              "slug": "ba:itemname_colaflavoring",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -21147,6 +21819,7 @@
             },
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -21155,6 +21828,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -21164,6 +21838,7 @@
           ],
           "out": {
             "item": "Soda Can",
+            "slug": "ba:itemname_sodacan",
             "per": 250
           },
           "pageId": "recipes-sodarecipe"
@@ -21176,6 +21851,7 @@
           "inputs": [
             {
               "item": "Battery",
+              "slug": "ba:itemname_battery",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -21183,6 +21859,7 @@
             },
             {
               "item": "Capacitors",
+              "slug": "ba:itemname_capacitors",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -21190,6 +21867,7 @@
             },
             {
               "item": "Copper Clad Laminate",
+              "slug": "ba:itemname_coppercladlaminate",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -21197,6 +21875,7 @@
             },
             {
               "item": "Glass",
+              "slug": "ba:itemname_glass",
               "per": 5,
               "from": [
                 "ba:street_pier#7"
@@ -21204,6 +21883,7 @@
             },
             {
               "item": "Integrated Circuits",
+              "slug": "ba:itemname_integratedcircuits",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -21211,6 +21891,7 @@
             },
             {
               "item": "Microphone",
+              "slug": "ba:itemname_microphone",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -21218,6 +21899,7 @@
             },
             {
               "item": "Plastic",
+              "slug": "ba:itemname_plastic",
               "per": 5,
               "from": [
                 "ba:street_pier#7",
@@ -21226,6 +21908,7 @@
             },
             {
               "item": "Resistors",
+              "slug": "ba:itemname_resistors",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -21233,6 +21916,7 @@
             },
             {
               "item": "Speaker",
+              "slug": "ba:itemname_speaker",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -21240,6 +21924,7 @@
             },
             {
               "item": "Transistors",
+              "slug": "ba:itemname_transistors",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -21248,6 +21933,7 @@
           ],
           "out": {
             "item": "ZanaMan Smartwatch",
+            "slug": "ba:itemname_smartwatch1",
             "per": 30
           },
           "pageId": "recipes-smartwatch1recipe"
@@ -22227,6 +22913,10 @@
           "Graphic Designer",
           "Cleaning"
         ],
+        "skillKeys": [
+          "ba:skill_graphicdesigner",
+          "ba:skill_cleaning"
+        ],
         "hiring": [
           "ba:street_fourthavenue#41",
           "ba:street_fifthavenue#16"
@@ -22277,6 +22967,7 @@
           "rank": "primary",
           "kind": "fee",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "computerworkstation"
           ],
@@ -23079,6 +23770,10 @@
           "Gym Trainer",
           "Cleaning"
         ],
+        "skillKeys": [
+          "ba:skill_gymtrainer",
+          "ba:skill_cleaning"
+        ],
         "hiring": "ba:street_fifthavenue#16",
         "primary": [
           "gymcovercharge",
@@ -23124,6 +23819,7 @@
           "rank": "primary",
           "kind": "fee",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [],
           "wholesale": false,
           "importers": [],
@@ -23148,6 +23844,14 @@
             "Gift Shops",
             "Liquor Stores",
             "Night Clubs"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_supermarket",
+            "ba:businesstype_electronicsstore",
+            "ba:businesstype_florist",
+            "ba:businesstype_giftshop",
+            "ba:businesstype_liquorstore",
+            "ba:businesstype_nightclub"
           ],
           "fixtures": [
             "drinksfridge",
@@ -23199,6 +23903,17 @@
             "Liquor Stores",
             "Night Clubs"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_fastfoodrestaurant",
+            "ba:businesstype_supermarket",
+            "ba:businesstype_cinema",
+            "ba:businesstype_coffeeshop",
+            "ba:businesstype_electronicsstore",
+            "ba:businesstype_florist",
+            "ba:businesstype_giftshop",
+            "ba:businesstype_liquorstore",
+            "ba:businesstype_nightclub"
+          ],
           "fixtures": [
             "drinksfridge",
             "largedrinksfridge"
@@ -23245,6 +23960,7 @@
           "inputs": [
             {
               "item": "Caffeine Extract",
+              "slug": "ba:itemname_caffeineextract",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -23252,6 +23968,7 @@
             },
             {
               "item": "Carbon Dioxide",
+              "slug": "ba:itemname_carbondioxide",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -23259,6 +23976,7 @@
             },
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -23267,6 +23985,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -23276,6 +23995,7 @@
           ],
           "out": {
             "item": "Energy Drink",
+            "slug": "ba:itemname_energydrink",
             "per": 250
           },
           "pageId": "recipes-energydrinkrecipe"
@@ -23288,6 +24008,7 @@
           "inputs": [
             {
               "item": "Carbon Dioxide",
+              "slug": "ba:itemname_carbondioxide",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -23295,6 +24016,7 @@
             },
             {
               "item": "Cola Flavoring",
+              "slug": "ba:itemname_colaflavoring",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -23302,6 +24024,7 @@
             },
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -23310,6 +24033,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -23319,6 +24043,7 @@
           ],
           "out": {
             "item": "Soda Can",
+            "slug": "ba:itemname_sodacan",
             "per": 250
           },
           "pageId": "recipes-sodarecipe"
@@ -24173,6 +24898,11 @@
           "Customer Service",
           "Cleaning"
         ],
+        "skillKeys": [
+          "ba:skill_hairstylist",
+          "ba:skill_customerservice",
+          "ba:skill_cleaning"
+        ],
         "hiring": "ba:street_fifthavenue#16",
         "primary": [
           "hairchemicalfee",
@@ -24224,6 +24954,7 @@
           "rank": "primary",
           "kind": "fee",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "hairdresserchair",
             "hairdresserchairmodern"
@@ -24249,6 +24980,7 @@
           "rank": "primary",
           "kind": "fee",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "hairdresserchair",
             "hairdresserchairmodern"
@@ -24274,6 +25006,7 @@
           "rank": "primary",
           "kind": "fee",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "hairdresserheadwash"
           ],
@@ -24298,6 +25031,7 @@
           "rank": "primary",
           "kind": "fee",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "hairdresserchair",
             "hairdresserchairmodern"
@@ -24323,6 +25057,7 @@
           "rank": "additional",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "hairdressershelf"
           ],
@@ -24358,6 +25093,7 @@
           "inputs": [
             {
               "item": "Hair Care Formula",
+              "slug": "ba:itemname_haircareformula",
               "per": 150,
               "from": [
                 "ba:street_pier#8"
@@ -24365,6 +25101,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 150,
               "from": [
                 "ba:street_pier#8",
@@ -24374,6 +25111,7 @@
           ],
           "out": {
             "item": "Hair Care Product",
+            "slug": "ba:itemname_haircareproduct",
             "per": 150
           },
           "pageId": "recipes-haircareproductrecipe"
@@ -24977,6 +25715,10 @@
           "Customer Service",
           "Cleaning"
         ],
+        "skillKeys": [
+          "ba:skill_customerservice",
+          "ba:skill_cleaning"
+        ],
         "hiring": "ba:street_fifthavenue#16",
         "primary": [
           "cheapjewelry",
@@ -25017,6 +25759,9 @@
           "alsoSoldBy": [
             "Clothing Stores"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_clothingstore"
+          ],
           "fixtures": [
             "jewelryfloorshowcase"
           ],
@@ -25051,6 +25796,9 @@
           "alsoSoldBy": [
             "Clothing Stores"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_clothingstore"
+          ],
           "fixtures": [
             "jewelryfloorshowcase"
           ],
@@ -25084,6 +25832,10 @@
             "Electronics Stores",
             "Gift Shops"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_electronicsstore",
+            "ba:businesstype_giftshop"
+          ],
           "fixtures": [
             "productdisplaytable"
           ],
@@ -25108,6 +25860,10 @@
           "alsoSoldBy": [
             "Electronics Stores",
             "Gift Shops"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_electronicsstore",
+            "ba:businesstype_giftshop"
           ],
           "fixtures": [
             "productdisplaytable"
@@ -25134,6 +25890,7 @@
           "inputs": [
             {
               "item": "Uncut Gems (Cheap)",
+              "slug": "ba:itemname_uncutgemscheap",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -25141,6 +25898,7 @@
             },
             {
               "item": "Metal Band",
+              "slug": "ba:itemname_metalband",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -25149,6 +25907,7 @@
           ],
           "out": {
             "item": "Jewelry (Cheap)",
+            "slug": "ba:itemname_cheapjewelry",
             "per": 60
           },
           "pageId": "recipes-cheapjewelryrecipe"
@@ -25161,6 +25920,7 @@
           "inputs": [
             {
               "item": "Uncut Gems (Expensive)",
+              "slug": "ba:itemname_uncutgemsexpensive",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -25168,6 +25928,7 @@
             },
             {
               "item": "Metal Band",
+              "slug": "ba:itemname_metalband",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -25176,6 +25937,7 @@
           ],
           "out": {
             "item": "Jewelry (Expensive)",
+            "slug": "ba:itemname_expensivejewelry",
             "per": 30
           },
           "pageId": "recipes-expensivejewelryrecipe"
@@ -25188,6 +25950,7 @@
           "inputs": [
             {
               "item": "Battery",
+              "slug": "ba:itemname_battery",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -25195,6 +25958,7 @@
             },
             {
               "item": "Capacitors",
+              "slug": "ba:itemname_capacitors",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -25202,6 +25966,7 @@
             },
             {
               "item": "Copper Clad Laminate",
+              "slug": "ba:itemname_coppercladlaminate",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -25209,6 +25974,7 @@
             },
             {
               "item": "Glass",
+              "slug": "ba:itemname_glass",
               "per": 5,
               "from": [
                 "ba:street_pier#7"
@@ -25216,6 +25982,7 @@
             },
             {
               "item": "Integrated Circuits",
+              "slug": "ba:itemname_integratedcircuits",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -25223,6 +25990,7 @@
             },
             {
               "item": "Microphone",
+              "slug": "ba:itemname_microphone",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -25230,6 +25998,7 @@
             },
             {
               "item": "Plastic",
+              "slug": "ba:itemname_plastic",
               "per": 5,
               "from": [
                 "ba:street_pier#7",
@@ -25238,6 +26007,7 @@
             },
             {
               "item": "Resistors",
+              "slug": "ba:itemname_resistors",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -25245,6 +26015,7 @@
             },
             {
               "item": "Speaker",
+              "slug": "ba:itemname_speaker",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -25252,6 +26023,7 @@
             },
             {
               "item": "Transistors",
+              "slug": "ba:itemname_transistors",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -25260,6 +26032,7 @@
           ],
           "out": {
             "item": "Arty Fish Smartwatch",
+            "slug": "ba:itemname_smartwatch2",
             "per": 30
           },
           "pageId": "recipes-smartwatch2recipe"
@@ -25272,6 +26045,7 @@
           "inputs": [
             {
               "item": "Battery",
+              "slug": "ba:itemname_battery",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -25279,6 +26053,7 @@
             },
             {
               "item": "Capacitors",
+              "slug": "ba:itemname_capacitors",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -25286,6 +26061,7 @@
             },
             {
               "item": "Copper Clad Laminate",
+              "slug": "ba:itemname_coppercladlaminate",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -25293,6 +26069,7 @@
             },
             {
               "item": "Glass",
+              "slug": "ba:itemname_glass",
               "per": 5,
               "from": [
                 "ba:street_pier#7"
@@ -25300,6 +26077,7 @@
             },
             {
               "item": "Integrated Circuits",
+              "slug": "ba:itemname_integratedcircuits",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -25307,6 +26085,7 @@
             },
             {
               "item": "Microphone",
+              "slug": "ba:itemname_microphone",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -25314,6 +26093,7 @@
             },
             {
               "item": "Plastic",
+              "slug": "ba:itemname_plastic",
               "per": 5,
               "from": [
                 "ba:street_pier#7",
@@ -25322,6 +26102,7 @@
             },
             {
               "item": "Resistors",
+              "slug": "ba:itemname_resistors",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -25329,6 +26110,7 @@
             },
             {
               "item": "Speaker",
+              "slug": "ba:itemname_speaker",
               "per": 30,
               "from": [
                 "ba:street_pier#7"
@@ -25336,6 +26118,7 @@
             },
             {
               "item": "Transistors",
+              "slug": "ba:itemname_transistors",
               "per": 60,
               "from": [
                 "ba:street_pier#7"
@@ -25344,6 +26127,7 @@
           ],
           "out": {
             "item": "ZanaMan Smartwatch",
+            "slug": "ba:itemname_smartwatch1",
             "per": 30
           },
           "pageId": "recipes-smartwatch1recipe"
@@ -25954,6 +26738,10 @@
           "Lawyer",
           "Cleaning"
         ],
+        "skillKeys": [
+          "ba:skill_lawyer",
+          "ba:skill_cleaning"
+        ],
         "hiring": [
           "ba:street_fourthavenue#41",
           "ba:street_fifthavenue#16"
@@ -26004,6 +26792,7 @@
           "rank": "primary",
           "kind": "fee",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "computerworkstation"
           ],
@@ -26806,6 +27595,10 @@
           "Customer Service",
           "Cleaning"
         ],
+        "skillKeys": [
+          "ba:skill_customerservice",
+          "ba:skill_cleaning"
+        ],
         "hiring": "ba:street_fifthavenue#16",
         "primary": [
           "beer",
@@ -26857,6 +27650,9 @@
           "alsoSoldBy": [
             "Nightclubs"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_nightclub"
+          ],
           "fixtures": [
             "drinksshelf"
           ],
@@ -26905,6 +27701,9 @@
           "alsoSoldBy": [
             "Supermarkets"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_supermarket"
+          ],
           "fixtures": [
             "wineshelf"
           ],
@@ -26937,6 +27736,7 @@
           "rank": "primary",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "tobaccoshelf1",
             "tobaccoshelf2",
@@ -26985,6 +27785,7 @@
           "rank": "primary",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "tobaccoshelf1",
             "tobaccoshelf2",
@@ -27036,6 +27837,10 @@
             "Nightclubs",
             "Theaters"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_nightclub",
+            "ba:businesstype_theater"
+          ],
           "fixtures": [
             "drinksshelf"
           ],
@@ -27083,6 +27888,9 @@
           "kind": "product",
           "alsoSoldBy": [
             "Nightclubs"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_nightclub"
           ],
           "fixtures": [
             "drinksshelf"
@@ -27132,6 +27940,10 @@
           "alsoSoldBy": [
             "Nightclubs",
             "Theaters"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_nightclub",
+            "ba:businesstype_theater"
           ],
           "fixtures": [
             "drinksshelf"
@@ -27186,6 +27998,14 @@
             "Gift Shops",
             "Night Clubs"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_gym",
+            "ba:businesstype_supermarket",
+            "ba:businesstype_electronicsstore",
+            "ba:businesstype_florist",
+            "ba:businesstype_giftshop",
+            "ba:businesstype_nightclub"
+          ],
           "fixtures": [
             "drinksfridge",
             "largedrinksfridge"
@@ -27236,6 +28056,17 @@
             "Gift Shops",
             "Night Clubs"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_fastfoodrestaurant",
+            "ba:businesstype_gym",
+            "ba:businesstype_supermarket",
+            "ba:businesstype_cinema",
+            "ba:businesstype_coffeeshop",
+            "ba:businesstype_electronicsstore",
+            "ba:businesstype_florist",
+            "ba:businesstype_giftshop",
+            "ba:businesstype_nightclub"
+          ],
           "fixtures": [
             "drinksfridge",
             "largedrinksfridge"
@@ -27282,6 +28113,7 @@
           "inputs": [
             {
               "item": "Barley",
+              "slug": "ba:itemname_barley",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -27289,6 +28121,7 @@
             },
             {
               "item": "Carbon Dioxide",
+              "slug": "ba:itemname_carbondioxide",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -27296,6 +28129,7 @@
             },
             {
               "item": "Hops",
+              "slug": "ba:itemname_hops",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -27303,6 +28137,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -27311,6 +28146,7 @@
             },
             {
               "item": "Yeast",
+              "slug": "ba:itemname_yeast",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -27319,6 +28155,7 @@
           ],
           "out": {
             "item": "Beer",
+            "slug": "ba:itemname_beer",
             "per": 50
           },
           "pageId": "recipes-beerrecipe"
@@ -27331,6 +28168,7 @@
           "inputs": [
             {
               "item": "Grapes",
+              "slug": "ba:itemname_grapes",
               "per": 100,
               "from": [
                 "ba:street_pier#8"
@@ -27338,6 +28176,7 @@
             },
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -27346,6 +28185,7 @@
             },
             {
               "item": "Yeast",
+              "slug": "ba:itemname_yeast",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -27354,6 +28194,7 @@
           ],
           "out": {
             "item": "Bottle of Wine",
+            "slug": "ba:itemname_bottleofwine",
             "per": 50
           },
           "pageId": "recipes-winerecipe"
@@ -27366,6 +28207,7 @@
           "inputs": [
             {
               "item": "Cigar Paper",
+              "slug": "ba:itemname_cigarpaper",
               "per": 20,
               "from": [
                 "ba:street_pier#9"
@@ -27373,6 +28215,7 @@
             },
             {
               "item": "Tobacco",
+              "slug": "ba:itemname_tobacco",
               "per": 100,
               "from": [
                 "ba:street_pier#9"
@@ -27381,6 +28224,7 @@
           ],
           "out": {
             "item": "Cigar",
+            "slug": "ba:itemname_cigar",
             "per": 100
           },
           "pageId": "recipes-cigarrecipe"
@@ -27393,6 +28237,7 @@
           "inputs": [
             {
               "item": "Cigarette Paper",
+              "slug": "ba:itemname_cigarettepaper",
               "per": 20,
               "from": [
                 "ba:street_pier#9"
@@ -27400,6 +28245,7 @@
             },
             {
               "item": "Tobacco",
+              "slug": "ba:itemname_tobacco",
               "per": 100,
               "from": [
                 "ba:street_pier#9"
@@ -27408,6 +28254,7 @@
           ],
           "out": {
             "item": "Pack of Cigarettes",
+            "slug": "ba:itemname_cigarette",
             "per": 100
           },
           "pageId": "recipes-cigaretterecipe"
@@ -27420,6 +28267,7 @@
           "inputs": [
             {
               "item": "Barley",
+              "slug": "ba:itemname_barley",
               "per": 100,
               "from": [
                 "ba:street_pier#8"
@@ -27427,6 +28275,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -27435,6 +28284,7 @@
             },
             {
               "item": "Yeast",
+              "slug": "ba:itemname_yeast",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -27443,6 +28293,7 @@
           ],
           "out": {
             "item": "Whisky",
+            "slug": "ba:itemname_whisky",
             "per": 50
           },
           "pageId": "recipes-whiskyrecipe"
@@ -27455,6 +28306,7 @@
           "inputs": [
             {
               "item": "Barley",
+              "slug": "ba:itemname_barley",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -27462,6 +28314,7 @@
             },
             {
               "item": "Blue Agave",
+              "slug": "ba:itemname_blueagave",
               "per": 100,
               "from": [
                 "ba:street_pier#8"
@@ -27469,6 +28322,7 @@
             },
             {
               "item": "Lime Juice",
+              "slug": "ba:itemname_limejuice",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -27476,6 +28330,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -27484,6 +28339,7 @@
             },
             {
               "item": "Yeast",
+              "slug": "ba:itemname_yeast",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -27492,6 +28348,7 @@
           ],
           "out": {
             "item": "Margarita",
+            "slug": "ba:itemname_margarita",
             "per": 50
           },
           "pageId": "recipes-margaritarecipe"
@@ -27504,6 +28361,7 @@
           "inputs": [
             {
               "item": "Barley",
+              "slug": "ba:itemname_barley",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -27511,6 +28369,7 @@
             },
             {
               "item": "Juniper Berries",
+              "slug": "ba:itemname_juniperberries",
               "per": 100,
               "from": [
                 "ba:street_pier#8"
@@ -27518,6 +28377,7 @@
             },
             {
               "item": "Vermouth",
+              "slug": "ba:itemname_vermouth",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -27525,6 +28385,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -27533,6 +28394,7 @@
             },
             {
               "item": "Yeast",
+              "slug": "ba:itemname_yeast",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -27541,6 +28403,7 @@
           ],
           "out": {
             "item": "Martini",
+            "slug": "ba:itemname_martini",
             "per": 50
           },
           "pageId": "recipes-martinirecipe"
@@ -27553,6 +28416,7 @@
           "inputs": [
             {
               "item": "Caffeine Extract",
+              "slug": "ba:itemname_caffeineextract",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -27560,6 +28424,7 @@
             },
             {
               "item": "Carbon Dioxide",
+              "slug": "ba:itemname_carbondioxide",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -27567,6 +28432,7 @@
             },
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -27575,6 +28441,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -27584,6 +28451,7 @@
           ],
           "out": {
             "item": "Energy Drink",
+            "slug": "ba:itemname_energydrink",
             "per": 250
           },
           "pageId": "recipes-energydrinkrecipe"
@@ -27596,6 +28464,7 @@
           "inputs": [
             {
               "item": "Carbon Dioxide",
+              "slug": "ba:itemname_carbondioxide",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -27603,6 +28472,7 @@
             },
             {
               "item": "Cola Flavoring",
+              "slug": "ba:itemname_colaflavoring",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -27610,6 +28480,7 @@
             },
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -27618,6 +28489,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -27627,6 +28499,7 @@
           ],
           "out": {
             "item": "Soda Can",
+            "slug": "ba:itemname_sodacan",
             "per": 250
           },
           "pageId": "recipes-sodarecipe"
@@ -28472,6 +29345,11 @@
           "Customer Service",
           "Cleaning"
         ],
+        "skillKeys": [
+          "ba:skill_dj",
+          "ba:skill_customerservice",
+          "ba:skill_cleaning"
+        ],
         "hiring": "ba:street_fifthavenue#16",
         "primary": [
           "beer",
@@ -28529,6 +29407,9 @@
           "alsoSoldBy": [
             "Liquor Stores"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_liquorstore"
+          ],
           "fixtures": [
             "cocktailbarbeershelf",
             "woodencocktailbarbeershelf"
@@ -28576,6 +29457,7 @@
           "rank": "primary",
           "kind": "fee",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "coatcheckleft",
             "coatcheckright"
@@ -28600,6 +29482,7 @@
           "rank": "primary",
           "kind": "fee",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [],
           "wholesale": false,
           "importers": [],
@@ -28619,6 +29502,9 @@
           "kind": "product",
           "alsoSoldBy": [
             "Liquor Stores"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_liquorstore"
           ],
           "fixtures": [
             "cocktailbardrinkscounter",
@@ -28670,6 +29556,10 @@
             "Theaters",
             "Liquor Stores"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_theater",
+            "ba:businesstype_liquorstore"
+          ],
           "fixtures": [
             "cocktailbardrinkscounter",
             "woodencocktailbardrinkscounter"
@@ -28719,6 +29609,10 @@
           "alsoSoldBy": [
             "Liquor Stores",
             "Theaters"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_liquorstore",
+            "ba:businesstype_theater"
           ],
           "fixtures": [
             "cocktailbardrinkscounter",
@@ -28774,6 +29668,14 @@
             "Gift Shops",
             "Liquor Stores"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_gym",
+            "ba:businesstype_supermarket",
+            "ba:businesstype_electronicsstore",
+            "ba:businesstype_florist",
+            "ba:businesstype_giftshop",
+            "ba:businesstype_liquorstore"
+          ],
           "fixtures": [
             "drinksfridge",
             "largedrinksfridge"
@@ -28824,6 +29726,17 @@
             "Gift Shops",
             "Liquor Stores"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_fastfoodrestaurant",
+            "ba:businesstype_gym",
+            "ba:businesstype_supermarket",
+            "ba:businesstype_cinema",
+            "ba:businesstype_coffeeshop",
+            "ba:businesstype_electronicsstore",
+            "ba:businesstype_florist",
+            "ba:businesstype_giftshop",
+            "ba:businesstype_liquorstore"
+          ],
           "fixtures": [
             "drinksfridge",
             "largedrinksfridge"
@@ -28870,6 +29783,7 @@
           "inputs": [
             {
               "item": "Barley",
+              "slug": "ba:itemname_barley",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -28877,6 +29791,7 @@
             },
             {
               "item": "Carbon Dioxide",
+              "slug": "ba:itemname_carbondioxide",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -28884,6 +29799,7 @@
             },
             {
               "item": "Hops",
+              "slug": "ba:itemname_hops",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -28891,6 +29807,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -28899,6 +29816,7 @@
             },
             {
               "item": "Yeast",
+              "slug": "ba:itemname_yeast",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -28907,6 +29825,7 @@
           ],
           "out": {
             "item": "Beer",
+            "slug": "ba:itemname_beer",
             "per": 50
           },
           "pageId": "recipes-beerrecipe"
@@ -28919,6 +29838,7 @@
           "inputs": [
             {
               "item": "Barley",
+              "slug": "ba:itemname_barley",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -28926,6 +29846,7 @@
             },
             {
               "item": "Blue Agave",
+              "slug": "ba:itemname_blueagave",
               "per": 100,
               "from": [
                 "ba:street_pier#8"
@@ -28933,6 +29854,7 @@
             },
             {
               "item": "Lime Juice",
+              "slug": "ba:itemname_limejuice",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -28940,6 +29862,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -28948,6 +29871,7 @@
             },
             {
               "item": "Yeast",
+              "slug": "ba:itemname_yeast",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -28956,6 +29880,7 @@
           ],
           "out": {
             "item": "Margarita",
+            "slug": "ba:itemname_margarita",
             "per": 50
           },
           "pageId": "recipes-margaritarecipe"
@@ -28968,6 +29893,7 @@
           "inputs": [
             {
               "item": "Barley",
+              "slug": "ba:itemname_barley",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -28975,6 +29901,7 @@
             },
             {
               "item": "Juniper Berries",
+              "slug": "ba:itemname_juniperberries",
               "per": 100,
               "from": [
                 "ba:street_pier#8"
@@ -28982,6 +29909,7 @@
             },
             {
               "item": "Vermouth",
+              "slug": "ba:itemname_vermouth",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -28989,6 +29917,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -28997,6 +29926,7 @@
             },
             {
               "item": "Yeast",
+              "slug": "ba:itemname_yeast",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -29005,6 +29935,7 @@
           ],
           "out": {
             "item": "Martini",
+            "slug": "ba:itemname_martini",
             "per": 50
           },
           "pageId": "recipes-martinirecipe"
@@ -29017,6 +29948,7 @@
           "inputs": [
             {
               "item": "Barley",
+              "slug": "ba:itemname_barley",
               "per": 100,
               "from": [
                 "ba:street_pier#8"
@@ -29024,6 +29956,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -29032,6 +29965,7 @@
             },
             {
               "item": "Yeast",
+              "slug": "ba:itemname_yeast",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -29040,6 +29974,7 @@
           ],
           "out": {
             "item": "Whisky",
+            "slug": "ba:itemname_whisky",
             "per": 50
           },
           "pageId": "recipes-whiskyrecipe"
@@ -29052,6 +29987,7 @@
           "inputs": [
             {
               "item": "Caffeine Extract",
+              "slug": "ba:itemname_caffeineextract",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -29059,6 +29995,7 @@
             },
             {
               "item": "Carbon Dioxide",
+              "slug": "ba:itemname_carbondioxide",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -29066,6 +30003,7 @@
             },
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -29074,6 +30012,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -29083,6 +30022,7 @@
           ],
           "out": {
             "item": "Energy Drink",
+            "slug": "ba:itemname_energydrink",
             "per": 250
           },
           "pageId": "recipes-energydrinkrecipe"
@@ -29095,6 +30035,7 @@
           "inputs": [
             {
               "item": "Carbon Dioxide",
+              "slug": "ba:itemname_carbondioxide",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -29102,6 +30043,7 @@
             },
             {
               "item": "Cola Flavoring",
+              "slug": "ba:itemname_colaflavoring",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -29109,6 +30051,7 @@
             },
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -29117,6 +30060,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -29126,6 +30070,7 @@
           ],
           "out": {
             "item": "Soda Can",
+            "slug": "ba:itemname_sodacan",
             "per": 250
           },
           "pageId": "recipes-sodarecipe"
@@ -30086,6 +31031,10 @@
           "Customer Service",
           "Cleaning"
         ],
+        "skillKeys": [
+          "ba:skill_customerservice",
+          "ba:skill_cleaning"
+        ],
         "hiring": "ba:street_fifthavenue#16",
         "primary": [
           "freshfood",
@@ -30155,6 +31104,7 @@
           "rank": "primary",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "industrialfridge"
           ],
@@ -30187,6 +31137,7 @@
           "rank": "primary",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "industrialfreezer",
             "smallindustrialfreezer"
@@ -30229,6 +31180,10 @@
           "alsoSoldBy": [
             "Fast Food Restaurants",
             "Coffee Shops"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_fastfoodrestaurant",
+            "ba:businesstype_coffeeshop"
           ],
           "fixtures": [
             "icecreamcounter",
@@ -30285,6 +31240,14 @@
             "Liquor Stores",
             "Night Clubs"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_gym",
+            "ba:businesstype_electronicsstore",
+            "ba:businesstype_florist",
+            "ba:businesstype_giftshop",
+            "ba:businesstype_liquorstore",
+            "ba:businesstype_nightclub"
+          ],
           "fixtures": [
             "drinksfridge",
             "largedrinksfridge"
@@ -30335,6 +31298,17 @@
             "Liquor Stores",
             "Night Clubs"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_fastfoodrestaurant",
+            "ba:businesstype_gym",
+            "ba:businesstype_cinema",
+            "ba:businesstype_coffeeshop",
+            "ba:businesstype_electronicsstore",
+            "ba:businesstype_florist",
+            "ba:businesstype_giftshop",
+            "ba:businesstype_liquorstore",
+            "ba:businesstype_nightclub"
+          ],
           "fixtures": [
             "drinksfridge",
             "largedrinksfridge"
@@ -30382,6 +31356,11 @@
             "Coffee Shops",
             "Fast Food Restaurants"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_fruitandvegetablestore",
+            "ba:businesstype_coffeeshop",
+            "ba:businesstype_fastfoodrestaurant"
+          ],
           "fixtures": [
             "fruitpallet",
             "woodenproductcrate"
@@ -30411,6 +31390,11 @@
             "Coffee Shops",
             "Fast Food Restaurants"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_fruitandvegetablestore",
+            "ba:businesstype_coffeeshop",
+            "ba:businesstype_fastfoodrestaurant"
+          ],
           "fixtures": [
             "fruitpallet",
             "woodenproductcrate"
@@ -30437,6 +31421,9 @@
           "kind": "product",
           "alsoSoldBy": [
             "Liquor Stores"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_liquorstore"
           ],
           "fixtures": [
             "wineshelf"
@@ -30472,6 +31459,9 @@
           "alsoSoldBy": [
             "Fruit and Vegetable Stores"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_fruitandvegetablestore"
+          ],
           "fixtures": [
             "fruitpallet",
             "woodenproductcrate"
@@ -30498,6 +31488,9 @@
           "kind": "product",
           "alsoSoldBy": [
             "Coffee Shops"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_coffeeshop"
           ],
           "fixtures": [
             "bakeryshowcase"
@@ -30533,6 +31526,9 @@
           "alsoSoldBy": [
             "Coffee Shops"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_coffeeshop"
+          ],
           "fixtures": [
             "bakeryshowcase"
           ],
@@ -30567,6 +31563,9 @@
           "alsoSoldBy": [
             "Coffee Shops"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_coffeeshop"
+          ],
           "fixtures": [
             "bakeryshowcase"
           ],
@@ -30600,6 +31599,9 @@
           "kind": "product",
           "alsoSoldBy": [
             "Fruit and Vegetable Stores"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_fruitandvegetablestore"
           ],
           "fixtures": [
             "fruitpallet",
@@ -30644,6 +31646,9 @@
           "alsoSoldBy": [
             "Fruit and Vegetable Stores"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_fruitandvegetablestore"
+          ],
           "fixtures": [
             "fruitpallet",
             "woodenproductcrate"
@@ -30670,6 +31675,9 @@
           "kind": "product",
           "alsoSoldBy": [
             "Fruit and Vegetable Stores"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_fruitandvegetablestore"
           ],
           "fixtures": [
             "fruitpallet",
@@ -30700,6 +31708,7 @@
           "inputs": [
             {
               "item": "Bag of Tomatoes",
+              "slug": "ba:itemname_rawtomato",
               "per": 100,
               "from": [
                 "ba:street_pier#2",
@@ -30708,6 +31717,7 @@
             },
             {
               "item": "Ground Beef",
+              "slug": "ba:itemname_groundbeef",
               "per": 200,
               "from": [
                 "ba:street_pier#6"
@@ -30715,6 +31725,7 @@
             },
             {
               "item": "Russet Potatoes",
+              "slug": "ba:itemname_russetpotatoes",
               "per": 200,
               "from": [
                 "ba:street_pier#6"
@@ -30723,6 +31734,7 @@
           ],
           "out": {
             "item": "Fresh Food",
+            "slug": "ba:itemname_freshfood",
             "per": 200
           },
           "pageId": "recipes-freshfoodrecipe"
@@ -30735,6 +31747,7 @@
           "inputs": [
             {
               "item": "Chicken Breast",
+              "slug": "ba:itemname_chickenbreast",
               "per": 200,
               "from": [
                 "ba:street_pier#6"
@@ -30742,6 +31755,7 @@
             },
             {
               "item": "Vinaigrette",
+              "slug": "ba:itemname_vinaigrette",
               "per": 100,
               "from": [
                 "ba:street_pier#6"
@@ -30750,6 +31764,7 @@
           ],
           "out": {
             "item": "Frozen Food",
+            "slug": "ba:itemname_frozenfood",
             "per": 200
           },
           "pageId": "recipes-frozenfoodrecipe"
@@ -30762,6 +31777,7 @@
           "inputs": [
             {
               "item": "Milk",
+              "slug": "ba:itemname_milk",
               "per": 200,
               "from": [
                 "ba:street_pier#6"
@@ -30769,6 +31785,7 @@
             },
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 200,
               "from": [
                 "ba:street_pier#8",
@@ -30778,6 +31795,7 @@
           ],
           "out": {
             "item": "Ice Cream",
+            "slug": "ba:itemname_icecream",
             "per": 200
           },
           "pageId": "recipes-icecreamrecipe"
@@ -30790,6 +31808,7 @@
           "inputs": [
             {
               "item": "Caffeine Extract",
+              "slug": "ba:itemname_caffeineextract",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -30797,6 +31816,7 @@
             },
             {
               "item": "Carbon Dioxide",
+              "slug": "ba:itemname_carbondioxide",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -30804,6 +31824,7 @@
             },
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -30812,6 +31833,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -30821,6 +31843,7 @@
           ],
           "out": {
             "item": "Energy Drink",
+            "slug": "ba:itemname_energydrink",
             "per": 250
           },
           "pageId": "recipes-energydrinkrecipe"
@@ -30833,6 +31856,7 @@
           "inputs": [
             {
               "item": "Carbon Dioxide",
+              "slug": "ba:itemname_carbondioxide",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -30840,6 +31864,7 @@
             },
             {
               "item": "Cola Flavoring",
+              "slug": "ba:itemname_colaflavoring",
               "per": 250,
               "from": [
                 "ba:street_pier#8"
@@ -30847,6 +31872,7 @@
             },
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -30855,6 +31881,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 250,
               "from": [
                 "ba:street_pier#8",
@@ -30864,6 +31891,7 @@
           ],
           "out": {
             "item": "Soda Can",
+            "slug": "ba:itemname_sodacan",
             "per": 250
           },
           "pageId": "recipes-sodarecipe"
@@ -30876,6 +31904,7 @@
           "inputs": [
             {
               "item": "Seeds (Apple)",
+              "slug": "ba:itemname_appleseeds",
               "per": 50,
               "from": [
                 "ba:street_pier#9"
@@ -30883,6 +31912,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -30892,6 +31922,7 @@
           ],
           "out": {
             "item": "Apple",
+            "slug": "ba:itemname_apple",
             "per": 250
           },
           "pageId": "recipes-applerecipe"
@@ -30904,6 +31935,7 @@
           "inputs": [
             {
               "item": "Seeds (Banana)",
+              "slug": "ba:itemname_bananaseeds",
               "per": 50,
               "from": [
                 "ba:street_pier#9"
@@ -30911,6 +31943,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -30920,6 +31953,7 @@
           ],
           "out": {
             "item": "Banana",
+            "slug": "ba:itemname_banana",
             "per": 250
           },
           "pageId": "recipes-bananarecipe"
@@ -30932,6 +31966,7 @@
           "inputs": [
             {
               "item": "Grapes",
+              "slug": "ba:itemname_grapes",
               "per": 100,
               "from": [
                 "ba:street_pier#8"
@@ -30939,6 +31974,7 @@
             },
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -30947,6 +31983,7 @@
             },
             {
               "item": "Yeast",
+              "slug": "ba:itemname_yeast",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -30955,6 +31992,7 @@
           ],
           "out": {
             "item": "Bottle of Wine",
+            "slug": "ba:itemname_bottleofwine",
             "per": 50
           },
           "pageId": "recipes-winerecipe"
@@ -30967,6 +32005,7 @@
           "inputs": [
             {
               "item": "Seeds (Carrot)",
+              "slug": "ba:itemname_carrotseeds",
               "per": 50,
               "from": [
                 "ba:street_pier#9"
@@ -30974,6 +32013,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -30983,6 +32023,7 @@
           ],
           "out": {
             "item": "Carrot",
+            "slug": "ba:itemname_carrot",
             "per": 250
           },
           "pageId": "recipes-carrotrecipe"
@@ -30995,6 +32036,7 @@
           "inputs": [
             {
               "item": "Butter",
+              "slug": "ba:itemname_butter",
               "per": 100,
               "from": [
                 "ba:street_pier#6"
@@ -31002,6 +32044,7 @@
             },
             {
               "item": "Dough",
+              "slug": "ba:itemname_dough",
               "per": 200,
               "from": [
                 "ba:street_pier#6"
@@ -31010,6 +32053,7 @@
           ],
           "out": {
             "item": "Croissant",
+            "slug": "ba:itemname_croissant",
             "per": 200
           },
           "pageId": "recipes-croissantrecipe"
@@ -31022,6 +32066,7 @@
           "inputs": [
             {
               "item": "Baking Mix",
+              "slug": "ba:itemname_bakingmix",
               "per": 200,
               "from": [
                 "ba:street_pier#6"
@@ -31029,6 +32074,7 @@
             },
             {
               "item": "Milk",
+              "slug": "ba:itemname_milk",
               "per": 100,
               "from": [
                 "ba:street_pier#6"
@@ -31036,6 +32082,7 @@
             },
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 100,
               "from": [
                 "ba:street_pier#8",
@@ -31045,6 +32092,7 @@
           ],
           "out": {
             "item": "Cupcake",
+            "slug": "ba:itemname_cupcake",
             "per": 200
           },
           "pageId": "recipes-cupcakerecipe"
@@ -31057,6 +32105,7 @@
           "inputs": [
             {
               "item": "Dough",
+              "slug": "ba:itemname_dough",
               "per": 200,
               "from": [
                 "ba:street_pier#6"
@@ -31064,6 +32113,7 @@
             },
             {
               "item": "Milk",
+              "slug": "ba:itemname_milk",
               "per": 100,
               "from": [
                 "ba:street_pier#6"
@@ -31071,6 +32121,7 @@
             },
             {
               "item": "Sugar",
+              "slug": "ba:itemname_sugar",
               "per": 100,
               "from": [
                 "ba:street_pier#8",
@@ -31080,6 +32131,7 @@
           ],
           "out": {
             "item": "Donut",
+            "slug": "ba:itemname_donut",
             "per": 200
           },
           "pageId": "recipes-donutrecipe"
@@ -31092,6 +32144,7 @@
           "inputs": [
             {
               "item": "Seeds (Lettuce)",
+              "slug": "ba:itemname_lettuceseeds",
               "per": 50,
               "from": [
                 "ba:street_pier#9"
@@ -31099,6 +32152,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -31108,6 +32162,7 @@
           ],
           "out": {
             "item": "Lettuce",
+            "slug": "ba:itemname_lettuce",
             "per": 250
           },
           "pageId": "recipes-lettucerecipe"
@@ -31120,6 +32175,7 @@
           "inputs": [
             {
               "item": "Seeds (Pear)",
+              "slug": "ba:itemname_pearseeds",
               "per": 50,
               "from": [
                 "ba:street_pier#9"
@@ -31127,6 +32183,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -31136,6 +32193,7 @@
           ],
           "out": {
             "item": "Pear",
+            "slug": "ba:itemname_pear",
             "per": 250
           },
           "pageId": "recipes-pearrecipe"
@@ -31148,6 +32206,7 @@
           "inputs": [
             {
               "item": "Seeds (Tomato)",
+              "slug": "ba:itemname_tomatoseeds",
               "per": 50,
               "from": [
                 "ba:street_pier#9"
@@ -31155,6 +32214,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -31164,6 +32224,7 @@
           ],
           "out": {
             "item": "Tomato",
+            "slug": "ba:itemname_tomato",
             "per": 250
           },
           "pageId": "recipes-tomatorecipe"
@@ -32143,6 +33204,12 @@
           "Customer Service",
           "Cleaning"
         ],
+        "skillKeys": [
+          "ba:skill_actor",
+          "ba:skill_stagecrew",
+          "ba:skill_customerservice",
+          "ba:skill_cleaning"
+        ],
         "hiring": [
           "ba:street_broadwaystreet#5",
           "ba:street_fifthavenue#16"
@@ -32214,6 +33281,7 @@
           "rank": "primary",
           "kind": "fee",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "boothticket"
           ],
@@ -32237,6 +33305,7 @@
           "rank": "additional",
           "kind": "product",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "concessionsdisplaycase"
           ],
@@ -32271,6 +33340,10 @@
           "alsoSoldBy": [
             "Nightclubs",
             "Liquor Stores"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_nightclub",
+            "ba:businesstype_liquorstore"
           ],
           "fixtures": [
             "cocktailbardrinkscounter",
@@ -32321,6 +33394,9 @@
           "alsoSoldBy": [
             "Cinemas"
           ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_cinema"
+          ],
           "fixtures": [
             "concessionsdisplaycase"
           ],
@@ -32355,6 +33431,10 @@
           "alsoSoldBy": [
             "Nightclubs",
             "Liquor Stores"
+          ],
+          "alsoSoldByKeys": [
+            "ba:businesstype_nightclub",
+            "ba:businesstype_liquorstore"
           ],
           "fixtures": [
             "cocktailbardrinkscounter",
@@ -32406,6 +33486,7 @@
           "inputs": [
             {
               "item": "Cheese",
+              "slug": "ba:itemname_cheese",
               "per": 200,
               "from": [
                 "ba:street_pier#6"
@@ -32414,6 +33495,7 @@
           ],
           "out": {
             "item": "Cheese Platter",
+            "slug": "ba:itemname_cheeseplatter",
             "per": 200
           },
           "pageId": "recipes-cheeseplatterrecipe"
@@ -32426,6 +33508,7 @@
           "inputs": [
             {
               "item": "Barley",
+              "slug": "ba:itemname_barley",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -32433,6 +33516,7 @@
             },
             {
               "item": "Juniper Berries",
+              "slug": "ba:itemname_juniperberries",
               "per": 100,
               "from": [
                 "ba:street_pier#8"
@@ -32440,6 +33524,7 @@
             },
             {
               "item": "Vermouth",
+              "slug": "ba:itemname_vermouth",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -32447,6 +33532,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -32455,6 +33541,7 @@
             },
             {
               "item": "Yeast",
+              "slug": "ba:itemname_yeast",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -32463,6 +33550,7 @@
           ],
           "out": {
             "item": "Martini",
+            "slug": "ba:itemname_martini",
             "per": 50
           },
           "pageId": "recipes-martinirecipe"
@@ -32475,6 +33563,7 @@
           "inputs": [
             {
               "item": "Popcorn Kernels",
+              "slug": "ba:itemname_cornkernels",
               "per": 200,
               "from": [
                 "ba:street_pier#9"
@@ -32482,6 +33571,7 @@
             },
             {
               "item": "Butter",
+              "slug": "ba:itemname_butter",
               "per": 10,
               "from": [
                 "ba:street_pier#6"
@@ -32490,6 +33580,7 @@
           ],
           "out": {
             "item": "Popcorn",
+            "slug": "ba:itemname_popcorn",
             "per": 200
           },
           "pageId": "recipes-popcornrecipe"
@@ -32502,6 +33593,7 @@
           "inputs": [
             {
               "item": "Barley",
+              "slug": "ba:itemname_barley",
               "per": 100,
               "from": [
                 "ba:street_pier#8"
@@ -32509,6 +33601,7 @@
             },
             {
               "item": "Water",
+              "slug": "ba:itemname_water",
               "per": 50,
               "from": [
                 "ba:street_pier#8",
@@ -32517,6 +33610,7 @@
             },
             {
               "item": "Yeast",
+              "slug": "ba:itemname_yeast",
               "per": 50,
               "from": [
                 "ba:street_pier#8"
@@ -32525,6 +33619,7 @@
           ],
           "out": {
             "item": "Whisky",
+            "slug": "ba:itemname_whisky",
             "per": 50
           },
           "pageId": "recipes-whiskyrecipe"
@@ -33180,6 +34275,10 @@
           "Travel Agent",
           "Cleaning"
         ],
+        "skillKeys": [
+          "ba:skill_travelagent",
+          "ba:skill_cleaning"
+        ],
         "hiring": [
           "ba:street_fourthavenue#41",
           "ba:street_fifthavenue#16"
@@ -33230,6 +34329,7 @@
           "rank": "primary",
           "kind": "fee",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "computerworkstation"
           ],
@@ -34032,6 +35132,10 @@
           "Programmer",
           "Cleaning"
         ],
+        "skillKeys": [
+          "ba:skill_programmer",
+          "ba:skill_cleaning"
+        ],
         "hiring": [
           "ba:street_fourthavenue#41",
           "ba:street_fifthavenue#16"
@@ -34082,6 +35186,7 @@
           "rank": "primary",
           "kind": "fee",
           "alsoSoldBy": [],
+          "alsoSoldByKeys": [],
           "fixtures": [
             "computerworkstation"
           ],

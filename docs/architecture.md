@@ -216,8 +216,9 @@ when a board arrives and when the choice changes: `takeData(raw)` sets
 carries the English payload along unenumerated (`dataEn()`). Every draw then reads `D`
 as before, and a join inside the payload holds because both sides were swapped alike.
 The swap is `gnWalk()`: a name beside its key (`GN_PAIRS`: `item`/`type`/`name`/`demand`
-beside `slug`, `type`/`sub` beside `typeSlug`, `label`/`role` beside `skill`, `label`
-beside `demand`; `GN_LISTS` for parallel lists; any string under a `ba:` key) is
+beside `slug`, `type`/`sub` beside `typeSlug` (never `name`, which beside a type is a
+business the player or a rival named), `label`/`role` beside `skill`, `label` beside
+`demand`, `where` beside `hood`, `workstation` beside `workstationKey`; `GN_LISTS` for parallel lists; any string under a `ba:` key) is
 swapped only while it still reads as that key's English name, and `gnUnkeyed()` takes
 the few fields Python sends with no key, by the kind of name each holds. Every string
 passes `gnString()` on the way, the one place a name inside a sentence is swapped.
