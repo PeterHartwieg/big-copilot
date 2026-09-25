@@ -452,7 +452,7 @@ class FindingsHalfB(unittest.TestCase):
         found, _ = self.rows()
         text = {plain(r["text"]) for r in found}
         for want in (
-            "Item 18 import is paused: 1 days left at 40/day",
+            "Item 18 import is paused: 1 day left at 40/day",
             "Item 19 import is paused: 2 days left at 40/day",
             "Item 22 orders 1,300 a week against a 2,800 week of use, 1,500 short; already runs dry on Tuesday, "
             "2.2 days before Monday's import",
