@@ -29,6 +29,8 @@ Everything else:
   `tools/wiki_sample.json` and the hand-written articles in `tools/wiki_topics.json`.
   `tools/` also holds the GLM launcher, `tools/Invoke-ZaiClaude.ps1`, which is nothing to do
   with the wiki
+- static wiki pages for search engines (`/wiki/...`, the sitemap, robots.txt):
+  `tools/wiki_pages.py`, from `web/wiki-data.json`
 - location finder: `web/map.js` hosts it as a mode of the Map page, over the `premises`
   payload key from `_premises()` in `ba_dashboard.py`
 - community API: `server/`, `migrations/`, `web/community.js`
@@ -47,6 +49,7 @@ side and rebuild — the rebuild is the resolution.
 | --- | --- |
 | `web/index.html`, `web/version.json`, `web/py/ba_dashboard.py`, `web/py/ba_save.py`, `web/py/ba_buildings.json`, `web/py/ba_demand_curves.json` | `python build_web.py` |
 | `web/py/gametext.json`, `web/wiki-data.json` | `python build_web.py`, which needs the installed game |
+| `web/wiki/**/index.html`, `web/sitemap.xml`, `web/robots.txt` | `python build_web.py`, from the committed `web/wiki-data.json` through `tools/wiki_pages.py`; `python tools/wiki_pages.py` alone needs no game |
 | `web/maps/locations.json`, `web/maps/map-background.svg` | `export_map.py`, from private geometry; owner only |
 | `ba_buildings.json` | `make_buildings.py` |
 | `ba_demand_curves.json` | `make_demand_curves.py`, which reads the installed game's Addressables bundles with UnityPy; owner only |
