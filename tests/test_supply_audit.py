@@ -161,7 +161,7 @@ class ProductionLimitTests(unittest.TestCase):
     def test_without_the_limit_the_same_line_is_not_drawing(self):
         need = self.run_limited({}).need()
         self.assertEqual((need["status"], need["why"], need["level"]), ("stalled", "notDrawn", "warn"))
-        # A limit set but not reached, with nothing measured leaving: still not reaching the line.
+        # A limit set but not reached, with nothing measured leaving: still not reaching the factory.
         need = self.run_limited({"produceUpTo": True, "produceUpToValue": 500}, beer=400).need()
         self.assertEqual(need["why"], "notDrawn")
 
