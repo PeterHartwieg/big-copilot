@@ -33,6 +33,12 @@ const CONVERTED = {
   foot: '.sitefoot',
   /* A finding's headline and its detail, on Today and in the site panel. */
   f: '.find .what, .find .more, .sp-find .what, .sp-find .more',
+  /* Today's own words: the tiles, the list's head and count lines, each
+     finding's figure, the silenced line and the Next moves cards. The
+     finding sentences are Python's (f); the kinds panel is left out, as its
+     rows are the kinds' names (nav) and it redraws each time it opens, and so
+     is Ask the board under Next moves (the search palette's). */
+  today: '#kpis, #alertHead, #alerts .amt, #alertMinor .td-count, #silenced, #secMoves h2, #secMoves .moves',
 };
 const MEASURED = 'button, .chip, .seg a, th, .tile .lab';
 
@@ -110,7 +116,8 @@ test('?ui=de reaches the board: Python\'s messages in the table, and their Engli
     const cap = ttPayload({limit: 'the building', i18n: wire});
     return [row.text !== enOf(row, 'text'), findingAmount(row), cap.limit !== 'the building', spLimitShow(cap, {})];
   });
-  assert.deepEqual(read, [true, '1,500<small>units short</small>', true, 'door']);
+  // The figure is read out of the English and written in the page's numbers.
+  assert.deepEqual(read, [true, `1.500<small>${TABLE['today.amt.unitsShort']}</small>`, true, 'door']);
   // Numbers follow the UI language, on the board and in tt(); back in English, en-US again.
   assert.deepEqual(await page.evaluate(() => [NUM_LOCALE, fmt(1234.4), tt('f.x', '{n:,}', {n: 1234})]),
     ['de-DE', '$1.234', '1.234']);
