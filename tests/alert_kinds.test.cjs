@@ -127,6 +127,9 @@ test('the count lines say which is which', () => {
 const KINDS = source.slice(source.indexOf('const ALERT_GROUPS = ['),
   source.indexOf('/* The control that opens the panel'));
 const kinds = vm.createContext({});
+/* web/i18n.js runs ahead of the board script on the page: the kinds' labels
+   are read through its tt(). */
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8'), kinds);
 vm.runInContext(KINDS, kinds);
 const run = expr => JSON.parse(vm.runInContext(`JSON.stringify(${expr})`, kinds));
 
@@ -215,7 +218,8 @@ test('a cut at a comma leaves the variant bracket whole in the detail', () => {
 /* The renames of R12 change what a kind is called, never its id: the id is
    what a stored switch is keyed by, so a player's choices carry over. */
 test('idle stock has one name, and a renamed kind keeps its id', () => {
-  const kind = id => (source.match(new RegExp(`\\{id:"${id}",\\s*label:"([^"]+)"`)) || [])[1];
+  // The label's English, beside its key: get label(){ return tt("nav.kind.dead.label", "Idle stock"); }
+  const kind = id => (source.match(new RegExp(`\\{id:"${id}",\\s*get label\\(\\)\\{ return tt\\("[^"]+", "([^"]+)"`)) || [])[1];
   // A depot's idle group on Supply (R13) and the finding kind share one name.
   const group = (source.match(/slug: null, item: "([^"]+)", fact: kids\[0\]\.fact/) || [])[1];
   assert.equal(kind('dead'), 'Idle stock');

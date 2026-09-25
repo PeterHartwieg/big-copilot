@@ -20,18 +20,41 @@ import ba_dashboard
 from ba_dashboard import Msg, _alerts, _wire_msgs, msg, plain, tok
 from test_site_panel_fields import stub
 from tests import roster_fixture, theatre_fixture
+from tests.game_names_fixture import fixture as game_names_fixture
 from tests.es3_fixture import link_payload, write_link_save
 
 SUPPLY = {"graph": {"links": []}, "shops": [], "idle": [], "imports": []}
 
 # The areas whose Python prose is converted to msg(), and where that prose
-# sits in the payloads below: (payload, path to a list of rows, field). A
-# conversion pull request adds its area here, and from then on every such
-# sentence in the fixtures has to reach the page as a message, not as a plain
-# string that stays English. None is converted yet: PR 1 is the machinery,
-# with f.loss and f.staff.none as its worked example (tested on their own).
+# sits in the payloads below: (payload, path to a list of rows, field[, which
+# rows]). A conversion pull request adds its area here, and from then on every
+# such sentence in the fixtures has to reach the page as a message, not as a
+# plain string that stays English.
+#
+# The findings are converted in two halves: _alerts() and _shelf_notes() (5a),
+# then the helpers after _shelf_notes() (5b). Until both are in, only the kinds
+# the first half alone writes are held to it, with every summary line and unit;
+# "staff", "outruns" and "wholesale" are written by both halves.
+FINDINGS_5A = {
+    "notrading", "vacant", "loss", "satisfaction", "uniform", "bathroom", "toiletprivacy", "sink",
+    "music", "interior", "jobdemand", "companydemand", "promotion", "hype", "trend", "atcap",
+    "idlestaff", "unplanned",
+}
+
+
+def findings_5a(row, field):
+    if field == "text" and "detail" in row:
+        return True  # a summary line (_condense)
+    if field == "unit":
+        return bool(row.get("unit"))
+    if field == "site":
+        return row.get("siteKey") is None and row.get("group") in FINDINGS_5A
+    return row.get("group") in FINDINGS_5A
+
+
 CONVERTED = {
-    # "f": [("es3", "alerts", "text"), ("es3", "alerts", "detail"), ...],
+    "f": [(name, "alerts", field, findings_5a)
+          for name in ("es3", "game_names") for field in ("text", "unit")],
     # Today writes its own words in the page (tt()); Python sends it numbers only.
     "today": [],
 }
@@ -52,10 +75,11 @@ def rows_at(payload, path):
     return [r for r in here if isinstance(r, dict)]
 
 
-def uncovered(payload, path, field):
+def uncovered(payload, path, field, which=None):
     """The rows whose `field` reaches the page as a plain English string."""
     return [r[field] for r in rows_at(payload, path)
-            if isinstance(r.get(field), str) and field not in (r.get("i18n") or {})]
+            if (which is None or which(r, field))
+            and isinstance(r.get(field), str) and field not in (r.get("i18n") or {})]
 
 
 def fixtures():
@@ -69,6 +93,7 @@ def fixtures():
         "es3": es3,
         "theatre": _wire_msgs({"hourFindings": theatre["findings"], "hours": [theatre["grid"]]}),
         "roster": _wire_msgs({"staffing": list(roster_fixture.rows().values())}),
+        "game_names": _wire_msgs(game_names_fixture()["payload"]),
     }
 
 
@@ -193,7 +218,7 @@ class WorkedExample(unittest.TestCase):
         self.assertEqual(row["text"], "Lost $1,234 yesterday")
         self.assertEqual((row["text"].key, row["text"].p), ("f.loss", {"w": 1234.4}))
         _wire_msgs(row)
-        self.assertEqual(row["i18n"], {"text": ["f.loss", {"w": 1234.4}]})
+        self.assertEqual(row["i18n"], {"text": ["f.loss", {"w": 1234.4}], "unit": ["f.unit.loss", {}]})
 
     def test_no_staff_reads_as_it_did_and_carries_its_message(self):
         row = self.lines(staff=0, revenue=10.0)["staff"]
@@ -254,14 +279,49 @@ class PageTests(unittest.TestCase):
         self.assertEqual(got, {"lang": "de", "table": shipped} if shipped else None)
 
 
+class FindingsHalfA(unittest.TestCase):
+    """The kinds the fixtures do not raise, and the synthetic sites ("2 shops",
+    "Company"): every sentence, pill and unit a message."""
+
+    def test_every_row_of_the_first_half_is_a_message(self):
+        shop = lambda k, name, **o: stub(k, name, "retail", **{"revenue": 10.0, "promotion": 100, **o})
+        businesses = [
+            stub("k0", "New", "retail", opened=59, staff=0),
+            stub("k1", "Lease", "vacant"),
+            shop("k2", "A", promotion=60, traffic=40, marketingIndex=20, customers=3, profit=-50.0, costCentre=False,
+                 satisfaction={"overall": 70}, uniformGaps=["Cashier"], uniformGapSkills=["ba:skill_customerservice"],
+                 staffLacking=2, staffLackingCompany=1, quitWarnings=1, staffDemands=[
+                     {"slug": "ba:jobdemand_fulltime", "demand": "Full-time", "count": 2, "priority": 2,
+                      "company": False, "workedOver": {"count": 1, "max": 50, "unit": "hours"}},
+                     {"slug": "ba:jobdemand_silverhealthinsurance", "demand": "Health insurance", "count": 1,
+                      "priority": 1, "company": True}]),
+            shop("k3", "B", promotion=70, traffic=50, marketingIndex=20, customers=3, missingUniformLocker=True),
+        ]
+        trends = [{"s": 2, "ready": True, "change": -0.3, "last7": 700.0, "prev7": 1000.0}]
+        cap = {"kind": "cap", "limit": "staffing", "cap": 30, "when": "Mon 12", "hours": 2, "throughput": 50.0,
+               "fix": "more staff"}
+        hours = [dict(cap, key="k2", site="A"), dict(cap, key="k3", site="B")]
+        out = _wire_msgs(_alerts(businesses, SUPPLY, [], trends, [], hours, [], 60, 0.0))
+        rows = out["lines"] + out["minor"]["rows"]
+        self.assertTrue({"notrading", "vacant", "loss", "satisfaction", "uniform", "jobdemand", "companydemand",
+                         "promotion", "trend", "atcap"} <= {r["group"] for r in rows})
+        for r in rows:
+            with self.subTest(group=r["group"], text=r["text"]):
+                self.assertIn("text", r["i18n"])
+                if r["siteKey"] is None:
+                    self.assertIn("site", r["i18n"])
+                if r["unit"]:
+                    self.assertIn("unit", r["i18n"])
+
+
 class Coverage(unittest.TestCase):
     def test_every_converted_area_reaches_the_page_as_messages(self):
         payloads = fixtures()
         for area, places in CONVERTED.items():
-            for name, path, field in places:
+            for name, path, field, *which in places:
                 with self.subTest(area=area, payload=name, path=path, field=field):
                     self.assertTrue(rows_at(payloads[name], path), f"{name} has nothing at {path}")
-                    self.assertEqual(uncovered(payloads[name], path, field), [],
+                    self.assertEqual(uncovered(payloads[name], path, field, *which), [],
                                      "a sentence of a converted area lost its message (a + or .replace()?)")
 
     def test_the_coverage_check_finds_a_sentence_that_lost_its_message(self):
