@@ -1473,6 +1473,9 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
     ledger = history.ledger(character, day, entry)
     history.write()
     gate = max(profit_avg7 * MATERIAL_SHARE, MATERIAL_FLOOR)
+    # Staffing for factory lines, in each sizing; takes the lines' _posts.
+    factory_staffing = _factory_staffing(
+        save, names, businesses, supply.get("factories", {}), staff)
     alerts = _alerts(
         businesses, supply, chains, trends, hype, hour_findings, grids, day, gate
     )
@@ -1539,6 +1542,7 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         "hours": grids,
         "hourFindings": hour_findings,
         "staffing": staffing,
+        "factoryStaffing": factory_staffing,
         "plan": plan,
         # Every item name the text knows, so a material that no recipe or shop
         # line mentions is still named where the tables list it.
@@ -4944,6 +4948,45 @@ def _recipe_identity(rid: str | None, station: str, recipes: dict, chosen: dict)
     return None, None
 
 
+def _line_hours(posted: list, machines: int, rate: float, dem_makes: float, basis: str) -> dict:
+    """A factory line's hours: rostered now, and needed in each sizing.
+
+    `hoursNow` is the fewest hours a day any of its machines is rostered on
+    any weekday. 24/7 needs every machine all 24; Demand the hours that make
+    what the ends draw plus the margin once (`dem_makes` a day), never past
+    24, and 24 where nothing is drawn (`demBasis` "none"). Too few hours is
+    short (why hours: critical below STAFF_CRITICAL of the week on its
+    least-staffed machine, else warn). More than Demand needs is covered, with
+    `lower` as a suggestion, never a change. `_posts`, the machines' item ids
+    by list position, is for _factory_staffing() and leaves the payload there.
+    """
+    posted = sorted(posted, key=lambda m: (m["slot"], str(m["id"])))
+    now = min((min(m["days"]) for m in posted), default=0)
+    weekly = min((sum(m["days"]) for m in posted), default=0)
+    dem = 24
+    if basis == "sales" and rate and machines:
+        dem = min(24, math.ceil(round(dem_makes * (1 + SUPPLY_MARGIN) / (rate * machines), 6)))
+
+    def verdict(need):
+        if now < need:
+            level = "critical" if weekly < need * 7 * STAFF_CRITICAL else "warn"
+            return {"status": "short", "why": "hours", "level": level}
+        out = {"status": "covered", "why": None, "level": "ok"}
+        if now > need:
+            out["lower"] = need
+        return out
+
+    return {
+        "hoursNow": now,
+        "needHours": {"cap": 24, "dem": dem},
+        "demBasis": basis,
+        "running": sum(m["running"] for m in posted),
+        **verdict(24),
+        "dem": verdict(dem),
+        "_posts": [m["id"] for m in posted],
+    }
+
+
 def _factories(
     save: Save,
     names: Names,
@@ -4972,6 +5015,9 @@ def _factories(
     # produceUpToValue; the save leaves out a false one): the game stops the
     # machine once the factory holds that many of what it makes.
     limits = collections.defaultdict(lambda: collections.defaultdict(list))
+    # Each machine's item id and its rostered hours per weekday, for the line's
+    # hours now, what runs, and the factory roster (_factory_staffing).
+    posted = collections.defaultdict(lambda: collections.defaultdict(list))
     for building in save.items(save.root["BuildingRegistrations"]):
         if not building.get("RentedByPlayer"):
             continue
@@ -5003,6 +5049,12 @@ def _factories(
             roster[key][line].append(
                 {"slot": slot, "hours": len(covered[post]), "off": _off_hours(covered[post])}
             )
+            posted[key][line].append({
+                "slot": slot, "id": post,
+                "days": [sum(1 for w, _h in covered[post] if w == wd) for wd in range(7)],
+                # Running: a recipe chosen and somebody posted at some hour.
+                "running": line[1] is not None and bool(covered[post]),
+            })
     if not machines or not recipes:
         # No line can be read (no machines, or no recipe pages to read them
         # with), but current import contracts and recorded outflow are known.
@@ -5173,12 +5225,13 @@ def _factories(
             # more: an export, a factory it feeds), this line's share of it,
             # never past capacity. With nothing drawn or shipped there is no
             # demand to read, and the line is taken at capacity.
-            dem_makes, ramp = makes, ()
+            dem_makes, ramp, dem_basis = makes, (), "none"
             if demand:
                 wanted, ramp = demand(key, slug)
                 wanted = max(wanted, ships)
                 if wanted > 0 and capacity[slug]:
                     dem_makes = min(makes, wanted * makes / capacity[slug])
+                    dem_basis = "sales"
             limit = line_limit(key, (station, rid))
             make_back = min(ships, makes / 24 * hours_today, (limit or 0) * LIMIT_SLACK)
             limit_held = limit is not None and stock > 0 and stock >= limit - make_back
@@ -5203,6 +5256,7 @@ def _factories(
                     "limitHeld": limit_held,
                     "atRoster": round(makes * share),
                     **staffing,
+                    **_line_hours(posted[key][(station, rid)], n, rec["out"], dem_makes, dem_basis),
                 }
             )
             made_by[slug].add(key)
@@ -5334,6 +5388,9 @@ def _factories(
             {
                 "s": index[key],
                 "machines": sum(counter.values()),
+                # Placed is `machines`; running, those with a recipe and
+                # somebody posted at some hour.
+                "running": sum(m["running"] for line in posted[key].values() for m in line),
                 "lines": lines,
                 "unnamed": unnamed,
                 "needs": list(needs.values()),
@@ -7213,8 +7270,8 @@ def _staffing(
 ) -> list:
     """A roster the player can type in, one row per retail site.
 
-    Retail only in v1: an office's need is exact and a factory's is already
-    modelled, and both are deferred (scope section 9). The plan replaces a
+    Retail only: an office's need is exact and deferred (scope section 9); a
+    factory's roster is _factory_staffing(), through the same placer. The plan replaces a
     site's whole schedule rather than patching it, which is why cleaning and
     security shifts are reproduced here too — clearing wipes them, and the
     player would otherwise lose cleanliness and security without being told.
@@ -7375,6 +7432,163 @@ def _full_need(grid: dict) -> dict:
 # the shop is shut is an hour the demand test never measures, so opening every
 # day around the clock is the plan's first step, not an option beside it.
 ALL_DAY_OPEN = [[[0, 24]] for _ in range(7)]
+
+
+FACTORY_SKILL = "ba:skill_factoryworker"
+FACTORY_RUN_START = 6  # where a shorter run sits when nobody's demands decide it
+
+
+def _factory_run_start(hours: int, pool: list) -> int:
+    """Where a line's daily run of `hours` starts: around the workers' demands.
+
+    Every start from 0 to 24 - hours (a run never wraps past midnight) is cut
+    as the placer cuts it (_cut_run), and scored by how many of the pool could
+    take each piece without it touching one of their blackout windows. The
+    best score wins; a tie goes to the start closest to FACTORY_RUN_START, then
+    the earliest. A factory has no customer curve, so with nobody's demands
+    in play every run starts at 06:00.
+    """
+    if hours >= 24:
+        return 0
+    best = None
+    for start in range(0, 25 - hours):
+        score = sum(
+            1
+            for low, high in _cut_run(start, start + hours)
+            for person in pool
+            if not any(a < high and low < b for a, b in person["blackouts"])
+        )
+        rank = (-score, abs(start - FACTORY_RUN_START), start)
+        if best is None or rank < best[0]:
+            best = (rank, start)
+    return best[1]
+
+
+def _factory_staffing(save: Save, names, businesses: list, factories: dict, staff: list) -> dict:
+    """Staffing for factory lines, once per sizing: {cap: [row], dem: [row]}.
+
+    The shop roster's placer (_place_week) over a synthetic grid: one role,
+    Factory Worker, one station per machine, open around the clock, with no
+    cleaning or security. Each line runs its needed hours a day (24 sized
+    24/7, `needHours.dem` sized for demand) as one run from
+    _factory_run_start(), cut into shifts of at most 12 hours. The pool is the
+    factory's own staff, nobody unassigned. `headcount.needed` is the week's
+    machine-hours; `wageDay` the mean day's wage of the factory's factory
+    workers; `delta` what hiring the plan's `hire` and letting its `spare` go
+    does to the headcount and the day's wage bill. A factory the placer falls
+    over on is one `failed` row, as a shop is in _staffing().
+
+    Takes each line's `_posts` (its machines' item ids) off the payload.
+    """
+    sites = factories.get("sites", [])
+    posts_of = {}
+    for site in sites:
+        for line in site["lines"]:
+            posts_of[(site["s"], line["slug"])] = line.pop("_posts", [])
+    people = _plan_people(save, staff)
+    label = names.label(FACTORY_SKILL) if names else FACTORY_SKILL
+    out = {mode: [] for mode in SIZING_MODES}
+    for site in sites:
+        business = businesses[site["s"]]
+        pool = [p for p in _site_pool(people, business, []) if _usable(p, FACTORY_SKILL, "serve")]
+        workers = [
+            p for p in staff
+            if p["addr"] and site_key(p["addr"]) == business["key"]
+            and FACTORY_SKILL in (p["skills"] or ())
+        ]
+        wage_day = money(sum(p["daily"] for p in workers) / len(workers)) if workers else 0.0
+        for mode in SIZING_MODES:
+            try:
+                row = _factory_site_plan(site, business, posts_of, pool, people, mode, label,
+                                         names, wage_day)
+            except Exception:
+                row = {"key": business["key"], "s": site["s"], "name": business["name"],
+                       "failed": True}
+            if row is not None:
+                out[mode].append(row)
+    return out
+
+
+def _factory_site_plan(site, business, posts_of, pool, people, mode, label, names, wage_day):
+    """One factory's row of _factory_staffing() in one sizing, or None with no line."""
+    stations, runs, lines = [], {}, []
+    for line in site["lines"]:
+        posts = posts_of.get((site["s"], line["slug"])) or []
+        hours = line["needHours"][mode]
+        if not posts or not hours:
+            continue
+        start = _factory_run_start(hours, pool)
+        for position, post in zip(line["slots"], posts):
+            runs[len(stations)] = [set(range(start, start + hours)) for _ in range(7)]
+            stations.append({"id": post, "skill": FACTORY_SKILL, "rate": 1,
+                             "name": f"{line['item']}, position {position}"})
+        lines.append({
+            "slug": line["slug"], "item": line["item"], "machines": line["machines"],
+            "hoursNow": line["hoursNow"], "hours": hours, "from": start, "to": start + hours,
+            "cuts": [list(cut) for cut in _cut_run(start, start + hours)],
+        })
+    if not lines:
+        return None
+    grid = {"roles": [{"skill": FACTORY_SKILL, "label": label}], "stations": stations}
+    need = {FACTORY_SKILL: {
+        "need": [[sum(1 for days in runs.values() if hour in days[wd]) for hour in range(24)]
+                 for wd in range(7)],
+        "stations": runs,
+    }}
+    # The fewest of the factory's own workers that cover the week. The placer
+    # spreads a week over everybody it is given, so it is given the least
+    # ceil(machine-hours / 50) first, and one more while a line is left with
+    # nobody on it: whoever it is not given is spare. Those whose blackout
+    # windows touch the fewest shifts are kept first, then the pool's order.
+    pieces = [cut for line in lines for cut in line["cuts"]]
+    ranked = sorted(
+        enumerate(pool),
+        key=lambda entry: (
+            sum(1 for low, high in pieces for a, b in entry[1]["blackouts"]
+                if a < high and low < b),
+            entry[1]["weekendsOff"],
+            entry[1]["days"] is not None,
+            entry[0],
+        ),
+    )
+    ranked = [person for _index, person in ranked]
+    needed = sum(len(hours) for days in runs.values() for hours in days)
+    for count in range(min(math.ceil(needed / FULL_TIME[1]), len(ranked)), len(ranked) + 1):
+        trial = ranked[:count]
+        state = {person["id"]: _fresh_state() for person in trial}
+        week = _place_week(grid, need, ALL_DAY_OPEN, [], trial, people, business, [], state)
+        if all(shift["employee"] is not None for shift in week["shifts"]):
+            break
+    table = _index_table(stations, (week["shifts"],),
+                         (week["shifts"], week["shortHours"], week["placed"]), people)
+    count = week["headcount"][FACTORY_SKILL]
+    worked = {shift["employee"] for shift in week["shifts"] if shift["employee"] is not None}
+    headcount = {"needed": count["needed"], "min": count["min"], "have": len(pool),
+                 "spare": len(pool) - len(worked), "hire": count["hire"]}
+    workers = headcount["hire"] - headcount["spare"]
+    return {
+        "key": business["key"],
+        "s": site["s"],
+        "name": business["name"],
+        "lines": lines,
+        "headcount": headcount,
+        "wageDay": wage_day,
+        "delta": {"workers": workers, "perDay": money(workers * wage_day)},
+        "stations": table["stations"],
+        "people": table["people"],
+        "shifts": [_shift_row(shift, table) for shift in week["shifts"]],
+        "placed": [
+            {"p": table["person"][r["employee"]], "demand": r["demand"],
+             "label": names.label(r["demand"]) if names else r["demand"],
+             "wd": r["wd"], "from": r["from"], "to": r["to"]}
+            for r in week["placed"]
+        ],
+        "shortHours": [
+            {"p": table["person"][r["employee"]], "hours": r["hours"], "min": r["min"],
+             "planned": r["planned"]}
+            for r in week["shortHours"]
+        ],
+    }
 
 
 # How many finished days since the shop first opened make the demand data good
@@ -7604,7 +7818,13 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
         skill = role["skill"]
         posts = [s for s in grid["stations"] if s["skill"] == skill]
         role_wages[skill] = _role_wage(people, business, bench, skill)
-        wanted[skill] = _cover_runs(
+        # A factory hands each machine's hours over itself (`stations`, see
+        # _factory_staffing()); a shop's come from its need curve. Copied,
+        # because the bridging below writes into them.
+        stations = need[skill].get("stations")
+        wanted[skill] = {
+            index: [set(hours) for hours in days] for index, days in stations.items()
+        } if stations else _cover_runs(
             need[skill]["need"], [s["rate"] for s in posts], open_hours
         )
     required = sum(
@@ -10236,7 +10456,7 @@ def _alerts(
 
     found.extend(_idle_notes(businesses, supply["idle"], silent, mode))
     found.extend(_feed_notes(businesses, supply.get("factories", {}), silent, mode))
-    found.extend(_staff_notes(businesses, supply.get("factories", {}), silent))
+    found.extend(_staff_notes(businesses, supply.get("factories", {}), silent, mode))
     found.extend(_unnamed_notes(businesses, supply.get("factories", {}), silent))
     return _condense(found, gate)
 
@@ -10508,8 +10728,13 @@ def _unnamed_notes(businesses: list, factories: dict, silent: set) -> list:
     return notes
 
 
-def _staff_notes(businesses: list, factories: dict, silent: set) -> list:
-    """A factory machine nobody is posted to for part of the week stands still."""
+def _staff_notes(businesses: list, factories: dict, silent: set, mode: str = "cap") -> list:
+    """A factory machine nobody is posted to for part of the week stands still.
+
+    Sized 24/7 a machine needs all STAFF_HOURS of the week; sized for demand a
+    named line's machine needs only its `needHours.dem` a day, so it is a gap
+    only below that week. The finding's id does not change with the mode.
+    """
     notes = []
     for site in factories.get("sites", []):
         business = businesses[site["s"]]
@@ -10517,13 +10742,20 @@ def _staff_notes(businesses: list, factories: dict, silent: set) -> list:
             continue
         for line in site["lines"] + site["unnamed"]:
             name = line.get("item") or line["workstation"]
+            week = STAFF_HOURS
+            if mode == "dem" and line.get("needHours"):
+                week = line["needHours"]["dem"] * 7
             for machine in line.get("gaps", []):
-                share = machine["hours"] / STAFF_HOURS
-                lost = round((STAFF_HOURS - machine["hours"]) / 7 * line.get("rate", 0))
+                if machine["hours"] >= week:
+                    continue
+                share = machine["hours"] / week
+                lost = round((week - machine["hours"]) / 7 * line.get("rate", 0))
                 subject = f"{name} at position {machine['slot']}"
                 text = (
                     f"{name} machine at list position {machine['slot']} is staffed "
-                    f"{machine['hours']} of {STAFF_HOURS} hours; nobody on it {machine['off']}"
+                    f"{machine['hours']} of {week} hours"
+                    + (" needed" if week < STAFF_HOURS else "")
+                    + f"; nobody on it {machine['off']}"
                     + (f"; {lost:,} a day not made" if lost else "")
                 )
                 notes.append(
