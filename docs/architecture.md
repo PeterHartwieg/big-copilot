@@ -597,7 +597,11 @@ polls `version.json` with `cache: "no-store"`, and `web/community.js` calls
 `/api/community/*`. Nothing comes from another origin: `TEMPLATE` links Google Fonts for
 the local `dashboard.html`, but `build_web.py` swaps those links for the site's own copies
 in `web/fonts/`, so the privacy notice (`web/privacy.html`) can name Cloudflare as the
-only party that sees a request. `tests/test_privacy_promises.py` holds the site to that.
+only party that sees a request. `tests/test_privacy_promises.py` holds the site to that,
+and the Content-Security-Policy in `web/_headers` enforces it in the browser: only this
+site, plus the game link on `http://127.0.0.1:*` and `http://localhost:*`. A new fetch
+target, script or image source has to be added there too; `tests/test_headers.py` reads
+the policy and `tests/csp.test.cjs` boots Pyodide and the game link under it.
 
 Order matters. `BEFORE_SCRIPT` must stay ahead of the board script, or the board falls back
 to fetching `data.json` from a site that has no such route.
@@ -896,7 +900,10 @@ because a deploy from a checkout that lacks them would remove them from the site
 files from `https://cdn.jsdelivr.net/pyodide/v<version>/full/` into a new version folder,
 change `PYODIDE_VERSION` in `web/worker.js`, and delete the old folder.
 
-Everything else it fetches is same-origin, from `web/py/`, carrying the page's build stamp:
+Everything else it fetches is same-origin, from `web/py/`, carrying the page's build stamp.
+Because every one of those files is a stamp input, `web/_headers` caches `/py/*` as
+immutable and the worker fetches with the browser's default cache (`no-store` only for
+the unstamped `dev` build):
 
 - `ba_save.py` and `ba_dashboard.py` — a failed fetch throws and the worker never becomes
   ready.
