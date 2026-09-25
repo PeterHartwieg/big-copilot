@@ -14610,7 +14610,9 @@ body:has(#changelogDialog[open]){overflow:hidden}
 .hs-num button{border:0;background:none;color:var(--ink-2);font:500 16px/1 Archivo,sans-serif;cursor:pointer}
 .hs-num button:hover{background:var(--raised);color:var(--ink)}
 .hs-num button:disabled{opacity:.35;cursor:default;background:none}
-.hs-num b{display:grid;place-items:center;font:500 14px/1 "IBM Plex Mono",monospace;outline:none}
+.hs-num b{display:grid;place-items:center;font:500 14px/1 "IBM Plex Mono",monospace;outline:none;border-radius:6px}
+.hs-num b:focus-visible{box-shadow:inset 0 0 0 2px var(--accent)}
+.hs-held{color:var(--info)}
 .hs-match{font-size:13px;color:var(--ink-2)}
 .hs-match.none{margin:0;color:var(--ink-3)}
 .hs-match .warn{color:var(--warn)}
@@ -22527,7 +22529,9 @@ function hrOrderHtml(m, t){
   const under = !l ? `<div class="hs-gate"><b>Link the game to hire</b><ol><li>Subscribe to Big Copilot Link (Steam Workshop)</li><li>Load this company in the game</li><li>Link from the start screen</li></ol></div>`
     : old ? `<div class="hs-gate warn"><b>Update Big Copilot Link to 0.3.0</b><span>${l.mod ? `You have ${spEsc(l.mod)}. ` : ""}Restart the game, then link again.</span></div>`
     : n ? `<p class="hs-note">Picked for you. You confirm next.</p>` : "";
-  return `<h3>When you hire</h3><ul class="hs-ol">${items}</ul>
+  const Q = m.quick;
+  const held = Q && Q.hold && Q.held ? `<p class="hs-note hs-held">${hrNum(Q.held)} ${Q.held === 1 ? "week" : "weeks"} held for Quick hire (${hrRole(Q.q.skill)} at ${spEsc(hrSiteName(Q.S))})</p>` : "";
+  return `<h3>When you hire</h3><ul class="hs-ol">${items}</ul>${held}
     <div class="hs-sum"><span>Added wages</span><b>+${fmt(t.bill)}/day</b></div>${btn}${under}`;
 }
 
@@ -22596,7 +22600,7 @@ function hrRepaint(focus, parts){
 }
 const hrKey = el => {
   for(const a of ["data-hr-open", "data-hr-pick", "data-hr-move", "data-hr-scope", "data-hs-dem-open", "data-hr-min", "data-hr-max",
-                  "data-hq-role", "data-hq-site", "data-hq-min", "data-hq-less", "data-hq-more"])
+                  "data-hq-role", "data-hq-site", "data-hq-min", "data-hq-less", "data-hq-more", "data-hq-n"])
     if(el.hasAttribute(a)){
       const v = el.getAttribute(a);
       const box = el.closest("[data-hr-filters]");
@@ -22627,7 +22631,9 @@ function hrCandRow(m, r, c){
   const dem = (c.demands || []).map(d => warned.has(d) ? `<span class="warn">${hrName(d)} (${hrWhy(m, d, S, wk)})</span>` : hrName(d)).join(", ");
   /* On a phone Asks for is hidden: the unmet ones go under the name. */
   const why = [...warned.keys()].map(d => `${hrName(d)} (${hrWhy(m, d, S, wk)})`).join(", ");
+  const noShop = !picked && !elsewhere && r.pt && r.shop && !r.allShop && hrAsksPt(c);
   const to = elsewhere ? `<span class="dim">picked for ${spEsc(hrSiteName(elsewhere))}</span>`
+    : noShop ? `<span class="dim">not for shop weeks (Part-time)</span>`
     : S ? `${spEsc(hrSiteName(S))}${at.over ? ` <span class="warn">over the plan</span>` : ""}` : `<span class="dim">–</span>`;
   const soon = Number(c.hoursLeft) < 24;
   return `<tr class="${picked ? "on" : ""}" data-hr-cand="${attr(c.id)}">
@@ -22739,9 +22745,14 @@ function hrPopDraw(m){
   const host = anchor.closest("dialog") || document.body;
   if(pop.parentElement !== host) host.appendChild(pop);
   const had = document.activeElement && pop.contains(document.activeElement) ? document.activeElement.getAttribute("data-hr-dem") : null;
+  /* The company's Part-time counts at shops only: said so, and a role with no
+     shop week cannot change it from its own list. */
+  const company = f === hrFilters().company;
+  const r = hrPop.target && hrPop.target !== "quick" ? m.roles.find(x => x.skill === hrPop.target) : null;
+  const fixed = d => company && d === HR_PT && !!r && !r.shop;
   pop.innerHTML = `<div class="ph">Leave out anyone asking for:</div>${few.map(([d, n]) =>
-      `<label class="hs-opt"><input type="checkbox" class="hs-cb" data-hr-dem="${attr(d)}"${f.ex.includes(d) ? " checked" : ""}><span>${hrName(d)}${
-        d === HR_PT && f === hrFilters().company ? ` <small>· shop roles only</small>` : ""}</span><small>${hrNum(n)}</small></label>`).join("")
+      `<label class="hs-opt"><input type="checkbox" class="hs-cb" data-hr-dem="${attr(d)}"${f.ex.includes(d) ? " checked" : ""}${fixed(d) ? " disabled" : ""}><span>${hrName(d)}${
+        company && d === HR_PT ? ` <small>· shop roles only</small>` : ""}</span><small>${hrNum(n)}</small></label>`).join("")
     || `<p class="ph">Nobody asks for anything.</p>`}
     <div class="pf">${few.length < all.length ? `<button type="button" data-hs-dem-all>All ${all.length} demands</button>` : "<span></span>"}<button type="button" data-hs-dem-clear>Clear</button></div>`;
   pop.hidden = false;
@@ -22777,8 +22788,8 @@ function hrPopClose(back){
    role there, which Open places then leaves to it. Past those, and at a site
    with no plan, they join with no hours. The write keeps the site's week as
    the game has it and adds only the new people's shifts (hrQuickRequest()),
-   on the same /write/hire call as the order. Part-time is left out by default
-   at a shop. */
+   on the same /write/hire call as the order, which never changes a shop's
+   opening hours. Part-time is left out by default at a shop. */
 function hrQuickPlan(sites, cands, used){
   const q = hrUi.quick, H = D.hiring || {};
   const skills = [...new Set((H.sites || []).flatMap(s => s.accepts || []))]
@@ -22789,7 +22800,11 @@ function hrQuickPlan(sites, cands, used){
   const S = q.site ? at.find(x => x.key === q.site) : null;
   const shop = !!S && S.site.kind === "shop";
   const ex = q.ex || (shop ? [HR_PT] : []);
-  const out = {q, skills, sites: at, S, shop, ex, ready: !!(q.skill && S), plan: false, matches: [], picks: [], short: 0};
+  /* Its plan weeks are held, and its picks kept from Open places, only while
+     its confirm is open or its write is under way (hrUi.quickHold); a form
+     merely filled in holds nothing. */
+  const hold = !!hrUi.quickHold;
+  const out = {q, skills, sites: at, S, shop, ex, ready: !!(q.skill && S), hold, plan: false, matches: [], picks: [], short: 0, held: 0};
   if(!out.ready) return out;
   out.matches = cands.filter(c => hrLevel(c, q.skill) !== null && hrLevel(c, q.skill) >= q.min
     && !(c.demands || []).some(d => ex.includes(d))).sort(hrRank(q.skill));
@@ -22799,8 +22814,8 @@ function hrQuickPlan(sites, cands, used){
   out.picks = out.matches.slice(0, q.n).map(c => {
     const fails = x => (c.demands || []).filter(d => hrKind(d) === "schedule" && hrBreaks(d, x.w, S.row));
     const wk = open.find(x => !fails(x).length) || open[0] || null;
-    if(wk){ open.splice(open.indexOf(wk), 1); wk.who = {type: "quick", c}; }
-    used.set(c.id, S);
+    if(wk){ open.splice(open.indexOf(wk), 1); if(hold){ wk.who = {type: "quick", c}; out.held++; } }
+    if(hold) used.set(c.id, S);
     return {c, w: wk ? wk.w : null, misfit: wk ? fails(wk) : []};
   });
   out.short = Math.max(0, q.n - out.matches.length);
@@ -22837,14 +22852,16 @@ function hrQuickRequest(Q){
     hours.set(c.id, kept);
   });
   const given = [...hours.values()].filter(h => h > 0).length;
+  /* Picks whose plan week was there but met shifts already in the game. */
+  const clashed = Q.picks.filter(({c, w}) => now && w && !hours.get(c.id)).length;
   const days = [];
   week.forEach(({d, ...x}) => { let day = days.find(y => y.d === d); if(!day) days.push(day = {d, shifts: []}); day.shifts.push(x); });
   days.sort((a, b) => a.d - b.d).forEach(day => day.shifts.sort((a, b) => a.f - b.f || a.t - b.t));
   const site = given
     ? {address: gwAddress(S.key), expect: S.b && typeof S.b.shiftPrint === "string" ? S.b.shiftPrint : null,
-       openAllHours: !!(row.full && !row.openNow), days}
+       openAllHours: false, days}
     : {address: gwAddress(S.key), expect: null, days: null};
-  return {body: {sites: hires.length ? [site] : [], hires, moves: []}, names, hours, given};
+  return {body: {sites: hires.length ? [site] : [], hires, moves: []}, names, hours, given, clashed, now: !!now};
 }
 /* A pick whose plan week breaks one of their schedule demands, in orange. */
 const hrQuickMisfit = misfit => misfit.length ? `<small class="warn">hours break ${misfit.map(hrName).join(", ")}</small>` : "";
@@ -22879,6 +22896,7 @@ function hrQuickHtml(m){
 /* The confirm: the game is asked first, then one Hire. No undo. */
 let hrQuickLast = null;  // {Q, req}
 function hrQuickReview(){
+  hrUi.quickHold = true;
   const build = () => { const Q = hrQuickModel(hrModel()); hrQuickLast = {Q, req: hrQuickRequest(Q)}; return hrQuickLast; };
   build();
   const n = () => hrQuickLast.req.body.hires.length;
@@ -22894,8 +22912,9 @@ function hrQuickReview(){
   /* What the hires' hours are, and that nobody else's change. */
   const hours = () => {
     const {Q, req} = hrQuickLast, k = n();
-    if(!Q.plan) return gwCall("", "clock", "No hours yet: set them in the game.");
-    if(!req.given) return gwCall("", "clock", `No open hours in ${at()}'s plan: they join with no hours.`);
+    if(!Q.plan || !req.now) return gwCall("", "clock", "No hours yet: set them in the game.");
+    if(!req.given) return gwCall("", "clock", req.clashed ? "Their plan hours meet shifts already there: they join with no hours."
+      : `No open hours in ${at()}'s plan: they join with no hours.`);
     const hs = [...req.hours.values()].filter(h => h > 0), lo = Math.min(...hs), hi = Math.max(...hs);
     const each = `${lo === hi ? hrNum(lo) : `${hrNum(lo)}–${hrNum(hi)}`} h a week${req.given > 1 ? " each" : ""}`;
     const none = k - req.given;
@@ -22945,14 +22964,21 @@ function hrQuickReview(){
     },
     /* Who the game hired is staff now: left out of both pickers until the
        board reads the game again, so Hire more never offers them. */
-    onDone: answer => { hrHiredAdd((answer.hired || []).map(h => h && h.candidateId)); drawStaff(); },
+    /* Done: the form starts again (its weeks go back to Open places when the
+       confirm closes). */
+    onDone: answer => { hrHiredAdd((answer.hired || []).map(h => h && h.candidateId)); hrUi.quick = hrQuickNew(); },
     more: {label: "Hire more", go: () => {
       if(gwOpen) gwOpen.close();
       const el = document.querySelector("#hsQuick [data-hq-role]");
       if(el) el.focus({preventScroll: true});
     }},
   });
-  if(gwOpen) gwOpen.classList.add("hr-wide");
+  if(gwOpen){
+    gwOpen.classList.add("hr-wide");
+    /* Closed, however: the held weeks go back to Open places. */
+    gwOpen.addEventListener("close", () => { hrUi.quickHold = false; if($("secStaff")) drawStaff(["hsOpen", "hsOrder", "hsQuick"]); });
+  }
+  drawStaff(["hsOpen", "hsOrder", "hsQuick"]);
 }
 /* The filters a control changes: Change picks' role (its own set, when it has
    one), or the company's. */
@@ -23030,7 +23056,7 @@ function bindStaff(){
     if(hrPop.target === "quick"){
       const q = hrUi.quick;
       q.ex = flip(hrQuickModel(hrModel()).ex);
-      hrRepaint(null);
+      hrRepaint(null, ["hsOpen", "hsOrder", "hsQuick"]);
     } else {
       const f = hrFilterTarget(document.querySelector(`[data-hs-dem-open="${CSS.escape(hrPop.target)}"]`) || el);
       f.ex = flip(f.ex);
@@ -23041,9 +23067,12 @@ function bindStaff(){
   on("click", "#hsDemPop [data-hs-dem-all]", () => { if(!hrPop) return; hrPop.all = true; hrPopDraw(); });
   on("click", "#hsDemPop [data-hs-dem-clear]", () => {
     if(!hrPop) return;
-    if(hrPop.target === "quick"){ hrUi.quick.ex = []; hrRepaint(null); }
+    if(hrPop.target === "quick"){ hrUi.quick.ex = []; hrRepaint(null, ["hsOpen", "hsOrder", "hsQuick"]); }
     else {
-      hrFilterTarget(document.querySelector(`[data-hs-dem-open="${CSS.escape(hrPop.target)}"]`) || document.body).ex = [];
+      /* A role with no shop week clears its own list, not the shops' Part-time. */
+      const f = hrFilterTarget(document.querySelector(`[data-hs-dem-open="${CSS.escape(hrPop.target)}"]`) || document.body);
+      const r = hrPop.target ? hrModel().roles.find(x => x.skill === hrPop.target) : null;
+      f.ex = f === hrFilters().company && r && !r.shop ? f.ex.filter(d => d === HR_PT) : [];
       hrFiltersSave();
       hrRepaint(null);
     }
@@ -23070,7 +23099,7 @@ function bindStaff(){
   window.addEventListener("scroll", replace, {passive: true});
   /* Quick hire. */
   /* A quick hire's picks take plan weeks from Open places: all of it again. */
-  const quick = (el, set) => { set(hrUi.quick); hrRepaint(hrKey(el)); };
+  const quick = (el, set) => { set(hrUi.quick); hrRepaint(hrKey(el), ["hsOpen", "hsOrder", "hsQuick"]); };
   on("change", `${page} [data-hq-role]`, el => quick(el, q => { q.skill = el.value; }));
   on("change", `${page} [data-hq-site]`, el => quick(el, q => { q.site = el.value; q.ex = null; }));
   on("change", `${page} [data-hq-min]`, el => quick(el, q => { q.min = Number(el.value) || 0; }));

@@ -861,9 +861,17 @@ test('Quick hire: the best matches for one role at the headquarters, with no hou
   await again.click();
   assert.equal(await page.evaluate(() => !!document.querySelector('dialog.gw-dlg[open]')), false);
   assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.hasAttribute('data-hq-role')), true);
+  // Done: the form starts again, drawn when the dialog's close event lands.
+  await page.waitForFunction(() => !hrUi.quickHold);
+  assert.equal(await box.locator('[data-hq-role]').inputValue(), '');
+  assert.equal(await box.locator('[data-hq-site]').inputValue(), '');
+  assert.equal(await box.locator('[data-hq-n]').textContent(), '1');
+  assert.equal(await box.locator('.hs-match.none').textContent(), 'Pick a role and a site to see who matches.');
   // Hire more does not offer the three just hired while the board is the
   // one they were hired from; the board read again brings back whoever the
   // game still lists.
+  await box.locator('[data-hq-role]').selectOption(HRM);
+  await box.locator('[data-hq-site]').selectOption(Q);
   assert.deepEqual((await quick(page)).matches, ['h4', 'h5']);
   assert.match(await box.locator('[data-hq-list] summary').textContent(), /^2 match/);
   await page.evaluate(p => window.calmWatch.changed(JSON.parse(p)), data);
@@ -893,7 +901,20 @@ test('a live refresh on Staff keeps the focused control', async (t) => {
   assert.equal(await page.evaluate(() => document.activeElement.matches('#hsOpen .hs-fbar[data-hr-filters=""] [data-hr-min]')), true);
 });
 
-test('Quick hire at a shop takes its plan week first, and nobody else\'s hours change', async (t) => {
+// Opens Quick hire's confirm, the game taking everyone, and waits for its answer.
+const quickConfirm = async page => {
+  await answering(page, []);
+  await page.locator('#hsQuick [data-hq-go]').click();
+  await phase(page, 'ready');
+  return page.locator('dialog.gw-dlg');
+};
+const quickClose = async page => {
+  await page.locator('dialog.gw-dlg [data-gw-close]').click();
+  // The dialog's close event releases the hold and redraws the page.
+  await page.waitForFunction(() => !document.querySelector('dialog.gw-dlg[open]') && !hrUi.quickHold);
+};
+
+test('Quick hire at a shop holds its plan week while its confirm is open, and nobody else\'s hours change', async (t) => {
   const page = await board(t);
   const box = page.locator('#hsQuick');
   await box.locator('[data-hq-role]').selectOption(CS);
@@ -901,23 +922,14 @@ test('Quick hire at a shop takes its plan week first, and nobody else\'s hours c
   // A shop: Part-time left out, and the line saying so.
   assert.match(await box.locator('[data-hs-dem-open="quick"]').textContent(), /Part-time/);
   assert.equal(await box.locator('.hs-shops').textContent(), 'Part-time is left out for shop roles only.');
-  // Bram, Open places' pick before, is Quick hire's now, on the week Sam's
-  // reassign leaves; Open places re-picks the next best for what is left.
+  // Bram would take the week Sam's reassign leaves at Gifts; the form alone
+  // holds nothing: Open places is as it was.
   assert.deepEqual((await quick(page)).picks, [['c2', 36]]);
-  const m = await model(page);
-  assert.deepEqual(m.weeks.slice(0, 3), [
-    [G, 'demand', ['move:SPARE1', 'quick:c2']],
-    [C, 'demand', []],
-    [B, 'full', ['hire:c1', 'hire:c3!', 'hire:k1']],
-  ]);
-  assert.deepEqual(m.roles[0].picked, ['c1', 'c3']);
-  assert.equal(await page.locator(`#hsOpen tr[data-hr-role="${CS}"] td:nth-child(2)`).textContent(), '3');
-  await page.locator(`[data-hr-open="${CS}"]`).click();
-  const bram = page.locator('#hsSheet [data-hr-cand="c2"]');
-  assert.match(await bram.locator('td.to').textContent(), /picked for HART\. Gifts/);
-  assert.equal(await bram.locator('input').isDisabled(), true);
-  await page.locator('#hsSheet [data-hs-close]').click();
-  await page.locator('#hsSheet').waitFor({state: 'detached'});
+  const before = await model(page);
+  assert.deepEqual(before.weeks[0], [G, 'demand', ['move:SPARE1', 'hire:c2']]);
+  assert.deepEqual(before.roles[0].picked, ['c2', 'c1', 'c3']);
+  assert.equal(await page.evaluate(() => hrModel().quick.hold), false);
+  assert.equal(await page.locator('#hsOrder .hs-held').count(), 0);
   // The write: Gifts' week as the game has it (Ana's two days, as they are),
   // plus Bram's; Sam's reassign is not part of it.
   const body = await quickRequest(page);
@@ -928,24 +940,57 @@ test('Quick hire at a shop takes its plan week first, and nobody else\'s hours c
       {d: 2, shifts: [{f: 8, t: 20, employeeId: 'AAAAemployeeAAAAAAAAAAAA', itemInstanceId: 'REG-G'}]},
       {d: 5, shifts: [{f: 8, t: 20, employeeId: 'c2', itemInstanceId: 'REG-G'}]},
       {d: 6, shifts: [{f: 8, t: 20, employeeId: 'c2', itemInstanceId: 'REG-G'}]}]}]});
-  await answering(page, []);
-  await box.locator('[data-hq-go]').click();
-  await phase(page, 'ready');
-  const dlg = page.locator('dialog.gw-dlg');
+  // The confirm open: the week is held, Bram is Quick hire's, and Open
+  // places re-picks the next best for what is left.
+  const dlg = await quickConfirm(page);
+  const m = await model(page);
+  assert.deepEqual(m.weeks.slice(0, 3), [
+    [G, 'demand', ['move:SPARE1', 'quick:c2']],
+    [C, 'demand', []],
+    [B, 'full', ['hire:c1', 'hire:c3!', 'hire:k1']],
+  ]);
+  assert.deepEqual(m.roles[0].picked, ['c1', 'c3']);
+  assert.equal(await page.evaluate(() => hrModel().roles[0].at.get('c2').elsewhere.key), G);
+  assert.equal(await page.locator(`#hsOpen tr[data-hr-role="${CS}"] td:nth-child(2)`).textContent(), '3');
+  assert.equal(await page.locator('#hsOrder p.hs-held').textContent(), '1 week held for Quick hire (Customer Service at HART. Gifts)');
+  assert.deepEqual(await page.evaluate(() => window.hrWrites.at(-1).body), body);
   assert.equal(await dlg.locator('h2').textContent(), 'Hire 1 Customer Service');
   const text = await dlg.locator('.gw-body').textContent();
   assert.match(text, /Hours from HART\. Gifts's plan: 36 h a week; nobody else's hours change\./);
   assert.doesNotMatch(text, /The week is replaced/);
   assert.match(text, /Bram Castell90%\$25\/h36 h/);
-  await dlg.locator('[data-gw-close]').click();
+  // Closed: the hold is released.
+  await quickClose(page);
+  assert.deepEqual((await model(page)).weeks[0], [G, 'demand', ['move:SPARE1', 'hire:c2']]);
+  assert.equal(await page.locator('#hsOrder .hs-held').count(), 0);
+  assert.equal(await page.locator(`#hsOpen tr[data-hr-role="${CS}"] td:nth-child(2)`).textContent(), '4');
+  // Change picks, the form still filled: Bram is Open places' own again.
+  await page.locator(`[data-hr-open="${CS}"]`).click();
+  assert.equal(await page.locator('#hsSheet [data-hr-cand="c2"] input').isChecked(), true);
+  await page.locator('#hsSheet [data-hs-close]').click();
+  await page.locator('#hsSheet').waitFor({state: 'detached'});
   // One more than the plan's week: Ada joins with no hours.
   await box.locator('[data-hq-more]').click();
   assert.deepEqual((await quick(page)).picks, [['c2', 36], ['c1', null]]);
   const two = await page.evaluate(() => { const r = hrQuickRequest(hrQuickModel(hrModel())); return [[...r.hours], r.given]; });
   assert.deepEqual(two, [[['c2', 36], ['c1', 0]], 1]);
-  await box.locator('[data-hq-go]').click();
-  await phase(page, 'ready');
-  assert.match(await dlg.locator('.gw-body').textContent(), /Hours from HART\. Gifts's plan: 36 h a week( each)?; nobody else's hours change\. 1 joins with no hours\./);
+  await quickConfirm(page);
+  assert.match(await dlg.locator('.gw-body').textContent(), /Hours from HART\. Gifts's plan: 36 h a week; nobody else's hours change\. 1 joins with no hours\./);
+});
+
+test('Quick hire never opens a shop: a full-cover shop keeps its hours', async (t) => {
+  const d = JSON.parse(payload);
+  // Bare, new on full cover and closed now, with a week in the game (empty).
+  d.staffing.find(r => r.key === B).current = {shifts: 0, fragments: 0, coverFragments: 0, cleaning: 0, security: 0, list: []};
+  const page = await board(t, {data: JSON.stringify(d)});
+  const box = page.locator('#hsQuick');
+  await box.locator('[data-hq-role]').selectOption(CS);
+  await box.locator('[data-hq-site]').selectOption(B);
+  assert.deepEqual((await quick(page)).picks, [['c2', 36]]);
+  assert.deepEqual((await quickRequest(page)).sites, [{address: addr(B), expect: '811c9dc5', openAllHours: false, days: [
+    {d: 1, shifts: [{f: 0, t: 12, employeeId: 'c2', itemInstanceId: 'REG-B'}]},
+    {d: 2, shifts: [{f: 0, t: 12, employeeId: 'c2', itemInstanceId: 'REG-B'}]},
+    {d: 3, shifts: [{f: 0, t: 12, employeeId: 'c2', itemInstanceId: 'REG-B'}]}]}]);
 });
 
 test('Quick hire leaves out a new shift that meets one already there', async (t) => {
@@ -956,42 +1001,63 @@ test('Quick hire leaves out a new shift that meets one already there', async (t)
   const box = page.locator('#hsQuick');
   await box.locator('[data-hq-role]').selectOption(CS);
   await box.locator('[data-hq-site]').selectOption(G);
-  const r = await page.evaluate(() => { const r = hrQuickRequest(hrQuickModel(hrModel())); return {body: r.body, hours: [...r.hours]}; });
+  const r = await page.evaluate(() => { const r = hrQuickRequest(hrQuickModel(hrModel())); return {body: r.body, hours: [...r.hours], clashed: r.clashed}; });
   assert.deepEqual(r.hours, [['c2', 24]]);
+  assert.equal(r.clashed, 0);
   assert.deepEqual(r.body.sites[0].days, [
     {d: 0, shifts: [{f: 8, t: 20, employeeId: 'c2', itemInstanceId: 'REG-G'}]},
     {d: 1, shifts: [{f: 8, t: 20, employeeId: 'AAAAemployeeAAAAAAAAAAAA', itemInstanceId: 'REG-G'}]},
     {d: 2, shifts: [{f: 8, t: 20, employeeId: 'AAAAemployeeAAAAAAAAAAAA', itemInstanceId: 'REG-G'}]},
     {d: 5, shifts: [{f: 10, t: 14, employeeId: 'AAAAemployeeAAAAAAAAAAAA', itemInstanceId: 'REG-G'}]},
     {d: 6, shifts: [{f: 8, t: 20, employeeId: 'c2', itemInstanceId: 'REG-G'}]}]);
-  await answering(page, []);
-  await box.locator('[data-hq-go]').click();
-  await phase(page, 'ready');
-  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), /Hours from HART\. Gifts's plan: 24 h a week; nobody else's hours change\./);
+  const dlg = await quickConfirm(page);
+  assert.match(await dlg.locator('.gw-body').textContent(), /Hours from HART\. Gifts's plan: 24 h a week; nobody else's hours change\./);
 });
 
-test('Quick hire takes a role Open places had filled, and Open places shrinks', async (t) => {
+test('Quick hire whose plan hours all meet shifts already there joins with no hours', async (t) => {
+  const d = JSON.parse(payload);
+  // Ana on Gifts' register Friday to Sunday: all of the open week.
+  d.staffing.find(r => r.key === G).current.list.push({d: 5, s: 0, f: 8, t: 20, p: 0}, {d: 6, s: 0, f: 8, t: 20, p: 0}, {d: 0, s: 0, f: 8, t: 20, p: 0});
+  const page = await board(t, {data: JSON.stringify(d)});
+  const box = page.locator('#hsQuick');
+  await box.locator('[data-hq-role]').selectOption(CS);
+  await box.locator('[data-hq-site]').selectOption(G);
+  const r = await page.evaluate(() => { const r = hrQuickRequest(hrQuickModel(hrModel())); return {sites: r.body.sites, given: r.given, clashed: r.clashed}; });
+  assert.deepEqual(r, {sites: [{address: addr(G), expect: null, days: null}], given: 0, clashed: 1});
+  const dlg = await quickConfirm(page);
+  assert.match(await dlg.locator('.gw-body').textContent(), /Their plan hours meet shifts already there: they join with no hours\./);
+});
+
+test('Quick hire takes a role Open places had filled while its confirm is open, and Open places shrinks', async (t) => {
   const d = JSON.parse(payload);
   d.officeStaffing[0].current = {shifts: 0, fragments: 0, list: []};
   const page = await board(t, {data: JSON.stringify(d)});
-  assert.equal(await page.locator(`#hsOpen tr[data-hr-role="${LAW}"]`).count(), 1);
   const box = page.locator('#hsQuick');
   await box.locator('[data-hq-role]').selectOption(LAW);
   await box.locator('[data-hq-site]').selectOption(O);
-  // Lior, Open places' pick, takes the office's one week: the Lawyer row goes.
+  // Lior, Open places' pick, would take the office's one week; the form
+  // alone leaves the Lawyer row where it is.
   assert.deepEqual((await quick(page)).picks, [['l1', 42]]);
-  const m = await model(page);
-  assert.deepEqual(m.roles.map(r => r.skill), [CS, FW, CLEAN]);
-  assert.deepEqual(m.weeks[4], [O, 'office', ['quick:l1']]);
-  assert.equal(await page.locator(`#hsOpen tr[data-hr-role="${LAW}"]`).count(), 0);
-  assert.match(await page.locator('#hsOpen table.hs-roles tfoot').textContent(), /^Total7160\+\$/);
+  assert.equal(await page.locator(`#hsOpen tr[data-hr-role="${LAW}"]`).count(), 1);
   assert.deepEqual(await quickRequest(page), {moves: [], hires: [{candidateId: 'l1', address: addr(O), expect: {wage: 50}, seenHoursLeft: 100}],
     sites: [{address: addr(O), expect: '0ff1ce00', openAllHours: false, days: [
       {d: 1, shifts: [{f: 8, t: 22, employeeId: 'l1', itemInstanceId: 'DESK-1'}]},
       {d: 2, shifts: [{f: 8, t: 22, employeeId: 'l1', itemInstanceId: 'DESK-1'}]},
       {d: 3, shifts: [{f: 8, t: 22, employeeId: 'l1', itemInstanceId: 'DESK-1'}]}]}]});
+  // The confirm open: the week is held and the Lawyer row goes.
+  await quickConfirm(page);
+  const m = await model(page);
+  assert.deepEqual(m.roles.map(r => r.skill), [CS, FW, CLEAN]);
+  assert.deepEqual(m.weeks[4], [O, 'office', ['quick:l1']]);
+  assert.equal(await page.locator(`#hsOpen tr[data-hr-role="${LAW}"]`).count(), 0);
+  assert.match(await page.locator('#hsOpen table.hs-roles tfoot').textContent(), /^Total7160\+\$/);
+  assert.equal(await page.locator('#hsOrder p.hs-held').textContent(), '1 week held for Quick hire (Lawyer at HART. Law)');
   // The main order no longer hires Lior.
   assert.ok(!(await request(page)).hires.some(h => h.candidateId === 'l1'));
+  // Closed: the row is back.
+  await quickClose(page);
+  assert.equal(await page.locator(`#hsOpen tr[data-hr-role="${LAW}"]`).count(), 1);
+  assert.equal(await page.locator('#hsOrder .hs-held').count(), 0);
 });
 
 test('Quick hire where the plan has no open week: no hours, and says so', async (t) => {
@@ -999,32 +1065,50 @@ test('Quick hire where the plan has no open week: no hours, and says so', async 
   const box = page.locator('#hsQuick');
   await box.locator('[data-hq-role]').selectOption(CS);
   await box.locator('[data-hq-site]').selectOption(C);
-  // Corner's plan has no hire week: Bram joins it with no hours, and Open
-  // places picks the next best for Gifts.
+  // Corner's plan has no hire week: Bram joins it with no hours. While the
+  // confirm is open he is Quick hire's, and Open places picks the next best
+  // for Gifts; no week is held.
   assert.deepEqual((await quick(page)).picks, [['c2', null]]);
-  assert.deepEqual((await model(page)).weeks[0], [G, 'demand', ['move:SPARE1', 'hire:c1']]);
+  assert.deepEqual((await model(page)).weeks[0], [G, 'demand', ['move:SPARE1', 'hire:c2']]);
   assert.deepEqual((await quickRequest(page)).sites, [{address: addr(C), expect: null, days: null}]);
-  await answering(page, []);
-  await box.locator('[data-hq-go]').click();
-  await phase(page, 'ready');
-  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), /No open hours in HART\. Corner's plan: they join with no hours\./);
+  const dlg = await quickConfirm(page);
+  assert.deepEqual((await model(page)).weeks[0], [G, 'demand', ['move:SPARE1', 'hire:c1']]);
+  assert.equal(await page.locator('#hsOrder .hs-held').count(), 0);
+  assert.match(await dlg.locator('.gw-body').textContent(), /No open hours in HART\. Corner's plan: they join with no hours\./);
 });
 
 test('Part-time is left out per destination: a shop week, not an office week of the same role', async (t) => {
   const d = JSON.parse(payload);
-  d.candidates.push(cand('p1', 'Pia Quist', [[CS, 95]], 10, {demands: [PT]}));
+  d.candidates.push(cand('p1', 'Pia Quist', [[CS, 95]], 10, {demands: [PT]}), cand('p2', 'Paz Ruiz', [[CS, 94]], 10, {demands: [PT]}));
   const law = d.hiring.sites.find(s => s.key === O);
   law.accepts = [LAW, CS];
   law.plans.office.hireWeeks.push({skill: CS, hours: 14, days: 1, slots: [slot(0, 1, 8, 22, 'DESK-1')]});
   const page = await board(t, {data: JSON.stringify(d)});
   const m = await model(page);
   // Pia asks for Part-time: kept off the shops' weeks, placed in the office's.
+  // Paz asks for it too, and the office has no second week.
   assert.deepEqual(m.roles[0].picked, ['p1', 'c2', 'c1', 'c3']);
   assert.deepEqual(m.weeks[4], [O, 'office', ['hire:l1', 'hire:p1']]);
+  await page.locator(`[data-hr-open="${CS}"]`).click();
+  assert.equal(await page.locator('#hsSheet [data-hr-cand="p2"] td.to').textContent(), 'not for shop weeks (Part-time)');
+  assert.equal(await page.locator('#hsSheet [data-hr-cand="p1"] td.to').textContent(), 'HART. Law');
+  await page.locator('#hsSheet [data-hs-close]').click();
+  await page.locator('#hsSheet').waitFor({state: 'detached'});
   // Lawyer is hired into the office only: its Change picks shows no Part-time.
   await page.locator(`[data-hr-open="${LAW}"]`).click();
   const sheet = page.locator('#hsSheet');
   assert.match(await sheet.locator(`[data-hs-dem-open="${LAW}"]`).textContent(), /Leave out who asks for: nobody/);
+  // Its demand list names the company's Part-time as for shop roles only,
+  // and does not let it be changed from here; Clear keeps it.
+  await sheet.locator(`[data-hs-dem-open="${LAW}"]`).click();
+  const pop = page.locator('dialog#hsSheet > #hsDemPop');
+  const pt = pop.locator('label', {has: page.locator(`[data-hr-dem="${PT}"]`)});
+  assert.match(await pt.textContent(), /Part-time · shop roles only/);
+  assert.equal(await pop.locator(`[data-hr-dem="${PT}"]`).isDisabled(), true);
+  await pop.locator('[data-hs-dem-clear]').click();
+  assert.deepEqual(await page.evaluate(() => hrFilters().company.ex), [PT]);
+  assert.deepEqual((await model(page)).roles[0].picked, ['p1', 'c2', 'c1', 'c3']);
+  await page.keyboard.press('Escape');
   // "Lawyer only" copies the filter it is picked by, without Part-time.
   await sheet.locator('[data-hr-scope="own"]').check();
   assert.deepEqual((await page.evaluate(() => JSON.parse(localStorage.getItem('ba_dash_hire:default')))).roles[LAW].ex, []);
@@ -1032,8 +1116,9 @@ test('Part-time is left out per destination: a shop week, not an office week of 
   await sheet.waitFor({state: 'detached'});
   // The page's list names the company's Part-time as for shop roles only.
   await page.locator('#hsOpen [data-hs-dem-open=""]').click();
-  const pt = page.locator('#hsDemPop label', {has: page.locator(`[data-hr-dem="${PT}"]`)});
-  assert.match(await pt.textContent(), /Part-time · shop roles only/);
+  const pagePt = page.locator('#hsDemPop label', {has: page.locator(`[data-hr-dem="${PT}"]`)});
+  assert.match(await pagePt.textContent(), /Part-time · shop roles only/);
+  assert.equal(await page.locator(`#hsDemPop [data-hr-dem="${PT}"]`).isDisabled(), false);
 });
 
 test('"<Role> only" for a role hired into shops alone keeps Part-time', async (t) => {
@@ -1067,12 +1152,11 @@ test('Part-time is left out by default for shop roles only', async (t) => {
   assert.equal(await box.locator('.hs-shops').count(), 1);
   assert.ok(!(await quick(page)).matches.includes('p1'));
   // Quick hire's own list: unticking Part-time there brings Pia in for it
-  // only; she is Quick hire's pick for Gifts' open week, and Open places
-  // fills what is left, still without her.
+  // only; a filled form holds nothing, so Open places is as it was.
   await box.locator('[data-hs-dem-open="quick"]').click();
   await page.locator('body > #hsDemPop [data-hr-dem="' + PT + '"]').uncheck();
   assert.deepEqual((await quick(page)).picks, [['p1', 36]]);
-  assert.deepEqual((await model(page)).roles.find(r => r.skill === CS).picked, ['c2', 'c1']);
+  assert.deepEqual((await model(page)).roles.find(r => r.skill === CS).picked, ['c2', 'c1', 'c3']);
   await page.keyboard.press('Escape');
   await box.locator('[data-hq-role]').selectOption('');
   // Unticking Part-time in the page's list brings her back.
