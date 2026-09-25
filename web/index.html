@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "4054b3e7a9";</script>
-<link rel="stylesheet" href="community.css?v=4054b3e7a9">
+<script>window.LEDGER_BUILD = "6c490ceadf";</script>
+<link rel="stylesheet" href="community.css?v=6c490ceadf">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=4054b3e7a9">
+<link rel="stylesheet" href="fonts/fonts.css?v=6c490ceadf">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -3970,7 +3970,7 @@ details.help[open] summary::after{content:"\2013"}
        the wiki files shows instead. -->
   <div class="page" id="pageWiki" hidden>
     <div class="wiki" id="wikiRoot">
-      <p class="quiet" style="margin-top:44px">The wiki is not part of this build.</p>
+      <p class="quiet" style="margin-top:44px" data-tt="wiki.absent">The wiki is not part of this build.</p>
     </div>
   </div>
 <footer class="sitefoot">
@@ -4145,7 +4145,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"4054b3e7a9","latest":{"pr":118,"date":"2026-09-25","title":"Game names in the language you play in","summary":"A new Game names setting in the footer, beside Theme, shows the game's own names in any language the game ships: items, business types, neighbourhoods, stations, skills and staff demands, on the board, inside its findings and in the wiki, so the board reads like your game. The rest of the page stays English. Search finds a name in either language, and lists sort in the language you picked. If your browser prefers one of the game's languages, the board asks once whether to use it."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"6c490ceadf","latest":{"pr":118,"date":"2026-09-25","title":"Game names in the language you play in","summary":"A new Game names setting in the footer, beside Theme, shows the game's own names in any language the game ships: items, business types, neighbourhoods, stations, skills and staff demands, on the board, inside its findings and in the wiki, so the board reads like your game. The rest of the page stays English. Search finds a name in either language, and lists sort in the language you picked. If your browser prefers one of the game's languages, the board asks once whether to use it."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -4233,8 +4233,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=4054b3e7a9"></script>
-<script src="community.js?v=4054b3e7a9"></script>
+<script src="app.js?v=6c490ceadf"></script>
+<script src="community.js?v=6c490ceadf"></script>
 
 <script>
 
@@ -5504,7 +5504,7 @@ const SZ_WHY = {
   get "short:shortfall"(){ return tt("sb.why.short.shortfall", "Runs dry before the next delivery lands"); },
   get "short:target"(){ return tt("sb.why.short.target", "The daily top-up is less than a day's need"); },
   get "short:dry"(){ return tt("sb.why.short.dry", "The depot it comes from is out of it"); },
-  get "stalled:notDrawn"(){ return tt("sb.why.stalled.notDrawn", "The source holds it, yet little or nothing arrives"); },
+  get "stalled:notDrawn"(){ return tt("sb.why.stalled.notDrawn", "The source holds it, yet under three quarters of the need arrived per day over the last week (the last round alone while the log is under a week old): the line is not drawing it"); },
   get "stalled:waiting"(){ return tt("sb.why.stalled.waiting", "The line stands still for want of another input"); },
   get "idle:notMoving"(){ return tt("sb.why.idle.notMoving", "Nothing draws on it"); },
   get "idle:notRouted"(){ return tt("sb.why.idle.notRouted", "No plan sends it on, though your own sites sell or need it"); },
@@ -5516,8 +5516,8 @@ const SZ_WHY = {
   get "tight:target"(){ return tt("sb.why.tight.target", "The daily top-up covers a day's use, not the margin"); },
   get "covered:route"(){ return tt("sb.why.covered.route", "A route from your own site brings it"); },
   get "covered:limit"(){ return tt("sb.why.covered.limit", "Produce up to holds the line back, not the supply"); },
-  get "covered:staffing"(){ return tt("sb.why.covered.staffing", "The roster runs the machines only part of the week"); },
-  get "short:hours"(){ return tt("sb.why.short.hours", "Rostered fewer hours a day than the line needs"); },
+  get "covered:staffing"(){ return tt("sb.why.covered.staffing", "Your staffing runs the machines only part of the week"); },
+  get "short:hours"(){ return tt("sb.why.short.hours", "Staffed fewer hours a day than the line needs"); },
 };
 const SZ_STATE = {
   get covered(){ return tt("sb.state.covered", "Covers the use and the margin"); },
@@ -5687,9 +5687,9 @@ function szSays(f, r, depot){
     case "stalled":
       if(f.why === "waiting") return tt("sb.says.waiting", {one: "{lines} stands still for want of {inputs}", other: "{lines} stand still for want of {inputs}"},
         {n: lines.length, lines: sbList(lines), inputs: sbList(r.waitingOn || [])});
-      return tt("sb.says.stalled", "{depot} holds {n:,} but the line takes {pct}% of its need", {depot, n: r.depotStock || 0, pct});
+      return tt("sb.says.stalled", "{depot} holds {n:,}, yet only {pct}% of the need arrived per day over the last week", {depot, n: r.depotStock || 0, pct});
     case "covered":
-      if(f.why === "staffing") return tt("sb.says.staffing", "the roster runs these machines {pct}% of the week", {pct: Math.round((r.staffedShare ?? 1) * 100)});
+      if(f.why === "staffing") return tt("sb.says.staffing", "your staffing runs these machines {pct}% of the week", {pct: Math.round((r.staffedShare ?? 1) * 100)});
       if(f.why === "limit") return tt("sb.says.limit", "Produce up to holds the line back");
       if(f.why === "route") return tt("sb.says.route", "a route from your own site brings it");
       return "";
@@ -9155,7 +9155,7 @@ function spNeedRead(n, f){
       if(f.why === "waiting") return tt("sp.need.waiting", "Waiting on <b>{items}</b>", {items: spEsc((n.waitingOn || []).join(", "))});
       return tt("sp.need.stalled", "<b>{n}</b>/day arrives; the line is <b>not drawing it</b>", {n: spNum(n.arrives)});
     case "covered":
-      if(f.why === "staffing") return tt("sp.need.staffing", "The roster runs these machines <b>{pct}%</b> of the week", {pct: Math.round((n.staffedShare || 0) * 100)});
+      if(f.why === "staffing") return tt("sp.need.staffing", "Your staffing runs these machines <b>{pct}%</b> of the week", {pct: Math.round((n.staffedShare || 0) * 100)});
       if(f.why === "limit") return tt("sp.need.limit", "Held back by <b>Produce up to</b>");
       return tt("sp.need.instep", "In step");
     case "made": return tt("sp.need.made", "Made in-house");
@@ -11136,9 +11136,10 @@ const SB_LINE_COLS = [sbCol(() => tt("sb.col.line", "Line"), r => r.item || r.wo
 const SB_INPUT_COLS = [sbCol(() => tt("sb.col.input", "Factory input"), r => r.item, "l"),
   sbCol(() => tt("sb.col.eats", "Eats / day"), r => szUse(r.fact, r.perDay), "",
     () => tt("sb.col.eats.tip", "At full rate under 24/7; what the shops at the end of the chain use under Demand")),
-  sbCol(() => tt("sb.col.onHand", "On hand"), r => r.stock ?? null), sbCol(() => tt("sb.col.arrived", "Arrived / day"), r => r.known ? r.arrives : null),
+  sbCol(() => tt("sb.col.onHand", "On hand"), r => r.stock ?? null), sbCol(() => tt("sb.col.arrived", "Arrived / day"), r => r.known ? r.arrives : null, "",
+    () => tt("sb.col.arrived.tip", "Measured: what reached the factory a day over the last week, from its delivery log (only the last round while its log is under a week old)")),
   sbCol(() => tt("sb.col.topup", "Daily top-up"), r => r.directImport ? null : r.target || null, "",
-    () => tt("sb.col.topup.input.tip", "What the round brings each morning. With a change, the figure to type in the sending site's plan.")),
+    () => tt("sb.col.topup.input.tip", "Planned: what the round brings each morning. With a change, the figure to type in the sending site's plan.")),
   sbStatusCol(r => szRank(r.fact))];
 /* The sizing switch, with what it means; remembered on this device. */
 function sbSizingRow(id){
@@ -11847,6 +11848,13 @@ function factoryCounts(type){
   return out;
 }
 let planSeed = {};
+/* The days the unit prices were read over (_ingredient_prices()): a week of
+   goods cost against the units delivered, or the one day there is. */
+const priceSpan = () => {
+  const {priceFrom: from, priceDay: to} = D.plan || {};
+  return from != null && from !== to ? tt("gr.price.over", "over days {from}–{to}", {from, to})
+    : tt("gr.price.on", "on day {day}", {day: to});
+};
 const machinesOn = slug => Math.max(0, planCounts[slug] ?? planSeed[slug] ?? 1);
 
 function drawPlan(){
@@ -11958,7 +11966,7 @@ function drawPlan(){
       meta[i.item] = {
         tip: grSemis([on,
           base ? tt("gr.src.eat", "your factories already eat {n:,} of it a week", {n: base}) : "",
-          unit !== undefined ? tt("gr.src.price", "{w:$} each on day {day}", {w: unit, day: D.plan.priceDay}) : ""]),
+          unit !== undefined ? tt("gr.src.price", "{w:$} each {span}", {w: unit, span: priceSpan()}) : ""]),
         ordered: src ? src.ordered : null, active: src ? src.active : false,
         smart: !!(src && src.smart), paused, contracts, from: src ? src.from : null, baseline: base,
         unit: unit === undefined ? null : unit,
@@ -12051,13 +12059,13 @@ function drawProducts(){
         showAllProducts ? tt("co.prod.top", "top {n} only", {n: TOP}) : tt("co.prod.all", "all {n}", {n: all.length})}</a>`
     : `<span class="quiet">${tt("co.prod.all", "all {n}", {n: all.length})}</span>`;
   $("secProducts").innerHTML = sechead(tt("co.prod.title", "Products"), {
-    why: tt("co.prod.why", "Revenue and units are yesterday summed over every store that sells the line; units a week is the last seven days, and stores is how many carry it.")
+    why: tt("co.prod.why", "Revenue and units are a day's, averaged over the last seven days and summed over every store that sells the line; units a week is the last seven days, and stores is how many carry it.")
       + " " + (showPeak
         ? (weekRange
           ? tt("co.prod.why.peaks.range", "Peaks names the weekday that sells the most units, from {range}, and the points between best and worst day.", {range: weekRange})
           : tt("co.prod.why.peaks", "Peaks names the weekday that sells the most units and the points between best and worst day."))
         : tt("co.prod.why.notes", "Weekday peaks are on the product's own note; {n} of {total} have one.", {n: withPeak, total: rows.length})),
-    quiet: tt("co.prod.quiet", "by revenue yesterday"),
+    quiet: tt("co.prod.quiet", "by revenue a day, last 7 days"),
     aside: more,
   }) + `<table>
     <thead><tr><th class="l">${tt("co.prod.col.product", "Product")}</th><th>${tt("co.prod.col.revenue", "Revenue / day")}</th><th>${
@@ -12078,7 +12086,7 @@ function drawProducts(){
         : seller.line.revenue ? (p.stores > 1
           ? tt("co.prod.open.top.of", "Open {site}, the store that sells the most of it, one of {n}", {site: shortName(seller.b), n: p.stores})
           : tt("co.prod.open.top", "Open {site}, the store that sells the most of it", {site: shortName(seller.b)}))
-        : tt("co.prod.open.stocks", "Open {site}, which stocks it; no store sold any yesterday", {site: shortName(seller.b)});
+        : tt("co.prod.open.stocks", "Open {site}, which stocks it; no store sold any in the last seven days", {site: shortName(seller.b)});
       const name = seller ? `<a class="link xl-sells" href="#company" data-xl-item="${attr(p.slug)}" data-tip="${attr(opens)}">${p.item}</a>` : p.item;
       return `<tr data-slug="${attr(p.slug)}">
       <td class="l"${showPeak?"":` data-tip="${attr(peakTip(p))}"`}>${name}</td>
@@ -14381,7 +14389,7 @@ const WIKI_STREETS = {pier: "pier", bw: "broadwaystreet", tur: "hamptonsturnpike
    the game's help, so they sit under their own label and route under their own
    prefix, where they can never be mistaken for a help page. */
 const WIKI_TOPIC_CAT = "bigcopilot_topics";
-const WIKI_TOPIC_LABEL = "Big Copilot topics";
+const wikiTopicLabel = () => tt("wiki.topics.label", "Big Copilot topics");
 const wikiTopicId = slug => `topic/${String(slug ?? "")}`;
 /* What this release added inside the Wiki. The nav says the Wiki changed; these
    say what in it changed, so the reader is not left to hunt. A future topic is
@@ -14411,7 +14419,7 @@ function wikiNewBadge(what, key){
   if(!(WIKI_NEW[what] || []).includes(String(key))) return "";
   const id = WIKI_NEW_ID[what](String(key));
   if(wikiSeen(id)) return "";
-  return `<span class="feature-new" data-new-feature="${attr(id)}">New</span>`;
+  return `<span class="feature-new" data-new-feature="${attr(id)}">${wikiEsc(tt("wiki.new", "New"))}</span>`;
 }
 /* Reaching a marked topic is meeting it: the entry's own mark and the shelf that
    carried it are both put down, through the board's own store so the badges
@@ -14432,13 +14440,14 @@ const WIKI_HITS = 10;    // search rows before the same question
 /* What the badges mean. The words are the reader's, never the file's.
    "Checked" is reserved for a second kind of file — a shop the game ships, or
    the city's building table. Two help pages agreeing with each other is still
-   help, and says so. */
+   help, and says so. Each is [class, label, tip]; the words are getters, so
+   they are read in the language on screen. */
 const WIKI_BADGE = {
-  help: ["help", "Game help", "Stated in the game's help."],
-  asset: ["ok", "Checked", "Cross-checked with shop layouts or city data."],
-  model: ["warn", "Big Copilot", "Big Copilot's guidance or calculation."],
-  save: ["save", "Your save", "Read from your loaded save."],
-  gap: ["bad", "Gap", "Not specified in the game files."],
+  get help(){ return ["help", tt("wiki.badge.help", "Game help"), tt("wiki.badge.help.tip", "Stated in the game's help.")]; },
+  get asset(){ return ["ok", tt("wiki.badge.asset", "Checked"), tt("wiki.badge.asset.tip", "Cross-checked with shop layouts or city data.")]; },
+  get model(){ return ["warn", tt("wiki.badge.model", "Big Copilot"), tt("wiki.badge.model.tip", "Big Copilot's guidance or calculation.")]; },
+  get save(){ return ["save", tt("wiki.badge.save", "Your save"), tt("wiki.badge.save.tip", "Read from your loaded save.")]; },
+  get gap(){ return ["bad", tt("wiki.badge.gap", "Gap"), tt("wiki.badge.gap.tip", "Not specified in the game files.")]; },
 };
 
 /* The shelf's own order: what a player reaches for first, not the order the
@@ -14450,7 +14459,7 @@ const WIKI_CAT_ORDER = ["common_business_types", "common_sellable_products", "co
 /* Where the game's own name for a category reads as a file path rather than as
    a shelf, the shelf's word is used instead. Everything else keeps the name the
    game gives it, which is more precise than any rewording. */
-const WIKI_CAT_LABEL = {help_importers: "Wholesalers & importers"};
+const WIKI_CAT_LABEL = {get help_importers(){ return tt("wiki.cat.importers", "Wholesalers & importers"); }};
 const wikiCatLabel = cat => WIKI_CAT_LABEL[String(cat.id)] || cat.label || cat.id;
 
 const WIKI_CAT_ICON = {
@@ -14487,7 +14496,7 @@ function wikiCatIcon(cat){
 /* --- state ------------------------------------------------------------- */
 let wikiData = null;            // the indexed catalogue, once it is in
 let wikiStatus = "idle";        // idle · loading · ready · error
-let wikiFailure = "";           // what to tell the reader when it is error
+let wikiFailure = "";           // what to tell the reader when it is error (text, or a function giving it)
 let wikiRoute = {kind: "home", id: "", query: ""};
 let wikiWired = false;
 let wikiShowAll = false;        // the current list is showing everything
@@ -14506,9 +14515,21 @@ const wikiRoot = () => $("wikiRoot");
 /* Counts are written the way the board writes money: one thousands mark, the
    same one whatever the browser's own locale would have chosen. */
 const wikiNum = n => num(Number(n || 0));
-/* One of a thing or several, counted the way the rest of the page counts: the
-   board never writes "1 gaps". */
-const wikiCount = (n, word) => `${word}${Number(n) === 1 ? "" : "s"}`;
+/* Names run together with the language's "and": "A and B and C". */
+const wikiAnd = list => list.reduce((a, b) => tt("wiki.list.and", "{a} and {b}", {a, b}));
+/* Big Copilot's own words between tags: only what could become markup is
+   escaped, so an English sentence is written exactly as it always was. */
+const wikiEsc = s => String(s ?? "").replace(/[&<>]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;"}[c]));
+/* A sentence that carries markup (<b>): the translation is escaped whole and
+   only <b> and </b> are put back, then each param goes in, escaped, where its
+   mark stands. tt() is given the marks (wikiMarks()) rather than the values,
+   so a param is written out as text before it is passed. */
+const wikiMarks = params => Object.fromEntries(Object.keys(params).map((k, i) => [k, `\uE000${i}\uE001`]));
+function wikiRich(text, params){
+  const values = Object.values(params || {});
+  return wikiEsc(text).replace(/&lt;(\/?)b&gt;/g, "<$1b>")
+    .replace(/\uE000(\d+)\uE001/g, (m, i) => wikiEsc(values[i] ?? ""));
+}
 /* Text that lands between tags. attr() is the board's, for attributes. */
 const wikiText = s => String(s ?? "").replace(/[&<>"']/g, c =>
   ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
@@ -14546,13 +14567,14 @@ function wikiIndex(raw){
     title: String(p.title || p.id),
     lower: String(p.title || p.id).toLowerCase(),
     categoryId: String(p.categoryId || ""),
-    category: catById.has(String(p.categoryId)) ? wikiCatLabel(catById.get(String(p.categoryId))) : "",
+    /* Read when shown, so a change of language renames it. */
+    get category(){ return catById.has(this.categoryId) ? wikiCatLabel(catById.get(this.categoryId)) : ""; },
   })).concat(topics.map(t => ({
     id: wikiTopicId(t.slug),
     title: String(t.title || t.slug),
     lower: String(t.title || t.slug).toLowerCase(),
     categoryId: WIKI_TOPIC_CAT,
-    category: WIKI_TOPIC_LABEL,
+    get category(){ return wikiTopicLabel(); },
   }))).sort((a, b) => a.title.localeCompare(b.title));
   return {
     raw, pages, categories, byId, catById, search, topics, topicById,
@@ -14570,6 +14592,13 @@ function wikiIndex(raw){
   };
 }
 
+/* A failure worded by the page: the words are said again at each draw, so a
+   change of language reaches them. */
+function wikiError(say){
+  const error = new Error(say());
+  error.wikiSay = say;
+  return error;
+}
 function loadWikiData(){
   if(wikiStatus === "loading" || wikiStatus === "ready") return;
   wikiStatus = "loading";
@@ -14581,18 +14610,18 @@ function loadWikiData(){
   const got = embedded
     ? Promise.resolve(embedded)
     : fetch(`${WIKI_URL}?v=${window.LEDGER_BUILD || "1"}`).then(r => {
-        if(!r.ok) throw new Error(`the wiki content could not be fetched (${r.status})`);
+        if(!r.ok) throw wikiError(() => tt("wiki.fail.fetch", "the wiki content could not be fetched ({status})", {status: r.status}));
         return r.json();
       });
   got.then(raw => {
-    if(!raw || raw.schemaVersion !== 1) throw new Error("this build does not understand that wiki file");
-    if(!Array.isArray(raw.pages) || !raw.pages.length) throw new Error("the wiki file carries no pages");
+    if(!raw || raw.schemaVersion !== 1) throw wikiError(() => tt("wiki.fail.schema", "this build does not understand that wiki file"));
+    if(!Array.isArray(raw.pages) || !raw.pages.length) throw wikiError(() => tt("wiki.fail.empty", "the wiki file carries no pages"));
     wikiData = wikiIndex(raw);
     wikiStatus = "ready";
     drawWiki();
   }).catch(error => {
     wikiStatus = "error";
-    wikiFailure = (error && error.message) || String(error);
+    wikiFailure = (error && error.wikiSay) || (error && error.message) || String(error);
     drawWiki();
   });
 }
@@ -14740,7 +14769,7 @@ function wikiBlocks(text){
 }
 function wikiBody(text, ctx){
   const blocks = wikiBlocks(text);
-  if(!blocks.length) return `<p class="quiet">This page carries no text in the game's help file.</p>`;
+  if(!blocks.length) return `<p class="quiet">${wikiEsc(tt("wiki.page.empty", "This page carries no text in the game's help file."))}</p>`;
   return blocks.map(b => {
     if(b.kind === "ul") return `<ul class="wk-list">${b.items.map(i => `<li>${wikiInline(i, ctx)}</li>`).join("")}</ul>`;
     if(b.kind === "h") return `<h3 class="wk-lab">${wikiInline(b.line.replace(/:$/, ""), ctx)}</h3>`;
@@ -14805,8 +14834,10 @@ function wikiChip(kind, text, tip){
 const wikiWhy = text => text
   ? `<span class="why" data-tip="${attr(text)}" tabindex="0"><i>?</i></span>` : "";
 const WIKI_CHEV = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>';
+/* The trail's first step, the Wiki itself. */
+const wikiCrumbHome = () => tt("wiki.crumb.home", "Wiki");
 function wikiCrumb(trail){
-  return `<nav class="wk-crumb" aria-label="Breadcrumb">${trail.map((step, i) =>
+  return `<nav class="wk-crumb" aria-label="${attr(tt("wiki.crumb.aria", "Breadcrumb"))}">${trail.map((step, i) =>
     (i ? WIKI_CHEV : "") + (step.href
       ? `<a href="${attr(step.href)}">${wikiText(step.label)}</a>`
       : `<span>${wikiText(step.label)}</span>`)).join("")}</nav>`;
@@ -14847,6 +14878,8 @@ function wikiFind(query){
 }
 
 /* --- the views ----------------------------------------------------------- */
+/* The control that lifts a list's cap, by how many rows it would show. */
+const wikiShowAllText = n => tt("wiki.list.showAll", {one: "Show all {n:,}", other: "Show all {n:,}"}, {n});
 function wikiHome(){
   const q = wikiRoute.query || "";
   const hits = wikiFind(q);
@@ -14868,25 +14901,25 @@ function wikiHome(){
 <div class="sechead wk-top">
   <label class="wk-srch">${icon("search")}
     <input type="search" id="wikiSearch" autocomplete="off" spellcheck="false"
-      placeholder="Search ${wikiNum(held)} pages" aria-label="Search the wiki"
+      placeholder="${attr(tt("wiki.search.placeholder", {one: "Search {n:,} pages", other: "Search {n:,} pages"}, {n: held}))}" aria-label="${attr(tt("wiki.search.aria", "Search the wiki"))}"
       value="${attr(q)}">
     <span class="wk-cnt">${q ? wikiNum(hits.length) : ""}</span></label>
-  ${wikiWhy("Search the game's help by page title or category. No save needed.")}
+  ${wikiWhy(tt("wiki.search.tip", "Search the game's help by page title or category. No save needed."))}
   <span class="aside">${wikiStamp()}</span>
 </div>
 ${q ? `<div class="wk-hits">${
     shown.map(e => wikiRow(e, q)).join("")
-    || `<p class="wk-none">Nothing called that. Try a product, a shop or a piece of furniture.</p>`}
+    || `<p class="wk-none">${wikiEsc(tt("wiki.search.none", "Nothing called that. Try a product, a shop or a piece of furniture."))}</p>`}
   </div>${hits.length > shown.length
-    ? `<p class="quiet wk-more"><button type="button" class="link" data-wiki-all>Show all ${wikiNum(hits.length)}</button></p>`
+    ? `<p class="quiet wk-more"><button type="button" class="link" data-wiki-all>${wikiEsc(wikiShowAllText(hits.length))}</button></p>`
     : ""}` : ""}
 ${shelf ? `<div class="wk-shelf">${shelf}</div>`
-  : `<p class="wk-none">This build carries the pages but not the help menu's own shelf of categories. Search still finds every one of them.</p>`}
+  : `<p class="wk-none">${wikiEsc(tt("wiki.shelf.none", "This build carries the pages but not the help menu's own shelf of categories. Search still finds every one of them."))}</p>`}
 ${q ? "" : wikiTopicShelf()}
 <div class="wk-legend">
-  ${legend}${wikiWhy("Badges show where a fact comes from. Hover or focus a badge for its meaning.")}
+  ${legend}${wikiWhy(tt("wiki.legend.tip", "Badges show where a fact comes from. Hover or focus a badge for its meaning."))}
 </div>
-${listed > held ? `<p class="quiet wk-foot">${wikiNum(held)} of the help menu's ${wikiNum(listed)} pages are in this build.</p>` : ""}`;
+${listed > held ? `<p class="quiet wk-foot">${wikiEsc(tt("wiki.shelf.held", {one: "{n:,} of the help menu's {total:,} pages are in this build.", other: "{n:,} of the help menu's {total:,} pages are in this build."}, {n: held, total: listed}))}</p>` : ""}`;
 }
 
 /* The articles Big Copilot writes itself, listed under the game's own shelf.
@@ -14897,18 +14930,18 @@ function wikiTopicShelf(){
   const topics = (wikiData && wikiData.topics) || [];
   if(!topics.length) return "";
   const rows = topics.map(t => wikiRow({id: wikiTopicId(t.slug), title: t.title || t.slug,
-    category: WIKI_TOPIC_LABEL}, "", false, wikiNewBadge("topics", t.slug))).join("");
+    category: wikiTopicLabel()}, "", false, wikiNewBadge("topics", t.slug))).join("");
   return `
 <section class="sec wk-topics">
-  <div class="sechead"><h2>${wikiText(WIKI_TOPIC_LABEL)}${wikiNewBadge("shelf", "topics")}</h2>
-    ${wikiWhy("Written by Big Copilot, not taken from the game's help. Each one says what it was checked against.")}</div>
+  <div class="sechead"><h2>${wikiEsc(wikiTopicLabel())}${wikiNewBadge("shelf", "topics")}</h2>
+    ${wikiWhy(tt("wiki.topics.tip", "Written by Big Copilot, not taken from the game's help. Each one says what it was checked against."))}</div>
   <div class="wk-hits">${rows}</div>
 </section>`;
 }
 
 function wikiCategoryView(){
   const cat = wikiData.catById.get(String(wikiRoute.id));
-  if(!cat) return wikiMissing(`No category called “${wikiRoute.id}”.`);
+  if(!cat) return wikiMissing(tt("wiki.missing.cat", "No category called “{id}”.", {id: wikiRoute.id}));
   /* In the order of the names as shown, which the footer's "Game names" can change. */
   const cmp = typeof gnCompare === "function" ? gnCompare : (x, y) => x.localeCompare(y);
   const entries = wikiData.search.filter(e => e.categoryId === String(cat.id))
@@ -14916,18 +14949,19 @@ function wikiCategoryView(){
   const shown = wikiShowAll ? entries : entries.slice(0, WIKI_SHOWN);
   const listed = Number(cat.count) || entries.length;
   return `
-${wikiCrumb([{label: "Wiki", href: "#wiki"}, {label: wikiCatLabel(cat)}])}
+${wikiCrumb([{label: wikiCrumbHome(), href: "#wiki"}, {label: wikiCatLabel(cat)}])}
 <div class="wk-titlerow">
   <h1>${wikiText(wikiCatLabel(cat))}</h1>
-  <span class="chips">${wikiChip("help", `${wikiNum(entries.length)} page${entries.length === 1 ? "" : "s"}`,
+  <span class="chips">${wikiChip("help", tt("wiki.cat.pages", {one: "{n:,} page", other: "{n:,} pages"}, {n: entries.length}),
     listed > entries.length
-      ? `The game's help menu lists ${wikiNum(listed)} pages in this category; ${wikiNum(entries.length)} of them are in this build.`
-      : "Every page the game's help menu lists in this category.")}</span>
+      ? tt("wiki.cat.pages.held", {one: "The game's help menu lists {total:,} pages in this category; {n:,} of them are in this build.",
+        other: "The game's help menu lists {total:,} pages in this category; {n:,} of them are in this build."}, {n: entries.length, total: listed})
+      : tt("wiki.cat.pages.all", "Every page the game's help menu lists in this category."))}</span>
 </div>
 <div class="wk-hits">${shown.map(e => wikiRow(e, "", false)).join("")
-  || `<p class="wk-none">No page in this build belongs to this category.</p>`}</div>
+  || `<p class="wk-none">${wikiEsc(tt("wiki.cat.none", "No page in this build belongs to this category."))}</p>`}</div>
 ${entries.length > shown.length
-  ? `<p class="quiet wk-more"><button type="button" class="link" data-wiki-all>Show all ${wikiNum(entries.length)}</button></p>`
+  ? `<p class="quiet wk-more"><button type="button" class="link" data-wiki-all>${wikiEsc(wikiShowAllText(entries.length))}</button></p>`
   : ""}`;
 }
 
@@ -14937,12 +14971,12 @@ function wikiPageView(){
   const topic = wikiData.topicById.get(String(wikiRoute.id));
   if(topic) return wikiTopicPage(topic);
   const page = wikiData.byId.get(String(wikiRoute.id));
-  if(!page) return wikiMissing(`No page called “${wikiRoute.id}”. It may be one of the help links the game's own files leave dangling.`);
+  if(!page) return wikiMissing(tt("wiki.missing.page", "No page called “{id}”. It may be one of the help links the game's own files leave dangling.", {id: wikiRoute.id}));
   const cat = wikiData.catById.get(String(page.categoryId));
   if(wikiActive) return wikiGuidePage(wikiActive, page, cat);
   const ctx = {id: String(page.id)};
   return `
-${wikiCrumb([{label: "Wiki", href: "#wiki"},
+${wikiCrumb([{label: wikiCrumbHome(), href: "#wiki"},
   ...(cat ? [{label: wikiCatLabel(cat), href: wikiHref({kind: "category", id: cat.id})}] : []),
   {label: wikiName(page.key, page.title || page.id)}])}
 <div class="wk-titlerow">
@@ -14971,7 +15005,7 @@ function wikiTopicPage(topic){
   ${wikiTopicTable(section.table)}
 </section>`).join("");
   return `
-${wikiCrumb([{label: "Wiki", href: "#wiki"}, {label: WIKI_TOPIC_LABEL},
+${wikiCrumb([{label: wikiCrumbHome(), href: "#wiki"}, {label: wikiTopicLabel()},
   {label: topic.title || topic.slug}])}
 <div class="wk-titlerow">
   <h1>${wikiText(topic.title || topic.slug)}</h1>
@@ -14996,10 +15030,11 @@ function wikiTopicTable(table){
 }
 
 function wikiMissing(line){
-  return `${wikiCrumb([{label: "Wiki", href: "#wiki"}, {label: "Not here"}])}
-<div class="wk-titlerow"><h1>Not here</h1></div>
+  const title = tt("wiki.missing.title", "Not here");
+  return `${wikiCrumb([{label: wikiCrumbHome(), href: "#wiki"}, {label: title}])}
+<div class="wk-titlerow"><h1>${wikiEsc(title)}</h1></div>
 <p class="wk-lede">${wikiText(line)}</p>
-<p class="quiet"><a class="link" href="#wiki">Back to the categories</a></p>`;
+<p class="quiet"><a class="link" href="#wiki">${wikiEsc(tt("wiki.missing.back", "Back to the categories"))}</a></p>`;
 }
 
 /* Where a page's words come from, and what the extraction could not close.
@@ -15009,22 +15044,20 @@ function wikiSource(page){
   const files = Array.isArray((wikiData.provenance || {}).files) ? wikiData.provenance.files
     : Array.isArray(sources.files) ? sources.files : [];
   const build = Array.isArray(sources.build) ? sources.build : [];
-  const sourceName = f => /BusinessLayouts/i.test(f.path || "") ? "Shipped shop layout"
-    : /helpstructure/i.test(f.path || "") ? "Game help menu"
-    : /ba_buildings/i.test(f.path || "") ? "Big Copilot's city map" : "Game help text";
+  const sourceName = f => /BusinessLayouts/i.test(f.path || "") ? tt("wiki.src.layout", "Shipped shop layout")
+    : /helpstructure/i.test(f.path || "") ? tt("wiki.src.menu", "Game help menu")
+    : /ba_buildings/i.test(f.path || "") ? tt("wiki.src.map", "Big Copilot's city map") : tt("wiki.src.help", "Game help text");
   return `
 <details class="wk-src">
-  <summary>Where this page comes from</summary>
+  <summary>${wikiEsc(tt("wiki.src.title", "Where this page comes from"))}</summary>
   <div class="wk-srcbody">
-    <p>Reference facts come from the game's own help. Big Copilot arranges them into cards and
-      diagrams; authored guidance and calculations carry the amber badge. Shipped shop layouts
-      show observed placements, and do not establish every rule the game enforces.</p>
+    <p>${wikiEsc(tt("wiki.src.lede", "Reference facts come from the game's own help. Big Copilot arranges them into cards and diagrams; authored guidance and calculations carry the amber badge. Shipped shop layouts show observed placements, and do not establish every rule the game enforces."))}</p>
     ${files.length ? `<ul class="wk-files">${files.slice(0, 8).map(f =>
       `<li><b>${wikiText(sourceName(f))}</b>${f.note ? `<span>${wikiText(wikiUnkey(f.note))}</span>` : ""}</li>`).join("")}</ul>` : ""}
     ${build.length ? `<ul class="wk-files">${build.map(row =>
       `<li${row.caveat ? ` data-tip="${attr(row.caveat)}" tabindex="0"` : ""}><code>${wikiText(row.label)}</code>`
       + `<span>${row.value === null || row.value === undefined
-        ? "not observed"
+        ? wikiEsc(tt("wiki.src.notObserved", "not observed"))
         : wikiText(row.value)}</span></li>`).join("")}</ul>` : ""}
   </div>
 </details>`;
@@ -15046,10 +15079,10 @@ function wikiStamp(){
   const claimed = p.saveBuildNumber ?? p.gameBuild;
   const build = typeof claimed === "number" || typeof claimed === "string" ? claimed : null;
   const bits = [];
-  if(when) bits.push(wikiChip("dim", `game files of ${String(when).slice(0, 10)}`,
-    "The newest modification date of the game files this was read from — not when the reading ran."));
-  if(build) bits.push(wikiChip("dim", `save build ${build}`,
-    "The build number a save reports for this installation. A save from a newer build may not match what these pages say."));
+  if(when) bits.push(wikiChip("dim", tt("wiki.stamp.date", "game files of {date}", {date: String(when).slice(0, 10)}),
+    tt("wiki.stamp.date.tip", "The newest modification date of the game files this was read from — not when the reading ran.")));
+  if(build) bits.push(wikiChip("dim", tt("wiki.stamp.build", "save build {build}", {build: String(build)}),
+    tt("wiki.stamp.build.tip", "The build number a save reports for this installation. A save from a newer build may not match what these pages say.")));
   return bits.join("");
 }
 
@@ -15081,30 +15114,30 @@ function wikiYours(page, extra){
   const own = wikiOwn(page);
   const slots = [];
   if(own && own.best)
-    slots.push(wikiSlot("Demand", `${own.best.demand} in ${hoodName(own.best.hood)}`,
-      "The strongest neighbourhood for this product in your save's own demand snapshot, 0 to 100."));
+    slots.push(wikiSlot(tt("wiki.yours.demand", "Demand"), tt("wiki.yours.demand.v", "{demand} in {hood}", {demand: own.best.demand, hood: hoodName(own.best.hood)}),
+      tt("wiki.yours.demand.tip", "The strongest neighbourhood for this product in your save's own demand snapshot, 0 to 100.")));
   if(own && own.product){
-    slots.push(wikiSlot("You sell it", `${own.product.stores} shop${own.product.stores === 1 ? "" : "s"}`,
-      "Your own sites with this product on a shelf, from yesterday's trading."));
-    slots.push(wikiSlot("Sold a day", wikiNum(own.product.units),
-      "Units your shops sold yesterday, added up."));
-    slots.push(wikiSlot("Average sold price", wikiMoney(own.product.price),
-      "Your own average take per unit yesterday: revenue over units sold in your shops. Your save's figure, not a number from the game's help."));
+    slots.push(wikiSlot(tt("wiki.yours.sell", "You sell it"), tt("wiki.yours.sell.v", {one: "{n} shop", other: "{n} shops"}, {n: own.product.stores}),
+      tt("wiki.yours.sell.tip", "Your own sites with this product on a shelf, from the last seven days' trading.")));
+    slots.push(wikiSlot(tt("wiki.yours.sold", "Sold a day"), wikiNum(own.product.units),
+      tt("wiki.yours.sold.tip", "Units your shops sold a day, averaged over the last seven days and added up.")));
+    slots.push(wikiSlot(tt("wiki.yours.price", "Average sold price"), wikiMoney(own.product.price),
+      tt("wiki.yours.price.tip", "Your own average take per unit over the last seven days: revenue over units sold in your shops. Your save's figure, not a number from the game's help.")));
   }
   if(own && own.sites.length)
-    slots.push(wikiSlot("Yours", `${own.sites.length} site${own.sites.length === 1 ? "" : "s"}`,
-      "Businesses of this type in your company."));
+    slots.push(wikiSlot(tt("wiki.yours.sites", "Yours"), tt("wiki.yours.sites.v", {one: "{n} site", other: "{n} sites"}, {n: own.sites.length}),
+      tt("wiki.yours.sites.tip", "Businesses of this type in your company.")));
   (extra || []).forEach(s => slots.push(s));
   const body = slots.length
     ? `<div class="wk-savebox">${slots.join("")}</div>`
-    : `<div class="wk-savebox empty"><p class="quiet">${hasData()
-        ? "Nothing in the open save matches this page by name."
-        : "Open a save and what your own company does with this shows here. Until then the page is the game's help only."}</p></div>`;
+    : `<div class="wk-savebox empty"><p class="quiet">${wikiEsc(hasData()
+        ? tt("wiki.yours.nomatch", "Nothing in the open save matches this page by name.")
+        : tt("wiki.yours.nosave", "Open a save and what your own company does with this shows here. Until then the page is the game's help only."))}</p></div>`;
   return `
 <section class="sec">
-  <div class="sechead"><h2>Yours</h2>
-    ${wikiWhy("Your company's figures for this page. Load a save to see matching shops, sales and demand.")}
-    <span class="aside">${hasData() ? wikiChip("save", "from your save") : wikiChip("save", "no save open")}</span></div>
+  <div class="sechead"><h2>${wikiEsc(tt("wiki.yours.title", "Yours"))}</h2>
+    ${wikiWhy(tt("wiki.yours.tip", "Your company's figures for this page. Load a save to see matching shops, sales and demand."))}
+    <span class="aside">${hasData() ? wikiChip("save", tt("wiki.chip.fromSave", "from your save")) : wikiChip("save", tt("wiki.chip.noSave", "no save open"))}</span></div>
   ${body}
 </section>`;
 }
@@ -15162,70 +15195,75 @@ const wikiStationName = (r, station) => wikiName(r && r.workstationKey
    always used, never a new sentence invented here. A guide may carry its own
    COPY; otherwise the payload's shared block answers for every guide. */
 const WIKI_COPY = {
-  primaryTitle: "Sells",
-  secondaryTitle: "Also sells",
-  servicesTitle: "Services",
-  primaryRecipesTitle: "Make it",
-  secondaryRecipesTitle: "Also make",
-  dependenciesTitle: "Needs",
-  suppliersTitle: "Where to go",
-  staffTitle: "People",
-  fixturesTitle: "Fixtures",
-  stockTitle: "Stock",
-  setupTitle: "To open",
-  graphTitle: "Fits together",
-  sourceTitle: "Source",
-  roomTitle: "The room",
-  automaticFee: "Automatic",
-  automaticFeeTip: "Its own help page says this fee is charged automatically.",
-  noRecipe: "No recipe",
-  missingRecipe: "Recipe page missing",
-  missingRecipeTip: "A product's page names this recipe, but the recipe's own page is not in this build, "
-    + "so nothing about it can be read here.",
-  noRequirements: "None stated",
-  chooseProduct: "Choose a product",
+  get primaryTitle(){ return tt("wiki.copy.primaryTitle", "Sells"); },
+  get secondaryTitle(){ return tt("wiki.copy.secondaryTitle", "Also sells"); },
+  get servicesTitle(){ return tt("wiki.copy.servicesTitle", "Services"); },
+  get primaryRecipesTitle(){ return tt("wiki.copy.primaryRecipesTitle", "Make it"); },
+  get secondaryRecipesTitle(){ return tt("wiki.copy.secondaryRecipesTitle", "Also make"); },
+  get dependenciesTitle(){ return tt("wiki.copy.dependenciesTitle", "Needs"); },
+  get suppliersTitle(){ return tt("wiki.copy.suppliersTitle", "Where to go"); },
+  get staffTitle(){ return tt("wiki.copy.staffTitle", "People"); },
+  get fixturesTitle(){ return tt("wiki.copy.fixturesTitle", "Fixtures"); },
+  get stockTitle(){ return tt("wiki.copy.stockTitle", "Stock"); },
+  get setupTitle(){ return tt("wiki.copy.setupTitle", "To open"); },
+  get graphTitle(){ return tt("wiki.copy.graphTitle", "Fits together"); },
+  get sourceTitle(){ return tt("wiki.copy.sourceTitle", "Source"); },
+  get roomTitle(){ return tt("wiki.copy.roomTitle", "The room"); },
+  get automaticFee(){ return tt("wiki.copy.automaticFee", "Automatic"); },
+  get automaticFeeTip(){ return tt("wiki.copy.automaticFeeTip", "Its own help page says this fee is charged automatically."); },
+  get noRecipe(){ return tt("wiki.copy.noRecipe", "No recipe"); },
+  get missingRecipe(){ return tt("wiki.copy.missingRecipe", "Recipe page missing"); },
+  get missingRecipeTip(){ return tt("wiki.copy.missingRecipeTip", "A product's page names this recipe, but the recipe's own page is not in this build, so nothing about it can be read here."); },
+  get noRequirements(){ return tt("wiki.copy.noRequirements", "None stated"); },
+  get chooseProduct(){ return tt("wiki.copy.chooseProduct", "Choose a product"); },
   /* Where a claim would be, and the payload has none. */
-  noEquipment: "no fixture named",
-  noOtherSellers: "nobody else",
-  noListedSuppliers: "no vendor listed",
-  missingProduct: "Product details unavailable",
+  get noEquipment(){ return tt("wiki.copy.noEquipment", "no fixture named"); },
+  get noOtherSellers(){ return tt("wiki.copy.noOtherSellers", "nobody else"); },
+  get noListedSuppliers(){ return tt("wiki.copy.noListedSuppliers", "no vendor listed"); },
+  get missingProduct(){ return tt("wiki.copy.missingProduct", "Product details unavailable"); },
   /* The three kinds of line the opening list holds: what this business's own
      page requires, what another page requires of what it requires, and what the
      board suggests from the equipment's own pages. */
-  listedRequirements: "Listed requirements",
-  linkedRequirements: "Equipment and service requirements",
-  suggestedEquipment: "Additional equipment",
-  recruitmentTitle: "Recruitment",
+  get listedRequirements(){ return tt("wiki.copy.listedRequirements", "Listed requirements"); },
+  get linkedRequirements(){ return tt("wiki.copy.linkedRequirements", "Equipment and service requirements"); },
+  get suggestedEquipment(){ return tt("wiki.copy.suggestedEquipment", "Additional equipment"); },
+  get recruitmentTitle(){ return tt("wiki.copy.recruitmentTitle", "Recruitment"); },
   recruitmentHint: "",
   /* A line one of the offerings asks for, which the business page does not.
      Falls back to the caption for the requirements another page states. */
   conditionalRequirements: "",
-  sharedRecipe: "Primary and secondary range",
-  recipeLink: "Read the recipe",
-  originalHelp: "The game's own words",
-  plannerLabel: "Plan this range",
+  get sharedRecipe(){ return tt("wiki.copy.sharedRecipe", "Primary and secondary range"); },
+  get recipeLink(){ return tt("wiki.copy.recipeLink", "Read the recipe"); },
+  get originalHelp(){ return tt("wiki.copy.originalHelp", "The game's own words"); },
+  get plannerLabel(){ return tt("wiki.copy.plannerLabel", "Plan this range"); },
   /* The rank the payload gives an offering, as a label and as the sentence
      behind it. Both are copy: the page states the rank, it does not judge it. */
-  alsoCarried: "also carried",
-  alsoCarriedTip: "Not part of this type's own range: the help lists it among what the business also carries.",
-  alsoOffered: "also offered",
-  alsoOfferedTip: "Not part of this type's own range: the help lists it among what the business also offers.",
-  primaryHint: "Shelf numbers show storage capacity. A red dashed label means no supplier is listed in the help.",
-  recipeHint: "Rates are per workstation at full speed. Daily output assumes 24 hours without stopping.",
-  setupHint: "Green squares mark listed requirements; hollow squares are suggestions. Tick items as you go; checkmarks reset on reload.",
-  graphHint: "Select an item to highlight its shelves and suppliers. Select it again or press Escape to clear.",
-  placesHint: "Select a map pin to locate a supplier or recruitment agency.",
-  sourceHint: "Red dots mark missing information. Expand the sections below to read the original help and sources.",
-  fullDayHint: "Big Copilot's own reading: the page's maximum hourly rate times 24. That assumes the line runs all day, "
-    + "uninterrupted and at full rate — the help does not say what one achieves in practice, or what happens when "
-    + "an input runs out mid-hour.",
+  get alsoCarried(){ return tt("wiki.copy.alsoCarried", "also carried"); },
+  get alsoCarriedTip(){ return tt("wiki.copy.alsoCarriedTip", "Not part of this type's own range: the help lists it among what the business also carries."); },
+  get alsoOffered(){ return tt("wiki.copy.alsoOffered", "also offered"); },
+  get alsoOfferedTip(){ return tt("wiki.copy.alsoOfferedTip", "Not part of this type's own range: the help lists it among what the business also offers."); },
+  get primaryHint(){ return tt("wiki.copy.primaryHint", "Shelf numbers show storage capacity. A red dashed label means no supplier is listed in the help."); },
+  get recipeHint(){ return tt("wiki.copy.recipeHint", "Rates are per workstation at full speed. Daily output assumes 24 hours without stopping."); },
+  get setupHint(){ return tt("wiki.copy.setupHint", "Green squares mark listed requirements; hollow squares are suggestions. Tick items as you go; checkmarks reset on reload."); },
+  get graphHint(){ return tt("wiki.copy.graphHint", "Select an item to highlight its shelves and suppliers. Select it again or press Escape to clear."); },
+  get placesHint(){ return tt("wiki.copy.placesHint", "Select a map pin to locate a supplier or recruitment agency."); },
+  get sourceHint(){ return tt("wiki.copy.sourceHint", "Red dots mark missing information. Expand the sections below to read the original help and sources."); },
+  get fullDayHint(){ return tt("wiki.copy.fullDayHint", "Big Copilot's own reading: the page's maximum hourly rate times 24. That assumes the line runs all day, uninterrupted and at full rate — the help does not say what one achieves in practice, or what happens when an input runs out mid-hour."); },
   /* Hints a section only wears once the words for it are authored. */
   servicesHint: "", roomHint: "", equipmentHint: "", capacityHint: "", peopleHint: "", rangeHint: "",
 };
+/* The stand-in for the linked-requirements hint, which two kinds of row wear. */
+const wikiLinkedHint = () => tt("wiki.setup.linked.hint", "Required when using the named equipment or service.");
 function wikiCopy(key, fallback){
   const own = (wikiG().COPY || {})[key];
   const shared = (((wikiData && wikiData.raw) || {}).COPY || {})[key];
-  const value = own ?? shared ?? WIKI_COPY[key];
+  const given = own ?? shared;
+  /* The payload's labels are guideUi in tools/wiki_sample.json, and each is
+     keyed there as wiki.ui.<name> (tools/i18n.py guide_ui_calls()): the one
+     place a key is built rather than written, which is why this is ttText()
+     and not tt(). The payload's English is the English, as sent. */
+  if(typeof given === "string" && given) return ttText(`wiki.ui.${key}`, given);
+  const value = given ?? WIKI_COPY[key];
   return value === undefined || value === null ? (fallback ?? "") : String(value);
 }
 
@@ -15239,10 +15277,10 @@ function wikiFixTip(f){
   const caps = (f.capacity || []).filter(c => c && Number.isFinite(c.value))
     .map(c => `${c.label} ${wikiNum(c.value)}${c.unit ? ` ${c.unit}` : ""}`);
   const bits = [];
-  if(caps.length) bits.push(`Holds ${caps.join("; ")}.`);
-  if(Number.isFinite(f.customers)) bits.push(`Serves ${wikiNum(f.customers)} customers an hour.`);
-  if(f.observed) bits.push(`Counted in the shops the game ships: ${f.observed}`);
-  return bits.join(" ") || "Its help page gives no numbers for this one.";
+  if(caps.length) bits.push(tt("wiki.fix.holds", "Holds {caps}.", {caps: caps.join("; ")}));
+  if(Number.isFinite(f.customers)) bits.push(tt("wiki.fix.serves", {one: "Serves {n:,} customers an hour.", other: "Serves {n:,} customers an hour."}, {n: f.customers}));
+  if(f.observed) bits.push(tt("wiki.fix.observed", "Counted in the shops the game ships: {observed}", {observed: f.observed}));
+  return bits.join(" ") || tt("wiki.fix.none", "Its help page gives no numbers for this one.");
 }
 /* The first capacity a fixture's page states, for the meta line under a name. */
 const wikiFixHolds = f => ((f.capacity || []).find(c => c && Number.isFinite(c.value)) || {}).value;
@@ -15360,16 +15398,15 @@ function wikiGuidePage(g, page, cat){
   const plan = ours.length ? "recipes" : primary.length ? "primary" : fees.length ? "services" : "";
   const placed = wikiPlaced(g);
   return `
-${wikiCrumb([{label: "Wiki", href: "#wiki"},
+${wikiCrumb([{label: wikiCrumbHome(), href: "#wiki"},
   ...(cat ? [{label: wikiCatLabel(cat), href: wikiHref({kind: "category", id: cat.id})}] : []),
   {label: wikiName(b.nameSrc || page.key, b.name || page.title)}])}
 <div class="wk-titlerow">
   <h1>${wikiText(wikiName(b.nameSrc || page.key, b.name || page.title))}</h1>
-  <span class="chips">${wikiChip("help", "game help",
-    "This page is the game's own help for this business, and the help pages for the products, fixtures and recipes it names.")}${
-    placed ? wikiChip("asset", "fixtures counted in shipped shops",
-      "Where the page says how many of a fixture a shipped shop holds, that count was read from the shop layouts the game "
-      + "installs — not from the help text. It says what those shops do, not what the game requires.") : ""}</span>
+  <span class="chips">${wikiChip("help", tt("wiki.guide.chip.help", "game help"),
+    tt("wiki.guide.chip.help.tip", "This page is the game's own help for this business, and the help pages for the products, fixtures and recipes it names."))}${
+    placed ? wikiChip("asset", tt("wiki.guide.chip.counted", "fixtures counted in shipped shops"),
+      tt("wiki.guide.chip.counted.tip", "Where the page says how many of a fixture a shipped shop holds, that count was read from the shop layouts the game installs — not from the help text. It says what those shops do, not what the game requires.")) : ""}</span>
 </div>
 ${wikiGuideLede(g, primary, ctx)}
 ${wikiGuideTiles(g, offers)}
@@ -15401,12 +15438,15 @@ function wikiGuideLede(g, primary, ctx){
   /* The counted sentence is only written when the range is known either way; a
      product the extraction could not read is said out loud instead. */
   const counted = !primary.length ? ""
-    : unknown.length ? `${wikiNum(yes.length)} of its ${wikiNum(primary.length)} products are named on a wholesaler's `
-      + `list; ${wikiNum(unknown.length)} the help does not say either way.`
-    : none.length ? `${wikiNum(yes.length)} of its ${wikiNum(primary.length)} products can be ordered from any wholesaler.`
-    : `Every one of its ${wikiNum(primary.length)} products can be ordered from any wholesaler.`;
+    : unknown.length ? tt("wiki.guide.lede.unknown", {one: "{n:,} of its {total:,} products are named on a wholesaler's list; {unknown:,} the help does not say either way.",
+      other: "{n:,} of its {total:,} products are named on a wholesaler's list; {unknown:,} the help does not say either way."},
+      {n: yes.length, total: primary.length, unknown: unknown.length})
+    : none.length ? tt("wiki.guide.lede.some", {one: "{n:,} of its {total:,} products can be ordered from any wholesaler.",
+      other: "{n:,} of its {total:,} products can be ordered from any wholesaler."}, {n: yes.length, total: primary.length})
+    : tt("wiki.guide.lede.all", {one: "Every one of its {n:,} products can be ordered from any wholesaler.",
+      other: "Every one of its {n:,} products can be ordered from any wholesaler."}, {n: primary.length});
   const tail = !authored && none.length === 1
-    ? ` <b>${wikiText(wikiShown(none[0]))} is on no wholesaler's list.</b>` : "";
+    ? ` <b>${wikiEsc(tt("wiki.guide.lede.none", "{product} is on no wholesaler's list.", {product: wikiShown(none[0])}))}</b>` : "";
   return `<p class="wk-lede rv">${authored ? wikiInline(authored, ctx) : wikiText(counted)}${tail}</p>`
     + (notes.length ? `<ul class="wk-notes rv">${notes.map(n =>
         `<li>${wikiInline(n, ctx)}</li>`).join("")}</ul>` : "");
@@ -15425,30 +15465,32 @@ function wikiGuideTiles(g, offers){
   const hiring = wikiHiring(b).map(k => wikiSup(k, g)).filter(Boolean);
   const said = wikiCopy("rangeHint");
   const range = (said ? `${said} ` : "") + (primary.length
-    ? `Its own range: ${primary.map(wikiShown).join(", ")}.`
-      + (other.length ? ` Also carried, and drawn in full below: ${other.map(wikiShown).join(", ")}.`
-        : extras.length ? ` ${extras.length} more may be carried on the side; each belongs to another type's page.` : "")
-    : other.length ? `Carried here: ${other.map(wikiShown).join(", ")}.`
-    : "The help page names no range for this type.");
+    ? tt("wiki.tile.range.own", "Its own range: {list}.", {list: primary.map(wikiShown).join(", ")})
+      + (other.length ? " " + tt("wiki.tile.range.also", "Also carried, and drawn in full below: {list}.", {list: other.map(wikiShown).join(", ")})
+        : extras.length ? " " + tt("wiki.tile.range.extras", {one: "{n} more may be carried on the side; each belongs to another type's page.",
+          other: "{n} more may be carried on the side; each belongs to another type's page."}, {n: extras.length}) : "")
+    : other.length ? tt("wiki.tile.range.carried", "Carried here: {list}.", {list: other.map(wikiShown).join(", ")})
+    : tt("wiki.tile.range.none", "The help page names no range for this type."));
   return `<div class="kpis wk-tiles">
   <div class="kpi rv" data-tip="${attr(sizes.length
-    ? `Any retail size code the help lists: ${sizes.join(", ")}. The door limit rises with the code.`
-    : "The kind of building this business needs.")}">
-    <span class="lab">Building</span><span class="v t">${wikiText(b.building || "—")}</span>
+    ? tt("wiki.tile.building.tip", "Any retail size code the help lists: {codes}. The door limit rises with the code.", {codes: sizes.join(", ")})
+    : tt("wiki.tile.building.tip.none", "The kind of building this business needs."))}">
+    <span class="lab">${wikiEsc(tt("wiki.tile.building", "Building"))}</span><span class="v t">${wikiText(b.building || "—")}</span>
     ${sizes.length ? `<span class="sub">${wikiText(sizes[0])} – ${wikiText(sizes[sizes.length - 1])}</span>` : ""}</div>
-  <div class="kpi rv" data-tip="How customers are served, from the help page's own wording.">
-    <span class="lab">Customers</span><span class="v t">${wikiText(b.serving || "—")}</span></div>
+  <div class="kpi rv" data-tip="${attr(tt("wiki.tile.customers.tip", "How customers are served, from the help page's own wording."))}">
+    <span class="lab">${wikiEsc(tt("wiki.tile.customers", "Customers"))}</span><span class="v t">${wikiText(b.serving || "—")}</span></div>
   <div class="kpi rv" data-tip="${attr(range)}">
-    <span class="lab">Core range</span><span class="v">${primary.length}</span>
-    ${side ? `<span class="sub">${other.length
-      ? `+${wikiNum(other.length)} also carried` : `+${wikiNum(extras.length)} on the side`}</span>` : ""}</div>
+    <span class="lab">${wikiEsc(tt("wiki.tile.range", "Core range"))}</span><span class="v">${primary.length}</span>
+    ${side ? `<span class="sub">${wikiText(other.length
+      ? tt("wiki.tile.range.alsoN", "+{n:,} also carried", {n: other.length}) : tt("wiki.tile.range.sideN", "+{n:,} on the side", {n: extras.length}))}</span>` : ""}</div>
   <div class="kpi rv" data-tip="${attr(skills.length
     /* The agencies are named, not assigned: the payload's list is the business's,
        gathered across its skills, and this tile says no more than that. */
-    ? `${skills.map(k => wikiSkillName(b, k)).join(" and ")}.${hiring.length
-      ? ` ${wikiCopy("recruitmentTitle")}: ${hiring.map(s => `${s.name}, ${s.street}`).join("; ")}.` : ""}`
-    : "The help page names no staff skills for this type.")}">
-    <span class="lab">Staff skills</span><span class="v">${skills.length}</span>
+    ? tt("wiki.tile.skills.tip", "{skills}.", {skills: wikiAnd(skills.map(k => wikiSkillName(b, k)))}) + (hiring.length
+      ? " " + tt("wiki.tile.skills.hiring", "{title}: {agencies}.", {title: wikiCopy("recruitmentTitle"),
+        agencies: hiring.map(s => `${s.name}, ${s.street}`).join("; ")}) : "")
+    : tt("wiki.tile.skills.tip.none", "The help page names no staff skills for this type."))}">
+    <span class="lab">${wikiEsc(tt("wiki.tile.skills", "Staff skills"))}</span><span class="v">${skills.length}</span>
     ${skills.length ? `<span class="sub">${wikiText(skills.map(k => {
       /* The tile's own style lowercases the English; a name in another
          language keeps its case. */
@@ -15484,7 +15526,12 @@ function wikiGuideSetup(g, page, offers, ctx){
   const keys = Object.keys(fixtures);
   const vendorLine = list => (list || []).map(k => (wikiSup(k, g) || {}).name).filter(Boolean).join(", ");
   const vendorCount = list => (list || []).length
-    ? `${wikiNum(list.length)} vendor${list.length === 1 ? "" : "s"}` : wikiCopy("noListedSuppliers");
+    ? wikiEsc(tt("wiki.setup.vendors", {one: "{n:,} vendor", other: "{n:,} vendors"}, {n: list.length})) : wikiEsc(wikiCopy("noListedSuppliers"));
+  /* A fixture's own "Sold by" sentence, after its tip. */
+  const soldBy = list => list && list.length ? " " + tt("wiki.setup.soldBy", "Sold by {vendors}.", {vendors: vendorLine(list)}) : "";
+  /* How many customers an hour a fixture serves, ahead of its vendors. */
+  const serves = f => Number.isFinite(f.customers)
+    ? wikiRich(tt("wiki.setup.serves", "serves <b>{n}</b>/h", wikiMarks({n: wikiNum(f.customers)})), {n: wikiNum(f.customers)}) + " · " : "";
 
   /* A row is a square and a line, and the square is the only control on it: a
      requirement the help writes with links keeps them, and a link inside a
@@ -15498,7 +15545,7 @@ function wikiGuideSetup(g, page, offers, ctx){
     <button type="button" class="wk-tick" role="checkbox" aria-checked="${done ? "true" : "false"}"
       data-tick="${attr(id)}"${o.mark ? " data-wiki-more" : ""} aria-label="${attr(o.shown || o.name)}"></button>
     <span><strong>${o.html || wikiText(o.shown || o.name)}${o.catch
-      ? `<i class="wk-catch" aria-label="named by another page, not by this one"></i>` : ""}</strong>
+      ? `<i class="wk-catch" aria-label="${attr(tt("wiki.setup.catch", "named by another page, not by this one"))}"></i>` : ""}</strong>
     <span class="wk-m">${o.meta || ""}</span></span></div>`;
   };
   /* A caption over a run of rows, where the rows in one card come from more
@@ -15530,11 +15577,11 @@ function wikiGuideSetup(g, page, offers, ctx){
   /* The size codes belong to the retail table; a business the table says
      nothing about is not given its sentence. */
   const room = group(wikiCopy("roomTitle"), b.building ? [item({
-    id: "room", req: !!b.building, name: `${b.building} building`,
+    id: "room", req: !!b.building, name: tt("wiki.setup.room", "{building} building", {building: b.building}),
     meta: sizes.length ? `${wikiText(sizes[0].code)} – ${wikiText(sizes[sizes.length - 1].code)}` : "",
-    tip: wikiCopy("roomHint", `The page's own opening line: this business operates out of `
-      + `${String(b.building).toLowerCase()} buildings. Rented before anything else.`)
-      + (sizes.length ? " The traffic index belongs to the address and the door limit rises with the size code." : ""),
+    tip: wikiCopy("roomHint", tt("wiki.setup.room.tip", "The page's own opening line: this business operates out of {building} buildings. Rented before anything else.",
+      {building: String(b.building).toLowerCase()}))
+      + (sizes.length ? " " + tt("wiki.setup.room.sizes", "The traffic index belongs to the address and the door limit rises with the size code.") : ""),
   })] : [], wikiCopy("roomHint"));
 
   /* Each kind of thing named once, with what its own page says about it. */
@@ -15585,13 +15632,13 @@ function wikiGuideSetup(g, page, offers, ctx){
       shown: exact ? wikiFixName(one) : plain,
       html: exact ? null : wikiInline(line, ctx),
       meta: one
-        ? `${Number.isFinite(one.customers) ? `serves <b>${wikiNum(one.customers)}</b>/h · ` : ""}${vendorCount(one.vendors)}`
+        ? `${serves(one)}${vendorCount(one.vendors)}`
         /* Left and right of the same counter serve the same number, so each
            kind of till is named once. */
         : members.length ? eachNamed(members) : "",
-      tip: one ? `${wikiFixTip(one)}${one.vendors && one.vendors.length ? ` Sold by ${vendorLine(one.vendors)}.` : ""}`
+      tip: one ? `${wikiFixTip(one)}${soldBy(one.vendors)}`
         : members.length ? members.map(k => `${wikiFixName(fixtures[k])}: ${wikiFixTip(fixtures[k])}`).join(" ")
-        : "Listed on this business's own page under what it requires to function.",
+        : tt("wiki.setup.req.tip", "Listed on this business's own page under what it requires to function."),
     });
   });
   /* What the pieces on this page require in turn. A Computer Workstation's own
@@ -15633,10 +15680,10 @@ function wikiGuideSetup(g, page, offers, ctx){
         name: only ? links[0].text : wikiPlain(clause),
         html: wikiInline(only || clause, ctx),
         meta: one
-          ? `${Number.isFinite(one.customers) ? `serves <b>${wikiNum(one.customers)}</b>/h · ` : ""}${vendorCount(one.vendors)}`
+          ? `${serves(one)}${vendorCount(one.vendors)}`
           : eachNamed(members),
-        tip: `${wikiFixName(fixtures[k])} requires this on its own help page: “${wikiPlain(line)}”. `
-          + wikiCopy("linkedRequirementsHint", "Required when using the named equipment or service."),
+        tip: tt("wiki.setup.linked.tip", "{fixture} requires this on its own help page: “{line}”.", {fixture: wikiFixName(fixtures[k]), line: wikiPlain(line)})
+          + " " + wikiCopy("linkedRequirementsHint", wikiLinkedHint()),
       }));
       members.forEach(m => covered.add(m));
       wikiTargets(clause).forEach(t => linkedClaims.add(wikiTargetKey(t)));
@@ -15659,14 +15706,12 @@ function wikiGuideSetup(g, page, offers, ctx){
       mark: wikiShowFix && i === WIKI_SPARE,
       /* A number with no label over it would read as this fixture's one
          capacity; where its page gives several, each is named. */
-      meta: `${caps.length ? `holds <b>${wikiText(wikiCapText(caps))}</b> · ` : ""}${vendorCount(fixtures[k].vendors)}`,
-      tip: `${wikiFixTip(fixtures[k])}${fixtures[k].vendors && fixtures[k].vendors.length
-        ? ` Sold by ${vendorLine(fixtures[k].vendors)}.` : ""} `
-        + wikiCopy("equipmentSourceHint", "Listed by the equipment help; needed when using this equipment."),
+      meta: `${caps.length ? wikiRich(tt("wiki.setup.holds", "holds <b>{caps}</b>", wikiMarks({caps: wikiCapText(caps)})), {caps: wikiCapText(caps)}) + " · " : ""}${vendorCount(fixtures[k].vendors)}`,
+      tip: `${wikiFixTip(fixtures[k])}${soldBy(fixtures[k].vendors)} `
+        + wikiCopy("equipmentSourceHint", tt("wiki.setup.spare.tip", "Listed by the equipment help; needed when using this equipment.")),
     });
   }).concat(spare.length > shownSpare.length
-    ? [`<p class="quiet wk-more"><button type="button" class="link" data-wiki-fix>Show all ${
-        wikiNum(spare.length)}</button></p>`]
+    ? [`<p class="quiet wk-more"><button type="button" class="link" data-wiki-fix>${wikiEsc(wikiShowAllText(spare.length))}</button></p>`]
     : []);
 
   /* What a fixture consumes is a list on the fixture's own page. Where the
@@ -15715,21 +15760,20 @@ function wikiGuideSetup(g, page, offers, ctx){
   }));
   const feeItem = (n, i) => item({
     id: `need-${i}`, req: false, name: n.line, html: n.html, meta: wikiText(n.from.toLowerCase()),
-    tip: wikiCopy("equipmentSourceHint", `${n.from} lists this on its own help page under what it `
-      + "requires. Its own page, not this business's."),
+    tip: wikiCopy("equipmentSourceHint", tt("wiki.setup.fee.tip", "{from} lists this on its own help page under what it requires. Its own page, not this business's.", {from: n.from})),
   });
   const feeRows = kind => feeNeeds.map((n, i) => n.kind === kind ? feeItem(n, i) : "").filter(Boolean);
 
   const own = required.filter(productLine).map((line, i) => item({
     id: `stock-${i}`, req: true, name: wikiPlain(line), html: wikiInline(line, ctx), meta: "",
-    tip: "In the business page's own words, under what it requires to function.",
+    tip: tt("wiki.setup.stock.tip", "In the business page's own words, under what it requires to function."),
   }));
   const linked = [
     ...needs.map((n, i) => item({
-      id: `stock-need-${i}`, req: true, name: n.need, shown: n.shown, meta: "the fixture's own page", catch: n.missed,
-      tip: `${n.from} requires ${n.shown}, according to its help page. `
-        + (n.missed ? "The business page does not mention this requirement. " : "")
-        + wikiCopy("linkedRequirementsHint", "Required when using the named equipment or service."),
+      id: `stock-need-${i}`, req: true, name: n.need, shown: n.shown, meta: tt("wiki.setup.need.meta", "the fixture's own page"), catch: n.missed,
+      tip: tt("wiki.setup.need.tip", "{fixture} requires {need}, according to its help page.", {fixture: n.from, need: n.shown}) + " "
+        + (n.missed ? tt("wiki.setup.need.missed", "The business page does not mention this requirement.") + " " : "")
+        + wikiCopy("linkedRequirementsHint", wikiLinkedHint()),
     })),
   ];
   const stockFees = feeRows("stock");
@@ -15758,7 +15802,7 @@ function wikiGuideSetup(g, page, offers, ctx){
       return item({
         id: `skill-${skill}`, req: isRequired(skill), name: skill, shown: wikiSkillName(b, skill),
         meta: own.length ? wikiText(own.map(s => s.name).join(" · ")) : "",
-        tip: "The page says these skills can be assigned, not that the shop cannot open without them.",
+        tip: tt("wiki.setup.skill.tip", "The page says these skills can be assigned, not that the shop cannot open without them."),
       });
     }),
     ...feeRows("skill"),
@@ -15873,6 +15917,10 @@ const wikiUnkey = s => String(s ?? "")
   .replace(/\bhelp_[a-z0-9_:]+\b/gi, "the help's own page").replace(/\s+/g, " ").trim();
 
 /* --- what it sells -------------------------------------------------------- */
+/* The words a card and the graph's lanes share. */
+const wikiGoesOn = () => tt("wiki.card.goesOn", "Goes on");
+const wikiComesFrom = () => tt("wiki.card.comesFrom", "Comes from");
+const wikiAnyWholesaler = () => tt("wiki.card.wholesale.any", "Any wholesaler");
 const wikiPill = (text, n, cls, tip) => `<span class="wk-pill${cls ? ` ${cls}` : ""}"`
   + `${tip ? ` data-tip="${attr(tip)}"` : ""}>${wikiText(text)}${n ? `<b>${wikiText(n)}</b>` : ""}</span>`;
 /* A card's own title, and a link to the item's own help page where this build
@@ -15886,7 +15934,7 @@ function wikiCardTitle(p){
 function wikiGoodsCard(p, g){
   if(p.gone) return `<div class="wk-card gone rv"><div class="wk-cardtop">
     <h3>${wikiText(wikiCopy("missingProduct"))}</h3>${wikiChip("gap")}</div>
-    <dl><dt>Goes on</dt><dd><span class="quiet">${wikiText(wikiCopy("noEquipment"))}</span></dd></dl></div>`;
+    <dl><dt>${wikiEsc(wikiGoesOn())}</dt><dd><span class="quiet">${wikiText(wikiCopy("noEquipment"))}</span></dd></dl></div>`;
   const wholesalers = (g.WHOLESALERS || []).map(w => w.name);
   const goes = (p.fixtures || []).map(k => {
     const f = wikiFix(k, g);
@@ -15897,29 +15945,28 @@ function wikiGoodsCard(p, g){
   const state = wikiWholesale(p);
   const from = [
     state === "yes"
-      ? wikiPill("Any wholesaler", wholesalers.length, "on",
-          `${wholesalers.join(", ")}. Its own help page names the wholesalers, and it is on their product list.`)
+      ? wikiPill(wikiAnyWholesaler(), wholesalers.length, "on",
+          tt("wiki.card.wholesale.tip", "{wholesalers}. Its own help page names the wholesalers, and it is on their product list.", {wholesalers: wholesalers.join(", ")}))
       : state === "none"
-      ? wikiPill("No wholesaler listed", "", "no",
-          "No wholesaler's page lists it and its own page names none. That is the help being silent, not a rule in the "
-          + "game: import it or make it, and check in-game before you count on it.")
-      : wikiPill("Wholesale not stated", "", "unknown",
-          "The help does not say either way for this one, so neither does this page."),
+      ? wikiPill(tt("wiki.card.wholesale.none", "No wholesaler listed"), "", "no",
+          tt("wiki.card.wholesale.none.tip", "No wholesaler's page lists it and its own page names none. That is the help being silent, not a rule in the game: import it or make it, and check in-game before you count on it."))
+      : wikiPill(tt("wiki.card.wholesale.unknown", "Wholesale not stated"), "", "unknown",
+          tt("wiki.card.wholesale.unknown.tip", "The help does not say either way for this one, so neither does this page.")),
     ...(p.importers || []).map(k => {
       const sup = wikiSup(k, g);
       /* The address is the point of the pill: 4 Pier and 9 Pier are different
          buildings, so the number stays on. */
       return sup ? wikiPill(sup.name, sup.street, "", `${sup.kind}. ${sup.street}, ${hoodName(sup.hood)}.`) : "";
     }),
-    wikiRecipeKeys(p).length ? wikiPill("Your factory", "", "", "Made in a factory; the recipe is below.") : "",
+    wikiRecipeKeys(p).length ? wikiPill(tt("wiki.card.factory", "Your factory"), "", "", tt("wiki.card.factory.tip", "Made in a factory; the recipe is below.")) : "",
   ].join("");
   const also = (p.alsoSoldBy || []).map((n, i) => wikiPill(wikiName((p.alsoSoldByKeys || [])[i], n))).join("") || `<span class="quiet">${wikiText(wikiCopy("noOtherSellers"))}</span>`;
   return `<div class="wk-card rv"><div class="wk-cardtop"><h3>${wikiCardTitle(p)}</h3>${
     p.group === "additional" ? wikiChip("dim", wikiCopy("alsoCarried"), wikiCopy("alsoCarriedTip")) : ""}</div>
-    <dl><dt${wikiCopy("capacityHint") ? ` data-tip="${attr(wikiCopy("capacityHint"))}" tabindex="0"` : ""}>Goes on</dt>
+    <dl><dt${wikiCopy("capacityHint") ? ` data-tip="${attr(wikiCopy("capacityHint"))}" tabindex="0"` : ""}>${wikiEsc(wikiGoesOn())}</dt>
     <dd>${goes || `<span class="quiet">${wikiText(wikiCopy("noEquipment"))}</span>`}</dd>
-    <dt>Comes from</dt><dd>${from}</dd>
-    <dt>Also sold by</dt><dd>${also}</dd></dl></div>`;
+    <dt>${wikiEsc(wikiComesFrom())}</dt><dd>${from}</dd>
+    <dt>${wikiEsc(tt("wiki.card.alsoSold", "Also sold by"))}</dt><dd>${also}</dd></dl></div>`;
 }
 /* One section of cards. The range a business calls its own and the range it
    also carries are drawn the same way, in their own sections, because a shop
@@ -15953,7 +16000,7 @@ function wikiGuideServices(g, fees, plan, ctx){
       p.group === "additional" ? wikiChip("dim", wikiCopy("alsoOffered"), wikiCopy("alsoOfferedTip")) : ""}</div>
       <dl><dt>${wikiText(wikiCopy("dependenciesTitle"))}</dt>
       <dd class="wk-lines">${lines || `<span class="quiet">${wikiText(wikiCopy("noRequirements"))}</span>`}</dd>
-      <dt>Also offered by</dt><dd>${also}</dd></dl></div>`;
+      <dt>${wikiEsc(tt("wiki.card.alsoOffered", "Also offered by"))}</dt><dd>${also}</dd></dl></div>`;
   }).join("");
   return `
 <section class="sec">
@@ -15990,7 +16037,7 @@ function wikiGraphModel(primary, g){
       if(!f) return;
       const caps = wikiCaps(p, k, f);
       add("fixture", `f:${k}`, wikiFixName(f), [
-        caps.length ? `holds ${wikiCapText(caps)}` : "",
+        caps.length ? tt("wiki.graph.holds", "holds {caps}", {caps: wikiCapText(caps)}) : "",
         Number.isFinite(f.customers) ? `${wikiNum(f.customers)}/h` : "",
       ].filter(Boolean).join(" · "));
       /* Supply reaches a product; a product goes on a fixture. The lines are
@@ -16001,7 +16048,7 @@ function wikiGraphModel(primary, g){
     (p.importers || []).forEach(k => {
       const sup = wikiSup(k, guide);
       if(!sup) return;
-      add("source", `s:${k}`, sup.name, `${sup.street} · import`);
+      add("source", `s:${k}`, sup.name, tt("wiki.graph.import", "{street} · import", {street: sup.street}));
       edges.push([`p:${p.key}`, `s:${k}`, "hop"]);
     });
     /* A shop's products may be made on more than one workstation, so each
@@ -16012,13 +16059,13 @@ function wikiGraphModel(primary, g){
       if(!station.name) return;
       const id = `s:ws:${wikiKey(station.name)}`;
       add("source", id, wikiName(recipe && recipe.workstationKey
-        ? `ba:factoryworkstationtype_${recipe.workstationKey}` : null, station.name), "your factory");
+        ? `ba:factoryworkstationtype_${recipe.workstationKey}` : null, station.name), tt("wiki.graph.factory", "your factory"));
       edges.push([`p:${p.key}`, id, "hop"]);
     });
   });
   if(anyWholesale){
     const n = (guide.WHOLESALERS || []).length;
-    nodes.source.unshift({id: "s:wholesale", name: "Any wholesaler", sub: `${wikiNum(n)} named`});
+    nodes.source.unshift({id: "s:wholesale", name: wikiAnyWholesaler(), sub: tt("wiki.graph.named", {one: "{n:,} named", other: "{n:,} named"}, {n})});
     primary.forEach(p => { if(wikiWholesale(p) === "yes") edges.push([`p:${p.key}`, "s:wholesale", "hop"]); });
   }
   return {nodes, edges};
@@ -16030,8 +16077,8 @@ function wikiGraphModel(primary, g){
 function wikiCrosscheckChip(primary){
   const notes = primary.map(p => p.crosscheck).filter(Boolean);
   if(!notes.length) return "";
-  return wikiChip("help", "read both ways",
-    `${notes.join(" ")} Both directions are the same help file agreeing with itself, not a second source.`);
+  return wikiChip("help", tt("wiki.graph.both", "read both ways"),
+    `${notes.join(" ")} ` + tt("wiki.graph.both.tip", "Both directions are the same help file agreeing with itself, not a second source."));
 }
 /* Above this many products the lanes stop being a picture, so the graph is
    drawn one product at a time and the cards above keep every relationship. */
@@ -16063,15 +16110,15 @@ function wikiGuideGraph(g, goods){
     <div class="wk-shadow" aria-hidden="true"></div>
     <div class="wk-ball" aria-hidden="true"><i></i><u></u></div>
     <div class="wk-lanes">
-      ${lane("Product", model.nodes.product)}
-      ${lane("Goes on", model.nodes.fixture)}
-      ${lane("Comes from", model.nodes.source)}
+      ${lane(tt("wiki.graph.product", "Product"), model.nodes.product)}
+      ${lane(wikiGoesOn(), model.nodes.fixture)}
+      ${lane(wikiComesFrom(), model.nodes.source)}
     </div>
     <div class="wk-graphfoot">
       <span class="wk-say" role="status"></span>
-      <span class="wk-key"><i></i>goes on<i class="d"></i>comes from</span>
+      <span class="wk-key"><i></i>${wikiEsc(tt("wiki.graph.key.on", "goes on"))}<i class="d"></i>${wikiEsc(tt("wiki.graph.key.from", "comes from"))}</span>
       <span class="wk-park" aria-hidden="true"></span>
-      <button type="button" class="ibtn wk-letgo" data-wiki-letgo hidden aria-label="Let go of the picked node">${icon("x") || WIKI_CHEV}</button>
+      <button type="button" class="ibtn wk-letgo" data-wiki-letgo hidden aria-label="${attr(tt("wiki.graph.letgo", "Let go of the picked node"))}">${icon("x") || WIKI_CHEV}</button>
     </div>
   </div>
 </section>`;
@@ -16081,6 +16128,19 @@ function wikiGuideGraph(g, goods){
 /* One flow per recipe, on the workstation that recipe's own page names. A
    recipe that makes more than one of the shop's products is drawn once, and
    says which of them it is for. */
+/* A workstation's note: the machines it is built from, and how many recipes
+   it runs. */
+function wikiStationTip(station){
+  const machine = station.assembly ? wikiName(station.assemblyKey, station.assembly) : tt("wiki.recipe.machine", "An assembly machine");
+  const line = (station.production || []).length
+    ? tt("wiki.recipe.machine.with", "{machine} with {tools}", {machine,
+      tools: station.production.map((n, i) => wikiName((station.productionKeys || [])[i], n)).join(", ")})
+    : machine;
+  return (station.runs || []).length
+    ? tt("wiki.recipe.machine.runs", {one: "{line}. The same workstation runs {n} recipes.", other: "{line}. The same workstation runs {n} recipes."},
+      {line, n: station.runs.length})
+    : line;
+}
 function wikiRecipeFlow(row, g){
   const r = row.recipe;
   /* A recipe shared across the two ranges says so, and every product it makes
@@ -16108,27 +16168,24 @@ function wikiRecipeFlow(row, g){
        a measurement. */
     const rate = Number.isFinite(i.per) ? `${wikiNum(i.per)}/h` : "—";
     return `<div class="wk-ing"><span>${wikiText(wikiName(i.slug, i.item))}${froms ? `<span class="wk-from">${wikiText(froms)}</span>` : ""}</span>`
-      + `<span class="wk-r"${Number.isFinite(i.per) ? "" : ' data-tip="The recipe page gives no hourly rate for this input."'}>${rate}</span></div>`;
+      + `<span class="wk-r"${Number.isFinite(i.per) ? "" : ` data-tip="${attr(tt("wiki.recipe.noRate.tip", "The recipe page gives no hourly rate for this input."))}"`}>${rate}</span></div>`;
   }).join("");
   const per = (r.out || {}).per;
   const rated = Number.isFinite(per);
   return `<div class="wk-recipe rv">${roles}<div class="wk-flow">
-    <div class="wk-box">${ings || `<span class="quiet">no ingredient stated</span>`}</div>
+    <div class="wk-box">${ings || `<span class="quiet">${wikiEsc(tt("wiki.recipe.noInput", "no ingredient stated"))}</span>`}</div>
     <span class="wk-arrow" aria-hidden="true"><i></i><i></i><i></i></span>
-    <div class="wk-box mid" data-tip="${attr(`${station.assembly ? wikiName(station.assemblyKey, station.assembly) : "An assembly machine"}`
-      + `${(station.production || []).length
-        ? ` with ${station.production.map((n, i) => wikiName((station.productionKeys || [])[i], n)).join(", ")}` : ""}`
-      + `${(station.runs || []).length ? `. The same workstation runs ${station.runs.length} recipes.` : ""}`)}">
-      <b>${wikiText(wikiStationName(r, station) || "Workstation")}</b>
+    <div class="wk-box mid" data-tip="${attr(wikiStationTip(station))}">
+      <b>${wikiText(wikiStationName(r, station) || tt("wiki.recipe.station", "Workstation"))}</b>
       ${(station.runs || []).length
-        ? `<small>${wikiNum(station.runs.length)} ${wikiCount(station.runs.length, "recipe")}</small>` : ""}</div>
+        ? `<small>${wikiEsc(tt("wiki.recipe.runs", {one: "{n:,} recipe", other: "{n:,} recipes"}, {n: station.runs.length}))}</small>` : ""}</div>
     <span class="wk-arrow" aria-hidden="true"><i></i><i></i><i></i></span>
     <div class="wk-out">${rated
       ? `<b>${wikiNum(per)}<small>/h</small></b>` : `<b class="none">—</b>`}
       <span>${wikiText(wikiName((r.out || {}).slug, (r.out || {}).item || ""))}</span>
       ${rated
-        ? wikiChip("model", `${wikiNum(per * 24)}/day`, wikiCopy("fullDayHint"))
-        : wikiChip("gap", "rate not stated", "This recipe page gives no maximum hourly rate, so there is no day figure to take from it.")}</div>
+        ? wikiChip("model", tt("wiki.recipe.perDay", "{n:,}/day", {n: per * 24}), wikiCopy("fullDayHint"))
+        : wikiChip("gap", tt("wiki.recipe.noRate", "rate not stated"), tt("wiki.recipe.noRate.day", "This recipe page gives no maximum hourly rate, so there is no day figure to take from it."))}</div>
   </div></div>`;
 }
 function wikiGuideRecipes(g, rows, which, plan){
@@ -16145,6 +16202,17 @@ function wikiGuideRecipes(g, rows, which, plan){
 }
 
 /* --- where to go ----------------------------------------------------------- */
+/* What a place is for, by the role it is gathered under. */
+function wikiRoleWord(role){
+  switch(role){
+    case "fixtures": return tt("wiki.place.role.fixtures", "fixtures");
+    case "products": return tt("wiki.place.role.products", "products");
+    case "ingredients": return tt("wiki.place.role.ingredients", "ingredients");
+    case "people": return tt("wiki.place.role.people", "people");
+    case "machines": return tt("wiki.place.role.machines", "machines");
+    default: return role;
+  }
+}
 function wikiGuidePlaces(g){
   const roles = {};
   const role = (key, what) => {
@@ -16164,8 +16232,9 @@ function wikiGuidePlaces(g){
   const rows = Object.keys(roles).map(key => {
     const sup = wikiSup(key, g);
     if(!sup) return "";
-    const facts = [sup.size ? `size ${sup.size}` : "", sup.area ? `${wikiNum(sup.area)} m²` : "",
-      Number.isFinite(sup.traffic) ? `traffic ${sup.traffic}` : ""].filter(Boolean).join(" · ");
+    const facts = [sup.size ? tt("wiki.place.size", "size {size}", {size: String(sup.size)}) : "",
+      sup.area ? tt("wiki.place.area", "{n:,} m²", {n: sup.area}) : "",
+      Number.isFinite(sup.traffic) ? tt("wiki.place.traffic", "traffic {n}", {n: sup.traffic}) : ""].filter(Boolean).join(" · ");
     const mapId = /^ba:street_[a-z]+#\d+$/.test(key) ? ` data-map-id="${attr(key)}"` : "";
     /* The board's own two letters for the neighbourhood, not initials of our
        own invention: The Hamptons is HA here as it is everywhere else. */
@@ -16174,7 +16243,7 @@ function wikiGuidePlaces(g){
       ${code ? `<span class="hood" data-tip="${attr(hoodName(sup.hood))}">${wikiText(code)}</span>` : `<span></span>`}
       <span class="wk-nm">${wikiText(sup.name)}${sup.flag ? `<i class="wk-flag" data-tip="${attr(sup.flag)}"></i>` : ""}
         <small class="wk-addr" data-addr="${attr(sup.street)}"${mapId} data-tip="${attr(`${sup.hood ? hoodName(sup.hood) : ""}${facts ? ` · ${facts}` : ""}`)}">${wikiText(sup.street)}</small></span>
-      <span class="wk-role">${wikiText([...roles[key]].join(" · "))}</span></div>`;
+      <span class="wk-role">${wikiText([...roles[key]].map(wikiRoleWord).join(" · "))}</span></div>`;
   }).join("");
   if(!rows) return "";
   const wholesalers = (g.WHOLESALERS || []);
@@ -16183,8 +16252,8 @@ function wikiGuidePlaces(g){
   <div class="sechead"><h2>${wikiText(wikiCopy("suppliersTitle"))}</h2>
     ${wikiWhy(wikiCopy("placesHint"))}
     ${wholesalers.length ? `<span class="aside">${wikiChip("dim",
-      `${wikiNum(wholesalers.length)} ${wikiCount(wholesalers.length, "wholesaler")}`,
-      `${wholesalers.map(w => w.name).join(", ")}. Named on the help's own wholesale page.`)}</span>` : ""}</div>
+      tt("wiki.place.wholesalers", {one: "{n:,} wholesaler", other: "{n:,} wholesalers"}, {n: wholesalers.length}),
+      tt("wiki.place.wholesalers.tip", "{names}. Named on the help's own wholesale page.", {names: wholesalers.map(w => w.name).join(", ")}))}</span>` : ""}</div>
   <div class="wk-places">${rows}</div>
 </section>`;
 }
@@ -16212,64 +16281,75 @@ function wikiPlanChain(){
 function wikiPlanControl(){
   const slot = $("wikiPlanSlot");
   if(!slot) return;
-  const name = (wikiG().BUSINESS || {}).name || "this range";
+  const b = wikiG().BUSINESS || {};
+  const own = b.name ? wikiName(b.nameSrc, b.name) : "";
   if(wikiCanPlan())
     /* The planner works from the business's own range; the recipes for what it
        also carries stay here. The words for that distinction are authored. */
     slot.innerHTML = `<button type="button" class="btn2" data-wiki-plan
-      data-tip="${attr(wikiCopy("plannerHint", `Open the Growth planner with ${name} selected.`))}"
+      data-tip="${attr(wikiCopy("plannerHint", own
+        ? tt("wiki.plan.tip", "Open the Growth planner with {name} selected.", {name: own})
+        : tt("wiki.plan.tip.range", "Open the Growth planner with this range selected.")))}"
       >${wikiText(wikiCopy("plannerLabel"))} ${icon("chev")}</button>`;
   else
     slot.innerHTML = `<span class="quiet" data-tip="${attr(hasData()
-      ? "This business type is missing from your save's planner catalogue."
-      : "Load a save to plan with your factories and orders.")}"
-      >${hasData() ? "Not in this save's catalogue" : "Open a save to plan this range"}</span>`;
+      ? tt("wiki.plan.missing.tip", "This business type is missing from your save's planner catalogue.")
+      : tt("wiki.plan.nosave.tip", "Load a save to plan with your factories and orders."))}"
+      >${wikiEsc(hasData() ? tt("wiki.plan.missing", "Not in this save's catalogue") : tt("wiki.plan.nosave", "Open a save to plan this range"))}</span>`;
 }
 
 /* Prices are joined by stable item/type IDs, never names or yesterday's sales.
    Native disclosures keep neighbourhoods compact without extra saved UI state. */
+/* A price the save does not carry. */
+const wikiUnavailable = () => tt("wiki.prices.unavailable", "Unavailable");
 function wikiGuidePrices(g, offers){
   if(!offers.length) return "";
-  const heading = `<div class="sechead"><h2>Prices in your save</h2>
-    <span class="aside">${wikiChip("save", hasData() ? `save day ${D.meta?.day ?? "unknown"}` : "no save open")}</span></div>`;
+  const heading = `<div class="sechead"><h2>${wikiEsc(tt("wiki.prices.title", "Prices in your save"))}</h2>
+    <span class="aside">${wikiChip("save", hasData()
+      ? (D.meta?.day ?? null) === null ? tt("wiki.prices.day.unknown", "save day unknown") : tt("wiki.prices.day", "save day {day}", {day: D.meta.day})
+      : tt("wiki.chip.noSave", "no save open"))}</span></div>`;
   if(!hasData()) return `<section class="sec" id="${WIKI_SECTIONS.prices}">${heading}
-    <p class="quiet">Open a save to see your configured prices and neighbourhood market prices.</p></section>`;
+    <p class="quiet">${wikiEsc(tt("wiki.prices.nosave", "Open a save to see your configured prices and neighbourhood market prices."))}</p></section>`;
   const mine = (D.businesses || []).filter(b => b.typeSlug === g.BUSINESS.nameSrc && b.status !== "vacant");
-  /* By the neighbourhood's key; a shop with none is grouped under a word. */
-  const UNKNOWN = "Unknown neighbourhood";
+  /* By the neighbourhood's key; a shop with none is grouped under a marker
+     that no key can be, and worded when shown. */
+  const UNKNOWN = "?unknown";
   const hoodOf = b => b.neighbourhood || UNKNOWN;
-  const hoodWords = h => h === UNKNOWN ? h : hoodName(h);
+  const hoodWords = h => h === UNKNOWN ? tt("wiki.prices.hood.unknown", "Unknown neighbourhood") : hoodName(h);
   const rows = new Map(((D.market || {}).rows || []).map(r => [r.slug, r]));
   const hoods = [...new Set([
     ...mine.map(hoodOf),
     ...offers.flatMap(p => (rows.get(p.slug)?.cells || []).filter(Boolean).map(c => c.hood)),
   ].filter(Boolean))];
   const price = n => Number.isFinite(n) && n >= 0 ? `$${n.toFixed(2)}` : null;
+  /* The two price columns' headers, which each cell also carries for the
+     narrow layout. */
+  const colMine = tt("wiki.prices.col.mine", "Your configured price");
+  const colMarket = tt("wiki.prices.col.market", "Lowest market price");
   const body = hoods.map((hood, index) => {
     const shops = mine.filter(b => hoodOf(b) === hood);
     const lines = offers.map(p => {
       const own = shops.map(b => {
         const line = (b.lines || []).find(l => l.slug === p.slug);
-        const value = line && !("configuredPrice" in line) ? "Unavailable" : price(line?.configuredPrice) ?? "Not set";
+        const value = line && !("configuredPrice" in line) ? wikiUnavailable() : price(line?.configuredPrice) ?? tt("wiki.prices.notSet", "Not set");
         return `<div>${wikiText(b.name)}: <b>${wikiText(value)}</b></div>`;
-      }).join("") || "No matching shop";
+      }).join("") || wikiEsc(tt("wiki.prices.noShop", "No matching shop"));
       const cell = (rows.get(p.slug)?.cells || []).find(c => c && c.hood === hood);
       const market = price(cell?.marketPrice);
-      return `<tr><th scope="row">${wikiText(wikiShown(p))}</th><td data-label="Your configured price">${own}</td><td data-label="Lowest market price">${
-        market === null ? `<span class="quiet">Unavailable</span><small>${wikiText(cell?.marketPriceNote || "Not available in this save")}</small>`
+      return `<tr><th scope="row">${wikiText(wikiShown(p))}</th><td data-label="${attr(colMine)}">${own}</td><td data-label="${attr(colMarket)}">${
+        market === null ? `<span class="quiet">${wikiEsc(wikiUnavailable())}</span><small>${wikiText(cell?.marketPriceNote || tt("wiki.prices.notInSave", "Not available in this save"))}</small>`
           : wikiText(market)}</td></tr>`;
     }).join("");
     return `<details class="wk-prices"${index === 0 ? " open" : ""}>
       <summary>${wikiText(hoodWords(hood))}</summary>
-      <div class="wk-price-scroll" role="region" aria-label="${attr(hoodWords(hood) + " prices")}" tabindex="0">
-      <table aria-label="${attr(hoodWords(hood) + " prices per unit or service")}">
-        <thead><tr><th scope="col">Product or service</th><th scope="col">Your configured price</th>
-        <th scope="col">Lowest market price</th></tr></thead><tbody>${lines}</tbody></table></div></details>`;
+      <div class="wk-price-scroll" role="region" aria-label="${attr(tt("wiki.prices.region", "{hood} prices", {hood: hoodWords(hood)}))}" tabindex="0">
+      <table aria-label="${attr(tt("wiki.prices.table", "{hood} prices per unit or service", {hood: hoodWords(hood)}))}">
+        <thead><tr><th scope="col">${wikiEsc(tt("wiki.prices.col.item", "Product or service"))}</th><th scope="col">${wikiText(colMine)}</th>
+        <th scope="col">${wikiText(colMarket)}</th></tr></thead><tbody>${lines}</tbody></table></div></details>`;
   }).join("");
   return `<section class="sec" id="${WIKI_SECTIONS.prices}">${heading}
-    <p class="quiet">Prices per unit or service. The market minimum includes your shops and other business types selling the item.
-    Reconstructed from this save; MarketInsider's cached display may differ. These are not recommended prices.</p>
-    ${body || '<p class="quiet">No matching shops or neighbourhood market data in this save.</p>'}</section>`;
+    <p class="quiet">${wikiEsc(tt("wiki.prices.lede", "Prices per unit or service. The market minimum includes your shops and other business types selling the item. Reconstructed from this save; MarketInsider's cached display may differ. These are not recommended prices."))}</p>
+    ${body || `<p class="quiet">${wikiEsc(tt("wiki.prices.none", "No matching shops or neighbourhood market data in this save."))}</p>`}</section>`;
 }
 
 function wikiGuideOwn(g, goods){
@@ -16277,11 +16357,11 @@ function wikiGuideOwn(g, goods){
   const b = g.BUSINESS || {};
   const mine = (D.businesses || []).filter(x => x.typeSlug === b.nameSrc && x.status !== "vacant");
   const slots = [];
-  if(mine.length) slots.push(wikiSlot("Your shops", `${mine.length}`,
-    `Businesses of this type in your company: ${mine.slice(0, 4).map(x => x.name).join(", ")}.`));
+  if(mine.length) slots.push(wikiSlot(tt("wiki.yours.shops", "Your shops"), `${mine.length}`,
+    tt("wiki.yours.shops.tip", "Businesses of this type in your company: {shops}.", {shops: mine.slice(0, 4).map(x => x.name).join(", ")})));
   const sold = (D.products || []).filter(p => goods.some(x => x.slug === p.slug));
-  if(sold.length && goods.length) slots.push(wikiSlot("Its range, sold", `${sold.length} of ${goods.length}`,
-    `${sold.map(p => p.item).join(", ")} moved in your shops yesterday.`));
+  if(sold.length && goods.length) slots.push(wikiSlot(tt("wiki.yours.rangeSold", "Its range, sold"), tt("wiki.yours.rangeSold.v", "{n} of {total}", {n: sold.length, total: goods.length}),
+    tt("wiki.yours.rangeSold.tip", "{items} moved in your shops in the last seven days.", {items: sold.map(p => p.item).join(", ")})));
   return slots;
 }
 
@@ -16293,7 +16373,7 @@ function wikiGuideSource(g, page, ctx){
   <div class="sechead"><h2>${wikiText(wikiCopy("sourceTitle"))}</h2>
     ${wikiWhy(wikiCopy("sourceHint"))}
     <span class="aside">${(g.GAPS || []).length
-      ? wikiChip("gap", `${g.GAPS.length} ${wikiCount(g.GAPS.length, "gap")}`) : ""}</span></div>
+      ? wikiChip("gap", tt("wiki.source.gaps", {one: "{n} gap", other: "{n} gaps"}, {n: g.GAPS.length})) : ""}</span></div>
   <div class="wk-gaps">${gaps}</div>
   <details class="wk-src">
     <summary>${wikiText(wikiCopy("originalHelp"))}</summary>
@@ -16349,15 +16429,14 @@ function drawWiki(hold){
   const host = wikiRoot();
   if(!host) return;
   if(wikiStatus === "loading" || wikiStatus === "idle"){
-    host.innerHTML = wikiFrame(`<p class="wk-state" role="status">Reading the game's help…</p>`);
+    host.innerHTML = wikiFrame(`<p class="wk-state" role="status">${wikiEsc(tt("wiki.state.loading", "Reading the game's help…"))}</p>`);
     return;
   }
   if(wikiStatus === "error"){
     host.innerHTML = wikiFrame(`<div class="wk-state err" role="status">
-      <p><b>The wiki could not be opened.</b> ${wikiText(wikiFailure)}</p>
-      <p class="quiet">The wiki is the game's own help text, kept beside the board. It is a separate file from your save,
-        so nothing else on the board is affected.</p>
-      <p><button type="button" class="btn2" data-wiki-retry>Try again</button></p>
+      <p><b>${wikiEsc(tt("wiki.state.error", "The wiki could not be opened."))}</b> ${wikiText(typeof wikiFailure === "function" ? wikiFailure() : wikiFailure)}</p>
+      <p class="quiet">${wikiEsc(tt("wiki.state.error.note", "The wiki is the game's own help text, kept beside the board. It is a separate file from your save, so nothing else on the board is affected."))}</p>
+      <p><button type="button" class="btn2" data-wiki-retry>${wikiEsc(tt("wiki.state.retry", "Try again"))}</button></p>
     </div>`);
     wireWiki();
     return;
@@ -16560,7 +16639,7 @@ function wikiPaint(){
   const links = wikiPicked ? edges.filter(e => e[0] === wikiPicked || e[1] === wikiPicked).length : 0;
   /* The reading is the accessible one too: the status line says what is held
      and how many lines it has, and the button that lets go appears with it. */
-  if(say) say.textContent = wikiPicked ? `${name} · ${links} link${links === 1 ? "" : "s"}` : "";
+  if(say) say.textContent = wikiPicked ? tt("wiki.graph.say", {one: "{name} · {n} link", other: "{name} · {n} links"}, {name, n: links}) : "";
   const letgo = graph.querySelector("[data-wiki-letgo]");
   if(letgo) letgo.hidden = !wikiPicked;
   wikiBall();
@@ -19622,9 +19701,9 @@ function planDraw(){
       : [tt("gr.ing.note", "Company targets are company-wide: you type each one across your importer contracts in the game; the board adds them up and never guesses a split per warehouse."),
         priced ? tt("gr.ing.cost", {one: "A week costs {w:$} across the {priced} of {n} ingredients this company already buys.",
           other: "A week costs {w:$} across the {priced} of {n} ingredients this company already buys."}, {w: cash, priced, n: total}) : "",
-        priced && priced < total ? tt("gr.ing.prices", {one: "Unit prices are what you paid on day {day}; the other {n} show quantities only.",
-          other: "Unit prices are what you paid on day {day}; the other {n} show quantities only."},
-          {day: D.plan.priceDay, n: total - priced}) : ""].filter(Boolean).join(" ");
+        priced && priced < total ? tt("gr.ing.prices", {one: "Unit prices are what you paid {span}; the other {n} show quantities only.",
+          other: "Unit prices are what you paid {span}; the other {n} show quantities only."},
+          {span: priceSpan(), n: total - priced}) : ""].filter(Boolean).join(" ");
   }
 }
 const bindPlan = once(() => on("click", "tr.line .step a[data-d]", (a, e) => {

@@ -74,7 +74,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `products` | `_products()`, with `peak`/`swing`/`weeks` from `_product_rhythm()` | `drawProducts`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn` |
 | `staff` | `_staff_summary()` | `drawKpis`, `drawPayroll` |
 | `loans` | `_loans()` | `drawKpis`, and the `SS_VIEWS` `cash` entry's `live()` |
-| `supply` | `_supply()`; its `facts` from `_supply_facts()`, each fact's status word from `_supply_status()`; `margin` and `roundTo` are `SUPPLY_MARGIN` and `SUPPLY_ROUND_TO` | `supplyChecklistRows`, `sbData`, the tab drawers `drawShopsTab`, `drawWarehousesTab`, `drawFactoriesTab` (with `sbDepotRows`, `sbTabOf`, `sbNodeOpen`), `drawSite`, `drawFlow`, `flowLayout`, `factoryView`; `web/map.js` `refreshCityMaps`. `supply.facts` only through `supplyFact()` (below), and `supply.idle` only through `idleRows()`, which keeps the rows idle under the sizing on screen (`modes`) with their `dem` laid over |
+| `supply` | `_supply()`; its `facts` from `_supply_facts()`, each fact's status word from `_supply_status()`; `margin` and `roundTo` are `SUPPLY_MARGIN` and `SUPPLY_ROUND_TO` | `supplyChecklistRows`, `sbData`, the tab drawers `drawShopsTab`, `drawWarehousesTab`, `drawFactoriesTab` (with `sbDepotRows`, `sbTabOf`, `sbNodeOpen`), `drawSite`, `drawFlow`, `flowLayout`, `factoryView`; `web/map.js` `refreshCityMaps`. `supply.facts` only through `supplyFact()` (below), and `supply.idle` only through `idleRows()`, which keeps the rows idle under the sizing on screen (`modes`) with their `dem` laid over. `supply.wholesaleShops` (the shops a repeating wholesale contract delivers to) has no board reader: `_alerts()` counts it as a delivery plan |
 | `rhythm` | `_chain_rhythm()`; its `recent` key holds the same three series over the last `RHYTHM_RECENT_DAYS` (28) calendar days before the last finished day, which the chart draws, while the full-length ones feed `_supply()` | `weekdaySeries` (which `drawChart` asks), `drawSite` |
 | `market` | `_market()`; its `catalogue` key is popped out and handed to `_plan()` | `drawMovers`, `drawMarket`; `web/wiki.js` `wikiOwn`, `wikiGuidePrices` |
 | `premises` | `_premises()`, with `_premises_status()`, `_premises_demand()`, `_rent_estimate()`, `_deposit_estimate()`, `_deposit_check()`, `_door_caps()`, `_rival_numbers()`, `_rival_names()` | `drawFindLocation`, `finderPreset`, `wireCards`; `web/map.js` `premises` |
@@ -85,7 +85,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `hourFindings` | `_hour_findings()` | `drawSite` |
 | `staffing` | `_staffing()`, with `_plan_site()`, `_need_curve()`, `_arrival_ceiling()`, `_cut_run()`, `_bridge_troughs()`, `_hires_for()`, `_plan_people()`, `_current_roster()`, `_index_table()`, `_shift_row()` | `drawSite` through `spRosterBlock`, and `drawOptimizeStaffing` for the Next-moves card |
 | `factoryStaffing` | `_factory_staffing()`, once per sizing (`{cap, dem}`), with `_factory_site_plan()`, `_factory_run_start()` and the shop placer `_place_week()`; its hours come from each factory line's `needHours`, `hoursNow` and `_posts` (the machines' ids, set by `_line_hours()` in `_factories()` on each line and on each unnamed line with a recipe, and taken off the payload here, by the line's place in its list) | `drawFactoryStaffing`, through `drawFactoriesTab` |
-| `plan` | `_plan()` | `drawPlan`, `planDraw`, `indexPlan`, `factoryView`, `factoryCounts`, `planTypes`, `defaultRate`, `itemName`; `web/wiki.js` `wikiCanPlan` |
+| `plan` | `_plan()`; its `prices`, `priceFrom` and `priceDay` from `_ingredient_prices()` | `drawPlan`, `planDraw`, `indexPlan`, `factoryView`, `factoryCounts`, `planTypes`, `defaultRate`, `itemName`; `web/wiki.js` `wikiCanPlan` |
 | `names` | `_game_names()`: every `NAME_PREFIXES` key of `names.locale` but the `_description`s, plus `HOOD_LABEL` for a neighbourhood the text lacks | `itemName`, `gameName` (and through it `hoodName`), `englishName` (from the English payload), `localiseNames` |
 | `skillNames` | `extract()` inline, every skill in `STATION_SKILLS` through `names.label()` | `gwSkillName` |
 | `cashFlow` | `_cash_flow()` | `drawKpis` |
@@ -94,7 +94,6 @@ this column is where to look when you change a key's shape — not a complete ca
 | `minor` | `_alerts()`, its `minor`, sized 24/7 | `alertLines()` |
 | `alertsDemand` | `_alerts(..., "dem")`, a second pass over the same `supply.facts` with factory lines sized on demand: `{lines, minor}`, the shape of `alerts` and `minor` | `alertLines()`, when the sizing switch reads Demand |
 | `goals` | `_goals()` | `drawGoals` |
-| `weekly` | `_weekly()` | no reader |
 
 Four indirect routes an agent would otherwise miss:
 
@@ -128,11 +127,8 @@ Four indirect routes an agent would otherwise miss:
 - The site panel and the map cards are filled from data already in hand, so they do not
   appear above.
 
-Two keys have no reader, and only one of them is dead end to end:
-
-- `weekly` is genuinely unread. `_weekly()` feeds nothing else.
-- `ledgerDays`: the *key* is unread, but the `ledger` it counts is what `_cash_flow()`
-  reads. The history write and `history.ledger()` both have to stay.
+One key has no reader: `ledgerDays`. The *key* is unread, but the `ledger` it counts is
+what `_cash_flow()` reads. The history write and `history.ledger()` both have to stay.
 
 `hypeExposure` is read: do not delete it. `spHypeRow` draws the site panel's promotion row
 from it.
@@ -321,6 +317,16 @@ leer"). Where Python pluralises a name today, pass the count and let the key say
 **Never build a sentence out of pieces.** `tt("a", "Lost") + " " + fmt(w)` cannot be
 translated: word order is the translation's. One key per sentence, with its numbers and
 names as params.
+
+**One exception to literal keys: the Wiki guides' labels.** Their English is `guideUi`
+in `tools/wiki_sample.json`, and it reaches the page inside the wiki payload (each
+guide's `COPY`), so `web/wiki.js` cannot write it at the call site. `extract` reads
+`guideUi` itself (`guide_ui_calls()` in `tools/i18n.py`) and emits one key per entry,
+`wiki.ui.<name>`, with the entry as its English; `wikiCopy()` looks each label up with
+``ttText(`wiki.ui.${name}`, english)`` (the payload's English), which the extractor does not read
+as a call. The key set is the JSON's, so the catalogue checks hold for these keys too.
+Nothing else may build a key. The guides' article prose, the topics and the gap and
+source notes are not labels and stay English.
 
 ### How it runs
 
