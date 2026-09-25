@@ -161,7 +161,7 @@ let wikiLandTop = false;        // that landing came with entering or a new page
 const wikiRoot = () => $("wikiRoot");
 /* Counts are written the way the board writes money: one thousands mark, the
    same one whatever the browser's own locale would have chosen. */
-const wikiNum = n => Number(n || 0).toLocaleString("en-US");
+const wikiNum = n => num(Number(n || 0));
 /* One of a thing or several, counted the way the rest of the page counts: the
    board never writes "1 gaps". */
 const wikiCount = (n, word) => `${word}${Number(n) === 1 ? "" : "s"}`;
