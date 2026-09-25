@@ -10,6 +10,7 @@ const BOOT = source.slice(source.indexOf('let shellOnly = false;'),
   source.indexOf('/* A page written with its numbers'));
 
 function board({saved = {}, data = {}} = {}) {
+  if (data) require('./_payload_contract.cjs').assertPayloadShape(data, 'navigation');
   const entries = ['#today'], states = [null];
   let position = 0;
   const listeners = {}, captured = {};

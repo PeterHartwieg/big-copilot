@@ -58,6 +58,7 @@ async function board({width = 1600, recent, houseRules = CUSTOM, difficulty, bus
     showPage('company', false, 'none'); showSub('company', 'results');
     drawMast(); drawFooter(); drawDifficulty(); drawChart(); drawProducts(); drawGoals(); wireAll();
   }, {recent, houseRules, difficulty, businesses, products, goals});
+  require('./_payload_contract.cjs').assertPayloadShape(await page.evaluate(() => D), 'fold_views');
   return {page, errors};
 }
 const tools = page => page.$$eval('#chartTools a', as => as.map(a => a.textContent));
@@ -349,7 +350,18 @@ test('a resize that swaps the chip closes the popover; focus goes only where it 
     await page.waitForFunction(() => !document.getElementById('fvDiffPop').classList.contains('on')
       && document.activeElement !== document.querySelector('#clock .fv-diff'), null, {timeout: 10000});
     const s = await state(page);
-    assert.deepEqual([s.open, s.focus, s.expanded, s.tip], [false, 'body', ['false', 'false'], false]);
+    // Whether the browser has dropped focus to the page before the resize
+    // handler runs is the engine's timing (Linux Chromium often has not): the
+    // handler then sends it to the footer's chip, which is in the window here.
+    // Either way focus never stays on the hidden chip.
+    assert.ok(['body', 'foot'].includes(s.focus), `focus went to ${s.focus}`);
+    if (s.focus === 'foot') {
+      assert.ok(await page.evaluate(() => {
+        const r = document.activeElement.getBoundingClientRect();
+        return r.width > 0 && r.bottom > 0 && r.top < innerHeight;
+      }), 'the footer chip that took focus is in the window');
+    }
+    assert.deepEqual([s.open, s.expanded, s.tip], [false, ['false', 'false'], false]);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
   ({page, errors} = await board({width: 390}));

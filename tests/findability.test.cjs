@@ -65,6 +65,7 @@ async function board(o = {}) {
     showPage('company');
     drawSite();
   }, o);
+  require('./_payload_contract.cjs').assertPayloadShape(await page.evaluate(() => D), 'findability');
   return page;
 }
 const readOf = (page, block) => page.locator(`#sitePanel [data-block="${block}"] .sp-readout`).first().innerText();
@@ -481,7 +482,9 @@ test('every finding is reached from the keyboard, a synthetic one too, and lands
     // Its name says whose finding it is, and the row opens its detail as it
     // does under the pointer.
     assert.equal(await page.getByRole('button', {name: /^Company: 1 staff with demands only you can meet/}).count(), 1);
-    await page.waitForTimeout(400);
+    // The detail fades in under the focus: its end state is fully shown.
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('#alertSection .find[data-id="c1"] .more')).opacity === '1',
+      null, {polling: 50});
     assert.equal(await page.locator('#alertSection .find[data-id="c1"] .more').evaluate(m => getComputedStyle(m).opacity), '1');
     await page.keyboard.press('Space');
     assert.equal(await page.evaluate(() => [location.hash, siteKey].join(' ')), `${HERE} ${KEY}`);
@@ -638,8 +641,13 @@ test("a site's page on a phone: a sticky crumb row, arrows round the list, nothi
     assert.ok(stuck.y > 400, `the page scrolled: ${JSON.stringify(stuck)}`);
     assert.ok(Math.abs(stuck.top - stuck.mast) <= 1, `stuck under the masthead: ${JSON.stringify(stuck)}`);
     // A block landed on comes to rest below the crumb row, not under it.
-    await page.evaluate(() => { scrollTo(0, 0); xlArrive('#sp-shelves'); });
-    await page.waitForTimeout(600);
+    await page.evaluate(() => { scrollTo(0, 0); window.xlScroll = null; xlArrive('#sp-shelves'); });
+    // The smooth scroll's end state: moved off the top, and still over three frames.
+    await page.waitForFunction(() => {
+      const mark = window.xlScroll;
+      window.xlScroll = {y: scrollY, frames: mark && mark.y === scrollY ? mark.frames + 1 : 0};
+      return scrollY > 0 && window.xlScroll.frames >= 3;
+    }, null, {polling: 'raf'});
     const landed = await page.evaluate(() => ({
       block: document.querySelector('#sp-shelves').getBoundingClientRect().top,
       crumbs: document.querySelector('.ss-crumbs').getBoundingClientRect().bottom, y: scrollY}));

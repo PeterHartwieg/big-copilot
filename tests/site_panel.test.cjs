@@ -75,6 +75,7 @@ async function site(overrides = {}) {
     showPage('company');
     drawSite();
   }, overrides);
+  require('./_payload_contract.cjs').assertPayloadShape(await page.evaluate(() => D), 'site_panel');
   return page;
 }
 
@@ -847,13 +848,15 @@ test('a wholesale finding opens its shop on the shelf row, lit, and a depot on i
   const page = await site({shop, alerts: [a], supply: {facts: {0: {energy: sf('short', 'order',
     {role: 'shelf', cad: 'weekly', use: 70, need: 81, have: 50, setTo: 90, wholesale: true})}}}});
   try {
-    const landed = await page.evaluate(async a => {
-      showPage('today'); goToAlert(a);
-      await new Promise(r => setTimeout(r, 1200));
+    await page.evaluate(a => { showPage('today'); goToAlert(a); }, a);
+    const landing = () => {
       const row = [...document.querySelectorAll('#sp-shelves tbody tr')].find(tr => /Energy Drink/.test(tr.textContent));
       const r = row ? row.getBoundingClientRect() : null;
       return {row: !!row, lit: !!row && row.classList.contains('sp-hit'), inView: !!r && r.top >= 0 && r.bottom <= innerHeight};
-    }, a);
+    };
+    // The landing's end state: the row lit, scrolled into view.
+    await page.waitForFunction(`(${landing})().lit && (${landing})().inView`, null, {polling: 50});
+    const landed = await page.evaluate(landing);
     // The drink sits in the folded odds and ends: the fold opens for it.
     assert.deepEqual(landed, {row: true, lit: true, inView: true});
     // And its row says the word Checks says.
@@ -881,14 +884,16 @@ for (const width of [1440, 390]) {
       const page = await site({shop: DEPOT, alerts: [a], viewport: {width, height: 900},
         supply: {day: 29, imports: [importRow()], facts: {0: {soda: sf('covered'), [slug]: fact}}}});
       try {
-        const landed = await page.evaluate(async a => {
-          showPage('today'); goToAlert(a);
-          await new Promise(r => setTimeout(r, 1200));
+        await page.evaluate(a => { showPage('today'); goToAlert(a); }, a);
+        const landing = () => {
           const lit = [...document.querySelectorAll('#sp-stock tbody tr.sp-hit')];
           const r = lit[0] ? lit[0].getBoundingClientRect() : null;
           return {lit: lit.map(tr => tr.cells[0].textContent.replace(/\s+/g, ' ').trim()),
                   inView: !!r && r.top >= 0 && r.bottom <= innerHeight};
-        }, a);
+        };
+        // The landing's end state: a row lit, scrolled into view.
+        await page.waitForFunction(`(${landing})().inView`, null, {polling: 50});
+        const landed = await page.evaluate(landing);
         assert.equal(landed.lit.length, 1, `${group}: ${JSON.stringify(landed)}`);
         assert.match(landed.lit[0], /short$/);
         assert.ok(landed.inView, group);

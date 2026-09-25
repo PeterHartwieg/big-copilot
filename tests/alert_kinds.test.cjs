@@ -283,6 +283,7 @@ test('Today, the kinds popover and the map read the list of the sizing on screen
   const lines = ctx => JSON.parse(vm.runInContext('JSON.stringify(alertLines().map(a => a.id))', ctx));
   vm.runInContext(`D = {alerts: [{id: 'feed'}, {id: 'paused'}], minor: {rows: [{id: 'm'}]},
     alertsDemand: {lines: [{id: 'paused'}], minor: {rows: []}}}`, ctx);
+  require('./_payload_contract.cjs').assertPayloadShape(vm.runInContext('D', ctx), 'alert_kinds');
   assert.deepEqual(lines(ctx), ['feed', 'paused']);
   vm.runInContext('sizing = "dem"', ctx);
   assert.deepEqual(lines(ctx), ['paused']);

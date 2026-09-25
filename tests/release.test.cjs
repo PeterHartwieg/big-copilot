@@ -45,6 +45,7 @@ test('release preserves the redesigned map, interactive ball and dismissible bad
       document.body.classList.add('has-board');
       D = {meta:{character:'release-fixture',day:1},businesses:[],homes:[],alerts:[],minor:{rows:[]}};
     });
+    require('./_payload_contract.cjs').assertPayloadShape(await page.evaluate(() => D), 'release');
     // Opening the search palette is the search's visit.
     await page.evaluate(() => { ssOpen(); ssClose(); });
     assert.equal(await page.locator('[data-new-feature="board-search"]:not([hidden])').count(),0);

@@ -107,6 +107,7 @@ async function board(o = {}) {
     showPage('today', false, 'replace');
     drawGoals();
   }, [SHOP, GYM, FACTORY, DEPOT]);
+  require('./_payload_contract.cjs').assertPayloadShape(await page.evaluate(() => D), 'search');
   return page;
 }
 const typed = async (page, text) => { await page.fill('#ssInput', text); };
@@ -423,12 +424,24 @@ test('with storage refused, the questions and the palette still work and nothing
 
 // --- the masthead ------------------------------------------------------------------------
 
+/* The shelf at rest: every ball has finished its entrance (under reduced motion
+   it jumps to scale 1 at its 400 ms mark), and nothing on the shelf has moved,
+   come or gone for 400 ms, longer than an eaten ball's 220 ms wait before the
+   next one rolls out. */
+const shelfAtRest = page => page.evaluate(() => { window.shelfMark = null; }).then(() => page.waitForFunction(() => {
+  const now = performance.now();
+  const state = [...document.querySelectorAll('.mast .orb')].map(o => o.style.transform).join('|');
+  const done = [...document.querySelectorAll('.mast .orb')].every(o => /scale\(1(\.0+)?\)$/.test(o.style.transform));  // the browser writes "scale(1)"
+  if(!done || !window.shelfMark || window.shelfMark.state !== state){ window.shelfMark = {state, at: now}; return false; }
+  return now - window.shelfMark.at >= 400;
+}, null, {polling: 50}));
+
 test('the sphere rests between the nav and the field, and the field steps down before it would crowd it', async () => {
   const page = await board({data: false, width: 1440});
   try {
     await page.evaluate(() => { $('title').textContent = 'Big Copilot'; wireSphere(); });
     await page.locator('#orb.live').waitFor();
-    await page.waitForTimeout(700);  // under reduced motion an entrance ends at its 400 ms mark
+    await shelfAtRest(page);  // under reduced motion an entrance ends at its 400 ms mark
     const [orb, field, nav] = await page.evaluate(() => ['orb', 'ssField', 'nav'].map(id => {
       const r = document.getElementById(id).getBoundingClientRect(); return {left: r.left, right: r.right, w: r.width};
     }));
@@ -436,9 +449,9 @@ test('the sphere rests between the nav and the field, and the field steps down b
     assert.ok(orb.right <= field.left, `the ball ${orb.right} ends before the field ${field.left}`);
     // However many balls roll out, none rests under the field.
     await page.click('.wordmark');
-    await page.waitForTimeout(300);
+    await shelfAtRest(page);
     await page.click('.wordmark');
-    await page.waitForTimeout(300);
+    await shelfAtRest(page);
     const right = await page.evaluate(() => Math.max(...[...document.querySelectorAll('.orb')].map(o => o.getBoundingClientRect().right)));
     assert.ok(right <= (await page.locator('#ssField').boundingBox()).x + 1);
     // Narrower, the field gives way to its icon rather than to the ball.
@@ -524,7 +537,8 @@ test('a landing still waiting for its page is dropped when the reader goes elsew
     // Away before the wiki page opens; the landing used to wait its full four
     // seconds for the guide and then put the strip on whatever page was up.
     await page.evaluate(() => { ssAsk('prices'); showPage('supply'); });
-    await page.waitForTimeout(4600);
+    // The landing is over, dropped or (the old bug) landed after its wait.
+    await page.waitForFunction(() => ssPending === null, null, {polling: 50});
     assert.equal(await page.evaluate(() => page), 'supply');
     assert.equal(await page.locator('.ss-asked').count(), 0);
     assert.equal(await page.locator('.ss-lit').count(), 0);
