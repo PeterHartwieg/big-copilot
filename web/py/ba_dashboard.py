@@ -11166,6 +11166,11 @@ def _condense(found: list, gate: float) -> dict:
                 # A merged line reads out the worst of its rows, so it points
                 # at that row's evidence.
                 **({"ev": worst["ev"]} if worst.get("ev") else {}),
+                # Every row's item, worst first, so the board can count out
+                # the ones a chain planned ahead in the browser has ordered
+                # (planHush()).
+                **({"slugs": slugs} if (slugs := [r["ev"]["slug"] for r in rows
+                                                  if (r.get("ev") or {}).get("slug")]) else {}),
             }
         )
 
@@ -12622,6 +12627,51 @@ g[data-series].off{opacity:0}
 td .ing{font-size:12px;color:var(--ink-2);white-space:normal;font-family:Archivo,sans-serif}
 td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)}
 .planline{margin:14px 0 0;font-size:13.5px;color:var(--ink-2)}
+/* A plan saved ahead (pl-): Built at, what is built, the save box, the first
+   fill, and the strip on Supply's Warehouses. */
+.pl-build{display:flex;align-items:center;flex-wrap:wrap;gap:10px 14px;margin:0 0 18px;padding:12px 16px;border-radius:10px;background:var(--surface);border:1px solid var(--rule-soft);font-size:13px;color:var(--ink-2)}
+.pl-build .lab{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap}
+.pl-build select,.pl-fill select{font:inherit;font-size:13px;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:7px;padding:6px 10px;max-width:100%}
+.pl-state{display:inline-flex;align-items:center;flex-wrap:wrap;gap:8px 10px;font:500 13px/1.3 "IBM Plex Mono",monospace;color:var(--ink)}
+.pl-state i{font-style:normal;color:var(--ink-3)}
+.pl-leg{display:flex;flex-wrap:wrap;gap:8px 16px;margin-left:auto;font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.pl-leg>span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.pl-leg .pl-pm i{width:11px;height:11px}
+.pl-pm{display:inline-flex;flex-wrap:wrap;gap:4px;vertical-align:middle}
+.pl-pm i{width:14px;height:14px;border-radius:4px;display:block;box-sizing:border-box}
+.pl-pm i.run{background:var(--accent)}
+.pl-pm i.placed{background:var(--accent-soft);box-shadow:inset 0 0 0 1.5px var(--accent)}
+.pl-pm i.todo{border:1.5px dashed var(--ink-3)}
+.pl-pm em{font:500 11px/1 "IBM Plex Mono",monospace;font-style:normal;color:var(--ink-3);align-self:center}
+.machines i.pl-placed{background:var(--accent-soft);box-shadow:inset 0 0 0 1.5px var(--accent)}
+.machines i.pl-todo{background:transparent;border:1.5px dashed var(--ink-3);box-sizing:border-box}
+.pl-save{display:flex;align-items:center;flex-wrap:wrap;gap:12px 16px;margin-top:22px;padding:14px 16px;border-radius:10px;border:1px solid var(--accent);background:var(--accent-soft)}
+.pl-save .txt{font-size:13px;color:var(--ink-2);flex:1 1 320px}
+.pl-save .txt b{color:var(--ink);font-weight:600}
+.pl-save .btn2 svg,.pl-done svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pl-save .btn2[disabled]{opacity:.5;cursor:default}
+.pl-done{display:inline-flex;align-items:center;gap:8px;font:500 12.5px/1 "IBM Plex Mono",monospace;color:var(--accent)}
+.pl-save .link{font-size:12.5px}
+.pl-fill{display:flex;align-items:center;gap:12px;margin-top:12px;padding:10px 14px;border-radius:8px;background:var(--surface);border:1px dashed var(--warn);font-size:13px;color:var(--ink-2)}
+.pl-fill[hidden],.pl-save[hidden]{display:none}
+.pl-fill b{color:var(--ink);font-weight:600}
+.pl-fill .ic{color:var(--warn);display:grid;place-items:center;flex:none}
+.pl-fill .ic svg,.pl-saved .ic svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.pl-fill .mono{font-family:"IBM Plex Mono",monospace;color:var(--ink)}
+.pl-fill select{padding:3px 8px;font-size:12.5px}
+.pl-fillrow{margin:0 0 14px}
+.pl-saved{display:flex;align-items:center;flex-wrap:wrap;gap:10px 14px;margin:0 0 12px;padding:11px 14px;border-radius:10px;border:1px solid var(--rule);background:var(--surface);font-size:13px;color:var(--ink-2)}
+.pl-saved .ic{width:30px;height:30px;border-radius:8px;background:var(--raised);display:grid;place-items:center;color:var(--accent);flex:none}
+.pl-saved>span:nth-child(2){flex:1 1 300px}
+.pl-saved b{color:var(--ink);font-weight:600}
+.pl-saved .aside{margin-left:auto;display:flex;align-items:center;gap:14px}
+.pl-tag{display:inline-block;margin-left:6px;padding:0 5px;border-radius:3px;box-shadow:inset 0 0 0 1px var(--accent);color:var(--accent);font:500 9.5px/1.6 "IBM Plex Mono",monospace;letter-spacing:.04em;vertical-align:1px;cursor:help}
+@media(max-width:640px){
+  .pl-leg{margin-left:0}
+  .pl-build select{flex:1 1 100%}
+  .pl-fill{align-items:flex-start}
+  .pl-saved .aside{margin-left:0}
+}
 .planline b{color:var(--ink);font-family:"IBM Plex Mono",monospace;font-weight:500}
 
 /* flow map ---------------------------------------------------------------- */
@@ -13733,7 +13783,7 @@ body:has(#changelogDialog[open]){overflow:hidden}
     </section>
     <section class="sec rv" id="secIngredients" data-sub="plan">
       <div class="sechead"><h2>Ingredients</h2>
-        <span class="why" data-tip="What the machines above eat, added up across every line that shares an ingredient. Per day and per week are this range's own figures. Company target is the order for the whole company once the plan runs: never less than a week of this range, and beyond that what the range adds over what your factories already eat, on top of every contract already active, rounded up to the hundred the logistics manager takes. You type that target across your importer contracts in the game yourself; the board never guesses a split per warehouse. Hover an ingredient for what is on order today, and Used by for every line that eats it. A cash column appears once the company already buys one of these ingredients, at the price it last paid." tabindex="0"><i>?</i></span></div>
+        <span class="why" data-tip="What the machines above eat, added up across every line that shares an ingredient. Per day and per week are this range's own figures. Company target is the order for the whole company once the plan runs: never less than a week of this range, and beyond that what the range adds over what your factories already eat, on top of every contract already active, with one 15% margin for the whole chain and rounded up to tens. The plan always runs every machine 24/7, whatever the sizing switch on Supply says. Save as plan puts each change on Supply's checklist, at the warehouse that imports the ingredient for the factory the plan is built at. Hover an ingredient for what is on order today, and Used by for every line that eats it. A cash column appears once the company already buys one of these ingredients, at the price it last paid." tabindex="0"><i>?</i></span></div>
       <table class="ingtable" id="ingTable">
         <thead><tr><th>Ingredient</th><th class="l">Used by</th><th>Per day</th><th>Per week</th><th>Company target</th>
           <th>On order now</th><th>Change</th><th class="cash">Cash / week</th></tr></thead>
@@ -14514,7 +14564,10 @@ function supplyFact(s, slug){
   const f = ((((typeof D !== "undefined" && D) || {}).supply || {}).facts || {})[s];
   const fact = f && f[slug];
   if(!fact) return null;
-  return sizing === "dem" && fact.dem ? {...fact, ...fact.dem} : fact;
+  const sized = sizing === "dem" && fact.dem ? {...fact, ...fact.dem} : fact;
+  /* A chain planned ahead in this browser is laid over it here, and only here. */
+  const ov = planAt(s, slug);
+  return ov ? planApply(sized, ov) : sized;
 }
 /* What a row reads when Python sent no fact for it: a recipe named in this
    browser since the last extract, whose figures only the next refresh (a new
@@ -14524,6 +14577,218 @@ const SZ_NEW = {st: "new", why: "named", lvl: "info", use: null, need: null, hav
 /* And what it reads when Python judged nothing for it at all. */
 const SZ_NONE = {...SZ_NEW, why: "unjudged"};
 const szFact = (s, slug) => supplyFact(s, slug) || SZ_NONE;
+
+/* --- a chain planned ahead -----------------------------------------------
+   Plan a chain can order ahead for a factory still being built: Save as plan
+   keeps the finished layout (its machines per product, the factory it is
+   built at, the company target for each ingredient) on this device, per
+   character. Python never sees it, so it is laid over the facts here, in the
+   one accessor every view reads (supplyFact()): while the plan is saved its
+   inputs read new, "ordered ahead · plan: …", instead of idle, not drawn or
+   too big, and the import levels and top-ups it needs are the facts' own
+   figures to set, so the checklist, the tabs, the site pages, Goods flow and
+   Today all agree. A plan sizes at 24/7 whatever the sizing switch says: a
+   range no shop sells yet would size to nothing under Demand. It clears
+   itself once every planned machine runs, or on Remove. */
+const PLAN_STORE = "ba_dash_plans:";
+let planStamp = 0;
+const planMemo = new Map();
+const planStoreKey = () => {
+  const c = typeof D !== "undefined" && D && D.supply && D.supply.factories && D.supply.factories.character;
+  return c ? PLAN_STORE + c : null;
+};
+const planValid = p => !!p && typeof p === "object" && typeof p.type === "string"
+  && !!p.counts && typeof p.counts === "object" && !!p.inputs && typeof p.inputs === "object";
+/* The saved plan, or null. Kept as a list of one, so a second plan can join
+   it later without a new key. Storage may refuse (a private window): the plan
+   then lasts as long as the page. */
+function planSaved(){
+  const key = planStoreKey();
+  if(!planMemo.has(key)){
+    let saved = null;
+    if(key) try{ saved = JSON.parse(localStorage.getItem(key)); }catch(e){}
+    const plan = Array.isArray(saved) ? saved[0] : null;
+    planMemo.set(key, planValid(plan) ? plan : null);
+  }
+  return planMemo.get(key);
+}
+/* Save (a plan) or remove (null) the character's plan. Every supply figure
+   reads it, so the rows are built again. */
+function planKeep(plan){
+  const key = planStoreKey();
+  planMemo.set(key, plan);
+  planStamp++;
+  if(typeof sbStamp !== "undefined") sbStamp++;
+  if(key) try{
+    if(plan) localStorage.setItem(key, JSON.stringify([plan]));
+    else localStorage.removeItem(key);
+  }catch(e){}
+}
+/* Rounded up to tens, as every supply figure is (supply.roundTo). */
+const planUp = v => {
+  const step = ((typeof D !== "undefined" && D && D.supply) || {}).roundTo || 10;
+  return Math.ceil(Math.round(v * 1e6) / 1e6 / step) * step;
+};
+/* The first Monday after `day`: the import a plan saved today lands on
+   (day 1 of a save is a Monday). */
+const planImportDay = day => day + (((8 - day % 7) % 7) || 7);
+/* The first fill, in one pure function: the rounds from the opening day to
+   the import's day, that day's morning round included since it comes before
+   the ships, each at the finished layout's daily use, less what the depot
+   already holds, rounded up to `step`. */
+function planFill(inputs, opens, importDay, held, step){
+  const rounds = Math.max(0, importDay - opens + 1);
+  const up = v => Math.ceil(Math.round(v * 1e6) / 1e6 / step) * step;
+  const items = Object.keys(inputs).map(slug => ({slug, item: inputs[slug].item,
+      amount: rounds ? up(Math.max(0, rounds * (inputs[slug].day || 0) - (held(slug) || 0))) : 0}))
+    .filter(x => x.amount > 0).sort((a, b) => b.amount - a.amount || a.item.localeCompare(b.item));
+  return {opens, importDay, rounds, items, total: items.reduce((t, x) => t + x.amount, 0)};
+}
+/* What is built of a layout: per product the machines planned, placed and
+   running. A placed machine with no recipe chosen, or nobody posted to it,
+   counts as built but not running; an empty machine on a workstation the
+   plan uses counts toward whichever product still has room, at the factory
+   the plan is built at (`at`, a site index), or for a new factory at any
+   factory the company did not have when the plan was saved (`known`). */
+function planPlacement(counts, at, known){
+  const recipes = {};
+  ((D.plan || {}).recipes || []).forEach(r => recipes[r.slug] = r);
+  const stations = (D.plan || {}).workstations || {};
+  const by = {};
+  Object.keys(counts).filter(p => counts[p] > 0 && recipes[p]).forEach(p => by[p] = {planned: counts[p], placed: 0, run: 0});
+  const view = D.supply && D.supply.factories && D.supply.factories.sites ? factoryView() : {sites: []};
+  const here = site => at !== null && at !== undefined ? site.s === at
+    : !!D.businesses[site.s] && !(known || []).includes(D.businesses[site.s].key);
+  let spare = [];
+  view.sites.forEach(site => {
+    site.lines.forEach(l => {
+      const b = by[l.slug];
+      if(!b) return;
+      b.placed += l.machines || 0;
+      b.run += Number.isFinite(l.running) ? l.running : l.named && l.hoursWeek > 0 ? l.machines || 0 : 0;
+    });
+    if(here(site)) (site.unnamed || []).forEach(u => spare.push(u));
+  });
+  /* The empty machines fill the products with room, first come first. */
+  Object.keys(by).forEach(p => {
+    const b = by[p], ws = stations[recipes[p].workstation] || {};
+    const name = (ws.name || recipes[p].workstation || "").toLowerCase();
+    spare = spare.map(u => {
+      const fits = u.idle || (u.candidates || []).some(c => c.slug === p);
+      if(!fits || (u.workstation || "").toLowerCase() !== name) return u;
+      const take = Math.min(Math.max(0, b.planned - b.placed), u.machines || 0);
+      b.placed += take;
+      return {...u, machines: (u.machines || 0) - take};
+    });
+  });
+  let planned = 0, placed = 0, running = 0;
+  Object.values(by).forEach(b => {
+    b.placed = Math.min(b.planned, b.placed);
+    b.run = Math.min(b.placed, b.run);
+    planned += b.planned; placed += b.placed; running += b.run;
+  });
+  return {planned, placed, running, by, complete: planned > 0 && running >= planned};
+}
+/* The plan laid over the facts, once per board and change: by site and item,
+   the name to say, the week it uses, and the figure to set (`weekly` for an
+   import level, `daily` for a factory top-up); the imports no depot holds
+   yet (`loose`); the first fill; and what is built. Only raw facts are read
+   here, never supplyFact(), which reads this. */
+let planCache = null;
+function planOverlay(){
+  if(typeof D === "undefined" || !D || !D.supply || !D.businesses) return null;
+  const sb = typeof sbStamp !== "undefined" ? sbStamp : 0;
+  if(planCache && planCache.D === D && planCache.stamp === planStamp && planCache.sb === sb) return planCache.v;
+  planCache = {D, stamp: planStamp, sb, v: null};  // set first: a read inside the build sees no plan
+  const plan = planSaved();
+  if(!plan) return null;
+  let v = null;
+  try{ v = planBuild(plan); }catch(e){ console.error(e); }
+  if(v && v.state.complete){
+    /* Every planned machine runs: the facts judge the chain from here. */
+    planKeep(null);
+    v = null;
+  }
+  planCache = {D, stamp: planStamp, sb: typeof sbStamp !== "undefined" ? sbStamp : 0, v};
+  return v;
+}
+function planBuild(plan){
+  const bs = D.businesses, idx = key => { const i = bs.findIndex(b => b && b.key === key); return i < 0 ? null : i; };
+  const fs = plan.factory ? idx(plan.factory) : null;
+  const state = planPlacement(plan.counts, plan.factory ? fs ?? -1 : null, plan.known || []);
+  const name = `${fs !== null ? shortName(bs[fs]) : "a new factory"}, ${plural(state.planned, "machine")}`;
+  const margin = Number.isFinite(D.supply.margin) ? D.supply.margin : 0;
+  const facts = D.supply.facts || {}, depots = (D.supply.factories || {}).depots || {};
+  const sources = (D.plan || {}).sources || {};
+  const site = fs !== null ? factoryView().sites.find(x => x.s === fs) : null;
+  const at = new Map(), loose = [];
+  const put = (s, slug, o) => {
+    if(!Number.isInteger(s) || !bs[s]) return;
+    const k = `${s}|${slug}`;
+    at.set(k, {...(at.get(k) || {}), name, ...o});
+  };
+  Object.keys(plan.inputs).forEach(slug => {
+    const inp = plan.inputs[slug];
+    const ds = inp.depot ? idx(inp.depot) : null;
+    /* What the company orders now against the target the plan was saved
+       with: the gap goes on the depot's own contract. */
+    const src = sources[slug];
+    const have = src && Number.isFinite(src.ordered) ? src.ordered : 0;
+    const gap = (inp.target || 0) - have;
+    const fact = ds !== null && facts[ds] ? facts[ds][slug] : null;
+    if(fact && fact.imp){
+      const c = (depots[ds] || {})[slug] || {};
+      const now = c.smart && Number.isFinite(c.target) ? c.target : c.weekly || 0;
+      put(ds, slug, {week: inp.week, weekly: gap > 0 ? planUp(now + gap) : null});
+    } else {
+      if(ds !== null) put(ds, slug, {week: inp.week});
+      if(gap > 0) loose.push({slug, item: inp.item, week: inp.week, target: planUp(gap), plan: name});
+    }
+    const n = site && (site.needs || []).find(x => x.slug === slug);
+    if(n){
+      const fed = !n.directImport && Number.isInteger(n.from);
+      const daily = fed ? planUp((inp.day || 0) * (1 + margin)) : null;
+      put(fs, slug, {week: inp.week, daily: daily !== null && daily > (n.target || 0) ? daily : null});
+      if(fed && n.from !== ds) put(n.from, slug, {week: inp.week});
+    }
+  });
+  /* The first fill, while the import it bridges to has not landed. */
+  let fill = null;
+  const today = D.meta && D.meta.day;
+  if(Number.isFinite(today) && Number.isFinite(plan.importDay) && today < plan.importDay){
+    const opens = Math.min(plan.importDay, Math.max(Number.isFinite(plan.opens) ? plan.opens : today + 1, today + 1));
+    const held = slug => {
+      const ds = plan.inputs[slug].depot ? idx(plan.inputs[slug].depot) : null;
+      return ds === null ? 0 : ((bs[ds].lines || []).find(l => l.slug === slug) || {}).units || 0;
+    };
+    fill = planFill(plan.inputs, opens, plan.importDay, held, D.supply.roundTo || 10);
+    const first = fill.items[0];
+    fill.s = first && plan.inputs[first.slug].depot ? idx(plan.inputs[first.slug].depot) : null;
+  }
+  return {plan, name, fs, state, at, loose, fill};
+}
+/* A fact under the plan. Idle, stalled, covered, tight and new read new,
+   ordered ahead, with the plan's figure to set (none where what is on order
+   already reaches it); short and no plan keep their word and take the larger
+   figure; a paused import is the player's to resume first. */
+const PLAN_QUIET = ["idle", "stalled", "covered", "tight", "new"];
+function planApply(fact, ov){
+  const one = (f, setTo) => {
+    if(!f) return f;
+    if(f.st === "paused") return f;
+    const want = Number.isFinite(setTo) ? setTo : null;
+    if(PLAN_QUIET.includes(f.st))
+      return {...f, st: "new", why: "plan", lvl: "info", plan: ov.name, planWeek: ov.week, setTo: want, lower: null, lowers: false};
+    return {...f, plan: ov.name, planWeek: ov.week,
+      setTo: want !== null && !(Number.isFinite(f.setTo) && f.setTo >= want) ? want : f.setTo};
+  };
+  const out = one(fact, fact.cad === "weekly" ? ov.weekly : ov.daily);
+  return fact.import ? {...out, import: one(fact.import, ov.weekly)} : out;
+}
+/* The plan's word on a site's item, if it has one. */
+const planAt = (s, slug) => { const v = planOverlay(); return v ? v.at.get(`${s}|${slug}`) || null : null; };
+/* A holding the plan made new: it leaves the idle lists and its findings. */
+const planQuiet = (s, slug) => { const f = planAt(s, slug) && supplyFact(s, slug); return !!f && f.st === "new" && f.why === "plan"; };
 /* The nine words, and the chip colour from the fact's severity. */
 const SZ_WORD = {covered: "covered", tight: "tight", short: "short", noplan: "no plan", paused: "paused",
                  stalled: "stalled", idle: "idle", made: "made here", new: "new"};
@@ -14545,6 +14810,7 @@ const SZ_WHY = {
   "new:firstFill": "A first fill: one-off fills never count as use",
   "new:named": "Named in this browser: judged at the next refresh",
   "new:unjudged": "Not judged yet: the next refresh judges it",
+  "new:plan": "Ordered ahead for a factory still being built",
   "short:order": "The order does not bring the week it has to cover",
   "short:shortfall": "Runs dry before the next delivery lands",
   "short:target": "The daily top-up is less than a day's need",
@@ -14570,7 +14836,9 @@ const SZ_STATE = {
   stalled: "Planned, but little or nothing arrives", idle: "Held far beyond what moves",
   made: "Made at this site", new: "Too young to judge",
 };
-const szTip = f => SZ_WHY[`${f.st}:${f.why}`] || SZ_STATE[f.st] || "";
+/* A fact the saved plan made new names the plan (planApply()). */
+const szTip = f => f.why === "plan" && f.plan ? `ordered ahead · plan: ${f.plan}`
+  : SZ_WHY[`${f.st}:${f.why}`] || SZ_STATE[f.st] || "";
 /* A fact's figures (use, need, have, setTo, lower) are a week's where `cad`
    is weekly (an import brings the item, or a wholesale delivery) and a day's
    where a daily top-up does (a shelf, a depot fed only by a route from your
@@ -14600,10 +14868,44 @@ function szParts(p){
    `dem` holds what Demand changes of a row idle under both. */
 const idleRows = () => ((D.supply || {}).idle || [])
   .filter(r => !r.modes || r.modes.includes(sizing))
+  .filter(r => !planQuiet(r.s, r.slug))
   .map(r => sizing === "dem" && r.dem ? {...r, ...r.dem} : r);
-/* Today's findings for the sizing on screen: Python runs the list twice. */
-const alertLines = () => (sizing === "dem" && D.alertsDemand ? D.alertsDemand.lines : D.alerts) || [];
-const alertMinor = () => (sizing === "dem" && D.alertsDemand ? D.alertsDemand.minor : D.minor) || {};
+/* Today's findings for the sizing on screen: Python runs the list twice.
+   A chain planned ahead in this browser quiets what it ordered ahead
+   (planHush()). */
+const alertLines = () => planHush((sizing === "dem" && D.alertsDemand ? D.alertsDemand.lines : D.alerts) || []);
+const alertMinor = () => {
+  const m = (sizing === "dem" && D.alertsDemand ? D.alertsDemand.minor : D.minor) || {};
+  if(!m.rows) return m;
+  const rows = planHush(m.rows);
+  return rows.length === m.rows.length ? m : {...m, rows, count: Math.max(0, (m.count || 0) - (m.rows.length - rows.length))};
+};
+/* The findings about a holding the saved plan orders ahead (idle, not
+   routed, not fed) go while it is saved; a finding that counts several
+   holdings (`slugs`, _condense()) counts only the others. */
+const PLAN_HUSH = ["dead", "notrouted", "feed", "target"];
+function planHush(list){
+  if(typeof planOverlay !== "function" || !planOverlay()) return list;
+  return list.flatMap(a => {
+    if(!PLAN_HUSH.includes(a.group) || !a.siteKey) return [a];
+    const s = D.businesses.findIndex(b => b.key === a.siteKey);
+    if(s < 0) return [a];
+    if(Array.isArray(a.slugs) && a.slugs.length){
+      const kept = a.slugs.filter(slug => !planQuiet(s, slug));
+      if(!kept.length) return [];
+      if(kept.length === a.slugs.length) return [a];
+      /* The largest it named may be one the plan quiets: the next one leads. */
+      const lead = kept[0] !== a.slugs[0];
+      /* One left, and the one it read out: that row's own words. */
+      if(kept.length === 1 && !lead && a.detail) return [{...a, slugs: kept, text: a.detail, detail: null}];
+      const text = a.text.replace(/^\d+/, String(kept.length));
+      const named = slug => ((D.businesses[s].lines || []).find(l => l.slug === slug) || {}).item || itemName(slug);
+      return [{...a, slugs: kept, text: lead ? text.replace(named(a.slugs[0]), named(kept[0])) : text,
+        ...(lead ? {ev: {slug: kept[0]}, detail: null} : {})}];
+    }
+    return a.ev && a.ev.slug && planQuiet(s, a.ev.slug) ? [] : [a];
+  });
+}
 /* The sizing switch. The page redraws whole, since every supply figure and
    Today's list follow it. */
 const SZ_SWITCH_TIP = "How factory lines and the imports behind them are sized. 24/7: rated output, round the clock. Demand: what the shops at the end of each chain use, plus the margin.";
@@ -18588,7 +18890,7 @@ function importSetting(fact, contract, edit){
    factory's own import beside a top-up that falls short without it (its
    fact is paused at more than info). One the top-up covers stays quiet. */
 const importResumes = r => r.fit === "paused" && !!r.fact && !!r.fact.lvl && r.fact.lvl !== "info";
-function buildOrderChecklist(importRows, looseRows, sites, shops, imports, businesses, depots = [], wholesale = [], lines = []){
+function buildOrderChecklist(importRows, looseRows, sites, shops, imports, businesses, depots = [], wholesale = [], lines = [], fills = []){
   const rows = [];
   const site = s => businesses[s];
   const address = s => site(s) ? `${site(s).name} · ${site(s).address}` : "Choose a depot";
@@ -18606,8 +18908,13 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     // name, for reconcileOrderMarks to carry over.
     const legacyKey = id(item);
     rows.push({key, legacyKey, group, item, slug, current, proposed, reason, kind, site: s, source, mode,
-               ...(paused ? {paused: true} : {}), ...(tight ? {tight: true} : {}), ...(lower ? {lower: true} : {})});
+               ...(paused ? {paused: true} : {}), ...(tight ? {tight: true} : {}), ...(lower ? {lower: true} : {}),
+               // A change a chain planned ahead asks for (planOverlay()).
+               ...(line.plan || (line.fact && line.fact.plan) ? {plan: true} : {})});
   };
+  /* The words for a figure a saved plan sets: its finished layout, 24/7. */
+  const planned = (f, per) => `Ordered ahead for the plan ${f.plan}: its finished layout uses ${
+    Math.round(per === "day" ? (f.planWeek || 0) / 7 : f.planWeek || 0).toLocaleString()} a ${per} at 24/7`;
   /* What a figure was sized on, in the words of the sizing on screen. */
   const margin = m => Number.isFinite(m) ? `, plus a ${Math.round(m * 100)}% margin` : ", plus the margin";
   importRows.forEach(d => d.rows.forEach(r => {
@@ -18634,13 +18941,17 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
           : "The top-up beside it falls short without it; resume it, or raise the top-up."}`,
         null, mode, true);
     } else if(r.edited ? r.changed : r.setTo !== null && r.setTo !== undefined){
-      const why = r.edited ? yours : `${sized}${r.fit === "tight" ? "; the order covers the use but not the margin" : ""}.`;
+      const why = r.edited ? yours : r.fact && r.fact.plan ? `${planned(r.fact, "week")}${margin(r.margin)}.`
+        : `${sized}${r.fit === "tight" ? "; the order covers the use but not the margin" : ""}.`;
       add("Weekly imports", r.s, r, r.inGame ?? r.current ?? null, value,
         `${setting(value)} ${why}`, null, mode, false, !r.edited && r.fit === "tight");
     }
   }));
-  looseRows.forEach(r => add("Weekly imports", null, r, null, null,
-    `Choose a supplying depot before setting an order. The factory lines use ${Math.round(r.week).toLocaleString()} units/week.`));
+  looseRows.forEach(r => r.plan
+    ? add("Weekly imports", null, r, null, r.target,
+      `Set up a weekly import at the depot that will feed the factory: the plan ${r.plan} needs ${r.target.toLocaleString()} more a week, its finished layout at 24/7${margin(r.margin)}.`)
+    : add("Weekly imports", null, r, null, null,
+      `Choose a supplying depot before setting an order. The factory lines use ${Math.round(r.week).toLocaleString()} units/week.`));
   imports.forEach(r => {
     const f = r.fact || {};
     const catchUp = Number.isFinite(r.catchUp) && r.catchUp > 0 ? r.catchUp : null;
@@ -18657,7 +18968,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     const f = r.fact || {};
     if(set(f)) add("Factory daily top-ups", s.s, r, r.target || 0, f.setTo,
       `${r.from === null || r.from === undefined ? "Choose a supplying depot" : `From ${address(r.from)}`}. ${
-        r.sizedFor || "Full-rate input requirement"}${margin(r.margin)}; confirm staffing and output limits.`,
+        f.plan ? planned(f, "day") : r.sizedFor || "Full-rate input requirement"}${margin(r.margin)}; confirm staffing and output limits.`,
       r.from ?? null, null, false, f.st === "tight");
     if(f.st === "stalled" && f.why !== "waiting") add("Check the delivery route", s.s, r, null, null,
       `No delivery was recorded despite stock at ${address(r.from)}. Check the route and transport in-game.`, r.from ?? null);
@@ -18726,6 +19037,9 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     const row = rows[rows.length - 1];
     if(r.rid !== undefined){ row.line = r.rid; row.key = JSON.stringify(JSON.parse(row.key).concat([r.rid])); row.legacyKey = row.key; }
   });
+  /* A saved plan's first fill: one import brought in once, before the next
+     Monday's delivery lands (planFill()). */
+  fills.forEach(r => add("Before the next delivery", r.s ?? null, {item: r.item, slug: r.slug, plan: true}, null, r.proposed, r.reason));
   const groups = new Map();
   rows.forEach(r => {
     if(!groups.has(r.group)) groups.set(r.group, []);
@@ -18878,7 +19192,7 @@ function sbData(){
   const at = new Map();
   c.rows.forEach((r, i) => {
     r.i = i;
-    byTab[r.site === null || r.site === undefined ? "warehouses" : sbTabOf(r.site)].push(r);
+    byTab[r.site === null || r.site === undefined || r.slug === "plan:fill" ? "warehouses" : sbTabOf(r.site)].push(r);
     const k = `${r.site ?? ""}|${r.slug}`;  // by the item's key
     if(!at.has(k)) at.set(k, []);
     at.get(k).push(r);
@@ -19120,6 +19434,14 @@ function supplyChecklistRows(){
     row.week += szWeek(fact, n.perWeek); row.users.push({s: site.s, perDay: szUse(fact, n.perDay)});
   }));
   const looseRows = Object.values(loose).sort((a, b) => b.week - a.week);
+  /* A saved plan's inputs no depot imports yet, and its first fill. */
+  const pv = planOverlay();
+  (pv ? pv.loose : []).filter(x => !looseRows.some(r => r.slug === x.slug)).forEach(x => looseRows.push({item: x.item, slug: x.slug,
+    week: x.week, target: x.target, users: [], plan: x.plan, margin, fact: {...SZ_NEW, why: "plan", plan: x.plan, planWeek: x.week}}));
+  const fills = pv && pv.fill && pv.fill.total > 0 ? [{s: pv.fill.s, item: "First fill", slug: "plan:fill", proposed: pv.fill.total,
+    reason: `The factory opens on ${WEEKDAY_NAMES[pv.fill.opens % 7]} (day ${pv.fill.opens}), ${plural(pv.fill.rounds, "morning round")} before ${
+      WEEKDAY_NAMES[pv.fill.importDay % 7]}'s import (day ${pv.fill.importDay}) lands. Bring in once: ${
+      pv.fill.items.map(x => `${x.item} ${x.amount.toLocaleString()}`).join(", ")}.`}] : [];
   /* The daily top-ups into each factory: each input's own fact. */
   const allSites = f.sites.map(s => ({s: s.s, rows: s.needs.filter(n => !n.directImport)
       .map(n => ({...n, fact: szNeed(s, n), sizedFor, margin}))
@@ -19139,8 +19461,8 @@ function supplyChecklistRows(){
     hoursNow: l.hoursNow, thinDay: l.thinDay || null, need: (l.needHours || {})[sizing], machines: l.machines, sizedFor})));
   const rows = buildOrderChecklist(importRows, looseRows, allSites,
     (D.supply.shops || []).map(r => ({...r, fact: szFact(r.s, r.slug), margin})),
-    (D.supply.imports || []).map(r => ({...r, fact: szFact(r.s, r.slug)})), D.businesses, depotTopups, wholesaleRows, lines);
-  return {f, importRows, looseRows, allSites, lines, rows, margin};
+    (D.supply.imports || []).map(r => ({...r, fact: szFact(r.s, r.slug)})), D.businesses, depotTopups, wholesaleRows, lines, fills);
+  return {f, importRows, looseRows, allSites, lines, rows, margin, plan: pv};
 }
 /* A factory line's own verdict under the sizing on screen: too few hours is
    short (`hours`), more than it needs is covered with `lower`, a suggestion.
@@ -19614,7 +19936,9 @@ function sbDepotRow(d, ctx, r, kid){
   const parts = szParts(f.parts);
   const rated = sizing === "cap" && (f.parts || {}).lines > 0 && f.dem && Number.isFinite(f.dem.use)
     ? `<span class="sb-rated" data-tip="${attr(`Sized 24/7 (the switch on Factories): factory lines at their rated output round the clock. Sized for Demand this line would use ${f.dem.use.toLocaleString()} a week.`)}">24/7</span>` : "";
-  const week = r.week === null ? "—" : `<span class="sb-uses"${parts ? ` data-tip="${attr(parts)}"` : ""}>${r.week.toLocaleString()}</span>${rated}${szRamp(f)}`;
+  const planTag = f.plan ? `<span class="pl-tag" data-tip="${attr(`The plan ${f.plan} uses ${(f.planWeek || 0).toLocaleString()} a week, every machine 24/7`)}">plan</span>` : "";
+  const week = r.week === null ? (planTag ? `—${planTag}` : "—")
+    : `<span class="sb-uses"${parts ? ` data-tip="${attr(parts)}"` : ""}>${r.week.toLocaleString()}</span>${planTag || rated}${szRamp(f)}`;
   const unfed = (f.unfed || []).filter(u => D.businesses[u[0]]);
   const reason = unfed.length ? `not routed: ${unfed.map(u => `${spEsc(shortName(D.businesses[u[0]]))} ${u[1].toLocaleString()}/day`).join(", ")}`
     : spEsc(szTip(f));
@@ -19688,8 +20012,8 @@ function drawWarehousesTab(){
       how: "<span><em>factory inputs no depot imports or tops up</em></span>",
       body: `<div class="scrollx"><table class="sb-t"><thead><tr><th class="sb-tk" aria-label="Typed in"></th><th class="l">Product</th><th>Uses / week</th><th class="l">Status</th></tr></thead><tbody>${
         d.looseRows.map((r, i) => `${sbTr(d, {s: null, slug: r.slug}, chk[i], null)}<td class="sb-tk">${sbTick(d, chk[i], r.item)}</td>
-          <td class="l nm" data-tip="${attr(`Drawn by ${r.users.map(u => `${shortName(D.businesses[u.s])} ${Math.round(u.perDay).toLocaleString()}/d`).join(", ")}`)}">${spEsc(r.item)}</td>
-          <td>${Math.round(r.week).toLocaleString()}</td><td class="l st">${sbStatus(r.fact, "choose a depot to import it")}</td></tr>`).join("")}</tbody></table></div>`}));
+          <td class="l nm" data-tip="${attr(r.plan ? `Ordered ahead for the plan ${r.plan}` : `Drawn by ${r.users.map(u => `${shortName(D.businesses[u.s])} ${Math.round(u.perDay).toLocaleString()}/d`).join(", ")}`)}">${spEsc(r.item)}</td>
+          <td>${Math.round(r.week).toLocaleString()}</td><td class="l st">${sbStatus(r.fact, r.plan ? `ordered ahead · plan: ${spEsc(r.plan)}; choose a depot to import it` : "choose a depot to import it")}</td></tr>`).join("")}</tbody></table></div>`}));
     every = every.concat(d.looseRows.map((r, i) => ({s: null, slug: r.slug, fact: r.fact, chk: chk[i]})));
   }
   const n = szTally(every, r => r.fact);
@@ -19703,11 +20027,25 @@ function drawWarehousesTab(){
   const calm = !every.some(r => r.fact && ["critical", "warn"].includes(r.fact.lvl));
   const more = !all && every.length > kept.length
     ? `<p class="sb-more"><span>${plural(every.length - kept.length, "more line is", "more lines are")} fine</span><a class="link" href="#" data-sb-mode="all">Everything</a></p>` : "";
-  const head = sbVerdict("warehouses", verdict, calm) + sbSizingRow("sbSizingW") + ctx.applyHere(ctx.toGame.length, null);
+  const head = sbPlanStrip(d, claimed) + sbVerdict("warehouses", verdict, calm) + sbSizingRow("sbSizingW") + ctx.applyHere(ctx.toGame.length, null);
   sbFill(sec, sbSection("warehouses", head, blocks.join("") + more + sbOthers(d, "warehouses", claimed)));
   if(sbAfterDraw("warehouses", every, kept)) return;
   szSwitch("sbSizingW");
   sbWire(sec, [["warehouses", SB_WH_COLS]], "warehouses");
+}
+
+/* A saved plan on Warehouses: what it is, what is built of it, and its
+   first fill with the tick of its own checklist row. */
+function sbPlanStrip(d, claimed){
+  const pv = d.plan;
+  if(!pv) return "";
+  const st = pv.state, fill = pv.fill;
+  const rows = fill ? sbChk(d, claimed, fill.s ?? null, "plan:fill", ["Before the next delivery"]) : [];
+  const once = rows.length ? `<div class="pl-fill pl-fillrow">${sbTick(d, rows, "First fill")}<span class="ic">${spIcon("truck")}</span><span><b>First fill before ${
+      WEEKDAY_NAMES[fill.importDay % 7]}</b>, one urgent import: <span class="mono">${fill.items.map(x => `${spEsc(x.item)} ${x.amount.toLocaleString()}`).join(" · ")}</span>.</span></div>` : "";
+  return `<div class="pl-saved"><span class="ic">${spIcon("gear")}</span><span><b>Plan saved: ${spEsc(pv.name)}.</b> ${planSquares(st, 12)} ${
+      st.placed} placed · ${st.running} running. Its inputs read <b>new</b> until all ${st.planned} run; then the plan clears itself.</span>
+    <span class="aside"><a class="link" href="#secPlan" data-pl-open>Open the plan</a><a class="link" href="#" data-pl-remove>Remove</a></span></div>${once}`;
 }
 
 /* --- Factories: lines, their hours, their inputs, and the staffing ------ */
@@ -20269,17 +20607,25 @@ function defaultRate(kind){
 }
 /* The company order for one material, in one pure function so it can be tested
    on its own: what the planned week needs beyond what the factories on the
-   floor already eat, added to what the company already holds on active
-   contracts, rounded up to the hundred the logistics manager takes. The
-   selected range is the floor: the target never drops below a week of the
-   range, so the range stays funded even when the factories on the floor
-   already eat that much. The gap is what to change the contracts by. An order
-   that does not exist yet counts as zero here — the caller keeps the "not
-   ordered" wording and marks a positive target as a new order. Paused
-   contracts never count; the game will not ship against them. */
-function planOrder(week, baseline, ordered){
+   floor already eat, with the one chain margin on it, added to what the
+   company already holds on active contracts, rounded up to tens as every
+   supply figure is (supply.margin and supply.roundTo). The selected range is
+   the floor: the target never drops below a week of the range and its margin,
+   so the range stays funded even when the factories on the floor already eat
+   that much. The gap is what to change the contracts by. An order that does
+   not exist yet counts as zero here — the caller keeps the "not ordered"
+   wording and marks a positive target as a new order. Paused contracts never
+   count; the game will not ship against them. `used`, where known, is what
+   the company's imports feed a week now, factory lines 24/7 (planUsed()):
+   what is on order beyond that and its margin is already ordered ahead, and
+   an added layout draws on it before it raises the order. */
+function planOrder(week, baseline, ordered, margin, roundTo, used){
   const have = ordered === null || ordered === undefined ? 0 : ordered;
-  const target = Math.ceil(Math.max(0, week, have + week - baseline) / 100) * 100;
+  const m = 1 + (Number.isFinite(margin) ? margin : 0), step = roundTo > 0 ? roundTo : 10;
+  const ahead = Number.isFinite(used) ? Math.max(0, have - used * m) : 0;
+  const more = (week - baseline) * m;
+  const raw = Math.max(0, week * m, have + (more > 0 ? Math.max(0, more - ahead) : more));
+  const target = Math.ceil(Math.round(raw * 1e6) / 1e6 / step) * step;
   return {target, gap: target - have};
 }
 /* A line starts as the factories the player already runs: the machines on
@@ -20298,6 +20644,201 @@ function factoryCounts(type){
 }
 let planSeed = {};
 const machinesOn = slug => Math.max(0, planCounts[slug] ?? planSeed[slug] ?? 1);
+/* What the company's imports feed of an item a week now, sized 24/7: the
+   week each importing site's fact is sized on, summed. */
+function planUsed(slug){
+  const facts = (D.supply || {}).facts || {};
+  let used = 0, any = false;
+  Object.keys(facts).forEach(s => {
+    const f = facts[s][slug];
+    const imp = f && f.imp ? f.import || f : null;
+    if(imp && Number.isFinite(imp.use)){ used += imp.use; any = true; }
+  });
+  return any ? used : null;
+}
+/* --- saving a plan -----------------------------------------------------
+   The steppers set the finished layout; Built at names the factory it goes
+   up in, or a new one; Save as plan keeps it (planKeep()), and from then on
+   the supply facts carry it (planOverlay()). Everything here reads the
+   layout on screen, so a stepper is instant. */
+let planWhere = null, planWhereType = null, planOpens = null;
+/* The factories, or none on a board without the supply payload. */
+const planView = () => D.supply && D.supply.factories && D.supply.factories.sites ? factoryView() : {sites: [], aliases: {}};
+/* The factories the company has, by key: a new factory is one that is not
+   among them when the plan is saved. */
+const planFactoryKeys = () => planView().sites.map(s => (D.businesses[s.s] || {}).key).filter(Boolean);
+/* Where a range is built by default: the saved plan's factory, else the
+   factory with most machines on the range, placed on it or standing empty on
+   a workstation it uses, else a new one. */
+function planWhereDefault(type){
+  const saved = planSaved();
+  if(saved && saved.type === type) return saved.factory || "new";
+  const products = ((D.plan.catalogue || {})[type] || {}).products || [];
+  const names = new Set(products.map(p => RECIPE_BY[p]).filter(Boolean)
+    .map(r => (((D.plan.workstations || {})[r.workstation] || {}).name || r.workstation || "").toLowerCase()));
+  let best = null, most = 0;
+  planView().sites.forEach(s => {
+    const n = s.lines.filter(l => products.includes(l.slug)).reduce((t, l) => t + (l.machines || 0), 0)
+      + (s.unnamed || []).filter(u => names.has((u.workstation || "").toLowerCase())).reduce((t, u) => t + (u.machines || 0), 0);
+    if(n > most && D.businesses[s.s]){ most = n; best = D.businesses[s.s].key; }
+  });
+  return best || "new";
+}
+const planWhereAt = where => {
+  if(!where || where === "new") return null;
+  const i = D.businesses.findIndex(b => b.key === where);
+  return i < 0 ? null : i;
+};
+/* The depot an ingredient is ordered at: the one that imports it for the
+   factory the plan is built at, else the one importing most of it now. */
+function planDepot(slug, at, view = planView()){
+  const site = Number.isInteger(at) ? view.sites.find(x => x.s === at) : null;
+  const n = site && (site.needs || []).find(x => x.slug === slug);
+  if(n){
+    const d = n.directImport ? site.s : [n.importSite, n.factoryImportSite, n.from].find(Number.isInteger);
+    if(Number.isInteger(d) && D.businesses[d]) return d;
+  }
+  const facts = (D.supply || {}).facts || {}, depots = ((D.supply || {}).factories || {}).depots || {};
+  const level = s => { const c = (depots[s] || {})[slug] || {}; return c.smart && Number.isFinite(c.target) ? c.target : c.weekly || 0; };
+  const found = Object.keys(facts).map(Number).filter(s => D.businesses[s] && facts[s][slug] && facts[s][slug].imp)
+    .sort((a, b) => level(b) - level(a) || a - b);
+  return found.length ? found[0] : null;
+}
+/* What a layout eats, by ingredient: a day and a week at 24/7, the company
+   target (planOrder(), against what the range's machines on the floor
+   already eat and what is on order), and the depot to order it at. */
+function planInputs(counts, at){
+  indexPlan();
+  const view = planView(), alias = view.aliases || {}, norm = slug => alias[slug] || slug;
+  const sources = D.plan.sources || {}, range = Object.keys(counts);
+  const out = {}, base = {};
+  range.forEach(p => {
+    const r = RECIPE_BY[p], m = counts[p] || 0;
+    if(!r || !m) return;
+    r.ingredients.forEach(i => {
+      const slug = norm(i.slug), o = out[slug] || (out[slug] = {item: i.item, raw: i.slug, day: 0, week: 0});
+      o.day += m * i.per * HOURS; o.week += m * i.per * HOURS * 7;
+    });
+  });
+  view.sites.forEach(s => s.lines.forEach(l => {
+    const r = RECIPE_BY[l.slug];
+    if(!r || !range.includes(l.slug)) return;
+    r.ingredients.forEach(i => { const slug = norm(i.slug); base[slug] = (base[slug] || 0) + (l.machines || 0) * i.per * HOURS * 7; });
+  }));
+  const done = {};
+  Object.keys(out).forEach(slug => {
+    const o = out[slug];
+    if(!(o.week > 0)) return;
+    const src = sources[slug] || sources[o.raw];
+    const target = planOrder(o.week, Math.round(base[slug] || 0), src ? src.ordered : null, (D.supply || {}).margin, (D.supply || {}).roundTo,
+      planUsed(slug) ?? undefined).target;
+    const ds = planDepot(slug, at, view);
+    done[slug] = {item: o.item, day: Math.round(o.day), week: Math.round(o.week), target,
+                  depot: ds === null ? null : D.businesses[ds].key};
+  });
+  return done;
+}
+/* The layout on screen, by product. */
+const planOnScreen = () => {
+  const counts = {};
+  $$("tr.line[data-slug][data-m]").forEach(tr => counts[tr.dataset.slug] = +tr.dataset.m);
+  return counts;
+};
+const planSame = (a, b) => {
+  const keys = new Set([...Object.keys(a || {}), ...Object.keys(b || {})]);
+  return [...keys].every(k => (a[k] || 0) === (b[k] || 0));
+};
+/* A square a machine: running, placed but not running, still to place. */
+function planSquares(state, most = 24){
+  const k = Math.min(state.planned, most);
+  const cls = i => i < state.running ? "run" : i < state.placed ? "placed" : "todo";
+  return `<span class="pl-pm" data-tip="${attr(`${state.running} running · ${state.placed - state.running} placed, not running yet · ${
+    state.planned - state.placed} still to place`)}">${[...Array(k).keys()].map(i => `<i class="${cls(i)}"></i>`).join("")}${
+    state.planned > most ? `<em>+${state.planned - most}</em>` : ""}</span>`;
+}
+const planCountsText = st => `${st.planned} planned <i>·</i> ${st.placed} placed <i>·</i> ${st.running} running`;
+/* The Built at strip, the squares on each line, the save box and the first
+   fill, after every stepper. */
+function planPaintSave(){
+  const box = $("plSave"), fillBox = $("plFill"), stateBox = $("plState");
+  if(!box || !D.plan) return;
+  const counts = planOnScreen(), at = planWhereAt(planWhere);
+  const state = planPlacement(counts, planWhere === "new" ? null : at ?? -1, planWhere === "new" ? planFactoryKeys() : []);
+  if(stateBox) stateBox.innerHTML = `${planSquares(state)}<span>${planCountsText(state)}</span>`;
+  const tile = $("vMachines");
+  if(tile && state.planned) tile.innerHTML = `${state.planned}<small>${state.placed} placed · ${state.running} running</small>`;
+  /* Each line's squares by what is built of it. */
+  $$("tr.line[data-slug]").forEach(tr => {
+    const b = state.by[tr.dataset.slug] || {placed: 0, run: 0};
+    $$(".machines i", tr).forEach((i, k) => {
+      i.classList.toggle("pl-placed", k >= b.run && k < b.placed);
+      i.classList.toggle("pl-todo", k >= b.placed);
+    });
+  });
+  /* Nothing to order ahead from without the save's day. */
+  const saved = planSaved(), today = (D.meta || {}).day;
+  box.hidden = !Number.isFinite(today);
+  if(fillBox) fillBox.hidden = box.hidden;
+  if(box.hidden) return;
+  const same = !!saved && saved.type === planType && (saved.factory || "new") === planWhere && planSame(saved.counts, counts);
+  const importDay = same && Number.isFinite(saved.importDay) ? saved.importDay : planImportDay(today);
+  const monday = WEEKDAY_NAMES[importDay % 7];
+  const changes = same ? sbData().rows.filter(r => r.plan).length : 0;
+  const was = saved && !same ? planOverlay() : null;
+  box.className = `pl-save${same ? " is-saved" : ""}`;
+  box.innerHTML = `<span class="txt"><b>Order ahead for the finished factory.</b> Saving turns the Company targets below into the orders on Supply: the weekly imports go to the full layout now, so ${
+      monday}'s delivery (day ${importDay}) lands as the factory opens. A plan runs every machine 24/7 whatever the sizing switch on Supply says, since a range no shop sells yet would size to nothing under Demand. Kept on this device for ${
+      spEsc(D.meta.save || "this save")}.${was ? ` Saving replaces the plan for ${spEsc(was.name)}.` : ""}</span>
+    ${same ? `<span class="pl-done" role="status">${icon("tick")}Saved · ${plural(changes, "change")} on Supply</span>`
+      : `<button type="button" class="btn2 primary" id="plSaveBtn"${state.planned ? "" : " disabled"}>${icon("tick")}<span>Save as plan</span></button>`}
+    ${saved ? `<a class="link" href="#" data-pl-remove>Remove plan</a>` : ""}`;
+  if($("plSaveBtn")) $("plSaveBtn").onclick = () => planSave(counts);
+  if(!fillBox) return;
+  /* The first fill: the days before that import, from the day the player
+     says the factory opens. */
+  const first = today + 1;
+  if(planOpens === null) planOpens = same && Number.isFinite(saved.opens) ? saved.opens : first;
+  planOpens = Math.min(importDay, Math.max(first, planOpens));
+  const inputs = same ? saved.inputs : planInputs(counts, at);
+  const held = slug => {
+    const key = inputs[slug].depot, ds = key ? D.businesses.findIndex(b => b.key === key) : -1;
+    return ds < 0 ? 0 : ((D.businesses[ds].lines || []).find(l => l.slug === slug) || {}).units || 0;
+  };
+  const fill = planFill(inputs, planOpens, importDay, held, (D.supply || {}).roundTo || 10);
+  const days = [...Array(Math.max(0, importDay - first + 1)).keys()].map(i => first + i);
+  fillBox.hidden = !state.planned;
+  fillBox.innerHTML = `<span class="ic">${spIcon("truck")}</span><span><b>First fill before ${monday}:</b> the factory opens <select id="plOpens" aria-label="The day the factory opens">${
+      days.map(d => `<option value="${d}"${d === planOpens ? " selected" : ""}>${WEEKDAY_NAMES[d % 7]}, day ${d}</option>`).join("")}</select>, ${
+      plural(fill.rounds, "morning round")} before the import lands. ${fill.items.length
+      ? `One urgent import: <span class="mono">${fill.items.map(x => `${spEsc(x.item)} ${x.amount.toLocaleString()}`).join(" · ")}</span>.`
+      : "The warehouses already hold enough until then."}</span>`;
+  $("plOpens").onchange = e => {
+    planOpens = +e.target.value;
+    const now = planSaved();
+    if(same && now){ planKeep({...now, opens: planOpens}); planRedraw(); }
+    else planPaintSave();
+  };
+}
+function planSave(counts){
+  const today = D.meta.day, at = planWhereAt(planWhere);
+  const importDay = planImportDay(today);
+  planKeep({v: 1, type: planType, factory: planWhere === "new" ? null : planWhere, known: planFactoryKeys(),
+            counts: {...counts}, savedDay: today, importDay,
+            opens: Math.min(importDay, Math.max(today + 1, planOpens ?? today + 1)), inputs: planInputs(counts, at)});
+  planRedraw();
+}
+function planRemove(){
+  planKeep(null);
+  planRedraw();
+}
+/* Every view reads the plan: the one on screen is drawn now, the rest as
+   they open (pageStale). */
+function planRedraw(){
+  PAGE_DRAWS.filter(row => row[0]).forEach(row => pageStale.add(row));
+  if(typeof page !== "undefined" && page) drawStale(page);
+  try{ drawSite(); }catch(e){}
+  wireAll();
+}
 
 function drawPlan(){
   indexPlan();
@@ -20307,15 +20848,20 @@ function drawPlan(){
     $("planPicker").innerHTML = ""; $("planBody").innerHTML = ""; $("ingBody").innerHTML = "";
     return;
   }
+  /* A saved plan opens on its own range, at its own layout. */
+  const saved = planSaved();
   if(!types.includes(planType))
-    planType = types.includes("ba:businesstype_supermarket")
-      ? "ba:businesstype_supermarket" : types[0];
+    planType = saved && types.includes(saved.type) ? saved.type
+      : types.includes("ba:businesstype_supermarket") ? "ba:businesstype_supermarket" : types[0];
   const cat = D.plan.catalogue, own = (D.plan.own || {})[planType];
-  planSeed = factoryCounts(planType);
+  planSeed = saved && saved.type === planType ? {...factoryCounts(planType), ...saved.counts} : factoryCounts(planType);
+  if(planWhereType !== planType){ planWhere = planWhereDefault(planType); planWhereType = planType; planOpens = null; }
+  const factories = planView().sites.map(x => D.businesses[x.s]).filter(Boolean);
+  if(planWhere !== "new" && !factories.some(b => b.key === planWhere)) planWhere = "new";
   const kind = cat[planType].type, low = kind.toLowerCase();
   const shops = own ? (own.shops ?? own.sites) || 0 : 0;
   const perShop = defaultRate(planType) || 0;
-  const pick = k => { planType = k; planCounts = {}; drawPlan(); };
+  const pick = k => { planType = k; planCounts = {}; drawPlan(); };  // Built at follows the range (planWhereType)
 
   /* The types the player runs are the segments, as on the canvas; every other
      type the city sells is one select away. */
@@ -20403,7 +20949,7 @@ function drawPlan(){
           + (unit !== undefined ? `; ${fmt(unit)} each on day ${D.plan.priceDay}` : ""),
         ordered: src ? src.ordered : null, active: src ? src.active : false,
         smart: !!(src && src.smart), paused, contracts, from: src ? src.from : null, baseline: base,
-        unit: unit === undefined ? null : unit,
+        unit: unit === undefined ? null : unit, used: planUsed(norm(i.slug)),
       };
     });
     return `<tr class="line" data-m="${machinesOn(slug)}" data-min="0" data-max="99" data-rate="${r.out}" data-ing="${attr(ing)}" data-kit="${attr(JSON.stringify(kit))}" data-slug="${attr(slug)}" data-name="${attr(r.item)}">
@@ -20420,6 +20966,14 @@ function drawPlan(){
   $("planNote").textContent = (bought ? `${plural(bought, "product")} of ${cat[planType].products.length} bought in` : "")
     + (svcs.length ? `${bought ? " · " : ""}also sells ${svcs.join(", ")} as services, which no line makes or stocks` : "");
   $("planBody").innerHTML = `
+    <div class="pl-build">
+      <span class="lab">Built at</span><select id="plWhere" aria-label="The factory this plan builds">${
+        factories.map(b => `<option value="${attr(b.key)}"${b.key === planWhere ? " selected" : ""}>${spEsc(shortName(b))}${
+          b.address ? ` · ${spEsc(b.address)}` : ""}</option>`).join("")}<option value="new"${planWhere === "new" ? " selected" : ""}>A new factory</option></select>
+      <span class="pl-state" id="plState"></span>
+      <span class="pl-leg"><span><span class="pl-pm"><i class="run"></i></span>running</span><span data-tip="Placed in the factory, but no recipe chosen or nobody posted to it yet"><span class="pl-pm"><i class="placed"></i></span>placed, not running</span><span><span class="pl-pm"><i class="todo"></i></span>to place</span></span>
+      ${why("The steppers set the finished layout. Machines already placed count as built; a placed machine with no recipe or nobody posted counts as built but not running, so a half-built factory reads right without anything to type.")}
+    </div>
     <div class="planstats">
       <div class="planstat"><span class="lab">Machines</span><div class="v" id="vMachines"></div></div>
       <div class="planstat" id="vMadeTile"><span class="lab">Made / week</span><div class="v"><span id="vMade"></span><small>units</small></div></div>
@@ -20434,7 +20988,10 @@ function drawPlan(){
       ? `Your <b>${shops}</b> ${low}${shops === 1 ? "" : "s"} take what ${shops === 1 ? "it sells" : "they sell"} today, <b>${
           perShop.toLocaleString("en-US")}</b> a day per product, <b id="vTake"></b> units a week across the range. Everything above that, <b id="vSurplus"></b> units a week, is surplus for export.`
       : own ? `Your <b>${shops}</b> ${low}${shops === 1 ? "" : "s"} trade, but how much physical supply they use is not measured, so shop coverage and export surplus cannot be estimated here.`
-      : `You do not run a ${low} yet, so nothing here is measured: everything made, <b id="vSurplus"></b> units a week, is surplus for export until the shops exist.`}<span id="vShort"></span></p>`;
+          : `You do not run a ${low} yet, so nothing here is measured: everything made, <b id="vSurplus"></b> units a week, is surplus for export until the shops exist.`}<span id="vShort"></span></p>
+    <div class="pl-save" id="plSave"></div>
+    <div class="pl-fill" id="plFill"></div>`;
+  $("plWhere").onchange = e => { planWhere = e.target.value; planPaintSave(); };
   planDraw();
   wireTips();
 }
@@ -23662,7 +24219,7 @@ function planDraw(){
          "not ordered" wording; a positive target there is a new order to
          place, not a change. Paused contracts are shown apart and never
          counted. */
-      const o = planOrder(r.week, i.baseline || 0, ordered);
+      const o = planOrder(r.week, i.baseline || 0, ordered, (D.supply || {}).margin, (D.supply || {}).roundTo, i.used ?? undefined);
       targetSum += o.target;
       const gap = ordered === null ? (o.target > 0 ? o.target : null) : o.gap;
       const value = unit === null ? null : r.week * unit;
@@ -23689,11 +24246,12 @@ function planDraw(){
     if(foot) foot.innerHTML = total ? `<tr><td class="l">Total</td><td></td><td>${fmtN(raw / 7)}</td><td>${fmtN(raw)}</td><td>${fmtN(targetSum)}</td><td></td><td></td><td class="cash">${cash ? fmt(cash) : ""}</td></tr>` : "";
     const note = $("ingNote");
     if(note) note.textContent = !total ? "Nothing to import; this range is bought as finished goods."
-      : `Company targets are company-wide: you type each one across your importer contracts in the game; the board adds them up and never guesses a split per warehouse.`
+      : `Company targets are company-wide. Save as plan puts the change on Supply, at the warehouse that imports each ingredient for the factory it is built at.`
         + (!priced ? "" : ` A week costs ${fmt(cash)} across the ${priced} of ${total} ingredients this company already buys.`
           + (priced < total
             ? ` Unit prices are what you paid on day ${D.plan.priceDay}; the other ${total - priced} show quantities only.` : ""));
   }
+  planPaintSave();
 }
 const bindPlan = once(() => on("click", "tr.line .step a[data-d]", (a, e) => {
   e.preventDefault();
@@ -23705,7 +24263,16 @@ const bindPlan = once(() => on("click", "tr.line .step a[data-d]", (a, e) => {
   if(tr.dataset.slug) planCounts[tr.dataset.slug] = +tr.dataset.m;
   planDraw();
 }));
-function wirePlan(){ bindPlan(); planDraw(); }
+const bindPlanSave = once(() => {
+  on("click", "[data-pl-remove]", (a, e) => { e.preventDefault(); planRemove(); });
+  on("click", "[data-pl-open]", (a, e) => {
+    e.preventDefault();
+    const saved = planSaved();
+    if(saved){ planType = saved.type; planCounts = {}; planWhere = null; planOpens = null; }
+    reveal("secPlan");
+  });
+});
+function wirePlan(){ bindPlan(); bindPlanSave(); planDraw(); }
 
 /* site detail: the panel answers the pointer -------------------------------------
    A block reads out on its own line whatever inside it carries data-read, a
