@@ -17269,7 +17269,7 @@ function xlKind(w, n, slug){
   }
   const many = /quarters$/.test(w) ? w : /[^aeiou]y$/.test(w) ? w.slice(0, -1) + "ies" : `${w}s`;
   const type = /^ba:/.test(slug || "") ? `\u27e6${slug}|${w}\u27e7` : w;
-  return tt("co.chain.kind", {one: "{n} {kind}", other: "{n} {kinds}"}, {n, kind: w, kinds: many, type});
+  return tt("co.chain.kind", {one: "{n} {kind}", other: "{n} {kinds}"}, {n, kind: w, kinds: many, kind_name: type});
 }
 function chainRow(c, v){
   const cells = v.chain(c);
