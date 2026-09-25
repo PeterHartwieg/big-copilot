@@ -978,6 +978,7 @@ COVER_NOISE_DAYS = 0.5
 # this many days it is an anecdote.
 SHIPPED_WINDOW = 7
 DELIVERY_LOG_SIZE = 60  # transactions a site's log keeps before the oldest go
+PRICE_DAYS = 7  # days of goods cost and deliveries a unit price is read over
 SHIPPED_MIN_DAYS = 3
 # A factory input topped up every morning and holding less than this many
 # rounds' worth is a buffer the machines eat through, not a pile.
@@ -1304,8 +1305,10 @@ OPENING_EVENT = 0  # "{rival} opened {business} at {address}"
 def _rival_names(save: Save, numbers: dict) -> dict:
     """{rival number: name} for every rival company the save lets us name.
 
-    Two sources. The four story rivals are named by the message keys they have
-    sent. Everybody else is named by their own opening announcement: a market
+    Two sources. The four story rivals are named by their fixed ids, and a
+    story rival the table lacks by the message keys it has sent: a rival's list
+    can hold another rival's keys, so the first match is only a fallback.
+    Everybody else is named by their own opening announcement: a market
     event of type 0 carries the rival's name, the business's name and its
     address, and the registration still standing at that address, opened on the
     same day and under the same name, carries the owner's id. A name is kept
@@ -1316,6 +1319,9 @@ def _rival_names(save: Save, numbers: dict) -> dict:
     for state in save.items(save.root.get("specialRivalStates")):
         rival = state.get("rivalId")
         if not rival:
+            continue
+        if rival in SPECIAL_RIVAL_NAMES:
+            found[rival] = SPECIAL_RIVAL_NAMES[rival]
             continue
         for key in save.items(state.get("sentMessageKeys")):
             match = _RIVAL_MESSAGE_RE.match(key or "")
@@ -1541,8 +1547,11 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
     stations = _service_stations(names)
     recipes = _recipes(names)
     staff_by_addr, staff = _staff(save, names)
-    crew_skill = {p["id"]: p["skill"] for p in staff}
-    residential = _residential_addresses(save, summaries)
+    # Every skill a person holds, the top one first: a station is held by
+    # anyone with its skill, not only by those whose best skill it is.
+    crew_skill = {p["id"]: [p["skill"], *(s for s in p.get("skills", ()) if s != p["skill"])]
+                  for p in staff}
+    residential = _residential_addresses(save, summaries, buildings)
     stmt_history = _statement_history(save, summaries)
     latest = stmt_history[-1][1] if stmt_history else {}
 
@@ -1722,7 +1731,6 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         "minor": alerts["minor"],
         "alertsDemand": {"lines": alerts_demand["lines"], "minor": alerts_demand["minor"]},
         "goals": _goals(save, names, businesses),
-        "weekly": _weekly(save),
     }
 
 
@@ -1822,9 +1830,18 @@ def _difficulty(save: Save) -> dict:
     }
 
 
-def _residential_addresses(save: Save, summaries: list) -> set:
-    """Apartments are billed as residences, not businesses."""
-    out = set()
+def _residential_addresses(save: Save, summaries: list, buildings: list = ()) -> set:
+    """Apartments are billed as residences, not businesses.
+
+    A home rented today, or a new character's first one, has no statement
+    yet, so a rented building the building table calls residential is a home
+    too: nobody can run a business in one.
+    """
+    table = load_buildings() if buildings else {}
+    out = {
+        (b["StreetName"], b["StreetNumber"]) for b in buildings
+        if (table.get((b["StreetName"], b["StreetNumber"])) or {}).get("t") == "residential"
+    }
     for s in summaries[-5:]:
         for r in save.items(s.get("residentialStatements")):
             addr = save.address(r.get("Address"))
@@ -2537,7 +2554,7 @@ def _loans(save: Save, names: Names) -> list:
 
 def _products(businesses: list) -> list:
     agg = collections.defaultdict(
-        lambda: {"revenue": 0.0, "units": 0, "week": 0, "stock": 0, "stores": 0}
+        lambda: {"revenue": 0.0, "units": 0.0, "week": 0, "stock": 0, "stores": 0}
     )
     for b in businesses:
         for line in b["lines"]:
@@ -2548,7 +2565,9 @@ def _products(businesses: list) -> list:
             rec = agg[line["slug"]]
             rec["item"] = line["item"]
             rec["revenue"] += line["revenue"]
-            rec["units"] += line["soldPerDay"]
+            # The daily rate before rounding: a line selling 0.4 a day is
+            # not nothing, and its share of the average price is not free.
+            rec["units"] += line.get("rate", line["soldPerDay"])
             rec["week"] += line["soldPerWeek"]
             rec["stock"] += line["units"]
             rec["stores"] += 1 if line["revenue"] else 0
@@ -2556,6 +2575,7 @@ def _products(businesses: list) -> list:
     for rec in out:
         rec["revenue"] = money(rec["revenue"])
         rec["price"] = round(rec["revenue"] / rec["units"], 2) if rec["units"] else 0
+        rec["units"] = round(rec["units"])
     return sorted(out, key=lambda x: -x["revenue"])
 
 
@@ -2564,9 +2584,12 @@ def _staff_summary(staff: list, businesses: list) -> dict:
     cost_by_role = collections.Counter()
     for s in staff:
         cost_by_role[s["role"]] += s["daily"]
+    # By site key, not name: two shops can share a name.
     by_site = collections.Counter()
+    site_name = {}
     for b in businesses:
-        by_site[b["name"]] = b["staff"]
+        by_site[b["key"]] += b["staff"]
+        site_name[b["key"]] = b["name"]
     return {
         "total": len(staff),
         "dailyCost": sum(s["daily"] for s in staff),
@@ -2581,24 +2604,10 @@ def _staff_summary(staff: list, businesses: list) -> dict:
             key=lambda x: -x["count"],
         ),
         "sites": sorted(
-            ({"site": s, "count": c} for s, c in by_site.items() if c),
+            ({"site": site_name[k], "key": k, "count": c} for k, c in by_site.items() if c),
             key=lambda x: -x["count"],
         ),
     }
-
-
-def _weekly(save: Save) -> list:
-    income = {
-        t["m_Item1"]: t["m_Item2"] for t in save.items(save.root["playerWeeklyIncomeHistory"])
-    }
-    count = {
-        t["m_Item1"]: t["m_Item2"]
-        for t in save.items(save.root["playerNumberOfBusinessesHistory"])
-    }
-    return [
-        {"day": d, "income": money(income[d]), "businesses": count.get(d, 0)}
-        for d in sorted(income)
-    ]
 
 
 def _openable_types(names: Names) -> list[str]:
@@ -4023,6 +4032,11 @@ def _supply(
             if not fact:
                 continue
             row["status"], row["why"], row["level"] = fact["st"], fact["why"], fact["lvl"]
+            # A depot of yours holds it and no plan sends it on: Not routed
+            # says so, naming this factory, and the input's own finding gives
+            # way to it, as a shelf's does.
+            if fact.get("via") is not None:
+                row["via"] = fact["via"]
             row["raiseTarget"] = (fact["setTo"] if row["target"] and fact["cad"] == "daily"
                                   else None)
             # The factory's own contract, paused while the top-up falls short
@@ -4294,7 +4308,7 @@ def _supply(
                 need = cycle_need = 0
                 provision, cadence = ordered, "weekly"
             else:
-                out = draw(business["key"], line["item"])
+                out = draw(business["key"], line["slug"])
                 if out <= 0 and line["units"] <= 0:
                     continue
                 target = next(
@@ -4383,6 +4397,9 @@ def _supply(
         else None,
         "leftToday": round(left_today, 3),
         "shops": shop_rows,
+        # The shops a repeating wholesale contract delivers to: a standing
+        # supply that draws no link on the graph.
+        "wholesaleShops": sorted({index[shop] for shop, _item in wholesale}),
         "imports": import_rows,
         "idle": idle_rows,
         "idleWeeks": IDLE_WEEKS,
@@ -5489,9 +5506,13 @@ def _factories(
                     item,
                     {"item": ing["item"], "slug": item, "perDay": 0.0, "lines": [], "lineSlugs": [],
                      "staffedDay": 0.0,
-                     "demDay": 0.0, "ramp": set()},
+                     "demDay": 0.0, "ramp": set(), "_shipDraw": 0.0, "_allLimit": True},
                 )
                 row["perDay"] += n * ing["per"] * 24
+                # What the lines' shipped output took of it: a line held by its
+                # limit makes what leaves, and eats for that, not for capacity.
+                row["_shipDraw"] += n * ing["per"] * 24 * (min(makes, ships) / makes if makes else 0.0)
+                row["_allLimit"] = row["_allLimit"] and limit is not None
                 row["staffedDay"] += n * ing["per"] * 24 * share
                 row["demDay"] += n * ing["per"] * 24 * (dem_makes / makes if makes else 1.0)
                 row["ramp"] |= set(ramp)
@@ -5553,8 +5574,18 @@ def _factories(
             row["waitingOnSlugs"] = [slug for _name, slug in waiting]
             # Every line eating it held by its limit, with some of it on hand:
             # the machines are not waiting for it, they have nothing to make.
+            # Or every such line has Produce up to set, what arrives covers
+            # what their shipped output ate, and enough is on hand to go on
+            # making it for the rest of the day: one line held at its limit
+            # all day and another only late in the day still draw no more
+            # than they ship, whatever the hour's stock test says. A line
+            # that has run the input down is starved, not held.
+            ship_draw, all_limit = row.pop("_shipDraw"), row.pop("_allLimit")
             row["limited"] = bool(
-                row["lines"] and all(held_lines[line] for line in row["lines"]) and held(key, slug) > 0
+                row["lines"] and held(key, slug) > 0 and (
+                    all(held_lines[line] for line in row["lines"])
+                    or (all_limit and ship_draw > 0 and arrives(key, slug) >= ship_draw * 0.85
+                        and held(key, slug) >= ship_draw * rest_of_day))
             )
             row["target"] = target
             row["source"] = import_source
@@ -5594,8 +5625,6 @@ def _factories(
             ramp = row.pop("ramp")
             if ramp:
                 ramp_at[(key, slug)] |= ramp
-                if own_import:
-                    ramp_at[(key, slug)] |= ramp
                 if source:
                     ramp_at[(import_source, slug)] |= ramp
             row["demDay"] = round(row["demDay"])
@@ -5753,8 +5782,11 @@ def _factories(
     }
 
 
-def _serves(status: str | None, skill: str | None, needed: str | None = None) -> bool:
+def _serves(status: str | None, skill, needed: str | None = None) -> bool:
     """Whether someone with this skill can hold the post a station is.
+
+    `skill` is one skill, or every skill the person holds with the top one
+    first: a shop's station takes anyone holding its skill.
 
     A shop's queue is served at whichever station the shift posts to, and the
     station names its own skill: the fitness planning board wants a Gym Trainer,
@@ -5762,9 +5794,11 @@ def _serves(status: str | None, skill: str | None, needed: str | None = None) ->
     office's customers are served by the professional the agency employs, which
     is everyone there but the cleaners, so its computers name no skill at all.
     """
+    held = [skill] if skill is None or isinstance(skill, str) else list(skill)
     if status == "office":
-        return bool(skill) and skill != CLEANING_SKILL
-    return skill is not None and skill == needed
+        top = held[0] if held else None
+        return bool(top) and top != CLEANING_SKILL
+    return needed is not None and needed in held
 
 
 def _service_wages(staff: list, status_of: dict) -> dict:
@@ -9988,33 +10022,70 @@ def _ingredient_prices(save: Save, names: Names, supply: dict, businesses: list)
 
     The save carries no importer price list — `importPartnerships.products` holds
     an item, an amount and a warehouse, and nothing about money. What it does
-    carry is what was paid: yesterday's goods cost per line, against the units
-    drawn that day. Dividing one by the other gives a real unit price for every
-    material this company already buys, and nothing at all for one it does not.
-    Guessing the rest would be inventing a price list.
+    carry is what was paid: each site's goods cost per item, booked where the
+    goods are used (a factory, not the depot that imported them), and the
+    units the delivery log shows reaching that site. Over the last PRICE_DAYS
+    days, company-wide, the one divided by the other gives a real unit price
+    for every material this company already buys, and nothing at all for one
+    it does not. A day's cost swings with the morning round, so a single day
+    is never divided by a week's average. Something the company makes itself
+    reaches its users at no cost, so it has no price here. Guessing the rest
+    would be inventing a price list.
     """
     summaries = sorted(save.items(save.root["financialSummaries"]), key=lambda s: s["dayNumber"])
     if not summaries:
-        return {"unit": {}, "day": None}
-    spend = collections.defaultdict(float)
-    for statement in save.items(summaries[-1]["businessIncomeStatements"]):
-        addr = save.address(statement.get("Address"))
-        for line in save.items(statement.get("Resources")):
-            if line.get("Amount"):
-                spend[(site_key(addr), line["ItemName"])] += line["Amount"]
+        return {"unit": {}, "day": None, "from": None}
+    window = {s["dayNumber"] for s in summaries[-PRICE_DAYS:]}
+    spend = collections.defaultdict(lambda: collections.defaultdict(float))
+    for summary in summaries[-PRICE_DAYS:]:
+        for statement in save.items(summary["businessIncomeStatements"]):
+            key = site_key(save.address(statement.get("Address")))
+            for line in save.items(statement.get("Resources")):
+                if line.get("ItemName") and line.get("Amount"):
+                    spend[(key, line["ItemName"])][summary["dayNumber"]] += line["Amount"]
 
-    by_label = {b["key"]: {} for b in businesses}
-    for row in supply["imports"]:
-        by_label[businesses[row["s"]]["key"]][row["item"]] = row["perDay"]
+    # What reached each site, day by day. A log at its full length has lost
+    # part of its oldest day, so that day is left out.
+    arrived = collections.defaultdict(lambda: collections.defaultdict(float))
+    covered = collections.defaultdict(set)
+    for building in save.items(save.root["BuildingRegistrations"]):
+        if not building.get("RentedByPlayer"):
+            continue
+        key = site_key((building["StreetName"], building["StreetNumber"]))
+        log = save.items(building.get("deliveryTransactions"))
+        days = {t.get("dayOfDelivery") for t in log if isinstance(t.get("dayOfDelivery"), int)}
+        if days and len(log) >= DELIVERY_LOG_SIZE:
+            days.discard(min(days))
+        covered[key] = days & window
+        for transaction in log:
+            when = transaction.get("dayOfDelivery")
+            if when not in covered[key]:
+                continue
+            for entry in save.items(transaction.get("deliveryItems")):
+                amount = entry.get("amountDelivered") or 0
+                if entry.get("itemName") and amount > 0:
+                    arrived[(key, entry["itemName"])][when] += amount
 
-    prices = {}
-    for (key, slug), paid in spend.items():
-        units = by_label.get(key, {}).get(names.label(slug))
-        if units and units > 0:
-            prices.setdefault(slug, []).append(paid / units)
+    made = {line["slug"] for site in (supply.get("factories") or {}).get("sites", [])
+            for line in site.get("lines", [])}
+    paid = collections.defaultdict(float)
+    units = collections.defaultdict(float)
+    for (key, slug), by_day in spend.items():
+        if slug in made:
+            continue
+        # Only the days this site's log covers, and only where goods came in:
+        # a shop keeps no log, and cost there has no units to divide by.
+        days = covered.get(key, ())
+        got = sum(arrived[(key, slug)].get(d, 0.0) for d in days)
+        if got <= 0:
+            continue
+        paid[slug] += sum(by_day.get(d, 0.0) for d in days)
+        units[slug] += got
     return {
-        "unit": {s: round(sum(v) / len(v), 4) for s, v in prices.items()},
+        "unit": {slug: round(paid[slug] / units[slug], 4)
+                 for slug in _in_order(units) if paid[slug] > 0},
         "day": summaries[-1]["dayNumber"],
+        "from": min(window),
     }
 
 
@@ -10194,6 +10265,7 @@ def _plan(
         "own": own,
         "prices": prices["unit"],
         "priceDay": prices["day"],
+        "priceFrom": prices.get("from"),
         "priceCount": len(prices["unit"]),
         "peak": round(uplift, 3),
         # By the workstation's key, never its name.
@@ -10310,7 +10382,11 @@ def _alerts(
                      worth=worth, always=always, ev=ev, named=named)
         )
 
+    # A delivery plan: a route or an import into the site, or a repeating
+    # wholesale contract to it.
     planned = {link["to"] for link in supply["graph"]["links"]}
+    planned |= {businesses[s]["key"] for s in supply.get("wholesaleShops", ())
+                if 0 <= s < len(businesses)}
 
     # --- a site that has not started trading is one finding, not four
     silent = set()
@@ -11079,6 +11155,8 @@ def _feed_notes(businesses: list, factories: dict, silent: set, mode: str = "cap
             lines = ", ".join(tok(slugs[i] if i < len(slugs) else None, line)
                               for i, line in enumerate(row["lines"][:3]))
             item = tok(row.get("slug"), row["item"])
+            if status == "noplan" and row.get("via") is not None:
+                continue  # said once, by the depot's Not routed finding
             if status == "noplan":
                 text = (f"{item} feeds {lines} at {per_day:,}/day "
                         f"but no depot tops it up")
@@ -14996,7 +15074,7 @@ const SZ_WHY = {
   "short:shortfall": "Runs dry before the next delivery lands",
   "short:target": "The daily top-up is less than a day's need",
   "short:dry": "The depot it comes from is out of it",
-  "stalled:notDrawn": "The source holds it, yet little or nothing arrives",
+  "stalled:notDrawn": "The source holds it, yet under three quarters of the need arrived a day last week: the line is not drawing it",
   "stalled:waiting": "The line stands still for want of another input",
   "idle:notMoving": "Nothing draws on it",
   "idle:notRouted": "No plan sends it on, though your own sites sell or need it",
@@ -15154,7 +15232,7 @@ function szSays(f, r, depot){
     case "tight": return f.setTo !== null ? `${f.setTo.toLocaleString()} would carry the margin` : "";
     case "stalled":
       if(f.why === "waiting") return `${lines.join(", ")} stand${lines.length === 1 ? "s" : ""} still for want of ${(r.waitingOn || []).join(", ")}`;
-      return `${depot} holds ${(r.depotStock || 0).toLocaleString()} but the line takes ${pct}% of its need`;
+      return `${depot} holds ${(r.depotStock || 0).toLocaleString()}, yet only ${pct}% of the need arrived a day last week`;
     case "covered":
       if(f.why === "staffing") return `the roster runs these machines ${Math.round((r.staffedShare ?? 1) * 100)}% of the week`;
       if(f.why === "limit") return "Produce up to holds the line back";
@@ -20211,8 +20289,8 @@ const SB_LINE_COLS = [["Line", r => r.item || r.workstation, "l"],
   ["Status", r => r.fact ? szRank(r.fact) : null, "l"]];
 const SB_INPUT_COLS = [["Factory input", r => r.item, "l"],
   ["Eats / day", r => szUse(r.fact, r.perDay), "", "At full rate under 24/7; what the shops at the end of the chain use under Demand"],
-  ["On hand", r => r.stock ?? null], ["Arrived / day", r => r.known ? r.arrives : null],
-  ["Daily top-up", r => r.directImport ? null : r.target || null, "", "What the round brings each morning. With a change, the figure to type in the sending site's plan."],
+  ["On hand", r => r.stock ?? null], ["Arrived / day", r => r.known ? r.arrives : null, "", "Measured: what reached the factory a day over the last week, from its delivery log (the last round alone while it is newer than that)"],
+  ["Daily top-up", r => r.directImport ? null : r.target || null, "", "Planned: what the round brings each morning. With a change, the figure to type in the sending site's plan."],
   ["Status", r => szRank(r.fact), "l"]];
 /* The sizing switch, with what it means; remembered on this device. */
 function sbSizingRow(id){
@@ -20787,6 +20865,12 @@ function factoryCounts(type){
   return out;
 }
 let planSeed = {};
+/* The days the unit prices were read over (_ingredient_prices()): a week of
+   goods cost against the units delivered, or the one day there is. */
+const priceSpan = () => {
+  const {priceFrom: from, priceDay: to} = D.plan || {};
+  return from != null && from !== to ? `over days ${from}–${to}` : `on day ${to}`;
+};
 const machinesOn = slug => Math.max(0, planCounts[slug] ?? planSeed[slug] ?? 1);
 
 function drawPlan(){
@@ -20890,7 +20974,7 @@ function drawPlan(){
       meta[i.item] = {
         tip: on
           + (base ? `; your factories already eat ${base.toLocaleString("en-US")} of it a week` : "")
-          + (unit !== undefined ? `; ${fmt(unit)} each on day ${D.plan.priceDay}` : ""),
+          + (unit !== undefined ? `; ${fmt(unit)} each ${priceSpan()}` : ""),
         ordered: src ? src.ordered : null, active: src ? src.active : false,
         smart: !!(src && src.smart), paused, contracts, from: src ? src.from : null, baseline: base,
         unit: unit === undefined ? null : unit,
@@ -20967,12 +21051,12 @@ function drawProducts(){
         showAllProducts ? `top ${TOP} only` : `all ${all.length}`}</a>`
     : `<span class="quiet">all ${all.length}</span>`;
   $("secProducts").innerHTML = sechead("Products", {
-    why: `Revenue and units are yesterday summed over every store that sells the line;`
+    why: `Revenue and units are a day's, averaged over the last seven days and summed over every store that sells the line;`
       + ` units a week is the last seven days, and stores is how many carry it.`
       + (showPeak
         ? ` Peaks names the weekday that sells the most units${fromWeeks} and the points between best and worst day.`
         : ` Weekday peaks are on the product's own note; ${withPeak} of ${rows.length} have one.`),
-    quiet: "by revenue yesterday",
+    quiet: "by revenue a day, last 7 days",
     aside: more,
   }) + `<table>
     <thead><tr><th class="l">Product</th><th>Revenue / day</th><th>Units / day</th>
@@ -24197,7 +24281,7 @@ function planDraw(){
       : `Company targets are company-wide: you type each one across your importer contracts in the game; the board adds them up and never guesses a split per warehouse.`
         + (!priced ? "" : ` A week costs ${fmt(cash)} across the ${priced} of ${total} ingredients this company already buys.`
           + (priced < total
-            ? ` Unit prices are what you paid on day ${D.plan.priceDay}; the other ${total - priced} show quantities only.` : ""));
+            ? ` Unit prices are what you paid ${priceSpan()}; the other ${total - priced} show quantities only.` : ""));
   }
 }
 const bindPlan = once(() => on("click", "tr.line .step a[data-d]", (a, e) => {

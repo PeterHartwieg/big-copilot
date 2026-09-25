@@ -1032,7 +1032,7 @@ test('the range sold in your shops is matched by the item key, never by its name
     {item: 'Coffee', slug: 'ba:itemname_coffeebeans', price: 3, stores: 1, units: 2}]}});
   const html = await w.load('wiki/businesstypes-coffeeshop');
   assert.match(html, /Its range, sold/);
-  assert.match(html, /Coffee moved in your shops yesterday\./);
+  assert.match(html, /Coffee moved in your shops in the last seven days\./);
   assert.doesNotMatch(html, /Coffee, Coffee moved/);
 });
 
