@@ -51,7 +51,7 @@ OPENED = 3  # the day every site opened
 RIVAL_ID = "RIVALoneRIVALoneRIVALo=="
 PRESET = "PRESETdataAAAAAAAAAAAA=="
 
-# The shape of a week, Monday first after Sunday: index is day % 7.
+# The shape of a week, indexed by day % 7: 0 Sunday, 1 Monday (day 1 is a Monday).
 WEEK = (1.3, 0.8, 0.9, 0.9, 1.0, 1.2, 1.4)
 
 
@@ -127,13 +127,19 @@ def _lift(day: int) -> float:
     return WEEK[day % 7] * (1.2 if WAVE[0] <= day < WAVE[1] else 1.0)
 
 
-def _sales(day: int, base: dict, customers: int, hours: range, hyped: bool = False) -> dict:
+def _sales(day: int, base: dict, customers: int, hours: range, hyped: bool = False,
+           rush: dict | None = None) -> dict:
     """One day of a shop's order history: `base` units a day of each item at
     its price, shaped by the weekday (and the wave), with the door count
-    spread over `hours`."""
+    spread over `hours`. `rush` fixes the count of some hours ({hour: n}); the
+    rest of the day is spread over the others."""
     f = _lift(day) if hyped else WEEK[day % 7]
     seen = round(customers * f)
-    per_hour = [seen // len(hours) + (1 if i < seen % len(hours) else 0) for i in range(len(hours))]
+    rush = rush or {}
+    rest = [h for h in hours if h not in rush]
+    left = seen - sum(rush.values())
+    spread = {h: left // len(rest) + (1 if i < left % len(rest) else 0) for i, h in enumerate(rest)}
+    per_hour = [rush.get(h, spread.get(h)) for h in hours]
     return {
         "dayNumber": day, "totalCustomers": seen,
         "itemSales": [{"itemName": slug, "amountSold": round(units * f),
@@ -144,16 +150,21 @@ def _sales(day: int, base: dict, customers: int, hours: range, hyped: bool = Fal
 
 
 LIQUOR_SALES = {BEER: (250, 6.0)}
+# The evening rush at the liquor store: more than its one register serves (20 an hour).
+LIQUOR_RUSH = {17: 24, 18: 24}
 GIFT_SALES = {GIFT: (80, 12.0), UMBRELLA: (20, 15.0)}
 WAVE = (DAY - 5, DAY + 4)  # the days the hype wave on beer runs
 
 
-def _statement(addr, sales, cogs, wages, rent, profit=None) -> dict:
+def _statement(addr, sales, cogs, wages, rent, profit=None, resources=None) -> dict:
     profit = sales - cogs - wages - rent if profit is None else profit
     return {"Address": address(*addr), "TotalSales": float(sales), "TotalResources": float(cogs),
             "SalaryExpenses": float(wages), "RentExpenses": float(rent),
             "MarketingExpenses": 0.0, "Theft": 0.0, "LicensingFees": 0.0,
-            "TotalProfit": float(profit)}
+            "TotalProfit": float(profit),
+            # The goods cost line by line, which the planner prices materials from.
+            "Resources": [{"ItemName": slug, "Amount": float(amount)}
+                          for slug, amount in (resources or {}).items()]}
 
 
 def _summary(d: int) -> dict:
@@ -164,7 +175,7 @@ def _summary(d: int) -> dict:
     statements = [
         _statement(LIQUOR, beer, beer * 0.2, 456, 150),
         _statement(GIFTS, gifts, gifts * 0.5, 180, 120),
-        _statement(HUB, 0, 0, 0, 90),
+        _statement(HUB, 0, 200, 0, 90, resources={WATER: 200}),  # 400 water a day at $0.50
         _statement(BREWERY, 0, 60, 192, 110),
     ]
     business = sum(s["TotalProfit"] for s in statements)
@@ -221,7 +232,7 @@ def data_company(day: int = DAY) -> dict:
         "scheduleDays": _week((8, 22), [
             _shift(8, 16, "EMPana", "REGliquor"), _shift(14, 22, "EMPben", "REGliquor"),
             _shift(8, 20, "EMPcy", "CLEANliquor", kind=0)]),
-        "orderHistory": [_sales(d, LIQUOR_SALES, 160, range(8, 22), hyped=True) for d in orders],
+        "orderHistory": [_sales(d, LIQUOR_SALES, 160, range(8, 22), hyped=True, rush=LIQUOR_RUSH) for d in orders],
         "retailPrices": [{"itemName": BEER, "price": 6.0}, {"itemName": SODA, "price": 2.5}],
         "deliveryTransactions": [],
     }
@@ -316,7 +327,7 @@ def data_company(day: int = DAY) -> dict:
 
     root = {
         "Day": day, "Hour": 14, "Minute": 30, "Money": 25000.0 + 80.0 * (day - DAY),
-        "SaveGameName": "Payload Co", "characterId": CHARACTER, "buildNumberAtLastSave": 3682,
+        "SaveGameName": "Payload Co", "characterId": CHARACTER, "buildNumberAtLastSave": 3671 if day <= DAY else 3682,
         "Happiness": 60.0,
         "gameVariables": {"daysPerYear": 60, "difficulty": 2, "startingMoney": 10000.0,
                           "marketPriceMultiplier": 0.7, "employeeHourlySalaryMultiplier": 0.9,
@@ -339,7 +350,7 @@ def data_company(day: int = DAY) -> dict:
         ],
         "importPartnerships": [
             {"id": "IMPORTwater", "importAddress": address(*PIER),
-             "nextDeliveryDay": day + (8 - day % 7) % 7 or day + 7, "isActive": True,
+             "nextDeliveryDay": day + ((8 - day % 7) % 7 or 7), "isActive": True,
              "isRepeatingOrder": True, "isTarget": False,
              "products": [{"itemName": WATER, "amount": 3000, "amountOrderedLastWeek": 3000,
                            "assignedWarehouse": address(*HUB)}]},
@@ -375,8 +386,9 @@ def data_company(day: int = DAY) -> dict:
                                       for d in range(7, day, 7)],
         "playerNumberOfBusinessesHistory": [{"m_Item1": d, "m_Item2": 4} for d in range(7, day, 7)],
     }
-    # Build 3672 dropped NetWorth from the save: DAY still carries it, a later
-    # day does not, so the second run reads the carried-forward figure.
+    # Build 3672 dropped NetWorth from the save. DAY is saved on build 3671 and
+    # still carries it; a later day is saved after the upgrade to 3682 and does
+    # not, so the second run reads the carried-forward figure.
     if day <= DAY:
         root["NetWorth"] = 480000.0
     return root

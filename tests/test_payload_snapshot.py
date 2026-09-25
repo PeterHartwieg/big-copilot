@@ -1,4 +1,4 @@
-"""extract() payload snapshots; after an intended change run `UPDATE_SNAPSHOTS=1 python -m unittest tests.test_payload_snapshot` (or `python tests/test_payload_snapshot.py --update`) and commit tests/fixtures/payload_snapshot/.
+"""extract() payload snapshots; after an intended change run `python tests/test_payload_snapshot.py --update`, review the diff and commit tests/fixtures/payload_snapshot/.
 
 Three cases, each extract() end to end on a synthetic ES3 save, compared with
 json.dumps(payload, sort_keys=True, indent=1) as committed:
@@ -36,9 +36,8 @@ from ba_save import Names, load_save  # noqa: E402
 SNAPSHOTS = os.path.join(HERE, "fixtures", "payload_snapshot")
 UPDATE = os.environ.get("UPDATE_SNAPSHOTS") == "1"
 UPDATE_HINT = ("If the change is intended, regenerate the snapshots with "
-               "`UPDATE_SNAPSHOTS=1 python -m unittest tests.test_payload_snapshot` "
-               "(PowerShell: `$env:UPDATE_SNAPSHOTS=1; python -m unittest tests.test_payload_snapshot`, "
-               "or `python tests/test_payload_snapshot.py --update`) and commit tests/fixtures/payload_snapshot/.")
+               "`python tests/test_payload_snapshot.py --update`, review the diff and commit "
+               "tests/fixtures/payload_snapshot/.")
 # Fields that hold the time of the run or of the save file, never the save's content.
 WALL_CLOCK = (("meta", "generated"), ("meta", "saved"))
 PLACEHOLDER = "<wall clock>"
@@ -95,21 +94,41 @@ def _short(value) -> str:
     return text if len(text) <= 80 else text[:77] + "..."
 
 
+def _top(path: str) -> str:
+    return path.split(".", 1)[0].split("[", 1)[0]
+
+
 def diff(expected: str, actual: str) -> str:
-    """The first differing paths between two snapshot texts, one per line."""
+    """The differing paths between two snapshot texts: a count per top-level
+    key, then a sample in document order that takes from every top-level key
+    in turn, so one inserted row cannot hide a change elsewhere."""
     old, new = _flatten(json.loads(expected)), _flatten(json.loads(actual))
-    lines = []
-    for path in sorted(set(old) | set(new)):
+    by_top = {}
+    for path in list(old) + [p for p in new if p not in old]:
         if path not in new:
-            lines.append(f"  - {path}: {_short(old[path])} (gone)")
+            line = f"  - {path}: {_short(old[path])} (gone)"
         elif path not in old:
-            lines.append(f"  + {path}: {_short(new[path])} (new)")
+            line = f"  + {path}: {_short(new[path])} (new)"
         elif old[path] != new[path] or type(old[path]) is not type(new[path]):
-            lines.append(f"  ~ {path}: {_short(old[path])} -> {_short(new[path])}")
-    shown = lines[:MAX_DIFFS]
-    if len(lines) > MAX_DIFFS:
-        shown.append(f"  ... and {len(lines) - MAX_DIFFS} more differing paths")
-    return "\n".join(shown) or "  (same values; only the text differs, e.g. key order or float format)"
+            line = f"  ~ {path}: {_short(old[path])} -> {_short(new[path])}"
+        else:
+            continue
+        by_top.setdefault(_top(path), []).append(line)
+    if not by_top:
+        return "  (same values; only the text differs, e.g. key order or float format)"
+    total = sum(len(lines) for lines in by_top.values())
+    head = f"  {total} differing paths: " + ", ".join(f"{k}: {len(v)}" for k, v in by_top.items())
+    # Round robin over the top-level keys, then back into document order.
+    taken = [0] * len(by_top)
+    queues = list(by_top.values())
+    while sum(taken) < min(MAX_DIFFS, total):
+        for i, lines in enumerate(queues):
+            if taken[i] < len(lines) and sum(taken) < MAX_DIFFS:
+                taken[i] += 1
+    shown = [line for i, lines in enumerate(queues) for line in lines[:taken[i]]]
+    if total > len(shown):
+        shown.append(f"  ... and {total - len(shown)} more")
+    return "\n".join([head] + shown)
 
 
 def read(case: str) -> str | None:
@@ -122,10 +141,19 @@ def read(case: str) -> str | None:
 
 
 def write_all(texts: dict) -> None:
+    """Write every case, drop a snapshot no case makes any more, and name on
+    stderr each file that changed."""
     os.makedirs(SNAPSHOTS, exist_ok=True)
+    for name in sorted(os.listdir(SNAPSHOTS)):
+        if name.endswith(".json") and name[:-5] not in texts:
+            os.remove(os.path.join(SNAPSHOTS, name))
+            print(f"payload snapshot: removed {name}", file=sys.stderr)
     for case, text in texts.items():
+        if read(case) == text:
+            continue
         with open(os.path.join(SNAPSHOTS, case + ".json"), "w", encoding="utf-8", newline="\n") as fh:
             fh.write(text)
+        print(f"payload snapshot: rewrote {case}.json", file=sys.stderr)
 
 
 class PayloadSnapshotTests(unittest.TestCase):
@@ -161,8 +189,10 @@ class PayloadSnapshotTests(unittest.TestCase):
         self.assertTrue(day40["daily"] and day40["loans"] and day40["homes"] and day40["ownedBuildings"])
         self.assertTrue(day40["hypeExposure"] and day40["market"]["rows"] and day40["market"]["shortages"])
         self.assertTrue(day40["supply"]["factories"]["sites"] and day40["supply"]["imports"])
-        self.assertTrue(day40["alerts"] and day40["staffing"] and day40["factoryStaffing"])
-        self.assertTrue(all(t["ready"] for t in day40["trends"]))
+        self.assertTrue(day40["alerts"] and day40["staffing"] and day40["hourFindings"])
+        self.assertTrue(day40["factoryStaffing"]["cap"] and day40["factoryStaffing"]["dem"])
+        self.assertTrue(day40["plan"]["prices"])
+        self.assertTrue(day40["trends"] and all(t["ready"] for t in day40["trends"]))
         self.assertIsNone(day40["cashFlow"])
         self.assertEqual((later["ledgerDays"], later["cashFlow"]["days"]), (2, 7))
         self.assertEqual(later["kpi"]["netWorthAsOf"], save_fixtures.DAY)
