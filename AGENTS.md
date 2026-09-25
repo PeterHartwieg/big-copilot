@@ -103,13 +103,14 @@ side and rebuild — the rebuild is the resolution.
 | `ba_demand_curves.json` | `make_demand_curves.py`, which reads the installed game's Addressables bundles with UnityPy; owner only |
 | `mockup/*/*.dc.html` and `mockup/*/canvas.json` | the `mockup/*/build_*.py` generators, such as `mockup/revamp/build_canvas.py` |
 | `mockup/find-location/data.json` | `mockup/find-location/make_data.py`, which reads a real save and a session-scratchpad `hart.json` at hard-coded paths, so it does not run as committed; owner only. Every other file under `mockup/` is hand-made or owner-supplied, `mockup/ui-mockup.html` and the `city.jpg` backdrops included |
+| `tests/fixtures/payload_snapshot/*.json` | `python tests/test_payload_snapshot.py --update`; they move with `ba_dashboard.py`, `ba_save.py`, `ba_buildings.json`, `ba_demand_curves.json`, `tests/es3_fixture.py` and `tests/save_fixtures.py` |
 | `dashboard.html`, `market_history.json` | local runs; gitignored |
 
 ## Finishing a change
 
 | You changed | Run |
 | --- | --- |
-| `ba_save.py`, `ba_dashboard.py` (extraction) | `python -m unittest discover -s tests`, then `python build_web.py`. Premises extraction is `tests/test_premises.py` |
+| `ba_save.py`, `ba_dashboard.py` (extraction) | `python -m unittest discover -s tests`, then `python build_web.py`. Premises extraction is `tests/test_premises.py`. `tests/test_payload_snapshot.py` compares whole `extract()` payloads with `tests/fixtures/payload_snapshot/`; after an intended change regenerate them with `python tests/test_payload_snapshot.py --update` and review the diff |
 | The `TEMPLATE` markup, CSS or board script | `python -m unittest discover -s tests` and `node --test tests/*.test.cjs`, then `python build_web.py` |
 | `web/app.js`, `web/worker.js`, `web/update.js` | `node --test tests/*.test.cjs`, then `python build_web.py` |
 | `build_web.py` `BANNER` or `BEFORE_SCRIPT` (landing screen, news strip) | `python build_web.py` first, since the Node tests and `tests.test_privacy_promises` read the built page; then `node --test tests/news.test.cjs tests/release.test.cjs tests/update.test.cjs` and `python -m unittest tests.test_privacy_promises tests.test_footer` |

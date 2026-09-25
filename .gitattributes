@@ -3,3 +3,5 @@ web/maps/*.svg -text
 # Third-party runtime and font files ship byte for byte as released.
 web/pyodide/** -text
 web/fonts/** -text
+# Payload snapshots are compared as text; keep them LF on every checkout.
+tests/fixtures/payload_snapshot/** text eol=lf
