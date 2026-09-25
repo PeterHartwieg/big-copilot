@@ -9763,15 +9763,20 @@ def _group_shortages(shortages: list) -> list:
 def _prune_days(store: dict, keep: int, day: int | None = None) -> None:
     """Keep the ``keep`` latest days of a day-keyed record.
 
-    With ``day`` (the save being read), the count is taken up to that day and
-    every later day stays too: an older save reloaded after a newer one keeps
-    its own day and the days before it, and the newer save's days are there
-    for when it is opened again.
+    With ``day`` (the save being read), the count is taken up to that day, and
+    the ``keep`` latest days after it stay too: an older save reloaded after a
+    newer one keeps its own day and the days before it, and the newer save's
+    days are there for when it is opened again. Stepping back through older
+    and older saves never holds more than twice ``keep``.
     """
     keys = sorted(store, key=int)
-    if day is not None:
-        keys = [k for k in keys if int(k) <= day]
-    for old in keys[:-keep]:
+    if day is None:
+        drop = keys[:-keep]
+    else:
+        before = [k for k in keys if int(k) <= day]
+        after = [k for k in keys if int(k) > day]
+        drop = before[:-keep] + after[:-keep]
+    for old in drop:
         del store[old]
 
 
@@ -9893,16 +9898,19 @@ class History:
         for name, record in self.book.items():
             _prune_days(record.get("days", {}), days, day if name == character else None)
 
-    def write(self) -> None:
-        if not self.path or not self.writable:
-            return
+    def write(self) -> bool:
+        """Save the book; False when it was not saved (no path counts as saved)."""
+        if not self.path:
+            return True
+        if not self.writable:
+            return False
         # A build takes seconds and loads this file at its start; a name given
         # in between must not be undone by the build writing what it loaded.
         # Manual names and legacy recipe guesses are preserved from disk: only
         # the names this instance itself changed overrule it.
         disk = self._load()
         if not self.writable:
-            return
+            return False
         for character, ours in self.book.items():
             theirs = disk.get(character, {})
             names = dict(theirs.get("lineNames", {}))
@@ -9924,11 +9932,13 @@ class History:
             with open(tmp, "w", encoding="utf-8") as fh:
                 json.dump({"characters": self.book}, fh, separators=(",", ":"))
             os.replace(tmp, self.path)
+            return True
         except OSError:
             try:
                 os.remove(tmp)
             except OSError:
                 pass
+            return False
 
 
 def _cash_flow(ledger: list, daily: list, day: int) -> dict | None:
@@ -28468,11 +28478,9 @@ class Board:
         with self.build:
             history = History(self.history)
             history.named(self.character or "default", {rid: slug})
-            history.write()
-            if not history.writable:
-                print(f"The line name was not kept: {self.history} could not be read "
-                      "(a damaged copy is set aside as .bad; the next build starts a fresh one).",
-                      flush=True)
+            if not history.write():
+                print(f"The line name was not kept: {os.path.basename(self.history)} could not be "
+                      "read or written. Name the line again after the next update.", flush=True)
             with self.lock:
                 self.revision += 1
                 self._fingerprint = None

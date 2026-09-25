@@ -74,7 +74,8 @@ function writeText(path, text) {
   else { try { py.FS.unlink(path); } catch (e) {} }
 }
 
-// The history file as text, or null when there is none to hand back.
+// The history file as text, or null when there is none to hand back: the
+// page then keeps what it has stored.
 function heldHistory() {
   try { return py.FS.readFile(HISTORY, {encoding: "utf8"}); } catch (e) { return null; }
 }
@@ -111,9 +112,12 @@ onmessage = (e) => {
         say("build", `Reading ${msg.name}`);
         const t = performance.now();
         const data = build(path);
-        // No file after a build: Python set a damaged copy aside and wrote
-        // nothing, so the page keeps what it has stored (null, not "").
-        postMessage({kind: "built", id: msg.id, data, history: heldHistory(),
+        // A damaged copy Python set aside (.bad) is dropped by the page too
+        // (""), so the next build starts a fresh record, as the CLI does.
+        const history = heldHistory();
+        const setAside = history === null && py.FS.analyzePath(HISTORY + ".bad").exists;
+        if (setAside) py.FS.unlink(HISTORY + ".bad");  // said once, not on every build
+        postMessage({kind: "built", id: msg.id, data, history: setAside ? "" : history,
                      ms: Math.round(performance.now() - t)});
       } else if (msg.kind === "name") {
         if (!lastSave) throw new Error("no save loaded yet");

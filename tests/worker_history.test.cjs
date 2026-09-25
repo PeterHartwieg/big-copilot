@@ -27,6 +27,7 @@ function worker() {
       writeFile(p, data) { writes.push(p); files.set(p, typeof data === 'string' ? data : '<bytes>'); },
       readFile(p) { if (!files.has(p)) throw new Error('ENOENT'); return files.get(p); },
       unlink(p) { if (!files.delete(p)) throw new Error('ENOENT'); },
+      analyzePath(p) { return {exists: files.has(p)}; },
       utime() {},
     },
     // browser_build keeps the history file; browser_name adds a name to the
@@ -41,7 +42,10 @@ function worker() {
         return undefined;
       }
       // A history that does not parse is set aside and none is written.
-      if ((files.get(hist) || '').startsWith('{damaged')) files.delete(hist);
+      if ((files.get(hist) || '').startsWith('{damaged')) {
+        files.set(hist + '.bad', files.get(hist));
+        files.delete(hist);
+      }
       return JSON.stringify({history: files.get(hist) || ''});
     },
   };
@@ -107,11 +111,21 @@ test('a new en.json of the same length replaces the old one; the same text is no
   assert.equal(w.files.has(LOCALE), false, 'the built-in text again: the file is gone');
 });
 
-test('a build that wrote no history hands back none, so the page keeps its stored copy', async () => {
+test('a damaged history set aside is dropped by the page, and the next build starts fresh', async () => {
   const w = worker();
   await w.send(build(1, '{damaged'));
   assert.equal(w.posted.at(-1).kind, 'built');
-  assert.strictEqual(w.posted.at(-1).history, null);
-  await w.send(build(2, JSON.stringify({names: []})));
-  assert.equal(w.posted.at(-1).history, JSON.stringify({names: []}));
+  assert.strictEqual(w.posted.at(-1).history, '', 'the page drops its damaged copy');
+  // A page that still resent it (another tab) recovers the same way.
+  await w.send(build(2, '{damaged'));
+  assert.strictEqual(w.posted.at(-1).history, '');
+  await w.send(build(3, ''));
+  await w.send({kind: 'name', id: 4, rid: 'a', slug: 'beer'});
+  assert.deepEqual(JSON.parse(w.posted.at(-1).history).names, ['a'], 'a fresh record');
+});
+
+test('a build that leaves no history file for another reason hands back none', async () => {
+  const w = worker();
+  await w.send(build(1, ''));  // nothing sent, nothing written (the stand-in writes no file)
+  assert.strictEqual(w.posted.at(-1).history, null, 'null: the page keeps what it has stored');
 });

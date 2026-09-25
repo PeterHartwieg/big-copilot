@@ -59,7 +59,7 @@ class UnreadableHistory(Tmp):
         self.assertEqual(history.book, {})
         history.demand("alice", 2, snapshot(2))
         history.ledger("alice", 2, {"cash": 1, "profit": 0})
-        history.write()
+        self.assertFalse(history.write())
         # This run wrote nothing: the damaged text is kept, as .bad, for a look.
         self.assertFalse(os.path.exists(self.path))
         self.assertEqual(self.read(self.path + ".bad"), '{"characters": {"alice": {"days": {"1": ')
@@ -104,11 +104,11 @@ class UnreadableHistory(Tmp):
             raise OSError("disk full")
 
         with mock.patch.object(ba_dashboard.json, "dump", cut):
-            history.write()
+            self.assertFalse(history.write(), "a failed write says so")
         self.assertEqual(self.read(), before)
         self.assertEqual(sorted(os.listdir(self.tmp.name)), ["market_history.json"], "no temp file left behind")
         # And a whole write still lands.
-        history.write()
+        self.assertTrue(history.write())
         self.assertIn("61", json.loads(self.read())["characters"]["alice"]["days"])
 
 
@@ -141,6 +141,21 @@ class OlderSave(Tmp):
         self.assertIn("30", history.book["c"]["days"])
         # The later save's days are all still there for when it is opened again.
         self.assertEqual(len(history.book["c"]["ledger"]), 61)
+
+    def test_stepping_back_through_older_saves_stays_bounded(self):
+        history = History(None)
+        for day in range(100, 160):
+            history.demand("c", day, snapshot(day))
+            history.ledger("c", day, {"cash": day, "profit": 0})
+        for day in (140, 120, 100, 80, 60, 40, 20):
+            history.demand("c", day, snapshot(day))
+            run = history.ledger("c", day, {"cash": day, "profit": 0})
+            self.assertEqual(run[-1]["day"], day, "each save reads its own day")
+            for record in ("days", "ledger"):
+                self.assertLessEqual(len(history.book["c"][record]), 2 * ba_dashboard.HISTORY_DAYS, (day, record))
+        history.keep_recent("c", 14, 8, day=20)
+        self.assertLessEqual(len(history.book["c"]["days"]), 28)
+        self.assertIn("20", history.book["c"]["days"])
 
     def test_net_worth_carried_forward_is_never_from_a_later_save(self):
         history = History(None)
@@ -193,11 +208,12 @@ class BrowserBound(Tmp):
             history.demand("c", day, snapshot(day))
         history.write()
         save = mock.Mock(root={"characterId": "c", "Day": 40})
-        with mock.patch.object(ba_dashboard, "load_save", return_value=save),                 mock.patch.object(ba_dashboard, "safe_extract", return_value={}):
-            ba_dashboard.browser_build("x.hsg", "", self.path, None)
+        with mock.patch.object(ba_dashboard, "load_save", return_value=save):
+            with mock.patch.object(ba_dashboard, "safe_extract", return_value={}):
+                ba_dashboard.browser_build("x.hsg", "", self.path, None)
         days = sorted(map(int, json.loads(self.read())["characters"]["c"]["days"]))
-        self.assertEqual(days, list(range(27, 41)) + list(range(41, 61)),
-                         "its own two weeks up to day 40, and the later save's days")
+        self.assertEqual(days, list(range(27, 41)) + list(range(47, 61)),
+                         "its own two weeks up to day 40, and the later save's latest two")
 
     def test_the_cli_keeps_its_sixty_days(self):
         history = History(self.path)
