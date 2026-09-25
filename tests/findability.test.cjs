@@ -72,6 +72,7 @@ async function board(o = {}) {
 // stays skipped until the next rendering update finds it near the viewport,
 // and until then its innerText is "" while its box already has a size, so a
 // visibility wait does not cover it. Wait for the rendered state itself.
+// checkVisibility sees an ancestor's skip only: point it inside a section.
 async function textOf(locator) {
   const el = await locator.first().elementHandle();  // waits until attached
   await locator.page().waitForFunction(node => node.checkVisibility({contentVisibilityAuto: true}), el, {polling: 'raf'});

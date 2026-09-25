@@ -841,6 +841,8 @@ test('rate limit: vote hammering eventually returns 429 and stops database write
     if (windowOf() === startWindow) {
       run = { accepted, sawLimited, rowsAtLimit, after, rowsAfter };
     } else {
+      // A run takes about a second and a window is a minute, so a second
+      // straddle in a row means a run slower than a window: an error, not a retry.
       assert.ok(tries < 3, 'three runs in a row straddled a limiter window');
     }
   }
