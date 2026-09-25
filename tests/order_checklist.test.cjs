@@ -319,6 +319,18 @@ test('the player\'s figure replaces the suggestion; typing the suggestion is no 
   assert.deepEqual([away.stale, away.edited, away.value], [true, false, 1400]);
   const rows = build({imports:[{s:0, rows:[row(f, {weekly:1200}, {value:900, inGame:900})]}]});
   assert.deepEqual([rows[0].current, rows[0].proposed], [1200, 1400]);
+  // A figure typed on a line no contract imports ("not imported, add N"),
+  // which a route from the company's own site has covered since: no contract
+  // and no suggestion leaves the figure nothing to answer, so it is stale.
+  const routed = setting(fact('covered', {why:'route'}), {}, {value:600, inGame:null});
+  assert.deepEqual([routed.stale, routed.edited, routed.value, routed.inGame, routed.changed],
+    [true, false, null, null, false]);
+  // While the line still asks for an import, the figure stands.
+  const adding = setting(fact('noplan', {setTo:1610}), {}, {value:600, inGame:null});
+  assert.deepEqual([adding.stale, adding.edited, adding.value], [false, true, 600]);
+  // Nothing suggested only because nothing is used right now: the figure stays.
+  const idle = setting(fact('noplan', {setTo:null, use:0, need:0}), {}, {value:600, inGame:null});
+  assert.deepEqual([idle.stale, idle.edited, idle.value], [false, true, 600]);
   // Not a number, or below zero, is not a figure.
   assert.equal(setting(f, {weekly:900}, -5).edited, false);
   assert.equal(setting(f, {weekly:900}, NaN).edited, false);

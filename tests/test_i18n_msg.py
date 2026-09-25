@@ -301,14 +301,14 @@ class PageTests(unittest.TestCase):
 
     def test_a_lang_page_carries_its_table(self):
         page = ba_dashboard.render(None, ui={"lang": "de", "table": {"nav.today": "Heute</script>"}})
-        self.assertIn('const TT_EMBED = {"lang":"de","table":{"nav.today":"Heute<\\/script>"}};', page)
+        self.assertIn('const TT_EMBED = {"lang":"de","table":{"nav.today":"Heute\\u003c/script>"}};', page)
 
     def test_the_table_is_spliced_last_and_only_into_the_head(self):
         # No later placeholder runs over the table's text, and a marker in the
         # player's own words (the payload) stays as written.
         table = {"nav.x": "__TITLE__ <!--__FOOTER__--> /*__MAP_SCRIPT__*/"}
         page = ba_dashboard.render(None, ui={"lang": "de", "table": table})
-        self.assertIn(json.dumps(table, separators=(",", ":")), page)
+        self.assertIn(ba_dashboard.script_json(json.dumps(table, separators=(",", ":"))), page)
         payload = fixtures()["es3"]
         payload["meta"]["save"] = "Co /*__I18N_SCRIPT__*/"
         page = ba_dashboard.render(payload)

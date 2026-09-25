@@ -547,8 +547,8 @@ class Names:
             return text
         tail = slug.split("_", 1)[-1] if "_" in slug else slug.replace("ba:", "")
         # "smartphone1" reads better as "Smartphone 1"; a slug is all we have.
-        tail = re.sub(r"(?<=[a-z])(?=\d)", " ", tail.replace("-", " "))
-        return tail.title()
+        tail = re.sub(r"(?<=[a-z])(?=\d)", " ", tail.replace("-", " ").replace("_", " "))
+        return _plain(tail.title())
 
     def street(self, slug: str | None) -> str:
         if not slug:
@@ -564,12 +564,29 @@ class Names:
             else:
                 parts.append(rest.capitalize())
                 break
-        return " ".join(_STREET_FIX.get(p, p) for p in parts)
+        return _plain(" ".join(_STREET_FIX.get(p, p) for p in parts))
 
     def addr(self, address: tuple[str, int] | None) -> str:
         if not address:
             return "-"
-        return f"{address[1]} {self.street(address[0])}"
+        return f"{house_number(address[1])} {self.street(address[0])}"
+
+
+def _plain(text: str) -> str:
+    """A label made from a slug, not from game text: a crafted save can put
+    anything in a slug, so only letters, digits, spaces and ' . & - stay."""
+    return re.sub(r"[^A-Za-z0-9 '.&-]", "", text)
+
+
+def house_number(value) -> str:
+    """A street number as the address shows it: digits only."""
+    if isinstance(value, bool):
+        return "-"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return re.sub(r"\D", "", str(value if value is not None else "")) or "-"
 
 
 if __name__ == "__main__":
