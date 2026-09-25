@@ -13,7 +13,7 @@ whose line eats water, and a second depot.
 import unittest
 
 from ba_dashboard import (
-    Names, _feed_notes, _idle_notes, _import_catch_up, _import_need,
+    Names, _feed_notes, _idle_notes, _deepest_use, _import_catch_up,
     _scheduled_import_gap, _supply, site_key,
 )
 from test_recipe_identity import BEER, RID, WATER, SaveStub
@@ -239,10 +239,10 @@ class RoundWalkTests(unittest.TestCase):
         flat = [1] * 7
         # Today's round still to go, and the rounds of days 11 and 12: the
         # day-12 round leaves before the import lands.
-        self.assertEqual(_import_need(100, flat, 10, 12, 1.0, rounds=True), 300)
-        self.assertEqual(_import_need(100, flat, 10, 12, 0.0, rounds=True), 200)
+        self.assertEqual(_deepest_use(100, flat, 10, 12, 1.0, rounds=True), 300)
+        self.assertEqual(_deepest_use(100, flat, 10, 12, 0.0, rounds=True), 200)
         # A shelf: half of today and day 11; the drop supplies day 12.
-        self.assertEqual(_import_need(100, flat, 10, 12, .5), 150)
+        self.assertEqual(_deepest_use(100, flat, 10, 12, .5), 150)
         self.assertEqual(_import_catch_up(250, 100, flat, 10, 12, 0.0, rounds=True), 0)
         self.assertEqual(_import_catch_up(250, 100, flat, 10, 12, 1.0, rounds=True), 50)
 

@@ -74,7 +74,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `products` | `_products()`, with `peak`/`swing`/`weeks` from `_product_rhythm()` | `drawProducts`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn` |
 | `staff` | `_staff_summary()` | `drawKpis`, `drawPayroll` |
 | `loans` | `_loans()` | `drawKpis`, and the `SS_VIEWS` `cash` entry's `live()` |
-| `supply` | `_supply()`; its `facts` from `_supply_facts()`, each fact's status word from `_supply_status()`; `margin` and `roundTo` are `SUPPLY_MARGIN` and `SUPPLY_ROUND_TO` | `supplyChecklistRows`, `sbData`, the tab drawers `drawShopsTab`, `drawWarehousesTab`, `drawFactoriesTab` (with `sbDepotRows`, `sbTabOf`, `sbNodeOpen`), `drawSite`, `drawFlow`, `flowLayout`, the phone chain's `flowStages`, `drawFlowChain`, `drawFlowFocus` and `flowPipeProblem` (which reads each `graph.links` entry's `slugs`, the products its pipe carries), `factoryView`; `web/map.js` `refreshCityMaps`. `supply.facts` only through `supplyFact()` (below), and `supply.idle` only through `idleRows()`, which keeps the rows idle under the sizing on screen (`modes`) with their `dem` laid over. `supply.wholesaleShops` (the shops a repeating wholesale contract delivers to) has no board reader: `_alerts()` counts it as a delivery plan |
+| `supply` | `_supply()`; its `facts` from `_supply_facts()`, each fact's status word from `_supply_status()`; `margin` and `roundTo` are `SUPPLY_MARGIN` and `SUPPLY_ROUND_TO`; `roundTo` has no board reader, since the rounding is done in Python before the numbers ship | `supplyChecklistRows`, `sbData`, the tab drawers `drawShopsTab`, `drawWarehousesTab`, `drawFactoriesTab` (with `sbDepotRows`, `sbTabOf`, `sbNodeOpen`), `drawSite`, `drawFlow`, `flowLayout`, the phone chain's `flowStages`, `drawFlowChain`, `drawFlowFocus` and `flowPipeProblem` (which reads each `graph.links` entry's `slugs`, the products its pipe carries), `factoryView`; `web/map.js` `refreshCityMaps`. `supply.facts` only through `supplyFact()` (below), and `supply.idle` only through `idleRows()`, which keeps the rows idle under the sizing on screen (`modes`) with their `dem` laid over. `supply.wholesaleShops` (the shops a repeating wholesale contract delivers to) has no board reader: `_alerts()` counts it as a delivery plan |
 | `rhythm` | `_chain_rhythm()`; its `recent` key holds the same three series over the last `RHYTHM_RECENT_DAYS` (28) calendar days before the last finished day, which the chart draws, while the full-length ones feed `_supply()` | `weekdaySeries` (which `drawChart` asks), `drawSite` |
 | `market` | `_market()`; its `catalogue` key is popped out and handed to `_plan()` | `drawMovers`, `drawMarket`; `web/wiki.js` `wikiOwn`, `wikiGuidePrices` |
 | `premises` | `_premises()`, with `_premises_status()`, `_premises_demand()`, `_rent_estimate()`, `_deposit_estimate()`, `_deposit_check()`, `_door_caps()`, `_rival_numbers()`, `_rival_names()` | `drawFindLocation`, `finderPreset`, `wireCards`; `web/map.js` `premises` |
@@ -294,14 +294,19 @@ values included):
 | --- | --- | --- | --- |
 | `{x}` | `String(x)` | `f"{x}"` | decimal comma, up to 3 decimals, no grouping |
 | `{x:,}` | `num(x)`: grouped, up to 3 decimals, `-1,234.5` | `f"{x:,}"`: `-1,234.5`; a float keeps every digit `repr` shows | `-1.234,5` |
-| `{x:.1f}` (any digit) | `num(x, {min = max = 1 decimal, no grouping})`, as `x.toFixed(1)` | `f"{x:.1f}"` | `3,5` |
-| `{x:,.0f}` (any digit) | `num(x, {min = max = 0 decimals})` | `f"{x:,.0f}"` | `1.234` |
-| `{w:$}` | `fmt(w)`: `-$1,234` | `"-$" + f"{abs(w):,.0f}"` for a negative, `$1,234` otherwise | `-$1.234` |
-| `{w:$c}` | `compact(w)`: `$3.57M`, `$751k` | the same, halves rounded up as `Math.round` does | `$3,57M` |
+| `{x:.1f}` (any digit) | `num(x, {min = max = 1 decimal, no grouping})`, as `x.toFixed(1)` | `f"{x:.1f}"`, halves away from zero | `3,5` |
+| `{x:,.0f}` (any digit) | `num(x, {min = max = 0 decimals})` | `f"{x:,.0f}"`, halves away from zero | `1.234` |
+| `{w:$}` | `fmt(w)`: `-$1,234` | `"-$" + f"{abs(w):,.0f}"` for a negative, `$1,234` otherwise, halves away from zero | `-$1.234` |
+| `{w:$c}` | `compact(w)`: `$3.57M`, `$751k` | the same | `$3,57M` |
 | `{d:day}` | `Monday` for 1 (0 is Sunday) | the same | the table's `day.1` |
 
 The two sides differ only where the old code did: a float with more than three decimals
-(`{x:,}`), and a tie at an exact half (Python rounds half to even, `Intl` away from zero).
+(`{x:,}`). A tie at an exact half rounds away from zero on both sides, the one rule for
+numbers in text: `Intl` and `toFixed()` do it natively, `fmt()` and `compact()` round the
+size (`Math.round(Math.abs(n))`) and put the sign back, and Python's `msg()` rounds through
+`_half_away()`, reading a float at its shortest form as `Intl` does (2.675 is 2.68).
+`format()` alone would round half to even, and write $2.50 as `$2` in a finding beside `$3`
+on a tile.
 
 Numbers follow the UI language: English is always en-US. `tt()` formats through the
 board's `num()` once it exists, and through `Intl` in `ttNumLocale()` before it does (the
@@ -597,7 +602,11 @@ polls `version.json` with `cache: "no-store"`, and `web/community.js` calls
 `/api/community/*`. Nothing comes from another origin: `TEMPLATE` links Google Fonts for
 the local `dashboard.html`, but `build_web.py` swaps those links for the site's own copies
 in `web/fonts/`, so the privacy notice (`web/privacy.html`) can name Cloudflare as the
-only party that sees a request. `tests/test_privacy_promises.py` holds the site to that.
+only party that sees a request. `tests/test_privacy_promises.py` holds the site to that,
+and the Content-Security-Policy in `web/_headers` enforces it in the browser: only this
+site, plus the game link on `http://127.0.0.1:*` and `http://localhost:*`. A new fetch
+target, script or image source has to be added there too; `tests/test_headers.py` reads
+the policy and `tests/csp.test.cjs` boots Pyodide and the game link under it.
 
 Order matters. `BEFORE_SCRIPT` must stay ahead of the board script, or the board falls back
 to fetching `data.json` from a site that has no such route.
@@ -896,7 +905,10 @@ because a deploy from a checkout that lacks them would remove them from the site
 files from `https://cdn.jsdelivr.net/pyodide/v<version>/full/` into a new version folder,
 change `PYODIDE_VERSION` in `web/worker.js`, and delete the old folder.
 
-Everything else it fetches is same-origin, from `web/py/`, carrying the page's build stamp:
+Everything else it fetches is same-origin, from `web/py/`, carrying the page's build stamp.
+Because every one of those files is a stamp input, `web/_headers` caches `/py/*` as
+immutable and the worker fetches with the browser's default cache (`no-store` only for
+the unstamped `dev` build):
 
 - `ba_save.py` and `ba_dashboard.py` — a failed fetch throws and the worker never becomes
   ready.
@@ -904,6 +916,9 @@ Everything else it fetches is same-origin, from `web/py/`, carrying the page's b
   virtual filesystem only when the fetch succeeds, so a build missing one still boots and
   degrades instead: without the curves the board states no arrival ceiling, and every number
   it does state still comes off the measured hour grid.
+
+Gradual (percentage) deployments are unsupported for that reason: while two versions serve
+side by side, a `/py/` file from the old one could be cached immutably under the new stamp.
 
 On top of those, the worker writes at runtime: the save bytes under `/save`, the player's
 optional `en.json` and the history JSON under `/data`, and Python itself writes a

@@ -47,8 +47,11 @@ handling network requests. Worker invocation logs are switched off in
 The browser Python worker is still `web/worker.js`. The server entry point is
 `server/worker.mjs`, outside the publicly served `web/` directory. It handles only
 API requests; the existing assets continue to be served directly. D1 holds the
-presence and vote tables. A Cloudflare rate-limit binding limits requests per IP
-at each edge location; it is not a global identity or fraud-prevention guarantee.
+presence and vote tables. Cloudflare rate-limit bindings limit requests per IP at
+each edge location: heartbeats have their own budget of 20 a minute
+(`PRESENCE_LIMITER`), since a real tab sends one every five minutes, and the listing
+and votes share 120 a minute (`COMMUNITY_LIMITER`). Neither is a global identity or
+fraud-prevention guarantee.
 
 Install the pinned development dependencies with `npm ci`. For local development:
 

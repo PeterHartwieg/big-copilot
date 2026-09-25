@@ -3,3 +3,12 @@
 test-*
 __pycache__/
 market_history.json
+# Sidecars and local renders that name a character or hold a company's data
+*.meta
+*.character
+dashboard*.html
+*.log
+.DS_Store
+# The map's source images: export_map.py and tests/test_map_assets.py hash them,
+# but the page only fetches locations.json and map-background.svg
+maps/full-map.*

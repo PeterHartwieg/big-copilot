@@ -362,10 +362,28 @@ def _js_round(x: float) -> int:
     return int(math.floor(x + 0.5))
 
 
+def _half_away(v, places: int = 0) -> decimal.Decimal:
+    """v rounded to `places` decimals, halves away from zero.
+
+    The one rounding rule for numbers written into text, on both sides of the
+    payload: the page's fmt() and tt() round the size of a number and put the
+    sign back (Math.round(Math.abs(n))), and Intl.NumberFormat, which writes
+    every fixed-decimal number on the page, rounds halves away from zero too.
+    Python's format() rounds halves to even, so $2.50 would read "$2" in a
+    finding and "$3" on the tile beside it. A float is read at its shortest
+    decimal form (repr), as Intl reads it, so 2.675 is 2.68 on both sides.
+    """
+    shown = decimal.Decimal(v if isinstance(v, (int, decimal.Decimal)) else repr(float(v)))
+    if not shown.is_finite():  # inf and nan are written as they are
+        return shown
+    return shown.quantize(decimal.Decimal(1).scaleb(-places), decimal.ROUND_HALF_UP)
+
+
 def _msg_format(v, spec: str | None) -> str:
     """One placeholder's English, by the spec tt() in web/i18n.js shares. Each
-    writes exactly what the f-string it replaces wrote: {x} as f"{x}", {x:,}
-    as f"{x:,}", {x:.1f} / {x:,.0f} as the same f-string spec, {w:$} as the
+    writes what the f-string it replaces wrote, with halves rounded away from
+    zero (_half_away()) as the page rounds them: {x} as f"{x}", {x:,} as
+    f"{x:,}", {x:.1f} / {x:,.0f} as the same f-string spec, {w:$} as the
     board's fmt() ("-$1,234"; f"${x:,.0f}", which writes "$-1,234", becomes
     "${x:,.0f}" instead), {w:$c} as compact(), {d:day} a weekday name."""
     if isinstance(v, Msg) or spec is None:
@@ -375,7 +393,7 @@ def _msg_format(v, spec: str | None) -> str:
     if spec == ",":
         return format(v, ",")
     if spec == "$":
-        return ("-" if v < 0 else "") + "$" + format(abs(v), ",.0f")
+        return ("-" if v < 0 else "") + "$" + format(_half_away(abs(v)), ",.0f")
     if spec == "$c":
         a, s = abs(v), "-" if v < 0 else ""
         if a >= 1e6:
@@ -384,8 +402,9 @@ def _msg_format(v, spec: str | None) -> str:
         if a >= 1e3:
             return s + "$" + str(_js_round(a / 1e3)) + "k"
         return s + "$" + str(_js_round(a))
-    if MSG_FIXED.fullmatch(spec):
-        return format(v, spec)
+    fixed = MSG_FIXED.fullmatch(spec)
+    if fixed:
+        return format(_half_away(v, int(fixed.group(2))), spec)
     raise ValueError(f"msg(): unknown placeholder spec {spec!r}")
 
 
@@ -650,17 +669,6 @@ COST_CENTRE_TYPES = OVERHEAD_TYPES | {
 }
 
 STOCK_COVER_DAYS = 7  # window used for the average daily sales rate
-
-# Vending-machine drinks and the free checkout bag ride along in almost every
-# business's price list regardless of what it actually specialises in. Left in,
-# they pad every business type's product count by the same handful and drown
-# out what the type is actually built around.
-AMENITY_ITEMS = {
-    "ba:itemname_paperbag",
-    "ba:itemname_sodacan",
-    "ba:itemname_energydrink",
-    "ba:itemname_cupofcoffee",
-}
 
 # The per-type product range used to live here as a hand-typed table. It now
 # comes straight from the game's own F1 help pages instead — see
@@ -1111,9 +1119,6 @@ SHIPPED_WINDOW = 7
 DELIVERY_LOG_SIZE = 60  # transactions a site's log keeps before the oldest go
 PRICE_DAYS = 7  # days of goods cost and deliveries a unit price is read over
 SHIPPED_MIN_DAYS = 3
-# A factory input topped up every morning and holding less than this many
-# rounds' worth is a buffer the machines eat through, not a pile.
-BUFFER_DAYS = 2
 LINE_STARVED = 0.75  # a line fed less than this share of its need is losing hours
 # The week's arrivals are measured backwards; the need is counted from the
 # machines standing there today. A recipe switched on yesterday has six days of
@@ -2843,32 +2848,20 @@ def _deepest_use(per_day, weekly, day, until, left_today, rounds=False):
 
     A day's use can be negative (a route's surplus beyond it stays on the
     shelf), so this is the deepest the running total goes, not where it ends:
-    a quiet Sunday does not refill a shelf emptied on Saturday. With `rounds`
-    the walk is a depot's morning rounds (_import_need): the delivery day's
-    round is charged too.
+    a quiet Sunday does not refill a shelf emptied on Saturday.
+
+    Shop-style (`rounds` False): the rest of today, charged for the hours it
+    has left, then whole days up to `until`, whose drop supplies that day. A
+    depot served by a morning logistics round (`rounds` True) is emptied a
+    round at a time, not an hour at a time: `left_today` is then 1 or 0 (0
+    once today's round is in the log), and the delivery day's own round is
+    charged too, because it leaves before the import lands.
     """
     used = deepest = 0.0
     for ahead in range(max(0, until - day + (1 if rounds else 0))):
         used += per_day * weekly[(day + ahead) % 7] * (left_today if ahead == 0 else 1)
         deepest = max(deepest, used)
     return deepest
-
-
-def _import_need(per_day, weekly, day, arrives, left_today, rounds=False):
-    """Units the draw takes from now until the delivery on day `arrives`.
-
-    Shop-style (`rounds` False): the rest of today, charged for the hours it
-    has left, then whole days up to the delivery day, which the drop supplies.
-    A depot served by a morning logistics round (`rounds` True) is emptied a
-    round at a time, not an hour at a time: `left_today` is then 1 or 0 (0
-    once today's round is in the log), and the delivery day's own round is
-    charged too, because it leaves before the import lands.
-    """
-    last = arrives - day + (1 if rounds else 0)
-    return sum(
-        per_day * weekly[(day + ahead) % 7] * (left_today if ahead == 0 else 1)
-        for ahead in range(max(0, last))
-    )
 
 
 def _import_catch_up(stock, per_day, weekly, day, arrives, left_today, rounds=False):
@@ -3107,7 +3100,7 @@ def _scheduled_import_gap(stock, per_day, weekly, day, deliveries, left_today, r
     extra stock brought in now makes that drop smaller: the one-off amount is
     then the least that keeps every day of the walk above zero, found by search.
 
-    With `rounds` the depot is emptied by a morning round, as in _import_need:
+    With `rounds` the depot is emptied by a morning round, as in _deepest_use:
     each day's round leaves before that day's drop lands, so the walk charges
     the round first, and the last delivery day's round is part of it.
     """
@@ -15083,9 +15076,9 @@ const SOURCE = window.LEDGER_SOURCE || {
   }
 };
 
-const LINE_COLOURS = {MT:"#f07a1f", HK:"#e0362c", MH:"#a83bb0", LM:"#0c5ec4",
-                      GD:"#7a8f27", IC:"#5c6f7a", HA:"#0f8f86", "":"#8b9499"};
-const fmt = n => (n<0?"-":"") + "$" + num(Math.abs(Math.round(n)));
+/* Money: halves round away from zero, the size first and the sign put back,
+   as _half_away() rounds in Python and Intl rounds every fixed-decimal number. */
+const fmt = n => (n<0?"-":"") + "$" + num(Math.round(Math.abs(n)));
 /* Every number on the board goes through num(), in the UI's number locale, so
    a German browser never shows "1.234 units" beside "$1,234". English is
    always en-US; German is de-DE. The UI language is web/i18n.js's: this starts
@@ -15116,13 +15109,6 @@ const meter = v => graded(v, v >= 85 ? "" : v >= 60 ? "warn" : "neg");
 /* Neutral gauge: for numbers that describe a situation rather than grade it,
    like how busy a street is. */
 const gauge = v => graded(v, "ink-3");
-
-/* A neighbourhood badge: the player's [XX] prefix, or the canonical code for a
-   shop the building table places. With neither, no badge. */
-const bullet = b => b.code ? `<span class="bullet" style="background:${LINE_COLOURS[b.code]||LINE_COLOURS[""]}"
-  title="${attr(hoodName(b.neighbourhood)||"Unassigned")}">${spEsc(b.code)}</span>` : "";
-const siteCell = b => `<div class="site">${bullet(b)}<span><b>${spEsc(b.name)}</b>
-  <span class="sub">${spEsc(b.type)} · ${spEsc(b.address)}${mapButton(b.key,b.name)}</span></span></div>`;
 
 /* The tile sparkline, the generator's spark(): an area under the line, the
    line, a point and a read-out that follow the pointer (wireTiles). x runs
@@ -18197,7 +18183,6 @@ function miniChart(series, key, colour, o = {}){
    says which, and when capacity stood idle. */
 const HOUR_ROWS = [1,2,3,4,5,6,0];
 const WEEK_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-const WEEK_FULL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 /* WEEK_SHORT[wd] in the UI language, for the site panel's own labels. The
    arrays stay English: spIdleWeek() reads Python's English weekday off them. */
 function spWd(wd){
@@ -18408,7 +18393,7 @@ function spIdleParts(parts, noun){
   return more ? tt("sp.idle.more", "{said} (and {n} more)", {said, n: more}) : said;
 }
 function spIdleWeek(n){
-  const wd = WEEK_FULL.indexOf(n.day), long = n.to - n.from;
+  const wd = WEEKDAY_NAMES.indexOf(n.day), long = n.to - n.from;
   const w = n.week || {spare: n.spare, worth: n.worth, seen: n.seen,
     cells: [...Array(Math.max(long, 0)).keys()].map(k => [wd, n.from + k]),
     parts: [{noun: n.noun, staff: n.staff,
@@ -20786,7 +20771,7 @@ function drawSite(){
         /* A wholesale store's weekly delivery feeds the shelf where no top-up does. */
         const deal = t && !t.target && t.wholesale ? t.wholesale : null;
         /* Python names the day in English: shown as the UI's own short weekday. */
-        const peakWd = t && t.peakDay ? WEEK_FULL.indexOf(t.peakDay) : -1;
+        const peakWd = t && t.peakDay ? WEEKDAY_NAMES.indexOf(t.peakDay) : -1;
         const busiest = t && t.peakDay ? `${peakWd >= 0 ? spWd(peakWd) : t.peakDay.slice(0, 3)} ${num(t.peakSold)}` : "—";
         /* The shelf's word, as Checks says it; a shelf Python did not judge has none. */
         const word = sp && supplyFact(siteTab, l.slug) ? ` ${szChip(f)}` : "";
@@ -20797,7 +20782,7 @@ function drawSite(){
           <td>${fmt(l.revenue)}</td>
           <td>${deal ? `${over ? `<span class="sp-up${f.st === "short" ? " bad" : ""}" data-el="raise">${num(deal)} ${spIcon("right")} <b>${
                 num(f.setTo)}</b></span>` : num(deal)}<small ${SMALL} data-tip="${attr(t.wholesaleDay
-                ? tt("sp.shelf.wholesale.day", "Delivered by a wholesale store each {day}", {day: WEEK_FULL.includes(t.wholesaleDay) ? ttDay(WEEK_FULL.indexOf(t.wholesaleDay)) : t.wholesaleDay})
+                ? tt("sp.shelf.wholesale.day", "Delivered by a wholesale store each {day}", {day: WEEKDAY_NAMES.includes(t.wholesaleDay) ? ttDay(WEEKDAY_NAMES.indexOf(t.wholesaleDay)) : t.wholesaleDay})
                 : tt("sp.shelf.wholesale.week", "Delivered by a wholesale store each week"))}">${tt("sp.stock.wholesale", "/wk wholesale")}</small>`
             : !t || !t.target ? (sp ? `<span class="sp-noplan" data-el="noplan">${spIcon("route")}${tt("sp.noplan", "no plan")}</span>` : "—")
             : over ? `<span class="sp-up${f.st === "short" ? " bad" : ""}" data-el="raise">${num(t.target)} ${spIcon("right")} <b>${
@@ -21060,7 +21045,7 @@ function drawSite(){
       </section>
       <section class="rv" data-block="week" id="sp-week">
         ${sechead(tt("sp.week.title", "Its week"), {icon: sp ? "week" : null, quiet: b.rhythm ? tt("sp.week.peaks", "peaks {day}, {n} points between best and worst",
-          {day: WEEK_FULL.includes(b.peakDay) ? ttDay(WEEK_FULL.indexOf(b.peakDay)) : b.peakDay, n: b.swing}) : ""})}
+          {day: WEEKDAY_NAMES.includes(b.peakDay) ? ttDay(WEEKDAY_NAMES.indexOf(b.peakDay)) : b.peakDay, n: b.swing}) : ""})}
         <div class="chartbox" style="padding-bottom:16px">${b.rhythm
           /* Named, like the company's By weekday, so the two stop reading as
              two answers to one question: this is this site's revenue alone. */
@@ -28775,7 +28760,7 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
       if(row.d === undefined) return name;
       const s = last && ((last.week.days.find(x => x.d === row.d) || {}).shifts || [])[row.i];
       const who = s && (last.row.people || []).find(p => p.id === s.employeeId);
-      const day = WEEK_FULL[row.d] ? ttDay(row.d) : tt("sp.gw.aday.cap", "A day");
+      const day = WEEKDAY_NAMES[row.d] ? ttDay(row.d) : tt("sp.gw.aday.cap", "A day");
       return s ? tt("sp.gw.sch.object", "{day} {f}-{t}, {who}", {day, f: s.f, t: s.t, who: spEsc((who || {}).name || tt("sp.gw.someone", "someone"))}) : day;
     },
     draw: (answer, phase) => {
@@ -28823,7 +28808,7 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
         roleOf(p.employeeId) ? `<small>${roleOf(p.employeeId)}</small>` : ""}</span>`);
       const over = (answer.warnings || []).filter(w => w.type === "overworked").map(w =>
         gwCall("warn", "flame", tt("sp.gw.over", "<b>{name}</b> works {n} h on {day}. The game allows it.",
-          {name: spEsc(w.name || tt("sp.gw.someone.cap", "Someone")), n: Number(w.hours), day: WEEK_FULL[w.d] ? ttDay(w.d) : tt("sp.gw.aday", "a day")})));
+          {name: spEsc(w.name || tt("sp.gw.someone.cap", "Someone")), n: Number(w.hours), day: WEEKDAY_NAMES[w.d] ? ttDay(w.d) : tt("sp.gw.aday", "a day")})));
       return `<div class="gw-planrow">${which}</div>`
         + gwTiles([[labels[0], now.length, sentList.length], [labels[1], gwHours(now), gwHours(sentList)], [labels[2], nowPeople, afterPeople]])
         + gwWeek(now, week.days) + kept + toggle

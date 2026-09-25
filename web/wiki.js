@@ -935,8 +935,6 @@ function wikiFixTip(f){
   if(f.observed) bits.push(tt("wiki.fix.observed", "Counted in the shops the game ships: {observed}", {observed: f.observed}));
   return bits.join(" ") || tt("wiki.fix.none", "Its help page gives no numbers for this one.");
 }
-/* The first capacity a fixture's page states, for the meta line under a name. */
-const wikiFixHolds = f => ((f.capacity || []).find(c => c && Number.isFinite(c.value)) || {}).value;
 /* What one product may hold on one fixture. The extraction answers where the
    answer is unambiguous; where a fixture's page counts two kinds of goods and
    nothing says which line is this product's, every labelled row is shown. The

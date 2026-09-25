@@ -26,6 +26,7 @@ sys.path.insert(
 )
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import ba_dashboard
 import build_wiki_data as build
 import extract_wiki
 import wiki_data
@@ -864,6 +865,14 @@ class PrivacyTests(FixtureCase):
         for string in build._strings(payload):
             self.assertNotIn(os.path.basename(self.root), string)
 
+    def test_a_public_url_passes_and_a_drive_path_fails(self):
+        for text in ("https://store.steampowered.com/app/1331550/", "http://bigcopilot.com/wiki/",
+                     "See HTTPS://example.com/a:b for more."):
+            build.check_privacy({"topics": [{"body": text}]}, [])
+        for text in ("C:\\Games\\Big Ambitions", "c:/steam/en.json", "saved at D:\\x", "(e:/x)"):
+            with self.assertRaisesRegex(wiki_data.SourceError, "machine path"):
+                build.check_privacy({"topics": [{"body": text}]}, [])
+
 
 class DeterminismTests(FixtureCase):
     def test_two_builds_are_byte_identical(self):
@@ -1012,17 +1021,27 @@ class TopicTests(FixtureCase):
     def test_the_rent_topic_states_the_formula_and_the_seven_district_rates(self):
         topic = self.topic()
         prose = " ".join(line for section in topic["sections"] for line in section["paragraphs"])
-        self.assertIn("floor area × (30 + traffic index) × district rate", prose)
-        self.assertIn("1.033", prose)
+        self.assertIn("floor area × (%d + traffic index) × district rate"
+                      % ba_dashboard.RENT_TRAFFIC_OFFSET, prose)
+        self.assertIn("multiplied by **%s**" % ba_dashboard.RENT_OFFICE_FACTOR, prose)
         tables = [section["table"] for section in topic["sections"] if section.get("table")]
         self.assertEqual(len(tables), 1)
         table = tables[0]
         self.assertEqual(table["columns"], ["District", "Rate"])
-        self.assertEqual(len(table["rows"]), 7)
-        self.assertEqual({row[0] for row in table["rows"]},
-                         {"Midtown", "Hell's Kitchen", "Murray Hill", "Garment District",
-                          "Lower Manhattan", "The Hamptons", "Industry City"})
-        self.assertEqual(dict(table["rows"])["Midtown"], "0.02482")
+        # the article teaches the rates the finder estimates with, not a copy
+        # that a refit leaves behind
+        self.assertEqual(dict(table["rows"]),
+                         {hood: "%.5f" % rate for hood, rate in ba_dashboard.RENT_RATES.items()})
+        self.assertEqual([row[0] for row in table["rows"]], list(ba_dashboard.RENT_RATES))
+
+    def test_the_rent_topic_s_deposit_months_follow_the_deposit_factors(self):
+        # a deposit is DEPOSIT_FACTORS days of rent; the article rounds it to months
+        prose = " ".join(line for section in self.topic()["sections"] for line in section["paragraphs"])
+        words = {2: "two", 3: "three", 4: "four"}
+        months = {kind: round(factor / 30) for kind, factor in ba_dashboard.DEPOSIT_FACTORS.items()}
+        self.assertIn("For a shop or an office it comes to about %s months of rent"
+                      % words.get(months["lease"], str(months["lease"])), prose)
+        self.assertIn("for a warehouse, about %s." % words.get(months["warehouse"], str(months["warehouse"])), prose)
 
     def test_the_rent_topic_dates_its_fit_and_says_residential_is_not_covered(self):
         topic = self.topic()
