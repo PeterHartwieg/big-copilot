@@ -1,5 +1,9 @@
 # Optimize staffing: technical scope
 
+Status: retail staffing shipped (PR #58, 19 September 2026, reworked in PRs #59 and #61);
+offices and factories are still deferred. Kept in place because `ba_dashboard.py` cites it.
+Wording on the board follows the vocabulary rules in AGENTS.md, not this document.
+
 Written 19 September 2026. Scopes the third **Next moves** card, which has read
 `SOON` since the revamp: *"Shifts from the hour grid: registers, door caps and
 who is off today."*
