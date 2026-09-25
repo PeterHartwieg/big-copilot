@@ -1602,6 +1602,78 @@ test('a stage the panel nearly fills gets the Map / Plan switch, not the dock', 
     const panel = await page.locator('#cityMapPage .places').boundingBox();
     assert.ok(plan.x + plan.width <= panel.x + 1, `plan ends at ${plan.x + plan.width}, panel starts at ${panel.x}`);
     assert.equal(await page.locator('#cityMapPage .lp-phoneplan .lp-svg').isVisible(), true);
+    // The site card steps aside with the map, so it never covers the plan.
+    assert.equal(await page.locator('#cityMapPage .site').isVisible(), false);
+    // Widening the window hands the stage to the dock; narrowing it again
+    // comes back to the plan the player chose.
+    await page.setViewportSize({width: 1440, height: 1000});
+    await page.locator(dock).waitFor();
+    assert.equal(await page.locator('#cityMapPage .lp-phoneplan').isVisible(), false);
+    await page.setViewportSize({width: 900, height: 1000});
+    await page.locator('#cityMapPage .lp-phoneplan .lp-svg').waitFor();
+    assert.equal(await page.locator(`${seg} [data-lp-view="plan"]`).getAttribute('aria-pressed'), 'true');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a hover the list no longer holds ends; a footprint hover does not', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await openMap(page); await turnOn(page);
+    await page.locator(`${dock} .lp-tile`).first().waitFor();
+    await page.locator(`#cityMapPage .place[data-pick="${MT[0]}"]`).hover();
+    assert.match(await page.locator(`${dock} .lp-detail`).textContent(), /HoveredD2/);
+    // The pointer stays on the list while a filter takes the row away (M1: none listed).
+    await page.evaluate(() => { cityMapPage.layoutPick = 'M1'; cityMapPage.update(); });
+    assert.match(await page.locator(`${dock} .lp-detail`).textContent(), /Hover a row/);
+    await page.evaluate(() => { cityMapPage.layoutPick = null; cityMapPage.update(); });
+    // A footprint hovered on the map keeps its hover through a rebuild, and its
+    // row is marked, not its footprint lit as a list hover would.
+    await page.evaluate(key => { cityMapPage.light(key, false); cityMapPage.update(); }, MT[0]);
+    assert.match(await page.locator(`${dock} .lp-detail`).textContent(), /HoveredD2/);
+    assert.equal(await page.locator(`#cityMapPage .place[data-pick="${MT[0]}"]`).evaluate(r => r.classList.contains('hot')), true);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a card the zoom buttons push aside still keeps clear of the dock', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await openMap(page); await turnOn(page);
+    await page.locator(`${dock} .lp-tile`).first().waitFor();
+    await pick(page, HK[0]);
+    await page.waitForTimeout(900);   // the glide
+    // The case: the card first lands just right of the dock, low enough to meet
+    // the zoom buttons, which push it left over the dock. That needs a stage
+    // where the card fits between the dock and the panel and the zoom buttons
+    // sit less than a card's width from the dock; find one.
+    const fits = () => page.evaluate(() => {
+      const v = cityMapPage, r = v.stageRect(), sr = v.stage.getBoundingClientRect();
+      const z = v.root.querySelector('.zoomer').getBoundingClientRect();
+      const dockRight = 16 + v.dock.offsetWidth, cw = v.card.offsetWidth, zl = z.left - sr.left - 8;
+      const limit = r.width - PANEL_W - 14;
+      return !v.dock.hidden && dockRight + 1 + cw <= limit && zl - cw < dockRight;
+    });
+    let found = false;
+    for(let width = 1400; width <= 1900 && !found; width += 10){
+      await page.setViewportSize({width, height: 1000});
+      await page.waitForTimeout(80);
+      found = await fits();
+    }
+    assert.ok(found, 'no stage width puts the card between the dock and the zoom buttons');
+    // Move the camera, as a drag does, so the card lands there.
+    await page.evaluate(key => {
+      const v = cityMapPage; v.rect = null;
+      const r = v.stageRect(), s = v.scale(), [x, y, w, h] = v.assets.byKey.get(key).bounds;
+      const px = 16 + v.dock.offsetWidth + 1 - 40, py = r.height - 40;
+      v.box = [x + w / 2 - px / s, y + h / 2 - py / s, r.width / s, r.height / s];
+      v.drawView();
+    }, HK[0]);
+    const card = await page.locator('#cityMapPage .site').boundingBox();
+    const shelf = await page.locator(dock).boundingBox();
+    const meet = card.x < shelf.x + shelf.width && card.x + card.width > shelf.x
+      && card.y < shelf.y + shelf.height && card.y + card.height > shelf.y;
+    assert.equal(meet, false, `card ${JSON.stringify(card)} dock ${JSON.stringify(shelf)}`);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

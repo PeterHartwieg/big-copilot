@@ -1192,6 +1192,7 @@ class CityMapView {
     if(this.list) this.list.querySelectorAll('.hot').forEach(p => p.classList.remove('hot'));
     if(key && !fromList && this.list) this.list.querySelector(`[data-pick="${CSS.escape(key)}"]`)?.classList.add('hot');
     // The dock follows the pointer and falls back to the pick when it leaves.
+    this.hoverFromList = !!key && fromList;
     if(this.hoverKey !== key){ this.hoverKey = key; this.paintDockState(); }
   }
   /* --- floor plans ------------------------------------------------------------
@@ -1336,16 +1337,19 @@ class CityMapView {
      left of the panel, where there is one. */
   paintPhonePlan(on){
     if(!this.seg || !this.phonePlan) return;
-    const b = on ? this.planSite(this.selected) : null, code = this.planOf(b);
-    if(!code) this.planView = false;
+    // Plan stays chosen while the dock has the stage (a maximised window), and
+    // comes back with the switch; only a pick with no plan resets it.
+    if(!this.planOf(this.planSite(this.selected))) this.planView = false;
+    const b = on ? this.planSite(this.selected) : null, code = this.planOf(b), view = !!code && !!this.planView;
     this.seg.hidden = !code;
     this.seg.querySelectorAll('[data-lp-view]').forEach(btn => {
-      const pressed = (btn.dataset.lpView === 'plan') === !!this.planView;
+      const pressed = (btn.dataset.lpView === 'plan') === view;
       btn.classList.toggle('on', pressed); btn.setAttribute('aria-pressed', String(pressed));
     });
-    this.stage.classList.toggle('lp-planview', !!this.planView);
-    this.phonePlan.hidden = !this.planView;
-    if(!this.planView){ this.phonePlanSig = null; return; }
+    // The plan view hides the map's layer, the site card with it (map.css).
+    this.stage.classList.toggle('lp-planview', view);
+    this.phonePlan.hidden = !view;
+    if(!view){ this.phonePlanSig = null; return; }
     const r = this.stageRect(), plan = this.plans.plans[code], panel = this.hasPanel() ? PANEL_W : 0;
     this.phonePlan.style.right = `${panel}px`;
     const s = Math.max(.5, Math.min(14, (r.width - panel - 44) / (plan.w / FLOOR_PLAN_PX), (r.height - 190) / (plan.h / FLOOR_PLAN_PX)));
@@ -1425,8 +1429,11 @@ class CityMapView {
         + (all.length ? '' : '<div class="empty">Nothing matches.</div>');
       if(focusedKey) [...this.list.children].find(b=>b.dataset.pick===focusedKey)?.focus({preventScroll:true});
       this.list.scrollTop=listScroll;
+      // A list hover whose row the change took away ends with it; a footprint
+      // hovered on the map stays hovered, whatever the list now holds.
       const row = hovered && this.list.querySelector(`[data-pick="${CSS.escape(hovered)}"]`);
-      if(row){ this.light(hovered); row.classList.add('hot'); }
+      if(hovered && this.hoverFromList){ if(row){ this.light(hovered); row.classList.add('hot'); } else this.light(null); }
+      else if(hovered) this.light(hovered, false);
     }
     // The dock first, so the card is placed against the dock as it now stands.
     this.paintPlans(); this.fillCard(); this.paintView();
@@ -1486,9 +1493,7 @@ class CityMapView {
     const cw = card.offsetWidth, ch = card.offsetHeight;
     let left = flip ? p.x - 40 - cw : p.x + 40;
     left = Math.max(12, Math.min(limit - cw, left)); // never under the panel, even after a drag
-    // Only a card that reaches over the dock has to stay above it.
-    const dockRight = this.dock && !this.dock.hidden ? 16 + this.dock.offsetWidth : 0;
-    let top = Math.max(12, Math.min(r.height - ch - 12 - (left < dockRight ? this.dockRoom() : 0), p.y - 34));
+    let top = Math.max(12, Math.min(r.height - ch - 12, p.y - 34));
     // the zoom buttons keep their corner: a card that would cover them moves aside
     const z = this.root.querySelector('.zoomer');
     if(z){
@@ -1498,6 +1503,10 @@ class CityMapView {
         if(zl - cw >= 12) left = zl - cw; else top = Math.max(12, zt - ch);
       }
     }
+    // Last, once the card's column is settled: a card that reaches over the
+    // dock stays above it, since the dock paints over the card.
+    const dockRight = this.dock && !this.dock.hidden ? 16 + this.dock.offsetWidth : 0;
+    if(left < dockRight) top = Math.max(12, Math.min(top, r.height - ch - 12 - this.dockRoom()));
     card.style.transform = `translate(${left.toFixed(1)}px,${top.toFixed(1)}px)`;
   }
   async select(key, focus=true, fresh=false){
