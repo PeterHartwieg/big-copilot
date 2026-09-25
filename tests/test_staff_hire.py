@@ -19,6 +19,7 @@ from ba_dashboard import (
     _character,
     _hiring,
     _hourly,
+    _office_always_on,
     _office_runs,
     _office_staffing,
     _staff,
@@ -294,33 +295,56 @@ class FactoryHireTest(unittest.TestCase):
 
 class OfficeRunsTest(unittest.TestCase):
     ALL_DAY = [[[0, 24]] for _ in range(7)]
+    DAY = set(range(8, 22))
+    CLOCK = set(range(24))
 
-    def test_round_the_clock_at_a_full_door_staffs_every_computer(self):
-        runs, rule = _office_runs(6, self.ALL_DAY, 50)
-        self.assertEqual(rule, "allday")
-        self.assertEqual(len(runs), 6)
-        self.assertTrue(all(days[wd] == set(range(24)) for days in runs.values() for wd in range(7)))
+    def test_always_on_is_three_at_a_door_of_fifty_and_fewer_below(self):
+        self.assertEqual(_office_always_on(10, 50), 3)
+        self.assertEqual(_office_always_on(10, 25), 2)  # 1.5 rounds half up
+        self.assertEqual(_office_always_on(10, 10), 1)  # 0.6
+        self.assertEqual(_office_always_on(10, 5), 1)   # 0.3, at least one
+        self.assertEqual(_office_always_on(10, 0), 1)   # capacity unknown
+        self.assertEqual(_office_always_on(10, 100), 6)
+        self.assertEqual(_office_always_on(2, 50), 2)   # never more than there are
 
-    def test_a_smaller_door_staffs_proportionally_fewer_but_a_third_at_least(self):
-        self.assertEqual(len(_office_runs(10, self.ALL_DAY, 25)[0]), 5)
-        self.assertEqual(len(_office_runs(9, self.ALL_DAY, 5)[0]), 3)
-        self.assertEqual(len(_office_runs(1, self.ALL_DAY, 1)[0]), 1)
+    def test_the_week_of_every_office(self):
+        # Six computers, door 50, open around the clock: three always on;
+        # every computer 8-22 on weekdays; three (half) on weekends, which the
+        # always-on three already are.
+        runs, always = _office_runs(6, self.ALL_DAY, 50)
+        self.assertEqual(always, 3)
+        for index in range(6):
+            for wd in range(7):
+                if index < 3:
+                    want = self.CLOCK
+                elif wd in (6, 0):
+                    want = set()
+                else:
+                    want = self.DAY
+                self.assertEqual(runs[index][wd], want, (index, wd))
 
-    def test_otherwise_weekdays_all_and_weekends_half_eight_to_ten(self):
-        runs, rule = _office_runs(5, [[[6, 23]] for _ in range(7)], 50)
-        self.assertEqual(rule, "day")
-        day = set(range(8, 22))
-        for index in range(5):
-            for wd in (1, 2, 3, 4, 5):
-                self.assertEqual(runs[index][wd], day)
-            for wd in (6, 0):
-                self.assertEqual(runs[index][wd], day if index < 3 else set())
+    def test_weekend_half_counts_the_always_on_ones(self):
+        # Eight computers, door 20: one always on, four on weekends 8-22.
+        runs, always = _office_runs(8, self.ALL_DAY, 20)
+        self.assertEqual(always, 1)
+        self.assertEqual(runs[0][6], self.CLOCK)
+        for index in (1, 2, 3):
+            self.assertEqual(runs[index][6], self.DAY)
+            self.assertEqual(runs[index][0], self.DAY)
+        for index in range(4, 8):
+            self.assertEqual(runs[index][6], set())
+            self.assertEqual(runs[index][2], self.DAY)
 
-    def test_the_office_s_own_hours_clip_the_day(self):
+    def test_hours_the_office_is_shut_are_left_out(self):
         shut_weekends = [[] if wd in (6, 0) else [[9, 17]] for wd in range(7)]
-        runs, _rule = _office_runs(2, shut_weekends, 50)
-        self.assertEqual(runs[0][1], set(range(9, 17)))
+        runs, _always = _office_runs(2, shut_weekends, 50)
+        self.assertEqual(runs[0][1], set(range(9, 17)))  # always-on, clipped
+        self.assertEqual(runs[1][1], set(range(9, 17)))
         self.assertEqual(runs[0][6], set())
+
+    def test_no_opening_hours_in_the_save_are_not_clipped(self):
+        runs, _always = _office_runs(1, [[] for _ in range(7)], 50)
+        self.assertEqual(runs[0][3], self.CLOCK)
 
 
 def office_registration(computers, opens, number=10, shifts=()):
@@ -378,24 +402,29 @@ class OfficeStaffingTest(unittest.TestCase):
         return out
 
     def test_every_computer_every_open_hour_on_weekdays(self):
+        # Door 50: three computers always on, clipped to the 8-20 the office
+        # opens; the fourth weekdays only.
         _save, _b, [row] = office_rows(4, self.WEEKDAYS_8_20, [lawyer("l1"), lawyer("l2")])
-        self.assertEqual(row["rule"], "day")
+        self.assertEqual(row["alwaysOn"], 3)
         covered = self.covered(row)
         for i in range(4):
             for wd in (1, 2, 3, 4, 5):
                 self.assertEqual(covered[(f"pc{i}", wd)], set(range(8, 20)))
             for wd in (6, 0):
-                self.assertEqual(covered[(f"pc{i}", wd)], set(range(8, 20)) if i < 2 else set())
+                self.assertEqual(covered[(f"pc{i}", wd)], set(range(8, 20)) if i < 3 else set())
         self.assertEqual(row["computers"], 4)
         self.assertFalse(row["openAllHours"])
 
     def test_round_the_clock(self):
-        _save, _b, [row] = office_rows(3, [[[0, 24]] for _ in range(7)], [lawyer("l1")])
-        self.assertEqual(row["rule"], "allday")
+        _save, _b, [row] = office_rows(5, [[[0, 24]] for _ in range(7)], [lawyer("l1")])
         covered = self.covered(row)
-        for i in range(3):
+        for i in range(5):
             for wd in range(7):
-                self.assertEqual(covered[(f"pc{i}", wd)], set(range(24)))
+                if i < 3:
+                    want = set(range(24))
+                else:
+                    want = set() if wd in (6, 0) else set(range(8, 22))
+                self.assertEqual(covered[(f"pc{i}", wd)], want, (i, wd))
 
     def test_hire_weeks_are_the_hire_count(self):
         _save, _b, [row] = office_rows(4, self.WEEKDAYS_8_20, [lawyer("l1")])
