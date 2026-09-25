@@ -23,11 +23,6 @@ def peak(profile):
     return max(profile, key=lambda p: p["index"])["day"]
 
 
-class Names:
-    def label(self, item):
-        return item.title()
-
-
 class WeekdayWindowTests(unittest.TestCase):
     def test_the_last_four_weeks_give_every_weekday_four_readings(self):
         points = series(range(1, 60), switch=29)
@@ -78,9 +73,10 @@ class WeekdayWindowTests(unittest.TestCase):
         history = {"$items": [
             {"dayNumber": d, "itemSales": {"$items": [{"itemName": "shirt", "amountSold": v}]}}
             for d, v in series(range(1, 22), switch=100)]}
-        out = _product_rhythm(Save({}, {}, "test.hsg"), [{"orderHistory": history}], Names())
-        self.assertEqual(out["Shirt"]["weeks"], min(p["n"] for p in out["Shirt"]["profile"]))
-        self.assertEqual(out["Shirt"]["peak"], "Friday")
+        out = _product_rhythm(Save({}, {}, "test.hsg"), [{"orderHistory": history}])
+        # Keyed by the item's key, never its name.
+        self.assertEqual(out["shirt"]["weeks"], min(p["n"] for p in out["shirt"]["profile"]))
+        self.assertEqual(out["shirt"]["peak"], "Friday")
 
 
 if __name__ == "__main__":

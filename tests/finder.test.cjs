@@ -19,11 +19,15 @@ const CINEMA = 'ba:businesstype_cinema';
 /* A business name is the player's or a rival's own text, so one of them is markup. */
 const HOSTILE = '<img src=x onerror=window.__x=1>';
 const HK_NAME = "Hell's Kitchen";
+/* The payload names a neighbourhood by the game's key; the exported map data
+   by its English name, which is the key's id with the spaces and marks put in. */
+const hoodKey = name => `ba:neighborhood_${name.toLowerCase().replace(/[^a-z]/g, '')}`;
+const HK_HOOD = hoodKey(HK_NAME), MT_HOOD = hoodKey('Midtown');
 
 /* The deposit is what signing costs on the day; it follows the rent unless a
    row names its own, and a building with no rent estimate has none either. */
 const site = (key, over) => {
-  const b = {key, address: at(key).address, hood: at(key).hood, type: 'retail',
+  const b = {key, address: at(key).address, hood: hoodKey(at(key).hood), type: 'retail',
     size: 'C', m2: 225, traffic: 50, cap: 30, rent: 100, status: 'vacant', occupant: null, ...over};
   return {deposit: b.rent == null ? null : b.rent * 6, ...b};
 };
@@ -57,19 +61,19 @@ const PREMISES = {
       occupant: {name: 'HART. Gym', type: 'Gym', typeSlug: 'ba:businesstype_gym'}}),
   ],
   forSale: [
-    {key: MT[2], address: at(MT[2]).address, hood: 'Midtown', type: 'retail', size: 'M', m2: 1000, price: 4200000},
+    {key: MT[2], address: at(MT[2]).address, hood: MT_HOOD, type: 'retail', size: 'M', m2: 1000, price: 4200000},
     // A tower on a mature save runs past a billion.
-    {key: MT[3], address: at(MT[3]).address, hood: 'Midtown', type: 'cinema', size: 'S', m2: 1200, price: 5584228352},
-    {key: HK[0], address: at(HK[0]).address, hood: "Hell's Kitchen", type: 'retail', size: 'C', m2: 225, price: 750000},
+    {key: MT[3], address: at(MT[3]).address, hood: MT_HOOD, type: 'cinema', size: 'S', m2: 1200, price: 5584228352},
+    {key: HK[0], address: at(HK[0]).address, hood: HK_HOOD, type: 'retail', size: 'C', m2: 225, price: 750000},
   ],
   demand: {
-    "Hell's Kitchen": [
+    [HK_HOOD]: [
       {slug: CLOTHES, type: 'Clothing Store', demand: 77, providers: 2, mine: false, category: 'retail'},
       {slug: COFFEE, type: 'Coffee Shop', demand: 40, providers: 1, mine: false, category: 'retail'},
       {slug: LAW, type: 'Law Firm', demand: 60, providers: 0, mine: false, category: 'office'},
       {slug: CINEMA, type: 'Cinema', demand: 50, providers: 0, mine: false, category: 'cinema'},
     ],
-    Midtown: [
+    [MT_HOOD]: [
       {slug: CLOTHES, type: 'Clothing Store', demand: 50, providers: 3, mine: false, category: 'retail'},
       {slug: COFFEE, type: 'Coffee Shop', demand: 90, providers: 1, mine: false, category: 'retail'},
     ],
@@ -81,12 +85,12 @@ const PREMISES = {
   caps: {retail: {C: 30, D: 40, M: 75}, office: {J: 10}, cinema: {S: [100, 150]}, theater: {R: [150, 200]}},
 };
 const MARKET = {
-  hoods: ["Hell's Kitchen", 'Midtown'], rows: [], trendDays: 0, movers: [], hype: [], noOffices: [], catalogue: {},
+  hoods: [HK_HOOD, MT_HOOD], rows: [], trendDays: 0, movers: [], hype: [], noOffices: [], catalogue: {},
   types: [{type: 'Clothing Store', slug: CLOTHES, products: 2, mine: false, peak: 77, cells: [
-    {hood: "Hell's Kitchen", demand: 77, count: 2, providers: 2, sell: 0, here: false},
-    {hood: 'Midtown', demand: 50, count: 2, providers: 3, sell: 0, here: false}]}],
+    {hood: HK_HOOD, demand: 77, count: 2, providers: 2, sell: 0, here: false},
+    {hood: MT_HOOD, demand: 50, count: 2, providers: 3, sell: 0, here: false}]}],
   offices: [{type: 'Law Firm', slug: LAW, fees: ['Legal advice'], mine: false, peak: 60, cells: [
-    {hood: "Hell's Kitchen", demand: 60, providers: 0, hype: null, delta: null, here: false}, null]}],
+    {hood: HK_HOOD, demand: 60, providers: 0, hype: null, delta: null, here: false}, null]}],
 };
 
 let browser, server, url, html;
@@ -224,7 +228,7 @@ test('the defaults are visibly chosen on first open, and nothing is ever dimmed'
       chips.map(c => ({what: c.dataset.cat || c.dataset.show || c.dataset.h || c.querySelector('input')?.dataset.f,
         on: c.classList.contains('on'), opacity: getComputedStyle(c).opacity})));
     const on = state.filter(s => s.on).map(s => s.what).sort();
-    assert.deepEqual(on, [HK_NAME, 'Midtown', 'rent', 'retail'].sort());
+    assert.deepEqual(on, [HK_HOOD, MT_HOOD, 'rent', 'retail'].sort());
     // "Any type" is the default, so the type picker reads as unchosen.
     assert.equal(await page.locator('#cityMapPage .fsel.on').count(), 0);
     assert.equal(await page.locator('#cityMapPage .fsel select').inputValue(), '');
@@ -327,7 +331,7 @@ test('a type filter re-scores every row, and a neighbourhood chip drops one', as
     // Hell's Kitchen wants coffee far less than clothes, so Midtown leads.
     assert.deepEqual(await rowKeys(page), [MT[0], HK[0], MT[1]]);
     assert.deepEqual(await page.$$eval('#cityMapPage .place.fr .v.sc', v => v.map(x => x.textContent)), ['45', '24', '18']);
-    await page.locator('#cityMapPage .fchip.hd[data-h="Midtown"]').click();
+    await page.locator(`#cityMapPage .fchip.hd[data-h="${MT_HOOD}"]`).click();
     assert.deepEqual(await rowKeys(page), [HK[0]]);
     // A minimum on traffic empties it entirely.
     await page.locator('#cityMapPage .fchip.num input[data-f="minTraffic"]').fill('70');
@@ -391,7 +395,7 @@ test('for sale is a plain list, cheapest first, and the neighbourhood chips stil
     assert.equal(await page.locator('#cityMapPage .location.fp.buy').count(), 0);
     await pick(page, MT[2]);
     assert.equal(await page.locator('#cityMapPage .site h3').textContent(), at(MT[2]).address);
-    await page.locator('#cityMapPage .fchip.hd[data-h="Midtown"]').click();
+    await page.locator(`#cityMapPage .fchip.hd[data-h="${MT_HOOD}"]`).click();
     assert.deepEqual(await rowKeys(page), [HK[0]]);
     assert.equal(await page.locator('#cityMapPage .location.fp.cand').count(), 1);
     assert.deepEqual(errors, []);
@@ -407,7 +411,7 @@ test('the filters come back with the character; the switch lasts only the sessio
     await page.locator('#cityMapPage .fchip.num input[data-f="minCap"]').fill('5');
     await page.locator('#cityMapPage .fchip.num input[data-f="maxCap"]').fill('60');
     await page.locator('#cityMapPage .fchip.num input[data-f="maxM2"]').fill('300');
-    await page.locator('#cityMapPage .fchip.hd[data-h="Midtown"]').click();
+    await page.locator(`#cityMapPage .fchip.hd[data-h="${MT_HOOD}"]`).click();
     const {page: again} = await fixture(context);
     try{
       // A new load opens the plain map, however the last session left the switch.
@@ -425,8 +429,8 @@ test('the filters come back with the character; the switch lasts only the sessio
       assert.equal(await again.locator('#cityMapPage .fchip.num input[data-f="maxM2"]').inputValue(), '300');
       // A minimum that is set shows as set, like any other chosen control.
       assert.equal(await again.locator('#cityMapPage .fchip.num.on input[data-f="minCap"]').count(), 1);
-      assert.equal(await again.locator('#cityMapPage .fchip.hd[data-h="Midtown"]').evaluate(c => c.classList.contains('on')), false);
-      assert.equal(await again.locator(`#cityMapPage .fchip.hd[data-h="${HK_NAME}"]`).evaluate(c => c.classList.contains('on')), true);
+      assert.equal(await again.locator(`#cityMapPage .fchip.hd[data-h="${MT_HOOD}"]`).evaluate(c => c.classList.contains('on')), false);
+      assert.equal(await again.locator(`#cityMapPage .fchip.hd[data-h="${HK_HOOD}"]`).evaluate(c => c.classList.contains('on')), true);
       // A different character starts from the defaults, never another company's.
       await again.evaluate(() => { D.meta.character = 'finder-b'; refreshCityMaps(); });
       assert.equal(await again.locator('#cityMapPage .filters').isVisible(), false);
@@ -482,7 +486,7 @@ test('a saved search comes back in one click, for every character and after a re
     await openMap(page); await turnOn(page);
     await page.locator('#cityMapPage .fchip.cat[data-cat="office"]').click();
     await page.locator('#cityMapPage .fchip.num input[data-f="minCap"]').fill('5');
-    await page.locator('#cityMapPage .fchip.hd[data-h="Midtown"]').click();
+    await page.locator(`#cityMapPage .fchip.hd[data-h="${MT_HOOD}"]`).click();
     // The name on offer says what the search looks for.
     await page.locator(`${saved} [data-f="save"]`).click();
     assert.match(await page.locator(`${saved} [data-f="name"]`).inputValue(), /^Office · /);
@@ -552,19 +556,47 @@ test('a saved search is read against this save: what it does not know falls away
   const context = await browser.newContext();
   const {page} = await fixture(context);
   try{
-    await page.evaluate(() => localStorage.setItem('ba_finder_saved_v1', JSON.stringify([
-      {name: 'Elsewhere', filters: {cat: 'retail', show: 'rent', hoods: ['Midtown', 'Nowhere'],
+    await page.evaluate(mt => localStorage.setItem('ba_finder_saved_v1', JSON.stringify([
+      {name: 'Elsewhere', filters: {cat: 'retail', show: 'rent', hoods: [mt, 'ba:neighborhood_nowhere'],
         minCap: 'lots', maxCap: -5, sort: 'score', extra: 1}},
-      {name: 'No filters'}, 'junk'])));
+      {name: 'No filters'}, 'junk'])), MT_HOOD);
     const {page: again, errors} = await fixture(context);
     try{
       await openMap(again); await turnOn(again);
       assert.deepEqual(await savedNames(again), ['Elsewhere']);
       await again.locator(`${saved} [data-saved="Elsewhere"]`).click();
       assert.deepEqual(await rowKeys(again), [MT[0], MT[1]]);
-      assert.equal(await again.locator(`#cityMapPage .fchip.hd[data-h="${HK_NAME}"]`).getAttribute('aria-pressed'), 'false');
+      assert.equal(await again.locator(`#cityMapPage .fchip.hd[data-h="${HK_HOOD}"]`).getAttribute('aria-pressed'), 'false');
       assert.equal(await again.locator('#cityMapPage .fchip.num input[data-f="minCap"]').inputValue(), '0');
       assert.equal(await again.locator(`${saved} [data-saved="Elsewhere"]`).getAttribute('aria-pressed'), 'true');
+      assert.deepEqual(errors, []);
+    } finally { await again.close(); }
+  } finally { await page.close(); await context.close(); }
+});
+
+test('neighbourhoods stored by their English name read back as the game key they name', async () => {
+  const context = await browser.newContext();
+  const {page} = await fixture(context);
+  try{
+    // What the finder stored before it kept neighbourhoods by key.
+    await page.evaluate(name => {
+      localStorage.setItem('ba_finder_saved_v1', JSON.stringify([
+        {name: 'Old', filters: {cat: 'retail', show: 'rent', hoods: ['Midtown', 'Nowhere'], sort: 'score'}}]));
+      localStorage.setItem('ba_finder_v1:finder-a', JSON.stringify({cat: 'retail', type: '', show: 'rent',
+        hoods: [name], minCap: 0, maxCap: 0, minTraffic: 0, sort: 'score'}));
+    }, HK_NAME);
+    const {page: again, errors} = await fixture(context);
+    try{
+      await openMap(again); await turnOn(again);
+      // The filters kept for the character: Hell's Kitchen alone.
+      assert.equal(await again.locator(`#cityMapPage .fchip.hd[data-h="${HK_HOOD}"]`).getAttribute('aria-pressed'), 'true');
+      assert.equal(await again.locator(`#cityMapPage .fchip.hd[data-h="${MT_HOOD}"]`).getAttribute('aria-pressed'), 'false');
+      // The saved search: Midtown, and a name no neighbourhood has falls away.
+      await again.locator(`${saved} [data-saved="Old"]`).click();
+      assert.deepEqual(await rowKeys(again), [MT[0], MT[1]]);
+      // Written back in keys, once, so the old names are gone from storage.
+      assert.deepEqual(await again.evaluate(() => JSON.parse(localStorage.getItem('ba_finder_saved_v1'))[0].filters.hoods),
+        [MT_HOOD]);
       assert.deepEqual(errors, []);
     } finally { await again.close(); }
   } finally { await page.close(); await context.close(); }
@@ -1405,7 +1437,7 @@ test('a Growth cell opens the finder on its own type and neighbourhood', async (
   const {page, errors} = await fixture();
   try{
     await page.evaluate(() => { showPage('growth'); drawMarket(); wireHeat(); });
-    await page.locator(`#market .cell[data-slug="${CLOTHES}"][data-hood="Hell\\'s Kitchen"]`).click();
+    await page.locator(`#market .cell[data-slug="${CLOTHES}"][data-hood="${HK_HOOD}"]`).click();
     await page.locator('#cityMapPage .place.fr').first().waitFor();
     // The cell is on a hidden page now, so the keyboard lands on the first result.
     await page.waitForFunction(() => document.activeElement?.matches('#cityMapPage .place.fr'));
@@ -1441,7 +1473,7 @@ async function scrolledFinderToGrowthCell(width, scroller){
     const before = await page.$eval(scroller, el => el.scrollTop);
     assert.ok(before > 0, 'the panel scrolls');
     await page.evaluate(() => { showPage('growth'); drawMarket(); wireHeat(); });
-    await page.locator(`#market .cell[data-slug="${CLOTHES}"][data-hood="${HK_NAME}"]`).click();
+    await page.locator(`#market .cell[data-slug="${CLOTHES}"][data-hood="${HK_HOOD}"]`).click();
     await page.waitForFunction(() => document.activeElement?.matches('#cityMapPage .place.fr'));
     await page.waitForTimeout(100);
     assert.ok(await page.$eval(scroller, el => el.scrollTop) < before, 'the panel went back up');

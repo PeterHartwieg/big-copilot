@@ -83,7 +83,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `hourFindings` | `_hour_findings()` | `drawSite` |
 | `staffing` | `_staffing()`, with `_plan_site()`, `_need_curve()`, `_arrival_ceiling()`, `_cut_run()`, `_bridge_troughs()`, `_hires_for()`, `_plan_people()`, `_current_roster()`, `_index_table()`, `_shift_row()` | `drawSite` through `spRosterBlock`, and `drawOptimizeStaffing` for the Next-moves card |
 | `plan` | `_plan()` | `drawPlan`, `planDraw`, `indexPlan`, `factoryView`, `factoryCounts`, `planTypes`, `defaultRate`, `itemName`; `web/wiki.js` `wikiCanPlan` |
-| `itemNames` | `extract()` inline, every `ba:itemname_` key of `names.locale` | `itemName` |
+| `names` | `_game_names()`: every `NAME_PREFIXES` key of `names.locale` but the `_description`s, plus `HOOD_LABEL` for a neighbourhood the text lacks | `itemName`, `gameName` (and through it `hoodName`) |
 | `skillNames` | `extract()` inline, every skill in `STATION_SKILLS` through `names.label()` | `gwSkillName` |
 | `cashFlow` | `_cash_flow()` | `drawKpis` |
 | `ledgerDays` | `extract()` inline, `len(ledger)` | no reader — but see below |
@@ -200,9 +200,18 @@ that reaches the payload, sort it through `_in_order()` — which puts `None` la
 real saves hold items with no name. Business lines, factory `arrivals` and `depotOther`
 already go through it.
 
+Game names are words; the game's keys are identities. Every payload row that shows an
+item, a business type, a skill or a neighbourhood carries its key beside the name
+(`slug`, `typeSlug`, `skill`, and a neighbourhood's `hood` or `neighbourhood` *is* its key,
+`ba:neighborhood_<id>`), and the page joins, stores and matches on the key only: a name is
+looked up to be shown (`gameName()`, `hoodName()`, `itemName()`). The building table
+stores the bare `<id>` as `h`; `hood_key()` makes the key. Python's own English sentences
+and the few English tables it wrote by name (`RENT_RATES`, the demand history's snapshot
+keys) read the English name through `HOOD_LABEL`, and stay as they are.
+
 ## Template placeholders
 
-`TEMPLATE` carries fourteen tokens. All fourteen are substituted by `render()`, but the
+`TEMPLATE` carries fifteen tokens. All fifteen are substituted by `render()`, but the
 text for two of them is supplied by the caller.
 
 | Token | Filled with |
@@ -220,7 +229,8 @@ text for two of them is supplied by the caller.
 | `/*__WIKI_CSS__*/` | `render()`, from `web/wiki.css` if present |
 | `/*__WIKI_SCRIPT__*/` | `render()`, from `web/wiki.js` if present |
 | `/*__WIKI_PAYLOAD__*/` | `render()`, from `web/wiki-data.json`; skipped when `live=True`, because the hosted build fetches it with the build stamp instead |
-| `/*__HOOD_TAGS__*/{}` | `render()`, from `HOOD_TAG` — one neighbourhood-tag table shared by the board and the wiki |
+| `/*__HOOD_TAGS__*/{}` | `render()`, from `HOOD_TAG` — one neighbourhood-tag table shared by the board and the wiki, keyed by the game's neighbourhood key |
+| `/*__HOOD_NAMES__*/{}` | `render()`, from `HOOD_LABEL` — each neighbourhood's English name by the same key: `hoodName()`'s fallback and `hoodKeyOf()`'s way back from a stored name |
 
 Only the wiki files are optional. `render()` reads them through `optional_asset()`, so a
 checkout without `web/wiki.js` still renders a whole board and the Wiki tab is left out of

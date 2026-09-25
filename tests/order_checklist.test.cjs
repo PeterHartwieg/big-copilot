@@ -22,17 +22,27 @@ const businesses = [
   {key:'factory#2', name:'Factory', address:'2 Factory Street'},
   {key:'shop#3', name:'Shop', address:'3 Shop Street'},
 ];
+// Every row Python sends carries its item's key beside the name; a fixture
+// that names only the item gets the key it would have had.
+const keyed = r => r.slug ? r : {...r, slug: keyOf(r.item)};
 const build = (overrides = {}) => {
   const args = {imports:[], loose:[], sites:[], shops:[], checks:[], businesses, ...overrides};
   return JSON.parse(JSON.stringify(context.buildOrderChecklist(
-    args.imports, args.loose, args.sites, args.shops, args.checks, args.businesses)));
+    args.imports.map(d => ({...d, rows: d.rows.map(keyed)})), args.loose.map(keyed),
+    args.sites.map(s => ({...s, rows: s.rows.map(keyed)})), args.shops.map(keyed), args.checks.map(keyed),
+    args.businesses)));
 };
 // A fact as Python sends it, with only the fields a test cares about.
 const fact = (st, extra = {}) => ({st, why: null, lvl: st === 'covered' ? 'ok' : 'warn', setTo: null,
   use: 1300, need: 1500, parts: {lines: 1000, sites: 300, route: 0}, ...extra});
+// The item's key, as Python sends it beside every name.
+const keyOf = item => `ba:itemname_${item.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
 // A Weekly imports row as drawLogistics() builds it: the fact's figures, then the setting.
-const order = changes => ({s:0, item:'Sugar', current:1000, inGame:1000, setTo:1500, value:1500,
-  fit:'short', use:1300, parts:{lines:1000, sites:300, route:0}, margin:0.15, ...changes});
+const order = changes => {
+  const row = {s:0, item:'Sugar', current:1000, inGame:1000, setTo:1500, value:1500,
+    fit:'short', use:1300, parts:{lines:1000, sites:300, route:0}, margin:0.15, ...changes};
+  return {slug: keyOf(row.item), ...row};
+};
 
 test('a paused contract beside a top-up that falls short is resumed; one the top-up covers is left alone', () => {
   const paused = lvl => order({item: 'Water', fit: 'paused', paused: true, pausedWeekly: 1000, current: 0,
@@ -133,6 +143,20 @@ test('incomplete data preserves saved marks until a complete snapshot can reconc
   assert.ok(marks.has(other[0].key));
   marks = context.reconcileOrderMarks(marks, [], true);
   assert.equal(marks.size, 0, 'a complete snapshot can remove resolved actions');
+});
+
+test('a row is keyed by its item key, and a tick stored under the item name still counts', () => {
+  const [row] = build({imports:[{s:0, rows:[order({slug: 'ba:itemname_sugar'})]}]});
+  assert.equal(row.key, JSON.stringify(['Weekly imports', 'depot#1', 'ba:itemname_sugar', 1000, 1500, null]));
+  // The key a tick was stored under before: the same row, by the item's name.
+  const stored = JSON.stringify(['Weekly imports', 'depot#1', 'Sugar', 1000, 1500, null]);
+  assert.deepEqual([...context.reconcileOrderMarks(new Set([stored]), [row], true)], [row.key]);
+  assert.deepEqual([...context.reconcileOrderMarks(new Set([stored]), [row], false)], [row.key]);
+  // A same-named item under another key is another row: its tick is not this one's.
+  const [twin] = build({imports:[{s:0, rows:[order({slug: 'ba:itemname_rawsugar'})]}]});
+  assert.notEqual(twin.key, row.key);
+  // A stored name no row carries any more is dropped like any resolved tick.
+  assert.equal(context.reconcileOrderMarks(new Set([stored]), [], true).size, 0);
 });
 
 test('a paused order or delivery gap is a review action, not an invented quantity', () => {

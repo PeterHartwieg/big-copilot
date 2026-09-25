@@ -16,6 +16,16 @@ const vm = require('node:vm');
 const path = require('node:path');
 
 const WIKI = fs.readFileSync(path.join(__dirname, '..', 'web', 'wiki.js'), 'utf8');
+/* The board's neighbourhood tables, as render() writes them in: keyed by the
+   game's key, the words looked up only to be shown. */
+const HOOD_EN = {midtown: 'Midtown', hellskitchen: "Hell's Kitchen", murrayhill: 'Murray Hill',
+  lowermanhattan: 'Lower Manhattan', garmentdistrict: 'Garment District', industrycity: 'Industry City',
+  thehamptons: 'The Hamptons'};
+const HOOD_TAGS = Object.fromEntries(Object.entries({midtown: 'MT', hellskitchen: 'HK', murrayhill: 'MH',
+  lowermanhattan: 'LM', garmentdistrict: 'GD', industrycity: 'IC', thehamptons: 'HA'})
+  .map(([id, tag]) => [`ba:neighborhood_${id}`, tag]));
+const hoodName = key => HOOD_EN[String(key || '').replace(/^ba:neighborhood_/, '')] || String(key || '').replace(/^ba:neighborhood_/, '');
+
 
 /* --- the fixture --------------------------------------------------------- */
 
@@ -26,15 +36,15 @@ const ANDERSON = 'ba:street_fifthavenue#16';
 const SALON = 'ba:street_broadwaystreet#7';
 
 const SUPPLIERS = {
-  [PEDERSON]: {name: 'AJ Pederson & Son', street: '13 Fifth Avenue', hood: 'Garment District',
+  [PEDERSON]: {name: 'AJ Pederson & Son', street: '13 Fifth Avenue', hood: 'ba:neighborhood_garmentdistrict',
     kind: 'Furniture vendor', size: 'M', area: 1000, traffic: 45},
-  [BLUESTONE]: {name: 'Bluestone Imports', street: '4 Pier', hood: 'Murray Hill',
+  [BLUESTONE]: {name: 'Bluestone Imports', street: '4 Pier', hood: 'ba:neighborhood_murrayhill',
     kind: 'Importer - retail inventory', size: 'H', area: 690, traffic: 18},
-  [DEPOT]: {name: 'Factory Supply Depot', street: '2 Twenty-fifth Street', hood: 'Industry City',
+  [DEPOT]: {name: 'Factory Supply Depot', street: '2 Twenty-fifth Street', hood: 'ba:neighborhood_industrycity',
     kind: 'Factory machine vendor', size: 'M', area: 1000, traffic: 37},
-  [ANDERSON]: {name: 'Anderson Recruitment Corp.', street: '16 Fifth Avenue', hood: 'The Hamptons',
+  [ANDERSON]: {name: 'Anderson Recruitment Corp.', street: '16 Fifth Avenue', hood: 'ba:neighborhood_thehamptons',
     kind: 'Recruitment', size: 'C', area: 225, traffic: 50},
-  [SALON]: {name: 'Salon Supplies Co.', street: '7 Broadway Street', hood: 'Midtown',
+  [SALON]: {name: 'Salon Supplies Co.', street: '7 Broadway Street', hood: 'ba:neighborhood_midtown',
     kind: 'Furniture vendor', size: 'S', area: 400, traffic: 30},
 };
 
@@ -44,7 +54,7 @@ const SUPPLIERS = {
 const COFFEE = {
   SOURCES: {sourceDate: '2026-09-10', files: []},
   SUPPLIERS,
-  WHOLESALERS: [{name: 'Hudson Wholesale', street: '13 Twelfth Street', hood: 'Lower Manhattan'}],
+  WHOLESALERS: [{name: 'Hudson Wholesale', street: '13 Twelfth Street', hood: 'ba:neighborhood_lowermanhattan'}],
   FIXTURES: {
     coffeemachine: {name: 'Coffee Machine', sells: ['coffee', 'tea'], customers: 25, vendors: [PEDERSON],
       capacity: [{label: 'Coffee', value: 200, unit: 'units'}, {label: 'Cold drinks', value: 120, unit: 'units'}],
@@ -174,7 +184,7 @@ const LAW = {
 const WIDE_NAMES = ['Apples', 'Bread', 'Cheese', 'Dates', 'Eggs', 'Flour', 'Grapes', 'Honey'];
 const WIDE = {
   SOURCES: {sourceDate: '2026-09-10', files: []},
-  SUPPLIERS, WHOLESALERS: [{name: 'Hudson Wholesale', street: '13 Twelfth Street', hood: 'Lower Manhattan'}],
+  SUPPLIERS, WHOLESALERS: [{name: 'Hudson Wholesale', street: '13 Twelfth Street', hood: 'ba:neighborhood_lowermanhattan'}],
   FIXTURES: {rack: {name: 'Produce Rack', sells: [], customers: 12, vendors: [PEDERSON], station: null,
     needs: null, mount: null, capacity: [{label: 'Products', value: 150, unit: 'units'}]}},
   PRODUCTS: Object.fromEntries(WIDE_NAMES.map(name => [name.toLowerCase(), {
@@ -291,8 +301,7 @@ function wiki({data = DATA, save = null} = {}) {
     showSub(id, view){ drawn.push(['sub', id, view]); },
     drawPlan(){ drawn.push(['plan', context.planType]); },
     wireTips(){}, wireReveal(){}, hideTip(){},
-    HOOD_TAGS: {"Midtown": "MT", "Murray Hill": "MH", "Lower Manhattan": "LM",
-      "Garment District": "GD", "Industry City": "IC", "The Hamptons": "HA"},
+    HOOD_TAGS, hoodName,
     requestAnimationFrame(){}, cancelAnimationFrame(){}, setTimeout(){},
     history: {replaceState(){}},
     matchMedia: () => ({matches: false, addEventListener(){}}),
@@ -987,18 +996,18 @@ test('the labels the payload carries are the ones the page wears', async () => {
 test('pricing uses configured values and stable IDs, including secondary products', async () => {
   const save = {meta:{day:190}, businesses:[
     {name:'Coffee <One>', type:'Localized name', typeSlug:COFFEE.BUSINESS.nameSrc,
-      neighbourhood:'Midtown', lines:[
+      neighbourhood:'ba:neighborhood_midtown', lines:[
         {slug:'ba:itemname_coffee', configuredPrice:205.20},
         {slug:'ba:itemname_tea', configuredPrice:0},
         {slug:'ba:itemname_cake', configuredPrice:8.75},
       ]},
-    {name:'Coffee Two', typeSlug:COFFEE.BUSINESS.nameSrc, neighbourhood:'Midtown',
+    {name:'Coffee Two', typeSlug:COFFEE.BUSINESS.nameSrc, neighbourhood:'ba:neighborhood_midtown',
       lines:[{slug:'ba:itemname_coffee', configuredPrice:6.50}]},
-    {name:'Other type', type:'Coffee Shop', typeSlug:'other', neighbourhood:'Midtown',
+    {name:'Other type', type:'Coffee Shop', typeSlug:'other', neighbourhood:'ba:neighborhood_midtown',
       lines:[{slug:'ba:itemname_coffee', configuredPrice:999.99}]},
-  ], products:[{item:'Coffee', price:111.11, stores:1, units:2}], market:{rows:[
-    {slug:'ba:itemname_coffee', cells:[{hood:'Midtown',marketPrice:4.25}, {hood:'Murray Hill',marketPrice:3.10}]},
-    {slug:'ba:itemname_cake', cells:[{hood:'Midtown',marketPrice:null,marketPriceNote:'Supply-event pricing unavailable'}]},
+  ], products:[{item:'Coffee', slug:'ba:itemname_coffee', price:111.11, stores:1, units:2}], market:{rows:[
+    {slug:'ba:itemname_coffee', cells:[{hood:'ba:neighborhood_midtown',marketPrice:4.25}, {hood:'ba:neighborhood_murrayhill',marketPrice:3.10}]},
+    {slug:'ba:itemname_cake', cells:[{hood:'ba:neighborhood_midtown',marketPrice:null,marketPriceNote:'Supply-event pricing unavailable'}]},
   ]}};
   const w = wiki({save});
   const html = section(await w.load('wiki/businesstypes-coffeeshop'), 'Prices in your save');
@@ -1016,14 +1025,25 @@ test('pricing uses configured values and stable IDs, including secondary product
   assert.doesNotMatch(midtown, /\$3\.10/);
 });
 
+test('the range sold in your shops is matched by the item key, never by its name', async () => {
+  // A second item that shares the name "Coffee" is not the guide's coffee.
+  const w = wiki({save: {meta: {day: 9}, businesses: [], market: {rows: []}, products: [
+    {item: 'Coffee', slug: 'ba:itemname_coffee', price: 3, stores: 1, units: 2},
+    {item: 'Coffee', slug: 'ba:itemname_coffeebeans', price: 3, stores: 1, units: 2}]}});
+  const html = await w.load('wiki/businesstypes-coffeeshop');
+  assert.match(html, /Its range, sold/);
+  assert.match(html, /Coffee moved in your shops yesterday\./);
+  assert.doesNotMatch(html, /Coffee, Coffee moved/);
+});
+
 test('pricing retains unlocated and closed shops, excludes vacant leases, and handles old payloads', async () => {
   const w = wiki({save:{meta:{day:10}, businesses:[
     {name:'Unlocated',typeSlug:COFFEE.BUSINESS.nameSrc,status:'retail',neighbourhood:'',lines:[
       {slug:'ba:itemname_coffee',configuredPrice:12.34}, {slug:'ba:itemname_tea',configuredPrice:null},
       {slug:'ba:itemname_cake',configuredPrice:0}, {slug:'ba:itemname_mug',price:9.99}]},
-    {name:'Closed Coffee',typeSlug:COFFEE.BUSINESS.nameSrc,status:'retail',neighbourhood:'Midtown',temporarilyClosed:true,
+    {name:'Closed Coffee',typeSlug:COFFEE.BUSINESS.nameSrc,status:'retail',neighbourhood:'ba:neighborhood_midtown',temporarilyClosed:true,
       lines:[{slug:'ba:itemname_coffee',configuredPrice:3.25}]},
-    {name:'Vacant lease',typeSlug:COFFEE.BUSINESS.nameSrc,status:'vacant',neighbourhood:'Midtown',
+    {name:'Vacant lease',typeSlug:COFFEE.BUSINESS.nameSrc,status:'vacant',neighbourhood:'ba:neighborhood_midtown',
       lines:[{slug:'ba:itemname_coffee',configuredPrice:999.99}]},
   ],market:{rows:[]}}});
   const html = section(await w.load('wiki/businesstypes-coffeeshop'), 'Prices in your save');
@@ -1039,7 +1059,7 @@ test('pricing retains unlocated and closed shops, excludes vacant leases, and ha
 
 test('pricing works before owning a business, for services, and clears with saves', async () => {
   const w = wiki({save:{meta:{day:8}, businesses:[], market:{rows:[
-    {slug:'ba:itemname_haircut', cells:[{hood:'Midtown',marketPrice:20.50}]},
+    {slug:'ba:itemname_haircut', cells:[{hood:'ba:neighborhood_midtown',marketPrice:20.50}]},
   ]}}});
   let html = section(await w.load('wiki/businesstypes-hairdresser'), 'Prices in your save');
   assert.match(html, /Hair Cutting Fee/);

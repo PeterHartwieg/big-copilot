@@ -58,11 +58,11 @@ const fixture = () => ({
       sites: [{s: 5, unnamed: [], lines: [
         {item: 'Juice', slug: 'juice', basis: 'table', workstation: 'Juicer', slots: [1], machines: 2, rate: 30, hoursWeek: 168, fullWeek: 336, gaps: [], makes: 1440, atRoster: 720, ships: 1440, stock: 500, toCity: 1200, toPier: 0},
         {item: 'Cordial', slug: 'cordial', basis: 'table', workstation: 'Juicer', slots: [1], machines: 2, rate: 30, hoursWeek: 169, fullWeek: 336, gaps: [], makes: 1440, atRoster: 720, ships: 1440, stock: 500, toCity: 0, toPier: 0}], needs: [
-        {item: 'Apple', slug: 'apple', perDay: 50, perWeek: 350, from: 3, lines: ['Juice'], status: 'ok',
+        {item: 'Apple', slug: 'apple', perDay: 50, perWeek: 350, from: 3, lines: ['Juice'], lineSlugs: ['juice'], status: 'ok',
           target: 100, known: true, arrives: 60, level: 'ok'},
-        {item: 'Pear', slug: 'pear', perDay: 200, perWeek: 1400, from: 3, lines: ['Juice'], status: 'ok',
+        {item: 'Pear', slug: 'pear', perDay: 200, perWeek: 1400, from: 3, lines: ['Juice'], lineSlugs: ['juice'], status: 'ok',
           target: 250, known: true, arrives: 140, level: 'ok'},
-        {item: 'Fig', slug: 'fig', perDay: 20, perWeek: 140, from: 3, lines: ['Juice'], status: 'ok',
+        {item: 'Fig', slug: 'fig', perDay: 20, perWeek: 140, from: 3, lines: ['Juice'], lineSlugs: ['juice'], status: 'ok',
           target: 0, known: false, arrives: 0, level: 'ok'}]}],
       depots: {3: {apple: {weekly: 800}, pear: {weekly: 2400}, fig: {weekly: 200}},
         4: {kiwi: {weekly: 300}, lime: {weekly: 900}, kale: {weekly: 100}}},

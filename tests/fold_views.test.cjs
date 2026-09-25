@@ -144,7 +144,7 @@ test('site by site keeps its table, and the verdict stays plain text', async () 
 });
 
 test('Products names its peaks in units, with the weeks they come from', async () => {
-  const product = (item, peak, swing, weeks = peak ? 2 : 0) => ({item, revenue: 1000, units: 50, week: 350, price: 20, stores: 7,
+  const product = (item, peak, swing, weeks = peak ? 2 : 0) => ({item, slug: item.toLowerCase(), revenue: 1000, units: 50, week: 350, price: 20, stores: 7,
     peak, swing, weeks});
   const {page, errors} = await board({products: [product('Shirts', 'Saturday', 37), product('Hats', 'Sunday', 20, 3),
     product('Socks', null, 0)]});
@@ -295,7 +295,7 @@ test("the search control keeps out of the sphere's resting place, Normal or Cust
 });
 
 // A long page, so the footer's chip is well out of the window near the top.
-const LONG_PAGE = {products: Array.from({length: 30}, (_, i) => ({item: `Line ${i}`, revenue: 1000, units: 50, week: 350,
+const LONG_PAGE = {products: Array.from({length: 30}, (_, i) => ({item: `Line ${i}`, slug: `line${i}`, revenue: 1000, units: 50, week: 350,
   price: 20, stores: 7, peak: null, swing: 0, weeks: 0}))};
 const state = page => page.evaluate(() => ({
   open: document.getElementById('fvDiffPop').classList.contains('on'),
@@ -520,7 +520,7 @@ test('the site page names its own week', async () => {
       const shop = {
         key: 'ba:street_fifthavenue#1', status: 'retail', name: 'HART. Clothing', code: 'MT',
         type: 'Clothing Store', typeSlug: 'ba:businesstype_clothingstore', address: '1 Fifth Avenue',
-        neighbourhood: 'Midtown', opened: 3, revenue: 900, customers: 30, basket: 30, profit: 200,
+        neighbourhood: 'ba:neighborhood_midtown', opened: 3, revenue: 900, customers: 30, basket: 30, profit: 200,
         margin: 22.2, cogs: 0, wages: 300, rent: 100, marketing: 0, theft: 0, licensing: 0,
         staff: 2, staffCost: 300, crew: [{role: 'Customer service', count: 2, daily: 300, absent: 0}],
         people: [], lines: [], series: [], staffDemands: [], quitWarnings: 0, daysOpen: 30,
@@ -552,7 +552,7 @@ test("a site's page puts By weekday aside, the chip still opens over it, and #se
     const KEY = 'ba:street_fifthavenue#1';
     await page.evaluate(key => {
       const shop = {key, status: 'retail', name: 'HART. Clothing', code: 'MT', type: 'Clothing Store',
-        typeSlug: 'ba:businesstype_clothingstore', address: '1 Fifth Avenue', neighbourhood: 'Midtown', opened: 3,
+        typeSlug: 'ba:businesstype_clothingstore', address: '1 Fifth Avenue', neighbourhood: 'ba:neighborhood_midtown', opened: 3,
         revenue: 900, customers: 30, basket: 30, profit: 200, margin: 22.2, cogs: 0, wages: 300, rent: 100, marketing: 0,
         theft: 0, licensing: 0, staff: 2, staffCost: 300, crew: [{role: 'Customer service', count: 2, daily: 300, absent: 0}],
         people: [], lines: [], series: [], staffDemands: [], quitWarnings: 0, daysOpen: 30,
