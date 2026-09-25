@@ -191,8 +191,7 @@ const finderDefaults = () => ({on:false, cat:"retail", type:"", show:"rent",
 /* Buildings run past a billion on a mature save, where the board's compact form
    would say "$5584.2M". An asking price gets its own scale. */
 const askingPrice = n => n == null ? "—"
-  : n >= 1e10 ? tt("map.price.bn1", "${x:.1f}bn", {x: n / 1e9})
-  : n >= 1e9 ? tt("map.price.bn2", "${x:.2f}bn", {x: n / 1e9}) : money(n);
+  : n >= 1e9 ? tt("map.price.bn", "${x}bn", {x: (n / 1e9).toFixed(n >= 1e10 ? 1 : 2)}) : money(n);
 /* A rival's or the game's occupant, by name and business type; the save does
    not always have them. */
 const mapUnnamed = () => tt("map.unnamed", "unnamed");
@@ -588,7 +587,7 @@ class CityMapView {
     if(!premises()) return "";
     /* A chip with its name on it: a bare pin in the corner was the most
        hidden way into a headline feature. */
-    return `<div class="fswitch"><button type="button" class="ibtn" data-f="tog" aria-pressed="false" data-visit-feature="floor-plans" data-tip="${attr(tt("map.finder.tip", "Rank the buildings you could take for a business type"))}">${ICON.pin}<span data-mw="finder">${mapText(MAP_WORDS.finder)}</span><span class="feature-new" data-new-feature="floor-plans" aria-hidden="true" data-mw="isNew" hidden>${mapText(MAP_WORDS.isNew)}</span></button></div>`;
+    return `<div class="fswitch"><button type="button" class="ibtn" data-f="tog" aria-pressed="false" data-visit-feature="floor-plans">${ICON.pin}<span data-mw="finder">${mapText(MAP_WORDS.finder)}</span><span class="feature-new" data-new-feature="floor-plans" aria-hidden="true" data-mw="isNew" hidden>${mapText(MAP_WORDS.isNew)}</span></button></div>`;
   }
   /* Every control is the same chip: outlined when it is not chosen, filled when
      it is. Nothing is ever dimmed, so nothing reads as unavailable. */

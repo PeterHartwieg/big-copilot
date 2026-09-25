@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "f4a7670f27";</script>
-<link rel="stylesheet" href="community.css?v=f4a7670f27">
+<script>window.LEDGER_BUILD = "3df641a1e9";</script>
+<link rel="stylesheet" href="community.css?v=3df641a1e9">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=f4a7670f27">
+<link rel="stylesheet" href="fonts/fonts.css?v=3df641a1e9">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -4113,7 +4113,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"f4a7670f27","latest":{"pr":118,"date":"2026-09-25","title":"Game names in the language you play in","summary":"A new Game names setting in the footer, beside Theme, shows the game's own names in any language the game ships: items, business types, neighbourhoods, stations, skills and staff demands, on the board, inside its findings and in the wiki, so the board reads like your game. The rest of the page stays English. Search finds a name in either language, and lists sort in the language you picked. If your browser prefers one of the game's languages, the board asks once whether to use it."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"3df641a1e9","latest":{"pr":118,"date":"2026-09-25","title":"Game names in the language you play in","summary":"A new Game names setting in the footer, beside Theme, shows the game's own names in any language the game ships: items, business types, neighbourhoods, stations, skills and staff demands, on the board, inside its findings and in the wiki, so the board reads like your game. The rest of the page stays English. Search finds a name in either language, and lists sort in the language you picked. If your browser prefers one of the game's languages, the board asks once whether to use it."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -4197,8 +4197,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=f4a7670f27"></script>
-<script src="community.js?v=f4a7670f27"></script>
+<script src="app.js?v=3df641a1e9"></script>
+<script src="community.js?v=3df641a1e9"></script>
 
 <script>
 
@@ -11877,8 +11877,7 @@ const finderDefaults = () => ({on:false, cat:"retail", type:"", show:"rent",
 /* Buildings run past a billion on a mature save, where the board's compact form
    would say "$5584.2M". An asking price gets its own scale. */
 const askingPrice = n => n == null ? "—"
-  : n >= 1e10 ? tt("map.price.bn1", "${x:.1f}bn", {x: n / 1e9})
-  : n >= 1e9 ? tt("map.price.bn2", "${x:.2f}bn", {x: n / 1e9}) : money(n);
+  : n >= 1e9 ? tt("map.price.bn", "${x}bn", {x: (n / 1e9).toFixed(n >= 1e10 ? 1 : 2)}) : money(n);
 /* A rival's or the game's occupant, by name and business type; the save does
    not always have them. */
 const mapUnnamed = () => tt("map.unnamed", "unnamed");
@@ -12274,7 +12273,7 @@ class CityMapView {
     if(!premises()) return "";
     /* A chip with its name on it: a bare pin in the corner was the most
        hidden way into a headline feature. */
-    return `<div class="fswitch"><button type="button" class="ibtn" data-f="tog" aria-pressed="false" data-visit-feature="floor-plans" data-tip="${attr(tt("map.finder.tip", "Rank the buildings you could take for a business type"))}">${ICON.pin}<span data-mw="finder">${mapText(MAP_WORDS.finder)}</span><span class="feature-new" data-new-feature="floor-plans" aria-hidden="true" data-mw="isNew" hidden>${mapText(MAP_WORDS.isNew)}</span></button></div>`;
+    return `<div class="fswitch"><button type="button" class="ibtn" data-f="tog" aria-pressed="false" data-visit-feature="floor-plans">${ICON.pin}<span data-mw="finder">${mapText(MAP_WORDS.finder)}</span><span class="feature-new" data-new-feature="floor-plans" aria-hidden="true" data-mw="isNew" hidden>${mapText(MAP_WORDS.isNew)}</span></button></div>`;
   }
   /* Every control is the same chip: outlined when it is not chosen, filled when
      it is. Nothing is ever dimmed, so nothing reads as unavailable. */
