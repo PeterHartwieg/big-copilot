@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "f615a9152c";</script>
-<link rel="stylesheet" href="community.css?v=f615a9152c">
+<script>window.LEDGER_BUILD = "eed08fddcb";</script>
+<link rel="stylesheet" href="community.css?v=eed08fddcb">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=f615a9152c">
+<link rel="stylesheet" href="fonts/fonts.css?v=eed08fddcb">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -4145,7 +4145,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"f615a9152c","latest":{"pr":118,"date":"2026-09-25","title":"Game names in the language you play in","summary":"A new Game names setting in the footer, beside Theme, shows the game's own names in any language the game ships: items, business types, neighbourhoods, stations, skills and staff demands, on the board, inside its findings and in the wiki, so the board reads like your game. The rest of the page stays English. Search finds a name in either language, and lists sort in the language you picked. If your browser prefers one of the game's languages, the board asks once whether to use it."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"eed08fddcb","latest":{"pr":118,"date":"2026-09-25","title":"Game names in the language you play in","summary":"A new Game names setting in the footer, beside Theme, shows the game's own names in any language the game ships: items, business types, neighbourhoods, stations, skills and staff demands, on the board, inside its findings and in the wiki, so the board reads like your game. The rest of the page stays English. Search finds a name in either language, and lists sort in the language you picked. If your browser prefers one of the game's languages, the board asks once whether to use it."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -4233,8 +4233,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=f615a9152c"></script>
-<script src="community.js?v=f615a9152c"></script>
+<script src="app.js?v=eed08fddcb"></script>
+<script src="community.js?v=eed08fddcb"></script>
 
 <script>
 
@@ -4266,7 +4266,9 @@ const SOURCE = window.LEDGER_SOURCE || {
         const body = await res.json();
         misses = 0;
         h.stale(body.error);
-        if(stamp === null){ stamp = body.stamp; return; }
+        /* A page opened before any board built (watch()'s shell) loads the
+           first one as soon as it exists. */
+        if(stamp === null){ stamp = body.stamp; if(!D && stamp) h.changed(await SOURCE.data()); return; }
         if(body.stamp === stamp) return;
         stamp = body.stamp;
         h.changed(await SOURCE.data());
@@ -4462,7 +4464,9 @@ const HOOD_NAMES = {"ba:neighborhood_midtown":"Midtown","ba:neighborhood_hellski
    or a neighbourhood carries the game's key; the words are looked up only to be
    shown, from the payload's `names`, which the game text fills. */
 const gameName = key => key ? (gnTable && gnTable[key]) || ((D && D.names) || {})[key] || HOOD_NAMES[key] || "" : "";
-const hoodName = key => gameName(key) || String(key || "").replace(/^ba:neighborhood_/, "");
+/* A key the game has no name for comes from a crafted save: its fallback keeps
+   only what ba_save._plain() keeps, so it is text wherever it lands. */
+const hoodName = key => gameName(key) || String(key || "").replace(/^ba:neighborhood_/, "").replace(/[^A-Za-z0-9 '.&-]/g, "");
 
 /* --- game names in the player's language -------------------------------
    Python writes every name in English, and the page lays one language's table
@@ -6577,7 +6581,7 @@ function xlKind(w, n, slug){
     case "factory": return tt("co.chain.factories", {one: "{n} factory", other: "{n} factories"}, {n});
   }
   const many = /quarters$/.test(w) ? w : /[^aeiou]y$/.test(w) ? w.slice(0, -1) + "ies" : `${w}s`;
-  const type = /^ba:/.test(slug || "") ? `\u27e6${slug}|${w}\u27e7` : w;
+  const type = /^ba:[a-z0-9_]+$/i.test(slug || "") ? `\u27e6${slug}|${w}\u27e7` : w;
   return tt("co.chain.kind", {one: "{n} {kind}", other: "{n} {kinds}"}, {n, kind: w, kinds: many, type});
 }
 function chainRow(c, v){
@@ -11085,11 +11089,12 @@ function impDraft(){
     if(!typed) return;
     next.value = value;
     /* The browser owes no change event for a value a script put back, so it
-       is committed on leaving the box or on Enter, unless an edit of the
-       player's own has fired one meanwhile. */
+       is committed on leaving the box or on Enter, unless the player has
+       edited it since: then the browser's own change event commits it. */
     let done = false;
     const commit = () => { if(!done && next.value !== next.defaultValue && next.onchange){ done = true; next.onchange(); } };
-    next.addEventListener("change", () => { done = true; }, {once: true});
+    /* Once the player edits the box, the browser owes its own change event. */
+    next.addEventListener("input", () => { done = true; }, {once: true});
     next.addEventListener("blur", commit, {once: true});
     next.addEventListener("keydown", e => { if(e.key === "Enter") commit(); });
   };

@@ -547,7 +547,7 @@ class Names:
             return text
         tail = slug.split("_", 1)[-1] if "_" in slug else slug.replace("ba:", "")
         # "smartphone1" reads better as "Smartphone 1"; a slug is all we have.
-        tail = re.sub(r"(?<=[a-z])(?=\d)", " ", tail.replace("-", " "))
+        tail = re.sub(r"(?<=[a-z])(?=\d)", " ", tail.replace("-", " ").replace("_", " "))
         return _plain(tail.title())
 
     def street(self, slug: str | None) -> str:
@@ -580,8 +580,12 @@ def _plain(text: str) -> str:
 
 def house_number(value) -> str:
     """A street number as the address shows it: digits only."""
-    if isinstance(value, int) and not isinstance(value, bool):
+    if isinstance(value, bool):
+        return "-"
+    if isinstance(value, int):
         return str(value)
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
     return re.sub(r"\D", "", str(value if value is not None else "")) or "-"
 
 
