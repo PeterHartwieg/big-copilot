@@ -1328,10 +1328,13 @@ function wikiGuideSetup(g, page, offers, ctx){
   /* What a fixture consumes is a list on the fixture's own page. Where the
      business page does not carry it too, the square says whose page it is. */
   const needs = [];
-  keys.forEach(k => [].concat(fixtures[k].needs || []).filter(Boolean).forEach(need => {
-    if(needs.some(n => wikiKey(n.need) === wikiKey(need))) return;
+  keys.forEach(k => [].concat(fixtures[k].needs || []).forEach((need, i) => {
+    if(!need || needs.some(n => wikiKey(n.need) === wikiKey(need))) return;
     const missed = !mentions(page.body || "", need) && !isRequired(need);
-    needs.push({need: String(need), from: fixtures[k].name, missed});
+    /* `need` stays English for the matching above; `shown` and `from` are what
+       the page prints, in the language picked. */
+    needs.push({need: String(need), shown: wikiName((fixtures[k].needKeys || [])[i], String(need)),
+      from: wikiFixName(fixtures[k]), missed});
   }));
   /* A service's own requirements. The card for the service shows all of them,
      always; this list only adds what the shop would otherwise not know it has
@@ -1379,8 +1382,8 @@ function wikiGuideSetup(g, page, offers, ctx){
   }));
   const linked = [
     ...needs.map((n, i) => item({
-      id: `stock-need-${i}`, req: true, name: n.need, meta: "the fixture's own page", catch: n.missed,
-      tip: `${n.from} requires ${n.need}, according to its help page. `
+      id: `stock-need-${i}`, req: true, name: n.need, shown: n.shown, meta: "the fixture's own page", catch: n.missed,
+      tip: `${n.from} requires ${n.shown}, according to its help page. `
         + (n.missed ? "The business page does not mention this requirement. " : "")
         + wikiCopy("linkedRequirementsHint", "Required when using the named equipment or service."),
     })),

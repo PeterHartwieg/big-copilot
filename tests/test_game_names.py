@@ -240,5 +240,33 @@ class Tokens(unittest.TestCase):
             self.assertNotIn("⟦", row["id"] + row["site"] + (row["siteKey"] or ""))
 
 
+class WaitingOn(unittest.TestCase):
+    """A stopped line's inputs travel with their keys; what an input waits on is
+    named by the key each name came with."""
+
+    def test_two_inputs_with_one_english_name_keep_their_own_keys(self):
+        import ba_dashboard
+        from ba_save import Names
+        from tests.test_recipe_identity import BEER, RID, SaveStub
+        water, depot = "ba:itemname_water", "depot#1"
+        lettuce, raw = "ba:itemname_lettuce", "ba:itemname_rawlettuce"
+        factory = ba_dashboard.site_key(("factory", 0))
+        flow = {"index": {factory: 0, depot: 1}, "held": {}, "edges": {},
+                "targets": {(factory, k): (100, depot) for k in (water, lettuce, raw)},
+                "imports": {}, "shipped": lambda *a: None, "received": lambda *a: 0,
+                "byDay": lambda *a: {}, "roundDays": lambda *a: [], "routed": {}, "routeOnly": {}}
+        recipes = {BEER: {"slug": BEER, "item": "Beer", "out": 30, "workstation": "bottledgoods",
+                          "ingredients": [{"slug": water, "item": "Water", "per": 10},
+                                          {"slug": lettuce, "item": "Bag of Lettuce", "per": 5},
+                                          {"slug": raw, "item": "Bag of Lettuce", "per": 5}]}}
+        site = ba_dashboard._factories(SaveStub([[RID]]), Names({}), [], recipes, flow,
+                                       ba_dashboard.History(None), "company")["sites"][0]
+        line = site["lines"][0]
+        self.assertEqual(line["missingSlugs"], [water, lettuce, raw])
+        row = next(r for r in site["needs"] if r["slug"] == water)
+        self.assertEqual(row["waitingOn"], ["Bag of Lettuce", "Bag of Lettuce"])
+        self.assertEqual(row["waitingOnSlugs"], [lettuce, raw])
+
+
 if __name__ == "__main__":
     unittest.main()

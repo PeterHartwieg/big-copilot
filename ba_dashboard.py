@@ -5516,8 +5516,10 @@ def _factories(
                     and line["ships"] < line["atRoster"] * LINE_STARVED):
                 line["limitHeld"] = True
         stopped_lines = {line["item"]: line["missing"] for line in lines if line["missing"]}
-        missing_key = {name: slug for line in lines
-                       for name, slug in zip(line["missing"], line.get("missingSlugs") or [])}
+        # The same lines' inputs with their keys, in step with the names: two
+        # keys can share an English name.
+        stopped_pairs = {line["item"]: list(zip(line["missing"], line.get("missingSlugs") or []))
+                         for line in lines if line["missing"]}
         held_lines = collections.defaultdict(lambda: True)
         for line in lines:
             held_lines[line["item"]] = held_lines[line["item"]] and line["limitHeld"]
@@ -5541,12 +5543,14 @@ def _factories(
             import_source = key if direct else upstream(source, slug) if source else None
             # An input that only sits because every line using it is stopped
             # for want of something else is waiting, not being ignored.
-            row["waitingOn"] = (
-                sorted({m for line in row["lines"] for m in stopped_lines[line] if m != row["item"]})
+            waiting = (
+                sorted({pair for line in row["lines"] for pair in stopped_pairs[line] if pair[0] != row["item"]},
+                       key=lambda pair: (pair[0], str(pair[1])))
                 if all(line in stopped_lines for line in row["lines"])
                 else []
             )
-            row["waitingOnSlugs"] = [missing_key.get(name) for name in row["waitingOn"]]
+            row["waitingOn"] = [name for name, _slug in waiting]
+            row["waitingOnSlugs"] = [slug for _name, slug in waiting]
             # Every line eating it held by its limit, with some of it on hand:
             # the machines are not waiting for it, they have nothing to make.
             row["limited"] = bool(

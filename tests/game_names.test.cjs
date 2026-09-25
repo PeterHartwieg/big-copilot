@@ -533,6 +533,19 @@ test('a requirement stated on the fixture page names the fixture in the language
   assert.ok(tips.every(t => / \(DE\) requires this/.test(t)), tips.join(' | '));
 });
 
+/* What a fixture consumes, stated on the fixture's own page: the row and its
+   tip name both the fixture and what it needs in the language picked. */
+test('a fixture that needs stock names both in the language picked', async t => {
+  const {page} = await site(t);
+  await page.evaluate(async () => { await setGameNames('de'); BigCopilotBoard.browseWiki(); location.hash = '#wiki/businesstypes-giftshop'; });
+  await page.locator('#pageWiki h1').filter({hasText: 'Geschenkeladen'}).waitFor();
+  const register = FIX.de['ba:itemname_cashregister'];
+  const tips = await page.$$eval('#pageWiki [data-tip]', els => els.map(e => e.dataset.tip));
+  assert.ok(tips.some(t => t.startsWith(`${register} requires Papiertüte, according to its help page.`)), tips.join(' | '));
+  const rows = await page.$$eval('#pageWiki .wk-item strong', els => els.map(e => e.textContent));
+  assert.ok(rows.includes('Papiertüte'), rows.join(' | '));
+});
+
 test('the board search lists a wiki page under its name as shown, and finds it by the English', async t => {
   const {page} = await site(t);
   await boardOn(page);

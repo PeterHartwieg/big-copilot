@@ -1643,6 +1643,9 @@ class Guide:
                 "observed": observed_text(self.layouts, slug),
                 "station": fixture_station(text),
                 "needs": [ref["name"] for ref in needs] or None,
+                # Their game keys, index for index, so the page can name them in
+                # the language picked.
+                "needKeys": [ref.get("slug") for ref in needs] or None,
                 "mount": _join_or([ref["name"] for ref in mounts]),
                 "groups": sorted(set(self.groups.get(slug) or [])),
                 "requirementsRaw": list(self.evidence.get(slug) or []),
