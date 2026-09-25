@@ -41,7 +41,7 @@ import webbrowser
 from html import escape as html_escape
 
 from ba_save import (
-    Names, NotEnglishText, Save, bundled_locale, english_text, house_number, load_best_locale,
+    Names, NotEnglishText, Save, _plain, bundled_locale, english_text, house_number, load_best_locale,
     load_locale, load_save,
 )
 
@@ -504,7 +504,7 @@ def hood_label(key: str | None, default: str = "") -> str:
     """A neighbourhood key's English name, for Python's own sentences."""
     if not key:
         return default
-    return HOOD_LABEL.get(key) or key.removeprefix(HOOD_PREFIX)
+    return HOOD_LABEL.get(key) or _plain(key.removeprefix(HOOD_PREFIX))
 
 # Every building in the city, from the game's fixed map: make_buildings.py
 # generates ba_buildings.json beside this file, and the browser worker writes it
@@ -14755,7 +14755,7 @@ const SOURCE = window.LEDGER_SOURCE || {
         h.stale(body.error);
         /* A page opened before any board built (watch()'s shell) loads the
            first one as soon as it exists. */
-        if(stamp === null){ stamp = body.stamp; if(!D && stamp) h.changed(await SOURCE.data()); return; }
+        if(stamp === null){ if(!D && body.stamp){ const d = await SOURCE.data(); stamp = body.stamp; h.changed(d); } else stamp = body.stamp; return; }
         if(body.stamp === stamp) return;
         stamp = body.stamp;
         h.changed(await SOURCE.data());
