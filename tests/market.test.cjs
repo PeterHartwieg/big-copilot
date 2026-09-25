@@ -123,20 +123,47 @@ test('sorting by a neighbourhood orders each band by demand, the emptier market 
   } finally { await page.close(); }
 });
 
-test('an office cell pins its story without offering Plan a chain, in every view', async () => {
+test('a shop row carries its own way into Plan a chain; an office row has none, in every view', async () => {
   const page = await grid();
   try {
-    await page.locator('#market .cell[data-office][data-r="2"][data-c="0"]').click();
-    const detail = await page.locator('#cellDetail').innerText();
-    assert.match(detail, /Travel Agency in Hell's Kitchen/);
-    assert.doesNotMatch(detail, /Plan a chain/);
-    await cell(page, 1, 0).click();
-    assert.match(await page.locator('#cellDetail').innerText(), /Plan a chain/);
-    // The same fee in a product view is still an office's, so still nothing to plan.
+    await page.evaluate(() => {
+      D.plan = {catalogue: {
+        'ba:businesstype_cinema': {type: 'Cinema', products: ['ba:itemname_popcorn']},
+        'ba:businesstype_supermarket': {type: 'Supermarket', products: ['ba:itemname_apple', 'ba:itemname_bread']}}};
+      D.market.rows.push({item: 'Apple', slug: 'ba:itemname_apple', sell: true, make: false, office: false,
+        cells: [{hood: 'ba:neighborhood_midtown', demand: 50, providers: 1, sell: true}, null, null]});
+      drawMarket();
+      window.drawPlan = () => { window.planned = planType; };   // the plan page itself is not under test
+    });
+    const plans = () => page.$$eval('#market .r', rs => rs.map(r => r.querySelector('.mk-plan')?.dataset.plan || null));
+    assert.deepEqual(await plans(), ['ba:businesstype_cinema', 'ba:businesstype_supermarket', null, null]);
+    assert.equal(await page.locator('#market .r[data-r="0"] small').innerText(), '1 product · Setup guide › · Plan a chain ›');
+    // Nothing is drawn under the grid.
+    assert.equal(await page.locator('#cellDetail').count(), 0);
+    await page.locator('#market .r[data-r="1"] .mk-plan').click();
+    assert.equal(await page.evaluate(() => window.planned), 'ba:businesstype_supermarket');
+    assert.equal(await page.evaluate(() => planType), 'ba:businesstype_supermarket');
+    // A second click on the type already open keeps the machines the player stepped.
+    await page.evaluate(() => { planCounts = {'ba:itemname_apple': 4}; showPage('growth'); showSub('growth', 'market'); });
+    await page.locator('#market .r[data-r="1"] .mk-plan').click();
+    assert.deepEqual(await page.evaluate(() => planCounts), {'ba:itemname_apple': 4});
+    await page.evaluate(() => showSub('growth', 'market'));
+    await page.locator('#market .r[data-r="0"] .mk-plan').click();
+    assert.deepEqual(await page.evaluate(() => [planType, planCounts]), ['ba:businesstype_cinema', {}]);
+    // A product row plans the type that sells it; the office fee still plans nothing.
     await page.evaluate(() => { marketView = 'mine'; drawMarket(); });
-    await cell(page, 0, 0).click();
-    assert.match(await page.locator('#cellDetail').innerText(), /Lawyer Fee \(Hourly\) in Hell's Kitchen/);
-    assert.doesNotMatch(await page.locator('#cellDetail').innerText(), /Plan a chain/);
+    assert.deepEqual(await plans(), [null, 'ba:businesstype_supermarket']);
+    assert.equal(await page.locator('#market .r[data-r="0"] small').innerText(), 'you sell it');
+    assert.equal(await page.locator('#market .r[data-r="1"] small').innerText(), 'you sell it · Plan a chain ›');
+  } finally { await page.close(); }
+});
+
+test('without the premises payload a cell is no button and a click stays on the grid', async () => {
+  const page = await grid();
+  try {
+    assert.equal(await page.locator('#market .cell[role=button]').count(), 0);
+    await cell(page, 1, 0).click();
+    assert.equal(await page.locator('#secMarket').isVisible(), true);
   } finally { await page.close(); }
 });
 
