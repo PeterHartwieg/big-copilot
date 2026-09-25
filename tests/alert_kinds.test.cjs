@@ -188,7 +188,7 @@ const headline = a => vm.runInContext('splitFinding', splitting)(a).what;
 
 test('a finding keeps the variant in its headline', () => {
   const site = 'Factory Clothing';
-  const text = v => `Fabric (${v}) arrives at 6,612/day against 11,520 needed while Import Hub holds 65,354; the line is not drawing it`;
+  const text = v => `Fabric (${v}) arrives at 6,612/day against 11,520 needed while Import Hub holds 65,354; it isn't reaching the line`;
   const a = headline({site, text: text('Expensive')});
   const b = headline({site, text: text('Cheap')});
   assert.match(a, /^Fabric \(Expensive\)/);
