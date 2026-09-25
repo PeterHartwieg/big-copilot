@@ -38,7 +38,7 @@ HOME = ("ba:street_broadwaystreet", 13)   # residential, Midtown
 RIVAL = ("ba:street_broadwaystreet", 9)   # retail, Midtown, a rival's gift shop
 FOR_SALE = ("ba:street_broadwaystreet", 11)
 BANK = ("ba:street_broadwaystreet", 1)
-PIER = ("ba:street_eighthavenue", 2)
+PIER = ("ba:street_pier", 1)  # the importer
 
 BEER, WATER = "ba:itemname_beer", "ba:itemname_water"
 GIFT, UMBRELLA, BAG = "ba:itemname_cheapgift", "ba:itemname_umbrella", "ba:itemname_paperbag"
@@ -156,6 +156,9 @@ LIQUOR_SALES = {BEER: (250, 6.0)}
 # The evening rush at the liquor store: more than its one register serves (20 an hour).
 LIQUOR_RUSH = {17: 24, 18: 24}
 GIFT_SALES = {GIFT: (80, 12.0), UMBRELLA: (20, 15.0)}
+# Each site's daily rent, within 2% of the rent formula's estimate for its building
+# (_rent_estimate), so premises.rent.check reads a small deviation.
+RENT = {LIQUOR: 225.0, GIFTS: 100.0, HUB: 460.0, BREWERY: 445.0}
 LOAN_PAYMENT = 300.0  # the loan's daily payment, booked in each day's summary
 WAVE = (DAY - 5, DAY + 10)  # the days the hype wave on beer runs: over both saves
 
@@ -177,10 +180,10 @@ def _summary(d: int) -> dict:
     gifts = round(80 * f) * 12.0 + round(20 * f) * 15.0
     # A site's statement books its costs as positive figures.
     statements = [
-        _statement(LIQUOR, beer, beer * 0.2, 456, 150),
-        _statement(GIFTS, gifts, gifts * 0.5, 180, 120),
-        _statement(HUB, 0, 200, 0, 90, resources={WATER: 200}),  # 400 water a day at $0.50
-        _statement(BREWERY, 0, 60, 192, 110),
+        _statement(LIQUOR, beer, beer * 0.2, 456, RENT[LIQUOR]),
+        _statement(GIFTS, gifts, gifts * 0.5, 180, RENT[GIFTS]),
+        _statement(HUB, 0, 200, 0, RENT[HUB], resources={WATER: 200}),  # 400 water a day at $0.50
+        _statement(BREWERY, 0, 60, 192, RENT[BREWERY]),
     ]
     business = sum(s["TotalProfit"] for s in statements)
     return {
@@ -219,7 +222,7 @@ def data_company(day: int = DAY) -> dict:
     liquor = {
         "StreetName": LIQUOR[0], "StreetNumber": LIQUOR[1], "RentedByPlayer": True,
         "BusinessName": "HART. Spirits", "businessTypeName": "ba:businesstype_liquorstore",
-        "creationDay": OPENED, "RentPerDay": 150.0, "customerCapacity": 30,  # size C
+        "creationDay": OPENED, "RentPerDay": RENT[LIQUOR], "customerCapacity": 30,  # size C
         "securityLevelPercentage": 40.0,
         "satisfaction": {"overall": 82.0, "customerService": 90.0, "pricing": 75.0,
                          "cleanliness": 88.0, "facility": 70.0},
@@ -243,7 +246,7 @@ def data_company(day: int = DAY) -> dict:
     gifts = {
         "StreetName": GIFTS[0], "StreetNumber": GIFTS[1], "RentedByPlayer": True,
         "BusinessName": "HART. Gifts", "businessTypeName": "ba:businesstype_giftshop",
-        "creationDay": OPENED, "RentPerDay": 120.0, "customerCapacity": 30,  # size C
+        "creationDay": OPENED, "RentPerDay": RENT[GIFTS], "customerCapacity": 30,  # size C
         "securityLevelPercentage": 0.0,
         "satisfaction": {"overall": 64.0, "customerService": 70.0, "pricing": 60.0,
                          "cleanliness": 40.0, "facility": 55.0},
@@ -264,7 +267,7 @@ def data_company(day: int = DAY) -> dict:
     hub = {
         "StreetName": HUB[0], "StreetNumber": HUB[1], "RentedByPlayer": True,
         "BusinessName": "HART. Hub", "businessTypeName": "ba:businesstype_warehouse",
-        "creationDay": OPENED, "RentPerDay": 90.0,
+        "creationDay": OPENED, "RentPerDay": RENT[HUB],
         "itemInstances": [_shelf("PALLEThub", {WATER: 1500})],
         "scheduleDays": [], "orderHistory": [], "retailPrices": [],
         "deliveryTransactions": hub_log,
@@ -272,7 +275,7 @@ def data_company(day: int = DAY) -> dict:
     brewery = {
         "StreetName": BREWERY[0], "StreetNumber": BREWERY[1], "RentedByPlayer": True,
         "BusinessName": "HART. Brewery", "businessTypeName": "ba:businesstype_factory",
-        "creationDay": OPENED, "RentPerDay": 110.0,
+        "creationDay": OPENED, "RentPerDay": RENT[BREWERY],
         "itemInstances": [
             _item("MACHINEone", "ba:itemname_bottlingmachine", priority=0, selectedRecipeId=BEER_RECIPE,
                   workstationType="ba:factoryworkstationtype_bottledgoodsworkstation"),

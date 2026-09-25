@@ -439,7 +439,7 @@
      "weekSold": 0.0
     }
    ],
-   "margin": 46.3,
+   "margin": 42.2,
    "marketing": 0.0,
    "marketingIndex": 20.0,
    "missingAmenities": [
@@ -472,10 +472,10 @@
      "role": "Customer Service"
     }
    ],
-   "profit": 834.0,
+   "profit": 759.0,
    "promotion": 120.0,
    "quitWarnings": 1,
-   "rent": 150.0,
+   "rent": 225.0,
    "restocks": true,
    "revenue": 1800.0,
    "rhythm": [
@@ -534,127 +534,127 @@
     {
      "customers": null,
      "day": 26,
-     "profit": 834.0,
+     "profit": 759.0,
      "revenue": 1800.0
     },
     {
      "customers": null,
      "day": 27,
-     "profit": 1074.0,
+     "profit": 999.0,
      "revenue": 2100.0
     },
     {
      "customers": null,
      "day": 28,
-     "profit": 954.0,
+     "profit": 879.0,
      "revenue": 1950.0
     },
     {
      "customers": null,
      "day": 29,
-     "profit": 354.0,
+     "profit": 279.0,
      "revenue": 1200.0
     },
     {
      "customers": null,
      "day": 30,
-     "profit": 474.0,
+     "profit": 399.0,
      "revenue": 1350.0
     },
     {
      "customers": null,
      "day": 31,
-     "profit": 474.0,
+     "profit": 399.0,
      "revenue": 1350.0
     },
     {
      "customers": null,
      "day": 32,
-     "profit": 594.0,
+     "profit": 519.0,
      "revenue": 1500.0
     },
     {
      "customers": 192,
      "day": 33,
-     "profit": 834.0,
+     "profit": 759.0,
      "revenue": 1800.0
     },
     {
      "customers": 224,
      "day": 34,
-     "profit": 1074.0,
+     "profit": 999.0,
      "revenue": 2100.0
     },
     {
      "customers": 250,
      "day": 35,
-     "profit": 1266.0,
+     "profit": 1191.0,
      "revenue": 2340.0
     },
     {
      "customers": 154,
      "day": 36,
-     "profit": 546.0,
+     "profit": 471.0,
      "revenue": 1440.0
     },
     {
      "customers": 173,
      "day": 37,
-     "profit": 690.0,
+     "profit": 615.0,
      "revenue": 1620.0
     },
     {
      "customers": 173,
      "day": 38,
-     "profit": 690.0,
+     "profit": 615.0,
      "revenue": 1620.0
     },
     {
      "customers": 192,
      "day": 39,
-     "profit": 834.0,
+     "profit": 759.0,
      "revenue": 1800.0
     },
     {
      "customers": 230,
      "day": 40,
-     "profit": 1122.0,
+     "profit": 1047.0,
      "revenue": 2160.0
     },
     {
      "customers": 269,
      "day": 41,
-     "profit": 1410.0,
+     "profit": 1335.0,
      "revenue": 2520.0
     },
     {
      "customers": 250,
      "day": 42,
-     "profit": 1266.0,
+     "profit": 1191.0,
      "revenue": 2340.0
     },
     {
      "customers": 154,
      "day": 43,
-     "profit": 546.0,
+     "profit": 471.0,
      "revenue": 1440.0
     },
     {
      "customers": 173,
      "day": 44,
-     "profit": 690.0,
+     "profit": 615.0,
      "revenue": 1620.0
     },
     {
      "customers": 173,
      "day": 45,
-     "profit": 690.0,
+     "profit": 615.0,
      "revenue": 1620.0
     },
     {
      "customers": 192,
      "day": 46,
-     "profit": 834.0,
+     "profit": 759.0,
      "revenue": 1800.0
     }
    ],
@@ -744,7 +744,7 @@
      "weekSold": 600.0
     }
    ],
-   "margin": 26.2,
+   "margin": 27.8,
    "marketing": 0.0,
    "marketingIndex": 0.0,
    "missingAmenities": [
@@ -766,10 +766,10 @@
      "role": "Customer Service"
     }
    ],
-   "profit": 330.0,
+   "profit": 350.0,
    "promotion": 80.0,
    "quitWarnings": 0,
-   "rent": 120.0,
+   "rent": 100.0,
    "restocks": true,
    "revenue": 1260.0,
    "rhythm": [
@@ -828,127 +828,127 @@
     {
      "customers": null,
      "day": 26,
-     "profit": 456.0,
+     "profit": 476.0,
      "revenue": 1512.0
     },
     {
      "customers": null,
      "day": 27,
-     "profit": 582.0,
+     "profit": 602.0,
      "revenue": 1764.0
     },
     {
      "customers": null,
      "day": 28,
-     "profit": 519.0,
+     "profit": 539.0,
      "revenue": 1638.0
     },
     {
      "customers": null,
      "day": 29,
-     "profit": 204.0,
+     "profit": 224.0,
      "revenue": 1008.0
     },
     {
      "customers": null,
      "day": 30,
-     "profit": 267.0,
+     "profit": 287.0,
      "revenue": 1134.0
     },
     {
      "customers": null,
      "day": 31,
-     "profit": 267.0,
+     "profit": 287.0,
      "revenue": 1134.0
     },
     {
      "customers": null,
      "day": 32,
-     "profit": 330.0,
+     "profit": 350.0,
      "revenue": 1260.0
     },
     {
      "customers": 84,
      "day": 33,
-     "profit": 456.0,
+     "profit": 476.0,
      "revenue": 1512.0
     },
     {
      "customers": 98,
      "day": 34,
-     "profit": 582.0,
+     "profit": 602.0,
      "revenue": 1764.0
     },
     {
      "customers": 91,
      "day": 35,
-     "profit": 519.0,
+     "profit": 539.0,
      "revenue": 1638.0
     },
     {
      "customers": 56,
      "day": 36,
-     "profit": 204.0,
+     "profit": 224.0,
      "revenue": 1008.0
     },
     {
      "customers": 63,
      "day": 37,
-     "profit": 267.0,
+     "profit": 287.0,
      "revenue": 1134.0
     },
     {
      "customers": 63,
      "day": 38,
-     "profit": 267.0,
+     "profit": 287.0,
      "revenue": 1134.0
     },
     {
      "customers": 70,
      "day": 39,
-     "profit": 330.0,
+     "profit": 350.0,
      "revenue": 1260.0
     },
     {
      "customers": 84,
      "day": 40,
-     "profit": 456.0,
+     "profit": 476.0,
      "revenue": 1512.0
     },
     {
      "customers": 98,
      "day": 41,
-     "profit": 582.0,
+     "profit": 602.0,
      "revenue": 1764.0
     },
     {
      "customers": 91,
      "day": 42,
-     "profit": 519.0,
+     "profit": 539.0,
      "revenue": 1638.0
     },
     {
      "customers": 56,
      "day": 43,
-     "profit": 204.0,
+     "profit": 224.0,
      "revenue": 1008.0
     },
     {
      "customers": 63,
      "day": 44,
-     "profit": 267.0,
+     "profit": 287.0,
      "revenue": 1134.0
     },
     {
      "customers": 63,
      "day": 45,
-     "profit": 267.0,
+     "profit": 287.0,
      "revenue": 1134.0
     },
     {
      "customers": 70,
      "day": 46,
-     "profit": 330.0,
+     "profit": 350.0,
      "revenue": 1260.0
     }
    ],
@@ -1016,10 +1016,10 @@
    "opened": 3,
    "peakDay": null,
    "people": [],
-   "profit": -290.0,
+   "profit": -660.0,
    "promotion": 0,
    "quitWarnings": 0,
-   "rent": 90.0,
+   "rent": 460.0,
    "restocks": false,
    "revenue": 0.0,
    "rhythm": null,
@@ -1035,127 +1035,127 @@
     {
      "customers": null,
      "day": 26,
-     "profit": -290.0,
+     "profit": -660.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 27,
-     "profit": -290.0,
+     "profit": -660.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 28,
-     "profit": -290.0,
+     "profit": -660.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 29,
-     "profit": -290.0,
+     "profit": -660.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 30,
-     "profit": -290.0,
+     "profit": -660.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 31,
-     "profit": -290.0,
+     "profit": -660.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 32,
-     "profit": -290.0,
+     "profit": -660.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 33,
-     "profit": -290.0,
+     "profit": -660.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 34,
-     "profit": -290.0,
+     "profit": -660.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 35,
-     "profit": -290.0,
+     "profit": -660.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 36,
-     "profit": -290.0,
+     "profit": -660.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 37,
-     "profit": -290.0,
+     "profit": -660.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 38,
-     "profit": -290.0,
+     "profit": -660.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 39,
-     "profit": -290.0,
+     "profit": -660.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 40,
-     "profit": -290.0,
+     "profit": -660.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 41,
-     "profit": -290.0,
+     "profit": -660.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 42,
-     "profit": -290.0,
+     "profit": -660.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 43,
-     "profit": -290.0,
+     "profit": -660.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 44,
-     "profit": -290.0,
+     "profit": -660.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 45,
-     "profit": -290.0,
+     "profit": -660.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 46,
-     "profit": -290.0,
+     "profit": -660.0,
      "revenue": 0.0
     }
    ],
@@ -1248,10 +1248,10 @@
      "role": "Factory Worker"
     }
    ],
-   "profit": -362.0,
+   "profit": -697.0,
    "promotion": 0,
    "quitWarnings": 0,
-   "rent": 110.0,
+   "rent": 445.0,
    "restocks": false,
    "revenue": 0.0,
    "rhythm": null,
@@ -1267,127 +1267,127 @@
     {
      "customers": null,
      "day": 26,
-     "profit": -362.0,
+     "profit": -697.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 27,
-     "profit": -362.0,
+     "profit": -697.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 28,
-     "profit": -362.0,
+     "profit": -697.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 29,
-     "profit": -362.0,
+     "profit": -697.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 30,
-     "profit": -362.0,
+     "profit": -697.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 31,
-     "profit": -362.0,
+     "profit": -697.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 32,
-     "profit": -362.0,
+     "profit": -697.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 33,
-     "profit": -362.0,
+     "profit": -697.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 34,
-     "profit": -362.0,
+     "profit": -697.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 35,
-     "profit": -362.0,
+     "profit": -697.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 36,
-     "profit": -362.0,
+     "profit": -697.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 37,
-     "profit": -362.0,
+     "profit": -697.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 38,
-     "profit": -362.0,
+     "profit": -697.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 39,
-     "profit": -362.0,
+     "profit": -697.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 40,
-     "profit": -362.0,
+     "profit": -697.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 41,
-     "profit": -362.0,
+     "profit": -697.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 42,
-     "profit": -362.0,
+     "profit": -697.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 43,
-     "profit": -362.0,
+     "profit": -697.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 44,
-     "profit": -362.0,
+     "profit": -697.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 45,
-     "profit": -362.0,
+     "profit": -697.0,
      "revenue": 0.0
     },
     {
      "customers": null,
      "day": 46,
-     "profit": -362.0,
+     "profit": -697.0,
      "revenue": 0.0
     }
    ],
@@ -1420,24 +1420,24 @@
   "netWorthChange": null,
   "netWorthFrom": null,
   "netWorthTo": null,
-  "profit": 1959.0,
-  "reinvested": 1399.0
+  "profit": -3361.0,
+  "reinvested": -3921.0
  },
  "chains": [
   {
    "change": 0.0,
    "cogs": 630.0,
-   "cost": 930.0,
+   "cost": 910.0,
    "count": 1,
    "external": 0.0,
    "last7": 9450.0,
    "licensing": 0.0,
-   "margin": 26.2,
+   "margin": 27.8,
    "marketing": 0.0,
    "name": "Gift Shops",
    "prev7": 9450.0,
-   "profit": 330.0,
-   "rent": 120.0,
+   "profit": 350.0,
+   "rent": 100.0,
    "retailRevenue": 1260.0,
    "revenue": 1260.0,
    "sites": [
@@ -1451,17 +1451,17 @@
   {
    "change": 0.0613,
    "cogs": 620.0,
-   "cost": 1618.0,
+   "cost": 2398.0,
    "count": 3,
    "external": 0.0,
    "last7": 13500.0,
    "licensing": 0.0,
-   "margin": 10.1,
+   "margin": -33.2,
    "marketing": 0.0,
    "name": "Liquor Stores",
    "prev7": 12720.0,
-   "profit": 182.0,
-   "rent": 350.0,
+   "profit": -598.0,
+   "rent": 1130.0,
    "retailRevenue": 1800.0,
    "revenue": 1800.0,
    "sites": [
@@ -1477,7 +1477,7 @@
  ],
  "daily": [
   {
-   "business": 638.0,
+   "business": -122.0,
    "cogs": 1376.0,
    "day": 26,
    "homes": 45.0,
@@ -1485,15 +1485,15 @@
    "loans": 300.0,
    "marketing": 0.0,
    "parking": 5.0,
-   "profit": 258.0,
-   "profit7": 258.0,
-   "rent": 470.0,
+   "profit": -502.0,
+   "profit7": -502.0,
+   "rent": 1230.0,
    "revenue": 3312.0,
    "theft": 0.0,
    "wages": 828.0
   },
   {
-   "business": 1004.0,
+   "business": 244.0,
    "cogs": 1562.0,
    "day": 27,
    "homes": 45.0,
@@ -1501,15 +1501,15 @@
    "loans": 300.0,
    "marketing": 0.0,
    "parking": 5.0,
-   "profit": 624.0,
-   "profit7": 441.0,
-   "rent": 470.0,
+   "profit": -136.0,
+   "profit7": -319.0,
+   "rent": 1230.0,
    "revenue": 3864.0,
    "theft": 0.0,
    "wages": 828.0
   },
   {
-   "business": 821.0,
+   "business": 61.0,
    "cogs": 1469.0,
    "day": 28,
    "homes": 45.0,
@@ -1517,15 +1517,15 @@
    "loans": 300.0,
    "marketing": 0.0,
    "parking": 5.0,
-   "profit": 441.0,
-   "profit7": 441.0,
-   "rent": 470.0,
+   "profit": -319.0,
+   "profit7": -319.0,
+   "rent": 1230.0,
    "revenue": 3588.0,
    "theft": 0.0,
    "wages": 828.0
   },
   {
-   "business": -94.0,
+   "business": -854.0,
    "cogs": 1004.0,
    "day": 29,
    "homes": 45.0,
@@ -1533,15 +1533,15 @@
    "loans": 300.0,
    "marketing": 0.0,
    "parking": 5.0,
-   "profit": -474.0,
-   "profit7": 212.25,
-   "rent": 470.0,
+   "profit": -1234.0,
+   "profit7": -547.75,
+   "rent": 1230.0,
    "revenue": 2208.0,
    "theft": 0.0,
    "wages": 828.0
   },
   {
-   "business": 89.0,
+   "business": -671.0,
    "cogs": 1097.0,
    "day": 30,
    "homes": 45.0,
@@ -1549,15 +1549,15 @@
    "loans": 300.0,
    "marketing": 0.0,
    "parking": 5.0,
-   "profit": -291.0,
-   "profit7": 111.6,
-   "rent": 470.0,
+   "profit": -1051.0,
+   "profit7": -648.4,
+   "rent": 1230.0,
    "revenue": 2484.0,
    "theft": 0.0,
    "wages": 828.0
   },
   {
-   "business": 89.0,
+   "business": -671.0,
    "cogs": 1097.0,
    "day": 31,
    "homes": 45.0,
@@ -1565,15 +1565,15 @@
    "loans": 300.0,
    "marketing": 0.0,
    "parking": 5.0,
-   "profit": -291.0,
-   "profit7": 44.5,
-   "rent": 470.0,
+   "profit": -1051.0,
+   "profit7": -715.5,
+   "rent": 1230.0,
    "revenue": 2484.0,
    "theft": 0.0,
    "wages": 828.0
   },
   {
-   "business": 272.0,
+   "business": -488.0,
    "cogs": 1190.0,
    "day": 32,
    "homes": 45.0,
@@ -1581,15 +1581,15 @@
    "loans": 300.0,
    "marketing": 0.0,
    "parking": 5.0,
-   "profit": -108.0,
-   "profit7": 22.71,
-   "rent": 470.0,
+   "profit": -868.0,
+   "profit7": -737.29,
+   "rent": 1230.0,
    "revenue": 2760.0,
    "theft": 0.0,
    "wages": 828.0
   },
   {
-   "business": 638.0,
+   "business": -122.0,
    "cogs": 1376.0,
    "day": 33,
    "homes": 45.0,
@@ -1597,15 +1597,15 @@
    "loans": 300.0,
    "marketing": 0.0,
    "parking": 5.0,
-   "profit": 258.0,
-   "profit7": 22.71,
-   "rent": 470.0,
+   "profit": -502.0,
+   "profit7": -737.29,
+   "rent": 1230.0,
    "revenue": 3312.0,
    "theft": 0.0,
    "wages": 828.0
   },
   {
-   "business": 1004.0,
+   "business": 244.0,
    "cogs": 1562.0,
    "day": 34,
    "homes": 45.0,
@@ -1613,15 +1613,15 @@
    "loans": 300.0,
    "marketing": 0.0,
    "parking": 5.0,
-   "profit": 624.0,
-   "profit7": 22.71,
-   "rent": 470.0,
+   "profit": -136.0,
+   "profit7": -737.29,
+   "rent": 1230.0,
    "revenue": 3864.0,
    "theft": 0.0,
    "wages": 828.0
   },
   {
-   "business": 1133.0,
+   "business": 373.0,
    "cogs": 1547.0,
    "day": 35,
    "homes": 45.0,
@@ -1629,15 +1629,15 @@
    "loans": 300.0,
    "marketing": 0.0,
    "parking": 5.0,
-   "profit": 753.0,
-   "profit7": 67.29,
-   "rent": 470.0,
+   "profit": -7.0,
+   "profit7": -692.71,
+   "rent": 1230.0,
    "revenue": 3978.0,
    "theft": 0.0,
    "wages": 828.0
   },
   {
-   "business": 98.0,
+   "business": -662.0,
    "cogs": 1052.0,
    "day": 36,
    "homes": 45.0,
@@ -1645,15 +1645,15 @@
    "loans": 300.0,
    "marketing": 0.0,
    "parking": 5.0,
-   "profit": -282.0,
-   "profit7": 94.71,
-   "rent": 470.0,
+   "profit": -1042.0,
+   "profit7": -665.29,
+   "rent": 1230.0,
    "revenue": 2448.0,
    "theft": 0.0,
    "wages": 828.0
   },
   {
-   "business": 305.0,
+   "business": -455.0,
    "cogs": 1151.0,
    "day": 37,
    "homes": 45.0,
@@ -1661,15 +1661,15 @@
    "loans": 300.0,
    "marketing": 0.0,
    "parking": 5.0,
-   "profit": -75.0,
-   "profit7": 125.57,
-   "rent": 470.0,
+   "profit": -835.0,
+   "profit7": -634.43,
+   "rent": 1230.0,
    "revenue": 2754.0,
    "theft": 0.0,
    "wages": 828.0
   },
   {
-   "business": 305.0,
+   "business": -455.0,
    "cogs": 1151.0,
    "day": 38,
    "homes": 45.0,
@@ -1677,15 +1677,15 @@
    "loans": 300.0,
    "marketing": 0.0,
    "parking": 5.0,
-   "profit": -75.0,
-   "profit7": 156.43,
-   "rent": 470.0,
+   "profit": -835.0,
+   "profit7": -603.57,
+   "rent": 1230.0,
    "revenue": 2754.0,
    "theft": 0.0,
    "wages": 828.0
   },
   {
-   "business": 512.0,
+   "business": -248.0,
    "cogs": 1250.0,
    "day": 39,
    "homes": 45.0,
@@ -1693,15 +1693,15 @@
    "loans": 300.0,
    "marketing": 0.0,
    "parking": 5.0,
-   "profit": 132.0,
-   "profit7": 190.71,
-   "rent": 470.0,
+   "profit": -628.0,
+   "profit7": -569.29,
+   "rent": 1230.0,
    "revenue": 3060.0,
    "theft": 0.0,
    "wages": 828.0
   },
   {
-   "business": 926.0,
+   "business": 166.0,
    "cogs": 1448.0,
    "day": 40,
    "homes": 45.0,
@@ -1709,15 +1709,15 @@
    "loans": 300.0,
    "marketing": 0.0,
    "parking": 5.0,
-   "profit": 546.0,
-   "profit7": 231.86,
-   "rent": 470.0,
+   "profit": -214.0,
+   "profit7": -528.14,
+   "rent": 1230.0,
    "revenue": 3672.0,
    "theft": 0.0,
    "wages": 828.0
   },
   {
-   "business": 1340.0,
+   "business": 580.0,
    "cogs": 1646.0,
    "day": 41,
    "homes": 45.0,
@@ -1725,15 +1725,15 @@
    "loans": 300.0,
    "marketing": 0.0,
    "parking": 5.0,
-   "profit": 960.0,
-   "profit7": 279.86,
-   "rent": 470.0,
+   "profit": 200.0,
+   "profit7": -480.14,
+   "rent": 1230.0,
    "revenue": 4284.0,
    "theft": 0.0,
    "wages": 828.0
   },
   {
-   "business": 1133.0,
+   "business": 373.0,
    "cogs": 1547.0,
    "day": 42,
    "homes": 45.0,
@@ -1741,15 +1741,15 @@
    "loans": 300.0,
    "marketing": 0.0,
    "parking": 5.0,
-   "profit": 753.0,
-   "profit7": 279.86,
-   "rent": 470.0,
+   "profit": -7.0,
+   "profit7": -480.14,
+   "rent": 1230.0,
    "revenue": 3978.0,
    "theft": 0.0,
    "wages": 828.0
   },
   {
-   "business": 98.0,
+   "business": -662.0,
    "cogs": 1052.0,
    "day": 43,
    "homes": 45.0,
@@ -1757,15 +1757,15 @@
    "loans": 300.0,
    "marketing": 0.0,
    "parking": 5.0,
-   "profit": -282.0,
-   "profit7": 279.86,
-   "rent": 470.0,
+   "profit": -1042.0,
+   "profit7": -480.14,
+   "rent": 1230.0,
    "revenue": 2448.0,
    "theft": 0.0,
    "wages": 828.0
   },
   {
-   "business": 305.0,
+   "business": -455.0,
    "cogs": 1151.0,
    "day": 44,
    "homes": 45.0,
@@ -1773,15 +1773,15 @@
    "loans": 300.0,
    "marketing": 0.0,
    "parking": 5.0,
-   "profit": -75.0,
-   "profit7": 279.86,
-   "rent": 470.0,
+   "profit": -835.0,
+   "profit7": -480.14,
+   "rent": 1230.0,
    "revenue": 2754.0,
    "theft": 0.0,
    "wages": 828.0
   },
   {
-   "business": 305.0,
+   "business": -455.0,
    "cogs": 1151.0,
    "day": 45,
    "homes": 45.0,
@@ -1789,15 +1789,15 @@
    "loans": 300.0,
    "marketing": 0.0,
    "parking": 5.0,
-   "profit": -75.0,
-   "profit7": 279.86,
-   "rent": 470.0,
+   "profit": -835.0,
+   "profit7": -480.14,
+   "rent": 1230.0,
    "revenue": 2754.0,
    "theft": 0.0,
    "wages": 828.0
   },
   {
-   "business": 512.0,
+   "business": -248.0,
    "cogs": 1250.0,
    "day": 46,
    "homes": 45.0,
@@ -1805,9 +1805,9 @@
    "loans": 300.0,
    "marketing": 0.0,
    "parking": 5.0,
-   "profit": 132.0,
-   "profit7": 279.86,
-   "rent": 470.0,
+   "profit": -628.0,
+   "profit7": -480.14,
+   "rent": 1230.0,
    "revenue": 3060.0,
    "theft": 0.0,
    "wages": 828.0
@@ -4719,13 +4719,13 @@
    "items": [
     "Beer"
    ],
-   "profit": 834.0,
+   "profit": 759.0,
    "revenue": 1800.0,
    "sites": [
     {
      "key": "ba:street_eighthstreet#5",
      "name": "HART. Spirits",
-     "profit": 834.0,
+     "profit": 759.0,
      "revenue": 1800.0,
      "share": 100,
      "type": "ba:businesstype_liquorstore"
@@ -4744,11 +4744,11 @@
   "materiality": 500.0,
   "netWorth": 480000.0,
   "netWorthAsOf": 40,
-  "profitAvg7": 279.85714285714283,
-  "profitPrev7": 190.71428571428572,
-  "profitSum7": 1959.0,
-  "profitYesterday": 132.0,
-  "rentBill": 470.0,
+  "profitAvg7": -480.14285714285717,
+  "profitPrev7": -569.2857142857143,
+  "profitSum7": -3361.0,
+  "profitYesterday": -628.0,
+  "rentBill": 1230.0,
   "revenue": 3060.0,
   "vacant": 0,
   "wageBill": 828.0
@@ -5430,7 +5430,7 @@
     "contracts": [
      {
       "active": true,
-      "from": "2 Eighth Avenue",
+      "from": "1 Pier",
       "ordered": 3000,
       "smart": false,
       "warehouse": "4 Eighth Avenue"
@@ -5448,7 +5448,7 @@
       "weekly": 3000
      }
     ],
-    "from": "2 Eighth Avenue",
+    "from": "1 Pier",
     "ordered": 3000,
     "paused": 0,
     "smart": false,
@@ -5721,7 +5721,7 @@
   "rent": {
    "check": {
     "leases": 4,
-    "worst": 4.1222
+    "worst": 0.02
    },
    "constant": 30,
    "deposit": {
@@ -8098,7 +8098,7 @@
         "amount": 3000,
         "group": 0,
         "id": "IMPORTwater",
-        "importer": "2 Eighth Avenue",
+        "importer": "1 Pier",
         "lastWeek": 3000,
         "order": 0,
         "product": 0,
@@ -8401,7 +8401,7 @@
     {
      "arrives": 50,
      "cadence": "weekly",
-     "from": "import:ba:street_eighthavenue#2",
+     "from": "import:ba:street_pier#1",
      "items": 1,
      "paused": false,
      "perDay": 429,
@@ -8590,11 +8590,11 @@
     {
      "col": 0,
      "hood": "",
-     "id": "import:ba:street_eighthavenue#2",
+     "id": "import:ba:street_pier#1",
      "items": [],
      "kind": "import",
      "low": 0,
-     "name": "2 Eighth Avenue",
+     "name": "1 Pier",
      "short": 0,
      "site": null,
      "stock": 0,
@@ -8621,7 +8621,7 @@
       "amount": 3000,
       "group": 0,
       "id": "IMPORTwater",
-      "importer": "2 Eighth Avenue",
+      "importer": "1 Pier",
       "lastWeek": 3000,
       "order": 0,
       "product": 0,
@@ -8636,7 +8636,7 @@
     "daysOnHand": 3.8,
     "due": 4.0,
     "dueNeed": 1600,
-    "from": "2 Eighth Avenue",
+    "from": "1 Pier",
     "importPerDay": 400,
     "item": "Water",
     "lastWeek": 3000,
