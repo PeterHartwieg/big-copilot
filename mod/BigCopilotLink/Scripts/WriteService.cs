@@ -63,8 +63,9 @@ namespace BigCopilotLink
     /// <summary>
     /// POST /write/* (docs/game-link-api.md, "Writes"): the approval check, the body, the
     /// parse, and the trip to the main thread, for every kind; the kinds themselves are
-    /// UniformWrite, ImportWrite and ScheduleWrite. One per city load, like SaveService:
-    /// the undo it keeps belongs to that city session.
+    /// UniformWrite, ImportWrite, ScheduleWrite and (from 0.3.0) HireWrite. One per city
+    /// load, like SaveService: the undo it keeps belongs to that city session. A hire has
+    /// no undo.
     ///
     /// Threading. The handler threads parse the body and touch nothing of the game. The
     /// check-and-apply runs whole on the main thread, and only while no refresh is in
@@ -78,7 +79,7 @@ namespace BigCopilotLink
     /// </summary>
     public sealed class WriteService
     {
-        public static readonly string[] Kinds = { "uniforms", "imports", "schedule" };
+        public static readonly string[] Kinds = { "uniforms", "imports", "schedule", "hire" };
 
         private const int MaxBodyBytes = 256 * 1024;
 
@@ -113,8 +114,8 @@ namespace BigCopilotLink
 
         /// <summary>
         /// An HTTP pool thread. <paramref name="kind"/> is "uniforms", "imports",
-        /// "schedule" or "undo". Every answer comes back as a status and a body; the
-        /// listener writes it.
+        /// "schedule", "hire" or "undo". Every answer comes back as a status and a body;
+        /// the listener writes it.
         /// </summary>
         public WriteAnswer Handle(HttpListenerRequest request, string kind)
         {
@@ -137,6 +138,9 @@ namespace BigCopilotLink
             {
                 return WriteAnswer.BadRequest(e.Message);
             }
+
+            // Nothing to ask the game: a hire is never undone.
+            if (job == NoUndo) return WriteAnswer.Error(409, "no_undo");
 
             return RunOnMainThread(job, dryRun);
         }
@@ -161,15 +165,24 @@ namespace BigCopilotLink
                     var req = ScheduleWrite.Parse(root);
                     return (ws, dryRun) => ScheduleWrite.Run(ws, req, dryRun);
                 }
+                case "hire":
+                {
+                    var req = HireWrite.Parse(root);
+                    return (ws, dryRun) => HireWrite.Run(ws, req, dryRun);
+                }
                 default:
                 {
                     var target = JsonReader.Str(root, "kind", "body", true);
                     if (Array.IndexOf(Kinds, target) < 0)
-                        throw new BadRequestException("body.kind must be one of uniforms, imports, schedule");
+                        throw new BadRequestException("body.kind must be one of uniforms, imports, schedule, hire");
+                    if (target == "hire") return NoUndo;
                     return (ws, dryRun) => ws.Undo(target, dryRun);
                 }
             }
         }
+
+        /// <summary>The undo of a hire: answered 409 no_undo by Handle, never run.</summary>
+        private static readonly Func<WriteService, bool, WriteAnswer> NoUndo = (ws, dryRun) => WriteAnswer.Error(409, "no_undo");
 
         /// <summary>
         /// Null text when the bytes are not UTF-8; false when the body is over the cap.
@@ -315,7 +328,7 @@ namespace BigCopilotLink
             }
         }
 
-        private static WriteAnswer CannotWrite(string reason)
+        internal static WriteAnswer CannotWrite(string reason)
         {
             var w = new JsonWriter();
             w.BeginObject();
@@ -349,6 +362,12 @@ namespace BigCopilotLink
         /// </summary>
         internal string Applied(string notificationKey, string business)
         {
+            return Applied(notificationKey, new Dictionary<string, string> { { "business", business ?? "" } });
+        }
+
+        /// <summary>Applied, for a notification with several {placeholders}.</summary>
+        internal string Applied(string notificationKey, Dictionary<string, string> data)
+        {
             try
             {
                 SaveGameManager.MarkChange();
@@ -358,7 +377,7 @@ namespace BigCopilotLink
                 LinkMod.LogError("MarkChange after a write failed: " + e.Message);
             }
 
-            Notify(notificationKey, "business", business);
+            Notify(notificationKey, data);
             return RefreshAfterWrite();
         }
 
@@ -379,9 +398,14 @@ namespace BigCopilotLink
         /// <summary>Main thread. An in-game notification from a Locales/en.json key with one {placeholder}.</summary>
         internal static void Notify(string key, string argument, string value)
         {
+            Notify(key, new Dictionary<string, string> { { argument, value ?? "" } });
+        }
+
+        /// <summary>Main thread. An in-game notification from a Locales/en.json key with its {placeholders}.</summary>
+        internal static void Notify(string key, Dictionary<string, string> data)
+        {
             try
             {
-                var data = new Dictionary<string, string> { { argument, value ?? "" } };
                 // Not tracked on the save game: the notification is about this session.
                 global::UI.Notification.Notifications.Show(
                     global::UI.Notification.NotificationType.Success, key, data, 5f, null, null, true, false);
@@ -537,6 +561,24 @@ namespace BigCopilotLink
             var ui = list != null ? list.purchasingAgentPlanUISettings : null;
             if (ui == null || !ui.gameObject.activeInHierarchy || PlanUiCurrent == null) return false;
             return ReferenceEquals(PlanUiCurrent.GetValue(ui), contract);
+        }
+
+        /// <summary>
+        /// Main thread. True while the phone's MyEmployees app is on screen:
+        /// UIs.fullMenu.myEmployees (a MonoBehaviour) active and enabled. FullMenu.SelectApp
+        /// deactivates every other app under appsContainer and activates the chosen one,
+        /// and closing the full menu deactivates the whole menu when its fade ends
+        /// (FullMenu.Toggle's onComplete), so this holds exactly while the app is shown.
+        /// Its candidate list and mass-action selection are built when it opens (OnEnable,
+        /// ChangeTab, LoadList a frame later) and would go stale under a hire, which is
+        /// why the hire write refuses while it is open. Unverified in the game: Peter's
+        /// 0.3.0 checklist item 2.
+        /// </summary>
+        internal static bool MyEmployeesOpen()
+        {
+            var menu = FullMenu();
+            var app = menu != null ? menu.myEmployees : null;
+            return app != null && app.isActiveAndEnabled; // Unity null: destroyed, or never built
         }
 
         /// <summary>
