@@ -12,6 +12,45 @@ on the outside wall and of bays. `project/stage.jpg` is the map backdrop, render
 Murray Hill and the Garment District from `mockup/find-location/data.json` (HART. YT, day
 20). Which version each address has is a stable hash, because no shipped file has `v` yet.
 
+## Peter's decisions (25 Sep 2026)
+
+These settle the open questions below; where they disagree with the rest of this
+file, they win.
+
+1. **Comparing: option B**, the layout shelf: all of the kind's layouts at one scale,
+   the hovered row's layout lit, and a click on a tile filters the list to that layout.
+2. **Phone: 4A**, a Map / Plan switch in the map window.
+3. **Orientation: as stored.** The plans are shown in the prefab's own frame, not turned
+   to the street, with no street marker.
+4. **Card details:** keep the loading bay count. Drop the outline in metres and drop the
+   door swing lines.
+5. **Vector plans in board colours** (theme-aware), not screenshots.
+
+## As ported (branch floor-plans)
+
+- Generator: `make_floor_plans.py` at the repo root (owner-side, UnityPy) replaces
+  `make_plans.py` + `research/floor-plans/render_plans.py` for the shipped file,
+  `web/maps/floor-plans.json`. It draws from the prefabs directly, one plan a structure
+  (21, keyed `C2`, with a `kinds` table), not one a kind and layout (24).
+  `make_plans.py` and `plans.json` here still feed this canvas only.
+- Versions: `make_buildings.py --versions` reads `BuildingVersion` into
+  `ba_buildings.json` as `v`; `_premises()` carries `layout` for retail, office and
+  warehouse rows.
+- Door swings: the door leaves (door meshes lower than 2.8 m, drawn standing open) are
+  left out; the opening in the wall module stays.
+- The grey block in H3 (and one in I3) is `SM_Negative Space Loading Dock`, a sunken
+  dock about 24 × 7.3 m and 1.9 m deep. It is drawn as a bay, so every warehouse's bay
+  count still equals its loading doors.
+- The shelf replaces the single card, as on the canvas. The card's details (Picked /
+  Hovered, code, kind and size, address, m², cap, entrances or loading bays, the `?`
+  legend) sit in a line above the tiles, so there is one dock, not two. Tiles say
+  "N listed" rather than "N here". Warehouses wrap onto two rows of six.
+- The phone's Map / Plan switch sits bottom-left of the map window, not top-right, so it
+  never covers the site card's close button.
+- Bays are the ground showing through, so the legend says "gaps in the floor" rather
+  than naming a colour that differs by theme.
+- A `New` badge (id `floor-plans`) sits on the Find a location switch until it is used.
+
 ## The idea in one line
 
 The empty map area left of the panel gets one docked card, bottom-left, that shows the plan
