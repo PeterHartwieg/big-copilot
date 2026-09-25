@@ -264,9 +264,171 @@ between a swapped name and Python's English prose (`spLimitRole()`) asks
 `englishName(key)` as well. The wiki swaps only what it shows, through `wikiName(key,
 english)`, because its matching against the help's own words needs the English.
 
+## UI text
+
+Big Copilot's own words can be shown in another language; German is the first. The
+game's names are a separate layer (the footer's Game names, above), and the two meet only
+where a sentence holds a name.
+
+**The English stays at the call site, beside a key.** Nothing is looked up in English:
+
+| Where | How |
+| --- | --- |
+| A script (board script, `web/*.js`) | `tt("sp.tile.size", "Size")`, `tt("f.x", "{n:,} units short", {n})`, `tt("f.m", {one: "{n} machine", other: "{n} machines"}, {n})` |
+| Markup (`TEMPLATE`, `BANNER`, `footer_html()`) | `<span data-tt="nav.today">Today</span>`; `data-tt-title`, `data-tt-aria-label`, `data-tt-placeholder` and `data-tt-tip` (for `data-tip`) name the key beside the attribute they fill |
+| Python (`ba_dashboard.py`) | `msg("f.loss", "Lost {w:$} yesterday", w=abs(b["profit"]))` |
+
+With no table loaded every one of these gives its English, so an English page is byte for
+byte what it was: `tests/i18n_layout.test.cjs` checks the page asks for no table without
+`?ui`, and a conversion proves its own English unchanged.
+
+**Keys** are `<area>.<thing>[.<part>]`. The area names the page, and the pull request that
+owns it; they are the CSS prefixes: `nav`, `land`, `app`, `foot`, `today`, `f` (findings),
+`co`, `sp` (site panel), `sb` (supply), `gr`, `map`, `wiki`, `comm`, `upd`, and `day` for the
+weekday names in `web/i18n.js`. `AREAS` in `tools/i18n.py` is the list. A key never ends in
+`_one`, `_other` or another plural category: the catalogue writes plurals that way.
+
+**Placeholders** are `{name}` with a small spec that `tt()` and `msg()` both implement. Each
+spec writes, in English, exactly what the code it replaces wrote on that side
+(`tests/i18n_runtime.test.cjs` against the board's `num()`, `fmt()`, `compact()` and
+`toFixed()`; `tests/test_i18n_msg.py` against the f-strings, fractional and negative
+values included):
+
+| Spec | English in a script (`tt`) | English in Python (`msg`) | German |
+| --- | --- | --- | --- |
+| `{x}` | `String(x)` | `f"{x}"` | decimal comma, up to 3 decimals, no grouping |
+| `{x:,}` | `num(x)`: grouped, up to 3 decimals, `-1,234.5` | `f"{x:,}"`: `-1,234.5`; a float keeps every digit `repr` shows | `-1.234,5` |
+| `{x:.1f}` (any digit) | `num(x, {min = max = 1 decimal, no grouping})`, as `x.toFixed(1)` | `f"{x:.1f}"` | `3,5` |
+| `{x:,.0f}` (any digit) | `num(x, {min = max = 0 decimals})` | `f"{x:,.0f}"` | `1.234` |
+| `{w:$}` | `fmt(w)`: `-$1,234` | `"-$" + f"{abs(w):,.0f}"` for a negative, `$1,234` otherwise | `-$1.234` |
+| `{w:$c}` | `compact(w)`: `$3.57M`, `$751k` | the same, halves rounded up as `Math.round` does | `$3,57M` |
+| `{d:day}` | `Monday` for 1 (0 is Sunday) | the same | the table's `day.1` |
+
+The two sides differ only where the old code did: a float with more than three decimals
+(`{x:,}`), and a tie at an exact half (Python rounds half to even, `Intl` away from zero).
+
+Numbers follow the UI language: English is always en-US. `tt()` formats through the
+board's `num()` once it exists, and through `Intl` in `ttNumLocale()` before it does (the
+landing). A param `{m: [key, params, english]}` is a nested message; a script nests by
+passing another `tt()` as the param instead.
+
+**Game names** travel as params holding the usual token (`tok()`), so the translation
+decides where the name stands and `gnString()` writes it in the names language. The
+translator's rule: no article or case ending before a `{name}`, because a name cannot be
+declined. Put it after a colon or in apposition ("{item}: läuft 3,5 Tage vor der Lieferung
+leer"). Where Python pluralises a name today, pass the count and let the key say it.
+
+**Never build a sentence out of pieces.** `tt("a", "Lost") + " " + fmt(w)` cannot be
+translated: word order is the translation's. One key per sentence, with its numbers and
+names as params.
+
+### How it runs
+
+- `web/i18n.js` is spliced by `render()` into a `<script>` at the end of the head, at
+  `/*__I18N_SCRIPT__*/`: after the stylesheets, so the browser finds those first, and
+  before the landing, the board and every other script but the theme's, so `app.js`, `update.js`,
+  `community.js`, the board script, `map.js`, `wiki.js` and the local `dashboard.html` can
+  all call `tt()`. Its top-level names start `tt`/`TT_`, or are `tApply`, `enOf`,
+  `setUiLocale` and `setUiLang`.
+- The site's table is `web/i18n/<lang>.json`, fetched with the build stamp
+  (`window.LEDGER_BUILD`, which `page_html()` now sets in the head for that reason). Until
+  the footer picker ships, the only switch is the developer flag `?ui=de`, which is not
+  remembered. While it loads, `html.tt-wait` hides the page for at most 400 ms. A table
+  with no keys (the German is empty until its translation lands) counts as English,
+  numbers included.
+  `document.documentElement.lang` follows the UI language.
+- The CLI's `--lang de` carries `web/i18n/de.json` in the page (`cli_ui_table()`, filling
+  `/*__UI_TABLE__*/null` inside `web/i18n.js`) when that table is not empty, as it carries
+  the names.
+- `ttSetTable(lang, table)` puts a table in force, refills the markup (`tApply()`, which
+  keeps the English it replaced) and calls every `ttOnChange()` listener. The board's
+  listener sets `NUM_LOCALE = ttNumLocale()` (en-US for English, de-DE for German), so
+  `num()` and everything built on it follows, then calls `gnRedraw()`:
+  `D = localiseNames(D)` and `renderCalm(false)`, the path a names switch takes.
+  `NUM_LOCALE` also starts at `ttNumLocale()`, so a `--lang de` page draws German numbers
+  from the first frame. `setUiLocale(lang)` sets `<html lang>` and returns the same locale.
+
+### Python's sentences
+
+`msg(key, en, **p)` returns a `Msg`: a `str` whose value is the English sentence Python
+always wrote, carrying `.key` and `.p`. Every Python reader and test sees the English as
+before. At the end of `extract()`, `_wire_msgs()` walks the payload once and, for every
+field holding a `Msg`, adds `row["i18n"][field] = [key, params]` (numbers raw, names as
+tokens, a nested `Msg` as `{"m": [key, params, english]}`).
+
+Concatenating or `.replace()`-ing a `Msg` gives a plain `str`: that row then has no
+`i18n` entry and stays English on every page. The loss is visible, not wrong, and the
+per-area coverage in `tests/test_i18n_msg.py` (`CONVERTED`) catches it for a converted
+area. Ids, `subject`, the history, anything sent to the game and CLI output never use
+`msg()`; Python stays English inside.
+
+On the page, `localiseNames()` hands its fresh copy to `ttPayload()`, which, while a table
+is loaded, swaps each field its row's `i18n` names and keeps the English it showed on the
+row under a symbol key (so `{...row}` copies keep it, and JSON and `Object.keys()` never
+see it). **Code that reads Python's words reads `enOf(row, field)`**: the English,
+whatever the page shows. `findingAmount()`, `spLimitShow()` (and through it
+`spLimitRole()`), the site panel's cap chips (`limitEn()` in `drawSite()`: the
+`"the building"` tests, `capSentence`, `spLimitIcons()` and `data-limit`) and its ceiling
+strip (`spBindingLimits()`, which `spCeiling()` reads) do; `splitFinding()` only looks for its two English sentence shapes while
+the row is shown in English, and its generic cut (`:`, `;`, `. `, the comma within
+`HEADLINE_MAX`) works in any language, so a translation puts its headline first and the
+detail after `: ` or `; `. Any other comparison against Python's English has to move to
+`enOf()` in the pull request that converts its sentence.
+
+### The catalogue and the translations
+
+| File | Role |
+| --- | --- |
+| `i18n/de.json` | The German, hand-reviewed: flat, `"key": "text"`, plurals as `key_one`/`key_other` |
+| `i18n/de.base.json` | The English each German string was translated from, per key. Staleness is measured against it; `python tools/i18n.py accept de [key …]` records it |
+| `web/i18n/de.json` | Generated by `python build_web.py` (`tools/i18n.py ship`): `i18n/de.json` minus orphans, placeholder mismatches and stale keys (whose English changed since `de.base.json` recorded it, or was never recorded), which show English until redone and `accept`ed. In `STAMP_INPUTS`, and compared by `--check` |
+| `tools/i18n.py` | `extract` (the English catalogue, read off the call sites: a JS lexer over the scripts, an HTML parser over the markup, `ast` over `msg(`), `status [--strict]`, `ship`, `accept`, `glossary`, `draft-sheet` |
+
+No English catalogue is committed: it would conflict on every English edit. `extract` builds
+it on demand and fails on a key with two English defaults, or a call whose key or English is
+not a literal (or holds `${}`). A missing, stale or orphaned translation never fails the
+build or the tests: the page falls back to English per key, so an English edit elsewhere
+never breaks anybody. `status --strict` fails on them, for a translation pull request.
+
+`glossary de --out <path>` and `draft-sheet de --out <path>` read the installed game's
+`en.json` and `de.json` for the game's own words (address form: du, as the game's German
+uses). That text is the game's, so both refuse a path inside this checkout (with or
+without its `.git`) or inside any other git work tree.
+
+### Converting an area
+
+1. Take the area's prefix (the table above) and the files it owns; nobody else writes keys
+   under it.
+2. Scripts: wrap each visible string, `tt("sp.tile.size", "Size")`; sentences with numbers
+   or names become one key with params. Markup: `data-tt` on the innermost element that
+   holds only the words, `data-tt-title` and friends beside attributes. Python: the
+   f-string becomes `msg("f.thing", "…{n:,}…", n=…)` with the same English, and any board
+   code that parses that sentence reads `enOf(row, field)`. Pick each spec from the old
+   code, so the English stays byte for byte:
+
+   | Old code | Template |
+   | --- | --- |
+   | `${x}` in a script, `f"{x}"` | `{x}` |
+   | `num(x)`, `f"{x:,}"` | `{x:,}` |
+   | `x.toFixed(1)`, `f"{x:.1f}"` | `{x:.1f}` |
+   | `num(x, {minimumFractionDigits: 2, maximumFractionDigits: 2})`, `f"{x:,.2f}"` | `{x:,.2f}` |
+   | `num(Math.round(x))` | `{x:,.0f}` for a value that is never an exact half; otherwise round in the caller and pass the whole number as `{x:,}` |
+   | `fmt(x)`, `f"${abs(x):,.0f}"`, or `f"${x:,.0f}"` with `x` never negative | `{x:$}` |
+   | `f"${x:,.0f}"` where `x` can be negative (writes `$-1,234`) | `${x:,.0f}`: a literal dollar before the placeholder |
+   | `compact(x)` / `money(x)` | `{x:$c}` |
+   | `WEEKDAY_NAMES[d]`, `WEEKDAYS[d]` | `{d:day}` |
+   | a game name, `tok(key, name)` | `{item}` with the token as the param |
+3. Prove the English unchanged: the area's existing tests pass untouched, and a fixture
+   board rendered before and after shows the same text.
+4. Add the area to `CONVERTED` in `tests/test_i18n_msg.py` (Python fields) and in
+   `tests/i18n_layout.test.cjs` (its selector), so English that bypasses `tt()` fails from
+   then on.
+5. Run the i18n tests and `python build_web.py`. `python tools/i18n.py status de` lists the
+   new keys as missing, which is expected until the German is drafted.
+
 ## Template placeholders
 
-`TEMPLATE` carries sixteen tokens. All sixteen are substituted by `render()`, but the
+`TEMPLATE` carries seventeen tokens. All seventeen are substituted by `render()`, but the
 text for three of them is supplied by the caller.
 
 | Token | Filled with |
@@ -287,6 +449,11 @@ text for three of them is supplied by the caller.
 | `/*__HOOD_TAGS__*/{}` | `render()`, from `HOOD_TAG` — one neighbourhood-tag table shared by the board and the wiki, keyed by the game's neighbourhood key |
 | `/*__HOOD_NAMES__*/{}` | `render()`, from `HOOD_LABEL` — each neighbourhood's English name by the same key: `hoodName()`'s fallback and `hoodKeyOf()`'s way back from a stored name |
 | `/*__NAMES__*/null` | `render()`'s `names=` argument, `{lang, names}` from `cli_names()` for `--lang`; `null` elsewhere, where the site fetches `web/names/<lang>.json` instead |
+| `/*__I18N_SCRIPT__*/` | `render()`, from `web/i18n.js`, in a `<script>` of its own at the end of the head, after the stylesheets and before the landing and every script but the theme's ([UI text](#ui-text)). Spliced last, at the first marker only, so no other placeholder runs over it |
+
+`web/i18n.js` carries one more, `/*__UI_TABLE__*/null`, which `render()` fills before the
+splice from its `ui=` argument: `{lang, table}` from `cli_ui_table()` for `--lang`, `null`
+elsewhere, where the site fetches `web/i18n/<lang>.json` instead.
 
 Only the wiki files are optional. `render()` reads them through `optional_asset()`, so a
 checkout without `web/wiki.js` still renders a whole board and the Wiki tab is left out of
@@ -309,17 +476,19 @@ What `page_html()` produces, top of the file down:
 
 1. `<!doctype html>` then `<meta charset="utf-8">`, both emitted by `render()` before the
    template, so the page runs in standards mode.
-2. The head `page_html()` builds, in this order: the viewport tag and the
-   `web/community.css` link stamped with the release version. There is no analytics
+2. The head `page_html()` builds, in this order: the viewport tag, `window.LEDGER_BUILD`
+   (the stamp, set here rather than in `BEFORE_SCRIPT` because `web/i18n.js`, in the
+   template's head, fetches a UI table with it) and the `web/community.css` link stamped
+   with the release version. There is no analytics
    script, and Cloudflare's automatic Web Analytics injection is switched off for the
    domain, because the privacy notice says the site runs none. `page_html()` then swaps the
    template's Google Fonts links for `web/fonts/fonts.css`, stamped the same way.
-3. `TEMPLATE`, with the landing screen (`BANNER`) substituted into its `<!--__BANNER__-->`
-   slot: the release banner, the drop zone, the save-location help and the footer.
+3. `TEMPLATE`, whose head scripts are the theme and `web/i18n.js`, with the landing screen
+   (`BANNER`) substituted into its `<!--__BANNER__-->` slot: the release banner, the drop
+   zone, the save-location help and the footer.
 4. `BEFORE_SCRIPT`, filled in by `page_html()` with the stamp, the release JSON and the
    inlined `web/update.js`, in its slot just ahead of the board's own script:
-   `window.LEDGER_BUILD`, `window.LEDGER_RELEASE`, `update.js`, `app.js?v=<stamp>`,
-   `community.js?v=<stamp>`.
+   `window.LEDGER_RELEASE`, `update.js`, `app.js?v=<stamp>`, `community.js?v=<stamp>`.
 5. The board script, the last `<script>` block of `TEMPLATE`.
 
 Before any of that, `main()` refreshes `web/wiki-data.json`, copies `ba_save.py`,
@@ -376,7 +545,8 @@ else. The page still uses the network for its own assets, all same-origin.
 The static ones are versioned, so a deploy busts their caches: `web/map.js` fetches
 `maps/locations.json` with the build stamp and the background image with its own content
 hash, `web/wiki.js` fetches `wiki-data.json` with the build stamp, and the board fetches
-`names/<lang>.json` with it when a language is picked. The dynamic ones
+`names/<lang>.json` with it when a language is picked, and `web/i18n.js` fetches
+`i18n/<lang>.json` with it for a UI language. The dynamic ones
 carry no version, because the whole point is to see the current state: `web/update.js`
 polls `version.json` with `cache: "no-store"`, and `web/community.js` calls
 `/api/community/*`. Nothing comes from another origin: `TEMPLATE` links Google Fonts for
