@@ -859,6 +859,10 @@ test('rate limit: presence has its own budget, so a heartbeat loop stops early a
 
   const origin = originFor('rate-limit-presence');
   const ip = nextIp();
+  // Miniflare's limiter counts in wall-clock-aligned 60 s windows, so a loop
+  // that straddles a minute boundary could be granted a second budget. Start
+  // the loop early in a window.
+  while (Date.now() % 60000 > 50000) await new Promise((resolve) => setTimeout(resolve, 250));
   let accepted = 0;
   let sawLimited = false;
   for (let attempt = 0; attempt < 60; attempt++) {

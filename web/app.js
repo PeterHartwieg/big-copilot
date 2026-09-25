@@ -611,12 +611,13 @@
   }
   // Only this machine: the bytes are the player's whole company, and a link
   // in a pasted address must never point the page at someone else. The
-  // origin of a loopback http URL, else null.
+  // origin of a loopback http URL, else null. IPv6 [::1] is left out: the
+  // CSP (web/_headers) cannot name an IPv6 literal, so it could never connect.
   function loopbackOrigin(text) {
     try {
       const url = new URL(text);
-      const host = url.hostname.replace(/^\[|\]$/g, "");
-      if (url.protocol === "http:" && (host === "127.0.0.1" || host === "localhost" || host === "::1")) {
+      const host = url.hostname;
+      if (url.protocol === "http:" && (host === "127.0.0.1" || host === "localhost")) {
         return url.origin;
       }
     } catch (e) {}

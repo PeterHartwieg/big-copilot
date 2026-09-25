@@ -3,9 +3,10 @@
 # which reads the Big Copilot Link mod on the player's own loopback (any port:
 # #link= can move it). Inline scripts and style attributes are part of the
 # built page, so 'unsafe-inline' stays; Pyodide compiles WebAssembly in the
-# worker ('wasm-unsafe-eval'). CSP cannot name an IPv6 literal, so a #link= on
-# [::1] is refused; the mod listens on 127.0.0.1. tests/test_headers.py checks
-# this block, and tests/csp.test.cjs boots Pyodide and the link under it.
+# worker ('wasm-unsafe-eval'). CSP cannot name an IPv6 literal, so web/app.js
+# ignores a #link= on [::1] and uses the default; the mod listens on
+# 127.0.0.1. tests/test_headers.py checks this block, and tests/csp.test.cjs
+# boots Pyodide and the link under it.
 /*
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' http://127.0.0.1:* http://localhost:*; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
   X-Frame-Options: DENY

@@ -89,9 +89,14 @@ class Headers(unittest.TestCase):
         # Every fetch of py/ in the shipped scripts carries the stamp.
         for name in ("app.js", "worker.js", "map.js", "wiki.js", "community.js", "update.js", "i18n.js"):
             text = (WEB / name).read_text(encoding="utf-8")
-            for match in re.finditer(r"""fetch\(\s*[`'"]py/[^`'"]*[`'"]""", text):
-                with self.subTest(script=name, fetch=match.group(0)):
-                    self.assertIn("?v=${stamp}", match.group(0))
+            fetches = re.findall(r"""fetch\(\s*[`'"]py/[^`'"]*[`'"]""", text)
+            if name == "worker.js":
+                # The two modules in a loop, then the three data files: a
+                # pattern that stopped matching would pass the check vacuously.
+                self.assertEqual(len(fetches), 4, f"worker.js py/ fetches: {fetches}")
+            for fetch in fetches:
+                with self.subTest(script=name, fetch=fetch):
+                    self.assertIn("?v=${stamp}", fetch)
 
 
 if __name__ == "__main__":

@@ -912,6 +912,9 @@ the unstamped `dev` build):
   degrades instead: without the curves the board states no arrival ceiling, and every number
   it does state still comes off the measured hour grid.
 
+Gradual (percentage) deployments are unsupported for that reason: while two versions serve
+side by side, a `/py/` file from the old one could be cached immutably under the new stamp.
+
 On top of those, the worker writes at runtime: the save bytes under `/save`, the player's
 optional `en.json` and the history JSON under `/data`, and Python itself writes a
 `<history>.character` sidecar. Nothing else exists on that filesystem — which is why

@@ -101,11 +101,17 @@ test('the board boots Pyodide and draws its pages under the CSP', async (t) => {
   assert.match(res.headers()['content-security-policy'] || '', /frame-ancestors 'none'/, 'the server applies web/_headers');
   await page.locator('#savePick').setInputFiles(save);
   await until(page, found, () => document.body.classList.contains('has-board'));
-  // The Map (locations, background image as a blob) and the Wiki (its data).
-  for (const id of ['map', 'wiki']) {
-    await page.locator(`nav [data-id="${id}"]`).first().click();
-    await page.waitForLoadState('networkidle');
-  }
+  // The Map: its locations fetched and its background decoded from a blob,
+  // which exists only once both are in and the city is drawn.
+  await page.locator('nav [data-id="map"]').first().click();
+  await until(page, found, () => /^blob:/.test(document.querySelector('.map-detail-background')?.getAttribute('href') || ''));
+  // The Wiki: its catalogue fetched, the shelf drawn, then one article read.
+  await page.locator('nav [data-id="wiki"]').first().click();
+  await until(page, found, () => !!document.querySelector('#wikiRoot .wk-cat'));
+  await page.locator('#wikiRoot .wk-cat').first().click();
+  await until(page, found, () => !!document.querySelector('#wikiRoot .wk-hit'));
+  await page.locator('#wikiRoot .wk-hit').first().click();
+  await until(page, found, () => !!document.querySelector('#wikiRoot .wk-read'));
   assert.deepEqual(found, {violations: [], console: [], errors: []});
   // The listener hears a refusal: a fetch to another host is one.
   // The CSP refuses it before any request leaves the browser.
