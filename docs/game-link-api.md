@@ -103,7 +103,7 @@ state from the listener's threads.
   "busy": false,
   "size": 5123456,
   "refreshedAt": "2026-09-22T14:33:20Z",
-  "writes": ["uniforms", "imports", "schedule"],
+  "writes": ["uniforms", "imports", "schedule", "hire"],
   "paired": false
 }
 ```
@@ -176,7 +176,7 @@ moves staff between sites and writes their weeks in one call, and has no undo. T
 `docs/mod-write-back-scope.md`; this section is only the wire.
 
 **Every write** is `POST /write/<kind>` with a JSON body (`Content-Type: application/json`,
-at most 256 KiB, else `413 {"error":"too_large"}`) and the header
+at most 256 KiB, a `hire` body at most 2 MiB, else `413 {"error":"too_large"}`) and the header
 `Authorization: Bearer <token>`, the token the game issued this browser when the player
 approved it (see "Approving a browser" below).
 
@@ -219,7 +219,7 @@ approved it (see "Approving a browser" below).
 | `409` | `{"error":"changed","rows":[...]}` | An `expect` no longer holds; nothing written |
 | `409` | `{"error":"refused","rows":[...]}` | A rule refused a row (`rows[i].error`); nothing written |
 | `409` | `{"error":"cannot_write","reason":"saving"}` | An apply while the game is saving or `CanSave()` is false (a dry run skips this check); `reason` as for `/refresh` (`saving`, `placement`, `interior`, `casino`, `other`), and for `hire` also `myemployees` |
-| `413` | `{"error":"too_large"}` | Body over 256 KiB |
+| `413` | `{"error":"too_large"}` | Body over 256 KiB (a `hire` body: over 2 MiB) |
 | `503` | `{"error":"busy"}` or `{"error":"main_thread_unavailable"}` | Walk in flight past three seconds, or no city loaded |
 
 `rows` in a `409` has the same shape as in the dry run's `200`, so the page renders both
@@ -454,6 +454,19 @@ is skipped rather than refused (below). The game rules behind it are
   - A shift may name someone this call hires or moves in: they count as assigned to the site
     their hire or move names, and as gone from the site a move takes them from.
 - The same candidate or employee twice (across `hires` and `moves`) or one site twice is `400`.
+- **Size.** A hire body may be up to 2 MiB, since it carries every touched site's full week;
+  every other write 256 KiB. Over that, `413 too_large`. The page measures the body before it
+  sends it and refuses one over 2 MiB with its own message.
+
+**What the page sends** (the board's side of the contract, which the mod does not check):
+
+- `days` replaces all seven days, so for a factory or an office the page keeps, in `days`,
+  the site's live shifts on stations its plan does not own (drivers, cleaners).
+- A move source whose week the page does not rewrite loses the mover's shifts there (the
+  game's move clears them; `moved[].shiftsCleared` says how many). The page names that in its
+  review before the confirm.
+- People in training (`EmployeeInstance.trainingSession` set, the game's `IsTraining`) are
+  never proposed for a move; the mod would refuse them `in_training`.
 
 **What the mod does, in this order, on one main-thread walk**
 
@@ -514,7 +527,7 @@ confirm.
 | --- | --- | --- |
 | `move` | `id` (employee) | `not_found` (no employee by that id), `changed` (not at `from` any more), `in_training` (the game's move turns a person in training away), `no_skill` (none of the skills the target takes) |
 | `hire` | `id` (candidate) | `changed` (wage differs), `no_skill` (none of the skills the target takes) |
-| `site` | `address` | `not_found`, `changed` (print, sites with `days` only), `not_rented`, `no_business` (no business name, or `ba:businesstype_empty`: the game's assign filter leaves it out), `headquarters` (`days` not null at a headquarters), `screen_open` (the BizMan schedule is open on it, or an auto-fill is running) |
+| `site` | `address` | `not_found`, `changed` (print, sites with `days` only), `not_rented`, `no_business` (no business name, or `ba:businesstype_empty`: the game's assign filter leaves it out), `headquarters` (`days` not null at a headquarters), `screen_open` (the BizMan schedule is open on it, or an auto-fill is running; assign-only sites too) |
 | `shift` | `address`, `d`, `i` | the schedule write's: `not_assigned`, `no_station`, `no_skill`, `bad_hours`, `overlap_person`, `overlap_station`, judged as if the call's moves and hires had happened |
 
 The skills a site takes a person for are the game's assign check: the business type's
@@ -636,11 +649,16 @@ mock at the game's own autosave folder gives a live-looking link without the mod
 `--throttle`, `--refuse <reason>` and `--schema <n>` exercise the clients' error paths.
 For the writes, `--refuse-write <error>[:<detail>]`, `--busy-writes <n>` and `--writes <kinds>`
 do the same, and for `hire`, `--hire-gone <candidateId>` (repeatable) makes a candidate gone
-and `--myemployees` opens the phone's MyEmployees app. `POST /debug/config` changes all of
+and `--myemployees` opens the phone's MyEmployees app. For `schedule` and `hire`,
+`--screen-open <street>:<number>` (repeatable) opens BizMan's schedule screen on a site: a
+write touching it answers the site error `screen_open`, in the mod's order, for assign-only
+hire sites too and in dry runs. `POST /debug/config` changes all of
 these while the mock runs (`refuseWrite`, `busyWrites`, `writes`, `hireGone`, `myEmployees`,
-`reset`), and `GET /debug/writes` lists the applies. The mock never rewrites the file: an
+`screenOpen` as a list of `{street, number}`, `reset`), and `GET /debug/writes` lists the applies. The mock never rewrites the file: an
 apply is kept in memory over the bytes, so a later write sees it, but `/save` still serves the
 file as it is. For `hire` it reads the candidates from the save's
-`CandidateEmployeeInstances`, and what a site takes a person for from the site's stations
-(the game reads the business type, which the save does not hold); a site with no station takes
-anyone.
+`CandidateEmployeeInstances`, and what a site takes a person for from the business type,
+through the payload's own table (`ASSIGN_SKILLS` in `ba_dashboard.py`, read from the game's
+type data), so a warehouse takes drivers only. For a type that table does not know, the
+site's stations stand in. The mock takes a hire body up to 2 MiB and every other write up to
+256 KiB, as the mod does.

@@ -376,13 +376,17 @@ hire and move staff…") was seen at least once (Forget approved browsers, then 
    working at the target (MyEmployees shows the new business). A person in training
    answers `in_training`.
 5. **Schedule open.** With BizMan → Schedule open on a target shop the write answers
-   `screen_open`.
+   `screen_open`, also when that shop is only assigned to (no week sent).
 6. **A factory and an office.** A factory hire with its week (the first factory schedule
    the mod writes: check the machines take the shifts) and an office hire with its week.
+   The factory's delivery drivers and the office's cleaners keep their shifts.
 7. **Headquarters.** An HR manager hired into the headquarters: assigned, no shifts
    written (`days` null).
 8. **Thirty or more hires in one call.** Note any hitch in the frame: it answers
-   whether the write needs to report progress.
+   whether the write needs to report progress. Then the body size: a company-wide hire
+   whose body is well over 256 KiB (ten or more shops' weeks; the browser's network tab
+   shows the request size) goes through, not `413 too_large`. A hire body may be up to
+   2 MiB; every other write stays at 256 KiB.
 9. **Save and reload.** The hires persist with their hire day; the candidates badge in
    the phone counts right.
 

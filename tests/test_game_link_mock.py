@@ -906,9 +906,10 @@ class MockHire(LinkedMock):
         # Every hire and move rule, and a shift naming someone the call does not bring.
         body = self.body(
             hires=[{"candidateId": IDA, "address": GIFTS, "expect": {"wage": 25.0}},
-                   {"candidateId": VERA, "address": GIFTS, "expect": {"wage": 30.0}}],
+                   {"candidateId": VERA, "address": DEPOT, "expect": {"wage": 30.0}}],
             moves=[{"employeeId": "nobody", "from": None, "to": CORNER},
                    {"employeeId": CY, "from": GIFTS, "to": CORNER}])
+        body["sites"].append({"address": DEPOT, "expect": None, "days": None})
         status, answer = self.post("hire", body)
         self.assertEqual(status, 200)
         self.assertFalse(answer["ok"])
@@ -923,8 +924,8 @@ class MockHire(LinkedMock):
         status, answer = self.post("hire", dict(body, dryRun=False))
         self.assertEqual((status, answer["error"]), (409, "changed"), "a changed row makes the refusal changed")
         status, answer = self.post("hire", self.body(dryRun=False, hires=[
-            {"candidateId": VERA, "address": GIFTS, "expect": {"wage": 30.0}}], moves=[], sites=[
-            {"address": GIFTS, "expect": GIFTS_PRINT, "days": []}]))
+            {"candidateId": VERA, "address": DEPOT, "expect": {"wage": 30.0}}], moves=[], sites=[
+            {"address": DEPOT, "expect": None, "days": None}]))
         self.assertEqual((status, answer), (409, {"error": "refused", "rows": [
             {"scope": "hire", "id": VERA, "error": "no_skill"}]}))
         self.assertEqual(self.link.applied, [])
@@ -954,25 +955,77 @@ class MockHire(LinkedMock):
         self.assertEqual(answer["rows"][0], {"scope": "site", "address": GIFTS, "error": "changed"})
         regs = self.link._save().items(self.link._save().root["BuildingRegistrations"])
         regs[0]["businessTypeName"] = HQ = "ba:businesstype_headquarters"
-        _, answer = self.post("hire", self.body())
+        _, answer = self.post("hire", self.body(hires=self.body()["hires"][:1]))
         self.assertEqual(answer["rows"][0], {"scope": "site", "address": GIFTS, "error": "headquarters"})
-        # Assign only at a headquarters is fine; an empty building is no business.
-        _, answer = self.post("hire", self.body(moves=[], sites=[{"address": GIFTS, "expect": None, "days": None}]))
+        # Assign only at a headquarters is fine (Ida cleans, which a headquarters
+        # takes); an empty building is no business.
+        _, answer = self.post("hire", self.body(moves=[], hires=self.body()["hires"][:1],
+                                                sites=[{"address": GIFTS, "expect": None, "days": None}]))
         self.assertTrue(answer["ok"], answer)
         self.assertEqual(regs[0]["businessTypeName"], HQ)
         regs[0]["businessTypeName"] = "ba:businesstype_empty"
         _, answer = self.post("hire", self.body(moves=[], sites=[{"address": GIFTS, "expect": None, "days": None}]))
         self.assertEqual(answer["rows"], [{"scope": "site", "address": GIFTS, "error": "no_business"}])
 
-    def test_assign_only_at_a_site_with_no_station_takes_anyone(self):
-        status, answer = self.post("hire", {"dryRun": False, "moves": [],
-                                            "hires": [{"candidateId": VERA, "address": DEPOT, "expect": {"wage": 30.0}}],
-                                            "sites": [{"address": DEPOT, "expect": None, "days": None}]})
+    def vera_to_depot(self, dry):
+        return self.post("hire", {"dryRun": dry, "moves": [],
+                                  "hires": [{"candidateId": VERA, "address": DEPOT, "expect": {"wage": 30.0}}],
+                                  "sites": [{"address": DEPOT, "expect": None, "days": None}]})
+
+    def test_a_warehouse_takes_drivers_only(self):
+        # The business type's skills (ASSIGN_SKILLS), not the stations: the depot has none.
+        self.assertEqual(self.vera_to_depot(False), (409, {"error": "refused", "rows": [
+            {"scope": "hire", "id": VERA, "error": "no_skill"}]}))
+        vera = self.link._candidates(self.link._save())[VERA]
+        vera["characterData"]["skills"]["$items"][0]["name"] = "ba:skill_deliverydriver"
+        status, answer = self.vera_to_depot(False)
         self.assertEqual(status, 200, answer)
         self.assertEqual(answer["sites"], [{"address": DEPOT, "business": "HART. Depot", "before": None, "after": None,
                                             "removed": 0, "added": 0, "openedHours": False, "leftWithout": [],
                                             "warnings": [], "siteError": None}])
         self.assertEqual(self.link.moved[VERA], ("ba:street_pier", 9))
+
+    def test_a_schedule_screen_open_on_a_site_refuses_it(self):
+        self.link.configure({"screenOpen": [CORNER]})
+        self.assertEqual(self.link.screen_open, {("ba:street_broadway", 2)})
+        # A site with a week, in a dry run and an apply.
+        _, answer = self.post("hire", self.body())
+        self.assertFalse(answer["ok"])
+        self.assertEqual(answer["rows"], [{"scope": "site", "address": CORNER, "error": "screen_open"}])
+        self.assertEqual(answer["sites"][1]["siteError"], "screen_open")
+        self.assertEqual(self.post("hire", self.body(dryRun=False)), (409, {"error": "refused", "rows": [
+            {"scope": "site", "address": CORNER, "error": "screen_open"}]}))
+        # An assign-only site too.
+        assign = self.body(hires=[], sites=[{"address": CORNER, "expect": None, "days": None}])
+        _, answer = self.post("hire", assign)
+        self.assertEqual(answer["rows"], [{"scope": "site", "address": CORNER, "error": "screen_open"}])
+        self.assertEqual(self.post("hire", dict(assign, dryRun=False)), (409, {"error": "refused", "rows": [
+            {"scope": "site", "address": CORNER, "error": "screen_open"}]}))
+        # The schedule write to the same site, after `changed`; other sites are free.
+        status, answer = self.post("schedule", {"dryRun": True, "address": CORNER, "expect": CORNER_PRINT, "days": []})
+        self.assertEqual((status, answer["ok"], answer["siteError"]), (200, False, "screen_open"))
+        self.assertEqual(self.post("schedule", {"address": CORNER, "expect": CORNER_PRINT, "days": []}),
+                         (409, {"error": "refused", "rows": [{"error": "screen_open"}]}))
+        self.assertEqual(self.post("schedule", {"address": CORNER, "expect": "811c9dc5", "days": []}),
+                         (409, {"error": "changed", "rows": []}))
+        self.assertTrue(self.post("schedule", {"dryRun": True, "address": GIFTS, "expect": GIFTS_PRINT,
+                                               "days": []})[1]["ok"])
+        self.assertEqual(self.link.applied, [])
+        self.link.configure({"reset": True})
+        self.assertEqual(self.link.screen_open, set())
+
+    def test_a_hire_body_may_be_up_to_2_mib(self):
+        headers = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
+        # Past the other kinds' 256 KiB: parsed, so a padded but valid body goes through.
+        padded = json.dumps(dict(self.body(), pad="x" * (300 * 1024))).encode()
+        status, _, raw = call(self.url + "/write/hire", "POST", headers, padded)
+        self.assertEqual(status, 200, raw[:200])
+        self.assertTrue(json.loads(raw)["ok"])
+        status, _, raw = call(self.url + "/write/hire", "POST", headers, b"x" * (2 * 1024 * 1024 + 1))
+        self.assertEqual((status, json.loads(raw)), (413, {"error": "too_large"}))
+        # Every other kind keeps 256 KiB.
+        status, _, raw = call(self.url + "/write/schedule", "POST", headers, b"x" * (256 * 1024 + 1))
+        self.assertEqual((status, json.loads(raw)), (413, {"error": "too_large"}))
 
     def test_a_move_clears_the_persons_shifts_at_the_site_they_leave(self):
         # Ana works both of Gifts' shifts; Gifts is not rewritten, the game's move clears them.

@@ -83,6 +83,12 @@ namespace BigCopilotLink
 
         private const int MaxBodyBytes = 256 * 1024;
 
+        /// <summary>
+        /// A hire carries every touched site's full week, so a late-game company-wide
+        /// hire can pass the other kinds' limit; it alone may be up to 2 MiB.
+        /// </summary>
+        private const int MaxHireBodyBytes = 2 * 1024 * 1024;
+
         /// <summary>How long a write waits out a refresh in flight before answering busy.</summary>
         private const int BusyWaitMs = 3000;
 
@@ -123,7 +129,8 @@ namespace BigCopilotLink
             if (!_approvals.IsApproved(request)) return WriteAnswer.Error(401, "not_paired");
 
             string text;
-            if (!TryReadBody(request, MaxBodyBytes, out text)) return WriteAnswer.Error(413, "too_large");
+            var limit = kind == "hire" ? MaxHireBodyBytes : MaxBodyBytes;
+            if (!TryReadBody(request, limit, out text)) return WriteAnswer.Error(413, "too_large");
 
             Func<WriteService, bool, WriteAnswer> job;
             bool dryRun;

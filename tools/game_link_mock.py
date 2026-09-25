@@ -35,9 +35,12 @@ apply answer that refusal, --busy-writes <n> answers the next n writes busy,
 A hire (POST /write/hire) takes its candidates from the save's
 CandidateEmployeeInstances and checks moves, wages and each site's week (the
 schedule write's grid, with the call's own hires and moves counted as
-assigned). What a candidate may be hired for is read off the site's stations,
-since the business type data is the game's; a site with no station takes
-anyone. --hire-gone <id> (or /debug/config "hireGone") makes a candidate gone,
+assigned). What a candidate may be hired for is the business type's, from
+ASSIGN_SKILLS in ba_dashboard (the table the page uses), so a warehouse takes
+drivers only; a type the table does not know falls back to the site's
+stations. --screen-open <street>:<number> (or /debug/config "screenOpen")
+opens BizMan's schedule screen on a site: a schedule or hire write touching
+it is refused screen_open. --hire-gone <id> (or /debug/config "hireGone") makes a candidate gone,
 --myemployees (or "myEmployees") the phone's MyEmployees app open. A hire has
 no undo: POST /write/undo {"kind": "hire"} answers 409 no_undo.
 """
@@ -59,7 +62,7 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import ba_save  # noqa: E402
-from ba_dashboard import STATION_SKILLS, _uniform_gaps, money, schedule_entries, shift_print  # noqa: E402
+from ba_dashboard import ASSIGN_SKILLS, STATION_SKILLS, _uniform_gaps, money, schedule_entries, shift_print  # noqa: E402
 
 SCHEMA_VERSION = 1
 DEFAULT_PORT = 8322
@@ -79,6 +82,7 @@ PAIR_NAME_MAX = 40
 # Localizor, the mock keeps a few.
 LOCALE_KEYS = frozenset({"ok", "cancel", "close", "yes", "no", "back"})
 MAX_BODY = 256 * 1024
+MAX_HIRE_BODY = 2 * 1024 * 1024  # a hire carries every touched site's full week
 DRAIN_LIMIT = 4 * 1024 * 1024  # the most of a refused body read off the wire
 ENDPOINTS = (["/health", "/save", "/refresh"] + [f"/write/{k}" for k in (*WRITE_KINDS, "undo")]
              + ["/pair/request", "/pair/status"])
@@ -135,6 +139,14 @@ def _wire(address: tuple[str, int]) -> dict:
     return {"street": address[0], "number": address[1]}
 
 
+def _cli_address(text: str) -> tuple[str, int]:
+    """--screen-open's STREET:NUMBER as an address; the street may hold a colon."""
+    street, _, number = text.rpartition(":")
+    if not street or not number.isdigit():
+        raise SystemExit(f"--screen-open {text!r} must be STREET:NUMBER")
+    return street, int(number)
+
+
 def _whole(value) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
 
@@ -147,7 +159,8 @@ class Link:
                  cash: float, build: int, schema: int, throttle: bool, refuse: str | None,
                  pair: str = "approve", writes: list | None = list(WRITE_KINDS),
                  refuse_write: str | None = None, busy_writes: int = 0,
-                 hire_gone: list | None = None, myemployees: bool = False):
+                 hire_gone: list | None = None, myemployees: bool = False,
+                 screen_open: list | None = None):
         self.path = path
         self.character, self.company = character, company
         self.day, self.hour, self.cash, self.build = day, hour, cash, build
@@ -190,6 +203,9 @@ class Link:
         self.hired: set = set()
         self.gone: set = set(hire_gone or ())
         self.myemployees = myemployees
+        # The sites BizMan's schedule screen is open on (addresses): a schedule
+        # or hire write touching one is refused screen_open.
+        self.screen_open: set = set(screen_open or ())
         # What the items bundle would tell the game per contract, set by
         # /debug/config: {id: {"unitPrice": float, "cap": int}}.
         self.terms: dict = {}
@@ -872,6 +888,9 @@ class Link:
             # plans and contracts when someone is unassigned there: never written.
             answer["siteError"] = "headquarters"
             return self._schedule_refused(answer, dry)
+        if address in self.screen_open:
+            answer["siteError"] = "screen_open"
+            return self._schedule_refused(answer, dry)
         people = self._people(save)
         answer["rows"], after = self._check_shifts(
             save, reg, address, shifts,
@@ -950,11 +969,13 @@ class Link:
     # hire ---------------------------------------------------------------------------
     def _accepts(self, save, reg) -> set | None:
         """The skills a business takes a person for (the game's assign check:
-        the business type's primary skills, cleaning, security, delivery),
-        as far as the bytes tell: the game reads the type data, which the save
-        does not hold, so the skills of the stations installed here stand in.
-        None where there is no station (a headquarters, a warehouse): anyone."""
-        skills = set()
+        the business type's primary skills, cleaning, security, delivery):
+        ASSIGN_SKILLS, the table the page reads from the game's type data. For
+        a type the table does not know, the skills of the stations installed
+        here stand in; None (anyone) only when neither says anything."""
+        skills = set(ASSIGN_SKILLS.get(reg.get("businessTypeName"), ()))
+        if skills:
+            return skills
         for holder in save.items(reg.get("itemInstances")):
             item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
             skills.update(STATION_SKILLS.get((item or {}).get("itemName"), ()))
@@ -1128,6 +1149,8 @@ class Link:
             error = error or refused(reg)
             if error is None and site["shifts"] is not None and reg.get("businessTypeName") == HQ_TYPE:
                 error = "headquarters"
+            if error is None and address in self.screen_open:
+                error = "screen_open"  # assign-only sites too, as the mod's CheckSite
             if error:
                 answer["siteError"] = error
                 rows.append({"scope": "site", "address": _wire(address), "error": error})
@@ -1261,6 +1284,7 @@ class Link:
                 self.uniforms, self.products, self.contracts, self.schedules = {}, {}, {}, {}
                 self.opened, self.terms = {}, {}
                 self.moved, self.hired, self.gone, self.myemployees = {}, set(), set(), False
+                self.screen_open = set()
                 self.pair, self.pair_delay, self.pair_requests, self.tokens = "approve", PAIR_DELAY, {}, {}
                 self.pair_cooldowns, self.strikes, self.reject_tokens = list(PAIR_COOLDOWNS), {}, False
                 self.day, self.hour = self._clock
@@ -1290,6 +1314,8 @@ class Link:
                 self.gone = set(body["hireGone"] or ())
             if "myEmployees" in body:  # the phone's MyEmployees app open, or closed
                 self.myemployees = bool(body["myEmployees"])
+            if "screenOpen" in body:  # the sites BizMan's schedule screen is open on
+                self.screen_open = {_address(a, "screenOpen[]") for a in body["screenOpen"] or ()}
             return {"refuseWrite": self.refuse_write, "busyWrites": self.busy_writes,
                     "writes": self.writes, "applied": len(self.applied)}
 
@@ -1405,7 +1431,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif route == "/debug/config":
             body = self._body()
             if body is not None:
-                self._json(200, self.link.configure(body))
+                try:
+                    self._json(200, self.link.configure(body))
+                except BadRequest as err:
+                    self._json(400, {"error": "bad_request", "detail": str(err)})
         else:
             self._other_method()
 
@@ -1456,7 +1485,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.close_connection = True
             self._json(401, {"error": "not_paired"}, {"Connection": "close"})
             return
-        if int(self.headers.get("Content-Length") or 0) > MAX_BODY:
+        if int(self.headers.get("Content-Length") or 0) > (MAX_HIRE_BODY if kind == "hire" else MAX_BODY):
             self._drain()
             self.close_connection = True
             self._json(413, {"error": "too_large"}, {"Connection": "close"})
@@ -1553,6 +1582,9 @@ def main() -> None:
                     help="a candidate that has left the game's list since the bytes (repeatable): a hire of them is skipped as gone")
     ap.add_argument("--myemployees", action="store_true",
                     help="the phone's MyEmployees app is open: a hire apply is refused, its dry run blocked")
+    ap.add_argument("--screen-open", action="append", default=[], metavar="STREET:NUMBER",
+                    help="BizMan's schedule screen is open on this site (repeatable): "
+                         "a schedule or hire write touching it is refused screen_open")
     args = ap.parse_args()
     if not os.path.isfile(args.save):
         raise SystemExit(f"{args.save} is not a file")
@@ -1560,7 +1592,8 @@ def main() -> None:
     link = Link(args.save, character=args.character, company=args.company, day=args.day, hour=args.hour,
                 cash=args.cash, build=args.build, schema=args.schema, throttle=args.throttle, refuse=args.refuse,
                 pair=args.pair, writes=writes, refuse_write=args.refuse_write, busy_writes=args.busy_writes,
-                hire_gone=args.hire_gone, myemployees=args.myemployees)
+                hire_gone=args.hire_gone, myemployees=args.myemployees,
+                screen_open=[_cli_address(a) for a in args.screen_open])
     server = MockServer(link, args.port).start()
     print(f"Serving {args.save} as the game link at {server.url}/  (Ctrl+C to stop)", flush=True)
     try:
