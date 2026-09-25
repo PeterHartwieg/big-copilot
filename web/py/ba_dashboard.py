@@ -135,6 +135,19 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
     # On the site the source strip under the masthead already names the save, so
     # only the CLI's page, which has no strip, repeats it down here.
     file_slot = "" if landing or site else '<span class="sf-meta" id="footFile"></span>'
+    # The game's names in another language: the tables sit beside the site's
+    # page (web/names/), so only the site offers the choice; a local page gets
+    # its language from --lang instead. The board script wires every copy.
+    names = ""
+    if site:
+        head = f"gnHead{'L' if landing else ''}"
+        options = "".join(f'<option value="{code}" lang="{code}">{html_escape(word)}</option>'
+                          for code, word in GAME_NAME_LANGS.items())
+        names = (f'<div class="sf-col sf-gn">\n        <h2 class="sf-head" id="{head}">Game names</h2>\n'
+                 f'        <select class="gn-pick" data-gn-pick aria-labelledby="{head}" title="The game&#39;s own '
+                 'names for items, business types, neighbourhoods, stations and skills, in the language you '
+                 'play in. Everything else on the page stays English.">'
+                 f'{options}</select>\n      </div>\n      ')
     build = (f'<span class="sf-meta">Game build {VERIFIED_BUILD}</span>' if landing
              else '<span class="sf-meta" id="footBuild"></span>'
                   # The difficulty chip, shown here at 1500 px and under; wider
@@ -198,7 +211,7 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
       <!-- Marked by attribute rather than id, and wired by the board script for
            whichever copies are in the page: the landing's footer and the board's
            are both here until the board replaces the landing. -->
-      <div class="sf-col sf-theme">
+      {names}<div class="sf-col sf-theme">
         <h2 class="sf-head" id="themeHead{'L' if landing else ''}">Theme</h2>
         <div class="sf-seg" role="group" aria-labelledby="themeHead{'L' if landing else ''}">
           <button type="button" class="sf-segbtn" data-theme-set="auto" aria-pressed="false"><span class="sf-sr">Match system</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9 20.5h6M12 16.5v4"/></svg></button>
@@ -255,6 +268,30 @@ HOOD_LABEL = {
 HOOD_TAG = {key: tag for tag, key in NEIGHBOURHOODS.items()}
 
 
+# A game name inside a sentence the page shows travels as a token,
+# U+27E6 <key>|<English> U+27E7, so the page can write it in the language the player picked
+# (gnString() in the board script) and in English otherwise. Only text that
+# reaches the page carries one: ids, subjects, history keys and anything sent to
+# the game stay plain English, and plain() turns a token back into its English
+# for Python's own reading (the CLI, the tests). A plural or a lowercased name
+# cannot be a token, since the page swaps the whole name: those stay English.
+NAME_TOKEN = re.compile("\u27e6(ba:[^\u27e7|\\s]+)\\|([^\u27e7]*)\u27e7")
+
+
+def tok(key, english) -> str:
+    """A game name for a sentence: a token where it has a game key, else as is."""
+    if not english:
+        return english or ""
+    if not isinstance(key, str) or not key.startswith("ba:") or "\u27e7" in english or "|" in key:
+        return english
+    return f"\u27e6{key}|{english}\u27e7"
+
+
+def plain(text):
+    """Text with every game-name token back in its English."""
+    return NAME_TOKEN.sub(lambda m: m.group(2), text) if isinstance(text, str) else text
+
+
 # The display names the page is sent, by key prefix. build_web.py ships the
 # same keys of the locale in gametext.json.
 NAME_PREFIXES = (
@@ -281,6 +318,49 @@ def _game_names(names) -> dict:
     for key, label in HOOD_LABEL.items():
         out.setdefault(key, label)
     return out
+
+
+# The languages the game ships besides its English, by the code of their locale
+# file, each named in its own words for the "Game names" picker, English first.
+# The page swaps the game's own names (items, business types, neighbourhoods,
+# stations, skills, job demands) for one of these; everything the board writes
+# itself stays English. build_web.py writes web/names/<code>.json for every
+# language here but English, and stops when the game's locale.json lists a
+# language this table has no autonym for, or one falls under NAME_COVERAGE.
+GAME_NAME_LANGS = {
+    "en": "English", "cs": "Čeština", "da": "Dansk", "de": "Deutsch", "es": "Español",
+    "fr": "Français", "it": "Italiano", "lt": "Lietuvių", "hu": "Magyar",
+    "nl": "Nederlands", "pl": "Polski", "pt": "Português (Brasil)", "ro": "Română",
+    "fi": "Suomi", "tr": "Türkçe", "el": "Ελληνικά", "ru": "Русский", "uk": "Українська",
+    "ja": "日本語", "ko": "한국어", "zh-cn": "简体中文", "zh-tw": "繁體中文",
+}
+# A language whose file names fewer of the English name keys than this is left
+# out rather than shown half in English (the game's ar.json names none).
+NAME_COVERAGE = 0.5
+
+
+def _name_keys(english: dict[str, str]) -> list[str]:
+    """The keys of the English text that the payload's `names` carries."""
+    return sorted(k for k, v in english.items()
+                  if k.startswith(NAME_PREFIXES) and not k.endswith("_description") and v)
+
+
+def name_coverage(english: dict[str, str], other: dict[str, str]) -> float:
+    """The share of the English name keys that another language's text names."""
+    keys = _name_keys(english)
+    named = sum(1 for k in keys if isinstance(other.get(k), str) and other[k].strip())
+    return named / len(keys) if keys else 0.0
+
+
+def name_table(english: dict[str, str], other: dict[str, str]) -> dict[str, str]:
+    """One language's game names by key, for the page to lay over `names`.
+
+    Only the keys `names` carries, and only where the language words it
+    differently: a key left out reads as English, which is also what the page
+    does for a key the language has no word for.
+    """
+    return {k: other[k] for k in _name_keys(english)
+            if isinstance(other.get(k), str) and other[k].strip() and other[k] != english[k]}
 
 
 def hood_key(row: dict | None) -> str | None:
@@ -5366,12 +5446,13 @@ def _factories(
 
     chosen = history.named(character) if history else {}
 
-    def missing(key, slug):
-        """Inputs of a recipe that neither arrive nor are held at the site."""
+    def missing(key, slug, keys=False):
+        """Inputs of a recipe that neither arrive nor are held at the site: their
+        names, or with `keys` their game keys, in the same order."""
         if flow["received"](key, "") is None:
             return []
         return [
-            ing["item"]
+            ing["slug"] if keys else ing["item"]
             for ing in recipes[slug]["ingredients"]
             if not arrives(key, resolve(ing)) and not held(key, resolve(ing))
         ]
@@ -5430,6 +5511,7 @@ def _factories(
                     {
                         "rid": rid,
                         "workstation": station_name(station),
+                        "workstationKey": f"ba:factoryworkstationtype_{station}",
                         "slots": sorted(slots[key][(station, rid)]),
                         "machines": n,
                         "idle": rid is None,
@@ -5481,7 +5563,10 @@ def _factories(
                     "item": rec["item"],
                     "slug": slug,
                     "missing": stopped,
+                    # Their game keys, index for index, for the page to name them.
+                    "missingSlugs": missing(key, slug, keys=True),
                     "workstation": station_name(station),
+                    "workstationKey": f"ba:factoryworkstationtype_{station}",
                     "slots": sorted(slots[key][(station, rid)]),
                     "machines": n,
                     "rate": rec["out"],
@@ -5533,6 +5618,10 @@ def _factories(
                     and line["ships"] < line["atRoster"] * LINE_STARVED):
                 line["limitHeld"] = True
         stopped_lines = {line["item"]: line["missing"] for line in lines if line["missing"]}
+        # The same lines' inputs with their keys, in step with the names: two
+        # keys can share an English name.
+        stopped_pairs = {line["item"]: list(zip(line["missing"], line.get("missingSlugs") or []))
+                         for line in lines if line["missing"]}
         held_lines = collections.defaultdict(lambda: True)
         for line in lines:
             held_lines[line["item"]] = held_lines[line["item"]] and line["limitHeld"]
@@ -5556,11 +5645,14 @@ def _factories(
             import_source = key if direct else upstream(source, slug) if source else None
             # An input that only sits because every line using it is stopped
             # for want of something else is waiting, not being ignored.
-            row["waitingOn"] = (
-                sorted({m for line in row["lines"] for m in stopped_lines[line] if m != row["item"]})
+            waiting = (
+                sorted({pair for line in row["lines"] for pair in stopped_pairs[line] if pair[0] != row["item"]},
+                       key=lambda pair: (pair[0], str(pair[1])))
                 if all(line in stopped_lines for line in row["lines"])
                 else []
             )
+            row["waitingOn"] = [name for name, _slug in waiting]
+            row["waitingOnSlugs"] = [slug for _name, slug in waiting]
             # Every line eating it held by its limit, with some of it on hand:
             # the machines are not waiting for it, they have nothing to make.
             row["limited"] = bool(
@@ -7821,7 +7913,7 @@ def _factory_site_plan(save, building, site, business, posts_of, pool, people, m
         now = line.get("hoursNow") or 0
         todo.append((line, posts_of.get(("unnamed", site["s"], i)) or [],
                      24 if mode == "cap" or not now else now,
-                     f"{line['workstation']}, recipe not named", True))
+                     f"{tok(line.get('workstationKey'), line['workstation'])}, recipe not named", True))
     for line, posts, hours, item, unnamed in todo:
         if posts and not hours:
             # A line this sizing leaves idle: its machines are still machines,
@@ -7838,7 +7930,7 @@ def _factory_site_plan(save, building, site, business, posts_of, pool, people, m
         for position, post in zip(line["slots"], posts):
             runs[len(stations)] = [set(range(start, start + hours)) for _ in range(7)]
             stations.append({"id": post, "skill": FACTORY_SKILL, "rate": 1,
-                             "name": f"{item}, position {position}"})
+                             "name": f"{plain(item)}, position {position}"})
         lines.append({
             "slug": line.get("slug"), "item": item, "machines": line["machines"],
             "hoursNow": line.get("hoursNow"), "hours": hours, "from": start, "to": start + hours,
@@ -9254,7 +9346,8 @@ def _role_words(role: dict, office: bool) -> dict:
         # other about posts. The posts limit names the station itself, so two
         # shops short of two different stations of one role never collide --
         # the id hashes the limit, and nothing but the limit.
-        "staffing": (f"{role['label']} staffing", f"another {role['label']} on those hours"),
+        "staffing": (f"{tok(role['skill'], role['label'])} staffing",
+                     f"another {tok(role['skill'], role['label'])} on those hours"),
         "posts": (_plural(station), f"another {station}"),
     }
 
@@ -10828,6 +10921,7 @@ def _finding(
     worth=None,
     always: bool = False,
     ev: dict | None = None,
+    named: str | None = None,
 ) -> dict:
     """One row of the list.
 
@@ -10842,6 +10936,9 @@ def _finding(
     item's `slug`, or a machine's list position as `slot`. It is left off
     entirely where the panel has a fixed mark to pulse instead, because it
     travels in every payload.
+
+    `subject` is English, since the id hashes it; `named` is how a summary
+    line of several rows names it (_condense()), with its game names as tokens.
     """
     return {
         "level": level,
@@ -10850,6 +10947,7 @@ def _finding(
         "text": text,
         "rank": rank,
         "subject": subject,
+        "named": subject if named is None else named,
         "worth": worth,
         "unit": ALERT_UNITS.get(group, ""),
         "id": _alert_id(group, key or site, subject),
@@ -10882,10 +10980,10 @@ def _alerts(
     found = []
 
     def note(level, site, group, text, rank=0.0, subject="", worth=None, always=False,
-             key=None, ev=None):
+             key=None, ev=None, named=None):
         found.append(
             _finding(level, site, group, text, key=key, rank=rank, subject=subject,
-                     worth=worth, always=always, ev=ev)
+                     worth=worth, always=always, ev=ev, named=named)
         )
 
     planned = {link["to"] for link in supply["graph"]["links"]}
@@ -10979,7 +11077,9 @@ def _alerts(
                 always=True, key=b["key"],
             )
         elif b.get("uniformGaps"):
-            roles = ", ".join(b["uniformGaps"])
+            skills = b.get("uniformGapSkills") or []
+            roles = ", ".join(tok(skills[i] if i < len(skills) else None, role)
+                              for i, role in enumerate(b["uniformGaps"]))
             note(
                 "warn", b["name"], "uniform",
                 f"No uniform set for {roles}; customers judge every role on a "
@@ -11009,7 +11109,7 @@ def _alerts(
         else:
             continue
         text = f"{count} staff with unmet demands: " + ", ".join(
-            f"{d['demand']} for {d['count']} ("
+            f"{tok(d.get('slug'), d['demand'])} for {d['count']} ("
             + ("company-wide" if d["company"] else JOB_DEMAND_PRIORITY[d["priority"]].lower())
             + _worked_over(d, ", ")
             + ")"
@@ -11040,7 +11140,7 @@ def _alerts(
         note(
             "warn", "Company", "companydemand",
             f"{lacking} staff with demands only you can meet: "
-            + ", ".join(f"{d['demand']} for {d['count']}" for d in rows)
+            + ", ".join(f"{tok(d.get('slug'), d['demand'])} for {d['count']}" for d in rows)
             + (". Health insurance comes through an HR manager's plan" if insured else ""),
             always=True,
         )
@@ -11159,7 +11259,7 @@ def _alerts(
                 "critical" if soonest <= 2 else "warn",
                 top["name"],
                 "hype",
-                f"{hood_label(waves[0]['hood'])} hype on {lines}; "
+                f"{tok(waves[0]['hood'], hood_label(waves[0]['hood']))} hype on {lines}; "
                 f"{top['name']} does ${top['revenue']:,.0f}/day under it against "
                 f"${base['revenue']:,.0f} for {base['basis']}; "
                 f"about ${drop:,.0f}/day of revenue rides on {wave_word}.{queue}",
@@ -11171,7 +11271,7 @@ def _alerts(
                 "warn",
                 top["name"],
                 "hype",
-                f"{hood_label(waves[0]['hood'])} hype on {lines}; "
+                f"{tok(waves[0]['hood'], hood_label(waves[0]['hood']))} hype on {lines}; "
                 f"{top['name']} does ${top['revenue']:,.0f}/day under it. There is no "
                 f"shop of the same kind trading without a wave and no trading days "
                 f"before {'this one' if len(waves) == 1 else 'the first of them'} "
@@ -11269,7 +11369,7 @@ def _alerts(
         # hashed, and it is the string main hashed too, so a shop's and an
         # office's silences survive this change.
         note(
-            "warn", where, "atcap", text, subject=limit, worth=worth,
+            "warn", where, "atcap", text, subject=plain(limit), named=limit, worth=worth,
             key=group[0]["key"] if len(group) == 1 else None,
         )
 
@@ -11351,14 +11451,15 @@ def _shelf_notes(businesses: list, supply: dict, silent: set, mode: str = "cap")
             line = next((l for l in b["lines"] if l["slug"] == slug), None)
             if not line:
                 continue
+            item = tok(slug, line["item"])
             if (fact["st"] == "noplan" and fact["lvl"] in ("warn", "critical")
                     and fact.get("via") is None):
                 rate = round(line.get("tradeRate", line["rate"]))
                 notes.append(_finding(
                     fact["lvl"], b["name"], "unplanned",
-                    f"{line['item']} is on no distribution plan: {line['units']:,} left "
+                    f"{item} is on no distribution plan: {line['units']:,} left "
                     f"at {rate:,}/day",
-                    key=b["key"], rank=-line["units"], subject=line["item"], ev={"slug": slug}))
+                    key=b["key"], rank=-line["units"], subject=line["item"], named=item, ev={"slug": slug}))
             elif fact["st"] == "short" and fact["cad"] == "weekly":
                 # Fed by a weekly wholesale delivery, not a top-up.
                 rate = round(line.get("tradeRate", line["rate"]))
@@ -11368,15 +11469,15 @@ def _shelf_notes(businesses: list, supply: dict, silent: set, mode: str = "cap")
                 if fact["why"] == "shortfall" and also_short:
                     # Both at once: the stock does not reach the drop, and the
                     # delivery would not carry the week if it did.
-                    text = (f"{line['item']} runs out before {day}'s wholesale delivery, and the "
+                    text = (f"{item} runs out before {day}'s wholesale delivery, and the "
                             f"delivery brings {fact['have']:,} a week against the {fact['use']:,} "
                             f"it sells"
                             + (f"; raise the contract to {fact['setTo']:,}" if fact.get("setTo") else ""))
                 elif fact["why"] == "shortfall":
-                    text = (f"{line['item']} runs out before {day}'s wholesale delivery: "
+                    text = (f"{item} runs out before {day}'s wholesale delivery: "
                             f"{line['units']:,} left at {rate:,}/day")
                 else:
-                    text = (f"{line['item']}'s wholesale delivery brings {fact['have']:,} a week "
+                    text = (f"{item}'s wholesale delivery brings {fact['have']:,} a week "
                             f"against the {fact['use']:,} it sells")
                 # Running out before the delivery ranks ahead of an order
                 # short of the week; the ratio breaks ties among each.
@@ -11384,17 +11485,17 @@ def _shelf_notes(businesses: list, supply: dict, silent: set, mode: str = "cap")
                 notes.append(_finding(
                     fact["lvl"], b["name"], "wholesale", text, key=b["key"],
                     rank=ratio - 10 if fact["why"] == "shortfall" else ratio,
-                    subject=line["item"], ev={"slug": slug}))
+                    subject=line["item"], named=item, ev={"slug": slug}))
             elif fact["st"] == "short" and fact["why"] == "target":
                 peak = (rows.get((s, slug)) or {}).get("peakDay")
                 notes.append(_finding(
                     "critical", b["name"], "outruns",
-                    f"{line['item']} sells {fact['use']:,} on "
+                    f"{item} sells {fact['use']:,} on "
                     f"{'a ' + peak if peak else 'its busiest day'} against a "
                     f"{fact['have']:,} top-up; empties before the next drop",
                     key=b["key"],
                     rank=-round(fact["use"] / fact["have"] * 100) if fact["have"] else 0,
-                    subject=line["item"], ev={"slug": slug}))
+                    subject=line["item"], named=item, ev={"slug": slug}))
     return notes
 
 
@@ -11426,13 +11527,14 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
             if fact["role"] == "depot" and fact["cad"] == "daily":
                 if fact["st"] == "short" and fact["why"] == "target":
                     item = labels.get((s, slug), slug)
+                    named = tok(slug, item)
                     notes.append(_finding(
                         "critical", b["name"], "topup",
-                        f"{item} is topped up to {fact['have']:,} a day against the "
+                        f"{named} is topped up to {fact['have']:,} a day against the "
                         f"{fact['use']:,} its busiest day sends on; raise the top-up to "
                         f"{fact['setTo']:,}",
                         key=b["key"], rank=round(fact["have"] / fact["use"], 2) if fact["use"] else 0,
-                        subject=item, ev={"slug": slug}))
+                        subject=item, named=named, ev={"slug": slug}))
                 continue
             if fact["cad"] != "weekly" or fact["role"] not in ("depot", "input"):
                 continue
@@ -11445,6 +11547,7 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
                     or (st == "noplan" and fact["lvl"] != "info")):
                 continue
             item = labels.get((s, slug), slug)
+            named = tok(slug, item)
             row = rows.get((s, slug))
             entry = depots.get(s, {}).get(slug) or {}
             parts = fact.get("parts") or {}
@@ -11458,52 +11561,52 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
                 # the depot's own page (Weekly imports does not list it).
                 notes.append(_finding(
                     fact["lvl"], site, "wholesale",
-                    f"{item}'s wholesale delivery brings {fact['have']:,} a week against "
+                    f"{named}'s wholesale delivery brings {fact['have']:,} a week against "
                     f"{fact['use']:,} used"
                     + (f" beyond the {parts['route']:,} a week a route brings"
                        if parts.get("route") else "")
                     + (f"; raise the contract to {fact['setTo']:,}" if fact.get("setTo") else ""),
                     key=key, rank=round(fact["have"] / fact["use"], 2) if fact["use"] else 0,
-                    subject=item, ev=ev))
+                    subject=item, named=named, ev=ev))
                 continue
             smart = _smart_words(entry.get("target") or 0, entry.get("plainAfter", 0),
                                  entry.get("plainBefore", 0)) if entry.get("smart") else ""
             if parts.get("lines") or fact["role"] == "input":
                 if st == "paused":
-                    text = f"{item} import is paused; resume the contract supplying {site}"
+                    text = f"{named} import is paused; resume the contract supplying {site}"
                 elif st == "noplan":
                     stock = next((l["units"] for l in b["lines"] if l["slug"] == slug), 0)
                     weeks = stock / fact["use"] if fact["use"] else 0
                     who = "the factories eat" if not parts.get("sites") else "the factories and other sites draw"
-                    text = (f"{item} has no standing import; {site} holds {stock:,}, "
+                    text = (f"{named} has no standing import; {site} holds {stock:,}, "
                             f"{weeks:.1f} weeks of the {fact['use']:,} a week {who}"
                             + (f" beyond the {parts['route']:,} a week a route brings"
                                if parts.get("route") else ""))
                 elif entry.get("smart"):
-                    text = (f"{item}: this import needs to cover {fact['use']:,} a week and "
+                    text = (f"{named}: this import needs to cover {fact['use']:,} a week and "
                             f"{smart}; raise the Smart Delivery stock"
                             + (f" at {entry['levelName']}" if entry.get("levelName") else "")
                             + (f" to {fact['setTo']:,}" if fact.get("setTo") else ""))
                 else:
-                    text = (f"{item}: this import needs to cover {fact['use']:,} a week and the "
+                    text = (f"{named}: this import needs to cover {fact['use']:,} a week and the "
                             f"import order is {entry.get('weekly', 0):,}"
                             + (f"; raise it to {fact['setTo']:,}" if fact.get("setTo") else ""))
                 notes.append(_finding(fact["lvl"], site, "feed", text, key=key,
-                                      rank=-round(fact["use"] / 7), subject=item, ev=ev))
+                                      rank=-round(fact["use"] / 7), subject=item, named=named, ev=ev))
                 continue
             if st == "noplan":
                 continue  # a depot only shops draw on: their shelves say it
             cover = row["cover"] if row else 0
             if st == "paused":
-                text = (f"{item} import is paused: {cover:.0f} days left at "
+                text = (f"{named} import is paused: {cover:.0f} days left at "
                         f"{row.get('importPerDay', row['perDay']):,}/day"
-                        if row else f"{item} import is paused")
+                        if row else f"{named} import is paused")
                 notes.append(_finding(fact["lvl"], site, "paused", text,
-                                      key=key, rank=cover, subject=item, ev=ev))
+                                      key=key, rank=cover, subject=item, named=named, ev=ev))
                 continue
             brought = entry.get("weekly", 0)
-            text = ((f"{item}: {smart} against a " if entry.get("smart")
-                     else f"{item} orders {brought:,} a week against a ")
+            text = ((f"{named}: {smart} against a " if entry.get("smart")
+                     else f"{named} orders {brought:,} a week against a ")
                     + f"{fact['use']:,} week of use, {fact['use'] - brought:,} short")
             if row and row["coverFit"] == "short":
                 arrives = weekday(row.get("coverageUntil", row["arrives"])) or "the next"
@@ -11511,7 +11614,7 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
                 text += (f"; already runs dry {when}, {row['shortBy']:.1f} days before "
                          f"{arrives}'s import")
             notes.append(_finding("critical", site, "order", text,
-                                  key=key, rank=cover, subject=item, ev=ev))
+                                  key=key, rank=cover, subject=item, named=named, ev=ev))
     return notes
 
 
@@ -11520,19 +11623,20 @@ def _shortfall_note(row: dict, item: str, site: str, key: str) -> dict:
     brings the week, a busy day the shelf cannot carry to the next round."""
     arrives = weekday(row.get("coverageUntil", row["arrives"])) or "the next"
     when = f"on {row['runsOut']}" if row["runsOut"] else f"in {row['cover']} days"
+    named = tok(row["slug"], item)
     # The draw the import answers for; a route's share is named, not hidden.
     rate = f"{row.get('importPerDay', row['perDay']):,}/day" + (
         f" beyond the {row['routed']:,}/day a route brings" if row.get("routed") else "")
     if row.get("covered"):
-        text = (f"{item} runs dry {when}, before the route's next round; a route brings "
+        text = (f"{named} runs dry {when}, before the route's next round; a route brings "
                 f"the week's draw ({row['routed']:,}/day) but a busy day outruns the shelf"
                 + ("; the import is paused" if row["paused"] else ""))
     else:
-        text = (f"{item} runs dry {when}, {row['shortBy']:.1f} days before "
+        text = (f"{named} runs dry {when}, {row['shortBy']:.1f} days before "
                 f"{arrives}'s import ("
                 + (rate if row.get("routed") else f"{rate}, {row['peakPerDay']:,} at peak") + ")")
     return _finding("critical", site, "shortfall", text,
-                    key=key, rank=row["cover"], subject=item, ev={"slug": row["slug"]})
+                    key=key, rank=row["cover"], subject=item, named=named, ev={"slug": row["slug"]})
 
 
 def _unnamed_notes(businesses: list, factories: dict, silent: set) -> list:
@@ -11558,14 +11662,18 @@ def _unnamed_notes(businesses: list, factories: dict, silent: set) -> list:
             where = ", ".join(
                 sorted({f"{u['workstation']} #{s}" for u in rows for s in u["slots"]})
             )
+            # The same places in the same order, their workstation a token.
+            spots = {f"{u['workstation']} #{s}": f"{tok(u.get('workstationKey'), u['workstation'])} #{s}"
+                     for u in rows for s in u["slots"]}
+            shown = ", ".join(spots[w] for w in sorted(spots))
             if kind == "idle":
                 text = (
-                    f"{machines} machine{'s' if many else ''} at {where} "
+                    f"{machines} machine{'s' if many else ''} at {shown} "
                     f"{'have' if many else 'has'} no recipe set: staffed and rented, making nothing"
                 )
             else:
                 text = (
-                    f"{machines} machine{'s' if many else ''} at {where} "
+                    f"{machines} machine{'s' if many else ''} at {shown} "
                     f"{'run' if many else 'runs'} a recipe without usable details. "
                     f"Its inputs are missing from the totals; name unknown recipes or "
                     f"load matching game text to include them"
@@ -11573,7 +11681,7 @@ def _unnamed_notes(businesses: list, factories: dict, silent: set) -> list:
             notes.append(
                 _finding(
                     level, business["name"], group, text,
-                    key=business["key"], rank=-machines, subject=where,
+                    key=business["key"], rank=-machines, subject=where, named=shown,
                 )
             )
     return notes
@@ -11593,6 +11701,8 @@ def _staff_notes(businesses: list, factories: dict, silent: set, mode: str = "ca
             continue
         for line in site["lines"] + site["unnamed"]:
             name = line.get("item") or line["workstation"]
+            named = (tok(line.get("slug"), line["item"]) if line.get("item")
+                     else tok(line.get("workstationKey"), line["workstation"]))
             week = STAFF_HOURS
             if mode == "dem" and line.get("needHours"):
                 week = line["needHours"]["dem"] * 7
@@ -11603,7 +11713,7 @@ def _staff_notes(businesses: list, factories: dict, silent: set, mode: str = "ca
                 lost = round((week - machine["hours"]) / 7 * line.get("rate", 0))
                 subject = f"{name} at position {machine['slot']}"
                 text = (
-                    f"{name} machine at list position {machine['slot']} is staffed "
+                    f"{named} machine at list position {machine['slot']} is staffed "
                     f"{machine['hours']} of {week} hours"
                     + (" needed" if week < STAFF_HOURS else "")
                     + f"; nobody on it {machine['off']}"
@@ -11614,6 +11724,7 @@ def _staff_notes(businesses: list, factories: dict, silent: set, mode: str = "ca
                         "critical" if share < STAFF_CRITICAL else "warn",
                         business["name"], "staff", text,
                         key=business["key"], rank=machine["hours"], subject=subject,
+                        named=f"{named} at position {machine['slot']}",
                         ev={"slot": machine["slot"], "slug": line.get("slug")},
                     )
                 )
@@ -11640,35 +11751,38 @@ def _feed_notes(businesses: list, factories: dict, silent: set, mode: str = "cap
             status, why = row["status"], row.get("why")
             per_day = row.get("use", base["perDay"])
             depot = businesses[row["from"]]["name"] if row["from"] is not None else "the depot"
-            lines = ", ".join(row["lines"][:3])
+            slugs = row.get("lineSlugs") or []
+            lines = ", ".join(tok(slugs[i] if i < len(slugs) else None, line)
+                              for i, line in enumerate(row["lines"][:3]))
+            item = tok(row.get("slug"), row["item"])
             if status == "noplan":
-                text = (f"{row['item']} feeds {lines} at {per_day:,}/day "
+                text = (f"{item} feeds {lines} at {per_day:,}/day "
                         f"but no depot tops it up")
             elif status == "short" and why == "target":
                 hours = row["target"] / per_day * 24 if per_day else 0
                 raise_to = row.get("setTo", base.get("raiseTarget"))
-                text = (f"{row['item']} top-up of {row['target']:,} covers {hours:.0f} hours "
+                text = (f"{item} top-up of {row['target']:,} covers {hours:.0f} hours "
                         f"of a {per_day:,}/day line"
                         + (f"; raise it to {raise_to:,}" if raise_to else ""))
                 if row.get("stalled"):
                     text += (f"; and none arrived last week though {depot} holds "
                              f"{row['depotStock']:,}")
             elif status == "short" and why == "dry":
-                text = (f"{row['item']} arrives at {row['arrives']:,}/day against "
+                text = (f"{item} arrives at {row['arrives']:,}/day against "
                         f"{per_day:,} needed and {depot} holds {row['depotStock']:,}; "
                         f"the import is not keeping up")
             elif status == "stalled" and why == "notDrawn":
-                text = (f"{row['item']} arrives at {row['arrives']:,}/day against "
+                text = (f"{item} arrives at {row['arrives']:,}/day against "
                         f"{per_day:,} needed while {depot} holds {row['depotStock']:,}; "
                         f"the line is not drawing it")
             else:
                 continue
             if row.get("ownPaused"):
-                text += f"; or resume the paused {row['item']} import to {business['name']}"
+                text += f"; or resume the paused {item} import to {business['name']}"
             notes.append(
                 _finding(
                     row["level"], business["name"], "feed", text,
-                    key=business["key"], rank=-base["perDay"], subject=row["item"],
+                    key=business["key"], rank=-base["perDay"], subject=row["item"], named=item,
                     ev={"slug": row["slug"]},
                 )
             )
@@ -11708,6 +11822,7 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
             continue
         name, key = businesses[row["s"]]["name"], businesses[row["s"]]["key"]
         ev = {"slug": row["slug"]}
+        item = tok(row["slug"], row["item"])
         if why == "notRouted":
             unfed = row.get("unfed") or []
             sites = [businesses[s] for s, _per_day, _days in unfed]
@@ -11725,9 +11840,9 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
                 verb = "needs" if one else "need"
             notes.append(_finding(
                 "warn", name, "notrouted",
-                f"{name} holds {row['stock']:,} {row['item']} no plan sends on; "
+                f"{name} holds {row['stock']:,} {item} no plan sends on; "
                 f"{who} {verb} {per_day:,}/day{held_for}",
-                key=key, rank=-row["stock"], subject=row["item"], ev=ev))
+                key=key, rank=-row["stock"], subject=row["item"], named=item, ev=ev))
         elif why == "notMoving":
             # Brought here by a top-up target, with no shelf, onward route or
             # line here to use it: most likely a target set on the wrong route.
@@ -11741,22 +11856,22 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
             )
             notes.append(_finding(
                 "info", name, "dead",
-                f"{row['stock']:,} {row['item']} held with nothing moving out{route}",
-                key=key, rank=-row["stock"], subject=row["item"], worth=worth_of(row), ev=ev))
+                f"{row['stock']:,} {item} held with nothing moving out{route}",
+                key=key, rank=-row["stock"], subject=row["item"], named=item, worth=worth_of(row), ev=ev))
         elif why == "importHigh":
             level = row.get("importLevel") or 0
             setting = (f"Smart Delivery keeps {level:,} in stock" if row.get("smart")
                        else f"the import brings {level:,} a week")
             notes.append(_finding(
                 "info", name, "dead",
-                f"{row['stock']:,} {row['item']} is {row['weeks']:.0f} weeks of what it feeds; "
+                f"{row['stock']:,} {item} is {row['weeks']:.0f} weeks of what it feeds; "
                 f"{setting}, {level / max(row['perWeek'], 1):.0f} weeks of it, so lower the import",
-                key=key, rank=-row["stock"], subject=row["item"], worth=worth_of(row), ev=ev))
+                key=key, rank=-row["stock"], subject=row["item"], named=item, worth=worth_of(row), ev=ev))
         else:
             notes.append(_finding(
                 "info", name, "dead",
-                f"{row['stock']:,} {row['item']} is {row['weeks']:.0f} weeks of what leaves",
-                key=key, rank=-row["stock"], subject=row["item"], worth=worth_of(row), ev=ev))
+                f"{row['stock']:,} {item} is {row['weeks']:.0f} weeks of what leaves",
+                key=key, rank=-row["stock"], subject=row["item"], named=item, worth=worth_of(row), ev=ev))
 
     # A top-up target set too high groups by the target behind it: the same
     # number in the same plan, repeated across shops, is one setting to change.
@@ -11767,6 +11882,8 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
             by_target.setdefault(row["target"] or 0, []).append(row)
     for target, rows in by_target.items():
         items = sorted({r["item"] for r in rows})
+        slug_of = {r["item"]: r["slug"] for r in rows}
+        shown = ", ".join(tok(slug_of[i], i) for i in items)
         sites = len({r["s"] for r in rows})
         daily = sum(r["perWeek"] for r in rows) / 7 / len(rows)
         stock = sum(r["stock"] for r in rows)
@@ -11777,13 +11894,13 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
         ) or None
         if target and daily:
             text = (
-                f"{', '.join(items)} top-up target of {target:,} is "
+                f"{shown} top-up target of {target:,} is "
                 f"{target / daily:.0f}x daily sales in {sites} "
                 f"shop{'s' if sites > 1 else ''}; lower the target"
             )
         else:
             text = (
-                f"{stock:,} units of {', '.join(items)} across {sites} "
+                f"{stock:,} units of {shown} across {sites} "
                 f"site{'s' if sites > 1 else ''} is "
                 f"{stock / max(sum(r['perWeek'] for r in rows), 1):.0f} weeks of supply"
             )
@@ -11792,7 +11909,8 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
         notes.append(
             _finding(
                 "info", site, "target", text,
-                key=one["key"] if one else None, rank=-stock, subject=items[0], worth=worth,
+                key=one["key"] if one else None, rank=-stock, subject=items[0],
+                named=tok(slug_of[items[0]], items[0]), worth=worth,
                 # One target set too high can span several shops; the panel can
                 # only point at a row when a single site owns the finding, and
                 # the row it points at is the one the sentence names.
@@ -11849,7 +11967,7 @@ def _condense(found: list, gate: float) -> dict:
                 "site": worst["site"],
                 "siteKey": worst["siteKey"],
                 "group": group,
-                "text": SUMMARIES[group].format(n=len(rows), subject=worst["subject"]),
+                "text": SUMMARIES[group].format(n=len(rows), subject=worst.get("named", worst["subject"])),
                 "detail": worst["text"],
                 "worth": sum(worths) if worths else None,
                 "unit": ALERT_UNITS.get(group, ""),
@@ -11866,7 +11984,7 @@ def _condense(found: list, gate: float) -> dict:
     order = {"critical": 0, "warn": 1, "info": 2}
     lines, minor = [], []
     for row in out:
-        for key in ("rank", "subject"):
+        for key in ("rank", "subject", "named"):
             row.pop(key, None)
         small = (
             not row["always"]
@@ -11901,6 +12019,7 @@ def render(
     head: str = "",
     map_external: bool = False,
     site: bool = False,
+    names: dict | None = None,
 ) -> str:
     """The page. With live=True it asks its data source for fresh numbers.
 
@@ -11917,7 +12036,11 @@ def render(
     A save name is the player's own text, so it is escaped on the way into the
     title, and ``</`` is escaped inside the JSON so a name can never close the
     script tag it sits in.
+
+    ``names`` is ``{"lang": code, "names": table}``, a name_table() the page
+    lays over the payload's names (``--lang``); None keeps them English.
     """
+    names_json = "null" if not names else json.dumps(names, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     if data is None:
         payload, title = "null", "Big Copilot"
     else:
@@ -11997,6 +12120,8 @@ def render(
         .replace("/*__HOOD_TAGS__*/{}", json.dumps(HOOD_TAG, separators=(",", ":")))
         # And their English names by the same keys, for a board without game text.
         .replace("/*__HOOD_NAMES__*/{}", json.dumps(HOOD_LABEL, separators=(",", ":")))
+        # The game names in another language, for a local page built with --lang.
+        .replace("/*__NAMES__*/null", names_json)
         .replace("<!--__CHANGELOG__-->", changelog)
         .replace("/*__LIVE__*/false", "true" if live else "false")
         .replace("__TITLE__", html_escape(title))
@@ -13246,7 +13371,7 @@ g[data-series].off{opacity:0}
 
 /* heat grid --------------------------------------------------------------- */
 .heat{display:grid;grid-template-columns:200px repeat(7,minmax(0,1fr));gap:4px;align-items:center}
-.heat .h{font:500 10px/1.3 "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);text-align:center;padding-bottom:6px;transition:color .15s}
+.heat .h{font:500 10px/1.3 "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);text-align:center;padding-bottom:6px;transition:color .15s;min-width:0;overflow-wrap:anywhere}
 .heat .h.hl{color:var(--ink)}
 .heat .mk-tag{display:none}
 .heat .r{font-size:13px;font-weight:500;padding-right:12px;transition:color .15s}
@@ -14169,6 +14294,21 @@ tr.ss-ring > td{animation:ss-flash 2.4s ease-out}
 .sf-ic{fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 /* The theme control keeps the right edge of the row, as on the canvas. */
 .sf-theme{align-items:flex-end}
+/* The game-names picker sits just left of it, the two settings together. */
+.sf-gn{margin-left:auto}
+.gn-pick{height:42px;max-width:220px;padding:0 12px;border:1px solid var(--rule);border-radius:999px;background:var(--surface);
+  color:var(--ink);font:500 13px/1 Archivo,"Helvetica Neue",Arial,sans-serif;cursor:pointer}
+.gn-pick:hover{border-color:var(--ink-3)}
+/* The one-time offer of the player's own language, hung off <body>. */
+.gn-offer{position:fixed;right:16px;bottom:16px;z-index:60;display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;
+  max-width:min(420px,calc(100vw - 32px));padding:12px 14px;border:1px solid var(--rule);border-radius:10px;
+  background:var(--surface);color:var(--ink);box-shadow:0 12px 32px color-mix(in srgb,var(--ink) 16%,transparent);font-size:13px}
+.gn-offer p{margin:0;flex:1 1 180px;line-height:1.5}
+.gn-offer-acts{display:flex;gap:8px;flex:none}
+.gn-offer button{height:30px;padding:0 12px;border-radius:6px;font:500 12px/1 Archivo,"Helvetica Neue",Arial,sans-serif;cursor:pointer}
+.gn-offer .gn-yes{border:1px solid var(--accent);background:var(--accent);color:var(--on-accent)}
+.gn-offer .gn-no{border:1px solid var(--rule);background:transparent;color:var(--ink-2)}
+.gn-offer button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .sf-seg{display:inline-flex;gap:2px;padding:3px;border:1px solid var(--rule);border-radius:999px;background:var(--surface)}
 .sf-segbtn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;padding:0;
   border:0;border-radius:999px;background:transparent;color:var(--ink-2);cursor:pointer}
@@ -14208,6 +14348,8 @@ tr.ss-ring > td{animation:ss-flash 2.4s ease-out}
   .sf-cols{flex-direction:column;gap:20px}
   .sf-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 16px;width:100%}
   .sf-theme{align-items:flex-start}
+  .sf-gn{margin-left:0}
+  .gn-pick{height:44px}
   .sf-segbtn{width:44px;height:44px}
   .sf-link,.sf-legal a{min-height:44px}
   .sf-base{flex-direction:column;align-items:flex-start;gap:10px}
@@ -14853,7 +14995,13 @@ const SOURCE = window.LEDGER_SOURCE || {
 
 const LINE_COLOURS = {MT:"#f07a1f", HK:"#e0362c", MH:"#a83bb0", LM:"#0c5ec4",
                       GD:"#7a8f27", IC:"#5c6f7a", HA:"#0f8f86", "":"#8b9499"};
-const fmt = n => (n<0?"-":"") + "$" + Math.abs(Math.round(n)).toLocaleString("en-US");
+const fmt = n => (n<0?"-":"") + "$" + num(Math.abs(Math.round(n)));
+/* Every number on the board goes through num(), in the UI's number locale, so
+   a German browser never shows "1.234 units" beside "$1,234". English is
+   always en-US; the language switch will set NUM_LOCALE. Never call a bare
+   toLocaleString(): it follows the browser. */
+let NUM_LOCALE = "en-US";
+const num = (n, opts) => Number(n).toLocaleString(NUM_LOCALE, opts);
 const compact = n => {
   const a = Math.abs(n), s = n<0?"-":"";
   if(a>=1e6) return s+"$"+(a/1e6).toFixed(a>=1e7?1:2)+"M";
@@ -15027,8 +15175,270 @@ const HOOD_NAMES = /*__HOOD_NAMES__*/{};
 /* A game name by its key. Everything that identifies an item, a business type
    or a neighbourhood carries the game's key; the words are looked up only to be
    shown, from the payload's `names`, which the game text fills. */
-const gameName = key => key ? ((D && D.names) || {})[key] || HOOD_NAMES[key] || "" : "";
+const gameName = key => key ? (gnTable && gnTable[key]) || ((D && D.names) || {})[key] || HOOD_NAMES[key] || "" : "";
 const hoodName = key => gameName(key) || String(key || "").replace(/^ba:neighborhood_/, "");
+
+/* --- game names in the player's language -------------------------------
+   Python writes every name in English, and the page lays one language's table
+   (web/names/<lang>.json, keyed like `names`) over the payload once, when it
+   arrives and when the footer's "Game names" changes: D = localiseNames(the
+   English payload). Every draw then reads D as before, and a join inside the
+   payload still holds because both of its sides were swapped alike. The
+   English payload rides along on D, unenumerated; dataEn() gives it back, for
+   the search's English words, and englishName() reads a name from it. Nothing
+   Python worked out is recomputed: switching never re-runs Python. A key the
+   table lacks keeps its English name.
+   The walk is gnWalk(), and every string in the payload passes through
+   gnString() on the way, which is where a name Python wrote inside a sentence,
+   as a token (U+27E6 key|English U+27E7), becomes the name in the language on
+   screen. */
+const GN_KEY = "ba_dash_names";
+const GN_OFFER_KEY = "ba_dash_names_offer";
+/* A local page built with --lang carries its table: {lang, names}. */
+const GN_EMBED = /*__NAMES__*/null;
+const GN_SRC = typeof Symbol === "function" ? Symbol("english payload") : "__gnEnglish";
+let gnLang = "en", gnTable = null, gnSeq = 0;
+const gnTables = new Map();
+if(GN_EMBED && GN_EMBED.lang && GN_EMBED.names){ gnLang = GN_EMBED.lang; gnTable = GN_EMBED.names; }
+const dataEn = () => (D && D[GN_SRC]) || D;
+const englishName = key => key ? ((dataEn() || {}).names || {})[key] || HOOD_NAMES[key] || "" : "";
+/* The name in the language picked, or "" while it is English or the table has
+   no word for it: what the wiki asks before it shows its own English. */
+const gnLocal = key => (key && gnTable && gnTable[key]) || "";
+/* One English name for every key of a kind that carries it, where every such
+   key reads the same in the language too; a name two keys share and the
+   language tells apart ("Bag of Lettuce") is left in English. For the few
+   payload fields Python sends a name in without its key. */
+function gnByName(T, EN, prefix){
+  const out = new Map(), split = new Set();
+  Object.keys(EN).forEach(k => {
+    if(!k.startsWith(prefix)) return;
+    const en = EN[k], here = T[k] || en;
+    if(out.has(en) && out.get(en) !== here) split.add(en); else out.set(en, here);
+  });
+  split.forEach(en => out.delete(en));
+  return out;
+}
+/* The swap for one name beside its key. `loose` is for a field that only
+   ever holds the game's name for the key, though Python may have worded it
+   its own way (a recipe's "Apple" for the item "Bag of Apples"); any other
+   field is swapped only while it reads as the key's English name, so a
+   player's own words beside a key are never touched. */
+const gnSwap = (T, EN, key, english, loose) =>
+  typeof key === "string" && typeof english === "string" && (loose || english === EN[key]) && T[key] ? T[key] : null;
+/* Which field names a key, and the fields beside it that show that key's name
+   (loose ones first, then strict ones). A field left out here stays English;
+   gnUnkeyed() takes the few with no key. */
+const GN_PAIRS = [["slug", ["item", "type", "demand"], ["name"]], ["typeSlug", ["type"], ["sub"]],
+  ["skill", ["label", "role"], []], ["demand", ["label"], []], ["hood", [], ["where"]],
+  ["workstationKey", ["workstation"], []]];
+/* Lists of names with their keys in a list beside them, index for index. */
+const GN_LISTS = [["items", "slugs"], ["fees", "feeSlugs"], ["lines", "lineSlugs"], ["uniformGaps", "uniformGapSkills"],
+  ["missing", "missingSlugs"], ["waitingOn", "waitingOnSlugs"]];
+/* Every string of the payload passes here, the table or not. Python writes
+   a game name inside a sentence as a token, U+27E6 key|English U+27E7 (tok()
+   in Python), and it reads as that key's name in the language on screen, or
+   as the English Python wrote where there is no table or the table has no
+   word for it. Nothing else of the string moves, so a sentence the board
+   parses (spLimitRole(), splitFinding()) reads as it did, names swapped. */
+const GN_TOKEN = /\u27e6(ba:[^\u27e7|\s]+)(?:\|([^\u27e7]*))?\u27e7/g;
+function gnString(s, T, EN){
+  if(s.indexOf("\u27e6") < 0) return s;
+  return s.replace(GN_TOKEN, (m, key, english) =>
+    (T && T[key]) || english || EN[key] || HOOD_NAMES[key] || prettySlug(key));
+}
+/* A copy of the English payload with its names swapped; `at` is the key the
+   value sits under, which names the thing when it is a game key itself
+   (plan.catalogue, plan.items, names, skillNames). */
+function gnWalk(v, T, EN, at){
+  if(typeof v === "string") return gnString(v, T, EN);
+  if(Array.isArray(v)) return v.map(x => gnWalk(x, T, EN, ""));
+  if(!v || typeof v !== "object") return v;
+  const o = {};
+  for(const k of Object.keys(v)) o[k] = gnWalk(v[k], T, EN, k);
+  if(!T) return o;
+  for(const [k, loose, strict] of GN_PAIRS){
+    const key = typeof v[k] === "string" && /^ba:/.test(v[k]) ? v[k] : null;
+    if(!key) continue;
+    loose.forEach(f => { const s = gnSwap(T, EN, key, v[f], true); if(s) o[f] = s; });
+    strict.forEach(f => { const s = gnSwap(T, EN, key, v[f]); if(s) o[f] = s; });
+  }
+  if(/^ba:/.test(at) && typeof v.slug !== "string" && typeof v.typeSlug !== "string")
+    ["type", "item", "name"].forEach(f => { const s = gnSwap(T, EN, at, v[f], f !== "name"); if(s) o[f] = s; });
+  for(const [names, keys] of GN_LISTS)
+    if(Array.isArray(v[names]) && Array.isArray(v[keys]))
+      o[names] = v[names].map((s, i) => gnSwap(T, EN, v[keys][i], s) || o[names][i]);
+  /* A table of names by key (names, skillNames, plan.items). */
+  for(const k of Object.keys(v))
+    if(k.startsWith("ba:")){ const s = gnSwap(T, EN, k, v[k], true); if(s) o[k] = s; }
+  return o;
+}
+/* The fields Python sends a name in with no key beside it, by the kind of
+   name each holds. */
+function gnUnkeyed(o, T, EN){
+  const skill = gnByName(T, EN, "ba:skill_"), item = gnByName(T, EN, "ba:itemname_"),
+    type = gnByName(T, EN, "ba:businesstype_"), station = gnByName(T, EN, "ba:factoryworkstationtype_");
+  const swap = (m, s) => typeof s === "string" && m.has(s) ? m.get(s) : s;
+  const each = (list, fn) => { if(Array.isArray(list)) list.forEach(fn); };
+  each(o.businesses, b => {
+    each(b.crew, r => { r.role = swap(skill, r.role); });
+    each(b.people, p => { p.role = swap(skill, p.role); });
+  });
+  each((o.staff || {}).roles, r => { r.role = swap(skill, r.role); });
+  each(o.hours, h => each(h.roles, r => { r.station = swap(item, r.station); }));
+  each(o.staffing, r => each(r.stations, s => { s.name = swap(item, s.name); }));
+  each(o.hypeExposure, h => { if(Array.isArray(h.items)) h.items = h.items.map(s => swap(item, s)); });
+  Object.values((o.plan || {}).workstations || {}).forEach(w => {
+    if(!w || typeof w !== "object") return;
+    w.name = swap(station, w.name);
+    ["machines", "assembly", "makes"].forEach(k => { if(Array.isArray(w[k])) w[k] = w[k].map(s => swap(item, s)); });
+  });
+  const supply = o.supply || {};
+  each((supply.factories || {}).sites, f => each(f.lines, l => { l.workstation = swap(station, l.workstation); }));
+  each((supply.graph || {}).nodes, n => { n.sub = swap(type, n.sub); });
+}
+/* The payload in the language picked: always a fresh copy of the English one,
+   which it carries along. Handing it a board already swapped starts from that
+   board's English, so a language change never swaps a swapped name. */
+function localiseNames(raw){
+  if(!raw || typeof raw !== "object") return raw;
+  const en = raw[GN_SRC] || raw;
+  const EN = en.names || {};
+  const out = gnWalk(en, gnTable, EN, "");
+  if(gnTable) gnUnkeyed(out, gnTable, EN);
+  Object.defineProperty(out, GN_SRC, {value: en});
+  return out;
+}
+/* Every board that arrives comes in through here. */
+function takeData(raw){ D = localiseNames(raw); return D; }
+/* Names sort in the language they are shown in; English keeps the order it
+   always had. */
+let gnCollator = null;
+function gnCompare(a, b){
+  a = String(a); b = String(b);
+  if(gnLang === "en") return a.localeCompare(b);
+  if(!gnCollator || gnCollator.lang !== gnLang){
+    let c;
+    try{ c = new Intl.Collator(gnLang); }catch(e){ c = {compare: (x, y) => x.localeCompare(y)}; }
+    gnCollator = {lang: gnLang, c};
+  }
+  return gnCollator.c.compare(a, b);
+}
+/* The languages this page can show: the picker's options, English first. */
+const gnPickers = () => [...document.querySelectorAll("[data-gn-pick]")];
+const gnLangs = () => {
+  const p = gnPickers()[0];
+  return p ? [...p.options].map(o => [o.value, o.textContent]) : GN_EMBED ? [["en", "English"], [GN_EMBED.lang, GN_EMBED.lang]] : [["en", "English"]];
+};
+const gnKnown = lang => gnLangs().some(([code]) => code === lang);
+function gnStored(){
+  try{ return localStorage.getItem(GN_KEY) || ""; }catch(e){ return ""; }
+}
+function gnRemember(lang){
+  try{ localStorage.setItem(GN_KEY, lang); }catch(e){}
+}
+/* A language's table: fetched once beside the page, with the build stamp so a
+   deploy busts it. */
+function gnLoad(lang){
+  if(gnTables.has(lang)) return gnTables.get(lang);
+  const v = encodeURIComponent(window.LEDGER_BUILD || "");
+  const got = fetch(`names/${encodeURIComponent(lang)}.json${v ? `?v=${v}` : ""}`)
+    .then(r => { if(!r.ok) throw new Error(`names/${lang}.json: ${r.status}`); return r.json(); });
+  gnTables.set(lang, got);
+  got.catch(() => gnTables.delete(lang));
+  return got;
+}
+function gnPaint(){
+  gnPickers().forEach(p => { p.value = gnLang; });
+}
+/* Switch the game names: the whole board is drawn again, as for another save,
+   from the English payload it already holds. A table that will not load leaves
+   the names as they were. */
+async function setGameNames(lang){
+  if(!gnKnown(lang)) lang = "en";
+  const seq = ++gnSeq;
+  let table = null;
+  if(lang !== "en"){
+    try{ table = await gnLoad(lang); }catch(e){ if(seq === gnSeq) gnPaint(); return false; }
+  }
+  if(seq !== gnSeq) return false;
+  gnLang = lang; gnTable = table && typeof table === "object" ? table : null;
+  gnPaint();
+  gnRedraw();
+  return true;
+}
+function gnRedraw(){
+  if(typeof hasData === "function" && hasData()){
+    D = localiseNames(D);
+    renderCalm(false);
+  } else if(typeof page !== "undefined" && page === "wiki" && typeof wikiVisit === "function"){
+    wikiVisit();
+  }
+}
+/* The browser's languages, first to last, to the game's code: the first that
+   is English or one the game has decides, so a reader who puts English first is
+   never offered anything. */
+function gnBrowserLang(list){
+  const langs = gnLangs().map(([code]) => code);
+  for(const tag of list || []){
+    const t = String(tag || "").toLowerCase();
+    if(!t) continue;
+    const base = t.split("-")[0];
+    if(base === "en") return "en";
+    if(base === "zh"){
+      if(/^zh-(hant|tw|hk|mo)\b/.test(t)) return langs.includes("zh-tw") ? "zh-tw" : null;
+      return langs.includes("zh-cn") ? "zh-cn" : null;
+    }
+    if(langs.includes(base)) return base;
+  }
+  return "en";
+}
+function gnOfferDone(){
+  try{ return !!localStorage.getItem(GN_OFFER_KEY); }catch(e){ return false; }
+}
+function gnOfferClose(el, answer){
+  try{ localStorage.setItem(GN_OFFER_KEY, answer); }catch(e){}
+  el.remove();
+}
+/* Once, ever: a reader whose browser prefers a language the game has is asked
+   whether the game's names should follow it. Either answer is kept, and a
+   choice already made in the footer counts as one. */
+function gnOffer(){
+  if(!gnPickers().length || gnStored() || gnOfferDone() || document.querySelector(".gn-offer")) return null;
+  const lang = gnBrowserLang(navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language]);
+  if(!lang || lang === "en") return null;
+  const word = (gnLangs().find(([code]) => code === lang) || [])[1];
+  if(!word) return null;
+  const el = document.createElement("div");
+  el.className = "gn-offer";
+  el.setAttribute("role", "dialog");
+  el.setAttribute("aria-label", "Game names");
+  el.innerHTML = `<p>Show game names in <span lang="${attr(lang)}">${spEsc(word)}</span>?</p>
+    <div class="gn-offer-acts"><button type="button" class="gn-yes">Yes</button><button type="button" class="gn-no">No thanks</button></div>`;
+  el.querySelector(".gn-yes").onclick = () => { gnOfferClose(el, "yes"); gnRemember(lang); setGameNames(lang); };
+  el.querySelector(".gn-no").onclick = () => gnOfferClose(el, "no");
+  document.body.appendChild(el);
+  return el;
+}
+function wireGameNames(){
+  gnPickers().forEach(p => {
+    if(p.dataset.gnWired) return;
+    p.dataset.gnWired = "1";
+    p.addEventListener("change", () => {
+      gnRemember(p.value);
+      const offer = document.querySelector(".gn-offer");
+      if(offer) gnOfferClose(offer, "picked");
+      setGameNames(p.value);
+    });
+  });
+  gnPaint();
+}
+/* Width in the units shortText() counts: a wide (CJK) character is two. */
+const gnWide = ch => /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]/.test(ch)
+  || (ch.codePointAt(0) >= 0x20000 && ch.codePointAt(0) <= 0x3fffd);
+/* ` lang="xx"` for a name the page uppercases, so a Turkish dotted i or a Greek
+   accent is cased by the language's own rules. */
+const gnLangAttr = () => gnLang === "en" ? "" : ` lang="${gnLang}"`;
 /* A neighbourhood as a key, from either a key or an English name: what map
    data exported by name and filters stored before keys hold. Null for neither. */
 const hoodKeyOf = v => typeof v !== "string" || !v ? null
@@ -15165,7 +15575,7 @@ const VIEWS = {
       ["Business", b=>kidCell(b), "l", null],
       ["Opened", b=>`day ${b.opened}`, "", b=>b.opened],
       ["Staff", b=>b.staff||"—", "", b=>b.staff],
-      ["Customers", b=>b.customers?b.customers.toLocaleString():"—", "", b=>b.customers],
+      ["Customers", b=>b.customers?num(b.customers):"—", "", b=>b.customers],
       // An office's customer is an hour billed, so its spend is per hour.
       ["Spend / visit", b=>b.basket===null?"—":`$${b.basket.toFixed(2)}${b.status==="office"?"/hour":""}`, "", b=>b.basket??-1],
       ["Satisfaction", b=>b.satisfaction.overall===null?"—":meter(b.satisfaction.overall), "gauge", b=>b.satisfaction.overall??-1],
@@ -15390,7 +15800,7 @@ function drawFlow(){
     const xc = fwd && b.corridor !== null ? b.corridor : x2;
     const mid = (x1 + xc) / 2;
     const w = 1 + Math.sqrt(l.perDay / heaviest) * 2.5;
-    const tip = `${named(l.from)} to ${named(l.to)}: ${l.perDay.toLocaleString()} units a day over ${
+    const tip = `${named(l.from)} to ${named(l.to)}: ${num(l.perDay)} units a day over ${
       l.items} product${l.items === 1 ? "" : "s"}, ${l.paused ? "import paused"
       : l.cadence === "weekly" ? "weekly import" : "daily distribution"}`;
     pipes.push(`<path class="pipe ${l.cadence}${l.paused ? " paused" : ""}" id="pipe${i}"
@@ -15414,7 +15824,8 @@ function drawFlow(){
         ? `<rect x="${x + 10}" y="${y + 13}" width="24" height="18" rx="3" fill="var(--raised)" stroke="var(--rule)"></rect>
            <text x="${x + 22}" y="${y + 26}" text-anchor="middle" class="s" style="font-weight:600;fill:var(--ink-2)">${hood}</text>` : ""}
       <text x="${tx}" y="${y + 19}">${attr(shortText(node.name, hood ? 19 : 24))}</text>
-      <text class="s" x="${tx}" y="${y + 34}">${node.stock ? node.stock.toLocaleString() + " held" : attr(node.sub)}</text></g>`);
+      <text class="s" x="${tx}" y="${y + 34}">${node.stock ? num(node.stock) + " held"
+        : `${attr(shortText(node.sub || "", hood ? 21 : 26, true))}<title>${attr(node.sub || "")}</title>`}</text></g>`);
     if(flag) dots.push(`<circle class="${flag[0]}" cx="${x + NODE_W - 10}" cy="${y + 10}" r="4"><title>${flag[1]}</title></circle>`);
   });
 
@@ -15437,7 +15848,23 @@ function flowCountText(facts){
     .map(([st, k]) => `${k} ${SZ_WORD[st] || st}`).join(", ");
 }
 
-const shortText = (t, n) => t.replace(/^\[[^\]]*\]\s*/, "").slice(0, n);
+/* A node's name cut to fit its box: n is a width in Latin letters, and a wide
+   (CJK) character takes two of them. */
+const shortText = (t, n, ellipsis = false) => {
+  const s = String(t || "").replace(/^\[[^\]]*\]\s*/, "");
+  const width = ch => gnWide(ch) ? 2 : 1;
+  let w = 0, out = "";
+  for(const ch of s) w += width(ch);
+  /* Cut with an ellipsis, the ellipsis takes one unit of the width itself. */
+  const room = ellipsis && w > n ? n - 1 : n;
+  w = 0;
+  for(const ch of s){
+    w += width(ch);
+    if(w > room) break;
+    out += ch;
+  }
+  return ellipsis && out.length < s.length ? `${out.trimEnd()}\u2026` : out;
+};
 
 /* --- one verdict per supply fact ---------------------------------------
    Python judges every (site, item) the company holds, needs or plans once,
@@ -15531,8 +15958,8 @@ function szRamp(f){
 /* Used / week, split the way Python summed it up the routes. */
 function szParts(p){
   if(!p) return "";
-  return [p.lines ? `Factory lines ${p.lines.toLocaleString()}` : "", p.sites ? `shops ${p.sites.toLocaleString()} a week` : "",
-    p.route ? `a route from your own site brings ${p.route.toLocaleString()}` : ""].filter(Boolean).join(" · ");
+  return [p.lines ? `Factory lines ${num(p.lines)}` : "", p.sites ? `shops ${num(p.sites)} a week` : "",
+    p.route ? `a route from your own site brings ${num(p.route)}` : ""].filter(Boolean).join(" · ");
 }
 /* Idle stock under the sizing on screen. A factory input's draw follows the
    sizing, so a holding can be idle under one and not the other (`modes`);
@@ -15572,7 +15999,7 @@ function supplySorted(rows, cols, state){
   return rows.slice().sort((a, b) => {
     const x = key(a), y = key(b);
     if(x == null || y == null) return (x == null) - (y == null);
-    return (typeof x === "string" ? x.localeCompare(y) : (x > y) - (x < y)) * state.dir;
+    return (typeof x === "string" ? gnCompare(x, y) : (x > y) - (x < y)) * state.dir;
   });
 }
 function supplyHead(cols, state){
@@ -15638,15 +16065,15 @@ function szSays(f, r, depot){
   switch(f.st){
     case "paused": return "resume the import contract";
     case "noplan": return f.setTo !== null && f.setTo !== undefined
-      ? `put ${r.item} on a plan at ${f.setTo.toLocaleString()} a ${szWeekly(f) ? "week" : "day"}` : "nothing brings it in";
+      ? `put ${r.item} on a plan at ${num(f.setTo)} a ${szWeekly(f) ? "week" : "day"}` : "nothing brings it in";
     case "short":
-      if(f.why === "dry") return `${depot} holds ${(r.depotStock || 0).toLocaleString()}; the import is not keeping up`;
-      if(f.why === "order") return f.setTo !== null ? `raise the weekly import to ${f.setTo.toLocaleString()}` : szTip(f).toLowerCase();
-      return f.setTo !== null ? `raise ${depot}'s top-up to ${f.setTo.toLocaleString()}` : szTip(f).toLowerCase();
-    case "tight": return f.setTo !== null ? `${f.setTo.toLocaleString()} would carry the margin` : "";
+      if(f.why === "dry") return `${depot} holds ${num(r.depotStock || 0)}; the import is not keeping up`;
+      if(f.why === "order") return f.setTo !== null ? `raise the weekly import to ${num(f.setTo)}` : szTip(f).toLowerCase();
+      return f.setTo !== null ? `raise ${depot}'s top-up to ${num(f.setTo)}` : szTip(f).toLowerCase();
+    case "tight": return f.setTo !== null ? `${num(f.setTo)} would carry the margin` : "";
     case "stalled":
       if(f.why === "waiting") return `${lines.join(", ")} stand${lines.length === 1 ? "s" : ""} still for want of ${(r.waitingOn || []).join(", ")}`;
-      return `${depot} holds ${(r.depotStock || 0).toLocaleString()} but the line takes ${pct}% of its need`;
+      return `${depot} holds ${num(r.depotStock || 0)} but the line takes ${pct}% of its need`;
     case "covered":
       if(f.why === "staffing") return `the roster runs these machines ${Math.round((r.staffedShare ?? 1) * 100)}% of the week`;
       if(f.why === "limit") return "Produce up to holds the line back";
@@ -15691,7 +16118,7 @@ function nameLine(rid, slug){
   const again = () => { sbStamp++; drawSupplyStrip(); drawSupplyTab(sub.supply); drawSite(); wireAll(); };
   if(!LIVE){ again(); return; }
   SOURCE.name(rid, slug)
-    .then(data => { if(data){ D = data; renderCalm(); } else again(); })
+    .then(data => { if(data){ takeData(data); renderCalm(); } else again(); })
     .catch(again);
 }
 /* A name kept in this browser that the live board does not yet have — the
@@ -15705,7 +16132,7 @@ function syncLocalNames(view){
   if(!missing.length) return;
   missing.forEach(u => syncedNames.add(u.rid));
   Promise.all(missing.map(u => SOURCE.name(u.rid, names[u.rid])))
-    .then(results => { const last = results.filter(Boolean).pop(); if(last){ D = last; renderCalm(); } })
+    .then(results => { const last = results.filter(Boolean).pop(); if(last){ takeData(last); renderCalm(); } })
     .catch(() => {});
 }
 
@@ -15780,7 +16207,7 @@ function drawMast(){
      text-transform. */
   const bits = [];
   if(year) bits.push(`YEAR ${year}`);
-  bits.push(`${k.businesses} SITES`, `${k.employees.toLocaleString()} STAFF`);
+  bits.push(`${k.businesses} SITES`, `${num(k.employees)} STAFF`);
   /* The flags go on a line of their own so the first line stays short enough
      for the sphere to rest between the nav and the clock. */
   const flags = [];
@@ -15846,7 +16273,7 @@ function drawKpis(){
      /* The day's result has a page of its own; the tile is the way in. */
      go: "secDaily", goTip: "Open Company › Results, the daily result"},
     {l: "Revenue yesterday", v: fmt(k.revenue),
-     chip: chipHtml("dim", k.customers.toLocaleString(), `${k.customers.toLocaleString()} customers served yesterday`),
+     chip: chipHtml("dim", num(k.customers), `${num(k.customers)} customers served yesterday`),
      sub: "customers", spark: hist(d => d.revenue)},
     /* Cash has no day-by-day history in the save, so this tile has no line. */
     {l: "Cash on hand", v: fmt(k.cash), chip: cashTile.chip,
@@ -16110,14 +16537,48 @@ const SEV_WORD = {crit: "urgent", watch: "watch", opp: "opportunity"};
    (three of a kind at one site) carries its worst member's sentence as detail. */
 const HEADLINE_MAX = 60;
 const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/* The game names in the language on screen that hold a mark a finding is cut
+   at (a comma, a bracket, a colon, a stop): "Kleidung (klassisch, günstig,
+   Damen)", "Blume (günstig)". A finding is never cut inside one of them. Read
+   off the names the board shows, so it holds in every language. */
+const FINDING_CUT_MARKS = /[,(:;.]/;
+let findingNamesFor = null, findingNamesList = [];
+function findingNames(){
+  const names = (typeof D !== "undefined" && D && D.names) || null;
+  if(names !== findingNamesFor){
+    findingNamesFor = names;
+    findingNamesList = [...new Set(Object.values(names || {}))]
+      .filter(n => typeof n === "string" && n.length > 2 && FINDING_CUT_MARKS.test(n))
+      .sort((x, y) => y.length - x.length);
+  }
+  return findingNamesList;
+}
+/* Where in `t` a game name stands, as [from, to) pairs. */
+function findingNameSpans(t){
+  const spans = [];
+  if(!FINDING_CUT_MARKS.test(t)) return spans;
+  for(const name of findingNames()){
+    for(let at = t.indexOf(name); at >= 0; at = t.indexOf(name, at + name.length))
+      if(!spans.some(([f, e]) => at < e && at + name.length > f)) spans.push([at, at + name.length]);
+  }
+  return spans;
+}
+const inFindingName = (spans, i) => spans.some(([f, e]) => i > f && i < e);
 function splitFinding(a){
   let t = String(a.text || "");
   if(a.site && t.startsWith(a.site)){
     t = t.slice(a.site.length).replace(/^[\s,:;-]+/, "").replace(/^(is|are)\s+/, "");
   }
-  /* A colon between digits is a time of day, not a break. */
-  const m = t.match(/^(.*?)(?:(?<!\d):(?!\d)|;|\.\s)\s*(.*)$/s);
-  let what = m ? m[1] : t, more = m ? m[2] : "";
+  /* A colon between digits is a time of day, not a break, and a mark inside
+     a game name is part of the name. */
+  const whole = findingNameSpans(t);
+  let what = t, more = "";
+  for(const m of t.matchAll(/(?<!\d):(?!\d)|;|\.\s/g)){
+    if(inFindingName(whole, m.index)) continue;
+    what = t.slice(0, m.index);
+    more = t.slice(m.index + m[0].length).replace(/^\s+/, "");
+    break;
+  }
   /* "at <site>" inside the headline is the pill again. */
   if(a.site) what = what.replace(new RegExp(`\\s+at ${escapeRe(a.site)}\\b`), "");
   const lead = rest => { more = more ? `${rest.replace(/[.\s]+$/, "")}. ${more}` : rest; };
@@ -16127,7 +16588,8 @@ function splitFinding(a){
   let r;
   if((r = what.match(/^(\d+) (machines?) at (.+?) (runs? a recipe the board cannot name.*)$/))){
     what = `${r[1]} ${r[2]} ${r[4]}`; lead(`At ${r[3]}`);
-  } else if((r = what.match(/^(.+?) (top-up target of .+)$/)) && r[1].includes(", ")){
+  } else if((r = what.match(/^(.+?) (top-up target of .+)$/))
+      && [...r[1].matchAll(/, /g)].some(c => !inFindingName(findingNameSpans(r[1]), c.index))){
     what = r[2]; lead(r[1]);
   }
   /* Still long: the last comma or bracket inside the limit ends the headline
@@ -16137,8 +16599,8 @@ function splitFinding(a){
      cut there named the item without its variant: two rows read "Fabric".
      Only a bracket of words ("(important)", "(3 at peak)") is a place to cut. */
   if(what.length > HEADLINE_MAX){
-    const cuts = [];
-    for(const m of what.matchAll(/, | \((?![A-Z])/g)) cuts.push(m.index);
+    const cuts = [], names = findingNameSpans(what);
+    for(const m of what.matchAll(/, | \((?![A-Z])/g)) if(!inFindingName(names, m.index)) cuts.push(m.index);
     let at = Math.max(-1, ...cuts.filter(i => i <= HEADLINE_MAX));
     if(at < 20) at = Math.min(...cuts.filter(i => i > 0));
     if(isFinite(at) && at > 0){
@@ -16474,7 +16936,9 @@ function xlMembers(c){
     if(!b) return;
     const word = b.status === "retail" ? "shop" : b.status === "office" ? "office"
       : b.status === "vacant" ? "vacant lease"
-      : factories.has(i) ? "factory" : String(b.type || "site").toLowerCase();
+      /* The sentence is English and pluralised in English, so the kind is the
+         type's English name whatever language the names are shown in. */
+      : factories.has(i) ? "factory" : String(englishName(b.typeSlug) || b.type || "site").toLowerCase();
     counts.set(word, (counts.get(word) || 0) + 1);
   });
   if(!counts.size) return `${c.count} site${c.count === 1 ? "" : "s"}`;
@@ -16957,7 +17421,9 @@ function spLimitRole(part, roles){
   if(SP_PLAIN_LIMIT[part]) return (roles || []).find(r => !r.noun) || null;
   const staffing = /\bstaffing$/.test(part);
   const want = part.replace(/\s*staffing$/, "");
-  return (roles || []).find(r => staffing ? r.label === want : r.noun === part) || null;
+  /* The finding is Python's English; the role's label may be in the player's
+     language, so its English name is asked as well. */
+  return (roles || []).find(r => staffing ? r.label === want || englishName(r.skill) === want : r.noun === part) || null;
 }
 /* The cells one cap chip is about, in the cells' own tokens. A finding naming
    two tied answers -- "Gym Trainer staffing and registers" -- is about the
@@ -17608,7 +18074,7 @@ const spSpark = (series, key, money, tone) => {
     if(read(d)) return `<i class="none" style="--v:4%" data-read="${attr(`day ${d.day} <b>no reading</b>`)}"></i>`;
     return `<i class="${last7 ? "l" : ""}" style="--v:${
       (25 + (d[key] - lo) / ((top - lo) || 1) * 75).toFixed(0)}%" data-read="${attr(`day ${d.day} <b>${
-      money ? fmt(d[key]) : Math.round(d[key]).toLocaleString()}</b>`)}"></i>`;
+      money ? fmt(d[key]) : num(Math.round(d[key]))}</b>`)}"></i>`;
   }).join("")}</div><div class="sp-tread sp-readout"></div></div>`;
 };
 /* How dark each cost sits in the bar: the big ones darkest, so the shape of a
@@ -18432,7 +18898,7 @@ const spUp = (now, to, bad) => `<span class="sp-up${bad ? " bad" : ""}">${spEsc(
 const spMeter = (pct, bad) => `<div class="sp-meter${bad ? " bad" : ""}"><i style="--w:${
   Math.max(0, Math.min(100, Math.round(pct || 0)))}%"></i></div>`;
 /* A figure the payload does not carry is a dash, never a nought. */
-const spNum = n => Number.isFinite(n) ? Math.round(n).toLocaleString() : "—";
+const spNum = n => Number.isFinite(n) ? num(Math.round(n)) : "—";
 /* The total of one key over some rows, or nothing at all when no row carries
    it: a factory whose every machine runs a recipe the board cannot name has an
    unknown output, not an output of zero. */
@@ -18911,7 +19377,7 @@ function spHomePanel(home){
   const code = HOOD_TAGS[home.hood] || "";
   const tiles = spTile("Rent / day", fmt(day))
     + spTile("Rent / week", fmt(day * 7))
-    + spTile("Size", m === null ? "—" : `${m.toLocaleString()}<small>m²</small>`)
+    + spTile("Size", m === null ? "—" : `${num(m)}<small>m²</small>`)
     + spTile("Per m²", m === null || !rent ? "—" : `$${(rent / m).toFixed(2)}<small>/day</small>`);
   return `${siteCrumbs(home.key, home.address, false)}
     <div class="sitehead rv">
@@ -19098,7 +19564,7 @@ function drawSite(){
   const stats = !shelved ? "" : `
     <div class="sstat"><span class="lab">Revenue yesterday</span><div class="v">${fmt(b.revenue)}${trendChip}</div>${
       sp ? spSpark(b.series, "revenue", true, tone) : ""}</div>
-    <div class="sstat"><span class="lab">Customers</span><div class="v">${b.customers ? b.customers.toLocaleString() : "—"}${
+    <div class="sstat"><span class="lab">Customers</span><div class="v">${b.customers ? num(b.customers) : "—"}${
       b.basket === null ? "" : `<small ${SMALL}>$${b.basket.toFixed(2)}/${office ? "hour billed" : "visit"}</small>`}</div>${
       sp ? spSpark(b.series, "customers", false, "") : ""}</div>
     <div class="sstat"${sp ? "" : ` data-tip="${attr(costTip)}"`}><span class="lab">Profit</span>${
@@ -19173,7 +19639,7 @@ function drawSite(){
       <thead><tr><th>Fee</th><th>Hours billed / day</th><th>Revenue / day</th></tr></thead>
       <tbody>${shelves.map(l => `<tr data-el="${attr(spKeyTok(l.slug, l.item))}">
           <td class="l">${l.item}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
-          <td>${l.soldPerDay.toLocaleString()}</td>
+          <td>${num(l.soldPerDay)}</td>
           <td>${fmt(l.revenue)}</td></tr>`).join("")}</tbody></table>` : `<p class="quiet">Nothing billed here yet.</p>`)
     : shelves.length ? `
     <table>
@@ -19188,22 +19654,22 @@ function drawSite(){
         const over = sp && t && (t.target || t.wholesale) && Number.isFinite(f.setTo) && (f.st === "short" || f.st === "tight");
         /* A wholesale store's weekly delivery feeds the shelf where no top-up does. */
         const deal = t && !t.target && t.wholesale ? t.wholesale : null;
-        const busiest = t && t.peakDay ? `${t.peakDay.slice(0, 3)} ${t.peakSold.toLocaleString()}` : "—";
+        const busiest = t && t.peakDay ? `${t.peakDay.slice(0, 3)} ${num(t.peakSold)}` : "—";
         /* The shelf's word, as Checks says it; a shelf Python did not judge has none. */
         const word = sp && supplyFact(siteTab, l.slug) ? ` ${szChip(f)}` : "";
         return `<tr data-el="${attr(spKeyTok(l.slug, l.item))}${over ? " outruns" : ""}">
           <td class="l">${l.item}${word}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
-          <td>${l.soldPerDay.toLocaleString()}</td>
+          <td>${num(l.soldPerDay)}</td>
           <td>${over && !deal ? `<span class="sp-red">${busiest}</span>` : busiest}</td>
           <td>${fmt(l.revenue)}</td>
-          <td>${deal ? `${over ? `<span class="sp-up${f.st === "short" ? " bad" : ""}" data-el="raise">${deal.toLocaleString()} ${spIcon("right")} <b>${
-                f.setTo.toLocaleString()}</b></span>` : deal.toLocaleString()}<small ${SMALL} data-tip="${attr(`Delivered by a wholesale store${
+          <td>${deal ? `${over ? `<span class="sp-up${f.st === "short" ? " bad" : ""}" data-el="raise">${num(deal)} ${spIcon("right")} <b>${
+                num(f.setTo)}</b></span>` : num(deal)}<small ${SMALL} data-tip="${attr(`Delivered by a wholesale store${
                 t.wholesaleDay ? ` each ${t.wholesaleDay}` : " each week"}`)}">/wk wholesale</small>`
             : !t || !t.target ? (sp ? `<span class="sp-noplan" data-el="noplan">${spIcon("route")}no plan</span>` : "—")
-            : over ? `<span class="sp-up${f.st === "short" ? " bad" : ""}" data-el="raise">${t.target.toLocaleString()} ${spIcon("right")} <b>${
-                f.setTo.toLocaleString()}</b></span>` : t.target.toLocaleString()}</td>
+            : over ? `<span class="sp-up${f.st === "short" ? " bad" : ""}" data-el="raise">${num(t.target)} ${spIcon("right")} <b>${
+                num(f.setTo)}</b></span>` : num(t.target)}</td>
           <td class="gauge${f.st === "short" ? " low" : ""}">${gauge(t, f)}</td>
-          <td>${sp && !l.units ? `<span class="sp-red">${l.units.toLocaleString()}</span>` : l.units.toLocaleString()}</td></tr>`;
+          <td>${sp && !l.units ? `<span class="sp-red">${num(l.units)}</span>` : num(l.units)}</td></tr>`;
       }).join("")}</tbody></table>` : `<p class="quiet">Nothing stocked here.</p>`;
   const shelfMore = shelved && !office && sideShelves.length ? `
     <p class="quiet" style="margin:12px 0 0"><a class="link" href="#" id="shelfToggle" aria-expanded="${showAllShelves}">${
@@ -19545,8 +20011,9 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
                                       .concat(mode === "smart" ? ["smart"] : []));
     const key = id(slug);
     // The key a tick was stored under while rows were keyed by the item's
-    // name, for reconcileOrderMarks to carry over.
-    const legacyKey = id(item);
+    // name, for reconcileOrderMarks to carry over. That name was English, so
+    // with the names in another language it is the key's English name.
+    const legacyKey = id(typeof gnLang !== "undefined" && gnLang !== "en" ? englishName(slug) || item : item);
     rows.push({key, legacyKey, group, item, slug, current, proposed, reason, kind, site: s, source, mode,
                ...(paused ? {paused: true} : {}), ...(tight ? {tight: true} : {}), ...(lower ? {lower: true} : {})});
   };
@@ -19558,21 +20025,21 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     const mode = r.smart ? "smart" : "weekly";
     // A level is set on one contract: the one that holds it is named.
     const where = r.levelName ?? r.levelImporter;
-    const setting = n => r.smart ? `Set Smart Delivery stock${where ? ` at ${where}` : ""} to ${n.toLocaleString()}.`
-      : `Set the weekly order to ${n.toLocaleString()}.`;
+    const setting = n => r.smart ? `Set Smart Delivery stock${where ? ` at ${where}` : ""} to ${num(n)}.`
+      : `Set the weekly order to ${num(n)}.`;
     const yours = `Your own figure${r.setTo !== null && r.setTo !== undefined
-      ? `; the board suggests ${r.setTo.toLocaleString()}` : ""}.`;
+      ? `; the board suggests ${num(r.setTo)}` : ""}.`;
     // What a route from the company's own site brings is off the week already.
     const p = r.parts || {};
-    const byRoute = p.route ? `, less the ${p.route.toLocaleString()} a week a route brings` : "";
-    const sized = `${r.use ? `Uses ${r.use.toLocaleString()} a week${p.lines && p.sites ? " (factory lines and shops)"
+    const byRoute = p.route ? `, less the ${num(p.route)} a week a route brings` : "";
+    const sized = `${r.use ? `Uses ${num(r.use)} a week${p.lines && p.sites ? " (factory lines and shops)"
       : p.lines ? " (factory lines)" : p.sites ? " (shops)" : ""}` : "Sized"}${byRoute}${margin(r.margin)}`;
     if(r.fit === "paused" && ((r.need || 0) > 0 || r.edited || importResumes(r))){
-      const now = r.smart ? `set to keep ${(r.inGame ?? r.pausedWeekly).toLocaleString()} in stock`
-        : `configured for ${r.pausedWeekly.toLocaleString()} units/week`;
+      const now = r.smart ? `set to keep ${num(r.inGame ?? r.pausedWeekly)} in stock`
+        : `configured for ${num(r.pausedWeekly)} units/week`;
       add("Weekly imports", r.s, r, null, r.edited ? value : null,
         `Resume the paused import contract. It is ${now}. ${r.edited ? `${setting(value)} ${yours}`
-          : (r.need || 0) > 0 ? `${sized}: ${(r.setTo ?? r.need).toLocaleString()} a week. Review the quantity after resuming.`
+          : (r.need || 0) > 0 ? `${sized}: ${num(r.setTo ?? r.need)} a week. Review the quantity after resuming.`
           : "The top-up beside it falls short without it; resume it, or raise the top-up."}`,
         null, mode, true);
     } else if(r.edited ? r.changed : r.setTo !== null && r.setTo !== undefined){
@@ -19582,18 +20049,18 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     }
   }));
   looseRows.forEach(r => add("Weekly imports", null, r, null, null,
-    `Choose a supplying depot before setting an order. The factory lines use ${Math.round(r.week).toLocaleString()} units/week.`));
+    `Choose a supplying depot before setting an order. The factory lines use ${num(Math.round(r.week))} units/week.`));
   imports.forEach(r => {
     const f = r.fact || {};
     const catchUp = Number.isFinite(r.catchUp) && r.catchUp > 0 ? r.catchUp : null;
     if(f.st === "paused" && !rows.some(x => x.kind === "Weekly imports" && x.site === r.s && x.slug === r.slug)) add("Weekly imports", r.s, r, null, null,
       `Review the paused import from ${r.from || "the supplier"}; resume it in-game if still needed.`);
     else if(f.st === "short" && f.why === "shortfall" && r.covered) add("Before the next delivery", r.s, r, null, catchUp,
-      `${catchUp ? `Bring in ${catchUp.toLocaleString()} extra units${r.runsOut ? ` before ${r.runsOut}` : ""}. ` : ""}A route brings the week's draw, but a busy day may empty the shelf before its next round${r.paused
+      `${catchUp ? `Bring in ${num(catchUp)} extra units${r.runsOut ? ` before ${r.runsOut}` : ""}. ` : ""}A route brings the week's draw, but a busy day may empty the shelf before its next round${r.paused
         ? `, and the backup import from ${r.from || "the supplier"} is paused. Arrange a one-off supply, raise the route's stock target, or resume the import.`
         : `. Arrange a one-off supply, or raise the route's stock target.`}`);
     else if(f.st === "short" && f.why === "shortfall") add("Before the next delivery", r.s, r, null, catchUp,
-      `${catchUp ? `Bring in ${catchUp.toLocaleString()} extra units${r.runsOut ? ` before ${r.runsOut}` : ""}. Estimated demand minus current stock and scheduled incoming deliveries, rounded up to whole units. ` : ""}Stock may run out ${r.shortBy} days before a scheduled delivery. Arrange a one-off supply; a weekly order change alone will not bridge this gap.`);
+      `${catchUp ? `Bring in ${num(catchUp)} extra units${r.runsOut ? ` before ${r.runsOut}` : ""}. Estimated demand minus current stock and scheduled incoming deliveries, rounded up to whole units. ` : ""}Stock may run out ${r.shortBy} days before a scheduled delivery. Arrange a one-off supply; a weekly order change alone will not bridge this gap.`);
   });
   sites.forEach(s => s.rows.forEach(r => {
     const f = r.fact || {};
@@ -19615,12 +20082,12 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     /* A top-up target set far above what sells (idle, `lowers`): the lower
        target to type, a change that is never tight and never on Today. */
     if(from !== null && r.peakSold > 0 && set(f) && f.lowers) add("Shop daily top-ups", r.s, r, r.target || 0,
-      f.setTo, `From ${address(from)}. Lower the top-up: it holds ${r.sold > 0 ? `${Math.round((r.target || 0) / r.sold).toLocaleString()} days` : "weeks"} of sales. `
-        + `Peak sales ${r.peakSold.toLocaleString()} units/day${r.peakDay ? ` on ${r.peakDay}` : " (no weekday profile)"} until the next round${margin(r.margin)}.`,
+      f.setTo, `From ${address(from)}. Lower the top-up: it holds ${r.sold > 0 ? `${num(Math.round((r.target || 0) / r.sold))} days` : "weeks"} of sales. `
+        + `Peak sales ${num(r.peakSold)} units/day${r.peakDay ? ` on ${r.peakDay}` : " (no weekday profile)"} until the next round${margin(r.margin)}.`,
       from, null, false, false, true);
     else if(from !== null && r.peakSold > 0 && set(f)) add("Shop daily top-ups", r.s, r, r.target || 0,
       f.setTo, `From ${address(from)}. `
-        + `Peak sales ${r.peakSold.toLocaleString()} units/day${r.peakDay ? ` on ${r.peakDay}` : " (no weekday profile)"}${margin(r.margin)}; check shelf space.`,
+        + `Peak sales ${num(r.peakSold)} units/day${r.peakDay ? ` on ${r.peakDay}` : " (no weekday profile)"}${margin(r.margin)}; check shelf space.`,
       from, null, false, f.st === "tight");
   });
   /* A shop or depot a wholesale store delivers to each week: the contract's
@@ -19633,14 +20100,14 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     /* The margin as the fact carries it: a depot's factory lines sized 24/7
        take none, so its need is its use and no margin is claimed. */
     const sized = Number.isFinite(f.need) && Number.isFinite(f.use) && f.need > f.use
-      ? `${margin(r.margin)}, ${f.need.toLocaleString()} in all` : "";
+      ? `${margin(r.margin)}, ${num(f.need)} in all` : "";
     if(set(f)) add("Wholesale deliveries", r.s, r, Number.isFinite(f.have) ? f.have : null, f.setTo,
-      `${f.role === "depot" ? "Uses" : "Sells"} ${(f.use || 0).toLocaleString()} a week${sized}. Change the amount on the wholesale delivery contract in-game.`,
+      `${f.role === "depot" ? "Uses" : "Sells"} ${num(f.use || 0)} a week${sized}. Change the amount on the wholesale delivery contract in-game.`,
       null, "weekly", false, f.st === "tight");
     /* Independent of the contract: stock that runs out before the delivery
        is brought in by hand, whether or not the contract is raised too. */
     if(f.st === "short" && Number.isFinite(f.catchUp) && f.catchUp > 0) add("Before the next delivery", r.s, r, null, f.catchUp,
-      `Bring in ${f.catchUp.toLocaleString()} extra units by hand before ${when} wholesale delivery: the stock on hand runs out before it lands.`);
+      `Bring in ${num(f.catchUp)} extra units by hand before ${when} wholesale delivery: the stock on hand runs out before it lands.`);
   });
   /* A depot only a route from your own site feeds: the top-up that route's
      plan holds it to, against its busiest day (its fact's day figures). */
@@ -19650,7 +20117,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     const from = Number.isInteger(f.from) ? f.from : null;
     add("Depot daily top-ups", r.s, r, Number.isFinite(f.have) ? f.have : 0, f.setTo,
       `${from !== null ? `Set on the plan of ${address(from)}. ` : ""}Its busiest day sends on ${
-        (f.use || 0).toLocaleString()} units${margin(r.margin)}.`,
+        num(f.use || 0)} units${margin(r.margin)}.`,
       from, null, false, f.st === "tight");
   });
   /* A factory line rostered fewer hours than the sizing on screen needs: the
@@ -19737,7 +20204,7 @@ function planImportsState(rows, marks, nameOf, gaps = {}){
   const more = also.length ? ` ${(gaps.margin || 0) + (gaps.lower || 0)} more on Supply only ${also.join(" or ")}.` : "";
   if(!left.length) return {badge: "ALL TICKED", live: false,
     what: `You ticked ${rows.length === 1 ? "the one change" : `all ${rows.length}`}. A change the game has taken leaves the list with the next save.${more}`};
-  const n = v => v === null || v === undefined ? "not set" : v.toLocaleString();
+  const n = v => v === null || v === undefined ? "not set" : num(v);
   /* A paused import the player gave a figure has no current setting: it is
      a resume, not an order going from "not set". */
   const resume = r => !!r.paused;
@@ -20111,7 +20578,7 @@ function sbStatus(f, reason, tip){
 /* The setting as the game holds it, and what to type: now, an arrow, the new
    figure. Without a change, just the setting. */
 function sbChg(now, to, unit, where){
-  const n = v => Number.isFinite(v) ? Math.round(v).toLocaleString() : "—";
+  const n = v => Number.isFinite(v) ? num(Math.round(v)) : "—";
   const body = Number.isFinite(to) && to !== now
     ? `<span class="sb-chg"><s>${n(now)}</s><span class="to">${spIcon("right")}</span><b>${n(to)}</b>${unit ? `<small>${unit}</small>` : ""}</span>`
     : `${n(now)}${unit && Number.isFinite(now) ? ` <span class="sb-unit">${unit}</span>` : ""}`;
@@ -20222,7 +20689,7 @@ function sbOthers(d, tab, claimed){
     <th class="l">Site</th><th class="l">Product</th><th>Change</th><th class="l">Why</th></tr></thead><tbody>${rows.map(r => {
       const b = D.businesses[r.site];
       const to = r.proposed === null ? `<span class="sb-unit">review</span>`
-        : r.kind === "Before the next delivery" ? `<span class="sb-chg"><b>+${r.proposed.toLocaleString()}</b><small>once</small></span>`
+        : r.kind === "Before the next delivery" ? `<span class="sb-chg"><b>+${num(r.proposed)}</b><small>once</small></span>`
         : sbChg(r.current, r.proposed, r.mode === "smart" ? "in stock" : r.mode === "weekly" ? "a week" : r.mode === "hours" ? "h a day" : "a day");
       return `${sbTr(d, {s: r.site, slug: null}, [r], null)}<td class="sb-tk">${sbTick(d, [r], `${r.item}${b ? ` at ${shortName(b)}` : ""}`)}</td>
         <td class="l">${b ? siteTd(b) : "choose a depot"}</td><td class="l">${spEsc(r.item)}</td><td>${to}</td><td class="l st">${spEsc(r.reason)}</td></tr>`;
@@ -20368,7 +20835,10 @@ function drawShopsTab(){
   /* Worst first, then the tightest shelf. */
   const usual = (all ? shelves : kept).slice().sort((a, b) => szRank(a.fact) - szRank(b.fact) || (b.pressure ?? -1) - (a.pressure ?? -1));
   const units = sbGroup(usual, r => r.fact.st === "idle" ? `${r.slug}|${r.fact.why}` : null, kids => {
-    const types = new Set(kids.map(k => (D.businesses[k.s] || {}).type).filter(Boolean));
+    /* An English phrase ("3 clothing store shops"), so the kind is the type's
+       English name, lowercased, whatever language the names are shown in. */
+    const types = new Set(kids.map(k => { const b = D.businesses[k.s] || {}; return englishName(b.typeSlug) || b.type; })
+      .filter(Boolean));
     return {s: null, item: kids[0].item, slug: kids[0].slug, fact: kids[0].fact, sold: kids.reduce((t, k) => t + (k.sold || 0), 0),
       stock: kids.reduce((t, k) => t + (k.stock || 0), 0), pressure: null, peakSold: null, target: null,
       shops: types.size === 1 ? `${kids.length} ${[...types][0].toLowerCase()} shops` : `${kids.length} shops`,
@@ -20376,7 +20846,7 @@ function drawShopsTab(){
   });
   const row = (r, kid) => {
     if(kid === "parent") return sbGroupTr(r, `<td class="l">${spEsc(r.shops)}</td><td class="l nm">${spEsc(r.item)}${sbKids(r)}</td>
-      <td>${r.sold.toLocaleString()}</td><td>—</td><td>${r.stock.toLocaleString()}</td><td>—</td>
+      <td>${num(r.sold)}</td><td>—</td><td>${num(r.stock)}</td><td>—</td>
       <td>${r.left ? `<span class="sb-chg"><b>${r.left} to type</b></span>` : ""}<span class="sub r">click to open</span></td>
       <td class="l st">${sbStatus(r.fact, spEsc(szTip(r.fact)))}</td>`);
     const b = D.businesses[r.s], f = r.fact;
@@ -20387,14 +20857,14 @@ function drawShopsTab(){
       ? sbChg(r.wholesale, set ? set.proposed : null, "a week", `wholesale${r.wholesaleDay ? `, each ${r.wholesaleDay}` : ""}`)
       : sbChg(r.target || null, set ? set.proposed : null, "a day",
           from !== null && D.businesses[from] ? `${r.target ? "from" : "plan from"} ${spEsc(shortName(D.businesses[from]))}` : "");
-    const reason = [spEsc(szTip(f)), f.st === "short" && r.peakDay ? `${r.peakDay}s sell ${(r.peakSold || 0).toLocaleString()}` : ""].filter(Boolean).join("; ");
+    const reason = [spEsc(szTip(f)), f.st === "short" && r.peakDay ? `${r.peakDay}s sell ${num(r.peakSold || 0)}` : ""].filter(Boolean).join("; ");
     return `${sbTr(d, r, r.chk, kid)}<td class="sb-tk">${sbTick(d, r.chk, `${r.item} at ${b ? shortName(b) : "the shop"}`)}</td>
       <td class="l">${siteTd(b)}</td><td class="l nm">${spEsc(r.item)}</td>
-      <td>${(r.sold ?? 0).toLocaleString()}</td>
-      <td>${r.peakSold === null || r.peakSold === undefined ? "—" : `${r.peakDay ? `${r.peakDay.slice(0, 3)} ` : ""}${r.peakSold.toLocaleString()}`}</td>
-      <td>${(r.stock ?? 0).toLocaleString()}</td>
+      <td>${num(r.sold ?? 0)}</td>
+      <td>${r.peakSold === null || r.peakSold === undefined ? "—" : `${r.peakDay ? `${r.peakDay.slice(0, 3)} ` : ""}${num(r.peakSold)}`}</td>
+      <td>${num(r.stock ?? 0)}</td>
       <td>${r.pressure === null || r.pressure === undefined ? (r.target ? "—" : sbGauge(null)) : sbGauge(r.pressure, f.st === "short" ? "bad" : f.st === "tight" ? "warn" : "")}</td>
-      <td>${setting}${once ? `<span class="sub r">bring in ${once.proposed === null ? "some" : `+${once.proposed.toLocaleString()}`} once</span>` : ""}</td>
+      <td>${setting}${once ? `<span class="sub r">bring in ${once.proposed === null ? "some" : `+${num(once.proposed)}`} once</span>` : ""}</td>
       <td class="l st">${sbStatus(f, reason, set ? set.reason : once ? once.reason : "")}${szRamp(f)}</td></tr>`;
   };
   const n = szTally(shelves, r => r.fact);
@@ -20451,10 +20921,10 @@ function sbImportCtx(d){
     : (r.levelName && (r.contracts || []).length > 1 ? `<span class="sub">at ${attr(r.levelName)}</span>` : "")
     + (!r.plainBefore ? "" : r.plainBefore >= r.inGame
       ? `<span class="sub" data-tip="${attr("A plain contract the game delivers before the level already brings the level or more, so the level brings nothing")}">${
-        r.plainBefore.toLocaleString()} a week delivered first already ${r.plainBefore > r.inGame ? "passes" : "reaches"} it</span>`
+        num(r.plainBefore)} a week delivered first already ${r.plainBefore > r.inGame ? "passes" : "reaches"} it</span>`
       : `<span class="sub" data-tip="${attr("A plain contract the game delivers before the level: it counts toward the level, and the level only tops up what is still missing")}">${
-        r.plainBefore.toLocaleString()} a week delivered first counts toward it</span>`)
-    + (r.plainAfter ? `<span class="sub" data-tip="${attr("A plain contract the game delivers after the level brings this on top of it")}">plus ${r.plainAfter.toLocaleString()} a week</span>` : "");
+        num(r.plainBefore)} a week delivered first counts toward it</span>`)
+    + (r.plainAfter ? `<span class="sub" data-tip="${attr("A plain contract the game delivers after the level brings this on top of it")}">plus ${num(r.plainAfter)} a week</span>` : "");
   /* What the box is about: the fact's verdict on the figure in game, or
      nothing where the box already says what to change it to. */
   const verdict = r => r.edited ? ""
@@ -20465,7 +20935,7 @@ function sbImportCtx(d){
         D.businesses[r.s] ? shortName(D.businesses[r.s]) : "the factory"}`)
     : r.fit === "paused" ? chipHtml(SZ_CHIP[r.fact.lvl] || "warn", "resume import", szTip(r.fact))
     : r.setTo !== null ? up(r.inGame === null ? "add" : "raise", r.fit === "tight" ? SZ_STATE.tight : szTip(r.fact))
-    : r.lower !== null ? chipHtml("dim", "could lower", `More than half again what the week needs; ${r.lower.toLocaleString()} would do`)
+    : r.lower !== null ? chipHtml("dim", "could lower", `More than half again what the week needs; ${num(r.lower)} would do`)
     : "";
   /* What the box holds, said per state: the board's suggestion, the figure
      already in game, or the player's own. */
@@ -20473,27 +20943,27 @@ function sbImportCtx(d){
     ? `the level${r.levelName ? ` at ${r.levelName}` : ""} at which the week's deliveries, in the game's order, bring ${sizing === "dem"
       ? "what the shops at the end of each chain use" : "everything this depot feeds at full capacity"}`
     : sizing === "dem" ? "a week of what the shops at the end of each chain use" : "a week of everything this depot feeds at full capacity")
-    + (r.parts.route ? `, less the ${r.parts.route.toLocaleString()} a week a route brings` : "")
+    + (r.parts.route ? `, less the ${num(r.parts.route)} a week a route brings` : "")
     + `, plus ${Number.isFinite(margin) ? `a ${Math.round(margin * 100)}%` : "the"} margin`;
   const suggests = r => r.suggested !== null && r.suggested !== r.inGame;
   const boxTip = r => r.edited
-    ? `Your own figure. ${suggests(r) ? `The board suggests ${r.suggested.toLocaleString()}` : `The game holds ${r.inGame.toLocaleString()}`}`
+    ? `Your own figure. ${suggests(r) ? `The board suggests ${num(r.suggested)}` : `The game holds ${num(r.inGame)}`}`
     : r.covered ? `The figure in game. ${routeTip(r)}`
     : r.paused ? `The figure in game, on a paused contract: resume it in game for it to deliver`
-    : suggests(r) ? `The board suggests ${r.value.toLocaleString()}: ${boardSays(r)}`
+    : suggests(r) ? `The board suggests ${num(r.value)}: ${boardSays(r)}`
     : "The figure in game; nothing here asks for a change";
-  const resetTo = r => suggests(r) ? `the board's suggestion, ${r.suggested.toLocaleString()}`
-    : `the figure in game, ${(r.inGame ?? 0).toLocaleString()}`;
+  const resetTo = r => suggests(r) ? `the board's suggestion, ${num(r.suggested)}`
+    : `the figure in game, ${num(r.inGame ?? 0)}`;
   /* Two or more contracts on one line: each is listed in the order the game
      delivers them, with its importer, how it is set and whether it runs. */
   const contractLines = r => r.contracts.length < 2 ? ""
     : `<span class="sub imp-contracts">${r.contracts.map((c, i) => `<span>${i + 1}. ${attr(c.importer || "Importer")} · ${
-        c.smart ? `keeps ${c.amount.toLocaleString()} in stock` : `${c.amount.toLocaleString()} a week`}${c.active ? "" : " · paused"}</span>`).join("")}<span class="imp-order">In delivery order, set at the headquarters in game</span></span>`;
+        c.smart ? `keeps ${num(c.amount)} in stock` : `${num(c.amount)} a week`}${c.active ? "" : " · paused"}</span>`).join("")}<span class="imp-order">In delivery order, set at the headquarters in game</span></span>`;
   /* The setting cell: the figure in game, the arrow, the Set to box, and what
      the box is about. */
   const cell = r => {
     const now = r.inGame === null ? (r.covered ? chipHtml("dim", "not imported", routeTip(r)) : chipHtml(SZ_CHIP[r.fact.lvl] || "dim", "not imported", szTip(r.fact)))
-      : `<s>${r.inGame.toLocaleString()}</s>`;
+      : `<s>${num(r.inGame)}</s>`;
     const arrow = r.value !== null && r.value !== r.inGame ? `<span class="to">${spIcon("right")}</span>` : "";
     const box = r.value === null ? "" : `<span class="imp-set"><input type="number" min="0" step="1" inputmode="numeric"
       class="imp-in" value="${r.value}" data-imp="${attr(r.impId)}" data-imp-suggested="${r.suggested ?? ""}" data-imp-ingame="${r.inGame ?? ""}" data-tip="${attr(boxTip(r))}" aria-label="${attr(`Set ${r.item} to, ${r.smart ? "units kept in stock" : "units a week"}`)}">${
@@ -20535,7 +21005,7 @@ function sbDepotRows(d, claimed, s, slugs){
   });
 }
 function sbDepotRow(d, ctx, r, kid){
-  if(kid === "parent") return sbGroupTr(r, `<td class="l nm">Idle stock${sbKids(r)}</td><td>${r.stock.toLocaleString()}</td><td>—</td><td>—</td>
+  if(kid === "parent") return sbGroupTr(r, `<td class="l nm">Idle stock${sbKids(r)}</td><td>${num(r.stock)}</td><td>—</td><td>—</td>
     <td class="l"><span class="sb-rail">${spRail(0, null, false, true)}</span></td><td><span class="sub r">click to open</span></td><td>—</td>
     <td class="l st">${sbStatus(r.fact, spEsc(r.why))}</td>`);
   const f = r.fact, ir = r.ir, b = D.businesses[r.s];
@@ -20555,19 +21025,19 @@ function sbDepotRow(d, ctx, r, kid){
     : "—";
   const parts = szParts(f.parts);
   const rated = sizing === "cap" && (f.parts || {}).lines > 0 && f.dem && Number.isFinite(f.dem.use)
-    ? `<span class="sb-rated" data-tip="${attr(`Sized 24/7 (the switch on Factories): factory lines at their rated output round the clock. Sized for Demand this line would use ${f.dem.use.toLocaleString()} a week.`)}">24/7</span>` : "";
-  const week = r.week === null ? "—" : `<span class="sb-uses"${parts ? ` data-tip="${attr(parts)}"` : ""}>${r.week.toLocaleString()}</span>${rated}${szRamp(f)}`;
+    ? `<span class="sb-rated" data-tip="${attr(`Sized 24/7 (the switch on Factories): factory lines at their rated output round the clock. Sized for Demand this line would use ${num(f.dem.use)} a week.`)}">24/7</span>` : "";
+  const week = r.week === null ? "—" : `<span class="sb-uses"${parts ? ` data-tip="${attr(parts)}"` : ""}>${num(r.week)}</span>${rated}${szRamp(f)}`;
   const unfed = (f.unfed || []).filter(u => D.businesses[u[0]]);
-  const reason = unfed.length ? `not routed: ${unfed.map(u => `${spEsc(shortName(D.businesses[u[0]]))} ${u[1].toLocaleString()}/day`).join(", ")}`
+  const reason = unfed.length ? `not routed: ${unfed.map(u => `${spEsc(shortName(D.businesses[u[0]]))} ${num(u[1])}/day`).join(", ")}`
     : spEsc(szTip(f));
   return `${sbTr(d, r, r.chk, kid, r.imp && r.imp.changed ? "imp-changed" : "")}<td class="sb-tk">${sbTick(d, r.chk, `${r.item} at ${b ? shortName(b) : "the depot"}`)}</td>
-    <td class="l nm"${r.imp && r.imp.users ? ` data-tip="${attr(r.imp.users.length ? `Drawn by ${r.imp.users.map(u => `${shortName(D.businesses[u.s])} ${u.perDay.toLocaleString()}/d`).join(", ")}` : "No factory line or shop on a plan draws it")}"` : ""}>${spEsc(r.item)}${
-      r.imp && Number.isFinite(r.imp.arrived) ? `<span class="sub">${r.imp.arrived.toLocaleString()} arrived last week</span>` : ""}</td>
-    <td>${(r.stock ?? 0).toLocaleString()}</td>
-    <td>${r.draw === null ? "—" : r.draw.toLocaleString()}${ir && ir.basis === "order" ? `<span class="sub"> est.</span>` : ""}</td>
-    <td>${r.busy === null ? "—" : `${ir && ir.peakDay ? `${ir.peakDay.slice(0, 3)} ` : ""}${r.busy.toLocaleString()}`}</td>
+    <td class="l nm"${r.imp && r.imp.users ? ` data-tip="${attr(r.imp.users.length ? `Drawn by ${r.imp.users.map(u => `${shortName(D.businesses[u.s])} ${num(u.perDay)}/d`).join(", ")}` : "No factory line or shop on a plan draws it")}"` : ""}>${spEsc(r.item)}${
+      r.imp && Number.isFinite(r.imp.arrived) ? `<span class="sub">${num(r.imp.arrived)} arrived last week</span>` : ""}</td>
+    <td>${num(r.stock ?? 0)}</td>
+    <td>${r.draw === null ? "—" : num(r.draw)}${ir && ir.basis === "order" ? `<span class="sub"> est.</span>` : ""}</td>
+    <td>${r.busy === null ? "—" : `${ir && ir.peakDay ? `${ir.peakDay.slice(0, 3)} ` : ""}${num(r.busy)}`}</td>
     <td class="l">${cover}</td>
-    <td class="imp-to">${setting}${once ? `<span class="sub r">bring in ${once.proposed === null ? "some" : `+${once.proposed.toLocaleString()}`} once</span>` : ""}</td>
+    <td class="imp-to">${setting}${once ? `<span class="sub r">bring in ${once.proposed === null ? "some" : `+${num(once.proposed)}`} once</span>` : ""}</td>
     <td>${week}</td>
     <td class="l st">${sbStatus(f, reason, (r.chk[0] || {}).reason || "")}</td></tr>`;
 }
@@ -20610,8 +21080,8 @@ function drawWarehousesTab(){
     ].filter(Boolean).join("");
     const floor = (b.lines || []).reduce((t, l) => t + (l.units || 0), 0);
     const weekUse = rows.reduce((t, r) => t + (r.week || 0), 0);
-    const stats = sbStat("On the floor", floor.toLocaleString())
-      + (weekUse ? sbStat("Uses / week", weekUse.toLocaleString(), sizing === "cap" ? "24/7" : "demand",
+    const stats = sbStat("On the floor", num(floor))
+      + (weekUse ? sbStat("Uses / week", num(weekUse), sizing === "cap" ? "24/7" : "demand",
           "What a week uses along every route out of here, under the sizing on screen: what the imports have to bring, before the one chain margin") : "");
     if(!all && !keep.length){
       const arrivedHere = sbArrive && sbArrive.tab === "warehouses" && sbArrive.s === s;
@@ -20630,8 +21100,8 @@ function drawWarehousesTab(){
       how: "<span><em>factory inputs no depot imports or tops up</em></span>",
       body: `<div class="scrollx"><table class="sb-t"><thead><tr><th class="sb-tk" aria-label="Typed in"></th><th class="l">Product</th><th>Uses / week</th><th class="l">Status</th></tr></thead><tbody>${
         d.looseRows.map((r, i) => `${sbTr(d, {s: null, slug: r.slug}, chk[i], null)}<td class="sb-tk">${sbTick(d, chk[i], r.item)}</td>
-          <td class="l nm" data-tip="${attr(`Drawn by ${r.users.map(u => `${shortName(D.businesses[u.s])} ${Math.round(u.perDay).toLocaleString()}/d`).join(", ")}`)}">${spEsc(r.item)}</td>
-          <td>${Math.round(r.week).toLocaleString()}</td><td class="l st">${sbStatus(r.fact, "choose a depot to import it")}</td></tr>`).join("")}</tbody></table></div>`}));
+          <td class="l nm" data-tip="${attr(`Drawn by ${r.users.map(u => `${shortName(D.businesses[u.s])} ${num(Math.round(u.perDay))}/d`).join(", ")}`)}">${spEsc(r.item)}</td>
+          <td>${num(Math.round(r.week))}</td><td class="l st">${sbStatus(r.fact, "choose a depot to import it")}</td></tr>`).join("")}</tbody></table></div>`}));
     every = every.concat(d.looseRows.map((r, i) => ({s: null, slug: r.slug, fact: r.fact, chk: chk[i]})));
   }
   const n = szTally(every, r => r.fact);
@@ -20717,17 +21187,17 @@ function sbLineRow(d, r, site){
       r.basis === "table" ? "Recipe table" : "named by you"}</span>${r.basis === "you" && r.rid
       ? ` <button type="button" class="unname" data-rid="${r.rid}" data-tip="Forget this name" aria-label="Forget this name">${CLOSE_ICON}</button>` : ""}
       <span class="sub">${spEsc(r.workstation)}${slotText(r)}, ${r.rate}/h a machine${r.limitHeld && Number.isFinite(r.limit)
-        ? ` · <span data-tip="Produce up to stops the line once ${attr(r.item)} holds ${r.limit.toLocaleString()}">held by Produce up to ${r.limit.toLocaleString()}</span>` : ""}</span></td>
+        ? ` · <span data-tip="Produce up to stops the line once ${attr(r.item)} holds ${num(r.limit)}">held by Produce up to ${num(r.limit)}</span>` : ""}</span></td>
     <td class="l">${spMachines(r.machines, r.gaps, r.slots)}</td>
     <td class="l">${hours}</td>
-    <td>${(r.makes ?? 0).toLocaleString()}${r.missing && r.missing.length ? `<span class="sub">stopped: no ${r.missing.map(spEsc).join(", ")}</span>`
-      : r.fullWeek && r.hoursWeek < r.fullWeek ? `<span class="sub">${(r.atRoster ?? 0).toLocaleString()} at this roster</span>` : ""}</td>
+    <td>${num(r.makes ?? 0)}${r.missing && r.missing.length ? `<span class="sub">stopped: no ${r.missing.map(spEsc).join(", ")}</span>`
+      : r.fullWeek && r.hoursWeek < r.fullWeek ? `<span class="sub">${num(r.atRoster ?? 0)} at this roster</span>` : ""}</td>
     ${r.later ? `<td colspan="2"><span class="sub" data-tip="${attr(`Ships, held and what the plans take are ${r.item}'s, shared by every line making it; they are on the other ${r.item} line, at ${r.later}`)}">shared with the other ${
-      spEsc(r.item)} line</span></td>` : `<td>${(r.ships ?? 0).toLocaleString()}${r.piling ? ` <span class="chip warn">piling up</span>` : ""}${r.toCity > 0
-      ? `<span class="sub" data-tip="The target the line's delivery plans top your own sites up to">tops up to ${r.toCity.toLocaleString()}</span>` : ""}${r.toPier > 0
-      ? `<span class="sub" data-tip="What the plans from this factory send to a pier for export">+${r.toPier.toLocaleString()} export</span>` : ""}${r.makers > 1
+      spEsc(r.item)} line</span></td>` : `<td>${num(r.ships ?? 0)}${r.piling ? ` <span class="chip warn">piling up</span>` : ""}${r.toCity > 0
+      ? `<span class="sub" data-tip="The target the line's delivery plans top your own sites up to">tops up to ${num(r.toCity)}</span>` : ""}${r.toPier > 0
+      ? `<span class="sub" data-tip="What the plans from this factory send to a pier for export">+${num(r.toPier)} export</span>` : ""}${r.makers > 1
       ? `<span class="sub" data-tip="${attr(`Shared by the ${r.makers} lines making ${r.item}`)}">all ${r.makers} ${spEsc(r.item)} lines</span>` : ""}</td>
-    <td>${(r.stock ?? 0).toLocaleString()}${Number.isFinite(r.limit) ? `<span class="sub">of ${r.limit.toLocaleString()}</span>` : ""}</td>`}
+    <td>${num(r.stock ?? 0)}${Number.isFinite(r.limit) ? `<span class="sub">of ${num(r.limit)}</span>` : ""}</td>`}
     <td class="l st">${f ? sbStatus(f, reason, tip) : "—"}</td></tr>`;
 }
 function sbInputRow(d, r, site){
@@ -20738,14 +21208,14 @@ function sbInputRow(d, r, site){
   const setting = r.directImport ? `<span class="sub" data-tip="Weekly import delivered to this factory; assessed against weekly input demand, not daily logistics rounds.">direct import</span>`
     : sbChg(r.target || null, set ? set.proposed : null, "a day", r.from !== null && r.from !== undefined && D.businesses[r.from]
       ? `from ${spEsc(shortName(D.businesses[r.from]))}` : "")
-      + (!set && Number.isFinite(f.lower) ? `<span class="sub r">${f.lower.toLocaleString()} would do</span>` : "")
+      + (!set && Number.isFinite(f.lower) ? `<span class="sub r">${num(f.lower)} would do</span>` : "")
       + (route ? `<span class="sub r">check the route</span>` : "");
   const says = szSays(f, r, depot);
   return `${sbTr(d, r, r.chk, null)}<td class="sb-tk">${sbTick(d, r.chk, `${r.item} at ${b ? shortName(b) : "the factory"}`)}</td>
     <td class="l nm">${spEsc(r.item)}<span class="sub">${factoryLineText(site, r)}</span></td>
-    <td>${szUse(f, r.perDay).toLocaleString()}${szRamp(f)}</td>
-    <td>${(r.stock ?? 0).toLocaleString()}</td>
-    <td>${r.known ? r.arrives.toLocaleString() : "—"}${r.known && r.perDay ? `<span class="sub"> ${Math.round(r.arrives / r.perDay * 100)}%</span>` : ""}</td>
+    <td>${num(szUse(f, r.perDay))}${szRamp(f)}</td>
+    <td>${num(r.stock ?? 0)}</td>
+    <td>${r.known ? num(r.arrives) : "—"}${r.known && r.perDay ? `<span class="sub"> ${Math.round(r.arrives / r.perDay * 100)}%</span>` : ""}</td>
     <td>${setting}</td>
     <td class="l st">${sbStatus(f, says || spEsc(szTip(f)), (set || route || {}).reason || "")}</td></tr>`;
 }
@@ -20811,7 +21281,7 @@ function drawFactoriesTab(){
     const staffed = Math.round(site.lines.reduce((t, l) => t + (l.hoursWeek || 0), 0) / 7);
     const stats = sbStat("Machines", placed, Number.isFinite(running) && running < placed ? `${running} running` : "",
         Number.isFinite(running) ? `${placed} placed; ${running} run a recipe with someone posted at some hour` : "")
-      + sbStat("Staffed", staffed.toLocaleString(), "h a day", "Hours a day someone is posted to a machine, all lines together");
+      + sbStat("Staffed", num(staffed), "h a day", "Hours a day someone is posted to a machine, all lines together");
     return sbObject("factories", s, {icon: "gear", how, stats, left, open: left > 0 || keep.some(r => r.fact && r.fact.lvl === "critical"), body});
   });
   const lineN = szTally(everyLine.filter(r => r.fact), r => r.fact);
@@ -20885,7 +21355,7 @@ function drawFactoryStaffing(){
         l.machines > 1 ? `<small class="sb-per">× ${l.machines} machines</small>` : ""}</span></div>`;
     }).join("");
     return `<div class="sb-sfac"><div class="sb-sfh"><span>${name}</span><span class="sb-hc">${
-      (hc.needed ?? 0).toLocaleString()} machine-hours a week; you have <b>${hc.have ?? 0}</b> factory workers${chip}${small}${unnamedNote}</span>${wage}${go}</div>${lines}</div>`;
+      num(hc.needed ?? 0)} machine-hours a week; you have <b>${hc.have ?? 0}</b> factory workers${chip}${small}${unnamedNote}</span>${wage}${go}</div>${lines}</div>`;
   });
   const lead = sizing === "dem" ? "Sized for demand" : "Sized 24/7";
   const tot = workers || perDay ? `<div class="sb-stot"><span>${lead}:</span>${workers ? `<b class="${workers > 0 ? "up" : "dn"}">${workers > 0 ? "+" : "−"}${plural(Math.abs(workers), "factory worker")}</b>` : ""}${
@@ -21154,7 +21624,7 @@ function drawMarket(){
      a phone shows; the full name stays in its tip. */
   grid.innerHTML = any
     ? `<div></div>` + m.hoods.map((h, j) => `<div class="h${h === marketSortHood ? " sort" : ""}${HOOD_TAGS[h] ? " mk-tagged" : ""}" data-c="${j}" data-hood="${attr(h)}" data-tip="${
-        attr(`${hoodName(h)}: click to sort by demand here`)}"><span class="mk-long">${shortHood(hoodName(h))}</span>${
+        attr(`${hoodName(h)}: click to sort by demand here`)}"><span class="mk-long"${gnLangAttr()}>${shortHood(hoodName(h))}</span>${
         HOOD_TAGS[h] ? `<span class="mk-tag">${HOOD_TAGS[h]}</span>` : ""}</div>`).join("")
       + shown.map((r, i) => types ? typeRow(r, i, m.hoods) : productRow(r, i, m.hoods, m.trendDays)).join("")
       + (offices.length ? `<div class="band">Offices<small>customers served online · each cell is the demand for its hourly fee</small></div>`
@@ -21198,7 +21668,7 @@ function planTypes(){
   const cat = D.plan.catalogue || {};
   return Object.keys(cat)
     .filter(k => (cat[k].products || []).length >= 1)
-    .sort((a,b) => cat[a].type.localeCompare(cat[b].type));
+    .sort((a,b) => gnCompare(cat[a].type, cat[b].type));
 }
 
 /* What one shop actually shifts is measured where the owner runs the type, so
@@ -21304,7 +21774,7 @@ function drawPlan(){
     if(!r){
       bought++;
       return `<tr><td class="l">${itemName(slug)}<span class="sub">no recipe in the game: bought in${
-          wantWeek ? ` · shops want ${Math.round(wantWeek).toLocaleString("en-US")}/week` : ""}</span></td>
+          wantWeek ? ` · shops want ${num(Math.round(wantWeek))}/week` : ""}</span></td>
         <td class="l" colspan="4"><span class="quiet">the game documents no way to make this one; the shops buy it from an importer</span></td></tr>`;
     }
     const station = ws[r.workstation] || {};
@@ -21324,7 +21794,7 @@ function drawPlan(){
          each Monday at one depot, not an amount on order, so it is said depot
          by depot and never summed; a level of N supplies at most N a week,
          which is why it counts toward what is ordered below. */
-      const units = v => v.toLocaleString("en-US");
+      const units = v => num(v);
       const perDepot = (src, would) => (src.depots || []).map(d => d.smart
         ? `Smart Delivery ${would ? "would keep" : "keeps"} ${units(d.level)} in stock at ${d.warehouse}${
             d.name && d.name !== d.importer ? ` (${d.name})` : ""}${
@@ -21335,13 +21805,13 @@ function drawPlan(){
         : `${units(d.weekly)} a week to ${d.warehouse}`).join("; ");
       const on = !src ? "Not on any import contract yet"
         : src.active && src.smart ? `${perDepot(src, false)}, from ${src.from}`
-        : src.active ? `${src.ordered.toLocaleString("en-US")} a week on order now from ${src.from} to ${src.warehouse}`
+        : src.active ? `${num(src.ordered)} a week on order now from ${src.from} to ${src.warehouse}`
         : paused && src.smart ? `Paused: ${perDepot(src, true)}, from ${src.from}; nothing active`
-        : paused ? `${paused.toLocaleString("en-US")} a week sits on paused contracts from ${src.from} to ${src.warehouse}; nothing active`
+        : paused ? `${num(paused)} a week sits on paused contracts from ${src.from} to ${src.warehouse}; nothing active`
         : `${contracts} contract${contracts === 1 ? "" : "s"} with ${src.from} to ${src.warehouse}, ordered at zero`;
       meta[i.item] = {
         tip: on
-          + (base ? `; your factories already eat ${base.toLocaleString("en-US")} of it a week` : "")
+          + (base ? `; your factories already eat ${num(base)} of it a week` : "")
           + (unit !== undefined ? `; ${fmt(unit)} each on day ${D.plan.priceDay}` : ""),
         ordered: src ? src.ordered : null, active: src ? src.active : false,
         smart: !!(src && src.smart), paused, contracts, from: src ? src.from : null, baseline: base,
@@ -21349,8 +21819,8 @@ function drawPlan(){
       };
     });
     return `<tr class="line" data-m="${machinesOn(slug)}" data-min="0" data-max="99" data-rate="${r.out}" data-ing="${attr(ing)}" data-kit="${attr(JSON.stringify(kit))}" data-slug="${attr(slug)}" data-name="${attr(r.item)}">
-      <td class="l">${r.item}<span class="sub" data-tip="${attr(`One ${station.name || r.workstation} is ${kit.length ? kit.join(" + ") : "one machine"}; one makes ${(r.out * HOURS).toLocaleString("en-US")} a day`)}">${
-        r.out.toLocaleString("en-US")}/h rated · ${station.name || r.workstation}</span></td>
+      <td class="l">${r.item}<span class="sub" data-tip="${attr(`One ${station.name || r.workstation} is ${kit.length ? kit.join(" + ") : "one machine"}; one makes ${num(r.out * HOURS)} a day`)}">${
+        num(r.out)}/h rated · ${station.name || r.workstation}</span></td>
       <td class="l"><span class="step"><a href="#" data-d="-1" aria-label="one machine fewer">−</a><b>${machinesOn(slug)}</b><a href="#" data-d="1" aria-label="one machine more">+</a><span class="machines"></span></span></td>
       <td class="made"></td><td class="covers"></td><td class="l"><span class="ing"></span></td></tr>`;
   });
@@ -21374,7 +21844,7 @@ function drawPlan(){
     <p class="quiet" id="vKit" style="margin:12px 0 0"></p>
     <p class="planline">${own && perShop
       ? `Your <b>${shops}</b> ${low}${shops === 1 ? "" : "s"} take what ${shops === 1 ? "it sells" : "they sell"} today, <b>${
-          perShop.toLocaleString("en-US")}</b> a day per product, <b id="vTake"></b> units a week across the range. Everything above that, <b id="vSurplus"></b> units a week, is surplus for export.`
+          num(perShop)}</b> a day per product, <b id="vTake"></b> units a week across the range. Everything above that, <b id="vSurplus"></b> units a week, is surplus for export.`
       : own ? `Your <b>${shops}</b> ${low}${shops === 1 ? "" : "s"} trade, but how much physical supply they use is not measured, so shop coverage and export surplus cannot be estimated here.`
       : `You do not run a ${low} yet, so nothing here is measured: everything made, <b id="vSurplus"></b> units a week, is surplus for export until the shops exist.`}<span id="vShort"></span></p>`;
   planDraw();
@@ -21445,9 +21915,9 @@ function drawProducts(){
       return `<tr data-slug="${attr(p.slug)}">
       <td class="l"${showPeak?"":` data-tip="${attr(peakTip(p))}"`}>${name}</td>
       <td><span class="bar"><i style="width:${(p.revenue / top * 100).toFixed(0)}%"></i></span>${fmt(p.revenue)}</td>
-      <td>${p.units.toLocaleString()}</td>
-      <td>${(p.week ?? p.units * 7).toLocaleString()}</td>
-      <td>$${p.price.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td>${num(p.units)}</td>
+      <td>${num(p.week ?? p.units * 7)}</td>
+      <td>$${num(p.price, {minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       <td>${p.stores}</td>
       ${showPeak?`<td class="${p.peak?"pos":""}" data-tip="${attr(peakTip(p))}">${
         p.peak ? `${p.peak.slice(0,3)} +${p.swing}` : "—"}</td>`:""}</tr>`;}).join("")}</tbody></table>`;
@@ -22575,20 +23045,20 @@ function drawGoals(){
      the completed count with an unfilled box. Goods made, tax paid and the
      buildings owned are running totals below the checklist: owning all 885
      buildings is not a goal anybody plays for. */
-  const num = n => (n || 0).toLocaleString();
-  const ofAll = (label, n, total) => total > 0 ? [[label, n >= total, `${num(n)} / ${num(total)}`]] : [];
+  const count = n => num(n || 0);
+  const ofAll = (label, n, total) => total > 0 ? [[label, n >= total, `${count(n)} / ${count(total)}`]] : [];
   const miles = [
     ...ofAll("Every business type run", g.typesRun, g.typesTotal),
     ...ofAll("Rivals taken over", g.rivalsDefeated, g.rivalsTotal),
     ...(g.goalsTotal > 0 ? ofAll("Personal goals done", g.goalsDone ?? g.completed, g.goalsTotal)
-      : [["Personal goals done", false, `${num(g.goalsDone ?? g.completed)} done`]]),
+      : [["Personal goals done", false, `${count(g.goalsDone ?? g.completed)} done`]]),
     ...ofAll("Diplomas earned", g.diplomas, g.diplomasTotal),
   ];
   $("secGoals").innerHTML = sechead("Milestones", {quiet: "career totals"})
     + `<div class="miles">${miles.map(([label, done, text]) =>
       `<div class="mile${done ? " done" : ""}"><span class="box">${icon("tick")}</span>${
         label}<span class="c">${text}</span></div>`).join("")}</div>`
-    + `<p class="quiet">${num(g.goodsProduced)} goods produced · ${compact(g.taxesPaid || 0)} in tax paid · ${
+    + `<p class="quiet">${count(g.goodsProduced)} goods produced · ${compact(g.taxesPaid || 0)} in tax paid · ${
       plural(g.buildingsOwned || 0, "building")} owned</p>`;
 }
 
@@ -23572,7 +24042,7 @@ const ALERT_GROUPS = [
   {id:"notrading",    label:"Not trading yet",        note:"Temporarily closed, or open but with no staff, no prices, no stock or no trading day", on:true},
   {id:"vacant",       label:"Vacant leases",          note:"A lease still paying rent with no business in it", on:true},
   {id:"loss",         label:"Losing money",           note:"A business that lost money yesterday", on:true},
-  {id:"staff",        label:"Nobody on shift",        note:"A shop or office with nobody on, or a machine nobody is posted to", on:true},
+  {id:"staff",        label:"Nobody staffed",         note:"A shop or office with nobody working, or a machine nobody staffs", on:true},
   {id:"satisfaction", label:"Low satisfaction",       note:"Customer satisfaction under 80%", on:true},
   {id:"promotion",    label:"Promotion below cap",    note:"A shop under the 100% cap with campaigns left to run", on:true},
   {id:"uniform",      label:"Uniforms / locker",      note:"Missing uniform locker or staff uniforms", on:true},
@@ -24217,7 +24687,7 @@ const ssEsc = s => String(s ?? "").replace(/[&<>"']/g, c =>
   ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
 const ssPhone = () => !!(window.matchMedia && matchMedia("(max-width:560px)").matches);
 const ssTyping = t => !!t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName || ""));
-const ssNum = n => Math.round(n || 0).toLocaleString("en-US");
+const ssNum = n => num(Math.round(n || 0));
 
 /* --- where things land ----------------------------------------------------- */
 /* Every way into one site from a finding, a search or a question goes through
@@ -24284,7 +24754,7 @@ function ssTopType(){
     by[b.typeSlug] = by[b.typeSlug] || {slug: b.typeSlug, type: b.type, revenue: 0};
     by[b.typeSlug].revenue += b.revenue || 0;
   });
-  return Object.values(by).sort((a, z) => z.revenue - a.revenue || a.type.localeCompare(z.type))[0] || null;
+  return Object.values(by).sort((a, z) => z.revenue - a.revenue || gnCompare(a.type, z.type))[0] || null;
 }
 function ssPrices(){
   const t = ssTopType();
@@ -24551,8 +25021,11 @@ window.addEventListener("hashchange", ssAfter);
    site's address (its name is a link to it), land where Enter goes (said in
    the footer), go what Enter does. */
 function ssEntry(o){
-  const e = Object.assign({syn: [], kw: [], tag: "", dot: "", hood: "", map: "", mapLabel: "", land: "", href: ""}, o);
+  const e = Object.assign({syn: [], kw: [], tag: "", dot: "", hood: "", map: "", mapLabel: "", land: "", href: "", en: ""}, o);
   e.lt = e.t.toLowerCase(); e.lp = e.p.toLowerCase();
+  /* A game name shown in another language answers to its English name too. */
+  if(e.en === e.t) e.en = "";
+  e.le = e.en.toLowerCase();
   e.kwRaw = e.kw.map(s => String(s));
   e.syn = e.syn.map(s => s.toLowerCase()); e.kw = e.kwRaw.map(s => s.toLowerCase());
   if(!e.land) e.land = e.p;
@@ -24651,7 +25124,7 @@ const SS_VIEWS = [
 ];
 /* The words players use for a kind of finding. */
 const SS_KIND_SYN = {feed: ["fed", "inputs", "ingredients", "starved"], atcap: ["capacity", "full", "ceiling", "turned away"],
-  idlestaff: ["overstaffed", "idle staff", "too many staff", "hire"], staff: ["unstaffed", "no staff", "staffing", "hire"],
+  idlestaff: ["overstaffed", "idle staff", "too many staff", "hire"], staff: ["unstaffed", "no staff", "staffing", "hire", "on shift"],
   jobdemand: ["demands", "unhappy staff", "quit", "hire"], companydemand: ["insurance", "health insurance", "hr manager"],
   dead: ["dead stock", "stock not moving", "not moving"], target: ["overstock"],
   notrouted: ["not routed", "no route", "unrouted", "stuck in the warehouse"],
@@ -24687,6 +25160,9 @@ function ssKindGo(id){
     if(row){ row.scrollIntoView({block: "nearest"}); ssRing(row); }
   }, 450);
 }
+/* The English names of some game keys, where the page shows them in another
+   language: extra words a search answers to. */
+const ssEnglish = keys => gnLang === "en" ? [] : keys.filter(Boolean).map(k => englishName(k)).filter(Boolean);
 /* The tab holding the most idle rows. */
 function ssIdleTab(){
   const n = {shops: 0, warehouses: 0, factories: 0};
@@ -24714,7 +25190,8 @@ function ssBuild(){
     const fac = D.supply && D.supply.factories;
     const facSites = (fac && fac.sites) || [];
     const eats = {};
-    facSites.forEach(f => { eats[f.s] = (f.needs || []).map(n => n.item); });
+    const eatSlugs = {};
+    facSites.forEach(f => { eats[f.s] = (f.needs || []).map(n => n.item); eatSlugs[f.s] = (f.needs || []).map(n => n.slug); });
     /* A site's dot is the worst finding the list reads out for it: a kind
        switched off does not colour it. */
     const siteRows = {};
@@ -24724,7 +25201,8 @@ function ssBuild(){
       out.push(ssEntry({id: `site:${b.key}`, g: "sites", t: shortName(b),
         p: b.status === "vacant" ? `Vacant lease · ${b.address || ""}`
           : `${b.type} · ${b.address || ""}${inputs.length ? ` · eats ${inputs.join(" and ")}` : ""}`,
-        ic: "building", hood: b.code || "", kw: [b.address, b.neighbourhood && hoodName(b.neighbourhood), b.type, b.name, ...inputs].filter(Boolean),
+        ic: "building", hood: b.code || "", kw: [b.address, b.neighbourhood && hoodName(b.neighbourhood), b.type, b.name, ...inputs,
+          ...ssEnglish([b.neighbourhood, b.typeSlug, ...(eatSlugs[i] || [])])].filter(Boolean),
         dot: ssWorst(siteRows[b.key] || []), map: b.key, mapLabel: b.name, land: b.name, href: siteHref(b.key),
         go: () => ssOpenSite(b.key)}));
     });
@@ -24778,7 +25256,7 @@ function ssBuild(){
       if(!it.kind) Object.assign(it, {kind: "idle", ic: "crate", land: `Supply › ${SB_LABEL[sbTabOf(r.s)]} · Idle stock`,
         go: () => sbLand(sbTabOf(r.s), r.s, r.slug, "")});
     });
-    items.forEach((it, slug) => out.push(ssEntry({id: `product:${slug}`, g: "products", t: it.name,
+    items.forEach((it, slug) => out.push(ssEntry({id: `product:${slug}`, g: "products", t: it.name, en: englishName(slug),
       p: it.parts.slice(0, 2).join(" · "), ic: it.ic, dot: it.dot || "", land: it.land, go: it.go})));
     const counts = kindCounts();
     ALERT_GROUPS.forEach(g => {
@@ -24796,8 +25274,9 @@ function ssBuild(){
       const had = best.get(d.slug);
       if(!had || d.demand > had.demand) best.set(d.slug, {...d, hood});
     }));
-    [...best.values()].sort((a, z) => z.demand - a.demand || a.type.localeCompare(z.type)).forEach(d => {
+    [...best.values()].sort((a, z) => z.demand - a.demand || gnCompare(a.type, z.type)).forEach(d => {
       out.push(ssEntry({id: `finder:${d.slug}`, g: "finder", t: `Open ${/^[AEIOU]/i.test(d.type) ? "an" : "a"} ${d.type}`,
+        kw: ssEnglish([d.slug, d.hood]),
         p: `best fit: ${hoodName(d.hood)} · demand ${d.demand}`, ic: "pin",
         syn: ["new shop", "new business", "open", "expand"], land: `Map › Find a location · ${d.type}`,
         go: () => ssFinder({cat: d.category, type: d.slug, hoods: [d.hood]})}));
@@ -24807,10 +25286,14 @@ function ssBuild(){
       go: () => ssFinder({cat: "warehouse", type: "", hoods: null})}));
   }
   /* The wiki's own index (wikiIndex() in web/wiki.js), once its file is in. */
-  if(typeof wikiData !== "undefined" && wikiData && wikiData.search) wikiData.search.forEach(w =>
-    out.push(ssEntry({id: `wiki:${w.id}`, g: "wiki", t: w.title, p: `Wiki › ${w.category || "the game's help"}`, ic: "wiki",
-      syn: SS_WIKI_SYN[w.title] || [], land: `Wiki › ${w.title}`,
-      go: () => ssHash(wikiHref({kind: "page", id: w.id}))})));
+  /* A page titled with a game name is listed under the name as shown, and
+     answers to its English title too (`en`), as the wiki's own search does. */
+  if(typeof wikiData !== "undefined" && wikiData && wikiData.search) wikiData.search.forEach(w => {
+    const shown = typeof wikiName === "function" ? wikiName(w.key, w.title) : w.title;
+    out.push(ssEntry({id: `wiki:${w.id}`, g: "wiki", t: shown, en: w.title, p: `Wiki › ${w.category || "the game's help"}`, ic: "wiki",
+      syn: SS_WIKI_SYN[w.title] || [], land: `Wiki › ${shown}`,
+      go: () => ssHash(wikiHref({kind: "page", id: w.id}))}));
+  });
   return out;
 }
 
@@ -24825,6 +25308,8 @@ function ssScore(e, qq, ws){
   if(e.lt.startsWith(qq)) return [100, "t", ""];
   if(ws.test(e.lt)) return [85, "t", ""];
   if(e.lt.includes(qq)) return [60, "t", ""];
+  if(e.le && (e.le.startsWith(qq) || ws.test(e.le))) return [80, "kw", e.en];
+  if(e.le && e.le.includes(qq)) return [55, "kw", e.en];
   for(const s of e.syn) if(s.startsWith(qq) || (qq.length >= 4 && s.includes(qq))) return [70, "syn", s];
   const k = e.kw.findIndex(w => ws.test(w));
   if(e.g === "sites" && k >= 0) return [75, "kw", e.kwRaw[k]];
@@ -25589,7 +26074,7 @@ function planDraw(){
      Tuesday does not count as covering the shop. The surplus stays weekly. */
   const peakDay = host ? (+host.dataset.pershop || 0) * (+host.dataset.peak || 1) : 0;
   const wantWeek = perShopWeek * shopsOwned;  // one product, every shop, a week
-  const fmtN = n => Math.round(n).toLocaleString("en-US");
+  const fmtN = n => num(Math.round(n));
   let machines = 0, made = 0, raw = 0, exportWeek = 0, shortLines = 0;
   const ing = {}, kitCount = {};
   lines.forEach(tr => {
@@ -25684,14 +26169,14 @@ function planDraw(){
       `<td class="l"><span class="usedby" data-tip="${attr(`Used by ${r.by.join(", ")}`)}">${
         r.by.slice(0, 2).join(", ")}${r.by.length > 2 ? ` +${r.by.length - 2}` : ""}</span></td>` +
       `<td>${fmtN(r.week / 7)}</td><td class="wk">${fmtN(r.week)}</td><td><span class="set">${fmtN(o.target)}</span></td>` +
-      `<td>${ordered === null ? `<span class="quiet">not ordered</span>` : ordered.toLocaleString("en-US")
+      `<td>${ordered === null ? `<span class="quiet">not ordered</span>` : num(ordered)
         }${ordered !== null && i.smart && i.active ? ` <span class="sub plan-smart" data-tip="Smart Delivery keeps a stock level at each depot; this is the most those levels supply in a week, which the target is compared with. Hover the ingredient for each depot's level">a week at most, Smart Delivery</span>` : ""
         }${i.paused ? ` ${chipHtml("warn", `paused ${fmtN(i.paused)}`, "Also sits on paused contracts; never counted as ordered")}` : ""}</td>` +
       `<td>${gap === null ? "—"
         : ordered === null ? chipHtml("warn", `+${fmtN(gap)}`, "No contract yet, so this is the whole order to place")
         : Math.abs(gap) < 1 ? chipHtml("ok", "as is")
-        : gap > 0 ? chipHtml("warn", `+${Math.ceil(gap).toLocaleString("en-US")}`)
-        : chipHtml("dim", Math.floor(gap).toLocaleString("en-US"))}</td>` +
+        : gap > 0 ? chipHtml("warn", `+${num(Math.ceil(gap))}`)
+        : chipHtml("dim", num(Math.floor(gap)))}</td>` +
       `<td class="cash">${value === null ? `<span class="quiet">no price</span>` : fmt(value)}</td></tr>`;
     }).join("");
     /* No price known anywhere: the column goes, and the ? says why. */
@@ -26211,7 +26696,7 @@ const GW_REFUSE = {
     over_cap: r => {
       const p = (r.products || []).find(x => x && x.error === "over_cap") || r;
       const max = p.max === null || p.max === undefined ? NaN : Number(p.max);
-      return {rule: `More than the importer still allows this week${Number.isFinite(max) ? ` (${max.toLocaleString()})` : ""}`,
+      return {rule: `More than the importer still allows this week${Number.isFinite(max) ? ` (${num(max)})` : ""}`,
         fix: "Lower the amount, or bring the rest through another importer."};
     },
     bad_amount: {rule: "An amount is not a whole number of 0 or more", fix: "Correct it, then try again."},
@@ -27035,13 +27520,13 @@ function gwLineWords(l, place){
   const at = `${spEsc(l.r.item)} at ${spEsc(l.depot.name)}`;
   const words = [];
   if(l.uncovered > 0) words.push(place
-    ? `<b>${Math.round(l.uncovered).toLocaleString()} a week of ${at} not covered</b>: ${GW_UNCOVERED[l.cause]}.`
-    : `${Math.round(l.uncovered).toLocaleString()} a week not covered: ${GW_UNCOVERED[l.cause]}.`);
+    ? `<b>${num(Math.round(l.uncovered))} a week of ${at} not covered</b>: ${GW_UNCOVERED[l.cause]}.`
+    : `${num(Math.round(l.uncovered))} a week not covered: ${GW_UNCOVERED[l.cause]}.`);
   else if(l.cause !== "caps") words.push(place ? `<b>${at}</b>: ${GW_UNCOVERED[l.cause]}.`
     : `${GW_UNCOVERED[l.cause].replace(/^./, x => x.toUpperCase())}.`);
   /* Stopping it is the advice only where the others cover the week; short of
      it, the cap is what leaves the kept contract nothing to bring. */
-  l.kept.forEach(c => words.push(`<b>${spEsc(c.importer || "A contract")}</b> keeps its ${c.amount.toLocaleString()} a week${
+  l.kept.forEach(c => words.push(`<b>${spEsc(c.importer || "A contract")}</b> keeps its ${num(c.amount)} a week${
     place ? ` of ${at}` : ""}: ${l.uncovered > 0 ? "its importer's cap leaves it nothing this week"
       : "a write never stops a contract; stop it in BizMan"}.`));
   return words;
@@ -27100,7 +27585,7 @@ function gwOrdersClose(){
   const left = hours >= 48 ? `${Math.floor(hours / 24)} d` : hours >= 1 ? `${Math.floor(hours)} h` : `${Math.max(1, Math.round(hours * 60))} min`;
   return `orders close<br>Sun 20:00 · in ${left}`;
 }
-const gwN = n => Math.round(Number(n) || 0).toLocaleString();
+const gwN = n => num(Math.round(Number(n) || 0));
 /* The write as the player reads it: a card a material, grouped by depot. The
    bar is what the contracts hold now (grey) and what the write sets (green);
    red hatching past the cap is what the importers' caps leave uncovered. The
@@ -27125,7 +27610,7 @@ function gwImportView(lines, answer, phase){
     const now = Number.isFinite(r.inGame) ? r.inGame : 0;
     const target = Number.isFinite(r.value) ? r.value : 0;
     const after = smart ? target : Math.max(0, target - (l.uncovered || 0));
-    const num = done || now === after
+    const figure = done || now === after
       ? `<span class="gw-num">${gwN(after)}<small>${unit}</small></span>`
       : `<span class="gw-num"><span class="gw-sr">from </span><s>${gwN(now)}</s>${gwSvg("right")}<span class="gw-sr"> to </span>${gwN(after)}<small>${unit}</small></span>`;
     const mode = smart ? `<span class="gw-mode smart" title="Smart Delivery: keeps this much in stock">${gwSvg("tank")}<span class="gw-sr">Smart Delivery</span></span>`
@@ -27199,7 +27684,7 @@ function gwImportView(lines, answer, phase){
       });
     }
     return `<div class="gw-line${dim ? " dim" : ""}${done ? " ticked" : ""}"><div class="gw-lt"><span class="gw-mat" aria-hidden="true">${gwSvg("crate")}</span><b>${
-      spEsc(r.item)}</b>${mode}${num}</div>${bar}${pills.length ? `<div class="gw-imps">${pills.join("")}</div>` : ""}${notes.join("")}</div>`;
+      spEsc(r.item)}</b>${mode}${figure}</div>${bar}${pills.length ? `<div class="gw-imps">${pills.join("")}</div>` : ""}${notes.join("")}</div>`;
   };
   const depots = new Map();
   lines.forEach(l => { if(!depots.has(l.depot.key)) depots.set(l.depot.key, []); depots.get(l.depot.key).push(l); });
@@ -27590,7 +28075,17 @@ function boot(){
 }
 /* A page written with its numbers boots now. One that receives them later,
    as the in-browser board does, boots on the first delivery. */
+if(D) takeData(D);
 if(D) boot();
+/* The footer's "Game names": a choice kept from an earlier visit is fetched
+   now, and a board that arrives first is drawn in English and again once the
+   table is in. A page built with --lang has its table already and no picker. */
+wireGameNames();
+if(!GN_EMBED && gnPickers().length){
+  const want = gnStored();
+  if(want && want !== "en" && gnKnown(want)) setGameNames(want);
+  else if(!want) gnOffer();
+}
 
 /* What a host page may ask of the board. The web front door offers the wiki
    from its landing, before any save is open; everything else waits for one. */
@@ -27622,7 +28117,7 @@ function startWatching(){
          rest to be drawn as it is opened; another company or save redraws it
          all. */
       const same = !first && sameCompany(D, data);
-      D = data;
+      takeData(data);
       gwTerms.clear();  // what the game said of caps belongs to the board it was said about
       gwReadStuck = false;
       if(gwOpen && gwOpen._gwGate) gwOpen._gwBuilt = true;  // an undo's gate: a board built since
@@ -28106,12 +28601,13 @@ class GameLink:
 class Board:
     """Holds the current dashboard, and rebuilds it when the save changes."""
 
-    def __init__(self, target: str, out: str, link: GameLink | None = None):
+    def __init__(self, target: str, out: str, link: GameLink | None = None, lang: str | None = None):
         self.target = target
         self.link = link
         self.out = out
         self.locale_source, locale = game_text()
         self.names = Names(locale)
+        self.lang_names = cli_names(lang, self.locale_source, locale)
         self.history = os.path.join(os.path.dirname(out) or ".", "market_history.json")
         self.lock = threading.Lock()
         self.html = b""
@@ -28172,8 +28668,10 @@ class Board:
 
         try:
             data = safe_extract(load_save(path), self.names, self.history)
-            live_page = render(data, live=True).encode("utf-8")
-            static_page = render(data).encode("utf-8")
+            # names= only for --lang: an English board renders as it always has.
+            lang = {"names": self.lang_names} if self.lang_names else {}
+            live_page = render(data, live=True, **lang).encode("utf-8")
+            static_page = render(data, **lang).encode("utf-8")
         except Exception as exc:
             # Fingerprint it anyway. Without this a save that will not build is
             # re-read every interval -- a 26 MB parse every few seconds, which
@@ -28293,9 +28791,10 @@ def watch(
     interval: int,
     open_browser: bool,
     link: GameLink | None = None,
+    lang: str | None = None,
 ) -> None:
     lowered = yield_to_the_game()
-    board = Board(target, out, link=link)
+    board = Board(target, out, link=link, lang=lang)
     try:
         board.refresh(settle=False)
     except LinkUnavailable as exc:
@@ -28411,6 +28910,24 @@ def locale_note(source: str | None, locale: dict[str, str]) -> str:
     return f"game text: {source}"
 
 
+def cli_names(lang: str | None, source: str | None, english: dict[str, str]) -> dict | None:
+    """--lang: the game names of one language, from the installed game, for
+    render(names=...). None for English or no --lang."""
+    if not lang or lang == "en":
+        return None
+    if lang not in GAME_NAME_LANGS:
+        raise SystemExit(f"--lang {lang}: the game has no such language; one of "
+                         + ", ".join(code for code in GAME_NAME_LANGS))
+    if not source or bundled_locale(source):
+        raise SystemExit(f"--lang {lang} reads the game's own {lang}.json beside its en.json, "
+                         "and no installed game was found; set BA_LOCALE to the game's en.json")
+    other = load_locale(os.path.join(os.path.dirname(source), f"{lang}.json"))
+    if name_coverage(english, other) < NAME_COVERAGE:
+        raise SystemExit(f"--lang {lang}: {os.path.join(os.path.dirname(source), lang + '.json')} "
+                         "names too few of the game's items to use")
+    return {"lang": lang, "names": name_table(english, other)}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -28454,6 +28971,14 @@ def main() -> None:
         help="read the running game through the Big Copilot Link mod instead of a "
         "save folder; URL defaults to http://127.0.0.1:8322. The bytes are kept "
         "as game-link.hsg beside the output file",
+    )
+    ap.add_argument(
+        "--lang",
+        default=None,
+        metavar="CODE",
+        help="show the game's own names (items, business types, neighbourhoods, "
+        "skills) in one of the game's languages, e.g. de, fr, ja, zh-cn; the rest "
+        "of the page stays English",
     )
     ap.add_argument(
         "--backfill",
@@ -28505,7 +29030,8 @@ def main() -> None:
         print(f"  merged {recorded} snapshots into {os.path.basename(history)}")
 
     if args.watch:
-        watch(target, out, port=args.port, interval=interval, open_browser=not args.no_open, link=link)
+        watch(target, out, port=args.port, interval=interval, open_browser=not args.no_open, link=link,
+              lang=args.lang)
         return
 
     if link is not None:
@@ -28522,9 +29048,10 @@ def main() -> None:
     else:
         path = newest_under(target)
         source_name = os.path.basename(path)
+    lang_names = cli_names(args.lang, locale_source, locale)
     data = safe_extract(load_save(path), names, history)
     with open(out, "w", encoding="utf-8") as fh:
-        fh.write(render(data))
+        fh.write(render(data, names=lang_names))
 
     k = data["kpi"]
     minor = data["minor"]

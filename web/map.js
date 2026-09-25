@@ -128,6 +128,8 @@ const GLIDE_MS = 700;
 const FINDER_CATS = [["retail","Retail"],["office","Office"],["warehouse","Warehouse"],["cinema","Cinema"],["theater","Theater"]];
 const FINDER_KEY = "ba_finder_v1";
 const premises = () => D?.premises || null;
+/* Names sort in the language the board shows them in (gnCompare()). */
+const mapCompare = (a, b) => typeof gnCompare === 'function' ? gnCompare(a, b) : String(a).localeCompare(String(b));
 const mapCharacter = () => D?.meta?.character || D?.supply?.factories?.character || D?.meta?.save || "";
 /* A size letter whose layouts disagree carries [min, max] rather than a number. */
 const capText = c => c == null ? "—" : Array.isArray(c) ? `${c[0]}–${c[1]}` : String(c);
@@ -147,7 +149,7 @@ const FINDER_SHOWS = [
   ["sale", "For sale", "Whole buildings the game offers for sale, cheapest first. Buying one is an investment, not an opening, so it is not scored."],
 ];
 const finderDefaults = () => ({on:false, cat:"retail", type:"", show:"rent",
-  hoods:null, minM2:0, maxM2:0, minCap:0, maxCap:0, minTraffic:0, sort:"score", sortPicked:false});
+  hoods:null, layouts:[], minM2:0, maxM2:0, minCap:0, maxCap:0, minTraffic:0, sort:"score", sortPicked:false});
 /* Buildings run past a billion on a mature save, where the board's compact form
    would say "$5584.2M". An asking price gets its own scale. */
 const askingPrice = n => n == null ? "—"
@@ -248,8 +250,9 @@ const finderRange = (label, lo, hi) => lo && hi ? `${label} ${lo}–${hi}` : lo 
    A layout is the building's size and version ("C2"); make_floor_plans.py
    draws every layout the finder's kinds use out of the game's own shells, as
    one path of rectangles for each of floor, bay, wall, window and door, 24
-   units a metre. The finder fetches the file the first time it is on. A row
-   with no plan (a cinema, or a save the file does not cover) shows nothing. */
+   units a metre. The file is fetched the first time a picked building has a
+   layout, and the plan shows in that building's card. A building with no plan
+   (a cinema, or a save the file does not cover) shows no plan block. */
 let floorPlanAssets = null;
 function loadFloorPlans(){
   if(!floorPlanAssets) floorPlanAssets = (async () => {
@@ -262,9 +265,6 @@ function loadFloorPlans(){
   return floorPlanAssets;
 }
 const FLOOR_PLAN_PX = 24;
-/* The map area left of the panel the dock needs; a narrower one gets the switch. */
-const FLOOR_PLAN_DOCK_MIN = 560;
-const FLOOR_PLAN_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="1"></rect><path d="M4 11h7v9M11 4v4M15 11h5"></path></svg>';
 const FLOOR_PLAN_TIP = "The game's own layout for the building, seen from above and shown the way the game stores it, so the top is not necessarily north or the street. Walls are grey, windows blue and doors green; a door on the outside wall is an entrance. In a warehouse, the gaps in the floor are the loading bays. m² and cap are the game's figures for the size.";
 /* One plan at s pixels a metre, painted in the board's colours by class. */
 function floorPlanSvg(plan, s, label){
@@ -301,18 +301,6 @@ class CityMapView {
       const sorter = e.target.closest('.fhead [data-s]');
       if(sorter){ this.sortBy(sorter.dataset.s); return; }
       if(e.target.closest('[data-more]')){ this.showAll = true; this.update(); return; }
-      // A layout on the shelf lists only that layout; a second click, or the
-      // chip in the filters, lists them all again.
-      const tile = e.target.closest('[data-lp-tile]');
-      if(tile){ this.layoutPick = this.layoutPick === tile.dataset.lpTile ? null : tile.dataset.lpTile; this.showAll = false; this.update(); return; }
-      if(e.target.closest('[data-lp-clear]')){ this.layoutPick = null; this.showAll = false; this.update(); return; }
-      const view = e.target.closest('[data-lp-view]');
-      if(view){
-        this.planView = view.dataset.lpView === 'plan'; this.paintPlans();
-        // The card was out of layout under the plan; place it again now the map is back.
-        if(!this.planView) this.paintView();
-        return;
-      }
       const action = e.target.closest('[data-action]')?.dataset.action;
       if(action === 'in' || action === 'out') this.zoom(action === 'in' ? .65 : 1.5);
       if(action === 'reset') this.reset(true);
@@ -376,11 +364,9 @@ class CityMapView {
       <g class="map-pips"></g></g></svg>
       <div class="layer">${(a.districtLabels || []).map(l=>`<span class="dlabel" data-x="${l.anchor[0]}" data-y="${l.anchor[1]}">${mapText(l.label)}</span>`).join('')}
         <div class="shadow" aria-hidden="true"></div><div class="ball" aria-hidden="true"><i></i><u></u></div>
-        <div class="site" role="region" aria-live="polite" hidden><span class="tail"></span><button type="button" class="x" aria-label="Close">${ICON.x}</button><h3></h3><div class="sub"></div><div class="nums"></div><div class="st" hidden></div><div class="facts" hidden></div><div class="fit" hidden></div><p class="why" hidden></p><div class="finds2"></div><a class="go2 ss-pagego" href="#detail" data-action="details">${SS_PAGE}its page</a></div>
+        <div class="site" role="region" aria-live="polite" hidden><span class="tail"></span><button type="button" class="x" aria-label="Close">${ICON.x}</button><h3></h3><div class="sub"></div><div class="nums"></div><div class="st" hidden></div><div class="facts" hidden></div><div class="lp-plan" hidden></div><div class="fit" hidden></div><p class="why" hidden></p><div class="finds2"></div><a class="go2 ss-pagego" href="#detail" data-action="details">${SS_PAGE}its page</a></div>
       </div>
-      ${this.panel ? `<div class="lp-dock" role="region" aria-label="Floor plans" hidden></div><div class="lp-phoneplan" hidden></div>` : ""}
       ${this.panel ? this.finderControls() : ""}
-      ${this.panel ? `<div class="lp-seg" role="group" aria-label="Show the map or the floor plan" hidden><button type="button" data-lp-view="map" aria-pressed="true">Map</button><button type="button" data-lp-view="plan" aria-pressed="false">${FLOOR_PLAN_ICON}Plan</button></div>` : ""}
       <div class="zoomer" role="group" aria-label="Map zoom"><button type="button" class="ibtn" data-action="in" aria-label="Zoom in">+</button><button type="button" class="ibtn" data-action="out" aria-label="Zoom out">−</button><button type="button" class="ibtn" data-action="reset" aria-label="Whole city"${this.panel ? ' data-tip="Whole city"' : ''}>${ICON.home}</button>${this.panel && document.fullscreenEnabled ? `<button type="button" class="ibtn" data-action="full" aria-label="Full screen" data-tip="Full screen">${ICON.full}</button>` : ''}</div>
     </div>${this.panel ? `<aside class="places fonly" aria-label="Premises found">${this.finderPanel()}<div class="list"></div></aside>` : ""}</div>`;
     this.svg = this.root.querySelector('.map-canvas');
@@ -393,10 +379,6 @@ class CityMapView {
     this.paths = new Map([...this.root.querySelectorAll('[data-location]')].map(p => [p.dataset.location,p]));
     this.pips = this.root.querySelector('.map-pips');
     this.districts = [...this.root.querySelectorAll('.dlabel')];
-    this.dock = this.root.querySelector('.lp-dock');
-    this.phonePlan = this.root.querySelector('.lp-phoneplan');
-    this.seg = this.root.querySelector('.lp-seg');
-    this.shelfSig = null;
     if(this.search){
       this.search.oninput = () => { this.query = this.search.value; this.showAll = false; this.update(); };
       // Without a list to click, Enter takes the first match.
@@ -422,7 +404,7 @@ class CityMapView {
     this.wirePan();
     this.wireBall?.();
     this.resizeObserver?.disconnect();
-    this.resizeObserver = new ResizeObserver(() => {this.rect=null; if(!this.box) this.reset(); this.paintPlans(); this.paintView();});
+    this.resizeObserver = new ResizeObserver(() => {this.rect=null; if(!this.box) this.reset(); this.paintView();});
     this.citymap.addEventListener('fullscreenchange', () => { this.rect = null; if(this.selected) this.select(this.selected, true); else this.reset(); });
     this.resizeObserver.observe(this.svg);
     this.reset();
@@ -436,7 +418,7 @@ class CityMapView {
   hoodList(){
     const P = premises(); if(!P) return [];
     return [...new Set(P.buildings.map(b => b.hood).filter(Boolean))]
-      .sort((a, b) => hoodName(a).localeCompare(hoodName(b)));
+      .sort((a, b) => mapCompare(hoodName(a), hoodName(b)));
   }
   hoodOn(hood){ return !this.fs.hoods || this.fs.hoods.includes(hood); }
   /* The header carries the switch and nothing else; everything the finder asks
@@ -469,7 +451,7 @@ class CityMapView {
       ${row('Capacity', `<label class="fchip num">min<input type="number" min="0" data-f="minCap" value="0" aria-label="Smallest building capacity"></label>
         <label class="fchip num">max<input type="number" min="0" data-f="maxCap" value="0" aria-label="Largest building capacity"></label>`)}
       ${row('Traffic', `<label class="fchip num">min<input type="number" min="0" data-f="minTraffic" value="0" aria-label="Least foot traffic"></label>`)}
-      ${row('Layout', '<span class="lp-laychip"></span>', ' flayout')}
+      ${row('Layout', '<span class="flays" role="group" aria-label="Layouts"></span>', ' flayout')}
       ${row('Saved', `<span class="fsaved" role="group" aria-label="Saved searches"><span class="fsaved-list"></span><span class="fsaved-new">
         <label class="fchip fname" hidden><input type="text" maxlength="24" data-f="name" aria-label="Name for this search"></label>
         <span class="fsave"><button type="button" class="fchip fnew" data-f="save" data-tip="Save these filters and the sort under a name. Every character shares the saved searches; a name already taken is replaced.">${ICON.plus}Save</button><button type="button" class="fdel" data-f="cancel" aria-label="Cancel saving" hidden>${ICON.x}</button></span>
@@ -480,13 +462,14 @@ class CityMapView {
     if(!premises() || !this.panel) return;
     const changed = () => { this.showAll = false; this.saveFinder(); this.update(); };
     this.root.querySelector('[data-f="tog"]').onclick = () => {
-      this.fs.on = !this.fs.on; this.layoutPick = null; this.deselect(); changed();
+      this.fs.on = !this.fs.on; this.deselect(); changed();
     };
     this.root.querySelectorAll('.fchip.cat').forEach(chip => chip.onclick = () => {
       // A sort the player picked travels to the new category when it can; the
       // old category's own default does not, so a warehouse's floor-area order
       // never becomes the shops'.
-      this.fs.cat = chip.dataset.cat; this.fs.type = ""; this.layoutPick = null;
+      // A layout key belongs to its kind, like a business type.
+      this.fs.cat = chip.dataset.cat; this.fs.type = ""; this.fs.layouts = [];
       if(!this.fs.sortPicked) this.fs.sort = this.sortKeys()[0];
       this.clampSort();
       changed();
@@ -502,6 +485,16 @@ class CityMapView {
       let picked = this.fs.hoods ? this.fs.hoods.slice() : all.slice();
       picked = picked.includes(h) ? picked.filter(x => x !== h) : [...picked, h];
       this.fs.hoods = picked.length === all.length ? null : picked;
+      changed();
+    });
+    // Pick to filter: a chip is lit when its layout is picked, a click lights
+    // or unlights it, and the list shows only the lit layouts. None lit is no
+    // filter. The chips are drawn again with the kind, so the row answers
+    // through a handler on itself.
+    this.root.querySelector('.flays').addEventListener('click', e => {
+      const chip = e.target.closest('[data-flay]'); if(!chip) return;
+      const code = chip.dataset.flay, now = this.fs.layouts || [];
+      this.fs.layouts = now.includes(code) ? now.filter(c => c !== code) : [...now, code];
       changed();
     });
     this.root.querySelectorAll('.fchip.num input').forEach(input => input.oninput = () => {
@@ -569,6 +562,7 @@ class CityMapView {
       const saved = JSON.parse(localStorage.getItem(store));
       if(saved && typeof saved === "object") this.fs = {...this.fs, ...saved,
         hoods: Array.isArray(saved.hoods) ? finderHoodKeys(saved.hoods) : null,
+        layouts: Array.isArray(saved.layouts) ? saved.layouts.filter(c => typeof c === "string") : [],
         // Availability used to be two switches; a state saved then opens on
         // whichever list it was reading.
         show: saved.show || (saved.buy ? "takeover" : "rent")};
@@ -592,12 +586,10 @@ class CityMapView {
     // A preset is a fresh question, and Today's card advertises the vacant
     // count: it opens on vacant premises with no minimum in the way, whatever
     // the last visit left behind. Only the neighbourhoods come from the caller.
-    this.fs = {...this.fs, on:true, show:'rent', minM2:0, maxM2:0, minCap:0, maxCap:0, minTraffic:0, ...preset};
+    this.fs = {...this.fs, on:true, show:'rent', layouts:[], minM2:0, maxM2:0, minCap:0, maxCap:0, minTraffic:0, ...preset};
     // It also lands on the column the category ranks by, never on a stale sort.
     this.fs.sort = this.fs.cat === 'warehouse' ? 'm2' : 'score'; this.fs.sortPicked = false;
     this.saveFinder();
-    // A layout picked on the shelf belonged to the last question, not this one.
-    this.layoutPick = null;
     this.selected = null; this.showAll = false;  // back to the 80-row cap
     this.ready.then(ok => { if(ok) this.update(); });
   }
@@ -611,7 +603,7 @@ class CityMapView {
     let hoods = Array.isArray(f.hoods) ? f.hoods.filter(h => all.includes(h)) : null;
     if(hoods && hoods.length === all.length) hoods = null;
     // A limit that is not a number, or one with no end to it, is no limit.
-    const num = v => { const n = Math.max(0, +v || 0); return Number.isFinite(n) ? n : 0; };
+    const limit = v => { const n = Math.max(0, +v || 0); return Number.isFinite(n) ? n : 0; };
     const cat = FINDER_CATS.some(([c]) => c === f.cat) ? f.cat : "retail";
     // The type and the sort fall back here exactly as paintControls makes the
     // live ones fall back, so a search this save cannot honour in full still
@@ -620,8 +612,12 @@ class CityMapView {
     return {...f, hoods, cat, sort, sortPicked: sort === keys[0] ? false : !!f.sortPicked,
       type: this.catTypes(cat).has(f.type) ? f.type : "",
       show: FINDER_SHOWS.some(([k]) => k === f.show) ? f.show : "rent",
-      minM2: num(f.minM2), maxM2: num(f.maxM2), minCap: num(f.minCap), maxCap: num(f.maxCap),
-      minTraffic: num(f.minTraffic)};
+      minM2: limit(f.minM2), maxM2: limit(f.maxM2), minCap: limit(f.minCap), maxCap: limit(f.maxCap),
+      minTraffic: limit(f.minTraffic),
+      // A layout this save's buildings of the kind do not have is dropped, and a
+      // kind with fewer than two layouts has no layout filter at all, as on screen.
+      layouts: this.layoutKeys(cat).length < 2 || !Array.isArray(f.layouts) ? []
+        : f.layouts.filter(c => this.layoutKeys(cat).includes(c))};
   }
   /* Two states are the same search when everything the player can see matches,
      the sort included, since a search is saved with its sort. */
@@ -630,7 +626,8 @@ class CityMapView {
     // For sale is always cheapest first: the sort it carries is not on screen,
     // so two sale searches that read alike are alike.
     if(shown.show === "sale") shown.sort = null;
-    return JSON.stringify({...shown, hoods: shown.hoods ? shown.hoods.slice().sort() : null});
+    return JSON.stringify({...shown, hoods: shown.hoods ? shown.hoods.slice().sort() : null,
+      layouts: (shown.layouts || []).slice().sort()});
   }
   savedOn(){
     const now = this.savedKey(this.fs), list = finderSaved();
@@ -649,7 +646,6 @@ class CityMapView {
     if(f.show === "sale"){ f.sort = this.fs.sort; f.sortPicked = this.fs.sortPicked; }
     this.fs = {...this.fs, ...f, on:true};
     this.clampSort();
-    this.layoutPick = null;   // a saved search carries no layout
     this.showAll = false; this.deselect(); this.saveFinder(); this.update();
   }
   /* A name already in the list replaces that search in place: the exact name if
@@ -691,6 +687,7 @@ class CityMapView {
       f.hoods ? f.hoods.map(hoodTag).join(" ") || "no neighbourhood" : "every neighbourhood",
       finderRange("m²", f.minM2, f.maxM2), finderRange("capacity", f.minCap, f.maxCap),
       f.minTraffic ? `traffic ≥ ${f.minTraffic}` : "",
+      f.layouts.length ? `layout ${f.layouts.join(" ")}` : "",
       // For sale is always cheapest first, so only a ranked list names its sort.
       f.show === "sale" ? "" : `by ${FINDER_SORT_NAMES[f.sort] || f.sort}`].filter(Boolean).join(" · ");
   }
@@ -806,7 +803,7 @@ class CityMapView {
     for(const b of P.buildings){
       if(b.type !== fs.cat) continue;
       if(!this.candidate(b)) continue;
-      if(!this.hoodOn(b.hood) || b.traffic < fs.minTraffic) continue;
+      if(!this.hoodOn(b.hood) || !this.layoutOn(b.layout) || b.traffic < fs.minTraffic) continue;
       if(!finderFits(b.m2, fs.minM2, fs.maxM2)) continue;
       // Both ends judge a range by its smallest variant: a cinema seating 100
       // to 150 clears a minimum of 100 and fits under a maximum of 120, but a
@@ -815,19 +812,18 @@ class CityMapView {
       const loc = this.assets.byKey.get(b.key);
       out.push({key:b.key, address:b.address, hood:b.hood, bld:b, f:this.fitFor(b), region:loc?.region, bounds:loc?.bounds});
     }
-    const shown = this.byLayout(out, r => r.bld.layout);
     // A range sorts on the cap it can promise, the same bound the filter reads.
     const value = r => fs.sort === 'traffic' ? r.bld.traffic : fs.sort === 'demand' ? r.f.demand
       : fs.sort === 'cap' ? capMin(r.bld.cap) : fs.sort === 'deposit' ? r.bld.deposit
       : fs.sort === 'm2' ? r.bld.m2 : r.f.score;
     // A row with nothing to sort on stays at the bottom whichever way the
     // column points; it is not the smallest value, it is no value at all.
-    shown.sort((a, b) => {
+    out.sort((a, b) => {
       const x = value(a), y = value(b);
       if(x == null || y == null) return (x == null) - (y == null) || b.bld.traffic - a.bld.traffic;
       return (y - x) || b.bld.traffic - a.bld.traffic;
     });
-    return shown;
+    return out;
   }
   /* The rows carry their geometry like every other row, so a listing lights its
      own footprint and a click on either one selects it. */
@@ -836,12 +832,12 @@ class CityMapView {
     // A listing is an address with its own floor area; the kind, the traffic
     // and the door cap come from the building behind it, so the controls still
     // on screen all apply.
-    return this.byLayout(P.forSale.filter(s => {
-      if(!this.hoodOn(s.hood) || !this.saleKind(s)) return false;
+    return P.forSale.filter(s => {
+      if(!this.hoodOn(s.hood) || !this.saleKind(s) || !this.layoutOn(s.layout)) return false;
       const b = this.sites?.get(s.key);
       return finderFits(b?.traffic, fs.minTraffic, 0) && finderFits(s.m2, fs.minM2, fs.maxM2)
         && finderFits(capMin(b?.cap), fs.minCap, fs.maxCap);
-    }), s => s.layout).sort((a, b) => a.price - b.price)
+    }).sort((a, b) => a.price - b.price)
       .map(s => { const loc = this.assets.byKey.get(s.key); return {...s, region:loc?.region, bounds:loc?.bounds}; });
   }
   saleKind(s){ return (this.sites?.get(s.key)?.type ?? s.type) === this.fs.cat; }
@@ -872,8 +868,8 @@ class CityMapView {
       const sub = what + (f.rivals != null ? ` · ${f.rivals} rival${f.rivals === 1 ? '' : 's'}` : '');
       // Floor area is not shaded, like the cap: bigger is not better for every business.
       const numbers = wh
-        ? `<span class="v sc sh"${lead(b.m2, SHADE_LEAD)}>${b.m2.toLocaleString('en-US')}</span><span class="v sh"${byTraffic(b.traffic, SHADE_SIDE)}>${b.traffic}</span><span class="v"></span>`
-        : `<span class="v sc sh"${lead(f.score, SHADE_LEAD)}>${f.score ?? '—'}</span><span class="v sh"${byTraffic(b.traffic, SHADE_SIDE)}>${b.traffic}</span><span class="v sh"${byDemand(f.demand, SHADE_SIDE)}>${f.demand ?? '—'}</span><span class="v m2">${b.m2.toLocaleString('en-US')}</span>`;
+        ? `<span class="v sc sh"${lead(b.m2, SHADE_LEAD)}>${num(b.m2)}</span><span class="v sh"${byTraffic(b.traffic, SHADE_SIDE)}>${b.traffic}</span><span class="v"></span>`
+        : `<span class="v sc sh"${lead(f.score, SHADE_LEAD)}>${f.score ?? '—'}</span><span class="v sh"${byTraffic(b.traffic, SHADE_SIDE)}>${b.traffic}</span><span class="v sh"${byDemand(f.demand, SHADE_SIDE)}>${f.demand ?? '—'}</span><span class="v m2">${num(b.m2)}</span>`;
       // The dot says what taking this place would mean: an empty floor to rent
       // or a rival to buy out.
       return `<button type="button" class="place fr${grid}${b.status === 'rival' ? ' buy' : ''}${r.key === this.selected ? ' on' : ''}" data-pick="${mapText(r.key)}" aria-pressed="${r.key === this.selected}"><span class="rk"><i></i>${i + 1}</span><span class="hood">${mapText(hoodTag(b.hood))}</span><span class="nm">${mapText(b.address)}<small>${this.layoutTag(b)}${mapText(sub)}</small></span>${numbers}<span class="v cap">${mapText(capText(b.cap))}</span><span class="v dep" data-tip="${attr(depositNote(b))}">${b.deposit != null ? mapText(fmt(b.deposit)) : '—'}</span></button>`;
@@ -881,7 +877,7 @@ class CityMapView {
   }
   saleList(rows){
     return `<div class="fhead sale"><span></span><span>Address</span><span>Type</span><span>m²</span><span>Price</span></div>`
-      + rows.map(s => `<button type="button" class="place fr sale${s.key === this.selected ? ' on' : ''}" data-pick="${mapText(s.key)}" aria-pressed="${s.key === this.selected}"><span class="hood">${mapText(hoodTag(s.hood))}</span><span class="nm">${mapText(s.address)}<small>${this.layoutTag(s)}${mapText(hoodName(s.hood))}</small></span><span class="v t">${mapText(typeLabel(s.type))}</span><span class="v">${s.m2.toLocaleString('en-US')}</span><span class="v">${mapText(askingPrice(s.price))}</span></button>`).join('');
+      + rows.map(s => `<button type="button" class="place fr sale${s.key === this.selected ? ' on' : ''}" data-pick="${mapText(s.key)}" aria-pressed="${s.key === this.selected}"><span class="hood">${mapText(hoodTag(s.hood))}</span><span class="nm">${mapText(s.address)}<small>${this.layoutTag(s)}${mapText(hoodName(s.hood))}</small></span><span class="v t">${mapText(typeLabel(s.type))}</span><span class="v">${num(s.m2)}</span><span class="v">${mapText(askingPrice(s.price))}</span></button>`).join('');
   }
   /* The facts every address carries, finder on or off: what the place is, what
      it would cost and whether it is free. */
@@ -895,7 +891,7 @@ class CityMapView {
     st.innerHTML = `<i></i>${mapText(finderStatus(b))}`;
     facts.innerHTML = `<span class="wide">Owner<b>${this.ownerOf(b)}</b></span>`
       + `<span class="wide">Renter<b>${this.renterOf(b)}</b></span>`
-      + `<span>${mapText(`${typeLabel(b.type)} ${b.size || ''}`.trim())}<b>${b.m2.toLocaleString('en-US')} m²</b></span>`
+      + `<span>${mapText(`${typeLabel(b.type)} ${b.size || ''}`.trim())}<b>${num(b.m2)} m²</b></span>`
       + `<span>Foot traffic<b>${b.traffic}</b></span>`
       + `<span>Building capacity<b>${mapText(capText(b.cap))}</b></span>`
       + `<span>Est. rent / day<b>${b.rent != null ? mapText(fmt(b.rent)) : '—'}</b></span>`
@@ -909,16 +905,16 @@ class CityMapView {
     const why = card.querySelector('.why');
     why.hidden = !f.fit;
     if(f.fit) why.textContent = this.whyRanked(b, f);
-    const num = (v, lab, cls = "") => `<div class="num"><b class="mono${cls}">${v}</b><span>${lab}</span></div>`;
+    const stat = (v, lab, cls = "") => `<div class="num"><b class="mono${cls}">${v}</b><span>${lab}</span></div>`;
     // The demand is the Growth grid's own reading, so it leads back to that
     // type's row there.
     const demand = f.slug
       ? `<a class="num mf-grow" href="#secMarket" data-grow="${mapText(f.slug)}" data-tip="${
           mapText(`${f.fit} in every neighbourhood, on Growth › Demand`)}"><b class="mono">${f.demand}</b><span>demand ›</span></a>`
-      : num(f.demand, 'demand');
+      : stat(f.demand, 'demand');
     card.querySelector('.nums').innerHTML = f.score != null
-      ? num(f.score, 'score', ' sc') + num(b.traffic, 'traffic') + demand
-      : num(b.m2.toLocaleString('en-US'), 'm²') + num(b.traffic, 'traffic');
+      ? stat(f.score, 'score', ' sc') + stat(b.traffic, 'traffic') + demand
+      : stat(num(b.m2), 'm²') + stat(b.traffic, 'traffic');
     const grow = card.querySelector('.mf-grow');
     if(grow) grow.onclick = e => { e.preventDefault(); showGrowthRow(grow.dataset.grow); };
     if(grow && focusGrow) grow.focus({preventScroll: true});
@@ -977,7 +973,7 @@ class CityMapView {
     this.root.querySelectorAll('.fchip.cat').forEach(chip => mark(chip, chip.dataset.cat === this.fs.cat));
     const select = this.root.querySelector('[data-f="type"]');
     const types = this.catTypes(this.fs.cat);
-    const options = [...types].sort((a, b) => a[1].localeCompare(b[1]));
+    const options = [...types].sort((a, b) => mapCompare(a[1], b[1]));
     if(this.fs.type && !types.has(this.fs.type)) this.fs.type = "";
     select.innerHTML = `<option value="">Any type</option>` + options.map(([slug, label]) =>
       `<option value="${attr(slug)}"${slug === this.fs.type ? ' selected' : ''}>${mapText(label)}</option>`).join('');
@@ -994,13 +990,18 @@ class CityMapView {
       if(input.value !== v && document.activeElement !== input) input.value = v;
       box.classList.toggle('on', +v > 0);
     });
-    // The layout filter shows only while a layout on the shelf is chosen.
-    const layout = this.root.querySelector('.frow.flayout');
-    if(this.layoutPick && !this.planCodes().includes(this.layoutPick)) this.layoutPick = null;
-    layout.hidden = !this.layoutPick;
-    const chip = this.layoutPick ? `<button type="button" class="fchip on" data-lp-clear aria-label="${attr(`Layout ${this.layoutPick}: list every layout again`)}">Layout ${mapText(this.layoutPick)}<b aria-hidden="true">×</b></button>` : '';
-    const host = layout.querySelector('.lp-laychip');
-    if(host.dataset.sig !== chip){ host.dataset.sig = chip; host.innerHTML = chip; }
+    // The kind's layout keys, one chip each. A kind with fewer than two has
+    // nothing to choose between, so no row (and no filter).
+    const keys = this.layoutKeys(), layout = this.root.querySelector('.frow.flayout');
+    this.fs.layouts = keys.length < 2 ? [] : (this.fs.layouts || []).filter(c => keys.includes(c));
+    layout.hidden = keys.length < 2;
+    // Drawn again only when the kind's keys change, so a chip keeps the focus.
+    const host = layout.querySelector('.flays'), sig = JSON.stringify(keys);
+    if(host.dataset.sig !== sig){
+      host.dataset.sig = sig;
+      host.innerHTML = keys.map(c => `<button type="button" class="fchip flay" data-flay="${attr(c)}" aria-pressed="false">${mapText(c)}</button>`).join('');
+    }
+    host.querySelectorAll('.flay').forEach(chip => mark(chip, this.fs.layouts.includes(chip.dataset.flay)));
     this.root.querySelectorAll('.fchip.show').forEach(chip => {
       const key = chip.dataset.show;
       chip.querySelector('b').textContent = key === 'sale'
@@ -1218,173 +1219,75 @@ class CityMapView {
     if(key && fromList && this.paths.get(key)) this.paths.get(key).classList.add('hot');
     if(this.list) this.list.querySelectorAll('.hot').forEach(p => p.classList.remove('hot'));
     if(key && !fromList && this.list) this.list.querySelector(`[data-pick="${CSS.escape(key)}"]`)?.classList.add('hot');
-    // The dock follows the pointer and falls back to the pick when it leaves.
-    this.hoverFromList = !!key && fromList;
-    if(this.hoverKey !== key){ this.hoverKey = key; this.paintDockState(); }
   }
   /* --- floor plans ------------------------------------------------------------
-     Desktop: a dock bottom-left of the map area holds the kind's layouts on one
-     shelf at one scale, with the hovered or picked row's layout lit and its
-     numbers above. Phone: once a picked row has a plan, a Map / Plan switch in
-     the map window shows it full size. A row with no plan shows nothing. */
+     A picked building with a plan shows it in its card, under the facts: one
+     plan, with its layout code and its entrances (loading bays for a
+     warehouse). m² and cap are already among the facts. */
   wantPlans(){
     if(this.plansAsked) return;
     this.plansAsked = true;
     loadFloorPlans().then(plans => { this.plans = plans; if(plans && this.svg) this.update(); });
   }
-  /* The building behind a key, from the premises or a sale listing. */
-  planSite(key){
-    if(!key) return null;
-    return this.sites?.get(key) || premises()?.forSale.find(s => s.key === key) || null;
-  }
-  /* The layout code of a building this finder can draw, or null. Only a
-     building of the kind on show counts, so a footprint hovered on the map
-     never lights a layout the shelf does not hold. */
-  planOf(b){
-    const code = b?.layout;
-    return code && b.type === this.fs.cat && this.plans?.plans?.[code] && this.planCodes().includes(code) ? code : null;
-  }
-  /* The kind's layouts the file can draw. None while the payload carries no
-     layouts for the kind, so a board made before the plans shows no shelf. */
-  planCodes(){
-    const cat = this.fs.cat;
-    if(!(premises()?.buildings || []).some(b => b.type === cat && b.layout)) return [];
-    return (this.plans?.kinds?.[cat] || []).filter(c => this.plans.plans[c]);
-  }
-  layoutTag(b){ const code = this.planOf(b); return code ? `<span class="lp-tag">${mapText(code)}</span>` : ''; }
-  /* Counts every listed row's layout before the layout filter applies, so the
-     shelf can say how many of each the other filters leave. */
-  byLayout(rows, layoutOf){
-    const counts = new Map();
-    rows.forEach(r => { const c = layoutOf(r); if(c) counts.set(c, (counts.get(c) || 0) + 1); });
-    this.layoutCounts = counts;
-    if(this.layoutPick && !this.planCodes().includes(this.layoutPick)) this.layoutPick = null;
-    return this.layoutPick ? rows.filter(r => layoutOf(r) === this.layoutPick) : rows;
-  }
-  /* The height the dock takes from the bottom of the stage, 0 when it is away. */
-  dockRoom(){ return this.dock && !this.dock.hidden ? this.dock.offsetHeight + 16 : 0; }
-  /* How this stage shows plans: the dock when the map area left of the panel
-     has room for the shelf, else (a phone, or a stage the panel nearly fills)
-     the Map / Plan switch. */
-  planMode(){
-    if(!this.finderOn() || !this.plans || !this.planCodes().length) return null;
-    return !this.narrow && this.freeWidth() >= FLOOR_PLAN_DOCK_MIN ? 'dock' : 'switch';
-  }
-  paintPlans(){
-    if(!this.dock || !this.svg) return;
-    const mode = this.planMode();
-    // Showing the dock again replays its entrance (CSS on .lp-dock); nothing
-    // else does.
-    if(this.dock.hidden === (mode === 'dock')) this.dock.hidden = mode !== 'dock';
-    if(mode === 'dock') this.paintShelf(this.planCodes());
-    this.paintPhonePlan(mode === 'switch');
-  }
-  /* The kind's layouts at one scale: one row, or two when there are more than
-     six (the warehouses' twelve). The scale is the largest that fits the free
-     map area, never more than 10 px a metre. The tiles are built once for a
-     kind and a scale; counts, the filter and the lights change in place, so a
-     keystroke or a live refresh never redraws the shelf or moves the focus. */
-  paintShelf(codes){
-    const plans = this.plans.plans, wrap = codes.length > 6;
-    const lines = wrap ? [codes.slice(0, Math.ceil(codes.length / 2)), codes.slice(Math.ceil(codes.length / 2))] : [codes];
-    const perLine = lines[0].length, boxH = wrap ? 64 : 112;
-    const room = Math.max(240, Math.min(660, this.freeWidth() - 100)) - 26 - perLine * 20;
-    const tall = Math.max(...codes.map(c => plans[c].h)) / FLOOR_PLAN_PX;
-    const wide = Math.max(...lines.map(l => l.reduce((t, c) => t + plans[c].w / FLOOR_PLAN_PX, 0)));
-    const s = Math.max(.5, Math.min(10, boxH / tall, room / wide));
-    const sig = JSON.stringify([this.fs.cat, codes, s.toFixed(2)]);
-    if(sig !== this.shelfSig){
-      this.shelfSig = sig;
-      // Every building of a kind and size has the same floor area in the game.
-      const m2 = new Map();
-      (premises()?.buildings || []).forEach(b => { if(b.type === this.fs.cat && !m2.has(b.size)) m2.set(b.size, b.m2); });
-      const kind = FINDER_CATS.find(([c]) => c === this.fs.cat)?.[1] || "";
-      const tile = code => {
-        const area = m2.get(code.replace(/\d+$/, ''));
-        return `<button type="button" class="lp-tile" data-lp-tile="${attr(code)}" aria-pressed="false"><span class="lp-tilebox" style="height:${boxH}px">${floorPlanSvg(plans[code], s, `Floor plan ${code}`)}</span><span class="lp-tilecode"><b>${mapText(code)}</b>${area ? `${area.toLocaleString('en-US')} m²` : ''}</span><span class="lp-tilen"></span></button>`;
-      };
-      this.dock.innerHTML = `<div class="lp-shelf"><div class="lp-detail"><div class="lp-body"></div><span class="why lp-why" tabindex="0" data-tip="${attr(FLOOR_PLAN_TIP)}"><i>?</i></span></div><div class="lp-shelfhead"><span class="lp-lab">${mapText(kind)} layouts at one scale</span><span class="lp-note"></span>${floorPlanScale(s)}</div>${lines.map(l => `<div class="lp-tiles">${l.map(tile).join('')}</div>`).join('')}</div>`;
-      this.detailSig = null;
+  planOf(b){ const code = b?.layout; return code && this.plans?.plans?.[code] ? code : null; }
+  layoutTag(b){ return b?.layout ? `<span class="lp-tag">${mapText(b.layout)}</span>` : ''; }
+  /* The kind's layout keys, from the buildings themselves: A1, A2, C1… Kept
+     for the payload they were read from, since every row asks. */
+  layoutKeys(cat = this.fs.cat){
+    const P = premises();
+    if(this.layoutKeysOf?.P !== P) this.layoutKeysOf = {P, byCat: new Map()};
+    const memo = this.layoutKeysOf.byCat;
+    if(!memo.has(cat)){
+      const keys = new Set();
+      (P?.buildings || []).forEach(b => { if(b.type === cat && b.layout) keys.add(b.layout); });
+      memo.set(cat, [...keys].sort((a, b) => a.localeCompare(b, 'en', {numeric: true})));
     }
-    const counts = this.layoutCounts || new Map();
-    this.dock.querySelectorAll('[data-lp-tile]').forEach(t => {
-      const code = t.dataset.lpTile, n = counts.get(code) || 0, picked = this.layoutPick === code;
-      const label = `Layout ${code}, ${n || 'none'} listed. ${picked ? 'List every layout again.' : 'List only this layout.'}`;
-      t.classList.toggle('none', !n);
-      if(t.getAttribute('aria-pressed') !== String(picked)) t.setAttribute('aria-pressed', String(picked));
-      if(t.getAttribute('aria-label') !== label) t.setAttribute('aria-label', label);
-      const count = t.querySelector('.lp-tilen'), text = n ? `${n} listed` : 'none listed';
-      if(count.textContent !== text) count.textContent = text;
-    });
-    const note = this.dock.querySelector('.lp-note'), noteText = this.layoutPick ? 'click it again to list every layout' : 'click one to list only it';
-    if(note.textContent !== noteText) note.textContent = noteText;
-    this.paintDockState();
+    return memo.get(cat);
   }
-  /* The row the dock describes: the hovered one if it has a plan, else the
-     picked one, else none. */
-  planShown(){
-    for(const [key, how] of [[this.hoverKey, 'hover'], [this.selected, 'pick']]){
-      const b = this.planSite(key), code = this.planOf(b);
-      if(code) return {key, b, code, how: how === 'hover' && key === this.selected ? 'pick' : how};
+  /* None lit is no filter, and so is every one lit: the chips stay lit, but a
+     building with no layout is not dropped for want of one. */
+  layoutOn(code){
+    const lit = this.fs.layouts || [];
+    if(!lit.length) return true;
+    const keys = this.layoutKeys();
+    return keys.every(c => lit.includes(c)) || lit.includes(code);
+  }
+  paintCardPlan(key){
+    const box = this.card?.querySelector('.lp-plan'); if(!box) return;
+    const b = key ? this.sites?.get(key) || premises()?.forSale.find(s => s.key === key) : null;
+    if(b?.layout) this.wantPlans();
+    const code = this.planOf(b);
+    box.hidden = !code;
+    if(!code){ box.innerHTML = ''; box.dataset.sig = ''; return; }
+    if(box.dataset.sig === code) return;
+    box.dataset.sig = code;
+    const plan = this.plans.plans[code], wh = b.type === 'warehouse', n = wh ? plan.bays : plan.doors;
+    const what = wh ? (n === 1 ? 'loading bay' : 'loading bays') : (n === 1 ? 'entrance' : 'entrances');
+    box.innerHTML = `<div class="lp-planhead"><span class="lp-lab" tabindex="0" data-tip="${attr(FLOOR_PLAN_TIP)}">Layout</span><b>${mapText(code)}</b><span class="lp-count">${n} ${what}</span><span class="lp-scalehost"></span></div>`
+      + `<div class="lp-planbox">${floorPlanSvg(plan, 10, `Floor plan ${code}`)}</div>`;
+  }
+  /* The plan takes the card's width and what height the stage leaves it, up to
+     160 px; the scale bar follows the size it is drawn at. A card that still
+     does not fit (a phone) scrolls rather than leave the stage. */
+  sizeCardPlan(r){
+    const card = this.card, box = card.querySelector('.lp-plan');
+    // Everything is reckoned on the card's outer edge, the one that has to stay
+    // on the stage: max-height in whichever box the card sizes, and the room
+    // for the plan from the card's natural outer height (scrollHeight is the
+    // padding box's, so the borders go back on).
+    const cs = getComputedStyle(card), px = k => parseFloat(cs[k]) || 0;
+    const borderY = px('borderTopWidth') + px('borderBottomWidth'), padY = px('paddingTop') + px('paddingBottom');
+    const outer = Math.max(120, r.height - 24);
+    card.style.maxHeight = `${cs.boxSizing === 'border-box' ? outer : outer - borderY - padY}px`;
+    if(box && !box.hidden && box.dataset.sig){
+      const svg = box.querySelector('svg'), plan = this.plans.plans[box.dataset.sig];
+      const others = card.scrollHeight + borderY - svg.getBoundingClientRect().height;
+      box.style.setProperty('--lp-plan-max', `${Math.max(90, Math.min(160, Math.floor(outer - others)))}px`);
+      const sr = svg.getBoundingClientRect(), s = Math.min(sr.width / (plan.w / FLOOR_PLAN_PX), sr.height / (plan.h / FLOOR_PLAN_PX));
+      const bar = floorPlanScale(s), host = box.querySelector('.lp-scalehost');
+      if(s > 0 && host.dataset.sig !== bar){ host.dataset.sig = bar; host.innerHTML = bar; }
     }
-    return null;
-  }
-  planNumbers(b, code){
-    const plan = this.plans.plans[code], wh = b.type === 'warehouse';
-    const site = this.sites?.get(b.key) || b;
-    const n = wh ? plan.bays : plan.doors;
-    const num = (v, label) => `<div><b>${mapText(v)}</b><span>${label}</span></div>`;
-    return `<div class="lp-nums">${num(b.m2.toLocaleString('en-US'), 'm²')}${num(capText(site.cap), 'cap')}${
-      num(n, wh ? (n === 1 ? 'loading bay' : 'loading bays') : (n === 1 ? 'entrance' : 'entrances'))}</div>`;
-  }
-  paintDockState(){
-    if(!this.dock || this.dock.hidden) return;
-    const shown = this.planShown(), hoverCode = shown?.how === 'hover' ? shown.code : null;
-    const pickCode = this.planOf(this.planSite(this.selected));
-    this.dock.querySelectorAll('[data-lp-tile]').forEach(t => {
-      t.classList.toggle('lit', t.dataset.lpTile === pickCode);
-      t.classList.toggle('hover', t.dataset.lpTile === hoverCode && hoverCode !== pickCode);
-    });
-    const detail = this.dock.querySelector('.lp-detail'); if(!detail) return;
-    // The ? stays put; only the words beside it change, and only when they do.
-    let cls = 'lp-detail empty', body = '<p class="lp-hint">Hover a row to light its layout here; pick one to keep it lit.</p>';
-    if(shown){
-      const {b, code, how} = shown;
-      const kind = FINDER_CATS.find(([c]) => c === b.type)?.[1] || typeLabel(b.type);
-      cls = `lp-detail ${how}`;
-      body = `<div class="lp-id"><div class="lp-state"><i></i><span>${how === 'hover' ? 'Hovered' : 'Picked'}</span></div>`
-        + `<div class="lp-code"><b>${mapText(code)}</b><span>${mapText(`${kind}, size ${b.size}`)}</span></div>`
-        + `<div class="lp-addr">${mapText(b.address)}</div></div>${this.planNumbers(b, code)}`;
-    }
-    if(detail.className !== cls) detail.className = cls;
-    if(this.detailSig !== body){ this.detailSig = body; detail.querySelector('.lp-body').innerHTML = body; }
-  }
-  /* The Map / Plan switch, on a phone or a stage too narrow for the dock: it
-     shows the pick, since a phone has no hover. The plan covers the map area
-     left of the panel, where there is one. */
-  paintPhonePlan(on){
-    if(!this.seg || !this.phonePlan) return;
-    // Plan stays chosen while the dock has the stage (a maximised window), and
-    // comes back with the switch; only a pick with no plan resets it.
-    if(!this.planOf(this.planSite(this.selected))) this.planView = false;
-    const b = on ? this.planSite(this.selected) : null, code = this.planOf(b), view = !!code && !!this.planView;
-    this.seg.hidden = !code;
-    this.seg.querySelectorAll('[data-lp-view]').forEach(btn => {
-      const pressed = (btn.dataset.lpView === 'plan') === view;
-      btn.classList.toggle('on', pressed); btn.setAttribute('aria-pressed', String(pressed));
-    });
-    // The plan view hides the map's layer, the site card with it (map.css).
-    this.stage.classList.toggle('lp-planview', view);
-    this.phonePlan.hidden = !view;
-    if(!view){ this.phonePlanSig = null; return; }
-    const r = this.stageRect(), plan = this.plans.plans[code], panel = this.hasPanel() ? PANEL_W : 0;
-    this.phonePlan.style.right = `${panel}px`;
-    const s = Math.max(.5, Math.min(14, (r.width - panel - 44) / (plan.w / FLOOR_PLAN_PX), (r.height - 190) / (plan.h / FLOOR_PLAN_PX)));
-    const sig = JSON.stringify([b.key, code, s.toFixed(2)]);
-    if(sig === this.phonePlanSig) return;
-    this.phonePlanSig = sig;
-    this.phonePlan.innerHTML = `<div class="lp-ppbox">${floorPlanSvg(plan, s, `Floor plan ${code}, ${b.address}`)}</div>`
-      + `<div class="lp-pphead"><div class="lp-code"><b>${mapText(code)}</b><span>${mapText(b.address)}</span></div>${this.planNumbers(b, code)}${floorPlanScale(s)}</div>`;
+    card.classList.toggle('lp-scroll', card.scrollHeight > card.clientHeight + 1);
   }
   /* The rows: whatever layers are on, added up and deduped, then searched. */
   rows(){
@@ -1415,7 +1318,8 @@ class CityMapView {
     this.sites = new Map((premises()?.buildings || []).map(b => [b.key, b]));
     this.counts = null;
     this.loadFinder();
-    if(this.finderOn()) this.wantPlans();
+    // Fetched once the map has premises, so the first card opens at its size.
+    if(premises()) this.wantPlans();
     this.paintControls();
     const counts = {mine:this.businesses.size, own:this.owned.size, home:this.homes.size, fnd:[...this.businesses.keys()].filter(k => this.findings.has(k)).length, all:this.assets.buildings.length};
     this.root.querySelectorAll('.lay').forEach(chip => { chip.querySelector('.n').textContent = counts[chip.dataset.l]; });
@@ -1446,9 +1350,6 @@ class CityMapView {
     const cnt = this.root.querySelector('.srch .cnt'); if(cnt) cnt.textContent = this.matches.length;
     if(this.list && this.finderOn()){
       const focusedKey=this.list.contains(document.activeElement)?document.activeElement.dataset.pick:null, listScroll=this.list.scrollTop;
-      // Rebuilding the rows under the pointer fires a leave; the hover survives
-      // a live refresh as long as its row does.
-      const hovered = this.hoverKey, hoveredFromList = this.hoverFromList;
       const all = this.matches;
       const some = this.showAll ? all : all.slice(0, 80);
       this.list.innerHTML = (this.saleView() ? this.saleList(some) : this.finderList(some))
@@ -1456,14 +1357,8 @@ class CityMapView {
         + (all.length ? '' : '<div class="empty">Nothing matches.</div>');
       if(focusedKey) [...this.list.children].find(b=>b.dataset.pick===focusedKey)?.focus({preventScroll:true});
       this.list.scrollTop=listScroll;
-      // A list hover whose row the change took away ends with it; a footprint
-      // hovered on the map stays hovered, whatever the list now holds.
-      const row = hovered && this.list.querySelector(`[data-pick="${CSS.escape(hovered)}"]`);
-      if(hovered && hoveredFromList){ if(row){ this.light(hovered); row.classList.add('hot'); } else this.light(null); }
-      else if(hovered) this.light(hovered, false);
     }
-    // The dock first, so the card is placed against the dock as it now stands.
-    this.paintPlans(); this.fillCard(); this.paintView();
+    this.fillCard(); this.paintView();
   }
   /* The card beside the picked footprint: name, one identity line, three mono
      numbers, the findings as dot + verb + amount, and the arrow to the site. */
@@ -1472,7 +1367,7 @@ class CityMapView {
     const key = this.selected, b = this.businesses.get(key), loc = this.assets.byKey.get(key), owned = this.owned.get(key), home = this.homes.get(key);
     // A live refresh repaints the card; its Demand link keeps the focus it had.
     const focusGrow = !!document.activeElement?.classList?.contains('mf-grow') && card.contains(document.activeElement);
-    if(!key){ card.hidden = true; card.classList.remove('in'); this.paintFacts(null); return; }
+    if(!key){ card.hidden = true; card.classList.remove('in'); this.paintFacts(null); this.paintCardPlan(null); return; }
     // Filled now, shown by showCard() once the camera has settled: until then
     // it stays out of the tab order and out of the live region.
     const trading = b && b.status !== 'vacant';
@@ -1486,12 +1381,12 @@ class CityMapView {
       // The title is already the address; a bare location adds its neighbourhood.
       : mapText((loc?.hood && hoodName(loc.hood)) || loc?.address || '');
     card.querySelector('.sub').innerHTML = `<span class="hood">${mapText(hoodCode(b, loc?.hood || b?.neighbourhood))}</span><span>${sub}${!loc ? ' · no map position' : ''}</span>`;
-    const num = (v, lab) => `<div class="num"><b class="mono">${v}</b><span>${lab}</span></div>`;
+    const stat = (v, lab) => `<div class="num"><b class="mono">${v}</b><span>${lab}</span></div>`;
     card.querySelector('.nums').innerHTML = trading
-      ? num(`<span class="${(b.profit || 0) >= 0 ? 'pos' : 'neg'}">${mapText(fmt(b.profit || 0))}</span>`, 'yesterday') + num(mapText(fmt(b.rent || 0)), 'rent / day') + num(mapText(b.staff ?? '—'), 'staff')
-      : b ? num(mapText(fmt(b.rent || 0)), 'rent / day') + num('—', 'not trading')
-      : owned ? num(owned.purchasePrice != null ? mapText(money(owned.purchasePrice)) : '—', 'paid')
-      : home ? num(mapText(fmt(home.rent || 0)), 'rent / day') : '';
+      ? stat(`<span class="${(b.profit || 0) >= 0 ? 'pos' : 'neg'}">${mapText(fmt(b.profit || 0))}</span>`, 'yesterday') + stat(mapText(fmt(b.rent || 0)), 'rent / day') + stat(mapText(b.staff ?? '—'), 'staff')
+      : b ? stat(mapText(fmt(b.rent || 0)), 'rent / day') + stat('—', 'not trading')
+      : owned ? stat(owned.purchasePrice != null ? mapText(money(owned.purchasePrice)) : '—', 'paid')
+      : home ? stat(mapText(fmt(home.rent || 0)), 'rent / day') : '';
     const findings = this.findings.get(key) || [];
     const f = card.querySelector('.finds2');
     f.innerHTML = findings.map(a => `<div class="f ${mapKind([a])}"><i></i><span>${mapText(splitFinding(a).what)}<span class="fa">${findingAmount(a)}</span></span></div>`).join('');
@@ -1503,6 +1398,7 @@ class CityMapView {
     go.hidden = !b && !home;
     go.setAttribute('href', siteAddr || '#detail');
     this.paintFacts(key, focusGrow);
+    this.paintCardPlan(key);
     if(card.classList.contains('in')) this.placeCard();
   }
   showCard(){
@@ -1512,6 +1408,7 @@ class CityMapView {
   placeCard(){
     const card = this.card; if(!card || card.hidden || !this.selected) return;
     const loc = this.assets.byKey.get(this.selected), r = this.stageRect();
+    this.sizeCardPlan(r);
     if(!loc?.bounds){ // no geometry: the card sits in the free corner of the stage
       card.classList.remove('flip'); card.style.transform = 'translate(16px,16px)'; return;
     }
@@ -1532,10 +1429,6 @@ class CityMapView {
         if(zl - cw >= 12) left = zl - cw; else top = Math.max(12, zt - ch);
       }
     }
-    // Last, once the card's column is settled: a card that reaches over the
-    // dock stays above it, since the dock paints over the card.
-    const dockRight = this.dock && !this.dock.hidden ? 16 + this.dock.offsetWidth : 0;
-    if(left < dockRight) top = Math.max(12, Math.min(top, r.height - ch - 12 - this.dockRoom()));
     card.style.transform = `translate(${left.toFixed(1)}px,${top.toFixed(1)}px)`;
   }
   async select(key, focus=true, fresh=false){
@@ -1558,9 +1451,7 @@ class CityMapView {
       const r = this.stageRect(), [x,y,w,h]=b.bounds, cx = x+w/2, cy = y+h/2;
       const s = Math.max(this.scale(), this.cityScale() * PICK_ZOOM);
       const free = this.freeWidth();
-      // With the plans docked at the bottom, it lands in the middle of the map
-      // above them, so the card beside it stays clear of the dock.
-      const box = [cx - (free*.44)/s, cy - ((r.height - this.dockRoom())/2)/s, r.width/s, r.height/s];
+      const box = [cx - (free*.44)/s, cy - (r.height/2)/s, r.width/s, r.height/s];
       this.cancelGlide();
       this.onSettled = () => { if(this.selected === key) this.showCard(); };
       this.update();
@@ -1580,7 +1471,6 @@ class CityMapView {
     this.selected=null; this.query=''; this.hot=null; this.onSettled=null;
     this.fsCharacter = undefined; this.fs = finderDefaults(); this.showAll = false;
     this.savedUsed = null; this.closeNaming();
-    this.layoutPick = null; this.hoverKey = null; this.planView = false;
     if(this.orb) this.orb.size = 170;
     if(this.svg){ if(this.search) this.search.value=''; this.layers = {mine:true, own:true, home:true, fnd:true, all:false};
       this.root.querySelectorAll('.lay').forEach(c => { c.classList.toggle('off', !this.layers[c.dataset.l]); c.setAttribute('aria-pressed', String(this.layers[c.dataset.l])); });

@@ -457,10 +457,10 @@ class SecondaryRangeTests(GuideCase):
         recipe = recipes["haircareproductrecipe"]
         self.assertEqual(recipe["workstationKey"], "chemical")
         self.assertEqual(recipe["pageId"], "recipes-haircareproductrecipe")
-        self.assertEqual(recipe["out"], {"item": "Hair Care Product", "per": 20})
+        self.assertEqual(recipe["out"], {"item": "Hair Care Product", "slug": "ba:itemname_haircareproduct", "per": 20})
         self.assertEqual(
             recipe["inputs"],
-            [{"item": "Clay", "per": 10, "from": ["ba:street_pier#9"]}])
+            [{"item": "Clay", "slug": "ba:itemname_clay", "per": 10, "from": ["ba:street_pier#9"]}])
 
     def test_a_shared_ingredient_importer_is_listed_in_the_guide_s_own_suppliers(self):
         salon = self.guide("salon")
@@ -874,7 +874,7 @@ class DeterminismTests(GuideCase):
         self.assertEqual(sorted(sample["PRODUCTS"]),
                          ["cheapgift", "expensivegift", "umbrella"])
         self.assertEqual(sample["RECIPES"]["cheapgiftrecipe"]["inputs"],
-                         [{"item": "Clay", "per": 50, "from": ["ba:street_pier#9"]}])
+                         [{"item": "Clay", "slug": "ba:itemname_clay", "per": 50, "from": ["ba:street_pier#9"]}])
 
     def test_the_payload_survives_its_own_validator(self):
         payload = json.loads(build.serialise(self.build()))

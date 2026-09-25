@@ -89,7 +89,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `candidates` | `_candidates()`, with `_character()` and `_skill_rows()` | the Staff page |
 | `hiring` | `_hiring()`, which takes each plan row's private `_hire` (`_hire_fields()`: `hireWeeks` from `_hire_weeks()`, `spare`, `bench`) off `staffing`, `staffing[].fullCover`, `factoryStaffing` and `officeStaffing`; `accepts` from `ASSIGN_SKILLS`, `facts` from `_site_facts()`, `company` from `_company_facts()` | the Staff page |
 | `plan` | `_plan()` | `drawPlan`, `planDraw`, `indexPlan`, `factoryView`, `factoryCounts`, `planTypes`, `defaultRate`, `itemName`; `web/wiki.js` `wikiCanPlan` |
-| `names` | `_game_names()`: every `NAME_PREFIXES` key of `names.locale` but the `_description`s, plus `HOOD_LABEL` for a neighbourhood the text lacks | `itemName`, `gameName` (and through it `hoodName`) |
+| `names` | `_game_names()`: every `NAME_PREFIXES` key of `names.locale` but the `_description`s, plus `HOOD_LABEL` for a neighbourhood the text lacks | `itemName`, `gameName` (and through it `hoodName`), `englishName` (from the English payload), `localiseNames` |
 | `skillNames` | `extract()` inline, every skill in `STATION_SKILLS` through `names.label()` | `gwSkillName` |
 | `cashFlow` | `_cash_flow()` | `drawKpis` |
 | `ledgerDays` | `extract()` inline, `len(ledger)` | no reader — but see below |
@@ -286,10 +286,38 @@ stores the bare `<id>` as `h`; `hood_key()` makes the key. Python's own English 
 and the few English tables it wrote by name (`RENT_RATES`, the demand history's snapshot
 keys) read the English name through `HOOD_LABEL`, and stay as they are.
 
+The footer's **Game names** (site only) shows those names in another of the game's
+languages. Python still writes English; the page lays a table over the payload once,
+when a board arrives and when the choice changes: `takeData(raw)` sets
+`D = localiseNames(raw)`, a copy of the English payload with its names swapped, which
+carries the English payload along unenumerated (`dataEn()`). Every draw then reads `D`
+as before, and a join inside the payload holds because both sides were swapped alike.
+The swap is `gnWalk()`: a name beside its key (`GN_PAIRS`: `item`/`type`/`name`/`demand`
+beside `slug`, `type`/`sub` beside `typeSlug` (never `name`, which beside a type is a
+business the player or a rival named), `label`/`role` beside `skill`, `label` beside
+`demand`, `where` beside `hood`, `workstation` beside `workstationKey`; `GN_LISTS` for parallel lists; any string under a `ba:` key) is
+swapped only while it still reads as that key's English name, and `gnUnkeyed()` takes
+the few fields Python sends with no key, by the kind of name each holds. Every string
+passes `gnString()` on the way, the one place a name inside a sentence is swapped.
+Python writes such a name as a token, `tok(key, english)` → U+27E6 `key|English`
+U+27E7 (the findings, their summaries, an hour grid's `limit` and `fix`), and
+`gnString()` reads it as the table's word or else the English it carries; `plain()`
+turns a token back into its English for Python's own reading. Only text that reaches
+the page carries one: an alert's `subject` and so its id, the history files and
+anything sent to the game stay plain English. A name Python pluralises or lowercases
+("the projection booths", "3 gift shops", a chain's "Gift Shops") cannot be a token and
+stays English. A board handed to the page anywhere but `takeData()` would show the
+tokens raw, which is why every door goes through it. A key the table lacks stays English. `setGameNames(lang)` fetches
+`web/names/<lang>.json` with the build stamp and redraws the whole board through
+`renderCalm(false)`, the path another save takes; Python never runs again. A join
+between a swapped name and Python's English prose (`spLimitRole()`) asks
+`englishName(key)` as well. The wiki swaps only what it shows, through `wikiName(key,
+english)`, because its matching against the help's own words needs the English.
+
 ## Template placeholders
 
-`TEMPLATE` carries fifteen tokens. All fifteen are substituted by `render()`, but the
-text for two of them is supplied by the caller.
+`TEMPLATE` carries sixteen tokens. All sixteen are substituted by `render()`, but the
+text for three of them is supplied by the caller.
 
 | Token | Filled with |
 | --- | --- |
@@ -308,6 +336,7 @@ text for two of them is supplied by the caller.
 | `/*__WIKI_PAYLOAD__*/` | `render()`, from `web/wiki-data.json`; skipped when `live=True`, because the hosted build fetches it with the build stamp instead |
 | `/*__HOOD_TAGS__*/{}` | `render()`, from `HOOD_TAG` — one neighbourhood-tag table shared by the board and the wiki, keyed by the game's neighbourhood key |
 | `/*__HOOD_NAMES__*/{}` | `render()`, from `HOOD_LABEL` — each neighbourhood's English name by the same key: `hoodName()`'s fallback and `hoodKeyOf()`'s way back from a stored name |
+| `/*__NAMES__*/null` | `render()`'s `names=` argument, `{lang, names}` from `cli_names()` for `--lang`; `null` elsewhere, where the site fetches `web/names/<lang>.json` instead |
 
 Only the wiki files are optional. `render()` reads them through `optional_asset()`, so a
 checkout without `web/wiki.js` still renders a whole board and the Wiki tab is left out of
@@ -345,7 +374,7 @@ What `page_html()` produces, top of the file down:
 
 Before any of that, `main()` refreshes `web/wiki-data.json`, copies `ba_save.py`,
 `ba_dashboard.py`, `ba_buildings.json` and `ba_demand_curves.json` into `web/py/`, and
-writes `web/py/gametext.json` from the installed locale — everything `stamp()` hashes has to be in place before
+writes `web/py/gametext.json` and `web/names/<lang>.json` (`write_name_tables()`) from the installed locale — everything `stamp()` hashes has to be in place before
 `release_info()` runs. `main()` then writes `web/index.html` and `web/version.json`.
 
 `ships()` decides what of the locale travels in `gametext.json`, and nothing else does. It
@@ -362,7 +391,7 @@ analysis needs but `ships()` does not keep is simply absent in the browser, with
 `python build_web.py --check` calls `check()`, which reuses the same `release_info()` and
 `page_html()` and compares their output against what is committed under `web/`. That is why
 it needs no installed game: it re-derives the page from the sources and the committed
-`gametext.json` and `wiki-data.json` rather than rebuilding them. `stamp()` normalises CRLF
+`gametext.json`, `wiki-data.json` and `web/names/` rather than rebuilding them. `stamp()` normalises CRLF
 to LF for everything except the `.svg` background, so a Windows checkout is not stale by
 itself.
 
@@ -396,7 +425,8 @@ case `app.js` fetches the bytes from that mod on the player's own machine, and t
 else. The page still uses the network for its own assets, all same-origin.
 The static ones are versioned, so a deploy busts their caches: `web/map.js` fetches
 `maps/locations.json` with the build stamp and the background image with its own content
-hash, and `web/wiki.js` fetches `wiki-data.json` with the build stamp. The dynamic ones
+hash, `web/wiki.js` fetches `wiki-data.json` with the build stamp, and the board fetches
+`names/<lang>.json` with it when a language is picked. The dynamic ones
 carry no version, because the whole point is to see the current state: `web/update.js`
 polls `version.json` with `cache: "no-store"`, and `web/community.js` calls
 `/api/community/*`. Nothing comes from another origin: `TEMPLATE` links Google Fonts for

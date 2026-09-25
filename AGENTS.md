@@ -80,9 +80,8 @@ names):
 - Never advise opening a second location or a bigger site because one is at building
   capacity. Being at capacity is normal in a good setup, not a finding.
 
-Older text still uses these words (the `staff` finding kind's label, the Door cap section
-of `docs/dashboard-reference.md`). Follow the rule in new text; renaming old text is its
-own task.
+Older design docs (the `*-scope.md` files) still use "door cap" and "shift"; follow the
+rule in new text and leave historical docs as they are.
 
 ## Sources and generated files
 
@@ -93,6 +92,7 @@ side and rebuild — the rebuild is the resolution.
 | --- | --- |
 | `web/index.html`, `web/version.json`, `web/py/ba_dashboard.py`, `web/py/ba_save.py`, `web/py/ba_buildings.json`, `web/py/ba_demand_curves.json` | `python build_web.py` |
 | `web/py/gametext.json`, `web/wiki-data.json` | `python build_web.py`, which needs the installed game |
+| `web/names/<lang>.json`, the game names in each other language the game ships | `python build_web.py`, which needs the installed game; the language list is `GAME_NAME_LANGS` in `ba_dashboard.py`, and the build stops when the game's `locale.json` disagrees with it |
 | `web/wiki/**/index.html`, `web/sitemap.xml`, `web/robots.txt` | `python build_web.py`, from the committed `web/wiki-data.json` through `tools/wiki_pages.py`; `python tools/wiki_pages.py` alone needs no game |
 | `web/maps/locations.json`, `web/maps/map-background.svg` | `export_map.py`, from private geometry; owner only |
 | `ba_buildings.json` | `make_buildings.py`; the `v` (version) key comes from `make_buildings.py --versions`, which reads the installed game's buildings bundle with UnityPy; owner only |

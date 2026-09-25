@@ -338,7 +338,7 @@ grid and three lines meet.
   exact station the employee was posted to, so the figure is the sum of the stations
   manned in that hour, not the number of staff times a guess. Two people rostered on one
   station count that station once.
-- **The door cap** is the building's own `customerCapacity`: 30 for the small
+- **The building capacity** is the building's own `customerCapacity`: 30 for the small
   supermarkets, 75 for the big ones and the electronics stores, 100 for the cinema. It is
   a per-hour limit, not a daily total.
 
@@ -375,7 +375,7 @@ ZanaMan Computer, Laptop, Basic Gaming PC Setup) with someone other than a clean
 at it counts one customer an hour. No help page states that rate. It was measured on a law
 firm at build 3680, whose hour reports matched the lawyers on shift one for one at every
 level the roster reached (1, 2, 33 and 50), with the fee's demand reading 66 at the time,
-so it should be checked again after a game update. The door cap is the office building's.
+so it should be checked again after a game update. The building capacity is the office building's.
 
 ### What the roster actually says
 
@@ -400,7 +400,7 @@ per weekday gives +0.96 for this alignment, against +0.60 for the next best rota
 
 **At the ceiling.** Hours at 95% of effective capacity, with the binding limit named. Each
 hour is judged on its own roster, and each role on the roster that was on for it. Where the
-door cap is at or below the site's staffed capacity the building is the limit. That is
+building capacity is at or below the site's staffed capacity the building is the limit. That is
 not raised as a finding: plenty of well-run sites sit at their building's capacity, and
 there is nothing to fix, so it shows on the site page only, as a neutral hour chip ("at
 building capacity") and neutral rings on its hours in the grid. Otherwise every role standing at the site's own minimum is named, and only those: a
@@ -452,7 +452,7 @@ the hour actually wants, with the basis it was worked out on. `measured` is the 
 who came, on a weekday with two weeks behind it, in an hour that did not run into a
 ceiling. `censored` is an hour that came within 95% of what was available: the real demand
 is unknown and above it, so the estimate is what the **site** served that hour — its
-effective capacity, which is its slowest role with the door cap already applied — plus one
+effective capacity, which is its slowest role with the building capacity already applied — plus one
 more of *this* role's stations, then held down by this role's stations installed, the door
 cap and the arrival ceiling, and never dropped below what was measured. Starting from the
 role's own staffed capacity would ask a fast role to grow because a slow one held the hour
@@ -1394,7 +1394,7 @@ can answer "which available premises are best right now?" and any address's card
 what the place is. The payload is `premises`: one row per building registration the fixed
 building table places, plus the buildings on sale, the demand grid turned inside out by
 neighbourhood, and the two reconstructed tables below. A row carries the address, its
-neighbourhood, building type, size letter, square metres, foot traffic, door cap,
+neighbourhood, building type, size letter, square metres, foot traffic, building capacity,
 estimated rent, estimated deposit, status and occupant. Python does no ranking; the page
 scores and sorts.
 
@@ -1487,7 +1487,7 @@ deposits, in the payload's live check and in the fit behind it. `rent.deposit.ch
 reports how many of your own deposits were measured and the worst relative deviation, 0
 and 0 for a character who has paid none.
 
-### Door cap
+### Building capacity
 
 `customerCapacity` is also stored only for an occupied building. The cap a size buys
 comes instead from the game's own help page `help_building_types_content`, which lists a
