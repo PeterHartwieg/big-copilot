@@ -301,6 +301,56 @@ test('a depot no importer fills keeps its place above its factory in a round tri
   }
 });
 
+/* A factory in round trips with `k` depots, the first also feeding a shop. */
+function roundTrips(k){
+  const data = fixture();
+  const base = data.supply.graph.nodes;
+  const hub = base.find(n => n.id === 'hub#1'), f = base.find(n => n.id === 'factory#2'), shop = base.find(n => n.id === 'shop#3');
+  const depots = Array.from({length: k}, (_, i) => i ? {...hub, id: `dep#${i}`, name: `[D${i}] Depot ${i}`, tag: `D${i}`, site: null, items: []} : hub);
+  const link = (from, to, perDay) => ({from, to, perDay, items: 1, cadence: 'daily', paused: false, arrives: null});
+  data.supply.graph = {nodes: [f, ...depots, shop],
+    links: [...depots.flatMap(d => [link(d.id, 'factory#2', 500), link('factory#2', d.id, 300)]), link('hub#1', 'shop#3', 200)]};
+  return data;
+}
+
+test('a return is always the way back: a hand-stocked hub beside an importer to the factory', async t => {
+  for(const factoryFirst of [false, true]){
+    const data = roundTrip();
+    const g = data.supply.graph;
+    // The hub is stocked by hand; the pier imports straight to the factory.
+    g.links = g.links.filter(l => l.from !== 'import:pier');
+    g.links.push({from: 'import:pier', to: 'factory#2', perDay: 100, items: 1, slugs: ['milk'], cadence: 'weekly', paused: false, arrives: 34});
+    if(factoryFirst) g.nodes = [g.nodes.find(n => n.id === 'factory#2'), ...g.nodes.filter(n => n.id !== 'factory#2')];
+    const page = await board(t, data, 390);
+    const s = await state(page);
+    assert.deepEqual(s.rails, ['Importers', 'Depots', 'Factories', 'Shops'], `factory first: ${factoryFirst}`);
+    assert.match(s.pipes.find(p => p.a === 'factory#2' && p.b === 'hub#1').cls, /\bback\b/);
+  }
+});
+
+test('a factory in round trips with two depots sits below both, both returns drawn back', async t => {
+  const page = await board(t, roundTrips(2), 390);
+  const s = await state(page);
+  assert.deepEqual(s.rails, ['Depots', 'Factories', 'Shops']);
+  assert.deepEqual(s.cards.slice(0, 3).sort(), ['dep#1', 'factory#2', 'hub#1']);
+  assert.equal(s.cards[2], 'factory#2');
+  const backs = s.pipes.filter(p => p.a === 'factory#2');
+  assert.equal(backs.length, 2);
+  backs.forEach(p => assert.match(p.cls, /\bback\b/));
+});
+
+test('every pipe back up has a lane of its own, and a paused one a red arrow', async t => {
+  const data = roundTrips(4);
+  data.supply.graph.links.find(l => l.from === 'factory#2' && l.to === 'dep#2').paused = true;
+  const page = await board(t, data, 390);
+  const s = await state(page);
+  const backs = s.pipes.filter(p => /\bback\b/.test(p.cls));
+  assert.equal(backs.length, 4);
+  assert.equal(new Set(backs.map(p => p.lane)).size, 4, JSON.stringify(backs.map(p => p.lane)));
+  assert.equal(await page.$eval('#flowChain path[data-b="dep#2"][data-a="factory#2"]', p => p.getAttribute('marker-end')), 'url(#sbFcArrow-bad)');
+  assert.ok((await state(page)).overflow <= 0);
+});
+
 test('a way back leaving the last stage has room under it', async t => {
   const data = roundTrip();
   // A shop cannot send, so the last stage here is the factories: no shops.

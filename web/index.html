@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "c88213b6d8";</script>
-<link rel="stylesheet" href="community.css?v=c88213b6d8">
+<script>window.LEDGER_BUILD = "8530de99c0";</script>
+<link rel="stylesheet" href="community.css?v=8530de99c0">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=c88213b6d8">
+<link rel="stylesheet" href="fonts/fonts.css?v=8530de99c0">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -4251,7 +4251,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"c88213b6d8","latest":{"pr":152,"date":"2026-09-25","title":"Goods flow you can read on a phone","summary":"On a phone or a portrait tablet, Supply's goods-flow diagram is now a chain you read top to bottom: your importers, depots, factories and shops in the order the goods travel, with the pipes between them. A depot's shops fold into one card from four up, the sites worth a look sit in a row on top, and shops no pipe reaches share one line at the bottom. Tap a site to follow it: what comes in, what goes out, the pipe carrying a short or stalled product in colour, its problems in words, and one tap to its rows or its site page. With no pipe yet, the box says so and links the wiki's guide to imports."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"8530de99c0","latest":{"pr":152,"date":"2026-09-25","title":"Goods flow you can read on a phone","summary":"On a phone or a portrait tablet, Supply's goods-flow diagram is now a chain you read top to bottom: your importers, depots, factories and shops in the order the goods travel, with the pipes between them. A depot's shops fold into one card from four up, the sites worth a look sit in a row on top, and shops no pipe reaches share one line at the bottom. Tap a site to follow it: what comes in, what goes out, the pipe carrying a short or stalled product in colour, its problems in words, and one tap to its rows or its site page. With no pipe yet, the box says so and links the wiki's guide to imports."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -4339,8 +4339,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=c88213b6d8"></script>
-<script src="community.js?v=c88213b6d8"></script>
+<script src="app.js?v=8530de99c0"></script>
+<script src="community.js?v=8530de99c0"></script>
 
 <script>
 
@@ -5575,10 +5575,14 @@ function flowStages(g){
   outOf.forEach(ls => ls.sort((a, b) => byRole(a.to, b.to)));
   const hasIn = fedBy;
   const starts = g.nodes.filter(n => linked.has(n.id)).sort((a, b) => (hasIn.has(a.id) ? 1 : 0) - (hasIn.has(b.id) ? 1 : 0) || byRole(a.id, b.id));
-  const seen = new Set(), onPath = new Set(), back = new Set(), post = [];
+  /* The rule first: every return (a factory's output going back to a depot
+     that feeds it) is a way back, drawn but never ranked. The walk then only
+     breaks whatever cycles are left. */
+  const back = new Set(links.filter(ret)), seen = new Set(), onPath = new Set(), post = [];
   const walk = id => {
     seen.add(id); onPath.add(id);
     (outOf.get(id) || []).forEach(l => {
+      if(back.has(l)) return;
       if(onPath.has(l.to)) back.add(l);
       else if(!seen.has(l.to)) walk(l.to);
     });
@@ -5853,7 +5857,15 @@ function flowChainPipes(){
   const isBack = p => at.get(p.to).band <= at.get(p.from).band;
   const last = bandsEl.length - 1;
   const room = list.some(p => isBack(p) && at.get(p.from).band === last) ? `${FLOW_GUT}px` : "";
-  if(host.style.paddingBottom !== room){ host.style.paddingBottom = room; return flowChainPipes(); }
+  /* Pipes back up each take their own lane on the right, 3 px apart; past
+     what the box's padding holds, the chain gives up that much width. */
+  const backs = list.filter(isBack);
+  const wider = `${Math.max(0, FLOW_BACK_LANE + 3 * (backs.length - 1) - 10)}px`;
+  const padR = wider === "0px" ? "" : wider;
+  if(host.style.paddingBottom !== room || host.style.paddingRight !== padR){
+    host.style.paddingBottom = room; host.style.paddingRight = padR;
+    return flowChainPipes();
+  }
   const heaviest = Math.max(1, ...list.map(p => p.perDay));
   const spread = (key, other) => {
     const off = new Map(), by = new Map();
@@ -5869,8 +5881,7 @@ function flowChainPipes(){
   svg.setAttribute("height", f(base.height));
   /* Each pipe back up its own lane, 3 px apart, kept inside the box's
      padding; its arrowhead a fixed size, in the pipe's own colour. */
-  const backs = list.filter(isBack);
-  const backLane = p => base.width + Math.min(FLOW_BACK_LANE + 3 * backs.indexOf(p), 10);
+  const backLane = p => base.width - (parseFloat(padR) || 0) + FLOW_BACK_LANE + 3 * backs.indexOf(p);
   const arrow = st => `<marker id="sbFcArrow-${st}" class="${st}" viewBox="0 0 8 8" refX="7" refY="4" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z"></path></marker>`;
   const arrowOf = p => p.cls === "bad" || p.cls === "warn" || p.cls === "lit" ? p.cls : p.paused ? "bad" : "plain";
   svg.innerHTML = `<defs>${["plain", "lit", "warn", "bad"].map(arrow).join("")}</defs>` + list.map(p => {

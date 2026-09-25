@@ -16273,10 +16273,14 @@ function flowStages(g){
   outOf.forEach(ls => ls.sort((a, b) => byRole(a.to, b.to)));
   const hasIn = fedBy;
   const starts = g.nodes.filter(n => linked.has(n.id)).sort((a, b) => (hasIn.has(a.id) ? 1 : 0) - (hasIn.has(b.id) ? 1 : 0) || byRole(a.id, b.id));
-  const seen = new Set(), onPath = new Set(), back = new Set(), post = [];
+  /* The rule first: every return (a factory's output going back to a depot
+     that feeds it) is a way back, drawn but never ranked. The walk then only
+     breaks whatever cycles are left. */
+  const back = new Set(links.filter(ret)), seen = new Set(), onPath = new Set(), post = [];
   const walk = id => {
     seen.add(id); onPath.add(id);
     (outOf.get(id) || []).forEach(l => {
+      if(back.has(l)) return;
       if(onPath.has(l.to)) back.add(l);
       else if(!seen.has(l.to)) walk(l.to);
     });
@@ -16551,7 +16555,15 @@ function flowChainPipes(){
   const isBack = p => at.get(p.to).band <= at.get(p.from).band;
   const last = bandsEl.length - 1;
   const room = list.some(p => isBack(p) && at.get(p.from).band === last) ? `${FLOW_GUT}px` : "";
-  if(host.style.paddingBottom !== room){ host.style.paddingBottom = room; return flowChainPipes(); }
+  /* Pipes back up each take their own lane on the right, 3 px apart; past
+     what the box's padding holds, the chain gives up that much width. */
+  const backs = list.filter(isBack);
+  const wider = `${Math.max(0, FLOW_BACK_LANE + 3 * (backs.length - 1) - 10)}px`;
+  const padR = wider === "0px" ? "" : wider;
+  if(host.style.paddingBottom !== room || host.style.paddingRight !== padR){
+    host.style.paddingBottom = room; host.style.paddingRight = padR;
+    return flowChainPipes();
+  }
   const heaviest = Math.max(1, ...list.map(p => p.perDay));
   const spread = (key, other) => {
     const off = new Map(), by = new Map();
@@ -16567,8 +16579,7 @@ function flowChainPipes(){
   svg.setAttribute("height", f(base.height));
   /* Each pipe back up its own lane, 3 px apart, kept inside the box's
      padding; its arrowhead a fixed size, in the pipe's own colour. */
-  const backs = list.filter(isBack);
-  const backLane = p => base.width + Math.min(FLOW_BACK_LANE + 3 * backs.indexOf(p), 10);
+  const backLane = p => base.width - (parseFloat(padR) || 0) + FLOW_BACK_LANE + 3 * backs.indexOf(p);
   const arrow = st => `<marker id="sbFcArrow-${st}" class="${st}" viewBox="0 0 8 8" refX="7" refY="4" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z"></path></marker>`;
   const arrowOf = p => p.cls === "bad" || p.cls === "warn" || p.cls === "lit" ? p.cls : p.paused ? "bad" : "plain";
   svg.innerHTML = `<defs>${["plain", "lit", "warn", "bad"].map(arrow).join("")}</defs>` + list.map(p => {
