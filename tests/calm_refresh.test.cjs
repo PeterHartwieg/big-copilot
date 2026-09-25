@@ -402,6 +402,120 @@ test('one row that throws on a view does not keep the others from drawing, and i
   assert.deepEqual(await liveDot(page), {stale: false, says: 'LIVE', why: ''});
 });
 
+test('a row that throws while the board is drawn leaves the rest drawn, wired and marked Stale', async t => {
+  const page = await board(t);
+  const messages = [];
+  page.on('console', m => { if (m.type() === 'error') messages.push(m.text()); });
+  await page.evaluate(() => {
+    window.calmDraw = window.drawAlerts;
+    window.drawAlerts = () => { throw new Error('alerts broke'); };
+    window.calmCalls = {payroll: 0, staffing: 0, wired: 0};
+    const spy = (name, key) => { const f = window[name]; window[name] = (...a) => { calmCalls[key]++; return f(...a); }; };
+    spy('drawPayroll', 'payroll'); spy('drawOptimizeStaffing', 'staffing'); spy('wireAll', 'wired');
+  });
+  // Another company: every row is drawn, Today's findings first among them.
+  await deliver(page, other);
+  const calls = await page.evaluate(() => calmCalls);
+  assert.equal(calls.payroll, 1, 'a page drawn after the row that threw');
+  assert.equal(calls.staffing, 1, 'the last row');
+  assert.ok(calls.wired >= 1, 'the board is wired');
+  assert.equal(await page.evaluate(() => [...pageStale].some(row => /drawAlerts/.test(String(row[1])))), true,
+    'the row that threw stays out of date');
+  assert.ok(messages.some(m => /alerts broke/.test(m)), messages.join('\n'));
+  assert.deepEqual(await liveDot(page), {stale: true, says: 'Stale', why: 'alerts broke'});
+  assert.match(await page.locator('footer').first().textContent(), /\S/, 'the footer is drawn');
+
+  // Once it draws again, the next board clears the mark.
+  await page.evaluate(() => { window.drawAlerts = window.calmDraw; });
+  await deliver(page, later);
+  assert.deepEqual(await liveDot(page), {stale: false, says: 'LIVE', why: ''});
+  assert.equal(await page.evaluate(() => [...pageStale].some(row => /drawAlerts/.test(String(row[1])))), false);
+});
+
+test('a row drawn on every page that threw is tried again on the next page opened', async t => {
+  const page = await board(t);
+  const messages = [];
+  page.on('console', m => { if (m.type() === 'error') messages.push(m.text()); });
+  await page.evaluate(() => {
+    window.calmDraw = window.drawFindLocation;
+    window.drawFindLocation = () => { throw new Error('finder line broke'); };
+  });
+  await deliver(page, later);
+  assert.deepEqual(await liveDot(page), {stale: true, says: 'Stale', why: 'finder line broke'});
+  await page.evaluate(() => { window.drawFindLocation = window.calmDraw; });
+  await page.click('#nav a[data-id="company"]');
+  assert.deepEqual(await liveDot(page), {stale: false, says: 'LIVE', why: ''});
+  assert.equal(await page.evaluate(() => [...pageStale].some(row => /drawFindLocation/.test(String(row[1])))), false);
+});
+
+test('a refresh keeps a Set to figure being typed, and the focus on its box', async t => {
+  const page = await board(t);
+  // Every line shown: the depot's lines are all covered, so none would be by default.
+  await page.evaluate(() => { showPage('supply'); showSub('supply', 'warehouses'); sbWhich = 'all'; drawSupplyTab('warehouses'); wireAll(); });
+  const typed = await page.evaluate(() => {
+    const box = document.querySelector('#secWarehouses input[data-imp]');
+    if (!box) return null;
+    box.focus();
+    box.value = '1234';  // typed, not committed: no change event yet
+    window.calmBox = box;
+    return box.dataset.imp;
+  });
+  assert.ok(typed, 'the depot has a Set to box');
+  await deliver(page, later);
+  const now = await page.evaluate(() => {
+    const el = document.activeElement;
+    return {id: el.dataset.imp ?? null, value: el.value, rebuilt: el !== window.calmBox && !window.calmBox.isConnected};
+  });
+  assert.deepEqual(now, {id: typed, value: '1234', rebuilt: true});
+  // Leaving the box keeps the figure, as it would have without the refresh.
+  await page.evaluate(() => document.activeElement.blur());
+  assert.equal(await page.evaluate(id => (impSetEdits().edits[id] || {}).value, typed), 1234);
+  assert.match(await page.evaluate(() => localStorage.getItem(impSetEdits().key) || ''), /"value":1234/);
+});
+
+test('Enter keeps a Set to figure put back by a refresh', async t => {
+  const page = await board(t);
+  await page.evaluate(() => { showPage('supply'); showSub('supply', 'warehouses'); sbWhich = 'all'; drawSupplyTab('warehouses'); wireAll(); });
+  const typed = await page.evaluate(() => {
+    const box = document.querySelector('#secWarehouses input[data-imp]');
+    box.focus(); box.value = '4321';
+    return box.dataset.imp;
+  });
+  await page.evaluate(() => {
+    window.calmKept = 0;
+    const keep = window.impSetKeep;
+    window.impSetKeep = (...a) => { calmKept++; return keep(...a); };
+  });
+  await deliver(page, later);
+  await page.keyboard.press('Enter');
+  assert.equal(await page.evaluate(id => (impSetEdits().edits[id] || {}).value, typed), 4321);
+  // Leaving the box after Enter commits nothing twice.
+  await page.evaluate(() => new Promise(r => setTimeout(r)));
+  await page.evaluate(() => document.activeElement && document.activeElement.blur());
+  assert.equal(await page.evaluate(() => calmKept), 1, 'one commit');
+});
+
+test('a Set to figure put back by a refresh and edited again is committed once', async t => {
+  const page = await board(t);
+  await page.evaluate(() => { showPage('supply'); showSub('supply', 'warehouses'); sbWhich = 'all'; drawSupplyTab('warehouses'); wireAll(); });
+  const typed = await page.evaluate(() => {
+    const box = document.querySelector('#secWarehouses input[data-imp]');
+    box.focus(); box.value = '432';
+    window.calmKept = 0;
+    const keep = window.impSetKeep;
+    window.impSetKeep = (...a) => { calmKept++; return keep(...a); };
+    return box.dataset.imp;
+  });
+  await deliver(page, later);
+  await page.keyboard.press('End');
+  await page.keyboard.type('1');
+  await page.keyboard.press('Enter');
+  await page.evaluate(() => new Promise(r => setTimeout(r)));
+  await page.evaluate(() => document.activeElement && document.activeElement.blur());
+  assert.equal(await page.evaluate(id => (impSetEdits().edits[id] || {}).value, typed), 4321);
+  assert.equal(await page.evaluate(() => calmKept), 1, 'one commit');
+});
+
 test('a render keeps a Stale mark on the fresh dot, and a lost source replaces it', async t => {
   const page = await board(t);
   await page.evaluate(() => { window.calmWatch.stale('rebuild broke'); renderCalm(); });
@@ -435,10 +549,13 @@ test('a refresh settles the board, not an open dialog', async t => {
 test('a refresh with the search palette open does not make its lit row hop again', async t => {
   const page = await board(t);
   await settle(page);
+  await page.evaluate(() => ssOpen());
+  // The palette's own drop and the first row's hop, played out: a row is lit
+  // and neither animation still runs.
+  await page.waitForFunction(() => ssPal.querySelectorAll('.ss-q2.on').length > 0
+    && !document.getAnimations().some(a => ['ss-drop', 'ss-hop'].includes(a.animationName) && a.playState === 'running'),
+  null, {polling: 50});
   const hop = await page.evaluate(async p => {
-    ssOpen();
-    // The palette's own drop and the first row's hop, played out.
-    await new Promise(r => setTimeout(r, 900));
     const hopping = () => document.getAnimations()
       .filter(a => a.animationName === 'ss-hop' && a.playState === 'running').length;
     const lit = ssPal.querySelectorAll('.ss-q2.on').length, before = hopping();

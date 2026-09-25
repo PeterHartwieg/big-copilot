@@ -63,6 +63,7 @@ const fixture = () => ({
 });
 
 async function board({width = 1280, view = 'all', storage = true, page: given, data = fixture(), before = null} = {}){
+  require('./_payload_contract.cjs').assertPayloadShape(data, 'import_setto');
   const page = given || await browser.newPage({viewport: {width, height: 1000}});
   if(!given){
     await page.route('https://**', route => route.abort());
@@ -298,6 +299,28 @@ for(const value of [900, 2000]){
     } finally { await page.close(); }
   });
 }
+
+test('a figure typed on a line a route has since covered is forgotten, and the table still draws', async () => {
+  // Typed on "not imported, add N" (no contract, so inGame null); a route
+  // from the company's own site covers the line now: no suggestion either.
+  const data = fixture();
+  data.businesses[0].lines.push({slug: 'pepper', item: 'Pepper', units: 120});
+  data.supply.facts[0].pepper = depotFact('covered', 300, {why: 'route', parts: {lines: 300, sites: 0, route: 300}});
+  const page = await board({data, before: [KEY, JSON.stringify({'["depot#0","pepper"]': {value: 600, inGame: null}})]});
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  try{
+    const pepper = (await cells(page)).find(r => r.item === 'Pepper');
+    assert.ok(pepper, 'the covered line is listed');
+    assert.equal(pepper.box, null, 'no box: nothing to set');
+    assert.match(pepper.verdict, /covered by route/);
+    assert.equal(await page.locator('#secWarehouses tr[data-slug] .imp-reset').count(), 0);
+    assert.equal(await page.evaluate(key => localStorage.getItem(key), KEY), '{}');
+    // Drawn again, Today's card and the tabs still stand.
+    await page.evaluate(() => { drawSupplyStrip(); drawWarehousesTab(); wireAll(); });
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
 
 test('typing the figure in game turns the suggestion down and it stays down', async () => {
   const page = await board();

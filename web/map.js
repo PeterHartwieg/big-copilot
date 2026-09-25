@@ -21,7 +21,7 @@ function mapButton(key, label){
   return `<button type="button" class="map-shortcut" data-map-key="${attr(key)}" aria-label="${attr(name)}" title="${attr(tt("map.btn.title", "Show on map"))}">${MAP_ICON}</button>`;
 }
 function mapRef(b, label){
-  return b ? `${label === undefined ? shortName(b) : label}${mapButton(b.key, b.name || b.address)}` : "—";
+  return b ? `${mapText(label === undefined ? shortName(b) : label)}${mapButton(b.key, b.name || b.address)}` : "—";
 }
 /* A site's name, wherever the board prints it, is a way to the site's own
    page (siteHref() in the board script): plain text until the pointer is on
@@ -345,7 +345,7 @@ function floorPlanSvg(plan, s, label){
 /* The first of 1, 2, 5, 10, 20 or 50 m that is at least 36 px long. */
 function floorPlanScale(s){
   const m = [1, 2, 5, 10, 20, 50].find(n => n * s >= 36) || 50;
-  return `<span class="lp-scale" aria-label="${attr(tt("map.plan.scale", {one: "Scale: {n} metres", other: "Scale: {n} metres"}, {n: m}))}"><i style="width:${(m * s).toFixed(1)}px"></i><span>${
+  return `<span class="lp-scale" aria-label="${attr(tt("map.plan.scale", {one: "Scale: {n} metre", other: "Scale: {n} metres"}, {n: m}))}"><i style="width:${(m * s).toFixed(1)}px"></i><span>${
     mapText(tt("map.plan.metres", "{n} m", {n: m}))}</span></span>`;
 }
 

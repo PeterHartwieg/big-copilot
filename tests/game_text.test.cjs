@@ -8,11 +8,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
-const consts = source.slice(source.indexOf('  const LANGUAGE_KEY ='), source.indexOf('  const DB ='));
-const helpers = source.slice(source.indexOf('  function gameTextLanguage('), source.indexOf('  async function takeLocale('));
+const {between} = require('./_slice.cjs');
+const consts = between(source, '  const LANGUAGE_KEY =', '  const DB =');
+const helpers = between(source, '  function gameTextLanguage(', '  async function takeLocale(');
 // The page's tt(), which app.js writes every word through.
 const i18n = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8');
-const take = source.slice(source.indexOf('  async function takeLocale('), source.indexOf('  /* --- what the board asks for'));
+const take = between(source, '  async function takeLocale(', '  /* --- what the board asks for');
 
 const ENGLISH = {'ba:neighborhood_global': 'Global', menu_options_others_language: 'Language'};
 const GERMAN = {'ba:neighborhood_global': 'Global', menu_options_others_language: 'Sprache'};

@@ -5,22 +5,17 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
+const {between} = require('./_slice.cjs');
 // The game-link section, plus the two functions it drives: update()'s first
 // branch hands it the refresh, checkFolder() hands it the watch.
 // The page's tt(), which app.js writes every word through.
 const i18n = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8');
 // How app.js hands the strip its words: say(), failure() and errWords().
-const sayHelpers = source.slice(source.indexOf('  const say = (v)'), source.indexOf('\n', source.indexOf('  const errWords')));
+const sayHelpers = between(source, '  const say = (v)', '\n', {endAfter: '  const errWords'});
 const words = (v) => (typeof v === 'function' ? v() : v);
-const section = source.slice(
-  source.indexOf('  /* --- the game link (docs/game-link-api.md)'),
-  source.indexOf('  /* --- building'));
-const updater = source.slice(
-  source.indexOf('  async function update()'),
-  source.indexOf('  /* --- watching the folder'));
-const watcher = source.slice(
-  source.indexOf('  async function checkFolder()'),
-  source.indexOf('  function armWatch()'));
+const section = between(source, '  /* --- the game link (docs/game-link-api.md)', '  /* --- building');
+const updater = between(source, '  async function update()', '  /* --- watching the folder');
+const watcher = between(source, '  async function checkFolder()', '  function armWatch()');
 
 const HEALTH = {
   ok: true, schemaVersion: 1, modVersion: '0.1.0', source: 'mock', build: 3680,

@@ -9,23 +9,27 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '..', 'ba_dashboard.py'), 'utf8');
-const start = source.indexOf('function buildOrderChecklist(');
-const end = source.indexOf('const orderMarkCache', start);
-assert.ok(start >= 0 && end > start);
+const {at, between} = require('./_slice.cjs');
+const start = at(source, 'function buildOrderChecklist(');
+const end = at(source, 'const orderMarkCache', {from: start});
 const context = vm.createContext({});
 // tt(), which the Plan imports card's wording goes through (web/i18n.js).
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8'), context);
 // The row setting the imports table computes, which feeds the checklist.
-const settingStart = source.indexOf('function importSetting(');
-assert.ok(settingStart >= 0 && settingStart < start);
+const settingStart = at(source, 'function importSetting(');
+assert.ok(settingStart < start);
 // The board's number formatter, which the checklist's wording goes through.
-vm.runInContext(source.slice(source.indexOf('let NUM_LOCALE'), source.indexOf('const compact =')), context);
+vm.runInContext(between(source, 'let NUM_LOCALE', 'const compact ='), context);
+// The weekday names and Supply's word helpers (sbDay, sbDayShort) the reasons use.
+vm.runInContext(between(source, 'const WEEKDAY_NAMES', 'function drawWeekday('), context);
+vm.runInContext(between(source, '/* A list as one message: the last pair is its own key (sb.list.last)', "/* A node's name cut to fit"), context);
 vm.runInContext(source.slice(settingStart, end), context);
 const businesses = [
   {key:'depot#1', name:'Depot', address:'1 Depot Street'},
   {key:'factory#2', name:'Factory', address:'2 Factory Street'},
   {key:'shop#3', name:'Shop', address:'3 Shop Street'},
 ];
+require('./_payload_contract.cjs').assertPayloadShape({businesses}, 'order_checklist');
 // Every row Python sends carries its item's key beside the name; a fixture
 // that names only the item gets the key it would have had.
 const keyed = r => r.slug ? r : {...r, slug: keyOf(r.item)};
@@ -203,7 +207,7 @@ test('unassigned factories require depot selection; a top-up is the input fact\'
   assert.match(rows[1].reason, /Full-rate input requirement, plus the margin; confirm staffing and output limits/);
   // Under Demand the reason says what the figure was sized for.
   const [dem] = build({sites:[{s:1, rows:[{item:'Flour', target:100, perDay:215, from:0, margin:0.15,
-    sizedFor:'What the shops at the end of the chain use', fact:fact('short', {setTo:250})}]}]});
+    sizedFor:'dem', fact:fact('short', {setTo:250})}]}]});
   assert.match(dem.reason, /^From Depot · 1 Depot Street\. What the shops at the end of the chain use, plus a 15% margin/);
 });
 
@@ -315,6 +319,18 @@ test('the player\'s figure replaces the suggestion; typing the suggestion is no 
   assert.deepEqual([away.stale, away.edited, away.value], [true, false, 1400]);
   const rows = build({imports:[{s:0, rows:[row(f, {weekly:1200}, {value:900, inGame:900})]}]});
   assert.deepEqual([rows[0].current, rows[0].proposed], [1200, 1400]);
+  // A figure typed on a line no contract imports ("not imported, add N"),
+  // which a route from the company's own site has covered since: no contract
+  // and no suggestion leaves the figure nothing to answer, so it is stale.
+  const routed = setting(fact('covered', {why:'route'}), {}, {value:600, inGame:null});
+  assert.deepEqual([routed.stale, routed.edited, routed.value, routed.inGame, routed.changed],
+    [true, false, null, null, false]);
+  // While the line still asks for an import, the figure stands.
+  const adding = setting(fact('noplan', {setTo:1610}), {}, {value:600, inGame:null});
+  assert.deepEqual([adding.stale, adding.edited, adding.value], [false, true, 600]);
+  // Nothing suggested only because nothing is used right now: the figure stays.
+  const idle = setting(fact('noplan', {setTo:null, use:0, need:0}), {}, {value:600, inGame:null});
+  assert.deepEqual([idle.stale, idle.edited, idle.value], [false, true, 600]);
   // Not a number, or below zero, is not a figure.
   assert.equal(setting(f, {weekly:900}, -5).edited, false);
   assert.equal(setting(f, {weekly:900}, NaN).edited, false);
@@ -417,7 +433,7 @@ test('tight never reaches Today: with only margin changes left, the card says no
   assert.deepEqual(card([], [], {complete: true, unnamed: 0, margin: 2}), {badge:'ALL SET', live:false,
     what:'Nothing falls short. Supply lists 2 changes that would restore the margin.'});
   assert.doesNotMatch(card([], [], {complete: true, unnamed: 0, margin: 1}).what, /tight/i);
-  const drawn = source.slice(source.indexOf('function drawSupplyStrip('), source.indexOf('/* The Set to figures the player typed'));
+  const drawn = between(source, 'function drawSupplyStrip(', '/* The Set to figures the player typed');
   assert.match(drawn, /const urgent = rows\.filter\(r => !r\.tight && !r\.lower\);/);
   assert.match(drawn, /planImportsState\(urgent,/);
 });
@@ -478,6 +494,27 @@ test('the card says a review in the checklist’s own words, and escapes a save�
     what:'<b>&lt;Glue></b>: choose a supplying depot before setting an order.'});
 });
 
+test("in another language the words change, and the kinds, tick keys and Today's wording stay whole", () => {
+  // A row's kind is its id: the tabs pick rows by it and every tick's key holds it.
+  const input = {loose:[{item:'Glue', week:700}], imports:[{s:0, rows:[order({})]}]};
+  const en = build(input);
+  context.ttSetTable('de', {'sb.ck.kind.imports': 'Wochenimporte', 'sb.ck.loose': 'Wähle ein Depot.',
+    'sb.ck.lead.loose': 'wähle ein Depot', 'sb.ck.copy.row': '[ ] {item} – {change} – {reason}'});
+  try {
+    const de = build(input);
+    assert.deepEqual(de.map(r => [r.kind, r.key, r.legacyKey]), en.map(r => [r.kind, r.key, r.legacyKey]));
+    assert.match(de[0].group, /^Wochenimporte · Depot · 1 Depot Street$/);
+    const review = de.find(r => r.proposed === null);
+    assert.match(review.reason, /^Wähle ein Depot\. /);
+    // Today's card takes the review's own first sentence, not a slice of the reason.
+    assert.equal(card([review]).what, '<b>Glue</b>: wähle ein Depot.');
+    // The copied checklist follows the UI language.
+    assert.match(context.orderChecklistText(de, 'Company'), /\n\[ \] Glue – Review – Wähle ein Depot\./);
+  } finally {
+    context.ttSetTable('en', null);
+  }
+});
+
 test('the board keeps no verdict engine of its own', () => {
   // Python is the only judge (supplyFact); the JS engine that recomputed
   // factory inputs and import levels is gone.
@@ -489,7 +526,7 @@ test('the board keeps no verdict engine of its own', () => {
 test('a factory line short of its hours is one "Factory run hours" row; more hours than needed is none', () => {
   const lines = [
     {s: 1, item: 'Cake', slug: 'ba:itemname_cake', fact: {st: 'short', why: 'hours', lvl: 'warn'}, hoursNow: 12, need: 24, machines: 2,
-     sizedFor: 'Full-rate input requirement'},
+     sizedFor: 'cap'},
     {s: 1, item: 'Bread', slug: 'ba:itemname_bread', fact: {st: 'covered', why: null, lvl: 'ok', lower: 10}, hoursNow: 24, need: 10, machines: 2},
   ];
   const rows = JSON.parse(JSON.stringify(context.buildOrderChecklist([], [], [], [], [], businesses, [], [], lines)));

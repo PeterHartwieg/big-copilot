@@ -4,12 +4,13 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname, '..', 'ba_dashboard.py'), 'utf8');
+const {between} = require('./_slice.cjs');
 
 /* The boot slice starts at the shell, so the no-save path comes with it. */
-const BOOT = source.slice(source.indexOf('let shellOnly = false;'),
-  source.indexOf('/* A page written with its numbers'));
+const BOOT = between(source, 'let shellOnly = false;', '/* A page written with its numbers');
 
 function board({saved = {}, data = {}} = {}) {
+  if (data) require('./_payload_contract.cjs').assertPayloadShape(data, 'navigation');
   const entries = ['#today'], states = [null];
   let position = 0;
   const listeners = {}, captured = {};
@@ -53,11 +54,11 @@ function board({saved = {}, data = {}} = {}) {
   /* web/i18n.js runs ahead of the board script on the page: the tabs' labels
      are read through its tt(). */
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8'), context);
-  vm.runInContext(source.slice(source.indexOf('const SEC_PAGE ='), source.indexOf('/* The business a finding')), context);
-  vm.runInContext(source.slice(source.indexOf('const featureDiscovery ='), source.indexOf('/* --- changelog dialog')), context);
-  vm.runInContext(source.slice(source.indexOf('const PAGES ='), source.indexOf('/* --- which kinds of finding')), context);
+  vm.runInContext(between(source, 'const SEC_PAGE =', '/* The business a finding'), context);
+  vm.runInContext(between(source, 'const featureDiscovery =', '/* --- changelog dialog'), context);
+  vm.runInContext(between(source, 'const PAGES =', '/* --- which kinds of finding'), context);
   /* The crumb row above a site's head, and its clicks. */
-  vm.runInContext(source.slice(source.indexOf('const SS_BACK ='), source.indexOf("/* The site's page stands on its own")), context);
+  vm.runInContext(between(source, 'const SS_BACK =', "/* The site's page stands on its own"), context);
   let booted = false;
   const load = () => {
     if (booted) return;
@@ -634,4 +635,43 @@ test("from one site's page, a search's site leads back to the first, where Back 
   assert.deepEqual({...b.states[2].ssFrom}, {label: 'HART. Clothing', hash: '#site/fifthavenue-57'});
   b.move(-1);
   assert.equal(b.site(), SHOP);
+});
+
+/* Issue #100 Change C: a view is a row in SUBS, SEC_PAGE and PAGE_DRAWS
+   (docs/architecture.md, Registries, "A view or a page"). A view without its
+   SEC_PAGE row cannot be revealed or deep-linked; one without a PAGE_DRAWS
+   tag is never redrawn by a live refresh. */
+test('every view in SUBS has its SEC_PAGE row and a PAGE_DRAWS tag', () => {
+  const b = board();
+  const got = JSON.parse(vm.runInContext(`JSON.stringify({
+    subs: Object.entries(SUBS).map(([p, s]) => [p, s.items.map(([id, , sec]) => [id, sec])]),
+    secPage: SEC_PAGE, tags: PAGE_DRAWS.map(([tag]) => tag)})`, b.context));
+  const tagged = new Set(got.tags.flatMap(t => t.split(' ')));
+  const missing = [];
+  for (const [pageId, views] of got.subs) for (const [view, sec] of views) {
+    const row = got.secPage[sec];
+    if (!row) missing.push(`${sec} has no SEC_PAGE row`);
+    else if (row[0] !== pageId || row[1] !== view)
+      missing.push(`SEC_PAGE.${sec} is ${JSON.stringify(row)}, not ["${pageId}","${view}"]`);
+    if (!tagged.has(`${pageId}/${view}`)) missing.push(`no PAGE_DRAWS row is tagged ${pageId}/${view}`);
+  }
+  assert.deepEqual(missing, []);
+});
+
+test('every PAGE_DRAWS tag names a real page or view', () => {
+  const b = board();
+  const got = JSON.parse(vm.runInContext(`JSON.stringify({
+    pages: PAGES.map(p => p.id),
+    subs: Object.fromEntries(Object.entries(SUBS).map(([p, s]) => [p, s.items.map(([id]) => id)])),
+    tags: PAGE_DRAWS.map(([tag]) => tag)})`, b.context));
+  const real = new Set();
+  for (const p of got.pages) {
+    if (got.subs[p]) got.subs[p].forEach(v => real.add(`${p}/${v}`));
+    else real.add(p);  // a page without views is drawn under its own id
+  }
+  // "" is the documented tag for a row a live refresh always draws.
+  const bad = got.tags.flatMap(t => t === '' ? [] : t.split(' ')).filter(t => !real.has(t));
+  assert.deepEqual(bad, [], `PAGE_DRAWS tags that name no page or view: ${bad.join(', ')}`);
+  // And every page with views is in PAGES.
+  assert.deepEqual(Object.keys(got.subs).filter(p => !got.pages.includes(p)), []);
 });

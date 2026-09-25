@@ -51,6 +51,19 @@ const CONVERTED = {
      rows are the kinds' names (nav) and it redraws each time it opens, and so
      is Ask the board under Next moves (the search palette's). */
   today: '#kpis, #alertHead, #alerts .amt, #alertMinor .td-count, #silenced, #secMoves h2, #secMoves .moves',
+  /* Supply's own words: the switches, the checklist strip's chrome, each
+     tab's verdict, sizing row, headers, status words, reasons, counts, units
+     and notes, the factory staffing block, and the diagram's legend and
+     column heads. Left out: the names (sites, products, the diagram's boxes)
+     and the order checklist's own reasons (the "Other changes" Why cells),
+     which are sb.ck's. */
+  sb: '#sbMode, #sbView, #sbStrip, #pageSupply .sb-verdict, #pageSupply .sb-sizing, #pageSupply .sb-ramp, '
+    + '#pageSupply .sb-more, #pageSupply .sb-part, #pageSupply .sb-clear, #pageSupply thead, #pageSupply .sb-v, '
+    + '#pageSupply .sb-why, #pageSupply .sb-stats, #pageSupply .cnt, #pageSupply .how, #pageSupply .sb-chg small, '
+    + '#pageSupply .sb-unit, #pageSupply td .sub, #pageSupply .chip, #pageSupply .sb-staff .sechead, #pageSupply .sb-hc, '
+    + '#pageSupply .sb-stot, #pageSupply .sb-flowleg, #pageSupply svg text.col, #pageSupply .imp-unit, #pageSupply .up',
+  /* The order checklist's own reasons, in the "Other changes" Why cells. */
+  'sb.ck': '#pageSupply .sb-ckwhy',
   /* The Growth page below its view switch (nav's): the demand grid, the waves,
      Plan a chain and its Ingredients. */
   gr: '#secMarket, #secPlan, #secIngredients',
@@ -60,6 +73,16 @@ const CONVERTED = {
     + '#secPortfolio .sechead, #portfolio thead, #portfolio tfoot, #portfolio tr.chain, #portfolio tr.kid td:not(.l), '
     + '#secProducts .sechead, #secProducts thead, #secProducts td:not(.l), #secProducts > p, '
     + '#secPayroll .sechead, #secPayroll > p, #secGoals',
+  /* The Wiki's own words: the home view's search row, legend, topic shelf
+     heading and states; a guide's section headings, checklist cards and
+     captions (its labels are guideUi's, keyed wiki.ui.*), tiles, card and lane
+     labels, pills, graph key, save strip and prices. The articles and the
+     categories' names stay English. */
+  wiki: '#wikiRoot .wk-top, #wikiRoot .wk-legend, #wikiRoot .sechead h2, #wikiRoot .wk-group > h3, #wikiRoot .wk-sub, #wikiRoot .wk-state, #wikiRoot .wk-foot, '
+    + '#wikiRoot .wk-crumb > a:first-child, #wikiRoot .wk-titlerow .chips, #wikiRoot .wk-tiles .lab, #wikiRoot .wk-tiles .kpi:nth-child(3) .sub, '
+    + '#wikiRoot .wk-card:not(.svc) dt, #wikiRoot .wk-pill.on, #wikiRoot .wk-pill.no, #wikiRoot .wk-pill.unknown, '
+    + '#wikiRoot .wk-lane h3, #wikiRoot .wk-key, #wikiRoot .wk-savebox .wk-lab, #wikiRoot .wk-savebox.empty, '
+    + '#wikiRoot #wk-prices > .sechead, #wikiRoot #wk-prices > p, #wikiRoot .wk-prices thead',
   /* The site panel's own chrome: headings, tile labels, table heads, the
      roster's steps, tabs and counters, the notes' labels and the empty
      states. Its read-outs and chips carry site, people and game names, and
@@ -219,6 +242,8 @@ async function views(page){
     (D.businesses || []).forEach(b => out.push(['company', 'results', b.key]));
     // The map with the finder on, its first result's card open.
     if(D.premises) out.push(['map', 'finder', null]);
+    // One of the Wiki's guides, beside its home view.
+    if(typeof showWikiRoute === 'function') out.push(['wiki', 'guide', null]);
     return out;
   });
 }
@@ -234,6 +259,10 @@ async function show(page, [pageId, sub, site]){
         const first = document.querySelector('#cityMapPage .place.fr');
         if(first) await cityMapPage.select(first.dataset.pick, false);
       }
+    } else if(pageId === 'wiki' && typeof wikiStatus !== 'undefined'){
+      /* The wiki draws once its catalogue has loaded. */
+      for(let i = 0; i < 400 && wikiStatus !== 'ready' && wikiStatus !== 'error'; i++) await new Promise(r => setTimeout(r, 25));
+      showWikiRoute(sub === 'guide' ? 'wiki/businesstypes-bookstore' : 'wiki');
     } else if(sub) showSub(pageId, sub);
     if(site) openSite(site, false);
   }, [pageId, sub, site]);

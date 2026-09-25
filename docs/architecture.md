@@ -318,6 +318,16 @@ leer"). Where Python pluralises a name today, pass the count and let the key say
 translated: word order is the translation's. One key per sentence, with its numbers and
 names as params.
 
+**One exception to literal keys: the Wiki guides' labels.** Their English is `guideUi`
+in `tools/wiki_sample.json`, and it reaches the page inside the wiki payload (each
+guide's `COPY`), so `web/wiki.js` cannot write it at the call site. `extract` reads
+`guideUi` itself (`guide_ui_calls()` in `tools/i18n.py`) and emits one key per entry,
+`wiki.ui.<name>`, with the entry as its English; `wikiCopy()` looks each label up with
+``ttText(`wiki.ui.${name}`, english)`` (the payload's English), which the extractor does not read
+as a call. The key set is the JSON's, so the catalogue checks hold for these keys too.
+Nothing else may build a key. The guides' article prose, the topics and the gap and
+source notes are not labels and stay English.
+
 ### How it runs
 
 - `web/i18n.js` is spliced by `render()` into a `<script>` at the end of the head, at
@@ -495,8 +505,9 @@ the navigation (`PAGES` tests for `showWikiRoute`). `web/map.js` and `web/map.cs
 opened directly: delete either and `render()` raises.
 
 `build_web.py` has a second, private set of tokens — `__STAMP__`, `__RELEASE__`,
-`__UPDATE_SCRIPT__`, `__BUILD__`, `__ICON_FOLDER__`, `__ICON_LINK__`, `__ICON_MORE__`.
-Those are substituted inside `BANNER` and `BEFORE_SCRIPT` before either string reaches
+`__UPDATE_SCRIPT__`, `__BUILD__`, `__ICON_FOLDER__`, `__ICON_LINK__`, `__ICON_MORE__`
+(`tests/test_doc_registries.py` holds this list to `build_web.py`). Those are substituted
+inside `BANNER` and `BEFORE_SCRIPT` before either string reaches
 `render()`, so they never appear in `TEMPLATE`. `BANNER` also carries the template's own
 `<!--__FOOTER__-->`, which `build_web.py` fills with `footer_html(landing=True, site=True)`.
 
@@ -756,10 +767,12 @@ a save of another character arriving under an open site's page (`siteFor` agains
 A registry is a table kept by hand that a new thing has to be added to. Nothing generates
 them, and a missing row often fails quietly: a finding that goes nowhere when clicked, a
 view search cannot find. Each checklist below names the anchor to grep, what goes in it,
-and the test that covers the table ("none" means no test reads it). Most of those tests
-check the entries that exist today, so none of them fails yet when a new entry is
-missing; Change C of issue #100 adds those checks. Until then, extend the covering test
-for the new entry. Rows marked
+and the test that covers the table ("none" means no test reads it). A few tables are held
+to each other or to this document, so a missing row fails with its name: the finding-kind
+tables (`tests/alert_kinds.test.cjs`), the view tables (`tests/navigation.test.cjs`), and
+the payload table, the private build tokens and the finding groups
+(`tests/test_doc_registries.py`). The other covering tests check the entries that exist
+today, so extend them for the new entry. Rows marked
 *only if* apply to some entries, not all. All anchors are in `ba_dashboard.py` unless a row
 says otherwise; "board script" means the last `<script>` block of its `TEMPLATE`.
 
@@ -768,18 +781,18 @@ says otherwise; "board script" means the last `<script>` block of its `TEMPLATE`
 | Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
 | The inputs of `def _alerts(` (called twice in `extract()`): `businesses`, `supply`, `trends`, `hype`, `hours`, `grids`; it also takes `chains` but never reads it | Where the finding's numbers come from. A business's single fields (`revenue`, `profit`, `theft`) are its last day only; its `series`, built in the `series.append(` loop of `def _business(`, holds up to 30 days, and `_site_trends()` shows how to sum a week from it. A new per-day figure goes into that loop | the kind's own Python test |
-| `note(` in `def _alerts(`, or `_finding(` in one of the `_*_notes` helpers (`_shelf_notes`, `_import_notes`, `_idle_notes`, `_feed_notes`, `_staff_notes`, `_unnamed_notes`) | The finding itself, with its group id | the kind's own Python test, such as `tests/test_routed_supply.py` |
+| `note(` in `def _alerts(`, or `_finding(` in one of the `_*_notes` helpers (`_shelf_notes`, `_import_notes`, `_idle_notes`, `_feed_notes`, `_staff_notes`, `_unnamed_notes`) | The finding itself, with its group id: a string literal, or a literal tuple a `for` loop runs over, which is what the registry test can read | the kind's own Python test, such as `tests/test_routed_supply.py`; `tests/test_doc_registries.py` holds the groups emitted equal to `ALERT_GROUPS` |
 | The hand-built business dicts the tests pass to `_alerts()`: `def stub(` in `tests/test_site_panel_fields.py` (shared with `tests/test_hype_alerts.py`); `def business(` in `tests/test_idle_week.py` (reused by `tests/idle_week_fixture.py` for `tests/site_panel.test.cjs`); `def businesses(self)` on `Company` in `tests/test_supply_facts.py`; `ImportRoutesTests.build()` in `tests/test_import_routes.py`, whose businesses `tests/test_smart_delivery.py` passes on; and the `business()` inside `depot_supply()` in `tests/test_routed_supply.py`, wrapped in `SupplyOnly`, which a `for b in businesses` loop sees as empty but an index `businesses[s]` still reaches. None has `series`; only businesses built by the real `_business()` do | Read a new field with `.get()` and a default, or add it to every one of these, or those tests break | `tests/test_site_panel_fields.py`, `tests/test_hype_alerts.py`, `tests/test_idle_week.py`, `tests/site_panel.test.cjs`, `tests/test_supply_facts.py`, `tests/test_import_routes.py`, `tests/test_smart_delivery.py`, `tests/test_routed_supply.py` |
 | `AMENITY_DEMANDS = {` | *Only if* it is an amenity kind: `slug: (group, text)` | `tests/test_uniform_alerts.py`, "test_an_empty_cache_means_every_demand_failed" |
-| `ALERT_UNITS = {` | *Only if* its `worth` is money: the unit, such as `"/day rent"` | none |
+| `ALERT_UNITS = {` | *Only if* its `worth` is money: the unit, such as `"/day rent"`. Otherwise the kind goes on `NOT_MONEY` in `tests/alert_kinds.test.cjs` | `tests/alert_kinds.test.cjs`, "every finding kind has an ALERT_UNITS unit or is listed as carrying no money" |
 | `SUMMARIES = {`, and `WORST_FIRST =` for mixed severities | *Only if* three or more at one site should merge into one counted line | none; a missing entry just stops the merge |
 | `def _condense(` | *Only if* the kind merges and a field of its own must survive the merge. A merged row is built fresh: it keeps `group`, the key the rows were merged on; from the worst row it keeps `level`, `site`, `siteKey`, `detail` (that row's `text`) and `ev` when present; `text` is the `SUMMARIES` line, `worth` the sum of the rows' non-null worths (or `None` when there are none), `unit` from `ALERT_UNITS`, `id` a new `_alert_id("summary", …)`, and `always` is true if any row's is. Every other field is dropped. Every row, merged or not, also loses `rank` and `subject`, and `always` once the materiality gate has used it | none |
-| `const ALERT_GROUPS = [` (board script) | `{id, label, note, on}`. The settings panel, `kindLabel`, `kindCounts`, search and the map's `kindOff` all read it. Keep a noisy kind `on: false` | `tests/alert_kinds.test.cjs`, "At capacity is on by default" and the per-kind tests |
+| `const ALERT_GROUPS = [` (board script) | `{id, label, note, on}`. The settings panel, `kindLabel`, `kindCounts`, search and the map's `kindOff` all read it. Keep a noisy kind `on: false` | `tests/alert_kinds.test.cjs`, "At capacity is on by default" and the per-kind tests; `tests/test_doc_registries.py`, "test_every_alert_group_is_a_group_the_findings_emit" |
 | `const ALERT_DEFAULTS_V1 =` (board script) | Never add to it: it is the frozen migration of old settings | `tests/alert_kinds.test.cjs`, "a stored whole map keeps only …" |
-| `const ALERT_LINKS = {` (board script) | Where a click lands: `{sec, tab?, site?, port?}`, where `tab` is a Supply tab (`shops`, `warehouses`, `factories`) or `"site"` for the tab of the site's own kind. Without it `goToAlert()` does nothing | `tests/alert_kinds.test.cjs` per-kind tests and "the supply kinds land on the Supply tab of their object"; `tests/job_demands.test.cjs`, "both demand findings can be filtered and link somewhere" |
+| `const ALERT_LINKS = {` (board script) | Where a click lands: `{sec, tab?, site?, port?}`, where `tab` is a Supply tab (`shops`, `warehouses`, `factories`) or `"site"` for the tab of the site's own kind. Without it `goToAlert()` does nothing | `tests/alert_kinds.test.cjs`, "every finding kind has an ALERT_LINKS entry …", the per-kind tests and "the supply kinds land on the Supply tab of their object"; `tests/job_demands.test.cjs`, "both demand findings can be filtered and link somewhere" |
 | `const ALERT_SITE_PICK = {` (board script) | *Only if* the kind is company-wide, with no site of its own | `tests/job_demands.test.cjs` |
 | `const ALERT_LANDS_ON_ROW = new Set(` (board script) | *Only if* the finding is about one shelf, stock or input row | none |
-| `const ALERT_EVIDENCE = {` (board script) | The site panel block it lights, `{block, hit?}` | `tests/site_panel.test.cjs`, "the findings here are the ones about this site, and each lights its block" |
+| `const ALERT_EVIDENCE = {` (board script) | The site panel block it lights, `{block, hit?}`. A kind with no site panel goes on `NO_EVIDENCE` in `tests/alert_kinds.test.cjs` instead | `tests/alert_kinds.test.cjs`, "every finding kind with a site panel has an ALERT_EVIDENCE entry"; `tests/site_panel.test.cjs`, "the findings here are the ones about this site, and each lights its block" |
 | `const SP_EVIDENCE_KIND = {`, `const SP_EVIDENCE_HIT = {` (board script) | *Only if* a depot or factory keeps it in another block, or the hit depends on the site | `tests/alert_kinds.test.cjs` for the first; none for the second |
 | `function findingAmount(` (board script) | *Only if* the generic number patterns miss its amount | `tests/alert_kinds.test.cjs`, `tests/job_demands.test.cjs` |
 | `const SS_KIND_SYN = {` (board script) | The players' own words for it, for search | `tests/search.test.cjs`, "the index holds every group …" |
@@ -787,8 +800,12 @@ says otherwise; "board script" means the last `<script>` block of its `TEMPLATE`
 | "What counts as a finding" in `docs/dashboard-reference.md` | The player-facing description | none |
 
 The map colours a finding by its `level` and `kindOff()`, so `web/map.js` needs nothing.
-Today `vacant` has no `ALERT_EVIDENCE` entry, most kinds have no `SS_KIND_SYN` entry and
-`ALERT_UNITS` holds only the money kinds, so a completeness test has to allow for those.
+Not every kind is in every table, and the tests list the exceptions by name: `vacant` has
+no `ALERT_EVIDENCE` entry, since a vacant lease has no site panel (`NO_EVIDENCE`), and
+`ALERT_UNITS` holds only the money kinds (`NOT_MONEY` lists the rest). Most kinds have no
+`SS_KIND_SYN` entry, which no test checks. Many kinds come from `_finding()` in
+a `_*_notes` helper or from `AMENITY_DEMANDS`, not from `note()`, so the group test reads
+all three.
 
 ### A view or a page
 
@@ -797,9 +814,9 @@ Today `vacant` has no `ALERT_EVIDENCE` entry, most kinds have no `SS_KIND_SYN` e
 | The markup: `<div class="page" id="page…">` for a page, or `<section class="sec rv" id="sec…" data-sub="…">` inside its page for a view; a page with views also gets its `<nav class="seg" id="…Nav">` | The host element | the navigation tests, indirectly |
 | `const PAGES = [` (board script) | *Only for a page*: `{id, label, host, newFeature?}` | `tests/navigation.test.cjs`, "the top row is Today, Company, Supply, Growth, Map, Wiki" |
 | `const ICON = {` (board script) | *Only for a page*: its nav icon, keyed by page id | none |
-| `const SUBS = {` (board script) | *Only for a view*: its `[id, label, section]` item; a new page with views needs the whole entry | `tests/navigation.test.cjs`, "Company carries Results, Products, Payroll and Milestones" |
-| `const SEC_PAGE = {` (board script) | `secX: [page, view]` for every section. Without it `reveal()`, the sub-nav and `pageFromHash()` fail | `tests/navigation.test.cjs`, "every Company section deep link opens the view that holds it"; `tests/alert_kinds.test.cjs`, "the supply kinds land on the Supply tab of their object" |
-| `const PAGE_DRAWS = [` (board script) | `["page/view", () => drawX()]`, tagged with every view whose markup it writes | `tests/calm_refresh.test.cjs`, "a refresh on Today draws Today …" |
+| `const SUBS = {` (board script) | *Only for a view*: its `[id, label, section]` item; a new page with views needs the whole entry | `tests/navigation.test.cjs`, "Company carries Results, Products, Payroll and Milestones" and "every view in SUBS has its SEC_PAGE row and a PAGE_DRAWS tag" |
+| `const SEC_PAGE = {` (board script) | `secX: [page, view]` for every section. Without it `reveal()`, the sub-nav and `pageFromHash()` fail | `tests/navigation.test.cjs`, "every view in SUBS has its SEC_PAGE row …" and "every Company section deep link opens the view that holds it"; `tests/alert_kinds.test.cjs`, "the supply kinds land on the Supply tab of their object" |
+| `const PAGE_DRAWS = [` (board script) | `["page/view", () => drawX()]`, tagged with every view whose markup it writes | `tests/calm_refresh.test.cjs`, "a refresh on Today draws Today …"; `tests/navigation.test.cjs`, "every PAGE_DRAWS tag names a real page or view" and the SUBS test above |
 | `const SS_VIEWS = [` (board script) | `{id, t, p, ic, syn, go}`, so search can open it | `tests/search.test.cjs`, "the index holds every group …" |
 | `function showPage(` (board script) | *Only if* the page loads or draws when shown, as the Map does | none |
 | `const SB_SEC =`, `const SB_LABEL =`, `const SB_TAB_ICON =` (board script) | *Only for* a new Supply tab: its section, label and icon, keyed by the tab id. Also its `supply` item in `SUBS`; its draw function in `drawSupplyTab()`'s dispatch map (a missing tab draws Shops); `sbTabOf()`, which sorts a site onto a tab; and the tab-keyed objects in `sbData()` (`byTab`), `sbUpdateStrip()` (`sbLeft`) and `ssIdleTab()`; and the tab list in `ssTopupTab()` | `tests/navigation.test.cjs`, "Supply is three tabs, one per object"; `tests/import_routes.test.cjs` |
@@ -816,7 +833,7 @@ watch server, `web/worker.js` and `web/app.js` all pass the whole dict through.
 | Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
 | The `return {` at the end of `def extract(` | `"key": _producer(...)`. It must be JSON-serialisable, with any set ordered through `_in_order()` | only JSON-serialisability: `tests/test_supply_facts.py`, "test_the_payload_carries_the_facts_and_both_passes_of_findings" |
-| The payload table in [The payload contract](#the-payload-contract) | A row that follows the reader convention | none |
+| The payload table in [The payload contract](#the-payload-contract) | A row that follows the reader convention | `tests/test_doc_registries.py`, "test_the_payload_table_has_a_row_for_every_key_extract_returns" (the key column only) |
 | The reader, `D.<key>`, in the board script, `web/map.js` or `web/wiki.js` | A reader that survives a missing key (fall back to an empty value), because many Node tests build a partial `D` | indirect |
 | `class History:` and the `history.ledger(` / `history.write()` lines in `extract()` | *Only if* the value has to persist between saves | none |
 

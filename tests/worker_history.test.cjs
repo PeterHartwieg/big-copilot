@@ -8,10 +8,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const {at} = require('./_slice.cjs');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'web', 'worker.js'), 'utf8');
 // Everything after Pyodide's boot: the file helpers and the message handler.
-const handler = source.slice(source.indexOf('function writeText('));
+const handler = source.slice(at(source, 'function writeText('));
 const names = ['SAVE_DIR', 'DATA_DIR', 'HISTORY', 'LOCALE', 'NAMES'].map((name) => {
   const line = source.split(/\r?\n/).find((l) => l.startsWith(`const ${name} =`));
   assert.ok(line, name);

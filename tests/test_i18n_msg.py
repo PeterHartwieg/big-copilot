@@ -84,11 +84,19 @@ CONVERTED = {
        ("data", "supply.factories.sites.lines.gaps", "off")],
     # Today writes its own words in the page (tt()); Python sends it numbers only.
     "today": [],
+    # Supply's chrome, and the imports and schedule write dialogs, write their
+    # own words in the page (tt()); Python sends the supply facts as codes.
+    "sb": [],
+    # The order checklist words its reasons in the page (tt()); Python sends
+    # the facts, names and weekday names it reads them from.
+    "sb.ck": [],
     # Growth writes its own words in the page (tt()); Python sends it names, numbers
     # and the supplier-event kinds, which the page words by their English.
     "gr": [],
     # The Company page: each chain's name in the Portfolio.
     "co": [("es3", "chains", "name")],
+    # The Wiki writes its own words in the page (tt()); Python sends it none.
+    "wiki": [],
 }
 
 
@@ -293,14 +301,14 @@ class PageTests(unittest.TestCase):
 
     def test_a_lang_page_carries_its_table(self):
         page = ba_dashboard.render(None, ui={"lang": "de", "table": {"nav.today": "Heute</script>"}})
-        self.assertIn('const TT_EMBED = {"lang":"de","table":{"nav.today":"Heute<\\/script>"}};', page)
+        self.assertIn('const TT_EMBED = {"lang":"de","table":{"nav.today":"Heute\\u003c/script>"}};', page)
 
     def test_the_table_is_spliced_last_and_only_into_the_head(self):
         # No later placeholder runs over the table's text, and a marker in the
         # player's own words (the payload) stays as written.
         table = {"nav.x": "__TITLE__ <!--__FOOTER__--> /*__MAP_SCRIPT__*/"}
         page = ba_dashboard.render(None, ui={"lang": "de", "table": table})
-        self.assertIn(json.dumps(table, separators=(",", ":")), page)
+        self.assertIn(ba_dashboard.script_json(json.dumps(table, separators=(",", ":"))), page)
         payload = fixtures()["es3"]
         payload["meta"]["save"] = "Co /*__I18N_SCRIPT__*/"
         page = ba_dashboard.render(payload)
@@ -444,7 +452,7 @@ class FindingsHalfB(unittest.TestCase):
         found, _ = self.rows()
         text = {plain(r["text"]) for r in found}
         for want in (
-            "Item 18 import is paused: 1 days left at 40/day",
+            "Item 18 import is paused: 1 day left at 40/day",
             "Item 19 import is paused: 2 days left at 40/day",
             "Item 22 orders 1,300 a week against a 2,800 week of use, 1,500 short; already runs dry on Tuesday, "
             "2.2 days before Monday's import",
@@ -533,6 +541,21 @@ class Coverage(unittest.TestCase):
                     self.assertTrue(rows_at(payloads[name], path), f"{name} has nothing at {path}")
                     self.assertEqual(uncovered(payloads[name], path, field, *which), [],
                                      "a sentence of a converted area lost its message (a + or .replace()?)")
+
+    def test_a_level_contract_is_named_by_a_message_with_its_ordinal(self):
+        # Supply (sb): "1 Pier, its 2nd of 3 contracts here", the ordinal a
+        # message of its own; one importer alone is just its name.
+        line = [{"importer": "1 Pier", "order": o} for o in (4, 7, 9)] + [{"importer": "X", "order": 1}]
+        for order, nth in ((4, "1st"), (7, "2nd"), (9, "3rd")):
+            name = ba_dashboard._level_name(line, "1 Pier", order)
+            self.assertEqual(name, f"1 Pier, its {nth} of 3 contracts here")
+            self.assertEqual(name.wire()[0], "sb.py.levelName")
+            self.assertEqual(name.wire()[1]["nth"]["m"][2], nth)
+        self.assertEqual([str(ba_dashboard._ordinal_msg(n)) for n in (11, 12, 13, 21, 22, 23, 104, 111)],
+                         ["11th", "12th", "13th", "21st", "22nd", "23rd", "104th", "111th"])
+        self.assertEqual(ba_dashboard._level_name(line, "X", 1), "X")
+        wired = _wire_msgs({"levelName": ba_dashboard._level_name(line, "1 Pier", 7)})
+        self.assertEqual(wired["i18n"]["levelName"][0], "sb.py.levelName")
 
     def test_the_coverage_check_finds_a_sentence_that_lost_its_message(self):
         # The guard itself: a row edited after msg() is reported, a wired one is not.
