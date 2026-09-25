@@ -76,6 +76,8 @@ CONVERTED = {
        for name in ("data", "game_names") for field in ("text", "detail", "site")],
     # Today writes its own words in the page (tt()); Python sends it numbers only.
     "today": [],
+    # The Company page: each chain's name in the Portfolio.
+    "co": [("es3", "chains", "name")],
 }
 
 
