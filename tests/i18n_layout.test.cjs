@@ -27,7 +27,12 @@ const WIDTHS = [360, 768, 1280, 1500, 1501, 1920];
    A conversion pull request adds its row; from then on English left on
    screen there fails the sweep. */
 const CONVERTED = {
-  // nav: '#nav, .subnav',
+  /* The masthead's own lines: its live dot's word is community.js's. */
+  nav: '#nav, #companyNav, #supplyNav, #growthNav, #clock > b, #clock > small:not(.fv-diffline), #clock .flag, '
+    + '#clock .fv-diff, #ssField, .ss-ask, #ssAskMini',
+  foot: '.sitefoot',
+  /* A finding's headline and its detail, on Today and in the site panel. */
+  f: '.find .what, .find .more, .sp-find .what, .sp-find .more',
 };
 const MEASURED = 'button, .chip, .seg a, th, .tile .lab';
 
@@ -174,16 +179,28 @@ async function measure(page){
   return page.evaluate(([sel, converted]) => {
     const root = document.documentElement;
     const shown = el => el.offsetParent !== null || el.getClientRects().length > 0;
+    /* A New badge hangs off its control's edge on purpose (the search icon's
+       does), so its words are left out of what an overflow is known by. */
+    const own = el => [...el.querySelectorAll('.feature-new')].reduce((s, b) => s.replace(b.textContent, ''), el.textContent);
     const over = [...document.querySelectorAll(sel)]
       .filter(el => shown(el) && el.scrollWidth > el.clientWidth + 1)
-      .map(el => `${el.tagName.toLowerCase()}${el.className ? '.' + String(el.className).split(' ')[0] : ''}: ${el.textContent.trim().slice(0, 40)}`);
+      .map(el => `${el.tagName.toLowerCase()}${el.className ? '.' + String(el.className).split(' ')[0] : ''}: ${own(el).trim().slice(0, 40)}`);
     const english = [];
     for(const [area, where] of Object.entries(converted)){
       document.querySelectorAll(where).forEach(host => {
         const walk = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
         for(let n = walk.nextNode(); n; n = walk.nextNode()){
           if(!n.parentElement || !shown(n.parentElement)) continue;
-          const outside = n.textContent.replace(/\[[^\]]*\]/g, '').replace(/[\d\s.,:;$%+\-–—×·/()!?%'"‹›…#]+/g, '');
+          /* A name (Big Copilot, YouTube, the studio) is marked translate="no". */
+          if(n.parentElement.closest('[translate="no"]')) continue;
+          /* A finding's sentence is cut into headline and detail, so its
+             brackets can open in one text node and close in the next; and a
+             message nests others (a list, a weekday, a finding's detail),
+             so brackets nest. Matched pairs go innermost first; what is left
+             before a lone "]" opened earlier, and after a lone "[" closes later. */
+          let outside = n.textContent;
+          for(let was = ''; was !== outside;){ was = outside; outside = outside.replace(/\[[^\[\]]*\]/g, ''); }
+          outside = outside.replace(/^[^]*\]/, '').replace(/\[[^]*$/, '').replace(/[\d\s.,:;$%+\-–—×·/()!?%'"‹›…#]+/g, '');
           if(outside.length > 1) english.push(`${area}: ${n.textContent.trim().slice(0, 60)}`);
         }
       });

@@ -34,11 +34,28 @@ SUPPLY = {"graph": {"links": []}, "shops": [], "idle": [], "imports": []}
 # plain string that stays English.
 #
 # The findings are converted in two halves: _alerts() and _shelf_notes() (5a),
-# then the helpers after _shelf_notes() (5b). Until both are in, only the kinds
-# the second half alone writes are held to it here: their sentences, the
-# detail of a summary line naming one of them, and a synthetic site ("2
-# shops"). "wholesale" is written by both halves, and "staff" by 5a and the
-# site panel's area; the summary lines' own text is 5a's (SUMMARIES).
+# then the helpers after _shelf_notes() (5b). The kinds the first half writes
+# are held to it with every summary line and unit
+# (findings_5a), and the kinds the second half writes with their detail and
+# synthetic sites (findings_5b). "staff", "outruns" and "wholesale" are
+# written by both halves (and "staff" by the site panel's area too).
+FINDINGS_5A = {
+    "notrading", "vacant", "loss", "satisfaction", "uniform", "bathroom", "toiletprivacy", "sink",
+    "music", "interior", "jobdemand", "companydemand", "promotion", "hype", "trend", "atcap",
+    "idlestaff", "unplanned",
+}
+
+
+def findings_5a(row, field):
+    if field == "text" and "detail" in row:
+        return True  # a summary line (_condense)
+    if field == "unit":
+        return bool(row.get("unit"))
+    if field == "site":
+        return row.get("siteKey") is None and row.get("group") in FINDINGS_5A
+    return row.get("group") in FINDINGS_5A
+
+
 FINDINGS_5B = {"topup", "paused", "order", "shortfall", "feed", "unnamed", "unset", "dead", "notrouted", "target"}
 
 
@@ -46,15 +63,17 @@ def findings_5b(row, field):
     if row.get("group") not in FINDINGS_5B:
         return False
     if field == "text":
-        return "detail" not in row  # a summary line's own text is 5a's
+        return "detail" not in row  # a summary line's own text: findings_5a
     if field == "site":
         return row.get("siteKey") is None
     return True
 
 
 CONVERTED = {
-    "f": [(name, "alerts", field, findings_5b)
-          for name in ("data", "game_names") for field in ("text", "detail", "site")],
+    "f": [(name, "alerts", field, findings_5a)
+          for name in ("es3", "game_names") for field in ("text", "unit")]
+    + [(name, "alerts", field, findings_5b)
+       for name in ("data", "game_names") for field in ("text", "detail", "site")],
 }
 
 
@@ -222,7 +241,7 @@ class WorkedExample(unittest.TestCase):
         self.assertEqual(row["text"], "Lost $1,234 yesterday")
         self.assertEqual((row["text"].key, row["text"].p), ("f.loss", {"w": 1234.4}))
         _wire_msgs(row)
-        self.assertEqual(row["i18n"], {"text": ["f.loss", {"w": 1234.4}]})
+        self.assertEqual(row["i18n"], {"text": ["f.loss", {"w": 1234.4}], "unit": ["f.unit.loss", {}]})
 
     def test_no_staff_reads_as_it_did_and_carries_its_message(self):
         row = self.lines(staff=0, revenue=10.0)["staff"]
@@ -404,7 +423,7 @@ class FindingsHalfB(unittest.TestCase):
                     self.assertIsInstance(r["site"], Msg)
                     keys |= keys_in(r["site"])
                 self.assertIn("text", _wire_msgs(dict(r))["i18n"])
-        self.assertEqual(sorted(k for k in keys if k != "f.list"), sorted(FINDINGS_5B_KEYS))
+        self.assertEqual(sorted(k for k in keys if k not in ("f.list", "f.list.last")), sorted(FINDINGS_5B_KEYS))
 
     def test_the_english_is_what_the_f_strings_wrote(self):
         found, _ = self.rows()
@@ -455,6 +474,39 @@ FINDINGS_5B_KEYS = {
     "f.dead", "f.dead.route", "f.dead.import", "f.dead.import.smart", "f.dead.weeks",
     "f.target", "f.target.units", "f.target.site",
 }
+class FindingsHalfA(unittest.TestCase):
+    """The kinds the fixtures do not raise, and the synthetic sites ("2 shops",
+    "Company"): every sentence, pill and unit a message."""
+
+    def test_every_row_of_the_first_half_is_a_message(self):
+        shop = lambda k, name, **o: stub(k, name, "retail", **{"revenue": 10.0, "promotion": 100, **o})
+        businesses = [
+            stub("k0", "New", "retail", opened=59, staff=0),
+            stub("k1", "Lease", "vacant"),
+            shop("k2", "A", promotion=60, traffic=40, marketingIndex=20, customers=3, profit=-50.0, costCentre=False,
+                 satisfaction={"overall": 70}, uniformGaps=["Cashier"], uniformGapSkills=["ba:skill_customerservice"],
+                 staffLacking=2, staffLackingCompany=1, quitWarnings=1, staffDemands=[
+                     {"slug": "ba:jobdemand_fulltime", "demand": "Full-time", "count": 2, "priority": 2,
+                      "company": False, "workedOver": {"count": 1, "max": 50, "unit": "hours"}},
+                     {"slug": "ba:jobdemand_silverhealthinsurance", "demand": "Health insurance", "count": 1,
+                      "priority": 1, "company": True}]),
+            shop("k3", "B", promotion=70, traffic=50, marketingIndex=20, customers=3, missingUniformLocker=True),
+        ]
+        trends = [{"s": 2, "ready": True, "change": -0.3, "last7": 700.0, "prev7": 1000.0}]
+        cap = {"kind": "cap", "limit": "staffing", "cap": 30, "when": "Mon 12", "hours": 2, "throughput": 50.0,
+               "fix": "more staff"}
+        hours = [dict(cap, key="k2", site="A"), dict(cap, key="k3", site="B")]
+        out = _wire_msgs(_alerts(businesses, SUPPLY, [], trends, [], hours, [], 60, 0.0))
+        rows = out["lines"] + out["minor"]["rows"]
+        self.assertTrue({"notrading", "vacant", "loss", "satisfaction", "uniform", "jobdemand", "companydemand",
+                         "promotion", "trend", "atcap"} <= {r["group"] for r in rows})
+        for r in rows:
+            with self.subTest(group=r["group"], text=r["text"]):
+                self.assertIn("text", r["i18n"])
+                if r["siteKey"] is None:
+                    self.assertIn("site", r["i18n"])
+                if r["unit"]:
+                    self.assertIn("unit", r["i18n"])
 
 
 class Coverage(unittest.TestCase):
