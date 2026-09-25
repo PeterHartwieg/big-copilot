@@ -8,6 +8,7 @@ here the way the game's own rules read them instead.
 import unittest
 
 from ba_dashboard import (
+    plain,
     AMENITY_DEMANDS, DEMANDS_NOT_MADE, OFFICE_SKILLS, RETAIL_TYPES,
     STATION_SKILLS, _alerts, _business, _staff,
 )
@@ -123,7 +124,7 @@ class AmenityAlertTests(unittest.TestCase):
             items=[LOCKER], posts=[((GUARD,), GUARD_POST)], uniforms=[SERVICE]
         )
         self.assertEqual(len(warnings), 1)
-        self.assertIn("No uniform set for Securityguard", warnings[0]["text"])
+        self.assertIn("No uniform set for Securityguard", plain(warnings[0]["text"]))
         self.assertEqual(warnings[0]["level"], "warn")
         self.assertEqual(warnings[0]["siteKey"], "ba:street_fifthavenue#46")
 
@@ -141,7 +142,7 @@ class AmenityAlertTests(unittest.TestCase):
         posts = [((skill,), station) for station, skill in EIGHT_STATIONS]
         warnings = self.warnings(items=[LOCKER], posts=posts, uniforms=[])
         self.assertEqual(len(warnings), 1)
-        named = warnings[0]["text"].split("No uniform set for ")[1].split(";")[0]
+        named = plain(warnings[0]["text"]).split("No uniform set for ")[1].split(";")[0]
         self.assertEqual(
             named.split(", "),
             [Names({}).label(skill) for _station, skill in sorted(
@@ -154,7 +155,7 @@ class AmenityAlertTests(unittest.TestCase):
             items=[LOCKER], posts=[((GUARD,), GUARD_POST)], uniforms=[]
         )
         self.assertEqual(len(warnings), 1)
-        self.assertIn("No uniform set", warnings[0]["text"])
+        self.assertIn("No uniform set", plain(warnings[0]["text"]))
 
     def test_cached_unfulfilled_uniform_demand_does_not_invent_a_gap(self):
         self.assertEqual(
@@ -196,8 +197,8 @@ class AmenityAlertTests(unittest.TestCase):
             uniforms=[GUARD],
         )
         self.assertEqual(len(warnings), 1)
-        self.assertIn("Customerservice", warnings[0]["text"])
-        self.assertNotIn("Securityguard", warnings[0]["text"])
+        self.assertIn("Customerservice", plain(warnings[0]["text"]))
+        self.assertNotIn("Securityguard", plain(warnings[0]["text"]))
 
     def test_the_first_station_skill_the_worker_holds_wins(self):
         # A computer lists ten skills; the game takes the first the worker has
@@ -208,8 +209,8 @@ class AmenityAlertTests(unittest.TestCase):
             uniforms=[PROGRAMMER],
         )
         self.assertEqual(len(gaps), 1)
-        self.assertIn("Lawyer", gaps[0]["text"])
-        self.assertNotIn("Programmer", gaps[0]["text"])
+        self.assertIn("Lawyer", plain(gaps[0]["text"]))
+        self.assertNotIn("Programmer", plain(gaps[0]["text"]))
         self.assertEqual(
             self.warnings(items=[LOCKER],
                           posts=[((PROGRAMMER, LAWYER), "ba:itemname_desktopcomputer")],
@@ -227,7 +228,7 @@ class AmenityAlertTests(unittest.TestCase):
         warnings = self.warnings(items=[LOCKER], posts=[((GUARD,), GUARD_POST)],
                                  uniforms=None)
         self.assertEqual(len(warnings), 1)
-        self.assertIn("Securityguard", warnings[0]["text"])
+        self.assertIn("Securityguard", plain(warnings[0]["text"]))
 
     def test_a_station_the_table_does_not_know_yields_no_role(self):
         self.assertEqual(
@@ -244,19 +245,19 @@ class AmenityAlertTests(unittest.TestCase):
     def test_missing_locker_stands_in_for_the_roles_behind_it(self):
         warnings = self.warnings(posts=[((GUARD,), GUARD_POST)], uniforms=[])
         self.assertEqual(len(warnings), 1)
-        self.assertIn("No uniform locker", warnings[0]["text"])
+        self.assertIn("No uniform locker", plain(warnings[0]["text"]))
 
     def test_missing_locker_warns_even_when_every_role_is_covered(self):
         warnings = self.warnings(posts=[((GUARD,), GUARD_POST)], uniforms=[GUARD])
         self.assertEqual(len(warnings), 1)
-        self.assertIn("No uniform locker", warnings[0]["text"])
+        self.assertIn("No uniform locker", plain(warnings[0]["text"]))
 
     def test_boxed_locker_is_not_installed(self):
         box = {"itemName": "ba:itemname_closedcardboardbox",
                "cargoInstances": {"$items": [{"itemName": LOCKER, "amount": 1}]}}
         warnings = self.warnings(items=[box])
         self.assertEqual(len(warnings), 1)
-        self.assertIn("No uniform locker", warnings[0]["text"])
+        self.assertIn("No uniform locker", plain(warnings[0]["text"]))
 
     # --- demands a business type never makes ---------------------------
 
@@ -289,7 +290,7 @@ class AmenityAlertTests(unittest.TestCase):
             demands=[s for s in AMENITY_DEMANDS if s != MUSIC],
         )
         self.assertEqual(len(warnings), 1)
-        self.assertIn("No music playing", warnings[0]["text"])
+        self.assertIn("No music playing", plain(warnings[0]["text"]))
 
     # --- what an absent demand means -----------------------------------
 

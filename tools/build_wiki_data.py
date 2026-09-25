@@ -864,6 +864,7 @@ class Sample:
                 "src": "help_%s_content" % prefix,
                 "rank": "primary" if prefix in primary else "additional",
                 "alsoSoldBy": [ref["name"] for ref in record["soldFrom"]["otherBusinesses"]],
+                "alsoSoldByKeys": [ref.get("slug") for ref in record["soldFrom"]["otherBusinesses"]],
                 "fixtures": sorted({other.removeprefix("ba:itemname_") for other in named + holders}),
                 "wholesale": wholesale,
                 "importers": [key for key in (
@@ -897,6 +898,7 @@ class Sample:
                     self.touch(ingredient["slug"])
                     ingredients.append({
                         "item": ingredient["name"],
+                        "slug": ingredient["slug"],
                         "per": ingredient["perHour"],
                         "from": [key for key in (
                             self.supplier_key(source.get("address"))
@@ -909,7 +911,8 @@ class Sample:
                     "src": "help_recipes_%s_content" % tail,
                     "workstation": (recipe.get("workstation") or {}).get("name"),
                     "inputs": ingredients,
-                    "out": {"item": recipe["output"]["name"], "per": recipe["output"]["perHour"]},
+                    "out": {"item": recipe["output"]["name"], "slug": recipe["output"].get("slug"),
+                            "per": recipe["output"]["perHour"]},
                 }
         self._recipes = out
         return out
@@ -970,6 +973,9 @@ class Sample:
             "building": building,
             "serving": serving,
             "skills": [ref["name"] for ref in record.get("skills") or []],
+            # The game's key for each skill, index for index, so the page can
+            # name it in the language the player picked.
+            "skillKeys": [ref.get("slug") for ref in record.get("skills") or []],
             "hiring": self.recruiter(record),
             "primary": [ref["slug"].removeprefix("ba:itemname_")
                         for ref in (record.get("products") or {}).get("primary") or []],
@@ -1353,6 +1359,7 @@ class Guide:
             "building": self.building,
             "serving": serving,
             "skills": [ref["name"] for ref in skills],
+            "skillKeys": [ref.get("slug") for ref in skills],
             "hiring": hiring,
             "primary": list(self.range["primary"]),
             "secondary": list(self.range["additional"]),
@@ -1446,6 +1453,7 @@ class Guide:
                 "rank": rank,
                 "kind": kind,
                 "alsoSoldBy": [ref["name"] for ref in sellers.values()],
+                "alsoSoldByKeys": [ref.get("slug") for ref in sellers.values()],
                 "fixtures": sorted(set(fixtures) | set(fee_fixtures)),
                 "wholesale": page_wholesale if page_wholesale == list_wholesale else None,
                 "importers": [key for key in (
@@ -1531,6 +1539,7 @@ class Guide:
             self.touch(ingredient["slug"])
             entry["inputs"].append({
                 "item": ingredient["name"],
+                "slug": ingredient["slug"],
                 "per": ingredient["perHour"],
                 "from": [key for key in (
                     self.supplier_key(source.get("address"))
@@ -1541,7 +1550,8 @@ class Guide:
         output = record.get("output") or {}
         if output.get("perHour") is None:
             self.note("recipeRates", entry["name"] or key)
-        entry["out"] = {"item": output.get("name") or product_name, "per": output.get("perHour")}
+        entry["out"] = {"item": output.get("name") or product_name, "slug": output.get("slug"),
+                        "per": output.get("perHour")}
         return entry
 
     def station_keys(self) -> list[str]:
@@ -1568,7 +1578,9 @@ class Guide:
                     "name": name,
                     "src": "help_factory_workstation_%s_content" % key,
                     "assembly": None,
+                    "assemblyKey": None,
                     "production": [],
+                    "productionKeys": [],
                     "vendor": None,
                     "vendors": [],
                     "runs": [],
@@ -1588,7 +1600,11 @@ class Guide:
                 "name": name,
                 "src": "help_factory_workstation_%s_content" % key,
                 "assembly": next((ref["name"] for ref in record.get("assemblyMachines") or []), None),
+                # The machines' game keys, so the page can name them in the
+                # language picked.
+                "assemblyKey": next((ref.get("slug") for ref in record.get("assemblyMachines") or []), None),
                 "production": [ref["name"] for ref in record.get("machines") or []],
+                "productionKeys": [ref.get("slug") for ref in record.get("machines") or []],
                 "vendor": sorted(vendors.items(), key=lambda item: (-item[1], item[0]))[0][0]
                 if vendors else None,
                 "vendors": [key for key, _ in sorted(vendors.items())],
@@ -1627,6 +1643,9 @@ class Guide:
                 "observed": observed_text(self.layouts, slug),
                 "station": fixture_station(text),
                 "needs": [ref["name"] for ref in needs] or None,
+                # Their game keys, index for index, so the page can name them in
+                # the language picked.
+                "needKeys": [ref.get("slug") for ref in needs] or None,
                 "mount": _join_or([ref["name"] for ref in mounts]),
                 "groups": sorted(set(self.groups.get(slug) or [])),
                 "requirementsRaw": list(self.evidence.get(slug) or []),

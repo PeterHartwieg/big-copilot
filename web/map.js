@@ -128,6 +128,8 @@ const GLIDE_MS = 700;
 const FINDER_CATS = [["retail","Retail"],["office","Office"],["warehouse","Warehouse"],["cinema","Cinema"],["theater","Theater"]];
 const FINDER_KEY = "ba_finder_v1";
 const premises = () => D?.premises || null;
+/* Names sort in the language the board shows them in (gnCompare()). */
+const mapCompare = (a, b) => typeof gnCompare === 'function' ? gnCompare(a, b) : String(a).localeCompare(String(b));
 const mapCharacter = () => D?.meta?.character || D?.supply?.factories?.character || D?.meta?.save || "";
 /* A size letter whose layouts disagree carries [min, max] rather than a number. */
 const capText = c => c == null ? "—" : Array.isArray(c) ? `${c[0]}–${c[1]}` : String(c);
@@ -416,7 +418,7 @@ class CityMapView {
   hoodList(){
     const P = premises(); if(!P) return [];
     return [...new Set(P.buildings.map(b => b.hood).filter(Boolean))]
-      .sort((a, b) => hoodName(a).localeCompare(hoodName(b)));
+      .sort((a, b) => mapCompare(hoodName(a), hoodName(b)));
   }
   hoodOn(hood){ return !this.fs.hoods || this.fs.hoods.includes(hood); }
   /* The header carries the switch and nothing else; everything the finder asks
@@ -971,7 +973,7 @@ class CityMapView {
     this.root.querySelectorAll('.fchip.cat').forEach(chip => mark(chip, chip.dataset.cat === this.fs.cat));
     const select = this.root.querySelector('[data-f="type"]');
     const types = this.catTypes(this.fs.cat);
-    const options = [...types].sort((a, b) => a[1].localeCompare(b[1]));
+    const options = [...types].sort((a, b) => mapCompare(a[1], b[1]));
     if(this.fs.type && !types.has(this.fs.type)) this.fs.type = "";
     select.innerHTML = `<option value="">Any type</option>` + options.map(([slug, label]) =>
       `<option value="${attr(slug)}"${slug === this.fs.type ? ' selected' : ''}>${mapText(label)}</option>`).join('');
