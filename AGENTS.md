@@ -108,8 +108,8 @@ side and rebuild — the rebuild is the resolution.
 
 ## Finishing a change
 
-`.github/workflows/tests.yml` runs the Python suite, the Node suites (Chromium on Linux) and
-`python build_web.py --check` on every pull request and push to main.
+`.github/workflows/tests.yml` runs the Python suite, the Node suites (Chromium on Linux),
+`npm run check:worker` and `python build_web.py --check` on every pull request and push to main.
 
 | You changed | Run |
 | --- | --- |

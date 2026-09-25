@@ -306,6 +306,21 @@ const state = page => page.evaluate(() => ({
   y: window.scrollY,
 }));
 
+// After a resize hides the focused chip: whether the browser has dropped focus
+// to the page before the resize handler runs is the engine's timing (Linux
+// Chromium often has not, Windows sometimes). If not, the handler sends it to
+// the chip the resize shows, `shown`, which must then be in the window. Either
+// way focus never stays on the hidden chip.
+async function droppedOrShown(page, s, shown) {
+  assert.ok(['body', shown].includes(s.focus), `focus went to ${s.focus}`);
+  if (s.focus === shown) {
+    assert.ok(await page.evaluate(() => {
+      const r = document.activeElement.getBoundingClientRect();
+      return r.width > 0 && r.bottom > 0 && r.top < innerHeight;
+    }), `the ${shown} chip that took focus is in the window`);
+  }
+}
+
 test('a resize that swaps the chip closes the popover; focus goes only where it can be seen', async () => {
   // Desktop to narrow, near the top of a long page: the footer's chip is off
   // screen, so focus leaves the popover for the page, and nothing scrolls.
@@ -352,17 +367,7 @@ test('a resize that swaps the chip closes the popover; focus goes only where it 
     await page.waitForFunction(() => !document.getElementById('fvDiffPop').classList.contains('on')
       && document.activeElement !== document.querySelector('#clock .fv-diff'), null, {timeout: 10000});
     const s = await state(page);
-    // Whether the browser has dropped focus to the page before the resize
-    // handler runs is the engine's timing (Linux Chromium often has not): the
-    // handler then sends it to the footer's chip, which is in the window here.
-    // Either way focus never stays on the hidden chip.
-    assert.ok(['body', 'foot'].includes(s.focus), `focus went to ${s.focus}`);
-    if (s.focus === 'foot') {
-      assert.ok(await page.evaluate(() => {
-        const r = document.activeElement.getBoundingClientRect();
-        return r.width > 0 && r.bottom > 0 && r.top < innerHeight;
-      }), 'the footer chip that took focus is in the window');
-    }
+    await droppedOrShown(page, s, 'foot');
     assert.deepEqual([s.open, s.expanded, s.tip], [false, ['false', 'false'], false]);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
@@ -375,9 +380,11 @@ test('a resize that swaps the chip closes the popover; focus goes only where it 
     assert.equal((await state(page)).focus, 'foot');
     await page.mouse.move(5, 5);
     await page.setViewportSize({width: 1600, height: 1000});
-    await page.waitForFunction(() => !document.getElementById('fvDiffPop').classList.contains('on'));
+    await page.waitForFunction(() => !document.getElementById('fvDiffPop').classList.contains('on')
+      && document.activeElement !== document.querySelector('#footDiff .fv-diff'), null, {timeout: 10000});
     const s = await state(page);
-    assert.deepEqual([s.open, s.focus, s.expanded, s.tip], [false, 'body', ['false', 'false'], false]);
+    await droppedOrShown(page, s, 'mast');
+    assert.deepEqual([s.open, s.expanded, s.tip], [false, ['false', 'false'], false]);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 
