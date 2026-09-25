@@ -149,16 +149,37 @@
   }
 
   const stored = {
-    get(key) { try { return localStorage.getItem(key) || ""; } catch (e) { return ""; } },
+    get(key) {
+      if (key === HISTORY_KEY && historyHeld !== null) return historyHeld;
+      try { return localStorage.getItem(key) || ""; } catch (e) { return ""; }
+    },
     set(key, value) {
-      try { localStorage.setItem(key, value); return true; }
-      catch (e) {
-        note("warn", () => key === HISTORY_KEY ? tt("app.store.history", "Could not remember history.") : tt("app.store.gametext", "Could not remember the game text."),
-          () => tt("app.store.full", "Browser storage is full or blocked."));
+      try {
+        localStorage.setItem(key, value);
+        if (key === HISTORY_KEY) historyHeld = null;
+        if (storeTrouble && storeTrouble.key === key) storeTrouble = null;
+        return true;
+      } catch (e) {
+        if (key === HISTORY_KEY) historyHeld = value;
+        storeTrouble = {key, text: () => storeWords(key), sub: () => tt("app.store.full", "Browser storage is full or blocked.")};
+        sayStoreTrouble();
         return false;
       }
     },
   };
+  // A write the browser refused stays said: the note is raised again after
+  // every build until a write of the same key goes through, rather than being
+  // cleared by the next build's own note. History the browser would not keep
+  // is held in memory meanwhile, so this visit's trends still move.
+  let storeTrouble = null;  // {key, text, sub} while a write is refused
+  let historyHeld = null;
+  const storeWords = (key) => key === HISTORY_KEY ? tt("app.store.history", "Could not remember history.")
+    : key === LOCALE_KEY ? tt("app.store.gametext", "Could not remember the game text.")
+    : tt("app.store.other", "Could not remember this choice in the browser.");
+  function sayStoreTrouble() {
+    if (storeTrouble) note("warn", storeTrouble.text, storeTrouble.sub);
+    return !!storeTrouble;
+  }
 
   /* A directory handle survives a reload only through IndexedDB. */
   const handles = {
@@ -201,6 +222,13 @@
   let sourceGen = 0;      // bumps when a different folder or file set comes in
   let lastGoodSource = 0; // the sourceGen the board on screen came from
   let dirHandle = null;   // live folder handle, Chromium only
+  // A source picked once, which the browser never hands back: "file" for one
+  // save file, "folder" for a folder read as a snapshot, "" otherwise. It is
+  // kept for the tab (sessionStorage), so a reload can ask for it again.
+  let snapshot = "";
+  let reopen = null;      // {kind, name}: what this tab had before a reload
+  const REOPEN_KEY = "ledger_reopen";
+  const fileAgain = () => !linkUrl && !dirHandle && (snapshot || (reopen && reopen.kind)) === "file";
   let lastEntries = null; // {file, dir} for every save and sidecar last seen
   let busy = false;
   let runtimeReady = false;
@@ -216,21 +244,29 @@
   let attempt = null;
   let readerError = null;
   let worker = null;
+  // How long the reader may go without a word while it has work: a reply or
+  // a progress message restarts it. Only the reader's own work is timed; the
+  // player answering the browser's prompt, or the game serializing, has its
+  // own bounded wait and never costs the reader.
   const LOAD_TIMEOUT_MS = 120000;
+  let readerTimer = null;
+  function timeReader() {
+    clearTimeout(readerTimer);
+    readerTimer = null;
+    if (!pending.size || readerError) return;
+    const timer = setTimeout(() => {
+      if (timer !== readerTimer || !pending.size) return;
+      failReader(failure(() => tt("app.reader.timeout", "Loading timed out. Reload the app to try again.")));
+    }, LOAD_TIMEOUT_MS);
+    readerTimer = timer;
+  }
 
   function finishAttempt(gen) {
-    if (attempt && attempt.gen === gen) {
-      clearTimeout(attempt.timer);
-      attempt = null;
-    }
+    if (attempt && attempt.gen === gen) attempt = null;
   }
   function startAttempt(gen, restoring = false) {
     if (gen !== sourceGen || readerError) return false;
-    if (!attempt) {
-      attempt = {gen, restoring, timer: setTimeout(() => {
-        failReader(failure(() => tt("app.reader.timeout", "Loading timed out. Reload the app to try again.")));
-      }, LOAD_TIMEOUT_MS)};
-    }
+    if (!attempt) attempt = {gen, restoring};
     if (restoring) attempt.restoring = true;
     return true;
   }
@@ -238,10 +274,12 @@
   function supersede() {
     finishAttempt(sourceGen);
     sourceGen++;
+    reopen = null;
     busy = false;
     queued = null;
     for (const p of pending.values()) p.reject(new Error(tt("app.reader.superseded", "Save selection changed")));
     pending.clear();
+    timeReader();
     stopWatch();
     linkMoved();
     return sourceGen;
@@ -272,6 +310,7 @@
       if (!msg || typeof msg.kind !== "string") { failReader(failure(() => tt("app.reader.invalid", "Invalid reader response."))); return; }
       if (msg.kind === "startup-failed") { failReader(new Error(msg.error)); return; }
       if (msg.kind === "progress") {
+        timeReader();  // it is working: the clock starts again
         if (msg.stage === "ready") {
           runtimeReady = true;
           if (!attempt && strip.tone === "ready") idleState();
@@ -281,6 +320,7 @@
       const p = pending.get(msg.id);
       if (!p) return;
       pending.delete(msg.id);
+      timeReader();
       try {
         if (p.gen !== sourceGen) throw new Error(tt("app.reader.superseded", "Save selection changed"));
         if (msg.kind !== "built") throw msg.error ? new Error(msg.error) : failure(() => tt("app.reader.invalid.bare", "Invalid reader response"));
@@ -303,6 +343,7 @@
       pending.set(id, {resolve, reject, gen});
       try { worker.postMessage(Object.assign({id}, msg), transfer || []); }
       catch (err) { pending.delete(id); reject(err); }
+      timeReader();
     });
   }
 
@@ -359,14 +400,19 @@
       : tt("app.update", "Update");
     btn.classList.toggle("primary", opens);
     btn.title = linkUrl ? tt("app.update.link.title", "Ask the game for its current state")
+      : fileAgain() ? tt("app.update.file.title", "One save file is read as it was when you chose it. If the game has saved since, choose the file again.")
       : tt("app.update.title", "Read the newest save from the chosen folder again");
-    $("recoverBtn").hidden = !(bad && noted.recover);
+    // After a reload a file or snapshot folder has to be chosen again; the
+    // strip says so and offers the one button that does it.
+    const askAgain = !board && !!reopen && strip.tone === "remembered";
+    $("recoverBtn").hidden = !((bad && noted.recover) || askAgain);
     // A link that reaches nothing is most often a mod that is not installed yet.
     const modLink = $("modLink");
     if (modLink) modLink.hidden = !(bad && linkUrl);
     // In linked mode the folder is a way out, not a way back.
     $("recoverBtn").innerHTML = ICON_FOLDER;
-    $("recoverBtn").append(linkUrl ? tt("app.recover.link", "Choose a folder instead") : tt("app.recover", "Choose the folder again"));
+    $("recoverBtn").append(linkUrl ? tt("app.recover.link", "Choose a folder instead")
+      : fileAgain() ? tt("app.recover.file", "Choose the file again") : tt("app.recover", "Choose the folder again"));
     $("reloadBtn").hidden = !readerError;
     // On the landing the strip only shows when it has something to say: a
     // remembered folder, a save being read, a folder that would not read.
@@ -449,7 +495,7 @@
       $("menuSourceSlot").append(savePicker, fb, ...(lb ? [lb] : []), sp);
       $("watchBtn").addEventListener("click", toggleWatch);
       syncWatchBtn();
-      $("menuChipSlot").appendChild($("localeChip"));
+      $("menuChipSlot").append($("localeChip"), $("localeReset"));
       // The menu is new markup: a table loaded before it came fills it now.
       if (typeof tApply === "function") tApply($("srcMenu"));
       if ($("saveLocation")) $("help").querySelector(".help-content").prepend($("saveLocation"));
@@ -585,6 +631,7 @@
   // address spaces: "loopback-network" from Chrome 145, "local-network-access"
   // before; a browser that knows neither asks nothing and reads as granted.
   const PROMPT_WAIT_MS = 90000;
+  const SAVE_WAIT_MS = 30000;  // a whole save, headers and bytes
   async function loopbackPermission() {
     if (typeof navigator === "undefined" || !navigator.permissions) return "granted";
     // A page served from this machine is already on loopback: nothing to ask.
@@ -615,8 +662,11 @@
     // checked again right before each request goes out. Only ever an address
     // on this computer: a token must never go to "null/write/..." on the
     // site's own server. A failure thrown before any request left carries
-    // `unsent`, and `moved` where the binding no longer held.
-    const {wait, link, bound, ...rest} = init || {};
+    // `unsent`, and `moved` where the binding no longer held. `init.body`
+    // reads a 2xx answer's bytes into `res.bytes` under the same timer: a
+    // game that quits mid-download, or stalls, fails the call like one that
+    // never answered.
+    const {wait, link, bound, body, ...rest} = init || {};
     const base = link || linkUrl;
     const moved = () => Object.assign(failure(() => tt("app.link.moved", "The board is no longer linked to the same game.")), {unsent: true, moved: true});
     if (!loopbackOrigin(base || "")) throw Object.assign(failure(() => tt("app.link.local", "Not linked to the game on this computer.")), {unsent: true});
@@ -643,6 +693,10 @@
         // the error can come from another realm than this script's.
         if (err.name === "TypeError" && space && linkSpace === null) continue;
         throw await linkFailure();
+      }
+      if (body && res.ok) {
+        try { res.bytes = await res.arrayBuffer(); }
+        catch (err) { clearTimeout(timer); throw await linkFailure(); }
       }
       clearTimeout(timer);
       linkSpace = space;
@@ -701,6 +755,7 @@
     linkGone = false;
     linkNotReady = 0;
     stored.set(LINK_KEY, linkUrl);
+    pickedOnce("");
     dirHandle = null;  // in memory; the remembered handle stays in IndexedDB
     savePicker.hidden = true;
     closeSavePicker();
@@ -793,7 +848,9 @@
       state("ok", () => tt("app.link.same", "No newer state from the game"), () => linkLine(health));
     } else {
       let res;
-      try { res = await linkFetch("/save", {headers: lastLinkStamp ? {"If-None-Match": `"${lastLinkStamp}"`} : {}}); }
+      // The bytes are read inside linkFetch, under its timer: a save is a few
+      // MB even on loopback, so it gets longer than a health check.
+      try { res = await linkFetch("/save", {headers: lastLinkStamp ? {"If-None-Match": `"${lastLinkStamp}"`} : {}, wait: SAVE_WAIT_MS, body: true}); }
       catch (err) { linkDown(gen, err); return; }
       if (gen !== sourceGen) return;
       if (res.status === 304) {  // a newer stamp was announced and then overtaken
@@ -815,8 +872,7 @@
         note("bad", why, () => tt("app.link.loadsave", "Load a save in the game, then click Update."), true);
         return;
       } else {
-        const bytes = await res.arrayBuffer();
-        if (gen !== sourceGen) return;
+        const bytes = res.bytes;
         // linkHealth now, not after the build: the strip's line while the
         // bytes are read should be the day they carry.
         linkHealth = health;
@@ -858,7 +914,7 @@
     // whatever the second answer is, it is handled like the first, and a
     // second throttle means a refresh really is in flight.
     let before = lastLinkStamp;
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let round = 0; round < 2; round++) {
       let res;
       try { res = await linkFetch("/refresh", {method: "POST"}); }
       catch (err) { linkDown(gen, err); return; }
@@ -879,7 +935,7 @@
         return;
       }
       if (res.status === 429) {
-        if (attempt === 1) break;  // in flight: the poll below catches its stamp
+        if (round === 1) break;  // in flight: the poll below catches its stamp
         let retryAfter = 5;
         try { retryAfter = (await res.json()).retryAfter || 5; } catch (e) {}
         const wait = Math.min(20, Math.max(1, retryAfter));
@@ -1421,7 +1477,9 @@
       // before stays, so the watcher reads these bytes again, not skips them.
       const was = lastLinkStamp;
       if (file.linkStamp) lastLinkStamp = file.linkStamp;
-      note("");
+      // Storage that refused the history is said under every board, not
+      // only for the moment between the reply and this line.
+      if (!sayStoreTrouble()) note("");
       try { if (handlers) { handlers.stale(""); handlers.changed(data); } }
       catch (err) { lastLinkStamp = was; throw err; }
       enterBoard();
@@ -1644,6 +1702,9 @@
   async function readMeta(e) {
     const key = `${e.dir}/${e.file.name}@${e.file.lastModified}`;
     if (metaCache.has(key)) return metaCache.get(key);
+    // A sidecar is rewritten with every autosave, each under a new time: a
+    // session left watching for days would otherwise keep every one.
+    if (metaCache.size > 500) metaCache.clear();
     let info = null;
     try {
       const m = JSON.parse(await e.file.text());
@@ -1787,7 +1848,8 @@
     // saying under a board that shows.
     if (strip.tone !== "bad") {
       if (fellBack) note("warn", fellBack);
-      else note(moved ? "warn" : "", moved);
+      else if (moved) note("warn", moved);
+      else if (!sayStoreTrouble()) note("");
     }
     return strip.tone !== "bad";
   }
@@ -1822,6 +1884,7 @@
     if (gen !== sourceGen) return;
     dirHandle = handle;
     handles.set("saves", handle);
+    pickedOnce("");
     dropLink();  // a folder chosen here replaces the game link as the source
     if (!onBoard()) place();
     await loadFromHandle(handle, why);
@@ -1839,6 +1902,30 @@
     } else {
       $("folderPick").click();
     }
+  }
+
+  // What this tab picked once, for offerReopen() after a reload.
+  function pickedOnce(kind, name) {
+    snapshot = kind;
+    try {
+      if (kind) sessionStorage.setItem(REOPEN_KEY, JSON.stringify({kind, name: name || ""}));
+      else sessionStorage.removeItem(REOPEN_KEY);
+    } catch (e) {}
+  }
+  // A reload in one-file (or snapshot folder) mode lands here with nothing to
+  // read, often on a board address such as #site/...: the browser never hands
+  // a chosen file back, so the page asks for it again rather than looking as
+  // if nothing had been open.
+  function offerReopen() {
+    let was = null;
+    try { was = JSON.parse(sessionStorage.getItem(REOPEN_KEY) || "null"); } catch (e) {}
+    if (!was || (was.kind !== "file" && was.kind !== "folder")) return;
+    reopen = {kind: was.kind, name: String(was.name || "")};
+    const deep = location.hash.length > 1 && !/^#(wiki(\/|$)|link=)/.test(location.hash);
+    state("remembered", () => reopen.kind === "file" ? tt("app.reopen.file", "Choose the save file again")
+      : tt("app.reopen.folder", "Choose the save folder again"), reopen.name);
+    note("info", () => tt("app.reopen.why", "A browser does not reopen a chosen file after a reload."),
+      () => deep ? tt("app.reopen.where", "The board then opens where you left it.") : "");
   }
 
   async function update() {
@@ -1862,6 +1949,10 @@
       }
       if (!onBoard()) startAttempt(gen, true);
       await loadFromHandle(handle, () => tt("app.open.newer", "Checking for a newer save"));
+    } else if (fileAgain()) {
+      // One file is read as it was chosen; a newer save is a new pick.
+      note("info", () => tt("app.update.file.note", "One save file is read as it was when you chose it. To read a newer save, choose the file again."));
+      $("savePick").click();
     } else if (canHandle) {
       await pickFolder();
     } else {
@@ -1968,6 +2059,8 @@
     $("asideQuiet").textContent = has
       ? tt("land.gametext.own.hint", "Click the chip to replace it.")
       : tt("land.gametext.hint", "If your game is newer, click the chip and choose its en.json; it is remembered in this browser and wins over the built-in text.");
+    const reset = $("localeReset");
+    if (reset) reset.hidden = !has;
     const hint = $("menuChipHint");
     if (hint) hint.textContent = has ? tt("app.menu.gametext.own", "your en.json is remembered · click to replace")
       : tt("app.menu.gametext", "built in · choose en.json only if your game is newer");
@@ -2027,6 +2120,15 @@
     if (rebuild && lastFile && lastFileGen === gen) buildFrom(lastFile);
   }
 
+  // Back to the text the page ships, which a later deploy brings up to date:
+  // the remembered en.json is dropped and the board read again without it.
+  function resetLocale() {
+    try { localStorage.removeItem(LOCALE_KEY); } catch (e) {}
+    note("");
+    localeState();
+    if (lastFile && lastFileGen === sourceGen) buildFrom(lastFile);
+  }
+
   /* --- what the board asks for ----------------------------------------- */
   window.LEDGER_SOURCE = {
     // Read on every masthead paint, so it follows the UI language.
@@ -2037,8 +2139,10 @@
       return ask({kind: "build", name: lastFile.name, bytes, mtime: lastFile.lastModified,
                   locale: stored.get(LOCALE_KEY), history: stored.get(HISTORY_KEY)}, [bytes]);
     },
-    // Resolves to the rebuilt data; the board swaps it in itself.
-    name: (rid, slug) => ask({kind: "name", rid, slug: slug || null, history: stored.get(HISTORY_KEY)}),
+    // Resolves to the rebuilt data; the board swaps it in itself. No
+    // history goes with it: the worker names against the copy it holds, so
+    // names asked for together all keep theirs (worker.js).
+    name: (rid, slug) => ask({kind: "name", rid, slug: slug || null}),
     watch: (h) => { handlers = h; },
     // The game link, for the board's write buttons: the kinds the mod takes
     // and whose company it is, and the game's day and hour at the last
@@ -2318,6 +2422,7 @@
       else if (gen !== sourceGen) return;        // superseded during the walk
       dirHandle = null; // A manual file/snapshot must not be replaced by the old watcher.
       dropLink();       // and a folder or file chosen here replaces the game link
+      pickedOnce(fromFolder ? "folder" : "file", fromFolder ? "" : newestOf(saves.map((e) => e.file)).name);
       if (!onBoard()) place();
       if (!startAttempt(gen)) return;
       state("busy", () => tt("app.open.selected", "Opening the selected save…"));
@@ -2394,7 +2499,7 @@
       if (typeof featureDiscovery !== "undefined") featureDiscovery.visit("game-link");
       linkToGame();
     });
-    $("recoverBtn").addEventListener("click", pickFolder);
+    $("recoverBtn").addEventListener("click", () => (fileAgain() ? $("savePick").click() : pickFolder()));
     $("reloadBtn").addEventListener("click", () => location.reload());
     $("savePickLabel").addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("savePick").click(); }
@@ -2404,6 +2509,7 @@
     $("savePick").addEventListener("change", (e) => take(e.target.files));
     $("localePick").addEventListener("change", (e) => take(e.target.files));
     $("localeChip").addEventListener("click", () => $("localePick").click());
+    $("localeReset").addEventListener("click", resetLocale);
     document.addEventListener("click", closeMenu);
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(); });
     // Back from the game: check at once rather than waiting out the interval.
@@ -2427,6 +2533,11 @@
     }));
     $("forgetHistory").addEventListener("click", () => {
       try { localStorage.removeItem(HISTORY_KEY); } catch (e) {}
+      historyHeld = null;
+      if (storeTrouble && storeTrouble.key === HISTORY_KEY) storeTrouble = null;
+      // The reader holds a copy for naming lines; it goes too, or the next
+      // name would write the old record back.
+      if (worker && !readerError) worker.postMessage({kind: "forget"});
       note("info", () => tt("app.history.forgotten", "History forgotten. The next save starts a fresh record."));
     });
 
@@ -2478,6 +2589,7 @@
     } else {
       finishAttempt(resumeGen);
       idleState();
+      offerReopen();
     }
   });
 })();

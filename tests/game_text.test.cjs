@@ -27,12 +27,14 @@ function setup(kept = '') {
     stored: {get: (key) => storage[key] || '', set: (key, value) => { storage[key] = value; return true; }},
     // app.js hands note() its words as a function that writes them.
     note: (...args) => notes.push(args.map((a) => (typeof a === 'function' ? a() : a))),
-    localeState() {}, buildFrom() {},
+    localeState() { context.painted = (context.painted || 0) + 1; },
+    buildFrom(f) { builds.push(f); },
     sourceGen: 0, lastFile: null, lastFileGen: -1,
   });
+  const builds = [];
   vm.runInContext(i18n, context);
-  vm.runInContext(consts + helpers + take + '\nthis.api = {gameTextLanguage, dropForeignLocale, takeLocale};', context);
-  return {api: context.api, storage, notes};
+  vm.runInContext(consts + helpers + take + '\nthis.api = {gameTextLanguage, dropForeignLocale, takeLocale, resetLocale};', context);
+  return {api: context.api, storage, notes, builds, context};
 }
 
 const file = (name, table) => ({name, text: async () => JSON.stringify(table)});
@@ -73,4 +75,16 @@ test('a foreign file kept before the check is dropped; English and junk are left
     api.dropForeignLocale();
     assert.equal('ledger_locale' in storage, left, kept);
   }
+});
+
+// WB-4 in #109: a remembered en.json used to win over the shipped text for
+// good. Using the built-in text again drops it and reads the board again.
+test('the built-in text can be put back, and the board is read without the kept file', () => {
+  const {api, storage, builds, context} = setup(JSON.stringify(ENGLISH));
+  const save = {name: 'x.hsg'};
+  context.lastFile = save; context.lastFileGen = 0;
+  api.resetLocale();
+  assert.equal('ledger_locale' in storage, false);
+  assert.equal(context.painted, 1, 'the chip says built in again');
+  assert.deepEqual(builds, [save]);
 });

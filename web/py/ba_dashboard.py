@@ -1766,7 +1766,7 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         _ingredient_prices(save, names, supply, businesses),
         rhythm,
     )
-    net_worth = _net_worth(root, history, character)
+    net_worth = _net_worth(root, history, character, day)
     entry = {
         "hour": root["Hour"],
         "cash": money(root["Money"]),
@@ -1867,19 +1867,20 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
     })
 
 
-def _net_worth(root: dict, history, character: str) -> dict:
+def _net_worth(root: dict, history, character: str, day: int) -> dict:
     """Net worth, or the last one the game told us.
 
     Build 3672 dropped ``NetWorth`` from the save (``midnightBankBalances``
     appeared in its place). There is no honest way to recompute the game's own
     figure from what is left, so the last recorded one is carried forward and
-    labelled with the day it came from rather than passed off as today's.
+    labelled with the day it came from rather than passed off as today's. A
+    day after this save's own is from a later save, so it is never the one.
     """
     live = root.get("NetWorth")
     if live is not None:
         return {"value": money(live), "asOf": None}
     for entry in reversed(history.ledger_entries(character)):
-        if entry.get("netWorth"):
+        if entry["day"] <= day and entry.get("netWorth"):
             return {"value": money(entry["netWorth"]), "asOf": entry["day"]}
     return {"value": None, "asOf": None}
 
@@ -9273,6 +9274,11 @@ SUPPLIER_EVENTS = {
 }
 HISTORY_DAYS = 60  # how much demand history to keep on disk
 TREND_WINDOW = 7  # compare against this many days back when the history reaches it
+# The browser's history lives in localStorage (about 5 MB for the site, the
+# player's en.json included; a day's demand snapshot is about 22 KB), so it
+# keeps two weeks of demand for the characters opened most recently.
+BROWSER_HISTORY_DAYS = 14
+BROWSER_HISTORY_CHARACTERS = 8
 
 
 def _market_event_active(event, day):
@@ -9771,16 +9777,38 @@ class History:
 
     def __init__(self, path: str | None):
         self.path = path
+        # False when the file on disk could not be read: this run then never
+        # writes, so a file locked for a moment or damaged is not replaced by
+        # one day's snapshot and weeks of history lost with it.
+        self.writable = True
         self.book = self._load()
         self._touched = set()  # (character, rid) names this instance changed
 
     def _load(self) -> dict:
-        if self.path and os.path.exists(self.path):
+        """The book on disk; {} when there is none or it cannot be used.
+
+        A file that exists but does not parse is moved aside to ``.bad`` so
+        the next run starts clean and the damaged copy can still be looked at;
+        one that cannot be opened (another program holds it) is left alone.
+        Either way this run does not write.
+        """
+        if not self.path or not os.path.exists(self.path):
+            return {}
+        try:
+            with open(self.path, encoding="utf-8") as fh:
+                whole = json.load(fh)
+            book = whole.get("characters", {}) if isinstance(whole, dict) else None
+            if not isinstance(book, dict):
+                raise ValueError("no characters table")
+            return book
+        except ValueError:
+            self.writable = False
             try:
-                with open(self.path, encoding="utf-8") as fh:
-                    return json.load(fh).get("characters", {})
-            except (OSError, ValueError):
+                os.replace(self.path, self.path + ".bad")
+            except OSError:
                 pass
+        except OSError:
+            self.writable = False
         return {}
 
     def _for(self, character: str) -> dict:
@@ -9819,7 +9847,10 @@ class History:
         store[str(day)] = {**store.get(str(day), {}), **entry}
         for old in sorted(store, key=int)[:-HISTORY_DAYS]:
             del store[old]
-        return [dict(store[d], day=int(d)) for d in sorted(store, key=int)]
+        # Days after today are from a later save of this character: the player
+        # reloaded an older one, or picked it to look back. They are kept for
+        # when that later save is opened again, but never read as today's run.
+        return [dict(store[d], day=int(d)) for d in sorted(store, key=int) if int(d) <= day]
 
     def named(self, character: str, updates: dict | None = None) -> dict:
         """Lines the player named by hand, by recipe id; a None clears one."""
@@ -9832,14 +9863,33 @@ class History:
                 store.pop(rid, None)
         return dict(store)
 
+    def keep_recent(self, character: str, days: int, characters: int) -> None:
+        """Bound the book, for a store with a small quota (the browser's).
+
+        ``character`` becomes the most recent; only the ``characters`` most
+        recently built are kept, each with its last ``days`` demand snapshots.
+        The trend compares with about a week back, so two weeks of snapshots
+        lose nothing the board shows; the ledger is small and keeps its 60.
+        """
+        if character in self.book:
+            self.book[character] = self.book.pop(character)
+        for old in list(self.book)[:-characters]:
+            del self.book[old]
+        for record in self.book.values():
+            store = record.get("days", {})
+            for old in sorted(store, key=int)[:-days]:
+                del store[old]
+
     def write(self) -> None:
-        if not self.path:
+        if not self.path or not self.writable:
             return
         # A build takes seconds and loads this file at its start; a name given
         # in between must not be undone by the build writing what it loaded.
         # Manual names and legacy recipe guesses are preserved from disk: only
         # the names this instance itself changed overrule it.
         disk = self._load()
+        if not self.writable:
+            return
         for character, ours in self.book.items():
             theirs = disk.get(character, {})
             names = dict(theirs.get("lineNames", {}))
@@ -9854,11 +9904,18 @@ class History:
             learnt = dict(theirs.get("recipes", {}))
             learnt.update(ours.get("recipes", {}))
             ours["recipes"] = learnt
+        # Written beside it and swapped in, so a run stopped mid-write leaves
+        # the old file whole instead of half a file.
+        tmp = self.path + ".tmp"
         try:
-            with open(self.path, "w", encoding="utf-8") as fh:
+            with open(tmp, "w", encoding="utf-8") as fh:
                 json.dump({"characters": self.book}, fh, separators=(",", ":"))
+            os.replace(tmp, self.path)
         except OSError:
-            pass
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
 
 
 def _cash_flow(ledger: list, daily: list, day: int) -> dict | None:
@@ -28137,8 +28194,14 @@ def browser_build(
             f"read ({type(exc).__name__}: {exc})"
         ) from exc
     data = safe_extract(save, names, history_path)
+    character = save.root.get("characterId") or "default"
+    # The page keeps this file in localStorage, a few MB for the whole site:
+    # sixty days of demand for every character ever opened would fill it.
+    history = History(history_path)
+    history.keep_recent(character, BROWSER_HISTORY_DAYS, BROWSER_HISTORY_CHARACTERS)
+    history.write()
     with open(history_path + ".character", "w", encoding="utf-8") as fh:
-        fh.write(save.root.get("characterId") or "default")
+        fh.write(character)
     return json.dumps(data, separators=(",", ":"))
 
 
@@ -28408,7 +28471,15 @@ class Board:
             # this link downloaded, since the mod has nothing newer to say. A
             # fresh board has no fingerprint either, and no stamp: a
             # game-link.hsg left by an earlier session is never its source.
-            path = self.link.poll()
+            # The rebuild after a name does not need the game: with the game
+            # closed, the downloaded bytes still carry the name to the board.
+            try:
+                path = self.link.poll()
+            except LinkUnavailable:
+                if (self._fingerprint is not None or not self.link.stamp
+                        or not os.path.exists(self.link.path)):
+                    raise
+                path = None
             if path is None:
                 if (self._fingerprint is not None or not self.link.stamp
                         or not os.path.exists(self.link.path)):

@@ -35,6 +35,14 @@ async function setup(t, options = {}) {
       localStorage.setItem('ledger_history', 'original-history');
       sessionStorage.seeded = 'yes';
     }
+    // Storage that refuses the history, as a full quota does.
+    if (options.historyFull) {
+      const real = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key, value) {
+        if (key === 'ledger_history') throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+        return real.call(this, key, value);
+      };
+    }
     const file = (name, time) => {
       const value = new File(['save'], name, {lastModified:time});
       value.arrayBuffer = async () => { await wait('bytes'); return new ArrayBuffer(8); };
@@ -326,10 +334,21 @@ test('permission denial after a click keeps recovery available', async t => {
   assert.equal(await page.locator('#recoverBtn').isVisible(), true);
 });
 
-test('timeout covers handle lookup and Reload app starts a new attempt', async t => {
+// WB-5 in #109: the timeout is the reader's, not the whole attempt's. A slow
+// folder lookup, a permission prompt or a game serializing never costs the
+// reader; a reader that has work and says nothing for two minutes does.
+test("the timeout covers the reader's own work, not the lookup, and Reload app starts a new attempt", async t => {
   const page = await setup(t, {delay:'lookup'});
   await page.waitForFunction(() => fixture.calls.includes('lookup'));
-  await page.evaluate(() => { fixture.expire(); fixture.release('lookup'); });
+  assert.equal(await page.evaluate(() => typeof fixture.expire), 'undefined', 'nothing is timed while the reader has no work');
+  await page.evaluate(() => fixture.release('lookup'));
+  await messages(page);
+  // A progress message starts the clock again: the timer armed before it is spent.
+  const rearmed = await page.evaluate(() => { fixture.first = fixture.expire; fixture.worker.emit({kind:'progress', stage:'code'}); return fixture.first !== fixture.expire; });
+  assert.equal(rearmed, true, 'progress arms a new timer');
+  await page.evaluate(() => fixture.first());
+  assert.equal(await page.locator('#reloadBtn').isVisible(), false, 'the spent timer does nothing');
+  await page.evaluate(() => fixture.expire());
   await settle(page);
   assert.equal(await page.locator('#reloadBtn').isVisible(), true);
   assert.equal(await page.locator('#srcProg').isVisible(), false);
@@ -400,3 +419,80 @@ for (const [pick, expected] of [[{dir:'alice', name:''}, 'newer.hsg'], [{dir:'',
     if (pick.name) assert.match(await page.locator('#srcNote').innerText(), /Could not find/);
   });
 }
+
+// WB-2 in #109: a history the browser will not keep used to be said for a
+// moment and then cleared by the build's own note, while the trends froze.
+test('storage that refuses the history says so under every board, and the visit keeps its record', async t => {
+  const page = await setup(t, {historyFull:true});
+  await messages(page);
+  await page.evaluate(() => fixture.complete(0, 'fresh-history'));
+  assert.equal(await hasBoard(page), true);
+  const said = /Could not remember history\. Browser storage is full or blocked\./;
+  assert.match(await page.locator('#srcNote').innerText(), said);
+  await page.locator('#savePick').setInputFiles({name:'manual.hsg', mimeType:'application/octet-stream', buffer:Buffer.from('save')});
+  await messages(page, 2);
+  assert.equal(await page.evaluate(() => fixture.worker.messages[1].history), 'fresh-history',
+    "the next build carries this visit's record, not the stored one");
+  await page.evaluate(() => fixture.complete(1, 'newer-history'));
+  assert.match(await page.locator('#srcNote').innerText(), said, 'still said after the next build');
+  assert.equal(await page.evaluate(() => localStorage.getItem('ledger_history')), 'original-history');
+});
+
+// WB-3 in #109: a name carries no history; the reader names against its own.
+// Forget history drops the reader's copy as well as the stored one.
+test('a name goes to the reader without a history, and forgetting reaches the reader too', async t => {
+  const page = await setup(t);
+  await messages(page);
+  await page.evaluate(() => fixture.complete());
+  await page.evaluate(() => { window.LEDGER_SOURCE.name('rid', 'beer'); window.LEDGER_SOURCE.name('rid2', 'wine'); });
+  await messages(page, 3);
+  const asked = await page.evaluate(() => fixture.worker.messages.slice(1).map(m => ({kind:m.kind, history:'history' in m})));
+  assert.deepEqual(asked, [{kind:'name', history:false}, {kind:'name', history:false}]);
+  await page.evaluate(() => document.getElementById('forgetHistory').click());
+  await messages(page, 4);
+  assert.equal(await page.evaluate(() => fixture.worker.messages[3].kind), 'forget');
+  assert.equal(await page.evaluate(() => localStorage.getItem('ledger_history')), null);
+});
+
+// U2 in #109: one save file cannot be reopened by the page after a reload.
+test('one file: Update says a changed file is chosen again, and a reload asks for the file', async t => {
+  const page = await setup(t, {missing:true});
+  await page.waitForFunction(() => document.querySelector('#srcProg').hidden);
+  await page.locator('#savePick').setInputFiles({name:'manual.hsg', mimeType:'application/octet-stream', buffer:Buffer.from('save')});
+  await messages(page);
+  await page.evaluate(() => fixture.complete());
+  assert.equal(await hasBoard(page), true);
+  assert.match(await page.locator('#updateBtn').getAttribute('title'), /choose the file again/);
+  const chooser = page.waitForEvent('filechooser');
+  await page.locator('#updateBtn').click();
+  await chooser;
+  assert.match(await page.locator('#srcNote').innerText(), /To read a newer save, choose the file again\./);
+
+  await page.evaluate(() => { location.hash = '#company'; });
+  await page.reload();
+  await page.evaluate(() => { renderAll = () => {}; });
+  await page.waitForFunction(() => document.getElementById('srcStatus').textContent === 'Choose the save file again');
+  assert.equal(await hasBoard(page), false);
+  assert.match(await page.locator('#srcMeta').innerText(), /manual\.hsg/i);
+  assert.match(await page.locator('#srcNote').innerText(), /after a reload.*where you left it/s);
+  assert.equal(await page.locator('#recoverBtn').isVisible(), true);
+  assert.equal(await page.locator('#recoverBtn').innerText(), 'Choose the file again');
+  const again = page.waitForEvent('filechooser');
+  await page.locator('#recoverBtn').click();
+  await (await again).setFiles({name:'manual.hsg', mimeType:'application/octet-stream', buffer:Buffer.from('save')});
+  await messages(page);
+  await page.evaluate(() => fixture.complete());
+  assert.equal(await hasBoard(page), true);
+  assert.equal(await page.locator('#pageCompany').isVisible(), true, 'the board opens where it was');
+});
+
+test('a remembered folder is never offered as a file to choose again', async t => {
+  const page = await setup(t);
+  await messages(page);
+  await page.evaluate(() => fixture.complete());
+  await page.reload();
+  await page.evaluate(() => { renderAll = () => {}; });
+  await messages(page);
+  assert.notEqual(await text(page), 'Choose the save file again');
+  assert.equal(await page.evaluate(() => sessionStorage.getItem('ledger_reopen')), null);
+});

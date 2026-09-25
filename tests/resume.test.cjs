@@ -27,7 +27,7 @@ async function resume(permission, options = {}) {
     stored:{get:(key) => key === 'ledger_link' && options.link ? options.link : ''},
     LINK_KEY:'ledger_link', LINK_DEFAULT:'http://127.0.0.1:8322', linkUrl:null, URL,
     runtimeReady:true, pick:{dir:'character', name:'chosen.hsg'},
-    place(){}, idleState(){}, wireLanding(){}, paintStrip(){},
+    place(){}, idleState(){}, wireLanding(){}, paintStrip(){}, offerReopen(){ context.reopened = true; },
     startAttempt(){return true;}, finishAttempt(){}, state(){},
     note(...args){notes.push(args.map((a) => (typeof a === 'function' ? a() : a)));},
     async loadFromHandle(value){loads.push(value);},
@@ -67,4 +67,13 @@ test('a remembered link that is not this machine is not followed', async () => {
     const result = await resume('granted', {link});
     assert.equal(result.context.linkUrl, 'http://127.0.0.1:8322', link);
   }
+});
+test('with nothing to reopen, startup offers to choose a picked-once save again', async () => {
+  // U2 in #109: offerReopen() decides from the tab's own record whether a
+  // one-file source was open before the reload; startup only asks it when no
+  // link and no folder handle can bring the board back.
+  assert.equal((await resume('granted', {missing:true})).context.reopened, true);
+  assert.equal((await resume('granted', {supported:false})).context.reopened, true);
+  assert.equal((await resume('granted')).context.reopened, undefined);
+  assert.equal((await resume('granted', {link:'http://127.0.0.1:8322'})).context.reopened, undefined);
 });
