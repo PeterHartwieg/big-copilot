@@ -22051,7 +22051,7 @@ const ALERT_GROUPS = [
   {id:"notrading",    label:"Not trading yet",        note:"Temporarily closed, or open but with no staff, no prices, no stock or no trading day", on:true},
   {id:"vacant",       label:"Vacant leases",          note:"A lease still paying rent with no business in it", on:true},
   {id:"loss",         label:"Losing money",           note:"A business that lost money yesterday", on:true},
-  {id:"staff",        label:"Nobody on shift",        note:"A shop or office with nobody on, or a machine nobody is posted to", on:true},
+  {id:"staff",        label:"Nobody staffed",         note:"A shop or office with nobody working, or a machine nobody staffs", on:true},
   {id:"satisfaction", label:"Low satisfaction",       note:"Customer satisfaction under 80%", on:true},
   {id:"promotion",    label:"Promotion below cap",    note:"A shop under the 100% cap with campaigns left to run", on:true},
   {id:"uniform",      label:"Uniforms / locker",      note:"Missing uniform locker or staff uniforms", on:true},
@@ -23132,7 +23132,7 @@ const SS_VIEWS = [
 ];
 /* The words players use for a kind of finding. */
 const SS_KIND_SYN = {feed: ["fed", "inputs", "ingredients", "starved"], atcap: ["capacity", "full", "ceiling", "turned away"],
-  idlestaff: ["overstaffed", "idle staff", "too many staff", "hire"], staff: ["unstaffed", "no staff", "staffing", "hire"],
+  idlestaff: ["overstaffed", "idle staff", "too many staff", "hire"], staff: ["unstaffed", "no staff", "staffing", "hire", "on shift"],
   jobdemand: ["demands", "unhappy staff", "quit", "hire"], companydemand: ["insurance", "health insurance", "hr manager"],
   dead: ["dead stock", "stock not moving", "not moving"], target: ["overstock"],
   notrouted: ["not routed", "no route", "unrouted", "stuck in the warehouse"],

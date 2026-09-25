@@ -80,9 +80,8 @@ names):
 - Never advise opening a second location or a bigger site because one is at building
   capacity. Being at capacity is normal in a good setup, not a finding.
 
-Older text still uses these words (the `staff` finding kind's label, the Door cap section
-of `docs/dashboard-reference.md`). Follow the rule in new text; renaming old text is its
-own task.
+Older design docs (the `*-scope.md` files) still use "door cap" and "shift"; follow the
+rule in new text and leave historical docs as they are.
 
 ## Sources and generated files
 

@@ -28,6 +28,9 @@ file, they win.
 
 ## As ported (branch floor-plans)
 
+*Superseded by "Simplified after release" above: the dock, the shelf and the
+Map / Plan switch described here are gone; kept as the record of the canvas.*
+
 - Generator: `make_floor_plans.py` at the repo root (owner-side, UnityPy) replaces
   `make_plans.py` + `research/floor-plans/render_plans.py` for the shipped file,
   `web/maps/floor-plans.json`. It draws from the prefabs directly, one plan a structure
@@ -51,7 +54,18 @@ file, they win.
   than naming a colour that differs by theme.
 - A `New` badge (id `floor-plans`) sits on the Find a location switch until it is used.
 
+## Simplified after release (Peter, 25 Sep 2026)
+
+The dock took too much of the map. It is gone, with the shelf, the hover lighting and the
+Map / Plan switch. A picked building's plan now sits in its site card, under the facts:
+one plan with its layout code and entrances (loading bays for a warehouse), scaled to the
+card's width and at most 160 px tall. Find a location gained a Layout filter: a chip for
+each layout key of the kind, several at once, saved with the other filters.
+
 ## The idea in one line
+
+*Superseded by "Simplified after release" above: the dock, the shelf and the
+Map / Plan switch described here are gone; kept as the record of the canvas.*
 
 The empty map area left of the panel gets one docked card, bottom-left, that shows the plan
 of whatever row you hover and falls back to the one you picked. It sits in the same place for
@@ -94,6 +108,9 @@ every row, so scanning the list reads like flipping pages.
 
 ## Artboard 2: comparing. Two options; I recommend B
 
+*Superseded by "Simplified after release" above: the dock, the shelf and the
+Map / Plan switch described here are gone; kept as the record of the canvas.*
+
 - **A · Pin plans side by side.** "Pin to compare" on the card. Up to three pinned plans sit
   in a tray at one shared scale, with the hovered or picked plan in a dashed slot at the end.
   Pinned rows show a pin after the address. It compares specific candidates, but adds pin
@@ -111,6 +128,9 @@ B can replace the single card or sit under it. On the canvas it replaces it. If 
 both, the card goes above the shelf, and the site card area gets tight at a 720 px stage.
 
 ## Open questions for Peter
+
+*Superseded by "Simplified after release" above: the dock, the shelf and the
+Map / Plan switch described here are gone; kept as the record of the canvas.*
 
 1. **Compare: A, B, or neither** for a first release? (Recommendation: B, with the single card
    from artboard 1 dropped in favour of the shelf, or both if the height allows.)
@@ -134,6 +154,9 @@ both, the card goes above the shelf, and the site card area gets tight at a 720 
    one for each kind and layout (24).
 
 ## Porting note
+
+*Superseded by "Simplified after release" above: the dock, the shelf and the
+Map / Plan switch described here are gone; kept as the record of the canvas.*
 
 - Build step: `make_plans.py`'s logic moves next to the other owner-only exporters (it needs
   the renders, and those need the game). It writes one small JSON of paths, which is shipped

@@ -327,59 +327,22 @@ body.map-modal-open{overflow:hidden}
 .lp-scale{display:inline-flex;align-items:center;gap:6px;font:500 10px/1 "IBM Plex Mono",monospace;color:var(--ink-3);white-space:nowrap}
 .lp-scale i{display:block;height:6px;border:1.5px solid var(--ink-3);border-top:0;box-sizing:border-box}
 .lp-lab{font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap}
-.lp-note{font-size:11.5px;color:var(--ink-3);white-space:nowrap}
-/* the dock: bottom-left of the map area, above the district labels and the ball.
-   The site card is placed clear of it. It slides in when it appears, never on a
-   redraw inside it. */
-.lp-dock{position:absolute;left:16px;bottom:16px;z-index:4;animation:lp-in .22s cubic-bezier(.2,.7,.2,1)}
-.lp-dock[hidden]{display:none}
-.lp-shelf{display:flex;flex-direction:column;gap:8px;min-width:420px;padding:10px 12px 12px;border-radius:10px;border:1px solid var(--rule);background:var(--surface);box-shadow:0 12px 40px #0008;color:var(--ink)}
-@keyframes lp-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-.lp-detail{display:flex;align-items:center;gap:18px;min-height:46px;padding-bottom:8px;border-bottom:1px solid var(--rule-soft)}
-.lp-detail .lp-why{margin-left:auto;align-self:flex-start}
-.lp-body{display:flex;align-items:center;gap:18px;min-width:0}
-.lp-id{display:flex;flex-direction:column;gap:5px;min-width:0}
-.lp-hint{margin:0;font-size:12px;line-height:1.4;color:var(--ink-3)}
-.lp-state{display:flex;align-items:center;gap:6px;font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
-.lp-state i{width:7px;height:7px;border-radius:50%;background:var(--accent);box-sizing:border-box}
-.lp-detail.hover .lp-state i{background:transparent;border:1.5px solid var(--ink-3)}
-.lp-code{display:flex;align-items:baseline;gap:8px;min-width:0}
-.lp-code>b{font:500 22px/1 "IBM Plex Mono",monospace;letter-spacing:-.02em;color:var(--ink)}
-.lp-code>span{font-size:12px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.lp-addr{font-size:12px;font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
-.lp-nums{display:flex;gap:14px}
-.lp-nums div{display:flex;flex-direction:column;gap:3px}
-.lp-nums b{font:500 16px/1 "IBM Plex Mono",monospace;letter-spacing:-.02em;color:var(--ink)}
-.lp-nums span{font:500 9.5px/1.1 "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap}
-.lp-shelfhead{display:flex;align-items:center;gap:12px}
-.lp-shelfhead .lp-scale{margin-left:auto}
-.lp-tiles{display:flex;gap:6px;align-items:stretch}
-.lp-tile{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:58px;padding:6px 6px 5px;border-radius:8px;border:1px solid transparent;background:var(--ground);color:var(--ink-2);cursor:pointer;font:inherit;transition:border-color .15s,background .15s,transform .2s cubic-bezier(.34,1.56,.64,1)}
-.lp-tile:hover{border-color:var(--ink-3);transform:translateY(-2px)}
-.lp-tile:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.lp-tilebox{display:flex;align-items:flex-end;justify-content:center}
-.lp-tilecode{display:flex;align-items:baseline;gap:5px;font:400 10px/1 "IBM Plex Mono",monospace;color:var(--ink-3);white-space:nowrap}
-.lp-tilecode b{font-size:13px;font-weight:500;color:var(--ink)}
-.lp-tilen{font:400 10px/1 "IBM Plex Mono",monospace;color:var(--ink-3);white-space:nowrap}
-.lp-tile.none{opacity:.55}
-.lp-tile.lit{border-color:var(--accent);background:var(--accent-soft)}
-.lp-tile.lit .lp-svg .lp-f{fill:color-mix(in oklab,var(--accent) 22%,var(--surface))}
-.lp-tile.hover{border-color:var(--ink-3)}
-.lp-tile.hover .lp-svg .lp-f{fill:color-mix(in oklab,var(--ink) 24%,var(--surface))}
-.lp-tile[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 .fswitch .feature-new{margin-left:2px}
-/* phones: no hover, so a Map / Plan switch in the map window shows the pick. It
-   sits bottom-left, clear of the site card's close button and the zoom buttons. */
-.lp-seg{position:absolute;left:10px;bottom:10px;z-index:6;display:flex;padding:3px;border-radius:9px;background:var(--surface);border:1px solid var(--rule);box-shadow:0 2px 8px #0003}
-.lp-seg[hidden]{display:none}
-.lp-seg button{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 13px;border:0;border-radius:6px;background:none;color:var(--ink-2);font:500 13px/1 Archivo,"Helvetica Neue",Arial,sans-serif;cursor:pointer}
-.lp-seg button svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.lp-seg button.on{background:var(--accent-soft);color:var(--ink)}
-.lp-phoneplan{position:absolute;inset:0;z-index:5;background:var(--surface);color:var(--ink);display:flex;flex-direction:column;padding:62px 14px 64px;gap:10px;box-sizing:border-box}
-.lp-phoneplan[hidden]{display:none}
-.lp-ppbox{flex:1;display:grid;place-items:center;border-radius:8px;background:var(--ground);min-height:0;overflow:hidden}
-.lp-pphead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px}
-.lp-pphead .lp-code{flex-basis:100%}
-.lp-pphead .lp-code>span{font-size:12.5px;color:var(--ink)}
-.lp-pphead .lp-scale{margin-left:auto}
-.stage.lp-planview .zoomer,.stage.lp-planview .layer{display:none}
+/* the picked building's plan, in its card under the facts: the card's width,
+   and what height the stage leaves it (--lp-plan-max, set by sizeCardPlan) */
+.site .lp-plan{margin-top:10px;padding-top:10px;border-top:1px solid var(--rule-soft)}
+.site .lp-plan[hidden]{display:none}
+.lp-planhead{display:flex;align-items:baseline;gap:8px;margin-bottom:7px}
+.lp-planhead .lp-lab{cursor:help;border-bottom:1px dotted var(--rule)}
+.lp-planhead b{font:500 14px/1 "IBM Plex Mono",monospace;color:var(--ink)}
+.lp-count{font-size:11.5px;color:var(--ink-3)}
+.lp-scalehost{margin-left:auto}
+.lp-planbox{border-radius:7px;background:var(--ground);padding:6px}
+.lp-planbox .lp-svg{width:100%;height:auto;max-height:var(--lp-plan-max,160px)}
+/* a card taller than the stage (a phone) scrolls inside it */
+.city-map .site.lp-scroll{overflow-y:auto;overscroll-behavior:contain}
+.city-map .site.lp-scroll .tail{display:none}
+/* and its close button stays in reach while it scrolls */
+.city-map .site.lp-scroll .x{position:sticky;top:0;float:right;margin:-4px -6px 0 8px;z-index:1;background:var(--surface)}
+.city-map .site.lp-scroll .x:hover{background:var(--raised)}
+.city-map .site.lp-scroll h3{padding-right:0}
