@@ -864,6 +864,14 @@ class PrivacyTests(FixtureCase):
         for string in build._strings(payload):
             self.assertNotIn(os.path.basename(self.root), string)
 
+    def test_a_public_url_passes_and_a_drive_path_fails(self):
+        for text in ("https://store.steampowered.com/app/1331550/", "http://bigcopilot.com/wiki/",
+                     "See HTTPS://example.com/a:b for more."):
+            build.check_privacy({"topics": [{"body": text}]}, [])
+        for text in ("C:\\Games\\Big Ambitions", "c:/steam/en.json", "saved at D:\\x", "(e:/x)"):
+            with self.assertRaisesRegex(wiki_data.SourceError, "machine path"):
+                build.check_privacy({"topics": [{"body": text}]}, [])
+
 
 class DeterminismTests(FixtureCase):
     def test_two_builds_are_byte_identical(self):

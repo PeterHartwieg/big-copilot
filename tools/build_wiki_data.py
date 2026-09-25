@@ -161,8 +161,10 @@ _SLUG_LINK_KINDS = (
     "general", "rivals", "finance", "building", "special", "minor",
 )
 
-# A place on this machine must never reach the payload, in any string.
-_PRIVATE_PATH_RE = re.compile(r"(?i)([a-z]:[\\/]|/users/|\\users\\|/home/|file://)")
+# A place on this machine must never reach the payload, in any string. A drive
+# letter counts only where no URL scheme letter comes before it, so the `s:/`
+# in `https://` is not a drive.
+_PRIVATE_PATH_RE = re.compile(r"(?i)((?<![a-z0-9+.-])[a-z]:[\\/]|/users/|\\users\\|/home/|file://)")
 
 _INLINE_CAPACITY_RE = re.compile(r"^\*\*Product Capacity:\*\*\s*([\d,]+)\s*([A-Za-z]*)\s*$", re.M)
 _RETAIL_SIZE_RE = re.compile(
