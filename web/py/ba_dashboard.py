@@ -650,16 +650,16 @@ AMENITY_ITEMS = {
 # read from the save's own roster instead — see _uniform_gaps() — because the
 # cached answer is a snapshot of one moment and cannot be trusted either way.
 AMENITY_DEMANDS = {
-    "ba:customerdemand_toilet": ("bathroom", "No customer bathroom here"),
+    "ba:customerdemand_toilet": ("bathroom", msg("f.amenity.bathroom", "No customer bathroom here")),
     "ba:customerdemand_toiletprivacy": (
         "toiletprivacy",
-        "Customer bathroom has no privacy: no stall or door",
+        msg("f.amenity.toiletprivacy", "Customer bathroom has no privacy: no stall or door"),
     ),
-    "ba:customerdemand_sink": ("sink", "No sink for customers to wash up"),
-    "ba:customerdemand_music": ("music", "No music playing for customers"),
+    "ba:customerdemand_sink": ("sink", msg("f.amenity.sink", "No sink for customers to wash up")),
+    "ba:customerdemand_music": ("music", msg("f.amenity.music", "No music playing for customers")),
     "ba:customerdemand_interiordesign": (
         "interior",
-        "Interior design falls short of what customers expect here",
+        msg("f.amenity.interior", "Interior design falls short of what customers expect here"),
     ),
 }
 
@@ -10057,7 +10057,8 @@ def _hype_exposure(businesses: list, market: dict) -> list:
                 "name": best["name"],
                 "hood": best["neighbourhood"],
                 "revenue": money(sum(before) / len(before)),
-                "basis": f"its own {len(before)} days before day {wave['startDay']}",
+                "basis": msg("f.hype.basis.own", "its own {n} days before day {day}",
+                             n=len(before), day=wave["startDay"]),
             }
         else:
             pool = [
@@ -10072,7 +10073,7 @@ def _hype_exposure(businesses: list, market: dict) -> list:
                     "name": other["name"],
                     "hood": other["neighbourhood"],
                     "revenue": other["revenue"],
-                    "basis": f"the no-hype {other['name']}",
+                    "basis": msg("f.hype.basis.other", "the no-hype {site}", site=other["name"]),
                 }
                 if other
                 else None
@@ -10317,26 +10318,58 @@ def _plan(
 # under the amount. Only groups whose worth carries money get a unit; the rest
 # are left empty because their worth is always None.
 ALERT_UNITS = {
-    "notrading": "/day rent",
-    "vacant": "/day rent",
-    "loss": "/day loss",
-    "hype": "/day revenue",
-    "trend": "/day revenue",
-    "atcap": "/day trade",
-    "idlestaff": "/day wages",
-    "dead": "/day tied up",
-    "target": "/day excess",
+    "notrading": msg("f.unit.rent", "/day rent"),
+    "vacant": msg("f.unit.rent", "/day rent"),
+    "loss": msg("f.unit.loss", "/day loss"),
+    "hype": msg("f.unit.revenue", "/day revenue"),
+    "trend": msg("f.unit.revenue", "/day revenue"),
+    "atcap": msg("f.unit.trade", "/day trade"),
+    "idlestaff": msg("f.unit.wages", "/day wages"),
+    "dead": msg("f.unit.tied", "/day tied up"),
+    "target": msg("f.unit.excess", "/day excess"),
 }
 
 
-def _worked_over(d: dict, lead: str) -> str:
+def _msg_list(items: list):
+    """Several names or phrases as one list, "a, b, c", that stays a message:
+    a nested "{a}, {b}" per comma, the last pair under a key of its own
+    (f.list.last), so a translation can join that one with its "and". One item
+    is itself."""
+    if len(items) == 1:
+        return items[0]
+    if len(items) == 2:
+        return msg("f.list.last", "{a}, {b}", a=items[0], b=items[1])
+    return msg("f.list", "{a}, {b}", a=items[0], b=_msg_list(items[1:]))
+
+
+def _worked_over(d: dict):
     """Why an hours or days demand fails when the roster itself meets it: the
-    week worked so far has passed its top. The whole row, or how many of it."""
+    week worked so far has passed its top. The whole row, or how many of it;
+    None when it has not."""
     w = d.get("workedOver")
     if not w:
-        return ""
-    who = "" if w["count"] == d["count"] else f"{w['count']} "
-    return f"{lead}{who}worked over {w['max']} {w['unit']} this week"
+        return None
+    if w["count"] == d["count"]:
+        if w["unit"] == "days":
+            return msg("f.jobdemand.over.days", "worked over {max} days this week", max=w["max"])
+        return msg("f.jobdemand.over.hours", "worked over {max} hours this week", max=w["max"])
+    if w["unit"] == "days":
+        return msg("f.jobdemand.over.days.some", {"one": "{n} worked over {max} days this week",
+                                                    "other": "{n} worked over {max} days this week"},
+                   n=w["count"], max=w["max"])
+    return msg("f.jobdemand.over.hours.some", {"one": "{n} worked over {max} hours this week",
+                                                "other": "{n} worked over {max} hours this week"},
+               n=w["count"], max=w["max"])
+
+
+def _demand_priority(priority: int):
+    """A job demand's priority as a finding says it: JOB_DEMAND_PRIORITY,
+    lowercased."""
+    if priority == 2:
+        return msg("f.jobdemand.critical", "critical")
+    if priority == 1:
+        return msg("f.jobdemand.important", "important")
+    return msg("f.jobdemand.nice", "nice to have")
 
 
 def _alert_id(*parts: str) -> str:
@@ -10444,33 +10477,36 @@ def _alerts(
         failed, reasons = [], []
         if b.get("closed"):
             failed.append("closed")
-            reasons.append("temporarily closed")
+            reasons.append(msg("f.notrading.closed", "temporarily closed"))
         if b["staff"] == 0:
             failed.append("staff")
-            reasons.append("no staff")
+            reasons.append(msg("f.notrading.staff", "no staff"))
         if not priced:
             failed.append("prices")
-            reasons.append("no prices set")
+            reasons.append(msg("f.notrading.prices", "no prices set"))
         elif not office and not stocked:
             failed.append("stock")
-            reasons.append("no stock")
+            reasons.append(msg("f.notrading.stock", "no stock"))
         elif not office and len(stocked) * 2 < len(priced):
             failed.append("shelves")
-            reasons.append(f"{len(priced) - len(stocked)} of {len(priced)} shelves bare")
+            reasons.append(msg("f.notrading.shelves", "{n} of {of} shelves bare",
+                               n=len(priced) - len(stocked), of=len(priced)))
         if not office and b["key"] not in planned:
             failed.append("plan")
-            reasons.append("no delivery plan")
+            reasons.append(msg("f.notrading.plan", "no delivery plan"))
         b["notTrading"] = failed
         if not reasons:
             reasons.append(
-                f"staffed and {'priced' if office else 'stocked'}, no trading day booked yet"
+                msg("f.notrading.ready.office", "staffed and priced, no trading day booked yet")
+                if office else
+                msg("f.notrading.ready", "staffed and stocked, no trading day booked yet")
             )
         note(
             "critical",
             b["name"],
             "notrading",
-            f"{b['name']} opened day {b['opened']}, not trading yet: "
-            f"{', '.join(reasons)}, ${b['rent']:,.0f}/day rent",
+            msg("f.notrading", "{site} opened day {day}, not trading yet: {reasons}, ${rent:,.0f}/day rent",
+                site=b["name"], day=b["opened"], reasons=_msg_list(reasons), rent=b["rent"]),
             worth=b["rent"],
             always=True,
             key=b["key"],
@@ -10481,9 +10517,10 @@ def _alerts(
         rent = sum(b["rent"] for b in vacant)
         note(
             "warn",
-            f"{len(vacant)} leases",
+            msg("f.site.leases", {"one": "{n} leases", "other": "{n} leases"}, n=len(vacant)),
             "vacant",
-            f"{len(vacant)} vacant leases costing ${rent:,.0f}/day in rent",
+            msg("f.vacant", {"one": "{n} vacant leases costing ${rent:,.0f}/day in rent",
+                             "other": "{n} vacant leases costing ${rent:,.0f}/day in rent"}, n=len(vacant), rent=rent),
             worth=rent,
         )
 
@@ -10503,23 +10540,24 @@ def _alerts(
             note("critical", b["name"], "staff", msg("f.staff.none", "No staff assigned"), always=True, key=b["key"])
         sat = b["satisfaction"]["overall"]
         if sat is not None and b["customers"] and sat < 80:
-            note("warn", b["name"], "satisfaction", f"Customer satisfaction at {sat}%", key=b["key"])
+            note("warn", b["name"], "satisfaction", msg("f.satisfaction", "Customer satisfaction at {n}%", n=sat),
+                 key=b["key"])
         if b.get("missingUniformLocker"):
             # Installing the locker is the first action to take, so it stands in
             # for whichever roles are uncovered behind it.
             note(
                 "warn", b["name"], "uniform",
-                "No uniform locker installed; add one to manage employee uniforms",
+                msg("f.uniform.locker", "No uniform locker installed; add one to manage employee uniforms"),
                 always=True, key=b["key"],
             )
         elif b.get("uniformGaps"):
             skills = b.get("uniformGapSkills") or []
-            roles = ", ".join(tok(skills[i] if i < len(skills) else None, role)
-                              for i, role in enumerate(b["uniformGaps"]))
+            roles = _msg_list([tok(skills[i] if i < len(skills) else None, role)
+                               for i, role in enumerate(b["uniformGaps"])])
             note(
                 "warn", b["name"], "uniform",
-                f"No uniform set for {roles}; customers judge every role on a "
-                f"station shift here",
+                msg("f.uniform.gaps", "No uniform set for {roles}; customers judge every role on a "
+                    "station shift here", roles=roles),
                 always=True, key=b["key"],
             )
         for slug in b["missingAmenities"]:
@@ -10544,16 +10582,24 @@ def _alerts(
             count, shown = b.get("staffLacking", 0), wants
         else:
             continue
-        text = f"{count} staff with unmet demands: " + ", ".join(
-            f"{tok(d.get('slug'), d['demand'])} for {d['count']} ("
-            + ("company-wide" if d["company"] else JOB_DEMAND_PRIORITY[d["priority"]].lower())
-            + _worked_over(d, ", ")
-            + ")"
-            for d in shown
-        )
+        items = []
+        for d in shown:
+            why = (msg("f.jobdemand.company", "company-wide") if d["company"]
+                   else _demand_priority(d["priority"]))
+            over = _worked_over(d)
+            if over:
+                why = msg("f.jobdemand.why", "{priority}, {over}", priority=why, over=over)
+            items.append(msg("f.jobdemand.item", "{demand} for {n} ({why})",
+                             demand=tok(d.get("slug"), d["demand"]), n=d["count"], why=why))
         if quitting:
-            text += (f"; {quitting} of them {'has' if quitting == 1 else 'have'} "
-                     f"warned they will quit")
+            text = msg("f.jobdemand.quit", {
+                "one": "{count} staff with unmet demands: {demands}; {n} of them has warned they will quit",
+                "other": "{count} staff with unmet demands: {demands}; {n} of them have warned they will quit",
+            }, count=count, demands=_msg_list(items), n=quitting)
+        else:
+            text = msg("f.jobdemand", {"one": "{n} staff with unmet demands: {demands}",
+                                       "other": "{n} staff with unmet demands: {demands}"},
+                       n=count, demands=_msg_list(items))
         note(
             "critical" if quitting else "warn", b["name"], "jobdemand", text,
             always=True, key=b["key"],
@@ -10573,11 +10619,19 @@ def _alerts(
     if company:
         rows = sorted(company.values(), key=lambda d: (-d["priority"], -d["count"], d["demand"]))
         insured = any(JOB_DEMANDS[d["slug"]][0] == "insurance" for d in rows)
+        demands = _msg_list([msg("f.companydemand.item", "{demand} for {n}",
+                                 demand=tok(d.get("slug"), d["demand"]), n=d["count"]) for d in rows])
         note(
-            "warn", "Company", "companydemand",
-            f"{lacking} staff with demands only you can meet: "
-            + ", ".join(f"{tok(d.get('slug'), d['demand'])} for {d['count']}" for d in rows)
-            + (". Health insurance comes through an HR manager's plan" if insured else ""),
+            "warn", msg("f.site.company", "Company"), "companydemand",
+            msg("f.companydemand.insurance", {
+                "one": "{n} staff with demands only you can meet: {demands}. Health insurance comes through "
+                       "an HR manager's plan",
+                "other": "{n} staff with demands only you can meet: {demands}. Health insurance comes through "
+                         "an HR manager's plan"}, n=lacking, demands=demands)
+            if insured else
+            msg("f.companydemand", {"one": "{n} staff with demands only you can meet: {demands}",
+                                    "other": "{n} staff with demands only you can meet: {demands}"},
+                n=lacking, demands=demands),
             always=True,
         )
 
@@ -10600,25 +10654,31 @@ def _alerts(
     if short:
         worst = PROMOTION_CAP - short[0]["promotion"]
         level = "warn" if worst >= PROMOTION_GAP else "info"
-        where = short[0]["name"] if len(short) == 1 else f"{len(short)} shops"
+        where = (short[0]["name"] if len(short) == 1
+                 else msg("f.site.shops", {"one": "{n} shop", "other": "{n} shops"}, n=len(short)))
         if len(short) == 1:
             b = short[0]
-            text = (
-                f"{b['name']} promotes at {b['promotion']}% of the 100% cap: "
-                f"{b['traffic']}% foot traffic and {b['marketingIndex']}% marketing. "
-                f"The address sets the foot traffic, so the missing "
-                f"{PROMOTION_CAP - b['promotion']} points have to come from campaigns"
-            )
+            text = msg("f.promotion", {
+                "one": "{site} promotes at {promotion}% of the 100% cap: {traffic}% foot traffic and "
+                       "{marketing}% marketing. The address sets the foot traffic, so the missing "
+                       "{n} points have to come from campaigns",
+                "other": "{site} promotes at {promotion}% of the 100% cap: {traffic}% foot traffic and "
+                         "{marketing}% marketing. The address sets the foot traffic, so the missing "
+                         "{n} points have to come from campaigns",
+            }, site=b["name"], promotion=b["promotion"], traffic=b["traffic"],
+                marketing=b["marketingIndex"], n=PROMOTION_CAP - b["promotion"])
         else:
-            who = ", ".join(
-                f"{b['name']} {b['promotion']}% ({b['marketingIndex']}% marketing)"
+            who = _msg_list([
+                msg("f.promotion.shop", "{site} {promotion}% ({marketing}% marketing)",
+                    site=b["name"], promotion=b["promotion"], marketing=b["marketingIndex"])
                 for b in short
-            )
-            text = (
-                f"{len(short)} shops promote below the 100% cap with marketing not yet "
-                f"maxed: {who}. The address sets the foot traffic, so campaigns are "
-                f"the only lever"
-            )
+            ])
+            text = msg("f.promotion.shops", {
+                "one": "{n} shop promotes below the 100% cap with marketing not yet maxed: {shops}. "
+                       "The address sets the foot traffic, so campaigns are the only lever",
+                "other": "{n} shops promote below the 100% cap with marketing not yet maxed: {shops}. "
+                         "The address sets the foot traffic, so campaigns are the only lever",
+            }, n=len(short), shops=who)
         note(
             level, where, "promotion", text, rank=-worst, always=True,
             key=short[0]["key"] if len(short) == 1 else None,
@@ -10654,64 +10714,94 @@ def _alerts(
         waves.sort(key=lambda w: w["daysLeft"])
         soonest = waves[0]["daysLeft"]
         if len(waves) == 1:
-            left = waves[0]["daysLeft"]
-            lines = (
-                f"{waves[0]['count']} lines "
-                + (
-                    "ends today"
-                    if left <= 0
-                    else "ends tomorrow"
-                    if left == 1
-                    else f"has {left} days left"
-                )
-            )
+            left, n = waves[0]["daysLeft"], waves[0]["count"]
+            if left <= 0:
+                lines = msg("f.hype.lines.today", {"one": "{n} lines ends today", "other": "{n} lines ends today"}, n=n)
+            elif left == 1:
+                lines = msg("f.hype.lines.tomorrow", {"one": "{n} lines ends tomorrow", "other": "{n} lines ends tomorrow"}, n=n)
+            else:
+                lines = msg("f.hype.lines.left", {"one": "{n} lines has {days} days left", "other": "{n} lines has {days} days left"},
+                            n=n, days=left)
         else:
             parts = []
-            for n, wave in enumerate(waves):
-                left = wave["daysLeft"]
-                ends = (
-                    "today" if left <= 0 else "tomorrow" if left == 1 else f"in {left} days"
-                )
-                parts.append(f"{wave['count']} {'end ' if n == 0 or left <= 1 else ''}{ends}")
-            lines = f"{sum(w['count'] for w in waves)} lines ({', '.join(parts)})"
-        wave_word = "the wave" if len(waves) == 1 else "the waves"
+            for i, wave in enumerate(waves):
+                left, n = wave["daysLeft"], wave["count"]
+                if left <= 0:
+                    parts.append(msg("f.hype.part.today", {"one": "{n} end today",
+                                                           "other": "{n} end today"}, n=n))
+                elif left == 1:
+                    parts.append(msg("f.hype.part.tomorrow", {"one": "{n} end tomorrow",
+                                                              "other": "{n} end tomorrow"}, n=n))
+                elif i == 0:
+                    parts.append(msg("f.hype.part.first", {"one": "{n} end in {days} days",
+                                                           "other": "{n} end in {days} days"}, n=n, days=left))
+                else:
+                    parts.append(msg("f.hype.part.later", {"one": "{n} in {days} days",
+                                                           "other": "{n} in {days} days"}, n=n, days=left))
+            lines = msg("f.hype.lines.waves", "{n} lines ({waves})",
+                        n=sum(w["count"] for w in waves), waves=_msg_list(parts))
+        one = len(waves) == 1
+        hood = tok(waves[0]["hood"], hood_label(waves[0]["hood"]))
         # Pricing is somebody else's job in this company. When a wave lands on a
         # shop that is already full, the door turns part of it away — until the
         # wave's end date.
         full = full_hours(top["key"])
-        queue = (
-            f" It already runs within 10% of capacity for {full} hour"
-            f"{'' if full == 1 else 's'} of a normal week, so the door is turning part "
-            f"of {wave_word} away."
-            if full
-            else ""
-        )
         # The baseline is the first wave's: the shop's own days before a later
         # wave already carry the earlier one.
         base = min(waves, key=lambda w: w["startDay"])["baseline"]
         if base:
             drop = max(top["revenue"] - base["revenue"], 0)
+            said = dict(hood=hood, lines=lines, site=top["name"], revenue=top["revenue"],
+                        base=base["revenue"], basis=base["basis"], drop=drop)
+            if full and one:
+                text = msg("f.hype.wave.full", {
+                    "one": "{hood} hype on {lines}; {site} does ${revenue:,.0f}/day under it against ${base:,.0f} for "
+                           "{basis}; about ${drop:,.0f}/day of revenue rides on the wave. It already runs within 10% "
+                           "of capacity for {n} hour of a normal week, so the door is turning part of the wave "
+                           "away.",
+                    "other": "{hood} hype on {lines}; {site} does ${revenue:,.0f}/day under it against ${base:,.0f} for "
+                             "{basis}; about ${drop:,.0f}/day of revenue rides on the wave. It already runs within "
+                             "10% of capacity for {n} hours of a normal week, so the door is turning part of the "
+                             "wave away.",
+                }, n=full, **said)
+            elif full:
+                text = msg("f.hype.waves.full", {
+                    "one": "{hood} hype on {lines}; {site} does ${revenue:,.0f}/day under it against ${base:,.0f} for "
+                           "{basis}; about ${drop:,.0f}/day of revenue rides on the waves. It already runs within "
+                           "10% of capacity for {n} hour of a normal week, so the door is turning part of the "
+                           "waves away.",
+                    "other": "{hood} hype on {lines}; {site} does ${revenue:,.0f}/day under it against ${base:,.0f} for "
+                             "{basis}; about ${drop:,.0f}/day of revenue rides on the waves. It already runs within "
+                             "10% of capacity for {n} hours of a normal week, so the door is turning part of the "
+                             "waves away.",
+                }, n=full, **said)
+            elif one:
+                text = msg("f.hype.wave", "{hood} hype on {lines}; {site} does ${revenue:,.0f}/day under it against "
+                           "${base:,.0f} for {basis}; about ${drop:,.0f}/day of revenue rides on the wave.", **said)
+            else:
+                text = msg("f.hype.waves", "{hood} hype on {lines}; {site} does ${revenue:,.0f}/day under it against "
+                           "${base:,.0f} for {basis}; about ${drop:,.0f}/day of revenue rides on the waves.", **said)
             note(
                 "critical" if soonest <= 2 else "warn",
                 top["name"],
                 "hype",
-                f"{tok(waves[0]['hood'], hood_label(waves[0]['hood']))} hype on {lines}; "
-                f"{top['name']} does ${top['revenue']:,.0f}/day under it against "
-                f"${base['revenue']:,.0f} for {base['basis']}; "
-                f"about ${drop:,.0f}/day of revenue rides on {wave_word}.{queue}",
+                text,
                 worth=drop,
                 key=top["key"],
             )
         else:
+            said = dict(hood=hood, lines=lines, site=top["name"], revenue=top["revenue"])
             note(
                 "warn",
                 top["name"],
                 "hype",
-                f"{tok(waves[0]['hood'], hood_label(waves[0]['hood']))} hype on {lines}; "
-                f"{top['name']} does ${top['revenue']:,.0f}/day under it. There is no "
-                f"shop of the same kind trading without a wave and no trading days "
-                f"before {'this one' if len(waves) == 1 else 'the first of them'} "
-                f"started, so there is no baseline to say what the drop will be",
+                msg("f.hype.nobase", "{hood} hype on {lines}; {site} does ${revenue:,.0f}/day under it. There is no "
+                    "shop of the same kind trading without a wave and no trading days before this one started, "
+                    "so there is no baseline to say what the drop will be", **said)
+                if one else
+                msg("f.hype.nobase.waves", "{hood} hype on {lines}; {site} does ${revenue:,.0f}/day under it. There "
+                    "is no shop of the same kind trading without a wave and no trading days before the first of "
+                    "them started, so there is no baseline to say what the drop will be", **said),
                 always=True,
                 key=top["key"],
             )
@@ -10731,14 +10821,17 @@ def _alerts(
             continue
         if row["change"] > 0 and b["key"] in riding:
             continue
-        direction = "up" if row["change"] > 0 else "down"
+        said = dict(pct=abs(row["change"]) * 100, now=row["last7"], start=day - 7, end=day - 1,
+                    before=row["prev7"])
         note(
             "warn" if row["change"] < 0 else "info",
             b["name"],
             "trend",
-            f"Revenue {direction} {abs(row['change']) * 100:.0f}% week on week: "
-            f"${row['last7']:,.0f} over days {day - 7}-{day - 1} against "
-            f"${row['prev7']:,.0f} the week before",
+            msg("f.trend.up", "Revenue up {pct:.0f}% week on week: ${now:,.0f} over days {start}-{end} against "
+                "${before:,.0f} the week before", **said)
+            if row["change"] > 0 else
+            msg("f.trend.down", "Revenue down {pct:.0f}% week on week: ${now:,.0f} over days {start}-{end} against "
+                "${before:,.0f} the week before", **said),
             worth=abs(row["last7"] - row["prev7"]) / 7,
             key=b["key"],
         )
@@ -10783,21 +10876,50 @@ def _alerts(
         where = (
             group[0]["site"]
             if len(group) == 1
-            else f"{len(group)} {'offices' if office else 'shops'}"
+            else msg("f.site.offices", {"one": "{n} office", "other": "{n} offices"}, n=len(group))
+            if office
+            else msg("f.site.shops", {"one": "{n} shop", "other": "{n} shops"}, n=len(group))
         )
-        who = "" if len(group) == 1 else ": " + ", ".join(f["site"] for f in group)
-        ceiling = f"{cap}/h" if cap == top else f"{cap}-{top}/h"
-        noun = group[0].get("noun") or ("workstations" if office else "counters")
-        text = (
-            f"{where} fill{'s' if len(group) == 1 else ''} "
-            f"the {noun} {when}, "
-            f"{per_week} hours a week at {ceiling} and ${worth:,.0f}/day through the "
+        said = dict(
+            where=where, when=when, n=per_week, worth=worth, fix=group[0]["fix"],
+            rate=msg("f.atcap.rate", "{n}/h", n=cap) if cap == top
+            else msg("f.atcap.range", "{low}-{high}/h", low=cap, high=top),
+            noun=group[0].get("noun") or (msg("f.atcap.noun.office", "workstations") if office
+                                          else msg("f.atcap.noun.shop", "counters")),
             # Only the first character: a tie joins two limits, and
             # str.capitalize() would lowercase "DJ booths" in the second.
-            f"ceiling. {limit[:1].upper() + limit[1:]} "
-            f"{'are' if group[0].get('limits', 1) > 1 else 'is'} the "
-            f"limit, so the answer is {group[0]['fix']}{who}"
+            limit=limit[:1].upper() + limit[1:],
         )
+        several = group[0].get("limits", 1) > 1
+        if len(group) == 1:
+            text = (
+                msg("f.atcap.limits", {
+                    "one": "{where} fills the {noun} {when}, {n} hours a week at {rate} and "
+                           "${worth:,.0f}/day through the ceiling. {limit} are the limit, so the answer is {fix}",
+                    "other": "{where} fills the {noun} {when}, {n} hours a week at {rate} and "
+                             "${worth:,.0f}/day through the ceiling. {limit} are the limit, so the answer is {fix}"}, **said)
+                if several else
+                msg("f.atcap", {
+                    "one": "{where} fills the {noun} {when}, {n} hours a week at {rate} and "
+                           "${worth:,.0f}/day through the ceiling. {limit} is the limit, so the answer is {fix}",
+                    "other": "{where} fills the {noun} {when}, {n} hours a week at {rate} and "
+                             "${worth:,.0f}/day through the ceiling. {limit} is the limit, so the answer is {fix}"}, **said)
+            )
+        else:
+            sites = _msg_list([f["site"] for f in group])
+            text = (
+                msg("f.atcap.sites.limits", {
+                    "one": "{where} fill the {noun} {when}, {n} hours a week at {rate} and "
+                           "${worth:,.0f}/day through the ceiling. {limit} are the limit, so the answer is {fix}: {sites}",
+                    "other": "{where} fill the {noun} {when}, {n} hours a week at {rate} and "
+                             "${worth:,.0f}/day through the ceiling. {limit} are the limit, so the answer is {fix}: {sites}"}, sites=sites, **said)
+                if several else
+                msg("f.atcap.sites", {
+                    "one": "{where} fill the {noun} {when}, {n} hours a week at {rate} and "
+                           "${worth:,.0f}/day through the ceiling. {limit} is the limit, so the answer is {fix}: {sites}",
+                    "other": "{where} fill the {noun} {when}, {n} hours a week at {rate} and "
+                             "${worth:,.0f}/day through the ceiling. {limit} is the limit, so the answer is {fix}: {sites}"}, sites=sites, **said)
+            )
         # One site can be at more than one ceiling, and the limit is what keeps
         # the ids apart: a role short of people says "Gym Trainer staffing" and
         # the same role short of posts says "fitness planning boards", so
@@ -10835,8 +10957,10 @@ def _alerts(
             "idlestaff",
             # The waste leads, so the row's headline is the whole week's figure
             # and the shape of the hours unfolds as its detail.
-            f"{site} runs {week['spare']} staff-hours a week that buy nothing: "
-            f"{runs} for {week['seen']} customers an hour",
+            msg("f.idlestaff", {
+                "one": "{site} runs {n} staff-hours a week that buy nothing: {runs} for {seen} customers an hour",
+                "other": "{site} runs {n} staff-hours a week that buy nothing: {runs} for {seen} customers an hour",
+            }, site=site, n=week["spare"], runs=runs, seen=week["seen"]),
             worth=week["worth"],
             key=finding["key"],
         )
@@ -10893,28 +11017,33 @@ def _shelf_notes(businesses: list, supply: dict, silent: set, mode: str = "cap")
                 rate = round(line.get("tradeRate", line["rate"]))
                 notes.append(_finding(
                     fact["lvl"], b["name"], "unplanned",
-                    f"{item} is on no distribution plan: {line['units']:,} left "
-                    f"at {rate:,}/day",
+                    msg("f.unplanned", "{item} is on no distribution plan: {units:,} left at {rate:,}/day",
+                        item=item, units=line["units"], rate=rate),
                     key=b["key"], rank=-line["units"], subject=line["item"], named=item, ev={"slug": slug}))
             elif fact["st"] == "short" and fact["cad"] == "weekly":
                 # Fed by a weekly wholesale delivery, not a top-up.
                 rate = round(line.get("tradeRate", line["rate"]))
                 row = rows.get((s, slug)) or {}
-                day = fact.get("day") or row.get("wholesaleDay") or "the next"
+                day = fact.get("day") or row.get("wholesaleDay")
+                day = (msg("f.wholesale.day", "{d:day}", d=WEEKDAYS.index(day)) if day in WEEKDAYS
+                       else day or msg("f.wholesale.next", "the next"))
                 also_short = _below(fact["have"], fact["use"])
+                said = dict(item=item, day=day, have=fact["have"], use=fact["use"])
                 if fact["why"] == "shortfall" and also_short:
                     # Both at once: the stock does not reach the drop, and the
                     # delivery would not carry the week if it did.
-                    text = (f"{item} runs out before {day}'s wholesale delivery, and the "
-                            f"delivery brings {fact['have']:,} a week against the {fact['use']:,} "
-                            f"it sells"
-                            + (f"; raise the contract to {fact['setTo']:,}" if fact.get("setTo") else ""))
+                    text = (msg("f.wholesale.both.raise", "{item} runs out before {day}'s wholesale delivery, and "
+                                "the delivery brings {have:,} a week against the {use:,} it sells; raise the "
+                                "contract to {set:,}", set=fact["setTo"], **said)
+                            if fact.get("setTo") else
+                            msg("f.wholesale.both", "{item} runs out before {day}'s wholesale delivery, and the "
+                                "delivery brings {have:,} a week against the {use:,} it sells", **said))
                 elif fact["why"] == "shortfall":
-                    text = (f"{item} runs out before {day}'s wholesale delivery: "
-                            f"{line['units']:,} left at {rate:,}/day")
+                    text = msg("f.wholesale.shortfall", "{item} runs out before {day}'s wholesale delivery: "
+                               "{units:,} left at {rate:,}/day", item=item, day=day, units=line["units"], rate=rate)
                 else:
-                    text = (f"{item}'s wholesale delivery brings {fact['have']:,} a week "
-                            f"against the {fact['use']:,} it sells")
+                    text = msg("f.wholesale.order", "{item}'s wholesale delivery brings {have:,} a week against "
+                               "the {use:,} it sells", **said)
                 # Running out before the delivery ranks ahead of an order
                 # short of the week; the ratio breaks ties among each.
                 ratio = round(fact["have"] / fact["use"], 2) if fact["use"] else 0
@@ -10926,9 +11055,12 @@ def _shelf_notes(businesses: list, supply: dict, silent: set, mode: str = "cap")
                 peak = (rows.get((s, slug)) or {}).get("peakDay")
                 notes.append(_finding(
                     "critical", b["name"], "outruns",
-                    f"{item} sells {fact['use']:,} on "
-                    f"{'a ' + peak if peak else 'its busiest day'} against a "
-                    f"{fact['have']:,} top-up; empties before the next drop",
+                    msg("f.outruns.day", "{item} sells {use:,} on a {d:day} against a {have:,} top-up; empties "
+                        "before the next drop", item=item, use=fact["use"], have=fact["have"],
+                        d=WEEKDAYS.index(peak))
+                    if peak in WEEKDAYS else
+                    msg("f.outruns", "{item} sells {use:,} on its busiest day against a {have:,} top-up; empties "
+                        "before the next drop", item=item, use=fact["use"], have=fact["have"]),
                     key=b["key"],
                     rank=-round(fact["use"] / fact["have"] * 100) if fact["have"] else 0,
                     subject=line["item"], named=item, ev={"slug": slug}))
@@ -11357,22 +11489,54 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
     return notes
 
 
-# How a pile of same-shaped findings at one site reads as a single line.
+# How a pile of same-shaped findings at one site reads as a single line: n
+# findings, and the one named first. A line stands for CONDENSE_AT or more, so
+# the "one" forms are there for a translation's plural rules, not the English.
 SUMMARIES = {
-    "shortfall": "{n} items run dry before their next delivery; soonest {subject}",
-    "order": "{n} weekly orders cannot cover their own week; worst {subject}",
-    "paused": "{n} imports are paused; soonest to run out is {subject}",
-    "outruns": "{n} products outsell their daily top-up; worst {subject}",
-    "topup": "{n} products outrun the depot's daily top-up; worst {subject}",
-    "wholesale": "{n} products' wholesale deliveries fall short or arrive too late; worst {subject}",
-    "unplanned": "{n} stocked products are on no distribution plan; largest {subject}",
-    "dead": "{n} products sit idle; largest {subject}",
-    "notrouted": "{n} products are held where no plan sends them on; largest {subject}",
-    "feed": "{n} factory inputs are not fed as the machines need; largest {subject}",
-    "staff": "{n} factory machines are not staffed round the clock; worst {subject}",
-    "unnamed": "{n} factory machines run recipes the board cannot name; {subject} the largest",
-    "unset": "{n} factory machines have no recipe set; {subject} the largest",
-    "target": "{n} top-up targets are set far above what sells; {subject} the deepest",
+    "shortfall": lambda n, subject: msg("f.sum.shortfall", {
+        "one": "{n} item runs dry before its next delivery; soonest {subject}",
+        "other": "{n} items run dry before their next delivery; soonest {subject}"}, n=n, subject=subject),
+    "order": lambda n, subject: msg("f.sum.order", {
+        "one": "{n} weekly order cannot cover its own week; worst {subject}",
+        "other": "{n} weekly orders cannot cover their own week; worst {subject}"}, n=n, subject=subject),
+    "paused": lambda n, subject: msg("f.sum.paused", {
+        "one": "{n} import is paused; soonest to run out is {subject}",
+        "other": "{n} imports are paused; soonest to run out is {subject}"}, n=n, subject=subject),
+    "outruns": lambda n, subject: msg("f.sum.outruns", {
+        "one": "{n} product outsells its daily top-up; worst {subject}",
+        "other": "{n} products outsell their daily top-up; worst {subject}"}, n=n, subject=subject),
+    "topup": lambda n, subject: msg("f.sum.topup", {
+        "one": "{n} product outruns the depot's daily top-up; worst {subject}",
+        "other": "{n} products outrun the depot's daily top-up; worst {subject}"}, n=n, subject=subject),
+    "wholesale": lambda n, subject: msg("f.sum.wholesale", {
+        "one": "{n} product's wholesale deliveries fall short or arrive too late; worst {subject}",
+        "other": "{n} products' wholesale deliveries fall short or arrive too late; worst {subject}"},
+        n=n, subject=subject),
+    "unplanned": lambda n, subject: msg("f.sum.unplanned", {
+        "one": "{n} stocked product is on no distribution plan; largest {subject}",
+        "other": "{n} stocked products are on no distribution plan; largest {subject}"}, n=n, subject=subject),
+    "dead": lambda n, subject: msg("f.sum.dead", {
+        "one": "{n} product sits idle; largest {subject}",
+        "other": "{n} products sit idle; largest {subject}"}, n=n, subject=subject),
+    "notrouted": lambda n, subject: msg("f.sum.notrouted", {
+        "one": "{n} product is held where no plan sends it on; largest {subject}",
+        "other": "{n} products are held where no plan sends them on; largest {subject}"}, n=n, subject=subject),
+    "feed": lambda n, subject: msg("f.sum.feed", {
+        "one": "{n} factory input is not fed as the machines need; largest {subject}",
+        "other": "{n} factory inputs are not fed as the machines need; largest {subject}"}, n=n, subject=subject),
+    "staff": lambda n, subject: msg("f.sum.staff", {
+        "one": "{n} factory machine is not staffed round the clock; worst {subject}",
+        "other": "{n} factory machines are not staffed round the clock; worst {subject}"}, n=n, subject=subject),
+    "unnamed": lambda n, subject: msg("f.sum.unnamed", {
+        "one": "{n} factory machine runs a recipe the board cannot name; {subject} the largest",
+        "other": "{n} factory machines run recipes the board cannot name; {subject} the largest"},
+        n=n, subject=subject),
+    "unset": lambda n, subject: msg("f.sum.unset", {
+        "one": "{n} factory machine has no recipe set; {subject} the largest",
+        "other": "{n} factory machines have no recipe set; {subject} the largest"}, n=n, subject=subject),
+    "target": lambda n, subject: msg("f.sum.target", {
+        "one": "{n} top-up target is set far above what sells; {subject} the deepest",
+        "other": "{n} top-up targets are set far above what sells; {subject} the deepest"}, n=n, subject=subject),
 }
 CONDENSE_AT = 3  # three or more of a kind at one site becomes one line
 WORST_FIRST = {"wholesale"}  # condensed by severity first, then rank
@@ -11403,7 +11567,7 @@ def _condense(found: list, gate: float) -> dict:
                 "site": worst["site"],
                 "siteKey": worst["siteKey"],
                 "group": group,
-                "text": SUMMARIES[group].format(n=len(rows), subject=worst.get("named", worst["subject"])),
+                "text": SUMMARIES[group](len(rows), worst.get("named", worst["subject"])),
                 "detail": worst["text"],
                 "worth": sum(worths) if worths else None,
                 "unit": ALERT_UNITS.get(group, ""),
