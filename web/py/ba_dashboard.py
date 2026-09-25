@@ -21580,6 +21580,12 @@ function grList(items){
   if(items.length === 2) return tt("gr.list.last", "{a}, {b}", {a: items[0], b: items[1]});
   return tt("gr.list", "{a}, {b}", {a: items[0], b: grList(items.slice(1))});
 }
+/* The start of a list that goes on (a "…" or a "+2" follows): commas only,
+   so a translation's "and" never ends a list that has not ended. */
+function grCutList(items){
+  if(items.length < 2) return items.length ? String(items[0]) : "";
+  return tt("gr.list.cut", "{a}, {b}", {a: items[0], b: grCutList(items.slice(1))});
+}
 /* The fee names an office cell's note joins with "and". */
 function grAndList(items){
   if(items.length < 2) return items.length ? String(items[0]) : "";
@@ -21636,8 +21642,9 @@ function drawMovers(){
   });
   [...byPlace.values()].slice(0,5).forEach(g => {
     const n = g.rows.length, one = g.rows[0];
-    const kinds = [...new Set(g.rows.map(x => grTroubleWord(x.kind)))];
-    const kind = kinds.length === 1 ? grTroubleOf(one.kind) || kinds[0] : "mixed";
+    // One kind or several is decided on the kinds themselves, never on their words.
+    const kinds = [...new Set(g.rows.map(x => grTroubleOf(x.kind) || String(x.kind).toLowerCase().replace(/^product /, "")))];
+    const kind = kinds.length === 1 ? kinds[0] : "mixed";
     const left = g.lo === g.hi ? days(g.lo) : tt("gr.wave.dayRange", "{lo}–{hi} d", {lo: g.lo, hi: g.hi});
     const tip = tt("gr.short.tip", "{where}: {list}.", {where: g.where, list: grList(g.rows.map(x => x.mine
       ? tt("gr.short.rowMine", {one: "{item} ({kind}, {n} day left, you sell or make it)", other: "{item} ({kind}, {n} days left, you sell or make it)"},
@@ -21651,13 +21658,13 @@ function drawMovers(){
       kind === "shortage" ? tt("gr.wave.shortAt", "shortage at {place}", {place})
       : kind === "strain" ? tt("gr.wave.strainAt", "supplier strain at {place}", {place})
       : kind === "backorder" ? tt("gr.wave.backorderAt", "backorder at {place}", {place})
-      : tt("gr.wave.troubleAt", "{kind} at {place}", {kind, place}), left, tip));
+      : tt("gr.wave.troubleAt", "{kind} at {place}", {kind: grTroubleWord(one.kind), place}), left, tip));
     else out.push(waveHtml("dn", place,
       kind === "shortage" ? tt("gr.wave.manyShort", {one: "{n} product short", other: "{n} products short"}, {n})
       : kind === "strain" ? tt("gr.wave.manyStrain", {one: "{n} product in supplier strain", other: "{n} products in supplier strain"}, {n})
       : kind === "backorder" ? tt("gr.wave.manyBackorder", {one: "{n} product in backorder", other: "{n} products in backorder"}, {n})
       : kind === "mixed" ? tt("gr.wave.manyTrouble", {one: "{n} product in supply trouble", other: "{n} products in supply trouble"}, {n})
-      : tt("gr.wave.manyIn", {one: "{n} product in {kind}", other: "{n} products in {kind}"}, {n, kind}), left, tip));
+      : tt("gr.wave.manyIn", {one: "{n} product in {kind}", other: "{n} products in {kind}"}, {n, kind: grTroubleWord(one.kind)}), left, tip));
   });
   /* One wave, or one shop opening, moves a whole range at once, so it reads as
      one chip, and where our own shop opened in that window the note says so. */
@@ -21668,7 +21675,7 @@ function drawMovers(){
       : x.sell ? tt("gr.wave.oneHere", "{item} you sell here", {item}) : item;
     const delta = `${x.delta > 0 ? "+" : ""}${x.delta}`;
     const place = hoodName(x.hood);
-    const items = x.count > x.items.length ? tt("gr.list.more", "{list}…", {list: grList(x.items)}) : grList(x.items);
+    const items = x.count > x.items.length ? tt("gr.list.more", "{list}…", {list: grCutList(x.items)}) : grList(x.items);
     const tip = x.openedHere
       ? tt("gr.mover.tipOpened", {one: "{place}: {items} moved {delta} on average over {n} day; {shop} opened day {day}, inside this window. Click to sort the grid by {place}.",
           other: "{place}: {items} moved {delta} on average over {n} days; {shop} opened day {day}, inside this window. Click to sort the grid by {place}."},
@@ -25603,7 +25610,7 @@ function planDraw(){
       `<td class="l"${i.tip ? ` data-tip="${attr(i.tip)}"` : ""}>${name}${i.from && !i.active ? ` ${chipHtml("warn", tt("gr.ing.paused", "paused"),
         tt("gr.ing.pausedTip", "Every contract for it is paused; none of it counts as ordered"))}` : ""}</td>` +
       `<td class="l"><span class="usedby" data-tip="${attr(tt("gr.ing.usedBy", "Used by {list}", {list: grList(r.by)}))}">${
-        grList(r.by.slice(0, 2))}${r.by.length > 2 ? ` +${r.by.length - 2}` : ""}</span></td>` +
+        r.by.length > 2 ? tt("gr.list.plus", "{list} +{n}", {list: grCutList(r.by.slice(0, 2)), n: r.by.length - 2}) : grList(r.by)}</span></td>` +
       `<td>${fmtN(r.week / 7)}</td><td class="wk">${fmtN(r.week)}</td><td><span class="set">${fmtN(o.target)}</span></td>` +
       `<td>${ordered === null ? `<span class="quiet">${tt("gr.ing.notOrdered", "not ordered")}</span>` : num(ordered)
         }${ordered !== null && i.smart && i.active ? ` <span class="sub plan-smart" data-tip="${attr(tt("gr.ing.smartTip", "Smart Delivery keeps a stock level at each depot; this is the most those levels supply in a week, which the target is compared with. Hover the ingredient for each depot's level"))}">${
@@ -25625,8 +25632,10 @@ function planDraw(){
     const note = $("ingNote");
     if(note) note.textContent = !total ? tt("gr.ing.none", "Nothing to import; this range is bought as finished goods.")
       : [tt("gr.ing.note", "Company targets are company-wide: you type each one across your importer contracts in the game; the board adds them up and never guesses a split per warehouse."),
-        priced ? tt("gr.ing.cost", "A week costs {w:$} across the {n} of {total} ingredients this company already buys.", {w: cash, n: priced, total}) : "",
-        priced && priced < total ? tt("gr.ing.prices", "Unit prices are what you paid on day {day}; the other {n} show quantities only.",
+        priced ? tt("gr.ing.cost", {one: "A week costs {w:$} across the {priced} of {n} ingredients this company already buys.",
+          other: "A week costs {w:$} across the {priced} of {n} ingredients this company already buys."}, {w: cash, priced, n: total}) : "",
+        priced && priced < total ? tt("gr.ing.prices", {one: "Unit prices are what you paid on day {day}; the other {n} show quantities only.",
+          other: "Unit prices are what you paid on day {day}; the other {n} show quantities only."},
           {day: D.plan.priceDay, n: total - priced}) : ""].filter(Boolean).join(" ");
   }
 }
