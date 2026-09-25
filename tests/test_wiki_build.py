@@ -173,6 +173,9 @@ Each importer and wholesaler has a weekly limit for deliveries on each item.
 """
 
 LOCALE = {
+    # The neighbourhood names the pier note is written in.
+    "ba:neighborhood_murrayhill": "Murray Hill",
+    "ba:neighborhood_lowermanhattan": "Lower Manhattan",
     "ba:businesstype_giftshop": "Gift Shop",
     "help_ba:businesstype_giftshop_content": GIFT_HELP,
     "ba:itemname_cheapgift": "Gift (Cheap)",
@@ -242,11 +245,11 @@ HELP_STRUCTURE = """[
 # The buildings the help's addresses resolve to: 4 pier, 13 Fifth Avenue,
 # 16 Fourth Avenue and 9 Pier, with a pier whose neighbourhood differs.
 BUILDINGS = [
-    {"s": "ba:street_pier", "n": 4, "h": "Murray Hill", "t": "special", "z": "H", "m": 690, "x": 18},
-    {"s": "ba:street_pier", "n": 9, "h": "Lower Manhattan", "t": "special", "z": "H", "m": 690, "x": 18},
-    {"s": "ba:street_fifthavenue", "n": 13, "h": "Garment District", "t": "retail", "z": "M", "m": 1000, "x": 45},
-    {"s": "ba:street_fifthavenue", "n": 16, "h": "Chelsea", "t": "retail", "z": "C", "m": 225, "x": 40},
-    {"s": "ba:street_fourthavenue", "n": 16, "h": "Hell's Kitchen", "t": "retail", "z": "C", "m": 225, "x": 50},
+    {"s": "ba:street_pier", "n": 4, "h": "murrayhill", "t": "special", "z": "H", "m": 690, "x": 18},
+    {"s": "ba:street_pier", "n": 9, "h": "lowermanhattan", "t": "special", "z": "H", "m": 690, "x": 18},
+    {"s": "ba:street_fifthavenue", "n": 13, "h": "garmentdistrict", "t": "retail", "z": "M", "m": 1000, "x": 45},
+    {"s": "ba:street_fifthavenue", "n": 16, "h": "chelsea", "t": "retail", "z": "C", "m": 225, "x": 40},
+    {"s": "ba:street_fourthavenue", "n": 16, "h": "hellskitchen", "t": "retail", "z": "C", "m": 225, "x": 50},
 ]
 
 # A shipped layout, as the game writes one: items with a name each.
@@ -588,7 +591,7 @@ class FactsFollowSourceTests(FixtureCase):
     def test_addresses_are_placed_by_the_building_table(self):
         supplier = self.sample()["SUPPLIERS"]["ba:street_fifthavenue#13"]
         self.assertEqual(supplier["street"], "13 Fifth Avenue")
-        self.assertEqual(supplier["hood"], "Garment District")
+        self.assertEqual(supplier["hood"], "ba:neighborhood_garmentdistrict")
         self.assertEqual(supplier["size"], "M")
         self.assertEqual(supplier["area"], 1000)
         self.assertEqual(supplier["traffic"], 45)

@@ -19,7 +19,7 @@ import json
 import os
 import shutil
 
-from ba_dashboard import VERIFIED_BUILD, footer_html, render
+from ba_dashboard import NAME_PREFIXES, VERIFIED_BUILD, footer_html, render
 from ba_save import bundled_locale, load_game_locale, locale_search_paths
 from tools.build_wiki_data import write_public_wiki
 from tools.extract_wiki import game_data_dir
@@ -29,15 +29,8 @@ from tools.extract_wiki import game_data_dir
 # analysis reads: recipes, the item pages that state a station's customer
 # capacity, each business type's range, and the workstation pages. Nothing
 # else from the locale travels. A player's own en.json, when given, is laid
-# over this, so a newer game wins.
-NAME_PREFIXES = (
-    "ba:itemname_",
-    "ba:businesstype_",
-    "ba:neighborhood_",
-    "ba:factoryworkstationtype_",
-    "ba:skill_",
-    "ba:jobdemand_",
-)
+# over this, so a newer game wins. The name keys are ba_dashboard's
+# NAME_PREFIXES, the same ones the payload's `names` carries.
 
 
 def ships(key: str, text: str) -> bool:

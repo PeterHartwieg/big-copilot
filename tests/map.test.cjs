@@ -762,7 +762,7 @@ test("the home panel's map pin titles the dialog with the flat's address",async(
   try{
     const home=geometry.buildings.find(b=>b.key==='ba:street_tenthstreet#2' && b.path) || geometry.buildings.find(b=>b.region==='mainland' && b.path && b.key!==place.key);
     await page.evaluate(h=>{
-      D.homes=[{key:h.key,address:h.address,rent:34,m:96,hood:"Hell's Kitchen"}];
+      D.homes=[{key:h.key,address:h.address,rent:34,m:96,hood:'ba:neighborhood_hellskitchen'}];
       refreshCityMaps();showPage('company');openSite(h.key,false);
     },home);
     assert.equal(await page.locator('#sitePanel .sp-house').count(),1);

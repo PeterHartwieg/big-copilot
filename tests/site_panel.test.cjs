@@ -47,7 +47,7 @@ async function site(overrides = {}) {
     document.body.classList.add('has-board');
     const shop = {
       key: 'ba:street_secondavenue#10', status: 'retail', name: 'HART. Gifts', code: 'HK',
-      type: 'Gift Shop', address: '10 Second Avenue', neighbourhood: "Hell's Kitchen",
+      type: 'Gift Shop', address: '10 Second Avenue', neighbourhood: 'ba:neighborhood_hellskitchen',
       opened: 3, revenue: 900, customers: 30, basket: 30, profit: 200, margin: 22.2,
       cogs: 0, wages: 300, rent: 100, marketing: 0, theft: 0, licensing: 0,
       staff: 2, staffCost: 300, crew: [{role: 'Customer service', count: 2, daily: 300, absent: 0}],
@@ -917,12 +917,12 @@ const FACTORY_SITE = {
      candidates: [], hoursWeek: 168, fullWeek: 168, gaps: []},
   ],
   needs: [
-    {item: 'Ground Beef', slug: 'gb', perDay: 9600, perWeek: 67200, lines: ['Burger'],
+    {item: 'Ground Beef', slug: 'gb', perDay: 9600, perWeek: 67200, lines: ['Burger'], lineSlugs: ['burger'],
      target: 8000, raiseTarget: 9600, raiseImport: null, dailyNeed: 9600, arrives: 1900,
      known: true, stock: 1900, from: 1, directImport: false, stalled: false, waitingOn: [],
      importWeekly: null, depotNeed: 67200, staffedShare: 1, madeAt: [], depotStock: 4000,
      status: 'target', level: 'critical'},
-    {item: 'Grapes', slug: 'grapes', perDay: 2400, perWeek: 16800, lines: ['Bottle of Wine'],
+    {item: 'Grapes', slug: 'grapes', perDay: 2400, perWeek: 16800, lines: ['Bottle of Wine'], lineSlugs: ['wine'],
      target: 2400, raiseTarget: null, raiseImport: null, dailyNeed: 2400, arrives: 2380,
      known: true, stock: 3000, from: 1, directImport: false, stalled: false, waitingOn: [],
      importWeekly: null, depotNeed: 16800, staffedShare: 1, madeAt: [], depotStock: 900,
@@ -1132,7 +1132,7 @@ test('a depot line nothing imports is covered by what leaves it', async () => {
       factories: factories({sites: [{...FACTORY_SITE, s: 1, unnamed: [],
         lines: [{...FACTORY_SITE.lines[0], item: 'Tomato Soup', slug: 'soup'}],
         needs: [{...FACTORY_SITE.needs[0], item: 'Bag of Tomatoes', slug: 'tomato',
-                 perDay: 4100, lines: ['Tomato Soup'], from: 0}]}]}),
+                 perDay: 4100, lines: ['Tomato Soup'], lineSlugs: ['soup'], from: 0}]}]}),
       facts: {0: {tomato: sf('covered', null, {use: 28700}), napkins: sf('idle', 'notMoving')}},
     },
   });
@@ -1309,7 +1309,7 @@ test('a depot expected to hold something and holding none draws that row', async
     supply: {day: 29, factories: factories({sites: [{...FACTORY_SITE, s: 1, unnamed: [],
       lines: [FACTORY_SITE.lines[0]],
       needs: [{...FACTORY_SITE.needs[0], item: 'Bag of Tomatoes', slug: 'tomato',
-               perDay: 4100, lines: ['Burger'], from: 0, target: 0,
+               perDay: 4100, lines: ['Burger'], lineSlugs: ['burger'], from: 0, target: 0,
                status: 'noplan', level: 'warn'}]}]}),
       // Nothing brings it to the depot: no standing import.
       facts: {0: {tomato: sf('noplan')}}},
@@ -1447,7 +1447,7 @@ test('the zero-stock row says why there is none of it, for every verdict', async
   // this company's factories are never imported at all; and a verdict that
   // says nothing about the supply leaves the column at a dash.
   const need = over => ({...FACTORY_SITE.needs[0], item: 'Bag of Tomatoes', slug: 'tomato',
-                         perDay: 4100, lines: ['Burger'], from: 0, target: 0,
+                         perDay: 4100, lines: ['Burger'], lineSlugs: ['burger'], from: 0, target: 0,
                          importWeekly: null, madeAt: [], ...over});
   const nothing = /<b>Nothing on hand<\/b>; <b>4,100<\/b>\/day is drawn from here/;
   const cases = [
@@ -1494,7 +1494,7 @@ test('the zero-stock row says why there is none of it, for every verdict', async
 // reached from its map card alone, so the picker never lists it. Hell's Kitchen
 // is in the board's own HOOD_TAGS table, so the head's bullet reads HK.
 const HOME = {key: 'ba:street_bleeckerstreet#14', address: '14 Bleecker Street',
-              rent: 1150, m: 204, hood: "Hell's Kitchen"};
+              rent: 1150, m: 204, hood: 'ba:neighborhood_hellskitchen'};
 
 // Opens a home over the shop fixture, the way the map card does.
 async function home(row = HOME) {

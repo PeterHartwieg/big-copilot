@@ -29,11 +29,11 @@ async function grid() {
   await page.setContent(html, {waitUntil: 'load'});
   await page.evaluate(() => {
     document.body.classList.add('has-board');
-    const hoods = ['Hell\'s Kitchen', 'Industry City', 'Midtown'];
+    const hoods = ['ba:neighborhood_hellskitchen', 'ba:neighborhood_industrycity', 'ba:neighborhood_midtown'];
     const shopCell = (hood, demand, count, providers) => ({hood, demand, count, providers, sell: 0, here: false});
     const fee = (hood, demand, providers, here = false) => ({hood, demand, providers, hype: null, delta: null, here});
     D = {meta: {character: 'market-fixture'}, market: {
-      hoods, trendDays: 0, noOffices: ['Industry City'], rows: [
+      hoods, trendDays: 0, noOffices: ['ba:neighborhood_industrycity'], rows: [
         {item: 'Lawyer Fee (Hourly)', slug: 'ba:itemname_hourlylawyerfee', sell: true, make: false, office: true,
           cells: [{hood: hoods[0], demand: 33, providers: 2, sell: true}, null, {hood: hoods[2], demand: 66, providers: 1}]}],
       // Python ranks rows by their best neighbourhood; the fixture is in that order.
@@ -111,14 +111,14 @@ test('sorting by a neighbourhood orders each band by demand, the emptier market 
   const page = await grid();
   try {
     // Midtown: Cinema and Supermarket both read 64; the supermarket has one rival, the cinema three.
-    await page.locator('#market .h[data-hood="Midtown"]').click();
+    await page.locator('#market .h[data-hood="ba:neighborhood_midtown"]').click();
     assert.deepEqual(await rowNames(page), ['Supermarket', 'Cinema', 'Law Firm', 'Travel Agency']);
     assert.match(await page.locator('#marketNote').innerText(), /Sorted by demand in Midtown, highest first/);
     // A second click reverses the whole order, ties included: the least
     // inviting cell (equal demand, more sellers) leads.
-    await page.locator('#market .h[data-hood="Midtown"]').click();
+    await page.locator('#market .h[data-hood="ba:neighborhood_midtown"]').click();
     assert.deepEqual(await rowNames(page), ['Cinema', 'Supermarket', 'Travel Agency', 'Law Firm']);
-    await page.locator('#market .h[data-hood="Hell\'s Kitchen"]').click();
+    await page.locator('#market .h[data-hood="ba:neighborhood_hellskitchen"]').click();
     assert.deepEqual(await rowNames(page), ['Supermarket', 'Cinema', 'Travel Agency', 'Law Firm']);
   } finally { await page.close(); }
 });

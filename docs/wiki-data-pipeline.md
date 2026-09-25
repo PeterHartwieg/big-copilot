@@ -204,8 +204,11 @@ The contract (`schemaVersion: 1`):
 
 Supplier keys are the same `ba:street_<slug>#<number>` site keys the map page
 uses, so cross-references join. `ba_buildings.json` gives each address its
-neighbourhood, size code, area and traffic; without it those fields are null
-and the miss is listed, not guessed.
+neighbourhood (as the game's key, `ba:neighborhood_<id>`, which the page names
+through `hoodName()`), size code, area and traffic; without it those fields are
+null and the miss is listed, not guessed. A page record whose help prefix is a
+game key (an item, a business type) carries it as `key`, which is what the
+page's "Yours" strip matches the open save on; the title is only words.
 
 What the payload deliberately does not carry, each as a gap that is only
 written while its check still holds: prices for the sample (the pages the

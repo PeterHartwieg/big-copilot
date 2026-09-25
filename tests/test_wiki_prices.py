@@ -18,8 +18,8 @@ class WikiPricesTests(unittest.TestCase):
         save = Save({"BuildingRegistrations": {"$items": shops},
                      "marketEvents": {"$items": list(events)}}, {}, "")
         with patch("ba_dashboard.load_buildings", return_value={
-            ("street", 1): {"h": "Midtown"}, ("street", 2): {"h": "Midtown"},
-            ("street", 3): {"h": "Murray Hill"},
+            ("street", 1): {"h": "midtown"}, ("street", 2): {"h": "midtown"},
+            ("street", 3): {"h": "murrayhill"},
         }):
             return _wiki_market_prices(save, 10)
 
@@ -28,25 +28,25 @@ class WikiPricesTests(unittest.TestCase):
             shop(1, 4.25, RentedByPlayer=True, businessTypeName="coffee"),
             shop(2, 5.50, businessTypeName="restaurant"), shop(3, 1.25),
         ])
-        self.assertEqual(prices[(ITEM, "Midtown")], 4.25)
-        self.assertEqual(prices[(ITEM, "Murray Hill")], 1.25)
+        self.assertEqual(prices[(ITEM, "ba:neighborhood_midtown")], 4.25)
+        self.assertEqual(prices[(ITEM, "ba:neighborhood_murrayhill")], 1.25)
         self.assertEqual(gaps, {})
         prices, _ = self.prices([shop(1, 4.25), shop(2, 2.50, businessTypeName="other")])
-        self.assertEqual(prices[(ITEM, "Midtown")], 2.50)
+        self.assertEqual(prices[(ITEM, "ba:neighborhood_midtown")], 2.50)
 
     def test_closures_unnamed_nonpositive_and_invalid_prices_do_not_qualify(self):
         prices, _ = self.prices([
             shop(1, 4.25), shop(2, 1, temporarilyClosed=True), shop(2, 1, BusinessName=""),
             *[shop(2, p) for p in (0, -1, None, float("nan"), float("inf"), True, "2")],
         ])
-        self.assertEqual(prices, {(ITEM, "Midtown"): 4.25})
+        self.assertEqual(prices, {(ITEM, "ba:neighborhood_midtown"): 4.25})
 
     def test_item_variants_and_duplicates(self):
         other = shop(1, 1)
         other["retailPrices"]["$items"][0]["itemName"] = ITEM + "variant"
         prices, _ = self.prices([shop(1, 4.25), shop(1, 4.25), other])
-        self.assertEqual(prices[(ITEM, "Midtown")], 4.25)
-        self.assertEqual(prices[(ITEM + "variant", "Midtown")], 1)
+        self.assertEqual(prices[(ITEM, "ba:neighborhood_midtown")], 4.25)
+        self.assertEqual(prices[(ITEM + "variant", "ba:neighborhood_midtown")], 1)
 
     def test_supply_events_and_unmapped_sellers_explicitly_block_a_claim(self):
         for kind in (3, 4):
@@ -75,7 +75,7 @@ class WikiPricesTests(unittest.TestCase):
 
     def test_positive_subcent_price_qualifies_before_currency_rounding(self):
         prices, gaps = self.prices([shop(1, 0.001), shop(2, 4)])
-        self.assertEqual(prices[(ITEM, "Midtown")], 0)
+        self.assertEqual(prices[(ITEM, "ba:neighborhood_midtown")], 0)
         self.assertEqual(gaps, {})
 
     def test_no_sellers_does_not_invent_a_fallback(self):
@@ -91,12 +91,12 @@ class WikiPricesTests(unittest.TestCase):
         save = Save({"BuildingRegistrations": {"$items": [shop(1, 4.25)]},
                      "marketEvents": {"$items": []}, "logisticsManagerPlans": {"$items": []},
                      "productMarketEntries": {"$items": [{"itemName": ITEM,
-                         "demandValues": {"$items": [{"neighborhood": "midtown", "demand": 60,
+                         "demandValues": {"$items": [{"neighborhood": "ba:neighborhood_midtown", "demand": 60,
                              "providers": 1, "hasPlayerMonopoly": False}]}}]}}, {}, "")
-        with patch("ba_dashboard.load_buildings", return_value={("street", 1): {"h": "Midtown"}}), \
+        with patch("ba_dashboard.load_buildings", return_value={("street", 1): {"h": "midtown"}}), \
                 patch("ba_dashboard._type_catalogue", return_value={}):
             def cell():
-                return _market(save, Names({"midtown": "Midtown"}), [], 10, History(None), "test")["rows"][0]["cells"][0]
+                return _market(save, Names({"ba:neighborhood_midtown": "Midtown"}), [], 10, History(None), "test")["rows"][0]["cells"][0]
             self.assertEqual(cell()["marketPrice"], 4.25)
             self.assertNotIn("marketPriceNote", cell())
             save.root["marketEvents"]["$items"] = [{"type": 3, "itemName": ITEM,
