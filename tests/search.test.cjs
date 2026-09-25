@@ -470,7 +470,7 @@ test('a live refresh while the palette is open re-reads the board, and keeps the
   try {
     // renderAll() is where a refresh, or another save, arrives.
     const source = fs.readFileSync(path.join(__dirname, '..', 'ba_dashboard.py'), 'utf8');
-    const body = source.slice(source.indexOf('function renderAll(){'), source.indexOf('/* --- pages ---'));
+    const body = require('./_slice.cjs').between(source, 'function renderAll(){', '/* --- pages ---');
     assert.match(body, /ssDataChanged\(\);\s*ssCheckLanding\(\);/);
     await page.keyboard.press('/');
     await typed(page, 'test');

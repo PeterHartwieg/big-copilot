@@ -8,11 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '..', 'ba_dashboard.py'), 'utf8');
-const slice = (from, to) => {
-  const start = source.indexOf(from), end = source.indexOf(to, start);
-  assert.ok(start >= 0 && end > start, `${from} not found`);
-  return source.slice(start, end);
-};
+const slice = (from, to) => require('./_slice.cjs').between(source, from, to);
 
 const board = (goals = {typesRun: 1, typesTotal: 3}) => {
   const section = {innerHTML: ''};
