@@ -106,6 +106,14 @@ async function setup(t, options = {}) {
       body:url.pathname === '/' ? html : url.pathname === '/app.js' ? app : ''});
   });
   const page = await context.newPage();
+  // Playwright only sees a file chooser the browser was told to intercept, and
+  // it turns interception on without waiting whenever the first 'filechooser'
+  // listener is added. A waitForEvent followed at once by a key press can
+  // therefore lose the race: the page opens the chooser (trusted keydown,
+  // user activation, input.click() all seen in CI) before interception is
+  // on, and no event ever comes. A listener held for the page's life turns it
+  // on before the page loads, so every later waitForEvent finds it on.
+  page.on('filechooser', () => {});
   const errors = [];
   page.on('pageerror', err => errors.push(err.message));
   await page.goto('http://restore.test/' + (options.hash || ''));
