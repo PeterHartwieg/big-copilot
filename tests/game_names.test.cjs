@@ -391,7 +391,9 @@ test('no game-name token reaches the page, in English or in German', async t => 
         if(n.nodeType === 3){
           const host = n.parentElement;
           if(host && host.closest('script,style,template')) continue;
-          if(/[⟦⟧]/.test(n.data)) seen.push(`${where}: text ${n.data.trim().slice(0, 80)}`);
+          /* A raw game key is a name the page failed to look up. */
+          if(/[⟦⟧]|\bba:(itemname|businesstype|skill|neighborhood|factoryworkstationtype|jobdemand)_/.test(n.data))
+            seen.push(`${where}: text ${n.data.trim().slice(0, 80)}`);
         } else {
           for(const a of n.attributes) if(/[⟦⟧]/.test(a.value)) seen.push(`${where}: ${n.tagName}[${a.name}] ${a.value.slice(0, 80)}`);
         }
@@ -402,6 +404,16 @@ test('no game-name token reaches the page, in English or in German', async t => 
       showPage(p); await wait(); look(p);
       for(const [view] of (SUBS[p] || {items: []}).items){ showSub(p, view); await wait(); look(`${p}/${view}`); }
     }
+    /* Supply's tabs, each in both lists, as the diagram, in both sizings. */
+    showPage('supply');
+    for(const mode of ['cap', 'dem']) for(const which of ['changes', 'all']) for(const view of ['list', 'diagram']){
+      sizing = mode; sbWhich = which; sbViewOn = view;
+      for(const [tab] of SUBS.supply.items){
+        showSub('supply', tab); drawSupplyTab(tab); wireAll(); await wait();
+        look(`supply/${tab} ${mode} ${which} ${view}`);
+      }
+    }
+    sizing = 'cap'; sbWhich = 'changes'; sbViewOn = 'list';
     for(const b of D.businesses){ openSite(b.key); await wait(); look(`site ${b.name}`); }
     showPage('today'); await wait();
     const index = ssBuild();

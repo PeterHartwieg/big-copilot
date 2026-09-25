@@ -198,13 +198,28 @@ test('the Results chart is drawn once its container is on screen, and only then'
   assert.ok(b.charts() > after, 'coming back redraws the chart that measured nothing while hidden');
 });
 
-test('Supply keeps the stored id of its flow view under a clearer name', () => {
-  const b = board({saved:{ba_dash_supply:'map'}});
-  assert.equal(b.sub('supply'), 'map', 'a view remembered from an earlier release still resolves');
-  b.context.showSub('supply', 'orders');
-  assert.match(b.$('supplyNav').innerHTML, /href="#secFlow" data-id="map"/);
-  assert.match(b.$('supplyNav').innerHTML, />Goods flow</);
-  assert.doesNotMatch(b.$('supplyNav').innerHTML, />Map</);
+test('Supply is three tabs, one per object', () => {
+  const b = board();
+  const items = vm.runInContext('SUBS.supply.items', b.context);
+  assert.deepEqual([...items].map(([k, label, anchor]) => [k, label, anchor]),
+    [['shops', 'Shops', 'secShops'], ['warehouses', 'Warehouses', 'secWarehouses'], ['factories', 'Factories', 'secFactories']]);
+  b.context.showSub('supply', 'factories');
+  assert.match(b.$('supplyNav').innerHTML, /href="#secFactories" data-id="factories" class="on">/);
+  assert.match(b.$('supplyNav').innerHTML, /<span>Factories<\/span>/);
+});
+
+test('a Supply view remembered from before R13 opens the tab that took its place', () => {
+  const remembered = saved => {
+    const b = board({saved});
+    return {sub: b.sub('supply'), auto: vm.runInContext('supplyAuto', b.context)};
+  };
+  assert.deepEqual(remembered({ba_dash_supply: 'checks'}), {sub: 'shops', auto: false});
+  // Goods flow is Warehouses, with the diagram on (remembered under ba_dash_supply_view).
+  assert.deepEqual(remembered({ba_dash_supply: 'map'}), {sub: 'warehouses', auto: false});
+  // Orders, or no view at all: the tab with the most to type, picked when the checklist draws.
+  assert.equal(remembered({ba_dash_supply: 'orders'}).auto, true);
+  assert.equal(remembered({}).auto, true);
+  assert.deepEqual(remembered({ba_dash_supply: 'factories'}), {sub: 'factories', auto: false});
 });
 
 test('top menu preserves the sequence through Back and Forward without duplicates', () => {
@@ -235,6 +250,7 @@ test('replaying a section hash keeps that history entry intact', () => {
   b.context.history.pushState(null, '', '#secStock');
   b.move(0);
   assert.equal(b.page(), 'supply');
+  assert.equal(b.sub('supply'), 'shops', 'an old Checks link opens the tab that took its place');
   assert.equal(b.context.location.hash, '#secStock');
   assert.deepEqual(b.entries, ['#today', '#secStock']);
   b.move(-1);
@@ -242,7 +258,8 @@ test('replaying a section hash keeps that history entry intact', () => {
 });
 
 for (const [pageId, view, anchor, nav] of [
-  ['supply','orders','secLogistics','supplyNav'], ['supply','checks','secStock','supplyNav'],
+  ['supply','shops','secShops','supplyNav'], ['supply','warehouses','secWarehouses','supplyNav'],
+  ['supply','factories','secFactories','supplyNav'],
   ['growth','market','secMarket','growthNav'], ['growth','plan','secPlan','growthNav'],
   ['company','products','secProducts','companyNav'], ['company','payroll','secPayroll','companyNav'],
   ['company','milestones','secGoals','companyNav'],
@@ -515,9 +532,9 @@ test('arriving from a finding names the page it was on, through Back, Forward an
   again.boot();
   assert.equal(again.from().label, 'Today');
   // Anywhere else a finding is clicked: the view's own word.
-  b.context.showSub('supply', 'checks'); b.context.showPage('supply');
+  b.context.showSub('supply', 'warehouses'); b.context.showPage('supply');
   b.context.openSite(DEPOT, false, 'a2');
-  assert.deepEqual({...b.from()}, {label: 'Checks', hash: '#supply'});
+  assert.deepEqual({...b.from()}, {label: 'Warehouses', hash: '#supply'});
   // The picker, a name or a portfolio row is no finding: back to the portfolio.
   b.context.openSite(SHOP);
   assert.equal(b.from(), null);

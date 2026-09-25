@@ -63,16 +63,16 @@ this column is where to look when you change a key's shape — not a complete ca
 
 | Key | Produced by | Read by |
 | --- | --- | --- |
-| `meta` | `extract()` inline, with `_city_date()` and `_difficulty()` | `drawMast`, `drawWeekday`, `drawSite`, `drawOrderChecklist`, `drawLogistics`, `drawFooter`, `fvOpenDiff`, `drawDifficulty`; `web/map.js` `refreshCityMaps`; `web/wiki.js` `wikiGuidePrices` |
+| `meta` | `extract()` inline, with `_city_date()` and `_difficulty()` | `drawMast`, `drawWeekday`, `drawSite`, `sbData`, `drawSupplyStrip`, `drawFactoriesTab`, `drawFooter`, `fvOpenDiff`, `drawDifficulty`; `web/map.js` `refreshCityMaps`; `web/wiki.js` `wikiGuidePrices` |
 | `kpi` | `extract()` inline, with `_net_worth()` | `drawMast`, `drawKpis` |
 | `daily` | `_daily_series()`, plus the rolling `profit7` added in `extract()` | `drawChart`, `drawKpis`, `drawKpis/hist` |
-| `businesses` | `_business()` per rented non-residential building | `drawPortfolio`, `drawSitePicker`, `openSite`, `siteKeys`, `drawSite`, `drawFlowDetail`, `drawWeekday`, `drawOrderChecklist`, `drawLogistics` and its locals `held`, `label`, `users`, `factoryView/held`, `alertSite`, `nameUses`, `supplyLocation`, and the `SUPPLY_VIEWS` callbacks `shops.row`, `shops.verdict`, `imports.row`, `imports.verdict`, `idle.row`, `idle.verdict`, `lines.row`, `feed.row`, `feed.verdict`; `web/map.js` `mapBusinesses`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn`, `wikiGuidePrices` |
+| `businesses` | `_business()` per rented non-residential building | `drawPortfolio`, `drawSitePicker`, `openSite`, `siteKeys`, `drawSite`, `drawWeekday`, `supplyChecklistRows` and its locals `lineOf`, `held`, `label`, `factoryView/held`, `alertSite`, `nameUses`, the tab drawers `drawShopsTab`, `drawWarehousesTab`, `drawFactoriesTab` and their row helpers (`sbObject`, `sbDepotRow`, `sbLineRow`, `sbInputRow`, `sbTabOf`), and `drawFactoryStaffing`; `web/map.js` `mapBusinesses`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn`, `wikiGuidePrices` |
 | `ownedBuildings` | `_owned_buildings()` | `web/map.js` only: `CityMapView.update`, `openLocationMap` |
 | `homes` | `_homes()`, with `m` and `hood` from `load_buildings()` | `spHome`, `siteKeys`; `web/map.js` `CityMapView.update`, `openLocationMap` |
 | `products` | `_products()`, with `peak`/`swing`/`weeks` from `_product_rhythm()` | `drawProducts`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn` |
 | `staff` | `_staff_summary()` | `drawKpis`, `drawPayroll` |
 | `loans` | `_loans()` | `drawKpis` |
-| `supply` | `_supply()`; its `facts` from `_supply_facts()`, each fact's status word from `_supply_status()`; `margin` and `roundTo` are `SUPPLY_MARGIN` and `SUPPLY_ROUND_TO` | `drawLogistics`, `drawOrderChecklist`, `drawSite`, `drawFlow`, `drawFlowDetail`, `flowLayout`, `supplyLocation`, `factoryView`, and the `SUPPLY_VIEWS` callbacks `shops.rows`, `imports.rows`, `imports.note`, `imports.verdict`, `idle.rows`, `idle.verdict`; `web/map.js` `refreshCityMaps`. `supply.facts` only through `supplyFact()` (below), and `supply.idle` only through `idleRows()`, which keeps the rows idle under the sizing on screen (`modes`) with their `dem` laid over |
+| `supply` | `_supply()`; its `facts` from `_supply_facts()`, each fact's status word from `_supply_status()`; `margin` and `roundTo` are `SUPPLY_MARGIN` and `SUPPLY_ROUND_TO` | `supplyChecklistRows`, `sbData`, the tab drawers `drawShopsTab`, `drawWarehousesTab`, `drawFactoriesTab` (with `sbDepotRows`, `sbTabOf`, `sbNodeOpen`), `drawSite`, `drawFlow`, `flowLayout`, `factoryView`; `web/map.js` `refreshCityMaps`. `supply.facts` only through `supplyFact()` (below), and `supply.idle` only through `idleRows()`, which keeps the rows idle under the sizing on screen (`modes`) with their `dem` laid over |
 | `rhythm` | `_chain_rhythm()`; its `recent` key holds the same three series over the last `RHYTHM_RECENT_DAYS` (28) calendar days before the last finished day, which the chart draws, while the full-length ones feed `_supply()` | `weekdaySeries` (which `drawChart` asks), `drawSite` |
 | `market` | `_market()`; its `catalogue` key is popped out and handed to `_plan()` | `drawMovers`, `drawMarket`; `web/wiki.js` `wikiOwn`, `wikiGuidePrices` |
 | `premises` | `_premises()`, with `_premises_status()`, `_premises_demand()`, `_rent_estimate()`, `_deposit_estimate()`, `_deposit_check()`, `_door_caps()`, `_rival_numbers()`, `_rival_names()` | `drawFindLocation`, `finderPreset`, `wireCards`; `web/map.js` `premises` |
@@ -82,6 +82,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `hours` | `_hourly()`, the sites with hour reports behind them | `drawSite` |
 | `hourFindings` | `_hour_findings()` | `drawSite` |
 | `staffing` | `_staffing()`, with `_plan_site()`, `_need_curve()`, `_arrival_ceiling()`, `_cut_run()`, `_bridge_troughs()`, `_hires_for()`, `_plan_people()`, `_current_roster()`, `_index_table()`, `_shift_row()` | `drawSite` through `spRosterBlock`, and `drawOptimizeStaffing` for the Next-moves card |
+| `factoryStaffing` | `_factory_staffing()`, once per sizing (`{cap, dem}`), with `_factory_site_plan()`, `_factory_run_start()` and the shop placer `_place_week()`; its hours come from each factory line's `needHours`, `hoursNow` and `_posts` (the machines' ids, set by `_line_hours()` in `_factories()` on each line and on each unnamed line with a recipe, and taken off the payload here, by the line's place in its list) | `drawFactoryStaffing`, through `drawFactoriesTab` |
 | `plan` | `_plan()` | `drawPlan`, `planDraw`, `indexPlan`, `factoryView`, `factoryCounts`, `planTypes`, `defaultRate`, `itemName`; `web/wiki.js` `wikiCanPlan` |
 | `names` | `_game_names()`: every `NAME_PREFIXES` key of `names.locale` but the `_description`s, plus `HOOD_LABEL` for a neighbourhood the text lacks | `itemName`, `gameName` (and through it `hoodName`), `englishName` (from the English payload), `localiseNames` |
 | `skillNames` | `extract()` inline, every skill in `STATION_SKILLS` through `names.label()` | `gwSkillName` |
@@ -95,17 +96,19 @@ this column is where to look when you change a key's shape — not a complete ca
 
 Four indirect routes an agent would otherwise miss:
 
-- `drawStock` references no key of its own. The Checks view gets its rows through the
-  `SUPPLY_VIEWS` entry selected by `stockView`, and those callbacks do the reading. Change a
-  shape in `supply` or `businesses` and it is `SUPPLY_VIEWS` you have to follow, not
-  `drawStock`.
+- The Supply page's change checklist has one source. `supplyChecklistRows()` gathers the rows
+  from `supply`, `businesses` and the plan, `sbData()` caches them with the player's ticks,
+  and `drawSupplyStrip()` (the strip under the tabs, Today's Plan imports card, the tab
+  badges) and the three tab drawers all read `sbData()` rather than the payload. Change a
+  shape in `supply` or `businesses` and it is `supplyChecklistRows()` you have to follow;
+  it also fills `gwImportRows`, which the game link's write-back reads.
 - The whole location finder reads `premises` through one accessor,
   `const premises = () => D?.premises || null` in `web/map.js`. Every `CityMapView` method
   that ranks, filters or describes a building goes through it, so that one line is the seam
   to follow when the key's shape changes.
 - Every supply verdict on the board reads `supply.facts` through one accessor,
   `supplyFact(s, slug)`: the fact for a site index and an item, its 24/7 fields with the
-  fact's `dem` laid over them when the sizing switch reads Demand. Checks, Orders, Goods
+  fact's `dem` laid over them when the sizing switch reads Demand. The three Supply tabs, the checklist, Goods
   flow and the site page all ask it, so none of them computes a verdict of its own; the
   Python twin is `_supply_fact()`, which the findings use. The findings themselves come
   twice, `alerts`/`minor` and `alertsDemand`, and `alertLines()` picks the pair by the same
@@ -138,6 +141,25 @@ and nothing else, so the page can say so rather than leave a hole where a shop w
 without `failed` is a whole plan. Each site is planned against its own copy of the week and
 of the bench, written back only once its row is built, so a site that falls over leaves no
 phantom hours behind for the next one to hire around.
+
+A `factoryStaffing` row is one factory in one sizing, `{key, s, name, lines, headcount,
+wageDay, delta}` and, where it counts them, `unnamedMachines`: `lines` (each line's `slug`,
+`item`, `machines`, `hoursNow`, the `hours` it needs a day, the run `from`/`to` and its
+`cuts` into shifts of at most 12 hours; a line on a recipe the board cannot name has
+`unnamed: true` and `slug` null, all 24 hours sized 24/7 and its hours now sized for
+demand), `headcount` (`needed` machine-hours a week, `min`, `have`, `spare`, `hire`, for the
+Factory Worker role), `wageDay` (the mean day's wage of the factory's factory workers) and
+`delta` (`workers` is `hire - spare`, `perDay` that times `wageDay`). The placer's own
+tables (`stations`, `people`, `shifts`, `placed`, `shortHours`) stay in Python:
+`_factory_staffing(..., detail=True)` keeps them for the tests. A factory the placer falls
+over on is `{key, s, name, failed: true}`. Its lines carry the matching verdict themselves:
+`status`/`why`/`level` sized 24/7 (`short` with why `hours`, judged on the week of the
+least-rostered machine, or `covered`) and the same under `dem` sized for demand, where more
+hours than needed adds `lower`, a suggestion rather than a change; `hoursNow` is that
+machine's week in whole hours a day and `thinDay` (`{day, hours}`) the weekday with fewest
+hours where it is under that; `demBasis` is `none` where nothing is drawn and Demand also
+sizes the line at 24. `supply.factories.sites[]` counts `running` machines (a recipe and
+somebody posted) beside the placed ones (`machines`).
 
 A `staffing` row carries two lookup tables, `stations` and `people`, and every row under it
 points into them by index rather than repeating an id: `s` a station, `p` a person or null.
@@ -358,9 +380,9 @@ three of them. Each page is a `div.page` that `showPage()` unhides.
 
 | Page (`id`) | Host element | Drawn by |
 | --- | --- | --- |
-| Today (`today`) | `pageToday` | `drawKpis` (`#kpis`), `drawAlerts` (`#alertSection`), `drawFindLocation` and `drawOptimizeStaffing` (each card's live count, its sentence about this save and the line naming where it goes); the "Plan imports" card is painted by `paintPlanImports` from `drawOrderChecklist`, with `planImportsState()` counting the same rows and ticks as the checklist |
+| Today (`today`) | `pageToday` | `drawKpis` (`#kpis`), `drawAlerts` (`#alertSection`), `drawFindLocation` and `drawOptimizeStaffing` (each card's live count, its sentence about this save and the line naming where it goes); the "Plan imports" card is painted by `paintPlanImports` from `drawSupplyStrip` (the change checklist's strip on Supply, drawn on Today too), with `planImportsState()` counting the same rows and ticks as the checklist |
 | Company (`company`) | `pageCompany` | one view at a time — see below |
-| Supply (`supply`) | `pageSupply` | one view at a time — see below |
+| Supply (`supply`) | `pageSupply` | one tab at a time — see below |
 | Growth (`growth`) | `pageGrowth` | one view at a time — see below |
 | Map (`map`) | `pageMap` | `showCityMap` / `refreshCityMaps` in `web/map.js`, which also hosts the location finder as a mode of the page — `openFinder()` switches it on, and `CityMapView` ranks the `premises` rows beside the map |
 | Wiki (`wiki`) | `pageWiki` | `wikiVisit` → `showWikiRoute` in `web/wiki.js`; the entry is omitted when `showWikiRoute` is undefined |
@@ -374,13 +396,36 @@ Company's views:
 | Payroll | `secPayroll` | `drawPayroll` |
 | Milestones | `secGoals` | `drawGoals`; the difficulty is not here but a chip at the end of the clock's last line at 1501 px and over (`drawMast`) and, at 1500 px and under, the footer stamp (`drawFooter`, `#footDiff`), built by `fvDiffChip()`, with a body-level popover (`#fvDiffPop`) from `drawDifficulty()` |
 
-Supply's views:
+Supply's views are three tabs, one per object (R13):
 
 | View | Section | Drawn by |
 | --- | --- | --- |
-| Orders | `secLogistics` | `drawLogistics`, plus `drawOrderChecklist` for the change checklist |
-| Checks | `secStock` | `drawStock`, which renders whichever entry of `SUPPLY_VIEWS` is selected (`shops`, `imports`, `idle`, `lines`, `feed`) |
-| Goods flow | `secFlow` | `drawFlow`, plus `drawFlowDetail` for the panel under the diagram |
+| Shops | `secShops` | `drawShopsTab`: every shelf against tomorrow morning's round |
+| Warehouses | `secWarehouses` | `drawWarehousesTab`: every depot, second tier included, with each import line's Set to box (`sbImportCtx()`); a factory input no depot brings is its "No depot" block |
+| Factories | `secFactories` | `drawFactoriesTab`: each factory's lines and their hours, its factory inputs and its own imports, then `drawFactoryStaffing()` from `factoryStaffing[sizing]` |
+
+Above the three, `#sbStrip` is the one change checklist (`drawSupplyStrip()`): the done
+count, Copy remaining and the reset, over the rows of every tab. It also paints each tab's
+badge (`sbBadge()`, through `SUBS.supply.badge`) and Today's Plan imports card, so its
+`PAGE_DRAWS` row is tagged for Today and all three tabs. Every tab reads the same rows
+through `sbData()`: `supplyChecklistRows()` gathers the facts into the rows each table shows
+and hands them to `buildOrderChecklist()`, the single source of what to change (it also
+leaves `gwImportRows` for the game link's write-back); the result is kept per board, sizing
+and browser-side change (`sbStamp`). A table row carries the tick for the checklist rows about
+its site and item (`sbChk()`); any row no table claims is listed under "Other changes" on its
+tab, so every change is tickable. A site's tab is `sbTabOf()`: a shop's Shops, a factory's
+Factories, every other site's Warehouses.
+
+Needs a change and Everything (`sbWhich`, in memory) and list or diagram (`sbViewMode()`,
+`ba_dash_supply_view`) sit in the subhead. The goods-flow diagram is a view of the tab on
+screen: `sbPlaceFlow()` moves the one `svg#flow` into that tab's `.sb-diag`, and a click on a
+site (`sbNodeOpen()`) goes back to the list on that site's rows. A finding's link, the search
+and a diagram click land through `sbLand()`: the tab, Everything where the row is no change, its
+group opened, `[data-sb-at]` lit, and a crumb back. Supply's old views still resolve: a
+remembered `ba_dash_supply` of `checks` opens Shops, `map` Warehouses with the diagram on, and
+`orders` (or none) the tab with the most still to type (`SUPPLY_WAS`, `supplyAuto`); the old
+`#secLogistics`, `#secStock` and `#secFlow` links reach their tab through `SEC_PAGE` and
+`SEC_MOVED`.
 
 Growth's views:
 
@@ -460,7 +505,7 @@ name and its own text, so every finding is reached from the keyboard; a silenced
 `inert`. A modified click is left to the browser and opens the address in a new tab.
 
 A plain click on a site's name records where it was clicked, as a finding, a search and a
-question do: the crumb reads "‹ Today", "‹ Checks" or "‹ Map", or names the other site's page
+question do: the crumb reads "‹ Today", "‹ Shops" or "‹ Map", or names the other site's page
 the name sat on, and that is the browser's Back. Two places keep the portfolio as the way back:
 the Portfolio's own names and a site page's picker. The crumb row's own "‹ OtherSite" link is
 left to `wireSiteCrumbs()` and goes Back rather than opening a new visit. The map's

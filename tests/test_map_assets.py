@@ -33,7 +33,7 @@ class MapAssets(unittest.TestCase):
                 self.assertTrue(x <= ax <= x+w and y <= ay <= y+h)
                 self.assertTrue(b['key'].startswith('ba:street_'))
 
-    def test_local_server_serves_only_the_two_runtime_map_assets(self):
+    def test_local_server_serves_only_the_runtime_map_assets(self):
         class Handler(BoardHandler):
             board = SimpleNamespace(lock=threading.Lock(), html=b'', data=b'', stamp=b'')
             def log_message(self, *args):
@@ -43,7 +43,8 @@ class MapAssets(unittest.TestCase):
         thread.start()
         try:
             base = f'http://127.0.0.1:{server.server_port}'
-            for filename, content_type in [('locations.json', 'application/json'), ('map-background.svg', 'image/svg+xml')]:
+            for filename, content_type in [('locations.json', 'application/json'), ('map-background.svg', 'image/svg+xml'),
+                                           ('floor-plans.json', 'application/json')]:
                 with urllib.request.urlopen(base + '/maps/' + filename + '?v=test') as response:
                     self.assertEqual(response.headers['Content-Type'], content_type)
                     self.assertEqual(response.read(), (ROOT / 'web/maps' / filename).read_bytes())
