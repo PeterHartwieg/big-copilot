@@ -1,5 +1,8 @@
 # Next moves: feature scope and player research
 
+Status: archived. A research proposal of 11 September 2026; the Next moves cards it led to
+shipped with the revamp and later releases.
+
 Research date: 11 September 2026. Proposal for discussion, not an implementation commitment.
 
 ## Recommendation

@@ -1,5 +1,9 @@
 # Game link mod: technical scope
 
+Status: step 1 shipped (PR #72, 22 September 2026), step 2 in
+[mod-write-back-scope.md](mod-write-back-scope.md). Kept in place because the mod source
+cites it; the current contract is [game-link-api.md](game-link-api.md).
+
 Written 22 September 2026. Scopes a second way for Big Copilot to get its numbers: a
 Steam Workshop mod that hands the running game's state straight to the board, beside
 the existing save-folder read. Players keep the choice. Step 1 is read only; step 2

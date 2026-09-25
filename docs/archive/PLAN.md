@@ -1,5 +1,9 @@
 # Ledger Release Plan
 
+Status: historical, archived. The release plan of 9 September 2026, since carried out.
+Superseded by [docs/architecture.md](../architecture.md) for how the site works and
+[docs/contributing.md](../contributing.md) for releasing; its build numbers are out of date.
+
 How the Big Ambitions ledger goes from one machine to anyone: a web page that runs the
 analysis inside the browser. Nothing is uploaded. Hosting on Cloudflare. Three steps,
 after a short proof that the browser integration works.

@@ -1,5 +1,8 @@
 # Issue #2: name factory lines immediately
 
+Status: implemented (PR #13, 12 September 2026). Kept in place because `ba_dashboard.py`
+cites it.
+
 Smaller design implemented 12 September 2026. The owner authorized merging and deploying after the CLI review fixes; independent in-game mapping verification remains open.
 
 ## The change
