@@ -1,0 +1,151 @@
+"""The local watch server in file mode: Board + BoardHandler over a save on disk.
+
+watch() itself blocks in serve_forever() and lowers the process priority, so
+this drives the same pieces it wires together: a Board over a synthetic .hsg,
+BoardHandler on port 0, and a poll thread that calls board.refresh() the way
+watch()'s does. The page's side is what is checked: /stamp moves when the save
+is rewritten, /data.json follows, and POST /name rebuilds with the name kept.
+Synthetic only: never a real save.
+"""
+from __future__ import annotations
+
+import http.server
+import json
+import os
+import sys
+import tempfile
+import threading
+import time
+import unittest
+import urllib.error
+import urllib.request
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.dirname(HERE))
+
+import ba_dashboard  # noqa: E402
+import es3_fixture  # noqa: E402
+
+DEADLINE = 120.0  # seconds to wait for the poll thread to see a change; never reached when it works
+
+
+class WatchServer(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.save = os.path.join(self.tmp.name, "Link Co.hsg")
+        self.write_save(day=34)
+        os.utime(self.save, (1_700_000_000, 1_700_000_000))
+        self.out = os.path.join(self.tmp.name, "dashboard.html")
+        self.board = ba_dashboard.Board(self.save, self.out)
+        self.assertTrue(self.board.refresh(settle=False))
+
+        board = self.board
+
+        class Handler(ba_dashboard.BoardHandler):
+            pass
+
+        Handler.board = board
+        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.base = f"http://127.0.0.1:{self.server.server_port}"
+        self.serving = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.serving.start()
+
+        # watch()'s poll loop, at a test's pace and with a way to stop it.
+        self.stop = threading.Event()
+        self.failures = []
+
+        def poll():
+            while not self.stop.is_set():
+                try:
+                    board.refresh(settle=False)
+                except Exception as exc:  # noqa: BLE001 -- reported by the test
+                    self.failures.append(exc)
+                self.stop.wait(0.05)
+
+        self.poller = threading.Thread(target=poll, daemon=True)
+        self.poller.start()
+
+    def tearDown(self):
+        self.stop.set()
+        self.poller.join()
+        self.server.shutdown()
+        self.server.server_close()
+        self.serving.join()
+        self.tmp.cleanup()
+
+    def write_save(self, day: int) -> None:
+        root = es3_fixture.link_company()
+        root["Day"] = day
+        with open(self.save, "wb") as fh:
+            fh.write(es3_fixture.encode(root))
+
+    def get(self, route: str):
+        with urllib.request.urlopen(self.base + route) as response:
+            self.assertEqual(response.status, 200)
+            self.assertEqual(response.headers["Cache-Control"], "no-store")
+            return response.headers["Content-Type"], response.read()
+
+    def stamp(self) -> str:
+        ctype, body = self.get("/stamp")
+        self.assertEqual(ctype, "application/json")
+        payload = json.loads(body)
+        self.assertNotIn("error", payload)
+        return payload["stamp"]
+
+    def day(self) -> int:
+        ctype, body = self.get("/data.json")
+        self.assertEqual(ctype, "application/json")
+        return json.loads(body)["meta"]["day"]
+
+    def wait_for_stamp_other_than(self, old: str) -> str:
+        end = time.monotonic() + DEADLINE
+        while time.monotonic() < end:
+            self.assertEqual(self.failures, [])
+            now = self.stamp()
+            if now != old:
+                return now
+            self.stop.wait(0.05)
+        self.fail(f"the stamp stayed {old!r} after the save changed")
+
+    def test_the_stamp_moves_when_the_save_is_rewritten(self):
+        first = self.stamp()
+        self.assertEqual(first, "Link Co.hsg@1700000000#0")
+        self.assertEqual(self.day(), 34)
+        ctype, page = self.get("/")
+        self.assertTrue(ctype.startswith("text/html"))
+        self.assertIn(b"<html", page[:500].lower())
+        self.assertTrue(os.path.exists(self.out), "the static board was not written")
+
+        # A newer save: other bytes and a later modification time.
+        self.write_save(day=35)
+        os.utime(self.save, (1_700_000_100, 1_700_000_100))
+        second = self.wait_for_stamp_other_than(first)
+        self.assertEqual(second, "Link Co.hsg@1700000100#0")
+        self.assertEqual(self.day(), 35)
+        self.assertEqual(self.failures, [])
+
+    def test_naming_a_line_rebuilds_and_keeps_the_name(self):
+        first = self.stamp()
+        body = json.dumps({"rid": "RIDaaaa", "slug": "ba:itemname_beer"}).encode("utf-8")
+        request = urllib.request.Request(self.base + "/name", data=body, method="POST",
+                                         headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(request) as response:
+            self.assertEqual(response.status, 204)
+        # name_line() rebuilds before the 204, so the revision has moved already.
+        self.assertEqual(self.stamp(), first[: first.rindex("#")] + "#1")
+        with open(os.path.join(self.tmp.name, "market_history.json"), encoding="utf-8") as fh:
+            book = json.load(fh)["characters"]
+        # The link company has no characterId, so its names file under "default".
+        self.assertEqual(book["default"]["lineNames"], {"RIDaaaa": "ba:itemname_beer"})
+
+    def test_a_bad_name_request_is_refused(self):
+        request = urllib.request.Request(self.base + "/name", data=b"not json", method="POST")
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            urllib.request.urlopen(request)
+        self.assertEqual(caught.exception.code, 400)
+        caught.exception.close()
+
+
+if __name__ == "__main__":
+    unittest.main()
