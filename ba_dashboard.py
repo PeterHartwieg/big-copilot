@@ -2257,6 +2257,10 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
                 "revenue": money(revenue_by_item[item] / span),
                 "soldPerDay": round(units_sold[item] / span),
                 "soldPerWeek": round(units_sold[item] / span * 7),
+                # Unrounded, for _products() alone, which takes them off the
+                # payload: a price from rounded units is no price.
+                "_sold": units_sold[item] / span,
+                "_takings": revenue_by_item[item] / span,
             }
         )
     lines.sort(key=lambda x: (x["cover"] is None, x["cover"] if x["cover"] else 0))
@@ -2558,23 +2562,25 @@ def _products(businesses: list) -> list:
     )
     for b in businesses:
         for line in b["lines"]:
+            # The day's takings and units before rounding: a line selling 0.4
+            # a day is not nothing, and its share of the average price is not
+            # free. _business() leaves them for this and nothing else.
+            sold, takings = line.pop("_sold", None), line.pop("_takings", None)
             if not line["revenue"] and not line["units"]:
                 continue
             # By key: two items can share a name, and the page names a row
             # from its key.
             rec = agg[line["slug"]]
             rec["item"] = line["item"]
-            rec["revenue"] += line["revenue"]
-            # The daily rate before rounding: a line selling 0.4 a day is
-            # not nothing, and its share of the average price is not free.
-            rec["units"] += line.get("rate", line["soldPerDay"])
+            rec["revenue"] += line["revenue"] if takings is None else takings
+            rec["units"] += line.get("rate", line["soldPerDay"]) if sold is None else sold
             rec["week"] += line["soldPerWeek"]
             rec["stock"] += line["units"]
             rec["stores"] += 1 if line["revenue"] else 0
     out = [{"item": v.pop("item"), "slug": k, **v} for k, v in agg.items()]
     for rec in out:
-        rec["revenue"] = money(rec["revenue"])
         rec["price"] = round(rec["revenue"] / rec["units"], 2) if rec["units"] else 0
+        rec["revenue"] = money(rec["revenue"])
         rec["units"] = round(rec["units"])
     return sorted(out, key=lambda x: -x["revenue"])
 
@@ -5544,6 +5550,15 @@ def _factories(
         held_lines = collections.defaultdict(lambda: True)
         for line in lines:
             held_lines[line["item"]] = held_lines[line["item"]] and line["limitHeld"]
+        # What the lines not yet held by their limit would eat of each input
+        # at full rate: a starved line ships little, so its shipped output is
+        # no measure of what it has to have on hand.
+        free_draw = collections.defaultdict(float)
+        for line in lines:
+            if line["limitHeld"]:
+                continue
+            for ing in recipes[line["slug"]]["ingredients"]:
+                free_draw[resolve(ing)] += line["machines"] * ing["per"] * 24
         for slug, row in needs.items():
             target, source = flow["targets"].get((key, slug), (0, None))
             # A factory can itself be an import destination. Weekly deliveries
@@ -5575,17 +5590,18 @@ def _factories(
             # Every line eating it held by its limit, with some of it on hand:
             # the machines are not waiting for it, they have nothing to make.
             # Or every such line has Produce up to set, what arrives covers
-            # what their shipped output ate, and enough is on hand to go on
-            # making it for the rest of the day: one line held at its limit
-            # all day and another only late in the day still draw no more
-            # than they ship, whatever the hour's stock test says. A line
-            # that has run the input down is starved, not held.
+            # what their shipped output ate, and enough is on hand to run the
+            # lines not yet held at full rate for the rest of the day: one
+            # line held at its limit all day and another only late in the day
+            # still draw no more than they ship, whatever the hour's stock
+            # test says. A line that could not run flat out on what it holds
+            # is starved, not held.
             ship_draw, all_limit = row.pop("_shipDraw"), row.pop("_allLimit")
             row["limited"] = bool(
                 row["lines"] and held(key, slug) > 0 and (
                     all(held_lines[line] for line in row["lines"])
                     or (all_limit and ship_draw > 0 and arrives(key, slug) >= ship_draw * 0.85
-                        and held(key, slug) >= ship_draw * rest_of_day))
+                        and held(key, slug) >= free_draw[slug] * rest_of_day))
             )
             row["target"] = target
             row["source"] = import_source
@@ -15080,7 +15096,7 @@ const SZ_WHY = {
   "short:shortfall": "Runs dry before the next delivery lands",
   "short:target": "The daily top-up is less than a day's need",
   "short:dry": "The depot it comes from is out of it",
-  "stalled:notDrawn": "The source holds it, yet under three quarters of the need arrived a day last week: the line is not drawing it",
+  "stalled:notDrawn": "The source holds it, yet under three quarters of the need arrived per day over the last week (the last round alone while the log is under a week old): the line is not drawing it",
   "stalled:waiting": "The line stands still for want of another input",
   "idle:notMoving": "Nothing draws on it",
   "idle:notRouted": "No plan sends it on, though your own sites sell or need it",
@@ -15092,7 +15108,7 @@ const SZ_WHY = {
   "tight:target": "The daily top-up covers a day's use, not the margin",
   "covered:route": "A route from your own site brings it",
   "covered:limit": "Produce up to holds the line back, not the supply",
-  "covered:staffing": "The roster runs the machines only part of the week",
+  "covered:staffing": "Your staffing runs the machines only part of the week",
   "short:hours": "Rostered fewer hours a day than the line needs",
 };
 const SZ_STATE = {
@@ -15240,7 +15256,7 @@ function szSays(f, r, depot){
       if(f.why === "waiting") return `${lines.join(", ")} stand${lines.length === 1 ? "s" : ""} still for want of ${(r.waitingOn || []).join(", ")}`;
       return `${depot} holds ${num(r.depotStock || 0)}, yet only ${pct}% of the need arrived per day over the last week`;
     case "covered":
-      if(f.why === "staffing") return `the roster runs these machines ${Math.round((r.staffedShare ?? 1) * 100)}% of the week`;
+      if(f.why === "staffing") return `your staffing runs these machines ${Math.round((r.staffedShare ?? 1) * 100)}% of the week`;
       if(f.why === "limit") return "Produce up to holds the line back";
       if(f.why === "route") return "a route from your own site brings it";
       return "";
@@ -18463,7 +18479,7 @@ function spNeedRead(n, f){
       if(f.why === "waiting") return `Waiting on <b>${spEsc((n.waitingOn || []).join(", "))}</b>`;
       return `<b>${spNum(n.arrives)}</b>/day arrives; the line is <b>not drawing it</b>`;
     case "covered":
-      if(f.why === "staffing") return `The roster runs these machines <b>${Math.round((n.staffedShare || 0) * 100)}%</b> of the week`;
+      if(f.why === "staffing") return `Your staffing runs these machines <b>${Math.round((n.staffedShare || 0) * 100)}%</b> of the week`;
       if(f.why === "limit") return "Held back by <b>Produce up to</b>";
       return "In step";
     case "made": return "Made in-house";
@@ -20295,7 +20311,7 @@ const SB_LINE_COLS = [["Line", r => r.item || r.workstation, "l"],
   ["Status", r => r.fact ? szRank(r.fact) : null, "l"]];
 const SB_INPUT_COLS = [["Factory input", r => r.item, "l"],
   ["Eats / day", r => szUse(r.fact, r.perDay), "", "At full rate under 24/7; what the shops at the end of the chain use under Demand"],
-  ["On hand", r => r.stock ?? null], ["Arrived / day", r => r.known ? r.arrives : null, "", "Measured: what reached the factory a day over the last week, from its delivery log (the last round alone while it is newer than that)"],
+  ["On hand", r => r.stock ?? null], ["Arrived / day", r => r.known ? r.arrives : null, "", "Measured: what reached the factory a day over the last week, from its delivery log (only the last round while its log is under a week old)"],
   ["Daily top-up", r => r.directImport ? null : r.target || null, "", "Planned: what the round brings each morning. With a change, the figure to type in the sending site's plan."],
   ["Status", r => szRank(r.fact), "l"]];
 /* The sizing switch, with what it means; remembered on this device. */
@@ -21078,7 +21094,7 @@ function drawProducts(){
       const seller = xlSellers(p.slug)[0];
       const opens = !seller ? ""
         : seller.line.revenue ? `Open ${shortName(seller.b)}, the store that sells the most of it${p.stores > 1 ? `, one of ${p.stores}` : ""}`
-        : `Open ${shortName(seller.b)}, which stocks it; no store sold any yesterday`;
+        : `Open ${shortName(seller.b)}, which stocks it; no store sold any in the last seven days`;
       const name = seller ? `<a class="link xl-sells" href="#company" data-xl-item="${attr(p.slug)}" data-tip="${attr(opens)}">${p.item}</a>` : p.item;
       return `<tr data-slug="${attr(p.slug)}">
       <td class="l"${showPeak?"":` data-tip="${attr(peakTip(p))}"`}>${name}</td>

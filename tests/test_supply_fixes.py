@@ -93,6 +93,27 @@ class LimitedInputTests(unittest.TestCase):
         self.assertEqual((c.fact(FACTORY, WATER)["st"], c.fact(FACTORY, WATER)["why"]), ("stalled", "notDrawn"))
 
 
+class StarvedLineTests(unittest.TestCase):
+    """SU-2: a line fed half its need just after the morning round is starved,
+    though its Produce up to limit is set and what it ships matches what came."""
+
+    def test_half_a_round_just_after_it_landed_is_not_drawn(self):
+        c = Company(hour=7)
+        c.site(HUB, "Import Hub")
+        c.factory(FACTORY, "Brewery", limit=5000)
+        c.hold(HUB, WATER, 5000)
+        c.hold(FACTORY, WATER, 120)  # the round's 120, a line eats 240 a day
+        c.hold(FACTORY, BEER, 100)
+        c.contract(HUB, WATER, 3500)
+        c.plan(HUB, FACTORY, WATER, 240)
+        for d in range(13, 20):
+            c.ship(d, HUB, FACTORY, {WATER: 120})
+            c.ship(d, FACTORY, None, {BEER: 360})
+        c.run()
+        self.assertFalse(c.supply["factories"]["sites"][0]["needs"][0]["limited"])
+        self.assertEqual((c.fact(FACTORY, WATER)["st"], c.fact(FACTORY, WATER)["why"]), ("stalled", "notDrawn"))
+
+
 class WholesalePlanTests(unittest.TestCase):
     """SU-3: a new shop a repeating wholesale contract delivers to has a plan."""
 

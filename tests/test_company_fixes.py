@@ -26,8 +26,9 @@ def flat_registration():
             "itemInstances": [], "scheduleDays": [], "orderHistory": [], "retailPrices": []}
 
 
-def extract_company(change, table=None):
+def extract_company(change, table=None, names=None):
     """extract() over tests/es3_fixture.py's company after `change(root)`."""
+    names = names or Names({})
     root = es3_fixture.link_company()
     change(root)
     with tempfile.TemporaryDirectory() as folder:
@@ -36,9 +37,9 @@ def extract_company(change, table=None):
             fh.write(es3_fixture.encode(root))
         save = load_save(path)
         if table is None:
-            return extract(save, Names({}), None)
+            return extract(save, names, None)
         with patch("ba_dashboard.load_buildings", return_value=table):
-            return extract(save, Names({}), None)
+            return extract(save, names, None)
 
 
 class NewHomeTests(unittest.TestCase):
@@ -95,6 +96,21 @@ class ProductsTests(unittest.TestCase):
         self.assertEqual((alone["price"], alone["units"]), (10.0, 0))
 
 
+class SlowSellerTests(unittest.TestCase):
+    """EX-6: one $100 sale in seven days is $100 a unit, not a rounded rate's."""
+
+    def test_one_sale_a_week_prices_at_what_it_sold_for(self):
+        from test_supply_facts import ROSE, business
+        orders = [{"dayNumber": d, "totalCustomers": 1 if d == 5 else 0,
+                   "itemSales": {"$items": [{"itemName": ROSE, "amountSold": 1, "totalPrice": 100}]
+                                 if d == 5 else []}} for d in range(1, 8)]
+        shop = business(orders, day=8)
+        [product] = _products([shop])
+        self.assertEqual((product["price"], product["revenue"], product["units"]), (100.0, 14.29, 0))
+        # The unrounded figures are _products()'s alone: they leave the payload.
+        self.assertFalse([k for line in shop["lines"] for k in line if k.startswith("_")])
+
+
 class RivalNameTests(unittest.TestCase):
     """EX-9: a story rival is named by its fixed id, whatever keys it holds."""
 
@@ -128,6 +144,25 @@ class SecondSkillTests(unittest.TestCase):
         [grid] = _hourly(Save({}, {}, ""), [b], [site("retail", name="Mart", basket=12.0)],
                          {REGISTER: (SERVICE, 20)}, set(), crew, Names({SERVICE: "Customer Service"}))
         self.assertEqual(grid["staffed"][MONDAY][10], 20)
+
+    def test_extract_counts_a_register_worked_by_a_second_skill(self):
+        def cleaner_first(root):
+            # Ana's best skill is cleaning; she works the register on Mondays.
+            ana = root["EmployeeInstances"][0]["characterData"]
+            ana["skills"] = [{"name": "ba:skill_customerservice", "value": 30.0},
+                             {"name": "ba:skill_cleaning", "value": 60.0}]
+            root["BuildingRegistrations"][0]["orderHistory"] = [
+                {"dayNumber": d, "totalCustomers": 5, "hourReports": [{"hour": 10, "customers": 5}]}
+                for d in (22, 29)]
+            # The register carries its id, as the save's own furniture does.
+            for holder in root["BuildingRegistrations"][0]["itemInstances"]:
+                holder["$v"]["id"] = holder["$k"]
+        # The register's F1 page, which names the skill it asks for.
+        register = ("**Cash Register** is a special *employee station* that requires employees with"
+                    " [Customer Service](skill-customerservice) skill. **Customer Capacity:** 20")
+        data = extract_company(cleaner_first, names=Names({f"help_{REGISTER}_content": register}))
+        grid = next(g for g in data["hours"] if g["key"] == "ba:street_secondavenue#10")
+        self.assertGreater(grid["staffed"][MONDAY][10], 0)
 
 
 if __name__ == "__main__":

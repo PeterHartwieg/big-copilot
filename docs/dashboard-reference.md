@@ -1016,7 +1016,7 @@ first of these that fits is the word:
 | **stalled** | planned, and the depot holds it, but little arrives, and neither a Produce up to limit nor the roster explains it |
 | **idle** | stock not moving on (see *Idle stock* below) |
 | **tight** | covers the use, but not the 15% margin |
-| **covered** | everything else, with the reason where it is not the figure itself: a route brings it, the line is held by its Produce up to limit, or the roster runs the machines part of the week |
+| **covered** | everything else, with the reason where it is not the figure itself: a route brings it, the line is held by its Produce up to limit, or your staffing runs the machines part of the week |
 
 What a figure has to cover is what the ends of the chain use (the shops' sales, the
 factory lines' draw) plus a 15% margin, added **once** over the whole chain from import
@@ -1071,8 +1071,13 @@ day what it holds sits anywhere under the limit, and what it eats matches what i
 not what it could make. Its inputs read **covered**, held by Produce up to, rather than
 **stalled**, when the line makes well under its roster's output (under three quarters)
 while every input it eats is on hand for the rest of the day at the full rate, as well as
-when the output held is at the limit. A starved line runs its input down instead, and
-stays **stalled**.
+when the output held is at the limit. An input several lines eat is covered when all of
+them are held that way, and also when every one of them has Produce up to set, what
+arrives is at least 85% of what their shipped output ate (each line's use of the input
+times the smaller of what it ships and what it could make), and the factory holds enough of
+it to run the lines not yet at their limit at full rate for the rest of the day: one line
+at its limit all day and another only late in the day still eat no more than they ship. A
+starved line runs its input down instead, and stays **stalled**.
 
 **Wholesale deliveries.** A shop can be fed by a wholesale store instead of your own
 depots: a repeating delivery contract (the save's `DeliveryContracts`) brings a set amount
