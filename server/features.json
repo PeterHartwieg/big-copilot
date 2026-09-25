@@ -5,11 +5,6 @@
     "description": "Estimate how many in-game days each business needs to earn back its setup costs, based on its net profit."
   },
   {
-    "id": "factory-supply-to-demand",
-    "title": "Supply chain for factories not running 24/7",
-    "description": "Plan factory lines that make just enough for your weekly demand instead of full output, and say how long each one has to run."
-  },
-  {
     "id": "multilingual-support",
     "title": "Multilingual support",
     "description": "The board's own wording in other languages, with names read from the language file your game runs in."
