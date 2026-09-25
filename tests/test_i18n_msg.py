@@ -84,6 +84,9 @@ CONVERTED = {
        ("data", "supply.factories.sites.lines.gaps", "off")],
     # Today writes its own words in the page (tt()); Python sends it numbers only.
     "today": [],
+    # Growth writes its own words in the page (tt()); Python sends it names, numbers
+    # and the supplier-event kinds, which the page words by their English.
+    "gr": [],
     # The Company page: each chain's name in the Portfolio.
     "co": [("es3", "chains", "name")],
 }
