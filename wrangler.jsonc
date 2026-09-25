@@ -17,7 +17,7 @@
   },
   // The page's own address. Custom domains: wrangler creates the DNS records and
   // the certificate itself, since the zone lives in the same Cloudflare account.
-  "workers_dev": true,
+  "workers_dev": false,
   "routes": [
     { "pattern": "bigcopilot.com", "custom_domain": true },
     { "pattern": "www.bigcopilot.com", "custom_domain": true }
