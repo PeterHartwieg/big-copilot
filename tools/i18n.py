@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import collections
 import html.parser
 import json
 import os
@@ -224,8 +225,41 @@ def js_calls(src: str, where: str, first_line: int = 1) -> list[dict]:
             raise CatalogueError(f"{place}: tt({key!r}) needs literal English (no ${{}})")
         if not after or after[0][1] not in (",", ")"):
             raise CatalogueError(f"{place}: tt({key!r}): the English must be one literal, not an expression")
-        out.append({"key": key, "en": en, "where": place})
+        out.append({"key": key, "en": en, "where": place, "params": _js_params(after)})
     return out
+
+
+def _js_params(after: list):
+    """The names a tt() call passes as its params, read off the tokens after
+    its English: the keys of a plain object literal, or none when the call
+    ends there. None when they cannot be read (a variable, a spread, a
+    computed key): a translation is then held to its English's own."""
+    if after[0][1] == ")":
+        return set()
+    if len(after) < 2 or after[1][1] != "{":
+        return None
+    names, depth, expect_key = set(), 0, True
+    for kind, value, _at in after[2:]:
+        if depth == 0 and value == "}":
+            return names
+        if value in ("{", "[", "("):
+            if depth == 0 and expect_key:
+                return None  # a computed key
+            depth += 1
+            continue
+        if value in ("}", "]", ")"):
+            depth -= 1
+            continue
+        if depth:
+            continue
+        if expect_key:
+            if kind not in ("id", "str"):
+                return None  # a spread, or something the catalogue cannot read
+            names.add(value)
+            expect_key = False
+        elif value == ",":
+            expect_key = True
+    return None
 
 
 def _line_counter(src: str, first_line: int):
@@ -325,7 +359,9 @@ def python_calls(path: str) -> list[dict]:
             if used - given:
                 raise CatalogueError(f"{place}: msg({node.args[0].value!r}) has no param for "
                                      + ", ".join(sorted(used - given)))
-        out.append({"key": node.args[0].value, "en": en, "where": place})
+        # The names it passes, where they can be read: a **spread hides them.
+        out.append({"key": node.args[0].value, "en": en, "where": place,
+                    "params": None if None in given else given})
     return out
 
 
@@ -405,6 +441,22 @@ def catalogue(found: list[dict] | None = None, where: bool = False) -> dict:
     return dict(sorted(flat.items()))
 
 
+def passed(found: list[dict] | None = None) -> dict:
+    """{key: the param names every call site of the key passes}, or None for
+    a key where one call site's cannot be read. A translation may use any of
+    them, not only those its English prints: "{station_name}", a game name's
+    token passed beside the English plural "{stations}" (fits())."""
+    found = calls() if found is None else found
+    out = {}
+    for c in found:
+        mine = c.get("params")
+        if c["key"] not in out:
+            out[c["key"]] = None if mine is None else set(mine)
+        elif out[c["key"]] is not None:
+            out[c["key"]] = None if mine is None else out[c["key"]] & set(mine)
+    return out
+
+
 # ------------------------------------------------------------- translations
 def fields(text: str) -> set[str]:
     """A text's placeholders, name and spec."""
@@ -429,19 +481,52 @@ def _english_for(key: str, english: dict) -> tuple[str | None, set | None]:
     return None, None
 
 
-def fits(key: str, text: str, english: dict, lang: str) -> bool:
-    """Whether a translation can stand in for its English: every placeholder
-    of a plain key, no more and no fewer; a plural form uses no placeholder its
-    English lacks (`other` all of them), and names a category the language has."""
+def _names_it(token: str, param: str) -> bool:
+    """Whether a game name's token param stands in for an English param: X_name
+    for X, and station_name for stations, as the pattern passes them."""
+    return token.endswith("_name") and token[:-5] in (param, param[:-1] if param.endswith("s") else param)
+
+
+def fits(key: str, text: str, english: dict, lang: str, params: dict | None = None) -> bool:
+    """Whether a translation can stand in for its English.
+
+    Where every call site's params are known (`params`, from passed()), it
+    may use any param the calls pass, whether the English prints it or not;
+    a param the English prints keeps the English's spec, and is used, except
+    that a passed token param stands in for its English word (X_name for X,
+    station_name for stations: _names_it()) and a `one` or `zero` plural
+    form may leave out {n} ("ein Laden"); `few`, `many` and `other` may not.
+    Otherwise every placeholder of a plain key, no more and no fewer, and a
+    plural form uses no placeholder its English lacks (`other` all of them).
+    Either way a plural form names a category the language has."""
     en, names = _english_for(key, english)
     if en is None:
         return False
     got = fields(text)
     m = PLURAL_SUFFIX.search(key)
-    if not m or _base_key(key) in english:
-        return got == names
-    if m.group(1) not in PLURALS.get(lang, PLURALS["en"]):
+    plural = bool(m) and _base_key(key) not in english
+    if plural and m.group(1) not in PLURALS.get(lang, PLURALS["en"]):
         return False
+    given = (params or {}).get(_base_key(key) if plural else key)
+    if given is not None:
+        specs = collections.defaultdict(set)
+        for f in names:
+            name, spec = f.split(":", 1)
+            specs[name].add(spec)
+        used = set()
+        for f in got:
+            name, spec = f.split(":", 1)
+            if name not in given or (name in specs and spec not in specs[name]):
+                return False
+            used.add(name)
+        for name in specs:
+            if name in used or (name == "n" and plural and m.group(1) in ("one", "zero")):
+                continue
+            if not any(_names_it(token, name) for token in used - set(specs)):
+                return False
+        return True
+    if not plural:
+        return got == names
     return got <= names if m.group(1) != "other" else got == names
 
 
@@ -467,15 +552,18 @@ def languages(root: str = ROOT) -> list[str]:
     return sorted(n[:-5] for n in os.listdir(folder) if n.endswith(".json") and not n.endswith(".base.json"))
 
 
-def status(lang: str, english: dict | None = None) -> dict:
-    """{missing, stale, orphan, mismatch}: lists of keys."""
-    english = catalogue() if english is None else english
+def status(lang: str, english: dict | None = None, params: dict | None = None) -> dict:
+    """{missing, stale, orphan, mismatch}: lists of keys. `params` is
+    passed()'s; with neither given, both are read off the sources."""
+    if english is None:
+        found = calls()
+        english, params = catalogue(found), passed(found)
     table, base = load(lang)
     bases = {_base_key(k) for k in table}
     missing = [k for k in english if k not in table and not (
         _base_key(k) != k and _base_key(k) in bases)]
     orphan = [k for k in table if _english_for(k, english)[0] is None]
-    mismatch = [k for k in table if k not in orphan and not fits(k, table[k], english, lang)]
+    mismatch = [k for k in table if k not in orphan and not fits(k, table[k], english, lang, params)]
     stale = [k for k in table if k not in orphan and base.get(k) != _english_text(k, english)]
     return {"missing": missing, "stale": stale, "orphan": orphan, "mismatch": mismatch}
 
@@ -489,14 +577,14 @@ def _english_text(key: str, english: dict) -> str | None:
     return english.get(key) or english.get(f"{base}_other")
 
 
-def shipped(lang: str, english: dict, root: str = ROOT) -> dict:
+def shipped(lang: str, english: dict, root: str = ROOT, params: dict | None = None) -> dict:
     """The table the page gets: the translation minus orphans, mismatches and
     stale keys (whose English changed since, or which have no recorded
     English in <lang>.base.json). Those show their English until the
     translation is redone and `accept`ed."""
     table, base = load(lang, root)
     return {k: v for k, v in sorted(table.items())
-            if _english_for(k, english)[0] is not None and fits(k, v, english, lang)
+            if _english_for(k, english)[0] is not None and fits(k, v, english, lang, params)
             and base.get(k) == _english_text(k, english)}
 
 
@@ -504,7 +592,8 @@ def _dump(table: dict) -> str:
     return json.dumps(table, ensure_ascii=False, separators=(",", ":"), sort_keys=True) + "\n"
 
 
-def ship(check: bool = False, root: str = ROOT, english: dict | None = None) -> list[str]:
+def ship(check: bool = False, root: str = ROOT, english: dict | None = None,
+         params: dict | None = None) -> list[str]:
     """Write web/i18n/<lang>.json for every translation under i18n/, and drop
     any for a language no longer there. With check=True write nothing and
     return the paths that differ, forward-slashed and relative to root.
@@ -512,13 +601,16 @@ def ship(check: bool = False, root: str = ROOT, english: dict | None = None) -> 
     The English and the translations are always this checkout's (catalogue()
     reads the imported sources, and i18n/ sits beside them); root redirects
     only the tables compared or written, as build_web.check() redirects the
-    page it compares while render() reads this checkout's board."""
-    english = catalogue() if english is None else english
+    page it compares while render() reads this checkout's board. `params` is
+    passed()'s; with neither given, both are read off the sources."""
+    if english is None:
+        found = calls()
+        english, params = catalogue(found), passed(found)
     out_dir = os.path.join(root, "web", "i18n")
     stale = []
     langs = languages()
     for lang in langs:
-        text = _dump(shipped(lang, english))
+        text = _dump(shipped(lang, english, params=params))
         path = os.path.join(out_dir, f"{lang}.json")
         try:
             with open(path, encoding="utf-8", newline="") as fh:
@@ -644,6 +736,8 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("extract", help="the English catalogue, as JSON")
     p.add_argument("--where", action="store_true", help="each key's English and its call sites")
+    p.add_argument("--params", action="store_true",
+                   help="instead, the param names each key's calls pass (null where they cannot be read)")
     p = sub.add_parser("status", help="missing, stale, orphaned and mismatched translations")
     p.add_argument("lang", nargs="?")
     p.add_argument("--strict", action="store_true", help="fail on anything but a clean translation")
@@ -664,14 +758,19 @@ def main(argv=None) -> int:
     if hasattr(out, "reconfigure"):
         out.reconfigure(encoding="utf-8")
     try:
-        if args.cmd == "extract":
+        if args.cmd == "extract" and args.params:
+            json.dump({k: None if v is None else sorted(v) for k, v in sorted(passed().items())},
+                      out, ensure_ascii=False, indent=1)
+            out.write("\n")
+        elif args.cmd == "extract":
             json.dump(catalogue(where=args.where), out, ensure_ascii=False, indent=1)
             out.write("\n")
         elif args.cmd == "status":
-            english = catalogue()
+            found = calls()
+            english, params = catalogue(found), passed(found)
             bad = 0
             for lang in [args.lang] if args.lang else languages():
-                st = status(lang, english)
+                st = status(lang, english, params)
                 print(f"{lang}: {len(english)} English keys; " + ", ".join(f"{len(v)} {k}" for k, v in st.items()))
                 for kind, keys in st.items():
                     for k in keys:

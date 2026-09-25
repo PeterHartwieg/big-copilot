@@ -26,6 +26,8 @@ async function fixture(width = 1280, theme = 'dark') {
       }
     };
   }, theme);
+  // The page's tt() loads first, as it does in the built page's head.
+  await page.addScriptTag({path:path.join(root, 'web/i18n.js')});
   await page.addScriptTag({path:path.join(root, 'web/app.js')});
   await page.evaluate(() => window.dispatchEvent(new Event('DOMContentLoaded')));
   await loadFiles(page);

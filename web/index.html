@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "a619537ca8";</script>
-<link rel="stylesheet" href="community.css?v=a619537ca8">
+<script>window.LEDGER_BUILD = "7abb3ce8bd";</script>
+<link rel="stylesheet" href="community.css?v=7abb3ce8bd">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=a619537ca8">
+<link rel="stylesheet" href="fonts/fonts.css?v=7abb3ce8bd">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2919,9 +2919,35 @@ tr.ss-ring > td{animation:ss-flash 2.4s ease-out}
 .sf-theme{align-items:flex-end}
 /* The game-names picker sits just left of it, the two settings together. */
 .sf-gn{margin-left:auto}
-.gn-pick{height:42px;max-width:220px;padding:0 12px;border:1px solid var(--rule);border-radius:999px;background:var(--surface);
-  color:var(--ink);font:500 13px/1 Archivo,"Helvetica Neue",Arial,sans-serif;cursor:pointer}
-.gn-pick:hover{border-color:var(--ink-3)}
+/* Drawn as the Theme switch is: the same pill, border, surface and inner 3px
+   inset, with the globe in a round well the size of a theme button. */
+.gn-pick{display:inline-flex}
+.gn-btn{display:inline-flex;align-items:center;gap:10px;box-sizing:border-box;height:42px;max-width:240px;padding:3px 14px 3px 3px;
+  border:1px solid var(--rule);border-radius:999px;background:var(--surface);color:var(--ink);cursor:pointer;
+  font:500 13px/1 Archivo,"Helvetica Neue",Arial,sans-serif;transition:border-color .15s ease}
+.gn-btn:hover,.gn-btn[aria-expanded="true"]{border-color:var(--accent)}
+.gn-glyph{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;flex:none;border-radius:999px;
+  background:var(--accent-soft);color:var(--accent)}
+.gn-cur{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gn-chev{color:var(--ink-2);transition:transform .15s ease}
+.gn-btn:hover .gn-chev{color:var(--ink)}
+.gn-btn[aria-expanded="true"] .gn-chev{transform:rotate(180deg)}
+/* The list, hung off <body> by gnOpen() and placed against the button. */
+.gn-pop{position:fixed;left:0;top:0;z-index:60;box-sizing:border-box;min-width:200px;max-width:calc(100vw - 24px);max-height:340px;
+  overflow-y:auto;overscroll-behavior:contain;padding:6px;border:1px solid var(--rule);border-radius:12px;background:var(--surface);
+  color:var(--ink);box-shadow:0 12px 32px color-mix(in srgb,var(--ink) 16%,transparent);scrollbar-width:thin;
+  scrollbar-color:var(--rule) transparent;animation:gnpop .14s cubic-bezier(.2,.7,.2,1)}
+.gn-pop[hidden]{display:none}
+.gn-pop:focus{outline:none}
+.gn-opt{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:36px;padding:0 10px 0 12px;
+  border-radius:8px;font:500 13px/1.2 Archivo,"Helvetica Neue",Arial,sans-serif;cursor:pointer;white-space:nowrap}
+.gn-opt .sf-ic{visibility:hidden;color:var(--accent);stroke-width:2.1}
+.gn-opt.gn-on{background:var(--accent-soft)}
+.gn-pop:focus-visible .gn-opt.gn-on{box-shadow:inset 0 0 0 1px var(--accent)}
+.gn-opt[aria-selected="true"]{color:var(--accent);font-weight:600}
+.gn-opt[aria-selected="true"] .sf-ic{visibility:visible}
+@keyframes gnpop{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.gn-pop,.gn-chev{animation:none;transition:none}}
 /* The one-time offer of the player's own language, hung off <body>. */
 .gn-offer{position:fixed;right:16px;bottom:16px;z-index:60;display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;
   max-width:min(420px,calc(100vw - 32px));padding:12px 14px;border:1px solid var(--rule);border-radius:10px;
@@ -2972,7 +2998,10 @@ tr.ss-ring > td{animation:ss-flash 2.4s ease-out}
   .sf-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 16px;width:100%}
   .sf-theme{align-items:flex-start}
   .sf-gn{margin-left:0}
-  .gn-pick{height:44px}
+  /* The pill keeps the Theme switch's height here too: 44px wells and a 3px inset. */
+  .gn-btn{height:52px;padding-right:16px}
+  .gn-glyph{width:44px;height:44px}
+  .gn-opt{min-height:44px}
   .sf-segbtn{width:44px;height:44px}
   .sf-link,.sf-legal a{min-height:44px}
   .sf-base{flex-direction:column;align-items:flex-start;gap:10px}
@@ -3625,6 +3654,8 @@ details.help[open] summary::after{content:"\2013"}
 .menu-heading{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-2);padding:6px 10px}
 .menu-panel .lg-btn{display:flex;width:100%;justify-content:flex-start;border:0;background:none;padding:10px;border-radius:3px;font-size:13px;font-weight:500;min-height:0}
 .menu-panel .lg-btn:hover{background:var(--raised)}
+/* A longer language wraps a menu line rather than running past the panel. */
+.menu-panel .lg-btn{white-space:normal;overflow-wrap:anywhere;text-align:left}
 .menu-hint{font-size:11px;color:var(--ink-2);margin:4px 10px 10px}
 .menu-divider{border-top:1px solid var(--rule);margin:6px 0 12px}
 .menu-panel .lg-chip{margin-left:9px}
@@ -3639,47 +3670,48 @@ details.help[open] summary::after{content:"\2013"}
 .foot-links{display:flex;gap:10px 18px;align-items:center;flex-wrap:wrap}
 @media (max-width:760px){.menu-panel{width:min(320px,calc(100vw - 60px))}.path-row{flex-wrap:wrap}.path-row code{flex-basis:100%}}
 </style>
-<aside class="release-banner" id="releaseBanner" aria-label="App update" hidden>
+<aside class="release-banner" id="releaseBanner" aria-label="App update" data-tt-aria-label="upd.banner" hidden>
   <div class="release-copy">
     <p id="releaseMessage" role="status" aria-live="polite"></p>
     <details id="releaseDetails" hidden><summary id="releaseTitle"></summary><p id="releaseSummary"></p></details>
   </div>
   <div class="release-actions">
-    <button type="button" class="release-reload" id="releaseReload"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13 6a5 5 0 1 0 .2 3M13 2v4H9"/></svg>Reload</button>
-    <button type="button" class="release-dismiss" id="releaseDismiss" aria-label="Dismiss this update" title="Dismiss this update"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button>
+    <button type="button" class="release-reload" id="releaseReload"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13 6a5 5 0 1 0 .2 3M13 2v4H9"/></svg><span data-tt="upd.reload">Reload</span></button>
+    <button type="button" class="release-dismiss" id="releaseDismiss" aria-label="Dismiss this update" title="Dismiss this update" data-tt-aria-label="upd.dismiss" data-tt-title="upd.dismiss"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button>
   </div>
 </aside>
 <!-- One-time news strip. For the next announcement replace data-news-id and the
-     copy: a new id shows again to everyone who dismissed this one (web/update.js). -->
-<aside class="news-strip" id="newsStrip" data-news-id="link-0.2.0" aria-label="News" hidden>
-  <p class="news-copy"><b class="news-tag">New</b>Big Copilot Link 0.2.0 lets the board make changes in your game: set uniforms, apply import amounts and write staffing plans, with a preview and one-step undo.<a id="newsLink" href="https://steamcommunity.com/sharedfiles/filedetails/?id=3806322395" target="_blank" rel="noopener">Get the mod on the Steam Workshop</a></p>
-  <button type="button" class="news-dismiss" id="newsDismiss" aria-label="Dismiss this news" title="Dismiss this news"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button>
+     copy, and give the copy a new data-tt key: a new id shows again to everyone
+     who dismissed this one (web/update.js). -->
+<aside class="news-strip" id="newsStrip" data-news-id="link-0.2.0" aria-label="News" data-tt-aria-label="upd.news" hidden>
+  <p class="news-copy"><b class="news-tag" data-tt="upd.news.tag">New</b><span data-tt="upd.news.link-0-2-0">Big Copilot Link 0.2.0 lets the board make changes in your game: set uniforms, apply import amounts and write staffing plans, with a preview and one-step undo.</span><a id="newsLink" href="https://steamcommunity.com/sharedfiles/filedetails/?id=3806322395" target="_blank" rel="noopener" data-tt="upd.news.get-mod">Get the mod on the Steam Workshop</a></p>
+  <button type="button" class="news-dismiss" id="newsDismiss" aria-label="Dismiss this news" title="Dismiss this news" data-tt-aria-label="upd.news.dismiss" data-tt-title="upd.news.dismiss"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button>
 </aside>
 <section class="landing" id="landing">
   <div class="brand rv" id="lgBrand"><span class="wordmark">Big Copilot</span><span class="dot" id="lgDot"></span></div>
-  <p class="rv" id="welcomeLede">Drop a Big Ambitions save. Everything is read in this tab and nothing leaves it.</p>
-  <div class="drop rv" id="drop" role="button" tabindex="0" title="Choose the folder named Big Ambitions inside SaveGames, or drop it here. The page looks through every company folder in it and takes the newest save; a menu then lets you pick another character or save.">
+  <p class="rv" id="welcomeLede" data-tt="land.lede">Drop a Big Ambitions save. Everything is read in this tab and nothing leaves it.</p>
+  <div class="drop rv" id="drop" role="button" tabindex="0" title="Choose the folder named Big Ambitions inside SaveGames, or drop it here. The page looks through every company folder in it and takes the newest save; a menu then lets you pick another character or save." data-tt-title="land.drop.title">
     <div class="folder"><i class="tab"></i><i></i><span class="file"></span><i class="flap"></i></div>
-    <b>Drop your save folder anywhere</b>
-    <span>the newest .hsg in it opens</span>
+    <b data-tt="land.drop.head">Drop your save folder anywhere</b>
+    <span data-tt="land.drop.sub">the newest .hsg in it opens</span>
   </div>
   <div class="row rv" id="entryRow">
-    <button type="button" class="btn" id="folderBtn" title="Choose the folder named Big Ambitions inside SaveGames. The page looks through every company folder in it and takes the newest save."><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>Choose the folder</button>
-    <button type="button" class="btn" id="linkBtn" data-visit-feature="game-link" title="Read the running game through the Big Copilot Link mod from the Steam Workshop. No folder needed; the board follows the game as you play."><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>Link to the game<span class="feature-new" data-new-feature="game-link" hidden>New</span></button>
-    <label class="link lg-pick" id="savePickLabel" role="button" tabindex="0" title="Choose one specific .hsg file instead"><span id="savePickText">or one save file</span><input type="file" id="savePick" accept=".hsg"></label>
+    <button type="button" class="btn" id="folderBtn" title="Choose the folder named Big Ambitions inside SaveGames. The page looks through every company folder in it and takes the newest save." data-tt-title="land.folder.title"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>Choose the folder</button>
+    <button type="button" class="btn" id="linkBtn" data-visit-feature="game-link" title="Read the running game through the Big Copilot Link mod from the Steam Workshop. No folder needed; the board follows the game as you play." data-tt-title="land.link.title"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>Link to the game<span class="feature-new" data-new-feature="game-link" hidden>New</span></button>
+    <label class="link lg-pick" id="savePickLabel" role="button" tabindex="0" title="Choose one specific .hsg file instead" data-tt-title="land.onefile.title"><span id="savePickText">or one save file</span><input type="file" id="savePick" accept=".hsg"></label>
   </div>
   <div class="save-location rv" id="saveLocation">
-    <label for="savePlatform">Save folder <select id="savePlatform" aria-label="Operating system for save folder help"><option value="windows">Windows</option><option value="mac">macOS</option><option value="other" selected>Other / unknown</option></select></label>
+    <label for="savePlatform"><span data-tt="land.where.label">Save folder</span> <select id="savePlatform" aria-label="Operating system for save folder help" data-tt-aria-label="land.where.select"><option value="windows">Windows</option><option value="mac">macOS</option><option value="other" selected data-tt="land.where.other">Other / unknown</option></select></label>
     <div class="path-row" id="savePathRow" hidden><code id="savePath"></code><button type="button" class="copy" id="savePathCopy" data-copy="savePath">Copy</button></div>
     <p id="saveLocationHint">Choose Windows or macOS to see its save folder, or select a .hsg file.</p>
   </div>
   <div class="lg-src" id="srcSlot">
     <div class="strip" id="srcStrip" hidden>
-      <div class="st"><span class="led" id="srcLed" aria-hidden="true"></span><span id="srcStatus" role="status" aria-live="polite" aria-atomic="true"></span><span class="prog" id="srcProg" role="progressbar" aria-label="Loading save" hidden><i></i></span><span class="file" id="srcMeta"></span></div>
+      <div class="st"><span class="led" id="srcLed" aria-hidden="true"></span><span id="srcStatus" role="status" aria-live="polite" aria-atomic="true"></span><span class="prog" id="srcProg" role="progressbar" aria-label="Loading save" data-tt-aria-label="app.strip.progress" hidden><i></i></span><span class="file" id="srcMeta"></span></div>
       <div class="right" id="srcActions">
-        <a class="btn2" id="modLink" href="https://steamcommunity.com/sharedfiles/filedetails/?id=3806322395" target="_blank" rel="noopener" hidden title="Big Copilot Link on the Steam Workshop: subscribe, enable it in the game's Mods menu, load a save">Get the mod</a>
+        <a class="btn2" id="modLink" href="https://steamcommunity.com/sharedfiles/filedetails/?id=3806322395" target="_blank" rel="noopener" hidden title="Big Copilot Link on the Steam Workshop: subscribe, enable it in the game's Mods menu, load a save" data-tt-title="app.strip.mod.title" data-tt="app.strip.mod">Get the mod</a>
         <button type="button" class="btn2 primary" id="recoverBtn" hidden><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>Choose the folder again</button>
-        <button type="button" class="btn2 primary" id="reloadBtn" hidden>Reload app</button>
+        <button type="button" class="btn2 primary" id="reloadBtn" hidden data-tt="app.strip.reload">Reload app</button>
         <button type="button" class="btn2" id="updateBtn" disabled title="Read the newest save from the chosen folder again">Update</button>
       </div>
     </div>
@@ -3746,7 +3778,7 @@ details.help[open] summary::after{content:"\2013"}
            are both here until the board replaces the landing. -->
       <div class="sf-col sf-gn">
         <h2 class="sf-head" id="gnHeadL" data-tt="foot.names.head">Game names</h2>
-        <select class="gn-pick" data-gn-pick aria-labelledby="gnHeadL" data-tt-title="foot.names.tip" title="The game&#39;s own names for items, business types, neighbourhoods, stations and skills, in the language you play in. Everything else on the page stays English."><option value="en" lang="en">English</option><option value="cs" lang="cs">Čeština</option><option value="da" lang="da">Dansk</option><option value="de" lang="de">Deutsch</option><option value="es" lang="es">Español</option><option value="fr" lang="fr">Français</option><option value="it" lang="it">Italiano</option><option value="lt" lang="lt">Lietuvių</option><option value="hu" lang="hu">Magyar</option><option value="nl" lang="nl">Nederlands</option><option value="pl" lang="pl">Polski</option><option value="pt" lang="pt">Português (Brasil)</option><option value="ro" lang="ro">Română</option><option value="fi" lang="fi">Suomi</option><option value="tr" lang="tr">Türkçe</option><option value="el" lang="el">Ελληνικά</option><option value="ru" lang="ru">Русский</option><option value="uk" lang="uk">Українська</option><option value="ja" lang="ja">日本語</option><option value="ko" lang="ko">한국어</option><option value="zh-cn" lang="zh-cn">简体中文</option><option value="zh-tw" lang="zh-tw">繁體中文</option></select>
+        <div class="gn-pick" data-gn-pick data-value="en"><button type="button" class="gn-btn" id="gnHeadLBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="gnHeadL gnHeadLBtn" data-tt-title="foot.names.tip" title="The game&#39;s own names for items, business types, neighbourhoods, stations and skills, in the language you play in. Everything else on the page stays English."><span class="gn-glyph" aria-hidden="true"><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.3 3.6 5.1 3.6 8.5s-1.2 6.2-3.6 8.5c-2.4-2.3-3.6-5.1-3.6-8.5s1.2-6.2 3.6-8.5z"/></svg></span><span class="gn-cur" lang="en" translate="no">English</span><svg class="sf-ic gn-chev" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button><ul class="gn-opts" hidden><li data-value="en" lang="en" translate="no">English</li><li data-value="cs" lang="cs" translate="no">Čeština</li><li data-value="da" lang="da" translate="no">Dansk</li><li data-value="de" lang="de" translate="no">Deutsch</li><li data-value="es" lang="es" translate="no">Español</li><li data-value="fr" lang="fr" translate="no">Français</li><li data-value="it" lang="it" translate="no">Italiano</li><li data-value="lt" lang="lt" translate="no">Lietuvių</li><li data-value="hu" lang="hu" translate="no">Magyar</li><li data-value="nl" lang="nl" translate="no">Nederlands</li><li data-value="pl" lang="pl" translate="no">Polski</li><li data-value="pt" lang="pt" translate="no">Português (Brasil)</li><li data-value="ro" lang="ro" translate="no">Română</li><li data-value="fi" lang="fi" translate="no">Suomi</li><li data-value="tr" lang="tr" translate="no">Türkçe</li><li data-value="el" lang="el" translate="no">Ελληνικά</li><li data-value="ru" lang="ru" translate="no">Русский</li><li data-value="uk" lang="uk" translate="no">Українська</li><li data-value="ja" lang="ja" translate="no">日本語</li><li data-value="ko" lang="ko" translate="no">한국어</li><li data-value="zh-cn" lang="zh-cn" translate="no">简体中文</li><li data-value="zh-tw" lang="zh-tw" translate="no">繁體中文</li></ul></div>
       </div>
       <div class="sf-col sf-theme">
         <h2 class="sf-head" id="themeHeadL" data-tt="foot.theme.head">Theme</h2>
@@ -3769,23 +3801,23 @@ details.help[open] summary::after{content:"\2013"}
   </div>
 </footer>
   <details class="help" id="help">
-    <summary>Where is my save?</summary>
+    <summary data-tt="land.help.summary">Where is my save?</summary>
     <div class="help-content">
-      <p>Choose the <b>Big Ambitions</b> folder inside <b>SaveGames</b>; the page finds the newest save across the company folders inside it.</p>
-      <p>If you cannot find it, the game shows you: on its <b>Load Game</b> screen, click <b>Browse savegame folder&hellip;</b> and the folder opens in a file window.</p>
-      <p>The game autosaves every five minutes. Your browser may call folder access an "upload" or ask to "let this site view files"; the save stays on your computer. Checked on game build 3682; the Python runtime the page needs is about 6 MB, fetched once and cached.</p>
-      <p><b>Linked to the game.</b> With the <a href="https://steamcommunity.com/sharedfiles/filedetails/?id=3806322395" target="_blank" rel="noopener">Big Copilot Link mod</a> from the Steam Workshop enabled, click <b>Link to the game</b> and the board reads the running game itself. Chrome and Edge ask once to allow the site to reach your computer; the data still never leaves it.</p>
+      <p id="lgHelpFolder">Choose the <b>Big Ambitions</b> folder inside <b>SaveGames</b>; the page finds the newest save across the company folders inside it.</p>
+      <p id="lgHelpFind">If you cannot find it, the game shows you: on its <b>Load Game</b> screen, click <b>Browse savegame folder&hellip;</b> and the folder opens in a file window.</p>
+      <p id="lgHelpAutosave" data-build="3682">The game autosaves every five minutes. Your browser may call folder access an "upload" or ask to "let this site view files"; the save stays on your computer. Checked on game build 3682; the Python runtime the page needs is about 6 MB, fetched once and cached.</p>
+      <p id="lgHelpLinked"><b>Linked to the game.</b> With the <a href="https://steamcommunity.com/sharedfiles/filedetails/?id=3806322395" target="_blank" rel="noopener">Big Copilot Link mod</a> from the Steam Workshop enabled, click <b>Link to the game</b> and the board reads the running game itself. Chrome and Edge ask once to allow the site to reach your computer; the data still never leaves it.</p>
       <div class="lg-gametext">
         <div class="path-label" id="asideEyebrow">Game text</div>
         <div id="asideChip"><button type="button" class="lg-chip" id="localeChip" data-state="ok"><i></i><span>Game text built in</span></button></div>
         <p id="asideText">Names, recipes and station capacities come with the page, from game build 3682.</p>
         <p class="quiet" id="asideQuiet">If your game is newer, click the chip and choose its <code>en.json</code>; it is remembered in this browser and wins over the built-in text.</p>
-        <div id="localeWindows" hidden><div class="path-label">en.json lives here &middot; default Windows Steam installation</div>
+        <div id="localeWindows" hidden><div class="path-label" data-tt="land.gametext.where">en.json lives here &middot; default Windows Steam installation</div>
         <div class="path-row"><code id="localePath">C:\Program Files (x86)\Steam\steamapps\common\Big Ambitions\Big Ambitions_Data\StreamingAssets\locale</code><button type="button" class="copy" data-copy="localePath">Copy</button></div>
         </div>
         <p id="localeOther" class="quiet">To find your game's <code>en.json</code>, open Steam &rarr; Manage &rarr; Browse local files. On macOS, search that folder for <code>en.json</code>; use Show Package Contents if the game files are inside an app bundle.</p>
       </div>
-      <p class="lg-quiet"><button type="button" class="lg-text" id="forgetHistory" title="Sixty days of demand and cash history are kept in this browser for the trends. Forgetting them starts a fresh record.">Forget history</button> &middot; the page only reads your saves, from a folder or from the running game.</p>
+      <p class="lg-quiet"><button type="button" class="lg-text" id="forgetHistory" title="Sixty days of demand and cash history are kept in this browser for the trends. Forgetting them starts a fresh record." data-tt-title="land.forget.title" data-tt="land.forget">Forget history</button> <span data-tt="land.forget.after">&middot; the page only reads your saves, from a folder or from the running game.</span></p>
     </div>
   </details>
   <div class="orb" id="lgOrb" aria-hidden="true"><i></i><u></u></div>
@@ -3798,12 +3830,12 @@ details.help[open] summary::after{content:"\2013"}
      the board has its own footer and carries them itself. -->
 <template id="boardControls">
   <div class="menu" id="srcMenu">
-    <button type="button" class="ibtn tr" id="menuBtn" aria-haspopup="true" aria-expanded="false" aria-label="More" data-tip="Change folder · one file · watch · game text · history · about"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.4"></circle><circle cx="12" cy="12" r="1.4"></circle><circle cx="18" cy="12" r="1.4"></circle></svg></button>
+    <button type="button" class="ibtn tr" id="menuBtn" aria-haspopup="true" aria-expanded="false" aria-label="More" data-tip="Change folder · one file · watch · game text · history · about" data-tt-aria-label="app.menu.more" data-tt-tip="app.menu.tip"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.4"></circle><circle cx="12" cy="12" r="1.4"></circle><circle cx="18" cy="12" r="1.4"></circle></svg></button>
     <div class="menu-panel">
-      <div class="menu-heading">Save source</div>
+      <div class="menu-heading" data-tt="app.menu.source">Save source</div>
       <div id="menuSourceSlot"></div>
       <button type="button" class="lg-btn lg-watch" id="watchBtn" hidden>Watch</button>
-      <p class="menu-hint">Pick a character or one save above and the board follows it, or link to the running game. Or drop a .hsg save anywhere.</p>
+      <p class="menu-hint" data-tt="app.menu.hint">Pick a character or one save above and the board follows it, or link to the running game. Or drop a .hsg save anywhere.</p>
       <div class="menu-divider"></div>
       <div id="menuChipSlot"></div>
       <p class="menu-hint" id="menuChipHint"></p>
@@ -3878,27 +3910,27 @@ details.help[open] summary::after{content:"\2013"}
     <div class="sechead subhead"><nav class="seg" id="growthNav" aria-label="Growth views" data-tt-aria-label="nav.sub.growth"></nav></div>
 
     <section class="sec rv" id="secMarket" data-sub="market">
-      <div class="sechead"><h2>Market demand</h2>
+      <div class="sechead"><h2 data-tt="gr.market.title">Market demand</h2>
         <span class="why" id="marketWhy" data-tip="" tabindex="0"><i>?</i></span>
         <span class="quiet" id="marketNote"></span>
-        <div class="aside"><span class="seg" id="marketTools" aria-label="Market views"></span></div></div>
+        <div class="aside"><span class="seg" id="marketTools" aria-label="Market views" data-tt-aria-label="gr.market.views"></span></div></div>
       <div class="waves" id="movers"></div>
       <div class="heat" id="market"></div>
     </section>
 
     <section class="sec rv" id="secPlan" data-sub="plan">
-      <div class="sechead"><h2>Plan a chain</h2>
-        <span class="why" data-tip="Every machine runs 24 hours at its rated rate, so a line makes its full quantity whether or not the shelves need it. Build the factory first; the shops come after, and what they do not take is exported. Step a single line up when one product deserves more, down to none to buy it in instead." tabindex="0"><i>?</i></span>
+      <div class="sechead"><h2 data-tt="gr.plan.title">Plan a chain</h2>
+        <span class="why" data-tt-tip="gr.plan.why" data-tip="Every machine runs 24 hours at its rated rate, so a line makes its full quantity whether or not the shelves need it. Build the factory first; the shops come after, and what they do not take is exported. Step a single line up when one product deserves more, down to none to buy it in instead." tabindex="0"><i>?</i></span>
         <span class="quiet" id="planNote"></span>
         <div class="aside" id="planPicker"></div></div>
       <div id="planBody"></div>
     </section>
     <section class="sec rv" id="secIngredients" data-sub="plan">
-      <div class="sechead"><h2>Ingredients</h2>
-        <span class="why" data-tip="What the machines above eat, added up across every line that shares an ingredient. Per day and per week are this range's own figures. Company target is the order for the whole company once the plan runs: never less than a week of this range, and beyond that what the range adds over what your factories already eat, on top of every contract already active, rounded up to the hundred the logistics manager takes. You type that target across your importer contracts in the game yourself; the board never guesses a split per warehouse. Hover an ingredient for what is on order today, and Used by for every line that eats it. A cash column appears once the company already buys one of these ingredients, at the price it last paid." tabindex="0"><i>?</i></span></div>
+      <div class="sechead"><h2 data-tt="gr.ing.title">Ingredients</h2>
+        <span class="why" data-tt-tip="gr.ing.why" data-tip="What the machines above eat, added up across every line that shares an ingredient. Per day and per week are this range's own figures. Company target is the order for the whole company once the plan runs: never less than a week of this range, and beyond that what the range adds over what your factories already eat, on top of every contract already active, rounded up to the hundred the logistics manager takes. You type that target across your importer contracts in the game yourself; the board never guesses a split per warehouse. Hover an ingredient for what is on order today, and Used by for every line that eats it. A cash column appears once the company already buys one of these ingredients, at the price it last paid." tabindex="0"><i>?</i></span></div>
       <table class="ingtable" id="ingTable">
-        <thead><tr><th>Ingredient</th><th class="l">Used by</th><th>Per day</th><th>Per week</th><th>Company target</th>
-          <th>On order now</th><th>Change</th><th class="cash">Cash / week</th></tr></thead>
+        <thead><tr><th data-tt="gr.ing.col.name">Ingredient</th><th class="l" data-tt="gr.ing.col.usedBy">Used by</th><th data-tt="gr.ing.col.day">Per day</th><th data-tt="gr.ing.col.week">Per week</th><th data-tt="gr.ing.col.target">Company target</th>
+          <th data-tt="gr.ing.col.onOrder">On order now</th><th data-tt="gr.ing.col.change">Change</th><th class="cash" data-tt="gr.ing.col.cash">Cash / week</th></tr></thead>
         <tbody id="ingBody"></tbody>
         <tfoot id="ingFoot"></tfoot>
       </table>
@@ -4001,7 +4033,7 @@ details.help[open] summary::after{content:"\2013"}
            are both here until the board replaces the landing. -->
       <div class="sf-col sf-gn">
         <h2 class="sf-head" id="gnHead" data-tt="foot.names.head">Game names</h2>
-        <select class="gn-pick" data-gn-pick aria-labelledby="gnHead" data-tt-title="foot.names.tip" title="The game&#39;s own names for items, business types, neighbourhoods, stations and skills, in the language you play in. Everything else on the page stays English."><option value="en" lang="en">English</option><option value="cs" lang="cs">Čeština</option><option value="da" lang="da">Dansk</option><option value="de" lang="de">Deutsch</option><option value="es" lang="es">Español</option><option value="fr" lang="fr">Français</option><option value="it" lang="it">Italiano</option><option value="lt" lang="lt">Lietuvių</option><option value="hu" lang="hu">Magyar</option><option value="nl" lang="nl">Nederlands</option><option value="pl" lang="pl">Polski</option><option value="pt" lang="pt">Português (Brasil)</option><option value="ro" lang="ro">Română</option><option value="fi" lang="fi">Suomi</option><option value="tr" lang="tr">Türkçe</option><option value="el" lang="el">Ελληνικά</option><option value="ru" lang="ru">Русский</option><option value="uk" lang="uk">Українська</option><option value="ja" lang="ja">日本語</option><option value="ko" lang="ko">한국어</option><option value="zh-cn" lang="zh-cn">简体中文</option><option value="zh-tw" lang="zh-tw">繁體中文</option></select>
+        <div class="gn-pick" data-gn-pick data-value="en"><button type="button" class="gn-btn" id="gnHeadBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="gnHead gnHeadBtn" data-tt-title="foot.names.tip" title="The game&#39;s own names for items, business types, neighbourhoods, stations and skills, in the language you play in. Everything else on the page stays English."><span class="gn-glyph" aria-hidden="true"><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.3 3.6 5.1 3.6 8.5s-1.2 6.2-3.6 8.5c-2.4-2.3-3.6-5.1-3.6-8.5s1.2-6.2 3.6-8.5z"/></svg></span><span class="gn-cur" lang="en" translate="no">English</span><svg class="sf-ic gn-chev" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button><ul class="gn-opts" hidden><li data-value="en" lang="en" translate="no">English</li><li data-value="cs" lang="cs" translate="no">Čeština</li><li data-value="da" lang="da" translate="no">Dansk</li><li data-value="de" lang="de" translate="no">Deutsch</li><li data-value="es" lang="es" translate="no">Español</li><li data-value="fr" lang="fr" translate="no">Français</li><li data-value="it" lang="it" translate="no">Italiano</li><li data-value="lt" lang="lt" translate="no">Lietuvių</li><li data-value="hu" lang="hu" translate="no">Magyar</li><li data-value="nl" lang="nl" translate="no">Nederlands</li><li data-value="pl" lang="pl" translate="no">Polski</li><li data-value="pt" lang="pt" translate="no">Português (Brasil)</li><li data-value="ro" lang="ro" translate="no">Română</li><li data-value="fi" lang="fi" translate="no">Suomi</li><li data-value="tr" lang="tr" translate="no">Türkçe</li><li data-value="el" lang="el" translate="no">Ελληνικά</li><li data-value="ru" lang="ru" translate="no">Русский</li><li data-value="uk" lang="uk" translate="no">Українська</li><li data-value="ja" lang="ja" translate="no">日本語</li><li data-value="ko" lang="ko" translate="no">한국어</li><li data-value="zh-cn" lang="zh-cn" translate="no">简体中文</li><li data-value="zh-tw" lang="zh-tw" translate="no">繁體中文</li></ul></div>
       </div>
       <div class="sf-col sf-theme">
         <h2 class="sf-head" id="themeHead" data-tt="foot.theme.head">Theme</h2>
@@ -4113,7 +4145,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"a619537ca8","latest":{"pr":118,"date":"2026-09-25","title":"Game names in the language you play in","summary":"A new Game names setting in the footer, beside Theme, shows the game's own names in any language the game ships: items, business types, neighbourhoods, stations, skills and staff demands, on the board, inside its findings and in the wiki, so the board reads like your game. The rest of the page stays English. Search finds a name in either language, and lists sort in the language you picked. If your browser prefers one of the game's languages, the board asks once whether to use it."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"7abb3ce8bd","latest":{"pr":118,"date":"2026-09-25","title":"Game names in the language you play in","summary":"A new Game names setting in the footer, beside Theme, shows the game's own names in any language the game ships: items, business types, neighbourhoods, stations, skills and staff demands, on the board, inside its findings and in the wiki, so the board reads like your game. The rest of the page stays English. Search finds a name in either language, and lists sort in the language you picked. If your browser prefers one of the game's languages, the board asks once whether to use it."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -4167,7 +4199,7 @@ document.addEventListener('click', event => {
       $('releaseTitle').textContent = hasChange ? latest.title : '';
       $('releaseSummary').textContent = hasChange ? latest.summary : '';
       banner.hidden = false;
-      $('releaseMessage').textContent = 'Update available';
+      $('releaseMessage').textContent = tt('upd.available', 'Update available');
       measure();
     } catch (_) {
       // Offline, missing manifests and transient deploy failures stay quiet.
@@ -4175,6 +4207,10 @@ document.addEventListener('click', event => {
       checking = false;
     }
   }
+  // A change of UI language: the one line this file wrote is written again.
+  if (typeof ttOnChange === 'function') ttOnChange(() => {
+    if (!banner.hidden) $('releaseMessage').textContent = tt('upd.available', 'Update available');
+  });
   setInterval(check, 60000);
   window.addEventListener('focus', check);
   window.addEventListener('online', () => { lastCheck = -Infinity; check(); });
@@ -4197,8 +4233,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=a619537ca8"></script>
-<script src="community.js?v=a619537ca8"></script>
+<script src="app.js?v=7abb3ce8bd"></script>
+<script src="community.js?v=7abb3ce8bd"></script>
 
 <script>
 
@@ -4279,7 +4315,7 @@ const gauge = v => graded(v, "ink-3");
    shop the building table places. With neither, no badge. */
 const bullet = b => b.code ? `<span class="bullet" style="background:${LINE_COLOURS[b.code]||LINE_COLOURS[""]}"
   title="${attr(hoodName(b.neighbourhood)||"Unassigned")}">${spEsc(b.code)}</span>` : "";
-const siteCell = b => `<div class="site">${bullet(b)}<span><b>${spEsc(b.name)}</b>
+const siteCell = b => `<div class="site">${bullet(b)}<span><b>${b.name}</b>
   <span class="sub">${b.type} · ${b.address}${mapButton(b.key,b.name)}</span></span></div>`;
 
 /* The tile sparkline, the generator's spark(): an area under the line, the
@@ -4580,9 +4616,14 @@ function gnCompare(a, b){
 }
 /* The languages this page can show: the picker's options, English first. */
 const gnPickers = () => [...document.querySelectorAll("[data-gn-pick]")];
+/* A picker's choices: the hidden list footer_html() writes inside it. Its
+   value is its data-value. */
+const gnOpts = p => [...p.querySelectorAll(".gn-opts [data-value]")];
+/* The open list and the picker it belongs to; gnOpen() below. */
+let gnPop = null, gnPopFor = null, gnAt = -1, gnTyped = "", gnTypedAt = 0, gnSpace = false;
 const gnLangs = () => {
   const p = gnPickers()[0];
-  return p ? [...p.options].map(o => [o.value, o.textContent]) : GN_EMBED ? [["en", "English"], [GN_EMBED.lang, GN_EMBED.lang]] : [["en", "English"]];
+  return p ? gnOpts(p).map(o => [o.dataset.value, o.textContent]) : GN_EMBED ? [["en", "English"], [GN_EMBED.lang, GN_EMBED.lang]] : [["en", "English"]];
 };
 const gnKnown = lang => gnLangs().some(([code]) => code === lang);
 function gnStored(){
@@ -4602,8 +4643,20 @@ function gnLoad(lang){
   got.catch(() => gnTables.delete(lang));
   return got;
 }
-function gnPaint(){
-  gnPickers().forEach(p => { p.value = gnLang; });
+/* Every picker shows `lang`: the language on screen, or one just chosen while
+   its table loads. */
+function gnPaint(lang = gnLang){
+  gnPickers().forEach(p => {
+    p.dataset.value = lang;
+    const o = gnOpts(p).find(o => o.dataset.value === lang), cur = p.querySelector(".gn-cur");
+    if(!o || !cur) return;
+    cur.textContent = o.textContent;
+    cur.setAttribute("lang", o.getAttribute("lang") || lang);
+    /* An autonym is a name, left as it is; a choice worded in the UI's own
+       language would drop the mark. */
+    if(o.getAttribute("translate") === "no") cur.setAttribute("translate", "no"); else cur.removeAttribute("translate");
+  });
+  if(gnPopFor) gnMark();
 }
 /* Switch the game names: the whole board is drawn again, as for another save,
    from the English payload it already holds. A table that will not load leaves
@@ -4677,18 +4730,181 @@ function gnOffer(){
   document.body.appendChild(el);
   return el;
 }
+/* A language picked in the footer: kept, the offer answered, the names switched. */
+function gnChoose(lang){
+  gnRemember(lang);
+  const offer = document.querySelector(".gn-offer");
+  if(offer) gnOfferClose(offer, "picked");
+  gnPaint(lang);
+  return setGameNames(lang);
+}
 function wireGameNames(){
   gnPickers().forEach(p => {
     if(p.dataset.gnWired) return;
     p.dataset.gnWired = "1";
-    p.addEventListener("change", () => {
-      gnRemember(p.value);
-      const offer = document.querySelector(".gn-offer");
-      if(offer) gnOfferClose(offer, "picked");
-      setGameNames(p.value);
+    const btn = p.querySelector(".gn-btn");
+    if(!btn) return;
+    /* Enter and Space click the button; the arrows open the list as well. */
+    btn.addEventListener("click", () => { if(gnPopFor === p) gnClose(true); else gnOpen(p); });
+    btn.addEventListener("keydown", e => {
+      if(!["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) return;
+      e.preventDefault();
+      gnOpen(p, e.key);
     });
   });
   gnPaint();
+}
+/* The picker's list: one listbox hung off <body>, as #alertPop is, so no
+   section's paint containment clips it, and placed against the button that
+   opened it. Focus sits on the list and aria-activedescendant names the row
+   the keys move over: the listbox-button pattern. */
+const GN_TICK = '<svg class="sf-ic" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+const gnRows = () => gnPop ? [...gnPop.querySelectorAll(".gn-opt")] : [];
+function gnMark(){
+  const want = gnPopFor && gnPopFor.dataset.value;
+  gnRows().forEach(r => r.setAttribute("aria-selected", String(r.dataset.value === want)));
+}
+function gnActive(i, scroll = true){
+  const rows = gnRows();
+  if(!rows.length) return;
+  gnAt = Math.max(0, Math.min(rows.length - 1, i));
+  rows.forEach((r, k) => r.classList.toggle("gn-on", k === gnAt));
+  gnPop.setAttribute("aria-activedescendant", rows[gnAt].id);
+  if(scroll) rows[gnAt].scrollIntoView({block: "nearest"});
+}
+/* Under the button while the list fits there, else above it (the footer is the
+   foot of the page), on whichever side has more room; the rows scroll. */
+function gnPlace(){
+  const btn = gnPopFor && gnPopFor.querySelector(".gn-btn");
+  if(!btn || !btn.isConnected){ gnClose(false); return; }
+  const r = btn.getBoundingClientRect();
+  const vw = document.documentElement.clientWidth || window.innerWidth;
+  const vh = document.documentElement.clientHeight || window.innerHeight;
+  gnPop.style.minWidth = Math.round(r.width) + "px";
+  gnPop.style.maxHeight = "";
+  const h = gnPop.offsetHeight, below = vh - 12 - (r.bottom + 6), above = r.top - 6 - 12;
+  const down = h <= below || below >= above;
+  const fit = Math.max(120, Math.min(h, down ? below : above));
+  gnPop.style.maxHeight = fit + "px";
+  gnPop.style.top = Math.max(12, down ? r.bottom + 6 : r.top - 6 - fit) + "px";
+  gnPop.style.left = Math.max(12, Math.min(r.left, vw - gnPop.offsetWidth - 12)) + "px";
+}
+function gnClose(focus){
+  if(!gnPopFor) return;
+  const btn = gnPopFor.querySelector(".gn-btn");
+  gnPop.hidden = true;
+  gnPop.removeAttribute("aria-activedescendant");
+  gnPopFor = null; gnTyped = ""; gnSpace = false;
+  if(btn){ btn.setAttribute("aria-expanded", "false"); if(focus) btn.focus(); }
+}
+function gnPick(i){
+  const row = gnRows()[i], p = gnPopFor;
+  if(!row || !p) return;
+  const lang = row.dataset.value, was = p.dataset.value;
+  gnClose(true);
+  if(lang !== was) gnChoose(lang);
+}
+/* Type-ahead: letters typed within half a second of each other find the next
+   row that starts with them; one letter pressed again steps through its rows. */
+/* Whether letters typed are still being gathered; past the half second the
+   gathered ones are dropped, so Space picks again. */
+function gnTyping(){
+  if(gnTyped && Date.now() - gnTypedAt > 500) gnTyped = "";
+  return !!gnTyped;
+}
+function gnFind(ch){
+  const now = Date.now();
+  gnTyped = (gnTyping() ? gnTyped : "") + ch.toLocaleLowerCase();
+  gnTypedAt = now;
+  const rows = gnRows(), same = [...gnTyped].every(c => c === gnTyped[0]);
+  const word = same ? gnTyped[0] : gnTyped, from = same || gnTyped.length === 1 ? gnAt + 1 : gnAt;
+  for(let k = 0; k < rows.length; k++){
+    const i = (from + k) % rows.length;
+    if(rows[i].textContent.trim().toLocaleLowerCase().startsWith(word)){ gnActive(i); return; }
+  }
+}
+function gnKey(e){
+  const n = gnRows().length;
+  if(e.key === "ArrowDown") gnActive(gnAt + 1);
+  else if(e.key === "ArrowUp") gnActive(gnAt - 1);
+  else if(e.key === "Home") gnActive(0);
+  else if(e.key === "End") gnActive(n - 1);
+  else if(e.key === "PageDown") gnActive(gnAt + 8);
+  else if(e.key === "PageUp") gnActive(gnAt - 8);
+  else if(e.key === "Enter") gnPick(gnAt);
+  /* Space picks on its keyup: picked on the keydown, focus would be back on
+     the button when the key comes up, and the button would open again. */
+  else if(e.key === " " && !gnTyping()) gnSpace = true;
+  else if(e.key === "Escape"){ e.stopPropagation(); gnClose(true); }
+  else if(e.key === "Tab"){ gnClose(true); return; }
+  else if(e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) gnFind(e.key);
+  else return;
+  e.preventDefault();
+}
+function gnBuild(){
+  gnPop = document.createElement("div");
+  gnPop.className = "gn-pop";
+  gnPop.id = "gnPop";
+  gnPop.setAttribute("role", "listbox");
+  gnPop.tabIndex = -1;
+  gnPop.hidden = true;
+  document.body.appendChild(gnPop);
+  gnPop.addEventListener("keydown", gnKey);
+  gnPop.addEventListener("keyup", e => {
+    if(e.key !== " " || !gnSpace) return;
+    gnSpace = false;
+    e.preventDefault();
+    gnPick(gnAt);
+  });
+  gnPop.addEventListener("click", e => {
+    const row = e.target.closest && e.target.closest(".gn-opt");
+    if(row) gnPick(gnRows().indexOf(row));
+  });
+  gnPop.addEventListener("mousemove", e => {
+    const row = e.target.closest && e.target.closest(".gn-opt"), i = gnRows().indexOf(row);
+    if(row && i !== gnAt) gnActive(i, false);
+  });
+  /* A press outside closes it; one on its own button is left to the click. */
+  document.addEventListener("pointerdown", e => {
+    if(!gnPopFor || gnPop.contains(e.target) || gnPopFor.contains(e.target)) return;
+    gnClose(false);
+  }, true);
+  gnPop.addEventListener("focusout", e => {
+    const to = e.relatedTarget;
+    if(gnPopFor && to && !gnPop.contains(to) && !gnPopFor.contains(to)) gnClose(false);
+  });
+  window.addEventListener("resize", () => { if(gnPopFor) gnPlace(); });
+  window.addEventListener("scroll", e => {
+    if(!gnPopFor || (e.target && e.target.nodeType === 1 && gnPop.contains(e.target))) return;
+    gnPlace();
+  }, true);
+}
+function gnOpen(p, key){
+  if(gnPopFor) gnClose(false);
+  if(!gnPop) gnBuild();
+  const btn = p.querySelector(".gn-btn"), head = p.closest(".sf-gn") && p.closest(".sf-gn").querySelector(".sf-head");
+  if(head && head.id) gnPop.setAttribute("aria-labelledby", head.id);
+  gnPop.textContent = "";
+  gnOpts(p).forEach((o, i) => {
+    const row = document.createElement("div");
+    row.className = "gn-opt";
+    row.id = `gnOpt${i}`;
+    row.setAttribute("role", "option");
+    row.dataset.value = o.dataset.value;
+    ["lang", "translate"].forEach(a => { if(o.getAttribute(a)) row.setAttribute(a, o.getAttribute(a)); });
+    row.innerHTML = `<span class="gn-word"></span>${GN_TICK}`;
+    row.firstChild.textContent = o.textContent;
+    gnPop.appendChild(row);
+  });
+  gnPopFor = p; gnTyped = "";
+  gnMark();
+  btn.setAttribute("aria-expanded", "true");
+  btn.setAttribute("aria-controls", "gnPop");
+  gnPop.hidden = false;
+  gnPlace();
+  const rows = gnRows(), on = Math.max(0, rows.findIndex(r => r.dataset.value === p.dataset.value));
+  gnActive(key === "Home" ? 0 : key === "End" ? rows.length - 1 : on);
+  gnPop.focus({preventScroll: true});
 }
 /* Width in the units shortText() counts: a wide (CJK) character is two. */
 const gnWide = ch => /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]/.test(ch)
@@ -4696,6 +4912,10 @@ const gnWide = ch => /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]/.test(
 /* ` lang="xx"` for a name the page uppercases, so a Turkish dotted i or a Greek
    accent is cased by the language's own rules. */
 const gnLangAttr = () => gnLang === "en" ? "" : ` lang="${gnLang}"`;
+/* A game name inside a sentence, lowercased the way English runs one into its
+   text ("3 liquor store lines"), and left as it is in any other names
+   language, where lowercasing breaks the word (German nouns keep their capital). */
+const gnLower = s => gnLang === "en" ? String(s).toLowerCase() : String(s);
 /* A neighbourhood as a key, from either a key or an English name: what map
    data exported by name and filters stored before keys hold. Null for neither. */
 const hoodKeyOf = v => typeof v !== "string" || !v ? null
@@ -5113,7 +5333,7 @@ function drawFlow(){
     boxes.push(`<g class="node" data-id="${attr(node.id)}">
       <rect x="${x}" y="${y}" width="${NODE_W}" height="${NODE_H}" rx="7"></rect>${hood
         ? `<rect x="${x + 10}" y="${y + 13}" width="24" height="18" rx="3" fill="var(--raised)" stroke="var(--rule)"></rect>
-           <text x="${x + 22}" y="${y + 26}" text-anchor="middle" class="s" style="font-weight:600;fill:var(--ink-2)">${spEsc(hood)}</text>` : ""}
+           <text x="${x + 22}" y="${y + 26}" text-anchor="middle" class="s" style="font-weight:600;fill:var(--ink-2)">${hood}</text>` : ""}
       <text x="${tx}" y="${y + 19}">${attr(shortText(node.name, hood ? 19 : 24))}</text>
       <text class="s" x="${tx}" y="${y + 34}">${node.stock ? num(node.stock) + " held"
         : `${attr(shortText(node.sub || "", hood ? 21 : 26, true))}<title>${attr(node.sub || "")}</title>`}</text></g>`);
@@ -5478,8 +5698,14 @@ function factoryView(){
 /* --- chrome, wired up once ----------------------------------------- */
 // changed for growth: the market views are a .seg; "Everything" went, being the
 // union of "What I sell" and "Not yet", and the numbers are always in the cells.
-seg($("marketTools"), [["types","By type"],["mine","What I sell"],["new","Not yet"]],
-  () => marketView, v => { marketView = v; showAllMarket = false; }, () => drawMarket());
+/* Its labels are written once here, so a language switch writes them again. */
+function grMarketTools(){
+  seg($("marketTools"), [["types", tt("gr.view.types", "By type")], ["mine", tt("gr.view.mine", "What I sell")],
+    ["new", tt("gr.view.new", "Not yet")]],
+    () => marketView, v => { marketView = v; showAllMarket = false; }, () => drawMarket());
+}
+grMarketTools();
+if(typeof ttOnChange === "function") ttOnChange(grMarketTools);
 
 /* --- draw ----------------------------------------------------------- */
 /* A weekday's short name, 0 Monday (the masthead counts from day 1, a Monday). */
@@ -6091,14 +6317,14 @@ function findingRow(a){
     <span class="mark" data-tip="${attr(tt("today.find.silence", "Silence this finding"))}"></span>
     <span class="site">${site}</span>
     <span hidden id="ss-fn${n}">${spEsc(b ? shortName(b) : a.site)}:</span>
-    <button type="button" class="what" id="ss-fw${n}" aria-labelledby="ss-fn${n} ss-fw${n}">${spEsc(what)}${kindOff(a) ? ` ${chipHtml("dim", kindLabel(a.group), tt("today.find.off", "This kind is switched off in the list; it is counted here instead"))}` : ""}</button>${
+    <button type="button" class="what" id="ss-fw${n}" aria-labelledby="ss-fn${n} ss-fw${n}">${what}${kindOff(a) ? ` ${chipHtml("dim", kindLabel(a.group), tt("today.find.off", "This kind is switched off in the list; it is counted here instead"))}` : ""}</button>${
       /* The game link's buttons sit under the sentence, beside the row's own
          button rather than inside it. */
       writes ? `
     <span class="gw-acts gw-find">${writes}</span>` : ""}
     <span class="amt">${findingAmount(a)}</span>
     <span class="go">${icon("go")}</span>${more ? `
-    <span class="more">${spEsc(more)}</span>` : ""}</div>`;
+    <span class="more">${more}</span>` : ""}</div>`;
 }
 /* Row click opens the finding's page; a click on the mark is stopped in the
    capture phase by wireFinds() and never reaches this. */
@@ -6311,7 +6537,7 @@ const CHEV = () => `<span class="chev">${icon("chev")}</span>`;
 /* A site in a table: its neighbourhood pill, its short name, and the type and
    address underneath. With `chev`, the arrow that says the row opens; with
    `link`, the name is also a link to the site's own page. */
-const siteLabel = (b, chev, link) => `${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${link ? siteLink(b) : spEsc(shortName(b))}${chev ? ` ${CHEV()}` : ""}
+const siteLabel = (b, chev, link) => `${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${link ? siteLink(b) : shortName(b)}${chev ? ` ${CHEV()}` : ""}
   ${mapButton(b.key,b.name)}<span class="sub">${b.type} · ${b.address}</span>`;
 const kidCell = b => siteLabel(b, true, true);
 
@@ -6358,7 +6584,7 @@ function chainRow(c, v){
   const cells = v.chain(c);
   const note = c.external
     ? tt("co.chain.external", "{w:$c} of it sold outside the company by its factory", {w: c.external})
-    : c.suppliedBy.length ? tt("co.chain.supplied", "supplied from {sites}", {sites: c.suppliedBy.map(spEsc).join(", ")}) : "";
+    : c.suppliedBy.length ? tt("co.chain.supplied", "supplied from {sites}", {sites: c.suppliedBy.join(", ")}) : "";
   const name = `${CHEV()}${c.name}<span class="sub" style="padding-left:16px">${xlMembers(c)}${
     note ? ` · ${note}` : ""}</span>`;
   /* A chain is known by its English name, so the chains a reader opened stay
@@ -9062,7 +9288,7 @@ function drawSite(){
     <table>
       <thead><tr><th>Fee</th><th>Hours billed / day</th><th>Revenue / day</th></tr></thead>
       <tbody>${shelves.map(l => `<tr data-el="${attr(spKeyTok(l.slug, l.item))}">
-          <td class="l">${spEsc(l.item)}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
+          <td class="l">${l.item}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
           <td>${num(l.soldPerDay)}</td>
           <td>${fmt(l.revenue)}</td></tr>`).join("")}</tbody></table>` : `<p class="quiet">Nothing billed here yet.</p>`)
     : shelves.length ? `
@@ -9082,7 +9308,7 @@ function drawSite(){
         /* The shelf's word, as Checks says it; a shelf Python did not judge has none. */
         const word = sp && supplyFact(siteTab, l.slug) ? ` ${szChip(f)}` : "";
         return `<tr data-el="${attr(spKeyTok(l.slug, l.item))}${over ? " outruns" : ""}">
-          <td class="l">${spEsc(l.item)}${word}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
+          <td class="l">${l.item}${word}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
           <td>${num(l.soldPerDay)}</td>
           <td>${over && !deal ? `<span class="sp-red">${busiest}</span>` : busiest}</td>
           <td>${fmt(l.revenue)}</td>
@@ -9273,7 +9499,7 @@ function drawSite(){
   $("sitePanel").innerHTML = `${siteCrumbs(b.key, shortName(b), true)}
     <div class="sitehead rv">
       ${b.code ? `<span class="bullet">${spEsc(b.code)}</span>` : ""}
-      <div><h2>${spEsc(baseName(b))}${mapButton(b.key,b.name)}${headMarks}</h2><span class="sub">${sub}${depot ? mapButton(depot.key,depot.name) : ""}</span></div>
+      <div><h2>${baseName(b)}${mapButton(b.key,b.name)}${headMarks}</h2><span class="sub">${sub}${depot ? mapButton(depot.key,depot.name) : ""}</span></div>
     </div>
     ${spFinds(finds, b, kind)}
     ${spBody || `
@@ -9398,11 +9624,9 @@ function importSetting(fact, contract, edit){
      game's own figure has moved, whether to the typed figure or elsewhere,
      that answer is stale: it is no longer an edit, the row goes back to the
      board's own suggestion, and the caller forgets it. Until then it stands,
-     including the figure in game typed to turn a suggestion down. A line
-     with neither a contract nor a suggestion (a route has since covered it)
-     has nothing left for a typed figure to answer: stale too. */
+     including the figure in game typed to turn a suggestion down. */
   const typed = !!edit && Number.isFinite(edit.value) && edit.value >= 0;
-  const stale = typed && (edit.inGame !== inGame || suggested === null);
+  const stale = typed && edit.inGame !== inGame;
   const edited = typed && !stale;
   const value = edited ? edit.value : suggested;
   return {smart, current, pausedWeekly, paused, fit: fact.st, setTo, inGame, suggested, value, edited,
@@ -10398,7 +10622,7 @@ function sbImportCtx(d){
     + `, plus ${Number.isFinite(margin) ? `a ${Math.round(margin * 100)}%` : "the"} margin`;
   const suggests = r => r.suggested !== null && r.suggested !== r.inGame;
   const boxTip = r => r.edited
-    ? `Your own figure. ${suggests(r) ? `The board suggests ${num(r.suggested)}` : `The game holds ${num(r.inGame ?? 0)}`}`
+    ? `Your own figure. ${suggests(r) ? `The board suggests ${num(r.suggested)}` : `The game holds ${num(r.inGame)}`}`
     : r.covered ? `The figure in game. ${routeTip(r)}`
     : r.paused ? `The figure in game, on a paused contract: resume it in game for it to deliver`
     : suggests(r) ? `The board suggests ${num(r.value)}: ${boardSays(r)}`
@@ -10842,22 +11066,6 @@ function wireImportSet(host, redraw){
     again(id);
   });
 }
-/* A live refresh rebuilds the tab a Set to box is on, and a figure typed but
-   not yet committed would go with the box, the focus too. Read before the
-   rebuild; the function returned puts both back on the new box (renderAll()). */
-function impDraft(){
-  const box = document.activeElement;
-  if(!box || !box.matches || !box.matches("input[data-imp]")) return null;
-  const id = box.dataset.imp, value = box.value, typed = value !== box.defaultValue;
-  const sec = box.closest("section[id]");
-  return () => {
-    const host = (sec && document.getElementById(sec.id)) || document;
-    const next = [...host.querySelectorAll("input[data-imp]")].find(el => el.dataset.imp === id);
-    if(!next || next === box) return;
-    if(typed) next.value = value;
-    next.focus({preventScroll: true});
-  };
-}
 
 /* --- market demand ----------------------------------------------------
    The waves come first: the game's own hype events, supplier trouble, and
@@ -10897,16 +11105,55 @@ function waveHtml(dir, place, what, tag, tip, hood){
     ? `<a class="wave ${dir}" href="#secMarket" data-hood="${attr(hood)}" data-tip="${attr(tip)}">${body}</a>`
     : `<span class="wave ${dir}" data-tip="${attr(tip)}">${body}</span>`;
 }
+/* A list as one message: the last pair is its own key, so a translation can
+   join it with its "and"; in English every pair is joined with a comma. */
+function grList(items){
+  if(items.length < 2) return items.length ? String(items[0]) : "";
+  if(items.length === 2) return tt("gr.list.last", "{a}, {b}", {a: items[0], b: items[1]});
+  return tt("gr.list", "{a}, {b}", {a: items[0], b: grList(items.slice(1))});
+}
+/* The start of a list that goes on (a "…" or a "+2" follows): commas only,
+   so a translation's "and" never ends a list that has not ended. */
+function grCutList(items){
+  if(items.length < 2) return items.length ? String(items[0]) : "";
+  return tt("gr.list.cut", "{a}, {b}", {a: items[0], b: grCutList(items.slice(1))});
+}
+/* The fee names an office cell's note joins with "and". */
+function grAndList(items){
+  if(items.length < 2) return items.length ? String(items[0]) : "";
+  return tt("gr.list.and", "{a} and {b}", {a: items[0], b: grAndList(items.slice(1))});
+}
+/* A cell's note is its facts in a row, each its own message. */
+function grFacts(items){
+  const f = items.filter(Boolean);
+  if(f.length < 2) return f.length ? f[0] : "";
+  return tt("gr.facts", "{a}, {b}", {a: f[0], b: grFacts(f.slice(1))});
+}
+/* The game's supplier events, by the English Python names them with. */
+const grTroubleOf = k => ({"product shortage": "shortage", "supplier strain": "strain", "backorder": "backorder"})[String(k).toLowerCase()] || "";
+function grTroubleWord(k){
+  switch(grTroubleOf(k)){
+    case "shortage": return tt("gr.trouble.shortage", "shortage");
+    case "strain": return tt("gr.trouble.strain", "supplier strain");
+    case "backorder": return tt("gr.trouble.backorder", "backorder");
+  }
+  return String(k).toLowerCase().replace(/^product /, "");
+}
 function drawMovers(){
   const m = D.market;
   const out = [];
-  const days = n => `${n} d`;
+  const days = n => tt("gr.wave.days", "{n} d", {n});
   m.hype.slice(0,5).forEach(h => {
-    const what = (h.count > 1 ? `${h.count} products` : spEsc(h.items[0]))
-      + (h.sellHere ? " you sell here" : h.mine ? " you stock" : "");
+    const n = h.count, item = h.items[0];
+    const what = h.sellHere ? (n > 1 ? tt("gr.hype.manyHere", {one: "{n} product you sell here", other: "{n} products you sell here"}, {n})
+        : tt("gr.wave.oneHere", "{item} you sell here", {item}))
+      : h.mine ? (n > 1 ? tt("gr.hype.manyStock", {one: "{n} product you stock", other: "{n} products you stock"}, {n})
+        : tt("gr.hype.oneStock", "{item} you stock", {item}))
+      : n > 1 ? tt("gr.hype.many", {one: "{n} product", other: "{n} products"}, {n}) : item;
     const place = hoodName(h.hood);
-    const tip = `Hype in ${place} since day ${h.startDay}, ${plural(h.daysLeft, "day")} left: ${
-      h.items.join(", ")}. Click to sort the grid by ${place}.`;
+    const tip = tt("gr.hype.tip", {one: "Hype in {place} since day {day}, {n} day left: {items}. Click to sort the grid by {place}.",
+      other: "Hype in {place} since day {day}, {n} days left: {items}. Click to sort the grid by {place}."},
+      {place, day: h.startDay, n: h.daysLeft, items: grList(h.items)});
     out.push(waveHtml("up", place, what, days(h.daysLeft), tip, h.hood));
   });
   /* Python already folds one product short at several suppliers into one
@@ -10914,11 +11161,11 @@ function drawMovers(){
      here, so a pier short of three products is one chip, not three. The chip
      is the place (or the one product), a short phrase and the days; the
      sentence is on hover. */
-  const trouble = k => k.toLowerCase().replace(/^product /, "");
   const byPlace = new Map();
   m.shortages.forEach(x => {
     // Folded by the place's identity: a neighbourhood's key, or the address.
-    const where = x.count > 1 ? `${x.count} suppliers` : x.hood ? hoodName(x.hood) : x.where;
+    const where = x.count > 1 ? tt("gr.short.suppliers", {one: "{n} supplier", other: "{n} suppliers"}, {n: x.count})
+      : x.hood ? hoodName(x.hood) : x.where;
     const id = x.count > 1 ? where : x.hood || x.where;
     const g = byPlace.get(id) || {where, rows: [], mine: 0, lo: Infinity, hi: 0};
     g.rows.push(x); g.mine += x.mine ? 1 : 0;
@@ -10927,28 +11174,52 @@ function drawMovers(){
   });
   [...byPlace.values()].slice(0,5).forEach(g => {
     const n = g.rows.length, one = g.rows[0];
-    const kinds = [...new Set(g.rows.map(x => trouble(x.kind)))];
-    const kind = kinds.length === 1 ? kinds[0] : "supply trouble";
-    const left = g.lo === g.hi ? days(g.lo) : `${g.lo}–${g.hi} d`;
-    const tip = `${g.where}: ${g.rows.map(x => `${x.item} (${trouble(x.kind)}, ${plural(x.daysLeft, "day")} left${
-      x.mine ? ", you sell or make it" : ""})`).join(", ")}.`;
+    // One kind or several is decided on the kinds themselves, never on their words.
+    const kinds = [...new Set(g.rows.map(x => grTroubleOf(x.kind) || String(x.kind).toLowerCase().replace(/^product /, "")))];
+    const kind = kinds.length === 1 ? kinds[0] : "mixed";
+    const left = g.lo === g.hi ? days(g.lo) : tt("gr.wave.dayRange", "{lo}–{hi} d", {lo: g.lo, hi: g.hi});
+    const tip = tt("gr.short.tip", "{where}: {list}.", {where: g.where, list: grList(g.rows.map(x => x.mine
+      ? tt("gr.short.rowMine", {one: "{item} ({kind}, {n} day left, you sell or make it)", other: "{item} ({kind}, {n} days left, you sell or make it)"},
+        {item: x.item, kind: grTroubleWord(x.kind), n: x.daysLeft})
+      : tt("gr.short.row", {one: "{item} ({kind}, {n} day left)", other: "{item} ({kind}, {n} days left)"},
+        {item: x.item, kind: grTroubleWord(x.kind), n: x.daysLeft})))});
     /* Whether it touches the player's own shelves is in the sentence on
        hover; the chip itself stays as short as the design's. */
-    if(n === 1) out.push(waveHtml("dn", spEsc(one.item), `${kind} at ${mapAddress(g.where)}`, left, tip));
-    else out.push(waveHtml("dn", mapAddress(g.where), `${n} products ${kind === "shortage" ? "short" : `in ${kind}`}`, left, tip));
+    const place = mapAddress(g.where);
+    if(n === 1) out.push(waveHtml("dn", one.item,
+      kind === "shortage" ? tt("gr.wave.shortAt", "shortage at {place}", {place})
+      : kind === "strain" ? tt("gr.wave.strainAt", "supplier strain at {place}", {place})
+      : kind === "backorder" ? tt("gr.wave.backorderAt", "backorder at {place}", {place})
+      : tt("gr.wave.troubleAt", "{kind} at {place}", {kind: grTroubleWord(one.kind), place}), left, tip));
+    else out.push(waveHtml("dn", place,
+      kind === "shortage" ? tt("gr.wave.manyShort", {one: "{n} product short", other: "{n} products short"}, {n})
+      : kind === "strain" ? tt("gr.wave.manyStrain", {one: "{n} product in supplier strain", other: "{n} products in supplier strain"}, {n})
+      : kind === "backorder" ? tt("gr.wave.manyBackorder", {one: "{n} product in backorder", other: "{n} products in backorder"}, {n})
+      : kind === "mixed" ? tt("gr.wave.manyTrouble", {one: "{n} product in supply trouble", other: "{n} products in supply trouble"}, {n})
+      : tt("gr.wave.manyIn", {one: "{n} product in {kind}", other: "{n} products in {kind}"}, {n, kind: grTroubleWord(one.kind)}), left, tip));
   });
   /* One wave, or one shop opening, moves a whole range at once, so it reads as
      one chip, and where our own shop opened in that window the note says so. */
   (m.movers || []).slice(0,6).forEach(x => {
-    const what = (x.count > 1 ? `${x.count} ${x.family.toLowerCase()} lines` : spEsc(x.items[0])) + (x.sell ? " you sell here" : "");
+    const n = x.count, family = gnLower(x.family), item = x.items[0];
+    const what = n > 1 ? (x.sell ? tt("gr.mover.manyHere", {one: "{n} {family} line you sell here", other: "{n} {family} lines you sell here"}, {n, family})
+        : tt("gr.mover.many", {one: "{n} {family} line", other: "{n} {family} lines"}, {n, family}))
+      : x.sell ? tt("gr.wave.oneHere", "{item} you sell here", {item}) : item;
     const delta = `${x.delta > 0 ? "+" : ""}${x.delta}`;
     const place = hoodName(x.hood);
-    const tip = `${place}: ${x.items.join(", ")}${x.count > x.items.length ? "…" : ""} moved ${delta} on average over ${
-      plural(m.trendDays, "day")}${x.openedHere ? `; ${x.openedHere} opened day ${x.openedDay}, inside this window` : ""}. Click to sort the grid by ${place}.`;
+    const items = x.count > x.items.length ? tt("gr.list.more", "{list}…", {list: grCutList(x.items)}) : grList(x.items);
+    const tip = x.openedHere
+      ? tt("gr.mover.tipOpened", {one: "{place}: {items} moved {delta} on average over {n} day; {shop} opened day {day}, inside this window. Click to sort the grid by {place}.",
+          other: "{place}: {items} moved {delta} on average over {n} days; {shop} opened day {day}, inside this window. Click to sort the grid by {place}."},
+          {place, items, delta, n: m.trendDays, shop: x.openedHere, day: x.openedDay})
+      : tt("gr.mover.tip", {one: "{place}: {items} moved {delta} on average over {n} day. Click to sort the grid by {place}.",
+          other: "{place}: {items} moved {delta} on average over {n} days. Click to sort the grid by {place}."},
+          {place, items, delta, n: m.trendDays});
     out.push(waveHtml(x.up ? "up" : "dn", place, what, delta, tip, x.hood));
   });
   $("movers").innerHTML = out.length ? out.join("")
-    : `<span class="quiet">No demand events running right now${m.trendDays ? "" : "; trend history starts building from today"}.</span>`;
+    : `<span class="quiet">${m.trendDays ? tt("gr.movers.none", "No demand events running right now.")
+      : tt("gr.movers.noneFresh", "No demand events running right now; trend history starts building from today.")}</span>`;
   $$("#movers a[data-hood]").forEach(a => a.onclick = e => {
     e.preventDefault();
     marketSortHood = a.dataset.hood; marketSortDir = -1;
@@ -10956,22 +11227,33 @@ function drawMovers(){
   });
 }
 
+/* A cell's note: the row's name, the neighbourhood, and its facts. */
+const grCellTip = (name, hood, facts) => tt("gr.cell.tip", "{name} in {hood}: {facts}", {name, hood: hoodName(hood), facts: grFacts(facts)});
+const grNoReading = (name, hood) => tt("gr.cell.none", "{name} in {hood}: no reading", {name, hood: hoodName(hood)});
+/* The hype and the trend a product or office cell adds to its note. */
+const grHypeFact = n => n ? tt("gr.fact.hype", {one: "hype for {n} more day", other: "hype for {n} more days"}, {n}) : "";
+const grDeltaFact = (delta, n) => delta ? tt("gr.fact.delta", {one: "{delta} over {n} day", other: "{delta} over {n} days"},
+  {delta: `${delta > 0 ? "+" : ""}${delta}`, n}) : "";
 /* Every type reads the same way: the average demand across its primary
    products, which is the number the grid ranks by, so a one-product type shows
    that product's own demand. */
 function typeRow(r, i, hoods){
-  const guide = xlGuideLink(r.slug, "Setup guide"), plan = growthPlanLink(growthPlanType(r.slug, true));
-  let h = `<div class="r" data-r="${i}" data-slug="${attr(r.slug)}"><span class="mk-name">${r.type}</span><small>${plural(r.products, "product")}${r.mine ? " · you run one" : ""}${
+  const guide = xlGuideLink(r.slug, tt("gr.guide", "Setup guide")), plan = growthPlanLink(growthPlanType(r.slug, true));
+  let h = `<div class="r" data-r="${i}" data-slug="${attr(r.slug)}"><span class="mk-name">${r.type}</span><small>${
+    tt("gr.type.products", {one: "{n} product", other: "{n} products"}, {n: r.products})}${r.mine ? ` · ${tt("gr.row.runOne", "you run one")}` : ""}${
     guide ? ` · ${guide}` : ""}${plan ? ` · ${plan}` : ""}</small></div>`;
   r.cells.forEach((c, j) => {
-    if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}" data-tip="${attr(`${r.type} in ${hoodName(hoods[j])}: no reading`)}">—</div>`; return; }
-    const range = r.products === 1 ? `demand ${c.demand} for its one product`
-      : c.count < r.products ? `average demand ${c.demand} across the ${c.count} of its ${r.products} products with a reading here`
-      : `average demand ${c.demand} across its ${c.count} products`;
+    if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}" data-tip="${attr(grNoReading(r.type, hoods[j]))}">—</div>`; return; }
+    const d = c.demand, n = r.products;
+    const range = n === 1 ? tt("gr.fact.oneProduct", "demand {d} for its one product", {d})
+      : c.count < n ? tt("gr.fact.avgSome", "average demand {d} across the {count} of its {n} products with a reading here", {d, count: c.count, n})
+      : tt("gr.fact.avgAll", "average demand {d} across its {n} products", {d, n: c.count});
     // The game counts every seller there, the player's own shop included.
-    const sellers = `${plural(c.providers, "seller")}${c.count > 1 ? " on average" : ""}${
-      c.here ? (c.providers ? ", yours among them" : ", you have a store here") : ""}`;
-    const tip = `${r.type} in ${hoodName(c.hood)}: ${range}, ${sellers}`;
+    const sellers = c.count > 1
+      ? tt("gr.fact.sellersAvg", {one: "{n} seller on average", other: "{n} sellers on average"}, {n: c.providers})
+      : tt("gr.fact.sellers", {one: "{n} seller", other: "{n} sellers"}, {n: c.providers});
+    const tip = grCellTip(r.type, c.hood, [range, sellers,
+      c.here ? (c.providers ? tt("gr.fact.yours", "yours among them") : tt("gr.fact.store", "you have a store here")) : ""]);
     h += `<div class="cell${c.here ? " mine" : ""}" data-r="${i}" data-c="${j}" data-slug="${attr(r.slug)}" data-hood="${
       attr(c.hood)}"${cellGo(r.slug, c.hood)} style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
       c.demand}${rivalDots(c.providers)}</div>`;
@@ -10983,17 +11265,18 @@ function typeRow(r, i, hoods){
    included. Neighbourhoods without an office building have no reading, and
    say so. */
 function officeRow(r, i, hoods, trendDays, noOffices){
-  const guide = xlGuideLink(r.slug, "Setup guide");
-  let h = `<div class="r" data-r="${i}" data-slug="${attr(r.slug)}"><span class="mk-name">${r.type}</span><small>${r.fees.join(", ")}${r.mine ? " · you run one" : ""}${
-    guide ? ` · ${guide}` : ""}</small></div>`;
+  const guide = xlGuideLink(r.slug, tt("gr.guide", "Setup guide"));
+  let h = `<div class="r" data-r="${i}" data-slug="${attr(r.slug)}"><span class="mk-name">${r.type}</span><small>${grList(r.fees)}${
+    r.mine ? ` · ${tt("gr.row.runOne", "you run one")}` : ""}${guide ? ` · ${guide}` : ""}</small></div>`;
   r.cells.forEach((c, j) => {
-    if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}" data-office data-tip="${attr(`${r.type} in ${hoodName(hoods[j])}: ${
-      noOffices.includes(hoods[j]) ? "no office buildings here" : "no reading"}`)}">—</div>`; return; }
-    const firms = c.here ? `${plural(c.providers, "firm")} charging it, yours among them`
-      : c.providers ? plural(c.providers, "rival firm") : "no firm charging it yet";
-    const tip = `${r.type} in ${hoodName(c.hood)}: demand ${c.demand} for ${r.fees.join(" and ")}, ${firms}${
-      c.hype ? `, hype for ${plural(c.hype, "more day")}` : ""}${
-      c.delta ? `, ${c.delta > 0 ? "+" : ""}${c.delta} over ${plural(trendDays, "day")}` : ""}`;
+    if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}" data-office data-tip="${attr(noOffices.includes(hoods[j])
+      ? tt("gr.cell.noOffice", "{name} in {hood}: no office buildings here", {name: r.type, hood: hoodName(hoods[j])})
+      : grNoReading(r.type, hoods[j]))}">—</div>`; return; }
+    const n = c.providers;
+    const firms = c.here ? tt("gr.fact.firmsYours", {one: "{n} firm charging it, yours among them", other: "{n} firms charging it, yours among them"}, {n})
+      : n ? tt("gr.fact.rivals", {one: "{n} rival firm", other: "{n} rival firms"}, {n}) : tt("gr.fact.noFirm", "no firm charging it yet");
+    const tip = grCellTip(r.type, c.hood, [tt("gr.fact.demandFor", "demand {d} for {fees}", {d: c.demand, fees: grAndList(r.fees)}),
+      firms, grHypeFact(c.hype), grDeltaFact(c.delta, trendDays)]);
     h += `<div class="cell${c.here ? " mine" : ""}" data-r="${i}" data-c="${j}" data-office data-slug="${
       attr(r.slug)}" data-hood="${attr(c.hood)}"${cellGo(r.slug, c.hood)} style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
       c.demand}${rivalDots(c.providers)}</div>`;
@@ -11001,16 +11284,16 @@ function officeRow(r, i, hoods, trendDays, noOffices){
   return h;
 }
 function productRow(r, i, hoods, trendDays){
-  const tag = r.make && !r.sell ? "you make this, not sold" : r.make ? "you make and sell it" : r.sell ? "you sell it" : "";
+  const tag = r.make && !r.sell ? tt("gr.row.makeOnly", "you make this, not sold") : r.make ? tt("gr.row.makeSell", "you make and sell it")
+    : r.sell ? tt("gr.row.sell", "you sell it") : "";
   const office = r.office ? " data-office" : "";  // an office fee: nothing to plan
   const plan = r.office ? "" : growthPlanLink(growthPlanType(r.slug, false));
   let h = `<div class="r" data-r="${i}"><span class="mk-name">${r.item}</span><small>${[tag, plan].filter(Boolean).join(" · ")}</small></div>`;
   r.cells.forEach((c, j) => {
-    if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}"${office} data-tip="${attr(`${r.item} in ${hoodName(hoods[j])}: no reading`)}">—</div>`; return; }
-    const tip = `${r.item} in ${hoodName(c.hood)}: demand ${c.demand}, ${c.monopoly ? "only you sell it" : plural(c.providers, "seller")}${
-      c.hype ? `, hype for ${plural(c.hype, "more day")}` : ""}${
-      c.delta ? `, ${c.delta > 0 ? "+" : ""}${c.delta} over ${plural(trendDays, "day")}` : ""}${
-      c.sell && !c.monopoly ? ", you sell it here" : ""}`;
+    if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}"${office} data-tip="${attr(grNoReading(r.item, hoods[j]))}">—</div>`; return; }
+    const tip = grCellTip(r.item, c.hood, [tt("gr.fact.demand", "demand {d}", {d: c.demand}),
+      c.monopoly ? tt("gr.fact.onlyYou", "only you sell it") : tt("gr.fact.sellers", {one: "{n} seller", other: "{n} sellers"}, {n: c.providers}),
+      grHypeFact(c.hype), grDeltaFact(c.delta, trendDays), c.sell && !c.monopoly ? tt("gr.fact.sellHere", "you sell it here") : ""]);
     h += `<div class="cell${c.sell ? " mine" : ""}" data-r="${i}" data-c="${j}"${office} style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
       c.demand}${rivalDots(c.monopoly ? 0 : c.providers)}</div>`;
   });
@@ -11069,18 +11352,21 @@ function drawMarket(){
   const offices = types ? hoodSorted(m.offices || [], m.hoods) : [];
 
   const notes = [];
-  if(marketSortHood) notes.push(`Sorted by demand in ${hoodName(marketSortHood)}, ${
-      marketSortDir < 0 ? "highest" : "lowest"} first · <a class="link" href="#" id="marketUsual">usual order</a>`);
-  else if(types) notes.push("Ranked by each type's best neighbourhood");
-  else if(marketView === "new") notes.push("Strongest unserved demand first");
-  else if(!m.trendDays) notes.push("Trend history starts building from today");
-  if(!types && rows.length > limit) notes.push(showAllMarket
-    ? `all ${rows.length} · <a class="link" href="#" id="marketMore">top ${limit}</a>`
-    : `${limit} of ${rows.length} · <a class="link" href="#" id="marketMore">show all ${rows.length}</a>`);
+  if(marketSortHood) notes.push(`${marketSortDir < 0
+      ? tt("gr.note.sortHigh", "Sorted by demand in {hood}, highest first", {hood: hoodName(marketSortHood)})
+      : tt("gr.note.sortLow", "Sorted by demand in {hood}, lowest first", {hood: hoodName(marketSortHood)})
+    } · <a class="link" href="#" id="marketUsual">${tt("gr.note.usual", "usual order")}</a>`);
+  else if(types) notes.push(tt("gr.note.ranked", "Ranked by each type's best neighbourhood"));
+  else if(marketView === "new") notes.push(tt("gr.note.unserved", "Strongest unserved demand first"));
+  else if(!m.trendDays) notes.push(tt("gr.note.fresh", "Trend history starts building from today"));
+  const all = rows.length;
+  if(!types && all > limit) notes.push(showAllMarket
+    ? `${tt("gr.note.all", "all {n}", {n: all})} · <a class="link" href="#" id="marketMore">${tt("gr.note.top", "top {n}", {n: limit})}</a>`
+    : `${tt("gr.note.some", "{shown} of {n}", {shown: limit, n: all})} · <a class="link" href="#" id="marketMore">${tt("gr.note.showAll", "show all {n}", {n: all})}</a>`);
   $("marketNote").innerHTML = notes.join(" · ");
   $("marketWhy").dataset.tip = types
-    ? `Each cell is the average demand, 0 to 100, across a type's primary products in that neighbourhood, so a one-product type shows that product's own demand. Rows rank by their best neighbourhood. Dots count sellers, yours included, ten at most. An outlined cell is where you already run one. Offices, below the shops, sell one hourly fee each, so their cell is that fee's demand and the dots count the firms charging it, yours included. Hover to light a row and a column, click a cell to find premises for that type there, click a neighbourhood to sort by it.`
-    : `Each cell is the demand for a product in that neighbourhood, 0 to 100, shaded to match. Dots count sellers; no dots means only you. An outlined cell is where you already sell it. Hover to light a row and a column, click a neighbourhood to sort by it.`;
+    ? tt("gr.why.types", "Each cell is the average demand, 0 to 100, across a type's primary products in that neighbourhood, so a one-product type shows that product's own demand. Rows rank by their best neighbourhood. Dots count sellers, yours included, ten at most. An outlined cell is where you already run one. Offices, below the shops, sell one hourly fee each, so their cell is that fee's demand and the dots count the firms charging it, yours included. Hover to light a row and a column, click a cell to find premises for that type there, click a neighbourhood to sort by it.")
+    : tt("gr.why.products", "Each cell is the demand for a product in that neighbourhood, 0 to 100, shaded to match. Dots count sellers; no dots means only you. An outlined cell is where you already sell it. Hover to light a row and a column, click a neighbourhood to sort by it.");
 
   const grid = $("market");
   /* The label column is 200px on a desk; a phone narrows it (--mk-label, in
@@ -11091,12 +11377,13 @@ function drawMarket(){
      a phone shows; the full name stays in its tip. */
   grid.innerHTML = any
     ? `<div></div>` + m.hoods.map((h, j) => `<div class="h${h === marketSortHood ? " sort" : ""}${HOOD_TAGS[h] ? " mk-tagged" : ""}" data-c="${j}" data-hood="${attr(h)}" data-tip="${
-        attr(`${hoodName(h)}: click to sort by demand here`)}"><span class="mk-long"${gnLangAttr()}>${shortHood(hoodName(h))}</span>${
+        attr(tt("gr.head.tip", "{hood}: click to sort by demand here", {hood: hoodName(h)}))}"><span class="mk-long"${gnLangAttr()}>${shortHood(hoodName(h))}</span>${
         HOOD_TAGS[h] ? `<span class="mk-tag">${HOOD_TAGS[h]}</span>` : ""}</div>`).join("")
       + shown.map((r, i) => types ? typeRow(r, i, m.hoods) : productRow(r, i, m.hoods, m.trendDays)).join("")
-      + (offices.length ? `<div class="band">Offices<small>customers served online · each cell is the demand for its hourly fee</small></div>`
+      + (offices.length ? `<div class="band">${tt("gr.band.title", "Offices")}<small>${
+        tt("gr.band.note", "customers served online · each cell is the demand for its hourly fee")}</small></div>`
         + offices.map((r, k) => officeRow(r, shown.length + k, m.hoods, m.trendDays, m.noOffices || [])).join("") : "")
-    : `<span class="quiet" style="grid-column:1/-1">${types ? "No business type matched." : "Nothing here."}</span>`;
+    : `<span class="quiet" style="grid-column:1/-1">${types ? tt("gr.empty.types", "No business type matched.") : tt("gr.empty.rows", "Nothing here.")}</span>`;
   wireMarketSort();
   wireTips();
 }
@@ -11146,6 +11433,12 @@ function defaultRate(kind){
   if(!vals.length) return null;
   return Math.max(1, Math.round(vals.reduce((a,b) => a+b, 0) / vals.length));
 }
+/* Facts joined by semicolons, each its own message. */
+function grSemis(items){
+  const f = items.filter(Boolean);
+  if(f.length < 2) return f.length ? f[0] : "";
+  return tt("gr.semis", "{a}; {b}", {a: f[0], b: grSemis(f.slice(1))});
+}
 /* The company order for one material, in one pure function so it can be tested
    on its own: what the planned week needs beyond what the factories on the
    floor already eat, added to what the company already holds on active
@@ -11182,7 +11475,7 @@ function drawPlan(){
   indexPlan();
   const types = planTypes();
   if(!types.length){
-    $("planNote").textContent = "No product catalogue in this save.";
+    $("planNote").textContent = tt("gr.plan.noCatalogue", "No product catalogue in this save.");
     $("planPicker").innerHTML = ""; $("planBody").innerHTML = ""; $("ingBody").innerHTML = "";
     return;
   }
@@ -11191,7 +11484,7 @@ function drawPlan(){
       ? "ba:businesstype_supermarket" : types[0];
   const cat = D.plan.catalogue, own = (D.plan.own || {})[planType];
   planSeed = factoryCounts(planType);
-  const kind = cat[planType].type, low = kind.toLowerCase();
+  const kind = cat[planType].type, low = gnLower(kind);
   const shops = own ? (own.shops ?? own.sites) || 0 : 0;
   const perShop = defaultRate(planType) || 0;
   const pick = k => { planType = k; planCounts = {}; drawPlan(); };
@@ -11201,10 +11494,10 @@ function drawPlan(){
   const owned = types.filter(k => (D.plan.own || {})[k]);
   const others = types.filter(k => !owned.includes(k));
   $("planPicker").innerHTML = (owned.length ? `<span class="seg" id="planTypes"></span>` : "") + (others.length
-    ? `<span class="field" style="margin:0"><select id="planPick" aria-label="Another business type">
-        <option value="" ${others.includes(planType) ? "" : "selected"} disabled>Another type…</option>${
+    ? `<span class="field" style="margin:0"><select id="planPick" aria-label="${attr(tt("gr.plan.pickAria", "Another business type"))}">
+        <option value="" ${others.includes(planType) ? "" : "selected"} disabled>${tt("gr.plan.pickOther", "Another type…")}</option>${
         others.map(k => `<option value="${attr(k)}" ${k === planType ? "selected" : ""}>${cat[k].type} · ${cat[k].products.length}</option>`).join("")}
-      </select></span>` : "") + xlGuideLink(planType, "Setup guide");
+      </select></span>` : "") + xlGuideLink(planType, tt("gr.guide", "Setup guide"));
   if(owned.length) seg($("planTypes"), owned.map(k => [k, cat[k].type]), () => planType, k => { planType = k; planCounts = {}; }, drawPlan);
   const sel = $("planPick");
   if(sel) sel.onchange = e => pick(e.target.value);
@@ -11240,9 +11533,9 @@ function drawPlan(){
     const r = RECIPE_BY[slug];
     if(!r){
       bought++;
-      return `<tr><td class="l">${itemName(slug)}<span class="sub">no recipe in the game: bought in${
-          wantWeek ? ` · shops want ${num(Math.round(wantWeek))}/week` : ""}</span></td>
-        <td class="l" colspan="4"><span class="quiet">the game documents no way to make this one; the shops buy it from an importer</span></td></tr>`;
+      return `<tr><td class="l">${itemName(slug)}<span class="sub">${tt("gr.line.noRecipe", "no recipe in the game: bought in")}${
+          wantWeek ? ` · ${tt("gr.line.shopsWant", "shops want {n:,}/week", {n: Math.round(wantWeek)})}` : ""}</span></td>
+        <td class="l" colspan="4"><span class="quiet">${tt("gr.line.noRecipeNote", "the game documents no way to make this one; the shops buy it from an importer")}</span></td></tr>`;
     }
     const station = ws[r.workstation] || {};
     const kit = [...(station.assembly || []), ...(station.machines || [])];
@@ -11261,34 +11554,43 @@ function drawPlan(){
          each Monday at one depot, not an amount on order, so it is said depot
          by depot and never summed; a level of N supplies at most N a week,
          which is why it counts toward what is ordered below. */
-      const units = v => num(v);
-      const perDepot = (src, would) => (src.depots || []).map(d => d.smart
-        ? `Smart Delivery ${would ? "would keep" : "keeps"} ${units(d.level)} in stock at ${d.warehouse}${
-            d.name && d.name !== d.importer ? ` (${d.name})` : ""}${
-            !d.plainBefore ? "" : d.plainBefore >= d.level
-              ? `, but the ${units(d.plainBefore)} a week delivered before it already ${d.plainBefore > d.level ? "passes" : "reaches"} the ${units(d.level)} level`
-              : `, counting the ${units(d.plainBefore)} a week delivered before it`}${
-            d.plainAfter ? `, plus ${units(d.plainAfter)} a week on top` : ""}`
-        : `${units(d.weekly)} a week to ${d.warehouse}`).join("; ");
-      const on = !src ? "Not on any import contract yet"
-        : src.active && src.smart ? `${perDepot(src, false)}, from ${src.from}`
-        : src.active ? `${num(src.ordered)} a week on order now from ${src.from} to ${src.warehouse}`
-        : paused && src.smart ? `Paused: ${perDepot(src, true)}, from ${src.from}; nothing active`
-        : paused ? `${num(paused)} a week sits on paused contracts from ${src.from} to ${src.warehouse}; nothing active`
-        : `${contracts} contract${contracts === 1 ? "" : "s"} with ${src.from} to ${src.warehouse}, ordered at zero`;
+      const perDepot = (src, would) => grSemis((src.depots || []).map(d => {
+        if(!d.smart) return tt("gr.src.weekly", "{n:,} a week to {depot}", {n: d.weekly, depot: d.warehouse});
+        const p = {n: d.level, depot: d.warehouse, name: d.name};
+        const named = d.name && d.name !== d.importer;
+        return grFacts([would
+          ? (named ? tt("gr.src.wouldNamed", "Smart Delivery would keep {n:,} in stock at {depot} ({name})", p)
+            : tt("gr.src.would", "Smart Delivery would keep {n:,} in stock at {depot}", p))
+          : (named ? tt("gr.src.keepsNamed", "Smart Delivery keeps {n:,} in stock at {depot} ({name})", p)
+            : tt("gr.src.keeps", "Smart Delivery keeps {n:,} in stock at {depot}", p)),
+          !d.plainBefore ? "" : d.plainBefore > d.level
+            ? tt("gr.src.beforePasses", "but the {b:,} a week delivered before it already passes the {n:,} level", {b: d.plainBefore, n: d.level})
+            : d.plainBefore === d.level
+            ? tt("gr.src.beforeReaches", "but the {b:,} a week delivered before it already reaches the {n:,} level", {b: d.plainBefore, n: d.level})
+            : tt("gr.src.beforeCounts", "counting the {b:,} a week delivered before it", {b: d.plainBefore}),
+          d.plainAfter ? tt("gr.src.after", "plus {n:,} a week on top", {n: d.plainAfter}) : ""]);
+      }));
+      const on = !src ? tt("gr.src.none", "Not on any import contract yet")
+        : src.active && src.smart ? tt("gr.src.smartFrom", "{depots}, from {from}", {depots: perDepot(src, false), from: src.from})
+        : src.active ? tt("gr.src.active", "{n:,} a week on order now from {from} to {depot}", {n: src.ordered, from: src.from, depot: src.warehouse})
+        : paused && src.smart ? tt("gr.src.pausedSmart", "Paused: {depots}, from {from}; nothing active", {depots: perDepot(src, true), from: src.from})
+        : paused ? tt("gr.src.paused", "{n:,} a week sits on paused contracts from {from} to {depot}; nothing active", {n: paused, from: src.from, depot: src.warehouse})
+        : tt("gr.src.zero", {one: "{n} contract with {from} to {depot}, ordered at zero", other: "{n} contracts with {from} to {depot}, ordered at zero"},
+          {n: contracts, from: src.from, depot: src.warehouse});
       meta[i.item] = {
-        tip: on
-          + (base ? `; your factories already eat ${num(base)} of it a week` : "")
-          + (unit !== undefined ? `; ${fmt(unit)} each on day ${D.plan.priceDay}` : ""),
+        tip: grSemis([on,
+          base ? tt("gr.src.eat", "your factories already eat {n:,} of it a week", {n: base}) : "",
+          unit !== undefined ? tt("gr.src.price", "{w:$} each on day {day}", {w: unit, day: D.plan.priceDay}) : ""]),
         ordered: src ? src.ordered : null, active: src ? src.active : false,
         smart: !!(src && src.smart), paused, contracts, from: src ? src.from : null, baseline: base,
         unit: unit === undefined ? null : unit,
       };
     });
     return `<tr class="line" data-m="${machinesOn(slug)}" data-min="0" data-max="99" data-rate="${r.out}" data-ing="${attr(ing)}" data-kit="${attr(JSON.stringify(kit))}" data-slug="${attr(slug)}" data-name="${attr(r.item)}">
-      <td class="l">${r.item}<span class="sub" data-tip="${attr(`One ${station.name || r.workstation} is ${kit.length ? kit.join(" + ") : "one machine"}; one makes ${num(r.out * HOURS)} a day`)}">${
-        num(r.out)}/h rated · ${station.name || r.workstation}</span></td>
-      <td class="l"><span class="step"><a href="#" data-d="-1" aria-label="one machine fewer">−</a><b>${machinesOn(slug)}</b><a href="#" data-d="1" aria-label="one machine more">+</a><span class="machines"></span></span></td>
+      <td class="l">${r.item}<span class="sub" data-tip="${attr(tt("gr.line.kitTip", "One {station} is {kit}; one makes {n:,} a day",
+        {station: station.name || r.workstation, kit: kit.length ? kit.join(" + ") : tt("gr.line.oneMachine", "one machine"), n: r.out * HOURS}))}">${
+        tt("gr.line.rated", "{n:,}/h rated · {station}", {n: r.out, station: station.name || r.workstation})}</span></td>
+      <td class="l"><span class="step"><a href="#" data-d="-1" aria-label="${attr(tt("gr.line.fewer", "one machine fewer"))}">−</a><b>${machinesOn(slug)}</b><a href="#" data-d="1" aria-label="${attr(tt("gr.line.more", "one machine more"))}">+</a><span class="machines"></span></span></td>
       <td class="made"></td><td class="covers"></td><td class="l"><span class="ing"></span></td></tr>`;
   });
 
@@ -11296,24 +11598,31 @@ function drawPlan(){
      services are charged for work done, so no factory line makes or stocks
      them and they stay out of the import sums entirely. */
   const svcs = (cat[planType].services || []).map(itemName);
-  $("planNote").textContent = (bought ? `${plural(bought, "product")} of ${cat[planType].products.length} bought in` : "")
-    + (svcs.length ? `${bought ? " · " : ""}also sells ${svcs.join(", ")} as services, which no line makes or stocks` : "");
+  $("planNote").textContent = [bought ? tt("gr.plan.bought", {one: "{n} product of {total} bought in", other: "{n} products of {total} bought in"},
+      {n: bought, total: cat[planType].products.length}) : "",
+    svcs.length ? tt("gr.plan.services", "also sells {list} as services, which no line makes or stocks", {list: grList(svcs)}) : ""]
+    .filter(Boolean).join(" · ");
   $("planBody").innerHTML = `
     <div class="planstats">
-      <div class="planstat"><span class="lab">Machines</span><div class="v" id="vMachines"></div></div>
-      <div class="planstat" id="vMadeTile"><span class="lab">Made / week</span><div class="v"><span id="vMade"></span><small>units</small></div></div>
-      <div class="planstat"><span class="lab">Raw material / week</span><div class="v"><span id="vRaw"></span><small>units to import</small></div></div>
+      <div class="planstat"><span class="lab">${tt("gr.stat.machines", "Machines")}</span><div class="v" id="vMachines"></div></div>
+      <div class="planstat" id="vMadeTile"><span class="lab">${tt("gr.stat.made", "Made / week")}</span><div class="v"><span id="vMade"></span><small>${tt("gr.stat.units", "units")}</small></div></div>
+      <div class="planstat"><span class="lab">${tt("gr.stat.raw", "Raw material / week")}</span><div class="v"><span id="vRaw"></span><small>${tt("gr.stat.import", "units to import")}</small></div></div>
     </div>
     <table data-pershop="${perShop}" data-shops="${shops}" data-peak="${D.plan.peak || 1}" data-products="${cat[planType].products.length}" data-ingmeta="${attr(JSON.stringify(meta))}">
-      <thead><tr><th>Product</th><th class="l">Machines</th><th>Made / week</th><th>Supplies</th><th class="l">Raw material / week</th></tr></thead>
+      <thead><tr><th>${tt("gr.col.product", "Product")}</th><th class="l">${tt("gr.col.machines", "Machines")}</th><th>${tt("gr.col.made", "Made / week")}</th><th>${
+        tt("gr.col.supplies", "Supplies")}</th><th class="l">${tt("gr.col.raw", "Raw material / week")}</th></tr></thead>
       <tbody>${lines.join("")}</tbody>
     </table>
     <p class="quiet" id="vKit" style="margin:12px 0 0"></p>
     <p class="planline">${own && perShop
-      ? `Your <b>${shops}</b> ${low}${shops === 1 ? "" : "s"} take what ${shops === 1 ? "it sells" : "they sell"} today, <b>${
-          num(perShop)}</b> a day per product, <b id="vTake"></b> units a week across the range. Everything above that, <b id="vSurplus"></b> units a week, is surplus for export.`
-      : own ? `Your <b>${shops}</b> ${low}${shops === 1 ? "" : "s"} trade, but how much physical supply they use is not measured, so shop coverage and export surplus cannot be estimated here.`
-      : `You do not run a ${low} yet, so nothing here is measured: everything made, <b id="vSurplus"></b> units a week, is surplus for export until the shops exist.`}<span id="vShort"></span></p>`;
+      ? tt("gr.plan.take", {one: "Your {shops} {type} take what it sells today, {per} a day per product, {take} units a week across the range. Everything above that, {surplus} units a week, is surplus for export.",
+          other: "Your {shops} {type}s take what they sell today, {per} a day per product, {take} units a week across the range. Everything above that, {surplus} units a week, is surplus for export."},
+          {n: shops, shops: `<b>${shops}</b>`, type: low, per: `<b>${num(perShop)}</b>`, take: `<b id="vTake"></b>`, surplus: `<b id="vSurplus"></b>`})
+      : own ? tt("gr.plan.unmeasured", {one: "Your {shops} {type} trade, but how much physical supply they use is not measured, so shop coverage and export surplus cannot be estimated here.",
+          other: "Your {shops} {type}s trade, but how much physical supply they use is not measured, so shop coverage and export surplus cannot be estimated here."},
+          {n: shops, shops: `<b>${shops}</b>`, type: low})
+      : tt("gr.plan.notRun", "You do not run a {type} yet, so nothing here is measured: everything made, {surplus} units a week, is surplus for export until the shops exist.",
+          {type: low, surplus: `<b id="vSurplus"></b>`})}<span id="vShort"></span></p>`;
   planDraw();
   wireTips();
 }
@@ -11392,7 +11701,7 @@ function drawProducts(){
           ? tt("co.prod.open.top.of", "Open {site}, the store that sells the most of it, one of {n}", {site: shortName(seller.b), n: p.stores})
           : tt("co.prod.open.top", "Open {site}, the store that sells the most of it", {site: shortName(seller.b)}))
         : tt("co.prod.open.stocks", "Open {site}, which stocks it; no store sold any yesterday", {site: shortName(seller.b)});
-      const name = seller ? `<a class="link xl-sells" href="#company" data-xl-item="${attr(p.slug)}" data-tip="${attr(opens)}">${spEsc(p.item)}</a>` : spEsc(p.item);
+      const name = seller ? `<a class="link xl-sells" href="#company" data-xl-item="${attr(p.slug)}" data-tip="${attr(opens)}">${p.item}</a>` : p.item;
       return `<tr data-slug="${attr(p.slug)}">
       <td class="l"${showPeak?"":` data-tip="${attr(peakTip(p))}"`}>${name}</td>
       <td><span class="bar"><i style="width:${(p.revenue / top * 100).toFixed(0)}%"></i></span>${fmt(p.revenue)}</td>
@@ -11942,7 +12251,7 @@ function mapButton(key, label){
   return `<button type="button" class="map-shortcut" data-map-key="${attr(key)}" aria-label="${attr(name)}" title="${attr(tt("map.btn.title", "Show on map"))}">${MAP_ICON}</button>`;
 }
 function mapRef(b, label){
-  return b ? `${mapText(label === undefined ? shortName(b) : label)}${mapButton(b.key, b.name || b.address)}` : "—";
+  return b ? `${label === undefined ? shortName(b) : label}${mapButton(b.key, b.name || b.address)}` : "—";
 }
 /* A site's name, wherever the board prints it, is a way to the site's own
    page (siteHref() in the board script): plain text until the pointer is on
@@ -16018,17 +16327,13 @@ function renderAll(){
   const marked = !!(staleSource || staleDraws.size);
   drawMast();
   if(marked) paintStale();
-  /* A row that throws is kept out of date and marks the dot, as in
-     drawStale(); the rows after it, the footer and the wiring still run. */
-  const typing = calmLazy ? impDraft() : null;
   PAGE_DRAWS.forEach(row => {
     if(here !== null && row[0] && !row[0].split(" ").includes(here)){ pageStale.add(row); return; }
     pageStale.delete(row);
-    try{ row[1](); staleDraws.delete(row); }
-    catch(e){ pageStale.add(row); staleDraws.set(row, e && e.message || String(e)); console.error(e); }
+    row[1]();
+    staleDraws.delete(row);
   });
-  if(typing) typing();
-  if(marked || staleDraws.size) paintStale();
+  if(marked) paintStale();
   drawFooter();
   drawDifficulty(diffFocus);
   wireAll();
@@ -18781,7 +19086,7 @@ function growthPlanType(slug, isType){
   return holds.find(k => k === planType) || holds.find(k => (D.plan.own || {})[k]) || holds[0] || "";
 }
 const growthPlanLink = kind => kind
-  ? `<a class="link mk-plan" href="#secPlan" data-plan="${attr(kind)}">Plan a chain ›</a>` : "";
+  ? `<a class="link mk-plan" href="#secPlan" data-plan="${attr(kind)}">${tt("gr.planLink", "Plan a chain")} ›</a>` : "";
 /* The finder's Demand figure comes back here: the By type view, the type's row
    scrolled to and ringed once, its cells with it. A type the grid has no row
    for lands on the grid itself. */
@@ -18831,10 +19136,11 @@ function planDraw(){
     set(".step b", m); set(".made", fmtN(wk));
     const covers = peakDay ? wk / 7 / peakDay : null;
     const coversEl = q(".covers", tr);
-    if(coversEl) coversEl.innerHTML = (covers === null ? "—" : `${covers.toFixed(1)} shop${covers === 1 ? "" : "s"}`)
-      + (wantWeek ? `<span class="sub">shops take ${fmtN(wantWeek)} · ${surplus >= 0
-          ? chipHtml("ok", `+${fmtN(surplus)}`, "Surplus a week, for export")
-          : chipHtml("bad", fmtN(surplus), "Short a week; this line needs more machines")}</span>` : "");
+    if(coversEl) coversEl.innerHTML = (covers === null ? "—"
+        : covers === 1 ? tt("gr.line.coversOne", "{n:.1f} shop", {n: covers}) : tt("gr.line.covers", "{n:.1f} shops", {n: covers}))
+      + (wantWeek ? `<span class="sub">${tt("gr.line.take", "shops take {n:,}", {n: Math.round(wantWeek)})} · ${surplus >= 0
+          ? chipHtml("ok", `+${fmtN(surplus)}`, tt("gr.line.surplusTip", "Surplus a week, for export"))
+          : chipHtml("bad", fmtN(surplus), tt("gr.line.shortTip", "Short a week; this line needs more machines"))}</span>` : "");
     let kit = []; try{ kit = JSON.parse(tr.dataset.kit || "[]"); }catch(e){}
     kit.forEach(k => kitCount[k] = (kitCount[k] || 0) + m);
     const cell = q("td.l", tr);
@@ -18843,7 +19149,7 @@ function planDraw(){
       const i = x.lastIndexOf(":"); return [x.slice(0, i).trim(), +x.slice(i + 1)];
     });
     const ingEl = q(".ing", tr);
-    if(ingEl) ingEl.innerHTML = parts.map(([name, f]) => `<b>${fmtN(wk * f)}</b> ${name}`).join(", ");
+    if(ingEl) ingEl.innerHTML = grList(parts.map(([name, f]) => `<b>${fmtN(wk * f)}</b> ${name}`));
     parts.forEach(([name, f]) => {
       raw += wk * f;
       const r = ing[name] || (ing[name] = {week: 0, by: []});
@@ -18870,16 +19176,20 @@ function planDraw(){
      under the table, not in a tile of its own. */
   const madeTile = $("vMadeTile");
   if(madeTile) madeTile.dataset.tip = wantWeek
-    ? `The shops take ${fmtN(wantWeek * products)} units a week across the range; ${fmtN(exportWeek)} is surplus for export`
-    : shopsOwned ? `Demand is unknown: the ${shopsOwned} ${shopsOwned === 1 ? "shop sells" : "shops sell"} services or goods this planner cannot measure, so shop coverage and export surplus cannot be estimated`
-    : `Nothing measured yet: all ${fmtN(made)} units a week are surplus for export until the shops exist`;
-  put("vShort", shortLines ? ` ${shortLines} line${shortLines === 1 ? " does" : "s do"} not keep up with the shelves; those need more machines.` : "");
+    ? tt("gr.made.tip", "The shops take {take:,} units a week across the range; {surplus:,} is surplus for export",
+      {take: Math.round(wantWeek * products), surplus: Math.round(exportWeek)})
+    : shopsOwned ? tt("gr.made.unknown", {one: "Demand is unknown: the {n} shop sells services or goods this planner cannot measure, so shop coverage and export surplus cannot be estimated",
+      other: "Demand is unknown: the {n} shops sell services or goods this planner cannot measure, so shop coverage and export surplus cannot be estimated"}, {n: shopsOwned})
+    : tt("gr.made.none", "Nothing measured yet: all {n:,} units a week are surplus for export until the shops exist", {n: Math.round(made)});
+  put("vShort", shortLines ? ` ${tt("gr.plan.short", {one: "{n} line does not keep up with the shelves; those need more machines.",
+    other: "{n} lines do not keep up with the shelves; those need more machines."}, {n: shortLines})}` : "");
   /* What the factory has to buy: each workstation's kit, times the machines
      on every line that uses it. */
   const kitList = Object.entries(kitCount).sort((a, b) => b[1] - a[1]);
-  put("vKit", !machines ? "No machines set, so nothing is being made."
-    : kitList.length ? `Machines to buy: ${kitList.map(([k, n]) => `${k} ×${n}`).join(", ")} · ${kitList.reduce((a, b) => a + b[1], 0)} in all`
-    : "Nothing in this range is manufactured; it is all bought in.");
+  put("vKit", !machines ? tt("gr.kit.none", "No machines set, so nothing is being made.")
+    : kitList.length ? tt("gr.kit.buy", "Machines to buy: {list} · {n} in all",
+      {list: grList(kitList.map(([k, n]) => `${k} ×${n}`)), n: kitList.reduce((a, b) => a + b[1], 0)})
+    : tt("gr.kit.bought", "Nothing in this range is manufactured; it is all bought in."));
   /* the ingredient table: one row per material, summed over the lines that share it */
   const body = $("ingBody");
   if(body){
@@ -18907,31 +19217,36 @@ function planDraw(){
       const value = unit === null ? null : r.week * unit;
       total++; if(unit !== null){ priced++; cash += value; }
       return `<tr data-name="${attr(name)}" class="${prev[name] && prev[name] !== fmtN(r.week) ? "bump" : ""}">` +
-      `<td class="l"${i.tip ? ` data-tip="${attr(i.tip)}"` : ""}>${name}${i.from && !i.active ? ` ${chipHtml("warn", "paused", "Every contract for it is paused; none of it counts as ordered")}` : ""}</td>` +
-      `<td class="l"><span class="usedby" data-tip="${attr(`Used by ${r.by.join(", ")}`)}">${
-        r.by.slice(0, 2).join(", ")}${r.by.length > 2 ? ` +${r.by.length - 2}` : ""}</span></td>` +
+      `<td class="l"${i.tip ? ` data-tip="${attr(i.tip)}"` : ""}>${name}${i.from && !i.active ? ` ${chipHtml("warn", tt("gr.ing.paused", "paused"),
+        tt("gr.ing.pausedTip", "Every contract for it is paused; none of it counts as ordered"))}` : ""}</td>` +
+      `<td class="l"><span class="usedby" data-tip="${attr(tt("gr.ing.usedBy", "Used by {list}", {list: grList(r.by)}))}">${
+        r.by.length > 2 ? tt("gr.list.plus", "{list} +{n}", {list: grCutList(r.by.slice(0, 2)), n: r.by.length - 2}) : grList(r.by)}</span></td>` +
       `<td>${fmtN(r.week / 7)}</td><td class="wk">${fmtN(r.week)}</td><td><span class="set">${fmtN(o.target)}</span></td>` +
-      `<td>${ordered === null ? `<span class="quiet">not ordered</span>` : num(ordered)
-        }${ordered !== null && i.smart && i.active ? ` <span class="sub plan-smart" data-tip="Smart Delivery keeps a stock level at each depot; this is the most those levels supply in a week, which the target is compared with. Hover the ingredient for each depot's level">a week at most, Smart Delivery</span>` : ""
-        }${i.paused ? ` ${chipHtml("warn", `paused ${fmtN(i.paused)}`, "Also sits on paused contracts; never counted as ordered")}` : ""}</td>` +
+      `<td>${ordered === null ? `<span class="quiet">${tt("gr.ing.notOrdered", "not ordered")}</span>` : num(ordered)
+        }${ordered !== null && i.smart && i.active ? ` <span class="sub plan-smart" data-tip="${attr(tt("gr.ing.smartTip", "Smart Delivery keeps a stock level at each depot; this is the most those levels supply in a week, which the target is compared with. Hover the ingredient for each depot's level"))}">${
+          tt("gr.ing.smart", "a week at most, Smart Delivery")}</span>` : ""
+        }${i.paused ? ` ${chipHtml("warn", tt("gr.ing.pausedN", "paused {n:,}", {n: Math.round(i.paused)}),
+          tt("gr.ing.pausedNTip", "Also sits on paused contracts; never counted as ordered"))}` : ""}</td>` +
       `<td>${gap === null ? "—"
-        : ordered === null ? chipHtml("warn", `+${fmtN(gap)}`, "No contract yet, so this is the whole order to place")
-        : Math.abs(gap) < 1 ? chipHtml("ok", "as is")
+        : ordered === null ? chipHtml("warn", `+${fmtN(gap)}`, tt("gr.ing.newTip", "No contract yet, so this is the whole order to place"))
+        : Math.abs(gap) < 1 ? chipHtml("ok", tt("gr.ing.asIs", "as is"))
         : gap > 0 ? chipHtml("warn", `+${num(Math.ceil(gap))}`)
         : chipHtml("dim", num(Math.floor(gap)))}</td>` +
-      `<td class="cash">${value === null ? `<span class="quiet">no price</span>` : fmt(value)}</td></tr>`;
+      `<td class="cash">${value === null ? `<span class="quiet">${tt("gr.ing.noPrice", "no price")}</span>` : fmt(value)}</td></tr>`;
     }).join("");
     /* No price known anywhere: the column goes, and the ? says why. */
     const table = $("ingTable");
     if(table) table.classList.toggle("nocash", !priced);
     const foot = $("ingFoot");
-    if(foot) foot.innerHTML = total ? `<tr><td class="l">Total</td><td></td><td>${fmtN(raw / 7)}</td><td>${fmtN(raw)}</td><td>${fmtN(targetSum)}</td><td></td><td></td><td class="cash">${cash ? fmt(cash) : ""}</td></tr>` : "";
+    if(foot) foot.innerHTML = total ? `<tr><td class="l">${tt("gr.ing.total", "Total")}</td><td></td><td>${fmtN(raw / 7)}</td><td>${fmtN(raw)}</td><td>${fmtN(targetSum)}</td><td></td><td></td><td class="cash">${cash ? fmt(cash) : ""}</td></tr>` : "";
     const note = $("ingNote");
-    if(note) note.textContent = !total ? "Nothing to import; this range is bought as finished goods."
-      : `Company targets are company-wide: you type each one across your importer contracts in the game; the board adds them up and never guesses a split per warehouse.`
-        + (!priced ? "" : ` A week costs ${fmt(cash)} across the ${priced} of ${total} ingredients this company already buys.`
-          + (priced < total
-            ? ` Unit prices are what you paid on day ${D.plan.priceDay}; the other ${total - priced} show quantities only.` : ""));
+    if(note) note.textContent = !total ? tt("gr.ing.none", "Nothing to import; this range is bought as finished goods.")
+      : [tt("gr.ing.note", "Company targets are company-wide: you type each one across your importer contracts in the game; the board adds them up and never guesses a split per warehouse."),
+        priced ? tt("gr.ing.cost", {one: "A week costs {w:$} across the {priced} of {n} ingredients this company already buys.",
+          other: "A week costs {w:$} across the {priced} of {n} ingredients this company already buys."}, {w: cash, priced, n: total}) : "",
+        priced && priced < total ? tt("gr.ing.prices", {one: "Unit prices are what you paid on day {day}; the other {n} show quantities only.",
+          other: "Unit prices are what you paid on day {day}; the other {n} show quantities only."},
+          {day: D.plan.priceDay, n: total - priced}) : ""].filter(Boolean).join(" ");
   }
 }
 const bindPlan = once(() => on("click", "tr.line .step a[data-d]", (a, e) => {
@@ -20887,11 +21202,10 @@ function startWatching(){
       gwTerms.clear();  // what the game said of caps belongs to the board it was said about
       gwReadStuck = false;
       if(gwOpen && gwOpen._gwGate) gwOpen._gwBuilt = true;  // an undo's gate: a board built since
-      /* A row that would not draw failed on older numbers than these: the
-         next board clears its mark, and it is tried again when it opens. One
-         that throws on these numbers marks the dot again (renderAll()). */
-      staleDraws.clear();
       if(first) boot(); else renderCalm(same);
+      /* A row that would not draw failed on older numbers than these: the
+         next board clears its mark, and it is tried again when it opens. */
+      if(staleDraws.size){ staleDraws.clear(); paintStale(); }
       const dot = $("live");
       if(dot){ dot.classList.add("just"); setTimeout(() => dot.classList.remove("just"), 1600); }
     },
