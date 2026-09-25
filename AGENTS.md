@@ -173,9 +173,13 @@ and never attach one to an issue.
   `tests/game_link.test.cjs`, `tests/game_text.test.cjs`, `tests/performance.test.cjs`,
   `tests/resume.test.cjs`, `tests/save_location.test.cjs`. `tests/alert_kinds.test.cjs` also
   matches a fragment of the findings loop in `mapFindings()` in `web/map.js` with a regex.
-  The tests above slice through `between()` in `tests/_slice.cjs`, which throws naming an
-  anchor that is missing or no longer unique, so a reworded anchor fails loudly rather than
-  slicing the wrong span. Three Python tests read `ba_dashboard.py` as text: `tests/test_plan_orders.py`
+  The tests above find their anchors through `between()` and `at()` in `tests/_slice.cjs`.
+  They throw naming a start anchor that is missing or no longer unique, or an end anchor
+  missing after it, so a reworded anchor fails loudly rather than slicing the wrong span.
+  End anchors are not checked for uniqueness: the first one after the start wins.
+  `tests/game_names.test.cjs`, `tests/i18n_runtime.test.cjs` and
+  `tests/number_locale.test.cjs` also slice `ba_dashboard.py`, still with a bare `indexOf`.
+  Three Python tests read `ba_dashboard.py` as text: `tests/test_plan_orders.py`
   cuts `function planOrder(` out of `TEMPLATE`, `tests/test_routed_supply.py` checks the
   line with `id:"shortfall"`, and `tests/test_doc_registries.py` reads the `ALERT_GROUPS`
   ids and `TEMPLATE`'s tokens, and parses `_alerts()` and the `_*_notes` helpers for the
