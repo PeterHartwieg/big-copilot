@@ -1275,6 +1275,9 @@ class FixtureKeyTests(unittest.TestCase):
     OPTIONAL = {
         "needs": {"dem", "ownPaused"}, "idle": {"unfed", "routedFrom", "importLevel", "smart", "dem"},
         "shops": {"wholesale", "wholesaleDay"},
+        # R13's line hours: accepted whether or not the fixture carries them yet.
+        "lines": {"hoursNow", "needHours", "demBasis", "running", "status", "why", "level",
+                  "dem"},
     }
 
     @staticmethod
@@ -1327,7 +1330,10 @@ class FixtureKeyTests(unittest.TestCase):
         self.assertEqual(set(fixture["alertsDemand"]), {"lines", "minor"})
         theirs = self.rows(fixture["supply"])
         for kind in theirs:
-            sent = [row for supply in mine for row in self.rows(supply)[kind]]
+            # A key with a leading underscore is Python's own (a line's _posts,
+            # for the factory roster) and leaves before the payload does.
+            sent = [{k: v for k, v in row.items() if not k.startswith("_")}
+                    for supply in mine for row in self.rows(supply)[kind]]
             self.assertTrue(sent, kind)
             optional = self.OPTIONAL.get(kind, set())
             always = set.intersection(*(set(row) for row in sent)) - optional

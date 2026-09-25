@@ -4944,6 +4944,45 @@ def _recipe_identity(rid: str | None, station: str, recipes: dict, chosen: dict)
     return None, None
 
 
+def _line_hours(posted: list, machines: int, rate: float, dem_makes: float, basis: str) -> dict:
+    """A factory line's hours: rostered now, and needed in each sizing.
+
+    `hoursNow` is the fewest hours a day any of its machines is rostered on
+    any weekday. 24/7 needs every machine all 24; Demand the hours that make
+    what the ends draw plus the margin once (`dem_makes` a day), never past
+    24, and 24 where nothing is drawn (`demBasis` "none"). Too few hours is
+    short (why hours: critical below STAFF_CRITICAL of the week on its
+    least-staffed machine, else warn). More than Demand needs is covered, with
+    `lower` as a suggestion, never a change. `_posts`, the machines' item ids
+    by list position, is for _factory_staffing() and leaves the payload there.
+    """
+    posted = sorted(posted, key=lambda m: (m["slot"], str(m["id"])))
+    now = min((min(m["days"]) for m in posted), default=0)
+    weekly = min((sum(m["days"]) for m in posted), default=0)
+    dem = 24
+    if basis == "sales" and rate and machines:
+        dem = min(24, math.ceil(round(dem_makes * (1 + SUPPLY_MARGIN) / (rate * machines), 6)))
+
+    def verdict(need):
+        if now < need:
+            level = "critical" if weekly < need * 7 * STAFF_CRITICAL else "warn"
+            return {"status": "short", "why": "hours", "level": level}
+        out = {"status": "covered", "why": None, "level": "ok"}
+        if now > need:
+            out["lower"] = need
+        return out
+
+    return {
+        "hoursNow": now,
+        "needHours": {"cap": 24, "dem": dem},
+        "demBasis": basis,
+        "running": sum(m["running"] for m in posted),
+        **verdict(24),
+        "dem": verdict(dem),
+        "_posts": [m["id"] for m in posted],
+    }
+
+
 def _factories(
     save: Save,
     names: Names,
@@ -4972,6 +5011,9 @@ def _factories(
     # produceUpToValue; the save leaves out a false one): the game stops the
     # machine once the factory holds that many of what it makes.
     limits = collections.defaultdict(lambda: collections.defaultdict(list))
+    # Each machine's item id and its rostered hours per weekday, for the line's
+    # hours now, what runs, and the factory roster (_factory_staffing).
+    posted = collections.defaultdict(lambda: collections.defaultdict(list))
     for building in save.items(save.root["BuildingRegistrations"]):
         if not building.get("RentedByPlayer"):
             continue
@@ -5003,6 +5045,12 @@ def _factories(
             roster[key][line].append(
                 {"slot": slot, "hours": len(covered[post]), "off": _off_hours(covered[post])}
             )
+            posted[key][line].append({
+                "slot": slot, "id": post,
+                "days": [sum(1 for w, _h in covered[post] if w == wd) for wd in range(7)],
+                # Running: a recipe chosen and somebody posted at some hour.
+                "running": line[1] is not None and bool(covered[post]),
+            })
     if not machines or not recipes:
         # No line can be read (no machines, or no recipe pages to read them
         # with), but current import contracts and recorded outflow are known.
@@ -5173,12 +5221,13 @@ def _factories(
             # more: an export, a factory it feeds), this line's share of it,
             # never past capacity. With nothing drawn or shipped there is no
             # demand to read, and the line is taken at capacity.
-            dem_makes, ramp = makes, ()
+            dem_makes, ramp, dem_basis = makes, (), "none"
             if demand:
                 wanted, ramp = demand(key, slug)
                 wanted = max(wanted, ships)
                 if wanted > 0 and capacity[slug]:
                     dem_makes = min(makes, wanted * makes / capacity[slug])
+                    dem_basis = "sales"
             limit = line_limit(key, (station, rid))
             make_back = min(ships, makes / 24 * hours_today, (limit or 0) * LIMIT_SLACK)
             limit_held = limit is not None and stock > 0 and stock >= limit - make_back
@@ -5203,6 +5252,7 @@ def _factories(
                     "limitHeld": limit_held,
                     "atRoster": round(makes * share),
                     **staffing,
+                    **_line_hours(posted[key][(station, rid)], n, rec["out"], dem_makes, dem_basis),
                 }
             )
             made_by[slug].add(key)
@@ -5334,6 +5384,9 @@ def _factories(
             {
                 "s": index[key],
                 "machines": sum(counter.values()),
+                # Placed is `machines`; running, those with a recipe and
+                # somebody posted at some hour.
+                "running": sum(m["running"] for line in posted[key].values() for m in line),
                 "lines": lines,
                 "unnamed": unnamed,
                 "needs": list(needs.values()),
