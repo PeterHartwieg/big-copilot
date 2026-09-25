@@ -75,6 +75,7 @@ function harness({routes = {}} = {}) {
     onBoard: () => true,
     supersede: () => ++context.sourceGen,
     closeSavePicker() {}, place() {}, armWatch() {}, stopWatch() {}, syncWatchBtn() {}, linkMoved() {},
+    pickedOnce() {},
     idleState() { seen.states.push(['idle']); strip.tone = 'ready'; },
     startAttempt: () => true, finishAttempt() {},
     async buildFrom(file) { seen.builds.push(file); },
@@ -667,4 +668,39 @@ test('#link= only moves the port on this machine', () => {
     h.context.location.hash = bad;
     assert.equal(h.run('linkBase()'), 'http://127.0.0.1:8322', bad);
   }
+});
+
+// WB-1 in #109: the save's bytes are read under linkFetch's own timer, and a
+// game that quits or stalls mid-download ends the read like a closed game,
+// not as an unhandled rejection that leaves "Reading the game" on screen.
+test('a game that quits mid-download reads as unreachable, with nothing built', async () => {
+  const cut = {...reply(200, null, {'X-Game-Link-Stamp': 's9'}),
+    arrayBuffer: async () => { throw new TypeError('network error'); }};
+  const h = harness({routes: {health: {...HEALTH, stamp: 's9'}, save: cut}});
+  let finished = 0;
+  h.context.finishAttempt = () => { finished++; };
+  h.run('lastLinkStamp = "s1"');
+  await h.run('loadFromLink("Reading the game")');
+  assert.equal(h.seen.builds.length, 0);
+  assert.deepEqual(h.seen.states.at(-1), ['bad', 'Could not reach the game', 'http://127.0.0.1:8322']);
+  assert.match(h.seen.notes.at(-1)[1], /The game is not running/);
+  assert.equal(finished, 1, 'the attempt is over, so Update works again');
+  assert.equal(h.run('lastLinkStamp'), 's1', 'the next check reads the save again');
+});
+
+test("the save's timer runs until its bytes are in, and is longer than a health check's", async () => {
+  const h = harness({routes: {health: {...HEALTH, stamp: 's9'}}});
+  const timers = [];
+  let live = 0;
+  h.context.setTimeout = (fn, ms) => { timers.push(ms); live++; return timers.length; };
+  h.context.clearTimeout = () => { live--; };
+  let during = null;
+  h.routes.save = {...reply(200, null, {'X-Game-Link-Stamp': 's9'}),
+    arrayBuffer: async () => { during = live; return new ArrayBuffer(8); }};
+  await h.run('loadFromLink("Reading the game")');
+  assert.deepEqual(timers, [5000, 30000], 'health, then the save');
+  assert.equal(during, 1, "the save's timer is still armed while its body is read");
+  assert.equal(live, 0);
+  assert.equal(h.seen.builds.length, 1);
+  assert.equal(h.seen.builds[0].parts[0].byteLength, 8, 'the bytes read are the ones built');
 });

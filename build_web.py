@@ -354,6 +354,7 @@ details.help[open] summary::after{content:"\2013"}
 .menu-hint{font-size:11px;color:var(--ink-2);margin:4px 10px 10px}
 .menu-divider{border-top:1px solid var(--rule);margin:6px 0 12px}
 .menu-panel .lg-chip{margin-left:9px}
+.menu-panel #localeReset{margin-left:10px}
 .menu-panel details.help{margin-top:12px;border-top:1px solid var(--rule);padding:0 10px}
 .menu-panel details.help summary{padding:12px 0}
 .menu-panel .help-content{padding-bottom:12px}
@@ -422,7 +423,7 @@ details.help[open] summary::after{content:"\2013"}
       <p id="lgHelpLinked"><b>Linked to the game.</b> With the <a href="https://steamcommunity.com/sharedfiles/filedetails/?id=3806322395" target="_blank" rel="noopener">Big Copilot Link mod</a> from the Steam Workshop enabled, click <b>Link to the game</b> and the board reads the running game itself. Chrome and Edge ask once to allow the site to reach your computer; the data still never leaves it.</p>
       <div class="lg-gametext">
         <div class="path-label" id="asideEyebrow">Game text</div>
-        <div id="asideChip"><button type="button" class="lg-chip" id="localeChip" data-state="ok"><i></i><span>Game text built in</span></button></div>
+        <div id="asideChip"><button type="button" class="lg-chip" id="localeChip" data-state="ok"><i></i><span>Game text built in</span></button> <button type="button" class="lg-text" id="localeReset" hidden title="Forget your en.json and use the game text that comes with the page" data-tt-title="land.gametext.reset.title" data-tt="land.gametext.reset">Use the built-in text</button></div>
         <p id="asideText">Names, recipes and station capacities come with the page, from game build __BUILD__.</p>
         <p class="quiet" id="asideQuiet">If your game is newer, click the chip and choose its <code>en.json</code>; it is remembered in this browser and wins over the built-in text.</p>
         <div id="localeWindows" hidden><div class="path-label" data-tt="land.gametext.where">en.json lives here &middot; default Windows Steam installation</div>
@@ -430,7 +431,7 @@ details.help[open] summary::after{content:"\2013"}
         </div>
         <p id="localeOther" class="quiet">To find your game's <code>en.json</code>, open Steam &rarr; Manage &rarr; Browse local files. On macOS, search that folder for <code>en.json</code>; use Show Package Contents if the game files are inside an app bundle.</p>
       </div>
-      <p class="lg-quiet"><button type="button" class="lg-text" id="forgetHistory" title="Sixty days of demand and cash history are kept in this browser for the trends. Forgetting them starts a fresh record." data-tt-title="land.forget.title" data-tt="land.forget">Forget history</button> <span data-tt="land.forget.after">&middot; the page only reads your saves, from a folder or from the running game.</span></p>
+      <p class="lg-quiet"><button type="button" class="lg-text" id="forgetHistory" title="Two weeks of demand and sixty days of cash history are kept in this browser for the trends. Forgetting them starts a fresh record." data-tt-title="land.forget.title" data-tt="land.forget">Forget history</button> <span data-tt="land.forget.after">&middot; the page only reads your saves, from a folder or from the running game.</span></p>
     </div>
   </details>
   <div class="orb" id="lgOrb" aria-hidden="true"><i></i><u></u></div>
