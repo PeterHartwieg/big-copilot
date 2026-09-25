@@ -10433,7 +10433,7 @@ def _alerts(
 
     found.extend(_idle_notes(businesses, supply["idle"], silent, mode))
     found.extend(_feed_notes(businesses, supply.get("factories", {}), silent, mode))
-    found.extend(_staff_notes(businesses, supply.get("factories", {}), silent))
+    found.extend(_staff_notes(businesses, supply.get("factories", {}), silent, mode))
     found.extend(_unnamed_notes(businesses, supply.get("factories", {}), silent))
     return _condense(found, gate)
 
@@ -10705,8 +10705,13 @@ def _unnamed_notes(businesses: list, factories: dict, silent: set) -> list:
     return notes
 
 
-def _staff_notes(businesses: list, factories: dict, silent: set) -> list:
-    """A factory machine nobody is posted to for part of the week stands still."""
+def _staff_notes(businesses: list, factories: dict, silent: set, mode: str = "cap") -> list:
+    """A factory machine nobody is posted to for part of the week stands still.
+
+    Sized 24/7 a machine needs all STAFF_HOURS of the week; sized for demand a
+    named line's machine needs only its `needHours.dem` a day, so it is a gap
+    only below that week. The finding's id does not change with the mode.
+    """
     notes = []
     for site in factories.get("sites", []):
         business = businesses[site["s"]]
@@ -10714,13 +10719,20 @@ def _staff_notes(businesses: list, factories: dict, silent: set) -> list:
             continue
         for line in site["lines"] + site["unnamed"]:
             name = line.get("item") or line["workstation"]
+            week = STAFF_HOURS
+            if mode == "dem" and line.get("needHours"):
+                week = line["needHours"]["dem"] * 7
             for machine in line.get("gaps", []):
-                share = machine["hours"] / STAFF_HOURS
-                lost = round((STAFF_HOURS - machine["hours"]) / 7 * line.get("rate", 0))
+                if machine["hours"] >= week:
+                    continue
+                share = machine["hours"] / week
+                lost = round((week - machine["hours"]) / 7 * line.get("rate", 0))
                 subject = f"{name} at position {machine['slot']}"
                 text = (
                     f"{name} machine at list position {machine['slot']} is staffed "
-                    f"{machine['hours']} of {STAFF_HOURS} hours; nobody on it {machine['off']}"
+                    f"{machine['hours']} of {week} hours"
+                    + (" needed" if week < STAFF_HOURS else "")
+                    + f"; nobody on it {machine['off']}"
                     + (f"; {lost:,} a day not made" if lost else "")
                 )
                 notes.append(
