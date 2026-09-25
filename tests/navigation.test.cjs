@@ -51,6 +51,9 @@ function board({saved = {}, data = {}} = {}) {
     location.hash = entries[position];
     listeners.hashchange();
   }
+  /* web/i18n.js runs ahead of the board script on the page: the tabs' labels
+     are read through its tt(). */
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8'), context);
   vm.runInContext(source.slice(source.indexOf('const SEC_PAGE ='), source.indexOf('/* The business a finding')), context);
   vm.runInContext(source.slice(source.indexOf('const featureDiscovery ='), source.indexOf('/* --- changelog dialog')), context);
   vm.runInContext(source.slice(source.indexOf('const PAGES ='), source.indexOf('/* --- which kinds of finding')), context);

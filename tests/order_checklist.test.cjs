@@ -13,6 +13,8 @@ const start = source.indexOf('function buildOrderChecklist(');
 const end = source.indexOf('const orderMarkCache', start);
 assert.ok(start >= 0 && end > start);
 const context = vm.createContext({});
+// tt(), which the Plan imports card's wording goes through (web/i18n.js).
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8'), context);
 // The row setting the imports table computes, which feeds the checklist.
 const settingStart = source.indexOf('function importSetting(');
 assert.ok(settingStart >= 0 && settingStart < start);
