@@ -76,17 +76,17 @@ CLOSED_SHOP = ("ba:street_fifthavenue", 14)
 
 BUILDINGS = {
     HK_SHOP: {"s": HK_SHOP[0], "n": 2, "h": "hellskitchen", "t": "retail",
-              "z": "C", "m": 225, "x": 50},
+              "z": "C", "m": 225, "x": 50, "v": 2},
     MT_SHOP: {"s": MT_SHOP[0], "n": 8, "h": "midtown", "t": "retail",
-              "z": "M", "m": 1000, "x": 47},
+              "z": "M", "m": 1000, "x": 47, "v": 1},
     LM_OFFICE: {"s": LM_OFFICE[0], "n": 12, "h": "lowermanhattan", "t": "office",
-                "z": "K", "m": 660, "x": 37},
+                "z": "K", "m": 660, "x": 37, "v": 1},
     FLAT: {"s": FLAT[0], "n": 72, "h": "lowermanhattan", "t": "residential",
-           "z": "B", "m": 54, "x": 21},
+           "z": "B", "m": 54, "x": 21, "v": 1},
     DEPOT: {"s": DEPOT[0], "n": 90, "h": "industrycity", "t": "warehouse",
-            "z": "H", "m": 690, "x": 14},
+            "z": "H", "m": 690, "x": 14, "v": 3},
     PIER: {"s": PIER[0], "n": 99, "h": "midtown", "t": "special",
-           "z": "O", "m": 500, "x": 60},
+           "z": "O", "m": 500, "x": 60, "v": 1},
     CLOSED_SHOP: {"s": CLOSED_SHOP[0], "n": 14, "h": "midtown", "t": "retail",
                   "z": "A", "m": 75, "x": 30},
 }
@@ -350,10 +350,29 @@ class StatusTests(unittest.TestCase):
                          ["ba:street_fifthavenue#8", "ba:street_secondavenue#2"])
         self.assertEqual(payload["buildings"][1], {
             "key": "ba:street_secondavenue#2", "address": "2 Second Avenue",
-            "hood": "ba:neighborhood_hellskitchen", "type": "retail", "size": "C", "m2": 225,
+            "hood": "ba:neighborhood_hellskitchen", "type": "retail", "size": "C",
+            "layout": "C2", "m2": 225,
             "traffic": 50, "cap": 30, "rent": 264, "deposit": 16590,
             "status": "vacant", "occupant": None, "owner": "city",
             "ownerRival": None, "occupantRival": None,
+        })
+
+    def test_a_building_carries_its_layout_when_the_finder_has_a_plan_for_it(self):
+        # Layout = size code + version, for the three kinds the finder draws
+        # plans for. A flat, a special building or a row with no version (a
+        # table made before versions were read, as CLOSED_SHOP's) has none.
+        self.assertNotIn("v", BUILDINGS[CLOSED_SHOP])
+        payload = premises([reg(a, AvailableForRent=True) for a in
+                            (HK_SHOP, MT_SHOP, LM_OFFICE, FLAT, DEPOT, PIER, CLOSED_SHOP)])
+        layouts = {b["key"]: b["layout"] for b in payload["buildings"]}
+        self.assertEqual(layouts, {
+            "ba:street_secondavenue#2": "C2",
+            "ba:street_fifthavenue#8": "M1",
+            "ba:street_fifthavenue#12": "K1",
+            "ba:street_fifthavenue#72": None,
+            "ba:street_fifthavenue#90": "H3",
+            "ba:street_fifthavenue#99": None,
+            "ba:street_fifthavenue#14": None,
         })
 
     def test_a_registration_the_table_does_not_place_is_dropped(self):
@@ -503,9 +522,9 @@ class ForSaleTests(unittest.TestCase):
         self.assertEqual(payload["forSale"], [
             {"key": "ba:street_fifthavenue#72", "address": "72 Fifth Avenue",
              "hood": "ba:neighborhood_lowermanhattan", "type": "residential", "size": "B",
-             "m2": 54, "price": 79850000},
+             "layout": None, "m2": 54, "price": 79850000},
             {"key": "ba:street_fifthavenue#8", "address": "8 Fifth Avenue",
-             "hood": "ba:neighborhood_midtown", "type": "retail", "size": "M", "m2": 1000,
+             "hood": "ba:neighborhood_midtown", "type": "retail", "size": "M", "layout": "M1", "m2": 1000,
              "price": 4250000},
         ])
 

@@ -306,7 +306,8 @@ def load_buildings() -> dict:
     """ba_buildings.json as {(street slug, number): row}, read once.
 
     Row keys are single letters to keep the file small: s street slug, n number,
-    h neighbourhood, t building type, z size code, m square metres, x traffic.
+    h neighbourhood, t building type, z size code, m square metres, x traffic,
+    v building version (absent from a table made before versions were read).
     """
     global _buildings
     if _buildings is None:
@@ -1321,6 +1322,21 @@ def _premises_demand(market: dict) -> dict:
     return {hood: rows for hood, rows in out.items() if rows}
 
 
+# The kinds whose buildings the finder shows a floor plan for. A layout is the
+# building's size code plus its version ("C2"), which is how the game picks the
+# interior (BuildingSizeInfo(size, version)); the type is not part of it, so an
+# office C2 is the same shell as a shop C2. make_floor_plans.py draws one plan
+# for each layout these kinds use.
+FLOOR_PLAN_KINDS = ("retail", "office", "warehouse")
+
+
+def _layout(row: dict) -> str | None:
+    """A building's layout code, or None when it has no plan or no version."""
+    if row.get("t") not in FLOOR_PLAN_KINDS or row.get("v") is None:
+        return None
+    return f"{row['z']}{row['v']}"
+
+
 def _premises(save: Save, names: Names, market: dict) -> dict:
     """Every building in the city, with what it would cost and what it holds.
 
@@ -1365,6 +1381,7 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
                 "hood": hood_key(row),
                 "type": row["t"],
                 "size": row["z"],
+                "layout": _layout(row),
                 "m2": row["m"],
                 "traffic": row["x"],
                 "cap": caps.get(row["t"], {}).get(row["z"]),
@@ -1396,6 +1413,7 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
                 "hood": hood_key(row),
                 "type": row["t"],
                 "size": row["z"],
+                "layout": _layout(row),
                 "m2": row["m"],
                 "price": int(round(entry.get("buildingPrice") or 0)),
             }
@@ -11269,7 +11287,15 @@ def render(
             locations = json.load(fh)
         with open(os.path.join(asset_root, "maps", locations["image"]), "rb") as fh:
             image = "data:image/svg+xml;base64," + base64.b64encode(fh.read()).decode("ascii")
-        map_payload = "window.BIG_COPILOT_MAP=" + json.dumps({"data": locations, "image": image}, separators=(",", ":")).replace("</", "<\\/") + ";"
+        embedded = {"data": locations, "image": image}
+        # The finder's floor plans travel with the map in a page opened from a
+        # file; without them the finder simply shows no plan.
+        try:
+            with open(os.path.join(asset_root, "maps", "floor-plans.json"), encoding="utf-8") as fh:
+                embedded["plans"] = json.load(fh)
+        except (OSError, ValueError):
+            pass
+        map_payload = "window.BIG_COPILOT_MAP=" + json.dumps(embedded, separators=(",", ":")).replace("</", "<\\/") + ";"
     # A page that is saved and opened from a file has nowhere to fetch the help
     # from, so an export carries it. The hosted build fetches it instead, with
     # the build stamp on it, and would only be made heavier by a copy. The wiki
@@ -26196,6 +26222,7 @@ class BoardHandler(http.server.BaseHTTPRequestHandler):
         map_assets = {
             "/maps/locations.json": "application/json",
             "/maps/map-background.svg": "image/svg+xml",
+            "/maps/floor-plans.json": "application/json",
             "/wiki-data.json": "application/json",
         }
         if route in map_assets:

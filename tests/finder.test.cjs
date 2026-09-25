@@ -102,7 +102,8 @@ before(async () => {
   server = http.createServer((req, res) => {
     const route = req.url.split('?')[0];
     const files = {'/maps/locations.json': ['locations.json', 'application/json'],
-      '/maps/map-background.svg': ['map-background.svg', 'image/svg+xml']};
+      '/maps/map-background.svg': ['map-background.svg', 'image/svg+xml'],
+      '/maps/floor-plans.json': ['floor-plans.json', 'application/json']};
     if(files[route]){ res.setHeader('Content-Type', files[route][1]); res.end(fs.readFileSync(path.join(root, 'web/maps', files[route][0]))); }
     else { res.setHeader('Content-Type', 'text/html'); res.end(html); }
   });
@@ -184,7 +185,8 @@ test('the switch is in the map window; every filter lives in the panel', async (
     assert.equal(await page.locator('#cityMapPage [data-stage] .fswitch .ibtn').count(), 1);
     assert.equal(await page.locator(chip).isVisible(), true);
     // A chip with its name on it, not a bare pin that only a tooltip names.
-    assert.equal((await page.locator(chip).innerText()).trim(), 'Find a location');
+    // The New badge beside the name is not part of it (it is aria-hidden).
+    assert.equal((await page.locator(`${chip} > span:not(.feature-new)`).innerText()).trim(), 'Find a location');
     assert.equal(await page.getByRole('button', {name: 'Find a location', exact: true}).count(), 1);
     assert.equal(await page.locator(chip).getAttribute('aria-pressed'), 'false');
     assert.equal(await page.locator('#cityMapPage .map-head').isVisible(), true);
@@ -201,7 +203,7 @@ test('the switch is in the map window; every filter lives in the panel', async (
     assert.equal(await page.locator('#cityMapPage .places .filters').evaluate(
       f => f.nextElementSibling.classList.contains('list')), true);
     assert.deepEqual(await page.$$eval('#cityMapPage .filters .lab', l => l.map(x => x.textContent)),
-      ['Kind', 'Type', 'Show', 'Where', 'Size', 'Capacity', 'Traffic', 'Saved']);
+      ['Kind', 'Type', 'Show', 'Where', 'Size', 'Capacity', 'Traffic', 'Layout', 'Saved']);
     // The "ranked by…" line is gone; the formula lives in the ? alone.
     assert.equal(await page.locator('#cityMapPage .fnote').count(), 0);
     assert.match(await page.locator('#cityMapPage .filters .why').getAttribute('data-tip'), /÷ 100/);
@@ -1587,6 +1589,278 @@ test('a row the demand figure leads back to clears the sticky masthead', async (
     assert.ok(await page.evaluate(() => scrollY) > 0, 'the page scrolled');
     // The focus follows, to the office row's cell that opens the finder.
     assert.equal(await page.evaluate(() => document.activeElement?.matches('#market .cell[role=button][data-r="1"]')), true);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+/* Floor plans (issue #70): the game's own layout for each building. The plans
+   are the committed web/maps/floor-plans.json; the rows name their layout. */
+const PLANNED = {...PREMISES, buildings: PREMISES.buildings.map(b =>
+  b.key === HK[0] ? {...b, layout: 'C1'} : b.key === HK[1] ? {...b, layout: 'C2'}
+  : b.key === MT[0] ? {...b, layout: 'D2', size: 'D'} : b.key === HK[4] ? {...b, layout: 'J1'}
+  : b.type === 'retail' || b.type === 'office' ? {...b, layout: null} : b)};
+const dock = '#cityMapPage .lp-dock';
+const tags = page => page.$$eval('#cityMapPage .place.fr', rows => rows.map(r => r.querySelector('.lp-tag')?.textContent || ''));
+
+test('each row names its layout and the dock shows the kind\'s layouts at one scale', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await openMap(page);
+    assert.equal(await page.locator(dock).isVisible(), false);
+    await turnOn(page);
+    await page.locator(`${dock} .lp-tile`).first().waitFor();
+    // The list reads [HK0 C1, MT0 D2, MT1 with no layout]: a row with no plan has no tag.
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
+    assert.deepEqual(await tags(page), ['C1', 'D2', '']);
+    // Every retail layout, each saying how many listed rows have it.
+    assert.deepEqual(await page.$$eval(`${dock} .lp-tile`, t => t.map(x => x.dataset.lpTile)), ['A1', 'A2', 'C1', 'C2', 'D2', 'M1']);
+    assert.deepEqual(await page.$$eval(`${dock} .lp-tilen`, t => t.map(x => x.textContent)),
+      ['none listed', 'none listed', '1 listed', 'none listed', '1 listed', 'none listed']);
+    // One scale: the same number of pixels a metre on every tile.
+    const perMetre = await page.$$eval(`${dock} .lp-svg`, s => s.map(x => +x.getAttribute('width') / x.viewBox.baseVal.width));
+    assert.ok(perMetre.every(k => Math.abs(k - perMetre[0]) < 1e-3), perMetre.join());
+    assert.match(await page.locator(`${dock} .lp-detail`).textContent(), /Hover a row/);
+    // Hovering a row lights its layout and describes it; leaving the list goes back.
+    await page.locator(`#cityMapPage .place[data-pick="${MT[0]}"]`).hover();
+    assert.match(await page.locator(`${dock} .lp-detail`).textContent(), /HoveredD2Retail, size D/);
+    assert.equal(await page.locator(`${dock} .lp-tile.hover`).getAttribute('data-lp-tile'), 'D2');
+    await pick(page, HK[0]);
+    await page.mouse.move(5, 5);
+    await page.waitForFunction(() => /Picked/.test(document.querySelector('#cityMapPage .lp-detail').textContent));
+    assert.match(await page.locator(`${dock} .lp-detail`).textContent(), /PickedC1Retail, size C/);
+    assert.equal(await page.locator(`${dock} .lp-detail .lp-nums`).textContent(), '225m²30cap1entrance');
+    assert.equal(await page.locator(`${dock} .lp-tile.lit`).getAttribute('data-lp-tile'), 'C1');
+    // Hovering a row with no plan leaves the pick on show.
+    await page.locator(`#cityMapPage .place[data-pick="${MT[1]}"]`).hover();
+    assert.match(await page.locator(`${dock} .lp-detail`).textContent(), /PickedC1/);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a layout on the shelf lists only that layout until it is cleared', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await openMap(page); await turnOn(page);
+    await page.locator(`${dock} .lp-tile[data-lp-tile="C1"]`).click();
+    assert.deepEqual(await rowKeys(page), [HK[0]]);
+    assert.equal(await page.locator(`${dock} .lp-tile[data-lp-tile="C1"]`).getAttribute('aria-pressed'), 'true');
+    // The filter names itself in the panel; the counts still count every layout.
+    assert.equal(await page.locator('#cityMapPage .frow.flayout').isVisible(), true);
+    assert.equal((await page.locator('#cityMapPage [data-lp-clear]').textContent()).trim(), 'Layout C1×');
+    assert.equal(await page.locator(`${dock} .lp-tile[data-lp-tile="D2"] .lp-tilen`).textContent(), '1 listed');
+    await page.locator('#cityMapPage [data-lp-clear]').click();
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
+    assert.equal(await page.locator('#cityMapPage .frow.flayout').isVisible(), false);
+    // A second click on the tile clears it too, and a new kind drops it.
+    await page.locator(`${dock} .lp-tile[data-lp-tile="D2"]`).click();
+    assert.deepEqual(await rowKeys(page), [MT[0]]);
+    await page.locator(`${dock} .lp-tile[data-lp-tile="D2"]`).click();
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
+    await page.locator(`${dock} .lp-tile[data-lp-tile="D2"]`).click();
+    await page.locator('#cityMapPage .fchip.cat[data-cat="office"]').click();
+    assert.deepEqual(await rowKeys(page), [HK[4]]);
+    assert.deepEqual(await tags(page), ['J1']);
+    assert.deepEqual(await page.$$eval(`${dock} .lp-tile`, t => t.map(x => x.dataset.lpTile)), ['A3', 'C1', 'C2', 'D2', 'J1', 'K1']);
+    // Cinemas have no plans: no shelf and no tags.
+    await page.locator('#cityMapPage .fchip.cat[data-cat="cinema"]').click();
+    assert.equal(await page.locator(dock).isVisible(), false);
+    assert.deepEqual(await tags(page), ['', '']);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a picked row and its card keep clear of the dock', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await openMap(page); await turnOn(page);
+    await page.locator(`${dock} .lp-tile`).first().waitFor();
+    await pick(page, HK[0]);
+    await page.waitForTimeout(900);   // the glide
+    const card = await page.locator('#cityMapPage .site').boundingBox();
+    const shelf = await page.locator(dock).boundingBox();
+    assert.ok(card.y + card.height <= shelf.y, `card ends at ${card.y + card.height}, dock starts at ${shelf.y}`);
+    const fp = await page.locator(`#cityMapPage [data-location="${HK[0]}"]`).boundingBox();
+    assert.ok(fp.y + fp.height / 2 < shelf.y, 'the footprint lands above the dock');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('on a phone a Map / Plan switch shows the picked row\'s plan', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await page.setViewportSize({width: 390, height: 844});
+    await openMap(page); await turnOn(page);
+    const seg = '#cityMapPage .lp-seg';
+    assert.equal(await page.locator(dock).isVisible(), false);
+    assert.equal(await page.locator(seg).isVisible(), false);
+    await pick(page, HK[0]);
+    await page.locator(seg).waitFor();
+    await page.locator(`${seg} [data-lp-view="plan"]`).click();
+    assert.equal(await page.locator(`${seg} [data-lp-view="plan"]`).getAttribute('aria-pressed'), 'true');
+    assert.equal(await page.locator('#cityMapPage .lp-phoneplan .lp-svg').isVisible(), true);
+    assert.match(await page.locator('#cityMapPage .lp-phoneplan').textContent(), /C1/);
+    await page.locator(`${seg} [data-lp-view="map"]`).click();
+    assert.equal(await page.locator('#cityMapPage .lp-phoneplan').isVisible(), false);
+    // A row with no plan has no switch.
+    await page.locator(`#cityMapPage .place[data-pick="${MT[1]}"]`).click();
+    await page.waitForFunction(() => document.querySelector('#cityMapPage .lp-seg').hidden);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a live refresh keeps the hover and the pick and never rebuilds the shelf', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await openMap(page); await turnOn(page);
+    await page.locator(`${dock} .lp-tile`).first().waitFor();
+    await pick(page, HK[0]);
+    await page.locator(`#cityMapPage .place[data-pick="${MT[0]}"]`).hover();
+    assert.match(await page.locator(`${dock} .lp-detail`).textContent(), /HoveredD2/);
+    // Mark the tiles and the ?, then refresh as a live save does.
+    await page.evaluate(() => document.querySelectorAll('#cityMapPage .lp-tile, #cityMapPage .lp-why').forEach(t => { t.dataset.marker = '1'; }));
+    await page.locator('#cityMapPage .lp-why').focus();
+    await page.evaluate(() => { D = {...D}; refreshCityMaps(); cityMapPage.update(); });
+    assert.equal(await page.locator('#cityMapPage .lp-tile[data-marker], #cityMapPage .lp-why[data-marker]').count(), 7);
+    assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('lp-why')), true);
+    assert.match(await page.locator(`${dock} .lp-detail`).textContent(), /HoveredD2/);
+    assert.equal(await page.locator(`${dock} .lp-tile.lit`).getAttribute('data-lp-tile'), 'C1');
+    assert.equal(await page.locator(`${dock} .lp-tile.hover`).getAttribute('data-lp-tile'), 'D2');
+    // A tile click changes the counts and the filter in place, focus included.
+    await page.locator(`${dock} .lp-tile[data-lp-tile="C1"]`).focus();
+    await page.keyboard.press('Enter');
+    assert.deepEqual(await rowKeys(page), [HK[0]]);
+    assert.equal(await page.locator('#cityMapPage .lp-tile[data-marker]').count(), 6);
+    assert.equal(await page.evaluate(() => document.activeElement?.dataset.lpTile), 'C1');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a preset or a saved search starts without the layout filter', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await openMap(page); await turnOn(page);
+    await page.evaluate(() => cityMapPage.saveSearch('Shops'));
+    await page.locator(`${dock} .lp-tile[data-lp-tile="C1"]`).click();
+    assert.deepEqual(await rowKeys(page), [HK[0]]);
+    await page.evaluate(() => cityMapPage.applySaved('Shops'));
+    await page.waitForFunction(() => document.querySelectorAll('#cityMapPage .place.fr').length === 3);
+    assert.equal(await page.locator('#cityMapPage .frow.flayout').isVisible(), false);
+    await page.locator(`${dock} .lp-tile[data-lp-tile="C1"]`).click();
+    assert.deepEqual(await rowKeys(page), [HK[0]]);
+    await page.evaluate(() => openFinder({cat: 'retail'}));
+    await page.waitForFunction(() => document.querySelectorAll('#cityMapPage .place.fr').length === 3);
+    assert.equal(await page.locator('#cityMapPage .frow.flayout').isVisible(), false);
+    assert.equal(await page.locator(`${dock} .lp-tile[aria-pressed="true"]`).count(), 0);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a stage the panel nearly fills gets the Map / Plan switch, not the dock', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await page.setViewportSize({width: 900, height: 1000});
+    await openMap(page); await turnOn(page);
+    await pick(page, HK[0]);
+    const seg = '#cityMapPage .lp-seg';
+    await page.locator(seg).waitFor();
+    assert.equal(await page.locator(dock).isVisible(), false);
+    await page.locator(`${seg} [data-lp-view="plan"]`).click();
+    // The plan fills the map area left of the panel, not the space under it.
+    const plan = await page.locator('#cityMapPage .lp-phoneplan').boundingBox();
+    const panel = await page.locator('#cityMapPage .places').boundingBox();
+    assert.ok(plan.x + plan.width <= panel.x + 1, `plan ends at ${plan.x + plan.width}, panel starts at ${panel.x}`);
+    assert.equal(await page.locator('#cityMapPage .lp-phoneplan .lp-svg').isVisible(), true);
+    // The site card steps aside with the map, so it never covers the plan.
+    assert.equal(await page.locator('#cityMapPage .site').isVisible(), false);
+    // Widening the window hands the stage to the dock; narrowing it again
+    // comes back to the plan the player chose.
+    await page.setViewportSize({width: 1440, height: 1000});
+    await page.locator(dock).waitFor();
+    assert.equal(await page.locator('#cityMapPage .lp-phoneplan').isVisible(), false);
+    await page.setViewportSize({width: 900, height: 1000});
+    await page.locator('#cityMapPage .lp-phoneplan .lp-svg').waitFor();
+    assert.equal(await page.locator(`${seg} [data-lp-view="plan"]`).getAttribute('aria-pressed'), 'true');
+    // Back to the map: the card, placed while it was out of layout, is placed
+    // again inside the map area, clear of the panel.
+    await page.locator(`${seg} [data-lp-view="map"]`).click();
+    await page.waitForFunction(() => {
+      const c = document.querySelector('#cityMapPage .site').getBoundingClientRect(), p = document.querySelector('#cityMapPage .places').getBoundingClientRect();
+      return c.width > 0 && c.right <= p.left;
+    }, null, {timeout: 5000});
+    const back = await page.locator('#cityMapPage .site').boundingBox(), box = await page.locator('#cityMapPage [data-stage]').boundingBox();
+    assert.ok(back.x >= box.x && back.y >= box.y && back.y + back.height <= box.y + box.height + 1, `card ${JSON.stringify(back)} stage ${JSON.stringify(box)}`);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a hover the list no longer holds ends; a footprint hover does not', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await openMap(page); await turnOn(page);
+    await page.locator(`${dock} .lp-tile`).first().waitFor();
+    await page.locator(`#cityMapPage .place[data-pick="${MT[0]}"]`).hover();
+    assert.match(await page.locator(`${dock} .lp-detail`).textContent(), /HoveredD2/);
+    // The pointer stays on the list while a filter takes the row away (M1: none listed).
+    await page.evaluate(() => { cityMapPage.layoutPick = 'M1'; cityMapPage.update(); });
+    assert.match(await page.locator(`${dock} .lp-detail`).textContent(), /Hover a row/);
+    await page.evaluate(() => { cityMapPage.layoutPick = null; cityMapPage.update(); });
+    // A footprint hovered on the map keeps its hover through a rebuild, and its
+    // row is marked, not its footprint lit as a list hover would. The pointer
+    // is on the map, as it is for a real footprint hover, so the rebuilt list
+    // has nothing under the pointer to hover.
+    const stage = await page.locator('#cityMapPage [data-stage]').boundingBox();
+    await page.mouse.move(stage.x + 300, stage.y + 60);
+    await page.evaluate(key => { cityMapPage.light(key, false); cityMapPage.update(); }, MT[0]);
+    assert.match(await page.locator(`${dock} .lp-detail`).textContent(), /HoveredD2/);
+    assert.equal(await page.locator(`#cityMapPage .place[data-pick="${MT[0]}"]`).evaluate(r => r.classList.contains('hot')), true);
+    assert.equal(await page.locator(`#cityMapPage [data-location="${MT[0]}"]`).evaluate(p => p.classList.contains('hot')), false);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a card the zoom buttons push aside still keeps clear of the dock', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await openMap(page); await turnOn(page);
+    await page.locator(`${dock} .lp-tile`).first().waitFor();
+    await pick(page, HK[0]);
+    await page.waitForTimeout(900);   // the glide
+    // The case: the card first lands just right of the dock, low enough to meet
+    // the zoom buttons, which push it left over the dock. That needs a stage
+    // where the card fits between the dock and the panel and the zoom buttons
+    // sit less than a card's width from the dock; find one.
+    // Past about 1300 px the shelf has its full room, so the dock's width is
+    // fixed and the width wanted follows from the element sizes.
+    const fits = () => {
+      const v = cityMapPage, sr = v.stage.getBoundingClientRect();
+      const z = v.root.querySelector('.zoomer').getBoundingClientRect();
+      const dockRight = 16 + v.dock.offsetWidth, cw = v.card.offsetWidth, zl = z.left - sr.left - 8;
+      const limit = sr.width - PANEL_W - 14;
+      return !v.dock.hidden && dockRight + 1 + cw <= limit && zl - cw < dockRight;
+    };
+    await page.setViewportSize({width: 1500, height: 1000});
+    await page.waitForFunction(() => { const v = cityMapPage; return !v.dock.hidden && v.stage.getBoundingClientRect().width > 1300; });
+    const width = await page.evaluate(() => {
+      const v = cityMapPage, sr = v.stage.getBoundingClientRect();
+      // The card fits between the dock and the panel from this stage width on.
+      const stage = 16 + v.dock.offsetWidth + 1 + v.card.offsetWidth + PANEL_W + 14;
+      return Math.ceil(stage + (window.innerWidth - sr.width));
+    });
+    await page.setViewportSize({width, height: 1000});
+    await page.waitForFunction(fits, null, {timeout: 5000});
+    // Move the camera, as a drag does, so the card lands there.
+    await page.evaluate(key => {
+      const v = cityMapPage; v.rect = null;
+      const r = v.stageRect(), s = v.scale(), [x, y, w, h] = v.assets.byKey.get(key).bounds;
+      const px = 16 + v.dock.offsetWidth + 1 - 40, py = r.height - 40;
+      v.box = [x + w / 2 - px / s, y + h / 2 - py / s, r.width / s, r.height / s];
+      v.drawView();
+    }, HK[0]);
+    const card = await page.locator('#cityMapPage .site').boundingBox();
+    const shelf = await page.locator(dock).boundingBox();
+    const meet = card.x < shelf.x + shelf.width && card.x + card.width > shelf.x
+      && card.y < shelf.y + shelf.height && card.y + card.height > shelf.y;
+    assert.equal(meet, false, `card ${JSON.stringify(card)} dock ${JSON.stringify(shelf)}`);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
