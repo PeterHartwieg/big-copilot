@@ -741,11 +741,11 @@ function wikiYours(page, extra){
       "The strongest neighbourhood for this product in your save's own demand snapshot, 0 to 100."));
   if(own && own.product){
     slots.push(wikiSlot("You sell it", `${own.product.stores} shop${own.product.stores === 1 ? "" : "s"}`,
-      "Your own sites with this product on a shelf, from yesterday's trading."));
+      "Your own sites with this product on a shelf, from the last seven days' trading."));
     slots.push(wikiSlot("Sold a day", wikiNum(own.product.units),
-      "Units your shops sold yesterday, added up."));
+      "Units your shops sold a day, averaged over the last seven days and added up."));
     slots.push(wikiSlot("Average sold price", wikiMoney(own.product.price),
-      "Your own average take per unit yesterday: revenue over units sold in your shops. Your save's figure, not a number from the game's help."));
+      "Your own average take per unit over the last seven days: revenue over units sold in your shops. Your save's figure, not a number from the game's help."));
   }
   if(own && own.sites.length)
     slots.push(wikiSlot("Yours", `${own.sites.length} site${own.sites.length === 1 ? "" : "s"}`,
@@ -1937,7 +1937,7 @@ function wikiGuideOwn(g, goods){
     `Businesses of this type in your company: ${mine.slice(0, 4).map(x => x.name).join(", ")}.`));
   const sold = (D.products || []).filter(p => goods.some(x => x.slug === p.slug));
   if(sold.length && goods.length) slots.push(wikiSlot("Its range, sold", `${sold.length} of ${goods.length}`,
-    `${sold.map(p => p.item).join(", ")} moved in your shops yesterday.`));
+    `${sold.map(p => p.item).join(", ")} moved in your shops in the last seven days.`));
   return slots;
 }
 

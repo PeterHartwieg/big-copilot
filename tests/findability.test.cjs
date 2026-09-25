@@ -293,7 +293,7 @@ test('a product stocked but not sold yet still opens a store that stocks it', as
   try {
     await page.evaluate(() => { siteOpen = false; drawSite(); showSub('company', 'products'); drawProducts(); });
     const link = page.locator('#secProducts .xl-sells', {hasText: 'New Gift'});
-    assert.equal(await link.getAttribute('data-tip'), 'Open HART. Other, which stocks it; no store sold any yesterday');
+    assert.equal(await link.getAttribute('data-tip'), 'Open HART. Other, which stocks it; no store sold any in the last seven days');
     assert.deepEqual(await page.$$eval('#secProducts .bar i', bars => bars.map(i => i.style.width)), ['100%', '0%']);
     await link.click();
     assert.equal(await page.evaluate(() => [siteOpen, siteKey].join(' ')), `true ${OTHER}`);
