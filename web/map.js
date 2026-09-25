@@ -21,7 +21,7 @@ function mapButton(key, label){
   return `<button type="button" class="map-shortcut" data-map-key="${attr(key)}" aria-label="${attr(name)}" title="${attr(tt("map.btn.title", "Show on map"))}">${MAP_ICON}</button>`;
 }
 function mapRef(b, label){
-  return b ? `${label === undefined ? shortName(b) : label}${mapButton(b.key, b.name || b.address)}` : "—";
+  return b ? `${mapText(label === undefined ? shortName(b) : label)}${mapButton(b.key, b.name || b.address)}` : "—";
 }
 /* A site's name, wherever the board prints it, is a way to the site's own
    page (siteHref() in the board script): plain text until the pointer is on
