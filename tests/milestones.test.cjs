@@ -42,7 +42,9 @@ test('Milestones is the checklist and its totals, with the buildings a total, no
     rivalsTotal: 4, goalsDone: 44, diplomas: 5, diplomasTotal: 5, goodsProduced: 321, taxesPaid: 0});
   assert.match(html, /<head why="">career totals<\/head>/);
   assert.doesNotMatch(html, /Every building owned|885/);
-  assert.match(html, /321 goods produced · 0 in tax paid · 0 buildings owned<\/p>/);
+  // tt() writes the tax as the board's compact() does ("$0"), not as this
+  // sandbox's stub.
+  assert.match(html, /321 goods produced · \$0 in tax paid · 0 buildings owned<\/p>/);
   assert.match(draw({buildingsOwned: 1}), /· 1 building owned</);
   // The difficulty is no longer here: no chips, no "playing on".
   assert.doesNotMatch(html, /class="rules"|playing on/);
