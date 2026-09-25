@@ -19723,9 +19723,11 @@ function importSetting(fact, contract, edit){
      game's own figure has moved, whether to the typed figure or elsewhere,
      that answer is stale: it is no longer an edit, the row goes back to the
      board's own suggestion, and the caller forgets it. Until then it stands,
-     including the figure in game typed to turn a suggestion down. */
+     including the figure in game typed to turn a suggestion down. A line
+     with neither a contract nor a suggestion (a route has since covered it)
+     has nothing left for a typed figure to answer: stale too. */
   const typed = !!edit && Number.isFinite(edit.value) && edit.value >= 0;
-  const stale = typed && edit.inGame !== inGame;
+  const stale = typed && (edit.inGame !== inGame || suggested === null);
   const edited = typed && !stale;
   const value = edited ? edit.value : suggested;
   return {smart, current, pausedWeekly, paused, fit: fact.st, setTo, inGame, suggested, value, edited,
@@ -20721,7 +20723,7 @@ function sbImportCtx(d){
     + `, plus ${Number.isFinite(margin) ? `a ${Math.round(margin * 100)}%` : "the"} margin`;
   const suggests = r => r.suggested !== null && r.suggested !== r.inGame;
   const boxTip = r => r.edited
-    ? `Your own figure. ${suggests(r) ? `The board suggests ${num(r.suggested)}` : `The game holds ${num(r.inGame)}`}`
+    ? `Your own figure. ${suggests(r) ? `The board suggests ${num(r.suggested)}` : `The game holds ${num(r.inGame ?? 0)}`}`
     : r.covered ? `The figure in game. ${routeTip(r)}`
     : r.paused ? `The figure in game, on a paused contract: resume it in game for it to deliver`
     : suggests(r) ? `The board suggests ${num(r.value)}: ${boardSays(r)}`
@@ -21164,6 +21166,22 @@ function wireImportSet(host, redraw){
     redraw();
     again(id);
   });
+}
+/* A live refresh rebuilds the tab a Set to box is on, and a figure typed but
+   not yet committed would go with the box, the focus too. Read before the
+   rebuild; the function returned puts both back on the new box (renderAll()). */
+function impDraft(){
+  const box = document.activeElement;
+  if(!box || !box.matches || !box.matches("input[data-imp]")) return null;
+  const id = box.dataset.imp, value = box.value, typed = value !== box.defaultValue;
+  const sec = box.closest("section[id]");
+  return () => {
+    const host = (sec && document.getElementById(sec.id)) || document;
+    const next = [...host.querySelectorAll("input[data-imp]")].find(el => el.dataset.imp === id);
+    if(!next || next === box) return;
+    if(typed) next.value = value;
+    next.focus({preventScroll: true});
+  };
 }
 
 /* --- market demand ----------------------------------------------------
@@ -22247,13 +22265,17 @@ function renderAll(){
   const marked = !!(staleSource || staleDraws.size);
   drawMast();
   if(marked) paintStale();
+  /* A row that throws is kept out of date and marks the dot, as in
+     drawStale(); the rows after it, the footer and the wiring still run. */
+  const typing = calmLazy ? impDraft() : null;
   PAGE_DRAWS.forEach(row => {
     if(here !== null && row[0] && !row[0].split(" ").includes(here)){ pageStale.add(row); return; }
     pageStale.delete(row);
-    row[1]();
-    staleDraws.delete(row);
+    try{ row[1](); staleDraws.delete(row); }
+    catch(e){ pageStale.add(row); staleDraws.set(row, e && e.message || String(e)); console.error(e); }
   });
-  if(marked) paintStale();
+  if(typing) typing();
+  if(marked || staleDraws.size) paintStale();
   drawFooter();
   drawDifficulty(diffFocus);
   wireAll();
@@ -27112,10 +27134,11 @@ function startWatching(){
       gwTerms.clear();  // what the game said of caps belongs to the board it was said about
       gwReadStuck = false;
       if(gwOpen && gwOpen._gwGate) gwOpen._gwBuilt = true;  // an undo's gate: a board built since
-      if(first) boot(); else renderCalm(same);
       /* A row that would not draw failed on older numbers than these: the
-         next board clears its mark, and it is tried again when it opens. */
-      if(staleDraws.size){ staleDraws.clear(); paintStale(); }
+         next board clears its mark, and it is tried again when it opens. One
+         that throws on these numbers marks the dot again (renderAll()). */
+      staleDraws.clear();
+      if(first) boot(); else renderCalm(same);
       const dot = $("live");
       if(dot){ dot.classList.add("just"); setTimeout(() => dot.classList.remove("just"), 1600); }
     },
@@ -27795,6 +27818,11 @@ def watch(
         # The game is not up yet, or the mod is off. The poll loop below
         # keeps trying; the server has nothing to be sorry for.
         print(f"  {exc}", flush=True)
+    except Exception as exc:
+        # A save that will not build is no reason to stop watching: the poll
+        # loop below tries again when the game writes the next one.
+        print(f"  skipped the first build -- {board.error or exc}", flush=True)
+        traceback.print_exc()
     BoardHandler.board = board
     server = http.server.ThreadingHTTPServer(("127.0.0.1", port), BoardHandler)
     url = f"http://127.0.0.1:{port}/"

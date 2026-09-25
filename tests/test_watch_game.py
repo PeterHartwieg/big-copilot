@@ -236,5 +236,49 @@ class GameLinkAgainstMock(unittest.TestCase):
         self.assertTrue(body["accepted"])
 
 
+class WatchSurvivesAFailingFirstBuild(unittest.TestCase):
+    """watch() keeps serving and polling when the first save will not build."""
+
+    def test_the_poll_loop_starts_after_a_failing_first_build(self):
+        from unittest import mock
+
+        class Board:
+            error = "Recover #1.hsg: 'NetWorth'"
+            locale_source, names, link = None, mock.Mock(locale={}), None
+
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def refresh(self, settle=True):
+                raise KeyError("NetWorth")
+
+        class Server:
+            def __init__(self, *args):
+                pass
+
+            def serve_forever(self):
+                raise KeyboardInterrupt
+
+            def shutdown(self):
+                pass
+
+        started = []
+
+        class Thread:
+            def __init__(self, target, daemon):
+                self.target = target
+
+            def start(self):
+                started.append(self.target)
+
+        with mock.patch.object(ba_dashboard, "Board", Board), \
+                mock.patch.object(ba_dashboard, "yield_to_the_game", lambda: False), \
+                mock.patch.object(ba_dashboard.http.server, "ThreadingHTTPServer", Server), \
+                mock.patch.object(ba_dashboard.threading, "Thread", Thread), \
+                mock.patch("sys.stdout"), mock.patch("sys.stderr"):
+            ba_dashboard.watch("saves", "out.html", 0, 30, open_browser=False)
+        self.assertEqual(len(started), 1, "the poll loop runs, to retry on the next save")
+
+
 if __name__ == "__main__":
     unittest.main()
