@@ -19,8 +19,11 @@ import json
 import os
 import shutil
 
-from ba_dashboard import NAME_PREFIXES, VERIFIED_BUILD, footer_html, render
-from ba_save import NotEnglishText, bundled_locale, load_game_locale, locale_search_paths
+from ba_dashboard import (
+    GAME_NAME_LANGS, NAME_COVERAGE, NAME_PREFIXES, VERIFIED_BUILD, footer_html, name_coverage,
+    name_table, render,
+)
+from ba_save import NotEnglishText, bundled_locale, load_game_locale, load_locale, locale_search_paths
 from tools.build_wiki_data import write_public_wiki
 from tools.extract_wiki import game_data_dir
 
@@ -53,6 +56,61 @@ def ships(key: str, text: str) -> bool:
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "web")
+
+# The game names in every other language the game ships, one table each under
+# web/names/, which the page fetches when the footer's "Game names" picks it.
+# The list is ba_dashboard's GAME_NAME_LANGS, which also names each language in
+# the picker, so --check knows the files without the game; the build stops when
+# the installed game's locale.json no longer agrees with it.
+NAME_LANGS = tuple(code for code in GAME_NAME_LANGS if code != "en")
+NAMES_DIR = "web/names"
+
+
+def name_tables(locale_dir: str, english: dict[str, str]) -> tuple[dict[str, dict[str, str]], dict[str, float]]:
+    """Every language locale.json lists but English, as name_table()s, and
+    the coverage of each language left out for naming too few of the keys.
+
+    Read from the folder of the game's en.json. A language listed without a
+    file of its own counts as naming nothing.
+    """
+    with open(os.path.join(locale_dir, "locale.json"), encoding="utf-8") as fh:
+        listed = json.load(fh)
+    tables, dropped = {}, {}
+    for code in sorted(listed):
+        if code == "en":
+            continue
+        other = load_locale(os.path.join(locale_dir, f"{code}.json"))
+        share = name_coverage(english, other)
+        if share < NAME_COVERAGE:
+            dropped[code] = share
+        else:
+            tables[code] = name_table(english, other)
+    return tables, dropped
+
+
+def write_name_tables(locale_path: str, english: dict[str, str], web: str = WEB) -> dict[str, dict[str, str]]:
+    """Write web/names/<code>.json for NAME_LANGS from the installed game."""
+    tables, dropped = name_tables(os.path.dirname(locale_path), english)
+    if set(tables) != set(NAME_LANGS):
+        new = sorted(set(tables) - set(NAME_LANGS))
+        gone = sorted(set(NAME_LANGS) - set(tables))
+        raise SystemExit(
+            "the game's languages no longer match GAME_NAME_LANGS in ba_dashboard.py"
+            + (f"; new: {', '.join(new)} (add each with its own name for itself)" if new else "")
+            + (f"; gone or under {NAME_COVERAGE:.0%} of the names: {', '.join(gone)} (remove them)" if gone else "")
+        )
+    folder = os.path.join(web, "names")
+    os.makedirs(folder, exist_ok=True)
+    for code in NAME_LANGS:
+        with open(os.path.join(folder, f"{code}.json"), "w", encoding="utf-8", newline=chr(10)) as fh:
+            json.dump(tables[code], fh, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+            fh.write(chr(10))
+    for name in os.listdir(folder):
+        if name.endswith(".json") and name[:-5] not in NAME_LANGS:
+            os.remove(os.path.join(folder, name))
+    if dropped:
+        print("names: left out " + ", ".join(f"{c} ({share:.0%})" for c, share in sorted(dropped.items())))
+    return tables
 # The board template's font links, swapped for the site's own copies.
 GOOGLE_FONTS = (
     '<link rel="preconnect" href="https://fonts.googleapis.com">\n'
@@ -407,6 +465,7 @@ STAMP_INPUTS = (
     "web/wiki.js", "web/wiki.css", "web/wiki-data.json",
     "tools/build_wiki_data.py", "tools/wiki_data.py", "tools/extract_wiki.py", "tools/wiki_sample.json",
     "tools/wiki_topics.json", "web/fonts/fonts.css",
+    *(f"{NAMES_DIR}/{code}.json" for code in NAME_LANGS),
 )
 
 
@@ -525,6 +584,12 @@ def check(root: str = HERE) -> list[str]:
         copied = "web/py/" + name
         if differs(copied, read_text(os.path.join(root, name))):
             stale.append(copied)
+    # The name tables are committed and not rebuilt here, like gametext.json;
+    # one that is missing leaves nothing to stamp, so it is all that is said.
+    missing = [f"{NAMES_DIR}/{code}.json" for code in NAME_LANGS
+               if not os.path.isfile(os.path.join(root, NAMES_DIR, f"{code}.json"))]
+    if missing:
+        return stale + missing
     release = release_info(root)
     if differs("web/version.json", release_json(release) + "\n"):
         stale.append("web/version.json")
@@ -581,6 +646,8 @@ def main() -> None:
     with open(os.path.join(WEB, "py", "gametext.json"), "w", encoding="utf-8", newline=chr(10)) as fh:
         json.dump(text, fh, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     print(f"gametext.json: {len(text)} entries")
+    tables = write_name_tables(locale_path, locale)
+    print(f"names: {len(tables)} languages under {NAMES_DIR}/")
     # Everything the stamp reads is now in place, so the page and version.json
     # describe the folder as it stands.
     release = release_info()

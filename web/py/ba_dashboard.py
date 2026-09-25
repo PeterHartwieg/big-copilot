@@ -135,6 +135,19 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
     # On the site the source strip under the masthead already names the save, so
     # only the CLI's page, which has no strip, repeats it down here.
     file_slot = "" if landing or site else '<span class="sf-meta" id="footFile"></span>'
+    # The game's names in another language: the tables sit beside the site's
+    # page (web/names/), so only the site offers the choice; a local page gets
+    # its language from --lang instead. The board script wires every copy.
+    names = ""
+    if site:
+        head = f"gnHead{'L' if landing else ''}"
+        options = "".join(f'<option value="{code}" lang="{code}">{html_escape(word)}</option>'
+                          for code, word in GAME_NAME_LANGS.items())
+        names = (f'<div class="sf-col sf-gn">\n        <h2 class="sf-head" id="{head}">Game names</h2>\n'
+                 f'        <select class="gn-pick" data-gn-pick aria-labelledby="{head}" title="The game&#39;s own '
+                 'names for items, business types, neighbourhoods, stations and skills, in the language you '
+                 'play in. Everything else on the page stays English.">'
+                 f'{options}</select>\n      </div>\n      ')
     build = (f'<span class="sf-meta">Game build {VERIFIED_BUILD}</span>' if landing
              else '<span class="sf-meta" id="footBuild"></span>'
                   # The difficulty chip, shown here at 1500 px and under; wider
@@ -198,7 +211,7 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
       <!-- Marked by attribute rather than id, and wired by the board script for
            whichever copies are in the page: the landing's footer and the board's
            are both here until the board replaces the landing. -->
-      <div class="sf-col sf-theme">
+      {names}<div class="sf-col sf-theme">
         <h2 class="sf-head" id="themeHead{'L' if landing else ''}">Theme</h2>
         <div class="sf-seg" role="group" aria-labelledby="themeHead{'L' if landing else ''}">
           <button type="button" class="sf-segbtn" data-theme-set="auto" aria-pressed="false"><span class="sf-sr">Match system</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9 20.5h6M12 16.5v4"/></svg></button>
@@ -281,6 +294,49 @@ def _game_names(names) -> dict:
     for key, label in HOOD_LABEL.items():
         out.setdefault(key, label)
     return out
+
+
+# The languages the game ships besides its English, by the code of their locale
+# file, each named in its own words for the "Game names" picker, English first.
+# The page swaps the game's own names (items, business types, neighbourhoods,
+# stations, skills, job demands) for one of these; everything the board writes
+# itself stays English. build_web.py writes web/names/<code>.json for every
+# language here but English, and stops when the game's locale.json lists a
+# language this table has no autonym for, or one falls under NAME_COVERAGE.
+GAME_NAME_LANGS = {
+    "en": "English", "cs": "Čeština", "da": "Dansk", "de": "Deutsch", "es": "Español",
+    "fr": "Français", "it": "Italiano", "lt": "Lietuvių", "hu": "Magyar",
+    "nl": "Nederlands", "pl": "Polski", "pt": "Português (Brasil)", "ro": "Română",
+    "fi": "Suomi", "tr": "Türkçe", "el": "Ελληνικά", "ru": "Русский", "uk": "Українська",
+    "ja": "日本語", "ko": "한국어", "zh-cn": "简体中文", "zh-tw": "繁體中文",
+}
+# A language whose file names fewer of the English name keys than this is left
+# out rather than shown half in English (the game's ar.json names none).
+NAME_COVERAGE = 0.5
+
+
+def _name_keys(english: dict[str, str]) -> list[str]:
+    """The keys of the English text that the payload's `names` carries."""
+    return sorted(k for k, v in english.items()
+                  if k.startswith(NAME_PREFIXES) and not k.endswith("_description") and v)
+
+
+def name_coverage(english: dict[str, str], other: dict[str, str]) -> float:
+    """The share of the English name keys that another language's text names."""
+    keys = _name_keys(english)
+    named = sum(1 for k in keys if isinstance(other.get(k), str) and other[k].strip())
+    return named / len(keys) if keys else 0.0
+
+
+def name_table(english: dict[str, str], other: dict[str, str]) -> dict[str, str]:
+    """One language's game names by key, for the page to lay over `names`.
+
+    Only the keys `names` carries, and only where the language words it
+    differently: a key left out reads as English, which is also what the page
+    does for a key the language has no word for.
+    """
+    return {k: other[k] for k in _name_keys(english)
+            if isinstance(other.get(k), str) and other[k].strip() and other[k] != english[k]}
 
 
 def hood_key(row: dict | None) -> str | None:
@@ -10899,6 +10955,7 @@ def render(
     head: str = "",
     map_external: bool = False,
     site: bool = False,
+    names: dict | None = None,
 ) -> str:
     """The page. With live=True it asks its data source for fresh numbers.
 
@@ -10915,7 +10972,11 @@ def render(
     A save name is the player's own text, so it is escaped on the way into the
     title, and ``</`` is escaped inside the JSON so a name can never close the
     script tag it sits in.
+
+    ``names`` is ``{"lang": code, "names": table}``, a name_table() the page
+    lays over the payload's names (``--lang``); None keeps them English.
     """
+    names_json = "null" if not names else json.dumps(names, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     if data is None:
         payload, title = "null", "Big Copilot"
     else:
@@ -10987,6 +11048,8 @@ def render(
         .replace("/*__HOOD_TAGS__*/{}", json.dumps(HOOD_TAG, separators=(",", ":")))
         # And their English names by the same keys, for a board without game text.
         .replace("/*__HOOD_NAMES__*/{}", json.dumps(HOOD_LABEL, separators=(",", ":")))
+        # The game names in another language, for a local page built with --lang.
+        .replace("/*__NAMES__*/null", names_json)
         .replace("<!--__CHANGELOG__-->", changelog)
         .replace("/*__LIVE__*/false", "true" if live else "false")
         .replace("__TITLE__", html_escape(title))
@@ -12101,7 +12164,7 @@ g[data-series].off{opacity:0}
 
 /* heat grid --------------------------------------------------------------- */
 .heat{display:grid;grid-template-columns:200px repeat(7,minmax(0,1fr));gap:4px;align-items:center}
-.heat .h{font:500 10px/1.3 "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);text-align:center;padding-bottom:6px;transition:color .15s}
+.heat .h{font:500 10px/1.3 "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);text-align:center;padding-bottom:6px;transition:color .15s;min-width:0;overflow-wrap:anywhere}
 .heat .h.hl{color:var(--ink)}
 .heat .mk-tag{display:none}
 .heat .r{font-size:13px;font-weight:500;padding-right:12px;transition:color .15s}
@@ -13021,6 +13084,21 @@ tr.ss-ring > td{animation:ss-flash 2.4s ease-out}
 .sf-ic{fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 /* The theme control keeps the right edge of the row, as on the canvas. */
 .sf-theme{align-items:flex-end}
+/* The game-names picker sits just left of it, the two settings together. */
+.sf-gn{margin-left:auto}
+.gn-pick{height:42px;max-width:220px;padding:0 12px;border:1px solid var(--rule);border-radius:999px;background:var(--surface);
+  color:var(--ink);font:500 13px/1 Archivo,"Helvetica Neue",Arial,sans-serif;cursor:pointer}
+.gn-pick:hover{border-color:var(--ink-3)}
+/* The one-time offer of the player's own language, hung off <body>. */
+.gn-offer{position:fixed;right:16px;bottom:16px;z-index:60;display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;
+  max-width:min(420px,calc(100vw - 32px));padding:12px 14px;border:1px solid var(--rule);border-radius:10px;
+  background:var(--surface);color:var(--ink);box-shadow:0 12px 32px color-mix(in srgb,var(--ink) 16%,transparent);font-size:13px}
+.gn-offer p{margin:0;flex:1 1 180px;line-height:1.5}
+.gn-offer-acts{display:flex;gap:8px;flex:none}
+.gn-offer button{height:30px;padding:0 12px;border-radius:6px;font:500 12px/1 Archivo,"Helvetica Neue",Arial,sans-serif;cursor:pointer}
+.gn-offer .gn-yes{border:1px solid var(--accent);background:var(--accent);color:var(--on-accent)}
+.gn-offer .gn-no{border:1px solid var(--rule);background:transparent;color:var(--ink-2)}
+.gn-offer button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .sf-seg{display:inline-flex;gap:2px;padding:3px;border:1px solid var(--rule);border-radius:999px;background:var(--surface)}
 .sf-segbtn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;padding:0;
   border:0;border-radius:999px;background:transparent;color:var(--ink-2);cursor:pointer}
@@ -13060,6 +13138,8 @@ tr.ss-ring > td{animation:ss-flash 2.4s ease-out}
   .sf-cols{flex-direction:column;gap:20px}
   .sf-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 16px;width:100%}
   .sf-theme{align-items:flex-start}
+  .sf-gn{margin-left:0}
+  .gn-pick{height:44px}
   .sf-segbtn{width:44px;height:44px}
   .sf-link,.sf-legal a{min-height:44px}
   .sf-base{flex-direction:column;align-items:flex-start;gap:10px}
@@ -13654,8 +13734,263 @@ const HOOD_NAMES = /*__HOOD_NAMES__*/{};
 /* A game name by its key. Everything that identifies an item, a business type
    or a neighbourhood carries the game's key; the words are looked up only to be
    shown, from the payload's `names`, which the game text fills. */
-const gameName = key => key ? ((D && D.names) || {})[key] || HOOD_NAMES[key] || "" : "";
+const gameName = key => key ? (gnTable && gnTable[key]) || ((D && D.names) || {})[key] || HOOD_NAMES[key] || "" : "";
 const hoodName = key => gameName(key) || String(key || "").replace(/^ba:neighborhood_/, "");
+
+/* --- game names in the player's language -------------------------------
+   Python writes every name in English, and the page lays one language's table
+   (web/names/<lang>.json, keyed like `names`) over the payload once, when it
+   arrives and when the footer's "Game names" changes: D = localiseNames(the
+   English payload). Every draw then reads D as before, and a join inside the
+   payload still holds because both of its sides were swapped alike. The
+   English payload rides along on D, unenumerated; dataEn() gives it back, for
+   the search's English words, and englishName() reads a name from it. Nothing
+   Python worked out is recomputed: switching never re-runs Python. A key the
+   table lacks keeps its English name.
+   The walk is gnWalk(), and every string in the payload passes through
+   gnString() on the way, which is where a name Python wrote inside a sentence,
+   as a ⟦ba:key⟧ token, becomes the name in the language on screen. */
+const GN_KEY = "ba_dash_names";
+const GN_OFFER_KEY = "ba_dash_names_offer";
+/* A local page built with --lang carries its table: {lang, names}. */
+const GN_EMBED = /*__NAMES__*/null;
+const GN_SRC = typeof Symbol === "function" ? Symbol("english payload") : "__gnEnglish";
+let gnLang = "en", gnTable = null, gnSeq = 0;
+const gnTables = new Map();
+if(GN_EMBED && GN_EMBED.lang && GN_EMBED.names){ gnLang = GN_EMBED.lang; gnTable = GN_EMBED.names; }
+const dataEn = () => (D && D[GN_SRC]) || D;
+const englishName = key => key ? ((dataEn() || {}).names || {})[key] || HOOD_NAMES[key] || "" : "";
+/* The name in the language picked, or "" while it is English or the table has
+   no word for it: what the wiki asks before it shows its own English. */
+const gnLocal = key => (key && gnTable && gnTable[key]) || "";
+/* One English name for every key of a kind that carries it, where every such
+   key reads the same in the language too; a name two keys share and the
+   language tells apart ("Bag of Lettuce") is left in English. For the few
+   payload fields Python sends a name in without its key. */
+function gnByName(T, EN, prefix){
+  const out = new Map(), split = new Set();
+  Object.keys(EN).forEach(k => {
+    if(!k.startsWith(prefix)) return;
+    const en = EN[k], here = T[k] || en;
+    if(out.has(en) && out.get(en) !== here) split.add(en); else out.set(en, here);
+  });
+  split.forEach(en => out.delete(en));
+  return out;
+}
+/* The swap for one name beside its key. `loose` is for a field that only
+   ever holds the game's name for the key, though Python may have worded it
+   its own way (a recipe's "Apple" for the item "Bag of Apples"); any other
+   field is swapped only while it reads as the key's English name, so a
+   player's own words beside a key are never touched. */
+const gnSwap = (T, EN, key, english, loose) =>
+  typeof key === "string" && typeof english === "string" && (loose || english === EN[key]) && T[key] ? T[key] : null;
+/* Which field names a key, and the fields beside it that show that key's name
+   (loose ones first, then strict ones). A field left out here stays English;
+   gnUnkeyed() takes the few with no key. */
+const GN_PAIRS = [["slug", ["item", "type", "demand"], ["name"]], ["typeSlug", ["type"], ["sub", "name"]],
+  ["skill", ["label", "role"], []], ["demand", ["label"], []], ["hood", [], ["where"]]];
+/* Lists of names with their keys in a list beside them, index for index. */
+const GN_LISTS = [["items", "slugs"], ["fees", "feeSlugs"], ["lines", "lineSlugs"], ["uniformGaps", "uniformGapSkills"]];
+/* Every string of the payload passes here, the table or not. Python's
+   sentences name nothing this way yet; a ⟦ba:key⟧ token reads as that key's
+   name in the language on screen, English where the table has none. */
+const GN_TOKEN = /⟦(ba:[^⟧\s]+)⟧/g;
+function gnString(s, T, EN){
+  if(s.indexOf("⟦") < 0) return s;
+  return s.replace(GN_TOKEN, (m, key) => (T && T[key]) || EN[key] || HOOD_NAMES[key] || prettySlug(key));
+}
+/* A copy of the English payload with its names swapped; `at` is the key the
+   value sits under, which names the thing when it is a game key itself
+   (plan.catalogue, plan.items, names, skillNames). */
+function gnWalk(v, T, EN, at){
+  if(typeof v === "string") return gnString(v, T, EN);
+  if(Array.isArray(v)) return v.map(x => gnWalk(x, T, EN, ""));
+  if(!v || typeof v !== "object") return v;
+  const o = {};
+  for(const k of Object.keys(v)) o[k] = gnWalk(v[k], T, EN, k);
+  if(!T) return o;
+  for(const [k, loose, strict] of GN_PAIRS){
+    const key = typeof v[k] === "string" && /^ba:/.test(v[k]) ? v[k] : null;
+    if(!key) continue;
+    loose.forEach(f => { const s = gnSwap(T, EN, key, v[f], true); if(s) o[f] = s; });
+    strict.forEach(f => { const s = gnSwap(T, EN, key, v[f]); if(s) o[f] = s; });
+  }
+  if(/^ba:/.test(at) && typeof v.slug !== "string" && typeof v.typeSlug !== "string")
+    ["type", "item", "name"].forEach(f => { const s = gnSwap(T, EN, at, v[f], f !== "name"); if(s) o[f] = s; });
+  for(const [names, keys] of GN_LISTS)
+    if(Array.isArray(v[names]) && Array.isArray(v[keys]))
+      o[names] = v[names].map((s, i) => gnSwap(T, EN, v[keys][i], s) || o[names][i]);
+  /* A table of names by key (names, skillNames, plan.items). */
+  for(const k of Object.keys(v))
+    if(k.startsWith("ba:")){ const s = gnSwap(T, EN, k, v[k], true); if(s) o[k] = s; }
+  return o;
+}
+/* The fields Python sends a name in with no key beside it, by the kind of
+   name each holds. */
+function gnUnkeyed(o, T, EN){
+  const skill = gnByName(T, EN, "ba:skill_"), item = gnByName(T, EN, "ba:itemname_"),
+    type = gnByName(T, EN, "ba:businesstype_"), station = gnByName(T, EN, "ba:factoryworkstationtype_");
+  const swap = (m, s) => typeof s === "string" && m.has(s) ? m.get(s) : s;
+  const each = (list, fn) => { if(Array.isArray(list)) list.forEach(fn); };
+  each(o.businesses, b => {
+    each(b.crew, r => { r.role = swap(skill, r.role); });
+    each(b.people, p => { p.role = swap(skill, p.role); });
+  });
+  each((o.staff || {}).roles, r => { r.role = swap(skill, r.role); });
+  each(o.hours, h => each(h.roles, r => { r.station = swap(item, r.station); }));
+  each(o.staffing, r => each(r.stations, s => { s.name = swap(item, s.name); }));
+  each(o.hypeExposure, h => { if(Array.isArray(h.items)) h.items = h.items.map(s => swap(item, s)); });
+  Object.values((o.plan || {}).workstations || {}).forEach(w => {
+    if(!w || typeof w !== "object") return;
+    w.name = swap(station, w.name);
+    ["machines", "assembly", "makes"].forEach(k => { if(Array.isArray(w[k])) w[k] = w[k].map(s => swap(item, s)); });
+  });
+  const supply = o.supply || {};
+  each((supply.factories || {}).sites, f => each(f.lines, l => { l.workstation = swap(station, l.workstation); }));
+  each((supply.graph || {}).nodes, n => { n.sub = swap(type, n.sub); });
+}
+/* The payload in the language picked: always a fresh copy of the English one,
+   which it carries along. Handing it a board already swapped starts from that
+   board's English, so a language change never swaps a swapped name. */
+function localiseNames(raw){
+  if(!raw || typeof raw !== "object") return raw;
+  const en = raw[GN_SRC] || raw;
+  const EN = en.names || {};
+  const out = gnWalk(en, gnTable, EN, "");
+  if(gnTable) gnUnkeyed(out, gnTable, EN);
+  Object.defineProperty(out, GN_SRC, {value: en});
+  return out;
+}
+/* Every board that arrives comes in through here. */
+function takeData(raw){ D = localiseNames(raw); return D; }
+/* Names sort in the language they are shown in; English keeps the order it
+   always had. */
+let gnCollator = null;
+function gnCompare(a, b){
+  a = String(a); b = String(b);
+  if(gnLang === "en") return a.localeCompare(b);
+  if(!gnCollator || gnCollator.lang !== gnLang){
+    let c;
+    try{ c = new Intl.Collator(gnLang); }catch(e){ c = {compare: (x, y) => x.localeCompare(y)}; }
+    gnCollator = {lang: gnLang, c};
+  }
+  return gnCollator.c.compare(a, b);
+}
+/* The languages this page can show: the picker's options, English first. */
+const gnPickers = () => [...document.querySelectorAll("[data-gn-pick]")];
+const gnLangs = () => {
+  const p = gnPickers()[0];
+  return p ? [...p.options].map(o => [o.value, o.textContent]) : GN_EMBED ? [["en", "English"], [GN_EMBED.lang, GN_EMBED.lang]] : [["en", "English"]];
+};
+const gnKnown = lang => gnLangs().some(([code]) => code === lang);
+function gnStored(){
+  try{ return localStorage.getItem(GN_KEY) || ""; }catch(e){ return ""; }
+}
+function gnRemember(lang){
+  try{ localStorage.setItem(GN_KEY, lang); }catch(e){}
+}
+/* A language's table: fetched once beside the page, with the build stamp so a
+   deploy busts it. */
+function gnLoad(lang){
+  if(gnTables.has(lang)) return gnTables.get(lang);
+  const v = encodeURIComponent(window.LEDGER_BUILD || "");
+  const got = fetch(`names/${encodeURIComponent(lang)}.json${v ? `?v=${v}` : ""}`)
+    .then(r => { if(!r.ok) throw new Error(`names/${lang}.json: ${r.status}`); return r.json(); });
+  gnTables.set(lang, got);
+  got.catch(() => gnTables.delete(lang));
+  return got;
+}
+function gnPaint(){
+  gnPickers().forEach(p => { p.value = gnLang; });
+}
+/* Switch the game names: the whole board is drawn again, as for another save,
+   from the English payload it already holds. A table that will not load leaves
+   the names as they were. */
+async function setGameNames(lang){
+  if(!gnKnown(lang)) lang = "en";
+  const seq = ++gnSeq;
+  let table = null;
+  if(lang !== "en"){
+    try{ table = await gnLoad(lang); }catch(e){ if(seq === gnSeq) gnPaint(); return false; }
+  }
+  if(seq !== gnSeq) return false;
+  gnLang = lang; gnTable = table && typeof table === "object" ? table : null;
+  gnPaint();
+  gnRedraw();
+  return true;
+}
+function gnRedraw(){
+  if(typeof hasData === "function" && hasData()){
+    D = localiseNames(D);
+    renderCalm(false);
+  } else if(typeof page !== "undefined" && page === "wiki" && typeof wikiVisit === "function"){
+    wikiVisit();
+  }
+}
+/* The browser's languages, first to last, to the game's code: the first that
+   is English or one the game has decides, so a reader who puts English first is
+   never offered anything. */
+function gnBrowserLang(list){
+  const langs = gnLangs().map(([code]) => code);
+  for(const tag of list || []){
+    const t = String(tag || "").toLowerCase();
+    if(!t) continue;
+    const base = t.split("-")[0];
+    if(base === "en") return "en";
+    if(base === "zh"){
+      if(/^zh-(hant|tw|hk|mo)\b/.test(t)) return langs.includes("zh-tw") ? "zh-tw" : null;
+      return langs.includes("zh-cn") ? "zh-cn" : null;
+    }
+    if(langs.includes(base)) return base;
+  }
+  return "en";
+}
+function gnOfferDone(){
+  try{ return !!localStorage.getItem(GN_OFFER_KEY); }catch(e){ return false; }
+}
+function gnOfferClose(el, answer){
+  try{ localStorage.setItem(GN_OFFER_KEY, answer); }catch(e){}
+  el.remove();
+}
+/* Once, ever: a reader whose browser prefers a language the game has is asked
+   whether the game's names should follow it. Either answer is kept, and a
+   choice already made in the footer counts as one. */
+function gnOffer(){
+  if(!gnPickers().length || gnStored() || gnOfferDone() || document.querySelector(".gn-offer")) return null;
+  const lang = gnBrowserLang(navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language]);
+  if(!lang || lang === "en") return null;
+  const word = (gnLangs().find(([code]) => code === lang) || [])[1];
+  if(!word) return null;
+  const el = document.createElement("div");
+  el.className = "gn-offer";
+  el.setAttribute("role", "dialog");
+  el.setAttribute("aria-label", "Game names");
+  el.innerHTML = `<p>Show game names in <span lang="${attr(lang)}">${spEsc(word)}</span>?</p>
+    <div class="gn-offer-acts"><button type="button" class="gn-yes">Yes</button><button type="button" class="gn-no">No thanks</button></div>`;
+  el.querySelector(".gn-yes").onclick = () => { gnOfferClose(el, "yes"); gnRemember(lang); setGameNames(lang); };
+  el.querySelector(".gn-no").onclick = () => gnOfferClose(el, "no");
+  document.body.appendChild(el);
+  return el;
+}
+function wireGameNames(){
+  gnPickers().forEach(p => {
+    if(p.dataset.gnWired) return;
+    p.dataset.gnWired = "1";
+    p.addEventListener("change", () => {
+      gnRemember(p.value);
+      const offer = document.querySelector(".gn-offer");
+      if(offer) gnOfferClose(offer, "picked");
+      setGameNames(p.value);
+    });
+  });
+  gnPaint();
+}
+/* Width in the units shortText() counts: a wide (CJK) character is two. */
+const gnWide = ch => /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]/.test(ch)
+  || (ch.codePointAt(0) >= 0x20000 && ch.codePointAt(0) <= 0x3fffd);
+/* ` lang="xx"` for a name the page uppercases, so a Turkish dotted i or a Greek
+   accent is cased by the language's own rules. */
+const gnLangAttr = () => gnLang === "en" ? "" : ` lang="${gnLang}"`;
 /* A neighbourhood as a key, from either a key or an English name: what map
    data exported by name and filters stored before keys hold. Null for neither. */
 const hoodKeyOf = v => typeof v !== "string" || !v ? null
@@ -14042,7 +14377,7 @@ function drawFlow(){
         ? `<rect x="${x + 10}" y="${y + 13}" width="24" height="18" rx="3" fill="var(--raised)" stroke="var(--rule)"></rect>
            <text x="${x + 22}" y="${y + 26}" text-anchor="middle" class="s" style="font-weight:600;fill:var(--ink-2)">${hood}</text>` : ""}
       <text x="${tx}" y="${y + 19}">${attr(shortText(node.name, hood ? 19 : 24))}</text>
-      <text class="s" x="${tx}" y="${y + 34}">${node.stock ? node.stock.toLocaleString() + " held" : attr(node.sub)}</text></g>`);
+      <text class="s" x="${tx}" y="${y + 34}">${node.stock ? node.stock.toLocaleString() + " held" : attr(shortText(node.sub || "", hood ? 21 : 26))}</text></g>`);
     if(flag) dots.push(`<circle class="${flag[0]}" cx="${x + NODE_W - 10}" cy="${y + 10}" r="4"><title>${flag[1]}</title></circle>`);
   });
 
@@ -14066,7 +14401,18 @@ function flowCountText(facts){
     .map(([st, k]) => `${k} ${SZ_WORD[st] || st}`).join(", ");
 }
 
-const shortText = (t, n) => t.replace(/^\[[^\]]*\]\s*/, "").slice(0, n);
+/* A node's name cut to fit its box: n is a width in Latin letters, and a wide
+   (CJK) character takes two of them. */
+const shortText = (t, n) => {
+  const s = String(t || "").replace(/^\[[^\]]*\]\s*/, "");
+  let w = 0, out = "";
+  for(const ch of s){
+    w += gnWide(ch) ? 2 : 1;
+    if(w > n) break;
+    out += ch;
+  }
+  return out;
+};
 
 function drawFlowDetail(){
   const g = D.supply.graph;
@@ -14259,7 +14605,7 @@ function supplySorted(rows, cols, state){
   return rows.slice().sort((a, b) => {
     const x = key(a), y = key(b);
     if(x == null || y == null) return (x == null) - (y == null);
-    return (typeof x === "string" ? x.localeCompare(y) : (x > y) - (x < y)) * state.dir;
+    return (typeof x === "string" ? gnCompare(x, y) : (x > y) - (x < y)) * state.dir;
   });
 }
 function supplyHead(cols, state){
@@ -14688,7 +15034,7 @@ function nameLine(rid, slug){
   const again = () => { drawStock(); drawLogistics(); drawSite(); wireAll(); };
   if(!LIVE){ again(); return; }
   SOURCE.name(rid, slug)
-    .then(data => { if(data){ D = data; renderCalm(); } else again(); })
+    .then(data => { if(data){ takeData(data); renderCalm(); } else again(); })
     .catch(again);
 }
 /* A name kept in this browser that the live board does not yet have — the
@@ -14702,7 +15048,7 @@ function syncLocalNames(view){
   if(!missing.length) return;
   missing.forEach(u => syncedNames.add(u.rid));
   Promise.all(missing.map(u => SOURCE.name(u.rid, names[u.rid])))
-    .then(results => { const last = results.filter(Boolean).pop(); if(last){ D = last; renderCalm(); } })
+    .then(results => { const last = results.filter(Boolean).pop(); if(last){ takeData(last); renderCalm(); } })
     .catch(() => {});
 }
 
@@ -15937,7 +16283,9 @@ function spLimitRole(part, roles){
   if(SP_PLAIN_LIMIT[part]) return (roles || []).find(r => !r.noun) || null;
   const staffing = /\bstaffing$/.test(part);
   const want = part.replace(/\s*staffing$/, "");
-  return (roles || []).find(r => staffing ? r.label === want : r.noun === part) || null;
+  /* The finding is Python's English; the role's label may be in the player's
+     language, so its English name is asked as well. */
+  return (roles || []).find(r => staffing ? r.label === want || englishName(r.skill) === want : r.noun === part) || null;
 }
 /* The cells one cap chip is about, in the cells' own tokens. A finding naming
    two tied answers -- "Gym Trainer staffing and registers" -- is about the
@@ -19543,7 +19891,7 @@ function drawMarket(){
      a phone shows; the full name stays in its tip. */
   grid.innerHTML = any
     ? `<div></div>` + m.hoods.map((h, j) => `<div class="h${h === marketSortHood ? " sort" : ""}${HOOD_TAGS[h] ? " mk-tagged" : ""}" data-c="${j}" data-hood="${attr(h)}" data-tip="${
-        attr(`${hoodName(h)}: click to sort by demand here`)}"><span class="mk-long">${shortHood(hoodName(h))}</span>${
+        attr(`${hoodName(h)}: click to sort by demand here`)}"><span class="mk-long"${gnLangAttr()}>${shortHood(hoodName(h))}</span>${
         HOOD_TAGS[h] ? `<span class="mk-tag">${HOOD_TAGS[h]}</span>` : ""}</div>`).join("")
       + shown.map((r, i) => types ? typeRow(r, i, m.hoods) : productRow(r, i, m.hoods, m.trendDays)).join("")
       + (offices.length ? `<div class="band">Offices<small>customers served online · each cell is the demand for its hourly fee</small></div>`
@@ -19588,7 +19936,7 @@ function planTypes(){
   const cat = D.plan.catalogue || {};
   return Object.keys(cat)
     .filter(k => (cat[k].products || []).length >= 1)
-    .sort((a,b) => cat[a].type.localeCompare(cat[b].type));
+    .sort((a,b) => gnCompare(cat[a].type, cat[b].type));
 }
 
 /* What one shop actually shifts is measured where the owner runs the type, so
@@ -21557,7 +21905,7 @@ function ssTopType(){
     by[b.typeSlug] = by[b.typeSlug] || {slug: b.typeSlug, type: b.type, revenue: 0};
     by[b.typeSlug].revenue += b.revenue || 0;
   });
-  return Object.values(by).sort((a, z) => z.revenue - a.revenue || a.type.localeCompare(z.type))[0] || null;
+  return Object.values(by).sort((a, z) => z.revenue - a.revenue || gnCompare(a.type, z.type))[0] || null;
 }
 function ssPrices(){
   const t = ssTopType();
@@ -21824,8 +22172,11 @@ window.addEventListener("hashchange", ssAfter);
    site's address (its name is a link to it), land where Enter goes (said in
    the footer), go what Enter does. */
 function ssEntry(o){
-  const e = Object.assign({syn: [], kw: [], tag: "", dot: "", hood: "", map: "", mapLabel: "", land: "", href: ""}, o);
+  const e = Object.assign({syn: [], kw: [], tag: "", dot: "", hood: "", map: "", mapLabel: "", land: "", href: "", en: ""}, o);
   e.lt = e.t.toLowerCase(); e.lp = e.p.toLowerCase();
+  /* A game name shown in another language answers to its English name too. */
+  if(e.en === e.t) e.en = "";
+  e.le = e.en.toLowerCase();
   e.kwRaw = e.kw.map(s => String(s));
   e.syn = e.syn.map(s => s.toLowerCase()); e.kw = e.kwRaw.map(s => s.toLowerCase());
   if(!e.land) e.land = e.p;
@@ -21948,6 +22299,9 @@ function ssKindGo(id){
     if(row){ row.scrollIntoView({block: "nearest"}); ssRing(row); }
   }, 450);
 }
+/* The English names of some game keys, where the page shows them in another
+   language: extra words a search answers to. */
+const ssEnglish = keys => gnLang === "en" ? [] : keys.filter(Boolean).map(k => englishName(k)).filter(Boolean);
 /* The inputs Python judged not fed as the machines need, by name. */
 function ssShortInputs(){
   const names = [];
@@ -21972,7 +22326,8 @@ function ssBuild(){
     const fac = D.supply && D.supply.factories;
     const facSites = (fac && fac.sites) || [];
     const eats = {};
-    facSites.forEach(f => { eats[f.s] = (f.needs || []).map(n => n.item); });
+    const eatSlugs = {};
+    facSites.forEach(f => { eats[f.s] = (f.needs || []).map(n => n.item); eatSlugs[f.s] = (f.needs || []).map(n => n.slug); });
     /* A site's dot is the worst finding the list reads out for it: a kind
        switched off does not colour it. */
     const siteRows = {};
@@ -21982,7 +22337,8 @@ function ssBuild(){
       out.push(ssEntry({id: `site:${b.key}`, g: "sites", t: shortName(b),
         p: b.status === "vacant" ? `Vacant lease · ${b.address || ""}`
           : `${b.type} · ${b.address || ""}${inputs.length ? ` · eats ${inputs.join(" and ")}` : ""}`,
-        ic: "building", hood: b.code || "", kw: [b.address, b.neighbourhood && hoodName(b.neighbourhood), b.type, b.name, ...inputs].filter(Boolean),
+        ic: "building", hood: b.code || "", kw: [b.address, b.neighbourhood && hoodName(b.neighbourhood), b.type, b.name, ...inputs,
+          ...ssEnglish([b.neighbourhood, b.typeSlug, ...(eatSlugs[i] || [])])].filter(Boolean),
         dot: ssWorst(siteRows[b.key] || []), map: b.key, mapLabel: b.name, land: b.name, href: siteHref(b.key),
         go: () => ssOpenSite(b.key)}));
     });
@@ -22035,7 +22391,7 @@ function ssBuild(){
       if(!it.dot) it.dot = "opp";
       if(!it.kind) Object.assign(it, {kind: "idle", ic: "crate", land: "Supply › Checks › Idle stock", go: () => ssStock("idle")});
     });
-    items.forEach((it, slug) => out.push(ssEntry({id: `product:${slug}`, g: "products", t: it.name,
+    items.forEach((it, slug) => out.push(ssEntry({id: `product:${slug}`, g: "products", t: it.name, en: englishName(slug),
       p: it.parts.slice(0, 2).join(" · "), ic: it.ic, dot: it.dot || "", land: it.land, go: it.go})));
     const counts = kindCounts();
     ALERT_GROUPS.forEach(g => {
@@ -22053,8 +22409,9 @@ function ssBuild(){
       const had = best.get(d.slug);
       if(!had || d.demand > had.demand) best.set(d.slug, {...d, hood});
     }));
-    [...best.values()].sort((a, z) => z.demand - a.demand || a.type.localeCompare(z.type)).forEach(d => {
+    [...best.values()].sort((a, z) => z.demand - a.demand || gnCompare(a.type, z.type)).forEach(d => {
       out.push(ssEntry({id: `finder:${d.slug}`, g: "finder", t: `Open ${/^[AEIOU]/i.test(d.type) ? "an" : "a"} ${d.type}`,
+        kw: ssEnglish([d.slug, d.hood]),
         p: `best fit: ${hoodName(d.hood)} · demand ${d.demand}`, ic: "pin",
         syn: ["new shop", "new business", "open", "expand"], land: `Map › Find a location · ${d.type}`,
         go: () => ssFinder({cat: d.category, type: d.slug, hoods: [d.hood]})}));
@@ -22082,6 +22439,8 @@ function ssScore(e, qq, ws){
   if(e.lt.startsWith(qq)) return [100, "t", ""];
   if(ws.test(e.lt)) return [85, "t", ""];
   if(e.lt.includes(qq)) return [60, "t", ""];
+  if(e.le && (e.le.startsWith(qq) || ws.test(e.le))) return [80, "kw", e.en];
+  if(e.le && e.le.includes(qq)) return [55, "kw", e.en];
   for(const s of e.syn) if(s.startsWith(qq) || (qq.length >= 4 && s.includes(qq))) return [70, "syn", s];
   const k = e.kw.findIndex(w => ws.test(w));
   if(e.g === "sites" && k >= 0) return [75, "kw", e.kwRaw[k]];
@@ -24781,7 +25140,17 @@ function boot(){
 }
 /* A page written with its numbers boots now. One that receives them later,
    as the in-browser board does, boots on the first delivery. */
+if(D) takeData(D);
 if(D) boot();
+/* The footer's "Game names": a choice kept from an earlier visit is fetched
+   now, and a board that arrives first is drawn in English and again once the
+   table is in. A page built with --lang has its table already and no picker. */
+wireGameNames();
+if(!GN_EMBED && gnPickers().length){
+  const want = gnStored();
+  if(want && want !== "en" && gnKnown(want)) setGameNames(want);
+  else if(!want) gnOffer();
+}
 
 /* What a host page may ask of the board. The web front door offers the wiki
    from its landing, before any save is open; everything else waits for one. */
@@ -24813,7 +25182,7 @@ function startWatching(){
          rest to be drawn as it is opened; another company or save redraws it
          all. */
       const same = !first && sameCompany(D, data);
-      D = data;
+      takeData(data);
       gwTerms.clear();  // what the game said of caps belongs to the board it was said about
       gwReadStuck = false;
       if(gwOpen && gwOpen._gwGate) gwOpen._gwBuilt = true;  // an undo's gate: a board built since
@@ -25297,12 +25666,13 @@ class GameLink:
 class Board:
     """Holds the current dashboard, and rebuilds it when the save changes."""
 
-    def __init__(self, target: str, out: str, link: GameLink | None = None):
+    def __init__(self, target: str, out: str, link: GameLink | None = None, lang: str | None = None):
         self.target = target
         self.link = link
         self.out = out
         self.locale_source, locale = game_text()
         self.names = Names(locale)
+        self.lang_names = cli_names(lang, self.locale_source, locale)
         self.history = os.path.join(os.path.dirname(out) or ".", "market_history.json")
         self.lock = threading.Lock()
         self.html = b""
@@ -25363,8 +25733,10 @@ class Board:
 
         try:
             data = safe_extract(load_save(path), self.names, self.history)
-            live_page = render(data, live=True).encode("utf-8")
-            static_page = render(data).encode("utf-8")
+            # names= only for --lang: an English board renders as it always has.
+            lang = {"names": self.lang_names} if self.lang_names else {}
+            live_page = render(data, live=True, **lang).encode("utf-8")
+            static_page = render(data, **lang).encode("utf-8")
         except Exception as exc:
             # Fingerprint it anyway. Without this a save that will not build is
             # re-read every interval -- a 26 MB parse every few seconds, which
@@ -25483,9 +25855,10 @@ def watch(
     interval: int,
     open_browser: bool,
     link: GameLink | None = None,
+    lang: str | None = None,
 ) -> None:
     lowered = yield_to_the_game()
-    board = Board(target, out, link=link)
+    board = Board(target, out, link=link, lang=lang)
     try:
         board.refresh(settle=False)
     except LinkUnavailable as exc:
@@ -25601,6 +25974,24 @@ def locale_note(source: str | None, locale: dict[str, str]) -> str:
     return f"game text: {source}"
 
 
+def cli_names(lang: str | None, source: str | None, english: dict[str, str]) -> dict | None:
+    """--lang: the game names of one language, from the installed game, for
+    render(names=...). None for English or no --lang."""
+    if not lang or lang == "en":
+        return None
+    if lang not in GAME_NAME_LANGS:
+        raise SystemExit(f"--lang {lang}: the game has no such language; one of "
+                         + ", ".join(code for code in GAME_NAME_LANGS))
+    if not source or bundled_locale(source):
+        raise SystemExit(f"--lang {lang} reads the game's own {lang}.json beside its en.json, "
+                         "and no installed game was found; set BA_LOCALE to the game's en.json")
+    other = load_locale(os.path.join(os.path.dirname(source), f"{lang}.json"))
+    if name_coverage(english, other) < NAME_COVERAGE:
+        raise SystemExit(f"--lang {lang}: {os.path.join(os.path.dirname(source), lang + '.json')} "
+                         "names too few of the game's items to use")
+    return {"lang": lang, "names": name_table(english, other)}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -25644,6 +26035,14 @@ def main() -> None:
         help="read the running game through the Big Copilot Link mod instead of a "
         "save folder; URL defaults to http://127.0.0.1:8322. The bytes are kept "
         "as game-link.hsg beside the output file",
+    )
+    ap.add_argument(
+        "--lang",
+        default=None,
+        metavar="CODE",
+        help="show the game's own names (items, business types, neighbourhoods, "
+        "skills) in one of the game's languages, e.g. de, fr, ja, zh-cn; the rest "
+        "of the page stays English",
     )
     ap.add_argument(
         "--backfill",
@@ -25695,7 +26094,8 @@ def main() -> None:
         print(f"  merged {recorded} snapshots into {os.path.basename(history)}")
 
     if args.watch:
-        watch(target, out, port=args.port, interval=interval, open_browser=not args.no_open, link=link)
+        watch(target, out, port=args.port, interval=interval, open_browser=not args.no_open, link=link,
+              lang=args.lang)
         return
 
     if link is not None:
@@ -25712,9 +26112,10 @@ def main() -> None:
     else:
         path = newest_under(target)
         source_name = os.path.basename(path)
+    lang_names = cli_names(args.lang, locale_source, locale)
     data = safe_extract(load_save(path), names, history)
     with open(out, "w", encoding="utf-8") as fh:
-        fh.write(render(data))
+        fh.write(render(data, names=lang_names))
 
     k = data["kpi"]
     minor = data["minor"]
