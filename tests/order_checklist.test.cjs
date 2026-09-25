@@ -16,6 +16,8 @@ const context = vm.createContext({});
 // The row setting the imports table computes, which feeds the checklist.
 const settingStart = source.indexOf('function importSetting(');
 assert.ok(settingStart >= 0 && settingStart < start);
+// The board's number formatter, which the checklist's wording goes through.
+vm.runInContext(source.slice(source.indexOf('let NUM_LOCALE'), source.indexOf('const compact =')), context);
 vm.runInContext(source.slice(settingStart, end), context);
 const businesses = [
   {key:'depot#1', name:'Depot', address:'1 Depot Street'},

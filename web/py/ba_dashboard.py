@@ -14082,7 +14082,13 @@ const SOURCE = window.LEDGER_SOURCE || {
 
 const LINE_COLOURS = {MT:"#f07a1f", HK:"#e0362c", MH:"#a83bb0", LM:"#0c5ec4",
                       GD:"#7a8f27", IC:"#5c6f7a", HA:"#0f8f86", "":"#8b9499"};
-const fmt = n => (n<0?"-":"") + "$" + Math.abs(Math.round(n)).toLocaleString("en-US");
+const fmt = n => (n<0?"-":"") + "$" + num(Math.abs(Math.round(n)));
+/* Every number on the board goes through num(), in the UI's number locale, so
+   a German browser never shows "1.234 units" beside "$1,234". English is
+   always en-US; the language switch will set NUM_LOCALE. Never call a bare
+   toLocaleString(): it follows the browser. */
+let NUM_LOCALE = "en-US";
+const num = (n, opts) => Number(n).toLocaleString(NUM_LOCALE, opts);
 const compact = n => {
   const a = Math.abs(n), s = n<0?"-":"";
   if(a>=1e6) return s+"$"+(a/1e6).toFixed(a>=1e7?1:2)+"M";
@@ -14656,7 +14662,7 @@ const VIEWS = {
       ["Business", b=>kidCell(b), "l", null],
       ["Opened", b=>`day ${b.opened}`, "", b=>b.opened],
       ["Staff", b=>b.staff||"—", "", b=>b.staff],
-      ["Customers", b=>b.customers?b.customers.toLocaleString("en-US"):"—", "", b=>b.customers],
+      ["Customers", b=>b.customers?num(b.customers):"—", "", b=>b.customers],
       // An office's customer is an hour billed, so its spend is per hour.
       ["Spend / visit", b=>b.basket===null?"—":`$${b.basket.toFixed(2)}${b.status==="office"?"/hour":""}`, "", b=>b.basket??-1],
       ["Satisfaction", b=>b.satisfaction.overall===null?"—":meter(b.satisfaction.overall), "gauge", b=>b.satisfaction.overall??-1],
@@ -14881,7 +14887,7 @@ function drawFlow(){
     const xc = fwd && b.corridor !== null ? b.corridor : x2;
     const mid = (x1 + xc) / 2;
     const w = 1 + Math.sqrt(l.perDay / heaviest) * 2.5;
-    const tip = `${named(l.from)} to ${named(l.to)}: ${l.perDay.toLocaleString("en-US")} units a day over ${
+    const tip = `${named(l.from)} to ${named(l.to)}: ${num(l.perDay)} units a day over ${
       l.items} product${l.items === 1 ? "" : "s"}, ${l.paused ? "import paused"
       : l.cadence === "weekly" ? "weekly import" : "daily distribution"}`;
     pipes.push(`<path class="pipe ${l.cadence}${l.paused ? " paused" : ""}" id="pipe${i}"
@@ -14905,7 +14911,7 @@ function drawFlow(){
         ? `<rect x="${x + 10}" y="${y + 13}" width="24" height="18" rx="3" fill="var(--raised)" stroke="var(--rule)"></rect>
            <text x="${x + 22}" y="${y + 26}" text-anchor="middle" class="s" style="font-weight:600;fill:var(--ink-2)">${hood}</text>` : ""}
       <text x="${tx}" y="${y + 19}">${attr(shortText(node.name, hood ? 19 : 24))}</text>
-      <text class="s" x="${tx}" y="${y + 34}">${node.stock ? node.stock.toLocaleString("en-US") + " held"
+      <text class="s" x="${tx}" y="${y + 34}">${node.stock ? num(node.stock) + " held"
         : `${attr(shortText(node.sub || "", hood ? 21 : 26, true))}<title>${attr(node.sub || "")}</title>`}</text></g>`);
     if(flag) dots.push(`<circle class="${flag[0]}" cx="${x + NODE_W - 10}" cy="${y + 10}" r="4"><title>${flag[1]}</title></circle>`);
   });
@@ -15039,8 +15045,8 @@ function szRamp(f){
 /* Used / week, split the way Python summed it up the routes. */
 function szParts(p){
   if(!p) return "";
-  return [p.lines ? `Factory lines ${p.lines.toLocaleString("en-US")}` : "", p.sites ? `shops ${p.sites.toLocaleString("en-US")} a week` : "",
-    p.route ? `a route from your own site brings ${p.route.toLocaleString("en-US")}` : ""].filter(Boolean).join(" · ");
+  return [p.lines ? `Factory lines ${num(p.lines)}` : "", p.sites ? `shops ${num(p.sites)} a week` : "",
+    p.route ? `a route from your own site brings ${num(p.route)}` : ""].filter(Boolean).join(" · ");
 }
 /* Idle stock under the sizing on screen. A factory input's draw follows the
    sizing, so a holding can be idle under one and not the other (`modes`);
@@ -15146,15 +15152,15 @@ function szSays(f, r, depot){
   switch(f.st){
     case "paused": return "resume the import contract";
     case "noplan": return f.setTo !== null && f.setTo !== undefined
-      ? `put ${r.item} on a plan at ${f.setTo.toLocaleString("en-US")} a ${szWeekly(f) ? "week" : "day"}` : "nothing brings it in";
+      ? `put ${r.item} on a plan at ${num(f.setTo)} a ${szWeekly(f) ? "week" : "day"}` : "nothing brings it in";
     case "short":
-      if(f.why === "dry") return `${depot} holds ${(r.depotStock || 0).toLocaleString("en-US")}; the import is not keeping up`;
-      if(f.why === "order") return f.setTo !== null ? `raise the weekly import to ${f.setTo.toLocaleString("en-US")}` : szTip(f).toLowerCase();
-      return f.setTo !== null ? `raise ${depot}'s top-up to ${f.setTo.toLocaleString("en-US")}` : szTip(f).toLowerCase();
-    case "tight": return f.setTo !== null ? `${f.setTo.toLocaleString("en-US")} would carry the margin` : "";
+      if(f.why === "dry") return `${depot} holds ${num(r.depotStock || 0)}; the import is not keeping up`;
+      if(f.why === "order") return f.setTo !== null ? `raise the weekly import to ${num(f.setTo)}` : szTip(f).toLowerCase();
+      return f.setTo !== null ? `raise ${depot}'s top-up to ${num(f.setTo)}` : szTip(f).toLowerCase();
+    case "tight": return f.setTo !== null ? `${num(f.setTo)} would carry the margin` : "";
     case "stalled":
       if(f.why === "waiting") return `${lines.join(", ")} stand${lines.length === 1 ? "s" : ""} still for want of ${(r.waitingOn || []).join(", ")}`;
-      return `${depot} holds ${(r.depotStock || 0).toLocaleString("en-US")} but the line takes ${pct}% of its need`;
+      return `${depot} holds ${num(r.depotStock || 0)} but the line takes ${pct}% of its need`;
     case "covered":
       if(f.why === "staffing") return `the roster runs these machines ${Math.round((r.staffedShare ?? 1) * 100)}% of the week`;
       if(f.why === "limit") return "Produce up to holds the line back";
@@ -15288,7 +15294,7 @@ function drawMast(){
      text-transform. */
   const bits = [];
   if(year) bits.push(`YEAR ${year}`);
-  bits.push(`${k.businesses} SITES`, `${k.employees.toLocaleString("en-US")} STAFF`);
+  bits.push(`${k.businesses} SITES`, `${num(k.employees)} STAFF`);
   /* The flags go on a line of their own so the first line stays short enough
      for the sphere to rest between the nav and the clock. */
   const flags = [];
@@ -15354,7 +15360,7 @@ function drawKpis(){
      /* The day's result has a page of its own; the tile is the way in. */
      go: "secDaily", goTip: "Open Company › Results, the daily result"},
     {l: "Revenue yesterday", v: fmt(k.revenue),
-     chip: chipHtml("dim", k.customers.toLocaleString("en-US"), `${k.customers.toLocaleString("en-US")} customers served yesterday`),
+     chip: chipHtml("dim", num(k.customers), `${num(k.customers)} customers served yesterday`),
      sub: "customers", spark: hist(d => d.revenue)},
     /* Cash has no day-by-day history in the save, so this tile has no line. */
     {l: "Cash on hand", v: fmt(k.cash), chip: cashTile.chip,
@@ -17152,7 +17158,7 @@ const spSpark = (series, key, money, tone) => {
     if(read(d)) return `<i class="none" style="--v:4%" data-read="${attr(`day ${d.day} <b>no reading</b>`)}"></i>`;
     return `<i class="${last7 ? "l" : ""}" style="--v:${
       (25 + (d[key] - lo) / ((top - lo) || 1) * 75).toFixed(0)}%" data-read="${attr(`day ${d.day} <b>${
-      money ? fmt(d[key]) : Math.round(d[key]).toLocaleString("en-US")}</b>`)}"></i>`;
+      money ? fmt(d[key]) : num(Math.round(d[key]))}</b>`)}"></i>`;
   }).join("")}</div><div class="sp-tread sp-readout"></div></div>`;
 };
 /* How dark each cost sits in the bar: the big ones darkest, so the shape of a
@@ -17976,7 +17982,7 @@ const spUp = (now, to, bad) => `<span class="sp-up${bad ? " bad" : ""}">${spEsc(
 const spMeter = (pct, bad) => `<div class="sp-meter${bad ? " bad" : ""}"><i style="--w:${
   Math.max(0, Math.min(100, Math.round(pct || 0)))}%"></i></div>`;
 /* A figure the payload does not carry is a dash, never a nought. */
-const spNum = n => Number.isFinite(n) ? Math.round(n).toLocaleString("en-US") : "—";
+const spNum = n => Number.isFinite(n) ? num(Math.round(n)) : "—";
 /* The total of one key over some rows, or nothing at all when no row carries
    it: a factory whose every machine runs a recipe the board cannot name has an
    unknown output, not an output of zero. */
@@ -18455,7 +18461,7 @@ function spHomePanel(home){
   const code = HOOD_TAGS[home.hood] || "";
   const tiles = spTile("Rent / day", fmt(day))
     + spTile("Rent / week", fmt(day * 7))
-    + spTile("Size", m === null ? "—" : `${m.toLocaleString("en-US")}<small>m²</small>`)
+    + spTile("Size", m === null ? "—" : `${num(m)}<small>m²</small>`)
     + spTile("Per m²", m === null || !rent ? "—" : `$${(rent / m).toFixed(2)}<small>/day</small>`);
   return `${siteCrumbs(home.key, home.address, false)}
     <div class="sitehead rv">
@@ -18642,7 +18648,7 @@ function drawSite(){
   const stats = !shelved ? "" : `
     <div class="sstat"><span class="lab">Revenue yesterday</span><div class="v">${fmt(b.revenue)}${trendChip}</div>${
       sp ? spSpark(b.series, "revenue", true, tone) : ""}</div>
-    <div class="sstat"><span class="lab">Customers</span><div class="v">${b.customers ? b.customers.toLocaleString("en-US") : "—"}${
+    <div class="sstat"><span class="lab">Customers</span><div class="v">${b.customers ? num(b.customers) : "—"}${
       b.basket === null ? "" : `<small ${SMALL}>$${b.basket.toFixed(2)}/${office ? "hour billed" : "visit"}</small>`}</div>${
       sp ? spSpark(b.series, "customers", false, "") : ""}</div>
     <div class="sstat"${sp ? "" : ` data-tip="${attr(costTip)}"`}><span class="lab">Profit</span>${
@@ -18717,7 +18723,7 @@ function drawSite(){
       <thead><tr><th>Fee</th><th>Hours billed / day</th><th>Revenue / day</th></tr></thead>
       <tbody>${shelves.map(l => `<tr data-el="${attr(spKeyTok(l.slug, l.item))}">
           <td class="l">${l.item}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
-          <td>${l.soldPerDay.toLocaleString("en-US")}</td>
+          <td>${num(l.soldPerDay)}</td>
           <td>${fmt(l.revenue)}</td></tr>`).join("")}</tbody></table>` : `<p class="quiet">Nothing billed here yet.</p>`)
     : shelves.length ? `
     <table>
@@ -18732,22 +18738,22 @@ function drawSite(){
         const over = sp && t && (t.target || t.wholesale) && Number.isFinite(f.setTo) && (f.st === "short" || f.st === "tight");
         /* A wholesale store's weekly delivery feeds the shelf where no top-up does. */
         const deal = t && !t.target && t.wholesale ? t.wholesale : null;
-        const busiest = t && t.peakDay ? `${t.peakDay.slice(0, 3)} ${t.peakSold.toLocaleString("en-US")}` : "—";
+        const busiest = t && t.peakDay ? `${t.peakDay.slice(0, 3)} ${num(t.peakSold)}` : "—";
         /* The shelf's word, as Checks says it; a shelf Python did not judge has none. */
         const word = sp && supplyFact(siteTab, l.slug) ? ` ${szChip(f)}` : "";
         return `<tr data-el="${attr(spKeyTok(l.slug, l.item))}${over ? " outruns" : ""}">
           <td class="l">${l.item}${word}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
-          <td>${l.soldPerDay.toLocaleString("en-US")}</td>
+          <td>${num(l.soldPerDay)}</td>
           <td>${over && !deal ? `<span class="sp-red">${busiest}</span>` : busiest}</td>
           <td>${fmt(l.revenue)}</td>
-          <td>${deal ? `${over ? `<span class="sp-up${f.st === "short" ? " bad" : ""}" data-el="raise">${deal.toLocaleString("en-US")} ${spIcon("right")} <b>${
-                f.setTo.toLocaleString("en-US")}</b></span>` : deal.toLocaleString("en-US")}<small ${SMALL} data-tip="${attr(`Delivered by a wholesale store${
+          <td>${deal ? `${over ? `<span class="sp-up${f.st === "short" ? " bad" : ""}" data-el="raise">${num(deal)} ${spIcon("right")} <b>${
+                num(f.setTo)}</b></span>` : num(deal)}<small ${SMALL} data-tip="${attr(`Delivered by a wholesale store${
                 t.wholesaleDay ? ` each ${t.wholesaleDay}` : " each week"}`)}">/wk wholesale</small>`
             : !t || !t.target ? (sp ? `<span class="sp-noplan" data-el="noplan">${spIcon("route")}no plan</span>` : "—")
-            : over ? `<span class="sp-up${f.st === "short" ? " bad" : ""}" data-el="raise">${t.target.toLocaleString("en-US")} ${spIcon("right")} <b>${
-                f.setTo.toLocaleString("en-US")}</b></span>` : t.target.toLocaleString("en-US")}</td>
+            : over ? `<span class="sp-up${f.st === "short" ? " bad" : ""}" data-el="raise">${num(t.target)} ${spIcon("right")} <b>${
+                num(f.setTo)}</b></span>` : num(t.target)}</td>
           <td class="gauge${f.st === "short" ? " low" : ""}">${gauge(t, f)}</td>
-          <td>${sp && !l.units ? `<span class="sp-red">${l.units.toLocaleString("en-US")}</span>` : l.units.toLocaleString("en-US")}</td></tr>`;
+          <td>${sp && !l.units ? `<span class="sp-red">${num(l.units)}</span>` : num(l.units)}</td></tr>`;
       }).join("")}</tbody></table>` : `<p class="quiet">Nothing stocked here.</p>`;
   const shelfMore = shelved && !office && sideShelves.length ? `
     <p class="quiet" style="margin:12px 0 0"><a class="link" href="#" id="shelfToggle" aria-expanded="${showAllShelves}">${
@@ -19103,21 +19109,21 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     const mode = r.smart ? "smart" : "weekly";
     // A level is set on one contract: the one that holds it is named.
     const where = r.levelName ?? r.levelImporter;
-    const setting = n => r.smart ? `Set Smart Delivery stock${where ? ` at ${where}` : ""} to ${n.toLocaleString("en-US")}.`
-      : `Set the weekly order to ${n.toLocaleString("en-US")}.`;
+    const setting = n => r.smart ? `Set Smart Delivery stock${where ? ` at ${where}` : ""} to ${num(n)}.`
+      : `Set the weekly order to ${num(n)}.`;
     const yours = `Your own figure${r.setTo !== null && r.setTo !== undefined
-      ? `; the board suggests ${r.setTo.toLocaleString("en-US")}` : ""}.`;
+      ? `; the board suggests ${num(r.setTo)}` : ""}.`;
     // What a route from the company's own site brings is off the week already.
     const p = r.parts || {};
-    const byRoute = p.route ? `, less the ${p.route.toLocaleString("en-US")} a week a route brings` : "";
-    const sized = `${r.use ? `Uses ${r.use.toLocaleString("en-US")} a week${p.lines && p.sites ? " (factory lines and shops)"
+    const byRoute = p.route ? `, less the ${num(p.route)} a week a route brings` : "";
+    const sized = `${r.use ? `Uses ${num(r.use)} a week${p.lines && p.sites ? " (factory lines and shops)"
       : p.lines ? " (factory lines)" : p.sites ? " (shops)" : ""}` : "Sized"}${byRoute}${margin(r.margin)}`;
     if(r.fit === "paused" && ((r.need || 0) > 0 || r.edited || importResumes(r))){
-      const now = r.smart ? `set to keep ${(r.inGame ?? r.pausedWeekly).toLocaleString("en-US")} in stock`
-        : `configured for ${r.pausedWeekly.toLocaleString("en-US")} units/week`;
+      const now = r.smart ? `set to keep ${num(r.inGame ?? r.pausedWeekly)} in stock`
+        : `configured for ${num(r.pausedWeekly)} units/week`;
       add("Weekly imports", r.s, r, null, r.edited ? value : null,
         `Resume the paused import contract. It is ${now}. ${r.edited ? `${setting(value)} ${yours}`
-          : (r.need || 0) > 0 ? `${sized}: ${(r.setTo ?? r.need).toLocaleString("en-US")} a week. Review the quantity after resuming.`
+          : (r.need || 0) > 0 ? `${sized}: ${num(r.setTo ?? r.need)} a week. Review the quantity after resuming.`
           : "The top-up beside it falls short without it; resume it, or raise the top-up."}`,
         null, mode, true);
     } else if(r.edited ? r.changed : r.setTo !== null && r.setTo !== undefined){
@@ -19127,18 +19133,18 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     }
   }));
   looseRows.forEach(r => add("Weekly imports", null, r, null, null,
-    `Choose a supplying depot before setting an order. The factory lines use ${Math.round(r.week).toLocaleString("en-US")} units/week.`));
+    `Choose a supplying depot before setting an order. The factory lines use ${num(Math.round(r.week))} units/week.`));
   imports.forEach(r => {
     const f = r.fact || {};
     const catchUp = Number.isFinite(r.catchUp) && r.catchUp > 0 ? r.catchUp : null;
     if(f.st === "paused" && !rows.some(x => x.kind === "Weekly imports" && x.site === r.s && x.slug === r.slug)) add("Weekly imports", r.s, r, null, null,
       `Review the paused import from ${r.from || "the supplier"}; resume it in-game if still needed.`);
     else if(f.st === "short" && f.why === "shortfall" && r.covered) add("Before the next delivery", r.s, r, null, catchUp,
-      `${catchUp ? `Bring in ${catchUp.toLocaleString("en-US")} extra units${r.runsOut ? ` before ${r.runsOut}` : ""}. ` : ""}A route brings the week's draw, but a busy day may empty the shelf before its next round${r.paused
+      `${catchUp ? `Bring in ${num(catchUp)} extra units${r.runsOut ? ` before ${r.runsOut}` : ""}. ` : ""}A route brings the week's draw, but a busy day may empty the shelf before its next round${r.paused
         ? `, and the backup import from ${r.from || "the supplier"} is paused. Arrange a one-off supply, raise the route's stock target, or resume the import.`
         : `. Arrange a one-off supply, or raise the route's stock target.`}`);
     else if(f.st === "short" && f.why === "shortfall") add("Before the next delivery", r.s, r, null, catchUp,
-      `${catchUp ? `Bring in ${catchUp.toLocaleString("en-US")} extra units${r.runsOut ? ` before ${r.runsOut}` : ""}. Estimated demand minus current stock and scheduled incoming deliveries, rounded up to whole units. ` : ""}Stock may run out ${r.shortBy} days before a scheduled delivery. Arrange a one-off supply; a weekly order change alone will not bridge this gap.`);
+      `${catchUp ? `Bring in ${num(catchUp)} extra units${r.runsOut ? ` before ${r.runsOut}` : ""}. Estimated demand minus current stock and scheduled incoming deliveries, rounded up to whole units. ` : ""}Stock may run out ${r.shortBy} days before a scheduled delivery. Arrange a one-off supply; a weekly order change alone will not bridge this gap.`);
   });
   sites.forEach(s => s.rows.forEach(r => {
     const f = r.fact || {};
@@ -19160,12 +19166,12 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     /* A top-up target set far above what sells (idle, `lowers`): the lower
        target to type, a change that is never tight and never on Today. */
     if(from !== null && r.peakSold > 0 && set(f) && f.lowers) add("Shop daily top-ups", r.s, r, r.target || 0,
-      f.setTo, `From ${address(from)}. Lower the top-up: it holds ${r.sold > 0 ? `${Math.round((r.target || 0) / r.sold).toLocaleString("en-US")} days` : "weeks"} of sales. `
-        + `Peak sales ${r.peakSold.toLocaleString("en-US")} units/day${r.peakDay ? ` on ${r.peakDay}` : " (no weekday profile)"} until the next round${margin(r.margin)}.`,
+      f.setTo, `From ${address(from)}. Lower the top-up: it holds ${r.sold > 0 ? `${num(Math.round((r.target || 0) / r.sold))} days` : "weeks"} of sales. `
+        + `Peak sales ${num(r.peakSold)} units/day${r.peakDay ? ` on ${r.peakDay}` : " (no weekday profile)"} until the next round${margin(r.margin)}.`,
       from, null, false, false, true);
     else if(from !== null && r.peakSold > 0 && set(f)) add("Shop daily top-ups", r.s, r, r.target || 0,
       f.setTo, `From ${address(from)}. `
-        + `Peak sales ${r.peakSold.toLocaleString("en-US")} units/day${r.peakDay ? ` on ${r.peakDay}` : " (no weekday profile)"}${margin(r.margin)}; check shelf space.`,
+        + `Peak sales ${num(r.peakSold)} units/day${r.peakDay ? ` on ${r.peakDay}` : " (no weekday profile)"}${margin(r.margin)}; check shelf space.`,
       from, null, false, f.st === "tight");
   });
   /* A shop or depot a wholesale store delivers to each week: the contract's
@@ -19178,14 +19184,14 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     /* The margin as the fact carries it: a depot's factory lines sized 24/7
        take none, so its need is its use and no margin is claimed. */
     const sized = Number.isFinite(f.need) && Number.isFinite(f.use) && f.need > f.use
-      ? `${margin(r.margin)}, ${f.need.toLocaleString("en-US")} in all` : "";
+      ? `${margin(r.margin)}, ${num(f.need)} in all` : "";
     if(set(f)) add("Wholesale deliveries", r.s, r, Number.isFinite(f.have) ? f.have : null, f.setTo,
-      `${f.role === "depot" ? "Uses" : "Sells"} ${(f.use || 0).toLocaleString("en-US")} a week${sized}. Change the amount on the wholesale delivery contract in-game.`,
+      `${f.role === "depot" ? "Uses" : "Sells"} ${num(f.use || 0)} a week${sized}. Change the amount on the wholesale delivery contract in-game.`,
       null, "weekly", false, f.st === "tight");
     /* Independent of the contract: stock that runs out before the delivery
        is brought in by hand, whether or not the contract is raised too. */
     if(f.st === "short" && Number.isFinite(f.catchUp) && f.catchUp > 0) add("Before the next delivery", r.s, r, null, f.catchUp,
-      `Bring in ${f.catchUp.toLocaleString("en-US")} extra units by hand before ${when} wholesale delivery: the stock on hand runs out before it lands.`);
+      `Bring in ${num(f.catchUp)} extra units by hand before ${when} wholesale delivery: the stock on hand runs out before it lands.`);
   });
   /* A depot only a route from your own site feeds: the top-up that route's
      plan holds it to, against its busiest day (its fact's day figures). */
@@ -19195,7 +19201,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     const from = Number.isInteger(f.from) ? f.from : null;
     add("Depot daily top-ups", r.s, r, Number.isFinite(f.have) ? f.have : 0, f.setTo,
       `${from !== null ? `Set on the plan of ${address(from)}. ` : ""}Its busiest day sends on ${
-        (f.use || 0).toLocaleString("en-US")} units${margin(r.margin)}.`,
+        num(f.use || 0)} units${margin(r.margin)}.`,
       from, null, false, f.st === "tight");
   });
   /* A factory line rostered fewer hours than the sizing on screen needs: the
@@ -19282,7 +19288,7 @@ function planImportsState(rows, marks, nameOf, gaps = {}){
   const more = also.length ? ` ${(gaps.margin || 0) + (gaps.lower || 0)} more on Supply only ${also.join(" or ")}.` : "";
   if(!left.length) return {badge: "ALL TICKED", live: false,
     what: `You ticked ${rows.length === 1 ? "the one change" : `all ${rows.length}`}. A change the game has taken leaves the list with the next save.${more}`};
-  const n = v => v === null || v === undefined ? "not set" : v.toLocaleString("en-US");
+  const n = v => v === null || v === undefined ? "not set" : num(v);
   /* A paused import the player gave a figure has no current setting: it is
      a resume, not an order going from "not set". */
   const resume = r => !!r.paused;
@@ -19656,7 +19662,7 @@ function sbStatus(f, reason, tip){
 /* The setting as the game holds it, and what to type: now, an arrow, the new
    figure. Without a change, just the setting. */
 function sbChg(now, to, unit, where){
-  const n = v => Number.isFinite(v) ? Math.round(v).toLocaleString("en-US") : "—";
+  const n = v => Number.isFinite(v) ? num(Math.round(v)) : "—";
   const body = Number.isFinite(to) && to !== now
     ? `<span class="sb-chg"><s>${n(now)}</s><span class="to">${spIcon("right")}</span><b>${n(to)}</b>${unit ? `<small>${unit}</small>` : ""}</span>`
     : `${n(now)}${unit && Number.isFinite(now) ? ` <span class="sb-unit">${unit}</span>` : ""}`;
@@ -19767,7 +19773,7 @@ function sbOthers(d, tab, claimed){
     <th class="l">Site</th><th class="l">Product</th><th>Change</th><th class="l">Why</th></tr></thead><tbody>${rows.map(r => {
       const b = D.businesses[r.site];
       const to = r.proposed === null ? `<span class="sb-unit">review</span>`
-        : r.kind === "Before the next delivery" ? `<span class="sb-chg"><b>+${r.proposed.toLocaleString("en-US")}</b><small>once</small></span>`
+        : r.kind === "Before the next delivery" ? `<span class="sb-chg"><b>+${num(r.proposed)}</b><small>once</small></span>`
         : sbChg(r.current, r.proposed, r.mode === "smart" ? "in stock" : r.mode === "weekly" ? "a week" : r.mode === "hours" ? "h a day" : "a day");
       return `${sbTr(d, {s: r.site, slug: null}, [r], null)}<td class="sb-tk">${sbTick(d, [r], `${r.item}${b ? ` at ${shortName(b)}` : ""}`)}</td>
         <td class="l">${b ? siteTd(b) : "choose a depot"}</td><td class="l">${spEsc(r.item)}</td><td>${to}</td><td class="l st">${spEsc(r.reason)}</td></tr>`;
@@ -19924,7 +19930,7 @@ function drawShopsTab(){
   });
   const row = (r, kid) => {
     if(kid === "parent") return sbGroupTr(r, `<td class="l">${spEsc(r.shops)}</td><td class="l nm">${spEsc(r.item)}${sbKids(r)}</td>
-      <td>${r.sold.toLocaleString("en-US")}</td><td>—</td><td>${r.stock.toLocaleString("en-US")}</td><td>—</td>
+      <td>${num(r.sold)}</td><td>—</td><td>${num(r.stock)}</td><td>—</td>
       <td>${r.left ? `<span class="sb-chg"><b>${r.left} to type</b></span>` : ""}<span class="sub r">click to open</span></td>
       <td class="l st">${sbStatus(r.fact, spEsc(szTip(r.fact)))}</td>`);
     const b = D.businesses[r.s], f = r.fact;
@@ -19935,14 +19941,14 @@ function drawShopsTab(){
       ? sbChg(r.wholesale, set ? set.proposed : null, "a week", `wholesale${r.wholesaleDay ? `, each ${r.wholesaleDay}` : ""}`)
       : sbChg(r.target || null, set ? set.proposed : null, "a day",
           from !== null && D.businesses[from] ? `${r.target ? "from" : "plan from"} ${spEsc(shortName(D.businesses[from]))}` : "");
-    const reason = [spEsc(szTip(f)), f.st === "short" && r.peakDay ? `${r.peakDay}s sell ${(r.peakSold || 0).toLocaleString("en-US")}` : ""].filter(Boolean).join("; ");
+    const reason = [spEsc(szTip(f)), f.st === "short" && r.peakDay ? `${r.peakDay}s sell ${num(r.peakSold || 0)}` : ""].filter(Boolean).join("; ");
     return `${sbTr(d, r, r.chk, kid)}<td class="sb-tk">${sbTick(d, r.chk, `${r.item} at ${b ? shortName(b) : "the shop"}`)}</td>
       <td class="l">${siteTd(b)}</td><td class="l nm">${spEsc(r.item)}</td>
-      <td>${(r.sold ?? 0).toLocaleString("en-US")}</td>
-      <td>${r.peakSold === null || r.peakSold === undefined ? "—" : `${r.peakDay ? `${r.peakDay.slice(0, 3)} ` : ""}${r.peakSold.toLocaleString("en-US")}`}</td>
-      <td>${(r.stock ?? 0).toLocaleString("en-US")}</td>
+      <td>${num(r.sold ?? 0)}</td>
+      <td>${r.peakSold === null || r.peakSold === undefined ? "—" : `${r.peakDay ? `${r.peakDay.slice(0, 3)} ` : ""}${num(r.peakSold)}`}</td>
+      <td>${num(r.stock ?? 0)}</td>
       <td>${r.pressure === null || r.pressure === undefined ? (r.target ? "—" : sbGauge(null)) : sbGauge(r.pressure, f.st === "short" ? "bad" : f.st === "tight" ? "warn" : "")}</td>
-      <td>${setting}${once ? `<span class="sub r">bring in ${once.proposed === null ? "some" : `+${once.proposed.toLocaleString("en-US")}`} once</span>` : ""}</td>
+      <td>${setting}${once ? `<span class="sub r">bring in ${once.proposed === null ? "some" : `+${num(once.proposed)}`} once</span>` : ""}</td>
       <td class="l st">${sbStatus(f, reason, set ? set.reason : once ? once.reason : "")}${szRamp(f)}</td></tr>`;
   };
   const n = szTally(shelves, r => r.fact);
@@ -19999,10 +20005,10 @@ function sbImportCtx(d){
     : (r.levelName && (r.contracts || []).length > 1 ? `<span class="sub">at ${attr(r.levelName)}</span>` : "")
     + (!r.plainBefore ? "" : r.plainBefore >= r.inGame
       ? `<span class="sub" data-tip="${attr("A plain contract the game delivers before the level already brings the level or more, so the level brings nothing")}">${
-        r.plainBefore.toLocaleString("en-US")} a week delivered first already ${r.plainBefore > r.inGame ? "passes" : "reaches"} it</span>`
+        num(r.plainBefore)} a week delivered first already ${r.plainBefore > r.inGame ? "passes" : "reaches"} it</span>`
       : `<span class="sub" data-tip="${attr("A plain contract the game delivers before the level: it counts toward the level, and the level only tops up what is still missing")}">${
-        r.plainBefore.toLocaleString("en-US")} a week delivered first counts toward it</span>`)
-    + (r.plainAfter ? `<span class="sub" data-tip="${attr("A plain contract the game delivers after the level brings this on top of it")}">plus ${r.plainAfter.toLocaleString("en-US")} a week</span>` : "");
+        num(r.plainBefore)} a week delivered first counts toward it</span>`)
+    + (r.plainAfter ? `<span class="sub" data-tip="${attr("A plain contract the game delivers after the level brings this on top of it")}">plus ${num(r.plainAfter)} a week</span>` : "");
   /* What the box is about: the fact's verdict on the figure in game, or
      nothing where the box already says what to change it to. */
   const verdict = r => r.edited ? ""
@@ -20013,7 +20019,7 @@ function sbImportCtx(d){
         D.businesses[r.s] ? shortName(D.businesses[r.s]) : "the factory"}`)
     : r.fit === "paused" ? chipHtml(SZ_CHIP[r.fact.lvl] || "warn", "resume import", szTip(r.fact))
     : r.setTo !== null ? up(r.inGame === null ? "add" : "raise", r.fit === "tight" ? SZ_STATE.tight : szTip(r.fact))
-    : r.lower !== null ? chipHtml("dim", "could lower", `More than half again what the week needs; ${r.lower.toLocaleString("en-US")} would do`)
+    : r.lower !== null ? chipHtml("dim", "could lower", `More than half again what the week needs; ${num(r.lower)} would do`)
     : "";
   /* What the box holds, said per state: the board's suggestion, the figure
      already in game, or the player's own. */
@@ -20021,27 +20027,27 @@ function sbImportCtx(d){
     ? `the level${r.levelName ? ` at ${r.levelName}` : ""} at which the week's deliveries, in the game's order, bring ${sizing === "dem"
       ? "what the shops at the end of each chain use" : "everything this depot feeds at full capacity"}`
     : sizing === "dem" ? "a week of what the shops at the end of each chain use" : "a week of everything this depot feeds at full capacity")
-    + (r.parts.route ? `, less the ${r.parts.route.toLocaleString("en-US")} a week a route brings` : "")
+    + (r.parts.route ? `, less the ${num(r.parts.route)} a week a route brings` : "")
     + `, plus ${Number.isFinite(margin) ? `a ${Math.round(margin * 100)}%` : "the"} margin`;
   const suggests = r => r.suggested !== null && r.suggested !== r.inGame;
   const boxTip = r => r.edited
-    ? `Your own figure. ${suggests(r) ? `The board suggests ${r.suggested.toLocaleString("en-US")}` : `The game holds ${r.inGame.toLocaleString("en-US")}`}`
+    ? `Your own figure. ${suggests(r) ? `The board suggests ${num(r.suggested)}` : `The game holds ${num(r.inGame)}`}`
     : r.covered ? `The figure in game. ${routeTip(r)}`
     : r.paused ? `The figure in game, on a paused contract: resume it in game for it to deliver`
-    : suggests(r) ? `The board suggests ${r.value.toLocaleString("en-US")}: ${boardSays(r)}`
+    : suggests(r) ? `The board suggests ${num(r.value)}: ${boardSays(r)}`
     : "The figure in game; nothing here asks for a change";
-  const resetTo = r => suggests(r) ? `the board's suggestion, ${r.suggested.toLocaleString("en-US")}`
-    : `the figure in game, ${(r.inGame ?? 0).toLocaleString("en-US")}`;
+  const resetTo = r => suggests(r) ? `the board's suggestion, ${num(r.suggested)}`
+    : `the figure in game, ${num(r.inGame ?? 0)}`;
   /* Two or more contracts on one line: each is listed in the order the game
      delivers them, with its importer, how it is set and whether it runs. */
   const contractLines = r => r.contracts.length < 2 ? ""
     : `<span class="sub imp-contracts">${r.contracts.map((c, i) => `<span>${i + 1}. ${attr(c.importer || "Importer")} · ${
-        c.smart ? `keeps ${c.amount.toLocaleString("en-US")} in stock` : `${c.amount.toLocaleString("en-US")} a week`}${c.active ? "" : " · paused"}</span>`).join("")}<span class="imp-order">In delivery order, set at the headquarters in game</span></span>`;
+        c.smart ? `keeps ${num(c.amount)} in stock` : `${num(c.amount)} a week`}${c.active ? "" : " · paused"}</span>`).join("")}<span class="imp-order">In delivery order, set at the headquarters in game</span></span>`;
   /* The setting cell: the figure in game, the arrow, the Set to box, and what
      the box is about. */
   const cell = r => {
     const now = r.inGame === null ? (r.covered ? chipHtml("dim", "not imported", routeTip(r)) : chipHtml(SZ_CHIP[r.fact.lvl] || "dim", "not imported", szTip(r.fact)))
-      : `<s>${r.inGame.toLocaleString("en-US")}</s>`;
+      : `<s>${num(r.inGame)}</s>`;
     const arrow = r.value !== null && r.value !== r.inGame ? `<span class="to">${spIcon("right")}</span>` : "";
     const box = r.value === null ? "" : `<span class="imp-set"><input type="number" min="0" step="1" inputmode="numeric"
       class="imp-in" value="${r.value}" data-imp="${attr(r.impId)}" data-imp-suggested="${r.suggested ?? ""}" data-imp-ingame="${r.inGame ?? ""}" data-tip="${attr(boxTip(r))}" aria-label="${attr(`Set ${r.item} to, ${r.smart ? "units kept in stock" : "units a week"}`)}">${
@@ -20083,7 +20089,7 @@ function sbDepotRows(d, claimed, s, slugs){
   });
 }
 function sbDepotRow(d, ctx, r, kid){
-  if(kid === "parent") return sbGroupTr(r, `<td class="l nm">Idle stock${sbKids(r)}</td><td>${r.stock.toLocaleString("en-US")}</td><td>—</td><td>—</td>
+  if(kid === "parent") return sbGroupTr(r, `<td class="l nm">Idle stock${sbKids(r)}</td><td>${num(r.stock)}</td><td>—</td><td>—</td>
     <td class="l"><span class="sb-rail">${spRail(0, null, false, true)}</span></td><td><span class="sub r">click to open</span></td><td>—</td>
     <td class="l st">${sbStatus(r.fact, spEsc(r.why))}</td>`);
   const f = r.fact, ir = r.ir, b = D.businesses[r.s];
@@ -20103,19 +20109,19 @@ function sbDepotRow(d, ctx, r, kid){
     : "—";
   const parts = szParts(f.parts);
   const rated = sizing === "cap" && (f.parts || {}).lines > 0 && f.dem && Number.isFinite(f.dem.use)
-    ? `<span class="sb-rated" data-tip="${attr(`Sized 24/7 (the switch on Factories): factory lines at their rated output round the clock. Sized for Demand this line would use ${f.dem.use.toLocaleString("en-US")} a week.`)}">24/7</span>` : "";
-  const week = r.week === null ? "—" : `<span class="sb-uses"${parts ? ` data-tip="${attr(parts)}"` : ""}>${r.week.toLocaleString("en-US")}</span>${rated}${szRamp(f)}`;
+    ? `<span class="sb-rated" data-tip="${attr(`Sized 24/7 (the switch on Factories): factory lines at their rated output round the clock. Sized for Demand this line would use ${num(f.dem.use)} a week.`)}">24/7</span>` : "";
+  const week = r.week === null ? "—" : `<span class="sb-uses"${parts ? ` data-tip="${attr(parts)}"` : ""}>${num(r.week)}</span>${rated}${szRamp(f)}`;
   const unfed = (f.unfed || []).filter(u => D.businesses[u[0]]);
-  const reason = unfed.length ? `not routed: ${unfed.map(u => `${spEsc(shortName(D.businesses[u[0]]))} ${u[1].toLocaleString("en-US")}/day`).join(", ")}`
+  const reason = unfed.length ? `not routed: ${unfed.map(u => `${spEsc(shortName(D.businesses[u[0]]))} ${num(u[1])}/day`).join(", ")}`
     : spEsc(szTip(f));
   return `${sbTr(d, r, r.chk, kid, r.imp && r.imp.changed ? "imp-changed" : "")}<td class="sb-tk">${sbTick(d, r.chk, `${r.item} at ${b ? shortName(b) : "the depot"}`)}</td>
-    <td class="l nm"${r.imp && r.imp.users ? ` data-tip="${attr(r.imp.users.length ? `Drawn by ${r.imp.users.map(u => `${shortName(D.businesses[u.s])} ${u.perDay.toLocaleString("en-US")}/d`).join(", ")}` : "No factory line or shop on a plan draws it")}"` : ""}>${spEsc(r.item)}${
-      r.imp && Number.isFinite(r.imp.arrived) ? `<span class="sub">${r.imp.arrived.toLocaleString("en-US")} arrived last week</span>` : ""}</td>
-    <td>${(r.stock ?? 0).toLocaleString("en-US")}</td>
-    <td>${r.draw === null ? "—" : r.draw.toLocaleString("en-US")}${ir && ir.basis === "order" ? `<span class="sub"> est.</span>` : ""}</td>
-    <td>${r.busy === null ? "—" : `${ir && ir.peakDay ? `${ir.peakDay.slice(0, 3)} ` : ""}${r.busy.toLocaleString("en-US")}`}</td>
+    <td class="l nm"${r.imp && r.imp.users ? ` data-tip="${attr(r.imp.users.length ? `Drawn by ${r.imp.users.map(u => `${shortName(D.businesses[u.s])} ${num(u.perDay)}/d`).join(", ")}` : "No factory line or shop on a plan draws it")}"` : ""}>${spEsc(r.item)}${
+      r.imp && Number.isFinite(r.imp.arrived) ? `<span class="sub">${num(r.imp.arrived)} arrived last week</span>` : ""}</td>
+    <td>${num(r.stock ?? 0)}</td>
+    <td>${r.draw === null ? "—" : num(r.draw)}${ir && ir.basis === "order" ? `<span class="sub"> est.</span>` : ""}</td>
+    <td>${r.busy === null ? "—" : `${ir && ir.peakDay ? `${ir.peakDay.slice(0, 3)} ` : ""}${num(r.busy)}`}</td>
     <td class="l">${cover}</td>
-    <td class="imp-to">${setting}${once ? `<span class="sub r">bring in ${once.proposed === null ? "some" : `+${once.proposed.toLocaleString("en-US")}`} once</span>` : ""}</td>
+    <td class="imp-to">${setting}${once ? `<span class="sub r">bring in ${once.proposed === null ? "some" : `+${num(once.proposed)}`} once</span>` : ""}</td>
     <td>${week}</td>
     <td class="l st">${sbStatus(f, reason, (r.chk[0] || {}).reason || "")}</td></tr>`;
 }
@@ -20158,8 +20164,8 @@ function drawWarehousesTab(){
     ].filter(Boolean).join("");
     const floor = (b.lines || []).reduce((t, l) => t + (l.units || 0), 0);
     const weekUse = rows.reduce((t, r) => t + (r.week || 0), 0);
-    const stats = sbStat("On the floor", floor.toLocaleString("en-US"))
-      + (weekUse ? sbStat("Uses / week", weekUse.toLocaleString("en-US"), sizing === "cap" ? "24/7" : "demand",
+    const stats = sbStat("On the floor", num(floor))
+      + (weekUse ? sbStat("Uses / week", num(weekUse), sizing === "cap" ? "24/7" : "demand",
           "What a week uses along every route out of here, under the sizing on screen: what the imports have to bring, before the one chain margin") : "");
     if(!all && !keep.length){
       const arrivedHere = sbArrive && sbArrive.tab === "warehouses" && sbArrive.s === s;
@@ -20178,8 +20184,8 @@ function drawWarehousesTab(){
       how: "<span><em>factory inputs no depot imports or tops up</em></span>",
       body: `<div class="scrollx"><table class="sb-t"><thead><tr><th class="sb-tk" aria-label="Typed in"></th><th class="l">Product</th><th>Uses / week</th><th class="l">Status</th></tr></thead><tbody>${
         d.looseRows.map((r, i) => `${sbTr(d, {s: null, slug: r.slug}, chk[i], null)}<td class="sb-tk">${sbTick(d, chk[i], r.item)}</td>
-          <td class="l nm" data-tip="${attr(`Drawn by ${r.users.map(u => `${shortName(D.businesses[u.s])} ${Math.round(u.perDay).toLocaleString("en-US")}/d`).join(", ")}`)}">${spEsc(r.item)}</td>
-          <td>${Math.round(r.week).toLocaleString("en-US")}</td><td class="l st">${sbStatus(r.fact, "choose a depot to import it")}</td></tr>`).join("")}</tbody></table></div>`}));
+          <td class="l nm" data-tip="${attr(`Drawn by ${r.users.map(u => `${shortName(D.businesses[u.s])} ${num(Math.round(u.perDay))}/d`).join(", ")}`)}">${spEsc(r.item)}</td>
+          <td>${num(Math.round(r.week))}</td><td class="l st">${sbStatus(r.fact, "choose a depot to import it")}</td></tr>`).join("")}</tbody></table></div>`}));
     every = every.concat(d.looseRows.map((r, i) => ({s: null, slug: r.slug, fact: r.fact, chk: chk[i]})));
   }
   const n = szTally(every, r => r.fact);
@@ -20265,17 +20271,17 @@ function sbLineRow(d, r, site){
       r.basis === "table" ? "Recipe table" : "named by you"}</span>${r.basis === "you" && r.rid
       ? ` <button type="button" class="unname" data-rid="${r.rid}" data-tip="Forget this name" aria-label="Forget this name">${CLOSE_ICON}</button>` : ""}
       <span class="sub">${spEsc(r.workstation)}${slotText(r)}, ${r.rate}/h a machine${r.limitHeld && Number.isFinite(r.limit)
-        ? ` · <span data-tip="Produce up to stops the line once ${attr(r.item)} holds ${r.limit.toLocaleString("en-US")}">held by Produce up to ${r.limit.toLocaleString("en-US")}</span>` : ""}</span></td>
+        ? ` · <span data-tip="Produce up to stops the line once ${attr(r.item)} holds ${num(r.limit)}">held by Produce up to ${num(r.limit)}</span>` : ""}</span></td>
     <td class="l">${spMachines(r.machines, r.gaps, r.slots)}</td>
     <td class="l">${hours}</td>
-    <td>${(r.makes ?? 0).toLocaleString("en-US")}${r.missing && r.missing.length ? `<span class="sub">stopped: no ${r.missing.map(spEsc).join(", ")}</span>`
-      : r.fullWeek && r.hoursWeek < r.fullWeek ? `<span class="sub">${(r.atRoster ?? 0).toLocaleString("en-US")} at this roster</span>` : ""}</td>
+    <td>${num(r.makes ?? 0)}${r.missing && r.missing.length ? `<span class="sub">stopped: no ${r.missing.map(spEsc).join(", ")}</span>`
+      : r.fullWeek && r.hoursWeek < r.fullWeek ? `<span class="sub">${num(r.atRoster ?? 0)} at this roster</span>` : ""}</td>
     ${r.later ? `<td colspan="2"><span class="sub" data-tip="${attr(`Ships, held and what the plans take are ${r.item}'s, shared by every line making it; they are on the other ${r.item} line, at ${r.later}`)}">shared with the other ${
-      spEsc(r.item)} line</span></td>` : `<td>${(r.ships ?? 0).toLocaleString("en-US")}${r.piling ? ` <span class="chip warn">piling up</span>` : ""}${r.toCity > 0
-      ? `<span class="sub" data-tip="The target the line's delivery plans top your own sites up to">tops up to ${r.toCity.toLocaleString("en-US")}</span>` : ""}${r.toPier > 0
-      ? `<span class="sub" data-tip="What the plans from this factory send to a pier for export">+${r.toPier.toLocaleString("en-US")} export</span>` : ""}${r.makers > 1
+      spEsc(r.item)} line</span></td>` : `<td>${num(r.ships ?? 0)}${r.piling ? ` <span class="chip warn">piling up</span>` : ""}${r.toCity > 0
+      ? `<span class="sub" data-tip="The target the line's delivery plans top your own sites up to">tops up to ${num(r.toCity)}</span>` : ""}${r.toPier > 0
+      ? `<span class="sub" data-tip="What the plans from this factory send to a pier for export">+${num(r.toPier)} export</span>` : ""}${r.makers > 1
       ? `<span class="sub" data-tip="${attr(`Shared by the ${r.makers} lines making ${r.item}`)}">all ${r.makers} ${spEsc(r.item)} lines</span>` : ""}</td>
-    <td>${(r.stock ?? 0).toLocaleString("en-US")}${Number.isFinite(r.limit) ? `<span class="sub">of ${r.limit.toLocaleString("en-US")}</span>` : ""}</td>`}
+    <td>${num(r.stock ?? 0)}${Number.isFinite(r.limit) ? `<span class="sub">of ${num(r.limit)}</span>` : ""}</td>`}
     <td class="l st">${f ? sbStatus(f, reason, tip) : "—"}</td></tr>`;
 }
 function sbInputRow(d, r, site){
@@ -20286,14 +20292,14 @@ function sbInputRow(d, r, site){
   const setting = r.directImport ? `<span class="sub" data-tip="Weekly import delivered to this factory; assessed against weekly input demand, not daily logistics rounds.">direct import</span>`
     : sbChg(r.target || null, set ? set.proposed : null, "a day", r.from !== null && r.from !== undefined && D.businesses[r.from]
       ? `from ${spEsc(shortName(D.businesses[r.from]))}` : "")
-      + (!set && Number.isFinite(f.lower) ? `<span class="sub r">${f.lower.toLocaleString("en-US")} would do</span>` : "")
+      + (!set && Number.isFinite(f.lower) ? `<span class="sub r">${num(f.lower)} would do</span>` : "")
       + (route ? `<span class="sub r">check the route</span>` : "");
   const says = szSays(f, r, depot);
   return `${sbTr(d, r, r.chk, null)}<td class="sb-tk">${sbTick(d, r.chk, `${r.item} at ${b ? shortName(b) : "the factory"}`)}</td>
     <td class="l nm">${spEsc(r.item)}<span class="sub">${factoryLineText(site, r)}</span></td>
-    <td>${szUse(f, r.perDay).toLocaleString("en-US")}${szRamp(f)}</td>
-    <td>${(r.stock ?? 0).toLocaleString("en-US")}</td>
-    <td>${r.known ? r.arrives.toLocaleString("en-US") : "—"}${r.known && r.perDay ? `<span class="sub"> ${Math.round(r.arrives / r.perDay * 100)}%</span>` : ""}</td>
+    <td>${num(szUse(f, r.perDay))}${szRamp(f)}</td>
+    <td>${num(r.stock ?? 0)}</td>
+    <td>${r.known ? num(r.arrives) : "—"}${r.known && r.perDay ? `<span class="sub"> ${Math.round(r.arrives / r.perDay * 100)}%</span>` : ""}</td>
     <td>${setting}</td>
     <td class="l st">${sbStatus(f, says || spEsc(szTip(f)), (set || route || {}).reason || "")}</td></tr>`;
 }
@@ -20359,7 +20365,7 @@ function drawFactoriesTab(){
     const staffed = Math.round(site.lines.reduce((t, l) => t + (l.hoursWeek || 0), 0) / 7);
     const stats = sbStat("Machines", placed, Number.isFinite(running) && running < placed ? `${running} running` : "",
         Number.isFinite(running) ? `${placed} placed; ${running} run a recipe with someone posted at some hour` : "")
-      + sbStat("Staffed", staffed.toLocaleString("en-US"), "h a day", "Hours a day someone is posted to a machine, all lines together");
+      + sbStat("Staffed", num(staffed), "h a day", "Hours a day someone is posted to a machine, all lines together");
     return sbObject("factories", s, {icon: "gear", how, stats, left, open: left > 0 || keep.some(r => r.fact && r.fact.lvl === "critical"), body});
   });
   const lineN = szTally(everyLine.filter(r => r.fact), r => r.fact);
@@ -20433,7 +20439,7 @@ function drawFactoryStaffing(){
         l.machines > 1 ? `<small class="sb-per">× ${l.machines} machines</small>` : ""}</span></div>`;
     }).join("");
     return `<div class="sb-sfac"><div class="sb-sfh"><span>${name}</span><span class="sb-hc">${
-      (hc.needed ?? 0).toLocaleString("en-US")} machine-hours a week; you have <b>${hc.have ?? 0}</b> factory workers${chip}${small}${unnamedNote}</span>${wage}${go}</div>${lines}</div>`;
+      num(hc.needed ?? 0)} machine-hours a week; you have <b>${hc.have ?? 0}</b> factory workers${chip}${small}${unnamedNote}</span>${wage}${go}</div>${lines}</div>`;
   });
   const lead = sizing === "dem" ? "Sized for demand" : "Sized 24/7";
   const tot = workers || perDay ? `<div class="sb-stot"><span>${lead}:</span>${workers ? `<b class="${workers > 0 ? "up" : "dn"}">${workers > 0 ? "+" : "−"}${plural(Math.abs(workers), "factory worker")}</b>` : ""}${
@@ -20852,7 +20858,7 @@ function drawPlan(){
     if(!r){
       bought++;
       return `<tr><td class="l">${itemName(slug)}<span class="sub">no recipe in the game: bought in${
-          wantWeek ? ` · shops want ${Math.round(wantWeek).toLocaleString("en-US")}/week` : ""}</span></td>
+          wantWeek ? ` · shops want ${num(Math.round(wantWeek))}/week` : ""}</span></td>
         <td class="l" colspan="4"><span class="quiet">the game documents no way to make this one; the shops buy it from an importer</span></td></tr>`;
     }
     const station = ws[r.workstation] || {};
@@ -20872,7 +20878,7 @@ function drawPlan(){
          each Monday at one depot, not an amount on order, so it is said depot
          by depot and never summed; a level of N supplies at most N a week,
          which is why it counts toward what is ordered below. */
-      const units = v => v.toLocaleString("en-US");
+      const units = v => num(v);
       const perDepot = (src, would) => (src.depots || []).map(d => d.smart
         ? `Smart Delivery ${would ? "would keep" : "keeps"} ${units(d.level)} in stock at ${d.warehouse}${
             d.name && d.name !== d.importer ? ` (${d.name})` : ""}${
@@ -20883,13 +20889,13 @@ function drawPlan(){
         : `${units(d.weekly)} a week to ${d.warehouse}`).join("; ");
       const on = !src ? "Not on any import contract yet"
         : src.active && src.smart ? `${perDepot(src, false)}, from ${src.from}`
-        : src.active ? `${src.ordered.toLocaleString("en-US")} a week on order now from ${src.from} to ${src.warehouse}`
+        : src.active ? `${num(src.ordered)} a week on order now from ${src.from} to ${src.warehouse}`
         : paused && src.smart ? `Paused: ${perDepot(src, true)}, from ${src.from}; nothing active`
-        : paused ? `${paused.toLocaleString("en-US")} a week sits on paused contracts from ${src.from} to ${src.warehouse}; nothing active`
+        : paused ? `${num(paused)} a week sits on paused contracts from ${src.from} to ${src.warehouse}; nothing active`
         : `${contracts} contract${contracts === 1 ? "" : "s"} with ${src.from} to ${src.warehouse}, ordered at zero`;
       meta[i.item] = {
         tip: on
-          + (base ? `; your factories already eat ${base.toLocaleString("en-US")} of it a week` : "")
+          + (base ? `; your factories already eat ${num(base)} of it a week` : "")
           + (unit !== undefined ? `; ${fmt(unit)} each on day ${D.plan.priceDay}` : ""),
         ordered: src ? src.ordered : null, active: src ? src.active : false,
         smart: !!(src && src.smart), paused, contracts, from: src ? src.from : null, baseline: base,
@@ -20897,8 +20903,8 @@ function drawPlan(){
       };
     });
     return `<tr class="line" data-m="${machinesOn(slug)}" data-min="0" data-max="99" data-rate="${r.out}" data-ing="${attr(ing)}" data-kit="${attr(JSON.stringify(kit))}" data-slug="${attr(slug)}" data-name="${attr(r.item)}">
-      <td class="l">${r.item}<span class="sub" data-tip="${attr(`One ${station.name || r.workstation} is ${kit.length ? kit.join(" + ") : "one machine"}; one makes ${(r.out * HOURS).toLocaleString("en-US")} a day`)}">${
-        r.out.toLocaleString("en-US")}/h rated · ${station.name || r.workstation}</span></td>
+      <td class="l">${r.item}<span class="sub" data-tip="${attr(`One ${station.name || r.workstation} is ${kit.length ? kit.join(" + ") : "one machine"}; one makes ${num(r.out * HOURS)} a day`)}">${
+        num(r.out)}/h rated · ${station.name || r.workstation}</span></td>
       <td class="l"><span class="step"><a href="#" data-d="-1" aria-label="one machine fewer">−</a><b>${machinesOn(slug)}</b><a href="#" data-d="1" aria-label="one machine more">+</a><span class="machines"></span></span></td>
       <td class="made"></td><td class="covers"></td><td class="l"><span class="ing"></span></td></tr>`;
   });
@@ -20922,7 +20928,7 @@ function drawPlan(){
     <p class="quiet" id="vKit" style="margin:12px 0 0"></p>
     <p class="planline">${own && perShop
       ? `Your <b>${shops}</b> ${low}${shops === 1 ? "" : "s"} take what ${shops === 1 ? "it sells" : "they sell"} today, <b>${
-          perShop.toLocaleString("en-US")}</b> a day per product, <b id="vTake"></b> units a week across the range. Everything above that, <b id="vSurplus"></b> units a week, is surplus for export.`
+          num(perShop)}</b> a day per product, <b id="vTake"></b> units a week across the range. Everything above that, <b id="vSurplus"></b> units a week, is surplus for export.`
       : own ? `Your <b>${shops}</b> ${low}${shops === 1 ? "" : "s"} trade, but how much physical supply they use is not measured, so shop coverage and export surplus cannot be estimated here.`
       : `You do not run a ${low} yet, so nothing here is measured: everything made, <b id="vSurplus"></b> units a week, is surplus for export until the shops exist.`}<span id="vShort"></span></p>`;
   planDraw();
@@ -20993,9 +20999,9 @@ function drawProducts(){
       return `<tr data-slug="${attr(p.slug)}">
       <td class="l"${showPeak?"":` data-tip="${attr(peakTip(p))}"`}>${name}</td>
       <td><span class="bar"><i style="width:${(p.revenue / top * 100).toFixed(0)}%"></i></span>${fmt(p.revenue)}</td>
-      <td>${p.units.toLocaleString("en-US")}</td>
-      <td>${(p.week ?? p.units * 7).toLocaleString("en-US")}</td>
-      <td>$${p.price.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td>${num(p.units)}</td>
+      <td>${num(p.week ?? p.units * 7)}</td>
+      <td>$${num(p.price, {minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       <td>${p.stores}</td>
       ${showPeak?`<td class="${p.peak?"pos":""}" data-tip="${attr(peakTip(p))}">${
         p.peak ? `${p.peak.slice(0,3)} +${p.swing}` : "—"}</td>`:""}</tr>`;}).join("")}</tbody></table>`;
@@ -21056,20 +21062,20 @@ function drawGoals(){
      the completed count with an unfilled box. Goods made, tax paid and the
      buildings owned are running totals below the checklist: owning all 885
      buildings is not a goal anybody plays for. */
-  const num = n => (n || 0).toLocaleString("en-US");
-  const ofAll = (label, n, total) => total > 0 ? [[label, n >= total, `${num(n)} / ${num(total)}`]] : [];
+  const count = n => num(n || 0);
+  const ofAll = (label, n, total) => total > 0 ? [[label, n >= total, `${count(n)} / ${count(total)}`]] : [];
   const miles = [
     ...ofAll("Every business type run", g.typesRun, g.typesTotal),
     ...ofAll("Rivals taken over", g.rivalsDefeated, g.rivalsTotal),
     ...(g.goalsTotal > 0 ? ofAll("Personal goals done", g.goalsDone ?? g.completed, g.goalsTotal)
-      : [["Personal goals done", false, `${num(g.goalsDone ?? g.completed)} done`]]),
+      : [["Personal goals done", false, `${count(g.goalsDone ?? g.completed)} done`]]),
     ...ofAll("Diplomas earned", g.diplomas, g.diplomasTotal),
   ];
   $("secGoals").innerHTML = sechead("Milestones", {quiet: "career totals"})
     + `<div class="miles">${miles.map(([label, done, text]) =>
       `<div class="mile${done ? " done" : ""}"><span class="box">${icon("tick")}</span>${
         label}<span class="c">${text}</span></div>`).join("")}</div>`
-    + `<p class="quiet">${num(g.goodsProduced)} goods produced · ${compact(g.taxesPaid || 0)} in tax paid · ${
+    + `<p class="quiet">${count(g.goodsProduced)} goods produced · ${compact(g.taxesPaid || 0)} in tax paid · ${
       plural(g.buildingsOwned || 0, "building")} owned</p>`;
 }
 
@@ -22696,7 +22702,7 @@ const ssEsc = s => String(s ?? "").replace(/[&<>"']/g, c =>
   ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
 const ssPhone = () => !!(window.matchMedia && matchMedia("(max-width:560px)").matches);
 const ssTyping = t => !!t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName || ""));
-const ssNum = n => Math.round(n || 0).toLocaleString("en-US");
+const ssNum = n => num(Math.round(n || 0));
 
 /* --- where things land ----------------------------------------------------- */
 /* Every way into one site from a finding, a search or a question goes through
@@ -24082,7 +24088,7 @@ function planDraw(){
      Tuesday does not count as covering the shop. The surplus stays weekly. */
   const peakDay = host ? (+host.dataset.pershop || 0) * (+host.dataset.peak || 1) : 0;
   const wantWeek = perShopWeek * shopsOwned;  // one product, every shop, a week
-  const fmtN = n => Math.round(n).toLocaleString("en-US");
+  const fmtN = n => num(Math.round(n));
   let machines = 0, made = 0, raw = 0, exportWeek = 0, shortLines = 0;
   const ing = {}, kitCount = {};
   lines.forEach(tr => {
@@ -24177,14 +24183,14 @@ function planDraw(){
       `<td class="l"><span class="usedby" data-tip="${attr(`Used by ${r.by.join(", ")}`)}">${
         r.by.slice(0, 2).join(", ")}${r.by.length > 2 ? ` +${r.by.length - 2}` : ""}</span></td>` +
       `<td>${fmtN(r.week / 7)}</td><td class="wk">${fmtN(r.week)}</td><td><span class="set">${fmtN(o.target)}</span></td>` +
-      `<td>${ordered === null ? `<span class="quiet">not ordered</span>` : ordered.toLocaleString("en-US")
+      `<td>${ordered === null ? `<span class="quiet">not ordered</span>` : num(ordered)
         }${ordered !== null && i.smart && i.active ? ` <span class="sub plan-smart" data-tip="Smart Delivery keeps a stock level at each depot; this is the most those levels supply in a week, which the target is compared with. Hover the ingredient for each depot's level">a week at most, Smart Delivery</span>` : ""
         }${i.paused ? ` ${chipHtml("warn", `paused ${fmtN(i.paused)}`, "Also sits on paused contracts; never counted as ordered")}` : ""}</td>` +
       `<td>${gap === null ? "—"
         : ordered === null ? chipHtml("warn", `+${fmtN(gap)}`, "No contract yet, so this is the whole order to place")
         : Math.abs(gap) < 1 ? chipHtml("ok", "as is")
-        : gap > 0 ? chipHtml("warn", `+${Math.ceil(gap).toLocaleString("en-US")}`)
-        : chipHtml("dim", Math.floor(gap).toLocaleString("en-US"))}</td>` +
+        : gap > 0 ? chipHtml("warn", `+${num(Math.ceil(gap))}`)
+        : chipHtml("dim", num(Math.floor(gap)))}</td>` +
       `<td class="cash">${value === null ? `<span class="quiet">no price</span>` : fmt(value)}</td></tr>`;
     }).join("");
     /* No price known anywhere: the column goes, and the ? says why. */
@@ -24702,7 +24708,7 @@ const GW_REFUSE = {
     over_cap: r => {
       const p = (r.products || []).find(x => x && x.error === "over_cap") || r;
       const max = p.max === null || p.max === undefined ? NaN : Number(p.max);
-      return {rule: `More than the importer still allows this week${Number.isFinite(max) ? ` (${max.toLocaleString("en-US")})` : ""}`,
+      return {rule: `More than the importer still allows this week${Number.isFinite(max) ? ` (${num(max)})` : ""}`,
         fix: "Lower the amount, or bring the rest through another importer."};
     },
     bad_amount: {rule: "An amount is not a whole number of 0 or more", fix: "Correct it, then try again."},
@@ -25511,13 +25517,13 @@ function gwLineWords(l, place){
   const at = `${spEsc(l.r.item)} at ${spEsc(l.depot.name)}`;
   const words = [];
   if(l.uncovered > 0) words.push(place
-    ? `<b>${Math.round(l.uncovered).toLocaleString("en-US")} a week of ${at} not covered</b>: ${GW_UNCOVERED[l.cause]}.`
-    : `${Math.round(l.uncovered).toLocaleString("en-US")} a week not covered: ${GW_UNCOVERED[l.cause]}.`);
+    ? `<b>${num(Math.round(l.uncovered))} a week of ${at} not covered</b>: ${GW_UNCOVERED[l.cause]}.`
+    : `${num(Math.round(l.uncovered))} a week not covered: ${GW_UNCOVERED[l.cause]}.`);
   else if(l.cause !== "caps") words.push(place ? `<b>${at}</b>: ${GW_UNCOVERED[l.cause]}.`
     : `${GW_UNCOVERED[l.cause].replace(/^./, x => x.toUpperCase())}.`);
   /* Stopping it is the advice only where the others cover the week; short of
      it, the cap is what leaves the kept contract nothing to bring. */
-  l.kept.forEach(c => words.push(`<b>${spEsc(c.importer || "A contract")}</b> keeps its ${c.amount.toLocaleString("en-US")} a week${
+  l.kept.forEach(c => words.push(`<b>${spEsc(c.importer || "A contract")}</b> keeps its ${num(c.amount)} a week${
     place ? ` of ${at}` : ""}: ${l.uncovered > 0 ? "its importer's cap leaves it nothing this week"
       : "a write never stops a contract; stop it in BizMan"}.`));
   return words;
@@ -25576,7 +25582,7 @@ function gwOrdersClose(){
   const left = hours >= 48 ? `${Math.floor(hours / 24)} d` : hours >= 1 ? `${Math.floor(hours)} h` : `${Math.max(1, Math.round(hours * 60))} min`;
   return `orders close<br>Sun 20:00 · in ${left}`;
 }
-const gwN = n => Math.round(Number(n) || 0).toLocaleString("en-US");
+const gwN = n => num(Math.round(Number(n) || 0));
 /* The write as the player reads it: a card a material, grouped by depot. The
    bar is what the contracts hold now (grey) and what the write sets (green);
    red hatching past the cap is what the importers' caps leave uncovered. The
@@ -25601,7 +25607,7 @@ function gwImportView(lines, answer, phase){
     const now = Number.isFinite(r.inGame) ? r.inGame : 0;
     const target = Number.isFinite(r.value) ? r.value : 0;
     const after = smart ? target : Math.max(0, target - (l.uncovered || 0));
-    const num = done || now === after
+    const figure = done || now === after
       ? `<span class="gw-num">${gwN(after)}<small>${unit}</small></span>`
       : `<span class="gw-num"><span class="gw-sr">from </span><s>${gwN(now)}</s>${gwSvg("right")}<span class="gw-sr"> to </span>${gwN(after)}<small>${unit}</small></span>`;
     const mode = smart ? `<span class="gw-mode smart" title="Smart Delivery: keeps this much in stock">${gwSvg("tank")}<span class="gw-sr">Smart Delivery</span></span>`
@@ -25675,7 +25681,7 @@ function gwImportView(lines, answer, phase){
       });
     }
     return `<div class="gw-line${dim ? " dim" : ""}${done ? " ticked" : ""}"><div class="gw-lt"><span class="gw-mat" aria-hidden="true">${gwSvg("crate")}</span><b>${
-      spEsc(r.item)}</b>${mode}${num}</div>${bar}${pills.length ? `<div class="gw-imps">${pills.join("")}</div>` : ""}${notes.join("")}</div>`;
+      spEsc(r.item)}</b>${mode}${figure}</div>${bar}${pills.length ? `<div class="gw-imps">${pills.join("")}</div>` : ""}${notes.join("")}</div>`;
   };
   const depots = new Map();
   lines.forEach(l => { if(!depots.has(l.depot.key)) depots.set(l.depot.key, []); depots.get(l.depot.key).push(l); });
