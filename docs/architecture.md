@@ -82,6 +82,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `hours` | `_hourly()`, the sites with hour reports behind them | `drawSite` |
 | `hourFindings` | `_hour_findings()` | `drawSite` |
 | `staffing` | `_staffing()`, with `_plan_site()`, `_need_curve()`, `_arrival_ceiling()`, `_cut_run()`, `_bridge_troughs()`, `_hires_for()`, `_plan_people()`, `_current_roster()`, `_index_table()`, `_shift_row()` | `drawSite` through `spRosterBlock`, and `drawOptimizeStaffing` for the Next-moves card |
+| `factoryStaffing` | `_factory_staffing()`, once per sizing (`{cap, dem}`), with `_factory_site_plan()`, `_factory_run_start()` and the shop placer `_place_week()`; its hours come from each factory line's `needHours`, `hoursNow` and `_posts` (the machines' ids, set by `_line_hours()` in `_factories()` and taken off the payload here) | `drawFactoryStaffing`, through `drawFactoriesTab` |
 | `plan` | `_plan()` | `drawPlan`, `planDraw`, `indexPlan`, `factoryView`, `factoryCounts`, `planTypes`, `defaultRate`, `itemName`; `web/wiki.js` `wikiCanPlan` |
 | `itemNames` | `extract()` inline, every `ba:itemname_` key of `names.locale` | `itemName` |
 | `skillNames` | `extract()` inline, every skill in `STATION_SKILLS` through `names.label()` | `gwSkillName` |
@@ -138,6 +139,19 @@ and nothing else, so the page can say so rather than leave a hole where a shop w
 without `failed` is a whole plan. Each site is planned against its own copy of the week and
 of the bench, written back only once its row is built, so a site that falls over leaves no
 phantom hours behind for the next one to hire around.
+
+A `factoryStaffing` row is one factory in one sizing: `lines` (each line's `hoursNow`,
+the `hours` it needs a day, the run `from`/`to` and its `cuts` into shifts of at most 12
+hours), `headcount` (`needed` machine-hours a week, `min`, `have`, `spare`, `hire`, for the
+Factory Worker role), `wageDay` (the mean day's wage of the factory's factory workers) and
+`delta` (`workers` is `hire - spare`, `perDay` that times `wageDay`), and the placer's
+`stations`, `people`, `shifts`, `placed` and `shortHours` in the `staffing` shapes below. A
+factory the placer falls over on is `{key, s, name, failed: true}`. Its lines carry the
+matching verdict themselves: `status`/`why`/`level` sized 24/7 (`short` with why `hours`, or
+`covered`) and the same under `dem` sized for demand, where more hours than needed adds
+`lower`, a suggestion rather than a change; `demBasis` is `none` where nothing is drawn and
+Demand also sizes the line at 24. `supply.factories.sites[]` counts `running` machines (a
+recipe and somebody posted) beside the placed ones (`machines`).
 
 A `staffing` row carries two lookup tables, `stations` and `people`, and every row under it
 points into them by index rather than repeating an id: `s` a station, `p` a person or null.
