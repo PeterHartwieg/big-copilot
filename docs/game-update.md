@@ -146,12 +146,15 @@ A non-zero exit says why:
 - Game not found: set `BA_LOCALE`.
 - Page missing from that file: the page key was renamed. Update every use of the old key
   (`git grep help_building_types_content`, and `RETAIL_SIZES_PAGE` in
-  `tools/build_wiki_data.py`), then rebuild `web/`; don't hand-edit the copies in `web/py/`.
-- No size rows parsed for a category: the page's wording changed. The keys in
-  `CAP_CATEGORIES`, `FALLBACK_CAPS` and the `VENUE_TYPES` values are the building table's
-  `t`, not the heading text, so do not rename them; ask the owner. A heading that is no
-  longer a bold line of letters, spaces and slashes needs `_CAP_SECTION_RE`; otherwise fix
-  `_CAP_SIZE_RE`.
+  `tools/build_wiki_data.py`), then run `python build_web.py`; don't hand-edit the
+  generated files under `web/`.
+- No size rows parsed for a category: the page's wording changed. If the category's
+  heading shows under `other headings` with a new name, ask the owner: `_door_caps()`
+  matches the lower-case heading against `CAP_CATEGORIES`, and those keys, the
+  `FALLBACK_CAPS` keys and the `VENUE_TYPES` values are also the building table's `t`, so
+  renaming them drops that type's capacity from every building. A heading that is no
+  longer a bold line of letters, spaces and slashes needs `_CAP_SECTION_RE`; change
+  `_CAP_SIZE_RE` only when the size-row format changed.
 - The table differs: compare the printed row counts with the page. Fewer rows than the
   page lists means `_CAP_SIZE_RE` lost rows; otherwise update `FALLBACK_CAPS` and its
   comment, and check `CAPS_HELP` in `tests/test_premises.py`.
@@ -304,9 +307,9 @@ Then the office post rate, if the company runs an office: open the office's own 
 the board. Hovering an hour reads "N of M workstations staffed", where N is the
 professionals posted (`staffed / postRate`), whatever the rate. The ceiling behind the
 "at the ceiling" mark is N × `OFFICE_POST_RATE`, so the mark is what assumes the current
-rate. Compare the hours marked "at the ceiling", skip any marked "at building capacity",
-and not the hour labelled "Busiest hour" (that label means the lead hour is not marked
-"at the ceiling"). There, customers should equal N.
+rate. Compare the hours marked "at the ceiling", skipping any marked "at building
+capacity"; a lead hour labelled "Busiest hour" instead of "Worst hour" means no hour reached
+the ceiling. There, customers should equal N × `OFFICE_POST_RATE` (N at today's rate of 1).
 A lower real rate can hide the "at the ceiling" mark altogether: it shows as customers
 stuck at the same fraction of N across hours with different N. The fee's demand is in the
 Offices band of the market demand grid (Growth > Demand), not in the tooltip. If the
