@@ -1,0 +1,8793 @@
+{
+ "alerts": [
+  {
+   "group": "jobdemand",
+   "id": "002e4a5a19",
+   "level": "critical",
+   "site": "HART. Spirits",
+   "siteKey": "ba:street_eighthstreet#5",
+   "text": "1 staff with unmet demands: ⟦ba:jobdemand_freeweekends|Free weekends⟧ for 1 (important); 1 of them has warned they will quit",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "ev": {
+    "slug": "ba:itemname_water"
+   },
+   "group": "feed",
+   "id": "eba27cb1f8",
+   "level": "critical",
+   "site": "HART. Hub",
+   "siteKey": "ba:street_eighthavenue#4",
+   "text": "⟦ba:itemname_water|Water⟧: this import needs to cover 8,400 a week and the import order is 3,000; raise it to 8,400",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "ev": {
+    "slug": "ba:itemname_water"
+   },
+   "group": "feed",
+   "id": "d303753fba",
+   "level": "critical",
+   "site": "HART. Brewery",
+   "siteKey": "ba:street_eighthavenue#8",
+   "text": "⟦ba:itemname_water|Water⟧ top-up of 800 covers 16 hours of a 1,200/day line; raise it to 1,200",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "ev": {
+    "slot": 2,
+    "slug": "ba:itemname_beer"
+   },
+   "group": "staff",
+   "id": "a532237a76",
+   "level": "critical",
+   "site": "HART. Brewery",
+   "siteKey": "ba:street_eighthavenue#8",
+   "text": "⟦ba:itemname_beer|Beer⟧ machine at list position 2 is staffed 0 of 168 hours; nobody on it Mon-Sun 0-24; 600 a day not made",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "toiletprivacy",
+   "id": "8dd6dd780d",
+   "level": "warn",
+   "site": "HART. Spirits",
+   "siteKey": "ba:street_eighthstreet#5",
+   "text": "Customer bathroom has no privacy: no stall or door",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "music",
+   "id": "54e243ddb4",
+   "level": "warn",
+   "site": "HART. Spirits",
+   "siteKey": "ba:street_eighthstreet#5",
+   "text": "No music playing for customers",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "interior",
+   "id": "cf963d40d2",
+   "level": "warn",
+   "site": "HART. Spirits",
+   "siteKey": "ba:street_eighthstreet#5",
+   "text": "Interior design falls short of what customers expect here",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "satisfaction",
+   "id": "a12c67d98b",
+   "level": "warn",
+   "site": "HART. Gifts",
+   "siteKey": "ba:street_broadwaystreet#19",
+   "text": "Customer satisfaction at 64.0%",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "uniform",
+   "id": "0be9a36146",
+   "level": "warn",
+   "site": "HART. Gifts",
+   "siteKey": "ba:street_broadwaystreet#19",
+   "text": "No uniform locker installed; add one to manage employee uniforms",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "toiletprivacy",
+   "id": "2c95181204",
+   "level": "warn",
+   "site": "HART. Gifts",
+   "siteKey": "ba:street_broadwaystreet#19",
+   "text": "Customer bathroom has no privacy: no stall or door",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "sink",
+   "id": "a78a54cf7f",
+   "level": "warn",
+   "site": "HART. Gifts",
+   "siteKey": "ba:street_broadwaystreet#19",
+   "text": "No sink for customers to wash up",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "music",
+   "id": "e6eba40d51",
+   "level": "warn",
+   "site": "HART. Gifts",
+   "siteKey": "ba:street_broadwaystreet#19",
+   "text": "No music playing for customers",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "interior",
+   "id": "167ee2d167",
+   "level": "warn",
+   "site": "HART. Gifts",
+   "siteKey": "ba:street_broadwaystreet#19",
+   "text": "Interior design falls short of what customers expect here",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "promotion",
+   "id": "f2450926c3",
+   "level": "warn",
+   "site": "HART. Gifts",
+   "siteKey": "ba:street_broadwaystreet#19",
+   "text": "HART. Gifts promotes at 80.0% of the 100% cap: 50.0% foot traffic and 0.0% marketing. The address sets the foot traffic, so the missing 20.0 points have to come from campaigns",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "ev": {
+    "slug": "ba:itemname_cheapgift"
+   },
+   "group": "wholesale",
+   "id": "2862885b06",
+   "level": "warn",
+   "site": "HART. Gifts",
+   "siteKey": "ba:street_broadwaystreet#19",
+   "text": "⟦ba:itemname_cheapgift|Gift (Cheap)⟧'s wholesale delivery brings 450 a week against the 600 it sells",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "ev": {
+    "slug": "ba:itemname_umbrella"
+   },
+   "group": "unplanned",
+   "id": "030bca4d36",
+   "level": "warn",
+   "site": "HART. Gifts",
+   "siteKey": "ba:street_broadwaystreet#19",
+   "text": "⟦ba:itemname_umbrella|Umbrella⟧ is on no distribution plan: 30 left at 21/day",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "ev": {
+    "slot": 1,
+    "slug": "ba:itemname_beer"
+   },
+   "group": "staff",
+   "id": "da4b709001",
+   "level": "warn",
+   "site": "HART. Brewery",
+   "siteKey": "ba:street_eighthavenue#8",
+   "text": "⟦ba:itemname_beer|Beer⟧ machine at list position 1 is staffed 84 of 168 hours; nobody on it Mon-Sun 0-8, 20-24; 300 a day not made",
+   "unit": "",
+   "worth": null
+  }
+ ],
+ "alertsDemand": {
+  "lines": [
+   {
+    "group": "jobdemand",
+    "id": "002e4a5a19",
+    "level": "critical",
+    "site": "HART. Spirits",
+    "siteKey": "ba:street_eighthstreet#5",
+    "text": "1 staff with unmet demands: ⟦ba:jobdemand_freeweekends|Free weekends⟧ for 1 (important); 1 of them has warned they will quit",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "ev": {
+     "slot": 2,
+     "slug": "ba:itemname_beer"
+    },
+    "group": "staff",
+    "id": "a532237a76",
+    "level": "critical",
+    "site": "HART. Brewery",
+    "siteKey": "ba:street_eighthavenue#8",
+    "text": "⟦ba:itemname_beer|Beer⟧ machine at list position 2 is staffed 0 of 56 hours needed; nobody on it Mon-Sun 0-24; 200 a day not made",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "toiletprivacy",
+    "id": "8dd6dd780d",
+    "level": "warn",
+    "site": "HART. Spirits",
+    "siteKey": "ba:street_eighthstreet#5",
+    "text": "Customer bathroom has no privacy: no stall or door",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "music",
+    "id": "54e243ddb4",
+    "level": "warn",
+    "site": "HART. Spirits",
+    "siteKey": "ba:street_eighthstreet#5",
+    "text": "No music playing for customers",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "interior",
+    "id": "cf963d40d2",
+    "level": "warn",
+    "site": "HART. Spirits",
+    "siteKey": "ba:street_eighthstreet#5",
+    "text": "Interior design falls short of what customers expect here",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "satisfaction",
+    "id": "a12c67d98b",
+    "level": "warn",
+    "site": "HART. Gifts",
+    "siteKey": "ba:street_broadwaystreet#19",
+    "text": "Customer satisfaction at 64.0%",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "uniform",
+    "id": "0be9a36146",
+    "level": "warn",
+    "site": "HART. Gifts",
+    "siteKey": "ba:street_broadwaystreet#19",
+    "text": "No uniform locker installed; add one to manage employee uniforms",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "toiletprivacy",
+    "id": "2c95181204",
+    "level": "warn",
+    "site": "HART. Gifts",
+    "siteKey": "ba:street_broadwaystreet#19",
+    "text": "Customer bathroom has no privacy: no stall or door",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "sink",
+    "id": "a78a54cf7f",
+    "level": "warn",
+    "site": "HART. Gifts",
+    "siteKey": "ba:street_broadwaystreet#19",
+    "text": "No sink for customers to wash up",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "music",
+    "id": "e6eba40d51",
+    "level": "warn",
+    "site": "HART. Gifts",
+    "siteKey": "ba:street_broadwaystreet#19",
+    "text": "No music playing for customers",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "interior",
+    "id": "167ee2d167",
+    "level": "warn",
+    "site": "HART. Gifts",
+    "siteKey": "ba:street_broadwaystreet#19",
+    "text": "Interior design falls short of what customers expect here",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "promotion",
+    "id": "f2450926c3",
+    "level": "warn",
+    "site": "HART. Gifts",
+    "siteKey": "ba:street_broadwaystreet#19",
+    "text": "HART. Gifts promotes at 80.0% of the 100% cap: 50.0% foot traffic and 0.0% marketing. The address sets the foot traffic, so the missing 20.0 points have to come from campaigns",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "ev": {
+     "slug": "ba:itemname_cheapgift"
+    },
+    "group": "wholesale",
+    "id": "2862885b06",
+    "level": "warn",
+    "site": "HART. Gifts",
+    "siteKey": "ba:street_broadwaystreet#19",
+    "text": "⟦ba:itemname_cheapgift|Gift (Cheap)⟧'s wholesale delivery brings 450 a week against the 600 it sells",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "ev": {
+     "slug": "ba:itemname_umbrella"
+    },
+    "group": "unplanned",
+    "id": "030bca4d36",
+    "level": "warn",
+    "site": "HART. Gifts",
+    "siteKey": "ba:street_broadwaystreet#19",
+    "text": "⟦ba:itemname_umbrella|Umbrella⟧ is on no distribution plan: 30 left at 21/day",
+    "unit": "",
+    "worth": null
+   }
+  ],
+  "minor": {
+   "count": 2,
+   "gate": 500.0,
+   "rows": [
+    {
+     "group": "atcap",
+     "id": "c814f4235c",
+     "level": "warn",
+     "site": "HART. Spirits",
+     "siteKey": "ba:street_eighthstreet#5",
+     "text": "HART. Spirits fills the counters every day 17-19, 14 hours a week at 20/h and $450/day through the ceiling. Registers is the limit, so the answer is another counter",
+     "unit": "/day trade",
+     "worth": 450.24
+    },
+    {
+     "group": "hype",
+     "id": "21bdb2218c",
+     "level": "warn",
+     "site": "HART. Spirits",
+     "siteKey": "ba:street_eighthstreet#5",
+     "text": "⟦ba:neighborhood_midtown|Midtown⟧ hype on 1 lines has 3 days left; HART. Spirits does $1,800/day under it against $1,607 for its own 7 days before day 35; about $193/day of revenue rides on the wave. It already runs within 10% of capacity for 14 hours of a normal week, so the door is turning part of the wave away.",
+     "unit": "/day revenue",
+     "worth": 192.86
+    }
+   ],
+   "worth": 643.1
+  }
+ },
+ "businesses": [
+  {
+   "address": "5 Eighth Street",
+   "amenities": {
+    "bathroom": true,
+    "interior": false,
+    "music": false,
+    "sink": true,
+    "toiletprivacy": false
+   },
+   "basket": 9.38,
+   "capacity": 30,
+   "closed": false,
+   "code": "MT",
+   "cogs": 360.0,
+   "costCentre": false,
+   "crew": [
+    {
+     "absent": 0,
+     "count": 2,
+     "daily": 288.0,
+     "role": "Customer Service",
+     "skill": 70.0
+    },
+    {
+     "absent": 0,
+     "count": 1,
+     "daily": 168.0,
+     "role": "Cleaning",
+     "skill": 60.0
+    }
+   ],
+   "customerRhythm": null,
+   "customers": 192,
+   "daysOpen": 44,
+   "key": "ba:street_eighthstreet#5",
+   "licensing": 0.0,
+   "lines": [
+    {
+     "configuredPrice": 6.0,
+     "cover": 1.2,
+     "item": "Beer",
+     "price": 6.0,
+     "rate": 321.4,
+     "revenue": 1928.57,
+     "slug": "ba:itemname_beer",
+     "soldPerDay": 321,
+     "soldPerWeek": 2250,
+     "tradeRate": 321.4,
+     "units": 400,
+     "weekSold": 2250.0
+    },
+    {
+     "configuredPrice": 2.5,
+     "cover": null,
+     "item": "Soda Can",
+     "price": 2.5,
+     "rate": 0.0,
+     "revenue": 0.0,
+     "slug": "ba:itemname_sodacan",
+     "soldPerDay": 0,
+     "soldPerWeek": 0,
+     "tradeRate": 0.0,
+     "units": 0,
+     "weekSold": 0.0
+    }
+   ],
+   "margin": 42.2,
+   "marketing": 0.0,
+   "marketingIndex": 20.0,
+   "missingAmenities": [
+    "ba:customerdemand_toiletprivacy",
+    "ba:customerdemand_music",
+    "ba:customerdemand_interiordesign"
+   ],
+   "missingUniformLocker": false,
+   "name": "HART. Spirits",
+   "neighbourhood": "ba:neighborhood_midtown",
+   "opened": 3,
+   "peakDay": "Saturday",
+   "people": [
+    {
+     "absent": false,
+     "daily": 168.0,
+     "name": "Cy Moss",
+     "role": "Cleaning"
+    },
+    {
+     "absent": false,
+     "daily": 144.0,
+     "name": "Ana Silva",
+     "role": "Customer Service"
+    },
+    {
+     "absent": false,
+     "daily": 144.0,
+     "name": "Ben Ode",
+     "role": "Customer Service"
+    }
+   ],
+   "profit": 759.0,
+   "promotion": 120.0,
+   "quitWarnings": 1,
+   "rent": 225.0,
+   "restocks": true,
+   "revenue": 1800.0,
+   "rhythm": [
+    {
+     "day": "Monday",
+     "index": 76,
+     "n": 3,
+     "short": "Mon"
+    },
+    {
+     "day": "Tuesday",
+     "index": 85,
+     "n": 3,
+     "short": "Tue"
+    },
+    {
+     "day": "Wednesday",
+     "index": 87,
+     "n": 3,
+     "short": "Wed"
+    },
+    {
+     "day": "Thursday",
+     "index": 92,
+     "n": 2,
+     "short": "Thu"
+    },
+    {
+     "day": "Friday",
+     "index": 109,
+     "n": 2,
+     "short": "Fri"
+    },
+    {
+     "day": "Saturday",
+     "index": 126,
+     "n": 3,
+     "short": "Sat"
+    },
+    {
+     "day": "Sunday",
+     "index": 124,
+     "n": 3,
+     "short": "Sun"
+    }
+   ],
+   "satisfaction": {
+    "cleanliness": 88.0,
+    "facility": 70.0,
+    "overall": 82.0,
+    "pricing": 75.0,
+    "service": 90.0
+   },
+   "security": 40,
+   "series": [
+    {
+     "customers": null,
+     "day": 26,
+     "profit": 759.0,
+     "revenue": 1800.0
+    },
+    {
+     "customers": null,
+     "day": 27,
+     "profit": 999.0,
+     "revenue": 2100.0
+    },
+    {
+     "customers": null,
+     "day": 28,
+     "profit": 879.0,
+     "revenue": 1950.0
+    },
+    {
+     "customers": null,
+     "day": 29,
+     "profit": 279.0,
+     "revenue": 1200.0
+    },
+    {
+     "customers": null,
+     "day": 30,
+     "profit": 399.0,
+     "revenue": 1350.0
+    },
+    {
+     "customers": null,
+     "day": 31,
+     "profit": 399.0,
+     "revenue": 1350.0
+    },
+    {
+     "customers": null,
+     "day": 32,
+     "profit": 519.0,
+     "revenue": 1500.0
+    },
+    {
+     "customers": 192,
+     "day": 33,
+     "profit": 759.0,
+     "revenue": 1800.0
+    },
+    {
+     "customers": 224,
+     "day": 34,
+     "profit": 999.0,
+     "revenue": 2100.0
+    },
+    {
+     "customers": 250,
+     "day": 35,
+     "profit": 1191.0,
+     "revenue": 2340.0
+    },
+    {
+     "customers": 154,
+     "day": 36,
+     "profit": 471.0,
+     "revenue": 1440.0
+    },
+    {
+     "customers": 173,
+     "day": 37,
+     "profit": 615.0,
+     "revenue": 1620.0
+    },
+    {
+     "customers": 173,
+     "day": 38,
+     "profit": 615.0,
+     "revenue": 1620.0
+    },
+    {
+     "customers": 192,
+     "day": 39,
+     "profit": 759.0,
+     "revenue": 1800.0
+    },
+    {
+     "customers": 230,
+     "day": 40,
+     "profit": 1047.0,
+     "revenue": 2160.0
+    },
+    {
+     "customers": 269,
+     "day": 41,
+     "profit": 1335.0,
+     "revenue": 2520.0
+    },
+    {
+     "customers": 250,
+     "day": 42,
+     "profit": 1191.0,
+     "revenue": 2340.0
+    },
+    {
+     "customers": 154,
+     "day": 43,
+     "profit": 471.0,
+     "revenue": 1440.0
+    },
+    {
+     "customers": 173,
+     "day": 44,
+     "profit": 615.0,
+     "revenue": 1620.0
+    },
+    {
+     "customers": 173,
+     "day": 45,
+     "profit": 615.0,
+     "revenue": 1620.0
+    },
+    {
+     "customers": 192,
+     "day": 46,
+     "profit": 759.0,
+     "revenue": 1800.0
+    }
+   ],
+   "shiftPrint": "5db33812",
+   "staff": 3,
+   "staffCost": 456.0,
+   "staffDemands": [
+    {
+     "company": false,
+     "count": 1,
+     "demand": "Free weekends",
+     "priority": 1,
+     "slug": "ba:jobdemand_freeweekends"
+    }
+   ],
+   "staffLacking": 1,
+   "staffLackingAny": 1,
+   "staffLackingCompany": 0,
+   "status": "retail",
+   "swing": 50,
+   "tag": "",
+   "theft": 0.0,
+   "tradeDays": 14,
+   "traffic": 60.0,
+   "type": "Liquor Store",
+   "typeSlug": "ba:businesstype_liquorstore",
+   "uniformGapSkills": [],
+   "uniformGaps": [],
+   "wages": 456.0
+  },
+  {
+   "address": "19 Broadway Street",
+   "amenities": {
+    "bathroom": true,
+    "interior": false,
+    "music": false,
+    "sink": false,
+    "toiletprivacy": false
+   },
+   "basket": 18.0,
+   "capacity": 30,
+   "closed": false,
+   "code": "LM",
+   "cogs": 630.0,
+   "costCentre": false,
+   "crew": [
+    {
+     "absent": 0,
+     "count": 1,
+     "daily": 180.0,
+     "role": "Customer Service",
+     "skill": 65.0
+    }
+   ],
+   "customerRhythm": null,
+   "customers": 70,
+   "daysOpen": 44,
+   "key": "ba:street_broadwaystreet#19",
+   "licensing": 0.0,
+   "lines": [
+    {
+     "configuredPrice": 15.0,
+     "cover": 1.4,
+     "item": "Umbrella",
+     "price": 15.0,
+     "rate": 21.4,
+     "revenue": 321.43,
+     "slug": "ba:itemname_umbrella",
+     "soldPerDay": 21,
+     "soldPerWeek": 150,
+     "tradeRate": 21.4,
+     "units": 30,
+     "weekSold": 150.0
+    },
+    {
+     "configuredPrice": 12.0,
+     "cover": 3.5,
+     "item": "Gift (Cheap)",
+     "price": 12.0,
+     "rate": 85.7,
+     "revenue": 1028.57,
+     "slug": "ba:itemname_cheapgift",
+     "soldPerDay": 86,
+     "soldPerWeek": 600,
+     "tradeRate": 85.7,
+     "units": 300,
+     "weekSold": 600.0
+    }
+   ],
+   "margin": 27.8,
+   "marketing": 0.0,
+   "marketingIndex": 0.0,
+   "missingAmenities": [
+    "ba:customerdemand_toiletprivacy",
+    "ba:customerdemand_sink",
+    "ba:customerdemand_music",
+    "ba:customerdemand_interiordesign"
+   ],
+   "missingUniformLocker": true,
+   "name": "HART. Gifts",
+   "neighbourhood": "ba:neighborhood_lowermanhattan",
+   "opened": 3,
+   "peakDay": "Saturday",
+   "people": [
+    {
+     "absent": false,
+     "daily": 180.0,
+     "name": "Dee Park",
+     "role": "Customer Service"
+    }
+   ],
+   "profit": 350.0,
+   "promotion": 80.0,
+   "quitWarnings": 0,
+   "rent": 100.0,
+   "restocks": true,
+   "revenue": 1260.0,
+   "rhythm": [
+    {
+     "day": "Monday",
+     "index": 75,
+     "n": 3,
+     "short": "Mon"
+    },
+    {
+     "day": "Tuesday",
+     "index": 85,
+     "n": 3,
+     "short": "Tue"
+    },
+    {
+     "day": "Wednesday",
+     "index": 87,
+     "n": 3,
+     "short": "Wed"
+    },
+    {
+     "day": "Thursday",
+     "index": 93,
+     "n": 2,
+     "short": "Thu"
+    },
+    {
+     "day": "Friday",
+     "index": 112,
+     "n": 2,
+     "short": "Fri"
+    },
+    {
+     "day": "Saturday",
+     "index": 129,
+     "n": 3,
+     "short": "Sat"
+    },
+    {
+     "day": "Sunday",
+     "index": 121,
+     "n": 3,
+     "short": "Sun"
+    }
+   ],
+   "satisfaction": {
+    "cleanliness": 40.0,
+    "facility": 55.0,
+    "overall": 64.0,
+    "pricing": 60.0,
+    "service": 70.0
+   },
+   "security": 0,
+   "series": [
+    {
+     "customers": null,
+     "day": 26,
+     "profit": 476.0,
+     "revenue": 1512.0
+    },
+    {
+     "customers": null,
+     "day": 27,
+     "profit": 602.0,
+     "revenue": 1764.0
+    },
+    {
+     "customers": null,
+     "day": 28,
+     "profit": 539.0,
+     "revenue": 1638.0
+    },
+    {
+     "customers": null,
+     "day": 29,
+     "profit": 224.0,
+     "revenue": 1008.0
+    },
+    {
+     "customers": null,
+     "day": 30,
+     "profit": 287.0,
+     "revenue": 1134.0
+    },
+    {
+     "customers": null,
+     "day": 31,
+     "profit": 287.0,
+     "revenue": 1134.0
+    },
+    {
+     "customers": null,
+     "day": 32,
+     "profit": 350.0,
+     "revenue": 1260.0
+    },
+    {
+     "customers": 84,
+     "day": 33,
+     "profit": 476.0,
+     "revenue": 1512.0
+    },
+    {
+     "customers": 98,
+     "day": 34,
+     "profit": 602.0,
+     "revenue": 1764.0
+    },
+    {
+     "customers": 91,
+     "day": 35,
+     "profit": 539.0,
+     "revenue": 1638.0
+    },
+    {
+     "customers": 56,
+     "day": 36,
+     "profit": 224.0,
+     "revenue": 1008.0
+    },
+    {
+     "customers": 63,
+     "day": 37,
+     "profit": 287.0,
+     "revenue": 1134.0
+    },
+    {
+     "customers": 63,
+     "day": 38,
+     "profit": 287.0,
+     "revenue": 1134.0
+    },
+    {
+     "customers": 70,
+     "day": 39,
+     "profit": 350.0,
+     "revenue": 1260.0
+    },
+    {
+     "customers": 84,
+     "day": 40,
+     "profit": 476.0,
+     "revenue": 1512.0
+    },
+    {
+     "customers": 98,
+     "day": 41,
+     "profit": 602.0,
+     "revenue": 1764.0
+    },
+    {
+     "customers": 91,
+     "day": 42,
+     "profit": 539.0,
+     "revenue": 1638.0
+    },
+    {
+     "customers": 56,
+     "day": 43,
+     "profit": 224.0,
+     "revenue": 1008.0
+    },
+    {
+     "customers": 63,
+     "day": 44,
+     "profit": 287.0,
+     "revenue": 1134.0
+    },
+    {
+     "customers": 63,
+     "day": 45,
+     "profit": 287.0,
+     "revenue": 1134.0
+    },
+    {
+     "customers": 70,
+     "day": 46,
+     "profit": 350.0,
+     "revenue": 1260.0
+    }
+   ],
+   "shiftPrint": "0b44d0d7",
+   "staff": 1,
+   "staffCost": 180.0,
+   "staffDemands": [],
+   "staffLacking": 0,
+   "staffLackingAny": 0,
+   "staffLackingCompany": 0,
+   "status": "retail",
+   "swing": 54,
+   "tag": "",
+   "theft": 0.0,
+   "tradeDays": 14,
+   "traffic": 50.0,
+   "type": "Gift Shop",
+   "typeSlug": "ba:businesstype_giftshop",
+   "uniformGapSkills": [
+    "ba:skill_customerservice"
+   ],
+   "uniformGaps": [
+    "Customer Service"
+   ],
+   "wages": 180.0
+  },
+  {
+   "address": "4 Eighth Avenue",
+   "amenities": null,
+   "basket": null,
+   "capacity": 0,
+   "closed": false,
+   "code": "IC",
+   "cogs": 200.0,
+   "costCentre": true,
+   "crew": [],
+   "customerRhythm": null,
+   "customers": 0,
+   "daysOpen": 44,
+   "key": "ba:street_eighthavenue#4",
+   "licensing": 0.0,
+   "lines": [
+    {
+     "configuredPrice": null,
+     "cover": null,
+     "item": "Water",
+     "price": 0.0,
+     "rate": 0.0,
+     "revenue": 0.0,
+     "slug": "ba:itemname_water",
+     "soldPerDay": 0,
+     "soldPerWeek": 0,
+     "tradeRate": 0.0,
+     "units": 1500,
+     "weekSold": 0.0
+    }
+   ],
+   "margin": null,
+   "marketing": 0.0,
+   "marketingIndex": 0,
+   "missingAmenities": [],
+   "missingUniformLocker": false,
+   "name": "HART. Hub",
+   "neighbourhood": "ba:neighborhood_industrycity",
+   "opened": 3,
+   "peakDay": null,
+   "people": [],
+   "profit": -660.0,
+   "promotion": 0,
+   "quitWarnings": 0,
+   "rent": 460.0,
+   "restocks": false,
+   "revenue": 0.0,
+   "rhythm": null,
+   "satisfaction": {
+    "cleanliness": 0,
+    "facility": 0,
+    "overall": null,
+    "pricing": 0,
+    "service": 0
+   },
+   "security": 0,
+   "series": [
+    {
+     "customers": null,
+     "day": 26,
+     "profit": -660.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 27,
+     "profit": -660.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 28,
+     "profit": -660.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 29,
+     "profit": -660.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 30,
+     "profit": -660.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 31,
+     "profit": -660.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 32,
+     "profit": -660.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 33,
+     "profit": -660.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 34,
+     "profit": -660.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 35,
+     "profit": -660.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 36,
+     "profit": -660.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 37,
+     "profit": -660.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 38,
+     "profit": -660.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 39,
+     "profit": -660.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 40,
+     "profit": -660.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 41,
+     "profit": -660.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 42,
+     "profit": -660.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 43,
+     "profit": -660.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 44,
+     "profit": -660.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 45,
+     "profit": -660.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 46,
+     "profit": -660.0,
+     "revenue": 0.0
+    }
+   ],
+   "shiftPrint": "811c9dc5",
+   "staff": 0,
+   "staffCost": 0,
+   "staffDemands": [],
+   "staffLacking": 0,
+   "staffLackingAny": 0,
+   "staffLackingCompany": 0,
+   "status": "overhead",
+   "swing": 0,
+   "tag": "",
+   "theft": 0.0,
+   "tradeDays": 0,
+   "traffic": 0,
+   "type": "Warehouse",
+   "typeSlug": "ba:businesstype_warehouse",
+   "uniformGapSkills": [],
+   "uniformGaps": [],
+   "wages": 0.0
+  },
+  {
+   "address": "8 Eighth Avenue",
+   "amenities": null,
+   "basket": null,
+   "capacity": 0,
+   "closed": false,
+   "code": "IC",
+   "cogs": 60.0,
+   "costCentre": true,
+   "crew": [
+    {
+     "absent": 1,
+     "count": 1,
+     "daily": 192.0,
+     "role": "Factory Worker",
+     "skill": 50.0
+    }
+   ],
+   "customerRhythm": null,
+   "customers": 0,
+   "daysOpen": 44,
+   "key": "ba:street_eighthavenue#8",
+   "licensing": 0.0,
+   "lines": [
+    {
+     "configuredPrice": null,
+     "cover": null,
+     "item": "Beer",
+     "price": 0.0,
+     "rate": 0.0,
+     "revenue": 0.0,
+     "slug": "ba:itemname_beer",
+     "soldPerDay": 0,
+     "soldPerWeek": 0,
+     "tradeRate": 0.0,
+     "units": 900,
+     "weekSold": 0.0
+    },
+    {
+     "configuredPrice": null,
+     "cover": null,
+     "item": "Water",
+     "price": 0.0,
+     "rate": 0.0,
+     "revenue": 0.0,
+     "slug": "ba:itemname_water",
+     "soldPerDay": 0,
+     "soldPerWeek": 0,
+     "tradeRate": 0.0,
+     "units": 500,
+     "weekSold": 0.0
+    }
+   ],
+   "margin": null,
+   "marketing": 0.0,
+   "marketingIndex": 0,
+   "missingAmenities": [],
+   "missingUniformLocker": false,
+   "name": "HART. Brewery",
+   "neighbourhood": "ba:neighborhood_industrycity",
+   "opened": 3,
+   "peakDay": null,
+   "people": [
+    {
+     "absent": true,
+     "daily": 192.0,
+     "name": "Eli Stone",
+     "role": "Factory Worker"
+    }
+   ],
+   "profit": -697.0,
+   "promotion": 0,
+   "quitWarnings": 0,
+   "rent": 445.0,
+   "restocks": false,
+   "revenue": 0.0,
+   "rhythm": null,
+   "satisfaction": {
+    "cleanliness": 0,
+    "facility": 0,
+    "overall": null,
+    "pricing": 0,
+    "service": 0
+   },
+   "security": 0,
+   "series": [
+    {
+     "customers": null,
+     "day": 26,
+     "profit": -697.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 27,
+     "profit": -697.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 28,
+     "profit": -697.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 29,
+     "profit": -697.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 30,
+     "profit": -697.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 31,
+     "profit": -697.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 32,
+     "profit": -697.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 33,
+     "profit": -697.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 34,
+     "profit": -697.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 35,
+     "profit": -697.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 36,
+     "profit": -697.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 37,
+     "profit": -697.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 38,
+     "profit": -697.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 39,
+     "profit": -697.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 40,
+     "profit": -697.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 41,
+     "profit": -697.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 42,
+     "profit": -697.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 43,
+     "profit": -697.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 44,
+     "profit": -697.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 45,
+     "profit": -697.0,
+     "revenue": 0.0
+    },
+    {
+     "customers": null,
+     "day": 46,
+     "profit": -697.0,
+     "revenue": 0.0
+    }
+   ],
+   "shiftPrint": "33952a24",
+   "staff": 1,
+   "staffCost": 192.0,
+   "staffDemands": [],
+   "staffLacking": 0,
+   "staffLackingAny": 0,
+   "staffLackingCompany": 0,
+   "status": "support",
+   "swing": 0,
+   "tag": "",
+   "theft": 0.0,
+   "tradeDays": 0,
+   "traffic": 0,
+   "type": "Factory",
+   "typeSlug": "ba:businesstype_factory",
+   "uniformGapSkills": [],
+   "uniformGaps": [],
+   "wages": 192.0
+  }
+ ],
+ "cashFlow": {
+  "cashChange": 560.0,
+  "cashFrom": 25000.0,
+  "cashTo": 25560.0,
+  "days": 7,
+  "fromDay": 40,
+  "netWorthChange": null,
+  "netWorthFrom": null,
+  "netWorthTo": null,
+  "profit": -3361.0,
+  "reinvested": -3921.0
+ },
+ "chains": [
+  {
+   "change": 0.0,
+   "cogs": 630.0,
+   "cost": 910.0,
+   "count": 1,
+   "external": 0.0,
+   "last7": 9450.0,
+   "licensing": 0.0,
+   "margin": 27.8,
+   "marketing": 0.0,
+   "name": "Gift Shops",
+   "prev7": 9450.0,
+   "profit": 350.0,
+   "rent": 100.0,
+   "retailRevenue": 1260.0,
+   "revenue": 1260.0,
+   "sites": [
+    "ba:street_broadwaystreet#19"
+   ],
+   "staff": 1,
+   "suppliedBy": [],
+   "theft": 0.0,
+   "wages": 180.0
+  },
+  {
+   "change": 0.0613,
+   "cogs": 620.0,
+   "cost": 2398.0,
+   "count": 3,
+   "external": 0.0,
+   "last7": 13500.0,
+   "licensing": 0.0,
+   "margin": -33.2,
+   "marketing": 0.0,
+   "name": "Liquor Stores",
+   "prev7": 12720.0,
+   "profit": -598.0,
+   "rent": 1130.0,
+   "retailRevenue": 1800.0,
+   "revenue": 1800.0,
+   "sites": [
+    "ba:street_eighthstreet#5",
+    "ba:street_eighthavenue#4",
+    "ba:street_eighthavenue#8"
+   ],
+   "staff": 4,
+   "suppliedBy": [],
+   "theft": 0.0,
+   "wages": 648.0
+  }
+ ],
+ "daily": [
+  {
+   "business": -122.0,
+   "cogs": 1376.0,
+   "day": 26,
+   "homes": 45.0,
+   "insurance": 30.0,
+   "loans": 300.0,
+   "marketing": 0.0,
+   "parking": 5.0,
+   "profit": -502.0,
+   "profit7": -502.0,
+   "rent": 1230.0,
+   "revenue": 3312.0,
+   "theft": 0.0,
+   "wages": 828.0
+  },
+  {
+   "business": 244.0,
+   "cogs": 1562.0,
+   "day": 27,
+   "homes": 45.0,
+   "insurance": 30.0,
+   "loans": 300.0,
+   "marketing": 0.0,
+   "parking": 5.0,
+   "profit": -136.0,
+   "profit7": -319.0,
+   "rent": 1230.0,
+   "revenue": 3864.0,
+   "theft": 0.0,
+   "wages": 828.0
+  },
+  {
+   "business": 61.0,
+   "cogs": 1469.0,
+   "day": 28,
+   "homes": 45.0,
+   "insurance": 30.0,
+   "loans": 300.0,
+   "marketing": 0.0,
+   "parking": 5.0,
+   "profit": -319.0,
+   "profit7": -319.0,
+   "rent": 1230.0,
+   "revenue": 3588.0,
+   "theft": 0.0,
+   "wages": 828.0
+  },
+  {
+   "business": -854.0,
+   "cogs": 1004.0,
+   "day": 29,
+   "homes": 45.0,
+   "insurance": 30.0,
+   "loans": 300.0,
+   "marketing": 0.0,
+   "parking": 5.0,
+   "profit": -1234.0,
+   "profit7": -547.75,
+   "rent": 1230.0,
+   "revenue": 2208.0,
+   "theft": 0.0,
+   "wages": 828.0
+  },
+  {
+   "business": -671.0,
+   "cogs": 1097.0,
+   "day": 30,
+   "homes": 45.0,
+   "insurance": 30.0,
+   "loans": 300.0,
+   "marketing": 0.0,
+   "parking": 5.0,
+   "profit": -1051.0,
+   "profit7": -648.4,
+   "rent": 1230.0,
+   "revenue": 2484.0,
+   "theft": 0.0,
+   "wages": 828.0
+  },
+  {
+   "business": -671.0,
+   "cogs": 1097.0,
+   "day": 31,
+   "homes": 45.0,
+   "insurance": 30.0,
+   "loans": 300.0,
+   "marketing": 0.0,
+   "parking": 5.0,
+   "profit": -1051.0,
+   "profit7": -715.5,
+   "rent": 1230.0,
+   "revenue": 2484.0,
+   "theft": 0.0,
+   "wages": 828.0
+  },
+  {
+   "business": -488.0,
+   "cogs": 1190.0,
+   "day": 32,
+   "homes": 45.0,
+   "insurance": 30.0,
+   "loans": 300.0,
+   "marketing": 0.0,
+   "parking": 5.0,
+   "profit": -868.0,
+   "profit7": -737.29,
+   "rent": 1230.0,
+   "revenue": 2760.0,
+   "theft": 0.0,
+   "wages": 828.0
+  },
+  {
+   "business": -122.0,
+   "cogs": 1376.0,
+   "day": 33,
+   "homes": 45.0,
+   "insurance": 30.0,
+   "loans": 300.0,
+   "marketing": 0.0,
+   "parking": 5.0,
+   "profit": -502.0,
+   "profit7": -737.29,
+   "rent": 1230.0,
+   "revenue": 3312.0,
+   "theft": 0.0,
+   "wages": 828.0
+  },
+  {
+   "business": 244.0,
+   "cogs": 1562.0,
+   "day": 34,
+   "homes": 45.0,
+   "insurance": 30.0,
+   "loans": 300.0,
+   "marketing": 0.0,
+   "parking": 5.0,
+   "profit": -136.0,
+   "profit7": -737.29,
+   "rent": 1230.0,
+   "revenue": 3864.0,
+   "theft": 0.0,
+   "wages": 828.0
+  },
+  {
+   "business": 373.0,
+   "cogs": 1547.0,
+   "day": 35,
+   "homes": 45.0,
+   "insurance": 30.0,
+   "loans": 300.0,
+   "marketing": 0.0,
+   "parking": 5.0,
+   "profit": -7.0,
+   "profit7": -692.71,
+   "rent": 1230.0,
+   "revenue": 3978.0,
+   "theft": 0.0,
+   "wages": 828.0
+  },
+  {
+   "business": -662.0,
+   "cogs": 1052.0,
+   "day": 36,
+   "homes": 45.0,
+   "insurance": 30.0,
+   "loans": 300.0,
+   "marketing": 0.0,
+   "parking": 5.0,
+   "profit": -1042.0,
+   "profit7": -665.29,
+   "rent": 1230.0,
+   "revenue": 2448.0,
+   "theft": 0.0,
+   "wages": 828.0
+  },
+  {
+   "business": -455.0,
+   "cogs": 1151.0,
+   "day": 37,
+   "homes": 45.0,
+   "insurance": 30.0,
+   "loans": 300.0,
+   "marketing": 0.0,
+   "parking": 5.0,
+   "profit": -835.0,
+   "profit7": -634.43,
+   "rent": 1230.0,
+   "revenue": 2754.0,
+   "theft": 0.0,
+   "wages": 828.0
+  },
+  {
+   "business": -455.0,
+   "cogs": 1151.0,
+   "day": 38,
+   "homes": 45.0,
+   "insurance": 30.0,
+   "loans": 300.0,
+   "marketing": 0.0,
+   "parking": 5.0,
+   "profit": -835.0,
+   "profit7": -603.57,
+   "rent": 1230.0,
+   "revenue": 2754.0,
+   "theft": 0.0,
+   "wages": 828.0
+  },
+  {
+   "business": -248.0,
+   "cogs": 1250.0,
+   "day": 39,
+   "homes": 45.0,
+   "insurance": 30.0,
+   "loans": 300.0,
+   "marketing": 0.0,
+   "parking": 5.0,
+   "profit": -628.0,
+   "profit7": -569.29,
+   "rent": 1230.0,
+   "revenue": 3060.0,
+   "theft": 0.0,
+   "wages": 828.0
+  },
+  {
+   "business": 166.0,
+   "cogs": 1448.0,
+   "day": 40,
+   "homes": 45.0,
+   "insurance": 30.0,
+   "loans": 300.0,
+   "marketing": 0.0,
+   "parking": 5.0,
+   "profit": -214.0,
+   "profit7": -528.14,
+   "rent": 1230.0,
+   "revenue": 3672.0,
+   "theft": 0.0,
+   "wages": 828.0
+  },
+  {
+   "business": 580.0,
+   "cogs": 1646.0,
+   "day": 41,
+   "homes": 45.0,
+   "insurance": 30.0,
+   "loans": 300.0,
+   "marketing": 0.0,
+   "parking": 5.0,
+   "profit": 200.0,
+   "profit7": -480.14,
+   "rent": 1230.0,
+   "revenue": 4284.0,
+   "theft": 0.0,
+   "wages": 828.0
+  },
+  {
+   "business": 373.0,
+   "cogs": 1547.0,
+   "day": 42,
+   "homes": 45.0,
+   "insurance": 30.0,
+   "loans": 300.0,
+   "marketing": 0.0,
+   "parking": 5.0,
+   "profit": -7.0,
+   "profit7": -480.14,
+   "rent": 1230.0,
+   "revenue": 3978.0,
+   "theft": 0.0,
+   "wages": 828.0
+  },
+  {
+   "business": -662.0,
+   "cogs": 1052.0,
+   "day": 43,
+   "homes": 45.0,
+   "insurance": 30.0,
+   "loans": 300.0,
+   "marketing": 0.0,
+   "parking": 5.0,
+   "profit": -1042.0,
+   "profit7": -480.14,
+   "rent": 1230.0,
+   "revenue": 2448.0,
+   "theft": 0.0,
+   "wages": 828.0
+  },
+  {
+   "business": -455.0,
+   "cogs": 1151.0,
+   "day": 44,
+   "homes": 45.0,
+   "insurance": 30.0,
+   "loans": 300.0,
+   "marketing": 0.0,
+   "parking": 5.0,
+   "profit": -835.0,
+   "profit7": -480.14,
+   "rent": 1230.0,
+   "revenue": 2754.0,
+   "theft": 0.0,
+   "wages": 828.0
+  },
+  {
+   "business": -455.0,
+   "cogs": 1151.0,
+   "day": 45,
+   "homes": 45.0,
+   "insurance": 30.0,
+   "loans": 300.0,
+   "marketing": 0.0,
+   "parking": 5.0,
+   "profit": -835.0,
+   "profit7": -480.14,
+   "rent": 1230.0,
+   "revenue": 2754.0,
+   "theft": 0.0,
+   "wages": 828.0
+  },
+  {
+   "business": -248.0,
+   "cogs": 1250.0,
+   "day": 46,
+   "homes": 45.0,
+   "insurance": 30.0,
+   "loans": 300.0,
+   "marketing": 0.0,
+   "parking": 5.0,
+   "profit": -628.0,
+   "profit7": -480.14,
+   "rent": 1230.0,
+   "revenue": 3060.0,
+   "theft": 0.0,
+   "wages": 828.0
+  }
+ ],
+ "factoryStaffing": {
+  "cap": [
+   {
+    "delta": {
+     "perDay": 1152.0,
+     "workers": 6
+    },
+    "headcount": {
+     "have": 1,
+     "hire": 6,
+     "min": 7,
+     "needed": 336,
+     "spare": 0
+    },
+    "key": "ba:street_eighthavenue#8",
+    "lines": [
+     {
+      "cuts": [
+       [
+        0,
+        12
+       ],
+       [
+        12,
+        24
+       ]
+      ],
+      "from": 0,
+      "hours": 24,
+      "hoursNow": 0,
+      "item": "Beer",
+      "machines": 2,
+      "slug": "ba:itemname_beer",
+      "to": 24
+     }
+    ],
+    "name": "HART. Brewery",
+    "s": 3,
+    "wageDay": 192.0
+   }
+  ],
+  "dem": [
+   {
+    "delta": {
+     "perDay": 384.0,
+     "workers": 2
+    },
+    "headcount": {
+     "have": 1,
+     "hire": 2,
+     "min": 3,
+     "needed": 112,
+     "spare": 0
+    },
+    "key": "ba:street_eighthavenue#8",
+    "lines": [
+     {
+      "cuts": [
+       [
+        6,
+        14
+       ]
+      ],
+      "from": 6,
+      "hours": 8,
+      "hoursNow": 0,
+      "item": "Beer",
+      "machines": 2,
+      "slug": "ba:itemname_beer",
+      "to": 14
+     }
+    ],
+    "name": "HART. Brewery",
+    "s": 3,
+    "wageDay": 192.0
+   }
+  ]
+ },
+ "goals": {
+  "buildingsOwned": 1,
+  "buildingsTotal": 885,
+  "completed": 1,
+  "diplomas": 1,
+  "diplomasTotal": 2,
+  "goalsDone": 1,
+  "goalsTotal": null,
+  "goodsProduced": 52800,
+  "rivalsDefeated": 0,
+  "rivalsTotal": 1,
+  "taxesPaid": 5200.0,
+  "typesRun": 2,
+  "typesTotal": 2
+ },
+ "homes": [
+  {
+   "address": "13 Broadway Street",
+   "hood": "ba:neighborhood_midtown",
+   "key": "ba:street_broadwaystreet#13",
+   "m": 589,
+   "rent": 45.0
+  }
+ ],
+ "hourFindings": [
+  {
+   "basket": 9.38,
+   "cap": 20,
+   "capTop": 20,
+   "fix": "another counter",
+   "hours": 14,
+   "key": "ba:street_eighthstreet#5",
+   "kind": "cap",
+   "limit": "registers",
+   "limits": 1,
+   "noun": null,
+   "office": false,
+   "site": "HART. Spirits",
+   "throughput": 450.24,
+   "when": "every day 17-19"
+  }
+ ],
+ "hours": [
+  {
+   "basket": 9.38,
+   "cap": 30,
+   "capHours": 14,
+   "counters": 20,
+   "customers": [
+    [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     17.0,
+     17.0,
+     17.0,
+     17.0,
+     17.0,
+     17.0,
+     17.0,
+     17.0,
+     17.0,
+     24.0,
+     24.0,
+     17.0,
+     16.0,
+     16.0,
+     null,
+     null
+    ],
+    [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     9.0,
+     9.0,
+     9.0,
+     9.0,
+     9.0,
+     9.0,
+     9.0,
+     9.0,
+     9.0,
+     24.0,
+     24.0,
+     9.0,
+     8.0,
+     8.0,
+     null,
+     null
+    ],
+    [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     11.0,
+     11.0,
+     11.0,
+     11.0,
+     11.0,
+     10.0,
+     10.0,
+     10.0,
+     10.0,
+     24.0,
+     24.0,
+     10.0,
+     10.0,
+     10.0,
+     null,
+     null
+    ],
+    [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     11.0,
+     11.0,
+     11.0,
+     11.0,
+     11.0,
+     10.0,
+     10.0,
+     10.0,
+     10.0,
+     24.0,
+     24.0,
+     10.0,
+     10.0,
+     10.0,
+     null,
+     null
+    ],
+    [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     12.0,
+     12.0,
+     12.0,
+     12.0,
+     12.0,
+     12.0,
+     12.0,
+     12.0,
+     12.0,
+     24.0,
+     24.0,
+     12.0,
+     12.0,
+     12.0,
+     null,
+     null
+    ],
+    [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     14.0,
+     14.0,
+     13.5,
+     13.5,
+     13.5,
+     13.5,
+     13.5,
+     13.5,
+     13.5,
+     24.0,
+     24.0,
+     13.5,
+     13.5,
+     13.5,
+     null,
+     null
+    ],
+    [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     17.0,
+     17.0,
+     17.0,
+     17.0,
+     17.0,
+     16.5,
+     16.5,
+     16.5,
+     16.0,
+     24.0,
+     24.0,
+     16.0,
+     16.0,
+     16.0,
+     null,
+     null
+    ]
+   ],
+   "door": 30,
+   "effective": [
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0
+    ]
+   ],
+   "key": "ba:street_eighthstreet#5",
+   "name": "HART. Spirits",
+   "office": false,
+   "onShift": [
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     2,
+     2,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     2,
+     2,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     2,
+     2,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     2,
+     2,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     2,
+     2,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     2,
+     2,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     2,
+     2,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0
+    ]
+   ],
+   "open": [
+    [
+     [
+      8,
+      22
+     ]
+    ],
+    [
+     [
+      8,
+      22
+     ]
+    ],
+    [
+     [
+      8,
+      22
+     ]
+    ],
+    [
+     [
+      8,
+      22
+     ]
+    ],
+    [
+     [
+      8,
+      22
+     ]
+    ],
+    [
+     [
+      8,
+      22
+     ]
+    ],
+    [
+     [
+      8,
+      22
+     ]
+    ]
+   ],
+   "peak": 24.0,
+   "postRate": null,
+   "reported": true,
+   "roles": [
+    {
+     "counters": 20,
+     "label": "Customer Service",
+     "many": "cash registers",
+     "noun": null,
+     "onShift": [
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       2,
+       2,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       2,
+       2,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       2,
+       2,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       2,
+       2,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       2,
+       2,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       2,
+       2,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       2,
+       2,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0
+      ]
+     ],
+     "one": "cash register",
+     "posts": [
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0
+      ]
+     ],
+     "skill": "ba:skill_customerservice",
+     "staffed": [
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       0,
+       0
+      ]
+     ],
+     "station": "Cash Register",
+     "stationCount": 1
+    }
+   ],
+   "staffed": [
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0
+    ]
+   ],
+   "stationCount": 1,
+   "stations": [
+    {
+     "id": "REGliquor",
+     "name": "Cash Register",
+     "rate": 20,
+     "skill": "ba:skill_customerservice",
+     "slug": "ba:itemname_cashregister"
+    }
+   ],
+   "thin": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ],
+   "weeks": [
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2
+   ]
+  },
+  {
+   "basket": 18.0,
+   "cap": 30,
+   "capHours": 0,
+   "counters": 20,
+   "customers": [
+    [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     10.0,
+     9.0,
+     9.0,
+     9.0,
+     9.0,
+     9.0,
+     9.0,
+     9.0,
+     9.0,
+     9.0,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     6.0,
+     6.0,
+     6.0,
+     6.0,
+     6.0,
+     6.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     7.0,
+     7.0,
+     7.0,
+     6.0,
+     6.0,
+     6.0,
+     6.0,
+     6.0,
+     6.0,
+     6.0,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     7.0,
+     7.0,
+     7.0,
+     6.0,
+     6.0,
+     6.0,
+     6.0,
+     6.0,
+     6.0,
+     6.0,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     7.0,
+     7.0,
+     7.0,
+     7.0,
+     7.0,
+     7.0,
+     7.0,
+     7.0,
+     7.0,
+     7.0,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     9.0,
+     9.0,
+     9.0,
+     9.0,
+     8.0,
+     8.0,
+     8.0,
+     8.0,
+     8.0,
+     8.0,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     10.0,
+     10.0,
+     10.0,
+     10.0,
+     10.0,
+     10.0,
+     10.0,
+     10.0,
+     9.0,
+     9.0,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   ],
+   "door": 30,
+   "effective": [
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0,
+     0,
+     0,
+     0
+    ]
+   ],
+   "key": "ba:street_broadwaystreet#19",
+   "name": "HART. Gifts",
+   "office": false,
+   "onShift": [
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0,
+     0,
+     0,
+     0
+    ]
+   ],
+   "open": [
+    [
+     [
+      9,
+      19
+     ]
+    ],
+    [
+     [
+      9,
+      19
+     ]
+    ],
+    [
+     [
+      9,
+      19
+     ]
+    ],
+    [
+     [
+      9,
+      19
+     ]
+    ],
+    [
+     [
+      9,
+      19
+     ]
+    ],
+    [
+     [
+      9,
+      19
+     ]
+    ],
+    [
+     [
+      9,
+      19
+     ]
+    ]
+   ],
+   "peak": 10.0,
+   "postRate": null,
+   "reported": true,
+   "roles": [
+    {
+     "counters": 20,
+     "label": "Customer Service",
+     "many": "cash registers",
+     "noun": null,
+     "onShift": [
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0,
+       0,
+       0,
+       0
+      ]
+     ],
+     "one": "cash register",
+     "posts": [
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       0,
+       0,
+       0,
+       0,
+       0
+      ]
+     ],
+     "skill": "ba:skill_customerservice",
+     "staffed": [
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       0,
+       0,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       0,
+       0,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       0,
+       0,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       0,
+       0,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       0,
+       0,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       0,
+       0,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       20,
+       0,
+       0,
+       0,
+       0,
+       0
+      ]
+     ],
+     "station": "Cash Register",
+     "stationCount": 1
+    }
+   ],
+   "staffed": [
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     0,
+     0,
+     0,
+     0,
+     0
+    ]
+   ],
+   "stationCount": 1,
+   "stations": [
+    {
+     "id": "REGgifts",
+     "name": "Cash Register",
+     "rate": 20,
+     "skill": "ba:skill_customerservice",
+     "slug": "ba:itemname_cashregister"
+    }
+   ],
+   "thin": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ],
+   "weeks": [
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2
+   ]
+  }
+ ],
+ "hypeExposure": [
+  {
+   "baseline": {
+    "basis": "its own 7 days before day 35",
+    "hood": "ba:neighborhood_midtown",
+    "name": "HART. Spirits",
+    "revenue": 1607.14
+   },
+   "count": 1,
+   "daysLeft": 3,
+   "hood": "ba:neighborhood_midtown",
+   "items": [
+    "Beer"
+   ],
+   "profit": 759.0,
+   "revenue": 1800.0,
+   "sites": [
+    {
+     "key": "ba:street_eighthstreet#5",
+     "name": "HART. Spirits",
+     "profit": 759.0,
+     "revenue": 1800.0,
+     "share": 100,
+     "type": "ba:businesstype_liquorstore"
+    }
+   ],
+   "startDay": 35,
+   "top": "ba:street_eighthstreet#5"
+  }
+ ],
+ "kpi": {
+  "businesses": 4,
+  "cash": 25560.0,
+  "customers": 262,
+  "debt": 29900.0,
+  "employees": 5,
+  "materiality": 500.0,
+  "netWorth": 480000.0,
+  "netWorthAsOf": 40,
+  "profitAvg7": -480.14285714285717,
+  "profitPrev7": -569.2857142857143,
+  "profitSum7": -3361.0,
+  "profitYesterday": -628.0,
+  "rentBill": 1230.0,
+  "revenue": 3060.0,
+  "vacant": 0,
+  "wageBill": 828.0
+ },
+ "ledgerDays": 2,
+ "loans": [
+  {
+   "bank": "1 Broadway Street",
+   "dailyInterest": 40.0,
+   "dailyPayment": 300.0,
+   "remaining": 29900.0,
+   "repaid": 40.2,
+   "total": 50000.0
+  }
+ ],
+ "market": {
+  "gaps": [
+   {
+    "demand": 54,
+    "hood": "ba:neighborhood_hellskitchen",
+    "hype": null,
+    "item": "Beer",
+    "make": true,
+    "providers": 0,
+    "slug": "ba:itemname_beer"
+   },
+   {
+    "demand": 58,
+    "hood": "ba:neighborhood_hellskitchen",
+    "hype": null,
+    "item": "Gift (Cheap)",
+    "make": false,
+    "providers": 1,
+    "slug": "ba:itemname_cheapgift"
+   },
+   {
+    "demand": 71,
+    "hood": "ba:neighborhood_lowermanhattan",
+    "hype": null,
+    "item": "Soda Can",
+    "make": false,
+    "providers": 2,
+    "slug": "ba:itemname_sodacan"
+   },
+   {
+    "demand": 55,
+    "hood": "ba:neighborhood_lowermanhattan",
+    "hype": null,
+    "item": "Beer",
+    "make": true,
+    "providers": 3,
+    "slug": "ba:itemname_beer"
+   }
+  ],
+  "hoods": [
+   "ba:neighborhood_hellskitchen",
+   "ba:neighborhood_industrycity",
+   "ba:neighborhood_lowermanhattan",
+   "ba:neighborhood_midtown"
+  ],
+  "hype": [
+   {
+    "count": 1,
+    "daysLeft": 3,
+    "hood": "ba:neighborhood_midtown",
+    "items": [
+     "Beer"
+    ],
+    "mine": true,
+    "sellHere": true,
+    "slugs": [
+     "ba:itemname_beer"
+    ],
+    "startDay": 35
+   }
+  ],
+  "movers": [
+   {
+    "count": 1,
+    "delta": -10,
+    "demand": 60,
+    "family": "Gift Shop",
+    "hood": "ba:neighborhood_lowermanhattan",
+    "items": [
+     "Gift (Cheap)"
+    ],
+    "openedDay": null,
+    "openedHere": null,
+    "sell": true,
+    "up": false,
+    "worst": -10
+   },
+   {
+    "count": 1,
+    "delta": 6,
+    "demand": 86,
+    "family": "Liquor Store",
+    "hood": "ba:neighborhood_midtown",
+    "items": [
+     "Beer"
+    ],
+    "openedDay": null,
+    "openedHere": null,
+    "sell": true,
+    "up": true,
+    "worst": 6
+   },
+   {
+    "count": 1,
+    "delta": -8,
+    "demand": 54,
+    "family": "Liquor Store",
+    "hood": "ba:neighborhood_hellskitchen",
+    "items": [
+     "Beer"
+    ],
+    "openedDay": null,
+    "openedHere": null,
+    "sell": false,
+    "up": false,
+    "worst": -8
+   },
+   {
+    "count": 1,
+    "delta": 5,
+    "demand": 71,
+    "family": "Liquor Store",
+    "hood": "ba:neighborhood_lowermanhattan",
+    "items": [
+     "Soda Can"
+    ],
+    "openedDay": null,
+    "openedHere": null,
+    "sell": false,
+    "up": true,
+    "worst": 5
+   }
+  ],
+  "noOffices": [
+   "ba:neighborhood_industrycity"
+  ],
+  "offices": [],
+  "rows": [
+   {
+    "cells": [
+     {
+      "delta": -8,
+      "demand": 54,
+      "hood": "ba:neighborhood_hellskitchen",
+      "hype": null,
+      "marketPrice": null,
+      "marketPriceNote": "No eligible seller; game fallback unavailable",
+      "monopoly": false,
+      "providers": 0,
+      "sell": false
+     },
+     {
+      "delta": 0,
+      "demand": 30,
+      "hood": "ba:neighborhood_industrycity",
+      "hype": null,
+      "marketPrice": null,
+      "marketPriceNote": "No eligible seller; game fallback unavailable",
+      "monopoly": false,
+      "providers": 1,
+      "sell": false
+     },
+     {
+      "delta": 0,
+      "demand": 55,
+      "hood": "ba:neighborhood_lowermanhattan",
+      "hype": null,
+      "marketPrice": null,
+      "marketPriceNote": "No eligible seller; game fallback unavailable",
+      "monopoly": false,
+      "providers": 3,
+      "sell": false
+     },
+     {
+      "delta": 6,
+      "demand": 86,
+      "hood": "ba:neighborhood_midtown",
+      "hype": 3,
+      "marketPrice": 4.5,
+      "monopoly": false,
+      "providers": 2,
+      "sell": true
+     }
+    ],
+    "gap": {
+     "demand": 55,
+     "hood": "ba:neighborhood_lowermanhattan",
+     "providers": 3
+    },
+    "hyped": true,
+    "item": "Beer",
+    "make": true,
+    "office": false,
+    "peak": 86,
+    "rising": 6,
+    "sell": true,
+    "slug": "ba:itemname_beer"
+   },
+   {
+    "cells": [
+     {
+      "delta": 0,
+      "demand": 30,
+      "hood": "ba:neighborhood_hellskitchen",
+      "hype": null,
+      "marketPrice": null,
+      "marketPriceNote": "No eligible seller; game fallback unavailable",
+      "monopoly": false,
+      "providers": 1,
+      "sell": false
+     },
+     {
+      "delta": 0,
+      "demand": 40,
+      "hood": "ba:neighborhood_industrycity",
+      "hype": null,
+      "marketPrice": null,
+      "marketPriceNote": "No eligible seller; game fallback unavailable",
+      "monopoly": false,
+      "providers": 1,
+      "sell": false
+     },
+     {
+      "delta": 5,
+      "demand": 71,
+      "hood": "ba:neighborhood_lowermanhattan",
+      "hype": null,
+      "marketPrice": null,
+      "marketPriceNote": "No eligible seller; game fallback unavailable",
+      "monopoly": false,
+      "providers": 2,
+      "sell": false
+     },
+     {
+      "delta": 0,
+      "demand": 50,
+      "hood": "ba:neighborhood_midtown",
+      "hype": null,
+      "marketPrice": 2.5,
+      "monopoly": false,
+      "providers": 5,
+      "sell": true
+     }
+    ],
+    "gap": {
+     "demand": 71,
+     "hood": "ba:neighborhood_lowermanhattan",
+     "providers": 2
+    },
+    "hyped": false,
+    "item": "Soda Can",
+    "make": false,
+    "office": false,
+    "peak": 71,
+    "rising": 5,
+    "sell": true,
+    "slug": "ba:itemname_sodacan"
+   },
+   {
+    "cells": [
+     {
+      "delta": 0,
+      "demand": 58,
+      "hood": "ba:neighborhood_hellskitchen",
+      "hype": null,
+      "marketPrice": null,
+      "marketPriceNote": "No eligible seller; game fallback unavailable",
+      "monopoly": false,
+      "providers": 1,
+      "sell": false
+     },
+     {
+      "delta": 0,
+      "demand": 20,
+      "hood": "ba:neighborhood_industrycity",
+      "hype": null,
+      "marketPrice": null,
+      "marketPriceNote": "No eligible seller; game fallback unavailable",
+      "monopoly": false,
+      "providers": 0,
+      "sell": false
+     },
+     {
+      "delta": -10,
+      "demand": 60,
+      "hood": "ba:neighborhood_lowermanhattan",
+      "hype": null,
+      "marketPrice": 12.0,
+      "monopoly": true,
+      "providers": 1,
+      "sell": true
+     },
+     {
+      "delta": 0,
+      "demand": 45,
+      "hood": "ba:neighborhood_midtown",
+      "hype": null,
+      "marketPrice": 11.0,
+      "monopoly": false,
+      "providers": 2,
+      "sell": false
+     }
+    ],
+    "gap": {
+     "demand": 58,
+     "hood": "ba:neighborhood_hellskitchen",
+     "providers": 1
+    },
+    "hyped": false,
+    "item": "Gift (Cheap)",
+    "make": false,
+    "office": false,
+    "peak": 60,
+    "rising": 0,
+    "sell": true,
+    "slug": "ba:itemname_cheapgift"
+   },
+   {
+    "cells": [
+     {
+      "delta": 0,
+      "demand": 25,
+      "hood": "ba:neighborhood_hellskitchen",
+      "hype": null,
+      "marketPrice": null,
+      "marketPriceNote": "Supply-event pricing unavailable",
+      "monopoly": false,
+      "providers": 2,
+      "sell": false
+     },
+     {
+      "delta": 0,
+      "demand": 15,
+      "hood": "ba:neighborhood_industrycity",
+      "hype": null,
+      "marketPrice": null,
+      "marketPriceNote": "Supply-event pricing unavailable",
+      "monopoly": false,
+      "providers": 0,
+      "sell": false
+     },
+     {
+      "delta": 0,
+      "demand": 40,
+      "hood": "ba:neighborhood_lowermanhattan",
+      "hype": null,
+      "marketPrice": null,
+      "marketPriceNote": "Supply-event pricing unavailable",
+      "monopoly": false,
+      "providers": 1,
+      "sell": true
+     },
+     {
+      "delta": 0,
+      "demand": 35,
+      "hood": "ba:neighborhood_midtown",
+      "hype": null,
+      "marketPrice": null,
+      "marketPriceNote": "Supply-event pricing unavailable",
+      "monopoly": false,
+      "providers": 4,
+      "sell": false
+     }
+    ],
+    "gap": {
+     "demand": 35,
+     "hood": "ba:neighborhood_midtown",
+     "providers": 4
+    },
+    "hyped": false,
+    "item": "Umbrella",
+    "make": false,
+    "office": false,
+    "peak": 40,
+    "rising": 0,
+    "sell": true,
+    "slug": "ba:itemname_umbrella"
+   }
+  ],
+  "shortages": [
+   {
+    "count": 1,
+    "daysLeft": 6,
+    "hood": "ba:neighborhood_lowermanhattan",
+    "item": "Umbrella",
+    "kind": "Product shortage",
+    "mine": true,
+    "slug": "ba:itemname_umbrella",
+    "where": "Lower Manhattan"
+   }
+  ],
+  "trackedDays": 2,
+  "trendDays": 7,
+  "types": [
+   {
+    "cells": [
+     {
+      "count": 2,
+      "demand": 42,
+      "here": false,
+      "hood": "ba:neighborhood_hellskitchen",
+      "providers": 0,
+      "sell": 0
+     },
+     {
+      "count": 2,
+      "demand": 35,
+      "here": false,
+      "hood": "ba:neighborhood_industrycity",
+      "providers": 1,
+      "sell": 0
+     },
+     {
+      "count": 2,
+      "demand": 63,
+      "here": false,
+      "hood": "ba:neighborhood_lowermanhattan",
+      "providers": 2,
+      "sell": 0
+     },
+     {
+      "count": 2,
+      "demand": 68,
+      "here": true,
+      "hood": "ba:neighborhood_midtown",
+      "providers": 4,
+      "sell": 2
+     }
+    ],
+    "mine": true,
+    "peak": 68,
+    "products": 2,
+    "slug": "ba:businesstype_liquorstore",
+    "type": "Liquor Store"
+   },
+   {
+    "cells": [
+     {
+      "count": 2,
+      "demand": 42,
+      "here": false,
+      "hood": "ba:neighborhood_hellskitchen",
+      "providers": 2,
+      "sell": 0
+     },
+     {
+      "count": 2,
+      "demand": 18,
+      "here": false,
+      "hood": "ba:neighborhood_industrycity",
+      "providers": 0,
+      "sell": 0
+     },
+     {
+      "count": 2,
+      "demand": 50,
+      "here": true,
+      "hood": "ba:neighborhood_lowermanhattan",
+      "providers": 1,
+      "sell": 2
+     },
+     {
+      "count": 2,
+      "demand": 40,
+      "here": false,
+      "hood": "ba:neighborhood_midtown",
+      "providers": 3,
+      "sell": 0
+     }
+    ],
+    "mine": true,
+    "peak": 50,
+    "products": 2,
+    "slug": "ba:businesstype_giftshop",
+    "type": "Gift Shop"
+   }
+  ]
+ },
+ "meta": {
+  "build": 3682,
+  "character": "PAYLOADco",
+  "cityDate": "Year 1, day 47 of 60",
+  "day": 47,
+  "difficulty": "Normal",
+  "generated": "<wall clock>",
+  "hour": 14,
+  "houseRules": {
+   "easier": 0,
+   "harder": 1,
+   "label": "Normal",
+   "rules": [
+    {
+     "lean": "level",
+     "name": "Public prices",
+     "normal": 0.7,
+     "unit": "×",
+     "value": 0.7,
+     "what": "cost of wholesale and imported goods, hospital fees and the like"
+    },
+    {
+     "lean": "harder",
+     "name": "Employee hourly salary",
+     "normal": 0.7,
+     "unit": "×",
+     "value": 0.9,
+     "what": "what staff cost an hour"
+    },
+    {
+     "lean": "level",
+     "name": "Rival attacks",
+     "normal": 1.0,
+     "unit": "×",
+     "value": 1.0,
+     "what": "severity of rival attacks; 0 switches them off entirely"
+    },
+    {
+     "lean": "level",
+     "name": "Base customer promotion",
+     "normal": 0.55,
+     "unit": "×",
+     "value": 0.55,
+     "what": "base level of customers without traffic or marketing"
+    },
+    {
+     "lean": "level",
+     "name": "Tax rate",
+     "normal": 5,
+     "unit": "%",
+     "value": 5.0,
+     "what": "annual rate from the IRS"
+    }
+   ],
+   "slot": 2,
+   "startingMoney": 10000.0
+  },
+  "locale": true,
+  "minute": 30,
+  "save": "Payload Co",
+  "saved": "<wall clock>",
+  "source": "payload.hsg",
+  "verifiedBuild": 3682
+ },
+ "minor": {
+  "count": 2,
+  "gate": 500.0,
+  "rows": [
+   {
+    "group": "atcap",
+    "id": "c814f4235c",
+    "level": "warn",
+    "site": "HART. Spirits",
+    "siteKey": "ba:street_eighthstreet#5",
+    "text": "HART. Spirits fills the counters every day 17-19, 14 hours a week at 20/h and $450/day through the ceiling. Registers is the limit, so the answer is another counter",
+    "unit": "/day trade",
+    "worth": 450.24
+   },
+   {
+    "group": "hype",
+    "id": "21bdb2218c",
+    "level": "warn",
+    "site": "HART. Spirits",
+    "siteKey": "ba:street_eighthstreet#5",
+    "text": "⟦ba:neighborhood_midtown|Midtown⟧ hype on 1 lines has 3 days left; HART. Spirits does $1,800/day under it against $1,607 for its own 7 days before day 35; about $193/day of revenue rides on the wave. It already runs within 10% of capacity for 14 hours of a normal week, so the door is turning part of the wave away.",
+    "unit": "/day revenue",
+    "worth": 192.86
+   }
+  ],
+  "worth": 643.1
+ },
+ "names": {
+  "ba:businesstype_empty": "Empty",
+  "ba:businesstype_factory": "Factory",
+  "ba:businesstype_giftshop": "Gift Shop",
+  "ba:businesstype_liquorstore": "Liquor Store",
+  "ba:businesstype_warehouse": "Warehouse",
+  "ba:itemname_beer": "Beer",
+  "ba:itemname_bottlingmachine": "Bottling Machine",
+  "ba:itemname_cashregister": "Cash Register",
+  "ba:itemname_cheapgift": "Gift (Cheap)",
+  "ba:itemname_cleaningstation": "Cleaning Station",
+  "ba:itemname_paperbag": "Paper Bag",
+  "ba:itemname_shelf": "Shelf",
+  "ba:itemname_sodacan": "Soda Can",
+  "ba:itemname_umbrella": "Umbrella",
+  "ba:itemname_water": "Water",
+  "ba:jobdemand_freeweekends": "Free weekends",
+  "ba:neighborhood_garmentdistrict": "Garment District",
+  "ba:neighborhood_global": "Global",
+  "ba:neighborhood_hellskitchen": "Hell's Kitchen",
+  "ba:neighborhood_industrycity": "Industry City",
+  "ba:neighborhood_lowermanhattan": "Lower Manhattan",
+  "ba:neighborhood_midtown": "Midtown",
+  "ba:neighborhood_murrayhill": "Murray Hill",
+  "ba:neighborhood_thehamptons": "The Hamptons",
+  "ba:skill_cleaning": "Cleaning",
+  "ba:skill_customerservice": "Customer Service",
+  "ba:skill_factoryworker": "Factory Worker"
+ },
+ "ownedBuildings": [
+  {
+   "address": "5 Eighth Street",
+   "key": "ba:street_eighthstreet#5",
+   "purchaseDay": 20,
+   "purchasePrice": 250000.0
+  }
+ ],
+ "plan": {
+  "catalogue": {
+   "ba:businesstype_giftshop": {
+    "products": [
+     "ba:itemname_cheapgift",
+     "ba:itemname_umbrella"
+    ],
+    "services": [],
+    "type": "Gift Shop"
+   },
+   "ba:businesstype_liquorstore": {
+    "products": [
+     "ba:itemname_beer",
+     "ba:itemname_sodacan"
+    ],
+    "services": [],
+    "type": "Liquor Store"
+   }
+  },
+  "items": {
+   "ba:itemname_beer": "Beer",
+   "ba:itemname_cheapgift": "Gift (Cheap)",
+   "ba:itemname_sodacan": "Soda Can",
+   "ba:itemname_umbrella": "Umbrella",
+   "ba:itemname_water": "Water"
+  },
+  "own": {
+   "ba:businesstype_giftshop": {
+    "perDay": {
+     "ba:itemname_cheapgift": 85.7,
+     "ba:itemname_umbrella": 21.4
+    },
+    "shops": 1,
+    "sites": 1
+   },
+   "ba:businesstype_liquorstore": {
+    "perDay": {
+     "ba:itemname_beer": 321.4
+    },
+    "shops": 1,
+    "sites": 1
+   }
+  },
+  "peak": 1.27,
+  "priceCount": 1,
+  "priceDay": 46,
+  "prices": {
+   "ba:itemname_water": 0.5
+  },
+  "recipes": [
+   {
+    "ingredients": [
+     {
+      "item": "Water",
+      "per": 25,
+      "slug": "ba:itemname_water"
+     }
+    ],
+    "item": "Beer",
+    "out": 25,
+    "slug": "ba:itemname_beer",
+    "workstation": "bottledgoods"
+   }
+  ],
+  "sources": {
+   "ba:itemname_water": {
+    "active": true,
+    "contracts": [
+     {
+      "active": true,
+      "from": "1 Pier",
+      "ordered": 3000,
+      "smart": false,
+      "warehouse": "4 Eighth Avenue"
+     }
+    ],
+    "depots": [
+     {
+      "importer": null,
+      "level": null,
+      "name": null,
+      "plainAfter": 0,
+      "plainBefore": 0,
+      "smart": false,
+      "warehouse": "4 Eighth Avenue",
+      "weekly": 3000
+     }
+    ],
+    "from": "1 Pier",
+    "ordered": 3000,
+    "paused": 0,
+    "smart": false,
+    "warehouse": "4 Eighth Avenue"
+   }
+  },
+  "stations": {
+   "ba:itemname_cashregister": 20
+  },
+  "workstations": {
+   "bottledgoods": {
+    "assembly": [
+     "Food Assembly Machine"
+    ],
+    "machines": [
+     "Bottling Machine"
+    ],
+    "makes": [
+     "Beer"
+    ],
+    "name": "Bottledgoods Workstation",
+    "slug": "bottledgoods"
+   }
+  }
+ },
+ "premises": {
+  "buildings": [
+   {
+    "address": "13 Broadway Street",
+    "cap": null,
+    "deposit": null,
+    "hood": "ba:neighborhood_midtown",
+    "key": "ba:street_broadwaystreet#13",
+    "layout": null,
+    "m2": 589,
+    "occupant": null,
+    "occupantRival": null,
+    "owner": "city",
+    "ownerRival": null,
+    "rent": null,
+    "size": "N",
+    "status": "mine",
+    "traffic": 40,
+    "type": "residential"
+   },
+   {
+    "address": "19 Broadway Street",
+    "cap": 30,
+    "deposit": 6160,
+    "hood": "ba:neighborhood_lowermanhattan",
+    "key": "ba:street_broadwaystreet#19",
+    "layout": "C1",
+    "m2": 225,
+    "occupant": {
+     "name": "HART. Gifts",
+     "type": "Gift Shop",
+     "typeSlug": "ba:businesstype_giftshop"
+    },
+    "occupantRival": null,
+    "owner": "city",
+    "ownerRival": null,
+    "rent": 98,
+    "size": "C",
+    "status": "mine",
+    "traffic": 40,
+    "type": "retail"
+   },
+   {
+    "address": "9 Broadway Street",
+    "cap": 75,
+    "deposit": 92000,
+    "hood": "ba:neighborhood_midtown",
+    "key": "ba:street_broadwaystreet#9",
+    "layout": "M1",
+    "m2": 1000,
+    "occupant": {
+     "name": "Corner Gifts",
+     "type": "Gift Shop",
+     "typeSlug": "ba:businesstype_giftshop"
+    },
+    "occupantRival": 1,
+    "owner": "rival",
+    "ownerRival": 1,
+    "rent": 1464,
+    "size": "M",
+    "status": "rival",
+    "traffic": 29,
+    "type": "retail"
+   },
+   {
+    "address": "4 Eighth Avenue",
+    "cap": null,
+    "deposit": 43150,
+    "hood": "ba:neighborhood_industrycity",
+    "key": "ba:street_eighthavenue#4",
+    "layout": "I3",
+    "m2": 1292,
+    "occupant": {
+     "name": "HART. Hub",
+     "type": "Warehouse",
+     "typeSlug": "ba:businesstype_warehouse"
+    },
+    "occupantRival": null,
+    "owner": "city",
+    "ownerRival": null,
+    "rent": 461,
+    "size": "I",
+    "status": "mine",
+    "traffic": 33,
+    "type": "warehouse"
+   },
+   {
+    "address": "8 Eighth Avenue",
+    "cap": null,
+    "deposit": 41750,
+    "hood": "ba:neighborhood_industrycity",
+    "key": "ba:street_eighthavenue#8",
+    "layout": "I3",
+    "m2": 1292,
+    "occupant": {
+     "name": "HART. Brewery",
+     "type": "Factory",
+     "typeSlug": "ba:businesstype_factory"
+    },
+    "occupantRival": null,
+    "owner": "city",
+    "ownerRival": null,
+    "rent": 446,
+    "size": "I",
+    "status": "mine",
+    "traffic": 31,
+    "type": "warehouse"
+   },
+   {
+    "address": "5 Eighth Street",
+    "cap": 30,
+    "deposit": 14010,
+    "hood": "ba:neighborhood_midtown",
+    "key": "ba:street_eighthstreet#5",
+    "layout": "C2",
+    "m2": 225,
+    "occupant": {
+     "name": "HART. Spirits",
+     "type": "Liquor Store",
+     "typeSlug": "ba:businesstype_liquorstore"
+    },
+    "occupantRival": null,
+    "owner": "you",
+    "ownerRival": null,
+    "rent": 223,
+    "size": "C",
+    "status": "mine",
+    "traffic": 10,
+    "type": "retail"
+   }
+  ],
+  "caps": {
+   "cinema": {
+    "S": [
+     100,
+     150
+    ]
+   },
+   "office": {
+    "A": 4,
+    "C": 8,
+    "D": 10,
+    "J": 10,
+    "K": 50
+   },
+   "retail": {
+    "A": 15,
+    "C": 30,
+    "D": 40,
+    "M": 75
+   },
+   "theater": {
+    "R": [
+     150,
+     200
+    ]
+   }
+  },
+  "demand": {
+   "ba:neighborhood_hellskitchen": [
+    {
+     "category": "retail",
+     "demand": 42,
+     "mine": false,
+     "providers": 0,
+     "slug": "ba:businesstype_liquorstore",
+     "type": "Liquor Store"
+    },
+    {
+     "category": "retail",
+     "demand": 42,
+     "mine": false,
+     "providers": 2,
+     "slug": "ba:businesstype_giftshop",
+     "type": "Gift Shop"
+    }
+   ],
+   "ba:neighborhood_industrycity": [
+    {
+     "category": "retail",
+     "demand": 35,
+     "mine": false,
+     "providers": 1,
+     "slug": "ba:businesstype_liquorstore",
+     "type": "Liquor Store"
+    },
+    {
+     "category": "retail",
+     "demand": 18,
+     "mine": false,
+     "providers": 0,
+     "slug": "ba:businesstype_giftshop",
+     "type": "Gift Shop"
+    }
+   ],
+   "ba:neighborhood_lowermanhattan": [
+    {
+     "category": "retail",
+     "demand": 63,
+     "mine": false,
+     "providers": 2,
+     "slug": "ba:businesstype_liquorstore",
+     "type": "Liquor Store"
+    },
+    {
+     "category": "retail",
+     "demand": 50,
+     "mine": true,
+     "providers": 1,
+     "slug": "ba:businesstype_giftshop",
+     "type": "Gift Shop"
+    }
+   ],
+   "ba:neighborhood_midtown": [
+    {
+     "category": "retail",
+     "demand": 68,
+     "mine": true,
+     "providers": 4,
+     "slug": "ba:businesstype_liquorstore",
+     "type": "Liquor Store"
+    },
+    {
+     "category": "retail",
+     "demand": 40,
+     "mine": false,
+     "providers": 3,
+     "slug": "ba:businesstype_giftshop",
+     "type": "Gift Shop"
+    }
+   ]
+  },
+  "forSale": [
+   {
+    "address": "11 Broadway Street",
+    "hood": "ba:neighborhood_midtown",
+    "key": "ba:street_broadwaystreet#11",
+    "layout": "A3",
+    "m2": 75,
+    "price": 410000,
+    "size": "A",
+    "type": "office"
+   }
+  ],
+  "rent": {
+   "check": {
+    "leases": 4,
+    "worst": 0.02
+   },
+   "constant": 30,
+   "deposit": {
+    "check": {
+     "deposits": 0,
+     "worst": 0.0
+    },
+    "factors": {
+     "lease": 62.84,
+     "warehouse": 93.61
+    }
+   },
+   "officeFactor": 1.033,
+   "rates": {
+    "ba:neighborhood_garmentdistrict": 0.00734,
+    "ba:neighborhood_hellskitchen": 0.01468,
+    "ba:neighborhood_industrycity": 0.00566,
+    "ba:neighborhood_lowermanhattan": 0.00621,
+    "ba:neighborhood_midtown": 0.02482,
+    "ba:neighborhood_murrayhill": 0.0102,
+    "ba:neighborhood_thehamptons": 0.00568
+   }
+  },
+  "rivalNames": {
+   "1": "Corner Holdings"
+  },
+  "rivals": 1
+ },
+ "products": [
+  {
+   "item": "Beer",
+   "peak": null,
+   "price": 6.01,
+   "revenue": 1928.57,
+   "slug": "ba:itemname_beer",
+   "stock": 1300,
+   "stores": 1,
+   "swing": 0,
+   "units": 321,
+   "week": 2250,
+   "weeks": 0
+  },
+  {
+   "item": "Gift (Cheap)",
+   "peak": null,
+   "price": 11.96,
+   "revenue": 1028.57,
+   "slug": "ba:itemname_cheapgift",
+   "stock": 300,
+   "stores": 1,
+   "swing": 0,
+   "units": 86,
+   "week": 600,
+   "weeks": 0
+  },
+  {
+   "item": "Umbrella",
+   "peak": null,
+   "price": 15.31,
+   "revenue": 321.43,
+   "slug": "ba:itemname_umbrella",
+   "stock": 30,
+   "stores": 1,
+   "swing": 0,
+   "units": 21,
+   "week": 150,
+   "weeks": 0
+  },
+  {
+   "item": "Water",
+   "peak": null,
+   "price": 0,
+   "revenue": 0.0,
+   "slug": "ba:itemname_water",
+   "stock": 2000,
+   "stores": 0,
+   "swing": 0,
+   "units": 0,
+   "week": 0,
+   "weeks": 0
+  }
+ ],
+ "rhythm": {
+  "basis": "revenue",
+  "customers": null,
+  "profit": null,
+  "recent": {
+   "customers": null,
+   "days": 28,
+   "profit": null,
+   "revenue": [
+    {
+     "day": "Monday",
+     "index": 76,
+     "n": 3,
+     "short": "Mon"
+    },
+    {
+     "day": "Tuesday",
+     "index": 85,
+     "n": 3,
+     "short": "Tue"
+    },
+    {
+     "day": "Wednesday",
+     "index": 87,
+     "n": 3,
+     "short": "Wed"
+    },
+    {
+     "day": "Thursday",
+     "index": 92,
+     "n": 2,
+     "short": "Thu"
+    },
+    {
+     "day": "Friday",
+     "index": 110,
+     "n": 2,
+     "short": "Fri"
+    },
+    {
+     "day": "Saturday",
+     "index": 127,
+     "n": 3,
+     "short": "Sat"
+    },
+    {
+     "day": "Sunday",
+     "index": 123,
+     "n": 3,
+     "short": "Sun"
+    }
+   ]
+  },
+  "revenue": [
+   {
+    "day": "Monday",
+    "index": 76,
+    "n": 3,
+    "short": "Mon"
+   },
+   {
+    "day": "Tuesday",
+    "index": 85,
+    "n": 3,
+    "short": "Tue"
+   },
+   {
+    "day": "Wednesday",
+    "index": 87,
+    "n": 3,
+    "short": "Wed"
+   },
+   {
+    "day": "Thursday",
+    "index": 92,
+    "n": 2,
+    "short": "Thu"
+   },
+   {
+    "day": "Friday",
+    "index": 110,
+    "n": 2,
+    "short": "Fri"
+   },
+   {
+    "day": "Saturday",
+    "index": 127,
+    "n": 3,
+    "short": "Sat"
+   },
+   {
+    "day": "Sunday",
+    "index": 123,
+    "n": 3,
+    "short": "Sun"
+   }
+  ],
+  "today": {
+   "day": "Friday",
+   "index": 110
+  },
+  "yesterday": {
+   "day": "Thursday",
+   "index": 92
+  }
+ },
+ "skillNames": {
+  "ba:skill_actor": "Actor",
+  "ba:skill_cleaning": "Cleaning",
+  "ba:skill_customerservice": "Customer Service",
+  "ba:skill_dj": "Dj",
+  "ba:skill_eventplanner": "Eventplanner",
+  "ba:skill_factoryworker": "Factory Worker",
+  "ba:skill_graphicdesigner": "Graphicdesigner",
+  "ba:skill_gymtrainer": "Gymtrainer",
+  "ba:skill_hairstylist": "Hairstylist",
+  "ba:skill_headhunter": "Headhunter",
+  "ba:skill_hrmanager": "Hrmanager",
+  "ba:skill_lawyer": "Lawyer",
+  "ba:skill_logisticsmanager": "Logisticsmanager",
+  "ba:skill_pricingmanager": "Pricingmanager",
+  "ba:skill_programmer": "Programmer",
+  "ba:skill_projectionist": "Projectionist",
+  "ba:skill_purchasingagent": "Purchasingagent",
+  "ba:skill_securityguard": "Securityguard",
+  "ba:skill_stagecrew": "Stagecrew",
+  "ba:skill_travelagent": "Travelagent"
+ },
+ "staff": {
+  "absent": 1,
+  "avgSatisfaction": 75.0,
+  "complaining": 0,
+  "dailyCost": 828.0,
+  "roles": [
+   {
+    "cost": 468,
+    "count": 3,
+    "role": "Customer Service"
+   },
+   {
+    "cost": 168,
+    "count": 1,
+    "role": "Cleaning"
+   },
+   {
+    "cost": 192,
+    "count": 1,
+    "role": "Factory Worker"
+   }
+  ],
+  "sites": [
+   {
+    "count": 3,
+    "site": "HART. Spirits"
+   },
+   {
+    "count": 1,
+    "site": "HART. Gifts"
+   },
+   {
+    "count": 1,
+    "site": "HART. Brewery"
+   }
+  ],
+  "total": 5,
+  "unhappy": 1
+ },
+ "staffing": [
+  {
+   "addPeople": {
+    "assign": [],
+    "hire": [
+     {
+      "people": 1,
+      "role": "Customer Service",
+      "skill": "ba:skill_customerservice"
+     }
+    ],
+    "hoursUncovered": 20,
+    "people": 1
+   },
+   "basis": {
+    "ba:skill_customerservice": [
+     [
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured"
+     ],
+     [
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured"
+     ],
+     [
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured"
+     ],
+     [
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured"
+     ],
+     [
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured"
+     ],
+     [
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured"
+     ],
+     [
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured"
+     ]
+    ]
+   },
+   "bench": [],
+   "ceiling": null,
+   "cost": {
+    "current": 1260.0,
+    "currentCover": 0.0,
+    "weekly": 900.0
+   },
+   "current": {
+    "cleaning": 0,
+    "coverFragments": 0,
+    "fragments": 0,
+    "list": [
+     {
+      "d": 0,
+      "f": 9,
+      "p": 0,
+      "s": 0,
+      "t": 19
+     },
+     {
+      "d": 1,
+      "f": 9,
+      "p": 0,
+      "s": 0,
+      "t": 19
+     },
+     {
+      "d": 2,
+      "f": 9,
+      "p": 0,
+      "s": 0,
+      "t": 19
+     },
+     {
+      "d": 3,
+      "f": 9,
+      "p": 0,
+      "s": 0,
+      "t": 19
+     },
+     {
+      "d": 4,
+      "f": 9,
+      "p": 0,
+      "s": 0,
+      "t": 19
+     },
+     {
+      "d": 5,
+      "f": 9,
+      "p": 0,
+      "s": 0,
+      "t": 19
+     },
+     {
+      "d": 6,
+      "f": 9,
+      "p": 0,
+      "s": 0,
+      "t": 19
+     }
+    ],
+    "security": 0,
+    "shifts": 7
+   },
+   "demandDataComplete": false,
+   "fullCover": {
+    "addPeople": {
+     "assign": [],
+     "hire": [
+      {
+       "people": 3,
+       "role": "Customer Service",
+       "skill": "ba:skill_customerservice"
+      }
+     ],
+     "hoursUncovered": 120,
+     "people": 3
+    },
+    "bench": [],
+    "cost": {
+     "current": 1260.0,
+     "currentCover": 0.0,
+     "weekly": 864.0
+    },
+    "daysMeasured": 14,
+    "daysNeeded": 9,
+    "headcount": {
+     "ba:skill_customerservice": {
+      "have": 1,
+      "hire": 3,
+      "hireHours": 90,
+      "kind": "serve",
+      "max": 5,
+      "min": 4,
+      "needed": 168,
+      "spare": 0
+     }
+    },
+    "inGame": true,
+    "open": [
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ]
+    ],
+    "openAllHours": true,
+    "openNow": false,
+    "placed": [],
+    "shifts": [
+     {
+      "d": 0,
+      "f": 0,
+      "p": 0,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 0,
+      "f": 12,
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 1,
+      "f": 0,
+      "p": 0,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 1,
+      "f": 12,
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 2,
+      "f": 0,
+      "p": 0,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 2,
+      "f": 12,
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 3,
+      "f": 0,
+      "p": 0,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 3,
+      "f": 12,
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 4,
+      "f": 0,
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 4,
+      "f": 12,
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 5,
+      "f": 0,
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 5,
+      "f": 12,
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 6,
+      "f": 0,
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 6,
+      "f": 12,
+      "p": null,
+      "s": 0,
+      "t": 24
+     }
+    ],
+    "shortDays": [],
+    "shortHours": [],
+    "slack": {
+     "budget": 16.8,
+     "cost": 0.0,
+     "hours": 0.0
+    }
+   },
+   "headcount": {
+    "ba:skill_customerservice": {
+     "have": 1,
+     "hire": 1,
+     "hireHours": 30,
+     "kind": "serve",
+     "max": 2,
+     "min": 2,
+     "needed": 70,
+     "spare": 0
+    }
+   },
+   "key": "ba:street_broadwaystreet#19",
+   "measure": {
+    "days": 14,
+    "need": 2,
+    "open": 44
+   },
+   "name": "HART. Gifts",
+   "need": {
+    "ba:skill_customerservice": [
+     [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0
+     ]
+    ]
+   },
+   "open": [
+    [
+     [
+      9,
+      19
+     ]
+    ],
+    [
+     [
+      9,
+      19
+     ]
+    ],
+    [
+     [
+      9,
+      19
+     ]
+    ],
+    [
+     [
+      9,
+      19
+     ]
+    ],
+    [
+     [
+      9,
+      19
+     ]
+    ],
+    [
+     [
+      9,
+      19
+     ]
+    ],
+    [
+     [
+      9,
+      19
+     ]
+    ]
+   ],
+   "people": [
+    {
+     "id": "EMPdee",
+     "name": "Dee Park"
+    }
+   ],
+   "placed": [],
+   "roles": [
+    {
+     "label": "Customer Service",
+     "skill": "ba:skill_customerservice",
+     "stations": [
+      0
+     ]
+    }
+   ],
+   "shifts": [
+    {
+     "d": 0,
+     "f": 9,
+     "p": 0,
+     "s": 0,
+     "t": 19
+    },
+    {
+     "d": 1,
+     "f": 9,
+     "p": 0,
+     "s": 0,
+     "t": 19
+    },
+    {
+     "d": 2,
+     "f": 9,
+     "p": 0,
+     "s": 0,
+     "t": 19
+    },
+    {
+     "d": 3,
+     "f": 9,
+     "p": 0,
+     "s": 0,
+     "t": 19
+    },
+    {
+     "d": 4,
+     "f": 9,
+     "p": 0,
+     "s": 0,
+     "t": 19
+    },
+    {
+     "d": 5,
+     "f": 9,
+     "p": null,
+     "s": 0,
+     "t": 19
+    },
+    {
+     "d": 6,
+     "f": 9,
+     "p": null,
+     "s": 0,
+     "t": 19
+    }
+   ],
+   "shortDays": [],
+   "shortHours": [],
+   "slack": {
+    "budget": 7.0,
+    "cost": 0.0,
+    "hours": 0.0
+   },
+   "stations": [
+    {
+     "id": "REGgifts",
+     "name": "Cash Register",
+     "rate": 20,
+     "skill": "ba:skill_customerservice"
+    }
+   ],
+   "typeSlug": "ba:businesstype_giftshop",
+   "unmeasured": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ]
+  },
+  {
+   "addPeople": {
+    "assign": [],
+    "hire": [
+     {
+      "people": 1,
+      "role": "Cleaning",
+      "skill": "ba:skill_cleaning"
+     }
+    ],
+    "hoursUncovered": 49,
+    "people": 1
+   },
+   "basis": {
+    "ba:skill_customerservice": [
+     [
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "censored",
+      "censored",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured"
+     ],
+     [
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "censored",
+      "censored",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured"
+     ],
+     [
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "censored",
+      "censored",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured"
+     ],
+     [
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "censored",
+      "censored",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured"
+     ],
+     [
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "censored",
+      "censored",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured"
+     ],
+     [
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "censored",
+      "censored",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured"
+     ],
+     [
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "censored",
+      "censored",
+      "measured",
+      "measured",
+      "measured",
+      "measured",
+      "measured"
+     ]
+    ]
+   },
+   "bench": [],
+   "ceiling": null,
+   "cost": {
+    "current": 3192.0,
+    "currentCover": 1176.0,
+    "weekly": 2450.0
+   },
+   "current": {
+    "cleaning": 7,
+    "coverFragments": 0,
+    "fragments": 0,
+    "list": [
+     {
+      "d": 0,
+      "f": 8,
+      "p": 0,
+      "s": 0,
+      "t": 16
+     },
+     {
+      "d": 0,
+      "f": 8,
+      "k": "clean",
+      "p": 2,
+      "s": 1,
+      "t": 20
+     },
+     {
+      "d": 0,
+      "f": 14,
+      "p": 1,
+      "s": 0,
+      "t": 22
+     },
+     {
+      "d": 1,
+      "f": 8,
+      "p": 0,
+      "s": 0,
+      "t": 16
+     },
+     {
+      "d": 1,
+      "f": 8,
+      "k": "clean",
+      "p": 2,
+      "s": 1,
+      "t": 20
+     },
+     {
+      "d": 1,
+      "f": 14,
+      "p": 1,
+      "s": 0,
+      "t": 22
+     },
+     {
+      "d": 2,
+      "f": 8,
+      "p": 0,
+      "s": 0,
+      "t": 16
+     },
+     {
+      "d": 2,
+      "f": 8,
+      "k": "clean",
+      "p": 2,
+      "s": 1,
+      "t": 20
+     },
+     {
+      "d": 2,
+      "f": 14,
+      "p": 1,
+      "s": 0,
+      "t": 22
+     },
+     {
+      "d": 3,
+      "f": 8,
+      "p": 0,
+      "s": 0,
+      "t": 16
+     },
+     {
+      "d": 3,
+      "f": 8,
+      "k": "clean",
+      "p": 2,
+      "s": 1,
+      "t": 20
+     },
+     {
+      "d": 3,
+      "f": 14,
+      "p": 1,
+      "s": 0,
+      "t": 22
+     },
+     {
+      "d": 4,
+      "f": 8,
+      "p": 0,
+      "s": 0,
+      "t": 16
+     },
+     {
+      "d": 4,
+      "f": 8,
+      "k": "clean",
+      "p": 2,
+      "s": 1,
+      "t": 20
+     },
+     {
+      "d": 4,
+      "f": 14,
+      "p": 1,
+      "s": 0,
+      "t": 22
+     },
+     {
+      "d": 5,
+      "f": 8,
+      "p": 0,
+      "s": 0,
+      "t": 16
+     },
+     {
+      "d": 5,
+      "f": 8,
+      "k": "clean",
+      "p": 2,
+      "s": 1,
+      "t": 20
+     },
+     {
+      "d": 5,
+      "f": 14,
+      "p": 1,
+      "s": 0,
+      "t": 22
+     },
+     {
+      "d": 6,
+      "f": 8,
+      "p": 0,
+      "s": 0,
+      "t": 16
+     },
+     {
+      "d": 6,
+      "f": 8,
+      "k": "clean",
+      "p": 2,
+      "s": 1,
+      "t": 20
+     },
+     {
+      "d": 6,
+      "f": 14,
+      "p": 1,
+      "s": 0,
+      "t": 22
+     }
+    ],
+    "security": 0,
+    "shifts": 21
+   },
+   "demandDataComplete": false,
+   "fullCover": {
+    "addPeople": {
+     "assign": [],
+     "hire": [
+      {
+       "people": 3,
+       "role": "Cleaning",
+       "skill": "ba:skill_cleaning"
+      },
+      {
+       "people": 2,
+       "role": "Customer Service",
+       "skill": "ba:skill_customerservice"
+      }
+     ],
+     "hoursUncovered": 192,
+     "people": 5
+    },
+    "bench": [],
+    "cost": {
+     "current": 3192.0,
+     "currentCover": 1176.0,
+     "weekly": 2400.0
+    },
+    "daysMeasured": 14,
+    "daysNeeded": 9,
+    "headcount": {
+     "ba:skill_cleaning": {
+      "have": 1,
+      "hire": 3,
+      "hireHours": 90,
+      "kind": "clean",
+      "max": 5,
+      "min": 4,
+      "needed": 168,
+      "spare": 0
+     },
+     "ba:skill_customerservice": {
+      "have": 2,
+      "hire": 2,
+      "hireHours": 60,
+      "kind": "serve",
+      "max": 5,
+      "min": 4,
+      "needed": 168,
+      "spare": 0
+     }
+    },
+    "inGame": true,
+    "open": [
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ],
+     [
+      [
+       0,
+       24
+      ]
+     ]
+    ],
+    "openAllHours": true,
+    "openNow": false,
+    "placed": [
+     {
+      "demand": "ba:jobdemand_freeweekends",
+      "from": 12,
+      "label": "Free weekends",
+      "p": 0,
+      "to": 24,
+      "wd": 1
+     },
+     {
+      "demand": "ba:jobdemand_freeweekends",
+      "from": 0,
+      "label": "Free weekends",
+      "p": 0,
+      "to": 12,
+      "wd": 2
+     },
+     {
+      "demand": "ba:jobdemand_freeweekends",
+      "from": 0,
+      "label": "Free weekends",
+      "p": 0,
+      "to": 12,
+      "wd": 3
+     },
+     {
+      "demand": "ba:jobdemand_freeweekends",
+      "from": 0,
+      "label": "Free weekends",
+      "p": 0,
+      "to": 12,
+      "wd": 4
+     }
+    ],
+    "shifts": [
+     {
+      "d": 0,
+      "f": 0,
+      "k": "clean",
+      "p": 2,
+      "s": 1,
+      "t": 12
+     },
+     {
+      "d": 0,
+      "f": 0,
+      "p": 1,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 0,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 1,
+      "t": 24
+     },
+     {
+      "d": 0,
+      "f": 12,
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 1,
+      "f": 0,
+      "k": "clean",
+      "p": 2,
+      "s": 1,
+      "t": 12
+     },
+     {
+      "d": 1,
+      "f": 0,
+      "p": 1,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 1,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 1,
+      "t": 24
+     },
+     {
+      "d": 1,
+      "f": 12,
+      "p": 0,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 2,
+      "f": 0,
+      "k": "clean",
+      "p": 2,
+      "s": 1,
+      "t": 12
+     },
+     {
+      "d": 2,
+      "f": 0,
+      "p": 0,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 2,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 1,
+      "t": 24
+     },
+     {
+      "d": 2,
+      "f": 12,
+      "p": 1,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 3,
+      "f": 0,
+      "k": "clean",
+      "p": 2,
+      "s": 1,
+      "t": 12
+     },
+     {
+      "d": 3,
+      "f": 0,
+      "p": 0,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 3,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 1,
+      "t": 24
+     },
+     {
+      "d": 3,
+      "f": 12,
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 4,
+      "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 1,
+      "t": 12
+     },
+     {
+      "d": 4,
+      "f": 0,
+      "p": 0,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 4,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 1,
+      "t": 24
+     },
+     {
+      "d": 4,
+      "f": 12,
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 5,
+      "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 1,
+      "t": 12
+     },
+     {
+      "d": 5,
+      "f": 0,
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 5,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 1,
+      "t": 24
+     },
+     {
+      "d": 5,
+      "f": 12,
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 6,
+      "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 1,
+      "t": 12
+     },
+     {
+      "d": 6,
+      "f": 0,
+      "p": 1,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 6,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 1,
+      "t": 24
+     },
+     {
+      "d": 6,
+      "f": 12,
+      "p": null,
+      "s": 0,
+      "t": 24
+     }
+    ],
+    "shortDays": [],
+    "shortHours": [],
+    "slack": {
+     "budget": 16.8,
+     "cost": 0.0,
+     "hours": 0.0
+    }
+   },
+   "headcount": {
+    "ba:skill_cleaning": {
+     "have": 1,
+     "hire": 1,
+     "hireHours": 30,
+     "kind": "clean",
+     "max": 3,
+     "min": 2,
+     "needed": 98,
+     "spare": 0
+    },
+    "ba:skill_customerservice": {
+     "have": 2,
+     "hire": 0,
+     "hireHours": 0,
+     "kind": "serve",
+     "max": 3,
+     "min": 2,
+     "needed": 98,
+     "spare": 0
+    }
+   },
+   "key": "ba:street_eighthstreet#5",
+   "measure": {
+    "days": 14,
+    "need": 2,
+    "open": 44
+   },
+   "name": "HART. Spirits",
+   "need": {
+    "ba:skill_customerservice": [
+     [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      0,
+      0
+     ]
+    ]
+   },
+   "open": [
+    [
+     [
+      8,
+      22
+     ]
+    ],
+    [
+     [
+      8,
+      22
+     ]
+    ],
+    [
+     [
+      8,
+      22
+     ]
+    ],
+    [
+     [
+      8,
+      22
+     ]
+    ],
+    [
+     [
+      8,
+      22
+     ]
+    ],
+    [
+     [
+      8,
+      22
+     ]
+    ],
+    [
+     [
+      8,
+      22
+     ]
+    ]
+   ],
+   "people": [
+    {
+     "id": "EMPana",
+     "name": "Ana Silva"
+    },
+    {
+     "id": "EMPben",
+     "name": "Ben Ode"
+    },
+    {
+     "id": "EMPcy",
+     "name": "Cy Moss"
+    }
+   ],
+   "placed": [
+    {
+     "demand": "ba:jobdemand_freeweekends",
+     "from": 15,
+     "label": "Free weekends",
+     "p": 0,
+     "to": 22,
+     "wd": 2
+    },
+    {
+     "demand": "ba:jobdemand_freeweekends",
+     "from": 8,
+     "label": "Free weekends",
+     "p": 0,
+     "to": 15,
+     "wd": 3
+    },
+    {
+     "demand": "ba:jobdemand_freeweekends",
+     "from": 15,
+     "label": "Free weekends",
+     "p": 0,
+     "to": 22,
+     "wd": 3
+    },
+    {
+     "demand": "ba:jobdemand_freeweekends",
+     "from": 8,
+     "label": "Free weekends",
+     "p": 0,
+     "to": 15,
+     "wd": 4
+    },
+    {
+     "demand": "ba:jobdemand_freeweekends",
+     "from": 15,
+     "label": "Free weekends",
+     "p": 0,
+     "to": 22,
+     "wd": 4
+    },
+    {
+     "demand": "ba:jobdemand_freeweekends",
+     "from": 8,
+     "label": "Free weekends",
+     "p": 0,
+     "to": 15,
+     "wd": 5
+    },
+    {
+     "demand": "ba:jobdemand_freeweekends",
+     "from": 15,
+     "label": "Free weekends",
+     "p": 0,
+     "to": 22,
+     "wd": 5
+    }
+   ],
+   "roles": [
+    {
+     "label": "Customer Service",
+     "skill": "ba:skill_customerservice",
+     "stations": [
+      0
+     ]
+    }
+   ],
+   "shifts": [
+    {
+     "d": 0,
+     "f": 8,
+     "k": "clean",
+     "p": 2,
+     "s": 1,
+     "t": 15
+    },
+    {
+     "d": 0,
+     "f": 8,
+     "p": 1,
+     "s": 0,
+     "t": 15
+    },
+    {
+     "d": 0,
+     "f": 15,
+     "k": "clean",
+     "p": 2,
+     "s": 1,
+     "t": 22
+    },
+    {
+     "d": 0,
+     "f": 15,
+     "p": 1,
+     "s": 0,
+     "t": 22
+    },
+    {
+     "d": 1,
+     "f": 8,
+     "k": "clean",
+     "p": 2,
+     "s": 1,
+     "t": 15
+    },
+    {
+     "d": 1,
+     "f": 8,
+     "p": 1,
+     "s": 0,
+     "t": 15
+    },
+    {
+     "d": 1,
+     "f": 15,
+     "k": "clean",
+     "p": 2,
+     "s": 1,
+     "t": 22
+    },
+    {
+     "d": 1,
+     "f": 15,
+     "p": 1,
+     "s": 0,
+     "t": 22
+    },
+    {
+     "d": 2,
+     "f": 8,
+     "k": "clean",
+     "p": 2,
+     "s": 1,
+     "t": 15
+    },
+    {
+     "d": 2,
+     "f": 8,
+     "p": 1,
+     "s": 0,
+     "t": 15
+    },
+    {
+     "d": 2,
+     "f": 15,
+     "k": "clean",
+     "p": 2,
+     "s": 1,
+     "t": 22
+    },
+    {
+     "d": 2,
+     "f": 15,
+     "p": 0,
+     "s": 0,
+     "t": 22
+    },
+    {
+     "d": 3,
+     "f": 8,
+     "k": "clean",
+     "p": 2,
+     "s": 1,
+     "t": 15
+    },
+    {
+     "d": 3,
+     "f": 8,
+     "p": 0,
+     "s": 0,
+     "t": 15
+    },
+    {
+     "d": 3,
+     "f": 15,
+     "k": "clean",
+     "p": null,
+     "s": 1,
+     "t": 22
+    },
+    {
+     "d": 3,
+     "f": 15,
+     "p": 0,
+     "s": 0,
+     "t": 22
+    },
+    {
+     "d": 4,
+     "f": 8,
+     "k": "clean",
+     "p": null,
+     "s": 1,
+     "t": 15
+    },
+    {
+     "d": 4,
+     "f": 8,
+     "p": 0,
+     "s": 0,
+     "t": 15
+    },
+    {
+     "d": 4,
+     "f": 15,
+     "k": "clean",
+     "p": null,
+     "s": 1,
+     "t": 22
+    },
+    {
+     "d": 4,
+     "f": 15,
+     "p": 0,
+     "s": 0,
+     "t": 22
+    },
+    {
+     "d": 5,
+     "f": 8,
+     "k": "clean",
+     "p": null,
+     "s": 1,
+     "t": 15
+    },
+    {
+     "d": 5,
+     "f": 8,
+     "p": 0,
+     "s": 0,
+     "t": 15
+    },
+    {
+     "d": 5,
+     "f": 15,
+     "k": "clean",
+     "p": null,
+     "s": 1,
+     "t": 22
+    },
+    {
+     "d": 5,
+     "f": 15,
+     "p": 0,
+     "s": 0,
+     "t": 22
+    },
+    {
+     "d": 6,
+     "f": 8,
+     "k": "clean",
+     "p": null,
+     "s": 1,
+     "t": 15
+    },
+    {
+     "d": 6,
+     "f": 8,
+     "p": 1,
+     "s": 0,
+     "t": 15
+    },
+    {
+     "d": 6,
+     "f": 15,
+     "k": "clean",
+     "p": null,
+     "s": 1,
+     "t": 22
+    },
+    {
+     "d": 6,
+     "f": 15,
+     "p": 1,
+     "s": 0,
+     "t": 22
+    }
+   ],
+   "shortDays": [],
+   "shortHours": [],
+   "slack": {
+    "budget": 9.8,
+    "cost": 0.0,
+    "hours": 0.0
+   },
+   "stations": [
+    {
+     "id": "REGliquor",
+     "name": "Cash Register",
+     "rate": 20,
+     "skill": "ba:skill_customerservice"
+    },
+    {
+     "id": "CLEANliquor",
+     "name": "Cleaning Station",
+     "rate": null,
+     "skill": "ba:skill_cleaning"
+    }
+   ],
+   "typeSlug": "ba:businesstype_liquorstore",
+   "unmeasured": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ]
+  }
+ ],
+ "supply": {
+  "day": 47,
+  "daysToImport": 3,
+  "factories": {
+   "aliases": {},
+   "character": "PAYLOADco",
+   "depotOther": {
+    "2": {
+     "ba:itemname_water": 0
+    },
+    "3": {
+     "ba:itemname_beer": 1750
+    }
+   },
+   "depotRoutes": {},
+   "depots": {
+    "2": {
+     "ba:itemname_water": {
+      "arrivedLastWeek": 3000,
+      "contracts": [
+       {
+        "active": true,
+        "agent": false,
+        "amount": 3000,
+        "group": 0,
+        "id": "IMPORTwater",
+        "importer": "1 Pier",
+        "lastWeek": 3000,
+        "order": 0,
+        "product": 0,
+        "repeating": true,
+        "smart": false
+       }
+      ],
+      "covered": false,
+      "drawWeek": 0,
+      "levelAt": null,
+      "levelId": null,
+      "levelImporter": null,
+      "levelName": null,
+      "pass": [
+       {
+        "amount": 3000,
+        "smart": false
+       }
+      ],
+      "pausedWeekly": 0,
+      "plain": 3000,
+      "plainAfter": 0,
+      "plainBefore": 0,
+      "routed": 0,
+      "smart": false,
+      "target": null,
+      "weekly": 3000
+     }
+    }
+   },
+   "machines": 2,
+   "sites": [
+    {
+     "arrivals": {
+      "ba:itemname_beer": 0,
+      "ba:itemname_water": 400
+     },
+     "known": true,
+     "lines": [
+      {
+       "atRoster": 300,
+       "basis": "table",
+       "dem": {
+        "level": "critical",
+        "status": "short",
+        "why": "hours"
+       },
+       "demBasis": "sales",
+       "fullWeek": 336,
+       "gaps": [
+        {
+         "hours": 0,
+         "off": "Mon-Sun 0-24",
+         "slot": 2
+        },
+        {
+         "hours": 84,
+         "off": "Mon-Sun 0-8, 20-24",
+         "slot": 1
+        }
+       ],
+       "hoursNow": 0,
+       "hoursWeek": 84,
+       "item": "Beer",
+       "level": "critical",
+       "limit": null,
+       "limitHeld": false,
+       "machines": 2,
+       "makes": 1200,
+       "missing": [],
+       "missingSlugs": [],
+       "needHours": {
+        "cap": 24,
+        "dem": 8
+       },
+       "piling": false,
+       "rate": 25,
+       "rid": "LScSWfyqVU+2BYQazKeF6g==",
+       "running": 1,
+       "ships": 250,
+       "slots": [
+        1,
+        2
+       ],
+       "slug": "ba:itemname_beer",
+       "status": "short",
+       "stock": 900,
+       "toCity": 600,
+       "toPier": 0,
+       "why": "hours",
+       "workstation": "Bottled Goods Workstation",
+       "workstationKey": "ba:factoryworkstationtype_bottledgoods"
+      }
+     ],
+     "machines": 2,
+     "needs": [
+      {
+       "arrives": 400,
+       "dailyNeed": 1200.0,
+       "dem": {
+        "level": "ok",
+        "setTo": null,
+        "status": "covered",
+        "use": 321,
+        "why": null
+       },
+       "demDay": 321,
+       "depotNeed": 8400,
+       "depotStock": 1500,
+       "directImport": false,
+       "directNeed": 0,
+       "directWeekly": null,
+       "factoryImportSite": null,
+       "firstFill": false,
+       "from": 2,
+       "importCovered": false,
+       "importDrawWeek": 0,
+       "importFit": "short",
+       "importLevelImporter": null,
+       "importLevelName": null,
+       "importNeed": 8400,
+       "importPaused": false,
+       "importPlainAfter": 0,
+       "importPlainBefore": 0,
+       "importRouted": 0,
+       "importRoutedFactories": 0,
+       "importSite": 2,
+       "importSmart": false,
+       "importTarget": null,
+       "importWeekly": 3000,
+       "item": "Water",
+       "known": true,
+       "level": "critical",
+       "limited": false,
+       "lineSlugs": [
+        "ba:itemname_beer"
+       ],
+       "lines": [
+        "Beer"
+       ],
+       "madeAt": [],
+       "perDay": 1200,
+       "perWeek": 8400,
+       "raiseImport": 8400,
+       "raiseTarget": 1200,
+       "slug": "ba:itemname_water",
+       "staffedShare": 0.25,
+       "stalled": false,
+       "status": "short",
+       "stock": 500,
+       "target": 800,
+       "waitingOn": [],
+       "waitingOnSlugs": [],
+       "warehouseNeed": 8400.0,
+       "why": "target"
+      }
+     ],
+     "running": 1,
+     "s": 3,
+     "targets": {
+      "ba:itemname_water": [
+       800,
+       2
+      ]
+     },
+     "unnamed": []
+    }
+   ],
+   "unnamed": 0
+  },
+  "facts": {
+   "0": {
+    "ba:itemname_beer": {
+     "cad": "daily",
+     "have": 600,
+     "imp": false,
+     "lvl": "ok",
+     "need": 466,
+     "role": "shelf",
+     "setTo": null,
+     "st": "covered",
+     "use": 405,
+     "why": null
+    },
+    "ba:itemname_sodacan": {
+     "cad": "daily",
+     "have": 0,
+     "imp": false,
+     "lvl": "ok",
+     "need": 0,
+     "role": "shelf",
+     "setTo": null,
+     "st": "covered",
+     "use": 0,
+     "why": null
+    }
+   },
+   "1": {
+    "ba:itemname_cheapgift": {
+     "cad": "weekly",
+     "day": "Monday",
+     "have": 450,
+     "imp": false,
+     "lvl": "warn",
+     "need": 690,
+     "parts": {
+      "lines": 0,
+      "route": 0,
+      "sites": 600
+     },
+     "role": "shelf",
+     "setTo": 690,
+     "st": "short",
+     "use": 600,
+     "wholesale": true,
+     "why": "order"
+    },
+    "ba:itemname_umbrella": {
+     "cad": "daily",
+     "have": 30,
+     "imp": false,
+     "lvl": "warn",
+     "need": 32,
+     "role": "shelf",
+     "setTo": 40,
+     "st": "noplan",
+     "use": 28,
+     "why": "target"
+    }
+   },
+   "2": {
+    "ba:itemname_water": {
+     "cad": "weekly",
+     "dem": {
+      "lvl": "warn",
+      "need": 2588,
+      "parts": {
+       "lines": 2250,
+       "route": 0,
+       "sites": 0
+      },
+      "setTo": null,
+      "st": "tight",
+      "use": 2250,
+      "why": "shortfall"
+     },
+     "have": 3000,
+     "imp": true,
+     "lvl": "critical",
+     "need": 8400,
+     "parts": {
+      "lines": 8400,
+      "route": 0,
+      "sites": 0
+     },
+     "role": "depot",
+     "setTo": 8400,
+     "st": "short",
+     "use": 8400,
+     "why": "order"
+    }
+   },
+   "3": {
+    "ba:itemname_beer": {
+     "cad": "made",
+     "have": 900,
+     "imp": false,
+     "lvl": "ok",
+     "need": 0,
+     "role": "output",
+     "setTo": null,
+     "st": "made",
+     "use": 0,
+     "why": null
+    },
+    "ba:itemname_water": {
+     "cad": "daily",
+     "dem": {
+      "lvl": "ok",
+      "need": 369,
+      "setTo": null,
+      "st": "covered",
+      "use": 321,
+      "why": null
+     },
+     "have": 800,
+     "imp": false,
+     "lvl": "critical",
+     "need": 1200,
+     "role": "input",
+     "setTo": 1200,
+     "st": "short",
+     "use": 1200,
+     "why": "target"
+    }
+   }
+  },
+  "graph": {
+   "links": [
+    {
+     "arrives": 50,
+     "cadence": "weekly",
+     "from": "import:ba:street_pier#1",
+     "items": 1,
+     "paused": false,
+     "perDay": 429,
+     "to": "ba:street_eighthavenue#4"
+    },
+    {
+     "arrives": null,
+     "cadence": "daily",
+     "from": "ba:street_eighthavenue#4",
+     "items": 1,
+     "paused": false,
+     "perDay": 0,
+     "to": "ba:street_eighthavenue#8"
+    },
+    {
+     "arrives": null,
+     "cadence": "daily",
+     "from": "ba:street_eighthavenue#8",
+     "items": 1,
+     "paused": false,
+     "perDay": 321,
+     "to": "ba:street_eighthstreet#5"
+    }
+   ],
+   "nodes": [
+    {
+     "col": 3,
+     "hood": "ba:neighborhood_midtown",
+     "id": "ba:street_eighthstreet#5",
+     "items": [
+      {
+       "cadence": "daily",
+       "cycleNeed": 405,
+       "fit": "ok",
+       "item": "Beer",
+       "keeps": false,
+       "low": false,
+       "made": false,
+       "need": 405,
+       "provision": 600,
+       "short": false,
+       "slug": "ba:itemname_beer",
+       "st": "covered",
+       "stock": 400,
+       "why": null
+      }
+     ],
+     "kind": "shop",
+     "low": 0,
+     "name": "HART. Spirits",
+     "short": 0,
+     "site": 0,
+     "stock": 400,
+     "sub": "Liquor Store",
+     "tag": "MT",
+     "tight": 0
+    },
+    {
+     "col": 3,
+     "hood": "ba:neighborhood_lowermanhattan",
+     "id": "ba:street_broadwaystreet#19",
+     "items": [
+      {
+       "cadence": "weekly",
+       "cycleNeed": 602,
+       "fit": "short",
+       "item": "Gift (Cheap)",
+       "keeps": false,
+       "low": false,
+       "made": false,
+       "need": 206,
+       "provision": 450,
+       "short": true,
+       "slug": "ba:itemname_cheapgift",
+       "st": "short",
+       "stock": 300,
+       "why": null
+      },
+      {
+       "cadence": "daily",
+       "cycleNeed": 28,
+       "fit": "short",
+       "item": "Umbrella",
+       "keeps": false,
+       "low": false,
+       "made": false,
+       "need": 28,
+       "provision": 0,
+       "short": true,
+       "slug": "ba:itemname_umbrella",
+       "st": "noplan",
+       "stock": 30,
+       "why": null
+      }
+     ],
+     "kind": "shop",
+     "low": 0,
+     "name": "HART. Gifts",
+     "short": 2,
+     "site": 1,
+     "stock": 330,
+     "sub": "Gift Shop",
+     "tag": "LM",
+     "tight": 0
+    },
+    {
+     "col": 2,
+     "hood": "ba:neighborhood_industrycity",
+     "id": "ba:street_eighthavenue#4",
+     "items": [
+      {
+       "cadence": "weekly",
+       "cycleNeed": 2800,
+       "fit": "short",
+       "item": "Water",
+       "keeps": false,
+       "low": true,
+       "made": false,
+       "need": 1600,
+       "provision": 3000,
+       "short": true,
+       "slug": "ba:itemname_water",
+       "st": "short",
+       "stock": 1500,
+       "why": null
+      }
+     ],
+     "kind": "depot",
+     "low": 1,
+     "name": "HART. Hub",
+     "short": 1,
+     "site": 2,
+     "stock": 1500,
+     "sub": "Warehouse",
+     "tag": "IC",
+     "tight": 0
+    },
+    {
+     "col": 1,
+     "hood": "ba:neighborhood_industrycity",
+     "id": "ba:street_eighthavenue#8",
+     "items": [
+      {
+       "cadence": "daily",
+       "cycleNeed": 1200,
+       "fit": "short",
+       "item": "Water",
+       "keeps": false,
+       "low": false,
+       "made": false,
+       "need": 1200,
+       "provision": 800,
+       "short": true,
+       "slug": "ba:itemname_water",
+       "st": "short",
+       "stock": 500,
+       "why": null
+      },
+      {
+       "cadence": "made",
+       "cycleNeed": 0,
+       "fit": "ok",
+       "item": "Beer",
+       "keeps": false,
+       "low": false,
+       "made": true,
+       "need": 0,
+       "provision": 0,
+       "short": false,
+       "slug": "ba:itemname_beer",
+       "st": "made",
+       "stock": 900,
+       "why": null
+      }
+     ],
+     "kind": "factory",
+     "low": 0,
+     "name": "HART. Brewery",
+     "short": 1,
+     "site": 3,
+     "stock": 1400,
+     "sub": "Factory",
+     "tag": "IC",
+     "tight": 0
+    },
+    {
+     "col": 0,
+     "hood": "",
+     "id": "import:ba:street_pier#1",
+     "items": [],
+     "kind": "import",
+     "low": 0,
+     "name": "1 Pier",
+     "short": 0,
+     "site": null,
+     "stock": 0,
+     "sub": "Weekly import",
+     "tag": "",
+     "tight": 0
+    }
+   ]
+  },
+  "hoursToImport": 2.4,
+  "idle": [],
+  "idleWeeks": 4.0,
+  "imports": [
+   {
+    "arrivedLastWeek": 3000,
+    "arrives": 50,
+    "basis": "shipped",
+    "carry": null,
+    "catchUp": 100,
+    "contracts": [
+     {
+      "active": true,
+      "agent": false,
+      "amount": 3000,
+      "group": 0,
+      "id": "IMPORTwater",
+      "importer": "1 Pier",
+      "lastWeek": 3000,
+      "order": 0,
+      "product": 0,
+      "repeating": true,
+      "smart": false
+     }
+    ],
+    "cover": 3.8,
+    "coverFit": "tight",
+    "coverageUntil": 50,
+    "covered": false,
+    "daysOnHand": 3.8,
+    "due": 4.0,
+    "dueNeed": 1600,
+    "from": "1 Pier",
+    "importPerDay": 400,
+    "item": "Water",
+    "lastWeek": 3000,
+    "level": "warn",
+    "levelAt": null,
+    "levelId": null,
+    "levelImporter": null,
+    "levelName": null,
+    "orderFit": "ok",
+    "pass": [
+     {
+      "amount": 3000,
+      "smart": false
+     }
+    ],
+    "paused": false,
+    "peakDay": null,
+    "peakPerDay": 400,
+    "perDay": 400,
+    "plain": 3000,
+    "plainAfter": 0,
+    "plainBefore": 0,
+    "reason": "shortfall",
+    "rounds": true,
+    "routed": 0,
+    "runsOut": "Monday",
+    "s": 2,
+    "shortBy": 0.25,
+    "slug": "ba:itemname_water",
+    "smart": false,
+    "stock": 1500,
+    "stockCover": 3.8,
+    "target": null,
+    "weekNeed": 2800,
+    "weekly": 3000
+   }
+  ],
+  "leftToday": 0.396,
+  "margin": 0.15,
+  "nextImportDay": 50,
+  "nextImportWeekday": "Monday",
+  "roundTo": 10,
+  "shops": [
+   {
+    "from": null,
+    "item": "Umbrella",
+    "level": "warn",
+    "peakDay": "Saturday",
+    "peakSold": 28,
+    "pressure": null,
+    "s": 1,
+    "slug": "ba:itemname_umbrella",
+    "sold": 21,
+    "stock": 30,
+    "target": 0
+   },
+   {
+    "from": null,
+    "item": "Gift (Cheap)",
+    "level": "ok",
+    "peakDay": "Saturday",
+    "peakSold": 111,
+    "pressure": null,
+    "s": 1,
+    "slug": "ba:itemname_cheapgift",
+    "sold": 86,
+    "stock": 300,
+    "target": 0,
+    "wholesale": 450,
+    "wholesaleDay": "Monday"
+   },
+   {
+    "from": 3,
+    "item": "Beer",
+    "level": "ok",
+    "peakDay": "Saturday",
+    "peakSold": 405,
+    "pressure": 67,
+    "s": 0,
+    "slug": "ba:itemname_beer",
+    "sold": 321,
+    "stock": 400,
+    "target": 600
+   }
+  ],
+  "today": "Friday"
+ },
+ "trends": [
+  {
+   "change": 0.0613,
+   "key": "ba:street_eighthstreet#5",
+   "last7": 13500.0,
+   "prev7": 12720.0,
+   "ready": true,
+   "s": 0
+  },
+  {
+   "change": 0.0,
+   "key": "ba:street_broadwaystreet#19",
+   "last7": 9450.0,
+   "prev7": 9450.0,
+   "ready": true,
+   "s": 1
+  },
+  {
+   "change": null,
+   "key": "ba:street_eighthavenue#4",
+   "last7": 0.0,
+   "prev7": 0.0,
+   "ready": true,
+   "s": 2
+  },
+  {
+   "change": null,
+   "key": "ba:street_eighthavenue#8",
+   "last7": 0.0,
+   "prev7": 0.0,
+   "ready": true,
+   "s": 3
+  }
+ ],
+ "weekly": [
+  {
+   "businesses": 4,
+   "day": 7,
+   "income": 9700.0
+  },
+  {
+   "businesses": 4,
+   "day": 14,
+   "income": 10400.0
+  },
+  {
+   "businesses": 4,
+   "day": 21,
+   "income": 11100.0
+  },
+  {
+   "businesses": 4,
+   "day": 28,
+   "income": 11800.0
+  },
+  {
+   "businesses": 4,
+   "day": 35,
+   "income": 12500.0
+  },
+  {
+   "businesses": 4,
+   "day": 42,
+   "income": 13200.0
+  }
+ ]
+}
