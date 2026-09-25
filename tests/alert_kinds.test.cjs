@@ -216,7 +216,7 @@ test('idle stock has one name, and a renamed kind keeps its id', () => {
   const group = (source.match(/slug: null, item: "([^"]+)", fact: kids\[0\]\.fact/) || [])[1];
   assert.equal(kind('dead'), 'Idle stock');
   assert.equal(group, kind('dead'), 'the idle group and the finding kind share one name');
-  assert.equal(kind('staff'), 'Nobody on shift');
+  assert.equal(kind('staff'), 'Nobody staffed');
 });
 
 /* R8: stock a depot holds that no plan sends on, while the company's own
