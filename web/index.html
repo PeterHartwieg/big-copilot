@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=151f086b6b">
+<link rel="stylesheet" href="community.css?v=e6161c97d1">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -14,7 +14,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=151f086b6b">
+<link rel="stylesheet" href="fonts/fonts.css?v=e6161c97d1">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -4056,8 +4056,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "151f086b6b";</script>
-<script>window.LEDGER_RELEASE = {"version":"151f086b6b","latest":{"pr":113,"date":"2026-09-25","title":"Floor plans in Find a location","summary":"Each building the finder lists now names its layout, and the map window shows the game's own floor plan for it: hover a row to see its layout light up on a shelf of every shop, office or warehouse layout drawn at one scale, with its floor area, capacity and entrances (loading bays for a warehouse). Click a layout on the shelf to list only buildings with that layout. On a phone, pick a row and switch the map window to Plan."}};</script>
+<script>window.LEDGER_BUILD = "e6161c97d1";</script>
+<script>window.LEDGER_RELEASE = {"version":"e6161c97d1","latest":{"pr":113,"date":"2026-09-25","title":"Floor plans in Find a location","summary":"Each building the finder lists now names its layout, and the map window shows the game's own floor plan for it: hover a row to see its layout light up on a shelf of every shop, office or warehouse layout drawn at one scale, with its floor area, capacity and entrances (loading bays for a warehouse). Click a layout on the shelf to list only buildings with that layout. On a phone, pick a row and switch the map window to Plan."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -4141,8 +4141,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=151f086b6b"></script>
-<script src="community.js?v=151f086b6b"></script>
+<script src="app.js?v=e6161c97d1"></script>
+<script src="community.js?v=e6161c97d1"></script>
 
 <script>
 
@@ -11697,7 +11697,9 @@ function hrReviewSites(m, req, phase, gone){
        is a place still open. Before that, the planned figures. */
     const took = x => !(phase === "done" && gone.has(x.c.id));
     const hired = hires.filter(x => took(x.who)), got = extra.filter(took);
-    const missed = phase === "done" ? hires.length - hired.length + extra.length - got.length : 0;
+    /* Places still open: week hires only, the ones "Pick N more" re-picks. A
+       gone hand pick or over-the-plan pick is shown as gone, nothing more. */
+    const missed = phase === "done" ? hires.length - hired.length : 0;
     const cost = hired.reduce((n, x) => n + Number(x.who.c.wage || 0) * Number(x.w.hours || 0) / 7, 0);
     let k = 0;
     const dot = cls => `<i class="${cls}" style="--k:${++k}"></i>`;
@@ -11714,13 +11716,14 @@ function hrReviewSites(m, req, phase, gone){
         HR_DAYS.map(d => `<span>${WEEK_FULL[d][0]}</span>`).join("")}</span><span class="m">Week</span></div>${
       hires.map(x => { const c = x.who.c, g = gone.has(c.id); return person(g ? `<span class="hr-struck">${spEsc(c.name)}</span>` : spEsc(c.name), {t: g ? "left the list" : `${c.age ?? ""} · hired${x.who.misfit.length ? " · hours break a demand" : ""}`},
         hrRole(x.w.skill), `${Math.round(hrLevel(c, x.w.skill))}%`, hrWage(c.wage), x.w.slots, `${x.w.hours || 0} h`, g ? "gap" : ""); }).join("")}${
-      extra.map(o => person(spEsc(o.c.name), {t: S.planned ? "hired · over the plan, no hours" : "hired · no hours"}, hrRole(o.skill), `${Math.round(hrLevel(o.c, o.skill))}%`, hrWage(o.c.wage), [], "–")).join("")}${
+      extra.map(o => { const g = gone.has(o.c.id); return person(g ? `<span class="hr-struck">${spEsc(o.c.name)}</span>` : spEsc(o.c.name),
+        {t: g ? "left the list" : S.planned ? "hired · over the plan, no hours" : "hired · no hours"}, hrRole(o.skill), `${Math.round(hrLevel(o.c, o.skill))}%`, hrWage(o.c.wage), [], "–", g ? "gap" : ""); }).join("")}${
       moves.map(x => person(spEsc(x.p.name || "?"), {t: x.fixed ? "unassigned, in the plan" : `moved from ${x.from ? spEsc(x.from.b ? shortName(x.from.b) : "a site") : "unassigned"}`, mv: true},
         hrRole(x.skill), x.p.level !== undefined ? `${Math.round(x.p.level)}%` : "–", x.p.wage !== undefined ? hrWage(x.p.wage) : "–",
         hrBenchSlots(S, x), `${hrSlotHours(hrBenchSlots(S, x))} h`)).join("")}${
       gaps.map(x => person("Nobody", {t: `no ${hrRole(x.w.skill)} passes your filters`}, hrRole(x.w.skill), "–", "–", x.w.slots, `${x.w.hours || 0} h`, "gap")).join("")}</div>` : "";
     const counts = `${hired.length + got.length} hired${moves.length ? `<span class="mvc">+${moves.length} moved</span>` : ""}${
-      missed ? `<span class="mvc gap">${missed} still open</span>` : ""}${at && at.rewrite && !hires.length && !moves.length ? `<span class="mvc">week rewritten</span>` : ""}`;
+      missed ? `<span class="mvc gap">${missed} still open</span>` : ""}${at && at.rewrite && !(phase === "done" ? hired.length + got.length : hires.length) && !moves.length ? `<span class="mvc">week rewritten</span>` : ""}`;
     return `<div class="hr-dsite${open ? " open" : ""}"><button type="button" class="hr-dhead" data-hr-site="${attr(S.key)}" aria-expanded="${open}">
       <span><span class="nm">${hoodHtml(S.b)}<span class="s">${spEsc(S.b ? shortName(S.b) : S.site.name || "?")}</span>${S.site.new ? `<span class="hr-new">new</span>` : ""}</span><span class="plan">${spEsc(S.b && S.b.type ? S.b.type : S.site.kind)} · ${plan}</span></span>
       <span class="hr-dots">${dots}</span><span class="c">${counts}<span class="cst">+${fmt(cost)}</span></span>${hrSvg("chev")}</button>${people}</div>`;
@@ -11812,7 +11815,10 @@ function hrReview(o = {}){
       if(phase === "done"){
         const hired = (answer.hired || []).length, moved = (answer.moved || []).length;
         const siteCount = (answer.sites || []).filter(s => s && s.after).length;
-        const more = gone.size ? `<div class="gw-call">${gwI("hire")}<div>${plural(gone.size, "place is", "places are")} still open. <button type="button" class="gw-mini-b" data-hr-more disabled title="Waiting for the board to read the game">Pick ${gone.size} more</button> opens the review for ${gone.size === 1 ? "it" : "them"} once the board has read the game.</div></div>` : "";
+        /* "Pick N more" re-picks week hires only: a gone hand pick is not a place. */
+        const open = req.body.hires.filter(h => gone.has(h.candidateId)
+          && m.sites.some(S => S.weeks.some(w => w.who && w.who.type === "hire" && w.who.c.id === h.candidateId))).length;
+        const more = open ? `<div class="gw-call">${gwI("hire")}<div>${plural(open, "place is", "places are")} still open. <button type="button" class="gw-mini-b" data-hr-more disabled title="Waiting for the board to read the game">Pick ${open} more</button> opens the review for ${open === 1 ? "it" : "them"} once the board has read the game.</div></div>` : "";
         return `${gwTiles([["Hired", null, hired], ["Moved", null, moved], ["Hours set", null, `${siteCount}<small class="hr-u"> ${siteCount === 1 ? "site" : "sites"}</small>`]])}
           <p class="gw-lead">Everyone starts on their hours from the next hour in the game. The wage bill is <b>+${fmt(bill)} a day</b>.</p>${sites}${goneCall}${emptyCall}${more}
           ${gapText ? `<div class="gw-call gw-warn">${gwI("alert")}<div>${gapText}. The line stays on the Staff page until someone passes your filters.</div></div>` : ""}
