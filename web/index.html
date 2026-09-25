@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=0a84948b6f">
+<link rel="stylesheet" href="community.css?v=52b37c680c">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -14,7 +14,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=0a84948b6f">
+<link rel="stylesheet" href="fonts/fonts.css?v=52b37c680c">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -784,8 +784,7 @@ svg{display:block}
 /* The board runs to a dozen screens, most of it off-view at any moment, and it
    is read on a second monitor while the game has the GPU. Sections that are not
    on screen are skipped entirely; the reserved height keeps the scrollbar
-   honest. The daily chart opts out because it sizes its viewBox from its own
-   rendered width, which is zero while skipped. */
+   honest. */
 section{content-visibility:auto; contain-intrinsic-size:auto 620px}
 section.measured{content-visibility:visible}
 /* A finding's link scrolls to a section; the sticky masthead must not cover it. */
@@ -1769,6 +1768,7 @@ td.gauge.low i b{background:var(--neg)}
 .legend a:hover i{transform:scaleX(1.4)}
 .xh{opacity:0;transition:opacity .12s}
 .chartbox:hover .xh{opacity:1}
+.chartbox.chart-miss .xh{opacity:0}
 g[data-series]{transition:opacity .25s}
 g[data-series].off{opacity:0}
 .chart rect{transition:opacity .15s}
@@ -3619,8 +3619,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "0a84948b6f";</script>
-<script>window.LEDGER_RELEASE = {"version":"0a84948b6f","latest":{"pr":94,"date":"2026-09-24","title":"Size supply for 24/7 or for demand, and find stock no plan sends on","summary":"Supply now judges every item once and uses the same word for it everywhere: covered, tight, short, no plan, paused, stalled, idle, made here or new. A Sizing switch on Orders, on the factory and import checks and on each warehouse and factory page sizes your factory lines, top-ups and imports for 24/7 rated output or for what your shops actually use, with one 15% margin over the whole chain from import to sale and figures rounded up to tens. Under Demand, a shop open less than a week is projected forward and marked \"may still be ramping\". Tight means an order covers the use but not the margin; it shows on Supply and never on Today. Shops and warehouses stocked by a repeating wholesale contract are judged against it. A new Not routed finding points at stock in a warehouse or factory that no plan sends on while your own shops sell it."}};</script>
+<script>window.LEDGER_BUILD = "52b37c680c";</script>
+<script>window.LEDGER_RELEASE = {"version":"52b37c680c","latest":{"pr":94,"date":"2026-09-24","title":"Size supply for 24/7 or for demand, and find stock no plan sends on","summary":"Supply now judges every item once and uses the same word for it everywhere: covered, tight, short, no plan, paused, stalled, idle, made here or new. A Sizing switch on Orders, on the factory and import checks and on each warehouse and factory page sizes your factory lines, top-ups and imports for 24/7 rated output or for what your shops actually use, with one 15% margin over the whole chain from import to sale and figures rounded up to tens. Under Demand, a shop open less than a week is projected forward and marked \"may still be ramping\". Tight means an order covers the use but not the margin; it shows on Supply and never on Today. Shops and warehouses stocked by a repeating wholesale contract are judged against it. A new Not routed finding points at stock in a warehouse or factory that no plan sends on while your own shops sell it."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -3704,8 +3704,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=0a84948b6f"></script>
-<script src="community.js?v=0a84948b6f"></script>
+<script src="app.js?v=52b37c680c"></script>
+<script src="community.js?v=52b37c680c"></script>
 
 <script>
 
@@ -5673,7 +5673,8 @@ function drawChart(){
   const ys = JSON.stringify(rows.map(r => +Y(r.profit7).toFixed(1)));
   const labels = JSON.stringify(rows.map(readout));
   $("dailyBox").innerHTML = `
-    <div class="chartbox chart" data-chart="1" data-xs="${attr(xs)}" data-ys="${attr(ys)}" data-labels="${attr(labels)}">
+    <div class="chartbox chart" data-chart="1" data-xs="${attr(xs)}" data-ys="${attr(ys)}" data-labels="${attr(labels)}"
+      data-plot="${(X(0) - bw / 2).toFixed(1)},${(X(n - 1) + bw / 2).toFixed(1)}">
       <div class="readout">${readout(last)}</div>
       <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px;overflow:visible">${out.join("\n")}</svg>
       <div class="legend">${Object.entries(SERIES).map(([id, s]) =>
@@ -14450,8 +14451,8 @@ function showPage(id, scroll = true, historyMode = "push"){
       history[historyMode === "replace" ? "replaceState" : "pushState"](
         siteHistoryState(historyMode === "replace"), "", hash);
   }catch(e){}
-  /* The chart sizes itself from its rendered width, which was zero while its
-     page was hidden. */
+  /* The chart is drawn again when its page shows, since it may have been
+     drawn into a hidden container. */
   if(id === "company" && sub.company === "results" && !siteOpen && hasData()) drawChart();
   if(id === "map") showCityMap();
   if(id === "wiki") wikiVisit(from !== "wiki");
@@ -15043,7 +15044,8 @@ buildAlertSettingsPanel();
 
    Results — wireChart, wirePortfolio, wireSiteReads, wireSiteFinds, wireSiteChips:
      .chartbox[data-chart][data-xs][data-ys][data-labels]  JSON arrays, one per
-                          day; inside it an svg with <g class="xh"><line/><circle/></g>,
+                          day, and data-plot "left,right", the hover bounds
+                          (first and last bar's outer edge) in viewBox units; inside it an svg with <g class="xh"><line/><circle/></g>,
                           a .readout line, and .legend a[data-series] toggling
                           g[data-series] (choices kept in seriesState across renders).
      tr.chain[data-chain]  click toggles .open and .show on tr.kid[data-parent=…];
@@ -16596,12 +16598,25 @@ const bindChart = once(() => {
     if(!line || !dotc || !out) return;
     let xs, ys, labels;
     try{ xs = JSON.parse(cb.dataset.xs); ys = JSON.parse(cb.dataset.ys); labels = JSON.parse(cb.dataset.labels); }catch(err){ return; }
-    const r = svg.getBoundingClientRect(); const vb = svg.viewBox.baseVal;
-    const x = (e.clientX - r.left) / r.width * vb.width;
+    /* The viewBox is fixed; preserveAspectRatio scales it down in a narrow box
+       and centres it at 1:1 in a wide one, so the pointer goes through the
+       svg's own screen transform. Beside the first and last bars (the y axis,
+       the empty margins) no day is read. */
+    const ctm = svg.getScreenCTM(); if(!ctm) return;
+    const x = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse()).x;
+    const [lo, hi] = (cb.dataset.plot || "").split(",").map(Number);
+    const miss = !(x >= lo && x <= hi) || !xs.length;
+    cb.classList.toggle("chart-miss", miss);
+    if(miss){ out.innerHTML = labels[labels.length - 1] || ""; return; }
     let k = 0; for(let i = 1; i < xs.length; i++) if(Math.abs(xs[i] - x) < Math.abs(xs[k] - x)) k = i;
     line.setAttribute("x1", xs[k]); line.setAttribute("x2", xs[k]);
     dotc.setAttribute("cx", xs[k]); dotc.setAttribute("cy", ys[k]);
     out.innerHTML = labels[k];
+  });
+  /* Leaving the chart ends where leaving through a margin does: on the last day. */
+  onLeave(".chartbox[data-chart]", cb => {
+    const out = q(".readout", cb);
+    try{ const labels = JSON.parse(cb.dataset.labels); if(out && labels.length) out.innerHTML = labels[labels.length - 1]; }catch(err){}
   });
   on("click", ".chartbox[data-chart] .legend a[data-series]", (a, e) => {
     e.preventDefault();
