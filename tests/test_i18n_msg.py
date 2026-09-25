@@ -537,6 +537,21 @@ class Coverage(unittest.TestCase):
                     self.assertEqual(uncovered(payloads[name], path, field, *which), [],
                                      "a sentence of a converted area lost its message (a + or .replace()?)")
 
+    def test_a_level_contract_is_named_by_a_message_with_its_ordinal(self):
+        # Supply (sb): "1 Pier, its 2nd of 3 contracts here", the ordinal a
+        # message of its own; one importer alone is just its name.
+        line = [{"importer": "1 Pier", "order": o} for o in (4, 7, 9)] + [{"importer": "X", "order": 1}]
+        for order, nth in ((4, "1st"), (7, "2nd"), (9, "3rd")):
+            name = ba_dashboard._level_name(line, "1 Pier", order)
+            self.assertEqual(name, f"1 Pier, its {nth} of 3 contracts here")
+            self.assertEqual(name.wire()[0], "sb.py.levelName")
+            self.assertEqual(name.wire()[1]["nth"]["m"][2], nth)
+        self.assertEqual([str(ba_dashboard._ordinal_msg(n)) for n in (11, 12, 13, 21, 22, 23, 104, 111)],
+                         ["11th", "12th", "13th", "21st", "22nd", "23rd", "104th", "111th"])
+        self.assertEqual(ba_dashboard._level_name(line, "X", 1), "X")
+        wired = _wire_msgs({"levelName": ba_dashboard._level_name(line, "1 Pier", 7)})
+        self.assertEqual(wired["i18n"]["levelName"][0], "sb.py.levelName")
+
     def test_the_coverage_check_finds_a_sentence_that_lost_its_message(self):
         # The guard itself: a row edited after msg() is reported, a wired one is not.
         payload = _wire_msgs({"alerts": [{"text": msg("f.staff.none", "No staff assigned")},

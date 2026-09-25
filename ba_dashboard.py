@@ -3013,13 +3013,24 @@ def _level_name(contracts: list, importer, order):
     own = [c["order"] for c in contracts if c["importer"] == importer]
     if len(own) < 2 or order not in own:
         return importer
-    return f"{importer}, its {_ordinal(own.index(order) + 1)} of {len(own)} contracts here"
+    return msg("sb.py.levelName", "{importer}, its {nth} of {n} contracts here",
+               importer=importer, nth=_ordinal_msg(own.index(order) + 1), n=len(own))
 
 
-def _ordinal(n: int) -> str:
-    """1st, 2nd, 3rd, 4th ... 11th, 12th, 13th, 21st."""
-    last = "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
-    return f"{n}{last}"
+def _ordinal_msg(n: int) -> Msg:
+    """1st, 2nd, 3rd, 4th ... 11th, 12th, 13th, 21st, as a message: the
+    suffix is picked the English way, one key per suffix, so a translation
+    writes its own ordinal ("2.") for each."""
+    if 10 <= n % 100 <= 20:
+        return msg("sb.py.ord.th", "{n}th", n=n)
+    last = n % 10
+    if last == 1:
+        return msg("sb.py.ord.st", "{n}st", n=n)
+    if last == 2:
+        return msg("sb.py.ord.nd", "{n}nd", n=n)
+    if last == 3:
+        return msg("sb.py.ord.rd", "{n}rd", n=n)
+    return msg("sb.py.ord.th", "{n}th", n=n)
 
 
 def _smart_words(level, plain_after, plain_before=0):
@@ -15869,12 +15880,16 @@ function sbAnd(items){
 }
 /* Python's English weekday name ("Friday") in the UI language, whole or
    short ("Fri"); a name it does not know is shown as it came. */
-function sbDay(name){
+const sbDayIndex = name => {
   const d = WEEKDAY_NAMES.indexOf(name);
+  return d >= 0 ? d : WEEKDAY_NAMES.findIndex(w => w.slice(0, 3) === name);
+};
+function sbDay(name){
+  const d = sbDayIndex(name);
   return d < 0 ? name : ttDay(d);
 }
 function sbDayShort(name){
-  switch(WEEKDAY_NAMES.indexOf(name)){
+  switch(sbDayIndex(name)){
     case 0: return tt("sb.dayShort.0", "Sun");
     case 1: return tt("sb.dayShort.1", "Mon");
     case 2: return tt("sb.dayShort.2", "Tue");
@@ -21445,7 +21460,7 @@ function sbDepotRows(d, claimed, s, slugs){
   });
 }
 function sbDepotRow(d, ctx, r, kid){
-  if(kid === "parent") return sbGroupTr(r, `<td class="l nm">${tt("sb.wh.idle", "Idle stock")}${sbKids(r)}</td><td>${num(r.stock)}</td><td>—</td><td>—</td>
+  if(kid === "parent") return sbGroupTr(r, `<td class="l nm">${tt("nav.kind.dead.label", "Idle stock")}${sbKids(r)}</td><td>${num(r.stock)}</td><td>—</td><td>—</td>
     <td class="l"><span class="sb-rail">${spRail(0, null, false, true)}</span></td><td><span class="sub r">${tt("sb.group.click", "click to open")}</span></td><td>—</td>
     <td class="l st">${sbStatus(r.fact, spEsc(r.why))}</td>`);
   const f = r.fact, ir = r.ir, b = D.businesses[r.s];
@@ -21496,7 +21511,7 @@ function sbDepotTable(d, ctx, rows){
   const usual = rows.slice().sort((a, b) => szRank(a.fact) - szRank(b.fact) || (b.week || 0) - (a.week || 0));
   const units = sbGroup(usual, r => r.fact.st === "idle" && !r.chk.length ? `${r.s}|idle` : null, kids => {
     const whys = [...new Set(kids.map(k => szTip(k.fact)))];
-    return {s: kids[0].s, slug: null, item: tt("sb.wh.idle", "Idle stock"), fact: kids[0].fact, stock: kids.reduce((t, k) => t + (k.stock || 0), 0),
+    return {s: kids[0].s, slug: null, item: tt("nav.kind.dead.label", "Idle stock"), fact: kids[0].fact, stock: kids.reduce((t, k) => t + (k.stock || 0), 0),
       draw: null, busy: null, week: null, why: whys.length === 1 ? whys[0]
         : tt("sb.wh.idle.why", {one: "{n} lines held far beyond what moves", other: "{n} lines held far beyond what moves"}, {n: kids.length})};
   });
@@ -21645,22 +21660,25 @@ function sbLineRow(d, r, site){
   const set = chk.find(c => c.kind === "Factory run hours");
   const sized = sizing === "dem" ? (r.demBasis === "none" ? tt("sb.line.sized.none", "nothing downstream is drawn, so Demand sizes it round the clock too")
     : tt("sb.line.sized.dem", "for what the shops use, plus the chain margin")) : tt("sb.line.sized.cap", "sized 24/7");
-  let hoursTip = r.thinDay ? tt("sb.line.rostered.thin", "Rostered {now} h a day on average; {day} has {hours} h", {now, day: sbDay(r.thinDay.day), hours: r.thinDay.hours})
+  let hoursTip = r.thinDay ? tt("sb.line.rostered.thin", "Rostered {now} h a day on average; {day} has {hours} h", {now, day: sbDayShort(r.thinDay.day), hours: r.thinDay.hours})
     : tt("sb.line.rostered", "Rostered {now} h a day", {now});
   if(Number.isFinite(need)) hoursTip = tt("sb.line.rostered.needs", "{rostered}; needs {need} h {sized}", {rostered: hoursTip, need, sized});
   const hours = now === null ? "—" : `<span class="sb-hrs">${sbDayStrip(now, Number.isFinite(need) ? need : now, hoursTip)}<span class="n">${set
       ? sbChg(now, set.proposed, tt("sb.unit.h", "h"))
       : `<b>${tt("sb.unit.nh", "{n} h", {n: now})}</b>${Number.isFinite(need) && need !== now ? ` · ${tt("sb.line.needs", "needs {n}", {n: need})}` : ""}`}</span></span>`;
   const reason = !f ? "" : f.st === "short" && f.why === "hours"
-      ? (r.thinDay ? tt("sb.line.short.thin", "rostered {now} ({day} {hours} h) of the {need} hours a day it needs, {sized}",
-          {now, day: sbDay(r.thinDay.day), hours: r.thinDay.hours, need, sized})
-        : tt("sb.line.short", "rostered {now} of the {need} hours a day it needs, {sized}", {now, need, sized}))
+      ? (r.thinDay ? tt("sb.line.short.thin", {one: "rostered {now} ({day} {hours} h) of the {n} hours a day it needs, {sized}",
+          other: "rostered {now} ({day} {hours} h) of the {n} hours a day it needs, {sized}"},
+          {now, day: sbDayShort(r.thinDay.day), hours: r.thinDay.hours, n: need, sized})
+        : tt("sb.line.short", {one: "rostered {now} of the {n} hours a day it needs, {sized}",
+          other: "rostered {now} of the {n} hours a day it needs, {sized}"}, {now, n: need, sized}))
     : f.st === "covered" && Number.isFinite(f.lower) ? tt("sb.line.fewer", "needs {lower} of its {now} hours: fewer would do", {lower: f.lower, now})
     : f.st === "covered" && Number.isFinite(need) ? (sizing === "cap" ? tt("sb.line.runs.cap", "runs 24/7, as sized")
-      : tt("sb.line.runs.dem", "runs the {need} hours a day it needs", {need}))
+      : tt("sb.line.runs.dem", {one: "runs the {n} hours a day it needs", other: "runs the {n} hours a day it needs"}, {n: need}))
     : spEsc(szTip(f));
   const tip = f && f.st === "short" && f.why === "hours"
-    ? tt("sb.line.post", "Post factory workers to {item} for {need} hours a day; the roster has them {now}.", {item: r.item, need, now})
+    ? tt("sb.line.post", {one: "Post factory workers to {item} for {n} hours a day; the roster has them {now}.",
+      other: "Post factory workers to {item} for {n} hours a day; the roster has them {now}."}, {item: r.item, n: need, now})
     : f && Number.isFinite(f.lower) ? tt("sb.line.fewer.tip", "A suggestion, not a change: the line would still meet its need on fewer hours") : "";
   const tickFor = b ? tt("sb.tick.hours", "{item} at {site}: hours", {item: r.item, site: shortName(b)})
     : tt("sb.tick.hoursFactory", "{item} at the factory: hours", {item: r.item});
@@ -21868,10 +21886,12 @@ function drawFactoryStaffing(){
       tt("sb.staff.have", {one: "{hours:,} machine-hours a week; you have {have} factory workers", other: "{hours:,} machine-hours a week; you have {have} factory workers"},
         {n: hc.have ?? 0, hours: hc.needed ?? 0, have: `<b>${hc.have ?? 0}</b>`})}${chip}${small}${unnamedNote}</span>${wage}${go}</div>${lines}</div>`;
   });
-  const lead = sizing === "dem" ? tt("sb.staff.lead.dem", "Sized for demand") : tt("sb.staff.lead.cap", "Sized 24/7");
-  const tot = workers || perDay ? `<div class="sb-stot"><span>${lead}:</span>${workers ? `<b class="${workers > 0 ? "up" : "dn"}">${workers > 0 ? "+" : "−"}${
-      tt("sb.staff.workers", {one: "{n} factory worker", other: "{n} factory workers"}, {n: Math.abs(workers)})}</b>` : ""}${
-    perDay ? `<b class="${perDay > 0 ? "up" : "dn"}">${perDay > 0 ? "+" : "−"}${tt("sb.staff.perDay", "{w:$} a day", {w: Math.abs(perDay)})}</b>` : ""}</div>` : "";
+  const lead = sizing === "dem" ? tt("sb.staff.tot.dem", "Sized for demand:") : tt("sb.staff.tot.cap", "Sized 24/7:");
+  const tot = workers || perDay ? `<div class="sb-stot"><span>${lead}</span>${workers ? `<b class="${workers > 0 ? "up" : "dn"}">${workers > 0
+      ? tt("sb.staff.tot.workers.up", {one: "+{n} factory worker", other: "+{n} factory workers"}, {n: workers})
+      : tt("sb.staff.tot.workers.dn", {one: "−{n} factory worker", other: "−{n} factory workers"}, {n: -workers})}</b>` : ""}${
+    perDay ? `<b class="${perDay > 0 ? "up" : "dn"}">${perDay > 0 ? tt("sb.staff.tot.perDay.up", "+{w:$} a day", {w: perDay})
+      : tt("sb.staff.tot.perDay.dn", "−{w:$} a day", {w: -perDay})}</b>` : ""}</div>` : "";
   return `<div class="sb-staff" id="sbStaff">${sechead(tt("sb.staff.title", "Staffing for factory lines"), {icon: "crew", why: SB_STAFF_WHY(),
     quiet: tt("sb.staff.quiet", "hours each line should run, the shifts to post, people, wages")})}${facs.join("")}${tot}</div>`;
 }
