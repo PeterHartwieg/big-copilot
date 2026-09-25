@@ -62,6 +62,8 @@ const CONVERTED = {
     + '#pageSupply .sb-why, #pageSupply .sb-stats, #pageSupply .cnt, #pageSupply .how, #pageSupply .sb-chg small, '
     + '#pageSupply .sb-unit, #pageSupply td .sub, #pageSupply .chip, #pageSupply .sb-staff .sechead, #pageSupply .sb-hc, '
     + '#pageSupply .sb-stot, #pageSupply .sb-flowleg, #pageSupply svg text.col, #pageSupply .imp-unit, #pageSupply .up',
+  /* The order checklist's own reasons, in the "Other changes" Why cells. */
+  'sb.ck': '#pageSupply .sb-ckwhy',
   /* The Growth page below its view switch (nav's): the demand grid, the waves,
      Plan a chain and its Ingredients. */
   gr: '#secMarket, #secPlan, #secIngredients',
