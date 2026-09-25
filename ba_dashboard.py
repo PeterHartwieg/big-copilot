@@ -13733,7 +13733,7 @@ body:has(#changelogDialog[open]){overflow:hidden}
     </section>
     <section class="sec rv" id="secIngredients" data-sub="plan">
       <div class="sechead"><h2>Ingredients</h2>
-        <span class="why" data-tip="What the machines above eat, added up across every line that shares an ingredient. Per day and per week are this range's own figures. Company target is the order for the whole company once the plan runs: never less than a week of this range, and beyond that what the range adds over what your factories already eat, on top of every contract already active, rounded up to the hundred the logistics manager takes. You type that target across your importer contracts in the game yourself; the board never guesses a split per warehouse. Hover an ingredient for what is on order today, and Used by for every line that eats it. A cash column appears once the company already buys one of these ingredients, at the price it last paid." tabindex="0"><i>?</i></span></div>
+        <span class="why" data-tip="What the machines above eat, added up across every line that shares an ingredient. Per day and per week are this range's own figures. Company target is the order for the whole company once the plan runs: never less than a week of this range, and beyond that what the range adds over what your factories already eat, on top of every contract already active, with one 15% margin for the whole chain and rounded up to tens. The plan always runs every machine 24/7, whatever the sizing switch on Supply says. Save as plan puts each change on Supply's checklist, at the warehouse that imports the ingredient for the factory the plan is built at. Hover an ingredient for what is on order today, and Used by for every line that eats it. A cash column appears once the company already buys one of these ingredients, at the price it last paid." tabindex="0"><i>?</i></span></div>
       <table class="ingtable" id="ingTable">
         <thead><tr><th>Ingredient</th><th class="l">Used by</th><th>Per day</th><th>Per week</th><th>Company target</th>
           <th>On order now</th><th>Change</th><th class="cash">Cash / week</th></tr></thead>
@@ -20269,17 +20269,20 @@ function defaultRate(kind){
 }
 /* The company order for one material, in one pure function so it can be tested
    on its own: what the planned week needs beyond what the factories on the
-   floor already eat, added to what the company already holds on active
-   contracts, rounded up to the hundred the logistics manager takes. The
-   selected range is the floor: the target never drops below a week of the
-   range, so the range stays funded even when the factories on the floor
-   already eat that much. The gap is what to change the contracts by. An order
-   that does not exist yet counts as zero here — the caller keeps the "not
-   ordered" wording and marks a positive target as a new order. Paused
-   contracts never count; the game will not ship against them. */
-function planOrder(week, baseline, ordered){
+   floor already eat, with the one chain margin on it, added to what the
+   company already holds on active contracts, rounded up to tens as every
+   supply figure is (supply.margin and supply.roundTo). The selected range is
+   the floor: the target never drops below a week of the range and its margin,
+   so the range stays funded even when the factories on the floor already eat
+   that much. The gap is what to change the contracts by. An order that does
+   not exist yet counts as zero here — the caller keeps the "not ordered"
+   wording and marks a positive target as a new order. Paused contracts never
+   count; the game will not ship against them. */
+function planOrder(week, baseline, ordered, margin, roundTo){
   const have = ordered === null || ordered === undefined ? 0 : ordered;
-  const target = Math.ceil(Math.max(0, week, have + week - baseline) / 100) * 100;
+  const m = 1 + (Number.isFinite(margin) ? margin : 0), step = roundTo > 0 ? roundTo : 10;
+  const raw = Math.max(0, week * m, have + (week - baseline) * m);
+  const target = Math.ceil(Math.round(raw * 1e6) / 1e6 / step) * step;
   return {target, gap: target - have};
 }
 /* A line starts as the factories the player already runs: the machines on
@@ -23662,7 +23665,7 @@ function planDraw(){
          "not ordered" wording; a positive target there is a new order to
          place, not a change. Paused contracts are shown apart and never
          counted. */
-      const o = planOrder(r.week, i.baseline || 0, ordered);
+      const o = planOrder(r.week, i.baseline || 0, ordered, (D.supply || {}).margin, (D.supply || {}).roundTo);
       targetSum += o.target;
       const gap = ordered === null ? (o.target > 0 ? o.target : null) : o.gap;
       const value = unit === null ? null : r.week * unit;
@@ -23689,7 +23692,7 @@ function planDraw(){
     if(foot) foot.innerHTML = total ? `<tr><td class="l">Total</td><td></td><td>${fmtN(raw / 7)}</td><td>${fmtN(raw)}</td><td>${fmtN(targetSum)}</td><td></td><td></td><td class="cash">${cash ? fmt(cash) : ""}</td></tr>` : "";
     const note = $("ingNote");
     if(note) note.textContent = !total ? "Nothing to import; this range is bought as finished goods."
-      : `Company targets are company-wide: you type each one across your importer contracts in the game; the board adds them up and never guesses a split per warehouse.`
+      : `Company targets are company-wide. Save as plan puts the change on Supply, at the warehouse that imports each ingredient for the factory it is built at.`
         + (!priced ? "" : ` A week costs ${fmt(cash)} across the ${priced} of ${total} ingredients this company already buys.`
           + (priced < total
             ? ` Unit prices are what you paid on day ${D.plan.priceDay}; the other ${total - priced} show quantities only.` : ""));
