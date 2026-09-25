@@ -572,6 +572,32 @@ test('Review: the dry run, who goes where, one confirm with no undo, and a parti
   assert.deepEqual(last.hires.map(h => [h.candidateId, h.address.number]), [['c3', 4]]);
 });
 
+test('a hand pick who leaves the list is shown as gone, not hired, and is no place to pick again', async (t) => {
+  const page = await board(t);
+  await page.locator(`#hrFound [data-hr-browse="${HRM}"]`).click();
+  await page.locator('#hrBrowse [data-hr-pick="h1"]').check();
+  await page.evaluate(src => { window.answerFor = eval(src); }, `(${answerFor.toString()})`);
+  await page.evaluate(() => {
+    window.hrAnswer = async (kind, body, o) => ({status: 200, error: null,
+      body: window.answerFor(body, {dryRun: !!o.dryRun, gone: o.dryRun ? [] : ['h1']})});
+  });
+  await page.locator('#hrBar [data-gw="hire"]').click();
+  await page.waitForFunction(() => document.querySelector('dialog.gw-dlg')?.dataset.phase === 'ready');
+  const dlg = page.locator('dialog.gw-dlg');
+  await dlg.locator('.gw-foot [data-gw-b="apply"]').click();
+  await page.waitForFunction(() => document.querySelector('dialog.gw-dlg')?.dataset.phase === 'done');
+  const hq = dlg.locator('.hr-dsite', {has: page.locator(`[data-hr-site="${Q}"]`)});
+  assert.match(await hq.locator('.c').textContent(), /^0 hired/);
+  assert.doesNotMatch(await hq.locator('.c').textContent(), /still open/);
+  await hq.locator(`[data-hr-site="${Q}"]`).click();
+  const row = dlg.locator('.hr-dsite.open .hr-dp:not(.hd)');
+  assert.equal(await row.count(), 1);
+  assert.match(await row.textContent(), /Mara Nyberg.*left the list/);
+  assert.equal(await row.locator('.hr-struck').count(), 1);
+  assert.doesNotMatch(await row.textContent(), /hired/);
+  assert.equal(await dlg.locator('[data-hr-more]').count(), 0, 'no place to pick again');
+});
+
 test('the review names the hours a move leaves empty where the week is not replaced', async (t) => {
   const d = JSON.parse(payload);
   // Corner's schedule as the board read it has no hours for Sam, so its week

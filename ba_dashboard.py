@@ -22363,7 +22363,9 @@ function hrReviewSites(m, req, phase, gone){
        is a place still open. Before that, the planned figures. */
     const took = x => !(phase === "done" && gone.has(x.c.id));
     const hired = hires.filter(x => took(x.who)), got = extra.filter(took);
-    const missed = phase === "done" ? hires.length - hired.length + extra.length - got.length : 0;
+    /* Places still open: week hires only, the ones "Pick N more" re-picks. A
+       gone hand pick or over-the-plan pick is shown as gone, nothing more. */
+    const missed = phase === "done" ? hires.length - hired.length : 0;
     const cost = hired.reduce((n, x) => n + Number(x.who.c.wage || 0) * Number(x.w.hours || 0) / 7, 0);
     let k = 0;
     const dot = cls => `<i class="${cls}" style="--k:${++k}"></i>`;
@@ -22380,13 +22382,14 @@ function hrReviewSites(m, req, phase, gone){
         HR_DAYS.map(d => `<span>${WEEK_FULL[d][0]}</span>`).join("")}</span><span class="m">Week</span></div>${
       hires.map(x => { const c = x.who.c, g = gone.has(c.id); return person(g ? `<span class="hr-struck">${spEsc(c.name)}</span>` : spEsc(c.name), {t: g ? "left the list" : `${c.age ?? ""} · hired${x.who.misfit.length ? " · hours break a demand" : ""}`},
         hrRole(x.w.skill), `${Math.round(hrLevel(c, x.w.skill))}%`, hrWage(c.wage), x.w.slots, `${x.w.hours || 0} h`, g ? "gap" : ""); }).join("")}${
-      extra.map(o => person(spEsc(o.c.name), {t: S.planned ? "hired · over the plan, no hours" : "hired · no hours"}, hrRole(o.skill), `${Math.round(hrLevel(o.c, o.skill))}%`, hrWage(o.c.wage), [], "–")).join("")}${
+      extra.map(o => { const g = gone.has(o.c.id); return person(g ? `<span class="hr-struck">${spEsc(o.c.name)}</span>` : spEsc(o.c.name),
+        {t: g ? "left the list" : S.planned ? "hired · over the plan, no hours" : "hired · no hours"}, hrRole(o.skill), `${Math.round(hrLevel(o.c, o.skill))}%`, hrWage(o.c.wage), [], "–", g ? "gap" : ""); }).join("")}${
       moves.map(x => person(spEsc(x.p.name || "?"), {t: x.fixed ? "unassigned, in the plan" : `moved from ${x.from ? spEsc(x.from.b ? shortName(x.from.b) : "a site") : "unassigned"}`, mv: true},
         hrRole(x.skill), x.p.level !== undefined ? `${Math.round(x.p.level)}%` : "–", x.p.wage !== undefined ? hrWage(x.p.wage) : "–",
         hrBenchSlots(S, x), `${hrSlotHours(hrBenchSlots(S, x))} h`)).join("")}${
       gaps.map(x => person("Nobody", {t: `no ${hrRole(x.w.skill)} passes your filters`}, hrRole(x.w.skill), "–", "–", x.w.slots, `${x.w.hours || 0} h`, "gap")).join("")}</div>` : "";
     const counts = `${hired.length + got.length} hired${moves.length ? `<span class="mvc">+${moves.length} moved</span>` : ""}${
-      missed ? `<span class="mvc gap">${missed} still open</span>` : ""}${at && at.rewrite && !hires.length && !moves.length ? `<span class="mvc">week rewritten</span>` : ""}`;
+      missed ? `<span class="mvc gap">${missed} still open</span>` : ""}${at && at.rewrite && !(phase === "done" ? hired.length + got.length : hires.length) && !moves.length ? `<span class="mvc">week rewritten</span>` : ""}`;
     return `<div class="hr-dsite${open ? " open" : ""}"><button type="button" class="hr-dhead" data-hr-site="${attr(S.key)}" aria-expanded="${open}">
       <span><span class="nm">${hoodHtml(S.b)}<span class="s">${spEsc(S.b ? shortName(S.b) : S.site.name || "?")}</span>${S.site.new ? `<span class="hr-new">new</span>` : ""}</span><span class="plan">${spEsc(S.b && S.b.type ? S.b.type : S.site.kind)} · ${plan}</span></span>
       <span class="hr-dots">${dots}</span><span class="c">${counts}<span class="cst">+${fmt(cost)}</span></span>${hrSvg("chev")}</button>${people}</div>`;
@@ -22478,7 +22481,10 @@ function hrReview(o = {}){
       if(phase === "done"){
         const hired = (answer.hired || []).length, moved = (answer.moved || []).length;
         const siteCount = (answer.sites || []).filter(s => s && s.after).length;
-        const more = gone.size ? `<div class="gw-call">${gwI("hire")}<div>${plural(gone.size, "place is", "places are")} still open. <button type="button" class="gw-mini-b" data-hr-more disabled title="Waiting for the board to read the game">Pick ${gone.size} more</button> opens the review for ${gone.size === 1 ? "it" : "them"} once the board has read the game.</div></div>` : "";
+        /* "Pick N more" re-picks week hires only: a gone hand pick is not a place. */
+        const open = req.body.hires.filter(h => gone.has(h.candidateId)
+          && m.sites.some(S => S.weeks.some(w => w.who && w.who.type === "hire" && w.who.c.id === h.candidateId))).length;
+        const more = open ? `<div class="gw-call">${gwI("hire")}<div>${plural(open, "place is", "places are")} still open. <button type="button" class="gw-mini-b" data-hr-more disabled title="Waiting for the board to read the game">Pick ${open} more</button> opens the review for ${open === 1 ? "it" : "them"} once the board has read the game.</div></div>` : "";
         return `${gwTiles([["Hired", null, hired], ["Moved", null, moved], ["Hours set", null, `${siteCount}<small class="hr-u"> ${siteCount === 1 ? "site" : "sites"}</small>`]])}
           <p class="gw-lead">Everyone starts on their hours from the next hour in the game. The wage bill is <b>+${fmt(bill)} a day</b>.</p>${sites}${goneCall}${emptyCall}${more}
           ${gapText ? `<div class="gw-call gw-warn">${gwI("alert")}<div>${gapText}. The line stays on the Staff page until someone passes your filters.</div></div>` : ""}
