@@ -33,6 +33,11 @@ const CONVERTED = {
   foot: '.sitefoot',
   /* A finding's headline and its detail, on Today and in the site panel. */
   f: '.find .what, .find .more, .sp-find .what, .sp-find .more',
+  /* The map's own controls and the finder's; the card's facts and fit line
+     carry names and layout codes, so only its numbers' labels and its link. */
+  map: '#cityMapPage .map-head .layers, #cityMapPage .fswitch, #cityMapPage .filters .lab, #cityMapPage .fchip.cat, '
+    + '#cityMapPage .fchip.show, #cityMapPage .fchip.num, #cityMapPage .fnew, #cityMapPage .fhead, #cityMapPage .places .empty, '
+    + '#cityMapPage .site .nums, #cityMapPage .site .go2',
   /* Today's own words: the tiles, the list's head and count lines, each
      finding's figure, the silenced line and the Next moves cards. The
      finding sentences are Python's (f); the kinds panel is left out, as its
@@ -176,13 +181,24 @@ async function views(page){
       else out.push([p.id, null, null]);
     });
     (D.businesses || []).forEach(b => out.push(['company', 'results', b.key]));
+    // The map with the finder on, its first result's card open.
+    if(D.premises) out.push(['map', 'finder', null]);
     return out;
   });
 }
 async function show(page, [pageId, sub, site]){
-  await page.evaluate(([pageId, sub, site]) => {
+  await page.evaluate(async ([pageId, sub, site]) => {
     showPage(pageId, false);
-    if(sub) showSub(pageId, sub);
+    /* The map draws once its geometry has loaded. */
+    if(pageId === 'map' && typeof cityMapPage !== 'undefined' && cityMapPage){
+      await cityMapPage.ready;
+      if(sub === 'finder'){
+        openFinder({});
+        await cityMapPage.ready;
+        const first = document.querySelector('#cityMapPage .place.fr');
+        if(first) await cityMapPage.select(first.dataset.pick, false);
+      }
+    } else if(sub) showSub(pageId, sub);
     if(site) openSite(site, false);
   }, [pageId, sub, site]);
   await page.waitForTimeout(50);
