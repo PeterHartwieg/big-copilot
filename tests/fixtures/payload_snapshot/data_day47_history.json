@@ -9235,6 +9235,9 @@
      "items": 1,
      "paused": false,
      "perDay": 429,
+     "slugs": [
+      "ba:itemname_water"
+     ],
      "to": "ba:street_eighthavenue#4"
     },
     {
@@ -9244,6 +9247,9 @@
      "items": 1,
      "paused": false,
      "perDay": 0,
+     "slugs": [
+      "ba:itemname_water"
+     ],
      "to": "ba:street_eighthavenue#8"
     },
     {
@@ -9253,6 +9259,9 @@
      "items": 1,
      "paused": false,
      "perDay": 321,
+     "slugs": [
+      "ba:itemname_beer"
+     ],
      "to": "ba:street_eighthstreet#5"
     }
    ],

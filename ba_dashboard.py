@@ -4298,7 +4298,7 @@ def _supply(
             "",
             "Weekly import" if partnership.get("isActive") else "Import paused",
         )
-        moved = collections.defaultdict(lambda: [0, 0])
+        moved = collections.defaultdict(lambda: [0, 0, set()])
         for product in save.items(partnership["products"]):
             warehouse = site_key(save.address(product["assignedWarehouse"]))
             amount = product.get("amount", 0)
@@ -4307,13 +4307,17 @@ def _supply(
             entry = moved[warehouse]
             entry[0] += expected.get((order, (warehouse, product["itemName"])), amount)
             entry[1] += 1
-        for warehouse, (amount, count) in moved.items():
+            entry[2].add(product["itemName"])
+        for warehouse, (amount, count, slugs) in moved.items():
             links.append(
                 {
                     "from": source_key,
                     "to": warehouse,
                     "perDay": round(amount / 7),
                     "items": count,
+                    # What the pipe carries, so a phone's chain can colour
+                    # the one pipe a stalled or short product rides.
+                    "slugs": _in_order(slugs),
                     "cadence": "weekly",
                     "paused": not partnership.get("isActive"),
                     "arrives": arrives,
@@ -4323,20 +4327,22 @@ def _supply(
     for source, destinations in edges.items():
         if source not in nodes:
             continue
-        moved = collections.defaultdict(lambda: [0.0, 0])
+        moved = collections.defaultdict(lambda: [0.0, 0, set()])
         for dest_key, item, _target in destinations:
             if dest_key not in nodes:
                 continue  # a pier: that is an export, not an internal move
             entry = moved[dest_key]
             entry[0] += draw(dest_key, item)
             entry[1] += 1
-        for dest_key, (per_day, count) in moved.items():
+            entry[2].add(item)
+        for dest_key, (per_day, count, slugs) in moved.items():
             links.append(
                 {
                     "from": source,
                     "to": dest_key,
                     "perDay": round(per_day),
                     "items": count,
+                    "slugs": _in_order(slugs),
                     "cadence": "daily",
                     "paused": False,
                     "arrives": None,

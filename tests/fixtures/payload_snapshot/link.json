@@ -2425,6 +2425,9 @@
      "items": 1,
      "paused": false,
      "perDay": 0,
+     "slugs": [
+      "ba:itemname_paperbag"
+     ],
      "to": "ba:street_pier#9"
     },
     {
@@ -2434,6 +2437,9 @@
      "items": 1,
      "paused": true,
      "perDay": 71,
+     "slugs": [
+      "ba:itemname_candle"
+     ],
      "to": "ba:street_pier#9"
     }
    ],
