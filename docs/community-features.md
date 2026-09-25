@@ -1,14 +1,12 @@
 # Community features
 
 The hosted dashboard shows an approximate online count and lets visitors vote for
-the **Time to break even**, **Supply chain for factories not running 24/7** and
-**Multilingual support** ideas (Find a location shipped on 15 September 2026 and
-Optimize staffing on 20 September 2026; both left the ballot). Time to break even
-would estimate how many in-game days each business needs to earn back its setup
-costs, based on its net profit; the factory idea would plan lines that make just
-enough for a week's demand rather than full output, and say how long each one has
-to run; and multilingual support would put the board's own wording into other
-languages. The
+the **Time to break even** and **Multilingual support** ideas (Find a location
+shipped on 15 September 2026, Optimize staffing on 20 September 2026 and Supply
+chain for factories not running 24/7 with Supply by object's Demand sizing; all
+three left the ballot). Time to break even would estimate how many in-game days
+each business needs to earn back its setup costs, based on its net profit; and
+multilingual support would put the board's own wording into other languages. The
 count means
 dashboard tabs seen in the last ten minutes, not verified people or players
 currently in the game. Votes help prioritise work; they are not release promises.

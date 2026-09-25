@@ -117,7 +117,7 @@ test('a building shortcut in a finding and in a supply summary does not trigger 
       D.supply={factories:{character:'map-a'}};
       const host=document.createElement('div');host.id='reference';
       const b=D.businesses[0];
-      host.innerHTML=findingRow({siteKey:b.key,site:b.name,id:'a',level:'critical',group:'staff',text:'No staff assigned'})+supplyLocation('test',0,1,'Contents');
+      host.innerHTML=findingRow({siteKey:b.key,site:b.name,id:'a',level:'critical',group:'staff',text:'No staff assigned'})+sbObject('warehouses',0,{icon:'crate',body:'Contents',open:false,left:0});
       window.parentClicks=0;host.querySelector('.find').onclick=()=>parentClicks++;
       document.body.append(host);
     });
