@@ -1,7 +1,8 @@
 'use strict';
 
 /**
- * Community API contract tests (docs/community-features-plan.md, "API contract").
+ * Community API contract tests. The contract once lived in the plan, now archived at
+ * docs/archive/community-features-plan.md; these tests are the contract as it stands.
  *
  * Runs the real worker (server/worker.mjs) inside Miniflare with an in-memory D1
  * database, the COMMUNITY_IP_SECRET binding, a simulated simple rate limiter and a
