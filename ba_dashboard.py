@@ -9385,6 +9385,11 @@ def _market(
                     else names.label(event.get("neighbourhood"), "-"),
                     # The neighbourhood `where` names, by key; None for an address.
                     "hood": None if event.get("address") else event.get("neighbourhood") or None,
+                    # The address `where` names, as the map's key; None for a
+                    # neighbourhood. The page pins it by this, never by the words.
+                    "siteKey": site_key(save.address(event.get("address"))) or None
+                    if event.get("address")
+                    else None,
                     "daysLeft": left,
                     "mine": item in sells or item in makes,
                 }
@@ -22291,7 +22296,7 @@ function drawMovers(){
     const where = x.count > 1 ? tt("gr.short.suppliers", {one: "{n} supplier", other: "{n} suppliers"}, {n: x.count})
       : x.hood ? hoodName(x.hood) : x.where;
     const id = x.count > 1 ? where : x.hood || x.where;
-    const g = byPlace.get(id) || {where, rows: [], mine: 0, lo: Infinity, hi: 0};
+    const g = byPlace.get(id) || {where, key: x.count > 1 || x.hood ? null : x.siteKey || null, rows: [], mine: 0, lo: Infinity, hi: 0};
     g.rows.push(x); g.mine += x.mine ? 1 : 0;
     g.lo = Math.min(g.lo, x.daysLeft); g.hi = Math.max(g.hi, x.daysLeft);
     byPlace.set(id, g);
@@ -22309,7 +22314,7 @@ function drawMovers(){
         {item: x.item, kind: grTroubleWord(x.kind), n: x.daysLeft})))});
     /* Whether it touches the player's own shelves is in the sentence on
        hover; the chip itself stays as short as the design's. */
-    const place = mapAddress(g.where);
+    const place = mapAddress(g.where, g.key);
     if(n === 1) out.push(waveHtml("dn", spEsc(one.item),
       kind === "shortage" ? tt("gr.wave.shortAt", "shortage at {place}", {place})
       : kind === "strain" ? tt("gr.wave.strainAt", "supplier strain at {place}", {place})

@@ -102,16 +102,10 @@ function mapKind(findings){
   if(findings.some(a => a.level === "warn")) return "watch";
   return "info";
 }
-function mapAddressKey(label){
-  // Only explicit address labels, never business names or free-text matching.
-  const found = /^(\d+)\s+(.+)$/.exec(label || "");
-  if(!found) return null;
-  if(!/(?:Street|Avenue|Road|Lane|Way|Turnpike|Pier)$/i.test(found[2])) return null;
-  const street = found[2].toLowerCase().replace(/[^a-z0-9]/g, "");
-  const normalized = {'21st':'twentyfirst','22nd':'twentysecond','23rd':'twentythird','24th':'twentyfourth','25th':'twentyfifth','26th':'twentysixth'};
-  return `ba:street_${street.replace(/^(21st|22nd|23rd|24th|25th|26th)/, s => normalized[s])}#${+found[1]}`;
-}
-function mapAddress(label, key){ return `${mapText(label)}${mapButton(key || mapAddressKey(label),label)}`; }
+/* An address and its map pin. The pin comes from the key the payload carries
+   beside the words: the words may be in any language, so they are never read
+   back into a key. */
+function mapAddress(label, key){ return `${mapText(label)}${mapButton(key,label)}`; }
 /* One source for a neighbourhood's two letters: a business carries its own,
    anything else takes the board's table, and only a place the table does not
    name falls back to initials. The card and the list read the same tag. */
@@ -979,12 +973,15 @@ class CityMapView {
     const value = r => fs.sort === 'traffic' ? r.bld.traffic : fs.sort === 'demand' ? r.f.demand
       : fs.sort === 'cap' ? capMin(r.bld.cap) : fs.sort === 'deposit' ? r.bld.deposit
       : fs.sort === 'm2' ? r.bld.m2 : r.f.score;
+    // Every column reads best-first: the most of anything good, but the least
+    // money up front, since the deposit decides whether a player can sign at all.
     // A row with nothing to sort on stays at the bottom whichever way the
     // column points; it is not the smallest value, it is no value at all.
+    const dir = fs.sort === 'deposit' ? -1 : 1;
     out.sort((a, b) => {
       const x = value(a), y = value(b);
       if(x == null || y == null) return (x == null) - (y == null) || b.bld.traffic - a.bld.traffic;
-      return (y - x) || b.bld.traffic - a.bld.traffic;
+      return dir * (y - x) || b.bld.traffic - a.bld.traffic;
     });
     return out;
   }
@@ -1151,8 +1148,12 @@ class CityMapView {
     const types = this.catTypes(this.fs.cat);
     const options = [...types].sort((a, b) => mapCompare(a[1], b[1]));
     if(this.fs.type && !types.has(this.fs.type)) this.fs.type = "";
-    select.innerHTML = `<option value="">${mapText(MAP_WORDS.anyType)}</option>` + options.map(([slug, label]) =>
+    // Rebuilt only when the list changed: replacing the options closes a list
+    // the player has open, and a live refresh rarely changes them.
+    const html = `<option value="">${mapText(MAP_WORDS.anyType)}</option>` + options.map(([slug, label]) =>
       `<option value="${attr(slug)}"${slug === this.fs.type ? ' selected' : ''}>${mapText(label)}</option>`).join('');
+    if(select.typesHtml !== html){ select.innerHTML = html; select.typesHtml = html; }
+    if(select.value !== this.fs.type) select.value = this.fs.type;
     select.disabled = !options.length;
     select.closest('.fsel').classList.toggle('on', !!this.fs.type);
     this.root.querySelector('.frow.ftype').hidden = this.saleView();
@@ -1349,14 +1350,27 @@ class CityMapView {
     if(REDUCED){ this.lift = 0; return; } // drawView paints it still, once per camera move
     if(this.ballHover) document.removeEventListener('mousemove', this.ballHover);
     document.addEventListener('mousemove', this.ballHover = e => {
+      // Only while the ball is on screen: measuring it forces a layout.
+      if(this.ballLoop !== this.buildToken) return;
       const r = this.ball.getBoundingClientRect();
       const dx = e.clientX - (r.left + r.width/2), dy = e.clientY - (r.top + r.height/2), d = Math.hypot(dx, dy) || 1;
       this.ball.style.setProperty('--hx', (34 + dx/d * 20) + '%'); this.ball.style.setProperty('--hy', (32 + dy/d * 20) + '%');
     });
-    const token = this.buildToken;
+    this.wakeBall();
+  }
+  /* The breathing runs only while the ball is on screen: a hidden map page or a
+     closed dialog stops the loop, and showing it again (showCityMap(),
+     openLocationMap()) wakes it. ballLoop names the build the running loop
+     belongs to, so a rebuild starts its own. */
+  wakeBall(){
+    if(!this.ball || REDUCED || this.ballLoop === this.buildToken) return;
+    const token = this.ballLoop = this.buildToken;
     const loop = t => {
-      if(token !== this.buildToken || !this.svg.isConnected) return;
-      if(!document.hidden && this.stage.offsetParent){
+      if(token !== this.buildToken || !this.svg.isConnected || !this.stage.offsetParent){
+        if(this.ballLoop === token) this.ballLoop = null;
+        return;
+      }
+      if(!document.hidden){
         const px = this.orb.size * this.scale();
         this.lift = (1 + Math.sin(t/700)) * px * .012;
         this.paintBall();
@@ -1487,6 +1501,7 @@ class CityMapView {
   }
   update(){
     if(!this.svg) return;
+    this.stale = false;
     // A view built before a save was open has no finder controls; the first
     // payload that carries premises brings them in.
     if(this.panel && premises() && !this.root.querySelector('[data-f="tog"]')) this.build();
@@ -1662,8 +1677,11 @@ function showCityMap(){
   // A fresh view starts plain. One that is already here keeps the finder as the
   // player left it, so a trip to another page and back finds the list still up.
   // openFinder() switches it on afterwards.
-  if(!cityMapPage) cityMapPage=new CityMapView($('cityMapPage'));
-  else cityMapPage.paintView();
+  if(!cityMapPage){ cityMapPage=new CityMapView($('cityMapPage')); return; }
+  // A live refresh while the page was hidden only marked it (refreshCityMaps).
+  if(cityMapPage.stale) cityMapPage.update();
+  cityMapPage.paintView();
+  cityMapPage.wakeBall();
 }
 /* Today's card and a Growth cell both open the map with the finder on and a
    category, a type and a neighbourhood already chosen. `focus` hands the
@@ -1698,7 +1716,10 @@ function refreshCityMaps(){
     mapViews.forEach(view=>view.resetCharacter());
   }
   cityMapCharacter=character;
-  mapViews.forEach(view=>view.update());
+  // A view off screen is only marked, and takes the new numbers when it is
+  // shown, as a PAGE_DRAWS row does; one on screen keeps an open Type list open
+  // unless its types changed (paintControls).
+  mapViews.forEach(view=>{ if(view.root.getClientRects().length) view.update(); else view.stale = true; });
 }
 function openLocationMap(key, trigger){
   const dialog=$('locationMapDialog');
@@ -1717,6 +1738,7 @@ function openLocationMap(key, trigger){
   }
   if(!cityMapOverlay) cityMapOverlay=new CityMapView($('cityMapOverlay'), {panel:false});
   cityMapOverlay.select(key,true,true);
+  cityMapOverlay.wakeBall();
 }
 document.addEventListener('click', e=>{
   const button=e.target.closest('[data-map-key]');

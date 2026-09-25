@@ -379,6 +379,9 @@ def data_company(day: int = DAY) -> dict:
             # An umbrella shortage in Lower Manhattan, running on both days.
             {"type": 3, "itemName": UMBRELLA, "neighbourhood": LOWER, "startDay": DAY - 1,
              "durationInDays": 14, "stopped": False},
+            # A backorder on water at the importer's pier: a place named by address.
+            {"type": 5, "itemName": WATER, "address": address(*PIER), "startDay": DAY - 1,
+             "durationInDays": 14, "stopped": False},
             # The rival's opening announcement, which names the company.
             {"type": 0, "rivalName": "Corner Holdings", "businessName": "Corner Gifts",
              "address": address(*RIVAL), "startDay": 12, "durationInDays": 1},
