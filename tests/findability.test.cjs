@@ -429,6 +429,8 @@ test("a finding row's name opens the site's page; the rest of the row still open
       D.alerts = [f]; drawAlerts(); showPage('today');
     }, FINDING);
     const name = page.locator('#alertSection .find .site a.ss-sl');
+    // innerText is empty until the page is rendered and shown: wait for that.
+    await name.waitFor({state: 'visible'});
     assert.equal(await name.innerText(), 'HART. Gifts');
     assert.equal(await name.getAttribute('href'), HERE);
     assert.equal(await name.getAttribute('data-tip'), 'Open its page');
