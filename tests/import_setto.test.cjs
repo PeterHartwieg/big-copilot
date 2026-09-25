@@ -376,7 +376,7 @@ test('the Plan imports card counts what the checklist has to do', async () => {
       document.querySelector('#sbTrayText').textContent]);
     const [badge, cls, what, todo] = await card();
     assert.deepEqual([badge, cls, todo], ['1 TO CHANGE', 'soon live', '0 of 1 typed in']);
-    assert.match(what, /^Sugar at North Depot: Smart Delivery stock 900 → 1[.,]?400\.$/);
+    assert.match(what, /^Sugar at North Depot: Smart Delivery stock 900 → 1,400\.$/);
     await box(page, 'Flour').fill('6000');
     await box(page, 'Flour').press('Enter');
     await page.waitForFunction(() => document.querySelector('#secWarehouses .imp-reset'));
@@ -385,10 +385,32 @@ test('the Plan imports card counts what the checklist has to do', async () => {
     await tick('Sugar');
     const one = await card();
     assert.deepEqual([one[0], one[3]], ['1 TO CHANGE', '1 of 2 typed in']);
-    assert.match(one[2], /^Flour at North Depot: Smart Delivery stock 5[.,]?000 → 6[.,]?000\.$/);
+    assert.match(one[2], /^Flour at North Depot: Smart Delivery stock 5,000 → 6,000\.$/);
     await tick('Flour');
     const [done, quiet, doneWhat, doneTodo] = await card();
     assert.deepEqual([done, quiet, doneTodo], ['ALL TICKED', 'soon', '2 of 2 typed in']);
     assert.match(doneWhat, /^You ticked all 2\./);
   } finally { await page.close(); }
+});
+
+// A German browser formats toLocaleString() with a full stop. The board pins
+// en-US, so a Supply figure reads the same whatever the player's locale.
+test('a German browser still reads Supply figures with a comma', async () => {
+  const context = await browser.newContext({locale: 'de-DE', viewport: {width: 1280, height: 1000}});
+  const page = await board({page: await (async () => {
+    const p = await context.newPage();
+    await p.route('https://**', route => route.abort());
+    await p.route('http://board.test/**', route => route.fulfill({contentType: 'text/html', body: html}));
+    await p.goto('http://board.test/');
+    return p;
+  })()});
+  try{
+    assert.equal(await page.evaluate(() => (8000).toLocaleString()), '8.000');
+    const flour = await page.locator('#secWarehouses tr[data-slug]', {hasText: 'Flour'}).innerText();
+    assert.match(flour, /\b2,000\b/);
+    assert.match(flour, /1,200 arrived last week/);
+    assert.doesNotMatch(flour, /\d\.\d{3}\b/);
+    const what = await page.evaluate(() => document.querySelector('#planImportsCard .what').textContent);
+    assert.equal(what, 'Sugar at North Depot: Smart Delivery stock 900 → 1,400.');
+  } finally { await context.close(); }
 });
