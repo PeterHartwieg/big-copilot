@@ -37,8 +37,8 @@ before(async () => {
 });
 after(async () => { await browser?.close(); });
 
-async function board(t){
-  const context = await browser.newContext({viewport: {width: 1280, height: 1000}});
+async function board(t, width = 1280){
+  const context = await browser.newContext({viewport: {width, height: 1000}});
   t.after(() => context.close());
   const page = await context.newPage();
   const errors = [];
@@ -142,6 +142,29 @@ test('every page, view and site page prints the names as text', async t => {
   // The factory's hood tag, a player's "[...]" prefix, in the goods-flow boxes.
   assert.ok((await page.locator('#flow').textContent()).includes('<bc-xss>'), 'the flow box names the tag');
   assert.deepEqual(await injected(page), clean);
+});
+
+test('the goods-flow chain on a phone prints the names as text, overview and each site followed', async t => {
+  const page = await board(t, 390);
+  await page.evaluate(() => { showPage('supply'); sbViewOn = 'diagram'; showSub('supply', 'warehouses'); drawSupplyTab('warehouses'); wireAll(); drawFlow(); });
+  assert.equal(await page.locator('#flowChain').isVisible(), true, 'the chain is drawn at 390 px');
+  assert.deepEqual(await injected(page), clean, 'the chain');
+  const chain = () => page.locator('#flowChain').textContent();
+  assert.ok((await chain()).includes('<bc-xss>'), 'the chain names the tag');
+  // Every group and the shops no pipe reaches, opened; then each site followed.
+  for (const g of await page.$$eval('#flowChain [data-fc-group]', gs => gs.map(el => el.dataset.fcGroup))) {
+    await page.evaluate(g => { flowOpenGroup = g; drawFlow(); }, g);
+    assert.deepEqual(await injected(page), clean, `group ${g}`);
+  }
+  const ids = await page.evaluate(() => D.supply.graph.nodes.map(n => n.id));
+  const seen = [];
+  for (const id of ids) {
+    await page.evaluate(id => flowFocus(id), id);
+    assert.deepEqual(await injected(page), clean, `following ${id}`);
+    seen.push(await chain());
+  }
+  for (const name of [NAMES.DEPOT, NAMES.FACTORY])
+    assert.ok(seen.some(text => text.includes(base(name))), `${base(name)} is followed by name`);
 });
 
 test('the search palette lists the names as text', async t => {

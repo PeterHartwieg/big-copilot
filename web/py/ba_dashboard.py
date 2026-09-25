@@ -4291,7 +4291,7 @@ def _supply(
             "",
             "Weekly import" if partnership.get("isActive") else "Import paused",
         )
-        moved = collections.defaultdict(lambda: [0, 0])
+        moved = collections.defaultdict(lambda: [0, 0, set()])
         for product in save.items(partnership["products"]):
             warehouse = site_key(save.address(product["assignedWarehouse"]))
             amount = product.get("amount", 0)
@@ -4300,13 +4300,17 @@ def _supply(
             entry = moved[warehouse]
             entry[0] += expected.get((order, (warehouse, product["itemName"])), amount)
             entry[1] += 1
-        for warehouse, (amount, count) in moved.items():
+            entry[2].add(product["itemName"])
+        for warehouse, (amount, count, slugs) in moved.items():
             links.append(
                 {
                     "from": source_key,
                     "to": warehouse,
                     "perDay": round(amount / 7),
                     "items": count,
+                    # What the pipe carries, so a phone's chain can colour
+                    # the one pipe a stalled or short product rides.
+                    "slugs": _in_order(slugs),
                     "cadence": "weekly",
                     "paused": not partnership.get("isActive"),
                     "arrives": arrives,
@@ -4316,20 +4320,22 @@ def _supply(
     for source, destinations in edges.items():
         if source not in nodes:
             continue
-        moved = collections.defaultdict(lambda: [0.0, 0])
+        moved = collections.defaultdict(lambda: [0.0, 0, set()])
         for dest_key, item, _target in destinations:
             if dest_key not in nodes:
                 continue  # a pier: that is an export, not an internal move
             entry = moved[dest_key]
             entry[0] += draw(dest_key, item)
             entry[1] += 1
-        for dest_key, (per_day, count) in moved.items():
+            entry[2].add(item)
+        for dest_key, (per_day, count, slugs) in moved.items():
             links.append(
                 {
                     "from": source,
                     "to": dest_key,
                     "perDay": round(per_day),
                     "items": count,
+                    "slugs": _in_order(slugs),
                     "cadence": "daily",
                     "paused": False,
                     "arrives": None,
@@ -13406,6 +13412,111 @@ html:has(dialog:modal){overflow:hidden}
 #pageSupply .sb-flowleg i{width:9px;height:9px;border-radius:50%;display:inline-block}
 #pageSupply .sb-flowleg u{width:22px;border-top:2px dashed var(--ink-3);display:inline-block;text-decoration:none}
 #pageSupply .sb-flowleg u.d{border-top-style:solid}
+/* goods flow on a narrow screen: the chain (#148), drawn instead of svg#flow
+   below 950 px of box; every class is sb-fc- (Supply flow chain) */
+#pageSupply .sb-flowbox.sb-fc-on{padding:12px}
+#pageSupply .sb-flowbox .sb-fc-leg-tap{display:none}
+#pageSupply .sb-flowbox.sb-fc-on .sb-fc-leg-tap{display:inline-flex;flex-basis:100%;color:var(--ink-2);font:400 12px/1.4 Archivo,sans-serif}
+#pageSupply .sb-flowbox.sb-fc-on .sb-fc-leg-click{display:none}
+#pageSupply .sb-flowbox.sb-fc-on .sb-flowleg{gap:8px 14px;margin-top:14px;font-size:10.5px}
+#pageSupply .sb-flowbox.sb-fc-focus .sb-flowleg,#pageSupply .sb-flowbox.sb-fc-empty .sb-flowleg{display:none}
+#pageSupply .sb-fc svg.sb-fc-i{width:16px;height:16px;display:block;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+#pageSupply .sb-fc-lab{font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+#pageSupply .sb-fc-d{width:8px;height:8px;border-radius:50%;flex:none}
+#pageSupply .sb-fc-d.warn{background:var(--warn)}
+#pageSupply .sb-fc-d.bad{background:var(--neg)}
+#pageSupply .sb-fc button{font:inherit;color:inherit}
+/* worth a look: the flagged sites, one tap each */
+#pageSupply .sb-fc-look{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+#pageSupply .sb-fc-row{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-right:-12px;padding-right:12px}
+#pageSupply .sb-fc-chip{display:inline-flex;align-items:center;gap:7px;min-height:34px;padding:0 11px 0 9px;border-radius:17px;border:1px solid var(--rule);background:var(--ground);color:var(--ink);font-size:12px;font-weight:500;white-space:nowrap;cursor:pointer}
+#pageSupply .sb-fc-chip small{font:500 10.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+#pageSupply .sb-fc-chip:hover{border-color:var(--ink-3)}
+/* the stages: a rail naming each, the cards, pipes laid over the gaps */
+#pageSupply .sb-fc-chain{position:relative}
+#pageSupply .sb-fc svg.sb-fc-pipes{position:absolute;left:0;top:0;width:auto;overflow:visible;pointer-events:none;display:block}
+#pageSupply .sb-fc-pipes path{fill:none;stroke:var(--ink-3);stroke-opacity:.5;stroke-linecap:round}
+#pageSupply .sb-fc-pipes path.weekly{stroke-dasharray:5 6}
+#pageSupply .sb-fc-pipes path.paused{stroke:var(--neg);stroke-opacity:.7}
+#pageSupply .sb-fc-pipes path.lit{stroke:var(--accent);stroke-opacity:1}
+#pageSupply .sb-fc-pipes path.warn{stroke:var(--warn);stroke-opacity:.95}
+#pageSupply .sb-fc-pipes path.bad{stroke:var(--neg);stroke-opacity:.95}
+#pageSupply .sb-fc-pipes marker path{fill:var(--ink-3);stroke:none}
+#pageSupply .sb-fc-pipes marker.lit path{fill:var(--accent)}
+#pageSupply .sb-fc-pipes marker.warn path{fill:var(--warn)}
+#pageSupply .sb-fc-pipes marker.bad path{fill:var(--neg)}
+#pageSupply .sb-fc-band{display:grid;grid-template-columns:16px minmax(0,1fr);gap:8px;align-items:stretch}
+#pageSupply .sb-fc-rail{writing-mode:vertical-rl;transform:rotate(180deg);text-align:center;font:500 9.5px/16px "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap;border-left:1px solid var(--rule-soft);overflow:hidden;text-overflow:ellipsis}
+#pageSupply .sb-fc-cards{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+#pageSupply .sb-fc-gut{height:36px}
+/* a site: kind icon, hood, dot; name; what it holds or what its pipe carries */
+#pageSupply .sb-fc-node{position:relative;flex:1 1 88px;max-width:170px;min-width:0;display:flex;flex-direction:column;gap:5px;min-height:76px;padding:9px 10px;border-radius:9px;border:1px solid var(--rule);background:var(--surface);color:var(--ink);text-align:left;cursor:pointer;box-sizing:border-box;transition:border-color .15s,transform .2s cubic-bezier(.34,1.56,.64,1)}
+#pageSupply .sb-flowbox.sb-fc-wide .sb-fc-node{max-width:190px}
+#pageSupply .sb-fc-node:hover{border-color:var(--ink-3)}
+#pageSupply .sb-fc-node:active{transform:scale(.97)}
+#pageSupply .sb-fc-node:focus-visible,#pageSupply .sb-fc-chip:focus-visible,#pageSupply .sb-fc-r:focus-visible,#pageSupply .sb-fc-btn:focus-visible,#pageSupply .sb-fc-back:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#pageSupply .sb-fc-top{display:flex;align-items:center;gap:6px;color:var(--ink-3)}
+#pageSupply .sb-fc-top svg.sb-fc-i{width:14px;height:14px}
+#pageSupply .sb-fc .hood{height:18px;min-width:22px;font-size:9.5px}
+#pageSupply .sb-fc-top .sb-fc-d{margin-left:auto}
+#pageSupply .sb-fc-nm{font-size:12.5px;font-weight:600;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+#pageSupply .sb-fc-sub{font:400 10.5px/1.25 "IBM Plex Mono",monospace;color:var(--ink-3)}
+#pageSupply .sb-fc-fl{font:500 10.5px/1.2 "IBM Plex Mono",monospace}
+#pageSupply .sb-fc-fl.warn{color:var(--warn)}
+#pageSupply .sb-fc-fl.bad{color:var(--neg)}
+#pageSupply .sb-fc-grp .sb-fc-n{margin-left:auto;font:600 10.5px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
+#pageSupply .sb-fc-grp .sb-fc-d+.sb-fc-n{margin-left:6px}
+#pageSupply .sb-fc-chev{display:grid;color:var(--ink-3);transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+#pageSupply .sb-fc-chev svg.sb-fc-i{width:13px;height:13px}
+#pageSupply .sb-fc-grp.open{border-color:var(--accent)}
+#pageSupply .sb-fc-grp.open .sb-fc-chev{transform:rotate(180deg);color:var(--accent)}
+#pageSupply .sb-fc-here{flex:1 1 100%;max-width:none;cursor:default;border:1.5px solid var(--accent);background:color-mix(in srgb,var(--accent) 7%,var(--surface));min-height:0;padding:12px 14px}
+#pageSupply .sb-flowbox.sb-fc-wide .sb-fc-here{max-width:none}
+#pageSupply .sb-fc-here:active{transform:none}
+#pageSupply .sb-fc-here .sb-fc-nm{font-size:15px;-webkit-line-clamp:1}
+#pageSupply .sb-fc-here .sb-fc-sub{font-size:11px}
+#pageSupply .sb-fc-unfedw{margin:10px 0 0 24px}
+#pageSupply .sb-fc-unfed{width:100%;max-width:none;border-style:dashed;background:transparent;min-height:0;flex-direction:row;align-items:center;gap:10px;padding:10px 12px;color:var(--ink)}
+#pageSupply .sb-fc-unfed>svg.sb-fc-i{color:var(--ink-3)}
+#pageSupply .sb-fc-txt{display:flex;flex-direction:column;gap:3px;min-width:0}
+#pageSupply .sb-fc-unfed .sb-fc-fl{margin-left:auto;white-space:nowrap}
+#pageSupply .sb-fc-unfed .sb-fc-chev{margin-left:auto}
+#pageSupply .sb-fc-unfed .sb-fc-fl+.sb-fc-chev{margin-left:4px}
+/* a group's shops, listed under the band */
+#pageSupply .sb-fc-rows{margin:10px 0 0 24px;border-top:1px solid var(--rule-soft)}
+#pageSupply .sb-fc-rhead{display:flex;justify-content:space-between;gap:10px;padding:9px 0 7px;white-space:nowrap}
+#pageSupply .sb-fc-r{display:grid;grid-template-columns:30px minmax(0,1fr) auto 10px;gap:8px;align-items:center;width:100%;min-height:44px;padding:0;border:0;border-bottom:1px solid var(--rule-soft);background:none;color:var(--ink);text-align:left;font-size:12.5px;cursor:pointer}
+#pageSupply .sb-fc-r:hover{background:var(--raised)}
+#pageSupply .sb-fc-r .hood{min-width:26px}
+#pageSupply .sb-fc-nm2{display:flex;flex-direction:column;gap:3px;min-width:0;overflow-wrap:anywhere}
+#pageSupply .sb-fc-nm2 small{font:500 10.5px/1.2 "IBM Plex Mono",monospace}
+#pageSupply .sb-fc-nm2 small.warn{color:var(--warn)}
+#pageSupply .sb-fc-nm2 small.bad{color:var(--neg)}
+#pageSupply .sb-fc-v{font:500 11px/1.2 "IBM Plex Mono",monospace;color:var(--ink-2);text-align:right;white-space:nowrap}
+#pageSupply .sb-fc-v small{display:block;font-size:10px;color:var(--ink-3)}
+/* following one site: the crumb back, the facts in words, the way on */
+#pageSupply .sb-fc-crumb{display:flex;align-items:center;gap:10px;margin-bottom:12px;min-width:0}
+#pageSupply .sb-fc-back{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 12px 0 8px;border:0;border-radius:18px;background:var(--accent-soft);color:var(--accent);font:500 12px/1 "IBM Plex Mono",monospace;white-space:nowrap;cursor:pointer}
+#pageSupply .sb-fc-back svg.sb-fc-i{width:14px;height:14px}
+#pageSupply .sb-fc-where{font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+#pageSupply .sb-fc-why{margin-top:14px;border-radius:10px;background:var(--ground);padding:12px;display:flex;flex-direction:column;gap:8px}
+#pageSupply .sb-fc-it{display:flex;align-items:baseline;gap:8px;font-size:12.5px;line-height:1.45;color:var(--ink-2);overflow-wrap:anywhere}
+#pageSupply .sb-fc-it b{color:var(--ink);font-weight:600}
+#pageSupply .sb-fc-it .chip{flex:none}
+#pageSupply .sb-fc-acts{display:flex;gap:8px;margin-top:14px}
+#pageSupply .sb-fc-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--rule);background:transparent;color:var(--ink);font:600 13px/1 Archivo,sans-serif;text-decoration:none;cursor:pointer;flex:1}
+#pageSupply .sb-fc-btn svg.sb-fc-i{width:15px;height:15px}
+#pageSupply .sb-fc-btn.go{border-color:var(--accent);color:var(--accent)}
+#pageSupply .sb-fc-btn:hover{border-color:var(--ink-3)}
+/* nothing moves yet */
+#pageSupply .sb-fc-empty{display:flex;flex-direction:column;align-items:center;gap:10px;padding:34px 18px 30px;text-align:center}
+#pageSupply .sb-fc-pic{display:flex;align-items:center;gap:6px}
+#pageSupply .sb-fc-pic span{width:34px;height:26px;border-radius:6px;border:1px dashed var(--rule)}
+#pageSupply .sb-fc-pic u{width:26px;border-top:2px dashed var(--rule);display:inline-block}
+#pageSupply .sb-fc-empty b{font-size:14px;font-weight:600}
+#pageSupply .sb-fc-empty p{margin:0;font-size:12.5px;line-height:1.5;color:var(--ink-2);max-width:280px}
+#pageSupply .sb-fc-empty .sb-fc-btn{flex:none;margin-top:6px}
+@media (prefers-reduced-motion:reduce){#pageSupply .sb-fc-node,#pageSupply .sb-fc-chev{transition:none}}
 
 /* the Set to box of an import line, its reset, and a line's contracts */
 #pageSupply .imp-unit{font:400 11px Archivo,sans-serif;color:var(--ink-3)}
@@ -14759,8 +14870,8 @@ body:has(#changelogDialog[open]){overflow:hidden}
     <section class="sec rv sb-tab" id="secShops" data-sub="shops"></section>
     <section class="sec rv sb-tab" id="secWarehouses" data-sub="warehouses"></section>
     <section class="sec rv sb-tab" id="secFactories" data-sub="factories"></section>
-    <div id="sbFlowHome" hidden><div class="sb-flowbox" id="sbFlowBox"><svg class="flow" id="flow"></svg>
-      <div class="sb-flowleg"><span><u></u><span data-tt="sb.flow.leg.weekly">weekly import</span></span><span><u class="d"></u><span data-tt="sb.flow.leg.morning">morning round</span></span><span><i style="background:var(--neg)"></i><span data-tt="sb.flow.leg.short">short or no plan</span></span><span><i style="background:var(--warn)"></i><span data-tt="sb.flow.leg.watch">worth watching</span></span><span data-tt="sb.flow.leg.click">Click a site to see its rows</span></div></div></div>
+    <div id="sbFlowHome" hidden><div class="sb-flowbox" id="sbFlowBox"><svg class="flow" id="flow"></svg><div class="sb-fc" id="flowChain" hidden></div>
+      <div class="sb-flowleg"><span><u></u><span data-tt="sb.flow.leg.weekly">weekly import</span></span><span><u class="d"></u><span data-tt="sb.flow.leg.morning">morning round</span></span><span><i style="background:var(--neg)"></i><span data-tt="sb.flow.leg.short">short or no plan</span></span><span><i style="background:var(--warn)"></i><span data-tt="sb.flow.leg.watch">worth watching</span></span><span class="sb-fc-leg-click" data-tt="sb.flow.leg.click">Click a site to see its rows</span><span class="sb-fc-leg-tap" data-tt="sb.flow.leg.tap">Tap a site to follow its goods. Tap a group to list its shops.</span></div></div></div>
   </div>
 
   <div class="page" id="pageGrowth" hidden>
@@ -15967,16 +16078,33 @@ function flowLayout(){
 
 function drawFlow(){
   const g = D.supply.graph;
-  const svg = $("flow");
-  svg.parentElement.hidden = !g.nodes.length;
-  if(!g.nodes.length){
-    flowPickId = null;
-    svg.innerHTML = "";
-    return;
-  }
+  const svg = $("flow"), chain = $("flowChain"), box = svg.parentElement;
+  flowWatch();
   /* A pick outlives a re-render; one that names a node this save no longer
      has is dropped, so nothing is dimmed and the detail shows the prompt. */
   if(flowPickId && !g.nodes.some(n => n.id === flowPickId)) flowPickId = null;
+  /* A box narrower than FLOW_CHAIN_MAX gets the chain. With no pipe at all
+     (no site, or sites no plan or import joins) the box says so at any
+     width, rather than standing empty or drawing loose boxes. */
+  const narrow = flowNarrow(), empty = !flowHasPipes(g);
+  /* The chain's focus and open group are the chain's: the picture the box
+     grows into starts whole, not dimmed round a site it cannot unpick. */
+  if(flowChainDrawn && !(narrow || empty)){ flowPickId = null; flowOpenGroup = null; }
+  flowChainDrawn = narrow || empty;
+  box.classList.toggle("sb-fc-on", flowChainDrawn);
+  box.classList.toggle("sb-fc-empty", empty);
+  box.classList.toggle("sb-fc-focus", !empty && narrow && !!flowPickId);
+  box.classList.toggle("sb-fc-wide", box.getBoundingClientRect().width >= 600);
+  svg.style.display = flowChainDrawn ? "none" : "";
+  if(chain) chain.hidden = !flowChainDrawn;
+  if(flowChainDrawn){
+    svg.innerHTML = "";
+    if(!chain) return;
+    if(empty){ flowPickId = null; chain.innerHTML = flowEmptyHtml(); return; }
+    drawFlowChain();
+    return;
+  }
+  if(chain) chain.innerHTML = "";
   const {at, width, height, colX} = flowLayout();
   const heaviest = Math.max(...g.links.map(l => l.perDay), 1);
   const named = id => (g.nodes.find(n => n.id === id) || {}).name || id;
@@ -16032,6 +16160,443 @@ function drawFlow(){
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
   svg.style.width = "100%"; svg.style.height = height + "px";
   svg.innerHTML = heads.concat(pipes, boxes, dots, cargo).join("");
+}
+
+/* --- the chain on a narrow screen (#148) ----------------------------------
+   Below FLOW_CHAIN_MAX px of box the four columns shrink past reading, so
+   drawFlow() draws #flowChain instead: the stages down the page in the order
+   the goods travel, pipes between them, and a tap follows one site (its
+   focus is flowPickId, which the desktop picture lights as its pick). */
+const FLOW_CHAIN_MAX = 950, FLOW_FOLD = 4, FLOW_GUT = 36, FLOW_LANE = 20, FLOW_BACK_LANE = 4;
+const FLOW_KIND_ORDER = {import: 0, factory: 1, depot: 2, shop: 3};
+const SB_FC_ICON = {
+  import: '<path d="M4 15l1.5 5h13L20 15z"></path><path d="M6 15V9h12v6M12 9V4M9 6h6"></path>',
+  depot: '<path d="M3 20V9l9-5 9 5v11"></path><path d="M7 20v-7h10v7M7 16h10"></path>',
+  factory: '<path d="M3 20V10l5 3V10l5 3V6h4v14z"></path><path d="M17 20h4V4h-4M3 20h18"></path>',
+  shop: '<path d="M4 9l1.5-5h13L20 9"></path><path d="M4 9h16v2a2.7 2.7 0 0 1-5.3 0 2.7 2.7 0 0 1-5.4 0A2.7 2.7 0 0 1 4 11z"></path><path d="M5.5 13v7h13v-7M10 20v-4h4v4"></path>',
+  chev: '<path d="M6 9l6 6 6-6"></path>',
+  back: '<path d="M15 6l-6 6 6 6"></path>',
+  rows: '<path d="M4 6h16M4 12h16M4 18h10"></path>',
+  panel: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"></rect><path d="M14 4.5v15"></path>',
+  book: '<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"></path><path d="M5 17a3 3 0 0 1 3-3h11"></path>',
+};
+const fcIcon = k => `<svg class="sb-fc-i" viewBox="0 0 24 24" aria-hidden="true">${SB_FC_ICON[k] || ""}</svg>`;
+/* The group that is open under the chain ("unfed" for the shops no pipe
+   reaches), whether the focus's own shop group is folded, and what the last
+   drawFlow() drew: the chain (true), the picture (false) or nothing yet. */
+let flowOpenGroup = null, flowFocusFolded = false, flowChainDrawn = null, flowChainPipeList = [];
+function flowNarrow(){
+  const box = $("sbFlowBox");
+  const w = box ? box.getBoundingClientRect().width : 0;
+  return (w || document.documentElement.clientWidth || window.innerWidth) < FLOW_CHAIN_MAX;
+}
+/* The box's width decides which drawing it gets, so a turn of the phone or a
+   resized window past the breakpoint redraws, and a width change inside the
+   chain re-lays its pipes. A box waiting at home (width 0) is left alone. */
+let flowObs = null;
+function flowWatch(){
+  const box = $("sbFlowBox");
+  if(flowObs || !box || typeof ResizeObserver === "undefined") return;
+  let last = 0;
+  flowObs = new ResizeObserver(() => {
+    const w = box.getBoundingClientRect().width;
+    if(!w || typeof D === "undefined" || !D || !D.supply || flowChainDrawn === null) return;
+    const turned = Math.abs(w - last) >= 1;
+    last = w;
+    const narrow = flowNarrow() || !flowHasPipes(D.supply.graph);
+    if(turned && narrow !== flowChainDrawn){ drawFlow(); if(!narrow) applyFlow(); return; }
+    /* Any other tick (a card grew a line at the same width, say) re-lays
+       the pipes, so their ends stay on the cards. */
+    if(narrow){ box.classList.toggle("sb-fc-wide", w >= 600); flowChainPipes(); }
+  });
+  flowObs.observe(box);
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if(flowChainDrawn) flowChainPipes(); });
+}
+const flowHasPipes = g => !!((g && g.links) || []).length;
+/* A site's flag on the chain: the worst of its facts, in words. */
+function flowFlag(node){
+  const facts = flowFacts(node);
+  const bad = facts.filter(f => f.lvl === "critical"), watch = facts.filter(f => f.lvl === "warn");
+  return bad.length ? {lvl: "bad", words: flowCountText(bad)} : watch.length ? {lvl: "warn", words: flowCountText(watch)} : {lvl: "", words: ""};
+}
+const flowBaseName = node => String(node.name || "").replace(/^\[[^\]]*\]\s*/, "") || String(node.name || "");
+const FLOW_BAND = kind => ({import: tt("sb.flow.col.importers", "Importers"), factory: tt("sb.flow.col.factories", "Factories"),
+  depot: tt("sb.flow.col.depots", "Depots"), shop: tt("sb.flow.col.shops", "Shops")}[kind] || "");
+
+/* The stages. Each site is ranked by its longest path from a source over the
+   pipes, so the Import Hub sits between the piers and the factories it feeds
+   (a depot can appear twice). Shops go to one band at the bottom; a rank
+   holding two kinds splits into one band per kind. A feeder's shops fold into
+   one group card from FLOW_FOLD up, and shops no pipe reaches wait for the
+   line under the chain. Ties keep Python's node order, which is fixed. */
+function flowStages(g){
+  const byId = new Map(g.nodes.map((n, i) => [n.id, {n, i}]));
+  const links = (g.links || []).filter(l => byId.has(l.from) && byId.has(l.to) && l.from !== l.to);
+  const linked = new Set();
+  links.forEach(l => { linked.add(l.from); linked.add(l.to); });
+  /* Back edges (a factory sending its output to the depot that feeds it, a
+     common round trip) are found by a depth-first walk from the sources in
+     node order, and left out of the ranking; they are still drawn. */
+  /* The walk goes by stage role, then node order, so which link of a cycle
+     is the way back never depends on how the save lists its sites: importer,
+     a depot an importer fills, factory, any other depot, shop. In a depot's
+     round trip with its factory the factory's return is the back edge. */
+  const order = id => byId.get(id).i;
+  /* A factory's return to a depot that feeds it is no way in to that depot:
+     a depot filled by a wholesale contract or by hand has no importer on the
+     diagram, and its round trip with the factory must not make it downstream. */
+  const kindIs = (id, k) => byId.get(id).n.kind === k;
+  const ret = l => kindIs(l.from, "factory") && kindIs(l.to, "depot") && links.some(r => r.from === l.to && r.to === l.from);
+  const imported = new Set(links.filter(l => kindIs(l.from, "import")).map(l => l.to));
+  const fedBy = new Set(links.filter(l => !ret(l)).map(l => l.to));
+  const role = id => {
+    const k = byId.get(id).n.kind;
+    return k === "import" ? 0 : k === "depot" ? (imported.has(id) || !fedBy.has(id) ? 1 : 3) : k === "factory" ? 2 : k === "shop" ? 4 : 5;
+  };
+  const byRole = (a, b) => role(a) - role(b) || order(a) - order(b);
+  const outOf = new Map();
+  links.forEach(l => { if(!outOf.has(l.from)) outOf.set(l.from, []); outOf.get(l.from).push(l); });
+  outOf.forEach(ls => ls.sort((a, b) => byRole(a.to, b.to)));
+  const hasIn = fedBy;
+  const starts = g.nodes.filter(n => linked.has(n.id)).sort((a, b) => (hasIn.has(a.id) ? 1 : 0) - (hasIn.has(b.id) ? 1 : 0) || byRole(a.id, b.id));
+  /* The rule first: every return (a factory's output going back to a depot
+     that feeds it) is a way back, drawn but never ranked. The walk then only
+     breaks whatever cycles are left. */
+  const back = new Set(links.filter(ret)), seen = new Set(), onPath = new Set(), post = [];
+  const walk = id => {
+    seen.add(id); onPath.add(id);
+    (outOf.get(id) || []).forEach(l => {
+      if(back.has(l)) return;
+      if(onPath.has(l.to)) back.add(l);
+      else if(!seen.has(l.to)) walk(l.to);
+    });
+    onPath.delete(id); post.push(id);
+  };
+  starts.forEach(n => { if(!seen.has(n.id)) walk(n.id); });
+  const rank = new Map(post.map(id => [id, 0]));
+  // Longest path over what is left, a DAG, in topological order.
+  post.slice().reverse().forEach(id => (outOf.get(id) || []).forEach(l => {
+    if(!back.has(l)) rank.set(l.to, Math.max(rank.get(l.to), rank.get(id) + 1));
+  }));
+  const kindOf = id => byId.get(id).n.kind;
+  const shopRanks = [...rank].filter(([id]) => kindOf(id) === "shop").map(([, r]) => r);
+  if(shopRanks.length){ const r = Math.max(...shopRanks); rank.forEach((_, id) => { if(kindOf(id) === "shop") rank.set(id, r); }); }
+  const unfed = [];
+  const kindRank = FLOW_KIND_ORDER;
+  const linkedRanks = [...rank];
+  g.nodes.forEach(n => {
+    if(linked.has(n.id)) return;
+    if(n.kind === "shop"){ unfed.push(n); return; }
+    /* A site on no pipe goes to its own kind's stage: the last one of its
+       kind, or else right after the kinds that come before it. */
+    const same = linkedRanks.filter(([id]) => kindOf(id) === n.kind).map(([, r]) => r);
+    const before = linkedRanks.filter(([id]) => (kindRank[kindOf(id)] ?? 9) < (kindRank[n.kind] ?? 9)).map(([, r]) => r);
+    rank.set(n.id, same.length ? Math.max(...same) : before.length ? Math.max(...before) : 0);
+  });
+  const bandKey = id => rank.get(id) * 10 + (FLOW_KIND_ORDER[kindOf(id)] ?? 9);
+  const keys = [...new Set([...rank.keys()].map(bandKey))].sort((a, b) => a - b);
+  // Which shops fold: by the feeder that sends each the most.
+  const feeder = new Map();
+  links.forEach(l => {
+    if(kindOf(l.to) !== "shop") return;
+    const had = feeder.get(l.to);
+    if(!had || l.perDay > had.perDay || (l.perDay === had.perDay && String(l.from) < String(had.from))) feeder.set(l.to, l);
+  });
+  const fed = new Map();
+  feeder.forEach((l, shop) => { if(!fed.has(l.from)) fed.set(l.from, []); fed.get(l.from).push(shop); });
+  const cardOf = new Map(), groups = new Map();
+  fed.forEach((shops, from) => {
+    if(shops.length < FLOW_FOLD) return;
+    const gid = `g:${from}`;
+    shops.sort((a, b) => byId.get(a).i - byId.get(b).i);
+    groups.set(gid, {id: gid, feeder: from, shops: shops.map(id => byId.get(id).n)});
+    shops.forEach(id => cardOf.set(id, gid));
+  });
+  const card = id => cardOf.get(id) || id;
+  // Each band's cards, in the order of what feeds them (so pipes cross less).
+  const pos = new Map(), bands = [];
+  keys.forEach((key, bi) => {
+    const ids = [...rank.keys()].filter(id => bandKey(id) === key).sort((a, b) => byId.get(a).i - byId.get(b).i);
+    const cards = [];
+    ids.forEach(id => { const c = card(id); if(!cards.includes(c)) cards.push(c); });
+    const centre = c => {
+      const from = links.filter(l => card(l.to) === c && pos.has(card(l.from))).map(l => pos.get(card(l.from)));
+      return from.length ? from.reduce((a, b) => a + b, 0) / from.length : Infinity;
+    };
+    const first = new Map(cards.map((c, i) => [c, i]));
+    if(bi) cards.sort((a, b) => (centre(a) - centre(b)) || first.get(a) - first.get(b));
+    cards.forEach((c, i) => pos.set(c, (i + .5) / cards.length));
+    bands.push({kind: kindOf(ids[0]), cards: cards.map(c => groups.get(c) ? {id: c, group: groups.get(c)} : {id: c, node: byId.get(c).n})});
+  });
+  // One pipe per pair of cards: a feeder's pipes to its group add up.
+  const pipes = new Map();
+  links.forEach(l => {
+    const a = card(l.from), b = card(l.to), k = `${a}\u0000${b}`;
+    const p = pipes.get(k) || {from: a, to: b, perDay: 0, cadence: l.cadence, paused: true, links: []};
+    p.perDay += l.perDay || 0;
+    if(l.cadence === "daily") p.cadence = "daily";
+    p.paused = p.paused && !!l.paused;
+    p.links.push(l);
+    pipes.set(k, p);
+  });
+  return {bands, unfed, groups, pipes: [...pipes.values()], card};
+}
+
+/* What a pipe carries that the judged site is short of: its worst fact among
+   the products the pipe brings. A payload from before links carried their
+   products colours a pipe only when it is the site's one way in. */
+function flowPipeProblem(links, node, only){
+  const facts = flowFacts(node), items = node.items || [];
+  const known = links.some(l => Array.isArray(l.slugs));
+  const slugs = new Set(links.flatMap(l => l.slugs || []));
+  let worst = null;
+  items.forEach((it, i) => {
+    const f = facts[i];
+    if(!f || (f.lvl !== "critical" && f.lvl !== "warn")) return;
+    if(known ? !slugs.has(it.slug) : !only) return;
+    const better = !worst || (f.lvl === "critical" && worst.f.lvl !== "critical")
+      || (f.lvl === worst.f.lvl && szRank(f) < szRank(worst.f));
+    if(better) worst = {f, it};
+  });
+  return worst ? {lvl: worst.f.lvl === "critical" ? "bad" : "warn",
+    words: tt("sb.flow.chain.carries", "{item} {word}", {item: worst.it.item, word: SZ_WORD[worst.f.st] || worst.f.st})} : null;
+}
+
+/* A site's card. `o.sub` and `o.flag` replace what it holds and its own flag
+   (the focus writes the pipe's figures there); `o.here` is the site followed. */
+function fcCard(id, node, o = {}){
+  const flag = o.flag !== undefined ? o.flag : flowFlag(node);
+  const sub = o.sub !== undefined ? o.sub : node.stock ? spEsc(tt("sb.flow.held", "{n:,} held", {n: node.stock})) : spEsc(flowSub(node));
+  const top = `<span class="sb-fc-top">${fcIcon(node.kind)}${node.tag ? `<span class="hood">${spEsc(node.tag)}</span>` : ""}${
+    flag && flag.lvl && o.dot !== false ? `<span class="sb-fc-d ${flag.lvl}" aria-hidden="true"></span>` : ""}</span>`;
+  const inner = `${top}<span class="sb-fc-nm">${spEsc(flowBaseName(node))}</span><span class="sb-fc-sub">${sub}</span>${
+    flag && flag.words ? `<span class="sb-fc-fl ${flag.lvl}">${spEsc(flag.words)}</span>` : ""}`;
+  return o.here ? `<div class="sb-fc-node sb-fc-here" data-fc-card="${attr(id)}">${inner}</div>`
+    : `<button type="button" class="sb-fc-node" data-fc-card="${attr(id)}" data-fc-id="${attr(node.id)}">${inner}</button>`;
+}
+/* A group of shops: their type when they share one (a game name), a count,
+   and what the feeder sends them a day. */
+function fcGroupCard(grp, perDay, open, sub){
+  const types = [...new Set(grp.shops.map(n => n.sub || ""))];
+  const name = types.length === 1 && types[0] ? spEsc(types[0]) : tt("sb.flow.chain.shops", "Shops");
+  const flags = grp.shops.map(flowFlag);
+  const lvl = flags.some(f => f.lvl === "bad") ? "bad" : flags.some(f => f.lvl === "warn") ? "warn" : "";
+  return `<button type="button" class="sb-fc-node sb-fc-grp${open ? " open" : ""}" data-fc-card="${attr(grp.id)}" data-fc-group="${attr(grp.id)}" aria-expanded="${open}">
+    <span class="sb-fc-top">${fcIcon("shop")}${lvl ? `<span class="sb-fc-d ${lvl}" aria-hidden="true"></span>` : ""}<span class="sb-fc-n">${grp.shops.length}</span><span class="sb-fc-chev">${fcIcon("chev")}</span></span>
+    <span class="sb-fc-nm">${name}</span><span class="sb-fc-sub">${sub || spEsc(tt("sb.flow.chain.perDay", "{n:,} a day", {n: perDay}))}</span></button>`;
+}
+/* A group's shops, listed under the band: each a tap to follow it. */
+function fcRows(gid, shops, headL, headR, perDayOf){
+  return `<div class="sb-fc-rows" data-fc-rows="${attr(gid)}"><div class="sb-fc-rhead"><span class="sb-fc-lab">${headL}</span><span class="sb-fc-lab">${headR}</span></div>${
+    shops.map(n => {
+      const f = flowFlag(n), day = perDayOf ? perDayOf(n) : null;
+      const held = spEsc(tt("sb.flow.held", "{n:,} held", {n: n.stock || 0}));
+      return `<button type="button" class="sb-fc-r" data-fc-id="${attr(n.id)}"><span>${n.tag ? `<span class="hood">${spEsc(n.tag)}</span>` : ""}</span>
+        <span class="sb-fc-nm2"><span>${spEsc(flowBaseName(n))}</span>${f.words ? `<small class="${f.lvl}">${spEsc(f.words)}</small>` : ""}</span>
+        <span class="sb-fc-v">${day !== null ? `${spEsc(tt("sb.flow.chain.perDay", "{n:,} a day", {n: day}))}<small>${held}</small>` : held}</span>
+        <span class="sb-fc-d ${f.lvl}" aria-hidden="true"></span></button>`;
+    }).join("")}</div>`;
+}
+const fcBand = (label, cards) =>
+  `<div class="sb-fc-band"><span class="sb-fc-rail">${label}</span><div class="sb-fc-cards">${cards}</div></div>`;
+const FC_GUT = `<div class="sb-fc-gut" aria-hidden="true"></div>`;
+
+/* The whole chain: worth a look, the stages and their pipes, an open group's
+   shops, the shops no pipe reaches. */
+function drawFlowChain(){
+  const g = D.supply.graph, st = flowStages(g), chain = $("flowChain");
+  if(flowPickId){ drawFlowFocus(g, st, g.nodes.find(n => n.id === flowPickId)); return; }
+  if(flowOpenGroup && flowOpenGroup !== "unfed" && !st.groups.has(flowOpenGroup)) flowOpenGroup = null;
+  if(flowOpenGroup === "unfed" && !st.unfed.length) flowOpenGroup = null;
+  const into = new Map();
+  st.pipes.forEach(p => into.set(p.to, (into.get(p.to) || 0) + p.perDay));
+  const flagged = g.nodes.map(n => [n, flowFlag(n)]).filter(([, f]) => f.lvl)
+    .sort((a, b) => (a[1].lvl === "bad" ? 0 : 1) - (b[1].lvl === "bad" ? 0 : 1));
+  const look = flagged.length ? `<div class="sb-fc-look"><span class="sb-fc-lab">${
+    tt("sb.flow.chain.look", {one: "{n} worth a look", other: "{n} worth a look"}, {n: flagged.length})}</span><div class="sb-fc-row">${
+    flagged.map(([n, f]) => `<button type="button" class="sb-fc-chip" data-fc-id="${attr(n.id)}"><span class="sb-fc-d ${f.lvl}" aria-hidden="true"></span>${
+      spEsc(n.tag ? `${n.tag} ${flowBaseName(n)}` : flowBaseName(n))}<small>${spEsc(f.words)}</small></button>`).join("")}</div></div>` : "";
+  const bands = st.bands.map(b => fcBand(FLOW_BAND(b.kind), b.cards.map(c => c.group
+    ? fcGroupCard(c.group, into.get(c.id) || 0, flowOpenGroup === c.id) : fcCard(c.id, c.node)).join("")));
+  const open = flowOpenGroup && st.groups.get(flowOpenGroup);
+  const perDayTo = (from, id) => (g.links || []).filter(l => l.from === from && l.to === id).reduce((a, l) => a + (l.perDay || 0), 0);
+  const rows = open ? fcRows(open.id, open.shops,
+    spEsc(tt("sb.flow.chain.nshops", {one: "{n} shop", other: "{n} shops"}, {n: open.shops.length})),
+    spEsc(tt("sb.flow.chain.perDay", "{n:,} a day", {n: into.get(open.id) || 0})), n => perDayTo(open.feeder, n.id)) : "";
+  let unfed = "";
+  if(st.unfed.length){
+    const counts = new Map();
+    st.unfed.forEach(n => counts.set(n.sub || "", (counts.get(n.sub || "") || 0) + 1));
+    const kinds = sbList([...counts].filter(([t]) => t).map(([t, k]) => k > 1 ? tt("sb.flow.chain.unfed.type", "{n} × {type}", {n: k, type: t}) : t));
+    const facts = st.unfed.flatMap(flowFacts);
+    const bad = facts.filter(f => f.lvl === "critical"), watch = facts.filter(f => f.lvl === "warn");
+    const flag = bad.length ? ["bad", flowCountText(bad)] : watch.length ? ["warn", flowCountText(watch)] : null;
+    const on = flowOpenGroup === "unfed";
+    unfed = `<div class="sb-fc-unfedw"><button type="button" class="sb-fc-node sb-fc-grp sb-fc-unfed${on ? " open" : ""}" data-fc-group="unfed" aria-expanded="${on}">${fcIcon("shop")}
+      <span class="sb-fc-txt"><span class="sb-fc-nm">${spEsc(tt("sb.flow.chain.unfed", {one: "{n} shop no pipe reaches", other: "{n} shops no pipe reaches"}, {n: st.unfed.length}))}</span>${
+      kinds ? `<span class="sb-fc-sub">${spEsc(kinds)}</span>` : ""}</span>${flag ? `<span class="sb-fc-fl ${flag[0]}">${spEsc(flag[1])}</span>` : ""}<span class="sb-fc-chev">${fcIcon("chev")}</span></button></div>${
+      on ? fcRows("unfed", st.unfed, spEsc(tt("sb.flow.chain.unfed.head", "No pipe reaches these")),
+        spEsc(tt("sb.flow.chain.nshops", {one: "{n} shop", other: "{n} shops"}, {n: st.unfed.length})), null) : ""}`;
+  }
+  flowChainPipeList = st.pipes.map(p => ({...p, cls: p.to === flowOpenGroup ? "lit" : ""}));
+  chain.innerHTML = `${look}${bands.length ? `<div class="sb-fc-chain"><svg class="sb-fc-pipes" aria-hidden="true"></svg>${bands.join(FC_GUT)}</div>` : ""}${rows}${unfed}`;
+  flowChainPipes();
+}
+
+/* One site followed: what comes in above it, what goes out below, the facts
+   worth a look in words, and the way to its rows and its own page. */
+function drawFlowFocus(g, st, node){
+  const chain = $("flowChain"), links = g.links || [];
+  const byId = new Map(g.nodes.map(n => [n.id, n]));
+  const ins = new Map(), outs = new Map();
+  links.forEach(l => {
+    if(l.to === node.id && byId.has(l.from) && l.from !== node.id) (ins.get(l.from) || ins.set(l.from, []).get(l.from)).push(l);
+    if(l.from === node.id && byId.has(l.to) && l.to !== node.id) (outs.get(l.to) || outs.set(l.to, []).get(l.to)).push(l);
+  });
+  const sum = ls => ls.reduce((a, l) => a + (l.perDay || 0), 0);
+  const count = ls => new Set(ls.flatMap(l => l.slugs || [])).size || ls.reduce((a, l) => a + (l.items || 0), 0);
+  const pipeSub = ls => spEsc(tt("sb.flow.chain.pipe", {one: "{perDay:,} a day · {n} product", other: "{perDay:,} a day · {n} products"},
+    {perDay: sum(ls), n: count(ls)}));
+  const cad = ls => ls.some(l => l.cadence === "daily") ? "daily" : "weekly";
+  const paused = ls => ls.every(l => l.paused);
+  const pipes = [], parts = [];
+  if(ins.size){
+    const cards = [...ins].map(([id, ls]) => {
+      /* Keyed by side: a depot that feeds a factory and takes its output is
+         in both bands, and each copy has its own pipe. */
+      const p = flowPipeProblem(ls, node, ins.size === 1);
+      pipes.push({from: `in:${id}`, to: "here", perDay: sum(ls), cadence: cad(ls), paused: paused(ls), cls: p ? p.lvl : "lit"});
+      return fcCard(`in:${id}`, byId.get(id), {sub: pipeSub(ls), flag: p, dot: false});
+    });
+    parts.push(fcBand(tt("sb.flow.chain.in", "Comes in"), cards.join("")));
+  }
+  const kindWord = flowSub(node);
+  const hereSub = node.stock ? spEsc(tt("sb.flow.chain.here.sub", "{type} · {n:,} held", {type: kindWord, n: node.stock})) : spEsc(kindWord);
+  parts.push(fcBand(tt("sb.flow.chain.here", "Here"), fcCard("here", node, {here: true, sub: hereSub})));
+  let rows = "";
+  if(outs.size){
+    const shops = [...outs.keys()].filter(id => byId.get(id).kind === "shop");
+    const fold = shops.length >= FLOW_FOLD;
+    const cards = [];
+    if(fold){
+      const ls = shops.flatMap(id => outs.get(id)), gid = `g:${node.id}`;
+      const grp = {id: gid, feeder: node.id, shops: shops.map(id => byId.get(id))};
+      const worst = grp.shops.map(n => flowPipeProblem(outs.get(n.id), n, false)).filter(Boolean);
+      const lvl = worst.some(w => w.lvl === "bad") ? "bad" : worst.length ? "warn" : "lit";
+      pipes.push({from: "here", to: gid, perDay: sum(ls), cadence: cad(ls), paused: paused(ls), cls: lvl});
+      cards.push(fcGroupCard(grp, sum(ls), !flowFocusFolded, pipeSub(ls)));
+      if(!flowFocusFolded) rows = fcRows(gid, grp.shops,
+        spEsc(tt("sb.flow.chain.nshops", {one: "{n} shop", other: "{n} shops"}, {n: shops.length})),
+        spEsc(tt("sb.flow.chain.perDay", "{n:,} a day", {n: sum(ls)})), n => sum(outs.get(n.id)));
+    }
+    [...outs].forEach(([id, ls]) => {
+      if(fold && byId.get(id).kind === "shop") return;
+      const p = flowPipeProblem(ls, byId.get(id), false);
+      pipes.push({from: "here", to: `out:${id}`, perDay: sum(ls), cadence: cad(ls), paused: paused(ls), cls: p ? p.lvl : "lit"});
+      cards.push(fcCard(`out:${id}`, byId.get(id), {sub: pipeSub(ls), flag: p, dot: false}));
+    });
+    parts.push(fcBand(tt("sb.flow.chain.out", "Goes out"), cards.join("")));
+  }
+  // Worth a look: every fact that is not fine, worst first, then what is covered.
+  const facts = flowFacts(node), items = node.items || [];
+  const pairs = items.map((it, i) => [it, facts[i]]).filter(([, f]) => f);
+  const bad = pairs.filter(([, f]) => !["covered", "made", "new"].includes(f.st)).sort((a, b) => szRank(a[1]) - szRank(b[1]));
+  const fine = pairs.filter(([, f]) => f.st === "covered");
+  const why = bad.length || fine.length ? `<div class="sb-fc-why">${bad.length ? `<span class="sb-fc-lab">${tt("sb.flow.chain.why.head", "Worth a look")}</span>` : ""}${
+    bad.map(([it, f]) => `<div class="sb-fc-it">${szChip(f)}<span>${tt("sb.flow.chain.why", "<b>{item}</b>: {why}",
+      {item: spEsc(it.item), why: spEsc(szTip(f))})}</span></div>`).join("")}${
+    fine.length ? `<div class="sb-fc-it">${szChip(fine[0][1])}<span>${spEsc(sbList(fine.map(([it]) => it.item)))}</span></div>` : ""}</div>` : "";
+  const s = Number.isInteger(node.site) ? node.site : D.businesses.findIndex(b => b.key === node.id);
+  const acts = s >= 0 ? `<div class="sb-fc-acts"><button type="button" class="sb-fc-btn go" data-fc-open="${attr(node.id)}">${fcIcon("rows")}${
+    items.length ? tt("sb.flow.chain.rows", {one: "Its {n} row", other: "Its {n} rows"}, {n: items.length}) : tt("sb.flow.chain.rows.none", "Its rows")}</button>${
+    D.businesses[s] ? `<button type="button" class="sb-fc-btn" data-fc-site="${attr(D.businesses[s].key)}">${fcIcon("panel")}${tt("sb.flow.chain.site", "Site page")}</button>` : ""}</div>` : "";
+  const crumb = `<div class="sb-fc-crumb"><button type="button" class="sb-fc-back" data-fc-back>${fcIcon("back")}${tt("sb.flow.chain.back", "Whole chain")}</button><span class="sb-fc-where">${
+    spEsc(tt("sb.flow.chain.following", "Following {name}", {name: flowBaseName(node)}))}</span></div>`;
+  flowChainPipeList = pipes;
+  chain.innerHTML = `${crumb}<div class="sb-fc-chain"><svg class="sb-fc-pipes" aria-hidden="true"></svg>${parts.join(FC_GUT)}</div>${rows}${why}${acts}`;
+  flowChainPipes();
+}
+
+/* The pipes, laid over the drawn cards: measured, so they follow the cards
+   wherever the layout puts them. A pipe between two neighbouring stages is
+   one curve; one that skips a stage, or runs back up (a factory's output
+   returning to the depot that feeds it), takes the lane beside the cards. */
+function flowChainPipes(){
+  const host = q("#flowChain .sb-fc-chain");
+  const svg = host && q(".sb-fc-pipes", host);
+  if(!svg) return;
+  const base = host.getBoundingClientRect();
+  if(!base.width) return;
+  const bandsEl = [...host.querySelectorAll(".sb-fc-band")];
+  const at = new Map();
+  bandsEl.forEach((band, bi) => band.querySelectorAll("[data-fc-card]").forEach(el => {
+    const r = el.getBoundingClientRect();
+    at.set(el.dataset.fcCard, {cx: r.left - base.left + r.width / 2, top: r.top - base.top, bottom: r.bottom - base.top, band: bi});
+  }));
+  const list = flowChainPipeList.filter(p => at.has(p.from) && at.has(p.to) && p.from !== p.to);
+  /* A pipe back up (a factory's output returning to its depot) runs down the
+     right-hand side with an arrowhead, apart from the left lane the forward
+     pipes that skip a stage take; one leaving the last stage needs room
+     under it. */
+  const isBack = p => at.get(p.to).band <= at.get(p.from).band;
+  const last = bandsEl.length - 1;
+  const room = list.some(p => isBack(p) && at.get(p.from).band === last) ? `${FLOW_GUT}px` : "";
+  /* Pipes back up each take their own lane on the right, 3 px apart; past
+     what the box's padding holds, the chain gives up that much width. */
+  const backs = list.filter(isBack);
+  const wider = `${Math.max(0, FLOW_BACK_LANE + 3 * (backs.length - 1) - 10)}px`;
+  const padR = wider === "0px" ? "" : wider;
+  if(host.style.paddingBottom !== room || host.style.paddingRight !== padR){
+    host.style.paddingBottom = room; host.style.paddingRight = padR;
+    return flowChainPipes();
+  }
+  const heaviest = Math.max(1, ...list.map(p => p.perDay));
+  const spread = (key, other) => {
+    const off = new Map(), by = new Map();
+    list.forEach(p => { if(!by.has(p[key])) by.set(p[key], []); by.get(p[key]).push(p); });
+    /* A pipe back up lands rightmost on its card, beside its lane. */
+    by.forEach(ps => ps.sort((a, b) => (isBack(a) - isBack(b)) || at.get(a[other]).cx - at.get(b[other]).cx)
+      .forEach((p, i) => off.set(p, (i - (ps.length - 1) / 2) * 7)));
+    return off;
+  };
+  const offA = spread("from", "to"), offB = spread("to", "from");
+  const f = v => v.toFixed(1), G = FLOW_GUT;
+  svg.setAttribute("width", f(base.width));
+  svg.setAttribute("height", f(base.height));
+  /* Each pipe back up its own lane, 3 px apart, kept inside the box's
+     padding; its arrowhead a fixed size, in the pipe's own colour. */
+  const backLane = p => base.width - (parseFloat(padR) || 0) + FLOW_BACK_LANE + 3 * backs.indexOf(p);
+  const arrow = st => `<marker id="sbFcArrow-${st}" class="${st}" viewBox="0 0 8 8" refX="7" refY="4" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z"></path></marker>`;
+  const arrowOf = p => p.cls === "bad" || p.cls === "warn" || p.cls === "lit" ? p.cls : p.paused ? "bad" : "plain";
+  svg.innerHTML = `<defs>${["plain", "lit", "warn", "bad"].map(arrow).join("")}</defs>` + list.map(p => {
+    const a = at.get(p.from), b = at.get(p.to);
+    const x1 = a.cx + offA.get(p), y1 = a.bottom, x2 = b.cx + offB.get(p), y2 = b.top;
+    const h = y2 - y1, back = isBack(p);
+    const lx = back ? f(backLane(p)) : FLOW_LANE;
+    const d = b.band === a.band + 1
+      ? `M${f(x1)},${f(y1)} C${f(x1)},${f(y1 + h * .55)} ${f(x2)},${f(y2 - h * .45)} ${f(x2)},${f(y2)}`
+      : `M${f(x1)},${f(y1)} C${f(x1)},${f(y1 + G * .55)} ${lx},${f(y1 + G * .45)} ${lx},${f(y1 + G)} L${lx},${f(y2 - G)} C${lx},${f(y2 - G * .55)} ${f(x2)},${f(y2 - G * .45)} ${f(x2)},${f(y2)}`;
+    const w = 1 + Math.sqrt(p.perDay / heaviest) * 2.5;
+    return `<path class="${p.cadence}${p.paused ? " paused" : ""}${back ? " back" : ""}${p.cls ? ` ${p.cls}` : ""}" data-a="${attr(p.from)}" data-b="${attr(p.to)}" data-lane="${back ? lx : b.band === a.band + 1 ? "" : FLOW_LANE}" stroke-width="${f(w)}" d="${d}"${back ? ` marker-end="url(#sbFcArrow-${arrowOf(p)})"` : ""}></path>`;
+  }).join("");
+}
+/* No pipe yet: say so, and where the first one comes from. */
+function flowEmptyHtml(){
+  const href = typeof wikiHref === "function" ? wikiHref({kind: "page", id: "importers-overview"}) : "#wiki/importers-overview";
+  return `<div class="sb-fc-empty"><div class="sb-fc-pic" aria-hidden="true"><span></span><u></u><span></span><u></u><span></span></div>
+    <b>${tt("sb.flow.empty.title", "No goods move between your sites yet")}</b>
+    <p>${tt("sb.flow.empty.body", "An import contract or a logistics manager's delivery plan draws the first pipe here.")}</p>
+    <a class="sb-fc-btn" href="${attr(href)}">${fcIcon("book")}${tt("sb.flow.empty.wiki", "How imports work")}</a></div>`;
+}
+/* Follow a site (null: back to the whole chain), and bring the box's top
+   into view when the tap sat further down. */
+function flowFocus(id){
+  flowPickId = id || null;
+  flowOpenGroup = null;
+  flowFocusFolded = false;
+  drawFlow();
+  const box = $("sbFlowBox");
+  if(box && box.getBoundingClientRect().top < 0) box.scrollIntoView({block: "start"});
 }
 
 /* The line under a box: a site's type (a game name), or an importer's state,
@@ -24399,6 +24964,10 @@ buildAlertSettingsPanel();
      svg.flow             g.node[data-id], path.pipe#pipeN[data-a][data-b],
                           circle.cargo[data-pipe=pipeN]: pipe hover moves cargo,
                           node click opens the site's rows (sbNodeOpen()).
+     #flowChain           the same graph under 950 px of box: [data-fc-id] follows
+                          a site (flowFocus()), [data-fc-group] opens a group,
+                          [data-fc-back] returns, [data-fc-open] opens the rows,
+                          [data-fc-site] the site page.
 
    Growth — wireHeat, wirePlan:
      .heat                .h[data-c], .r[data-r][data-slug], .cell[data-r][data-c][data-tip]:
@@ -26193,6 +26762,18 @@ const bindFlow = once(() => {
   onLeave(".flow .pipe", p => { const c = cargoOf(p); if(c) c.classList.remove("go"); });
   /* A site on the diagram opens its rows in the list, lit (R13). */
   on("click", ".flow .node[data-id]", n => sbNodeOpen(n.dataset.id));
+  /* The chain on a narrow screen: a card follows its site, a group opens its
+     shops, the crumb goes back to the whole chain (#148). */
+  on("click", "#flowChain [data-fc-id]", (el, e) => { e.preventDefault(); flowFocus(el.dataset.fcId); });
+  on("click", "#flowChain [data-fc-group]", (el, e) => {
+    e.preventDefault();
+    if(flowPickId) flowFocusFolded = !flowFocusFolded;
+    else flowOpenGroup = flowOpenGroup === el.dataset.fcGroup ? null : el.dataset.fcGroup;
+    drawFlow();
+  });
+  on("click", "#flowChain [data-fc-back]", (el, e) => { e.preventDefault(); flowFocus(null); });
+  on("click", "#flowChain [data-fc-open]", (el, e) => { e.preventDefault(); sbNodeOpen(el.dataset.fcOpen); });
+  on("click", "#flowChain [data-fc-site]", (el, e) => { e.preventDefault(); openSite(el.dataset.fcSite); });
 });
 function wireFlow(){ bindFlow(); applyFlow(); }
 

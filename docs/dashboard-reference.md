@@ -153,6 +153,13 @@ the map.
     line width for daily volume, in place of the tab's list. Click a site to go back to the
     list on its rows. A finding on Today lands the same way: on its tab, on its row, lit,
     with a crumb back.
+    On a phone or a portrait tablet (a diagram box under about 950 px) the diagram is the
+    chain instead: the stages down the page in the order the goods travel, so the Import Hub
+    sits between the piers and the factories. A depot's shops fold into one card from four up,
+    shops no pipe reaches share one line at the bottom, and the sites worth a look sit in a
+    row on top. Tapping a site follows it: what comes in above, what goes out below, the
+    pipe carrying a short or stalled product coloured, its facts in words, and buttons to
+    its rows and its site page. With no pipe at all the box says so and links the wiki.
 - **Growth**: planning, one view at a time.
   - *Market demand*: what is rising, what your suppliers are short of, and a demand
     grid by neighbourhood covering both what you sell and what you don't, with office
