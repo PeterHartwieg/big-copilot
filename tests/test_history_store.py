@@ -164,6 +164,17 @@ class BrowserBound(Tmp):
         with open(self.path + ".character", encoding="utf-8") as fh:
             self.assertEqual(fh.read(), "old3")
 
+    def test_a_damaged_browser_history_is_set_aside_and_nothing_written(self):
+        self.put('{"characters": {"x"')
+        save = mock.Mock(root={"characterId": "c"})
+        # extract() loads the history first, as the real one does.
+        with mock.patch.object(ba_dashboard, "load_save", return_value=save), \
+                mock.patch.object(ba_dashboard, "safe_extract",
+                                  side_effect=lambda s, n, h: (History(h).write(), {})[1]):
+            ba_dashboard.browser_build("x.hsg", "", self.path, None)
+        self.assertFalse(os.path.exists(self.path))
+        self.assertEqual(self.read(self.path + ".bad"), '{"characters": {"x"')
+
     def test_the_cli_keeps_its_sixty_days(self):
         history = History(self.path)
         for day in range(1, 71):

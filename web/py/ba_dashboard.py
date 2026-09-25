@@ -28197,9 +28197,12 @@ def browser_build(
     character = save.root.get("characterId") or "default"
     # The page keeps this file in localStorage, a few MB for the whole site:
     # sixty days of demand for every character ever opened would fill it.
-    history = History(history_path)
-    history.keep_recent(character, BROWSER_HISTORY_DAYS, BROWSER_HISTORY_CHARACTERS)
-    history.write()
+    # No file here means extract() did not write one (it set a damaged one
+    # aside), and this run writes nothing either.
+    if os.path.exists(history_path):
+        history = History(history_path)
+        history.keep_recent(character, BROWSER_HISTORY_DAYS, BROWSER_HISTORY_CHARACTERS)
+        history.write()
     with open(history_path + ".character", "w", encoding="utf-8") as fh:
         fh.write(character)
     return json.dumps(data, separators=(",", ":"))
