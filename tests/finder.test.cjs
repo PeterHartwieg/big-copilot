@@ -1426,41 +1426,63 @@ test('a Growth cell opens the finder on its own type and neighbourhood', async (
   } finally { await page.close(); }
 });
 
-test('a Growth cell opens the finder at the top of its list, however far it was scrolled', async () => {
-  // Enough vacant shops in Hell's Kitchen that the preset's list still scrolls.
+/* Enough vacant shops in Hell's Kitchen that the preset's list still scrolls.
+   On a wide map the list is the scroller; on a narrow one it is the whole
+   panel, with the filters above the results. */
+async function scrolledFinderToGrowthCell(width, scroller){
   const extra = geometry.buildings.filter(b => b.hood === HK_NAME && b.path && !HK.includes(b.key))
     .slice(0, 30).map(b => site(b.key, {traffic: 30}));
   assert.equal(extra.length, 30);
   const {page, errors} = await fixture(null, {premises: {...PREMISES, buildings: [...PREMISES.buildings, ...extra]}});
   try{
-    await page.setViewportSize({width: 1440, height: 600});
+    await page.setViewportSize({width, height: 600});
     await openMap(page); await turnOn(page);
-    const list = '#cityMapPage .places .list';
-    await page.$eval(list, el => { el.scrollTop = el.scrollHeight; });
-    assert.ok(await page.$eval(list, el => el.scrollTop) > 0, 'the list scrolls');
+    await page.$eval(scroller, el => { el.scrollTop = el.scrollHeight; });
+    const before = await page.$eval(scroller, el => el.scrollTop);
+    assert.ok(before > 0, 'the panel scrolls');
     await page.evaluate(() => { showPage('growth'); drawMarket(); wireHeat(); });
-    await page.locator(`#market .cell[data-slug="${CLOTHES}"][data-hood="${HK_NAME.replace("'", "\'")}"]`).click();
+    await page.locator(`#market .cell[data-slug="${CLOTHES}"][data-hood="${HK_NAME}"]`).click();
     await page.waitForFunction(() => document.activeElement?.matches('#cityMapPage .place.fr'));
-    assert.equal(await page.$eval(list, el => el.scrollTop), 0);
-    const [first, box] = await page.evaluate(sel => [document.querySelector(sel + ' .place.fr').getBoundingClientRect().top,
-      document.querySelector(sel).getBoundingClientRect()], list);
-    assert.ok(first >= box.top && first < box.bottom, 'the first result is in view');
-    assert.ok(await page.locator(list + ' .place.fr').count() > 10);
+    await page.waitForTimeout(100);
+    assert.ok(await page.$eval(scroller, el => el.scrollTop) < before, 'the panel went back up');
+    const [first, box, isFirst] = await page.evaluate(sel => {
+      const el = document.activeElement.getBoundingClientRect(), panel = document.querySelector(sel).getBoundingClientRect();
+      return [{top: el.top, bottom: el.bottom}, {top: Math.max(panel.top, 0), bottom: Math.min(panel.bottom, innerHeight)},
+        document.activeElement === document.querySelector('#cityMapPage .place.fr')];
+    }, scroller);
+    assert.equal(isFirst, true);
+    assert.ok(first.top >= box.top - 1 && first.bottom <= box.bottom + 1,
+      `the focused first result (${first.top}-${first.bottom}) is inside the visible panel (${box.top}-${box.bottom})`);
+    assert.ok(await page.locator('#cityMapPage .place.fr').count() > 10);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
+}
+test('a Growth cell opens the finder at the top of its list, however far it was scrolled', async () => {
+  await scrolledFinderToGrowthCell(1440, '#cityMapPage .places .list');
+});
+test('on a narrow map the panel goes back up and the focused first result is in view', async () => {
+  await scrolledFinderToGrowthCell(760, '#cityMapPage .places');
 });
 
-test('a finder the player left while it loaded does not take the focus', async () => {
+test('a finder the player left while it loaded never reaches for the focus', async () => {
   const {page, errors} = await fixture();
   try{
     await page.evaluate(() => { showPage('growth'); drawMarket(); wireHeat(); });
-    // Leave for Today before the map has loaded, then let it finish.
+    // A hidden page cannot take the focus anyway, so the spy counts the tries.
     await page.evaluate(async () => {
-      document.querySelector(`#market .cell[role=button]`).click();
+      window.focusTries = 0;
+      const focus = HTMLElement.prototype.focus;
+      HTMLElement.prototype.focus = function(...args){
+        if(this.closest('#cityMapPage')) window.focusTries++;
+        return focus.apply(this, args);
+      };
+      // Leave for Today before the map has loaded, then let it finish.
+      document.querySelector('#market .cell[role=button]').click();
       showPage('today');
       await cityMapPage.ready;
+      await new Promise(r => setTimeout(r, 50));
     });
-    assert.equal(await page.evaluate(() => !!document.activeElement?.closest('#cityMapPage')), false);
+    assert.equal(await page.evaluate(() => window.focusTries), 0);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

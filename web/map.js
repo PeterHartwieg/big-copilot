@@ -1338,8 +1338,8 @@ function openFinder(preset = {}, focus = false){
   showPage("map");
   showCityMap();
   const view = cityMapPage;
-  // A fresh question starts at the top of its answers, whatever the list was
-  // scrolled to before; on a narrow map the whole panel is what scrolls.
+  // A Growth cell's question starts at the top of its answers, whatever the
+  // list was scrolled to before; on a narrow map the whole panel scrolls.
   const toTop = () => view.root.querySelectorAll('.places, .places .list').forEach(el => { el.scrollTop = 0; });
   if(focus) toTop();
   view.setFinder(preset);
@@ -1348,7 +1348,11 @@ function openFinder(preset = {}, focus = false){
     if(!ok || page !== "map") return;
     toTop();
     const to = view.root.querySelector('.place.fr') || view.root.querySelector('[data-f="tog"]');
-    to?.focus({preventScroll: true});
+    if(!to) return;
+    to.focus({preventScroll: true});
+    // Narrow, the filters sit above the results in the same scroller, so the
+    // first result may still be below what the panel shows.
+    if(view.narrow) to.scrollIntoView({block: "nearest"});
   });
 }
 function refreshCityMaps(){
