@@ -15679,10 +15679,13 @@ function drawKpis(){
   const cashTile = cf
     ? {chip: chipHtml(cf.cashChange >= 0 ? "ok" : "bad", `${cf.cashChange >= 0 ? "▲" : "▼"} ${compact(Math.abs(cf.cashChange))}`,
          (cf.reinvested >= 0
-           ? tt("today.kpi.cash.tip.spent", "{days} days: {profit:$c} profit, cash {sign}{change:$c}; {spent:$c} went into set-up and stock",
-               {days: cf.days, profit: cf.profit, sign: plus(cf.cashChange), change: cf.cashChange, spent: cf.reinvested})
-           : tt("today.kpi.cash.tip.over", "{days} days: {profit:$c} profit, cash {sign}{change:$c}; {over:$c} more than the books earned",
-               {days: cf.days, profit: cf.profit, sign: plus(cf.cashChange), change: cf.cashChange, over: -cf.reinvested})) + owed),
+           /* Plural forms, though the English says "days" even for one. */
+           ? tt("today.kpi.cash.tip.spent", {one: "{n} days: {profit:$c} profit, cash {sign}{change:$c}; {spent:$c} went into set-up and stock",
+               other: "{n} days: {profit:$c} profit, cash {sign}{change:$c}; {spent:$c} went into set-up and stock"},
+               {n: cf.days, profit: cf.profit, sign: plus(cf.cashChange), change: cf.cashChange, spent: cf.reinvested})
+           : tt("today.kpi.cash.tip.over", {one: "{n} days: {profit:$c} profit, cash {sign}{change:$c}; {over:$c} more than the books earned",
+               other: "{n} days: {profit:$c} profit, cash {sign}{change:$c}; {over:$c} more than the books earned"},
+               {n: cf.days, profit: cf.profit, sign: plus(cf.cashChange), change: cf.cashChange, over: -cf.reinvested})) + owed),
        sub: cf.days === 7 ? tt("today.kpi.cash.week", "this week")
          : tt("today.kpi.cash.days", {one: "over {n} day", other: "over {n} days"}, {n: cf.days})}
     : {chip: chipHtml("dim", tt("today.kpi.cash.chip.profit", "{w:$c} profit", {w: k.profitSum7}),
@@ -15703,7 +15706,8 @@ function drawKpis(){
      /* The day's result has a page of its own; the tile is the way in. */
      go: "secDaily", goTip: tt("today.kpi.profit.go", "Open Company › Results, the daily result")},
     {id: "revenue", l: tt("today.kpi.revenue", "Revenue yesterday"), v: fmt(k.revenue),
-     chip: chipHtml("dim", num(k.customers), tt("today.kpi.revenue.tip", "{n:,} customers served yesterday", {n: k.customers})),
+     chip: chipHtml("dim", num(k.customers), tt("today.kpi.revenue.tip",
+       {one: "{n:,} customers served yesterday", other: "{n:,} customers served yesterday"}, {n: k.customers})),
      sub: tt("today.kpi.revenue.sub", "customers"), spark: hist(d => d.revenue)},
     /* Cash has no day-by-day history in the save, so this tile has no line. */
     {id: "cash", l: tt("today.kpi.cash", "Cash on hand"), v: fmt(k.cash), chip: cashTile.chip,
@@ -15729,7 +15733,7 @@ function drawKpis(){
            : chipHtml("dim", tt("today.kpi.worth.new", "new"),
                tt("today.kpi.worth.new.tip", "No net worth history yet; starts building today")),
          sub: k.netWorthAsOf ? tt("today.kpi.worth.stale", "stale")
-           : cf && cf.netWorthChange !== null ? tt("today.kpi.worth.over", "over {days} days", {days: cf.days})
+           : cf && cf.netWorthChange !== null ? tt("today.kpi.worth.over", {one: "over {n} days", other: "over {n} days"}, {n: cf.days})
            : tt("today.kpi.worth.none", "no history yet")},
   ];
   /* The tiles are rebuilt on every render; the entrance plays only the first time. */
@@ -15963,9 +15967,11 @@ const ALERT_EVIDENCE = {
 /* The three severities of the list: the alert levels Python assigns, in the
    design's words, as each counter's tooltip says them. */
 const SEV_KIND = {critical: "crit", warn: "watch", info: "opp"};
-const sevTip = (kind, n) => kind === "crit" ? tt("today.sev.crit", "{n} urgent; click to hide or show them", {n})
-  : kind === "watch" ? tt("today.sev.watch", "{n} watch; click to hide or show them", {n})
-  : tt("today.sev.opp", "{n} opportunity; click to hide or show them", {n});
+const sevTip = (kind, n) => kind === "crit"
+  ? tt("today.sev.crit", {one: "{n} urgent; click to hide or show them", other: "{n} urgent; click to hide or show them"}, {n})
+  : kind === "watch"
+  ? tt("today.sev.watch", {one: "{n} watch; click to hide or show them", other: "{n} watch; click to hide or show them"}, {n})
+  : tt("today.sev.opp", {one: "{n} opportunity; click to hide or show them", other: "{n} opportunity; click to hide or show them"}, {n});
 
 /* A finding is a short verb phrase; the rest of the sentence unfolds on hover.
    Python's sentences often lead with the site, which the row already names, so
@@ -16247,9 +16253,17 @@ function switchedOffKinds(rows, label, money, order = []){
     by.set(r.group, k);
   });
   const rank = id => { const i = order.indexOf(id); return i < 0 ? order.length : i; };
-  return [...by.entries()].sort((a, z) => rank(a[0]) - rank(z[0])).map(([id, k]) => k.worth >= 1
+  return todayList([...by.entries()].sort((a, z) => rank(a[0]) - rank(z[0])).map(([id, k]) => k.worth >= 1
     ? tt("today.minor.offKind.worth", "{kind} ({n}, {worth}/day)", {kind: label(id), n: k.n, worth: money(k.worth)})
-    : tt("today.minor.offKind", "{kind} ({n})", {kind: label(id), n: k.n})).join(", ");
+    : tt("today.minor.offKind", "{kind} ({n})", {kind: label(id), n: k.n})));
+}
+/* A list as one message, as Python's _msg_list() writes one: the last pair is
+   its own key (today.list.last), so a translation can join it with its "and";
+   in English every pair is joined with a comma. */
+function todayList(items){
+  if(items.length < 2) return items.length ? items[0] : "";
+  if(items.length === 2) return tt("today.list.last", "{a}, {b}", {a: items[0], b: items[1]});
+  return tt("today.list", "{a}, {b}", {a: items[0], b: todayList(items.slice(1))});
 }
 
 let showSwitchedOff = false;
@@ -22861,7 +22875,7 @@ buildAlertSettingsPanel();
 
    Today — wireTiles, wireSev, wireFinds, wireCards:
      .kpi                 spotlight under the pointer (--mx/--my); inside it
-                          .spark[data-vals="l1,l2,…"] with a <polyline points>
+                          .spark[data-vals="l1|l2|…"] with a <polyline points>
                           in a 0..100 x space, circle.pt and span.scrub.
      .sev[data-kind=crit|watch|opp]   click toggles .off and hides .find.<kind>.
      .find.crit|watch|opp[data-id]    a row; its .mark silences the row, data-id
