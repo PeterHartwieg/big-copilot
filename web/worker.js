@@ -43,20 +43,23 @@ const ready = (async () => {
   // The page passes its build stamp on this worker's URL; the Python files
   // are fetched with the same stamp so a deploy never mixes old and new.
   const stamp = new URL(self.location.href).searchParams.get("v") || "dev";
+  // A stamped URL never changes content (web/_headers caches /py/* for a year),
+  // so the browser may keep it; an unstamped dev build always refetches.
+  const cache = stamp === "dev" ? "no-store" : "default";
   for (const file of ["ba_save.py", "ba_dashboard.py"]) {
-    const res = await fetch(`py/${file}?v=${stamp}`, {cache: "no-store"});
+    const res = await fetch(`py/${file}?v=${stamp}`, {cache});
     if (!res.ok) throw new Error(`could not load ${file}: ${res.status}`);
     py.FS.writeFile(`/${file}`, await res.text());
   }
   py.FS.mkdir(SAVE_DIR);
   py.FS.mkdir(DATA_DIR);
-  const names = await fetch(`py/gametext.json?v=${stamp}`, {cache: "no-store"});
+  const names = await fetch(`py/gametext.json?v=${stamp}`, {cache});
   if (names.ok) py.FS.writeFile(NAMES, await names.text());
-  const buildings = await fetch(`py/ba_buildings.json?v=${stamp}`, {cache: "no-store"});
+  const buildings = await fetch(`py/ba_buildings.json?v=${stamp}`, {cache});
   if (buildings.ok) py.FS.writeFile(BUILDINGS, await buildings.text());
   // Both data tables are optional: the board falls back to the name prefix
   // without the city map, and simply states no arrival ceiling without these.
-  const curves = await fetch(`py/ba_demand_curves.json?v=${stamp}`, {cache: "no-store"});
+  const curves = await fetch(`py/ba_demand_curves.json?v=${stamp}`, {cache});
   if (curves.ok) py.FS.writeFile(CURVES, await curves.text());
   await py.runPythonAsync(`
 import sys

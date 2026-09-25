@@ -1,7 +1,8 @@
 'use strict';
 
 /**
- * Community API contract tests (docs/community-features-plan.md, "API contract").
+ * Community API contract tests. The contract once lived in the plan, now archived at
+ * docs/archive/community-features-plan.md; these tests are the contract as it stands.
  *
  * Runs the real worker (server/worker.mjs) inside Miniflare with an in-memory D1
  * database, the COMMUNITY_IP_SECRET binding, a simulated simple rate limiter and a
@@ -97,6 +98,7 @@ function baseOptions() {
     bindings: { COMMUNITY_IP_SECRET: 'local-test-secret-not-production' },
     ratelimits: {
       COMMUNITY_LIMITER: { namespace_id: '1001', simple: { limit: 120, period: 60 } },
+      PRESENCE_LIMITER: { namespace_id: '1002', simple: { limit: 20, period: 60 } },
     },
     serviceBindings: {
       ASSETS: async () => new Response('static fixture'),
@@ -855,4 +857,50 @@ test('rate limit: vote hammering eventually returns 429 and stops database write
   assert.equal(run.rowsAtLimit, 1, 'hammering duplicates stores exactly one vote row');
   assert.deepEqual(run.after, [429, 429, 429, 429, 429], 'still limited while the window lasts');
   assert.equal(run.rowsAfter, run.rowsAtLimit, 'limited requests must not write rows (no unlimited writes)');
+});
+
+test('rate limit: presence has its own budget, so a heartbeat loop stops early and voting still works', async () => {
+  // wrangler.jsonc is the source of truth; the Miniflare stubs above mirror it.
+  const config = fs.readFileSync(path.join(__dirname, '..', 'wrangler.jsonc'), 'utf8');
+  const limiters = Object.fromEntries(
+    [...config.matchAll(/"name":\s*"(\w+)",\s*"namespace_id":\s*"(\d+)",\s*"simple":\s*\{\s*"limit":\s*(\d+),\s*"period":\s*(\d+)/g)]
+      .map(([, name, ns, limit, period]) => [name, { ns, limit: Number(limit), period: Number(period) }]),
+  );
+  assert.deepEqual(Object.keys(limiters).sort(), ['COMMUNITY_LIMITER', 'PRESENCE_LIMITER']);
+  assert.notEqual(limiters.PRESENCE_LIMITER.ns, limiters.COMMUNITY_LIMITER.ns, 'separate namespaces');
+  assert.equal(limiters.PRESENCE_LIMITER.period, 60);
+  assert.ok(limiters.PRESENCE_LIMITER.limit >= 10 && limiters.PRESENCE_LIMITER.limit <= 20,
+    'presence allows about 10-20 heartbeats a minute per IP');
+  const opts = baseOptions().ratelimits;
+  for (const name of Object.keys(limiters)) {
+    assert.equal(opts[name].namespace_id, limiters[name].ns, `${name} stub mirrors wrangler.jsonc`);
+    assert.equal(opts[name].simple.limit, limiters[name].limit, `${name} stub mirrors wrangler.jsonc`);
+  }
+
+  const origin = originFor('rate-limit-presence');
+  const ip = nextIp();
+  // Miniflare's limiter counts in wall-clock-aligned 60 s windows, so a loop
+  // that straddles a minute boundary could be granted a second budget. Start
+  // the loop early in a window.
+  while (Date.now() % 60000 > 50000) await new Promise((resolve) => setTimeout(resolve, 250));
+  let accepted = 0;
+  let sawLimited = false;
+  for (let attempt = 0; attempt < 60; attempt++) {
+    const res = await heartbeat(crypto.randomUUID(), { origin, ip });
+    if (res.status === 429) {
+      sawLimited = true;
+      break;
+    }
+    await expectJSON(res, 200, `heartbeat #${attempt + 1}`);
+    accepted += 1;
+  }
+  assert.ok(sawLimited, 'a loop of fresh browser ids must hit the presence limiter');
+  assert.ok(accepted > 0 && accepted <= limiters.PRESENCE_LIMITER.limit,
+    `fresh ids accepted before limiting (${accepted}) stay within the presence budget`);
+  assert.equal(await tableRowCount(SCHEMA.presenceTable), accepted, 'limited heartbeats store no row');
+
+  // The shared budget is untouched: the same IP can still list and vote.
+  const [feature] = await getFeatures(origin, ip);
+  await expectJSON(await postJSON(mf, origin, '/api/community/vote', { featureId: feature.id }, ip), 200,
+    'vote from an IP whose presence budget is spent');
 });
