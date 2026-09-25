@@ -152,9 +152,10 @@ A non-zero exit says why:
   heading shows under `other headings` with a new name, ask the owner: `_door_caps()`
   matches the lower-case heading against `CAP_CATEGORIES`, and those keys, the
   `FALLBACK_CAPS` keys and the `VENUE_TYPES` values are also the building table's `t`, so
-  renaming them drops that type's capacity from every building. A heading that is no
-  longer a bold line of letters, spaces and slashes needs `_CAP_SECTION_RE`; change
-  `_CAP_SIZE_RE` only when the size-row format changed.
+  renaming them drops that type's capacity from every building. A size row counts only
+  when `_CAP_SECTION_RE` captures that same key: if the heading is no longer a bold line
+  of letters, spaces and slashes, widen `_CAP_SECTION_RE` so the capture is still the key;
+  if the heading still captures the key and the count is zero, fix `_CAP_SIZE_RE`.
 - The table differs: compare the printed row counts with the page. Fewer rows than the
   page lists means `_CAP_SIZE_RE` lost rows; otherwise update `FALLBACK_CAPS` and its
   comment, and check `CAPS_HELP` in `tests/test_premises.py`.
