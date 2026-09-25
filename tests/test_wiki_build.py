@@ -364,6 +364,14 @@ class ContractTests(FixtureCase):
         self.assertEqual(gift["title"], "Gift Shop")
         self.assertIn("businesses operate out of retail buildings", gift["body"])
 
+    def test_a_page_about_a_game_key_carries_that_key_and_no_other_page_does(self):
+        # The board matches a page to the open save on this key, never the title.
+        payload = self.build()
+        self.assertEqual(self.page(payload, "businesstypes-giftshop")["key"], "ba:businesstype_giftshop")
+        self.assertEqual(self.page(payload, "furniture-roundedshelf")["key"], "ba:itemname_roundedshelf")
+        self.assertNotIn("key", self.page(payload, "recipes-cheapgiftrecipe"))
+        self.assertNotIn("key", self.page(payload, "importers-bluestone"))
+
     def test_a_duplicate_slug_keeps_its_first_entry_and_reports_the_second(self):
         payload = self.build()
         # The second entry pointed ba:itemname_clay at an existing slug; that

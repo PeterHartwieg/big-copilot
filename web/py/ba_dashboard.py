@@ -14735,14 +14735,16 @@ function factoryView(){
         let row = s.needs.find(n => n.slug === islug);
         if(!row){
           const t = (s.targets || {})[islug];
-          row = {item: ing.item, slug: islug, perDay: 0, perWeek: 0, lines: [], waitingOn: [], madeAt: [],
+          row = {item: ing.item, slug: islug, perDay: 0, perWeek: 0, lines: [], lineSlugs: [], waitingOn: [], madeAt: [],
             target: t ? t[0] : 0, from: t ? t[1] : null, directImport: false, importSite: t ? t[1] : null,
             known: false, arrives: (s.arrivals || {})[islug] || 0, stock: held(s.s, islug),
             depotStock: t && t[1] !== null ? held(t[1], islug) : 0, importWeekly: null};
           s.needs.push(row);
         }
         row.perDay += perDay; row.perWeek += perDay * 7;
-        if(!row.lines.includes(rec.item)) row.lines.push(rec.item);
+        // The line by its key, its name beside it, as _factories() writes them.
+        row.lineSlugs = row.lineSlugs || [];
+        if(!row.lineSlugs.includes(slug)){ row.lineSlugs.push(slug); row.lines.push(rec.item); }
         row.named = true;
       });
       return false;
