@@ -108,6 +108,9 @@ side and rebuild — the rebuild is the resolution.
 
 ## Finishing a change
 
+`.github/workflows/tests.yml` runs the Python suite, the Node suites (Chromium on Linux),
+`npm run check:worker` and `python build_web.py --check` on every pull request and push to main.
+
 | You changed | Run |
 | --- | --- |
 | `ba_save.py`, `ba_dashboard.py` (extraction) | `python -m unittest discover -s tests`, then `python build_web.py`. Premises extraction is `tests/test_premises.py`. `tests/test_payload_snapshot.py` compares whole `extract()` payloads with `tests/fixtures/payload_snapshot/`; after an intended change regenerate them with `python tests/test_payload_snapshot.py --update` and review the diff |

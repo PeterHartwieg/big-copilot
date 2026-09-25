@@ -289,6 +289,7 @@ function element(id) {
 }
 
 function wiki({data = DATA, save = null} = {}) {
+  if (save) require('./_payload_contract.cjs').assertPayloadShape(save, 'wiki-guides');
   const root = element('wikiRoot');
   const nodes = new Map([['wikiRoot', root]]);
   const drawn = [];
@@ -1052,7 +1053,7 @@ test('pricing retains unlocated and closed shops, excludes vacant leases, and ha
     {name:'Unlocated',typeSlug:COFFEE.BUSINESS.nameSrc,status:'retail',neighbourhood:'',lines:[
       {slug:'ba:itemname_coffee',configuredPrice:12.34}, {slug:'ba:itemname_tea',configuredPrice:null},
       {slug:'ba:itemname_cake',configuredPrice:0}, {slug:'ba:itemname_mug',price:9.99}]},
-    {name:'Closed Coffee',typeSlug:COFFEE.BUSINESS.nameSrc,status:'retail',neighbourhood:'ba:neighborhood_midtown',temporarilyClosed:true,
+    {name:'Closed Coffee',typeSlug:COFFEE.BUSINESS.nameSrc,status:'retail',neighbourhood:'ba:neighborhood_midtown',closed:true,
       lines:[{slug:'ba:itemname_coffee',configuredPrice:3.25}]},
     {name:'Vacant lease',typeSlug:COFFEE.BUSINESS.nameSrc,status:'vacant',neighbourhood:'ba:neighborhood_midtown',
       lines:[{slug:'ba:itemname_coffee',configuredPrice:999.99}]},

@@ -98,6 +98,7 @@ async function shop(which = 'full', edit, boot){
     siteKey = b.key; siteOpen = true;
     drawSite();
   }, [[row], business()]);
+  require('./_payload_contract.cjs').assertPayloadShape(await page.evaluate(() => D), 'roster');
   return page;
 }
 
@@ -1495,7 +1496,7 @@ test('a row that says nothing about the shop\u2019s age does not call it new', a
 test('the Optimize staffing card lands on the Roster itself', async () => {
   const page = await shop('full');
   try {
-    const where = await page.evaluate(async () => {
+    await page.evaluate(() => {
       /* The harness hands the page one site and no company history, and
          showPage() draws the Results chart off that history on the way
          through. The chart is not what this is about. */
@@ -1503,7 +1504,16 @@ test('the Optimize staffing card lands on the Roster itself', async () => {
       drawOptimizeStaffing();
       wireCards();
       $('optimizeStaffingCard').click();
-      await new Promise(r => setTimeout(r, 600));
+    });
+    // The scroll's end state: the Roster near the top of the window, and
+    // still there over three frames in a row.
+    await page.waitForFunction(() => {
+      const top = Math.round(q('#sp-roster').getBoundingClientRect().top);
+      const mark = window.rosterLanding;
+      window.rosterLanding = {top, frames: mark && mark.top === top ? mark.frames + 1 : 0};
+      return top >= 0 && top < 200 && window.rosterLanding.frames >= 3;
+    }, null, {polling: 'raf'});
+    const where = await page.evaluate(() => {
       return {top: Math.round(q('#sp-roster').getBoundingClientRect().top),
         arrived: q('#sp-roster').classList.contains('sp-arrived'),
         page: [...document.querySelectorAll('.page')].filter(p => !p.hidden).map(p => p.id)};

@@ -714,20 +714,23 @@ test('the board search lists a wiki page under its name as shown, and finds it b
 
 test('a wiki category lists its pages in the order of the names shown', async t => {
   const {page} = await site(t);
-  const listed = async () => {
+  // The category's list, once it is drawn in the names now shown (`word` is
+  // one of them).
+  const listed = async word => {
     await page.evaluate(() => { location.hash = '#wiki/c/common_business_types'; });
-    await page.waitForTimeout(150);
+    await page.waitForFunction(word => [...document.querySelectorAll('#pageWiki .wk-hit .wk-what')]
+      .some(e => e.textContent === word), word);
     return page.$$eval('#pageWiki .wk-hit .wk-what', els => els.map(e => e.textContent));
   };
   await page.evaluate(() => BigCopilotBoard.browseWiki());
   await page.evaluate(() => { wikiShowAll = true; });
   await page.evaluate(async () => { await setGameNames('de'); });
-  const german = await listed();
+  const german = await listed('Lagerhaus');
   assert.ok(german.includes('Lagerhaus'), german.join(', '));
   const sorted = await page.evaluate(names => names.slice().sort(gnCompare), german);
   assert.deepEqual(german, sorted);
   await page.evaluate(async () => { await setGameNames('en'); });
-  const english = await listed();
+  const english = await listed('Warehouse');
   assert.deepEqual(english, await page.evaluate(names => names.slice().sort(gnCompare), english));
   assert.ok(english.indexOf('Warehouse') > english.indexOf('Gift Shop'));
 });
