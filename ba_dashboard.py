@@ -15481,8 +15481,9 @@ function drawMast(){
       return chip ? `<small class="fv-diffline"><span class="fv-glow">${line}</span>${chip}</small>` : `<small>${line}</small>`;
     }).join("");
   clock.dataset.tip = tt("nav.clock.tip", "Game time when the save was written: {date}. Day 1 was a Monday.", {date: m.cityDate})
-    + (k.vacant ? " " + tt("nav.clock.vacant", {one: "{n} lease vacant on top of the {b} sites.",
-        other: "{n} leases vacant on top of the {b} sites."}, {n: k.vacant, b: k.businesses}) : "");
+    + (k.vacant ? " " + tt("nav.clock.vacant", {one: "{n} lease vacant on top of the {b}.",
+        other: "{n} leases vacant on top of the {b}."}, {n: k.vacant,
+        b: tt("nav.clock.sites", {one: "{n} sites", other: "{n} sites"}, {n: k.businesses})}) : "");
   window.BigCopilotCommunity?.paintOnline();
 }
 
@@ -22942,12 +22943,12 @@ const SS_GROUPS = [navView("views", () => tt("nav.search.group.views", "Pages & 
 /* "4 more sites ›" under a group cut short, and where that row goes. */
 function ssGroupMore(g, n){
   switch(g){
-    case "views": return tt("nav.search.more.views", "{n} more pages & views ›", {n});
-    case "sites": return tt("nav.search.more.sites", "{n} more sites ›", {n});
-    case "products": return tt("nav.search.more.products", "{n} more products ›", {n});
-    case "kinds": return tt("nav.search.more.kinds", "{n} more finding kinds ›", {n});
-    case "finder": return tt("nav.search.more.finder", "{n} more find a location ›", {n});
-    default: return tt("nav.search.more.wiki", "{n} more wiki ›", {n});
+    case "views": return tt("nav.search.more.views", {one: "{n} more pages & views ›", other: "{n} more pages & views ›"}, {n});
+    case "sites": return tt("nav.search.more.sites", {one: "{n} more sites ›", other: "{n} more sites ›"}, {n});
+    case "products": return tt("nav.search.more.products", {one: "{n} more products ›", other: "{n} more products ›"}, {n});
+    case "kinds": return tt("nav.search.more.kinds", {one: "{n} more finding kinds ›", other: "{n} more finding kinds ›"}, {n});
+    case "finder": return tt("nav.search.more.finder", {one: "{n} more find a location ›", other: "{n} more find a location ›"}, {n});
+    default: return tt("nav.search.more.wiki", {one: "{n} more wiki ›", other: "{n} more wiki ›"}, {n});
   }
 }
 function ssGroupEvery(g){

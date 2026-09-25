@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "f1aa055a3e";</script>
-<link rel="stylesheet" href="community.css?v=f1aa055a3e">
+<script>window.LEDGER_BUILD = "8eff6e6163";</script>
+<link rel="stylesheet" href="community.css?v=8eff6e6163">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=f1aa055a3e">
+<link rel="stylesheet" href="fonts/fonts.css?v=8eff6e6163">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -4113,7 +4113,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"f1aa055a3e","latest":{"pr":118,"date":"2026-09-25","title":"Game names in the language you play in","summary":"A new Game names setting in the footer, beside Theme, shows the game's own names in any language the game ships: items, business types, neighbourhoods, stations, skills and staff demands, on the board, inside its findings and in the wiki, so the board reads like your game. The rest of the page stays English. Search finds a name in either language, and lists sort in the language you picked. If your browser prefers one of the game's languages, the board asks once whether to use it."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"8eff6e6163","latest":{"pr":118,"date":"2026-09-25","title":"Game names in the language you play in","summary":"A new Game names setting in the footer, beside Theme, shows the game's own names in any language the game ships: items, business types, neighbourhoods, stations, skills and staff demands, on the board, inside its findings and in the wiki, so the board reads like your game. The rest of the page stays English. Search finds a name in either language, and lists sort in the language you picked. If your browser prefers one of the game's languages, the board asks once whether to use it."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -4197,8 +4197,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=f1aa055a3e"></script>
-<script src="community.js?v=f1aa055a3e"></script>
+<script src="app.js?v=8eff6e6163"></script>
+<script src="community.js?v=8eff6e6163"></script>
 
 <script>
 
@@ -5500,8 +5500,9 @@ function drawMast(){
       return chip ? `<small class="fv-diffline"><span class="fv-glow">${line}</span>${chip}</small>` : `<small>${line}</small>`;
     }).join("");
   clock.dataset.tip = tt("nav.clock.tip", "Game time when the save was written: {date}. Day 1 was a Monday.", {date: m.cityDate})
-    + (k.vacant ? " " + tt("nav.clock.vacant", {one: "{n} lease vacant on top of the {b} sites.",
-        other: "{n} leases vacant on top of the {b} sites."}, {n: k.vacant, b: k.businesses}) : "");
+    + (k.vacant ? " " + tt("nav.clock.vacant", {one: "{n} lease vacant on top of the {b}.",
+        other: "{n} leases vacant on top of the {b}."}, {n: k.vacant,
+        b: tt("nav.clock.sites", {one: "{n} sites", other: "{n} sites"}, {n: k.businesses})}) : "");
   window.BigCopilotCommunity?.paintOnline();
 }
 
@@ -16858,12 +16859,12 @@ const SS_GROUPS = [navView("views", () => tt("nav.search.group.views", "Pages & 
 /* "4 more sites ›" under a group cut short, and where that row goes. */
 function ssGroupMore(g, n){
   switch(g){
-    case "views": return tt("nav.search.more.views", "{n} more pages & views ›", {n});
-    case "sites": return tt("nav.search.more.sites", "{n} more sites ›", {n});
-    case "products": return tt("nav.search.more.products", "{n} more products ›", {n});
-    case "kinds": return tt("nav.search.more.kinds", "{n} more finding kinds ›", {n});
-    case "finder": return tt("nav.search.more.finder", "{n} more find a location ›", {n});
-    default: return tt("nav.search.more.wiki", "{n} more wiki ›", {n});
+    case "views": return tt("nav.search.more.views", {one: "{n} more pages & views ›", other: "{n} more pages & views ›"}, {n});
+    case "sites": return tt("nav.search.more.sites", {one: "{n} more sites ›", other: "{n} more sites ›"}, {n});
+    case "products": return tt("nav.search.more.products", {one: "{n} more products ›", other: "{n} more products ›"}, {n});
+    case "kinds": return tt("nav.search.more.kinds", {one: "{n} more finding kinds ›", other: "{n} more finding kinds ›"}, {n});
+    case "finder": return tt("nav.search.more.finder", {one: "{n} more find a location ›", other: "{n} more find a location ›"}, {n});
+    default: return tt("nav.search.more.wiki", {one: "{n} more wiki ›", other: "{n} more wiki ›"}, {n});
   }
 }
 function ssGroupEvery(g){
