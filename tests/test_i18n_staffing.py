@@ -15,10 +15,11 @@ import random
 import unittest
 
 from ba_dashboard import (
-    IDLE_PARTS, PHRASE_SHAPES, STAFF_HOURS, WEEKDAYS, Msg, _cap_first, _hour_phrase, _idle_parts,
+    _alerts, IDLE_PARTS, PHRASE_SHAPES, STAFF_HOURS, WEEKDAYS, Msg, _cap_first, _hour_phrase, _idle_parts,
     _off_hours, _role_words, _sp_counters, _staff_notes, _wire_msgs, msg, plain, tok,
 )
 from tests import theatre_fixture
+from tests.test_site_panel_fields import stub
 
 
 # --- the code these replaced, as it stood before the conversion ------------
@@ -281,6 +282,45 @@ class LimitsAndCapitals(unittest.TestCase):
         self.assertEqual(fix[1]["b"]["m"][:2], ["sp.py.fix.role.post",
                                                 {"station": "projection booth", "station_name": booth}])
         self.assertEqual(tie["i18n"]["noun"][1]["b"]["m"][1]["station_name"], booth)
+
+
+class TheTodayLinesKeepTheirWords(unittest.TestCase):
+    """The at-capacity and overstaffed lines _alerts() writes carry this area's
+    words as nested messages: the limit opening a sentence through
+    _cap_first() and the posts' noun through _sp_counters()."""
+
+    SUPPLY = {"graph": {"links": []}, "shops": [], "idle": [], "imports": []}
+
+    def rows(self, hours, office):
+        status = "office" if office else "retail"
+        businesses = [stub("k1", "A", status, revenue=10.0, promotion=100)]
+        out = _wire_msgs(_alerts(businesses, self.SUPPLY, [], [], [], hours, [], 60, 0.0))
+        return {r["group"]: r for r in out["lines"] + out["minor"]["rows"]}
+
+    def test_the_at_capacity_line(self):
+        for office, noun, limit, first in (
+                (False, "sp.py.counters", "registers", "sp.py.limit.registers.first"),
+                (True, "sp.py.workstations", "workstations", "sp.py.workstations.first")):
+            words = _role_words({"skill": None if office else "ba:skill_customerservice"}, office)
+            said = words["posts"]
+            cap = {"kind": "cap", "key": "k1", "site": "A", "office": office, "limit": said[0], "fix": said[1],
+                   "limits": 1, "noun": None, "cap": 30, "capTop": 30, "when": _hour_phrase({1: {12, 13}}),
+                   "hours": 2, "throughput": 50.0}
+            with self.subTest(office=office):
+                row = self.rows([cap], office)["atcap"]
+                self.assertIn(limit.capitalize() + " is the limit", row["text"])
+                self.assertLessEqual({noun, first, "sp.py.fix.office.post" if office else "sp.py.fix.service.post"},
+                                     keys_in(row["text"]))
+
+    def test_the_overstaffed_line(self):
+        for office, noun in ((False, "sp.py.counters"), (True, "sp.py.workstations")):
+            idle = {"kind": "idle", "key": "k1", "site": "A", "office": office, "noun": None, "day": "Monday",
+                    "from": 8, "to": 12, "staff": 3, "seen": 2, "spare": 6, "worth": 20.0}
+            with self.subTest(office=office):
+                row = self.rows([idle], office)["idlestaff"]
+                self.assertIn(("3 workstations" if office else "3 counters") + " Mon 8-12", row["text"])
+                self.assertIn(noun, keys_in(row["text"]))
+                self.assertIn("sp.py.idle.part", keys_in(row["text"]))
 
 
 if __name__ == "__main__":

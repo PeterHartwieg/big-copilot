@@ -380,8 +380,8 @@ literal a `tt()` call passes, or none when it passes nothing), and `extract --pa
 prints them. Where every call's names can be read, `fits()` lets a translation use any
 of them, keeping the English's spec for the params the English prints. It still has to
 use every param its English prints, with two exceptions: a passed token param stands in
-for its English word (`X_name` for `X`, `station_name` for `stations`), and a plural form
-other than `other` may leave out `{n}` ("ein Laden"). A placeholder no call passes, or an
+for its English word (`X_name` for `X`, `station_name` for `stations`), and a `one` or
+`zero` plural form may leave out `{n}` ("ein Laden"). A placeholder no call passes, or an
 English param left out otherwise, makes it a mismatch, which `ship` drops. Where one
 call's names cannot be read (`**said`, a variable, a spread, a computed key) the
 translation is held to its English's own placeholders, no more and no fewer, as
@@ -835,12 +835,12 @@ are a separate list under `FINDER_SAVED_KEY`.
 | `const finderDefaults = () =>` | The key and its "no limit" default. `finderPick`, `saveFinder`, `resetCharacter` and `savedKey` follow it | "the defaults are visibly chosen on first open …" |
 | `setFinder(preset = {}){` | The key in the reset literal | "a preset lands on the column its category ranks by …" |
 | `loadFinder(){` | Usually nothing; a retired key goes on its `delete this.fs.` line | "the filters come back with the character …" |
-| `finderPanel(){` | A `row('Label', …)` control with `data-f="<key>"` | "the switch is in the map window; every filter lives in the panel" |
+| `finderPanel(){` and `const MAP_WORDS = {` | A `row('rowLabel', …)` control with `data-f="<key>"`; its words are `MAP_WORDS` getters over `tt("map.…")`, which a language switch writes again in place | "the switch is in the map window; every filter lives in the panel" |
 | `wireFinder(){`, `paintControls(){` | Nothing for a numeric chip; a new kind of control needs its handler and read-back here | "floor area is a column that sorts, and a filter on every list" |
 | `finderRows(){` and `saleRows(){` | The predicate; `const finderFits = (v, lo, hi) =>` for a range | "a type filter re-scores every row …", "the for-sale list answers to the filters still on screen" |
 | `savedFilters(s){` | Validation of the stored value | "a saved search is read against this save …" |
-| `savedTip(s){` and `const finderRange =` | Its part of a saved search's summary | none for most filters |
-| `sortKeys(`, `const FINDER_SORT_NAMES =`, `finderList(`, and the grid columns in `web/map.css` | *Only if* it is also a sortable column | "the Cap column sits between m² and Upfront …" |
+| `savedTip(s){` and `function finderRange(` | Its part of a saved search's summary | none for most filters |
+| `sortKeys(`, `function finderSortName(`, `finderList(`, and the grid columns in `web/map.css` | *Only if* it is also a sortable column | "the Cap column sits between m² and Upfront …" |
 | `def _premises(` in `ba_dashboard.py`, and the fixtures in `tests/finder.test.cjs` | *Only if* it needs a new field on each row | `tests/test_premises.py` (exact row dicts) |
 | `function ssFinder(` and the `openFinder({…})` callers (board script), and `function finderPreset(`, which turns a Growth › Demand cell into a preset for `openFinder(go, true)` | *Only if* a caller should preset it | `tests/search.test.cjs`; `tests/finder.test.cjs`, "a Growth cell opens the finder on its own type and neighbourhood" |
 

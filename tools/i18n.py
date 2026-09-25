@@ -494,8 +494,8 @@ def fits(key: str, text: str, english: dict, lang: str, params: dict | None = No
     may use any param the calls pass, whether the English prints it or not;
     a param the English prints keeps the English's spec, and is used, except
     that a passed token param stands in for its English word (X_name for X,
-    station_name for stations: _names_it()) and a plural form but `other`
-    may leave out {n} ("ein Laden").
+    station_name for stations: _names_it()) and a `one` or `zero` plural
+    form may leave out {n} ("ein Laden"); `few`, `many` and `other` may not.
     Otherwise every placeholder of a plain key, no more and no fewer, and a
     plural form uses no placeholder its English lacks (`other` all of them).
     Either way a plural form names a category the language has."""
@@ -520,7 +520,7 @@ def fits(key: str, text: str, english: dict, lang: str, params: dict | None = No
                 return False
             used.add(name)
         for name in specs:
-            if name in used or (name == "n" and plural and m.group(1) != "other"):
+            if name in used or (name == "n" and plural and m.group(1) in ("one", "zero")):
                 continue
             if not any(_names_it(token, name) for token in used - set(specs)):
                 return False

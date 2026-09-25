@@ -187,10 +187,10 @@ function mismatches(lang, table, base, passed = {}){
       if(![...fields(v)].every(f => given.includes(f.split(':')[0]) && (!names.has(f.split(':')[0]) || printed.has(f))))
         bad.push(`${k}: placeholders its calls do not pass, or a spec unlike the English`);
       /* Every English param is used, but a passed token param stands in for its
-         English word (X_name for X, station_name for stations), and a plural form
-         but `other` may leave out {n}. */
+         English word (X_name for X, station_name for stations), and a `one` or
+         `zero` form may leave out {n}. */
       const namesIt = (token, p) => token.endsWith('_name') && [p, p.endsWith('s') ? p.slice(0, -1) : p].includes(token.slice(0, -5));
-      const dropped = [...names].filter(p => !used.has(p) && !(p === 'n' && m && m[1] !== 'other')
+      const dropped = [...names].filter(p => !used.has(p) && !(p === 'n' && m && ['one', 'zero'].includes(m[1]))
         && ![...used].some(t => !names.has(t) && namesIt(t, p)));
       if(dropped.length) bad.push(`${k}: leaves out ${dropped.join(', ')}`);
       continue;
@@ -243,7 +243,7 @@ test('the check itself catches a wrong placeholder, a missing plural form and a 
   assert.equal(mismatches('de', {'f.a': 'Verlust {w}'}, station, given).length, 1);
   assert.equal(mismatches('de', {'sp.py.x': 'noch eine Station: {station_name}'}, station).length, 1);
   // Every English param is still used: only its token may replace it, and only
-  // a plural form but `other` may leave out {n}.
+  // a `one` or `zero` form may leave out {n}.
   const more = {'sp.py.s': '{stations}', 'sp.py.h_one': '{when} and {n} scattered hours',
     'sp.py.h_other': '{when} and {n} scattered hours', 'sp.py.l_one': '{n} shop', 'sp.py.l_other': '{n} shops'};
   const passes = {'sp.py.s': ['stations', 'station_name'], 'sp.py.h': ['when', 'n'], 'sp.py.l': ['n']};
@@ -253,6 +253,23 @@ test('the check itself catches a wrong placeholder, a missing plural form and a 
   assert.equal(mismatches('de', {'sp.py.h_one': '{n} verstreute Stunde', 'sp.py.h_other': '{n} verstreute Stunden'},
     more, passes).length, 2);
   assert.equal(mismatches('de', {'sp.py.s': 'Stationen'}, more, passes).length, 1);
+  // Polish: `one` may say "jeden sklep", but `few` and `many` still count.
+  const pl = {'sp.py.l_one': 'jeden sklep', 'sp.py.l_few': '{n} sklepy', 'sp.py.l_many': '{n} sklepów', 'sp.py.l_other': '{n} sklepu'};
+  assert.deepEqual(mismatches('pl', pl, more, passes), []);
+  assert.equal(mismatches('pl', {...pl, 'sp.py.l_few': 'kilka sklepów'}, more, passes).length, 1);
+  assert.equal(mismatches('pl', {...pl, 'sp.py.l_many': 'wiele sklepów'}, more, passes).length, 1);
+  // The build's fits() draws the same line.
+  const out = python(`
+import json
+from tools import i18n
+i18n.PLURALS['pl'] = ('one', 'few', 'many', 'other')
+english = {'sp.py.l_one': '{n} shop', 'sp.py.l_other': '{n} shops'}
+params = {'sp.py.l': {'n'}}
+print(json.dumps([i18n.fits(k, v, english, 'pl', params) for k, v in [
+    ('sp.py.l_one', 'jeden sklep'), ('sp.py.l_few', 'kilka sklepów'), ('sp.py.l_many', 'wiele sklepów'),
+    ('sp.py.l_few', '{n} sklepy'), ('sp.py.l_other', 'sklepu')]]))`);
+  assert.equal(out.status, 0, out.stderr);
+  assert.deepEqual(JSON.parse(out.stdout), [true, false, false, true, false]);
 });
 
 test('the params a call passes are read off it; a spread or a variable leaves them unknown', () => {
