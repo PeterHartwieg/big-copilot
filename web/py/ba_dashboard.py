@@ -13449,6 +13449,9 @@ html:has(dialog:modal){overflow:hidden}
 #pageSupply .sb-fc-pipes path.warn{stroke:var(--warn);stroke-opacity:.95}
 #pageSupply .sb-fc-pipes path.bad{stroke:var(--neg);stroke-opacity:.95}
 #pageSupply .sb-fc-pipes marker path{fill:var(--ink-3);stroke:none}
+#pageSupply .sb-fc-pipes marker.lit path{fill:var(--accent)}
+#pageSupply .sb-fc-pipes marker.warn path{fill:var(--warn)}
+#pageSupply .sb-fc-pipes marker.bad path{fill:var(--neg)}
 #pageSupply .sb-fc-band{display:grid;grid-template-columns:16px minmax(0,1fr);gap:8px;align-items:stretch}
 #pageSupply .sb-fc-rail{writing-mode:vertical-rl;transform:rotate(180deg);text-align:center;font:500 9.5px/16px "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap;border-left:1px solid var(--rule-soft);overflow:hidden;text-overflow:ellipsis}
 #pageSupply .sb-fc-cards{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
@@ -16178,7 +16181,7 @@ function drawFlow(){
    drawFlow() draws #flowChain instead: the stages down the page in the order
    the goods travel, pipes between them, and a tap follows one site (its
    focus is flowPickId, which the desktop picture lights as its pick). */
-const FLOW_CHAIN_MAX = 950, FLOW_FOLD = 4, FLOW_GUT = 36, FLOW_LANE = 20, FLOW_BACK_LANE = 6;
+const FLOW_CHAIN_MAX = 950, FLOW_FOLD = 4, FLOW_GUT = 36, FLOW_LANE = 20, FLOW_BACK_LANE = 4;
 const FLOW_KIND_ORDER = {import: 0, factory: 1, depot: 2, shop: 3};
 const SB_FC_ICON = {
   import: '<path d="M4 15l1.5 5h13L20 15z"></path><path d="M6 15V9h12v6M12 9V4M9 6h6"></path>',
@@ -16253,16 +16256,22 @@ function flowStages(g){
      a depot an importer fills, factory, any other depot, shop. In a depot's
      round trip with its factory the factory's return is the back edge. */
   const order = id => byId.get(id).i;
-  const imported = new Set(links.filter(l => byId.get(l.from).n.kind === "import").map(l => l.to));
+  /* A factory's return to a depot that feeds it is no way in to that depot:
+     a depot filled by a wholesale contract or by hand has no importer on the
+     diagram, and its round trip with the factory must not make it downstream. */
+  const kindIs = (id, k) => byId.get(id).n.kind === k;
+  const ret = l => kindIs(l.from, "factory") && links.some(r => r.from === l.to && r.to === l.from);
+  const imported = new Set(links.filter(l => kindIs(l.from, "import")).map(l => l.to));
+  const fedBy = new Set(links.filter(l => !ret(l)).map(l => l.to));
   const role = id => {
     const k = byId.get(id).n.kind;
-    return k === "import" ? 0 : k === "depot" ? (imported.has(id) ? 1 : 3) : k === "factory" ? 2 : k === "shop" ? 4 : 5;
+    return k === "import" ? 0 : k === "depot" ? (imported.has(id) || !fedBy.has(id) ? 1 : 3) : k === "factory" ? 2 : k === "shop" ? 4 : 5;
   };
   const byRole = (a, b) => role(a) - role(b) || order(a) - order(b);
   const outOf = new Map();
   links.forEach(l => { if(!outOf.has(l.from)) outOf.set(l.from, []); outOf.get(l.from).push(l); });
   outOf.forEach(ls => ls.sort((a, b) => byRole(a.to, b.to)));
-  const hasIn = new Set(links.map(l => l.to));
+  const hasIn = fedBy;
   const starts = g.nodes.filter(n => linked.has(n.id)).sort((a, b) => (hasIn.has(a.id) ? 1 : 0) - (hasIn.has(b.id) ? 1 : 0) || byRole(a.id, b.id));
   const seen = new Set(), onPath = new Set(), back = new Set(), post = [];
   const walk = id => {
@@ -16547,7 +16556,8 @@ function flowChainPipes(){
   const spread = (key, other) => {
     const off = new Map(), by = new Map();
     list.forEach(p => { if(!by.has(p[key])) by.set(p[key], []); by.get(p[key]).push(p); });
-    by.forEach(ps => ps.sort((a, b) => at.get(a[other]).cx - at.get(b[other]).cx)
+    /* A pipe back up lands rightmost on its card, beside its lane. */
+    by.forEach(ps => ps.sort((a, b) => (isBack(a) - isBack(b)) || at.get(a[other]).cx - at.get(b[other]).cx)
       .forEach((p, i) => off.set(p, (i - (ps.length - 1) / 2) * 7)));
     return off;
   };
@@ -16555,17 +16565,22 @@ function flowChainPipes(){
   const f = v => v.toFixed(1), G = FLOW_GUT;
   svg.setAttribute("width", f(base.width));
   svg.setAttribute("height", f(base.height));
-  const backLane = base.width + FLOW_BACK_LANE;
-  svg.innerHTML = `<defs><marker id="sbFcArrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z"></path></marker></defs>` + list.map(p => {
+  /* Each pipe back up its own lane, 3 px apart, kept inside the box's
+     padding; its arrowhead a fixed size, in the pipe's own colour. */
+  const backs = list.filter(isBack);
+  const backLane = p => base.width + Math.min(FLOW_BACK_LANE + 3 * backs.indexOf(p), 10);
+  const arrow = st => `<marker id="sbFcArrow-${st}" class="${st}" viewBox="0 0 8 8" refX="7" refY="4" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z"></path></marker>`;
+  const arrowOf = p => p.cls === "bad" || p.cls === "warn" || p.cls === "lit" ? p.cls : p.paused ? "bad" : "plain";
+  svg.innerHTML = `<defs>${["plain", "lit", "warn", "bad"].map(arrow).join("")}</defs>` + list.map(p => {
     const a = at.get(p.from), b = at.get(p.to);
     const x1 = a.cx + offA.get(p), y1 = a.bottom, x2 = b.cx + offB.get(p), y2 = b.top;
     const h = y2 - y1, back = isBack(p);
-    const lx = back ? f(backLane) : FLOW_LANE;
+    const lx = back ? f(backLane(p)) : FLOW_LANE;
     const d = b.band === a.band + 1
       ? `M${f(x1)},${f(y1)} C${f(x1)},${f(y1 + h * .55)} ${f(x2)},${f(y2 - h * .45)} ${f(x2)},${f(y2)}`
       : `M${f(x1)},${f(y1)} C${f(x1)},${f(y1 + G * .55)} ${lx},${f(y1 + G * .45)} ${lx},${f(y1 + G)} L${lx},${f(y2 - G)} C${lx},${f(y2 - G * .55)} ${f(x2)},${f(y2 - G * .45)} ${f(x2)},${f(y2)}`;
     const w = 1 + Math.sqrt(p.perDay / heaviest) * 2.5;
-    return `<path class="${p.cadence}${p.paused ? " paused" : ""}${back ? " back" : ""}${p.cls ? ` ${p.cls}` : ""}" data-a="${attr(p.from)}" data-b="${attr(p.to)}" data-lane="${back ? f(backLane) : b.band === a.band + 1 ? "" : FLOW_LANE}" stroke-width="${f(w)}" d="${d}"${back ? ` marker-end="url(#sbFcArrow)"` : ""}></path>`;
+    return `<path class="${p.cadence}${p.paused ? " paused" : ""}${back ? " back" : ""}${p.cls ? ` ${p.cls}` : ""}" data-a="${attr(p.from)}" data-b="${attr(p.to)}" data-lane="${back ? lx : b.band === a.band + 1 ? "" : FLOW_LANE}" stroke-width="${f(w)}" d="${d}"${back ? ` marker-end="url(#sbFcArrow-${arrowOf(p)})"` : ""}></path>`;
   }).join("");
 }
 /* No pipe yet: say so, and where the first one comes from. */

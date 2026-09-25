@@ -284,6 +284,23 @@ test("which link of a round trip is the way back does not depend on the save's s
   assert.match(s.pipes.find(p => p.a === 'factory#2' && p.b === 'hub#1').cls, /\bback\b/);
 });
 
+test('a depot no importer fills keeps its place above its factory in a round trip', async t => {
+  // Filled by a wholesale contract or by hand: no pier on the diagram.
+  const data = roundTrip();
+  const g = data.supply.graph;
+  g.nodes = g.nodes.filter(n => n.id !== 'import:pier');
+  g.links = g.links.filter(l => l.from !== 'import:pier');
+  for(const order of ['hub first', 'factory first']){
+    if(order === 'factory first') g.nodes = [g.nodes.find(n => n.id === 'factory#2'), ...g.nodes.filter(n => n.id !== 'factory#2')];
+    const page = await board(t, data, 390);
+    const s = await state(page);
+    assert.deepEqual(s.rails, ['Depots', 'Factories', 'Shops'], order);
+    assert.match(s.pipes.find(p => p.a === 'factory#2' && p.b === 'hub#1').cls, /\bback\b/, order);
+    // A fixed-size arrowhead, whatever the pipe's width.
+    assert.equal(await page.$eval('#flowChain marker[id^="sbFcArrow-"]', m => m.getAttribute('markerUnits')), 'userSpaceOnUse');
+  }
+});
+
 test('a way back leaving the last stage has room under it', async t => {
   const data = roundTrip();
   // A shop cannot send, so the last stage here is the factories: no shops.
