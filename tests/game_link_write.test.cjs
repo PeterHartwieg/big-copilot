@@ -371,6 +371,58 @@ test('the site panel offers the write for its one shop', async (t) => {
   assert.equal(await btn.getAttribute('data-gw-sites'), JSON.stringify([GIFTS]));
 });
 
+/* Where Today's uniform buttons sit: inside their own finding row, clear of
+   the row's text, and never pushing the page sideways, on a desktop and on a
+   phone. Measured at rest and again with the row's detail line opened by
+   focusing a button, as a keyboard does. */
+test('the uniform buttons sit inside their finding row, clear of its text, at 1440 and 390 px', async (t) => {
+  for (const width of [1440, 390]) {
+    const page = await linked(t, {approved: true, viewport: {width, height: 900}});
+    await page.evaluate(() => showPage('today'));
+    await button(page, GIFTS, 'Set for all 2 shops').waitFor();
+    const measure = () => page.evaluate(() => {
+      const box = (el) => el.getBoundingClientRect();
+      const meets = (a, b) => a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
+      const rows = [...document.querySelectorAll('#alertSection .find')].filter((row) => row.querySelector('.gw-find'));
+      const bad = [];
+      for (const row of rows) {
+        const r = box(row);
+        const text = [...row.querySelectorAll(':scope > .mark, :scope > .site, :scope > .what, :scope > .amt, :scope > .go, :scope > .more')]
+          .filter((el) => { const b = box(el); return b.width > 0 && b.height > 0; });
+        for (const btn of row.querySelectorAll('.gw-find .gw-btn')) {
+          const b = box(btn), name = btn.textContent.trim();
+          if (b.left < r.left - 0.5 || b.right > r.right + 0.5 || b.top < r.top - 0.5 || b.bottom > r.bottom + 0.5)
+            bad.push(`${name}: outside its row`);
+          for (const el of text) if (meets(b, box(el))) bad.push(`${name}: over .${el.className}`);
+        }
+        const btns = [...row.querySelectorAll('.gw-find .gw-btn')];
+        btns.forEach((a, i) => btns.slice(i + 1).forEach((c) => { if (meets(box(a), box(c)))
+          bad.push(`${a.textContent.trim()} and ${c.textContent.trim()} overlap`); }));
+      }
+      const html = document.documentElement;
+      return {rows: rows.length, buttons: rows.reduce((n, row) => n + row.querySelectorAll('.gw-find .gw-btn').length, 0),
+              bad, sideways: html.scrollWidth > html.clientWidth};
+    });
+    const rest = await measure();
+    assert.ok(rest.rows >= 2 && rest.buttons >= 3, `${width}px: ${JSON.stringify(rest)}`);
+    assert.deepEqual(rest.bad, [], `${width}px at rest`);
+    assert.equal(rest.sideways, false, `${width}px: the page scrolls sideways`);
+    // A keyboard on the button opens the row's detail line; the buttons keep clear of it.
+    await button(page, GIFTS).focus();
+    assert.equal(await page.evaluate(() => !!document.activeElement.closest('.find').querySelector(':scope > .more')), true,
+      `${width}px: the focused row has a detail line`);
+    await page.waitForFunction(() => {
+      const more = document.activeElement.closest('.find').querySelector(':scope > .more');
+      return getComputedStyle(more).opacity === '1' && more.getAnimations().every((a) => a.playState !== 'running');
+    });
+    assert.ok(await page.evaluate(() => document.activeElement.closest('.find').querySelector(':scope > .more')
+      .getBoundingClientRect().height) > 0, `${width}px: the detail line opens`);
+    const open = await measure();
+    assert.deepEqual(open.bad, [], `${width}px with the detail line open`);
+    assert.equal(open.sideways, false, `${width}px: the page scrolls sideways with the detail line open`);
+  }
+});
+
 test('a mod that does not take the kind leaves the button disabled, with the reason', async (t) => {
   for (const writes of [['imports'], null]) {
     const page = await linked(t, {writes, approved: true});
