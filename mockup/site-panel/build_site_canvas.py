@@ -1,6 +1,6 @@
 """Generates the site-panel canvas: project/*.dc.html and project/canvas.json.
 
-The brief is docs/site-panel-detail-scope.md. One panel, six artboards: a shop, a shop
+The brief is docs/archive/site-panel-detail-scope.md. One panel, six artboards: a shop, a shop
 too new to judge, an office, a warehouse, a factory and a home. The board's own
 stylesheet is borrowed from mockup/revamp/build_canvas.py so the two never drift; every
 class added here carries the sp- prefix the port will need anyway.

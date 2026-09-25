@@ -1,5 +1,7 @@
 # Issue #9: loading a previous save
 
+Status: archived. Shipped as PR #12 (12 September 2026).
+
 Selected scope, 12 September 2026. The user chose the prominent loading indicator and subsequently authorized implementation and release.
 
 ## Proposed change

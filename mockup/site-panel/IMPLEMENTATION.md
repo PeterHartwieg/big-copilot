@@ -8,7 +8,7 @@ The canvas is a draft Peter has not approved. **Get his go before PR 1.**
 The spec is `mockup/site-panel/build_site_canvas.py`: `SP_CSS` is the stylesheet, `WIRE` the
 behaviour, and `retail()`, `newshop()`, `office()`, `warehouse()`, `factory()`, `home()`,
 `bigcrew()`, `roster_block()` the markup. Port everything it draws. The why is
-`docs/site-panel-detail-scope.md`. To see an artboard at full size run the generator with
+`docs/archive/site-panel-detail-scope.md`. To see an artboard at full size run the generator with
 `--preview` and open `mockup/site-panel/_preview/<Board>.html` through the `web-test` launch
 config; delete `_preview/` afterwards. The numbers on the canvas are invented; the shapes
 are the spec.

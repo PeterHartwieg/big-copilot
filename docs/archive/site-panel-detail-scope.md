@@ -1,5 +1,7 @@
 # The site panel: what a store's page should say
 
+Status: archived. The site panel it inventoried shipped as PR #58 (19 September 2026).
+
 Written 19 September 2026 as the input to a UI/UX design session. This is an
 inventory, not a contract. It lists every fact the board warns about for one site,
 says where the data already lives, and marks what the site panel shows today. The
