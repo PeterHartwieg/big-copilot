@@ -1612,9 +1612,8 @@ test('the Layout filter offers the kind\'s layout keys and lists by them', async
     // The list reads [HK0 C1, MT0 D2, MT1 with no layout]: a row with no layout has no tag.
     assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
     assert.deepEqual(await tags(page), ['C1', 'D2', '']);
-    // Every retail layout the city's buildings have, none chosen: every row
-    // listed and every chip lit, as the neighbourhood chips are.
-    assert.deepEqual(await layChips(page), ['C1*', 'C2*', 'D2*']);
+    // Every retail layout the city's buildings have, none lit: no filter.
+    assert.deepEqual(await layChips(page), ['C1', 'C2', 'D2']);
     await page.locator(layChip('C1')).click();
     assert.deepEqual(await rowKeys(page), [HK[0]]);
     assert.deepEqual(await layChips(page), ['C1*', 'C2', 'D2']);
@@ -1626,11 +1625,14 @@ test('the Layout filter offers the kind\'s layout keys and lists by them', async
     await page.locator(`#cityMapPage .fchip.hd[data-h="${HK_HOOD}"]`).click();
     await page.locator(layChip('C1')).click(); await page.locator(layChip('D2')).click();
     assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
-    // A layout belongs to its kind: another kind starts with none chosen.
+    // A layout belongs to its kind: another kind starts with none lit. Here
+    // the offices have one layout only, which is nothing to choose between.
     await page.locator(layChip('C1')).click();
     await page.locator('#cityMapPage .fchip.cat[data-cat="office"]').click();
-    assert.deepEqual(await layChips(page), ['J1*']);
+    assert.equal(await page.locator('#cityMapPage .frow.flayout').isVisible(), false);
     assert.deepEqual(await rowKeys(page), [HK[4]]);
+    await page.locator('#cityMapPage .fchip.cat[data-cat="retail"]').click();
+    assert.deepEqual(await layChips(page), ['C1', 'C2', 'D2']);
     // Cinemas have no layouts: no row for them.
     await page.locator('#cityMapPage .fchip.cat[data-cat="cinema"]').click();
     assert.equal(await page.locator('#cityMapPage .frow.flayout').isVisible(), false);
@@ -1659,7 +1661,7 @@ test('the Layout filter is kept, saved with a search and cleared by a preset', a
     // A preset (Today's card, a Growth cell) is a fresh question.
     await page.evaluate(() => openFinder({cat: 'retail'}));
     await page.waitForFunction(() => document.querySelectorAll('#cityMapPage .place.fr').length === 3);
-    assert.deepEqual(await layChips(page), ['C1*', 'C2*', 'D2*']);
+    assert.deepEqual(await layChips(page), ['C1', 'C2', 'D2']);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
@@ -1706,7 +1708,7 @@ test('on a phone the card\'s plan fits the card and the card fits the map', asyn
   } finally { await page.close(); }
 });
 
-test('a Layout chip keeps the focus, and choosing every layout is no filter', async () => {
+test('Layout chips pick to filter, keep the focus, and all lit or none lit is no filter', async () => {
   const {page, errors} = await fixture(null, {premises: PLANNED});
   try{
     await openMap(page); await turnOn(page);
@@ -1715,11 +1717,20 @@ test('a Layout chip keeps the focus, and choosing every layout is no filter', as
     assert.equal(await page.evaluate(() => document.activeElement?.dataset.flay), 'C1');
     assert.equal(await page.locator(layChip('C1')).getAttribute('aria-pressed'), 'true');
     assert.deepEqual(await rowKeys(page), [HK[0]]);
-    // All three chosen is every layout, the row with none included: every chip
-    // stays lit, the one just clicked with them.
+    // All three lit stay lit, the one just clicked with them, and list every
+    // building, the one with no layout included.
     await page.locator(layChip('C2')).click();
     await page.locator(layChip('D2')).click();
     assert.deepEqual(await layChips(page), ['C1*', 'C2*', 'D2*']);
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
+    // Unlighting one filters again, to the two still lit.
+    await page.locator(layChip('C2')).click();
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[0]]);
+    // Clearing the last lit chip leaves none lit and the full list.
+    await page.locator(layChip('C1')).click();
+    assert.deepEqual(await rowKeys(page), [MT[0]]);
+    await page.locator(layChip('D2')).click();
+    assert.deepEqual(await layChips(page), ['C1', 'C2', 'D2']);
     assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
@@ -1737,7 +1748,7 @@ test('a search saved before the Layout filter still matches and clears it', asyn
     await page.locator(layChip('C1')).click();
     assert.equal(await page.locator('#cityMapPage .fsaved-list .fchip.on').count(), 0);
     await page.locator('#cityMapPage .fsaved-list [data-saved="Old"]').click();
-    assert.deepEqual(await layChips(page), ['C1*', 'C2*', 'D2*']);
+    assert.deepEqual(await layChips(page), ['C1', 'C2', 'D2']);
     assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }

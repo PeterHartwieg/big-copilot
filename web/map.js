@@ -485,16 +485,14 @@ class CityMapView {
       this.fs.hoods = picked.length === all.length ? null : picked;
       changed();
     });
-    // None chosen lists every layout. From there a click keeps only that
-    // layout; after that each click adds or drops one. The chips are drawn
-    // again with the kind, so the row answers through a handler on itself.
+    // Pick to filter: a chip is lit when its layout is picked, a click lights
+    // or unlights it, and the list shows only the lit layouts. None lit is no
+    // filter. The chips are drawn again with the kind, so the row answers
+    // through a handler on itself.
     this.root.querySelector('.flays').addEventListener('click', e => {
       const chip = e.target.closest('[data-flay]'); if(!chip) return;
       const code = chip.dataset.flay, now = this.fs.layouts || [];
-      const next = !now.length ? [code] : now.includes(code) ? now.filter(c => c !== code) : [...now, code];
-      // Every key chosen is no filter at all, as with the neighbourhoods, so a
-      // building with no layout is not dropped by choosing them all.
-      this.fs.layouts = this.layoutKeys().every(c => next.includes(c)) ? [] : next;
+      this.fs.layouts = now.includes(code) ? now.filter(c => c !== code) : [...now, code];
       changed();
     });
     this.root.querySelectorAll('.fchip.num input').forEach(input => input.oninput = () => {
@@ -988,19 +986,18 @@ class CityMapView {
       if(input.value !== v && document.activeElement !== input) input.value = v;
       box.classList.toggle('on', +v > 0);
     });
-    // The kind's layout keys, one chip each; a kind with none has no row.
+    // The kind's layout keys, one chip each. A kind with fewer than two has
+    // nothing to choose between, so no row (and no filter).
     const keys = this.layoutKeys(), layout = this.root.querySelector('.frow.flayout');
-    this.fs.layouts = (this.fs.layouts || []).filter(c => keys.includes(c));
-    layout.hidden = !keys.length;
+    this.fs.layouts = keys.length < 2 ? [] : (this.fs.layouts || []).filter(c => keys.includes(c));
+    layout.hidden = keys.length < 2;
     // Drawn again only when the kind's keys change, so a chip keeps the focus.
     const host = layout.querySelector('.flays'), sig = JSON.stringify(keys);
     if(host.dataset.sig !== sig){
       host.dataset.sig = sig;
       host.innerHTML = keys.map(c => `<button type="button" class="fchip flay" data-flay="${attr(c)}" aria-pressed="false">${mapText(c)}</button>`).join('');
     }
-    // Lit while listed, as a neighbourhood chip is: with no layout chosen every
-    // chip is lit, because every layout is listed.
-    host.querySelectorAll('.flay').forEach(chip => mark(chip, this.layoutOn(chip.dataset.flay)));
+    host.querySelectorAll('.flay').forEach(chip => mark(chip, this.fs.layouts.includes(chip.dataset.flay)));
     this.root.querySelectorAll('.fchip.show').forEach(chip => {
       const key = chip.dataset.show;
       chip.querySelector('b').textContent = key === 'sale'
@@ -1230,13 +1227,27 @@ class CityMapView {
   }
   planOf(b){ const code = b?.layout; return code && this.plans?.plans?.[code] ? code : null; }
   layoutTag(b){ return b?.layout ? `<span class="lp-tag">${mapText(b.layout)}</span>` : ''; }
-  /* The kind's layout keys, from the buildings themselves: A1, A2, C1… */
+  /* The kind's layout keys, from the buildings themselves: A1, A2, C1… Kept
+     for the payload they were read from, since every row asks. */
   layoutKeys(cat = this.fs.cat){
-    const keys = new Set();
-    (premises()?.buildings || []).forEach(b => { if(b.type === cat && b.layout) keys.add(b.layout); });
-    return [...keys].sort((a, b) => a.localeCompare(b, 'en', {numeric: true}));
+    const P = premises();
+    if(this.layoutKeysOf?.P !== P) this.layoutKeysOf = {P, byCat: new Map()};
+    const memo = this.layoutKeysOf.byCat;
+    if(!memo.has(cat)){
+      const keys = new Set();
+      (P?.buildings || []).forEach(b => { if(b.type === cat && b.layout) keys.add(b.layout); });
+      memo.set(cat, [...keys].sort((a, b) => a.localeCompare(b, 'en', {numeric: true})));
+    }
+    return memo.get(cat);
   }
-  layoutOn(code){ return !this.fs.layouts?.length || this.fs.layouts.includes(code); }
+  /* None lit is no filter, and so is every one lit: the chips stay lit, but a
+     building with no layout is not dropped for want of one. */
+  layoutOn(code){
+    const lit = this.fs.layouts || [];
+    if(!lit.length) return true;
+    const keys = this.layoutKeys();
+    return keys.every(c => lit.includes(c)) || lit.includes(code);
+  }
   paintCardPlan(key){
     const box = this.card?.querySelector('.lp-plan'); if(!box) return;
     const b = key ? this.sites?.get(key) || premises()?.forSale.find(s => s.key === key) : null;

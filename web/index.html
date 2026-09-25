@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="community.css?v=1d2d1f3b49">
+<link rel="stylesheet" href="community.css?v=086db92a81">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -14,7 +14,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=1d2d1f3b49">
+<link rel="stylesheet" href="fonts/fonts.css?v=086db92a81">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -3782,8 +3782,8 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_BUILD = "1d2d1f3b49";</script>
-<script>window.LEDGER_RELEASE = {"version":"1d2d1f3b49","latest":{"pr":113,"date":"2026-09-25","title":"Floor plans for every building, and a Layout filter","summary":"Each building the finder lists now names its layout, the game's short code for its shape, such as C1 or H3. Click a building on the map or in the list and its card shows the game's own floor plan for it, with its entrances (loading bays for a warehouse). A new Layout filter in Find a location lists only the layouts you pick, and a saved search keeps it."}};</script>
+<script>window.LEDGER_BUILD = "086db92a81";</script>
+<script>window.LEDGER_RELEASE = {"version":"086db92a81","latest":{"pr":113,"date":"2026-09-25","title":"Floor plans for every building, and a Layout filter","summary":"Each building the finder lists now names its layout, the game's short code for its shape, such as C1 or H3. Click a building on the map or in the list and its card shows the game's own floor plan for it, with its entrances (loading bays for a warehouse). A new Layout filter in Find a location lists only the layouts you pick, and a saved search keeps it."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -3867,8 +3867,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=1d2d1f3b49"></script>
-<script src="community.js?v=1d2d1f3b49"></script>
+<script src="app.js?v=086db92a81"></script>
+<script src="community.js?v=086db92a81"></script>
 
 <script>
 
@@ -11445,16 +11445,14 @@ class CityMapView {
       this.fs.hoods = picked.length === all.length ? null : picked;
       changed();
     });
-    // None chosen lists every layout. From there a click keeps only that
-    // layout; after that each click adds or drops one. The chips are drawn
-    // again with the kind, so the row answers through a handler on itself.
+    // Pick to filter: a chip is lit when its layout is picked, a click lights
+    // or unlights it, and the list shows only the lit layouts. None lit is no
+    // filter. The chips are drawn again with the kind, so the row answers
+    // through a handler on itself.
     this.root.querySelector('.flays').addEventListener('click', e => {
       const chip = e.target.closest('[data-flay]'); if(!chip) return;
       const code = chip.dataset.flay, now = this.fs.layouts || [];
-      const next = !now.length ? [code] : now.includes(code) ? now.filter(c => c !== code) : [...now, code];
-      // Every key chosen is no filter at all, as with the neighbourhoods, so a
-      // building with no layout is not dropped by choosing them all.
-      this.fs.layouts = this.layoutKeys().every(c => next.includes(c)) ? [] : next;
+      this.fs.layouts = now.includes(code) ? now.filter(c => c !== code) : [...now, code];
       changed();
     });
     this.root.querySelectorAll('.fchip.num input').forEach(input => input.oninput = () => {
@@ -11948,19 +11946,18 @@ class CityMapView {
       if(input.value !== v && document.activeElement !== input) input.value = v;
       box.classList.toggle('on', +v > 0);
     });
-    // The kind's layout keys, one chip each; a kind with none has no row.
+    // The kind's layout keys, one chip each. A kind with fewer than two has
+    // nothing to choose between, so no row (and no filter).
     const keys = this.layoutKeys(), layout = this.root.querySelector('.frow.flayout');
-    this.fs.layouts = (this.fs.layouts || []).filter(c => keys.includes(c));
-    layout.hidden = !keys.length;
+    this.fs.layouts = keys.length < 2 ? [] : (this.fs.layouts || []).filter(c => keys.includes(c));
+    layout.hidden = keys.length < 2;
     // Drawn again only when the kind's keys change, so a chip keeps the focus.
     const host = layout.querySelector('.flays'), sig = JSON.stringify(keys);
     if(host.dataset.sig !== sig){
       host.dataset.sig = sig;
       host.innerHTML = keys.map(c => `<button type="button" class="fchip flay" data-flay="${attr(c)}" aria-pressed="false">${mapText(c)}</button>`).join('');
     }
-    // Lit while listed, as a neighbourhood chip is: with no layout chosen every
-    // chip is lit, because every layout is listed.
-    host.querySelectorAll('.flay').forEach(chip => mark(chip, this.layoutOn(chip.dataset.flay)));
+    host.querySelectorAll('.flay').forEach(chip => mark(chip, this.fs.layouts.includes(chip.dataset.flay)));
     this.root.querySelectorAll('.fchip.show').forEach(chip => {
       const key = chip.dataset.show;
       chip.querySelector('b').textContent = key === 'sale'
@@ -12190,13 +12187,27 @@ class CityMapView {
   }
   planOf(b){ const code = b?.layout; return code && this.plans?.plans?.[code] ? code : null; }
   layoutTag(b){ return b?.layout ? `<span class="lp-tag">${mapText(b.layout)}</span>` : ''; }
-  /* The kind's layout keys, from the buildings themselves: A1, A2, C1… */
+  /* The kind's layout keys, from the buildings themselves: A1, A2, C1… Kept
+     for the payload they were read from, since every row asks. */
   layoutKeys(cat = this.fs.cat){
-    const keys = new Set();
-    (premises()?.buildings || []).forEach(b => { if(b.type === cat && b.layout) keys.add(b.layout); });
-    return [...keys].sort((a, b) => a.localeCompare(b, 'en', {numeric: true}));
+    const P = premises();
+    if(this.layoutKeysOf?.P !== P) this.layoutKeysOf = {P, byCat: new Map()};
+    const memo = this.layoutKeysOf.byCat;
+    if(!memo.has(cat)){
+      const keys = new Set();
+      (P?.buildings || []).forEach(b => { if(b.type === cat && b.layout) keys.add(b.layout); });
+      memo.set(cat, [...keys].sort((a, b) => a.localeCompare(b, 'en', {numeric: true})));
+    }
+    return memo.get(cat);
   }
-  layoutOn(code){ return !this.fs.layouts?.length || this.fs.layouts.includes(code); }
+  /* None lit is no filter, and so is every one lit: the chips stay lit, but a
+     building with no layout is not dropped for want of one. */
+  layoutOn(code){
+    const lit = this.fs.layouts || [];
+    if(!lit.length) return true;
+    const keys = this.layoutKeys();
+    return keys.every(c => lit.includes(c)) || lit.includes(code);
+  }
   paintCardPlan(key){
     const box = this.card?.querySelector('.lp-plan'); if(!box) return;
     const b = key ? this.sites?.get(key) || premises()?.forSale.find(s => s.key === key) : null;
