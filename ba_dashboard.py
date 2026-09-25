@@ -24952,7 +24952,7 @@ function ssLand(qn, from, ticket, tries = 0){
   const pickLabel = tt("nav.ask.pick", "Answer for");
   strip.innerHTML = `<span class="ic" aria-hidden="true">?</span><span><small>${tt("nav.ask.asked", "YOU ASKED")}</small><br><b>${ssEsc(qn.q)}</b></span>`
     + `<span class="quiet">${ssEsc(ssLands(qn))}</span>`
-    + (choices ? `<span class="seg ss-pick" role="group" aria-label="${attr(pickLabel)}">${choices.map(c =>
+    + (choices ? `<span class="seg ss-askpick" role="group" aria-label="${attr(pickLabel)}">${choices.map(c =>
       `<a href="#" data-ss="pick" data-pick="${attr(c.id)}"${c.on ? ` class="on" aria-current="true"` : ""}>${ssEsc(c.label)}</a>`).join("")}</span>` : "")
     + `<span class="go"><button type="button" data-ss="back">${
       ssEsc(tt("nav.ask.back", "‹ Back to {page}", {page: backLabel}))}</button>`
@@ -25675,7 +25675,8 @@ function ssRemember(e){
    file is in comes back from what was remembered. */
 function ssRecentEntries(){
   return ssRecent().map(r => {
-    const live = ssIndex.find(e => e.id === r.id);
+    const live = ssIndex.find(e => e.id === r.id)
+      || (r.id === "view:prices" ? ssIndex.find(e => e.id.startsWith("view:prices:")) : null);
     if(live) return live;
     if(r.id.startsWith("wiki:") && typeof wikiHref === "function") return ssEntry({id: r.id, g: "wiki", t: String(r.t || ""),
       p: String(r.p || tt("nav.search.recent.wiki", "Wiki")), ic: "wiki", go: () => ssHash(wikiHref({kind: "page", id: r.id.slice(5)}))});

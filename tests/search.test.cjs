@@ -514,10 +514,10 @@ test('"Are my prices right?" answers for each kind of shop the company runs', as
     await page.evaluate(() => ssAsk('prices'));
     await page.waitForFunction(() => document.querySelector('#pageWiki .ss-asked'), null, {timeout: 5000});
     assert.match(await page.evaluate(() => location.hash), /businesstypes-clothingstore\/prices$/);
-    const picks = () => page.$$eval('.ss-asked .ss-pick a', a => a.map(x => x.textContent + (x.classList.contains('on') ? '*' : '')));
+    const picks = () => page.$$eval('.ss-asked .ss-askpick a', a => a.map(x => x.textContent + (x.classList.contains('on') ? '*' : '')));
     assert.deepEqual(await picks(), ['Clothing Store*', 'Gym']);
-    await page.click('.ss-asked .ss-pick a[data-pick="ba:businesstype_gym"]');
-    await page.waitForFunction(() => /businesstypes-gym\/prices$/.test(location.hash) && document.querySelector('.ss-asked .ss-pick a.on')?.textContent === 'Gym');
+    await page.click('.ss-asked .ss-askpick a[data-pick="ba:businesstype_gym"]');
+    await page.waitForFunction(() => /businesstypes-gym\/prices$/.test(location.hash) && document.querySelector('.ss-asked .ss-askpick a.on')?.textContent === 'Gym');
     assert.equal(await page.locator('.ss-asked').count(), 1);
     // The way back is still the page the question was asked on.
     assert.match(await page.locator('.ss-asked [data-ss="back"]').innerText(), /Today/);
