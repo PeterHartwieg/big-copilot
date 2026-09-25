@@ -17616,7 +17616,6 @@ function miniChart(series, key, colour, o = {}){
    says which, and when capacity stood idle. */
 const HOUR_ROWS = [1,2,3,4,5,6,0];
 const WEEK_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-const WEEK_FULL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 /* WEEK_SHORT[wd] in the UI language, for the site panel's own labels. The
    arrays stay English: spIdleWeek() reads Python's English weekday off them. */
 function spWd(wd){
@@ -17827,7 +17826,7 @@ function spIdleParts(parts, noun){
   return more ? tt("sp.idle.more", "{said} (and {n} more)", {said, n: more}) : said;
 }
 function spIdleWeek(n){
-  const wd = WEEK_FULL.indexOf(n.day), long = n.to - n.from;
+  const wd = WEEKDAY_NAMES.indexOf(n.day), long = n.to - n.from;
   const w = n.week || {spare: n.spare, worth: n.worth, seen: n.seen,
     cells: [...Array(Math.max(long, 0)).keys()].map(k => [wd, n.from + k]),
     parts: [{noun: n.noun, staff: n.staff,
@@ -20205,7 +20204,7 @@ function drawSite(){
         /* A wholesale store's weekly delivery feeds the shelf where no top-up does. */
         const deal = t && !t.target && t.wholesale ? t.wholesale : null;
         /* Python names the day in English: shown as the UI's own short weekday. */
-        const peakWd = t && t.peakDay ? WEEK_FULL.indexOf(t.peakDay) : -1;
+        const peakWd = t && t.peakDay ? WEEKDAY_NAMES.indexOf(t.peakDay) : -1;
         const busiest = t && t.peakDay ? `${peakWd >= 0 ? spWd(peakWd) : t.peakDay.slice(0, 3)} ${num(t.peakSold)}` : "—";
         /* The shelf's word, as Checks says it; a shelf Python did not judge has none. */
         const word = sp && supplyFact(siteTab, l.slug) ? ` ${szChip(f)}` : "";
@@ -20216,7 +20215,7 @@ function drawSite(){
           <td>${fmt(l.revenue)}</td>
           <td>${deal ? `${over ? `<span class="sp-up${f.st === "short" ? " bad" : ""}" data-el="raise">${num(deal)} ${spIcon("right")} <b>${
                 num(f.setTo)}</b></span>` : num(deal)}<small ${SMALL} data-tip="${attr(t.wholesaleDay
-                ? tt("sp.shelf.wholesale.day", "Delivered by a wholesale store each {day}", {day: WEEK_FULL.includes(t.wholesaleDay) ? ttDay(WEEK_FULL.indexOf(t.wholesaleDay)) : t.wholesaleDay})
+                ? tt("sp.shelf.wholesale.day", "Delivered by a wholesale store each {day}", {day: WEEKDAY_NAMES.includes(t.wholesaleDay) ? ttDay(WEEKDAY_NAMES.indexOf(t.wholesaleDay)) : t.wholesaleDay})
                 : tt("sp.shelf.wholesale.week", "Delivered by a wholesale store each week"))}">${tt("sp.stock.wholesale", "/wk wholesale")}</small>`
             : !t || !t.target ? (sp ? `<span class="sp-noplan" data-el="noplan">${spIcon("route")}${tt("sp.noplan", "no plan")}</span>` : "—")
             : over ? `<span class="sp-up${f.st === "short" ? " bad" : ""}" data-el="raise">${num(t.target)} ${spIcon("right")} <b>${
@@ -20479,7 +20478,7 @@ function drawSite(){
       </section>
       <section class="rv" data-block="week" id="sp-week">
         ${sechead(tt("sp.week.title", "Its week"), {icon: sp ? "week" : null, quiet: b.rhythm ? tt("sp.week.peaks", "peaks {day}, {n} points between best and worst",
-          {day: WEEK_FULL.includes(b.peakDay) ? ttDay(WEEK_FULL.indexOf(b.peakDay)) : b.peakDay, n: b.swing}) : ""})}
+          {day: WEEKDAY_NAMES.includes(b.peakDay) ? ttDay(WEEKDAY_NAMES.indexOf(b.peakDay)) : b.peakDay, n: b.swing}) : ""})}
         <div class="chartbox" style="padding-bottom:16px">${b.rhythm
           /* Named, like the company's By weekday, so the two stop reading as
              two answers to one question: this is this site's revenue alone. */
@@ -28178,7 +28177,7 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
       if(row.d === undefined) return name;
       const s = last && ((last.week.days.find(x => x.d === row.d) || {}).shifts || [])[row.i];
       const who = s && (last.row.people || []).find(p => p.id === s.employeeId);
-      const day = WEEK_FULL[row.d] ? ttDay(row.d) : tt("sp.gw.aday.cap", "A day");
+      const day = WEEKDAY_NAMES[row.d] ? ttDay(row.d) : tt("sp.gw.aday.cap", "A day");
       return s ? tt("sp.gw.sch.object", "{day} {f}-{t}, {who}", {day, f: s.f, t: s.t, who: spEsc((who || {}).name || tt("sp.gw.someone", "someone"))}) : day;
     },
     draw: (answer, phase) => {
@@ -28226,7 +28225,7 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
         roleOf(p.employeeId) ? `<small>${roleOf(p.employeeId)}</small>` : ""}</span>`);
       const over = (answer.warnings || []).filter(w => w.type === "overworked").map(w =>
         gwCall("warn", "flame", tt("sp.gw.over", "<b>{name}</b> works {n} h on {day}. The game allows it.",
-          {name: spEsc(w.name || tt("sp.gw.someone.cap", "Someone")), n: Number(w.hours), day: WEEK_FULL[w.d] ? ttDay(w.d) : tt("sp.gw.aday", "a day")})));
+          {name: spEsc(w.name || tt("sp.gw.someone.cap", "Someone")), n: Number(w.hours), day: WEEKDAY_NAMES[w.d] ? ttDay(w.d) : tt("sp.gw.aday", "a day")})));
       return `<div class="gw-planrow">${which}</div>`
         + gwTiles([[labels[0], now.length, sentList.length], [labels[1], gwHours(now), gwHours(sentList)], [labels[2], nowPeople, afterPeople]])
         + gwWeek(now, week.days) + kept + toggle
