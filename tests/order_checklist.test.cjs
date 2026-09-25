@@ -29,6 +29,7 @@ const businesses = [
   {key:'factory#2', name:'Factory', address:'2 Factory Street'},
   {key:'shop#3', name:'Shop', address:'3 Shop Street'},
 ];
+require('./_payload_contract.cjs').assertPayloadShape({businesses}, 'order_checklist');
 // Every row Python sends carries its item's key beside the name; a fixture
 // that names only the item gets the key it would have had.
 const keyed = r => r.slug ? r : {...r, slug: keyOf(r.item)};

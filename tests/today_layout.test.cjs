@@ -62,6 +62,7 @@ async function today(width, {debt = 0, profitSum7 = 70000} = {}) {
     drawKpis(); drawAlerts();
     document.querySelectorAll('#pageToday section').forEach(s => s.classList.add('measured'));
   }, [KEY, debt, profitSum7]);
+  require('./_payload_contract.cjs').assertPayloadShape(await page.evaluate(() => D), 'today_layout');
   return page;
 }
 

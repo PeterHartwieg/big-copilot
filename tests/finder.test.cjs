@@ -124,6 +124,7 @@ async function fixture(context, {premises = PREMISES, character = 'finder-a'} = 
       supply: {shops: []}, daily: [], premises, market};
     refreshCityMaps();
   }, {premises, character, market: MARKET});
+  require('./_payload_contract.cjs').assertPayloadShape(await page.evaluate(() => D), 'finder');
   return {page, errors};
 }
 async function openMap(page){
@@ -1477,7 +1478,13 @@ async function scrolledFinderToGrowthCell(width, scroller){
     await page.evaluate(() => { showPage('growth'); drawMarket(); wireHeat(); });
     await page.locator(`#market .cell[data-slug="${CLOTHES}"][data-hood="${HK_HOOD}"]`).click();
     await page.waitForFunction(() => document.activeElement?.matches('#cityMapPage .place.fr'));
-    await page.waitForTimeout(100);
+    // The panel's scroll comes to rest: the same for three frames in a row.
+    await page.evaluate(() => { window.panelRest = null; });
+    await page.waitForFunction(sel => {
+      const y = document.querySelector(sel).scrollTop, mark = window.panelRest;
+      window.panelRest = {y, frames: mark && mark.y === y ? mark.frames + 1 : 0};
+      return window.panelRest.frames >= 3;
+    }, scroller, {polling: 'raf'});
     assert.ok(await page.$eval(scroller, el => el.scrollTop) < before, 'the panel went back up');
     const [first, box, isFirst] = await page.evaluate(sel => {
       const el = document.activeElement.getBoundingClientRect(), panel = document.querySelector(sel).getBoundingClientRect();
@@ -1582,7 +1589,14 @@ test('a row the demand figure leads back to clears the sticky masthead', async (
     // The Law Firm is the second row, so the page has to scroll to it.
     const row = page.locator(`#market .r[data-slug="${LAW}"]`);
     assert.equal(await row.getAttribute('data-r'), '1');
-    await page.waitForTimeout(600);   // settleScroll keeps the row in place for a few frames
+    // settleScroll keeps the row in place for a few frames: wait for the page
+    // to have scrolled and then held still for three frames in a row.
+    await page.evaluate(() => { window.pageRest = null; });
+    await page.waitForFunction(sel => {
+      const now = `${scrollY} ${Math.round(document.querySelector(sel).getBoundingClientRect().top)}`, mark = window.pageRest;
+      window.pageRest = {now, frames: mark && mark.now === now ? mark.frames + 1 : 0};
+      return scrollY > 0 && window.pageRest.frames >= 3;
+    }, `#market .r[data-slug="${LAW}"]`, {polling: 'raf'});
     const [top, mast] = await page.evaluate(sel => [document.querySelector(sel).getBoundingClientRect().top,
       document.getElementById('mast').getBoundingClientRect().bottom], `#market .r[data-slug="${LAW}"]`);
     assert.ok(top >= mast, `row top ${top} is under the masthead (${mast})`);
@@ -1698,7 +1712,14 @@ test('on a phone the card\'s plan fits the card and the card fits the map', asyn
     await openMap(page); await turnOn(page);
     await pick(page, HK[0]);
     await page.locator(`${plan} .lp-svg`).waitFor();
-    await page.waitForTimeout(300);
+    // The card has come to rest: the same box for three frames in a row.
+    await page.evaluate(() => { window.cardRest = null; });
+    await page.waitForFunction(() => {
+      const r = document.querySelector('#cityMapPage .site').getBoundingClientRect(), mark = window.cardRest;
+      const now = [r.x, r.y, r.width, r.height].map(Math.round).join(' ');
+      window.cardRest = {now, frames: mark && mark.now === now ? mark.frames + 1 : 0};
+      return window.cardRest.frames >= 3;
+    }, null, {polling: 'raf'});
     const card = await page.locator('#cityMapPage .site').boundingBox(), stage = await page.locator('#cityMapPage [data-stage]').boundingBox();
     const svg = await page.locator(`${plan} .lp-svg`).boundingBox();
     assert.ok(card.x >= stage.x && card.x + card.width <= stage.x + stage.width + 1, `card ${JSON.stringify(card)} stage ${JSON.stringify(stage)}`);

@@ -49,6 +49,7 @@ async function board(t, width, days = 40) {
     drawChart(); wireAll();
     document.querySelectorAll('section').forEach(s => s.classList.add('measured'));
   }, days);
+  require('./_payload_contract.cjs').assertPayloadShape(await page.evaluate(() => D), 'chart_hover');
   await page.locator('#dailyBox svg').scrollIntoViewIfNeeded();
   return page;
 }

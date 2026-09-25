@@ -731,10 +731,12 @@ ordinary day, not a Saturday.
 
 The save carries no importer price list. `importPartnerships.products` holds an item, an
 amount, a last-week figure and a warehouse, and nothing about money; there is none in
-`rivalStates` either. What the save does hold is what you paid: yesterday's goods cost,
-line by line, against the units drawn that day. Dividing one by the other gives a real
-unit price for every material this company already buys, and the section names the day it
-came from.
+`rivalStates` either. What the save does hold is what you paid: each site's goods cost,
+item by item, booked where the goods are used (a factory, not the depot that imported
+them), and the delivery log's units reaching that site. Over the last seven days, company
+wide, the one divided by the other gives a real unit price for every material this company
+already buys, and the section names the days it came from. A single day is never used: the
+cost swings with the morning round. Something the company makes itself has no price here.
 
 For anything you do not buy there is no honest price, so those rows show quantities and
 say so. The cash figure states its own coverage: *one week of stock costs $X across the 12
@@ -1011,10 +1013,10 @@ first of these that fits is the word:
 | **no plan** | nothing brings it: a shelf with no top-up and no wholesale delivery contract, a factory input with no top-up, a depot line with no import |
 | **new** | too young to judge: a shop under five trading days, a factory input on its first fill, a depot with no round logged yet |
 | **short** | the figure in game is under what the week or the day uses, the stock runs out before the drop, or the depot behind a factory input has run dry |
-| **stalled** | planned, and the depot holds it, but little arrives, and neither a Produce up to limit nor the roster explains it |
+| **stalled** | planned, and the depot holds it, but little arrives, and neither a Produce up to limit nor your staffing explains it |
 | **idle** | stock not moving on (see *Idle stock* below) |
 | **tight** | covers the use, but not the 15% margin |
-| **covered** | everything else, with the reason where it is not the figure itself: a route brings it, the line is held by its Produce up to limit, or the roster runs the machines part of the week |
+| **covered** | everything else, with the reason where it is not the figure itself: a route brings it, the line is held by its Produce up to limit, or your staffing runs the machines part of the week |
 
 What a figure has to cover is what the ends of the chain use (the shops' sales, the
 factory lines' draw) plus a 15% margin, added **once** over the whole chain from import
@@ -1067,10 +1069,15 @@ stop the top-up.
 at the limit and starts again as the morning round takes its output away, so through the
 day what it holds sits anywhere under the limit, and what it eats matches what it makes,
 not what it could make. Its inputs read **covered**, held by Produce up to, rather than
-**stalled**, when the line makes well under its roster's output (under three quarters)
+**stalled**, when the line makes well under the output its staffing allows (under three quarters)
 while every input it eats is on hand for the rest of the day at the full rate, as well as
-when the output held is at the limit. A starved line runs its input down instead, and
-stays **stalled**.
+when the output held is at the limit. An input several lines eat is covered when all of
+them are held that way, and also when every one of them has Produce up to set, what
+arrives is at least 85% of what their shipped output ate (each line's use of the input
+times the smaller of what it ships and what it could make), and the factory holds enough of
+it to run the lines not yet at their limit at full rate for the rest of the day: one line
+at its limit all day and another only late in the day still eat no more than they ship. A
+starved line runs its input down instead, and stays **stalled**.
 
 **Wholesale deliveries.** A shop can be fed by a wholesale store instead of your own
 depots: a repeating delivery contract (the save's `DeliveryContracts`) brings a set amount
@@ -1082,7 +1089,8 @@ reaches the drop, and critical once it runs out before it. The shelf's or depot'
 on Supply shows the contract's week in place of a top-up, with the change to type, and a
 short one is a finding. A one-off or
 urgent order, or a disabled contract, is no standing supply, and a shelf on a contract is
-never among the sites a **Not routed** finding names.
+never among the sites a **Not routed** finding names. A new shop on a repeating contract
+has a delivery plan, so its *not trading yet* finding does not say "no delivery plan".
 
 A line named by hand in this browser reads **new** until the next refresh (the next save
 on the web board, a re-run or `--watch` locally), because only a fresh build works out

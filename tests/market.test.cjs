@@ -53,6 +53,7 @@ async function grid() {
     drawMarket();
     wireHeat();
   });
+  require('./_payload_contract.cjs').assertPayloadShape(await page.evaluate(() => D), 'market');
   return page;
 }
 

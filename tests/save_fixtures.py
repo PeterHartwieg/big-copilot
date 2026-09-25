@@ -182,8 +182,11 @@ def _summary(d: int) -> dict:
     statements = [
         _statement(LIQUOR, beer, beer * 0.2, 456, RENT[LIQUOR]),
         _statement(GIFTS, gifts, gifts * 0.5, 180, RENT[GIFTS]),
-        _statement(HUB, 0, 200, 0, RENT[HUB], resources={WATER: 200}),  # 400 water a day at $0.50
-        _statement(BREWERY, 0, 60, 192, RENT[BREWERY]),
+        # The game books no goods cost at an importing depot: the water is
+        # paid for where it is used, 400 a day at $0.50, restocked by the next
+        # morning's round.
+        _statement(HUB, 0, 0, 0, RENT[HUB]),
+        _statement(BREWERY, 0, 260, 192, RENT[BREWERY], resources={WATER: 200}),
     ]
     business = sum(s["TotalProfit"] for s in statements)
     return {
