@@ -328,7 +328,7 @@ test('phone layouts fit in dark and light, with a single row of nav icons', asyn
     const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-giftshop',width,theme});
     await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
     const geometry = await page.evaluate(() => ({
-      overflow:document.documentElement.scrollWidth > document.documentElement.getBoundingClientRect().width,
+      overflow:document.documentElement.scrollWidth > document.documentElement.clientWidth,
       rows:[...document.querySelectorAll('#nav a[data-id]')].map(el=>Math.round(el.getBoundingClientRect().top)),
     }));
     assert.equal(geometry.overflow, false, `${width}px ${theme} overflow`);
@@ -523,7 +523,7 @@ test('a guide fits the phone, services, side range and all', async t => {
   for(const width of [320,390]) for(const theme of ['dark','light']) {
     const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-florist',width,theme,changeData:addGuides});
     await page.getByRole('heading', {name:'Florist',exact:true,level:1}).waitFor();
-    const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.getBoundingClientRect().width);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
     assert.equal(overflow, false, `${width}px ${theme} overflow`);
     assert.equal(await page.locator('.wk-card.svc').isVisible(), true);
     assert.deepEqual(errors, []);
@@ -577,7 +577,7 @@ test('an office shows what its workstation needs, on a phone and at a desk',
       assert.equal(await kit.locator('[data-wiki-fix]').count(), 0, 'nothing of the workstation is hidden');
       // Each of the three is a filled square, and none of them a suggestion.
       assert.equal(await kit.locator('.wk-item.req [data-tick*=":fix-need-"]').count(), 3);
-      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.getBoundingClientRect().width), false,
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth), false,
         `${width}px pushes the page sideways`);
       assert.deepEqual(errors, []);
       await page.close();
@@ -621,7 +621,7 @@ async function spill(page) {
           over.push(pill.textContent.replace(/\s+/g, ' ').trim().slice(0, 60));
       }
     }
-    return {over, sideways: document.documentElement.scrollWidth > document.documentElement.getBoundingClientRect().width};
+    return {over, sideways: document.documentElement.scrollWidth > document.documentElement.clientWidth};
   });
 }
 
@@ -713,7 +713,7 @@ test('save pricing is readable at desktop and phone widths and clears with the s
     assert.match(await section.innerText(), /My Gifts: \$30\.27/);
     assert.match(await section.innerText(), /\$25\.63/);
     assert.match(await section.innerText(), /Not set/);
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.getBoundingClientRect().width), false);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth), false);
     const marketCell = section.locator('tbody tr').first().locator('td').last();
     assert.equal(await marketCell.evaluate(el => el.getBoundingClientRect().right <= innerWidth), true);
     const disclosure = section.locator('details').first();

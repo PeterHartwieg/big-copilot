@@ -82,7 +82,7 @@ for (const width of [390, 1280]) test(`strip and update banner stack without ove
     }
     const next = await page.locator(board ? '.mast' : '#landing').boundingBox();
     assert.ok(next.y >= news.y + news.height - 0.5, 'the page starts below the strip');
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.getBoundingClientRect().width), true, 'no sideways scroll');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, 'no sideways scroll');
   }
 });
 

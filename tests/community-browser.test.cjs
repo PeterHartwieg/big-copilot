@@ -371,7 +371,7 @@ test('community dialog fits mobile in both themes and the keyboard stays in the 
     await page.evaluate(theme => document.documentElement.dataset.theme = theme,theme);
     const box = await dialog.boundingBox();
     assert.ok(box.x >= 0 && box.x + box.width <= 390);
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.getBoundingClientRect().width),true);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),true);
     await page.keyboard.press('Tab');
     assert.equal(await dialog.evaluate(el => el.contains(document.activeElement)),true);
   }

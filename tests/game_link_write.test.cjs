@@ -396,11 +396,12 @@ test('the uniform buttons sit inside their finding row, clear of its text, at 14
           for (const el of text) if (meets(b, box(el))) bad.push(`${name}: over .${el.className}`);
         }
         const btns = [...row.querySelectorAll('.gw-find .gw-btn')];
-        btns.forEach((a, i) => btns.slice(i + 1).forEach((c) => { if (meets(box(a), box(c))) bad.push('two buttons overlap'); }));
+        btns.forEach((a, i) => btns.slice(i + 1).forEach((c) => { if (meets(box(a), box(c)))
+          bad.push(`${a.textContent.trim()} and ${c.textContent.trim()} overlap`); }));
       }
       const html = document.documentElement;
       return {rows: rows.length, buttons: rows.reduce((n, row) => n + row.querySelectorAll('.gw-find .gw-btn').length, 0),
-              bad, sideways: html.scrollWidth > html.getBoundingClientRect().width};
+              bad, sideways: html.scrollWidth > html.clientWidth};
     });
     const rest = await measure();
     assert.ok(rest.rows >= 2 && rest.buttons >= 3, `${width}px: ${JSON.stringify(rest)}`);
@@ -408,11 +409,14 @@ test('the uniform buttons sit inside their finding row, clear of its text, at 14
     assert.equal(rest.sideways, false, `${width}px: the page scrolls sideways`);
     // A keyboard on the button opens the row's detail line; the buttons keep clear of it.
     await button(page, GIFTS).focus();
+    assert.equal(await page.evaluate(() => !!document.activeElement.closest('.find').querySelector(':scope > .more')), true,
+      `${width}px: the focused row has a detail line`);
     await page.waitForFunction(() => {
-      const more = document.activeElement.closest('.find').querySelector('.more');
-      return !more || (getComputedStyle(more).opacity === '1'
-        && more.getAnimations().every((a) => a.playState !== 'running'));
+      const more = document.activeElement.closest('.find').querySelector(':scope > .more');
+      return getComputedStyle(more).opacity === '1' && more.getAnimations().every((a) => a.playState !== 'running');
     });
+    assert.ok(await page.evaluate(() => document.activeElement.closest('.find').querySelector(':scope > .more')
+      .getBoundingClientRect().height) > 0, `${width}px: the detail line opens`);
     const open = await measure();
     assert.deepEqual(open.bad, [], `${width}px with the detail line open`);
     assert.equal(open.sideways, false, `${width}px: the page scrolls sideways with the detail line open`);

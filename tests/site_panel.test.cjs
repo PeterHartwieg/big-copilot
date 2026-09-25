@@ -606,8 +606,8 @@ test('the dimming a hovered finding switches on comes off with the redraw', asyn
     await page.hover('.sp-find[data-id="a1"]');
     assert.equal(await page.locator('#sitePanel.sp-focus').count(), 1);
     /* Read in the same task as the redraw: about 12 ms later Chrome sends a
-       mouseover to the new row now under the still pointer, which rightly
-       dims the panel again, so a second round trip raced it. */
+       mouseover to the new row now under the still pointer, which dims
+       the panel again, so a second round trip raced it. */
     assert.equal(await page.evaluate(() => {
       drawSite();
       return document.getElementById('sitePanel').classList.contains('sp-focus');
