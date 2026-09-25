@@ -27,6 +27,7 @@ import http.server
 import itertools
 import json
 import math
+import numbers
 import os
 import re
 import statistics
@@ -339,6 +340,8 @@ def _wire_value(v):
         return [_wire_value(x) for x in v]
     if isinstance(v, bool) or v is None or isinstance(v, (int, float)):
         return v
+    if isinstance(v, (numbers.Real, decimal.Decimal)):
+        return float(v)  # a Fraction or Decimal travels as JSON's number
     return str(v)
 
 
@@ -348,13 +351,17 @@ def _js_round(x: float) -> int:
 
 
 def _msg_format(v, spec: str | None) -> str:
-    """One placeholder's English, by the spec tt() in web/i18n.js shares."""
+    """One placeholder's English, by the spec tt() in web/i18n.js shares. Each
+    writes exactly what the f-string it replaces wrote: {x} as f"{x}", {x:,}
+    as f"{x:,}", {x:.1f} / {x:,.0f} as the same f-string spec, {w:$} as the
+    board's fmt() ("-$1,234"; f"${x:,.0f}", which writes "$-1,234", becomes
+    "${x:,.0f}" instead), {w:$c} as compact(), {d:day} a weekday name."""
     if isinstance(v, Msg) or spec is None:
         return str(v)
     if spec == "day":
         return WEEKDAYS[int(v) % 7]
     if spec == ",":
-        return format(v, ",") if isinstance(v, int) else format(v, ",.0f")
+        return format(v, ",")
     if spec == "$":
         return ("-" if v < 0 else "") + "$" + format(abs(v), ",.0f")
     if spec == "$c":
@@ -373,9 +380,9 @@ def _msg_format(v, spec: str | None) -> str:
 def msg(key: str, en, **p) -> Msg:
     """A sentence the page can translate: its English, with {name} and
     {name:spec} filled from p. `en` is a string, or {"one": ..., "other": ...}
-    chosen by the param n. The specs: {n:,} grouped whole, {x:.1f} and
-    {x:,.1f} fixed decimals, {w:$} money, {w:$c} compact money, {d:day} a
-    weekday index (0 Sunday). A game name goes in as a token (tok()), a nested
+    chosen by the param n. The specs (_msg_format()): {n:,} grouped, {x:.1f}
+    and {x:,.0f} fixed decimals, {w:$} money with the sign first, {w:$c}
+    compact money, {d:day} a weekday index (0 Sunday). A game name goes in as a token (tok()), a nested
     sentence as another msg()."""
     if isinstance(en, dict):
         en = en["one"] if p.get("n") == 1 else en["other"]
@@ -11522,9 +11529,11 @@ def render(
     wiki_script = optional_asset("wiki.js")
     wiki_css = optional_asset("wiki.css")
     # Big Copilot's own text in another language (docs/architecture.md, "UI
-    # text"): tt() and the table loader, in the head, ahead of every script
-    # that may call it. The table a --lang page carries goes in here, before
-    # the splice, so no other placeholder can reach it.
+    # text"): tt() and the table loader, at the end of the head (after the
+    # stylesheets), ahead of every script that may call it, with the table a --lang page carries. It is spliced
+    # last, and only at the first marker (the head's), so no other
+    # placeholder's .replace() runs over the table, and a marker inside the
+    # payload is left alone.
     with open(os.path.join(asset_root, "i18n.js"), encoding="utf-8") as fh:
         i18n_script = fh.read().replace("/*__UI_TABLE__*/null", ui_json)
     map_payload = ""
@@ -11556,8 +11565,7 @@ def render(
     # The <html> start tag is optional and the page never closed one, so this
     # only names the language of the element the parser makes anyway.
     return "<!doctype html>" + chr(10) + '<html lang="en">' + chr(10) + '<meta charset="utf-8">' + chr(10) + head + (
-        TEMPLATE.replace("/*__I18N_SCRIPT__*/", i18n_script)
-        .replace("/*__DATA__*/null", payload)
+        TEMPLATE.replace("/*__DATA__*/null", payload)
         .replace("/*__MAP_CSS__*/", map_css)
         .replace("/*__MAP_SCRIPT__*/", map_script)
         .replace("/*__MAP_PAYLOAD__*/", map_payload)
@@ -11577,6 +11585,7 @@ def render(
         .replace("<!--__FOOTER__-->", footer_html(site=site))
         .replace("<!--__BANNER__-->", banner)
         .replace("<!--__BEFORE_SCRIPT__-->", before_script)
+        .replace("/*__I18N_SCRIPT__*/", i18n_script, 1)
     )
 
 
@@ -11589,9 +11598,6 @@ TEMPLATE = r"""<title>__TITLE__</title>
    Blocked or full storage throws, and the system setting is then the answer,
    which is what the default is anyway. */
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
-</script>
-<script>
-/*__I18N_SCRIPT__*/
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13951,6 +13957,9 @@ body:has(#changelogDialog[open]){overflow:hidden}
   #sp-shelves td.l{white-space:nowrap}
 }
 </style>
+<script>
+/*__I18N_SCRIPT__*/
+</script>
 <!--__BANNER__-->
 <div class="wrap">
   <header class="mast" id="mast">
@@ -16605,7 +16614,9 @@ const spTrend = key => (D.trends || []).find(t => t.key === key) || null;
    day is held by staffing then and by the door later — so the panel lights
    each of them and draws a chip apiece. */
 const spCapNotes = key => (D.hourFindings || []).filter(f => f.key === key && f.kind === "cap");
-const spBindingLimits = key => spCapNotes(key).map(f => f.limit);
+/* Python's English limit, whatever language the chip's words are in
+   (enOf(), web/i18n.js): spCeiling() and spLimitIcons() compare it. */
+const spBindingLimits = key => spCapNotes(key).map(f => typeof enOf === "function" ? enOf(f, "limit") : f.limit);
 /* This site's overstaffed week, in the words of its Today line (_alerts() in
    the Python): the spare staff-hours of every idle run, their wages summed,
    who was on and when, and the weekday-hours named. A finding written before
@@ -18756,7 +18767,10 @@ function drawSite(){
   const idleNote = (D.hourFindings || []).find(f => f.key === b.key && f.kind !== "cap");
   /* The building's own capacity is no warning: plenty of good sites run at it,
      and there is nothing to fix, so its sentence only says how much. */
-  const capSentence = n => n.limit === "the building"
+  /* A cap's limit as Python wrote it: what the chips compare and key on,
+     whatever language the words on screen are in (enOf(), web/i18n.js). */
+  const limitEn = n => typeof enOf === "function" ? enOf(n, "limit") : n.limit;
+  const capSentence = n => limitEn(n) === "the building"
     ? `At the building's capacity ${n.hours} hours a week (${n.when}); ${fmt(n.throughput)}/day of trade goes through those hours.`
     : `At the ceiling ${n.hours} hours a week (${n.when}); ${n.limit} ${n.limits > 1 ? "are" : "is"} the limit, so
          the answer is ${n.fix}. ${fmt(n.throughput)}/day of trade goes through those
@@ -18964,9 +18978,9 @@ function drawSite(){
      held by staffing at night and by its door by day — and one for idle
      capacity. Hovering one picks its hours out of the grid. */
   const hourChips = !sp ? "" : `<div class="sp-hchips">${
-    capNotes.map(n => `<span class="sp-hchip cap${n.limit === "the building" ? " sp-bcap" : ""}" data-show="${attr(spLimitShow(n, grid))}" data-limit="${attr(n.limit)}" data-tip="${
+    capNotes.map(n => `<span class="sp-hchip cap${limitEn(n) === "the building" ? " sp-bcap" : ""}" data-show="${attr(spLimitShow(n, grid))}" data-limit="${attr(limitEn(n))}" data-tip="${
       attr(capSentence(n).replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
-      spLimitIcons(n.limit, office).map(spI).join("")}<b>${n.hours} h/wk</b> at ${n.limit === "the building" ? "building capacity" : "the ceiling"} · ${n.when} · ${
+      spLimitIcons(limitEn(n), office).map(spI).join("")}<b>${n.hours} h/wk</b> at ${limitEn(n) === "the building" ? "building capacity" : "the ceiling"} · ${n.when} · ${
       fmt(n.throughput)}/day through it${n.fix ? `<span class="fix">${spI("right")}${n.fix}</span>` : ""}</span>`).join("") +
     (idleWeek ? `<span class="sp-hchip idle" data-show="idle" data-tip="${attr(idleSentence.replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
       spI(idleNote.office ? "monitor" : "counter")}${idleRead}</span>` : "")}</div>`;

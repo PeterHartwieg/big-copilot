@@ -89,12 +89,12 @@ test('a missing key, or a translation naming a param it was not given, falls bac
 test('numbers follow the UI language: en-US in English, German in German', () => {
   const cases = [['{n:,}', 1234567.4], ['{x:.1f}', 3.46], ['{x:,.2f}', 12345.678], ['{w:$}', -1234.5],
     ['{w:$c}', 3574000], ['{w:$c}', 12345678], ['{w:$c}', 751400], ['{n}', 2.5]];
-  const en = load(), de = german({});
+  const en = load(), de = german({'day.0': 'Sonntag'});
   const both = cases.map(([spec, v]) => {
     const code = `tt("f.x", ${JSON.stringify(spec)}, {n: ${v}, x: ${v}, w: ${v}})`;
     return [en.run(code), de.run(code)];
   });
-  assert.deepEqual(both, [['1,234,567', '1.234.567'], ['3.5', '3,5'], ['12,345.68', '12.345,68'],
+  assert.deepEqual(both, [['1,234,567.4', '1.234.567,4'], ['3.5', '3,5'], ['12,345.68', '12.345,68'],
     ['-$1,234', '-$1.234'], ['$3.57M', '$3,57M'], ['$12.3M', '$12,3M'], ['$751k', '$751k'], ['2.5', '2,5']]);
   assert.equal(de.run('ttNumLocale()'), 'de-DE');
   assert.equal(en.run('ttNumLocale()'), 'en-US');
@@ -104,25 +104,39 @@ test("the board's num() does the formatting once it exists", () => {
   const seen = [];
   const {run} = load({extra: {num: (n, opts) => { seen.push([n, opts]); return `<${n}>`; }}});
   assert.equal(run('tt("f.x", "{w:$} and {n:,}", {w: 12.4, n: 5})'), '$<12> and <5>');
-  assert.deepEqual(seen.map(([n, o]) => [n, o && {...o}]), [[12, undefined], [5, {maximumFractionDigits: 0}]]);
+  assert.deepEqual(seen.map(([n, o]) => [n, o && {...o}]), [[12, undefined], [5, undefined]]);
 });
 
-test("in English the money specs write what the board's fmt() and compact() write", () => {
+test("in English every spec writes what the board code it replaces wrote", () => {
   const from = BOARD.indexOf('const fmt = n =>');
   const to = BOARD.indexOf('const el = (t,c,h)');
   assert.ok(from > 0 && to > from, 'fmt/compact moved: update tests/i18n_runtime.test.cjs');
   const board = vm.createContext({});
   vm.runInContext(BOARD.slice(from, to).replace(/^const /gm, 'var ').replace(/^let /gm, 'var '), board);
-  const {run} = load();
-  for(const v of [0, 0.4, -0.4, 2.5, -2.5, 98, 999.5, 1000, 1234.5, 99999, 999999, 1000000, 1125000,
-    3574000, 9999999, 12345678, -2500, -3574000]){
-    assert.equal(run(`tt("f.x", "{w:$}", {w: ${v}})`), board.fmt(v), `$ ${v}`);
-    assert.equal(run(`tt("f.x", "{w:$c}", {w: ${v}})`), board.compact(v), `$c ${v}`);
-  }
+  // tt() in the vm formats through this num(), as it does on the page.
+  const {run} = load({extra: {num: board.num}});
+  const values = [0, 0.4, -0.4, 2.5, -2.5, 98, 999.5, 1000, 1234.5, -1234.5, 1234.5678, -0.04, 0.1 + 0.2,
+    99999, 999999, 1000000, 1125000, 3574000, 9999999, 12345678, -2500, -3574000];
+  const fixed = d => ({minimumFractionDigits: d, maximumFractionDigits: d});
+  const old = {
+    '{x}': v => String(v),
+    '{x:,}': v => board.num(v),
+    '{x:.1f}': v => v.toFixed(1),
+    '{x:,.2f}': v => board.num(v, fixed(2)),
+    '{x:$}': v => board.fmt(v),
+    '{x:$c}': v => board.compact(v),
+  };
+  for(const [spec, was] of Object.entries(old))
+    for(const v of values)
+      assert.equal(run(`tt("f.x", ${JSON.stringify(spec)}, {x: ${v}})`), was(v), `${spec} ${v}`);
 });
 
 test("in English every spec writes what Python's msg() writes", () => {
-  const cases = [['{n}', 7], ['{n}', 2.5], ['{n:,}', 1234567], ['{n:,}', 1234.4], ['{x:.1f}', 3.14159],
+  // Values where Python's repr and JS agree; each side is held to its own old
+  // code above and in tests/test_i18n_msg.py.
+  const cases = [['{n}', 7], ['{n}', 2.5], ['{n}', -1234.5], ['{n:,}', 1234567], ['{n:,}', 1234.4],
+    ['{n:,}', -1234.5], ['{n:,}', 0.25], ['{x:,.0f}', 1234.4], ['{x:,.0f}', -1234.4], ['${x:,.0f}', -1234.4],
+    ['{x:.1f}', -0.04], ['{x:.1f}', -3.14159], ['{w:$}', -1234.4], ['{x:.1f}', 3.14159],
     ['{x:.2f}', 1234.5], ['{x:,.1f}', 12345.67], ['{w:$}', 98.4], ['{w:$}', 1234567], ['{w:$}', -50],
     ['{w:$c}', 98], ['{w:$c}', 751400], ['{w:$c}', 3574000], ['{w:$c}', 12345678], ['{w:$c}', 1125000],
     ['{w:$c}', -2500], ['{d:day}', 0], ['{d:day}', 3], ['{d:day}', 6]];
@@ -172,7 +186,7 @@ test("Python's messages: nested ones resolve per key, and the English Python wro
     'Coffee: 3.5 days early');
   assert.equal(german({'f.outer': '{item}: {when}', 'f.inner': '{days:.1f} Tage zu früh'})
     .run(`ttWire(${wire}, ${JSON.stringify(english)})`), 'Coffee: 3,5 Tage zu früh');
-  assert.equal(german({}).run(`ttWire(${wire}, ${JSON.stringify(english)})`), english);
+  assert.equal(german({'day.0': 'Sonntag'}).run(`ttWire(${wire}, ${JSON.stringify(english)})`), english);
 });
 
 test('ttPayload() swaps the fields Python sent as messages, and enOf() gives back the English', () => {
@@ -202,6 +216,10 @@ test('ttPayload() swaps the fields Python sent as messages, and enOf() gives bac
   assert.equal(de.run('enOf(__p.alerts[0], "group")'), 'loss');
   // The English rides along unenumerated: keys and JSON are the row's own.
   assert.deepEqual(Object.keys(p.alerts[0]), ['group', 'text', 'i18n']);
+  // A copied row keeps it: idleRows() and the supply rows spread theirs.
+  de.context.__copy = {...p.alerts[0], worth: 1};
+  assert.equal(de.run('enOf(__copy, "text")'), 'Lost $1,234 yesterday');
+  assert.equal(de.run('enOf({...__p.hours[0], ...{extra: 1}}, "limit")'), 'the building');
   assert.equal(JSON.parse(JSON.stringify(p)).alerts[0].text, 'Gestern $1.234 Verlust');
 });
 
@@ -267,6 +285,17 @@ test('?ui=de fetches the table with the build stamp, hides the page until it is 
   assert.equal(b.today.textContent, 'Heute');
   assert.ok(!b.document.classes.has('tt-wait'));
   assert.deepEqual(b.changes, ['de']);
+});
+
+test('an empty table is English, numbers included', async () => {
+  const b = boot('?ui=de', {table: {}});
+  await tick(); await tick();
+  b.document.fire('DOMContentLoaded');
+  assert.equal(b.run('ttLang'), 'en');
+  assert.equal(b.run('ttNumLocale()'), 'en-US');
+  assert.equal(b.document.documentElement.lang, 'en');
+  assert.equal(b.run('tt("f.x", "{w:$}", {w: 1234})'), '$1,234');
+  assert.ok(!b.document.classes.has('tt-wait'));
 });
 
 test('a table that does not come shows the page after 400 ms, in English', async () => {
