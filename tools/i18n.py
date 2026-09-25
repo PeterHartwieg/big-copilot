@@ -481,12 +481,21 @@ def _english_for(key: str, english: dict) -> tuple[str | None, set | None]:
     return None, None
 
 
+def _names_it(token: str, param: str) -> bool:
+    """Whether a game name's token param stands in for an English param: X_name
+    for X, and station_name for stations, as the pattern passes them."""
+    return token.endswith("_name") and token[:-5] in (param, param[:-1] if param.endswith("s") else param)
+
+
 def fits(key: str, text: str, english: dict, lang: str, params: dict | None = None) -> bool:
     """Whether a translation can stand in for its English.
 
     Where every call site's params are known (`params`, from passed()), it
-    may use any param the calls pass, whether the English prints it or not,
-    and leave any out; a param the English prints keeps the English's spec.
+    may use any param the calls pass, whether the English prints it or not;
+    a param the English prints keeps the English's spec, and is used, except
+    that a passed token param stands in for its English word (X_name for X,
+    station_name for stations: _names_it()) and a plural form but `other`
+    may leave out {n} ("ein Laden").
     Otherwise every placeholder of a plain key, no more and no fewer, and a
     plural form uses no placeholder its English lacks (`other` all of them).
     Either way a plural form names a category the language has."""
@@ -504,9 +513,16 @@ def fits(key: str, text: str, english: dict, lang: str, params: dict | None = No
         for f in names:
             name, spec = f.split(":", 1)
             specs[name].add(spec)
+        used = set()
         for f in got:
             name, spec = f.split(":", 1)
             if name not in given or (name in specs and spec not in specs[name]):
+                return False
+            used.add(name)
+        for name in specs:
+            if name in used or (name == "n" and plural and m.group(1) != "other"):
+                continue
+            if not any(_names_it(token, name) for token in used - set(specs)):
                 return False
         return True
     if not plural:

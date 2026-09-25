@@ -183,8 +183,16 @@ function mismatches(lang, table, base, passed = {}){
       const printed = new Set(Object.keys(base).filter(b => m ? b.replace(SUFFIX, '') === k.replace(SUFFIX, '') : b === k)
         .flatMap(b => [...fields(base[b])]));
       const names = new Set([...printed].map(f => f.split(':')[0]));
+      const used = new Set([...fields(v)].map(f => f.split(':')[0]));
       if(![...fields(v)].every(f => given.includes(f.split(':')[0]) && (!names.has(f.split(':')[0]) || printed.has(f))))
         bad.push(`${k}: placeholders its calls do not pass, or a spec unlike the English`);
+      /* Every English param is used, but a passed token param stands in for its
+         English word (X_name for X, station_name for stations), and a plural form
+         but `other` may leave out {n}. */
+      const namesIt = (token, p) => token.endsWith('_name') && [p, p.endsWith('s') ? p.slice(0, -1) : p].includes(token.slice(0, -5));
+      const dropped = [...names].filter(p => !used.has(p) && !(p === 'n' && m && m[1] !== 'other')
+        && ![...used].some(t => !names.has(t) && namesIt(t, p)));
+      if(dropped.length) bad.push(`${k}: leaves out ${dropped.join(', ')}`);
       continue;
     }
     if(!m){
@@ -231,9 +239,20 @@ test('the check itself catches a wrong placeholder, a missing plural form and a 
   const station = {'sp.py.x': 'another {station}', 'f.a': 'Lost {w:$}'};
   const given = {'sp.py.x': ['station', 'station_name'], 'f.a': ['w']};
   assert.deepEqual(mismatches('de', {'sp.py.x': 'noch eine Station: {station_name}'}, station, given), []);
-  assert.equal(mismatches('de', {'sp.py.x': 'noch eine {foo}'}, station, given).length, 1);
+  assert.ok(mismatches('de', {'sp.py.x': 'noch eine {foo}'}, station, given).length);
   assert.equal(mismatches('de', {'f.a': 'Verlust {w}'}, station, given).length, 1);
   assert.equal(mismatches('de', {'sp.py.x': 'noch eine Station: {station_name}'}, station).length, 1);
+  // Every English param is still used: only its token may replace it, and only
+  // a plural form but `other` may leave out {n}.
+  const more = {'sp.py.s': '{stations}', 'sp.py.h_one': '{when} and {n} scattered hours',
+    'sp.py.h_other': '{when} and {n} scattered hours', 'sp.py.l_one': '{n} shop', 'sp.py.l_other': '{n} shops'};
+  const passes = {'sp.py.s': ['stations', 'station_name'], 'sp.py.h': ['when', 'n'], 'sp.py.l': ['n']};
+  assert.deepEqual(mismatches('de', {'sp.py.s': 'Station: {station_name}'}, more, passes), []);
+  assert.deepEqual(mismatches('de', {'sp.py.l_one': 'ein Laden', 'sp.py.l_other': '{n} Läden'}, more, passes), []);
+  assert.equal(mismatches('de', {'sp.py.l_one': 'ein Laden', 'sp.py.l_other': 'Läden'}, more, passes).length, 1);
+  assert.equal(mismatches('de', {'sp.py.h_one': '{n} verstreute Stunde', 'sp.py.h_other': '{n} verstreute Stunden'},
+    more, passes).length, 2);
+  assert.equal(mismatches('de', {'sp.py.s': 'Stationen'}, more, passes).length, 1);
 });
 
 test('the params a call passes are read off it; a spread or a variable leaves them unknown', () => {
@@ -296,18 +315,27 @@ test("a translation may write a game name's token its calls pass beside the Engl
   const out = python(`
 import json
 from tools import i18n
-english = {"sp.py.x": "another {station}", "sp.py.y": "another {station}", "sp.py.z": "another {station}"}
-params = {"sp.py.x": {"station", "station_name"}, "sp.py.y": {"station", "station_name"}, "sp.py.z": None}
+english = {"sp.py.x": "another {station}", "sp.py.y": "another {station}", "sp.py.z": "another {station}",
+           "sp.py.s": "{stations}", "sp.py.w": "{when} and {n} scattered hours",
+           "sp.py.l_one": "{n} shop", "sp.py.l_other": "{n} shops",
+           "sp.py.o_one": "{n} shop", "sp.py.o_other": "{n} shops"}
+params = {"sp.py.x": {"station", "station_name"}, "sp.py.y": {"station", "station_name"}, "sp.py.z": None,
+          "sp.py.s": {"stations", "station_name"}, "sp.py.w": {"when", "n"}, "sp.py.l": {"n"}, "sp.py.o": {"n"}}
 table = {"sp.py.x": "noch eine Station: {station_name}", "sp.py.y": "noch eine {foo}",
-         "sp.py.z": "noch eine Station: {station_name}"}
+         "sp.py.z": "noch eine Station: {station_name}", "sp.py.s": "Stationen: {station_name}",
+         "sp.py.w": "{when} und verstreute Stunden", "sp.py.l_one": "ein Laden", "sp.py.l_other": "{n} Läden",
+         "sp.py.o_one": "ein Laden", "sp.py.o_other": "Läden"}
 i18n.load = lambda lang, root=i18n.ROOT: (table, dict(english))
 print(json.dumps([i18n.shipped("de", english, params=params), i18n.status("de", english, params)["mismatch"]]))`);
   assert.equal(out.status, 0, out.stderr);
   const [shipped, mismatch] = JSON.parse(out.stdout);
-  // x uses a passed token and ships; y names a param nobody passes; z's calls
-  // cannot be read, so it is held to the English's own placeholders.
-  assert.deepEqual(shipped, {'sp.py.x': 'noch eine Station: {station_name}'});
-  assert.deepEqual(mismatch.sort(), ['sp.py.y', 'sp.py.z']);
+  // x and s use a passed token for the English word and ship, and so does
+  // "ein Laden" for `one`; y names a param nobody passes; z's calls cannot be
+  // read, so it is held to the English's own placeholders; w drops the hours'
+  // count and o drops {n} from `other`.
+  assert.deepEqual(shipped, {'sp.py.l_one': 'ein Laden', 'sp.py.l_other': '{n} Läden',
+    'sp.py.o_one': 'ein Laden', 'sp.py.s': 'Stationen: {station_name}', 'sp.py.x': 'noch eine Station: {station_name}'});
+  assert.deepEqual(mismatch.sort(), ['sp.py.o_other', 'sp.py.w', 'sp.py.y', 'sp.py.z']);
 });
 
 test("the game's words are never written into a git work tree, this one or another", () => {

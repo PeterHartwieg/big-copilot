@@ -378,8 +378,11 @@ What a translation may name is what its calls pass. `extract` records, per key, 
 param names of every call site (`msg()`'s keyword arguments; the keys of the object
 literal a `tt()` call passes, or none when it passes nothing), and `extract --params`
 prints them. Where every call's names can be read, `fits()` lets a translation use any
-of them and leave any out, keeping the English's spec for the params the English
-prints; a placeholder no call passes makes it a mismatch, which `ship` drops. Where one
+of them, keeping the English's spec for the params the English prints. It still has to
+use every param its English prints, with two exceptions: a passed token param stands in
+for its English word (`X_name` for `X`, `station_name` for `stations`), and a plural form
+other than `other` may leave out `{n}` ("ein Laden"). A placeholder no call passes, or an
+English param left out otherwise, makes it a mismatch, which `ship` drops. Where one
 call's names cannot be read (`**said`, a variable, a spread, a computed key) the
 translation is held to its English's own placeholders, no more and no fewer, as
 before. Plural categories are checked either way.
@@ -446,6 +449,10 @@ without its `.git`) or inside any other git work tree.
    | `compact(x)` / `money(x)` | `{x:$c}` |
    | `WEEKDAY_NAMES[d]`, `WEEKDAYS[d]` | `{d:day}` |
    | a game name, `tok(key, name)` | `{item}` with the token as the param |
+
+   A list joined with `", ".join(...)` in Python becomes `_msg_list(items)`: a nested
+   `f.list` ("{a}, {b}") per comma and `f.list.last` for the final pair, both "{a}, {b}" in
+   English, so a translation can end the list with its "and" ("a, b und c").
 3. Prove the English unchanged: the area's existing tests pass untouched, and a fixture
    board rendered before and after shows the same text.
 4. Add the area to `CONVERTED` in `tests/test_i18n_msg.py` (Python fields) and in

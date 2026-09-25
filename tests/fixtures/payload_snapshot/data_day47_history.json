@@ -2,6 +2,32 @@
  "alerts": [
   {
    "group": "jobdemand",
+   "i18n": {
+    "text": [
+     "f.jobdemand.quit",
+     {
+      "count": 1,
+      "demands": {
+       "m": [
+        "f.jobdemand.item",
+        {
+         "demand": "⟦ba:jobdemand_freeweekends|Free weekends⟧",
+         "n": 1,
+         "why": {
+          "m": [
+           "f.jobdemand.important",
+           {},
+           "important"
+          ]
+         }
+        },
+        "⟦ba:jobdemand_freeweekends|Free weekends⟧ for 1 (important)"
+       ]
+      },
+      "n": 1
+     }
+    ]
+   },
    "id": "002e4a5a19",
    "level": "critical",
    "site": "HART. Spirits",
@@ -15,6 +41,17 @@
     "slug": "ba:itemname_water"
    },
    "group": "feed",
+   "i18n": {
+    "text": [
+     "f.import.order.raise",
+     {
+      "item": "⟦ba:itemname_water|Water⟧",
+      "order": 3000,
+      "set": 8400,
+      "use": 8400
+     }
+    ]
+   },
    "id": "eba27cb1f8",
    "level": "critical",
    "site": "HART. Hub",
@@ -28,6 +65,20 @@
     "slug": "ba:itemname_water"
    },
    "group": "feed",
+   "i18n": {
+    "text": [
+     "f.feed.target.raise",
+     {
+      "depot": "HART. Hub",
+      "item": "⟦ba:itemname_water|Water⟧",
+      "n": 16,
+      "per": 1200,
+      "set": 1200,
+      "site": "HART. Brewery",
+      "target": 800
+     }
+    ]
+   },
    "id": "d303753fba",
    "level": "critical",
    "site": "HART. Brewery",
@@ -104,6 +155,12 @@
   },
   {
    "group": "toiletprivacy",
+   "i18n": {
+    "text": [
+     "f.amenity.toiletprivacy",
+     {}
+    ]
+   },
    "id": "8dd6dd780d",
    "level": "warn",
    "site": "HART. Spirits",
@@ -114,6 +171,12 @@
   },
   {
    "group": "music",
+   "i18n": {
+    "text": [
+     "f.amenity.music",
+     {}
+    ]
+   },
    "id": "54e243ddb4",
    "level": "warn",
    "site": "HART. Spirits",
@@ -124,6 +187,12 @@
   },
   {
    "group": "interior",
+   "i18n": {
+    "text": [
+     "f.amenity.interior",
+     {}
+    ]
+   },
    "id": "cf963d40d2",
    "level": "warn",
    "site": "HART. Spirits",
@@ -134,6 +203,14 @@
   },
   {
    "group": "satisfaction",
+   "i18n": {
+    "text": [
+     "f.satisfaction",
+     {
+      "n": 64.0
+     }
+    ]
+   },
    "id": "a12c67d98b",
    "level": "warn",
    "site": "HART. Gifts",
@@ -144,6 +221,12 @@
   },
   {
    "group": "uniform",
+   "i18n": {
+    "text": [
+     "f.uniform.locker",
+     {}
+    ]
+   },
    "id": "0be9a36146",
    "level": "warn",
    "site": "HART. Gifts",
@@ -154,6 +237,12 @@
   },
   {
    "group": "toiletprivacy",
+   "i18n": {
+    "text": [
+     "f.amenity.toiletprivacy",
+     {}
+    ]
+   },
    "id": "2c95181204",
    "level": "warn",
    "site": "HART. Gifts",
@@ -164,6 +253,12 @@
   },
   {
    "group": "sink",
+   "i18n": {
+    "text": [
+     "f.amenity.sink",
+     {}
+    ]
+   },
    "id": "a78a54cf7f",
    "level": "warn",
    "site": "HART. Gifts",
@@ -174,6 +269,12 @@
   },
   {
    "group": "music",
+   "i18n": {
+    "text": [
+     "f.amenity.music",
+     {}
+    ]
+   },
    "id": "e6eba40d51",
    "level": "warn",
    "site": "HART. Gifts",
@@ -184,6 +285,12 @@
   },
   {
    "group": "interior",
+   "i18n": {
+    "text": [
+     "f.amenity.interior",
+     {}
+    ]
+   },
    "id": "167ee2d167",
    "level": "warn",
    "site": "HART. Gifts",
@@ -194,6 +301,18 @@
   },
   {
    "group": "promotion",
+   "i18n": {
+    "text": [
+     "f.promotion",
+     {
+      "marketing": 0.0,
+      "n": 20.0,
+      "promotion": 80.0,
+      "site": "HART. Gifts",
+      "traffic": 50.0
+     }
+    ]
+   },
    "id": "f2450926c3",
    "level": "warn",
    "site": "HART. Gifts",
@@ -207,6 +326,25 @@
     "slug": "ba:itemname_cheapgift"
    },
    "group": "wholesale",
+   "i18n": {
+    "text": [
+     "f.wholesale.order",
+     {
+      "day": {
+       "m": [
+        "f.wholesale.day",
+        {
+         "d": 1
+        },
+        "Monday"
+       ]
+      },
+      "have": 450,
+      "item": "⟦ba:itemname_cheapgift|Gift (Cheap)⟧",
+      "use": 600
+     }
+    ]
+   },
    "id": "2862885b06",
    "level": "warn",
    "site": "HART. Gifts",
@@ -220,6 +358,16 @@
     "slug": "ba:itemname_umbrella"
    },
    "group": "unplanned",
+   "i18n": {
+    "text": [
+     "f.unplanned",
+     {
+      "item": "⟦ba:itemname_umbrella|Umbrella⟧",
+      "rate": 21,
+      "units": 30
+     }
+    ]
+   },
    "id": "030bca4d36",
    "level": "warn",
    "site": "HART. Gifts",
@@ -317,6 +465,32 @@
   "lines": [
    {
     "group": "jobdemand",
+    "i18n": {
+     "text": [
+      "f.jobdemand.quit",
+      {
+       "count": 1,
+       "demands": {
+        "m": [
+         "f.jobdemand.item",
+         {
+          "demand": "⟦ba:jobdemand_freeweekends|Free weekends⟧",
+          "n": 1,
+          "why": {
+           "m": [
+            "f.jobdemand.important",
+            {},
+            "important"
+           ]
+          }
+         },
+         "⟦ba:jobdemand_freeweekends|Free weekends⟧ for 1 (important)"
+        ]
+       },
+       "n": 1
+      }
+     ]
+    },
     "id": "002e4a5a19",
     "level": "critical",
     "site": "HART. Spirits",
@@ -393,6 +567,12 @@
    },
    {
     "group": "toiletprivacy",
+    "i18n": {
+     "text": [
+      "f.amenity.toiletprivacy",
+      {}
+     ]
+    },
     "id": "8dd6dd780d",
     "level": "warn",
     "site": "HART. Spirits",
@@ -403,6 +583,12 @@
    },
    {
     "group": "music",
+    "i18n": {
+     "text": [
+      "f.amenity.music",
+      {}
+     ]
+    },
     "id": "54e243ddb4",
     "level": "warn",
     "site": "HART. Spirits",
@@ -413,6 +599,12 @@
    },
    {
     "group": "interior",
+    "i18n": {
+     "text": [
+      "f.amenity.interior",
+      {}
+     ]
+    },
     "id": "cf963d40d2",
     "level": "warn",
     "site": "HART. Spirits",
@@ -423,6 +615,14 @@
    },
    {
     "group": "satisfaction",
+    "i18n": {
+     "text": [
+      "f.satisfaction",
+      {
+       "n": 64.0
+      }
+     ]
+    },
     "id": "a12c67d98b",
     "level": "warn",
     "site": "HART. Gifts",
@@ -433,6 +633,12 @@
    },
    {
     "group": "uniform",
+    "i18n": {
+     "text": [
+      "f.uniform.locker",
+      {}
+     ]
+    },
     "id": "0be9a36146",
     "level": "warn",
     "site": "HART. Gifts",
@@ -443,6 +649,12 @@
    },
    {
     "group": "toiletprivacy",
+    "i18n": {
+     "text": [
+      "f.amenity.toiletprivacy",
+      {}
+     ]
+    },
     "id": "2c95181204",
     "level": "warn",
     "site": "HART. Gifts",
@@ -453,6 +665,12 @@
    },
    {
     "group": "sink",
+    "i18n": {
+     "text": [
+      "f.amenity.sink",
+      {}
+     ]
+    },
     "id": "a78a54cf7f",
     "level": "warn",
     "site": "HART. Gifts",
@@ -463,6 +681,12 @@
    },
    {
     "group": "music",
+    "i18n": {
+     "text": [
+      "f.amenity.music",
+      {}
+     ]
+    },
     "id": "e6eba40d51",
     "level": "warn",
     "site": "HART. Gifts",
@@ -473,6 +697,12 @@
    },
    {
     "group": "interior",
+    "i18n": {
+     "text": [
+      "f.amenity.interior",
+      {}
+     ]
+    },
     "id": "167ee2d167",
     "level": "warn",
     "site": "HART. Gifts",
@@ -483,6 +713,18 @@
    },
    {
     "group": "promotion",
+    "i18n": {
+     "text": [
+      "f.promotion",
+      {
+       "marketing": 0.0,
+       "n": 20.0,
+       "promotion": 80.0,
+       "site": "HART. Gifts",
+       "traffic": 50.0
+      }
+     ]
+    },
     "id": "f2450926c3",
     "level": "warn",
     "site": "HART. Gifts",
@@ -496,6 +738,25 @@
      "slug": "ba:itemname_cheapgift"
     },
     "group": "wholesale",
+    "i18n": {
+     "text": [
+      "f.wholesale.order",
+      {
+       "day": {
+        "m": [
+         "f.wholesale.day",
+         {
+          "d": 1
+         },
+         "Monday"
+        ]
+       },
+       "have": 450,
+       "item": "⟦ba:itemname_cheapgift|Gift (Cheap)⟧",
+       "use": 600
+      }
+     ]
+    },
     "id": "2862885b06",
     "level": "warn",
     "site": "HART. Gifts",
@@ -509,6 +770,16 @@
      "slug": "ba:itemname_umbrella"
     },
     "group": "unplanned",
+    "i18n": {
+     "text": [
+      "f.unplanned",
+      {
+       "item": "⟦ba:itemname_umbrella|Umbrella⟧",
+       "rate": 21,
+       "units": 30
+      }
+     ]
+    },
     "id": "030bca4d36",
     "level": "warn",
     "site": "HART. Gifts",
@@ -524,6 +795,75 @@
    "rows": [
     {
      "group": "atcap",
+     "i18n": {
+      "text": [
+       "f.atcap",
+       {
+        "fix": {
+         "m": [
+          "sp.py.fix.service.post",
+          {},
+          "another counter"
+         ]
+        },
+        "limit": {
+         "m": [
+          "sp.py.limit.registers.first",
+          {},
+          "Registers"
+         ]
+        },
+        "n": 14,
+        "noun": {
+         "m": [
+          "sp.py.counters",
+          {},
+          "counters"
+         ]
+        },
+        "rate": {
+         "m": [
+          "f.atcap.rate",
+          {
+           "n": 20
+          },
+          "20/h"
+         ]
+        },
+        "when": {
+         "m": [
+          "sp.py.when.part",
+          {
+           "days": {
+            "m": [
+             "sp.py.when.everyday",
+             {},
+             "every day"
+            ]
+           },
+           "hours": {
+            "m": [
+             "sp.py.when.hours",
+             {
+              "a": 17,
+              "b": 19
+             },
+             "17-19"
+            ]
+           }
+          },
+          "every day 17-19"
+         ]
+        },
+        "where": "HART. Spirits",
+        "worth": 450.24
+       }
+      ],
+      "unit": [
+       "f.unit.trade",
+       {}
+      ]
+     },
      "id": "c814f4235c",
      "level": "warn",
      "site": "HART. Spirits",
@@ -534,6 +874,43 @@
     },
     {
      "group": "hype",
+     "i18n": {
+      "text": [
+       "f.hype.wave.full",
+       {
+        "base": 1607.14,
+        "basis": {
+         "m": [
+          "f.hype.basis.own",
+          {
+           "day": 35,
+           "n": 7
+          },
+          "its own 7 days before day 35"
+         ]
+        },
+        "drop": 192.8599999999999,
+        "hood": "⟦ba:neighborhood_midtown|Midtown⟧",
+        "lines": {
+         "m": [
+          "f.hype.lines.left",
+          {
+           "days": 3,
+           "n": 1
+          },
+          "1 lines has 3 days left"
+         ]
+        },
+        "n": 14,
+        "revenue": 1800.0,
+        "site": "HART. Spirits"
+       }
+      ],
+      "unit": [
+       "f.unit.revenue",
+       {}
+      ]
+     },
      "id": "21bdb2218c",
      "level": "warn",
      "site": "HART. Spirits",
@@ -4918,6 +5295,15 @@
    "baseline": {
     "basis": "its own 7 days before day 35",
     "hood": "ba:neighborhood_midtown",
+    "i18n": {
+     "basis": [
+      "f.hype.basis.own",
+      {
+       "day": 35,
+       "n": 7
+      }
+     ]
+    },
     "name": "HART. Spirits",
     "revenue": 1607.14
    },
@@ -5510,6 +5896,75 @@
   "rows": [
    {
     "group": "atcap",
+    "i18n": {
+     "text": [
+      "f.atcap",
+      {
+       "fix": {
+        "m": [
+         "sp.py.fix.service.post",
+         {},
+         "another counter"
+        ]
+       },
+       "limit": {
+        "m": [
+         "sp.py.limit.registers.first",
+         {},
+         "Registers"
+        ]
+       },
+       "n": 14,
+       "noun": {
+        "m": [
+         "sp.py.counters",
+         {},
+         "counters"
+        ]
+       },
+       "rate": {
+        "m": [
+         "f.atcap.rate",
+         {
+          "n": 20
+         },
+         "20/h"
+        ]
+       },
+       "when": {
+        "m": [
+         "sp.py.when.part",
+         {
+          "days": {
+           "m": [
+            "sp.py.when.everyday",
+            {},
+            "every day"
+           ]
+          },
+          "hours": {
+           "m": [
+            "sp.py.when.hours",
+            {
+             "a": 17,
+             "b": 19
+            },
+            "17-19"
+           ]
+          }
+         },
+         "every day 17-19"
+        ]
+       },
+       "where": "HART. Spirits",
+       "worth": 450.24
+      }
+     ],
+     "unit": [
+      "f.unit.trade",
+      {}
+     ]
+    },
     "id": "c814f4235c",
     "level": "warn",
     "site": "HART. Spirits",
@@ -5520,6 +5975,43 @@
    },
    {
     "group": "hype",
+    "i18n": {
+     "text": [
+      "f.hype.wave.full",
+      {
+       "base": 1607.14,
+       "basis": {
+        "m": [
+         "f.hype.basis.own",
+         {
+          "day": 35,
+          "n": 7
+         },
+         "its own 7 days before day 35"
+        ]
+       },
+       "drop": 192.8599999999999,
+       "hood": "⟦ba:neighborhood_midtown|Midtown⟧",
+       "lines": {
+        "m": [
+         "f.hype.lines.left",
+         {
+          "days": 3,
+          "n": 1
+         },
+         "1 lines has 3 days left"
+        ]
+       },
+       "n": 14,
+       "revenue": 1800.0,
+       "site": "HART. Spirits"
+      }
+     ],
+     "unit": [
+      "f.unit.revenue",
+      {}
+     ]
+    },
     "id": "21bdb2218c",
     "level": "warn",
     "site": "HART. Spirits",
