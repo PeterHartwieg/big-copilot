@@ -343,7 +343,12 @@ function showWikiRoute(hash, entered = false){
      the top instead when the page turns out not to have that section. */
   if((moved || (entered && !land)) && window.scrollY > 0) window.scrollTo(0, 0);
   if(wikiStatus === "idle"){ loadWikiData(); return; }
+  /* The same route drawn again with nowhere to land is a live refresh (a new
+     save, the game names in another language): the reader stays with what
+     they had opened, focused and scrolled to. */
+  const keep = moved || entered || land ? null : wikiKeep();
   drawWiki();
+  wikiKeepRestore(keep);
 }
 
 /* --- the markdown the game writes --------------------------------------- */
@@ -937,8 +942,11 @@ const wikiFixHolds = f => ((f.capacity || []).find(c => c && Number.isFinite(c.v
    nothing says which line is this product's, every labelled row is shown. The
    largest is never picked: that would be a number the help does not give. */
 function wikiCaps(p, key, f){
-  const given = ((p || {}).fixtureCapacities || {})[key];
-  if(Array.isArray(given) && given.length) return given.filter(c => c && Number.isFinite(c.value));
+  /* A supplied answer is checked like the fallback: a row with no number is no
+     answer, and the fixture's own rows are read instead. */
+  const raw = ((p || {}).fixtureCapacities || {})[key];
+  const given = Array.isArray(raw) ? raw.filter(c => c && Number.isFinite(c.value)) : [];
+  if(given.length) return given;
   const caps = (f.capacity || []).filter(c => c && Number.isFinite(c.value));
   if(caps.length < 2) return caps;
   /* The product's own first word may name its line ("Gifts 300, flowers 100").
@@ -2071,6 +2079,59 @@ function wikiRestore(hold){
   try{ found.focus({preventScroll: true}); }catch(e){ try{ found.focus(); }catch(err){} }
   /* A section the browser has not painted yet is measured from its estimate,
      so the same correction is made once more when the new layout has settled. */
+  if(typeof requestAnimationFrame === "function") requestAnimationFrame(settle);
+}
+/* What a live refresh must hand back, taken before the redraw. Nothing in the
+   page has an id to find it by, so a thing is known by what it says: a
+   <details> by its summary, a focused control by its tag, text and link, each
+   with its place among the ones that read the same. The scroll is held by the
+   first section still on screen, which content-visibility would otherwise
+   leave at an estimated height once it is replaced. */
+const wikiKeepSel = "a[href],button,input,select,textarea,summary,[tabindex]";
+function wikiKeepId(el){
+  const text = String(el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 120);
+  return `${el.tagName}|${el.getAttribute("href") || ""}|${text}`;
+}
+function wikiKeepFind(list, id, nth){
+  return list.filter(el => wikiKeepId(el) === id)[nth] || null;
+}
+function wikiKeepPlace(list, el){
+  const id = wikiKeepId(el);
+  return {id, nth: list.filter(other => wikiKeepId(other) === id).indexOf(el)};
+}
+function wikiKeep(){
+  const host = wikiRoot();
+  if(!host || typeof host.querySelectorAll !== "function" || wikiStatus !== "ready") return null;
+  const summaries = [...host.querySelectorAll("details > summary")];
+  const open = summaries.map(sum => ({...wikiKeepPlace(summaries, sum), open: !!sum.parentElement.open}));
+  const active = typeof document !== "undefined" ? document.activeElement : null;
+  const controls = [...host.querySelectorAll(wikiKeepSel)];
+  const focus = active && active.id !== "wikiSearch" && host.contains(active) && controls.includes(active)
+    ? wikiKeepPlace(controls, active) : null;
+  const secs = [...host.querySelectorAll("section.sec")];
+  const at = secs.findIndex(sec => sec.getBoundingClientRect().bottom > 0);
+  const anchor = at < 0 ? null : {at, top: secs[at].getBoundingClientRect().top};
+  return {open, focus, anchor};
+}
+function wikiKeepRestore(keep){
+  const host = wikiRoot();
+  if(!keep || !host || typeof host.querySelectorAll !== "function") return;
+  const summaries = [...host.querySelectorAll("details > summary")];
+  keep.open.forEach(was => {
+    const sum = wikiKeepFind(summaries, was.id, was.nth);
+    if(sum && sum.parentElement.open !== was.open) sum.parentElement.open = was.open;
+  });
+  const settle = () => {
+    const sec = keep.anchor && host.querySelectorAll("section.sec")[keep.anchor.at];
+    if(!sec) return;
+    const by = sec.getBoundingClientRect().top - keep.anchor.top;
+    if(Math.abs(by) > 1 && typeof window.scrollBy === "function") window.scrollBy(0, by);
+  };
+  settle();
+  if(keep.focus){
+    const el = wikiKeepFind([...host.querySelectorAll(wikiKeepSel)], keep.focus.id, keep.focus.nth);
+    if(el){ try{ el.focus({preventScroll: true}); }catch(e){} }
+  }
   if(typeof requestAnimationFrame === "function") requestAnimationFrame(settle);
 }
 function drawWiki(hold){

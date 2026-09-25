@@ -265,7 +265,7 @@ test('rows rank by score, and a header click re-sorts them', async () => {
     assert.equal(line.opacity, '1');
     assert.ok(line.height > 8, `subtitle collapsed at ${line.height}px`);
     await page.locator('#cityMapPage .fhead [data-s="deposit"]').click();
-    assert.deepEqual(await rowKeys(page), [MT[0], HK[0], MT[1]]);
+    assert.deepEqual(await rowKeys(page), [MT[1], HK[0], MT[0]]);
     // Every column reads best-first; a second click on the same one goes back
     // to the order the category ranks by rather than turning it upside down.
     await page.locator('#cityMapPage .fhead [data-s="deposit"]').click();
@@ -1039,7 +1039,7 @@ test('the money column is what signing costs, with the rent behind it', async ()
     assert.equal(await page.locator(`#cityMapPage .place[data-pick="${HK[0]}"] .dep`).getAttribute('data-tip'),
       'Estimated deposit, about 63 days of rent; est. rent $140/day.');
     await page.locator('#cityMapPage .fhead [data-s="deposit"]').click();
-    assert.deepEqual(await rowKeys(page), [MT[0], HK[0], MT[1]]);
+    assert.deepEqual(await rowKeys(page), [MT[1], HK[0], MT[0]]);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
@@ -1427,7 +1427,7 @@ test('a column header sorts from the keyboard as well as the mouse', async () =>
     await head('deposit').focus();
     await page.keyboard.press(' ');
     assert.equal(await sorted(), 'Upfront');
-    assert.deepEqual(await rowKeys(page), [MT[0], HK[0], MT[1]]);
+    assert.deepEqual(await rowKeys(page), [MT[1], HK[0], MT[0]]);
     // A second press on the same header goes back to the default, as a click does.
     await head('deposit').focus();
     await page.keyboard.press('Enter');
@@ -1850,6 +1850,23 @@ test('a search saved with a layout matches a save whose kind has only that one',
     await page.locator('#cityMapPage .fsaved-list [data-saved="Offices"]').click();
     assert.deepEqual(await rowKeys(page), [HK[4]]);
     assert.equal(await page.locator('#cityMapPage .fsaved-list .fchip.on').textContent(), 'Offices');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a live refresh leaves the Type list alone unless its types changed', async () => {
+  const {page, errors} = await fixture();
+  try{
+    await openMap(page); await turnOn(page);
+    await page.locator('#cityMapPage [data-f="type"]').selectOption(COFFEE);
+    // Replacing the options would close the list under an open pointer.
+    const same = await page.evaluate(() => {
+      const first = document.querySelector('#cityMapPage [data-f="type"] option');
+      D = {...D}; refreshCityMaps();
+      const select = document.querySelector('#cityMapPage [data-f="type"]');
+      return select.querySelector('option') === first && select.value;
+    });
+    assert.equal(same, COFFEE);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

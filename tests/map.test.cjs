@@ -786,3 +786,41 @@ test("the home panel's map pin titles the dialog with the flat's address",async(
     assert.deepEqual(errors,[]);
   } finally { await page.close(); }
 });
+
+test('an address is pinned by the key beside it, never by reading its words',async()=>{
+  const {page,errors}=await fixture();
+  try{
+    const pins=await page.evaluate(()=>[mapAddress('13 Fifth Avenue'),mapAddress('13 Fünfte Allee','ba:street_fifthavenue#13')]
+      .map(h=>{const d=document.createElement('div');d.innerHTML=h;return d.querySelector('[data-map-key]')?.dataset.mapKey||null;}));
+    assert.deepEqual(pins,[null,'ba:street_fifthavenue#13']);
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});
+
+test('the map card rules are scoped to the map, so a board .site keeps its own look',()=>{
+  const css=fs.readFileSync(path.join(root,'web/map.css'),'utf8').replace(/\/\*[\s\S]*?\*\//g,'');
+  const loose=css.split(/[{}]/).filter((_,i)=>i%2===0).flatMap(sel=>sel.split(','))
+    .map(s=>s.trim()).filter(s=>/(^|\s)\.site\b/.test(s)&&!/^\.city-map \.site\b/.test(s));
+  assert.deepEqual(loose,[]);
+});
+
+test('a refresh while the map is hidden waits for the page, and the ball rests off screen',async()=>{
+  const {page,errors}=await fixture();
+  try{
+    await openPage(page);
+    await page.waitForFunction(()=>cityMapPage.ballLoop===cityMapPage.buildToken);
+    await page.evaluate(()=>showPage('today'));
+    // The loop notices on its next frame that nothing shows it, and stops.
+    await page.waitForFunction(()=>cityMapPage.ballLoop===null);
+    const hidden=await page.evaluate(()=>{
+      D={...D,businesses:[...D.businesses,{...D.businesses[0],key:'modded#98',name:'Later shop',address:'98 Later Street'}]};
+      refreshCityMaps();
+      return {stale:cityMapPage.stale,mine:cityMapPage.businesses.size};
+    });
+    assert.deepEqual(hidden,{stale:true,mine:2});
+    await page.evaluate(()=>showPage('map'));
+    assert.deepEqual(await page.evaluate(()=>({stale:cityMapPage.stale,mine:cityMapPage.businesses.size})),{stale:false,mine:3});
+    await page.waitForFunction(()=>cityMapPage.ballLoop===cityMapPage.buildToken);
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+});
