@@ -6,7 +6,7 @@ company here trades. An import hub brings in water for a brewery, which tops up
 a liquor store with beer; a gift shop is supplied by a wholesale contract. Two
 weeks of order history (with hour reports) and three weeks of financial
 summaries sit behind them, with staff on schedules, a loan, a rented home, a
-bought building, a rival next door, a hype wave and a supplier event, market
+bought building, a rival in Midtown, a hype wave and a supplier event, market
 demand in four neighbourhoods and a small game text with a recipe, a
 workstation and the station pages.
 
@@ -32,8 +32,8 @@ CHARACTER = "PAYLOADco"
 
 HUB = ("ba:street_eighthavenue", 4)       # a warehouse in Industry City
 BREWERY = ("ba:street_eighthavenue", 8)   # a warehouse in Industry City, run as a factory
-LIQUOR = ("ba:street_broadwaystreet", 7)  # retail, Midtown
-GIFTS = ("ba:street_broadwaystreet", 19)  # retail, Lower Manhattan
+LIQUOR = ("ba:street_eighthstreet", 5)    # retail size C, Midtown
+GIFTS = ("ba:street_broadwaystreet", 19)  # retail size C, Lower Manhattan
 HOME = ("ba:street_broadwaystreet", 13)   # residential, Midtown
 RIVAL = ("ba:street_broadwaystreet", 9)   # retail, Midtown, a rival's gift shop
 FOR_SALE = ("ba:street_broadwaystreet", 11)
@@ -57,7 +57,7 @@ WEEK = (1.3, 0.8, 0.9, 0.9, 1.0, 1.2, 1.4)
 
 def data_names() -> dict:
     """The game text extract() reads the company with: names, and the help
-    pages the recipe, workstation, station, door-cap and type catalogues come
+    pages the recipe, workstation, station, building capacity and type catalogues come
     from. Written in the game's own format; the figures are the fixture's."""
     station = ("**{name}** is a special *employee station* that requires employees with"
                " [{skill}](skill-{slug}) skill.\n\n**Customer Capacity:** {cap}")
@@ -75,6 +75,8 @@ def data_names() -> dict:
         "ba:businesstype_empty": "Empty",
         SERVICE: "Customer Service", CLEANING: "Cleaning", FACTORY_WORKER: "Factory Worker",
         "ba:jobdemand_freeweekends": "Free weekends",
+        MIDTOWN: "Midtown", LOWER: "Lower Manhattan", INDUSTRY: "Industry City",
+        HELLS: "Hell's Kitchen", "ba:neighborhood_global": "Global",
         "help_ba:itemname_cashregister_content": station.format(
             name="Cash Register", skill="Customer Service", slug="customerservice", cap=20),
         "help_ba:itemname_cleaningstation_content": (
@@ -136,6 +138,7 @@ def _sales(day: int, base: dict, customers: int, hours: range, hyped: bool = Fal
     f = _lift(day) if hyped else WEEK[day % 7]
     seen = round(customers * f)
     rush = rush or {}
+    assert set(rush) <= set(hours), "a rush hour outside the open hours"
     rest = [h for h in hours if h not in rush]
     left = seen - sum(rush.values())
     spread = {h: left // len(rest) + (1 if i < left % len(rest) else 0) for i, h in enumerate(rest)}
@@ -153,7 +156,8 @@ LIQUOR_SALES = {BEER: (250, 6.0)}
 # The evening rush at the liquor store: more than its one register serves (20 an hour).
 LIQUOR_RUSH = {17: 24, 18: 24}
 GIFT_SALES = {GIFT: (80, 12.0), UMBRELLA: (20, 15.0)}
-WAVE = (DAY - 5, DAY + 4)  # the days the hype wave on beer runs
+LOAN_PAYMENT = 300.0  # the loan's daily payment, booked in each day's summary
+WAVE = (DAY - 5, DAY + 10)  # the days the hype wave on beer runs: over both saves
 
 
 def _statement(addr, sales, cogs, wages, rent, profit=None, resources=None) -> dict:
@@ -185,9 +189,9 @@ def _summary(d: int) -> dict:
         "residentialStatements": [{"Address": address(*HOME)}],
         "totalBusinessProfit": business,
         # The company's own costs: negative, but for the homes (see _daily_series).
-        "totalLoanExpenses": -300.0, "totalHealthInsuranceExpenses": -30.0,
+        "totalLoanExpenses": -LOAN_PAYMENT, "totalHealthInsuranceExpenses": -30.0,
         "totalResidentialExpenses": 45.0, "parkingFees": -5.0,
-        "totalProfit": business - 300.0 - 30.0 - 45.0 - 5.0,
+        "totalProfit": business - LOAN_PAYMENT - 30.0 - 45.0 - 5.0,
     }
 
 
@@ -215,7 +219,7 @@ def data_company(day: int = DAY) -> dict:
     liquor = {
         "StreetName": LIQUOR[0], "StreetNumber": LIQUOR[1], "RentedByPlayer": True,
         "BusinessName": "HART. Spirits", "businessTypeName": "ba:businesstype_liquorstore",
-        "creationDay": OPENED, "RentPerDay": 150.0, "customerCapacity": 30,
+        "creationDay": OPENED, "RentPerDay": 150.0, "customerCapacity": 30,  # size C
         "securityLevelPercentage": 40.0,
         "satisfaction": {"overall": 82.0, "customerService": 90.0, "pricing": 75.0,
                          "cleanliness": 88.0, "facility": 70.0},
@@ -239,7 +243,7 @@ def data_company(day: int = DAY) -> dict:
     gifts = {
         "StreetName": GIFTS[0], "StreetNumber": GIFTS[1], "RentedByPlayer": True,
         "BusinessName": "HART. Gifts", "businessTypeName": "ba:businesstype_giftshop",
-        "creationDay": OPENED, "RentPerDay": 120.0, "customerCapacity": 20,
+        "creationDay": OPENED, "RentPerDay": 120.0, "customerCapacity": 30,  # size C
         "securityLevelPercentage": 0.0,
         "satisfaction": {"overall": 64.0, "customerService": 70.0, "pricing": 60.0,
                          "cleanliness": 40.0, "facility": 55.0},
@@ -304,7 +308,7 @@ def data_company(day: int = DAY) -> dict:
         person("EMPcy", "Cy Moss", [(CLEANING, 60.0)], LIQUOR, 84, week, wage=14.0),
         person("EMPdee", "Dee Park", [(SERVICE, 65.0)], GIFTS, 70, week, satisfaction=55.0),
         person("EMPeli", "Eli Stone", [(FACTORY_WORKER, 50.0)], BREWERY, 84, week, wage=16.0,
-               isAbsent=day % 2 == 1),
+               isAbsent=True),
     ]
 
     def demand(slug, values):
@@ -338,8 +342,8 @@ def data_company(day: int = DAY) -> dict:
         "employeePresets": [{"id": PRESET, "name": "Black"}],
         "financialSummaries": [_summary(d) for d in past],
         "Loans": [{"bankAddress": address(*BANK), "totalAmount": 50000.0,
-                   "remainingAmount": 32000.0 - 600.0 * (day - DAY),
-                   "dailyPayment": 600.0, "dailyInterest": 40.0}],
+                   "remainingAmount": 32000.0 - LOAN_PAYMENT * (day - DAY),
+                   "dailyPayment": LOAN_PAYMENT, "dailyInterest": 40.0}],
         "logisticsManagerPlans": [
             {"targetAddress": address(*HUB), "destinations": [
                 {"deliveryTargetAddress": address(*BREWERY),
@@ -363,7 +367,7 @@ def data_company(day: int = DAY) -> dict:
                         "amountOrderedThisWeek": 0}]},
         ],
         "marketEvents": [
-            # A hype wave on beer in Midtown, five days old on DAY, over a week later.
+            # A hype wave on beer in Midtown, five days old on DAY, still on a week later.
             {"type": 2, "itemName": BEER, "neighbourhood": MIDTOWN, "startDay": WAVE[0],
              "durationInDays": WAVE[1] - WAVE[0], "stopped": False},
             # An umbrella shortage in Lower Manhattan, running on both days.

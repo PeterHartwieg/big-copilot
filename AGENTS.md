@@ -100,7 +100,7 @@ side and rebuild — the rebuild is the resolution.
 | `ba_demand_curves.json` | `make_demand_curves.py`, which reads the installed game's Addressables bundles with UnityPy; owner only |
 | `mockup/*/*.dc.html` and `mockup/*/canvas.json` | the `mockup/*/build_*.py` generators, such as `mockup/revamp/build_canvas.py` |
 | `mockup/find-location/data.json` | `mockup/find-location/make_data.py`, which reads a real save and a session-scratchpad `hart.json` at hard-coded paths, so it does not run as committed; owner only. Every other file under `mockup/` is hand-made or owner-supplied, `mockup/ui-mockup.html` and the `city.jpg` backdrops included |
-| `tests/fixtures/payload_snapshot/*.json` | `python tests/test_payload_snapshot.py --update`; they move with `ba_dashboard.py`, `ba_save.py`, `ba_buildings.json`, `ba_demand_curves.json` and `tests/save_fixtures.py` |
+| `tests/fixtures/payload_snapshot/*.json` | `python tests/test_payload_snapshot.py --update`; they move with `ba_dashboard.py`, `ba_save.py`, `ba_buildings.json`, `ba_demand_curves.json`, `tests/es3_fixture.py` and `tests/save_fixtures.py` |
 | `dashboard.html`, `market_history.json` | local runs; gitignored |
 
 ## Finishing a change

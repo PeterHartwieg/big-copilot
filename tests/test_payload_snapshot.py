@@ -100,8 +100,9 @@ def _top(path: str) -> str:
 
 def diff(expected: str, actual: str) -> str:
     """The differing paths between two snapshot texts: a count per top-level
-    key, then a sample in document order that takes from every top-level key
-    in turn, so one inserted row cannot hide a change elsewhere."""
+    key, then a sample that takes from every top-level key in turn, so one
+    inserted row cannot hide a change elsewhere. Within a key the sample runs
+    in the old snapshot's order, with paths only the new one has after them."""
     old, new = _flatten(json.loads(expected)), _flatten(json.loads(actual))
     by_top = {}
     for path in list(old) + [p for p in new if p not in old]:
@@ -118,7 +119,7 @@ def diff(expected: str, actual: str) -> str:
         return "  (same values; only the text differs, e.g. key order or float format)"
     total = sum(len(lines) for lines in by_top.values())
     head = f"  {total} differing paths: " + ", ".join(f"{k}: {len(v)}" for k, v in by_top.items())
-    # Round robin over the top-level keys, then back into document order.
+    # Round robin over the top-level keys, then shown key by key.
     taken = [0] * len(by_top)
     queues = list(by_top.values())
     while sum(taken) < min(MAX_DIFFS, total):
@@ -197,6 +198,7 @@ class PayloadSnapshotTests(unittest.TestCase):
         self.assertEqual((later["ledgerDays"], later["cashFlow"]["days"]), (2, 7))
         self.assertEqual(later["kpi"]["netWorthAsOf"], save_fixtures.DAY)
         self.assertEqual(later["market"]["trendDays"], 7)
+        self.assertTrue(later["hypeExposure"])  # the wave runs over both saves
 
     def test_no_machine_or_run_specific_values(self):
         for case, text in self.texts.items():

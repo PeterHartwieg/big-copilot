@@ -2,10 +2,10 @@
  "alerts": [
   {
    "group": "jobdemand",
-   "id": "42cdc3ed24",
+   "id": "002e4a5a19",
    "level": "critical",
    "site": "HART. Spirits",
-   "siteKey": "ba:street_broadwaystreet#7",
+   "siteKey": "ba:street_eighthstreet#5",
    "text": "1 staff with unmet demands: ⟦ba:jobdemand_freeweekends|Free weekends⟧ for 1 (important); 1 of them has warned they will quit",
    "unit": "",
    "worth": null
@@ -52,30 +52,30 @@
   },
   {
    "group": "toiletprivacy",
-   "id": "10c78fd813",
+   "id": "8dd6dd780d",
    "level": "warn",
    "site": "HART. Spirits",
-   "siteKey": "ba:street_broadwaystreet#7",
+   "siteKey": "ba:street_eighthstreet#5",
    "text": "Customer bathroom has no privacy: no stall or door",
    "unit": "",
    "worth": null
   },
   {
    "group": "music",
-   "id": "923a0342b8",
+   "id": "54e243ddb4",
    "level": "warn",
    "site": "HART. Spirits",
-   "siteKey": "ba:street_broadwaystreet#7",
+   "siteKey": "ba:street_eighthstreet#5",
    "text": "No music playing for customers",
    "unit": "",
    "worth": null
   },
   {
    "group": "interior",
-   "id": "47d98af479",
+   "id": "cf963d40d2",
    "level": "warn",
    "site": "HART. Spirits",
-   "siteKey": "ba:street_broadwaystreet#7",
+   "siteKey": "ba:street_eighthstreet#5",
    "text": "Interior design falls short of what customers expect here",
    "unit": "",
    "worth": null
@@ -195,10 +195,10 @@
   "lines": [
    {
     "group": "jobdemand",
-    "id": "42cdc3ed24",
+    "id": "002e4a5a19",
     "level": "critical",
     "site": "HART. Spirits",
-    "siteKey": "ba:street_broadwaystreet#7",
+    "siteKey": "ba:street_eighthstreet#5",
     "text": "1 staff with unmet demands: ⟦ba:jobdemand_freeweekends|Free weekends⟧ for 1 (important); 1 of them has warned they will quit",
     "unit": "",
     "worth": null
@@ -219,30 +219,30 @@
    },
    {
     "group": "toiletprivacy",
-    "id": "10c78fd813",
+    "id": "8dd6dd780d",
     "level": "warn",
     "site": "HART. Spirits",
-    "siteKey": "ba:street_broadwaystreet#7",
+    "siteKey": "ba:street_eighthstreet#5",
     "text": "Customer bathroom has no privacy: no stall or door",
     "unit": "",
     "worth": null
    },
    {
     "group": "music",
-    "id": "923a0342b8",
+    "id": "54e243ddb4",
     "level": "warn",
     "site": "HART. Spirits",
-    "siteKey": "ba:street_broadwaystreet#7",
+    "siteKey": "ba:street_eighthstreet#5",
     "text": "No music playing for customers",
     "unit": "",
     "worth": null
    },
    {
     "group": "interior",
-    "id": "47d98af479",
+    "id": "cf963d40d2",
     "level": "warn",
     "site": "HART. Spirits",
-    "siteKey": "ba:street_broadwaystreet#7",
+    "siteKey": "ba:street_eighthstreet#5",
     "text": "Interior design falls short of what customers expect here",
     "unit": "",
     "worth": null
@@ -350,21 +350,21 @@
    "rows": [
     {
      "group": "atcap",
-     "id": "25154ea6b1",
+     "id": "c814f4235c",
      "level": "warn",
      "site": "HART. Spirits",
-     "siteKey": "ba:street_broadwaystreet#7",
+     "siteKey": "ba:street_eighthstreet#5",
      "text": "HART. Spirits fills the counters every day 17-19, 14 hours a week at 20/h and $450/day through the ceiling. Registers is the limit, so the answer is another counter",
      "unit": "/day trade",
      "worth": 450.24
     },
     {
      "group": "hype",
-     "id": "4f2c115bc3",
+     "id": "21bdb2218c",
      "level": "warn",
      "site": "HART. Spirits",
-     "siteKey": "ba:street_broadwaystreet#7",
-     "text": "⟦ba:neighborhood_midtown|Midtown⟧ hype on 1 lines has 4 days left; HART. Spirits does $1,800/day under it against $1,607 for its own 7 days before day 35; about $193/day of revenue rides on the wave. It already runs within 10% of capacity for 14 hours of a normal week, so the door is turning part of the wave away.",
+     "siteKey": "ba:street_eighthstreet#5",
+     "text": "⟦ba:neighborhood_midtown|Midtown⟧ hype on 1 lines has 10 days left; HART. Spirits does $1,800/day under it against $1,607 for its own 7 days before day 35; about $193/day of revenue rides on the wave. It already runs within 10% of capacity for 14 hours of a normal week, so the door is turning part of the wave away.",
      "unit": "/day revenue",
      "worth": 192.86
     }
@@ -374,7 +374,7 @@
  },
  "businesses": [
   {
-   "address": "7 Broadway Street",
+   "address": "5 Eighth Street",
    "amenities": {
     "bathroom": true,
     "interior": false,
@@ -407,7 +407,7 @@
    "customerRhythm": null,
    "customers": 192,
    "daysOpen": 37,
-   "key": "ba:street_broadwaystreet#7",
+   "key": "ba:street_eighthstreet#5",
    "licensing": 0.0,
    "lines": [
     {
@@ -695,7 +695,7 @@
     "toiletprivacy": false
    },
    "basket": 18.0,
-   "capacity": 20,
+   "capacity": 30,
    "closed": false,
    "code": "LM",
    "cogs": 630.0,
@@ -1189,7 +1189,7 @@
    "costCentre": true,
    "crew": [
     {
-     "absent": 0,
+     "absent": 1,
      "count": 1,
      "daily": 192.0,
      "role": "Factory Worker",
@@ -1242,7 +1242,7 @@
    "peakDay": null,
    "people": [
     {
-     "absent": false,
+     "absent": true,
      "daily": 192.0,
      "name": "Eli Stone",
      "role": "Factory Worker"
@@ -1454,7 +1454,7 @@
    "retailRevenue": 1800.0,
    "revenue": 1800.0,
    "sites": [
-    "ba:street_broadwaystreet#7",
+    "ba:street_eighthstreet#5",
     "ba:street_eighthavenue#4",
     "ba:street_eighthavenue#8"
    ],
@@ -1911,7 +1911,7 @@
    "capTop": 20,
    "fix": "another counter",
    "hours": 14,
-   "key": "ba:street_broadwaystreet#7",
+   "key": "ba:street_eighthstreet#5",
    "kind": "cap",
    "limit": "registers",
    "limits": 1,
@@ -2297,7 +2297,7 @@
      0
     ]
    ],
-   "key": "ba:street_broadwaystreet#7",
+   "key": "ba:street_eighthstreet#5",
    "name": "HART. Spirits",
    "office": false,
    "onShift": [
@@ -3310,7 +3310,7 @@
   },
   {
    "basket": 18.0,
-   "cap": 20,
+   "cap": 30,
    "capHours": 0,
    "counters": 20,
    "customers": [
@@ -3497,7 +3497,7 @@
      null
     ]
    ],
-   "door": 20,
+   "door": 30,
    "effective": [
     [
      0,
@@ -4703,7 +4703,7 @@
     "revenue": 1607.14
    },
    "count": 1,
-   "daysLeft": 4,
+   "daysLeft": 10,
    "hood": "ba:neighborhood_midtown",
    "items": [
     "Beer"
@@ -4712,7 +4712,7 @@
    "revenue": 1800.0,
    "sites": [
     {
-     "key": "ba:street_broadwaystreet#7",
+     "key": "ba:street_eighthstreet#5",
      "name": "HART. Spirits",
      "profit": 834.0,
      "revenue": 1800.0,
@@ -4721,7 +4721,7 @@
     }
    ],
    "startDay": 35,
-   "top": "ba:street_broadwaystreet#7"
+   "top": "ba:street_eighthstreet#5"
   }
  ],
  "kpi": {
@@ -4747,7 +4747,7 @@
   {
    "bank": "1 Broadway Street",
    "dailyInterest": 40.0,
-   "dailyPayment": 600.0,
+   "dailyPayment": 300.0,
    "remaining": 32000.0,
    "repaid": 36.0,
    "total": 50000.0
@@ -4801,7 +4801,7 @@
   "hype": [
    {
     "count": 1,
-    "daysLeft": 4,
+    "daysLeft": 10,
     "hood": "ba:neighborhood_midtown",
     "items": [
      "Beer"
@@ -4859,7 +4859,7 @@
       "delta": null,
       "demand": 80,
       "hood": "ba:neighborhood_midtown",
-      "hype": 4,
+      "hype": 10,
       "marketPrice": 4.5,
       "monopoly": false,
       "providers": 2,
@@ -5070,7 +5070,7 @@
     "kind": "Product shortage",
     "mine": true,
     "slug": "ba:itemname_umbrella",
-    "where": "Lowermanhattan"
+    "where": "Lower Manhattan"
    }
   ],
   "trackedDays": 1,
@@ -5230,21 +5230,21 @@
   "rows": [
    {
     "group": "atcap",
-    "id": "25154ea6b1",
+    "id": "c814f4235c",
     "level": "warn",
     "site": "HART. Spirits",
-    "siteKey": "ba:street_broadwaystreet#7",
+    "siteKey": "ba:street_eighthstreet#5",
     "text": "HART. Spirits fills the counters every day 17-19, 14 hours a week at 20/h and $450/day through the ceiling. Registers is the limit, so the answer is another counter",
     "unit": "/day trade",
     "worth": 450.24
    },
    {
     "group": "hype",
-    "id": "4f2c115bc3",
+    "id": "21bdb2218c",
     "level": "warn",
     "site": "HART. Spirits",
-    "siteKey": "ba:street_broadwaystreet#7",
-    "text": "⟦ba:neighborhood_midtown|Midtown⟧ hype on 1 lines has 4 days left; HART. Spirits does $1,800/day under it against $1,607 for its own 7 days before day 35; about $193/day of revenue rides on the wave. It already runs within 10% of capacity for 14 hours of a normal week, so the door is turning part of the wave away.",
+    "siteKey": "ba:street_eighthstreet#5",
+    "text": "⟦ba:neighborhood_midtown|Midtown⟧ hype on 1 lines has 10 days left; HART. Spirits does $1,800/day under it against $1,607 for its own 7 days before day 35; about $193/day of revenue rides on the wave. It already runs within 10% of capacity for 14 hours of a normal week, so the door is turning part of the wave away.",
     "unit": "/day revenue",
     "worth": 192.86
    }
@@ -5269,6 +5269,7 @@
   "ba:itemname_water": "Water",
   "ba:jobdemand_freeweekends": "Free weekends",
   "ba:neighborhood_garmentdistrict": "Garment District",
+  "ba:neighborhood_global": "Global",
   "ba:neighborhood_hellskitchen": "Hell's Kitchen",
   "ba:neighborhood_industrycity": "Industry City",
   "ba:neighborhood_lowermanhattan": "Lower Manhattan",
@@ -5281,8 +5282,8 @@
  },
  "ownedBuildings": [
   {
-   "address": "7 Broadway Street",
-   "key": "ba:street_broadwaystreet#7",
+   "address": "5 Eighth Street",
+   "key": "ba:street_eighthstreet#5",
    "purchaseDay": 20,
    "purchasePrice": 250000.0
   }
@@ -5444,28 +5445,6 @@
     "type": "retail"
    },
    {
-    "address": "7 Broadway Street",
-    "cap": 15,
-    "deposit": 5280,
-    "hood": "ba:neighborhood_midtown",
-    "key": "ba:street_broadwaystreet#7",
-    "layout": "A2",
-    "m2": 75,
-    "occupant": {
-     "name": "HART. Spirits",
-     "type": "Liquor Store",
-     "typeSlug": "ba:businesstype_liquorstore"
-    },
-    "occupantRival": null,
-    "owner": "you",
-    "ownerRival": null,
-    "rent": 84,
-    "size": "A",
-    "status": "mine",
-    "traffic": 15,
-    "type": "retail"
-   },
-   {
     "address": "9 Broadway Street",
     "cap": 75,
     "deposit": 92000,
@@ -5530,6 +5509,28 @@
     "status": "mine",
     "traffic": 31,
     "type": "warehouse"
+   },
+   {
+    "address": "5 Eighth Street",
+    "cap": 30,
+    "deposit": 14010,
+    "hood": "ba:neighborhood_midtown",
+    "key": "ba:street_eighthstreet#5",
+    "layout": "C2",
+    "m2": 225,
+    "occupant": {
+     "name": "HART. Spirits",
+     "type": "Liquor Store",
+     "typeSlug": "ba:businesstype_liquorstore"
+    },
+    "occupantRival": null,
+    "owner": "you",
+    "ownerRival": null,
+    "rent": 223,
+    "size": "C",
+    "status": "mine",
+    "traffic": 10,
+    "type": "retail"
    }
   ],
   "caps": {
@@ -5860,7 +5861,7 @@
   "ba:skill_travelagent": "Travelagent"
  },
  "staff": {
-  "absent": 0,
+  "absent": 1,
   "avgSatisfaction": 75.0,
   "complaining": 0,
   "dailyCost": 828.0,
@@ -7436,7 +7437,7 @@
      "spare": 0
     }
    },
-   "key": "ba:street_broadwaystreet#7",
+   "key": "ba:street_eighthstreet#5",
    "measure": {
     "days": 14,
     "need": 2,
@@ -8350,14 +8351,14 @@
      "items": 1,
      "paused": false,
      "perDay": 303,
-     "to": "ba:street_broadwaystreet#7"
+     "to": "ba:street_eighthstreet#5"
     }
    ],
    "nodes": [
     {
      "col": 3,
      "hood": "ba:neighborhood_midtown",
-     "id": "ba:street_broadwaystreet#7",
+     "id": "ba:street_eighthstreet#5",
      "items": [
       {
        "cadence": "daily",
@@ -8654,7 +8655,7 @@
  "trends": [
   {
    "change": 0.1307,
-   "key": "ba:street_broadwaystreet#7",
+   "key": "ba:street_eighthstreet#5",
    "last7": 12720.0,
    "prev7": 11250.0,
    "ready": true,
