@@ -106,7 +106,7 @@ side and rebuild — the rebuild is the resolution.
 
 | You changed | Run |
 | --- | --- |
-| `ba_save.py`, `ba_dashboard.py` (extraction) | `python -m unittest discover -s tests`, then `python build_web.py`. Premises extraction is `tests/test_premises.py` |
+| `ba_save.py`, `ba_dashboard.py` (extraction) | `python -m unittest discover -s tests`, then `python build_web.py`. Premises extraction is `tests/test_premises.py`. `tests/test_payload_snapshot.py` compares whole `extract()` payloads with `tests/fixtures/payload_snapshot/`; after an intended change regenerate them with `UPDATE_SNAPSHOTS=1 python -m unittest tests.test_payload_snapshot` and review the diff |
 | The `TEMPLATE` markup, CSS or board script | `python -m unittest discover -s tests` and `node --test tests/*.test.cjs`, then `python build_web.py` |
 | `web/app.js`, `web/worker.js`, `web/update.js` | `node --test tests/*.test.cjs`, then `python build_web.py` |
 | `build_web.py` `BANNER` or `BEFORE_SCRIPT` (landing screen, news strip) | `python build_web.py` first, since the Node tests and `tests.test_privacy_promises` read the built page; then `node --test tests/news.test.cjs tests/release.test.cjs tests/update.test.cjs` and `python -m unittest tests.test_privacy_promises tests.test_footer` |
