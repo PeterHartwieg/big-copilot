@@ -12031,13 +12031,15 @@ g[data-series].off{opacity:0}
 }
 .cell.hl{filter:brightness(1.18)}
 .cell:hover{transform:scale(1.12);box-shadow:0 8px 24px #0006;z-index:3}
-.cell.picked{outline:2px solid var(--ink);outline-offset:-2px}
+.heat .cell:not([role=button]){cursor:default}
+.heat .cell:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
 .cell .rv2{position:absolute;right:6px;bottom:5px;display:flex;gap:2px}
 .cell .rv2 i{width:3px;height:3px;border-radius:50%;background:var(--ink);opacity:.5}
 .cell.mine{outline:1.5px solid var(--accent);outline-offset:-1.5px}
-.celldetail{margin-top:14px;min-height:22px;font-size:13px;color:var(--ink-2)}
-.celldetail b{color:var(--ink);font-weight:600}
-.celldetail .link{margin-left:10px}
+/* a row's way into Plan a chain sits beside its setup guide; the row the
+   finder's Demand figure lands on rings once */
+.heat .r .mk-plan{font-size:11px;white-space:nowrap}
+.heat .mk-arrive{border-radius:6px;animation:sp-arrive 2.4s ease-out}
 
 /* waves ------------------------------------------------------------------ */
 .waves{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px}
@@ -13202,7 +13204,6 @@ body:has(#changelogDialog[open]){overflow:hidden}
         <div class="aside"><span class="seg" id="marketTools" aria-label="Market views"></span></div></div>
       <div class="waves" id="movers"></div>
       <div class="heat" id="market"></div>
-      <p class="celldetail" id="cellDetail">Click a cell</p>
     </section>
 
     <section class="sec rv" id="secPlan" data-sub="plan">
@@ -19293,9 +19294,9 @@ function drawMovers(){
    products, which is the number the grid ranks by, so a one-product type shows
    that product's own demand. */
 function typeRow(r, i, hoods){
-  const guide = xlGuideLink(r.slug, "Setup guide");
-  let h = `<div class="r" data-r="${i}"><span class="mk-name">${r.type}</span><small>${plural(r.products, "product")}${r.mine ? " · you run one" : ""}${
-    guide ? ` · ${guide}` : ""}</small></div>`;
+  const guide = xlGuideLink(r.slug, "Setup guide"), plan = growthPlanLink(growthPlanType(r.slug, true));
+  let h = `<div class="r" data-r="${i}" data-slug="${attr(r.slug)}"><span class="mk-name">${r.type}</span><small>${plural(r.products, "product")}${r.mine ? " · you run one" : ""}${
+    guide ? ` · ${guide}` : ""}${plan ? ` · ${plan}` : ""}</small></div>`;
   r.cells.forEach((c, j) => {
     if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}" data-tip="${attr(`${r.type} in ${hoods[j]}: no reading`)}">—</div>`; return; }
     const range = r.products === 1 ? `demand ${c.demand} for its one product`
@@ -19306,7 +19307,7 @@ function typeRow(r, i, hoods){
       c.here ? (c.providers ? ", yours among them" : ", you have a store here") : ""}`;
     const tip = `${r.type} in ${c.hood}: ${range}, ${sellers}`;
     h += `<div class="cell${c.here ? " mine" : ""}" data-r="${i}" data-c="${j}" data-slug="${attr(r.slug)}" data-hood="${
-      attr(c.hood)}" style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
+      attr(c.hood)}"${cellGo(r.slug, c.hood)} style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
       c.demand}${rivalDots(c.providers)}</div>`;
   });
   return h;
@@ -19317,7 +19318,7 @@ function typeRow(r, i, hoods){
    say so. */
 function officeRow(r, i, hoods, trendDays, noOffices){
   const guide = xlGuideLink(r.slug, "Setup guide");
-  let h = `<div class="r" data-r="${i}"><span class="mk-name">${r.type}</span><small>${r.fees.join(", ")}${r.mine ? " · you run one" : ""}${
+  let h = `<div class="r" data-r="${i}" data-slug="${attr(r.slug)}"><span class="mk-name">${r.type}</span><small>${r.fees.join(", ")}${r.mine ? " · you run one" : ""}${
     guide ? ` · ${guide}` : ""}</small></div>`;
   r.cells.forEach((c, j) => {
     if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}" data-office data-tip="${attr(`${r.type} in ${hoods[j]}: ${
@@ -19328,7 +19329,7 @@ function officeRow(r, i, hoods, trendDays, noOffices){
       c.hype ? `, hype for ${plural(c.hype, "more day")}` : ""}${
       c.delta ? `, ${c.delta > 0 ? "+" : ""}${c.delta} over ${plural(trendDays, "day")}` : ""}`;
     h += `<div class="cell${c.here ? " mine" : ""}" data-r="${i}" data-c="${j}" data-office data-slug="${
-      attr(r.slug)}" data-hood="${attr(c.hood)}" style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
+      attr(r.slug)}" data-hood="${attr(c.hood)}"${cellGo(r.slug, c.hood)} style="background:${shadeDemand(c.demand)}" data-tip="${attr(tip)}">${
       c.demand}${rivalDots(c.providers)}</div>`;
   });
   return h;
@@ -19336,7 +19337,8 @@ function officeRow(r, i, hoods, trendDays, noOffices){
 function productRow(r, i, hoods, trendDays){
   const tag = r.make && !r.sell ? "you make this, not sold" : r.make ? "you make and sell it" : r.sell ? "you sell it" : "";
   const office = r.office ? " data-office" : "";  // an office fee: nothing to plan
-  let h = `<div class="r" data-r="${i}"><span class="mk-name">${r.item}</span><small>${tag}</small></div>`;
+  const plan = r.office ? "" : growthPlanLink(growthPlanType(r.slug, false));
+  let h = `<div class="r" data-r="${i}"><span class="mk-name">${r.item}</span><small>${[tag, plan].filter(Boolean).join(" · ")}</small></div>`;
   r.cells.forEach((c, j) => {
     if(!c){ h += `<div class="cell none" data-r="${i}" data-c="${j}"${office} data-tip="${attr(`${r.item} in ${hoods[j]}: no reading`)}">—</div>`; return; }
     const tip = `${r.item} in ${c.hood}: demand ${c.demand}, ${c.monopoly ? "only you sell it" : plural(c.providers, "seller")}${
@@ -19411,8 +19413,8 @@ function drawMarket(){
     : `${limit} of ${rows.length} · <a class="link" href="#" id="marketMore">show all ${rows.length}</a>`);
   $("marketNote").innerHTML = notes.join(" · ");
   $("marketWhy").dataset.tip = types
-    ? `Each cell is the average demand, 0 to 100, across a type's primary products in that neighbourhood, so a one-product type shows that product's own demand. Rows rank by their best neighbourhood. Dots count sellers, yours included, ten at most. An outlined cell is where you already run one. Offices, below the shops, sell one hourly fee each, so their cell is that fee's demand and the dots count the firms charging it, yours included. Hover to light a row and a column, click a cell to pin its story below, click a neighbourhood to sort by it.`
-    : `Each cell is the demand for a product in that neighbourhood, 0 to 100, shaded to match. Dots count sellers; no dots means only you. An outlined cell is where you already sell it. Hover to light a row and a column, click a cell to pin its story below, click a neighbourhood to sort by it.`;
+    ? `Each cell is the average demand, 0 to 100, across a type's primary products in that neighbourhood, so a one-product type shows that product's own demand. Rows rank by their best neighbourhood. Dots count sellers, yours included, ten at most. An outlined cell is where you already run one. Offices, below the shops, sell one hourly fee each, so their cell is that fee's demand and the dots count the firms charging it, yours included. Hover to light a row and a column, click a cell to find premises for that type there, click a neighbourhood to sort by it.`
+    : `Each cell is the demand for a product in that neighbourhood, 0 to 100, shaded to match. Dots count sellers; no dots means only you. An outlined cell is where you already sell it. Hover to light a row and a column, click a neighbourhood to sort by it.`;
 
   const grid = $("market");
   /* The label column is 200px on a desk; a phone narrows it (--mk-label, in
@@ -19429,7 +19431,6 @@ function drawMarket(){
       + (offices.length ? `<div class="band">Offices<small>customers served online · each cell is the demand for its hourly fee</small></div>`
         + offices.map((r, k) => officeRow(r, shown.length + k, m.hoods, m.trendDays, m.noOffices || [])).join("") : "")
     : `<span class="quiet" style="grid-column:1/-1">${types ? "No business type matched." : "Nothing here."}</span>`;
-  $("cellDetail").textContent = any ? "Click a cell" : "";
   wireMarketSort();
   wireTips();
 }
@@ -21050,10 +21051,13 @@ buildAlertSettingsPanel();
                           node click picks (flowPickId, re-applied after render).
 
    Growth — wireHeat, wirePlan:
-     .heat                .h[data-c], .r[data-r], .cell[data-r][data-c][data-tip]:
-                          hover lights row and column, click pins the story into
-                          #cellDetail ("Name: rest" splits at the first colon);
-                          a .cell[data-office] gets no Plan a chain link.
+     .heat                .h[data-c], .r[data-r][data-slug], .cell[data-r][data-c][data-tip]:
+                          hover lights row and column; a cell with a finder
+                          preset (role=button) opens the Map finder on its type
+                          and neighbourhood, by click, Enter or Space;
+                          .r .mk-plan[data-plan] opens Plan a chain on that
+                          type, and an office row has none; showGrowthRow()
+                          rings a type's row (.mk-arrive).
      tr.line[data-m][data-rate][data-ing="Name:factor,…"][data-kit][data-slug][data-max]
                           with .step a[data-d=-1|1], .step b, .machines, .made,
                           .covers, .ing; totals in #vMachines #vMade #vTake #vRaw
@@ -22632,39 +22636,69 @@ const bindFlow = once(() => {
 });
 function wireFlow(){ bindFlow(); applyFlow(); }
 
-/* demand grid: rows and columns light up together; a click pins a cell's story -- */
+/* demand grid: rows and columns light up together; a cell opens the finder ---- */
 const wireHeat = once(() => {
   onEnter(".heat .cell", c => {
     $$(`.cell[data-r="${CSS.escape(c.dataset.r)}"], .cell[data-c="${CSS.escape(c.dataset.c)}"]`).forEach(x => x.classList.add("hl"));
     $$(`.heat .h[data-c="${CSS.escape(c.dataset.c)}"], .heat .r[data-r="${CSS.escape(c.dataset.r)}"]`).forEach(x => x.classList.add("hl"));
   });
   onLeave(".heat .cell", () => $$(".hl").forEach(x => x.classList.remove("hl")));
+  /* A cell opens the map with the finder on, this type chosen and only this
+     neighbourhood left standing; Enter and Space do what a click does. */
   on("click", ".heat .cell", c => {
-    $$(".cell.picked").forEach(x => x.classList.remove("picked")); c.classList.add("picked");
-    const detail = $("cellDetail"), tip = c.dataset.tip || "";
-    if(!detail) return;
-    const i = tip.indexOf(":");
-    // An office has no line to plan; its fee is served, not made.
-    detail.innerHTML = (i > 0 ? `<b>${tip.slice(0, i)}</b>${tip.slice(i + 1)}` : tip)
-      + findPremisesLink(c)
-      + (c.hasAttribute("data-office") ? "" : ` <a class="link" href="#secPlan">open in Plan a chain</a>`);
+    const go = finderPreset(c.dataset.slug, c.dataset.hood);
+    if(go) openFinder(go);
   });
-  /* The pin opens the map with the finder on, this type chosen and only this
-     neighbourhood left standing. */
-  on("click", "#cellDetail .link.pin", (a, e) => {
+  on("keydown", ".heat .cell[role=button]", (c, e) => {
+    if(e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault(); c.click();
+  });
+  on("click", "#market .mk-plan[data-plan]", (a, e) => {
     e.preventDefault();
-    openFinder({cat:a.dataset.cat, type:a.dataset.slug, hoods:[a.dataset.hood]});
+    planType = a.dataset.plan; planCounts = {};
+    drawPlan();
+    reveal("secPlan");
   });
 });
-/* A cell with no demand reading has no type to look for, and a board built
-   before the premises payload has nowhere to send the click. */
-function findPremisesLink(cell){
-  const slug = cell.dataset.slug, hood = cell.dataset.hood;
-  if(!slug || !hood || !D.premises) return "";
+/* The finder preset a Growth cell opens: its type, the type's category and
+   only its neighbourhood. A cell with no demand reading has no type to look
+   for, and a board built before the premises payload has nowhere to send it. */
+function finderPreset(slug, hood){
+  if(!slug || !hood || !D.premises) return null;
   const cat = (D.premises.demand[hood] || []).find(d => d.slug === slug)?.category;
-  if(!cat) return "";
-  return ` <a class="link pin" href="#map" data-cat="${attr(cat)}" data-slug="${attr(slug)}" data-hood="${
-    attr(hood)}">${icon("pin")}find premises</a>`;
+  return cat ? {cat, type: slug, hoods: [hood]} : null;
+}
+/* A cell that opens the finder is a button to the keyboard as well. */
+const cellGo = (slug, hood) => finderPreset(slug, hood) ? ` role="button" tabindex="0"` : "";
+/* The type a Growth row plans: a type row its own, a product row the type that
+   sells it (the one already open in Plan a chain first, then one the player
+   runs). Office fees are served, not made, so an office row plans nothing, and
+   a type with no physical product has no line to plan either. */
+function growthPlanType(slug, isType){
+  if(!D.plan || !D.plan.catalogue) return "";
+  const types = planTypes();
+  if(isType) return types.includes(slug) ? slug : "";
+  const holds = types.filter(k => (D.plan.catalogue[k].products || []).includes(slug));
+  return holds.find(k => k === planType) || holds.find(k => (D.plan.own || {})[k]) || holds[0] || "";
+}
+const growthPlanLink = kind => kind
+  ? `<a class="link mk-plan" href="#secPlan" data-plan="${attr(kind)}">Plan a chain ›</a>` : "";
+/* The finder's Demand figure comes back here: the By type view, the type's row
+   scrolled to and ringed once, its cells with it. A type the grid has no row
+   for lands on the grid itself. */
+function showGrowthRow(slug){
+  const sel = `#market .r[data-slug="${CSS.escape(slug || "")}"]`;
+  if(marketView !== "types"){
+    marketView = "types"; showAllMarket = false;
+    $$("#marketTools a[data-id]").forEach(a => a.classList.toggle("on", a.dataset.id === "types"));
+    drawMarket();
+  } else if(!q(sel)) drawMarket();
+  reveal("secMarket", "push", q(sel) ? sel : null);
+  const row = q(sel); if(!row) return;
+  [row, ...$$(`#market .cell[data-r="${CSS.escape(row.dataset.r)}"]`)].forEach(el => {
+    el.classList.remove("mk-arrive"); void el.offsetWidth; el.classList.add("mk-arrive");
+    setTimeout(() => el.classList.remove("mk-arrive"), 2600);
+  });
 }
 
 /* plan a chain: every line runs 24/7; step a line's machines and everything follows */

@@ -837,9 +837,17 @@ class CityMapView {
     why.hidden = !f.fit;
     if(f.fit) why.textContent = this.whyRanked(b, f);
     const num = (v, lab, cls = "") => `<div class="num"><b class="mono${cls}">${v}</b><span>${lab}</span></div>`;
+    // The demand is the Growth grid's own reading, so it leads back to that
+    // type's row there.
+    const demand = f.slug
+      ? `<a class="num mf-grow" href="#secMarket" data-grow="${mapText(f.slug)}" data-tip="${
+          mapText(`${f.fit} in every neighbourhood, on Growth › Demand`)}"><b class="mono">${f.demand}</b><span>demand ›</span></a>`
+      : num(f.demand, 'demand');
     card.querySelector('.nums').innerHTML = f.score != null
-      ? num(f.score, 'score', ' sc') + num(b.traffic, 'traffic') + num(f.demand, 'demand')
+      ? num(f.score, 'score', ' sc') + num(b.traffic, 'traffic') + demand
       : num(b.m2.toLocaleString('en-US'), 'm²') + num(b.traffic, 'traffic');
+    const grow = card.querySelector('.mf-grow');
+    if(grow) grow.onclick = e => { e.preventDefault(); showGrowthRow(grow.dataset.grow); };
   }
   /* Who the building belongs to, and who trades from it. Both name the rival
      company where the save knows its name. */

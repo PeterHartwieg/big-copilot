@@ -1406,19 +1406,60 @@ test('a Growth cell opens the finder on its own type and neighbourhood', async (
   try{
     await page.evaluate(() => { showPage('growth'); drawMarket(); wireHeat(); });
     await page.locator(`#market .cell[data-slug="${CLOTHES}"][data-hood="Hell\\'s Kitchen"]`).click();
-    assert.match(await page.locator('#cellDetail').textContent(), /find premises/);
-    await page.locator('#cellDetail .link.pin').click();
     await page.locator('#cityMapPage .place.fr').first().waitFor();
     assert.equal(await page.locator('#cityMapPage .fchip.cat.on').textContent(), 'Retail');
     assert.equal(await page.locator('#cityMapPage [data-f="type"]').inputValue(), CLOTHES);
     assert.deepEqual(await rowKeys(page), [HK[0]]);   // Midtown is switched off
-    // An office row asks for office buildings instead.
+    // An office row asks for office buildings instead, and the keyboard does
+    // what the mouse does.
     await page.evaluate(() => showPage('growth'));
-    await page.locator(`#market .cell[data-slug="${LAW}"]`).click();
-    await page.locator('#cellDetail .link.pin').click();
+    await page.locator(`#market .cell[data-slug="${LAW}"]`).first().focus();
+    await page.keyboard.press('Enter');
     await page.locator('#cityMapPage .place.fr').first().waitFor();
     assert.equal(await page.locator('#cityMapPage .fchip.cat.on').textContent(), 'Office');
     assert.deepEqual(await rowKeys(page), [HK[4]]);
+    // Nothing is drawn under the grid any more.
+    assert.equal(await page.locator('#cellDetail').count(), 0);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a cell with no reading is no button and opens nothing', async () => {
+  const {page, errors} = await fixture();
+  try{
+    await page.evaluate(() => { showPage('growth'); drawMarket(); wireHeat(); });
+    // The Law Firm has no reading in Midtown.
+    const none = page.locator('#market .cell.none');
+    assert.equal(await none.count(), 1);
+    assert.equal(await none.getAttribute('role'), null);
+    await none.click();
+    assert.equal(await page.locator('#pageGrowth').isVisible(), true);
+    assert.equal(await page.locator('#cityMapPage .place.fr').count(), 0);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test("the finder's demand figure leads back to that type's Growth row", async () => {
+  const {page, errors} = await fixture();
+  try{
+    await openMap(page); await turnOn(page);
+    await page.locator('#cityMapPage [data-f="type"]').selectOption(CLOTHES);
+    await pick(page, HK[0]);
+    const back = page.locator('#cityMapPage .site .mf-grow');
+    assert.equal((await back.locator('b').textContent()).trim(), '77');
+    assert.match(await back.getAttribute('data-tip'), /Clothing Store in every neighbourhood, on Growth › Demand/);
+    // From the product views too: the link switches the grid back to By type.
+    await page.evaluate(() => { marketView = 'mine'; });
+    await back.click();
+    assert.equal(await page.locator('#pageGrowth').isVisible(), true);
+    assert.equal(await page.evaluate(() => marketView), 'types');
+    assert.equal(await page.locator('#marketTools a.on').textContent(), 'By type');
+    const row = page.locator(`#market .r[data-slug="${CLOTHES}"]`);
+    assert.match(await row.getAttribute('class'), /\bmk-arrive\b/);
+    const r = await row.getAttribute('data-r');
+    const ringed = await page.$$eval(`#market .cell[data-r="${r}"]`, cs => cs.every(c => c.classList.contains('mk-arrive')));
+    assert.equal(ringed, true);
+    assert.equal(await page.locator('#market .mk-arrive').count(), 3);   // the label and its two cells
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
