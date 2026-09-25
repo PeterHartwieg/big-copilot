@@ -45,7 +45,7 @@ const stock = (slug, item, units) => ({slug, item, units, rate: 0, price: 1, rev
 const depotFact = (st, use, extra = {}) => ({st, why: null, lvl: st === 'covered' ? 'ok' : 'info', role: 'depot',
   cad: 'weekly', use, need: Math.ceil(use * 1.15 / 10) * 10, have: use, setTo: null,
   parts: {lines: use, sites: 0, route: 0}, imp: true, ...extra});
-const inputFact = (use, have) => ({st: 'covered', why: null, lvl: 'ok', role: 'factory', cad: 'daily', use,
+const inputFact = (use, have) => ({st: 'covered', why: null, lvl: 'ok', role: 'input', cad: 'daily', use,
   need: Math.ceil(use * 1.15 / 10) * 10, have, setTo: null, from: 0});
 const need = (slug, item, perDay, target) => ({item, slug, perDay, perWeek: perDay * 7, lines: ['Smartwatch'],
   lineSlugs: ['watch'], target, from: 0, directImport: false, importSite: 0, factoryImportSite: null, stock: 300,
@@ -166,6 +166,8 @@ test('saving a plan adds the import level, the top-ups and one first fill row', 
       ['Before the next delivery', 'First fill', null, 123600, null],
     ]);
     const fill = await page.evaluate(() => sbData().rows.find(r => r.slug === 'plan:fill').reason);
+    // The fill row is the plan's, keyed on its factory, whatever its largest item.
+    assert.equal(await page.evaluate(() => sbData().rows.find(r => r.slug === 'plan:fill').site), 1);
     assert.match(fill, /opens on Thursday \(day 74\), 5 morning rounds before Monday's import \(day 78\) lands/);
     assert.match(fill, /Capacitors 81,400 to Import Hub, Battery 42,200 to Import Hub\./);
     // The opening day the player picks sizes the fill: Friday leaves four rounds.
@@ -193,7 +195,7 @@ test('while a plan is saved its inputs read new, with the plan, on Supply, the s
               idle: idleRows().length};
     });
     assert.match(wh.strip, /^Plan saved: Factory Electronics, 12 machines\. 5 placed · 2 running\. Its inputs read new until all 12 run; then the plan clears itself\./);
-    assert.match(wh.fill, /^First fill before Monday, one urgent import: Capacitors 81,400 · Battery 42,200\.$/);
+    assert.match(wh.fill, /^First fill before Monday, one urgent import: Capacitors 81,400 to Import Hub · Battery 42,200 to Import Hub\.$/);
     assert.equal(wh.cap, `new${reason}`);
     assert.equal(wh.bat, `new${reason}`);
     assert.equal(wh.tag, true);
@@ -415,7 +417,7 @@ test('a first fill to two depots names each item and its depot, in the checklist
     });
     assert.deepEqual(out.fill, [{item: 'Capacitors', amount: 81400, to: 'Import Hub'}, {item: 'Battery', amount: 42700, to: 'North Depot'}]);
     assert.match(out.text, /\[ \] First fill: bring in once Capacitors 81400 units to Import Hub, Battery 42700 units to North Depot\./);
-    assert.equal(out.card, '<b>First fill</b> at Import Hub: bring in once Capacitors 81,400 to Import Hub, Battery 42,700 to North Depot.');
+    assert.equal(out.card, '<b>First fill</b>: bring in once Capacitors 81,400 to Import Hub, Battery 42,700 to North Depot.');
     await supplyOn(page);
     assert.match(await page.textContent('#secWarehouses .pl-fillrow'), /Capacitors 81,400 to Import Hub · Battery 42,700 to North Depot/);
   } finally { await page.close(); }
@@ -442,5 +444,60 @@ test('a layout that already runs has nothing to save', async () => {
   try{
     await planPage(page);
     assert.equal(await page.isDisabled('#plSaveBtn'), true);
+    // A disabled button takes no pointer: the tip is on the span round it.
+    assert.match(await page.$eval('#plSaveBtn', b => b.parentElement.dataset.tip), /already runs/);
+  } finally { await page.close(); }
+});
+
+/* Review round 2. */
+test('a factory already holding an input no line eats yet still gets the planned top-up', async () => {
+  const data = fixture({running: 0, placed: 0, empty: 5});
+  const fs = data.supply.factories.sites[0];
+  fs.lines = []; fs.needs = []; fs.targets = {}; fs.arrivals = {};
+  // The first fill has landed: Python calls what is held a depot line, idle.
+  data.supply.facts[1] = {
+    cap: {st: 'idle', why: 'notMoving', lvl: 'info', role: 'depot', cad: 'weekly', use: 0, need: 0, have: 300, setTo: null},
+    bat: {st: 'idle', why: 'notMoving', lvl: 'info', role: 'depot', cad: 'weekly', use: 0, need: 0, have: 300, setTo: null}};
+  const page = await board({data});
+  try{
+    await savePlan(page);
+    const facts = await page.evaluate(() => ['cap', 'bat'].map(slug => { const f = supplyFact(1, slug); return [f.st, f.role, f.setTo]; }));
+    assert.deepEqual(facts, [['new', 'input', 19880], ['new', 'input', 9940]]);
+    assert.deepEqual(await rowsOf(page, 'Factory daily top-ups'), [['Capacitors', 1, 0, 19880], ['Battery', 1, 0, 9940]]);
+  } finally { await page.close(); }
+});
+
+test('a fact the plan quiets keeps its own figure where the plan has none, unless it lowers', async () => {
+  const page = await board();
+  try{
+    const out = await page.evaluate(() => {
+      const ov = {name: 'P', week: 7};
+      return [planApply({st: 'tight', cad: 'daily', setTo: 3500}, ov).setTo,
+              planApply({st: 'idle', cad: 'daily', setTo: 800, lowers: true}, ov).setTo,
+              planApply({st: 'tight', cad: 'daily', setTo: 3500}, {...ov, daily: 3000}).setTo,
+              planApply({st: 'tight', cad: 'daily', setTo: 3500}, {...ov, daily: 4000}).setTo];
+    });
+    assert.deepEqual(out, [3500, null, 3500, 4000]);
+  } finally { await page.close(); }
+});
+
+test('an input no depot brings keeps no plan on its row, with the plan\'s figure', async () => {
+  const data = fixture();
+  Object.assign(data.supply.factories.sites[0].needs[0], {from: null, importSite: null});
+  delete data.supply.factories.sites[0].targets.cap;
+  delete data.supply.facts[0].cap; delete data.supply.factories.depots[0].cap;
+  data.supply.idle = [];
+  data.plan.sources.cap = {ordered: 0, active: false, contracts: []};
+  data.supply.facts[1].cap = {st: 'noplan', why: 'target', lvl: 'critical', role: 'input', cad: 'daily', use: 2880,
+    need: 3320, have: 0, setTo: 3320};
+  const page = await board({data});
+  try{
+    await savePlan(page);
+    const out = await page.evaluate(() => {
+      const r = sbData().looseRows.find(x => x.slug === 'cap');
+      const row = sbData().rows.find(x => x.kind === 'Weekly imports' && x.slug === 'cap');
+      return [r.fact.st, r.fact.plan, row.proposed];
+    });
+    assert.deepEqual(out, ['noplan', 'Factory Electronics, 12 machines', 139110]);
   } finally { await page.close(); }
 });
