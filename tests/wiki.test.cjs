@@ -1203,3 +1203,25 @@ test('a setup square is a real checkbox, and each card keeps its own score', asy
   assert.equal(items[1].checked, 'false', 'and ticking it again lets it go');
   assert.equal(score.textContent, '0/2');
 });
+
+/* A translation is text: in a sentence that carries markup only its <b> is
+   put back, and a name inside it is escaped; one whose plural follows the
+   count its verb follows gets that count. */
+test('a translated sentence cannot become markup, and keeps only its <b>', async () => {
+  const w = wiki();
+  await w.load('wiki/businesstypes-giftshop');
+  w.call(`ttSetTable("de", {
+    "wiki.setup.serves": "<img src=x> bedient <b>{n}</b>/h",
+    "wiki.setup.vendors_one": "{n} Händler & Co", "wiki.setup.vendors_other": "{n} Händler & Co",
+    "wiki.guide.lede.none": "<i>{product}</i> fehlt"})`);
+  const html = await w.go('wiki/businesstypes-florist') && await w.go('wiki/businesstypes-giftshop');
+  assert.match(html, /&lt;img src=x&gt; bedient <b>30<\/b>\/h/);
+  assert.doesNotMatch(html, /<img src=x>/);
+  assert.match(html, /1 Händler &amp; Co/);
+  assert.match(html, /<b>&lt;i&gt;Gift \(Expensive\)&lt;\/i&gt; fehlt<\/b>/);
+  // The verb follows the part, not the whole: one of two products.
+  w.call(`ttSetTable("de", {"wiki.guide.lede.some_one": "ONE {n}/{total}", "wiki.guide.lede.some_other": "OTHER {n}/{total}"})`);
+  const again = await w.go('wiki/businesstypes-florist') && await w.go('wiki/businesstypes-giftshop');
+  assert.match(again, /ONE 1\/2/);
+  w.call('ttSetTable("en", null)');
+});
