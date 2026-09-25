@@ -2,7 +2,8 @@
 // under i18n/. What fails here fails for everybody, so only what is broken
 // fails: a key with two English defaults, a call site the catalogue cannot
 // read (a key or English that is not a literal, or holds ${}), a translation
-// whose placeholders or plural forms do not match the English it was made
+// whose placeholders are not ones its calls pass (or, where those cannot be
+// read, not the English's own), or whose plural forms do not match the English it was made
 // from, broken JSON, and a web/i18n/ table out of step with i18n/. A missing,
 // stale or orphaned translation does not fail: the page falls back to English
 // per key, and `python tools/i18n.py status --strict` gates translation work.
@@ -42,7 +43,16 @@ const fields = s => new Set([...String(s).matchAll(FIELD)].map(m => `${m[1]}:${m
 const same = (a, b) => a.size === b.size && [...a].every(x => b.has(x));
 const within = (a, b) => [...a].every(x => b.has(x));
 
-let english;
+let english, passed;
+/* extract --params: each key's param names, null where a call's cannot be read. */
+function PASSED(){
+  if(!passed){
+    const out = spawnSync(PY, [path.join('tools', 'i18n.py'), 'extract', '--params'], {cwd: ROOT, maxBuffer: 16 * 1024 * 1024});
+    assert.equal(out.status, 0, out.stderr.toString());
+    passed = JSON.parse(out.stdout.toString('utf8'));
+  }
+  return passed;
+}
 test('the English catalogue builds: every call site is a literal and every key has one English', () => {
   const out = spawnSync(PY, [path.join('tools', 'i18n.py'), 'extract'], {cwd: ROOT, maxBuffer: 16 * 1024 * 1024});
   assert.equal(out.status, 0, out.stderr.toString());
@@ -148,8 +158,11 @@ test('i18n/ holds German, as flat JSON of strings beside its base', () => {
   }
 });
 
-/* The rule the check applies, over a translation and its base. */
-function mismatches(lang, table, base){
+/* The rule the check applies, over a translation and its base. `passed` is
+   `extract --params`: where a key's calls pass params that can be read, a
+   translation may use any of them (a game name's token the English does not
+   print) and leave any out, keeping the English's spec for those it prints. */
+function mismatches(lang, table, base, passed = {}){
   const cats = new Intl.PluralRules(lang).resolvedOptions().pluralCategories;
   const bad = [];
   const groups = new Map();
@@ -165,6 +178,15 @@ function mismatches(lang, table, base){
     if(!cats.every(c => got.has(c))) bad.push(`${g}: ${lang} needs the forms ${cats.join(', ')}`);
   for(const [k, v] of Object.entries(table)){
     const m = SUFFIX.exec(k);
+    const given = passed[m ? k.replace(SUFFIX, '') : k];
+    if(Array.isArray(given)){
+      const printed = new Set(Object.keys(base).filter(b => m ? b.replace(SUFFIX, '') === k.replace(SUFFIX, '') : b === k)
+        .flatMap(b => [...fields(base[b])]));
+      const names = new Set([...printed].map(f => f.split(':')[0]));
+      if(![...fields(v)].every(f => given.includes(f.split(':')[0]) && (!names.has(f.split(':')[0]) || printed.has(f))))
+        bad.push(`${k}: placeholders its calls do not pass, or a spec unlike the English`);
+      continue;
+    }
     if(!m){
       if(k in base && !same(fields(v), fields(base[k]))) bad.push(`${k}: placeholders differ from the English`);
       continue;
@@ -192,7 +214,7 @@ test('every translation carries the placeholders and plural forms of the English
   for(const lang of LANGS){
     const table = JSON.parse(fs.readFileSync(path.join(ROOT, 'i18n', `${lang}.json`), 'utf8'));
     const base = JSON.parse(fs.readFileSync(path.join(ROOT, 'i18n', `${lang}.base.json`), 'utf8'));
-    assert.deepEqual(mismatches(lang, table, base), [], lang);
+    assert.deepEqual(mismatches(lang, table, base, PASSED()), [], lang);
   }
 });
 
@@ -204,6 +226,42 @@ test('the check itself catches a wrong placeholder, a missing plural form and a 
   assert.equal(mismatches('de', {'f.m_other': '{n} Automaten'}, base).length, 1);
   assert.equal(mismatches('de', {'f.m_one': 'x', 'f.m_other': '{n} y', 'f.m_few': 'z'}, base).length, 1);
   assert.equal(mismatches('de', {'f.m_one': '{n} {k}', 'f.m_other': '{n} y'}, base).length, 1);
+  // A param the calls pass beside the English (a game name's token) may stand in
+  // for the English word; one they do not pass, or a changed spec, may not.
+  const station = {'sp.py.x': 'another {station}', 'f.a': 'Lost {w:$}'};
+  const given = {'sp.py.x': ['station', 'station_name'], 'f.a': ['w']};
+  assert.deepEqual(mismatches('de', {'sp.py.x': 'noch eine Station: {station_name}'}, station, given), []);
+  assert.equal(mismatches('de', {'sp.py.x': 'noch eine {foo}'}, station, given).length, 1);
+  assert.equal(mismatches('de', {'f.a': 'Verlust {w}'}, station, given).length, 1);
+  assert.equal(mismatches('de', {'sp.py.x': 'noch eine Station: {station_name}'}, station).length, 1);
+});
+
+test('the params a call passes are read off it; a spread or a variable leaves them unknown', () => {
+  const out = python(`
+import json, os, tempfile
+from tools import i18n
+def py(src):
+    with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False, dir=i18n.ROOT) as fh:
+        fh.write(src)
+    try:
+        return [None if c["params"] is None else sorted(c["params"]) for c in i18n.python_calls(fh.name)]
+    finally:
+        os.remove(fh.name)
+def js(src):
+    return [None if c["params"] is None else sorted(c["params"]) for c in i18n.js_calls(src, "snippet")]
+print(json.dumps([
+    py('a = msg("sp.x", "another {station}", station=s, station_name=t)\\nb = msg("f.b", "x {n}", **said)'),
+    js('tt("nav.a", "A"); tt("nav.b", "{n} b", {n, k: 1, "q": [1, 2], f: g(1)}); tt("nav.c", "c {n}", p);'
+       + 'tt("nav.d", "d {n}", {...p}); tt("nav.e", "e {n}", {[k]: 1});'),
+    {k: (None if v is None else sorted(v)) for k, v in i18n.passed([
+        {"key": "f.x", "params": {"a", "b"}}, {"key": "f.x", "params": {"a"}},
+        {"key": "f.y", "params": {"a"}}, {"key": "f.y", "params": None}]).items()},
+]))`);
+  assert.equal(out.status, 0, out.stderr);
+  const [py, js, merged] = JSON.parse(out.stdout);
+  assert.deepEqual(py, [['station', 'station_name'], null]);
+  assert.deepEqual(js, [[], ['f', 'k', 'n', 'q'], null, null, null]);
+  assert.deepEqual(merged, {'f.x': ['a'], 'f.y': null});
 });
 
 test('web/i18n/ is what the build ships from i18n/', () => {
@@ -232,6 +290,24 @@ print(json.dumps([i18n.shipped("de", english), i18n.status("de", english)]))`);
   assert.deepEqual(status.mismatch.sort(), ['f.b', 'f.m_few']);
   assert.deepEqual(status.stale.filter(k => !status.mismatch.includes(k)).sort(), ['f.a', 'f.d']);
   assert.deepEqual(status.missing, []);
+});
+
+test("a translation may write a game name's token its calls pass beside the English, and nothing they do not", () => {
+  const out = python(`
+import json
+from tools import i18n
+english = {"sp.py.x": "another {station}", "sp.py.y": "another {station}", "sp.py.z": "another {station}"}
+params = {"sp.py.x": {"station", "station_name"}, "sp.py.y": {"station", "station_name"}, "sp.py.z": None}
+table = {"sp.py.x": "noch eine Station: {station_name}", "sp.py.y": "noch eine {foo}",
+         "sp.py.z": "noch eine Station: {station_name}"}
+i18n.load = lambda lang, root=i18n.ROOT: (table, dict(english))
+print(json.dumps([i18n.shipped("de", english, params=params), i18n.status("de", english, params)["mismatch"]]))`);
+  assert.equal(out.status, 0, out.stderr);
+  const [shipped, mismatch] = JSON.parse(out.stdout);
+  // x uses a passed token and ships; y names a param nobody passes; z's calls
+  // cannot be read, so it is held to the English's own placeholders.
+  assert.deepEqual(shipped, {'sp.py.x': 'noch eine Station: {station_name}'});
+  assert.deepEqual(mismatch.sort(), ['sp.py.y', 'sp.py.z']);
 });
 
 test("the game's words are never written into a git work tree, this one or another", () => {

@@ -5017,6 +5017,16 @@ def _sp_counters(office: bool):
     return msg("sp.py.workstations", "workstations") if office else msg("sp.py.counters", "counters")
 
 
+def _sp_station_noun(words: dict):
+    """A role's stations by their English plural, as _role_words() says them,
+    with the station's name as a token beside it (`station_name`); None where
+    the role has no station word of its own. The grid's role["noun"] stays
+    the plain str, which the page compares against a limit's English."""
+    if not words["noun"]:
+        return None
+    return msg("sp.py.noun.station", "{stations}", stations=words["noun"], station_name=words["stationName"])
+
+
 def _cap_first(text):
     """A cap finding's limit opening a sentence ("{limit} is the limit" in
     _alerts()): its first character upper case, as `limit[:1].upper() +
@@ -5027,8 +5037,8 @@ def _cap_first(text):
     with a game name's token) comes back as it is. The three that start lower
     case have a sentence-initial key of their own (sp.py.*.first: "Staffing",
     "Registers", "Workstations"), and a join capitalises its first part only:
-    "Staffing and projection booths". A station's own plural is a plain str,
-    the game's name in English, and is capitalised as a str. German capitalises
+    "Staffing and projection booths". A station's own plural keeps its
+    `station_name` token beside the capitalised English. German capitalises
     its nouns anyway, so a .first key's translation is usually its plain key's."""
     if text[:1].upper() == text[:1]:
         return text
@@ -5046,6 +5056,9 @@ def _cap_first(text):
             return msg("sp.py.limit.registers.first", "Registers")
         if text.key == "sp.py.workstations":
             return msg("sp.py.workstations.first", "Workstations")
+        if text.key == "sp.py.limit.station":
+            return msg("sp.py.limit.station.first", "{stations}", stations=_cap_first(text.p["stations"]),
+                       station_name=text.p["station_name"])
     return text[:1].upper() + text[1:]
 
 
@@ -6065,6 +6078,9 @@ def _hourly(
                 # The station of this role worth adding another of: the
                 # largest, ties broken by name so the words do not move.
                 "station": biggest,
+                # Its game key, so a sentence can carry the station's name
+                # as a token beside the English words made of it.
+                "stationKey": min(slugs[p] for p in by_skill[skill] if labels[p] == biggest),
                 "counters": sum(by_skill[skill].values()),
                 "stationCount": len(by_skill[skill]),
                 "staffed": [[0] * 24 for _ in range(7)],
@@ -7983,7 +7999,7 @@ def _factory_site_plan(site, business, posts_of, pool, people, mode, label, name
             runs[len(stations)] = [set(range(start, start + hours)) for _ in range(7)]
             stations.append({"id": post, "skill": FACTORY_SKILL, "rate": 1,
                              "name": msg("sp.py.factory.station", "{item}, position {slot}",
-                                         item=plain(item), slot=position)})
+                                         item=plain(item), slot=position, item_name=item)})
         lines.append({
             "slug": line.get("slug"), "item": item, "machines": line["machines"],
             "hoursNow": line.get("hoursNow"), "hours": hours, "from": start, "to": start + hours,
@@ -8871,10 +8887,13 @@ def _role_words(role: dict, office: bool) -> dict:
     station = _lower_first(role["station"])
     role_name = tok(role["skill"], role["label"])
     # The station's own words are the game's name, lowered and pluralised in
-    # English, so they stay English: a name travels as a token, and a token
-    # cannot be declined or pluralised.
+    # English, and stay English: a token cannot be declined or pluralised. So
+    # every message holding them also carries the name as a token,
+    # `station_name`, for a translation to write instead.
+    station_name = tok(role.get("stationKey"), role["station"])
     return {
         "noun": _plural(station),
+        "stationName": station_name,
         # Two different answers, two different limits, the way a shop's
         # "staffing" and "registers" are two: one line is about people, the
         # other about posts. The posts limit names the station itself, so two
@@ -8882,7 +8901,8 @@ def _role_words(role: dict, office: bool) -> dict:
         # the id hashes the limit, and nothing but the limit.
         "staffing": (msg("sp.py.limit.role", "{role} staffing", role=role_name),
                      msg("sp.py.fix.role.staff", "another {role} on those hours", role=role_name)),
-        "posts": (_plural(station), msg("sp.py.fix.role.post", "another {station}", station=station)),
+        "posts": (msg("sp.py.limit.station", "{stations}", stations=_plural(station), station_name=station_name),
+                  msg("sp.py.fix.role.post", "another {station}", station=station, station_name=station_name)),
     }
 
 
@@ -8999,9 +9019,9 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                 finding["fix"] = _sp_list([w[part][1] for w, part in said], " and ")
                 finding["limits"] = len(said)
                 finding["noun"] = (
-                    said[0][0]["noun"]
+                    _sp_station_noun(said[0][0])
                     if len(said) == 1
-                    else _sp_list([w["noun"] or _sp_counters(office) for w, _ in said], " and ")
+                    else _sp_list([_sp_station_noun(w) or _sp_counters(office) for w, _ in said], " and ")
                 )
             out.append(finding)
 
@@ -9047,7 +9067,7 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                             spare = sum(r[1] for r in piece)
                             runs_here.append(
                                 {
-                                    "noun": _role_words(role, office)["noun"],
+                                    "noun": _sp_station_noun(_role_words(role, office)),
                                     "wd": wd,
                                     "hours": [r[0] for r in piece],
                                     "staff": piece[0][3],
@@ -9076,7 +9096,7 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                     "key": grid["key"],
                     "site": grid["name"],
                     "office": office,
-                    "noun": _role_words(best["role"], office)["noun"],
+                    "noun": _sp_station_noun(_role_words(best["role"], office)),
                     "day": WEEKDAYS[best["wd"]],
                     "from": best["from"],
                     "to": best["to"],

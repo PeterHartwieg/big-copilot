@@ -212,14 +212,19 @@ class LimitsAndCapitals(unittest.TestCase):
                           ("workstations", "another computer workstation")))
         trainer = tok("ba:skill_gymtrainer", "Gym Trainer")
         gym = _role_words({"skill": "ba:skill_gymtrainer", "label": "Gym Trainer",
-                           "station": "Fitness Planning Board"}, False)
+                           "station": "Fitness Planning Board",
+                           "stationKey": "ba:itemname_fitnessplanningboard"}, False)
         self.assertEqual(gym["staffing"], (f"{trainer} staffing", f"another {trainer} on those hours"))
         self.assertEqual(gym["posts"], ("fitness planning boards", "another fitness planning board"))
-        # The station's plural is the game's name in English, so a plain str.
-        self.assertIs(type(gym["posts"][0]), str)
+        # The station's words stay the English plural; the grid's noun, which
+        # the page compares against a limit's English, stays a plain str. The
+        # messages made of them carry the name as a token beside them.
         self.assertIs(type(gym["noun"]), str)
+        board = tok("ba:itemname_fitnessplanningboard", "Fitness Planning Board")
+        for said in gym["posts"]:
+            self.assertEqual(said.p["station_name"], board)
         for words in (service, office, gym):
-            for said in (words["staffing"][0], words["staffing"][1], words["posts"][1]):
+            for said in (words["staffing"][0], words["staffing"][1], words["posts"][0], words["posts"][1]):
                 self.assertIsInstance(said, Msg)
 
     def test_cap_first_writes_the_old_capital_and_keeps_the_message(self):
@@ -240,7 +245,11 @@ class LimitsAndCapitals(unittest.TestCase):
                 self.assertIsInstance(got, Msg)
                 self.assertEqual(got.key, key)
         self.assertEqual(_cap_first(joined).wire()[1]["a"], {"m": ["sp.py.limit.staffing.first", {}, "Staffing"]})
-        # A station's own plural is a str, and stays one.
+        # A station's own plural keeps its name's token.
+        booth = tok("ba:itemname_projectionbooth", "Projection Booth")
+        station = _cap_first(msg("sp.py.limit.station", "{stations}", stations="projection booths", station_name=booth))
+        self.assertEqual((station, station.key, station.p["station_name"]),
+                         ("Projection booths", "sp.py.limit.station.first", booth))
         self.assertEqual(_cap_first("projection booths"), "Projection booths")
         self.assertEqual(_cap_first(""), "")
 
@@ -257,6 +266,21 @@ class LimitsAndCapitals(unittest.TestCase):
             if f["kind"] == "cap":
                 self.assertLessEqual({"limit", "fix", "when"}, set(f["i18n"]))
                 self.assertEqual(f["i18n"]["when"][0], "sp.py.when.part")
+
+    def test_a_station_word_carries_the_station_name_as_a_token(self):
+        # "staffing and projection booths" / "... and another projection booth":
+        # the station's part of the limit and of the fix each carry the token a
+        # German template writes instead of the English plural.
+        booth = tok("ba:itemname_projectionbooth", "Projection Booth")
+        payload = json.loads(json.dumps(_wire_msgs({"hourFindings": theatre_fixture.rows()["findings"]})))
+        [tie] = [f for f in payload["hourFindings"] if f["kind"] == "cap" and f["limits"] == 2]
+        limit, fix = tie["i18n"]["limit"], tie["i18n"]["fix"]
+        self.assertEqual(limit[0], "sp.py.list.and")
+        self.assertEqual(limit[1]["b"]["m"][:2], ["sp.py.limit.station",
+                                                  {"stations": "projection booths", "station_name": booth}])
+        self.assertEqual(fix[1]["b"]["m"][:2], ["sp.py.fix.role.post",
+                                                {"station": "projection booth", "station_name": booth}])
+        self.assertEqual(tie["i18n"]["noun"][1]["b"]["m"][1]["station_name"], booth)
 
 
 if __name__ == "__main__":

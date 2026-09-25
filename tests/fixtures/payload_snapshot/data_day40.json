@@ -3298,7 +3298,8 @@
       ]
      ],
      "station": "Cash Register",
-     "stationCount": 1
+     "stationCount": 1,
+     "stationKey": "ba:itemname_cashregister"
     }
    ],
    "staffed": [
@@ -4683,7 +4684,8 @@
       ]
      ],
      "station": "Cash Register",
-     "stationCount": 1
+     "stationCount": 1,
+     "stationKey": "ba:itemname_cashregister"
     }
    ],
    "staffed": [
