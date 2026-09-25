@@ -60,7 +60,7 @@ The board's words and the code's ids often differ, so grep the id, not the word.
 
 | On screen | In code |
 | --- | --- |
-| Staffing (a site's week of hours) | `roster`: `spRoster*` in the board script, `rostered()` and `_current_roster()` in Python |
+| Staffing (a site's week of hours) | `roster`: `spRoster*` in the board script; `_staffing()` (the `staffing` payload key) and `_current_roster()` in Python |
 | Idle stock | finding kind `dead` |
 | Overstaffed hours | finding kind `idlestaff` |
 | Demand wave ending | finding kind `hype`; the site panel's promotion row is `spHypeRow`, over the `hypeExposure` payload key |
