@@ -449,6 +449,9 @@ without its `.git`) or inside any other git work tree.
    A list joined with `", ".join(...)` in Python becomes `_msg_list(items)`: a nested
    `f.list` ("{a}, {b}") per comma and `f.list.last` for the final pair, both "{a}, {b}" in
    English, so a translation can end the list with its "and" ("a, b und c").
+   A game name the English runs into a sentence in lower case ("3 liquor store
+   lines") goes through `gnLower(name)`, never `.toLowerCase()`: it lowercases only
+   while the names are shown in English, so a German noun keeps its capital.
 3. Prove the English unchanged: the area's existing tests pass untouched, and a fixture
    board rendered before and after shows the same text.
 4. Add the area to `CONVERTED` in `tests/test_i18n_msg.py` (Python fields) and in
