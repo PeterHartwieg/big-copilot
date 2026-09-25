@@ -167,7 +167,7 @@ test('saving a plan adds the import level, the top-ups and one first fill row', 
     ]);
     const fill = await page.evaluate(() => sbData().rows.find(r => r.slug === 'plan:fill').reason);
     assert.match(fill, /opens on Thursday \(day 74\), 5 morning rounds before Monday's import \(day 78\) lands/);
-    assert.match(fill, /Capacitors 81,400, Battery 42,200/);
+    assert.match(fill, /Capacitors 81,400 to Import Hub, Battery 42,200 to Import Hub\./);
     // The opening day the player picks sizes the fill: Friday leaves four rounds.
     await page.selectOption('#plOpens', '75');
     assert.equal(await page.evaluate(key => JSON.parse(localStorage.getItem(key))[0].opens, STORE), 75);
@@ -207,8 +207,9 @@ test('while a plan is saved its inputs read new, with the plan, on Supply, the s
     assert.match(panel, new RegExp(`new · ${reason.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i'));
     // Today: the idle finding about what the plan orders ahead goes; the rest stays.
     assert.deepEqual(await page.evaluate(() => alertLines().map(a => a.id)), ['a-unset']);
-    const card = await page.evaluate(() => { drawSupplyStrip(); return document.querySelector('#planImportsCard .soon').textContent; });
-    assert.match(card, /4/);
+    const card = await page.evaluate(() => { drawSupplyStrip(); const c = document.querySelector('#planImportsCard');
+      return [c.querySelector('.soon').textContent, c.querySelector('.what').textContent]; });
+    assert.deepEqual(card, ['4 TO CHANGE', '4 changes at Import Hub and Factory Electronics, starting with Battery.']);
   } finally { await page.close(); }
 });
 
@@ -286,5 +287,160 @@ test('the first fill is the rounds to the import at the layout\'s day, less what
     ]);
     assert.deepEqual(out, [78, 85, 78, {opens: 75, importDay: 78, rounds: 4,
       items: [{slug: 'a', item: 'A', amount: 2500}], total: 2500}]);
+  } finally { await page.close(); }
+});
+
+/* Review round 1. */
+const supplyOn = page => page.evaluate(() => {
+  document.querySelectorAll('.page').forEach(el => { el.hidden = el.id !== 'pageSupply'; });
+  document.querySelectorAll('#pageSupply section').forEach(el => { el.hidden = false; el.classList.add('measured'); });
+  drawSupplyStrip(); drawWarehousesTab(); drawFactoriesTab(); wireAll();
+});
+const rowsOf = (page, kind) => page.evaluate(k => sbData().rows.filter(r => r.kind === k)
+  .map(r => [r.item, r.site, r.current, r.proposed]), kind);
+
+test('Open the plan lands on the saved plan, at its own factory', async () => {
+  const page = await board();
+  try{
+    await savePlan(page);
+    // Wandered off: another factory picked on the page, not saved.
+    await page.selectOption('#plWhere', 'new');
+    assert.doesNotMatch(await page.getAttribute('#plSave', 'class'), /is-saved/);
+    await supplyOn(page);
+    await page.click('#secWarehouses .pl-saved [data-pl-open]');
+    assert.equal(await page.inputValue('#plWhere'), FACTORY);
+    assert.match(await page.getAttribute('#plSave', 'class'), /is-saved/);
+    assert.equal((await page.textContent('#plState')).replace(/\s+/g, ' ').trim(), '12 planned · 5 placed · 2 running');
+  } finally { await page.close(); }
+});
+
+test('once the import has landed there is no first fill, on Supply or on the plan', async () => {
+  const page = await board();
+  try{
+    await savePlan(page);
+    const later = fixture(); later.meta.day = 78; later.supply.day = 78;
+    const out = await page.evaluate(data => {
+      D = data; sbStamp++;
+      drawPlan(); wireAll();
+      return {fill: planOverlay().fill, rows: sbData().rows.filter(r => r.slug === 'plan:fill').length,
+              hidden: document.getElementById('plFill').hidden, saved: document.getElementById('plSave').className};
+    }, later);
+    assert.deepEqual(out, {fill: null, rows: 0, hidden: true, saved: 'pl-save is-saved'});
+  } finally { await page.close(); }
+});
+
+test('extending one of two factories tops it up for the increase, other ranges included', async () => {
+  const data = fixture();
+  const TWO = 'ba:street_mill#3';
+  data.businesses.push(site(TWO, 'Factory Two', 'support', 'Factory', []));
+  const f = data.supply.factories;
+  const other = JSON.parse(JSON.stringify(f.sites[0]));
+  Object.assign(other, {s: 2, machines: 4, running: 4, unnamed: [], needs: [], targets: {}, arrivals: {}});
+  Object.assign(other.lines[0], {machines: 4, running: 4, slots: [1, 2, 3, 4]});
+  f.sites.push(other);
+  // Another range at the first factory eats 1,000 capacitors a day too.
+  f.sites[0].needs[0].perDay = 3880;
+  const page = await board({data});
+  try{
+    await planPage(page);
+    await page.selectOption('#plWhere', FACTORY);
+    await page.click('#plSaveBtn');
+    // Twelve in all, six placed across both: the first factory takes six more.
+    assert.deepEqual(await rowsOf(page, 'Factory daily top-ups'), [['Capacitors', 1, 3000, 14400], ['Battery', 1, 1500, 6630]]);
+    assert.equal(await page.evaluate(() => supplyFact(2, 'cap')), null);
+  } finally { await page.close(); }
+});
+
+test('a factory of empty workstations gets planned inputs, with their top-ups, on Factories and its page', async () => {
+  const data = fixture({running: 0, placed: 0, empty: 5});
+  const fs = data.supply.factories.sites[0];
+  fs.lines = []; fs.needs = []; fs.targets = {}; fs.arrivals = {};
+  delete data.supply.facts[1];
+  const page = await board({data});
+  try{
+    await savePlan(page);
+    assert.equal((await page.textContent('#plState')).replace(/\s+/g, ' ').trim(), '12 planned · 5 placed · 0 running');
+    const reason = 'ordered ahead · plan: Factory Electronics, 12 machines';
+    const facts = await page.evaluate(() => ['cap', 'bat'].map(slug => { const f = supplyFact(1, slug); return [f.st, szTip(f), f.setTo, f.from]; }));
+    assert.deepEqual(facts, [['new', reason, 19880, 0], ['new', reason, 9940, 0]]);
+    assert.deepEqual(await rowsOf(page, 'Factory daily top-ups'), [['Capacitors', 1, 0, 19880], ['Battery', 1, 0, 9940]]);
+    await supplyOn(page);
+    const tab = await page.evaluate(() => [...document.querySelectorAll('#secFactories tr[data-slug]')]
+      .map(tr => [tr.dataset.slug, (tr.querySelector('td.st') || {}).textContent || '']));
+    const words = tab.filter(([slug]) => slug === 'cap' || slug === 'bat').map(([, t]) => t.replace(/\s+/g, ' ').trim());
+    assert.equal(words.length, 2);
+    words.forEach(t => { assert.ok(t.startsWith('new'), t); });
+    const panel = await page.evaluate(key => { openSite(key, false); return document.querySelector('#sitePanel').textContent; }, FACTORY);
+    assert.match(panel, /ordered ahead · plan: Factory Electronics, 12 machines/);
+  } finally { await page.close(); }
+});
+
+test('a factory that imports an input itself beside a depot top-up keeps both', async () => {
+  const data = fixture();
+  const n = data.supply.factories.sites[0].needs[0];
+  n.factoryImportSite = 1;
+  data.supply.factories.depots[1] = {cap: {weekly: 2000, pausedWeekly: 0, smart: false, target: null, plain: 2000,
+    arrivedLastWeek: 2000, contracts: [contractOf(2, '1 Pier', false, 2000)]}};
+  data.supply.facts[1].cap = {...data.supply.facts[1].cap, imp: true,
+    import: {st: 'covered', why: null, lvl: 'ok', role: 'factory', cad: 'weekly', use: 2000, need: 2300, have: 2000, setTo: null, imp: true}};
+  const page = await board({data});
+  try{
+    await savePlan(page);
+    const f = await page.evaluate(() => { const f = supplyFact(1, 'cap'); return [f.st, f.setTo, f.import.st, f.import.setTo]; });
+    assert.deepEqual(f, ['new', 19880, 'new', null]);
+    assert.deepEqual((await rowsOf(page, 'Factory daily top-ups'))[0], ['Capacitors', 1, 3000, 19880]);
+    // The factory's own contract is not the plan's to raise: the hub's covers it.
+    assert.deepEqual((await rowsOf(page, 'Weekly imports')).map(r => r[0]), ['Battery']);
+  } finally { await page.close(); }
+});
+
+test('a first fill to two depots names each item and its depot, in the checklist and on Today', async () => {
+  const data = fixture();
+  const NORTH = 'ba:street_north#4';
+  data.businesses.push(site(NORTH, 'North Depot', 'support', 'Warehouse', [stock('bat', 'Battery', 500)]));
+  data.supply.factories.depots[2] = {bat: data.supply.factories.depots[0].bat};
+  delete data.supply.factories.depots[0].bat;
+  data.supply.facts[2] = {bat: data.supply.facts[0].bat};
+  delete data.supply.facts[0].bat;
+  Object.assign(data.supply.factories.sites[0].needs[1], {from: 2, importSite: 2});
+  data.supply.factories.sites[0].targets.bat = [1500, 2];
+  data.supply.facts[1].bat.from = 2;
+  const page = await board({data});
+  try{
+    await savePlan(page);
+    const out = await page.evaluate(() => {
+      const row = sbData().rows.find(r => r.slug === 'plan:fill');
+      return {text: orderChecklistText([row], 'T'), fill: row.fill,
+              card: planImportsState([row], new Set(), s => shortName(D.businesses[s])).what};
+    });
+    assert.deepEqual(out.fill, [{item: 'Capacitors', amount: 81400, to: 'Import Hub'}, {item: 'Battery', amount: 42700, to: 'North Depot'}]);
+    assert.match(out.text, /\[ \] First fill: bring in once Capacitors 81400 units to Import Hub, Battery 42700 units to North Depot\./);
+    assert.equal(out.card, '<b>First fill</b> at Import Hub: bring in once Capacitors 81,400 to Import Hub, Battery 42,700 to North Depot.');
+    await supplyOn(page);
+    assert.match(await page.textContent('#secWarehouses .pl-fillrow'), /Capacitors 81,400 to Import Hub · Battery 42,700 to North Depot/);
+  } finally { await page.close(); }
+});
+
+test('another character starts the Plan page afresh, on its own saved plan', async () => {
+  const page = await board();
+  try{
+    await savePlan(page);
+    const other = fixture(); other.meta.character = 'other'; other.supply.factories.character = 'other';
+    const out = await page.evaluate(([other, mine]) => {
+      D = other; sbStamp++; drawPlan(); wireAll();
+      const theirs = {counts: {...planCounts}, where: planWhere, saved: document.getElementById('plSave').className,
+                      m: document.querySelector('tr.line[data-slug="watch"]').dataset.m};
+      D = mine; sbStamp++; drawPlan(); wireAll();
+      return {theirs, back: document.getElementById('plSave').className, m: document.querySelector('tr.line[data-slug="watch"]').dataset.m};
+    }, [other, fixture()]);
+    assert.deepEqual(out, {theirs: {counts: {}, where: FACTORY, saved: 'pl-save', m: '2'}, back: 'pl-save is-saved', m: '12'});
+  } finally { await page.close(); }
+});
+
+test('a layout that already runs has nothing to save', async () => {
+  const page = await board({data: fixture({running: 12, placed: 12, empty: 0})});
+  try{
+    await planPage(page);
+    assert.equal(await page.isDisabled('#plSaveBtn'), true);
   } finally { await page.close(); }
 });
