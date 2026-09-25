@@ -650,3 +650,28 @@ test('a new factory starts at nothing and counts only its own machines', async (
     assert.deepEqual(cleared, [null, null]);
   } finally { await page.close(); }
 });
+
+test('Supplies measures the company\'s make plus the plan\'s increase against every shop', async () => {
+  const data = fixture();
+  // Two electronics stores sell 1,000 smartwatches a day each: 14,000 a week.
+  data.plan.own = {[TYPE]: {shops: 2, perDay: {watch: 1000}}};
+  const page = await board({data});
+  try{
+    const supplies = () => page.evaluate(() => ({
+      cell: document.querySelector('tr.line[data-slug="watch"] .covers').textContent.replace(/\s+/g, ' ').trim(),
+      short: document.getElementById('vShort').textContent.trim()}));
+    await planPage(page);
+    await page.evaluate(() => { planCounts = {}; drawPlan(); wireAll(); });
+    // Factory Electronics as it stands: its two machines are the company's two.
+    assert.deepEqual(await supplies(), {cell: '1.4 shopsshops take 14,000 · -3,920',
+      short: '1 line does not keep up with the shelves; those need more machines.'});
+    // A new factory at nothing reads the company's balance as it is.
+    await page.selectOption('#plWhere', 'new');
+    assert.equal(await page.getAttribute('tr.line[data-slug="watch"]', 'data-m'), '0');
+    assert.deepEqual(await supplies(), {cell: '1.4 shopsshops take 14,000 · -3,920',
+      short: '1 line does not keep up with the shelves; those need more machines.'});
+    // One machine there adds 5,040 a week to the company's 10,080.
+    await page.click('tr.line[data-slug="watch"] .step a[data-d="1"]');
+    assert.deepEqual(await supplies(), {cell: '2.2 shopsshops take 14,000 · +1,120', short: ''});
+  } finally { await page.close(); }
+});
