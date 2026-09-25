@@ -11799,6 +11799,22 @@ def _condense(found: list, gate: float) -> dict:
 
 
 # ------------------------------------------------------------------- render
+
+# Where the payload waits while render() fills the other placeholders: a NUL
+# pair, which no asset carries and json.dumps() always escapes.
+DATA_SLOT = "\x00__DATA__\x00"
+
+
+def script_json(text: str) -> str:
+    """JSON text made safe to sit inside a <script> element.
+
+    Every "<" becomes \\u003c, the same character to the JSON (a "<" only
+    ever stands inside a string there), so no saved name can close the script
+    ("</script>") or open a comment that swallows its end ("<!--<script").
+    """
+    return text.replace("<", "\\u003c")
+
+
 def render(
     data: dict | None,
     live: bool = False,
@@ -11824,20 +11840,20 @@ def render(
     and the tooltip layer has to guess where the window ends.
 
     A save name is the player's own text, so it is escaped on the way into the
-    title, and ``</`` is escaped inside the JSON so a name can never close the
-    script tag it sits in.
+    title, and every ``<`` is escaped inside the JSON (script_json()) so a name
+    can never close the script tag it sits in.
 
     ``names`` is ``{"lang": code, "names": table}``, a name_table() the page
     lays over the payload's names (``--lang``); None keeps them English.
     ``ui`` is ``{"lang": code, "table": table}``, Big Copilot's own text in
     that language (web/i18n/<code>.json, ``--lang``); None keeps it English.
     """
-    names_json = "null" if not names else json.dumps(names, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
-    ui_json = "null" if not ui else json.dumps(ui, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+    names_json = "null" if not names else script_json(json.dumps(names, ensure_ascii=False, separators=(",", ":")))
+    ui_json = "null" if not ui else script_json(json.dumps(ui, ensure_ascii=False, separators=(",", ":")))
     if data is None:
         payload, title = "null", "Big Copilot"
     else:
-        payload = json.dumps(data, separators=(",", ":")).replace("</", "<\\/")
+        payload = script_json(json.dumps(data, separators=(",", ":")))
         title = f"{data['meta']['save']} · Big Copilot"
     # UI source stays shared between the local HTML and browser build. Static
     # exports embed geography so opening a file needs no local server or fetch.
@@ -11895,7 +11911,7 @@ def render(
                 embedded["plans"] = json.load(fh)
         except (OSError, ValueError):
             pass
-        map_payload = "window.BIG_COPILOT_MAP=" + json.dumps(embedded, separators=(",", ":")).replace("</", "<\\/") + ";"
+        map_payload = "window.BIG_COPILOT_MAP=" + script_json(json.dumps(embedded, separators=(",", ":"))) + ";"
     # A page that is saved and opened from a file has nowhere to fetch the help
     # from, so an export carries it. The hosted build fetches it instead, with
     # the build stamp on it, and would only be made heavier by a copy. The wiki
@@ -11905,11 +11921,13 @@ def render(
         catalogue = optional_asset("wiki-data.json")
         if catalogue:
             wiki_payload = ("window.BIG_COPILOT_WIKI="
-                            + catalogue.strip().replace("</", "<\\/") + ";")
+                            + script_json(catalogue.strip()) + ";")
     # The <html> start tag is optional and the page never closed one, so this
     # only names the language of the element the parser makes anyway.
     return "<!doctype html>" + chr(10) + '<html lang="en">' + chr(10) + '<meta charset="utf-8">' + chr(10) + head + (
-        TEMPLATE.replace("/*__DATA__*/null", payload)
+        # The payload goes in last, through DATA_SLOT, so no placeholder's
+        # .replace() below runs over the save's own text.
+        TEMPLATE.replace("/*__DATA__*/null", DATA_SLOT)
         .replace("/*__MAP_CSS__*/", map_css)
         .replace("/*__MAP_SCRIPT__*/", map_script)
         .replace("/*__MAP_PAYLOAD__*/", map_payload)
@@ -11930,6 +11948,7 @@ def render(
         .replace("<!--__BANNER__-->", banner)
         .replace("<!--__BEFORE_SCRIPT__-->", before_script)
         .replace("/*__I18N_SCRIPT__*/", i18n_script, 1)
+        .replace(DATA_SLOT, payload, 1)
     )
 
 
@@ -14604,7 +14623,7 @@ const gauge = v => graded(v, "ink-3");
    shop the building table places. With neither, no badge. */
 const bullet = b => b.code ? `<span class="bullet" style="background:${LINE_COLOURS[b.code]||LINE_COLOURS[""]}"
   title="${attr(hoodName(b.neighbourhood)||"Unassigned")}">${spEsc(b.code)}</span>` : "";
-const siteCell = b => `<div class="site">${bullet(b)}<span><b>${b.name}</b>
+const siteCell = b => `<div class="site">${bullet(b)}<span><b>${spEsc(b.name)}</b>
   <span class="sub">${b.type} · ${b.address}${mapButton(b.key,b.name)}</span></span></div>`;
 
 /* The tile sparkline, the generator's spark(): an area under the line, the
@@ -15438,7 +15457,7 @@ function drawFlow(){
     boxes.push(`<g class="node" data-id="${attr(node.id)}">
       <rect x="${x}" y="${y}" width="${NODE_W}" height="${NODE_H}" rx="7"></rect>${hood
         ? `<rect x="${x + 10}" y="${y + 13}" width="24" height="18" rx="3" fill="var(--raised)" stroke="var(--rule)"></rect>
-           <text x="${x + 22}" y="${y + 26}" text-anchor="middle" class="s" style="font-weight:600;fill:var(--ink-2)">${hood}</text>` : ""}
+           <text x="${x + 22}" y="${y + 26}" text-anchor="middle" class="s" style="font-weight:600;fill:var(--ink-2)">${spEsc(hood)}</text>` : ""}
       <text x="${tx}" y="${y + 19}">${attr(shortText(node.name, hood ? 19 : 24))}</text>
       <text class="s" x="${tx}" y="${y + 34}">${node.stock ? num(node.stock) + " held"
         : `${attr(shortText(node.sub || "", hood ? 21 : 26, true))}<title>${attr(node.sub || "")}</title>`}</text></g>`);
@@ -16416,14 +16435,14 @@ function findingRow(a){
     <span class="mark" data-tip="${attr(tt("today.find.silence", "Silence this finding"))}"></span>
     <span class="site">${site}</span>
     <span hidden id="ss-fn${n}">${spEsc(b ? shortName(b) : a.site)}:</span>
-    <button type="button" class="what" id="ss-fw${n}" aria-labelledby="ss-fn${n} ss-fw${n}">${what}${kindOff(a) ? ` ${chipHtml("dim", kindLabel(a.group), tt("today.find.off", "This kind is switched off in the list; it is counted here instead"))}` : ""}</button>${
+    <button type="button" class="what" id="ss-fw${n}" aria-labelledby="ss-fn${n} ss-fw${n}">${spEsc(what)}${kindOff(a) ? ` ${chipHtml("dim", kindLabel(a.group), tt("today.find.off", "This kind is switched off in the list; it is counted here instead"))}` : ""}</button>${
       /* The game link's buttons sit under the sentence, beside the row's own
          button rather than inside it. */
       writes ? `
     <span class="gw-acts gw-find">${writes}</span>` : ""}
     <span class="amt">${findingAmount(a)}</span>
     <span class="go">${icon("go")}</span>${more ? `
-    <span class="more">${more}</span>` : ""}</div>`;
+    <span class="more">${spEsc(more)}</span>` : ""}</div>`;
 }
 /* Row click opens the finding's page; a click on the mark is stopped in the
    capture phase by wireFinds() and never reaches this. */
@@ -16636,7 +16655,7 @@ const CHEV = () => `<span class="chev">${icon("chev")}</span>`;
 /* A site in a table: its neighbourhood pill, its short name, and the type and
    address underneath. With `chev`, the arrow that says the row opens; with
    `link`, the name is also a link to the site's own page. */
-const siteLabel = (b, chev, link) => `${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${link ? siteLink(b) : shortName(b)}${chev ? ` ${CHEV()}` : ""}
+const siteLabel = (b, chev, link) => `${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${link ? siteLink(b) : spEsc(shortName(b))}${chev ? ` ${CHEV()}` : ""}
   ${mapButton(b.key,b.name)}<span class="sub">${b.type} · ${b.address}</span>`;
 const kidCell = b => siteLabel(b, true, true);
 
@@ -16683,7 +16702,7 @@ function chainRow(c, v){
   const cells = v.chain(c);
   const note = c.external
     ? tt("co.chain.external", "{w:$c} of it sold outside the company by its factory", {w: c.external})
-    : c.suppliedBy.length ? tt("co.chain.supplied", "supplied from {sites}", {sites: c.suppliedBy.join(", ")}) : "";
+    : c.suppliedBy.length ? tt("co.chain.supplied", "supplied from {sites}", {sites: c.suppliedBy.map(spEsc).join(", ")}) : "";
   const name = `${CHEV()}${c.name}<span class="sub" style="padding-left:16px">${xlMembers(c)}${
     note ? ` · ${note}` : ""}</span>`;
   /* A chain is known by its English name, so the chains a reader opened stay
@@ -19387,7 +19406,7 @@ function drawSite(){
     <table>
       <thead><tr><th>Fee</th><th>Hours billed / day</th><th>Revenue / day</th></tr></thead>
       <tbody>${shelves.map(l => `<tr data-el="${attr(spKeyTok(l.slug, l.item))}">
-          <td class="l">${l.item}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
+          <td class="l">${spEsc(l.item)}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
           <td>${num(l.soldPerDay)}</td>
           <td>${fmt(l.revenue)}</td></tr>`).join("")}</tbody></table>` : `<p class="quiet">Nothing billed here yet.</p>`)
     : shelves.length ? `
@@ -19407,7 +19426,7 @@ function drawSite(){
         /* The shelf's word, as Checks says it; a shelf Python did not judge has none. */
         const word = sp && supplyFact(siteTab, l.slug) ? ` ${szChip(f)}` : "";
         return `<tr data-el="${attr(spKeyTok(l.slug, l.item))}${over ? " outruns" : ""}">
-          <td class="l">${l.item}${word}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
+          <td class="l">${spEsc(l.item)}${word}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
           <td>${num(l.soldPerDay)}</td>
           <td>${over && !deal ? `<span class="sp-red">${busiest}</span>` : busiest}</td>
           <td>${fmt(l.revenue)}</td>
@@ -19598,7 +19617,7 @@ function drawSite(){
   $("sitePanel").innerHTML = `${siteCrumbs(b.key, shortName(b), true)}
     <div class="sitehead rv">
       ${b.code ? `<span class="bullet">${spEsc(b.code)}</span>` : ""}
-      <div><h2>${baseName(b)}${mapButton(b.key,b.name)}${headMarks}</h2><span class="sub">${sub}${depot ? mapButton(depot.key,depot.name) : ""}</span></div>
+      <div><h2>${spEsc(baseName(b))}${mapButton(b.key,b.name)}${headMarks}</h2><span class="sub">${sub}${depot ? mapButton(depot.key,depot.name) : ""}</span></div>
     </div>
     ${spFinds(finds, b, kind)}
     ${spBody || `
@@ -19723,9 +19742,11 @@ function importSetting(fact, contract, edit){
      game's own figure has moved, whether to the typed figure or elsewhere,
      that answer is stale: it is no longer an edit, the row goes back to the
      board's own suggestion, and the caller forgets it. Until then it stands,
-     including the figure in game typed to turn a suggestion down. */
+     including the figure in game typed to turn a suggestion down. A line
+     with neither a contract nor a suggestion (a route has since covered it)
+     has nothing left for a typed figure to answer: stale too. */
   const typed = !!edit && Number.isFinite(edit.value) && edit.value >= 0;
-  const stale = typed && edit.inGame !== inGame;
+  const stale = typed && (edit.inGame !== inGame || suggested === null);
   const edited = typed && !stale;
   const value = edited ? edit.value : suggested;
   return {smart, current, pausedWeekly, paused, fit: fact.st, setTo, inGame, suggested, value, edited,
@@ -20721,7 +20742,7 @@ function sbImportCtx(d){
     + `, plus ${Number.isFinite(margin) ? `a ${Math.round(margin * 100)}%` : "the"} margin`;
   const suggests = r => r.suggested !== null && r.suggested !== r.inGame;
   const boxTip = r => r.edited
-    ? `Your own figure. ${suggests(r) ? `The board suggests ${num(r.suggested)}` : `The game holds ${num(r.inGame)}`}`
+    ? `Your own figure. ${suggests(r) ? `The board suggests ${num(r.suggested)}` : `The game holds ${num(r.inGame ?? 0)}`}`
     : r.covered ? `The figure in game. ${routeTip(r)}`
     : r.paused ? `The figure in game, on a paused contract: resume it in game for it to deliver`
     : suggests(r) ? `The board suggests ${num(r.value)}: ${boardSays(r)}`
@@ -21165,6 +21186,22 @@ function wireImportSet(host, redraw){
     again(id);
   });
 }
+/* A live refresh rebuilds the tab a Set to box is on, and a figure typed but
+   not yet committed would go with the box, the focus too. Read before the
+   rebuild; the function returned puts both back on the new box (renderAll()). */
+function impDraft(){
+  const box = document.activeElement;
+  if(!box || !box.matches || !box.matches("input[data-imp]")) return null;
+  const id = box.dataset.imp, value = box.value, typed = value !== box.defaultValue;
+  const sec = box.closest("section[id]");
+  return () => {
+    const host = (sec && document.getElementById(sec.id)) || document;
+    const next = [...host.querySelectorAll("input[data-imp]")].find(el => el.dataset.imp === id);
+    if(!next || next === box) return;
+    if(typed) next.value = value;
+    next.focus({preventScroll: true});
+  };
+}
 
 /* --- market demand ----------------------------------------------------
    The waves come first: the game's own hype events, supplier trouble, and
@@ -21209,7 +21246,7 @@ function drawMovers(){
   const out = [];
   const days = n => `${n} d`;
   m.hype.slice(0,5).forEach(h => {
-    const what = (h.count > 1 ? `${h.count} products` : h.items[0])
+    const what = (h.count > 1 ? `${h.count} products` : spEsc(h.items[0]))
       + (h.sellHere ? " you sell here" : h.mine ? " you stock" : "");
     const place = hoodName(h.hood);
     const tip = `Hype in ${place} since day ${h.startDay}, ${plural(h.daysLeft, "day")} left: ${
@@ -21241,13 +21278,13 @@ function drawMovers(){
       x.mine ? ", you sell or make it" : ""})`).join(", ")}.`;
     /* Whether it touches the player's own shelves is in the sentence on
        hover; the chip itself stays as short as the design's. */
-    if(n === 1) out.push(waveHtml("dn", one.item, `${kind} at ${mapAddress(g.where)}`, left, tip));
+    if(n === 1) out.push(waveHtml("dn", spEsc(one.item), `${kind} at ${mapAddress(g.where)}`, left, tip));
     else out.push(waveHtml("dn", mapAddress(g.where), `${n} products ${kind === "shortage" ? "short" : `in ${kind}`}`, left, tip));
   });
   /* One wave, or one shop opening, moves a whole range at once, so it reads as
      one chip, and where our own shop opened in that window the note says so. */
   (m.movers || []).slice(0,6).forEach(x => {
-    const what = (x.count > 1 ? `${x.count} ${x.family.toLowerCase()} lines` : x.items[0]) + (x.sell ? " you sell here" : "");
+    const what = (x.count > 1 ? `${x.count} ${x.family.toLowerCase()} lines` : spEsc(x.items[0])) + (x.sell ? " you sell here" : "");
     const delta = `${x.delta > 0 ? "+" : ""}${x.delta}`;
     const place = hoodName(x.hood);
     const tip = `${place}: ${x.items.join(", ")}${x.count > x.items.length ? "…" : ""} moved ${delta} on average over ${
@@ -21699,7 +21736,7 @@ function drawProducts(){
           ? tt("co.prod.open.top.of", "Open {site}, the store that sells the most of it, one of {n}", {site: shortName(seller.b), n: p.stores})
           : tt("co.prod.open.top", "Open {site}, the store that sells the most of it", {site: shortName(seller.b)}))
         : tt("co.prod.open.stocks", "Open {site}, which stocks it; no store sold any yesterday", {site: shortName(seller.b)});
-      const name = seller ? `<a class="link xl-sells" href="#company" data-xl-item="${attr(p.slug)}" data-tip="${attr(opens)}">${p.item}</a>` : p.item;
+      const name = seller ? `<a class="link xl-sells" href="#company" data-xl-item="${attr(p.slug)}" data-tip="${attr(opens)}">${spEsc(p.item)}</a>` : spEsc(p.item);
       return `<tr data-slug="${attr(p.slug)}">
       <td class="l"${showPeak?"":` data-tip="${attr(peakTip(p))}"`}>${name}</td>
       <td><span class="bar"><i style="width:${(p.revenue / top * 100).toFixed(0)}%"></i></span>${fmt(p.revenue)}</td>
@@ -22247,13 +22284,17 @@ function renderAll(){
   const marked = !!(staleSource || staleDraws.size);
   drawMast();
   if(marked) paintStale();
+  /* A row that throws is kept out of date and marks the dot, as in
+     drawStale(); the rows after it, the footer and the wiring still run. */
+  const typing = calmLazy ? impDraft() : null;
   PAGE_DRAWS.forEach(row => {
     if(here !== null && row[0] && !row[0].split(" ").includes(here)){ pageStale.add(row); return; }
     pageStale.delete(row);
-    row[1]();
-    staleDraws.delete(row);
+    try{ row[1](); staleDraws.delete(row); }
+    catch(e){ pageStale.add(row); staleDraws.set(row, e && e.message || String(e)); console.error(e); }
   });
-  if(marked) paintStale();
+  if(typing) typing();
+  if(marked || staleDraws.size) paintStale();
   drawFooter();
   drawDifficulty(diffFocus);
   wireAll();
@@ -27112,10 +27153,11 @@ function startWatching(){
       gwTerms.clear();  // what the game said of caps belongs to the board it was said about
       gwReadStuck = false;
       if(gwOpen && gwOpen._gwGate) gwOpen._gwBuilt = true;  // an undo's gate: a board built since
-      if(first) boot(); else renderCalm(same);
       /* A row that would not draw failed on older numbers than these: the
-         next board clears its mark, and it is tried again when it opens. */
-      if(staleDraws.size){ staleDraws.clear(); paintStale(); }
+         next board clears its mark, and it is tried again when it opens. One
+         that throws on these numbers marks the dot again (renderAll()). */
+      staleDraws.clear();
+      if(first) boot(); else renderCalm(same);
       const dot = $("live");
       if(dot){ dot.classList.add("just"); setTimeout(() => dot.classList.remove("just"), 1600); }
     },
@@ -27795,6 +27837,11 @@ def watch(
         # The game is not up yet, or the mod is off. The poll loop below
         # keeps trying; the server has nothing to be sorry for.
         print(f"  {exc}", flush=True)
+    except Exception as exc:
+        # A save that will not build is no reason to stop watching: the poll
+        # loop below tries again when the game writes the next one.
+        print(f"  skipped the first build -- {board.error or exc}", flush=True)
+        traceback.print_exc()
     BoardHandler.board = board
     server = http.server.ThreadingHTTPServer(("127.0.0.1", port), BoardHandler)
     url = f"http://127.0.0.1:{port}/"

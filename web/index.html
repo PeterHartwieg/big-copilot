@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "2b0572de8c";</script>
-<link rel="stylesheet" href="community.css?v=2b0572de8c">
+<script>window.LEDGER_BUILD = "a619537ca8";</script>
+<link rel="stylesheet" href="community.css?v=a619537ca8">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=2b0572de8c">
+<link rel="stylesheet" href="fonts/fonts.css?v=a619537ca8">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -4113,7 +4113,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"2b0572de8c","latest":{"pr":118,"date":"2026-09-25","title":"Game names in the language you play in","summary":"A new Game names setting in the footer, beside Theme, shows the game's own names in any language the game ships: items, business types, neighbourhoods, stations, skills and staff demands, on the board, inside its findings and in the wiki, so the board reads like your game. The rest of the page stays English. Search finds a name in either language, and lists sort in the language you picked. If your browser prefers one of the game's languages, the board asks once whether to use it."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"a619537ca8","latest":{"pr":118,"date":"2026-09-25","title":"Game names in the language you play in","summary":"A new Game names setting in the footer, beside Theme, shows the game's own names in any language the game ships: items, business types, neighbourhoods, stations, skills and staff demands, on the board, inside its findings and in the wiki, so the board reads like your game. The rest of the page stays English. Search finds a name in either language, and lists sort in the language you picked. If your browser prefers one of the game's languages, the board asks once whether to use it."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -4197,8 +4197,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=2b0572de8c"></script>
-<script src="community.js?v=2b0572de8c"></script>
+<script src="app.js?v=a619537ca8"></script>
+<script src="community.js?v=a619537ca8"></script>
 
 <script>
 
@@ -4279,7 +4279,7 @@ const gauge = v => graded(v, "ink-3");
    shop the building table places. With neither, no badge. */
 const bullet = b => b.code ? `<span class="bullet" style="background:${LINE_COLOURS[b.code]||LINE_COLOURS[""]}"
   title="${attr(hoodName(b.neighbourhood)||"Unassigned")}">${spEsc(b.code)}</span>` : "";
-const siteCell = b => `<div class="site">${bullet(b)}<span><b>${b.name}</b>
+const siteCell = b => `<div class="site">${bullet(b)}<span><b>${spEsc(b.name)}</b>
   <span class="sub">${b.type} · ${b.address}${mapButton(b.key,b.name)}</span></span></div>`;
 
 /* The tile sparkline, the generator's spark(): an area under the line, the
@@ -5113,7 +5113,7 @@ function drawFlow(){
     boxes.push(`<g class="node" data-id="${attr(node.id)}">
       <rect x="${x}" y="${y}" width="${NODE_W}" height="${NODE_H}" rx="7"></rect>${hood
         ? `<rect x="${x + 10}" y="${y + 13}" width="24" height="18" rx="3" fill="var(--raised)" stroke="var(--rule)"></rect>
-           <text x="${x + 22}" y="${y + 26}" text-anchor="middle" class="s" style="font-weight:600;fill:var(--ink-2)">${hood}</text>` : ""}
+           <text x="${x + 22}" y="${y + 26}" text-anchor="middle" class="s" style="font-weight:600;fill:var(--ink-2)">${spEsc(hood)}</text>` : ""}
       <text x="${tx}" y="${y + 19}">${attr(shortText(node.name, hood ? 19 : 24))}</text>
       <text class="s" x="${tx}" y="${y + 34}">${node.stock ? num(node.stock) + " held"
         : `${attr(shortText(node.sub || "", hood ? 21 : 26, true))}<title>${attr(node.sub || "")}</title>`}</text></g>`);
@@ -6091,14 +6091,14 @@ function findingRow(a){
     <span class="mark" data-tip="${attr(tt("today.find.silence", "Silence this finding"))}"></span>
     <span class="site">${site}</span>
     <span hidden id="ss-fn${n}">${spEsc(b ? shortName(b) : a.site)}:</span>
-    <button type="button" class="what" id="ss-fw${n}" aria-labelledby="ss-fn${n} ss-fw${n}">${what}${kindOff(a) ? ` ${chipHtml("dim", kindLabel(a.group), tt("today.find.off", "This kind is switched off in the list; it is counted here instead"))}` : ""}</button>${
+    <button type="button" class="what" id="ss-fw${n}" aria-labelledby="ss-fn${n} ss-fw${n}">${spEsc(what)}${kindOff(a) ? ` ${chipHtml("dim", kindLabel(a.group), tt("today.find.off", "This kind is switched off in the list; it is counted here instead"))}` : ""}</button>${
       /* The game link's buttons sit under the sentence, beside the row's own
          button rather than inside it. */
       writes ? `
     <span class="gw-acts gw-find">${writes}</span>` : ""}
     <span class="amt">${findingAmount(a)}</span>
     <span class="go">${icon("go")}</span>${more ? `
-    <span class="more">${more}</span>` : ""}</div>`;
+    <span class="more">${spEsc(more)}</span>` : ""}</div>`;
 }
 /* Row click opens the finding's page; a click on the mark is stopped in the
    capture phase by wireFinds() and never reaches this. */
@@ -6311,7 +6311,7 @@ const CHEV = () => `<span class="chev">${icon("chev")}</span>`;
 /* A site in a table: its neighbourhood pill, its short name, and the type and
    address underneath. With `chev`, the arrow that says the row opens; with
    `link`, the name is also a link to the site's own page. */
-const siteLabel = (b, chev, link) => `${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${link ? siteLink(b) : shortName(b)}${chev ? ` ${CHEV()}` : ""}
+const siteLabel = (b, chev, link) => `${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${link ? siteLink(b) : spEsc(shortName(b))}${chev ? ` ${CHEV()}` : ""}
   ${mapButton(b.key,b.name)}<span class="sub">${b.type} · ${b.address}</span>`;
 const kidCell = b => siteLabel(b, true, true);
 
@@ -6358,7 +6358,7 @@ function chainRow(c, v){
   const cells = v.chain(c);
   const note = c.external
     ? tt("co.chain.external", "{w:$c} of it sold outside the company by its factory", {w: c.external})
-    : c.suppliedBy.length ? tt("co.chain.supplied", "supplied from {sites}", {sites: c.suppliedBy.join(", ")}) : "";
+    : c.suppliedBy.length ? tt("co.chain.supplied", "supplied from {sites}", {sites: c.suppliedBy.map(spEsc).join(", ")}) : "";
   const name = `${CHEV()}${c.name}<span class="sub" style="padding-left:16px">${xlMembers(c)}${
     note ? ` · ${note}` : ""}</span>`;
   /* A chain is known by its English name, so the chains a reader opened stay
@@ -9062,7 +9062,7 @@ function drawSite(){
     <table>
       <thead><tr><th>Fee</th><th>Hours billed / day</th><th>Revenue / day</th></tr></thead>
       <tbody>${shelves.map(l => `<tr data-el="${attr(spKeyTok(l.slug, l.item))}">
-          <td class="l">${l.item}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
+          <td class="l">${spEsc(l.item)}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
           <td>${num(l.soldPerDay)}</td>
           <td>${fmt(l.revenue)}</td></tr>`).join("")}</tbody></table>` : `<p class="quiet">Nothing billed here yet.</p>`)
     : shelves.length ? `
@@ -9082,7 +9082,7 @@ function drawSite(){
         /* The shelf's word, as Checks says it; a shelf Python did not judge has none. */
         const word = sp && supplyFact(siteTab, l.slug) ? ` ${szChip(f)}` : "";
         return `<tr data-el="${attr(spKeyTok(l.slug, l.item))}${over ? " outruns" : ""}">
-          <td class="l">${l.item}${word}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
+          <td class="l">${spEsc(l.item)}${word}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : "no price"}</span></td>
           <td>${num(l.soldPerDay)}</td>
           <td>${over && !deal ? `<span class="sp-red">${busiest}</span>` : busiest}</td>
           <td>${fmt(l.revenue)}</td>
@@ -9273,7 +9273,7 @@ function drawSite(){
   $("sitePanel").innerHTML = `${siteCrumbs(b.key, shortName(b), true)}
     <div class="sitehead rv">
       ${b.code ? `<span class="bullet">${spEsc(b.code)}</span>` : ""}
-      <div><h2>${baseName(b)}${mapButton(b.key,b.name)}${headMarks}</h2><span class="sub">${sub}${depot ? mapButton(depot.key,depot.name) : ""}</span></div>
+      <div><h2>${spEsc(baseName(b))}${mapButton(b.key,b.name)}${headMarks}</h2><span class="sub">${sub}${depot ? mapButton(depot.key,depot.name) : ""}</span></div>
     </div>
     ${spFinds(finds, b, kind)}
     ${spBody || `
@@ -9398,9 +9398,11 @@ function importSetting(fact, contract, edit){
      game's own figure has moved, whether to the typed figure or elsewhere,
      that answer is stale: it is no longer an edit, the row goes back to the
      board's own suggestion, and the caller forgets it. Until then it stands,
-     including the figure in game typed to turn a suggestion down. */
+     including the figure in game typed to turn a suggestion down. A line
+     with neither a contract nor a suggestion (a route has since covered it)
+     has nothing left for a typed figure to answer: stale too. */
   const typed = !!edit && Number.isFinite(edit.value) && edit.value >= 0;
-  const stale = typed && edit.inGame !== inGame;
+  const stale = typed && (edit.inGame !== inGame || suggested === null);
   const edited = typed && !stale;
   const value = edited ? edit.value : suggested;
   return {smart, current, pausedWeekly, paused, fit: fact.st, setTo, inGame, suggested, value, edited,
@@ -10396,7 +10398,7 @@ function sbImportCtx(d){
     + `, plus ${Number.isFinite(margin) ? `a ${Math.round(margin * 100)}%` : "the"} margin`;
   const suggests = r => r.suggested !== null && r.suggested !== r.inGame;
   const boxTip = r => r.edited
-    ? `Your own figure. ${suggests(r) ? `The board suggests ${num(r.suggested)}` : `The game holds ${num(r.inGame)}`}`
+    ? `Your own figure. ${suggests(r) ? `The board suggests ${num(r.suggested)}` : `The game holds ${num(r.inGame ?? 0)}`}`
     : r.covered ? `The figure in game. ${routeTip(r)}`
     : r.paused ? `The figure in game, on a paused contract: resume it in game for it to deliver`
     : suggests(r) ? `The board suggests ${num(r.value)}: ${boardSays(r)}`
@@ -10840,6 +10842,22 @@ function wireImportSet(host, redraw){
     again(id);
   });
 }
+/* A live refresh rebuilds the tab a Set to box is on, and a figure typed but
+   not yet committed would go with the box, the focus too. Read before the
+   rebuild; the function returned puts both back on the new box (renderAll()). */
+function impDraft(){
+  const box = document.activeElement;
+  if(!box || !box.matches || !box.matches("input[data-imp]")) return null;
+  const id = box.dataset.imp, value = box.value, typed = value !== box.defaultValue;
+  const sec = box.closest("section[id]");
+  return () => {
+    const host = (sec && document.getElementById(sec.id)) || document;
+    const next = [...host.querySelectorAll("input[data-imp]")].find(el => el.dataset.imp === id);
+    if(!next || next === box) return;
+    if(typed) next.value = value;
+    next.focus({preventScroll: true});
+  };
+}
 
 /* --- market demand ----------------------------------------------------
    The waves come first: the game's own hype events, supplier trouble, and
@@ -10884,7 +10902,7 @@ function drawMovers(){
   const out = [];
   const days = n => `${n} d`;
   m.hype.slice(0,5).forEach(h => {
-    const what = (h.count > 1 ? `${h.count} products` : h.items[0])
+    const what = (h.count > 1 ? `${h.count} products` : spEsc(h.items[0]))
       + (h.sellHere ? " you sell here" : h.mine ? " you stock" : "");
     const place = hoodName(h.hood);
     const tip = `Hype in ${place} since day ${h.startDay}, ${plural(h.daysLeft, "day")} left: ${
@@ -10916,13 +10934,13 @@ function drawMovers(){
       x.mine ? ", you sell or make it" : ""})`).join(", ")}.`;
     /* Whether it touches the player's own shelves is in the sentence on
        hover; the chip itself stays as short as the design's. */
-    if(n === 1) out.push(waveHtml("dn", one.item, `${kind} at ${mapAddress(g.where)}`, left, tip));
+    if(n === 1) out.push(waveHtml("dn", spEsc(one.item), `${kind} at ${mapAddress(g.where)}`, left, tip));
     else out.push(waveHtml("dn", mapAddress(g.where), `${n} products ${kind === "shortage" ? "short" : `in ${kind}`}`, left, tip));
   });
   /* One wave, or one shop opening, moves a whole range at once, so it reads as
      one chip, and where our own shop opened in that window the note says so. */
   (m.movers || []).slice(0,6).forEach(x => {
-    const what = (x.count > 1 ? `${x.count} ${x.family.toLowerCase()} lines` : x.items[0]) + (x.sell ? " you sell here" : "");
+    const what = (x.count > 1 ? `${x.count} ${x.family.toLowerCase()} lines` : spEsc(x.items[0])) + (x.sell ? " you sell here" : "");
     const delta = `${x.delta > 0 ? "+" : ""}${x.delta}`;
     const place = hoodName(x.hood);
     const tip = `${place}: ${x.items.join(", ")}${x.count > x.items.length ? "…" : ""} moved ${delta} on average over ${
@@ -11374,7 +11392,7 @@ function drawProducts(){
           ? tt("co.prod.open.top.of", "Open {site}, the store that sells the most of it, one of {n}", {site: shortName(seller.b), n: p.stores})
           : tt("co.prod.open.top", "Open {site}, the store that sells the most of it", {site: shortName(seller.b)}))
         : tt("co.prod.open.stocks", "Open {site}, which stocks it; no store sold any yesterday", {site: shortName(seller.b)});
-      const name = seller ? `<a class="link xl-sells" href="#company" data-xl-item="${attr(p.slug)}" data-tip="${attr(opens)}">${p.item}</a>` : p.item;
+      const name = seller ? `<a class="link xl-sells" href="#company" data-xl-item="${attr(p.slug)}" data-tip="${attr(opens)}">${spEsc(p.item)}</a>` : spEsc(p.item);
       return `<tr data-slug="${attr(p.slug)}">
       <td class="l"${showPeak?"":` data-tip="${attr(peakTip(p))}"`}>${name}</td>
       <td><span class="bar"><i style="width:${(p.revenue / top * 100).toFixed(0)}%"></i></span>${fmt(p.revenue)}</td>
@@ -11924,7 +11942,7 @@ function mapButton(key, label){
   return `<button type="button" class="map-shortcut" data-map-key="${attr(key)}" aria-label="${attr(name)}" title="${attr(tt("map.btn.title", "Show on map"))}">${MAP_ICON}</button>`;
 }
 function mapRef(b, label){
-  return b ? `${label === undefined ? shortName(b) : label}${mapButton(b.key, b.name || b.address)}` : "—";
+  return b ? `${mapText(label === undefined ? shortName(b) : label)}${mapButton(b.key, b.name || b.address)}` : "—";
 }
 /* A site's name, wherever the board prints it, is a way to the site's own
    page (siteHref() in the board script): plain text until the pointer is on
@@ -16000,13 +16018,17 @@ function renderAll(){
   const marked = !!(staleSource || staleDraws.size);
   drawMast();
   if(marked) paintStale();
+  /* A row that throws is kept out of date and marks the dot, as in
+     drawStale(); the rows after it, the footer and the wiring still run. */
+  const typing = calmLazy ? impDraft() : null;
   PAGE_DRAWS.forEach(row => {
     if(here !== null && row[0] && !row[0].split(" ").includes(here)){ pageStale.add(row); return; }
     pageStale.delete(row);
-    row[1]();
-    staleDraws.delete(row);
+    try{ row[1](); staleDraws.delete(row); }
+    catch(e){ pageStale.add(row); staleDraws.set(row, e && e.message || String(e)); console.error(e); }
   });
-  if(marked) paintStale();
+  if(typing) typing();
+  if(marked || staleDraws.size) paintStale();
   drawFooter();
   drawDifficulty(diffFocus);
   wireAll();
@@ -20865,10 +20887,11 @@ function startWatching(){
       gwTerms.clear();  // what the game said of caps belongs to the board it was said about
       gwReadStuck = false;
       if(gwOpen && gwOpen._gwGate) gwOpen._gwBuilt = true;  // an undo's gate: a board built since
-      if(first) boot(); else renderCalm(same);
       /* A row that would not draw failed on older numbers than these: the
-         next board clears its mark, and it is tried again when it opens. */
-      if(staleDraws.size){ staleDraws.clear(); paintStale(); }
+         next board clears its mark, and it is tried again when it opens. One
+         that throws on these numbers marks the dot again (renderAll()). */
+      staleDraws.clear();
+      if(first) boot(); else renderCalm(same);
       const dot = $("live");
       if(dot){ dot.classList.add("just"); setTimeout(() => dot.classList.remove("just"), 1600); }
     },
