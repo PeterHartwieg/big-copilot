@@ -6684,6 +6684,14 @@ def _plan_people(save: Save, staff: list) -> dict:
     save demand full time, but the plan may not invent one for the other two.
     """
     demands, training = {}, set()
+    # The stations each person has a shift on now, at any site: an office's
+    # plan keeps somebody at their own desk where it can (_placement_rank()).
+    home = collections.defaultdict(set)
+    for reg in save.items(save.root.get("BuildingRegistrations")):
+        for day in save.items(reg.get("scheduleDays")):
+            for shift in save.items(day.get("workShifts")):
+                if isinstance(shift, dict) and shift.get("employeeId") is not None:
+                    home[shift["employeeId"]].add(shift.get("itemInstanceId"))
     for employee in save.items(save.root.get("EmployeeInstances")):
         if save.deref(employee.get("trainingSession")):
             training.add(employee.get("id"))
@@ -6717,6 +6725,9 @@ def _plan_people(save: Save, staff: list) -> dict:
             # The weekly hours the game has them on now, at the one site they
             # work: a hire's week never takes them below it (_fill_hire_weeks()).
             "now": person.get("hours") or 0,
+            "home": home.get(person["id"], set()),
+            # Each desk or chair demand, as the item names that meet it.
+            "desks": [tuple("ba:itemname_" + name for name in r[1]) for r in rules if r[0] == "desk"],
         }
     return out
 
@@ -6895,6 +6906,12 @@ def _placement_rank(person: dict, state: dict, slot: dict, here: dict) -> tuple:
         # the week and the site owes as few people thirty hours as it can.
         0.0 if on_roster else -((person["band"] or FULL_TIME)[1] - state["hours"]),
         0 if wants_day else 1,
+        # A desk or chair demand is met by the station's own furniture: the
+        # station that meets theirs first, then the one they work now, so a
+        # new week does not move a whole office to other desks (Peter's
+        # in-game test, 25 September 2026).
+        0 if _desk_fits(person, slot, here) else 1,
+        0 if slot["station"] in (person.get("home") or ()) else 1,
         0 if adjacent else 1,
         # A bench member is a last resort even at equal hours: drawing one costs
         # the checklist a MyEmployees step and binds them to this building, so
@@ -6903,6 +6920,19 @@ def _placement_rank(person: dict, state: dict, slot: dict, here: dict) -> tuple:
         person["wage"],
         str(person["id"]),
     )
+
+
+def _desk_fits(person: dict, slot: dict, here: dict) -> bool:
+    """Whether a station meets every desk or chair demand a person holds.
+
+    True for somebody with none, and where the site's furniture is not known.
+    """
+    wants = person.get("desks") or ()
+    groups = here.get("groups") or {}
+    if not wants or not groups:
+        return True
+    held = groups.get(slot["station"], ())
+    return all(any(name in held for name in names) for names in wants)
 
 
 def _cover_runs(need: list, rates: list, open_hours: list) -> dict:
@@ -8722,7 +8752,8 @@ def _serving_hours(shifts: list) -> int:
     return sum(s["to"] - s["from"] for s in shifts if s["kind"] == "serve")
 
 
-def _place_week(grid, need, slots_open, cover_posts, pool, people, business, bench, state) -> dict:
+def _place_week(grid, need, slots_open, cover_posts, pool, people, business, bench, state,
+                groups=None) -> dict:
     """One week of shifts for one site, from one need curve: the placer itself.
 
     Everything after the need curve, in the scope's order: a. per-station cover
@@ -8841,6 +8872,9 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
         for post in cover_posts
     ]
     here = {
+        # Each station's furniture group (_station_groups()), where the caller
+        # has the building: a desk demand is met at a station, not a site.
+        "groups": groups or {},
         "rostered": set(),
         "flex": {
             person["id"]: sum(
@@ -9585,7 +9619,7 @@ def _office_site_plan(save, names, business, building, grid, skill, pool, people
     fake = {"roles": [{"skill": skill, "label": label}], "stations": stations}
     usable_bench = [p for p in bench if _usable(p, skill, "serve")]
     week = _place_week(fake, need, slots_open, [], pool, people, business, usable_bench,
-                       state)
+                       state, groups=_station_groups(save, building))
     current = _current_roster(save, building, {s["id"]: s for s in stations})
     lists = (week["shifts"], week["shortHours"], week["shortDays"], week["placed"],
              week["bench"])
@@ -9646,21 +9680,91 @@ def _business_kind(business: dict) -> str | None:
 
 
 # How the Staff page judges each kind of demand a candidate holds: `schedule`
-# against the hire week the person gets, `site` against the site's facts,
+# against the hire week the person gets, `station` against the stations that
+# week puts them on (the site's `stations`), `site` against the site's facts,
 # `company` once for everybody.
 DEMAND_SCOPE = {
     "hours": "schedule", "days": "schedule", "daysoff": "schedule", "noshift": "schedule",
     "nocleaning": "schedule",
-    "desk": "site", "building": "site", "clean": "site",
+    "desk": "station", "building": "site", "clean": "site",
     "insurance": "company", "happiness": "company",
 }
+
+
+def _station_groups(save: Save, registration: dict) -> dict:
+    """Each item's furniture group: {item id: {item names}}.
+
+    The game's assignedWorkStationItems, which a desk or chair demand reads
+    (WorksOnItem), is every item of the group each station a person has a
+    shift on stands in: follow `parentId` up to the root item, usually the
+    desk, and take it and everything stacked on it (computer, chair, monitor,
+    mousepad, phone). Rebuilt this way from the schedule it matched the saved
+    list for every employee of three offices on two saves (26 September 2026).
+    """
+    items = []
+    for holder in save.items(registration.get("itemInstances")):
+        item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
+        if item and item.get("id") is not None:
+            items.append(item)
+    by_id = {item["id"]: item for item in items}
+    kids = collections.defaultdict(list)
+    for item in items:
+        if item.get("parentId") in by_id:
+            kids[item["parentId"]].append(item)
+
+    def root(item):
+        seen = set()
+        while item.get("parentId") in by_id and item["id"] not in seen:
+            seen.add(item["id"])
+            item = by_id[item["parentId"]]
+        return item
+
+    def names(item, seen):
+        if item["id"] in seen:
+            return set()
+        seen.add(item["id"])
+        out = {item.get("itemName")} - {None}
+        for kid in kids[item["id"]]:
+            out |= names(kid, seen)
+        return out
+
+    groups = {}
+    out = {}
+    for item in items:
+        top = root(item)
+        if top["id"] not in groups:
+            groups[top["id"]] = names(top, set())
+        out[item["id"]] = groups[top["id"]]
+    return out
+
+
+def _station_facts(save: Save, registration: dict, stations) -> dict:
+    """The desk and chair demands each of a site's stations meets.
+
+    {station id: [demand slugs]}, the stations with none left out. A person
+    meets such a demand when a station they work stands in a group holding one
+    of its items (_station_groups()), which is the game's own test.
+    """
+    groups = _station_groups(save, registration)
+    desk = [(slug, setting) for slug, (kind, setting, _p) in sorted(JOB_DEMANDS.items())
+            if kind == "desk"]
+    out = {}
+    for sid in sorted({s for s in stations if s is not None}, key=str):
+        held = groups.get(sid, set())
+        met = [slug for slug, setting in desk
+               if any("ba:itemname_" + name in held for name in setting)]
+        if met:
+            out[str(sid)] = met
+    return out
 
 
 def _site_facts(save: Save, registration: dict) -> dict:
     """Whether a site meets each site-level demand, as _job_demands() judges it.
 
-    A desk demand is about the person's own desk, which a hire does not have
-    yet, so it reads whether the site holds such an item anywhere.
+    A desk or chair demand is not one of them: it is about the stations the
+    person works (_station_facts()), not whether the site holds such an item
+    anywhere, which said met for every lawyer at a firm with one executive
+    desk (Peter's in-game test, 25 September 2026).
     """
     here = _items_by_name(save, registration)
     clean = None
@@ -9675,8 +9779,6 @@ def _site_facts(save: Save, registration: dict) -> dict:
             out[slug] = clean >= setting
         elif kind == "building":
             out[slug] = _holds_demanded_item(save, here, setting)
-        else:
-            out[slug] = any(here.get("ba:itemname_" + item) for item in setting)
     return out
 
 
@@ -9753,6 +9855,16 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
     def take(row):
         return (row or {}).pop("_hire", None)
 
+    def rows_of(kind, key):
+        """The plan rows of one site, whose stations the page may place people on."""
+        if kind == "shop":
+            return [shops.get(key)]
+        if kind == "factory":
+            return list(factories.get(key, {}).values())
+        if kind == "office":
+            return [offices.get(key)]
+        return []
+
     sites = []
     for business in businesses:
         kind = _business_kind(business)
@@ -9795,6 +9907,12 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
             "accepts": list(ASSIGN_SKILLS.get(business["typeSlug"], ())),
             "plans": {mode: plans[mode] for mode in _in_order(plans)},
             "facts": _site_facts(save, reg),
+            # The desk and chair demands each station of the site meets: the
+            # page judges them against the stations a person's week is on.
+            "stations": _station_facts(save, reg, [
+                station["id"] for row in rows_of(kind, business["key"])
+                for station in (row or {}).get("stations") or ()
+            ]),
         })
     # Rows of sites the list above skips still lose their private field.
     for row in staffing:
@@ -24883,7 +25001,8 @@ function hrModel(){
     for(const skill of ordered){
       const S = sites.find(x => x !== from && (x.site.accepts || []).includes(skill) && x.weeks.some(y => !y.taken && y.w.skill === skill));
       if(!S) continue;
-      const wk = S.weeks.find(y => !y.taken && y.w.skill === skill);
+      const open = S.weeks.filter(y => !y.taken && y.w.skill === skill);
+      const wk = open.find(y => !hrDeskMiss(p.demands, S, y.w).length) || open[0];
       wk.taken = true;
       moved.add(id);
       const lv = level(skill);
@@ -24934,7 +25053,9 @@ function hrModel(){
            week whose schedule demands they meet, else the first, warned. */
         const S = free[0].S, mine = free.filter(x => x.S === S);
         const fails = x => (c.demands || []).filter(d => hrKind(d) === "schedule" && hrBreaks(d, x.w, S.row));
-        const fit = mine.find(x => !fails(x).length);
+        /* The weeks of a role are interchangeable, so the one at a desk
+           that meets their desk and chair demands goes first. */
+        const fit = mine.find(x => !fails(x).length && !hrDeskMiss(c.demands, S, x.w).length) || mine.find(x => !fails(x).length);
         const wk = fit || mine[0];
         wk.who = {type: "hire", c, misfit: fit ? [] : fails(wk)};
         role.picked.push(c);
@@ -24955,12 +25076,26 @@ function hrModel(){
   return {sites, moves, roles, overs, cands, byId, used, quick};
 }
 
+/* A desk or chair demand against a week: whether one of the stations the week
+   puts them on stands in furniture that meets it (the site's `stations`), the
+   game's own test. No week, no station: the game leaves their list empty. */
+const hrDeskMet = (slug, S, w) => !!(S && w) && (w.slots || []).some(sl =>
+  (((S.site.stations || {})[String(sl.station)]) || []).includes(slug));
+const hrDeskAnywhere = (slug, S) => !!S && Object.values(S.site.stations || {}).some(l => (l || []).includes(slug));
+/* The desk and chair demands a week of this site leaves unmet. */
+const hrDeskMiss = (demands, S, w) => (demands || []).filter(d => hrKind(d) === "station" && !hrDeskMet(d, S, w));
 /* A demand of someone going to a site, as the page judges it: "ok", "warn"
-   (not met here, met at another planned site), "no" (met nowhere) or null
-   (not judged). Schedule demands are judged against their week. */
+   (not met here, met at another planned site, or at another desk here), "no"
+   (met nowhere) or null (not judged). Schedule demands are judged against
+   their week, desk and chair demands against the stations it is on. */
 function hrDemandAt(m, slug, S, wk){
   const kind = hrKind(slug);
   if(kind === "schedule") return wk ? (hrBreaks(slug, wk.w, S && S.row) ? "warn" : "ok") : null;
+  if(kind === "station"){
+    if(!S) return null;
+    if(hrDeskMet(slug, S, wk && wk.w)) return "ok";
+    return m.sites.some(x => x.planned && hrDeskAnywhere(slug, x)) ? "warn" : "no";
+  }
   if(kind === "company"){
     const c = ((D.hiring || {}).company || {})[slug];
     return c === undefined ? null : c ? "ok" : "no";
@@ -25321,6 +25456,10 @@ function hrWhy(m, slug, S, wk){
   const kind = hrKind(slug);
   if(kind === "schedule") return "the plan's hours break it";
   if(kind === "company") return "not offered";
+  if(kind === "station"){
+    if(hrDemandAt(m, slug, S, wk) === "no") return "none at any site";
+    return hrDeskAnywhere(slug, S) ? "not at this desk" : `none at ${spEsc(hrSiteName(S))}`;
+  }
   const tone = hrDemandAt(m, slug, S, wk);
   return tone === "warn" ? `none at ${spEsc(hrSiteName(S))}` : "none at any site";
 }
@@ -25518,7 +25657,8 @@ function hrQuickPlan(sites, cands, used){
   const open = out.plan ? S.weeks.filter(x => x.w.skill === q.skill && !x.who) : [];
   out.picks = out.matches.slice(0, q.n).map(c => {
     const fails = x => (c.demands || []).filter(d => hrKind(d) === "schedule" && hrBreaks(d, x.w, S.row));
-    const wk = open.find(x => !fails(x).length) || open[0] || null;
+    const wk = open.find(x => !fails(x).length && !hrDeskMiss(c.demands, S, x.w).length)
+      || open.find(x => !fails(x).length) || open[0] || null;
     if(wk){ open.splice(open.indexOf(wk), 1); if(hold){ wk.who = {type: "quick", c}; out.held++; } }
     if(hold) used.set(c.id, S);
     return {c, w: wk ? wk.w : null, misfit: wk ? fails(wk) : []};

@@ -30,6 +30,7 @@ from ba_dashboard import (
 )
 from ba_save import Names, Save
 
+import ba_dashboard
 import test_staffing as ts
 from test_factory_staffing import FACTORY as FACTORY_ADDR, Bare, People, hand_factory, hand_rows
 
@@ -232,6 +233,65 @@ class ShopHireWeeksTest(unittest.TestCase):
             by_skill[week["skill"]].append(week["hours"])
         for hours in by_skill.values():
             self.assertEqual(hours, sorted(hours, reverse=True))
+
+
+class StationFactsTest(unittest.TestCase):
+    """A desk or chair demand is met by the furniture of the station a person
+    works (the game's assignedWorkStationItems), not by the site holding such
+    an item anywhere (Peter's in-game test, 25 September 2026)."""
+
+    def reg(self):
+        item = lambda iid, name, parent=None: {"$v": dict({"id": iid, "itemName": "ba:itemname_" + name},  # noqa: E731
+                                                            **({"parentId": parent} if parent else {}))}
+        return {"itemInstances": {"$items": [
+            item("d1", "officedesk1"), item("pc1", "computer", "d1"), item("ch1", "officechair", "d1"),
+            item("d2", "officedesk2left"), item("pc2", "computer", "d2"), item("ch2", "officechair2", "d2"),
+            item("m2", "computermonitor", "d2"),
+        ]}}
+
+    def test_groups_follow_the_parent_to_the_desk_and_back_down(self):
+        groups = ba_dashboard._station_groups(save_of({}), self.reg())
+        self.assertEqual(groups["pc1"], {"ba:itemname_officedesk1", "ba:itemname_computer",
+                                         "ba:itemname_officechair"})
+        self.assertIn("ba:itemname_computermonitor", groups["pc2"])
+        self.assertIs(groups["pc2"], groups["m2"])
+
+    def test_each_station_lists_the_demands_its_desk_meets(self):
+        facts = ba_dashboard._station_facts(save_of({}), self.reg(), ["pc1", "pc2"])
+        self.assertIn("ba:jobdemand_seatedatofficedesk1", facts["pc1"])
+        self.assertNotIn("ba:jobdemand_seatedatofficedesk2", facts["pc1"])
+        self.assertNotIn("ba:jobdemand_seatedatofficechair2", facts["pc1"])
+        for slug in ("ba:jobdemand_seatedatofficedesk2", "ba:jobdemand_seatedatofficechair2",
+                     "ba:jobdemand_hascomputermonitor"):
+            self.assertIn(slug, facts["pc2"])
+
+    def test_an_office_plan_keeps_a_desk_demand_at_a_desk_that_meets_it(self):
+        """Two computers, one at an executive desk; the lawyer who asks for one
+        works it, and each keeps the computer they are on now."""
+        reg = office_registration(2, [[[8, 20]] for _ in range(7)])
+        reg["itemInstances"]["$items"] += [
+            {"$v": {"id": "desk0", "itemName": "ba:itemname_officedesk1"}},
+            {"$v": {"id": "desk1", "itemName": "ba:itemname_officedesk2left"}},
+        ]
+        for holder in reg["itemInstances"]["$items"]:
+            item = holder["$v"]
+            if item["id"] in ("pc0", "pc1"):
+                item["parentId"] = "desk" + item["id"][-1]
+        wants = dict(lawyer("a"), demands={"$items": ["ba:jobdemand_seatedatofficedesk2"]})
+        people = [lawyer("b"), wants]
+        save = save_of({"EmployeeInstances": {"$items": people},
+                        "BuildingRegistrations": {"$items": [reg]}})
+        business = {"key": site_key((STREET, 10)), "name": "Halden Law", "status": "office",
+                    "typeSlug": LAW, "basket": 388.0, "staff": 2}
+        _by_addr, staff = _staff(save, Names({}))
+        grids = _hourly(save, [reg], [business], {}, {COMPUTER},
+                        {p["id"]: p["skill"] for p in staff}, Names({}))
+        [row] = _office_staffing(save, Names({}), [business], grids, staff, set())
+        on = collections.defaultdict(set)
+        for s in row["shifts"]:
+            if s["p"] is not None:
+                on[row["people"][s["p"]]["id"]].add(row["stations"][s["s"]]["id"])
+        self.assertEqual(on["a"], {"pc1"})
 
 
 def shop_hiring(weeks, opens=((0, 24),)):
@@ -638,6 +698,11 @@ class HiringTest(unittest.TestCase):
         self.assertEqual(self.hiring["demandKinds"]["ba:jobdemand_nonights"], "schedule")
         self.assertEqual(self.hiring["demandKinds"]["ba:jobdemand_coffeemachine"], "site")
         self.assertEqual(self.hiring["demandKinds"]["ba:jobdemand_goldhealthinsurance"], "company")
+        self.assertEqual(self.hiring["demandKinds"]["ba:jobdemand_seatedatofficedesk2"], "station")
+        # A desk demand is never a site fact: it is met at a station or not.
+        self.assertNotIn("ba:jobdemand_seatedatofficedesk2", self.site("Shop A")["facts"])
+
+
 
     def test_bench_and_the_people_it_names(self):
         self.assertEqual(self.hiring["bench"], ["e2"])

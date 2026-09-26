@@ -1359,3 +1359,25 @@ test('a plan week whose slots are all unusable is no clash: no open hours', asyn
   assert.match(text, /No open hours in HART\. Gifts's plan: they join with no hours\./);
   assert.doesNotMatch(text, /meet shifts already there/);
 });
+
+test('a desk or chair demand is judged at the desk the week is on, and a pick goes to one that meets it', async (t) => {
+  const page = await board(t);
+  const out = await page.evaluate(() => {
+    const EXEC = 'ba:jobdemand_seatedatofficedesk2';
+    D.hiring.demandKinds[EXEC] = 'station';
+    const at = (station) => ({w: {slots: [{station, d: 1, f: 8, t: 22}]}});
+    const S = {site: {stations: {'DESK-2': [EXEC]}, name: 'Law'}, planned: true};
+    const bare = {site: {stations: {}, name: 'Bare'}, planned: true};
+    const m = {sites: [S]};
+    return {
+      met: hrDemandAt(m, EXEC, S, at('DESK-2')),
+      other: hrDemandAt(m, EXEC, S, at('DESK-1')),
+      why: hrWhy(m, EXEC, S, at('DESK-1')),
+      none: hrDemandAt({sites: [bare]}, EXEC, bare, at('DESK-1')),
+      noWeek: hrDemandAt(m, EXEC, S, null),
+      miss: hrDeskMiss([EXEC, 'ba:jobdemand_fulltime'], S, at('DESK-1').w),
+    };
+  });
+  assert.deepEqual(out, {met: 'ok', other: 'warn', why: 'not at this desk', none: 'no', noWeek: 'warn',
+                         miss: ['ba:jobdemand_seatedatofficedesk2']});
+});
