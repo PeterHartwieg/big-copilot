@@ -412,7 +412,7 @@ test('a row that throws while the board is drawn leaves the rest drawn, wired an
     window.drawAlerts = () => { throw new Error('alerts broke'); };
     window.calmCalls = {payroll: 0, staffing: 0, wired: 0};
     const spy = (name, key) => { const f = window[name]; window[name] = (...a) => { calmCalls[key]++; return f(...a); }; };
-    spy('drawPayroll', 'payroll'); spy('drawOptimizeStaffing', 'staffing'); spy('wireAll', 'wired');
+    spy('drawStaff', 'payroll'); spy('drawOptimizeStaffing', 'staffing'); spy('wireAll', 'wired');
   });
   // Another company: every row is drawn, Today's findings first among them.
   await deliver(page, other);

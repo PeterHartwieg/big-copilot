@@ -25638,7 +25638,7 @@ const hrWeekStrip = (slots, gap) => {
   const on = new Set((slots || []).map(s => s.d));
   const tip = HR_DAYS.filter(d => on.has(d)).map(d => {
     const s = slots.filter(x => x.d === d).map(x => `${String(x.f).padStart(2, "0")}–${String(x.t).padStart(2, "0")}`).join(", ");
-    return `${WEEK_FULL[d].slice(0, 3)} ${s}`;
+    return `${ttDay(d).slice(0, 3)} ${s}`;
   }).join(" · ");
   return `<span class="hr-wk${gap ? " gap" : ""}" data-tip="${attr(tip || "no hours: assigned only")}">${HR_DAYS.map(d => `<i class="${on.has(d) ? "on" : ""}"></i>`).join("")}</span>`;
 };
@@ -25680,7 +25680,7 @@ function hrReviewSites(m, req, phase, gone){
     const person = (name, sub, role, lv, wage, slots, hours, cls) => `<div class="hr-dp${cls ? ` ${cls}` : ""}"><span class="who"><b>${name}</b><small${sub.mv ? ` class="mv"` : ""}>${sub.t}</small></span><span class="r">${role}</span>
       <span class="m">${lv}</span><span class="m">${wage}</span>${hrWeekStrip(slots, cls === "gap")}<span class="m">${hours}</span></div>`;
     const people = open ? `<div class="hr-dpeople"><div class="hr-dp hd"><span>Person</span><span>Role</span><span class="m">Skill</span><span class="m">$/h</span><span class="hr-wkd">${
-        HR_DAYS.map(d => `<span>${WEEK_FULL[d][0]}</span>`).join("")}</span><span class="m">Week</span></div>${
+        HR_DAYS.map(d => `<span>${ttDay(d)[0]}</span>`).join("")}</span><span class="m">Week</span></div>${
       hires.map(x => { const c = x.who.c, g = gone.has(c.id); return person(g ? `<span class="hr-struck">${spEsc(c.name)}</span>` : spEsc(c.name), {t: g ? "application expired" : `new hire${x.who.misfit.length ? " · hours break a demand" : ""}`},
         hrRole(x.w.skill), `${Math.round(hrLevel(c, x.w.skill))}%`, hrWage(c.wage), x.w.slots, `${x.w.hours || 0} h`, g ? "gap" : ""); }).join("")}${
       extra.map(o => { const g = gone.has(o.c.id); return person(g ? `<span class="hr-struck">${spEsc(o.c.name)}</span>` : spEsc(o.c.name),
@@ -25750,7 +25750,7 @@ function hrReview(o = {}){
       if(row.scope === "hire" || row.scope === "move") return spEsc(nameOf(row.id));
       const S = row.address && hrLast.m.sites.find(x => x.key === gwKeyOf(row.address));
       const site = S && S.b ? spEsc(shortName(S.b)) : row.address ? gwSiteName(row) : "A site";
-      return row.scope === "shift" && row.d !== undefined ? `${site}: ${WEEK_FULL[row.d] || "a day"}` : site;
+      return row.scope === "shift" && row.d !== undefined ? `${site}: ${ttDay(row.d)}` : site;
     },
     draw: (answer, phase) => {
       const {m, req} = hrLast, gone = goneOf(answer), t = hrTotals(m), c = counts();
