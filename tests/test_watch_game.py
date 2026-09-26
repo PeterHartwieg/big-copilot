@@ -119,12 +119,45 @@ class GameLinkAgainstMock(unittest.TestCase):
         self.mock.busy = True
         self.assertIsNone(self.game.poll())
 
-    def test_schema_mismatch_stops_naming_the_version_needed(self):
+    def test_schema_mismatch_names_the_version_needed_and_passes(self):
+        """GL-7 in #110: an outage the next poll can end, as the contract's step 5 has it."""
         self.mock.schema = 2
-        with self.assertRaises(SystemExit) as caught:
+        with self.assertRaises(ba_dashboard.LinkMismatch) as caught:
             self.game.poll()
+        self.assertIsInstance(caught.exception, ba_dashboard.LinkUnavailable, "the watch loop's outage")
         self.assertIn("version 2", str(caught.exception))
         self.assertIn("version 1", str(caught.exception))
+        self.mock.schema = 1
+        self.assertEqual(self.game.poll(), self.game.path, "a mod put right is read as ever")
+
+    def test_a_one_shot_run_still_stops_on_a_mismatch(self):
+        self.mock.schema = 2
+        with self.assertRaises(ba_dashboard.LinkMismatch):
+            self.game.wait_for_save(seconds=5)
+
+    def test_localhost_and_ipv6_loopback_are_spelt_127_0_0_1(self):
+        """GL-1 in #110: the mod listens on 127.0.0.1 and turns away any other Host."""
+        port = self.server.url.rsplit(":", 1)[1]
+        for given in (f"http://localhost:{port}", f"http://LOCALHOST:{port}/", f"http://[::1]:{port}"):
+            game = ba_dashboard.GameLink(given, self.out)
+            self.assertEqual(game.url, f"http://127.0.0.1:{port}", given)
+        self.assertEqual(game.poll(), game.path, "and it reaches the mod")
+        self.assertEqual(ba_dashboard.GameLink("http://localhost", self.out).url, "http://127.0.0.1")
+        self.assertEqual(ba_dashboard.GameLink("http://10.0.0.5:8322", self.out).url, "http://10.0.0.5:8322",
+                         "another address is left as given")
+
+    def test_a_proxy_in_the_environment_is_never_used(self):
+        """GL-3 in #110: HTTP_PROXY would send even 127.0.0.1 through the proxy."""
+        from unittest import mock
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            dead = f"http://127.0.0.1:{probe.getsockname()[1]}"
+        env = {"HTTP_PROXY": dead, "http_proxy": dead, "NO_PROXY": "", "no_proxy": ""}
+        with mock.patch.dict(os.environ, env):
+            game = ba_dashboard.GameLink(self.server.url, self.out)
+            proxies = [h.proxies for h in game._opener.handlers if isinstance(h, ba_dashboard.urllib.request.ProxyHandler)]
+            self.assertEqual([p for p in proxies if p], [], "the environment's proxy is not in the opener")
+            self.assertEqual(game.poll(), game.path)
 
     def test_the_board_only_builds_from_bytes_its_own_link_downloaded(self):
         """Board._refresh in link mode: a stale file, the first stamp, a rename."""
@@ -338,6 +371,72 @@ class WatchSurvivesAFailingFirstBuild(unittest.TestCase):
         page = ba_dashboard.BoardHandler.board.html.decode("utf-8")
         self.assertIn("const LIVE = true", page)
         self.assertIn("let D = null", page)
+
+    def test_the_poll_loop_says_a_mismatch_once_and_keeps_polling(self):
+        """GL-7 in #110: said once under the board it keeps, over when the version returns."""
+        from unittest import mock
+
+        mismatch = ba_dashboard.LinkMismatch("the Big Copilot Link mod speaks schema version 2")
+        answers = [mismatch, mismatch, mismatch, False, True]
+
+        class Board:
+            error = None
+            day = 40
+            locale_source, names, link = None, mock.Mock(locale={}), mock.Mock(url="http://127.0.0.1:8322")
+
+            def __init__(self, *args, **kwargs):
+                self.html = b"<html>"
+
+            def refresh(self, settle=True):
+                answer = answers.pop(0) if answers else False
+                if isinstance(answer, Exception):
+                    raise answer
+                return answer
+
+        class Server:
+            def __init__(self, *args):
+                pass
+
+            def serve_forever(self):
+                raise KeyboardInterrupt
+
+            def shutdown(self):
+                pass
+
+        started = []
+
+        class Thread:
+            def __init__(self, target, daemon):
+                self.target = target
+
+            def start(self):
+                started.append(self.target)
+
+        class Stop(Exception):
+            pass
+
+        sleeps = []
+
+        def sleep(seconds):
+            sleeps.append(seconds)
+            if len(sleeps) >= 6:
+                raise Stop
+
+        with mock.patch.object(ba_dashboard, "Board", Board), \
+                mock.patch.object(ba_dashboard, "yield_to_the_game", lambda: False), \
+                mock.patch.object(ba_dashboard.http.server, "ThreadingHTTPServer", Server), \
+                mock.patch.object(ba_dashboard.threading, "Thread", Thread), \
+                mock.patch("sys.stdout"), mock.patch("sys.stderr"):
+            ba_dashboard.watch(None, "out.html", 0, 30, open_browser=False, link=Board.link)
+        said = io.StringIO()
+        with mock.patch.object(ba_dashboard.time, "sleep", sleep), contextlib.redirect_stdout(said):
+            with self.assertRaises(Stop):
+                started[0]()
+        self.assertEqual(answers, [], "every answer after the mismatch was asked for")
+        lines = said.getvalue().splitlines()
+        self.assertEqual(sum("schema version 2" in line for line in lines), 1, lines)
+        self.assertEqual(sum("the game link is back" in line for line in lines), 1, lines)
+        self.assertTrue(any("rebuilt from the game (day 40)" in line for line in lines), lines)
 
 
 if __name__ == "__main__":
