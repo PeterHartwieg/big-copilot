@@ -237,6 +237,13 @@ Where the build differs from or adds to 2.1-2.4; the board worker reads these to
 - **Health insurance** is a person's own HR plan, and a hire joins none: `company` says
   `"plan"` where some HR manager's plan offers the tier, and the page warns "add them to
   an HR plan that offers it".
+- **Where to find them** (under the roles table): for each role places stay open in, how
+  many more are needed, how many candidates there are (or that the filters leave them all
+  out), and where people come from: a Headhunter at the headquarters recruiting the role,
+  or the game's Recruitment Agency; a headhunter already recruiting it is said
+  (`hiring.recruiting`, from `headhunterPlans`).
+- **Styled option lists**: a Staff select opens the page's own list (`#hsSelPop`, where the
+  pointer is a mouse) instead of the system's; the select stays the control.
 
 ### 2.5 Tests (extraction)
 

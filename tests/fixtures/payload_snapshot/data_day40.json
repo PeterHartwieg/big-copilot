@@ -1962,6 +1962,7 @@
    "wages": 192.0
   }
  ],
+ "candidates": [],
  "cashFlow": null,
  "chains": [
   {
@@ -2374,6 +2375,73 @@
  "factoryStaffing": {
   "cap": [
    {
+    "addPeople": {
+     "assign": [],
+     "hire": [
+      {
+       "people": 6,
+       "role": "Factory Worker",
+       "skill": "ba:skill_factoryworker"
+      }
+     ],
+     "hoursUncovered": 288,
+     "people": 6
+    },
+    "current": {
+     "fragments": 0,
+     "list": [
+      {
+       "d": 0,
+       "f": 8,
+       "p": 0,
+       "s": 0,
+       "t": 20
+      },
+      {
+       "d": 1,
+       "f": 8,
+       "p": 0,
+       "s": 0,
+       "t": 20
+      },
+      {
+       "d": 2,
+       "f": 8,
+       "p": 0,
+       "s": 0,
+       "t": 20
+      },
+      {
+       "d": 3,
+       "f": 8,
+       "p": 0,
+       "s": 0,
+       "t": 20
+      },
+      {
+       "d": 4,
+       "f": 8,
+       "p": 0,
+       "s": 0,
+       "t": 20
+      },
+      {
+       "d": 5,
+       "f": 8,
+       "p": 0,
+       "s": 0,
+       "t": 20
+      },
+      {
+       "d": 6,
+       "f": 8,
+       "p": 0,
+       "s": 0,
+       "t": 20
+      }
+     ],
+     "shifts": 7
+    },
     "delta": {
      "perDay": 1152.0,
      "workers": 6
@@ -2408,12 +2476,317 @@
      }
     ],
     "name": "HART. Brewery",
+    "people": [
+     {
+      "id": "EMPeli",
+      "name": "Eli Stone"
+     }
+    ],
     "s": 3,
+    "shifts": [
+     {
+      "d": 0,
+      "f": 0,
+      "p": 0,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 0,
+      "f": 0,
+      "p": null,
+      "s": 1,
+      "t": 12
+     },
+     {
+      "d": 0,
+      "f": 12,
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 0,
+      "f": 12,
+      "p": null,
+      "s": 1,
+      "t": 24
+     },
+     {
+      "d": 1,
+      "f": 0,
+      "p": 0,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 1,
+      "f": 0,
+      "p": null,
+      "s": 1,
+      "t": 12
+     },
+     {
+      "d": 1,
+      "f": 12,
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 1,
+      "f": 12,
+      "p": null,
+      "s": 1,
+      "t": 24
+     },
+     {
+      "d": 2,
+      "f": 0,
+      "p": 0,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 2,
+      "f": 0,
+      "p": null,
+      "s": 1,
+      "t": 12
+     },
+     {
+      "d": 2,
+      "f": 12,
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 2,
+      "f": 12,
+      "p": null,
+      "s": 1,
+      "t": 24
+     },
+     {
+      "d": 3,
+      "f": 0,
+      "p": 0,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 3,
+      "f": 0,
+      "p": null,
+      "s": 1,
+      "t": 12
+     },
+     {
+      "d": 3,
+      "f": 12,
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 3,
+      "f": 12,
+      "p": null,
+      "s": 1,
+      "t": 24
+     },
+     {
+      "d": 4,
+      "f": 0,
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 4,
+      "f": 0,
+      "p": null,
+      "s": 1,
+      "t": 12
+     },
+     {
+      "d": 4,
+      "f": 12,
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 4,
+      "f": 12,
+      "p": null,
+      "s": 1,
+      "t": 24
+     },
+     {
+      "d": 5,
+      "f": 0,
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 5,
+      "f": 0,
+      "p": null,
+      "s": 1,
+      "t": 12
+     },
+     {
+      "d": 5,
+      "f": 12,
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 5,
+      "f": 12,
+      "p": null,
+      "s": 1,
+      "t": 24
+     },
+     {
+      "d": 6,
+      "f": 0,
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 6,
+      "f": 0,
+      "p": null,
+      "s": 1,
+      "t": 12
+     },
+     {
+      "d": 6,
+      "f": 12,
+      "p": null,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 6,
+      "f": 12,
+      "p": null,
+      "s": 1,
+      "t": 24
+     }
+    ],
+    "stations": [
+     {
+      "i18n": {
+       "name": [
+        "sp.py.factory.station",
+        {
+         "item": "Beer",
+         "item_name": "Beer",
+         "slot": 1
+        }
+       ]
+      },
+      "id": "MACHINEone",
+      "name": "Beer, position 1",
+      "rate": 1,
+      "skill": "ba:skill_factoryworker"
+     },
+     {
+      "i18n": {
+       "name": [
+        "sp.py.factory.station",
+        {
+         "item": "Beer",
+         "item_name": "Beer",
+         "slot": 2
+        }
+       ]
+      },
+      "id": "MACHINEtwo",
+      "name": "Beer, position 2",
+      "rate": 1,
+      "skill": "ba:skill_factoryworker"
+     }
+    ],
     "wageDay": 192.0
    }
   ],
   "dem": [
    {
+    "addPeople": {
+     "assign": [],
+     "hire": [
+      {
+       "people": 1,
+       "role": "Factory Worker",
+       "skill": "ba:skill_factoryworker"
+      }
+     ],
+     "hoursUncovered": 49,
+     "people": 1
+    },
+    "current": {
+     "fragments": 0,
+     "list": [
+      {
+       "d": 0,
+       "f": 8,
+       "p": 0,
+       "s": 0,
+       "t": 20
+      },
+      {
+       "d": 1,
+       "f": 8,
+       "p": 0,
+       "s": 0,
+       "t": 20
+      },
+      {
+       "d": 2,
+       "f": 8,
+       "p": 0,
+       "s": 0,
+       "t": 20
+      },
+      {
+       "d": 3,
+       "f": 8,
+       "p": 0,
+       "s": 0,
+       "t": 20
+      },
+      {
+       "d": 4,
+       "f": 8,
+       "p": 0,
+       "s": 0,
+       "t": 20
+      },
+      {
+       "d": 5,
+       "f": 8,
+       "p": 0,
+       "s": 0,
+       "t": 20
+      },
+      {
+       "d": 6,
+       "f": 8,
+       "p": 0,
+       "s": 0,
+       "t": 20
+      }
+     ],
+     "shifts": 7
+    },
     "delta": {
      "perDay": 192.0,
      "workers": 1
@@ -2444,7 +2817,147 @@
      }
     ],
     "name": "HART. Brewery",
+    "people": [
+     {
+      "id": "EMPeli",
+      "name": "Eli Stone"
+     }
+    ],
     "s": 3,
+    "shifts": [
+     {
+      "d": 0,
+      "f": 6,
+      "p": 0,
+      "s": 0,
+      "t": 13
+     },
+     {
+      "d": 0,
+      "f": 6,
+      "p": null,
+      "s": 1,
+      "t": 13
+     },
+     {
+      "d": 1,
+      "f": 6,
+      "p": 0,
+      "s": 0,
+      "t": 13
+     },
+     {
+      "d": 1,
+      "f": 6,
+      "p": null,
+      "s": 1,
+      "t": 13
+     },
+     {
+      "d": 2,
+      "f": 6,
+      "p": 0,
+      "s": 0,
+      "t": 13
+     },
+     {
+      "d": 2,
+      "f": 6,
+      "p": null,
+      "s": 1,
+      "t": 13
+     },
+     {
+      "d": 3,
+      "f": 6,
+      "p": 0,
+      "s": 0,
+      "t": 13
+     },
+     {
+      "d": 3,
+      "f": 6,
+      "p": null,
+      "s": 1,
+      "t": 13
+     },
+     {
+      "d": 4,
+      "f": 6,
+      "p": 0,
+      "s": 0,
+      "t": 13
+     },
+     {
+      "d": 4,
+      "f": 6,
+      "p": null,
+      "s": 1,
+      "t": 13
+     },
+     {
+      "d": 5,
+      "f": 6,
+      "p": 0,
+      "s": 0,
+      "t": 13
+     },
+     {
+      "d": 5,
+      "f": 6,
+      "p": null,
+      "s": 1,
+      "t": 13
+     },
+     {
+      "d": 6,
+      "f": 6,
+      "p": 0,
+      "s": 0,
+      "t": 13
+     },
+     {
+      "d": 6,
+      "f": 6,
+      "p": null,
+      "s": 1,
+      "t": 13
+     }
+    ],
+    "stations": [
+     {
+      "i18n": {
+       "name": [
+        "sp.py.factory.station",
+        {
+         "item": "Beer",
+         "item_name": "Beer",
+         "slot": 1
+        }
+       ]
+      },
+      "id": "MACHINEone",
+      "name": "Beer, position 1",
+      "rate": 1,
+      "skill": "ba:skill_factoryworker"
+     },
+     {
+      "i18n": {
+       "name": [
+        "sp.py.factory.station",
+        {
+         "item": "Beer",
+         "item_name": "Beer",
+         "slot": 2
+        }
+       ]
+      },
+      "id": "MACHINEtwo",
+      "name": "Beer, position 2",
+      "rate": 1,
+      "skill": "ba:skill_factoryworker"
+     }
+    ],
     "wageDay": 192.0
    }
   ]
@@ -2463,6 +2976,859 @@
   "taxesPaid": 5200.0,
   "typesRun": 2,
   "typesTotal": 2
+ },
+ "hiring": {
+  "bench": [],
+  "company": {
+   "ba:jobdemand_bronzehealthinsurance": false,
+   "ba:jobdemand_goldhealthinsurance": false,
+   "ba:jobdemand_peacefulworkenvironment": true,
+   "ba:jobdemand_silverhealthinsurance": false
+  },
+  "demandKinds": {
+   "ba:jobdemand_bronzehealthinsurance": "company",
+   "ba:jobdemand_cleanworkplace": "site",
+   "ba:jobdemand_coffeemachine": "site",
+   "ba:jobdemand_fivedaysweek": "schedule",
+   "ba:jobdemand_fourdaysweek": "schedule",
+   "ba:jobdemand_freeweekends": "schedule",
+   "ba:jobdemand_fulltime": "schedule",
+   "ba:jobdemand_goldhealthinsurance": "company",
+   "ba:jobdemand_hascalculator": "station",
+   "ba:jobdemand_hascomputermonitor": "station",
+   "ba:jobdemand_hasdeskcalendar": "station",
+   "ba:jobdemand_hasdeskglobe": "station",
+   "ba:jobdemand_hasgraphictablet": "station",
+   "ba:jobdemand_hasgraphictabletwithscreen": "station",
+   "ba:jobdemand_hasmousepad": "station",
+   "ba:jobdemand_hasofficephone": "station",
+   "ba:jobdemand_hasphone": "station",
+   "ba:jobdemand_hasprinter": "site",
+   "ba:jobdemand_largemeetingtable": "site",
+   "ba:jobdemand_noafternoons": "schedule",
+   "ba:jobdemand_nocleaning": "schedule",
+   "ba:jobdemand_noevenings": "schedule",
+   "ba:jobdemand_nomornings": "schedule",
+   "ba:jobdemand_nonights": "schedule",
+   "ba:jobdemand_parttime": "schedule",
+   "ba:jobdemand_peacefulworkenvironment": "company",
+   "ba:jobdemand_seatedatmultipurposechair": "station",
+   "ba:jobdemand_seatedatofficechair": "station",
+   "ba:jobdemand_seatedatofficechair2": "station",
+   "ba:jobdemand_seatedatofficedesk1": "station",
+   "ba:jobdemand_seatedatofficedesk2": "station",
+   "ba:jobdemand_silverhealthinsurance": "company",
+   "ba:jobdemand_sofa": "site",
+   "ba:jobdemand_standardfridge": "site",
+   "ba:jobdemand_watercooler": "site"
+  },
+  "people": {},
+  "recruiting": {},
+  "sites": [
+   {
+    "accepts": [
+     "ba:skill_customerservice",
+     "ba:skill_securityguard",
+     "ba:skill_cleaning"
+    ],
+    "address": {
+     "number": 5,
+     "street": "ba:street_eighthstreet"
+    },
+    "facts": {
+     "ba:jobdemand_cleanworkplace": true,
+     "ba:jobdemand_coffeemachine": false,
+     "ba:jobdemand_hasprinter": false,
+     "ba:jobdemand_largemeetingtable": false,
+     "ba:jobdemand_sofa": false,
+     "ba:jobdemand_standardfridge": false,
+     "ba:jobdemand_watercooler": false
+    },
+    "key": "ba:street_eighthstreet#5",
+    "kind": "shop",
+    "name": "HART. Spirits",
+    "new": false,
+    "planned": true,
+    "plans": {
+     "demand": {
+      "bench": [],
+      "fewer": [
+       {
+        "hours": 49.0,
+        "id": "EMPcy",
+        "name": "Cy Moss",
+        "now": 84
+       },
+       {
+        "hours": 49.0,
+        "id": "EMPana",
+        "name": "Ana Silva",
+        "now": 56
+       },
+       {
+        "hours": 49.0,
+        "id": "EMPben",
+        "name": "Ben Ode",
+        "now": 56
+       }
+      ],
+      "hireWeeks": [
+       {
+        "days": 4,
+        "hours": 49,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 3,
+          "f": 15,
+          "shift": 14,
+          "station": "CLEANliquor",
+          "t": 22
+         },
+         {
+          "d": 4,
+          "f": 8,
+          "shift": 16,
+          "station": "CLEANliquor",
+          "t": 15
+         },
+         {
+          "d": 4,
+          "f": 15,
+          "shift": 18,
+          "station": "CLEANliquor",
+          "t": 22
+         },
+         {
+          "d": 5,
+          "f": 8,
+          "shift": 20,
+          "station": "CLEANliquor",
+          "t": 15
+         },
+         {
+          "d": 5,
+          "f": 15,
+          "shift": 22,
+          "station": "CLEANliquor",
+          "t": 22
+         },
+         {
+          "d": 6,
+          "f": 8,
+          "shift": 24,
+          "station": "CLEANliquor",
+          "t": 15
+         },
+         {
+          "d": 6,
+          "f": 15,
+          "shift": 26,
+          "station": "CLEANliquor",
+          "t": 22
+         }
+        ]
+       }
+      ],
+      "spare": [],
+      "spareSkills": {}
+     },
+     "full": {
+      "bench": [],
+      "fewer": [
+       {
+        "hours": 48.0,
+        "id": "EMPcy",
+        "name": "Cy Moss",
+        "now": 84
+       },
+       {
+        "hours": 48.0,
+        "id": "EMPana",
+        "name": "Ana Silva",
+        "now": 56
+       },
+       {
+        "hours": 48.0,
+        "id": "EMPben",
+        "name": "Ben Ode",
+        "now": 56
+       }
+      ],
+      "hireWeeks": [
+       {
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 0,
+          "f": 12,
+          "shift": 2,
+          "station": "CLEANliquor",
+          "t": 24
+         },
+         {
+          "d": 1,
+          "f": 12,
+          "shift": 6,
+          "station": "CLEANliquor",
+          "t": 24
+         },
+         {
+          "d": 2,
+          "f": 12,
+          "shift": 10,
+          "station": "CLEANliquor",
+          "t": 24
+         },
+         {
+          "d": 3,
+          "f": 12,
+          "shift": 14,
+          "station": "CLEANliquor",
+          "t": 24
+         }
+        ]
+       },
+       {
+        "days": 3,
+        "hours": 36,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 4,
+          "f": 0,
+          "shift": 16,
+          "station": "CLEANliquor",
+          "t": 12
+         },
+         {
+          "d": 5,
+          "f": 0,
+          "shift": 20,
+          "station": "CLEANliquor",
+          "t": 12
+         },
+         {
+          "d": 6,
+          "f": 0,
+          "shift": 24,
+          "station": "CLEANliquor",
+          "t": 12
+         }
+        ]
+       },
+       {
+        "days": 3,
+        "hours": 36,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 4,
+          "f": 12,
+          "shift": 18,
+          "station": "CLEANliquor",
+          "t": 24
+         },
+         {
+          "d": 5,
+          "f": 12,
+          "shift": 22,
+          "station": "CLEANliquor",
+          "t": 24
+         },
+         {
+          "d": 6,
+          "f": 12,
+          "shift": 26,
+          "station": "CLEANliquor",
+          "t": 24
+         }
+        ]
+       },
+       {
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_customerservice",
+        "slots": [
+         {
+          "d": 0,
+          "f": 12,
+          "shift": 3,
+          "station": "REGliquor",
+          "t": 24
+         },
+         {
+          "d": 3,
+          "f": 12,
+          "shift": 15,
+          "station": "REGliquor",
+          "t": 24
+         },
+         {
+          "d": 4,
+          "f": 12,
+          "shift": 19,
+          "station": "REGliquor",
+          "t": 24
+         },
+         {
+          "d": 5,
+          "f": 0,
+          "shift": 21,
+          "station": "REGliquor",
+          "t": 12
+         }
+        ]
+       },
+       {
+        "days": 2,
+        "hours": 24,
+        "skill": "ba:skill_customerservice",
+        "slots": [
+         {
+          "d": 5,
+          "f": 12,
+          "shift": 23,
+          "station": "REGliquor",
+          "t": 24
+         },
+         {
+          "d": 6,
+          "f": 12,
+          "shift": 27,
+          "station": "REGliquor",
+          "t": 24
+         }
+        ]
+       }
+      ],
+      "spare": [],
+      "spareSkills": {}
+     }
+    },
+    "stations": {}
+   },
+   {
+    "accepts": [
+     "ba:skill_customerservice",
+     "ba:skill_securityguard",
+     "ba:skill_cleaning"
+    ],
+    "address": {
+     "number": 19,
+     "street": "ba:street_broadwaystreet"
+    },
+    "facts": {
+     "ba:jobdemand_cleanworkplace": false,
+     "ba:jobdemand_coffeemachine": false,
+     "ba:jobdemand_hasprinter": false,
+     "ba:jobdemand_largemeetingtable": false,
+     "ba:jobdemand_sofa": false,
+     "ba:jobdemand_standardfridge": false,
+     "ba:jobdemand_watercooler": false
+    },
+    "key": "ba:street_broadwaystreet#19",
+    "kind": "shop",
+    "name": "HART. Gifts",
+    "new": false,
+    "planned": true,
+    "plans": {
+     "demand": {
+      "bench": [],
+      "fewer": [
+       {
+        "hours": 50.0,
+        "id": "EMPdee",
+        "name": "Dee Park",
+        "now": 70
+       }
+      ],
+      "hireWeeks": [
+       {
+        "days": 2,
+        "hours": 20,
+        "skill": "ba:skill_customerservice",
+        "slots": [
+         {
+          "d": 5,
+          "f": 9,
+          "shift": 5,
+          "station": "REGgifts",
+          "t": 19
+         },
+         {
+          "d": 6,
+          "f": 9,
+          "shift": 6,
+          "station": "REGgifts",
+          "t": 19
+         }
+        ]
+       }
+      ],
+      "spare": [],
+      "spareSkills": {}
+     },
+     "full": {
+      "bench": [],
+      "fewer": [
+       {
+        "hours": 48.0,
+        "id": "EMPdee",
+        "name": "Dee Park",
+        "now": 70
+       }
+      ],
+      "hireWeeks": [
+       {
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_customerservice",
+        "slots": [
+         {
+          "d": 0,
+          "f": 12,
+          "shift": 1,
+          "station": "REGgifts",
+          "t": 24
+         },
+         {
+          "d": 1,
+          "f": 12,
+          "shift": 3,
+          "station": "REGgifts",
+          "t": 24
+         },
+         {
+          "d": 2,
+          "f": 12,
+          "shift": 5,
+          "station": "REGgifts",
+          "t": 24
+         },
+         {
+          "d": 3,
+          "f": 12,
+          "shift": 7,
+          "station": "REGgifts",
+          "t": 24
+         }
+        ]
+       },
+       {
+        "days": 3,
+        "hours": 36,
+        "skill": "ba:skill_customerservice",
+        "slots": [
+         {
+          "d": 4,
+          "f": 0,
+          "shift": 8,
+          "station": "REGgifts",
+          "t": 12
+         },
+         {
+          "d": 5,
+          "f": 0,
+          "shift": 10,
+          "station": "REGgifts",
+          "t": 12
+         },
+         {
+          "d": 6,
+          "f": 0,
+          "shift": 12,
+          "station": "REGgifts",
+          "t": 12
+         }
+        ]
+       },
+       {
+        "days": 3,
+        "hours": 36,
+        "skill": "ba:skill_customerservice",
+        "slots": [
+         {
+          "d": 4,
+          "f": 12,
+          "shift": 9,
+          "station": "REGgifts",
+          "t": 24
+         },
+         {
+          "d": 5,
+          "f": 12,
+          "shift": 11,
+          "station": "REGgifts",
+          "t": 24
+         },
+         {
+          "d": 6,
+          "f": 12,
+          "shift": 13,
+          "station": "REGgifts",
+          "t": 24
+         }
+        ]
+       }
+      ],
+      "spare": [],
+      "spareSkills": {}
+     }
+    },
+    "stations": {}
+   },
+   {
+    "accepts": [
+     "ba:skill_deliverydriver"
+    ],
+    "address": {
+     "number": 4,
+     "street": "ba:street_eighthavenue"
+    },
+    "facts": {
+     "ba:jobdemand_cleanworkplace": true,
+     "ba:jobdemand_coffeemachine": false,
+     "ba:jobdemand_hasprinter": false,
+     "ba:jobdemand_largemeetingtable": false,
+     "ba:jobdemand_sofa": false,
+     "ba:jobdemand_standardfridge": false,
+     "ba:jobdemand_watercooler": false
+    },
+    "key": "ba:street_eighthavenue#4",
+    "kind": "warehouse",
+    "name": "HART. Hub",
+    "new": true,
+    "planned": false,
+    "plans": {},
+    "stations": {}
+   },
+   {
+    "accepts": [
+     "ba:skill_deliverydriver",
+     "ba:skill_factoryworker"
+    ],
+    "address": {
+     "number": 8,
+     "street": "ba:street_eighthavenue"
+    },
+    "facts": {
+     "ba:jobdemand_cleanworkplace": true,
+     "ba:jobdemand_coffeemachine": false,
+     "ba:jobdemand_hasprinter": false,
+     "ba:jobdemand_largemeetingtable": false,
+     "ba:jobdemand_sofa": false,
+     "ba:jobdemand_standardfridge": false,
+     "ba:jobdemand_watercooler": false
+    },
+    "key": "ba:street_eighthavenue#8",
+    "kind": "factory",
+    "name": "HART. Brewery",
+    "new": false,
+    "planned": true,
+    "plans": {
+     "cap": {
+      "bench": [],
+      "fewer": [
+       {
+        "hours": 48.0,
+        "id": "EMPeli",
+        "name": "Eli Stone",
+        "now": 84
+       }
+      ],
+      "hireWeeks": [
+       {
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_factoryworker",
+        "slots": [
+         {
+          "d": 0,
+          "f": 0,
+          "shift": 1,
+          "station": "MACHINEtwo",
+          "t": 12
+         },
+         {
+          "d": 2,
+          "f": 0,
+          "shift": 9,
+          "station": "MACHINEtwo",
+          "t": 12
+         },
+         {
+          "d": 4,
+          "f": 0,
+          "shift": 16,
+          "station": "MACHINEone",
+          "t": 12
+         },
+         {
+          "d": 5,
+          "f": 12,
+          "shift": 22,
+          "station": "MACHINEone",
+          "t": 24
+         }
+        ]
+       },
+       {
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_factoryworker",
+        "slots": [
+         {
+          "d": 0,
+          "f": 12,
+          "shift": 2,
+          "station": "MACHINEone",
+          "t": 24
+         },
+         {
+          "d": 2,
+          "f": 12,
+          "shift": 10,
+          "station": "MACHINEone",
+          "t": 24
+         },
+         {
+          "d": 4,
+          "f": 0,
+          "shift": 17,
+          "station": "MACHINEtwo",
+          "t": 12
+         },
+         {
+          "d": 5,
+          "f": 12,
+          "shift": 23,
+          "station": "MACHINEtwo",
+          "t": 24
+         }
+        ]
+       },
+       {
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_factoryworker",
+        "slots": [
+         {
+          "d": 0,
+          "f": 12,
+          "shift": 3,
+          "station": "MACHINEtwo",
+          "t": 24
+         },
+         {
+          "d": 2,
+          "f": 12,
+          "shift": 11,
+          "station": "MACHINEtwo",
+          "t": 24
+         },
+         {
+          "d": 4,
+          "f": 12,
+          "shift": 18,
+          "station": "MACHINEone",
+          "t": 24
+         },
+         {
+          "d": 6,
+          "f": 0,
+          "shift": 24,
+          "station": "MACHINEone",
+          "t": 12
+         }
+        ]
+       },
+       {
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_factoryworker",
+        "slots": [
+         {
+          "d": 1,
+          "f": 0,
+          "shift": 5,
+          "station": "MACHINEtwo",
+          "t": 12
+         },
+         {
+          "d": 3,
+          "f": 0,
+          "shift": 13,
+          "station": "MACHINEtwo",
+          "t": 12
+         },
+         {
+          "d": 4,
+          "f": 12,
+          "shift": 19,
+          "station": "MACHINEtwo",
+          "t": 24
+         },
+         {
+          "d": 6,
+          "f": 0,
+          "shift": 25,
+          "station": "MACHINEtwo",
+          "t": 12
+         }
+        ]
+       },
+       {
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_factoryworker",
+        "slots": [
+         {
+          "d": 1,
+          "f": 12,
+          "shift": 6,
+          "station": "MACHINEone",
+          "t": 24
+         },
+         {
+          "d": 3,
+          "f": 12,
+          "shift": 14,
+          "station": "MACHINEone",
+          "t": 24
+         },
+         {
+          "d": 5,
+          "f": 0,
+          "shift": 20,
+          "station": "MACHINEone",
+          "t": 12
+         },
+         {
+          "d": 6,
+          "f": 12,
+          "shift": 26,
+          "station": "MACHINEone",
+          "t": 24
+         }
+        ]
+       },
+       {
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_factoryworker",
+        "slots": [
+         {
+          "d": 1,
+          "f": 12,
+          "shift": 7,
+          "station": "MACHINEtwo",
+          "t": 24
+         },
+         {
+          "d": 3,
+          "f": 12,
+          "shift": 15,
+          "station": "MACHINEtwo",
+          "t": 24
+         },
+         {
+          "d": 5,
+          "f": 0,
+          "shift": 21,
+          "station": "MACHINEtwo",
+          "t": 12
+         },
+         {
+          "d": 6,
+          "f": 12,
+          "shift": 27,
+          "station": "MACHINEtwo",
+          "t": 24
+         }
+        ]
+       }
+      ],
+      "spare": [],
+      "spareSkills": {}
+     },
+     "dem": {
+      "bench": [],
+      "fewer": [
+       {
+        "hours": 49.0,
+        "id": "EMPeli",
+        "name": "Eli Stone",
+        "now": 84
+       }
+      ],
+      "hireWeeks": [
+       {
+        "days": 7,
+        "hours": 49,
+        "skill": "ba:skill_factoryworker",
+        "slots": [
+         {
+          "d": 0,
+          "f": 6,
+          "shift": 1,
+          "station": "MACHINEtwo",
+          "t": 13
+         },
+         {
+          "d": 1,
+          "f": 6,
+          "shift": 3,
+          "station": "MACHINEtwo",
+          "t": 13
+         },
+         {
+          "d": 2,
+          "f": 6,
+          "shift": 5,
+          "station": "MACHINEtwo",
+          "t": 13
+         },
+         {
+          "d": 3,
+          "f": 6,
+          "shift": 7,
+          "station": "MACHINEtwo",
+          "t": 13
+         },
+         {
+          "d": 4,
+          "f": 6,
+          "shift": 9,
+          "station": "MACHINEtwo",
+          "t": 13
+         },
+         {
+          "d": 5,
+          "f": 6,
+          "shift": 11,
+          "station": "MACHINEtwo",
+          "t": 13
+         },
+         {
+          "d": 6,
+          "f": 6,
+          "shift": 13,
+          "station": "MACHINEtwo",
+          "t": 13
+         }
+        ]
+       }
+      ],
+      "spare": [],
+      "spareSkills": {}
+     }
+    },
+    "stations": {}
+   }
+  ]
  },
  "homes": [
   {
@@ -6010,6 +7376,7 @@
   "ba:skill_customerservice": "Customer Service",
   "ba:skill_factoryworker": "Factory Worker"
  },
+ "officeStaffing": [],
  "ownedBuildings": [
   {
    "address": "5 Eighth Street",

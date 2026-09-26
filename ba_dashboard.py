@@ -9964,7 +9964,23 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
             if JOB_DEMANDS[slug][0] in DEMAND_SCOPE
         },
         "company": _company_facts(save),
+        "recruiting": _recruiting(save),
     }
+
+
+def _recruiting(save: Save) -> dict:
+    """How many of the company's headhunters are recruiting each skill now.
+
+    {skill: headhunters}, from headhunterPlans: a plan with somebody assigned
+    and isRecruiting set, by its skillRecruiting. The Staff page says where to
+    find people for a role its candidates cannot fill (Where to find them).
+    """
+    out = collections.Counter()
+    for plan in save.items(save.root.get("headhunterPlans")):
+        if isinstance(plan, dict) and plan.get("assignedEmployeeId") and plan.get("isRecruiting") \
+                and isinstance(plan.get("skillRecruiting"), str):
+            out[plan["skillRecruiting"]] += 1
+    return {skill: out[skill] for skill in sorted(out)}
 
 
 def _lower_first(text: str) -> str:
@@ -15892,6 +15908,17 @@ body:has(#changelogDialog[open]){overflow:hidden}
 .hs-opt small{font:500 11.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
 #hsDemPop .pf{display:flex;justify-content:space-between;align-items:center;padding:8px 8px 2px;border-top:1px solid var(--rule-soft);margin-top:6px}
 #hsDemPop .pf button{border:0;background:none;padding:0;font:inherit;font-size:12.5px;color:var(--ink-2);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+/* A Staff select's options, in place of the system's list: hangs off <body>
+   (or the sheet or dialog), placed against its field, like the demand list. */
+#hsSelPop{position:fixed;z-index:61;min-width:160px;max-width:calc(100vw - 24px);max-height:min(360px,calc(100vh - 24px));overflow:auto;padding:6px;border-radius:12px;background:var(--surface);border:1px solid var(--rule);box-shadow:0 24px 50px -20px #000c;box-sizing:border-box;outline:none}
+#hsSelPop[hidden]{display:none}
+.hs-selopt{display:grid;grid-template-columns:minmax(0,1fr) 14px;gap:10px;align-items:center;padding:8px 10px;border-radius:7px;font:500 13px/1.25 Archivo,sans-serif;color:var(--ink);cursor:pointer;white-space:nowrap}
+.hs-selopt:hover,.hs-selopt.on{background:var(--raised)}
+.hs-selopt[aria-selected="true"]{color:var(--accent);font-weight:600}
+.hs-selopt[aria-disabled="true"]{color:var(--ink-3);cursor:default}
+.hs-selopt svg{width:14px;height:14px;opacity:0}
+.hs-selopt[aria-selected="true"] svg{opacity:1}
+.hs-selopt.ph{color:var(--ink-3)}
 .hs-cb{appearance:none;-webkit-appearance:none;margin:0;width:18px;height:18px;border-radius:5px;border:1.5px solid var(--ink-3);background:transparent;display:inline-grid;place-items:center;cursor:pointer;vertical-align:middle;flex:none;transition:background .15s,border-color .15s}
 .hs-cb::after{content:"";width:9px;height:5px;border-left:2px solid var(--on-accent);border-bottom:2px solid var(--on-accent);transform:rotate(-45deg) scale(0);margin-top:-3px;transition:transform .2s cubic-bezier(.34,1.56,.64,1)}
 .hs-cb:checked{background:var(--accent);border-color:var(--accent)}
@@ -15924,6 +15951,14 @@ body:has(#changelogDialog[open]){overflow:hidden}
 .hs-re b{color:var(--ink);font-weight:600}
 .hs-re label{margin-left:auto;display:inline-flex;align-items:center;gap:8px;white-space:nowrap;color:var(--ink);font-weight:500;cursor:pointer}
 .hs-facts2{margin:14px 0 0;font-size:13px;color:var(--ink-3)}
+/* Where to find them: one line per role still short, under the roles table */
+.hs-find{margin:14px 0 0;padding:12px 14px;border:1px solid var(--rule-soft);border-radius:10px}
+.hs-find h4{margin:0 0 8px;font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.hs-find ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.hs-find li{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;font-size:13px;color:var(--ink-2);line-height:1.4}
+.hs-find li b{color:var(--ink);font-weight:600}
+.hs-find li .to{display:inline-flex;align-items:center;gap:4px;color:var(--ink-3)}
+.hs-find li .to svg{width:12px;height:12px}
 .hs-facts2 b{font:500 13.5px/1 "IBM Plex Mono",monospace;color:var(--ink)}
 .hs-facts2 b.warn{color:var(--warn)}
 /* quick hire */
@@ -25347,7 +25382,28 @@ function hrOpenHtml(m){
     <div class="hs-scroll"><table class="hs-t hs-roles"><thead><tr><th class="l">Role</th><th class="opt">Open</th><th class="opt">Own staff</th><th>New hires</th><th>Stays open</th><th class="opt">Wages/day</th><th><span class="gw-sr">Change picks</span></th></tr></thead>
     <tbody>${m.roles.map(r => hrRoleRow(m, r, lines(r.skill))).join("")}${stray ? `<tr class="hs-subrow"><td class="l" colspan="7">${stray}</td></tr>` : ""}</tbody>
     <tfoot><tr><td class="l">Total</td><td class="opt">${hrNum(t.needed)}</td><td class="opt">${hrNum(own)}</td><td data-l="New hires">${hrNum(t.hire)}</td><td class="${t.short ? "warn" : ""}" data-l="Stays open">${hrNum(t.short)}</td><td class="opt">+${fmt(t.bill)}</td><td></td></tr></tfoot></table></div>
-    ${facts}`;
+    ${hrFindHtml(m)}${facts}`;
+}
+/* Where to find them: for each role places stay open in, how many and where
+   the people come from, for an early company whose headhunters recruit few
+   roles or none. A headhunter already recruiting the role is said; otherwise
+   a Headhunter at the headquarters, or the game's Recruitment Agency. */
+function hrFindHtml(m){
+  const short = m.roles.filter(r => r.short > 0);
+  if(!short.length) return "";
+  const recruiting = (D.hiring || {}).recruiting || {};
+  const agency = gameName("ba:businesstype_recruitmentagency") || "Recruitment Agency";
+  const rows = short.map(r => {
+    const out = r.pool.length - r.pass;
+    const have = !r.pool.length ? "no candidates"
+      : !r.pass ? `${plural(r.pool.length, "candidate")}, all left out by your filters`
+      : `only ${plural(r.pass, "candidate")}${out ? ` (${hrNum(out)} more left out by your filters)` : ""}`;
+    const n = recruiting[r.skill] || 0;
+    const where = n ? `${n === 1 ? "your Headhunter is" : `${hrNum(n)} of your Headhunters are`} recruiting ${hrRole(r.skill)}: wait for more candidates, or a ${spEsc(agency)}`
+      : `a Headhunter at your headquarters recruiting ${hrRole(r.skill)}, or a ${spEsc(agency)}`;
+    return `<li><b>${hrRole(r.skill)}</b><span>${hrNum(r.short)} more needed · ${have}</span><span class="to">${hrSvg("chev")}${where}</span></li>`;
+  }).join("");
+  return `<div class="hs-find"><h4>Where to find them</h4><ul>${rows}</ul></div>`;
 }
 /* "When you hire": what the button does, in numbers, then the button, then
    what keeps it off. */
@@ -25616,6 +25672,113 @@ function hrPopPlace(anchor, pop){
   pop.style.left = `${left}px`;
   pop.style.top = `${below + h > vh - 12 && above >= 12 ? above : below}px`;
 }
+/* The option list of a Staff select, drawn by the page instead of the
+   system's white list (Peter's in-game test, 25 September 2026). The select
+   stays the control: the list sets its value and fires its change, so every
+   handler and the keyboard's own arrows keep working. Only where the pointer
+   is a mouse: a phone's own picker is the better one there. */
+let hrSel = null;  // {select, at}: the select whose list is open, the option lit
+const hrSelFine = () => !window.matchMedia || window.matchMedia("(pointer: fine)").matches;
+function hrSelOpen(select){
+  if(!select || select.disabled) return;
+  hrPopClose();
+  let pop = $("hsSelPop");
+  if(!pop){
+    pop = document.createElement("div");
+    pop.id = "hsSelPop"; pop.setAttribute("role", "listbox"); pop.tabIndex = -1;
+  }
+  const host = select.closest("dialog") || document.body;
+  if(pop.parentElement !== host) host.appendChild(pop);
+  const opts = [...select.options];
+  pop.setAttribute("aria-label", select.getAttribute("aria-label") || "");
+  pop.innerHTML = opts.map((o, i) => `<div class="hs-selopt${o.value === "" && !o.selected ? " ph" : ""}" role="option" data-hs-opt="${i}" aria-selected="${o.selected}"${
+    o.disabled ? ` aria-disabled="true"` : ""}><span>${spEsc(o.textContent)}</span>${hrSvg("check2")}</div>`).join("");
+  hrSel = {select, at: Math.max(0, select.selectedIndex)};
+  pop.hidden = false;
+  const anchor = select.closest(".hs-sel") || select;
+  pop.style.minWidth = `${Math.round(anchor.getBoundingClientRect().width)}px`;
+  anchor.setAttribute("aria-expanded", "true");
+  hrPopPlace(anchor, pop);
+  hrSelLight();
+  pop.focus({preventScroll: true});
+}
+function hrSelLight(){
+  const pop = $("hsSelPop");
+  if(!pop || !hrSel) return;
+  pop.querySelectorAll(".hs-selopt").forEach((el, i) => el.classList.toggle("on", i === hrSel.at));
+  const on = pop.querySelector(".hs-selopt.on");
+  if(on) on.scrollIntoView({block: "nearest"});
+}
+function hrSelClose(back){
+  const pop = $("hsSelPop"), sel = hrSel && hrSel.select;
+  hrSel = null;
+  if(pop){ pop.hidden = true; pop.remove(); }
+  const anchor = sel && (sel.closest(".hs-sel") || sel);
+  if(anchor && anchor.isConnected) anchor.setAttribute("aria-expanded", "false");
+  if(back && sel && sel.isConnected) sel.focus({preventScroll: true});
+}
+function hrSelPick(i){
+  if(!hrSel) return;
+  const sel = hrSel.select, o = sel.options[i];
+  if(!o || o.disabled){ return; }
+  hrSelClose(true);
+  if(sel.selectedIndex === i) return;
+  sel.selectedIndex = i;
+  sel.dispatchEvent(new Event("input", {bubbles: true}));
+  sel.dispatchEvent(new Event("change", {bubbles: true}));
+}
+function hrSelBind(){
+  const inStaff = t => t && t.closest && t.closest("#secStaff, #hsSheet, dialog.hr-wide");
+  /* A press on the field opens the list rather than the system's. */
+  document.addEventListener("mousedown", e => {
+    const t = e.target;
+    if(e.button !== 0 || !inStaff(t) || !hrSelFine()) return;
+    const field = t.closest(".hs-sel");
+    const select = field ? field.querySelector("select") : t.closest("select");
+    if(!select || !select.closest(".hs-sel")) return;
+    e.preventDefault();
+    if(hrSel && hrSel.select === select){ hrSelClose(true); return; }
+    select.focus({preventScroll: true});
+    hrSelOpen(select);
+  }, true);
+  document.addEventListener("click", e => {
+    if(!hrSel) return;
+    const opt = e.target.closest && e.target.closest("#hsSelPop [data-hs-opt]");
+    if(opt){ hrSelPick(Number(opt.dataset.hsOpt)); return; }
+    if(e.target.closest && (e.target.closest("#hsSelPop") || (hrSel.select.closest(".hs-sel") || hrSel.select).contains(e.target))) return;
+    hrSelClose();
+  });
+  document.addEventListener("keydown", e => {
+    const t = e.target;
+    /* On the select: Enter, Space, Alt+Down or F4 open the list; the arrows
+       alone change the value as a select always has. */
+    if(!hrSel){
+      if(t && t.tagName === "SELECT" && t.closest(".hs-sel") && inStaff(t) && hrSelFine()
+         && (e.key === "Enter" || e.key === " " || e.key === "F4" || (e.altKey && e.key === "ArrowDown"))){
+        e.preventDefault();
+        hrSelOpen(t);
+      }
+      return;
+    }
+    const n = hrSel.select.options.length;
+    const step = d => { let i = hrSel.at; for(let k = 0; k < n; k++){ i = (i + d + n) % n; if(!hrSel.select.options[i].disabled) break; } hrSel.at = i; hrSelLight(); };
+    if(e.key === "ArrowDown"){ e.preventDefault(); step(1); }
+    else if(e.key === "ArrowUp"){ e.preventDefault(); step(-1); }
+    else if(e.key === "Home"){ e.preventDefault(); hrSel.at = 0; hrSelLight(); }
+    else if(e.key === "End"){ e.preventDefault(); hrSel.at = n - 1; hrSelLight(); }
+    else if(e.key === "Enter" || e.key === " "){ e.preventDefault(); hrSelPick(hrSel.at); }
+    else if(e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); hrSelClose(true); }
+    else if(e.key === "Tab"){ hrSelClose(true); }
+  }, true);
+  const replace = () => {
+    const pop = $("hsSelPop"), sel = hrSel && hrSel.select;
+    if(!pop || !sel) return;
+    if(!sel.isConnected){ hrSelClose(); return; }
+    hrPopPlace(sel.closest(".hs-sel") || sel, pop);
+  };
+  window.addEventListener("resize", replace);
+  window.addEventListener("scroll", replace, {passive: true, capture: true});
+}
 function hrPopClose(back){
   const pop = $("hsDemPop");
   const target = hrPop && hrPop.target;
@@ -25883,6 +26046,7 @@ let hrBound = false;
 function bindStaff(){
   if(hrBound) return;
   hrBound = true;
+  hrSelBind();
   const page = "#secStaff", sheet = "#hsSheet";
   on("change", `${page} [data-hr-move]`, el => {
     if(el.checked) hrUi.moveOff.delete(el.dataset.hrMove); else hrUi.moveOff.add(el.dataset.hrMove);

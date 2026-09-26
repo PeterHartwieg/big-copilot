@@ -6684,6 +6684,14 @@ def _plan_people(save: Save, staff: list) -> dict:
     save demand full time, but the plan may not invent one for the other two.
     """
     demands, training = {}, set()
+    # The stations each person has a shift on now, at any site: an office's
+    # plan keeps somebody at their own desk where it can (_placement_rank()).
+    home = collections.defaultdict(set)
+    for reg in save.items(save.root.get("BuildingRegistrations")):
+        for day in save.items(reg.get("scheduleDays")):
+            for shift in save.items(day.get("workShifts")):
+                if isinstance(shift, dict) and shift.get("employeeId") is not None:
+                    home[shift["employeeId"]].add(shift.get("itemInstanceId"))
     for employee in save.items(save.root.get("EmployeeInstances")):
         if save.deref(employee.get("trainingSession")):
             training.add(employee.get("id"))
@@ -6714,6 +6722,12 @@ def _plan_people(save: Save, staff: list) -> dict:
             # In training (trainingSession set): the game will not assign them
             # to a business, so no plan counts on them from the bench.
             "training": person["id"] in training,
+            # The weekly hours the game has them on now, at the one site they
+            # work: a hire's week never takes them below it (_fill_hire_weeks()).
+            "now": person.get("hours") or 0,
+            "home": home.get(person["id"], set()),
+            # Each desk or chair demand, as the item names that meet it.
+            "desks": [tuple("ba:itemname_" + name for name in r[1]) for r in rules if r[0] == "desk"],
         }
     return out
 
@@ -6892,6 +6906,12 @@ def _placement_rank(person: dict, state: dict, slot: dict, here: dict) -> tuple:
         # the week and the site owes as few people thirty hours as it can.
         0.0 if on_roster else -((person["band"] or FULL_TIME)[1] - state["hours"]),
         0 if wants_day else 1,
+        # A desk or chair demand is met by the station's own furniture: the
+        # station that meets theirs first, then the one they work now, so a
+        # new week does not move a whole office to other desks (Peter's
+        # in-game test, 25 September 2026).
+        0 if _desk_fits(person, slot, here) else 1,
+        0 if slot["station"] in (person.get("home") or ()) else 1,
         0 if adjacent else 1,
         # A bench member is a last resort even at equal hours: drawing one costs
         # the checklist a MyEmployees step and binds them to this building, so
@@ -6900,6 +6920,19 @@ def _placement_rank(person: dict, state: dict, slot: dict, here: dict) -> tuple:
         person["wage"],
         str(person["id"]),
     )
+
+
+def _desk_fits(person: dict, slot: dict, here: dict) -> bool:
+    """Whether a station meets every desk or chair demand a person holds.
+
+    True for somebody with none, and where the site's furniture is not known.
+    """
+    wants = person.get("desks") or ()
+    groups = here.get("groups") or {}
+    if not wants or not groups:
+        return True
+    held = groups.get(slot["station"], ())
+    return all(any(name in held for name in names) for names in wants)
 
 
 def _cover_runs(need: list, rates: list, open_hours: list) -> dict:
@@ -7063,6 +7096,184 @@ def _hire_weeks(slots: list) -> list:
             if packed is not None:
                 return packed
     return worst
+
+
+def _hire_floor(person: dict) -> float:
+    """The fewest hours a hire's week may leave somebody already placed here with.
+
+    Their hours demand's floor, and the weekly hours the game has them on now
+    at the one site they work: a hire is never why somebody works less.
+    """
+    band = person["band"][0] if person["band"] else 0
+    return max(band, (person.get("now") or 0) if person["addr"] else 0)
+
+
+def _spread_residue(residue: list, shifts: list, pool: list, state: dict, before: dict) -> list:
+    """Move the open shifts off the day they pile up on, by swapping days with staff.
+
+    The placer fills the people a site already has before it counts a hire, so
+    the shifts nobody can take pile up on whichever day their weeks ran out: at
+    a law firm of 84 lawyers, 267 hours all on a Friday, 22 of them at the same
+    hour, which packed onto 22 hires of one day each, 7 to 14 hours a week
+    (Peter's in-game test, 25 September 2026). The hires those hours need are
+    about ceil(hours / 50). While more open shifts than that run at one hour,
+    or more than that many 14-hour days of them fall on one day, one of them
+    goes to somebody here who is off that day, and one of their own shifts of
+    the role on another day, where the open ones are fewer, is opened in its
+    place: nobody's week breaks a rule or a demand for it (_can_work()), and
+    nobody drops under _hire_floor(). Returns the open shifts afterwards, the
+    same shift rows, reassigned in place. Deterministic.
+    """
+    if not residue:
+        return residue
+    skill = residue[0]["skill"]
+    residue = list(residue)
+    total = sum(s["to"] - s["from"] for s in residue)
+    limit = max(1, math.ceil(total / FULL_TIME[1]))
+    by_id = {person["id"]: person for person in pool}
+    stuck = set()
+
+    def load():
+        at = [[0] * 24 for _ in range(7)]
+        day = [0] * 7
+        for s in residue:
+            day[s["wd"]] += s["to"] - s["from"]
+            for hour in range(s["from"], s["to"]):
+                at[s["wd"]][hour] += 1
+        return at, day
+
+    def find(wd, hour, at, day):
+        rows = sorted((s for s in residue if s["wd"] == wd and s["from"] <= hour < s["to"]),
+                      key=lambda s: (s["from"], s["to"], str(s["station"])))
+        free = sorted((pid for pid in by_id if not state[pid]["busy"][wd]), key=str)
+        for open_row in rows:
+            for pid in free:
+                person = by_id[pid]
+                if not _usable(person, skill, open_row["kind"]):
+                    continue
+                own = sorted((s for s in shifts if s["employee"] == pid and s["skill"] == skill
+                              and s["wd"] != wd), key=lambda s: (s["wd"], s["from"]))
+                for mine in own:
+                    if any(at[mine["wd"]][h] + 1 > limit for h in range(mine["from"], mine["to"])):
+                        continue
+                    if day[mine["wd"]] + (mine["to"] - mine["from"]) > limit * OVERWORK_HOURS:
+                        continue
+                    trial = _copy_state(state[pid])
+                    trial["hours"] -= mine["to"] - mine["from"]
+                    trial["busy"][mine["wd"]].difference_update(range(mine["from"], mine["to"]))
+                    if not trial["busy"][mine["wd"]]:
+                        trial["days"].discard(mine["wd"])
+                    if not _can_work(person, trial, open_row):
+                        continue
+                    here = state[pid]["hours"] - before[pid][0]
+                    after = here - (mine["to"] - mine["from"]) + (open_row["to"] - open_row["from"])
+                    if after < min(_hire_floor(person), here):
+                        continue
+                    days_after = len(trial["days"] | {wd}) - before[pid][1]
+                    if person["days"] is not None and days_after < min(
+                            person["days"], len(state[pid]["days"]) - before[pid][1]):
+                        continue
+                    return open_row, person, mine
+        return None
+
+    for _ in range(4 * len(shifts) + 1):
+        at, day = load()
+        crowded = sorted(
+            (-at[wd][hour], wd, hour)
+            for wd in range(7) for hour in range(24)
+            if at[wd][hour] and (at[wd][hour] > limit or day[wd] > limit * OVERWORK_HOURS)
+            and (wd, hour) not in stuck
+        )
+        if not crowded:
+            break
+        _, wd, hour = crowded[0]
+        swap = find(wd, hour, at, day)
+        if swap is None:
+            stuck.add((wd, hour))
+            continue
+        open_row, person, mine = swap
+        theirs = state[person["id"]]
+        theirs["hours"] -= mine["to"] - mine["from"]
+        theirs["busy"][mine["wd"]].difference_update(range(mine["from"], mine["to"]))
+        if not theirs["busy"][mine["wd"]]:
+            theirs["days"].discard(mine["wd"])
+        if not any(other is not mine and other["employee"] == person["id"]
+                   and other["station"] == mine["station"] and other["wd"] == mine["wd"]
+                   for other in shifts):
+            theirs["stations"].discard((mine["station"], mine["wd"]))
+        mine.update(employee=None, name=None, fromBench=False)
+        _take_over(open_row, person, state)
+        residue.remove(open_row)
+        residue.append(mine)
+    return residue
+
+
+def _fill_hire_weeks(weeks: list, shifts: list, pool: list, state: dict, before: dict) -> list:
+    """Give each hire short of a full week whole shifts the site's own people can spare.
+
+    The placer fills the people a site already has up to their ceiling before
+    it counts a single hire, so what is left for the hires is whatever their
+    weeks could not reach: at a law firm of 84 lawyers that was 267 hours, all
+    on a Friday, and 22 hires on one day each, 7 to 14 hours a week against a
+    full-time demand nearly every candidate holds (Peter's in-game test, 25
+    September 2026). Here each hire under FULL_TIME[0] takes whole shifts of
+    the same role, on days it does not work yet, from the people holding the
+    most hours above their own floor -- the larger of their hours demand's
+    floor and the hours the game has them on now -- so nobody already here is
+    cut below the week they have, and nobody is left under their demands'
+    floor or short of a four- or five-day count. The hire keeps within 50
+    hours and the 14-hour day. The number of hires does not change; only which
+    of the plan's shifts are theirs. Deterministic: donors by most spare hours,
+    then id; shifts by day and hour.
+    """
+    if not weeks:
+        return weeks
+    by_id = {person["id"]: person for person in pool}
+
+    def spare(person):
+        # Only this site's week counts: a bench member's hours elsewhere are
+        # another plan's, and `before` is what they held when this one began.
+        return state[person["id"]]["hours"] - before[person["id"]][0] - _hire_floor(person)
+
+    skill = weeks[0]["slots"][0]["skill"] if weeks[0]["slots"] else None
+    for week in sorted(weeks, key=lambda w: w["hours"]):
+        while week["hours"] < FULL_TIME[0]:
+            best = None
+            for shift in shifts:
+                person = by_id.get(shift["employee"])
+                if person is None or shift["skill"] != skill:
+                    continue
+                hours = shift["to"] - shift["from"]
+                if week["busy"][shift["wd"]] or not _hire_fits(shift, week):
+                    continue
+                if spare(person) < hours:
+                    continue
+                theirs = state[person["id"]]
+                last = sum(1 for s in shifts if s["employee"] == person["id"]
+                           and s["wd"] == shift["wd"]) == 1
+                if last and person["days"] is not None and                         len(theirs["days"]) - before[person["id"]][1] <= person["days"]:
+                    continue
+                key = (-spare(person), str(person["id"]), shift["wd"], shift["from"],
+                       str(shift["station"]))
+                if best is None or key < best[0]:
+                    best = (key, shift, person)
+            if best is None:
+                break
+            _, shift, person = best
+            mine = state[person["id"]]
+            mine["hours"] -= shift["to"] - shift["from"]
+            mine["busy"][shift["wd"]].difference_update(range(shift["from"], shift["to"]))
+            if not mine["busy"][shift["wd"]]:
+                mine["days"].discard(shift["wd"])
+            if not any(other is not shift and other["employee"] == person["id"]
+                       and other["station"] == shift["station"] and other["wd"] == shift["wd"]
+                       for other in shifts):
+                mine["stations"].discard((shift["station"], shift["wd"]))
+            shift.update(employee=None, name=None, fromBench=False)
+            week["hours"] += shift["to"] - shift["from"]
+            week["busy"][shift["wd"]].update(range(shift["from"], shift["to"]))
+            week["slots"].append(shift)
+    return weeks
 
 
 def _hires_for(slots: list) -> int:
@@ -8541,7 +8752,8 @@ def _serving_hours(shifts: list) -> int:
     return sum(s["to"] - s["from"] for s in shifts if s["kind"] == "serve")
 
 
-def _place_week(grid, need, slots_open, cover_posts, pool, people, business, bench, state) -> dict:
+def _place_week(grid, need, slots_open, cover_posts, pool, people, business, bench, state,
+                groups=None) -> dict:
     """One week of shifts for one site, from one need curve: the placer itself.
 
     Everything after the need curve, in the scope's order: a. per-station cover
@@ -8660,6 +8872,9 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
         for post in cover_posts
     ]
     here = {
+        # Each station's furniture group (_station_groups()), where the caller
+        # has the building: a desk demand is met at a station, not a site.
+        "groups": groups or {},
         "rostered": set(),
         "flex": {
             person["id"]: sum(
@@ -8703,6 +8918,15 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
     for shift in shifts:
         if shift["employee"] is None:
             uncovered[shift["skill"]].append(shift)
+    # The residue packed onto hires, each hire's week then filled to a full
+    # week out of the hours the site's own people hold above what they have
+    # now (_fill_hire_weeks()), before anybody is counted as spare below.
+    hire_weeks = {
+        skill: _fill_hire_weeks(
+            _hire_weeks(_spread_residue(uncovered[skill], shifts, pool, state, before)),
+            shifts, pool, state, before)
+        for skill in _in_order(uncovered)
+    }
     shifts.sort(
         key=lambda s: (s["wd"], s["from"], s["to"], str(s["station"]), str(s["employee"]))
     )
@@ -8754,9 +8978,7 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
     # have` says so with nothing left open, which the arithmetic rules out (the
     # people working a role's slots are all counted in its `have`); an empty
     # week pads it anyway, so the page's count and the weeks always agree.
-    hire_weeks = {}
-    for skill in _in_order(uncovered):
-        hire_weeks[skill] = _hire_weeks(uncovered[skill])
+    for skill in _in_order(hire_weeks):
         headcount[skill]["hire"] = max(headcount[skill]["hire"], len(hire_weeks[skill]))
     for skill in _in_order(headcount):
         weeks = hire_weeks.setdefault(skill, [])
@@ -8817,6 +9039,20 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
                  "want": person["days"], "planned": planned}
             )
     short_hours.sort(key=lambda r: (r["hours"] - r["min"], str(r["employee"])))
+    # The site's own people this week gives fewer hours than the game has them
+    # on now (and some): the Staff page's review names them before a write
+    # replaces the week. Nobody the plan gives no hours at all: the write's
+    # own dry run names those (leftWithout).
+    fewer = sorted(
+        (
+            {"employee": person["id"], "name": person["name"], "now": person.get("now") or 0,
+             "hours": state[person["id"]]["hours"] - before[person["id"]][0]}
+            for person in pool
+            if person["addr"] and person["id"] in worked
+            and 0 < state[person["id"]]["hours"] - before[person["id"]][0] < (person.get("now") or 0)
+        ),
+        key=lambda r: (r["hours"] - r["now"], str(r["employee"])),
+    )
     short_days.sort(key=lambda r: (r["days"] - r["want"], str(r["employee"])))
 
     wage_of = {person["id"]: person["wage"] for person in pool}
@@ -8867,6 +9103,7 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
         "hireWeeks": hire_weeks,
         "spareIds": spare_ids,
         "spareSkills": spare_skills,
+        "fewer": fewer,
     }
 
 
@@ -8949,6 +9186,9 @@ def _hire_fields(week: dict) -> dict:
         "spare": list(week["spareIds"]),
         "spareSkills": {pid: list(skills) for pid, skills in (week.get("spareSkills") or {}).items()},
         "bench": [row["employee"] for row in week["bench"]],
+        # The site's own people this plan gives fewer hours than they have now.
+        "fewer": [{"id": r["employee"], "name": r["name"], "now": r["now"], "hours": r["hours"]}
+                  for r in week.get("fewer") or []],
     }
 
 
@@ -9379,7 +9619,7 @@ def _office_site_plan(save, names, business, building, grid, skill, pool, people
     fake = {"roles": [{"skill": skill, "label": label}], "stations": stations}
     usable_bench = [p for p in bench if _usable(p, skill, "serve")]
     week = _place_week(fake, need, slots_open, [], pool, people, business, usable_bench,
-                       state)
+                       state, groups=_station_groups(save, building))
     current = _current_roster(save, building, {s["id"]: s for s in stations})
     lists = (week["shifts"], week["shortHours"], week["shortDays"], week["placed"],
              week["bench"])
@@ -9440,21 +9680,91 @@ def _business_kind(business: dict) -> str | None:
 
 
 # How the Staff page judges each kind of demand a candidate holds: `schedule`
-# against the hire week the person gets, `site` against the site's facts,
+# against the hire week the person gets, `station` against the stations that
+# week puts them on (the site's `stations`), `site` against the site's facts,
 # `company` once for everybody.
 DEMAND_SCOPE = {
     "hours": "schedule", "days": "schedule", "daysoff": "schedule", "noshift": "schedule",
     "nocleaning": "schedule",
-    "desk": "site", "building": "site", "clean": "site",
+    "desk": "station", "building": "site", "clean": "site",
     "insurance": "company", "happiness": "company",
 }
+
+
+def _station_groups(save: Save, registration: dict) -> dict:
+    """Each item's furniture group: {item id: {item names}}.
+
+    The game's assignedWorkStationItems, which a desk or chair demand reads
+    (WorksOnItem), is every item of the group each station a person has a
+    shift on stands in: follow `parentId` up to the root item, usually the
+    desk, and take it and everything stacked on it (computer, chair, monitor,
+    mousepad, phone). Rebuilt this way from the schedule it matched the saved
+    list for every employee of three offices on two saves (26 September 2026).
+    """
+    items = []
+    for holder in save.items(registration.get("itemInstances")):
+        item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
+        if item and item.get("id") is not None:
+            items.append(item)
+    by_id = {item["id"]: item for item in items}
+    kids = collections.defaultdict(list)
+    for item in items:
+        if item.get("parentId") in by_id:
+            kids[item["parentId"]].append(item)
+
+    def root(item):
+        seen = set()
+        while item.get("parentId") in by_id and item["id"] not in seen:
+            seen.add(item["id"])
+            item = by_id[item["parentId"]]
+        return item
+
+    def names(item, seen):
+        if item["id"] in seen:
+            return set()
+        seen.add(item["id"])
+        out = {item.get("itemName")} - {None}
+        for kid in kids[item["id"]]:
+            out |= names(kid, seen)
+        return out
+
+    groups = {}
+    out = {}
+    for item in items:
+        top = root(item)
+        if top["id"] not in groups:
+            groups[top["id"]] = names(top, set())
+        out[item["id"]] = groups[top["id"]]
+    return out
+
+
+def _station_facts(save: Save, registration: dict, stations) -> dict:
+    """The desk and chair demands each of a site's stations meets.
+
+    {station id: [demand slugs]}, the stations with none left out. A person
+    meets such a demand when a station they work stands in a group holding one
+    of its items (_station_groups()), which is the game's own test.
+    """
+    groups = _station_groups(save, registration)
+    desk = [(slug, setting) for slug, (kind, setting, _p) in sorted(JOB_DEMANDS.items())
+            if kind == "desk"]
+    out = {}
+    for sid in sorted({s for s in stations if s is not None}, key=str):
+        held = groups.get(sid, set())
+        met = [slug for slug, setting in desk
+               if any("ba:itemname_" + name in held for name in setting)]
+        if met:
+            out[str(sid)] = met
+    return out
 
 
 def _site_facts(save: Save, registration: dict) -> dict:
     """Whether a site meets each site-level demand, as _job_demands() judges it.
 
-    A desk demand is about the person's own desk, which a hire does not have
-    yet, so it reads whether the site holds such an item anywhere.
+    A desk or chair demand is not one of them: it is about the stations the
+    person works (_station_facts()), not whether the site holds such an item
+    anywhere, which said met for every lawyer at a firm with one executive
+    desk (Peter's in-game test, 25 September 2026).
     """
     here = _items_by_name(save, registration)
     clean = None
@@ -9469,17 +9779,17 @@ def _site_facts(save: Save, registration: dict) -> dict:
             out[slug] = clean >= setting
         elif kind == "building":
             out[slug] = _holds_demanded_item(save, here, setting)
-        else:
-            out[slug] = any(here.get("ba:itemname_" + item) for item in setting)
     return out
 
 
 def _company_facts(save: Save) -> dict:
     """Whether the company meets each company-level demand for a new hire.
 
-    Health insurance: some HR manager's plan offers that tier or better, with its
-    manager in place (not being replaced), as _job_demands() judges a person's
-    own plan. A happy boss: the player's happiness.
+    Health insurance is a person's own HR manager plan, and a hire joins none
+    (54 of Peter's test hires had no assignedHrManagerPlanId): `"plan"` where
+    some HR manager's plan, its manager in place (not being replaced), offers
+    that tier or better, so the player has one to add them to; False where none
+    does. A happy boss: the player's happiness, True or False.
     """
     root = save.root
     by_id = {e.get("id"): e for e in save.items(root.get("EmployeeInstances"))}
@@ -9494,10 +9804,18 @@ def _company_facts(save: Save) -> dict:
     for slug in sorted(JOB_DEMANDS):
         kind, setting, _priority = JOB_DEMANDS[slug]
         if kind == "insurance":
-            out[slug] = best >= setting
+            out[slug] = "plan" if best >= setting else False
         elif kind == "happiness":
             out[slug] = happiness >= setting
     return out
+
+
+def _unread(row: dict) -> bool:
+    """Whether a shop's demand plan rests on no hour read at all (every basis `none`)."""
+    return not any(
+        cell != "none"
+        for days in (row.get("basis") or {}).values() for day in days for cell in day
+    )
 
 
 def _full_offered(row: dict) -> bool:
@@ -9539,6 +9857,16 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
     def take(row):
         return (row or {}).pop("_hire", None)
 
+    def rows_of(kind, key):
+        """The plan rows of one site, whose stations the page may place people on."""
+        if kind == "shop":
+            return [shops.get(key)]
+        if kind == "factory":
+            return list(factories.get(key, {}).values())
+        if kind == "office":
+            return [offices.get(key)]
+        return []
+
     sites = []
     for business in businesses:
         kind = _business_kind(business)
@@ -9551,9 +9879,17 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
             demand = take(row)
             full = take((row or {}).get("fullCover"))
             if row and not row.get("failed") and demand is not None:
-                plans["demand"] = demand
                 if _full_offered(row) and full is not None:
                     plans["full"] = full
+                # A shop with no hour read yet has a demand plan of cleaning
+                # and security alone, however many hours it opens in the game.
+                # Peter's rule (26 September 2026): every hour it opens needs
+                # its stations staffed, even before anything is measured, so
+                # the Staff page hires by full cover there, as it does for a
+                # new shop. Evil Genius opened more hours and was hired
+                # nobody for them.
+                if not ("full" in plans and _unread(row)):
+                    plans["demand"] = demand
         elif kind == "factory":
             for mode, row in factories.get(business["key"], {}).items():
                 found = take(row)
@@ -9573,6 +9909,12 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
             "accepts": list(ASSIGN_SKILLS.get(business["typeSlug"], ())),
             "plans": {mode: plans[mode] for mode in _in_order(plans)},
             "facts": _site_facts(save, reg),
+            # The desk and chair demands each station of the site meets: the
+            # page judges them against the stations a person's week is on.
+            "stations": _station_facts(save, reg, [
+                station["id"] for row in rows_of(kind, business["key"])
+                for station in (row or {}).get("stations") or ()
+            ]),
         })
     # Rows of sites the list above skips still lose their private field.
     for row in staffing:
@@ -9622,7 +9964,23 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
             if JOB_DEMANDS[slug][0] in DEMAND_SCOPE
         },
         "company": _company_facts(save),
+        "recruiting": _recruiting(save),
     }
+
+
+def _recruiting(save: Save) -> dict:
+    """How many of the company's headhunters are recruiting each skill now.
+
+    {skill: headhunters}, from headhunterPlans: a plan with somebody assigned
+    and isRecruiting set, by its skillRecruiting. The Staff page says where to
+    find people for a role its candidates cannot fill (Where to find them).
+    """
+    out = collections.Counter()
+    for plan in save.items(save.root.get("headhunterPlans")):
+        if isinstance(plan, dict) and plan.get("assignedEmployeeId") and plan.get("isRecruiting") \
+                and isinstance(plan.get("skillRecruiting"), str):
+            out[plan["skillRecruiting"]] += 1
+    return {skill: out[skill] for skill in sorted(out)}
 
 
 def _lower_first(text: str) -> str:
@@ -15550,6 +15908,17 @@ body:has(#changelogDialog[open]){overflow:hidden}
 .hs-opt small{font:500 11.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
 #hsDemPop .pf{display:flex;justify-content:space-between;align-items:center;padding:8px 8px 2px;border-top:1px solid var(--rule-soft);margin-top:6px}
 #hsDemPop .pf button{border:0;background:none;padding:0;font:inherit;font-size:12.5px;color:var(--ink-2);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+/* A Staff select's options, in place of the system's list: hangs off <body>
+   (or the sheet or dialog), placed against its field, like the demand list. */
+#hsSelPop{position:fixed;z-index:61;min-width:160px;max-width:calc(100vw - 24px);max-height:min(360px,calc(100vh - 24px));overflow:auto;padding:6px;border-radius:12px;background:var(--surface);border:1px solid var(--rule);box-shadow:0 24px 50px -20px #000c;box-sizing:border-box;outline:none}
+#hsSelPop[hidden]{display:none}
+.hs-selopt{display:grid;grid-template-columns:minmax(0,1fr) 14px;gap:10px;align-items:center;padding:8px 10px;border-radius:7px;font:500 13px/1.25 Archivo,sans-serif;color:var(--ink);cursor:pointer;white-space:nowrap}
+.hs-selopt:hover,.hs-selopt.on{background:var(--raised)}
+.hs-selopt[aria-selected="true"]{color:var(--accent);font-weight:600}
+.hs-selopt[aria-disabled="true"]{color:var(--ink-3);cursor:default}
+.hs-selopt svg{width:14px;height:14px;opacity:0}
+.hs-selopt[aria-selected="true"] svg{opacity:1}
+.hs-selopt.ph{color:var(--ink-3)}
 .hs-cb{appearance:none;-webkit-appearance:none;margin:0;width:18px;height:18px;border-radius:5px;border:1.5px solid var(--ink-3);background:transparent;display:inline-grid;place-items:center;cursor:pointer;vertical-align:middle;flex:none;transition:background .15s,border-color .15s}
 .hs-cb::after{content:"";width:9px;height:5px;border-left:2px solid var(--on-accent);border-bottom:2px solid var(--on-accent);transform:rotate(-45deg) scale(0);margin-top:-3px;transition:transform .2s cubic-bezier(.34,1.56,.64,1)}
 .hs-cb:checked{background:var(--accent);border-color:var(--accent)}
@@ -15582,6 +15951,14 @@ body:has(#changelogDialog[open]){overflow:hidden}
 .hs-re b{color:var(--ink);font-weight:600}
 .hs-re label{margin-left:auto;display:inline-flex;align-items:center;gap:8px;white-space:nowrap;color:var(--ink);font-weight:500;cursor:pointer}
 .hs-facts2{margin:14px 0 0;font-size:13px;color:var(--ink-3)}
+/* Where to find them: one line per role still short, under the roles table */
+.hs-find{margin:14px 0 0;padding:12px 14px;border:1px solid var(--rule-soft);border-radius:10px}
+.hs-find h4{margin:0 0 8px;font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.hs-find ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.hs-find li{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;font-size:13px;color:var(--ink-2);line-height:1.4}
+.hs-find li b{color:var(--ink);font-weight:600}
+.hs-find li .to{display:inline-flex;align-items:center;gap:4px;color:var(--ink-3)}
+.hs-find li .to svg{width:12px;height:12px}
 .hs-facts2 b{font:500 13.5px/1 "IBM Plex Mono",monospace;color:var(--ink)}
 .hs-facts2 b.warn{color:var(--warn)}
 /* quick hire */
@@ -24661,7 +25038,8 @@ function hrModel(){
     for(const skill of ordered){
       const S = sites.find(x => x !== from && (x.site.accepts || []).includes(skill) && x.weeks.some(y => !y.taken && y.w.skill === skill));
       if(!S) continue;
-      const wk = S.weeks.find(y => !y.taken && y.w.skill === skill);
+      const open = S.weeks.filter(y => !y.taken && y.w.skill === skill);
+      const wk = open.find(y => !hrDeskMiss(p.demands, S, y.w).length) || open[0];
       wk.taken = true;
       moved.add(id);
       const lv = level(skill);
@@ -24712,7 +25090,9 @@ function hrModel(){
            week whose schedule demands they meet, else the first, warned. */
         const S = free[0].S, mine = free.filter(x => x.S === S);
         const fails = x => (c.demands || []).filter(d => hrKind(d) === "schedule" && hrBreaks(d, x.w, S.row));
-        const fit = mine.find(x => !fails(x).length);
+        /* The weeks of a role are interchangeable, so the one at a desk
+           that meets their desk and chair demands goes first. */
+        const fit = mine.find(x => !fails(x).length && !hrDeskMiss(c.demands, S, x.w).length) || mine.find(x => !fails(x).length);
         const wk = fit || mine[0];
         wk.who = {type: "hire", c, misfit: fit ? [] : fails(wk)};
         role.picked.push(c);
@@ -24733,15 +25113,31 @@ function hrModel(){
   return {sites, moves, roles, overs, cands, byId, used, quick};
 }
 
+/* A desk or chair demand against a week: whether one of the stations the week
+   puts them on stands in furniture that meets it (the site's `stations`), the
+   game's own test. No week, no station: the game leaves their list empty. */
+const hrDeskMet = (slug, S, w) => !!(S && w) && (w.slots || []).some(sl =>
+  (((S.site.stations || {})[String(sl.station)]) || []).includes(slug));
+const hrDeskAnywhere = (slug, S) => !!S && Object.values(S.site.stations || {}).some(l => (l || []).includes(slug));
+/* The desk and chair demands a week of this site leaves unmet. */
+const hrDeskMiss = (demands, S, w) => (demands || []).filter(d => hrKind(d) === "station" && !hrDeskMet(d, S, w));
 /* A demand of someone going to a site, as the page judges it: "ok", "warn"
-   (not met here, met at another planned site), "no" (met nowhere) or null
-   (not judged). Schedule demands are judged against their week. */
+   (not met here, met at another planned site, or at another desk here), "no"
+   (met nowhere) or null (not judged). Schedule demands are judged against
+   their week, desk and chair demands against the stations it is on. */
 function hrDemandAt(m, slug, S, wk){
   const kind = hrKind(slug);
   if(kind === "schedule") return wk ? (hrBreaks(slug, wk.w, S && S.row) ? "warn" : "ok") : null;
+  if(kind === "station"){
+    if(!S) return null;
+    if(hrDeskMet(slug, S, wk && wk.w)) return "ok";
+    return m.sites.some(x => x.planned && hrDeskAnywhere(slug, x)) ? "warn" : "no";
+  }
   if(kind === "company"){
     const c = ((D.hiring || {}).company || {})[slug];
-    return c === undefined ? null : c ? "ok" : "no";
+    /* "plan": an HR manager's plan offers it, but a hire joins none until
+       the player adds them to it. */
+    return c === undefined ? null : c === "plan" ? "warn" : c ? "ok" : "no";
   }
   if(kind === "site"){
     const here = S ? (S.site.facts || {})[slug] : undefined;
@@ -24986,7 +25382,28 @@ function hrOpenHtml(m){
     <div class="hs-scroll"><table class="hs-t hs-roles"><thead><tr><th class="l">Role</th><th class="opt">Open</th><th class="opt">Own staff</th><th>New hires</th><th>Stays open</th><th class="opt">Wages/day</th><th><span class="gw-sr">Change picks</span></th></tr></thead>
     <tbody>${m.roles.map(r => hrRoleRow(m, r, lines(r.skill))).join("")}${stray ? `<tr class="hs-subrow"><td class="l" colspan="7">${stray}</td></tr>` : ""}</tbody>
     <tfoot><tr><td class="l">Total</td><td class="opt">${hrNum(t.needed)}</td><td class="opt">${hrNum(own)}</td><td data-l="New hires">${hrNum(t.hire)}</td><td class="${t.short ? "warn" : ""}" data-l="Stays open">${hrNum(t.short)}</td><td class="opt">+${fmt(t.bill)}</td><td></td></tr></tfoot></table></div>
-    ${facts}`;
+    ${hrFindHtml(m)}${facts}`;
+}
+/* Where to find them: for each role places stay open in, how many and where
+   the people come from, for an early company whose headhunters recruit few
+   roles or none. A headhunter already recruiting the role is said; otherwise
+   a Headhunter at the headquarters, or the game's Recruitment Agency. */
+function hrFindHtml(m){
+  const short = m.roles.filter(r => r.short > 0);
+  if(!short.length) return "";
+  const recruiting = (D.hiring || {}).recruiting || {};
+  const agency = gameName("ba:businesstype_recruitmentagency") || "Recruitment Agency";
+  const rows = short.map(r => {
+    const out = r.pool.length - r.pass;
+    const have = !r.pool.length ? "no candidates"
+      : !r.pass ? `${plural(r.pool.length, "candidate")}, all left out by your filters`
+      : `only ${plural(r.pass, "candidate")}${out ? ` (${hrNum(out)} more left out by your filters)` : ""}`;
+    const n = recruiting[r.skill] || 0;
+    const where = n ? `${n === 1 ? "your Headhunter is" : `${hrNum(n)} of your Headhunters are`} recruiting ${hrRole(r.skill)}: wait for more candidates, or a ${spEsc(agency)}`
+      : `a Headhunter at your headquarters recruiting ${hrRole(r.skill)}, or a ${spEsc(agency)}`;
+    return `<li><b>${hrRole(r.skill)}</b><span>${hrNum(r.short)} more needed · ${have}</span><span class="to">${hrSvg("chev")}${where}</span></li>`;
+  }).join("");
+  return `<div class="hs-find"><h4>Where to find them</h4><ul>${rows}</ul></div>`;
 }
 /* "When you hire": what the button does, in numbers, then the button, then
    what keeps it off. */
@@ -25098,7 +25515,11 @@ const hrKey = el => {
 function hrWhy(m, slug, S, wk){
   const kind = hrKind(slug);
   if(kind === "schedule") return "the plan's hours break it";
-  if(kind === "company") return "not offered";
+  if(kind === "company") return hrDemandAt(m, slug, S, wk) === "warn" ? "add them to an HR plan that offers it" : "not offered";
+  if(kind === "station"){
+    if(hrDemandAt(m, slug, S, wk) === "no") return "none at any site";
+    return hrDeskAnywhere(slug, S) ? "not at this desk" : `none at ${spEsc(hrSiteName(S))}`;
+  }
   const tone = hrDemandAt(m, slug, S, wk);
   return tone === "warn" ? `none at ${spEsc(hrSiteName(S))}` : "none at any site";
 }
@@ -25251,6 +25672,113 @@ function hrPopPlace(anchor, pop){
   pop.style.left = `${left}px`;
   pop.style.top = `${below + h > vh - 12 && above >= 12 ? above : below}px`;
 }
+/* The option list of a Staff select, drawn by the page instead of the
+   system's white list (Peter's in-game test, 25 September 2026). The select
+   stays the control: the list sets its value and fires its change, so every
+   handler and the keyboard's own arrows keep working. Only where the pointer
+   is a mouse: a phone's own picker is the better one there. */
+let hrSel = null;  // {select, at}: the select whose list is open, the option lit
+const hrSelFine = () => !window.matchMedia || window.matchMedia("(pointer: fine)").matches;
+function hrSelOpen(select){
+  if(!select || select.disabled) return;
+  hrPopClose();
+  let pop = $("hsSelPop");
+  if(!pop){
+    pop = document.createElement("div");
+    pop.id = "hsSelPop"; pop.setAttribute("role", "listbox"); pop.tabIndex = -1;
+  }
+  const host = select.closest("dialog") || document.body;
+  if(pop.parentElement !== host) host.appendChild(pop);
+  const opts = [...select.options];
+  pop.setAttribute("aria-label", select.getAttribute("aria-label") || "");
+  pop.innerHTML = opts.map((o, i) => `<div class="hs-selopt${o.value === "" && !o.selected ? " ph" : ""}" role="option" data-hs-opt="${i}" aria-selected="${o.selected}"${
+    o.disabled ? ` aria-disabled="true"` : ""}><span>${spEsc(o.textContent)}</span>${hrSvg("check2")}</div>`).join("");
+  hrSel = {select, at: Math.max(0, select.selectedIndex)};
+  pop.hidden = false;
+  const anchor = select.closest(".hs-sel") || select;
+  pop.style.minWidth = `${Math.round(anchor.getBoundingClientRect().width)}px`;
+  anchor.setAttribute("aria-expanded", "true");
+  hrPopPlace(anchor, pop);
+  hrSelLight();
+  pop.focus({preventScroll: true});
+}
+function hrSelLight(){
+  const pop = $("hsSelPop");
+  if(!pop || !hrSel) return;
+  pop.querySelectorAll(".hs-selopt").forEach((el, i) => el.classList.toggle("on", i === hrSel.at));
+  const on = pop.querySelector(".hs-selopt.on");
+  if(on) on.scrollIntoView({block: "nearest"});
+}
+function hrSelClose(back){
+  const pop = $("hsSelPop"), sel = hrSel && hrSel.select;
+  hrSel = null;
+  if(pop){ pop.hidden = true; pop.remove(); }
+  const anchor = sel && (sel.closest(".hs-sel") || sel);
+  if(anchor && anchor.isConnected) anchor.setAttribute("aria-expanded", "false");
+  if(back && sel && sel.isConnected) sel.focus({preventScroll: true});
+}
+function hrSelPick(i){
+  if(!hrSel) return;
+  const sel = hrSel.select, o = sel.options[i];
+  if(!o || o.disabled){ return; }
+  hrSelClose(true);
+  if(sel.selectedIndex === i) return;
+  sel.selectedIndex = i;
+  sel.dispatchEvent(new Event("input", {bubbles: true}));
+  sel.dispatchEvent(new Event("change", {bubbles: true}));
+}
+function hrSelBind(){
+  const inStaff = t => t && t.closest && t.closest("#secStaff, #hsSheet, dialog.hr-wide");
+  /* A press on the field opens the list rather than the system's. */
+  document.addEventListener("mousedown", e => {
+    const t = e.target;
+    if(e.button !== 0 || !inStaff(t) || !hrSelFine()) return;
+    const field = t.closest(".hs-sel");
+    const select = field ? field.querySelector("select") : t.closest("select");
+    if(!select || !select.closest(".hs-sel")) return;
+    e.preventDefault();
+    if(hrSel && hrSel.select === select){ hrSelClose(true); return; }
+    select.focus({preventScroll: true});
+    hrSelOpen(select);
+  }, true);
+  document.addEventListener("click", e => {
+    if(!hrSel) return;
+    const opt = e.target.closest && e.target.closest("#hsSelPop [data-hs-opt]");
+    if(opt){ hrSelPick(Number(opt.dataset.hsOpt)); return; }
+    if(e.target.closest && (e.target.closest("#hsSelPop") || (hrSel.select.closest(".hs-sel") || hrSel.select).contains(e.target))) return;
+    hrSelClose();
+  });
+  document.addEventListener("keydown", e => {
+    const t = e.target;
+    /* On the select: Enter, Space, Alt+Down or F4 open the list; the arrows
+       alone change the value as a select always has. */
+    if(!hrSel){
+      if(t && t.tagName === "SELECT" && t.closest(".hs-sel") && inStaff(t) && hrSelFine()
+         && (e.key === "Enter" || e.key === " " || e.key === "F4" || (e.altKey && e.key === "ArrowDown"))){
+        e.preventDefault();
+        hrSelOpen(t);
+      }
+      return;
+    }
+    const n = hrSel.select.options.length;
+    const step = d => { let i = hrSel.at; for(let k = 0; k < n; k++){ i = (i + d + n) % n; if(!hrSel.select.options[i].disabled) break; } hrSel.at = i; hrSelLight(); };
+    if(e.key === "ArrowDown"){ e.preventDefault(); step(1); }
+    else if(e.key === "ArrowUp"){ e.preventDefault(); step(-1); }
+    else if(e.key === "Home"){ e.preventDefault(); hrSel.at = 0; hrSelLight(); }
+    else if(e.key === "End"){ e.preventDefault(); hrSel.at = n - 1; hrSelLight(); }
+    else if(e.key === "Enter" || e.key === " "){ e.preventDefault(); hrSelPick(hrSel.at); }
+    else if(e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); hrSelClose(true); }
+    else if(e.key === "Tab"){ hrSelClose(true); }
+  }, true);
+  const replace = () => {
+    const pop = $("hsSelPop"), sel = hrSel && hrSel.select;
+    if(!pop || !sel) return;
+    if(!sel.isConnected){ hrSelClose(); return; }
+    hrPopPlace(sel.closest(".hs-sel") || sel, pop);
+  };
+  window.addEventListener("resize", replace);
+  window.addEventListener("scroll", replace, {passive: true, capture: true});
+}
 function hrPopClose(back){
   const pop = $("hsDemPop");
   const target = hrPop && hrPop.target;
@@ -25296,7 +25824,8 @@ function hrQuickPlan(sites, cands, used){
   const open = out.plan ? S.weeks.filter(x => x.w.skill === q.skill && !x.who) : [];
   out.picks = out.matches.slice(0, q.n).map(c => {
     const fails = x => (c.demands || []).filter(d => hrKind(d) === "schedule" && hrBreaks(d, x.w, S.row));
-    const wk = open.find(x => !fails(x).length) || open[0] || null;
+    const wk = open.find(x => !fails(x).length && !hrDeskMiss(c.demands, S, x.w).length)
+      || open.find(x => !fails(x).length) || open[0] || null;
     if(wk){ open.splice(open.indexOf(wk), 1); if(hold){ wk.who = {type: "quick", c}; out.held++; } }
     if(hold) used.set(c.id, S);
     return {c, w: wk ? wk.w : null, misfit: wk ? fails(wk) : []};
@@ -25517,6 +26046,7 @@ let hrBound = false;
 function bindStaff(){
   if(hrBound) return;
   hrBound = true;
+  hrSelBind();
   const page = "#secStaff", sheet = "#hsSheet";
   on("change", `${page} [data-hr-move]`, el => {
     if(el.checked) hrUi.moveOff.delete(el.dataset.hrMove); else hrUi.moveOff.add(el.dataset.hrMove);
@@ -25638,7 +26168,7 @@ const hrWeekStrip = (slots, gap) => {
   const on = new Set((slots || []).map(s => s.d));
   const tip = HR_DAYS.filter(d => on.has(d)).map(d => {
     const s = slots.filter(x => x.d === d).map(x => `${String(x.f).padStart(2, "0")}–${String(x.t).padStart(2, "0")}`).join(", ");
-    return `${WEEK_FULL[d].slice(0, 3)} ${s}`;
+    return `${ttDay(d).slice(0, 3)} ${s}`;
   }).join(" · ");
   return `<span class="hr-wk${gap ? " gap" : ""}" data-tip="${attr(tip || "no hours: assigned only")}">${HR_DAYS.map(d => `<i class="${on.has(d) ? "on" : ""}"></i>`).join("")}</span>`;
 };
@@ -25680,7 +26210,7 @@ function hrReviewSites(m, req, phase, gone){
     const person = (name, sub, role, lv, wage, slots, hours, cls) => `<div class="hr-dp${cls ? ` ${cls}` : ""}"><span class="who"><b>${name}</b><small${sub.mv ? ` class="mv"` : ""}>${sub.t}</small></span><span class="r">${role}</span>
       <span class="m">${lv}</span><span class="m">${wage}</span>${hrWeekStrip(slots, cls === "gap")}<span class="m">${hours}</span></div>`;
     const people = open ? `<div class="hr-dpeople"><div class="hr-dp hd"><span>Person</span><span>Role</span><span class="m">Skill</span><span class="m">$/h</span><span class="hr-wkd">${
-        HR_DAYS.map(d => `<span>${WEEK_FULL[d][0]}</span>`).join("")}</span><span class="m">Week</span></div>${
+        HR_DAYS.map(d => `<span>${ttDay(d)[0]}</span>`).join("")}</span><span class="m">Week</span></div>${
       hires.map(x => { const c = x.who.c, g = gone.has(c.id); return person(g ? `<span class="hr-struck">${spEsc(c.name)}</span>` : spEsc(c.name), {t: g ? "application expired" : `new hire${x.who.misfit.length ? " · hours break a demand" : ""}`},
         hrRole(x.w.skill), `${Math.round(hrLevel(c, x.w.skill))}%`, hrWage(c.wage), x.w.slots, `${x.w.hours || 0} h`, g ? "gap" : ""); }).join("")}${
       extra.map(o => { const g = gone.has(o.c.id); return person(g ? `<span class="hr-struck">${spEsc(o.c.name)}</span>` : spEsc(o.c.name),
@@ -25750,7 +26280,7 @@ function hrReview(o = {}){
       if(row.scope === "hire" || row.scope === "move") return spEsc(nameOf(row.id));
       const S = row.address && hrLast.m.sites.find(x => x.key === gwKeyOf(row.address));
       const site = S && S.b ? spEsc(shortName(S.b)) : row.address ? gwSiteName(row) : "A site";
-      return row.scope === "shift" && row.d !== undefined ? `${site}: ${WEEK_FULL[row.d] || "a day"}` : site;
+      return row.scope === "shift" && row.d !== undefined ? `${site}: ${ttDay(row.d)}` : site;
     },
     draw: (answer, phase) => {
       const {m, req} = hrLast, gone = goneOf(answer), t = hrTotals(m), c = counts();
@@ -25771,6 +26301,9 @@ function hrReview(o = {}){
       const said = rewritten.length ? `<div class="gw-call info">${gwI("roster")}<div>The week is replaced at ${rewritten.map(s =>
         `<b>${gwSiteName(s)}</b> (${Number(s.removed) || 0} entries out, ${Number(s.added) || 0} in${s.openedHours ? ", open 0 to 24" : ""})`).join(", ")}.</div></div>` : "";
       const left = rewritten.flatMap(s => (s.leftWithout || []).map(p => `<span class="person"><i>${spEsc(gwInitials(p.name))}</i>${spEsc(p.name || "someone")}</span>`));
+      const fewer = hrFewer(m, rewritten);
+      const fewerCall = fewer.length ? `<div class="gw-call">${gwI("roster")}<div><b>Fewer hours than now</b> in the plan's week: ${
+        fewer.map(({S, r}) => `${spEsc(r.name || "someone")} (${spEsc(S.b ? shortName(S.b) : "a site")}, ${hrNum(r.now)} → ${hrNum(r.hours)} h)`).join(", ")}.</div></div>` : "";
       const emptied = hrLeftEmpty(req, answer);
       const displaced = [...req.touched.values()].filter(at => at.lost && at.lost.hours > 0);
       const displacedCall = displaced.length ? `<div class="gw-call">${gwI("roster")}<div><b>Hours the plan takes over</b>: shifts the plan does not own that overlap its own are cut to fit, ${
@@ -25794,7 +26327,7 @@ function hrReview(o = {}){
       const blocked = answer.blocked === "myemployees" ? `<div class="gw-no"><span class="ic">${hrSvg("phone")}</span><div class="rule">MyEmployees is open in the game.</div><div class="fix">${gwSvg("right")}<span>Close the MyEmployees app on your in-game phone, then try again.</span></div></div>` : "";
       return `${blocked}${gwTiles([["Hire", null, c.hire], ["Reassign", null, c.move], ["Added wages", null, `+${fmt(bill)}<small class="hr-u">/day</small>`]])}
         <p class="gw-lead">Who goes where. Open a site to see each person and the days they work.</p>
-        ${sites}${goneCall}${said}${emptyCall}${displacedCall}${left.length ? `<div class="gw-box">${gwCall("", "exit", "<b>No hours after this</b> for these people at the sites whose week is replaced. The game takes them off their work there and adds a to-do.")}<div class="gw-pills">${left.join("")}</div></div>` : ""}
+        ${sites}${goneCall}${said}${fewerCall}${emptyCall}${displacedCall}${left.length ? `<div class="gw-box">${gwCall("", "exit", "<b>No hours after this</b> for these people at the sites whose week is replaced. The game takes them off their work there and adds a to-do.")}<div class="gw-pills">${left.join("")}</div></div>` : ""}
         ${gapText ? `<div class="gw-call gw-warn">${gwI("alert")}<div>${gapText}.</div></div>` : ""}
         ${warned.length ? `<div class="gw-call">${gwI("info")}<div>${plural(warned.length, "person asks", "people ask")} for something their site does not meet (marked orange in Change picks). They are hired anyway.</div></div>` : ""}`;
     },
@@ -25825,6 +26358,12 @@ function hrReview(o = {}){
     },
   });
   if(gwOpen) gwOpen.classList.add("hr-wide");
+}
+/* The people a replaced week gives fewer hours than the game has them on now,
+   by the site's plan (`fewer`), for the sites the dry run says it rewrites. */
+function hrFewer(m, rewritten){
+  const keys = new Set((rewritten || []).map(s => s && s.address && gwKeyOf(s.address)).filter(Boolean));
+  return m.sites.filter(S => keys.has(S.key)).flatMap(S => (S.plan.fewer || []).map(r => ({S, r})));
 }
 /* A site row in the review opens for its people. */
 let hrReviewBound = false;

@@ -249,6 +249,17 @@ class CompanyFactsTest(unittest.TestCase):
         self.assertIs(facts["ba:jobdemand_peacefulworkenvironment"], False)
 
 
+class RecruitingTest(unittest.TestCase):
+    def test_headhunters_recruiting_now_by_skill(self):
+        plan = lambda who, skill, on=True: {"assignedEmployeeId": who, "isRecruiting": on,  # noqa: E731
+                                            "skillRecruiting": skill}
+        save = save_of({"headhunterPlans": {"$items": [
+            plan("h1", LAWYER), plan("h2", LAWYER), plan("h3", SERVICE, on=False),
+            plan(None, CLEANING), plan("h4", GUARD)]}})
+        self.assertEqual(ba_dashboard._recruiting(save), {GUARD: 1, LAWYER: 2})
+        self.assertEqual(ba_dashboard._recruiting(save_of({})), {})
+
+
 class StationFactsTest(unittest.TestCase):
     """A desk or chair demand is met by the furniture of the station a person
     works (the game's assignedWorkStationItems), not by the site holding such

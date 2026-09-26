@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "47bc101827";</script>
-<link rel="stylesheet" href="community.css?v=47bc101827">
+<script>window.LEDGER_BUILD = "d566019430";</script>
+<link rel="stylesheet" href="community.css?v=d566019430">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=47bc101827">
+<link rel="stylesheet" href="fonts/fonts.css?v=d566019430">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -3316,6 +3316,17 @@ body:has(#changelogDialog[open]){overflow:hidden}
 .hs-opt small{font:500 11.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
 #hsDemPop .pf{display:flex;justify-content:space-between;align-items:center;padding:8px 8px 2px;border-top:1px solid var(--rule-soft);margin-top:6px}
 #hsDemPop .pf button{border:0;background:none;padding:0;font:inherit;font-size:12.5px;color:var(--ink-2);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+/* A Staff select's options, in place of the system's list: hangs off <body>
+   (or the sheet or dialog), placed against its field, like the demand list. */
+#hsSelPop{position:fixed;z-index:61;min-width:160px;max-width:calc(100vw - 24px);max-height:min(360px,calc(100vh - 24px));overflow:auto;padding:6px;border-radius:12px;background:var(--surface);border:1px solid var(--rule);box-shadow:0 24px 50px -20px #000c;box-sizing:border-box;outline:none}
+#hsSelPop[hidden]{display:none}
+.hs-selopt{display:grid;grid-template-columns:minmax(0,1fr) 14px;gap:10px;align-items:center;padding:8px 10px;border-radius:7px;font:500 13px/1.25 Archivo,sans-serif;color:var(--ink);cursor:pointer;white-space:nowrap}
+.hs-selopt:hover,.hs-selopt.on{background:var(--raised)}
+.hs-selopt[aria-selected="true"]{color:var(--accent);font-weight:600}
+.hs-selopt[aria-disabled="true"]{color:var(--ink-3);cursor:default}
+.hs-selopt svg{width:14px;height:14px;opacity:0}
+.hs-selopt[aria-selected="true"] svg{opacity:1}
+.hs-selopt.ph{color:var(--ink-3)}
 .hs-cb{appearance:none;-webkit-appearance:none;margin:0;width:18px;height:18px;border-radius:5px;border:1.5px solid var(--ink-3);background:transparent;display:inline-grid;place-items:center;cursor:pointer;vertical-align:middle;flex:none;transition:background .15s,border-color .15s}
 .hs-cb::after{content:"";width:9px;height:5px;border-left:2px solid var(--on-accent);border-bottom:2px solid var(--on-accent);transform:rotate(-45deg) scale(0);margin-top:-3px;transition:transform .2s cubic-bezier(.34,1.56,.64,1)}
 .hs-cb:checked{background:var(--accent);border-color:var(--accent)}
@@ -3348,6 +3359,14 @@ body:has(#changelogDialog[open]){overflow:hidden}
 .hs-re b{color:var(--ink);font-weight:600}
 .hs-re label{margin-left:auto;display:inline-flex;align-items:center;gap:8px;white-space:nowrap;color:var(--ink);font-weight:500;cursor:pointer}
 .hs-facts2{margin:14px 0 0;font-size:13px;color:var(--ink-3)}
+/* Where to find them: one line per role still short, under the roles table */
+.hs-find{margin:14px 0 0;padding:12px 14px;border:1px solid var(--rule-soft);border-radius:10px}
+.hs-find h4{margin:0 0 8px;font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.hs-find ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.hs-find li{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;font-size:13px;color:var(--ink-2);line-height:1.4}
+.hs-find li b{color:var(--ink);font-weight:600}
+.hs-find li .to{display:inline-flex;align-items:center;gap:4px;color:var(--ink-3)}
+.hs-find li .to svg{width:12px;height:12px}
 .hs-facts2 b{font:500 13.5px/1 "IBM Plex Mono",monospace;color:var(--ink)}
 .hs-facts2 b.warn{color:var(--warn)}
 /* quick hire */
@@ -4526,7 +4545,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"47bc101827","latest":{"pr":121,"date":"2026-09-25","title":"Hire and place staff for every site at once","summary":"Company › Payroll is now Staff. It adds up what each shop, office and factory still needs by role, moves spare people between sites first, and picks the most skilled of your headhunters' candidates, with filters for the demands you want to avoid. One confirm hires them, puts them at their sites and writes their hours, through the Big Copilot Link mod 0.3.0. Hires cannot be undone."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"d566019430","latest":{"pr":121,"date":"2026-09-25","title":"Hire and place staff for every site at once","summary":"Company › Payroll is now Staff. It adds up what each shop, office and factory still needs by role, moves spare people between sites first, and picks the most skilled of your headhunters' candidates, with filters for the demands you want to avoid. One confirm hires them, puts them at their sites and writes their hours, through the Big Copilot Link mod 0.3.0. Hires cannot be undone."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -4614,8 +4633,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=47bc101827"></script>
-<script src="community.js?v=47bc101827"></script>
+<script src="app.js?v=d566019430"></script>
+<script src="community.js?v=d566019430"></script>
 
 <script>
 
@@ -13294,7 +13313,8 @@ function hrModel(){
     for(const skill of ordered){
       const S = sites.find(x => x !== from && (x.site.accepts || []).includes(skill) && x.weeks.some(y => !y.taken && y.w.skill === skill));
       if(!S) continue;
-      const wk = S.weeks.find(y => !y.taken && y.w.skill === skill);
+      const open = S.weeks.filter(y => !y.taken && y.w.skill === skill);
+      const wk = open.find(y => !hrDeskMiss(p.demands, S, y.w).length) || open[0];
       wk.taken = true;
       moved.add(id);
       const lv = level(skill);
@@ -13345,7 +13365,9 @@ function hrModel(){
            week whose schedule demands they meet, else the first, warned. */
         const S = free[0].S, mine = free.filter(x => x.S === S);
         const fails = x => (c.demands || []).filter(d => hrKind(d) === "schedule" && hrBreaks(d, x.w, S.row));
-        const fit = mine.find(x => !fails(x).length);
+        /* The weeks of a role are interchangeable, so the one at a desk
+           that meets their desk and chair demands goes first. */
+        const fit = mine.find(x => !fails(x).length && !hrDeskMiss(c.demands, S, x.w).length) || mine.find(x => !fails(x).length);
         const wk = fit || mine[0];
         wk.who = {type: "hire", c, misfit: fit ? [] : fails(wk)};
         role.picked.push(c);
@@ -13366,15 +13388,31 @@ function hrModel(){
   return {sites, moves, roles, overs, cands, byId, used, quick};
 }
 
+/* A desk or chair demand against a week: whether one of the stations the week
+   puts them on stands in furniture that meets it (the site's `stations`), the
+   game's own test. No week, no station: the game leaves their list empty. */
+const hrDeskMet = (slug, S, w) => !!(S && w) && (w.slots || []).some(sl =>
+  (((S.site.stations || {})[String(sl.station)]) || []).includes(slug));
+const hrDeskAnywhere = (slug, S) => !!S && Object.values(S.site.stations || {}).some(l => (l || []).includes(slug));
+/* The desk and chair demands a week of this site leaves unmet. */
+const hrDeskMiss = (demands, S, w) => (demands || []).filter(d => hrKind(d) === "station" && !hrDeskMet(d, S, w));
 /* A demand of someone going to a site, as the page judges it: "ok", "warn"
-   (not met here, met at another planned site), "no" (met nowhere) or null
-   (not judged). Schedule demands are judged against their week. */
+   (not met here, met at another planned site, or at another desk here), "no"
+   (met nowhere) or null (not judged). Schedule demands are judged against
+   their week, desk and chair demands against the stations it is on. */
 function hrDemandAt(m, slug, S, wk){
   const kind = hrKind(slug);
   if(kind === "schedule") return wk ? (hrBreaks(slug, wk.w, S && S.row) ? "warn" : "ok") : null;
+  if(kind === "station"){
+    if(!S) return null;
+    if(hrDeskMet(slug, S, wk && wk.w)) return "ok";
+    return m.sites.some(x => x.planned && hrDeskAnywhere(slug, x)) ? "warn" : "no";
+  }
   if(kind === "company"){
     const c = ((D.hiring || {}).company || {})[slug];
-    return c === undefined ? null : c ? "ok" : "no";
+    /* "plan": an HR manager's plan offers it, but a hire joins none until
+       the player adds them to it. */
+    return c === undefined ? null : c === "plan" ? "warn" : c ? "ok" : "no";
   }
   if(kind === "site"){
     const here = S ? (S.site.facts || {})[slug] : undefined;
@@ -13619,7 +13657,28 @@ function hrOpenHtml(m){
     <div class="hs-scroll"><table class="hs-t hs-roles"><thead><tr><th class="l">Role</th><th class="opt">Open</th><th class="opt">Own staff</th><th>New hires</th><th>Stays open</th><th class="opt">Wages/day</th><th><span class="gw-sr">Change picks</span></th></tr></thead>
     <tbody>${m.roles.map(r => hrRoleRow(m, r, lines(r.skill))).join("")}${stray ? `<tr class="hs-subrow"><td class="l" colspan="7">${stray}</td></tr>` : ""}</tbody>
     <tfoot><tr><td class="l">Total</td><td class="opt">${hrNum(t.needed)}</td><td class="opt">${hrNum(own)}</td><td data-l="New hires">${hrNum(t.hire)}</td><td class="${t.short ? "warn" : ""}" data-l="Stays open">${hrNum(t.short)}</td><td class="opt">+${fmt(t.bill)}</td><td></td></tr></tfoot></table></div>
-    ${facts}`;
+    ${hrFindHtml(m)}${facts}`;
+}
+/* Where to find them: for each role places stay open in, how many and where
+   the people come from, for an early company whose headhunters recruit few
+   roles or none. A headhunter already recruiting the role is said; otherwise
+   a Headhunter at the headquarters, or the game's Recruitment Agency. */
+function hrFindHtml(m){
+  const short = m.roles.filter(r => r.short > 0);
+  if(!short.length) return "";
+  const recruiting = (D.hiring || {}).recruiting || {};
+  const agency = gameName("ba:businesstype_recruitmentagency") || "Recruitment Agency";
+  const rows = short.map(r => {
+    const out = r.pool.length - r.pass;
+    const have = !r.pool.length ? "no candidates"
+      : !r.pass ? `${plural(r.pool.length, "candidate")}, all left out by your filters`
+      : `only ${plural(r.pass, "candidate")}${out ? ` (${hrNum(out)} more left out by your filters)` : ""}`;
+    const n = recruiting[r.skill] || 0;
+    const where = n ? `${n === 1 ? "your Headhunter is" : `${hrNum(n)} of your Headhunters are`} recruiting ${hrRole(r.skill)}: wait for more candidates, or a ${spEsc(agency)}`
+      : `a Headhunter at your headquarters recruiting ${hrRole(r.skill)}, or a ${spEsc(agency)}`;
+    return `<li><b>${hrRole(r.skill)}</b><span>${hrNum(r.short)} more needed · ${have}</span><span class="to">${hrSvg("chev")}${where}</span></li>`;
+  }).join("");
+  return `<div class="hs-find"><h4>Where to find them</h4><ul>${rows}</ul></div>`;
 }
 /* "When you hire": what the button does, in numbers, then the button, then
    what keeps it off. */
@@ -13731,7 +13790,11 @@ const hrKey = el => {
 function hrWhy(m, slug, S, wk){
   const kind = hrKind(slug);
   if(kind === "schedule") return "the plan's hours break it";
-  if(kind === "company") return "not offered";
+  if(kind === "company") return hrDemandAt(m, slug, S, wk) === "warn" ? "add them to an HR plan that offers it" : "not offered";
+  if(kind === "station"){
+    if(hrDemandAt(m, slug, S, wk) === "no") return "none at any site";
+    return hrDeskAnywhere(slug, S) ? "not at this desk" : `none at ${spEsc(hrSiteName(S))}`;
+  }
   const tone = hrDemandAt(m, slug, S, wk);
   return tone === "warn" ? `none at ${spEsc(hrSiteName(S))}` : "none at any site";
 }
@@ -13884,6 +13947,113 @@ function hrPopPlace(anchor, pop){
   pop.style.left = `${left}px`;
   pop.style.top = `${below + h > vh - 12 && above >= 12 ? above : below}px`;
 }
+/* The option list of a Staff select, drawn by the page instead of the
+   system's white list (Peter's in-game test, 25 September 2026). The select
+   stays the control: the list sets its value and fires its change, so every
+   handler and the keyboard's own arrows keep working. Only where the pointer
+   is a mouse: a phone's own picker is the better one there. */
+let hrSel = null;  // {select, at}: the select whose list is open, the option lit
+const hrSelFine = () => !window.matchMedia || window.matchMedia("(pointer: fine)").matches;
+function hrSelOpen(select){
+  if(!select || select.disabled) return;
+  hrPopClose();
+  let pop = $("hsSelPop");
+  if(!pop){
+    pop = document.createElement("div");
+    pop.id = "hsSelPop"; pop.setAttribute("role", "listbox"); pop.tabIndex = -1;
+  }
+  const host = select.closest("dialog") || document.body;
+  if(pop.parentElement !== host) host.appendChild(pop);
+  const opts = [...select.options];
+  pop.setAttribute("aria-label", select.getAttribute("aria-label") || "");
+  pop.innerHTML = opts.map((o, i) => `<div class="hs-selopt${o.value === "" && !o.selected ? " ph" : ""}" role="option" data-hs-opt="${i}" aria-selected="${o.selected}"${
+    o.disabled ? ` aria-disabled="true"` : ""}><span>${spEsc(o.textContent)}</span>${hrSvg("check2")}</div>`).join("");
+  hrSel = {select, at: Math.max(0, select.selectedIndex)};
+  pop.hidden = false;
+  const anchor = select.closest(".hs-sel") || select;
+  pop.style.minWidth = `${Math.round(anchor.getBoundingClientRect().width)}px`;
+  anchor.setAttribute("aria-expanded", "true");
+  hrPopPlace(anchor, pop);
+  hrSelLight();
+  pop.focus({preventScroll: true});
+}
+function hrSelLight(){
+  const pop = $("hsSelPop");
+  if(!pop || !hrSel) return;
+  pop.querySelectorAll(".hs-selopt").forEach((el, i) => el.classList.toggle("on", i === hrSel.at));
+  const on = pop.querySelector(".hs-selopt.on");
+  if(on) on.scrollIntoView({block: "nearest"});
+}
+function hrSelClose(back){
+  const pop = $("hsSelPop"), sel = hrSel && hrSel.select;
+  hrSel = null;
+  if(pop){ pop.hidden = true; pop.remove(); }
+  const anchor = sel && (sel.closest(".hs-sel") || sel);
+  if(anchor && anchor.isConnected) anchor.setAttribute("aria-expanded", "false");
+  if(back && sel && sel.isConnected) sel.focus({preventScroll: true});
+}
+function hrSelPick(i){
+  if(!hrSel) return;
+  const sel = hrSel.select, o = sel.options[i];
+  if(!o || o.disabled){ return; }
+  hrSelClose(true);
+  if(sel.selectedIndex === i) return;
+  sel.selectedIndex = i;
+  sel.dispatchEvent(new Event("input", {bubbles: true}));
+  sel.dispatchEvent(new Event("change", {bubbles: true}));
+}
+function hrSelBind(){
+  const inStaff = t => t && t.closest && t.closest("#secStaff, #hsSheet, dialog.hr-wide");
+  /* A press on the field opens the list rather than the system's. */
+  document.addEventListener("mousedown", e => {
+    const t = e.target;
+    if(e.button !== 0 || !inStaff(t) || !hrSelFine()) return;
+    const field = t.closest(".hs-sel");
+    const select = field ? field.querySelector("select") : t.closest("select");
+    if(!select || !select.closest(".hs-sel")) return;
+    e.preventDefault();
+    if(hrSel && hrSel.select === select){ hrSelClose(true); return; }
+    select.focus({preventScroll: true});
+    hrSelOpen(select);
+  }, true);
+  document.addEventListener("click", e => {
+    if(!hrSel) return;
+    const opt = e.target.closest && e.target.closest("#hsSelPop [data-hs-opt]");
+    if(opt){ hrSelPick(Number(opt.dataset.hsOpt)); return; }
+    if(e.target.closest && (e.target.closest("#hsSelPop") || (hrSel.select.closest(".hs-sel") || hrSel.select).contains(e.target))) return;
+    hrSelClose();
+  });
+  document.addEventListener("keydown", e => {
+    const t = e.target;
+    /* On the select: Enter, Space, Alt+Down or F4 open the list; the arrows
+       alone change the value as a select always has. */
+    if(!hrSel){
+      if(t && t.tagName === "SELECT" && t.closest(".hs-sel") && inStaff(t) && hrSelFine()
+         && (e.key === "Enter" || e.key === " " || e.key === "F4" || (e.altKey && e.key === "ArrowDown"))){
+        e.preventDefault();
+        hrSelOpen(t);
+      }
+      return;
+    }
+    const n = hrSel.select.options.length;
+    const step = d => { let i = hrSel.at; for(let k = 0; k < n; k++){ i = (i + d + n) % n; if(!hrSel.select.options[i].disabled) break; } hrSel.at = i; hrSelLight(); };
+    if(e.key === "ArrowDown"){ e.preventDefault(); step(1); }
+    else if(e.key === "ArrowUp"){ e.preventDefault(); step(-1); }
+    else if(e.key === "Home"){ e.preventDefault(); hrSel.at = 0; hrSelLight(); }
+    else if(e.key === "End"){ e.preventDefault(); hrSel.at = n - 1; hrSelLight(); }
+    else if(e.key === "Enter" || e.key === " "){ e.preventDefault(); hrSelPick(hrSel.at); }
+    else if(e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); hrSelClose(true); }
+    else if(e.key === "Tab"){ hrSelClose(true); }
+  }, true);
+  const replace = () => {
+    const pop = $("hsSelPop"), sel = hrSel && hrSel.select;
+    if(!pop || !sel) return;
+    if(!sel.isConnected){ hrSelClose(); return; }
+    hrPopPlace(sel.closest(".hs-sel") || sel, pop);
+  };
+  window.addEventListener("resize", replace);
+  window.addEventListener("scroll", replace, {passive: true, capture: true});
+}
 function hrPopClose(back){
   const pop = $("hsDemPop");
   const target = hrPop && hrPop.target;
@@ -13929,7 +14099,8 @@ function hrQuickPlan(sites, cands, used){
   const open = out.plan ? S.weeks.filter(x => x.w.skill === q.skill && !x.who) : [];
   out.picks = out.matches.slice(0, q.n).map(c => {
     const fails = x => (c.demands || []).filter(d => hrKind(d) === "schedule" && hrBreaks(d, x.w, S.row));
-    const wk = open.find(x => !fails(x).length) || open[0] || null;
+    const wk = open.find(x => !fails(x).length && !hrDeskMiss(c.demands, S, x.w).length)
+      || open.find(x => !fails(x).length) || open[0] || null;
     if(wk){ open.splice(open.indexOf(wk), 1); if(hold){ wk.who = {type: "quick", c}; out.held++; } }
     if(hold) used.set(c.id, S);
     return {c, w: wk ? wk.w : null, misfit: wk ? fails(wk) : []};
@@ -14150,6 +14321,7 @@ let hrBound = false;
 function bindStaff(){
   if(hrBound) return;
   hrBound = true;
+  hrSelBind();
   const page = "#secStaff", sheet = "#hsSheet";
   on("change", `${page} [data-hr-move]`, el => {
     if(el.checked) hrUi.moveOff.delete(el.dataset.hrMove); else hrUi.moveOff.add(el.dataset.hrMove);
@@ -14271,7 +14443,7 @@ const hrWeekStrip = (slots, gap) => {
   const on = new Set((slots || []).map(s => s.d));
   const tip = HR_DAYS.filter(d => on.has(d)).map(d => {
     const s = slots.filter(x => x.d === d).map(x => `${String(x.f).padStart(2, "0")}–${String(x.t).padStart(2, "0")}`).join(", ");
-    return `${WEEK_FULL[d].slice(0, 3)} ${s}`;
+    return `${ttDay(d).slice(0, 3)} ${s}`;
   }).join(" · ");
   return `<span class="hr-wk${gap ? " gap" : ""}" data-tip="${attr(tip || "no hours: assigned only")}">${HR_DAYS.map(d => `<i class="${on.has(d) ? "on" : ""}"></i>`).join("")}</span>`;
 };
@@ -14313,7 +14485,7 @@ function hrReviewSites(m, req, phase, gone){
     const person = (name, sub, role, lv, wage, slots, hours, cls) => `<div class="hr-dp${cls ? ` ${cls}` : ""}"><span class="who"><b>${name}</b><small${sub.mv ? ` class="mv"` : ""}>${sub.t}</small></span><span class="r">${role}</span>
       <span class="m">${lv}</span><span class="m">${wage}</span>${hrWeekStrip(slots, cls === "gap")}<span class="m">${hours}</span></div>`;
     const people = open ? `<div class="hr-dpeople"><div class="hr-dp hd"><span>Person</span><span>Role</span><span class="m">Skill</span><span class="m">$/h</span><span class="hr-wkd">${
-        HR_DAYS.map(d => `<span>${WEEK_FULL[d][0]}</span>`).join("")}</span><span class="m">Week</span></div>${
+        HR_DAYS.map(d => `<span>${ttDay(d)[0]}</span>`).join("")}</span><span class="m">Week</span></div>${
       hires.map(x => { const c = x.who.c, g = gone.has(c.id); return person(g ? `<span class="hr-struck">${spEsc(c.name)}</span>` : spEsc(c.name), {t: g ? "application expired" : `new hire${x.who.misfit.length ? " · hours break a demand" : ""}`},
         hrRole(x.w.skill), `${Math.round(hrLevel(c, x.w.skill))}%`, hrWage(c.wage), x.w.slots, `${x.w.hours || 0} h`, g ? "gap" : ""); }).join("")}${
       extra.map(o => { const g = gone.has(o.c.id); return person(g ? `<span class="hr-struck">${spEsc(o.c.name)}</span>` : spEsc(o.c.name),
@@ -14383,7 +14555,7 @@ function hrReview(o = {}){
       if(row.scope === "hire" || row.scope === "move") return spEsc(nameOf(row.id));
       const S = row.address && hrLast.m.sites.find(x => x.key === gwKeyOf(row.address));
       const site = S && S.b ? spEsc(shortName(S.b)) : row.address ? gwSiteName(row) : "A site";
-      return row.scope === "shift" && row.d !== undefined ? `${site}: ${WEEK_FULL[row.d] || "a day"}` : site;
+      return row.scope === "shift" && row.d !== undefined ? `${site}: ${ttDay(row.d)}` : site;
     },
     draw: (answer, phase) => {
       const {m, req} = hrLast, gone = goneOf(answer), t = hrTotals(m), c = counts();
@@ -14404,6 +14576,9 @@ function hrReview(o = {}){
       const said = rewritten.length ? `<div class="gw-call info">${gwI("roster")}<div>The week is replaced at ${rewritten.map(s =>
         `<b>${gwSiteName(s)}</b> (${Number(s.removed) || 0} entries out, ${Number(s.added) || 0} in${s.openedHours ? ", open 0 to 24" : ""})`).join(", ")}.</div></div>` : "";
       const left = rewritten.flatMap(s => (s.leftWithout || []).map(p => `<span class="person"><i>${spEsc(gwInitials(p.name))}</i>${spEsc(p.name || "someone")}</span>`));
+      const fewer = hrFewer(m, rewritten);
+      const fewerCall = fewer.length ? `<div class="gw-call">${gwI("roster")}<div><b>Fewer hours than now</b> in the plan's week: ${
+        fewer.map(({S, r}) => `${spEsc(r.name || "someone")} (${spEsc(S.b ? shortName(S.b) : "a site")}, ${hrNum(r.now)} → ${hrNum(r.hours)} h)`).join(", ")}.</div></div>` : "";
       const emptied = hrLeftEmpty(req, answer);
       const displaced = [...req.touched.values()].filter(at => at.lost && at.lost.hours > 0);
       const displacedCall = displaced.length ? `<div class="gw-call">${gwI("roster")}<div><b>Hours the plan takes over</b>: shifts the plan does not own that overlap its own are cut to fit, ${
@@ -14427,7 +14602,7 @@ function hrReview(o = {}){
       const blocked = answer.blocked === "myemployees" ? `<div class="gw-no"><span class="ic">${hrSvg("phone")}</span><div class="rule">MyEmployees is open in the game.</div><div class="fix">${gwSvg("right")}<span>Close the MyEmployees app on your in-game phone, then try again.</span></div></div>` : "";
       return `${blocked}${gwTiles([["Hire", null, c.hire], ["Reassign", null, c.move], ["Added wages", null, `+${fmt(bill)}<small class="hr-u">/day</small>`]])}
         <p class="gw-lead">Who goes where. Open a site to see each person and the days they work.</p>
-        ${sites}${goneCall}${said}${emptyCall}${displacedCall}${left.length ? `<div class="gw-box">${gwCall("", "exit", "<b>No hours after this</b> for these people at the sites whose week is replaced. The game takes them off their work there and adds a to-do.")}<div class="gw-pills">${left.join("")}</div></div>` : ""}
+        ${sites}${goneCall}${said}${fewerCall}${emptyCall}${displacedCall}${left.length ? `<div class="gw-box">${gwCall("", "exit", "<b>No hours after this</b> for these people at the sites whose week is replaced. The game takes them off their work there and adds a to-do.")}<div class="gw-pills">${left.join("")}</div></div>` : ""}
         ${gapText ? `<div class="gw-call gw-warn">${gwI("alert")}<div>${gapText}.</div></div>` : ""}
         ${warned.length ? `<div class="gw-call">${gwI("info")}<div>${plural(warned.length, "person asks", "people ask")} for something their site does not meet (marked orange in Change picks). They are hired anyway.</div></div>` : ""}`;
     },
@@ -14458,6 +14633,12 @@ function hrReview(o = {}){
     },
   });
   if(gwOpen) gwOpen.classList.add("hr-wide");
+}
+/* The people a replaced week gives fewer hours than the game has them on now,
+   by the site's plan (`fewer`), for the sites the dry run says it rewrites. */
+function hrFewer(m, rewritten){
+  const keys = new Set((rewritten || []).map(s => s && s.address && gwKeyOf(s.address)).filter(Boolean));
+  return m.sites.filter(S => keys.has(S.key)).flatMap(S => (S.plan.fewer || []).map(r => ({S, r})));
 }
 /* A site row in the review opens for its people. */
 let hrReviewBound = false;

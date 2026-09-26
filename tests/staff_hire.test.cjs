@@ -1392,3 +1392,44 @@ test('an insurance tier some HR plan offers warns that a hire has to be added to
   });
   assert.deepEqual(out, ['warn', 'add them to an HR plan that offers it']);
 });
+
+test('a Staff select opens the page\'s own option list, by mouse and by keyboard', async (t) => {
+  const page = await board(t);
+  const role = page.locator('#hsQuick [data-hq-role]');
+  await role.click();
+  const pop = page.locator('#hsSelPop');
+  assert.equal(await pop.isVisible(), true, 'the list, not the system\'s');
+  assert.equal(await pop.getAttribute('role'), 'listbox');
+  assert.equal(await page.locator('#hsQuick .hs-sel[aria-expanded="true"] [data-hq-role]').count(), 1);
+  await pop.locator('.hs-selopt', {hasText: 'HR Manager'}).click();
+  assert.equal(await pop.count(), 0);
+  assert.equal(await page.locator('#hsQuick [data-hq-role]').inputValue(), HRM);
+  // The keyboard: Enter opens it, the arrows move, Enter picks, Escape closes.
+  await page.locator('#hsQuick [data-hq-site]').focus();
+  await page.keyboard.press('Enter');
+  assert.equal(await page.locator('#hsSelPop').isVisible(), true);
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#hsSelPop').count(), 0);
+  assert.equal(await page.evaluate(() => document.activeElement.matches('[data-hq-site]')), true);
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  assert.notEqual(await page.locator('#hsQuick [data-hq-site]').inputValue(), '');
+});
+
+test('Where to find them: a role places stay open in, how many and where people come from', async (t) => {
+  const page = await board(t);
+  const text = await page.evaluate(([LAW, CS]) => {
+    D.hiring.recruiting = {[CS]: 1};
+    const role = (skill, short, pool, pass) => ({skill, short, pool: Array(pool).fill({}), pass});
+    const html = hrFindHtml({roles: [role(LAW, 6, 0, 0), role(CS, 2, 3, 1), role('ba:skill_cleaning', 0, 5, 5)]});
+    const el = document.createElement('div'); el.innerHTML = html;
+    return [...el.querySelectorAll('li')].map(li => [...li.children].map(c => c.textContent.trim()).join(' '));
+  }, [LAW, CS]);
+  assert.deepEqual(text, [
+    'Lawyer 6 more needed · no candidates a Headhunter at your headquarters recruiting Lawyer, or a Recruitment Agency',
+    'Customer Service 2 more needed · only 1 candidate (2 more left out by your filters) your Headhunter is recruiting Customer Service: wait for more candidates, or a Recruitment Agency',
+  ]);
+  // Nothing short, nothing said.
+  assert.equal(await page.evaluate(() => hrFindHtml({roles: []})), '');
+});
