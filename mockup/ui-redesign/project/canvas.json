@@ -1,0 +1,817 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-09-26T12:00:00Z"
+ },
+ "title": "Big Copilot Redesign",
+ "launch": {
+  "view": "canvas",
+  "page": "overview"
+ },
+ "pages": [
+  {
+   "id": "structure",
+   "name": "1 · Structure"
+  },
+  {
+   "id": "overview",
+   "name": "2 · Overview"
+  },
+  {
+   "id": "supply",
+   "name": "3 · Supply fix journey"
+  },
+  {
+   "id": "tasks",
+   "name": "4 · Staffing, Businesses, Expansion"
+  },
+  {
+   "id": "support",
+   "name": "5 · Supporting frames"
+  }
+ ],
+ "boards": {
+  "Sitemap.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 1340,
+   "title": "Sitemap: five destinations, two references, the shell",
+   "is_interactive": true,
+   "page": "structure"
+  },
+  "Coverage.dc.html": {
+   "x": 1520,
+   "y": 0,
+   "w": 1440,
+   "h": 3920,
+   "title": "Feature coverage: 105 capabilities, 31 finding kinds",
+   "is_interactive": true,
+   "page": "structure"
+  },
+  "Rationale.dc.html": {
+   "x": 3040,
+   "y": 0,
+   "w": 1440,
+   "h": 1500,
+   "title": "Rationale: hierarchy, navigation, shared workflows, motion",
+   "is_interactive": true,
+   "page": "structure"
+  },
+  "NavCompare.dc.html": {
+   "x": 0,
+   "y": 4340,
+   "w": 1440,
+   "h": 980,
+   "title": "Navigation: sidebar (recommended) against the evolved masthead",
+   "is_interactive": true,
+   "page": "structure"
+  },
+  "OverviewMasthead.dc.html": {
+   "x": 1520,
+   "y": 4340,
+   "w": 1440,
+   "h": 900,
+   "title": "Alternative · Overview with the evolved masthead",
+   "is_interactive": true,
+   "page": "structure"
+  },
+  "Motion.dc.html": {
+   "x": 3040,
+   "y": 4340,
+   "w": 1440,
+   "h": 1160,
+   "title": "Motion, focus and their still equivalents",
+   "is_interactive": true,
+   "page": "structure"
+  },
+  "Main.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 900,
+   "title": "Overview · first screen, 1440 × 900 (recommended)",
+   "is_interactive": true,
+   "page": "overview"
+  },
+  "OverviewFull.dc.html": {
+   "x": 1520,
+   "y": 0,
+   "w": 1440,
+   "h": 1900,
+   "title": "Overview · the whole page, dark",
+   "is_interactive": true,
+   "page": "overview"
+  },
+  "OverviewLight.dc.html": {
+   "x": 3040,
+   "y": 0,
+   "w": 1440,
+   "h": 1900,
+   "title": "Overview · the whole page, light",
+   "is_interactive": true,
+   "page": "overview"
+  },
+  "OverviewMany.dc.html": {
+   "x": 0,
+   "y": 2320,
+   "w": 1440,
+   "h": 2360,
+   "title": "Overview · every finding shown (17)",
+   "is_interactive": true,
+   "page": "overview"
+  },
+  "Customize.dc.html": {
+   "x": 1520,
+   "y": 2320,
+   "w": 1440,
+   "h": 900,
+   "title": "Customize checks · every kind, the $ line, what is off",
+   "is_interactive": true,
+   "page": "overview"
+  },
+  "OverviewCalm.dc.html": {
+   "x": 3040,
+   "y": 2320,
+   "w": 1440,
+   "h": 1480,
+   "title": "Overview · no urgent findings (checks off, waiting for data)",
+   "is_interactive": true,
+   "page": "overview"
+  },
+  "OverviewShopOnly.dc.html": {
+   "x": 4560,
+   "y": 2320,
+   "w": 1440,
+   "h": 1400,
+   "title": "Overview · shop-only company, no factories",
+   "is_interactive": true,
+   "page": "overview"
+  },
+  "OverviewStale.dc.html": {
+   "x": 6080,
+   "y": 2320,
+   "w": 1440,
+   "h": 900,
+   "title": "Overview · refresh failed, last good board kept",
+   "is_interactive": true,
+   "page": "overview"
+  },
+  "OverviewLong.dc.html": {
+   "x": 7600,
+   "y": 2320,
+   "w": 1440,
+   "h": 900,
+   "title": "Overview · German labels and long names",
+   "is_interactive": true,
+   "page": "overview"
+  },
+  "OverviewFocus.dc.html": {
+   "x": 9120,
+   "y": 2320,
+   "w": 1440,
+   "h": 900,
+   "title": "Overview · keyboard focus, reduced motion",
+   "is_interactive": true,
+   "page": "overview"
+  },
+  "Overview1024.dc.html": {
+   "x": 0,
+   "y": 5100,
+   "w": 1024,
+   "h": 2580,
+   "title": "Overview · 1024 px",
+   "is_interactive": true,
+   "page": "overview"
+  },
+  "Overview768.dc.html": {
+   "x": 1104,
+   "y": 5100,
+   "w": 768,
+   "h": 2900,
+   "title": "Overview · 768 px",
+   "is_interactive": true,
+   "page": "overview"
+  },
+  "PhoneOverview.dc.html": {
+   "x": 1952,
+   "y": 5100,
+   "w": 390,
+   "h": 2400,
+   "title": "Overview · phone, dark",
+   "is_interactive": true,
+   "page": "overview"
+  },
+  "PhoneOverviewLight.dc.html": {
+   "x": 2422,
+   "y": 5100,
+   "w": 390,
+   "h": 2400,
+   "title": "Overview · phone, light",
+   "is_interactive": true,
+   "page": "overview"
+  },
+  "Changes.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 1240,
+   "title": "Supply › Changes · the company-wide checklist",
+   "is_interactive": true,
+   "page": "supply"
+  },
+  "Imports.dc.html": {
+   "x": 1520,
+   "y": 0,
+   "w": 1440,
+   "h": 1200,
+   "title": "Supply › Imports · arrived from Needs attention",
+   "is_interactive": true,
+   "page": "supply"
+  },
+  "WritePreview.dc.html": {
+   "x": 3040,
+   "y": 0,
+   "w": 1440,
+   "h": 900,
+   "title": "Write 1 · preview (dry run agrees)",
+   "is_interactive": true,
+   "page": "supply"
+  },
+  "WritePermission.dc.html": {
+   "x": 4560,
+   "y": 0,
+   "w": 1440,
+   "h": 900,
+   "title": "Write 2 · waiting for permission in the game",
+   "is_interactive": true,
+   "page": "supply"
+  },
+  "WriteApplying.dc.html": {
+   "x": 6080,
+   "y": 0,
+   "w": 1440,
+   "h": 900,
+   "title": "Write 3 · applying, reading again",
+   "is_interactive": true,
+   "page": "supply"
+  },
+  "WriteDone.dc.html": {
+   "x": 7600,
+   "y": 0,
+   "w": 1440,
+   "h": 900,
+   "title": "Write 4 · done, the undo scope",
+   "is_interactive": true,
+   "page": "supply"
+  },
+  "OverviewReturn.dc.html": {
+   "x": 9120,
+   "y": 0,
+   "w": 1440,
+   "h": 900,
+   "title": "Back to Needs attention · position and state kept",
+   "is_interactive": true,
+   "page": "supply"
+  },
+  "ImportsApplied.dc.html": {
+   "x": 0,
+   "y": 1660,
+   "w": 1440,
+   "h": 1200,
+   "title": "Imports · applied, waiting for confirmation",
+   "is_interactive": true,
+   "page": "supply"
+  },
+  "ImportsMarked.dc.html": {
+   "x": 1520,
+   "y": 1660,
+   "w": 1440,
+   "h": 1200,
+   "title": "Imports · manual path, marked done by you",
+   "is_interactive": true,
+   "page": "supply"
+  },
+  "ImportsConfirmed.dc.html": {
+   "x": 3040,
+   "y": 1660,
+   "w": 1440,
+   "h": 1240,
+   "title": "Imports · confirmed from refreshed data",
+   "is_interactive": true,
+   "page": "supply"
+  },
+  "WriteRefused.dc.html": {
+   "x": 4560,
+   "y": 1660,
+   "w": 1440,
+   "h": 900,
+   "title": "Write · refused, lock window",
+   "is_interactive": true,
+   "page": "supply"
+  },
+  "WriteOverCap.dc.html": {
+   "x": 6080,
+   "y": 1660,
+   "w": 1440,
+   "h": 900,
+   "title": "Write · a row over the supplier cap",
+   "is_interactive": true,
+   "page": "supply"
+  },
+  "WriteChanged.dc.html": {
+   "x": 7600,
+   "y": 1660,
+   "w": 1440,
+   "h": 900,
+   "title": "Write · conditions changed in the game",
+   "is_interactive": true,
+   "page": "supply"
+  },
+  "WriteOldMod.dc.html": {
+   "x": 9120,
+   "y": 1660,
+   "w": 1440,
+   "h": 900,
+   "title": "Write · older mod, reads only",
+   "is_interactive": true,
+   "page": "supply"
+  },
+  "Production.dc.html": {
+   "x": 0,
+   "y": 3320,
+   "w": 1440,
+   "h": 1340,
+   "title": "Supply › Production · hours, basis, inputs, staffing plan",
+   "is_interactive": true,
+   "page": "supply"
+  },
+  "ProductionNone.dc.html": {
+   "x": 1520,
+   "y": 3320,
+   "w": 1440,
+   "h": 900,
+   "title": "Supply › Production · no factories yet",
+   "is_interactive": true,
+   "page": "supply"
+  },
+  "PhoneImports.dc.html": {
+   "x": 3040,
+   "y": 3320,
+   "w": 390,
+   "h": 1100,
+   "title": "Imports · phone, dark",
+   "is_interactive": true,
+   "page": "supply"
+  },
+  "PhoneImportsLight.dc.html": {
+   "x": 3510,
+   "y": 3320,
+   "w": 390,
+   "h": 1100,
+   "title": "Imports · phone, light",
+   "is_interactive": true,
+   "page": "supply"
+  },
+  "PhoneWrite.dc.html": {
+   "x": 3980,
+   "y": 3320,
+   "w": 390,
+   "h": 1100,
+   "title": "Imports · phone, the write as a sheet",
+   "is_interactive": true,
+   "page": "supply"
+  },
+  "Schedules.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 1160,
+   "title": "Staffing › Schedules · one shop's plan, with evidence and prerequisites",
+   "is_interactive": true,
+   "page": "tasks"
+  },
+  "Results.dc.html": {
+   "x": 1520,
+   "y": 0,
+   "w": 1440,
+   "h": 1380,
+   "title": "Businesses › Results · company results and finances",
+   "is_interactive": true,
+   "page": "tasks"
+  },
+  "BusinessDetail.dc.html": {
+   "x": 3040,
+   "y": 0,
+   "w": 1440,
+   "h": 1560,
+   "title": "Businesses › a business page (shop)",
+   "is_interactive": true,
+   "page": "tasks"
+  },
+  "BusinessKinds.dc.html": {
+   "x": 4560,
+   "y": 0,
+   "w": 1440,
+   "h": 1000,
+   "title": "Business pages: warehouse, factory, office, home",
+   "is_interactive": true,
+   "page": "tasks"
+  },
+  "Prices.dc.html": {
+   "x": 0,
+   "y": 1980,
+   "w": 1440,
+   "h": 900,
+   "title": "Businesses › Products & prices · from the Overview task",
+   "is_interactive": true,
+   "page": "tasks"
+  },
+  "PricesShop.dc.html": {
+   "x": 1520,
+   "y": 1980,
+   "w": 1440,
+   "h": 900,
+   "title": "Products & prices · one shop's prices against the market",
+   "is_interactive": true,
+   "page": "tasks"
+  },
+  "Finder.dc.html": {
+   "x": 3040,
+   "y": 1980,
+   "w": 1440,
+   "h": 1060,
+   "title": "Expansion › Find a location · map, list, filters, floor plan",
+   "is_interactive": true,
+   "page": "tasks"
+  },
+  "FinderDetail.dc.html": {
+   "x": 4560,
+   "y": 1980,
+   "w": 1440,
+   "h": 1060,
+   "title": "Find a location · a building's floor plan and costs, filters kept",
+   "is_interactive": true,
+   "page": "tasks"
+  },
+  "Deliveries.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 900,
+   "title": "Supply › Deliveries",
+   "is_interactive": true,
+   "page": "support"
+  },
+  "GoodsFlow.dc.html": {
+   "x": 1520,
+   "y": 0,
+   "w": 1440,
+   "h": 1000,
+   "title": "Supply › Goods flow",
+   "is_interactive": true,
+   "page": "support"
+  },
+  "StaffNeeds.dc.html": {
+   "x": 3040,
+   "y": 0,
+   "w": 1440,
+   "h": 900,
+   "title": "Staffing › Staff needs",
+   "is_interactive": true,
+   "page": "support"
+  },
+  "Payroll.dc.html": {
+   "x": 4560,
+   "y": 0,
+   "w": 1440,
+   "h": 900,
+   "title": "Staffing › Payroll",
+   "is_interactive": true,
+   "page": "support"
+  },
+  "Standards.dc.html": {
+   "x": 0,
+   "y": 1420,
+   "w": 1440,
+   "h": 900,
+   "title": "Businesses › Standards",
+   "is_interactive": true,
+   "page": "support"
+  },
+  "Milestones.dc.html": {
+   "x": 1520,
+   "y": 1420,
+   "w": 1440,
+   "h": 900,
+   "title": "Businesses › Milestones (secondary)",
+   "is_interactive": true,
+   "page": "support"
+  },
+  "Demand.dc.html": {
+   "x": 3040,
+   "y": 1420,
+   "w": 1440,
+   "h": 1000,
+   "title": "Expansion › Demand",
+   "is_interactive": true,
+   "page": "support"
+  },
+  "PlanFactory.dc.html": {
+   "x": 4560,
+   "y": 1420,
+   "w": 1440,
+   "h": 900,
+   "title": "Expansion › Plan a factory",
+   "is_interactive": true,
+   "page": "support"
+  },
+  "Guide.dc.html": {
+   "x": 0,
+   "y": 2840,
+   "w": 1440,
+   "h": 900,
+   "title": "Game guide (reference)",
+   "is_interactive": true,
+   "page": "support"
+  },
+  "CityMap.dc.html": {
+   "x": 1520,
+   "y": 2840,
+   "w": 1440,
+   "h": 900,
+   "title": "City map (reference), a home's card",
+   "is_interactive": true,
+   "page": "support"
+  },
+  "Preferences.dc.html": {
+   "x": 3040,
+   "y": 2840,
+   "w": 1440,
+   "h": 1060,
+   "title": "Preferences",
+   "is_interactive": true,
+   "page": "support"
+  },
+  "Help.dc.html": {
+   "x": 4560,
+   "y": 2840,
+   "w": 1440,
+   "h": 1000,
+   "title": "Help & feedback · Retired features as a contingency",
+   "is_interactive": true,
+   "page": "support"
+  },
+  "NoSave.dc.html": {
+   "x": 6080,
+   "y": 2840,
+   "w": 1440,
+   "h": 900,
+   "title": "No save yet · the entry",
+   "is_interactive": true,
+   "page": "support"
+  }
+ },
+ "order": [
+  "Sitemap.dc.html",
+  "Coverage.dc.html",
+  "Rationale.dc.html",
+  "NavCompare.dc.html",
+  "OverviewMasthead.dc.html",
+  "Motion.dc.html",
+  "Main.dc.html",
+  "OverviewFull.dc.html",
+  "OverviewLight.dc.html",
+  "OverviewMany.dc.html",
+  "Customize.dc.html",
+  "OverviewCalm.dc.html",
+  "OverviewShopOnly.dc.html",
+  "OverviewStale.dc.html",
+  "OverviewLong.dc.html",
+  "OverviewFocus.dc.html",
+  "Overview1024.dc.html",
+  "Overview768.dc.html",
+  "PhoneOverview.dc.html",
+  "PhoneOverviewLight.dc.html",
+  "Changes.dc.html",
+  "Imports.dc.html",
+  "WritePreview.dc.html",
+  "WritePermission.dc.html",
+  "WriteApplying.dc.html",
+  "WriteDone.dc.html",
+  "OverviewReturn.dc.html",
+  "ImportsApplied.dc.html",
+  "ImportsMarked.dc.html",
+  "ImportsConfirmed.dc.html",
+  "WriteRefused.dc.html",
+  "WriteOverCap.dc.html",
+  "WriteChanged.dc.html",
+  "WriteOldMod.dc.html",
+  "Production.dc.html",
+  "ProductionNone.dc.html",
+  "PhoneImports.dc.html",
+  "PhoneImportsLight.dc.html",
+  "PhoneWrite.dc.html",
+  "Schedules.dc.html",
+  "Results.dc.html",
+  "BusinessDetail.dc.html",
+  "BusinessKinds.dc.html",
+  "Prices.dc.html",
+  "PricesShop.dc.html",
+  "Finder.dc.html",
+  "FinderDetail.dc.html",
+  "Deliveries.dc.html",
+  "GoodsFlow.dc.html",
+  "StaffNeeds.dc.html",
+  "Payroll.dc.html",
+  "Standards.dc.html",
+  "Milestones.dc.html",
+  "Demand.dc.html",
+  "PlanFactory.dc.html",
+  "Guide.dc.html",
+  "CityMap.dc.html",
+  "Preferences.dc.html",
+  "Help.dc.html",
+  "NoSave.dc.html"
+ ],
+ "notes": {
+  "row-structure-0": {
+   "x": 0,
+   "y": -300,
+   "text": "Structure: sitemap, coverage and the reasons",
+   "kind": "title1",
+   "page": "structure",
+   "maxW": 4480
+  },
+  "row-structure-1": {
+   "x": 0,
+   "y": 4040,
+   "text": "Navigation: recommendation, alternative, motion",
+   "kind": "title1",
+   "page": "structure",
+   "maxW": 4480
+  },
+  "row-overview-0": {
+   "x": 0,
+   "y": -300,
+   "text": "Overview: Needs attention first",
+   "kind": "title1",
+   "page": "overview",
+   "maxW": 4480
+  },
+  "row-overview-1": {
+   "x": 0,
+   "y": 2020,
+   "text": "Overview: volume, calm, young company, failure",
+   "kind": "title1",
+   "page": "overview",
+   "maxW": 10560
+  },
+  "row-overview-2": {
+   "x": 0,
+   "y": 4800,
+   "text": "Overview at 1024, 768 and 390",
+   "kind": "title1",
+   "page": "overview",
+   "maxW": 2812
+  },
+  "row-supply-0": {
+   "x": 0,
+   "y": -300,
+   "text": "The import fix: notice › understand › review › apply › check › return",
+   "kind": "title1",
+   "page": "supply",
+   "maxW": 10560
+  },
+  "row-supply-1": {
+   "x": 0,
+   "y": 1360,
+   "text": "Other outcomes: applied, manual, confirmed, refused, over cap, moved on, old mod",
+   "kind": "title1",
+   "page": "supply",
+   "maxW": 10560
+  },
+  "row-supply-2": {
+   "x": 0,
+   "y": 3020,
+   "text": "Production and the phone journey",
+   "kind": "title1",
+   "page": "supply",
+   "maxW": 4370
+  },
+  "row-tasks-0": {
+   "x": 0,
+   "y": -300,
+   "text": "Staffing and Businesses: schedules, results, a business",
+   "kind": "title1",
+   "page": "tasks",
+   "maxW": 6000
+  },
+  "row-tasks-1": {
+   "x": 0,
+   "y": 1680,
+   "text": "Prices from the Overview task, and Find a location",
+   "kind": "title1",
+   "page": "tasks",
+   "maxW": 6000
+  },
+  "row-support-0": {
+   "x": 0,
+   "y": -300,
+   "text": "Supporting: Deliveries, Goods flow, Staff needs, Payroll",
+   "kind": "title1",
+   "page": "support",
+   "maxW": 6000
+  },
+  "row-support-1": {
+   "x": 0,
+   "y": 1120,
+   "text": "Supporting: Standards, Milestones, Demand, Plan a factory",
+   "kind": "title1",
+   "page": "support",
+   "maxW": 6000
+  },
+  "row-support-2": {
+   "x": 0,
+   "y": 2540,
+   "text": "References, utilities and the entry",
+   "kind": "title1",
+   "page": "support",
+   "maxW": 7520
+  },
+  "n-struct": {
+   "x": 0,
+   "y": -180,
+   "w": 520,
+   "maxH": 150,
+   "text": "Start here: the sitemap, then the coverage sheet (every ID and finding kind with its frame and whether it is existing, regrouped or new work), then the rationale.",
+   "page": "structure",
+   "fill": "blue"
+  },
+  "n-nav": {
+   "x": 0,
+   "y": 4160,
+   "w": 520,
+   "maxH": 150,
+   "text": "Sidebar recommended at 1024 and wider; the evolved masthead is the alternative and becomes the tablet layout. Phones get a labelled bottom bar.",
+   "page": "structure",
+   "fill": "blue"
+  },
+  "n-journey": {
+   "x": 0,
+   "y": -180,
+   "w": 520,
+   "maxH": 150,
+   "text": "Play from Overview (Main): Review import amount → Imports → Preview in the game → Apply → Allowed in game → Done → Back to Needs attention. The manual path is 'Mark done by you' on Imports.",
+   "page": "supply",
+   "fill": "blue"
+  },
+  "n-states": {
+   "x": 0,
+   "y": 1480,
+   "w": 520,
+   "maxH": 150,
+   "text": "Four marks, never merged: Suggested (dashed), Marked done by you (your note), Applied through game link (blue), Confirmed from refreshed data (green). Only a newer read can confirm.",
+   "page": "supply",
+   "fill": "blue"
+  },
+  "n-prod": {
+   "x": 0,
+   "y": 3140,
+   "w": 520,
+   "maxH": 150,
+   "text": "Production owns factory hours and the workers they need. Toggle 'Plan for' to see Full production against Shop demand change hours, inputs, hires and wages. Staffing links here; there is no second planner.",
+   "page": "supply",
+   "fill": "blue"
+  },
+  "n-sched": {
+   "x": 0,
+   "y": -180,
+   "w": 520,
+   "maxH": 150,
+   "text": "Schedules lists shops with their plan status; offices show why a shop schedule does not apply; factories link to Supply › Production, the one factory staffing plan.",
+   "page": "tasks",
+   "fill": "blue"
+  },
+  "n-price": {
+   "x": 0,
+   "y": 1800,
+   "w": 520,
+   "maxH": 150,
+   "text": "Overview › Check prices and product sales lands here; picking a shop shows its prices beside the market. No pricing optimizer: the page says these are comparisons.",
+   "page": "tasks",
+   "fill": "blue"
+  },
+  "n-find": {
+   "x": 1520,
+   "y": 1800,
+   "w": 520,
+   "maxH": 150,
+   "text": "Find a location keeps its filters: open a building (FinderDetail) and 'Results' returns to the same list. Demand › Florist · Midtown opens it with that context.",
+   "page": "tasks",
+   "fill": "blue"
+  }
+ },
+ "designSystems": []
+}

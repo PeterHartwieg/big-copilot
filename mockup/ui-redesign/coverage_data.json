@@ -1,0 +1,865 @@
+{
+"ids": [
+[
+"Entry and discovery",
+"E01",
+"Choose/drop save folder, landing",
+"Shell → Open save",
+"Keep folder/drop entry and newest-save explanation."
+],
+[
+"Entry and discovery",
+"E02",
+"Choose/drop one save, landing",
+"Shell → Open save → One file",
+"Keep deliberate snapshot selection and fallback."
+],
+[
+"Entry and discovery",
+"E03",
+"Link to running game, landing/source controls",
+"Shell → Link to game",
+"Keep connection setup and supported-write explanation."
+],
+[
+"Entry and discovery",
+"E04",
+"Character/save picker",
+"Shell → Company/save selector",
+"Always visible; changing scope clears incompatible selections."
+],
+[
+"Entry and discovery",
+"E05",
+"Resume remembered source and permission recovery",
+"Shell → Source status/recovery",
+"Retain remembered-source resume and explicit permission recovery."
+],
+[
+"Entry and discovery",
+"E06",
+"Follow changes, manual Update and fresh/stale status",
+"Shell → Source status and Update",
+"Show fresh/stale/reading states independently of online presence."
+],
+[
+"Entry and discovery",
+"E07",
+"Platform-specific save path and Copy",
+"Shell → Open save → Save-location help",
+"Retain platform paths and Copy, also reachable from Help."
+],
+[
+"Entry and discovery",
+"E08",
+"Wiki without a save",
+"Game guide, including no-save entry",
+"Keep usable independently of a company."
+],
+[
+"Entry and discovery",
+"E09",
+"Optional game text / game-name language",
+"Preferences → Game names / Game text",
+"Separate name language from UI language; missing-text recovery stays contextual."
+],
+[
+"Entry and discovery",
+"E10",
+"History retention and Forget history",
+"Preferences → History",
+"Retain retention/forget controls and consequence explanation."
+],
+[
+"Entry and discovery",
+"E11",
+"Six top-level pages and remembered subviews",
+"Shell → Proposed main/local navigation",
+"Replace page grouping; retain explicit routes and visible remembered state."
+],
+[
+"Entry and discovery",
+"E12",
+"Site URLs, breadcrumbs, Back/Forward, site picker",
+"Shared business context + route history",
+"Preserve site identity, Back/Forward and return-to-origin behavior."
+],
+[
+"Entry and discovery",
+"E13",
+"Global search, synonyms, grouped results, recents",
+"Shell → Optional Search",
+"Keep existing index; normal navigation must be sufficient."
+],
+[
+"Entry and discovery",
+"E14",
+"Search keyboard shortcuts and map shortcuts",
+"Search shortcuts + contextual map buttons",
+"Keep expert accelerators with visible equivalents."
+],
+[
+"Entry and discovery",
+"E15",
+"Ask the board's seven question links",
+"Overview → Permanent task groups",
+"Consolidate question routes; retire the disappearing row presentation only."
+],
+[
+"Entry and discovery",
+"E16",
+"Next moves cards",
+"Overview → Permanent task groups",
+"Merge Next moves entry points rather than adding a duplicate launcher."
+],
+[
+"Entry and discovery",
+"E17",
+"New badges and news strip",
+"Shell/contextual New badge + What's new",
+"Keep announcements secondary and link to permanent destinations."
+],
+[
+"Entry and discovery",
+"E18",
+"Difficulty settings comparison",
+"Shell → Game context/difficulty",
+"Keep context chip and comparison; also reachable from Preferences."
+],
+[
+"Company and dashboard",
+"C01",
+"Profit, revenue, cash and net-worth/fixed-cost tiles, Today",
+"Overview → Compact company strip",
+"Retain all four metric roles; Needs attention is first major block."
+],
+[
+"Company and dashboard",
+"C02",
+"Cash versus earned profit, debt note and history",
+"Businesses → Results → Company finances",
+"Overview cash summary links here; preserve debt/history limitations."
+],
+[
+"Company and dashboard",
+"C03",
+"Needs attention, severity and materiality",
+"Overview → Needs attention",
+"Prominent primary experience; all findings still available."
+],
+[
+"Company and dashboard",
+"C04",
+"Finding-kind switches, below-threshold and disabled groups",
+"Overview → Needs attention → Customize checks",
+"Keep materiality, below-threshold and off-kind disclosure in context."
+],
+[
+"Company and dashboard",
+"C05",
+"Daily/rolling result chart and series controls",
+"Businesses → Results",
+"Keep company daily/rolling chart and series controls."
+],
+[
+"Company and dashboard",
+"C06",
+"By weekday company chart and site comparison",
+"Businesses → Results → By weekday",
+"Retain site comparison and insufficient-history state."
+],
+[
+"Company and dashboard",
+"C07",
+"Portfolio by chain, site profit/cost/margin and trends",
+"Businesses → Results → Business/chain comparison",
+"Keep sortable portfolio and site drill-down."
+],
+[
+"Company and dashboard",
+"C08",
+"Portfolio Operations, satisfaction and promotion",
+"Businesses → Standards",
+"Rename the Operations entry; expose satisfaction and promotion subjects."
+],
+[
+"Company and dashboard",
+"C09",
+"Company costs outside sites",
+"Businesses → Results → Company costs",
+"Preserve costs outside sites and reconciliation."
+],
+[
+"Company and dashboard",
+"C10",
+"Company Products, top/all and aggregate sales",
+"Businesses → Products & prices → Sales",
+"Retain top/all, aggregates and seller drill-down."
+],
+[
+"Company and dashboard",
+"C11",
+"Product-level weekday peaks",
+"Businesses → Products & prices → Product evidence",
+"Share weekday evidence with Supply delivery sizing."
+],
+[
+"Company and dashboard",
+"C12",
+"Payroll by role, costs and satisfaction",
+"Staffing → Payroll",
+"Keep rate/booked distinction; Results and business costs link here."
+],
+[
+"Company and dashboard",
+"C13",
+"Milestones: business types, rivals, goals and diplomas",
+"Businesses → Milestones",
+"Supported secondary local view; no retirement assumed."
+],
+[
+"Company and dashboard",
+"C14",
+"Lifetime goods/taxes/buildings totals",
+"Businesses → Milestones → Career totals",
+"Keep lifetime totals; context links for financial/property figures."
+],
+[
+"Supply",
+"S01",
+"Shops / Warehouses / Factories tabs",
+"Supply → Scope control and object groups",
+"Move object tabs to scope/grouping; task views become primary local navigation."
+],
+[
+"Supply",
+"S02",
+"Needs a change / Everything",
+"Supply task views → Attention/all filter",
+"Keep filtering, visible scope and distinct empty states."
+],
+[
+"Supply",
+"S03",
+"Cross-tab change checklist and counts",
+"Supply → Changes",
+"Canonical cross-view checklist; Overview links to it."
+],
+[
+"Supply",
+"S04",
+"Per-row ticks, clear ticks, character persistence",
+"Supply → Changes and matching task rows",
+"One set of local progress notes per character; not game verification."
+],
+[
+"Supply",
+"S05",
+"Copy remaining and copy fallback",
+"Supply → Changes → Copy remaining",
+"Retain fallback, units, model and destinations in copied output."
+],
+[
+"Supply",
+"S06",
+"Editable import Set to amount and reset",
+"Supply → Imports → Proposed amount",
+"Keep override/reset and show recommendation versus chosen value."
+],
+[
+"Supply",
+"S07",
+"Weekly import quantities and supplier contracts",
+"Supply → Imports",
+"Combine warehouse and direct-factory import entry points."
+],
+[
+"Supply",
+"S08",
+"Smart Delivery stock targets and delivery ordering",
+"Supply → Imports → Contract details",
+"Keep fixed quantity versus stock-target semantics and supplier order."
+],
+[
+"Supply",
+"S09",
+"Warehouse stock cover, next arrival, run-out and catch-up",
+"Supply → Imports → Cover and timing",
+"Shared stock evidence also accessible from business detail/Deliveries."
+],
+[
+"Supply",
+"S10",
+"Shop daily top-ups and peak-day pressure",
+"Supply → Deliveries → Shop destination",
+"Keep peak-day use, pressure and daily target."
+],
+[
+"Supply",
+"S11",
+"Repeating wholesale deliveries",
+"Supply → Deliveries → Wholesale contract",
+"Retain weekly mode; no depot prerequisite."
+],
+[
+"Supply",
+"S12",
+"Depot-to-depot and route-fed warehouse supply",
+"Supply → Deliveries → Warehouse destination",
+"Retain second-tier source/destination relationships."
+],
+[
+"Supply",
+"S13",
+"Factory inputs, shared materials and no-depot inputs",
+"Supply → Production → Inputs",
+"Link to exact Deliveries or Imports fix; shared input evidence."
+],
+[
+"Supply",
+"S14",
+"Actual factory hours/output versus rated output",
+"Supply → Production → Lines",
+"Show current hours/output separately from rated/planned values."
+],
+[
+"Supply",
+"S15",
+"Demand sizing versus 24/7",
+"Supply → Planning basis, shared across affected views",
+"Full production versus Shop demand; explicit scope/persistence."
+],
+[
+"Supply",
+"S16",
+"Staffing for factory lines, hires and wage effect",
+"Supply → Production → Factory staffing",
+"Staffing links to this same line-hours/people/wages plan."
+],
+[
+"Supply",
+"S17",
+"Unknown recipe identification",
+"Supply → Production → Identify recipe",
+"Only affected lines need recovery; business page links here."
+],
+[
+"Supply",
+"S18",
+"Idle stock and high top-up recommendations",
+"Supply → Deliveries → Stock/target review",
+"Inputs/imports link here or retain contextual summaries; distinguish causes."
+],
+[
+"Supply",
+"S19",
+"Not-routed, paused and stalled diagnostics",
+"Supply → Deliveries / Imports by cause",
+"Paused contract in Imports; missing/stalled route in Deliveries; Goods flow for evidence."
+],
+[
+"Supply",
+"S20",
+"List/diagram presentation switch",
+"Supply → Goods flow, plus contextual Table/Goods flow links",
+"Named navigation destination replaces reliance on icon-only mode."
+],
+[
+"Supply",
+"S21",
+"Desktop goods-flow graph",
+"Supply → Goods flow, desktop",
+"Retain graph and selected-context links to rows."
+],
+[
+"Supply",
+"S22",
+"Responsive vertical flow and focused-site view",
+"Supply → Goods flow, narrow screens",
+"Keep responsive chain/focus behavior already in newer source."
+],
+[
+"Supply",
+"S23",
+"Grouping idle rows, collapsing sites and sorting",
+"Supply → Relevant task tables",
+"Retain grouping, sort, disclosed hidden counts and target expansion."
+],
+[
+"Supply",
+"S24",
+"Shared supply status words and explanations",
+"Shared supply evidence component",
+"One status vocabulary across Overview, Supply and site summaries."
+],
+[
+"Supply",
+"S25",
+"Apply imports through game link",
+"Supply → Imports → Preview/apply",
+"Only supported import writes; do not imply all checklist changes are writable."
+],
+[
+"Supply",
+"S26",
+"Import preview, caps, refused/uncovered amounts and undo",
+"Shared write dialog → Import operation",
+"Preserve caps, refusals, uncovered quantities, refresh and actual undo scope."
+],
+[
+"Business detail and staffing",
+"B01",
+"Site summary, trading readiness and local findings",
+"Businesses → Selected business → Summary",
+"Shared context from every finding/task; readiness and local findings remain."
+],
+[
+"Business detail and staffing",
+"B02",
+"Profit chart, costs and weekly rhythm",
+"Businesses → Selected business → Results",
+"Keep historical profit, cost and weekday evidence."
+],
+[
+"Business detail and staffing",
+"B03",
+"Satisfaction, amenities and uniforms",
+"Businesses → Selected business → Standards",
+"Keep amenity and uniform requirements, grouped without erasing fixes."
+],
+[
+"Business detail and staffing",
+"B04",
+"Promotion, marketing and demand-wave exposure",
+"Businesses → Selected business → Promotion",
+"Link to Standards comparison and Expansion's wave detail."
+],
+[
+"Business detail and staffing",
+"B05",
+"Customers by hour and limiting station/staffing",
+"Businesses → Selected business → Customers by hour",
+"Staffing uses the same evidence; building capacity alone stays neutral."
+],
+[
+"Business detail and staffing",
+"B06",
+"Overstaffed-hours evidence",
+"Staffing → Schedules → Selected business evidence",
+"Business page links to shared overstaffing evidence and assumptions."
+],
+[
+"Business detail and staffing",
+"B07",
+"Shop staffing plans, day copying, existing/proposed comparison",
+"Staffing → Schedules → Selected shop",
+"One plan; business page and Overview link to it."
+],
+[
+"Business detail and staffing",
+"B08",
+"Cover/Demand plan and Full cover 24/7 measurement test",
+"Staffing → Schedules → Planning/measurement mode",
+"Retain Cover/Demand and full-cover measurement purpose/readiness."
+],
+[
+"Business detail and staffing",
+"B09",
+"Assign/hire recommendations and unmet schedule demands",
+"Staffing → Staff needs, plus schedule prerequisites",
+"Keep people counts and assignment before hiring; no global optimizer claim."
+],
+[
+"Business detail and staffing",
+"B10",
+"Staffing checklist and ticks",
+"Staffing → Schedules → Plan progress",
+"Retain per-plan notes; align terminology with Supply, not a new universal checklist."
+],
+[
+"Business detail and staffing",
+"B11",
+"Write shop staffing, preview and undo",
+"Staffing → Schedules → Preview/apply",
+"Keep supported shop write, constraints, reread and undo."
+],
+[
+"Business detail and staffing",
+"B12",
+"Crew, role grouping, employee demands and quit warnings",
+"Businesses → Selected business → People",
+"Staff needs and Payroll link into the same crew evidence."
+],
+[
+"Business detail and staffing",
+"B13",
+"Set missing uniforms via game link",
+"Businesses → Standards → Uniform action",
+"Local finding offers same supported write; no duplicate implementation."
+],
+[
+"Business detail and staffing",
+"B14",
+"Shop shelves, prices, stock and office fees",
+"Businesses → Selected business → Products/fees",
+"Shared sales/prices entry; Supply links to local stock evidence."
+],
+[
+"Business detail and staffing",
+"B15",
+"Depot stock rail and sites fed",
+"Businesses → Selected warehouse → Stock and destinations",
+"Keep local rail/summary; full changes in Supply with site scope."
+],
+[
+"Business detail and staffing",
+"B16",
+"Factory machines, inputs and recipe selection",
+"Businesses → Selected factory → Lines and inputs",
+"Keep current-state overview; Production owns full planning and identification."
+],
+[
+"Business detail and staffing",
+"B17",
+"Home detail: rent, area and rent per area",
+"City map → Selected home",
+"Keep existing detail pending a separately approved map-card consolidation."
+],
+[
+"Growth",
+"G01",
+"Market demand by business type and neighbourhood",
+"Expansion → Demand → By business type",
+"Retain neighbourhood comparison, including offices."
+],
+[
+"Growth",
+"G02",
+"What I sell / Not yet product demand",
+"Expansion → Demand → What I sell / Not yet",
+"Keep distinct assortment and expansion questions; Products links here."
+],
+[
+"Growth",
+"G03",
+"Movers: demand changes, waves and supplier shortages",
+"Expansion → Demand → Market changes",
+"Relevant supplier shortages also link from Supply; wave exposure from business detail."
+],
+[
+"Growth",
+"G04",
+"Demand cell to location finder",
+"Expansion → Demand → Find a location",
+"Carry type/district selection into the single finder."
+],
+[
+"Growth",
+"G05",
+"Plan a chain, machine counts and export surplus",
+"Expansion → Plan a factory",
+"Preserve prospective production model, machine counts and export surplus."
+],
+[
+"Growth",
+"G06",
+"Planned ingredients, company target and observed costs",
+"Expansion → Plan a factory → Ingredients and costs",
+"Same plan, explicit model/observed-price coverage; link to current imports."
+],
+[
+"Map and premises",
+"M01",
+"City map, address search, layers and navigation",
+"City map",
+"Keep layers, address search, owned/rented buildings and navigation."
+],
+[
+"Map and premises",
+"M02",
+"Building cards and map overlays from other pages",
+"Shared location overlay/building card",
+"Preserve map context without abandoning the active task."
+],
+[
+"Map and premises",
+"M03",
+"Find a location ranking",
+"Expansion → Find a location",
+"City map launches the same map-backed workflow."
+],
+[
+"Map and premises",
+"M04",
+"Rent/takeover/sale modes and eligibility",
+"Expansion → Find a location → Availability mode",
+"Retain rent/takeover/sale and eligibility; no merged scoring claim."
+],
+[
+"Map and premises",
+"M05",
+"Type, district, area, building-capacity and traffic filters",
+"Expansion → Find a location → Filters",
+"Keep all filters with legible scope; advanced controls in a named disclosure."
+],
+[
+"Map and premises",
+"M06",
+"Floor plans and layout filter",
+"Finder / City map → Building card and layout filter",
+"One floor-plan source and building identity."
+],
+[
+"Map and premises",
+"M07",
+"Saved finder searches",
+"Expansion → Find a location → Saved searches",
+"Keep named saved filter/sort presets and persistence semantics."
+],
+[
+"Map and premises",
+"M08",
+"Rent/deposit estimates and building ownership",
+"Finder/building detail → Costs and ownership",
+"Preserve estimates, confidence limitations and rental/purchase differences."
+],
+[
+"Wiki and knowledge",
+"W01",
+"Wiki categories, pages and search",
+"Game guide → Browse/search",
+"Retain catalogue and internal search as an additional path."
+],
+[
+"Wiki and knowledge",
+"W02",
+"Business guides and setup checklists",
+"Game guide → Business guide → Setup",
+"Retain checklists as personal notes; Expansion links to relevant guide."
+],
+[
+"Wiki and knowledge",
+"W03",
+"Product fixtures, suppliers, recipes and recipe flows",
+"Game guide → Products, fixtures, suppliers and recipes",
+"Supply/Expansion use contextual links to this same reference."
+],
+[
+"Wiki and knowledge",
+"W04",
+"Yours and Prices in your save",
+"Businesses → Products & prices → Selected guide context",
+"Game guide retains Yours/Prices sections as a second entry to shared data."
+],
+[
+"Wiki and knowledge",
+"W05",
+"Static searchable wiki pages and direct links",
+"Public/static wiki URLs",
+"Keep routes, search-engine access and no-save behavior."
+],
+[
+"Preferences and community",
+"P01",
+"Theme/system preference and reduced-motion behavior",
+"Preferences → Appearance",
+"Keep theme/system and reduced-motion support throughout."
+],
+[
+"Preferences and community",
+"P02",
+"Interface language support in newer source",
+"Preferences → Interface language",
+"Reflect actual available translations; distinct from Game names."
+],
+[
+"Preferences and community",
+"P03",
+"Changelog, new-feature discovery and updates",
+"What's new + contextual release notice",
+"Keep current routes and feature badges; don't depend on them for discoverability."
+],
+[
+"Preferences and community",
+"P04",
+"Community feature ballot",
+"Help & feedback → Feature requests",
+"Existing ballot; future retirement lifecycle only when justified."
+],
+[
+"Preferences and community",
+"P05",
+"Approximate online count",
+"Secondary community/footer area",
+"Preserve approximate presence if retained; never substitute for save freshness."
+],
+[
+"Preferences and community",
+"P06",
+"Feedback/support links",
+"Help & feedback + contextual task feedback",
+"Make asking for help possible where confusion occurs."
+],
+[
+"Preferences and community",
+"P07",
+"Donation, social, source, game and legal links",
+"Footer/project utilities",
+"Keep donation, social, source and legal links plainly accessible."
+],
+[
+"Preferences and community",
+"P08",
+"Interactive brand spheres and coin effects",
+"Brand/masthead and contextual playful interactions",
+"Preserve recognizable sphere/coin personality; avoid competing with critical findings."
+],
+[
+"Local access",
+"L01",
+"CLI-generated local dashboard",
+"Local CLI → Shared dashboard shell",
+"Same core navigation; static/data-source limits remain explicit."
+],
+[
+"Local access",
+"L02",
+"CLI watch mode and game-link source",
+"Local CLI watch/game → Shared source status",
+"Retain supported source modes; no browser-only dependency for core tasks."
+],
+[
+"Local access",
+"L03",
+"CLI history backfill",
+"Local CLI → History backfill",
+"Retain documented local capability; don't imply a browser control exists."
+]
+],
+"kinds": [
+[
+"Not trading yet",
+"Business page → readiness; explicit links for staffing, stock, prices and delivery prerequisites"
+],
+[
+"Vacant leases",
+"Businesses → Results → company/site costs; map and property detail"
+],
+[
+"Losing money",
+"Business page → results and costs; distinguish a payment-day effect"
+],
+[
+"Nobody staffed",
+"Shop/office staff evidence → eligible schedule; factory → Supply Production"
+],
+[
+"Low satisfaction",
+"Business page → Standards and relevant causes"
+],
+[
+"Promotion below cap",
+"Business page → Promotion; Standards comparison for multiple sites"
+],
+[
+"Uniforms / locker",
+"Business page → uniforms; installation instruction or supported uniform write"
+],
+[
+"No customer bathroom",
+"Business page → amenities, bathroom requirement"
+],
+[
+"Bathroom has no privacy",
+"Business page → amenities, stall/door requirement"
+],
+[
+"No customer sink",
+"Business page → amenities, sink requirement"
+],
+[
+"No music playing",
+"Business page → amenities, music requirement"
+],
+[
+"Interior design too low",
+"Business page → amenities, interior requirement"
+],
+[
+"Staff demands",
+"Staffing → Staff needs, selected business/person or role group"
+],
+[
+"Insurance / happy boss",
+"Staffing → Staff needs, company-wide requirement"
+],
+[
+"Demand wave ending",
+"Business page → exposure and baseline; Expansion Demand → relevant wave"
+],
+[
+"Revenue trend",
+"Business page → results/weekday evidence"
+],
+[
+"No distribution plan",
+"Supply → Deliveries, selected item/destination"
+],
+[
+"Outsells its top-up",
+"Supply → Deliveries, target and peak-day evidence"
+],
+[
+"Import paused",
+"Supply → Imports, exact contract and alternatives"
+],
+[
+"Factory inputs",
+"Supply → Production, selected input; handoff to its import/delivery fix"
+],
+[
+"Unnamed factory line",
+"Supply → Production, recipe identification"
+],
+[
+"Machine with no recipe",
+"Supply → Production, affected machine and recipe reference"
+],
+[
+"Import shortfall",
+"Supply → Imports, arrival timing and catch-up; route-fed cases → Deliveries"
+],
+[
+"Depot top-up too low",
+"Supply → Deliveries, selected source and depot"
+],
+[
+"Wholesale delivery too low",
+"Supply → Deliveries, weekly wholesale contract"
+],
+[
+"Weekly order too small",
+"Supply → Imports, standing order"
+],
+[
+"At capacity",
+"Business page → customer hours and actual limiting station/staffing; building capacity alone is not a fix"
+],
+[
+"Overstaffed hours",
+"Staffing → Schedules, selected business and evidence"
+],
+[
+"Idle stock",
+"Supply → Deliveries, stock/use evidence; related import or production setting where applicable"
+],
+[
+"Not routed",
+"Supply → Deliveries, missing route; Goods flow as contextual evidence"
+],
+[
+"Top-up target too high",
+"Supply → Deliveries, proposed lower target and basis"
+]
+]
+}
