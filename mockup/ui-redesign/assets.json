@@ -1,0 +1,17 @@
+{
+ "img": {
+  "before-Main": "/_blob/dba117fe063394b3d7066de5ef04e887",
+  "after-R2Overview": "/_blob/126503530381754b59db0777747803da",
+  "before-Imports": "/_blob/3abbc6437e3eaf942666d436fc189847",
+  "after-R2Imports": "/_blob/48e1110f5959aeccb6bb5f5fcf5c29dc",
+  "before-Changes": "/_blob/c49a95e1d4d1ea30a1c07fd1bf7676b9",
+  "after-R2Changes": "/_blob/3c8688bbfc43c927cce06bef9ed61028",
+  "before-BusinessDetail": "/_blob/c00c0db0e224f8cafd9125c8e1324bfd",
+  "after-R2Business": "/_blob/fc77625b26b2691ac08c132490af3d1d",
+  "before-PhoneOverview": "/_blob/bb9499f37e205a5a47b4134086dcfc5d",
+  "after-R2Phone": "/_blob/8987c944dac8f0a6950a95a398dbe748",
+  "before-PhoneImports": "/_blob/1bde78a5211ecb2dbd7fc37feb2fc439",
+  "after-R2PhoneImports": "/_blob/ff89ad1b8c7d32a4d28742a805722827"
+ },
+ "words": {"OV": "307", "IM": "156", "CH": "132", "BU": "130", "PH": "130, 56"}
+}

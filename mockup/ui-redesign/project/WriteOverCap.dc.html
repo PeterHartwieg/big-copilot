@@ -33,6 +33,7 @@ a{color:inherit}
   --tip-bg:#15181a;--tip-ink:#f3f4ef;--shadow:0 22px 50px -26px #1a1f1c55;
 }
 .board *{box-sizing:border-box}
+.board [hidden]{display:none!important}
 .board svg{display:block}
 .board .mono,.board .num{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
 :where(.board) :where(h1,h2,h3,h4,p){margin:0}
@@ -662,7 +663,7 @@ a{color:inherit}
     <div class="nx-fine">Fan-made · not affiliated with Hovgaard Games</div>
   </div>
 </aside><main class="nx-main"><header class="nx-top"><div class=nx-ttl><div class="nx-crumb"><a href="Changes.dc.html">Supply</a><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><span>Imports</span></div><h1>Imports</h1></div><div class="clock"><b>Day 83<i>·</i>Wed 09:40</b><small>YEAR 2 · 14 SITES · 96 STAFF<span class="fv-diff"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg>Normal</span></small></div><div class="orb" aria-hidden="true"><u></u></div></header>
-<div class="nx-from" role="region" aria-label="Arrived from Needs attention"><a class="back" href="Main.dc.html#att"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg>Needs attention</a><span class="what">From Needs attention · <b>Water at Bridge Hub, import shortfall</b></span><span class="pos">1 of 4 critical<a href="#">Next finding<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a><span class="nx-prop">proposed</span></span></div>
+<div class="nx-from" role="region" aria-label="Arrived from Needs attention"><a class="back" href="Main.dc.html#att"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg>Needs attention</a><span class="what">From Needs attention · <b>Water at Bridge Hub, import shortfall</b></span><span class="pos">1 of 4 critical<a href="#">Next finding<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a></span></div>
 <div class="nx-scope"><span class="lab">Scope</span><span class="nx-pick sel"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20V9l9-5 9 5v11"></path><path d="M7 20v-7h10v7M7 16h10"></path></svg>Bridge Hub<span class="x" aria-label="Clear"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width:12px;height:12px"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></span><button class="nx-pick" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v10h16V10"></path><path d="M3 5h18l-1.5 5h-15z"></path><path d="M9 20v-6h6v6"></path></svg>Shops<span class="mono dim">11</span></button><button class="nx-pick" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20V9l9-5 9 5v11"></path><path d="M7 20v-7h10v7M7 16h10"></path></svg>Warehouses<span class="mono dim">2</span></button><button class="nx-pick" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V11l5 3V11l5 3V7l8-3v17z"></path><path d="M7 17h2M12 17h2M17 17h1"></path></svg>Factories<span class="mono dim">2</span></button><span style="margin-left:auto;display:flex;gap:8px;align-items:center"><a class="link" href="#">All depots and direct factory imports</a><div class="seg" data-seg="f"><button class="on" type="button">Needs a change</button><button type="button">Everything</button></div></span></div>
 <div class="nx-basis"><span class="lab">Plan for</span><div class="seg" data-seg="basis"><button class="on" type="button" data-v="full">Full production</button><button class="" type="button" data-v="demand">Shop demand</button></div><span class="txt"><b>Full production:</b> every factory line at its rated output, round the clock; the imports behind it are sized to match, with no margin on the factory part. <span style="color:var(--ink-3)">Shop demand would suggest 11,040 here.</span></span></div>
 <div class="sp-grid">
@@ -873,7 +874,7 @@ class Component extends DCLogic {
       const all = $$('.nx-chg'), done = all.filter(r => r.classList.contains('done'));
       const p = all.length ? done.length / all.length * 100 : 0;
       ck.style.setProperty('--p', p + '%');
-      const c = $('.cnt b', ck); if (c) c.textContent = done.length;
+      const c = $('.cnt [data-n]', ck) || $('.cnt b', ck); if (c) c.textContent = done.length;
       const t = $('.truck', ck); if (t && !rm()) { t.classList.remove('go'); void t.offsetWidth; t.classList.add('go'); }
     };
     $$('.nx-chg .nx-tick').forEach(t => t.addEventListener('click', () => {

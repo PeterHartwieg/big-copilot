@@ -33,6 +33,7 @@ a{color:inherit}
   --tip-bg:#15181a;--tip-ink:#f3f4ef;--shadow:0 22px 50px -26px #1a1f1c55;
 }
 .board *{box-sizing:border-box}
+.board [hidden]{display:none!important}
 .board svg{display:block}
 .board .mono,.board .num{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
 :where(.board) :where(h1,h2,h3,h4,p){margin:0}
@@ -662,7 +663,7 @@ a{color:inherit}
     <div class="nx-fine">Fan-made · not affiliated with Hovgaard Games</div>
   </div>
 </aside><main class="nx-main"><header class="nx-top"><div class=nx-ttl><div class="nx-crumb"><a href="Changes.dc.html">Supply</a><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><span>Production</span></div><h1>Production</h1></div><div class="clock"><b>Day 83<i>·</i>Wed 09:40</b><small>YEAR 2 · 14 SITES · 96 STAFF<span class="fv-diff"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg>Normal</span></small></div><div class="orb" aria-hidden="true"><u></u></div></header>
-<div class="nx-from" role="region" aria-label="Arrived from Needs attention"><a class="back" href="Main.dc.html#att"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg>Needs attention</a><span class="what">From Needs attention · <b>Beer machine 4 at Canal Brewery, nobody staffed</b></span><span class="pos">2 of 4 critical<a href="#">Next finding<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a><span class="nx-prop">proposed</span></span></div>
+<div class="nx-from" role="region" aria-label="Arrived from Needs attention"><a class="back" href="Main.dc.html#att"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg>Needs attention</a><span class="what">From Needs attention · <b>Beer machine 4 at Canal Brewery, nobody staffed</b></span><span class="pos">2 of 4 critical<a href="#">Next finding<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a></span></div>
 <div class="nx-scope"><span class="lab">Scope</span><button class="nx-pick sel" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V11l5 3V11l5 3V7l8-3v17z"></path><path d="M7 17h2M12 17h2M17 17h1"></path></svg>Canal Brewery<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></button><button class="nx-pick" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v10h16V10"></path><path d="M3 5h18l-1.5 5h-15z"></path><path d="M9 20v-6h6v6"></path></svg>Shops<span class="mono dim">11</span></button><button class="nx-pick" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20V9l9-5 9 5v11"></path><path d="M7 20v-7h10v7M7 16h10"></path></svg>Warehouses<span class="mono dim">2</span></button><button class="nx-pick" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V11l5 3V11l5 3V7l8-3v17z"></path><path d="M7 17h2M12 17h2M17 17h1"></path></svg>Factories<span class="mono dim">2</span></button><span style="margin-left:auto;display:flex;gap:8px;align-items:center"><div class="seg" data-seg="f"><button class="on" type="button">Needs a change</button><button type="button">Everything</button></div></span></div>
 <div class="nx-basis"><span class="lab">Plan for</span><div class="seg" data-seg="basis"><button class="on" type="button" data-v="full">Full production</button><button class="" type="button" data-v="demand">Shop demand</button></div><span class="txt"><b>Full production:</b> every factory line at its rated output, round the clock; the imports behind it are sized to match, with no margin on the factory part. <span style="color:var(--ink-3)">Kept for Marlow Trading; switching never resets a line you are following.</span></span></div>
 
@@ -682,15 +683,15 @@ a{color:inherit}
   <div style="margin-top:26px">
 <div class="sp-plan" id="staffplan">
   <div>
-    <h3><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg>Factory staffing for this plan<span class="nx-tag rg">one plan · also opens from Staffing</span></h3>
+    <h3><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg>Factory staffing for this plan</h3>
     <div class="sp-tiles">
       <div><span class="lab">Machine-hours</span><span class="v">672</span><small>a week</small></div>
       <div><span class="lab">Factory workers</span><span class="v">7 → 14</span><small>people · hire 7</small></div>
       <div><span class="lab">Wages</span><span class="v warnc">+$1,620</span><small>a day, at today's rates</small></div>
-      <div><span class="lab">Longest shift</span><span class="v">12 h</span><small>the game's cap</small></div>
+      <div><span class="lab">Hours in a row</span><span class="v">12 h</span><small>at most, per person</small></div>
     </div>
-    <div class="sp-shifts"><div class="sp-shift"><span class="m mono" style="font-size:12px;color:var(--ink-2)">Beer 1</span><div class="row"><b style="left:0;width:49.5%">00–12 · Cy Moss</b><b class="" style="left:50.5%;width:49.5%">12–24 · Ben Ode</b></div></div><div class="sp-shift"><span class="m mono" style="font-size:12px;color:var(--ink-2)">Beer 2</span><div class="row"><b style="left:0;width:49.5%">00–12 · Ana Silva</b><b class="" style="left:50.5%;width:49.5%">12–24 · Rui Paz</b></div></div><div class="sp-shift"><span class="m mono" style="font-size:12px;color:var(--ink-2)">Beer 3</span><div class="row"><b style="left:0;width:49.5%">00–12 · Lea Kim</b><b class="hire" style="left:50.5%;width:49.5%">12–24 · hire</b></div></div><div class="sp-shift"><span class="m mono" style="font-size:12px;color:var(--ink-2)">Beer 4</span><div class="row"><b class="hire" style="left:0;width:49.5%">00–12 · hire</b><b class="hire" style="left:50.5%;width:49.5%">12–24 · hire</b></div></div></div>
-    <p class="quiet" style="margin-top:10px">One person per machine per hour, shifts of at most 12 hours placed around the workers' own demands. Names are the factory's current workers; dashed bars are people to hire.</p>
+    <div class="sp-shifts"><div class="sp-shift"><span class="m mono" style="font-size:12px;color:var(--ink-2)">Beer 1</span><div class="row"><b style="left:0;width:49.5%">00–12 · 1 person</b><b style="left:50.5%;width:49.5%">12–24 · 1 person</b></div></div><div class="sp-shift"><span class="m mono" style="font-size:12px;color:var(--ink-2)">Beer 2</span><div class="row"><b style="left:0;width:49.5%">00–12 · 1 person</b><b style="left:50.5%;width:49.5%">12–24 · 1 person</b></div></div><div class="sp-shift"><span class="m mono" style="font-size:12px;color:var(--ink-2)">Beer 3</span><div class="row"><b style="left:0;width:49.5%">00–12 · 1 person</b><b style="left:50.5%;width:49.5%">12–24 · 1 person</b></div></div><div class="sp-shift"><span class="m mono" style="font-size:12px;color:var(--ink-2)">Beer 4</span><div class="row"><b style="left:0;width:49.5%">00–12 · 1 person</b><b style="left:50.5%;width:49.5%">12–24 · 1 person</b></div></div></div>
+    <p class="quiet" style="margin-top:10px">Scheduling blocks for a typical day: one person per machine per hour, at most 12 hours in a row. The board counts the people the week needs; it does not assign named workers to machines.</p>
   </div>
   <div style="display:flex;flex-direction:column;gap:10px">
     <div class="sp-where"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"></path><circle cx="12" cy="10" r="2.2"></circle></svg><span>In the game: <b>BizMan › Canal Brewery › Schedule</b>. The game link does not write factory hours or hire.</span></div>
@@ -717,15 +718,15 @@ a{color:inherit}
   <div style="margin-top:26px">
 <div class="sp-plan" id="staffplan">
   <div>
-    <h3><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg>Factory staffing for this plan<span class="nx-tag rg">one plan · also opens from Staffing</span></h3>
+    <h3><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg>Factory staffing for this plan</h3>
     <div class="sp-tiles">
       <div><span class="lab">Machine-hours</span><span class="v">364</span><small>a week</small></div>
       <div><span class="lab">Factory workers</span><span class="v">7 → 8</span><small>people · hire 1</small></div>
       <div><span class="lab">Wages</span><span class="v ">+$230</span><small>a day, at today's rates</small></div>
-      <div><span class="lab">Longest shift</span><span class="v">12 h</span><small>the game's cap</small></div>
+      <div><span class="lab">Hours in a row</span><span class="v">12 h</span><small>at most, per person</small></div>
     </div>
-    <div class="sp-shifts"><div class="sp-shift"><span class="m mono" style="font-size:12px;color:var(--ink-2)">Beer 1</span><div class="row"><b style="left:29.2%;width:28.8%">07–14 · Cy Moss</b><b class="" style="left:58.4%;width:24.6%">14–20 · Ben Ode</b></div></div><div class="sp-shift"><span class="m mono" style="font-size:12px;color:var(--ink-2)">Beer 2</span><div class="row"><b style="left:29.2%;width:28.8%">07–14 · Ana Silva</b><b class="" style="left:58.4%;width:24.6%">14–20 · Rui Paz</b></div></div><div class="sp-shift"><span class="m mono" style="font-size:12px;color:var(--ink-2)">Beer 3</span><div class="row"><b style="left:29.2%;width:28.8%">07–14 · Lea Kim</b><b class="" style="left:58.4%;width:24.6%">14–20 · Tom Vu</b></div></div><div class="sp-shift"><span class="m mono" style="font-size:12px;color:var(--ink-2)">Beer 4</span><div class="row"><b style="left:29.2%;width:28.8%">07–14 · Ida Lund</b><b class="hire" style="left:58.4%;width:24.6%">14–20 · hire</b></div></div></div>
-    <p class="quiet" style="margin-top:10px">One person per machine per hour, shifts of at most 12 hours placed around the workers' own demands. Names are the factory's current workers; dashed bars are people to hire.</p>
+    <div class="sp-shifts"><div class="sp-shift"><span class="m mono" style="font-size:12px;color:var(--ink-2)">Beer 1</span><div class="row"><b style="left:29.2%;width:28.8%">07–14 · 1 person</b><b style="left:58.4%;width:24.6%">14–20 · 1 person</b></div></div><div class="sp-shift"><span class="m mono" style="font-size:12px;color:var(--ink-2)">Beer 2</span><div class="row"><b style="left:29.2%;width:28.8%">07–14 · 1 person</b><b style="left:58.4%;width:24.6%">14–20 · 1 person</b></div></div><div class="sp-shift"><span class="m mono" style="font-size:12px;color:var(--ink-2)">Beer 3</span><div class="row"><b style="left:29.2%;width:28.8%">07–14 · 1 person</b><b style="left:58.4%;width:24.6%">14–20 · 1 person</b></div></div><div class="sp-shift"><span class="m mono" style="font-size:12px;color:var(--ink-2)">Beer 4</span><div class="row"><b style="left:29.2%;width:28.8%">07–14 · 1 person</b><b style="left:58.4%;width:24.6%">14–20 · 1 person</b></div></div></div>
+    <p class="quiet" style="margin-top:10px">Scheduling blocks for a typical day: one person per machine per hour, at most 12 hours in a row. The board counts the people the week needs; it does not assign named workers to machines.</p>
   </div>
   <div style="display:flex;flex-direction:column;gap:10px">
     <div class="sp-where"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"></path><circle cx="12" cy="10" r="2.2"></circle></svg><span>In the game: <b>BizMan › Canal Brewery › Schedule</b>. The game link does not write factory hours or hire.</span></div>
@@ -848,7 +849,7 @@ class Component extends DCLogic {
       const all = $$('.nx-chg'), done = all.filter(r => r.classList.contains('done'));
       const p = all.length ? done.length / all.length * 100 : 0;
       ck.style.setProperty('--p', p + '%');
-      const c = $('.cnt b', ck); if (c) c.textContent = done.length;
+      const c = $('.cnt [data-n]', ck) || $('.cnt b', ck); if (c) c.textContent = done.length;
       const t = $('.truck', ck); if (t && !rm()) { t.classList.remove('go'); void t.offsetWidth; t.classList.add('go'); }
     };
     $$('.nx-chg .nx-tick').forEach(t => t.addEventListener('click', () => {

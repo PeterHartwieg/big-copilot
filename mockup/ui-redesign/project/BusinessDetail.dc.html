@@ -33,6 +33,7 @@ a{color:inherit}
   --tip-bg:#15181a;--tip-ink:#f3f4ef;--shadow:0 22px 50px -26px #1a1f1c55;
 }
 .board *{box-sizing:border-box}
+.board [hidden]{display:none!important}
 .board svg{display:block}
 .board .mono,.board .num{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
 :where(.board) :where(h1,h2,h3,h4,p){margin:0}
@@ -1000,7 +1001,7 @@ class Component extends DCLogic {
       const all = $$('.nx-chg'), done = all.filter(r => r.classList.contains('done'));
       const p = all.length ? done.length / all.length * 100 : 0;
       ck.style.setProperty('--p', p + '%');
-      const c = $('.cnt b', ck); if (c) c.textContent = done.length;
+      const c = $('.cnt [data-n]', ck) || $('.cnt b', ck); if (c) c.textContent = done.length;
       const t = $('.truck', ck); if (t && !rm()) { t.classList.remove('go'); void t.offsetWidth; t.classList.add('go'); }
     };
     $$('.nx-chg .nx-tick').forEach(t => t.addEventListener('click', () => {

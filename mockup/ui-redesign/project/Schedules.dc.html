@@ -33,6 +33,7 @@ a{color:inherit}
   --tip-bg:#15181a;--tip-ink:#f3f4ef;--shadow:0 22px 50px -26px #1a1f1c55;
 }
 .board *{box-sizing:border-box}
+.board [hidden]{display:none!important}
 .board svg{display:block}
 .board .mono,.board .num{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
 :where(.board) :where(h1,h2,h3,h4,p){margin:0}
@@ -904,7 +905,7 @@ a{color:inherit}
       <span class="mo-ring" style="border-top-color:var(--accent)"></span><span class="mono" style="font-size:12.5px">3 of 17 entries typed</span>
       <span style="margin-left:auto;display:flex;gap:8px;align-items:center"><button type="button" class="nx-btn "><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="8.5" y="8.5" width="11" height="11" rx="2"></rect><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"></path></svg>Copy the week</button><button class="gw-btn " type="button"><span class="gw-mw" aria-hidden="true"><i></i><b></b></span>Write the week</button></span>
     </div>
-    <p class="quiet" style="margin-top:8px">The game link writes this shop's seven days of shifts and can open 0–24 for Full cover. Undo restores the shifts until your next schedule write. Offices and factories are not written.</p>
+    <p class="quiet" style="margin-top:8px">The game link writes this shop's seven days of scheduled hours and can open 0–24 for Full cover. Undo restores the previous schedule until your next schedule write. Offices and factories are not written.</p>
   </div>
 </div></main></div>
 </div>
@@ -1015,7 +1016,7 @@ class Component extends DCLogic {
       const all = $$('.nx-chg'), done = all.filter(r => r.classList.contains('done'));
       const p = all.length ? done.length / all.length * 100 : 0;
       ck.style.setProperty('--p', p + '%');
-      const c = $('.cnt b', ck); if (c) c.textContent = done.length;
+      const c = $('.cnt [data-n]', ck) || $('.cnt b', ck); if (c) c.textContent = done.length;
       const t = $('.truck', ck); if (t && !rm()) { t.classList.remove('go'); void t.offsetWidth; t.classList.add('go'); }
     };
     $$('.nx-chg .nx-tick').forEach(t => t.addEventListener('click', () => {

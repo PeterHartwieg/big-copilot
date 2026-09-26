@@ -145,7 +145,7 @@ CHG = [
     ]),
     ("Production", [
         ("sug", "Raise Bridge Hub's top-up of Water to Canal Brewery to 2,400", "IC", "Canal Brewery", "a day · Full production", "1,200", "2,400", "a day", False, "supply/production"),
-        ("sug", "Post factory workers on all 4 Beer machines, 24 h a day", "IC", "Canal Brewery", "hire 7 · +$1,620 a day in wages", "60", "96", "machine-h a day", False, "supply/production"),
+        ("sug", "Schedule all 4 Beer machines for 24 h a day", "IC", "Canal Brewery", "hire 7 · +$1,620 a day in wages", "60", "96", "machine-h a day", False, "supply/production"),
     ]),
 ]
 
@@ -173,7 +173,7 @@ def changes() -> str:
 [ ] Marlow Market (MT) · Umbrella: add a daily top-up of 30 from Bridge Hub
 [ ] Garment Depot -> Stitch &amp; Co · Clothing (Cheap): add a route, 180 a day
 [ ] Canal Brewery · Water top-up from Bridge Hub: 1,200 -> 2,400 a day
-[ ] Canal Brewery · Beer, 4 machines: 24 h a day (hire 7 factory workers)"""
+[ ] Canal Brewery · Beer, 4 machines: schedule 24 h a day (7 more people)"""
     body = f"""
 <p class="nx-lede" style="margin-top:18px">Every setting the board suggests you change, across the company, with its units and the basis it was sized on. <b>Your ticks are notes kept in this browser</b>; only a refreshed save or game read can confirm a change.</p>
 {scope(extra='<span class="chip dim">Plan for: Full production</span>')}
@@ -423,7 +423,7 @@ def overview_return() -> str:
     body = ov.kpis() + f'<section class="nx-att">{ov.att_head()}<div class="nx-attgrid"><div>{ov.queue(states=states)}</div>{ov.rail()}</div></section>' + ov.tasks_head() + ov.tasks()
     body = body.replace('<article class="nx-f crit" data-id="imp"', '<article class="nx-f crit held" data-id="imp" style="outline:2px solid var(--accent);outline-offset:-2px;border-radius:8px"', 1)
     note = (f'<div role="status" style="margin-top:14px;display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--ink-2)">{ic("back", style="color:var(--accent)")}'
-            f'Back where you left: finding 1 of 4 critical. The list keeps its order until you leave the page. <span class="nx-prop">proposed</span></div>')
+            f'Back where you left: finding 1 of 4 critical. The list keeps its order until you leave the page.</div>')
     return ov.app("overview", "attention", "Overview", note + body)
 
 
@@ -456,24 +456,23 @@ def staff_plan(plan: str) -> str:
     full = plan == "full"
     mh, need, hire, wage = ("672", "14", "hire 7", "+$1,620") if full else ("364", "8", "hire 1", "+$230")
     if full:
-        shifts = "".join(f'<div class="sp-shift"><span class="m mono" style="font-size:12px;color:var(--ink-2)">Beer {k}</span><div class="row"><b style="left:0;width:49.5%">00–12 · {a}</b><b class="{"hire" if k > 2 else ""}" style="left:50.5%;width:49.5%">12–24 · {b}</b></div></div>'
-                         for k, a, b in [(1, "Cy Moss", "Ben Ode"), (2, "Ana Silva", "Rui Paz"), (3, "Lea Kim", "hire"), (4, "hire", "hire")])
-        shifts = shifts.replace(">00–12 · hire<", ">00–12 · hire<").replace('<b style="left:0;width:49.5%">00–12 · hire</b>', '<b class="hire" style="left:0;width:49.5%">00–12 · hire</b>')
+        shifts = "".join(f'<div class="sp-shift"><span class="m mono" style="font-size:12px;color:var(--ink-2)">Beer {k}</span><div class="row"><b style="left:0;width:49.5%">00–12 · 1 person</b><b style="left:50.5%;width:49.5%">12–24 · 1 person</b></div></div>'
+                         for k in range(1, 5))
     else:
-        shifts = "".join(f'<div class="sp-shift"><span class="m mono" style="font-size:12px;color:var(--ink-2)">Beer {k}</span><div class="row"><b style="left:29.2%;width:28.8%">07–14 · {a}</b><b class="{"hire" if b == "hire" else ""}" style="left:58.4%;width:24.6%">14–20 · {b}</b></div></div>'
-                         for k, a, b in [(1, "Cy Moss", "Ben Ode"), (2, "Ana Silva", "Rui Paz"), (3, "Lea Kim", "Tom Vu"), (4, "Ida Lund", "hire")])
+        shifts = "".join(f'<div class="sp-shift"><span class="m mono" style="font-size:12px;color:var(--ink-2)">Beer {k}</span><div class="row"><b style="left:29.2%;width:28.8%">07–14 · 1 person</b><b style="left:58.4%;width:24.6%">14–20 · 1 person</b></div></div>'
+                         for k in range(1, 5))
     return f"""
 <div class="sp-plan" id="staffplan">
   <div>
-    <h3>{ic("staffing")}Factory staffing for this plan<span class="nx-tag rg">one plan · also opens from Staffing</span></h3>
+    <h3>{ic("staffing")}Factory staffing for this plan</h3>
     <div class="sp-tiles">
       <div><span class="lab">Machine-hours</span><span class="v">{mh}</span><small>a week</small></div>
       <div><span class="lab">Factory workers</span><span class="v">7 → {need}</span><small>people · {hire}</small></div>
       <div><span class="lab">Wages</span><span class="v {"warnc" if full else ""}">{wage}</span><small>a day, at today's rates</small></div>
-      <div><span class="lab">Longest shift</span><span class="v">12 h</span><small>the game's cap</small></div>
+      <div><span class="lab">Hours in a row</span><span class="v">12 h</span><small>at most, per person</small></div>
     </div>
     <div class="sp-shifts">{shifts}</div>
-    <p class="quiet" style="margin-top:10px">One person per machine per hour, shifts of at most 12 hours placed around the workers' own demands. Names are the factory's current workers; dashed bars are people to hire.</p>
+    <p class="quiet" style="margin-top:10px">Scheduling blocks for a typical day: one person per machine per hour, at most 12 hours in a row. The board counts the people the week needs; it does not assign named workers to machines.</p>
   </div>
   <div style="display:flex;flex-direction:column;gap:10px">
     <div class="sp-where">{ic("pin")}<span>In the game: <b>BizMan › Canal Brewery › Schedule</b>. The game link does not write factory hours or hire.</span></div>

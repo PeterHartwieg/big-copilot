@@ -291,7 +291,7 @@ def schedules() -> str:
       <span class="mo-ring" style="border-top-color:var(--accent)"></span><span class="mono" style="font-size:12.5px">3 of 17 entries typed</span>
       <span style="margin-left:auto;display:flex;gap:8px;align-items:center">{btn("Copy the week", "", icon="copy")}{gwbtn("Write the week", "", "#")}</span>
     </div>
-    <p class="quiet" style="margin-top:8px">The game link writes this shop's seven days of shifts and can open 0–24 for Full cover. Undo restores the shifts until your next schedule write. Offices and factories are not written.</p>
+    <p class="quiet" style="margin-top:8px">The game link writes this shop's seven days of scheduled hours and can open 0–24 for Full cover. Undo restores the previous schedule until your next schedule write. Offices and factories are not written.</p>
   </div>
 </div>"""
     return app("staffing", "schedules", "Schedules", body, [("Staffing", ROUTE["staffing"]), ("Schedules", "")])
@@ -641,7 +641,7 @@ def finder(detail: bool = False) -> str:
   <a href="{ROUTE["expansion/plan"]}"><b>{ic("factory")}Plan a factory</b><small>For a warehouse or factory floor, plan its machines and inputs</small></a>
 </div>"""
     body = f"""
-<p class="nx-lede" style="margin-top:18px">Vacant premises ranked for the business you want to open. The same finder opens from the City map. <b>Being at a building's capacity is normal</b>; this is for a new business, not a way around a full one.</p>
+<p class="nx-lede" style="margin-top:18px">Vacant premises ranked for the business you want to open.</p>
 {main}{onward}"""
     b = app("expansion", "finder", "Find a location", body, [("Expansion", ROUTE["expansion"]), ("Find a location", "")])
     if detail:
@@ -745,7 +745,7 @@ def goods_flow() -> str:
     svg.append("</svg>")
     body = f"""
 <div class="nx-scope"><span class="lab">Following</span><span class="nx-pick sel">{ic("warehouse")}Bridge Hub<span class="x">{ic("x", style="width:12px;height:12px")}</span></span>
-  <span class="nx-pick sel">{ic("tag")}Water<span class="x">{ic("x", style="width:12px;height:12px")}</span></span><span class="nx-tag nw">product filter · new work</span>
+  <span class="nx-pick sel">{ic("tag")}Water<span class="x">{ic("x", style="width:12px;height:12px")}</span></span>
   <span style="margin-left:auto" class="seg"><a href="{ROUTE["supply/deliveries"]}">Table</a><button class="on" type="button">Goods flow</button></span></div>
 <div class="gfl" style="margin-top:16px">{"".join(svg)}</div>
 <div class="mo-2" style="margin-top:14px">
@@ -753,7 +753,7 @@ def goods_flow() -> str:
     <div class="sp-kv"><span>In</span><b>1 Pier · 8,400 a week</b><span>Out</span><b>Canal Brewery 1,200 · 2 shops 240 a day</b><span>On hand</span><b>5,600 · dry Sat</b></div></div>
   <div class="mo-card"><h3>{ic("list")}How to read it</h3><div class="sp-legend" style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--ink-2)">
     <span>solid: the daily round · dashed: the weekly import · width: units a day</span><span>amber pipe: an input arriving short · dots: tight (amber), cannot cover (red)</span>
-    <span>On a phone the same graph becomes the vertical chain with a followed site (shipped, #148).</span></div></div>
+    </div></div>
 </div>"""
     return app("supply", "flow", "Goods flow", body, [("Supply", ROUTE["supply"]), ("Goods flow", "")])
 

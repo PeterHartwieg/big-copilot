@@ -7,9 +7,13 @@
  "title": "Big Copilot Redesign",
  "launch": {
   "view": "canvas",
-  "page": "overview"
+  "page": "r2"
  },
  "pages": [
+  {
+   "id": "r2",
+   "name": "Round 2 · after review"
+  },
   {
    "id": "structure",
    "name": "1 · Structure"
@@ -571,6 +575,159 @@
    "title": "No save yet · the entry",
    "is_interactive": true,
    "page": "support"
+  },
+  "R2Overview.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 1720,
+   "title": "R2 · Overview, masthead, dark",
+   "is_interactive": true,
+   "page": "r2"
+  },
+  "R2OverviewLight.dc.html": {
+   "x": 1520,
+   "y": 0,
+   "w": 1440,
+   "h": 1720,
+   "title": "R2 · Overview, masthead, light",
+   "is_interactive": true,
+   "page": "r2"
+  },
+  "R2OverviewLong.dc.html": {
+   "x": 3040,
+   "y": 0,
+   "w": 1440,
+   "h": 900,
+   "title": "R2 · long queue, scrolled: All tools stays one click away",
+   "is_interactive": true,
+   "page": "r2"
+  },
+  "R2OverviewSidebar.dc.html": {
+   "x": 4560,
+   "y": 0,
+   "w": 1440,
+   "h": 1860,
+   "title": "R2 · the same Overview with a slim sidebar (comparison)",
+   "is_interactive": true,
+   "page": "r2"
+  },
+  "R2Imports.dc.html": {
+   "x": 0,
+   "y": 2280,
+   "w": 1440,
+   "h": 1000,
+   "title": "R2 · Imports",
+   "is_interactive": true,
+   "page": "r2"
+  },
+  "R2ImportsOpen.dc.html": {
+   "x": 1520,
+   "y": 2280,
+   "w": 1440,
+   "h": 1140,
+   "title": "R2 · Imports, 'Why this amount?' and 'Set it in the game' open",
+   "is_interactive": true,
+   "page": "r2"
+  },
+  "R2Changes.dc.html": {
+   "x": 3040,
+   "y": 2280,
+   "w": 1440,
+   "h": 1060,
+   "title": "R2 · Changes",
+   "is_interactive": true,
+   "page": "r2"
+  },
+  "R2Business.dc.html": {
+   "x": 4560,
+   "y": 2280,
+   "w": 1440,
+   "h": 1320,
+   "title": "R2 · a business page",
+   "is_interactive": true,
+   "page": "r2"
+  },
+  "R2Phone.dc.html": {
+   "x": 0,
+   "y": 4020,
+   "w": 390,
+   "h": 2220,
+   "title": "R2 · phone Overview, dark",
+   "is_interactive": true,
+   "page": "r2"
+  },
+  "R2PhoneLight.dc.html": {
+   "x": 470,
+   "y": 4020,
+   "w": 390,
+   "h": 2220,
+   "title": "R2 · phone Overview, light",
+   "is_interactive": true,
+   "page": "r2"
+  },
+  "R2PhoneImports.dc.html": {
+   "x": 940,
+   "y": 4020,
+   "w": 390,
+   "h": 880,
+   "title": "R2 · phone Imports",
+   "is_interactive": true,
+   "page": "r2"
+  },
+  "R2PhoneWrite.dc.html": {
+   "x": 1410,
+   "y": 4020,
+   "w": 390,
+   "h": 880,
+   "title": "R2 · phone, the write as a sheet",
+   "is_interactive": true,
+   "page": "r2"
+  },
+  "BAOverview.dc.html": {
+   "x": 0,
+   "y": 6660,
+   "w": 1440,
+   "h": 1180,
+   "title": "Before and after · Overview",
+   "is_interactive": true,
+   "page": "r2"
+  },
+  "BAImports.dc.html": {
+   "x": 1520,
+   "y": 6660,
+   "w": 1440,
+   "h": 1180,
+   "title": "Before and after · Imports",
+   "is_interactive": true,
+   "page": "r2"
+  },
+  "BAChanges.dc.html": {
+   "x": 3040,
+   "y": 6660,
+   "w": 1440,
+   "h": 1180,
+   "title": "Before and after · Changes",
+   "is_interactive": true,
+   "page": "r2"
+  },
+  "BABusiness.dc.html": {
+   "x": 4560,
+   "y": 6660,
+   "w": 1440,
+   "h": 1180,
+   "title": "Before and after · Business page",
+   "is_interactive": true,
+   "page": "r2"
+  },
+  "BAPhone.dc.html": {
+   "x": 6080,
+   "y": 6660,
+   "w": 1440,
+   "h": 1300,
+   "title": "Before and after · Phone",
+   "is_interactive": true,
+   "page": "r2"
   }
  },
  "order": [
@@ -633,7 +790,24 @@
   "CityMap.dc.html",
   "Preferences.dc.html",
   "Help.dc.html",
-  "NoSave.dc.html"
+  "NoSave.dc.html",
+  "R2Overview.dc.html",
+  "R2OverviewLight.dc.html",
+  "R2OverviewLong.dc.html",
+  "R2OverviewSidebar.dc.html",
+  "R2Imports.dc.html",
+  "R2ImportsOpen.dc.html",
+  "R2Changes.dc.html",
+  "R2Business.dc.html",
+  "R2Phone.dc.html",
+  "R2PhoneLight.dc.html",
+  "R2PhoneImports.dc.html",
+  "R2PhoneWrite.dc.html",
+  "BAOverview.dc.html",
+  "BAImports.dc.html",
+  "BAChanges.dc.html",
+  "BABusiness.dc.html",
+  "BAPhone.dc.html"
  ],
  "notes": {
   "row-structure-0": {
@@ -699,6 +873,38 @@
    "kind": "title1",
    "page": "supply",
    "maxW": 4370
+  },
+  "row-r2-0": {
+   "x": 0,
+   "y": -300,
+   "text": "Round 2 · Overview: compact criticals, one expanded, All tools",
+   "kind": "title1",
+   "page": "r2",
+   "maxW": 6000
+  },
+  "row-r2-1": {
+   "x": 0,
+   "y": 1980,
+   "text": "Round 2 · Imports, Changes, a business page",
+   "kind": "title1",
+   "page": "r2",
+   "maxW": 6000
+  },
+  "row-r2-2": {
+   "x": 0,
+   "y": 3720,
+   "text": "Round 2 · phone Overview and the import flow",
+   "kind": "title1",
+   "page": "r2",
+   "maxW": 1800
+  },
+  "row-r2-3": {
+   "x": 0,
+   "y": 6360,
+   "text": "Round 2 · before and after",
+   "kind": "title1",
+   "page": "r2",
+   "maxW": 7520
   },
   "row-tasks-0": {
    "x": 0,
@@ -810,6 +1016,42 @@
    "maxH": 150,
    "text": "Find a location keeps its filters: open a building (FinderDetail) and 'Results' returns to the same list. Demand › Florist · Midtown opens it with that context.",
    "page": "tasks",
+   "fill": "blue"
+  },
+  "r2-a": {
+   "x": 0,
+   "y": -180,
+   "w": 520,
+   "maxH": 150,
+   "text": "Masthead refined (the review's preferred direction) with a persistent local row in each area; the slim sidebar at the right carries the same content and type scale for a fair comparison.",
+   "page": "r2",
+   "fill": "blue"
+  },
+  "r2-b": {
+   "x": 3040,
+   "y": -180,
+   "w": 520,
+   "maxH": 150,
+   "text": "Proposed, not existing: the arrival strip and return position, 'Next finding', and the goods-flow product filter. They are notes here so the product frames carry no design commentary.",
+   "page": "r2",
+   "fill": "blue"
+  },
+  "r2-c": {
+   "x": 0,
+   "y": 2100,
+   "w": 520,
+   "maxH": 150,
+   "text": "Imports: manual marking and the game link are alternatives in one action bar, not steps. The state pill shows where the change stands; its history opens from it.",
+   "page": "r2",
+   "fill": "blue"
+  },
+  "r2-d": {
+   "x": 0,
+   "y": 6480,
+   "w": 520,
+   "maxH": 150,
+   "text": "Word counts are the on-page text of the main area, measured in the browser on both versions (same method, whole page).",
+   "page": "r2",
    "fill": "blue"
   }
  },

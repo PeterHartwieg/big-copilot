@@ -33,6 +33,7 @@ a{color:inherit}
   --tip-bg:#15181a;--tip-ink:#f3f4ef;--shadow:0 22px 50px -26px #1a1f1c55;
 }
 .board *{box-sizing:border-box}
+.board [hidden]{display:none!important}
 .board svg{display:block}
 .board .mono,.board .num{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
 :where(.board) :where(h1,h2,h3,h4,p){margin:0}
@@ -856,7 +857,7 @@ a{color:inherit}
     <div class="nx-fine">Fan-made · not affiliated with Hovgaard Games</div>
   </div>
 </aside><main class="nx-main"><header class="nx-top"><div class=nx-ttl><div class="nx-crumb"><a href="Demand.dc.html">Expansion</a><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><span>Find a location</span></div><h1>Find a location</h1></div><div class="clock"><b>Day 83<i>·</i>Wed 09:40</b><small>YEAR 2 · 14 SITES · 96 STAFF<span class="fv-diff"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg>Normal</span></small></div><div class="orb" aria-hidden="true"><u></u></div></header>
-<p class="nx-lede" style="margin-top:18px">Vacant premises ranked for the business you want to open. The same finder opens from the City map. <b>Being at a building's capacity is normal</b>; this is for a new business, not a way around a full one.</p>
+<p class="nx-lede" style="margin-top:18px">Vacant premises ranked for the business you want to open.</p>
 
 <div class="fd">
   
@@ -1014,7 +1015,7 @@ class Component extends DCLogic {
       const all = $$('.nx-chg'), done = all.filter(r => r.classList.contains('done'));
       const p = all.length ? done.length / all.length * 100 : 0;
       ck.style.setProperty('--p', p + '%');
-      const c = $('.cnt b', ck); if (c) c.textContent = done.length;
+      const c = $('.cnt [data-n]', ck) || $('.cnt b', ck); if (c) c.textContent = done.length;
       const t = $('.truck', ck); if (t && !rm()) { t.classList.remove('go'); void t.offsetWidth; t.classList.add('go'); }
     };
     $$('.nx-chg .nx-tick').forEach(t => t.addEventListener('click', () => {

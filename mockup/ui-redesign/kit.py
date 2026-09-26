@@ -51,6 +51,7 @@ a{color:inherit}
   --tip-bg:#15181a;--tip-ink:#f3f4ef;--shadow:0 22px 50px -26px #1a1f1c55;
 }
 .board *{box-sizing:border-box}
+.board [hidden]{display:none!important}
 .board svg{display:block}
 .board .mono,.board .num{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
 :where(.board) :where(h1,h2,h3,h4,p){margin:0}
@@ -631,6 +632,7 @@ _P = {
     "users": '<circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><path d="M16 11.5a3 3 0 1 0 0-6M18.5 20a5.5 5.5 0 0 0-3-4.9"></path>',
     "cart": '<circle cx="9" cy="19" r="1.5"></circle><circle cx="17" cy="19" r="1.5"></circle><path d="M3 4h2l2.4 11h11L21 8H7"></path>',
     "cursor": '<path d="M5 3l14 7-6 2-2 6z"></path>',
+    "more": '<circle cx="6" cy="12" r="1.4"></circle><circle cx="12" cy="12" r="1.4"></circle><circle cx="18" cy="12" r="1.4"></circle>',
     "game": '<rect x="3" y="6" width="18" height="12" rx="3"></rect><path d="M8 10v4M6 12h4M15 11h.01M17.5 13h.01"></path>',
 }
 
@@ -800,7 +802,7 @@ def app(active: str, sub: str, title: str, body: str, crumbs=None, source: str =
 
 
 def from_strip(what: str, pos: str = "1 of 4 critical", nxt: bool = True, back: str = "Main.dc.html") -> str:
-    n = (f'<a href="#">Next finding{ic("chev")}</a><span class="nx-prop">proposed</span>') if nxt else ""
+    n = (f'<a href="#">Next finding{ic("chev")}</a>') if nxt else ""
     return (f'<div class="nx-from" role="region" aria-label="Arrived from Needs attention">'
             f'<a class="back" href="{back}#att">{ic("back")}Needs attention</a>'
             f'<span class="what">From Needs attention · <b>{what}</b></span>'
@@ -914,7 +916,7 @@ WIRE = r"""
       const all = $$('.nx-chg'), done = all.filter(r => r.classList.contains('done'));
       const p = all.length ? done.length / all.length * 100 : 0;
       ck.style.setProperty('--p', p + '%');
-      const c = $('.cnt b', ck); if (c) c.textContent = done.length;
+      const c = $('.cnt [data-n]', ck) || $('.cnt b', ck); if (c) c.textContent = done.length;
       const t = $('.truck', ck); if (t && !rm()) { t.classList.remove('go'); void t.offsetWidth; t.classList.add('go'); }
     };
     $$('.nx-chg .nx-tick').forEach(t => t.addEventListener('click', () => {

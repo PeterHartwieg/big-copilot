@@ -96,3 +96,42 @@ Shell and routes; Overview (Needs attention rows, task directory, replacing Next
 Ask the board); Supply local views over today's tabs with scope and Plan for; the arrival
 strip and return; the four marks; Staffing and Businesses landings; Expansion. New classes
 keep the `nx-` prefix (the canvas hit `.st`, `.ring` and `.sw` collisions on the way).
+
+## Round 2 (after the design review, 26 Sep 2026)
+
+Page "Round 2 · after review" (the canvas opens on it) redraws five screens from
+`boards_r2.py`; round 1 stays for comparison. The review's direction was taken as given:
+
+- **Shell:** the refined masthead (five destinations, City map, Game guide, source and clock)
+  with a persistent local row inside each area. `R2OverviewSidebar` is the same content and
+  type scale with a slim sidebar, for the comparison the review asked for.
+- **Overview:** one compact summary per critical finding (where and what · what matters now ·
+  one picture · one action), the first one expanded (weekly amounts by basis, who goes
+  without, ways to fix). No right rail: "Checked 14 businesses ▾" and "Your changes ▾" are
+  one line. "All tools" sits beside the heading and in the sticky condensed bar of a long
+  queue (`R2OverviewLong`). Four tool panels with small working pictures.
+- **Imports:** 8,400 → 18,740 units a week as the lead, labelled "Planned for full
+  production", on one scale with today's draw and the 1 Pier cap. One action bar: the state
+  pill, the game-link preview and "Mark done by you" as alternatives; "Why this amount?",
+  "Set it in the game" and Copy open on demand (`R2ImportsOpen`). The one-time catch-up is
+  a separate dashed strip.
+- **Changes:** the truck on a longer road, rows lead with product and site, then current →
+  proposed with the unit, where it is set and one state pill. Copy preview and the count
+  explanation open on demand.
+- **Business page:** one heading, mini bars for revenue and customers, a segmented profit
+  bar, peak customers against capacity, named amenity lamps.
+- **Phone:** one context line, one selected finding with its rail and the only filled
+  action, Supply views as pills with a visible continuation button.
+
+Before/after sheets (`BA*`) hold matched crops (uploaded assets, ids in `assets.json`) and
+what was removed, what became visual and where deferred detail lives. On-page words of the
+main area, measured the same way on both: Overview 639 → 307, Imports 378 → 156, Changes
+421 → 132, business page 201 → 130, phone Overview 270 → 130, phone Imports 97 → 56.
+
+Also fixed in round 1 frames: Production no longer puts named people on machine bars (it
+shows scheduling blocks and counts people), "Post factory workers" and "Longest shift" are
+gone, and the design notes inside Goods flow, Finder, Production and the arrival strip
+moved to canvas notes.
+
+Not yet checked: the canvas in Play mode, real phone browsers, text enlargement, contrast
+by measurement, and a quick user check of the three review tasks.

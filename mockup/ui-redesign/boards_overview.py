@@ -222,7 +222,7 @@ def tasks_head() -> str:
     return f"""
 <div class="nx-sechead" style="margin-top:44px;margin-bottom:0;padding-bottom:12px">
   <h2>What Big Copilot can do for Marlow Trading</h2>
-  <span class="quiet">The same thirteen tasks, in the same places, every visit. Counts follow the save.</span>
+  
   <div class="aside"><button class="nx-search" type="button" style="width:auto">{ic("search")}Prefer typing? Find a tool<kbd>Ctrl K</kbd></button></div>
 </div>"""
 
@@ -231,10 +231,10 @@ def queue(expanded: bool = False, states: dict | None = None) -> str:
     crit = "".join(crit_rows(states))
     first = WARN[:5]
     rest = WARN[5:]
-    band_c = f'<div class="nx-band"><span class="lab crit">Critical · all 4 cause groups</span><span class="quiet">Critical findings are never folded away</span></div>'
+    band_c = f'<div class="nx-band"><span class="lab crit">Critical · all 4 cause groups</span></div>'
     band_w = (f'<div class="nx-band"><span class="lab watch">Other actionable</span><span class="n">'
               f'{"11 warnings · 2 opportunities" if expanded else "5 of 11 warnings shown"}</span>'
-              f'<span class="quiet">Ranked by materiality, as today</span></div>')
+              f'</div>')
     more_rows = "".join(crow(r) for r in rest) + "".join(crow(r) for r in OPP)
     if expanded:
         body = band_c + crit + band_w + "".join(crow(r) for r in first) + more_rows

@@ -21,6 +21,7 @@ import boards_overview as ov  # noqa: E402
 import boards_supply as sp  # noqa: E402
 import boards_more as mo  # noqa: E402
 import boards_structure as st  # noqa: E402
+import boards_r2 as r2  # noqa: E402
 
 ROOT = HERE / "project"
 CREATED_AT = "2026-09-26T12:00:00Z"
@@ -52,7 +53,25 @@ BOARDS = [
 ]
 BOARDS += sp.BOARDS + mo.BOARDS
 
-PAGES = [("structure", "1 · Structure"), ("overview", "2 · Overview"), ("supply", "3 · Supply fix journey"),
+# round 2: the five refined screens, the navigation comparison and the before/after sheets
+_ASSETS = json.loads((HERE / "assets.json").read_text(encoding="utf-8")) if (HERE / "assets.json").exists() else {"img": {}, "words": {}}
+BOARDS += [
+    ("R2Overview.dc.html", "R2 · Overview, masthead, dark", r2.overview, 1440, 1720, "r2", 0, True, False, r2.CSS),
+    ("R2OverviewLight.dc.html", "R2 · Overview, masthead, light", r2.overview, 1440, 1720, "r2", 0, False, False, r2.CSS),
+    ("R2OverviewLong.dc.html", "R2 · long queue, scrolled: All tools stays one click away", r2.overview_long, 1440, 900, "r2", 0, True, False, r2.CSS),
+    ("R2OverviewSidebar.dc.html", "R2 · the same Overview with a slim sidebar (comparison)", r2.overview_sidebar, 1440, 1860, "r2", 0, True, False, r2.CSS + r2.SIDE_CSS),
+    ("R2Imports.dc.html", "R2 · Imports", r2.imports, 1440, 1000, "r2", 1, True, False, r2.CSS),
+    ("R2ImportsOpen.dc.html", "R2 · Imports, 'Why this amount?' and 'Set it in the game' open", lambda: r2.imports(True), 1440, 1140, "r2", 1, False, False, r2.CSS),
+    ("R2Changes.dc.html", "R2 · Changes", r2.changes, 1440, 1060, "r2", 1, True, False, r2.CSS),
+    ("R2Business.dc.html", "R2 · a business page", r2.business, 1440, 1320, "r2", 1, True, False, r2.CSS),
+    ("R2Phone.dc.html", "R2 · phone Overview, dark", r2.phone, 390, 2220, "r2", 2, True, False, ov.PHONE + r2.CSS),
+    ("R2PhoneLight.dc.html", "R2 · phone Overview, light", r2.phone, 390, 2220, "r2", 2, False, False, ov.PHONE + r2.CSS),
+    ("R2PhoneImports.dc.html", "R2 · phone Imports", r2.phone_imports, 390, 880, "r2", 2, True, False, ov.PHONE + sp.SUP_CSS + r2.CSS),
+    ("R2PhoneWrite.dc.html", "R2 · phone, the write as a sheet", lambda: r2.phone_imports(True), 390, 880, "r2", 2, True, False, ov.PHONE + sp.SUP_CSS + r2.CSS),
+] + [(f"{b[0]}.dc.html", f"Before and after · {b[1]}", (lambda i=i: r2.ba_sheet(i, _ASSETS["img"], _ASSETS["words"])), 1440, 1180 if b[0] != "BAPhone" else 1300,
+      "r2", 3, True, False, r2.CSS) for i, b in enumerate(r2.BA)]
+
+PAGES = [("r2", "Round 2 · after review"), ("structure", "1 · Structure"), ("overview", "2 · Overview"), ("supply", "3 · Supply fix journey"),
          ("tasks", "4 · Staffing, Businesses, Expansion"), ("support", "5 · Supporting frames")]
 ROW_TITLES = {
     ("structure", 0): "Structure: sitemap, coverage and the reasons", ("structure", 1): "Navigation: recommendation, alternative, motion",
@@ -60,11 +79,19 @@ ROW_TITLES = {
     ("overview", 2): "Overview at 1024, 768 and 390",
 }
 ROW_TITLES.update(sp.ROW_TITLES)
+ROW_TITLES.update({("r2", 0): "Round 2 · Overview: compact criticals, one expanded, All tools", ("r2", 1): "Round 2 · Imports, Changes, a business page",
+                   ("r2", 2): "Round 2 · phone Overview and the import flow", ("r2", 3): "Round 2 · before and after"})
 ROW_TITLES.update(mo.ROW_TITLES)
 NOTES = {}
 NOTES.update(st.NOTES)
 NOTES.update(sp.NOTES)
 NOTES.update(mo.NOTES)
+NOTES.update({
+    "r2-a": ("r2", 0, 0, "Masthead refined (the review's preferred direction) with a persistent local row in each area; the slim sidebar at the right carries the same content and type scale for a fair comparison."),
+    "r2-b": ("r2", 0, 3040, "Proposed, not existing: the arrival strip and return position, 'Next finding', and the goods-flow product filter. They are notes here so the product frames carry no design commentary."),
+    "r2-c": ("r2", 1, 0, "Imports: manual marking and the game link are alternatives in one action bar, not steps. The state pill shows where the change stands; its history opens from it."),
+    "r2-d": ("r2", 3, 0, "Word counts are the on-page text of the main area, measured in the browser on both versions (same method, whole page)."),
+})
 
 
 def build(preview: bool = False, only: str | None = None) -> None:
@@ -109,7 +136,7 @@ def build(preview: bool = False, only: str | None = None) -> None:
         print("wrote", len(order), "artboards (partial; index not written)")
         return
     index = {"v": 3, "createdOnFiles": {"v": 1, "at": CREATED_AT}, "title": "Big Copilot Redesign",
-             "launch": {"view": "canvas", "page": "overview"}, "pages": [{"id": i, "name": n} for i, n in PAGES],
+             "launch": {"view": "canvas", "page": "r2"}, "pages": [{"id": i, "name": n} for i, n in PAGES],
              "boards": boards, "order": order, "notes": notes, "designSystems": []}
     (ROOT / "canvas.json").write_text(json.dumps(index, indent=1, ensure_ascii=False), encoding="utf-8", newline="\n")
     print("wrote", len(order), "artboards")
