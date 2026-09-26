@@ -254,14 +254,20 @@ Where the build differs from or adds to 2.1-2.4; the board worker reads these to
   or the game's Recruitment Agency; a headhunter already recruiting it is said
   (`hiring.recruiting`, from `headhunterPlans`).
 - **Staff with no hours** (Peter's live game, 26 September 2026): a shop's `unstaffed`
-  (`{demand, full}`, the plans its Staffing block writes, read as that block picks them;
-  shops only, since an office has no Staffing block) is, per role, weekday and hour, the site's own people the plan puts on
+  (`{demand, full}` for a shop, read as its Staffing block picks them; `{office}` for an
+  office, the office default) is, per role, weekday and hour, the site's own people the plan puts on
   the role less everybody on its stations in the game's week (never below none), in roles
   where some of them (not in training, with some of their own planned hours unstaffed)
   have no hours at the site at all, from
   `UNSTAFFED_MIN_HOURS` (8) a week. It shows when nothing needs hiring too. A small box under the roles table names each such
   site, the hours and the idle people, and links to the site's Staffing, whose write puts
   the week in. Nobody is hired for those hours, so the order does not count them.
+- **An office's week is writable** (Peter, 26 September 2026): the office site page has a
+  Staffing block (`spOfficeRoster()`: hours and people now → the office default, hours
+  waiting on a hire, and the write button). `gwRosterPlan()` gives an office's
+  `officeStaffing` row, so `/write/schedule` takes it through the same review, confirm and
+  undo as a shop's, `openAllHours` always false; "Write all planned sites" includes offices.
+  The mod refuses only a headquarters (ScheduleWrite.cs), so no mod change.
 - **Styled option lists**: a Staff select opens the page's own list (`#hsSelPop`, where the
   pointer is a mouse) instead of the system's; the select stays the control.
 

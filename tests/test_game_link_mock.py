@@ -1076,3 +1076,47 @@ class MockHire(LinkedMock):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MockOfficeSchedule(LinkedMock):
+    """An office's week goes through /write/schedule like a shop's: only a
+    headquarters is refused (the mod's ScheduleWrite.cs)."""
+
+    OFFICE = {"street": "ba:street_park", "number": 88}
+    LAWYER = "LLLLemployeeLLLLLLLLLLLL"
+
+    def setUp(self):
+        # The synthetic company with an office in it, written where the mock reads.
+        real = es3_fixture.write_link_save
+
+        def write(path):
+            with open(path, "wb") as fh:
+                fh.write(es3_fixture.encode(self.company()))
+        es3_fixture.write_link_save = write
+        try:
+            super().setUp()
+        finally:
+            es3_fixture.write_link_save = real
+
+    def company(self):
+        company = es3_fixture.link_company()
+        company["BuildingRegistrations"].append({
+            "StreetName": "ba:street_park", "StreetNumber": 88, "RentedByPlayer": True,
+            "BusinessName": "HART. Law", "businessTypeName": "ba:businesstype_lawfirm",
+            "itemInstances": [{"$k": "PCpppppppppppppppppp==", "$v": {"itemName": "ba:itemname_computer"}}],
+            "scheduleDays": [{"day": d, "isOpen": True, "workShifts": [],
+                              "openingHourSlots": [{"startingHour": 8, "endingHour": 22}]} for d in range(1, 8)],
+            "orderHistory": [], "retailPrices": []})
+        company["EmployeeInstances"].append({
+            "id": self.LAWYER, "characterData": {"name": "Lena Voss", "skills": [{"name": "ba:skill_lawyer", "value": 80.0}]},
+            "assignedAddress": es3_fixture.address("ba:street_park", 88)})
+        return company
+
+    def test_an_office_week_is_accepted_and_never_opens_it(self):
+        shifts = [{"f": 8, "t": 18, "employeeId": self.LAWYER, "itemInstanceId": "PCpppppppppppppppppp=="}]
+        body = {"dryRun": True, "address": self.OFFICE, "expect": shift_print([]), "openAllHours": False,
+                "days": [{"d": 1, "shifts": shifts}, {"d": 2, "shifts": shifts}]}
+        status, answer = self.post("schedule", body)
+        self.assertEqual(status, 200)
+        self.assertTrue(answer["ok"], answer)
+        self.assertEqual((answer["added"], answer["openedHours"], answer["siteError"]), (2, False, None))

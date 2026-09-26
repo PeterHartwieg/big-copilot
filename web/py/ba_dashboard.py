@@ -10119,16 +10119,17 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
             found = take(offices.get(business["key"]))
             if found is not None:
                 plans["office"] = found
-        # Staff with no hours (_unstaffed()): the hours a shop's own people
-        # would work that nobody works in the game's week now, against the two
-        # plans its Staffing block writes (demand, full cover), which the page
-        # picks between as that block does. Shops only: an office has no
-        # Staffing block to write its week from.
+        # Staff with no hours (_unstaffed()): the hours a site's own people
+        # would work that nobody works in the game's week now, against the
+        # plans its Staffing block writes -- a shop's demand plan and full
+        # cover, which the page picks between as that block does; an office's
+        # office default.
         unstaffed = {}
-        base = shops.get(business["key"]) if kind == "shop" else None
+        base = shops.get(business["key"]) if kind == "shop" else offices.get(business["key"]) if kind == "office" else None
         if base and not base.get("failed"):
-            for mode, shifts in (("demand", base.get("shifts")),
-                                 ("full", (base.get("fullCover") or {}).get("shifts"))):
+            pairs = (("demand", base.get("shifts")), ("full", (base.get("fullCover") or {}).get("shifts"))) \
+                if kind == "shop" else (("office", base.get("shifts")),)
+            for mode, shifts in pairs:
                 gap = _unstaffed(base, shifts or (), own.get(business["key"], set()), training)
                 if gap:
                     unstaffed[mode] = gap
@@ -15461,6 +15462,11 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .person .sp-i{color:var(--warn);margin-left:-2px}
 .person .sp-i svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .sp-roster{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
+.sp-offroster{display:flex;flex-wrap:wrap;gap:10px 28px;margin:4px 0 14px}
+.sp-offroster>div{display:flex;flex-direction:column;gap:6px}
+.sp-offroster span{font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.sp-offroster b{font:500 20px/1 "IBM Plex Mono",monospace;color:var(--ink)}
+.sp-offroster s{color:var(--ink-3);font-size:15px}
 .sp-rrow{display:grid;grid-template-columns:200px 1fr auto;gap:18px;align-items:center;min-height:48px;border-bottom:1px solid var(--rule-soft)}
 .sp-rbtn{display:flex;align-items:center;gap:10px;min-height:44px;padding:0;border:0;background:none;color:var(--ink);font:500 13.5px/1.2 Archivo,sans-serif;cursor:pointer;text-align:left}
 .sp-rbtn i{flex:none;width:26px;height:26px;border-radius:50%;background:var(--raised);display:grid;place-items:center;font:600 9.5px/1 "IBM Plex Mono",monospace;font-style:normal;color:var(--ink-2)}
@@ -21264,6 +21270,25 @@ function spPlanPick(base, full){
     full ? ` class="sp-on" aria-current="true"` : ""}>${tt("sp.pick.full", "Full cover 24/7")}</a></span>${done}</div>`;
 }
 
+/* An office's Staffing: Peter's office default (officeStaffing) against the
+   week in the game, and its write -- the same review, confirm and undo as a
+   shop's, which never changes the office's opening hours. The hour grid of
+   the week is the Staff page's and the game's; here it is the numbers. */
+function spOfficeRoster(b){
+  const row = gwOfficeRow(b.key);
+  if(!row || !(row.shifts || []).length) return "";
+  const now = (row.current || {}).list || [], plan = (row.shifts || []).filter(s => !spNobody(s.p));
+  const hours = list => list.reduce((n, s) => n + s.t - s.f, 0);
+  const people = list => new Set(list.map(s => s.p).filter(p => p !== null && p !== undefined)).size;
+  const open = (row.shifts || []).filter(s => spNobody(s.p));
+  const facts = [[tt("sp.off.hours", "Hours / week"), hours(now), hours(plan)], [tt("sp.off.people", "People"), people(now), people(plan)]];
+  return `<section class="sec rv" data-block="roster" id="sp-roster" data-site="${attr(b.key)}">
+    ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster", quiet: tt("sp.off.quiet", "the office default: {n} always on, every computer on weekdays 8 to 22", {n: row.alwaysOn || 0})})}
+    <div class="sp-offroster">${facts.map(([k, a, z]) => `<div><span>${k}</span><b>${a === z ? z : `<s>${a}</s> → ${z}`}</b></div>`).join("")}${
+      open.length ? `<div><span>${tt("sp.off.open", "Waiting on a hire")}</span><b>${tt("sp.off.openh", "{n} h", {n: hours(open)})}</b></div>` : ""}</div>
+    ${gwLink() ? gwRosterButtons(b.key) : `<p class="quiet">${tt("sp.off.link", "Link the game to write this week from here.")}</p>`}
+  </section>`;
+}
 function spRosterBlock(b){
   const base = spRosterRow(b.key);
   const offer = spOffersFull(base);
@@ -22616,7 +22641,7 @@ function drawSite(){
     </section>` : ""}
     ${/* Only a shop is planned: an office bills hours rather than serving a
           queue, and a depot, a factory and a home have no row at all. */""}
-    ${kind === "retail" ? spRosterBlock(b) : ""}
+    ${kind === "retail" ? spRosterBlock(b) : office ? spOfficeRoster(b) : ""}
     <div class="duo sec" style="grid-template-columns:1fr 2fr">
       <section class="rv" data-block="crew" id="sp-crew">
         ${sechead(tt("sp.crew.title", "Crew"), {icon: spAny ? "crew" : null, why: roleTip || null, quiet: crewQuiet})}
@@ -25669,8 +25694,9 @@ function hrNoHoursHtml(){
    nothing. The link opens the site's Staffing, whose write puts the week in. */
 function hrIdleHtml(m){
   /* The plan the site's Staffing block shows and writes, as it picks it. */
-  const of = S => { const u = S.site.unstaffed || {}; return spPlanRead(S.key) === "full" && u.full ? u.full : u.demand; };
-  const rows = m.sites.filter(S => S.site.kind === "shop" && of(S)).map(S => {
+  const of = S => { const u = S.site.unstaffed || {};
+    return S.site.kind === "office" ? u.office : spPlanRead(S.key) === "full" && u.full ? u.full : u.demand; };
+  const rows = m.sites.filter(S => (S.site.kind === "shop" || S.site.kind === "office") && of(S)).map(S => {
     const u = of(S), name = spEsc(S.b ? shortName(S.b) : S.site.name || "A site");
     const who = (u.roles || []).filter(r => r.idle).map(r => `your ${hrNum(r.idle)} ${hrRole(r.skill)} staff ${r.idle === 1 ? "has" : "have"} no hours`);
     const href = siteHref(S.key);
@@ -31853,7 +31879,13 @@ const GW_HQ = "ba:businesstype_headquarters";
    opening hours, and none where nothing was planned. */
 function gwRosterPlan(key){
   const b = (D.businesses || []).find(x => x.key === key);
-  if(!b || b.typeSlug === GW_HQ || b.status !== "retail") return null;
+  if(!b || b.typeSlug === GW_HQ) return null;
+  /* An office: Peter's office default (officeStaffing), which never opens it. */
+  if(b.status === "office"){
+    const office = gwOfficeRow(key);
+    return office && (office.shifts || []).length ? office : null;
+  }
+  if(b.status !== "retail") return null;
   const base = spRosterRow(key);
   if(!base || base.failed) return null;
   const row = spOffersFull(base) && spPlanRead(base.key) === "full" ? spFullRow(base) : base;
@@ -31892,7 +31924,12 @@ function gwRosterMatches(row, week){
   }).sort();
   return !(row.full && !row.openNow) && want.length === have.length && want.every((x, i) => x === have[i]);
 }
-const gwScheduleSites = () => (D.staffing || []).map(r => r.key).filter(key => {
+const gwOfficeRow = key => {
+  const list = Array.isArray(D.officeStaffing) ? D.officeStaffing : [];
+  const row = list.find(r => r.key === key && !r.failed);
+  return row ? Object.assign({}, row, {full: false, office: true}) : null;
+};
+const gwScheduleSites = () => [...(D.staffing || []), ...(Array.isArray(D.officeStaffing) ? D.officeStaffing : [])].map(r => r.key).filter(key => {
   const row = gwRosterPlan(key);
   if(!row) return false;
   const week = gwRosterWeek(row);
@@ -31997,7 +32034,7 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
       const row = gwRosterPlan(key), week = gwRosterWeek(row);
       last = {row, week, now: (row.current || {}).list || []};
       return {address: gwAddress(key), expect: site().shiftPrint,
-              openAllHours: !!(row.full && !row.openNow && openAll), days: week.days};
+              openAllHours: !!(!row.office && row.full && !row.openNow && openAll), days: week.days};
     },
     verdict: answer => answer.ok ? `<b>${tt("sp.gw.sch.takes", "The game takes the week")}</b>` : `<b>${tt("sp.gw.refuses", "The game refuses this")}</b>`,
     object: row => {
@@ -32025,7 +32062,8 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
           other: "<b>{h} h a week stay empty</b> until you add {n} people. Write the roster again then: the board keeps this note on the roster until it is full."},
           {h: add.hoursUncovered || 0, n: add.people})) : "");
       const whole = tt("sp.gw.plan.whole", "replaces the whole week");
-      const which = row.full ? `<span class="gw-plan full">${gwSvg("sun")}${tt("sp.pick.full", "Full cover 24/7")}</span><span class="gw-only">${tt("sp.gw.plan.every", "every station, every hour")}</span>`
+      const which = row.office ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.gw.plan.office", "Office default")}</span><span class="gw-only">${tt("sp.gw.plan.whole", "replaces the whole week")}</span>`
+        : row.full ? `<span class="gw-plan full">${gwSvg("sun")}${tt("sp.pick.full", "Full cover 24/7")}</span><span class="gw-only">${tt("sp.gw.plan.every", "every station, every hour")}</span>`
         : spCoverOnly(row) ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.gw.plan.cover", "Cleaning and security")}</span><span class="gw-only">${whole}</span>`
         : `<span class="gw-plan">${gwSvg("roster")}${tt("sp.pick.demand", "Demand plan")}</span><span class="gw-only">${whole}</span>`;
       const kept = week.kept ? gwCall("info", "info", tt("sp.gw.sch.kept", {

@@ -550,15 +550,17 @@ class UnstaffedTest(unittest.TestCase):
         gap = ba_dashboard._unstaffed(row, plan, {"p1", "p2", "x"})
         self.assertEqual(gap, {"hours": 84, "roles": [{"skill": SERVICE, "hours": 84, "idle": 1}]})
 
-    def test_an_office_is_not_listed(self):
-        """An office has no Staffing block to write its week from."""
+    def test_an_office_is_measured_on_its_office_default(self):
+        """An office's own people with no hours, against the office default its
+        Staffing block writes."""
         _save, _b, [row] = office_rows(2, [[[8, 20]] for _ in range(7)], [lawyer("l1")])
         business = {"key": site_key((STREET, 10)), "name": "Halden Law", "status": "office",
                     "typeSlug": LAW, "basket": 388.0, "staff": 1}
         save = save_of({"EmployeeInstances": {"$items": [lawyer("l1")]},
                         "BuildingRegistrations": {"$items": [office_registration(2, [[[8, 20]] for _ in range(7)])]}})
         [site] = _hiring(save, [business], [], {}, [row])["sites"]
-        self.assertNotIn("unstaffed", site)
+        self.assertEqual(list(site["unstaffed"]), ["office"])
+        self.assertEqual([(r["skill"], r["idle"]) for r in site["unstaffed"]["office"]["roles"]], [(LAWYER, 1)])
 
 
 class NoOpeningHoursTest(unittest.TestCase):

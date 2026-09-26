@@ -1564,13 +1564,13 @@ test('Staff with no hours shows when nothing needs hiring, and then says no more
   assert.doesNotMatch(out.without, /Staff with no hours/);
 });
 
-test('Staff with no hours: shops only, and measured on the plan the Staffing block writes', async (t) => {
+test('Staff with no hours: shops and offices, each measured on the plan its Staffing block writes', async (t) => {
   const page = await board(t);
   const out = await page.evaluate(([G, O, CS, LAW]) => {
     const m = hrModel();
     const u = (h, skill) => ({hours: h, roles: [{skill, hours: h, idle: 2}]});
     m.sites.find(S => S.key === G).site.unstaffed = {demand: u(20, CS), full: u(90, CS)};
-    m.sites.find(S => S.key === O).site.unstaffed = {demand: u(40, LAW)};
+    m.sites.find(S => S.key === O).site.unstaffed = {office: u(40, LAW)};
     const text = () => { const el = document.createElement('div'); el.innerHTML = hrIdleHtml(m); return el.textContent; };
     const demand = text();
     spPlanWrite(G, 'full');
@@ -1580,5 +1580,35 @@ test('Staff with no hours: shops only, and measured on the plan the Staffing blo
   }, [G, O, CS, LAW]);
   assert.match(out.demand, /HART\. Gifts20 h with nobody on/);
   assert.match(out.full, /HART\. Gifts90 h with nobody on/);
-  assert.doesNotMatch(out.demand, /HART\. Law/);
+  assert.match(out.demand, /HART\. Law40 h with nobody on/);
+});
+
+test('an office week is written from its site page: the office default for its own staff, never opening it', async (t) => {
+  const page = await board(t);
+  const out = await page.evaluate(([O, LAW]) => {
+    const row = D.officeStaffing.find(r => r.key === O);
+    Object.assign(row, {people: [{id: 'LAWYER1', name: 'Lena Voss'}], alwaysOn: 1,
+      shifts: [{d: 1, s: 0, f: 8, t: 22, p: 0}, {d: 2, s: 0, f: 8, t: 22, p: 0}, {d: 3, s: 0, f: 8, t: 22, p: null}],
+      current: {list: []}});
+    window.hrAnswer = async (kind, body, o) => ({status: 200, error: null, body: {ok: true, kind, dryRun: !!o.dryRun, stamp: 's',
+      address: body.address, business: 'HART. Law', before: {shifts: 0, print: 'a'}, after: {shifts: 2, print: 'b'},
+      removed: 0, added: 2, openedHours: false, leftWithout: [], warnings: [], siteError: null, rows: []}});
+    Object.assign(D.businesses.find(b => b.key === O), {status: 'office'});
+    openSite(O, false);
+    const block = document.querySelector('#secDetail #sp-roster');
+    return {plan: !!gwRosterPlan(O), block: block && block.textContent.replace(/\s+/g, ' ').trim(),
+      button: !!(block && block.querySelector('[data-gw-sites]'))};
+  }, [O, LAW]);
+  assert.equal(out.plan, true);
+  assert.match(out.block, /Staffing/);
+  assert.match(out.block, /Waiting on a hire\s*14 h/);
+  assert.match(out.block, /Hours \/ week\s*0 → 28/);
+  assert.equal(out.button, true);
+  await page.locator('#secDetail #sp-roster [data-gw-sites]').first().click();
+  await phase(page, 'ready');
+  const w = await page.evaluate(() => window.hrWrites.filter(x => x.kind === 'schedule').at(-1));
+  assert.deepEqual(w.body, {address: addr(O), expect: '0ff1ce00', openAllHours: false, days: [
+    {d: 1, shifts: [{f: 8, t: 22, employeeId: 'LAWYER1', itemInstanceId: 'DESK-1'}]},
+    {d: 2, shifts: [{f: 8, t: 22, employeeId: 'LAWYER1', itemInstanceId: 'DESK-1'}]}]});
+  assert.match(await page.locator('dialog.gw-dlg').textContent(), /Office default/);
 });

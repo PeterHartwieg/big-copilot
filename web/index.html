@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "625f2291ac";</script>
-<link rel="stylesheet" href="community.css?v=625f2291ac">
+<script>window.LEDGER_BUILD = "63b9f3a0ea";</script>
+<link rel="stylesheet" href="community.css?v=63b9f3a0ea">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=625f2291ac">
+<link rel="stylesheet" href="fonts/fonts.css?v=63b9f3a0ea">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2617,6 +2617,11 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .person .sp-i{color:var(--warn);margin-left:-2px}
 .person .sp-i svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .sp-roster{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
+.sp-offroster{display:flex;flex-wrap:wrap;gap:10px 28px;margin:4px 0 14px}
+.sp-offroster>div{display:flex;flex-direction:column;gap:6px}
+.sp-offroster span{font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.sp-offroster b{font:500 20px/1 "IBM Plex Mono",monospace;color:var(--ink)}
+.sp-offroster s{color:var(--ink-3);font-size:15px}
 .sp-rrow{display:grid;grid-template-columns:200px 1fr auto;gap:18px;align-items:center;min-height:48px;border-bottom:1px solid var(--rule-soft)}
 .sp-rbtn{display:flex;align-items:center;gap:10px;min-height:44px;padding:0;border:0;background:none;color:var(--ink);font:500 13.5px/1.2 Archivo,sans-serif;cursor:pointer;text-align:left}
 .sp-rbtn i{flex:none;width:26px;height:26px;border-radius:50%;background:var(--raised);display:grid;place-items:center;font:600 9.5px/1 "IBM Plex Mono",monospace;font-style:normal;color:var(--ink-2)}
@@ -4547,7 +4552,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"625f2291ac","latest":{"pr":121,"date":"2026-09-25","title":"Hire and place staff for every site at once","summary":"Company › Payroll is now Staff. It adds up what each shop, office and factory still needs by role, moves spare people between sites first, and picks the most skilled of your headhunters' candidates, with filters for the demands you want to avoid. One confirm hires them, puts them at their sites and writes their hours, through the Big Copilot Link mod 0.3.0. Hires cannot be undone."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"63b9f3a0ea","latest":{"pr":121,"date":"2026-09-25","title":"Hire and place staff for every site at once","summary":"Company › Payroll is now Staff. It adds up what each shop, office and factory still needs by role, moves spare people between sites first, and picks the most skilled of your headhunters' candidates, with filters for the demands you want to avoid. One confirm hires them, puts them at their sites and writes their hours, through the Big Copilot Link mod 0.3.0. Hires cannot be undone."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -4635,8 +4640,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=625f2291ac"></script>
-<script src="community.js?v=625f2291ac"></script>
+<script src="app.js?v=63b9f3a0ea"></script>
+<script src="community.js?v=63b9f3a0ea"></script>
 
 <script>
 
@@ -9287,6 +9292,25 @@ function spPlanPick(base, full){
     full ? ` class="sp-on" aria-current="true"` : ""}>${tt("sp.pick.full", "Full cover 24/7")}</a></span>${done}</div>`;
 }
 
+/* An office's Staffing: Peter's office default (officeStaffing) against the
+   week in the game, and its write -- the same review, confirm and undo as a
+   shop's, which never changes the office's opening hours. The hour grid of
+   the week is the Staff page's and the game's; here it is the numbers. */
+function spOfficeRoster(b){
+  const row = gwOfficeRow(b.key);
+  if(!row || !(row.shifts || []).length) return "";
+  const now = (row.current || {}).list || [], plan = (row.shifts || []).filter(s => !spNobody(s.p));
+  const hours = list => list.reduce((n, s) => n + s.t - s.f, 0);
+  const people = list => new Set(list.map(s => s.p).filter(p => p !== null && p !== undefined)).size;
+  const open = (row.shifts || []).filter(s => spNobody(s.p));
+  const facts = [[tt("sp.off.hours", "Hours / week"), hours(now), hours(plan)], [tt("sp.off.people", "People"), people(now), people(plan)]];
+  return `<section class="sec rv" data-block="roster" id="sp-roster" data-site="${attr(b.key)}">
+    ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster", quiet: tt("sp.off.quiet", "the office default: {n} always on, every computer on weekdays 8 to 22", {n: row.alwaysOn || 0})})}
+    <div class="sp-offroster">${facts.map(([k, a, z]) => `<div><span>${k}</span><b>${a === z ? z : `<s>${a}</s> → ${z}`}</b></div>`).join("")}${
+      open.length ? `<div><span>${tt("sp.off.open", "Waiting on a hire")}</span><b>${tt("sp.off.openh", "{n} h", {n: hours(open)})}</b></div>` : ""}</div>
+    ${gwLink() ? gwRosterButtons(b.key) : `<p class="quiet">${tt("sp.off.link", "Link the game to write this week from here.")}</p>`}
+  </section>`;
+}
 function spRosterBlock(b){
   const base = spRosterRow(b.key);
   const offer = spOffersFull(base);
@@ -10639,7 +10663,7 @@ function drawSite(){
     </section>` : ""}
     ${/* Only a shop is planned: an office bills hours rather than serving a
           queue, and a depot, a factory and a home have no row at all. */""}
-    ${kind === "retail" ? spRosterBlock(b) : ""}
+    ${kind === "retail" ? spRosterBlock(b) : office ? spOfficeRoster(b) : ""}
     <div class="duo sec" style="grid-template-columns:1fr 2fr">
       <section class="rv" data-block="crew" id="sp-crew">
         ${sechead(tt("sp.crew.title", "Crew"), {icon: spAny ? "crew" : null, why: roleTip || null, quiet: crewQuiet})}
@@ -13692,8 +13716,9 @@ function hrNoHoursHtml(){
    nothing. The link opens the site's Staffing, whose write puts the week in. */
 function hrIdleHtml(m){
   /* The plan the site's Staffing block shows and writes, as it picks it. */
-  const of = S => { const u = S.site.unstaffed || {}; return spPlanRead(S.key) === "full" && u.full ? u.full : u.demand; };
-  const rows = m.sites.filter(S => S.site.kind === "shop" && of(S)).map(S => {
+  const of = S => { const u = S.site.unstaffed || {};
+    return S.site.kind === "office" ? u.office : spPlanRead(S.key) === "full" && u.full ? u.full : u.demand; };
+  const rows = m.sites.filter(S => (S.site.kind === "shop" || S.site.kind === "office") && of(S)).map(S => {
     const u = of(S), name = spEsc(S.b ? shortName(S.b) : S.site.name || "A site");
     const who = (u.roles || []).filter(r => r.idle).map(r => `your ${hrNum(r.idle)} ${hrRole(r.skill)} staff ${r.idle === 1 ? "has" : "have"} no hours`);
     const href = siteHref(S.key);
@@ -24106,7 +24131,13 @@ const GW_HQ = "ba:businesstype_headquarters";
    opening hours, and none where nothing was planned. */
 function gwRosterPlan(key){
   const b = (D.businesses || []).find(x => x.key === key);
-  if(!b || b.typeSlug === GW_HQ || b.status !== "retail") return null;
+  if(!b || b.typeSlug === GW_HQ) return null;
+  /* An office: Peter's office default (officeStaffing), which never opens it. */
+  if(b.status === "office"){
+    const office = gwOfficeRow(key);
+    return office && (office.shifts || []).length ? office : null;
+  }
+  if(b.status !== "retail") return null;
   const base = spRosterRow(key);
   if(!base || base.failed) return null;
   const row = spOffersFull(base) && spPlanRead(base.key) === "full" ? spFullRow(base) : base;
@@ -24145,7 +24176,12 @@ function gwRosterMatches(row, week){
   }).sort();
   return !(row.full && !row.openNow) && want.length === have.length && want.every((x, i) => x === have[i]);
 }
-const gwScheduleSites = () => (D.staffing || []).map(r => r.key).filter(key => {
+const gwOfficeRow = key => {
+  const list = Array.isArray(D.officeStaffing) ? D.officeStaffing : [];
+  const row = list.find(r => r.key === key && !r.failed);
+  return row ? Object.assign({}, row, {full: false, office: true}) : null;
+};
+const gwScheduleSites = () => [...(D.staffing || []), ...(Array.isArray(D.officeStaffing) ? D.officeStaffing : [])].map(r => r.key).filter(key => {
   const row = gwRosterPlan(key);
   if(!row) return false;
   const week = gwRosterWeek(row);
@@ -24250,7 +24286,7 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
       const row = gwRosterPlan(key), week = gwRosterWeek(row);
       last = {row, week, now: (row.current || {}).list || []};
       return {address: gwAddress(key), expect: site().shiftPrint,
-              openAllHours: !!(row.full && !row.openNow && openAll), days: week.days};
+              openAllHours: !!(!row.office && row.full && !row.openNow && openAll), days: week.days};
     },
     verdict: answer => answer.ok ? `<b>${tt("sp.gw.sch.takes", "The game takes the week")}</b>` : `<b>${tt("sp.gw.refuses", "The game refuses this")}</b>`,
     object: row => {
@@ -24278,7 +24314,8 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
           other: "<b>{h} h a week stay empty</b> until you add {n} people. Write the roster again then: the board keeps this note on the roster until it is full."},
           {h: add.hoursUncovered || 0, n: add.people})) : "");
       const whole = tt("sp.gw.plan.whole", "replaces the whole week");
-      const which = row.full ? `<span class="gw-plan full">${gwSvg("sun")}${tt("sp.pick.full", "Full cover 24/7")}</span><span class="gw-only">${tt("sp.gw.plan.every", "every station, every hour")}</span>`
+      const which = row.office ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.gw.plan.office", "Office default")}</span><span class="gw-only">${tt("sp.gw.plan.whole", "replaces the whole week")}</span>`
+        : row.full ? `<span class="gw-plan full">${gwSvg("sun")}${tt("sp.pick.full", "Full cover 24/7")}</span><span class="gw-only">${tt("sp.gw.plan.every", "every station, every hour")}</span>`
         : spCoverOnly(row) ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.gw.plan.cover", "Cleaning and security")}</span><span class="gw-only">${whole}</span>`
         : `<span class="gw-plan">${gwSvg("roster")}${tt("sp.pick.demand", "Demand plan")}</span><span class="gw-only">${whole}</span>`;
       const kept = week.kept ? gwCall("info", "info", tt("sp.gw.sch.kept", {
