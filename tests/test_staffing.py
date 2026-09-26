@@ -1145,6 +1145,48 @@ class MultiRoleTest(unittest.TestCase):
         self.assertEqual(row["need"][SERVICE][1][12], 1)
         self.assertEqual(row["need"][TRAINER][1][12], 2)
 
+    def test_a_hairdresser_plans_its_chairs_and_its_head_wash(self):
+        """Issue #154: the chairs were never planned, only the head wash.
+
+        One skill, two kinds of work: a chair cuts at 5 an hour and a head wash
+        shampoos at 10, and one cannot do the other's job. 8 customers an hour
+        want two chairs and one head wash, all worked by Hair Stylists.
+        """
+        stylist, chair, wash = ("ba:skill_hairstylist", "ba:itemname_hairdresserchair",
+                                "ba:itemname_hairdresserheadwash")
+
+        def help_page(fees):
+            return ("is a special *employee station*\n\n"
+                    + "".join(f"* [x](fees-{fee})\n" for fee in fees))
+
+        names = Names(dict(LABELS.locale, **{
+            stylist: "Hair Stylist", chair: "Hairdresser Chair", wash: "Hairdresser Head Wash",
+            f"help_{chair}_content": help_page(["haircuttingfee", "hairstylingfee"]),
+            f"help_{wash}_content": help_page(["hairshampooingfee"]),
+        }))
+        stations = {chair: (stylist, 5), wash: (stylist, 10)}
+        items = [(1, wash), (2, chair), (3, chair), (4, chair)]
+        reg = registration(items=items, hourly={h: 8 for h in range(24)})
+        people = [employee(f"p{i}", [stylist]) for i in range(10)]
+        save = Save({"EmployeeInstances": {"$items": people},
+                     "BuildingRegistrations": {"$items": [dict(reg, RentedByPlayer=True)]}},
+                    {}, "test.hsg")
+        sites = [business()]
+        _by_addr, staff = _staff(save, names)
+        grids = _hourly(save, [reg], sites, stations, set(),
+                        {p["id"]: p["skill"] for p in staff}, names)
+        [row] = _staffing(save, names, sites, grids, staff, 0.55)
+        split = f"{stylist}|{wash}"
+        self.assertEqual(row["need"][stylist][1][12], 2)
+        self.assertEqual(row["need"][split][1][12], 1)
+        served = {row["stations"][s["s"]]["id"]
+                  for s in staffed(row) if kind(s) == "serve" and s["d"] == 1
+                  and s["f"] <= 12 < s["t"]}
+        self.assertEqual(len(served & {2, 3, 4}), 2)
+        self.assertIn(1, served)
+        # One pool of Hair Stylists, not one per queue.
+        self.assertEqual(list(row["headcount"]), [stylist])
+
 
 class SurvivalTest(unittest.TestCase):
     """Saves are messy: none of this may raise."""

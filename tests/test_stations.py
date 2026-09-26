@@ -19,6 +19,7 @@ from ba_dashboard import (
     _hour_findings,
     _hourly,
     _service_stations,
+    _station_roles,
     _service_wages,
     _serves,
     money,
@@ -52,14 +53,17 @@ EMPTY_SUPPLY = {"graph": {"links": []}, "shops": [], "idle": [], "nextImportWeek
                 "imports": []}
 
 
-def page(name, skill, capacity):
+def page(name, skill, capacity, fees=()):
     """A station's F1 page, as the game writes it."""
     out = f"**{name}** is a special *employee station* that requires employees with [{name}]"
     if skill:
         out += f"(skill-{skill.split('_', 1)[-1]}) skill."
     if capacity:
         out += f"\n\n**Customer Capacity:** {capacity}"
-    return out
+    if fees:
+        out += "\n\nAt this station, employees can do the following:\n\n"
+        out += "\n".join(f"* [{fee}](fees-{fee})" for fee in fees)
+    return out + "\n\nThe furniture can be purchased from the following locations:\n* [Shop](fees-notafee)"
 
 
 NAMES = Names(dict({
@@ -71,8 +75,9 @@ NAMES = Names(dict({
     f"help_{COAT}_content": page("Coat Check Left", SERVICE, 50),
     f"help_{COSTUME}_content": page("Costume Booth", STAGECREW, 100),
     f"help_{DRESSING}_content": page("Dressing Room", ACTOR, 80),
-    f"help_{CHAIR}_content": page("Hairdresser Chair", STYLIST, 5),
-    f"help_{WASH}_content": page("Hairdresser Headwash", STYLIST, 10),
+    f"help_{CHAIR}_content": page("Hairdresser Chair", STYLIST, 5,
+                                  ("hairchemicalfee", "haircuttingfee", "hairstylingfee")),
+    f"help_{WASH}_content": page("Hairdresser Headwash", STYLIST, 10, ("hairshampooingfee",)),
     # Holds products, serves nobody.
     "help_ba:itemname_clothingrack_content": page("Clothing Rack", None, 10),
     # An employee station with no queue to hold.
@@ -640,15 +645,51 @@ class HairdresserTests(unittest.TestCase):
         b = building(items, shifts, hourly, 30, btype=HAIRDRESSER, number=number, name=name)
         return grid_of(b, crew, _service_stations(NAMES), name=name, basket=30.0)
 
-    def test_two_stations_of_one_role_take_the_larger_for_their_answer(self):
+    def test_a_chair_and_a_head_wash_are_two_queues(self):
+        """Issue #154: a head wash cannot cut hair, so it never stands in for a chair.
+
+        Pooled, one chair and one head wash read as 15 an hour and the answer
+        was another head wash. Each is its own queue, so the chair's 5 is the
+        site's ceiling and the answer is another chair.
+        """
         grid = self.hairdresser(chairs=1, washes=1)
-        [role] = grid["roles"]
-        self.assertEqual((role["label"], role["station"], role["counters"]),
-                         ("Hair Stylist", "Hairdresser Headwash", 15))
+        self.assertEqual(
+            [(r["key"], r["skill"], r["station"], r["counters"]) for r in grid["roles"]],
+            [(STYLIST, STYLIST, "Hairdresser Chair", 5),
+             (f"{STYLIST}|{WASH}", STYLIST, "Hairdresser Headwash", 10)],
+        )
+        self.assertEqual((grid["counters"], grid["staffed"][MONDAY][10]), (5, 5))
         [finding] = _hour_findings([grid], [site("Curls", number=9, basket=30.0)], {})
         self.assertEqual((plain(finding["limit"]), plain(finding["fix"])),
-                         ("hairdresser headwashes", "another hairdresser headwash"))
-        self.assertEqual(finding["noun"], "hairdresser headwashes")
+                         ("hairdresser chairs", "another hairdresser chair"))
+        self.assertEqual(finding["noun"], "hairdresser chairs")
+
+    def test_a_skill_doing_one_kind_of_work_keeps_its_key(self):
+        roles = _station_roles(_service_stations(NAMES), NAMES)
+        self.assertEqual(roles[CHAIR], STYLIST)
+        self.assertEqual(roles[WASH], f"{STYLIST}|{WASH}")
+        for slug in (BOARD, BOOTH, REGISTER, COAT, PROJECTION, COSTUME):
+            self.assertEqual(roles[slug], _service_stations(NAMES)[slug][0])
+
+    def test_the_shipped_help_splits_the_hairdresser_alone(self):
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "web", "py", "gametext.json")
+        with open(path, encoding="utf-8") as fh:
+            names = Names(json.load(fh))
+        stations = _service_stations(names)
+        split = {slug: key for slug, key in _station_roles(stations, names).items()
+                 if key != stations[slug][0]}
+        self.assertEqual(split, {WASH: f"{STYLIST}|{WASH}"})
+
+    def test_short_of_stylists_at_the_head_wash_asks_for_a_stylist(self):
+        """A shop with head washes only still names the skill it is short of."""
+        grid = self.hairdresser(washes=2, number=11, name="Braids")
+        grid["roles"][0]["staffed"][MONDAY] = [10] * 24
+        grid["staffed"][MONDAY] = [10] * 24
+        grid["effective"][MONDAY] = [10] * 24
+        findings = _hour_findings([grid], [site("Braids", number=11, basket=30.0)], {})
+        self.assertIn("another Hair Stylist on those hours",
+                      [plain(f["fix"]) for f in findings if f["kind"] == "cap"])
 
     def test_two_sites_short_of_different_stations_are_two_lines(self):
         """Same role, same ceiling, same hours, two different answers.
