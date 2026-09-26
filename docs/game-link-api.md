@@ -611,7 +611,7 @@ method but `OPTIONS` answers `403 {"error":"origin_not_allowed"}` (a `HEAD`, `40
 no body), without any `Access-Control-*` headers, so the browser blocks even that. A
 preflight from it answers `204` without the headers above, which the browser refuses.
 Mods before 0.3.1 did the work (a `/refresh` serialized, a `/save` sent the bytes) and
-only withheld the headers. A request with no `Origin` (curl, the CLI watcher) is served
+only withheld the headers; `/pair/request` alone already answered `403`. A request with no `Origin` (curl, the CLI watcher) is served
 as is.
 
 The allowlist: `https://bigcopilot.com`, `https://www.bigcopilot.com`, and any

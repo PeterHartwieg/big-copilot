@@ -406,7 +406,8 @@ http://127.0.0.1:8322/health` answers `"modVersion":"0.3.1"`.
    http://127.0.0.1:8322/refresh`, and the log shows no `serialized in` line for it.
    `curl -i -I -H "Origin: https://example.com" http://127.0.0.1:8322/save` answers `403`
    with no body. The same calls with no `Origin`, and with `-H "Origin:
-   https://bigcopilot.com"`, answer as before (`200`, `202`, `405`); the second carries
+   https://bigcopilot.com"`, answer as before (`200`, `202`, `405`; a second `/refresh` within 15 seconds
+   answers `429 throttled`, so wait before repeating it); the second carries
    `Access-Control-Allow-Origin`.
 2. **The board still works.** Link bigcopilot.com, Update, and set a uniform from a
    "No staff uniforms set" warning: dry run and apply go through as in 0.2.0 item 2.
