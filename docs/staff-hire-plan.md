@@ -216,11 +216,14 @@ Where the build differs from or adds to 2.1-2.4; the board worker reads these to
 
 ### 2.4b After Peter's in-game test (26 September 2026)
 
-- **Every open hour is staffed.** A shop whose demand plan rests on no hour read
-  (`_unread()`: every basis `none`) ships only its `full` plan, so the page hires by
-  full cover there as it does for a new shop; its demand plan would have been cleaning
-  and security alone however many hours it opened (Evil Genius). A shop with complete
-  data still reads a report-less hour as nobody came (the 23 September rule).
+- **Every open hour is staffed, never an hour more** (Peter, 26 September 2026: "Staff
+  the hours it's open, never change opening"). A shop whose need rests on no hour read
+  (`_need_unread()`: every basis `none`), new or not, gets `openCover`: every station of
+  every role the hours it opens now (`open` its own slots, `openAllHours` false), placed
+  beside the full-cover plan. `_hiring()` ships it as the site's only plan, `open`, so the
+  page hires by it and the write keeps the shop's opening hours. Its demand plan was
+  cleaning and security alone (Evil Genius). A shop with data keeps its measured plan, and
+  a report-less hour there is still nobody came (the 23 September rule).
 - **Hires get full weeks.** `_spread_residue()` moves the open shifts off the day they
   pile up on by swapping days with staff who are off that day, until no more than
   `ceil(hours / 50)` run at one hour; `_fill_hire_weeks()` then tops up a hire under 30

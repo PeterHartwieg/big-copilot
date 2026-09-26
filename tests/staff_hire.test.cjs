@@ -1433,3 +1433,15 @@ test('Where to find them: a role places stay open in, how many and where people 
   // Nothing short, nothing said.
   assert.equal(await page.evaluate(() => hrFindHtml({roles: []})), '');
 });
+
+test('a shop with no hour read is hired for the hours it opens, and the write never opens it', async (t) => {
+  const page = await board(t);
+  const out = await page.evaluate(([G]) => {
+    const base = D.staffing.find(r => r.key === G);
+    base.openCover = {shifts: base.shifts, open: [[[10, 18]]], openAllHours: false};
+    const site = {key: G, kind: 'shop', new: true, plans: {open: {hireWeeks: []}, full: {hireWeeks: []}}};
+    const v = hrVariant(site), row = hrPlanRow(site, v);
+    return {v, full: row.full, open: row.open, openAllHours: !!(row.full && !row.openNow)};
+  }, [G]);
+  assert.deepEqual(out, {v: 'open', full: false, open: [[[10, 18]]], openAllHours: false});
+});

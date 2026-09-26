@@ -321,7 +321,7 @@ class StationFactsTest(unittest.TestCase):
 
 def shop_hiring(weeks, opens=((0, 24),)):
     """One staffed shop through _staffing() and _hiring(), `weeks` of reports behind it."""
-    reg = ts.registration([(1, ts.REGISTER)], ts.FLAT, weeks=weeks, opens=opens)
+    reg = ts.registration([(1, ts.REGISTER), (8, ts.CLEAN_STATION)], ts.FLAT, weeks=weeks, opens=opens)
     save = Save({"EmployeeInstances": {"$items": [ts.employee("p1", [SERVICE])]},
                  "BuildingRegistrations": {"$items": [dict(reg, RentedByPlayer=True)]}},
                 {}, "t.hsg")
@@ -330,23 +330,43 @@ def shop_hiring(weeks, opens=((0, 24),)):
     grids = _hourly(save, [reg], [business], ts.STATIONS, set(),
                     {p["id"]: p["skill"] for p in staff}, ts.LABELS)
     rows = _staffing(save, ts.LABELS, [business], grids, staff, 0.55)
-    return _hiring(save, [business], rows, {}, [])["sites"][0]
+    return rows[0], _hiring(save, [business], rows, {}, [])["sites"][0]
 
 
 class UnreadShopTest(unittest.TestCase):
-    """Peter's rule (26 September 2026): every hour a shop opens needs its
-    stations staffed, even before anything is measured. Evil Genius opened
-    more hours with no hour read yet and was hired nobody for them."""
+    """Peter (26 September 2026): "Staff the hours it's open, never change
+    opening." A shop with no hour read is hired for by every station the hours
+    it opens now, and nothing opens it longer. Evil Genius opened more hours
+    with no hour read yet and was hired nobody for them."""
 
-    def test_a_shop_with_no_hour_read_is_hired_by_full_cover(self):
-        site = shop_hiring(weeks=1)
+    def test_a_shop_open_10_to_18_with_no_data_is_staffed_10_to_18_only(self):
+        row, site = shop_hiring(weeks=1, opens=((10, 18),))
         self.assertFalse(site["new"])
-        self.assertEqual(sorted(site["plans"]), ["full"])
-        weeks = site["plans"]["full"]["hireWeeks"]
-        self.assertTrue([w for w in weeks if w["skill"] == SERVICE])
+        self.assertEqual(sorted(site["plans"]), ["open"])
+        plan = row["openCover"]
+        self.assertIs(plan["openAllHours"], False)
+        self.assertEqual(plan["open"], [[[10, 18]] for _ in range(7)])
+        # Every station, the register and the cleaning station, 10 to 18 each day.
+        per = collections.defaultdict(set)
+        for s in plan["shifts"]:
+            self.assertGreaterEqual(s["f"], 10)
+            self.assertLessEqual(s["t"], 18)
+            per[(s["s"], s["d"])].update(range(s["f"], s["t"]))
+        self.assertEqual(len(per), 2 * 7)
+        self.assertTrue(all(hours == set(range(10, 18)) for hours in per.values()))
+        # The hires it needs, and each slot on an open entry of that plan.
+        weeks = site["plans"]["open"]["hireWeeks"]
+        self.assertTrue(weeks)
+        for week in weeks:
+            for slot in week["slots"]:
+                entry = plan["shifts"][slot["shift"]]
+                self.assertIsNone(entry["p"])
+                self.assertEqual((entry["d"], entry["f"], entry["t"]), (slot["d"], slot["f"], slot["t"]))
+        self.assertNotIn("_hire", plan)
 
     def test_a_measured_shop_keeps_its_demand_plan(self):
-        site = shop_hiring(weeks=2)
+        row, site = shop_hiring(weeks=2)
+        self.assertNotIn("openCover", row)
         self.assertEqual(sorted(site["plans"]), ["demand", "full"])
 
 

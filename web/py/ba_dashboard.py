@@ -8275,12 +8275,21 @@ def _staffing(
         scratch = {pid: _copy_state(entry) for pid, entry in site["before"].items()
                    if pid not in free}
         scratch.update({pid: _copy_state(shared[pid]) for pid in free})
+        # Every station the hours the shop opens now, for a shop with no hour
+        # read: what the Staff page hires by there (Peter, 26 September 2026:
+        # "Staff the hours it's open, never change opening"). Placed from the
+        # same starting week as the full-cover plan, as the other choice to it.
+        opened_scratch = {pid: _copy_state(entry) for pid, entry in scratch.items()}
         try:
             full = _place_week(
                 site["grid"], _full_need(site["grid"]), ALL_DAY_OPEN, site["coverPosts"],
                 site["own"] + site_bench, people, business, site_bench, scratch,
             )
-            row = _finish_site(site, full, names, people)
+            opened = _place_week(
+                site["grid"], _full_need(site["grid"]), site["grid"]["open"], site["coverPosts"],
+                site["own"] + site_bench, people, business, site_bench, opened_scratch,
+            ) if _need_unread(site["need"]) and any(site["grid"]["open"]) else None
+            row = _finish_site(site, full, names, people, opened)
         except Exception:
             out[index] = failed(business)
             continue
@@ -8290,6 +8299,12 @@ def _staffing(
         left = [person for person in left if person["id"] not in drawn]
         out[index] = row
     return out
+
+
+def _need_unread(need: dict) -> bool:
+    """Whether a need curve rests on no hour read at all: every basis `none`."""
+    return not any(cell != "none" for role in need.values()
+                   for day in role["basis"] for cell in day)
 
 
 def _full_need(grid: dict) -> dict:
@@ -9327,13 +9342,13 @@ def _plan_site(
     }
 
 
-def _finish_site(site, full, names, people) -> dict:
+def _finish_site(site, full, names, people, opened=None) -> dict:
     """One retail site's row, from its demand plan and its full-cover plan."""
     save, business, building, grid = (
         site["save"], site["business"], site["building"], site["grid"])
     week, current, cover_posts = site["week"], site["current"], site["coverPosts"]
     wage_of = dict(site["wage"])
-    for person in full["took"]:
+    for person in full["took"] + (opened["took"] if opened else []):
         wage_of[person["id"]] = person["wage"]
     # Two lookup tables, so the many rows below can be indices rather than
     # repeated 24-character ids. Everything a row points at is here: every
@@ -9342,8 +9357,8 @@ def _finish_site(site, full, names, people) -> dict:
     lists = lambda w: (w["shifts"], w["shortHours"], w["shortDays"], w["placed"], w["bench"])  # noqa: E731
     table = _index_table(
         grid["stations"] + cover_posts,
-        (week["shifts"], full["shifts"], current["list"]),
-        (current["list"],) + lists(week) + lists(full),
+        (week["shifts"], full["shifts"], current["list"]) + ((opened["shifts"],) if opened else ()),
+        (current["list"],) + lists(week) + lists(full) + (lists(opened) if opened else ()),
         people,
     )
     cost = {
@@ -9400,6 +9415,14 @@ def _finish_site(site, full, names, people) -> dict:
             "daysMeasured": site["run"],
             "daysNeeded": DEMAND_RUN_DAYS,
         },
+        # A shop with no hour read: every station of every role the hours it
+        # opens now, and never an hour more (`openAllHours` false). The Staff
+        # page hires by it there; the write keeps the shop's opening hours.
+        **({"openCover": {
+            key: value
+            for key, value in _plan_fields(opened, table, names, people, cost).items()
+            if key not in ("need", "basis")
+        } | {"open": grid["open"], "openAllHours": False}} if opened else {}),
         # The hand-over: the demand data is complete while the game runs full
         # cover, and the demand plan would change something. See
         # _demand_data_complete().
@@ -9810,14 +9833,6 @@ def _company_facts(save: Save) -> dict:
     return out
 
 
-def _unread(row: dict) -> bool:
-    """Whether a shop's demand plan rests on no hour read at all (every basis `none`)."""
-    return not any(
-        cell != "none"
-        for days in (row.get("basis") or {}).values() for day in days for cell in day
-    )
-
-
 def _full_offered(row: dict) -> bool:
     """The board's spOffersFull: a full-cover plan with a station to staff."""
     return bool(row and not row.get("failed") and row.get("fullCover")
@@ -9878,18 +9893,21 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
             row = shops.get(business["key"])
             demand = take(row)
             full = take((row or {}).get("fullCover"))
+            opened = take((row or {}).get("openCover"))
             if row and not row.get("failed") and demand is not None:
-                if _full_offered(row) and full is not None:
-                    plans["full"] = full
                 # A shop with no hour read yet has a demand plan of cleaning
                 # and security alone, however many hours it opens in the game.
-                # Peter's rule (26 September 2026): every hour it opens needs
-                # its stations staffed, even before anything is measured, so
-                # the Staff page hires by full cover there, as it does for a
-                # new shop. Evil Genius opened more hours and was hired
-                # nobody for them.
-                if not ("full" in plans and _unread(row)):
+                # Peter (26 September 2026): "Staff the hours it's open, never
+                # change opening." Such a shop is hired for by every station
+                # the hours it opens now (`open`), new or not, and the write
+                # keeps its opening hours. Evil Genius opened more hours and
+                # was hired nobody for them.
+                if opened is not None:
+                    plans["open"] = opened
+                else:
                     plans["demand"] = demand
+                    if _full_offered(row) and full is not None:
+                        plans["full"] = full
         elif kind == "factory":
             for mode, row in factories.get(business["key"], {}).items():
                 found = take(row)
@@ -9920,6 +9938,7 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
     for row in staffing:
         take(row)
         take(row.get("fullCover"))
+        take(row.get("openCover"))
     for rows in factories.values():
         for row in rows.values():
             take(row)
@@ -24952,6 +24971,8 @@ const hrKind = slug => ((D.hiring || {}).demandKinds || {})[slug] || null;
 function hrVariant(site){
   const plans = site.plans || {};
   if(site.kind === "shop"){
+    /* No hour read: every station the hours it opens now, never more. */
+    if(plans.open) return "open";
     if(plans.full && (site.new || spPlanRead(site.key) === "full")) return "full";
     return plans.demand ? "demand" : plans.full ? "full" : null;
   }
@@ -24962,6 +24983,7 @@ function hrPlanRow(site, variant){
   if(site.kind === "shop"){
     const base = spRosterRow(site.key);
     if(!base || base.failed) return null;
+    if(variant === "open" && base.openCover) return Object.assign({}, base, base.openCover, {openCover: null, fullCover: null, full: false});
     return variant === "full" && base.fullCover ? spFullRow(base) : base;
   }
   if(site.kind === "factory") return (((D.factoryStaffing || {})[variant]) || []).find(r => r.key === site.key && !r.failed) || null;
@@ -26204,7 +26226,8 @@ function hrReviewSites(m, req, phase, gone){
         + moves.map(() => dot("mv")).join("") + gaps.map(() => dot("gap")).join("")
       : phase === "done" ? [...hired, ...got, ...moves].map(() => dot("done")).join("") + Array.from({length: missed}, () => dot("gap")).join("")
       : [...hires, ...extra, ...moves].map(() => dot("wait")).join("");
-    const plan = !S.planned ? "no hours: assigned only" : S.site.new ? (S.site.kind === "office" ? "new: the office default" : "new: full cover, open 24/7")
+    const plan = !S.planned ? "no hours: assigned only" : S.variant === "open" ? `${S.site.new ? "new: " : ""}every station, the hours it opens`
+      : S.site.new ? (S.site.kind === "office" ? "new: the office default" : "new: full cover, open 24/7")
       : S.variant === "full" ? "hours from full cover" : "hours from the board's plan";
     const open = hrUi.reviewOpen === S.key;
     const person = (name, sub, role, lv, wage, slots, hours, cls) => `<div class="hr-dp${cls ? ` ${cls}` : ""}"><span class="who"><b>${name}</b><small${sub.mv ? ` class="mv"` : ""}>${sub.t}</small></span><span class="r">${role}</span>
