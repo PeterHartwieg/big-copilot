@@ -403,7 +403,9 @@ folder's root, 1 MB at most), then in the game's main menu open **Mods → Mod C
 choose **Edit mod** on the item under **My created mods**, select the mod folder, fill in **Change Logs** and
 set **Target Build** to the game build it was built against, and upload. The
 description is Steam BBCode: `mod/workshop/description.bbcode`, pasted whole.
-`node mod/workshop/render.cjs` re-renders the thumbnail and `how-it-works.png` (an extra
+`mod/workshop/thumbnail.png` is the live Workshop preview (the "Big Copilot Link. Business
+dashboard" card, 2048 px); `node mod/workshop/render.cjs` would overwrite it with the older
+orb art from `art.html`, so render only `how-it-works.png` (an extra
 image added on the Workshop page under Add/edit images & videos) from `art.html`.
 
 ## Options
