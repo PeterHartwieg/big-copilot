@@ -928,6 +928,8 @@ class PayloadTest(unittest.TestCase):
                 "shortHours", "shortDays", "placed", "bench", "slack", "cost",
                 "current", "measure", "addPeople", "fullCover", "demandDataComplete",
                 "unmeasured",
+                # The Staff page's plan, which never opens the shop longer.
+                "openCover",
                 # The Staff page's part, which _hiring() takes off in extract().
                 "_hire",
             },

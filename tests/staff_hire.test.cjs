@@ -94,8 +94,9 @@ function withHiring(text) {
       list: [{d: 1, s: 0, f: 8, t: 20, p: 0}, {d: 2, s: 0, f: 8, t: 20, p: 1}]},
     fullCover: null,
   });
-  // Bare: opened without staff, so the page plans it with full cover. Bo, on
-  // the bench, is already in that plan.
+  // Bare: opened without staff and nothing measured, so the page plans it
+  // with every station the hours it opens (openCover), never full cover.
+  // Bo, on the bench, is already in that plan.
   Object.assign(row(B), {
     stations: [{id: 'REG-B', name: 'Register', skill: CS, rate: 20}, {id: 'CLN-B', name: 'Cleaning station', skill: CLEAN, rate: null}],
     people: [{id: 'BENCH1', name: 'Bo Bench'}],
@@ -107,6 +108,8 @@ function withHiring(text) {
       {d: 1, s: 1, f: 8, t: 20, p: 0, k: 'clean'}, {d: 2, s: 1, f: 8, t: 20, p: null, k: 'clean'},
       {d: 3, s: 1, f: 8, t: 20, p: null, k: 'clean'}, {d: 4, s: 1, f: 8, t: 20, p: null, k: 'clean'}]}),
   });
+  row(B).openCover = Object.assign({}, row(B).fullCover, {open: row(B).open, openAllHours: false, complete: false,
+    openNow: undefined, inGame: undefined});
   const fac = (hire, extra) => Object.assign({key: F, s: fIndex, name: 'HART. Works', lines: [],
     headcount: {needed: 96, min: 2, have: 1, spare: 0, hire}, wageDay: 200, delta: {workers: hire, perDay: hire * 200},
     stations: [{id: 'MACH-1', name: 'Machine', skill: FW}], people: [{id: 'FW1', name: 'Fay Works'}]}, extra);
@@ -135,7 +138,7 @@ function withHiring(text) {
        plans: {demand: {spare: ['SPARE1'], bench: [], hireWeeks: []}}},
       {key: B, name: 'HART. Bare', kind: 'shop', address: addr(B), planned: true, new: true, accepts: [CS, CLEAN],
        facts: {'ba:jobdemand_coffeemachine': true},
-       plans: {demand: {spare: [], bench: [], hireWeeks: []}, full: {spare: [], bench: ['BENCH1'], hireWeeks: [
+       plans: {open: {spare: [], bench: ['BENCH1'], hireWeeks: [
          {skill: CS, hours: 36, days: 3, slots: [slot(0, 1, 0, 12, 'REG-B'), slot(1, 2, 0, 12, 'REG-B'), slot(2, 3, 0, 12, 'REG-B')]},
          {skill: CS, hours: 36, days: 3, slots: [slot(3, 4, 0, 12, 'REG-B'), slot(4, 5, 0, 12, 'REG-B'), slot(5, 6, 0, 12, 'REG-B')]},
          {skill: CLEAN, hours: 36, days: 3, slots: [slot(7, 2, 8, 20, 'CLN-B'), slot(8, 3, 8, 20, 'CLN-B'), slot(9, 4, 8, 20, 'CLN-B')]}]}}},
@@ -229,7 +232,7 @@ test('netting: the bench a plan counts on, then spare people, then hires, best f
   assert.deepEqual(m.weeks, [
     [G, 'demand', ['move:SPARE1', 'hire:c2']],
     [C, 'demand', []],
-    [B, 'full', ['hire:c1', 'hire:c3!', 'hire:k1']],
+    [B, 'open', ['hire:c1', 'hire:c3!', 'hire:k1']],
     [F, 'cap', ['hire:f1', 'hire:f2']],
     [O, 'office', ['hire:l1']],
     [Q, null, []],
@@ -277,7 +280,7 @@ test('netting: the bench a plan counts on, then spare people, then hires, best f
   assert.deepEqual(off.weeks.slice(0, 3), [
     [G, 'demand', ['hire:c2', 'hire:c1']],
     [C, 'demand', []],
-    [B, 'full', ['hire:c3', 'hire:c4', 'hire:k1']],
+    [B, 'open', ['hire:c3', 'hire:c4', 'hire:k1']],
   ]);
   assert.equal(await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).isChecked(), false);
   assert.equal((await page.locator(REVIEW).textContent()).trim(), 'Review and hire 8');
@@ -454,8 +457,9 @@ test('the request: a shop on its plan and on full cover, a factory, an office an
   // written without him.
   assert.deepEqual(site(2), {address: addr(C), expect: 'ecdcd9ed', openAllHours: false, days: [
     {d: 1, shifts: [{f: 8, t: 20, employeeId: 'CCCCemployeeCCCCCCCCCCCC', itemInstanceId: 'REG-C'}]}]});
-  // Bare, new, on full cover: open around the clock; Bo on his cleaning day.
-  assert.equal(site(4).openAllHours, true);
+  // Bare, new, nothing measured: every station the hours it opens, and the
+  // write never opens it longer; Bo on his cleaning day.
+  assert.equal(site(4).openAllHours, false);
   assert.equal(site(4).expect, '811c9dc5');
   assert.deepEqual(site(4).days.find(d => d.d === 1).shifts, [
     {f: 0, t: 12, employeeId: 'c1', itemInstanceId: 'REG-B'}, {f: 8, t: 20, employeeId: 'BENCH1', itemInstanceId: 'CLN-B'}]);
@@ -949,7 +953,7 @@ test('Quick hire at a shop holds its plan week while its confirm is open, and no
   assert.deepEqual(m.weeks.slice(0, 3), [
     [G, 'demand', ['move:SPARE1', 'quick:c2']],
     [C, 'demand', []],
-    [B, 'full', ['hire:c1', 'hire:c3!', 'hire:k1']],
+    [B, 'open', ['hire:c1', 'hire:c3!', 'hire:k1']],
   ]);
   assert.deepEqual(m.roles[0].picked, ['c1', 'c3']);
   assert.equal(await page.evaluate(() => hrModel().roles[0].at.get('c2').elsewhere.key), G);
@@ -1444,4 +1448,64 @@ test('a shop with no hour read is hired for the hours it opens, and the write ne
     return {v, full: row.full, open: row.open, openAllHours: !!(row.full && !row.openNow)};
   }, [G]);
   assert.deepEqual(out, {v: 'open', full: false, open: [[[10, 18]]], openAllHours: false});
+});
+
+test('the Staff page never opens a shop: full cover on the board maps to its open hours, and a shop with no hours has no plan', async (t) => {
+  const page = await board(t);
+  const out = await page.evaluate(([G]) => {
+    spPlanWrite(G, 'full');
+    const picked = hrVariant({key: G, kind: 'shop', plans: {demand: {}, open: {}}});
+    const noOpen = hrVariant({key: G, kind: 'shop', plans: {demand: {}, full: {}}});
+    spPlanWrite(G, 'demand');
+    const measured = hrVariant({key: G, kind: 'shop', plans: {demand: {}, open: {}}});
+    D.hiring.sites.find(s => s.key === G).noHours = true;
+    drawStaff(); wireStaff();
+    return {picked, noOpen, measured, note: document.querySelector('#secStaff .hs-nohours').textContent};
+  }, [G]);
+  assert.deepEqual(out, {picked: 'open', noOpen: 'demand', measured: 'demand',
+    note: 'HART. Gifts opens no hour in the game: set its opening hours first.'});
+  // Every site of a hire request keeps its opening hours.
+  const body = await request(page);
+  assert.ok(body.sites.length > 0);
+  assert.ok(body.sites.every(x => x.openAllHours === false));
+});
+
+test('a desk demand at a site with no plan is met at a desk there: seat them there', async (t) => {
+  const page = await board(t);
+  const out = await page.evaluate(() => {
+    const EXEC = 'ba:jobdemand_seatedatofficedesk2';
+    D.hiring.demandKinds[EXEC] = 'station';
+    const hq = {site: {stations: {d1: [EXEC]}, name: 'HQ'}, planned: false};
+    return [hrDemandAt({sites: [hq]}, EXEC, hq, null), hrWhy({sites: [hq]}, EXEC, hq, null)];
+  });
+  assert.deepEqual(out, ['warn', 'met at a desk here: seat them there']);
+});
+
+test('a live refresh under an open option list keeps the list on the new select, and the pick lands', async (t) => {
+  const page = await board(t);
+  await page.locator('#hsQuick [data-hq-role]').click();
+  assert.equal(await page.locator('#hsSelPop').isVisible(), true);
+  const out = await page.evaluate(([HRM]) => {
+    const old = document.querySelector('#hsQuick [data-hq-role]');
+    drawStaff(); wireStaff();
+    const now = document.querySelector('#hsQuick [data-hq-role]');
+    const i = [...now.options].findIndex(o => o.value === HRM);
+    return {redrawn: old !== now && !old.isConnected, open: !!document.getElementById('hsSelPop'),
+      pointed: hrSel && hrSel.select === now, i,
+      active: document.getElementById('hsSelPop').getAttribute('aria-activedescendant'),
+      controls: now.getAttribute('aria-controls'), expanded: now.getAttribute('aria-expanded')};
+  }, [HRM]);
+  assert.equal(out.redrawn, true);
+  assert.equal(out.open, true);
+  assert.equal(out.pointed, true);
+  assert.equal(out.active, 'hsSelOpt0');
+  assert.equal(out.controls, 'hsSelPop');
+  assert.equal(out.expanded, 'true');
+  await page.locator(`#hsSelPop [data-hs-opt="${out.i}"]`).click();
+  assert.equal(await page.locator('#hsQuick [data-hq-role]').inputValue(), HRM);
+  // Type-ahead: "h" lights the first option starting with it.
+  await page.locator('#hsQuick [data-hq-role]').click();
+  await page.keyboard.press('h');
+  const lit = await page.evaluate(() => document.querySelector('#hsSelPop .hs-selopt.on').textContent.trim());
+  assert.match(lit, /^H/);
 });

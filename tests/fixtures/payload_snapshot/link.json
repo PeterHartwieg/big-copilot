@@ -1171,16 +1171,9 @@
     "kind": "shop",
     "name": "HART. Gifts",
     "new": false,
+    "noHours": true,
     "planned": true,
-    "plans": {
-     "demand": {
-      "bench": [],
-      "fewer": [],
-      "hireWeeks": [],
-      "spare": [],
-      "spareSkills": {}
-     }
-    },
+    "plans": {},
     "stations": {}
    },
    {
@@ -1206,16 +1199,9 @@
     "kind": "shop",
     "name": "HART. Corner",
     "new": false,
+    "noHours": true,
     "planned": true,
-    "plans": {
-     "demand": {
-      "bench": [],
-      "fewer": [],
-      "hireWeeks": [],
-      "spare": [],
-      "spareSkills": {}
-     }
-    },
+    "plans": {},
     "stations": {}
    },
    {
@@ -1241,16 +1227,9 @@
     "kind": "shop",
     "name": "HART. Bare",
     "new": true,
+    "noHours": true,
     "planned": true,
-    "plans": {
-     "demand": {
-      "bench": [],
-      "fewer": [],
-      "hireWeeks": [],
-      "spare": [],
-      "spareSkills": {}
-     }
-    },
+    "plans": {},
     "stations": {}
    },
    {

@@ -3144,23 +3144,23 @@
       "spare": [],
       "spareSkills": {}
      },
-     "full": {
+     "open": {
       "bench": [],
       "fewer": [
        {
-        "hours": 48.0,
+        "hours": 49.0,
         "id": "EMPcy",
         "name": "Cy Moss",
         "now": 84
        },
        {
-        "hours": 48.0,
+        "hours": 49.0,
         "id": "EMPana",
         "name": "Ana Silva",
         "now": 56
        },
        {
-        "hours": 48.0,
+        "hours": 49.0,
         "id": "EMPben",
         "name": "Ben Ode",
         "now": 56
@@ -3169,148 +3169,57 @@
       "hireWeeks": [
        {
         "days": 4,
-        "hours": 48,
+        "hours": 49,
         "skill": "ba:skill_cleaning",
         "slots": [
          {
-          "d": 0,
-          "f": 12,
-          "shift": 2,
-          "station": "CLEANliquor",
-          "t": 24
-         },
-         {
-          "d": 1,
-          "f": 12,
-          "shift": 6,
-          "station": "CLEANliquor",
-          "t": 24
-         },
-         {
-          "d": 2,
-          "f": 12,
-          "shift": 10,
-          "station": "CLEANliquor",
-          "t": 24
-         },
-         {
           "d": 3,
-          "f": 12,
+          "f": 15,
           "shift": 14,
           "station": "CLEANliquor",
-          "t": 24
-         }
-        ]
-       },
-       {
-        "days": 3,
-        "hours": 36,
-        "skill": "ba:skill_cleaning",
-        "slots": [
+          "t": 22
+         },
          {
           "d": 4,
-          "f": 0,
+          "f": 8,
           "shift": 16,
           "station": "CLEANliquor",
-          "t": 12
+          "t": 15
          },
-         {
-          "d": 5,
-          "f": 0,
-          "shift": 20,
-          "station": "CLEANliquor",
-          "t": 12
-         },
-         {
-          "d": 6,
-          "f": 0,
-          "shift": 24,
-          "station": "CLEANliquor",
-          "t": 12
-         }
-        ]
-       },
-       {
-        "days": 3,
-        "hours": 36,
-        "skill": "ba:skill_cleaning",
-        "slots": [
          {
           "d": 4,
-          "f": 12,
+          "f": 15,
           "shift": 18,
           "station": "CLEANliquor",
-          "t": 24
+          "t": 22
          },
          {
           "d": 5,
-          "f": 12,
+          "f": 8,
+          "shift": 20,
+          "station": "CLEANliquor",
+          "t": 15
+         },
+         {
+          "d": 5,
+          "f": 15,
           "shift": 22,
           "station": "CLEANliquor",
-          "t": 24
+          "t": 22
          },
          {
           "d": 6,
-          "f": 12,
+          "f": 8,
+          "shift": 24,
+          "station": "CLEANliquor",
+          "t": 15
+         },
+         {
+          "d": 6,
+          "f": 15,
           "shift": 26,
           "station": "CLEANliquor",
-          "t": 24
-         }
-        ]
-       },
-       {
-        "days": 4,
-        "hours": 48,
-        "skill": "ba:skill_customerservice",
-        "slots": [
-         {
-          "d": 0,
-          "f": 12,
-          "shift": 3,
-          "station": "REGliquor",
-          "t": 24
-         },
-         {
-          "d": 3,
-          "f": 12,
-          "shift": 15,
-          "station": "REGliquor",
-          "t": 24
-         },
-         {
-          "d": 4,
-          "f": 12,
-          "shift": 19,
-          "station": "REGliquor",
-          "t": 24
-         },
-         {
-          "d": 5,
-          "f": 0,
-          "shift": 21,
-          "station": "REGliquor",
-          "t": 12
-         }
-        ]
-       },
-       {
-        "days": 2,
-        "hours": 24,
-        "skill": "ba:skill_customerservice",
-        "slots": [
-         {
-          "d": 5,
-          "f": 12,
-          "shift": 23,
-          "station": "REGliquor",
-          "t": 24
-         },
-         {
-          "d": 6,
-          "f": 12,
-          "shift": 27,
-          "station": "REGliquor",
-          "t": 24
+          "t": 22
          }
         ]
        }
@@ -3382,11 +3291,11 @@
       "spare": [],
       "spareSkills": {}
      },
-     "full": {
+     "open": {
       "bench": [],
       "fewer": [
        {
-        "hours": 48.0,
+        "hours": 50.0,
         "id": "EMPdee",
         "name": "Dee Park",
         "now": 70
@@ -3394,93 +3303,23 @@
       ],
       "hireWeeks": [
        {
-        "days": 4,
-        "hours": 48,
+        "days": 2,
+        "hours": 20,
         "skill": "ba:skill_customerservice",
         "slots": [
          {
-          "d": 0,
-          "f": 12,
-          "shift": 1,
-          "station": "REGgifts",
-          "t": 24
-         },
-         {
-          "d": 1,
-          "f": 12,
-          "shift": 3,
-          "station": "REGgifts",
-          "t": 24
-         },
-         {
-          "d": 2,
-          "f": 12,
+          "d": 5,
+          "f": 9,
           "shift": 5,
           "station": "REGgifts",
-          "t": 24
-         },
-         {
-          "d": 3,
-          "f": 12,
-          "shift": 7,
-          "station": "REGgifts",
-          "t": 24
-         }
-        ]
-       },
-       {
-        "days": 3,
-        "hours": 36,
-        "skill": "ba:skill_customerservice",
-        "slots": [
-         {
-          "d": 4,
-          "f": 0,
-          "shift": 8,
-          "station": "REGgifts",
-          "t": 12
-         },
-         {
-          "d": 5,
-          "f": 0,
-          "shift": 10,
-          "station": "REGgifts",
-          "t": 12
+          "t": 19
          },
          {
           "d": 6,
-          "f": 0,
-          "shift": 12,
+          "f": 9,
+          "shift": 6,
           "station": "REGgifts",
-          "t": 12
-         }
-        ]
-       },
-       {
-        "days": 3,
-        "hours": 36,
-        "skill": "ba:skill_customerservice",
-        "slots": [
-         {
-          "d": 4,
-          "f": 12,
-          "shift": 9,
-          "station": "REGgifts",
-          "t": 24
-         },
-         {
-          "d": 5,
-          "f": 12,
-          "shift": 11,
-          "station": "REGgifts",
-          "t": 24
-         },
-         {
-          "d": 6,
-          "f": 12,
-          "shift": 13,
-          "station": "REGgifts",
-          "t": 24
+          "t": 19
          }
         ]
        }
@@ -8790,6 +8629,143 @@
      ]
     ]
    ],
+   "openCover": {
+    "addPeople": {
+     "assign": [],
+     "hire": [
+      {
+       "people": 1,
+       "role": "Customer Service",
+       "skill": "ba:skill_customerservice"
+      }
+     ],
+     "hoursUncovered": 20,
+     "people": 1
+    },
+    "bench": [],
+    "complete": true,
+    "cost": {
+     "current": 1260.0,
+     "currentCover": 0.0,
+     "weekly": 900.0
+    },
+    "headcount": {
+     "ba:skill_customerservice": {
+      "have": 1,
+      "hire": 1,
+      "hireHours": 30,
+      "kind": "serve",
+      "max": 2,
+      "min": 2,
+      "needed": 70,
+      "spare": 0
+     }
+    },
+    "open": [
+     [
+      [
+       9,
+       19
+      ]
+     ],
+     [
+      [
+       9,
+       19
+      ]
+     ],
+     [
+      [
+       9,
+       19
+      ]
+     ],
+     [
+      [
+       9,
+       19
+      ]
+     ],
+     [
+      [
+       9,
+       19
+      ]
+     ],
+     [
+      [
+       9,
+       19
+      ]
+     ],
+     [
+      [
+       9,
+       19
+      ]
+     ]
+    ],
+    "openAllHours": false,
+    "placed": [],
+    "shifts": [
+     {
+      "d": 0,
+      "f": 9,
+      "p": 0,
+      "s": 0,
+      "t": 19
+     },
+     {
+      "d": 1,
+      "f": 9,
+      "p": 0,
+      "s": 0,
+      "t": 19
+     },
+     {
+      "d": 2,
+      "f": 9,
+      "p": 0,
+      "s": 0,
+      "t": 19
+     },
+     {
+      "d": 3,
+      "f": 9,
+      "p": 0,
+      "s": 0,
+      "t": 19
+     },
+     {
+      "d": 4,
+      "f": 9,
+      "p": 0,
+      "s": 0,
+      "t": 19
+     },
+     {
+      "d": 5,
+      "f": 9,
+      "p": null,
+      "s": 0,
+      "t": 19
+     },
+     {
+      "d": 6,
+      "f": 9,
+      "p": null,
+      "s": 0,
+      "t": 19
+     }
+    ],
+    "shortDays": [],
+    "shortHours": [],
+    "slack": {
+     "budget": 7.0,
+     "cost": 0.0,
+     "hours": 0.0
+    }
+   },
    "people": [
     {
      "id": "EMPdee",
@@ -9861,6 +9837,371 @@
      ]
     ]
    ],
+   "openCover": {
+    "addPeople": {
+     "assign": [],
+     "hire": [
+      {
+       "people": 1,
+       "role": "Cleaning",
+       "skill": "ba:skill_cleaning"
+      }
+     ],
+     "hoursUncovered": 49,
+     "people": 1
+    },
+    "bench": [],
+    "complete": true,
+    "cost": {
+     "current": 3192.0,
+     "currentCover": 1176.0,
+     "weekly": 2450.0
+    },
+    "headcount": {
+     "ba:skill_cleaning": {
+      "have": 1,
+      "hire": 1,
+      "hireHours": 30,
+      "kind": "clean",
+      "max": 3,
+      "min": 2,
+      "needed": 98,
+      "spare": 0
+     },
+     "ba:skill_customerservice": {
+      "have": 2,
+      "hire": 0,
+      "hireHours": 0,
+      "kind": "serve",
+      "max": 3,
+      "min": 2,
+      "needed": 98,
+      "spare": 0
+     }
+    },
+    "open": [
+     [
+      [
+       8,
+       22
+      ]
+     ],
+     [
+      [
+       8,
+       22
+      ]
+     ],
+     [
+      [
+       8,
+       22
+      ]
+     ],
+     [
+      [
+       8,
+       22
+      ]
+     ],
+     [
+      [
+       8,
+       22
+      ]
+     ],
+     [
+      [
+       8,
+       22
+      ]
+     ],
+     [
+      [
+       8,
+       22
+      ]
+     ]
+    ],
+    "openAllHours": false,
+    "placed": [
+     {
+      "demand": "ba:jobdemand_freeweekends",
+      "from": 15,
+      "label": "Free weekends",
+      "p": 0,
+      "to": 22,
+      "wd": 2
+     },
+     {
+      "demand": "ba:jobdemand_freeweekends",
+      "from": 8,
+      "label": "Free weekends",
+      "p": 0,
+      "to": 15,
+      "wd": 3
+     },
+     {
+      "demand": "ba:jobdemand_freeweekends",
+      "from": 15,
+      "label": "Free weekends",
+      "p": 0,
+      "to": 22,
+      "wd": 3
+     },
+     {
+      "demand": "ba:jobdemand_freeweekends",
+      "from": 8,
+      "label": "Free weekends",
+      "p": 0,
+      "to": 15,
+      "wd": 4
+     },
+     {
+      "demand": "ba:jobdemand_freeweekends",
+      "from": 15,
+      "label": "Free weekends",
+      "p": 0,
+      "to": 22,
+      "wd": 4
+     },
+     {
+      "demand": "ba:jobdemand_freeweekends",
+      "from": 8,
+      "label": "Free weekends",
+      "p": 0,
+      "to": 15,
+      "wd": 5
+     },
+     {
+      "demand": "ba:jobdemand_freeweekends",
+      "from": 15,
+      "label": "Free weekends",
+      "p": 0,
+      "to": 22,
+      "wd": 5
+     }
+    ],
+    "shifts": [
+     {
+      "d": 0,
+      "f": 8,
+      "k": "clean",
+      "p": 2,
+      "s": 1,
+      "t": 15
+     },
+     {
+      "d": 0,
+      "f": 8,
+      "p": 1,
+      "s": 0,
+      "t": 15
+     },
+     {
+      "d": 0,
+      "f": 15,
+      "k": "clean",
+      "p": 2,
+      "s": 1,
+      "t": 22
+     },
+     {
+      "d": 0,
+      "f": 15,
+      "p": 1,
+      "s": 0,
+      "t": 22
+     },
+     {
+      "d": 1,
+      "f": 8,
+      "k": "clean",
+      "p": 2,
+      "s": 1,
+      "t": 15
+     },
+     {
+      "d": 1,
+      "f": 8,
+      "p": 1,
+      "s": 0,
+      "t": 15
+     },
+     {
+      "d": 1,
+      "f": 15,
+      "k": "clean",
+      "p": 2,
+      "s": 1,
+      "t": 22
+     },
+     {
+      "d": 1,
+      "f": 15,
+      "p": 1,
+      "s": 0,
+      "t": 22
+     },
+     {
+      "d": 2,
+      "f": 8,
+      "k": "clean",
+      "p": 2,
+      "s": 1,
+      "t": 15
+     },
+     {
+      "d": 2,
+      "f": 8,
+      "p": 1,
+      "s": 0,
+      "t": 15
+     },
+     {
+      "d": 2,
+      "f": 15,
+      "k": "clean",
+      "p": 2,
+      "s": 1,
+      "t": 22
+     },
+     {
+      "d": 2,
+      "f": 15,
+      "p": 0,
+      "s": 0,
+      "t": 22
+     },
+     {
+      "d": 3,
+      "f": 8,
+      "k": "clean",
+      "p": 2,
+      "s": 1,
+      "t": 15
+     },
+     {
+      "d": 3,
+      "f": 8,
+      "p": 0,
+      "s": 0,
+      "t": 15
+     },
+     {
+      "d": 3,
+      "f": 15,
+      "k": "clean",
+      "p": null,
+      "s": 1,
+      "t": 22
+     },
+     {
+      "d": 3,
+      "f": 15,
+      "p": 0,
+      "s": 0,
+      "t": 22
+     },
+     {
+      "d": 4,
+      "f": 8,
+      "k": "clean",
+      "p": null,
+      "s": 1,
+      "t": 15
+     },
+     {
+      "d": 4,
+      "f": 8,
+      "p": 0,
+      "s": 0,
+      "t": 15
+     },
+     {
+      "d": 4,
+      "f": 15,
+      "k": "clean",
+      "p": null,
+      "s": 1,
+      "t": 22
+     },
+     {
+      "d": 4,
+      "f": 15,
+      "p": 0,
+      "s": 0,
+      "t": 22
+     },
+     {
+      "d": 5,
+      "f": 8,
+      "k": "clean",
+      "p": null,
+      "s": 1,
+      "t": 15
+     },
+     {
+      "d": 5,
+      "f": 8,
+      "p": 0,
+      "s": 0,
+      "t": 15
+     },
+     {
+      "d": 5,
+      "f": 15,
+      "k": "clean",
+      "p": null,
+      "s": 1,
+      "t": 22
+     },
+     {
+      "d": 5,
+      "f": 15,
+      "p": 0,
+      "s": 0,
+      "t": 22
+     },
+     {
+      "d": 6,
+      "f": 8,
+      "k": "clean",
+      "p": null,
+      "s": 1,
+      "t": 15
+     },
+     {
+      "d": 6,
+      "f": 8,
+      "p": 1,
+      "s": 0,
+      "t": 15
+     },
+     {
+      "d": 6,
+      "f": 15,
+      "k": "clean",
+      "p": null,
+      "s": 1,
+      "t": 22
+     },
+     {
+      "d": 6,
+      "f": 15,
+      "p": 1,
+      "s": 0,
+      "t": 22
+     }
+    ],
+    "shortDays": [],
+    "shortHours": [],
+    "slack": {
+     "budget": 9.8,
+     "cost": 0.0,
+     "hours": 0.0
+    }
+   },
    "people": [
     {
      "id": "EMPana",

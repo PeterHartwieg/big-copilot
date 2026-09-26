@@ -6874,6 +6874,11 @@ def _placement_rank(person: dict, state: dict, slot: dict, here: dict) -> tuple:
     # up, a name that is not is being chosen, and those are different questions.
     on_roster = person["id"] in here["rostered"]
     return (
+        # Somebody whose desk or chair demand this very station meets, before
+        # everybody else: otherwise a lawyer already given hours takes the
+        # executive desk ahead of the one who asks for it, who is then put at
+        # a desk that breaks their demand. Nobody else is ranked by it.
+        0 if person.get("desks") and _desk_fits(person, slot, here) else 1,
         # Headcount first: one more name on the roster is the expensive thing,
         # because it is one more person this site owes 30 hours to.
         0 if person["id"] in here["rostered"] else 1,
@@ -7249,9 +7254,12 @@ def _fill_hire_weeks(weeks: list, shifts: list, pool: list, state: dict, before:
                 if spare(person) < hours:
                     continue
                 theirs = state[person["id"]]
-                last = sum(1 for s in shifts if s["employee"] == person["id"]
-                           and s["wd"] == shift["wd"]) == 1
-                if last and person["days"] is not None and                         len(theirs["days"]) - before[person["id"]][1] <= person["days"]:
+                last = sum(
+                    1 for s in shifts
+                    if s["employee"] == person["id"] and s["wd"] == shift["wd"]
+                ) == 1
+                days_here = len(theirs["days"]) - before[person["id"]][1]
+                if last and person["days"] is not None and days_here <= person["days"]:
                     continue
                 key = (-spare(person), str(person["id"]), shift["wd"], shift["from"],
                        str(shift["station"]))
@@ -8275,36 +8283,70 @@ def _staffing(
         scratch = {pid: _copy_state(entry) for pid, entry in site["before"].items()
                    if pid not in free}
         scratch.update({pid: _copy_state(shared[pid]) for pid in free})
-        # Every station the hours the shop opens now, for a shop with no hour
-        # read: what the Staff page hires by there (Peter, 26 September 2026:
-        # "Staff the hours it's open, never change opening"). Placed from the
-        # same starting week as the full-cover plan, as the other choice to it.
+        # The Staff page's plan for the shop (Peter, 26 September 2026:
+        # "Staff the hours it's open, never change opening"): the hours it
+        # opens now and never more, placed from the same starting week as the
+        # full-cover plan, as the other choice to it. See _open_need().
         opened_scratch = {pid: _copy_state(entry) for pid, entry in scratch.items()}
+        grid = site["grid"]
+        offered = any(s["skill"] for s in grid["stations"]) and any(grid["open"])
         try:
             full = _place_week(
-                site["grid"], _full_need(site["grid"]), ALL_DAY_OPEN, site["coverPosts"],
+                grid, _full_need(grid), ALL_DAY_OPEN, site["coverPosts"],
                 site["own"] + site_bench, people, business, site_bench, scratch,
             )
             opened = _place_week(
-                site["grid"], _full_need(site["grid"]), site["grid"]["open"], site["coverPosts"],
+                grid, _open_need(site), grid["open"], site["coverPosts"],
                 site["own"] + site_bench, people, business, site_bench, opened_scratch,
-            ) if _need_unread(site["need"]) and any(site["grid"]["open"]) else None
+            ) if offered else None
             row = _finish_site(site, full, names, people, opened)
         except Exception:
             out[index] = failed(business)
             continue
+        # Whom either plan draws off the bench is this site's either way: the
+        # site panel follows full cover, the Staff page the open-hours plan.
+        drew_open = {p["id"] for p in opened["took"]} if opened else set()
         for pid in free:
-            shared[pid] = scratch[pid]
-        drawn = {p["id"] for p in full["took"]}
+            shared[pid] = opened_scratch[pid] if pid in drew_open and pid not in {
+                p["id"] for p in full["took"]} else scratch[pid]
+        drawn = {p["id"] for p in full["took"]} | drew_open
         left = [person for person in left if person["id"] not in drawn]
         out[index] = row
     return out
 
 
-def _need_unread(need: dict) -> bool:
-    """Whether a need curve rests on no hour read at all: every basis `none`."""
-    return not any(cell != "none" for role in need.values()
-                   for day in role["basis"] for cell in day)
+def _open_need(site: dict) -> dict:
+    """The need of the Staff page's plan for a shop, which never opens it longer.
+
+    A shop with complete data (DEMAND_RUN_DAYS): every station of every role,
+    the hours it opens now; the page uses it where the player runs full cover.
+    A shop without: its demand curve, with every open hour nothing has read
+    (basis `none`) given every station of the role (_open_floor()), which the
+    page uses in place of the demand plan -- an open hour needs its stations
+    before anything is measured (Peter, 26 September 2026). Hours the shop is
+    shut are left out by the placer either way.
+    """
+    if site["run"] >= DEMAND_RUN_DAYS:
+        return _full_need(site["grid"])
+    return _open_floor(site["need"], site["grid"])
+
+
+def _open_floor(need: dict, grid: dict) -> dict:
+    """A need curve with every open hour it reads nothing for (`none`) staffed in full."""
+    stations = collections.Counter(s["skill"] for s in grid["stations"])
+    out = {}
+    for skill, row in need.items():
+        count = stations.get(skill, 0)
+        cells = [list(day) for day in row["need"]]
+        basis = [list(day) for day in row["basis"]]
+        for wd in range(7):
+            for start, end in grid["open"][wd]:
+                for hour in range(max(0, start), min(24, end)):
+                    if count and basis[wd][hour] == "none":
+                        cells[wd][hour] = count
+                        basis[wd][hour] = "open"
+        out[skill] = dict(row, need=cells, basis=basis)
+    return out
 
 
 def _full_need(grid: dict) -> dict:
@@ -9415,14 +9457,16 @@ def _finish_site(site, full, names, people, opened=None) -> dict:
             "daysMeasured": site["run"],
             "daysNeeded": DEMAND_RUN_DAYS,
         },
-        # A shop with no hour read: every station of every role the hours it
-        # opens now, and never an hour more (`openAllHours` false). The Staff
-        # page hires by it there; the write keeps the shop's opening hours.
+        # The Staff page's plan (_open_need()): the hours the shop opens now,
+        # never an hour more (`openAllHours` false); `complete` whether it is
+        # full cover of those hours (complete data) or the demand plan with
+        # every unread open hour staffed (not yet).
         **({"openCover": {
             key: value
             for key, value in _plan_fields(opened, table, names, people, cost).items()
             if key not in ("need", "basis")
-        } | {"open": grid["open"], "openAllHours": False}} if opened else {}),
+        } | {"open": grid["open"], "openAllHours": False,
+             "complete": site["run"] >= DEMAND_RUN_DAYS}} if opened else {}),
         # The hand-over: the demand data is complete while the game runs full
         # cover, and the demand plan would change something. See
         # _demand_data_complete().
@@ -9761,6 +9805,21 @@ def _station_groups(save: Save, registration: dict) -> dict:
     return out
 
 
+def _station_roots(save: Save, registration: dict) -> list:
+    """The root item of every furniture group of a site (a desk, a table).
+
+    For a site with no plan (headquarters, warehouse), whose people are placed
+    by the player: the desk demands its desks meet, one entry per group.
+    """
+    items = []
+    for holder in save.items(registration.get("itemInstances")):
+        item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
+        if item and item.get("id") is not None:
+            items.append(item)
+    ids = {item["id"] for item in items}
+    return [item["id"] for item in items if item.get("parentId") not in ids]
+
+
 def _station_facts(save: Save, registration: dict, stations) -> dict:
     """The desk and chair demands each of a site's stations meets.
 
@@ -9843,7 +9902,7 @@ def _bench_claimed(staffing: list) -> set:
     """The unassigned people some shop's plan (either variant) counts on."""
     out = set()
     for row in staffing:
-        for plan in (row, row.get("fullCover") or {}):
+        for plan in (row, row.get("fullCover") or {}, row.get("openCover") or {}):
             out.update((plan.get("_hire") or {}).get("bench", ()))
     return out
 
@@ -9889,25 +9948,29 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
         if kind is None or reg is None:
             continue
         plans = {}
+        no_hours = False
         if kind == "shop":
             row = shops.get(business["key"])
             demand = take(row)
             full = take((row or {}).get("fullCover"))
             opened = take((row or {}).get("openCover"))
             if row and not row.get("failed") and demand is not None:
-                # A shop with no hour read yet has a demand plan of cleaning
-                # and security alone, however many hours it opens in the game.
                 # Peter (26 September 2026): "Staff the hours it's open, never
-                # change opening." Such a shop is hired for by every station
-                # the hours it opens now (`open`), new or not, and the write
-                # keeps its opening hours. Evil Genius opened more hours and
-                # was hired nobody for them.
-                if opened is not None:
+                # change opening." The Staff page never uses full cover, whose
+                # write opens a shop 0 to 24: it has the open-hours plan
+                # (`open`, _open_need()) instead. Without complete data that
+                # plan replaces the demand plan, whose unread open hours had
+                # nobody on the stations (Evil Genius); with it, the page
+                # takes `open` only where the player runs full cover. A shop
+                # the game opens no hour has no plan until it has hours.
+                if not any(row.get("open") or ()):
+                    no_hours = True
+                elif opened is not None and not (row.get("openCover") or {}).get("complete"):
                     plans["open"] = opened
                 else:
                     plans["demand"] = demand
-                    if _full_offered(row) and full is not None:
-                        plans["full"] = full
+                    if opened is not None:
+                        plans["open"] = opened
         elif kind == "factory":
             for mode, row in factories.get(business["key"], {}).items():
                 found = take(row)
@@ -9923,6 +9986,8 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
             "kind": kind,
             "address": {"street": reg.get("StreetName"), "number": reg.get("StreetNumber")},
             "planned": kind in ("shop", "office", "factory"),
+            # A shop the game opens no hour: no plan until it has hours.
+            **({"noHours": True} if no_hours else {}),
             "new": not business.get("staff"),
             "accepts": list(ASSIGN_SKILLS.get(business["typeSlug"], ())),
             "plans": {mode: plans[mode] for mode in _in_order(plans)},
@@ -9932,7 +9997,7 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
             "stations": _station_facts(save, reg, [
                 station["id"] for row in rows_of(kind, business["key"])
                 for station in (row or {}).get("stations") or ()
-            ]),
+            ] or _station_roots(save, reg)),
         })
     # Rows of sites the list above skips still lose their private field.
     for row in staffing:
@@ -24971,10 +25036,11 @@ const hrKind = slug => ((D.hiring || {}).demandKinds || {})[slug] || null;
 function hrVariant(site){
   const plans = site.plans || {};
   if(site.kind === "shop"){
-    /* No hour read: every station the hours it opens now, never more. */
-    if(plans.open) return "open";
-    if(plans.full && (site.new || spPlanRead(site.key) === "full")) return "full";
-    return plans.demand ? "demand" : plans.full ? "full" : null;
+    /* Never full cover, whose write opens a shop 0 to 24: the open-hours
+       plan where the data is not complete (it is then the only one), or
+       where the player runs full cover or the shop is new; else demand. */
+    if(plans.open && (!plans.demand || site.new || spPlanRead(site.key) === "full")) return "open";
+    return plans.demand ? "demand" : null;
   }
   if(site.kind === "factory") return plans[sizing] ? sizing : Object.keys(plans)[0] || null;
   return plans.office ? "office" : Object.keys(plans)[0] || null;
@@ -25153,6 +25219,8 @@ function hrDemandAt(m, slug, S, wk){
   if(kind === "station"){
     if(!S) return null;
     if(hrDeskMet(slug, S, wk && wk.w)) return "ok";
+    /* No week (a site with no plan, the headquarters): the player seats them. */
+    if(!(wk && wk.w)) return hrDeskAnywhere(slug, S) || m.sites.some(x => hrDeskAnywhere(slug, x)) ? "warn" : "no";
     return m.sites.some(x => x.planned && hrDeskAnywhere(slug, x)) ? "warn" : "no";
   }
   if(kind === "company"){
@@ -25286,7 +25354,7 @@ function hrRequest(m, only){
     if(!S.planned || !S.row) return {address: gwAddress(S.key), expect: null, days: null};
     at.lost = {hours: 0};
     const out = {address: gwAddress(S.key), expect: S.b && typeof S.b.shiftPrint === "string" ? S.b.shiftPrint : null,
-                 openAllHours: !!(S.row.full && !S.row.openNow), days: hrWeek(S, at.fill, away, arriving, at.lost)};
+                 openAllHours: false, days: hrWeek(S, at.fill, away, arriving, at.lost)};
     return out;
   });
   return {body: {sites, hires, moves}, names, touched};
@@ -25396,7 +25464,7 @@ function hrOpenHtml(m){
   const t = hrTotals(m);
   const soon = m.cands.filter(c => Number(c.hoursLeft) < 24).length;
   const facts = `<p class="hs-facts2"><b>${hrNum(m.cands.length)}</b> candidates${soon ? ` · <b class="warn">${hrNum(soon)}</b> expire within 24 h${gwLink() ? "" : " (as of the save)"}` : ""}</p>`;
-  const head = `<div class="hs-shead"><h3>Open places</h3></div>`;
+  const head = `<div class="hs-shead"><h3>Open places</h3></div>${hrNoHoursHtml()}`;
   if(!m.roles.length) return `${head}<p class="hs-note">Every planned site has its people.</p>${stray ? `<div class="hs-scroll">${stray}</div>` : ""}${facts}`;
   const shopPt = f.ex.includes(HR_PT) && m.roles.some(r => r.shop);
   const own = m.roles.reduce((n, r) => n + r.moved, 0);
@@ -25405,6 +25473,14 @@ function hrOpenHtml(m){
     <tbody>${m.roles.map(r => hrRoleRow(m, r, lines(r.skill))).join("")}${stray ? `<tr class="hs-subrow"><td class="l" colspan="7">${stray}</td></tr>` : ""}</tbody>
     <tfoot><tr><td class="l">Total</td><td class="opt">${hrNum(t.needed)}</td><td class="opt">${hrNum(own)}</td><td data-l="New hires">${hrNum(t.hire)}</td><td class="${t.short ? "warn" : ""}" data-l="Stays open">${hrNum(t.short)}</td><td class="opt">+${fmt(t.bill)}</td><td></td></tr></tfoot></table></div>
     ${hrFindHtml(m)}${facts}`;
+}
+/* Shops the game opens no hour: no plan, and nothing is hired for them,
+   until the player sets their opening hours. */
+function hrNoHoursHtml(){
+  const shut = ((D.hiring || {}).sites || []).filter(s => s.noHours);
+  const byKey = new Map((D.businesses || []).map(b => [b.key, b]));
+  return shut.length ? `<p class="hs-note hs-nohours">${shut.map(s => spEsc(byKey.get(s.key) ? shortName(byKey.get(s.key)) : s.name || "A shop")).join(", ")} ${
+    shut.length === 1 ? "opens" : "open"} no hour in the game: set ${shut.length === 1 ? "its" : "their"} opening hours first.</p>` : "";
 }
 /* Where to find them: for each role places stay open in, how many and where
    the people come from, for an early company whose headhunters recruit few
@@ -25420,9 +25496,9 @@ function hrFindHtml(m){
     const have = !r.pool.length ? "no candidates"
       : !r.pass ? `${plural(r.pool.length, "candidate")}, all left out by your filters`
       : `only ${plural(r.pass, "candidate")}${out ? ` (${hrNum(out)} more left out by your filters)` : ""}`;
-    const n = recruiting[r.skill] || 0;
-    const where = n ? `${n === 1 ? "your Headhunter is" : `${hrNum(n)} of your Headhunters are`} recruiting ${hrRole(r.skill)}: wait for more candidates, or a ${spEsc(agency)}`
-      : `a Headhunter at your headquarters recruiting ${hrRole(r.skill)}, or a ${spEsc(agency)}`;
+    const n = recruiting[r.skill] || 0, hh = hrRole("ba:skill_headhunter");
+    const where = n ? `${n === 1 ? `your ${hh} is` : `${hrNum(n)} of your ${hh}s are`} recruiting ${hrRole(r.skill)}: wait for more candidates, or a ${spEsc(agency)}`
+      : `a ${hh} at your headquarters recruiting ${hrRole(r.skill)}, or a ${spEsc(agency)}`;
     return `<li><b>${hrRole(r.skill)}</b><span>${hrNum(r.short)} more needed · ${have}</span><span class="to">${hrSvg("chev")}${where}</span></li>`;
   }).join("");
   return `<div class="hs-find"><h4>Where to find them</h4><ul>${rows}</ul></div>`;
@@ -25475,6 +25551,10 @@ function hrPayroll(){
    control outside them where it is. Change picks and the demand list, when
    open, are drawn again with it. */
 function drawStaff(parts){
+  drawStaffPage(parts);
+  hrSelRepoint();
+}
+function drawStaffPage(parts){
   const sec = $("secStaff");
   if(!sec) return;
   const H = D.hiring;
@@ -25540,7 +25620,8 @@ function hrWhy(m, slug, S, wk){
   if(kind === "company") return hrDemandAt(m, slug, S, wk) === "warn" ? "add them to an HR plan that offers it" : "not offered";
   if(kind === "station"){
     if(hrDemandAt(m, slug, S, wk) === "no") return "none at any site";
-    return hrDeskAnywhere(slug, S) ? "not at this desk" : `none at ${spEsc(hrSiteName(S))}`;
+    if(hrDeskAnywhere(slug, S)) return wk && wk.w ? "not at this desk" : "met at a desk here: seat them there";
+    return `none at ${spEsc(hrSiteName(S))}`;
   }
   const tone = hrDemandAt(m, slug, S, wk);
   return tone === "warn" ? `none at ${spEsc(hrSiteName(S))}` : "none at any site";
@@ -25699,7 +25780,7 @@ function hrPopPlace(anchor, pop){
    stays the control: the list sets its value and fires its change, so every
    handler and the keyboard's own arrows keep working. Only where the pointer
    is a mouse: a phone's own picker is the better one there. */
-let hrSel = null;  // {select, at}: the select whose list is open, the option lit
+let hrSel = null;  // {select, at, key, root}: the select whose list is open, the option lit
 const hrSelFine = () => !window.matchMedia || window.matchMedia("(pointer: fine)").matches;
 function hrSelOpen(select){
   if(!select || select.disabled) return;
@@ -25713,13 +25794,17 @@ function hrSelOpen(select){
   if(pop.parentElement !== host) host.appendChild(pop);
   const opts = [...select.options];
   pop.setAttribute("aria-label", select.getAttribute("aria-label") || "");
-  pop.innerHTML = opts.map((o, i) => `<div class="hs-selopt${o.value === "" && !o.selected ? " ph" : ""}" role="option" data-hs-opt="${i}" aria-selected="${o.selected}"${
+  pop.innerHTML = opts.map((o, i) => `<div class="hs-selopt${o.value === "" && !o.selected ? " ph" : ""}" role="option" id="hsSelOpt${i}" data-hs-opt="${i}" aria-selected="${o.selected}"${
     o.disabled ? ` aria-disabled="true"` : ""}><span>${spEsc(o.textContent)}</span>${hrSvg("check2")}</div>`).join("");
-  hrSel = {select, at: Math.max(0, select.selectedIndex)};
+  /* Where to find the select again once the page is drawn anew under it. */
+  const root = select.closest("#hsSheet") ? "hsSheet" : "secStaff";
+  hrSel = {select, at: Math.max(0, select.selectedIndex), key: hrKey(select), root, typed: "", typedAt: 0};
   pop.hidden = false;
   const anchor = select.closest(".hs-sel") || select;
   pop.style.minWidth = `${Math.round(anchor.getBoundingClientRect().width)}px`;
   anchor.setAttribute("aria-expanded", "true");
+  select.setAttribute("aria-expanded", "true");
+  select.setAttribute("aria-controls", "hsSelPop");
   hrPopPlace(anchor, pop);
   hrSelLight();
   pop.focus({preventScroll: true});
@@ -25729,7 +25814,17 @@ function hrSelLight(){
   if(!pop || !hrSel) return;
   pop.querySelectorAll(".hs-selopt").forEach((el, i) => el.classList.toggle("on", i === hrSel.at));
   const on = pop.querySelector(".hs-selopt.on");
-  if(on) on.scrollIntoView({block: "nearest"});
+  if(on){ on.scrollIntoView({block: "nearest"}); pop.setAttribute("aria-activedescendant", on.id); }
+}
+/* A live refresh draws the page anew under an open list: the list follows
+   its select to the new page, or closes where the select is gone. */
+function hrSelRepoint(){
+  if(!hrSel || hrSel.select.isConnected) return;
+  const root = $(hrSel.root), found = root && hrSel.key ? root.querySelector(hrSel.key) : null;
+  if(!found || found.tagName !== "SELECT"){ hrSelClose(); return; }
+  const at = hrSel.at;
+  hrSelOpen(found);
+  if(hrSel){ hrSel.at = Math.min(at, found.options.length - 1); hrSelLight(); }
 }
 function hrSelClose(back){
   const pop = $("hsSelPop"), sel = hrSel && hrSel.select;
@@ -25737,9 +25832,12 @@ function hrSelClose(back){
   if(pop){ pop.hidden = true; pop.remove(); }
   const anchor = sel && (sel.closest(".hs-sel") || sel);
   if(anchor && anchor.isConnected) anchor.setAttribute("aria-expanded", "false");
+  if(sel && sel.isConnected) sel.setAttribute("aria-expanded", "false");
   if(back && sel && sel.isConnected) sel.focus({preventScroll: true});
 }
 function hrSelPick(i){
+  if(!hrSel) return;
+  hrSelRepoint();
   if(!hrSel) return;
   const sel = hrSel.select, o = sel.options[i];
   if(!o || o.disabled){ return; }
@@ -25791,6 +25889,18 @@ function hrSelBind(){
     else if(e.key === "Enter" || e.key === " "){ e.preventDefault(); hrSelPick(hrSel.at); }
     else if(e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); hrSelClose(true); }
     else if(e.key === "Tab"){ hrSelClose(true); }
+    else if(e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey){
+      /* Type-ahead: the next option whose name starts with what was typed. */
+      e.preventDefault();
+      const now = Date.now();
+      hrSel.typed = (now - hrSel.typedAt < 700 ? hrSel.typed : "") + e.key.toLowerCase();
+      hrSel.typedAt = now;
+      const opts = [...hrSel.select.options], from = hrSel.typed.length > 1 ? hrSel.at : hrSel.at + 1;
+      for(let k = 0; k < n; k++){
+        const i = (from + k) % n, o = opts[i];
+        if(!o.disabled && o.textContent.trim().toLowerCase().startsWith(hrSel.typed)){ hrSel.at = i; hrSelLight(); break; }
+      }
+    }
   }, true);
   const replace = () => {
     const pop = $("hsSelPop"), sel = hrSel && hrSel.select;
@@ -26226,9 +26336,10 @@ function hrReviewSites(m, req, phase, gone){
         + moves.map(() => dot("mv")).join("") + gaps.map(() => dot("gap")).join("")
       : phase === "done" ? [...hired, ...got, ...moves].map(() => dot("done")).join("") + Array.from({length: missed}, () => dot("gap")).join("")
       : [...hires, ...extra, ...moves].map(() => dot("wait")).join("");
-    const plan = !S.planned ? "no hours: assigned only" : S.variant === "open" ? `${S.site.new ? "new: " : ""}every station, the hours it opens`
-      : S.site.new ? (S.site.kind === "office" ? "new: the office default" : "new: full cover, open 24/7")
-      : S.variant === "full" ? "hours from full cover" : "hours from the board's plan";
+    const plan = !S.planned ? "no hours: assigned only"
+      : S.variant === "open" ? `${S.site.new ? "new: " : ""}${S.row && S.row.complete ? "every station, the hours it opens"
+        : "every station where nothing is measured yet"}`
+      : S.site.new && S.site.kind === "office" ? "new: the office default" : "hours from the board's plan";
     const open = hrUi.reviewOpen === S.key;
     const person = (name, sub, role, lv, wage, slots, hours, cls) => `<div class="hr-dp${cls ? ` ${cls}` : ""}"><span class="who"><b>${name}</b><small${sub.mv ? ` class="mv"` : ""}>${sub.t}</small></span><span class="r">${role}</span>
       <span class="m">${lv}</span><span class="m">${wage}</span>${hrWeekStrip(slots, cls === "gap")}<span class="m">${hours}</span></div>`;

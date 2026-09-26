@@ -302,8 +302,10 @@ class StationFactsTest(unittest.TestCase):
             item = holder["$v"]
             if item["id"] in ("pc0", "pc1"):
                 item["parentId"] = "desk" + item["id"][-1]
-        wants = dict(lawyer("a"), demands={"$items": ["ba:jobdemand_seatedatofficedesk2"]})
-        people = [lawyer("b"), wants]
+        # The one who asks sorts last, so the other is on the roster first and
+        # would take the executive desk if desk fit ranked below that.
+        wants = dict(lawyer("z"), demands={"$items": ["ba:jobdemand_seatedatofficedesk2"]})
+        people = [lawyer("a"), wants]
         save = save_of({"EmployeeInstances": {"$items": people},
                         "BuildingRegistrations": {"$items": [reg]}})
         business = {"key": site_key((STREET, 10)), "name": "Halden Law", "status": "office",
@@ -316,7 +318,41 @@ class StationFactsTest(unittest.TestCase):
         for s in row["shifts"]:
             if s["p"] is not None:
                 on[row["people"][s["p"]]["id"]].add(row["stations"][s["s"]]["id"])
-        self.assertEqual(on["a"], {"pc1"})
+        self.assertEqual(on["z"], {"pc1"})
+
+    def test_the_one_who_asks_for_the_desk_takes_it_before_someone_already_placed(self):
+        """sol's case: a lawyer already given hours this week ranked ahead of
+        the one whose executive-desk demand the slot meets."""
+        person = lambda pid, desks: {"id": pid, "name": pid, "skills": {LAWYER}, "wage": 1.0,  # noqa: E731
+                                     "addr": ("s", 1), "band": (30, 50), "days": None,
+                                     "weekendsOff": False, "blackouts": [], "nocleaning": False,
+                                     "desks": desks, "home": set()}
+        placed = person("a", [])
+        asks = person("z", [("ba:itemname_officedesk2left", "ba:itemname_officedesk2right")])
+        here = {"rostered": {"a"}, "flex": {"a": 1, "z": 1},
+                "groups": {"pc1": {"ba:itemname_officedesk2left", "ba:itemname_computer"}}}
+        slot = {"wd": 1, "station": "pc1", "skill": LAWYER, "from": 8, "to": 15, "kind": "serve"}
+        state = lambda hours: dict(ba_dashboard._fresh_state(), hours=hours)  # noqa: E731
+        rank = ba_dashboard._placement_rank
+        self.assertLess(rank(asks, state(0.0), slot, here), rank(placed, state(12.0), slot, here))
+        # At a desk that meets nobody's demand, the roster still comes first.
+        plain = dict(slot, station="pc0")
+        self.assertLess(rank(placed, state(12.0), plain, here), rank(asks, state(0.0), plain, here))
+
+    def test_a_site_with_no_plan_lists_the_desks_it_has(self):
+        """The headquarters has no plan rows: its desks are its groups' roots."""
+        hq = {"BusinessName": "HQ", "businessTypeName": "ba:businesstype_headquarters",
+              "RentedByPlayer": True, "StreetName": STREET, "StreetNumber": 3,
+              "itemInstances": {"$items": [
+                  {"$v": {"id": "d1", "itemName": "ba:itemname_officedesk2left"}},
+                  {"$v": {"id": "c1", "itemName": "ba:itemname_computer", "parentId": "d1"}},
+                  {"$v": {"id": "d2", "itemName": "ba:itemname_officedesk1"}}]}}
+        save = save_of({"BuildingRegistrations": {"$items": [hq]}})
+        business = {"key": site_key((STREET, 3)), "name": "HQ", "typeSlug": "ba:businesstype_headquarters",
+                    "status": "overhead", "staff": 1}
+        [site] = _hiring(save, [business], [], {}, [])["sites"]
+        self.assertIn("ba:jobdemand_seatedatofficedesk2", site["stations"]["d1"])
+        self.assertNotIn("ba:jobdemand_seatedatofficedesk2", site["stations"].get("d2", []))
 
 
 def shop_hiring(weeks, opens=((0, 24),)):
@@ -364,10 +400,76 @@ class UnreadShopTest(unittest.TestCase):
                 self.assertEqual((entry["d"], entry["f"], entry["t"]), (slot["d"], slot["f"], slot["t"]))
         self.assertNotIn("_hire", plan)
 
-    def test_a_measured_shop_keeps_its_demand_plan(self):
-        row, site = shop_hiring(weeks=2)
+    def test_a_shop_with_complete_data_keeps_its_demand_plan(self):
+        """Its open-hours plan is full cover of the hours it opens, for where
+        the player runs full cover; the page never has full cover itself."""
+        row, site = shop_hiring(weeks=2, opens=((10, 18),))
+        self.assertEqual(sorted(site["plans"]), ["demand", "open"])
+        self.assertIs(row["openCover"]["complete"], True)
+        self.assertIs(row["openCover"]["openAllHours"], False)
+        self.assertTrue(all(10 <= s["f"] and s["t"] <= 18 for s in row["openCover"]["shifts"]))
+
+    def test_without_complete_data_every_unread_open_hour_gets_every_station(self):
+        """Six days: some hours scaled or measured, the rest read nothing.
+        Every open hour with nothing read is staffed in full; the rest keep
+        the demand plan's need."""
+        reg = ts.registration([(1, ts.REGISTER), (2, ts.REGISTER), (8, ts.CLEAN_STATION)],
+                              {h: 1 for h in range(10, 14)}, weeks=2, opens=((8, 20),))
+        save = Save({"EmployeeInstances": {"$items": [ts.employee("p1", [SERVICE])]},
+                     "BuildingRegistrations": {"$items": [dict(reg, RentedByPlayer=True)]},
+                     "Day": 7}, {}, "t.hsg")
+        business = dict(ts.business(), staff=1)
+        _by_addr, staff = _staff(save, ts.LABELS)
+        grids = _hourly(save, [reg], [business], ts.STATIONS, set(),
+                        {p["id"]: p["skill"] for p in staff}, ts.LABELS)
+        [row] = _staffing(save, ts.LABELS, [business], grids, staff, 0.55)
+        site = _hiring(save, [business], [row], {}, [])["sites"][0]
+        self.assertEqual(sorted(site["plans"]), ["open"])
+        self.assertIs(row["openCover"]["complete"], False)
+        cover = collections.defaultdict(set)
+        for s in row["openCover"]["shifts"]:
+            if not s.get("k"):
+                cover[(s["d"], s["s"])].update(range(s["f"], s["t"]))
+        basis = row["basis"][SERVICE]
+        read = []
+        for wd in range(7):
+            for hour in range(8, 20):
+                staffed = sum(hour in cover[(wd, st)] for st in (0, 1))
+                if basis[wd][hour] == "none":
+                    self.assertEqual(staffed, 2, (wd, hour))
+                else:
+                    # The demand plan's own need, with its troughs bridged.
+                    self.assertGreaterEqual(staffed, row["need"][SERVICE][wd][hour], (wd, hour))
+                    read.append(staffed)
+            self.assertFalse(any(h in cover[(wd, st)] for st in (0, 1) for h in (7, 20, 23)))
+        # Some hours were read, and they are not all staffed in full.
+        self.assertTrue(read)
+        self.assertLess(min(read), 2)
+        self.assertTrue(any(b == "none" for day in basis for b in day[8:20]))
+
+
+class OpenPlanBenchTest(unittest.TestCase):
+    def test_one_unassigned_person_is_promised_to_one_site(self):
+        """The open-hours plans draw on the bench like full cover's, and
+        record it: two new shops, one unassigned person, one promise."""
+        spec = lambda n: dict(items=[(1, ts.REGISTER)], hourly={}, weeks=0, number=n,  # noqa: E731
+                              opens=((8, 20),))
+        rows = ts.plan_sites([spec(12), spec(14)], [ts.employee("free", [SERVICE], here=False)])
+        promised = [row["openCover"]["_hire"]["bench"] for row in rows]
+        self.assertEqual(sum(b.count("free") for b in promised), 1)
+        for row in rows:
+            ids = set(row["openCover"]["_hire"]["bench"]) | set(row["fullCover"]["_hire"]["bench"])
+            if "free" in ids:
+                self.assertIn("free", row["openCover"]["_hire"]["bench"])
+        self.assertIn("free", ba_dashboard._bench_claimed(rows))
+
+
+class NoOpeningHoursTest(unittest.TestCase):
+    def test_a_shop_the_game_opens_no_hour_has_no_plan(self):
+        row, site = shop_hiring(weeks=0, opens=())
+        self.assertEqual(site["plans"], {})
+        self.assertIs(site["noHours"], True)
         self.assertNotIn("openCover", row)
-        self.assertEqual(sorted(site["plans"]), ["demand", "full"])
 
 
 class SpareTest(unittest.TestCase):
@@ -782,9 +884,11 @@ class HiringFromPlansTest(unittest.TestCase):
         business = dict(ts.business(), staff=1)
         hiring = _hiring(save, [business], rows, {}, [])
         [site] = hiring["sites"]
-        self.assertEqual(sorted(site["plans"]), ["demand", "full"])
+        # Never full cover, whose write opens a shop 0 to 24: the open-hours plan.
+        self.assertEqual(sorted(site["plans"]), ["demand", "open"])
         self.assertNotIn("_hire", rows[0])
         self.assertNotIn("_hire", rows[0]["fullCover"])
+        self.assertNotIn("_hire", rows[0]["openCover"])
         json.dumps(hiring)
 
 

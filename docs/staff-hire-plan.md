@@ -217,13 +217,20 @@ Where the build differs from or adds to 2.1-2.4; the board worker reads these to
 ### 2.4b After Peter's in-game test (26 September 2026)
 
 - **Every open hour is staffed, never an hour more** (Peter, 26 September 2026: "Staff
-  the hours it's open, never change opening"). A shop whose need rests on no hour read
-  (`_need_unread()`: every basis `none`), new or not, gets `openCover`: every station of
-  every role the hours it opens now (`open` its own slots, `openAllHours` false), placed
-  beside the full-cover plan. `_hiring()` ships it as the site's only plan, `open`, so the
-  page hires by it and the write keeps the shop's opening hours. Its demand plan was
-  cleaning and security alone (Evil Genius). A shop with data keeps its measured plan, and
-  a report-less hour there is still nobody came (the 23 September rule).
+  the hours it's open, never change opening"). The Staff page never uses full cover and
+  every hire request sends `openAllHours: false`. Every shop that full cover is offered at
+  and that opens some hour gets `openCover` (`_open_need()`), placed beside full cover
+  with its bench draws recorded like full cover's (`_bench_claimed()` reads it too):
+  without complete data, the demand curve with every open hour whose basis is `none`
+  staffed in full (`complete` false), and it is the site's only plan, `open`; with
+  complete data, full cover of the hours the shop opens (`complete` true), taken where the
+  player runs full cover, else `demand`. A shop the game opens no hour gets no plan
+  (`noHours`), and the page says to set its opening hours first. A report-less hour at a
+  shop with complete data is still nobody came (the 23 September rule).
+- **Desk demands at a site with no plan** (headquarters, warehouse): `stations` lists the
+  desk demands each furniture group's root meets; with no week the page says "met at a
+  desk here: seat them there". The office plan ranks the person whose desk demand a
+  station meets first, ahead of those already given hours.
 - **Hires get full weeks.** `_spread_residue()` moves the open shifts off the day they
   pile up on by swapping days with staff who are off that day, until no more than
   `ceil(hours / 50)` run at one hour; `_fill_hire_weeks()` then tops up a hire under 30
