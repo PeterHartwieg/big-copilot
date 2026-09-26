@@ -36,6 +36,7 @@ import threading
 import time
 import traceback
 import urllib.error
+import urllib.parse
 import urllib.request
 import webbrowser
 from html import escape as html_escape
@@ -30922,6 +30923,11 @@ function gwProblem(res){
     case "unreachable": return {wire: "no", say: say(tt("nav.dlg.say.noanswer", "No answer")), text: spEsc(res.message || tt("nav.dlg.unreachable.text", "The game did not answer.")), retry: true};
     case "uncertain": return {uncertain: true, text: tt("nav.dlg.uncertain.text", "The game did not answer, so this may or may not have been applied.")};
     case "not_linked": return {wire: "no", say: say(tt("nav.dlg.say.notlinked", "Not linked")), text: tt("nav.dlg.notlinked.text", "The board is no longer linked to the same game. Nothing was sent.")};
+    /* The mod answered in another schema version since this board was read. */
+    case "mismatch": return {wire: "no", say: say(tt("nav.dlg.say.mismatch", "The mod does not match")),
+      text: tt("nav.dlg.mismatch.text", "The Big Copilot Link mod now speaks version {v}; this page needs version {need}. Nothing was sent.",
+        {v: spEsc(String(res.version)), need: spEsc(String(res.need))}),
+      sub: tt("nav.dlg.mismatch.sub", "Update the mod, or reload this page.")};
     default: return {wire: "no", say: say(tt("nav.dlg.say.refused", "Refused")),
       text: body.detail ? tt("nav.dlg.status.detail", "The game answered {status} ({detail}). Nothing was changed.", {status: res.status, detail: spEsc(body.detail)})
         : tt("nav.dlg.status.text", "The game answered {status}. Nothing was changed.", {status: res.status})};
@@ -32704,6 +32710,33 @@ class LinkUnavailable(Exception):
     """The game link did not answer: the game is closed or between cities."""
 
 
+class LinkMismatch(LinkUnavailable):
+    """The mod answered, but speaks a schema version this board does not know.
+
+    An outage like any other to the watch loop (docs/game-link-api.md, the
+    clients' loop, step 5): said once under the board it keeps, and over the
+    moment a health answer of this version arrives. A one-shot run stops on it.
+    """
+
+
+def loopback_link(url: str) -> str:
+    """The mod's address with localhost and [::1] spelt 127.0.0.1.
+
+    The mod listens on http://127.0.0.1:<port>/ only, and its listener turns
+    away any other Host, so the other two names for this machine would read as
+    a game that is not there. Any other address is left as given.
+    """
+    try:
+        parts = urllib.parse.urlsplit(url)
+        port = parts.port
+    except ValueError:  # a port that is no number: urllib says so on the call
+        return url
+    if parts.hostname not in ("localhost", "::1"):
+        return url
+    host = f"127.0.0.1:{port}" if port else "127.0.0.1"
+    return urllib.parse.urlunsplit((parts.scheme, host, parts.path, parts.query, parts.fragment))
+
+
 class GameLink:
     """The running game's save, served by the Big Copilot Link mod.
 
@@ -32728,7 +32761,11 @@ class GameLink:
                 f"--game takes the mod's address (default http://127.0.0.1:8322), "
                 f"not {url!r}; a save or character name does not combine with it"
             )
-        self.url = url.rstrip("/")
+        self.url = loopback_link(url.rstrip("/"))
+        # No proxy, whatever HTTP_PROXY says: urllib would send even
+        # 127.0.0.1 through one, which fails, or hands a local intercepting
+        # proxy the player's whole save.
+        self._opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         self.path = os.path.join(out_dir, "game-link.hsg")
         self.stamp = ""  # the stamp of the bytes last downloaded
         self.character = ""
@@ -32743,7 +32780,7 @@ class GameLink:
             req = urllib.request.Request(
                 self.url + route, method=method, headers=headers or {}
             )
-            with urllib.request.urlopen(req, timeout=self.TIMEOUT) as res:
+            with self._opener.open(req, timeout=self.TIMEOUT) as res:
                 return res.status, dict(res.headers), res.read()
         except urllib.error.HTTPError as err:
             return err.code, dict(err.headers), err.read()
@@ -32758,8 +32795,9 @@ class GameLink:
 
         Keeps the last stamp it built from and sends it as If-None-Match, so
         a game that has moved on costs one /health and nothing more.
-        Raises LinkUnavailable while the game is not there and SystemExit
-        when the mod speaks a schema version this board does not know.
+        Raises LinkUnavailable while the game is not there, and its
+        LinkMismatch while the mod speaks a schema version this board does not
+        know: the next poll asks again, so a mod put right is read as ever.
         """
         status, _, body = self._call("/health")
         health = None
@@ -32787,7 +32825,7 @@ class GameLink:
         self.not_ready = 0
         version = health.get("schemaVersion")
         if version != self.SCHEMA:
-            raise SystemExit(
+            raise LinkMismatch(
                 f"the Big Copilot Link mod speaks schema version {version}; this "
                 f"board needs version {self.SCHEMA}. Update the mod or the board"
             )
@@ -32986,8 +33024,22 @@ class Board:
 class BoardHandler(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     board: Board = None
+    NAME_MAX_BYTES = 16 * 1024  # a {rid, slug} is a few dozen bytes
+
+    def _this_host(self) -> bool:
+        """A request addressed to this server by a loopback name, and else
+        answered 403. The server listens on 127.0.0.1 only, but a web page on
+        a name that resolves here (DNS rebinding) would send its own Host."""
+        port = self.server.server_address[1]
+        host = (self.headers.get("Host") or "").strip().lower()
+        if host in (f"127.0.0.1:{port}", f"localhost:{port}"):
+            return True
+        self.send_error(403)
+        return False
 
     def do_GET(self):
+        if not self._this_host():
+            return
         route = self.path.split("?")[0].rstrip("/") or "/"
         # Explicit allowlist: the watch server exposes no arbitrary workspace
         # files. The wiki's catalogue is the public one beside the page, never
@@ -33032,12 +33084,30 @@ class BoardHandler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         """The page naming a factory line by hand: {rid, slug}, slug null to clear."""
+        if not self._this_host():
+            return
         route = self.path.split("?")[0].rstrip("/")
         if route != "/name":
             self.send_error(404)
             return
+        # JSON only: a page elsewhere can send a form or text/plain POST
+        # without asking, but not this one, which needs a CORS preflight this
+        # server never answers. The body is never read past its cap.
+        if self.headers.get_content_type() != "application/json":
+            self.send_error(415)
+            return
         try:
             length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            self.send_error(400)
+            return
+        if length < 0:
+            self.send_error(400)
+            return
+        if length > self.NAME_MAX_BYTES:
+            self.send_error(413)
+            return
+        try:
             body = json.loads(self.rfile.read(length) or b"{}")
             rid, slug = str(body["rid"]), body.get("slug") or None
         except (ValueError, KeyError, TypeError):
@@ -33087,20 +33157,17 @@ def watch(
 
     def poll():
         last_failure = None
-        link_down = False
+        link_down = ""  # what was last said about the link being out, while it is
         while True:
             try:
                 moved = board.refresh()
-            except SystemExit as exc:
-                # A schema mismatch will not fix itself by polling: say it
-                # once and stop, leaving the last board served.
-                print(f"  {time.strftime('%H:%M:%S')}  {exc}", flush=True)
-                return
             except LinkUnavailable as exc:
                 # Once per outage, not once per interval: the game is closed
-                # or between cities, and the board on screen is still good.
-                if not link_down:
-                    link_down = True
+                # or between cities, or the mod speaks another schema version,
+                # and the board on screen is still good. Polling goes on, so a
+                # game that comes back, or a mod put right, is read again.
+                if str(exc) != link_down:
+                    link_down = str(exc)
                     print(f"  {time.strftime('%H:%M:%S')}  {exc}", flush=True)
             except Exception as exc:
                 signature = f"{type(exc).__name__}: {exc}"
@@ -33122,7 +33189,7 @@ def watch(
                     )
             else:
                 if link_down:
-                    link_down = False
+                    link_down = ""
                     print(f"  {time.strftime('%H:%M:%S')}  the game link is back", flush=True)
                 if moved:
                     what = (

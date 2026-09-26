@@ -68,7 +68,8 @@ SCHEMA_VERSION = 1
 DEFAULT_PORT = 8322
 REFRESH_WINDOW = 15  # seconds between refreshes, as the mod throttles
 ALLOWED_ORIGINS = ("https://bigcopilot.com", "https://www.bigcopilot.com")
-LOCAL_ORIGIN = re.compile(r"^http://(127\.0\.0\.1|localhost)(:\d+)?$")
+# As the mod matches them (LinkHttpServer.IsAllowedOrigin): in any case.
+LOCAL_ORIGIN = re.compile(r"^http://(?:127\.0\.0\.1|localhost)(?::[0-9]{1,5})?$", re.IGNORECASE)
 EXPOSED = "ETag, X-Game-Link-Stamp, X-Game-Link-Day, X-Game-Link-Character"
 WRITE_KINDS = ("uniforms", "imports", "schedule", "hire")
 PAIR_OUTCOMES = ("approve", "deny", "expire", "popup_open", "no_ui", "busy", "main_thread_unavailable")
@@ -95,7 +96,7 @@ LOCKER = "ba:itemname_uniformlocker"
 
 
 def allowed_origin(origin: str | None) -> bool:
-    return bool(origin) and (origin in ALLOWED_ORIGINS or bool(LOCAL_ORIGIN.match(origin)))
+    return bool(origin) and (origin.lower() in ALLOWED_ORIGINS or bool(LOCAL_ORIGIN.match(origin)))
 
 
 def origin_of(origin: str | None) -> str:
@@ -441,7 +442,8 @@ class Link:
                 if "error" in row:
                     row["error"] = rule
                 if rule == "locked":
-                    row["reopens"] = {"day": self._monday(), "hour": 8}
+                    # The mod's ReopenDay(): Monday 08:00, tomorrow on a Sunday.
+                    row["reopens"] = {"day": self._imminent_monday(), "hour": 8}
             return 409, {"error": error, "rows": rows}
         if error in ("changed", "refused") and kind == "undo":
             # As the mod's undo of that kind answers (UniformWrite, ImportWrite,
@@ -456,7 +458,7 @@ class Link:
                 return 409, dict(head, siteError=rule, rows=[] if rule == "changed" else [{"error": rule}])
             row = {"error": rule, "products": []}
             if rule == "locked":
-                row["reopens"] = {"day": self._monday(), "hour": 8}
+                row["reopens"] = {"day": self._imminent_monday(), "hour": 8}
             return 409, dict(head, rows=[row])
         return 409, {"error": error}
 
