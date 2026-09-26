@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "f6c66873f0";</script>
-<link rel="stylesheet" href="community.css?v=f6c66873f0">
+<script>window.LEDGER_BUILD = "c454f00949";</script>
+<link rel="stylesheet" href="community.css?v=c454f00949">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=f6c66873f0">
+<link rel="stylesheet" href="fonts/fonts.css?v=c454f00949">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -4552,7 +4552,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"f6c66873f0","latest":{"pr":121,"date":"2026-09-25","title":"Hire and place staff for every site at once","summary":"Company › Payroll is now Staff. It adds up what each shop, office and factory still needs by role, moves spare people between sites first, and picks the most skilled of your headhunters' candidates, with filters for the demands you want to avoid. One confirm hires them, puts them at their sites and writes their hours, through the Big Copilot Link mod 0.3.0. Hires cannot be undone."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"c454f00949","latest":{"pr":121,"date":"2026-09-25","title":"Hire and place staff for every site at once","summary":"Company › Payroll is now Staff. It adds up what each shop, office and factory still needs by role, moves spare people between sites first, and picks the most skilled of your headhunters' candidates, with filters for the demands you want to avoid. One confirm hires them, puts them at their sites and writes their hours, through the Big Copilot Link mod 0.3.0. Hires cannot be undone."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -4640,8 +4640,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=f6c66873f0"></script>
-<script src="community.js?v=f6c66873f0"></script>
+<script src="app.js?v=c454f00949"></script>
+<script src="community.js?v=c454f00949"></script>
 
 <script>
 
@@ -7449,8 +7449,9 @@ function drawChart(){
   const Y = v => T + (hi - v) / (hi - lo) * (H - T - B);
 
   const out = [];
-  for(let v = 0; v <= hi + 1e-9; v += step){
-    const yy = Y(v).toFixed(1);
+  /* From the lowest step at or above lo, so a loss day has a scale too. */
+  for(let k = Math.ceil(lo / step - 1e-9); k * step <= hi + 1e-9; k++){
+    const v = k * step || 0, yy = Y(v).toFixed(1);
     out.push(`<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" stroke="var(--rule-soft)"></line>`
       + `<text x="${L - 10}" y="${(+yy + 4).toFixed(1)}" text-anchor="end" font-size="10" font-family="IBM Plex Mono" fill="var(--ink-3)">${money(v)}</text>`);
   }
@@ -7946,7 +7947,8 @@ const roleCode = role => { const w = role.trim().split(/\s+/); return (w.length 
 function spKind(b){
   if(b.status === "retail") return "retail";
   if(b.status === "office") return "office";
-  if(spFactorySites().some(r => r.s === siteTab)) return "factory";
+  const i = D.businesses.indexOf(b);
+  if(i >= 0 && spFactorySites().some(r => r.s === i)) return "factory";
   if(b.status === "support" || b.status === "overhead") return "depot";
   return "home";
 }
@@ -8150,14 +8152,19 @@ const spDaySig = day => day.map(shifts => shifts.map(
   s => `${s.f}-${s.t}:${s.p === null || s.p === undefined ? "?" : s.p}:${s.k || ""}`).join(",")).join("|");
 /* The weekday each day is a copy of, or null. BizMan copies a schedule day and
    pastes it, so a day identical to an earlier one is two clicks rather than a
-   morning of typing; a day with nothing on it is nobody's copy. */
+   morning of typing; a day with nothing on it is nobody's copy. Earlier is the
+   order the tabs run in, Monday to Sunday (HOUR_ROWS), not the weekday index,
+   where Sunday is 0: a hint never points at a tab still to come. */
 function spSameDays(days){
-  const sigs = days.map(spDaySig);
-  return days.map((day, d) => {
-    if(!day.some(shifts => shifts.length)) return null;
-    const first = sigs.indexOf(sigs[d]);
-    return first < d ? first : null;
+  const out = days.map(() => null), source = new Map();
+  HOUR_ROWS.forEach(d => {
+    const day = days[d];
+    if(!day || !day.some(shifts => shifts.length)) return;
+    const sig = spDaySig(day);
+    if(source.has(sig)) out[d] = source.get(sig);
+    else source.set(sig, d);
   });
+  return out;
 }
 /* What a tick means: this exact line is entered in the game. So its identity
    is the line the player typed -- the weekday, the station, the hours from and
@@ -12567,7 +12574,9 @@ function drawMovers(){
     // Folded by the place's identity: a neighbourhood's key, or the address.
     const where = x.count > 1 ? tt("gr.short.suppliers", {one: "{n} supplier", other: "{n} suppliers"}, {n: x.count})
       : x.hood ? hoodName(x.hood) : x.where;
-    const id = x.count > 1 ? where : x.hood || x.where;
+    // One product at several suppliers is its own chip: two products each short
+    // at two suppliers are not the same two suppliers.
+    const id = x.count > 1 ? JSON.stringify([x.item, x.kind, x.count]) : x.hood || x.where;
     const g = byPlace.get(id) || {where, key: x.count > 1 || x.hood ? null : x.siteKey || null, rows: [], mine: 0, lo: Infinity, hi: 0};
     g.rows.push(x); g.mine += x.mine ? 1 : 0;
     g.lo = Math.min(g.lo, x.daysLeft); g.hi = Math.max(g.hi, x.daysLeft);
@@ -20425,7 +20434,7 @@ buildAlertSettingsPanel();
      .sw[data-kind=<alert group id>]  click toggles .on, flips alertGroupPrefs,
                           saves under ALERT_SETTINGS_KEY, redraws the findings
                           and the map's Findings layer.
-                          A .sw without data-kind only toggles .on.
+                          A .sw without data-kind is left to its own handler.
      the panel itself    a body-level popover (#alertPop), built once by
                           buildAlertSettingsPanel(). toggleKindsPanel(anchor)
                           opens and closes it under whatever element is passed.
@@ -22666,8 +22675,8 @@ const wireRoster = once(() => {
   onLeave("#sp-roster [data-p]", el => mark(el.dataset.p, false));
 });
 
-/* kinds popover: switches flip; with a data-kind they also flip the preference --- */
-const bindKinds = once(() => on("click", ".sw", s => {
+/* kinds popover: a switch with a data-kind flips, and flips the preference --- */
+const bindKinds = once(() => on("click", ".sw[data-kind]", s => {
   s.classList.toggle("on");
   /* changed for kinds: the switch is a span carrying role="switch", so the
      state a screen reader hears has to move with the class. */
@@ -23658,6 +23667,9 @@ function gwToast(){
   const last = Object.values(gwUndoable).sort((a, b) => b.at - a.at)[0];
   let bar = $("gwToast");
   if(!last || gwOpen){ if(bar) bar.remove(); return; }
+  /* The same undo as the strip already shows: left alone, so a refresh does
+     not take the focus off its Undo button or announce it again. */
+  if(bar && bar._gwLast === last) return;
   if(!bar){
     bar = document.createElement("div");
     bar.id = "gwToast"; bar.setAttribute("role", "status");
@@ -23666,6 +23678,7 @@ function gwToast(){
   const {spec, text, sub} = last;
   bar.innerHTML = `<span class="ic" aria-hidden="true">${gwSvg("tick")}</span><span class="t">${text}<small>${sub || ""}</small></span><button type="button" class="gw-b undo" data-gw-undo>${
     gwSvg("undo")}<span>${tt("nav.toast.undo", "Undo")}</span></button><button type="button" class="gw-x" data-gw-dismiss aria-label="${attr(tt("nav.toast.dismiss", "Dismiss"))}">${gwSvg("close")}</button>`;
+  bar._gwLast = last;
   bar.querySelector("[data-gw-undo]").onclick = () => gwUndo(spec);
   bar.querySelector("[data-gw-dismiss]").onclick = () => { delete gwUndoable[spec.kind]; gwToast(); };
 }
