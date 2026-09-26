@@ -976,6 +976,9 @@ class Component extends DCLogic {
       if (!a) return;
       const h = a.getAttribute('href') || '#';
       if (h.charAt(0) === '#' || h === '') e.preventDefault();
+      // an in-page jump (All tools, Needs attention) scrolls to its target
+      const t = h.length > 1 && h.charAt(0) === '#' ? document.getElementById(h.slice(1)) : null;
+      if (t) t.scrollIntoView({ behavior: rm() ? 'auto' : 'smooth', block: 'start' });
     });
 
     // the sphere rolls out of the wordmark's dot onto the page head's rule

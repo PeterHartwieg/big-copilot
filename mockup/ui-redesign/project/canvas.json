@@ -862,6 +862,15 @@
    "page": "history",
    "maxW": 7520
   },
+  "n-handoff": {
+   "x": 3040,
+   "y": -180,
+   "w": 520,
+   "maxH": 150,
+   "text": "Implementation handoff: mockup/ui-redesign/NOTES.md, 'Implementation handoff'. H1 one basis and amount everywhere; H2 shop demand names its factory hours; H3 returning keeps the finding, filters and place; H4 which controls work, link, illustrate or are unwired.",
+   "page": "overview",
+   "fill": "blue"
+  },
   "n-start": {
    "x": 0,
    "y": -180,

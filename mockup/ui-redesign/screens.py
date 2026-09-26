@@ -118,6 +118,9 @@ CSS = r2.CSS + """
 .r3-gaplab{position:absolute;top:-24px;left:calc(3.5 / 7 * 100%);width:calc(2 / 7 * 100%);display:flex;justify-content:center;font:600 10.5px/1 "IBM Plex Mono",monospace;color:var(--neg)}
 .r3-gaplab::after{content:"";position:absolute;left:0;right:0;top:14px;border-top:1.5px solid var(--neg);border-left:1.5px solid var(--neg);border-right:1.5px solid var(--neg);height:5px}
 .r2-scale .m.cap span{transform:translateX(-92%);text-align:right}
+.r3-dep{display:flex;gap:10px;align-items:flex-start;margin-top:40px;padding:10px 12px;border-radius:10px;border:1px solid color-mix(in srgb,var(--warn) 45%,transparent);background:var(--warn-soft);font-size:12.5px;color:var(--ink-2);line-height:1.45}
+.r3-dep > .i{color:var(--warn);margin-top:1px}
+.r3-dep b{color:var(--ink);font-weight:600}
 .r3-open{display:grid;grid-template-columns:1fr 1fr;gap:24px;padding:14px 22px 18px;border-top:1px solid var(--rule-soft)}
 
 /* 1024 and 768 ------------------------------------------------------------------- */
@@ -489,8 +492,35 @@ def recurring(full: bool, shown: bool = True) -> str:
     <span class="m" style="left:{pos}%;background:var(--accent)"><span style="color:var(--accent)">planned<br>{to}</span></span>
     <span class="m cap low" style="left:100%"><span>1 Pier cap<br>20,000</span></span>
   </div>
-  {f'<p style="font-size:12.5px;color:var(--ink-2);margin-top:40px">{note}</p>' if note else '<div style="height:44px"></div>'}
+  {HOURS_DEP if not full else '<div style="height:44px"></div>'}
 </div>"""
+
+
+# Shop demand only holds if the factory runs the hours it assumes: said where the amount is.
+HOURS_DEP = f"""
+<div class="r3-dep" role="note">{ic("factory")}<div><b>Needs a factory-hours change.</b> 11,040 assumes Canal Brewery's four Beer machines run
+  <b>13 h a day each</b> (now 24 · 24 · 12 · 0 h). Until they do, today's draw of 12,180 continues and 11,040 runs short.
+  <a class="link" href="{ROUTE["supply/production"]}">Plan factory hours</a></div></div>"""
+
+
+def why_pane(full: bool, shown: bool) -> str:
+    """Why this amount and the manual instructions, for one basis: the same figure everywhere."""
+    to = "18,740" if full else "11,040"
+    calc = ('<span>Canal Brewery at rated output, 2,400 a day × 7</span><b>16,800</b>' if full else
+            '<span>Canal Brewery at 13 h a day: 1,300 a day × 7 (shop sales + 15%)</span><b>9,100</b>')
+    extra = ('' if full else '<span><i>3</i>Factory hours: <b>BizMan › Canal Brewery › Schedule</b>, Beer 1–4 for <b>13 h a day</b>; see Supply › Production</span>')
+    other = ('<span>With shop demand instead</span><b style="color:var(--ink-2)">11,040</b>' if full else
+             '<span>With full production instead</span><b style="color:var(--ink-2)">18,740</b>')
+    return f"""
+  <div class="r3-open" data-when-basis="{"full" if full else "demand"}"{"" if full == shown else " hidden"}>
+    <div><span class="lab">Why {to} a week · planned for {"full production" if full else "shop demand"}</span>
+      <div class="r2-calc" style="margin-top:8px">{calc}
+        <span>2 grocery shelves, 240 a day × 7, plus 15%</span><b>1,932</b>
+        <span class="tot">Rounded up to the ten</span><b class="tot">{to}</b>{other}</div></div>
+    <div><span class="lab">Manual instructions</span>
+      <div class="r2-steps2" style="margin-top:8px"><span><i>1</i>Weekly order: <b>BizMan › Purchasing agent › 1 Pier › Water</b>, set Amount to <b>{to}</b> before Sun 20:00</span>
+        <span><i>2</i>Gap: <b>BizMan › Purchasing agent › Urgent order</b>, about <b>3,050</b> Water to Bridge Hub</span>{extra}</div></div>
+  </div>"""
 
 
 def imports_body(st: str = "sug", open_: bool = False, full: bool = True, arrived: bool = True, flow_link: bool = True) -> str:
@@ -525,16 +555,7 @@ def imports_body(st: str = "sug", open_: bool = False, full: bool = True, arrive
     <button class="r2-disc" type="button" data-open="why" aria-expanded="{"true" if open_ else "false"}">{ic("list")}Manual instructions</button>
     <button class="r2-disc" type="button">{ic("copy")}Copy both changes</button>
   </div>
-  <div class="r3-open" data-pane="why"{"" if open_ else " hidden"}>
-    <div><span class="lab">Why 18,740 a week</span>
-      <div class="r2-calc" style="margin-top:8px"><span>Canal Brewery at rated output, 2,400 a day × 7</span><b>16,800</b>
-        <span>2 grocery shelves, 240 a day × 7, plus 15%</span><b>1,932</b>
-        <span class="tot">Rounded up to the ten</span><b class="tot">18,740</b>
-        <span>With shop demand: the brewery at 1,300 a day</span><b style="color:var(--ink-2)">11,040</b></div></div>
-    <div><span class="lab">Manual instructions</span>
-      <div class="r2-steps2" style="margin-top:8px"><span><i>1</i>Weekly order: <b>BizMan › Purchasing agent › 1 Pier › Water</b>, set Amount to <b>18,740</b> before Sun 20:00</span>
-        <span><i>2</i>Gap: <b>BizMan › Purchasing agent › Urgent order</b>, about <b>3,050</b> Water to Bridge Hub</span></div></div>
-  </div>
+  <div data-pane="why"{"" if open_ else " hidden"}>{why_pane(True, full)}{why_pane(False, full)}</div>
 </section>
 <div class="r2-lines">
   <div class="r2-band"><span class="lab">Other lines at Bridge Hub</span><span class="quiet" style="margin-left:auto">2 covered lines hidden · <button class="link" type="button">Show everything</button></span></div>
@@ -628,7 +649,7 @@ def phone_imports(sheet: bool = False, full: bool = True, zoom: bool = False) ->
   <div class="sec"><div class="r3-step"><span class="n">1</span>Prevent the recurring shortage</div>
     <div class="r2-big"><span class="was">8,400</span><span class="arr">→</span><label class="to"><input value="{to}" aria-label="Weekly order"><span class="u">/ week</span></label></div>
     <div class="seg" data-seg="pb" style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr"><button class="{"on" if full else ""}" type="button" style="justify-content:center;min-height:40px">Full production</button><button class="{"" if full else "on"}" type="button" style="justify-content:center;min-height:40px">Shop demand</button></div>
-    <p style="font-size:12.5px;color:var(--ink-2);margin-top:8px">{"Planned for full production. Today's draw 12,180; 1 Pier cap 20,000." if full else "Planned for shop demand. Today's draw 12,180 is higher: the brewery runs more hours than shops need."}</p>
+    <p style="font-size:12.5px;color:var(--ink-2);margin-top:8px">{"Planned for full production. Today's draw 12,180; 1 Pier cap 20,000." if full else "Planned for shop demand. Needs Canal Brewery's Beer machines at 13 h a day each (now 24 · 24 · 12 · 0 h); until then today's draw of 12,180 continues."}</p>
     <div class="p2-acts" style="margin:6px -14px -12px">{gwbtn("Preview in the game", "", R["phonewrite"])}<div class="row">{btn("Mark done", "ghost", "#", icon="tick")}{btn("Manual instructions", "ghost", "#", icon="list")}</div></div></div>
   <div class="sec" style="border-top:1px solid var(--rule-soft)"><div class="r3-step"><span class="n">2</span>Cover the gap until Monday</div>
     <div class="r3-railgap" style="margin-top:26px"><span class="r3-gaplab">gap</span>{cover(["", "", "", "half", "dry", "", ""], ["W", "T", "F", "S", "S", "M", "T"], truck=5)}</div>

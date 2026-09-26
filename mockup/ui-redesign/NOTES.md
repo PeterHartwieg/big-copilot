@@ -170,3 +170,114 @@ overflow; Overview, Imports, Changes, business page, Production, Goods flow, Jou
 amount under Shop demand, the 1024 masthead colliding with the sphere, the 130% phone top
 bar clipping, a stray closing tag in Goods flow and the checklist count losing its size.
 Not checked: Play mode in the canvas itself, real phones, measured contrast.
+
+## Implementation handoff (26 Sep 2026)
+
+Peter: keep the current visual direction and move into implementation. The prototype's
+remaining placeholders do not need to be implemented in the canvas. The four requirements
+below are binding for the port; each says what the canvas shows and what it does not.
+
+### H1 · One basis, one amount, everywhere
+
+The selected planning basis (Full production / Shop demand) and the amount for a change
+(the suggestion, or the player's edit) come from one record per change. Every surface that
+names the change reads that record and never recomputes on its own:
+
+- the lead amount, its "Planned for …" label and the scale's planned marker (Imports);
+- "Why this amount?" (the arithmetic and its basis in the heading);
+- the manual instructions (the Amount to type);
+- copied text: Imports' Copy, Changes' Copy remaining and its preview (each line names the
+  basis, as today's copied output names the model);
+- the write preview's before → after, and the undo text after the write;
+- the finding's Details on the Overview and the change's row on Changes.
+
+Switching the basis recalculates the suggestion. A player-edited amount is kept (today's
+rule: kept per character, depot and material until reset or until the game's figure
+moves) and shown with the new suggestion beside it and "Reset to N". A write sends exactly
+the amount on screen and the preview names the basis it was planned on.
+
+Acceptance: switch the basis, edit the amount, then open Why, Manual instructions, Copy and
+Preview in the game: all show the same number and the same basis.
+
+Canvas status: the Imports basis switch keeps the amount, label, scale, Why and manual
+instructions consistent (`Imports`, `ImportsDemand`). Editing the amount is not wired, and
+the copied text and the write preview frames are drawn for full production only.
+
+### H2 · Shop demand names the factory hours it needs
+
+A recommendation sized on Shop demand that assumes a factory line runs different hours from
+now must say so where the amount is: the factory, the line and machines, current hours →
+required hours, what happens if the hours stay as they are, and a link to Supply ›
+Production with that factory selected. The same dependency appears as its own step in the
+manual instructions and the copied text, and as its own, non-writable row on Changes; the
+game link never implies it changes factory hours. The same rule applies under Full
+production when the plan assumes staffed hours the factory does not have (Beer 4 idle).
+
+Canvas status: `ImportsDemand` shows the dependency beside 11,040 (Canal Brewery's four Beer
+machines at 13 h a day, now 24 · 24 · 12 · 0 h) and as step 3 of the manual instructions;
+`PhoneImportsDemand` carries the same sentence. Changes does not yet draw the dependent row.
+
+### H3 · Returning keeps the finding, the filters and the place
+
+Leaving Needs attention for a task and coming back (the arrival strip's back button,
+browser Back, or Back to Needs attention after a write) restores:
+
+- the originating finding, scrolled into view and outlined for a moment, with its new mark
+  (Marked by you, Applied · awaiting refresh);
+- the list as it was: order, severity filters, "Show more" state and which Details were
+  open; nothing reorders while the page is open, and findings that arrived with a refresh
+  are announced rather than inserted above the player's place;
+- the scroll position.
+
+If the finding has left the list after a refresh, land at its former place with a status
+line saying why (confirmed, below the line, switched off). The destination keeps its own
+state on Back too: Supply scope, Plan for, Needs a change / Everything; Find a location's
+filters, sort and saved search; Schedules' business and day. The route carries the finding
+id and the filters (as `#site/…` routes do today), so reload and Forward work.
+
+Canvas status: `OverviewReturn` shows the finding kept in place and marked; filters, open
+Details and scroll restoration are not demonstrated. `FinderDetail` → Results shows kept
+finder filters as a label only.
+
+### H4 · What in the prototype works, and what only looks like it does
+
+**Working in Play (inside the artboard):** Details / Hide on every finding (Overview, phone);
+Show more / Show fewer; the Plan for switch on Imports and on Production; Why this amount? /
+Manual instructions (one shared panel); Preview the copied text on Changes; ticking a
+Suggested row on Changes (it becomes Marked by you, the truck and count move); the All tools
+and Needs attention jumps; the wordmark dot's coins, the sphere's entrance, squish and the
+wordmark's extra spheres; the dark and reduced-motion tweaks.
+
+**Linked (opens another artboard that shows the result):** every masthead destination and
+local-row view; finding actions (Review import, Plan factory hours, Resolve staff demand,
+Open readiness) and warning actions; tool-panel tasks; the arrival strip's back button;
+Follow the supply route → GoodsFlow; the separate fix → Production; Preview in the game →
+WritePreview → Apply → WritePermission → Allowed in game → WriteDone → Back to Needs
+attention → OverviewReturn (Close → ImportsApplied); Mark done by you on the weekly order →
+ImportsMarked; Customize checks → Customize; Florist × Midtown on Demand → Finder → Floor plan
+and costs → FinderDetail → Results → Finder; on the phone, Review import → PhoneImports →
+Preview in the game → PhoneWrite.
+
+**Illustrative states (drawn, not reached by an interaction):** WriteApplying (the apply in
+progress), WriteRefused, WriteOverCap, WriteChanged, WriteOldMod, ImportsConfirmed (what a
+later refresh shows), OverviewLong (the queue scrolled, sticky bar), OverviewCalm,
+OverviewShopOnly, OverviewStale, OverviewNames, OverviewFocus, ProductionNone, the 1024, 768,
+phone and 130% text frames, ImportsManual (the panel already open), and the chosen positions
+of segmented controls whose content does not change.
+
+**Unwired controls (look real, do nothing):** severity filter chips; "Checked 14 businesses"
+and "Your changes" disclosures; the switches, $ line, Reset and Done in Customize checks; the
+company/save chevron, Update, the ··· menu and Search; every Copy button; Mark done on the
+gap until Monday and on the phone; Clear my marks; Apply 2 import amounts (opens the
+single-import preview); Undo; editing any amount field; Try again and Open a save file;
+Needs a change / Everything, 30 days / All / By weekday and Profit & loss / Satisfaction
+(selection only); Find a location's filters, saved searches, list rows and map zoom;
+Schedules' business list, Demand plan / Full cover, now / plan and day tabs; shop chips on
+Products & prices other than the florist; the phone's Plan for switch (its two states are
+separate frames), its Supply view pills beyond Imports and its Why / Manual buttons; the
+Stitch Yard recipe picker; every control on Preferences, Help & feedback and the no-save
+entry.
+
+The port should treat only the first two groups as specified behaviour; the illustrative
+states are specified appearance, and the unwired controls are specified placement and
+wording only.

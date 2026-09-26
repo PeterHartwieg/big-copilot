@@ -138,6 +138,7 @@ ROW_TITLES = {
     ("history", 0): "Round 1 → round 2, with matched crops",
 }
 NOTES = {
+    "n-handoff": ("overview", 0, 3040, "Implementation handoff: mockup/ui-redesign/NOTES.md, 'Implementation handoff'. H1 one basis and amount everywhere; H2 shop demand names its factory hours; H3 returning keeps the finding, filters and place; H4 which controls work, link, illustrate or are unwired."),
     "n-start": ("overview", 0, 0, "Play from Main: Details opens a finding in place; Review import opens the setting. Details start closed so the whole queue is visible."),
     "n-journey": ("supply", 0, 0, "Imports holds two fixes: 1 prevents the recurring shortage (the weekly order, writable through the game link); 2 covers the gap until Monday (a one-time purchase, by hand). Toggle Plan for to see the amount move."),
     "n-states": ("supply", 1, 0, "Three kinds of done: Marked by you (outlined, neutral), Applied · awaiting refresh (blue), Confirmed (solid green, only from a newer read)."),

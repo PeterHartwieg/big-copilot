@@ -375,7 +375,7 @@ def write_frame(which: str) -> str:
         d = dlg("wait", "<b>Waiting for you in the game.</b>", "first write from<br>this browser",
                 f"""<div class="gw-scene"><div class="gw-pop"><b>Allow Big Copilot to change your game?</b>Chrome on Windows · bigcopilot.com<div class="bt"><span>Deny</span><span class="y">Allow</span></div></div><span class="gw-cursor" style="color:#fff">{ic("cursor")}</span></div>
 <p style="font-size:12.5px;color:var(--ink-2);line-height:1.5">Switch to the game and choose <b style="color:var(--ink)">Allow</b>. The game asks once per browser and remembers it. You can forget browsers in the mod's options.</p>""",
-                f'<span class="gw-hint">Asked 12 s ago · the game closes the popup after 60 s</span><a class="gw-b ghost" href="WritePreview.dc.html">Cancel</a><a class="gw-b go" href="WriteApplying.dc.html">Allowed in game</a>')
+                f'<span class="gw-hint">Asked 12 s ago · the game closes the popup after 60 s</span><a class="gw-b ghost" href="WritePreview.dc.html">Cancel</a><a class="gw-b go" href="WriteDone.dc.html">Allowed in game</a>')
     elif which == "applying":
         d = dlg("busy", "<b>Applying in the game…</b>", "all together,<br>or not at all",
                 mat(8400, 18740) + '<div class="gw-reread"><span>Reading the game again</span><span class="bar"></span></div>',

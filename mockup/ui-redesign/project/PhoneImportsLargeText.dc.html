@@ -1195,6 +1195,9 @@ a{color:inherit}
 .r3-gaplab{position:absolute;top:-24px;left:calc(3.5 / 7 * 100%);width:calc(2 / 7 * 100%);display:flex;justify-content:center;font:600 10.5px/1 "IBM Plex Mono",monospace;color:var(--neg)}
 .r3-gaplab::after{content:"";position:absolute;left:0;right:0;top:14px;border-top:1.5px solid var(--neg);border-left:1.5px solid var(--neg);border-right:1.5px solid var(--neg);height:5px}
 .r2-scale .m.cap span{transform:translateX(-92%);text-align:right}
+.r3-dep{display:flex;gap:10px;align-items:flex-start;margin-top:40px;padding:10px 12px;border-radius:10px;border:1px solid color-mix(in srgb,var(--warn) 45%,transparent);background:var(--warn-soft);font-size:12.5px;color:var(--ink-2);line-height:1.45}
+.r3-dep > .i{color:var(--warn);margin-top:1px}
+.r3-dep b{color:var(--ink);font-weight:600}
 .r3-open{display:grid;grid-template-columns:1fr 1fr;gap:24px;padding:14px 22px 18px;border-top:1px solid var(--rule-soft)}
 
 /* 1024 and 768 ------------------------------------------------------------------- */
@@ -1313,6 +1316,9 @@ class Component extends DCLogic {
       if (!a) return;
       const h = a.getAttribute('href') || '#';
       if (h.charAt(0) === '#' || h === '') e.preventDefault();
+      // an in-page jump (All tools, Needs attention) scrolls to its target
+      const t = h.length > 1 && h.charAt(0) === '#' ? document.getElementById(h.slice(1)) : null;
+      if (t) t.scrollIntoView({ behavior: rm() ? 'auto' : 'smooth', block: 'start' });
     });
 
     // the sphere rolls out of the wordmark's dot onto the page head's rule
