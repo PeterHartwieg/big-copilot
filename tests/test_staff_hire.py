@@ -235,6 +235,20 @@ class ShopHireWeeksTest(unittest.TestCase):
             self.assertEqual(hours, sorted(hours, reverse=True))
 
 
+class CompanyFactsTest(unittest.TestCase):
+    def test_an_insurance_tier_on_offer_still_needs_the_hire_added_to_a_plan(self):
+        """A hire joins no HR manager plan: "plan" says one offers the tier."""
+        manager = new_layout("m1", "Mara", [("ba:skill_hrmanager", 80.0)])
+        save = save_of({"EmployeeInstances": {"$items": [manager]}, "Happiness": 40,
+                        "hrManagerPlans": {"$items": [{"assignedEmployeeId": "m1",
+                                                       "healthInsurancePlan": {"planType": 1}}]}})
+        facts = ba_dashboard._company_facts(save)
+        self.assertEqual(facts["ba:jobdemand_bronzehealthinsurance"], "plan")
+        self.assertEqual(facts["ba:jobdemand_silverhealthinsurance"], "plan")
+        self.assertIs(facts["ba:jobdemand_goldhealthinsurance"], False)
+        self.assertIs(facts["ba:jobdemand_peacefulworkenvironment"], False)
+
+
 class StationFactsTest(unittest.TestCase):
     """A desk or chair demand is met by the furniture of the station a person
     works (the game's assignedWorkStationItems), not by the site holding such
@@ -691,7 +705,7 @@ class HiringTest(unittest.TestCase):
         self.assertFalse(self.site("Cafe B")["facts"]["ba:jobdemand_coffeemachine"])
         self.assertTrue(self.site("Cafe B")["facts"]["ba:jobdemand_cleanworkplace"])
         self.assertTrue(self.hiring["company"]["ba:jobdemand_peacefulworkenvironment"])
-        self.assertFalse(self.hiring["company"]["ba:jobdemand_bronzehealthinsurance"])
+        self.assertIs(self.hiring["company"]["ba:jobdemand_bronzehealthinsurance"], False)
 
     def test_every_demand_is_classified(self):
         self.assertEqual(set(self.hiring["demandKinds"]), set(JOB_DEMANDS))

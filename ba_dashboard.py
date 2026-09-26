@@ -9785,9 +9785,11 @@ def _site_facts(save: Save, registration: dict) -> dict:
 def _company_facts(save: Save) -> dict:
     """Whether the company meets each company-level demand for a new hire.
 
-    Health insurance: some HR manager's plan offers that tier or better, with its
-    manager in place (not being replaced), as _job_demands() judges a person's
-    own plan. A happy boss: the player's happiness.
+    Health insurance is a person's own HR manager plan, and a hire joins none
+    (54 of Peter's test hires had no assignedHrManagerPlanId): `"plan"` where
+    some HR manager's plan, its manager in place (not being replaced), offers
+    that tier or better, so the player has one to add them to; False where none
+    does. A happy boss: the player's happiness, True or False.
     """
     root = save.root
     by_id = {e.get("id"): e for e in save.items(root.get("EmployeeInstances"))}
@@ -9802,7 +9804,7 @@ def _company_facts(save: Save) -> dict:
     for slug in sorted(JOB_DEMANDS):
         kind, setting, _priority = JOB_DEMANDS[slug]
         if kind == "insurance":
-            out[slug] = best >= setting
+            out[slug] = "plan" if best >= setting else False
         elif kind == "happiness":
             out[slug] = happiness >= setting
     return out
@@ -25098,7 +25100,9 @@ function hrDemandAt(m, slug, S, wk){
   }
   if(kind === "company"){
     const c = ((D.hiring || {}).company || {})[slug];
-    return c === undefined ? null : c ? "ok" : "no";
+    /* "plan": an HR manager's plan offers it, but a hire joins none until
+       the player adds them to it. */
+    return c === undefined ? null : c === "plan" ? "warn" : c ? "ok" : "no";
   }
   if(kind === "site"){
     const here = S ? (S.site.facts || {})[slug] : undefined;
@@ -25455,7 +25459,7 @@ const hrKey = el => {
 function hrWhy(m, slug, S, wk){
   const kind = hrKind(slug);
   if(kind === "schedule") return "the plan's hours break it";
-  if(kind === "company") return "not offered";
+  if(kind === "company") return hrDemandAt(m, slug, S, wk) === "warn" ? "add them to an HR plan that offers it" : "not offered";
   if(kind === "station"){
     if(hrDemandAt(m, slug, S, wk) === "no") return "none at any site";
     return hrDeskAnywhere(slug, S) ? "not at this desk" : `none at ${spEsc(hrSiteName(S))}`;

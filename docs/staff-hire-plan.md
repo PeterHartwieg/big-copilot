@@ -234,6 +234,9 @@ Where the build differs from or adds to 2.1-2.4; the board worker reads these to
   `stations` lists the demands each station's furniture group meets
   (`_station_groups()`, the game's `assignedWorkStationItems`), and the page judges them
   against the stations a person's week is on. `facts` no longer carries them.
+- **Health insurance** is a person's own HR plan, and a hire joins none: `company` says
+  `"plan"` where some HR manager's plan offers the tier, and the page warns "add them to
+  an HR plan that offers it".
 
 ### 2.5 Tests (extraction)
 

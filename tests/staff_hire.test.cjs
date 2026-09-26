@@ -1381,3 +1381,14 @@ test('a desk or chair demand is judged at the desk the week is on, and a pick go
   assert.deepEqual(out, {met: 'ok', other: 'warn', why: 'not at this desk', none: 'no', noWeek: 'warn',
                          miss: ['ba:jobdemand_seatedatofficedesk2']});
 });
+
+test('an insurance tier some HR plan offers warns that a hire has to be added to it', async (t) => {
+  const page = await board(t);
+  const out = await page.evaluate(() => {
+    const GOLD = 'ba:jobdemand_goldhealthinsurance';
+    D.hiring.company[GOLD] = 'plan';
+    const S = {site: {stations: {}, name: 'Law'}, planned: true};
+    return [hrDemandAt({sites: [S]}, GOLD, S, null), hrWhy({sites: [S]}, GOLD, S, null)];
+  });
+  assert.deepEqual(out, ['warn', 'add them to an HR plan that offers it']);
+});
