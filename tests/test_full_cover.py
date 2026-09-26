@@ -46,6 +46,7 @@ from tests.test_staffing import (
     REGISTER,
     SCHEDULING_DEMANDS,
     SERVICE,
+    kind,
     LABELS,
     STATIONS,
     business,
@@ -109,8 +110,12 @@ class FullNeedTest(unittest.TestCase):
         # The need is constant, so the payload leaves it to the page.
         self.assertNotIn("need", full)
         self.assertNotIn("basis", full)
-        # The demand plan beside it is still cover only.
-        self.assertEqual(serving(row), [])
+        # The demand plan beside it staffs every register the hours the shop
+        # opens (8 to 20), nothing measured being no reason to leave one empty.
+        per_station = collections.Counter()
+        for s in serving(row):
+            per_station[s["s"]] += hours(s)
+        self.assertEqual(sorted(per_station.values()), [12 * 7, 12 * 7])
         # Every register every hour, whatever the doors say today.
         by_station = collections.Counter()
         for s in serving(full):
@@ -258,9 +263,10 @@ class FullCoverRulesTest(unittest.TestCase):
         people = [employee(f"c{i}", [CLEANING], demands=("ba:jobdemand_fulltime",))
                   for i in range(3)]
         row = plan([(1, REGISTER), (8, CLEAN_STATION)], people, BUSY, weeks=0, opens=((8, 24),))
-        self.assertEqual([s for s in row["shifts"] if s["p"] is None], [])
+        cleaning = [s for s in row["shifts"] if kind(s) == "clean"]
+        self.assertEqual([s for s in cleaning if s["p"] is None], [])
         worked = collections.Counter()
-        for s in row["shifts"]:
+        for s in cleaning:
             worked[s["p"]] += hours(s)
         self.assertGreaterEqual(min(worked.values()), FULL_TIME[0])
 
@@ -268,14 +274,15 @@ class FullCoverRulesTest(unittest.TestCase):
         """Demand plans draw first; a site's full-cover plan may use its own draw."""
         rows = plan_sites(
             [
-                dict(items=[(1, REGISTER)], hourly={}, weeks=0, number=12),
+                dict(items=[(1, REGISTER)], hourly={}, weeks=0, number=12, open_days=()),
                 dict(items=[(2, REGISTER)], hourly={h: 1 for h in range(24)}, number=14),
             ],
             [employee("free", [SERVICE], here=False)],
         )
         first, second = rows
-        # The first site's demand plan has no serving hour, so it leaves the
-        # bench member alone; the second site's demand plan takes them.
+        # The first site is shut all week, so its demand plan has no serving
+        # hour and leaves the bench member alone; the second site's demand
+        # plan takes them.
         self.assertEqual(first["bench"], [])
         self.assertEqual(len(second["bench"]), 1)
         # So the first site's full-cover plan may not promise them too; the
@@ -297,9 +304,11 @@ class FullCoverRulesTest(unittest.TestCase):
         promised = [[r["id"] for r in row["fullCover"]["addPeople"]["assign"]]
                     for row in rows]
         self.assertEqual(promised, [["free"], []])
-        # And nobody is promised across a demand plan and another site's test.
-        for row in rows:
-            self.assertEqual(row["addPeople"]["assign"], [])
+        # And nobody is promised across a demand plan and another site's test:
+        # the first shop's demand plan staffs its open hours too, so it is
+        # the first shop's either way.
+        self.assertEqual([[r["id"] for r in row["addPeople"]["assign"]] for row in rows],
+                         [["free"], []])
 
 
     def test_a_live_test_takes_the_unassigned_first(self):
@@ -512,6 +521,21 @@ class NineDayGateTest(unittest.TestCase):
         self.assertNotIn(3, {s["d"] for s in serving(row)})
         # A shut weekday is not missing data.
         self.assertEqual(row["unmeasured"][3], [])
+
+    def test_a_new_shop_that_opens_more_hours_staffs_them(self):
+        """Evil Genius (26 September 2026): a week of reports, 8 to 20, then
+        open around the clock. Nothing is read yet, so every hour it opens now
+        has every register staffed, the new ones included."""
+        row = plan(self.ITEMS, crew(service=2), BUSY, weeks=1, opens=((0, 24),),
+                   report_opens=((8, 20),))
+        self.assertEqual({b for day in row["basis"][SERVICE] for b in day}, {"open"})
+        self.assertEqual(row["need"][SERVICE], [[2] * 24 for _ in range(7)])
+        per_station = collections.Counter()
+        for s in serving(row):
+            per_station[s["s"]] += hours(s)
+        self.assertEqual(sorted(per_station.values()), [WEEK, WEEK])
+        # Two cashiers cannot hold 336 hours, so the Staff page hires for them.
+        self.assertGreater(row["headcount"][SERVICE]["hire"], 0)
 
     def test_a_shop_measured_8_to_22_now_open_around_the_clock(self):
         """The hours it never opened before are the ones the page names."""

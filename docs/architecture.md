@@ -225,7 +225,7 @@ ordinary serving shift. `roles[].stations` holds indices into the same `stations
 The board reads all of it in one place, `spRosterBlock()` in `drawSite()`, which is reached
 only for a `retail` site — an office, a depot, a factory and a home have no row. It builds
 its rows through `spRosterRows()`, and the rest of the block is small pure helpers next to
-it: `spRosterMeasured()` (does any hour have a basis other than `none`), `spSameDays()`
+it: `spRosterMeasured()` (does any hour have a basis other than `none` or `open`), `spSameDays()`
 (which weekday is a copy of which), `spOpenAt()` (are the doors open that hour),
 `spNeedAt()` (the need strip's height and its least certain basis for one hour),
 `spTickId()`/`spTicksRead()`/`spTicksWrite()`/`spTyped()` (the player's own ticks, in

@@ -471,8 +471,11 @@ role's own staffed capacity would ask a fast role to grow because a slow one hel
 back: a gym whose trainers can serve forty an hour but whose single register lets twenty
 through is short of registers, not of boards.
 `scaled` is a thin weekday read off the best measured one through the game's own day
-curve. `none` is a site too new to say anything about — and a site whose every weekday is
-thin gets no serving shifts at all, rather than a guess.
+curve. `none` is a site too new to say anything about. An hour like that which the shop
+opens in the game is `open` instead: every station of every serving role is staffed then,
+because an open hour needs its stations whatever has been measured (Peter's rule, 26
+September 2026), so a new shop that opens more hours gets staffed and hired for them. A
+shop with complete data keeps reading an hour with no report as nobody came.
 
 **Only a measured hour is a target.** The board never presents a censored hour as a number
 to aim at, and never prints the arrival ceiling as demand: the ceiling is the game's own
