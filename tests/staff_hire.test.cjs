@@ -1615,7 +1615,7 @@ test('an office week is written from its site page: the office default for its o
   assert.match(await page.locator('dialog.gw-dlg').textContent(), /Office default/);
 });
 
-test('an office write keeps its cleaner and anyone the default gives no computer, and names who drops hours', async (t) => {
+test('an office write only adds: the week as it stands plus the planned entries whose computer and person are free', async (t) => {
   const page = await board(t);
   const out = await page.evaluate(([O]) => {
     const row = D.officeStaffing.find(r => r.key === O);
@@ -1624,34 +1624,32 @@ test('an office write keeps its cleaner and anyone the default gives no computer
       roles: [{skill: 'ba:skill_lawyer', label: 'Lawyer', stations: [0]}],
       people: [{id: 'LAWYER1', name: 'Lena Voss'}, {id: 'CLEANER1', name: 'Cleo Mop'}, {id: 'LAWYER2', name: 'Max Idle'}],
       shifts: [{d: 1, s: 0, f: 8, t: 22, p: 0}, {d: 2, s: 0, f: 8, t: 22, p: 0}, {d: 3, s: 0, f: 8, t: 22, p: null}],
-      current: {list: [{d: 1, s: 1, f: 8, t: 12, p: 1, k: 'clean'}, {d: 4, s: 0, f: 8, t: 18, p: 2},
-        {d: 0, s: 0, f: 8, t: 22, p: 0}, {d: 5, s: 0, f: 8, t: 22, p: 0}, {d: 6, s: 0, f: 8, t: 22, p: 0}, {d: 2, s: 0, f: 10, t: 14, p: 2}]}});
+      current: {list: [{d: 0, s: 0, f: 8, t: 22, p: 0}, {d: 1, s: 1, f: 8, t: 12, p: 1, k: 'clean'}, {d: 2, s: 0, f: 10, t: 14, p: 2}]}});
     Object.assign(D.businesses.find(b => b.key === O), {status: 'office'});
     const plan = gwRosterPlan(O), week = gwRosterWeek(plan);
     const flat = week.days.flatMap(({d, shifts}) => shifts.map(s => `${d} ${s.f}-${s.t} ${s.employeeId}@${s.itemInstanceId}`));
-    // The game's week already this week: the office counts as written.
+    // Once the game's week is this week, nothing is left to add: written.
     const same = Object.assign({}, plan, {current: {list: week.days.flatMap(({d, shifts}) => shifts.map(s => ({d, f: s.f, t: s.t,
       s: plan.stations.findIndex(x => x.id === s.itemInstanceId), p: plan.people.findIndex(x => x.id === s.employeeId)})))}});
-    return {flat, kept: week.kept, matches: gwRosterMatches(same, gwRosterWeek(same)), written: !gwScheduleSites().includes(O) || true};
+    const again = gwRosterWeek(same);
+    return {flat, sent: week.sent, kept: week.kept, matches: gwRosterMatches(plan, week), after: gwRosterMatches(same, again), againSent: again.sent};
   }, [O]);
+  // Everything at the office stays; Lena's Monday is added; her Tuesday meets
+  // Max on the same computer, so it is not.
   assert.deepEqual(out.flat, [
-    '1 8-22 LAWYER1@DESK-1', '1 8-12 CLEANER1@CLN-O',
-    '2 8-22 LAWYER1@DESK-1',
-    '4 8-18 LAWYER2@DESK-1']);
-  assert.equal(out.kept, 2);
-  assert.equal(out.matches, true);
-  // The confirm names Lena, 42 h now and 28 h in the office default.
+    '0 8-22 LAWYER1@DESK-1',
+    '1 8-12 CLEANER1@CLN-O', '1 8-22 LAWYER1@DESK-1',
+    '2 10-14 LAWYER2@DESK-1']);
+  assert.deepEqual([out.sent, out.kept, out.matches, out.after, out.againSent], [1, 3, false, true, 0]);
   await page.evaluate(([O]) => {
     window.hrAnswer = async (kind, body, o) => ({status: 200, error: null, body: {ok: true, kind, dryRun: !!o.dryRun, stamp: 's',
-      address: body.address, business: 'HART. Law', before: {shifts: 5, print: 'a'}, after: {shifts: 4, print: 'b'},
-      removed: 5, added: 4, openedHours: false, leftWithout: [], warnings: [], siteError: null, rows: []}});
+      address: body.address, business: 'HART. Law', before: {shifts: 3, print: 'a'}, after: {shifts: 4, print: 'b'},
+      removed: 3, added: 4, openedHours: false, leftWithout: [], warnings: [], siteError: null, rows: []}});
     openSite(O, false);
   }, [O]);
   await page.locator('#secDetail #sp-roster [data-gw-sites]').first().click();
   await phase(page, 'ready');
   const text = await page.locator('dialog.gw-dlg').textContent();
-  // Max keeps his Thursday; his Tuesday hours meet Lena's planned entry.
-  assert.match(text, /Fewer hours than now: Max Idle \(14 → 10 h\), Lena Voss \(42 → 28 h\)\./);
-  assert.match(text, /2 entries the office default does not plan stay as they stand/);
-  assert.doesNotMatch(text, /cleaning and security only/);
+  assert.match(text, /Adds 14 h for Lena Voss; nobody's current hours change\./);
+  assert.doesNotMatch(text, /Fewer hours than now|stay as they stand/);
 });

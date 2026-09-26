@@ -31910,27 +31910,32 @@ function gwRosterWeek(row){
     days.get(s.d).push({f: s.f, t: s.t, employeeId: who.id, itemInstanceId: st.id});
     return true;
   };
-  (row.shifts || []).forEach(s => { if(!spNobody(s.p) && !bench.has(s.p) && put(s)) sent++; });
   if(row.office){
-    /* The office default plans the computers only, and the write replaces the
-       whole week: every entry on another station (cleaning, a locker) goes
-       back as it stands, or the game would take the cleaner off the office.
-       And somebody at the office the default gives no computer keeps their
-       computer entries where no planned entry is on that computer then, so a
-       write never leaves one of the office's own people with no hours. */
-    const comp = gwOfficeComputers(row);
-    const planned = new Set((row.shifts || []).filter(s => !spNobody(s.p)).map(s => s.p));
-    const taken = (s) => (row.shifts || []).some(p => p.s === s.s && p.d === s.d && p.f < s.t && s.f < p.t);
-    ((row.current || {}).list || []).forEach(s => {
-      if(!comp.has(s.s) || (!planned.has(s.p) && !taken(s))) { if(put(s)) kept++; }
+    /* An office's write adds, like Quick hire: every entry at the office
+       stays as it stands, and the office default's entries for the office's
+       own people go in only where that computer and that person are free
+       then. Nobody's hours change, so nobody is taken off the office. */
+    const busy = [];
+    const clash = (s, who, st) => busy.some(b => b.d === s.d && b.f < s.t && s.f < b.t && (b.who === who || b.st === st));
+    const add = s => { const st = (row.stations || [])[s.s], who = (row.people || [])[s.p];
+      if(st && who) busy.push({d: s.d, f: s.f, t: s.t, who: who.id, st: st.id}); };
+    ((row.current || {}).list || []).forEach(s => { if(put(s)){ kept++; add(s); } });
+    (row.shifts || []).forEach(s => {
+      if(spNobody(s.p) || bench.has(s.p)) return;
+      const st = (row.stations || [])[s.s], who = (row.people || [])[s.p];
+      if(!st || !who || clash(s, who.id, st.id)) return;
+      if(put(s)){ sent++; add(s); }
     });
-  } else if(!row.full && spCoverOnly(row))
+  } else (row.shifts || []).forEach(s => { if(!spNobody(s.p) && !bench.has(s.p) && put(s)) sent++; });
+  if(!row.office && !row.full && spCoverOnly(row))
     ((row.current || {}).list || []).filter(s => !s.k).forEach(s => { if(put(s)) kept++; });
   return {days: [...days].sort((a, b) => a[0] - b[0]).map(([d, shifts]) => ({d, shifts})), sent, kept};
 }
 /* Whether the game's schedule already is this week, entry for entry (and
    open around the clock where the plan wants that). */
 function gwRosterMatches(row, week){
+  /* An office's write only adds: written once there is nothing left to add. */
+  if(row.office) return week.sent === 0;
   const line = (d, s) => [d, s.f, s.t, s.employeeId, s.itemInstanceId].join("|");
   const want = week.days.flatMap(({d, shifts}) => shifts.map(s => line(d, s))).sort();
   const have = ((row.current || {}).list || []).map(s => {
@@ -31960,7 +31965,8 @@ function gwRosterButtons(key){
   const row = gwRosterPlan(key);
   if(!row) return "";
   const one = gwButton("schedule", tt("sp.gw.sch.one", "Write this roster to the game"), `data-gw-sites="${attr(JSON.stringify([key]))}"`,
-    gwRosterWeek(row).sent ? "" : tt("sp.gw.sch.blocked", "Every entry in this plan waits on somebody who does not work here yet: add them first"), {icon: "hire"});
+    gwRosterWeek(row).sent ? "" : row.office ? tt("sp.gw.sch.office.written", "Every entry the office default can add is in the game")
+      : tt("sp.gw.sch.blocked", "Every entry in this plan waits on somebody who does not work here yet: add them first"), {icon: "hire"});
   const all = gwScheduleSites();
   const many = all.length > 1
     ? gwButton("schedule", tt("sp.gw.sch.all", "Write all {n} planned sites", {n: all.length}), `data-gw-sites="${attr(JSON.stringify(all))}"`, "", {alt: true}) : "";
@@ -32086,10 +32092,7 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
         : row.full ? `<span class="gw-plan full">${gwSvg("sun")}${tt("sp.pick.full", "Full cover 24/7")}</span><span class="gw-only">${tt("sp.gw.plan.every", "every station, every hour")}</span>`
         : spCoverOnly(row) ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.gw.plan.cover", "Cleaning and security")}</span><span class="gw-only">${whole}</span>`
         : `<span class="gw-plan">${gwSvg("roster")}${tt("sp.pick.demand", "Demand plan")}</span><span class="gw-only">${whole}</span>`;
-      const kept = week.kept && row.office ? gwCall("info", "info", tt("sp.gw.sch.kept.office", {
-        one: "{n} entry the office default does not plan stays as it stands: cleaning, or a computer nobody is planned on then.",
-        other: "{n} entries the office default does not plan stay as they stand: cleaning, or a computer nobody is planned on then."}, {n: week.kept}))
-        : week.kept ? gwCall("info", "info", tt("sp.gw.sch.kept", {
+      const kept = week.kept && !row.office ? gwCall("info", "info", tt("sp.gw.sch.kept", {
         one: "The {n} serving entry in the game stays as it stands: this plan covers cleaning and security only.",
         other: "The {n} serving entries in the game stay as they stand: this plan covers cleaning and security only."}, {n: week.kept})) : "";
       /* Full cover opens the shop around the clock, unless the player opts out. */
@@ -32111,13 +32114,15 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
       };
       const left = (answer.leftWithout || []).map(p => `<span class="person"><i>${spEsc(gwInitials(p.name))}</i>${spEsc(p.name || tt("sp.gw.someone", "someone"))}${
         roleOf(p.employeeId) ? `<small>${roleOf(p.employeeId)}</small>` : ""}</span>`);
-      /* Anybody the week gives fewer hours than they have now. */
-      const had = new Map(), gets = new Map();
-      now.forEach(s => { const who = (row.people || [])[s.p]; if(who) had.set(who.id, (had.get(who.id) || 0) + s.t - s.f); });
-      sentList.forEach(s => gets.set(s.employeeId, (gets.get(s.employeeId) || 0) + s.t - s.f));
-      const fewer = [...had].filter(([id, h]) => (gets.get(id) || 0) < h && (gets.get(id) || 0) > 0)
-        .map(([id, h]) => `${spEsc(((row.people || []).find(p => p.id === id) || {}).name || tt("sp.gw.someone", "someone"))} (${h} → ${gets.get(id)} h)`);
-      const fewerCall = fewer.length ? gwCall("info", "roster", tt("sp.gw.fewer", "<b>Fewer hours than now</b>: {who}.", {who: fewer.join(", ")})) : "";
+      /* An office's write adds: the hours and the people it adds them for. */
+      let adds = "";
+      if(row.office){
+        const had = new Set(now.map(s => `${s.d}|${s.f}|${s.t}|${((row.people || [])[s.p] || {}).id}|${((row.stations || [])[s.s] || {}).id}`));
+        const added = week.days.flatMap(({d, shifts}) => shifts.map(s => Object.assign({d}, s)))
+          .filter(s => !had.has(`${s.d}|${s.f}|${s.t}|${s.employeeId}|${s.itemInstanceId}`));
+        const who = [...new Set(added.map(s => s.employeeId))].map(id => spEsc(((row.people || []).find(p => p.id === id) || {}).name || tt("sp.gw.someone", "someone")));
+        adds = gwCall("info", "roster", tt("sp.gw.sch.adds", "<b>Adds {h} h for {who}</b>; nobody's current hours change.", {h: gwHours(added), who: who.join(", ")}));
+      }
       const over = (answer.warnings || []).filter(w => w.type === "overworked").map(w =>
         gwCall("warn", "flame", tt("sp.gw.over", "<b>{name}</b> works {n} h on {day}. The game allows it.",
           {name: spEsc(w.name || tt("sp.gw.someone.cap", "Someone")), n: Number(w.hours), day: WEEKDAY_NAMES[w.d] ? ttDay(w.d) : tt("sp.gw.aday", "a day")})));
@@ -32125,7 +32130,7 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
         + gwTiles([[labels[0], now.length, sentList.length], [labels[1], gwHours(now), gwHours(sentList)], [labels[2], nowPeople, afterPeople]])
         + gwWeek(now, week.days) + kept + toggle
         + (left.length ? `<div class="gw-box">${gwCall("", "exit", tt("sp.gw.left", "<b>No shift here after this</b>. The game takes them off their work here and adds a to-do, as its own schedule does."))}<div class="gw-pills">${left.join("")}</div></div>` : "")
-        + fewerCall + (add.people ? gwAddBox(add, gwHours(sentList)) : "") + over.join("");
+        + adds + (add.people ? gwAddBox(add, gwHours(sentList)) : "") + over.join("");
     },
     bind: (dlg, replan) => {
       const sw = dlg.querySelector("[data-gw-open]");
