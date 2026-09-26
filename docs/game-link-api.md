@@ -217,7 +217,7 @@ approved it (see "Approving a browser" below).
 | `200` | `{"ok": true, "kind", "dryRun", ...}` | Applied, or a dry run's verdict (`ok` false when an apply would be refused) |
 | `400` | `{"error":"bad_request","detail":"<what>"}` | Not JSON, a missing or mistyped field |
 | `401` | `{"error":"not_paired"}` | No valid token for this origin: ask the game to approve this browser |
-| `403` | `{"error":"origin_not_allowed"}` | An `Origin` off the allowlist (mod 0.3.1 and later; before, `401`) |
+| `403` | `{"error":"origin_not_allowed"}` | An `Origin` off the allowlist (mod 0.3.1 and later; a write got `401` before) |
 | `409` | `{"error":"changed","rows":[...]}` | An `expect` no longer holds; nothing written |
 | `409` | `{"error":"refused","rows":[...]}` | A rule refused a row (`rows[i].error`); nothing written |
 | `409` | `{"error":"cannot_write","reason":"saving"}` | An apply while the game is saving or `CanSave()` is false (a dry run skips this check); `reason` as for `/refresh` (`saving`, `placement`, `interior`, `casino`, `other`), and for `hire` also `myemployees` |
