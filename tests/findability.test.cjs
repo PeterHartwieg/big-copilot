@@ -408,7 +408,7 @@ test("a site's page stands on its own, under a crumb row that carries the picker
     for (const sel of ['#secDaily', '#secRhythm', '#secPortfolio', '#companyNav'])
       assert.equal(await page.locator(sel).isHidden(), true, sel);
     assert.equal(await page.locator('#secDetail').isVisible(), true);
-    assert.equal(await page.locator('#nav a.on').getAttribute('data-id'), 'company', 'Company stays lit');
+    assert.equal(await page.locator('#nav a.on').getAttribute('data-id'), 'businesses', 'Businesses stays lit');
     // The crumb row sits above the head and holds the picker; the close is gone.
     assert.equal(await page.locator('#sitePanel > .ss-crumbs + .sitehead').count(), 1);
     assert.equal(await page.locator('.ss-crumbs #sitePick select.sitepick').count(), 1);
@@ -419,8 +419,8 @@ test("a site's page stands on its own, under a crumb row that carries the picker
     assert.equal(await page.locator('#sitePick .seg a[data-key]').first().getAttribute('href'), THERE);
     // "Portfolio" is the way back: Results whole again, the portfolio in view.
     await page.locator('.ss-crumb').click();
-    assert.equal(await page.evaluate(() => [location.hash, siteOpen].join(' ')), '#company false');
-    for (const sel of ['#secDaily', '#secPortfolio', '#companyNav'])
+    assert.equal(await page.evaluate(() => [location.hash, siteOpen].join(' ')), '#businesses/results false');
+    for (const sel of ['#secDaily', '#secPortfolio', '#localNav a[data-route="businesses/results"].on'])
       assert.equal(await page.locator(sel).isVisible(), true, sel);
     assert.equal(await page.locator('#secDetail').isHidden(), true);
     // The chain in the trail opens that chain there.
@@ -447,17 +447,22 @@ test("a finding row's name opens the site's page; the rest of the row still open
     await name.click();
     // A name lights no finding, but it says where it was clicked, as a finding does.
     assert.equal(await page.evaluate(() => [location.hash, siteOpen, spArrived, siteFrom.label].join(' ')),
-                 `${HERE} true  Today`);
-    assert.equal(await page.locator('.ss-crumb.from').textContent(), 'Today');
+                 `${HERE} true  Needs attention`);
+    assert.equal(await page.locator('.ss-crumb.from').textContent(), 'Needs attention');
     // The row itself: the finding, lit, and the crumb names Today.
     await page.evaluate(() => showPage('today'));
     await page.locator('#alertSection .find .what').click();
     assert.equal(await page.evaluate(() => [location.hash, siteOpen, spArrived].join(' ')),
                  `${HERE} true loss1`);
-    assert.equal(await page.locator('.ss-crumb.from').textContent(), 'Today');
+    assert.equal(await page.locator('.ss-crumb.from').textContent(), 'Needs attention');
     assert.equal(await page.locator('.ss-trail').textContent(), 'Portfolio›Gift Shops›HART. Gifts');
-    await page.locator('.ss-crumb.from').click();
-    await page.waitForFunction(() => location.hash === '#today' && page === 'today');
+    // A finding's landing says why the reader is here, in the strip above the
+    // page, whose way back takes the crumb's place.
+    assert.equal(await page.locator('#arrive').isVisible(), true);
+    assert.match(await page.locator('#arrive').innerText(), /You came from HART\. Gifts/);
+    assert.equal(await page.locator('.ss-crumb.from').isVisible(), false, 'one way back, not two');
+    await page.locator('#arrive .nx-back').click();
+    await page.waitForFunction(() => location.hash === '#overview' && page === 'today');
     assert.equal(await page.evaluate(() => siteOpen), false);
   } finally { await page.close(); }
 });
@@ -559,8 +564,9 @@ test('the portfolio and the Supply tabs name a site by a link to its page', asyn
     assert.equal(await cell.locator('.map-shortcut').count(), 1, 'the map button stays beside it');
     await cell.locator('a.ss-sl').click();
     assert.equal(await page.evaluate(() => [location.hash, page, siteKey].join(' ')), `${THERE} company ${OTHER}`);
-    // Anywhere else the crumb names the view the name was clicked on.
-    assert.equal(await page.evaluate(() => siteFrom && siteFrom.label), 'Shops');
+    // Anywhere else the crumb names the view the name was clicked on: the
+    // Shops scope is Supply › Deliveries.
+    assert.equal(await page.evaluate(() => siteFrom && siteFrom.label), 'Deliveries');
   } finally { await page.close(); }
 });
 
@@ -573,7 +579,7 @@ test("a crumb back to another site's page is the browser's Back, not a new visit
     }, FINDING);
     // Today, a site's name: its page, "‹ Today".
     await page.locator('#alertSection .find .site a.ss-sl').click();
-    assert.equal(await page.evaluate(() => siteFrom.label), 'Today');
+    assert.equal(await page.evaluate(() => siteFrom.label), 'Needs attention');
     // Another site's name on that page: its page, "‹ HART. Gifts".
     await page.evaluate(href => {
       const a = document.createElement('a');
@@ -587,7 +593,7 @@ test("a crumb back to another site's page is the browser's Back, not a new visit
     // The crumb goes back to the first site, where its own way back is still Today.
     await page.locator('.ss-crumb.from').click();
     await page.waitForFunction(here => location.hash === here, HERE);
-    assert.equal(await page.evaluate(() => siteFrom && siteFrom.label), 'Today');
+    assert.equal(await page.evaluate(() => siteFrom && siteFrom.label), 'Needs attention');
     assert.equal(await page.evaluate(() => history.length), length, 'Back, not a new visit');
   } finally { await page.close(); }
 });
@@ -611,7 +617,7 @@ test('a site given up while its page is open hands the page back to the portfoli
   try {
     await page.evaluate(key => { siteOpen = false; drawSite(); openSite(key); }, OTHER);
     await page.evaluate(() => { D = {...D, businesses: D.businesses.slice(0, 1)}; drawSite(); });
-    assert.equal(await page.evaluate(() => [location.hash, siteOpen].join(' ')), '#company false');
+    assert.equal(await page.evaluate(() => [location.hash, siteOpen].join(' ')), '#businesses/results false');
     assert.equal(await page.locator('#secPortfolio').isVisible(), true);
   } finally { await page.close(); }
 });
@@ -623,10 +629,10 @@ test("another character's save closes the page, its crumb and its evidence with 
       siteOpen = false; drawSite();
       D.alerts = [f]; drawAlerts(); showPage('today'); goToAlert(f);
     }, FINDING);
-    assert.equal(await page.evaluate(() => [location.hash, spArrived, siteFrom.label].join(' ')), `${HERE} loss1 Today`);
+    assert.equal(await page.evaluate(() => [location.hash, spArrived, siteFrom.label].join(' ')), `${HERE} loss1 Needs attention`);
     // The same address stands in the other company's save.
     await page.evaluate(() => { D = {...D, meta: {...D.meta, character: 'someone-else'}}; drawSite(); });
-    assert.equal(await page.evaluate(() => [location.hash, siteOpen, spArrived, siteFrom].join(' ')), '#company false  ');
+    assert.equal(await page.evaluate(() => [location.hash, siteOpen, spArrived, siteFrom].join(' ')), '#businesses/results false  ');
     assert.equal(await page.locator('#secPortfolio').isVisible(), true);
     assert.equal(await page.locator('#portfolio tr.kid.on').count(), 0, 'no portfolio row is lit as the open site');
   } finally { await page.close(); }

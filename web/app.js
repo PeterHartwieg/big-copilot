@@ -486,6 +486,7 @@
       row.appendChild($("srcStrip"));
       $("sourceNote").appendChild($("srcNote"));
       $("srcActions").appendChild($("boardControls").content.cloneNode(true));
+      wireCompanySwitch();
       const lb = $("linkBtn");
       fb.className = "lg-btn";
       if (lb) lb.className = "lg-btn";
@@ -544,6 +545,20 @@
       }
     }
   }
+  // The chevron after the company's name in the masthead opens the source
+  // menu, where the save picker and the other sources are: the company and
+  // save choice stays one click from every page.
+  function wireCompanySwitch() {
+    const co = $("mastCo"), menu = $("menuBtn");
+    if (!co || !menu) return;
+    co.hidden = false;
+    co.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (window.scrollY > 0) window.scrollTo(0, 0);
+      menu.click();
+      co.setAttribute("aria-expanded", menu.getAttribute("aria-expanded") || "false");
+    });
+  }
   function wireMenu() {
     $("menuBtn").addEventListener("click", (e) => {
       e.stopPropagation();
@@ -561,6 +576,7 @@
     closeSavePicker();
     m.classList.remove("open");
     $("menuBtn").setAttribute("aria-expanded", "false");
+    if ($("mastCo")) $("mastCo").setAttribute("aria-expanded", "false");
   }
   function enterBoard() {
     if (onBoard()) return;
@@ -569,7 +585,11 @@
     place();
     window.BigCopilotCommunity?.start();
     window.scrollTo(0, 0);
-    if (focusLeaves && document.activeElement === document.body) $("nav").querySelector("a.on").focus();
+    if (focusLeaves && document.activeElement === document.body) {
+      // The lit place, or on the City map or the Game guide the lit reference.
+      const lit = $("nav").querySelector("a.on") || document.querySelector("#navRefs a.on");
+      if (lit) lit.focus();
+    }
   }
 
   /* --- the game link (docs/game-link-api.md) ---------------------------- */

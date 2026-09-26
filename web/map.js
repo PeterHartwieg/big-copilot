@@ -1689,6 +1689,9 @@ function showCityMap(){
    control that opened the finder is on a page now hidden. */
 function openFinder(preset = {}, focus = false){
   if(!premises()) return;
+  // The finder is Expansion › Find a location in the board's shell: the page
+  // it opens stands under that route (docs/ui-route-migration.md).
+  if(typeof routeNext !== "undefined" && routeNext === null) routeNext = "expansion/finder";
   showPage("map");
   showCityMap();
   const view = cityMapPage;

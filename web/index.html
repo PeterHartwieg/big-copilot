@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "4541f823fe";</script>
-<link rel="stylesheet" href="community.css?v=4541f823fe">
+<script>window.LEDGER_BUILD = "45d27fd30c";</script>
+<link rel="stylesheet" href="community.css?v=45d27fd30c">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=4541f823fe">
+<link rel="stylesheet" href="fonts/fonts.css?v=45d27fd30c">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -3250,6 +3250,350 @@ body:has(#changelogDialog[open]){overflow:hidden}
   #sp-shelves > table{display:block;overflow-x:auto;max-width:100%}
   #sp-shelves td.l{white-space:nowrap}
 }
+
+/* ===== the redesign's shell and Overview (docs/ui-route-migration.md) =========
+   Five destinations in the masthead, City map and Game guide beside them, the
+   area's own views in a row under it, a strip that says why the reader
+   arrived, and the Overview: company figures, Needs attention first, then the
+   thirteen tasks. Every class is nx- (shell) or ov- (Overview), because the
+   board's classes are global. */
+:root{--neg-soft:#ff625722;--warn-soft:#f0913a22;--info-soft:#6ea8ff1f;--ink-3:#808a84}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--neg-soft:#cc2a201a;--warn-soft:#b34d001a;--info-soft:#2a5ea81a;--ink-3:#636c71;--warn:#b34d00}}
+:root[data-theme="light"]{--neg-soft:#cc2a201a;--warn-soft:#b34d001a;--info-soft:#2a5ea81a;--ink-3:#636c71;--warn:#b34d00}
+.nx-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+.nx-i{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+/* the masthead: 76 px, the five places labelled, the two references after a rule */
+.mast{height:76px;gap:18px}
+.wordmark{font-size:24px}
+.mast .wordmark{max-width:220px}
+.brand{align-items:center}
+.brand .dot{align-self:flex-end;margin-bottom:5px}
+.nx-co{display:inline-grid;place-items:center;width:26px;height:26px;margin-left:4px;border-radius:6px;border:0;background:none;color:var(--ink-3);cursor:pointer;padding:0}
+.nx-co:hover,.nx-co[aria-expanded="true"]{color:var(--ink);background:var(--surface)}
+.nx-co:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.nav{gap:2px;margin-left:4px;align-items:center}
+.nav a{position:relative;height:40px;padding:0 10px;gap:7px;border-radius:7px;font-size:14px}
+.nav a:hover{background:var(--surface)}
+.nav a:focus-visible,.nx-more:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.nav .ink{bottom:-19px}
+.nx-n{font:600 10.5px/1 "IBM Plex Mono",monospace;padding:3px 6px;border-radius:9px;background:var(--neg);color:#fff}
+.nx-refs{display:flex;align-items:center;gap:0;margin-left:auto;padding-left:8px;border-left:1px solid var(--rule);flex:none}
+.nx-refs a{position:relative;display:flex;align-items:center;gap:6px;height:36px;padding:0 8px;border-radius:7px;font-size:13px;font-weight:500;color:var(--ink-3);text-decoration:none;transition:color .15s}
+.nx-refs a:hover,.nx-refs a.on{color:var(--ink);background:var(--surface)}
+.nx-refs a.on{box-shadow:inset 0 -2px 0 var(--accent)}
+.nx-refs a:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.nx-refs a svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.nx-refs a.off{opacity:.55}
+.mast .ss-q,.mast .ss-qbtn{margin-left:0}
+.nx-more{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:7px;border:0;background:none;color:var(--ink-3);cursor:pointer;padding:0}
+.nx-more:hover,.nx-more[aria-expanded="true"]{color:var(--ink);background:var(--surface)}
+.nx-more svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8}
+section,.sitehead{scroll-margin-top:140px}
+/* the area's own views, one row under the masthead; on a phone a row of pills
+   that scrolls sideways inside itself */
+.nx-local{display:flex;align-items:center;gap:4px;min-height:52px;border-bottom:1px solid var(--rule-soft);overflow-x:auto;scrollbar-width:none}
+.nx-local::-webkit-scrollbar{display:none}
+.nx-local .lab{flex:none;font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin-right:10px}
+.nx-local a{flex:none;display:flex;align-items:center;gap:7px;height:34px;padding:0 13px;border-radius:7px;color:var(--ink-2);font-size:13.5px;font-weight:500;text-decoration:none;white-space:nowrap}
+.nx-local a:hover{color:var(--ink);background:var(--surface)}
+.nx-local a.on{background:var(--ink);color:var(--ground)}
+.nx-local a:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.nx-local a small{font:600 10.5px/1 "IBM Plex Mono",monospace;color:var(--warn)}
+.nx-local a.on small{color:var(--ground);opacity:.75}
+/* why the reader is here, and the way back */
+.nx-arrive{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;margin-top:16px;font-size:13px;color:var(--ink-2)}
+.nx-arrive .nx-back{display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:0 12px 0 9px;border-radius:15px;background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);color:var(--ink);font:600 12.5px/1 Archivo,sans-serif;cursor:pointer}
+.nx-arrive .nx-back svg{width:14px;height:14px;stroke:var(--accent);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.nx-arrive .nx-back:hover{border-color:var(--accent)}
+.nx-arrive .nx-back:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.nx-arrive b{color:var(--ink);font-weight:600}
+/* The strip is the way back; a site page's own crumb does not repeat it. */
+body.nx-arrived .ss-crumbs .ss-crumb.from{display:none}
+.nx-arrive .nx-x{margin-left:auto;border:0;background:none;color:var(--ink-3);cursor:pointer;font:inherit;font-size:12px;padding:4px}
+.nx-arrive .nx-x:hover{color:var(--ink)}
+/* the utilities menu (··· and, on a phone, Map & more): hung off <body> */
+.nx-menu{position:fixed;z-index:61;min-width:230px;padding:6px;border-radius:12px;background:var(--surface);border:1px solid var(--rule);box-shadow:0 20px 60px #0007}
+.nx-menu[hidden]{display:none}
+.nx-menu .lab{display:block;padding:10px 10px 4px;font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.nx-menu a,.nx-menu button{display:flex;align-items:center;gap:10px;width:100%;min-height:40px;padding:0 10px;border-radius:8px;border:0;background:none;color:var(--ink);font:500 13.5px/1.2 Archivo,sans-serif;text-align:left;text-decoration:none;cursor:pointer}
+.nx-menu a:hover,.nx-menu button:hover,.nx-menu a:focus-visible,.nx-menu button:focus-visible{background:var(--raised);outline:none}
+.nx-menu svg{width:16px;height:16px;stroke:var(--ink-3);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+/* the phone's bar: the five places, labelled, and Map & more */
+.nx-tabs{display:none}
+/* Narrower windows. web/map.css and web/wiki.css still carry the old
+   masthead's rules for these widths (a six-tab row that wraps); the shell's
+   own rules below are written as specifically (.wrap .mast) and come later,
+   so they decide. */
+@media (max-width:1420px){
+  .wrap .mast .nav a > svg{display:none}
+  .wrap .mast .nav a{padding:0 8px;font-size:13.5px}
+  .wrap .mast .nx-refs a{padding:0 6px}
+  .wrap .mast .nx-refs a > svg{display:none}
+}
+/* A tablet: the places take a row of their own under the brand, labelled
+   with their icons; the references, the search button and the clock stay up
+   top. The sphere steps out: its shelf is the one-row masthead's gap. */
+@media (max-width:1280px){
+  .wrap .mast{flex-wrap:wrap;height:auto;min-height:0;row-gap:0;padding:8px 0 0;gap:0 14px}
+  .wrap .mast .orb{display:none}
+  .wrap .mast .brand{max-width:none;min-width:0}
+  .wrap .mast .clock{max-width:none}
+  .wrap .mast .clock b{font-size:14px}
+  .wrap .mast .nav a.on{background:none}
+  .wrap .mast .ss-q{display:none}
+  .wrap .mast .ss-qbtn{display:grid}
+  .wrap .mast .brand{height:48px}
+  .wrap .mast .nav{order:5;flex-basis:100%;width:100%;margin:0;border-top:1px solid var(--rule-soft)}
+  .wrap .mast .nav a{height:46px;flex:1;justify-content:center;padding:0 4px}
+  .wrap .mast .nav a > svg{display:block}
+  .wrap .mast .nav .ink{display:block;bottom:-1px}
+  section,.sitehead{scroll-margin-top:170px}
+  .ov-sticky{top:112px}
+}
+@media (max-width:560px){
+  .wrap .mast{flex-wrap:nowrap;height:58px;padding:0;gap:10px}
+  .wrap .mast .brand{height:auto}
+  .wrap .mast .wordmark{font-size:21px;max-width:190px}
+  .wrap .mast .nav,.wrap .mast .nx-refs{display:none}
+  .wrap .mast .ss-qbtn{margin-left:auto}
+  section,.sitehead{scroll-margin-top:76px}
+  .ov-sticky{top:58px}
+  .wrap{padding-bottom:96px}
+  .nx-tabs{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));position:fixed;left:0;right:0;bottom:0;z-index:40;padding:4px 2px calc(4px + env(safe-area-inset-bottom));background:color-mix(in srgb,var(--ground) 96%,transparent);border-top:1px solid var(--rule);backdrop-filter:blur(8px)}
+  .nx-tabs a,.nx-tabs button{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:52px;padding:4px 0;border:0;border-radius:10px;background:none;color:var(--ink-3);font:500 10.5px/1.1 Archivo,sans-serif;letter-spacing:-.01em;text-align:center;text-decoration:none;cursor:pointer;min-width:0}
+  .nx-tabs a span:not(.nx-n),.nx-tabs button span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .nx-tabs svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+  .nx-tabs a.on{color:var(--accent);background:var(--accent-soft)}
+  .nx-tabs a.off{opacity:.5}
+  .nx-tabs .nx-n{position:absolute;top:3px;left:calc(50% + 6px);font-size:9.5px;padding:2px 5px}
+  .nx-tabs a:focus-visible,.nx-tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .nx-local{min-height:56px;gap:6px}
+  .nx-local .lab{display:none}
+  .nx-local a{height:40px;border-radius:20px;border:1px solid var(--rule)}
+  .nx-local a.on{border-color:var(--ink)}
+}
+/* A board with no save shows the Game guide alone; the phone's bar has
+   nothing else to offer it. */
+body.no-save .nx-tabs{display:none}
+
+/* the company figures: one strip, a line under each */
+#kpis.kpis{gap:0;margin-top:20px;border-bottom:1px solid var(--rule-soft)}
+#kpis .kpi{background:none;border:0;border-radius:0;border-right:1px solid var(--rule-soft);padding:4px 22px 14px 0;margin-right:22px;gap:6px}
+#kpis .kpi:last-child{border-right:0;margin-right:0}
+#kpis .kpi::before{inset:-4px 10px -4px -10px}
+#kpis .spark{height:28px;margin-top:6px}
+#kpis .spark svg{height:28px}
+#kpis a.kpi.td-go:hover .v{color:var(--accent)}
+
+/* Needs attention: the product's first block */
+#alertSection{margin-top:26px;content-visibility:visible}
+.ov-head{display:flex;align-items:center;flex-wrap:wrap;gap:10px 14px}
+.ov-head h2{margin:0;font-size:28px;font-weight:700;letter-spacing:-.03em;line-height:1.1}
+.ov-head .sev{min-height:32px;background:none;font:500 12.5px/1 "IBM Plex Mono",monospace;border:1px solid transparent}
+.ov-head .sev:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ov-head .sev span{font-family:Archivo,sans-serif;font-size:12.5px}
+.ov-head .sev[aria-pressed="false"]{opacity:.45}
+.ov-head .aside{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.nx-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:34px;padding:0 13px;border-radius:8px;border:1px solid var(--rule);background:var(--surface);color:var(--ink);font:600 12.5px/1.15 Archivo,sans-serif;cursor:pointer;white-space:nowrap;text-decoration:none;transition:border-color .15s,transform .25s cubic-bezier(.34,1.56,.64,1),background .15s}
+.nx-btn:hover{border-color:var(--ink-3)}
+.nx-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.nx-btn svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.nx-btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.nx-btn.pri:hover{transform:translateX(2px)}
+.nx-btn.ghost{background:transparent}
+.nx-btn.sm{min-height:30px;padding:0 10px;font-size:12px;border-radius:7px}
+.nx-btn.pill{border-radius:17px}
+#alertKindsToggle.nx-btn{width:auto;height:auto}
+.ov-meta{display:flex;align-items:center;flex-wrap:wrap;gap:6px 18px;margin:10px 0 12px;font-size:13px;color:var(--ink-2)}
+.ov-meta svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ov-meta b{color:var(--ink);font-weight:600}
+.ov-meta > span,.ov-meta > a{display:inline-flex;align-items:center;gap:6px}
+#alerts:not(.ov-all) .ov-later{display:none}
+.ov-task > span:first-child{grid-column:1;grid-row:1}
+.ov-meta a{display:inline-flex;align-items:center;gap:6px;color:var(--ink-2);text-decoration:none}
+.ov-meta a:hover{color:var(--ink)}
+.ov-meta a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.ov-news{display:flex;align-items:center;gap:10px;margin:0 0 10px;padding:9px 12px;border-radius:10px;border:1px solid color-mix(in srgb,var(--info) 40%,transparent);background:var(--info-soft);font-size:13px}
+.ov-news[hidden]{display:none}
+.ov-news button{margin-left:auto}
+#alerts.finds{border-top:1px solid var(--rule)}
+.ov-band{display:flex;align-items:center;gap:10px;padding:14px 0 6px;font:500 10.5px/1.2 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase}
+.ov-band.crit{color:var(--neg)}.ov-band.watch{color:var(--warn)}.ov-band.opp{color:var(--accent)}
+.ov-band.hide{display:none}
+/* a finding: the place and the problem, what matters now, a picture, Details
+   and the action. Critical rows are two lines; warnings one. */
+#alertSection .find.ov-f{grid-template-columns:18px minmax(0,1fr) minmax(0,300px) auto minmax(150px,auto);gap:4px 18px;padding:12px 6px 12px 0;cursor:default;border-radius:0}
+#alertSection .find.ov-f:hover{background:linear-gradient(90deg,transparent,var(--surface) 10%)}
+#alertSection .find.ov-f .mark{grid-column:1;grid-row:1/3;width:10px;height:10px;align-self:center}
+#alertSection .find.ov-f.crit .mark{box-shadow:0 0 0 4px var(--neg-soft)}
+.ov-t{grid-column:2;grid-row:1/3;display:flex;flex-direction:column;gap:5px;min-width:0}
+.ov-t .ov-l1{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;min-width:0}
+#alertSection .find.ov-f .site{font-size:13px;color:var(--ink-2)}
+#alertSection .find.ov-f .what{font-size:15.5px;line-height:1.3}
+#alertSection .find.ov-f.crit .what{font-size:17px;letter-spacing:-.01em}
+.ov-k{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.ov-now{font-size:13.5px;color:var(--ink-2);line-height:1.4}
+.ov-now b{font-weight:600;color:var(--neg)}
+.find.watch .ov-now b{color:var(--warn)}
+#alertSection .find.ov-f .more{display:none}
+.ov-vz{grid-column:3;grid-row:1/3;display:flex;flex-direction:column;gap:4px;justify-content:center;min-width:0}
+.ov-vz .amt{text-align:left}
+#alertSection .find.ov-f .amt{font-size:14px}
+.ov-det{grid-column:4;grid-row:1/3;align-self:center}
+.ov-det svg{transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.ov-det[aria-expanded="true"]{background:var(--surface);border-color:var(--ink-3)}
+.ov-det[aria-expanded="true"] svg{transform:rotate(180deg)}
+.ov-ac{grid-column:5;grid-row:1/3;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.ov-ac .nx-btn{min-width:170px;justify-content:space-between}
+#alertSection .find.ov-f .go{display:none}
+#alertSection .find.ov-f > .gw-find{grid-column:2/-1;grid-row:3;margin:4px 0 0}
+.find.watch.ov-f .ov-ac .nx-btn,.find.opp.ov-f .ov-ac .nx-btn{background:transparent;border-color:transparent;color:var(--accent);min-width:0;padding-right:0}
+.find.watch.ov-f .ov-ac .nx-btn:hover,.find.opp.ov-f .ov-ac .nx-btn:hover{border-color:transparent;transform:translateX(3px)}
+.find.ov-new .ov-k::after{content:attr(data-new);margin-left:8px;padding:2px 5px;border-radius:4px;background:var(--info-soft);color:var(--info);letter-spacing:.04em}
+.find.ov-lit{outline:2px solid var(--accent);outline-offset:-2px;border-radius:10px}
+.ov-x{grid-column:2/-1;grid-row:4;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin:8px 0 2px;border:1px solid var(--rule-soft);border-radius:12px;background:color-mix(in srgb,var(--surface) 75%,transparent);cursor:auto}
+.ov-x[hidden]{display:none}
+.ov-x > div{padding:12px 16px 14px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.ov-x > div + div{border-left:1px solid var(--rule-soft)}
+.ov-x .lab{font:500 10px/1.2 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.ov-x p{margin:0;font-size:13px;color:var(--ink-2);line-height:1.45}
+.ov-x a{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:500;color:var(--info);text-decoration:none}
+.ov-x a:hover{text-decoration:underline;text-underline-offset:3px}
+.ov-x a svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+/* the pictures: two or three bars on one scale, lamps, a week's cover */
+.ov-cmp{display:grid;grid-template-columns:auto minmax(60px,1fr) auto;gap:5px 10px;align-items:center;font-size:12px;color:var(--ink-2)}
+.ov-cmp .bar{height:8px;border-radius:2px;background:var(--rule-soft);position:relative;overflow:hidden}
+.ov-cmp .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:var(--ink-3)}
+.ov-cmp .bar i.a{background:var(--accent)}.ov-cmp .bar i.w{background:var(--warn)}.ov-cmp .bar i.n{background:var(--neg)}
+.ov-cmp .n{font:500 12px/1 "IBM Plex Mono",monospace;color:var(--ink);text-align:right;white-space:nowrap}
+.ov-lamps{display:flex;flex-wrap:wrap;gap:6px}
+.ov-lamp{display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:0 10px 0 7px;border-radius:14px;font-size:12px;font-weight:600;border:1.5px solid color-mix(in srgb,var(--neg) 55%,transparent);background:var(--neg-soft);color:var(--neg)}
+.ov-lamp svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ov-lamp.w{border-color:color-mix(in srgb,var(--warn) 55%,transparent);background:var(--warn-soft);color:var(--warn)}
+.ov-cov{display:flex;flex-direction:column;gap:4px}
+.ov-cov .days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}
+.ov-cov .d{height:12px;border-radius:2px;background:var(--accent);opacity:.85}
+.ov-cov .d.half{background:linear-gradient(90deg,var(--accent) 0 50%,transparent 50%),repeating-linear-gradient(135deg,var(--neg) 0 2px,transparent 2px 5px);opacity:1}
+.ov-cov .d.dry{background:repeating-linear-gradient(135deg,var(--neg) 0 2px,transparent 2px 5px);opacity:.9}
+.ov-cov .ax{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;font:500 9.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3);text-align:center}
+/* one line a warning */
+#alertSection .find.ov-f.ov-one{grid-template-columns:18px minmax(0,1fr) auto auto minmax(150px,auto);min-height:50px;padding:6px 6px 6px 0}
+.ov-one .ov-t{flex-direction:row;align-items:baseline;gap:4px 14px;flex-wrap:wrap}
+.ov-one .ov-t .site{min-width:0}
+.ov-one .ov-vz{grid-column:3}
+.ov-more{display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px;padding:14px 0 0;font-size:13px;color:var(--ink-2)}
+.ov-more .sep{width:1px;height:16px;background:var(--rule)}
+#alertMinor.td-minor{margin-top:6px}
+.ov-empty{padding:18px 0 14px;border-bottom:1px solid var(--rule-soft)}
+.ov-empty b{display:block;font-size:17px;color:var(--accent);margin-bottom:4px}
+.ov-empty p{margin:0;color:var(--ink-2);font-size:13px}
+/* the queue is long: a slim bar keeps All tools in reach */
+.ov-sticky{position:sticky;top:76px;z-index:4;display:flex;align-items:center;gap:12px;min-height:48px;margin:0;padding:0;background:color-mix(in srgb,var(--ground) 94%,transparent);backdrop-filter:blur(6px);border-bottom:1px solid var(--rule);opacity:0;visibility:hidden;transform:translateY(-6px);transition:opacity .18s,transform .18s,visibility .18s;margin-bottom:-48px}
+.ov-sticky.on{opacity:1;visibility:visible;transform:none}
+.ov-sticky b{font-size:15px}
+.ov-sticky .aside{margin-left:auto;display:flex;gap:8px}
+/* All tools: four panels, thirteen tasks */
+.ov-toolshead{display:flex;align-items:baseline;gap:14px;margin:0 0 14px}
+.ov-toolshead h2{margin:0;font-size:20px;font-weight:700;letter-spacing:-.02em}
+.ov-toolshead h2:focus{outline:none}
+.ov-tp{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.ov-p{position:relative;display:flex;flex-direction:column;border-radius:14px;background:var(--surface);border:1px solid var(--rule-soft);padding:16px 16px 8px;overflow:hidden;transition:border-color .2s}
+.ov-p:hover{border-color:var(--rule)}
+.ov-ph{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;min-height:62px}
+.ov-ph b{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:600}
+.ov-ph b svg{width:18px;height:18px;stroke:var(--accent);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ov-ill{width:118px;height:56px;flex:none;transition:transform .35s cubic-bezier(.34,1.56,.64,1)}
+.ov-p:hover .ov-ill{transform:translateY(-2px) scale(1.04)}
+.ov-ill .oi-ln{fill:none;stroke:var(--ink-3);stroke-width:2;stroke-linecap:round}
+.ov-ill .oi-ln.wk{stroke-dasharray:4 4}
+.ov-ill .oi-ln.lit{stroke:var(--accent)}
+.ov-ill .oi-nd{fill:var(--ground);stroke:var(--rule);stroke-width:1.5}
+.ov-ill .oi-nd.a{stroke:var(--accent)}
+.ov-ill .oi-cell{fill:var(--accent);opacity:.75}
+.ov-ill .oi-gap{fill:none;stroke:var(--neg);stroke-width:1.3}
+.ov-ill .oi-bar{fill:var(--accent);opacity:.8}
+.ov-ill .oi-bar.n{fill:var(--neg)}
+.ov-ill .oi-dotw{fill:var(--warn)}.ov-ill .oi-dotg{fill:var(--accent)}
+.ov-ill .oi-wall{fill:none;stroke:var(--ink-2);stroke-width:2}
+.ov-ill .oi-flr{fill:color-mix(in srgb,var(--accent) 12%,transparent)}
+.ov-ill .oi-pin{fill:var(--accent)}
+.ov-task{display:grid;grid-template-columns:minmax(0,1fr) auto 14px;align-items:center;gap:2px 10px;min-height:42px;padding:6px 0;border-top:1px solid var(--rule-soft);font-size:14px;font-weight:600;color:var(--ink);text-decoration:none}
+.ov-task > svg{width:14px;height:14px;stroke:var(--ink-3);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:transform .2s,stroke .15s;grid-column:3;grid-row:1}
+.ov-task:hover > svg{stroke:var(--accent);transform:translateX(3px)}
+.ov-task:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.ov-task .c{grid-column:2;grid-row:1;font:600 11px/1 "IBM Plex Mono",monospace;padding:3px 7px;border-radius:9px;background:var(--warn-soft);color:var(--warn);white-space:nowrap}
+.ov-task .c.b{background:var(--neg-soft);color:var(--neg)}
+.ov-task .c.q{background:none;color:var(--ink-3);font-weight:500;padding:3px 0}
+.ov-task .soon{grid-column:2;grid-row:1;font:600 10px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;padding:3px 6px;border-radius:9px;background:var(--raised);color:var(--ink-3);white-space:nowrap}
+.ov-task .soon.live{background:var(--accent-soft);color:var(--accent)}
+.ov-task .soon:empty{display:none}
+.ov-task .what{grid-column:1/-1;grid-row:2;font-size:12px;font-weight:400;color:var(--ink-3);line-height:1.35;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.ov-task .what:empty,.ov-task .go{display:none}
+.ov-task.off{color:var(--ink-2)}
+@media (max-width:1180px){
+  .ov-tp{grid-template-columns:repeat(2,minmax(0,1fr))}
+  /* A critical row in two lines: the words and the picture, then Details
+     and the action. A warning keeps its one line. */
+  #alertSection .find.ov-f{grid-template-columns:18px minmax(0,1fr) minmax(0,240px);row-gap:8px}
+  .ov-t{grid-row:1}
+  .ov-vz{grid-column:3;grid-row:1}
+  .ov-det{grid-column:2;grid-row:2;justify-self:start}
+  .ov-ac{grid-column:3;grid-row:2;align-items:flex-end}
+  #alertSection .find.ov-f.ov-one{grid-template-columns:18px minmax(0,1fr) auto auto auto;row-gap:0}
+  .ov-one .ov-t{grid-row:1}
+  .ov-one .ov-vz{grid-column:3;grid-row:1}
+  .ov-one .ov-det{grid-column:4;grid-row:1}
+  .ov-one .ov-ac{grid-column:5;grid-row:1}
+}
+@media (max-width:760px){
+  #kpis.kpis{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:12px}
+  #kpis .kpi:nth-child(2){border-right:0;margin-right:0}
+  #alertSection .find.ov-f,#alertSection .find.ov-f.ov-one{grid-template-columns:16px minmax(0,1fr) auto;gap:6px 10px;padding:12px 0}
+  #alertSection .find.ov-f .mark{grid-row:1;align-self:start;margin-top:6px}
+  .ov-t,.ov-one .ov-t{grid-column:2/-1;grid-row:1;flex-direction:column;align-items:flex-start;gap:4px}
+  .ov-vz,.ov-one .ov-vz{grid-column:2/-1;grid-row:2}
+  .ov-ac,.ov-one .ov-ac{grid-column:2;grid-row:3;align-items:stretch}
+  .ov-ac .nx-btn{min-height:44px;min-width:0;width:100%}
+  .find.watch.ov-f .ov-ac .nx-btn,.find.opp.ov-f .ov-ac .nx-btn{border-color:var(--rule);justify-content:space-between;padding:0 13px}
+  .ov-det,.ov-one .ov-det{grid-column:3;grid-row:3;min-height:44px}
+  .ov-x{grid-row:4;grid-column:1/-1;grid-template-columns:1fr}
+  .ov-x > div + div{border-left:0;border-top:1px solid var(--rule-soft)}
+  .ov-head h2{font-size:24px}
+  .ov-head .aside{margin-left:0}
+  .ov-tp{grid-template-columns:minmax(0,1fr)}
+  .ov-task{min-height:46px}
+  .ov-sticky{top:58px}
+}
+@media (prefers-reduced-motion:reduce){.ov-sticky{transition:none}.ov-ill,.ov-det svg{transition:none}}
+/* the adapters: Standards' subjects, a shop's prices, the Staffing lists */
+.nx-lead{display:flex;flex-wrap:wrap;gap:10px}
+.nx-card{display:flex;flex-direction:column;gap:6px;min-width:190px;flex:1 1 190px;padding:14px 16px;border-radius:12px;background:var(--surface);border:1px solid var(--rule-soft);color:inherit;text-decoration:none;cursor:pointer;font:inherit;text-align:left}
+button.nx-card{appearance:none}
+.nx-card:hover{border-color:var(--rule)}
+.nx-card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.nx-card b{display:flex;align-items:center;gap:8px;font-size:14.5px;font-weight:600}
+.nx-card b svg{width:17px;height:17px;stroke:var(--accent);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.nx-card .n{font:500 22px/1 "IBM Plex Mono",monospace}
+.nx-card .n.bad{color:var(--neg)}.nx-card .n.warn{color:var(--warn)}.nx-card .n.ok{color:var(--accent)}
+.nx-card small{font-size:12.5px;color:var(--ink-2);line-height:1.35}
+.nx-list{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
+.nx-row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto;gap:4px 16px;align-items:center;min-height:52px;padding:8px 6px 8px 0;border-bottom:1px solid var(--rule-soft)}
+.nx-row.lit{background:linear-gradient(90deg,transparent,var(--accent-soft) 12%);box-shadow:inset 3px 0 0 var(--accent)}
+.nx-row .nm{display:flex;align-items:center;gap:8px;min-width:0;font-weight:600}
+.nx-row .nm > span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.nx-row .nm > svg{width:17px;height:17px;flex:none;stroke:var(--ink-3);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.nx-card b .hood{margin-right:-2px}
+.nx-row .st{font-size:13px;color:var(--ink-2)}
+.nx-row .st b{color:var(--ink);font-weight:600}
+.nx-row .st .bad{color:var(--neg)}.nx-row .st .warn{color:var(--warn)}
+.nx-row .ac{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.nx-part{margin:22px 0 8px;font:500 10.5px/1.2 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.nx-part:first-child{margin-top:4px}
+@media (max-width:760px){
+  .nx-row{grid-template-columns:minmax(0,1fr);gap:6px}
+  .nx-row .ac{justify-content:flex-start}
+  .nx-row .ac .nx-btn{min-height:44px}
+}
 </style>
 <script>
 /* Big Copilot's own words in the reader's language (docs/architecture.md, "UI text").
@@ -3953,8 +4297,11 @@ details.help[open] summary::after{content:"\2013"}
 
 <div class="wrap">
   <header class="mast" id="mast">
-    <div class="brand" id="brand"><span class="wordmark" id="title"></span><span class="dot" id="dot"></span></div>
-    <nav class="nav" id="nav" aria-label="Board pages" data-tt-aria-label="nav.label"></nav>
+    <div class="brand" id="brand"><span class="wordmark" id="title"></span><span class="dot" id="dot"></span><button type="button" class="nx-co" id="mastCo" hidden aria-haspopup="true" aria-expanded="false" aria-label="Switch save or company" data-tt-aria-label="nav.co.switch"><svg class="nx-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></button></div>
+    <!-- The five places and the two references, built by the board script
+         from AREAS and REFS; the utilities menu hangs off <body>. -->
+    <nav class="nav" id="nav" aria-label="Main" data-tt-aria-label="nav.label"></nav>
+    <nav class="nx-refs" id="navRefs" aria-label="Reference and utilities" data-tt-aria-label="nav.refs.label"></nav>
     <div class="clock tr" id="clock" tabindex="0"
       data-tip="Game time when the save was written. Day 1 was a Monday."></div>
     <div class="orb" id="orb" aria-hidden="true"><i></i><u></u></div>
@@ -3963,35 +4310,57 @@ details.help[open] summary::after{content:"\2013"}
        the local server page leaves them empty and they take no room. -->
   <div class="source-row" id="sourceRow"></div>
   <div class="source-note" id="sourceNote"></div>
+  <!-- The area's own views, and why the reader is here (paintShell()). -->
+  <nav class="nx-local" id="localNav" hidden></nav>
+  <div class="nx-arrive" id="arrive" role="status" hidden></div>
 
   <div class="page" id="pageToday">
     <div class="kpis" id="kpis"></div>
 
-    <section class="sec rv" id="alertSection">
-      <!-- drawAlerts() fills the head (title, ? mark, the three severity
-           counters) around this tune button, which is bound once at boot and
-           is moved into each fresh head rather than rebuilt. -->
+    <section class="sec rv" id="alertSection" aria-labelledby="ovTitle">
+      <!-- drawAlerts() fills the head (title, the three severity filters, All
+           tools) around this Customize checks button, which is bound once at
+           boot and is moved into each fresh head rather than rebuilt. -->
       <div id="alertHead">
-        <button type="button" class="ibtn tr" id="alertKindsToggle" aria-expanded="false"
-          data-tip="Which kinds of finding make the list" data-tt-tip="today.kinds.toggle"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg></button>
+        <button type="button" class="nx-btn sm ghost" id="alertKindsToggle" aria-expanded="false"
+          data-tip="Which kinds of finding make the list" data-tt-tip="today.kinds.toggle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg><span data-tt="today.kinds.customize">Customize checks</span></button>
       </div>
+      <div class="ov-sticky" id="ovSticky" aria-hidden="true"></div>
+      <p class="ov-news" id="ovNews" role="status" hidden></p>
       <div class="finds" id="alerts"></div>
+      <div class="ov-more" id="ovMore" hidden></div>
       <p class="silenced" id="silenced"><b></b> · <a class="link" href="#" data-tt="today.silenced.undo">undo</a></p>
       <div class="td-minor" id="alertMinor"></div>
     </section>
 
-    <!-- Next moves: each card carries what it can say about this save, filled
-         by paintPlanImports() (from the change checklist), drawFindLocation()
-         and drawOptimizeStaffing(). The cards tilt from wireCards(). -->
+    <!-- All tools: the thirteen tasks, in four stable groups (drawTools()).
+         Three rows carry what they can say about this save, as the Next moves
+         cards did: paintPlanImports() (from the change checklist),
+         drawOptimizeStaffing() and drawFindLocation() fill their badge and
+         line, found by the same ids. -->
     <section class="sec rv" id="secMoves">
-      <div class="sechead"><h2 data-tt="today.moves.title">Next moves</h2>
-        <span class="why" data-tt-tip="today.moves.why" data-tip="Tools for the decisions you make each week, each one opening the page that does the work. Plan imports opens the change checklist on Supply; Optimize staffing opens Staffing on the shop with the most work to save, a week to copy into BizMan &rsaquo; Schedule; Find a location opens the finder on the Map." tabindex="0"><i>?</i></span></div>
-      <div class="moves">
-        <a class="move rv" href="#supply" id="planImportsCard"><span class="soon"></span><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4M8 14h3M13 14h3M8 18h3"></path></svg></span><b data-tt="today.moves.plan.title">Plan imports</b><span class="what"></span><span class="go" data-tt="today.moves.plan.go">Opens the change checklist</span></a>
-        <a class="move rv" href="#secDetail" id="optimizeStaffingCard"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg></span><b data-tt="today.moves.staff.title">Optimize staffing</b><span class="what">Hours built from your customer count: registers, building capacity and the schedule each person asked for.</span><span class="go">Opens the shop&#39;s Staffing</span></a>
-        <a class="move rv" href="#map" id="findLocationCard"><span class="soon">SOON</span><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"></path><circle cx="12" cy="10" r="2.2"></circle></svg></span><b data-tt="today.moves.find.title">Find a location</b><span class="what">Free buildings ranked by demand, rivals and the building capacity you would get.</span><span class="go" data-tt="today.moves.find.go">Opens the finder on the map</span></a>
+      <div class="ov-toolshead" id="tools"><h2 id="toolsTitle" tabindex="-1" data-tt="today.tools.title">All tools</h2></div>
+      <div class="ov-tp" id="toolPanels">
+        <div class="ov-p"><div class="ov-ph"><b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 8.5 12 4l8.5 4.5v8L12 21l-8.5-4.5z"></path><path d="M3.5 8.5 12 13l8.5-4.5M12 13v8"></path></svg><span data-tt="nav.area.supply">Supply</span></b><svg class="ov-ill" viewBox="0 0 118 56" aria-hidden="true"><path class="oi-ln wk" d="M16 28 H52"></path><path class="oi-ln lit" d="M64 28 C80 28 80 14 96 14"></path><path class="oi-ln lit" d="M64 28 C80 28 80 42 96 42"></path><circle class="oi-nd" cx="12" cy="28" r="8"></circle><rect class="oi-nd a" x="50" y="18" width="18" height="20" rx="3"></rect><rect class="oi-nd" x="96" y="6" width="16" height="16" rx="3"></rect><rect class="oi-nd" x="96" y="34" width="16" height="16" rx="3"></rect></svg></div>
+          <a class="ov-task" href="#supply/imports" data-ov-route="supply/imports" id="planImportsCard"><span data-tt="today.task.imports">Calculate import amounts</span><span class="soon"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg><span class="what"></span><span class="go"></span></a><a class="ov-task" href="#supply/deliveries" data-ov-route="supply/deliveries"><span data-tt="today.task.deliveries">Set delivery targets</span><span class="c" data-ov-count="deliveries" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><a class="ov-task" href="#supply/production" data-ov-route="supply/production"><span data-tt="today.task.production">Plan factory running hours</span><span class="c" data-ov-count="production" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><a class="ov-task" href="#supply/flow" data-ov-route="supply/flow"><span data-tt="today.task.flow">Trace goods through the company</span><span class="c" data-ov-count="flow" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div>
+        <div class="ov-p"><div class="ov-ph"><b><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg><span data-tt="nav.area.staffing">Staffing</span></b><svg class="ov-ill" viewBox="0 0 118 56" aria-hidden="true"><rect class="oi-cell" x="4.0" y="6" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="13.2" y="6" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="22.4" y="6" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="31.6" y="6" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="40.8" y="6" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="50.0" y="6" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="59.2" y="6" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="68.4" y="6" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="77.6" y="6" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="86.8" y="6" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="96.0" y="6" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="105.2" y="6" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="4.0" y="17" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="13.2" y="17" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="22.4" y="17" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="31.6" y="17" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="40.8" y="17" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="50.0" y="17" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="59.2" y="17" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="68.4" y="17" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="77.6" y="17" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="86.8" y="17" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="96.0" y="17" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="105.2" y="17" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="4.0" y="28" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="13.2" y="28" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="22.4" y="28" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="31.6" y="28" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="40.8" y="28" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="50.0" y="28" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="59.2" y="28" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="68.4" y="28" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="77.6" y="28" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="86.8" y="28" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="96.0" y="28" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="105.2" y="28" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="4.0" y="39" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="13.2" y="39" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="22.4" y="39" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="31.6" y="39" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="40.8" y="39" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="50.0" y="39" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="59.2" y="39" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="68.4" y="39" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="105.2" y="39" width="7.6" height="9" rx="1.5"></rect><rect class="oi-gap" x="77.6" y="39" width="26" height="9" rx="1.5" stroke-dasharray="3 2"></rect></svg></div>
+          <a class="ov-task" href="#staffing/schedules" data-ov-route="staffing/schedules" id="optimizeStaffingCard"><span data-tt="today.task.schedules">Build shop schedules</span><span class="soon"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg><span class="what"></span><span class="go"></span></a><a class="ov-task" href="#staffing/needs" data-ov-route="staffing/needs" data-ov-into="#nxHire"><span data-tt="today.task.hire">See whom to hire</span><span class="c" data-ov-count="hire" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><a class="ov-task" href="#staffing/needs" data-ov-route="staffing/needs" data-ov-into="#nxDemands"><span data-tt="today.task.demands">Resolve staff demands</span><span class="c" data-ov-count="demands" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div>
+        <div class="ov-p"><div class="ov-ph"><b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16"></path><path d="M14 10h5a1 1 0 0 1 1 1v10M4 21h17M8 8h2M8 12h2M8 16h2M17 14h1M17 18h1"></path></svg><span data-tt="nav.area.businesses">Businesses</span></b><svg class="ov-ill" viewBox="0 0 118 56" aria-hidden="true"><rect class="oi-bar" x="8" y="14" width="16" height="30" rx="2"></rect><rect class="oi-bar" x="30" y="22" width="16" height="22" rx="2"></rect><rect class="oi-bar" x="52" y="8" width="16" height="36" rx="2"></rect><rect class="oi-bar" x="74" y="28" width="16" height="16" rx="2"></rect><rect class="oi-bar n" x="96" y="44" width="16" height="9" rx="2"></rect><line x1="4" x2="114" y1="44" y2="44" stroke="var(--rule)"></line><circle class="oi-dotg" cx="16" cy="6" r="3"></circle><circle class="oi-dotg" cx="38" cy="14" r="3"></circle><circle class="oi-dotg" cx="60" cy="0" r="3"></circle><circle class="oi-dotw" cx="82" cy="20" r="3"></circle><circle class="oi-dotw" cx="104" cy="44" r="3"></circle></svg></div>
+          <a class="ov-task" href="#businesses/results" data-ov-route="businesses/results"><span data-tt="today.task.results">Compare business profits</span><span class="c" data-ov-count="results" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><a class="ov-task" href="#businesses/prices" data-ov-route="businesses/prices"><span data-tt="today.task.prices">Check prices and product sales</span><span class="c" data-ov-count="prices" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><a class="ov-task" href="#businesses/standards" data-ov-route="businesses/standards"><span data-tt="today.task.standards">Improve customer satisfaction</span><span class="c" data-ov-count="standards" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div>
+        <div class="ov-p"><div class="ov-ph"><b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18 10 12l4 4 6-7"></path><path d="M15 9h5v5"></path></svg><span data-tt="nav.area.expansion">Expansion</span></b><svg class="ov-ill" viewBox="0 0 118 56" aria-hidden="true"><rect class="oi-flr" x="30" y="10" width="80" height="42"></rect><path class="oi-wall" d="M30 10 H110 V52 H78 M62 52 H30 Z"></path><path class="oi-wall" d="M86 10 V28 H110" style="stroke-width:1.3"></path><path class="oi-pin" d="M18 4a9 9 0 0 1 9 9c0 7-9 15-9 15s-9-8-9-15a9 9 0 0 1 9-9z"></path><circle cx="18" cy="13" r="3.2" fill="var(--ground)"></circle></svg></div>
+          <a class="ov-task" href="#expansion/finder" data-ov-route="expansion/finder" id="findLocationCard"><span data-tt="today.task.finder">Find a suitable location</span><span class="soon"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg><span class="what"></span><span class="go"></span></a><a class="ov-task" href="#expansion/factory" data-ov-route="expansion/factory"><span data-tt="today.task.factory">Plan a new factory</span><span class="c" data-ov-count="factory" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><a class="ov-task" href="#expansion/demand" data-ov-route="expansion/demand"><span data-tt="today.task.demand">Explore market demand</span><span class="c" data-ov-count="demand" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div>
       </div>
     </section>
+  </div>
+
+  <!-- Staffing: the shop schedules, who is needed and asks for what, and the
+       payroll. Schedules and Staff needs list the businesses and open the
+       schedule and crew on each one's own page (docs/ui-route-migration.md). -->
+  <div class="page" id="pageStaffing" hidden>
+    <div class="sechead subhead" hidden><nav class="seg" id="staffingNav" aria-label="Staffing views" data-tt-aria-label="nav.sub.staffing"></nav></div>
+    <section class="sec rv" id="secSchedules" data-sub="schedules"></section>
+    <section class="sec rv" id="secNeeds" data-sub="needs"></section>
+    <section class="sec rv" id="secPayroll" data-sub="payroll"></section>
   </div>
 
   <!-- Supply, by object (R13): one tab each for shops, warehouses and
@@ -4001,7 +4370,7 @@ details.help[open] summary::after{content:"\2013"}
        is a view of the tab on screen, its one svg#flow moved into that tab's
        .sb-diag (sbPlaceFlow()). -->
   <div class="page" id="pageSupply" hidden>
-    <div class="sechead subhead sb-sub"><nav class="seg sb-tabs" id="supplyNav" aria-label="Supply" data-tt-aria-label="nav.sub.supply"></nav>
+    <div class="sechead subhead sb-sub"><span class="lab nx-scope" data-tt="sb.scope">Scope</span><nav class="seg sb-tabs" id="supplyNav" aria-label="Scope" data-tt-aria-label="sb.scope"></nav>
       <div class="aside"><span class="seg sb-mode" id="sbMode" aria-label="Which rows to list" data-tt-aria-label="sb.mode.label"></span><span class="seg sb-view" id="sbView" aria-label="List or diagram" data-tt-aria-label="sb.view.label"></span></div></div>
     <div id="sbStrip"></div>
 
@@ -4013,7 +4382,7 @@ details.help[open] summary::after{content:"\2013"}
   </div>
 
   <div class="page" id="pageGrowth" hidden>
-    <div class="sechead subhead"><nav class="seg" id="growthNav" aria-label="Growth views" data-tt-aria-label="nav.sub.growth"></nav></div>
+    <div class="sechead subhead" hidden><nav class="seg" id="growthNav" aria-label="Growth views" data-tt-aria-label="nav.sub.growth"></nav></div>
 
     <section class="sec rv" id="secMarket" data-sub="market">
       <div class="sechead"><h2 data-tt="gr.market.title">Market demand</h2>
@@ -4048,22 +4417,29 @@ details.help[open] summary::after{content:"\2013"}
        at a time behind the secondary nav. Each section's head and body are
        drawn by its own draw*(). -->
   <div class="page" id="pageCompany" hidden>
-    <div class="sechead subhead"><nav class="seg" id="companyNav" aria-label="Company views" data-tt-aria-label="nav.sub.company"></nav></div>
+    <div class="sechead subhead" hidden><nav class="seg" id="companyNav" aria-label="Company views" data-tt-aria-label="nav.sub.company"></nav></div>
 
     <section class="sec rv" id="secDaily" data-sub="results">
       <div id="dailyHead"></div>
       <div id="dailyBox"></div>
     </section>
 
-    <section class="sec rv" id="secPortfolio" data-sub="results">
+    <!-- Standards: the portfolio's Operations comparison under the subjects it
+         answers for (drawStandards()); the portfolio below it is the same
+         section Results shows. -->
+    <section class="sec rv" id="secStandards" data-sub="standards"></section>
+
+    <section class="sec rv" id="secPortfolio" data-sub="results standards">
       <div id="portHead"></div>
       <div style="overflow-x:auto"><table id="portfolio"></table></div>
     </section>
 
     <section class="sec rv" id="secDetail" data-sub="results" hidden><div id="sitePanel"></div></section>
 
+    <!-- Products & prices: a shop's live prices and the price guides
+         (drawPriceShops()), then the company's product sales. -->
+    <section class="sec rv" id="secPrices" data-sub="products"></section>
     <section class="sec rv" id="secProducts" data-sub="products"></section>
-    <section class="sec rv" id="secPayroll" data-sub="payroll"></section>
     <section class="sec rv" id="secGoals" data-sub="milestones"></section>
   </div>
 
@@ -4161,6 +4537,7 @@ details.help[open] summary::after{content:"\2013"}
     </div>
   </div>
 </footer>
+  <nav class="nx-tabs" id="phoneNav" aria-label="Main" data-tt-aria-label="nav.label"></nav>
 </div>
 <dialog class="changelog-dialog" id="changelogDialog" aria-labelledby="changelogTitle" aria-describedby="changelogIntro">
   <div class="changelog-head"><div><h2 id="changelogTitle" data-tt="nav.dlg.changelog.title">Changelog</h2><p id="changelogIntro" data-tt="nav.dlg.changelog.intro">What's changed in Big Copilot.</p></div><button type="button" class="btn2" id="closeChangelog" autofocus data-tt="nav.dlg.close">Close</button></div>
@@ -4251,7 +4628,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"4541f823fe","latest":{"pr":153,"date":"2026-09-25","title":"Goods flow you can read on a phone","summary":"On a phone or a portrait tablet, Supply's goods-flow diagram is now a chain you read top to bottom: your importers, depots, factories and shops in the order the goods travel, with the pipes between them. A depot's shops fold into one card from four up, the sites worth a look sit in a row on top, and shops no pipe reaches share one line at the bottom. Tap a site to follow it: what comes in, what goes out, the pipe carrying a short or stalled product in colour, its problems in words, and one tap to its rows or its site page. With no pipe yet, the box says so and links the wiki's guide to imports."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"45d27fd30c","latest":{"pr":153,"date":"2026-09-25","title":"Goods flow you can read on a phone","summary":"On a phone or a portrait tablet, Supply's goods-flow diagram is now a chain you read top to bottom: your importers, depots, factories and shops in the order the goods travel, with the pipes between them. A depot's shops fold into one card from four up, the sites worth a look sit in a row on top, and shops no pipe reaches share one line at the bottom. Tap a site to follow it: what comes in, what goes out, the pipe carrying a short or stalled product in colour, its problems in words, and one tap to its rows or its site page. With no pipe yet, the box says so and links the wiki's guide to imports."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -4339,8 +4716,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=4541f823fe"></script>
-<script src="community.js?v=4541f823fe"></script>
+<script src="app.js?v=45d27fd30c"></script>
+<script src="community.js?v=45d27fd30c"></script>
 
 <script>
 
@@ -6559,7 +6936,7 @@ const ALERT_LINKS = {
    opens that page first, then scrolls; the reader never lands on a hidden
    section. */
 const SEC_PAGE = {
-  alertSection:["today"],
+  alertSection:["today"], secMoves:["today"],
   /* secRhythm was Weekly rhythm, folded into Daily result's By weekday: an
      old link to it still opens Results, and reveal() lands it on the chart. */
   secDaily:["company","results"], secRhythm:["company","results"],
@@ -6569,7 +6946,11 @@ const SEC_PAGE = {
      old link still opens Supply, on the tab that took its place. */
   secLogistics:["supply","warehouses"], secStock:["supply","shops"], secFlow:["supply","warehouses"],
   secMarket:["growth","market"], secPlan:["growth","plan"], secIngredients:["growth","plan"],  // changed for growth: no secExpand
-  secProducts:["company","products"], secPayroll:["company","payroll"], secGoals:["company","milestones"],
+  secProducts:["company","products"], secPrices:["company","products"], secStandards:["company","standards"],
+  secGoals:["company","milestones"],
+  /* Payroll moved from Company to Staffing, beside the schedules and the
+     staff needs; its old #secPayroll link follows it there. */
+  secSchedules:["staffing","schedules"], secNeeds:["staffing","needs"], secPayroll:["staffing","payroll"],
 };
 /* Sections that have gone, and the section that took their place. */
 const SEC_MOVED = {secRhythm: "secDaily", secLogistics: "secWarehouses", secStock: "secShops", secFlow: "secWarehouses"};
@@ -6599,10 +6980,11 @@ function settleScroll(el, frames = 12){
 function reveal(secId, historyMode = "push", into = null){
   const [p, sv] = SEC_PAGE[secId] || ["today"];
   /* The open site's own section keeps its page up; every other one is
-     somewhere else. */
+     somewhere else. The view is set before the page, so the address the page
+     writes is the route that view stands for. */
   if(secId !== "secDetail") siteShut();
-  showPage(p, false, historyMode);
   if(sv) showSub(p, sv);
+  showPage(p, false, historyMode);
   const sec = $(SEC_MOVED[secId] || secId);
   if(!sec || sec.hidden) return;
   const target = into ? q(into) : null;
@@ -6638,9 +7020,22 @@ const ALERT_SITE_PICK = {
     return best;
   }},
 };
+/* A finding's landing, under the route its action names (FINDING_ROUTES):
+   whichever page the landing below opens, the shell shows that route, and a
+   site's page keeps it in its history entry. */
 function goToAlert(a){
   const link = ALERT_LINKS[a.group];
   if(!link) return;
+  routeNext = findingRoute(a).route;
+  try{ alertLanding(a, link); } finally { routeNext = null; arrivalNext = null; }
+}
+function alertLanding(a, link){
+  /* Nobody staffed at a shop or an office: its own schedule, on its page;
+     only a factory machine's hours are on the Factories tab. */
+  if(a.group === "staff" && !ovAtFactory(a)){
+    const b = alertSite(a);
+    if(b){ ssOpenSite(b.key, "#sp-roster", {finding: a.id}); return; }
+  }
   /* A supply kind lands on its tab, on the row it is about, lit, with a
      crumb back: the tab named, or the tab of the site's own kind. */
   if(link.tab){
@@ -6649,7 +7044,7 @@ function goToAlert(a){
     const tab = link.tab === "site" ? (s >= 0 ? sbTabOf(s) : "warehouses") : link.tab;
     const g = ALERT_GROUPS.find(x => x.id === a.group);
     sbLand(tab, s >= 0 ? s : null, (a.ev || {}).slug || null,
-      g ? tt("today.crumb", "from Today · {kind}", {kind: g.label}) : tt("today.crumb.any", "from Today · a finding"));
+      g ? tt("today.crumb", "from Needs attention · {kind}", {kind: g.label}) : tt("today.crumb.any", "from Needs attention · a finding"));
     return;
   }
   if(link.port){
@@ -6953,9 +7348,321 @@ function findingAmount(a){
    its kind's name so it is clear why it is down there. */
 const kindLabel = id => ((typeof ALERT_GROUPS !== "undefined" && ALERT_GROUPS.find(g => g.id === id)) || {}).label || id;
 const kindOff = a => alertGroupPrefs[a.group] === false;
+/* --- where each kind of finding is fixed ------------------------------------
+   The route a finding's action names, and the words on its button. The route
+   is the finding's final home in the redesign (docs/ui-structure-proposal.md,
+   section 7); where that home is still an existing view, ALERT_LINKS above is
+   the landing inside it, and docs/ui-route-migration.md names each one. `pick`
+   decides between two homes by the finding's own site or sentence. */
+const FINDING_ROUTES = {
+  notrading: {route: "businesses/results", act: "readiness"},
+  vacant: {route: "businesses/results", act: "costs"},
+  loss: {route: "businesses/results", act: "results"},
+  trend: {route: "businesses/results", act: "results"},
+  atcap: {route: "businesses/results", act: "hours"},
+  /* Nobody on a factory's machine is a Production plan; nobody at a shop or
+     an office is its schedule. */
+  staff: {route: "staffing/schedules", act: "schedule", pick: a => ovAtFactory(a) ? {route: "supply/production", act: "factoryHours"} : null},
+  idlestaff: {route: "staffing/schedules", act: "schedule"},
+  satisfaction: {route: "businesses/standards", act: "satisfaction"},
+  promotion: {route: "businesses/standards", act: "promotion"},
+  uniform: {route: "businesses/standards", act: "uniforms"},
+  bathroom: {route: "businesses/standards", act: "amenities"},
+  toiletprivacy: {route: "businesses/standards", act: "amenities"},
+  sink: {route: "businesses/standards", act: "amenities"},
+  music: {route: "businesses/standards", act: "amenities"},
+  interior: {route: "businesses/standards", act: "amenities"},
+  jobdemand: {route: "staffing/needs", act: "demand"},
+  companydemand: {route: "staffing/needs", act: "demand"},
+  hype: {route: "expansion/demand", act: "wave"},
+  unplanned: {route: "supply/deliveries", act: "delivery"},
+  outruns: {route: "supply/deliveries", act: "delivery"},
+  topup: {route: "supply/deliveries", act: "delivery"},
+  wholesale: {route: "supply/deliveries", act: "delivery"},
+  target: {route: "supply/deliveries", act: "target"},
+  dead: {route: "supply/deliveries", act: "idle"},
+  notrouted: {route: "supply/deliveries", act: "routes"},
+  /* A depot a route feeds runs dry before the route's round: its fix is the
+     route, not an import (f.shortfall.route*). */
+  shortfall: {route: "supply/imports", act: "import", pick: a => /^f\.shortfall\.route/.test(ovKey(a)) ? {route: "supply/deliveries", act: "delivery"} : null},
+  order: {route: "supply/imports", act: "import"},
+  paused: {route: "supply/imports", act: "import"},
+  feed: {route: "supply/production", act: "input"},
+  unnamed: {route: "supply/production", act: "recipe"},
+  unset: {route: "supply/production", act: "recipe"},
+};
+const ovKey = a => (a && a.i18n && a.i18n.text && a.i18n.text[0]) || "";
+const ovParams = a => (a && a.i18n && a.i18n.text && a.i18n.text[1]) || {};
+function ovAtFactory(a){
+  const b = alertSite(a);
+  const s = b ? D.businesses.indexOf(b) : -1;
+  return s >= 0 && !!D.supply && typeof sbTabOf === "function" && sbTabOf(s) === "factories";
+}
+function ovActLabel(act){
+  switch(act){
+    case "readiness": return tt("today.act.readiness", "Open readiness");
+    case "costs": return tt("today.act.costs", "Review costs");
+    case "results": return tt("today.act.results", "Review results");
+    case "hours": return tt("today.act.hours", "Review customer hours");
+    case "schedule": return tt("today.act.schedule", "Review schedule");
+    case "factoryHours": return tt("today.act.factoryHours", "Plan factory hours");
+    case "satisfaction": return tt("today.act.satisfaction", "Review satisfaction");
+    case "promotion": return tt("today.act.promotion", "Review promotion");
+    case "uniforms": return tt("today.act.uniforms", "Review uniforms");
+    case "amenities": return tt("today.act.amenities", "Review amenities");
+    case "demand": return tt("today.act.demand", "Resolve staff demand");
+    case "wave": return tt("today.act.wave", "Review demand wave");
+    case "delivery": return tt("today.act.delivery", "Review delivery");
+    case "target": return tt("today.act.target", "Review target");
+    case "idle": return tt("today.act.idle", "Review idle stock");
+    case "routes": return tt("today.act.routes", "Review routes");
+    case "import": return tt("today.act.import", "Review import");
+    case "input": return tt("today.act.input", "Review factory input");
+    case "recipe": return tt("today.act.recipe", "Identify recipe");
+    default: return tt("today.act.open", "Open");
+  }
+}
+/* {route, act, label} for a finding; a kind the table does not know opens the
+   route its landing stands for. */
+function findingRoute(a){
+  const f = FINDING_ROUTES[a.group];
+  if(!f) return {route: "overview", act: "", label: ovActLabel("")};
+  const picked = (f.pick && hasData() && f.pick(a)) || f;
+  return {route: picked.route, act: picked.act, label: ovActLabel(picked.act)};
+}
+
+/* --- the Overview's list: its order, its pictures, and the way back ---------
+   The list keeps the order the reader saw while they are working in it: rows
+   already on screen keep their places when a refresh arrives, new ones go to
+   the end of their group, marked new, with a line that says so. A fresh visit
+   to the Overview (the nav, a task) ranks them again. */
+let ovShowAll = false;            // "Show N more" is open
+const ovOpen = new Set();         // the findings whose Details are open
+let ovOrder = null;               // {company, D, ids: Map(id -> place)}
+let ovFresh = new Set();          // the ids that arrived with the last refresh
+const OV_FIRST = 5;               // warnings and opportunities before "Show N more"
+const ovCompany = () => hasData() && D.meta ? `${D.meta.character || ""}|${D.meta.save || ""}` : "";
+function ovForget(){ ovOrder = null; ovFresh = new Set(); }
+/* The three groups, each in Python's ranking, the rows already shown first in
+   their places. */
+function ovArrange(list){
+  const known = ovOrder && ovOrder.company === ovCompany() ? ovOrder : null;
+  const bands = {crit: [], watch: [], opp: []};
+  list.forEach(a => bands[SEV_KIND[a.level] || "opp"].push(a));
+  const fresh = new Set();
+  if(known) Object.keys(bands).forEach(k => {
+    const at = new Map(bands[k].map((a, i) => [a, i]));
+    const place = a => known.ids.has(a.id) ? known.ids.get(a.id) : 1e6 + at.get(a);
+    bands[k].sort((x, y) => place(x) - place(y));
+    /* Only numbers that moved on make a row new; a switch or a filter the
+       reader flipped only shows what was there. */
+    if(known.D !== D) bands[k].forEach(a => { if(!known.ids.has(a.id)) fresh.add(a.id); });
+  });
+  const rows = [...bands.crit, ...bands.watch, ...bands.opp];
+  const ids = known ? new Map(known.ids) : new Map();
+  rows.forEach((a, i) => { if(!ids.has(a.id)) ids.set(a.id, known ? 1e5 + i : i); });
+  if(!known) ovFresh = new Set();
+  else if(known.D !== D) ovFresh = fresh;
+  ovOrder = {company: ovCompany(), D, ids};
+  return {bands, rows, fresh: ovFresh};
+}
+/* The row the reader is looking at and where it stands, so a redraw that
+   adds or drops rows above it leaves it where it was. */
+function ovHold(){
+  if(page !== "today" || !(window.scrollY > 0)) return null;
+  const top = ($("mast") ? $("mast").getBoundingClientRect().bottom : 0);
+  const row = $$("#alerts .find[data-id]").find(f => f.getClientRects().length && f.getBoundingClientRect().bottom > top);
+  return row ? {id: row.dataset.id, top: row.getBoundingClientRect().top} : null;
+}
+function ovKeepHold(hold){
+  if(!hold) return;
+  const row = $$("#alerts .find[data-id]").find(f => f.dataset.id === hold.id);
+  if(!row || !row.getClientRects().length) return;
+  const moved = row.getBoundingClientRect().top - hold.top;
+  if(Math.abs(moved) > 1) window.scrollBy(0, moved);
+}
+/* "1 of 4 critical": a finding's place in its group, as the list shows it. */
+function ovPos(a){
+  const band = SEV_KIND[a.level] || "opp";
+  const rows = $$(`#alerts .find.${band}[data-id]`).map(f => f.dataset.id);
+  const i = rows.indexOf(a.id);
+  if(i < 0) return "";
+  const n = rows.length, at = i + 1;
+  return band === "crit" ? tt("today.pos.crit", "{i} of {n} critical", {i: at, n})
+    : band === "watch" ? tt("today.pos.watch", {one: "{i} of {n} warning", other: "{i} of {n} warnings"}, {i: at, n})
+    : tt("today.pos.opp", {one: "{i} of {n} opportunity", other: "{i} of {n} opportunities"}, {i: at, n});
+}
+/* The finding in a few words for the arrival strip: its item and place, and
+   its kind. */
+function ovWhere(a){
+  const b = alertSite(a);
+  const site = b ? shortName(b) : String(a.site || "");
+  const slug = (a.ev || {}).slug;
+  const item = slug ? gameName(slug) : "";
+  const kind = kindLabel(a.group);
+  return item ? tt("today.arrive.item", "{item} · {site}, {kind}", {item, site, kind})
+    : site ? tt("today.arrive.site", "{site}, {kind}", {site, kind}) : kind;
+}
+/* The Overview as the reader leaves it, kept on its own history entry (nxOv),
+   so Back, Forward, a reload and the arrival strip's way back all find it. */
+function ovSnapshot(focus = null){
+  const row = focus ? $$("#alerts .find[data-id]").find(f => f.dataset.id === focus) : null;
+  const tools = focus === "tools" ? $("tools") : null;
+  const at = row || tools;
+  return {y: Math.round(window.scrollY || 0), sev: typeof sevOff !== "undefined" ? [...sevOff] : [], all: ovShowAll,
+    open: [...ovOpen], focus, top: at ? Math.round(at.getBoundingClientRect().top) : null,
+    below: typeof showMinor !== "undefined" && showMinor, off: typeof showSwitchedOff !== "undefined" && showSwitchedOff};
+}
+function ovRemember(focus){
+  const snap = ovSnapshot(focus);
+  try{ if(page === "today") history.replaceState({...(history.state || {}), nxOv: snap}, "", location.hash); }catch(e){}
+  return snap;
+}
+/* The Overview back as it was left: its filters, the list opened or not,
+   the Details open, and the row the reader left from, outlined a moment where
+   it stood. A row gone with the latest numbers is said, not faked. */
+function ovArrive(snap){
+  if(!snap || typeof snap !== "object" || !hasData()) return;
+  if(Array.isArray(snap.sev) && typeof sevOff !== "undefined"){ sevOff.clear(); snap.sev.forEach(k => sevOff.add(k)); }
+  ovShowAll = !!snap.all;
+  ovOpen.clear(); (Array.isArray(snap.open) ? snap.open : []).forEach(id => ovOpen.add(id));
+  if(typeof snap.below === "boolean") showMinor = snap.below;
+  if(typeof snap.off === "boolean") showSwitchedOff = snap.off;
+  drawAlerts();
+  const land = () => {
+    const row = snap.focus && snap.focus !== "tools" ? $$("#alerts .find[data-id]").find(f => f.dataset.id === snap.focus) : null;
+    const tools = snap.focus === "tools" ? $("tools") : null;
+    const at = row && row.getClientRects().length ? row : tools;
+    if(at && typeof snap.top === "number") window.scrollBy(0, at.getBoundingClientRect().top - snap.top);
+    else if(at) at.scrollIntoView({block: "center"});
+    else window.scrollTo(0, snap.y || 0);
+    if(row){
+      row.classList.add("ov-lit");
+      setTimeout(() => row.classList.remove("ov-lit"), 2400);
+    } else if(snap.focus && snap.focus !== "tools"){
+      const news = $("ovNews");
+      if(news){ news.hidden = false; news.textContent = tt("today.back.gone", "The finding you left from is no longer on the list with the latest numbers."); }
+    }
+  };
+  requestAnimationFrame(() => requestAnimationFrame(land));
+}
+/* A finding's action: the route it names, with the way back to this row. */
+function ovFollow(a){
+  const snap = ovRemember(a.id);
+  arrivalNext = {what: ovWhere(a), pos: ovPos(a), back: "overview", backLabel: tt("nav.from.overview", "Needs attention"),
+    finding: a.id, depth: 1, ov: snap};
+  goToAlert(a);
+  arrivalNext = null;
+}
+/* A task in All tools: its route, with the way back to the directory. */
+function ovTool(id, label, o = {}){
+  const snap = page === "today" ? ovRemember("tools") : null;
+  openRoute(id, {...o, arrival: snap ? {what: label, pos: "", back: "overview", backLabel: tt("today.tools.back", "All tools"), depth: 1, ov: snap} : null});
+}
+/* The critical count on the Overview's link in the masthead and the phone's bar. */
+let ovCrit = 0;
+function ovCritBadge(n = ovCrit){
+  ovCrit = n;
+  document.querySelectorAll("[data-nav-crit]").forEach(el => {
+    el.textContent = n ? String(n) : "";
+    el.hidden = !n;
+    const a = el.closest("a");
+    if(a) a.setAttribute("aria-label", n ? tt("nav.area.overview.crit", {one: "Overview, {n} critical", other: "Overview, {n} critical"}, {n}) : tt("nav.area.overview", "Overview"));
+  });
+}
+
+/* The small pictures a finding carries on the Overview: only what its own
+   sentence says, drawn -- two amounts on one scale, a share of the hours, a
+   week of stock, the missing amenities as lamps. A finding with nothing to
+   draw shows its figure. */
+function ovBars(rows, fmtN = num){
+  const max = Math.max(1, ...rows.map(r => r[1]));
+  return `<div class="ov-cmp" role="img" aria-label="${attr(rows.map(([l, v]) => `${l}: ${fmtN(v)}`).join(", "))}">${rows.map(([l, v, c]) =>
+    `<span>${spEsc(l)}</span><span class="bar"><i class="${c || ""}" style="width:${Math.max(0, Math.min(100, v / max * 100)).toFixed(1)}%"></i></span><span class="n">${spEsc(fmtN(v))}</span>`).join("")}</div>`;
+}
+const ovPct = v => `${num(v, {maximumFractionDigits: 1})}%`;
+/* A week of stock from today: whole days full, the day it runs out half, the
+   rest dry. */
+function ovCover(days){
+  const d0 = hasData() && D.meta ? ((D.meta.day - 1) % 7 + 7) % 7 : 0;
+  const cells = Array.from({length: 7}, (_, i) => days >= i + 1 ? "" : days > i ? "half" : "dry");
+  const left = Math.max(0, Math.round(days * 10) / 10);
+  return `<div class="ov-cov" role="img" aria-label="${attr(tt("today.pic.cover", "Stock for about {n} days", {n: left}))}"><div class="days">${
+    cells.map(c => `<i class="d ${c}"></i>`).join("")}</div><div class="ax">${cells.map((_, i) => `<span>${spEsc(navShortDay((d0 + i) % 7))}</span>`).join("")}</div></div>`;
+}
+const OV_AMENITY = {bathroom: ["toilet", () => tt("today.lamp.bathroom", "Bathroom")], toiletprivacy: ["door", () => tt("today.lamp.privacy", "Privacy")],
+  sink: ["sink", () => tt("today.lamp.sink", "Sink")], music: ["music", () => tt("today.lamp.music", "Music")],
+  interior: ["interior", () => tt("today.lamp.interior", "Interior")], uniform: ["shirt", () => tt("today.lamp.uniform", "Uniforms")]};
+/* Every amenity the site is missing, from all its findings, not only this one. */
+function ovLamps(b){
+  const kinds = [...new Set([...alertLines(), ...(alertMinor().rows || [])].filter(x => OV_AMENITY[x.group] && alertSite(x) === b).map(x => x.group))];
+  if(!kinds.length) return "";
+  return `<div class="ov-lamps">${Object.keys(OV_AMENITY).filter(k => kinds.includes(k)).map(k =>
+    `<span class="ov-lamp">${spIcon(OV_AMENITY[k][0])}${spEsc(OV_AMENITY[k][1]())}</span>`).join("")}</div>`;
+}
+function ovPicture(a, b){
+  const p = ovParams(a), ok = v => typeof v === "number" && isFinite(v);
+  const t = String((typeof enOf === "function" ? enOf(a, "text") : a.text) || "");
+  let m;
+  switch(a.group){
+    case "order":
+      if(ok(p.brought) && ok(p.use)) return ovBars([[tt("today.pic.ordered", "Ordered a week"), p.brought, ""], [tt("today.pic.used", "Used a week"), p.use, "w"]]);
+      if(ok(p.order) && ok(p.use)) return ovBars([[tt("today.pic.ordered", "Ordered a week"), p.order, ""], [tt("today.pic.used", "Used a week"), p.use, "w"]]);
+      break;
+    case "wholesale":
+      if(ok(p.have) && ok(p.use)) return ovBars([[tt("today.pic.delivered", "Delivered a week"), p.have, ""], [tt("today.pic.sold", "Sold a week"), p.use, "w"]]);
+      break;
+    case "outruns": case "topup":
+      if(ok(p.have) && ok(p.use)) return ovBars([[tt("today.pic.topup", "Daily top-up"), p.have, ""], [tt("today.pic.busiest", "Busiest day"), p.use, "w"]]);
+      break;
+    case "staff":
+      if((m = t.match(/staffed (\d+) of (\d+) hours/))) return ovBars([[tt("today.pic.staffed", "Hours staffed"), +m[1], +m[1] ? "w" : "n"], [tt("today.pic.hoursWeek", "Hours in the week"), +m[2], "a"]]);
+      break;
+    case "feed":
+      /* An import that feeds the line, the depot's daily top-up, or what
+         arrives: each against what the machines need. */
+      if(ok(p.order) && ok(p.use)) return ovBars([[tt("today.pic.ordered", "Ordered a week"), p.order, ""], [tt("today.pic.used", "Used a week"), p.use, "w"]]);
+      if(ok(p.target) && ok(p.per)) return ovBars([[tt("today.pic.topup", "Daily top-up"), p.target, ""], [tt("today.pic.needed", "Needed a day"), p.per, "w"]]);
+      if(ok(p.arrives) && ok(p.per)) return ovBars([[tt("today.pic.arrives", "Arrives a day"), p.arrives, ""], [tt("today.pic.needed", "Needed a day"), p.per, "w"]]);
+      if((m = t.match(/covers (\d+) hours/))) return ovBars([[tt("today.pic.covered", "Hours covered"), +m[1], "w"], [tt("today.pic.hoursDay", "Hours it runs"), 24, "a"]]);
+      break;
+    case "satisfaction":
+      if(ok(p.n)) return ovBars([[tt("today.pic.satisfied", "Satisfied"), p.n, "w"], [tt("today.pic.full", "Everyone"), 100, "a"]], ovPct);
+      break;
+    case "promotion":
+      if((m = t.match(/at ([\d.]+)% of the ([\d.]+)% cap/))) return ovBars([[tt("today.pic.promotion", "Promotion"), +m[1], "w"], [tt("today.pic.cap", "Cap"), +m[2], "a"]], ovPct);
+      break;
+    case "unplanned":
+      if(ok(p.units) && ok(p.rate) && p.rate > 0) return ovCover(p.units / p.rate);
+      break;
+  }
+  if(OV_AMENITY[a.group] && b) return ovLamps(b);
+  return "";
+}
+/* A finding's Details: what the board read, where, and where it is fixed. */
+function ovDetails(a, b, fr){
+  const g = typeof ALERT_GROUPS !== "undefined" ? ALERT_GROUPS.find(x => x.id === a.group) : null;
+  const href = b ? siteHref(b.key) : "";
+  const links = [];
+  if(href) links.push(`<a href="${attr(href)}">${icon("go")}${spEsc(tt("today.det.site", "{site}'s page", {site: shortName(b)}))}</a>`);
+  if(routeArea(fr.route) === "supply" && fr.route !== "supply/production")
+    links.push(`<a href="#supply/flow" data-ov-route="supply/flow">${icon("go")}${spEsc(tt("today.det.flow", "Follow the supply route"))}</a>`);
+  if(a.group === "staff" && fr.route === "supply/production")
+    links.push(`<a href="#supply/production" data-ov-route="supply/production" data-ov-into="#sbStaff">${icon("go")}${spEsc(tt("today.det.factoryStaff", "Staffing for factory lines"))}</a>`);
+  if(gwDressable(a)) links.push(`<span class="quiet">${spEsc(tt("today.det.write", "The game link can set these uniforms after a preview."))}</span>`);
+  return `<div><span class="lab">${tt("today.det.read", "What the board read")}</span><p>${spEsc(a.text)}${a.detail ? ` ${spEsc(a.detail)}` : ""}</p></div>`
+    + `<div><span class="lab">${tt("today.det.kind", "Kind of finding")}</span><p><b>${spEsc(kindLabel(a.group))}</b>${g && g.note ? `. ${spEsc(g.note)}` : ""}</p></div>`
+    + `<div><span class="lab">${tt("today.det.where", "Where it is fixed")}</span><p>${spEsc(tt("today.det.opens", "{action} opens {path}", {action: fr.label, path: routePath(fr.route)}))}</p>${links.join("")}</div>`;
+}
 /* Numbers the ids that name a finding's button after its site. */
 let ssFindSeq = 0;
-function findingRow(a){
+/* A finding on the Overview: the place and the problem, with its kind; for a
+   critical one what matters now and a small picture, for the others the
+   figure; a labelled Details that opens in place; and the action, which opens
+   the finding's route. `o.rich` draws the two-line critical row, `o.later` a
+   row folded behind "Show N more", `o.isNew` one that arrived with the last
+   refresh. */
+function findingRow(a, o = {}){
   const b = alertSite(a);
   const {what, more} = splitFinding(a);
   /* In linked mode a shop's missing uniforms can be set from here; one row,
@@ -6972,31 +7679,45 @@ function findingRow(a){
      map button, whose own label would ride along). */
   const site = !b ? spEsc(a.site) : `${hoodHtml(b)}${siteLink(b, b.code ? baseName(b) : shortName(b))}${mapButton(b.key,b.name)}`;
   const n = ++ssFindSeq;
-  return `<div class="find ${SEV_KIND[a.level] || "opp"}" data-id="${attr(a.id)}">
+  const band = SEV_KIND[a.level] || "opp";
+  const fr = findingRoute(a);
+  const pic = o.rich ? ovPicture(a, b) : "";
+  const amt = findingAmount(a);
+  const open = ovOpen.has(a.id);
+  const det = `ov-x${n}`;
+  return `<div class="find ${band} ov-f${o.rich ? "" : " ov-one"}${o.later ? " ov-later" : ""}${o.isNew ? " ov-new" : ""}" data-id="${attr(a.id)}" data-kind="${attr(a.group)}">
     <span class="mark" data-tip="${attr(tt("today.find.silence", "Silence this finding"))}"></span>
-    <span class="site">${site}</span>
+    <div class="ov-t"><span class="ov-l1"><span class="site">${site}</span>
     <span hidden id="ss-fn${n}">${spEsc(b ? shortName(b) : a.site)}:</span>
-    <button type="button" class="what" id="ss-fw${n}" aria-labelledby="ss-fn${n} ss-fw${n}">${spEsc(what)}${kindOff(a) ? ` ${chipHtml("dim", kindLabel(a.group), tt("today.find.off", "This kind is switched off in the list; it is counted here instead"))}` : ""}</button>${
+    <button type="button" class="what" id="ss-fw${n}" aria-labelledby="ss-fn${n} ss-fw${n}">${spEsc(what)}${kindOff(a) ? ` ${chipHtml("dim", kindLabel(a.group), tt("today.find.off", "This kind is switched off in the list; it is counted here instead"))}` : ""}</button>
+    <span class="ov-k"${o.isNew ? ` data-new="${attr(tt("today.find.new", "new"))}"` : ""}>${spEsc(kindLabel(a.group))}</span></span>${
+      o.rich && more ? `<span class="ov-now">${spEsc(more)}</span>` : ""}</div>${
       /* The game link's buttons sit under the sentence, beside the row's own
          button rather than inside it. */
       writes ? `
     <span class="gw-acts gw-find">${writes}</span>` : ""}
-    <span class="amt">${findingAmount(a)}</span>
+    <div class="ov-vz">${pic || (amt ? `<span class="amt">${amt}</span>` : "")}</div>
+    <button type="button" class="nx-btn sm ghost ov-det" aria-expanded="${open}" aria-controls="${det}"><span>${open ? tt("today.det.hide", "Hide") : tt("today.det.show", "Details")}</span>${nxIcon("chevd")}</button>
+    <span class="ov-ac"><a class="nx-btn${o.rich ? " pri" : ""} ov-act" href="#${fr.route}">${spEsc(fr.label)}${icon("go")}</a></span>
     <span class="go">${icon("go")}</span>${more ? `
-    <span class="more">${spEsc(more)}</span>` : ""}</div>`;
+    <span class="more">${spEsc(more)}</span>` : ""}
+    <div class="ov-x" id="${det}" role="region" aria-labelledby="ss-fw${n}"${open ? "" : " hidden"}>${ovDetails(a, b, fr)}</div></div>`;
 }
-/* Row click opens the finding's page; a click on the mark is stopped in the
-   capture phase by wireFinds() and never reaches this. */
+/* The action, the sentence and the row's own ground open the finding's route;
+   Details, its pane, the game link's buttons and a site's name do their own
+   thing. A click on the mark is stopped in the capture phase by wireFinds()
+   and never reaches this. A modified click on the action is the browser's. */
 function bindFindingRows(host, list){
   $$(".find", host).forEach((node, i) => {
     node.onclick = e => {
       /* A site's name inside the row is its own link, to the site's page. */
       if(inSiteLink(e)) return;
-      e.preventDefault(); goToAlert(list[i]);
+      if(e.target.closest(".ov-det, .ov-x, .gw-acts")) return;
+      if(e.target.closest("a.ov-act") && (e.button > 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey)) return;
+      e.preventDefault(); ovFollow(list[i]);
     };
   });
 }
-
 /* Where a finding shows is decided twice over, by the materiality gate and by
    its kind's switch, and neither drops it. `list` is every above-gate finding
    whose kind is still on. `below` is what the gate set aside of the kinds that
@@ -7041,32 +7762,91 @@ function todayList(items){
 }
 
 let showSwitchedOff = false;
+/* A severity's word beside its count, and its group's heading. */
+function sevWord(k, n){
+  return k === "crit" ? tt("today.sev.word.crit", {one: "critical", other: "critical"}, {n})
+    : k === "watch" ? tt("today.sev.word.watch", {one: "warning", other: "warnings"}, {n})
+    : tt("today.sev.word.opp", {one: "opportunity", other: "opportunities"}, {n});
+}
+function bandLabel(k, n){
+  return k === "crit" ? tt("today.band.crit", "Critical · {n}", {n})
+    : k === "watch" ? tt("today.band.watch", "Warnings · {n}", {n}) : tt("today.band.opp", "Opportunities · {n}", {n});
+}
+/* The line under the heading: what the board checked, and the reader's own
+   marks on the change checklist, which open Supply › Changes. */
+function ovMetaHtml(){
+  const m = D.meta || {}, k = D.kpi || {};
+  const when = `${String(m.hour ?? 0).padStart(2, "0")}:${String(m.minute ?? 0).padStart(2, "0")}`;
+  let html = `<span>${icon("tick")}${tt("today.meta.checked", {one: "Checked {b} business at day {day}, {time}", other: "Checked {b} businesses at day {day}, {time}"},
+    {n: k.businesses || 0, b: `<b>${num(k.businesses || 0)}</b>`, day: m.day, time: when})}</span>`;
+  if(D.supply && typeof sbData === "function"){
+    try{
+      const d = sbData(), total = d.rows.length, mine = d.rows.filter(r => d.marks.has(r.key)).length;
+      if(total) html += `<a href="#supply/changes" data-ov-route="supply/changes">${spIcon("list")}${
+        tt("today.meta.changes", {one: "Your changes: {mine} of {n} marked by you", other: "Your changes: {mine} of {n} marked by you"}, {n: total, mine})}</a>`;
+    }catch(e){}
+  }
+  return `<div class="ov-meta">${html}</div>`;
+}
 function drawAlerts(){
   const {list, below, switchedOff, smaller} = partitionFindings(
     alertLines(), alertMinor().rows || [], alertGroupPrefs);
   const counts = {crit: 0, watch: 0, opp: 0};
   list.forEach(a => counts[SEV_KIND[a.level] || "opp"]++);
   const gate = alertMinor().gate || 0;
+  const hold = ovHold();
+  const {bands, rows, fresh} = ovArrange(list);
 
-  /* The head: title, the threshold behind the ?, the three severity counters
-     that filter the list, and the tune button. That button is bound once at
-     boot, so it is carried over into the fresh head rather than rebuilt. */
+  /* The head: the title, the threshold behind the ?, the three severity
+     filters, Customize checks and the jump to All tools. The Customize checks
+     button is bound once at boot, so it is carried over into the fresh head
+     rather than rebuilt. */
   const tune = $("alertKindsToggle");
-  $("alertHead").innerHTML = sechead(tt("today.alerts.title", "Needs attention"), {
-    why: tt("today.alerts.why", "A site that is not trading always makes the list. Everything else needs to be worth {gate:$}/day; smaller findings are counted below, and so are the kinds switched off.",
-      {gate}),
-    aside: ["crit", "watch", "opp"].map(k =>
-      `<span class="sev ${k}" data-kind="${k}" data-tip="${attr(sevTip(k, counts[k]))}"><i></i>${counts[k]}</span>`
-    ).join("") + `<span id="alertTuneSlot"></span>`,
-  });
+  $("alertHead").innerHTML = `<div class="ov-head"><h2 id="ovTitle">${tt("today.alerts.title", "Needs attention")}</h2>${
+    why(tt("today.alerts.why", "A site that is not trading always makes the list. Everything else needs to be worth {gate:$}/day; smaller findings are counted below, and so are the kinds switched off.",
+      {gate}))}${["crit", "watch", "opp"].map(k =>
+      `<button type="button" class="sev ${k}" data-kind="${k}" aria-pressed="${!sevOff.has(k)}" data-tip="${attr(sevTip(k, counts[k]))}"><i></i>${counts[k]}<span>${sevWord(k, counts[k])}</span></button>`
+    ).join("")}<div class="aside"><span id="alertTuneSlot"></span><button type="button" class="nx-btn sm pill" data-ov-tools aria-controls="tools">${nxIcon("chevd")}<span>${
+      tt("today.tools.jump", "All tools")}</span></button></div></div>${ovMetaHtml()}`;
   $("alertTuneSlot").replaceWith(tune);
 
   /* "Set for all" rides on the first row that can set uniforms and is not
      silenced, the smaller findings included, so it is on the page once. */
   gwUniformAllId = ([...list, ...smaller].find(x => gwDressable(x) && !silencedIds.has(x.id)) || {}).id ?? null;
-  $("alerts").innerHTML = list.length ? list.map(a => findingRow(a)).join("")
-    : `<span class="quiet" style="display:block;padding:12px 0">${tt("today.alerts.none", "Nothing to flag here.")}</span>`;
-  bindFindingRows($("alerts"), list);
+  /* Every critical finding shows; the warnings and opportunities after them
+     show five and fold the rest behind "Show N more", counted. */
+  let html = "", k = 0;
+  const folded = {watch: 0, opp: 0};
+  ["crit", "watch", "opp"].forEach(band => {
+    if(!bands[band].length) return;
+    html += `<div class="ov-band ${band}" data-kind="${band}">${bandLabel(band, bands[band].length)}</div>`;
+    bands[band].forEach(a => {
+      const later = band !== "crit" && k++ >= OV_FIRST;
+      if(later) folded[band]++;
+      html += findingRow(a, {rich: band === "crit", later, isNew: fresh.has(a.id)});
+    });
+  });
+  /* An empty list is only healthy when nothing was filtered away: it says what
+     it checked, and the lines under it say what it set aside. */
+  $("alerts").innerHTML = list.length ? html + `<p class="quiet ov-filtered" id="ovFiltered" hidden>${tt("today.alerts.filtered", "Every finding is hidden by the severity filters above.")}</p>`
+    : `<div class="ov-empty"><b>${tt("today.alerts.none", "No urgent issues found in this snapshot")}</b><p>${
+      tt("today.alerts.none.sub", "Nothing above the threshold in the kinds switched on. The lines below count what was set aside.")}</p></div>`;
+  $("alerts").classList.toggle("ov-all", ovShowAll);
+  bindFindingRows($("alerts"), rows);
+  const more = folded.watch + folded.opp;
+  const moreBox = $("ovMore");
+  moreBox.hidden = !more;
+  moreBox.innerHTML = more ? `<button type="button" class="nx-btn sm" data-ov-more aria-expanded="${ovShowAll}" aria-controls="alerts">${nxIcon("chevd")}<span>${ovShowAll
+    ? tt("today.more.fewer", "Show fewer") : tt("today.more.show", "Show {n} more: {w}, {o}", {n: more,
+      w: tt("today.more.watch", {one: "{n} warning", other: "{n} warnings"}, {n: folded.watch}),
+      o: tt("today.more.opp", {one: "{n} opportunity", other: "{n} opportunities"}, {n: folded.opp})})}</span></button>` : "";
+  const news = $("ovNews");
+  if(news){
+    news.hidden = !fresh.size;
+    news.innerHTML = fresh.size ? `<span>${tt("today.news", {one: "{n} finding arrived with the latest numbers; it is listed at the end of its group.",
+      other: "{n} findings arrived with the latest numbers; they are listed at the end of their groups."}, {n: fresh.size})}</span><button type="button" class="nx-btn sm" data-ov-rank>${
+      tt("today.news.rank", "Rank the list again")}</button>` : "";
+  }
 
   /* Nothing leaves the screen: under the list, one line counts what the
      materiality gate set aside and one names the kinds switched off, each with
@@ -7083,7 +7863,8 @@ function drawAlerts(){
       : tt("today.minor.below", "{n} below the {gate:$}/day line", {n: below.length, gate}))
     + block(switchedOff, showSwitchedOff, "off",
       tt("today.minor.off", "{n} in kinds switched off: {kinds}", {n: switchedOff.length,
-        kinds: switchedOffKinds(switchedOff, kindLabel, compact, ALERT_GROUPS.map(g => g.id))}));
+        kinds: switchedOffKinds(switchedOff, kindLabel, compact, ALERT_GROUPS.map(g => g.id))}))
+    + ovWaiting();
   $$("[data-td-toggle]", host).forEach(a => a.onclick = e => {
     e.preventDefault();
     if(a.dataset.tdToggle === "below") showMinor = !showMinor; else showSwitchedOff = !showSwitchedOff;
@@ -7091,10 +7872,39 @@ function drawAlerts(){
   });
   const rowsOf = {below, off: switchedOff};
   $$("[data-td-rows]", host).forEach(box => bindFindingRows(box, rowsOf[box.dataset.tdRows]));
+  ovCritBadge(counts.crit);
+  ovStickyPaint(list.length);
+  ovKeepHold(hold);
   /* The kinds switches and the "show" link redraw this view outside
      renderAll(), so the sticky state (filtered severities, silenced ids) is
      re-applied here; both calls are idempotent. */
   wireSev(); wireFinds();
+}
+/* The checks that could not run on this save, said under the list rather
+   than passed over: without the game's text the factory and capacity checks
+   have no recipes or station capacities to read. */
+function ovWaiting(){
+  if(!hasData() || !D.meta || D.meta.locale !== false) return "";
+  return `<p class="quiet td-count">${tt("today.minor.waiting", "Factory and capacity checks wait for the game's text (the masthead says NAMES ONLY).")}</p>`;
+}
+/* The long queue's slim bar: once the heading has scrolled away and before All
+   tools is in sight, it keeps the jump there and the way back to the top. */
+function ovStickyPaint(n){
+  const bar = $("ovSticky");
+  if(!bar) return;
+  bar.innerHTML = `<b>${tt("today.alerts.title", "Needs attention")}</b><span class="quiet">${tt("today.sticky.n", {one: "{n} finding", other: "{n} findings"}, {n})}</span>`
+    + `<span class="aside"><button type="button" class="nx-btn sm ghost" data-ov-top>${tt("today.sticky.top", "Back to top")}</button><button type="button" class="nx-btn sm pill" data-ov-tools aria-controls="tools">${
+      nxIcon("chevd")}<span>${tt("today.tools.jump", "All tools")}</span></button></span>`;
+  ovStickyCheck();
+}
+function ovStickyCheck(){
+  const bar = $("ovSticky"), head = $("alertHead"), tools = $("tools");
+  if(!bar || !head || !tools) return;
+  const topLine = $("mast") ? $("mast").getBoundingClientRect().bottom : 0;
+  const on = page === "today" && head.getBoundingClientRect().bottom < topLine && tools.getBoundingClientRect().top > (window.innerHeight || 800);
+  bar.classList.toggle("on", on);
+  bar.setAttribute("aria-hidden", String(!on));
+  bar.inert = !on;
 }
 
 /* A round step for the y axis: 1, 2, 2.5 or 5 times a power of ten, so about
@@ -13154,6 +13964,146 @@ function drawOptimizeStaffing(){
   card.dataset.site = row.key;
 }
 
+/* --- the redesign's adapters: counts, Standards, prices, Staffing ------------
+   The views the new routes open while the redesign brings their final
+   presentation (docs/ui-route-migration.md): each lists what the board already
+   knows and opens the existing evidence -- a business's page, a Supply tab --
+   with the right business or block in view. Nothing here computes a figure of
+   its own. */
+
+/* All tools: the count beside a task is how many findings on the list it
+   answers; with no factory the factory task says so rather than a count. */
+function drawTools(){
+  if(!$("toolPanels") || !hasData()) return;
+  const lines = alertLines().filter(a => !kindOff(a));
+  const count = kinds => lines.filter(a => kinds.includes(a.group)).length;
+  const set = (id, n, cls = "", words = "") => {
+    const el = q(`[data-ov-count="${id}"]`);
+    if(!el) return;
+    el.hidden = !n && !words;
+    el.className = `c${cls ? " " + cls : ""}`;
+    el.textContent = words || String(n);
+    if(words) el.removeAttribute("aria-label");
+    else el.setAttribute("aria-label", tt("today.task.count", {one: "{n} finding", other: "{n} findings"}, {n}));
+  };
+  set("deliveries", count(["unplanned", "outruns", "topup", "wholesale", "target", "dead", "notrouted"]));
+  const factories = ((D.supply || {}).factories || {}).sites || [];
+  if(!factories.length) set("production", 0, "q", tt("today.task.noFactory", "no factory yet"));
+  else set("production", lines.filter(a => ["feed", "unnamed", "unset"].includes(a.group) || (a.group === "staff" && ovAtFactory(a))).length);
+  set("demands", count(["jobdemand", "companydemand"]), "b");
+  set("standards", count(["satisfaction", "promotion", "uniform", "bathroom", "toiletprivacy", "sink", "music", "interior"]));
+  set("hire", 0);
+}
+/* Every finding of these kinds, above the line or under it, switched on or
+   off: the adapters list them all. */
+const nxFindings = kinds => [...alertLines(), ...(alertMinor().rows || [])].filter(a => kinds.includes(a.group));
+/* The businesses a set of findings is about, each once, in the list's order. */
+const nxSites = rows => [...new Map(rows.map(a => alertSite(a)).filter(Boolean).map(b => [b.key, b])).values()];
+
+/* Businesses › Standards: satisfaction, promotion, amenities and uniforms, the
+   subjects the portfolio's Operations comparison below answers for. */
+const STD_SUBJECTS = [
+  {id: "satisfaction", icon: "standards", kinds: ["satisfaction"], block: "#sp-standards", get label(){ return tt("co.std.satisfaction", "Satisfaction"); }},
+  {id: "promotion", icon: "magnet", kinds: ["promotion"], block: "#sp-pull", get label(){ return tt("co.std.promotion", "Promotion"); }},
+  {id: "amenities", icon: "toilet", kinds: ["bathroom", "toiletprivacy", "sink", "music", "interior"], block: "#sp-standards", get label(){ return tt("co.std.amenities", "Amenities"); }},
+  {id: "uniforms", icon: "shirt", kinds: ["uniform"], block: "#sp-standards", get label(){ return tt("co.std.uniforms", "Uniforms"); }},
+];
+function drawStandards(){
+  const host = $("secStandards");
+  if(!host || !hasData()) return;
+  host.innerHTML = `<div class="sechead"><h2>${tt("co.std.title", "Standards")}</h2><span class="quiet">${
+    tt("co.std.sub", "What customers find at each business. A subject opens the first business that needs it; the comparison below has them all.")}</span></div>`
+    + `<div class="nx-lead">${STD_SUBJECTS.map(sj => {
+      const rows = nxFindings(sj.kinds), sites = nxSites(rows);
+      const names = todayList(sites.slice(0, 3).map(b => spEsc(shortName(b))));
+      const more = sites.length > 3 ? tt("co.std.more", "{names} and {n} more", {names, n: sites.length - 3}) : names;
+      return `<button type="button" class="nx-card" data-std="${sj.id}"${sites.length ? ` data-site="${attr(sites[0].key)}"` : ""}><b>${spIcon(sj.icon)}${spEsc(sj.label)}</b>`
+        + `<span class="n ${rows.length ? "warn" : "ok"}">${num(rows.length)}</span><small>${rows.length
+          ? tt("co.std.at", {one: "{n} finding at {sites}", other: "{n} findings at {sites}"}, {n: rows.length, sites: more})
+          : tt("co.std.none", "Nothing flagged")}</small></button>`;
+    }).join("")}</div>`;
+}
+
+/* Businesses › Products & prices: a shop's own shelves and prices, and the
+   game's price guides beside the company's sales below. */
+function drawPriceShops(){
+  const host = $("secPrices");
+  if(!host || !hasData()) return;
+  const shops = D.businesses.filter(b => b.status === "retail");
+  const types = typeof ssOwnTypes === "function" && typeof wikiTypeHref === "function" ? ssOwnTypes() : [];
+  host.innerHTML = `<div class="sechead"><h2>${tt("co.prices.title", "Prices at a shop")}</h2><span class="quiet">${
+    tt("co.prices.sub", "A shop's shelves and the prices set on them. The guides set your prices beside the game's reference; the board has no pricing model.")}</span></div>`
+    + (shops.length ? `<div class="nx-lead">${shops.map(b => `<button type="button" class="nx-card" data-price-site="${attr(b.key)}"><b>${spIcon("tag")}${hoodHtml(b)}<span>${
+      spEsc(shortName(b))}</span></b><small>${spEsc(b.type || "")}</small></button>`).join("")}</div>`
+      : `<p class="quiet">${tt("co.prices.none", "No shop yet: prices are set on a shop's shelves.")}</p>`)
+    + (types.length ? `<p class="nx-part">${tt("co.prices.guides", "Price guides")}</p><div class="nx-lead">${types.map(t =>
+      `<button type="button" class="nx-card" data-price-guide="${attr(t.slug)}"><b>${spIcon("list")}<span>${spEsc(t.type)}</span></b><small>${
+        tt("co.prices.guide", "Prices in your save against the game's")}</small></button>`).join("")}</div>` : "");
+}
+
+/* Staffing › Schedules: every shop and office with the state of its plan, and
+   the schedule itself on its own page; the factories' staffing is planned with
+   their running hours, on Supply › Production. `schedLit` is the business a
+   task or the search asked for. */
+let schedLit = null;
+function schedPick(key){ schedLit = key || null; if(hasData()) drawSchedules(); }
+function drawSchedules(){
+  const host = $("secSchedules");
+  if(!host || !hasData()) return;
+  const plans = new Map((D.staffing || []).map(r => [r.key, r]));
+  const sites = D.businesses.filter(b => b.status === "retail" || b.status === "office");
+  const lit = schedLit || (typeof ssStaffingSite === "function" ? ssStaffingSite() : "");
+  const status = b => {
+    if(b.status === "office") return tt("co.sched.office", "Office: its staff and computers are on its page");
+    const r = plans.get(b.key);
+    if(!r) return tt("co.sched.none", "No plan yet");
+    if(r.failed) return tt("co.sched.failed", "No plan: the planner could not read this shop");
+    if(!(r.shifts || []).length) return tt("co.sched.empty", "No shifts to plan yet");
+    const c = spRosterCounts(r), people = c.hire ? spPlanPosts(r) : 0;
+    return people ? tt("co.sched.plan.hire", {one: "{now} entries now, {week} in the plan, {n} person to hire", other: "{now} entries now, {week} in the plan, {n} people to hire"},
+        {now: c.now, week: c.staffed, n: people})
+      : tt("co.sched.plan", "{now} entries now, {week} in the plan", {now: c.now, week: c.staffed});
+  };
+  const factories = ((D.supply || {}).factories || {}).sites || [];
+  host.innerHTML = `<div class="sechead"><h2>${tt("co.sched.title", "Shop schedules")}</h2><span class="quiet">${
+    tt("co.sched.sub", "A week of hours for each shop from its own customers. Open one to compare it with its schedule and copy it or write it through the game link.")}</span></div>`
+    + (sites.length ? `<div class="nx-list">${sites.map(b => `<div class="nx-row${b.key === lit ? " lit" : ""}"><span class="nm">${hoodHtml(b)}<span>${spEsc(shortName(b))}</span></span>`
+      + `<span class="st">${spEsc(status(b))}</span><span class="ac"><button type="button" class="nx-btn sm" data-sched-open="${attr(b.key)}">${
+        b.status === "office" ? tt("co.sched.openOffice", "Open staffing") : tt("co.sched.open", "Open schedule")}${icon("go")}</button></span></div>`).join("")}</div>`
+      : `<p class="quiet">${tt("co.sched.noSites", "No shop or office yet.")}</p>`)
+    + (factories.length ? `<p class="nx-part">${tt("co.sched.factories", "Factories")}</p><div class="nx-list"><div class="nx-row"><span class="nm">${spIcon("gear")}<span>${
+      tt("co.sched.factories.n", {one: "{n} factory", other: "{n} factories"}, {n: factories.length})}</span></span><span class="st">${
+      tt("co.sched.factories.st", "Factory staffing is planned with each line's running hours")}</span><span class="ac"><button type="button" class="nx-btn sm" data-prod-staff>${
+      tt("co.sched.factories.open", "Open Production")}${icon("go")}</button></span></div></div>` : "");
+}
+
+/* Staffing › Staff needs: the staff demands the findings name, company-wide
+   ones included, and the shops whose plan needs more people. Each opens the
+   crew or the schedule that shows it. */
+function drawNeeds(){
+  const host = $("secNeeds");
+  if(!host || !hasData()) return;
+  const demands = nxFindings(["jobdemand", "companydemand"]);
+  const hires = (D.staffing || []).filter(r => !r.failed && (r.shifts || []).length && spRosterCounts(r).hire);
+  const byKey = new Map(D.businesses.map(b => [b.key, b]));
+  host.innerHTML = `<div class="sechead"><h2>${tt("co.needs.title", "Staff needs")}</h2><span class="quiet">${
+    tt("co.needs.sub", "What your people ask for, and whom the shops' plans still need. The board suggests no moves between businesses.")}</span></div>`
+    + `<p class="nx-part" id="nxDemands">${tt("co.needs.demands", "Staff demands")}</p>`
+    + (demands.length ? `<div class="nx-list">${demands.map(a => {
+      const b = alertSite(a), {what} = splitFinding(a);
+      return `<div class="nx-row"><span class="nm">${b ? `${hoodHtml(b)}<span>${spEsc(shortName(b))}</span>` : `${spIcon("building")}<span>${
+        tt("co.needs.company", "Company-wide")}</span>`}</span><span class="st">${spEsc(what)}</span><span class="ac"><button type="button" class="nx-btn sm" data-need-open="${attr(a.id)}">${
+        tt("co.needs.crew", "Open crew")}${icon("go")}</button></span></div>`;
+    }).join("")}</div>` : `<p class="quiet">${tt("co.needs.demands.none", "No staff demands in this save.")}</p>`)
+    + `<p class="nx-part" id="nxHire">${tt("co.needs.hire", "Hiring for the schedules")}</p>`
+    + (hires.length ? `<div class="nx-list">${hires.map(r => {
+      const b = byKey.get(r.key), n = spPlanPosts(r);
+      return `<div class="nx-row"><span class="nm">${b ? hoodHtml(b) : ""}<span>${spEsc(b ? shortName(b) : r.name)}</span></span><span class="st">${
+        tt("co.needs.people", {one: "{n} person to hire for its plan", other: "{n} people to hire for its plan"}, {n})}</span><span class="ac"><button type="button" class="nx-btn sm" data-hire-open="${
+        attr(r.key)}">${tt("co.sched.open", "Open schedule")}${icon("go")}</button></span></div>`;
+    }).join("")}</div>` : `<p class="quiet">${tt("co.needs.hire.none", "No shop's plan needs more people.")}</p>`);
+}
+
 function drawFooter(){
   const m = D.meta;
   const f = $("footFile");  // the CLI's page only: the site names the save in its source strip
@@ -15001,6 +15951,9 @@ function showCityMap(){
    control that opened the finder is on a page now hidden. */
 function openFinder(preset = {}, focus = false){
   if(!premises()) return;
+  // The finder is Expansion › Find a location in the board's shell: the page
+  // it opens stands under that route (docs/ui-route-migration.md).
+  if(typeof routeNext !== "undefined" && routeNext === null) routeNext = "expansion/finder";
   showPage("map");
   showCityMap();
   const view = cityMapPage;
@@ -17639,21 +18592,25 @@ function renderCalm(lazy = true){
 }
 
 /* --- pages ------------------------------------------------------------ */
-/* One page at a time. Today is the daily check: four tiles and the list.
-   Everything else is a place you go on purpose — the company's own results and
-   reference tables, the supply round, growth planning, the city, and the game's
-   help. Which page and which view are remembered on this device and mirrored in
-   the hash. */
+/* One page at a time. The pages below are the hosts: the markup each place is
+   drawn into. What the reader sees and what the address bar says is a route
+   (ROUTES, further down): five destinations -- Overview, Businesses, Supply,
+   Staffing, Expansion -- each with its own views, and the City map and the
+   Game guide beside them. A route names the host page and view that shows it
+   today; the redesign's later chunks change what a route shows, never its id
+   (docs/ui-route-migration.md). Which page and which view are remembered on
+   this device and mirrored in the hash. */
 const PAGES = [
   /* Each label is read in the UI language every time it is asked for. */
-  {id:"today",   get label(){ return tt("nav.page.today", "Today"); },     host:"pageToday"},
-  {id:"company", get label(){ return tt("nav.page.company", "Company"); }, host:"pageCompany"},
-  {id:"supply",  get label(){ return tt("nav.page.supply", "Supply"); },   host:"pageSupply"},
-  {id:"growth",  get label(){ return tt("nav.page.growth", "Growth"); },   host:"pageGrowth"},
-  {id:"map", get label(){ return tt("nav.page.map", "Map"); }, host:"pageMap", newFeature:"map"},
-  /* A build without the wiki files carries no Wiki tab: an empty page is worse
-     than no page at all. */
-  ...(typeof showWikiRoute === "function" ? [{id:"wiki", get label(){ return tt("nav.page.wiki", "Wiki"); }, host:"pageWiki", newFeature:"wiki"}] : []),
+  {id:"today",   get label(){ return tt("nav.area.overview", "Overview"); },     host:"pageToday"},
+  {id:"company", get label(){ return tt("nav.area.businesses", "Businesses"); }, host:"pageCompany"},
+  {id:"supply",  get label(){ return tt("nav.area.supply", "Supply"); },   host:"pageSupply"},
+  {id:"staffing", get label(){ return tt("nav.area.staffing", "Staffing"); }, host:"pageStaffing"},
+  {id:"growth",  get label(){ return tt("nav.area.expansion", "Expansion"); },   host:"pageGrowth"},
+  {id:"map", get label(){ return tt("nav.ref.map", "City map"); }, host:"pageMap", newFeature:"map"},
+  /* A build without the wiki files carries no Game guide: an empty page is
+     worse than no page at all. */
+  ...(typeof showWikiRoute === "function" ? [{id:"wiki", get label(){ return tt("nav.ref.wiki", "Game guide"); }, host:"pageWiki", newFeature:"wiki"}] : []),
 ];
 /* A view of a page, [id, label, anchor], its label (index 1) read in the UI
    language every time. navSubLabel() is a view's label by its id. */
@@ -17669,18 +18626,19 @@ function navSubLabel(pageId, id){
 /* Hashes that named a page which has since become a view of another. Every link
    already saved, printed or shared keeps working, without a page behind it. */
 const PAGE_ALIASES = {results: ["company", "results"]};
-/* The board opens on the Wiki with no save at all, so everything the pages do
-   with numbers asks first. */
+/* The board opens on the Game guide with no save at all, so everything the
+   pages do with numbers asks first. */
 const hasData = () => typeof D !== "undefined" && !!D;
 const SUBS = {
   company: {host:"pageCompany", nav:"companyNav", key:"ba_dash_company", start:"results",
-            items:[navView("results", () => tt("nav.sub.results", "Results"), "secDaily"),
-                   navView("products", () => tt("nav.sub.products", "Products"), "secProducts"),
-                   navView("payroll", () => tt("nav.sub.payroll", "Payroll"), "secPayroll"),
-                   navView("milestones", () => tt("nav.sub.milestones", "Milestones"), "secGoals")]},
+            items:[navView("results", () => tt("nav.view.results", "Results"), "secDaily"),
+                   navView("products", () => tt("nav.view.prices", "Products & prices"), "secProducts"),
+                   navView("standards", () => tt("nav.view.standards", "Standards"), "secStandards"),
+                   navView("milestones", () => tt("nav.view.milestones", "Milestones"), "secGoals")]},
   /* Supply by object (R13): a tab each for shops, warehouses and factories,
      each with an icon and a badge of what is left to type there (sbBadge()),
-     and the diagram following the tab on screen (sbShown()). */
+     and the diagram following the tab on screen (sbShown()). The tabs are the
+     Supply views' scope now; the views themselves are routes. */
   supply: {host:"pageSupply", nav:"supplyNav", key:"ba_dash_supply", start:"shops",
            items:[navView("shops", () => tt("nav.sub.shops", "Shops"), "secShops"),
                   navView("warehouses", () => tt("nav.sub.warehouses", "Warehouses"), "secWarehouses"),
@@ -17688,10 +18646,13 @@ const SUBS = {
            lead: k => typeof sbTabIcon === "function" ? sbTabIcon(k) : "",
            badge: k => typeof sbBadge === "function" ? sbBadge(k) : "",
            shown: k => { if(typeof sbShown === "function") sbShown(k); }},
-  // changed for growth: Expand is gone; Growth is Demand and Plan a chain.
+  staffing: {host:"pageStaffing", nav:"staffingNav", key:"ba_dash_staffing", start:"schedules",
+             items:[navView("schedules", () => tt("nav.view.schedules", "Schedules"), "secSchedules"),
+                    navView("needs", () => tt("nav.view.needs", "Staff needs"), "secNeeds"),
+                    navView("payroll", () => tt("nav.view.payroll", "Payroll"), "secPayroll")]},
   growth: {host:"pageGrowth", nav:"growthNav", key:"ba_dash_growth", start:"market",
-           items:[navView("market", () => tt("nav.sub.market", "Demand"), "secMarket"),
-                  navView("plan", () => tt("nav.sub.plan", "Plan a chain"), "secPlan")]},
+           items:[navView("market", () => tt("nav.view.demand", "Demand"), "secMarket"),
+                  navView("plan", () => tt("nav.view.factory", "Plan a factory"), "secPlan")]},
 };
 const PAGE_KEY = "ba_dash_page";
 const remembered = key => { try{ return localStorage.getItem(key); }catch(e){ return null; } };
@@ -17714,18 +18675,220 @@ Object.entries(SUBS).forEach(([id, sv]) => {
   sub[id] = sv.items.some(([k]) => k === saved) ? saved : sv.start;
 });
 
+/* --- the shell's routes ----------------------------------------------------
+   The canonical address of every place the reader can be, one table for the
+   masthead, the area's row of views, a finding's action, All tools, search and
+   the address bar. A route is "area/view" (or "overview", "map", "wiki"); its
+   `host` is the page and view that shows it while the redesign moves its
+   presentation there, and `scopes`, on Supply, are the tabs the route may be
+   read on. docs/ui-route-migration.md is this table in words, with the old
+   hashes that still land on each route. */
+const AREAS = [
+  {id:"overview", icon:"today", get label(){ return tt("nav.area.overview", "Overview"); }},
+  {id:"businesses", icon:"company", get label(){ return tt("nav.area.businesses", "Businesses"); },
+   views:["results", "prices", "standards", "milestones"], start:"results"},
+  {id:"supply", icon:"supply", get label(){ return tt("nav.area.supply", "Supply"); },
+   views:["changes", "imports", "deliveries", "production", "flow"], start:"changes"},
+  {id:"staffing", icon:"people", get label(){ return tt("nav.area.staffing", "Staffing"); },
+   views:["schedules", "needs", "payroll"], start:"schedules"},
+  {id:"expansion", icon:"growth", get label(){ return tt("nav.area.expansion", "Expansion"); },
+   views:["demand", "finder", "factory"], start:"demand"},
+];
+const REFS = [
+  {id:"map", icon:"map", newFeature:"map", get label(){ return tt("nav.ref.map", "City map"); }},
+  ...(typeof showWikiRoute === "function" ? [{id:"wiki", icon:"wiki", newFeature:"wiki", get label(){ return tt("nav.ref.wiki", "Game guide"); }}] : []),
+];
+const ROUTES = {
+  "overview": {host: ["today"]},
+  "businesses/results": {host: ["company", "results"]},
+  "businesses/prices": {host: ["company", "products"]},
+  /* The portfolio's Operations comparison is the Standards view's body. */
+  "businesses/standards": {host: ["company", "standards"], enter(){ if(typeof view !== "undefined" && view !== "ops"){ view = "ops"; sortKey = null; if(hasData()) drawPortfolio(); } }},
+  "businesses/milestones": {host: ["company", "milestones"]},
+  /* The change checklist over every tab, on the tab with the most to type. */
+  "supply/changes": {host: ["supply"], scopes: null, enter(){ routeSupplyMode("list"); routeChecklistTab(); }, into: "#sbStrip"},
+  "supply/imports": {host: ["supply", "warehouses"], scopes: ["warehouses", "factories"], enter(){ routeSupplyMode("list"); }},
+  "supply/deliveries": {host: ["supply", "shops"], scopes: ["shops", "warehouses"], enter(){ routeSupplyMode("list"); }},
+  "supply/production": {host: ["supply", "factories"], scopes: ["factories"], enter(){ routeSupplyMode("list"); }},
+  /* The goods-flow diagram of the tab on screen. */
+  "supply/flow": {host: ["supply"], scopes: null, enter(){ routeSupplyMode("diagram"); }},
+  /* A task or the search may name the shop; the list lights it. */
+  "staffing/schedules": {host: ["staffing", "schedules"], after(o){ if(typeof schedPick === "function") schedPick(o.pick || null); }},
+  "staffing/needs": {host: ["staffing", "needs"]},
+  "staffing/payroll": {host: ["staffing", "payroll"]},
+  "expansion/demand": {host: ["growth", "market"]},
+  /* The finder is a mode of the City map's page (web/map.js). */
+  "expansion/finder": {host: ["map"], after(o){ if(!o.fromFinder && typeof openFinder === "function" && typeof premises === "function" && premises())
+    openFinder(o.preset || {cat: "retail", type: "", hoods: null}, !!o.focus); }},
+  "expansion/factory": {host: ["growth", "plan"]},
+  "map": {host: ["map"]},
+  "wiki": {host: ["wiki"]},
+};
+/* The route a host page and view shows when nothing more precise was asked
+   for: a finding, a search or the reader's own click on a scope tab. */
+const HOST_ROUTES = {today: "overview", map: "map", wiki: "wiki",
+  "company/results": "businesses/results", "company/products": "businesses/prices",
+  "company/standards": "businesses/standards", "company/milestones": "businesses/milestones",
+  "supply/shops": "supply/deliveries", "supply/warehouses": "supply/imports", "supply/factories": "supply/production",
+  "staffing/schedules": "staffing/schedules", "staffing/needs": "staffing/needs", "staffing/payroll": "staffing/payroll",
+  "growth/market": "expansion/demand", "growth/plan": "expansion/factory"};
+const ROUTE_KEY = "ba_dash_route";
+let route = "overview";
+/* A route asked for by the navigation about to happen (openRoute(), a finding,
+   a task), and the arrival it carries: why the reader is going there. Both are
+   taken by the next showPage() that writes the address. */
+let routeNext = null, arrivalNext = null;
+/* Why the reader is on the entry on screen ({what, pos, back, backLabel,
+   finding, depth, ov}); kept in the entry's state as nxArr. */
+let routeArrival = null;
+/* The view last shown in each area, this session: a click on an area comes
+   back to it; the first click of a visit opens the area's first view (Supply
+   opens Changes). */
+const areaLast = {};
+const routeArea = id => id === "overview" || id === "map" || id === "wiki" ? id : String(id).split("/")[0];
+/* The words of each view, for the area's row, a crumb and the arrival strip. */
+function routeViewLabel(id){
+  switch(id){
+    case "overview": return tt("nav.area.overview", "Overview");
+    case "businesses/results": return tt("nav.view.results", "Results");
+    case "businesses/prices": return tt("nav.view.prices", "Products & prices");
+    case "businesses/standards": return tt("nav.view.standards", "Standards");
+    case "businesses/milestones": return tt("nav.view.milestones", "Milestones");
+    case "supply/changes": return tt("nav.view.changes", "Changes");
+    case "supply/imports": return tt("nav.view.imports", "Imports");
+    case "supply/deliveries": return tt("nav.view.deliveries", "Deliveries");
+    case "supply/production": return tt("nav.view.production", "Production");
+    case "supply/flow": return tt("nav.view.flow", "Goods flow");
+    case "staffing/schedules": return tt("nav.view.schedules", "Schedules");
+    case "staffing/needs": return tt("nav.view.needs", "Staff needs");
+    case "staffing/payroll": return tt("nav.view.payroll", "Payroll");
+    case "expansion/demand": return tt("nav.view.demand", "Demand");
+    case "expansion/finder": return tt("nav.view.finder", "Find a location");
+    case "expansion/factory": return tt("nav.view.factory", "Plan a factory");
+    case "map": return tt("nav.ref.map", "City map");
+    case "wiki": return tt("nav.ref.wiki", "Game guide");
+    default: return id;
+  }
+}
+/* "Supply › Imports": where a route is, in the words on screen. */
+function routePath(id){
+  const a = AREAS.find(x => x.id === routeArea(id));
+  return a && a.views ? tt("nav.path", "{area} › {view}", {area: a.label, view: routeViewLabel(id)}) : routeViewLabel(id);
+}
+/* The route a click on an area opens: the view it was last left on this
+   session, else its first view. */
+function areaEntry(id){
+  if(ROUTES[id]) return id;
+  const a = AREAS.find(x => x.id === id);
+  return a ? `${id}/${areaLast[id] || a.start}` : null;
+}
+/* A route, an area, or one of the words an old link used for one. Anything
+   else (a page's own name, a section, a wiki page) is resolved elsewhere. */
+function routeResolve(h){
+  if(typeof h !== "string" || !h) return null;
+  if(ROUTES[h]) return h;
+  if(AREAS.some(a => a.id === h)) return areaEntry(h);
+  if(h === "guide") return "wiki";
+  return null;
+}
+/* Can `id` stand for what host page `p` shows now? On Supply a task view is
+   read on the tabs it names; the diagram is Goods flow's alone. */
+const routeDiagram = () => typeof sbViewMode === "function" && sbViewMode() === "diagram";
+function routeAccepts(id, p){
+  const r = ROUTES[id];
+  if(!r || r.host[0] !== p) return false;
+  if(p === "supply"){
+    if(id === "supply/flow") return routeDiagram();
+    if(routeDiagram()) return false;
+    return !r.scopes || r.scopes.includes(sub.supply);
+  }
+  return !r.host[1] || r.host[1] === sub[p];
+}
+function routeFor(p){
+  if(routeAccepts(route, p)) return route;
+  if(p === "supply" && routeDiagram()) return "supply/flow";
+  return HOST_ROUTES[SUBS[p] ? `${p}/${sub[p]}` : p] || HOST_ROUTES[p] || "overview";
+}
+/* What a history entry says about the shell: the route a site's page was
+   opened under, and why the reader arrived. */
+function routeState(){ try{ return history.state || {}; }catch(e){ return {}; } }
+function routeStateArrival(){
+  const a = routeState().nxArr;
+  return a && typeof a === "object" && typeof a.what === "string" ? a : null;
+}
+/* The history entry's state for a write: the site's crumb (siteHistoryState()),
+   the route a site's page stands under when it is not Businesses, and the
+   arrival -- a new entry's own, a replaced entry's as it was. */
+function routeHistoryState(replace, arrival){
+  const state = siteHistoryState(replace) || {};
+  if(siteOpen && page === "company" && route !== "businesses/results") state.nxRoute = route;
+  else delete state.nxRoute;
+  if(!replace){ delete state.nxArr; delete state.nxOv; if(arrival) state.nxArr = arrival; }
+  return Object.keys(state).length ? state : null;
+}
+/* Supply's list or diagram, as a route asks: the tab on screen is drawn again
+   in the other mode. */
+function routeSupplyMode(mode){
+  if(typeof sbViewMode !== "function" || sbViewMode() === mode) return;
+  sbViewOn = mode; remember(SB_VIEW_KEY, mode);
+  if(hasData() && D.supply){ sbPaintTools(); drawSupplyTab(sub.supply); sbPlaceFlow(); if(typeof wireAll === "function") wireAll(); }
+}
+/* Changes opens on the tab with the most still to type, as Plan imports did. */
+function routeChecklistTab(){
+  if(!hasData() || !D.supply || typeof sbData !== "function") return;
+  const d = sbData();
+  const left = t => d.byTab[t].filter(r => !d.marks.has(r.key)).length;
+  const tab = Object.keys(SB_SEC).reduce((a, t) => left(t) > left(a) ? t : a, sub.supply || "shops");
+  if(tab !== sub.supply) showSub("supply", tab);
+}
+/* Open a route: its host view, then its page. `o.historyMode` as showPage();
+   `o.arrival` is why the reader is going (the strip at the top of the page);
+   `o.restore` gives the Overview back as it was left; `o.into` a block to
+   land on. */
+function openRoute(id, o = {}){
+  const target = routeResolve(id);
+  const r = target && ROUTES[target];
+  if(!r) return false;
+  if(!hasData() && target !== "wiki") return false;
+  const mode = o.historyMode || "push";
+  siteShut();
+  /* Asked for first, so a view the route changes on the page on screen does
+     not settle a route of its own (routeSync()). */
+  routeNext = target;
+  if(r.enter) r.enter(o);
+  const [p, sv] = r.host;
+  if(sv) showSub(p, sv);
+  if(p === "today" && mode === "push" && !o.restore && typeof ovForget === "function") ovForget();
+  routeNext = target;
+  arrivalNext = o.arrival || null;
+  showPage(p, o.scroll !== false && !o.into && !r.into, mode);
+  routeNext = null; arrivalNext = null;
+  if(r.after) r.after(o);
+  const into = o.into || (mode === "push" ? r.into : null);
+  if(into && typeof settleScroll === "function" && typeof q === "function") settleScroll(q(into));
+  if(p === "today" && typeof ovArrive === "function") ovArrive(o.restore || (mode !== "push" ? routeState().nxOv : null));
+  return true;
+}
+/* An area's view with the arrival carried along, when the reader moves on
+   inside the area they arrived in. */
+function routeCarry(id){
+  const a = routeArrival;
+  return a && routeArea(id) === routeArea(route) && routeArea(route) !== "overview" ? {...a, depth: (a.depth || 1) + 1} : null;
+}
+
 /* What each draw function fills, in the order renderAll() draws them: the
    page or view ("page/view") its markup is on, space-separated when it is on
    two, or "" for one a live refresh always draws. Read from what each writes
    into and what other code reads back, not from the names:
-   - drawSupplyStrip() is Today's too: the change checklist paints the Plan
-     imports card there, and it counts every Supply tab's changes, so it is
-     drawn on each of them. The tabs read the same rows (sbData()).
+   - drawSupplyStrip() is the Overview's too: the change checklist paints the
+     Calculate import amounts task there, and it counts every Supply tab's
+     changes, so it is drawn on each of them. The tabs read the same rows
+     (sbData()).
    - drawSite() is drawn every time: it hides the site panel when no site is
      open (cheap), draws the open one where it is (on Company > Results, the
      view on screen whenever a site is open), and resets the factory view the
      site kinds are read from (spViewCache).
-   - drawOptimizeStaffing() names on its card the site the search and Ask
+   - drawOptimizeStaffing() names on its task row the site the search and Ask
      the board open, from any page; drawFindLocation() is a line of text.
    Everything outside the pages -- the masthead, the footer, the difficulty
    chips, the city maps (the location-map dialog opens from any page), the
@@ -17733,14 +18896,16 @@ Object.entries(SUBS).forEach(([id, sv]) => {
    calls its function by name when it runs, so a test that swaps one out is
    heard. */
 const PAGE_DRAWS = [
-  ["today", () => drawKpis()], ["today", () => drawAlerts()],
-  ["company/results", () => drawChart()], ["company/results", () => drawPortfolio()],
+  ["today", () => drawKpis()], ["today", () => drawAlerts()], ["today", () => drawTools()],
+  ["company/results", () => drawChart()], ["company/results company/standards", () => drawPortfolio()],
+  ["company/standards", () => drawStandards()],
   ["company/results", () => drawSitePicker()], ["", () => drawSite()],
   ["today supply/shops supply/warehouses supply/factories", () => drawSupplyStrip()],
   ["supply/shops", () => drawShopsTab()], ["supply/warehouses", () => drawWarehousesTab()], ["supply/factories", () => drawFactoriesTab()],
   ["supply/shops supply/warehouses supply/factories", () => drawFlow()],
   ["growth/market", () => drawMovers()], ["growth/market", () => drawMarket()], ["growth/plan", () => drawPlan()],  // changed for growth: no drawExpansion()
-  ["company/products", () => drawProducts()], ["company/payroll", () => drawPayroll()],
+  ["company/products", () => drawPriceShops()], ["company/products", () => drawProducts()],
+  ["staffing/schedules", () => drawSchedules()], ["staffing/needs", () => drawNeeds()], ["staffing/payroll", () => drawPayroll()],
   ["company/milestones", () => drawGoals()], ["", () => drawFindLocation()], ["", () => drawOptimizeStaffing()],
 ];
 /* The rows a live refresh left out: drawn for older numbers than D. */
@@ -17796,13 +18961,15 @@ function drawStale(pageId){
 }
 
 /* A page's row of views, the one on screen lit; a view may carry an icon
-   before its label and a badge after it. */
+   before its label and a badge after it. Supply's row is its scope; the other
+   pages' rows are kept for their hash links, under the area's own row. */
 function paintSubNav(pageId){
   const sv = SUBS[pageId];
   if(!sv) return;
   $(sv.nav).innerHTML = sv.items.map(([k, label, anchor=k]) =>
     `<a href="#${anchor}" data-id="${k}" class="${k === sub[pageId] ? "on" : ""}">${sv.lead ? `${sv.lead(k)}<span>${label}</span>` : label}${
       sv.badge ? sv.badge(k) : ""}</a>`).join("");
+  if(pageId === "supply" && page === "supply") paintLocal();
 }
 function showSub(pageId, id){
   const sv = SUBS[pageId];
@@ -17811,7 +18978,7 @@ function showSub(pageId, id){
   if(pageId === "company" && id !== "results") siteShut();
   sub[pageId] = id;
   drawStale(pageId);
-  document.querySelectorAll(`#${sv.host} [data-sub]`).forEach(el => { el.hidden = el.dataset.sub !== id; });
+  document.querySelectorAll(`#${sv.host} [data-sub]`).forEach(el => { el.hidden = !String(el.dataset.sub || "").split(" ").includes(id); });
   /* The site panel is only on screen while a site is open, so it owns its own
      visibility and the sweep above is corrected by the panel itself. */
   if(pageId === "company" && hasData()) drawSite();
@@ -17822,7 +18989,21 @@ function showSub(pageId, id){
      inside Results has to be drawn again once its container is on screen. Same
      rule as in showPage. */
   if(page === pageId && id === "results" && !siteOpen && hasData()) drawChart();
+  /* A scope picked on the page on screen (a Supply tab): the route follows,
+     in place, as the view did before routes. */
+  if(page === pageId && !siteOpen && routeNext === null) routeSync();
   wireReveal();
+}
+/* The route for the page on screen after its view changed in place; the entry
+   is replaced, never added, and keeps its state. */
+function routeSync(){
+  const next = routeFor(page);
+  if(next === route) return;
+  route = next;
+  if(AREAS.some(a => a.id === routeArea(route) && a.views)) areaLast[routeArea(route)] = route.split("/")[1];
+  remember(ROUTE_KEY, route);
+  try{ if(location.hash !== "#" + route && !SITE_HASH.test(location.hash.slice(1))) history.replaceState(routeHistoryState(true), "", "#" + route); }catch(e){}
+  paintShell();
 }
 /* Another page takes an open site's page down. Company itself does not: the
    site's page is on it, and the ways onto Company that mean the portfolio (the
@@ -17834,10 +19015,20 @@ function showPage(id, scroll = true, historyMode = "push"){
   const from = page;
   if(id !== "company") siteShut();
   page = id;
+  /* The route: the one asked for, where this page can show it; a site's page
+     stands under whichever area opened it (the entry's state on Back, Forward
+     or a reload), Businesses otherwise; anything else is the page's own. */
+  const next = routeNext;
+  routeNext = null;
+  route = id === "company" && siteOpen
+    ? next || (historyMode === "push" ? "businesses/results" : routeState().nxRoute || "businesses/results")
+    : next && routeAccepts(next, id) ? next : routeFor(id);
+  if(!ROUTES[route]) route = routeFor(id);
+  if(AREAS.some(a => a.id === routeArea(route) && a.views)) areaLast[routeArea(route)] = route.split("/")[1];
   drawStale(id);
   PAGES.forEach(p => { $(p.host).hidden = p.id !== id; });
-  document.querySelectorAll("#nav a[data-id]").forEach(a => a.classList.toggle("on", a.dataset.id === id));
   remember(PAGE_KEY, id);
+  if(!(id === "company" && siteOpen)) remember(ROUTE_KEY, route);
   /* Clicks add a visit; boot normalises the current entry. History replay
      only renders, so Back/Forward never changes the stack it is traversing. A
      hash that already resolves to this page is left alone while normalising, so
@@ -17845,15 +19036,26 @@ function showPage(id, scroll = true, historyMode = "push"){
      address, which is only kept while that site is the one on screen. An open
      site writes its own address, and the page it was reached from rides along
      in the entry's state, so the crumb can name it again after Back, Forward
-     or a reload. */
+     or a reload. So does the arrival: a new entry carries its own, a replayed
+     or normalised one shows what its state says. */
+  const arrival = arrivalNext;
+  arrivalNext = null;
   try{
     const now = location.hash.slice(1);
-    const hash = id === "company" && siteOpen && siteHref(siteKey) || "#" + id;
-    const keep = historyMode === "replace" && !siteOpen && !SITE_HASH.test(now) && pageFromHash(now) === id;
-    if(historyMode !== "none" && !keep && location.hash !== hash)
-      history[historyMode === "replace" ? "replaceState" : "pushState"](
-        siteHistoryState(historyMode === "replace"), "", hash);
+    const hash = id === "company" && siteOpen && siteHref(siteKey) || "#" + route;
+    const keep = historyMode === "replace" && !siteOpen && !SITE_HASH.test(now) && pageFromHash(now) === id
+      && !(routeResolve(now) && routeResolve(now) !== route);
+    if(historyMode === "push" && location.hash !== hash){
+      history.pushState(routeHistoryState(false, arrival), "", hash);
+      routeArrival = arrival;
+    } else if(historyMode === "replace" && !keep && location.hash !== hash){
+      history.replaceState(routeHistoryState(true), "", hash);
+      routeArrival = routeStateArrival();
+    } else if(historyMode !== "push"){
+      routeArrival = routeStateArrival();
+    }
   }catch(e){}
+  paintShell();
   /* The chart is drawn again when its page shows, since it may have been
      drawn into a hidden container. */
   if(id === "company" && sub.company === "results" && !siteOpen && hasData()) drawChart();
@@ -17865,52 +19067,158 @@ function showPage(id, scroll = true, historyMode = "push"){
   wireReveal();
   requestAnimationFrame(inkHome);
 }
-$("nav").innerHTML = PAGES.map(p =>
-  `<a href="#${p.id}" data-id="${p.id}">${icon(p.id)}<span>${p.label}</span>${p.newFeature ? `<span class="feature-new" data-new-feature="${p.newFeature}" hidden>${tt("nav.new", "New")}</span>` : ''}</a>`).join("") + '<i class="ink"></i>';
+/* The masthead: the five places, then the two references and the utilities.
+   A place's link is its area; the Overview's carries the critical count. */
+const NX_ICON = {
+  back: '<path d="M15 6l-6 6 6 6"></path>',
+  chevd: '<path d="M6 9l6 6 6-6"></path>',
+};
+const nxIcon = name => NX_ICON[name] ? `<svg class="nx-i" viewBox="0 0 24 24" aria-hidden="true">${NX_ICON[name]}</svg>` : icon(name);
+function navHtml(){
+  return AREAS.map(a => `<a href="#${a.id}" data-id="${a.id}">${icon(a.icon)}<span>${a.label}</span>${
+    a.id === "overview" ? `<span class="nx-n" data-nav-crit hidden></span>` : ""}</a>`).join("") + '<i class="ink"></i>';
+}
+/* The City map and the Game guide after the sphere's shelf, then the menu. */
+function refsHtml(){
+  return REFS.map(r => `<a href="#${r.id}" data-id="${r.id}">${icon(r.icon)}<span>${r.label}</span>${
+    r.newFeature ? `<span class="feature-new" data-new-feature="${r.newFeature}" hidden>${tt("nav.new", "New")}</span>` : ""}</a>`).join("")
+    + `<button type="button" class="nx-more" id="navMore" aria-haspopup="true" aria-expanded="false" aria-label="${
+      attr(tt("nav.more.label", "More: search, preferences, help and what's new"))}">${icon("more")}</button>`;
+}
+/* The phone's bar: the five places and Map & more, which opens the references
+   and the utilities. */
+function phoneNavHtml(){
+  return AREAS.map(a => `<a href="#${a.id}" data-id="${a.id}">${icon(a.icon)}<span>${a.label}</span>${
+    a.id === "overview" ? `<span class="nx-n" data-nav-crit hidden></span>` : ""}</a>`).join("")
+    + `<button type="button" id="phoneMore" aria-haspopup="true" aria-expanded="false">${icon("map")}<span>${tt("nav.more.phone", "Map & more")}</span></button>`;
+}
+$("nav").innerHTML = navHtml();
+if($("navRefs")) $("navRefs").innerHTML = refsHtml();
+if($("phoneNav")) $("phoneNav").innerHTML = phoneNavHtml();
 featureDiscovery.refresh();
-/* Which pages a reader can be on. Without a save only the Wiki has anything to
-   show, so the rest say so rather than opening blank. */
+/* The area's own row of views, the one on screen lit, and the place's lit
+   link in the masthead and the phone's bar. */
+function paintShell(){
+  const r = ROUTES[route] ? route : "overview";
+  const area = routeArea(r);
+  document.querySelectorAll("#nav a[data-id], #navRefs a[data-id], #phoneNav a[data-id]").forEach(a => {
+    const on = a.dataset.id === area;
+    a.classList.toggle("on", on);
+    if(on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+  });
+  paintLocal();
+  paintArrival();
+}
+function paintLocal(){
+  const host = $("localNav");
+  if(!host) return;
+  const r = ROUTES[route] ? route : "overview";
+  const a = AREAS.find(x => x.id === routeArea(r));
+  if(!a || !a.views || !hasData()){ host.hidden = true; host.innerHTML = ""; return; }
+  host.hidden = false;
+  host.setAttribute("aria-label", tt("nav.local.label", "{area} views", {area: a.label}));
+  host.innerHTML = `<span class="lab" aria-hidden="true">${spEsc(a.label)}</span>` + a.views.map(v => {
+    const id = `${a.id}/${v}`, n = routeCount(id);
+    return `<a href="#${id}" data-route="${id}"${id === r ? ` class="on" aria-current="page"` : ""}>${spEsc(routeViewLabel(id))}${
+      n ? `<small aria-label="${attr(tt("nav.local.count", {one: "{n} to do", other: "{n} to do"}, {n}))}">${n}</small>` : ""}</a>`;
+  }).join("");
+}
+/* The count beside a view in the area's row: what is still to do there. */
+function routeCount(id){
+  if(!hasData()) return 0;
+  if(id === "supply/changes") return typeof sbLeft !== "undefined" && sbLeft ? Object.values(sbLeft).reduce((s, n) => s + n, 0) : 0;
+  if(id === "staffing/needs" && typeof alertLines === "function")
+    return alertLines().filter(a => (a.group === "jobdemand" || a.group === "companydemand") && !(typeof kindOff === "function" && kindOff(a))).length;
+  return 0;
+}
+/* Why the reader is here and the way back: a finding's place and kind, or
+   the task they picked. */
+function paintArrival(){
+  const el = $("arrive");
+  if(!el) return;
+  const a = routeArrival;
+  if(!a || !hasData()){ el.hidden = true; el.innerHTML = ""; if(document.body && document.body.classList) document.body.classList.remove("nx-arrived"); return; }
+  el.hidden = false;
+  if(document.body && document.body.classList) document.body.classList.add("nx-arrived");
+  el.innerHTML = `<button type="button" class="nx-back" data-nx="back">${nxIcon("back")}<span>${spEsc(a.backLabel || tt("nav.from.overview", "Needs attention"))}</span></button>`
+    + `<span>${tt("nav.arrive.from", "You came from {what}", {what: `<b>${spEsc(a.what)}</b>`})}${a.pos ? ` · ${spEsc(a.pos)}` : ""}</span>`;
+}
+/* The way back: Back itself when the entry before is the one the reader came
+   from, so the Overview comes back as it was; otherwise a new visit to it,
+   given the state it was left in. */
+function arrivalReturn(){
+  const a = routeArrival;
+  if(!a) return;
+  let direct = false;
+  try{ direct = (a.depth || 1) === 1 && !!(history.state && history.state.nxArr); }catch(e){}
+  if(direct){ history.back(); return; }
+  openRoute(a.back || "overview", {restore: a.ov || null});
+}
+if($("arrive")) $("arrive").addEventListener("click", e => {
+  if(e.target.closest && e.target.closest("[data-nx=back]")) arrivalReturn();
+});
+/* Which places a reader can be on. Without a save only the Game guide has
+   anything to show, so the rest say so rather than opening blank. */
 function paintNav(){
   const open = hasData();
-  document.querySelectorAll("#nav a[data-id]").forEach(a => {
+  document.querySelectorAll("#nav a[data-id], #navRefs a[data-id], #phoneNav a[data-id]").forEach(a => {
     const off = !open && a.dataset.id !== "wiki";
     a.classList.toggle("off", off);
     a.setAttribute("aria-disabled", String(off));
     if(off) a.dataset.tip = tt("nav.off.tip", "Open a save to see this page");
     else delete a.dataset.tip;
   });
+  paintLocal();
 }
 /* The chrome written once at load, written again in the UI language when it
-   changes (web/i18n.js): the page tabs, their views, the tabs' tips and the
+   changes (web/i18n.js): the places, their views, the tabs' tips and the
    New badges the script wrote, the landing footer's game build, and the
    masthead clock's tip before a save is open. A board with a save redraws the
    masthead and the footer itself (renderAll()). */
 function navRelabel(){
-  document.querySelectorAll("#nav a[data-id]").forEach(a => {
-    const p = PAGES.find(x => x.id === a.dataset.id);
-    const words = p && a.querySelector("span:not(.feature-new)");
-    if(words) words.textContent = p.label;
-  });
-  document.querySelectorAll("#nav .feature-new, #ssField .feature-new, #ssFieldBtn .feature-new")
+  $("nav").innerHTML = navHtml();
+  if($("navRefs")) $("navRefs").innerHTML = refsHtml();
+  if($("phoneNav")) $("phoneNav").innerHTML = phoneNavHtml();
+  document.querySelectorAll("#nav .feature-new, #navRefs .feature-new, #ssField .feature-new, #ssFieldBtn .feature-new")
     .forEach(b => { b.textContent = tt("nav.new", "New"); });
+  featureDiscovery.refresh();
   Object.keys(SUBS).forEach(paintSubNav);
   paintNav();
+  paintShell();
   document.querySelectorAll("[data-foot-build]").forEach(el => {
     el.textContent = tt("foot.build", "Game build {n}", {n: el.dataset.footBuild});
   });
   if(!hasData() && $("clock")) $("clock").dataset.tip = tt("nav.clock.tip0", "Game time when the save was written. Day 1 was a Monday.");
   if(typeof ssChrome === "function") ssChrome();
+  if(typeof ovCritBadge === "function") ovCritBadge();
   if(typeof inkHome === "function") requestAnimationFrame(inkHome);
 }
 if(typeof ttOnChange === "function") ttOnChange(navRelabel);
-$("nav").addEventListener("click", e => {
+/* A place in the masthead or the phone's bar: its area, on the view it was
+   last left on this visit (Supply opens Changes the first time). */
+function navClick(e){
+  if(e.target.closest && e.target.closest("#navMore, #phoneMore")){
+    if(typeof nxMenuToggle === "function") nxMenuToggle(e.target.closest("#navMore, #phoneMore"));
+    return;
+  }
   const a = e.target.closest("a[data-id]");
   if(!a || e.button > 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
   e.preventDefault();
   if(!hasData() && a.dataset.id !== "wiki") return;
-  /* Company from the nav is the portfolio, even from a site's own page. */
+  /* Businesses from the nav is the portfolio, even from a site's own page. */
   siteShut();
-  showPage(a.dataset.id);
+  openRoute(a.dataset.id);
+}
+$("nav").addEventListener("click", navClick);
+if($("navRefs")) $("navRefs").addEventListener("click", navClick);
+if($("phoneNav")) $("phoneNav").addEventListener("click", navClick);
+/* The area's row: a view, with the arrival carried while the reader stays in
+   the area they were sent to. */
+if($("localNav")) $("localNav").addEventListener("click", e => {
+  const a = e.target.closest && e.target.closest("a[data-route]");
+  if(!a || e.button > 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+  e.preventDefault();
+  openRoute(a.dataset.route, {arrival: routeCarry(a.dataset.route)});
 });
 Object.entries(SUBS).forEach(([id, sv]) => $(sv.nav).addEventListener("click", e => {
   const a = e.target.closest("a[data-id]");
@@ -17918,11 +19226,13 @@ Object.entries(SUBS).forEach(([id, sv]) => $(sv.nav).addEventListener("click", e
   e.preventDefault();
   showSub(id, a.dataset.id);
 }));
-/* What a hash opens: a page, an old page name that has become a view, one of
-   the wiki's own routes (#wiki/<page>), a site's own page (#site/<slug>),
-   which lives on Company, or a section, which knows its page and view.
-   Anything else is not ours. */
+/* What a hash opens: a route (#supply/imports) or an area (#supply), a page,
+   an old page name that has become a view, one of the wiki's own routes
+   (#wiki/<page>), a site's own page (#site/<slug>), which lives on Company, or
+   a section, which knows its page and view. Anything else is not ours. */
 function pageFromHash(h){
+  const r = routeResolve(h);
+  if(r) return ROUTES[r].host[0];
   if(PAGES.some(p => p.id === h)) return h;
   if(PAGE_ALIASES[h]) return PAGE_ALIASES[h][0];
   if(/^wiki(\/|$)/.test(h)) return "wiki";
@@ -17936,6 +19246,8 @@ function pageFromHash(h){
    last used on screen. */
 function openHash(h, historyMode = "none"){
   if(PAGE_ALIASES[h]){ siteShut(); showPage(h, false, historyMode); return true; }
+  const r = routeResolve(h);
+  if(r && (hasData() || r === "wiki")){ openRoute(r, {historyMode, scroll: false}); return true; }
   const id = pageFromHash(h);
   if(!id) return false;
   if(openSiteHash(h, historyMode)) return true;
@@ -18027,10 +19339,9 @@ function siteBySlug(slug){
    crumb that leads back: the view's own word where the page has views
    ("Checks"), else the page's ("Today"), and the address that was on screen. */
 function siteCameFrom(){
-  const p = PAGES.find(x => x.id === page);
-  if(!p) return null;
-  const v = SUBS[page] && SUBS[page].items.find(([k]) => k === sub[page]);
-  return {label: v ? v[1] : p.label, hash: location.hash || "#" + page};
+  if(!PAGES.some(x => x.id === page)) return null;
+  return {label: route === "overview" ? tt("nav.from.overview", "Needs attention") : routeViewLabel(route),
+    hash: location.hash || "#" + route};
 }
 /* The state a history entry carries: a new entry starts empty, a replaced one
    keeps what others stored on it, and either carries the crumb's way back
@@ -18660,16 +19971,25 @@ function wireSphere(){
      DOM until the board has been shown, and that one is about to be removed. */
   const first = $("orb"), dotEl = $("dot"), navEl = $("nav");
   if(!first || !dotEl || !navEl) return;
-  if(!first.isConnected || !navEl.getBoundingClientRect().width || !first.offsetParent){ setTimeout(wireSphere, 200); return; }
+  /* A narrow masthead hides the sphere (its shelf is the desktop's gap between
+     the places and the references): it is wired once the window is wide
+     enough to show it. */
+  if(!first.isConnected || !navEl.getBoundingClientRect().width || !first.offsetParent){
+    if(first.isConnected && navEl.isConnected && getComputedStyle(first).display === "none"){
+      window.addEventListener("resize", () => wireSphere(), {once: true});
+      return;
+    }
+    setTimeout(wireSphere, 200); return;
+  }
   sphereWired = true;
   inkHome();  // the underline was homed while the board was hidden, so its width is 0
   const parent = first.offsetParent || first.parentElement;
-  const GAP = 12, MAX = 3, SIZES = [100, 72, 54];
+  const GAP = 12, MAX = 3, SIZES = [64, 48, 38];
   let p0, base;
   const measure = () => {
     p0 = parent.getBoundingClientRect();
     const n = navEl.getBoundingClientRect();
-    base = { x: n.right - p0.left + 40, mid: null };
+    base = { x: n.right - p0.left + 16, mid: null };
   };
   measure();
   const d0 = dotEl.getBoundingClientRect();
@@ -18682,6 +20002,12 @@ function wireSphere(){
   /* ...but never under the search field: it sits between the nav and the
      clock, so the shelf ends a gap short of it wherever it shares their row. */
   const wall = () => {
+    /* The references come after the shelf: the balls stop short of them. */
+    const refs = $("navRefs");
+    if(refs && refs.getClientRects().length){
+      const r = refs.getBoundingClientRect(), m = parent.getBoundingClientRect();
+      if(!(r.top >= m.bottom || r.bottom <= m.top)) return r.left - m.left - GAP;
+    }
     const f = typeof ssMastControl === "function" ? ssMastControl() : null;
     if(!f) return p0.width;
     const r = f.getBoundingClientRect(), m = parent.getBoundingClientRect();
@@ -18990,7 +20316,7 @@ function ssRing(el){
    the company-wide Staff list (R14) exist. */
 const SS_QUESTIONS = [
   {id: "profit", get q(){ return tt("nav.ask.profit.q", "Why did profit move?"); },
-   lands: () => tt("nav.ask.profit.lands", "Company › Results · the portfolio sorted by week on week"), page: "company",
+   lands: () => tt("nav.ask.profit.lands", "Businesses › Results · the portfolio sorted by week on week"), page: "company",
    go(){
      view = "pnl";
      const i = VIEWS.pnl.cols.findIndex(c => c[4] === "wow");
@@ -19000,72 +20326,40 @@ const SS_QUESTIONS = [
    },
    lit: "#secPortfolio", holds: () => view === "pnl"},
   {id: "open", get q(){ return tt("nav.ask.open.q", "Where should I open next?"); },
-   lands: () => tt("nav.ask.open.lands", "Map › Find a location · ranked by demand"), page: "map",
+   lands: () => tt("nav.ask.open.lands", "Expansion › Find a location · ranked by demand"), page: "map",
    go: () => ssFinder({cat: "retail", type: "", hoods: null}), lit: "#cityMapPage .places", dim: false, wait: true,
    holds: () => !!(cityMapPage && cityMapPage.finderOn())},
   {id: "fed", get q(){ return tt("nav.ask.fed.q", "Is my factory fed?"); },
-   lands: () => tt("nav.ask.fed.lands", "Supply › Factories · lines and factory inputs"), page: "supply",
-   go: () => ssSupply("factories"), lit: "#secFactories", holds: () => sub.supply === "factories"},
+   lands: () => tt("nav.ask.fed.lands", "Supply › Production · lines and factory inputs"), page: "supply",
+   go: () => openRoute("supply/production"), lit: "#secFactories", holds: () => sub.supply === "factories"},
   {id: "hire", get q(){ return tt("nav.ask.hire.q", "Whom should I hire?"); }, page: "company",
    lands: () => { const b = D.businesses.find(x => x.key === ssStaffingSite());
      return b ? tt("nav.ask.hire.lands.site", "Staffing on {site} · hiring lines", {site: b.name})
-       : tt("nav.ask.hire.lands.none", "Company › Results · the sites"); },
+       : tt("nav.ask.hire.lands.none", "Businesses › Results · the sites"); },
    go: () => ssOpenSite(ssStaffingSite(), "#sp-roster"),
    lit: () => siteOpen && ssStaffingSite() && siteKey === ssStaffingSite() ? $("sp-roster") : $("secPortfolio"),
    holds: a => a.site === (siteOpen ? siteKey : null)},
   {id: "prices", get q(){ return tt("nav.ask.prices.q", "Are my prices right?"); }, page: "wiki",
    lands: () => { const t = ssPricesType();
-     return t ? tt("nav.ask.prices.lands.type", "Wiki › {type} › Prices in your save", {type: t.type}) : tt("nav.ask.prices.lands.none", "Wiki"); },
+     return t ? tt("nav.ask.prices.lands.type", "Game guide › {type} › Prices in your save", {type: t.type}) : tt("nav.ask.prices.lands.none", "Game guide"); },
    go: () => ssPrices(), lit: "#wk-prices", wait: true, holds: a => location.hash === a.hash,
    /* A company with several kinds of shop picks which one's prices to read. */
    choices(){ const own = ssOwnTypes(), t = ssPricesType();
      return own.length > 1 ? own.map(x => ({id: x.slug, label: x.type, on: !!t && x.slug === t.slug})) : null; },
    choose(slug){ ssPricesPick = slug; }},
   {id: "import", get q(){ return tt("nav.ask.import.q", "What should I import this week?"); },
-   lands: () => tt("nav.ask.import.lands", "Supply › Change checklist"), page: "supply",
-   go: ssChecklist, lit: "#sbStrip", holds: () => page === "supply"},
+   lands: () => tt("nav.ask.import.lands", "Supply › Changes"), page: "supply",
+   go: () => openRoute("supply/changes"), lit: "#sbStrip", holds: () => page === "supply"},
   {id: "playing", get q(){ return tt("nav.ask.playing.q", "What am I playing on?"); },
    lands: () => tt("nav.ask.playing.lands", "Difficulty · every setting against Normal"), page: "",
    go: ssDifficulty, lit: () => fvShownChip(), dim: false, holds: () => ssDiffOpen()},
 ];
 const ssLands = qn => typeof qn.lands === "function" ? qn.lands() : qn.lands;
 
-/* The row under Next moves, and the button it folds into once used. Mounted
-   from here rather than written into the template, so the cards above it are
-   left as they are. */
-function ssAskMount(){
-  const sec = $("secMoves");
-  if(!sec || $("ssAsk")) return;
-  const row = document.createElement("nav");
-  row.className = "ss-ask"; row.id = "ssAsk"; row.setAttribute("aria-label", tt("nav.ask.label", "Ask the board"));
-  row.innerHTML = `<span class="ss-asklead"><i></i>${tt("nav.ask.label", "Ask the board")}</span>${SS_QUESTIONS.map(x =>
-    `<a class="ss-aq" href="#" data-ask="${x.id}">${ssEsc(x.q)}</a>`).join("")}<span class="ss-roll" aria-hidden="true"></span>`;
-  sec.appendChild(row);
-  const head = q(".sechead", sec);
-  if(head){
-    const aside = document.createElement("div");
-    aside.className = "aside"; aside.id = "ssAskMini";
-    aside.innerHTML = `<button type="button" class="ss-askmini" aria-label="${attr(tt("nav.ask.mini.label", "Ask the board (press /)"))}" aria-keyshortcuts="/"><i></i>${
-      tt("nav.ask.label", "Ask the board")}<span class="ss-kbd" aria-hidden="true">/</span></button>`;
-    head.appendChild(aside);
-    q("button", aside).addEventListener("click", () => ssOpen());
-  }
-  row.addEventListener("click", e => {
-    const a = e.target.closest("[data-ask]");
-    if(!a) return;
-    e.preventDefault();
-    ssAsk(a.dataset.ask);
-  });
-  /* The dot rolls to the question under the pointer. */
-  const ball = q(".ss-roll", row);
-  row.addEventListener("mouseover", e => {
-    const a = e.target.closest(".ss-aq");
-    if(!a || !ball) return;
-    const r = a.getBoundingClientRect(), s = row.getBoundingClientRect();
-    ball.style.transform = `translate(${(r.left - s.left + r.width / 2 - 4).toFixed(1)}px,${(r.top - s.top - 16).toFixed(1)}px) rotate(${Math.round(r.left)}deg)`;
-  });
-  ssAskPaint();
-}
+/* Ask the board used to be a row under Next moves as well, folded into a
+   button once used. The Overview's All tools replaced both (the redesign's
+   task directory, docs/ui-structure-proposal.md, E15); the questions remain
+   the palette's empty state. */
 function ssAskUsed(){
   let used = false;
   try{ used = localStorage.getItem(SS_ASK_KEY) === "1"; }catch(e){}
@@ -19259,122 +20553,122 @@ const ssWorst = rows => rows.map(r => SS_SEV[r.level] || "opp")
    thing (its own id, line and go) in place of the view's single one. */
 const SS_VIEWS = [
   {id: "alerts", get t(){ return tt("nav.search.alerts.title", "Needs attention"); },
-   get p(){ return tt("nav.search.alerts.line", "Today"); }, ic: "today", syn: ["problems", "alerts", "warnings", "findings", "to do"],
+   get p(){ return tt("nav.search.alerts.line", "Overview"); }, ic: "today", syn: ["problems", "alerts", "warnings", "findings", "to do", "today"],
    /* What the list reads out, for the sizing on screen: above the gate, and of a kind still on. */
-   live: () => ({tag: tt("nav.search.today", "{n} today", {n: alertLines().filter(a => !kindOff(a)).length})}), go: () => reveal("alertSection")},
-  {id: "moves", get t(){ return tt("nav.search.moves.title", "Next moves"); },
-   get p(){ return tt("nav.search.moves.line", "Today"); }, ic: "today", syn: ["tools", "what next"],
-   go(){ showPage("today", false); settleScroll($("secMoves")); }},
+   live: () => ({tag: tt("nav.search.today", "{n} today", {n: alertLines().filter(a => !kindOff(a)).length})}), go: () => openRoute("overview")},
+  {id: "moves", get t(){ return tt("nav.search.moves.title", "All tools"); },
+   get p(){ return tt("nav.search.moves.line", "Overview"); }, ic: "today", syn: ["tools", "what next", "next moves", "tasks"],
+   go(){ openRoute("overview", {scroll: false}); ovJumpTools(); }},
   {id: "cash", get t(){ return tt("nav.search.cash.title", "Cash on hand"); },
-   get p(){ return tt("nav.search.cash.line", "Today"); }, ic: "coin", syn: ["debt", "loans", "money", "owe", "bank", "cash"],
+   get p(){ return tt("nav.search.cash.line", "Overview"); }, ic: "coin", syn: ["debt", "loans", "money", "owe", "bank", "cash"],
    live(){ const debt = (D.loans || []).reduce((s, l) => s + (l.remaining || 0), 0);
-     return debt ? {p: tt("nav.search.cash.owed", "Today · {w} owed on loans", {w: compact(debt)})} : {}; },
-   go(){ showPage("today"); ssRing(q('#kpis [data-kpi="cash"]')); }},
+     return debt ? {p: tt("nav.search.cash.owed", "Overview · {w} owed on loans", {w: compact(debt)})} : {}; },
+   go(){ openRoute("overview"); ssRing(q('#kpis [data-kpi="cash"]')); }},
   {id: "daily", get t(){ return tt("nav.search.daily.title", "Daily result"); },
-   get p(){ return tt("nav.search.daily.line", "Company › Results"); }, ic: "profit", syn: ["profit", "revenue", "chart", "income", "why did profit move"],
+   get p(){ return tt("nav.search.daily.line", "Businesses › Results"); }, ic: "profit", syn: ["profit", "revenue", "chart", "income", "why did profit move"],
    go: () => reveal("secDaily")},
   {id: "portfolio", get t(){ return tt("nav.search.portfolio.title", "Portfolio"); },
-   get p(){ return tt("nav.search.portfolio.line", "Company › Results · profit and loss by chain"); }, ic: "company",
+   get p(){ return tt("nav.search.portfolio.line", "Businesses › Results · profit and loss by chain"); }, ic: "company",
    syn: ["sites", "chains", "margin", "break even", "payback", "losing money"],
    /* The board has no break-even figure yet, and says so rather than land the
       player on a table that looks as if it should hold one. */
-   synP: {get "break even"(){ return tt("nav.search.portfolio.breakeven", "no break-even figure yet · Company › Results · profit and loss by chain"); },
-          get "payback"(){ return tt("nav.search.portfolio.payback", "no payback figure yet · Company › Results · profit and loss by chain"); }},
+   synP: {get "break even"(){ return tt("nav.search.portfolio.breakeven", "no break-even figure yet · Businesses › Results · profit and loss by chain"); },
+          get "payback"(){ return tt("nav.search.portfolio.payback", "no payback figure yet · Businesses › Results · profit and loss by chain"); }},
    go(){ view = "pnl"; sortKey = null; drawPortfolio(); reveal("secPortfolio"); }},
-  {id: "ops", get t(){ return tt("nav.search.ops.title", "Portfolio · Operations"); },
-   get p(){ return tt("nav.search.ops.line", "Company › Results · satisfaction, promotion, traffic"); }, ic: "company",
-   syn: ["satisfaction", "promotion", "foot traffic", "marketing", "security", "standards", "pull"],
-   go(){ view = "ops"; sortKey = null; drawPortfolio(); reveal("secPortfolio"); }},
+  {id: "ops", get t(){ return tt("nav.search.ops.title", "Standards"); },
+   get p(){ return tt("nav.search.ops.line", "Businesses › Standards · satisfaction, promotion, amenities, uniforms"); }, ic: "company",
+   syn: ["satisfaction", "promotion", "foot traffic", "marketing", "security", "standards", "pull", "operations", "amenities", "uniforms"],
+   go(){ openRoute("businesses/standards"); }},
   /* Weekly rhythm is By weekday in the Daily result chart now (R15). */
   {id: "rhythm", get t(){ return tt("nav.search.rhythm.title", "By weekday"); },
-   get p(){ return tt("nav.search.rhythm.line", "Company › Results · Daily result"); }, ic: "week",
+   get p(){ return tt("nav.search.rhythm.line", "Businesses › Results · Daily result"); }, ic: "week",
    syn: ["weekly rhythm", "weekday", "busiest day", "peak day", "rhythm"],
    go(){ if(weekdaySeries().length) chartWindow = "wd"; reveal("secDaily"); }},
-  {id: "products", get t(){ return tt("nav.search.products.title", "Products"); },
-   get p(){ return tt("nav.search.products.line", "Company › Products"); }, ic: "shelves", syn: ["sales", "units", "total sales", "best sellers", "what sells"],
-   live: () => ({p: tt("nav.search.products.sold", "Company › Products · {n} sold", {n: (D.products || []).length})}), go: () => reveal("secProducts")},
+  {id: "products", get t(){ return tt("nav.search.products.title", "Products & prices"); },
+   get p(){ return tt("nav.search.products.line", "Businesses › Products & prices"); }, ic: "shelves", syn: ["sales", "units", "total sales", "best sellers", "what sells", "products", "shop prices"],
+   live: () => ({p: tt("nav.search.products.sold", "Businesses › Products & prices · {n} sold", {n: (D.products || []).length})}), go: () => openRoute("businesses/prices")},
   {id: "payroll", get t(){ return tt("nav.search.payroll.title", "Payroll"); },
-   get p(){ return tt("nav.search.payroll.line", "Company › Payroll"); }, ic: "people", syn: ["wages", "salary", "salaries", "employees", "headcount", "staff"],
-   live: () => D.staff && D.staff.total ? {p: tt("nav.search.payroll.people", {one: "Company › Payroll · {s} person", other: "Company › Payroll · {s} people"},
+   get p(){ return tt("nav.search.payroll.line", "Staffing › Payroll"); }, ic: "people", syn: ["wages", "salary", "salaries", "employees", "headcount", "staff"],
+   live: () => D.staff && D.staff.total ? {p: tt("nav.search.payroll.people", {one: "Staffing › Payroll · {s} person", other: "Staffing › Payroll · {s} people"},
      {n: D.staff.total, s: ssNum(D.staff.total)})} : {}, go: () => reveal("secPayroll")},
   {id: "milestones", get t(){ return tt("nav.search.milestones.title", "Milestones"); },
-   get p(){ return tt("nav.search.milestones.line", "Company › Milestones · career totals"); }, ic: "flag",
+   get p(){ return tt("nav.search.milestones.line", "Businesses › Milestones · career totals"); }, ic: "flag",
    syn: ["goals", "diplomas", "rivals", "career", "buildings owned", "tax paid"], go: () => reveal("secGoals")},
   /* The game's settings are the difficulty chip and its popover (R15). */
   {id: "difficulty", get t(){ return tt("nav.search.difficulty.title", "Difficulty"); },
    get p(){ return tt("nav.search.difficulty.line", "every setting against Normal"); }, ic: "tune",
    syn: ["settings", "game settings", "house rules", "custom", "tax rate", "what am i playing on"],
    live: () => D.meta && D.meta.difficulty ? {p: tt("nav.search.difficulty.named", "{name} · every setting against Normal", {name: fvDiffName(D.meta.difficulty)})} : {}, go: ssDifficulty},
-  {id: "checklist", get t(){ return tt("nav.search.checklist.title", "Change checklist"); },
-   get p(){ return tt("nav.search.checklist.line", "Supply · every tab"); }, ic: "calendar", syn: ["orders", "what to type", "import plan", "checklist"],
+  {id: "checklist", get t(){ return tt("nav.search.checklist.title", "Changes"); },
+   get p(){ return tt("nav.search.checklist.line", "Supply › Changes · every change to type"); }, ic: "calendar", syn: ["orders", "what to type", "import plan", "checklist", "change checklist"],
    live(){ const d = sbData(), n = d.rows.filter(r => !d.marks.has(r.key)).length;
-     return d.rows.length ? {p: n ? tt("nav.search.checklist.left", {one: "Supply · {n} change to type", other: "Supply · {n} changes to type"}, {n})
-       : tt("nav.search.checklist.done", "Supply · all ticked")} : {}; },
-   go: ssChecklist},
-  {id: "imports", get t(){ return tt("nav.search.imports.title", "Weekly imports"); },
-   get p(){ return tt("nav.search.imports.line", "Supply › Warehouses"); }, ic: "truck", syn: ["import", "importer", "contracts", "weekly order", "what should i import", "orders"],
-   go: () => ssSupply("warehouses")},
+     return d.rows.length ? {p: n ? tt("nav.search.checklist.left", {one: "Supply › Changes · {n} change to type", other: "Supply › Changes · {n} changes to type"}, {n})
+       : tt("nav.search.checklist.done", "Supply › Changes · all ticked")} : {}; },
+   go: () => openRoute("supply/changes")},
+  {id: "imports", get t(){ return tt("nav.search.imports.title", "Imports"); },
+   get p(){ return tt("nav.search.imports.line", "Supply › Imports · weekly contracts"); }, ic: "truck", syn: ["import", "importer", "contracts", "weekly order", "what should i import", "orders", "weekly imports", "import amounts"],
+   go: () => openRoute("supply/imports")},
   /* Top-ups are on every tab (a shelf's, a depot's, a factory input's): the
      tab with the most still to type, else Shops. */
-  {id: "topups", get t(){ return tt("nav.search.topups.title", "Daily top-ups"); },
-   get p(){ return tt("nav.search.topups.line", "Supply › Shops, Warehouses and Factories"); }, ic: "route", syn: ["top-up", "distribution", "logistics", "delivery plan"],
-   go: () => ssSupply(ssTopupTab())},
+  {id: "topups", get t(){ return tt("nav.search.topups.title", "Deliveries"); },
+   get p(){ return tt("nav.search.topups.line", "Supply › Deliveries · daily top-ups and wholesale"); }, ic: "route", syn: ["top-up", "distribution", "logistics", "delivery plan", "daily top-ups", "delivery targets"],
+   go(){ const tab = ssTopupTab(); openRoute(tab === "factories" ? "supply/production" : "supply/deliveries"); if(sub.supply !== tab) showSub("supply", tab); }},
   {id: "shops", get t(){ return tt("nav.search.shops.title", "Shops"); },
-   get p(){ return tt("nav.search.shops.line", "Supply › Shops · every shelf against tomorrow's round"); }, ic: "shelves", syn: ["shelves", "run out", "stock out", "empty shelf", "before the drop"],
+   get p(){ return tt("nav.search.shops.line", "Supply › Deliveries · every shelf against tomorrow's round"); }, ic: "shelves", syn: ["shelves", "run out", "stock out", "empty shelf", "before the drop"],
    go: () => ssSupply("shops")},
   {id: "warehouses", get t(){ return tt("nav.search.warehouses.title", "Warehouses"); },
-   get p(){ return tt("nav.search.warehouses.line", "Supply › Warehouses · every depot"); }, ic: "crate", syn: ["warehouse", "depot", "cover", "second-tier", "before the import"],
+   get p(){ return tt("nav.search.warehouses.line", "Supply › Imports · every depot"); }, ic: "crate", syn: ["warehouse", "depot", "cover", "second-tier", "before the import"],
    go: () => ssSupply("warehouses")},
   {id: "idle", get t(){ return tt("nav.search.idle.title", "Idle stock"); },
    get p(){ return tt("nav.search.idle.line", "Supply · grouped on each tab"); }, ic: "crate", syn: ["dead stock", "not moving", "overstock", "too much stock"],
    go: () => ssSupply(ssIdleTab())},
   {id: "lines", get t(){ return tt("nav.search.lines.title", "Factory lines"); },
-   get p(){ return tt("nav.search.lines.line", "Supply › Factories · machines and the hours they run"); }, ic: "gear", syn: ["machines", "recipes", "24/7", "staffed hours", "run hours"],
+   get p(){ return tt("nav.search.lines.line", "Supply › Production · machines and the hours they run"); }, ic: "gear", syn: ["machines", "recipes", "24/7", "staffed hours", "run hours"],
    go: () => ssSupply("factories")},
   {id: "feed", get t(){ return tt("nav.search.feed.title", "Factory inputs"); },
-   get p(){ return tt("nav.search.feed.line", "Supply › Factories"); }, ic: "pipe", syn: ["inputs", "ingredients", "fed", "factory inputs", "is my factory fed", "feed the factories"],
+   get p(){ return tt("nav.search.feed.line", "Supply › Production"); }, ic: "pipe", syn: ["inputs", "ingredients", "fed", "factory inputs", "is my factory fed", "feed the factories"],
    live(){ const short = alertLines().filter(a => a.group === "feed");
-     return short.length ? {p: tt("nav.search.feed.short", {one: "Supply › Factories · {n} input short", other: "Supply › Factories · {n} inputs short"}, {n: short.length}),
+     return short.length ? {p: tt("nav.search.feed.short", {one: "Supply › Production · {n} input short", other: "Supply › Production · {n} inputs short"}, {n: short.length}),
        dot: ssWorst(short), kw: ssShortInputs()} : {}; },
    go: () => ssSupply("factories")},
   {id: "factorystaff", get t(){ return tt("nav.search.factorystaff.title", "Staffing for factory lines"); },
-   get p(){ return tt("nav.search.factorystaff.line", "Supply › Factories"); }, ic: "roster", syn: ["factory workers", "factory staffing", "factory shifts", "run hours"],
+   get p(){ return tt("nav.search.factorystaff.line", "Supply › Production"); }, ic: "roster", syn: ["factory workers", "factory staffing", "factory shifts", "run hours"],
    go(){ ssSupply("factories"); setTimeout(() => { const el = $("sbStaff"); if(el) settleScroll(el); }, 60); }},
   {id: "flow", get t(){ return tt("nav.search.flow.title", "Goods flow"); },
-   get p(){ return tt("nav.search.flow.line", "Supply · the diagram view of each tab"); }, ic: "route", syn: ["diagram", "supply chain", "routes", "pipes"],
-   go(){ sbViewOn = "diagram"; remember(SB_VIEW_KEY, "diagram"); drawSupplyTab(sub.supply); wireAll(); ssSupply(sub.supply, true); }},
+   get p(){ return tt("nav.search.flow.line", "Supply › Goods flow · the diagram"); }, ic: "route", syn: ["diagram", "supply chain", "routes", "pipes", "trace goods"],
+   go: () => openRoute("supply/flow")},
   {id: "market", get t(){ return tt("nav.search.market.title", "Market demand"); },
-   get p(){ return tt("nav.search.market.line", "Growth › Demand"); }, ic: "growth", syn: ["demand", "hype", "waves", "neighbourhood"],
-   go: () => reveal("secMarket")},
-  {id: "plan", get t(){ return tt("nav.search.plan.title", "Plan a chain"); },
-   get p(){ return tt("nav.search.plan.line", "Growth › Plan a chain"); }, ic: "growth", syn: ["new factory", "recipe plan", "expand"],
-   go: () => reveal("secPlan")},
+   get p(){ return tt("nav.search.market.line", "Expansion › Demand"); }, ic: "growth", syn: ["demand", "hype", "waves", "neighbourhood", "market"],
+   go: () => openRoute("expansion/demand")},
+  {id: "plan", get t(){ return tt("nav.search.plan.title", "Plan a factory"); },
+   get p(){ return tt("nav.search.plan.line", "Expansion › Plan a factory"); }, ic: "growth", syn: ["new factory", "recipe plan", "expand", "plan a chain"],
+   go: () => openRoute("expansion/factory")},
   {id: "finder", get t(){ return tt("nav.search.finder.title", "Find a location"); },
-   get p(){ return tt("nav.search.finder.line", "Map"); }, ic: "pin", syn: ["rent", "premises", "building", "floor size", "m²", "vacant", "where should i open", "size"],
+   get p(){ return tt("nav.search.finder.line", "Expansion › Find a location"); }, ic: "pin", syn: ["rent", "premises", "building", "floor size", "m²", "vacant", "where should i open", "size"],
    live(){ const n = ((D.premises || {}).buildings || []).filter(b => b.type === "retail" && b.status === "vacant").length;
-     return n ? {p: tt("nav.search.finder.vacant", "Map · {n} vacant", {n})} : {}; },
+     return n ? {p: tt("nav.search.finder.vacant", "Expansion › Find a location · {n} vacant", {n})} : {}; },
    go: () => ssFinder({cat: "retail", type: "", hoods: null})},
-  {id: "map", get t(){ return tt("nav.search.map.title", "Map"); },
-   get p(){ return tt("nav.search.map.line", "Map · the city"); }, ic: "map", syn: ["city", "address", "where is"], go: () => showPage("map")},
-  {id: "staffing", get t(){ return tt("nav.search.staffing.title", "Staffing"); },
-   get p(){ return tt("nav.search.staffing.line", "each shop's page"); }, ic: "roster",
+  {id: "map", get t(){ return tt("nav.search.map.title", "City map"); },
+   get p(){ return tt("nav.search.map.line", "City map · the city"); }, ic: "map", syn: ["city", "address", "where is", "map"], go: () => openRoute("map")},
+  {id: "staffing", get t(){ return tt("nav.search.staffing.title", "Schedules"); },
+   get p(){ return tt("nav.search.staffing.line", "Staffing › Schedules · each shop's week"); }, ic: "roster",
    syn: ["hire", "hiring", "schedule", "shifts", "roster", "bizman", "overstaffed", "whom should i hire"],
    live(){ const b = D.businesses.find(x => x.key === ssStaffingSite());
-     return b ? {p: tt("nav.search.staffing.first", "each shop's page · first: {site}", {site: b.name}),
+     return b ? {p: tt("nav.search.staffing.first", "Staffing › Schedules · first: {site}", {site: b.name}),
        land: tt("nav.search.staffing.land", "{site} › Staffing", {site: b.name})} : {}; },
-   go: () => ssOpenSite(ssStaffingSite(), "#sp-roster")},
-  {id: "crew", get t(){ return tt("nav.search.crew.title", "Crew"); },
-   get p(){ return tt("nav.search.crew.line", "each site's page · who works there, what they want"); }, ic: "crew", syn: ["hire", "demands", "quit", "people"],
-   go: () => ssOpenSite(ssCrewSite(), "#sp-crew")},
+   go: () => routeOpenSite(ssStaffingSite(), "#sp-roster", "staffing/schedules")},
+  {id: "crew", get t(){ return tt("nav.search.crew.title", "Staff needs"); },
+   get p(){ return tt("nav.search.crew.line", "Staffing › Staff needs · demands and hiring"); }, ic: "crew", syn: ["hire", "demands", "quit", "people", "crew", "whom to hire"],
+   go: () => openRoute("staffing/needs")},
   {id: "prices", get t(){ return tt("nav.search.prices.title", "Prices in your save"); },
-   get p(){ return tt("nav.search.prices.line", "Wiki"); }, ic: "tag", syn: ["prices", "pricing", "market price", "too expensive", "are my prices right"],
+   get p(){ return tt("nav.search.prices.line", "Game guide"); }, ic: "tag", syn: ["prices", "pricing", "market price", "too expensive", "are my prices right"],
    /* One entry for each kind of shop the company runs, each opening its own guide. */
-   each: () => ssOwnTypes().map(t => ({id: `view:prices:${t.slug}`, p: tt("nav.search.prices.guide", "Wiki › {type} guide", {type: t.type}),
+   each: () => ssOwnTypes().map(t => ({id: `view:prices:${t.slug}`, p: tt("nav.search.prices.guide", "Game guide › {type}", {type: t.type}),
      kw: [t.type, ...ssEnglish([t.slug])], go: () => ssPrices(t.slug)})), go: () => ssPrices()},
-  {id: "wiki", get t(){ return tt("nav.search.wiki.title", "Wiki"); },
-   get p(){ return tt("nav.search.wiki.line", "the game's own help"); }, ic: "wiki", syn: ["help", "guide", "manual"], need: false, go: () => showPage("wiki")},
+  {id: "wiki", get t(){ return tt("nav.search.wiki.title", "Game guide"); },
+   get p(){ return tt("nav.search.wiki.line", "the game's own help"); }, ic: "wiki", syn: ["help", "guide", "manual", "wiki"], need: false, go: () => openRoute("wiki")},
   {id: "changelog", get t(){ return tt("nav.search.changelog.title", "Changelog"); },
-   get p(){ return tt("nav.search.changelog.line", "footer · what is new"); }, ic: "list", syn: ["new", "updates", "release notes"], need: false,
+   get p(){ return tt("nav.search.changelog.line", "More · what's new"); }, ic: "list", syn: ["new", "updates", "release notes"], need: false,
    go(){ const d = $("changelogDialog"); if(d && !d.open){ d.showModal(); featureDiscovery.visit("changelog"); d.scrollTop = 0; } }},
 ];
 /* The words players use for a kind of finding. */
@@ -19672,7 +20966,7 @@ const ssMastControl = () => [ssField, ssFieldBtn].find(el => el.isConnected && e
    field. Where they cannot both have it the field narrows, down to SS_FIELD_MIN,
    and below that it steps down to its icon. Measured at full width each time,
    whatever the last measure decided. */
-const SS_BALL_ROOM = 40 + 100 + 12, SS_FIELD_MIN = 180, SS_ICON_GAP = 12;
+const SS_BALL_ROOM = 16 + 64 + 12, SS_FIELD_MIN = 180, SS_ICON_GAP = 12;
 function ssFitMast(){
   const mast = $("mast"), nav = $("nav");
   if(!mast || !nav) return;
@@ -19683,21 +20977,20 @@ function ssFitMast(){
   const n = nav.getBoundingClientRect(), f = ssField.getBoundingClientRect();
   /* The nav on a row of its own (a narrow window) leaves the field its row. */
   if(n.top >= f.bottom || f.top >= n.bottom) return;
-  const room = Math.floor(f.right - (n.right + SS_BALL_ROOM));
-  if(room >= f.width) return;
+  /* The row is the places, the sphere's shelf, the references, the field and
+     the clock. What the shelf does not need of the gap before the references
+     is the field's to lose; past that the row overflows by the rest. */
+  const refs = $("navRefs");
+  const r = refs && refs.getClientRects().length ? refs.getBoundingClientRect() : null;
+  const over = Math.max(0, mast.scrollWidth - mast.clientWidth);
+  const slack = Math.floor((r ? r.left - n.right : f.left - n.right) - SS_BALL_ROOM - over);
+  if(slack >= 0) return;
+  const room = Math.floor(f.width + slack);
   if(room >= SS_FIELD_MIN){ ssField.style.width = room + "px"; return; }
   mast.classList.add("ss-tight");
-  /* The icon keeps out of the ball's room too. A long clock -- a flags line,
-     the difficulty chip from 1501 px -- can push it in there, so it closes on
-     the clock, down to the sphere's own gap. A very long save name can still
-     leave it no room (at 1301 px, and with the chip at about 1501 to 1530 px):
-     then it sits over the ball's resting place. */
-  const short = Math.ceil(n.right + SS_BALL_ROOM - ssFieldBtn.getBoundingClientRect().left);
-  const give = (parseFloat(getComputedStyle(mast).columnGap) || 0) - SS_ICON_GAP;
-  if(short > 0 && give > 0) ssFieldBtn.style.marginRight = `-${Math.min(short, give)}px`;
 }
 window.addEventListener("resize", ssFitMast);
-if(window.ResizeObserver) ["nav", "brand", "clock"].forEach(id => { if($(id)) new ResizeObserver(ssFitMast).observe($(id)); });
+if(window.ResizeObserver) ["nav", "navRefs", "brand", "clock"].forEach(id => { if($(id)) new ResizeObserver(ssFitMast).observe($(id)); });
 if(document.fonts && document.fonts.ready) document.fonts.ready.then(ssFitMast);
 
 const ssScrim = document.createElement("div");
@@ -20072,7 +21365,6 @@ document.addEventListener("keydown", e => {
     ssOpen();
   }
 });
-ssAskMount();
 /* A UI table already in force before this script ran (a fast fetch, or the
    CLI's --lang page) wrote the chrome above in its language; the landing's
    footer and the clock's first tip still need it. */
@@ -20081,7 +21373,9 @@ if(typeof ttLang !== "undefined" && ttLang !== "en") navRelabel();
 /* nav underline follows the pointer, then goes home --------------------------- */
 function inkHome(){
   const nav = $("nav"); if(!nav) return;
-  const a = nav.querySelector("a.on"); if(!a) return;
+  const a = nav.querySelector("a.on");
+  /* On the City map or the Game guide no place is lit, and nor is the line. */
+  if(!a){ nav.style.setProperty("--nw", "0px"); return; }
   const r = a.getBoundingClientRect(), n = nav.getBoundingClientRect();
   nav.style.setProperty("--nx", (r.left - n.left) + "px"); nav.style.setProperty("--nw", r.width + "px");
 }
@@ -20132,55 +21426,200 @@ const wireTiles = once(() => {
   });
 });
 
-/* cards tilt toward the pointer ------------------------------------------------ */
+/* the Overview's own controls, bound once and delegated ------------------------
+   Details opens a finding's pane in place and remembers it (ovOpen), "Show N
+   more" unfolds the rest of the list, All tools jumps to the directory and
+   hands it the keyboard, and a task row opens its route with the way back.
+   The three rows that carry what they know about this save keep the Next
+   moves cards' ids (planImportsCard, optimizeStaffingCard, findLocationCard),
+   and wireCards() is still the name wireAll() and the tests call. */
+function ovJumpTools(){
+  const head = $("tools"), title = $("toolsTitle");
+  if(!head) return;
+  head.scrollIntoView({behavior: REDUCED ? "auto" : "smooth", block: "start"});
+  if(title) title.focus({preventScroll: true});
+}
 const wireCards = once(() => {
-  $("planImportsCard").addEventListener("click", e => {
+  on("click", ".ov-det", (btn, e) => {
+    e.preventDefault(); e.stopPropagation();
+    const row = btn.closest(".find"), pane = row && row.querySelector(".ov-x");
+    if(!pane) return;
+    const open = pane.hidden;
+    pane.hidden = !open;
+    btn.setAttribute("aria-expanded", String(open));
+    const words = btn.querySelector("span");
+    if(words) words.textContent = open ? tt("today.det.hide", "Hide") : tt("today.det.show", "Details");
+    if(open) ovOpen.add(row.dataset.id); else ovOpen.delete(row.dataset.id);
+  });
+  on("click", "[data-ov-more]", (btn, e) => {
     e.preventDefault();
-    ssChecklist();
+    ovShowAll = !ovShowAll;
+    drawAlerts();
+    const again = q("[data-ov-more]");
+    if(again) again.focus({preventScroll: true});
   });
-  $("optimizeStaffingCard").addEventListener("click", e => {
+  on("click", "[data-ov-tools]", (btn, e) => { e.preventDefault(); ovJumpTools(); });
+  on("click", "[data-ov-top]", (btn, e) => {
     e.preventDefault();
-    /* Nothing to open before the payload carries a plan: the card then behaves
-       like the rest of the panel's entry points and simply shows the sites.
-       With a site to open, the panel is drawn first and the scroll is left to
-       reveal(), which lands on the Roster itself -- the two of them racing was
-       what put the player two blocks above it. */
-    const card = $("optimizeStaffingCard");
-    if(card.dataset.site) openSite(card.dataset.site, false);
-    reveal("secDetail", "push", "#sp-roster");
-    /* And the block says it has been arrived at, because a page that jumps
-       somewhere leaves the player to work out what moved. The ring itself is
-       an animation, so a reader who asked for no motion is covered by the
-       blanket rule in the stylesheet rather than by a branch here. */
-    const block = q("#sp-roster");
-    if(block){
-      block.classList.remove("sp-arrived");
-      void block.offsetWidth;  // restart it on a second click
-      block.classList.add("sp-arrived");
-    }
+    const sec = $("alertSection");
+    if(sec) sec.scrollIntoView({behavior: REDUCED ? "auto" : "smooth", block: "start"});
+    const h = $("ovTitle");
+    if(h){ h.tabIndex = -1; h.focus({preventScroll: true}); }
   });
-  $("findLocationCard").addEventListener("click", e => {
-    e.preventDefault();
-    /* Retail, any type: the count on the card is the retail one. */
-    if(D.premises) openFinder({cat:"retail", type:"", hoods:null});
-    else showPage("map");
-  });
-  document.addEventListener("mousemove", e => {
-    const c = closest(e, ".move, .drop"); if(!c || REDUCED) return;
-    const r = c.getBoundingClientRect();
-    const x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
-    c.style.setProperty("--ry", (x * 10) + "deg"); c.style.setProperty("--rx", (-y * 8) + "deg");
-  });
-  onLeave(".move, .drop", c => { c.style.setProperty("--ry", "0deg"); c.style.setProperty("--rx", "0deg"); });
+  on("click", "[data-ov-rank]", (btn, e) => { e.preventDefault(); ovForget(); drawAlerts(); });
+  /* A task row, a Details link or the changes line: its route, with the way
+     back. Find a suitable location opens the finder on retail, as the card
+     did; a modified click is the browser's. */
+  on("click", "[data-ov-route]", (a, e) => {
+    if(e.button > 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    e.preventDefault(); e.stopPropagation();
+    if(!hasData()) return;
+    const id = a.dataset.ovRoute;
+    const label = (a.querySelector("[data-tt]") || a).textContent.trim();
+    const o = {};
+    if(a.dataset.ovInto) o.into = a.dataset.ovInto;
+    if(id === "expansion/finder") o.preset = {cat: "retail", type: "", hoods: null};
+    /* Build shop schedules opens on the shop it names. */
+    if(a.id === "optimizeStaffingCard" && a.dataset.site) o.pick = a.dataset.site;
+    if(a.closest("#alerts")){
+      const row = a.closest(".find");
+      openRoute(id, {...o, arrival: row ? {what: label, pos: "", back: "overview", backLabel: tt("nav.from.overview", "Needs attention"), depth: 1, ov: ovRemember(row.dataset.id)} : null});
+    } else ovTool(id, label, o);
+  }, true);
+  window.addEventListener("scroll", () => { if(page === "today") requestAnimationFrame(ovStickyCheck); }, {passive: true});
+  window.addEventListener("resize", () => { if(page === "today") ovStickyCheck(); });
 });
+
+/* the adapters' own buttons, bound once: each opens the existing evidence
+   under the route it belongs to, so the shell and a site's crumb say where the
+   reader came from. */
+function routeOpenSite(key, into, id){
+  routeNext = id;
+  try{ ssOpenSite(key, into); } finally { routeNext = null; }
+}
+const wireAdapters = once(() => {
+  on("click", "[data-std]", (btn, e) => {
+    e.preventDefault();
+    const sj = STD_SUBJECTS.find(x => x.id === btn.dataset.std);
+    if(!sj) return;
+    /* Promotion is the comparison right below; the others open the first
+       business that needs them, on its Standards block. */
+    if(sj.id === "promotion" || !btn.dataset.site){ settleScroll($("secPortfolio")); return; }
+    routeOpenSite(btn.dataset.site, sj.block, "businesses/standards");
+  });
+  on("click", "[data-price-site]", (btn, e) => { e.preventDefault(); routeOpenSite(btn.dataset.priceSite, "#sp-shelves", "businesses/prices"); });
+  on("click", "[data-price-guide]", (btn, e) => { e.preventDefault(); ssPrices(btn.dataset.priceGuide); });
+  on("click", "[data-sched-open]", (btn, e) => { e.preventDefault(); routeOpenSite(btn.dataset.schedOpen, "#sp-roster", "staffing/schedules"); });
+  on("click", "[data-hire-open]", (btn, e) => { e.preventDefault(); routeOpenSite(btn.dataset.hireOpen, "#sp-roster", "staffing/needs"); });
+  on("click", "[data-prod-staff]", (btn, e) => { e.preventDefault(); openRoute("supply/production", {into: "#sbStaff"}); });
+  on("click", "[data-need-open]", (btn, e) => {
+    e.preventDefault();
+    const a = nxFindings(["jobdemand", "companydemand"]).find(x => x.id === btn.dataset.needOpen);
+    if(a) goToAlert(a);
+  });
+});
+
+/* the utilities: ··· in the masthead, Map & more on a phone -----------------
+   One menu hung off <body> (a section would clip it): search, what's new, the
+   preferences and help in the footer, and on a phone the City map and the
+   Game guide as well. Arrow keys move through it, Escape closes it and gives
+   the keyboard back to the button that opened it. */
+const nxMenu = document.createElement("div");
+nxMenu.className = "nx-menu"; nxMenu.id = "nxMenu"; nxMenu.hidden = true;
+nxMenu.setAttribute("role", "menu");
+nxMenu.setAttribute("aria-label", tt("nav.more.title", "More"));
+document.body.appendChild(nxMenu);
+let nxMenuFrom = null;
+const NX_MENU_ICON = {
+  search: '<circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4.5 4.5"></path>',
+  help: '<circle cx="12" cy="12" r="8.5"></circle><path d="M9.8 9.5a2.3 2.3 0 0 1 4.4.9c0 1.6-2.2 2-2.2 3.4M12 16.8v.01"></path>',
+};
+function nxMenuItems(phone){
+  const svg = d => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+  const item = (id, ic, label) => `<button type="button" role="menuitem" data-nx-item="${id}">${ic}<span>${spEsc(label)}</span></button>`;
+  return (phone ? `<span class="lab" role="presentation">${tt("nav.more.refs", "Reference")}</span>`
+      + REFS.filter(r => hasData() || r.id === "wiki").map(r => item(r.id, icon(r.icon), r.label)).join("") : "")
+    + `<span class="lab" role="presentation">${tt("nav.more.utils", "Utilities")}</span>`
+    + (hasData() ? item("search", svg(NX_MENU_ICON.search), tt("nav.more.search", "Search the board")) : "")
+    + item("news", spIcon("list"), tt("nav.more.news", "What's new"))
+    + item("prefs", icon("tune"), tt("nav.more.prefs", "Preferences: theme and game names"))
+    + item("help", svg(NX_MENU_ICON.help), tt("nav.more.help", "Help & feedback"));
+}
+function nxMenuToggle(btn){
+  if(!nxMenu.hidden && nxMenuFrom === btn){ nxMenuClose(true); return; }
+  nxMenuClose(false);
+  const phone = btn.id === "phoneMore";
+  nxMenu.innerHTML = nxMenuItems(phone);
+  nxMenu.hidden = false;
+  nxMenuFrom = btn;
+  btn.setAttribute("aria-expanded", "true");
+  const r = btn.getBoundingClientRect(), w = nxMenu.offsetWidth, h = nxMenu.offsetHeight;
+  const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
+  nxMenu.style.left = Math.max(8, Math.min(r.right - w, vw - w - 8)) + "px";
+  nxMenu.style.top = Math.max(8, phone ? r.top - h - 8 : Math.min(r.bottom + 8, vh - h - 8)) + "px";
+  const first = nxMenu.querySelector("[data-nx-item]");
+  if(first) first.focus({preventScroll: true});
+}
+function nxMenuClose(focus){
+  if(nxMenu.hidden) return;
+  nxMenu.hidden = true;
+  if(nxMenuFrom){ nxMenuFrom.setAttribute("aria-expanded", "false"); if(focus && nxMenuFrom.isConnected) nxMenuFrom.focus({preventScroll: true}); }
+  nxMenuFrom = null;
+}
+function nxMenuDo(id){
+  if(id === "map" || id === "wiki"){ if(hasData()) openRoute(id); else if(window.BigCopilotBoard) window.BigCopilotBoard.browseWiki(); return; }
+  if(id === "search"){ if(typeof ssOpen === "function") ssOpen(); return; }
+  if(id === "news"){
+    const d = $("changelogDialog");
+    if(d && !d.open){ d.showModal(); featureDiscovery.visit("changelog"); d.scrollTop = 0; }
+    return;
+  }
+  /* The preferences and the help live in the footer for now: the menu takes
+     the reader there and hands the keyboard to the first control. */
+  const foot = q(".wrap > .sitefoot") || q(".sitefoot");
+  if(!foot) return;
+  const box = id === "prefs" ? foot.querySelector(".sf-theme") || foot : foot.querySelector(".sf-nav") || foot;
+  box.scrollIntoView({behavior: REDUCED ? "auto" : "smooth", block: "center"});
+  const to = id === "prefs" ? box.querySelector('[data-theme-set][aria-pressed="true"], button') : box.querySelector("a");
+  if(to) to.focus({preventScroll: true});
+}
+nxMenu.addEventListener("click", e => {
+  const b = e.target.closest("[data-nx-item]");
+  if(!b) return;
+  nxMenuClose(false);
+  nxMenuDo(b.dataset.nxItem);
+});
+nxMenu.addEventListener("keydown", e => {
+  const items = $$("[data-nx-item]", nxMenu), i = items.indexOf(document.activeElement);
+  if(e.key === "Escape"){ e.preventDefault(); nxMenuClose(true); }
+  else if(e.key === "ArrowDown" || e.key === "ArrowUp"){
+    e.preventDefault();
+    const n = items.length, down = e.key === "ArrowDown";
+    const next = items[i < 0 ? (down ? 0 : n - 1) : (i + (down ? 1 : -1) + n) % n];
+    if(next) next.focus();
+  } else if(e.key === "Home" || e.key === "End"){ e.preventDefault(); (e.key === "Home" ? items[0] : items[items.length - 1]).focus(); }
+  else if(e.key === "Tab") nxMenuClose(false);
+});
+document.addEventListener("click", e => {
+  if(nxMenu.hidden || nxMenu.contains(e.target) || (nxMenuFrom && nxMenuFrom.contains(e.target))) return;
+  nxMenuClose(false);
+});
+window.addEventListener("resize", () => nxMenuClose(false));
 
 /* severity dots filter the list; the dot on a row silences it ------------------ */
 const sevOff = new Set();
 function applySev(){
-  $$(".sev[data-kind]").forEach(s => s.classList.toggle("off", sevOff.has(s.dataset.kind)));
+  $$(".sev[data-kind]").forEach(s => {
+    s.classList.toggle("off", sevOff.has(s.dataset.kind));
+    if(s.tagName === "BUTTON") s.setAttribute("aria-pressed", String(!sevOff.has(s.dataset.kind)));
+  });
   /* The main list only: the smaller findings under "show" are filtered by
-     kind alone, as they always were. */
+     kind alone, as they always were. A group's heading goes with its rows,
+     and a list the filters have emptied says so rather than looking healthy. */
   $$("#alerts .find").forEach(f => f.classList.toggle("hide", [...sevOff].some(k => f.classList.contains(k))));
+  $$("#alerts .ov-band").forEach(b => b.classList.toggle("hide", sevOff.has(b.dataset.kind)));
+  const all = $$("#alerts .find"), none = $("ovFiltered");
+  if(none) none.hidden = !(all.length && all.every(f => f.classList.contains("hide")));
 }
 const bindSev = once(() => on("click", ".sev[data-kind]", s => {
   sevOff.has(s.dataset.kind) ? sevOff.delete(s.dataset.kind) : sevOff.add(s.dataset.kind);
@@ -22460,7 +23899,7 @@ function wireWrites(){ bindWrites(); gwToast(); gwReadBack(); }
 /* Everything above, after every render. Delegated handlers bind once; the
    state-carrying ones re-apply their state to the fresh markup. */
 function wireAll(){
-  wireTips(); wireTiles(); wireCards();
+  wireTips(); wireTiles(); wireCards(); wireAdapters();
   wireSev(); wireFinds(); wireKinds();
   wireChart(); wirePortfolio(); wireSiteReads();
   wireFlow(); bindSupply();
@@ -22497,11 +23936,15 @@ function boot(){
     return;
   }
   paintNav();
-  /* A site's address reopens that site. An old page name is handed over
-     whole, so the view that replaced it is the one that opens — not whichever
-     view of its new page was last used. */
-  if(!openSiteHash(h, "replace"))
-    showPage(PAGE_ALIASES[h] ? h : pageFromHash(h) || remembered(PAGE_KEY) || "today", false, "replace");
+  /* A site's address reopens that site. A route or an area opens as itself,
+     and with no hash the route last shown does. An old page name is handed
+     over whole, so the view that replaced it is the one that opens — not
+     whichever view of its new page was last used. */
+  if(!openSiteHash(h, "replace")){
+    const r = routeResolve(h) || (h ? null : routeResolve(remembered(ROUTE_KEY) || ""));
+    if(r) openRoute(r, {historyMode: "replace", scroll: false});
+    else showPage(PAGE_ALIASES[h] ? h : pageFromHash(h) || remembered(PAGE_KEY) || "today", false, "replace");
+  }
   /* Bound once: the nav underline, the coin, and the sphere's entrance. A live
      refresh re-renders the numbers but never replays these. */
   wireNav(); wireCoin(); wireSphere();
