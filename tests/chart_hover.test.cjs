@@ -148,7 +148,7 @@ test('the y axis labels the losses below zero as well', async (t) => {
 test('a small loss still gets a label below zero', async (t) => {
   const page = await board(t, 1280);
   const labels = await page.evaluate(() => {
-    D.daily.forEach((r, i) => { r.profit = i === 3 ? -1 : 50000; });
+    D.daily.forEach((r, i) => { r.profit = i === D.daily.length - 3 ? -1 : 50000; });
     drawChart();
     return [...document.querySelectorAll('#dailyBox svg text[text-anchor="end"]')]
       .map(el => el.textContent.trim());
