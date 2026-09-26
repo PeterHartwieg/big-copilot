@@ -65,9 +65,20 @@ async function board(o = {}) {
     showPage('company');
     drawSite();
   }, o);
+  require('./_payload_contract.cjs').assertPayloadShape(await page.evaluate(() => D), 'findability');
   return page;
 }
-const readOf = (page, block) => page.locator(`#sitePanel [data-block="${block}"] .sp-readout`).first().innerText();
+// Every page's sections are content-visibility:auto. A section just shown
+// stays skipped until the next rendering update finds it near the viewport,
+// and until then its innerText is "" while its box already has a size, so a
+// visibility wait does not cover it. Wait for the rendered state itself.
+// checkVisibility sees an ancestor's skip only: point it inside a section.
+async function textOf(locator) {
+  const el = await locator.first().elementHandle();  // waits until attached
+  await locator.page().waitForFunction(node => node.checkVisibility({contentVisibilityAuto: true}), el, {polling: 'raf'});
+  return el.innerText();
+}
+const readOf = (page, block) => textOf(page.locator(`#sitePanel [data-block="${block}"] .sp-readout`));
 
 // One hour a day, noon, with six customers against three of capacity: at the ceiling.
 const grid = (office, staffedAt) => {
@@ -89,15 +100,15 @@ test('a shop block reads out its most telling cell before anything is pointed at
   const page = await board({hours: grid(false, 3)});
   try {
     // The hour grid opens on the busiest hour spent at the ceiling, Monday first.
-    assert.match(await page.locator('#hourRead').innerText(), /^Worst hour · Monday 12:00 6 customers · .* · at the ceiling$/);
+    assert.match(await textOf(page.locator('#hourRead')), /^Worst hour · Monday 12:00 6 customers · .* · at the ceiling$/);
     assert.equal(await readOf(page, 'pull'), 'Foot traffic 41 + marketing 31 · 28 short of the cap');
     // Nothing on the page asks to be hovered any more.
-    assert.doesNotMatch(await page.locator('#sitePanel').innerText(), /Hover an? /);
+    assert.doesNotMatch(await textOf(page.locator('#sitePanel')), /Hover an? /);
     // A pointer replaces the line; leaving the block puts the reading back.
     await page.hover('#sp-hours .hc[data-read*="Saturday 15:00"]');
-    assert.match(await page.locator('#hourRead').innerText(), /^Saturday 15:00 2 customers/);
+    assert.match(await textOf(page.locator('#hourRead')), /^Saturday 15:00 2 customers/);
     await page.mouse.move(2, 2);
-    assert.match(await page.locator('#hourRead').innerText(), /^Worst hour · Monday 12:00/);
+    assert.match(await textOf(page.locator('#hourRead')), /^Worst hour · Monday 12:00/);
     await page.hover('#sp-pull .sp-minis span');
     assert.equal(await readOf(page, 'pull'), 'Security 85%');
     await page.mouse.move(2, 2);
@@ -112,7 +123,7 @@ test('an office reads out its lowest standard, and a big crew who is off', async
   try {
     assert.equal(await readOf(page, 'standards'), 'Lowest · Cleanliness 62%');
     // Persons 1, 6 and 11 are off: two named, the third counted.
-    assert.equal(await page.locator('#sp-crew .sp-readout').innerText(), 'Off today · Person 1, Person 6 and 1 more');
+    assert.equal(await textOf(page.locator('#sp-crew .sp-readout')), 'Off today · Person 1, Person 6 and 1 more');
   } finally { await page.close(); }
 });
 
@@ -210,7 +221,7 @@ test('the Shelves and Fees heads link to the guide, landing on Prices in your sa
   let page = await board();
   try {
     const link = page.locator('#sp-shelves .sechead .xl-guide');
-    assert.equal(await link.innerText(), 'Compare with market prices ›');
+    assert.equal(await textOf(link), 'Compare with market prices ›');
     assert.equal(await link.getAttribute('href'), '#wiki/businesstypes-giftshop/prices');
     // Following it opens the Wiki page on that route.
     await link.click();
@@ -293,7 +304,7 @@ test('a product stocked but not sold yet still opens a store that stocks it', as
   try {
     await page.evaluate(() => { siteOpen = false; drawSite(); showSub('company', 'products'); drawProducts(); });
     const link = page.locator('#secProducts .xl-sells', {hasText: 'New Gift'});
-    assert.equal(await link.getAttribute('data-tip'), 'Open HART. Other, which stocks it; no store sold any yesterday');
+    assert.equal(await link.getAttribute('data-tip'), 'Open HART. Other, which stocks it; no store sold any in the last seven days');
     assert.deepEqual(await page.$$eval('#secProducts .bar i', bars => bars.map(i => i.style.width)), ['100%', '0%']);
     await link.click();
     assert.equal(await page.evaluate(() => [siteOpen, siteKey].join(' ')), `true ${OTHER}`);
@@ -325,7 +336,7 @@ test('a depot or factory holding a product is never where its Products row lands
   try {
     await page.evaluate(() => { siteOpen = false; drawSite(); showSub('company', 'products'); drawProducts(); });
     assert.equal(await page.locator('#secProducts .xl-sells').count(), 0);
-    assert.match(await page.locator('#secProducts tbody').innerText(), /New Gift/);
+    assert.match(await textOf(page.locator('#secProducts tbody')), /New Gift/);
   } finally { await page.close(); }
 });
 
@@ -428,7 +439,7 @@ test("a finding row's name opens the site's page; the rest of the row still open
       D.alerts = [f]; drawAlerts(); showPage('today');
     }, FINDING);
     const name = page.locator('#alertSection .find .site a.ss-sl');
-    assert.equal(await name.innerText(), 'HART. Gifts');
+    assert.equal(await textOf(name), 'HART. Gifts');
     assert.equal(await name.getAttribute('href'), HERE);
     assert.equal(await name.getAttribute('data-tip'), 'Open its page');
     // The map button stays beside the name, outside the link.
@@ -481,7 +492,10 @@ test('every finding is reached from the keyboard, a synthetic one too, and lands
     // Its name says whose finding it is, and the row opens its detail as it
     // does under the pointer.
     assert.equal(await page.getByRole('button', {name: /^Company: 1 staff with demands only you can meet/}).count(), 1);
-    await page.waitForTimeout(400);
+    // The detail fades in under the focus: wait for the fade to finish, then
+    // say what it shows.
+    await page.waitForFunction(() => !document.querySelector('#alertSection .find[data-id="c1"] .more').getAnimations().length,
+      null, {polling: 50});
     assert.equal(await page.locator('#alertSection .find[data-id="c1"] .more').evaluate(m => getComputedStyle(m).opacity), '1');
     await page.keyboard.press('Space');
     assert.equal(await page.evaluate(() => [location.hash, siteKey].join(' ')), `${HERE} ${KEY}`);
@@ -638,8 +652,13 @@ test("a site's page on a phone: a sticky crumb row, arrows round the list, nothi
     assert.ok(stuck.y > 400, `the page scrolled: ${JSON.stringify(stuck)}`);
     assert.ok(Math.abs(stuck.top - stuck.mast) <= 1, `stuck under the masthead: ${JSON.stringify(stuck)}`);
     // A block landed on comes to rest below the crumb row, not under it.
-    await page.evaluate(() => { scrollTo(0, 0); xlArrive('#sp-shelves'); });
-    await page.waitForTimeout(600);
+    await page.evaluate(() => { scrollTo(0, 0); window.xlScroll = null; xlArrive('#sp-shelves'); });
+    // The smooth scroll's end state: moved off the top, and still over three frames.
+    await page.waitForFunction(() => {
+      const mark = window.xlScroll;
+      window.xlScroll = {y: scrollY, frames: mark && mark.y === scrollY ? mark.frames + 1 : 0};
+      return scrollY > 0 && window.xlScroll.frames >= 3;
+    }, null, {polling: 'raf'});
     const landed = await page.evaluate(() => ({
       block: document.querySelector('#sp-shelves').getBoundingClientRect().top,
       crumbs: document.querySelector('.ss-crumbs').getBoundingClientRect().bottom, y: scrollY}));

@@ -4,9 +4,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
-const startup = source.slice(source.indexOf('    // A folder chosen on an earlier visit:'), source.lastIndexOf('  });'));
+const {between} = require('./_slice.cjs');
+const startup = between(source, '    // A folder chosen on an earlier visit:', '  });', {last: true});
+// The page's tt(), which app.js writes every word through.
+const i18n = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8');
+// How app.js hands the strip its words: say(), failure() and errWords().
+const sayHelpers = between(source, '  const say = (v)', '\n', {endAfter: '  const errWords'});
 // The loopback check a remembered link goes through, as app.js has it.
-const loopback = source.slice(source.indexOf('  function loopbackOrigin('), source.indexOf('  // Chrome and Edge hold a public page'));
+const loopback = between(source, '  function loopbackOrigin(', '  // Chrome and Edge hold a public page');
 
 async function resume(permission, options = {}) {
   const loads = [];
@@ -23,13 +28,14 @@ async function resume(permission, options = {}) {
     stored:{get:(key) => key === 'ledger_link' && options.link ? options.link : ''},
     LINK_KEY:'ledger_link', LINK_DEFAULT:'http://127.0.0.1:8322', linkUrl:null, URL,
     runtimeReady:true, pick:{dir:'character', name:'chosen.hsg'},
-    place(){}, idleState(){}, wireLanding(){}, paintStrip(){},
+    place(){}, idleState(){}, wireLanding(){}, paintStrip(){}, offerReopen(){ context.reopened = true; },
     startAttempt(){return true;}, finishAttempt(){}, state(){},
-    note(...args){notes.push(args);},
+    note(...args){notes.push(args.map((a) => (typeof a === 'function' ? a() : a)));},
     async loadFromHandle(value){loads.push(value);},
-    async loadFromLink(why, gen){links.push([why, gen]);},
+    async loadFromLink(why, gen){links.push([typeof why === 'function' ? why() : why, gen]);},
   });
-  await vm.runInContext(`(async () => {${loopback}\n${startup}\n})()`, context);
+  vm.runInContext(i18n, context);
+  await vm.runInContext(`(async () => {${sayHelpers}\n${loopback}\n${startup}\n})()`, context);
   return {loads, links, notes, handle, context};
 }
 
@@ -62,4 +68,13 @@ test('a remembered link that is not this machine is not followed', async () => {
     const result = await resume('granted', {link});
     assert.equal(result.context.linkUrl, 'http://127.0.0.1:8322', link);
   }
+});
+test('with nothing to reopen, startup offers to choose a picked-once save again', async () => {
+  // U2 in #109: offerReopen() decides from the tab's own record whether a
+  // one-file source was open before the reload; startup only asks it when no
+  // link and no folder handle can bring the board back.
+  assert.equal((await resume('granted', {missing:true})).context.reopened, true);
+  assert.equal((await resume('granted', {supported:false})).context.reopened, true);
+  assert.equal((await resume('granted')).context.reopened, undefined);
+  assert.equal((await resume('granted', {link:'http://127.0.0.1:8322'})).context.reopened, undefined);
 });

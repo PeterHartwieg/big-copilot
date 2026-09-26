@@ -161,8 +161,10 @@ _SLUG_LINK_KINDS = (
     "general", "rivals", "finance", "building", "special", "minor",
 )
 
-# A place on this machine must never reach the payload, in any string.
-_PRIVATE_PATH_RE = re.compile(r"(?i)([a-z]:[\\/]|/users/|\\users\\|/home/|file://)")
+# A place on this machine must never reach the payload, in any string. A drive
+# letter counts only where no URL scheme letter comes before it, so the `s:/`
+# in `https://` is not a drive.
+_PRIVATE_PATH_RE = re.compile(r"(?i)((?<![a-z0-9+.-])[a-z]:[\\/]|/users/|\\users\\|/home/|file://)")
 
 _INLINE_CAPACITY_RE = re.compile(r"^\*\*Product Capacity:\*\*\s*([\d,]+)\s*([A-Za-z]*)\s*$", re.M)
 _RETAIL_SIZE_RE = re.compile(
@@ -262,13 +264,17 @@ def street_label(address: tuple[str, int]) -> str:
 
 
 def source_meta(relative: str, path: str) -> dict:
-    """One source file as the payload records it: game-relative path and hash."""
+    """One source file as the payload records it: game-relative path and hash.
+
+    The mtime is left null, as for ba_buildings.json: Steam and a reinstall
+    touch unchanged files, and the hash already says whether the bytes moved.
+    """
     data = wiki_data.read_source(path)
     return {
         "path": relative,
         "bytes": len(data),
         "sha256": wiki_data.sha256_hex(data),
-        "mtime": wiki_data.modified_utc(path),
+        "mtime": None,
     }
 
 
@@ -1096,11 +1102,7 @@ def guide_copy(wording_data: dict, locale: dict[str, str], short: str) -> tuple[
         return None, []
 
     def holds(clauses) -> bool:
-        for clause in clauses or []:
-            needle = clause.get("includes")
-            if not needle or needle not in locale.get(clause.get("src") or "", ""):
-                return False
-        return True
+        return not _copy_misses(clauses, locale)
 
     lede_entry = entry.get("lede") or {}
     lede = lede_entry.get("text") if holds(lede_entry.get("when")) else None
@@ -1110,6 +1112,43 @@ def guide_copy(wording_data: dict, locale: dict[str, str], short: str) -> tuple[
         if note.get("text") and note.get("src") and holds(note.get("when"))
     ]
     return lede, notes
+
+
+def _copy_misses(clauses, locale: dict[str, str]) -> list[dict]:
+    """The clauses of a `when` list whose phrase is not on the page it names."""
+    return [
+        clause for clause in clauses or []
+        if not clause.get("includes")
+        or clause["includes"] not in locale.get(clause.get("src") or "", "")
+    ]
+
+
+def dropped_copy(wording_data: dict, locale: dict[str, str], shorts) -> list[dict]:
+    """The authored ledes and notes `guide_copy()` leaves out, for the build to report.
+
+    A game patch that rewords a phrase a `when` clause quotes drops that copy
+    from the payload; each drop is named here so it is seen, not silent. Only
+    the guides that were built (`shorts`) are checked: a business with no guide
+    has no copy to lose.
+    """
+    rows = []
+    for short, entry in sorted(((wording_data or {}).get("guides") or {}).items()):
+        if short not in shorts:
+            continue
+        entry = entry or {}
+        pieces = [("lede", entry.get("lede") or {})]
+        pieces += [("notes[%d]" % index, note or {})
+                   for index, note in enumerate(entry.get("notes") or [])]
+        for where, piece in pieces:
+            if not piece.get("text"):
+                continue
+            for clause in _copy_misses(piece.get("when"), locale):
+                rows.append({
+                    "key": "guides.%s.%s" % (short, where),
+                    "reason": "%r is no longer in %s; the authored text is left out"
+                              % (clause.get("includes"), clause.get("src")),
+                })
+    return rows
 
 
 class Guide:
@@ -1446,6 +1485,9 @@ class Guide:
             for ref in sellers.values():
                 self.touch(ref.get("slug") or "")
             self.page_id(prefix)
+            # The capacities travel only for the fixtures this guide lists for
+            # the product: a holder scoped to another business stays behind.
+            carried = set(fixtures) | set(fee_fixtures)
             out[slug] = {
                 "name": record["name"],
                 "slug": prefix,
@@ -1454,7 +1496,7 @@ class Guide:
                 "kind": kind,
                 "alsoSoldBy": [ref["name"] for ref in sellers.values()],
                 "alsoSoldByKeys": [ref.get("slug") for ref in sellers.values()],
-                "fixtures": sorted(set(fixtures) | set(fee_fixtures)),
+                "fixtures": sorted(carried),
                 "wholesale": page_wholesale if page_wholesale == list_wholesale else None,
                 "importers": [key for key in (
                     self.supplier_key(ref.get("address"))
@@ -1468,7 +1510,7 @@ class Guide:
                 "automatic": bool(_AUTOMATIC_FEE_RE.search(text)),
                 "pageId": self.page_id(prefix),
                 "fixtureCapacities": self.fixture_capacities(
-                    record.get("name") or "", sorted(set(named) | set(holders))),
+                    record.get("name") or "", sorted((set(named) | set(holders)) & carried)),
             }
         return out
 
@@ -2366,6 +2408,8 @@ def build_public_wiki(data_dir: str | None = None, buildings_path: str | None = 
     provenance["sources"]["helpStructure"] = _structure_meta(paths)
     provenance["counts"]["categories"] = len(categories)
     provenance["counts"]["guides"] = len(guides)
+    built = {guide["BUSINESS"]["nameSrc"].removeprefix("ba:businesstype_") for guide in guides.values()}
+    copy_issues += dropped_copy(wording(), locale, built)
     if copy_issues:
         provenance["issues"]["copy"] = copy_issues
 
@@ -2542,6 +2586,31 @@ def serialise(payload: dict) -> str:
     return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
 
 
+_DATE_KEYS = ("sourceDate", "extracted")
+
+
+def _same_but_the_date(payload: dict, existing: str) -> bool:
+    """Whether `payload` is the standing file's text but for its source date."""
+    try:
+        before = json.loads(existing)
+        date = before["provenance"]["sourceDate"]
+    except (ValueError, KeyError, TypeError):
+        return False
+    now = payload["provenance"].get("sourceDate")
+    if not date or date == now:
+        return False
+
+    def redate(node):
+        if isinstance(node, dict):
+            return {key: date if key in _DATE_KEYS and value == now else redate(value)
+                    for key, value in node.items()}
+        if isinstance(node, list):
+            return [redate(item) for item in node]
+        return node
+
+    return serialise(redate(payload)) == existing
+
+
 def write_public_wiki(path: str, data_dir: str | None = None,
                       buildings_path: str | None = None) -> str:
     """Build, validate, then replace the payload; skip the write when unchanged.
@@ -2559,10 +2628,16 @@ def write_public_wiki(path: str, data_dir: str | None = None,
     if os.path.exists(path):
         try:
             with open(path, "rb") as fh:
-                if fh.read().decode("utf-8") == text:
-                    return text
+                existing = fh.read().decode("utf-8")
         except (OSError, ValueError):
-            pass
+            existing = None
+        if existing == text:
+            return text
+        # Steam touches files it did not change, which moves sourceDate to
+        # the day it did so. When the date is all that differs, the sources
+        # are the ones the standing payload was built from: keep it and its date.
+        if existing is not None and _same_but_the_date(payload, existing):
+            return existing
     import tempfile
 
     handle, temporary = tempfile.mkstemp(dir=directory, prefix=".wiki-data-", suffix=".tmp")

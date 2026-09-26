@@ -8,9 +8,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
-const consts = source.slice(source.indexOf('  const LANGUAGE_KEY ='), source.indexOf('  const DB ='));
-const helpers = source.slice(source.indexOf('  function gameTextLanguage('), source.indexOf('  async function takeLocale('));
-const take = source.slice(source.indexOf('  async function takeLocale('), source.indexOf('  /* --- what the board asks for'));
+const {between} = require('./_slice.cjs');
+const consts = between(source, '  const LANGUAGE_KEY =', '  const DB =');
+const helpers = between(source, '  function gameTextLanguage(', '  async function takeLocale(');
+// The page's tt(), which app.js writes every word through.
+const i18n = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8');
+const take = between(source, '  async function takeLocale(', '  /* --- what the board asks for');
 
 const ENGLISH = {'ba:neighborhood_global': 'Global', menu_options_others_language: 'Language'};
 const GERMAN = {'ba:neighborhood_global': 'Global', menu_options_others_language: 'Sprache'};
@@ -23,12 +26,16 @@ function setup(kept = '') {
     LOCALE_KEY: 'ledger_locale',
     localStorage: {removeItem(key) { delete storage[key]; }},
     stored: {get: (key) => storage[key] || '', set: (key, value) => { storage[key] = value; return true; }},
-    note: (...args) => notes.push(args),
-    localeState() {}, buildFrom() {},
+    // app.js hands note() its words as a function that writes them.
+    note: (...args) => notes.push(args.map((a) => (typeof a === 'function' ? a() : a))),
+    localeState() { context.painted = (context.painted || 0) + 1; },
+    buildFrom(f) { builds.push(f); },
     sourceGen: 0, lastFile: null, lastFileGen: -1,
   });
-  vm.runInContext(consts + helpers + take + '\nthis.api = {gameTextLanguage, dropForeignLocale, takeLocale};', context);
-  return {api: context.api, storage, notes};
+  const builds = [];
+  vm.runInContext(i18n, context);
+  vm.runInContext(consts + helpers + take + '\nthis.api = {gameTextLanguage, dropForeignLocale, takeLocale, resetLocale};', context);
+  return {api: context.api, storage, notes, builds, context};
 }
 
 const file = (name, table) => ({name, text: async () => JSON.stringify(table)});
@@ -69,4 +76,16 @@ test('a foreign file kept before the check is dropped; English and junk are left
     api.dropForeignLocale();
     assert.equal('ledger_locale' in storage, left, kept);
   }
+});
+
+// WB-4 in #109: a remembered en.json used to win over the shipped text for
+// good. Using the built-in text again drops it and reads the board again.
+test('the built-in text can be put back, and the board is read without the kept file', () => {
+  const {api, storage, builds, context} = setup(JSON.stringify(ENGLISH));
+  const save = {name: 'x.hsg'};
+  context.lastFile = save; context.lastFileGen = 0;
+  api.resetLocale();
+  assert.equal('ledger_locale' in storage, false);
+  assert.equal(context.painted, 1, 'the chip says built in again');
+  assert.deepEqual(builds, [save]);
 });

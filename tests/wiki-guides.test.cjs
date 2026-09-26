@@ -16,6 +16,9 @@ const vm = require('node:vm');
 const path = require('node:path');
 
 const WIKI = fs.readFileSync(path.join(__dirname, '..', 'web', 'wiki.js'), 'utf8');
+/* web/i18n.js runs ahead of wiki.js on the page: the Wiki's own words go
+   through its tt(). */
+const I18N = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8');
 /* The board's neighbourhood tables, as render() writes them in: keyed by the
    game's key, the words looked up only to be shown. */
 const HOOD_EN = {midtown: 'Midtown', hellskitchen: "Hell's Kitchen", murrayhill: 'Murray Hill',
@@ -286,6 +289,7 @@ function element(id) {
 }
 
 function wiki({data = DATA, save = null} = {}) {
+  if (save) require('./_payload_contract.cjs').assertPayloadShape(save, 'wiki-guides');
   const root = element('wikiRoot');
   const nodes = new Map([['wikiRoot', root]]);
   const drawn = [];
@@ -295,7 +299,7 @@ function wiki({data = DATA, save = null} = {}) {
     $$: () => [],
     attr: s => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'),
     icon: name => `<svg data-icon="${name}"></svg>`,
-    fmt: n => (n < 0 ? '-' : '') + '$' + Math.abs(Math.round(n)).toLocaleString('en-US'),
+    fmt: n => (n < 0 ? '-' : '') + '$' + Math.round(Math.abs(n)).toLocaleString('en-US'),
     num: (n, opts) => Number(n).toLocaleString('en-US', opts),
     hasData: () => !!context.D,
     showPage(id){ drawn.push(['page', id]); },
@@ -312,6 +316,7 @@ function wiki({data = DATA, save = null} = {}) {
     fetch: async () => ({ok: true, status: 200, json: async () => data}),
   });
   context.window.window = context.window;
+  vm.runInContext(I18N, context);
   vm.runInContext(WIKI, context);
   return {
     context, root, drawn,
@@ -988,6 +993,12 @@ test('the labels the payload carries are the ones the page wears', async () => {
   assert.ok(headings(html).includes('Making it'));
   const hair = await w.go('wiki/businesstypes-hairdresser');
   assert.ok(headings(hair).includes('What it charges for'));
+  // In another language the same label is looked up as wiki.ui.<name>; a
+  // label the table does not carry keeps the payload's English.
+  w.call(`ttSetTable("de", {"wiki.ui.primaryTitle": "In den Regalen"})`);
+  const de = await w.go('wiki/businesstypes-coffeeshop');
+  assert.ok(headings(de).includes('In den Regalen'));
+  assert.ok(headings(de).includes('Also on the shelves'));
 });
 
 /* --- the catalogue this checkout has, once it carries guides ---------------- */
@@ -1033,7 +1044,7 @@ test('the range sold in your shops is matched by the item key, never by its name
     {item: 'Coffee', slug: 'ba:itemname_coffeebeans', price: 3, stores: 1, units: 2}]}});
   const html = await w.load('wiki/businesstypes-coffeeshop');
   assert.match(html, /Its range, sold/);
-  assert.match(html, /Coffee moved in your shops yesterday\./);
+  assert.match(html, /Coffee moved in your shops in the last seven days\./);
   assert.doesNotMatch(html, /Coffee, Coffee moved/);
 });
 
@@ -1042,7 +1053,7 @@ test('pricing retains unlocated and closed shops, excludes vacant leases, and ha
     {name:'Unlocated',typeSlug:COFFEE.BUSINESS.nameSrc,status:'retail',neighbourhood:'',lines:[
       {slug:'ba:itemname_coffee',configuredPrice:12.34}, {slug:'ba:itemname_tea',configuredPrice:null},
       {slug:'ba:itemname_cake',configuredPrice:0}, {slug:'ba:itemname_mug',price:9.99}]},
-    {name:'Closed Coffee',typeSlug:COFFEE.BUSINESS.nameSrc,status:'retail',neighbourhood:'ba:neighborhood_midtown',temporarilyClosed:true,
+    {name:'Closed Coffee',typeSlug:COFFEE.BUSINESS.nameSrc,status:'retail',neighbourhood:'ba:neighborhood_midtown',closed:true,
       lines:[{slug:'ba:itemname_coffee',configuredPrice:3.25}]},
     {name:'Vacant lease',typeSlug:COFFEE.BUSINESS.nameSrc,status:'vacant',neighbourhood:'ba:neighborhood_midtown',
       lines:[{slug:'ba:itemname_coffee',configuredPrice:999.99}]},
@@ -1119,4 +1130,14 @@ test('a shelf that counts two kinds of goods shows both rows, never the larger',
   // And where the extraction settled it, the number it settled on is shown.
   const also = section(html, 'Also sells');
   assert.match(also, /Cake Stand<b>60<\/b>/);
+});
+
+test('a supplied capacity with no number falls back to the fixture\'s own rows', () => {
+  const w = wiki();
+  const shelf = {capacity: [{label: 'Cakes', value: 60, unit: 'units'}]};
+  const caps = p => JSON.parse(JSON.stringify(w.context.wikiCaps(p, 'cakestand', shelf)));
+  assert.deepEqual(caps({name: 'Cake', fixtureCapacities: {cakestand: [{label: 'Cakes', value: 40}, {label: 'x', value: null}]}}),
+    [{label: 'Cakes', value: 40}]);
+  assert.deepEqual(caps({name: 'Cake', fixtureCapacities: {cakestand: [{label: 'Cakes', value: null}]}}),
+    [{label: 'Cakes', value: 60, unit: 'units'}]);
 });

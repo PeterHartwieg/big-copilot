@@ -32,7 +32,8 @@ CLI_INPUTS = tuple(dict.fromkeys(
     + ("ba_save.py", "ba_dashboard.py", "web/changelog.json", "web/map.js", "web/map.css",
        "web/wiki.js", "web/wiki.css", "web/wiki-data.json", "web/sitemap.xml", "web/robots.txt")
 ))
-CLI_TREES = ("tools/*.py", "tools/wiki_sample.json", "web/py/*", "web/maps/*", "web/wiki/**/*")
+# The translations under i18n/ are the source of web/i18n/, which --check rebuilds.
+CLI_TREES = ("tools/*.py", "tools/wiki_sample.json", "web/py/*", "web/maps/*", "web/wiki/**/*", "i18n/*.json")
 
 
 def place(root, name, data):
@@ -87,6 +88,17 @@ class WebFresh(unittest.TestCase):
                 edited = Path(tmp, authored)
                 edited.write_bytes(edited.read_bytes() + b"\n")
                 self.assertIn("web/version.json", build_web.check(tmp))
+
+    def test_an_edited_article_names_the_wiki_payload(self):
+        # Not only the stamp: the payload that carries the articles is named.
+        with tempfile.TemporaryDirectory() as tmp:
+            copy_inputs(tmp, CHECK_INPUTS)
+            edited = Path(tmp, "tools/wiki_topics.json")
+            edited.write_text(edited.read_text(encoding="utf-8").replace(
+                "0.02482", "0.02483", 1), encoding="utf-8")
+            stale = build_web.check(tmp)
+            self.assertIn("web/wiki-data.json", stale)
+            self.assertIn("web/version.json", stale)
 
     def test_stamp_ignores_line_endings(self):
         with tempfile.TemporaryDirectory() as lf, tempfile.TemporaryDirectory() as crlf, \

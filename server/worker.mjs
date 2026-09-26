@@ -18,8 +18,11 @@ const MAX_BODY_BYTES = 1024;
 // caches.default key only; this path is not a routable endpoint.
 const COUNT_CACHE_PATH = "/api/community/_presence-count-v1";
 
+// Presence has its own, tighter limiter: a real tab sends one heartbeat every five
+// minutes, so a loop of fresh browser ids cannot inflate the online count on the
+// budget meant for voting. Every other route shares COMMUNITY_LIMITER.
 const routes = {
-  "/api/community/presence": { method: "POST", write: true, handler: presence },
+  "/api/community/presence": { method: "POST", write: true, handler: presence, limiter: "PRESENCE_LIMITER" },
   "/api/community/vote": { method: "POST", write: true, handler: vote },
   "/api/community/features": { method: "GET", write: false, handler: features },
 };
@@ -55,7 +58,8 @@ async function handleApi(request, env) {
   const route = routes[pathname];
   if (!route) return json({ error: "Not found" }, 404);
   if (request.method !== route.method) return json({ error: "Method not allowed" }, 405);
-  const { COMMUNITY_DB: db, COMMUNITY_LIMITER: limiter, COMMUNITY_IP_SECRET: secret } = env;
+  const { COMMUNITY_DB: db, COMMUNITY_IP_SECRET: secret } = env;
+  const limiter = env[route.limiter || "COMMUNITY_LIMITER"];
   if (!db || !limiter || !secret) return json({ error: "Service unavailable" }, 503);
   const ip = clientIp(request);
   if (!ip) return json({ error: "Invalid request" }, 400);

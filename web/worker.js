@@ -6,7 +6,9 @@
  *            and the history text: parse it and send back the data and the
  *            updated history, both as JSON strings
  *   name   - the player named a factory line: record it and rebuild from the
- *            save already on hand
+ *            save already on hand, against the history this worker already
+ *            holds (names asked for together each keep theirs)
+ *   forget - the player forgot the history: drop the copy held here too
  * Nothing here talks to the network except the one-time runtime download,
  * which comes from this site: Pyodide's core files are served from
  * web/pyodide/ rather than a CDN, so no visitor's IP address reaches a third
@@ -26,7 +28,7 @@ const CURVES = `${DATA_DIR}/ba_demand_curves.json`;  // the game's arrival curve
 
 let py = null;
 let lastSave = null; // {name, mtime} of the save currently in the filesystem
-let localeStamp = null; // length of the locale text last written, to skip rewrites
+let localeText = null; // the locale text last written, to skip rewrites
 let queue = Promise.resolve(); // rebuilds run one at a time, like the watcher
 
 const say = (stage, detail) => postMessage({kind: "progress", stage, detail: detail || ""});
@@ -41,20 +43,23 @@ const ready = (async () => {
   // The page passes its build stamp on this worker's URL; the Python files
   // are fetched with the same stamp so a deploy never mixes old and new.
   const stamp = new URL(self.location.href).searchParams.get("v") || "dev";
+  // A stamped URL never changes content (web/_headers caches /py/* for a year),
+  // so the browser may keep it; an unstamped dev build always refetches.
+  const cache = stamp === "dev" ? "no-store" : "default";
   for (const file of ["ba_save.py", "ba_dashboard.py"]) {
-    const res = await fetch(`py/${file}?v=${stamp}`, {cache: "no-store"});
+    const res = await fetch(`py/${file}?v=${stamp}`, {cache});
     if (!res.ok) throw new Error(`could not load ${file}: ${res.status}`);
     py.FS.writeFile(`/${file}`, await res.text());
   }
   py.FS.mkdir(SAVE_DIR);
   py.FS.mkdir(DATA_DIR);
-  const names = await fetch(`py/gametext.json?v=${stamp}`, {cache: "no-store"});
+  const names = await fetch(`py/gametext.json?v=${stamp}`, {cache});
   if (names.ok) py.FS.writeFile(NAMES, await names.text());
-  const buildings = await fetch(`py/ba_buildings.json?v=${stamp}`, {cache: "no-store"});
+  const buildings = await fetch(`py/ba_buildings.json?v=${stamp}`, {cache});
   if (buildings.ok) py.FS.writeFile(BUILDINGS, await buildings.text());
   // Both data tables are optional: the board falls back to the name prefix
   // without the city map, and simply states no arrival ceiling without these.
-  const curves = await fetch(`py/ba_demand_curves.json?v=${stamp}`, {cache: "no-store"});
+  const curves = await fetch(`py/ba_demand_curves.json?v=${stamp}`, {cache});
   if (curves.ok) py.FS.writeFile(CURVES, await curves.text());
   await py.runPythonAsync(`
 import sys
@@ -72,8 +77,10 @@ function writeText(path, text) {
   else { try { py.FS.unlink(path); } catch (e) {} }
 }
 
-function readText(path) {
-  try { return py.FS.readFile(path, {encoding: "utf8"}); } catch (e) { return ""; }
+// The history file as text, or null when there is none to hand back: the
+// page then keeps what it has stored.
+function heldHistory() {
+  try { return py.FS.readFile(HISTORY, {encoding: "utf8"}); } catch (e) { return null; }
 }
 
 function placeSave(name, bytes, mtime) {
@@ -98,25 +105,36 @@ onmessage = (e) => {
     try {
       await ready;
       if (msg.kind === "build") {
-        if (msg.locale != null && msg.locale.length !== localeStamp) {
+        // Compared whole: a replacement of the same length is still new.
+        if (msg.locale != null && msg.locale !== localeText) {
           writeText(LOCALE, msg.locale);
-          localeStamp = msg.locale.length;
+          localeText = msg.locale;
         }
         writeText(HISTORY, msg.history);
         const path = placeSave(msg.name, msg.bytes, msg.mtime);
         say("build", `Reading ${msg.name}`);
         const t = performance.now();
         const data = build(path);
-        postMessage({kind: "built", id: msg.id, data, history: readText(HISTORY),
+        // A damaged copy Python set aside (.bad) is dropped by the page too
+        // (""), so the next build starts a fresh record, as the CLI does.
+        const history = heldHistory();
+        const setAside = history === null && py.FS.analyzePath(HISTORY + ".bad").exists;
+        if (setAside) py.FS.unlink(HISTORY + ".bad");  // said once, not on every build
+        postMessage({kind: "built", id: msg.id, data, history: setAside ? "" : history,
                      ms: Math.round(performance.now() - t)});
       } else if (msg.kind === "name") {
         if (!lastSave) throw new Error("no save loaded yet");
-        writeText(HISTORY, msg.history);
+        // The history is the page's only on a build. A name adds to the one
+        // held here, which the last build or name wrote: two names asked for
+        // together would otherwise each start from the page's copy from before
+        // either, and the second would drop the first.
         // JSON.stringify writes JavaScript's null, which Python does not know.
         const pySlug = msg.slug == null ? "None" : JSON.stringify(msg.slug);
         py.runPython(`ba_dashboard.browser_name(${JSON.stringify(HISTORY)}, ${JSON.stringify(msg.rid)}, ${pySlug})`);
         const data = build(`${SAVE_DIR}/${lastSave.name}`);
-        postMessage({kind: "built", id: msg.id, data, history: readText(HISTORY), ms: 0});
+        postMessage({kind: "built", id: msg.id, data, history: heldHistory(), ms: 0});
+      } else if (msg.kind === "forget") {
+        writeText(HISTORY, "");
       }
     } catch (err) {
       // Pyodide hands back a whole traceback; the last line is the sentence

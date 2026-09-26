@@ -5,17 +5,17 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
+const {between} = require('./_slice.cjs');
 // The game-link section, plus the two functions it drives: update()'s first
 // branch hands it the refresh, checkFolder() hands it the watch.
-const section = source.slice(
-  source.indexOf('  /* --- the game link (docs/game-link-api.md)'),
-  source.indexOf('  /* --- building'));
-const updater = source.slice(
-  source.indexOf('  async function update()'),
-  source.indexOf('  /* --- watching the folder'));
-const watcher = source.slice(
-  source.indexOf('  async function checkFolder()'),
-  source.indexOf('  function armWatch()'));
+// The page's tt(), which app.js writes every word through.
+const i18n = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8');
+// How app.js hands the strip its words: say(), failure() and errWords().
+const sayHelpers = between(source, '  const say = (v)', '\n', {endAfter: '  const errWords'});
+const words = (v) => (typeof v === 'function' ? v() : v);
+const section = between(source, '  /* --- the game link (docs/game-link-api.md)', '  /* --- building');
+const updater = between(source, '  async function update()', '  /* --- watching the folder');
+const watcher = between(source, '  async function checkFolder()', '  function armWatch()');
 
 const HEALTH = {
   ok: true, schemaVersion: 1, modVersion: '0.1.0', source: 'mock', build: 3680,
@@ -63,13 +63,19 @@ function harness({routes = {}} = {}) {
     company: 'Costy Co', sourceGen: 1, busy: false, attempt: null, readerError: null, handlers: null,
     lastGood: {}, lastCheck: null, lastEntries: null, watchChecking: false,
     savePicker: {hidden: false},
-    state(tone, head, meta) { seen.states.push([tone, head, meta]); strip.tone = tone; },
+    // app.js hands state() and note() its words as text or as a function
+    // that writes them; the stand-ins write them out, as the real ones do.
+    state(tone, head, meta) { seen.states.push([tone, words(head), words(meta)]); strip.tone = tone; },
     noted: {tone: '', text: '', sub: ''},
-    note(...args) { seen.notes.push(args); context.noted.tone = args[0] || ''; context.noted.text = args[1] || ''; context.noted.sub = args[2] || ''; },
+    note(...given) {
+      const args = given.map((a, i) => (i === 1 || i === 2 ? words(a) : a));
+      seen.notes.push(args); context.noted.tone = args[0] || ''; context.noted.text = args[1] || ''; context.noted.sub = args[2] || '';
+    },
     stored: {get: (key) => remembered[key] || '', set: (key, value) => { remembered[key] = value; return true; }},
     onBoard: () => true,
     supersede: () => ++context.sourceGen,
     closeSavePicker() {}, place() {}, armWatch() {}, stopWatch() {}, syncWatchBtn() {}, linkMoved() {},
+    pickedOnce() {},
     idleState() { seen.states.push(['idle']); strip.tone = 'ready'; },
     startAttempt: () => true, finishAttempt() {},
     async buildFrom(file) { seen.builds.push(file); },
@@ -84,7 +90,8 @@ function harness({routes = {}} = {}) {
       return 'status' in give ? give : reply(200, give);
     },
   });
-  vm.runInContext(section + '\n' + updater + '\n' + watcher, context);
+  vm.runInContext(i18n, context);
+  vm.runInContext(sayHelpers + '\n' + section + '\n' + updater + '\n' + watcher, context);
   vm.runInContext('linkWait = (ms) => { __waits.push(ms); __advance(ms); return Promise.resolve(); };', context);
   // linkFetch only ever reaches an address on this computer; the tests that
   // call it directly talk to the default one.
@@ -657,8 +664,43 @@ test('#link= only moves the port on this machine', () => {
   assert.equal(h.run('linkBase()'), 'http://127.0.0.1:8323');
   h.context.location.hash = '#link=http://localhost:8325/';
   assert.equal(h.run('linkBase()'), 'http://localhost:8325');
-  for (const bad of ['#link=https://evil.example', '#link=http://10.0.0.5:8322', '#link=ftp://127.0.0.1', '#link=not a url']) {
+  for (const bad of ['#link=https://evil.example', '#link=http://10.0.0.5:8322', '#link=ftp://127.0.0.1', '#link=not a url', '#link=http://[::1]:8325']) {
     h.context.location.hash = bad;
     assert.equal(h.run('linkBase()'), 'http://127.0.0.1:8322', bad);
   }
+});
+
+// WB-1 in #109: the save's bytes are read under linkFetch's own timer, and a
+// game that quits or stalls mid-download ends the read like a closed game,
+// not as an unhandled rejection that leaves "Reading the game" on screen.
+test('a game that quits mid-download reads as unreachable, with nothing built', async () => {
+  const cut = {...reply(200, null, {'X-Game-Link-Stamp': 's9'}),
+    arrayBuffer: async () => { throw new TypeError('network error'); }};
+  const h = harness({routes: {health: {...HEALTH, stamp: 's9'}, save: cut}});
+  let finished = 0;
+  h.context.finishAttempt = () => { finished++; };
+  h.run('lastLinkStamp = "s1"');
+  await h.run('loadFromLink("Reading the game")');
+  assert.equal(h.seen.builds.length, 0);
+  assert.deepEqual(h.seen.states.at(-1), ['bad', 'Could not reach the game', 'http://127.0.0.1:8322']);
+  assert.match(h.seen.notes.at(-1)[1], /The game is not running/);
+  assert.equal(finished, 1, 'the attempt is over, so Update works again');
+  assert.equal(h.run('lastLinkStamp'), 's1', 'the next check reads the save again');
+});
+
+test("the save's timer runs until its bytes are in, and is longer than a health check's", async () => {
+  const h = harness({routes: {health: {...HEALTH, stamp: 's9'}}});
+  const timers = [];
+  let live = 0;
+  h.context.setTimeout = (fn, ms) => { timers.push(ms); live++; return timers.length; };
+  h.context.clearTimeout = () => { live--; };
+  let during = null;
+  h.routes.save = {...reply(200, null, {'X-Game-Link-Stamp': 's9'}),
+    arrayBuffer: async () => { during = live; return new ArrayBuffer(8); }};
+  await h.run('loadFromLink("Reading the game")');
+  assert.deepEqual(timers, [5000, 30000], 'health, then the save');
+  assert.equal(during, 1, "the save's timer is still armed while its body is read");
+  assert.equal(live, 0);
+  assert.equal(h.seen.builds.length, 1);
+  assert.equal(h.seen.builds[0].parts[0].byteLength, 8, 'the bytes read are the ones built');
 });

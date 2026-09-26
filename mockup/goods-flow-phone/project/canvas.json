@@ -1,0 +1,183 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-09-25T16:00:00Z"
+ },
+ "title": "Big Copilot Goods Flow on a Phone",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [],
+ "boards": {
+  "Main.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 390,
+   "h": 1160,
+   "title": "Chain · overview",
+   "is_interactive": true
+  },
+  "ChainGroup.dc.html": {
+   "x": 470,
+   "y": 0,
+   "w": 390,
+   "h": 1510,
+   "title": "Chain · a group of shops open",
+   "is_interactive": true
+  },
+  "ChainFocus.dc.html": {
+   "x": 940,
+   "y": 0,
+   "w": 390,
+   "h": 980,
+   "title": "Chain · following a factory (stalled input)",
+   "is_interactive": true
+  },
+  "ChainDepot.dc.html": {
+   "x": 1410,
+   "y": 0,
+   "w": 390,
+   "h": 1270,
+   "title": "Chain · following a depot",
+   "is_interactive": true
+  },
+  "ChainUnfed.dc.html": {
+   "x": 1880,
+   "y": 0,
+   "w": 390,
+   "h": 1380,
+   "title": "Chain · shops no pipe reaches",
+   "is_interactive": true
+  },
+  "ChainSmall.dc.html": {
+   "x": 0,
+   "y": 2100,
+   "w": 390,
+   "h": 844,
+   "title": "Chain · a small company",
+   "is_interactive": true
+  },
+  "ChainEmpty.dc.html": {
+   "x": 470,
+   "y": 2100,
+   "w": 390,
+   "h": 844,
+   "title": "Chain · nothing moves yet",
+   "is_interactive": true
+  },
+  "ChainTablet.dc.html": {
+   "x": 940,
+   "y": 2100,
+   "w": 768,
+   "h": 1370,
+   "title": "Chain · tablet, 768 px",
+   "is_interactive": true
+  },
+  "PanFit.dc.html": {
+   "x": 0,
+   "y": 4100,
+   "w": 390,
+   "h": 890,
+   "title": "A · pan and zoom, fitted",
+   "is_interactive": true
+  },
+  "PanZoom.dc.html": {
+   "x": 470,
+   "y": 4100,
+   "w": 390,
+   "h": 970,
+   "title": "A · pan and zoom, a site tapped",
+   "is_interactive": true
+  },
+  "ListOverview.dc.html": {
+   "x": 940,
+   "y": 4100,
+   "w": 390,
+   "h": 1410,
+   "title": "B · site list",
+   "is_interactive": true
+  },
+  "ListOpen.dc.html": {
+   "x": 1410,
+   "y": 4100,
+   "w": 390,
+   "h": 1540,
+   "title": "B · site list, one site open",
+   "is_interactive": true
+  }
+ },
+ "order": [
+  "Main.dc.html",
+  "ChainGroup.dc.html",
+  "ChainFocus.dc.html",
+  "ChainDepot.dc.html",
+  "ChainUnfed.dc.html",
+  "ChainSmall.dc.html",
+  "ChainEmpty.dc.html",
+  "ChainTablet.dc.html",
+  "PanFit.dc.html",
+  "PanZoom.dc.html",
+  "ListOverview.dc.html",
+  "ListOpen.dc.html"
+ ],
+ "notes": {
+  "try-main": {
+   "x": 0,
+   "y": -230,
+   "w": 390,
+   "maxH": 170,
+   "text": "Recommended. The four columns turn into stages top to bottom, in the order goods travel. Tap a shop group to list its shops; Factory Jewelry and Jewelry Distrib. open their own flow (Play mode)."
+  },
+  "try-chainfocus": {
+   "x": 940,
+   "y": -230,
+   "w": 390,
+   "maxH": 170,
+   "text": "Following one site: what comes in above, what goes out below, each pipe's units a day on the neighbour's card. The amber pipe is the input that isn't reaching the factory."
+  },
+  "try-chainsmall": {
+   "x": 0,
+   "y": 1870,
+   "w": 390,
+   "maxH": 170,
+   "text": "A depot feeding three shops or fewer shows them as cards; groups start at four."
+  },
+  "try-panfit": {
+   "x": 0,
+   "y": 3870,
+   "w": 390,
+   "maxH": 170,
+   "text": "Direction A keeps the desktop picture and adds pinch, drag and + / − / fit. Fitted it is the 294 px problem again; readable only at 90 % and up, one column at a time."
+  },
+  "try-listoverview": {
+   "x": 940,
+   "y": 3870,
+   "w": 390,
+   "maxH": 170,
+   "text": "Direction B: every site in a list with 'from' and 'to'. Readable, but it repeats the Supply list view and loses the picture of the chain."
+  },
+  "row-rec": {
+   "x": 0,
+   "y": -560,
+   "text": "Recommended: the chain, stages top to bottom",
+   "kind": "title1",
+   "maxW": 2270
+  },
+  "row-edge": {
+   "x": 0,
+   "y": 1540,
+   "text": "The chain: edges and tablet",
+   "kind": "title1",
+   "maxW": 1708
+  },
+  "row-alt": {
+   "x": 0,
+   "y": 3540,
+   "text": "Alternatives: A pan and zoom, B site list",
+   "kind": "title1",
+   "maxW": 1800
+  }
+ },
+ "designSystems": []
+}

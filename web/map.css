@@ -125,25 +125,25 @@
 .map-canvas .fp.cand.buy{fill:#e0b84a;fill-opacity:.18;stroke:#f2cf6b}
 .stage.finder .map-canvas .fp.mine{fill-opacity:.1;stroke-opacity:.45}
 .stage.finder .map-canvas .fp.dim.mine{fill-opacity:.06}
-.site .st{display:inline-flex;align-items:center;gap:5px;font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin-top:10px}
-.site .st[hidden],.site .facts[hidden],.site .fit[hidden],.site .why[hidden]{display:none}
-.site .st i{flex:none;width:7px;height:7px;border-radius:50%;background:var(--accent)}
-.site .st.rival i{background:var(--warn)}.site .st.na i{background:var(--ink-3)}
-.site .facts{display:grid;grid-template-columns:1fr 1fr;gap:5px 14px;margin-top:8px;font-size:11.5px;color:var(--ink-3)}
-.site .facts b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink);float:right}
+.city-map .site .st{display:inline-flex;align-items:center;gap:5px;font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin-top:10px}
+.city-map .site .st[hidden],.city-map .site .facts[hidden],.city-map .site .fit[hidden],.city-map .site .why[hidden]{display:none}
+.city-map .site .st i{flex:none;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.city-map .site .st.rival i{background:var(--warn)}.city-map .site .st.na i{background:var(--ink-3)}
+.city-map .site .facts{display:grid;grid-template-columns:1fr 1fr;gap:5px 14px;margin-top:8px;font-size:11.5px;color:var(--ink-3)}
+.city-map .site .facts b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink);float:right}
 /* Who owns the place and who trades from it are names, not figures: they take
    the card's own type and the full width. */
-.site .facts .wide{grid-column:1/-1;display:flex;align-items:baseline;gap:10px;justify-content:space-between}
-.site .facts .wide b{float:none;font-family:inherit;text-align:right;min-width:0}
-.site .facts [data-tip]{cursor:help;border-bottom:1px dotted var(--rule)}
-.site .fit{margin-top:8px;font-size:12px;color:var(--ink-2);padding-right:28px}
-.site .fit b{color:var(--ink);font-weight:500}
+.city-map .site .facts .wide{grid-column:1/-1;display:flex;align-items:baseline;gap:10px;justify-content:space-between}
+.city-map .site .facts .wide b{float:none;font-family:inherit;text-align:right;min-width:0}
+.city-map .site .facts [data-tip]{cursor:help;border-bottom:1px dotted var(--rule)}
+.city-map .site .fit{margin-top:8px;font-size:12px;color:var(--ink-2);padding-right:28px}
+.city-map .site .fit b{color:var(--ink);font-weight:500}
 /* The board's ? badge is a circle; inside the card the same class is the
    paragraph that explains the ranking. */
-.site .why{width:auto;height:auto;display:block;border:0;border-radius:0;cursor:default;overflow:visible;
+.city-map .site .why{width:auto;height:auto;display:block;border:0;border-radius:0;cursor:default;overflow:visible;
   margin:6px 0 0;padding-right:28px;font:400 11.5px/1.45 Archivo,"Helvetica Neue",Arial,sans-serif;
   color:var(--ink-3);text-align:left}
-.site .nums .num b.sc{color:var(--accent)}
+.city-map .site .nums .num b.sc{color:var(--accent)}
 /* Growth: the pin beside a cell's story opens the finder on that cell. */
 .celldetail .link.pin{display:inline-flex;align-items:center;gap:5px;margin-left:10px}
 .celldetail .link.pin svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
@@ -221,36 +221,36 @@
 /* the site card: opens beside the footprint. Scoped to the map views: the
    board's finding rows wrap business names in a .site span of their own. */
 .city-map .site{position:absolute;left:0;top:0;width:290px;z-index:6;border-radius:10px;border:1px solid var(--rule);background:var(--surface);box-shadow:0 12px 40px #0008;padding:14px 16px 14px;opacity:0;pointer-events:none;transition:opacity .25s}
-.site.in{opacity:1;pointer-events:auto}
-.site[hidden]{display:none}
-.site h3{margin:0;font-size:16px;font-weight:600;letter-spacing:-.01em;padding-right:26px}
-.site .sub{display:flex;align-items:center;gap:6px;margin-top:5px;font-size:12px;color:var(--ink-2)}
-.site .x{position:absolute;top:10px;right:10px;width:24px;height:24px;border-radius:6px;border:0;background:none;display:grid;place-items:center;color:var(--ink-3);cursor:pointer;padding:0}
-.site .x:hover{color:var(--ink);background:var(--raised)}
-.site .x svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round}
-.site .nums{display:flex;gap:18px;margin-top:12px}
-.site .nums:empty{display:none}
-.site .num{display:flex;flex-direction:column;gap:3px}
-.site .num b{font-family:"IBM Plex Mono",monospace;font-size:17px;font-weight:500;letter-spacing:-.02em}
-.site .num span{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.city-map .site.in{opacity:1;pointer-events:auto}
+.city-map .site[hidden]{display:none}
+.city-map .site h3{margin:0;font-size:16px;font-weight:600;letter-spacing:-.01em;padding-right:26px}
+.city-map .site .sub{display:flex;align-items:center;gap:6px;margin-top:5px;font-size:12px;color:var(--ink-2)}
+.city-map .site .x{position:absolute;top:10px;right:10px;width:24px;height:24px;border-radius:6px;border:0;background:none;display:grid;place-items:center;color:var(--ink-3);cursor:pointer;padding:0}
+.city-map .site .x:hover{color:var(--ink);background:var(--raised)}
+.city-map .site .x svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round}
+.city-map .site .nums{display:flex;gap:18px;margin-top:12px}
+.city-map .site .nums:empty{display:none}
+.city-map .site .num{display:flex;flex-direction:column;gap:3px}
+.city-map .site .num b{font-family:"IBM Plex Mono",monospace;font-size:17px;font-weight:500;letter-spacing:-.02em}
+.city-map .site .num span{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
 /* the finder's demand figure is a way back to the type's Growth row */
-.site a.mf-grow{color:inherit;text-decoration:none;cursor:pointer}
-.site a.mf-grow:hover span,.site a.mf-grow:focus-visible span{color:var(--ink)}
-.site .finds2{margin-top:12px;display:flex;flex-direction:column;gap:6px}
-.site .finds2[hidden]{display:none}
-.site .f{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--ink-2);line-height:1.4;padding-right:28px}
-.site .f i{flex:none;width:7px;height:7px;border-radius:50%;margin-top:5px}
-.site .f.crit i{background:var(--neg)}.site .f.watch i{background:var(--warn)}.site .f.info i{background:var(--ink-3)}
-.site .f .fa{display:inline-block;font-family:"IBM Plex Mono",monospace;color:var(--ink);margin-left:6px;white-space:nowrap}
-.site .f .fa small{font-size:9.5px;letter-spacing:.08em;color:var(--ink-3);margin-left:3px}
-.site .num b .pos{color:var(--pos)}.site .num b .neg{color:var(--neg)}
+.city-map .site a.mf-grow{color:inherit;text-decoration:none;cursor:pointer}
+.city-map .site a.mf-grow:hover span,.city-map .site a.mf-grow:focus-visible span{color:var(--ink)}
+.city-map .site .finds2{margin-top:12px;display:flex;flex-direction:column;gap:6px}
+.city-map .site .finds2[hidden]{display:none}
+.city-map .site .f{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--ink-2);line-height:1.4;padding-right:28px}
+.city-map .site .f i{flex:none;width:7px;height:7px;border-radius:50%;margin-top:5px}
+.city-map .site .f.crit i{background:var(--neg)}.city-map .site .f.watch i{background:var(--warn)}.city-map .site .f.info i{background:var(--ink-3)}
+.city-map .site .f .fa{display:inline-block;font-family:"IBM Plex Mono",monospace;color:var(--ink);margin-left:6px;white-space:nowrap}
+.city-map .site .f .fa small{font-size:9.5px;letter-spacing:.08em;color:var(--ink-3);margin-left:3px}
+.city-map .site .num b .pos{color:var(--pos)}.city-map .site .num b .neg{color:var(--neg)}
 /* "its page": the labelled way to the site's own page, under what the card
    says, so it never sits on a finding's last line. The button's look is the
    board's .ss-pagego. */
-.site .go2{display:flex;width:max-content;margin:12px 0 0 auto}
-.site .go2[hidden]{display:none}
-.site .tail{position:absolute;left:-7px;top:22px;width:12px;height:12px;background:var(--surface);border-left:1px solid var(--rule);border-bottom:1px solid var(--rule);transform:rotate(45deg)}
-.site.flip .tail{left:auto;right:-7px;transform:rotate(-135deg)}
+.city-map .site .go2{display:flex;width:max-content;margin:12px 0 0 auto}
+.city-map .site .go2[hidden]{display:none}
+.city-map .site .tail{position:absolute;left:-7px;top:22px;width:12px;height:12px;background:var(--surface);border-left:1px solid var(--rule);border-bottom:1px solid var(--rule);transform:rotate(45deg)}
+.city-map .site.flip .tail{left:auto;right:-7px;transform:rotate(-135deg)}
 
 .map-status{font-size:12px;color:var(--ink-2);line-height:1.5;margin:8px 0}
 
@@ -330,8 +330,8 @@ body.map-modal-open{overflow:hidden}
 .fswitch .feature-new{margin-left:2px}
 /* the picked building's plan, in its card under the facts: the card's width,
    and what height the stage leaves it (--lp-plan-max, set by sizeCardPlan) */
-.site .lp-plan{margin-top:10px;padding-top:10px;border-top:1px solid var(--rule-soft)}
-.site .lp-plan[hidden]{display:none}
+.city-map .site .lp-plan{margin-top:10px;padding-top:10px;border-top:1px solid var(--rule-soft)}
+.city-map .site .lp-plan[hidden]{display:none}
 .lp-planhead{display:flex;align-items:baseline;gap:8px;margin-bottom:7px}
 .lp-planhead .lp-lab{cursor:help;border-bottom:1px dotted var(--rule)}
 .lp-planhead b{font:500 14px/1 "IBM Plex Mono",monospace;color:var(--ink)}

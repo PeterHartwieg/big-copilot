@@ -37,8 +37,9 @@ function seamSource(){
 const LANGS = ['en', 'cs', 'da', 'de', 'es', 'fr', 'it', 'lt', 'hu', 'nl', 'pl', 'pt', 'ro', 'fi', 'tr',
   'el', 'ru', 'uk', 'ja', 'ko', 'zh-cn', 'zh-tw'];
 function seam({table = null, lang = 'de'} = {}){
-  const picker = {options: LANGS.map(value => ({value, textContent: value})), dataset: {}, value: 'en',
-    addEventListener(){}};
+  const opts = LANGS.map(value => ({dataset: {value}, textContent: value, getAttribute: () => value}));
+  const picker = {dataset: {value: 'en'}, querySelectorAll: sel => sel === '.gn-opts [data-value]' ? opts : [],
+    querySelector: () => null, addEventListener(){}};
   const drawn = [];
   const context = vm.createContext({
     D: null, HOOD_NAMES: {}, page: 'today', console,
@@ -270,7 +271,7 @@ test('a Yes switches the names and is kept, and nobody reading in English is ask
   const stamp = await page.evaluate(() => window.LEDGER_BUILD);
   assert.deepEqual(fetched, [`/names/de.json?v=${stamp}`]);
   assert.equal(await page.evaluate(() => D.businesses[0].type), 'Geschenkeladen');
-  assert.deepEqual(await page.$$eval('[data-gn-pick]', els => els.map(e => e.value)), ['de', 'de']);
+  assert.deepEqual(await page.$$eval('[data-gn-pick]', els => els.map(e => e.dataset.value)), ['de', 'de']);
   const again = await site(t, {context});
   await again.page.waitForFunction(() => gnLang === 'de');
   assert.equal(await again.page.locator('.gn-offer').count(), 0);
@@ -279,19 +280,170 @@ test('a Yes switches the names and is kept, and nobody reading in English is ask
   assert.equal(await english.page.locator('.gn-offer').count(), 0);
 });
 
+/* The footer's picker: a button and a listbox hung off <body>. `choose` opens
+   it with a click and clicks the language's row. */
+const picker = (page, where = '.sf-landing') => page.locator(`${where} [data-gn-pick]`);
+async function choose(page, lang, where){
+  await picker(page, where).locator('.gn-btn').click();
+  await page.locator(`#gnPop [role="option"][data-value="${lang}"]`).click();
+}
+const popState = page => page.evaluate(() => {
+  const pop = document.getElementById('gnPop'), act = pop && pop.getAttribute('aria-activedescendant');
+  return {open: !!pop && !pop.hidden, active: act ? document.getElementById(act).dataset.value : null,
+    focus: document.activeElement === pop ? 'list' : document.activeElement.className};
+});
+
 test('the footer picker is kept across visits, and picking in it closes the offer', async t => {
   const {page, errors, context} = await site(t, {locale: 'fr-FR'});
   await page.locator('.gn-offer').waitFor();
-  await page.locator('.sf-landing [data-gn-pick]').selectOption('de');
+  await choose(page, 'de');
   await page.waitForFunction(() => gnLang === 'de');
   assert.equal(await page.locator('.gn-offer').count(), 0);
   assert.equal(await page.evaluate(() => localStorage.getItem('ba_dash_names')), 'de');
+  assert.equal(await picker(page).locator('.gn-cur').textContent(), 'Deutsch');
+  assert.equal((await popState(page)).open, false);
   const again = await site(t, {context});
   await again.page.waitForFunction(() => gnLang === 'de');
-  assert.equal(await again.page.locator('.sf-landing [data-gn-pick]').inputValue(), 'de');
-  await again.page.locator('.sf-landing [data-gn-pick]').selectOption('en');
+  assert.equal(await picker(again.page).getAttribute('data-value'), 'de');
+  assert.equal(await picker(again.page).locator('.gn-cur').getAttribute('lang'), 'de');
+  await choose(again.page, 'en');
   await again.page.waitForFunction(() => gnLang === 'en');
   assert.equal(await again.page.evaluate(() => localStorage.getItem('ba_dash_names')), 'en');
+  assert.deepEqual(errors, []);
+});
+
+test('the picker is a listbox button: every choice listed, the current one marked', async t => {
+  const {page, errors} = await site(t);
+  const btn = picker(page).locator('.gn-btn');
+  assert.equal(await btn.getAttribute('aria-haspopup'), 'listbox');
+  assert.equal(await btn.getAttribute('aria-expanded'), 'false');
+  // Named by the column's head and the language it shows.
+  assert.equal(await page.evaluate(() => {
+    const b = document.querySelector('.sf-landing .gn-btn');
+    return b.getAttribute('aria-labelledby').split(' ').map(id => document.getElementById(id).textContent.trim()).join(' ');
+  }), 'Game names English');
+  await btn.click();
+  assert.equal(await btn.getAttribute('aria-expanded'), 'true');
+  const pop = page.locator('#gnPop');
+  assert.equal(await pop.getAttribute('role'), 'listbox');
+  assert.equal(await pop.getAttribute('aria-labelledby'), 'gnHeadL');
+  // Hung off <body>, not inside the footer, and fixed against the button.
+  assert.equal(await page.evaluate(() => document.getElementById('gnPop').parentElement === document.body), true);
+  assert.equal(await pop.evaluate(e => getComputedStyle(e).position), 'fixed');
+  const rows = await pop.locator('[role="option"]').evaluateAll(els => els.map(e => [e.dataset.value, e.getAttribute('lang'), e.textContent]));
+  assert.deepEqual(rows.map(r => r[0]), LANGS);
+  assert.deepEqual(rows.find(r => r[0] === 'ja'), ['ja', 'ja', '日本語']);
+  assert.deepEqual(await pop.locator('[aria-selected="true"]').evaluateAll(els => els.map(e => e.dataset.value)), ['en']);
+  // 22 rows scroll inside a list that stays within the window.
+  const box = await pop.evaluate(e => ({sh: e.scrollHeight, ch: e.clientHeight, top: e.getBoundingClientRect().top,
+    bottom: e.getBoundingClientRect().bottom, vh: innerHeight}));
+  assert.ok(box.sh > box.ch, JSON.stringify(box));
+  assert.ok(box.top >= 0 && box.bottom <= box.vh, JSON.stringify(box));
+  // A click outside closes it, and picks nothing.
+  await page.locator('.sf-landing .sf-gn .sf-head').click();
+  assert.equal((await popState(page)).open, false);
+  assert.equal(await btn.getAttribute('aria-expanded'), 'false');
+  assert.equal(await page.evaluate(() => gnLang), 'en');
+  assert.deepEqual(errors, []);
+});
+
+test('the picker works from the keyboard alone', async t => {
+  const {page, errors} = await site(t);
+  const btn = picker(page).locator('.gn-btn');
+  await btn.focus();
+  // Escape closes and hands focus back to the button.
+  await page.keyboard.press('Enter');
+  assert.deepEqual(await popState(page), {open: true, active: 'en', focus: 'list'});
+  await page.keyboard.press('Escape');
+  assert.deepEqual(await popState(page), {open: false, active: null, focus: 'gn-btn'});
+  // The arrows open it too, and move; Home and End go to the ends.
+  await page.keyboard.press('ArrowDown');
+  assert.deepEqual(await popState(page), {open: true, active: 'en', focus: 'list'});
+  await page.keyboard.press('ArrowDown');
+  assert.equal((await popState(page)).active, 'cs');
+  await page.keyboard.press('End');
+  assert.equal((await popState(page)).active, 'zh-tw');
+  // The last row is scrolled into view.
+  assert.ok(await page.evaluate(() => {
+    const pop = document.getElementById('gnPop'), row = pop.querySelector('.gn-on');
+    const a = pop.getBoundingClientRect(), b = row.getBoundingClientRect();
+    return b.top >= a.top - 1 && b.bottom <= a.bottom + 1;
+  }));
+  await page.keyboard.press('ArrowDown');
+  assert.equal((await popState(page)).active, 'zh-tw');
+  await page.keyboard.press('Home');
+  assert.equal((await popState(page)).active, 'en');
+  await page.keyboard.press('ArrowUp');
+  assert.equal((await popState(page)).active, 'en');
+  // Type-ahead: the first row starting with the letters typed.
+  await page.keyboard.type('de');
+  assert.equal((await popState(page)).active, 'de');
+  await page.waitForTimeout(600);
+  await page.keyboard.type('p');
+  assert.equal((await popState(page)).active, 'pl');
+  await page.keyboard.type('p');
+  assert.equal((await popState(page)).active, 'pt');
+  await page.waitForTimeout(600);
+  // Enter picks, closes and hands focus back; the names switch and are kept.
+  await page.keyboard.type('deu');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => gnLang === 'de');
+  assert.deepEqual(await popState(page), {open: false, active: null, focus: 'gn-btn'});
+  assert.equal(await page.evaluate(() => localStorage.getItem('ba_dash_names')), 'de');
+  assert.equal(await btn.locator('.gn-cur').textContent(), 'Deutsch');
+  // Space picks too, and the button it hands focus back to stays shut.
+  await page.keyboard.press('Space');
+  assert.equal((await popState(page)).active, 'de');
+  await page.keyboard.press('Home');
+  await page.keyboard.press('Space');
+  await page.waitForFunction(() => gnLang === 'en');
+  assert.deepEqual(await popState(page), {open: false, active: null, focus: 'gn-btn'});
+  assert.equal(await page.evaluate(() => localStorage.getItem('ba_dash_names')), 'en');
+  // Tab closes the list without picking.
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Tab');
+  assert.equal((await popState(page)).open, false);
+  assert.equal(await page.evaluate(() => gnLang), 'en');
+  // Space picks again once a type-ahead's half second is over.
+  await btn.focus();
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('d');
+  assert.equal((await popState(page)).active, 'da');
+  await page.waitForTimeout(600);
+  await page.keyboard.press('Space');
+  await page.waitForFunction(() => gnLang === 'da');
+  assert.equal((await popState(page)).open, false);
+  assert.deepEqual(errors, []);
+});
+
+test('a language whose table will not load leaves the picker on the one before', async t => {
+  const {page, errors} = await site(t);
+  await page.route('**/names/fr.json*', route => route.fulfill({status: 404, body: ''}));
+  await choose(page, 'fr');
+  await page.waitForFunction(() => !gnTables.has('fr'));
+  await page.waitForFunction(() => document.querySelector('.sf-landing [data-gn-pick]').dataset.value === 'en');
+  assert.equal(await page.evaluate(() => gnLang), 'en');
+  assert.deepEqual(await page.$$eval('[data-gn-pick]', els => els.map(e => e.dataset.value)), ['en', 'en']);
+  assert.deepEqual(await page.$$eval('[data-gn-pick] .gn-cur', els => els.map(e => [e.textContent, e.getAttribute('lang')])),
+    [['English', 'en'], ['English', 'en']]);
+  assert.deepEqual(errors, []);
+});
+
+test('near the foot of the window the list opens above its button, inside a phone screen', async t => {
+  const {page, errors} = await site(t, {width: 375, height: 700});
+  const btn = picker(page).locator('.gn-btn');
+  await btn.scrollIntoViewIfNeeded();
+  await page.evaluate(() => {
+    const b = document.querySelector('.sf-landing .gn-btn').getBoundingClientRect();
+    scrollBy(0, b.bottom - innerHeight + 20);
+  });
+  await btn.click();
+  const [b, p] = await page.evaluate(() => [document.querySelector('.sf-landing .gn-btn'), document.getElementById('gnPop')]
+    .map(e => { const r = e.getBoundingClientRect(); return {top: r.top, bottom: r.bottom, left: r.left, right: r.right}; }));
+  assert.ok(p.bottom <= b.top, JSON.stringify({b, p}));
+  assert.ok(p.top >= 0 && p.left >= 0 && p.right <= 375, JSON.stringify(p));
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   assert.deepEqual(errors, []);
 });
 
@@ -301,7 +453,7 @@ test('a switch redraws the board already open, from the English it holds', async
   await page.evaluate(() => showPage('company'));
   const english = await page.evaluate(() => document.querySelector('#pageCompany').textContent);
   assert.ok(english.includes('Gift Shop'));
-  await page.locator('.sitefoot:not(.sf-landing) [data-gn-pick]').selectOption('de');
+  await choose(page, 'de', '.sitefoot:not(.sf-landing)');
   await page.waitForFunction(() => gnLang === 'de');
   const german = await page.evaluate(() => document.querySelector('#pageCompany').textContent);
   assert.ok(german.includes('Geschenkeladen'), 'the portfolio names the type in German');
@@ -562,20 +714,23 @@ test('the board search lists a wiki page under its name as shown, and finds it b
 
 test('a wiki category lists its pages in the order of the names shown', async t => {
   const {page} = await site(t);
-  const listed = async () => {
+  // The category's list, once it is drawn in the names now shown (`word` is
+  // one of them).
+  const listed = async word => {
     await page.evaluate(() => { location.hash = '#wiki/c/common_business_types'; });
-    await page.waitForTimeout(150);
+    await page.waitForFunction(word => [...document.querySelectorAll('#pageWiki .wk-hit .wk-what')]
+      .some(e => e.textContent === word), word);
     return page.$$eval('#pageWiki .wk-hit .wk-what', els => els.map(e => e.textContent));
   };
   await page.evaluate(() => BigCopilotBoard.browseWiki());
   await page.evaluate(() => { wikiShowAll = true; });
   await page.evaluate(async () => { await setGameNames('de'); });
-  const german = await listed();
+  const german = await listed('Lagerhaus');
   assert.ok(german.includes('Lagerhaus'), german.join(', '));
   const sorted = await page.evaluate(names => names.slice().sort(gnCompare), german);
   assert.deepEqual(german, sorted);
   await page.evaluate(async () => { await setGameNames('en'); });
-  const english = await listed();
+  const english = await listed('Warehouse');
   assert.deepEqual(english, await page.evaluate(names => names.slice().sort(gnCompare), english));
   assert.ok(english.indexOf('Warehouse') > english.indexOf('Gift Shop'));
 });

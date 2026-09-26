@@ -713,6 +713,13 @@ class FixtureTests(GuideCase):
         self.assertEqual(capacities,
                          {"roundedshelf": [{"label": "Gifts", "value": 300, "unit": "units"}]})
 
+    def test_capacities_travel_only_for_the_products_own_fixtures(self):
+        for business in ("giftshop", "salon"):
+            for key, product in self.guide(business)["PRODUCTS"].items():
+                with self.subTest(business=business, product=key):
+                    self.assertLessEqual(set(product["fixtureCapacities"]),
+                                         set(product["fixtures"]))
+
     def test_ambiguous_capacity_rows_are_left_to_the_fixture(self):
         self.write_locale(dict(LOCALE, **dict(SALON_PAGES, **{
             "ba:itemname_salonchair": "Salon Chair",
@@ -814,7 +821,9 @@ class CopyTests(GuideCase):
         copy = payload["guides"]["businesstypes-salon"]["COPY"]
         self.assertEqual(copy["chooseProduct"], "")
         self.assertEqual(copy["secondaryTitle"], "Also sells")
-        reported = {row["key"] for row in payload["provenance"]["issues"]["copy"]}
+        # guides.* rows are dropped authored copy, reported beside the UI keys
+        reported = {row["key"] for row in payload["provenance"]["issues"]["copy"]
+                    if not row["key"].startswith("guides.")}
         self.assertEqual(reported, {"chooseProduct"})
 
     def test_an_authored_lede_travels_only_while_its_evidence_holds(self):
@@ -850,11 +859,17 @@ class CopyTests(GuideCase):
         original = build.WORDING_PATH
         build.WORDING_PATH = os.path.join(self.root, "wiki_sample_copy.json")
         try:
-            salon = self.guide("salon")
+            payload = self.build()
         finally:
             build.WORDING_PATH = original
+        salon = payload["guides"]["businesstypes-salon"]
         self.assertIsNone(salon["BUSINESS"]["lede"])
         self.assertEqual(salon["BUSINESS"]["notes"], [])
+        # the drop is reported, not silent
+        dropped = [row for row in payload["provenance"]["issues"].get("copy", [])
+                   if row["key"].startswith("guides.salon.")]
+        self.assertEqual([row["key"] for row in dropped], ["guides.salon.lede"])
+        self.assertIn("Customers are self-serving.", dropped[0]["reason"])
 
     def test_a_business_without_authored_copy_has_null_and_an_empty_list(self):
         business = self.guide("giftshop")["BUSINESS"]

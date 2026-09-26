@@ -42,6 +42,7 @@ async function site(demands, quit = 0) {
     siteKey = key; siteOpen = true;
     drawSite();
   }, [demands, quit]);
+  require('./_payload_contract.cjs').assertPayloadShape(await page.evaluate(() => D), 'job_demands');
   return page;
 }
 

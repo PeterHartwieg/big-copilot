@@ -19,6 +19,7 @@ For setup, see the [README](../README.md). File paths below are relative to the 
 | `server/`, `migrations/` | Community presence/voting API, curated feature list, and D1 schema. Server code stays outside public assets. |
 | `web/community.js`, `web/community.css` | Hosted-site community controls; included by the browser build only. |
 | `web/wiki.js`, `web/wiki.css` | Wiki navigation, readers and visual business guides, including primary and secondary products. |
+| `web/i18n.js`, `tools/i18n.py`, `i18n/` | Big Copilot's own text in other languages: `tt()` and the table loader, the catalogue tool, and the translations (German first). `web/i18n/` is generated from `i18n/` by `python build_web.py`. |
 | `tools/build_wiki_data.py`, `web/wiki-data.json` | Build the public Wiki catalogue from the installed game's help. The browser build refreshes this before calculating its cache version. |
 | `dashboard.html` | The generated page from a local run. Overwritten each time. |
 | `market_history.json` | Rolling demand snapshots and the cash/net-worth ledger, per character, from local runs. Safe to delete; it rebuilds, but the accumulated trend history is lost, so back it up rather than deleting it. |
@@ -68,6 +69,19 @@ lengthy per-machine detail behind a disclosure. Do not reintroduce a fixed board
 width or use an unbroken note to size a metric column. Issue #7's screenshots show
 why both the shared layout and the displayed content need regression coverage.
 
+## Adding text to the page
+
+Every word Big Copilot writes itself goes through a key, so it can be translated
+([UI text](architecture.md#ui-text)) once its area is converted: in a script
+`tt("area.thing", "English")`, in markup `data-tt="area.thing"` around the English, and in
+Python `msg("area.thing", "English {n:,}", n=...)`. The English stays where it is; the key's
+area is the page's prefix (`today`, `sp`, `sb`, …). Write one key per sentence, with its
+numbers and game names as params: a sentence glued together from pieces cannot be
+translated, because word order belongs to the language. Never put an article in front of a
+`{name}`. After adding or changing such text, run
+`python -m unittest discover -s tests -p "test_i18n*.py"`, `node --test tests/i18n_*.test.cjs`
+and `python build_web.py`. The German for a new key comes later, from a translation pass;
+until then the page shows the English.
 
 ## Changelog
 

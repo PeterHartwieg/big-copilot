@@ -34,6 +34,135 @@ class Ref:
         self.ref_id = ref_id
 
 
+# --- the tags the plain Python types never produce ---------------------------
+# Real saves also carry bytes, enums, 32-bit floats, packed primitive arrays and
+# instances that reuse a type slot defined earlier. These markers write them, so
+# a test can hand ba_save the same shapes; a tree without them encodes exactly
+# as before. Each one knows its value tag and the bytes after it.
+
+class _Marker:
+    tag = 0
+
+    def encode(self) -> bytes:
+        raise NotImplementedError
+
+
+class Byte(_Marker):
+    """0x11: one unsigned byte; ba_save reads it back as an int."""
+    tag = 0x11
+
+    def __init__(self, value: int):
+        self.value = value
+
+    def encode(self) -> bytes:
+        return struct.pack("<B", self.value)
+
+
+class Enum(_Marker):
+    """0x1D: an enum, written as an int64; ba_save reads it back as an int."""
+    tag = 0x1D
+
+    def __init__(self, value: int):
+        self.value = value
+
+    def encode(self) -> bytes:
+        return struct.pack("<q", self.value)
+
+
+class Float32(_Marker):
+    """0x1F: a single-precision float; ba_save reads it back as a float."""
+    tag = 0x1F
+
+    def __init__(self, value: float):
+        self.value = value
+
+    def encode(self) -> bytes:
+        return struct.pack("<f", self.value)
+
+
+# Element formats of a packed array by .NET element type, as ba_save._PACKED reads them.
+PACKED_FORMATS = {
+    "System.Boolean": ("?", 1),
+    "System.Int32": ("i", 4),
+    "System.Int64": ("q", 8),
+    "System.Single": ("f", 4),
+    "System.Double": ("d", 8),
+}
+
+
+def _header(slot: int, type_name: str | None, reuse: bool) -> bytes:
+    """An instance header: 2f defines `slot` as `type_name`, 30 reuses it."""
+    if reuse:
+        return b"\x30" + struct.pack("<i", slot)
+    return b"\x2f" + struct.pack("<i", slot) + _string(type_name)
+
+
+class Instance(_Marker):
+    """An instance with an explicit type slot.
+
+    With `reuse` the header is 30 <slot>, a back-reference to a slot an earlier
+    Instance (or Packed) defined; ba_save then names it by that slot's type. A
+    `ref_id` makes it a class instance (0x01), otherwise it is a struct (0x03).
+    """
+
+    def __init__(self, type_name: str | None, fields, slot: int, ref_id: int | None = None,
+                 reuse: bool = False):
+        self.type_name, self.fields, self.slot = type_name, fields, slot
+        self.ref_id, self.reuse = ref_id, reuse
+        self.tag = 0x03 if ref_id is None else 0x01
+
+    def encode(self) -> bytes:
+        ref = b"" if self.ref_id is None else struct.pack("<i", self.ref_id)
+        return _header(self.slot, self.type_name, self.reuse) + ref + _body(self.fields)
+
+
+class Packed(_Marker):
+    """A packed primitive array: 08 <count> <size> <raw>, in an instance of `type_name`.
+
+    The element type comes from `type_name` (System.Int32[], System.Single[],
+    ...). For a type ba_save does not decode, pass `raw` and `size`; it hands
+    back one bytes object per element.
+    """
+
+    def __init__(self, type_name: str, values=(), slot: int = 0, ref_id: int | None = None,
+                 reuse: bool = False, raw: bytes | None = None, size: int | None = None):
+        self.type_name, self.values, self.slot = type_name, list(values), slot
+        self.ref_id, self.reuse, self.raw, self.size = ref_id, reuse, raw, size
+        self.tag = 0x03 if ref_id is None else 0x01
+
+    def encode(self) -> bytes:
+        if self.raw is not None:
+            size, raw = self.size, self.raw
+            count = len(raw) // size
+        else:
+            fmt, size = PACKED_FORMATS[self.type_name.split("[", 1)[0]]
+            count = len(self.values)
+            raw = struct.pack(f"<{count}{fmt}", *self.values)
+        ref = b"" if self.ref_id is None else struct.pack("<i", self.ref_id)
+        return (_header(self.slot, self.type_name, self.reuse) + ref
+                + b"\x08" + struct.pack("<ii", count, size) + raw + b"\x05")
+
+
+class NullInstance(_Marker):
+    """An instance whose header byte says null (00 or 2d); ba_save reads None."""
+
+    def __init__(self, head: int = 0x00, ref: bool = True):
+        self.head = head
+        self.tag = 0x01 if ref else 0x03
+
+    def encode(self) -> bytes:
+        return bytes([self.head])
+
+
+class Unnamed:
+    """A dict value written as unnamed entries (tag + 1, no key), the way a
+    Color32 holds its four bytes; ba_save collects them under "$vals". The key
+    it sits under is not written."""
+
+    def __init__(self, *values):
+        self.values = values
+
+
 def _string(value: str | None) -> bytes:
     if value is None:
         return b"\x00"
@@ -43,6 +172,8 @@ def _string(value: str | None) -> bytes:
 
 def _value(tag: int, value) -> bytes:
     """The bytes after a value tag; `tag` is the named form (odd)."""
+    if isinstance(value, _Marker):
+        return value.encode()
     if tag == 0x17:
         return struct.pack("<i", value)
     if tag == 0x21:
@@ -66,6 +197,8 @@ def _value(tag: int, value) -> bytes:
 
 
 def _tag(value) -> int:
+    if isinstance(value, _Marker):
+        return value.tag
     if isinstance(value, Shared):
         return 0x01
     if isinstance(value, Ref):
@@ -95,6 +228,11 @@ def _body(value) -> bytes:
         out += b"\x07"
     else:
         for key, item in value.items():
+            if isinstance(item, Unnamed):
+                for each in item.values:
+                    tag = _tag(each)
+                    out += bytes([tag + 1]) + _value(tag, each)
+                continue
             tag = _tag(item)
             out += bytes([tag]) + _string(key) + _value(tag, item)
     return bytes(out + b"\x05")

@@ -31,6 +31,7 @@ after(async () => { await browser?.close(); });
 /* The Supply page drawn from `data` under a sizing, every tab drawn. `which`
    is Needs a change or Everything; `names` are recipes named in this browser. */
 async function board(data, {mode = 'cap', names = null, which = 'all', tab = 'warehouses'} = {}){
+  require('./_payload_contract.cjs').assertPayloadShape(data, 'import_routes');
   const page = await browser.newPage({viewport: {width: 1280, height: 1000}});
   await page.route('https://**', route => route.abort());
   await page.route('http://board.test/**', route => route.fulfill({contentType: 'text/html', body: html}));
@@ -754,9 +755,9 @@ for (const scenario of [
   {name: 'a paused backup the route covers', code: 'from test_routed_supply import board_data,contract; '
     + 'd = board_data(1.0,[contract(5200,0,smart=True,active=False)])'},
 ]) {
-  test(`parity with extraction: ${scenario.name}`, async t => {
+  test(`parity with extraction: ${scenario.name}`, async () => {
     const data = JSON.parse(python(`import sys,json; sys.path.insert(0,"tests"); ${scenario.code}; print(json.dumps(d))`));
-    if (!data.supply.facts) { t.skip('this extraction sends no supply facts yet'); return; }
+    assert.ok(data.supply.facts, 'the extraction sends its supply facts');
     const page = await board(data);
     try {
       const seen = await page.evaluate(() => {

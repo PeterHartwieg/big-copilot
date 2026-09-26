@@ -136,8 +136,15 @@ const landedOnPrices = page => page.waitForFunction(() => {
 });
 
 // A landing scrolls for a few frames while the sections above it paint;
-// the reader's own scroll waits for that, or the landing would undo it.
-const settled = page => page.waitForTimeout(500);
+// the reader's own scroll waits for that, or the landing would undo it. The
+// landing (settleScroll()) stops once its target holds still for a frame, so
+// the end state is a scroll position and a page height unchanged for three
+// frames in a row.
+const settled = page => page.evaluate(() => { window.wikiSettle = null; }).then(() => page.waitForFunction(() => {
+  const now = `${scrollY} ${document.documentElement.scrollHeight}`, mark = window.wikiSettle;
+  window.wikiSettle = {now, frames: mark && mark.now === now ? mark.frames + 1 : 0};
+  return window.wikiSettle.frames >= 3;
+}, null, {polling: 'raf'}));
 
 test('Back and Forward onto a prices entry land on Prices, and a plain guide starts at its top', async t => {
   const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-giftshop'});
@@ -163,7 +170,9 @@ test('Back and Forward onto a prices entry land on Prices, and a plain guide sta
   // Forward to the other guide, which names no section: its top.
   await page.evaluate(() => history.forward());
   await page.getByRole('heading', {name:'Bookstore',exact:true,level:1}).waitFor();
-  await page.waitForTimeout(200);
+  // From the Prices landing (scrolled down) to the guide's top.
+  await page.waitForFunction(() => scrollY === 0);
+  await settled(page);
   assert.equal(await page.evaluate(() => scrollY), 0);
   // Back to Prices, Back again to the plain guide entry, then Forward: Prices.
   await page.evaluate(() => history.back());
@@ -196,7 +205,9 @@ test('a guide with no section, come back to from another page, starts at its top
     assert.equal(await page.evaluate(() => scrollY), 1500);
     await page.evaluate(() => { location.hash = '#wiki/businesstypes-giftshop'; });
     await page.waitForFunction(() => page === 'wiki');
-    await page.waitForTimeout(200);
+    // From 1500 down Today to the guide's top, and staying there.
+    await page.waitForFunction(() => scrollY === 0);
+    await settled(page);
     assert.equal(await page.evaluate(() => scrollY), 0, `visit ${visit + 1}`);
   }
   assert.deepEqual(errors, []);
@@ -705,6 +716,7 @@ test('save pricing is readable at desktop and phone widths and clears with the s
         market:{rows:[{slug:'ba:itemname_cheapgift', cells:[{hood:'ba:neighborhood_midtown',marketPrice:25.63}]}]}};
       drawWiki();
     });
+    require('./_payload_contract.cjs').assertPayloadShape(await page.evaluate(() => D), 'wiki-browser');
     const section = page.locator('section').filter({has:page.getByRole('heading',{name:'Prices in your save',exact:true})});
     await section.scrollIntoViewIfNeeded();
     await page.waitForFunction(() => Array.from(document.querySelectorAll('.wk-prices'))
@@ -739,5 +751,33 @@ test('a payload with no guides falls back to the sample it does carry', async t 
   await page.getByRole('heading', {name:'To open',exact:true,level:2}).waitFor();
   const card = page.locator('.wk-card').filter({has:page.getByRole('heading',{name:'Gift (Cheap)',exact:true})});
   assert.match(await card.innerText(), /Wholesale not stated/);
+  assert.deepEqual(errors, []);
+});
+
+/* A live refresh (a new save, every 30 s while watching) draws the same guide
+   again: what the reader opened, closed and focused stays as it was. */
+test('a live refresh keeps the open sections and the focus', async t => {
+  const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-giftshop'});
+  await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
+  await page.evaluate(() => {
+    D = {meta:{day:190}, businesses:[{name:'My Gifts', typeSlug:'ba:businesstype_giftshop',
+      neighbourhood:'ba:neighborhood_midtown', lines:[{slug:'ba:itemname_cheapgift', configuredPrice:30.27}]}],
+      market:{rows:[{slug:'ba:itemname_cheapgift', cells:[{hood:'ba:neighborhood_midtown',marketPrice:25.63},
+        {hood:'ba:neighborhood_hellskitchen',marketPrice:24.10}]}]}};
+    drawWiki();
+  });
+  const prices = page.locator('details.wk-prices');
+  assert.equal(await prices.count(), 2);
+  await prices.nth(0).locator('summary').click();   // closes the one open by default
+  await prices.nth(1).locator('summary').click();   // opens the second
+  await prices.nth(1).locator('summary').focus();
+  const state = () => page.evaluate(() => ({
+    open: Array.from(document.querySelectorAll('details.wk-prices')).map(d => d.open),
+    focus: document.activeElement?.textContent.trim()}));
+  const before = await state();
+  assert.deepEqual(before.open, [false, true]);
+  await page.evaluate(() => { D = {...D, meta:{day:191}}; wikiVisit(); });
+  assert.deepEqual(await state(), before);
+  assert.match(await page.locator('#wikiRoot').innerText(), /save day 191/);
   assert.deepEqual(errors, []);
 });

@@ -74,7 +74,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `products` | `_products()`, with `peak`/`swing`/`weeks` from `_product_rhythm()` | `drawProducts`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn` |
 | `staff` | `_staff_summary()` | `drawKpis`, `drawPayroll` |
 | `loans` | `_loans()` | `drawKpis`, and the `SS_VIEWS` `cash` entry's `live()` |
-| `supply` | `_supply()`; its `facts` from `_supply_facts()`, each fact's status word from `_supply_status()`; `margin` and `roundTo` are `SUPPLY_MARGIN` and `SUPPLY_ROUND_TO` | `supplyChecklistRows`, `sbData`, the tab drawers `drawShopsTab`, `drawWarehousesTab`, `drawFactoriesTab` (with `sbDepotRows`, `sbTabOf`, `sbNodeOpen`), `drawSite`, `drawFlow`, `flowLayout`, `factoryView`; `web/map.js` `refreshCityMaps`. `supply.facts` only through `supplyFact()` (below), and `supply.idle` only through `idleRows()`, which keeps the rows idle under the sizing on screen (`modes`) with their `dem` laid over |
+| `supply` | `_supply()`; its `facts` from `_supply_facts()`, each fact's status word from `_supply_status()`; `margin` and `roundTo` are `SUPPLY_MARGIN` and `SUPPLY_ROUND_TO`; `roundTo` has no board reader, since the rounding is done in Python before the numbers ship | `supplyChecklistRows`, `sbData`, the tab drawers `drawShopsTab`, `drawWarehousesTab`, `drawFactoriesTab` (with `sbDepotRows`, `sbTabOf`, `sbNodeOpen`), `drawSite`, `drawFlow`, `flowLayout`, the phone chain's `flowStages`, `drawFlowChain`, `drawFlowFocus` and `flowPipeProblem` (which reads each `graph.links` entry's `slugs`, the products its pipe carries), `factoryView`; `web/map.js` `refreshCityMaps`. `supply.facts` only through `supplyFact()` (below), and `supply.idle` only through `idleRows()`, which keeps the rows idle under the sizing on screen (`modes`) with their `dem` laid over. `supply.wholesaleShops` (the shops a repeating wholesale contract delivers to) has no board reader: `_alerts()` counts it as a delivery plan |
 | `rhythm` | `_chain_rhythm()`; its `recent` key holds the same three series over the last `RHYTHM_RECENT_DAYS` (28) calendar days before the last finished day, which the chart draws, while the full-length ones feed `_supply()` | `weekdaySeries` (which `drawChart` asks), `drawSite` |
 | `market` | `_market()`; its `catalogue` key is popped out and handed to `_plan()` | `drawMovers`, `drawMarket`; `web/wiki.js` `wikiOwn`, `wikiGuidePrices` |
 | `premises` | `_premises()`, with `_premises_status()`, `_premises_demand()`, `_rent_estimate()`, `_deposit_estimate()`, `_deposit_check()`, `_door_caps()`, `_rival_numbers()`, `_rival_names()` | `drawFindLocation`, `finderPreset`, `wireCards`; `web/map.js` `premises` |
@@ -88,7 +88,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `officeStaffing` | `_office_staffing()`, with `_office_site_plan()`, `_office_runs()` (Peter's office default) and the shop placer `_place_week()`, drawing on the unassigned people no shop plan counts on (`_bench_claimed()`) | the Staff page (issue #89) |
 | `candidates` | `_candidates()`, with `_character()` and `_skill_rows()` | the Staff page |
 | `hiring` | `_hiring()`, which takes each plan row's private `_hire` (`_hire_fields()`: `hireWeeks` from `_hire_weeks()`, `spare`, `bench`) off `staffing`, `staffing[].fullCover`, `factoryStaffing` and `officeStaffing`; `accepts` from `ASSIGN_SKILLS`, `facts` from `_site_facts()`, `company` from `_company_facts()` | the Staff page |
-| `plan` | `_plan()` | `drawPlan`, `planDraw`, `indexPlan`, `factoryView`, `factoryCounts`, `planTypes`, `defaultRate`, `itemName`; `web/wiki.js` `wikiCanPlan` |
+| `plan` | `_plan()`; its `prices`, `priceFrom` and `priceDay` from `_ingredient_prices()` | `drawPlan`, `planDraw`, `indexPlan`, `factoryView`, `factoryCounts`, `planTypes`, `defaultRate`, `itemName`; `web/wiki.js` `wikiCanPlan` |
 | `names` | `_game_names()`: every `NAME_PREFIXES` key of `names.locale` but the `_description`s, plus `HOOD_LABEL` for a neighbourhood the text lacks | `itemName`, `gameName` (and through it `hoodName`), `englishName` (from the English payload), `localiseNames` |
 | `skillNames` | `extract()` inline, every skill in `STATION_SKILLS` through `names.label()` | `gwSkillName` |
 | `cashFlow` | `_cash_flow()` | `drawKpis` |
@@ -97,7 +97,6 @@ this column is where to look when you change a key's shape — not a complete ca
 | `minor` | `_alerts()`, its `minor`, sized 24/7 | `alertLines()` |
 | `alertsDemand` | `_alerts(..., "dem")`, a second pass over the same `supply.facts` with factory lines sized on demand: `{lines, minor}`, the shape of `alerts` and `minor` | `alertLines()`, when the sizing switch reads Demand |
 | `goals` | `_goals()` | `drawGoals` |
-| `weekly` | `_weekly()` | no reader |
 
 Four indirect routes an agent would otherwise miss:
 
@@ -131,11 +130,8 @@ Four indirect routes an agent would otherwise miss:
 - The site panel and the map cards are filled from data already in hand, so they do not
   appear above.
 
-Two keys have no reader, and only one of them is dead end to end:
-
-- `weekly` is genuinely unread. `_weekly()` feeds nothing else.
-- `ledgerDays`: the *key* is unread, but the `ledger` it counts is what `_cash_flow()`
-  reads. The history write and `history.ledger()` both have to stay.
+One key has no reader: `ledgerDays`. The *key* is unread, but the `ledger` it counts is
+what `_cash_flow()` reads. The history write and `history.ledger()` both have to stay.
 
 `hypeExposure` is read: do not delete it. `spHypeRow` draws the site panel's promotion row
 from it.
@@ -314,9 +310,224 @@ between a swapped name and Python's English prose (`spLimitRole()`) asks
 `englishName(key)` as well. The wiki swaps only what it shows, through `wikiName(key,
 english)`, because its matching against the help's own words needs the English.
 
+## UI text
+
+Big Copilot's own words can be shown in another language; German is the first. The
+game's names are a separate layer (the footer's Game names, above), and the two meet only
+where a sentence holds a name.
+
+**The English stays at the call site, beside a key.** Nothing is looked up in English:
+
+| Where | How |
+| --- | --- |
+| A script (board script, `web/*.js`) | `tt("sp.tile.size", "Size")`, `tt("f.x", "{n:,} units short", {n})`, `tt("f.m", {one: "{n} machine", other: "{n} machines"}, {n})` |
+| Markup (`TEMPLATE`, `BANNER`, `footer_html()`) | `<span data-tt="nav.today">Today</span>`; `data-tt-title`, `data-tt-aria-label`, `data-tt-placeholder` and `data-tt-tip` (for `data-tip`) name the key beside the attribute they fill |
+| Python (`ba_dashboard.py`) | `msg("f.loss", "Lost {w:$} yesterday", w=abs(b["profit"]))` |
+
+With no table loaded every one of these gives its English, so an English page is byte for
+byte what it was: `tests/i18n_layout.test.cjs` checks the page asks for no table without
+`?ui`, and a conversion proves its own English unchanged.
+
+**Keys** are `<area>.<thing>[.<part>]`. The area names the page, and the pull request that
+owns it; they are the CSS prefixes: `nav`, `land`, `app`, `foot`, `today`, `f` (findings),
+`co`, `sp` (site panel), `sb` (supply), `gr`, `map`, `wiki`, `comm`, `upd`, and `day` for the
+weekday names in `web/i18n.js`. `AREAS` in `tools/i18n.py` is the list. A key never ends in
+`_one`, `_other` or another plural category: the catalogue writes plurals that way.
+
+**Placeholders** are `{name}` with a small spec that `tt()` and `msg()` both implement. Each
+spec writes, in English, exactly what the code it replaces wrote on that side
+(`tests/i18n_runtime.test.cjs` against the board's `num()`, `fmt()`, `compact()` and
+`toFixed()`; `tests/test_i18n_msg.py` against the f-strings, fractional and negative
+values included):
+
+| Spec | English in a script (`tt`) | English in Python (`msg`) | German |
+| --- | --- | --- | --- |
+| `{x}` | `String(x)` | `f"{x}"` | decimal comma, up to 3 decimals, no grouping |
+| `{x:,}` | `num(x)`: grouped, up to 3 decimals, `-1,234.5` | `f"{x:,}"`: `-1,234.5`; a float keeps every digit `repr` shows | `-1.234,5` |
+| `{x:.1f}` (any digit) | `num(x, {min = max = 1 decimal, no grouping})`, as `x.toFixed(1)` | `f"{x:.1f}"`, halves away from zero | `3,5` |
+| `{x:,.0f}` (any digit) | `num(x, {min = max = 0 decimals})` | `f"{x:,.0f}"`, halves away from zero | `1.234` |
+| `{w:$}` | `fmt(w)`: `-$1,234` | `"-$" + f"{abs(w):,.0f}"` for a negative, `$1,234` otherwise, halves away from zero | `-$1.234` |
+| `{w:$c}` | `compact(w)`: `$3.57M`, `$751k` | the same | `$3,57M` |
+| `{d:day}` | `Monday` for 1 (0 is Sunday) | the same | the table's `day.1` |
+
+The two sides differ only where the old code did: a float with more than three decimals
+(`{x:,}`). A tie at an exact half rounds away from zero on both sides, the one rule for
+numbers in text: `Intl` and `toFixed()` do it natively, `fmt()` and `compact()` round the
+size (`Math.round(Math.abs(n))`) and put the sign back, and Python's `msg()` rounds through
+`_half_away()`, reading a float at its shortest form as `Intl` does (2.675 is 2.68).
+`format()` alone would round half to even, and write $2.50 as `$2` in a finding beside `$3`
+on a tile.
+
+Numbers follow the UI language: English is always en-US. `tt()` formats through the
+board's `num()` once it exists, and through `Intl` in `ttNumLocale()` before it does (the
+landing). A param `{m: [key, params, english]}` is a nested message; a script nests by
+passing another `tt()` as the param instead.
+
+**Game names** travel as params holding the usual token (`tok()`), so the translation
+decides where the name stands and `gnString()` writes it in the names language. The
+translator's rule: no article or case ending before a `{name}`, because a name cannot be
+declined. Put it after a colon or in apposition ("{item}: läuft 3,5 Tage vor der Lieferung
+leer"). Where Python pluralises a name today, pass the count and let the key say it.
+
+**Never build a sentence out of pieces.** `tt("a", "Lost") + " " + fmt(w)` cannot be
+translated: word order is the translation's. One key per sentence, with its numbers and
+names as params.
+
+**One exception to literal keys: the Wiki guides' labels.** Their English is `guideUi`
+in `tools/wiki_sample.json`, and it reaches the page inside the wiki payload (each
+guide's `COPY`), so `web/wiki.js` cannot write it at the call site. `extract` reads
+`guideUi` itself (`guide_ui_calls()` in `tools/i18n.py`) and emits one key per entry,
+`wiki.ui.<name>`, with the entry as its English; `wikiCopy()` looks each label up with
+``ttText(`wiki.ui.${name}`, english)`` (the payload's English), which the extractor does not read
+as a call. The key set is the JSON's, so the catalogue checks hold for these keys too.
+Nothing else may build a key. The guides' article prose, the topics and the gap and
+source notes are not labels and stay English.
+
+### How it runs
+
+- `web/i18n.js` is spliced by `render()` into a `<script>` at the end of the head, at
+  `/*__I18N_SCRIPT__*/`: after the stylesheets, so the browser finds those first, and
+  before the landing, the board and every other script but the theme's, so `app.js`, `update.js`,
+  `community.js`, the board script, `map.js`, `wiki.js` and the local `dashboard.html` can
+  all call `tt()`. Its top-level names start `tt`/`TT_`, or are `tApply`, `enOf`,
+  `setUiLocale` and `setUiLang`.
+- The site's table is `web/i18n/<lang>.json`, fetched with the build stamp
+  (`window.LEDGER_BUILD`, which `page_html()` now sets in the head for that reason). Until
+  the footer picker ships, the only switch is the developer flag `?ui=de`, which is not
+  remembered. While it loads, `html.tt-wait` hides the page for at most 400 ms. A table
+  with no keys (the German is empty until its translation lands) counts as English,
+  numbers included.
+  `document.documentElement.lang` follows the UI language.
+- The CLI's `--lang de` carries `web/i18n/de.json` in the page (`cli_ui_table()`, filling
+  `/*__UI_TABLE__*/null` inside `web/i18n.js`) when that table is not empty, as it carries
+  the names.
+- `ttSetTable(lang, table)` puts a table in force, refills the markup (`tApply()`, which
+  keeps the English it replaced) and calls every `ttOnChange()` listener. The board's
+  listener sets `NUM_LOCALE = ttNumLocale()` (en-US for English, de-DE for German), so
+  `num()` and everything built on it follows, then calls `gnRedraw()`:
+  `D = localiseNames(D)` and `renderCalm(false)`, the path a names switch takes.
+  `NUM_LOCALE` also starts at `ttNumLocale()`, so a `--lang de` page draws German numbers
+  from the first frame. `setUiLocale(lang)` sets `<html lang>` and returns the same locale.
+
+### Python's sentences
+
+`msg(key, en, **p)` returns a `Msg`: a `str` whose value is the English sentence Python
+always wrote, carrying `.key` and `.p`. Every Python reader and test sees the English as
+before. At the end of `extract()`, `_wire_msgs()` walks the payload once and, for every
+field holding a `Msg`, adds `row["i18n"][field] = [key, params]` (numbers raw, names as
+tokens, a nested `Msg` as `{"m": [key, params, english]}`).
+
+A message that opens a sentence cannot be capitalised by slicing (`limit[:1].upper() +
+limit[1:]` is a plain `str`). A cap finding's limit goes through `_cap_first(limit)`
+instead: it gives the same English and stays a message, through a sentence-initial key of
+its own for the limits that start lower case (`sp.py.limit.staffing.first`, "Staffing";
+`registers` and `workstations` likewise), and by capitalising only the first part of a
+join. A new lower-case word that can open a sentence gets its `.first` key there.
+
+Words Python makes out of a game name in English (a station's lowered plural,
+"projection booths"; "another projection booth") cannot be tokens, because a token
+cannot be pluralised or declined. Such a message keeps the English word as its param
+and carries the name beside it as a token param as well: `stations` / `station`
+plus `station_name` (`⟦ba:itemname_projectionbooth|Projection Booth⟧`) in
+`sp.py.limit.station`, `sp.py.noun.station` and `sp.py.fix.role.post`, and `item_name`
+in `sp.py.factory.station`. The English template uses the English param; a translation
+uses the token ("noch eine Station: {station_name}") and gets the game's own name.
+`_sp_station_noun()` builds the noun this way; the grid's `role.noun` stays a plain
+`str`, because the page compares it against a limit's English.
+
+What a translation may name is what its calls pass. `extract` records, per key, the
+param names of every call site (`msg()`'s keyword arguments; the keys of the object
+literal a `tt()` call passes, or none when it passes nothing), and `extract --params`
+prints them. Where every call's names can be read, `fits()` lets a translation use any
+of them, keeping the English's spec for the params the English prints. It still has to
+use every param its English prints, with two exceptions: a passed token param stands in
+for its English word (`X_name` for `X`, `station_name` for `stations`), and a `one` or
+`zero` plural form may leave out `{n}` ("ein Laden"). A placeholder no call passes, or an
+English param left out otherwise, makes it a mismatch, which `ship` drops. Where one
+call's names cannot be read (`**said`, a variable, a spread, a computed key) the
+translation is held to its English's own placeholders, no more and no fewer, as
+before. Plural categories are checked either way.
+
+Concatenating or `.replace()`-ing a `Msg` gives a plain `str`: that row then has no
+`i18n` entry and stays English on every page. The loss is visible, not wrong, and the
+per-area coverage in `tests/test_i18n_msg.py` (`CONVERTED`) catches it for a converted
+area. Ids, `subject`, the history, anything sent to the game and CLI output never use
+`msg()`; Python stays English inside.
+
+On the page, `localiseNames()` hands its fresh copy to `ttPayload()`, which, while a table
+is loaded, swaps each field its row's `i18n` names and keeps the English it showed on the
+row under a symbol key (so `{...row}` copies keep it, and JSON and `Object.keys()` never
+see it). **Code that reads Python's words reads `enOf(row, field)`**: the English,
+whatever the page shows. `findingAmount()`, `spLimitShow()` (and through it
+`spLimitRole()`), the site panel's cap chips (`limitEn()` in `drawSite()`: the
+`"the building"` tests, `capSentence`, `spLimitIcons()` and `data-limit`) and its ceiling
+strip (`spBindingLimits()`, which `spCeiling()` reads) do; `splitFinding()` only looks for its two English sentence shapes while
+the row is shown in English, and its generic cut (`:`, `;`, `. `, the comma within
+`HEADLINE_MAX`) works in any language, so a translation puts its headline first and the
+detail after `: ` or `; `. Any other comparison against Python's English has to move to
+`enOf()` in the pull request that converts its sentence.
+
+### The catalogue and the translations
+
+| File | Role |
+| --- | --- |
+| `i18n/de.json` | The German, hand-reviewed: flat, `"key": "text"`, plurals as `key_one`/`key_other` |
+| `i18n/de.base.json` | The English each German string was translated from, per key. Staleness is measured against it; `python tools/i18n.py accept de [key …]` records it |
+| `web/i18n/de.json` | Generated by `python build_web.py` (`tools/i18n.py ship`): `i18n/de.json` minus orphans, placeholder mismatches (a placeholder its calls do not pass; see [Python's sentences](#pythons-sentences)) and stale keys (whose English changed since `de.base.json` recorded it, or was never recorded), which show English until redone and `accept`ed. In `STAMP_INPUTS`, and compared by `--check` |
+| `tools/i18n.py` | `extract` (the English catalogue, read off the call sites: a JS lexer over the scripts, an HTML parser over the markup, `ast` over `msg(`), `extract --params` (the params each key's calls pass), `status [--strict]`, `ship`, `accept`, `glossary`, `draft-sheet` |
+
+No English catalogue is committed: it would conflict on every English edit. `extract` builds
+it on demand and fails on a key with two English defaults, or a call whose key or English is
+not a literal (or holds `${}`). A missing, stale or orphaned translation never fails the
+build or the tests: the page falls back to English per key, so an English edit elsewhere
+never breaks anybody. `status --strict` fails on them, for a translation pull request.
+
+`glossary de --out <path>` and `draft-sheet de --out <path>` read the installed game's
+`en.json` and `de.json` for the game's own words (address form: du, as the game's German
+uses). That text is the game's, so both refuse a path inside this checkout (with or
+without its `.git`) or inside any other git work tree.
+
+### Converting an area
+
+1. Take the area's prefix (the table above) and the files it owns; nobody else writes keys
+   under it.
+2. Scripts: wrap each visible string, `tt("sp.tile.size", "Size")`; sentences with numbers
+   or names become one key with params. Markup: `data-tt` on the innermost element that
+   holds only the words, `data-tt-title` and friends beside attributes. Python: the
+   f-string becomes `msg("f.thing", "…{n:,}…", n=…)` with the same English, and any board
+   code that parses that sentence reads `enOf(row, field)`. Pick each spec from the old
+   code, so the English stays byte for byte:
+
+   | Old code | Template |
+   | --- | --- |
+   | `${x}` in a script, `f"{x}"` | `{x}` |
+   | `num(x)`, `f"{x:,}"` | `{x:,}` |
+   | `x.toFixed(1)`, `f"{x:.1f}"` | `{x:.1f}` |
+   | `num(x, {minimumFractionDigits: 2, maximumFractionDigits: 2})`, `f"{x:,.2f}"` | `{x:,.2f}` |
+   | `num(Math.round(x))` | `{x:,.0f}` for a value that is never an exact half; otherwise round in the caller and pass the whole number as `{x:,}` |
+   | `fmt(x)`, `f"${abs(x):,.0f}"`, or `f"${x:,.0f}"` with `x` never negative | `{x:$}` |
+   | `f"${x:,.0f}"` where `x` can be negative (writes `$-1,234`) | `${x:,.0f}`: a literal dollar before the placeholder |
+   | `compact(x)` / `money(x)` | `{x:$c}` |
+   | `WEEKDAY_NAMES[d]`, `WEEKDAYS[d]` | `{d:day}` |
+   | a game name, `tok(key, name)` | `{item}` with the token as the param |
+
+   A list joined with `", ".join(...)` in Python becomes `_msg_list(items)`: a nested
+   `f.list` ("{a}, {b}") per comma and `f.list.last` for the final pair, both "{a}, {b}" in
+   English, so a translation can end the list with its "and" ("a, b und c").
+   A game name the English runs into a sentence in lower case ("3 liquor store
+   lines") goes through `gnLower(name)`, never `.toLowerCase()`: it lowercases only
+   while the names are shown in English, so a German noun keeps its capital.
+3. Prove the English unchanged: the area's existing tests pass untouched, and a fixture
+   board rendered before and after shows the same text.
+4. Add the area to `CONVERTED` in `tests/test_i18n_msg.py` (Python fields) and in
+   `tests/i18n_layout.test.cjs` (its selector), so English that bypasses `tt()` fails from
+   then on.
+5. Run the i18n tests and `python build_web.py`. `python tools/i18n.py status de` lists the
+   new keys as missing, which is expected until the German is drafted.
+
 ## Template placeholders
 
-`TEMPLATE` carries sixteen tokens. All sixteen are substituted by `render()`, but the
+`TEMPLATE` carries seventeen tokens. All seventeen are substituted by `render()`, but the
 text for three of them is supplied by the caller.
 
 | Token | Filled with |
@@ -337,6 +548,11 @@ text for three of them is supplied by the caller.
 | `/*__HOOD_TAGS__*/{}` | `render()`, from `HOOD_TAG` — one neighbourhood-tag table shared by the board and the wiki, keyed by the game's neighbourhood key |
 | `/*__HOOD_NAMES__*/{}` | `render()`, from `HOOD_LABEL` — each neighbourhood's English name by the same key: `hoodName()`'s fallback and `hoodKeyOf()`'s way back from a stored name |
 | `/*__NAMES__*/null` | `render()`'s `names=` argument, `{lang, names}` from `cli_names()` for `--lang`; `null` elsewhere, where the site fetches `web/names/<lang>.json` instead |
+| `/*__I18N_SCRIPT__*/` | `render()`, from `web/i18n.js`, in a `<script>` of its own at the end of the head, after the stylesheets and before the landing and every script but the theme's ([UI text](#ui-text)). Spliced last, at the first marker only, so no other placeholder runs over it |
+
+`web/i18n.js` carries one more, `/*__UI_TABLE__*/null`, which `render()` fills before the
+splice from its `ui=` argument: `{lang, table}` from `cli_ui_table()` for `--lang`, `null`
+elsewhere, where the site fetches `web/i18n/<lang>.json` instead.
 
 Only the wiki files are optional. `render()` reads them through `optional_asset()`, so a
 checkout without `web/wiki.js` still renders a whole board and the Wiki tab is left out of
@@ -344,8 +560,9 @@ the navigation (`PAGES` tests for `showWikiRoute`). `web/map.js` and `web/map.cs
 opened directly: delete either and `render()` raises.
 
 `build_web.py` has a second, private set of tokens — `__STAMP__`, `__RELEASE__`,
-`__UPDATE_SCRIPT__`, `__BUILD__`, `__ICON_FOLDER__`, `__ICON_LINK__`, `__ICON_MORE__`.
-Those are substituted inside `BANNER` and `BEFORE_SCRIPT` before either string reaches
+`__UPDATE_SCRIPT__`, `__BUILD__`, `__ICON_FOLDER__`, `__ICON_LINK__`, `__ICON_MORE__`
+(`tests/test_doc_registries.py` holds this list to `build_web.py`). Those are substituted
+inside `BANNER` and `BEFORE_SCRIPT` before either string reaches
 `render()`, so they never appear in `TEMPLATE`. `BANNER` also carries the template's own
 `<!--__FOOTER__-->`, which `build_web.py` fills with `footer_html(landing=True, site=True)`.
 
@@ -359,17 +576,19 @@ What `page_html()` produces, top of the file down:
 
 1. `<!doctype html>` then `<meta charset="utf-8">`, both emitted by `render()` before the
    template, so the page runs in standards mode.
-2. The head `page_html()` builds, in this order: the viewport tag and the
-   `web/community.css` link stamped with the release version. There is no analytics
+2. The head `page_html()` builds, in this order: the viewport tag, `window.LEDGER_BUILD`
+   (the stamp, set here rather than in `BEFORE_SCRIPT` because `web/i18n.js`, in the
+   template's head, fetches a UI table with it) and the `web/community.css` link stamped
+   with the release version. There is no analytics
    script, and Cloudflare's automatic Web Analytics injection is switched off for the
    domain, because the privacy notice says the site runs none. `page_html()` then swaps the
    template's Google Fonts links for `web/fonts/fonts.css`, stamped the same way.
-3. `TEMPLATE`, with the landing screen (`BANNER`) substituted into its `<!--__BANNER__-->`
-   slot: the release banner, the drop zone, the save-location help and the footer.
+3. `TEMPLATE`, whose head scripts are the theme and `web/i18n.js`, with the landing screen
+   (`BANNER`) substituted into its `<!--__BANNER__-->` slot: the release banner, the drop
+   zone, the save-location help and the footer.
 4. `BEFORE_SCRIPT`, filled in by `page_html()` with the stamp, the release JSON and the
    inlined `web/update.js`, in its slot just ahead of the board's own script:
-   `window.LEDGER_BUILD`, `window.LEDGER_RELEASE`, `update.js`, `app.js?v=<stamp>`,
-   `community.js?v=<stamp>`.
+   `window.LEDGER_RELEASE`, `update.js`, `app.js?v=<stamp>`, `community.js?v=<stamp>`.
 5. The board script, the last `<script>` block of `TEMPLATE`.
 
 Before any of that, `main()` refreshes `web/wiki-data.json`, copies `ba_save.py`,
@@ -426,13 +645,18 @@ else. The page still uses the network for its own assets, all same-origin.
 The static ones are versioned, so a deploy busts their caches: `web/map.js` fetches
 `maps/locations.json` with the build stamp and the background image with its own content
 hash, `web/wiki.js` fetches `wiki-data.json` with the build stamp, and the board fetches
-`names/<lang>.json` with it when a language is picked. The dynamic ones
+`names/<lang>.json` with it when a language is picked, and `web/i18n.js` fetches
+`i18n/<lang>.json` with it for a UI language. The dynamic ones
 carry no version, because the whole point is to see the current state: `web/update.js`
 polls `version.json` with `cache: "no-store"`, and `web/community.js` calls
 `/api/community/*`. Nothing comes from another origin: `TEMPLATE` links Google Fonts for
 the local `dashboard.html`, but `build_web.py` swaps those links for the site's own copies
 in `web/fonts/`, so the privacy notice (`web/privacy.html`) can name Cloudflare as the
-only party that sees a request. `tests/test_privacy_promises.py` holds the site to that.
+only party that sees a request. `tests/test_privacy_promises.py` holds the site to that,
+and the Content-Security-Policy in `web/_headers` enforces it in the browser: only this
+site, plus the game link on `http://127.0.0.1:*` and `http://localhost:*`. A new fetch
+target, script or image source has to be added there too; `tests/test_headers.py` reads
+the policy and `tests/csp.test.cjs` boots Pyodide and the game link under it.
 
 Order matters. `BEFORE_SCRIPT` must stay ahead of the board script, or the board falls back
 to fetching `data.json` from a site that has no such route.
@@ -602,10 +826,12 @@ a save of another character arriving under an open site's page (`siteFor` agains
 A registry is a table kept by hand that a new thing has to be added to. Nothing generates
 them, and a missing row often fails quietly: a finding that goes nowhere when clicked, a
 view search cannot find. Each checklist below names the anchor to grep, what goes in it,
-and the test that covers the table ("none" means no test reads it). Most of those tests
-check the entries that exist today, so none of them fails yet when a new entry is
-missing; Change C of issue #100 adds those checks. Until then, extend the covering test
-for the new entry. Rows marked
+and the test that covers the table ("none" means no test reads it). A few tables are held
+to each other or to this document, so a missing row fails with its name: the finding-kind
+tables (`tests/alert_kinds.test.cjs`), the view tables (`tests/navigation.test.cjs`), and
+the payload table, the private build tokens and the finding groups
+(`tests/test_doc_registries.py`). The other covering tests check the entries that exist
+today, so extend them for the new entry. Rows marked
 *only if* apply to some entries, not all. All anchors are in `ba_dashboard.py` unless a row
 says otherwise; "board script" means the last `<script>` block of its `TEMPLATE`.
 
@@ -614,18 +840,18 @@ says otherwise; "board script" means the last `<script>` block of its `TEMPLATE`
 | Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
 | The inputs of `def _alerts(` (called twice in `extract()`): `businesses`, `supply`, `trends`, `hype`, `hours`, `grids`; it also takes `chains` but never reads it | Where the finding's numbers come from. A business's single fields (`revenue`, `profit`, `theft`) are its last day only; its `series`, built in the `series.append(` loop of `def _business(`, holds up to 30 days, and `_site_trends()` shows how to sum a week from it. A new per-day figure goes into that loop | the kind's own Python test |
-| `note(` in `def _alerts(`, or `_finding(` in one of the `_*_notes` helpers (`_shelf_notes`, `_import_notes`, `_idle_notes`, `_feed_notes`, `_staff_notes`, `_unnamed_notes`) | The finding itself, with its group id | the kind's own Python test, such as `tests/test_routed_supply.py` |
+| `note(` in `def _alerts(`, or `_finding(` in one of the `_*_notes` helpers (`_shelf_notes`, `_import_notes`, `_idle_notes`, `_feed_notes`, `_staff_notes`, `_unnamed_notes`) | The finding itself, with its group id: a string literal, or a literal tuple a `for` loop runs over, which is what the registry test can read | the kind's own Python test, such as `tests/test_routed_supply.py`; `tests/test_doc_registries.py` holds the groups emitted equal to `ALERT_GROUPS` |
 | The hand-built business dicts the tests pass to `_alerts()`: `def stub(` in `tests/test_site_panel_fields.py` (shared with `tests/test_hype_alerts.py`); `def business(` in `tests/test_idle_week.py` (reused by `tests/idle_week_fixture.py` for `tests/site_panel.test.cjs`); `def businesses(self)` on `Company` in `tests/test_supply_facts.py`; `ImportRoutesTests.build()` in `tests/test_import_routes.py`, whose businesses `tests/test_smart_delivery.py` passes on; and the `business()` inside `depot_supply()` in `tests/test_routed_supply.py`, wrapped in `SupplyOnly`, which a `for b in businesses` loop sees as empty but an index `businesses[s]` still reaches. None has `series`; only businesses built by the real `_business()` do | Read a new field with `.get()` and a default, or add it to every one of these, or those tests break | `tests/test_site_panel_fields.py`, `tests/test_hype_alerts.py`, `tests/test_idle_week.py`, `tests/site_panel.test.cjs`, `tests/test_supply_facts.py`, `tests/test_import_routes.py`, `tests/test_smart_delivery.py`, `tests/test_routed_supply.py` |
 | `AMENITY_DEMANDS = {` | *Only if* it is an amenity kind: `slug: (group, text)` | `tests/test_uniform_alerts.py`, "test_an_empty_cache_means_every_demand_failed" |
-| `ALERT_UNITS = {` | *Only if* its `worth` is money: the unit, such as `"/day rent"` | none |
+| `ALERT_UNITS = {` | *Only if* its `worth` is money: the unit, such as `"/day rent"`. Otherwise the kind goes on `NOT_MONEY` in `tests/alert_kinds.test.cjs` | `tests/alert_kinds.test.cjs`, "every finding kind has an ALERT_UNITS unit or is listed as carrying no money" |
 | `SUMMARIES = {`, and `WORST_FIRST =` for mixed severities | *Only if* three or more at one site should merge into one counted line | none; a missing entry just stops the merge |
 | `def _condense(` | *Only if* the kind merges and a field of its own must survive the merge. A merged row is built fresh: it keeps `group`, the key the rows were merged on; from the worst row it keeps `level`, `site`, `siteKey`, `detail` (that row's `text`) and `ev` when present; `text` is the `SUMMARIES` line, `worth` the sum of the rows' non-null worths (or `None` when there are none), `unit` from `ALERT_UNITS`, `id` a new `_alert_id("summary", …)`, and `always` is true if any row's is. Every other field is dropped. Every row, merged or not, also loses `rank` and `subject`, and `always` once the materiality gate has used it | none |
-| `const ALERT_GROUPS = [` (board script) | `{id, label, note, on}`. The settings panel, `kindLabel`, `kindCounts`, search and the map's `kindOff` all read it. Keep a noisy kind `on: false` | `tests/alert_kinds.test.cjs`, "At capacity is on by default" and the per-kind tests |
+| `const ALERT_GROUPS = [` (board script) | `{id, label, note, on}`. The settings panel, `kindLabel`, `kindCounts`, search and the map's `kindOff` all read it. Keep a noisy kind `on: false` | `tests/alert_kinds.test.cjs`, "At capacity is on by default" and the per-kind tests; `tests/test_doc_registries.py`, "test_every_alert_group_is_a_group_the_findings_emit" |
 | `const ALERT_DEFAULTS_V1 =` (board script) | Never add to it: it is the frozen migration of old settings | `tests/alert_kinds.test.cjs`, "a stored whole map keeps only …" |
-| `const ALERT_LINKS = {` (board script) | Where a click lands: `{sec, tab?, site?, port?}`, where `tab` is a Supply tab (`shops`, `warehouses`, `factories`) or `"site"` for the tab of the site's own kind. Without it `goToAlert()` does nothing | `tests/alert_kinds.test.cjs` per-kind tests and "the supply kinds land on the Supply tab of their object"; `tests/job_demands.test.cjs`, "both demand findings can be filtered and link somewhere" |
+| `const ALERT_LINKS = {` (board script) | Where a click lands: `{sec, tab?, site?, port?}`, where `tab` is a Supply tab (`shops`, `warehouses`, `factories`) or `"site"` for the tab of the site's own kind. Without it `goToAlert()` does nothing | `tests/alert_kinds.test.cjs`, "every finding kind has an ALERT_LINKS entry …", the per-kind tests and "the supply kinds land on the Supply tab of their object"; `tests/job_demands.test.cjs`, "both demand findings can be filtered and link somewhere" |
 | `const ALERT_SITE_PICK = {` (board script) | *Only if* the kind is company-wide, with no site of its own | `tests/job_demands.test.cjs` |
 | `const ALERT_LANDS_ON_ROW = new Set(` (board script) | *Only if* the finding is about one shelf, stock or input row | none |
-| `const ALERT_EVIDENCE = {` (board script) | The site panel block it lights, `{block, hit?}` | `tests/site_panel.test.cjs`, "the findings here are the ones about this site, and each lights its block" |
+| `const ALERT_EVIDENCE = {` (board script) | The site panel block it lights, `{block, hit?}`. A kind with no site panel goes on `NO_EVIDENCE` in `tests/alert_kinds.test.cjs` instead | `tests/alert_kinds.test.cjs`, "every finding kind with a site panel has an ALERT_EVIDENCE entry"; `tests/site_panel.test.cjs`, "the findings here are the ones about this site, and each lights its block" |
 | `const SP_EVIDENCE_KIND = {`, `const SP_EVIDENCE_HIT = {` (board script) | *Only if* a depot or factory keeps it in another block, or the hit depends on the site | `tests/alert_kinds.test.cjs` for the first; none for the second |
 | `function findingAmount(` (board script) | *Only if* the generic number patterns miss its amount | `tests/alert_kinds.test.cjs`, `tests/job_demands.test.cjs` |
 | `const SS_KIND_SYN = {` (board script) | The players' own words for it, for search | `tests/search.test.cjs`, "the index holds every group …" |
@@ -633,8 +859,12 @@ says otherwise; "board script" means the last `<script>` block of its `TEMPLATE`
 | "What counts as a finding" in `docs/dashboard-reference.md` | The player-facing description | none |
 
 The map colours a finding by its `level` and `kindOff()`, so `web/map.js` needs nothing.
-Today `vacant` has no `ALERT_EVIDENCE` entry, most kinds have no `SS_KIND_SYN` entry and
-`ALERT_UNITS` holds only the money kinds, so a completeness test has to allow for those.
+Not every kind is in every table, and the tests list the exceptions by name: `vacant` has
+no `ALERT_EVIDENCE` entry, since a vacant lease has no site panel (`NO_EVIDENCE`), and
+`ALERT_UNITS` holds only the money kinds (`NOT_MONEY` lists the rest). Most kinds have no
+`SS_KIND_SYN` entry, which no test checks. Many kinds come from `_finding()` in
+a `_*_notes` helper or from `AMENITY_DEMANDS`, not from `note()`, so the group test reads
+all three.
 
 ### A view or a page
 
@@ -643,9 +873,9 @@ Today `vacant` has no `ALERT_EVIDENCE` entry, most kinds have no `SS_KIND_SYN` e
 | The markup: `<div class="page" id="page…">` for a page, or `<section class="sec rv" id="sec…" data-sub="…">` inside its page for a view; a page with views also gets its `<nav class="seg" id="…Nav">` | The host element | the navigation tests, indirectly |
 | `const PAGES = [` (board script) | *Only for a page*: `{id, label, host, newFeature?}` | `tests/navigation.test.cjs`, "the top row is Today, Company, Supply, Growth, Map, Wiki" |
 | `const ICON = {` (board script) | *Only for a page*: its nav icon, keyed by page id | none |
-| `const SUBS = {` (board script) | *Only for a view*: its `[id, label, section]` item; a new page with views needs the whole entry | `tests/navigation.test.cjs`, "Company carries Results, Products, Payroll and Milestones" |
-| `const SEC_PAGE = {` (board script) | `secX: [page, view]` for every section. Without it `reveal()`, the sub-nav and `pageFromHash()` fail | `tests/navigation.test.cjs`, "every Company section deep link opens the view that holds it"; `tests/alert_kinds.test.cjs`, "the supply kinds land on the Supply tab of their object" |
-| `const PAGE_DRAWS = [` (board script) | `["page/view", () => drawX()]`, tagged with every view whose markup it writes | `tests/calm_refresh.test.cjs`, "a refresh on Today draws Today …" |
+| `const SUBS = {` (board script) | *Only for a view*: its `[id, label, section]` item; a new page with views needs the whole entry | `tests/navigation.test.cjs`, "Company carries Results, Products, Payroll and Milestones" and "every view in SUBS has its SEC_PAGE row and a PAGE_DRAWS tag" |
+| `const SEC_PAGE = {` (board script) | `secX: [page, view]` for every section. Without it `reveal()`, the sub-nav and `pageFromHash()` fail | `tests/navigation.test.cjs`, "every view in SUBS has its SEC_PAGE row …" and "every Company section deep link opens the view that holds it"; `tests/alert_kinds.test.cjs`, "the supply kinds land on the Supply tab of their object" |
+| `const PAGE_DRAWS = [` (board script) | `["page/view", () => drawX()]`, tagged with every view whose markup it writes | `tests/calm_refresh.test.cjs`, "a refresh on Today draws Today …"; `tests/navigation.test.cjs`, "every PAGE_DRAWS tag names a real page or view" and the SUBS test above |
 | `const SS_VIEWS = [` (board script) | `{id, t, p, ic, syn, go}`, so search can open it | `tests/search.test.cjs`, "the index holds every group …" |
 | `function showPage(` (board script) | *Only if* the page loads or draws when shown, as the Map does | none |
 | `const SB_SEC =`, `const SB_LABEL =`, `const SB_TAB_ICON =` (board script) | *Only for* a new Supply tab: its section, label and icon, keyed by the tab id. Also its `supply` item in `SUBS`; its draw function in `drawSupplyTab()`'s dispatch map (a missing tab draws Shops); `sbTabOf()`, which sorts a site onto a tab; and the tab-keyed objects in `sbData()` (`byTab`), `sbUpdateStrip()` (`sbLeft`) and `ssIdleTab()`; and the tab list in `ssTopupTab()` | `tests/navigation.test.cjs`, "Supply is three tabs, one per object"; `tests/import_routes.test.cjs` |
@@ -662,7 +892,7 @@ watch server, `web/worker.js` and `web/app.js` all pass the whole dict through.
 | Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
 | The `return {` at the end of `def extract(` | `"key": _producer(...)`. It must be JSON-serialisable, with any set ordered through `_in_order()` | only JSON-serialisability: `tests/test_supply_facts.py`, "test_the_payload_carries_the_facts_and_both_passes_of_findings" |
-| The payload table in [The payload contract](#the-payload-contract) | A row that follows the reader convention | none |
+| The payload table in [The payload contract](#the-payload-contract) | A row that follows the reader convention | `tests/test_doc_registries.py`, "test_the_payload_table_has_a_row_for_every_key_extract_returns" (the key column only) |
 | The reader, `D.<key>`, in the board script, `web/map.js` or `web/wiki.js` | A reader that survives a missing key (fall back to an empty value), because many Node tests build a partial `D` | indirect |
 | `class History:` and the `history.ledger(` / `history.write()` lines in `extract()` | *Only if* the value has to persist between saves | none |
 
@@ -680,12 +910,12 @@ are a separate list under `FINDER_SAVED_KEY`.
 | `const finderDefaults = () =>` | The key and its "no limit" default. `finderPick`, `saveFinder`, `resetCharacter` and `savedKey` follow it | "the defaults are visibly chosen on first open …" |
 | `setFinder(preset = {}){` | The key in the reset literal | "a preset lands on the column its category ranks by …" |
 | `loadFinder(){` | Usually nothing; a retired key goes on its `delete this.fs.` line | "the filters come back with the character …" |
-| `finderPanel(){` | A `row('Label', …)` control with `data-f="<key>"` | "the switch is in the map window; every filter lives in the panel" |
+| `finderPanel(){` and `const MAP_WORDS = {` | A `row('rowLabel', …)` control with `data-f="<key>"`; its words are `MAP_WORDS` getters over `tt("map.…")`, which a language switch writes again in place | "the switch is in the map window; every filter lives in the panel" |
 | `wireFinder(){`, `paintControls(){` | Nothing for a numeric chip; a new kind of control needs its handler and read-back here | "floor area is a column that sorts, and a filter on every list" |
 | `finderRows(){` and `saleRows(){` | The predicate; `const finderFits = (v, lo, hi) =>` for a range | "a type filter re-scores every row …", "the for-sale list answers to the filters still on screen" |
 | `savedFilters(s){` | Validation of the stored value | "a saved search is read against this save …" |
-| `savedTip(s){` and `const finderRange =` | Its part of a saved search's summary | none for most filters |
-| `sortKeys(`, `const FINDER_SORT_NAMES =`, `finderList(`, and the grid columns in `web/map.css` | *Only if* it is also a sortable column | "the Cap column sits between m² and Upfront …" |
+| `savedTip(s){` and `function finderRange(` | Its part of a saved search's summary | none for most filters |
+| `sortKeys(`, `function finderSortName(`, `finderList(`, and the grid columns in `web/map.css` | *Only if* it is also a sortable column | "the Cap column sits between m² and Upfront …" |
 | `def _premises(` in `ba_dashboard.py`, and the fixtures in `tests/finder.test.cjs` | *Only if* it needs a new field on each row | `tests/test_premises.py` (exact row dicts) |
 | `function ssFinder(` and the `openFinder({…})` callers (board script), and `function finderPreset(`, which turns a Growth › Demand cell into a preset for `openFinder(go, true)` | *Only if* a caller should preset it | `tests/search.test.cjs`; `tests/finder.test.cjs`, "a Growth cell opens the finder on its own type and neighbourhood" |
 
@@ -725,7 +955,10 @@ because a deploy from a checkout that lacks them would remove them from the site
 files from `https://cdn.jsdelivr.net/pyodide/v<version>/full/` into a new version folder,
 change `PYODIDE_VERSION` in `web/worker.js`, and delete the old folder.
 
-Everything else it fetches is same-origin, from `web/py/`, carrying the page's build stamp:
+Everything else it fetches is same-origin, from `web/py/`, carrying the page's build stamp.
+Because every one of those files is a stamp input, `web/_headers` caches `/py/*` as
+immutable and the worker fetches with the browser's default cache (`no-store` only for
+the unstamped `dev` build):
 
 - `ba_save.py` and `ba_dashboard.py` — a failed fetch throws and the worker never becomes
   ready.
@@ -733,6 +966,9 @@ Everything else it fetches is same-origin, from `web/py/`, carrying the page's b
   virtual filesystem only when the fetch succeeds, so a build missing one still boots and
   degrades instead: without the curves the board states no arrival ceiling, and every number
   it does state still comes off the measured hour grid.
+
+Gradual (percentage) deployments are unsupported for that reason: while two versions serve
+side by side, a `/py/` file from the old one could be cached immutably under the new stamp.
 
 On top of those, the worker writes at runtime: the save bytes under `/save`, the player's
 optional `en.json` and the history JSON under `/data`, and Python itself writes a

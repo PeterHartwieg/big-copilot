@@ -3,6 +3,8 @@
 The bytes are dummy ones -- the mock never parses them and neither does
 GameLink; the board's parsing is the folder path's and is covered elsewhere.
 """
+import contextlib
+import io
 import os
 import socket
 import sys
@@ -156,6 +158,60 @@ class GameLinkAgainstMock(unittest.TestCase):
         finally:
             ba_dashboard.load_save, ba_dashboard.safe_extract, ba_dashboard.render = real
 
+    def test_a_line_named_while_the_game_is_closed_rebuilds_from_the_downloaded_bytes(self):
+        """EX-7 in #109: the name reaches the board without waiting for the game."""
+        seen = []
+        real = (ba_dashboard.load_save, ba_dashboard.safe_extract, ba_dashboard.render)
+        ba_dashboard.load_save = lambda path: path
+        ba_dashboard.safe_extract = lambda path, names, history: (
+            seen.append(path) or {"meta": {"day": 7, "save": "Mock Co"}, "supply": {"factories": {"character": "abc"}}})
+        ba_dashboard.render = lambda data, live=False: "<html>"
+        try:
+            out = os.path.join(self.out, "board.html")
+            board = ba_dashboard.Board(None, out, link=ba_dashboard.GameLink(self.server.url, self.out))
+            self.mock.refresh(force=True)
+            self.assertTrue(board.refresh(settle=False))
+            revision = board.revision
+
+            def closed():
+                raise ba_dashboard.LinkUnavailable("the game link did not answer")
+            board.link.poll = closed
+            board.name_line("rid", "beer")
+            self.assertEqual(seen, [board.link.path, board.link.path])
+            self.assertEqual(board.revision, revision + 1)
+            self.assertIn(f"#{revision + 1}", board.stamp.decode())
+            # With nothing to rebuild the closed game is still reported.
+            with self.assertRaises(ba_dashboard.LinkUnavailable):
+                board.refresh(settle=False)
+        finally:
+            ba_dashboard.load_save, ba_dashboard.safe_extract, ba_dashboard.render = real
+
+    def test_a_name_the_history_cannot_keep_is_said_and_the_board_still_rebuilds(self):
+        """#109: a damaged market_history.json loses the name, and says so."""
+        seen = []
+        real = (ba_dashboard.load_save, ba_dashboard.safe_extract, ba_dashboard.render)
+        ba_dashboard.load_save = lambda path: path
+        ba_dashboard.safe_extract = lambda path, names, history: (
+            seen.append(path) or {"meta": {"day": 7, "save": "Mock Co"}, "supply": {"factories": {"character": "abc"}}})
+        ba_dashboard.render = lambda data, live=False: "<html>"
+        try:
+            out = os.path.join(self.out, "board.html")
+            board = ba_dashboard.Board(None, out, link=ba_dashboard.GameLink(self.server.url, self.out))
+            self.mock.refresh(force=True)
+            self.assertTrue(board.refresh(settle=False))
+            with open(board.history, "w", encoding="utf-8") as fh:
+                fh.write('{"characters": {"abc"')  # cut off mid-write
+            revision = board.revision
+            said = io.StringIO()
+            with contextlib.redirect_stdout(said):
+                board.name_line("rid", "beer")
+            self.assertIn("The line name was not kept: market_history.json could not be read or written. "
+                          "Name the line again once the board has rebuilt.", said.getvalue())
+            self.assertEqual(board.revision, revision + 1)
+            self.assertEqual(len(seen), 2, "the board rebuilt all the same")
+        finally:
+            ba_dashboard.load_save, ba_dashboard.safe_extract, ba_dashboard.render = real
+
     def test_wait_for_save_waits_for_the_refresh_it_asked_for(self):
         """A 202 names the stamp being replaced; the bytes returned are newer.
 
@@ -234,6 +290,54 @@ class GameLinkAgainstMock(unittest.TestCase):
         status, body = self.game.refresh()
         self.assertEqual(status, 202)
         self.assertTrue(body["accepted"])
+
+
+class WatchSurvivesAFailingFirstBuild(unittest.TestCase):
+    """watch() keeps serving and polling when the first save will not build."""
+
+    def test_the_poll_loop_starts_after_a_failing_first_build(self):
+        from unittest import mock
+
+        class Board:
+            error = "Recover #1.hsg: 'NetWorth'"
+            locale_source, names, link = None, mock.Mock(locale={}), None
+
+            def __init__(self, *args, **kwargs):
+                self.html = b""
+
+            def refresh(self, settle=True):
+                raise KeyError("NetWorth")
+
+        class Server:
+            def __init__(self, *args):
+                pass
+
+            def serve_forever(self):
+                raise KeyboardInterrupt
+
+            def shutdown(self):
+                pass
+
+        started = []
+
+        class Thread:
+            def __init__(self, target, daemon):
+                self.target = target
+
+            def start(self):
+                started.append(self.target)
+
+        with mock.patch.object(ba_dashboard, "Board", Board), \
+                mock.patch.object(ba_dashboard, "yield_to_the_game", lambda: False), \
+                mock.patch.object(ba_dashboard.http.server, "ThreadingHTTPServer", Server), \
+                mock.patch.object(ba_dashboard.threading, "Thread", Thread), \
+                mock.patch("sys.stdout"), mock.patch("sys.stderr"):
+            ba_dashboard.watch("saves", "out.html", 0, 30, open_browser=False)
+        self.assertEqual(len(started), 1, "the poll loop runs, to retry on the next save")
+        # The page served meanwhile is the live shell, which loads the first good build.
+        page = ba_dashboard.BoardHandler.board.html.decode("utf-8")
+        self.assertIn("const LIVE = true", page)
+        self.assertIn("let D = null", page)
 
 
 if __name__ == "__main__":

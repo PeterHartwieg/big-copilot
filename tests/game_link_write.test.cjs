@@ -4,7 +4,7 @@
 // place of the Pyodide worker that answers every build with that company's
 // payload. Install Playwright and its Chromium browser to run; NODE_PATH may
 // point at an existing Playwright installation.
-const {test, before, after} = require('node:test');
+const {test, before, beforeEach, after} = require('node:test');
 const assert = require('node:assert/strict');
 const {spawn, spawnSync} = require('node:child_process');
 const fs = require('node:fs');
@@ -77,6 +77,16 @@ async function configure(body) {
 }
 const applied = async () => (await (await fetch(mockUrl + '/debug/writes')).json()).writes;
 
+// Every scenario starts from the mock as it was launched, whatever the one
+// before it switched on (rejectTokens, a refused write, a slow player) or
+// left behind when it failed half way: one failure cannot cascade.
+beforeEach(async () => {
+  const state = await configure({reset: true, refuseWrite: null, busyWrites: 0,
+    writes: ['uniforms', 'imports', 'schedule'], pair: 'approve', pairDelay: 1.0, pairCooldowns: [10, 30, 120],
+    rejectTokens: false, tokens: {}, importTerms: {}});
+  assert.equal(state.applied, 0, 'the mock starts each scenario with nothing applied');
+});
+
 // The page, linked to the mock. `writes` is what /health lists (null: the key
 // is left out, as a 0.1.0 mod does); `approved`: the game approved this
 // browser before, so its token is kept; `stored` is an approval kept as it
@@ -89,7 +99,13 @@ async function linked(t, {writes = ['uniforms', 'imports', 'schedule'], approved
                    tokens: approved ? {[TOKEN]: ORIGIN} : {}});
   const code = approved ? {link: mockUrl, token: TOKEN} : stored;
   const context = await browser.newContext({viewport, reducedMotion: 'reduce'});
-  t.after(() => context.close());
+  // A route handler still waiting on route.fetch() when the scenario ends
+  // would reject into the next test; drop every handler before closing.
+  t.after(async () => {
+    for (const p of context.pages()) await p.unrouteAll({behavior: 'ignoreErrors'});
+    await context.unrouteAll({behavior: 'ignoreErrors'});
+    await context.close();
+  });
   await context.addInitScript(({data, code}) => {
     window.builds = 0;
     // What the fake worker builds: the test's payload, or what a test says
@@ -129,6 +145,11 @@ async function linked(t, {writes = ['uniforms', 'imports', 'schedule'], approved
 
 const button = (page, key, label = 'Set Default uniforms') =>
   page.locator(`#alerts [data-gw="uniforms"][data-gw-sites*='${JSON.stringify(key).slice(1, -1)}']`, {hasText: label}).first();
+// A held answer let go once its page is gone (the scenario ended first, and
+// its context closed) has nowhere to go; that is no failure of the next one.
+const passOn = (route, res) => route.fulfill({response: res}).catch((err) => {
+  if (!/disposed|closed/i.test(err.message)) throw err;
+});
 // Holds the board's next read of the save until the test lets it go.
 async function holdSave(page) {
   let release;
@@ -136,7 +157,7 @@ async function holdSave(page) {
   await page.route(`${mockUrl}/save`, async (route) => {
     const res = await route.fetch();
     await held;
-    await route.fulfill({response: res});
+    await passOn(route, res);
   });
   return release;
 }
@@ -475,7 +496,11 @@ test('the game\'s approval: the wait after repeated denials is said, and Ask aga
   const again = dialog(page).getByRole('button', {name: 'Ask again'});
   assert.equal(await again.isDisabled(), true);
   const sent = asks.length;
-  await page.waitForTimeout(3500);
+  // Ask again comes back once the wait has run out.
+  await page.waitForFunction(() => {
+    const b = document.querySelector('dialog.gw-dlg [data-gw-again]');
+    return b && !b.disabled;
+  });
   assert.equal(asks.length, sent, 'no request of its own while the player waits');
   assert.equal(await again.isEnabled(), true, 'Ask again comes back once the wait has run out');
   await configure({pair: 'approve'});
@@ -550,7 +575,7 @@ test('a Cancel before the game has answered the request still leaves the questio
   await page.route(`${mockUrl}/pair/request`, async (route) => {
     const res = await route.fetch();
     await held;
-    await route.fulfill({response: res});
+    await passOn(route, res);
   });
   const asks = [];
   page.on('request', (req) => { if (req.url().endsWith('/pair/request')) asks.push(1); });
@@ -680,7 +705,11 @@ test('the game\'s approval: after 30 s the dialog asks whether the game can be s
   assert.equal(await page.evaluate(() => document.activeElement.dataset.gwB), 'Cancel');
   const meta = pair(page).locator('.gw-meta');
   const before = await meta.textContent();
-  await page.waitForTimeout(2200);
+  // The clock keeps going: the line changes from what it said.
+  await page.waitForFunction((was) => {
+    const m = document.querySelector('dialog.gw-dlg[data-phase="approval"] .gw-meta');
+    return m && m.textContent !== was;
+  }, before);
   assert.notEqual(await meta.textContent(), before, 'the clock keeps going');
   await cancel.click();
 });
@@ -907,9 +936,11 @@ test('an undo right after an apply is read once the read under way is done', asy
   const held = new Promise((resolve) => { release = resolve; });
   await page.route(`${mockUrl}/save`, async (route) => {
     saves++;
-    const res = await route.fetch();
+    const res = await route.fetch().catch(() => null);  // the page may be gone
+    if (!res) return;
     if (saves === 1) await held;  // the read after the apply, still under way
-    await route.fulfill({response: res});
+    // The test ends once the second read is asked for, before its answer.
+    await passOn(route, res);
   });
   await button(page, GIFTS).click();
   await dialog(page).getByRole('button', {name: SET}).click();
@@ -1000,7 +1031,7 @@ test('undo gate: a board built from the undo\'s state before its answer is handl
   await page.route(`${mockUrl}/write/undo`, async (route) => {
     const res = await route.fetch();
     await held;
-    await route.fulfill({response: res});
+    await passOn(route, res);
   });
   const builds = await page.evaluate(() => window.builds);
   await dialog(page).getByRole('button', {name: 'Undo'}).click();
@@ -1578,10 +1609,14 @@ test('imports: a stopped contract is started, with its next delivery against cas
   assert.equal(await candle.locator('.gw-lvl u.cap').textContent(), 'cap 400');
   assert.equal(await dialog(page).getByRole('button', {name: 'Apply 1 change'}).isEnabled(), true);
   await dialog(page).getByRole('button', {name: 'Cancel'}).click();
+  // The capped dialog is gone before the next one opens: its own "3 Pier is
+  // stopped." line (at 400, $1,000) must not pass for the new one's.
+  await dialog(page).waitFor({state: 'detached'});
   await configure({importTerms: {CONTRACTthree: {unitPrice: 2.5, cap: 1000}}});
   await applyImports(page).click();
   const restart = dialog(page).locator('.gw-line', {hasText: 'Candle'}).locator('.gw-call', {hasText: '3 Pier is stopped.'});
-  await restart.waitFor();
+  // The game's answer to the full 600: its bill, not a stale capped one.
+  await restart.filter({hasText: /next delivery, day 36: \$1,500/}).waitFor();
   assert.match(await restart.textContent(), /This starts it again, with Repeating on\..*next delivery, day 36: \$1,500 of \$10,000/);
   assert.equal(await dialog(page).getByText(/not covered/).count(), 0);
   assert.equal(await dialog(page).locator('.gw-imp.stopped', {hasText: '3 Pier'}).count(), 1);
@@ -2094,6 +2129,7 @@ test('schedule: Refresh the board after an undo the game refused, in a run, read
   const block = await roster(page, GIFTS);
   await block.getByRole('button', {name: 'Write all 2 planned sites'}).click();
   await ready(page);
+  const builds = await page.evaluate(() => window.builds);
   await dialog(page).getByRole('button', {name: 'Write the week'}).click();
   await dialog(page).getByText('HART. Corner: 1 entry set in place of 1.').waitFor();
   // The game moved on: the undo is refused, the write stays in the game.
@@ -2103,6 +2139,11 @@ test('schedule: Refresh the board after an undo the game refused, in a run, read
   await dialog(page).getByText('The game has moved on since this board was read. Nothing was changed.').waitFor();
   let asked = 0;
   page.on('request', (req) => { if (req.url().endsWith('/write/schedule') && req.method() === 'POST') asked++; });
+  // The board's read of the game after the write is over first: Update
+  // clicked while another read runs is dropped (one at a time, update() in
+  // web/app.js), and no /refresh would ever be sent.
+  await page.waitForFunction((n) => window.builds > n
+    && document.getElementById('srcStatus').textContent === 'Up to date', builds);
   const refresh = page.waitForRequest((req) => req.url().endsWith('/refresh') && req.method() === 'POST');
   await dialog(page).getByRole('button', {name: 'Refresh the board'}).click();
   await refresh;

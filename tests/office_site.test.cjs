@@ -67,6 +67,7 @@ async function site(status) {
     siteKey = key; siteOpen = true;
     drawSite();
   }, status === 'office');
+  require('./_payload_contract.cjs').assertPayloadShape(await page.evaluate(() => D), 'office_site');
   return page;
 }
 

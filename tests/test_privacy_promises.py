@@ -72,6 +72,18 @@ class PrivacyPromises(unittest.TestCase):
         community = (WEB / "community.js").read_text(encoding="utf-8")
         self.assertNotIn("localStorage.setItem", community)
         self.assertNotIn("sessionStorage", community)
+        # "The identifier ... is not stored in your browser": no store at all.
+        self.assertNotIn("indexedDB", community)
+
+    def test_the_site_sets_no_cookies_of_its_own(self):
+        # "Big Copilot sets no cookies of its own." IndexedDB is named in the
+        # notice (the history lives there, in app.js); cookies are not.
+        for path in [WEB / name for name in SCRIPTS + ("i18n.js",) + PAGES] + [ROOT / "ba_dashboard.py"]:
+            with self.subTest(name=path.name):
+                self.assertNotIn("document.cookie", path.read_text(encoding="utf-8"))
+        for path in (ROOT / "server").glob("*.mjs"):
+            with self.subTest(name=path.name):
+                self.assertNotRegex(path.read_text(encoding="utf-8"), r"(?i)set-cookie")
 
     def test_no_analytics_script(self):
         for path in (ROOT / "build_web.py", WEB / "index.html"):
@@ -84,6 +96,37 @@ class PrivacyPromises(unittest.TestCase):
         config = (ROOT / "wrangler.jsonc").read_text(encoding="utf-8")
         self.assertRegex(config, r'"invocation_logs"\s*:\s*false')
         self.assertRegex(config, r'"traces"\s*:\s*\{\s*"enabled"\s*:\s*false\s*\}')
+
+    def test_worker_code_logs_nothing(self):
+        # "We keep no access logs ourselves." Observability is on, so anything
+        # the Worker prints is stored in Workers Logs; the Worker prints nothing,
+        # and nothing ships its logs elsewhere. A new log line has to be checked
+        # for request data (IP, URL, ids) before this test is loosened.
+        config = (ROOT / "wrangler.jsonc").read_text(encoding="utf-8")
+        self.assertNotIn("logpush", config)
+        self.assertNotIn("tail_consumers", config)
+        for path in (ROOT / "server").glob("*.mjs"):
+            with self.subTest(name=path.name):
+                self.assertNotRegex(path.read_text(encoding="utf-8"), r"\bconsole\s*\.")
+
+    def test_daily_cleanup_is_scheduled(self):
+        # "Both are deleted within two days" (presence) and "within one day
+        # after we close the poll" (votes): a daily cron runs scheduled(),
+        # which deletes presence rows older than 24 hours and the votes of
+        # polls no longer in server/features.json.
+        config = (ROOT / "wrangler.jsonc").read_text(encoding="utf-8")
+        crons = re.search(r'"crons"\s*:\s*\[([^\]]*)\]', config)
+        self.assertIsNotNone(crons, "wrangler.jsonc schedules no cron")
+        schedules = re.findall(r'"([^"]+)"', crons.group(1))
+        self.assertTrue(schedules)
+        # Daily or more often: the day, month and weekday fields are all "*".
+        self.assertTrue(any(s.split()[2:] == ["*", "*", "*"] for s in schedules), schedules)
+        worker = (ROOT / "server" / "worker.mjs").read_text(encoding="utf-8")
+        handler = worker[worker.index("async scheduled("):]
+        handler = handler[:handler.index("\n  },")]
+        self.assertIn("DELETE FROM community_presence WHERE last_seen <=", handler)
+        self.assertIn("24 * 60 * 60", handler)
+        self.assertIn("DELETE FROM community_votes WHERE feature_id NOT IN", handler)
 
 
 if __name__ == "__main__":

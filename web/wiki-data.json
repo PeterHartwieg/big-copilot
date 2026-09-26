@@ -6800,35 +6800,35 @@
           "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
           "bytes": 814954,
           "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
-          "mtime": "2026-09-23T15:55:07Z",
+          "mtime": null,
           "note": "6054 locale keys. Guide facts and original help text are read from this file."
         },
         {
           "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
           "bytes": 104483,
           "sha256": "3cc581d1f52800a8b3dcf7bec8e9bcbc92c661095d56924488e61c91b71a0cf4",
-          "mtime": "2026-09-01T20:28:31Z",
+          "mtime": null,
           "note": "14 categories, 852 page entries, 851 distinct page slugs. not strict JSON: trailing commas dropped before parsing"
         },
         {
           "path": "Big Ambitions_Data/StreamingAssets/BusinessLayouts/GiftShop/M1/GiftShopRivals.json",
           "bytes": 515994,
           "sha256": "678f0146d6ce8dea8fbc92d457ba162278e9f99bb689f5d9a81f5c6423ce294c",
-          "mtime": "2026-08-28T17:10:28Z",
+          "mtime": null,
           "note": "200 placed items, authored at game build 3521. Shows where the game's own shops place this furniture; it is not a statement of what a layout must contain."
         },
         {
           "path": "Big Ambitions_Data/StreamingAssets/BusinessLayouts/GiftShop/D3/GolfAreaGiftShop.json",
           "bytes": 282041,
           "sha256": "64034d3c664bd00d7b4564a0ad512dfdf1ad9b19d84c748a5e64a1baaa573cdf",
-          "mtime": "2026-08-28T17:10:28Z",
+          "mtime": null,
           "note": "174 placed items, authored at game build 3629. Shows where the game's own shops place this furniture; it is not a statement of what a layout must contain."
         },
         {
           "path": "Big Ambitions_Data/StreamingAssets/BusinessLayouts/GiftShop/D3/TennisAreaGiftShop.json",
           "bytes": 273060,
           "sha256": "418dab8ad7526ba7fd4c784f67ba4c376eb52360afa79829b1a501f9d7c7b1e1",
-          "mtime": "2026-08-28T17:10:28Z",
+          "mtime": null,
           "note": "160 placed items, authored at game build 3629. Shows where the game's own shops place this furniture; it is not a statement of what a layout must contain."
         },
         {
@@ -9511,14 +9511,14 @@
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
             "bytes": 814954,
             "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
-            "mtime": "2026-09-23T15:55:07Z",
+            "mtime": null,
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
             "bytes": 104483,
             "sha256": "3cc581d1f52800a8b3dcf7bec8e9bcbc92c661095d56924488e61c91b71a0cf4",
-            "mtime": "2026-09-01T20:28:31Z",
+            "mtime": null,
             "note": "14 categories, 852 page entries, 851 distinct page slugs. not strict JSON: trailing commas dropped before parsing"
           },
           {
@@ -10607,14 +10607,14 @@
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
             "bytes": 814954,
             "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
-            "mtime": "2026-09-23T15:55:07Z",
+            "mtime": null,
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
             "bytes": 104483,
             "sha256": "3cc581d1f52800a8b3dcf7bec8e9bcbc92c661095d56924488e61c91b71a0cf4",
-            "mtime": "2026-09-01T20:28:31Z",
+            "mtime": null,
             "note": "14 categories, 852 page entries, 851 distinct page slugs. not strict JSON: trailing commas dropped before parsing"
           },
           {
@@ -11953,14 +11953,14 @@
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
             "bytes": 814954,
             "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
-            "mtime": "2026-09-23T15:55:07Z",
+            "mtime": null,
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
             "bytes": 104483,
             "sha256": "3cc581d1f52800a8b3dcf7bec8e9bcbc92c661095d56924488e61c91b71a0cf4",
-            "mtime": "2026-09-01T20:28:31Z",
+            "mtime": null,
             "note": "14 categories, 852 page entries, 851 distinct page slugs. not strict JSON: trailing commas dropped before parsing"
           },
           {
@@ -13676,14 +13676,14 @@
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
             "bytes": 814954,
             "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
-            "mtime": "2026-09-23T15:55:07Z",
+            "mtime": null,
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
             "bytes": 104483,
             "sha256": "3cc581d1f52800a8b3dcf7bec8e9bcbc92c661095d56924488e61c91b71a0cf4",
-            "mtime": "2026-09-01T20:28:31Z",
+            "mtime": null,
             "note": "14 categories, 852 page entries, 851 distinct page slugs. not strict JSON: trailing commas dropped before parsing"
           },
           {
@@ -15412,14 +15412,14 @@
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
             "bytes": 814954,
             "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
-            "mtime": "2026-09-23T15:55:07Z",
+            "mtime": null,
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
             "bytes": 104483,
             "sha256": "3cc581d1f52800a8b3dcf7bec8e9bcbc92c661095d56924488e61c91b71a0cf4",
-            "mtime": "2026-09-01T20:28:31Z",
+            "mtime": null,
             "note": "14 categories, 852 page entries, 851 distinct page slugs. not strict JSON: trailing commas dropped before parsing"
           },
           {
@@ -16322,14 +16322,14 @@
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
             "bytes": 814954,
             "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
-            "mtime": "2026-09-23T15:55:07Z",
+            "mtime": null,
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
             "bytes": 104483,
             "sha256": "3cc581d1f52800a8b3dcf7bec8e9bcbc92c661095d56924488e61c91b71a0cf4",
-            "mtime": "2026-09-01T20:28:31Z",
+            "mtime": null,
             "note": "14 categories, 852 page entries, 851 distinct page slugs. not strict JSON: trailing commas dropped before parsing"
           },
           {
@@ -18075,14 +18075,14 @@
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
             "bytes": 814954,
             "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
-            "mtime": "2026-09-23T15:55:07Z",
+            "mtime": null,
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
             "bytes": 104483,
             "sha256": "3cc581d1f52800a8b3dcf7bec8e9bcbc92c661095d56924488e61c91b71a0cf4",
-            "mtime": "2026-09-01T20:28:31Z",
+            "mtime": null,
             "note": "14 categories, 852 page entries, 851 distinct page slugs. not strict JSON: trailing commas dropped before parsing"
           },
           {
@@ -19527,14 +19527,14 @@
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
             "bytes": 814954,
             "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
-            "mtime": "2026-09-23T15:55:07Z",
+            "mtime": null,
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
             "bytes": 104483,
             "sha256": "3cc581d1f52800a8b3dcf7bec8e9bcbc92c661095d56924488e61c91b71a0cf4",
-            "mtime": "2026-09-01T20:28:31Z",
+            "mtime": null,
             "note": "14 categories, 852 page entries, 851 distinct page slugs. not strict JSON: trailing commas dropped before parsing"
           },
           {
@@ -20820,14 +20820,14 @@
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
             "bytes": 814954,
             "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
-            "mtime": "2026-09-23T15:55:07Z",
+            "mtime": null,
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
             "bytes": 104483,
             "sha256": "3cc581d1f52800a8b3dcf7bec8e9bcbc92c661095d56924488e61c91b71a0cf4",
-            "mtime": "2026-09-01T20:28:31Z",
+            "mtime": null,
             "note": "14 categories, 852 page entries, 851 distinct page slugs. not strict JSON: trailing commas dropped before parsing"
           },
           {
@@ -22959,35 +22959,35 @@
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
             "bytes": 814954,
             "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
-            "mtime": "2026-09-23T15:55:07Z",
+            "mtime": null,
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
             "bytes": 104483,
             "sha256": "3cc581d1f52800a8b3dcf7bec8e9bcbc92c661095d56924488e61c91b71a0cf4",
-            "mtime": "2026-09-01T20:28:31Z",
+            "mtime": null,
             "note": "14 categories, 852 page entries, 851 distinct page slugs. not strict JSON: trailing commas dropped before parsing"
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/BusinessLayouts/GiftShop/M1/GiftShopRivals.json",
             "bytes": 515994,
             "sha256": "678f0146d6ce8dea8fbc92d457ba162278e9f99bb689f5d9a81f5c6423ce294c",
-            "mtime": "2026-08-28T17:10:28Z",
+            "mtime": null,
             "note": "200 placed items, authored at game build 3521. Shows where the game's own shops place this furniture; it is not a statement of what a layout must contain."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/BusinessLayouts/GiftShop/D3/GolfAreaGiftShop.json",
             "bytes": 282041,
             "sha256": "64034d3c664bd00d7b4564a0ad512dfdf1ad9b19d84c748a5e64a1baaa573cdf",
-            "mtime": "2026-08-28T17:10:28Z",
+            "mtime": null,
             "note": "174 placed items, authored at game build 3629. Shows where the game's own shops place this furniture; it is not a statement of what a layout must contain."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/BusinessLayouts/GiftShop/D3/TennisAreaGiftShop.json",
             "bytes": 273060,
             "sha256": "418dab8ad7526ba7fd4c784f67ba4c376eb52360afa79829b1a501f9d7c7b1e1",
-            "mtime": "2026-08-28T17:10:28Z",
+            "mtime": null,
             "note": "160 placed items, authored at game build 3629. Shows where the game's own shops place this furniture; it is not a statement of what a layout must contain."
           },
           {
@@ -23890,14 +23890,14 @@
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
             "bytes": 814954,
             "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
-            "mtime": "2026-09-23T15:55:07Z",
+            "mtime": null,
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
             "bytes": 104483,
             "sha256": "3cc581d1f52800a8b3dcf7bec8e9bcbc92c661095d56924488e61c91b71a0cf4",
-            "mtime": "2026-09-01T20:28:31Z",
+            "mtime": null,
             "note": "14 categories, 852 page entries, 851 distinct page slugs. not strict JSON: trailing commas dropped before parsing"
           },
           {
@@ -25017,14 +25017,14 @@
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
             "bytes": 814954,
             "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
-            "mtime": "2026-09-23T15:55:07Z",
+            "mtime": null,
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
             "bytes": 104483,
             "sha256": "3cc581d1f52800a8b3dcf7bec8e9bcbc92c661095d56924488e61c91b71a0cf4",
-            "mtime": "2026-09-01T20:28:31Z",
+            "mtime": null,
             "note": "14 categories, 852 page entries, 851 distinct page slugs. not strict JSON: trailing commas dropped before parsing"
           },
           {
@@ -25851,14 +25851,14 @@
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
             "bytes": 814954,
             "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
-            "mtime": "2026-09-23T15:55:07Z",
+            "mtime": null,
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
             "bytes": 104483,
             "sha256": "3cc581d1f52800a8b3dcf7bec8e9bcbc92c661095d56924488e61c91b71a0cf4",
-            "mtime": "2026-09-01T20:28:31Z",
+            "mtime": null,
             "note": "14 categories, 852 page entries, 851 distinct page slugs. not strict JSON: trailing commas dropped before parsing"
           },
           {
@@ -26886,14 +26886,14 @@
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
             "bytes": 814954,
             "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
-            "mtime": "2026-09-23T15:55:07Z",
+            "mtime": null,
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
             "bytes": 104483,
             "sha256": "3cc581d1f52800a8b3dcf7bec8e9bcbc92c661095d56924488e61c91b71a0cf4",
-            "mtime": "2026-09-01T20:28:31Z",
+            "mtime": null,
             "note": "14 categories, 852 page entries, 851 distinct page slugs. not strict JSON: trailing commas dropped before parsing"
           },
           {
@@ -27786,14 +27786,14 @@
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
             "bytes": 814954,
             "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
-            "mtime": "2026-09-23T15:55:07Z",
+            "mtime": null,
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
             "bytes": 104483,
             "sha256": "3cc581d1f52800a8b3dcf7bec8e9bcbc92c661095d56924488e61c91b71a0cf4",
-            "mtime": "2026-09-01T20:28:31Z",
+            "mtime": null,
             "note": "14 categories, 852 page entries, 851 distinct page slugs. not strict JSON: trailing commas dropped before parsing"
           },
           {
@@ -27994,21 +27994,7 @@
           "automatic": false,
           "pageId": "products-beer",
           "fixtureCapacities": {
-            "cocktailbarbeershelf": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
             "drinksshelf": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
-            "woodencocktailbarbeershelf": [
               {
                 "label": "Products",
                 "value": 50,
@@ -28182,21 +28168,7 @@
           "automatic": false,
           "pageId": "products-whisky",
           "fixtureCapacities": {
-            "cocktailbardrinkscounter": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
             "drinksshelf": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
-            "woodencocktailbardrinkscounter": [
               {
                 "label": "Products",
                 "value": 50,
@@ -28233,21 +28205,7 @@
           "automatic": false,
           "pageId": "products-margarita",
           "fixtureCapacities": {
-            "cocktailbardrinkscounter": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
             "drinksshelf": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
-            "woodencocktailbardrinkscounter": [
               {
                 "label": "Products",
                 "value": 50,
@@ -28286,21 +28244,7 @@
           "automatic": false,
           "pageId": "products-martini",
           "fixtureCapacities": {
-            "cocktailbardrinkscounter": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
             "drinksshelf": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
-            "woodencocktailbardrinkscounter": [
               {
                 "label": "Products",
                 "value": 50,
@@ -29528,14 +29472,14 @@
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
             "bytes": 814954,
             "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
-            "mtime": "2026-09-23T15:55:07Z",
+            "mtime": null,
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
             "bytes": 104483,
             "sha256": "3cc581d1f52800a8b3dcf7bec8e9bcbc92c661095d56924488e61c91b71a0cf4",
-            "mtime": "2026-09-01T20:28:31Z",
+            "mtime": null,
             "note": "14 categories, 852 page entries, 851 distinct page slugs. not strict JSON: trailing commas dropped before parsing"
           },
           {
@@ -29781,13 +29725,6 @@
                 "unit": "units"
               }
             ],
-            "drinksshelf": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
             "woodencocktailbarbeershelf": [
               {
                 "label": "Products",
@@ -29877,13 +29814,6 @@
                 "unit": "units"
               }
             ],
-            "drinksshelf": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
             "woodencocktailbardrinkscounter": [
               {
                 "label": "Products",
@@ -29931,13 +29861,6 @@
                 "unit": "units"
               }
             ],
-            "drinksshelf": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
             "woodencocktailbardrinkscounter": [
               {
                 "label": "Products",
@@ -29979,13 +29902,6 @@
           "pageId": "products-whisky",
           "fixtureCapacities": {
             "cocktailbardrinkscounter": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
-            "drinksshelf": [
               {
                 "label": "Products",
                 "value": 50,
@@ -31242,14 +31158,14 @@
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
             "bytes": 814954,
             "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
-            "mtime": "2026-09-23T15:55:07Z",
+            "mtime": null,
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
             "bytes": 104483,
             "sha256": "3cc581d1f52800a8b3dcf7bec8e9bcbc92c661095d56924488e61c91b71a0cf4",
-            "mtime": "2026-09-01T20:28:31Z",
+            "mtime": null,
             "note": "14 categories, 852 page entries, 851 distinct page slugs. not strict JSON: trailing commas dropped before parsing"
           },
           {
@@ -33447,14 +33363,14 @@
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
             "bytes": 814954,
             "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
-            "mtime": "2026-09-23T15:55:07Z",
+            "mtime": null,
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
             "bytes": 104483,
             "sha256": "3cc581d1f52800a8b3dcf7bec8e9bcbc92c661095d56924488e61c91b71a0cf4",
-            "mtime": "2026-09-01T20:28:31Z",
+            "mtime": null,
             "note": "14 categories, 852 page entries, 851 distinct page slugs. not strict JSON: trailing commas dropped before parsing"
           },
           {
@@ -33771,13 +33687,6 @@
                 "unit": "units"
               }
             ],
-            "drinksshelf": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
             "woodencocktailbardrinkscounter": [
               {
                 "label": "Products",
@@ -33856,13 +33765,6 @@
           "pageId": "products-whisky",
           "fixtureCapacities": {
             "cocktailbardrinkscounter": [
-              {
-                "label": "Products",
-                "value": 50,
-                "unit": "units"
-              }
-            ],
-            "drinksshelf": [
               {
                 "label": "Products",
                 "value": 50,
@@ -34541,14 +34443,14 @@
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
             "bytes": 814954,
             "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
-            "mtime": "2026-09-23T15:55:07Z",
+            "mtime": null,
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
             "bytes": 104483,
             "sha256": "3cc581d1f52800a8b3dcf7bec8e9bcbc92c661095d56924488e61c91b71a0cf4",
-            "mtime": "2026-09-01T20:28:31Z",
+            "mtime": null,
             "note": "14 categories, 852 page entries, 851 distinct page slugs. not strict JSON: trailing commas dropped before parsing"
           },
           {
@@ -35439,14 +35341,14 @@
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
             "bytes": 814954,
             "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
-            "mtime": "2026-09-23T15:55:07Z",
+            "mtime": null,
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
             "bytes": 104483,
             "sha256": "3cc581d1f52800a8b3dcf7bec8e9bcbc92c661095d56924488e61c91b71a0cf4",
-            "mtime": "2026-09-01T20:28:31Z",
+            "mtime": null,
             "note": "14 categories, 852 page entries, 851 distinct page slugs. not strict JSON: trailing commas dropped before parsing"
           },
           {
@@ -36317,14 +36219,14 @@
             "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
             "bytes": 814954,
             "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
-            "mtime": "2026-09-23T15:55:07Z",
+            "mtime": null,
             "note": "6054 locale keys. Guide facts and original help text are read from this file."
           },
           {
             "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
             "bytes": 104483,
             "sha256": "3cc581d1f52800a8b3dcf7bec8e9bcbc92c661095d56924488e61c91b71a0cf4",
-            "mtime": "2026-09-01T20:28:31Z",
+            "mtime": null,
             "note": "14 categories, 852 page entries, 851 distinct page slugs. not strict JSON: trailing commas dropped before parsing"
           },
           {
@@ -36529,13 +36431,13 @@
         "path": "Big Ambitions_Data/StreamingAssets/locale/en.json",
         "bytes": 814954,
         "sha256": "310445972573647a0ce8964dc4596666ff781c6f16843b2a116ee75783f72bf6",
-        "mtime": "2026-09-23T15:55:07Z"
+        "mtime": null
       },
       "helpStructure": {
         "path": "Big Ambitions_Data/StreamingAssets/helpstructure.json",
         "bytes": 104483,
         "sha256": "3cc581d1f52800a8b3dcf7bec8e9bcbc92c661095d56924488e61c91b71a0cf4",
-        "mtime": "2026-09-01T20:28:31Z"
+        "mtime": null
       },
       "buildings": {
         "path": "ba_buildings.json",
@@ -36549,7 +36451,7 @@
           "path": "Big Ambitions_Data/StreamingAssets/BusinessLayouts/GiftShop/M1/GiftShopRivals.json",
           "bytes": 515994,
           "sha256": "678f0146d6ce8dea8fbc92d457ba162278e9f99bb689f5d9a81f5c6423ce294c",
-          "mtime": "2026-08-28T17:10:28Z",
+          "mtime": null,
           "build": 3521,
           "items": 200
         },
@@ -36557,7 +36459,7 @@
           "path": "Big Ambitions_Data/StreamingAssets/BusinessLayouts/GiftShop/D3/GolfAreaGiftShop.json",
           "bytes": 282041,
           "sha256": "64034d3c664bd00d7b4564a0ad512dfdf1ad9b19d84c748a5e64a1baaa573cdf",
-          "mtime": "2026-08-28T17:10:28Z",
+          "mtime": null,
           "build": 3629,
           "items": 174
         },
@@ -36565,7 +36467,7 @@
           "path": "Big Ambitions_Data/StreamingAssets/BusinessLayouts/GiftShop/D3/TennisAreaGiftShop.json",
           "bytes": 273060,
           "sha256": "418dab8ad7526ba7fd4c784f67ba4c376eb52360afa79829b1a501f9d7c7b1e1",
-          "mtime": "2026-08-28T17:10:28Z",
+          "mtime": null,
           "build": 3629,
           "items": 160
         }

@@ -17,7 +17,7 @@
   },
   // The page's own address. Custom domains: wrangler creates the DNS records and
   // the certificate itself, since the zone lives in the same Cloudflare account.
-  "workers_dev": true,
+  "workers_dev": false,
   "routes": [
     { "pattern": "bigcopilot.com", "custom_domain": true },
     { "pattern": "www.bigcopilot.com", "custom_domain": true }
@@ -36,13 +36,20 @@
       "migrations_dir": "migrations"
     }
   ],
-  // Best-effort per-IP guard for every /api/* call. Keys are HMACs of the client
-  // IP, so raw IPs never reach D1 or responses. Not a global enforcement promise.
+  // Best-effort per-IP guards for /api/*. Keys are HMACs of the client IP, so raw
+  // IPs never reach D1 or responses. Not a global enforcement promise. Presence
+  // heartbeats have their own budget (a real tab sends one every five minutes);
+  // every other route shares COMMUNITY_LIMITER.
   "ratelimits": [
     {
       "name": "COMMUNITY_LIMITER",
       "namespace_id": "1001",
       "simple": { "limit": 120, "period": 60 }
+    },
+    {
+      "name": "PRESENCE_LIMITER",
+      "namespace_id": "1002",
+      "simple": { "limit": 20, "period": 60 }
     }
   ],
   // Daily cleanup of presence rows older than 24 hours and of votes for polls
