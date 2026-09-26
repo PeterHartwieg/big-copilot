@@ -3135,6 +3135,7 @@
    "roles": [
     {
      "counters": 20,
+     "key": "ba:skill_customerservice",
      "label": "Customer Service",
      "many": "cash registers",
      "noun": null,
@@ -4521,6 +4522,7 @@
    "roles": [
     {
      "counters": 20,
+     "key": "ba:skill_customerservice",
      "label": "Customer Service",
      "many": "cash registers",
      "noun": null,

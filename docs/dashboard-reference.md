@@ -351,6 +351,13 @@ as its slowest role: the grid shows the minimum across roles, the sum only withi
 each role's own roster is judged separately in the findings. Two projection booths with one
 projectionist hold the whole theatre back to 25 an hour however many stage crew are on.
 
+A skill whose stations do different work is split into one role per kind of work, read from
+the fees each station's help page lists. Today that is the hairdresser alone: the chair
+cuts, styles and colours, the head wash only shampoos, and neither can do the other's job,
+so the chairs and the head wash are two roles, each planned against the site's demand. One
+chair and one head wash serve 5 an hour, not 15. Hair Stylists are still one pool of
+people: a staffing limit names the skill, and the plan's headcount counts them once.
+
 **Offices** get the same grid, because they keep the same hour reports. Their customers
 are digital, and each one is an hour billed by one professional, so an office's registers
 are its computers: every computer listed on the game's *Computer Options* page (Computer,
