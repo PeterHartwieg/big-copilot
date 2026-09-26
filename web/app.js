@@ -585,6 +585,13 @@
   // The /health body read with the newest bytes, for the strip; after a
   // failed build it names the failed bytes' game, not the board's.
   let linkHealth = null;
+  // The schemaVersion this page speaks, and the one in the last health object
+  // any caller read, the watcher's included. linkHealth moves only with new
+  // bytes, so a mod updated under an open tab shows here first: writes go
+  // only while the two agree (linkSpeaks()).
+  const LINK_SCHEMA = 1;
+  let linkSchema = LINK_SCHEMA;
+  const linkSpeaks = () => linkSchema === LINK_SCHEMA;
   let linkGone = false;   // the watcher has said the game went away
   let linkNotReady = 0;   // /health answers in a row that were never health, any caller
   // The watcher's own notes about the port, recognised on screen: it says one
@@ -611,14 +618,15 @@
   }
   // Only this machine: the bytes are the player's whole company, and a link
   // in a pasted address must never point the page at someone else. The
-  // origin of a loopback http URL, else null. IPv6 [::1] is left out: the
-  // CSP (web/_headers) cannot name an IPv6 literal, so it could never connect.
+  // origin of a loopback http URL, else null. The mod listens on 127.0.0.1
+  // only and turns away any other Host, so localhost and [::1] are spelt
+  // 127.0.0.1 (the CSP in web/_headers could not name [::1] anyway).
   function loopbackOrigin(text) {
     try {
       const url = new URL(text);
       const host = url.hostname;
-      if (url.protocol === "http:" && (host === "127.0.0.1" || host === "localhost")) {
-        return url.origin;
+      if (url.protocol === "http:" && (host === "127.0.0.1" || host === "localhost" || host === "[::1]")) {
+        return "http://127.0.0.1" + (url.port ? ":" + url.port : "");
       }
     } catch (e) {}
     return null;
@@ -740,6 +748,7 @@
     linkUrl = null;
     lastLinkStamp = "";
     linkHealth = null;
+    linkSchema = LINK_SCHEMA;
     linkGone = false;
     linkNotReady = 0;
     try { localStorage.removeItem(LINK_KEY); } catch (e) {}
@@ -753,6 +762,7 @@
     // first stamp the mod answers has to be read, whatever it is.
     lastLinkStamp = "";
     linkHealth = null;
+    linkSchema = LINK_SCHEMA;
     linkGone = false;
     linkNotReady = 0;
     stored.set(LINK_KEY, linkUrl);
@@ -781,12 +791,17 @@
     // An object, from whichever caller: the run of never-health is over. What
     // the watcher said stands until a health answer of this version.
     linkNotReady = 0;
+    // Its version decides the writes from now on; an open write dialog hears
+    // of it when that changes.
+    const spoke = linkSpeaks();
+    linkSchema = body.schemaVersion;
+    if (spoke !== linkSpeaks()) linkMoved();
     return body;
   }
   // False when the mod speaks this page's version; otherwise the bad state
   // is on screen and the caller returns. A not-ready answer is not judged.
   function wrongVersion(health, gen) {
-    if (health === NOT_READY || health.schemaVersion === 1) return false;
+    if (health === NOT_READY || health.schemaVersion === LINK_SCHEMA) return false;
     finishAttempt(gen);
     if (health.schemaVersion == null) {
       // A JSON object with no version in it is not the mod's health at all.
@@ -796,7 +811,7 @@
     } else {
       state("bad", () => tt("app.link.mismatch", "The Big Copilot Link mod and this page do not match"), linkUrl);
       note("bad", () => tt("app.link.mismatch.why", "The mod speaks version {v}; this page needs version {need}. Update the mod (or the page) and try again.",
-        {v: health.schemaVersion, need: 1}), "", true);
+        {v: health.schemaVersion, need: LINK_SCHEMA}), "", true);
     }
     return true;
   }
@@ -1053,8 +1068,10 @@
       }
     } catch (e) {}
   }
-  // The kinds the linked mod takes; a mod before 0.2.0 lists none.
-  const linkWrites = () => (linkUrl && linkHealth && Array.isArray(linkHealth.writes) ? linkHealth.writes.slice() : []);
+  // The kinds the linked mod takes; a mod before 0.2.0 lists none, and one
+  // that has since answered in another schema version takes none from here.
+  const linkWrites = () => (linkUrl && linkHealth && linkSpeaks() && Array.isArray(linkHealth.writes)
+    ? linkHealth.writes.slice() : []);
 
   // What a write or an ask is bound to: the mod address, the source, and the
   // character and company it started with. Any of them moving ends it before
@@ -1062,7 +1079,7 @@
   function bindSource() {
     const bound = {link: linkUrl, gen: sourceGen, character: linkHealth ? linkHealth.character || "" : "",
                    company: linkHealth ? linkHealth.company || "" : ""};
-    bound.holds = () => linkUrl === bound.link && sourceGen === bound.gen && !!loopbackOrigin(bound.link || "")
+    bound.holds = () => linkUrl === bound.link && sourceGen === bound.gen && !!loopbackOrigin(bound.link || "") && linkSpeaks()
       && (!linkHealth || ((linkHealth.character || "") === bound.character && (linkHealth.company || "") === bound.company));
     return bound;
   }
@@ -1249,6 +1266,12 @@
     if (!linkUrl || !loopbackOrigin(linkUrl)) return {status: 0, error: "not_linked", body: null};
     const bound = bindSource();
     const notLinked = {status: 0, error: "not_linked", body: null};
+    // A mod that now speaks another schema version gets no v1 body: a newer
+    // one would misread it. Something that is no mod at all is not linked.
+    if (!linkSpeaks()) {
+      return linkSchema == null ? notLinked
+        : {status: 0, error: "mismatch", version: linkSchema, need: LINK_SCHEMA, body: null};
+    }
     const path = kind === "undo" ? "/write/undo" : `/write/${kind}`;
     const payload = JSON.stringify(Object.assign({}, body, {dryRun}));
     // One click asks the game at most once: a token this write asked for and
@@ -1420,13 +1443,13 @@
       }
       return;
     }
-    if (health.schemaVersion !== 1) {
+    if (health.schemaVersion !== LINK_SCHEMA) {
       // A JSON object that is not this page's health: another program on the
       // port, or a mod of another version. Said while no such note is up,
       // under the board that stays; Update gives the full refusal.
       const v = health.schemaVersion;
       const words = v == null ? portGone
-        : () => tt("app.link.port.version", "The mod now speaks version {v}; this page needs version {need}.", {v, need: 1});
+        : () => tt("app.link.port.version", "The mod now speaks version {v}; this page needs version {need}.", {v, need: LINK_SCHEMA});
       if (noted.text !== words() && strip.tone === "ok") {
         note("warn", words, () => tt("app.link.port.details", "Click Update for the details."));
         portNote = noted.text;

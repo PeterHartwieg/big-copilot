@@ -662,9 +662,14 @@ test('#link= only moves the port on this machine', () => {
   const h = harness();
   h.context.location.hash = '#link=http://127.0.0.1:8323';
   assert.equal(h.run('linkBase()'), 'http://127.0.0.1:8323');
-  h.context.location.hash = '#link=http://localhost:8325/';
-  assert.equal(h.run('linkBase()'), 'http://localhost:8325');
-  for (const bad of ['#link=https://evil.example', '#link=http://10.0.0.5:8322', '#link=ftp://127.0.0.1', '#link=not a url', '#link=http://[::1]:8325']) {
+  // GL-1 in #110: the mod listens on 127.0.0.1 and turns away any other Host,
+  // so the other names for this machine are spelt the way it answers.
+  for (const other of ['#link=http://localhost:8325/', '#link=http://LOCALHOST:8325', '#link=http://[::1]:8325']) {
+    h.context.location.hash = other;
+    assert.equal(h.run('linkBase()'), 'http://127.0.0.1:8325', other);
+  }
+  for (const bad of ['#link=https://evil.example', '#link=http://10.0.0.5:8322', '#link=ftp://127.0.0.1', '#link=not a url',
+    '#link=http://localhost.evil.example:8325', '#link=https://localhost:8325']) {
     h.context.location.hash = bad;
     assert.equal(h.run('linkBase()'), 'http://127.0.0.1:8322', bad);
   }
@@ -703,4 +708,49 @@ test("the save's timer runs until its bytes are in, and is longer than a health 
   assert.equal(live, 0);
   assert.equal(h.seen.builds.length, 1);
   assert.equal(h.seen.builds[0].parts[0].byteLength, 8, 'the bytes read are the ones built');
+});
+
+// GL-4 in #110: the tab outlives the mod it was read from. linkHealth moves
+// only with new bytes, so the watcher's health is what says the mod now
+// speaks another version: no write goes to it, and the dialog says why.
+// Values made inside the harness's context, compared as plain data.
+const plain = (v) => JSON.parse(JSON.stringify(v));
+
+test('a mod that now speaks another version takes no writes until it speaks this one again', async () => {
+  let body = {...HEALTH, writes: ['uniforms', 'imports'], stamp: 's1'};
+  const h = harness({routes: {health: () => body}});
+  let moved = 0;
+  h.context.linkMoved = () => { moved++; };
+  h.run(`linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"; strip.tone = "ok"; linkHealth = ${JSON.stringify(body)}`);
+  await h.run('checkFolder()');
+  assert.deepEqual(plain(h.run('linkWrites()')), ['uniforms', 'imports']);
+  assert.equal(moved, 0, 'nothing changed');
+
+  body = {...HEALTH, schemaVersion: 2, writes: ['uniforms', 'imports'], stamp: 's1'};
+  await h.run('checkFolder()');
+  assert.match(h.context.noted.text, /version 2/);
+  assert.deepEqual(plain(h.run('linkWrites()')), [], 'the board draws its write buttons off');
+  assert.equal(moved, 1, 'an open write dialog hears of it');
+  const refused = await h.run('gameWrite("uniforms", {sites: []}, {dryRun: true})');
+  assert.deepEqual(plain(refused), {status: 0, error: 'mismatch', version: 2, need: 1, body: null});
+  assert.equal(h.run('bindSource().holds()'), false, 'a write under way stops before its next request');
+  assert.ok(!h.seen.calls.some(([url]) => url.includes('/write/') || url.includes('/pair/')), 'nothing was sent');
+
+  body = {hello: 'world'};
+  await h.run('checkFolder()');
+  assert.equal((await h.run('gameWrite("uniforms", {sites: []}, {dryRun: true})')).error, 'not_linked',
+    'something that is no mod at all is not linked');
+
+  body = {...HEALTH, writes: ['uniforms', 'imports'], stamp: 's1'};
+  await h.run('checkFolder()');
+  assert.deepEqual(plain(h.run('linkWrites()')), ['uniforms', 'imports'], 'back once it speaks this version');
+  assert.equal(h.run('bindSource().holds()'), true);
+});
+
+test('the refusal on Update is still the full one, and names the version this page needs', async () => {
+  const h = harness({routes: {health: {...HEALTH, schemaVersion: 2}}});
+  await h.run('loadFromLink("Linking to the game")');
+  assert.deepEqual(h.seen.states.at(-1), ['bad', 'The Big Copilot Link mod and this page do not match', 'http://127.0.0.1:8322']);
+  assert.match(h.seen.notes.at(-1)[1], /speaks version 2; this page needs version 1/);
+  assert.deepEqual(plain(h.run('linkWrites()')), []);
 });
