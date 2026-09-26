@@ -483,6 +483,40 @@ class OpenPlanBenchTest(unittest.TestCase):
         self.assertIn("free", ba_dashboard._bench_claimed(rows))
 
 
+class UnstaffedTest(unittest.TestCase):
+    """Staff with no hours (Peter's live game, 26 September 2026): Evil Genius 2
+    kept its four cashiers assigned with no hours in BizMan; the plan fills the
+    register with them and hires nobody, so the page said nothing."""
+
+    ROW = {"stations": [{"id": 1, "skill": SERVICE}, {"id": 8, "skill": CLEANING}],
+           "people": [{"id": "p1"}, {"id": "p2"}, {"id": "c1"}],
+           "current": {"list": [{"d": d, "s": 1, "f": 0, "t": 24, "p": 2} for d in range(7)]}}
+
+    def test_own_cashiers_with_no_hours_are_named_with_the_hours_nobody_works(self):
+        plan = [{"d": d, "s": 0, "f": 0, "t": 12, "p": 0} for d in range(4)]
+        plan += [{"d": d, "s": 0, "f": 12, "t": 24, "p": 1} for d in range(4)]
+        plan += [{"d": d, "s": 1, "f": 0, "t": 24, "p": 2} for d in range(7)]
+        plan += [{"d": 5, "s": 0, "f": 0, "t": 12, "p": None}]  # a hire's: not counted
+        gap = ba_dashboard._unstaffed(self.ROW, plan, {"p1", "p2", "c1"})
+        self.assertEqual(gap, {"hours": 96, "roles": [{"skill": SERVICE, "hours": 96, "idle": 2}]})
+
+    def test_a_small_gap_or_nobody_idle_is_not_named(self):
+        small = [{"d": 1, "s": 0, "f": 8, "t": 14, "p": 0}]
+        self.assertIsNone(ba_dashboard._unstaffed(self.ROW, small, {"p1"}))
+        # The same person already works the register some of the week: not idle.
+        row = dict(self.ROW, current={"list": [{"d": 0, "s": 0, "f": 8, "t": 12, "p": 0}]})
+        more = [{"d": d, "s": 0, "f": 8, "t": 20, "p": 0} for d in range(4)]
+        self.assertIsNone(ba_dashboard._unstaffed(row, more, {"p1"}))
+        # Somebody who is not the site's own (a bench member the plan draws on).
+        self.assertIsNone(ba_dashboard._unstaffed(self.ROW, more, set()))
+
+    def test_the_hiring_payload_carries_it(self):
+        _row, site = shop_hiring(weeks=2)
+        gap = site["plans"]["demand"]["unstaffed"]
+        self.assertGreaterEqual(gap["hours"], ba_dashboard.UNSTAFFED_MIN_HOURS)
+        self.assertEqual([(r["skill"], r["idle"]) for r in gap["roles"]], [(SERVICE, 1)])
+
+
 class NoOpeningHoursTest(unittest.TestCase):
     def test_a_shop_the_game_opens_no_hour_has_no_plan(self):
         row, site = shop_hiring(weeks=0, opens=())

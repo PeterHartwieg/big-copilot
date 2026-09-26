@@ -1527,3 +1527,21 @@ test('an option list whose select comes back disabled, or not at all, closes', a
     assert.equal(open, false, how);
   }
 });
+
+test('Staff with no hours: a site whose own staff the plan counts on have no hours, and a link to its Staffing', async (t) => {
+  const page = await board(t);
+  const text = await page.evaluate(([G, CS]) => {
+    D.hiring.sites.find(s => s.key === G).plans.demand.unstaffed = {hours: 168, roles: [{skill: CS, hours: 168, idle: 4}]};
+    drawStaff(); wireStaff();
+    const box = document.querySelector('#secStaff .hs-idle');
+    return box && [...box.querySelectorAll('li')].map(li => [...li.children].map(c => c.textContent.trim()).join(' | '));
+  }, [G, CS]);
+  assert.deepEqual(text, ['HART. Gifts | 168 h with nobody on · your 4 Customer Service staff have no hours | Write their week']);
+  const link = page.locator('#secStaff .hs-idle a[data-hr-roster]');
+  assert.match(await link.getAttribute('href'), /^#site\//);
+  await link.click();
+  await page.waitForSelector('#sp-roster.sp-arrived');
+  assert.equal(await page.evaluate(() => !!document.querySelector('#secDetail #sp-roster')), true);
+  // Not counted in the order: nobody is hired for those hours.
+  assert.equal(await page.evaluate(() => hrTotals(hrModel()).hire), 7);
+});

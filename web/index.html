@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "5c451d9704";</script>
-<link rel="stylesheet" href="community.css?v=5c451d9704">
+<script>window.LEDGER_BUILD = "6bef884cce";</script>
+<link rel="stylesheet" href="community.css?v=6bef884cce">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=5c451d9704">
+<link rel="stylesheet" href="fonts/fonts.css?v=6bef884cce">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -3367,6 +3367,8 @@ body:has(#changelogDialog[open]){overflow:hidden}
 .hs-find li b{color:var(--ink);font-weight:600}
 .hs-find li .to{display:inline-flex;align-items:center;gap:4px;color:var(--ink-3)}
 .hs-find li .to svg{width:12px;height:12px}
+.hs-find li a.to{color:var(--accent);text-decoration:none}
+.hs-find li a.to:hover{text-decoration:underline;text-underline-offset:3px}
 .hs-facts2 b{font:500 13.5px/1 "IBM Plex Mono",monospace;color:var(--ink)}
 .hs-facts2 b.warn{color:var(--warn)}
 /* quick hire */
@@ -4545,7 +4547,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"5c451d9704","latest":{"pr":121,"date":"2026-09-25","title":"Hire and place staff for every site at once","summary":"Company › Payroll is now Staff. It adds up what each shop, office and factory still needs by role, moves spare people between sites first, and picks the most skilled of your headhunters' candidates, with filters for the demands you want to avoid. One confirm hires them, puts them at their sites and writes their hours, through the Big Copilot Link mod 0.3.0. Hires cannot be undone."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"6bef884cce","latest":{"pr":121,"date":"2026-09-25","title":"Hire and place staff for every site at once","summary":"Company › Payroll is now Staff. It adds up what each shop, office and factory still needs by role, moves spare people between sites first, and picks the most skilled of your headhunters' candidates, with filters for the demands you want to avoid. One confirm hires them, puts them at their sites and writes their hours, through the Big Copilot Link mod 0.3.0. Hires cannot be undone."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -4633,8 +4635,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=5c451d9704"></script>
-<script src="community.js?v=5c451d9704"></script>
+<script src="app.js?v=6bef884cce"></script>
+<script src="community.js?v=6bef884cce"></script>
 
 <script>
 
@@ -13670,7 +13672,7 @@ function hrOpenHtml(m){
     <div class="hs-scroll"><table class="hs-t hs-roles"><thead><tr><th class="l">Role</th><th class="opt">Open</th><th class="opt">Own staff</th><th>New hires</th><th>Stays open</th><th class="opt">Wages/day</th><th><span class="gw-sr">Change picks</span></th></tr></thead>
     <tbody>${m.roles.map(r => hrRoleRow(m, r, lines(r.skill))).join("")}${stray ? `<tr class="hs-subrow"><td class="l" colspan="7">${stray}</td></tr>` : ""}</tbody>
     <tfoot><tr><td class="l">Total</td><td class="opt">${hrNum(t.needed)}</td><td class="opt">${hrNum(own)}</td><td data-l="New hires">${hrNum(t.hire)}</td><td class="${t.short ? "warn" : ""}" data-l="Stays open">${hrNum(t.short)}</td><td class="opt">+${fmt(t.bill)}</td><td></td></tr></tfoot></table></div>
-    ${hrFindHtml(m)}${facts}`;
+    ${hrFindHtml(m)}${hrIdleHtml(m)}${facts}`;
 }
 /* Shops the game opens no hour: no plan, and nothing is hired for them,
    until the player sets their opening hours. */
@@ -13679,6 +13681,20 @@ function hrNoHoursHtml(){
   const byKey = new Map((D.businesses || []).map(b => [b.key, b]));
   return shut.length ? `<p class="hs-note hs-nohours">${shut.map(s => spEsc(byKey.get(s.key) ? shortName(byKey.get(s.key)) : s.name || "A shop")).join(", ")} ${
     shut.length === 1 ? "opens" : "open"} no hour in the game: set ${shut.length === 1 ? "its" : "their"} opening hours first.</p>` : "";
+}
+/* Staff with no hours: planned sites whose week in the game leaves the plan's
+   hours with nobody on, where the site's own people would work them (the
+   plan's `unstaffed`); nothing is hired for those, so the order would say
+   nothing. The link opens the site's Staffing, whose write puts the week in. */
+function hrIdleHtml(m){
+  const rows = m.sites.filter(S => S.plan && S.plan.unstaffed).map(S => {
+    const u = S.plan.unstaffed, name = spEsc(S.b ? shortName(S.b) : S.site.name || "A site");
+    const who = (u.roles || []).filter(r => r.idle).map(r => `your ${hrNum(r.idle)} ${hrRole(r.skill)} staff ${r.idle === 1 ? "has" : "have"} no hours`);
+    const href = siteHref(S.key);
+    return `<li><b>${name}</b><span>${hrNum(u.hours)} h with nobody on${who.length ? ` · ${who.join(" · ")}` : ""}</span>${
+      href ? `<a class="to" href="${attr(href)}" data-hr-roster="${attr(S.key)}">${hrSvg("chev")}Write their week</a>` : ""}</li>`;
+  }).join("");
+  return rows ? `<div class="hs-find hs-idle"><h4>Staff with no hours</h4><ul>${rows}</ul></div>` : "";
 }
 /* Where to find them: for each role places stay open in, how many and where
    the people come from, for an early company whose headhunters recruit few
@@ -14424,6 +14440,13 @@ function bindStaff(){
   });
   on("click", `${sheet} [data-hs-done], ${sheet} [data-hs-close]`, () => { const d = $("hsSheet"); if(d) d.close(); });
   /* The demand list. */
+  on("click", `${page} [data-hr-roster]`, (el, e) => {
+    e.preventDefault();
+    openSite(el.dataset.hrRoster, false);
+    reveal("secDetail", "push", "#sp-roster");
+    const block = q("#sp-roster");
+    if(block){ block.classList.remove("sp-arrived"); void block.offsetWidth; block.classList.add("sp-arrived"); }
+  });
   on("click", "[data-hs-dem-open]", el => {
     const target = el.dataset.hsDemOpen;
     if(hrPop && hrPop.target === target){ hrPopClose(true); return; }

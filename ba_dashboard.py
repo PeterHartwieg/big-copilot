@@ -9875,6 +9875,61 @@ def _station_groups(save: Save, registration: dict) -> dict:
     return out
 
 
+# The fewest station-hours a week the Staff page names as a site's own staff
+# with no hours: less is a shift the player moved, not a week left empty.
+UNSTAFFED_MIN_HOURS = 8
+
+
+def _unstaffed(row: dict, shifts, own: set) -> dict | None:
+    """The plan's station-hours the site's own people would work that nobody
+    works in the game's week now, when there are UNSTAFFED_MIN_HOURS or more.
+
+    Peter's live game (26 September 2026): a liquor store with its four
+    cashiers still assigned but their hours taken off in BizMan. The plan
+    fills the register with those four and hires nobody, so the Staff page
+    said nothing. `shifts` is the plan's (the row's index tables), `row`
+    carries the game's week as `current.list`. Only hours a planned shift
+    gives one of the site's own people count, so a hire's week is never
+    counted here as well, and only roles where some of them (`idle`) have
+    plan hours and none in the game's week. Returns {hours, roles: [{skill,
+    hours, idle}]}, or None.
+    """
+    stations, people = row.get("stations") or [], row.get("people") or []
+    person = lambda p: people[p]["id"] if p is not None and 0 <= p < len(people) else None  # noqa: E731
+    skill = lambda s: stations[s].get("skill") if s is not None and 0 <= s < len(stations) else None  # noqa: E731
+    now = set()
+    worked = collections.Counter()
+    for entry in (row.get("current") or {}).get("list") or ():
+        for hour in range(entry.get("f", 0), entry.get("t", 0)):
+            now.add((entry.get("s"), entry.get("d"), hour))
+        if person(entry.get("p")):
+            worked[(person(entry.get("p")), skill(entry.get("s")))] += entry.get("t", 0) - entry.get("f", 0)
+    gap = collections.Counter()
+    planned = collections.defaultdict(set)
+    for entry in shifts:
+        pid = person(entry.get("p"))
+        if pid is None or pid not in own:
+            continue
+        role = skill(entry.get("s"))
+        planned[role].add(pid)
+        for hour in range(entry.get("f", 0), entry.get("t", 0)):
+            if (entry.get("s"), entry.get("d"), hour) not in now:
+                gap[role] += 1
+    # Only the roles where some of the site's own people have no hours at all
+    # in the game's week: a plan that merely differs from the week is the site
+    # page's to show, not somebody sitting idle.
+    roles = [
+        {"skill": role, "hours": gap[role],
+         "idle": sum(1 for pid in planned[role] if not worked[(pid, role)])}
+        for role in _in_order(gap) if gap[role]
+    ]
+    roles = [r for r in roles if r["idle"]]
+    total = sum(r["hours"] for r in roles)
+    if total < UNSTAFFED_MIN_HOURS:
+        return None
+    return {"hours": total, "roles": roles}
+
+
 def _station_roots(save: Save, registration: dict) -> list:
     """The root item of every furniture group of a site (a desk, a table).
 
@@ -10005,6 +10060,12 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
             return [offices.get(key)]
         return []
 
+    # Each site's own people: whom a plan's shifts there may already count on.
+    own = collections.defaultdict(set)
+    for employee in save.items(save.root.get("EmployeeInstances")):
+        addr = save.address(employee.get("assignedAddress")) if isinstance(employee, dict) else None
+        if addr:
+            own[site_key(addr)].add(employee.get("id"))
     sites = []
     for business in businesses:
         kind = _business_kind(business)
@@ -10044,6 +10105,16 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
             found = take(offices.get(business["key"]))
             if found is not None:
                 plans["office"] = found
+        # The plan's hours the site's own people would work that nobody works
+        # in the game's week now: Staff with no hours (_unstaffed()).
+        row_of = {"demand": shops.get(business["key"]), "open": (shops.get(business["key"]) or {}).get("openCover"),
+                  "office": offices.get(business["key"])}
+        base = shops.get(business["key"]) if kind == "shop" else offices.get(business["key"])
+        for mode, plan in plans.items():
+            if mode in row_of and row_of[mode] and base:
+                gap = _unstaffed(base, row_of[mode].get("shifts") or (), own.get(business["key"], set()))
+                if gap:
+                    plan["unstaffed"] = gap
         sites.append({
             "key": business["key"],
             "name": business["name"],
@@ -16122,6 +16193,8 @@ body:has(#changelogDialog[open]){overflow:hidden}
 .hs-find li b{color:var(--ink);font-weight:600}
 .hs-find li .to{display:inline-flex;align-items:center;gap:4px;color:var(--ink-3)}
 .hs-find li .to svg{width:12px;height:12px}
+.hs-find li a.to{color:var(--accent);text-decoration:none}
+.hs-find li a.to:hover{text-decoration:underline;text-underline-offset:3px}
 .hs-facts2 b{font:500 13.5px/1 "IBM Plex Mono",monospace;color:var(--ink)}
 .hs-facts2 b.warn{color:var(--warn)}
 /* quick hire */
@@ -25558,7 +25631,7 @@ function hrOpenHtml(m){
     <div class="hs-scroll"><table class="hs-t hs-roles"><thead><tr><th class="l">Role</th><th class="opt">Open</th><th class="opt">Own staff</th><th>New hires</th><th>Stays open</th><th class="opt">Wages/day</th><th><span class="gw-sr">Change picks</span></th></tr></thead>
     <tbody>${m.roles.map(r => hrRoleRow(m, r, lines(r.skill))).join("")}${stray ? `<tr class="hs-subrow"><td class="l" colspan="7">${stray}</td></tr>` : ""}</tbody>
     <tfoot><tr><td class="l">Total</td><td class="opt">${hrNum(t.needed)}</td><td class="opt">${hrNum(own)}</td><td data-l="New hires">${hrNum(t.hire)}</td><td class="${t.short ? "warn" : ""}" data-l="Stays open">${hrNum(t.short)}</td><td class="opt">+${fmt(t.bill)}</td><td></td></tr></tfoot></table></div>
-    ${hrFindHtml(m)}${facts}`;
+    ${hrFindHtml(m)}${hrIdleHtml(m)}${facts}`;
 }
 /* Shops the game opens no hour: no plan, and nothing is hired for them,
    until the player sets their opening hours. */
@@ -25567,6 +25640,20 @@ function hrNoHoursHtml(){
   const byKey = new Map((D.businesses || []).map(b => [b.key, b]));
   return shut.length ? `<p class="hs-note hs-nohours">${shut.map(s => spEsc(byKey.get(s.key) ? shortName(byKey.get(s.key)) : s.name || "A shop")).join(", ")} ${
     shut.length === 1 ? "opens" : "open"} no hour in the game: set ${shut.length === 1 ? "its" : "their"} opening hours first.</p>` : "";
+}
+/* Staff with no hours: planned sites whose week in the game leaves the plan's
+   hours with nobody on, where the site's own people would work them (the
+   plan's `unstaffed`); nothing is hired for those, so the order would say
+   nothing. The link opens the site's Staffing, whose write puts the week in. */
+function hrIdleHtml(m){
+  const rows = m.sites.filter(S => S.plan && S.plan.unstaffed).map(S => {
+    const u = S.plan.unstaffed, name = spEsc(S.b ? shortName(S.b) : S.site.name || "A site");
+    const who = (u.roles || []).filter(r => r.idle).map(r => `your ${hrNum(r.idle)} ${hrRole(r.skill)} staff ${r.idle === 1 ? "has" : "have"} no hours`);
+    const href = siteHref(S.key);
+    return `<li><b>${name}</b><span>${hrNum(u.hours)} h with nobody on${who.length ? ` · ${who.join(" · ")}` : ""}</span>${
+      href ? `<a class="to" href="${attr(href)}" data-hr-roster="${attr(S.key)}">${hrSvg("chev")}Write their week</a>` : ""}</li>`;
+  }).join("");
+  return rows ? `<div class="hs-find hs-idle"><h4>Staff with no hours</h4><ul>${rows}</ul></div>` : "";
 }
 /* Where to find them: for each role places stay open in, how many and where
    the people come from, for an early company whose headhunters recruit few
@@ -26312,6 +26399,13 @@ function bindStaff(){
   });
   on("click", `${sheet} [data-hs-done], ${sheet} [data-hs-close]`, () => { const d = $("hsSheet"); if(d) d.close(); });
   /* The demand list. */
+  on("click", `${page} [data-hr-roster]`, (el, e) => {
+    e.preventDefault();
+    openSite(el.dataset.hrRoster, false);
+    reveal("secDetail", "push", "#sp-roster");
+    const block = q("#sp-roster");
+    if(block){ block.classList.remove("sp-arrived"); void block.offsetWidth; block.classList.add("sp-arrived"); }
+  });
   on("click", "[data-hs-dem-open]", el => {
     const target = el.dataset.hsDemOpen;
     if(hrPop && hrPop.target === target){ hrPopClose(true); return; }
