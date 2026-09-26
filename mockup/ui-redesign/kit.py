@@ -827,7 +827,7 @@ WIRE = r"""
     });
 
     // the sphere rolls out of the wordmark's dot onto the page head's rule
-    const shelf = document.querySelector('.nc') ? null : ($('.nx-top') || $('.nx-mast') || $('.nx-ptop'));
+    const shelf = document.querySelector('.nc, .jy') ? null : ($('.nx-top') || $('.nx-mast') || $('.nx-ptop'));
     const dot = $('#dot');
     const orbs = [];
     const place = (o, k) => {

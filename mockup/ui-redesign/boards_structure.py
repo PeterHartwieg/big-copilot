@@ -59,6 +59,17 @@ CSS = """
 .nc h2{font-size:18px;font-weight:600;margin:14px 0 6px;display:flex;align-items:center;gap:10px}
 .nc ul{margin:0;padding-left:18px;font-size:13px;color:var(--ink-2);line-height:1.55}
 .nc ul b{color:var(--ink)}
+.jy{margin-top:26px}
+.jy h2{display:flex;align-items:center;gap:10px;font-size:18px;font-weight:600;margin-bottom:12px}
+.jy h2 .n{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--ink);color:var(--ground);font:600 12px/1 "IBM Plex Mono",monospace}
+.jy-row{display:flex;align-items:flex-start;gap:14px}
+.jy-f{margin:0;display:flex;flex-direction:column;gap:8px;width:400px}
+.jy-shot{position:relative;width:400px;height:250px;border-radius:10px;border:1px solid var(--rule);overflow:hidden;background:var(--ground)}
+.jy-shot > .board{position:absolute;left:0;top:0;width:1440px;height:900px;transform:scale(.2778);transform-origin:0 0;pointer-events:none}
+.jy-f figcaption{font-size:13px;color:var(--ink-2);line-height:1.4}
+.jy-f figcaption b{display:block;font:600 11px/1.4 "IBM Plex Mono",monospace;color:var(--accent);letter-spacing:.04em}
+.jy-a{align-self:center;margin-top:-40px;color:var(--ink-3)}
+.jy-a .i{width:22px;height:22px}
 .mt{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-top:24px}
 .mt .c{border:1px solid var(--rule-soft);border-radius:12px;background:var(--surface);padding:16px;display:flex;flex-direction:column;gap:10px}
 .mt .c h3{font-size:14.5px;font-weight:600;display:flex;align-items:center;gap:8px}
@@ -142,10 +153,10 @@ def sitemap() -> str:
 # status: ex = existing capability with a new home or label; rg = regrouped presentation;
 # nw = new interaction work. frame = the artboard that shows it.
 COVER = {
-    "E01": ("ex", "NoSave"), "E02": ("ex", "NoSave"), "E03": ("ex", "NoSave"), "E04": ("ex", "Main · sidebar"), "E05": ("ex", "OverviewStale"),
-    "E06": ("ex", "Main · sidebar, OverviewStale"), "E07": ("ex", "NoSave"), "E08": ("ex", "Guide, NoSave"), "E09": ("ex", "Preferences"),
-    "E10": ("ex", "Preferences"), "E11": ("rg", "Sitemap, NavCompare"), "E12": ("rg", "BusinessDetail · crumbs"), "E13": ("ex", "Main · sidebar"),
-    "E14": ("ex", "Motion"), "E15": ("rg", "Main · task directory"), "E16": ("rg", "Main · task directory"), "E17": ("ex", "Help, sidebar"),
+    "E01": ("ex", "NoSave"), "E02": ("ex", "NoSave"), "E03": ("ex", "NoSave"), "E04": ("ex", "Main · masthead"), "E05": ("ex", "OverviewStale"),
+    "E06": ("ex", "Main · masthead, OverviewStale"), "E07": ("ex", "NoSave"), "E08": ("ex", "Guide, NoSave"), "E09": ("ex", "Preferences"),
+    "E10": ("ex", "Preferences"), "E11": ("rg", "Sitemap, NavCompare"), "E12": ("rg", "BusinessDetail · crumbs"), "E13": ("ex", "Main · masthead ⋯"),
+    "E14": ("ex", "Motion"), "E15": ("rg", "Main · task directory"), "E16": ("rg", "Main · task directory"), "E17": ("ex", "Help, masthead ⋯"),
     "E18": ("ex", "Preferences, clock chip"),
     "C01": ("rg", "Main · company strip"), "C02": ("ex", "Results · finances"), "C03": ("ex", "Main"), "C04": ("rg", "Customize"),
     "C05": ("ex", "Results"), "C06": ("ex", "Results · By weekday"), "C07": ("ex", "Results"), "C08": ("rg", "Standards"),
@@ -166,7 +177,7 @@ COVER = {
     "M01": ("ex", "CityMap"), "M02": ("ex", "CityMap, Finder"), "M03": ("ex", "Finder"), "M04": ("ex", "Finder"), "M05": ("ex", "Finder"),
     "M06": ("ex", "Finder, FinderDetail"), "M07": ("ex", "Finder"), "M08": ("ex", "FinderDetail"),
     "W01": ("ex", "Guide"), "W02": ("ex", "Guide"), "W03": ("ex", "Guide"), "W04": ("rg", "PricesShop, Guide"), "W05": ("ex", "Sitemap · routes"),
-    "P01": ("ex", "Preferences, Motion"), "P02": ("ex", "Preferences, OverviewLong"), "P03": ("ex", "Help"), "P04": ("ex", "Help"), "P05": ("ex", "Help"),
+    "P01": ("ex", "Preferences, Motion"), "P02": ("ex", "Preferences, OverviewNames"), "P03": ("ex", "Help"), "P04": ("ex", "Help"), "P05": ("ex", "Help"),
     "P06": ("ex", "Help"), "P07": ("ex", "Help"), "P08": ("ex", "Motion, every page"),
     "L01": ("ex", "Preferences · CLI"), "L02": ("ex", "Preferences · CLI"), "L03": ("ex", "Preferences · CLI"),
 }
@@ -203,8 +214,8 @@ def coverage() -> str:
             tr += f'<tr><td class="id">{cid}</td><td class="cap">{cap}</td><td class="home">{home}</td><td class="tg">{TAGS[st_]}</td><td class="fr">{fr}</td></tr>'
         blocks.append(f'<div class="cv-sec"><h2>{sec}<small>{len(rows)}</small></h2><table class="cv-t">{tr}</table></div>')
     krows = [f'<tr><td class="cap">{k}</td><td class="home">{d}</td><td class="fr">{KIND_FRAMES[k.strip()]}</td></tr>' for k, d in data["kinds"]]
-    new = [("From Needs attention strip, return with position", "Imports, Production, OverviewReturn"), ("Next finding (optional queue navigation)", "Imports · marked proposed"),
-           ("Four marks: suggested, marked done, applied, confirmed", "Changes, Imports*, Main rail"), ("Critical groups never folded; counted remainder; jump to tasks", "Main, OverviewMany"),
+    new = [("Details on each finding, collapsed by default", "Main, OverviewDetails"), ("From Needs attention strip, return with position", "Imports, Production, OverviewReturn"),
+           ("Four marks: suggested, marked done, applied, confirmed", "Changes, Imports*, Main rail"), ("Critical groups never folded; counted remainder; All tools from the heading and a sticky bar", "Main, OverviewLong"),
            ("Plan for kept per company, visible wherever it changes a figure", "Imports, Production, Changes"), ("Goods flow product filter", "GoodsFlow"),
            ("Task directory counts with honest prerequisites", "Main, OverviewShopOnly"), ("Retired features record (contingency)", "Help")]
     nw = "".join(f'<tr><td class="cap">{a}</td><td class="fr">{b}</td></tr>' for a, b in new)
@@ -227,38 +238,32 @@ def rationale() -> str:
     return f"""
 <div class="ss">
   <h1>Why it is built this way</h1>
-  <p class="sub">The first screen says <b>"here is what needs fixing, and here is how I help"</b>. Everything else is a place you can see from there.</p>
+  <p class="sub">The first screen says <b>"here is what needs fixing, and here is how I help"</b>. Everything else is a labelled place you can reach from there.</p>
   <div class="ra">
     <section><h2>{ic("overview")}Hierarchy</h2>
-      <p>Needs attention is the largest type on the page and starts inside the first 300 px, after one quiet line of company numbers (no tiles). Critical cause groups are shown in full, each with place and item, evidence in numbers, a consequence or deadline where the save supports one, a small evidence picture (cover rail, hours) and one named action. Warnings are one line each, still with a named action. The rest is counted, never hidden: "Show all 17", below-the-line, switched-off and waiting-for-data lines stay under the list.</p>
-      <p style="margin-top:8px">The task directory follows with four groups and thirteen tasks whose labels and order never change; counts change. A jump link and the sidebar keep it one click away when the list grows.</p></section>
-    <section><h2>{ic("list")}Navigation: sidebar, recommended</h2>
-      <p><b>Sidebar:</b> 240 px buys room for five labelled destinations, their local views (Imports and Production are visible words, not tabs you must first open), counts, the company and source block with Update, and room for longer translations. It shows where you are while a long findings list scrolls.</p>
-      <p style="margin-top:8px"><b>Masthead evolved:</b> full width for tables and the map, closest to today, but local views need a second row, source moves to a strip, and German labels crowd the row by 1300 px. Chosen for tablets (768) as a labelled tab row; phones get a labelled bottom bar with all five destinations.</p></section>
-    <section><h2>{ic("link")}Shared workflows</h2>
-      <ul><li><b>Problem, task, place</b> are three doors to one workflow. A finding opens its exact view with the business and item selected and a "From Needs attention" strip that returns to the same row.</li>
-      <li><b>Factory hours and the workers they need</b> are one plan in Supply › Production. Staffing lists factories and links there; there is no second planner and no per-person factory optimiser.</li>
-      <li><b>Plan for</b> (Full production or Shop demand) is named wherever it changes a figure: imports, inputs, hours, the copied checklist.</li>
-      <li><b>One finder</b> from Expansion, City map and a Demand cell. <b>Prices</b> in Products &amp; prices, echoed by the Game guide.</li></ul></section>
+      <p>Needs attention starts under one line of company numbers. Every critical finding is a summary: where and what, what matters now, one labelled picture, a <b>Details</b> control and one named action. Details are closed by default, so the whole queue is visible and the player chooses what to open. Warnings are one line each. The rest is counted under the list, never hidden.</p>
+      <p style="margin-top:8px">All tools sits beside the heading and in a sticky bar when the queue is long: four panels, thirteen tasks, labels that never move.</p></section>
+    <section><h2>{ic("list")}Navigation: the masthead</h2>
+      <p>The masthead keeps the current product's open layout and full width for tables and the map. Five labelled destinations, City map and Game guide, the source and clock; a persistent local row inside each area makes Imports, Production, Schedules and Prices visible words. At 768 it becomes two rows; phones get a labelled bottom bar. The slim sidebar with the same content is kept on NavCompare as the alternative.</p></section>
+    <section><h2>{ic("link")}Fixes are named for the problem they solve</h2>
+      <ul><li><b>Prevent the recurring shortage</b> (the weekly order) and <b>cover the gap until Monday</b> (a one-time purchase) are two fixes side by side, with their own actions.</li>
+      <li>Only the weekly amount can be written by the game link; the gap is bought by hand.</li>
+      <li><b>Plan for</b> is named beside every figure it changes; switching it redraws the amount and its scale.</li>
+      <li>Factory hours and the workers they need are one plan in Supply › Production; Staffing links to it.</li></ul></section>
+    <section><h2>{ic("tick")}Three kinds of done</h2>
+      <p><b>Marked by you</b>: an outlined neutral tick, a note in this browser. <b>Applied · awaiting refresh</b>: blue, the game took the write. <b>Confirmed</b>: solid green, only when a newer read shows the problem gone. Rows keep their place when their mark changes.</p></section>
     <section><h2>{ic("motion")}Motion and personality</h2>
-      <p>Kept: the dot that pays coins, the sphere rolling out of it onto the page head's rule (three on repeated clicks, the fourth gulps one), the checklist truck driving the dashed road as ticks land, the game-link wire, icons that tilt on hover. Added only where motion explains: the arrival strip slides from above; hovering a linked finding lights its partner. Every motion has a still form (Motion sheet); no celebration for an unverified tick.</p></section>
-    <section><h2>{ic("warn")}Deliberate compromises</h2>
-      <ul><li>Critical rows are tall; on a very bad day four fill the first screen and warnings start below the fold. Urgency wins.</li>
-      <li>The right rail (what was checked, your changes) moves under the list below 1200 px.</li>
-      <li>Prices stay comparisons; the page says so instead of recommending a price.</li>
-      <li>Goods flow's product filter is new work; the graph itself is unchanged.</li>
-      <li>Secondary text tokens are adjusted for contrast: dark ink-3 #808a84, light ink-3 #636c71, light warn #b34d00.</li></ul></section>
+      <p>The dot pays coins, the sphere rolls from the dot onto the masthead rule, the checklist truck drives as marks land, the wire shows each request and answer, and the tool panels carry small working pictures. Details slide open; the Plan for switch redraws in place. Each has a still form (Motion).</p></section>
     <section><h2>{ic("gear")}New data and backend needs</h2>
-      <ul><li><b>None for the navigation.</b> Existing hashes map to new routes (Sitemap).</li>
-      <li>Finding rows need a <b>deadline field</b> where the model has one (run-out day and hour exist in supply rows; expose on the finding), and a named action id per kind.</li>
-      <li>A local <b>resolution record</b> per finding: marked-done time, applied-write stamp; "confirmed" is derived by comparing the next payload.</li>
-      <li><b>Plan for per company</b>: SIZING_KEY becomes keyed by character.</li>
-      <li>Goods flow product filter needs product slugs on graph links (issue #148, decision 7).</li>
-      <li>Retired features: a lifecycle state in server/features.json only if one is ever retired.</li></ul></section>
+      <ul><li>A deadline per finding where the model has one, and an action id per finding kind.</li>
+      <li>A local resolution record per finding; confirmation compares the next payload.</li>
+      <li>Plan for kept per company (SIZING_KEY by character).</li>
+      <li>The catch-up amount on the finding (the depot page computes it today).</li>
+      <li>Product slugs on goods-flow links for the followed route (#148, decision 7).</li></ul></section>
   </div>
-  <div class="ra" style="margin-top:26px"><section><h2>{ic("chev")}Suggested port order</h2>
-    <p>1 Shell and routes (sidebar, tablet tabs, phone bar, hash aliases). 2 Overview: Needs attention rows and task directory, replacing Next moves and Ask the board. 3 Supply local views over today's tabs, with scope and Plan for. 4 Arrival strip and return. 5 Four marks. 6 Staffing and Businesses landings. 7 Expansion. Each step ships alone.</p></section>
-    <section><h2>{ic("eye")}What to test first</h2><p>Unaided first click from the Overview for: import amounts, partial-day factory hours, a shop schedule, prices at a named shop, a premises with its floor plan; shop-only and factory companies; newcomers and returning players.</p></section></div>
+  <div class="ra" style="margin-top:26px"><section><h2>{ic("warn")}Deliberate compromises</h2>
+    <p>Critical summaries are about 84 px; four fill most of the first screen on a bad day. The satisfaction parts and machine rows carry short labels rather than icons alone. Prices stay comparisons. Secondary text tokens are adjusted for contrast (dark #808a84, light #636c71, light warn #b34d00).</p></section>
+    <section><h2>{ic("eye")}What to test first</h2><p>Unaided: the most urgent issue and its next action; import amounts, factory hours and shop prices without Search; telling a manual note from a verified fix. Then the four journeys at 1024, on a phone and with larger text.</p></section></div>
 </div>"""
 
 
@@ -266,27 +271,26 @@ def rationale() -> str:
 # navigation comparison
 # --------------------------------------------------------------------------
 def nav_compare() -> str:
-    side = ov.overview().replace('<div class="orb" aria-hidden="true"><u></u></div>', '<div class="orb" aria-hidden="true" style="right:300px"><u></u></div>')
-    mast = ov.overview_masthead().replace('<div class="orb" aria-hidden="true"><u></u></div>', '<div class="orb" aria-hidden="true" style="right:330px;bottom:0"><u></u></div>')
+    import screens
+    mast = screens.overview().replace('<div class="orb" aria-hidden="true"><u></u></div>', '<div class="orb" aria-hidden="true" style="right:300px"><u></u></div>')
+    side = screens.overview_sidebar().replace('<div class="orb" aria-hidden="true"><u></u></div>', '<div class="orb" aria-hidden="true" style="right:300px"><u></u></div>')
     return f"""
 <div class="ss">
   <h1>Navigation: two treatments, one structure</h1>
-  <p class="sub">Both keep the five destinations, the two references and Needs attention first. The sidebar is recommended for desktop; the masthead carries on as the tablet layout.</p>
+  <p class="sub">Same content and type scale in both. The masthead is recommended; the slim sidebar stays as the alternative.</p>
   <div class="nc">
-    <div><div class="shot"><div class="board">{side}</div></div>
-      <h2>{chip("ok", "recommended")}Persistent sidebar</h2>
-      <ul><li><b>Discovery:</b> local views are words on screen (Imports, Production, Schedules) with counts.</li>
-      <li><b>Context:</b> company, source, freshness and Update sit together, top left, on every page.</li>
-      <li><b>Space:</b> costs 240 px; tables still get 1,120 px at 1440. Narrows to 208 px at 1024.</li>
-      <li><b>Language:</b> "Braucht Aufmerksamkeit" and "Einstellungen" fit without shrinking (OverviewLong).</li>
-      <li><b>Personality:</b> the dot stays on the wordmark; the sphere rolls onto the page head's rule.</li></ul></div>
     <div><div class="shot"><div class="board">{mast}</div></div>
-      <h2>{chip("dim", "alternative")}Evolved masthead</h2>
-      <ul><li><b>Discovery:</b> five labels plus City map and Game guide in one row; local views need a second row per area.</li>
-      <li><b>Context:</b> company and source move to a strip under the masthead: one more band before Needs attention.</li>
-      <li><b>Space:</b> full width for the map and wide tables; the most familiar to current players.</li>
-      <li><b>Language:</b> German labels run out of row at about 1,300 px and must collapse to icons.</li>
-      <li><b>Personality:</b> the sphere keeps today's shelf exactly.</li></ul></div>
+      <h2>{chip("ok", "recommended")}Masthead with a local row</h2>
+      <ul><li><b>Space:</b> the full width for queues, tables and the map; Schedules and Find a location keep two columns, not three.</li>
+      <li><b>Discovery:</b> five labelled places and a persistent local row (Changes · Imports · Deliveries · Production · Goods flow).</li>
+      <li><b>Continuity:</b> closest to today's board, and the sphere keeps its shelf.</li>
+      <li><b>Cost:</b> German labels need the 1024 compact row; references drop their icons there.</li></ul></div>
+    <div><div class="shot"><div class="board">{side}</div></div>
+      <h2>{chip("dim", "alternative")}Slim sidebar</h2>
+      <ul><li><b>Space:</b> 196 px less for the work; the queue's picture column narrows to 240 px.</li>
+      <li><b>Discovery:</b> the five places are always in one column; local views still need a row in the page.</li>
+      <li><b>Continuity:</b> reads more like an admin console.</li>
+      <li><b>Benefit:</b> room for long translated labels without a compact mode.</li></ul></div>
   </div>
 </div>"""
 
@@ -304,10 +308,10 @@ def motion() -> str:
          "Reduced: the truck and the green line jump to the new position. The count '3 of 9 done' says the same in words."),
         ("The game-link wire", f'<span class="gw-w ask"><i class="a"></i><i class="ln"></i><i class="p"></i><i class="p"></i><i class="p"></i><span class="g">{ic("game")}</span></span><span class="gw-w ok"><i class="a"></i><i class="ln"></i><span class="g">{ic("game")}</span></span><span class="gw-w no"><i class="a"></i><i class="ln"></i><span class="g">{ic("game")}</span></span>',
          "Blue packets ask, solid green agrees or is done, broken red refuses, amber waits or the game moved on, grey is busy.", "Reduced: packets stand still; every state also has its sentence ('Waiting for you in the game', 'The game refused')."),
-        ("Arrival from a finding", f'<div class="nx-from" style="margin:0;width:88%"><span class="back">{ic("back")}Back</span><span class="what">From <b>Water at Bridge Hub</b></span></div>', "The arrival strip slides in once, so you see why this page opened; the matching row is outlined.",
-         "Reduced: the strip is simply there. Focus moves to the selected row's heading for keyboard and screen reader users."),
-        ("Linked findings", f'<div style="width:88%;display:flex;flex-direction:column;gap:6px"><div style="height:18px;border-radius:4px;background:var(--surface);box-shadow:inset 3px 0 0 var(--info)"></div><div style="height:18px;border-radius:4px;background:var(--info-soft);box-shadow:inset 3px 0 0 var(--info)"></div></div>', "Hovering or focusing an upstream import shortfall lights the factory input it starves, without merging them.",
-         "No motion to reduce; on touch the 'Linked' button scrolls to and outlines the partner."),
+        ("Details on a finding", f'<span class="r3-det" aria-expanded="true" style="pointer-events:none">Hide{ic("chevd")}</span><div style="width:48%;display:flex;flex-direction:column;gap:5px"><i style="height:8px;border-radius:3px;background:var(--rule)"></i><i style="height:8px;width:70%;border-radius:3px;background:var(--rule)"></i></div>', "The panel slides open under its summary and the chevron turns; the summary joins the panel's surface. The action button stays separate.",
+         "Reduced: opens at once. The button is a real disclosure (aria-expanded, aria-controls); Enter and Space open it."),
+        ("Changing Plan for", f'<div class="seg"><button class="on" type="button">Full production</button><button type="button">Shop demand</button></div><span class="mono" style="font-size:18px">18,740</span>', "The amount, its label and the scale's planned marker move to the new basis; the order now and today's draw stay put, so the change reads as a comparison.",
+         "Reduced: the values swap without movement; the new basis is announced (Planned for shop demand, 11,040 a week)."),
     ]
     cc = "".join(f'<div class="c"><h3>{t}</h3><div class="demo">{d}</div><p>{p}</p><p class="rmq">{r}</p></div>' for t, d, p, r in cards)
     focus = f"""
@@ -325,6 +329,35 @@ def motion() -> str:
   <p class="sub">Each motion explains a relation or a change of state, or is a brand touch that never blocks work. Each has a still equivalent; turn on the <b>reduced</b> tweak on any artboard to see them.</p>
   <div class="mt">{cc}</div>
   {focus}
+</div>"""
+
+
+def journeys() -> str:
+    import screens, boards_supply as sp, boards_more as mo
+    def thumb(markup, frame, cap):
+        return (f'<figure class="jy-f"><div class="jy-shot"><div class="board">{markup}</div></div>'
+                f'<figcaption><b>{frame}</b>{cap}</figcaption></figure>')
+    arrow = f'<span class="jy-a">{ic("go")}</span>'
+    rows = [
+        ("Open a finding", [(screens.overview(), "Main", "All critical summaries, details closed"),
+                            (screens.overview(True), "OverviewDetails", "Details on Water: amounts by basis, who goes without, the two fixes"),
+                            (screens.imports(), "Imports", "Review import opens the setting, the finding named in the arrival strip")]),
+        ("Follow its supply connection", [(screens.overview(True), "OverviewDetails", "Follow the supply route"),
+                                          (mo.goods_flow(), "GoodsFlow", "1 Pier → Bridge Hub → Canal Brewery lit; the short input in amber"),
+                                          (sp.production(), "Production", "The Water top-up on Canal Brewery, its separate fix")]),
+        ("Change the planning basis", [(screens.imports(), "Imports", "Planned for full production: 18,740 a week"),
+                                       (screens.imports(full=False), "ImportsDemand", "Shop demand: 11,040; today's draw is higher, and says why"),
+                                       (sp.production(), "Production", "The same switch redraws hours, inputs, people and wages")]),
+        ("Return to the queue", [(screens.imports(), "Imports", "Preview in the game"),
+                                 (sp.write_frame("done"), "WriteDone", "Applied; confirmed only after a newer read"),
+                                 (screens.overview_return(), "OverviewReturn", "Same place, same order, the row marked Applied")]),
+    ]
+    body = "".join(f'<section class="jy"><h2><span class="n">{k + 1}</span>{t}</h2><div class="jy-row">{arrow.join(thumb(*x) for x in xs)}</div></section>' for k, (t, xs) in enumerate(rows))
+    return f"""
+<div class="ss">
+  <h1>Four journeys</h1>
+  <p class="sub">Each step is an artboard; play them from <b>Main</b>. The same journeys are drawn at 1024 (Overview1024, Imports1024), on a phone (PhoneOverviewDetails, PhoneImports, PhoneImportsDemand, PhoneWrite) and with text at 130% (PhoneLargeText, PhoneImportsLargeText).</p>
+  {body}
 </div>"""
 
 

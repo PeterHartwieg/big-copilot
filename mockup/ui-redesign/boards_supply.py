@@ -472,14 +472,14 @@ def staff_plan(plan: str) -> str:
       <div><span class="lab">Hours in a row</span><span class="v">12 h</span><small>at most, per person</small></div>
     </div>
     <div class="sp-shifts">{shifts}</div>
-    <p class="quiet" style="margin-top:10px">Scheduling blocks for a typical day: one person per machine per hour, at most 12 hours in a row. The board counts the people the week needs; it does not assign named workers to machines.</p>
+    <p class="quiet" style="margin-top:10px">A typical day: one person per machine per hour, at most 12 hours in a row.</p>
   </div>
   <div style="display:flex;flex-direction:column;gap:10px">
     <div class="sp-where">{ic("pin")}<span>In the game: <b>BizMan › Canal Brewery › Schedule</b>. The game link does not write factory hours or hire.</span></div>
     {btn("Copy the plan", "", icon="copy")}
     {btn("Mark done by you", "ghost", icon="tick")}
     <a class="link" href="{ROUTE["staffing/needs"]}" style="align-self:flex-start">See whom to hire in Staffing</a>
-    <div style="margin-top:auto;padding-top:10px;border-top:1px solid var(--rule-soft);font-size:12px;color:var(--ink-3)">{ic("staffing", style="width:14px;height:14px;display:inline-block;vertical-align:-3px")} Staffing › Schedules links here for Canal Brewery; there is no second factory planner.</div>
+    
   </div>
 </div>"""
 
@@ -505,11 +505,11 @@ def production(arrived: bool = True) -> str:
     body = f"""
 {fs}
 {scope().replace('Whole company', 'Canal Brewery').replace('class="nx-pick" type="button">' + ic("businesses"), 'class="nx-pick sel" type="button">' + ic("factory"), 1)}
-{basis("full", note=' <span style="color:var(--ink-3)">Kept for Marlow Trading; switching never resets a line you are following.</span>')}
+{basis("full")}
 {pane("full")}{pane("demand")}
 <div class="nx-band" style="margin-top:30px"><span class="lab">Stitch Yard</span><span class="n">1 line the board cannot name</span></div>
 <div class="sp-line" style="grid-template-columns:28px 190px minmax(0,1fr) 260px">{ic("factory")}<span><b>Unnamed line</b><small class="quiet" style="display:block">2 machines · Sewing Workstation</small></span>
-  <span class="quiet">Draws Fabric (Cheap), ships nothing yet, so the recipe cannot be read from the flow. Say what it runs and its needs join the plan.</span>
+  <span class="quiet">Draws Fabric (Cheap) and ships nothing yet. Name its recipe to plan its inputs.</span>
   <span style="display:flex;gap:8px;align-items:center"><span class="sp-pick">Clothing (Cheap)? {ic("chevd")}</span>{btn("Save", "sm")}</span></div>"""
     return app("supply", "production", "Production", body, CRUMB("Production"))
 

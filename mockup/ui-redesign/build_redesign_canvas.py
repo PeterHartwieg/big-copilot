@@ -2,7 +2,13 @@
 
 Design brief: docs/ui-structure-proposal.md and docs/ui-designer-prompt.md (the audit's
 worktree, origin/main 09c5c32). Visual authority: TEMPLATE in ba_dashboard.py at that
-commit. NOTES.md beside this file holds the rationale, compromises and data needs.
+commit. NOTES.md beside this file holds the rationale, compromises, data needs and the
+history of the three rounds.
+
+The product frames are drawn by screens.py (the masthead treatment) and by the screen
+builders in boards_supply.py and boards_more.py, rendered through screens.app2(). The
+structure sheets are boards_structure.py; boards_r2.py keeps the round-2 stylesheet and
+the before/after sheets; boards_overview.py keeps the phone stylesheet and Customize.
 
 Never hand-edit project/: change the builders and rerun. `--preview` also writes plain
 HTML copies into _preview/ for screenshots at each width (not part of the canvas).
@@ -22,80 +28,139 @@ import boards_supply as sp  # noqa: E402
 import boards_more as mo  # noqa: E402
 import boards_structure as st  # noqa: E402
 import boards_r2 as r2  # noqa: E402
+import screens as sc  # noqa: E402
+
+# every screen renders in the masthead shell, with the round-3 arrival strip
+for _m in (sp, mo):
+    _m.app = sc.app2
+    _m.from_strip = sc.from_strip
+sp.imports = lambda *a, **k: sc.imports()
 
 ROOT = HERE / "project"
 CREATED_AT = "2026-09-26T12:00:00Z"
+_ASSETS = json.loads((HERE / "assets.json").read_text(encoding="utf-8")) if (HERE / "assets.json").exists() else {"img": {}, "words": {}}
+
+P = sc.CSS                               # product frames
+PS = sc.CSS + sp.SUP_CSS                 # supply screens
+PM = sc.CSS + sp.SUP_CSS + mo.MORE_CSS   # everything else
+PH = ov.PHONE + sp.SUP_CSS + sc.CSS      # phones
+STR = st.CSS + PM                        # sheets that embed product frames
 
 # file, title, builder, w, h, page, row, dark, reduced, extra css
 BOARDS = [
-    # --- 1 · structure ------------------------------------------------------
-    ("Sitemap.dc.html", "Sitemap: five destinations, two references, the shell", st.sitemap, 1440, 1340, "structure", 0, True, False, st.CSS),
+    # --- Overview -------------------------------------------------------------
+    ("Main.dc.html", "Overview · dark (start here)", sc.overview, 1440, 1640, "overview", 0, True, False, P),
+    ("OverviewDetails.dc.html", "Overview · Details open on a finding", lambda: sc.overview(True), 1440, 1860, "overview", 0, True, False, P),
+    ("OverviewLight.dc.html", "Overview · light", sc.overview, 1440, 1640, "overview", 0, False, False, P),
+    ("OverviewLong.dc.html", "Overview · long queue, scrolled: All tools stays in reach", sc.overview_long, 1440, 900, "overview", 0, True, False, P),
+    ("Customize.dc.html", "Customize checks", sc.customize, 1440, 900, "overview", 1, True, False, P + ov.CUST_CSS),
+    ("OverviewCalm.dc.html", "Overview · no urgent findings", sc.overview_calm, 1440, 1200, "overview", 1, True, False, P),
+    ("OverviewShopOnly.dc.html", "Overview · shop-only company", sc.overview_shop_only, 1440, 1200, "overview", 1, False, False, P),
+    ("OverviewStale.dc.html", "Overview · refresh failed, last good board kept", sc.overview_stale, 1440, 900, "overview", 1, True, False, P),
+    ("OverviewNames.dc.html", "Overview · German navigation and long names", sc.overview_names, 1440, 900, "overview", 1, True, False, P),
+    ("OverviewFocus.dc.html", "Overview · keyboard focus on Details, reduced motion", sc.overview_focus, 1440, 900, "overview", 1, True, True, P),
+    ("Overview1024.dc.html", "Overview · 1024 px, Details open", sc.overview_1024, 1024, 2240, "overview", 2, True, False, P),
+    ("Overview768.dc.html", "Overview · 768 px, Details open", sc.overview_768, 768, 2700, "overview", 2, True, False, P),
+    ("PhoneOverview.dc.html", "Overview · phone, dark", sc.phone, 390, 2180, "overview", 2, True, False, PH),
+    ("PhoneOverviewDetails.dc.html", "Overview · phone, Details open", lambda: sc.phone(True), 390, 2440, "overview", 2, True, False, PH),
+    ("PhoneOverviewLight.dc.html", "Overview · phone, light", sc.phone, 390, 2180, "overview", 2, False, False, PH),
+    ("PhoneLargeText.dc.html", "Overview · phone, text at 130%, Details open", lambda: sc.phone(True, zoom=True), 390, 3280, "overview", 2, True, False, PH),
+    # --- the supply fix journey ------------------------------------------------------
+    ("Changes.dc.html", "Supply › Changes", sc.changes, 1440, 1060, "supply", 0, True, False, PS),
+    ("Imports.dc.html", "Supply › Imports · from Needs attention", sc.imports, 1440, 1060, "supply", 0, True, False, PS),
+    ("ImportsDemand.dc.html", "Imports · Plan for switched to Shop demand", lambda: sc.imports(full=False), 1440, 1060, "supply", 0, True, False, PS),
+    ("ImportsManual.dc.html", "Imports · Why this amount? and Manual instructions open", lambda: sc.imports(open_=True), 1440, 1240, "supply", 0, False, False, PS),
+    ("WritePreview.dc.html", "Write 1 · preview", lambda: sp.write_frame("preview"), 1440, 900, "supply", 0, True, False, PS),
+    ("WritePermission.dc.html", "Write 2 · waiting for permission", lambda: sp.write_frame("permission"), 1440, 900, "supply", 0, True, False, PS),
+    ("WriteApplying.dc.html", "Write 3 · applying, reading again", lambda: sp.write_frame("applying"), 1440, 900, "supply", 0, True, False, PS),
+    ("WriteDone.dc.html", "Write 4 · done, the undo scope", lambda: sp.write_frame("done"), 1440, 900, "supply", 0, True, False, PS),
+    ("OverviewReturn.dc.html", "Back to Needs attention · place and order kept", sc.overview_return, 1440, 900, "supply", 0, True, False, P),
+    ("ImportsApplied.dc.html", "Imports · applied, awaiting refresh", lambda: sc.imports("link"), 1440, 1060, "supply", 1, True, False, PS),
+    ("ImportsMarked.dc.html", "Imports · marked done by you", lambda: sc.imports("mine"), 1440, 1060, "supply", 1, True, False, PS),
+    ("ImportsConfirmed.dc.html", "Imports · confirmed from refreshed data", lambda: sc.imports("conf", arrived=False), 1440, 1100, "supply", 1, False, False, PS),
+    ("WriteRefused.dc.html", "Write · refused, lock window", lambda: sp.write_frame("lock"), 1440, 900, "supply", 1, True, False, PS),
+    ("WriteOverCap.dc.html", "Write · a row over the supplier cap", lambda: sp.write_frame("over"), 1440, 900, "supply", 1, True, False, PS),
+    ("WriteChanged.dc.html", "Write · changed in the game meanwhile", lambda: sp.write_frame("changed"), 1440, 900, "supply", 1, True, False, PS),
+    ("WriteOldMod.dc.html", "Write · older mod, reads only", lambda: sp.write_frame("old"), 1440, 900, "supply", 1, False, False, PS),
+    ("Production.dc.html", "Supply › Production · hours, basis, inputs, staffing", sp.production, 1440, 1420, "supply", 2, True, False, PS),
+    ("ProductionNone.dc.html", "Supply › Production · no factories yet", sp.production_none, 1440, 900, "supply", 2, False, False, PS),
+    ("Deliveries.dc.html", "Supply › Deliveries", mo.deliveries, 1440, 900, "supply", 2, True, False, PM),
+    ("GoodsFlow.dc.html", "Supply › Goods flow · following Water from Bridge Hub", mo.goods_flow, 1440, 1080, "supply", 2, True, False, PM),
+    ("Imports1024.dc.html", "Imports · 1024 px, Shop demand", sc.imports_1024, 1024, 1120, "supply", 3, True, False, PS),
+    ("PhoneImports.dc.html", "Imports · phone, dark", sc.phone_imports, 390, 900, "supply", 3, True, False, PH),
+    ("PhoneImportsDemand.dc.html", "Imports · phone, Shop demand", lambda: sc.phone_imports(full=False), 390, 900, "supply", 3, False, False, PH),
+    ("PhoneWrite.dc.html", "Imports · phone, the write as a sheet", lambda: sc.phone_imports(True), 390, 900, "supply", 3, True, False, PH),
+    ("PhoneImportsLargeText.dc.html", "Imports · phone, text at 130%", lambda: sc.phone_imports(zoom=True), 390, 1620, "supply", 3, True, False, PH),
+    # --- Staffing, Businesses, Expansion -------------------------------------------------
+    ("Schedules.dc.html", "Staffing › Schedules", mo.schedules, 1440, 1120, "tasks", 0, True, False, PM),
+    ("StaffNeeds.dc.html", "Staffing › Staff needs", mo.staff_needs, 1440, 900, "tasks", 0, True, False, PM),
+    ("Payroll.dc.html", "Staffing › Payroll", mo.payroll, 1440, 900, "tasks", 0, True, False, PM),
+    ("Results.dc.html", "Businesses › Results", mo.results, 1440, 1240, "tasks", 1, True, False, PM),
+    ("BusinessDetail.dc.html", "Businesses › a business page (shop)", sc.business, 1440, 1340, "tasks", 1, True, False, PM),
+    ("BusinessKinds.dc.html", "Business pages: warehouse, factory, office, home", mo.business_kinds, 1440, 900, "tasks", 1, True, False, PM),
+    ("Prices.dc.html", "Businesses › Products & prices", lambda: mo.prices(False), 1440, 900, "tasks", 1, True, False, PM),
+    ("PricesShop.dc.html", "Products & prices · one shop against the market", lambda: mo.prices(True), 1440, 900, "tasks", 1, True, False, PM),
+    ("Standards.dc.html", "Businesses › Standards", mo.standards, 1440, 900, "tasks", 1, True, False, PM),
+    ("Milestones.dc.html", "Businesses › Milestones", mo.milestones, 1440, 900, "tasks", 1, True, False, PM),
+    ("Demand.dc.html", "Expansion › Demand", mo.demand, 1440, 900, "tasks", 2, True, False, PM),
+    ("Finder.dc.html", "Expansion › Find a location", lambda: mo.finder(), 1440, 1060, "tasks", 2, True, False, PM),
+    ("FinderDetail.dc.html", "Find a location · a building, filters kept", lambda: mo.finder(True), 1440, 1060, "tasks", 2, False, False, PM),
+    ("PlanFactory.dc.html", "Expansion › Plan a factory", mo.plan_factory, 1440, 900, "tasks", 2, True, False, PM),
+    # --- references, utilities, entry ------------------------------------------------------
+    ("Guide.dc.html", "Game guide", mo.guide, 1440, 900, "support", 0, True, False, PM),
+    ("CityMap.dc.html", "City map, a home's card", mo.city_map, 1440, 960, "support", 0, True, False, PM),
+    ("Preferences.dc.html", "Preferences", mo.preferences, 1440, 1080, "support", 0, False, False, PM),
+    ("Help.dc.html", "Help & feedback", mo.help_page, 1440, 1000, "support", 0, True, False, PM),
+    ("NoSave.dc.html", "No save yet · the entry", mo.no_save, 1440, 900, "support", 0, True, False, PM),
+    # --- structure ------------------------------------------------------------------------
+    ("Sitemap.dc.html", "Sitemap", st.sitemap, 1440, 1340, "structure", 0, True, False, st.CSS),
     ("Coverage.dc.html", "Feature coverage: 105 capabilities, 31 finding kinds", st.coverage, 1440, 3920, "structure", 0, True, False, st.CSS),
-    ("Rationale.dc.html", "Rationale: hierarchy, navigation, shared workflows, motion", st.rationale, 1440, 1500, "structure", 0, True, False, st.CSS),
-    ("NavCompare.dc.html", "Navigation: sidebar (recommended) against the evolved masthead", st.nav_compare, 1440, 980, "structure", 1, True, False, st.CSS),
-    ("OverviewMasthead.dc.html", "Alternative · Overview with the evolved masthead", ov.overview_masthead, 1440, 900, "structure", 1, True, False, ""),
-    ("Motion.dc.html", "Motion, focus and their still equivalents", st.motion, 1440, 1160, "structure", 1, True, False, st.CSS),
-    # --- 2 · overview -------------------------------------------------------
-    ("Main.dc.html", "Overview · first screen, 1440 × 900 (recommended)", ov.overview, 1440, 900, "overview", 0, True, False, ""),
-    ("OverviewFull.dc.html", "Overview · the whole page, dark", ov.overview, 1440, 1900, "overview", 0, True, False, ""),
-    ("OverviewLight.dc.html", "Overview · the whole page, light", ov.overview, 1440, 1900, "overview", 0, False, False, ""),
-    ("OverviewMany.dc.html", "Overview · every finding shown (17)", lambda: ov.app("overview", "attention", "Overview", ov.overview_body(expanded=True)), 1440, 2360, "overview", 1, True, False, ""),
-    ("Customize.dc.html", "Customize checks · every kind, the $ line, what is off", ov.customize, 1440, 900, "overview", 1, True, False, ov.CUST_CSS),
-    ("OverviewCalm.dc.html", "Overview · no urgent findings (checks off, waiting for data)", ov.overview_calm, 1440, 1480, "overview", 1, True, False, ""),
-    ("OverviewShopOnly.dc.html", "Overview · shop-only company, no factories", ov.overview_shop_only, 1440, 1400, "overview", 1, False, False, ""),
-    ("OverviewStale.dc.html", "Overview · refresh failed, last good board kept", ov.overview_stale, 1440, 900, "overview", 1, True, False, ""),
-    ("OverviewLong.dc.html", "Overview · German labels and long names", ov.overview_long, 1440, 900, "overview", 1, True, False, ""),
-    ("OverviewFocus.dc.html", "Overview · keyboard focus, reduced motion", ov.overview_focus, 1440, 900, "overview", 1, True, True, ""),
-    ("Overview1024.dc.html", "Overview · 1024 px", ov.overview_1024, 1024, 2580, "overview", 2, True, False, ov.BP1024),
-    ("Overview768.dc.html", "Overview · 768 px", ov.overview_768, 768, 2900, "overview", 2, True, False, ov.TAB),
-    ("PhoneOverview.dc.html", "Overview · phone, dark", ov.phone_overview, 390, 2400, "overview", 2, True, False, ov.PHONE),
-    ("PhoneOverviewLight.dc.html", "Overview · phone, light", ov.phone_overview, 390, 2400, "overview", 2, False, False, ov.PHONE),
-]
-BOARDS += sp.BOARDS + mo.BOARDS
+    ("Rationale.dc.html", "Rationale", st.rationale, 1440, 1360, "structure", 0, True, False, st.CSS),
+    ("Journeys.dc.html", "Four journeys, step by step", st.journeys, 1440, 1980, "structure", 1, True, False, STR),
+    ("NavCompare.dc.html", "Navigation: masthead (recommended) and slim sidebar", st.nav_compare, 1440, 960, "structure", 1, True, False, STR + r2.CSS + sc.SIDE_CSS),
+    ("Motion.dc.html", "Motion, focus and touch", st.motion, 1440, 1160, "structure", 1, True, False, STR),
+] + [(f"{b[0]}.dc.html", f"Round 1 → round 2 · {b[1]}", (lambda i=i: r2.ba_sheet(i, _ASSETS["img"], _ASSETS["words"])), 1440, 1180 if b[0] != "BAPhone" else 1300,
+      "history", 0, True, False, r2.CSS) for i, b in enumerate(r2.BA)]
 
-# round 2: the five refined screens, the navigation comparison and the before/after sheets
-_ASSETS = json.loads((HERE / "assets.json").read_text(encoding="utf-8")) if (HERE / "assets.json").exists() else {"img": {}, "words": {}}
-BOARDS += [
-    ("R2Overview.dc.html", "R2 · Overview, masthead, dark", r2.overview, 1440, 1720, "r2", 0, True, False, r2.CSS),
-    ("R2OverviewLight.dc.html", "R2 · Overview, masthead, light", r2.overview, 1440, 1720, "r2", 0, False, False, r2.CSS),
-    ("R2OverviewLong.dc.html", "R2 · long queue, scrolled: All tools stays one click away", r2.overview_long, 1440, 900, "r2", 0, True, False, r2.CSS),
-    ("R2OverviewSidebar.dc.html", "R2 · the same Overview with a slim sidebar (comparison)", r2.overview_sidebar, 1440, 1860, "r2", 0, True, False, r2.CSS + r2.SIDE_CSS),
-    ("R2Imports.dc.html", "R2 · Imports", r2.imports, 1440, 1000, "r2", 1, True, False, r2.CSS),
-    ("R2ImportsOpen.dc.html", "R2 · Imports, 'Why this amount?' and 'Set it in the game' open", lambda: r2.imports(True), 1440, 1140, "r2", 1, False, False, r2.CSS),
-    ("R2Changes.dc.html", "R2 · Changes", r2.changes, 1440, 1060, "r2", 1, True, False, r2.CSS),
-    ("R2Business.dc.html", "R2 · a business page", r2.business, 1440, 1320, "r2", 1, True, False, r2.CSS),
-    ("R2Phone.dc.html", "R2 · phone Overview, dark", r2.phone, 390, 2220, "r2", 2, True, False, ov.PHONE + r2.CSS),
-    ("R2PhoneLight.dc.html", "R2 · phone Overview, light", r2.phone, 390, 2220, "r2", 2, False, False, ov.PHONE + r2.CSS),
-    ("R2PhoneImports.dc.html", "R2 · phone Imports", r2.phone_imports, 390, 880, "r2", 2, True, False, ov.PHONE + sp.SUP_CSS + r2.CSS),
-    ("R2PhoneWrite.dc.html", "R2 · phone, the write as a sheet", lambda: r2.phone_imports(True), 390, 880, "r2", 2, True, False, ov.PHONE + sp.SUP_CSS + r2.CSS),
-] + [(f"{b[0]}.dc.html", f"Before and after · {b[1]}", (lambda i=i: r2.ba_sheet(i, _ASSETS["img"], _ASSETS["words"])), 1440, 1180 if b[0] != "BAPhone" else 1300,
-      "r2", 3, True, False, r2.CSS) for i, b in enumerate(r2.BA)]
-
-PAGES = [("r2", "Round 2 · after review"), ("structure", "1 · Structure"), ("overview", "2 · Overview"), ("supply", "3 · Supply fix journey"),
-         ("tasks", "4 · Staffing, Businesses, Expansion"), ("support", "5 · Supporting frames")]
+PAGES = [("overview", "1 · Overview"), ("supply", "2 · Supply fix journey"), ("tasks", "3 · Staffing, Businesses, Expansion"),
+         ("support", "4 · References and utilities"), ("structure", "5 · Structure and journeys"), ("history", "History")]
 ROW_TITLES = {
-    ("structure", 0): "Structure: sitemap, coverage and the reasons", ("structure", 1): "Navigation: recommendation, alternative, motion",
-    ("overview", 0): "Overview: Needs attention first", ("overview", 1): "Overview: volume, calm, young company, failure",
-    ("overview", 2): "Overview at 1024, 768 and 390",
+    ("overview", 0): "Overview: every critical finding summarised, Details on demand",
+    ("overview", 1): "Overview states: checks, calm, young company, failure, long names, focus",
+    ("overview", 2): "Overview at 1024, 768, phone and larger text",
+    ("supply", 0): "The import fix: open → review → apply → return",
+    ("supply", 1): "Other outcomes: applied, marked, confirmed, refused, over cap, moved on, old mod",
+    ("supply", 2): "Production, Deliveries and the followed route",
+    ("supply", 3): "The journey at 1024, on a phone and with larger text",
+    ("tasks", 0): "Staffing", ("tasks", 1): "Businesses", ("tasks", 2): "Expansion",
+    ("support", 0): "References, utilities and the entry",
+    ("structure", 0): "Sitemap, coverage and rationale", ("structure", 1): "Journeys, navigation, motion",
+    ("history", 0): "Round 1 → round 2, with matched crops",
 }
-ROW_TITLES.update(sp.ROW_TITLES)
-ROW_TITLES.update({("r2", 0): "Round 2 · Overview: compact criticals, one expanded, All tools", ("r2", 1): "Round 2 · Imports, Changes, a business page",
-                   ("r2", 2): "Round 2 · phone Overview and the import flow", ("r2", 3): "Round 2 · before and after"})
-ROW_TITLES.update(mo.ROW_TITLES)
-NOTES = {}
-NOTES.update(st.NOTES)
-NOTES.update(sp.NOTES)
-NOTES.update(mo.NOTES)
-NOTES.update({
-    "r2-a": ("r2", 0, 0, "Masthead refined (the review's preferred direction) with a persistent local row in each area; the slim sidebar at the right carries the same content and type scale for a fair comparison."),
-    "r2-b": ("r2", 0, 3040, "Proposed, not existing: the arrival strip and return position, 'Next finding', and the goods-flow product filter. They are notes here so the product frames carry no design commentary."),
-    "r2-c": ("r2", 1, 0, "Imports: manual marking and the game link are alternatives in one action bar, not steps. The state pill shows where the change stands; its history opens from it."),
-    "r2-d": ("r2", 3, 0, "Word counts are the on-page text of the main area, measured in the browser on both versions (same method, whole page)."),
-})
+NOTES = {
+    "n-start": ("overview", 0, 0, "Play from Main: Details opens a finding in place; Review import opens the setting. Details start closed so the whole queue is visible."),
+    "n-journey": ("supply", 0, 0, "Imports holds two fixes: 1 prevents the recurring shortage (the weekly order, writable through the game link); 2 covers the gap until Monday (a one-time purchase, by hand). Toggle Plan for to see the amount move."),
+    "n-states": ("supply", 1, 0, "Three kinds of done: Marked by you (outlined, neutral), Applied · awaiting refresh (blue), Confirmed (solid green, only from a newer read)."),
+    "n-prod": ("supply", 2, 0, "Production owns factory hours and the people they need; Staffing links here. Scheduling blocks, not named workers."),
+    "n-prop": ("supply", 0, 1520, "Proposed, not existing today: the arrival strip with return position, Details per finding, and following a product's route in Goods flow."),
+    "n-sched": ("tasks", 0, 0, "Schedules lists shops with their plan status; offices say why shop schedules do not apply; factories link to Supply › Production."),
+    "n-price": ("tasks", 1, 0, "Overview › Check prices and product sales lands on Products & prices; picking a shop shows its prices beside the market."),
+    "n-find": ("tasks", 2, 1520, "Find a location keeps its filters: open a building (FinderDetail) and Results returns to the same list."),
+    "n-hist": ("history", 0, 0, "Round 1 used a sidebar and a right rail; round 2 moved to the masthead and compact summaries; round 3 (these pages) adds Details, the two named fixes and the three ticks."),
+}
+
+
+def _clean(project: Path) -> None:
+    keep = {b[0] for b in BOARDS} | {"canvas.json"}
+    for f in project.glob("*.dc.html"):
+        if f.name not in keep:
+            f.unlink()
 
 
 def build(preview: bool = False, only: str | None = None) -> None:
     ROOT.mkdir(parents=True, exist_ok=True)
+    if not only:
+        _clean(ROOT)
     boards, order, notes = {}, [], {}
     cursor: dict = {}
     row_h: dict = {}
@@ -136,7 +201,7 @@ def build(preview: bool = False, only: str | None = None) -> None:
         print("wrote", len(order), "artboards (partial; index not written)")
         return
     index = {"v": 3, "createdOnFiles": {"v": 1, "at": CREATED_AT}, "title": "Big Copilot Redesign",
-             "launch": {"view": "canvas", "page": "r2"}, "pages": [{"id": i, "name": n} for i, n in PAGES],
+             "launch": {"view": "canvas", "page": "overview"}, "pages": [{"id": i, "name": n} for i, n in PAGES],
              "boards": boards, "order": order, "notes": notes, "designSystems": []}
     (ROOT / "canvas.json").write_text(json.dumps(index, indent=1, ensure_ascii=False), encoding="utf-8", newline="\n")
     print("wrote", len(order), "artboards")

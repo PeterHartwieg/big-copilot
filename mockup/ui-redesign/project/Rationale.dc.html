@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Rationale: hierarchy, navigation, shared workflows, motion</title>
+<title>Rationale</title>
 <script src="./support.js"></script>
 </head>
 <body>
@@ -591,6 +591,17 @@ a{color:inherit}
 .nc h2{font-size:18px;font-weight:600;margin:14px 0 6px;display:flex;align-items:center;gap:10px}
 .nc ul{margin:0;padding-left:18px;font-size:13px;color:var(--ink-2);line-height:1.55}
 .nc ul b{color:var(--ink)}
+.jy{margin-top:26px}
+.jy h2{display:flex;align-items:center;gap:10px;font-size:18px;font-weight:600;margin-bottom:12px}
+.jy h2 .n{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--ink);color:var(--ground);font:600 12px/1 "IBM Plex Mono",monospace}
+.jy-row{display:flex;align-items:flex-start;gap:14px}
+.jy-f{margin:0;display:flex;flex-direction:column;gap:8px;width:400px}
+.jy-shot{position:relative;width:400px;height:250px;border-radius:10px;border:1px solid var(--rule);overflow:hidden;background:var(--ground)}
+.jy-shot > .board{position:absolute;left:0;top:0;width:1440px;height:900px;transform:scale(.2778);transform-origin:0 0;pointer-events:none}
+.jy-f figcaption{font-size:13px;color:var(--ink-2);line-height:1.4}
+.jy-f figcaption b{display:block;font:600 11px/1.4 "IBM Plex Mono",monospace;color:var(--accent);letter-spacing:.04em}
+.jy-a{align-self:center;margin-top:-40px;color:var(--ink-3)}
+.jy-a .i{width:22px;height:22px}
 .mt{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-top:24px}
 .mt .c{border:1px solid var(--rule-soft);border-radius:12px;background:var(--surface);padding:16px;display:flex;flex-direction:column;gap:10px}
 .mt .c h3{font-size:14.5px;font-weight:600;display:flex;align-items:center;gap:8px}
@@ -608,46 +619,40 @@ a{color:inherit}
 .st-road span .i{width:22px;height:22px}
 </style>
 </helmet>
-<div class="board {{theme}} {{motion}}" style="width: 1440px; height: 1500px;">
+<div class="board {{theme}} {{motion}}" style="width: 1440px; height: 1360px;">
 
 <div class="ss">
   <h1>Why it is built this way</h1>
-  <p class="sub">The first screen says <b>"here is what needs fixing, and here is how I help"</b>. Everything else is a place you can see from there.</p>
+  <p class="sub">The first screen says <b>"here is what needs fixing, and here is how I help"</b>. Everything else is a labelled place you can reach from there.</p>
   <div class="ra">
     <section><h2><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="4"></circle><path d="M12 3.5V2M12 22v-1.5M3.5 12H2M22 12h-1.5"></path></svg>Hierarchy</h2>
-      <p>Needs attention is the largest type on the page and starts inside the first 300 px, after one quiet line of company numbers (no tiles). Critical cause groups are shown in full, each with place and item, evidence in numbers, a consequence or deadline where the save supports one, a small evidence picture (cover rail, hours) and one named action. Warnings are one line each, still with a named action. The rest is counted, never hidden: "Show all 17", below-the-line, switched-off and waiting-for-data lines stay under the list.</p>
-      <p style="margin-top:8px">The task directory follows with four groups and thirteen tasks whose labels and order never change; counts change. A jump link and the sidebar keep it one click away when the list grows.</p></section>
-    <section><h2><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"></path></svg>Navigation: sidebar, recommended</h2>
-      <p><b>Sidebar:</b> 240 px buys room for five labelled destinations, their local views (Imports and Production are visible words, not tabs you must first open), counts, the company and source block with Update, and room for longer translations. It shows where you are while a long findings list scrolls.</p>
-      <p style="margin-top:8px"><b>Masthead evolved:</b> full width for tables and the map, closest to today, but local views need a second row, source moves to a strip, and German labels crowd the row by 1300 px. Chosen for tablets (768) as a labelled tab row; phones get a labelled bottom bar with all five destinations.</p></section>
-    <section><h2><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"></path><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"></path></svg>Shared workflows</h2>
-      <ul><li><b>Problem, task, place</b> are three doors to one workflow. A finding opens its exact view with the business and item selected and a "From Needs attention" strip that returns to the same row.</li>
-      <li><b>Factory hours and the workers they need</b> are one plan in Supply › Production. Staffing lists factories and links there; there is no second planner and no per-person factory optimiser.</li>
-      <li><b>Plan for</b> (Full production or Shop demand) is named wherever it changes a figure: imports, inputs, hours, the copied checklist.</li>
-      <li><b>One finder</b> from Expansion, City map and a Demand cell. <b>Prices</b> in Products &amp; prices, echoed by the Game guide.</li></ul></section>
+      <p>Needs attention starts under one line of company numbers. Every critical finding is a summary: where and what, what matters now, one labelled picture, a <b>Details</b> control and one named action. Details are closed by default, so the whole queue is visible and the player chooses what to open. Warnings are one line each. The rest is counted under the list, never hidden.</p>
+      <p style="margin-top:8px">All tools sits beside the heading and in a sticky bar when the queue is long: four panels, thirteen tasks, labels that never move.</p></section>
+    <section><h2><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"></path></svg>Navigation: the masthead</h2>
+      <p>The masthead keeps the current product's open layout and full width for tables and the map. Five labelled destinations, City map and Game guide, the source and clock; a persistent local row inside each area makes Imports, Production, Schedules and Prices visible words. At 768 it becomes two rows; phones get a labelled bottom bar. The slim sidebar with the same content is kept on NavCompare as the alternative.</p></section>
+    <section><h2><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"></path><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"></path></svg>Fixes are named for the problem they solve</h2>
+      <ul><li><b>Prevent the recurring shortage</b> (the weekly order) and <b>cover the gap until Monday</b> (a one-time purchase) are two fixes side by side, with their own actions.</li>
+      <li>Only the weekly amount can be written by the game link; the gap is bought by hand.</li>
+      <li><b>Plan for</b> is named beside every figure it changes; switching it redraws the amount and its scale.</li>
+      <li>Factory hours and the workers they need are one plan in Supply › Production; Staffing links to it.</li></ul></section>
+    <section><h2><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"></path></svg>Three kinds of done</h2>
+      <p><b>Marked by you</b>: an outlined neutral tick, a note in this browser. <b>Applied · awaiting refresh</b>: blue, the game took the write. <b>Confirmed</b>: solid green, only when a newer read shows the problem gone. Rows keep their place when their mark changes.</p></section>
     <section><h2><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l2-6 4 12 2-6h5"></path></svg>Motion and personality</h2>
-      <p>Kept: the dot that pays coins, the sphere rolling out of it onto the page head's rule (three on repeated clicks, the fourth gulps one), the checklist truck driving the dashed road as ticks land, the game-link wire, icons that tilt on hover. Added only where motion explains: the arrival strip slides from above; hovering a linked finding lights its partner. Every motion has a still form (Motion sheet); no celebration for an unverified tick.</p></section>
-    <section><h2><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 2.8 19.5h18.4z"></path><path d="M12 10v4.5M12 17v.2"></path></svg>Deliberate compromises</h2>
-      <ul><li>Critical rows are tall; on a very bad day four fill the first screen and warnings start below the fold. Urgency wins.</li>
-      <li>The right rail (what was checked, your changes) moves under the list below 1200 px.</li>
-      <li>Prices stay comparisons; the page says so instead of recommending a price.</li>
-      <li>Goods flow's product filter is new work; the graph itself is unchanged.</li>
-      <li>Secondary text tokens are adjusted for contrast: dark ink-3 #808a84, light ink-3 #636c71, light warn #b34d00.</li></ul></section>
+      <p>The dot pays coins, the sphere rolls from the dot onto the masthead rule, the checklist truck drives as marks land, the wire shows each request and answer, and the tool panels carry small working pictures. Details slide open; the Plan for switch redraws in place. Each has a still form (Motion).</p></section>
     <section><h2><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"></path></svg>New data and backend needs</h2>
-      <ul><li><b>None for the navigation.</b> Existing hashes map to new routes (Sitemap).</li>
-      <li>Finding rows need a <b>deadline field</b> where the model has one (run-out day and hour exist in supply rows; expose on the finding), and a named action id per kind.</li>
-      <li>A local <b>resolution record</b> per finding: marked-done time, applied-write stamp; "confirmed" is derived by comparing the next payload.</li>
-      <li><b>Plan for per company</b>: SIZING_KEY becomes keyed by character.</li>
-      <li>Goods flow product filter needs product slugs on graph links (issue #148, decision 7).</li>
-      <li>Retired features: a lifecycle state in server/features.json only if one is ever retired.</li></ul></section>
+      <ul><li>A deadline per finding where the model has one, and an action id per finding kind.</li>
+      <li>A local resolution record per finding; confirmation compares the next payload.</li>
+      <li>Plan for kept per company (SIZING_KEY by character).</li>
+      <li>The catch-up amount on the finding (the depot page computes it today).</li>
+      <li>Product slugs on goods-flow links for the followed route (#148, decision 7).</li></ul></section>
   </div>
-  <div class="ra" style="margin-top:26px"><section><h2><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>Suggested port order</h2>
-    <p>1 Shell and routes (sidebar, tablet tabs, phone bar, hash aliases). 2 Overview: Needs attention rows and task directory, replacing Next moves and Ask the board. 3 Supply local views over today's tabs, with scope and Plan for. 4 Arrival strip and return. 5 Four marks. 6 Staffing and Businesses landings. 7 Expansion. Each step ships alone.</p></section>
-    <section><h2><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle></svg>What to test first</h2><p>Unaided first click from the Overview for: import amounts, partial-day factory hours, a shop schedule, prices at a named shop, a premises with its floor plan; shop-only and factory companies; newcomers and returning players.</p></section></div>
+  <div class="ra" style="margin-top:26px"><section><h2><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 2.8 19.5h18.4z"></path><path d="M12 10v4.5M12 17v.2"></path></svg>Deliberate compromises</h2>
+    <p>Critical summaries are about 84 px; four fill most of the first screen on a bad day. The satisfaction parts and machine rows carry short labels rather than icons alone. Prices stay comparisons. Secondary text tokens are adjusted for contrast (dark #808a84, light #636c71, light warn #b34d00).</p></section>
+    <section><h2><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle></svg>What to test first</h2><p>Unaided: the most urgent issue and its next action; import amounts, factory hours and shop prices without Search; telling a manual note from a verified fix. Then the four journeys at 1024, on a phone and with larger text.</p></section></div>
 </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":true,"section":"Theme"},"reduced":{"editor":"boolean","default":false,"section":"Motion"},"$preview":{"width":1440,"height":1500}}'>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":true,"section":"Theme"},"reduced":{"editor":"boolean","default":false,"section":"Motion"},"$preview":{"width":1440,"height":1360}}'>
 class Component extends DCLogic {
   renderVals() { return { theme: (this.props.dark ?? true) ? 'dark' : 'light', motion: (this.props.reduced ?? false) ? 'rm' : '' }; }
   componentDidMount() {
@@ -664,7 +669,7 @@ class Component extends DCLogic {
     });
 
     // the sphere rolls out of the wordmark's dot onto the page head's rule
-    const shelf = document.querySelector('.nc') ? null : ($('.nx-top') || $('.nx-mast') || $('.nx-ptop'));
+    const shelf = document.querySelector('.nc, .jy') ? null : ($('.nx-top') || $('.nx-mast') || $('.nx-ptop'));
     const dot = $('#dot');
     const orbs = [];
     const place = (o, k) => {

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Sitemap: five destinations, two references, the shell</title>
+<title>Sitemap</title>
 <script src="./support.js"></script>
 </head>
 <body>
@@ -591,6 +591,17 @@ a{color:inherit}
 .nc h2{font-size:18px;font-weight:600;margin:14px 0 6px;display:flex;align-items:center;gap:10px}
 .nc ul{margin:0;padding-left:18px;font-size:13px;color:var(--ink-2);line-height:1.55}
 .nc ul b{color:var(--ink)}
+.jy{margin-top:26px}
+.jy h2{display:flex;align-items:center;gap:10px;font-size:18px;font-weight:600;margin-bottom:12px}
+.jy h2 .n{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--ink);color:var(--ground);font:600 12px/1 "IBM Plex Mono",monospace}
+.jy-row{display:flex;align-items:flex-start;gap:14px}
+.jy-f{margin:0;display:flex;flex-direction:column;gap:8px;width:400px}
+.jy-shot{position:relative;width:400px;height:250px;border-radius:10px;border:1px solid var(--rule);overflow:hidden;background:var(--ground)}
+.jy-shot > .board{position:absolute;left:0;top:0;width:1440px;height:900px;transform:scale(.2778);transform-origin:0 0;pointer-events:none}
+.jy-f figcaption{font-size:13px;color:var(--ink-2);line-height:1.4}
+.jy-f figcaption b{display:block;font:600 11px/1.4 "IBM Plex Mono",monospace;color:var(--accent);letter-spacing:.04em}
+.jy-a{align-self:center;margin-top:-40px;color:var(--ink-3)}
+.jy-a .i{width:22px;height:22px}
 .mt{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-top:24px}
 .mt .c{border:1px solid var(--rule-soft);border-radius:12px;background:var(--surface);padding:16px;display:flex;flex-direction:column;gap:10px}
 .mt .c h3{font-size:14.5px;font-weight:600;display:flex;align-items:center;gap:8px}
@@ -649,7 +660,7 @@ class Component extends DCLogic {
     });
 
     // the sphere rolls out of the wordmark's dot onto the page head's rule
-    const shelf = document.querySelector('.nc') ? null : ($('.nx-top') || $('.nx-mast') || $('.nx-ptop'));
+    const shelf = document.querySelector('.nc, .jy') ? null : ($('.nx-top') || $('.nx-mast') || $('.nx-ptop'));
     const dot = $('#dot');
     const orbs = [];
     const place = (o, k) => {

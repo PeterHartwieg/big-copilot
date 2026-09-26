@@ -543,6 +543,588 @@ a{color:inherit}
 .board.rm .gw-w.wait .p:first-of-type{opacity:1}
 .board.rm .gw-reread .bar::after{left:0;width:45%}
 
+/* --- the refined masthead: five places, the references, source and clock ---- */
+.r2-mast{position:relative;display:flex;align-items:center;gap:18px;height:76px;padding:0 40px;border-bottom:1px solid var(--rule);background:var(--ground)}
+.r2-mast .nx-brand{padding:0;gap:3px}
+.r2-mast .wordmark{font-size:23px;max-width:210px}
+.r2-co{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:6px;border:0;background:none;color:var(--ink-3);cursor:pointer;margin-left:2px;padding:0}
+.r2-co:hover{color:var(--ink);background:var(--surface)}
+.r2-co .i{width:15px;height:15px}
+.r2-nav{display:flex;gap:2px}
+.r2-nav a{position:relative;display:flex;align-items:center;gap:7px;height:40px;padding:0 10px;border-radius:7px;color:var(--ink-2);font-size:14px;font-weight:500;transition:color .15s,background .15s}
+.r2-nav a .i{width:18px;height:18px;transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.r2-nav a:hover{color:var(--ink);background:var(--surface)}
+.r2-nav a:hover .i{transform:translateY(-2px) rotate(-6deg)}
+.r2-nav a.on{color:var(--ink)}
+.r2-nav a.on::after{content:"";position:absolute;left:12px;right:12px;bottom:-19px;height:2px;border-radius:2px;background:var(--accent)}
+.r2-nav a .n{font:600 10.5px/1 "IBM Plex Mono",monospace;padding:3px 6px;border-radius:9px;background:var(--neg);color:#fff}
+.r2-refs{display:flex;gap:0;padding-left:10px;border-left:1px solid var(--rule)}
+.r2-refs a,.r2-refs button{display:flex;align-items:center;gap:6px;height:36px;padding:0 8px;border-radius:7px;color:var(--ink-3);font-size:13px;background:none;border:0;cursor:pointer}
+.r2-refs a:hover,.r2-refs button:hover{color:var(--ink);background:var(--surface)}
+.r2-refs .i{width:16px;height:16px}
+.r2-mast .clock{margin-left:auto}
+.r2-src{display:flex;align-items:center;gap:8px;font:500 11px/1 "IBM Plex Mono",monospace;color:var(--accent);letter-spacing:.06em;white-space:nowrap}
+.r2-src b{width:7px;height:7px;border-radius:50%;background:currentColor}
+.r2-src .ibtn{width:30px;height:30px}
+.r2-local{display:flex;align-items:center;gap:4px;height:52px;padding:0 40px;border-bottom:1px solid var(--rule-soft)}
+.r2-local a{display:flex;align-items:center;gap:7px;height:34px;padding:0 13px;border-radius:7px;color:var(--ink-2);font-size:13.5px;font-weight:500}
+.r2-local a:hover{color:var(--ink);background:var(--surface)}
+.r2-local a.on{background:var(--ink);color:var(--ground)}
+.r2-local a small{font:600 10.5px/1 "IBM Plex Mono",monospace;color:var(--warn)}
+.r2-local a.on small{color:var(--ground);opacity:.7}
+.r2-local .area{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin-right:10px}
+.r2-main{padding:0 40px 56px}
+
+/* --- the slim sidebar, for the comparison only -------------------------------- */
+.r2-app{display:grid;grid-template-columns:196px minmax(0,1fr);min-height:100%}
+.r2-side{position:sticky;top:0;height:900px;display:flex;flex-direction:column;gap:4px;padding:22px 12px;border-right:1px solid var(--rule)}
+.r2-side .nx-brand{padding:0 8px 18px}
+.r2-side .wordmark{font-size:21px;max-width:150px}
+.r2-side a{display:flex;align-items:center;gap:10px;height:38px;padding:0 10px;border-radius:8px;color:var(--ink-2);font-size:14px;font-weight:500}
+.r2-side a .i{width:18px;height:18px}
+.r2-side a.on{background:var(--surface);color:var(--ink);box-shadow:inset 3px 0 0 var(--accent)}
+.r2-side a .n{margin-left:auto;font:600 10.5px/1 "IBM Plex Mono",monospace;padding:3px 6px;border-radius:9px;background:var(--neg);color:#fff}
+.r2-side .ref{margin-top:14px;padding-top:12px;border-top:1px solid var(--rule-soft)}
+.r2-side .ref a{height:34px;font-size:13px;color:var(--ink-3)}
+.r2-side .foot{margin-top:auto;display:flex;flex-direction:column;gap:2px}
+.r2-side .foot a{height:32px;font-size:12.5px;color:var(--ink-3)}
+.r2-sidetop{position:relative;display:flex;align-items:center;gap:18px;height:76px;padding:0 40px;border-bottom:1px solid var(--rule)}
+.r2-sidetop h1{font-size:22px;font-weight:700;letter-spacing:-.02em}
+
+/* --- company numbers: weight without a tile wall -------------------------------- */
+.r2-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin-top:20px;border-bottom:1px solid var(--rule-soft)}
+.r2-kpi{display:grid;grid-template-columns:minmax(0,1fr) 104px;grid-template-rows:auto auto;gap:4px 12px;padding:4px 22px 16px 0;margin-right:22px;border-right:1px solid var(--rule-soft);color:inherit}
+.r2-kpi:last-child{border-right:0;margin-right:0}
+.r2-kpi .lab{grid-column:1/3}
+.r2-kpi .v{font:500 27px/1.05 "IBM Plex Mono",monospace;letter-spacing:-.02em;white-space:nowrap}
+.r2-kpi .d{grid-column:1/3;display:flex;align-items:center;gap:8px;font:500 11.5px/1.3 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.r2-kpi svg{grid-row:2;grid-column:2;width:104px;height:32px;align-self:end}
+.r2-kpi svg polyline{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-linejoin:round}
+.r2-kpi svg polygon{fill:var(--accent);opacity:.1}
+.r2-kpi svg polyline.n{stroke:var(--neg)}
+.r2-kpi svg polygon.n{fill:var(--neg)}
+.r2-kpi:hover .v{color:var(--accent)}
+
+/* --- Needs attention ------------------------------------------------------------ */
+.r2-head{display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px;margin-top:26px}
+.r2-head h2{font-size:28px;font-weight:700;letter-spacing:-.03em;line-height:1}
+.r2-head .aside{margin-left:auto;display:flex;align-items:center;gap:8px}
+.r2-meta{display:flex;align-items:center;flex-wrap:wrap;gap:6px 18px;margin:10px 0 12px;font-size:13px;color:var(--ink-2)}
+.r2-disc{display:inline-flex;align-items:center;gap:6px;border:0;background:none;padding:0;color:var(--ink-2);font:inherit;cursor:pointer}
+.r2-disc:hover{color:var(--ink)}
+.r2-disc .i{width:13px;height:13px}
+.r2-disc b{color:var(--ink);font-weight:600}
+.r2-disc .blue{color:var(--info);font-weight:600}
+.r2-tools{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 13px;border-radius:17px;border:1px solid var(--rule);background:var(--surface);color:var(--ink);font-size:13px;font-weight:600;cursor:pointer}
+.r2-tools .i{width:14px;height:14px;transition:transform .2s}
+.r2-tools:hover{border-color:var(--ink-3)}
+.r2-tools:hover .i{transform:translateY(2px)}
+
+.r2-q{border-top:1px solid var(--rule)}
+.r2-band{display:flex;align-items:center;gap:10px;padding:14px 0 6px}
+.r2-band .lab.crit{color:var(--neg)}.r2-band .lab.watch{color:var(--warn)}
+.r2-f{display:grid;grid-template-columns:16px minmax(0,1fr) 320px 196px;gap:0 22px;align-items:center;min-height:84px;padding:12px 6px 12px 0;border-bottom:1px solid var(--rule-soft);position:relative;transition:background .15s}
+.r2-f:hover{background:linear-gradient(90deg,transparent,var(--surface) 10%)}
+.r2-f .mark{width:10px;height:10px;border-radius:50%;background:var(--neg);box-shadow:0 0 0 4px var(--neg-soft);justify-self:center;transition:transform .2s cubic-bezier(.34,1.56,.64,1)}
+.r2-f:hover .mark{transform:scale(1.35)}
+.r2-f .t{display:flex;flex-direction:column;gap:5px;min-width:0}
+.r2-f .t h3{display:flex;align-items:baseline;gap:10px;font-size:17px;font-weight:600;letter-spacing:-.01em;line-height:1.25}
+.r2-f .t h3 .hood{transform:translateY(-2px)}
+.r2-f .t h3 .k{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:500}
+.r2-f .now{font-size:14px;color:var(--ink-2)}
+.r2-f .now b{font-weight:600;color:var(--neg)}
+.r2-f .now b.w{color:var(--warn)}
+.r2-f .vz{display:flex;flex-direction:column;gap:4px}
+.r2-f .ac{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.r2-f .ac .nx-btn{min-width:176px;justify-content:space-between}
+.r2-f .ac small{font-size:12px;color:var(--ink-3);display:flex;align-items:center;gap:6px}
+.r2-f.sel{background:color-mix(in srgb,var(--surface) 70%,transparent);border-bottom-color:transparent;border-radius:12px 12px 0 0}
+.r2-x{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:0;margin:0 0 10px 38px;border:1px solid var(--rule-soft);border-top:0;border-radius:0 0 12px 12px;background:color-mix(in srgb,var(--surface) 70%,transparent)}
+.r2-x > div{padding:14px 18px 16px;display:flex;flex-direction:column;gap:9px}
+.r2-x > div + div{border-left:1px solid var(--rule-soft)}
+.r2-x .lab{font-size:10px}
+.r2-x p{font-size:13px;color:var(--ink-2);line-height:1.45}
+.r2-x p b{color:var(--ink);font-weight:600}
+.r2-cmp{display:grid;grid-template-columns:112px minmax(0,1fr) 62px;gap:6px 10px;align-items:center;font-size:12.5px;color:var(--ink-2)}
+.r2-cmp .bar{height:9px;border-radius:2px;background:var(--rule-soft);position:relative}
+.r2-cmp .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:2px}
+.r2-cmp .n{font:500 12.5px/1 "IBM Plex Mono",monospace;text-align:right;color:var(--ink)}
+.r2-aff{display:flex;flex-direction:column;gap:6px}
+.r2-aff span{display:flex;align-items:center;gap:8px;font-size:13px}
+.r2-aff span .i{width:15px;height:15px;color:var(--ink-3)}
+.r2-ways{display:flex;flex-direction:column;gap:8px}
+.r2-ways > span{display:flex;align-items:flex-start;gap:8px;font-size:13px;color:var(--ink-2);line-height:1.4}
+.r2-ways > span .i{width:15px;height:15px;color:var(--ink-3);margin-top:1px}
+.r2-ways > span b{color:var(--ink);font-weight:600}
+.r2-ways a.rel{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--info);font-weight:500}
+.r2-ways a.rel .i{width:15px;height:15px}
+
+.r2-w{display:grid;grid-template-columns:16px 200px minmax(0,1fr) 120px 200px;gap:0 16px;align-items:center;min-height:50px;padding:6px 6px 6px 0;border-bottom:1px solid var(--rule-soft);color:inherit;transition:background .15s}
+.r2-w:hover{background:linear-gradient(90deg,transparent,var(--surface) 10%)}
+.r2-w .mark{width:8px;height:8px;border-radius:50%;justify-self:center;background:var(--warn)}
+.r2-w.opp .mark{background:var(--accent)}
+.r2-w .site{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2);white-space:nowrap;overflow:hidden}
+.r2-w b{font-size:14.5px;font-weight:600}
+.r2-w .amt{font:500 13.5px/1 "IBM Plex Mono",monospace;text-align:right;white-space:nowrap}
+.r2-w .amt small{font-size:11px;color:var(--ink-3);margin-left:4px}
+.r2-w .to{display:flex;align-items:center;justify-content:flex-end;gap:7px;font-size:13px;font-weight:600;color:var(--accent);white-space:nowrap}
+.r2-w .to .i{width:14px;height:14px;transition:transform .2s}
+.r2-w:hover .to .i{transform:translateX(3px)}
+.r2-w .to .gw-mw{color:var(--ink-3)}
+.r2-more{display:flex;align-items:center;gap:16px;padding:14px 0 0;font-size:13px;color:var(--ink-2)}
+.r2-more .sep{width:1px;height:16px;background:var(--rule)}
+
+/* --- the four tool panels ------------------------------------------------------- */
+.r2-toolshead{display:flex;align-items:baseline;gap:14px;margin-top:40px;margin-bottom:14px}
+.r2-toolshead h2{font-size:20px;font-weight:700;letter-spacing:-.02em}
+.r2-tp{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.r2-p{position:relative;display:flex;flex-direction:column;border-radius:14px;background:var(--surface);border:1px solid var(--rule-soft);padding:16px 16px 8px;overflow:hidden;transition:border-color .2s}
+.r2-p:hover{border-color:var(--rule)}
+.r2-p .r2-ph{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;min-height:62px}
+.r2-p .r2-ph b{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:600}
+.r2-p .r2-ph b .i{color:var(--accent);width:18px;height:18px}
+.r2-p .r2-ph svg.ill{width:118px;height:56px;flex:none;transition:transform .35s cubic-bezier(.34,1.56,.64,1)}
+.r2-p:hover .ph svg.ill{transform:translateY(-2px) scale(1.04)}
+.r2-p a.t{display:flex;align-items:center;gap:10px;min-height:40px;border-top:1px solid var(--rule-soft);font-size:14px;font-weight:600;color:var(--ink)}
+.r2-p a.t .c{margin-left:auto;font:600 11px/1 "IBM Plex Mono",monospace;padding:3px 7px;border-radius:9px;background:var(--warn-soft);color:var(--warn)}
+.r2-p a.t .c.b{background:var(--neg-soft);color:var(--neg)}
+.r2-p a.t > .i{width:14px;height:14px;color:var(--ink-3);transition:transform .2s,color .15s}
+.r2-p a.t .c + .i{margin-left:0}
+.r2-p a.t:not(:has(.c)) > .i{margin-left:auto}
+.r2-p a.t:hover > .i{color:var(--accent);transform:translateX(3px)}
+.ill .ln{fill:none;stroke:var(--ink-3);stroke-width:2;stroke-linecap:round}
+.ill .ln.wk{stroke-dasharray:4 4}
+.ill .ln.lit{stroke:var(--accent)}
+.ill .nd{fill:var(--ground);stroke:var(--rule);stroke-width:1.5}
+.ill .nd.a{stroke:var(--accent)}
+.ill .cell{fill:var(--accent);opacity:.75}
+.ill .cell.o{fill:var(--rule)}
+.ill .gap{fill:none;stroke:var(--neg);stroke-width:1.3}
+.ill .bar{fill:var(--accent);opacity:.8}
+.ill .bar.n{fill:var(--neg)}
+.ill .dotw{fill:var(--warn)}.ill .dotg{fill:var(--accent)}
+.ill .wall{fill:none;stroke:var(--ink-2);stroke-width:2}
+.ill .flr{fill:color-mix(in srgb,var(--accent) 12%,transparent)}
+.ill .pin{fill:var(--accent)}
+
+/* --- sticky condensed attention bar (long queue, scrolled) ----------------------- */
+.r2-sticky{position:sticky;top:0;z-index:4;display:flex;align-items:center;gap:14px;height:54px;padding:0 40px;margin:0 -40px;background:color-mix(in srgb,var(--ground) 94%,transparent);backdrop-filter:blur(6px);border-bottom:1px solid var(--rule)}
+.r2-sticky b{font-size:16px;font-weight:700}
+
+/* --- the supply decision surface ------------------------------------------------- */
+.r2-from{display:flex;align-items:center;gap:12px;margin-top:16px;font-size:13px;color:var(--ink-2)}
+.r2-from a.back{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px 0 9px;border-radius:15px;background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);color:var(--ink);font-weight:600;font-size:12.5px}
+.r2-from a.back .i{width:14px;height:14px;color:var(--accent)}
+.r2-from b{color:var(--ink);font-weight:600}
+.r2-scope{display:flex;align-items:center;flex-wrap:wrap;gap:10px 14px;margin-top:16px}
+.r2-scope .nx-basis{margin:0;padding:6px 8px 6px 12px;border-radius:10px;grid-template-columns:auto auto auto}
+.r2-dec{margin-top:18px;border-radius:16px;background:var(--surface);border:1px solid var(--rule-soft);overflow:hidden}
+.r2-dh{display:flex;align-items:center;flex-wrap:wrap;gap:10px 14px;padding:18px 22px 0}
+.r2-dh h2{font-size:22px;font-weight:700;letter-spacing:-.02em}
+.r2-dh .how{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink-2)}
+.r2-dh .how .i{width:16px;height:16px;color:var(--ink-3)}
+.r2-db{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:0}
+.r2-db > div{padding:18px 22px 20px}
+.r2-db > div + div{border-left:1px solid var(--rule-soft)}
+.r2-big{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 14px;margin-top:10px}
+.r2-big .was{font:500 26px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.r2-big .arr{font-size:22px;color:var(--ink-3)}
+.r2-big .to{display:inline-flex;align-items:baseline;gap:8px;padding:6px 12px;border-radius:10px;border:1.5px solid var(--accent);background:var(--ground)}
+.r2-big .to input{width:150px;border:0;background:none;color:var(--ink);font:600 40px/1 "IBM Plex Mono",monospace;letter-spacing:-.02em;padding:0;text-align:right;outline:none}
+.r2-big .u{font-size:14px;color:var(--ink-2)}
+.r2-basis{display:inline-flex;align-items:center;gap:6px;margin-top:10px;font-size:13px;color:var(--ink-2)}
+.r2-basis b{color:var(--ink);font-weight:600}
+.r2-scale{position:relative;margin-top:30px;height:14px;border-radius:3px;background:var(--rule-soft)}
+.r2-scale i{position:absolute;top:0;bottom:0;border-radius:3px}
+.r2-scale .m{position:absolute;top:-6px;bottom:-6px;width:2px;background:var(--ink)}
+.r2-scale .m span{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);white-space:nowrap;font:500 10.5px/1.2 "IBM Plex Mono",monospace;color:var(--ink-2);text-align:center}
+.r2-scale .m.low span{bottom:auto;top:22px}
+.r2-scale .m.cap{background:var(--ink-3)}
+.r2-railbig .nx-cov .d{height:28px;border-radius:4px}
+.r2-railbig .nx-cov .d .trk{top:-22px}
+.r2-railbig .nx-cov .d .trk .i{width:18px;height:18px}
+.r2-railbig .nx-cov .ax{font-size:11px;margin-top:4px}
+.r2-railbig .nx-cov .days{gap:4px}
+.r2-rn{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:14px;font-size:13px;color:var(--ink-2)}
+.r2-rn b{font:600 15px/1 "IBM Plex Mono",monospace;color:var(--neg)}
+.r2-rn b.ok{color:var(--ink)}
+.r2-act{display:flex;align-items:center;flex-wrap:wrap;gap:10px 12px;padding:14px 22px;border-top:1px solid var(--rule-soft);background:color-mix(in srgb,var(--ground) 45%,transparent)}
+.r2-act .gw-btn{height:40px;font-size:13.5px;padding:0 16px 0 13px}
+.r2-act .nx-btn{height:40px}
+.r2-act .sep{flex:1}
+.r2-act .note{font-size:12.5px;color:var(--ink-3)}
+.r2-open{padding:14px 22px 16px;border-top:1px solid var(--rule-soft);display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.r2-calc{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 18px;font-size:13px;color:var(--ink-2)}
+.r2-calc b{font:500 13px/1.3 "IBM Plex Mono",monospace;color:var(--ink);text-align:right}
+.r2-calc .tot{border-top:1px solid var(--rule);padding-top:6px}
+.r2-steps2{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--ink-2)}
+.r2-steps2 span{display:flex;gap:10px}
+.r2-steps2 span i{font:600 11px/18px "IBM Plex Mono",monospace;font-style:normal;width:18px;height:18px;border-radius:50%;background:var(--raised);text-align:center;color:var(--ink-2);flex:none}
+.r2-steps2 b{color:var(--ink);font-weight:600}
+.r2-once{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:14px;align-items:center;margin-top:12px;padding:14px 18px;border-radius:14px;border:1px dashed var(--rule)}
+.r2-once .k{font:500 10.5px/1.2 "IBM Plex Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+.r2-once .v{font:600 20px/1 "IBM Plex Mono",monospace}
+.r2-once p{font-size:13px;color:var(--ink-2)}
+.r2-lines{margin-top:22px}
+.r2-li{display:grid;grid-template-columns:22px 200px 170px minmax(0,1fr) 200px;gap:14px;align-items:center;min-height:52px;border-bottom:1px solid var(--rule-soft);font-size:13.5px}
+.r2-li .i{color:var(--ink-3)}
+.r2-li .n{font:500 13.5px/1.2 "IBM Plex Mono",monospace}
+.r2-li .n s{color:var(--ink-3);margin-right:6px}
+.r2-li .n em{font-style:normal;color:var(--accent)}
+.r2-li .n small{font-size:11px;color:var(--ink-3);margin-left:4px}
+.r2-li .src{font-size:12.5px;color:var(--ink-3)}
+
+/* --- Changes ------------------------------------------------------------------ */
+.r2-ck{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:22px;align-items:center;margin-top:20px;padding:18px 22px;border-radius:16px;background:var(--surface);border:1px solid var(--rule-soft)}
+.r2-ck .cnt{display:flex;flex-direction:column;gap:3px}
+.r2-ck .cnt b{font:600 28px/1 "IBM Plex Mono",monospace}
+.r2-ck .cnt b small{font-size:15px;color:var(--ink-3);font-weight:500}
+.r2-ck .cnt span{font-size:12.5px;color:var(--ink-2)}
+.r2-ck .road{position:relative;height:34px}
+.r2-ck .road::before{content:"";position:absolute;left:0;right:0;top:24px;border-top:2px dashed var(--rule)}
+.r2-ck .road .done{position:absolute;left:0;top:23px;height:4px;border-radius:2px;background:var(--accent);width:var(--p,0%);transition:width .8s cubic-bezier(.2,.7,.2,1)}
+.r2-ck .road .truck{position:absolute;top:0;left:var(--p,0%);transform:translateX(-50%);color:var(--ink);transition:left .8s cubic-bezier(.2,.7,.2,1)}
+.r2-ck .road .truck .i{width:26px;height:26px}
+.r2-ck .road .flag{position:absolute;right:-4px;top:8px;color:var(--ink-3)}
+.r2-ck .road .flag .i{width:18px;height:18px}
+.r2-ck .acts{display:flex;align-items:center;gap:8px}
+.r2-ckbar{display:flex;align-items:center;gap:16px;margin-top:12px;font-size:13px;color:var(--ink-2)}
+.r2-cg{display:flex;align-items:center;gap:10px;margin-top:22px;padding-bottom:8px;border-bottom:1px solid var(--rule)}
+.r2-cg b{font-size:15px;font-weight:600}
+.r2-cg .i{color:var(--ink-3)}
+.r2-cg a{margin-left:auto;font-size:12.5px;color:var(--ink-2)}
+.r2-c{display:grid;grid-template-columns:24px minmax(0,1fr) 250px 170px 190px;gap:14px;align-items:center;min-height:58px;border-bottom:1px solid var(--rule-soft)}
+.r2-c .w{display:flex;align-items:center;gap:8px;min-width:0}
+.r2-c .w b{font-size:14.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.r2-c .w span{font-size:13px;color:var(--ink-2);white-space:nowrap}
+.r2-c .v{font:500 15px/1 "IBM Plex Mono",monospace;white-space:nowrap}
+.r2-c .v s{color:var(--ink-3);margin-right:8px;text-decoration-thickness:1px}
+.r2-c .v em{font-style:normal;color:var(--accent);font-weight:600}
+.r2-c .v small{font-size:11.5px;color:var(--ink-3);margin-left:6px;font-weight:400}
+.r2-c .where{font-size:12.5px;color:var(--ink-3);display:flex;align-items:center;gap:6px}
+.r2-c .where .gw-mw{color:var(--ink-3)}
+.r2-c .st{display:flex;justify-content:flex-end}
+.r2-c.done .w b{color:var(--ink-2)}
+.r2-c.done .v em{color:var(--ink-2)}
+.r2-copyp{margin-top:12px}
+
+/* --- the business page, with its small data graphics back ------------------------- */
+.r2-bh{display:flex;align-items:center;gap:16px;margin-top:22px}
+.r2-bh .av{width:52px;height:52px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font:700 14px "IBM Plex Mono",monospace;flex:none}
+.r2-bh h1{font-size:28px;font-weight:700;letter-spacing:-.025em}
+.r2-bh .meta{font-size:13px;color:var(--ink-2);margin-top:3px}
+.r2-bh .acts{margin-left:auto;display:flex;gap:8px}
+.r2-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-top:20px}
+.r2-tile{padding:14px 16px 14px;border-radius:12px;background:var(--surface);border:1px solid var(--rule-soft);display:flex;flex-direction:column;gap:6px}
+.r2-tile .v{font:500 26px/1.05 "IBM Plex Mono",monospace;letter-spacing:-.02em}
+.r2-tile .d{display:flex;align-items:center;gap:8px;font:500 11.5px/1.3 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.r2-mb{display:flex;align-items:flex-end;gap:3px;height:34px;margin-top:4px}
+.r2-mb i{flex:1;border-radius:2px 2px 0 0;background:color-mix(in srgb,var(--ink) 18%,transparent)}
+.r2-mb i.hi{background:var(--accent)}
+.r2-seg{display:flex;height:10px;border-radius:3px;overflow:hidden;margin-top:12px;gap:2px}
+.r2-seg i{display:block}
+.r2-segl{display:flex;gap:10px;flex-wrap:wrap;font:500 10.5px/1.3 "IBM Plex Mono",monospace;color:var(--ink-3);margin-top:6px}
+.r2-segl span{display:inline-flex;align-items:center;gap:5px}
+.r2-segl span i{width:8px;height:8px;border-radius:2px;display:inline-block}
+.r2-capb{display:grid;grid-template-columns:repeat(14,minmax(0,1fr));gap:2px;height:34px;align-items:end;margin-top:4px}
+.r2-capb i{border-radius:2px 2px 0 0;background:var(--accent);opacity:.7}
+.r2-capb i.top{opacity:1;box-shadow:inset 0 2px 0 var(--ink)}
+.r2-g2{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px;margin-top:16px}
+.r2-card{border-radius:14px;background:var(--surface);border:1px solid var(--rule-soft);padding:16px 18px}
+.r2-card h3{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;margin-bottom:12px}
+.r2-card h3 .i{color:var(--ink-3)}
+.r2-card h3 .aside{margin-left:auto;font-size:12.5px;font-weight:400;color:var(--ink-2)}
+.r2-sat{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:22px;align-items:end}
+.r2-sat .big{font:500 46px/1 "IBM Plex Mono",monospace;letter-spacing:-.03em}
+.r2-sat .big small{font-size:16px;color:var(--ink-3)}
+.r2-eq{position:relative;display:flex;align-items:flex-end;gap:8px;height:70px;padding-top:4px}
+.r2-eq i{width:14px;border-radius:3px 3px 0 0}
+.r2-eq .ln{position:absolute;left:-4px;right:-4px;bottom:56px;border-top:1px dashed var(--ink-3)}
+.r2-eq .ln::after{content:"80";position:absolute;right:-18px;top:-7px;font:500 9.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.r2-lamps{display:flex;flex-wrap:wrap;gap:8px}
+.r2-lamp{display:flex;flex-direction:column;align-items:center;gap:5px;width:58px}
+.r2-lamp span{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;border:1.5px solid var(--rule)}
+.r2-lamp span .i{width:18px;height:18px}
+.r2-lamp.lit span{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 50%,transparent);color:var(--accent)}
+.r2-lamp.miss span{background:var(--neg-soft);border-color:color-mix(in srgb,var(--neg) 60%,transparent);color:var(--neg)}
+.r2-lamp small{font-size:10.5px;color:var(--ink-3);text-align:center;line-height:1.2}
+.r2-promo{display:flex;height:16px;border-radius:4px;overflow:hidden;gap:2px;margin-top:10px}
+.r2-heat{display:grid;grid-template-columns:34px repeat(24,minmax(0,1fr));gap:2px}
+.r2-heat span{font:500 10px/15px "IBM Plex Mono",monospace;color:var(--ink-3)}
+.r2-heat i{height:15px;border-radius:2px}
+.r2-heat i.hr{box-shadow:inset 0 0 0 1.5px var(--neg)}
+.r2-heat .ax{grid-column:2/-1;display:grid;grid-template-columns:repeat(24,minmax(0,1fr));font:500 9.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3);margin-top:4px}
+.r2-people{display:flex;flex-wrap:wrap;gap:8px}
+.r2-person{display:flex;align-items:center;gap:8px;height:34px;padding:0 12px 0 5px;border-radius:17px;background:var(--raised);font-size:13px}
+.r2-person .hood{height:24px;min-width:24px;border-radius:12px}
+.r2-person small{font-size:11.5px;color:var(--ink-3)}
+.r2-pr{display:grid;grid-template-columns:minmax(0,1fr) 80px 90px 120px;gap:10px;align-items:center;min-height:44px;border-bottom:1px solid var(--rule-soft);font-size:13.5px}
+.r2-pr .n{font:500 13px/1 "IBM Plex Mono",monospace;text-align:right}
+.r2-pr .mini{height:6px;border-radius:3px;background:var(--rule-soft);position:relative}
+.r2-pr .mini i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:var(--accent)}
+.r2-pr .mini u{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink-2)}
+
+/* --- phone, round 2 ------------------------------------------------------------ */
+.p2{position:relative;height:100%;display:flex;flex-direction:column}
+.p2-top{position:relative;display:flex;align-items:center;gap:10px;height:56px;padding:0 16px;border-bottom:1px solid var(--rule)}
+.p2-top .wordmark{font-size:21px;max-width:190px}
+.p2-top .src{margin-left:auto;display:flex;align-items:center;gap:6px;font:500 10.5px/1 "IBM Plex Mono",monospace;color:var(--accent)}
+.p2-top .src b{width:7px;height:7px;border-radius:50%;background:currentColor}
+.p2-top .ibtn{width:40px;height:40px;border-radius:10px}
+.p2-b{padding:0 16px 96px}
+.p2-ctx{display:flex;align-items:center;gap:14px;height:46px;border-bottom:1px solid var(--rule-soft);font:500 12.5px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.p2-ctx b{color:var(--ink);font-weight:500}
+.p2-ctx a{margin-left:auto;display:inline-grid;place-items:center;width:32px;height:32px;color:var(--ink-3)}
+.p2-h{display:flex;align-items:center;gap:10px;margin:18px 0 8px}
+.p2-h h2{font-size:24px;font-weight:700;letter-spacing:-.03em}
+.p2-h .r2-tools{margin-left:auto;height:36px}
+.p2-sev{display:flex;gap:4px;margin-bottom:6px}
+.p2-sev .sev{min-height:36px;padding:0 9px}
+.p2-f{display:flex;flex-direction:column;gap:6px;padding:14px 0;border-bottom:1px solid var(--rule-soft)}
+.p2-f .l1{display:flex;align-items:center;gap:8px}
+.p2-f .l1 .mk{width:9px;height:9px;border-radius:50%;background:var(--neg);box-shadow:0 0 0 3px var(--neg-soft);flex:none}
+.p2-f .l1 b{font-size:16px;font-weight:600;line-height:1.25}
+.p2-f .now{font-size:13.5px;color:var(--ink-2);padding-left:17px}
+.p2-f .now b{color:var(--neg);font-weight:600}
+.p2-f .go{display:flex;align-items:center;justify-content:space-between;height:44px;padding:0 14px;margin-left:17px;border-radius:10px;border:1px solid var(--rule);font-size:14px;font-weight:600;color:var(--ink)}
+.p2-f .go .i{width:16px;height:16px;color:var(--accent)}
+.p2-f.sel{background:var(--surface);margin:8px -10px 0;padding:14px 10px;border-radius:14px;border:1px solid var(--rule-soft)}
+.p2-f.sel .go{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.p2-f.sel .go .i{color:var(--on-accent)}
+.p2-f .vz{padding-left:17px;margin-top:4px}
+.p2-f .vz .nx-cov .d{height:16px}
+.p2-f .ev{padding-left:17px;font-size:13px;color:var(--ink-2)}
+.p2-f .ev b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)}
+.p2-w{display:grid;grid-template-columns:10px minmax(0,1fr) 16px;gap:4px 10px;align-items:center;min-height:56px;padding:8px 0;border-bottom:1px solid var(--rule-soft)}
+.p2-w .mk{width:7px;height:7px;border-radius:50%;background:var(--warn)}
+.p2-w b{font-size:14px;font-weight:600;display:block}
+.p2-w small{font-size:12.5px;color:var(--ink-3)}
+.p2-w > .i{width:15px;height:15px;color:var(--ink-3)}
+.p2-tp{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}
+.p2-tp .r2-p{padding:14px 14px 6px}
+.p2-tp .r2-p .r2-ph{min-height:48px}
+.p2-tp .r2-p .r2-ph svg.ill{width:96px;height:46px}
+.p2-tp .r2-p a.t{min-height:46px}
+.p2-views{position:relative;margin-top:12px}
+.p2-views .row{display:flex;gap:6px;overflow:hidden;padding-right:40px}
+.p2-views .row a{flex:none;display:flex;align-items:center;height:40px;padding:0 14px;border-radius:20px;border:1px solid var(--rule);font-size:13.5px;font-weight:500;color:var(--ink-2);white-space:nowrap}
+.p2-views .row a.on{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+.p2-views .fade{position:absolute;right:0;top:0;bottom:0;width:70px;background:linear-gradient(90deg,transparent,var(--ground) 55%);display:flex;align-items:center;justify-content:flex-end}
+.p2-views .fade button{width:36px;height:36px;border-radius:18px;border:1px solid var(--rule);background:var(--surface);color:var(--ink);display:grid;place-items:center;padding:0}
+.p2-views .fade .i{width:15px;height:15px}
+.p2-dec{margin-top:14px;border-radius:16px;background:var(--surface);border:1px solid var(--rule-soft);overflow:hidden}
+.p2-dec .hd{padding:14px 14px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.p2-dec .hd h2{font-size:18px;font-weight:700}
+.p2-dec .sec{padding:12px 14px}
+.p2-dec .r2-big .was{font-size:18px}
+.p2-dec .r2-big .to input{width:112px;font-size:30px}
+.p2-dec .r2-big{margin-top:6px}
+.p2-acts{display:flex;flex-direction:column;gap:8px;padding:12px 14px 14px;border-top:1px solid var(--rule-soft)}
+.p2-acts .gw-btn,.p2-acts .nx-btn{height:46px;justify-content:center;font-size:14px}
+.p2-acts .row{display:flex;gap:8px}
+.p2-acts .row .nx-btn{flex:1}
+.p2-sheet{position:absolute;left:0;right:0;bottom:0;z-index:21;background:var(--surface);border-radius:18px 18px 0 0;border:1px solid var(--rule);border-bottom:0;box-shadow:0 -20px 50px -24px #000c;padding-bottom:16px}
+.p2-sheet .grab{width:38px;height:4px;border-radius:2px;background:var(--rule);margin:8px auto 4px}
+.p2-sheet .gw-dlg{width:100%;border:0;box-shadow:none;border-radius:0;background:transparent}
+.p2-sheet .gw-foot{flex-wrap:wrap}
+.p2-sheet .gw-b{flex:1;justify-content:center;height:46px}
+.p2-sheet .gw-hint{flex-basis:100%}
+
+/* --- before / after sheets (annotation, not product UI) ------------------------ */
+.ba{padding:40px 48px}
+.ba h1{font-size:30px;font-weight:800;letter-spacing:-.03em}
+.ba .sub{font-size:14px;color:var(--ink-2);margin-top:6px}
+.ba-pair{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:22px}
+.ba-pair figure{margin:0;display:flex;flex-direction:column;gap:8px}
+.ba-pair figcaption{display:flex;align-items:center;gap:10px;font:600 11px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.ba-pair figcaption b{color:var(--ink);font-family:Archivo,sans-serif;letter-spacing:0;text-transform:none;font-size:14px}
+.ba-pair img{width:100%;height:auto;border-radius:10px;border:1px solid var(--rule);display:block}
+.ba-notes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-top:22px}
+.ba-notes div{border-top:2px solid var(--rule);padding-top:10px}
+.ba-notes h3{font-size:14px;font-weight:600;margin-bottom:6px}
+.ba-notes ul{margin:0;padding-left:16px;font-size:13px;color:var(--ink-2);line-height:1.5}
+.ba-notes .rm{border-color:var(--neg)}.ba-notes .vs{border-color:var(--accent)}.ba-notes .df{border-color:var(--info)}
+.ba-count{display:inline-flex;align-items:center;gap:8px;margin-left:12px;font:500 12px/1 "IBM Plex Mono",monospace;color:var(--ink-2);padding:5px 9px;border-radius:6px;background:var(--surface);border:1px solid var(--rule-soft)}
+.ba-phones{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;margin-top:22px}
+
+/* round 3 --------------------------------------------------------------------- */
+.r2-src{font:500 11.5px/1 Archivo,sans-serif;letter-spacing:0;color:var(--ink-2);text-transform:none}
+.r2-src b{background:var(--accent)}
+.r2-src em{font-style:normal;color:var(--accent);font-weight:600}
+.r2-src.stale b{background:var(--warn)}.r2-src.stale em{color:var(--warn)}
+.r2-src.fail b{background:var(--neg)}.r2-src.fail em{color:var(--neg)}
+.r2-mast .clock small{gap:10px}
+.r3-title{display:flex;align-items:baseline;gap:14px;margin-top:22px}
+.r3-title h1{font-size:26px;font-weight:700;letter-spacing:-.025em}
+.r3-title .sub{font-size:13.5px;color:var(--ink-2)}
+
+/* a finding summary with its own Details control ------------------------------ */
+.r3-f{display:grid;grid-template-columns:16px minmax(0,1fr) 300px 104px 196px;gap:0 18px;align-items:center;min-height:84px;padding:12px 6px 12px 0;border-bottom:1px solid var(--rule-soft);transition:background .15s}
+.r3-f:hover{background:linear-gradient(90deg,transparent,var(--surface) 10%)}
+.r3-f .mark{width:10px;height:10px;border-radius:50%;background:var(--neg);box-shadow:0 0 0 4px var(--neg-soft);justify-self:center;transition:transform .2s cubic-bezier(.34,1.56,.64,1)}
+.r3-f:hover .mark{transform:scale(1.35)}
+.r3-f .t{display:flex;flex-direction:column;gap:5px;min-width:0}
+.r3-f .t h3{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;font-size:17px;font-weight:600;letter-spacing:-.01em;line-height:1.25}
+.r3-f .t h3 .hood{transform:translateY(-2px)}
+.r3-f .t h3 .k{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.r3-f .now{font-size:14px;color:var(--ink-2)}
+.r3-f .now b{font-weight:600;color:var(--neg)}
+.r3-f .vz{display:flex;flex-direction:column;gap:3px}
+.r3-det{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:34px;padding:0 12px;border-radius:8px;border:1px solid var(--rule);background:transparent;color:var(--ink-2);font:500 13px/1 Archivo,sans-serif;cursor:pointer;white-space:nowrap}
+.r3-det:hover{color:var(--ink);border-color:var(--ink-3)}
+.r3-det .i{width:14px;height:14px;transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.r3-det[aria-expanded="true"]{color:var(--ink);background:var(--surface);border-color:var(--ink-3)}
+.r3-det[aria-expanded="true"] .i{transform:rotate(180deg)}
+.r3-f .ac{display:flex;justify-content:flex-end}
+.r3-f .ac .nx-btn{min-width:180px;justify-content:space-between}
+.r3-f:has(+ .r3-x:not([hidden])){background:color-mix(in srgb,var(--surface) 75%,transparent);border-bottom-color:transparent;border-radius:12px 12px 0 0}
+.r3-x{display:grid;grid-template-columns:1fr .9fr 1.5fr;margin:0 0 10px 34px;border:1px solid var(--rule-soft);border-top:0;border-radius:0 0 12px 12px;background:color-mix(in srgb,var(--surface) 75%,transparent)}
+.r3-x > div{padding:14px 18px 16px;display:flex;flex-direction:column;gap:9px}
+.r3-x > div + div{border-left:1px solid var(--rule-soft)}
+.r3-x p{font-size:13px;color:var(--ink-2);line-height:1.45}
+.r3-x p b{color:var(--ink);font-weight:600}
+.r3-fix{display:grid;grid-template-columns:28px minmax(0,1fr);gap:4px 10px;padding:10px 12px;border-radius:10px;background:var(--ground);border:1px solid var(--rule-soft)}
+.r3-fix .n{grid-row:1/3;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font:600 11.5px/1 "IBM Plex Mono",monospace;background:var(--raised);color:var(--ink)}
+.r3-fix b{font-size:13.5px;font-weight:600}
+.r3-fix span{font-size:12.5px;color:var(--ink-2);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.r3-fix span .v{font:600 13px/1 "IBM Plex Mono",monospace;color:var(--ink)}
+.r3-links{display:flex;flex-direction:column;gap:6px}
+.r3-links a{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--info)}
+.r3-links a .i{width:15px;height:15px}
+
+/* the checklist count keeps its size over the kit's own rule */
+.board .r2-ck.nx-ck .cnt b{font:600 28px/1 "IBM Plex Mono",monospace}
+.board .r2-ck.nx-ck .cnt b small{font-size:15px;color:var(--ink-3);font-weight:500}
+.board .r2-ck.nx-ck .cnt{font:inherit}
+.board .r2-ck.nx-ck .cnt b span{font:inherit;color:inherit}
+
+/* diagram labels ---------------------------------------------------------------- */
+.r3-mach{display:grid;grid-template-columns:44px minmax(0,1fr);gap:3px 8px;align-items:center}
+.r3-mach span{font:500 10px/1 "IBM Plex Mono",monospace;color:var(--ink-3);white-space:nowrap}
+.r3-mach span.hit{color:var(--neg);font-weight:600}
+.r3-mach .ax{grid-column:2;display:flex;justify-content:space-between;font:500 9px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.r3-lamp{display:flex;align-items:center;gap:6px;height:30px;padding:0 10px 0 7px;border-radius:15px;font-size:12px;font-weight:600}
+.r3-lamp .i{width:15px;height:15px}
+.r3-lamp.miss{border:1.5px solid color-mix(in srgb,var(--neg) 55%,transparent);background:var(--neg-soft);color:var(--neg)}
+.r3-lamp.ok{border:1.5px solid color-mix(in srgb,var(--accent) 50%,transparent);background:var(--accent-soft);color:var(--accent)}
+.r3-eq{display:flex;align-items:flex-end;gap:10px;position:relative;padding-top:6px}
+.r3-eq .c{display:flex;flex-direction:column;align-items:center;gap:6px}
+.r3-eq .c .t{position:relative;width:16px;height:64px;border-radius:4px;background:var(--raised);overflow:hidden}
+.r3-eq .c .t b{position:absolute;left:0;right:0;bottom:0;border-radius:4px;background:var(--accent)}
+.r3-eq .c.low .t b{background:var(--warn)}
+.r3-eq .c small{font-size:10.5px;color:var(--ink-2);text-align:center;line-height:1.15;width:62px}
+.r3-eq .c small em{display:block;font:500 11px/1.2 "IBM Plex Mono",monospace;font-style:normal;color:var(--ink)}
+.r3-eq .c.low small em{color:var(--warn)}
+.r3-eq .ln{position:absolute;left:-4px;right:-4px;top:19px;border-top:1px dashed var(--ink-3)}
+.r3-eq .ln::after{content:"80";position:absolute;right:-16px;top:-7px;font:500 9.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+
+/* ticks: marked by you (outlined, neutral), applied (blue), confirmed (solid green) */
+.board .nx-tick.on,.board .done > .nx-tick{background:transparent;border-color:var(--ink-2);color:var(--ink-2)}
+.board .nx-tick.link{border-color:var(--info);background:var(--info-soft);color:var(--info)}
+.board .nx-tick.conf{border-color:var(--accent);background:var(--accent);color:var(--on-accent)}
+.board .nx-state.conf{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+
+/* the two fixes on Imports ------------------------------------------------------ */
+.r3-two{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:0}
+.r3-two > section{display:flex;flex-direction:column;padding:18px 22px 0}
+.r3-two > section + section{border-left:1px solid var(--rule-soft)}
+.r3-step{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:600}
+.r3-step .n{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font:600 12px/1 "IBM Plex Mono",monospace;background:var(--ink);color:var(--ground)}
+.r3-step small{font-size:12.5px;font-weight:400;color:var(--ink-3)}
+.r3-acts{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;margin:auto -22px 0;padding:12px 22px;border-top:1px solid var(--rule-soft);background:color-mix(in srgb,var(--ground) 45%,transparent)}
+.r3-acts .gw-btn,.r3-acts .nx-btn{height:38px}
+.r3-acts .gap{flex:1}
+.r3-acts .note{font-size:12.5px;color:var(--ink-3)}
+.r3-cover{font:600 30px/1 "IBM Plex Mono",monospace;letter-spacing:-.02em}
+.r3-cover small{font:500 13px/1 Archivo,sans-serif;color:var(--ink-2);letter-spacing:0;margin-left:6px}
+.r3-railgap{position:relative;margin-top:30px}
+.r3-railgap .nx-cov .d{height:26px;border-radius:4px}
+.r3-railgap .nx-cov .d .trk{top:-21px}
+.r3-railgap .nx-cov .d .trk .i{width:17px;height:17px}
+.r3-railgap .nx-cov .ax{font-size:10.5px;margin-top:4px}
+.r3-gaplab{position:absolute;top:-24px;left:calc(3.5 / 7 * 100%);width:calc(2 / 7 * 100%);display:flex;justify-content:center;font:600 10.5px/1 "IBM Plex Mono",monospace;color:var(--neg)}
+.r3-gaplab::after{content:"";position:absolute;left:0;right:0;top:14px;border-top:1.5px solid var(--neg);border-left:1.5px solid var(--neg);border-right:1.5px solid var(--neg);height:5px}
+.r2-scale .m.cap span{transform:translateX(-92%);text-align:right}
+.r3-open{display:grid;grid-template-columns:1fr 1fr;gap:24px;padding:14px 22px 18px;border-top:1px solid var(--rule-soft)}
+
+/* 1024 and 768 ------------------------------------------------------------------- */
+.bp1024 .r2-mast{gap:12px;padding:0 24px}
+.bp1024 .r2-mast .wordmark{font-size:19px;max-width:150px}
+.bp1024 .r2-nav a{padding:0 7px;font-size:13px;gap:6px}
+.bp1024 .r2-nav a .i{display:none}
+.bp1024 .r2-refs button{display:none}
+.bp1024 .r2-refs a{font-size:12.5px;padding:0 6px}
+.bp1024 .r2-refs a .i{width:14px;height:14px}
+.bp1024 .r2-mast .clock b{font-size:14px}
+.bp1024 .r2-main,.bp1024 .r2-local{padding-left:24px;padding-right:24px}
+.bp1024 .r2-kpis{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:12px}
+.bp1024 .r2-kpi:nth-child(2){border-right:0;margin-right:0}
+.bp1024 .r3-f{grid-template-columns:16px minmax(0,1fr) 220px;grid-template-rows:auto auto;row-gap:10px}
+.bp1024 .r3-f .vz{grid-column:3;grid-row:1}
+.bp1024 .r3-f .r3-det{grid-column:2;grid-row:2;justify-self:start}
+.bp1024 .r3-f .ac{grid-column:3;grid-row:2}
+.bp1024 .r3-x{grid-template-columns:1fr 1fr}
+.bp1024 .r3-x > div:last-child{grid-column:1/3;border-left:0;border-top:1px solid var(--rule-soft)}
+.bp1024 .r2-w{grid-template-columns:16px 170px minmax(0,1fr) 180px}
+.bp1024 .r2-w .amt{display:none}
+.bp1024 .r2-tp{grid-template-columns:repeat(2,minmax(0,1fr))}
+.bp1024 .r2-head .aside{margin-left:0}
+.bp1024 .r3-two{grid-template-columns:1fr}
+.bp1024 .r3-two > section + section{border-left:0;border-top:1px solid var(--rule-soft)}
+.bp1024 .r2-scope .nx-basis{grid-template-columns:auto auto}
+.bp1024 .r2-scope .nx-basis .txt{display:none}
+.r3-tm{position:relative;display:flex;align-items:center;gap:14px;height:60px;padding:0 24px}
+.r3-tm .wordmark{font-size:21px;max-width:220px}
+.r3-tm .clock{margin-left:auto}
+.r3-tm .clock b{font-size:14px}
+.r3-tnav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) auto;padding:0 24px;border-bottom:1px solid var(--rule)}
+.r3-tnav a{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 2px 10px;color:var(--ink-2);font-size:12.5px;font-weight:500}
+.r3-tnav a .i{width:19px;height:19px}
+.r3-tnav a.on{color:var(--ink)}
+.r3-tnav a.on::after{content:"";position:absolute;left:20%;right:20%;bottom:-1px;height:2px;background:var(--accent);border-radius:2px}
+.r3-tnav a .n{position:absolute;top:4px;left:calc(50% + 8px);font:600 9.5px/1 "IBM Plex Mono",monospace;padding:2px 5px;border-radius:8px;background:var(--neg);color:#fff}
+.r3-tnav .more{flex-direction:row;gap:6px;padding:0 4px 0 14px;margin:10px 0;border-left:1px solid var(--rule-soft);color:var(--ink-3)}
+.bp768 .r2-main,.bp768 .r2-local{padding-left:24px;padding-right:24px}
+.bp768 .r2-local{overflow:hidden}
+.bp768 .r2-kpis{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:12px}
+.bp768 .r2-kpi:nth-child(2){border-right:0;margin-right:0}
+.bp768 .r2-kpi svg{width:80px}
+.bp768 .r2-head .aside{margin-left:0}
+.bp768 .r3-f{grid-template-columns:16px minmax(0,1fr);row-gap:10px}
+.bp768 .r3-f .vz{grid-column:2}
+.bp768 .r3-f .r3-det{grid-column:2;justify-self:start}
+.bp768 .r3-f .ac{grid-column:2;justify-content:flex-start;margin-top:-44px;margin-left:120px}
+.bp768 .r3-x{grid-template-columns:1fr;margin-left:0}
+.bp768 .r3-x > div + div{border-left:0;border-top:1px solid var(--rule-soft)}
+.bp768 .r2-w{grid-template-columns:16px minmax(0,1fr) 170px;grid-template-rows:auto auto}
+.bp768 .r2-w .site{grid-column:2}
+.bp768 .r2-w b{grid-column:2}
+.bp768 .r2-w .amt{display:none}
+.bp768 .r2-w .to{grid-column:3;grid-row:1/3}
+.bp768 .r2-tp{grid-template-columns:repeat(2,minmax(0,1fr))}
+.bp768 .r2-more{flex-wrap:wrap}
+
+/* phone ------------------------------------------------------------------------- */
+.p2-top .src{font:500 11px/1.2 Archivo,sans-serif;color:var(--ink-2);text-align:right}
+.p2-top .src em{font-style:normal;color:var(--accent);font-weight:600}
+.p3-sev{display:flex;flex-wrap:wrap;gap:4px 2px;margin-bottom:6px}
+.p3-sev .sev{min-height:36px;padding:0 8px}
+.p3-row{display:flex;gap:8px;padding-left:17px;margin-top:4px}
+.p3-row .go{flex:1;margin-left:0}
+.p3-row .r3-det{height:44px}
+.p2-f .go{margin-left:0}
+.p3-x{margin:8px 0 0 17px;display:flex;flex-direction:column;gap:8px}
+.p3-x .r3-fix{padding:9px 10px}
+.p2-dec .r3-step{font-size:14px}
+.p3-z{zoom:1.3;width:300px}
+.p3-z .p2-top{gap:6px;padding:0 10px}
+.p3-z .p2-top .wordmark{font-size:17px;max-width:128px}
+.p3-z .p2-top .src{font-size:10px}
+.p3-z .p2-top .ibtn{width:34px;height:34px}
+.r2-tools{white-space:nowrap}
+.p3-z .p2-h{flex-wrap:wrap}
+.p3-z .p2-h h2{font-size:22px}
+
 .sp-scope-note{font-size:12.5px;color:var(--ink-3);margin-left:6px}
 .sp-grid{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:28px;align-items:start;margin-top:22px}
 .sp-mat{border:1px solid color-mix(in srgb,var(--accent) 35%,var(--rule));border-radius:14px;background:var(--surface);overflow:hidden;box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 7%,transparent)}
@@ -836,66 +1418,47 @@ a{color:inherit}
 .ret dd{margin:0;color:var(--ink-3)}
 </style>
 </helmet>
-<div class="board {{theme}} {{motion}}" style="width: 1440px; height: 1560px;">
-<div class="nx-app">
-<aside class="nx-side" aria-label="Big Copilot">
-  <div class="nx-brand"><span class="wordmark" id="wm" title="Marlow Trading">Marlow Trading</span><span class="dot" id="dot" role="button" tabindex="0" aria-label="Brand dot: pays out coins"></span></div>
-  <div style="display:flex;flex-direction:column;gap:10px">
-    <button class="nx-co" type="button" aria-haspopup="listbox"><span class="t"><b>Marlow Trading</b><small>Year 2 · autosave 3</small></span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></button>
-    <div class="nx-src"><span class="st live"><b></b>Game link · live</span><span class="when">Read 14 s ago · Link mod 0.2.1</span><button class="ibtn" type="button" aria-label="Update now"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7"></path><path d="M20 4v5h-5"></path></svg></button></div>
-  </div>
-  <nav class="nx-nav" aria-label="Main"><a class="m" href="Main.dc.html"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="4"></circle><path d="M12 3.5V2M12 22v-1.5M3.5 12H2M22 12h-1.5"></path></svg><span>Overview</span><span class="n crit">4</span></a><a class="m on" href="Results.dc.html" aria-current=page><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16"></path><path d="M14 10h5a1 1 0 0 1 1 1v10M4 21h17M8 8h2M8 12h2M8 16h2M17 14h1M17 18h1"></path></svg><span>Businesses</span><span></span></a><div class="subs"><a class="on" href="Results.dc.html">Results</a><a class="" href="Prices.dc.html">Products &amp; prices</a><a class="" href="Standards.dc.html">Standards</a><a class="" href="Milestones.dc.html">Milestones</a></div><a class="m" href="Changes.dc.html"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 8.5 12 4l8.5 4.5v8L12 21l-8.5-4.5z"></path><path d="M3.5 8.5 12 13l8.5-4.5M12 13v8"></path></svg><span>Supply</span><span class="n ">9</span></a><a class="m" href="Schedules.dc.html"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg><span>Staffing</span><span class="n ">2</span></a><a class="m" href="Demand.dc.html"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18 10 12l4 4 6-7"></path><path d="M15 9h5v5"></path></svg><span>Expansion</span><span></span></a>
-    <div class="lab">Reference</div>
-    <div class="ref"><a class="m" href="CityMap.dc.html"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6z"></path><path d="M9 4v14M15 6v14"></path></svg><span>City map</span><span></span></a>
-    <a class="m" href="Guide.dc.html"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z"></path><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19v-3M9 7h6M9 10.5h4"></path></svg><span>Game guide</span><span></span></a></div>
-  </nav>
-  <div class="nx-util">
-    <button class="nx-search" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m20 20-4.2-4.2"></path></svg>Find a tool or answer<kbd>Ctrl K</kbd></button>
-    <a href="Preferences.dc.html"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg>Preferences</a>
-    <a href="Help.dc.html"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"></path></svg>What's new<span class="nd" aria-label="1 new"></span></a>
-    <a href="Help.dc.html"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.1-2.4 3.6"></path><path d="M12 16.8v.2"></path></svg>Help &amp; feedback</a>
-    <div class="nx-fine">Fan-made · not affiliated with Hovgaard Games</div>
-  </div>
-</aside><main class="nx-main"><header class="nx-top"><div class=nx-ttl><div class="nx-crumb"><a href="Results.dc.html">Businesses</a><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><a href="Results.dc.html">Results</a><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg><span>Pepper &amp; Pine Florist</span></div><h1>Pepper &amp; Pine Florist</h1></div><div class="clock"><b>Day 83<i>·</i>Wed 09:40</b><small>YEAR 2 · 14 SITES · 96 STAFF<span class="fv-diff"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg>Normal</span></small></div><div class="orb" aria-hidden="true"><u></u></div></header>
-<div style="display:flex;align-items:center;gap:14px;margin-top:22px">
-  <span style="width:46px;height:46px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font:700 13px 'IBM Plex Mono',monospace">MH</span>
-  <div><div class="mo-head"><h2 style="font-size:26px">Pepper &amp; Pine Florist</h2><span class="chip line">3 / 11 by profit</span></div>
-  <div class="sub quiet">Florist · 14 Park Ave · Murray Hill · opened day 12 · supplied by wholesale and Bridge Hub</div></div>
-  <span style="margin-left:auto;display:flex;gap:8px"><a class="nx-btn " href="Schedules.dc.html"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg>Staffing plan</a><a class="nx-btn " href="Deliveries.dc.html"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 8.5 12 4l8.5 4.5v8L12 21l-8.5-4.5z"></path><path d="M3.5 8.5 12 13l8.5-4.5M12 13v8"></path></svg>Delivery targets</a><a class="nx-btn " href="PricesShop.dc.html"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12.5V4.5h8l9 9-8 8z"></path><circle cx="8" cy="9" r="1.5"></circle></svg>Prices</a></span>
+<div class="board {{theme}} {{motion}}" style="width: 1440px; height: 1340px;">
+
+<header class="r2-mast nx-mast">
+  <div class="nx-brand"><span class="wordmark" id="wm" title="Marlow Trading">Marlow Trading</span><span class="dot" id="dot" role="button" tabindex="0" aria-label="Brand dot: pays out coins"></span>
+    <button class="r2-co" type="button" aria-label="Switch company or save"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></button></div>
+  <nav class="r2-nav" aria-label="Main"><a class="" href="Main.dc.html"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="4"></circle><path d="M12 3.5V2M12 22v-1.5M3.5 12H2M22 12h-1.5"></path></svg>Overview<span class=n>4</span></a><a class="on" href="Results.dc.html" aria-current=page><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16"></path><path d="M14 10h5a1 1 0 0 1 1 1v10M4 21h17M8 8h2M8 12h2M8 16h2M17 14h1M17 18h1"></path></svg>Businesses</a><a class="" href="Changes.dc.html"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 8.5 12 4l8.5 4.5v8L12 21l-8.5-4.5z"></path><path d="M3.5 8.5 12 13l8.5-4.5M12 13v8"></path></svg>Supply</a><a class="" href="Schedules.dc.html"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg>Staffing</a><a class="" href="Demand.dc.html"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18 10 12l4 4 6-7"></path><path d="M15 9h5v5"></path></svg>Expansion</a></nav>
+  <div class="r2-refs"><a href="CityMap.dc.html"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6z"></path><path d="M9 4v14M15 6v14"></path></svg>City map</a><a href="Guide.dc.html"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z"></path><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19v-3M9 7h6M9 10.5h4"></path></svg>Game guide</a><button type="button" aria-label="Search, preferences, help and feedback"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.4"></circle><circle cx="12" cy="12" r="1.4"></circle><circle cx="18" cy="12" r="1.4"></circle></svg></button></div>
+  <div class="clock"><b>Day 83<i>·</i>Wed 09:40</b><small><span class="r2-src "><b></b><em>Live</em>· updated 14s ago</span><button class="ibtn" type="button" aria-label="Update now" style="width:24px;height:24px"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="width:13px;height:13px"><path d="M20 12a8 8 0 1 1-2.3-5.7"></path><path d="M20 4v5h-5"></path></svg></button></small></div>
+  <div class="orb" aria-hidden="true"><u></u></div>
+</header><nav class="r2-local" aria-label="Businesses views"><span class="area">Businesses</span><a class="on" href="Results.dc.html">Results</a><a class="" href="Prices.dc.html">Products &amp; prices</a><a class="" href="Standards.dc.html">Standards</a><a class="" href="Milestones.dc.html">Milestones</a></nav><main class="r2-main">
+<div class="r2-bh"><span class="av">MH</span>
+  <div><div style="display:flex;align-items:center;gap:12px"><h1>Pepper &amp; Pine Florist</h1><span class="chip line">3rd of 11 by profit</span></div>
+  <div class="meta">Florist · 14 Park Ave, Murray Hill · open 08–22 · since day 12</div></div>
+  <div class="acts"><a class="nx-btn " href="Schedules.dc.html"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>Schedule</a><a class="nx-btn " href="Deliveries.dc.html"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 7h11v9h-11z"></path><path d="M13.5 10h4l3 3v3h-7"></path><circle cx="6.5" cy="17.5" r="1.7"></circle><circle cx="17" cy="17.5" r="1.7"></circle></svg>Deliveries</a><a class="nx-btn " href="PricesShop.dc.html"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12.5V4.5h8l9 9-8 8z"></path><circle cx="8" cy="9" r="1.5"></circle></svg>Prices</a></div></div>
+<a class="r2-w" href="Schedules.dc.html" style="margin-top:14px;border-top:1px solid var(--rule-soft)"><span class="mark"></span><span class="site"><span class="lab" style="color:var(--warn)">Needs attention here</span></span>
+  <b>Cash register staffing is the limit, 17–19 daily</b><span class="amt">$410<small>/day</small></span><span class="to">Review staffing<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></span></a>
+<div class="r2-tiles">
+  <div class="r2-tile"><span class="lab">Revenue yesterday</span><span class="v">$1,840</span><span class="d"><span class="chip ok">▲ 6%</span>on its weekday</span><div class="r2-mb"><i class="" style="height:67%"></i><i class="" style="height:72%"></i><i class="" style="height:70%"></i><i class="" style="height:78%"></i><i class="" style="height:86%"></i><i class="" style="height:97%"></i><i class="" style="height:89%"></i><i class="" style="height:68%"></i><i class="" style="height:74%"></i><i class="" style="height:77%"></i><i class="" style="height:82%"></i><i class="" style="height:91%"></i><i class="" style="height:100%"></i><i class="hi" style="height:94%"></i></div></div>
+  <div class="r2-tile"><span class="lab">Customers</span><span class="v">196</span><span class="d">$9.40 a visit</span><div class="r2-mb"><i class="" style="height:71%"></i><i class="" style="height:75%"></i><i class="" style="height:71%"></i><i class="" style="height:78%"></i><i class="" style="height:85%"></i><i class="" style="height:97%"></i><i class="" style="height:89%"></i><i class="" style="height:67%"></i><i class="" style="height:74%"></i><i class="" style="height:75%"></i><i class="" style="height:81%"></i><i class="" style="height:90%"></i><i class="" style="height:100%"></i><i class="hi" style="height:92%"></i></div></div>
+  <div class="r2-tile"><span class="lab">Profit yesterday</span><span class="v pos">$690</span><span class="d">37.5% margin</span>
+    <div class="r2-seg"><i style="flex:31;background:var(--warn)"></i><i style="flex:18;background:var(--info)"></i><i style="flex:13;background:var(--ink-3)"></i><i style="flex:38;background:var(--accent)"></i></div>
+    <div class="r2-segl"><span><i style="background:var(--warn)"></i>goods</span><span><i style="background:var(--info)"></i>wages</span><span><i style="background:var(--ink-3)"></i>rent</span><span><i style="background:var(--accent)"></i>profit</span></div></div>
+  <div class="r2-tile"><span class="lab">Customers an hour, peak</span><span class="v">30<small style="font-size:14px;color:var(--ink-3)"> of 30</small></span><span class="d">at building capacity on 4 of 14 days</span><div class="r2-capb"><i class="" style="height:60%"></i><i class="" style="height:67%"></i><i class="" style="height:67%"></i><i class="" style="height:63%"></i><i class="" style="height:73%"></i><i class="top" style="height:100%"></i><i class="top" style="height:100%"></i><i class="" style="height:70%"></i><i class="" style="height:67%"></i><i class="" style="height:67%"></i><i class="" style="height:77%"></i><i class="top" style="height:100%"></i><i class="top" style="height:100%"></i><i class="" style="height:87%"></i></div></div>
 </div>
-<div class="mo-jumps"><a class="on" href="#">Summary</a><a href="#">Results</a><a href="#">Standards</a><a href="#">Customers by hour</a><a href="#">People</a><a href="#">Products &amp; prices</a></div>
-<div class="nx-band" style="margin-top:18px"><span class="lab watch">Needs attention here · 1</span></div>
-<a class="nx-r watch" data-id="cap" href="Schedules.dc.html"><span class="mark"></span><span class="site"><span class="hood">MH</span><span>Pepper &amp; Pine Florist</span></span><span class="w"><b>Cash register staffing is the limit, 17–19 daily</b><small>20 of 20 served an hour · another Cash register person on those hours</small></span><span class="amt">$410<small>/day through it</small></span><span class="to">Review staffing<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></span></a>
-<div class="mo-tiles" style="margin-top:18px">
-  <div class="mo-tile"><span class="lab">Revenue yesterday</span><span class="v">$1,840</span><small>+6% on its weekday</small></div>
-  <div class="mo-tile"><span class="lab">Customers</span><span class="v">196</span><small>$9.40 a visit</small></div>
-  <div class="mo-tile"><span class="lab">Profit</span><span class="v pos">$690</span><small>37.5% margin</small></div>
-  <div class="mo-tile"><span class="lab">Building capacity</span><span class="v">30 /h</span><small>the building's own limit; normal, not a finding</small></div>
+<div class="r2-g2">
+  <div class="r2-card"><h3><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"></path></svg>Satisfaction<span class="aside"><a class="link" href="Standards.dc.html">Compare shops</a></span></h3>
+    <div style="display:flex;flex-direction:column"><div class="r2-sat" style="grid-template-columns:auto auto;align-items:end"><span class="big">86<small>%</small></span><div class="r3-eq" role="img" aria-label="Service 88, pricing 84, cleanliness 63, facility 86, against the 80 line"><span class="ln"></span><div class="c "><span class="t"><b style="height:88%"></b></span><small>Service<em>88%</em></small></div><div class="c "><span class="t"><b style="height:84%"></b></span><small>Pricing<em>84%</em></small></div><div class="c low"><span class="t"><b style="height:63%"></b></span><small>Cleanliness<em>63%</em></small></div><div class="c "><span class="t"><b style="height:86%"></b></span><small>Facility<em>86%</em></small></div></div></div><div class="r2-lamps" style="margin-top:14px"><div class="r2-lamp lit"><span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4h12v17M4 21h16"></path><circle cx="14.5" cy="12.5" r=".8"></circle></svg></span><small>Bathroom</small></div><div class="r2-lamp lit"><span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2"></rect><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"></path></svg></span><small>Privacy</small></div><div class="r2-lamp lit"><span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16v2a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"></path><path d="M12 12V6a2 2 0 0 1 4 0"></path></svg></span><small>Sink</small></div><div class="r2-lamp lit"><span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v12"></path><circle cx="6.5" cy="18" r="2.5"></circle><circle cx="16.5" cy="16" r="2.5"></circle></svg></span><small>Music</small></div><div class="r2-lamp miss"><span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4l6 6-8 8-6-6z"></path><path d="M6 12l-2 8 8-2"></path></svg></span><small>Interior 48/55</small></div><div class="r2-lamp lit"><span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4 4 7l2 3 2-1v11h8V9l2 1 2-3-4-3a4 4 0 0 1-8 0z"></path></svg></span><small>Uniforms</small></div></div></div></div>
+  <div class="r2-card"><h3><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10v4h3l7 4V6L6 10z"></path><path d="M16.5 9a4 4 0 0 1 0 6"></path></svg>Promotion<span class="aside">at the cap</span></h3>
+    <div style="display:flex;align-items:baseline;gap:8px"><span class="mono" style="font-size:40px;letter-spacing:-.03em">100</span><span style="color:var(--ink-3)">/ 100</span></div>
+    <div class="r2-promo"><i style="flex:72;background:var(--accent);opacity:.75"></i><i style="flex:28;background:var(--accent)"></i></div>
+    <div class="r2-segl"><span><i style="background:var(--accent);opacity:.75"></i>foot traffic 72</span><span><i style="background:var(--accent)"></i>marketing 28</span></div></div>
 </div>
-<div class="mo-2" style="margin-top:20px">
-  <div class="mo-card"><h3><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"></path></svg>Satisfaction<span class="aside"><a class="link" href="Standards.dc.html">Compare shops</a></span></h3>
-    <div class="mo-sat"><span class="big">86<small>%</small></span><div class="mo-eq"><i style="height:60px;background:var(--accent)"></i><i style="height:54px;background:var(--accent)"></i><i style="height:40px;background:var(--warn)"></i><i style="height:58px;background:var(--accent)"></i></div>
-      <div class="mo-lamps"><span class="mo-lamp lit" title="Bathroom"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4h12v17M4 21h16"></path><circle cx="14.5" cy="12.5" r=".8"></circle></svg></span><span class="mo-lamp lit" title="Sink"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16v2a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"></path><path d="M12 12V6a2 2 0 0 1 4 0"></path></svg></span><span class="mo-lamp lit" title="Music"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v12"></path><circle cx="6.5" cy="18" r="2.5"></circle><circle cx="16.5" cy="16" r="2.5"></circle></svg></span><span class="mo-lamp miss" title="Interior design 48 of 55"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4l6 6-8 8-6-6z"></path><path d="M6 12l-2 8 8-2"></path></svg></span><span class="mo-lamp lit" title="Uniforms"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4 4 7l2 3 2-1v11h8V9l2 1 2-3-4-3a4 4 0 0 1-8 0z"></path></svg></span></div></div>
-    <p class="quiet" style="margin-top:10px">Interior design 48 of the 55 florists here expect · uniforms set for both roles.</p></div>
-  <div class="mo-card"><h3><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10v4h3l7 4V6L6 10z"></path><path d="M16.5 9a4 4 0 0 1 0 6"></path></svg>Promotion</h3>
-    <div style="display:flex;align-items:baseline;gap:8px"><span class="mono" style="font-size:28px">100</span><span class="quiet">/ 100 cap · foot traffic 72 + marketing 28</span></div>
-    <div class="mo-bar" style="margin-top:10px;height:8px"><i style="width:100%"></i></div>
-    <p class="quiet" style="margin-top:10px">No demand wave under this shop now. <a class="link" href="Demand.dc.html">Market changes</a></p></div>
-</div>
-<div class="mo-card" style="margin-top:16px"><h3><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 2"></path></svg>Customers by hour<span class="aside quiet">worst hour Sat 18:00 · 20 of 20 on the Cash register</span></h3>
-  <div class="mo-heat"><span>MON</span><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i class="" style="background:color-mix(in srgb,var(--accent) 27%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 30%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 28%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 30%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 75%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 62%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 25%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 33%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 27%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 66%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 84%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 71%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 33%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 29%,var(--rule-soft))"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><span>TUE</span><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i class="" style="background:color-mix(in srgb,var(--accent) 31%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 26%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 31%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 33%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 73%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 78%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 31%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 25%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 32%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 74%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 68%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 61%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 33%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 29%,var(--rule-soft))"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><span>WED</span><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i class="" style="background:color-mix(in srgb,var(--accent) 31%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 33%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 31%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 33%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 70%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 79%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 29%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 34%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 33%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 63%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 64%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 66%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 34%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 29%,var(--rule-soft))"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><span>THU</span><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i class="" style="background:color-mix(in srgb,var(--accent) 31%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 28%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 29%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 28%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 69%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 74%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 30%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 33%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 31%,var(--rule-soft))"></i><i class="hr" style="background:color-mix(in srgb,var(--accent) 82%,var(--rule-soft))"></i><i class="hr" style="background:color-mix(in srgb,var(--accent) 80%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 83%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 31%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 26%,var(--rule-soft))"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><span>FRI</span><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i class="" style="background:color-mix(in srgb,var(--accent) 47%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 49%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 48%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 43%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 90%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 77%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 47%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 43%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 39%,var(--rule-soft))"></i><i class="hr" style="background:color-mix(in srgb,var(--accent) 73%,var(--rule-soft))"></i><i class="hr" style="background:color-mix(in srgb,var(--accent) 90%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 90%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 37%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 46%,var(--rule-soft))"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><span>SAT</span><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i class="" style="background:color-mix(in srgb,var(--accent) 41%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 38%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 39%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 46%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 90%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 73%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 44%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 36%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 45%,var(--rule-soft))"></i><i class="hr" style="background:color-mix(in srgb,var(--accent) 80%,var(--rule-soft))"></i><i class="hr" style="background:color-mix(in srgb,var(--accent) 90%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 90%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 42%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 49%,var(--rule-soft))"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><span>SUN</span><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i class="" style="background:color-mix(in srgb,var(--accent) 40%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 37%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 44%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 36%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 77%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 83%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 44%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 38%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 36%,var(--rule-soft))"></i><i class="hr" style="background:color-mix(in srgb,var(--accent) 90%,var(--rule-soft))"></i><i class="hr" style="background:color-mix(in srgb,var(--accent) 80%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 90%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 48%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 41%,var(--rule-soft))"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i></div>
-  <p class="quiet" style="margin-top:8px">Red rings: hours at the Cash register's ceiling. The building's own capacity (30 an hour) is not reached.</p></div>
-<div class="mo-2" style="margin-top:16px">
-  <div class="mo-card"><h3><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><path d="M16 11.5a3 3 0 1 0 0-6M18.5 20a5.5 5.5 0 0 0-3-4.9"></path></svg>People<span class="aside quiet">5 · $512 a day</span></h3>
-    <div class="mo-crew"><span><span class="hood">CS</span>Ben Ode<small>Customer Service</small></span><span><span class="hood">CS</span>Cy Moss<small>Customer Service</small></span><span><span class="hood">CS</span>Ana Silva<small>Customer Service</small></span><span><span class="hood">CL</span>Lea Kim<small>Cleaning</small></span><span><span class="hood">CL</span>Tom Vu<small>Cleaning</small></span></div></div>
-  <div class="mo-card"><h3><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12.5V4.5h8l9 9-8 8z"></path><circle cx="8" cy="9" r="1.5"></circle></svg>Products &amp; prices<span class="aside"><a class="link" href="PricesShop.dc.html">All prices here</a></span></h3>
-    <table class="nx-t"><thead><tr><th>Product</th><th class="n">Your price</th><th class="n">Sells / day</th><th>Stock</th></tr></thead><tbody>
-      <tr><td>Flowers (Cheap)</td><td class="n">$6.50</td><td class="n">118</td><td><span class="chip ok">covered</span></td></tr>
-      <tr><td>Flowers (Luxury)</td><td class="n">$24.00</td><td class="n">41</td><td><span class="chip warn">tight</span></td></tr></tbody></table></div>
-</div></main></div>
+<div class="r2-card" style="margin-top:16px"><h3><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 2"></path></svg>Customers by hour<span class="aside">red outline: Cash register at its ceiling</span></h3><div class="r2-heat"><span>MON</span><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i class="" style="background:color-mix(in srgb,var(--accent) 27%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 30%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 28%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 30%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 75%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 62%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 25%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 33%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 27%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 66%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 84%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 71%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 33%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 29%,var(--rule-soft))"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><span>TUE</span><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i class="" style="background:color-mix(in srgb,var(--accent) 31%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 26%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 31%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 33%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 73%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 78%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 31%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 25%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 32%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 74%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 68%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 61%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 33%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 29%,var(--rule-soft))"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><span>WED</span><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i class="" style="background:color-mix(in srgb,var(--accent) 31%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 33%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 31%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 33%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 70%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 79%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 29%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 34%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 33%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 63%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 64%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 66%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 34%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 29%,var(--rule-soft))"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><span>THU</span><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i class="" style="background:color-mix(in srgb,var(--accent) 31%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 28%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 29%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 28%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 69%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 74%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 30%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 33%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 31%,var(--rule-soft))"></i><i class="hr" style="background:color-mix(in srgb,var(--accent) 82%,var(--rule-soft))"></i><i class="hr" style="background:color-mix(in srgb,var(--accent) 80%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 83%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 31%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 26%,var(--rule-soft))"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><span>FRI</span><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i class="" style="background:color-mix(in srgb,var(--accent) 47%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 49%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 48%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 43%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 90%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 77%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 47%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 43%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 39%,var(--rule-soft))"></i><i class="hr" style="background:color-mix(in srgb,var(--accent) 73%,var(--rule-soft))"></i><i class="hr" style="background:color-mix(in srgb,var(--accent) 90%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 90%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 37%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 46%,var(--rule-soft))"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><span>SAT</span><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i class="" style="background:color-mix(in srgb,var(--accent) 41%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 38%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 39%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 46%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 90%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 73%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 44%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 36%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 45%,var(--rule-soft))"></i><i class="hr" style="background:color-mix(in srgb,var(--accent) 80%,var(--rule-soft))"></i><i class="hr" style="background:color-mix(in srgb,var(--accent) 90%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 90%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 42%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 49%,var(--rule-soft))"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><span>SUN</span><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><i class="" style="background:color-mix(in srgb,var(--accent) 40%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 37%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 44%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 36%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 77%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 83%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 44%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 38%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 36%,var(--rule-soft))"></i><i class="hr" style="background:color-mix(in srgb,var(--accent) 90%,var(--rule-soft))"></i><i class="hr" style="background:color-mix(in srgb,var(--accent) 80%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 90%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 48%,var(--rule-soft))"></i><i class="" style="background:color-mix(in srgb,var(--accent) 41%,var(--rule-soft))"></i><i style="background:var(--rule-soft)"></i><i style="background:var(--rule-soft)"></i><div class="ax"><span>0</span><span></span><span></span><span>3</span><span></span><span></span><span>6</span><span></span><span></span><span>9</span><span></span><span></span><span>12</span><span></span><span></span><span>15</span><span></span><span></span><span>18</span><span></span><span></span><span>21</span><span></span><span></span></div></div></div>
+<div class="r2-g2" style="grid-template-columns:1fr 1fr">
+  <div class="r2-card"><h3><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><path d="M16 11.5a3 3 0 1 0 0-6M18.5 20a5.5 5.5 0 0 0-3-4.9"></path></svg>People<span class="aside">5 · $512 a day</span></h3><div class="r2-people"><span class="r2-person"><span class="hood">CS</span>Ben Ode<small>Cash register</small></span><span class="r2-person"><span class="hood">CS</span>Cy Moss<small>Cash register</small></span><span class="r2-person"><span class="hood">CS</span>Ana Silva<small>Cash register</small></span><span class="r2-person"><span class="hood">CL</span>Lea Kim<small>Cleaning</small></span><span class="r2-person"><span class="hood">CL</span>Tom Vu<small>Cleaning</small></span></div></div>
+  <div class="r2-card"><h3><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12.5V4.5h8l9 9-8 8z"></path><circle cx="8" cy="9" r="1.5"></circle></svg>Products<span class="aside"><a class="link" href="PricesShop.dc.html">Prices against the market</a></span></h3>
+    <div class="r2-pr" style="min-height:28px;font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;color:var(--ink-3)"><span>PRODUCT</span><span class="n" style="font-size:10px">PRICE</span><span class="n" style="font-size:10px">A DAY</span><span>STOCK</span></div><div class="r2-pr"><span>Flowers (Cheap)</span><span class="n">$6.50</span><span class="n">118</span><div class="mini" title="stock against the busiest day"><i style="width:92%"></i><u style="left:80%"></u></div></div><div class="r2-pr"><span>Flowers (Luxury)</span><span class="n">$24.00</span><span class="n">41</span><div class="mini" title="stock against the busiest day"><i style="width:71%"></i><u style="left:80%"></u></div></div><div class="r2-pr"><span>Plant (Potted)</span><span class="n">$18.00</span><span class="n">22</span><div class="mini" title="stock against the busiest day"><i style="width:88%"></i><u style="left:80%"></u></div></div></div>
+</div></main>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":true,"section":"Theme"},"reduced":{"editor":"boolean","default":false,"section":"Motion"},"$preview":{"width":1440,"height":1560}}'>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":true,"section":"Theme"},"reduced":{"editor":"boolean","default":false,"section":"Motion"},"$preview":{"width":1440,"height":1340}}'>
 class Component extends DCLogic {
   renderVals() { return { theme: (this.props.dark ?? true) ? 'dark' : 'light', motion: (this.props.reduced ?? false) ? 'rm' : '' }; }
   componentDidMount() {
@@ -912,7 +1475,7 @@ class Component extends DCLogic {
     });
 
     // the sphere rolls out of the wordmark's dot onto the page head's rule
-    const shelf = document.querySelector('.nc') ? null : ($('.nx-top') || $('.nx-mast') || $('.nx-ptop'));
+    const shelf = document.querySelector('.nc, .jy') ? null : ($('.nx-top') || $('.nx-mast') || $('.nx-ptop'));
     const dot = $('#dot');
     const orbs = [];
     const place = (o, k) => {

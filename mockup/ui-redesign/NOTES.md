@@ -135,3 +135,38 @@ moved to canvas notes.
 
 Not yet checked: the canvas in Play mode, real phone browsers, text enlargement, contrast
 by measurement, and a quick user check of the three review tasks.
+
+## Round 3 (26 Sep 2026): interactions made explicit, carried across every screen
+
+The canvas is now one design in the masthead treatment (`screens.py`); round 1 lives in git
+history and on the History page as matched crops. Page order: Overview, Supply fix journey,
+Staffing/Businesses/Expansion, References and utilities, Structure and journeys, History.
+
+- **Details per finding**: a labelled Details control with a turning chevron, closed by
+  default, so all critical summaries are visible; Review import stays the separate action.
+  `OverviewDetails` shows one open.
+- **Two fixes, two problems**: "Prevent the recurring shortage: increase the weekly order"
+  and "Cover the gap until Monday: buy approximately 3,050 units now" are numbered fixes in
+  the finding's details and two side-by-side sections on Imports, each with its own actions;
+  only the first can be written by the game link. The gap is bracketed on the stock rail.
+- **Three kinds of done**: Marked by you is an outlined neutral tick, Applied · awaiting
+  refresh is blue, Confirmed is solid green (tick and pill).
+- **Labels restored**: phone severity words, "Live · updated 14s ago", "Manual instructions"
+  instead of "Set it in game", machine names on the factory hours strip, Service / Pricing /
+  Cleanliness / Facility under the satisfaction bars.
+- **Plan for switches in place**: Imports carries both bases; toggling moves the amount,
+  its label and the scale's planned marker (`ImportsDemand`). Shop demand explains why
+  today's draw is higher than the plan.
+- **Journeys**: open a finding, follow its supply connection (Goods flow following Water),
+  change the planning basis, return to the queue; storyboarded on `Journeys` and drawn at
+  1024, on a phone and with text at 130% (CSS zoom on a 300 px layout).
+- Every other screen renders through `screens.app2()` with the masthead and local row;
+  explanatory paragraphs that described the design were removed or cut to one line.
+
+Checked in a real browser (Playwright, previews): every frame for markup balance and
+overflow; Overview, Imports, Changes, business page, Production, Goods flow, Journeys, the
+1024 and 768 Overview, 1024 Imports, phone Overview with Details, phone Imports and both
+130% frames by screenshot. That pass caught the 1024 Imports showing the full-production
+amount under Shop demand, the 1024 masthead colliding with the sphere, the 130% phone top
+bar clipping, a stray closing tag in Goods flow and the checklist count losing its size.
+Not checked: Play mode in the canvas itself, real phones, measured contrast.

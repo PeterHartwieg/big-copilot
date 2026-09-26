@@ -291,7 +291,7 @@ def schedules() -> str:
       <span class="mo-ring" style="border-top-color:var(--accent)"></span><span class="mono" style="font-size:12.5px">3 of 17 entries typed</span>
       <span style="margin-left:auto;display:flex;gap:8px;align-items:center">{btn("Copy the week", "", icon="copy")}{gwbtn("Write the week", "", "#")}</span>
     </div>
-    <p class="quiet" style="margin-top:8px">The game link writes this shop's seven days of scheduled hours and can open 0–24 for Full cover. Undo restores the previous schedule until your next schedule write. Offices and factories are not written.</p>
+    <p class="quiet" style="margin-top:8px">Writes this shop's week of scheduled hours; undo lasts until your next schedule write.</p>
   </div>
 </div>"""
     return app("staffing", "schedules", "Schedules", body, [("Staffing", ROUTE["staffing"]), ("Schedules", "")])
@@ -320,7 +320,7 @@ def staff_needs() -> str:
       <tr><td>{hood("IC")} Canal Brewery</td><td>factory worker</td><td class="n">0</td><td class="n">7<small>Full production</small></td></tr>
       <tr><td>{hood("LM")} Harbor Gifts</td><td>Customer Service · Cleaning</td><td class="n">1<small>Lea Kim</small></td><td class="n">1</td></tr>
     </tbody></table>
-    <p class="quiet" style="margin-top:10px">One row per business and role, from each business's own plan. The board does not move people between businesses for you.</p>
+    <p class="quiet" style="margin-top:10px">Assign people you already employ before hiring.</p>
   </div>
 </div>
 <div class="mo-sec"><div class="nx-sechead"><h2>Quit warnings</h2><span class="quiet">people unhappy long enough to leave</span></div>
@@ -340,7 +340,7 @@ def payroll() -> str:
   <div><span class="lab">Difference</span><span class="v warnc">+$1,300</span><small>raises since last week, mostly at Canal Brewery</small></div>
 </div>
 <div class="mo-sec"><table class="nx-t"><thead><tr><th>Role</th><th class="n">People</th><th class="n">Avg rate / h</th><th class="n">Booked / week</th><th>Satisfaction</th><th></th></tr></thead><tbody>{tr}</tbody></table>
-<p class="quiet" style="margin-top:10px">Company results link here from wages; each business's own people are on its business page.</p></div>"""
+</div>"""
     return app("staffing", "payroll", "Payroll", body, [("Staffing", ROUTE["staffing"]), ("Payroll", "")])
 
 
@@ -382,12 +382,8 @@ def results() -> str:
 <table class="nx-t"><thead><tr><th>Chain</th><th class="n">Revenue</th><th class="n">Week on week</th><th class="n">Profit</th><th class="n">Margin</th></tr></thead><tbody>{tr}
 <tr><td class="quiet">Company costs outside sites · loan interest, head office, vehicles</td><td></td><td></td><td class="n neg">-$1,980</td><td></td></tr>
 <tr><td><b>Company profit</b></td><td class="n">$33,790</td><td></td><td class="n pos">$420</td><td></td></tr></tbody></table>
-<p class="quiet" style="margin-top:10px">Open a chain to see its businesses; each opens its business page. Wages link to <a class="link" href="{ROUTE["staffing/payroll"]}">Staffing › Payroll</a>.</p></div>
-<div class="mo-sec"><div class="nx-sechead"><h2>More about your businesses</h2></div><div class="mo-views">
-  <a href="{ROUTE["businesses/products"]}"><b>{ic("tag")}Products &amp; prices</b><small>What sells across the company, and each shop's prices against the market</small></a>
-  <a href="{ROUTE["businesses/standards"]}"><b>{ic("star")}Standards</b><small>Satisfaction, promotion, amenities and uniforms, shop against shop</small></a>
-  <a href="{ROUTE["businesses/milestones"]}"><b>{ic("trophy")}Milestones</b><small>Career goals, business types run, rivals, diplomas, lifetime totals</small></a>
-</div></div>"""
+<p class="quiet" style="margin-top:10px">Wages in detail: <a class="link" href="{ROUTE["staffing/payroll"]}">Staffing › Payroll</a></p></div>
+"""
     return app("businesses", "results", "Results", body, [("Businesses", ROUTE["businesses"]), ("Results", "")])
 
 
@@ -456,7 +452,7 @@ def prices(shop: bool = False) -> str:
   <tr><td><b>Vase</b></td><td class="n">Not set</td><td class="n">$14.00</td><td class="n">—</td><td class="n">0</td><td>{chip("warn", "no price")}</td></tr>
   <tr><td><b>Plant (Potted)</b></td><td class="n">$18.00</td><td class="n">Unavailable<small>supplier event active</small></td><td class="n">$18.00</td><td class="n">22</td><td></td></tr>
 </tbody></table>
-<p class="quiet" style="margin-top:10px">These are comparisons, not recommended prices: the board has no pricing model. The lowest market price rebuilds the game's MarketInsider figure, per neighbourhood, and is withheld during a supplier event.</p>"""
+<p class="quiet" style="margin-top:10px">Comparisons, not recommended prices. The lowest market price is withheld during a supplier event.</p>"""
     else:
         top10 = [("Beer", "1,100", "$4.20", "2"), ("Flowers (Cheap)", "118", "$6.50", "1"), ("Coffee", "640", "$3.10", "1"), ("Water", "240", "$1.20", "2"), ("Wine (Cheap)", "210", "$9.80", "1"), ("Gift (Cheap)", "86", "$8.00", "1")]
         tbl = f"""
@@ -464,9 +460,9 @@ def prices(shop: bool = False) -> str:
 <table class="nx-t"><thead><tr><th>Product</th><th class="n">Sells / day</th><th class="n">Average sold price</th><th class="n">Sold at</th><th>Busiest day</th></tr></thead><tbody>
 {"".join(f'<tr><td><b>{p}</b></td><td class="n">{s}</td><td class="n">{a}</td><td class="n">{n} shops</td><td class="mono" style="font-size:12px">Sat</td></tr>' for p, s, a, n in top10)}
 </tbody></table>
-<p class="quiet" style="margin-top:10px">A product opens its sellers; weekday peaks here are the same evidence Supply uses for delivery targets.</p>"""
+"""
     body = f"""
-<p class="nx-lede" style="margin-top:18px">Prices belong to a shop. Pick one to compare its prices with what the market charges nearby; the company's sales stay below.</p>
+
 <div class="nx-scope" style="flex-wrap:wrap"><span class="lab">Prices at</span>{picks}</div>
 {tbl}"""
     return app("businesses", "products", "Products &amp; prices", body, [("Businesses", ROUTE["businesses"]), ("Products &amp; prices", "")])
@@ -488,12 +484,12 @@ def standards() -> str:
         uni = gwbtn("Set missing uniforms", "sm", "#") if u == "missing" else (f'<span class="quiet">{u}</span>')
         tr += f'<tr class="{"sel" if note == "4 fixes" else ""}"><td>{hood(h)} <b>{n}</b>{f"<small>{note}</small>" if note else ""}</td><td>{sat}</td><td class="n">{str(p) + "%" if p else "—"}</td><td>{lamps(l)}</td><td>{uni}</td></tr>'
     body = f"""
-<p class="nx-lede" style="margin-top:18px">Satisfaction, promotion, amenities and uniforms, shop against shop. A shop's own page holds its evidence; supported fixes can be written from here.</p>
+
 <div class="sp-legend" style="display:flex;gap:16px;margin-top:14px;font-size:12px;color:var(--ink-2);flex-wrap:wrap">
   <span><span class="mo-lamp lit" style="width:20px;height:20px;display:inline-grid"></span> found</span><span><span class="mo-lamp miss" style="width:20px;height:20px;display:inline-grid"></span> missing</span><span><span class="mo-lamp never" style="width:20px;height:20px;display:inline-grid"></span> not scored yet</span>
   <span>Amenities: bathroom · privacy · sink · music · interior design</span></div>
 <table class="nx-t" style="margin-top:14px"><thead><tr><th>Shop</th><th>Satisfaction · line at 80%</th><th class="n">Promotion</th><th>Amenities</th><th>Uniforms</th></tr></thead><tbody>{tr}</tbody></table>
-<p class="quiet" style="margin-top:10px">The game link sets missing uniforms from a preset where a uniform locker is installed; everything else here is changed in the game.</p>"""
+"""
     return app("businesses", "standards", "Standards", body, [("Businesses", ROUTE["businesses"]), ("Standards", "")])
 
 
@@ -501,7 +497,7 @@ def milestones() -> str:
     goals = [("Run 5 business types", 5, 5), ("Own 3 buildings", 1, 3), ("Reach $2M net worth", 1.84, 2), ("Employ 100 people", 96, 100)]
     g = "".join(f'<div style="display:grid;grid-template-columns:minmax(0,1fr) 200px 70px;gap:14px;align-items:center;padding:10px 0;border-bottom:1px solid var(--rule-soft)"><span>{n}</span><div class="mo-bar" style="height:8px"><i style="width:{a / b * 100:.0f}%"></i></div><span class="mono" style="font-size:12px;text-align:right">{a:g} / {b:g}</span></div>' for n, a, b in goals)
     body = f"""
-<p class="nx-lede" style="margin-top:18px">A secondary view for the long game. Nothing here needs attention; it is kept, not retired.</p>
+
 <div class="mo-2" style="margin-top:18px">
   <div class="mo-card"><h3>{ic("trophy")}Career goals</h3>{g}</div>
   <div class="mo-card"><h3>{ic("businesses")}Business types run</h3><div class="mo-crew">{"".join(f"<span>{t}</span>" for t in ["Grocery store", "Florist", "Liquor store", "Coffee shop", "Gift shop", "Bookstore", "Factory", "Warehouse", "Office"])}</div>
@@ -547,11 +543,7 @@ def demand() -> str:
   <div class="aside"><div class="seg"><button class="on" type="button">By type</button><button type="button">What I sell</button><button type="button">Not yet</button></div></div></div>
 <div class="dm">{head}{cells}</div>
 <div class="sp-legend" style="display:flex;gap:16px;margin-top:10px;font-size:12px;color:var(--ink-2)"><span><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--info);margin-right:6px"></i>you run one here</span><span>Offices: 4 types in their own band below</span><span class="quiet">Demand is how much customers want a type here, not guaranteed profit.</span></div>
-<div class="mo-views" style="margin-top:22px">
-  <a href="{ROUTE["expansion/finder"]}"><b>{ic("pin")}Find a location</b><small>Vacant premises ranked for a type and neighbourhood</small></a>
-  <a href="{ROUTE["expansion/plan"]}"><b>{ic("factory")}Plan a factory</b><small>Machines, ingredients and costs for a factory you do not run yet</small></a>
-  <a href="{ROUTE["guide"]}"><b>{ic("guide")}Business guides</b><small>Setup checklists for each type, in the Game guide</small></a>
-</div>"""
+<p class="quiet" style="margin-top:14px">A cell opens Find a location for that type and neighbourhood. Setup checklists: <a class="link" href="{ROUTE["guide"]}">Game guide</a></p>"""
     return app("expansion", "demand", "Demand", body, [("Expansion", ROUTE["expansion"]), ("Demand", "")])
 
 
@@ -671,8 +663,7 @@ def finder(detail: bool = False) -> str:
 
 def plan_factory() -> str:
     body = f"""
-<div role="note" style="margin-top:18px;display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:10px;border:1px dashed var(--rule);background:var(--surface);font-size:13px;color:var(--ink-2)">
-  {ic("factory", style="color:var(--ink-3)")}<span><b style="color:var(--ink)">A factory you do not run yet.</b> Planned at full production: rated output, 24 hours a day. It does not change your imports or deliveries; running factories are planned in <a class="link" href="{ROUTE["supply/production"]}">Supply › Production</a>. It cannot plan new shop demand or build a network for you.</span></div>
+<div class="r2-scope" style="margin-top:20px"><span class="chip dim">Plan for: Full production</span><span class="quiet">A factory you do not run yet. Running factories: <a class="link" href="{ROUTE["supply/production"]}">Supply › Production</a></span></div>
 <div class="mo-2" style="margin-top:20px;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr)">
   <div class="mo-card"><h3>{ic("factory")}Lines<span class="aside quiet">Clothing factory · 2 lines</span></h3>
     <table class="nx-t"><thead><tr><th>Recipe</th><th>Machines</th><th class="n">Makes a day</th><th class="n">Your shops use</th><th class="n">Export surplus</th></tr></thead><tbody>
@@ -711,7 +702,7 @@ def deliveries() -> str:
 <tr class="grp"><td colspan="6">Factories · inputs</td></tr>
 {row("IC", "Canal Brewery", "Water", "short", "bad", "1,200", "2,400", "top-up a day", "Bridge Hub", "Full production · also on Production")}
 </tbody></table>
-<p class="quiet" style="margin-top:10px">A supplier running short sends you to <a class="link" href="{ROUTE["supply/imports"]}">Imports</a> with the line selected. Paused imports live there too; missing or stalled routes live here, with Goods flow as evidence.</p>"""
+<p class="quiet" style="margin-top:10px">Import amounts and paused imports: <a class="link" href="{ROUTE["supply/imports"]}">Imports</a></p>"""
     return app("supply", "deliveries", "Deliveries", body, [("Supply", ROUTE["supply"]), ("Deliveries", "")])
 
 
@@ -744,6 +735,7 @@ def goods_flow() -> str:
                    f'{f"<text class=s x={x - 52} y={y + 13}>{s}</text>" if s else ""}{dot}</g>')
     svg.append("</svg>")
     body = f"""
+{from_strip("Water · Bridge Hub, import shortfall", "following its supply route")}
 <div class="nx-scope"><span class="lab">Following</span><span class="nx-pick sel">{ic("warehouse")}Bridge Hub<span class="x">{ic("x", style="width:12px;height:12px")}</span></span>
   <span class="nx-pick sel">{ic("tag")}Water<span class="x">{ic("x", style="width:12px;height:12px")}</span></span>
   <span style="margin-left:auto" class="seg"><a href="{ROUTE["supply/deliveries"]}">Table</a><button class="on" type="button">Goods flow</button></span></div>
@@ -751,10 +743,10 @@ def goods_flow() -> str:
 <div class="mo-2" style="margin-top:14px">
   <div class="mo-card"><h3>{ic("warehouse")}Bridge Hub · Water<span class="aside"><a class="link" href="{ROUTE["supply/imports"]}">Its import</a></span></h3>
     <div class="sp-kv"><span>In</span><b>1 Pier · 8,400 a week</b><span>Out</span><b>Canal Brewery 1,200 · 2 shops 240 a day</b><span>On hand</span><b>5,600 · dry Sat</b></div></div>
-  <div class="mo-card"><h3>{ic("list")}How to read it</h3><div class="sp-legend" style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--ink-2)">
-    <span>solid: the daily round · dashed: the weekly import · width: units a day</span><span>amber pipe: an input arriving short · dots: tight (amber), cannot cover (red)</span>
-    </div></div>
-</div>"""
+  <div class="mo-card"><h3>{ic("link")}Fixes on this route</h3><div style="display:flex;flex-direction:column;gap:8px">
+    <a href="{ROUTE["supply/imports"]}" style="color:var(--info);font-size:13px;font-weight:500">1 Pier → Bridge Hub: the weekly order and the gap until Monday</a>
+    <a href="{ROUTE["supply/production"]}" style="color:var(--info);font-size:13px;font-weight:500">Bridge Hub → Canal Brewery: the Water top-up</a></div>
+    <p class="quiet" style="margin-top:10px">solid: the daily round · dashed: the weekly import · amber: an input arriving short</p></div></div>"""
     return app("supply", "flow", "Goods flow", body, [("Supply", ROUTE["supply"]), ("Goods flow", "")])
 
 
@@ -798,7 +790,7 @@ def city_map() -> str:
     <div class="quiet">31 5th Avenue · apartment</div>
     <div class="plan" style="padding:12px">{floor_plan()}</div>
     <div class="facts" style="display:grid;grid-template-columns:auto auto;gap:6px 12px;font-size:12.5px;color:var(--ink-2)"><span>Rent a day</span><b class="mono" style="text-align:right">$140</b><span>A week</span><b class="mono" style="text-align:right">$980</b><span>Floor</span><b class="mono" style="text-align:right">95 m²</b><span>Rent per m² a day</span><b class="mono" style="text-align:right">$1.47</b></div>
-    <p class="quiet">A home is not a business: nothing is sold or measured here, so it has no results or findings. The rent is in company costs.</p>
+    <p class="quiet">Not a business: no results or findings. Rent is in company costs.</p>
   </div>
 </div>"""
     return app("map", "", "City map", body)
@@ -931,7 +923,7 @@ def business_kinds() -> str:
   {rail_row("Water", ["", "", "", "half", "dry", "", ""], 5, "<a class='link' href='Imports.dc.html'>Raise the weekly order</a> · Imports")}
   {rail_row("Soda Can", ["", "", "", "", "", "", ""], 5, "covered · Smart Delivery")}
   {rail_row("Umbrella", ["", "", "", "", "", "", ""], None, "idle · nothing draws on it")}
-  <p class="quiet" style="margin-top:8px">The summary stays here; changing amounts happens in Supply with Bridge Hub already in scope.</p></div>"""
+  </div>"""
     fac = f"""
 <div class="mo-card"><h3>{ic("factory")}Canal Brewery · factory<span class="aside">{hood("IC")}</span></h3>
   <div class="mo-3" style="margin-bottom:12px"><div class="mo-tile"><span class="lab">Machines</span><span class="v">4</span><small>all on a named line</small></div><div class="mo-tile"><span class="lab">Makes a day</span><span class="v">1,500</span><small>of 2,400 rated</small></div><div class="mo-tile"><span class="lab">Ships</span><span class="v">1,480</span><small>to Bridge Hub</small></div></div>
@@ -944,7 +936,7 @@ def business_kinds() -> str:
   <div class="mo-3" style="margin-bottom:12px"><div class="mo-tile"><span class="lab">Fees a day</span><span class="v">$2,140</span></div><div class="mo-tile"><span class="lab">Clients</span><span class="v">18</span><small>of 20 desks' capacity</small></div><div class="mo-tile"><span class="lab">People</span><span class="v">12</span><small>1 unmet demand</small></div></div>
   <div class="nx-omit"><div>{ic("calendar")}<span>No shop schedule here: offices have staff and desk evidence, not a Cash register plan. <a class="link" href="{ROUTE["staffing/needs"]}">Staff needs</a></span></div></div></div>"""
     body = f"""
-<p class="nx-lede" style="margin-top:18px">One business page, shaped by the kind of business. Each shows its own state and links to the one workflow that changes it.</p>
+
 <div class="mo-2" style="margin-top:18px">{depot}{fac}</div>
 <div class="mo-2" style="margin-top:16px">{office}
 <div class="mo-card"><h3>{ic("home")}A home</h3><p class="quiet">Opens from its card on the City map: rent a day and a week, floor area, rent per m². Not a business, so no results and no findings. <a class="link" href="{ROUTE["map"]}">City map</a></p></div></div>"""
