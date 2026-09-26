@@ -5172,6 +5172,9 @@ def _cap_first(text):
         if text.key == "sp.py.limit.station":
             return msg("sp.py.limit.station.first", "{stations}", stations=_cap_first(text.p["stations"]),
                        station_name=text.p["station_name"])
+        if text.key == "sp.py.limit.station.staff":
+            return msg("sp.py.limit.station.staff.first", "{station} staffing",
+                       station=_cap_first(text.p["station"]), station_name=text.p["station_name"])
     return text[:1].upper() + text[1:]
 
 
@@ -18361,7 +18364,7 @@ function hourGrid(g, todayWd, lead = null, idle = []){
             ? roleRead(binding[0], wd, h)
             : tt("sp.hour.registers", "{n} of {of} register capacity on", {n: g.staffed[wd][h], of: g.counters});
       const idleWord = roles.length > 1 && idle.length
-        ? tt("sp.hour.idle.roles", "{roles} idle", {roles: idle.map(r => (r.shared && r.many) || r.label || tt("sp.hour.capacity", "capacity")).join(", ")})
+        ? tt("sp.hour.idle.roles", "{roles} idle", {roles: idle.map(r => (r.shared && (gnLocal(r.stationKey) || r.many)) || r.label || tt("sp.hour.capacity", "capacity")).join(", ")})
         : tt("sp.hour.idle", "capacity idle");
       /* The ceilings this hour stood at, as `<kind>:<skill>` tokens, so a chip
          can ask for its own hours by kind and role together. */

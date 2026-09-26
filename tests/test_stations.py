@@ -15,6 +15,7 @@ from ba_dashboard import (
     plain,
     SERVICE_SKILL,
     _alerts,
+    _cap_first,
     _business,
     _hour_findings,
     _hourly,
@@ -684,6 +685,12 @@ class HairdresserTests(unittest.TestCase):
                          "another Hair Stylist at the hairdresser chair and "
                          "another Hair Stylist at the hairdresser headwash")
         self.assertEqual(finding["noun"], "hairdresser chairs and hairdresser headwashes")
+        # Opening a sentence, the limit is still a message a translation can
+        # replace, not an English str.
+        first = _cap_first(finding["limit"])
+        self.assertEqual(first.p["a"].key, "sp.py.limit.station.staff.first")
+        self.assertEqual(plain(first),
+                         "Hairdresser chair staffing and hairdresser headwash staffing")
 
     def test_a_skill_doing_one_kind_of_work_keeps_its_key(self):
         roles = _station_roles(_service_stations(NAMES), NAMES)

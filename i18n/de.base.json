@@ -2780,6 +2780,7 @@
  "sp.py.limit.station": "{stations}",
  "sp.py.limit.station.first": "{stations}",
  "sp.py.limit.station.staff": "{station} staffing",
+ "sp.py.limit.station.staff.first": "{station} staffing",
  "sp.py.list.and": "{a} and {b}",
  "sp.py.list.comma": "{a}, {b}",
  "sp.py.list.semi": "{a}; {b}",
