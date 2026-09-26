@@ -1273,7 +1273,12 @@
         : {status: 0, error: "mismatch", version: linkSchema, need: LINK_SCHEMA, body: null};
     }
     const path = kind === "undo" ? "/write/undo" : `/write/${kind}`;
-    const payload = JSON.stringify(Object.assign({}, body, {dryRun}));
+    // Uniforms find their buildings by address alone, and every save has the
+    // same map: the save this board was read from goes along, and a mod from
+    // 0.3.1 answers `changed` when the game has another loaded. Older mods
+    // ignore the field.
+    const sameSave = kind === "uniforms" && bound.character ? {expect: {character: bound.character, company: bound.company}} : {};
+    const payload = JSON.stringify(Object.assign({}, body, sameSave, {dryRun}));
     // One click asks the game at most once: a token this write asked for and
     // got is not asked for again, busy retries and all; nor is one the game
     // gave the Apply this dry run follows (`opts.asked`).

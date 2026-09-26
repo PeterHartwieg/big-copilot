@@ -28,8 +28,10 @@ Mod Builder.
 - **An origin allowlist.** Browser requests are answered only for
   `https://bigcopilot.com`, `https://www.bigcopilot.com`, and any `http://127.0.0.1`
   or `http://localhost` page (the local watcher, a local `build_web.py` preview).
-  Every other origin gets a response with no CORS headers, which the browser then
-  refuses to hand to the page.
+  From 0.3.1 every other origin is turned away with `403 origin_not_allowed` before the
+  mod does any work (0.3.0 and earlier did the work and answered with no CORS headers,
+  which the browser then refused to hand to the page). A request with no `Origin`, such as
+  curl or the CLI watcher, is served as before.
 - **It is the whole save.** What `/save` serves is your entire company, not a summary.
   Big Copilot reads it in your own browser; it is not uploaded anywhere. Anything else
   that could reach loopback on your machine could read it too, which is what the
@@ -58,7 +60,7 @@ under "Writes":
 
 | Endpoint | What it changes |
 | --- | --- |
-| `/write/uniforms` | Puts a preset (the one named "Default" unless the page names another) on every skill of a site's Uniforms window that has no uniform yet (or on the skills the page names). A skill you dressed yourself is never touched. |
+| `/write/uniforms` | Puts a preset (the one named "Default" unless the page names another) on every skill of a site's Uniforms window that has no uniform yet (or on the skills the page names). A skill you dressed yourself is never touched. From 0.3.1 a page may send the character and company it read the plan from; when the game has another save loaded, every site answers `changed` and nothing is set. |
 | `/write/imports` | Sets purchasing-agent contract amounts, switches a stopped contract back on (with Repeating), and reorders contracts in the plan order. It never stops a contract, and never adds or removes a product. |
 | `/write/schedule` | Replaces one business's seven days of shifts; with `openAllHours`, also opens every day 0 to 24. Never at a headquarters. |
 | `/write/hire` | From 0.3.0. Hires headhunter candidates into businesses, moves employees from one business to another, and writes the weeks of the businesses involved, in one call: what MyEmployees' "Assign business and hire" and "Assign business" do, then the schedule write for each week sent. A candidate who has left the game's list since the board read it is skipped, and their shifts are left empty; anything else refused refuses the whole call. Never undone. |
@@ -182,7 +184,7 @@ the worker thread failed again on its second chance; serializing on the main thr
    | ModId | `BigCopilotLink` |
    | DisplayName | `Big Copilot Link` |
    | Author | `Peter Hartwieg` |
-   | Version | `0.3.0` |
+   | Version | `0.3.1` |
    | Mod Assembly | drag `BigCopilotLink.asmdef` into the field |
    | Locales Folder | drag the `Locales` folder into the field; the option labels are keys in `Locales/en.json` |
 
@@ -222,7 +224,7 @@ Launch the game, enable **Big Copilot Link** in the Mods menu, load a save, then
 curl http://127.0.0.1:8322/health
 ```
 
-Expect `{"ok":true,"schemaVersion":1,"modVersion":"0.3.0","source":"game",…,"writes":["uniforms","imports","schedule","hire"],"paired":false}` and a
+Expect `{"ok":true,"schemaVersion":1,"modVersion":"0.3.1","source":"game",…,"writes":["uniforms","imports","schedule","hire"],"paired":false}` and a
 `[BigCopilotLink] serving the game to Big Copilot on http://127.0.0.1:8322/` line in
 the player log (`%USERPROFILE%\AppData\LocalLow\Hovgaard Games\Big Ambitions\Player.log`;
 on a Mac, `~/Library/Logs/Hovgaard Games/Big Ambitions/Player.log`), then, a few
@@ -393,6 +395,29 @@ hire and move staff…") was seen at least once (Forget approved browsers, then 
 9. **Save and reload.** The hires persist with their hire day; the candidates badge in
    the phone counts right.
 
+### In-game checklist for 0.3.1
+
+Two hardening changes from issue #110, nothing new on the board. Built as above; `curl
+http://127.0.0.1:8322/health` answers `"modVersion":"0.3.1"`.
+
+1. **A foreign origin is refused.** `curl -i -H "Origin: https://example.com"
+   http://127.0.0.1:8322/health` answers `403` with `{"error":"origin_not_allowed"}`;
+   so does `curl -i -X POST -H "Content-Length: 0" -H "Origin: https://example.com"
+   http://127.0.0.1:8322/refresh`, and the log shows no `serialized in` line for it.
+   `curl -i -I -H "Origin: https://example.com" http://127.0.0.1:8322/save` answers `403`
+   with no body. The same calls with no `Origin`, and with `-H "Origin:
+   https://bigcopilot.com"`, answer as before (`200`, `202`, `405`; a second `/refresh` within 15 seconds
+   answers `429 throttled`, so wait before repeating it); the second carries
+   `Access-Control-Allow-Origin`.
+2. **The board still works.** Link bigcopilot.com, Update, and set a uniform from a
+   "No staff uniforms set" warning: dry run and apply go through as in 0.2.0 item 2.
+3. **Another save.** With a token from "Writes by hand" above, send a uniforms dry run
+   whose body adds `"expect":{"character":"<character from /health>","company":"<company
+   from /health>"}`: it answers as without it. Change one letter of `company` (or
+   `character`): the dry run answers `200` with `"ok":false` and every row's `error`
+   `changed`, and the apply (`"dryRun":false`) answers `409 {"error":"changed",…}` with
+   nothing set in the Uniforms window. Leave `expect` out: it answers as in 0.3.0.
+
 ## Publish to the Workshop
 
 The Workshop item is 3806322395, owned by Peter's Steam account; its page, art and
@@ -430,7 +455,7 @@ Read by reflection and confirmed by the Mac compile. Public unless noted.
 
 | Member | Used for |
 | --- | --- |
-| `SaveGameManager.Current` (static `GameInstance`), fields `Day`, `Hour`, `Minute`, `Money`, `characterId`, `SaveGameName`, `buildNumberAtLastSave` | health, the serialize |
+| `SaveGameManager.Current` (static `GameInstance`), fields `Day`, `Hour`, `Minute`, `Money`, `characterId`, `SaveGameName`, `buildNumberAtLastSave` | health, the serialize; from 0.3.1 also the uniforms write's `expect` |
 | `SaveGameManager.SavingGameInProgress`, `HasChangesSinceLastSave()` | the save-completed edges; the second dereferences the player and throws once on exit to desktop, which the pump swallows |
 | `SaveGameManager.CanSave()` | **private static**: called by reflection, looked up once; falls back to the four public states below. Build 3682 also refuses a save while the activity panel is open inside a `ba:businesstype_school` building, a case neither that fallback nor `RefusalReason()` names |
 | `OdinSerializer.SerializationUtility.SerializeValue<GameInstance>(instance, stream, DataFormat.Binary, context)` with a private `SerializationContext` (policy `Player.SaveSystem.SaveGameSerializationPolicy`, error policy `ErrorHandlingPolicy.ThrowOnErrors`) | the bytes, as `SaveGameSerializationHelper.SerializeBinaryData` makes them |

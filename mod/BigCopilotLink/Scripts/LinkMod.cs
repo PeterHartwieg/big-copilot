@@ -22,7 +22,7 @@ namespace BigCopilotLink
     [ModEntryOnCityLoad]
     public class LinkMod : IModBigAmbitions
     {
-        public const string Version = "0.3.0";
+        public const string Version = "0.3.1";
 
         /// <summary>docs/game-link-api.md. Bump on any breaking change.</summary>
         public const int SchemaVersion = 1;

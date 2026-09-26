@@ -849,6 +849,23 @@ test('a game that moved on answers 409 changed, and the dialog offers a refresh'
   assert.equal((await applied()).length, 0);
 });
 
+test('uniforms name the save they were planned from; another one loaded since answers changed', async (t) => {
+  const page = await linked(t, {approved: true});
+  const sent = [];
+  page.on('request', (req) => {
+    if (req.url().endsWith('/write/uniforms') && req.method() === 'POST') sent.push(JSON.parse(req.postData()));
+  });
+  await button(page, GIFTS).click();
+  await ready(page);
+  // The game loads another of the character's saves; the board has not read it yet.
+  await configure({company: 'Other Co'});
+  await dialog(page).getByRole('button', {name: SET}).click();
+  await dialog(page).getByText('The game has moved on since this board was read. Nothing was changed.').waitFor();
+  assert.deepEqual(sent.map((body) => [body.dryRun, body.expect]),
+    [[true, {character: 'default', company: 'Link Co'}], [false, {character: 'default', company: 'Link Co'}]]);
+  assert.equal((await applied()).length, 0);
+});
+
 test('a refusal names the rule, the shop and the fix, and Apply stays off', async (t) => {
   const page = await linked(t, {approved: true});
   // The shop with no locker, asked for directly: the dry run already refuses.

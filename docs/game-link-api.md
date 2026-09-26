@@ -182,8 +182,9 @@ approved it (see "Approving a browser" below).
 
 - A request that names the same site, contract or product twice is `400 bad_request`.
 - **Approval.** A missing, unknown, expired or forgotten token, or one used from another
-  origin than the one it was issued to, answers `401 {"error":"not_paired"}` before the body
-  is read; the page drops its token and asks the game again. Reads (`/health`, `/save`,
+  allowed origin than the one it was issued to, answers `401 {"error":"not_paired"}` before
+  the body is read (an origin off the allowlist is `403` before that; see "CORS and the
+  browser"); the page drops its token and asks the game again. Reads (`/health`, `/save`,
   `/refresh`) never need one.
 - **Dry run.** `"dryRun": true` in the body runs every check and answers the verdict and
   the values the game would hold, applying nothing. A well-formed, paired dry run always
@@ -216,6 +217,7 @@ approved it (see "Approving a browser" below).
 | `200` | `{"ok": true, "kind", "dryRun", ...}` | Applied, or a dry run's verdict (`ok` false when an apply would be refused) |
 | `400` | `{"error":"bad_request","detail":"<what>"}` | Not JSON, a missing or mistyped field |
 | `401` | `{"error":"not_paired"}` | No valid token for this origin: ask the game to approve this browser |
+| `403` | `{"error":"origin_not_allowed"}` | An `Origin` off the allowlist (mod 0.3.1 and later; a write got `401` before) |
 | `409` | `{"error":"changed","rows":[...]}` | An `expect` no longer holds; nothing written |
 | `409` | `{"error":"refused","rows":[...]}` | A rule refused a row (`rows[i].error`); nothing written |
 | `409` | `{"error":"cannot_write","reason":"saving"}` | An apply while the game is saving or `CanSave()` is false (a dry run skips this check); `reason` as for `/refresh` (`saving`, `placement`, `interior`, `casino`, `other`), and for `hire` also `myemployees` |
@@ -276,6 +278,7 @@ Rules the mod keeps:
 
 ```json
 {"dryRun": true,
+ "expect": {"character": "58e6a328-…", "company": "HART. YT"},
  "sites": [{"address": {"street": "ba:street_secondavenue", "number": 12},
             "skills": ["ba:skill_customerservice", "ba:skill_cleaning"],
             "presetId": null}]}
@@ -301,7 +304,16 @@ named "Default", else the first of `GameInstance.employeePresets`; a string name
   `not_offered`. Neither is a refusal.
 - Row `error`: `not_found` (no registration at that address), `not_rented`, `no_business`
   (an empty building), `no_locker` (no item tagged `isuniformlocker`), `no_preset`.
-- No `expect`: "has no uniform yet" is the compare-and-set.
+- "Has no uniform yet" is the compare-and-set for each skill. An address alone names a
+  building in whichever save is loaded, and the map is the same in every save, so the body
+  may also carry `expect`, optional, with `character` and `company` as `/health` named them
+  when the page read the bytes it planned from. Mod 0.3.1 and later compare each field
+  sent with the loaded game (`characterId`, `SaveGameName`); when one differs, every row
+  answers `changed` (before `not_found`) and nothing is written: an apply `409
+  {"error":"changed", ...}`, a dry run `200` with `ok` false. A field left out, or
+  `expect` absent, is not checked. Additive: `schemaVersion` stays 1, and a mod before
+  0.3.1 ignores the field (its parse reads only the keys it knows), so the page sends it
+  to every mod.
 
 #### `POST /write/imports`
 
@@ -594,9 +606,13 @@ Access-Control-Allow-Private-Network: true     (only when the request carried
                                                 Access-Control-Request-Private-Network: true)
 ```
 
-An `Origin` that is not on the list gets the response without any `Access-Control-*`
-headers, which the browser then blocks. A request with no `Origin` (curl, the CLI
-watcher) is served as is.
+An `Origin` that is not on the list is turned away before the mod does any work: every
+method but `OPTIONS` answers `403 {"error":"origin_not_allowed"}` (a `HEAD`, `403` with
+no body), without any `Access-Control-*` headers, so the browser blocks even that. A
+preflight from it answers `204` without the headers above, which the browser refuses.
+Mods before 0.3.1 did the work (a `/refresh` serialized, a `/save` sent the bytes) and
+only withheld the headers; `/pair/request` alone already answered `403`. A request with no `Origin` (curl, the CLI watcher) is served
+as is.
 
 The allowlist: `https://bigcopilot.com`, `https://www.bigcopilot.com`, and any
 `http://127.0.0.1:<port>` or `http://localhost:<port>` (the local watcher and a local
@@ -654,7 +670,8 @@ and `--myemployees` opens the phone's MyEmployees app. For `schedule` and `hire`
 write touching it answers the site error `screen_open`, in the mod's order, for assign-only
 hire sites too and in dry runs. `POST /debug/config` changes all of
 these while the mock runs (`refuseWrite`, `busyWrites`, `writes`, `hireGone`, `myEmployees`,
-`screenOpen` as a list of `{street, number}`, `reset`), and `GET /debug/writes` lists the applies. The mock never rewrites the file: an
+`screenOpen` as a list of `{street, number}`, `character` and `company` for another save
+loaded under the same bytes, `reset`), and `GET /debug/writes` lists the applies. The mock never rewrites the file: an
 apply is kept in memory over the bytes, so a later write sees it, but `/save` still serves the
 file as it is. For `hire` it reads the candidates from the save's
 `CandidateEmployeeInstances`, and what a site takes a person for from the business type,
