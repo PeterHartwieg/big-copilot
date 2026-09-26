@@ -1,0 +1,131 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-09-25T15:00:00Z"
+ },
+ "title": "Big Copilot Staff v2",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [],
+ "boards": {
+  "Main.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 1720,
+   "title": "A · Overview",
+   "is_interactive": true
+  },
+  "ChangePicks.dc.html": {
+   "x": 0,
+   "y": 2300,
+   "w": 1440,
+   "h": 1500,
+   "title": "B · Change picks for one role",
+   "is_interactive": true
+  },
+  "QuickHire.dc.html": {
+   "x": 0,
+   "y": 4600,
+   "w": 2332,
+   "h": 760,
+   "title": "Q · Quick hire",
+   "is_interactive": true
+  },
+  "Review.dc.html": {
+   "x": 0,
+   "y": 5760,
+   "w": 2376,
+   "h": 1440,
+   "title": "C · Review and confirm",
+   "is_interactive": true
+  },
+  "Gates.dc.html": {
+   "x": 1600,
+   "y": 2300,
+   "w": 1440,
+   "h": 1860,
+   "title": "D · Game not linked, mod too old",
+   "is_interactive": true
+  },
+  "Phone.dc.html": {
+   "x": 1600,
+   "y": 0,
+   "w": 390,
+   "h": 1000,
+   "title": "E · Phone",
+   "is_interactive": true
+  },
+  "PhoneQuick.dc.html": {
+   "x": 2150,
+   "y": 0,
+   "w": 390,
+   "h": 700,
+   "title": "E2 · Phone · quick hire",
+   "is_interactive": true
+  }
+ },
+ "order": [
+  "Main.dc.html",
+  "ChangePicks.dc.html",
+  "QuickHire.dc.html",
+  "Review.dc.html",
+  "Gates.dc.html",
+  "Phone.dc.html",
+  "PhoneQuick.dc.html"
+ ],
+ "notes": {
+  "try-main": {
+   "x": 0,
+   "y": -250,
+   "w": 560,
+   "maxH": 190,
+   "text": "Left: one row a role. Right: what the button does, the button, and Quick hire for any site. Click a “Leave out who asks for” control to open the demand list."
+  },
+  "try-changepicks": {
+   "x": 0,
+   "y": 2050,
+   "w": 560,
+   "maxH": 190,
+   "text": "“Change picks” opens one role over the page. Tick or untick someone: the count updates. Part-time is left out by default for shop roles."
+  },
+  "try-quickhire": {
+   "x": 0,
+   "y": 4350,
+   "w": 560,
+   "maxH": 190,
+   "text": "Quick hire: role, site, how many, skill, demands to leave out. The best matches are picked; one confirm hires them. Replaces the HQ and warehouse table."
+  },
+  "try-review": {
+   "x": 0,
+   "y": 5510,
+   "w": 560,
+   "maxH": 190,
+   "text": "Click a site row to open or close its people."
+  },
+  "try-gates": {
+   "x": 1600,
+   "y": 2050,
+   "w": 560,
+   "maxH": 190,
+   "text": "Picks still work from the save; only the button is disabled, with the fix beside it."
+  },
+  "try-phone": {
+   "x": 1600,
+   "y": -250,
+   "w": 390,
+   "maxH": 190,
+   "text": "Summary card, roles as rows, Quick hire as a button, the main button in a bar at the bottom."
+  },
+  "try-phonequick": {
+   "x": 2150,
+   "y": -250,
+   "w": 390,
+   "maxH": 190,
+   "text": "Quick hire at phone width: the same card as a page."
+  }
+ },
+ "designSystems": []
+}

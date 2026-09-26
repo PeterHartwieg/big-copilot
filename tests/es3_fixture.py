@@ -260,7 +260,7 @@ def link_company() -> dict:
     """Three shops: two with a locker and a role on shift without a uniform,
     one with no locker; a depot; two import contracts on one item and a
     stopped one, with an agent, on another; a schedule of two shifts at the
-    first shop. Enough besides for extract() to run."""
+    first shop; three candidates. Enough besides for extract() to run."""
     preset = "PRESETdefaultAAAAAAAAAA=="
 
     def shop(street, number, name, uniforms, locker=True):
@@ -309,6 +309,25 @@ def link_company() -> dict:
              "assignedAddress": address("ba:street_secondavenue", 10)},
             {"id": "CCCCemployeeCCCCCCCCCCCC", "characterData": {"name": "Cy Moss", "skills": [served]},
              "assignedAddress": address("ba:street_broadway", 2)},
+        ],
+        # The headhunters' candidates (invented people), in both of the game's
+        # layouts: characterData, and an older save's top-level name and skills.
+        "CandidateEmployeeInstances": [
+            {"id": "IIIIcandidateIIIIIIIIIII",
+             "characterData": {"name": "Ida Nord", "ageInDays": 12410,
+                               "skills": [{"name": "ba:skill_customerservice", "value": 88.0},
+                                          {"name": "ba:skill_cleaning", "value": 31.0}]},
+             "hourlyWage": 26.5, "demands": ["ba:jobdemand_noweekends"], "hired": False, "declined": False,
+             "candidateInfo": {"hoursUntilExpiring": 71, "sourceHeadhunterId": "HEADHUNTERaaaaaaaaaaaaaa"}},
+            {"id": "OOOOcandidateOOOOOOOOOOO", "name": "Oskar Lind", "ageInDays": 9855,
+             "skills": [{"name": "ba:skill_customerservice", "value": 70.0}],
+             "hourlyWage": 22.0, "demands": [], "hired": False, "declined": False,
+             "candidateInfo": {"hoursUntilExpiring": 5, "fromJobBoard": True}},
+            {"id": "VVVVcandidateVVVVVVVVVVV",
+             "characterData": {"name": "Vera Holt", "ageInDays": 14600,
+                               "skills": [{"name": "ba:skill_securityguard", "value": 60.0}]},
+             "hourlyWage": 30.0, "demands": [], "hired": False, "declined": False,
+             "candidateInfo": {"hoursUntilExpiring": 150, "sourceAddress": address("ba:street_pier", 5)}},
         ],
         "employeePresets": [{"id": preset, "name": "Default"}],
         "importPartnerships": [

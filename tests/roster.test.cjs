@@ -1741,7 +1741,7 @@ test('a plan half of which waits on hires says what to delete and what to leave'
     // Not "delete the cleaning and security hours and drag these in": half of
     // "these" is dashed, and the hours under them would stand bare.
     assert.match(note, /Delete the cleaning and security hours the solid entries replace/);
-    assert.match(note, new RegExp(`leave what is under the ${counts.hire} dashed entry`));
+    assert.match(note, new RegExp(`leave what is under the ${counts.hire} dashed ${counts.hire === 1 ? 'entry' : 'entries'}`));
     assert.doesNotMatch(note, /drag these in instead/);
   } finally { await page.close(); }
 });

@@ -519,3 +519,84 @@ findings round after round, simplify the rule; the undo's re-ask went through th
 Workers: Opus 5.5 subagents with explicit file ownership and a hard no-delete rule (no rm, git
 clean/restore/checkout/stash). A worker once tried to delete something unexpected and Peter stopped
 it.
+
+## 11. Hire and move (mod 0.3.0, 25 September 2026)
+
+The Staff page (issue #89, plan `docs/staff-hire-plan.md`) hires the headhunters' candidates,
+moves spare staff between sites and writes the weeks of the sites involved, in one call:
+`POST /write/hire`, wire contract in `docs/game-link-api.md`. Game facts below were read from
+the game's IL on 25 September 2026 (dumps in `research/headhunter/` in the main checkout,
+local only: `il_hire.txt`, `il_dc.txt`, `il_all.txt`), and are quoted with the method they
+come from.
+
+**Candidates**
+
+- The list is `GameInstance.CandidateEmployeeInstances`: ordinary `EmployeeInstance`s with a
+  `candidateInfo` (`hoursUntilExpiring`, `sourceHeadhunterId`, `fromJobBoard`,
+  `sourceAddress`), `hourlyWage`, `demands`, `hired`, `declined`. Older saves hold the name,
+  age and skills on the instance itself instead of in `characterData`.
+- `RecruitmentHelper.GenerateCandidate` starts `hoursUntilExpiring` at 168.
+  `EmployeeHelper.RunHourly` takes one off every candidate each game hour and removes one at 0
+  from the list and from `EmployeeInstancesDictionary`. So the bytes' value is stale by the
+  save's age, and cannot be a compare-and-set: the candidate's presence in the list is the
+  check (`gone`), its wage the compare-and-set (`changed`).
+- `EmployeeHelper.DiscardCandidate` (the phone's discard) removes the candidate the same way.
+  An expired, discarded or phone-hired candidate and an id that never was one all read as
+  "not in the list", which is why the contract has `gone` and no `not_found` for a hire.
+
+**Hiring: `AssignToBusinessAndHireMassAction`** (MyEmployees, candidates tab, "Assign
+business and hire")
+
+- The business options come from `BuildingHelper.GetPlayerBuildingRegistrations` with
+  `PlayerBuildingFilter`: `RentedByPlayer`, a non-empty `BusinessName`, and a business type
+  other than `ba:businesstype_empty`. The write refuses the rest as `not_rented` or
+  `no_business`.
+- The skill check (`HireAndAssignBusiness`'s closure): the business type's
+  `employeePrimarySkills`, plus `ba:skill_cleaning` when the building type `NeedsCleaning`,
+  `ba:skill_securityguard` when the business type has the `allowtheft` tag, and
+  `ba:skill_deliverydriver` when the building type's `requiredBuildingSkills` names it. A
+  candidate with none of these is skipped with the notification
+  `myemployees_mass_action_employee_has_no_valid_skills`; the write refuses it (`no_skill`).
+- Then, per candidate: `assignedAddress = business.Address`, `EmployeeHelper.HireCandidate`,
+  and the UI's `candidateScrollerController.RemoveCandidate`.
+- `EmployeeHelper.HireCandidate`: ignores a duplicate (already in the employee list); clears
+  `assignedAddress` if it points at an empty building; removes the instance from
+  `CandidateEmployeeInstances` and adds it to `EmployeeInstancesDictionary` and the employee
+  list, same object and same `id`; `FinishPendingNegotiation(candidate, true)` (a salary
+  negotiation in `candidateSalaryNegotiations` ends accepted); updates the phone and
+  MyEmployees badges; clears `candidateInfo`; sets `dayHired` to today and `nextSickDay`;
+  adds the to-do (task 5 when assigned, 13 when not); resets the complaint clock; fires
+  `ba:gameevent_employeehired`; adds the happiness modifier
+  `ba:happinessmodifier_first_employee`.
+- The mod calls `HireCandidate` itself rather than copying its body, and refreshes the
+  MyEmployees scroller only if it is built (the write is refused while the app is open).
+
+**Moving: `AssignBusinessMassAction`** (MyEmployees, employees tab, "Assign business")
+
+- The same skill check against the target, then per employee: skipped when already at the
+  target; refused with `myemployees_mass_action_cant_assign_business_to_training_employee`
+  when `IsTraining` (the write's `in_training`); otherwise
+  `EmployeeHelper.UnassignEmployeeFromAllWorkshifts` (every shift at their business removed,
+  a delivery driver's vehicle slot cleared at a warehouse, weekly hours and days updated),
+  `CustomerDemandHelper.ReloadCachedFulfilled` at the new and then the old address, the to-do
+  (task 5 or 13), and `assignedAddress` set to the target.
+- One person belongs to one business, so a move always takes them off the source site. The
+  board only offers people the source's plan gives no hours (spare), and when it rewrites the
+  source's week anyway, the review lists it.
+
+**Not done here**
+
+- Letting someone go: the player uses MyEmployees (`RemoveEmployee`). No undo for a hire.
+- Salary negotiation: a candidate's `hourlyWage` is what they are hired at, as the mass
+  action does; the write never opens a negotiation.
+- `hired` and `declined` flags on a candidate in the list: the payload leaves such candidates
+  out; the game's mass action does not look at them. Not checked by the write.
+
+**What stays unverified until Peter's in-game test** (plan section 5, "What Peter does on the
+Mac")
+
+- How the mod tells that MyEmployees is open (`UIs.Instance.fullMenu.myEmployees`, active and
+  enabled). The write refuses while it is, because its candidate list and mass-action
+  selection would go stale under the change.
+- Whether the game's "no shifts" to-do clears once the week is written after a hire.
+- The first factory and office weeks ever written through the mod.

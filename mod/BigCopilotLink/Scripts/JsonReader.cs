@@ -20,7 +20,7 @@ namespace BigCopilotLink
     /// </summary>
     public static class JsonReader
     {
-        // A body is at most 256 KiB, but nesting is what would blow the stack.
+        // A body is at most 256 KiB (a hire 2 MiB), but nesting is what would blow the stack.
         private const int MaxDepth = 32;
 
         public static object Parse(string text)

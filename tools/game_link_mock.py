@@ -12,7 +12,7 @@ Error paths on demand: --throttle answers every /refresh with 429, --refuse
 <reason> with 409, --schema <n> advertises another schema version. The day,
 hour and cash in /health are whatever the flags say, not the save's.
 
-The writes (POST /write/uniforms, /imports, /schedule, /undo) are checked
+The writes (POST /write/uniforms, /imports, /schedule, /hire, /undo) are checked
 against the save as ba_save reads it, as far as the bytes allow: addresses,
 contract ids and amounts, the shift print, uniforms already set, who is
 assigned where, which stations exist. What the game alone knows (importer caps,
@@ -31,6 +31,18 @@ a second as --pair says: approve (the default), deny, expire, or popup_open
 --refuse-write <error>[:<detail>] makes every
 apply answer that refusal, --busy-writes <n> answers the next n writes busy,
 --writes names the kinds /health lists ("" for a 0.1.0 mod that lists none).
+
+A hire (POST /write/hire) takes its candidates from the save's
+CandidateEmployeeInstances and checks moves, wages and each site's week (the
+schedule write's grid, with the call's own hires and moves counted as
+assigned). What a candidate may be hired for is the business type's, from
+ASSIGN_SKILLS in ba_dashboard (the table the page uses), so a warehouse takes
+drivers only; a type the table does not know falls back to the site's
+stations. --screen-open <street>:<number> (or /debug/config "screenOpen")
+opens BizMan's schedule screen on a site: a schedule or hire write touching
+it is refused screen_open. --hire-gone <id> (or /debug/config "hireGone") makes a candidate gone,
+--myemployees (or "myEmployees") the phone's MyEmployees app open. A hire has
+no undo: POST /write/undo {"kind": "hire"} answers 409 no_undo.
 """
 from __future__ import annotations
 
@@ -50,7 +62,7 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import ba_save  # noqa: E402
-from ba_dashboard import STATION_SKILLS, _uniform_gaps, schedule_entries, shift_print  # noqa: E402
+from ba_dashboard import ASSIGN_SKILLS, STATION_SKILLS, _uniform_gaps, money, schedule_entries, shift_print  # noqa: E402
 
 SCHEMA_VERSION = 1
 DEFAULT_PORT = 8322
@@ -58,7 +70,7 @@ REFRESH_WINDOW = 15  # seconds between refreshes, as the mod throttles
 ALLOWED_ORIGINS = ("https://bigcopilot.com", "https://www.bigcopilot.com")
 LOCAL_ORIGIN = re.compile(r"^http://(127\.0\.0\.1|localhost)(:\d+)?$")
 EXPOSED = "ETag, X-Game-Link-Stamp, X-Game-Link-Day, X-Game-Link-Character"
-WRITE_KINDS = ("uniforms", "imports", "schedule")
+WRITE_KINDS = ("uniforms", "imports", "schedule", "hire")
 PAIR_OUTCOMES = ("approve", "deny", "expire", "popup_open", "no_ui", "busy", "main_thread_unavailable")
 PAIR_DELAY = 1.0  # seconds before the mock's player answers the popup
 PAIR_COOLDOWNS = (10, 30, 120)  # seconds an origin waits after a denial or an expiry, then a repeat, then more
@@ -70,11 +82,13 @@ PAIR_NAME_MAX = 40
 # Localizor, the mock keeps a few.
 LOCALE_KEYS = frozenset({"ok", "cancel", "close", "yes", "no", "back"})
 MAX_BODY = 256 * 1024
+MAX_HIRE_BODY = 2 * 1024 * 1024  # a hire carries every touched site's full week
 DRAIN_LIMIT = 4 * 1024 * 1024  # the most of a refused body read off the wire
 ENDPOINTS = (["/health", "/save", "/refresh"] + [f"/write/{k}" for k in (*WRITE_KINDS, "undo")]
              + ["/pair/request", "/pair/status"])
 # The refusal --refuse-write refused answers per kind when it names no rule.
-REFUSED_DEFAULT = {"uniforms": "no_locker", "imports": "locked", "schedule": "screen_open"}
+REFUSED_DEFAULT = {"uniforms": "no_locker", "imports": "locked", "schedule": "screen_open", "hire": "screen_open"}
+UNDOABLE = ("uniforms", "imports", "schedule")  # a hire has no undo
 HQ_TYPE = "ba:businesstype_headquarters"
 CLEANING_STATION = "ba:itemname_cleaningstation"
 LOCKER = "ba:itemname_uniformlocker"
@@ -125,6 +139,14 @@ def _wire(address: tuple[str, int]) -> dict:
     return {"street": address[0], "number": address[1]}
 
 
+def _cli_address(text: str) -> tuple[str, int]:
+    """--screen-open's STREET:NUMBER as an address; the street may hold a colon."""
+    street, _, number = text.rpartition(":")
+    if not street or not number.isdigit():
+        raise SystemExit(f"--screen-open {text!r} must be STREET:NUMBER")
+    return street, int(number)
+
+
 def _whole(value) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
 
@@ -136,7 +158,9 @@ class Link:
     def __init__(self, path: str, *, character: str, company: str, day: int, hour: int,
                  cash: float, build: int, schema: int, throttle: bool, refuse: str | None,
                  pair: str = "approve", writes: list | None = list(WRITE_KINDS),
-                 refuse_write: str | None = None, busy_writes: int = 0):
+                 refuse_write: str | None = None, busy_writes: int = 0,
+                 hire_gone: list | None = None, myemployees: bool = False,
+                 screen_open: list | None = None):
         self.path = path
         self.character, self.company = character, company
         self.day, self.hour, self.cash, self.build = day, hour, cash, build
@@ -170,6 +194,18 @@ class Link:
         self.schedules: dict = {}   # address -> [entries], as schedule_entries()
         self.opened: dict = {}      # address -> the weekdays a write opened 0 to 24
         self.undo: dict = {}
+        # Hiring: where an apply put people (employee or candidate id ->
+        # address, None for unassigned), the candidates it hired, the
+        # candidates that have left the game's list since the bytes (expired,
+        # hired or discarded in the phone: /debug/config "hireGone" or
+        # --hire-gone), and whether the phone's MyEmployees app is open.
+        self.moved: dict = {}
+        self.hired: set = set()
+        self.gone: set = set(hire_gone or ())
+        self.myemployees = myemployees
+        # The sites BizMan's schedule screen is open on (addresses): a schedule
+        # or hire write touching one is refused screen_open.
+        self.screen_open: set = set(screen_open or ())
         # What the items bundle would tell the game per contract, set by
         # /debug/config: {id: {"unitPrice": float, "cap": int}}.
         self.terms: dict = {}
@@ -361,6 +397,8 @@ class Link:
             if self.busy_writes > 0:
                 self.busy_writes -= 1
                 return 503, {"error": "busy"}
+            if kind == "undo" and body.get("kind") == "hire":
+                return 409, {"error": "no_undo"}  # a hire is never undone
             if not dry and self.refuse_write:
                 return self._refusal(kind, body)
             if kind == "undo":
@@ -386,6 +424,12 @@ class Link:
             return 503, {"error": error}
         if error == "cannot_write":
             return 409, {"error": "cannot_write", "reason": detail or "saving"}
+        if error in ("changed", "refused") and kind == "hire":
+            # One row for the first site the call names, refused alike.
+            sites = body.get("sites") if isinstance(body.get("sites"), list) else []
+            where = next((s.get("address") for s in sites if isinstance(s, dict)), None)
+            rule = "changed" if error == "changed" else detail or REFUSED_DEFAULT[kind]
+            return 409, {"error": error, "rows": [{"scope": "site", "address": where, "error": rule}]}
         if error in ("changed", "refused") and kind in WRITE_KINDS:
             # The rows the dry run of this body answers, each refused alike.
             _, answer = getattr(self, "_" + kind)(self._save(), body, True)
@@ -722,23 +766,54 @@ class Link:
             self.undo.pop("imports", None)
         return 200, answer
 
+    # people ---------------------------------------------------------------------
+    @staticmethod
+    def _character(save, instance) -> dict:
+        """A person's name, skills and age: `characterData` where the save has
+        it, else the instance's own top-level fields (older saves)."""
+        data = save.deref(instance.get("characterData"))
+        return data if isinstance(data, dict) and data else instance
+
+    def _skills(self, save, instance) -> set:
+        return {k.get("name") for k in save.items(self._character(save, instance).get("skills"))
+                if isinstance(k, dict)}
+
+    def _candidates(self, save) -> dict:
+        """The game's candidate list now: the bytes' CandidateEmployeeInstances,
+        less those an apply hired and those gone since the bytes."""
+        return {c.get("id"): c for c in save.items(save.root.get("CandidateEmployeeInstances"))
+                if isinstance(c, dict) and c.get("id") not in self.hired and c.get("id") not in self.gone}
+
+    def _people(self, save) -> dict:
+        """Everyone employed now: the bytes' employees and the candidates an apply hired."""
+        people = {e.get("id"): e for e in save.items(save.root.get("EmployeeInstances")) if isinstance(e, dict)}
+        for c in save.items(save.root.get("CandidateEmployeeInstances")):
+            if isinstance(c, dict) and c.get("id") in self.hired:
+                people[c.get("id")] = c
+        return people
+
+    def _where(self, save, who, person) -> tuple | None:
+        """Where a person works now: as an apply left them, else as the bytes have it."""
+        if who in self.moved:
+            return self.moved[who]
+        return save.address(person.get("assignedAddress")) if person else None
+
+    def _entries(self, save, reg, address) -> list:
+        """A business's shifts now: as an apply left them, else as the bytes have them."""
+        return self.schedules.get(address, schedule_entries(save, reg))
+
+    def _names(self, save) -> dict:
+        """Everyone's name by id, candidates included."""
+        return {p.get("id"): self._character(save, p).get("name")
+                for key in ("EmployeeInstances", "CandidateEmployeeInstances")
+                for p in save.items(save.root.get(key)) if isinstance(p, dict)}
+
     # schedule -------------------------------------------------------------------
-    def _schedule(self, save, body, dry):
-        address = _address(body.get("address"), "address")
-        expect = body.get("expect")
-        open_all = body.get("openAllHours", False)
-        days = body.get("days")
-        if not isinstance(expect, str):
-            raise BadRequest("expect must be the shift print")
-        if not isinstance(open_all, bool):
-            raise BadRequest("openAllHours must be true or false")
+    @staticmethod
+    def _parse_days(days) -> list:
+        """`days` as the schedule write takes it: (weekday, index, shift) per shift."""
         if not isinstance(days, list):
             raise BadRequest("days must be a list")
-        reg = self._registration(save, address)
-        answer = {"ok": False, "kind": "schedule", "dryRun": dry, "address": _wire(address),
-                  "business": reg.get("BusinessName") if reg else None, "before": None, "after": None,
-                  "removed": 0, "added": 0, "openedHours": False, "leftWithout": [], "warnings": [],
-                  "siteError": self._site_error(reg), "rows": []}
         shifts = []
         for day in days:
             if not (isinstance(day, dict) and _whole(day.get("d")) and 0 <= day["d"] <= 6
@@ -748,11 +823,60 @@ class Link:
                 if not isinstance(shift, dict):
                     raise BadRequest("shifts[] must be objects")
                 shifts.append((day["d"], i, shift))
+        return shifts
+
+    @staticmethod
+    def _check_shifts(save, reg, address, shifts, where, skills) -> tuple[list, list]:
+        """The grid's rules over a week of shifts at one business: the refused
+        rows ({d, i, error}) and the entries that pass. `where(id)` is where
+        that person works (None when nobody by that id works anywhere),
+        `skills(id)` their skills."""
+        stations = {h.get("$k"): (save.deref(h.get("$v")) or {}).get("itemName")
+                    for h in save.items(reg.get("itemInstances")) if isinstance(h, dict)}
+        rows, after, taken = [], [], []
+        for d, i, shift in shifts:
+            f, t = shift.get("f"), shift.get("t")
+            who, post = shift.get("employeeId"), shift.get("itemInstanceId")
+            error = None
+            if where(who) != address:
+                error = "not_assigned"
+            elif stations.get(post) not in STATION_SKILLS:
+                # No such item here, or one nobody works at, as far as the bytes tell.
+                error = "no_station"
+            elif not skills(who) & set(STATION_SKILLS[stations[post]]):
+                error = "no_skill"  # HasSkillForWorkstation, read off the station's skills
+            elif not (_whole(f) and _whole(t) and 0 <= f < t <= 24 and t - f <= 12):
+                error = "bad_hours"
+            elif any(d == d2 and f < t2 and f2 < t and who == w2 for d2, f2, t2, w2, _p in taken):
+                error = "overlap_person"
+            elif any(d == d2 and f < t2 and f2 < t and post == p2 for d2, f2, t2, _w, p2 in taken):
+                error = "overlap_station"
+            if error:
+                rows.append({"d": d, "i": i, "error": error})
+                continue
+            taken.append((d, f, t, who, post))
+            after.append((d, f, t, who, post, 0 if stations[post] == CLEANING_STATION else 1))
+        return rows, after
+
+    def _schedule(self, save, body, dry):
+        address = _address(body.get("address"), "address")
+        expect = body.get("expect")
+        open_all = body.get("openAllHours", False)
+        if not isinstance(expect, str):
+            raise BadRequest("expect must be the shift print")
+        if not isinstance(open_all, bool):
+            raise BadRequest("openAllHours must be true or false")
+        shifts = self._parse_days(body.get("days"))
+        reg = self._registration(save, address)
+        answer = {"ok": False, "kind": "schedule", "dryRun": dry, "address": _wire(address),
+                  "business": reg.get("BusinessName") if reg else None, "before": None, "after": None,
+                  "removed": 0, "added": 0, "openedHours": False, "leftWithout": [], "warnings": [],
+                  "siteError": self._site_error(reg), "rows": []}
         # not_found first (there is nothing to compare without the building),
         # then `changed`, then every other rule, the site's own included.
         if reg is None:
             return self._schedule_refused(answer, dry)
-        before = self.schedules.get(address, schedule_entries(save, reg))
+        before = self._entries(save, reg, address)
         answer["before"] = {"shifts": len(before), "print": shift_print(before)}
         if expect != answer["before"]["print"]:
             answer["siteError"] = "changed"
@@ -764,43 +888,21 @@ class Link:
             # plans and contracts when someone is unassigned there: never written.
             answer["siteError"] = "headquarters"
             return self._schedule_refused(answer, dry)
-        staff = {e.get("id"): e for e in save.items(save.root.get("EmployeeInstances"))}
-        stations = {h.get("$k"): (save.deref(h.get("$v")) or {}).get("itemName")
-                    for h in save.items(reg.get("itemInstances")) if isinstance(h, dict)}
-
-        def skills(person):
-            return {k.get("name") for k in save.items((save.deref(person.get("characterData")) or {}).get("skills"))}
-        after, taken = [], []
-        for d, i, shift in shifts:
-            f, t = shift.get("f"), shift.get("t")
-            who, post = shift.get("employeeId"), shift.get("itemInstanceId")
-            person = staff.get(who)
-            error = None
-            if not person or save.address(person.get("assignedAddress")) != address:
-                error = "not_assigned"
-            elif stations.get(post) not in STATION_SKILLS:
-                # No such item here, or one nobody works at, as far as the bytes tell.
-                error = "no_station"
-            elif not skills(person) & set(STATION_SKILLS[stations[post]]):
-                error = "no_skill"  # HasSkillForWorkstation, read off the station's skills
-            elif not (_whole(f) and _whole(t) and 0 <= f < t <= 24 and t - f <= 12):
-                error = "bad_hours"
-            elif any(d == d2 and f < t2 and f2 < t and who == w2 for d2, f2, t2, w2, _p in taken):
-                error = "overlap_person"
-            elif any(d == d2 and f < t2 and f2 < t and post == p2 for d2, f2, t2, _w, p2 in taken):
-                error = "overlap_station"
-            if error:
-                answer["rows"].append({"d": d, "i": i, "error": error})
-                continue
-            taken.append((d, f, t, who, post))
-            after.append((d, f, t, who, post, 0 if stations[post] == CLEANING_STATION else 1))
+        if address in self.screen_open:
+            answer["siteError"] = "screen_open"
+            return self._schedule_refused(answer, dry)
+        people = self._people(save)
+        answer["rows"], after = self._check_shifts(
+            save, reg, address, shifts,
+            lambda who: self._where(save, who, people[who]) if who in people else None,
+            lambda who: self._skills(save, people[who]))
         answer["ok"] = answer["siteError"] is None and not answer["rows"]
         # With openAllHours the write opens the days not open 0 to 24 already;
         # a day already open stays the player's, and openedHours says whether
         # any was opened.
         opens = {d for d in self._days(reg) if not self._all_day(reg, address, d)} if open_all else set()
         # openedHours only for a write that would go through.
-        self._schedule_answer(answer, save, before, after, bool(opens) and answer["ok"],
+        self._schedule_answer(answer, self._names(save), before, after, bool(opens) and answer["ok"],
                               self._open_days(reg, address, open_all))
         if dry or not answer["ok"]:
             return self._schedule_refused(answer, dry)
@@ -845,16 +947,18 @@ class Link:
         return {d for d, sd in days.items() if sd.get("isOpen")} | self.opened.get(address, set())
 
     @staticmethod
-    def _schedule_answer(answer, save, before, after, open_all, open_days):
-        names = {e.get("id"): (save.deref(e.get("characterData")) or {}).get("name")
-                 for e in save.items(save.root.get("EmployeeInstances"))}
+    def _schedule_answer(answer, names, before, after, open_all, open_days, moved=()):
+        """The schedule answer's fields from the shifts before and after;
+        `names` by id. Someone in `moved` (a hire write's moves) has left for
+        another site, not been left without work."""
         answer["before"] = {"shifts": len(before), "print": shift_print(before)}
         answer["after"] = {"shifts": len(after), "print": shift_print(after)}
         answer["removed"], answer["added"] = len(before), len(after)
         answer["openedHours"] = open_all
         kept = {e[3] for e in after}
         answer["leftWithout"] = [{"employeeId": who, "name": names.get(who)}
-                                 for who in dict.fromkeys(e[3] for e in before) if who and who not in kept]
+                                 for who in dict.fromkeys(e[3] for e in before)
+                                 if who and who not in kept and who not in moved]
         hours = {}
         for d, f, t, who, _post, _type in after:
             hours[(who, d)] = hours.get((who, d), 0) + t - f
@@ -862,10 +966,253 @@ class Link:
         answer["warnings"] = [{"type": "overworked", "employeeId": who, "name": names.get(who), "d": d, "hours": h}
                               for (who, d), h in sorted(hours.items()) if h > 14 and d in open_days]
 
+    # hire ---------------------------------------------------------------------------
+    def _accepts(self, save, reg) -> set | None:
+        """The skills a business takes a person for (the game's assign check:
+        the business type's primary skills, cleaning, security, delivery):
+        ASSIGN_SKILLS, the table the page reads from the game's type data. For
+        a type the table does not know, the skills of the stations installed
+        here stand in; None (anyone) only when neither says anything."""
+        skills = set(ASSIGN_SKILLS.get(reg.get("businessTypeName"), ()))
+        if skills:
+            return skills
+        for holder in save.items(reg.get("itemInstances")):
+            item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
+            skills.update(STATION_SKILLS.get((item or {}).get("itemName"), ()))
+        return skills or None
+
+    @staticmethod
+    def _parse_hire(body) -> tuple[list, list, list]:
+        """The hire write's body, checked for shape: (sites, hires, moves),
+        each row with its address(es) parsed. Anything the contract does not
+        allow is a BadRequest."""
+        sites, hires, moves = body.get("sites"), body.get("hires"), body.get("moves")
+        if not (isinstance(sites, list) and isinstance(hires, list) and isinstance(moves, list)):
+            raise BadRequest("sites, hires and moves must be lists")
+        parsed_sites, seen = [], set()
+        for site in sites:
+            if not isinstance(site, dict):
+                raise BadRequest("sites[] must be objects")
+            address = _address(site.get("address"), "sites[].address")
+            if address in seen:
+                raise BadRequest("sites[] names a site twice")
+            seen.add(address)
+            open_all = site.get("openAllHours", False)
+            if not isinstance(open_all, bool):
+                raise BadRequest("sites[].openAllHours must be true or false")
+            if site.get("days") is None:
+                if site.get("expect") is not None:
+                    raise BadRequest("sites[].expect must be null when days is null")
+                shifts = None
+            else:
+                if not isinstance(site.get("expect"), str):
+                    raise BadRequest("sites[].expect must be the shift print")
+                shifts = Link._parse_days(site["days"])
+            parsed_sites.append({"address": address, "expect": site.get("expect"), "openAllHours": open_all,
+                                 "shifts": shifts})
+        people = set()
+        parsed_hires = []
+        for hire in hires:
+            if not (isinstance(hire, dict) and isinstance(hire.get("candidateId"), str)):
+                raise BadRequest("hires[] must carry candidateId")
+            expect = hire.get("expect")
+            if not (isinstance(expect, dict) and isinstance(expect.get("wage"), (int, float))
+                    and not isinstance(expect.get("wage"), bool)):
+                raise BadRequest("hires[].expect must be {wage}")
+            seen_left = hire.get("seenHoursLeft")
+            if seen_left is not None and not (isinstance(seen_left, (int, float)) and not isinstance(seen_left, bool)):
+                raise BadRequest("hires[].seenHoursLeft must be a number or null")
+            if hire["candidateId"] in people:
+                raise BadRequest("hires[] names a candidate twice")
+            people.add(hire["candidateId"])
+            parsed_hires.append({"id": hire["candidateId"], "address": _address(hire.get("address"), "hires[].address"),
+                                 "wage": expect["wage"]})
+        parsed_moves = []
+        for move in moves:
+            if not (isinstance(move, dict) and isinstance(move.get("employeeId"), str)):
+                raise BadRequest("moves[] must carry employeeId")
+            if move["employeeId"] in people:
+                raise BadRequest("moves[] names someone twice")
+            people.add(move["employeeId"])
+            source = None if move.get("from") is None else _address(move.get("from"), "moves[].from")
+            target = _address(move.get("to"), "moves[].to")
+            if source == target:
+                raise BadRequest("moves[] moves someone to where they are")
+            parsed_moves.append({"id": move["employeeId"], "from": source, "to": target})
+        targets = {h["address"] for h in parsed_hires} | {m["to"] for m in parsed_moves}
+        sources = {m["from"] for m in parsed_moves if m["from"] is not None}
+        if targets - seen:
+            raise BadRequest("every hire's and move's target needs its sites[] entry")
+        if seen - targets - sources:
+            raise BadRequest("sites[] names a site no hire or move touches")
+        return parsed_sites, parsed_hires, parsed_moves
+
+    def _hire(self, save, body, dry):
+        sites, hires, moves = self._parse_hire(body)
+        blocked = self.myemployees
+        if blocked and not dry:
+            # The phone's MyEmployees app would show a stale candidate list.
+            return 409, {"error": "cannot_write", "reason": "myemployees"}
+        regs = {s["address"]: self._registration(save, s["address"]) for s in sites}
+        names = self._names(save)
+        people = self._people(save)
+        candidates = self._candidates(save)
+        rows = []
+
+        def business(address):
+            reg = self._registration(save, address) if address else None
+            return reg.get("BusinessName") if reg else None
+
+        def refused(reg):
+            """A target the game's assign filter would not offer, or no building."""
+            if reg is None:
+                return "not_found"
+            if not reg.get("RentedByPlayer"):
+                return "not_rented"
+            if not reg.get("BusinessName") or reg.get("businessTypeName") in (None, "", "ba:businesstype_empty"):
+                return "no_business"
+            return None
+
+        def takes(address, skills):
+            reg = regs.get(address)
+            accepts = self._accepts(save, reg) if reg is not None and not refused(reg) else None
+            return accepts is None or bool(accepts & skills)
+
+        # Moves: not_found, changed (not where the bytes had them), in_training, no_skill.
+        moved = []
+        for move in moves:
+            person = people.get(move["id"])
+            error = None
+            if person is None:
+                error = "not_found"
+            elif self._where(save, move["id"], person) != move["from"]:
+                error = "changed"
+            elif person.get("trainingSession"):
+                error = "in_training"  # the game's move turns them away
+            elif not takes(move["to"], self._skills(save, person)):
+                error = "no_skill"
+            if error:
+                rows.append({"scope": "move", "id": move["id"], "error": error})
+                continue
+            source = move["from"]
+            cleared = 0
+            if source is not None:
+                reg = self._registration(save, source)
+                cleared = sum(1 for e in (self._entries(save, reg, source) if reg else []) if e[3] == move["id"])
+            moved.append({"employeeId": move["id"], "name": names.get(move["id"]), "from": business(source),
+                          "to": business(move["to"]), "shiftsCleared": cleared, "_move": move})
+        # Hires: gone (never a refusal), changed (the wage), no_skill.
+        hired, skipped, gone = [], [], set()
+        for hire in hires:
+            candidate = candidates.get(hire["id"])
+            if candidate is None:
+                gone.add(hire["id"])
+                skipped.append({"candidateId": hire["id"], "name": names.get(hire["id"]), "reason": "gone",
+                                "hoursDropped": 0})
+                continue
+            error = None
+            wage = candidate.get("hourlyWage") or 0
+            if abs(wage - hire["wage"]) > 0.005:
+                error = "changed"  # equal to the cent, or the page re-plans
+            elif not takes(hire["address"], self._skills(save, candidate)):
+                error = "no_skill"
+            if error:
+                rows.append({"scope": "hire", "id": hire["id"], "error": error})
+                continue
+            info = save.deref(candidate.get("candidateInfo")) or {}
+            hired.append({"candidateId": hire["id"], "name": names.get(hire["id"]), "business": business(hire["address"]),
+                          "wage": money(wage), "hoursLeft": info.get("hoursUntilExpiring"), "_hire": hire})
+        # Where everyone would work once the moves and hires are done.
+        after_call = {m["_move"]["id"]: m["_move"]["to"] for m in moved}
+        after_call.update({h["candidateId"]: h["_hire"]["address"] for h in hired})
+        skills_of = {**{who: self._skills(save, p) for who, p in people.items()},
+                     **{cid: self._skills(save, c) for cid, c in candidates.items()}}
+
+        def where(who):
+            if who in after_call:
+                return after_call[who]
+            return self._where(save, who, people[who]) if who in people else None
+
+        answers, writes = [], []
+        for site in sites:
+            address, reg = site["address"], regs[site["address"]]
+            answer = {"address": _wire(address), "business": reg.get("BusinessName") if reg else None,
+                      "before": None, "after": None, "removed": 0, "added": 0, "openedHours": False,
+                      "leftWithout": [], "warnings": [], "siteError": None}
+            answers.append(answer)
+            # not_found, then changed (the print), then the site's own rules.
+            error = "not_found" if reg is None else None
+            if error is None and site["shifts"] is not None:
+                before = self._entries(save, reg, address)
+                if site["expect"] != shift_print(before):
+                    error = "changed"
+            error = error or refused(reg)
+            if error is None and site["shifts"] is not None and reg.get("businessTypeName") == HQ_TYPE:
+                error = "headquarters"
+            if error is None and address in self.screen_open:
+                error = "screen_open"  # assign-only sites too, as the mod's CheckSite
+            if error:
+                answer["siteError"] = error
+                rows.append({"scope": "site", "address": _wire(address), "error": error})
+                continue
+            if site["shifts"] is None:
+                continue  # assign only: the week is left as it is
+            # A gone candidate's shifts are dropped, their hours left empty.
+            shifts = []
+            for d, i, shift in site["shifts"]:
+                if shift.get("employeeId") in gone:
+                    hours = (shift.get("t") or 0) - (shift.get("f") or 0)
+                    for skip in skipped:
+                        if skip["candidateId"] == shift.get("employeeId") and _whole(hours):
+                            skip["hoursDropped"] += max(0, hours)
+                    continue
+                shifts.append((d, i, shift))
+            shift_rows, after = self._check_shifts(save, reg, address, shifts, where,
+                                                   lambda who: skills_of.get(who, set()))
+            rows.extend({"scope": "shift", "address": _wire(address), **row} for row in shift_rows)
+            opens = ({d for d in self._days(reg) if not self._all_day(reg, address, d)}
+                     if site["openAllHours"] else set())
+            self._schedule_answer(answer, names, before, after, bool(opens) and not shift_rows,
+                                  self._open_days(reg, address, site["openAllHours"]), moved=set(after_call))
+            writes.append((address, after, opens))
+        ok = not rows and not blocked
+        result = {"ok": ok, "kind": "hire", "dryRun": dry,
+                  "hired": [{k: v for k, v in h.items() if k != "_hire"} for h in hired],
+                  "moved": [{k: v for k, v in m.items() if k != "_move"} for m in moved],
+                  "skipped": skipped, "sites": answers,
+                  "wageAdded": round(sum(h["wage"] for h in hired), 2), "rows": rows}
+        if blocked:
+            result["blocked"] = "myemployees"
+        if dry:
+            return 200, result
+        if rows:
+            error = "changed" if any(row["error"] == "changed" for row in rows) else "refused"
+            return 409, {"error": error, "rows": rows}
+        # Apply, in the game's order: moves, hires, then each site's week.
+        written = set()
+        for m in moved:
+            move = m["_move"]
+            if move["from"] is not None and m["shiftsCleared"]:
+                reg = self._registration(save, move["from"])
+                self.schedules[move["from"]] = [e for e in self._entries(save, reg, move["from"]) if e[3] != move["id"]]
+                written.add(move["from"])
+            self.moved[move["id"]] = move["to"]
+        for h in hired:
+            self.hired.add(h["candidateId"])
+            self.moved[h["candidateId"]] = h["_hire"]["address"]
+        for address, after, opens in writes:
+            self.schedules[address] = after
+            self.opened.setdefault(address, set()).update(opens)
+            written.add(address)
+        # The schedule kind's undo is cleared for every site this call wrote.
+        if self.undo.get("schedule", {}).get("address") in written:
+            self.undo.pop("schedule")
+        return 200, result
+
     # undo -----------------------------------------------------------------------
     def _undo(self, body, dry):
         kind = body.get("kind")
-        if kind not in WRITE_KINDS:
+        if kind not in UNDOABLE:
             raise BadRequest("kind must be uniforms, imports or schedule")
         record = self.undo.get(kind)
         if record is None:
@@ -907,18 +1254,18 @@ class Link:
             # moved away or a station sold since is the game having moved on.
             save = self._save()
             reg = self._registration(save, address)
-            staff = {e.get("id"): e for e in save.items(save.root.get("EmployeeInstances"))}
+            staff = self._people(save)
             stations = {h.get("$k") for h in save.items((reg or {}).get("itemInstances")) if isinstance(h, dict)}
             if self._site_error(reg) or any(
                     post not in stations or who not in staff
-                    or save.address(staff[who].get("assignedAddress")) != address
+                    or self._where(save, who, staff[who]) != address
                     for _d, _f, _t, who, post, _k in record["before"]):
                 return 409, {"error": "changed"}
             answer = {"ok": True, "kind": kind, "dryRun": dry, "undo": True, "address": _wire(address),
                       "business": record["business"], "siteError": None, "rows": []}
             # Open after the undo: the days the write opened go back as they were.
             reopened = self.opened.get(address, set()) - set(record["opened"])
-            self._schedule_answer(answer, save, record["after"], record["before"], False,
+            self._schedule_answer(answer, self._names(save), record["after"], record["before"], False,
                                   {d for d, sd in self._days(reg).items() if sd.get("isOpen")} | reopened)
             # True only when the undo restores opening hours the write opened.
             answer["openedHours"] = bool(record["opened"])
@@ -936,6 +1283,8 @@ class Link:
                 self.applied, self.undo, self.order = [], {}, None
                 self.uniforms, self.products, self.contracts, self.schedules = {}, {}, {}, {}
                 self.opened, self.terms = {}, {}
+                self.moved, self.hired, self.gone, self.myemployees = {}, set(), set(), False
+                self.screen_open = set()
                 self.pair, self.pair_delay, self.pair_requests, self.tokens = "approve", PAIR_DELAY, {}, {}
                 self.pair_cooldowns, self.strikes, self.reject_tokens = list(PAIR_COOLDOWNS), {}, False
                 self.day, self.hour = self._clock
@@ -961,6 +1310,12 @@ class Link:
                 self.reject_tokens = bool(body["rejectTokens"])
             if "tokens" in body:  # approvals already given: {token: origin}
                 self.tokens = dict(body["tokens"] or {})
+            if "hireGone" in body:  # candidate ids that have left the game's list since the bytes
+                self.gone = set(body["hireGone"] or ())
+            if "myEmployees" in body:  # the phone's MyEmployees app open, or closed
+                self.myemployees = bool(body["myEmployees"])
+            if "screenOpen" in body:  # the sites BizMan's schedule screen is open on
+                self.screen_open = {_address(a, "screenOpen[]") for a in body["screenOpen"] or ()}
             return {"refuseWrite": self.refuse_write, "busyWrites": self.busy_writes,
                     "writes": self.writes, "applied": len(self.applied)}
 
@@ -1076,7 +1431,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif route == "/debug/config":
             body = self._body()
             if body is not None:
-                self._json(200, self.link.configure(body))
+                try:
+                    self._json(200, self.link.configure(body))
+                except BadRequest as err:
+                    self._json(400, {"error": "bad_request", "detail": str(err)})
         else:
             self._other_method()
 
@@ -1127,7 +1485,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.close_connection = True
             self._json(401, {"error": "not_paired"}, {"Connection": "close"})
             return
-        if int(self.headers.get("Content-Length") or 0) > MAX_BODY:
+        if int(self.headers.get("Content-Length") or 0) > (MAX_HIRE_BODY if kind == "hire" else MAX_BODY):
             self._drain()
             self.close_connection = True
             self._json(413, {"error": "too_large"}, {"Connection": "close"})
@@ -1220,13 +1578,22 @@ def main() -> None:
                     help="answer every apply with this refusal: changed, refused[:rule], cannot_write[:reason], "
                          "busy, main_thread_unavailable, not_paired, too_large")
     ap.add_argument("--busy-writes", type=int, default=0, help="answer the next N writes 503 busy")
+    ap.add_argument("--hire-gone", action="append", default=[], metavar="CANDIDATE_ID",
+                    help="a candidate that has left the game's list since the bytes (repeatable): a hire of them is skipped as gone")
+    ap.add_argument("--myemployees", action="store_true",
+                    help="the phone's MyEmployees app is open: a hire apply is refused, its dry run blocked")
+    ap.add_argument("--screen-open", action="append", default=[], metavar="STREET:NUMBER",
+                    help="BizMan's schedule screen is open on this site (repeatable): "
+                         "a schedule or hire write touching it is refused screen_open")
     args = ap.parse_args()
     if not os.path.isfile(args.save):
         raise SystemExit(f"{args.save} is not a file")
     writes = [k for k in args.writes.split(",") if k] if args.writes else None
     link = Link(args.save, character=args.character, company=args.company, day=args.day, hour=args.hour,
                 cash=args.cash, build=args.build, schema=args.schema, throttle=args.throttle, refuse=args.refuse,
-                pair=args.pair, writes=writes, refuse_write=args.refuse_write, busy_writes=args.busy_writes)
+                pair=args.pair, writes=writes, refuse_write=args.refuse_write, busy_writes=args.busy_writes,
+                hire_gone=args.hire_gone, myemployees=args.myemployees,
+                screen_open=[_cli_address(a) for a in args.screen_open])
     server = MockServer(link, args.port).start()
     print(f"Serving {args.save} as the game link at {server.url}/  (Ctrl+C to stop)", flush=True)
     try:

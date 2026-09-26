@@ -953,6 +953,65 @@
    "wages": 0.0
   }
  ],
+ "candidates": [
+  {
+   "age": 206,
+   "demands": [
+    "ba:jobdemand_noweekends"
+   ],
+   "hoursLeft": 71,
+   "id": "IIIIcandidateIIIIIIIIIII",
+   "level": 88,
+   "name": "Ida Nord",
+   "skill": "ba:skill_customerservice",
+   "skills": [
+    {
+     "level": 88,
+     "skill": "ba:skill_customerservice"
+    },
+    {
+     "level": 31,
+     "skill": "ba:skill_cleaning"
+    }
+   ],
+   "source": "headhunter",
+   "wage": 26.5
+  },
+  {
+   "age": 164,
+   "demands": [],
+   "hoursLeft": 5,
+   "id": "OOOOcandidateOOOOOOOOOOO",
+   "level": 70,
+   "name": "Oskar Lind",
+   "skill": "ba:skill_customerservice",
+   "skills": [
+    {
+     "level": 70,
+     "skill": "ba:skill_customerservice"
+    }
+   ],
+   "source": "jobboard",
+   "wage": 22.0
+  },
+  {
+   "age": 243,
+   "demands": [],
+   "hoursLeft": 150,
+   "id": "VVVVcandidateVVVVVVVVVVV",
+   "level": 60,
+   "name": "Vera Holt",
+   "skill": "ba:skill_securityguard",
+   "skills": [
+    {
+     "level": 60,
+     "skill": "ba:skill_securityguard"
+    }
+   ],
+   "source": "agency",
+   "wage": 30.0
+  }
+ ],
  "cashFlow": null,
  "chains": [
   {
@@ -1041,6 +1100,165 @@
   "typesRun": 1,
   "typesTotal": 0
  },
+ "hiring": {
+  "bench": [],
+  "company": {
+   "ba:jobdemand_bronzehealthinsurance": false,
+   "ba:jobdemand_goldhealthinsurance": false,
+   "ba:jobdemand_peacefulworkenvironment": false,
+   "ba:jobdemand_silverhealthinsurance": false
+  },
+  "demandKinds": {
+   "ba:jobdemand_bronzehealthinsurance": "company",
+   "ba:jobdemand_cleanworkplace": "site",
+   "ba:jobdemand_coffeemachine": "site",
+   "ba:jobdemand_fivedaysweek": "schedule",
+   "ba:jobdemand_fourdaysweek": "schedule",
+   "ba:jobdemand_freeweekends": "schedule",
+   "ba:jobdemand_fulltime": "schedule",
+   "ba:jobdemand_goldhealthinsurance": "company",
+   "ba:jobdemand_hascalculator": "station",
+   "ba:jobdemand_hascomputermonitor": "station",
+   "ba:jobdemand_hasdeskcalendar": "station",
+   "ba:jobdemand_hasdeskglobe": "station",
+   "ba:jobdemand_hasgraphictablet": "station",
+   "ba:jobdemand_hasgraphictabletwithscreen": "station",
+   "ba:jobdemand_hasmousepad": "station",
+   "ba:jobdemand_hasofficephone": "station",
+   "ba:jobdemand_hasphone": "station",
+   "ba:jobdemand_hasprinter": "site",
+   "ba:jobdemand_largemeetingtable": "site",
+   "ba:jobdemand_noafternoons": "schedule",
+   "ba:jobdemand_nocleaning": "schedule",
+   "ba:jobdemand_noevenings": "schedule",
+   "ba:jobdemand_nomornings": "schedule",
+   "ba:jobdemand_nonights": "schedule",
+   "ba:jobdemand_parttime": "schedule",
+   "ba:jobdemand_peacefulworkenvironment": "company",
+   "ba:jobdemand_seatedatmultipurposechair": "station",
+   "ba:jobdemand_seatedatofficechair": "station",
+   "ba:jobdemand_seatedatofficechair2": "station",
+   "ba:jobdemand_seatedatofficedesk1": "station",
+   "ba:jobdemand_seatedatofficedesk2": "station",
+   "ba:jobdemand_silverhealthinsurance": "company",
+   "ba:jobdemand_sofa": "site",
+   "ba:jobdemand_standardfridge": "site",
+   "ba:jobdemand_watercooler": "site"
+  },
+  "people": {},
+  "recruiting": {},
+  "sites": [
+   {
+    "accepts": [
+     "ba:skill_customerservice",
+     "ba:skill_securityguard",
+     "ba:skill_cleaning"
+    ],
+    "address": {
+     "number": 10,
+     "street": "ba:street_secondavenue"
+    },
+    "facts": {
+     "ba:jobdemand_cleanworkplace": true,
+     "ba:jobdemand_coffeemachine": false,
+     "ba:jobdemand_hasprinter": false,
+     "ba:jobdemand_largemeetingtable": false,
+     "ba:jobdemand_sofa": false,
+     "ba:jobdemand_standardfridge": false,
+     "ba:jobdemand_watercooler": false
+    },
+    "key": "ba:street_secondavenue#10",
+    "kind": "shop",
+    "name": "HART. Gifts",
+    "new": false,
+    "noHours": true,
+    "planned": true,
+    "plans": {},
+    "stations": {}
+   },
+   {
+    "accepts": [
+     "ba:skill_customerservice",
+     "ba:skill_securityguard",
+     "ba:skill_cleaning"
+    ],
+    "address": {
+     "number": 2,
+     "street": "ba:street_broadway"
+    },
+    "facts": {
+     "ba:jobdemand_cleanworkplace": true,
+     "ba:jobdemand_coffeemachine": false,
+     "ba:jobdemand_hasprinter": false,
+     "ba:jobdemand_largemeetingtable": false,
+     "ba:jobdemand_sofa": false,
+     "ba:jobdemand_standardfridge": false,
+     "ba:jobdemand_watercooler": false
+    },
+    "key": "ba:street_broadway#2",
+    "kind": "shop",
+    "name": "HART. Corner",
+    "new": false,
+    "noHours": true,
+    "planned": true,
+    "plans": {},
+    "stations": {}
+   },
+   {
+    "accepts": [
+     "ba:skill_customerservice",
+     "ba:skill_securityguard",
+     "ba:skill_cleaning"
+    ],
+    "address": {
+     "number": 4,
+     "street": "ba:street_fifthavenue"
+    },
+    "facts": {
+     "ba:jobdemand_cleanworkplace": true,
+     "ba:jobdemand_coffeemachine": false,
+     "ba:jobdemand_hasprinter": false,
+     "ba:jobdemand_largemeetingtable": false,
+     "ba:jobdemand_sofa": false,
+     "ba:jobdemand_standardfridge": false,
+     "ba:jobdemand_watercooler": false
+    },
+    "key": "ba:street_fifthavenue#4",
+    "kind": "shop",
+    "name": "HART. Bare",
+    "new": true,
+    "noHours": true,
+    "planned": true,
+    "plans": {},
+    "stations": {}
+   },
+   {
+    "accepts": [
+     "ba:skill_deliverydriver"
+    ],
+    "address": {
+     "number": 9,
+     "street": "ba:street_pier"
+    },
+    "facts": {
+     "ba:jobdemand_cleanworkplace": true,
+     "ba:jobdemand_coffeemachine": false,
+     "ba:jobdemand_hasprinter": false,
+     "ba:jobdemand_largemeetingtable": false,
+     "ba:jobdemand_sofa": false,
+     "ba:jobdemand_standardfridge": false,
+     "ba:jobdemand_watercooler": false
+    },
+    "key": "ba:street_pier#9",
+    "kind": "warehouse",
+    "name": "HART. Depot",
+    "new": true,
+    "planned": false,
+    "plans": {},
+    "stations": {}
+   }
+  ]
+ },
  "homes": [],
  "hourFindings": [],
  "hours": [],
@@ -1116,6 +1334,7 @@
   "ba:neighborhood_murrayhill": "Murray Hill",
   "ba:neighborhood_thehamptons": "The Hamptons"
  },
+ "officeStaffing": [],
  "ownedBuildings": [],
  "plan": {
   "catalogue": {},

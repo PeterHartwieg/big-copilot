@@ -15,7 +15,7 @@ MonoBehaviour:
   ModId: BigCopilotLink
   DisplayName: Big Copilot Link
   Author: Peter Hartwieg
-  Version: 0.2.0
+  Version: 0.3.0
   AssetBundleName: 
   ModAssembly: {fileID: 5897886265953266890, guid: f0287921e47674114ab6725cae28b73f,
     type: 3}

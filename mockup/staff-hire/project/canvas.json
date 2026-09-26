@@ -1,0 +1,131 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-09-25T09:00:00Z"
+ },
+ "title": "Big Copilot Staff Hire",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [],
+ "boards": {
+  "Main.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 2300,
+   "title": "1 · Staff page · needs and moves",
+   "is_interactive": true
+  },
+  "CandidatesDrawer.dc.html": {
+   "x": 0,
+   "y": 2700,
+   "w": 1440,
+   "h": 2580,
+   "title": "2A · Candidates in a drawer under the role",
+   "is_interactive": true
+  },
+  "CandidatesTable.dc.html": {
+   "x": 1600,
+   "y": 2700,
+   "w": 1440,
+   "h": 1700,
+   "title": "2B · Candidates as a full table",
+   "is_interactive": true
+  },
+  "Review.dc.html": {
+   "x": 0,
+   "y": 5680,
+   "w": 1304,
+   "h": 1580,
+   "title": "3 · Review and confirm",
+   "is_interactive": true
+  },
+  "After.dc.html": {
+   "x": 0,
+   "y": 7660,
+   "w": 2216,
+   "h": 1000,
+   "title": "4 · After the confirm",
+   "is_interactive": true
+  },
+  "NotLinked.dc.html": {
+   "x": 0,
+   "y": 9060,
+   "w": 1440,
+   "h": 1640,
+   "title": "5 · Game not linked",
+   "is_interactive": true
+  },
+  "Phone.dc.html": {
+   "x": 1600,
+   "y": 0,
+   "w": 390,
+   "h": 844,
+   "title": "6 · Phone",
+   "is_interactive": true
+  }
+ },
+ "order": [
+  "Main.dc.html",
+  "CandidatesDrawer.dc.html",
+  "CandidatesTable.dc.html",
+  "Review.dc.html",
+  "After.dc.html",
+  "NotLinked.dc.html",
+  "Phone.dc.html"
+ ],
+ "notes": {
+  "try-main": {
+   "x": 0,
+   "y": -250,
+   "w": 560,
+   "maxH": 190,
+   "text": "Company › Staff replaces Payroll. Top to bottom: what hiring would do (tiles), moves first, one line a role summed over every planned site, the roles the board does not plan, the action bar, and Payroll as it was. Untick a move; hover a site chip, a tile or a count."
+  },
+  "try-candidatesdrawer": {
+   "x": 0,
+   "y": 2450,
+   "w": 560,
+   "maxH": 190,
+   "text": "OPTION A (recommended). Click “Candidates” on a line: its people open under it. Play with the demand chips and the two sliders: the picks, the counts and the bar above re-run. Untick a picked person and the next best steps in; tick an unpicked one to add them. Hover a demand: green tick = the site meets it, red = no site does."
+  },
+  "try-candidatestable": {
+   "x": 1600,
+   "y": 2450,
+   "w": 560,
+   "maxH": 190,
+   "text": "OPTION B. The same pool as a view of its own: roles down the left (planned first, then what the headhunters found for HQ and warehouses), filters under them, one big table. Same picking rules and controls as A."
+  },
+  "try-review": {
+   "x": 0,
+   "y": 5430,
+   "w": 560,
+   "maxH": 190,
+   "text": "Click a site row to open or close its people. Filled dot = hire, hollow = moved in, dashed = a place nobody fills. The week strip is which days each person works; hover it for the hours."
+  },
+  "try-after": {
+   "x": 0,
+   "y": 7410,
+   "w": 560,
+   "maxH": 190,
+   "text": "No Undo in 02: hiring cannot be undone, so the dialog says where to let someone go instead. 03 is the partial answer when candidates expired between the dry run and the hire."
+  },
+  "try-notlinked": {
+   "x": 0,
+   "y": 8810,
+   "w": 560,
+   "maxH": 190,
+   "text": "Read from a save file: the plan, the moves and the picks still work, so Peter can prepare the list; Review is disabled until the game is linked. Candidates' hours left are as of the save."
+  },
+  "try-phone": {
+   "x": 1600,
+   "y": -250,
+   "w": 390,
+   "maxH": 190,
+   "text": "At phone width each role is a card; the action bar sits at the bottom. Candidates opens the role as a full-screen list (not drawn)."
+  }
+ },
+ "designSystems": []
+}

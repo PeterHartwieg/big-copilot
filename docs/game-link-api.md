@@ -103,7 +103,7 @@ state from the listener's threads.
   "busy": false,
   "size": 5123456,
   "refreshedAt": "2026-09-22T14:33:20Z",
-  "writes": ["uniforms", "imports", "schedule"],
+  "writes": ["uniforms", "imports", "schedule", "hire"],
   "paired": false
 }
 ```
@@ -117,7 +117,8 @@ state from the listener's threads.
 - `cash`, `day`, `hour`, `minute` are the live values for a ticker; they can be newer
   than the served bytes.
 - `writes` lists the write kinds this mod accepts (see "Writes" below); a mod before 0.2.0
-  sends no `writes`, which a client reads as `[]`. `paired` is true only when this request
+  sends no `writes`, which a client reads as `[]`. Mod 0.2.0 lists `uniforms`, `imports`,
+  `schedule`; 0.3.0 adds `hire`, and a client offers a kind only when it is listed. `paired` is true only when this request
   carried a token the game approved for its origin, so a poll without one always says
   false. Both are
   additive: `schemaVersion` stays 1.
@@ -170,11 +171,12 @@ Every JSON answer, `/health` included, carries `Cache-Control: no-store`: a cach
 ### Writes
 
 Mod 0.2.0 and later. Three kinds change the game — `uniforms`, `imports`, `schedule` —
-and a fourth undoes the last write of a kind. The scope and the game rules behind each are
+and a fourth undoes the last write of a kind. Mod 0.3.0 adds `hire`, which hires candidates,
+moves staff between sites and writes their weeks in one call, and has no undo. The scope and the game rules behind each are
 `docs/mod-write-back-scope.md`; this section is only the wire.
 
 **Every write** is `POST /write/<kind>` with a JSON body (`Content-Type: application/json`,
-at most 256 KiB, else `413 {"error":"too_large"}`) and the header
+at most 256 KiB, a `hire` body at most 2 MiB, else `413 {"error":"too_large"}`) and the header
 `Authorization: Bearer <token>`, the token the game issued this browser when the player
 approved it (see "Approving a browser" below).
 
@@ -216,8 +218,8 @@ approved it (see "Approving a browser" below).
 | `401` | `{"error":"not_paired"}` | No valid token for this origin: ask the game to approve this browser |
 | `409` | `{"error":"changed","rows":[...]}` | An `expect` no longer holds; nothing written |
 | `409` | `{"error":"refused","rows":[...]}` | A rule refused a row (`rows[i].error`); nothing written |
-| `409` | `{"error":"cannot_write","reason":"saving"}` | An apply while the game is saving or `CanSave()` is false (a dry run skips this check); `reason` as for `/refresh` (`saving`, `placement`, `interior`, `casino`, `other`) |
-| `413` | `{"error":"too_large"}` | Body over 256 KiB |
+| `409` | `{"error":"cannot_write","reason":"saving"}` | An apply while the game is saving or `CanSave()` is false (a dry run skips this check); `reason` as for `/refresh` (`saving`, `placement`, `interior`, `casino`, `other`), and for `hire` also `myemployees` |
+| `413` | `{"error":"too_large"}` | Body over 256 KiB (a `hire` body: over 2 MiB) |
 | `503` | `{"error":"busy"}` or `{"error":"main_thread_unavailable"}` | Walk in flight past three seconds, or no city loaded |
 
 `rows` in a `409` has the same shape as in the dry run's `200`, so the page renders both
@@ -414,6 +416,133 @@ A test vector both sides pin: the two lines
 `0|0|12|AAAAemployeeAAAAAAAAAAAA|CCCCcleanCCCCCCCCCCCCCCC|0` and
 `1|8|20|AAAAemployeeAAAAAAAAAAAA|BBBBstationBBBBBBBBBBBBB|1` print as `ee01ac86`.
 
+#### `POST /write/hire`
+
+Mod 0.3.0 and later. Hires headhunter candidates and assigns them to a site, moves employees
+between sites, and writes the weeks of the sites involved, in one call. Everything in "Every
+write" above holds, except that there is no undo and a candidate who has left the game's list
+is skipped rather than refused (below). The game rules behind it are
+`docs/mod-write-back-scope.md` section 11.
+
+```json
+{"dryRun": true,
+ "sites": [{"address": {"street": "ba:street_secondavenue", "number": 12},
+            "expect": "9f86d081",
+            "openAllHours": false,
+            "days": [{"d": 1, "shifts": [{"f": 8, "t": 20, "employeeId": "…", "itemInstanceId": "…"}]}]},
+           {"address": {"street": "ba:street_bleecker", "number": 40}, "expect": null, "days": null}],
+ "hires": [{"candidateId": "…", "address": {"street": "ba:street_secondavenue", "number": 12},
+            "expect": {"wage": 26.5}, "seenHoursLeft": 71}],
+ "moves": [{"employeeId": "…", "from": {"street": "…", "number": 7},
+            "to": {"street": "ba:street_secondavenue", "number": 12}}]}
+```
+
+- `sites`, `hires` and `moves` are all required; any of them may be empty.
+- `hires[]`: a candidate (`EmployeeInstance.id` in `GameInstance.CandidateEmployeeInstances`)
+  hired and assigned to `address`. `expect.wage` is the candidate's `hourlyWage` as the bytes
+  had it; the mod compares it to the cent. `seenHoursLeft` (a number or null, optional) is
+  what the page showed; the mod does not check it, since `hoursUntilExpiring` falls every game
+  hour, and answers the live value.
+- `moves[]`: an employee assigned to `to`. `from` is where the bytes had them, `null` for an
+  unassigned employee; it is the move's compare-and-set. `from` equal to `to` is `400`.
+- `sites[]`: every address a hire or a move targets, plus any move source whose week the
+  page rewrites; nothing else (`400`). A target with no `sites[]` entry is `400`.
+  - `days` has `/write/schedule`'s shape and rules and replaces the site's seven days;
+    `expect` is then the site's shift print (a string) and `openAllHours` works as there.
+  - `days: null` assigns only and leaves the week as it is; `expect` must then be `null`
+    (`400` otherwise). Headquarters and warehouses are always written this way.
+  - A shift may name someone this call hires or moves in: they count as assigned to the site
+    their hire or move names, and as gone from the site a move takes them from.
+- The same candidate or employee twice (across `hires` and `moves`) or one site twice is `400`.
+- **Size.** A hire body may be up to 2 MiB, since it carries every touched site's full week;
+  every other write 256 KiB. Over that, `413 too_large`. The page measures the body before it
+  sends it and refuses one over 2 MiB with its own message.
+
+**What the page sends** (the board's side of the contract, which the mod does not check):
+
+- `days` replaces all seven days, so for a factory or an office the page keeps, in `days`,
+  the site's live shifts on stations its plan does not own (drivers, cleaners).
+- A move source whose week the page does not rewrite loses the mover's shifts there (the
+  game's move clears them; `moved[].shiftsCleared` says how many). The page names that in its
+  review before the confirm.
+- People in training (`EmployeeInstance.trainingSession` set, the game's `IsTraining`) are
+  never proposed for a move; the mod would refuse them `in_training`.
+
+**What the mod does, in this order, on one main-thread walk**
+
+1. Every check below, for every row. A dry run stops here.
+2. Moves, as the game's MyEmployees "Assign business" mass action does: the person's shifts
+   and delivery-driver slot are cleared (`EmployeeHelper.UnassignEmployeeFromAllWorkshifts`,
+   which also adds the game's to-do), `CustomerDemandHelper.ReloadCachedFulfilled` at the
+   new and the old business, then `assignedAddress` is set.
+3. Hires, as the game's "Assign business and hire" mass action does: `assignedAddress` is
+   set, then `EmployeeHelper.HireCandidate`. The candidate keeps the same id, leaves
+   `CandidateEmployeeInstances`, gets `dayHired`, and a pending salary negotiation with them
+   ends accepted.
+4. Each `sites[]` entry with `days`: the schedule write's apply, unchanged.
+5. `MarkChange()`, one notification ("Big Copilot hired 34 and moved 3"), a refresh. The
+   `schedule` kind's undo is cleared if it belongs to a site this call wrote (a move that
+   cleared someone's shifts counts as writing the site they left).
+
+**Gone.** A candidate the game's list no longer holds (expired, hired or discarded in the
+phone since the bytes, or an id that never was one: the mod cannot tell these apart) is
+`gone`. Gone never refuses: the hire is skipped, every shift that names them is dropped from
+its site's `days` (those hours stay empty) and the rest is checked and applied. A dry run
+reports it the same way.
+
+**MyEmployees open.** While the phone's MyEmployees app is open (its candidate list and mass
+actions would go stale), an apply answers `409 {"error":"cannot_write","reason":"myemployees"}`
+and writes nothing. Unlike `saving`, a dry run checks it too: `200`, `ok` false,
+`"blocked": "myemployees"`, so the page can say "Close MyEmployees in the game" before the
+confirm.
+
+```json
+{"ok": true, "kind": "hire", "dryRun": true,
+ "hired": [{"candidateId": "…", "name": "Ada Brandt", "business": "Costy Co 2", "wage": 26.5, "hoursLeft": 70}],
+ "moved": [{"employeeId": "…", "name": "…", "from": "Costy Co 5", "to": "Costy Co 2", "shiftsCleared": 4}],
+ "skipped": [{"candidateId": "…", "name": "…", "reason": "gone", "hoursDropped": 44}],
+ "sites": [{"address": {}, "business": "Costy Co 2", "before": {"shifts": 84, "print": "…"},
+            "after": {"shifts": 90, "print": "…"}, "removed": 84, "added": 90, "openedHours": false,
+            "leftWithout": [], "warnings": [], "siteError": null}],
+ "wageAdded": 48.5,
+ "rows": []}
+```
+
+- `hired` and `moved` are what the call did (a dry run: would do), in request order: every
+  hire and move with no row error of its own. `hired[].wage` is the live `hourlyWage`, `hoursLeft` the live
+  `hoursUntilExpiring`. `moved[].from` is the business the person leaves (`null` from the
+  bench); `shiftsCleared` how many shifts they held there.
+- `skipped[]`: each gone candidate; `name` is null when the mod no longer knows them, and
+  `hoursDropped` sums the hours of the shifts dropped for them.
+- `wageAdded` is the sum of `hourlyWage` over `hired`, per hour (the page turns it into a day).
+- `sites[]`, one per request entry, in request order, with the schedule write's answer fields.
+  An assign-only site answers `before` and `after` null and `removed`/`added` 0.
+  `leftWithout` does not list people this call moves away. `siteError` repeats the site's
+  row error, if any.
+- `blocked` is present only as above.
+- `rows`: every refusal, each `{"scope", "id" | "address", "d"?, "i"?, "error"}`, moves first,
+  then hires, then sites with their shifts, each in request order:
+
+| Scope | Key | Errors, in the order they are checked |
+| --- | --- | --- |
+| `move` | `id` (employee) | `not_found` (no employee by that id), `changed` (not at `from` any more), `in_training` (the game's move turns a person in training away), `no_skill` (none of the skills the target takes) |
+| `hire` | `id` (candidate) | `changed` (wage differs), `no_skill` (none of the skills the target takes) |
+| `site` | `address` | `not_found`, `changed` (print, sites with `days` only), `not_rented`, `no_business` (no business name, or `ba:businesstype_empty`: the game's assign filter leaves it out), `headquarters` (`days` not null at a headquarters), `screen_open` (the BizMan schedule is open on it, or an auto-fill is running; assign-only sites too) |
+| `shift` | `address`, `d`, `i` | the schedule write's: `not_assigned`, `no_station`, `no_skill`, `bad_hours`, `overlap_person`, `overlap_station`, judged as if the call's moves and hires had happened |
+
+The skills a site takes a person for are the game's assign check: the business type's
+`employeePrimarySkills`, plus cleaning where the building `NeedsCleaning`, security guard
+where the business type has the `allowtheft` tag, and delivery driver where the building
+type's `requiredBuildingSkills` names it. The payload's `hiring.sites[].accepts` is the same
+list, so the board never proposes a `no_skill` row.
+
+An apply with any row answers `409` with the rows: `changed` when any row's error is
+`changed` (the page refreshes and re-plans), else `refused`. Nothing is written.
+
+A hire has no undo: `POST /write/undo {"kind": "hire"}` answers `409 {"error":"no_undo"}`.
+To let someone go, the player uses MyEmployees in the game. The game's approval popup names
+hiring among what the board may change.
+
 #### `POST /write/undo`
 
 ```json
@@ -429,14 +558,15 @@ or a station sold since answers `changed`). Answers like the write it undoes, wi
 skills it cleared in `set`; imports and schedule answer `before` as the state the undo
 found and the values as they now stand;
 `409 {"error":"nothing_to_undo"}` when there is none; `409 {"error":"changed"}` when the
-game has moved on. An undo is not itself undoable; a new write of the kind replaces what
+game has moved on; `409 {"error":"no_undo"}` for `"kind": "hire"`, which is never undone. An undo is not itself undoable; a new write of the kind replaces what
 undo would restore. One board per game: with two boards writing the same kind, an undo
 restores whichever write came last.
 
 ### Anything else
 
-`404 {"error": "not_found", "endpoints": [...]}`, listing the paths above (0.1.0 lists
-`/health`, `/save`, `/refresh`).
+`404 {"error": "not_found", "endpoints": [...]}`, listing the paths above: 0.1.0 lists
+`/health`, `/save`, `/refresh`; 0.2.0 adds `/write/uniforms`, `/write/imports`,
+`/write/schedule`, `/write/undo`, `/pair/request`, `/pair/status`; 0.3.0 adds `/write/hire`.
 Methods other than the ones above answer `405`.
 
 ## CORS and the browser
@@ -517,3 +647,18 @@ Serves the file with this contract, `source: "mock"`. `POST /refresh` and a chan
 the file's modification time both re-read it and issue a new stamp, so pointing the
 mock at the game's own autosave folder gives a live-looking link without the mod.
 `--throttle`, `--refuse <reason>` and `--schema <n>` exercise the clients' error paths.
+For the writes, `--refuse-write <error>[:<detail>]`, `--busy-writes <n>` and `--writes <kinds>`
+do the same, and for `hire`, `--hire-gone <candidateId>` (repeatable) makes a candidate gone
+and `--myemployees` opens the phone's MyEmployees app. For `schedule` and `hire`,
+`--screen-open <street>:<number>` (repeatable) opens BizMan's schedule screen on a site: a
+write touching it answers the site error `screen_open`, in the mod's order, for assign-only
+hire sites too and in dry runs. `POST /debug/config` changes all of
+these while the mock runs (`refuseWrite`, `busyWrites`, `writes`, `hireGone`, `myEmployees`,
+`screenOpen` as a list of `{street, number}`, `reset`), and `GET /debug/writes` lists the applies. The mock never rewrites the file: an
+apply is kept in memory over the bytes, so a later write sees it, but `/save` still serves the
+file as it is. For `hire` it reads the candidates from the save's
+`CandidateEmployeeInstances`, and what a site takes a person for from the business type,
+through the payload's own table (`ASSIGN_SKILLS` in `ba_dashboard.py`, read from the game's
+type data), so a warehouse takes drivers only. For a type that table does not know, the
+site's stations stand in. The mock takes a hire body up to 2 MiB and every other write up to
+256 KiB, as the mod does.

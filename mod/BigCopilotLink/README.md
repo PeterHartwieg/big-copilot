@@ -4,9 +4,10 @@ This mod lets [Big Copilot](https://bigcopilot.com) read the game you are playin
 instead of a save file you picked by hand. While a city is loaded it serializes the
 running game with the game's own serializer settings, on a thread of its own, and
 serves the resulting bytes — a `.hsg` as the game would write it — over loopback
-HTTP. It holds no model of the game. From 0.2.0 it also makes three changes the board
+HTTP. It holds no model of the game. From 0.2.0 it also makes the changes the board
 proposes, and only when you confirm them on the board from a browser you approved in
-the game: default uniforms, import contract amounts, and a business's staff schedule (see
+the game: default uniforms, import contract amounts, a business's staff schedule and,
+from 0.3.0, hiring the headhunters' candidates and moving staff between businesses (see
 "What it changes" below).
 
 **Players:** subscribe on the Steam Workshop,
@@ -50,9 +51,9 @@ Mod Builder.
   `HKEY_CURRENT_USER\Software\Hovgaard Games\Big Ambitions`, a plist on a Mac), where the
   SDK keeps mod options too. **Forget approved browsers** in the mod's options empties it.
 
-## What it changes (0.2.0)
+## What it changes (0.2.0 and 0.3.0)
 
-Four `POST` endpoints, all in [`docs/game-link-api.md`](../../docs/game-link-api.md)
+Five `POST` endpoints, all in [`docs/game-link-api.md`](../../docs/game-link-api.md)
 under "Writes":
 
 | Endpoint | What it changes |
@@ -60,7 +61,8 @@ under "Writes":
 | `/write/uniforms` | Puts a preset (the one named "Default" unless the page names another) on every skill of a site's Uniforms window that has no uniform yet (or on the skills the page names). A skill you dressed yourself is never touched. |
 | `/write/imports` | Sets purchasing-agent contract amounts, switches a stopped contract back on (with Repeating), and reorders contracts in the plan order. It never stops a contract, and never adds or removes a product. |
 | `/write/schedule` | Replaces one business's seven days of shifts; with `openAllHours`, also opens every day 0 to 24. Never at a headquarters. |
-| `/write/undo` | Puts back what the last write of a kind changed, in this city session, where the game still holds what that write left. |
+| `/write/hire` | From 0.3.0. Hires headhunter candidates into businesses, moves employees from one business to another, and writes the weeks of the businesses involved, in one call: what MyEmployees' "Assign business and hire" and "Assign business" do, then the schedule write for each week sent. A candidate who has left the game's list since the board read it is skipped, and their shifts are left empty; anything else refused refuses the whole call. Never undone. |
+| `/write/undo` | Puts back what the last write of a kind changed, in this city session, where the game still holds what that write left. A hire answers `no_undo`: let someone go in MyEmployees. |
 
 - **Approving a browser.** Every write needs `Authorization: Bearer <token>`, a token
   the game gives a browser once you allow it. The first write from a browser asks in the
@@ -89,9 +91,13 @@ under "Writes":
 - **Not while you are looking at it.** A schedule write is refused while the BizMan
   schedule is open on that business (or the game's auto-fill is still filling it), an
   imports write while the purchasing-agent plan screen shows that contract or, for a
-  reorder, while a headquarters' purchasing-agent list is on screen.
+  reorder, while a headquarters' purchasing-agent list is on screen. A hire is refused
+  while the phone's MyEmployees app is open anywhere (`cannot_write` `myemployees`; a dry
+  run answers `"blocked": "myemployees"`), and on a business whose BizMan schedule is
+  open.
 - **After a write** the mod marks the game as changed (as the game's own screens do),
-  shows "Big Copilot updated … at …", and refreshes the served bytes so the board
+  shows "Big Copilot updated … at …" (a hire: "Big Copilot hired 3 and moved 1 staff"),
+  and refreshes the served bytes so the board
   rebuilds from what the game now holds. It does not save the game.
 - **Threading.** A write never runs while a refresh walk is in flight on the worker
   thread: the main thread turns the job away without touching anything, and the
@@ -176,7 +182,7 @@ the worker thread failed again on its second chance; serializing on the main thr
    | ModId | `BigCopilotLink` |
    | DisplayName | `Big Copilot Link` |
    | Author | `Peter Hartwieg` |
-   | Version | `0.2.0` |
+   | Version | `0.3.0` |
    | Mod Assembly | drag `BigCopilotLink.asmdef` into the field |
    | Locales Folder | drag the `Locales` folder into the field; the option labels are keys in `Locales/en.json` |
 
@@ -216,7 +222,7 @@ Launch the game, enable **Big Copilot Link** in the Mods menu, load a save, then
 curl http://127.0.0.1:8322/health
 ```
 
-Expect `{"ok":true,"schemaVersion":1,"modVersion":"0.2.0","source":"game",…,"writes":["uniforms","imports","schedule"],"paired":false}` and a
+Expect `{"ok":true,"schemaVersion":1,"modVersion":"0.3.0","source":"game",…,"writes":["uniforms","imports","schedule","hire"],"paired":false}` and a
 `[BigCopilotLink] serving the game to Big Copilot on http://127.0.0.1:8322/` line in
 the player log (`%USERPROFILE%\AppData\LocalLow\Hovgaard Games\Big Ambitions\Player.log`;
 on a Mac, `~/Library/Logs/Hovgaard Games/Big Ambitions/Player.log`), then, a few
@@ -261,6 +267,8 @@ curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/js
   --data-binary @imports.json http://127.0.0.1:8322/write/imports
 curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
   -d '{"kind":"uniforms","dryRun":false}' http://127.0.0.1:8322/write/undo
+curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  --data-binary @hire.json http://127.0.0.1:8322/write/hire
 ```
 
 The health call answers `"paired":true`. A POST with no body needs
@@ -342,6 +350,49 @@ the new bytes.
     write waits for the walk (up to three seconds) and applies, or answers `503 busy`
     with nothing written; never a half-written state.
 
+### In-game checklist for 0.3.0
+
+The plan's list (`docs/staff-hire-plan.md`, "What Peter does on the Mac"), with what to
+look at. Built as above; `curl http://127.0.0.1:8322/health` answers `"modVersion":"0.3.0"`
+and `"writes"` includes `"hire"`. The board on the mock's scenarios has passed first
+(the integrator's QA), and the browser is approved, so the popup's new text ("…and to
+hire and move staff…") was seen at least once (Forget approved browsers, then write).
+
+1. **Two hires into one shop.** Dry run (the review), then apply. Both are in
+   MyEmployees at that shop, gone from the candidate list; their shifts are in the BizMan
+   schedule; one notification ("Big Copilot hired 2 new staff"); the board refreshes. Note
+   whether the game's "no shifts"/idle to-do for them clears after the week is written.
+2. **MyEmployees open.** Open the phone's MyEmployees app and press Review on the board:
+   refused with "Close MyEmployees" (the dry run's `blocked`). Close it, retry: works.
+   This is the check on how the mod tells the app is open:
+   `UIs.Instance.fullMenu.myEmployees.isActiveAndEnabled`. Also try another phone app
+   open (say BizMan) and the phone closed: neither blocks. If it blocks with the phone
+   closed, or does not block with MyEmployees open, that member is wrong.
+3. **A gone candidate.** After the dry run, discard one candidate in the phone (then
+   close MyEmployees), then confirm: the answer is partial, that one is in `skipped` with
+   `hoursDropped`, the rest are hired, and that candidate's hours stay empty in the
+   schedule. The done dialog counts only who was hired at that site, with the open
+   place shown apart. Then wait for the board to read the game again (the "Pick N more"
+   button comes on), press it, and confirm: the replacement is hired into that site and
+   its week is written with them on the open hours.
+4. **A move.** Move a spare from one shop to another: gone from the source's schedule,
+   working at the target (MyEmployees shows the new business). A person in training
+   answers `in_training`.
+5. **Schedule open.** With BizMan → Schedule open on a target shop the write answers
+   `screen_open`, also when that shop is only assigned to (no week sent).
+6. **A factory and an office.** A factory hire with its week (the first factory schedule
+   the mod writes: check the machines take the shifts) and an office hire with its week.
+   The factory's delivery drivers and the office's cleaners keep their shifts.
+7. **Headquarters.** An HR manager hired into the headquarters: assigned, no shifts
+   written (`days` null).
+8. **Thirty or more hires in one call.** Note any hitch in the frame: it answers
+   whether the write needs to report progress. Then the body size: a company-wide hire
+   whose body is well over 256 KiB (ten or more shops' weeks; the browser's network tab
+   shows the request size) goes through, not `413 too_large`. A hire body may be up to
+   2 MiB; every other write stays at 256 KiB.
+9. **Save and reload.** The hires persist with their hire day; the candidates badge in
+   the phone counts right.
+
 ## Publish to the Workshop
 
 The Workshop item is 3806322395, owned by Peter's Steam account; its page, art and
@@ -352,7 +403,9 @@ folder's root, 1 MB at most), then in the game's main menu open **Mods → Mod C
 choose **Edit mod** on the item under **My created mods**, select the mod folder, fill in **Change Logs** and
 set **Target Build** to the game build it was built against, and upload. The
 description is Steam BBCode: `mod/workshop/description.bbcode`, pasted whole.
-`node mod/workshop/render.cjs` re-renders the thumbnail and `how-it-works.png` (an extra
+`mod/workshop/thumbnail.png` is the live Workshop preview (the "Big Copilot Link. Business
+dashboard" card, 2048 px); `node mod/workshop/render.cjs` would overwrite it with the older
+orb art from `art.html`, so render only `how-it-works.png` (an extra
 image added on the Workshop page under Add/edit images & videos) from `art.html`.
 
 ## Options
@@ -395,6 +448,12 @@ Read by reflection and confirmed by the Mac compile. Public unless noted.
 | `PurchasingAgentPlanUI._currentImportPartnership` (**private**, reflection), reached through `UIs.Instance.fullMenu.bizMan.business.purchasingAgentsPlanList.purchasingAgentPlanUISettings` | "is the plan screen open on this contract" |
 | `UIs.Instance.fullMenu.schedule` (`BizManSchedule`), `ScheduleHelper.Business`, `BizManSchedule._activeAutoFillers` (**private**, reflection), `ScheduleAutoFiller.Registration` | "is the schedule screen open on this business, or its auto-fill running" |
 | `ScheduleDay`, `WorkShift`, `OpeningHourSlot` fields; `ScheduleHelper.IsCleaningStation(ItemInstance)`; `EmployeeInstance.UpdateWeeklyHoursAndDays`, `UpdateAssignedWorkStationItems`, `IsAssignedToAnyWorkShift`, `UnAssignWork`, `AddTodoTask`, `HasAnySkillWithTag`; `BusinessSecurityHelper.UpdateSecurityLevel`; `TasksUI.forceCheckForCompletedTodoTasks`; `CustomerEntriesHelper.UpdateCustomerEntriesForPlayerBusiness`, `BusinessHelper.CheckIfTheaterHasNoActors`, `IsMissingEmployeeTaskActive`, `ForceRecheckMissingEmployeeAlert`, `GlobalEvents.onBuildingRegistrationChange` | the schedule. `ScheduleHelper.UpdateEmployeeAfterWorkShiftChange` is **private**, so it is re-implemented from its IL; its `UpdateHQPlans` step never applies, because headquarters are refused |
+| `GameInstance.CandidateEmployeeInstances` (`List<EmployeeInstance>`); `EmployeeInstance` fields `id`, `hourlyWage`, `assignedAddress`, `characterData` (`name`, `skills[].name`), `candidateInfo` (`CandidateInfo.hoursUntilExpiring`), properties `IsCandidate` (`candidateInfo != null`) and `IsTraining` (`trainingSession != null`), `IsAssignedToAnyBusiness()`, `AddTodoTask(TodoTaskType, bool)` with `TodoTaskType.EmployeeIdle` (5) and `EmployeeUnassigned` (13); static `EmployeeHelper.GetEmployeeById(id, false)`, `HireCandidate(EmployeeInstance)`, `UnassignEmployeeFromAllWorkshifts(EmployeeInstance)`; static `Entities.CustomerDemandHelper.ReloadCachedFulfilled(Address)`; the property `BuildingRegistration.Address` | 0.3.0, hire and move: the calls MyEmployees' mass actions make (`AssignToBusinessAndHireMassAction` and `AssignBusinessMassAction` closures). `GetEmployeeById` also finds candidates (the dictionary holds them; `DiscardCandidate` removes them), so the write treats an `IsCandidate` result as nobody's staff |
+| `Helpers.BusinessTypeHelper.GetData(reg)` (`BusinessType`: `employeePrimarySkills`, `HasTag(TagRef.Businesstag.allowtheft)`), `Buildings.BuildingTypeHelper.GetData(reg)` (`BuildingTypeData`: property `NeedsCleaning`, `requiredBuildingSkills`) | 0.3.0: the skills a business takes a person for, as the mass actions' assign check builds them |
+| `UIs.Instance.fullMenu.myEmployees` (`UI.Smartphone.Apps.MyEmployees.MyEmployees`, a `MonoBehaviour`) and its `isActiveAndEnabled` | 0.3.0: "is MyEmployees open". `FullMenu.SelectApp` activates only the chosen app under `appsContainer` and closing the menu deactivates it when the fade ends; the app reloads its lists in `OnEnable`, so the mod does not touch its scrollers. **Unverified in game**: 0.3.0 checklist item 2 |
+
+The 0.3.0 rows were read from build 3682's IL and by reflection on 25 September 2026 and
+have not been compiled yet.
 
 Whether the game restores persisted option values by calling the change callbacks at
 registration is unverified. It is safe either way: restarting the listener is

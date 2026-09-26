@@ -170,12 +170,12 @@ test('the company-wide demand finding lands on the Crew with the most people lac
     assert.equal(await page.locator('#sp-crew.xl-arrived').count(), 1);
     assert.equal(await page.locator('#sp-crew .sp-dem.sp-hit').count(), 1);
     assert.match(await page.locator('#sp-crew .sp-dem.sp-hit').innerText(), /Gold Health Insurance/);
-    // No site lacks it any more: the link falls back to Payroll.
+    // No site lacks it any more: the link falls back to Staff.
     await page.evaluate(() => {
       D.businesses.forEach(b => { b.staffLackingCompany = 0; b.staffDemands = []; });
       siteOpen = false; drawSite();
       goToAlert({id: 'c1', level: 'warn', site: 'Company', siteKey: null, group: 'companydemand', text: ''});
     });
-    assert.equal(await page.evaluate(() => [page, siteOpen, sub.company].join(' ')), 'company false payroll');
+    assert.equal(await page.evaluate(() => [page, siteOpen, sub.company].join(' ')), 'company false staff');
   } finally { await page.close(); }
 });
