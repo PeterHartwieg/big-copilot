@@ -1005,6 +1005,50 @@ def _service_stations(names: Names) -> dict:
     return out
 
 
+# The fees a station's help page says its employee can charge for, from the
+# "At this station, employees can do the following" list.
+_STATION_FEE_RE = re.compile(r"\]\(fees-([a-z0-9_]+)\)")
+
+
+def _station_roles(stations: dict, names: Names | None) -> dict:
+    """The role each serving station belongs to: its skill, unless that skill's
+    stations do different work.
+
+    A hairdresser's chairs and its head wash both ask for a Hair Stylist, but
+    the chair cuts, styles and colours while the head wash only shampoos. A
+    head wash cannot give a haircut, so the two are separate queues, each
+    planned against the site's demand, and pooling them let the head wash's 10
+    an hour stand in for the chairs. Stations of one skill are split by the
+    fees their help pages list; the group holding the alphabetically first
+    station keeps the bare skill as its key, so every site whose skill does one
+    kind of work keeps the key it always had. Hair Stylists stay one pool of
+    people either way: the key splits the queue, not the hiring.
+    """
+    if names is None:
+        return {slug: skill for slug, (skill, _rate) in stations.items()}
+    work = collections.defaultdict(lambda: collections.defaultdict(list))
+    for slug, (skill, _rate) in stations.items():
+        text = names.locale.get(f"help_{slug}_content", "")
+        fees = frozenset(_STATION_FEE_RE.findall(text.split("purchased from")[0]))
+        work[skill][fees].append(slug)
+    out = {}
+    for skill, groups in work.items():
+        for rank, slugs in enumerate(sorted(groups.values(), key=min)):
+            for slug in slugs:
+                out[slug] = skill if rank == 0 else f"{skill}|{min(slugs)}"
+    return out
+
+
+def _role_key(role: dict):
+    """A role's own key: its skill, or the split key _station_roles() gave it."""
+    return role.get("key", role["skill"])
+
+
+def _station_role(station: dict):
+    """The role key a grid station belongs to, as _role_key() reads a role's."""
+    return station.get("role", station["skill"])
+
+
 def _office_posts(names: Names) -> set:
     """The computers an office professional is posted to, from Computer Options."""
     _head, _, options = names.locale.get(COMPUTER_GROUP_HELP, "").partition("Options include:")
@@ -5230,6 +5274,9 @@ def _cap_first(text):
         if text.key == "sp.py.limit.station":
             return msg("sp.py.limit.station.first", "{stations}", stations=_cap_first(text.p["stations"]),
                        station_name=text.p["station_name"])
+        if text.key == "sp.py.limit.station.staff":
+            return msg("sp.py.limit.station.staff.first", "{station} staffing",
+                       station=_cap_first(text.p["station"]), station_name=text.p["station_name"])
     return text[:1].upper() + text[1:]
 
 
@@ -6223,6 +6270,7 @@ def _hourly(
     finding is which.
     """
     by_key = {b["key"]: b for b in businesses}
+    role_of = _station_roles(stations, names)
     out = []
     for b in buildings:
         key = site_key((b["StreetName"], b["StreetNumber"]))
@@ -6249,7 +6297,7 @@ def _hourly(
             [round(sum(h) / len(h), 1) if h else None for h in row] for row in seen
         ]
 
-        here, labels, slugs = {}, {}, {}
+        here, labels, slugs, keys = {}, {}, {}, {}
         for holder in save.items(b["itemInstances"]):
             item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
             if item and item.get("itemName") in posts:
@@ -6258,19 +6306,27 @@ def _hourly(
                 labels[item.get("id")] = (
                     names.label(item["itemName"]) if names else item["itemName"]
                 )
-        # One role per skill the site's stations ask for. A set decides the
-        # order they reach the payload in.
-        by_skill = collections.defaultdict(dict)
+                keys[item.get("id")] = (
+                    None if office else role_of.get(item["itemName"], here[item.get("id")][0])
+                )
+        # One role per queue the site's stations hold: per skill, with a skill
+        # whose stations do different work split by _station_roles(). A set
+        # decides the order they reach the payload in.
+        by_role = collections.defaultdict(dict)
+        skill_of = {}
         for post, (skill, rate) in here.items():
-            by_skill[skill][post] = rate
+            by_role[keys[post]][post] = rate
+            skill_of[keys[post]] = skill
         roles = []
-        for skill in _in_order(by_skill):
+        for role_key in _in_order(by_role):
+            skill = skill_of[role_key]
             rates = {}
-            for post, rate in by_skill[skill].items():
+            for post, rate in by_role[role_key].items():
                 label = labels[post]
                 rates[label] = max(rates.get(label, 0), rate)
             biggest = max(_in_order(rates), key=rates.get)
             role = {
+                "key": role_key,
                 "skill": skill,
                 "label": names.label(skill) if skill and names else skill,
                 # The station of this role worth adding another of: the
@@ -6278,9 +6334,9 @@ def _hourly(
                 "station": biggest,
                 # Its game key, so a sentence can carry the station's name
                 # as a token beside the English words made of it.
-                "stationKey": min(slugs[p] for p in by_skill[skill] if labels[p] == biggest),
-                "counters": sum(by_skill[skill].values()),
-                "stationCount": len(by_skill[skill]),
+                "stationKey": min(slugs[p] for p in by_role[role_key] if labels[p] == biggest),
+                "counters": sum(by_role[role_key].values()),
+                "stationCount": len(by_role[role_key]),
                 "staffed": [[0] * 24 for _ in range(7)],
                 "onShift": [[0] * 24 for _ in range(7)],
                 # Stations of this role manned that hour. Capacity and furniture
@@ -6296,6 +6352,12 @@ def _hourly(
             role["one"] = _lower_first(role["station"])
             role["many"] = _plural(role["one"])
             roles.append(role)
+        # Two roles of one skill at one site -- a hairdresser's chairs and head
+        # wash -- cannot both be named by the skill, so their words name the
+        # station instead (_role_words()).
+        for role in roles:
+            if sum(1 for other in roles if other["skill"] == role["skill"]) > 1:
+                role["shared"] = True
 
         # The roster, read the same way the game reads it: scheduleDay.day is the
         # game day modulo 7, with 7 standing in for Sunday's 0. A site with no
@@ -6315,11 +6377,11 @@ def _hourly(
             )
         staffed = [[0] * 24 for _ in range(7)]
         on_shift = [[0] * 24 for _ in range(7)]
-        if by_skill:
+        if by_role:
             for scheduled in save.items(b.get("scheduleDays")):
                 wd = scheduled["day"] % 7
-                manned = {skill: [set() for _ in range(24)] for skill in by_skill}
-                on = {skill: [0] * 24 for skill in by_skill}
+                manned = {k: [set() for _ in range(24)] for k in by_role}
+                on = {k: [0] * 24 for k in by_role}
                 for shift in save.items(scheduled.get("workShifts")):
                     if shift.get("type") != STATION_SHIFT:
                         continue
@@ -6334,20 +6396,20 @@ def _hourly(
                     for hour in range(
                         max(0, shift["startingHour"]), min(24, shift["endingHour"])
                     ):
-                        manned[needed][hour].add(post)
-                        on[needed][hour] += 1
+                        manned[keys[post]][hour].add(post)
+                        on[keys[post]][hour] += 1
                 for role in roles:
-                    skill = role["skill"]
-                    posts_here = by_skill[skill]
+                    role_key = role["key"]
+                    posts_here = by_role[role_key]
                     for hour in range(24):
                         role["staffed"][wd][hour] = sum(
                             rate
                             for post, rate in posts_here.items()
-                            if post in manned[skill][hour]
+                            if post in manned[role_key][hour]
                         )
-                        role["onShift"][wd][hour] = on[skill][hour]
+                        role["onShift"][wd][hour] = on[role_key][hour]
                         role["posts"][wd][hour] = len(
-                            manned[skill][hour] & set(posts_here)
+                            manned[role_key][hour] & set(posts_here)
                         )
                 for hour in range(24):
                     # A customer passes through every role, so the site is only
@@ -6397,6 +6459,9 @@ def _hourly(
                         "name": labels[post],
                         "skill": skill,
                         "rate": rate,
+                        # A station of a split skill names its role; every
+                        # other one's role is its skill (_station_role()).
+                        **({"role": keys[post]} if keys[post] != skill else {}),
                     }
                     for post, (skill, rate) in here.items()
                 ),
@@ -6522,12 +6587,12 @@ def _fill_stations(demand: float, rates: list) -> int:
 def _role_rates(role: dict, rates: dict | None) -> list:
     """The throughputs of one role's stations.
 
-    `rates` is {skill: [throughput per station]} where the caller has the
+    `rates` is {role key: [throughput per station]} where the caller has the
     station list to hand. Without it the grid carries only the role's total and
     its station count, so the honest stand-in is an even split.
     """
-    if rates and role["skill"] in rates:
-        return list(rates[role["skill"]])
+    if rates and _role_key(role) in rates:
+        return list(rates[_role_key(role)])
     count = role["stationCount"]
     if not count:
         return []
@@ -6611,7 +6676,7 @@ def _need_curve(
                     if from_case:
                         demand[wd][hour] = from_value * day[wd] / day[source]
                         basis[wd][hour] = "scaled"
-        out[role["skill"]] = {
+        out[_role_key(role)] = {
             "demand": [[round(v, 1) for v in row] for row in demand],
             "need": [[_fill_stations(v, station_rates) for v in row] for row in demand],
             "basis": basis,
@@ -8364,8 +8429,8 @@ def _full_need(grid: dict) -> dict:
     """
     out = {}
     for role in grid["roles"]:
-        count = sum(1 for s in grid["stations"] if s["skill"] == role["skill"])
-        out[role["skill"]] = {
+        count = sum(1 for s in grid["stations"] if _station_role(s) == _role_key(role))
+        out[_role_key(role)] = {
             "need": [[count] * 24 for _ in range(7)],
             "basis": [["full"] * 24 for _ in range(7)],
         }
@@ -8830,17 +8895,17 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
     # a. Per-station cover, b. the cut, with the troughs bridged in between.
     wanted, role_wages = {}, {}
     for role in grid["roles"]:
-        skill = role["skill"]
-        posts = [s for s in grid["stations"] if s["skill"] == skill]
-        role_wages[skill] = _role_wage(people, business, bench, skill)
+        skill, role_key = role["skill"], _role_key(role)
+        posts = [s for s in grid["stations"] if _station_role(s) == role_key]
+        role_wages[role_key] = _role_wage(people, business, bench, skill)
         # A factory hands each machine's hours over itself (`stations`, see
         # _factory_staffing()); a shop's come from its need curve. Copied,
         # because the bridging below writes into them.
-        stations = need[skill].get("stations")
-        wanted[skill] = {
+        stations = need[role_key].get("stations")
+        wanted[role_key] = {
             index: [set(hours) for hours in days] for index, days in stations.items()
         } if stations else _cover_runs(
-            need[skill]["need"], [s["rate"] for s in posts], open_hours
+            need[role_key]["need"], [s["rate"] for s in posts], open_hours
         )
     required = sum(
         len(days[wd])
@@ -8855,9 +8920,9 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
 
     slots = []
     for role in grid["roles"]:
-        skill = role["skill"]
-        posts = [s for s in grid["stations"] if s["skill"] == skill]
-        for index, days in wanted[skill].items():
+        skill, role_key = role["skill"], _role_key(role)
+        posts = [s for s in grid["stations"] if _station_role(s) == role_key]
+        for index, days in wanted[role_key].items():
             post = posts[index]
             for wd in range(7):
                 for start, end in _runs(days[wd]):
@@ -8925,7 +8990,9 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
     # and then its cleaning and security cover. Counted through that predicate
     # rather than by skills held, or somebody who holds Cleaning and Customer
     # Service scores two roles the plan will only ever use them for one of.
-    roles_here = [(role["skill"], "serve") for role in grid["roles"]]
+    # Two roles of one skill -- a hairdresser's chairs and head wash -- are one
+    # role to the person holding it, so the pairs are counted once each.
+    roles_here = list(dict.fromkeys((role["skill"], "serve") for role in grid["roles"]))
     roles_here += [
         (COVER_STATIONS[post["slug"]][1], COVER_STATIONS[post["slug"]][0])
         for post in cover_posts
@@ -9349,7 +9416,7 @@ def _plan_site(
     )
     rates = collections.defaultdict(list)
     for station in grid["stations"]:
-        rates[station["skill"]].append(station["rate"])
+        rates[_station_role(station)].append(station["rate"])
     run = _days_open(save, building)
     daily = _open_day_average(save, building, grid["open"]) if run >= DEMAND_RUN_DAYS else None
     need = _need_curve(_run_measured(grid, run, daily), day=curve.get("d"), ceiling=ceiling,
@@ -9426,11 +9493,12 @@ def _finish_site(site, full, names, people, opened=None) -> dict:
         "roles": [
             {
                 "skill": role["skill"],
+                **({"key": _role_key(role)} if _role_key(role) != role["skill"] else {}),
                 "label": role["label"],
                 "stations": [
                     table["station"][s["id"]]
                     for s in grid["stations"]
-                    if s["skill"] == role["skill"]
+                    if _station_role(s) == _role_key(role)
                 ],
             }
             for role in grid["roles"]
@@ -10101,6 +10169,20 @@ def _role_words(role: dict, office: bool) -> dict:
     # every message holding them also carries the name as a token,
     # `station_name`, for a translation to write instead.
     station_name = tok(role.get("stationKey"), role["station"])
+    if role.get("shared"):
+        # One of two roles of one skill (_hourly()): the skill alone would name
+        # both, so the station says which queue is short of people.
+        staffing = (
+            msg("sp.py.limit.station.staff", "{station} staffing",
+                station=station, station_name=station_name),
+            msg("sp.py.fix.station.staff", "another {role} at the {station}",
+                role=role_name, station=station, station_name=station_name),
+        )
+    else:
+        staffing = (
+            msg("sp.py.limit.role", "{role} staffing", role=role_name),
+            msg("sp.py.fix.role.staff", "another {role} on those hours", role=role_name),
+        )
     return {
         "noun": _plural(station),
         "stationName": station_name,
@@ -10109,8 +10191,7 @@ def _role_words(role: dict, office: bool) -> dict:
         # other about posts. The posts limit names the station itself, so two
         # shops short of two different stations of one role never collide --
         # the id hashes the limit, and nothing but the limit.
-        "staffing": (msg("sp.py.limit.role", "{role} staffing", role=role_name),
-                     msg("sp.py.fix.role.staff", "another {role} on those hours", role=role_name)),
+        "staffing": staffing,
         "posts": (msg("sp.py.limit.station", "{stations}", stations=_plural(station), station_name=station_name),
                   msg("sp.py.fix.role.post", "another {station}", station=station, station_name=station_name)),
     }
@@ -10151,7 +10232,9 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
         # An hour is filed under everything holding it at once, so the trade
         # through it is priced once however many roles are tied on it.
         office = grid.get("office", False)
-        roles = {role["skill"]: role for role in grid["roles"]}
+        # Keyed by role, so a hairdresser's chairs and head wash stay apart:
+        # both short of Hair Stylists on one hour is two people to hire, not one.
+        roles = {_role_key(role): role for role in grid["roles"]}
         by_limit = collections.defaultdict(lambda: collections.defaultdict(set))
         for wd, hour in sorted(_capped_cells(grid)):
             if door and door <= grid["staffed"][wd][hour]:
@@ -10170,7 +10253,7 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                         "staffing"
                         if r["staffed"][wd][hour] < r["counters"]
                         else "registers",
-                        r["skill"],
+                        _role_key(r),
                     )
                     for r in roles.values()
                     if r["staffed"][wd][hour] == site_staffed
@@ -19691,7 +19774,7 @@ function hourGrid(g, todayWd, lead = null, idle = []){
             ? roleRead(binding[0], wd, h)
             : tt("sp.hour.registers", "{n} of {of} register capacity on", {n: g.staffed[wd][h], of: g.counters});
       const idleWord = roles.length > 1 && idle.length
-        ? tt("sp.hour.idle.roles", "{roles} idle", {roles: idle.map(r => r.label || tt("sp.hour.capacity", "capacity")).join(", ")})
+        ? tt("sp.hour.idle.roles", "{roles} idle", {roles: idle.map(r => (r.shared && (gnLocal(r.stationKey) || r.many)) || r.label || tt("sp.hour.capacity", "capacity")).join(", ")})
         : tt("sp.hour.idle", "capacity idle");
       /* The ceilings this hour stood at, as `<kind>:<skill>` tokens, so a chip
          can ask for its own hours by kind and role together. */
@@ -19825,6 +19908,10 @@ function spIdleWeek(n){
    is `door` alone, because a door belongs to the building rather than to
    anybody's role. A grid with no roles is an old one and keeps the site-wide
    rule under a nameless role. */
+/* A role's own key: its skill, or the split key a skill whose stations do
+   different work gives each of them -- a hairdresser's chairs and head wash
+   (_station_roles()). Tokens name the role, so the two queues light apart. */
+const spRoleKey = r => r.key || r.skill;
 const spRoleToken = (kind, skill) => `${kind}:${String(skill || "").replace(/\s+/g, "")}`;
 const SP_CELL_ORDER = {staff: 0, post: 1};
 const spCellLimit = (g, wd, h) => {
@@ -19833,7 +19920,7 @@ const spCellLimit = (g, wd, h) => {
   const at = (g.roles || []).filter(r => r.staffed[wd][h] === staffed);
   if(!at.length) return spRoleToken(staffed < g.counters ? "staff" : "post", "");
   return [...new Set(at.map(r =>
-    spRoleToken(r.staffed[wd][h] < r.counters ? "staff" : "post", r.skill)))]
+    spRoleToken(r.staffed[wd][h] < r.counters ? "staff" : "post", spRoleKey(r))))]
     .sort((a, b) => SP_CELL_ORDER[a.split(":")[0]] - SP_CELL_ORDER[b.split(":")[0]]
       || a.localeCompare(b))
     .join(" ");
@@ -19849,7 +19936,10 @@ function spLimitRole(part, roles){
   const want = part.replace(/\s*staffing$/, "");
   /* The finding is Python's English; the role's label may be in the player's
      language, so its English name is asked as well. */
-  return (roles || []).find(r => staffing ? r.label === want || englishName(r.skill) === want : r.noun === part) || null;
+  /* One of two roles of one skill says "<station> staffing" (`shared`). */
+  return (roles || []).find(r => staffing
+    ? (r.shared ? r.one === want : r.label === want || englishName(r.skill) === want)
+    : r.noun === part) || null;
 }
 /* The cells one cap chip is about, in the cells' own tokens. A finding naming
    two tied answers -- "Gym Trainer staffing and registers" -- is about the
@@ -19860,7 +19950,7 @@ const spLimitShow = (n, g, lim = typeof enOf === "function" ? enOf(n, "limit") :
   : String(lim).split(" and ").map(part => {
       const role = spLimitRole(part, (g || {}).roles);
       return spRoleToken(/\bstaffing$/.test(part) ? "staff" : "post",
-        role ? role.skill : "");
+        role ? spRoleKey(role) : "");
     }).join(" ");
 /* the roster ------------------------------------------------------------------
    docs/dashboard-reference.md's `staffing` row: the week the player would
@@ -20039,8 +20129,8 @@ const spFullNeed = row => {
   const need = {}, basis = {};
   (row.roles || []).forEach(r => {
     const n = (r.stations || []).length;
-    need[r.skill] = [...Array(7)].map(() => Array(24).fill(n));
-    basis[r.skill] = [...Array(7)].map(() => Array(24).fill("full"));
+    need[spRoleKey(r)] = [...Array(7)].map(() => Array(24).fill(n));
+    basis[spRoleKey(r)] = [...Array(7)].map(() => Array(24).fill("full"));
   });
   return {need, basis};
 };
@@ -20161,8 +20251,8 @@ const SP_BASIS_READ = {
 function spNeedAt(row, wd, h){
   let n = 0, basis = null;
   (row.roles || []).forEach(r => {
-    const need = ((row.need || {})[r.skill] || [])[wd] || [];
-    const bases = ((row.basis || {})[r.skill] || [])[wd] || [];
+    const need = ((row.need || {})[spRoleKey(r)] || [])[wd] || [];
+    const bases = ((row.basis || {})[spRoleKey(r)] || [])[wd] || [];
     if(!need[h]) return;
     n += need[h];
     const here = bases[h];
