@@ -206,6 +206,30 @@ test('a day identical to an earlier one is named as its copy, and an empty day i
   } finally { await page.close(); }
 });
 
+test('a copy hint points at a tab to the left: Monday is the first tab, Sunday the last (#107)', async () => {
+  // `shut` with Sunday made Monday again: Sunday is Monday's copy, never the
+  // reverse, although Sunday is weekday 0.
+  const page = await shop('shut', row => {
+    const monday = row.shifts.filter(s => s.d === 1);
+    row.shifts = row.shifts.filter(s => s.d !== 0).concat(monday.map(s => Object.assign({}, s, {d: 0})));
+  });
+  try {
+    const got = await page.evaluate(key => {
+      const r = spRosterRow(key);
+      const same = spSameDays(spRosterRows(r, r.shifts));
+      const tabs = [...document.querySelectorAll('#sp-roster [data-day]')].map(a => [+a.dataset.day, a.dataset.read]);
+      return {same, order: HOUR_ROWS, tabs};
+    }, KEY);
+    assert.equal(got.same[1], null, 'Monday, the first tab, copies nothing');
+    assert.equal(got.same[0], 1, 'Sunday, the last tab, is Monday again');
+    for (const [d, src] of got.same.entries())
+      if (src !== null) assert.ok(got.order.indexOf(src) < got.order.indexOf(d), `day ${d} points forward to ${src}`);
+    assert.equal(got.tabs[0][0], 1, 'the tabs open on Monday');
+    assert.doesNotMatch(got.tabs[0][1], /same/, got.tabs[0][1]);
+    assert.match(got.tabs[6][1], /same/, 'the Sunday tab offers the copy');
+  } finally { await page.close(); }
+});
+
 test('a day matching in hours but not in people is not a copy', async () => {
   const page = await shop('shut');
   try {

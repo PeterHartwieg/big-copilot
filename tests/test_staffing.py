@@ -19,7 +19,6 @@ from ba_dashboard import (
     FULL_TIME,
     JOB_DEMANDS,
     SHIFT_CAP,
-    OVERWORK_HOURS,
     WEEKEND_WEEKDAYS,
     COVER_STATIONS,
     _arrival_ceiling,
@@ -634,6 +633,44 @@ class CutTest(unittest.TestCase):
         self.assertEqual(_cut_run(5, 4), [])
 
 
+class TwelveHourDayTest(unittest.TestCase):
+    """Nobody is planned more than 12 hours in one day, a hire included (#107).
+
+    The game's own auto-filler stops at 12 a day; sickness starts above 14,
+    but the board says 12 and plans 12.
+    """
+
+    def person(self):
+        return {"id": "a", "skills": {SERVICE}, "band": None, "days": None,
+                "weekendsOff": False, "blackouts": [], "nocleaning": False}
+
+    def slot(self, start, end):
+        return {"wd": 2, "from": start, "to": end, "skill": SERVICE, "kind": "serve",
+                "station": 1}
+
+    def test_a_person_with_eight_hours_takes_four_more_and_not_five(self):
+        state = ba_dashboard._fresh_state()
+        state["busy"][2].update(range(0, 8))
+        state["hours"] = 8.0
+        state["days"].add(2)
+        self.assertTrue(ba_dashboard._can_work(self.person(), state, self.slot(10, 14)))
+        self.assertFalse(ba_dashboard._can_work(self.person(), state, self.slot(10, 15)))
+
+    def test_a_hire_with_eight_hours_takes_four_more_and_not_five(self):
+        hire = {"hours": 8.0, "busy": [set() for _ in range(7)], "slots": []}
+        hire["busy"][2].update(range(0, 8))
+        self.assertTrue(ba_dashboard._hire_fits(self.slot(10, 14), hire))
+        self.assertFalse(ba_dashboard._hire_fits(self.slot(10, 15), hire))
+
+    def test_a_day_of_two_long_entries_needs_two_hires(self):
+        # 0-7 and 12-19 are 14 hours with no overlap: one person under the old
+        # 14-hour day, two under the 12-hour one.
+        weeks = ba_dashboard._hire_weeks([self.slot(0, 7), self.slot(12, 19)])
+        self.assertEqual(len(weeks), 2)
+        for week in weeks:
+            self.assertTrue(all(len(day) <= SHIFT_CAP for day in week["busy"]))
+
+
 class RosterRulesTest(unittest.TestCase):
     """A property test: no produced shift may break any rule, on any fixture."""
 
@@ -724,7 +761,7 @@ class RosterRulesTest(unittest.TestCase):
                 for hour in range(shift["f"], shift["t"]):
                     self.assertNotIn(hour, busy[shift["d"]], "one shift per hour")
                     busy[shift["d"]].add(hour)
-            self.assertLessEqual(max(per_day.values()), OVERWORK_HOURS, eid)
+            self.assertLessEqual(max(per_day.values()), SHIFT_CAP, eid)
 
     def person_with(self, slug):
         return f"p{self.DEMANDS.index((slug,)):02d}"
@@ -2280,7 +2317,7 @@ class RosterInvariantTest(unittest.TestCase):
                 if rule["days"] is not None:
                     self.assertLessEqual(len(mine["days"]), rule["days"], f"{label}: {pid}")
                 for day, busy in mine["busy"].items():
-                    self.assertLessEqual(len(busy), OVERWORK_HOURS, f"{label}: {pid} day {day}")
+                    self.assertLessEqual(len(busy), SHIFT_CAP, f"{label}: {pid} day {day}")
 
     def test_the_warnings_name_everybody_the_week_leaves_short(self):
         """Both directions: no warning invented, and none owed and missing.

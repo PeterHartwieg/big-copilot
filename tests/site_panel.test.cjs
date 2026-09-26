@@ -951,6 +951,23 @@ const FACTORY = {...DEPOT, name: 'HART. Works', type: 'Factory',
                  lines: [{item: 'Burger', slug: 'burger', units: 2100, rate: 0, price: 1,
                           revenue: 0, soldPerDay: 0}]};
 
+/* The panel kind is the site's own, whichever page is open (#107 BA-2): with
+   the factory's page open, a depot is still a depot, and the reverse. */
+test('a site is a factory by its own row, not by the page that is open', async () => {
+  const page = await site({shop: FACTORY, peer: {...DEPOT, key: OTHER},
+    supply: {day: 29, factories: factories()}});
+  try {
+    const kinds = await page.evaluate(() => {
+      const open = [siteTab, spKind(D.businesses[0]), spKind(D.businesses[1])];
+      siteTab = 1;
+      const other = [spKind(D.businesses[0]), spKind(D.businesses[1])];
+      siteTab = -1;
+      return [open, other, [spKind(D.businesses[0]), spKind(D.businesses[1])]];
+    });
+    assert.deepEqual(kinds, [[0, 'factory', 'depot'], ['factory', 'depot'], ['factory', 'depot']]);
+  } finally { await page.close(); }
+});
+
 test('a factory fills each machine square by the week it is rostered', async () => {
   const page = await site({shop: FACTORY, supply: {day: 29, factories: factories()}});
   try {
