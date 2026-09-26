@@ -605,7 +605,7 @@ for every retail site, and the way to find out: every station of every role staf
 hour of every day, 168 hours a week each, for two weeks, so no customer is turned away by an
 empty station and the hours that come back are the demand. It is a different need curve
 put through the same placer with every rule above unchanged (twelve-hour entries, the
-14-hour day, the 50-hour ceiling, day counts, blackout windows, one business per person, no
+12-hour day, the 50-hour ceiling, day counts, blackout windows, one business per person, no
 server on cleaning, the fewest people first) and the same people: the site's staff, the
 unassigned bench and hires. Every site's demand plan is placed first; then every
 full-cover plan, against the unassigned staff the demand plans left, each taking whom it

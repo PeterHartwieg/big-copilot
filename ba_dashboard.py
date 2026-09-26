@@ -19440,7 +19440,8 @@ function drawChart(){
   rows.forEach(r => Object.values(SERIES).forEach(s => { min = Math.min(min, r[s.key]); max = Math.max(max, r[s.key]); }));
   const step = niceStep((max - min) || 1, 5), fine = step / 5;
   const hi = Math.max(Math.ceil((max + step * .05) / fine) * fine, fine);
-  const lo = min < 0 ? -Math.ceil((-min + step * .05) / fine) * fine : 0;
+  /* Whole steps below zero, so even a small loss gets a labelled line. */
+  const lo = min < 0 ? -Math.ceil((-min + step * .05) / step) * step : 0;
   const X = i => L + (n > 1 ? i / (n - 1) : .5) * (W - L - R);
   const Y = v => T + (hi - v) / (hi - lo) * (H - T - B);
 
