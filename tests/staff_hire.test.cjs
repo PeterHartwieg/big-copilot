@@ -1545,3 +1545,21 @@ test('Staff with no hours: a site whose own staff the plan counts on have no hou
   // Not counted in the order: nobody is hired for those hours.
   assert.equal(await page.evaluate(() => hrTotals(hrModel()).hire), 7);
 });
+
+test('Staff with no hours shows when nothing needs hiring, and then says no more that every site has its people', async (t) => {
+  const page = await board(t);
+  const out = await page.evaluate(([G, CS]) => {
+    const m = hrModel();
+    m.roles = [];
+    m.sites.find(S => S.key === G).plan.unstaffed = {hours: 168, roles: [{skill: CS, hours: 168, idle: 4}]};
+    const withIdle = hrOpenHtml(m);
+    m.sites.find(S => S.key === G).plan.unstaffed = null;
+    const without = hrOpenHtml(m);
+    return {withIdle, without};
+  }, [G, CS]);
+  assert.match(out.withIdle, /Staff with no hours/);
+  assert.match(out.withIdle, /168 h with nobody on/);
+  assert.doesNotMatch(out.withIdle, /Every planned site has its people/);
+  assert.match(out.without, /Every planned site has its people/);
+  assert.doesNotMatch(out.without, /Staff with no hours/);
+});

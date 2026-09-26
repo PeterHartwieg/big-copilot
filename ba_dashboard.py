@@ -9880,31 +9880,37 @@ def _station_groups(save: Save, registration: dict) -> dict:
 UNSTAFFED_MIN_HOURS = 8
 
 
-def _unstaffed(row: dict, shifts, own: set) -> dict | None:
-    """The plan's station-hours the site's own people would work that nobody
-    works in the game's week now, when there are UNSTAFFED_MIN_HOURS or more.
+def _unstaffed(row: dict, shifts, own: set, training=frozenset()) -> dict | None:
+    """The plan's hours the site's own people would work that nobody works in
+    the game's week now, when there are UNSTAFFED_MIN_HOURS or more.
 
     Peter's live game (26 September 2026): a liquor store with its four
     cashiers still assigned but their hours taken off in BizMan. The plan
     fills the register with those four and hires nobody, so the Staff page
     said nothing. `shifts` is the plan's (the row's index tables), `row`
-    carries the game's week as `current.list`. Only hours a planned shift
-    gives one of the site's own people count, so a hire's week is never
-    counted here as well, and only roles where some of them (`idle`) have
-    plan hours and none in the game's week. Returns {hours, roles: [{skill,
-    hours, idle}]}, or None.
+    carries the game's week as `current.list`.
+
+    Counted per role, weekday and hour: the site's own people the plan puts
+    on the role then, less everybody on the role's stations in the game's
+    week then, never below none -- so somebody on register 2 where the plan
+    uses register 1 is not a gap. Only hours a planned shift gives the site's
+    own people count, so a hire's week is never counted here as well. Only
+    roles where some of them (`idle`) have no hours at the site at all in the
+    game's week, and nobody in training: a plan that merely differs from the
+    week is the site page's to show. Returns {hours, roles: [{skill, hours,
+    idle}]}, or None.
     """
     stations, people = row.get("stations") or [], row.get("people") or []
     person = lambda p: people[p]["id"] if p is not None and 0 <= p < len(people) else None  # noqa: E731
     skill = lambda s: stations[s].get("skill") if s is not None and 0 <= s < len(stations) else None  # noqa: E731
-    now = set()
-    worked = collections.Counter()
+    now = collections.Counter()
+    working = set()
     for entry in (row.get("current") or {}).get("list") or ():
         for hour in range(entry.get("f", 0), entry.get("t", 0)):
-            now.add((entry.get("s"), entry.get("d"), hour))
-        if person(entry.get("p")):
-            worked[(person(entry.get("p")), skill(entry.get("s")))] += entry.get("t", 0) - entry.get("f", 0)
-    gap = collections.Counter()
+            now[(skill(entry.get("s")), entry.get("d"), hour)] += 1
+        if person(entry.get("p")) and entry.get("t", 0) > entry.get("f", 0):
+            working.add(person(entry.get("p")))
+    want = collections.Counter()
     planned = collections.defaultdict(set)
     for entry in shifts:
         pid = person(entry.get("p"))
@@ -9913,14 +9919,13 @@ def _unstaffed(row: dict, shifts, own: set) -> dict | None:
         role = skill(entry.get("s"))
         planned[role].add(pid)
         for hour in range(entry.get("f", 0), entry.get("t", 0)):
-            if (entry.get("s"), entry.get("d"), hour) not in now:
-                gap[role] += 1
-    # Only the roles where some of the site's own people have no hours at all
-    # in the game's week: a plan that merely differs from the week is the site
-    # page's to show, not somebody sitting idle.
+            want[(role, entry.get("d"), hour)] += 1
+    gap = collections.Counter()
+    for (role, day, hour), n in want.items():
+        gap[role] += max(0, n - now[(role, day, hour)])
     roles = [
         {"skill": role, "hours": gap[role],
-         "idle": sum(1 for pid in planned[role] if not worked[(pid, role)])}
+         "idle": sum(1 for pid in planned[role] if pid not in working and pid not in training)}
         for role in _in_order(gap) if gap[role]
     ]
     roles = [r for r in roles if r["idle"]]
@@ -10062,10 +10067,13 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
 
     # Each site's own people: whom a plan's shifts there may already count on.
     own = collections.defaultdict(set)
+    training = set()
     for employee in save.items(save.root.get("EmployeeInstances")):
         addr = save.address(employee.get("assignedAddress")) if isinstance(employee, dict) else None
         if addr:
             own[site_key(addr)].add(employee.get("id"))
+        if isinstance(employee, dict) and save.deref(employee.get("trainingSession")):
+            training.add(employee.get("id"))
     sites = []
     for business in businesses:
         kind = _business_kind(business)
@@ -10112,7 +10120,8 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
         base = shops.get(business["key"]) if kind == "shop" else offices.get(business["key"])
         for mode, plan in plans.items():
             if mode in row_of and row_of[mode] and base:
-                gap = _unstaffed(base, row_of[mode].get("shifts") or (), own.get(business["key"], set()))
+                gap = _unstaffed(base, row_of[mode].get("shifts") or (), own.get(business["key"], set()),
+                                 training)
                 if gap:
                     plan["unstaffed"] = gap
         sites.append({
@@ -25624,7 +25633,11 @@ function hrOpenHtml(m){
   const soon = m.cands.filter(c => Number(c.hoursLeft) < 24).length;
   const facts = `<p class="hs-facts2"><b>${hrNum(m.cands.length)}</b> candidates${soon ? ` · <b class="warn">${hrNum(soon)}</b> expire within 24 h${gwLink() ? "" : " (as of the save)"}` : ""}</p>`;
   const head = `<div class="hs-shead"><h3>Open places</h3></div>${hrNoHoursHtml()}`;
-  if(!m.roles.length) return `${head}<p class="hs-note">Every planned site has its people.</p>${stray ? `<div class="hs-scroll">${stray}</div>` : ""}${facts}`;
+  if(!m.roles.length){
+    /* Nothing to hire, but maybe people to give hours: then not "has its people". */
+    const idle = hrIdleHtml(m);
+    return `${head}${idle ? "" : `<p class="hs-note">Every planned site has its people.</p>`}${stray ? `<div class="hs-scroll">${stray}</div>` : ""}${idle}${facts}`;
+  }
   const shopPt = f.ex.includes(HR_PT) && m.roles.some(r => r.shop);
   const own = m.roles.reduce((n, r) => n + r.moved, 0);
   return `${head}${hrFbar("", f, `<b>${hrNum(match)}</b> match`)}${shopPt ? `<p class="hs-note hs-shops">Part-time is left out for shop roles only.</p>` : ""}

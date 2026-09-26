@@ -510,6 +510,28 @@ class UnstaffedTest(unittest.TestCase):
         # Somebody who is not the site's own (a bench member the plan draws on).
         self.assertIsNone(ba_dashboard._unstaffed(self.ROW, more, set()))
 
+    def test_another_register_of_the_role_is_not_a_gap(self):
+        """Somebody on register 2 where the plan uses register 1 covers the hour."""
+        row = {"stations": [{"id": 1, "skill": SERVICE}, {"id": 2, "skill": SERVICE}],
+               "people": [{"id": "p1"}, {"id": "x"}],
+               "current": {"list": [{"d": d, "s": 1, "f": 0, "t": 24, "p": 1} for d in range(7)]}}
+        plan = [{"d": d, "s": 0, "f": 0, "t": 12, "p": 0} for d in range(7)]
+        self.assertIsNone(ba_dashboard._unstaffed(row, plan, {"p1", "x"}))
+        # One of two planned cashiers at an hour a single register is worked:
+        # the other is the gap, one person-hour each such hour.
+        row2 = dict(row, people=[{"id": "p1"}, {"id": "x"}, {"id": "p2"}])
+        plan2 = [{"d": d, "s": 0, "f": 0, "t": 12, "p": 0} for d in range(7)]
+        plan2 += [{"d": d, "s": 1, "f": 0, "t": 12, "p": 2} for d in range(7)]
+        gap = ba_dashboard._unstaffed(row2, plan2, {"p1", "p2", "x"})
+        self.assertEqual(gap, {"hours": 84, "roles": [{"skill": SERVICE, "hours": 84, "idle": 2}]})
+
+    def test_somebody_working_another_role_or_in_training_is_not_idle(self):
+        # c1 cleans all week now; the plan puts them on the register too.
+        plan = [{"d": d, "s": 0, "f": 0, "t": 12, "p": 2} for d in range(4)]
+        self.assertIsNone(ba_dashboard._unstaffed(self.ROW, plan, {"p1", "p2", "c1"}))
+        plan = [{"d": d, "s": 0, "f": 0, "t": 12, "p": 0} for d in range(4)]
+        self.assertIsNone(ba_dashboard._unstaffed(self.ROW, plan, {"p1"}, training={"p1"}))
+
     def test_the_hiring_payload_carries_it(self):
         _row, site = shop_hiring(weeks=2)
         gap = site["plans"]["demand"]["unstaffed"]
