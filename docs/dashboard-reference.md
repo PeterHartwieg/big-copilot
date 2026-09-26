@@ -174,7 +174,7 @@ the map.
   - *Needs* are the hire weeks of the plan each site follows: a shop's roster (the
     full-cover week for a shop nobody works yet), a factory's in the sizing the Supply
     switch shows, an office's by the office default. Each hire week is a week one new
-    person could work under the game's rules (12-hour shifts, 14 hours a day, 50 a week),
+    person could work under the game's rules (12 hours a day, 50 a week),
     so the count is people, not hours divided by 40.
   - *The office default*: three computers staffed around the clock in a building with a
     door capacity of 50, proportionally fewer in smaller ones (at least one); every

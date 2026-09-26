@@ -19,7 +19,6 @@ from ba_dashboard import (
     HIRE_ORDERS,
     FULL_TIME,
     JOB_DEMANDS,
-    OVERWORK_HOURS,
     SHIFT_CAP,
     _cut_run,
     _full_cover_in_game,
@@ -173,7 +172,7 @@ class FullCoverRulesTest(unittest.TestCase):
             per_day = collections.Counter()
             for s in shifts:
                 per_day[s["d"]] += hours(s)
-            self.assertLessEqual(max(per_day.values()), OVERWORK_HOURS, f"{eid}: 14-hour day")
+            self.assertLessEqual(max(per_day.values()), SHIFT_CAP, f"{eid}: over 12 hours in a day")
             if SERVICE in skills:
                 self.assertFalse([s for s in shifts if kind(s) == "clean"],
                                  f"{eid}: a server is never put on cleaning")
@@ -249,7 +248,7 @@ class FullCoverRulesTest(unittest.TestCase):
         self.assertEqual(len(worked), 11)
         self.assertLessEqual(max(worked.values()), FULL_TIME[1])
         self.assertGreaterEqual(min(worked.values()), FULL_TIME[0])
-        self.assertLessEqual(max(per_day.values()), OVERWORK_HOURS)
+        self.assertLessEqual(max(per_day.values()), SHIFT_CAP)
 
     def test_a_cleaning_station_on_sixteen_hour_days_takes_three(self):
         """112 hours in 8-hour entries, two a day: three people, not four."""
@@ -719,13 +718,16 @@ class HireCountTest(unittest.TestCase):
     """The hire count is never worse than the first-fit count it replaced."""
 
     def test_the_smallest_case_the_review_found(self):
-        cases = [(0, 2, 9, 16), (1, 1, 7, 18), (2, 1, 6, 12), (2, 2, 1, 9), (3, 0, 9, 18),
-                 (3, 1, 13, 16), (3, 2, 2, 13), (4, 1, 8, 15), (4, 2, 8, 18), (5, 0, 2, 9),
-                 (5, 0, 9, 16), (6, 1, 13, 15), (6, 2, 7, 18)]
+        # A week where first fit by the clock takes two and longest-first takes
+        # three, under the 12-hour day. (The review's own case put 23 hours on
+        # one day, which two people can no longer work.)
+        cases = [(1, 0, 20, 22), (1, 1, 11, 15), (3, 1, 17, 21), (4, 0, 7, 9), (4, 0, 12, 17),
+                 (4, 2, 5, 9), (4, 2, 17, 24), (6, 1, 2, 9)]
         slots = [{"wd": wd, "station": st, "from": f, "to": t, "skill": "x", "kind": "serve"}
                  for wd, st, f, t in cases]
         clock = _pack_hires(slots, None, HIRE_ORDERS[0])
         self.assertEqual(clock, 2)
+        self.assertEqual(_pack_hires(slots, None, HIRE_ORDERS[1]), 3)
         self.assertEqual(_hires_for(slots), 2)
 
     def test_never_above_either_first_fit_order(self):

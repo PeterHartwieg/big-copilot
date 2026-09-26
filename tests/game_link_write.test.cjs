@@ -299,6 +299,13 @@ test('set for all shops, and undo from the strip once the dialog is closed', asy
   await dialog(page).locator('.gw-foot').getByRole('button', {name: 'Close'}).click();
   const strip = page.locator('#gwToast');
   await strip.getByText('Default is on 2 roles at 2 shops.').waitFor();
+  // A redraw keeps the same strip, so a keyboard user on Undo stays there (#107).
+  assert.equal(await page.evaluate(() => {
+    const undo = document.querySelector('#gwToast [data-gw-undo]');
+    undo.focus();
+    wireAll();
+    return document.activeElement === undo && document.querySelector('#gwToast [data-gw-undo]') === undo;
+  }), true);
   await strip.getByRole('button', {name: 'Undo'}).click();
   await dialog(page).getByText('Undone: 2 roles back to no uniform.').waitFor();
   assert.deepEqual((await applied()).map((w) => w.kind), ['uniforms', 'undo']);
@@ -1944,7 +1951,12 @@ test('schedule: full cover opens every day 0 to 24, unless the player opts out',
   await open.waitFor();
   assert.equal(await open.getAttribute('aria-checked'), 'true');
   await dialog(page).locator('.gw-plan', {hasText: 'Full cover 24/7'}).waitFor();
-  await open.click();
+  // The click flips the switch once: the Filter kinds switches' handler leaves
+  // it alone, so it shows and says what will be sent (#107).
+  assert.deepEqual(await open.evaluate((el) => {
+    el.click();
+    return [el.classList.contains('on'), el.getAttribute('aria-checked')];
+  }), [false, 'false']);
   // The game is asked again, without the opening hours.
   await page.locator('dialog.gw-dlg[data-phase="ready"] [role="switch"][aria-checked="false"]').waitFor();
   await dialog(page).getByRole('button', {name: 'Write the week'}).click();

@@ -242,6 +242,29 @@ test('at 390 px the Growth grid narrows its names, never its cells or the page',
 
 // --- Today with the other passes on it (site pages R9, search R10/R11, folds R15) ----
 
+/* Two products, each short at two suppliers, are not the same two suppliers:
+   each is its own chip, named by its product (#107). */
+test('a product short at several suppliers is a chip of its own, not folded with another', async () => {
+  const page = await browser.newPage({viewport: {width: 1440, height: 900}});
+  try {
+    await page.route('https://**', route => route.abort());
+    await page.setContent(html, {waitUntil: 'load'});
+    const chips = await page.evaluate(() => {
+      document.body.classList.add('has-board');
+      const short = (item, where, count, siteKey = null) => ({item, kind: 'Product shortage', where, count,
+        daysLeft: 3, mine: false, hood: null, siteKey});
+      D = {meta: {character: 'movers-fixture', day: 30}, market: {
+        hoods: [], trendDays: 7, noOffices: [], rows: [], offices: [], hype: [], movers: [], types: [],
+        shortages: [short('Soda', 'Two places', 2), short('Napkins', 'Two places', 2),
+                    short('Cups', '1 Pier Road', 1, 'k1'), short('Lids', '1 Pier Road', 1, 'k1')]}};
+      drawMovers();
+      return [...document.querySelectorAll('#movers .wave.dn b')].map(b => b.textContent);
+    });
+    // The pier's two products still fold into one chip: one place.
+    assert.deepEqual(chips, ['Soda', 'Napkins', '1 Pier Road']);
+  } finally { await page.close(); }
+});
+
 test('at 390 px the count lines, the Ask row and a live Plan imports card share Today without overlap', async () => {
   const page = await today(390);
   try {

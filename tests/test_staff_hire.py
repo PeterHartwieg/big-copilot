@@ -15,7 +15,7 @@ from ba_dashboard import (
     ASSIGN_SKILLS,
     FULL_TIME,
     JOB_DEMANDS,
-    OVERWORK_HOURS,
+    SHIFT_CAP,
     _candidates,
     _character,
     _hiring,
@@ -191,7 +191,7 @@ def slots_point_at_open_entries(test, row, hire):
             test.assertEqual(row["stations"][entry["s"]]["id"], slot["station"])
             test.assertEqual(row["stations"][entry["s"]]["skill"], week["skill"])
             per_day[slot["d"]] += slot["t"] - slot["f"]
-        test.assertTrue(all(h <= OVERWORK_HOURS for h in per_day.values()))
+        test.assertTrue(all(h <= SHIFT_CAP for h in per_day.values()))
     # Every open entry is somebody's week, once.
     used = [s["shift"] for w in hire["hireWeeks"] for s in w["slots"]]
     test.assertEqual(len(used), len(set(used)))

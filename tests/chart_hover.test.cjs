@@ -129,3 +129,18 @@ test('a lone day reads only under its own bar', async t => {
     await hoverMiss(page, x, midY, 30);
   }
 });
+
+// A loss day hangs below the axis with a scale of its own: the y labels run
+// from below zero, and zero is still one of them (#107).
+test('the y axis labels the losses below zero as well', async (t) => {
+  const page = await board(t, 1280);
+  const labels = await page.evaluate(() => {
+    D.daily.forEach((r, i) => { r.profit = i % 7 === 3 ? -2400 : 1500; });
+    drawChart();
+    return [...document.querySelectorAll('#dailyBox svg text[text-anchor="end"]')]
+      .map(el => el.textContent.trim());
+  });
+  assert.ok(labels.some(l => /^-\$/.test(l)), JSON.stringify(labels));
+  assert.ok(labels.some(l => /^\$0$/.test(l)), JSON.stringify(labels));
+});
+
