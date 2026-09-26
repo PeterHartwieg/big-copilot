@@ -3071,7 +3071,7 @@
         "now": 84
        },
        {
-        "hours": 49.0,
+        "hours": 35.0,
         "id": "EMPana",
         "name": "Ana Silva",
         "now": 56
@@ -3085,23 +3085,37 @@
       ],
       "hireWeeks": [
        {
-        "days": 4,
+        "days": 7,
         "hours": 49,
         "skill": "ba:skill_cleaning",
         "slots": [
+         {
+          "d": 0,
+          "f": 15,
+          "shift": 2,
+          "station": "CLEANliquor",
+          "t": 22
+         },
+         {
+          "d": 1,
+          "f": 15,
+          "shift": 6,
+          "station": "CLEANliquor",
+          "t": 22
+         },
+         {
+          "d": 2,
+          "f": 15,
+          "shift": 10,
+          "station": "CLEANliquor",
+          "t": 22
+         },
          {
           "d": 3,
           "f": 15,
           "shift": 14,
           "station": "CLEANliquor",
           "t": 22
-         },
-         {
-          "d": 4,
-          "f": 8,
-          "shift": 16,
-          "station": "CLEANliquor",
-          "t": 15
          },
          {
           "d": 4,
@@ -3112,13 +3126,6 @@
          },
          {
           "d": 5,
-          "f": 8,
-          "shift": 20,
-          "station": "CLEANliquor",
-          "t": 15
-         },
-         {
-          "d": 5,
           "f": 15,
           "shift": 22,
           "station": "CLEANliquor",
@@ -3126,16 +3133,30 @@
          },
          {
           "d": 6,
-          "f": 8,
-          "shift": 24,
+          "f": 15,
+          "shift": 26,
           "station": "CLEANliquor",
-          "t": 15
+          "t": 22
+         }
+        ]
+       },
+       {
+        "days": 2,
+        "hours": 14,
+        "skill": "ba:skill_customerservice",
+        "slots": [
+         {
+          "d": 0,
+          "f": 15,
+          "shift": 3,
+          "station": "REGliquor",
+          "t": 22
          },
          {
           "d": 6,
           "f": 15,
-          "shift": 26,
-          "station": "CLEANliquor",
+          "shift": 27,
+          "station": "REGliquor",
           "t": 22
          }
         ]
@@ -3154,7 +3175,7 @@
         "now": 84
        },
        {
-        "hours": 49.0,
+        "hours": 35.0,
         "id": "EMPana",
         "name": "Ana Silva",
         "now": 56
@@ -3168,23 +3189,37 @@
       ],
       "hireWeeks": [
        {
-        "days": 4,
+        "days": 7,
         "hours": 49,
         "skill": "ba:skill_cleaning",
         "slots": [
+         {
+          "d": 0,
+          "f": 15,
+          "shift": 2,
+          "station": "CLEANliquor",
+          "t": 22
+         },
+         {
+          "d": 1,
+          "f": 15,
+          "shift": 6,
+          "station": "CLEANliquor",
+          "t": 22
+         },
+         {
+          "d": 2,
+          "f": 15,
+          "shift": 10,
+          "station": "CLEANliquor",
+          "t": 22
+         },
          {
           "d": 3,
           "f": 15,
           "shift": 14,
           "station": "CLEANliquor",
           "t": 22
-         },
-         {
-          "d": 4,
-          "f": 8,
-          "shift": 16,
-          "station": "CLEANliquor",
-          "t": 15
          },
          {
           "d": 4,
@@ -3195,13 +3230,6 @@
          },
          {
           "d": 5,
-          "f": 8,
-          "shift": 20,
-          "station": "CLEANliquor",
-          "t": 15
-         },
-         {
-          "d": 5,
           "f": 15,
           "shift": 22,
           "station": "CLEANliquor",
@@ -3209,16 +3237,30 @@
          },
          {
           "d": 6,
-          "f": 8,
-          "shift": 24,
+          "f": 15,
+          "shift": 26,
           "station": "CLEANliquor",
-          "t": 15
+          "t": 22
+         }
+        ]
+       },
+       {
+        "days": 2,
+        "hours": 14,
+        "skill": "ba:skill_customerservice",
+        "slots": [
+         {
+          "d": 0,
+          "f": 15,
+          "shift": 3,
+          "station": "REGliquor",
+          "t": 22
          },
          {
           "d": 6,
           "f": 15,
-          "shift": 26,
-          "station": "CLEANliquor",
+          "shift": 27,
+          "station": "REGliquor",
           "t": 22
          }
         ]
@@ -8869,10 +8911,15 @@
       "people": 1,
       "role": "Cleaning",
       "skill": "ba:skill_cleaning"
+     },
+     {
+      "people": 1,
+      "role": "Customer Service",
+      "skill": "ba:skill_customerservice"
      }
     ],
-    "hoursUncovered": 49,
-    "people": 1
+    "hoursUncovered": 63,
+    "people": 2
    },
    "basis": {
     "ba:skill_customerservice": [
@@ -9065,7 +9112,7 @@
    "cost": {
     "current": 3192.0,
     "currentCover": 1176.0,
-    "weekly": 2450.0
+    "weekly": 2198.0
    },
    "current": {
     "cleaning": 7,
@@ -9593,8 +9640,8 @@
     },
     "ba:skill_customerservice": {
      "have": 2,
-     "hire": 0,
-     "hireHours": 0,
+     "hire": 1,
+     "hireHours": 30,
      "kind": "serve",
      "max": 3,
      "min": 2,
@@ -9847,17 +9894,22 @@
        "people": 1,
        "role": "Cleaning",
        "skill": "ba:skill_cleaning"
+      },
+      {
+       "people": 1,
+       "role": "Customer Service",
+       "skill": "ba:skill_customerservice"
       }
      ],
-     "hoursUncovered": 49,
-     "people": 1
+     "hoursUncovered": 63,
+     "people": 2
     },
     "bench": [],
     "complete": true,
     "cost": {
      "current": 3192.0,
      "currentCover": 1176.0,
-     "weekly": 2450.0
+     "weekly": 2198.0
     },
     "headcount": {
      "ba:skill_cleaning": {
@@ -9872,8 +9924,8 @@
      },
      "ba:skill_customerservice": {
       "have": 2,
-      "hire": 0,
-      "hireHours": 0,
+      "hire": 1,
+      "hireHours": 30,
       "kind": "serve",
       "max": 3,
       "min": 2,
@@ -9933,6 +9985,14 @@
       "label": "Free weekends",
       "p": 0,
       "to": 22,
+      "wd": 1
+     },
+     {
+      "demand": "ba:jobdemand_freeweekends",
+      "from": 8,
+      "label": "Free weekends",
+      "p": 0,
+      "to": 15,
       "wd": 2
      },
      {
@@ -9945,14 +10005,6 @@
      },
      {
       "demand": "ba:jobdemand_freeweekends",
-      "from": 15,
-      "label": "Free weekends",
-      "p": 0,
-      "to": 22,
-      "wd": 3
-     },
-     {
-      "demand": "ba:jobdemand_freeweekends",
       "from": 8,
       "label": "Free weekends",
       "p": 0,
@@ -9961,26 +10013,10 @@
      },
      {
       "demand": "ba:jobdemand_freeweekends",
-      "from": 15,
-      "label": "Free weekends",
-      "p": 0,
-      "to": 22,
-      "wd": 4
-     },
-     {
-      "demand": "ba:jobdemand_freeweekends",
       "from": 8,
       "label": "Free weekends",
       "p": 0,
       "to": 15,
-      "wd": 5
-     },
-     {
-      "demand": "ba:jobdemand_freeweekends",
-      "from": 15,
-      "label": "Free weekends",
-      "p": 0,
-      "to": 22,
       "wd": 5
      }
     ],
@@ -10004,14 +10040,14 @@
       "d": 0,
       "f": 15,
       "k": "clean",
-      "p": 2,
+      "p": null,
       "s": 1,
       "t": 22
      },
      {
       "d": 0,
       "f": 15,
-      "p": 1,
+      "p": null,
       "s": 0,
       "t": 22
      },
@@ -10034,44 +10070,44 @@
       "d": 1,
       "f": 15,
       "k": "clean",
-      "p": 2,
+      "p": null,
       "s": 1,
       "t": 22
      },
      {
       "d": 1,
-      "f": 15,
-      "p": 1,
-      "s": 0,
-      "t": 22
-     },
-     {
-      "d": 2,
-      "f": 8,
-      "k": "clean",
-      "p": 2,
-      "s": 1,
-      "t": 15
-     },
-     {
-      "d": 2,
-      "f": 8,
-      "p": 1,
-      "s": 0,
-      "t": 15
-     },
-     {
-      "d": 2,
-      "f": 15,
-      "k": "clean",
-      "p": 2,
-      "s": 1,
-      "t": 22
-     },
-     {
-      "d": 2,
       "f": 15,
       "p": 0,
+      "s": 0,
+      "t": 22
+     },
+     {
+      "d": 2,
+      "f": 8,
+      "k": "clean",
+      "p": 2,
+      "s": 1,
+      "t": 15
+     },
+     {
+      "d": 2,
+      "f": 8,
+      "p": 0,
+      "s": 0,
+      "t": 15
+     },
+     {
+      "d": 2,
+      "f": 15,
+      "k": "clean",
+      "p": null,
+      "s": 1,
+      "t": 22
+     },
+     {
+      "d": 2,
+      "f": 15,
+      "p": 1,
       "s": 0,
       "t": 22
      },
@@ -10101,7 +10137,7 @@
      {
       "d": 3,
       "f": 15,
-      "p": 0,
+      "p": 1,
       "s": 0,
       "t": 22
      },
@@ -10109,7 +10145,7 @@
       "d": 4,
       "f": 8,
       "k": "clean",
-      "p": null,
+      "p": 2,
       "s": 1,
       "t": 15
      },
@@ -10131,7 +10167,7 @@
      {
       "d": 4,
       "f": 15,
-      "p": 0,
+      "p": 1,
       "s": 0,
       "t": 22
      },
@@ -10139,7 +10175,7 @@
       "d": 5,
       "f": 8,
       "k": "clean",
-      "p": null,
+      "p": 2,
       "s": 1,
       "t": 15
      },
@@ -10161,7 +10197,7 @@
      {
       "d": 5,
       "f": 15,
-      "p": 0,
+      "p": 1,
       "s": 0,
       "t": 22
      },
@@ -10169,7 +10205,7 @@
       "d": 6,
       "f": 8,
       "k": "clean",
-      "p": null,
+      "p": 2,
       "s": 1,
       "t": 15
      },
@@ -10191,7 +10227,7 @@
      {
       "d": 6,
       "f": 15,
-      "p": 1,
+      "p": null,
       "s": 0,
       "t": 22
      }
@@ -10225,6 +10261,14 @@
      "label": "Free weekends",
      "p": 0,
      "to": 22,
+     "wd": 1
+    },
+    {
+     "demand": "ba:jobdemand_freeweekends",
+     "from": 8,
+     "label": "Free weekends",
+     "p": 0,
+     "to": 15,
      "wd": 2
     },
     {
@@ -10237,14 +10281,6 @@
     },
     {
      "demand": "ba:jobdemand_freeweekends",
-     "from": 15,
-     "label": "Free weekends",
-     "p": 0,
-     "to": 22,
-     "wd": 3
-    },
-    {
-     "demand": "ba:jobdemand_freeweekends",
      "from": 8,
      "label": "Free weekends",
      "p": 0,
@@ -10253,26 +10289,10 @@
     },
     {
      "demand": "ba:jobdemand_freeweekends",
-     "from": 15,
-     "label": "Free weekends",
-     "p": 0,
-     "to": 22,
-     "wd": 4
-    },
-    {
-     "demand": "ba:jobdemand_freeweekends",
      "from": 8,
      "label": "Free weekends",
      "p": 0,
      "to": 15,
-     "wd": 5
-    },
-    {
-     "demand": "ba:jobdemand_freeweekends",
-     "from": 15,
-     "label": "Free weekends",
-     "p": 0,
-     "to": 22,
      "wd": 5
     }
    ],
@@ -10305,14 +10325,14 @@
      "d": 0,
      "f": 15,
      "k": "clean",
-     "p": 2,
+     "p": null,
      "s": 1,
      "t": 22
     },
     {
      "d": 0,
      "f": 15,
-     "p": 1,
+     "p": null,
      "s": 0,
      "t": 22
     },
@@ -10335,44 +10355,44 @@
      "d": 1,
      "f": 15,
      "k": "clean",
-     "p": 2,
+     "p": null,
      "s": 1,
      "t": 22
     },
     {
      "d": 1,
-     "f": 15,
-     "p": 1,
-     "s": 0,
-     "t": 22
-    },
-    {
-     "d": 2,
-     "f": 8,
-     "k": "clean",
-     "p": 2,
-     "s": 1,
-     "t": 15
-    },
-    {
-     "d": 2,
-     "f": 8,
-     "p": 1,
-     "s": 0,
-     "t": 15
-    },
-    {
-     "d": 2,
-     "f": 15,
-     "k": "clean",
-     "p": 2,
-     "s": 1,
-     "t": 22
-    },
-    {
-     "d": 2,
      "f": 15,
      "p": 0,
+     "s": 0,
+     "t": 22
+    },
+    {
+     "d": 2,
+     "f": 8,
+     "k": "clean",
+     "p": 2,
+     "s": 1,
+     "t": 15
+    },
+    {
+     "d": 2,
+     "f": 8,
+     "p": 0,
+     "s": 0,
+     "t": 15
+    },
+    {
+     "d": 2,
+     "f": 15,
+     "k": "clean",
+     "p": null,
+     "s": 1,
+     "t": 22
+    },
+    {
+     "d": 2,
+     "f": 15,
+     "p": 1,
      "s": 0,
      "t": 22
     },
@@ -10402,7 +10422,7 @@
     {
      "d": 3,
      "f": 15,
-     "p": 0,
+     "p": 1,
      "s": 0,
      "t": 22
     },
@@ -10410,7 +10430,7 @@
      "d": 4,
      "f": 8,
      "k": "clean",
-     "p": null,
+     "p": 2,
      "s": 1,
      "t": 15
     },
@@ -10432,7 +10452,7 @@
     {
      "d": 4,
      "f": 15,
-     "p": 0,
+     "p": 1,
      "s": 0,
      "t": 22
     },
@@ -10440,7 +10460,7 @@
      "d": 5,
      "f": 8,
      "k": "clean",
-     "p": null,
+     "p": 2,
      "s": 1,
      "t": 15
     },
@@ -10462,7 +10482,7 @@
     {
      "d": 5,
      "f": 15,
-     "p": 0,
+     "p": 1,
      "s": 0,
      "t": 22
     },
@@ -10470,7 +10490,7 @@
      "d": 6,
      "f": 8,
      "k": "clean",
-     "p": null,
+     "p": 2,
      "s": 1,
      "t": 15
     },
@@ -10492,7 +10512,7 @@
     {
      "d": 6,
      "f": 15,
-     "p": 1,
+     "p": null,
      "s": 0,
      "t": 22
     }

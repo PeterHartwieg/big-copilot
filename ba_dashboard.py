@@ -6688,8 +6688,10 @@ def _need_curve(
 # ------------------------------------------------------------ roster building
 # The rules any suggested roster has to obey, read from BigAmbitions.dll at
 # VERIFIED_BUILD. docs/staffing-assistant-scope.md section 2 quotes each source.
+# The longest shift, and the most hours the plan gives anybody in one day: the
+# game's own auto-filler stops at 12 a day too, short of the 14 that raise
+# sickness (ScheduleHelper.GetOverworkedDays).
 SHIFT_CAP = 12  # ScheduleHelper.ShiftLengthCap, ScheduleAutoFiller.MaxEmployeeHoursPerDay
-OVERWORK_HOURS = 14  # more than this in one day raises sickness
 SLACK_SHARE = 0.10  # of a site's required station-hours, spent bridging troughs
 # The shortest piece the plan will cut a shift into, and the shortest head it
 # will leave behind. Not a game rule: the game takes a one-hour shift happily.
@@ -6861,7 +6863,7 @@ def _can_work(person: dict, state: dict, slot: dict) -> bool:
         return False
     if any(hour in state["busy"][wd] for hour in range(start, end)):
         return False
-    if len(state["busy"][wd]) + hours > OVERWORK_HOURS:
+    if len(state["busy"][wd]) + hours > SHIFT_CAP:
         return False
     # The week's ceiling. Their own band's if they have one, and full time's 50
     # if they do not: that is not a demand invented for somebody who holds none
@@ -6913,7 +6915,7 @@ def _placement_rank(person: dict, state: dict, slot: dict, here: dict) -> tuple:
        `_can_work()` and never traded away.
     3. **Then the longest shifts.** Nothing to rank: the shifts are cut before
        anybody is placed, into the fewest that stay inside the 12-hour cap, and
-       the 14-hour day belongs to `_can_work()`.
+       the 12-hour day belongs to `_can_work()`.
 
     Then continuity — already on this station the day before or after, so the
     player types fewer distinct names — the site's own staff before a bench
@@ -7077,7 +7079,7 @@ def _hire_fits(slot: dict, hire: dict) -> bool:
     busy = hire["busy"][slot["wd"]]
     return (
         hire["hours"] + hours <= FULL_TIME[1]
-        and len(busy) + hours <= OVERWORK_HOURS
+        and len(busy) + hours <= SHIFT_CAP
         and not any(h in busy for h in range(slot["from"], slot["to"]))
     )
 
@@ -7134,7 +7136,7 @@ def _hire_weeks(slots: list) -> list:
 
     Dividing the hours by a full week understates it: four uncovered twelve-hour
     weekend shifts are 48 hours, but two of them fall on the same day and the
-    game stops anyone working more than fourteen hours in one. So the residue is
+    plan gives nobody more than twelve hours in one. So the residue is
     packed onto hypothetical hires who have no demands of their own -- a full
     week, the daily cap, and one shift at a time.
 
@@ -7160,7 +7162,7 @@ def _hire_weeks(slots: list) -> list:
         day = [s for s in slots if s["wd"] == wd]
         if not day:
             continue
-        floor = max(floor, math.ceil(sum(s["to"] - s["from"] for s in day) / OVERWORK_HOURS))
+        floor = max(floor, math.ceil(sum(s["to"] - s["from"] for s in day) / SHIFT_CAP))
         for hour in range(24):
             floor = max(floor, sum(1 for s in day if s["from"] <= hour < s["to"]))
     for count in range(floor, len(worst)):
@@ -7190,7 +7192,7 @@ def _spread_residue(residue: list, shifts: list, pool: list, state: dict, before
     hour, which packed onto 22 hires of one day each, 7 to 14 hours a week
     (Peter's in-game test, 25 September 2026). The hires those hours need are
     about ceil(hours / 50). While more open shifts than that run at one hour,
-    or more than that many 14-hour days of them fall on one day, one of them
+    or more than that many 12-hour days of them fall on one day, one of them
     goes to somebody here who is off that day, and one of their own shifts of
     the role on another day, where the open ones are fewer, is opened in its
     place: nobody's week breaks a rule or a demand for it (_can_work()), and
@@ -7229,7 +7231,7 @@ def _spread_residue(residue: list, shifts: list, pool: list, state: dict, before
                 for mine in own:
                     if any(at[mine["wd"]][h] + 1 > limit for h in range(mine["from"], mine["to"])):
                         continue
-                    if day[mine["wd"]] + (mine["to"] - mine["from"]) > limit * OVERWORK_HOURS:
+                    if day[mine["wd"]] + (mine["to"] - mine["from"]) > limit * SHIFT_CAP:
                         continue
                     trial = _copy_state(state[pid])
                     trial["hours"] -= mine["to"] - mine["from"]
@@ -7254,7 +7256,7 @@ def _spread_residue(residue: list, shifts: list, pool: list, state: dict, before
         crowded = sorted(
             (-at[wd][hour], wd, hour)
             for wd in range(7) for hour in range(24)
-            if at[wd][hour] and (at[wd][hour] > limit or day[wd] > limit * OVERWORK_HOURS)
+            if at[wd][hour] and (at[wd][hour] > limit or day[wd] > limit * SHIFT_CAP)
             and (wd, hour) not in stuck
         )
         if not crowded:
@@ -7295,7 +7297,7 @@ def _fill_hire_weeks(weeks: list, shifts: list, pool: list, state: dict, before:
     floor and the hours the game has them on now -- so nobody already here is
     cut below the week they have, and nobody is left under their demands'
     floor or short of a four- or five-day count. The hire keeps within 50
-    hours and the 14-hour day. The number of hires does not change; only which
+    hours and the 12-hour day. The number of hires does not change; only which
     of the plan's shifts are theirs. Deterministic: donors by most spare hours,
     then id; shifts by day and hour.
     """
@@ -7596,7 +7598,7 @@ def _piece_over(shift: dict, donor: dict, taker: dict, state: dict, shifts: list
 def _keeps_floors(person: dict, before: dict, without: dict, gained: dict) -> bool:
     """Whether a swap leaves a person no worse off against their own demands.
 
-    `_can_work()` tests ceilings only: the 50 hours, the 14-hour day, the most
+    `_can_work()` tests ceilings only: the 50 hours, the 12-hour day, the most
     days a count allows. A swap hands one entry away and takes another, so it
     can also lower somebody's hours under their floor, or their days under an
     exact four- or five-day count, and turn a met demand into a broken one.
@@ -19439,13 +19441,15 @@ function drawChart(){
   rows.forEach(r => Object.values(SERIES).forEach(s => { min = Math.min(min, r[s.key]); max = Math.max(max, r[s.key]); }));
   const step = niceStep((max - min) || 1, 5), fine = step / 5;
   const hi = Math.max(Math.ceil((max + step * .05) / fine) * fine, fine);
-  const lo = min < 0 ? -Math.ceil((-min + step * .05) / fine) * fine : 0;
+  /* Whole steps below zero, so even a small loss gets a labelled line. */
+  const lo = min < 0 ? -Math.ceil((-min + step * .05) / step) * step : 0;
   const X = i => L + (n > 1 ? i / (n - 1) : .5) * (W - L - R);
   const Y = v => T + (hi - v) / (hi - lo) * (H - T - B);
 
   const out = [];
-  for(let v = 0; v <= hi + 1e-9; v += step){
-    const yy = Y(v).toFixed(1);
+  /* From the lowest step at or above lo, so a loss day has a scale too. */
+  for(let k = Math.ceil(lo / step - 1e-9); k * step <= hi + 1e-9; k++){
+    const v = k * step || 0, yy = Y(v).toFixed(1);
     out.push(`<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" stroke="var(--rule-soft)"></line>`
       + `<text x="${L - 10}" y="${(+yy + 4).toFixed(1)}" text-anchor="end" font-size="10" font-family="IBM Plex Mono" fill="var(--ink-3)">${money(v)}</text>`);
   }
@@ -19941,7 +19945,8 @@ const roleCode = role => { const w = role.trim().split(/\s+/); return (w.length 
 function spKind(b){
   if(b.status === "retail") return "retail";
   if(b.status === "office") return "office";
-  if(spFactorySites().some(r => r.s === siteTab)) return "factory";
+  const i = D.businesses.indexOf(b);
+  if(i >= 0 && spFactorySites().some(r => r.s === i)) return "factory";
   if(b.status === "support" || b.status === "overhead") return "depot";
   return "home";
 }
@@ -20145,14 +20150,19 @@ const spDaySig = day => day.map(shifts => shifts.map(
   s => `${s.f}-${s.t}:${s.p === null || s.p === undefined ? "?" : s.p}:${s.k || ""}`).join(",")).join("|");
 /* The weekday each day is a copy of, or null. BizMan copies a schedule day and
    pastes it, so a day identical to an earlier one is two clicks rather than a
-   morning of typing; a day with nothing on it is nobody's copy. */
+   morning of typing; a day with nothing on it is nobody's copy. Earlier is the
+   order the tabs run in, Monday to Sunday (HOUR_ROWS), not the weekday index,
+   where Sunday is 0: a hint never points at a tab still to come. */
 function spSameDays(days){
-  const sigs = days.map(spDaySig);
-  return days.map((day, d) => {
-    if(!day.some(shifts => shifts.length)) return null;
-    const first = sigs.indexOf(sigs[d]);
-    return first < d ? first : null;
+  const out = days.map(() => null), source = new Map();
+  HOUR_ROWS.forEach(d => {
+    const day = days[d];
+    if(!day || !day.some(shifts => shifts.length)) return;
+    const sig = spDaySig(day);
+    if(source.has(sig)) out[d] = source.get(sig);
+    else source.set(sig, d);
   });
+  return out;
 }
 /* What a tick means: this exact line is entered in the game. So its identity
    is the line the player typed -- the weekday, the station, the hours from and
@@ -24562,7 +24572,9 @@ function drawMovers(){
     // Folded by the place's identity: a neighbourhood's key, or the address.
     const where = x.count > 1 ? tt("gr.short.suppliers", {one: "{n} supplier", other: "{n} suppliers"}, {n: x.count})
       : x.hood ? hoodName(x.hood) : x.where;
-    const id = x.count > 1 ? where : x.hood || x.where;
+    // One product at several suppliers is its own chip: two products each short
+    // at two suppliers are not the same two suppliers.
+    const id = x.count > 1 ? JSON.stringify([x.item, x.kind, x.count]) : x.hood || x.where;
     const g = byPlace.get(id) || {where, key: x.count > 1 || x.hood ? null : x.siteKey || null, rows: [], mine: 0, lo: Infinity, hi: 0};
     g.rows.push(x); g.mine += x.mine ? 1 : 0;
     g.lo = Math.min(g.lo, x.daysLeft); g.hi = Math.max(g.hi, x.daysLeft);
@@ -28190,7 +28202,7 @@ buildAlertSettingsPanel();
      .sw[data-kind=<alert group id>]  click toggles .on, flips alertGroupPrefs,
                           saves under ALERT_SETTINGS_KEY, redraws the findings
                           and the map's Findings layer.
-                          A .sw without data-kind only toggles .on.
+                          A .sw without data-kind is left to its own handler.
      the panel itself    a body-level popover (#alertPop), built once by
                           buildAlertSettingsPanel(). toggleKindsPanel(anchor)
                           opens and closes it under whatever element is passed.
@@ -30431,8 +30443,8 @@ const wireRoster = once(() => {
   onLeave("#sp-roster [data-p]", el => mark(el.dataset.p, false));
 });
 
-/* kinds popover: switches flip; with a data-kind they also flip the preference --- */
-const bindKinds = once(() => on("click", ".sw", s => {
+/* kinds popover: a switch with a data-kind flips, and flips the preference --- */
+const bindKinds = once(() => on("click", ".sw[data-kind]", s => {
   s.classList.toggle("on");
   /* changed for kinds: the switch is a span carrying role="switch", so the
      state a screen reader hears has to move with the class. */
@@ -31428,6 +31440,9 @@ function gwToast(){
   const last = Object.values(gwUndoable).sort((a, b) => b.at - a.at)[0];
   let bar = $("gwToast");
   if(!last || gwOpen){ if(bar) bar.remove(); return; }
+  /* The same undo as the strip already shows: left alone, so a refresh does
+     not take the focus off its Undo button or announce it again. */
+  if(bar && bar._gwLast === last) return;
   if(!bar){
     bar = document.createElement("div");
     bar.id = "gwToast"; bar.setAttribute("role", "status");
@@ -31436,6 +31451,7 @@ function gwToast(){
   const {spec, text, sub} = last;
   bar.innerHTML = `<span class="ic" aria-hidden="true">${gwSvg("tick")}</span><span class="t">${text}<small>${sub || ""}</small></span><button type="button" class="gw-b undo" data-gw-undo>${
     gwSvg("undo")}<span>${tt("nav.toast.undo", "Undo")}</span></button><button type="button" class="gw-x" data-gw-dismiss aria-label="${attr(tt("nav.toast.dismiss", "Dismiss"))}">${gwSvg("close")}</button>`;
+  bar._gwLast = last;
   bar.querySelector("[data-gw-undo]").onclick = () => gwUndo(spec);
   bar.querySelector("[data-gw-dismiss]").onclick = () => { delete gwUndoable[spec.kind]; gwToast(); };
 }
