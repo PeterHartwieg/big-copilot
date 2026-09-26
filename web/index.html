@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "63b9f3a0ea";</script>
-<link rel="stylesheet" href="community.css?v=63b9f3a0ea">
+<script>window.LEDGER_BUILD = "5fcced956c";</script>
+<link rel="stylesheet" href="community.css?v=5fcced956c">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=63b9f3a0ea">
+<link rel="stylesheet" href="fonts/fonts.css?v=5fcced956c">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -4552,7 +4552,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"63b9f3a0ea","latest":{"pr":121,"date":"2026-09-25","title":"Hire and place staff for every site at once","summary":"Company › Payroll is now Staff. It adds up what each shop, office and factory still needs by role, moves spare people between sites first, and picks the most skilled of your headhunters' candidates, with filters for the demands you want to avoid. One confirm hires them, puts them at their sites and writes their hours, through the Big Copilot Link mod 0.3.0. Hires cannot be undone."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"5fcced956c","latest":{"pr":121,"date":"2026-09-25","title":"Hire and place staff for every site at once","summary":"Company › Payroll is now Staff. It adds up what each shop, office and factory still needs by role, moves spare people between sites first, and picks the most skilled of your headhunters' candidates, with filters for the demands you want to avoid. One confirm hires them, puts them at their sites and writes their hours, through the Big Copilot Link mod 0.3.0. Hires cannot be undone."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -4640,8 +4640,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=63b9f3a0ea"></script>
-<script src="community.js?v=63b9f3a0ea"></script>
+<script src="app.js?v=5fcced956c"></script>
+<script src="community.js?v=5fcced956c"></script>
 
 <script>
 
@@ -9299,7 +9299,8 @@ function spPlanPick(base, full){
 function spOfficeRoster(b){
   const row = gwOfficeRow(b.key);
   if(!row || !(row.shifts || []).length) return "";
-  const now = (row.current || {}).list || [], plan = (row.shifts || []).filter(s => !spNobody(s.p));
+  const comp = gwOfficeComputers(row);
+  const now = ((row.current || {}).list || []).filter(s => comp.has(s.s)), plan = (row.shifts || []).filter(s => !spNobody(s.p));
   const hours = list => list.reduce((n, s) => n + s.t - s.f, 0);
   const people = list => new Set(list.map(s => s.p).filter(p => p !== null && p !== undefined)).size;
   const open = (row.shifts || []).filter(s => spNobody(s.p));
@@ -13717,7 +13718,8 @@ function hrNoHoursHtml(){
 function hrIdleHtml(m){
   /* The plan the site's Staffing block shows and writes, as it picks it. */
   const of = S => { const u = S.site.unstaffed || {};
-    return S.site.kind === "office" ? u.office : spPlanRead(S.key) === "full" && u.full ? u.full : u.demand; };
+    const base = spRosterRow(S.key);
+    return S.site.kind === "office" ? u.office : spOffersFull(base) && spPlanRead(S.key) === "full" && u.full ? u.full : u.demand; };
   const rows = m.sites.filter(S => (S.site.kind === "shop" || S.site.kind === "office") && of(S)).map(S => {
     const u = of(S), name = spEsc(S.b ? shortName(S.b) : S.site.name || "A site");
     const who = (u.roles || []).filter(r => r.idle).map(r => `your ${hrNum(r.idle)} ${hrRole(r.skill)} staff ${r.idle === 1 ? "has" : "have"} no hours`);
@@ -24161,7 +24163,20 @@ function gwRosterWeek(row){
     return true;
   };
   (row.shifts || []).forEach(s => { if(!spNobody(s.p) && !bench.has(s.p) && put(s)) sent++; });
-  if(!row.full && spCoverOnly(row))
+  if(row.office){
+    /* The office default plans the computers only, and the write replaces the
+       whole week: every entry on another station (cleaning, a locker) goes
+       back as it stands, or the game would take the cleaner off the office.
+       And somebody at the office the default gives no computer keeps their
+       computer entries where no planned entry is on that computer then, so a
+       write never leaves one of the office's own people with no hours. */
+    const comp = gwOfficeComputers(row);
+    const planned = new Set((row.shifts || []).filter(s => !spNobody(s.p)).map(s => s.p));
+    const taken = (s) => (row.shifts || []).some(p => p.s === s.s && p.d === s.d && p.f < s.t && s.f < p.t);
+    ((row.current || {}).list || []).forEach(s => {
+      if(!comp.has(s.s) || (!planned.has(s.p) && !taken(s))) { if(put(s)) kept++; }
+    });
+  } else if(!row.full && spCoverOnly(row))
     ((row.current || {}).list || []).filter(s => !s.k).forEach(s => { if(put(s)) kept++; });
   return {days: [...days].sort((a, b) => a[0] - b[0]).map(([d, shifts]) => ({d, shifts})), sent, kept};
 }
@@ -24176,6 +24191,8 @@ function gwRosterMatches(row, week){
   }).sort();
   return !(row.full && !row.openNow) && want.length === have.length && want.every((x, i) => x === have[i]);
 }
+/* An office row's computers: the stations of its one role, by index. */
+const gwOfficeComputers = row => new Set((row.roles || []).flatMap(r => r.stations || []));
 const gwOfficeRow = key => {
   const list = Array.isArray(D.officeStaffing) ? D.officeStaffing : [];
   const row = list.find(r => r.key === key && !r.failed);
@@ -24279,8 +24296,11 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
     kind: "schedule", icon: "roster", againLabel: tt("sp.gw.sch.again", "Write again"),
     title: many ? tt("sp.gw.sch.all", "Write all {n} planned sites", {n: keys.length}) : tt("sp.gw.sch.one", "Write this roster to the game"),
     where: () => many ? `${gwSteps(keys, run, i)}<span>${tt("sp.gw.run.where", "{n} of {of} · {name}", {n: i + 1, of: keys.length, name})}</span>` : gwWhere(b),
-    nothing: () => !gwRosterPlan(key) ? tt("sp.gw.sch.noplan", "This shop has no plan to write any more.")
-      : typeof (site() || {}).shiftPrint !== "string" ? tt("sp.gw.sch.reread", "Read the game again first: this board does not know the shop's schedule well enough to replace it.")
+    nothing: () => !gwRosterPlan(key) ? (b.status === "office" ? tt("sp.gw.sch.noplan.office", "This office has no plan to write any more.")
+        : tt("sp.gw.sch.noplan", "This shop has no plan to write any more."))
+      : typeof (site() || {}).shiftPrint !== "string" ? (b.status === "office"
+        ? tt("sp.gw.sch.reread.office", "Read the game again first: this board does not know the office's schedule well enough to replace it.")
+        : tt("sp.gw.sch.reread", "Read the game again first: this board does not know the shop's schedule well enough to replace it."))
       : "",
     body: () => {
       const row = gwRosterPlan(key), week = gwRosterWeek(row);
@@ -24314,11 +24334,14 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
           other: "<b>{h} h a week stay empty</b> until you add {n} people. Write the roster again then: the board keeps this note on the roster until it is full."},
           {h: add.hoursUncovered || 0, n: add.people})) : "");
       const whole = tt("sp.gw.plan.whole", "replaces the whole week");
-      const which = row.office ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.gw.plan.office", "Office default")}</span><span class="gw-only">${tt("sp.gw.plan.whole", "replaces the whole week")}</span>`
+      const which = row.office ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.gw.plan.office", "Office default")}</span><span class="gw-only">${whole}</span>`
         : row.full ? `<span class="gw-plan full">${gwSvg("sun")}${tt("sp.pick.full", "Full cover 24/7")}</span><span class="gw-only">${tt("sp.gw.plan.every", "every station, every hour")}</span>`
         : spCoverOnly(row) ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.gw.plan.cover", "Cleaning and security")}</span><span class="gw-only">${whole}</span>`
         : `<span class="gw-plan">${gwSvg("roster")}${tt("sp.pick.demand", "Demand plan")}</span><span class="gw-only">${whole}</span>`;
-      const kept = week.kept ? gwCall("info", "info", tt("sp.gw.sch.kept", {
+      const kept = week.kept && row.office ? gwCall("info", "info", tt("sp.gw.sch.kept.office", {
+        one: "{n} entry the office default does not plan stays as it stands: cleaning, or a computer nobody is planned on then.",
+        other: "{n} entries the office default does not plan stay as they stand: cleaning, or a computer nobody is planned on then."}, {n: week.kept}))
+        : week.kept ? gwCall("info", "info", tt("sp.gw.sch.kept", {
         one: "The {n} serving entry in the game stays as it stands: this plan covers cleaning and security only.",
         other: "The {n} serving entries in the game stay as they stand: this plan covers cleaning and security only."}, {n: week.kept})) : "";
       /* Full cover opens the shop around the clock, unless the player opts out. */
@@ -24340,6 +24363,13 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
       };
       const left = (answer.leftWithout || []).map(p => `<span class="person"><i>${spEsc(gwInitials(p.name))}</i>${spEsc(p.name || tt("sp.gw.someone", "someone"))}${
         roleOf(p.employeeId) ? `<small>${roleOf(p.employeeId)}</small>` : ""}</span>`);
+      /* Anybody the week gives fewer hours than they have now. */
+      const had = new Map(), gets = new Map();
+      now.forEach(s => { const who = (row.people || [])[s.p]; if(who) had.set(who.id, (had.get(who.id) || 0) + s.t - s.f); });
+      sentList.forEach(s => gets.set(s.employeeId, (gets.get(s.employeeId) || 0) + s.t - s.f));
+      const fewer = [...had].filter(([id, h]) => (gets.get(id) || 0) < h && (gets.get(id) || 0) > 0)
+        .map(([id, h]) => `${spEsc(((row.people || []).find(p => p.id === id) || {}).name || tt("sp.gw.someone", "someone"))} (${h} → ${gets.get(id)} h)`);
+      const fewerCall = fewer.length ? gwCall("info", "roster", tt("sp.gw.fewer", "<b>Fewer hours than now</b>: {who}.", {who: fewer.join(", ")})) : "";
       const over = (answer.warnings || []).filter(w => w.type === "overworked").map(w =>
         gwCall("warn", "flame", tt("sp.gw.over", "<b>{name}</b> works {n} h on {day}. The game allows it.",
           {name: spEsc(w.name || tt("sp.gw.someone.cap", "Someone")), n: Number(w.hours), day: WEEKDAY_NAMES[w.d] ? ttDay(w.d) : tt("sp.gw.aday", "a day")})));
@@ -24347,7 +24377,7 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
         + gwTiles([[labels[0], now.length, sentList.length], [labels[1], gwHours(now), gwHours(sentList)], [labels[2], nowPeople, afterPeople]])
         + gwWeek(now, week.days) + kept + toggle
         + (left.length ? `<div class="gw-box">${gwCall("", "exit", tt("sp.gw.left", "<b>No shift here after this</b>. The game takes them off their work here and adds a to-do, as its own schedule does."))}<div class="gw-pills">${left.join("")}</div></div>` : "")
-        + (add.people ? gwAddBox(add, gwHours(sentList)) : "") + over.join("");
+        + fewerCall + (add.people ? gwAddBox(add, gwHours(sentList)) : "") + over.join("");
     },
     bind: (dlg, replan) => {
       const sw = dlg.querySelector("[data-gw-open]");

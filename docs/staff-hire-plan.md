@@ -267,6 +267,10 @@ Where the build differs from or adds to 2.1-2.4; the board worker reads these to
   waiting on a hire, and the write button). `gwRosterPlan()` gives an office's
   `officeStaffing` row, so `/write/schedule` takes it through the same review, confirm and
   undo as a shop's, `openAllHours` always false; "Write all planned sites" includes offices.
+  The office default plans the computers only, and the write replaces the whole week, so
+  `gwRosterWeek()` sends back every entry on another station (cleaning) as it stands, and
+  the computer entries of anybody the default gives no computer where no planned entry is
+  on that computer then; the confirm names anyone whose hours drop.
   The mod refuses only a headquarters (ScheduleWrite.cs), so no mod change.
 - **Styled option lists**: a Staff select opens the page's own list (`#hsSelPop`, where the
   pointer is a mouse) instead of the system's; the select stays the control.

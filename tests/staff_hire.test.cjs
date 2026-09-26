@@ -1569,6 +1569,8 @@ test('Staff with no hours: shops and offices, each measured on the plan its Staf
   const out = await page.evaluate(([G, O, CS, LAW]) => {
     const m = hrModel();
     const u = (h, skill) => ({hours: h, roles: [{skill, hours: h, idle: 2}]});
+    /* Full cover on offer at Gifts, as gwRosterPlan() asks before taking it. */
+    D.staffing.find(r => r.key === G).fullCover = {shifts: []};
     m.sites.find(S => S.key === G).site.unstaffed = {demand: u(20, CS), full: u(90, CS)};
     m.sites.find(S => S.key === O).site.unstaffed = {office: u(40, LAW)};
     const text = () => { const el = document.createElement('div'); el.innerHTML = hrIdleHtml(m); return el.textContent; };
@@ -1611,4 +1613,45 @@ test('an office week is written from its site page: the office default for its o
     {d: 1, shifts: [{f: 8, t: 22, employeeId: 'LAWYER1', itemInstanceId: 'DESK-1'}]},
     {d: 2, shifts: [{f: 8, t: 22, employeeId: 'LAWYER1', itemInstanceId: 'DESK-1'}]}]});
   assert.match(await page.locator('dialog.gw-dlg').textContent(), /Office default/);
+});
+
+test('an office write keeps its cleaner and anyone the default gives no computer, and names who drops hours', async (t) => {
+  const page = await board(t);
+  const out = await page.evaluate(([O]) => {
+    const row = D.officeStaffing.find(r => r.key === O);
+    Object.assign(row, {
+      stations: [{id: 'DESK-1', name: 'Computer', skill: 'ba:skill_lawyer'}, {id: 'CLN-O', name: 'Cleaning station', skill: 'ba:skill_cleaning'}],
+      roles: [{skill: 'ba:skill_lawyer', label: 'Lawyer', stations: [0]}],
+      people: [{id: 'LAWYER1', name: 'Lena Voss'}, {id: 'CLEANER1', name: 'Cleo Mop'}, {id: 'LAWYER2', name: 'Max Idle'}],
+      shifts: [{d: 1, s: 0, f: 8, t: 22, p: 0}, {d: 2, s: 0, f: 8, t: 22, p: 0}, {d: 3, s: 0, f: 8, t: 22, p: null}],
+      current: {list: [{d: 1, s: 1, f: 8, t: 12, p: 1, k: 'clean'}, {d: 4, s: 0, f: 8, t: 18, p: 2},
+        {d: 0, s: 0, f: 8, t: 22, p: 0}, {d: 5, s: 0, f: 8, t: 22, p: 0}, {d: 6, s: 0, f: 8, t: 22, p: 0}, {d: 2, s: 0, f: 10, t: 14, p: 2}]}});
+    Object.assign(D.businesses.find(b => b.key === O), {status: 'office'});
+    const plan = gwRosterPlan(O), week = gwRosterWeek(plan);
+    const flat = week.days.flatMap(({d, shifts}) => shifts.map(s => `${d} ${s.f}-${s.t} ${s.employeeId}@${s.itemInstanceId}`));
+    // The game's week already this week: the office counts as written.
+    const same = Object.assign({}, plan, {current: {list: week.days.flatMap(({d, shifts}) => shifts.map(s => ({d, f: s.f, t: s.t,
+      s: plan.stations.findIndex(x => x.id === s.itemInstanceId), p: plan.people.findIndex(x => x.id === s.employeeId)})))}});
+    return {flat, kept: week.kept, matches: gwRosterMatches(same, gwRosterWeek(same)), written: !gwScheduleSites().includes(O) || true};
+  }, [O]);
+  assert.deepEqual(out.flat, [
+    '1 8-22 LAWYER1@DESK-1', '1 8-12 CLEANER1@CLN-O',
+    '2 8-22 LAWYER1@DESK-1',
+    '4 8-18 LAWYER2@DESK-1']);
+  assert.equal(out.kept, 2);
+  assert.equal(out.matches, true);
+  // The confirm names Lena, 42 h now and 28 h in the office default.
+  await page.evaluate(([O]) => {
+    window.hrAnswer = async (kind, body, o) => ({status: 200, error: null, body: {ok: true, kind, dryRun: !!o.dryRun, stamp: 's',
+      address: body.address, business: 'HART. Law', before: {shifts: 5, print: 'a'}, after: {shifts: 4, print: 'b'},
+      removed: 5, added: 4, openedHours: false, leftWithout: [], warnings: [], siteError: null, rows: []}});
+    openSite(O, false);
+  }, [O]);
+  await page.locator('#secDetail #sp-roster [data-gw-sites]').first().click();
+  await phase(page, 'ready');
+  const text = await page.locator('dialog.gw-dlg').textContent();
+  // Max keeps his Thursday; his Tuesday hours meet Lena's planned entry.
+  assert.match(text, /Fewer hours than now: Max Idle \(14 → 10 h\), Lena Voss \(42 → 28 h\)\./);
+  assert.match(text, /2 entries the office default does not plan stay as they stand/);
+  assert.doesNotMatch(text, /cleaning and security only/);
 });
