@@ -163,6 +163,7 @@ class Link:
                  screen_open: list | None = None):
         self.path = path
         self.character, self.company = character, company
+        self._loaded = (character, company)  # what a reset puts back
         self.day, self.hour, self.cash, self.build = day, hour, cash, build
         self._clock = (day, hour)  # what a reset puts back
         self.schema, self.throttle, self.refuse = schema, throttle, refuse
@@ -468,6 +469,17 @@ class Link:
         seen = set()
         presets = [{"id": p.get("id"), "name": p.get("name")}
                    for p in save.items(save.root.get("employeePresets"))]
+        # The save the page planned from, as /health names it (mod 0.3.1): each
+        # field sent is compared, one left out is not.
+        expect = body.get("expect")
+        if expect is not None and not isinstance(expect, dict):
+            raise BadRequest("expect must be an object")
+        expect = expect or {}
+        for key in ("character", "company"):
+            if expect.get(key) is not None and not isinstance(expect[key], str):
+                raise BadRequest(f"expect.{key} must be a string")
+        other_save = any(expect.get(key) is not None and expect[key] != getattr(self, key)
+                         for key in ("character", "company"))
         rows, writes = [], []
         for site in sites:
             if not isinstance(site, dict):
@@ -482,6 +494,11 @@ class Link:
             wanted = site.get("presetId")
             if wanted is not None and not isinstance(wanted, str):
                 raise BadRequest("sites[].presetId must be null or a string")
+            if other_save:
+                # Another company's building at that address, if any: never touched.
+                rows.append({"address": _wire(address), "business": None, "presetId": None,
+                             "presetName": None, "set": [], "skipped": [], "error": "changed"})
+                continue
             reg = self._registration(save, address)
             row = {"address": _wire(address), "business": reg.get("BusinessName") if reg else None,
                    "presetId": None, "presetName": None, "set": [], "skipped": [], "error": None}
@@ -524,7 +541,7 @@ class Link:
         if dry:
             return 200, answer
         if not ok:
-            return 409, {"error": "refused", "rows": rows}
+            return 409, {"error": "changed" if other_save else "refused", "rows": rows}
         for address, skills, preset_id in writes:
             self.uniforms.setdefault(address, {}).update({skill: preset_id for skill in skills})
         # An apply that sets nothing leaves nothing to undo.
@@ -1288,12 +1305,17 @@ class Link:
                 self.pair, self.pair_delay, self.pair_requests, self.tokens = "approve", PAIR_DELAY, {}, {}
                 self.pair_cooldowns, self.strikes, self.reject_tokens = list(PAIR_COOLDOWNS), {}, False
                 self.day, self.hour = self._clock
+                self.character, self.company = self._loaded
             if "importTerms" in body:
                 self.terms = dict(body["importTerms"] or {})
             if "day" in body:
                 self.day = int(body["day"])
             if "hour" in body:
                 self.hour = int(body["hour"])
+            if "character" in body:  # another save loaded, the bytes left as they are
+                self.character = str(body["character"])
+            if "company" in body:
+                self.company = str(body["company"])
             if "refuseWrite" in body:
                 self.refuse_write = body["refuseWrite"] or None
             if "busyWrites" in body:
@@ -1346,6 +1368,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def _route(self) -> str:
         return self.path.split("?")[0].rstrip("/") or "/"
 
+    def _foreign(self) -> bool:
+        """As the mod from 0.3.1: an Origin off the allowlist is turned away
+        before any work, on every method but OPTIONS. A request with no Origin
+        (curl, the CLI watcher) is served. True when the 403 has been sent."""
+        origin = origin_of(self.headers.get("Origin"))
+        if not origin or allowed_origin(origin):
+            return False
+        self._drain()
+        self.close_connection = True
+        if self.command == "HEAD":
+            self.send_response(403)
+            self.send_header("Content-Length", "0")
+            self.send_header("Connection", "close")
+            self.end_headers()
+        else:
+            self._json(403, {"error": "origin_not_allowed"}, {"Connection": "close"})
+        return True
+
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header("Content-Length", "0")
@@ -1359,6 +1399,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
+        if self._foreign():
+            return
         route = self._route()
         if route in ("/", "/health"):
             self._json(200, self.link.health(self.link.paired(self.headers.get("Authorization"), self.headers.get("Origin"))))
@@ -1387,6 +1429,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_HEAD(self):
         # A HEAD answer carries no body, or the next request on a kept-alive
         # connection reads the leftover bytes as its status line.
+        if self._foreign():
+            return
         status = 405 if self._route() in ("/", *ENDPOINTS) else 404
         self.send_response(status)
         self.send_header("Content-Length", "0")
@@ -1397,24 +1441,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self._other_method()
 
     def _other_method(self):
+        if self._foreign():
+            return
         if self._route() in ("/", *ENDPOINTS):
             self._json(405, {"error": "method_not_allowed"})
         else:
             self._not_found()
 
     def do_POST(self):
+        if self._foreign():
+            return
         route = self._route()
         if route == "/refresh":
             status, body = self.link.refresh()
             self._json(status, body)
         elif route == "/pair/request":
-            # As the mod: an origin off the allowlist is turned away before the body is read.
-            origin = origin_of(self.headers.get("Origin"))
-            if origin and not allowed_origin(origin):
-                self._drain()
-                self.close_connection = True
-                self._json(403, {"error": "origin_not_allowed"}, {"Connection": "close"})
-                return
             if int(self.headers.get("Content-Length") or 0) > PAIR_MAX_BODY:
                 self._drain()
                 self.close_connection = True

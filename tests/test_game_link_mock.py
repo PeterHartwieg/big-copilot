@@ -125,6 +125,28 @@ class MockContract(unittest.TestCase):
         self.assertIn("Authorization", headers.get("Access-Control-Allow-Headers", ""))
         self.assertIn("GET", headers.get("Access-Control-Allow-Methods", ""))
 
+    def test_an_origin_off_the_list_is_refused_before_any_work(self):
+        # As the mod from 0.3.1: 403 on every method but OPTIONS, and nothing done.
+        before = self.link.stamp
+        self.link.last_refresh = 0  # a refresh would run
+        evil = {"Origin": "https://evil.example"}
+        for method, route in (("GET", "/health"), ("GET", "/save"), ("POST", "/refresh"),
+                              ("POST", "/write/uniforms"), ("PUT", "/save"), ("GET", "/nothing")):
+            status, headers, body = call(self.url + route, method, dict(evil, **{"Content-Length": "0"}))
+            self.assertEqual((status, json.loads(body)), (403, {"error": "origin_not_allowed"}), f"{method} {route}")
+            self.assertNotIn("Access-Control-Allow-Origin", headers)
+        self.assertEqual(self.link.stamp, before, "the refresh did not run")
+        status, _, body = call(self.url + "/save", "HEAD", evil)
+        self.assertEqual((status, body), (403, b""))
+        # A preflight still answers, without the headers the browser needs.
+        status, headers, _ = call(self.url + "/refresh", "OPTIONS", dict(evil, **{"Access-Control-Request-Method": "POST"}))
+        self.assertEqual(status, 204)
+        self.assertNotIn("Access-Control-Allow-Methods", headers)
+        # No Origin (curl, the CLI watcher) and an allowed one are served as before.
+        for headers in ({}, {"Origin": "https://bigcopilot.com"}, {"Origin": "http://localhost:9321"}):
+            self.assertEqual(call(self.url + "/health", headers=headers)[0], 200, headers)
+            self.assertEqual(call(self.url + "/save", headers=headers)[0], 200, headers)
+
     def test_no_save_yet_before_the_first_refresh(self):
         self.link.stamp = ""
         status, _, body = call(self.url + "/save")
@@ -381,6 +403,29 @@ class MockWrites(LinkedMock):
         self.assertEqual(nowhere["error"], "not_found")
         self.assertEqual(self.stamp(), before, "a dry run moves nothing")
         self.assertEqual(self.link.applied, [])
+
+    def test_uniforms_expect_names_the_save_and_another_one_is_changed(self):
+        site = {"address": GIFTS, "skills": ["ba:skill_customerservice"], "presetId": None}
+        # Left out, or naming the loaded save: as before.
+        for expect in (None, {}, {"character": "abc"}, {"company": "Mock Co"}, {"character": "abc", "company": "Mock Co"}):
+            body = {"dryRun": True, "sites": [site], **({"expect": expect} if expect is not None else {})}
+            status, answer = self.post("uniforms", body)
+            self.assertEqual((status, answer["ok"], answer["rows"][0]["set"]), (200, True, ["ba:skill_customerservice"]), expect)
+        # Another save of the same character, or another character: every row changed.
+        for expect in ({"character": "abc", "company": "Other Co"}, {"character": "xyz"}):
+            status, answer = self.post("uniforms", {"dryRun": True, "expect": expect, "sites": [
+                site, {"address": {"street": "ba:street_nowhere", "number": 1}, "skills": None}]})
+            self.assertEqual((status, answer["ok"]), (200, False), expect)
+            self.assertEqual([r["error"] for r in answer["rows"]], ["changed", "changed"], expect)
+            self.assertEqual([r["set"] for r in answer["rows"]], [[], []])
+            status, answer = self.post("uniforms", {"expect": expect, "sites": [site]})
+            self.assertEqual((status, answer["error"]), (409, "changed"), expect)
+        self.assertEqual(self.link.applied, [], "nothing written for another save")
+        for expect in ("abc", {"character": 3}, {"company": ["Mock Co"]}):
+            status, answer = self.post("uniforms", {"dryRun": True, "expect": expect, "sites": [site]})
+            self.assertEqual((status, answer["error"]), (400, "bad_request"), expect)
+        status, _ = self.post("uniforms", {"expect": {"character": "abc", "company": "Mock Co"}, "sites": [site]})
+        self.assertEqual(status, 200)
 
     def test_a_refused_apply_writes_nothing(self):
         status, answer = self.post("uniforms", {"sites": [
