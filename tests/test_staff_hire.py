@@ -5,6 +5,7 @@ candidate names are save data like employee names.
 """
 import collections
 import json
+import math
 import os
 import subprocess
 import sys
@@ -486,6 +487,31 @@ class OfficeStaffingTest(unittest.TestCase):
         self.assertEqual(len(hire["hireWeeks"]), row["headcount"][LAWYER]["hire"])
         self.assertTrue(hire["hireWeeks"])
         slots_point_at_open_entries(self, row, hire)
+
+    def test_a_hire_gets_a_full_week_and_nobody_here_works_less(self):
+        """Peter's in-game test (25 September 2026): the lawyers already there
+        filled every day but one, and the hires got that one day, 7 to 14
+        hours each. Now the open hours are spread over the week by swapping
+        days with the staff, and each hire takes a full-time week, with
+        nobody here planned under the 40 hours the game has them on."""
+        for n in (14, 20):
+            people = [dict(lawyer(f"l{i:02d}"), assignedWeeklyHours=40) for i in range(n)]
+            _save, _b, [row] = office_rows(10, [[[0, 24]] for _ in range(7)], people)
+            weeks = row["_hire"]["hireWeeks"]
+            self.assertTrue(weeks, n)
+            self.assertEqual(len(weeks), row["headcount"][LAWYER]["hire"])
+            for week in weeks:
+                self.assertGreaterEqual(week["hours"], FULL_TIME[0], (n, week["hours"]))
+                self.assertGreaterEqual(week["days"], 3, n)
+            open_hours = sum(s["t"] - s["f"] for s in row["shifts"] if s["p"] is None)
+            self.assertLessEqual(len(weeks), math.ceil(open_hours / FULL_TIME[0]), n)
+            worked = collections.Counter()
+            for s in row["shifts"]:
+                if s["p"] is not None:
+                    worked[s["p"]] += s["t"] - s["f"]
+            self.assertEqual(len(worked), n)
+            self.assertGreaterEqual(min(worked.values()), 40, n)
+            slots_point_at_open_entries(self, row, row["_hire"])
 
     def test_the_bench_is_drawn_unless_a_shop_counts_on_them(self):
         people = [lawyer("l1"), lawyer("b1", here=False)]

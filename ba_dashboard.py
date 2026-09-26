@@ -6714,6 +6714,9 @@ def _plan_people(save: Save, staff: list) -> dict:
             # In training (trainingSession set): the game will not assign them
             # to a business, so no plan counts on them from the bench.
             "training": person["id"] in training,
+            # The weekly hours the game has them on now, at the one site they
+            # work: a hire's week never takes them below it (_fill_hire_weeks()).
+            "now": person.get("hours") or 0,
         }
     return out
 
@@ -7063,6 +7066,184 @@ def _hire_weeks(slots: list) -> list:
             if packed is not None:
                 return packed
     return worst
+
+
+def _hire_floor(person: dict) -> float:
+    """The fewest hours a hire's week may leave somebody already placed here with.
+
+    Their hours demand's floor, and the weekly hours the game has them on now
+    at the one site they work: a hire is never why somebody works less.
+    """
+    band = person["band"][0] if person["band"] else 0
+    return max(band, (person.get("now") or 0) if person["addr"] else 0)
+
+
+def _spread_residue(residue: list, shifts: list, pool: list, state: dict, before: dict) -> list:
+    """Move the open shifts off the day they pile up on, by swapping days with staff.
+
+    The placer fills the people a site already has before it counts a hire, so
+    the shifts nobody can take pile up on whichever day their weeks ran out: at
+    a law firm of 84 lawyers, 267 hours all on a Friday, 22 of them at the same
+    hour, which packed onto 22 hires of one day each, 7 to 14 hours a week
+    (Peter's in-game test, 25 September 2026). The hires those hours need are
+    about ceil(hours / 50). While more open shifts than that run at one hour,
+    or more than that many 14-hour days of them fall on one day, one of them
+    goes to somebody here who is off that day, and one of their own shifts of
+    the role on another day, where the open ones are fewer, is opened in its
+    place: nobody's week breaks a rule or a demand for it (_can_work()), and
+    nobody drops under _hire_floor(). Returns the open shifts afterwards, the
+    same shift rows, reassigned in place. Deterministic.
+    """
+    if not residue:
+        return residue
+    skill = residue[0]["skill"]
+    residue = list(residue)
+    total = sum(s["to"] - s["from"] for s in residue)
+    limit = max(1, math.ceil(total / FULL_TIME[1]))
+    by_id = {person["id"]: person for person in pool}
+    stuck = set()
+
+    def load():
+        at = [[0] * 24 for _ in range(7)]
+        day = [0] * 7
+        for s in residue:
+            day[s["wd"]] += s["to"] - s["from"]
+            for hour in range(s["from"], s["to"]):
+                at[s["wd"]][hour] += 1
+        return at, day
+
+    def find(wd, hour, at, day):
+        rows = sorted((s for s in residue if s["wd"] == wd and s["from"] <= hour < s["to"]),
+                      key=lambda s: (s["from"], s["to"], str(s["station"])))
+        free = sorted((pid for pid in by_id if not state[pid]["busy"][wd]), key=str)
+        for open_row in rows:
+            for pid in free:
+                person = by_id[pid]
+                if not _usable(person, skill, open_row["kind"]):
+                    continue
+                own = sorted((s for s in shifts if s["employee"] == pid and s["skill"] == skill
+                              and s["wd"] != wd), key=lambda s: (s["wd"], s["from"]))
+                for mine in own:
+                    if any(at[mine["wd"]][h] + 1 > limit for h in range(mine["from"], mine["to"])):
+                        continue
+                    if day[mine["wd"]] + (mine["to"] - mine["from"]) > limit * OVERWORK_HOURS:
+                        continue
+                    trial = _copy_state(state[pid])
+                    trial["hours"] -= mine["to"] - mine["from"]
+                    trial["busy"][mine["wd"]].difference_update(range(mine["from"], mine["to"]))
+                    if not trial["busy"][mine["wd"]]:
+                        trial["days"].discard(mine["wd"])
+                    if not _can_work(person, trial, open_row):
+                        continue
+                    here = state[pid]["hours"] - before[pid][0]
+                    after = here - (mine["to"] - mine["from"]) + (open_row["to"] - open_row["from"])
+                    if after < min(_hire_floor(person), here):
+                        continue
+                    days_after = len(trial["days"] | {wd}) - before[pid][1]
+                    if person["days"] is not None and days_after < min(
+                            person["days"], len(state[pid]["days"]) - before[pid][1]):
+                        continue
+                    return open_row, person, mine
+        return None
+
+    for _ in range(4 * len(shifts) + 1):
+        at, day = load()
+        crowded = sorted(
+            (-at[wd][hour], wd, hour)
+            for wd in range(7) for hour in range(24)
+            if at[wd][hour] and (at[wd][hour] > limit or day[wd] > limit * OVERWORK_HOURS)
+            and (wd, hour) not in stuck
+        )
+        if not crowded:
+            break
+        _, wd, hour = crowded[0]
+        swap = find(wd, hour, at, day)
+        if swap is None:
+            stuck.add((wd, hour))
+            continue
+        open_row, person, mine = swap
+        theirs = state[person["id"]]
+        theirs["hours"] -= mine["to"] - mine["from"]
+        theirs["busy"][mine["wd"]].difference_update(range(mine["from"], mine["to"]))
+        if not theirs["busy"][mine["wd"]]:
+            theirs["days"].discard(mine["wd"])
+        if not any(other is not mine and other["employee"] == person["id"]
+                   and other["station"] == mine["station"] and other["wd"] == mine["wd"]
+                   for other in shifts):
+            theirs["stations"].discard((mine["station"], mine["wd"]))
+        mine.update(employee=None, name=None, fromBench=False)
+        _take_over(open_row, person, state)
+        residue.remove(open_row)
+        residue.append(mine)
+    return residue
+
+
+def _fill_hire_weeks(weeks: list, shifts: list, pool: list, state: dict, before: dict) -> list:
+    """Give each hire short of a full week whole shifts the site's own people can spare.
+
+    The placer fills the people a site already has up to their ceiling before
+    it counts a single hire, so what is left for the hires is whatever their
+    weeks could not reach: at a law firm of 84 lawyers that was 267 hours, all
+    on a Friday, and 22 hires on one day each, 7 to 14 hours a week against a
+    full-time demand nearly every candidate holds (Peter's in-game test, 25
+    September 2026). Here each hire under FULL_TIME[0] takes whole shifts of
+    the same role, on days it does not work yet, from the people holding the
+    most hours above their own floor -- the larger of their hours demand's
+    floor and the hours the game has them on now -- so nobody already here is
+    cut below the week they have, and nobody is left under their demands'
+    floor or short of a four- or five-day count. The hire keeps within 50
+    hours and the 14-hour day. The number of hires does not change; only which
+    of the plan's shifts are theirs. Deterministic: donors by most spare hours,
+    then id; shifts by day and hour.
+    """
+    if not weeks:
+        return weeks
+    by_id = {person["id"]: person for person in pool}
+
+    def spare(person):
+        # Only this site's week counts: a bench member's hours elsewhere are
+        # another plan's, and `before` is what they held when this one began.
+        return state[person["id"]]["hours"] - before[person["id"]][0] - _hire_floor(person)
+
+    skill = weeks[0]["slots"][0]["skill"] if weeks[0]["slots"] else None
+    for week in sorted(weeks, key=lambda w: w["hours"]):
+        while week["hours"] < FULL_TIME[0]:
+            best = None
+            for shift in shifts:
+                person = by_id.get(shift["employee"])
+                if person is None or shift["skill"] != skill:
+                    continue
+                hours = shift["to"] - shift["from"]
+                if week["busy"][shift["wd"]] or not _hire_fits(shift, week):
+                    continue
+                if spare(person) < hours:
+                    continue
+                theirs = state[person["id"]]
+                last = sum(1 for s in shifts if s["employee"] == person["id"]
+                           and s["wd"] == shift["wd"]) == 1
+                if last and person["days"] is not None and                         len(theirs["days"]) - before[person["id"]][1] <= person["days"]:
+                    continue
+                key = (-spare(person), str(person["id"]), shift["wd"], shift["from"],
+                       str(shift["station"]))
+                if best is None or key < best[0]:
+                    best = (key, shift, person)
+            if best is None:
+                break
+            _, shift, person = best
+            mine = state[person["id"]]
+            mine["hours"] -= shift["to"] - shift["from"]
+            mine["busy"][shift["wd"]].difference_update(range(shift["from"], shift["to"]))
+            if not mine["busy"][shift["wd"]]:
+                mine["days"].discard(shift["wd"])
+            if not any(other is not shift and other["employee"] == person["id"]
+                       and other["station"] == shift["station"] and other["wd"] == shift["wd"]
+                       for other in shifts):
+                mine["stations"].discard((shift["station"], shift["wd"]))
+            shift.update(employee=None, name=None, fromBench=False)
+            week["hours"] += shift["to"] - shift["from"]
+            week["busy"][shift["wd"]].update(range(shift["from"], shift["to"]))
+            week["slots"].append(shift)
+    return weeks
 
 
 def _hires_for(slots: list) -> int:
@@ -8738,6 +8919,15 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
     for shift in shifts:
         if shift["employee"] is None:
             uncovered[shift["skill"]].append(shift)
+    # The residue packed onto hires, each hire's week then filled to a full
+    # week out of the hours the site's own people hold above what they have
+    # now (_fill_hire_weeks()), before anybody is counted as spare below.
+    hire_weeks = {
+        skill: _fill_hire_weeks(
+            _hire_weeks(_spread_residue(uncovered[skill], shifts, pool, state, before)),
+            shifts, pool, state, before)
+        for skill in _in_order(uncovered)
+    }
     shifts.sort(
         key=lambda s: (s["wd"], s["from"], s["to"], str(s["station"]), str(s["employee"]))
     )
@@ -8789,9 +8979,7 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
     # have` says so with nothing left open, which the arithmetic rules out (the
     # people working a role's slots are all counted in its `have`); an empty
     # week pads it anyway, so the page's count and the weeks always agree.
-    hire_weeks = {}
-    for skill in _in_order(uncovered):
-        hire_weeks[skill] = _hire_weeks(uncovered[skill])
+    for skill in _in_order(hire_weeks):
         headcount[skill]["hire"] = max(headcount[skill]["hire"], len(hire_weeks[skill]))
     for skill in _in_order(headcount):
         weeks = hire_weeks.setdefault(skill, [])
@@ -8852,6 +9040,20 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
                  "want": person["days"], "planned": planned}
             )
     short_hours.sort(key=lambda r: (r["hours"] - r["min"], str(r["employee"])))
+    # The site's own people this week gives fewer hours than the game has them
+    # on now (and some): the Staff page's review names them before a write
+    # replaces the week. Nobody the plan gives no hours at all: the write's
+    # own dry run names those (leftWithout).
+    fewer = sorted(
+        (
+            {"employee": person["id"], "name": person["name"], "now": person.get("now") or 0,
+             "hours": state[person["id"]]["hours"] - before[person["id"]][0]}
+            for person in pool
+            if person["addr"] and person["id"] in worked
+            and 0 < state[person["id"]]["hours"] - before[person["id"]][0] < (person.get("now") or 0)
+        ),
+        key=lambda r: (r["hours"] - r["now"], str(r["employee"])),
+    )
     short_days.sort(key=lambda r: (r["days"] - r["want"], str(r["employee"])))
 
     wage_of = {person["id"]: person["wage"] for person in pool}
@@ -8902,6 +9104,7 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
         "hireWeeks": hire_weeks,
         "spareIds": spare_ids,
         "spareSkills": spare_skills,
+        "fewer": fewer,
     }
 
 
@@ -8984,6 +9187,9 @@ def _hire_fields(week: dict) -> dict:
         "spare": list(week["spareIds"]),
         "spareSkills": {pid: list(skills) for pid, skills in (week.get("spareSkills") or {}).items()},
         "bench": [row["employee"] for row in week["bench"]],
+        # The site's own people this plan gives fewer hours than they have now.
+        "fewer": [{"id": r["employee"], "name": r["name"], "now": r["now"], "hours": r["hours"]}
+                  for r in week.get("fewer") or []],
     }
 
 
@@ -25810,6 +26016,9 @@ function hrReview(o = {}){
       const said = rewritten.length ? `<div class="gw-call info">${gwI("roster")}<div>The week is replaced at ${rewritten.map(s =>
         `<b>${gwSiteName(s)}</b> (${Number(s.removed) || 0} entries out, ${Number(s.added) || 0} in${s.openedHours ? ", open 0 to 24" : ""})`).join(", ")}.</div></div>` : "";
       const left = rewritten.flatMap(s => (s.leftWithout || []).map(p => `<span class="person"><i>${spEsc(gwInitials(p.name))}</i>${spEsc(p.name || "someone")}</span>`));
+      const fewer = hrFewer(m, rewritten);
+      const fewerCall = fewer.length ? `<div class="gw-call">${gwI("roster")}<div><b>Fewer hours than now</b> in the plan's week: ${
+        fewer.map(({S, r}) => `${spEsc(r.name || "someone")} (${spEsc(S.b ? shortName(S.b) : "a site")}, ${hrNum(r.now)} → ${hrNum(r.hours)} h)`).join(", ")}.</div></div>` : "";
       const emptied = hrLeftEmpty(req, answer);
       const displaced = [...req.touched.values()].filter(at => at.lost && at.lost.hours > 0);
       const displacedCall = displaced.length ? `<div class="gw-call">${gwI("roster")}<div><b>Hours the plan takes over</b>: shifts the plan does not own that overlap its own are cut to fit, ${
@@ -25833,7 +26042,7 @@ function hrReview(o = {}){
       const blocked = answer.blocked === "myemployees" ? `<div class="gw-no"><span class="ic">${hrSvg("phone")}</span><div class="rule">MyEmployees is open in the game.</div><div class="fix">${gwSvg("right")}<span>Close the MyEmployees app on your in-game phone, then try again.</span></div></div>` : "";
       return `${blocked}${gwTiles([["Hire", null, c.hire], ["Reassign", null, c.move], ["Added wages", null, `+${fmt(bill)}<small class="hr-u">/day</small>`]])}
         <p class="gw-lead">Who goes where. Open a site to see each person and the days they work.</p>
-        ${sites}${goneCall}${said}${emptyCall}${displacedCall}${left.length ? `<div class="gw-box">${gwCall("", "exit", "<b>No hours after this</b> for these people at the sites whose week is replaced. The game takes them off their work there and adds a to-do.")}<div class="gw-pills">${left.join("")}</div></div>` : ""}
+        ${sites}${goneCall}${said}${fewerCall}${emptyCall}${displacedCall}${left.length ? `<div class="gw-box">${gwCall("", "exit", "<b>No hours after this</b> for these people at the sites whose week is replaced. The game takes them off their work there and adds a to-do.")}<div class="gw-pills">${left.join("")}</div></div>` : ""}
         ${gapText ? `<div class="gw-call gw-warn">${gwI("alert")}<div>${gapText}.</div></div>` : ""}
         ${warned.length ? `<div class="gw-call">${gwI("info")}<div>${plural(warned.length, "person asks", "people ask")} for something their site does not meet (marked orange in Change picks). They are hired anyway.</div></div>` : ""}`;
     },
@@ -25864,6 +26073,12 @@ function hrReview(o = {}){
     },
   });
   if(gwOpen) gwOpen.classList.add("hr-wide");
+}
+/* The people a replaced week gives fewer hours than the game has them on now,
+   by the site's plan (`fewer`), for the sites the dry run says it rewrites. */
+function hrFewer(m, rewritten){
+  const keys = new Set((rewritten || []).map(s => s && s.address && gwKeyOf(s.address)).filter(Boolean));
+  return m.sites.filter(S => keys.has(S.key)).flatMap(S => (S.plan.fewer || []).map(r => ({S, r})));
 }
 /* A site row in the review opens for its people. */
 let hrReviewBound = false;

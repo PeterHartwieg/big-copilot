@@ -145,7 +145,7 @@ function withHiring(text) {
          {skill: FW, hours: 24, days: 2, slots: [slot(3, 4, 0, 12, 'MACH-1'), slot(4, 5, 0, 12, 'MACH-1')]}]},
          dem: {spare: [], bench: [], hireWeeks: [{skill: FW, hours: 12, days: 1, slots: [slot(1, 2, 0, 12, 'MACH-1')]}]}}},
       {key: O, name: 'HART. Law', kind: 'office', address: addr(O), planned: true, new: true, accepts: [LAW], facts: {},
-       plans: {office: {spare: [], bench: [], hireWeeks: [
+       plans: {office: {spare: [], bench: [], fewer: [{id: 'LAWYER1', name: 'Lena Voss', now: 48, hours: 40}], hireWeeks: [
          {skill: LAW, hours: 42, days: 3, slots: [slot(0, 1, 8, 22, 'DESK-1'), slot(1, 2, 8, 22, 'DESK-1'), slot(2, 3, 8, 22, 'DESK-1')]}]}}},
       {key: Q, name: 'HART. HQ', kind: 'hq', address: addr(Q), planned: false, new: false, accepts: [HRM], facts: {}, plans: {}},
       {key: W, name: 'HART. Depot', kind: 'warehouse', address: addr(W), planned: false, new: false, accepts: [DRV], facts: {}, plans: {}},
@@ -632,6 +632,8 @@ test('Review: the dry run, who goes where, one confirm with no undo, and a parti
   // One row a site touched, in list order.
   assert.deepEqual(await dlg.locator('.hr-dhead .s').allTextContents(), ['HART. Gifts', 'HART. Corner', 'HART. Bare', 'HART. Works', 'HART. Law']);
   assert.match(await dlg.locator('.gw-body').textContent(), /The week is replaced at/);
+  // Somebody the plan's week gives fewer hours than now is named before the confirm.
+  assert.match(await dlg.locator('.gw-body').textContent(), /Fewer hours than now in the plan's week: Lena Voss \(HART\. Law, 48 → 40 h\)\./);
   const bare = dlg.locator('.hr-dsite', {has: page.locator(`[data-hr-site="${B}"]`)});
   assert.match(await bare.locator('.c').textContent(), /^3 new\+1 reassigned/);
   // A site opens for its people and their days.
