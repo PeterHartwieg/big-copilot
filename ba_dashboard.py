@@ -8644,41 +8644,6 @@ def _unmeasured(grid: dict, run: int) -> list:
     ]
 
 
-def _open_floor(need: dict, grid: dict) -> dict:
-    """Every hour the shop opens in the game with no demand read for it, staffed in full.
-
-    Peter's rule (26 September 2026): an hour the doors are open needs every
-    station of every serving role, even before any customer has been
-    measured; measured demand decides the hours it has read. So an open hour
-    the demand curve has nothing for (`none`: a shop too new for a reading, or
-    a thin weekday no measured weekday scales) gets the role's whole station
-    count, on the basis `open`. Before this such a shop was planned nobody on
-    its serving stations, however many hours it opened in the game.
-
-    A shop with complete data is left as _run_measured() reads it: there an
-    hour with no report is an hour nobody came (the game files none), and the
-    demand test exists to find exactly those hours. Hours the shop is shut
-    stay as they are.
-    """
-    stations = collections.Counter(s["skill"] for s in grid["stations"])
-    out = {}
-    for skill, row in need.items():
-        count = stations.get(skill, 0)
-        if not count:
-            out[skill] = row
-            continue
-        cells = [list(day) for day in row["need"]]
-        basis = [list(day) for day in row["basis"]]
-        for wd in range(7):
-            for start, end in grid["open"][wd]:
-                for hour in range(max(0, start), min(24, end)):
-                    if basis[wd][hour] == "none":
-                        cells[wd][hour] = count
-                        basis[wd][hour] = "open"
-        out[skill] = dict(row, need=cells, basis=basis)
-    return out
-
-
 def _demand_data_complete(run, week, grid, in_game) -> bool:
     """Whether to tell the player to switch from full cover to the demand plan.
 
@@ -9294,10 +9259,8 @@ def _plan_site(
         rates[station["skill"]].append(station["rate"])
     run = _days_open(save, building)
     daily = _open_day_average(save, building, grid["open"]) if run >= DEMAND_RUN_DAYS else None
-    need = _open_floor(
-        _need_curve(_run_measured(grid, run, daily), day=curve.get("d"), ceiling=ceiling,
-                    rates=dict(rates)),
-        grid)
+    need = _need_curve(_run_measured(grid, run, daily), day=curve.get("d"), ceiling=ceiling,
+                       rates=dict(rates))
 
     cover_posts = _cover_posts(save, building, names)
     pool = _site_pool(people, business, bench)
@@ -19661,7 +19624,7 @@ const spRosterRow = key => (D.staffing || []).find(r => r.key === key) || null;
    honest to put on the strip: the game's own arrival ceiling over-predicts a
    shop like this fourfold, so it is never shown as demand. */
 const spRosterMeasured = row => !!row && !row.failed && Object.keys(row.basis || {}).some(
-  skill => (row.basis[skill] || []).some(day => (day || []).some(b => b && b !== "none" && b !== "open")));
+  skill => (row.basis[skill] || []).some(day => (day || []).some(b => b && b !== "none")));
 /* Whether the doors are open that hour. The game keeps a list of slots a day,
    and the hour between two of them is the shop shut, not trade dipping. */
 const spOpenAt = (slots, h) => (slots || []).some(s => s[0] <= h && h < s[1]);
@@ -19943,7 +19906,6 @@ const SP_BASIS_READ = {
   get scaled(){ return " · " + tt("sp.basis.scaled", "<b>scaled from the best measured day</b> through the game's day curve; this weekday rests on under two weeks"); },
   get measured(){ return " · " + tt("sp.basis.measured", "measured"); },
   get full(){ return " · " + tt("sp.basis.full", "<b>full cover</b>: every station, every hour, to measure demand"); },
-  get open(){ return " · " + tt("sp.basis.open", "<b>open, not measured yet</b>: every station until customers are measured"); },
 };
 function spNeedAt(row, wd, h){
   let n = 0, basis = null;
@@ -20428,10 +20390,9 @@ function spRosterDay(c, wd, on){
   });
   const bases = Object.values(c.row.basis || {}).flatMap(days => (days || [])[wd] || []);
   const readDay = bases.some(b => b === "measured" || b === "censored") ? "measured"
-    : bases.some(b => b === "scaled") ? "scaled" : bases.some(b => b === "open") ? "open" : "none";
+    : bases.some(b => b === "scaled") ? "scaled" : "none";
   let out = `<div class="sp-grow sp-needrow${cells.length ? "" : " sp-unmeas"}"><span class="lab" tabindex="0" data-read="${attr(
     c.full ? tt("sp.need.full", "Every station, every hour: the demand test, {d:day}", {d: wd})
-      : cells.length && readDay === "open" ? tt("sp.need.open", "Every station the hours it opens, {d:day}: nothing measured yet", {d: wd})
       : cells.length ? tt("sp.need.asks", "Stations the measured hours ask for, {d:day}", {d: wd})
       /* The doors decide before the measurement does, here as everywhere else
          in the block: a shop shut on Sunday has not measured nothing, it has

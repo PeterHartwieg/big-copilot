@@ -1067,23 +1067,8 @@ class PayloadTest(unittest.TestCase):
         # week in a role this plan did work out.
         self.assertTrue(by_name["C0"]["planned"])
         self.assertEqual(by_name["C0"]["hours"], 28)
-        # The cashier too: nothing is measured, so every open hour has the
-        # register staffed (Peter's rule, 26 September 2026), and 28 hours
-        # are all there are.
-        self.assertTrue(by_name["P0"]["planned"])
-        self.assertEqual(by_name["P0"]["hours"], 28)
-
-    def test_a_role_the_plan_does_not_cover_says_nothing(self):
-        # A shop shut all week plans no serving hour, so an empty week in the
-        # role says nothing about the person holding it.
-        row = plan(
-            [(1, REGISTER)],
-            [employee("p0", [SERVICE], demands=("ba:jobdemand_fulltime",))],
-            FLAT,
-            weeks=0,
-            open_days=(),
-        )
-        by_name = {row["people"][r["p"]]["name"]: r for r in row["shortHours"]}
+        # The cashier holds nothing the plan covers, so their empty week says
+        # nothing about them at all.
         self.assertFalse(by_name["P0"]["planned"])
         self.assertEqual(by_name["P0"]["hours"], 0)
 
@@ -1111,8 +1096,7 @@ class PayloadTest(unittest.TestCase):
         # Seven reports, one of each weekday, and not one of them enough on its
         # own: the shop has traded and still cannot be read.
         self.assertEqual(row["measure"]["days"], 7)
-        # Nothing is read, so every hour it opens is staffed in full.
-        self.assertTrue(all(b == "open" for days in row["basis"].values()
+        self.assertTrue(all(b == "none" for days in row["basis"].values()
                             for day in days for b in day))
 
     def test_the_bench_needs_a_myemployees_step_first(self):
@@ -1148,10 +1132,8 @@ class PayloadTest(unittest.TestCase):
             {p["id"]: p["skill"] for p in staff}, LABELS,
         )
         [row] = _staffing(save, LABELS, sites, grids, staff, 0.55)
-        # Nothing measured is recommended from demand: every open hour is
-        # staffed in full instead, on the basis `open`.
-        self.assertEqual({c for r in row["basis"][SERVICE] for c in r}, {"open"})
-        self.assertEqual(sum(hours(s) for s in row["shifts"] if kind(s) == "serve"), 24 * 7)
+        self.assertEqual({c for r in row["basis"][SERVICE] for c in r}, {"none"})
+        self.assertEqual([s for s in row["shifts"] if kind(s) == "serve"], [])
 
 
 class MultiRoleTest(unittest.TestCase):
@@ -1294,11 +1276,8 @@ class UnmeasuredSiteTest(unittest.TestCase):
     def test_it_gets_a_row_with_cover_and_hiring_lines(self):
         row = self.row()
         self.assertIsNotNone(row)
-        # Open 8 to 20: those hours staffed in full, the shut ones not at all.
-        self.assertEqual({c for r in row["basis"][SERVICE] for c in r}, {"open", "none"})
-        self.assertEqual(
-            sum(hours(s) for s in row["shifts"] if kind(s) == "serve"), 12 * 7
-        )
+        self.assertEqual({c for r in row["basis"][SERVICE] for c in r}, {"none"})
+        self.assertEqual([s for s in row["shifts"] if kind(s) == "serve"], [])
         self.assertEqual(
             sum(hours(s) for s in row["shifts"] if kind(s) == "clean"), 12 * 7
         )
