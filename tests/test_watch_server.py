@@ -9,6 +9,7 @@ Synthetic only: never a real save.
 """
 from __future__ import annotations
 
+import http.client
 import http.server
 import json
 import os
@@ -144,12 +145,62 @@ class WatchServer(unittest.TestCase):
         # The link company has no characterId, so its names file under "default".
         self.assertEqual(book["default"]["lineNames"], {"RIDaaaa": "ba:itemname_beer"})
 
-    def test_a_bad_name_request_is_refused(self):
-        request = urllib.request.Request(self.base + "/name", data=b"not json", method="POST")
+    def refused(self, request) -> int:
         with self.assertRaises(urllib.error.HTTPError) as caught:
             urllib.request.urlopen(request)
-        self.assertEqual(caught.exception.code, 400)
         caught.exception.close()
+        return caught.exception.code
+
+    def name_request(self, body: bytes, **headers):
+        return urllib.request.Request(self.base + "/name", data=body, method="POST",
+                                      headers={"Content-Type": "application/json", **headers})
+
+    def test_a_bad_name_request_is_refused(self):
+        self.assertEqual(self.refused(self.name_request(b"not json")), 400)
+        self.assertEqual(self.refused(self.name_request(b'{"slug": "x"}')), 400, "no rid")
+
+    def test_a_name_must_come_as_json(self):
+        """EX-4 in #110: a form or text/plain POST, which any page can send
+        without a preflight, is refused before it is read."""
+        body = json.dumps({"rid": "RIDaaaa", "slug": None}).encode("utf-8")
+        for ctype in ("text/plain", "application/x-www-form-urlencoded", "multipart/form-data; boundary=x"):
+            self.assertEqual(self.refused(self.name_request(body, **{"Content-Type": ctype})), 415, ctype)
+        # No Content-Type at all (urllib would add a form's).
+        conn = http.client.HTTPConnection("127.0.0.1", self.server.server_port)
+        try:
+            conn.request("POST", "/name", body=body)
+            response = conn.getresponse()
+            response.read()
+            self.assertEqual(response.status, 415)
+        finally:
+            conn.close()
+        first = self.stamp()
+        self.assertEqual(first[first.rindex("#"):], "#0", "nothing was named")
+        request = self.name_request(body, **{"Content-Type": "application/json; charset=utf-8"})
+        with urllib.request.urlopen(request) as response:
+            self.assertEqual(response.status, 204, "JSON with a charset is still JSON")
+
+    def test_a_name_body_past_the_cap_is_refused_unread(self):
+        big = b"{" + b" " * ba_dashboard.BoardHandler.NAME_MAX_BYTES + b"}"
+        self.assertEqual(self.refused(self.name_request(big)), 413)
+        first = self.stamp()
+        self.assertEqual(first[first.rindex("#"):], "#0")
+
+    def test_only_a_loopback_host_is_served(self):
+        """EX-4 in #110: a page on a name rebound to 127.0.0.1 sends its own Host."""
+        port = self.server.server_port
+        for route in ("/", "/data.json", "/stamp", "/wiki-data.json"):
+            for host in ("attacker.example", f"attacker.example:{port}", f"127.0.0.1:{port + 1}", ""):
+                request = urllib.request.Request(self.base + route, headers={"Host": host})
+                self.assertEqual(self.refused(request), 403, (route, host))
+        body = json.dumps({"rid": "RIDaaaa", "slug": "ba:itemname_beer"}).encode("utf-8")
+        self.assertEqual(self.refused(self.name_request(body, Host=f"attacker.example:{port}")), 403)
+        # Both loopback names this server answers to, in any case.
+        for host in (f"127.0.0.1:{port}", f"localhost:{port}", f"LocalHost:{port}"):
+            request = urllib.request.Request(self.base + "/stamp", headers={"Host": host})
+            with urllib.request.urlopen(request) as response:
+                self.assertEqual(response.status, 200, host)
+                json.loads(response.read())
 
 
 if __name__ == "__main__":

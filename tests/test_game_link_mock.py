@@ -111,12 +111,15 @@ class MockContract(unittest.TestCase):
             conn.close()
 
     def test_cors_only_for_the_allowlist(self):
-        for origin in ("https://bigcopilot.com", "http://127.0.0.1:8770", "http://localhost:8080"):
+        # In any case, as the mod's IsAllowedOrigin compares them (GL-8 in #110).
+        for origin in ("https://bigcopilot.com", "http://127.0.0.1:8770", "http://localhost:8080",
+                       "https://BigCopilot.com", "http://LocalHost:8080"):
             _, headers, _ = call(self.url + "/health", headers={"Origin": origin})
             self.assertEqual(headers.get("Access-Control-Allow-Origin"), origin, origin)
             self.assertIn("X-Game-Link-Stamp", headers.get("Access-Control-Expose-Headers", ""))
-        _, headers, _ = call(self.url + "/health", headers={"Origin": "https://evil.example"})
-        self.assertNotIn("Access-Control-Allow-Origin", headers)
+        for origin in ("https://evil.example", "http://localhost:123456", "http://localhost.evil.example"):
+            _, headers, _ = call(self.url + "/health", headers={"Origin": origin})
+            self.assertNotIn("Access-Control-Allow-Origin", headers, origin)
         status, headers, _ = call(self.url + "/save", "OPTIONS", headers={
             "Origin": "https://bigcopilot.com", "Access-Control-Request-Method": "GET",
             "Access-Control-Request-Private-Network": "true"})
@@ -643,9 +646,10 @@ class MockWrites(LinkedMock):
                          (409, "refused", "screen_open", [{"error": "screen_open"}]))
         # Imports: a locked row names when the window reopens; changed rows carry changed.
         self.link.refuse_write = "refused:locked"
+        self.link.day, self.link.hour = 35, 21  # Sunday 21:00: the mod reopens Monday, day 36
         status, answer = self.post("undo", {"kind": "imports"})
         self.assertEqual((status, answer["rows"][0]["error"]), (409, "locked"))
-        self.assertEqual(answer["rows"][0]["reopens"]["hour"], 8)
+        self.assertEqual(answer["rows"][0]["reopens"], {"day": 36, "hour": 8})
         self.link.refuse_write = "changed"
         status, answer = self.post("undo", {"kind": "imports"})
         self.assertEqual((status, answer["error"], answer["rows"][0]["error"]), (409, "changed", "changed"))
