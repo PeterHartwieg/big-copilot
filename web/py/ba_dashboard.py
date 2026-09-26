@@ -9736,6 +9736,17 @@ def _office_staffing(save: Save, names, businesses: list, grids: list, staff: li
     return out
 
 
+def _unrepresentable(save: Save, building: dict) -> int:
+    """How many of a building's shifts _current_roster() cannot list as they are."""
+    bad = 0
+    for scheduled in save.items(building.get("scheduleDays")):
+        for shift in save.items(scheduled.get("workShifts")):
+            start, end = shift.get("startingHour"), shift.get("endingHour")
+            if not isinstance(start, int) or not isinstance(end, int) or not 0 <= start < end <= 24:
+                bad += 1
+    return bad
+
+
 def _office_site_plan(save, names, business, building, grid, skill, pool, people, bench,
                       state) -> tuple:
     """One office's row of _office_staffing(), and who it drew off the bench."""
@@ -9758,6 +9769,7 @@ def _office_site_plan(save, names, business, building, grid, skill, pool, people
     week = _place_week(fake, need, slots_open, [], pool, people, business, usable_bench,
                        state, groups=_station_groups(save, building))
     current = _current_roster(save, building, {s["id"]: s for s in stations})
+    bad = _unrepresentable(save, building)
     lists = (week["shifts"], week["shortHours"], week["shortDays"], week["placed"],
              week["bench"])
     table = _index_table(stations, (week["shifts"], current["list"]),
@@ -9777,6 +9789,10 @@ def _office_site_plan(save, names, business, building, grid, skill, pool, people
         "label": label,
         # Computers staffed around the clock by the office default.
         "alwaysOn": always,
+        # Shifts in the game's week _current_roster() drops or clamps (no
+        # hours, reversed, outside 0-24): the page cannot send them back as
+        # they are, so an office write, which keeps every entry, is refused.
+        **({"unrepresentable": bad} if bad else {}),
         "computers": len(stations),
         "staffedComputers": len(runs),
         # The hours the plan staffs against: the office's own (around the
@@ -21278,13 +21294,15 @@ function spOfficeRoster(b){
   const row = gwOfficeRow(b.key);
   if(!row || !(row.shifts || []).length) return "";
   const comp = gwOfficeComputers(row);
-  const now = ((row.current || {}).list || []).filter(s => comp.has(s.s)), plan = (row.shifts || []).filter(s => !spNobody(s.p));
+  /* Now, and after the write adds what it can: it never takes an entry away. */
+  const now = ((row.current || {}).list || []).filter(s => comp.has(s.s)), after = now.concat(gwRosterWeek(row).added);
   const hours = list => list.reduce((n, s) => n + s.t - s.f, 0);
   const people = list => new Set(list.map(s => s.p).filter(p => p !== null && p !== undefined)).size;
   const open = (row.shifts || []).filter(s => spNobody(s.p));
-  const facts = [[tt("sp.off.hours", "Hours / week"), hours(now), hours(plan)], [tt("sp.off.people", "People"), people(now), people(plan)]];
+  const facts = [[tt("sp.off.hours", "Hours / week"), hours(now), hours(after)], [tt("sp.off.people", "People"), people(now), people(after)]];
   return `<section class="sec rv" data-block="roster" id="sp-roster" data-site="${attr(b.key)}">
     ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster", quiet: tt("sp.off.quiet", "the office default: {n} always on, every computer on weekdays 8 to 22", {n: row.alwaysOn || 0})})}
+    <p class="quiet">${tt("sp.off.after", "Computers now → after adding the office default where they are free")}</p>
     <div class="sp-offroster">${facts.map(([k, a, z]) => `<div><span>${k}</span><b>${a === z ? z : `<s>${a}</s> → ${z}`}</b></div>`).join("")}${
       open.length ? `<div><span>${tt("sp.off.open", "Waiting on a hire")}</span><b>${tt("sp.off.openh", "{n} h", {n: hours(open)})}</b></div>` : ""}</div>
     ${gwLink() ? gwRosterButtons(b.key) : `<p class="quiet">${tt("sp.off.link", "Link the game to write this week from here.")}</p>`}
@@ -31902,7 +31920,8 @@ function gwRosterPlan(key){
 function gwRosterWeek(row){
   const bench = new Set([...(row.bench || []), ...((row.addPeople || {}).assign || [])].map(r => r.p));
   const days = new Map();
-  let sent = 0, kept = 0;
+  let sent = 0, kept = 0, unreadable = 0;
+  const added = [];  // an office's: the planned entries the write adds
   const put = s => {
     const st = (row.stations || [])[s.s], who = (row.people || [])[s.p];
     if(!st || !spHasId(st.id) || !who || !spHasId(who.id) || !(s.d >= 0 && s.d < 7)) return false;
@@ -31915,21 +31934,25 @@ function gwRosterWeek(row){
        stays as it stands, and the office default's entries for the office's
        own people go in only where that computer and that person are free
        then. Nobody's hours change, so nobody is taken off the office. */
+    /* Busy by the rows' own indices, so an entry this board cannot send (a
+       station or person with no id) still keeps its hours from an addition;
+       and any such entry stops the write (`unreadable`), since the week sent
+       replaces the office's and would drop it. */
     const busy = [];
-    const clash = (s, who, st) => busy.some(b => b.d === s.d && b.f < s.t && s.f < b.t && (b.who === who || b.st === st));
-    const add = s => { const st = (row.stations || [])[s.s], who = (row.people || [])[s.p];
-      if(st && who) busy.push({d: s.d, f: s.f, t: s.t, who: who.id, st: st.id}); };
-    ((row.current || {}).list || []).forEach(s => { if(put(s)){ kept++; add(s); } });
+    unreadable += Number(row.unrepresentable) || 0;
+    const clash = s => busy.some(b => b.d === s.d && b.f < s.t && s.f < b.t && (b.p === s.p || b.s === s.s));
+    ((row.current || {}).list || []).forEach(s => {
+      busy.push({d: s.d, f: s.f, t: s.t, p: s.p, s: s.s});
+      if(put(s)) kept++; else unreadable++;
+    });
     (row.shifts || []).forEach(s => {
-      if(spNobody(s.p) || bench.has(s.p)) return;
-      const st = (row.stations || [])[s.s], who = (row.people || [])[s.p];
-      if(!st || !who || clash(s, who.id, st.id)) return;
-      if(put(s)){ sent++; add(s); }
+      if(spNobody(s.p) || bench.has(s.p) || clash(s)) return;
+      if(put(s)){ sent++; added.push(s); busy.push({d: s.d, f: s.f, t: s.t, p: s.p, s: s.s}); }
     });
   } else (row.shifts || []).forEach(s => { if(!spNobody(s.p) && !bench.has(s.p) && put(s)) sent++; });
   if(!row.office && !row.full && spCoverOnly(row))
     ((row.current || {}).list || []).filter(s => !s.k).forEach(s => { if(put(s)) kept++; });
-  return {days: [...days].sort((a, b) => a[0] - b[0]).map(([d, shifts]) => ({d, shifts})), sent, kept};
+  return {days: [...days].sort((a, b) => a[0] - b[0]).map(([d, shifts]) => ({d, shifts})), sent, kept, unreadable, added};
 }
 /* Whether the game's schedule already is this week, entry for entry (and
    open around the clock where the plan wants that). */
@@ -31955,7 +31978,7 @@ const gwScheduleSites = () => [...(D.staffing || []), ...(Array.isArray(D.office
   const row = gwRosterPlan(key);
   if(!row) return false;
   const week = gwRosterWeek(row);
-  return week.sent > 0 && !gwRosterMatches(row, week);
+  return week.sent > 0 && !week.unreadable && !gwRosterMatches(row, week);
 });
 /* The roster's own write, and every planned shop's in turn. How many people
    the plan still waits on stays beside it until they are added, so a partial
@@ -31965,7 +31988,8 @@ function gwRosterButtons(key){
   const row = gwRosterPlan(key);
   if(!row) return "";
   const one = gwButton("schedule", tt("sp.gw.sch.one", "Write this roster to the game"), `data-gw-sites="${attr(JSON.stringify([key]))}"`,
-    gwRosterWeek(row).sent ? "" : row.office ? tt("sp.gw.sch.office.written", "Every entry the office default can add is in the game")
+    row.office && gwRosterWeek(row).unreadable ? tt("sp.gw.sch.office.unreadable", "An entry here can't be read; change it in the game first")
+      : gwRosterWeek(row).sent ? "" : row.office ? tt("sp.gw.sch.office.written", "Every entry the office default can add is in the game")
       : tt("sp.gw.sch.blocked", "Every entry in this plan waits on somebody who does not work here yet: add them first"), {icon: "hire"});
   const all = gwScheduleSites();
   const many = all.length > 1
@@ -32052,8 +32076,10 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
     where: () => many ? `${gwSteps(keys, run, i)}<span>${tt("sp.gw.run.where", "{n} of {of} · {name}", {n: i + 1, of: keys.length, name})}</span>` : gwWhere(b),
     nothing: () => !gwRosterPlan(key) ? (b.status === "office" ? tt("sp.gw.sch.noplan.office", "This office has no plan to write any more.")
         : tt("sp.gw.sch.noplan", "This shop has no plan to write any more."))
+      : b.status === "office" && gwRosterWeek(gwRosterPlan(key)).unreadable
+        ? tt("sp.gw.sch.office.unreadable", "An entry here can't be read; change it in the game first")
       : typeof (site() || {}).shiftPrint !== "string" ? (b.status === "office"
-        ? tt("sp.gw.sch.reread.office", "Read the game again first: this board does not know the office's schedule well enough to replace it.")
+        ? tt("sp.gw.sch.reread.office", "Read the game again first: this board does not know the office's schedule well enough to add to it.")
         : tt("sp.gw.sch.reread", "Read the game again first: this board does not know the shop's schedule well enough to replace it."))
       : "",
     body: () => {
@@ -32088,7 +32114,7 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
           other: "<b>{h} h a week stay empty</b> until you add {n} people. Write the roster again then: the board keeps this note on the roster until it is full."},
           {h: add.hoursUncovered || 0, n: add.people})) : "");
       const whole = tt("sp.gw.plan.whole", "replaces the whole week");
-      const which = row.office ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.gw.plan.office", "Office default")}</span><span class="gw-only">${whole}</span>`
+      const which = row.office ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.gw.plan.office", "Office default")}</span><span class="gw-only">${tt("sp.gw.plan.adds", "adds to the week")}</span>`
         : row.full ? `<span class="gw-plan full">${gwSvg("sun")}${tt("sp.pick.full", "Full cover 24/7")}</span><span class="gw-only">${tt("sp.gw.plan.every", "every station, every hour")}</span>`
         : spCoverOnly(row) ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.gw.plan.cover", "Cleaning and security")}</span><span class="gw-only">${whole}</span>`
         : `<span class="gw-plan">${gwSvg("roster")}${tt("sp.pick.demand", "Demand plan")}</span><span class="gw-only">${whole}</span>`;
@@ -32121,7 +32147,8 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
         const added = week.days.flatMap(({d, shifts}) => shifts.map(s => Object.assign({d}, s)))
           .filter(s => !had.has(`${s.d}|${s.f}|${s.t}|${s.employeeId}|${s.itemInstanceId}`));
         const who = [...new Set(added.map(s => s.employeeId))].map(id => spEsc(((row.people || []).find(p => p.id === id) || {}).name || tt("sp.gw.someone", "someone")));
-        adds = gwCall("info", "roster", tt("sp.gw.sch.adds", "<b>Adds {h} h for {who}</b>; nobody's current hours change.", {h: gwHours(added), who: who.join(", ")}));
+        adds = added.length ? gwCall("info", "roster", tt("sp.gw.sch.adds", "<b>Adds {h} h for {who}</b>; nobody's current hours change.", {h: gwHours(added), who: who.join(", ")}))
+          : gwCall("info", "roster", tt("sp.gw.sch.office.written", "Every entry the office default can add is in the game"));
       }
       const over = (answer.warnings || []).filter(w => w.type === "overworked").map(w =>
         gwCall("warn", "flame", tt("sp.gw.over", "<b>{name}</b> works {n} h on {day}. The game allows it.",

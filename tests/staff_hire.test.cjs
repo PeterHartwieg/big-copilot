@@ -1651,5 +1651,50 @@ test('an office write only adds: the week as it stands plus the planned entries 
   await phase(page, 'ready');
   const text = await page.locator('dialog.gw-dlg').textContent();
   assert.match(text, /Adds 14 h for Lena Voss; nobody's current hours change\./);
-  assert.doesNotMatch(text, /Fewer hours than now|stay as they stand/);
+  assert.doesNotMatch(text, /Fewer hours than now|stay as they stand|replaces the whole week/);
+  assert.match(text, /Office default\s*adds to the week/);
+});
+
+test('an office entry this board cannot read stops the office write, and still keeps its hours from additions', async (t) => {
+  const page = await board(t);
+  const out = await page.evaluate(([O]) => {
+    const row = D.officeStaffing.find(r => r.key === O);
+    Object.assign(row, {
+      stations: [{id: 'DESK-1', name: 'Computer', skill: 'ba:skill_lawyer'}],
+      roles: [{skill: 'ba:skill_lawyer', label: 'Lawyer', stations: [0]}],
+      people: [{id: 'LAWYER1', name: 'Lena Voss'}, {id: null, name: 'Nobody Known'}],
+      shifts: [{d: 1, s: 0, f: 8, t: 22, p: 0}, {d: 2, s: 0, f: 8, t: 22, p: 0}],
+      current: {list: [{d: 1, s: 0, f: 10, t: 14, p: 1}]}});
+    Object.assign(D.businesses.find(b => b.key === O), {status: 'office'});
+    const week = gwRosterWeek(gwRosterPlan(O));
+    openSite(O, false);
+    const b = document.querySelector('#secDetail #sp-roster [data-gw-sites]');
+    return {unreadable: week.unreadable, days: week.days.map(x => x.d), listed: gwScheduleSites().includes(O),
+      off: b && (b.getAttribute('aria-disabled') === 'true' || b.disabled), why: b && (b.getAttribute('aria-label') || b.title || b.textContent)};
+  }, [O]);
+  // The unreadable Monday entry keeps Lena's Monday out; her Tuesday is added.
+  assert.deepEqual(out.days, [2]);
+  assert.equal(out.unreadable, 1);
+  assert.equal(out.listed, false);
+  assert.equal(out.off, true);
+  assert.match(out.why, /can't be read; change it in the game first/);
+});
+
+test('an office write is refused while a shift cannot be carried, and nothing to add says so', async (t) => {
+  const page = await board(t);
+  const out = await page.evaluate(([O]) => {
+    const row = D.officeStaffing.find(r => r.key === O);
+    Object.assign(row, {
+      stations: [{id: 'DESK-1', name: 'Computer', skill: 'ba:skill_lawyer'}],
+      roles: [{skill: 'ba:skill_lawyer', label: 'Lawyer', stations: [0]}],
+      people: [{id: 'LAWYER1', name: 'Lena Voss'}],
+      shifts: [{d: 1, s: 0, f: 8, t: 22, p: 0}], current: {list: []}, unrepresentable: 1});
+    Object.assign(D.businesses.find(b => b.key === O), {status: 'office'});
+    const blocked = gwRosterWeek(gwRosterPlan(O)).unreadable;
+    delete row.unrepresentable;
+    row.current = {list: [{d: 1, s: 0, f: 8, t: 22, p: 0}]};
+    const written = gwRosterWeek(gwRosterPlan(O));
+    return {blocked, sent: written.sent, listed: gwScheduleSites().includes(O)};
+  }, [O]);
+  assert.deepEqual(out, {blocked: 1, sent: 0, listed: false});
 });

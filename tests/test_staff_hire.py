@@ -818,6 +818,19 @@ class OfficeStaffingTest(unittest.TestCase):
                     want = set() if wd in (6, 0) else set(range(8, 22))
                 self.assertEqual(covered[(f"pc{i}", wd)], want, (i, wd))
 
+    def test_a_shift_the_page_cannot_carry_is_counted(self):
+        """A reversed or out-of-range shift: the page cannot send it back, so
+        an office write, which keeps every entry, is refused."""
+        _save, _b, [row] = office_rows(2, self.WEEKDAYS_8_20, [lawyer("l1")])
+        self.assertNotIn("unrepresentable", row)
+        shifts = [{"wd": 1, "startingHour": 8, "endingHour": 12, "employeeId": "l1", "itemInstanceId": "pc0"},
+                  {"wd": 1, "startingHour": 14, "endingHour": 14, "employeeId": "l1", "itemInstanceId": "pc0"},
+                  {"wd": 2, "startingHour": 20, "endingHour": 26, "employeeId": "l1", "itemInstanceId": "pc1"}]
+        reg = office_registration(2, self.WEEKDAYS_8_20, shifts=shifts)
+        save = save_of({"EmployeeInstances": {"$items": [lawyer("l1")]},
+                        "BuildingRegistrations": {"$items": [reg]}})
+        self.assertEqual(ba_dashboard._unrepresentable(save, reg), 2)
+
     def test_hire_weeks_are_the_hire_count(self):
         _save, _b, [row] = office_rows(4, self.WEEKDAYS_8_20, [lawyer("l1")])
         hire = row["_hire"]

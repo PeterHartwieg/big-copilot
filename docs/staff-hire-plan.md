@@ -271,7 +271,10 @@ Where the build differs from or adds to 2.1-2.4; the board worker reads these to
   office as it stands, plus the office default's entries for the office's own people where
   that computer and that person are free then. Nobody's hours change, so nobody is taken
   off the office; the confirm says "Adds N h for …; nobody's current hours change". An
-  office counts as written once nothing is left to add.
+  office counts as written once nothing is left to add. The write is refused ("an entry
+  here can't be read; change it in the game first") while any entry at the office cannot
+  be sent back as it stands: a station or person with no id, or a shift the row cannot
+  carry (`unrepresentable`, from `_unrepresentable()`: no hours, reversed, outside 0-24).
   The mod refuses only a headquarters (ScheduleWrite.cs), so no mod change.
 - **Styled option lists**: a Staff select opens the page's own list (`#hsSelPop`, where the
   pointer is a mouse) instead of the system's; the select stays the control.
