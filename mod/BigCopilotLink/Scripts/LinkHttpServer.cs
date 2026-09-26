@@ -161,6 +161,17 @@ namespace BigCopilotLink
                 return;
             }
 
+            // An Origin off the allowlist is turned away before any work (0.3.1). A
+            // body-less POST is a CORS "simple" request, so without this any page could
+            // make the game serialize, or be handed the bytes it cannot read. A request
+            // with no Origin (curl, the CLI watcher) is served as before.
+            if (!corsAllowed && !string.IsNullOrEmpty(request.Headers["Origin"]))
+            {
+                if (method == "HEAD") WriteNoBody(context, 403);
+                else WriteJson(context, 403, "{\"error\":\"origin_not_allowed\"}");
+                return;
+            }
+
             if (method == "HEAD")
             {
                 // A HEAD answer carries no body, or a kept-alive client reads the

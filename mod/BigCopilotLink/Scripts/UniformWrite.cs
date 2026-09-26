@@ -20,6 +20,9 @@ namespace BigCopilotLink
         public sealed class Request
         {
             public readonly List<Site> Sites = new List<Site>();
+            /// <summary>body.expect.character and .company, from 0.3.1; null: not checked.</summary>
+            public string ExpectCharacter;
+            public string ExpectCompany;
         }
 
         public sealed class Site
@@ -63,6 +66,17 @@ namespace BigCopilotLink
         public static Request Parse(Dictionary<string, object> root)
         {
             var req = new Request();
+            // Additive in 0.3.1: the save the page planned from, as /health named it
+            // ("character", "company"). An address names a building in whichever save
+            // is loaded, and the map is the same in every one. Either left out (an older
+            // page) is not checked.
+            var expect = JsonReader.Get(root, "expect");
+            if (expect != null)
+            {
+                var guard = JsonReader.Obj(expect, "body.expect");
+                req.ExpectCharacter = JsonReader.Str(guard, "character", "body.expect", false);
+                req.ExpectCompany = JsonReader.Str(guard, "company", "body.expect", false);
+            }
             // One row per site: two rows for one site would each plan against the state
             // before either applied, and the second's undo entry would record the first
             // row's preset as the old value.
@@ -103,11 +117,23 @@ namespace BigCopilotLink
             var presets = SaveGameManager.Current.employeePresets ?? new List<EmployeePreset>();
             var rows = new List<Row>();
             var failed = false;
+            // Another save loaded since the page read the bytes: every row is the other
+            // company's building, so none is touched. The same fields /health reports.
+            var game = SaveGameManager.Current;
+            var otherSave =
+                (req.ExpectCharacter != null && !string.Equals(req.ExpectCharacter, game.characterId ?? "", StringComparison.Ordinal)) ||
+                (req.ExpectCompany != null && !string.Equals(req.ExpectCompany, game.SaveGameName ?? "", StringComparison.Ordinal));
 
             foreach (var site in req.Sites)
             {
                 var row = new Row { Address = site.Address };
                 rows.Add(row);
+                if (otherSave)
+                {
+                    row.Error = "changed";
+                    failed = true;
+                    continue;
+                }
                 row.Error = CheckSite(row, presets, site.PresetId);
                 if (row.Error != null)
                 {
