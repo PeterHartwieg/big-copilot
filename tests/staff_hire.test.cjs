@@ -1509,3 +1509,21 @@ test('a live refresh under an open option list keeps the list on the new select,
   const lit = await page.evaluate(() => document.querySelector('#hsSelPop .hs-selopt.on').textContent.trim());
   assert.match(lit, /^H/);
 });
+
+test('an option list whose select comes back disabled, or not at all, closes', async (t) => {
+  const page = await board(t);
+  for(const how of ['disabled', 'gone']){
+    await page.locator('#hsQuick [data-hq-role]').click();
+    const open = await page.evaluate(how => {
+      const old = document.querySelector('#hsQuick [data-hq-role]');
+      const next = old.cloneNode(true);
+      if(how === 'disabled'){ next.disabled = true; old.replaceWith(next); }
+      else old.remove();
+      hrSelRepoint();
+      const still = !!document.getElementById('hsSelPop');
+      drawStaff(); wireStaff();
+      return still;
+    }, how);
+    assert.equal(open, false, how);
+  }
+});

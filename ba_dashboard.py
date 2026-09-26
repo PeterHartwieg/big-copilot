@@ -6874,14 +6874,16 @@ def _placement_rank(person: dict, state: dict, slot: dict, here: dict) -> tuple:
     # up, a name that is not is being chosen, and those are different questions.
     on_roster = person["id"] in here["rostered"]
     return (
-        # Somebody whose desk or chair demand this very station meets, before
-        # everybody else: otherwise a lawyer already given hours takes the
-        # executive desk ahead of the one who asks for it, who is then put at
-        # a desk that breaks their demand. Nobody else is ranked by it.
-        0 if person.get("desks") and _desk_fits(person, slot, here) else 1,
         # Headcount first: one more name on the roster is the expensive thing,
         # because it is one more person this site owes 30 hours to.
         0 if person["id"] in here["rostered"] else 1,
+        # Within that tier, the site's own person whose desk or chair demand
+        # this very station meets: otherwise a lawyer with no such demand takes
+        # the executive desk ahead of the one who asks for it, who is then put
+        # at a desk that breaks it. Only where the site's furniture is known
+        # (an office), and never somebody from the bench over the site's own.
+        0 if here.get("groups") and person["addr"] and person.get("desks")
+        and _desk_fits(person, slot, here) else 1,
         # Then whose floor is still at stake, emptiest week first. A part-timer
         # already past their ten hours waits behind a full-timer still under
         # thirty, and two people under theirs rise towards it together. Past the
@@ -9890,12 +9892,6 @@ def _company_facts(save: Save) -> dict:
         elif kind == "happiness":
             out[slug] = happiness >= setting
     return out
-
-
-def _full_offered(row: dict) -> bool:
-    """The board's spOffersFull: a full-cover plan with a station to staff."""
-    return bool(row and not row.get("failed") and row.get("fullCover")
-                and any(r.get("stations") for r in row.get("roles") or ()))
 
 
 def _bench_claimed(staffing: list) -> set:
@@ -25821,7 +25817,7 @@ function hrSelLight(){
 function hrSelRepoint(){
   if(!hrSel || hrSel.select.isConnected) return;
   const root = $(hrSel.root), found = root && hrSel.key ? root.querySelector(hrSel.key) : null;
-  if(!found || found.tagName !== "SELECT"){ hrSelClose(); return; }
+  if(!found || found.tagName !== "SELECT" || found.disabled){ hrSelClose(); return; }
   const at = hrSel.at;
   hrSelOpen(found);
   if(hrSel){ hrSel.at = Math.min(at, found.options.length - 1); hrSelLight(); }

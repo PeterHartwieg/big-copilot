@@ -229,8 +229,9 @@ Where the build differs from or adds to 2.1-2.4; the board worker reads these to
   shop with complete data is still nobody came (the 23 September rule).
 - **Desk demands at a site with no plan** (headquarters, warehouse): `stations` lists the
   desk demands each furniture group's root meets; with no week the page says "met at a
-  desk here: seat them there". The office plan ranks the person whose desk demand a
-  station meets first, ahead of those already given hours.
+  desk here: seat them there". Within a tier of the placement rank (already given hours,
+  or not), the office's own person whose desk demand a station meets comes first; never
+  somebody from the bench over the site's own, and only where the site's desks are known.
 - **Hires get full weeks.** `_spread_residue()` moves the open shifts off the day they
   pile up on by swapping days with staff who are off that day, until no more than
   `ceil(hours / 50)` run at one hour; `_fill_hire_weeks()` then tops up a hire under 30

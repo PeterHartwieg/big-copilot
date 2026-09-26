@@ -320,24 +320,43 @@ class StationFactsTest(unittest.TestCase):
                 on[row["people"][s["p"]]["id"]].add(row["stations"][s["s"]]["id"])
         self.assertEqual(on["z"], {"pc1"})
 
-    def test_the_one_who_asks_for_the_desk_takes_it_before_someone_already_placed(self):
-        """sol's case: a lawyer already given hours this week ranked ahead of
-        the one whose executive-desk demand the slot meets."""
-        person = lambda pid, desks: {"id": pid, "name": pid, "skills": {LAWYER}, "wage": 1.0,  # noqa: E731
-                                     "addr": ("s", 1), "band": (30, 50), "days": None,
-                                     "weekendsOff": False, "blackouts": [], "nocleaning": False,
-                                     "desks": desks, "home": set()}
-        placed = person("a", [])
-        asks = person("z", [("ba:itemname_officedesk2left", "ba:itemname_officedesk2right")])
-        here = {"rostered": {"a"}, "flex": {"a": 1, "z": 1},
-                "groups": {"pc1": {"ba:itemname_officedesk2left", "ba:itemname_computer"}}}
+    def test_the_desk_goes_to_the_one_who_asks_within_the_same_tier(self):
+        """sol's case: of the site's own people, the one whose executive-desk
+        demand the slot meets takes it; somebody already given hours still
+        comes first, and nobody from the bench is put ahead of the site's own."""
+        person = lambda pid, desks, addr=("s", 1): {  # noqa: E731
+            "id": pid, "name": pid, "skills": {LAWYER}, "wage": 1.0, "addr": addr,
+            "band": (30, 50), "days": None, "weekendsOff": False, "blackouts": [],
+            "nocleaning": False, "desks": desks, "home": set()}
+        EXEC = [("ba:itemname_officedesk2left", "ba:itemname_officedesk2right")]
+        plain, asks = person("a", []), person("z", EXEC)
+        outsider = person("o", EXEC, addr=None)
+        groups = {"pc1": {"ba:itemname_officedesk2left", "ba:itemname_computer"}}
         slot = {"wd": 1, "station": "pc1", "skill": LAWYER, "from": 8, "to": 15, "kind": "serve"}
-        state = lambda hours: dict(ba_dashboard._fresh_state(), hours=hours)  # noqa: E731
+        fresh = ba_dashboard._fresh_state
         rank = ba_dashboard._placement_rank
-        self.assertLess(rank(asks, state(0.0), slot, here), rank(placed, state(12.0), slot, here))
-        # At a desk that meets nobody's demand, the roster still comes first.
-        plain = dict(slot, station="pc0")
-        self.assertLess(rank(placed, state(12.0), plain, here), rank(asks, state(0.0), plain, here))
+        # Neither started yet: the one who asks takes the executive desk.
+        here = {"rostered": set(), "flex": {}, "groups": groups}
+        self.assertLess(rank(asks, fresh(), slot, here), rank(plain, fresh(), slot, here))
+        # Somebody from the bench who asks for it never goes ahead of the site's own.
+        self.assertLess(rank(plain, fresh(), slot, here), rank(outsider, fresh(), slot, here))
+        # Already given hours: the roster tier still comes first.
+        here = {"rostered": {"a"}, "flex": {}, "groups": groups}
+        self.assertLess(rank(plain, fresh(), slot, here), rank(asks, fresh(), slot, here))
+
+    def test_a_desk_demand_ranks_nobody_where_the_furniture_is_unknown(self):
+        """Opus's case: at a shop (no desk groups) somebody with a desk demand
+        is not put first for every slot."""
+        person = lambda pid, desks: {  # noqa: E731
+            "id": pid, "name": pid, "skills": {SERVICE}, "wage": 1.0, "addr": ("s", 1),
+            "band": (30, 50), "days": None, "weekendsOff": False, "blackouts": [],
+            "nocleaning": False, "desks": desks, "home": set()}
+        slot = {"wd": 1, "station": 1, "skill": SERVICE, "from": 8, "to": 15, "kind": "serve"}
+        here = {"rostered": {"a"}, "flex": {}, "groups": {}}
+        rank = ba_dashboard._placement_rank
+        state = lambda h: dict(ba_dashboard._fresh_state(), hours=h)  # noqa: E731
+        self.assertLess(rank(person("a", []), state(12.0), slot, here),
+                        rank(person("z", [("ba:itemname_officedesk2left",)]), state(0.0), slot, here))
 
     def test_a_site_with_no_plan_lists_the_desks_it_has(self):
         """The headquarters has no plan rows: its desks are its groups' roots."""
