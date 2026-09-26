@@ -6247,6 +6247,12 @@ def _hourly(
             role["one"] = _lower_first(role["station"])
             role["many"] = _plural(role["one"])
             roles.append(role)
+        # Two roles of one skill at one site -- a hairdresser's chairs and head
+        # wash -- cannot both be named by the skill, so their words name the
+        # station instead (_role_words()).
+        for role in roles:
+            if sum(1 for other in roles if other["skill"] == role["skill"]) > 1:
+                role["shared"] = True
 
         # The roster, read the same way the game reads it: scheduleDay.day is the
         # game day modulo 7, with 7 standing in for Sunday's 0. A site with no
@@ -9046,6 +9052,20 @@ def _role_words(role: dict, office: bool) -> dict:
     # every message holding them also carries the name as a token,
     # `station_name`, for a translation to write instead.
     station_name = tok(role.get("stationKey"), role["station"])
+    if role.get("shared"):
+        # One of two roles of one skill (_hourly()): the skill alone would name
+        # both, so the station says which queue is short of people.
+        staffing = (
+            msg("sp.py.limit.station.staff", "{station} staffing",
+                station=station, station_name=station_name),
+            msg("sp.py.fix.station.staff", "another {role} at the {station}",
+                role=role_name, station=station, station_name=station_name),
+        )
+    else:
+        staffing = (
+            msg("sp.py.limit.role", "{role} staffing", role=role_name),
+            msg("sp.py.fix.role.staff", "another {role} on those hours", role=role_name),
+        )
     return {
         "noun": _plural(station),
         "stationName": station_name,
@@ -9054,8 +9074,7 @@ def _role_words(role: dict, office: bool) -> dict:
         # other about posts. The posts limit names the station itself, so two
         # shops short of two different stations of one role never collide --
         # the id hashes the limit, and nothing but the limit.
-        "staffing": (msg("sp.py.limit.role", "{role} staffing", role=role_name),
-                     msg("sp.py.fix.role.staff", "another {role} on those hours", role=role_name)),
+        "staffing": staffing,
         "posts": (msg("sp.py.limit.station", "{stations}", stations=_plural(station), station_name=station_name),
                   msg("sp.py.fix.role.post", "another {station}", station=station, station_name=station_name)),
     }
@@ -9096,10 +9115,8 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
         # An hour is filed under everything holding it at once, so the trade
         # through it is priced once however many roles are tied on it.
         office = grid.get("office", False)
-        # Keyed by role, so a hairdresser's chairs and head wash stay apart. A
-        # staffing limit is about people, and the people of one skill are one
-        # pool whichever of its stations stands empty, so it names the skill:
-        # the role of that skill holding the bare key (_station_roles()).
+        # Keyed by role, so a hairdresser's chairs and head wash stay apart:
+        # both short of Hair Stylists on one hour is two people to hire, not one.
         roles = {_role_key(role): role for role in grid["roles"]}
         by_limit = collections.defaultdict(lambda: collections.defaultdict(set))
         for wd, hour in sorted(_capped_cells(grid)):
@@ -9114,15 +9131,16 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
             # board and a single manned register is fixed by neither alone, so
             # neither alone is worth the money going through that hour.
             here = tuple(sorted(
-                {
+                (
                     (
-                        ("staffing", r["skill"])
+                        "staffing"
                         if r["staffed"][wd][hour] < r["counters"]
-                        else ("registers", _role_key(r))
+                        else "registers",
+                        _role_key(r),
                     )
                     for r in roles.values()
                     if r["staffed"][wd][hour] == site_staffed
-                },
+                ),
                 key=_limit_order,
             ))
             # The site's capacity is the minimum across its roles, so some role
@@ -9168,11 +9186,7 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                 # words and the id do not move between runs.
                 said = [
                     (
-                        _role_words(
-                            roles.get(skill)
-                            or next(r for r in roles.values() if r["skill"] == skill),
-                            office,
-                        ),
+                        _role_words(roles[skill], office),
                         "staffing" if kind == "staffing" else "posts",
                     )
                     for kind, skill in limits
@@ -18347,7 +18361,7 @@ function hourGrid(g, todayWd, lead = null, idle = []){
             ? roleRead(binding[0], wd, h)
             : tt("sp.hour.registers", "{n} of {of} register capacity on", {n: g.staffed[wd][h], of: g.counters});
       const idleWord = roles.length > 1 && idle.length
-        ? tt("sp.hour.idle.roles", "{roles} idle", {roles: idle.map(r => r.label || tt("sp.hour.capacity", "capacity")).join(", ")})
+        ? tt("sp.hour.idle.roles", "{roles} idle", {roles: idle.map(r => (r.shared && r.many) || r.label || tt("sp.hour.capacity", "capacity")).join(", ")})
         : tt("sp.hour.idle", "capacity idle");
       /* The ceilings this hour stood at, as `<kind>:<skill>` tokens, so a chip
          can ask for its own hours by kind and role together. */
@@ -18483,8 +18497,7 @@ function spIdleWeek(n){
    rule under a nameless role. */
 /* A role's own key: its skill, or the split key a skill whose stations do
    different work gives each of them -- a hairdresser's chairs and head wash
-   (_station_roles()). People are one pool per skill, so a staffing token names
-   the skill and a post token the role. */
+   (_station_roles()). Tokens name the role, so the two queues light apart. */
 const spRoleKey = r => r.key || r.skill;
 const spRoleToken = (kind, skill) => `${kind}:${String(skill || "").replace(/\s+/g, "")}`;
 const SP_CELL_ORDER = {staff: 0, post: 1};
@@ -18493,8 +18506,8 @@ const spCellLimit = (g, wd, h) => {
   if(g.door && g.door <= staffed) return "door";
   const at = (g.roles || []).filter(r => r.staffed[wd][h] === staffed);
   if(!at.length) return spRoleToken(staffed < g.counters ? "staff" : "post", "");
-  return [...new Set(at.map(r => r.staffed[wd][h] < r.counters
-    ? spRoleToken("staff", r.skill) : spRoleToken("post", spRoleKey(r))))]
+  return [...new Set(at.map(r =>
+    spRoleToken(r.staffed[wd][h] < r.counters ? "staff" : "post", spRoleKey(r))))]
     .sort((a, b) => SP_CELL_ORDER[a.split(":")[0]] - SP_CELL_ORDER[b.split(":")[0]]
       || a.localeCompare(b))
     .join(" ");
@@ -18510,7 +18523,10 @@ function spLimitRole(part, roles){
   const want = part.replace(/\s*staffing$/, "");
   /* The finding is Python's English; the role's label may be in the player's
      language, so its English name is asked as well. */
-  return (roles || []).find(r => staffing ? r.label === want || englishName(r.skill) === want : r.noun === part) || null;
+  /* One of two roles of one skill says "<station> staffing" (`shared`). */
+  return (roles || []).find(r => staffing
+    ? (r.shared ? r.one === want : r.label === want || englishName(r.skill) === want)
+    : r.noun === part) || null;
 }
 /* The cells one cap chip is about, in the cells' own tokens. A finding naming
    two tied answers -- "Gym Trainer staffing and registers" -- is about the
@@ -18520,9 +18536,8 @@ const spLimitShow = (n, g, lim = typeof enOf === "function" ? enOf(n, "limit") :
   lim === "the building" ? "door"
   : String(lim).split(" and ").map(part => {
       const role = spLimitRole(part, (g || {}).roles);
-      const staff = /\bstaffing$/.test(part);
-      return spRoleToken(staff ? "staff" : "post",
-        role ? (staff ? role.skill : spRoleKey(role)) : "");
+      return spRoleToken(/\bstaffing$/.test(part) ? "staff" : "post",
+        role ? spRoleKey(role) : "");
     }).join(" ");
 /* the roster ------------------------------------------------------------------
    docs/dashboard-reference.md's `staffing` row: the week the player would

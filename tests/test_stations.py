@@ -664,6 +664,27 @@ class HairdresserTests(unittest.TestCase):
                          ("hairdresser chairs", "another hairdresser chair"))
         self.assertEqual(finding["noun"], "hairdresser chairs")
 
+    def test_both_queues_short_of_stylists_ask_for_two(self):
+        """Two of four chairs and one of two head washes manned: 10 an hour each.
+
+        Both queues hold the site, and each needs its own Hair Stylist, so the
+        finding names both stations rather than one "another Hair Stylist".
+        """
+        posts = [(1, CHAIR), (2, CHAIR), (3, CHAIR), (4, CHAIR), (20, WASH), (21, WASH)]
+        crew = {"a": STYLIST, "b": STYLIST, "c": STYLIST}
+        shifts = [shift("a", 1, 9, 18), shift("b", 2, 9, 18), shift("c", 20, 9, 18)]
+        hourly = {h: 10 if 9 <= h < 18 else 0 for h in range(24)}
+        b = building(posts, shifts, hourly, 30, btype=HAIRDRESSER, number=9, name="Curls")
+        grid = grid_of(b, crew, _service_stations(NAMES), name="Curls", basket=30.0)
+        self.assertTrue(all(r.get("shared") for r in grid["roles"]))
+        [finding] = _hour_findings([grid], [site("Curls", number=9, basket=30.0)], {})
+        self.assertEqual(plain(finding["limit"]),
+                         "hairdresser chair staffing and hairdresser headwash staffing")
+        self.assertEqual(plain(finding["fix"]),
+                         "another Hair Stylist at the hairdresser chair and "
+                         "another Hair Stylist at the hairdresser headwash")
+        self.assertEqual(finding["noun"], "hairdresser chairs and hairdresser headwashes")
+
     def test_a_skill_doing_one_kind_of_work_keeps_its_key(self):
         roles = _station_roles(_service_stations(NAMES), NAMES)
         self.assertEqual(roles[CHAIR], STYLIST)
