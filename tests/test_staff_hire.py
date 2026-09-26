@@ -234,6 +234,37 @@ class ShopHireWeeksTest(unittest.TestCase):
             self.assertEqual(hours, sorted(hours, reverse=True))
 
 
+def shop_hiring(weeks, opens=((0, 24),)):
+    """One staffed shop through _staffing() and _hiring(), `weeks` of reports behind it."""
+    reg = ts.registration([(1, ts.REGISTER)], ts.FLAT, weeks=weeks, opens=opens)
+    save = Save({"EmployeeInstances": {"$items": [ts.employee("p1", [SERVICE])]},
+                 "BuildingRegistrations": {"$items": [dict(reg, RentedByPlayer=True)]}},
+                {}, "t.hsg")
+    business = dict(ts.business(), staff=1)
+    _by_addr, staff = _staff(save, ts.LABELS)
+    grids = _hourly(save, [reg], [business], ts.STATIONS, set(),
+                    {p["id"]: p["skill"] for p in staff}, ts.LABELS)
+    rows = _staffing(save, ts.LABELS, [business], grids, staff, 0.55)
+    return _hiring(save, [business], rows, {}, [])["sites"][0]
+
+
+class UnreadShopTest(unittest.TestCase):
+    """Peter's rule (26 September 2026): every hour a shop opens needs its
+    stations staffed, even before anything is measured. Evil Genius opened
+    more hours with no hour read yet and was hired nobody for them."""
+
+    def test_a_shop_with_no_hour_read_is_hired_by_full_cover(self):
+        site = shop_hiring(weeks=1)
+        self.assertFalse(site["new"])
+        self.assertEqual(sorted(site["plans"]), ["full"])
+        weeks = site["plans"]["full"]["hireWeeks"]
+        self.assertTrue([w for w in weeks if w["skill"] == SERVICE])
+
+    def test_a_measured_shop_keeps_its_demand_plan(self):
+        site = shop_hiring(weeks=2)
+        self.assertEqual(sorted(site["plans"]), ["demand", "full"])
+
+
 class SpareTest(unittest.TestCase):
     def test_spare_is_the_own_staff_given_no_hours(self):
         # One register open four hours a day needs one person; five are here.

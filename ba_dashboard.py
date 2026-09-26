@@ -9706,6 +9706,14 @@ def _company_facts(save: Save) -> dict:
     return out
 
 
+def _unread(row: dict) -> bool:
+    """Whether a shop's demand plan rests on no hour read at all (every basis `none`)."""
+    return not any(
+        cell != "none"
+        for days in (row.get("basis") or {}).values() for day in days for cell in day
+    )
+
+
 def _full_offered(row: dict) -> bool:
     """The board's spOffersFull: a full-cover plan with a station to staff."""
     return bool(row and not row.get("failed") and row.get("fullCover")
@@ -9757,9 +9765,17 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
             demand = take(row)
             full = take((row or {}).get("fullCover"))
             if row and not row.get("failed") and demand is not None:
-                plans["demand"] = demand
                 if _full_offered(row) and full is not None:
                     plans["full"] = full
+                # A shop with no hour read yet has a demand plan of cleaning
+                # and security alone, however many hours it opens in the game.
+                # Peter's rule (26 September 2026): every hour it opens needs
+                # its stations staffed, even before anything is measured, so
+                # the Staff page hires by full cover there, as it does for a
+                # new shop. Evil Genius opened more hours and was hired
+                # nobody for them.
+                if not ("full" in plans and _unread(row)):
+                    plans["demand"] = demand
         elif kind == "factory":
             for mode, row in factories.get(business["key"], {}).items():
                 found = take(row)

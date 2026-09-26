@@ -214,6 +214,27 @@ Where the build differs from or adds to 2.1-2.4; the board worker reads these to
   people no shop plan (either variant) counts on, in office order. `officeStaffing` rows
   are described in `docs/architecture.md`.
 
+### 2.4b After Peter's in-game test (26 September 2026)
+
+- **Every open hour is staffed.** A shop whose demand plan rests on no hour read
+  (`_unread()`: every basis `none`) ships only its `full` plan, so the page hires by
+  full cover there as it does for a new shop; its demand plan would have been cleaning
+  and security alone however many hours it opened (Evil Genius). A shop with complete
+  data still reads a report-less hour as nobody came (the 23 September rule).
+- **Hires get full weeks.** `_spread_residue()` moves the open shifts off the day they
+  pile up on by swapping days with staff who are off that day, until no more than
+  `ceil(hours / 50)` run at one hour; `_fill_hire_weeks()` then tops up a hire under 30
+  hours with whole shifts from staff above their floor. Neither takes anybody under
+  `_hire_floor()`: their hours demand's floor and the hours the game has them on now
+  (`people[].now`, `assignedWeeklyHours`). The law firm went from 22 one-day hires to 7
+  of 35 to 49 hours.
+- **`fewer`** on each plan: the site's own people the week gives fewer hours than now;
+  the review names them for the sites whose week it replaces.
+- **Desk and chair demands are per station** (`station` in `demandKinds`): the site's
+  `stations` lists the demands each station's furniture group meets
+  (`_station_groups()`, the game's `assignedWorkStationItems`), and the page judges them
+  against the stations a person's week is on. `facts` no longer carries them.
+
 ### 2.5 Tests (extraction)
 
 New `tests/test_staff_hire.py`, synthetic saves only: both character layouts for `_staff` and
