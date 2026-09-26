@@ -533,10 +533,32 @@ class UnstaffedTest(unittest.TestCase):
         self.assertIsNone(ba_dashboard._unstaffed(self.ROW, plan, {"p1"}, training={"p1"}))
 
     def test_the_hiring_payload_carries_it(self):
+        # On the site, per plan the Staffing block writes (demand, full cover).
         _row, site = shop_hiring(weeks=2)
-        gap = site["plans"]["demand"]["unstaffed"]
-        self.assertGreaterEqual(gap["hours"], ba_dashboard.UNSTAFFED_MIN_HOURS)
-        self.assertEqual([(r["skill"], r["idle"]) for r in gap["roles"]], [(SERVICE, 1)])
+        for mode in ("demand", "full"):
+            gap = site["unstaffed"][mode]
+            self.assertGreaterEqual(gap["hours"], ba_dashboard.UNSTAFFED_MIN_HOURS)
+            self.assertEqual([(r["skill"], r["idle"]) for r in gap["roles"]], [(SERVICE, 1)])
+
+    def test_an_idle_person_whose_own_hours_are_covered_is_not_counted(self):
+        """p2's planned hours are all worked by somebody else now: not idle."""
+        row = {"stations": [{"id": 1, "skill": SERVICE}, {"id": 2, "skill": SERVICE}],
+               "people": [{"id": "p1"}, {"id": "p2"}, {"id": "x"}],
+               "current": {"list": [{"d": d, "s": 1, "f": 12, "t": 24, "p": 2} for d in range(7)]}}
+        plan = [{"d": d, "s": 0, "f": 0, "t": 12, "p": 0} for d in range(7)]
+        plan += [{"d": d, "s": 1, "f": 12, "t": 24, "p": 1} for d in range(7)]
+        gap = ba_dashboard._unstaffed(row, plan, {"p1", "p2", "x"})
+        self.assertEqual(gap, {"hours": 84, "roles": [{"skill": SERVICE, "hours": 84, "idle": 1}]})
+
+    def test_an_office_is_not_listed(self):
+        """An office has no Staffing block to write its week from."""
+        _save, _b, [row] = office_rows(2, [[[8, 20]] for _ in range(7)], [lawyer("l1")])
+        business = {"key": site_key((STREET, 10)), "name": "Halden Law", "status": "office",
+                    "typeSlug": LAW, "basket": 388.0, "staff": 1}
+        save = save_of({"EmployeeInstances": {"$items": [lawyer("l1")]},
+                        "BuildingRegistrations": {"$items": [office_registration(2, [[[8, 20]] for _ in range(7)])]}})
+        [site] = _hiring(save, [business], [], {}, [row])["sites"]
+        self.assertNotIn("unstaffed", site)
 
 
 class NoOpeningHoursTest(unittest.TestCase):

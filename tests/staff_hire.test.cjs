@@ -1531,7 +1531,7 @@ test('an option list whose select comes back disabled, or not at all, closes', a
 test('Staff with no hours: a site whose own staff the plan counts on have no hours, and a link to its Staffing', async (t) => {
   const page = await board(t);
   const text = await page.evaluate(([G, CS]) => {
-    D.hiring.sites.find(s => s.key === G).plans.demand.unstaffed = {hours: 168, roles: [{skill: CS, hours: 168, idle: 4}]};
+    D.hiring.sites.find(s => s.key === G).unstaffed = {demand: {hours: 168, roles: [{skill: CS, hours: 168, idle: 4}]}};
     drawStaff(); wireStaff();
     const box = document.querySelector('#secStaff .hs-idle');
     return box && [...box.querySelectorAll('li')].map(li => [...li.children].map(c => c.textContent.trim()).join(' | '));
@@ -1551,9 +1551,9 @@ test('Staff with no hours shows when nothing needs hiring, and then says no more
   const out = await page.evaluate(([G, CS]) => {
     const m = hrModel();
     m.roles = [];
-    m.sites.find(S => S.key === G).plan.unstaffed = {hours: 168, roles: [{skill: CS, hours: 168, idle: 4}]};
+    m.sites.find(S => S.key === G).site.unstaffed = {demand: {hours: 168, roles: [{skill: CS, hours: 168, idle: 4}]}};
     const withIdle = hrOpenHtml(m);
-    m.sites.find(S => S.key === G).plan.unstaffed = null;
+    m.sites.find(S => S.key === G).site.unstaffed = null;
     const without = hrOpenHtml(m);
     return {withIdle, without};
   }, [G, CS]);
@@ -1562,4 +1562,23 @@ test('Staff with no hours shows when nothing needs hiring, and then says no more
   assert.doesNotMatch(out.withIdle, /Every planned site has its people/);
   assert.match(out.without, /Every planned site has its people/);
   assert.doesNotMatch(out.without, /Staff with no hours/);
+});
+
+test('Staff with no hours: shops only, and measured on the plan the Staffing block writes', async (t) => {
+  const page = await board(t);
+  const out = await page.evaluate(([G, O, CS, LAW]) => {
+    const m = hrModel();
+    const u = (h, skill) => ({hours: h, roles: [{skill, hours: h, idle: 2}]});
+    m.sites.find(S => S.key === G).site.unstaffed = {demand: u(20, CS), full: u(90, CS)};
+    m.sites.find(S => S.key === O).site.unstaffed = {demand: u(40, LAW)};
+    const text = () => { const el = document.createElement('div'); el.innerHTML = hrIdleHtml(m); return el.textContent; };
+    const demand = text();
+    spPlanWrite(G, 'full');
+    const full = text();
+    spPlanWrite(G, 'demand');
+    return {demand, full};
+  }, [G, O, CS, LAW]);
+  assert.match(out.demand, /HART\. Gifts20 h with nobody on/);
+  assert.match(out.full, /HART\. Gifts90 h with nobody on/);
+  assert.doesNotMatch(out.demand, /HART\. Law/);
 });

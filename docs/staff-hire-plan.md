@@ -253,10 +253,12 @@ Where the build differs from or adds to 2.1-2.4; the board worker reads these to
   out), and where people come from: a Headhunter at the headquarters recruiting the role,
   or the game's Recruitment Agency; a headhunter already recruiting it is said
   (`hiring.recruiting`, from `headhunterPlans`).
-- **Staff with no hours** (Peter's live game, 26 September 2026): a plan's `unstaffed`
-  (`_unstaffed()`) is, per role, weekday and hour, the site's own people the plan puts on
+- **Staff with no hours** (Peter's live game, 26 September 2026): a shop's `unstaffed`
+  (`{demand, full}`, the plans its Staffing block writes, read as that block picks them;
+  shops only, since an office has no Staffing block) is, per role, weekday and hour, the site's own people the plan puts on
   the role less everybody on its stations in the game's week (never below none), in roles
-  where some of them (not in training) have no hours at the site at all, from
+  where some of them (not in training, with some of their own planned hours unstaffed)
+  have no hours at the site at all, from
   `UNSTAFFED_MIN_HOURS` (8) a week. It shows when nothing needs hiring too. A small box under the roles table names each such
   site, the hours and the idle people, and links to the site's Staffing, whose write puts
   the week in. Nobody is hired for those hours, so the order does not count them.

@@ -9911,21 +9911,27 @@ def _unstaffed(row: dict, shifts, own: set, training=frozenset()) -> dict | None
         if person(entry.get("p")) and entry.get("t", 0) > entry.get("f", 0):
             working.add(person(entry.get("p")))
     want = collections.Counter()
-    planned = collections.defaultdict(set)
+    cells = collections.defaultdict(set)  # (role, person): their planned hours
     for entry in shifts:
         pid = person(entry.get("p"))
         if pid is None or pid not in own:
             continue
         role = skill(entry.get("s"))
-        planned[role].add(pid)
         for hour in range(entry.get("f", 0), entry.get("t", 0)):
             want[(role, entry.get("d"), hour)] += 1
+            cells[(role, pid)].add((entry.get("d"), hour))
     gap = collections.Counter()
     for (role, day, hour), n in want.items():
         gap[role] += max(0, n - now[(role, day, hour)])
+    # Idle: nothing at the site in the game's week, not in training, and some
+    # of their own planned hours left with nobody on.
+    idle = collections.Counter(
+        role for (role, pid), hours in cells.items()
+        if pid not in working and pid not in training
+        and any(want[(role, d, h)] > now[(role, d, h)] for d, h in hours)
+    )
     roles = [
-        {"skill": role, "hours": gap[role],
-         "idle": sum(1 for pid in planned[role] if pid not in working and pid not in training)}
+        {"skill": role, "hours": gap[role], "idle": idle[role]}
         for role in _in_order(gap) if gap[role]
     ]
     roles = [r for r in roles if r["idle"]]
@@ -10113,17 +10119,19 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
             found = take(offices.get(business["key"]))
             if found is not None:
                 plans["office"] = found
-        # The plan's hours the site's own people would work that nobody works
-        # in the game's week now: Staff with no hours (_unstaffed()).
-        row_of = {"demand": shops.get(business["key"]), "open": (shops.get(business["key"]) or {}).get("openCover"),
-                  "office": offices.get(business["key"])}
-        base = shops.get(business["key"]) if kind == "shop" else offices.get(business["key"])
-        for mode, plan in plans.items():
-            if mode in row_of and row_of[mode] and base:
-                gap = _unstaffed(base, row_of[mode].get("shifts") or (), own.get(business["key"], set()),
-                                 training)
+        # Staff with no hours (_unstaffed()): the hours a shop's own people
+        # would work that nobody works in the game's week now, against the two
+        # plans its Staffing block writes (demand, full cover), which the page
+        # picks between as that block does. Shops only: an office has no
+        # Staffing block to write its week from.
+        unstaffed = {}
+        base = shops.get(business["key"]) if kind == "shop" else None
+        if base and not base.get("failed"):
+            for mode, shifts in (("demand", base.get("shifts")),
+                                 ("full", (base.get("fullCover") or {}).get("shifts"))):
+                gap = _unstaffed(base, shifts or (), own.get(business["key"], set()), training)
                 if gap:
-                    plan["unstaffed"] = gap
+                    unstaffed[mode] = gap
         sites.append({
             "key": business["key"],
             "name": business["name"],
@@ -10132,6 +10140,7 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
             "planned": kind in ("shop", "office", "factory"),
             # A shop the game opens no hour: no plan until it has hours.
             **({"noHours": True} if no_hours else {}),
+            **({"unstaffed": unstaffed} if unstaffed else {}),
             "new": not business.get("staff"),
             "accepts": list(ASSIGN_SKILLS.get(business["typeSlug"], ())),
             "plans": {mode: plans[mode] for mode in _in_order(plans)},
@@ -25659,8 +25668,10 @@ function hrNoHoursHtml(){
    plan's `unstaffed`); nothing is hired for those, so the order would say
    nothing. The link opens the site's Staffing, whose write puts the week in. */
 function hrIdleHtml(m){
-  const rows = m.sites.filter(S => S.plan && S.plan.unstaffed).map(S => {
-    const u = S.plan.unstaffed, name = spEsc(S.b ? shortName(S.b) : S.site.name || "A site");
+  /* The plan the site's Staffing block shows and writes, as it picks it. */
+  const of = S => { const u = S.site.unstaffed || {}; return spPlanRead(S.key) === "full" && u.full ? u.full : u.demand; };
+  const rows = m.sites.filter(S => S.site.kind === "shop" && of(S)).map(S => {
+    const u = of(S), name = spEsc(S.b ? shortName(S.b) : S.site.name || "A site");
     const who = (u.roles || []).filter(r => r.idle).map(r => `your ${hrNum(r.idle)} ${hrRole(r.skill)} staff ${r.idle === 1 ? "has" : "have"} no hours`);
     const href = siteHref(S.key);
     return `<li><b>${name}</b><span>${hrNum(u.hours)} h with nobody on${who.length ? ` · ${who.join(" · ")}` : ""}</span>${
