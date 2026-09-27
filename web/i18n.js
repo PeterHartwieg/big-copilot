@@ -16,9 +16,9 @@
 /* A local page built with `--lang de` carries its table: {lang, table}. */
 const TT_EMBED = /*__UI_TABLE__*/null;
 /* The languages Big Copilot's own text comes in, English first. */
-const TT_LANGS = ["en", "de"];
+const TT_LANGS = ["en", "de", "pt"];
 /* Numbers follow the UI language: English is always en-US. */
-const TT_NUM_LOCALES = {en: "en-US", de: "de-DE"};
+const TT_NUM_LOCALES = {en: "en-US", de: "de-DE", pt: "pt-BR"};
 /* A placeholder: {name} or {name:spec}; single braces, as SUMMARIES writes them. */
 const TT_SPEC = /\{(\w+)(?::([^{}]+))?\}/g;
 /* A game name inside a sentence (tok() in Python), for a page without the

@@ -60,7 +60,7 @@ PLURAL_SUFFIX = re.compile(r"_(zero|one|two|few|many|other)$")
 FIELD = re.compile(r"\{(\w+)(?::([^{}]+))?\}")
 SPECS = re.compile(r",|\$|\$c|day|,?\.\df")
 # CLDR plural categories of the languages Big Copilot is translated into.
-PLURALS = {"en": ("one", "other"), "de": ("one", "other")}
+PLURALS = {"en": ("one", "other"), "de": ("one", "other"), "pt": ("one", "many", "other")}
 ATTRS = ("data-tt-title", "data-tt-aria-label", "data-tt-placeholder", "data-tt-tip")
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
 
