@@ -1,0 +1,120 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-09-27T12:00:00Z"
+ },
+ "title": "Big Copilot navigation: sidebar A/B/C",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [],
+ "boards": {
+  "Main.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 1400,
+   "title": "Now"
+  },
+  "ImportsA.dc.html": {
+   "x": 1520,
+   "y": 0,
+   "w": 1440,
+   "h": 1400,
+   "title": "A"
+  },
+  "ImportsB.dc.html": {
+   "x": 3040,
+   "y": 0,
+   "w": 1440,
+   "h": 1400,
+   "title": "B"
+  },
+  "ImportsC.dc.html": {
+   "x": 4560,
+   "y": 0,
+   "w": 1440,
+   "h": 1400,
+   "title": "C"
+  },
+  "OverviewNow.dc.html": {
+   "x": 0,
+   "y": 1820,
+   "w": 1440,
+   "h": 1720,
+   "title": "Now"
+  },
+  "OverviewA.dc.html": {
+   "x": 1520,
+   "y": 1820,
+   "w": 1440,
+   "h": 1720,
+   "title": "A"
+  },
+  "OverviewB.dc.html": {
+   "x": 3040,
+   "y": 1820,
+   "w": 1440,
+   "h": 1720,
+   "title": "B"
+  },
+  "OverviewC.dc.html": {
+   "x": 4560,
+   "y": 1820,
+   "w": 1440,
+   "h": 1720,
+   "title": "C"
+  },
+  "ImportsB1100.dc.html": {
+   "x": 0,
+   "y": 3960,
+   "w": 1100,
+   "h": 1400,
+   "title": "B \u00b7 1100"
+  },
+  "ImportsBDark.dc.html": {
+   "x": 1180,
+   "y": 3960,
+   "w": 1440,
+   "h": 1400,
+   "title": "B \u00b7 dark"
+  }
+ },
+ "order": [
+  "Main.dc.html",
+  "ImportsA.dc.html",
+  "ImportsB.dc.html",
+  "ImportsC.dc.html",
+  "OverviewNow.dc.html",
+  "OverviewA.dc.html",
+  "OverviewB.dc.html",
+  "OverviewC.dc.html",
+  "ImportsB1100.dc.html",
+  "ImportsBDark.dc.html"
+ ],
+ "notes": {
+  "rowImports": {
+   "x": 0,
+   "y": -300,
+   "text": "Supply \u203a Imports",
+   "kind": "title1",
+   "maxW": 5980
+  },
+  "rowOverview": {
+   "x": 0,
+   "y": 1520,
+   "text": "Overview",
+   "kind": "title1",
+   "maxW": 5980
+  },
+  "rowB": {
+   "x": 0,
+   "y": 3660,
+   "text": "B at 1100 px, and dark",
+   "kind": "title1",
+   "maxW": 2620
+  }
+ },
+ "designSystems": []
+}

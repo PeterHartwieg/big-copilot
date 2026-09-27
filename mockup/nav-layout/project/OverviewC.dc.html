@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Big Copilot · C</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0}
+.board{--ground:#eef0ea;--surface:#fdfdfb;--raised:#f3f4ef;--ink:#15181a;--ink-2:#5b6469;--ink-3:#7d868b;
+  --rule:#d2d6cd;--rule-soft:#e0e3da;--accent:#00703a;--accent-soft:#00703a1f;--on-accent:#fff;
+  --pos:#00703a;--neg:#cc2a20;--warn:#b34d00;--info:#2a5ea8;--news:#e4e8df;--chipbg:#00000010;
+  position:relative;overflow:hidden;background:var(--ground);color:var(--ink);
+  font-family:Archivo,"Helvetica Neue",Arial,sans-serif;font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.board.dark{--ground:#0d100f;--surface:#151917;--raised:#1c211e;--ink:#e9ece6;--ink-2:#9aa39d;--ink-3:#808a84;
+  --rule:#262c28;--rule-soft:#1e2320;--accent:#43c07a;--accent-soft:#43c07a26;--on-accent:#08130d;
+  --pos:#43c07a;--neg:#ff6257;--warn:#f0913a;--info:#6ea8ff;--news:#141a17;--chipbg:#ffffff12}
+.board a{color:inherit;text-decoration:none}
+.board button{font:inherit;color:inherit}
+.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.mono{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
+.new{display:inline-block;font:600 8.5px/1 "IBM Plex Mono",monospace;letter-spacing:.06em;padding:3px 5px;border-radius:4px;background:var(--accent-soft);color:var(--accent)}
+.hood{display:inline-grid;place-items:center;min-width:22px;height:18px;padding:0 4px;border:1px solid var(--rule);border-radius:4px;background:var(--raised);font:600 9.5px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.mapb{display:inline-grid;place-items:center;width:20px;height:20px;border:1px solid var(--rule);border-radius:4px;color:var(--ink-2)}
+.mapb .i{width:12px;height:12px}
+
+/* the news strip */
+.news{display:flex;align-items:center;gap:8px;height:38px;padding:0 36px;background:var(--news);font-size:12px;color:var(--ink-2);white-space:nowrap;overflow:hidden}
+.news b.d{width:6px;height:6px;border-radius:50%;background:var(--accent);flex:none}
+.news strong{color:var(--ink);font-weight:600}
+.news span{overflow:hidden;text-overflow:ellipsis}
+.news a{color:var(--accent)!important;text-decoration:underline!important;flex:none}
+.news .x{margin-left:auto;flex:none;color:var(--ink-3)}
+.news .x .i{width:13px;height:13px}
+
+/* brand: wordmark, dot, sphere */
+.wordmark{font-size:30px;font-weight:800;letter-spacing:-.045em;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dot{display:inline-block;flex:none;width:10px;height:10px;border-radius:50%;background:var(--accent)}
+.orb{position:absolute;width:42px;height:42px;border-radius:50%;
+  background:radial-gradient(circle at 32% 30%,#d9ffe8 0%,#7fe3a8 14%,#43c07a 38%,#146b3c 78%,#0b3d23 100%);
+  box-shadow:0 10px 22px #43c07a3d,inset -8px -11px 18px #00000066,inset 3px 4px 10px #ffffff22}
+.orb::before{content:"";position:absolute;inset:0;border-radius:50%;
+  background:radial-gradient(circle at 72% 28%,#0003 0 4.5%,transparent 5.5%),radial-gradient(circle at 26% 62%,#0003 0 3.5%,transparent 4.5%),radial-gradient(circle at 62% 80%,#0002 0 3%,transparent 4%)}
+.orb::after{content:"";position:absolute;left:14%;right:14%;bottom:-6px;height:8px;border-radius:50%;background:#000;opacity:.2;filter:blur(4px);z-index:-1}
+.dark .orb::after{opacity:.45}
+
+/* buttons shared by the shells */
+.ib{display:inline-grid;place-items:center;width:36px;height:36px;border:1px solid var(--rule);border-radius:8px;background:var(--surface);color:var(--ink);position:relative}
+.ib .i{width:15px;height:15px}
+.ib .new{position:absolute;top:-10px;left:50%;transform:translateX(-50%)}
+.tb{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:36px;padding:0 13px;border:1px solid var(--rule);border-radius:8px;background:var(--surface);font-size:13px;font-weight:500;white-space:nowrap}
+.tb .i{width:15px;height:15px}
+.clock{text-align:right;white-space:nowrap}
+.clock b{font:500 16px/1.2 "IBM Plex Mono",monospace}
+.clock b i{font-style:normal;color:var(--ink-3);margin:0 5px}
+.clock small{display:block;font:400 10.5px/1.3 "IBM Plex Mono",monospace;color:var(--ink-3);margin-top:3px}
+
+/* the current masthead */
+.mast{position:relative;display:flex;align-items:center;gap:14px;height:100px;margin:0 36px;border-bottom:1px solid var(--rule)}
+.mast .brand{display:flex;align-items:baseline;gap:3px;margin-right:auto}
+.mast .wordmark{max-width:236px}
+.mast .orb{left:262px;top:22px}
+.refs{display:flex;align-items:center;gap:12px;padding:0 14px;border-left:1px solid var(--rule);font-size:13px;color:var(--ink-2)}
+.refs a{display:flex;align-items:center;gap:6px}
+.refs .i{width:15px;height:15px}
+.mast .clock{margin-left:14px}
+.areas{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));margin:0 36px;border-bottom:1px solid var(--rule)}
+.areas a{position:relative;display:flex;align-items:center;justify-content:center;gap:8px;height:46px;color:var(--ink-2);font-size:14px;font-weight:500}
+.areas a .i{width:17px;height:17px}
+.areas a.on{color:var(--ink)}
+.areas a.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--accent)}
+.bad{display:inline-grid;place-items:center;min-width:17px;height:17px;padding:0 5px;border-radius:9px;background:var(--neg);color:#fff;font:600 10px/1 "IBM Plex Mono",monospace}
+
+/* the view row: tabs and the view's controls */
+.vrow{display:flex;align-items:center;gap:10px;min-height:54px;margin:0 36px;border-bottom:1px solid var(--rule-soft)}
+.vtabs{display:flex;align-items:center;gap:2px;margin-right:auto}
+.vtabs a{display:flex;align-items:center;gap:7px;height:34px;padding:0 13px;border-radius:7px;color:var(--ink-2);font-size:13.5px;font-weight:500;white-space:nowrap}
+.vtabs a.on{background:var(--ink);color:var(--ground)}
+.cnt{font:600 10.5px/1 "IBM Plex Mono",monospace;color:var(--warn)}
+.vtabs a.on .cnt{color:var(--ground);opacity:.75}
+.ctls{display:flex;align-items:center;gap:10px}
+.scope{display:flex;align-items:center;gap:10px;height:36px;padding:0 12px;border:1px solid var(--rule);border-radius:8px;background:var(--surface);font-size:13px;font-weight:500;white-space:nowrap;min-width:210px}
+.scope .i{width:15px;height:15px;color:var(--ink-3)}
+.scope .i:last-child{margin-left:auto;color:var(--ink)}
+.seg{display:inline-flex;gap:2px;padding:3px;border:1px solid var(--rule);border-radius:8px;background:var(--surface)}
+.seg a{display:flex;align-items:center;justify-content:center;height:28px;padding:0 10px;border-radius:5px;font-size:12.5px;color:var(--ink-2);white-space:nowrap}
+.seg a.on{background:var(--ink);color:var(--ground)}
+
+/* a page's content column */
+.pg{padding:22px 36px 40px}
+
+/* Imports: the focused change */
+.ic-card{border:1px solid var(--rule);border-radius:12px;background:var(--surface);overflow:hidden}
+.ic-h{display:flex;align-items:center;gap:12px;padding:22px 22px 0}
+.ic-h h2{margin:0;font-size:21px;font-weight:700;letter-spacing:-.01em;white-space:nowrap}
+.ic-h .meta{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2);white-space:nowrap}
+.ic-h .x{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px solid var(--rule);display:grid;place-items:center}
+.ic-h .x .i{width:13px;height:13px}
+.step{display:flex;align-items:center;gap:12px;padding:22px 22px 0;font-weight:600;font-size:15px}
+.step b{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--ink);color:var(--ground);font:600 11px/1 "IBM Plex Mono",monospace}
+.amt{display:flex;align-items:center;gap:18px;padding:16px 22px 0}
+.amt .was{font:400 26px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.amt .i{color:var(--ink-2)}
+.amt .box{display:flex;align-items:baseline;justify-content:flex-end;gap:6px;width:240px;height:60px;padding:14px 14px 0;border:1.5px solid var(--accent);border-radius:8px}
+.amt .box b{font:500 32px/1 "IBM Plex Mono",monospace}
+.amt .box small{font-size:12px;color:var(--ink-2)}
+.scale{position:relative;height:84px;margin:0 22px}
+.scale .trk{position:absolute;left:0;right:0;top:44px;height:8px;border-radius:4px;background:var(--rule-soft)}
+.scale .now{position:absolute;left:0;top:44px;height:8px;border-radius:4px 0 0 4px;background:#9aa0a0}
+.scale .pl{position:absolute;top:44px;height:8px;background:var(--accent)}
+.scale .mk{position:absolute;top:36px;width:1.5px;height:24px;background:var(--ink-2)}
+.scale .lb{position:absolute;transform:translateX(-50%);text-align:center;font:400 10.5px/1.25 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.scale .lb.w{color:var(--warn)}
+.scale .lb.g{color:var(--accent)}
+.ic-f{display:flex;gap:22px;padding:14px 22px 14px;margin-top:10px;border-top:1px solid var(--rule-soft);background:var(--ground);font-size:12.5px;color:var(--ink-2)}
+.dark .ic-f{background:#111513}
+.ic-f span{display:flex;align-items:center;gap:6px;text-decoration:underline;text-underline-offset:3px}
+.ic-f .i{width:13px;height:13px}
+
+/* Imports: depot tables */
+.depot{margin-top:22px;padding-top:20px;border-top:1px solid var(--rule)}
+.dh{display:grid;grid-template-columns:52px minmax(0,1fr) auto;align-items:start;gap:0}
+.dh .ico{width:34px;height:34px;border-radius:50%;background:var(--raised);display:grid;place-items:center;color:var(--ink-2);margin-top:2px}
+.dh .ico .i{width:15px;height:15px}
+.dh .nm{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600}
+.dh .sub{display:flex;gap:16px;margin-top:6px;font-size:12px;font-style:italic;color:var(--ink-2)}
+.dh .sub span{display:flex;align-items:center;gap:4px}
+.dh .sub .i{width:12px;height:12px}
+.dh .st{display:flex;align-items:center;gap:22px}
+.dh .st div{text-align:right}
+.dh .st small{display:block;font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;color:var(--ink-2)}
+.dh .st b{display:block;margin-top:6px;font:500 16px/1 "IBM Plex Mono",monospace}
+.dh .st .ch{font:500 11.5px/1 "IBM Plex Mono",monospace;color:var(--warn)}
+.dh .st .cv{width:26px;height:26px;border-radius:50%;border:1px solid var(--rule);display:grid;place-items:center}
+.dh .st .cv .i{width:12px;height:12px}
+.tbl{margin:14px 0 0 52px}
+.tr{display:grid;grid-template-columns:32px minmax(150px,1.5fr) 72px 88px 70px 128px minmax(190px,1.4fr) 84px 96px;align-items:center;gap:0 12px;min-height:58px;padding:0 0 0 6px;border-bottom:1px solid var(--rule-soft)}
+.tr.hd{white-space:nowrap;min-height:36px;font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.1em;color:var(--ink-2);border-bottom:1px solid var(--rule)}
+.tr.sel{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+.tr .r{text-align:right}
+.tr .n{font:400 13.5px/1 "IBM Plex Mono",monospace}
+.tr .rad{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--ink-3)}
+.tr .pn{font-size:14px}
+.tr .pn small{display:block;font-size:11.5px;color:var(--ink-2)}
+.rv{display:inline-block;margin-left:6px;padding:2px 7px;border:1px solid var(--rule);border-radius:10px;font:500 10.5px/1.2 "IBM Plex Mono",monospace;color:var(--ink-2);vertical-align:1px}
+.cov{display:flex;gap:3px;align-items:flex-end;height:16px;position:relative}
+.cov i{width:13px;height:5px;border-radius:2px;background:var(--rule)}
+.cov i.f{background:var(--accent)}
+.cov i.s{background:repeating-linear-gradient(135deg,var(--neg) 0 3px,transparent 3px 5px)}
+.cov .t{position:absolute;top:-4px;width:12px;height:12px;color:var(--ink)}
+.ord{display:flex;align-items:center;justify-content:flex-end;gap:7px;font:400 13px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.ord .in{width:86px;height:30px;border:1px solid var(--rule);border-radius:6px;background:var(--surface);display:flex;align-items:center;justify-content:flex-end;padding:0 8px;color:var(--ink);font-size:13.5px}
+.ord .in.g{border-color:var(--accent);color:var(--accent);border-width:1.5px}
+.ord small{white-space:nowrap;font:400 10.5px/1 Archivo,sans-serif}
+.ord .res{white-space:nowrap;padding:3px 6px;border-radius:4px;background:#cc2a201a;color:var(--neg);font-size:11px}
+.us{text-decoration:underline dotted;text-underline-offset:3px}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-radius:4px;font:500 11px/1 "IBM Plex Mono",monospace;background:#cc2a201a;color:var(--neg);white-space:nowrap}
+.pill .i{width:11px;height:11px}
+.pill.o{background:none;border:1px solid var(--neg)}
+.tr2{grid-template-columns:32px minmax(150px,1fr) 110px 150px;min-height:44px}
+
+/* Overview */
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-bottom:1px solid var(--rule-soft)}
+.kpi{padding:6px 18px 16px 0;margin-right:18px;border-right:1px solid var(--rule-soft)}
+.kpi:last-child{border-right:0;margin-right:0}
+.kpi .lab{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;color:var(--ink-2)}
+.kpi .v{margin-top:10px;font:500 28px/1.05 "IBM Plex Mono",monospace;letter-spacing:-.02em}
+.kpi .v.neg{color:var(--neg)}
+.kpi .d{display:flex;gap:10px;align-items:center;margin-top:8px;font:400 11px/1.3 "IBM Plex Mono",monospace;color:var(--ink-2);white-space:nowrap;overflow:hidden}
+.kpi .d .c{padding:2px 6px;border-radius:3px;background:var(--chipbg)}
+.kpi .d .c.n{background:#cc2a201a;color:var(--neg)}
+.kpi svg{display:block;width:100%;height:28px;margin-top:10px}
+.kpi svg polyline{fill:none;stroke-width:1.5;stroke-linejoin:round}
+.na-h{display:flex;align-items:center;gap:12px;margin-top:26px}
+.na-h h2{margin:0;font-size:26px;font-weight:700;letter-spacing:-.02em}
+.qm{width:18px;height:18px;border-radius:50%;border:1px solid var(--rule);display:grid;place-items:center;font:500 10px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.sev{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 11px;border:1px solid var(--ink-3);border-radius:6px;font:500 12px/1 "IBM Plex Mono",monospace}
+.sev b{width:7px;height:7px;border-radius:50%}
+.cust{margin-left:auto;display:flex;align-items:center;gap:7px;height:30px;padding:0 11px;border:1px solid var(--rule);border-radius:6px;background:var(--surface);font-size:12px;font-weight:600}
+.cust .i{width:14px;height:14px}
+.grp{margin-top:18px;font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em}
+.fr{display:grid;grid-template-columns:24px minmax(0,1fr) auto auto auto;align-items:center;gap:0 14px;min-height:64px;padding:10px 0;border-bottom:1px solid var(--rule-soft)}
+.fr .sd{width:10px;height:10px;border-radius:50%;background:var(--neg);box-shadow:0 0 0 4px #cc2a2022}
+.fr .sd.w{background:var(--warn);box-shadow:none}
+.fr .l1{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;white-space:nowrap}
+.fr .pl{font-size:13px;color:var(--ink-2)}
+.fr .hl{font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.fr .l2{margin-top:4px;font-size:12.5px;color:var(--ink-2)}
+.ev{display:grid;grid-template-columns:auto 58px 58px;gap:5px 10px;align-items:center;font-size:11.5px;color:var(--ink-2)}
+.ev .bar{height:5px;border-radius:3px;background:var(--rule-soft);position:relative}
+.ev .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:3px}
+.ev .v{font:400 11.5px/1 "IBM Plex Mono",monospace;color:var(--ink);text-align:right}
+.det{display:flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:1px solid var(--rule);border-radius:6px;background:var(--surface);font-size:12px;font-weight:500}
+.det .i{width:12px;height:12px}
+.board .act{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:148px;height:34px;padding:0 12px;border-radius:6px;background:var(--accent);color:var(--on-accent);font-size:12.5px;font-weight:600;white-space:nowrap}
+.act .i{width:13px;height:13px}
+.board .lnk{display:flex;align-items:center;gap:8px;color:var(--accent);font-size:12.5px;font-weight:600;white-space:nowrap}
+.lnk .i{width:13px;height:13px}
+.more{display:inline-flex;align-items:center;gap:7px;margin-top:12px;height:30px;padding:0 11px;border:1px solid var(--rule);border-radius:6px;background:var(--surface);font-size:12px;font-weight:600}
+.more .i{width:12px;height:12px}
+.fine{margin-top:10px;font-size:12px;color:var(--ink-2)}
+.fine u{text-underline-offset:3px}
+.tools-h{margin:34px 0 14px;font-size:19px;font-weight:700}
+.tools{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.tool{border:1px solid var(--rule);border-radius:12px;background:var(--surface);padding:18px 16px 10px}
+.tool .th{display:flex;align-items:center;gap:8px;height:48px;font-size:15px;font-weight:600}
+.tool .th .i{width:15px;height:15px;color:var(--accent)}
+.tool .th svg.pic{margin-left:auto;width:96px;height:44px}
+.tool a{display:flex;align-items:center;gap:8px;min-height:37px;padding:4px 0;line-height:1.25;border-bottom:1px solid var(--rule-soft);font-size:13px;font-weight:500}
+.tool a:last-child{border-bottom:0}
+.tool a .i{width:13px;height:13px;margin-left:8px;color:var(--ink-2)}
+.tool a .c{margin-left:auto;white-space:nowrap;flex:none;font:600 9.5px/1 "IBM Plex Mono",monospace;letter-spacing:.06em;padding:3px 6px;border-radius:8px;background:var(--chipbg);color:var(--ink-2)}
+.tool a .c.w{background:#b34d001a;color:var(--warn)}
+.tool a .c.g{background:var(--accent-soft);color:var(--accent)}
+.tool a .c+.i{margin-left:8px}
+.tool a span.fill{margin-left:auto}
+
+/* ---- sidebar shells ---------------------------------------------------- */
+.app{display:grid;grid-template-columns:var(--sw) minmax(0,1fr);height:100%}
+.side{position:relative;border-right:1px solid var(--rule);background:var(--ground)}
+.sin{position:relative;height:900px;display:flex;flex-direction:column;padding:22px 14px 16px}
+.shead{position:relative;display:flex;align-items:baseline;gap:3px;padding:6px 8px 0;height:62px;border-bottom:1px solid var(--rule)}
+.shead .wordmark{font-size:21px;max-width:calc(var(--sw) - 64px)}
+.shead .orb{right:4px;top:28px;width:34px;height:34px}
+.sk{display:flex;align-items:center;gap:9px;height:36px;margin:14px 0 6px;padding:0 10px;border:1px solid var(--rule);border-radius:8px;background:var(--surface);font-size:13px;color:var(--ink-2);position:relative}
+.sk .i{width:15px;height:15px}
+.sk kbd{margin-left:auto;font:500 10px/1 "IBM Plex Mono",monospace;padding:3px 5px;border:1px solid var(--rule);border-radius:4px;color:var(--ink-3)}
+.sk .new{margin-left:2px}
+.snav{display:flex;flex-direction:column;gap:1px;margin-top:8px}
+.snav a.m{display:flex;align-items:center;gap:10px;height:38px;padding:0 10px;border-radius:8px;color:var(--ink-2);font-size:14px;font-weight:500}
+.snav a.m .i{width:18px;height:18px}
+.snav a.m.on{background:var(--surface);color:var(--ink);box-shadow:inset 3px 0 0 var(--accent)}
+.snav a.m.open{color:var(--ink)}
+.snav a.m .bad,.snav a.m .cv{margin-left:auto}
+.snav a.m .cv{width:13px;height:13px;color:var(--ink-3)}
+.snav .subs{display:flex;flex-direction:column;gap:1px;margin:2px 0 6px 19px;padding-left:12px;border-left:1px solid var(--rule)}
+.snav .subs a{display:flex;align-items:center;gap:8px;height:31px;padding:0 10px;border-radius:6px;color:var(--ink-2);font-size:13.5px;font-weight:500}
+.snav .subs a .cnt{margin-left:auto}
+.snav .subs a.on{background:var(--ink);color:var(--ground)}
+.snav .subs a.on .cnt{color:var(--ground);opacity:.75}
+.sctl{display:flex;flex-direction:column;gap:7px;margin:5px 0 6px 0;padding:10px;border:1px solid var(--rule);border-radius:9px;background:var(--surface)}
+.sctl .scope{min-width:0;height:32px;background:var(--ground);font-size:12.5px}
+.sctl .seg{display:grid;grid-template-columns:1fr 1fr;background:var(--ground)}
+.sctl .seg a{height:26px;padding:0 6px;font-size:12px}
+.sref{display:flex;flex-direction:column;gap:1px;margin-top:12px;padding-top:12px;border-top:1px solid var(--rule-soft)}
+.sref a{display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:8px;color:var(--ink-2);font-size:13.5px}
+.sref a .i{width:17px;height:17px}
+.sref a .new{margin-left:auto}
+.sfoot{margin-top:auto;padding-top:14px;border-top:1px solid var(--rule)}
+.sfoot .clock{text-align:left;padding:0 8px}
+.sfoot .clock b{font-size:14.5px}
+.sfoot .row{display:flex;gap:8px;margin-top:12px}
+.sfoot .row .tb{flex:1}
+.sfoot .src{display:flex;align-items:center;gap:7px;margin:10px 8px 0;font:400 10.5px/1.3 "IBM Plex Mono",monospace;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sfoot .src b{width:6px;height:6px;border-radius:50%;background:var(--accent);flex:none}
+.cbar{display:flex;align-items:center;gap:10px;min-height:58px;margin:0 36px;border-bottom:1px solid var(--rule-soft)}
+.main .news{padding:0 36px}
+.app .scope{min-width:180px}
+.menu{left:244px;bottom:14px}
+.narrow .vrow{flex-wrap:wrap;padding:8px 0;row-gap:8px}
+.narrow .vrow .ctls{margin-left:auto}
+.narrow .tr{grid-template-columns:28px minmax(120px,1.3fr) 64px 76px 62px 118px minmax(150px,1.2fr) 82px 84px;gap:0 10px}
+.narrow .tr2{grid-template-columns:28px minmax(120px,1fr) 110px 150px}
+
+/* the merged menu, drawn open */
+.menu{position:absolute;z-index:20;width:286px;padding:6px;border-radius:12px;background:var(--surface);border:1px solid var(--rule);box-shadow:0 20px 50px #15181a2e}
+.menu .lab{display:block;padding:10px 10px 5px;font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;color:var(--ink-3)}
+.menu a{display:flex;align-items:center;gap:10px;min-height:38px;padding:0 10px;border-radius:8px;font-size:13.5px;font-weight:500}
+.menu a .i{width:16px;height:16px;color:var(--ink-2)}
+.menu a.hi{background:var(--raised)}
+.menu .stat{padding:8px 10px 10px;font-size:12px;color:var(--ink-2);border-bottom:1px solid var(--rule-soft)}
+.menu .stat b{font-weight:600;color:var(--ink)}
+.menu hr{border:0;border-top:1px solid var(--rule-soft);margin:6px 4px}
+.menu a small{margin-left:auto;color:var(--ink-3)}
+.sfoot .ib.open{border-color:var(--ink);box-shadow:0 0 0 2px var(--accent-soft)}
+
+/* the rail: B at 1100 px */
+.rail .sin{padding:18px 10px 14px;align-items:center}
+.rail .rhead{position:relative;width:44px;height:58px;border-bottom:1px solid var(--rule);display:flex;justify-content:center}
+.rail .rhead .orb{position:relative;width:34px;height:34px;display:block}
+.rail a.ri{position:relative;display:grid;place-items:center;width:44px;height:42px;border-radius:9px;color:var(--ink-2)}
+.rail a.ri .i{width:19px;height:19px}
+.rail a.ri.on{background:var(--surface);color:var(--ink);box-shadow:inset 3px 0 0 var(--accent)}
+.rail a.ri .bad{position:absolute;top:3px;right:1px;min-width:15px;height:15px;font-size:9px;padding:0 4px}
+.rail a.ri .nd{position:absolute;top:8px;right:8px;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.rail .grp{display:flex;flex-direction:column;gap:3px;margin-top:10px}
+.rail .grp.sep{padding-top:10px;border-top:1px solid var(--rule-soft)}
+.rail .rclock{margin-top:auto;padding-top:12px;border-top:1px solid var(--rule);text-align:center;font:500 12px/1.3 "IBM Plex Mono",monospace}
+.rail .rclock small{display:block;font-size:9.5px;color:var(--ink-3)}
+.rail .rfoot{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+</style>
+</helmet>
+<div class="board light" style="width: 1440px; height: 1720px;">
+<div class="app" style="--sw:280px"><aside class="side"><div class="sin"><div class="shead"><span class="wordmark">QA Expanded Co.</span><span class="dot"></span><span class="orb"></span></div><div class="sk"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m20 20-4.2-4.2"></path></svg>Search<span class=new>NEW</span><kbd>Ctrl K</kbd></div><nav class="snav"><a class="m on" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"></path></svg>Overview<span class="bad">8</span></a><a class="m" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16"></path><path d="M14 10h5a1 1 0 0 1 1 1v10M4 21h17M8 8h2M8 12h2M8 16h2"></path></svg>Businesses<svg class="i cv" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a><a class="m" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 8 12 3.5 20.5 8v8L12 20.5 3.5 16z"></path><path d="M3.5 8 12 12.5 20.5 8M12 12.5v8"></path></svg>Supply<svg class="i cv" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a><a class="m" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg>Staffing<svg class="i cv" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a><a class="m" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17 10 11l4 4 6-7"></path><path d="M15 8h5v5"></path></svg>Expansion<svg class="i cv" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a></nav><div class="sref"><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6z"></path><path d="M9 4v14M15 6v14"></path></svg>City map<span class="new">NEW</span></a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z"></path><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19v-3M9 7h6M9 10.5h4"></path></svg>Game guide<span class="new">NEW</span></a></div><div class="sfoot"><div class="clock"><b>Day 47<i>·</i>Fri 14:30</b><small>YEAR 1</small></div><div class="src"><b></b>Save folder · saved 16:25</div><div class="row"><span class="tb"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7"></path><path d="M20 4v5h-5"></path></svg>Update</span><span class="ib"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.4"></circle><circle cx="12" cy="12" r="1.4"></circle><circle cx="18" cy="12" r="1.4"></circle></svg></span></div></div></div></aside><main class="main"><div class="news"><b class="d"></b><strong>New</strong><span>Big Copilot Link 0.2.0 lets the board make changes in your game: set uniforms, apply import amounts and write staffing plans, with a preview and one-step undo.</span><a href="#">Get the mod on the Steam Workshop</a><span class="x"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></span></div><div class="pg">
+<div class="kpis">
+  <div class="kpi"><div class="lab">PROFIT YESTERDAY</div><div class="v neg">-$628</div><div class="d"><span class="c n">−31%</span>vs 7-day</div><svg viewBox="0 0 300 28" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,28 0.0,16.0 21.4,26.0 42.9,11.0 64.3,21.0 85.7,26.0 107.1,16.0 128.6,21.0 150.0,11.0 171.4,16.0 192.9,26.0 214.3,16.0 235.7,6.0 257.1,16.0 278.6,21.0 300.0,16.0 300,28" fill="#cc2a2014"></polygon><polyline points="0.0,16.0 21.4,26.0 42.9,11.0 64.3,21.0 85.7,26.0 107.1,16.0 128.6,21.0 150.0,11.0 171.4,16.0 192.9,26.0 214.3,16.0 235.7,6.0 257.1,16.0 278.6,21.0 300.0,16.0" stroke="var(--neg)"></polyline></svg></div>
+  <div class="kpi"><div class="lab">REVENUE YESTERDAY</div><div class="v">$6,164</div><div class="d"><span class="c">270</span>customers</div><svg viewBox="0 0 300 28" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,28 0.0,22.0 21.4,14.0 42.9,26.0 64.3,22.0 85.7,18.0 107.1,10.0 128.6,22.0 150.0,18.0 171.4,14.0 192.9,10.0 214.3,18.0 235.7,6.0 257.1,22.0 278.6,18.0 300.0,14.0 300,28" fill="#00703a14"></polygon><polyline points="0.0,22.0 21.4,14.0 42.9,26.0 64.3,22.0 85.7,18.0 107.1,10.0 128.6,22.0 150.0,18.0 171.4,14.0 192.9,10.0 214.3,18.0 235.7,6.0 257.1,22.0 278.6,18.0 300.0,14.0" stroke="var(--accent)"></polyline></svg></div>
+  <div class="kpi"><div class="lab">CASH ON HAND</div><div class="v">$25,560</div><div class="d"><span class="c">-$3k profit</span>$30k owed on loans</div><svg viewBox="0 0 300 28" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,28 0.0,26.0 75.0,26.0 150.0,26.0 225.0,26.0 300.0,26.0 300,28" fill="transparent"></polygon><polyline points="0.0,26.0 75.0,26.0 150.0,26.0 225.0,26.0 300.0,26.0" stroke="var(--accent)"></polyline></svg></div>
+  <div class="kpi"><div class="lab">FIXED COST / DAY</div><div class="v">$3,808</div><div class="d"><span class="c">rent $2k</span>payroll $1k</div><svg viewBox="0 0 300 28" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,28 0.0,26.0 75.0,26.0 150.0,26.0 225.0,26.0 300.0,26.0 300,28" fill="transparent"></polygon><polyline points="0.0,26.0 75.0,26.0 150.0,26.0 225.0,26.0 300.0,26.0" stroke="var(--accent)"></polyline></svg></div>
+</div>
+<div class="na-h"><h2>Needs attention</h2><span class="qm">?</span>
+  <span class="sev"><b style="background:var(--neg)"></b>8 critical</span><span class="sev"><b style="background:var(--warn)"></b>13 warnings</span><span class="sev"><b style="background:var(--accent)"></b>2 opportunities</span>
+  <span class="cust"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg>Customize checks</span></div>
+<div class="grp" style="color:var(--neg)">CRITICAL</div><div class="fr"><span class="sd"></span><div><div class="l1"><span class="hood">MT</span><span class="pl">HART. New Gifts</span><span class="mapb"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 4v16M15 4v16M4 12h5M15 12h5"></path></svg></span><span class="hl">Opened day 46, not trading yet</span></div><div class="l2">no staff, no prices set, no delivery plan, $150/day rent</div></div><span></span><span></span><a class="act" href="#">Open readiness<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div><div class="fr"><span class="sd"></span><div><div class="l1"><span class="hood">MT</span><span class="pl">HART. Spirits</span><span class="mapb"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 4v16M15 4v16M4 12h5M15 12h5"></path></svg></span><span class="hl">1 staff with unmet demands</span></div><div class="l2">No weekends for 1 (important); 1 of them has warned they will quit</div></div><span></span><span></span><a class="act" href="#">Resolve staff demand<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div><div class="fr"><span class="sd"></span><div><div class="l1"><span class="hood">IC</span><span class="pl">HART. Overflow Depot</span><span class="mapb"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 4v16M15 4v16M4 12h5M15 12h5"></path></svg></span><span class="hl">Gift (Cheap) orders 100 a week against a 560 week of use</span></div><div class="l2">460 short. already runs dry on Saturday, 2.8 days before Monday's import</div></div><div class="ev"><span>Ordered a week</span><span class="bar"><i style="width:17%;min-width:8px;background:var(--ink-2)"></i></span><span class="v">100</span><span>Used a week</span><span class="bar"><i style="width:100%;background:var(--warn)"></i></span><span class="v">560</span></div><span class="det">Details<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></span><a class="act" href="#">Review import<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div><div class="fr"><span class="sd"></span><div><div class="l1"><span class="hood">IC</span><span class="pl">HART. Overflow Depot</span><span class="mapb"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 4v16M15 4v16M4 12h5M15 12h5"></path></svg></span><span class="hl">Umbrella import is paused</span></div><div class="l2">1 day left at 20/day</div></div><span></span><span class="det">Details<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></span><a class="act" href="#">Review import<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div><div class="fr"><span class="sd"></span><div><div class="l1"><span class="hood">IC</span><span class="pl">HART. Hub</span><span class="mapb"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 4v16M15 4v16M4 12h5M15 12h5"></path></svg></span><span class="hl">Water</span></div><div class="l2">this import needs to cover 16,800 a week and the import order is 3,000; raise it to 16,800</div></div><div class="ev"><span>Ordered a week</span><span class="bar"><i style="width:17%;min-width:8px;background:var(--ink-2)"></i></span><span class="v">3,000</span><span>Used a week</span><span class="bar"><i style="width:100%;background:var(--warn)"></i></span><span class="v">16,800</span></div><span class="det">Details<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></span><a class="act" href="#">Review factory input<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div><div class="fr"><span class="sd"></span><div><div class="l1"><span class="hood">IC</span><span class="pl">HART. Brewery</span><span class="mapb"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 4v16M15 4v16M4 12h5M15 12h5"></path></svg></span><span class="hl">5 factory inputs are not fed as the machines need</span></div><div class="l2">largest Barley. Barley feeds Beer at 2,400/day but no depot tops it up</div></div><span></span><span class="det">Details<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></span><a class="act" href="#">Review factory input<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div><div class="fr"><span class="sd"></span><div><div class="l1"><span class="hood">IC</span><span class="pl">HART. Brewery</span><span class="mapb"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 4v16M15 4v16M4 12h5M15 12h5"></path></svg></span><span class="hl">4 factory machines are not staffed round the clock</span></div><div class="l2">worst Beer at position 2: staffed 0 of 168 hours, nobody on it Mon–Sun 0–24; 1,200 a day not made</div></div><span></span><span class="det">Details<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></span><a class="act" href="#">Plan factory hours<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div><div class="fr"><span class="sd"></span><div><div class="l1"><span class="hood">IC</span><span class="pl">HART. Brewery</span><span class="mapb"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 4v16M15 4v16M4 12h5M15 12h5"></path></svg></span><span class="hl">1 machine at Bottled Goods Workstation #3 has no recipe set</span></div><div class="l2">staffed and rented, making nothing</div></div><span></span><span></span><a class="act" href="#">Identify recipe<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div>
+<div class="grp" style="color:var(--warn)">WARNINGS</div><div class="fr" style="min-height:50px"><span class="sd w"></span><div><div class="l1"><span class="hood">MT</span><span class="pl">HART. Spirits</span><span class="mapb"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 4v16M15 4v16M4 12h5M15 12h5"></path></svg></span><span class="hl" style="font-size:14px">Customer bathroom has no privacy</span></div></div><span></span><span></span><a class="lnk" href="#">Review amenities<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div><div class="fr" style="min-height:50px"><span class="sd w"></span><div><div class="l1"><span class="hood">MT</span><span class="pl">HART. Spirits</span><span class="mapb"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 4v16M15 4v16M4 12h5M15 12h5"></path></svg></span><span class="hl" style="font-size:14px">No music playing for customers</span></div></div><span></span><span></span><a class="lnk" href="#">Review amenities<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div><div class="fr" style="min-height:50px"><span class="sd w"></span><div><div class="l1"><span class="hood">MT</span><span class="pl">HART. Spirits</span><span class="mapb"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 4v16M15 4v16M4 12h5M15 12h5"></path></svg></span><span class="hl" style="font-size:14px">Interior design falls short of what customers expect here</span></div></div><span></span><span></span><a class="lnk" href="#">Review amenities<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div><div class="fr" style="min-height:50px"><span class="sd w"></span><div><div class="l1"><span class="hood">LM</span><span class="pl">HART. Gifts</span><span class="mapb"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 4v16M15 4v16M4 12h5M15 12h5"></path></svg></span><span class="hl" style="font-size:14px">Customer satisfaction at 64.0%</span></div></div><span></span><span></span><a class="lnk" href="#">Review satisfaction<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div><div class="fr" style="min-height:50px"><span class="sd w"></span><div><div class="l1"><span class="hood">LM</span><span class="pl">HART. Gifts</span><span class="mapb"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 4v16M15 4v16M4 12h5M15 12h5"></path></svg></span><span class="hl" style="font-size:14px">No uniform locker installed</span></div></div><span></span><span></span><a class="lnk" href="#">Review uniforms<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div>
+<div class="grp" style="color:var(--accent)">OPPORTUNITIES</div>
+<span class="more"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>Show 10 more: 8 warnings, 2 opportunities</span>
+<div class="fine">3 below the $500/day line · $850/day <u>show</u></div>
+<div class="fine" style="margin-top:4px">1 in kinds switched off: Demand wave ending (1, $193/day) <u>show</u></div>
+<div class="tools-h">All tools</div><div class="tools"><div class="tool"><div class="th"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 8 12 3.5 20.5 8v8L12 20.5 3.5 16z"></path><path d="M3.5 8 12 12.5 20.5 8M12 12.5v8"></path></svg>Supply<svg class="pic" viewBox="0 0 96 44"><circle cx="10" cy="22" r="6" fill="none" stroke="var(--ink-3)"></circle><path d="M17 22h14" stroke="var(--ink-3)" stroke-dasharray="3 3"></path><rect x="32" y="12" width="20" height="20" rx="3" fill="none" stroke="var(--accent)" stroke-width="1.6"></rect><path d="M52 22c8 0 8-12 18-12M52 22c8 0 8 12 18 12" fill="none" stroke="var(--accent)" stroke-width="1.6"></path><rect x="72" y="4" width="14" height="12" rx="2" fill="none" stroke="var(--ink-3)"></rect><rect x="72" y="28" width="14" height="12" rx="2" fill="none" stroke="var(--ink-3)"></rect></svg></div><a href="#">Calculate import amounts<span class="c g">13 TO CHANGE</span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><a href="#">Set delivery targets<span class="c w">2</span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><a href="#">Plan factory running hours<span class="c w">5</span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><a href="#">Trace goods through the company<span class="fill"></span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div><div class="tool"><div class="th"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg>Staffing<svg class="pic" viewBox="0 0 96 44"><rect x="2.0" y="4.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="9.5" y="4.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="17.0" y="4.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="24.5" y="4.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="32.0" y="4.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="39.5" y="4.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="47.0" y="4.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="54.5" y="4.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="62.0" y="4.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="69.5" y="4.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="77.0" y="4.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="84.5" y="4.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="2.0" y="11.5" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="9.5" y="11.5" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="17.0" y="11.5" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="24.5" y="11.5" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="32.0" y="11.5" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="39.5" y="11.5" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="47.0" y="11.5" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="54.5" y="11.5" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="62.0" y="11.5" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="69.5" y="11.5" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="77.0" y="11.5" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="84.5" y="11.5" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="2.0" y="19.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="9.5" y="19.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="17.0" y="19.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="24.5" y="19.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="32.0" y="19.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="39.5" y="19.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="47.0" y="19.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="54.5" y="19.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="62.0" y="19.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="69.5" y="19.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="77.0" y="19.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="84.5" y="19.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="2.0" y="26.5" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="9.5" y="26.5" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="17.0" y="26.5" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="24.5" y="26.5" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="32.0" y="26.5" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="39.5" y="26.5" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="47.0" y="26.5" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="54.5" y="26.5" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="62.0" y="26.5" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="69.5" y="26.5" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="77.0" y="26.5" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="84.5" y="26.5" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="2.0" y="34.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="9.5" y="34.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="17.0" y="34.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="24.5" y="34.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="32.0" y="34.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="39.5" y="34.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="47.0" y="34.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="54.5" y="34.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="62.0" y="34.0" width="6" height="6" rx="1" fill="var(--accent)" stroke="none" stroke-dasharray="2 1"></rect><rect x="69.5" y="34.0" width="6" height="6" rx="1" fill="none" stroke="var(--neg)" stroke-dasharray="2 1"></rect><rect x="77.0" y="34.0" width="6" height="6" rx="1" fill="none" stroke="var(--neg)" stroke-dasharray="2 1"></rect><rect x="84.5" y="34.0" width="6" height="6" rx="1" fill="none" stroke="var(--neg)" stroke-dasharray="2 1"></rect></svg></div><a href="#">Build shop schedules<span class="c g">−2 ENTRIES</span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><a href="#">See whom to hire<span class="fill"></span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><a href="#">Resolve staff demands<span class="c w">1</span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div><div class="tool"><div class="th"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16"></path><path d="M14 10h5a1 1 0 0 1 1 1v10M4 21h17M8 8h2M8 12h2M8 16h2"></path></svg>Businesses<svg class="pic" viewBox="0 0 96 44"><rect x="20" y="18" width="11" height="24" fill="var(--accent)"></rect><rect x="38" y="24" width="11" height="18" fill="var(--accent)"></rect><rect x="56" y="12" width="11" height="30" fill="var(--accent)"></rect><rect x="74" y="32" width="11" height="10" fill="var(--accent)"></rect><rect x="82" y="36" width="10" height="6" rx="2" fill="var(--neg)"></rect><circle cx="25" cy="10" r="2.2" fill="var(--accent)"></circle><circle cx="43" cy="16" r="2.2" fill="var(--accent)"></circle><circle cx="61" cy="5" r="2.2" fill="var(--accent)"></circle></svg></div><a href="#">Compare business profits<span class="fill"></span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><a href="#">Check prices and product sales<span class="fill"></span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><a href="#">Improve customer satisfaction<span class="c w">11</span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div><div class="tool"><div class="th"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17 10 11l4 4 6-7"></path><path d="M15 8h5v5"></path></svg>Expansion<svg class="pic" viewBox="0 0 96 44"><rect x="26" y="8" width="66" height="34" fill="var(--raised)" stroke="var(--ink-2)"></rect><path d="M60 8v14h32" fill="none" stroke="var(--ink-2)"></path><path d="M14 18s-6-5.5-6-10a6 6 0 0 1 12 0c0 4.5-6 10-6 10z" fill="var(--accent)"></path><circle cx="14" cy="8" r="2" fill="var(--surface)"></circle></svg></div><a href="#">Find a suitable location<span class="c ">NONE FREE</span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><a href="#">Plan a new factory<span class="fill"></span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><a href="#">Explore market demand<span class="fill"></span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div></div></div></main></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview": {"width": 1440, "height": 1720}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
