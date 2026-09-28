@@ -8,6 +8,7 @@ table of three items and two materials, and hand-built registrations and
 statements at real addresses (so the building table knows their size). Never a
 real save.
 """
+import json
 import os
 import sys
 import unittest
@@ -122,6 +123,13 @@ class OutcomeTest(unittest.TestCase):
         self.assertEqual(payback_outcome(2000, self.DAYS, True, 9, 0), {"state": "never"})
         self.assertEqual(payback_outcome(2000, self.DAYS, True, 9, -50), {"state": "never"})
 
+    def test_from_inside_the_lease_it_gives_the_payback_period_instead(self):
+        # The profit before the record is unknown: no days to go, no "never",
+        # but the whole setup over the recent rate.
+        self.assertEqual(payback_outcome(2000, self.DAYS, False, 9, 250), {"state": "window", "days": 8})
+        self.assertEqual(payback_outcome(2000, self.DAYS, False, 9, -50), {"state": "window"})
+        self.assertEqual(payback_outcome(2000, self.DAYS, False, 9, None), {"state": "window"})
+
     def test_no_rate_is_unknown(self):
         self.assertEqual(payback_outcome(2000, [(10, -100)], True, 9, None), {"state": "unknown"})
 
@@ -199,25 +207,56 @@ class PaybackTest(PricesTestCase):
                        statements([(30, {SHOP: (1, 1), BREWERY: (-1, 0)})]), History(None), "CHAR")
         self.assertEqual(list(out["chains"]), [KEY_SHOP])
 
+    def test_a_chain_of_cost_centres_that_sells_outside_has_a_row(self):
+        save, regs, businesses, _ = self.company()
+        chains = [{"name": "Factory", "sites": [KEY_BREWERY]}, {"name": "Liquor Stores", "sites": [KEY_SHOP]}]
+        rows = [(d, {SHOP: (1, 1), BREWERY: (100000, 120000)}) for d in range(30, 40)]
+        out = _payback(save, Names({}), regs, businesses, chains, statements(rows), History(None), "CHAR")
+        self.assertEqual(sorted(out["chains"]), sorted([KEY_SHOP, KEY_BREWERY]))
+        self.assertNotIn("firm", out["sites"][KEY_BREWERY])
+        self.assertEqual(out["chains"][KEY_BREWERY]["firm"]["state"], "reached")
+
     def test_statements_older_than_the_window_say_at_the_latest(self):
-        # 60 days kept, and the shop has a statement on the first of them.
-        rows = [(d, {SHOP: (20000, 25000)}) for d in range(100, 160)]
+        # 61 days kept, and the shop has a statement on the first of them.
+        rows = [(d, {SHOP: (20000, 25000)}) for d in range(100, 161)]
         out, _ = self.run_payback(rows)
         site = out["sites"][KEY_SHOP]
         self.assertFalse(site["exact"])
         self.assertEqual(site["firm"]["state"], "latest")
         self.assertEqual(site["since"], 100)
 
-    def test_the_firm_s_bill_replaces_the_estimate_in_both_modes_and_is_remembered(self):
+    def test_a_site_opened_before_the_record_that_has_not_paid_back_in_it(self):
+        rows = [(d, {SHOP: (100, 50000)}) for d in range(100, 161)]
+        out, _ = self.run_payback(rows)
+        site = out["sites"][KEY_SHOP]
+        self.assertFalse(site["exact"])
+        # 2,100 + 131,850 + 5,880 at 100 a day.
+        self.assertEqual(site["firm"], {"state": "window", "days": 1399})
+        losing = [(d, {SHOP: (-100, 50)}) for d in range(100, 161)]
+        out, _ = self.run_payback(losing)
+        self.assertEqual(out["sites"][KEY_SHOP]["firm"], {"state": "window"})
+
+    def test_the_firm_s_bill_replaces_the_firm_estimate_and_is_remembered(self):
         rows = [(d, {SHOP: (-98, 0)}) for d in range(30, 33)]
         out, history = self.run_payback(rows, transactions=[bill("5 8th Street", 120000.5, 31)])
         cost = out["sites"][KEY_SHOP]["cost"]
         self.assertEqual(cost["billed"], 120000.5)
         self.assertEqual(cost["firm"], 120000.5 + 5880)
-        self.assertEqual(cost["self"], cost["firm"])
+        # Installing it yourself is still the furniture, the paid slots and the deposit.
+        self.assertEqual(cost["self"], 2100 + 50 + 5880)
         # A week on, the log no longer holds the bill: the investment stays put.
         later, _ = self.run_payback(rows + [(33, {SHOP: (-98, 0)})], history)
         self.assertEqual(later["sites"][KEY_SHOP]["cost"]["firm"], 120000.5 + 5880)
+
+    def test_a_later_re_layout_s_bill_is_not_the_setup(self):
+        # Trading since day 32; the firm re-laid the shop out on day 36.
+        rows = [(d, {SHOP: (-98 if d < 32 else 500, 0 if d < 32 else 900)}) for d in range(30, 40)]
+        out, _ = self.run_payback(rows, transactions=[bill("5 8th Street", 250000, 36)])
+        self.assertNotIn("billed", out["sites"][KEY_SHOP]["cost"])
+        # A lease older than the record: any bill in the log is a re-layout.
+        old = [(d, {SHOP: (500, 900)}) for d in range(100, 161)]
+        out, _ = self.run_payback(old, transactions=[bill("5 8th Street", 250000, 158)])
+        self.assertNotIn("billed", out["sites"][KEY_SHOP]["cost"])
 
     def test_a_bill_for_an_earlier_business_at_the_address_is_not_this_one_s(self):
         rows = [(d, {SHOP: (-98, 0)}) for d in range(30, 33)]
@@ -232,7 +271,7 @@ class PaybackTest(PricesTestCase):
         self.assertEqual(first["sites"][KEY_SHOP]["firm"]["state"], "reached")
         reached = first["sites"][KEY_SHOP]["firm"]["day"]
         # Sixty days later the window starts long after the opening.
-        later = [(d, {SHOP: (100, 50000)}) for d in range(100, 160)]
+        later = [(d, {SHOP: (100, 50000)}) for d in range(100, 161)]
         again, _ = self.run_payback(later, history)
         self.assertEqual(again["sites"][KEY_SHOP]["firm"],
                          {"state": "reached", "day": reached, "after": reached - 30, "kept": True})
@@ -241,13 +280,32 @@ class PaybackTest(PricesTestCase):
         history = History(None)
         opening = [(d, {SHOP: (40000, 50000)}) for d in range(29, 40)]
         self.run_payback(opening, history)
-        later = [(d, {SHOP: (100, 50000)}) for d in range(100, 160)]
+        later = [(d, {SHOP: (100, 50000)}) for d in range(100, 161)]
         # A bottling machine added since: the setup is no longer the one paid
-        # back, and 6,000 over the window does not reach it: (50,900 + 131,850
-        # + 5,880 - 6,000) at 100 a day.
+        # back, and 6,100 over the window does not reach it. The lease is older
+        # than the record, so the payback period stands in: (50,900 + 131,850
+        # + 5,880) at 100 a day.
         again, _ = self.run_payback(later, history, shop_items=[
             ("ba:itemname_cashregister", 900), ("ba:itemname_bottlingmachine", 50000)])
-        self.assertEqual(again["sites"][KEY_SHOP]["firm"], {"state": "togo", "days": 1827})
+        self.assertEqual(again["sites"][KEY_SHOP]["firm"], {"state": "window", "days": 1887})
+
+    def test_an_older_save_reads_the_memory_and_changes_none_of_it(self):
+        history = History(None)
+        opening = [(d, {SHOP: (-98, 0)}) for d in range(29, 31)] + [
+            (d, {SHOP: (40000, 50000)}) for d in range(31, 40)]
+        newer, _ = self.run_payback(opening, history)
+        reached = newer["sites"][KEY_SHOP]["firm"]["day"]
+        before = json.loads(json.dumps(history.payback("CHAR")))
+        # An older save of the same character, from before the shop opened.
+        save, regs, businesses, chains = self.company()
+        _payback(save, Names({}), regs[1:], businesses[1:], [{"name": "Head office and support",
+                 "sites": [KEY_BREWERY]}], statements([(20, {BREWERY: (-500, 0)})]), history, "CHAR")
+        self.assertEqual(history.payback("CHAR"), before)
+        # And the newer save again, its statements rolled on past the opening.
+        later = [(d, {SHOP: (100, 50000)}) for d in range(100, 161)]
+        again, _ = self.run_payback(later, history)
+        self.assertEqual(again["sites"][KEY_SHOP]["firm"]["day"], reached)
+        self.assertTrue(again["sites"][KEY_SHOP]["firm"]["kept"])
 
     def test_sales_before_the_opening_day_were_another_business(self):
         rows = [(d, {SHOP: (5000000, 6000000)}) for d in range(100, 120)] + [

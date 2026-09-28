@@ -1350,13 +1350,13 @@
     },
     "exact": false,
     "firm": {
-     "state": "unknown"
+     "state": "window"
     },
     "opened": 0,
     "profit": 0.0,
     "rate": null,
     "self": {
-     "state": "unknown"
+     "state": "window"
     },
     "since": null,
     "sites": [
@@ -1380,13 +1380,13 @@
     "costCentre": false,
     "exact": false,
     "firm": {
-     "state": "unknown"
+     "state": "window"
     },
     "opened": 0,
     "profit": 0.0,
     "rate": null,
     "self": {
-     "state": "unknown"
+     "state": "window"
     },
     "since": null
    },
@@ -1402,13 +1402,13 @@
     "costCentre": false,
     "exact": false,
     "firm": {
-     "state": "unknown"
+     "state": "window"
     },
     "opened": 0,
     "profit": 0.0,
     "rate": null,
     "self": {
-     "state": "unknown"
+     "state": "window"
     },
     "since": null
    },
@@ -1439,13 +1439,13 @@
     "costCentre": false,
     "exact": false,
     "firm": {
-     "state": "unknown"
+     "state": "window"
     },
     "opened": 0,
     "profit": 0.0,
     "rate": null,
     "self": {
-     "state": "unknown"
+     "state": "window"
     },
     "since": null
    }

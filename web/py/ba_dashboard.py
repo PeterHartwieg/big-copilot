@@ -11755,8 +11755,9 @@ INSTALL_FEE_PER_M2 = 586
 # days since the site first sold anything, closed days included, because rent
 # is paid on those too and the estimate counts calendar days.
 PAYBACK_RECENT_DAYS = 14
-# How many days of statements the game keeps; a shorter run has lost nothing.
-STATEMENT_WINDOW = 60
+# How many finished days of statements the game keeps (Safara on day 185 holds
+# days 124 to 184); a shorter run has lost nothing yet.
+STATEMENT_WINDOW = 61
 # A remembered break-even day stands while the investment it was reached
 # against moves by less than this share (a painting added, a plant sold).
 PAYBACK_REMEMBER_SLACK = 0.01
@@ -11863,8 +11864,11 @@ def payback_outcome(investment: float, days: list, exact: bool, opened: int, rat
     `reached`: the first day the running total reached it, and how many days
     after opening, where `days` start with the lease. `latest`: the same day
     where they start inside it, so the site paid back by then at the latest.
-    Otherwise `togo`, the days still needed at `rate` a day; `never` when the
-    rate earns nothing; `unknown` with no rate at all.
+    Otherwise, from the lease's start, `togo`: the days still needed at `rate`
+    a day, or `never` when the rate earns nothing. From inside the lease the
+    profit before the record is unknown, so neither can be said: `window`
+    gives the whole payback period at `rate` instead (`days`, absent when the
+    rate earns nothing). `unknown` with no rate at all.
     """
     total = 0.0
     for day, profit in days:
@@ -11873,6 +11877,10 @@ def payback_outcome(investment: float, days: list, exact: bool, opened: int, rat
             if exact:
                 return {"state": "reached", "day": day, "after": day - opened}
             return {"state": "latest", "day": day}
+    if not exact:
+        if rate is not None and rate > 0:
+            return {"state": "window", "days": max(1, math.ceil(investment / rate))}
+        return {"state": "window"}
     if rate is None:
         return {"state": "unknown"}
     if rate <= 0:
@@ -11923,8 +11931,13 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
     A factory, a depot and a head office are cost centres: they get no payback
     of their own, and their investment counts in their chain, where a shop fed
     by its own factory stops looking free of goods costs. A chain's investment
-    and profit are the sums over its sites; a chain of cost centres alone earns
-    nothing to pay anything back with, so it has no row.
+    and profit are the sums over its sites. A chain of cost centres alone has a
+    row only when it sells something (a factory selling outside the company);
+    one that sells nothing has nothing to pay anything back with.
+
+    The history keeps what the statements forget. An older save of the same
+    character reads it and changes nothing, as the ledger does, so going back
+    to an earlier save and forward again loses no remembered day.
     """
     prices = load_item_prices()
     regs = {site_key((b["StreetName"], b["StreetNumber"])): b for b in buildings}
@@ -11935,6 +11948,12 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
     # Fewer statements than the game keeps: nothing has dropped out yet.
     whole = len(stmt_history) < STATEMENT_WINDOW
     store = history.payback(character)
+    older = (isinstance(store.get("day"), int) and last_day is not None
+             and last_day < store["day"])
+    if older:  # read the newer save's memory, write none of it
+        store = json.loads(json.dumps(store))
+    elif last_day is not None:
+        store["day"] = last_day
     kept_sites, kept_chains = store["sites"], store["chains"]
 
     sites, series = {}, {}
@@ -11959,14 +11978,19 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
         cost = _site_setup(save, regs[key], addr, prices)
         # The firm's real bill where the log still holds it, and remembered
         # after it drops out, so the investment does not jump a week later.
+        # Only the bill that set the site up counts: the lease starts inside
+        # the record and the bill comes no later than the first day with
+        # sales. A re-layout months on is a new bill for an old site.
         lease = min(opened, first) if first is not None else opened
-        billed = sum(amount for day, amount in bills.get(key, ()) if day is None or day >= lease)
+        selling = next((day for day, _p, sales in days if sales > 0), None)
+        billed = sum(amount for day, amount in bills.get(key, ())
+                     if exact and (day is None or (day >= lease and (selling is None or day <= selling))))
         if billed:
             memory["bill"] = money(billed)
         billed = memory.get("bill") or 0
         if billed:
             cost["billed"] = money(billed)
-            cost["firm"] = cost["self"] = money(cost["deposit"] + billed)
+            cost["firm"] = money(cost["deposit"] + billed)
         kept_sites[key] = memory
         series[key] = days
         row = {"costCentre": b["costCentre"], "cost": cost}
@@ -11983,7 +12007,8 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
     out_chains = {}
     for chain in chains:
         members = [k for k in chain["sites"] if k in sites]
-        if not members or all(sites[k]["costCentre"] for k in members):
+        if not members or (all(sites[k]["costCentre"] for k in members)
+                           and not any(sales > 0 for k in members for _d, _p, sales in series[k])):
             continue
         cost = {field: money(sum(sites[k]["cost"].get(field, 0) for k in members))
                 for field in ("furniture", "materials", "fee", "deposit", "billed", "firm", "self")}
@@ -15518,6 +15543,14 @@ tr.kid{display:none}
 tr.kid.show{display:table-row;animation:rowin .3s ease}
 @keyframes rowin{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
 tr.kid td:first-child{padding-left:42px}
+/* The portfolio is eleven columns beside the sidebar: tighter cells keep it,
+   Payback included, inside 1280 px, and a chain's name room not to stack. */
+#portfolio th,#portfolio td{padding:10px 6px}
+#portfolio th:first-child,#portfolio td:first-child{padding-left:12px}
+#portfolio tbody td,#portfolio tfoot td{font-size:12.5px}
+#portfolio tbody td.l{font-size:13.5px;min-width:180px}
+#portfolio tr.kid td:first-child{padding-left:36px}
+#portfolio .pb-cell{cursor:help}
 tr.bump td{animation:bump .6s ease}
 @keyframes bump{0%{background:var(--accent-soft)}100%{background:transparent}}
 .grp td{background:var(--raised);font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.06em;color:var(--ink-2);padding:7px 12px}
@@ -21779,16 +21812,23 @@ function paybackSentence(o){
     case "latest": return tt("co.payback.latest", "Paid back by day {day} at the latest", {day: o.day});
     case "togo": return tt("co.payback.togo", {one: "{n} day to go at recent profit", other: "{n} days to go at recent profit"}, {n: o.days});
     case "never": return tt("co.payback.never", "Not paying back at current profit");
+    /* Opened before the save's record: what it earned before is unknown, so
+       the whole payback period at recent profit stands in. */
+    case "window": return o.days ? tt("co.payback.window", {one: "Pays back in about {n} day of profit; opened before the save's record",
+      other: "Pays back in about {n} days of profit; opened before the save's record"}, {n: o.days})
+      : tt("co.payback.window.none", "Opened before the save's record");
     case "unknown": return tt("co.payback.unknown", "No trading day finished yet");
   }
   return "";
 }
+/* The column's short form; the sentence is the cell's tip. */
 function paybackShort(o){
   switch(o && o.state){
     case "reached": return tt("co.payback.cell.reached", "day {day}", {day: o.day});
-    case "latest": return tt("co.payback.cell.latest", "by day {day}", {day: o.day});
-    case "togo": return tt("co.payback.cell.togo", {one: "{n} day to go", other: "{n} days to go"}, {n: o.days});
-    case "never": return tt("co.payback.cell.never", "not paying back");
+    case "latest": return tt("co.payback.cell.latest", "≤ day {day}", {day: o.day});
+    case "togo": return tt("co.payback.cell.togo", "{n:,} d", {n: o.days});
+    case "never": return tt("co.payback.cell.never", "no payback");
+    case "window": return o.days ? tt("co.payback.cell.window", "~{n:,} d", {n: o.days}) : "—";
   }
   return "—";
 }
@@ -21813,6 +21853,8 @@ function paybackTip(row, chain){
 function paybackCell(row, chain){
   const o = paybackOf(row);
   if(!o) return "—";
+  if(o.state === "unknown" || (o.state === "window" && !o.days))
+    return `<span class="pb-cell quiet" data-tip="${attr(tt("co.payback.tip", "{what}. {basis}", {what: paybackSentence(o), basis: paybackTip(row, chain)}))}" tabindex="0">—</span>`;
   return `<span class="pb-cell${o.state === "never" ? " neg" : ""}" data-tip="${attr(tt("co.payback.tip", "{what}. {basis}", {what: paybackSentence(o), basis: paybackTip(row, chain)}))}" tabindex="0">${paybackShort(o)}</span>`;
 }
 /* Sorting: the day it paid back or will, the ones that never will last. */
@@ -21820,8 +21862,14 @@ function paybackRank(row){
   const o = paybackOf(row);
   if(!o) return -1;
   if(o.state === "reached" || o.state === "latest") return o.day;
-  if(o.state === "togo") return ((D.meta || {}).day || 0) + o.days;
+  if(o.state === "togo" || (o.state === "window" && o.days)) return ((D.meta || {}).day || 0) + o.days;
   return o.state === "never" ? 1e9 : -1;
+}
+/* Arrived from search: the table may be wider than the page, so the Payback
+   column is scrolled into sight. */
+function paybackIntoView(){
+  const t = $("portfolio"), wrap = t && t.parentElement;
+  if(wrap && wrap.scrollWidth > wrap.clientWidth) wrap.scrollLeft = wrap.scrollWidth;
 }
 
 function chainRow(c, v){
@@ -33677,7 +33725,7 @@ const SS_VIEWS = [
    /* Break-even is the portfolio's Payback column, per chain and per site. */
    synP: {get "break even"(){ return tt("nav.search.portfolio.breakeven", "the Payback column · Businesses › Results · break-even day by chain and site"); },
           get "payback"(){ return tt("nav.search.portfolio.payback", "the Payback column · Businesses › Results · break-even day by chain and site"); }},
-   go(){ view = "pnl"; sortKey = null; drawPortfolio(); reveal("secPortfolio"); }},
+   go(){ view = "pnl"; sortKey = null; drawPortfolio(); reveal("secPortfolio"); paybackIntoView(); }},
   {id: "ops", get t(){ return tt("nav.search.ops.title", "Standards"); },
    get p(){ return tt("nav.search.ops.line", "Businesses › Standards · satisfaction, promotion, amenities, uniforms"); }, ic: "company",
    syn: ["satisfaction", "promotion", "foot traffic", "marketing", "security", "standards", "pull", "operations", "amenities", "uniforms"],

@@ -129,7 +129,7 @@ side and rebuild — the rebuild is the resolution.
 | `server/`, `migrations/` | `npm run test:community` and `npm run check:worker` |
 | `web/community.js`, `web/community.css` | those two npm commands, then `python build_web.py` — both files are cache-busted by the build stamp |
 | `make_buildings.py`, `make_floor_plans.py` or what they write | `python -m unittest tests.test_floor_plans tests.test_premises`, then `python build_web.py` |
-| `make_item_prices.py`, `ba_item_prices.json`, or the payback figures (`_payback()`) | `python -m unittest tests.test_payback`, then `python build_web.py` |
+| `make_item_prices.py`, `ba_item_prices.json`, or the payback figures (`_payback()`, the Payback column, `spPayback()`) | `python -m unittest tests.test_payback` and `node --test tests/payback.test.cjs`, then `python build_web.py` |
 | Added or changed UI text (`tt()`, `data-tt*`, `msg()`), `web/i18n.js`, `tools/i18n.py`, `i18n/` | `python -m unittest discover -s tests -p "test_i18n*.py"` and `node --test tests/i18n_*.test.cjs`, then `python build_web.py`, plus the rows for the files the text is in |
 | `tools/Invoke-ZaiClaude.ps1` | `python -m unittest tests.test_agent_cli` |
 | `tools/game_update/` | no tests: run the script you changed against the installed game (`docs/game-update.md`) |
