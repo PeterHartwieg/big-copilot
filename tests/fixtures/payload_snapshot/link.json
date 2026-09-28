@@ -638,6 +638,7 @@
     "toiletprivacy": false
    },
    "basket": null,
+   "campaigns": [],
    "capacity": 0,
    "closed": false,
    "code": "HK",
@@ -661,6 +662,22 @@
    "margin": null,
    "marketing": 0.0,
    "marketingIndex": 0,
+   "marketingPlan": {
+    "costNow": 0,
+    "costPlan": 6350,
+    "marketingNow": 0,
+    "marketingPlan": 100,
+    "needsSetup": true,
+    "on": [
+     "SmallInternet",
+     "MediumInternet",
+     "LargeBillboard"
+    ],
+    "promotionNow": 0,
+    "promotionPlan": 70,
+    "target": "marketing",
+    "was": []
+   },
    "missingAmenities": [
     "ba:customerdemand_toilet",
     "ba:customerdemand_toiletprivacy",
@@ -736,6 +753,7 @@
     "toiletprivacy": false
    },
    "basket": null,
+   "campaigns": [],
    "capacity": 0,
    "closed": false,
    "code": "",
@@ -759,6 +777,7 @@
    "margin": null,
    "marketing": 0.0,
    "marketingIndex": 0,
+   "marketingPlan": null,
    "missingAmenities": [
     "ba:customerdemand_toilet",
     "ba:customerdemand_toiletprivacy",
@@ -828,6 +847,7 @@
     "toiletprivacy": false
    },
    "basket": null,
+   "campaigns": [],
    "capacity": 0,
    "closed": false,
    "code": "GD",
@@ -843,6 +863,20 @@
    "margin": null,
    "marketing": 0.0,
    "marketingIndex": 0,
+   "marketingPlan": {
+    "costNow": 0,
+    "costPlan": 2500,
+    "marketingNow": 0,
+    "marketingPlan": 100,
+    "needsSetup": true,
+    "on": [
+     "MediumBillboard"
+    ],
+    "promotionNow": 0,
+    "promotionPlan": 90,
+    "target": "marketing",
+    "was": []
+   },
    "missingAmenities": [
     "ba:customerdemand_toilet",
     "ba:customerdemand_toiletprivacy",
@@ -895,6 +929,7 @@
    "address": "9 Pier",
    "amenities": null,
    "basket": null,
+   "campaigns": [],
    "capacity": 0,
    "closed": false,
    "code": "LM",
@@ -910,6 +945,7 @@
    "margin": null,
    "marketing": 0.0,
    "marketingIndex": 0,
+   "marketingPlan": null,
    "missingAmenities": [],
    "missingUniformLocker": false,
    "name": "HART. Depot",

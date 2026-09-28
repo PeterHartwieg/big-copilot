@@ -1105,6 +1105,8 @@
   const APPROVAL_GRACE_S = 5;   // a request's own 60 s, and a little for the clocks
   const APPROVAL_AUTO_WAIT_S = 10;
   const WRITE_BUSY_RETRIES = 3;
+  // The kinds that carry the same-save guard (`expect`), see gameWrite().
+  const SAME_SAVE_KINDS = new Set(["uniforms", "marketing"]);
   // The mod always finishes a write it has started, however long the game
   // takes over it, so a write waits far longer for its answer than a read.
   const WRITE_WAIT_MS = 30000;
@@ -1349,11 +1351,11 @@
         : {status: 0, error: "mismatch", version: linkSchema, need: LINK_SCHEMA, body: null};
     }
     const path = kind === "undo" ? "/write/undo" : `/write/${kind}`;
-    // Uniforms find their buildings by address alone, and every save has the
-    // same map: the save this board was read from goes along, and a mod from
-    // 0.3.1 answers `changed` when the game has another loaded. Older mods
-    // ignore the field.
-    const sameSave = kind === "uniforms" && bound.character ? {expect: {character: bound.character, company: bound.company}} : {};
+    // Uniforms and marketing find their buildings by address alone, and every
+    // save has the same map: the save this board was read from goes along, and
+    // a mod from 0.3.1 answers `changed` when the game has another loaded.
+    // Older mods ignore the field; marketing needs 0.4.0 anyway.
+    const sameSave = SAME_SAVE_KINDS.has(kind) && bound.character ? {expect: {character: bound.character, company: bound.company}} : {};
     const payload = JSON.stringify(Object.assign({}, body, sameSave, {dryRun}));
     // One click asks the game at most once: a token this write asked for and
     // got is not asked for again, busy retries and all; nor is one the game

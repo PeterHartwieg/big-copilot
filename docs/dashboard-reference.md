@@ -933,11 +933,33 @@ and dims the rest; clicking scrolls there.
   An office is never asked about bathrooms, music or uniforms, so it draws the bars alone
   and its workstations beside them, one square a desk, filled while somebody is placed at
   it at the busiest hour.
-- **Promotion** (a shop). Foot traffic and marketing against the game's own 100 cap, split
-  into what the street brings and what campaigns add, with security and how many shoppers
-  fit inside. A demand wave running over the shop adds a bar for the share of its takings
+- **Promotion** (a shop or an office). Foot traffic and marketing against the game's own 100
+  cap, split into what the street brings and what campaigns add, with security and how many
+  shoppers fit inside. A demand wave running over the shop adds a bar for the share of its takings
   riding on the wave and a pip a day left; with no baseline to measure the wave against,
-  the bar is hatched rather than guessed.
+  the bar is hatched rather than guessed. The big number is the game's own total: marketing
+  counts at the neighbourhood's marketing strength (half in Midtown, 0.7 in Hell's Kitchen,
+  0.8 in Murray Hill, 0.9 in the Garment District, in full elsewhere), so the two figures
+  need not add up to it.
+
+  The last line is the **cheapest mix**: of the 64 ways to run the six campaign types, the
+  cheapest a day that brings promotion to 100. Marketing is the campaigns' reach in m² over
+  the building's m² (a cinema's and a theater's reach counts twice), so a small shop needs
+  little. When no mix reaches 100, the plan is the cheapest that brings marketing to 100,
+  which is as high as promotion can go there. 99 is short. Of two mixes at the same price,
+  the one with fewer campaigns wins, then the one already running. The line reads *running*
+  when the site already runs it; otherwise it names the mix, its cost a day and the
+  promotion it gives, which also shows a shop overspending on campaigns that only push
+  past 100. With the game link it carries a **Set** button: a dry run first, then the game
+  switches the mix on and every other campaign off (never removed), and Undo puts the
+  switches back. Every write also sets the site up so BizMan's Marketing page shows a switch
+  for all six types, which otherwise takes a visit to each agency and a call; a site that
+  runs its mix but misses a switch gets a **Set up** button for that alone. Without the
+  link, or with a mod older than 0.4.0, the line says which switches to flip in BizMan
+  instead. The Promotion finding offers the cheapest mix at every site it would change,
+  and Businesses › Standards also offers the set-up for every shop and office missing a
+  switch. Headquarters, warehouses and factories get no plan: they have no customers, or
+  campaigns bring them no promotion.
 - **Customers by hour.** The two things the grid can say that a daily total cannot are
   chips under it: what the ceiling costs, with the fix, and what idle hours cost. Hours
   held by the building's own capacity get a neutral chip with no fix, since that is not a

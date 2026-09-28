@@ -167,7 +167,7 @@ rule under The game tables.
 
 ### The game tables
 
-Three tables in `ba_dashboard.py` were read by hand from the game's Addressables bundles
+Five tables in `ba_dashboard.py` were read by hand from the game's Addressables bundles
 under `Big Ambitions_Data/StreamingAssets/aa/StandaloneWindows64/`. No help page carries
 them, and no test can see the game change them:
 
@@ -176,11 +176,18 @@ them, and no test can see the game change them:
 | `DEMANDS_NOT_MADE` | `defaultlocalgroup_assets_businesstypes_*` | `businessTypeName`, `customerDemandSets[].type` | the amenity and uniform demands a retail type's customers never make, so the board does not warn about them |
 | `STATION_SKILLS` | `defaultlocalgroup_assets_items_*` | `itemName`, `suitableSkills`, in order | which uniform a worker at each station owes |
 | `JOB_DEMANDS` | `defaultlocalgroup_assets_jobdemands_*` | `demandName`, `priority`, `itemNames`, and the hour, day and minimum fields | the rules behind the unmet staff demand warnings |
+| `MARKETING_STRENGTH` | `defaultlocalgroup_assets_neighborhoods_*` | `neighbourhood`, `marketingStrength` | how much of a site's marketing counts toward its promotion, per neighbourhood |
+| `MARKETING_REACH` | `defaultlocalgroup_assets_buildingtypes_*` | `buildingType`, `marketingReachMultiplier`, and `tags` holding `ba:buildingtypetag_hasmarketingpromotion` | which building types campaigns promote, and how far their reach goes; together with `MARKETING_STRENGTH` it prices the cheapest campaign mix |
 
 The rules each `JOB_DEMANDS` kind repeats (`Fulfilled()` in
 `Entities.Employee.JobDemands.Requirements`) are in `BigAmbitions.dll`, not in a bundle.
+So are the six campaign types' prices and reach in `MARKETING_TYPES`
+(`MarketingTypeSettings..cctor`) and the formula `marketing_score()` repeats
+(`BuildingRegistration.GetMarketingEfficiency`, `BusinessHelper.UpdatePromotion`):
+`tests/test_marketing_plan.py` holds the formula against every promotion the saves on the
+machine store, so run it after loading and saving a game on the new build.
 
-`tools/game_update/bundles.py` re-reads the three bundles and prints one line per
+`tools/game_update/bundles.py` re-reads the five bundles and prints one line per
 difference. It needs UnityPy, which is an owner-side dependency installed outside the
 repository, the same way `make_demand_curves.py` asks for it:
 
@@ -218,7 +225,7 @@ does not model at build 3682. Classify a new one by what the player can do with 
 
 A type that disappears from the bundle is reported only for `RETAIL_TYPES`.
 
-It ends with a count. `0 difference(s)` means all three tables match and the game has no
+It ends with a count. `0 difference(s)` means all five tables match and the game has no
 business type the board has not classified. Its `note:` lines list
 demands a type makes beyond the six the board models (seating, workout variety); they are
 expected. It compares `JOB_DEMANDS` names, priorities and item lists only. When a demand

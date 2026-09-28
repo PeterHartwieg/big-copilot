@@ -934,6 +934,7 @@
     "toiletprivacy": false
    },
    "basket": 9.38,
+   "campaigns": [],
    "capacity": 30,
    "closed": false,
    "code": "MT",
@@ -995,6 +996,22 @@
    "margin": 42.2,
    "marketing": 0.0,
    "marketingIndex": 20.0,
+   "marketingPlan": {
+    "costNow": 0,
+    "costPlan": 1100,
+    "marketingNow": 20.0,
+    "marketingPlan": 80,
+    "needsSetup": true,
+    "on": [
+     "SmallInternet",
+     "LargeInternet",
+     "SmallBillboard"
+    ],
+    "promotionNow": 120.0,
+    "promotionPlan": 100,
+    "target": "promotion",
+    "was": []
+   },
    "missingAmenities": [
     "ba:customerdemand_toiletprivacy",
     "ba:customerdemand_music",
@@ -1248,6 +1265,7 @@
     "toiletprivacy": false
    },
    "basket": 18.0,
+   "campaigns": [],
    "capacity": 30,
    "closed": false,
    "code": "LM",
@@ -1302,6 +1320,21 @@
    "margin": 27.8,
    "marketing": 0.0,
    "marketingIndex": 0.0,
+   "marketingPlan": {
+    "costNow": 0,
+    "costPlan": 600,
+    "marketingNow": 0.0,
+    "marketingPlan": 53,
+    "needsSetup": true,
+    "on": [
+     "SmallInternet",
+     "SmallBillboard"
+    ],
+    "promotionNow": 80.0,
+    "promotionPlan": 100,
+    "target": "promotion",
+    "was": []
+   },
    "missingAmenities": [
     "ba:customerdemand_toiletprivacy",
     "ba:customerdemand_sink",
@@ -1534,6 +1567,7 @@
    "address": "4 Eighth Avenue",
    "amenities": null,
    "basket": null,
+   "campaigns": [],
    "capacity": 0,
    "closed": false,
    "code": "IC",
@@ -1565,6 +1599,7 @@
    "margin": null,
    "marketing": 0.0,
    "marketingIndex": 0,
+   "marketingPlan": null,
    "missingAmenities": [],
    "missingUniformLocker": false,
    "name": "HART. Hub",
@@ -1738,6 +1773,7 @@
    "address": "8 Eighth Avenue",
    "amenities": null,
    "basket": null,
+   "campaigns": [],
    "capacity": 0,
    "closed": false,
    "code": "IC",
@@ -1792,6 +1828,7 @@
    "margin": null,
    "marketing": 0.0,
    "marketingIndex": 0,
+   "marketingPlan": null,
    "missingAmenities": [],
    "missingUniformLocker": false,
    "name": "HART. Brewery",

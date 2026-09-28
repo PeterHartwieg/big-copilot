@@ -874,6 +874,106 @@ TREND_MOVE = 0.15  # how far a site's week has to move before it is news
 PROMOTION_CAP = 100  # promotion and marketing both stop counting here
 PROMOTION_GAP = 10  # a shortfall smaller than this is an opportunity, not a warning
 
+# --- marketing campaigns (docs/marketing-write-scope.md) --------------------
+# The six campaign types, indexed by the game's enum id (Entities.MarketingTypeName):
+# (name, $ a day, reach in m²). Hard-coded in MarketingTypeSettings..cctor in
+# BigAmbitions.dll, build 3680; no bundle carries them.
+MARKETING_TYPES = (
+    ("SmallInternet", 100, 20),
+    ("MediumInternet", 250, 40),
+    ("LargeInternet", 500, 60),
+    ("SmallBillboard", 500, 100),
+    ("MediumBillboard", 2500, 250),
+    ("LargeBillboard", 6000, 600),
+)
+MARKETING_IDS = {name: i for i, (name, _price, _reach) in enumerate(MARKETING_TYPES)}
+# NeighborhoodData.marketingStrength per neighbourhood key, read from the game's
+# defaultlocalgroup_assets_neighborhoods bundle at build 3682
+# (tools/game_update/bundles.py compares it). "global" is no place a site stands.
+MARKETING_STRENGTH = {
+    HOOD_PREFIX + "midtown": 0.5,
+    HOOD_PREFIX + "hellskitchen": 0.7,
+    HOOD_PREFIX + "murrayhill": 0.8,
+    HOOD_PREFIX + "garmentdistrict": 0.9,
+    HOOD_PREFIX + "industrycity": 1.0,
+    HOOD_PREFIX + "lowermanhattan": 1.0,
+    HOOD_PREFIX + "thehamptons": 1.0,
+}
+# BuildingTypeData.marketingReachMultiplier for the building types tagged
+# ba:buildingtypetag_hasmarketingpromotion, keyed by the building table's "t";
+# from the defaultlocalgroup_assets_buildingtypes bundle at build 3682. A
+# warehouse, residential or special building has no such tag, and no promotion
+# from campaigns.
+MARKETING_REACH = {"retail": 1.0, "office": 1.0, "cinema": 2.0, "theater": 2.0}
+# Headquarters sit in office buildings and have a promotion, but no customers:
+# the plan covers the shops and offices a player runs (RETAIL_TYPES, OFFICE_TYPES).
+MARKETING_ALL = frozenset(range(len(MARKETING_TYPES)))
+
+
+def _marketing_building(type_slug: str) -> str | None:
+    """A building type ("retail") as it is, or a business type's building type."""
+    if type_slug in MARKETING_REACH:
+        return type_slug
+    if type_slug in ("ba:businesstype_cinema", "ba:businesstype_theater"):
+        return type_slug.removeprefix("ba:businesstype_")
+    if type_slug in RETAIL_TYPES:
+        return "retail"
+    if type_slug in OFFICE_TYPES or type_slug == "ba:businesstype_headquarters":
+        return "office"
+    return None
+
+
+def marketing_score(traffic, on_ids, sqm, type_slug, neighbourhood) -> tuple[int, int]:
+    """(marketing, promotion total) the game gives a site running `on_ids`.
+
+    BuildingRegistration.GetMarketingEfficiency and BusinessHelper.UpdatePromotion:
+    marketing = round(min(1, reach × multiplier / m²) × 100), then
+    total = min(100, round(traffic + marketing × neighbourhood strength)).
+    Unity's RoundToInt rounds half to even, as Python's round() does.
+    `type_slug` is a building type or a business type; an unknown one, or an
+    unknown neighbourhood, raises KeyError rather than guess.
+    """
+    building = _marketing_building(type_slug)
+    if building is None:
+        raise KeyError(type_slug)
+    strength = MARKETING_STRENGTH[neighbourhood]
+    reach = sum(MARKETING_TYPES[i][2] for i in set(on_ids))
+    marketing = round(min(1.0, reach * MARKETING_REACH[building] / sqm) * 100) if sqm else 0
+    total = min(PROMOTION_CAP, round(traffic + marketing * strength))
+    return marketing, total
+
+
+def marketing_plan(traffic, was_ids, sqm, type_slug, neighbourhood) -> dict:
+    """The cheapest mix of campaigns for one site, from all 64.
+
+    The cheapest mix that brings promotion to 100; when none can, the cheapest
+    that brings marketing to 100 (or, in a building too big for that, to the
+    most it can reach). No tolerance: 99 is short. Ties go to fewer campaigns,
+    then to the mix the site runs now (`was_ids`). Settled by Peter, 28 Sep 2026.
+    """
+    was = frozenset(was_ids)
+    mixes = []
+    for mask in range(1 << len(MARKETING_TYPES)):
+        on = frozenset(i for i in MARKETING_ALL if mask >> i & 1)
+        marketing, total = marketing_score(traffic, on, sqm, type_slug, neighbourhood)
+        cost = sum(MARKETING_TYPES[i][1] for i in on)
+        mixes.append((on, cost, marketing, total, mask))
+    full = [m for m in mixes if m[3] >= PROMOTION_CAP]
+    if not full:
+        best = max(m[2] for m in mixes)
+        full = [m for m in mixes if m[2] >= best]
+    on, cost, marketing, total, _mask = min(full, key=lambda m: (m[1], len(m[0]), m[0] != was, m[4]))
+    now_marketing, now_total = marketing_score(traffic, was, sqm, type_slug, neighbourhood)
+    return {
+        "on": sorted(on),
+        "cost": cost,
+        "marketing": marketing,
+        "promotion": total,
+        "target": "promotion" if total >= PROMOTION_CAP else "marketing",
+        "costNow": sum(MARKETING_TYPES[i][1] for i in was),
+        "modelNow": [now_marketing, now_total],
+    }
+
 
 def weekday(day: int) -> str:
     return WEEKDAYS[day % 7]
@@ -2632,6 +2732,7 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
     )
     wants_uniforms = status == "retail" and UNIFORM_DEMAND not in not_made
     uniform_gaps = _uniform_gaps(save, b, crew, names) if wants_uniforms else []
+    campaigns, marketing = _marketing(save, b, building, status, neighbourhood, promo)
 
     return {
         "name": name or "Vacant lease",
@@ -2668,6 +2769,10 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
         "promotion": promo.get("total", 0),
         "traffic": promo.get("trafficIndex", 0),
         "marketingIndex": promo.get("marketing", 0),
+        # The campaigns as the game holds them, and the cheapest mix for a shop
+        # or an office (None elsewhere, or where a figure is unknown).
+        "campaigns": campaigns,
+        "marketingPlan": marketing,
         "missingAmenities": missing_amenities,
         # The same walk, amenity by amenity: True is the game cached the demand
         # as fulfilled, False is looked for and missed. A demand the type never
@@ -2712,6 +2817,47 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
         # Days after opening with at least one customer, all the order history
         # holds: under MIN_TRADE_DAYS a shelf is too young to judge.
         "tradeDays": len(trading),
+    }
+
+
+def _marketing(save, b, building, status, neighbourhood, promo) -> tuple[list, dict | None]:
+    """A site's campaigns, and its cheapest mix (marketing_plan()).
+
+    `campaigns` is one row per entry the game holds: the type's enum name, the
+    agency's site key and whether it runs. The plan is for a shop or an office
+    in a building whose type carries a promotion, with its m² and neighbourhood
+    known; anything else gets None. `on` and `was` are enum names, as the write
+    sends them. `needsSetup`: an entry is missing for one of the six types, so
+    BizMan does not show every switch for the site yet.
+    """
+    campaigns = []
+    for c in save.items(b.get("marketingCampaigns")):
+        kind = c.get("marketingTypeName")
+        if not isinstance(kind, int) or not 0 <= kind < len(MARKETING_TYPES):
+            continue
+        campaigns.append({"type": MARKETING_TYPES[kind][0],
+                          "agency": site_key(save.address(c.get("agencyAddress"))),
+                          "enabled": bool(c.get("enabled"))})
+    if status not in ("retail", "office") or not building:
+        return campaigns, None
+    sqm, kind = building.get("m"), building.get("t")
+    if not sqm or kind not in MARKETING_REACH or neighbourhood not in MARKETING_STRENGTH:
+        return campaigns, None
+    was = {MARKETING_IDS[c["type"]] for c in campaigns if c["enabled"]}
+    traffic = promo.get("trafficIndex", 0) or 0
+    plan = marketing_plan(traffic, was, sqm, kind, neighbourhood)
+    name = lambda ids: [MARKETING_TYPES[i][0] for i in sorted(ids)]  # noqa: E731
+    return campaigns, {
+        "on": name(plan["on"]),
+        "was": name(was),
+        "costNow": plan["costNow"],
+        "costPlan": plan["cost"],
+        "marketingNow": promo.get("marketing", 0),
+        "marketingPlan": plan["marketing"],
+        "promotionNow": promo.get("total", 0),
+        "promotionPlan": plan["promotion"],
+        "target": plan["target"],
+        "needsSetup": {c["type"] for c in campaigns} != {t[0] for t in MARKETING_TYPES},
     }
 
 
@@ -14323,6 +14469,10 @@ html:has(dialog:modal){overflow:hidden}
 .gw-shop .gw-why{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:0 0 4px 30px;font-size:12.5px;line-height:1.45;color:var(--ink-2)}
 .gw-shop .gw-why b{color:var(--ink);font-weight:600}
 .gw-shop.out{opacity:.45}
+.gw-mkrow{grid-template-columns:minmax(0,1fr) auto}
+.gw-mk{grid-column:1/-1;grid-row:2;padding-left:30px;font-size:12.5px;line-height:1.45;color:var(--ink-2)}
+.gw-mk em{font-style:normal;color:var(--ink);font-weight:500}
+.gw-mkrow .c{white-space:nowrap}
 .gw-shop.out .nm span:last-child{text-decoration:line-through}
 .gw-mini-b{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:8px;border:1px solid var(--rule);background:var(--surface);color:var(--ink);font:500 12px/1 Archivo,sans-serif;cursor:pointer;transition:border-color .15s,transform .2s}
 .gw-mini-b:hover{border-color:var(--ink-3);transform:translateY(-1px)}
@@ -15588,6 +15738,11 @@ section:hover > .sechead .sp-ico.magnet{transform:rotate(90deg) scale(1.1)}
 
 /* pull: promotion against the game's 100 cap, and the wave riding over it */
 .sp-promorow{display:flex;align-items:center;gap:16px}
+.sp-stack{display:flex;flex-direction:column;gap:32px}
+.spmk{margin-top:12px;font-size:13px;line-height:1.45;color:var(--ink-2)}
+.spmk p{margin:0}
+.spmk b{color:var(--ink);font-weight:600}
+.spmk .spmk-hand{margin-top:4px;color:var(--ink-3)}
 .sp-promo{position:relative;flex:1;display:flex;height:16px;border-radius:8px;border:1px dashed var(--rule);overflow:hidden}
 .sp-promo i{display:block;height:100%;transform-origin:left;transform:scaleX(0);transition:transform .8s cubic-bezier(.2,.7,.2,1)}
 .rv.in .sp-promo i{transform:none}
@@ -21040,7 +21195,9 @@ function findingRow(a, o = {}){
   const {what, more} = splitFinding(a);
   /* In linked mode a shop's missing uniforms can be set from here; one row,
      picked by drawAlerts(), also offers every shop at once. */
-  const writes = gwDressable(a) ? gwUniformButtons(b, a.id === gwUniformAllId) : "";
+  const writes = gwDressable(a) ? gwUniformButtons(b, a.id === gwUniformAllId)
+    /* The promotion finding: the cheapest mix at every site it would change. */
+    : a.group === "promotion" ? gwMkAll("mix") : "";
   /* Three shops can share a name; the pill already tells them apart, so the
      neighbourhood shortName() would add is only spelt out when there is no pill. */
   /* The name is a way to the site's own page; the rest of the row still opens
@@ -22359,10 +22516,10 @@ let spFindsAll = false, spArrived = null;
 const SP_EVIDENCE_HIT = {uniform: b => b.missingUniformLocker ? "locker" : "uniform"};
 /* Which blocks each kind of panel actually draws. A finding pointing anywhere
    else gets no data-ev at all, rather than dimming the page and scrolling
-   nowhere; `desks` and `pull` are drawn in the same slot, so both are listed. */
+   nowhere; an office draws `pull` under its `desks`. */
 const SP_BLOCKS = {
   retail: ["tiles", "standards", "pull", "hours", "crew", "shelves", "profit", "week"],
-  office: ["tiles", "standards", "desks", "hours", "crew", "shelves", "profit", "week"],
+  office: ["tiles", "standards", "desks", "pull", "hours", "crew", "shelves", "profit", "week"],
   depot: ["tiles", "stock", "feeds", "crew"],
   factory: ["tiles", "lines", "inputs", "crew"],
   home: [],
@@ -22534,7 +22691,9 @@ const SP_AMENITY_ICON = {bathroom: "toilet", toiletprivacy: "door", sink: "sink"
 function spPull(b){
   const hype = spHypeRow(b.key);
   const traffic = b.traffic || 0, marketing = b.marketingIndex || 0;
-  const total = Math.min(100, traffic + marketing);
+  /* The game's own total: marketing counts at the neighbourhood's strength
+     (half of it in Midtown), so the two figures need not add up to it. */
+  const total = Math.min(100, Number.isFinite(b.promotion) ? b.promotion : traffic + marketing);
   return `<div class="sp-promorow">
       <div class="sp-promo">
         <i class="tr" style="width:${traffic}%" data-read="${attr(tt("sp.pull.traffic", "Foot traffic <b>{n}</b>", {n: traffic}))}"></i>${
@@ -22557,7 +22716,7 @@ function spPull(b){
         `<i${k < hype.wave.daysLeft ? ` class="on"` : ""}></i>`).join("")}</span>&nbsp; ${tt("sp.pull.days", "{n}d", {n: hype.wave.daysLeft})}</span></div>` : ""}
     <div class="sp-read sp-readout">${total >= 100
       ? tt("sp.pull.read.cap", "Foot traffic <b>{traffic}</b> + marketing <b>{marketing}</b> · <b>at the cap</b>", {traffic, marketing})
-      : tt("sp.pull.read", "Foot traffic <b>{traffic}</b> + marketing <b>{marketing}</b> · <b>{short}</b> short of the cap", {traffic, marketing, short: 100 - total})}</div>`;
+      : tt("sp.pull.read", "Foot traffic <b>{traffic}</b> + marketing <b>{marketing}</b> · <b>{short}</b> short of the cap", {traffic, marketing, short: 100 - total})}</div>${spMkLine(b)}`;
 }
 
 /* The crew of a big site: one row a role, one dot a person, the pills one
@@ -24400,6 +24559,13 @@ function drawSite(){
       spI(idleNote.office ? "monitor" : "counter")}${idleRead}</span>` : "")}</div>`;
   /* An office's own second block: the workstations beside its standards. */
   const desks = sp && office && grid && grid.stationCount ? spDesks(grid) : null;
+  /* Promotion: a shop's, and an office's under its desks (the cheapest-mix
+     line and its Set button are the same on both). */
+  const pullBlock = sp ? `
+      <section class="rv" data-block="pull" id="sp-pull" data-readzone>
+        ${sechead(tt("sp.pull.title", "Promotion"), {icon: "magnet", iconCls: "magnet", why: tt("sp.pull.why", "Foot traffic and marketing against the game's 100% cap: what the street brings, and what campaigns add.")})}
+        ${spPull(b)}
+      </section>` : "";
   /* hourGrid() fills this with the hour its read-out opens on. */
   const hourLead = {};
   /* The two weeks the chip above compares, shaded on the chart with their own
@@ -24536,17 +24702,13 @@ function drawSite(){
           : tt("sp.sat.why", "What customers find when they walk in. A lit lamp was found in place, a struck one was looked for and missed, and a dashed one is not known: the game scores a shop only once customers have walked it.")})}
         ${spStandards(b)}
       </section>${
-        kind === "retail" ? `
-      <section class="rv" data-block="pull" id="sp-pull" data-readzone>
-        ${sechead(tt("sp.pull.title", "Promotion"), {icon: "magnet", iconCls: "magnet", why: tt("sp.pull.why", "Foot traffic and marketing against the game's 100% cap: what the street brings, and what campaigns add.")})}
-        ${spPull(b)}
-      </section>` : desks ? `
+        kind === "retail" ? pullBlock : `<div class="sp-stack">${desks ? `
       <section class="rv" data-block="desks" id="sp-desks" data-readzone>
         ${sechead(tt("sp.desks.title", "Desks"), {icon: "monitor", quiet: tt("sp.desks.rate", {one: "{n} client/h each", other: "{n} clients/h each"}, {n: grid.postRate}),
           why: tt("sp.desks.why", {one: "A workstation bills {n} client an hour while somebody sits at it.", other: "A workstation bills {n} clients an hour while somebody sits at it."}, {n: grid.postRate})})}
         ${desks.html}
         <div class="sp-read sp-readout">${tt("sp.desks.read", "{n} of {of} staffed at the busiest hour", {n: desks.manned, of: grid.stationCount})}</div>
-      </section>` : ""}
+      </section>` : ""}${pullBlock}</div>`}
     </div>` : ""}
     ${/* Only a shop and an office have an hourly grid, so this block is always
           the shop and office one. */""}
@@ -30378,7 +30540,9 @@ function drawStandards(){
           ? tt("co.std.at2", "at {sites}", {sites: more})
           : tt("co.std.none", "Nothing flagged")}</small></button>`;
     }).join("")}</div>`;
-  host.innerHTML = sechead(tt("co.std.title", "Standards"), {sr: true}) + cards + stdTable();
+  /* In linked mode, marketing for every shop and office at once. */
+  const mk = gwMkAll("mix") + gwMkAll("setup", true);
+  host.innerHTML = sechead(tt("co.std.title", "Standards"), {sr: true}) + cards + (mk ? `<div class="gw-acts gw-panel bz-mk">${mk}</div>` : "") + stdTable();
 }
 /* The comparison: one row a shop or office, the lowest satisfaction first
    and the ones not scored yet last. Each reading is the business's own
@@ -35166,6 +35330,7 @@ function gwUpdateMod(kind){
   if(kind === "imports") return tt("nav.dlg.mod.imports", "Update the Big Copilot Link mod to change imports from here");
   if(kind === "schedule") return tt("nav.dlg.mod.schedule", "Update the Big Copilot Link mod to write schedules from here");
   if(kind === "hire") return tt("nav.dlg.mod.hire", "Update the Big Copilot Link mod to hire and place staff from here");
+  if(kind === "marketing") return tt("nav.dlg.mod.marketing", "Update the Big Copilot Link mod to set marketing from here");
   return tt("nav.dlg.mod.other", "Update the Big Copilot Link mod to {kind} from here", {kind});
 }
 /* How long an apply's Undo lasts, by the kind of write (no full stop). */
@@ -35173,6 +35338,7 @@ function gwUndoStays(kind){
   if(kind === "uniforms") return tt("nav.dlg.stays.uniforms", "Undo stays until your next uniform change");
   if(kind === "imports") return tt("nav.dlg.stays.imports", "Undo stays until your next imports change");
   if(kind === "schedule") return tt("nav.dlg.stays.schedule", "Undo stays until your next schedule change");
+  if(kind === "marketing") return tt("nav.dlg.stays.marketing", "Undo stays until your next marketing change");
   return tt("nav.dlg.stays.other", "Undo stays until your next {kind} change", {kind});
 }
 const gwUndoable = {};  // kind -> {spec, text, sub, character, at}: its last apply, until undone or replaced
@@ -35210,6 +35376,7 @@ const GW_P = {
   skip: '<path d="M6 5.5v13l9-6.5zM18 5v14"></path>',
   hire: '<circle cx="10" cy="8" r="3.5"></circle><path d="M3.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6"></path>',
   phone: '<rect x="7" y="2.5" width="10" height="19" rx="2"></rect><path d="M11 18.5h2"></path>',
+  magnet: '<path d="M6 4v8a6 6 0 0 0 12 0V4h-4v8a2 2 0 0 1-4 0V4zM6 8h4M14 8h4"></path>',
 };
 const gwSvg = (name, cls) => `<svg${cls ? ` class="${cls}"` : ""} viewBox="0 0 24 24" aria-hidden="true">${GW_P[name] || ""}</svg>`;
 const gwI = name => `<span class="gw-i">${gwSvg(name)}</span>`;
@@ -35444,6 +35611,171 @@ function gwUniforms(keys){
   });
 }
 
+/* Marketing: the cheapest campaign mix (docs/marketing-write-scope.md). Each
+   shop's and office's marketingPlan comes from Python: `on`, the mix to run,
+   and `was`, what runs now, both as the game's enum names. A write sends both,
+   and also adds whatever BizMan needs to show every switch (`needsSetup`). */
+function gwMkName(type){
+  switch(type){
+    case "SmallInternet": return tt("sp.mk.type.smallinternet", "Small internet");
+    case "MediumInternet": return tt("sp.mk.type.mediuminternet", "Medium internet");
+    case "LargeInternet": return tt("sp.mk.type.largeinternet", "Large internet");
+    case "SmallBillboard": return tt("sp.mk.type.smallbillboard", "Small billboard");
+    case "MediumBillboard": return tt("sp.mk.type.mediumbillboard", "Medium billboard");
+    case "LargeBillboard": return tt("sp.mk.type.largebillboard", "Large billboard");
+  }
+  return spEsc(type);
+}
+const gwMkMix = types => types.length ? types.map(gwMkName).join(" + ") : tt("sp.mk.none", "no campaigns");
+const gwMkSame = p => p.on.length === p.was.length && p.on.every(t => p.was.includes(t));
+/* The sites a marketing write covers: `mix`, every one whose plan differs
+   from what runs; `setup`, every one missing a switch in BizMan. */
+const gwMkSites = mode => (D.businesses || []).filter(b => b.marketingPlan
+  && (mode === "setup" ? b.marketingPlan.needsSetup : !gwMkSame(b.marketingPlan)));
+const gwMkCan = () => { const l = gwLink(); return !!l && (l.writes || []).includes("marketing"); };
+/* The Promotion block's last line: the plan, and its Set button. Where the
+   board cannot write it, what to switch in BizMan instead. */
+function spMkLine(b){
+  const p = b.marketingPlan;
+  if(!p) return "";
+  const same = gwMkSame(p);
+  const mix = `<b>${gwMkMix(p.on)}</b>`;
+  const line = same ? tt("sp.mk.running", "Cheapest mix, running: {mix} · {cost:$}/day", {mix, cost: p.costPlan})
+    : tt("sp.mk.line", "Cheapest mix: {mix} · {cost:$}/day · {p}%", {mix, cost: p.costPlan, p: p.promotionPlan});
+  /* BizMan shows a switch only for a type the site already has an entry
+     for; any other is booked at a marketing agency. */
+  const entered = new Set((b.campaigns || []).map(c => c.type));
+  const add = p.on.filter(t => !p.was.includes(t));
+  const on = add.filter(t => entered.has(t)).map(gwMkName), visit = add.filter(t => !entered.has(t)).map(gwMkName);
+  const off = p.was.filter(t => !p.on.includes(t)).map(gwMkName);
+  const flip = on.length && off.length ? tt("sp.mk.hand.both", "In BizMan › Marketing, switch on {on} and switch off {off}.", {on: todayList(on), off: todayList(off)})
+    : on.length ? tt("sp.mk.hand.on", "In BizMan › Marketing, switch on {on}.", {on: todayList(on)})
+    : off.length ? tt("sp.mk.hand.off", "In BizMan › Marketing, switch off {off}.", {off: todayList(off)}) : "";
+  const book = visit.length ? tt("sp.mk.hand.visit", "Book {types} at a marketing agency: BizMan has no switch for them yet.", {types: todayList(visit)}) : "";
+  const hand = same || gwMkCan() ? "" : [flip, book].filter(Boolean).join(" ");
+  const sites = `data-gw-sites="${attr(JSON.stringify([b.key]))}"`;
+  const btn = !same ? gwButton("marketing", tt("sp.mk.set", "Set"), `${sites} data-gw-mode="mix"`, "", {name: tt("sp.mk.set.name", "Set the cheapest mix")})
+    : p.needsSetup ? gwButton("marketing", tt("sp.mk.setup", "Set up"), `${sites} data-gw-mode="setup"`, "", {alt: true, name: tt("sp.mk.setup.name", "Add every campaign switch to BizMan")})
+    : "";
+  return `<div class="spmk"><p>${line}</p>${hand ? `<p class="spmk-hand">${hand}</p>` : ""}${btn ? `<div class="gw-acts gw-panel">${btn}</div>` : ""}</div>`;
+}
+/* Every site at once: the cheapest mix wherever it differs, or the set-up
+   wherever a switch is missing. */
+function gwMkAll(mode, alt){
+  const n = gwMkSites(mode).length;
+  if(!n) return "";
+  const label = mode === "setup" ? tt("sp.gw.mk.setupall", {one: "Set up {n} site", other: "Set up all {n} sites"}, {n})
+    : tt("sp.gw.mk.all", {one: "Set the cheapest mix at {n} site", other: "Set the cheapest mix at {n} sites"}, {n});
+  return gwButton("marketing", label, `data-gw-mk-all data-gw-mode="${mode}"`, "", {alt});
+}
+
+/* Campaigns at one site, or at many. The game sets all of them or none, so a
+   site it refuses can be left out, as with uniforms. */
+function gwMarketing(keys, mode){
+  const out = new Set();  // sites left out
+  const many = keys.length > 1;
+  const setup = mode === "setup";
+  const site = k => (D.businesses || []).find(b => b.key === k && b.marketingPlan);
+  const kept = () => keys.filter(k => !out.has(k)).map(site).filter(Boolean);
+  /* The plans the game last judged, so the drawing stays with its answer
+     while the board reads the game again after an apply. */
+  let judged = new Map();
+  const plan = r => judged.get(gwKeyOf(r.address));
+  const moved = answer => (answer.rows || []).filter(r => !r.error && plan(r) && !gwMkSame(plan(r)));
+  const first = site(keys[0]);
+  if(!first) return;
+  const refusal = r => {
+    const known = GW_REFUSE.marketing[r.error] || GW_REFUSE.any[r.error];
+    return known || {rule: tt("sp.gw.uni.refused", "The game refused this ({code})", {code: spEsc(r.error)}), fix: ""};
+  };
+  const row = (r, phase) => {
+    const b = gwSiteOf(r.address), p = plan(r), key = gwKeyOf(r.address);
+    if(!p) return "";
+    const back = phase === "undone";
+    const change = gwMkSame(p) ? tt("sp.gw.mk.setuponly", "switches added, nothing else changes")
+      : `${gwMkMix(back ? p.on : p.was)} <em>→ ${gwMkMix(back ? p.was : p.on)}</em>`;
+    const cost = gwMkSame(p) ? tt("sp.gw.mk.perday", "{w:$}/day", {w: p.costNow})
+      : tt("sp.gw.mk.costs", "{a:$} → {b:$}/day", {a: back ? p.costPlan : p.costNow, b: back ? p.costNow : p.costPlan});
+    /* The game's own reckoning, before and after an apply; said only where
+       it is not what the board planned. */
+    const total = r.promotion && Number(r.promotion.total);
+    const game = (phase === "ready" || phase === "done") && !r.error && Number.isFinite(total) && total !== p.promotionPlan
+      ? ` · ${tt("sp.gw.mk.game", "the game says {p}%", {p: total})}` : "";
+    const say = r.error ? refusal(r) : null;
+    const name = gwSiteName(r);
+    return `<div class="gw-shop gw-mkrow${r.error ? " bad" : ""}" tabindex="0" data-read="${attr(`<b>${name}</b> · ${change} · ${cost}`)}"><div class="nm">${b ? hoodHtml(b) : ""}<span>${name}</span></div>${
+      `<span class="gw-mk">${change}${game}</span><span class="c">${cost}</span>`}${say ? `<div class="gw-why"><span><b>${say.rule}</b>.${say.fix ? ` ${say.fix}` : ""}</span>${
+      phase === "ready" && kept().length > 1 ? `<button type="button" class="gw-mini-b" data-gw-leave="${attr(key)}" aria-label="${
+      attr(tt("sp.gw.mk.leave.label", "Leave it out: {name}", {name: b ? shortName(b) : r.business || tt("sp.gw.mk.thissite", "this site")}))}">${
+      gwSvg("skip")}${tt("sp.gw.uni.leave", "Leave it out")}</button>` : ""}</div>` : ""}</div>`;
+  };
+  const outRow = b => `<div class="gw-shop out"><div class="nm">${hoodHtml(b)}<span>${spEsc(shortName(b))}</span></div><span class="gw-minis"></span><span class="c">${tt("sp.gw.uni.out", "out")}</span></div>`;
+  const title = () => {
+    const n = kept().length;
+    if(setup) return many ? tt("sp.gw.mk.title.setupmany", {one: "Set up marketing at {n} site", other: "Set up marketing at {n} sites"}, {n})
+      : tt("sp.gw.mk.title.setup", "Set up marketing");
+    return many ? tt("sp.gw.mk.title.many", {one: "Set the cheapest mix at {n} site", other: "Set the cheapest mix at {n} sites"}, {n})
+      : tt("sp.gw.mk.title", "Set the cheapest mix");
+  };
+  gwConfirm({
+    kind: "marketing", icon: "magnet", againLabel: tt("sp.gw.mk.again", "Set again"),
+    title,
+    where: () => !many ? gwWhere(first)
+      : out.size ? `<span>${tt("sp.gw.uni.leftout", "{names} left out", {names: [...out].map(k => spEsc(shortName(site(k) || {name: k}))).join(", ")})}</span>` : "",
+    nothing: () => kept().length ? "" : tt("sp.gw.mk.nothing", "No site left to set."),
+    body: () => {
+      const sites = kept();
+      judged = new Map(sites.map(b => [b.key, b.marketingPlan]));
+      return {sites: sites.map(b => ({address: gwAddress(b.key), on: b.marketingPlan.on.slice(), was: b.marketingPlan.was.slice()}))};
+    },
+    verdict: answer => {
+      const rows = answer.rows || [], bad = rows.filter(r => r.error).length, n = moved(answer).length;
+      if(bad) return many ? `<b>${tt("sp.gw.mk.refuses", "The game refuses {n} of {of} sites", {n: bad, of: rows.length})}</b>`
+        : `<b>${tt("sp.gw.refuses", "The game refuses this")}</b>`;
+      return n ? `<b>${tt("sp.gw.mk.change", {one: "The game will change the campaigns at {n} site", other: "The game will change the campaigns at {n} sites"}, {n})}</b>`
+        : `<b>${tt("sp.gw.mk.switches", "The game will add the missing switches")}</b>`;
+    },
+    inline: many,
+    draw: (answer, phase) => {
+      const rows = answer.rows || [];
+      const ok = rows.filter(r => !r.error && plan(r));
+      const sum = f => ok.reduce((s, r) => s + (plan(r)[f] || 0), 0);
+      const tally = many && phase === "ready" ? `<div class="gw-tally"><div><span class="gw-lab">${tt("sp.gw.mk.now", "Now, a day")}</span><span class="gw-big dim">${fmt(sum("costNow"))}</span></div>
+        <div><span class="gw-lab">${tt("sp.gw.mk.after", "After, a day")}</span><span class="gw-big">${fmt(sum("costPlan"))}</span></div>
+        <div><span class="gw-lab">${tt("sp.gw.mk.sites", "Sites")}</span><span class="gw-big dim">${ok.length}${rows.length > ok.length ? `<small>+${rows.length - ok.length}</small>` : ""}</span></div></div>` : "";
+      return tally + `<div data-readzone><div class="gw-shops">${rows.map(r => row(r, phase)).join("")}${
+        [...out].map(site).filter(Boolean).map(outRow).join("")}</div><div class="gw-read sp-readout">&nbsp;</div></div>`;
+    },
+    refusedHint: () => many ? tt("sp.gw.mk.refusedmany", "Every site is set, or none: leave a refused site out, or fix it first.") : tt("sp.gw.unchanged", "Nothing was changed."),
+    bind: (dlg, replan) => {
+      dlg.querySelectorAll("[data-gw-leave]").forEach(b => { b.onclick = () => {
+        if(b.classList.contains("gw-busy")) return;
+        out.add(b.dataset.gwLeave);
+        const r = b.closest(".gw-shop");
+        if(r) r.classList.add("out");
+        replan(b);
+      }; });
+    },
+    object: gwSiteName,
+    applyLabel: answer => {
+      if(many) return tt("sp.gw.mk.apply", {one: "Set at {n} site", other: "Set at {n} sites"}, {n: kept().length});
+      return (answer ? moved(answer).length : !setup) ? tt("sp.gw.mk.title", "Set the cheapest mix") : tt("sp.mk.setup", "Set up");
+    },
+    applying: tt("sp.gw.mk.applying", "Setting campaigns in the game…"),
+    undoHint: () => many && kept().length > 1 ? tt("sp.gw.mk.undohint", "Undo takes back all {n} sites at once.", {n: kept().length}) : null,
+    /* Set-up alone switches nothing on or off: there is nothing to undo. */
+    changed: answer => moved(answer).length > 0,
+    done: answer => {
+      const n = moved(answer).length;
+      if(answer.undo) return n > 1 ? tt("sp.gw.mk.undone.many", "Undone: campaigns back as they were at {n} sites.", {n})
+        : tt("sp.gw.mk.undone", "Undone: campaigns back as they were.");
+      if(!n) return tt("sp.gw.mk.done.setup", "Every campaign switch is in BizMan now.");
+      return n === 1 ? tt("sp.gw.mk.done.one", "The cheapest mix runs at {shop}.", {shop: gwSiteName(moved(answer)[0])})
+        : tt("sp.gw.mk.done.many", "The cheapest mix runs at {n} sites.", {n});
+    },
+  });
+}
+
 /* The refusals the player can fix in the game while the same request stays
    valid (a screen closed, a locker placed, a week's lock over). Try again is
    offered only when every error the answer names is one of them; the rest
@@ -35490,6 +35822,11 @@ const GW_REFUSE = {
         fix: tt("nav.dlg.refuse.overcap.fix", "Lower the amount, or bring the rest through another importer.")};
     },
     bad_amount: {get rule(){ return tt("nav.dlg.refuse.badamount.rule", "An amount is not a whole number of 0 or more"); }, get fix(){ return tt("nav.dlg.refuse.badamount.fix", "Correct it, then try again."); }},
+  },
+  marketing: {
+    no_business: {get rule(){ return tt("nav.dlg.refuse.nobusiness.rule", "No business is set up here"); }, get fix(){ return tt("nav.dlg.refuse.nobusiness.fix", "Set one up in BizMan first."); }},
+    no_promotion: {get rule(){ return tt("nav.dlg.refuse.nopromotion.rule", "Campaigns bring this business no promotion"); }, get fix(){ return tt("nav.dlg.refuse.nopromotion.fix", "Leave it out."); }},
+    no_agency: {get rule(){ return tt("nav.dlg.refuse.noagency.rule", "No marketing agency in the city offers a campaign in this mix"); }, get fix(){ return tt("nav.dlg.refuse.noagency.fix", "Refresh the board."); }},
   },
   schedule: {
     headquarters: {get rule(){ return tt("nav.dlg.refuse.hq.rule", "A headquarters' schedule is not written from here"); }, get fix(){ return tt("nav.dlg.refuse.hq.fix", "Change it in BizMan in the game."); }},
@@ -36989,6 +37326,8 @@ const bindWrites = once(() => {
     else if(kind === "imports") gwImports(btn.dataset.gwDepot || null, btn.dataset.gwLine || null);
     else if(kind === "schedule") gwSchedule(JSON.parse(btn.dataset.gwSites || "[]"));
     else if(kind === "hire") hrReview();
+    else if(kind === "marketing") gwMarketing(btn.hasAttribute("data-gw-mk-all")
+      ? gwMkSites(btn.dataset.gwMode).map(b => b.key) : JSON.parse(btn.dataset.gwSites || "[]"), btn.dataset.gwMode);
   }, true);
 });
 function wireWrites(){ bindWrites(); gwToast(); gwReadBack(); }

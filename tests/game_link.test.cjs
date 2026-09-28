@@ -747,6 +747,35 @@ test('a mod that now speaks another version takes no writes until it speaks this
   assert.equal(h.run('bindSource().holds()'), true);
 });
 
+// Uniforms and marketing (mod 0.4.0) find their buildings by address alone:
+// they name the save the board was read from, so the mod answers `changed`
+// when the game has another one loaded. The other kinds carry their own ids.
+test('marketing and uniforms name the save they were planned from; the other kinds do not', async () => {
+  const health = {...HEALTH, writes: ['uniforms', 'imports', 'schedule', 'hire', 'marketing']};
+  const h = harness({routes: {health}});
+  h.run(`linkHealth = ${JSON.stringify(health)}; keepApproval(linkUrl, "approved-token")`);
+  const sent = [];
+  const reads = h.context.fetch;
+  h.context.fetch = async (url, init) => {
+    if (!String(url).includes('/write/')) return reads(url, init);
+    const kind = String(url).split('/write/')[1];
+    sent.push([kind, JSON.parse(init.body), init.headers.Authorization]);
+    return reply(200, {ok: true, kind, dryRun: true, rows: []});
+  };
+  for (const kind of ['marketing', 'uniforms', 'imports']) {
+    const got = await h.run(`gameWrite(${JSON.stringify(kind)}, {sites: []}, {dryRun: true})`);
+    assert.equal(got.error, null, kind);
+    assert.equal(got.body.kind, kind);
+  }
+  const save = {character: 'abc', company: 'Costy Co'};
+  assert.deepEqual(sent.map(([kind, body, auth]) => [kind, body.expect || null, body.dryRun, auth]), [
+    ['marketing', save, true, 'Bearer approved-token'],
+    ['uniforms', save, true, 'Bearer approved-token'],
+    ['imports', null, true, 'Bearer approved-token'],
+  ]);
+  assert.deepEqual(plain(h.run('linkWrites()')), health.writes, 'the board offers what the mod lists');
+});
+
 test('the refusal on Update is still the full one, and names the version this page needs', async () => {
   const h = harness({routes: {health: {...HEALTH, schemaVersion: 2}}});
   await h.run('loadFromLink("Linking to the game")');
