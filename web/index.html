@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "af043c9f3c";</script>
-<link rel="stylesheet" href="community.css?v=af043c9f3c">
+<script>window.LEDGER_BUILD = "f35b20d819";</script>
+<link rel="stylesheet" href="community.css?v=f35b20d819">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=af043c9f3c">
+<link rel="stylesheet" href="fonts/fonts.css?v=f35b20d819">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -5556,7 +5556,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"af043c9f3c","latest":{"pr":169,"date":"2026-09-28","title":"A new layout: problems first, and a sidebar with five places to fix them","summary":"The board is rebuilt around what needs your attention. The Overview opens on Needs attention, each finding with a button that takes you to the exact setting, and a way back to where you were. A sidebar on the left holds five places, the open one with its views under it: the Overview, Businesses (results, cash and loans, prices against the market, a standards comparison with uniforms you can set from it, milestones), Supply (the changes to make, imports, deliveries, production, and a goods flow you can drag and zoom like the map), Staffing (schedules, staff needs, payroll) and Expansion (demand, finding a location, planning a factory), then the City map and the Wiki. The button at its foot folds the sidebar to a strip of icons, and the board remembers it. Every business page links to its schedule, deliveries and prices. Changes you mark, apply through the game link, or that a later save confirms now look different, and preferences and help sit under the one ··· menu at the sidebar's foot. Old links keep working."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"f35b20d819","latest":{"pr":169,"date":"2026-09-28","title":"A new layout: problems first, and a sidebar with five places to fix them","summary":"The board is rebuilt around what needs your attention. The Overview opens on Needs attention, each finding with a button that takes you to the exact setting, and a way back to where you were. A sidebar on the left holds five places, the open one with its views under it: the Overview, Businesses (results, cash and loans, prices against the market, a standards comparison with uniforms you can set from it, milestones), Supply (the changes to make, imports, deliveries, production, and a goods flow you can drag and zoom like the map), Staffing (schedules, staff needs, payroll) and Expansion (demand, finding a location, planning a factory), then the City map and the Wiki. The button at its foot folds the sidebar to a strip of icons, and the board remembers it. Every business page links to its schedule, deliveries and prices. Changes you mark, apply through the game link, or that a later save confirms now look different, and preferences and help sit under the one ··· menu at the sidebar's foot. Old links keep working."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -5644,8 +5644,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=af043c9f3c"></script>
-<script src="community.js?v=af043c9f3c"></script>
+<script src="app.js?v=f35b20d819"></script>
+<script src="community.js?v=f35b20d819"></script>
 
 <script>
 
@@ -26942,12 +26942,19 @@ const bindFinds = once(() => {
   }, true);
   on("click", ".silenced a", (a, e) => {
     e.preventDefault();
+    const last = [...silencedIds].pop();  // the row silenced last
     silencedIds.clear(); saveSilenced();
     $$(".find.gone").forEach(f => findGone(f, false));
     silencedLine();
-    /* The rows are back: the button returns to the first one shown, and the
-       focus to the list, since this line folds away. */
-    if(ovMovePicks()){ const row = document.querySelector("#alerts .find:not(.gone) .what"); if(row) row.focus(); }
+    /* The rows are back, an all-sites button with them. This line folds
+       away, so the focus goes to the row silenced last, in the list or
+       among the smaller findings, or to the first row shown. */
+    ovMovePicks();
+    const shown = f => f && !f.closest(".hide") && f.getClientRects().length > 0;
+    const row = [...document.querySelectorAll("#alerts .find, #alertMinor .find")].find(f => f.dataset.id === last && shown(f))
+      || [...document.querySelectorAll("#alerts .find:not(.hide), #alertMinor .find:not(.hide)")].find(shown);
+    const to = row && row.querySelector(".what");
+    if(to) to.focus();
   });
 });
 function wireFinds(){
@@ -27946,23 +27953,26 @@ function gwMarketing(keys, mode){
     return missing.filter(t => !shut.has(sellerOf(p, t)));
   };
   const sellerOf = (p, t) => (p.setupAgencies || []).find(k => ((gwMkAgency(k) || {}).types || []).includes(t)) || "";
-  /* A missing switch the game does not add either waits for its agency (the
-     answer's `waiting`: not a contact, or not open, with when it opens) or
-     was there already (added in the game since the board was read). Only an
-     older answer without `waiting` leaves the board to guess, by its own
-     clock. */
+  /* A switch the game does not add waits for an agency, as the answer's
+     `waiting` lists them: every type it skipped, the ones the board knows
+     nothing of included (an agency that is not a contact). Its `opens` says
+     when a closed one opens; with none, the board's own agency table tells a
+     first visit from a temporary closure where it knows, and otherwise the
+     row names the agency alone. A missing switch in neither `entriesAdded`
+     nor `waiting` was there already. Only an older answer without `waiting`
+     leaves the board to guess, by its own clock. */
   const missed = r => { const p = plan(r) || {}, got = added(r); return (p.setupTypes || []).filter(t => !got.includes(t)); };
   const waitList = r => {
-    const p = plan(r) || {}, left = missed(r);
-    if(Array.isArray(r.waiting)) return r.waiting.filter(w => w && left.includes(w.type)).map(w => {
+    const p = plan(r) || {}, got = added(r);
+    if(Array.isArray(r.waiting)) return r.waiting.filter(w => w && w.type && !got.includes(w.type)).map(w => {
       const known = w.agency && w.agency.address ? gwMkAgency(gwKeyOf(w.agency.address)) : null;
       return {type: w.type, agency: gwMkAgencyOf({agency: w.agency}), opens: w.opens ? gwMkOpensOf({opens: w.opens}) : null,
-        visit: !w.opens && !!known && !known.contact};
+        why: w.opens ? "open" : !known ? "" : !known.contact ? "visit" : known.closed ? "reopen" : ""};
     });
     const shut = new Set(gwMkClosed(p.setupAgencies || []).map(a => a.key));
-    return left.filter(t => shut.has(sellerOf(p, t))).map(t => {
-      const k = sellerOf(p, t);
-      return {type: t, agency: spEsc((gwMkAgency(k) || {}).name || ""), opens: gwMkOpensOf({agency: {address: gwAddress(k)}})};
+    return missed(r).filter(t => shut.has(sellerOf(p, t))).map(t => {
+      const k = sellerOf(p, t), opens = gwMkOpensOf({agency: {address: gwAddress(k)}});
+      return {type: t, agency: spEsc((gwMkAgency(k) || {}).name || ""), opens, why: opens ? "open" : ""};
     });
   };
   const waiting = r => waitList(r).map(w => w.type);
@@ -27970,14 +27980,15 @@ function gwMarketing(keys, mode){
   const waits = r => {
     const by = new Map();
     waitList(r).forEach(w => {
-      const k = `${w.agency}|${w.visit}|${w.opens ? `${w.opens.d}|${w.opens.h}` : ""}`;
-      if(!by.has(k)) by.set(k, {agency: w.agency, opens: w.opens, visit: w.visit, types: []});
+      const k = `${w.agency}|${w.why}|${w.opens ? `${w.opens.d}|${w.opens.h}` : ""}`;
+      if(!by.has(k)) by.set(k, {agency: w.agency, opens: w.opens, why: w.why, types: []});
       by.get(k).types.push(w.type);
     });
-    const parts = [...by.values()].map(({agency, opens, visit, types}) => {
+    const parts = [...by.values()].map(({agency, opens, why, types}) => {
       const o = {n: types.length, types: todayList(types.map(gwMkName)), agency};
-      return visit ? tt("sp.gw.mk.waits.visit", {one: "{types} switch waits for a first visit to {agency}", other: "{types} switches wait for a first visit to {agency}"}, o)
-        : !opens ? tt("sp.gw.mk.waits", {one: "{types} switch waits for {agency} to open", other: "{types} switches wait for {agency} to open"}, o)
+      return why === "visit" ? tt("sp.gw.mk.waits.visit", {one: "{types} switch waits for a first visit to {agency}", other: "{types} switches wait for a first visit to {agency}"}, o)
+        : why === "reopen" ? tt("sp.gw.mk.waits.reopen", {one: "{types} switch waits for {agency} to reopen", other: "{types} switches wait for {agency} to reopen"}, o)
+        : !opens ? tt("sp.gw.mk.waits", {one: "{types} switch waits for {agency}", other: "{types} switches wait for {agency}"}, o)
         : opens.d === null ? tt("sp.gw.mk.waits.at", {one: "{types} switch waits for {agency}, open at {h}:00", other: "{types} switches wait for {agency}, open at {h}:00"}, Object.assign(o, {h: opens.h}))
         : tt("sp.gw.mk.waits.day", {one: "{types} switch waits for {agency}, open {d:day} at {h}:00", other: "{types} switches wait for {agency}, open {d:day} at {h}:00"},
           Object.assign(o, {h: opens.h, d: opens.d}));
@@ -27990,6 +28001,9 @@ function gwMarketing(keys, mode){
   const okRows = answer => (answer.rows || []).filter(r => !r.error && plan(r));
   const addedN = answer => okRows(answer).reduce((n, r) => n + added(r).length, 0);
   const waitingN = answer => okRows(answer).reduce((n, r) => n + waiting(r).length, 0);
+  /* Every waiting switch waits only for an agency to open (the answer names
+     its opening): only then is "closed" the reason. */
+  const closedOnly = answer => okRows(answer).every(r => waitList(r).every(w => w.why === "open"));
   const first = site(keys[0]);
   if(!first) return;
   const refusal = r => {
@@ -28050,7 +28064,8 @@ function gwMarketing(keys, mode){
       const k = addedN(answer);
       return n ? `<b>${tt("sp.gw.mk.change", {one: "The game will change the campaigns at {n} site", other: "The game will change the campaigns at {n} sites"}, {n})}</b>`
         : k ? `<b>${tt("sp.gw.mk.switches", {one: "The game will add {n} switch", other: "The game will add {n} switches"}, {n: k})}</b>`
-        : waitingN(answer) ? `<b>${tt("sp.gw.mk.noswitch", "No switch can be added until an agency opens")}</b>`
+        : waitingN(answer) ? `<b>${closedOnly(answer) ? tt("sp.gw.mk.noswitch", "No switch can be added until an agency opens")
+          : tt("sp.gw.mk.noswitch.now", "No switch can be added now")}</b>`
         : `<b>${tt("sp.gw.mk.noneneeded", "No switches to add")}</b>`;
     },
     inline: many,
@@ -28087,12 +28102,15 @@ function gwMarketing(keys, mode){
       const n = moved(answer).length;
       if(answer.undo) return n > 1 ? tt("sp.gw.mk.undone.many", "Undone: campaigns back as they were at {n} sites.", {n})
         : tt("sp.gw.mk.undone", "Undone: campaigns back as they were.");
-      const k = addedN(answer), left = waitingN(answer);
-      const rest = left ? ` ${tt("sp.gw.mk.done.wait", {one: "{n} switch waits for an agency to open.", other: "{n} switches wait for an agency to open."}, {n: left})}` : "";
-      /* Every missing switch is added, found there already, or waiting for an
-         agency that is closed now: only the last is said to wait. */
+      const k = addedN(answer), left = waitingN(answer), shut = closedOnly(answer);
+      const rest = !left ? "" : ` ${shut ? tt("sp.gw.mk.done.wait", {one: "{n} switch waits for an agency to open.", other: "{n} switches wait for an agency to open."}, {n: left})
+        : tt("sp.gw.mk.done.waitany", {one: "{n} switch waits for an agency.", other: "{n} switches wait for an agency."}, {n: left})}`;
+      /* Every switch is added, found there already, or waiting for an
+         agency, as the answer's `waiting` says; "closed" only when each wait
+         is for an agency to open, and "every switch" only when none waits. */
       if(!n) return left ? (k ? `${tt("sp.gw.mk.done.some", {one: "{n} switch added to BizMan.", other: "{n} switches added to BizMan."}, {n: k})}${rest}`
-          : tt("sp.gw.mk.done.none", "No switch was added: the agencies it needs are closed."))
+          : shut ? tt("sp.gw.mk.done.none", "No switch was added: the agencies it needs are closed.")
+          : tt("sp.gw.mk.done.noneany", "No switch was added: each one waits for an agency."))
         : k ? tt("sp.gw.mk.done.setup", "Every campaign switch is in BizMan now.")
         : tt("sp.gw.mk.done.there", "No switches were added: they are in BizMan already.");
       return (n === 1 ? tt("sp.gw.mk.done.one", "The cheapest mix runs at {shop}.", {shop: gwSiteName(moved(answer)[0])})

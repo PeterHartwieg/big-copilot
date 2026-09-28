@@ -455,5 +455,60 @@ test('silencing the row with the all-sites button moves it, and undo brings it b
   assert.equal(await page.evaluate(() => document.activeElement === document.querySelector('#silenced a')), true);
   await page.locator('#silenced a').click();
   assert.equal(await carrier(), 'promo-gifts');
-  assert.equal(await page.evaluate(() => !!document.activeElement.closest('#alerts .find')), true);
+  // The focus goes back to the row that was silenced.
+  assert.equal(await page.evaluate(() => document.activeElement.closest('.find')?.dataset.id), 'promo-gifts');
+});
+
+test('undoing a silence puts the focus on the row it brings back, or on the first row shown', async (t) => {
+  const d = JSON.parse(earlyMorning());
+  d.alerts[1].level = 'info';  // Bare's finding an opportunity
+  const page = await board(t, {link: Object.assign({}, LINK, {hour: 7}), data: JSON.stringify(d)});
+  await page.evaluate(() => { showPage('today'); });
+  const focused = () => page.evaluate(() => document.activeElement.closest('.find')?.dataset.id || null);
+  // No button moves here: the focus still goes to the row brought back.
+  await page.locator('#alerts .find[data-id="promo-bare"] .mark').click();
+  await page.locator('#silenced a').click();
+  assert.equal(await focused(), 'promo-bare');
+  // Its band filtered away: the first row shown takes the focus instead.
+  await page.locator('#alerts .find[data-id="promo-bare"] .mark').click();
+  await page.locator('#alertHead .sev[data-kind="opp"]').click();
+  await page.locator('#silenced a').click();
+  assert.equal(await focused(), 'promo-gifts');
+});
+
+test('a switch waiting for an agency the board thinks is a contact is not called closed', async (t) => {
+  const page = await board(t);
+  await answering(page, {entries: {[B]: []}, waiting: {[B]: [
+    {type: 'SmallBillboard', agency: CITYADS, opens: null}, {type: 'LargeBillboard', agency: CITYADS, opens: null}]}});
+  await openSite(page, B);
+  await page.locator('#sp-pull [data-gw="marketing"]').click();
+  await phase(page, 'ready');
+  const dlg = page.locator('dialog.gw-dlg');
+  assert.match(await dlg.locator('.gw-verdict').innerText(), /No switch can be added now/);
+  assert.equal(await dlg.locator('.gw-mkrow .gw-mk').innerText(),
+    'Small billboard, Large billboard switches wait for CityAds · Small internet, Medium internet, Large internet switches already in BizMan');
+  assert.doesNotMatch(await dlg.innerText(), /closed|to open/);
+  await dlg.locator('[data-gw-b="apply"]').click();
+  await phase(page, 'done');
+  assert.equal(await dlg.locator('.gw-said').textContent(), 'No switch was added: each one waits for an agency.');
+});
+
+test('switches of an agency the board knows is no contact: a first visit, never "every switch"', async (t) => {
+  const d = JSON.parse(payload);
+  d.marketingAgencies.find(a => a.key === ADS).contact = false;
+  // The board plans set-up with McCain's alone.
+  Object.assign(d.businesses.find(b => b.key === B).marketingPlan,
+    {setupTypes: ['SmallInternet', 'MediumInternet', 'LargeInternet'], setupAgencies: [NET]});
+  const page = await board(t, {data: JSON.stringify(d)});
+  await answering(page, {entries: {[B]: ['SmallInternet', 'MediumInternet', 'LargeInternet']}, waiting: {[B]: [
+    {type: 'SmallBillboard', agency: CITYADS, opens: null}, {type: 'LargeBillboard', agency: CITYADS, opens: null}]}});
+  await openSite(page, B);
+  await page.locator('#sp-pull [data-gw="marketing"]').click();
+  await phase(page, 'ready');
+  const dlg = page.locator('dialog.gw-dlg');
+  assert.equal(await dlg.locator('.gw-mkrow .gw-mk').innerText(),
+    'Small internet, Medium internet, Large internet switches added, nothing else changes · Small billboard, Large billboard switches wait for a first visit to CityAds');
+  await dlg.locator('[data-gw-b="apply"]').click();
+  await phase(page, 'done');
+  assert.equal(await dlg.locator('.gw-said').textContent(), '3 switches added to BizMan. 2 switches wait for an agency.');
 });

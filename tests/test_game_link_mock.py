@@ -1330,7 +1330,7 @@ class MockMarketing(MarketingMock):
         self.assertEqual([w["type"] for w in row["waiting"]], ALL_TYPES)
         self.assertEqual({(w["agency"]["address"]["number"], str(w["opens"])) for w in row["waiting"]},
                          {(17, str({"day": 35, "hour": 8})), (5, str({"day": 35, "hour": 8}))})
-        # The apply answers the same list; an undo adds nothing, so nothing waits.
+        # The apply answers the same list.
         status, answer = self.post("marketing", {"sites": [self.site(BARE, on=(), was=())]})
         self.assertEqual((status, len(answer["rows"][0]["waiting"])), (200, 6))
 
