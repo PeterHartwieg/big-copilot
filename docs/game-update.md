@@ -234,6 +234,11 @@ The arrival curves in `ba_demand_curves.json` come from the same bundles. With U
 ba_demand_curves.json`. No diff means the curves did not change. If they did, the file is
 the change: commit it and rebuild.
 
+Furniture prices and wall and floor materials change between builds too (a machine's price
+has halved before now), and the payback figures read them. With UnityPy on `PYTHONPATH`, run
+`python make_item_prices.py` and then `git diff --stat ba_item_prices.json`; a diff is the
+change, so commit it, run `python -m unittest tests.test_payback` and rebuild.
+
 Layout versions come from the game's buildings bundle and floor plans from its
 building-structure bundles; both commands below need UnityPy and the installed game, so
 they are owner-only. With UnityPy on `PYTHONPATH`, run `python make_buildings.py --versions` (the

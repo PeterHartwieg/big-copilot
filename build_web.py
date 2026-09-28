@@ -505,6 +505,8 @@ STAMP_INPUTS = (
     # Big Copilot's own text: tt() (inlined in the page) and each language's
     # table, which the page fetches (tools/i18n.py ship writes them).
     "web/i18n.js", *(f"web/i18n/{lang}.json" for lang in ui_text.languages()),
+    # The furniture and material prices the payback figures read (make_item_prices.py).
+    "web/py/ba_item_prices.json",
 )
 
 
@@ -652,7 +654,8 @@ def check(root: str = HERE) -> list[str]:
         except FileNotFoundError:
             return True
 
-    for name in ("ba_save.py", "ba_dashboard.py", "ba_buildings.json", "ba_demand_curves.json"):
+    for name in ("ba_save.py", "ba_dashboard.py", "ba_buildings.json", "ba_demand_curves.json",
+                 "ba_item_prices.json"):
         copied = "web/py/" + name
         if differs(copied, read_text(os.path.join(root, name))):
             stale.append(copied)
@@ -745,10 +748,10 @@ def main() -> None:
     print(f"web/wiki/: {pages} static pages, sitemap.xml and robots.txt")
     for name in ("ba_save.py", "ba_dashboard.py"):
         shutil.copyfile(os.path.join(HERE, name), os.path.join(WEB, "py", name))
-    # The building table and the arrival curves travel with the code;
-    # make_buildings.py and make_demand_curves.py have to have been run, since
-    # the worker hands both to Python as data.
-    for name in ("ba_buildings.json", "ba_demand_curves.json"):
+    # The building table, the arrival curves and the item prices travel with
+    # the code; make_buildings.py, make_demand_curves.py and make_item_prices.py
+    # have to have been run, since the worker hands them to Python as data.
+    for name in ("ba_buildings.json", "ba_demand_curves.json", "ba_item_prices.json"):
         shutil.copyfile(os.path.join(HERE, name), os.path.join(WEB, "py", name))
     text = {k: v for k, v in locale.items() if ships(k, v)}
     with open(os.path.join(WEB, "py", "gametext.json"), "w", encoding="utf-8", newline=chr(10)) as fh:
