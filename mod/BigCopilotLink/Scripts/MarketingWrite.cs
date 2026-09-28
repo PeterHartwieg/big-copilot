@@ -13,14 +13,16 @@ namespace BigCopilotLink
     /// "ba:gameevent_newmarketing", and removes unticked types (the write never
     /// removes: it disables, as the phone does, so undo stays exact). BizMan draws a
     /// block of switches only for agencies the site has an entry with, and only for a
-    /// phone contact. The write goes only through agencies the player already knows (a
-    /// phone contact: they visited once) and only while they are open
-    /// (BusinessHelper.IsBusinessOpen, the game's own check); it never adds a contact
-    /// (Peter, 28 Sep 2026). Every write gives the site an entry for every type such an
-    /// agency sells (the unused ones disabled, which costs nothing: MarketingHelper.RunDaily,
-    /// GetMarketingEfficiency and GetDailyMarketingExpenses all count enabled ones only),
-    /// so BizMan shows every switch from then on. A row that would change a campaign at
-    /// an agency that is not a contact, or is closed, is refused whole.
+    /// phone contact. An entry the site already has is switched any time, as the phone
+    /// does. A NEW entry goes only to an agency the player already knows (a phone
+    /// contact: they visited once) and only while it is open
+    /// (BusinessHelper.IsBusinessOpen, the game's own check); the write never adds a
+    /// contact (Peter, 28 Sep 2026). Every write gives the site an entry for every type
+    /// such an agency sells (the unused ones disabled, which costs nothing:
+    /// MarketingHelper.RunDaily, GetMarketingEfficiency and GetDailyMarketingExpenses all
+    /// count enabled ones only), so BizMan shows every switch from then on; the others
+    /// wait (`waiting`). A row whose `on` needs a new entry that no usable agency sells is
+    /// refused whole.
     /// </summary>
     public static class MarketingWrite
     {
@@ -229,8 +231,6 @@ namespace BigCopilotLink
         {
             var rows = new List<Row>();
             var changed = false;
-            var agencies = Agencies();
-            var checks = new Dictionary<string, AgencyCheck>(StringComparer.Ordinal);
             foreach (var flip in state.Flips)
             {
                 var row = rows.Find(r => r.Address.Is(flip.Site.Street, flip.Site.Number));
@@ -261,24 +261,16 @@ namespace BigCopilotLink
                 }
                 entry.Now = flip.Before;
             }
-            // The same rule as the write: every agency whose campaign undo switches back
-            // must be a contact and open now.
-            var blocked = false;
+            // Undo only switches existing entries back, which the phone does any time: no
+            // agency check, only the compare-and-set above.
             foreach (var row in rows)
             {
                 if (row.Error != null) continue;
-                row.Error = CheckChanges(row, agencies, checks);
-                if (row.Error != null)
-                {
-                    blocked = true;
-                    continue;
-                }
                 row.AfterCost = Cost(row.Entries);
                 row.AfterPromotion = Predict(row.Registration, Running(row.Entries));
             }
 
-            var failed = changed || blocked;
-            if (dryRun || failed) return Answer(rows, dryRun, failed, true, null);
+            if (dryRun || changed) return Answer(rows, dryRun, changed, true, null);
 
             foreach (var row in rows)
             {
@@ -361,8 +353,11 @@ namespace BigCopilotLink
         }
 
         /// <summary>
-        /// Every entry the row adds or switches, in type order: its agency must be a phone
-        /// contact and open now. The first that is not refuses the row, naming it.
+        /// Every entry the row adds, in type order: its agency must be a phone contact and
+        /// open now, as the in-person path needs. Existing entries are switched any time,
+        /// as BizManMarketing.UpdateCampaignEnabled does from the phone, with no check.
+        /// Set-up entries only ever go to a usable agency, so in practice this names a type
+        /// in `on` that no usable agency sells.
         /// </summary>
         private static string CheckChanges(Row row, List<Agency> agencies, Dictionary<string, AgencyCheck> checks)
         {
@@ -370,7 +365,7 @@ namespace BigCopilotLink
             entries.Sort((a, b) => a.Type.CompareTo(b.Type));
             foreach (var e in entries)
             {
-                if (e.Campaign != null && e.Was == e.Now) continue;
+                if (e.Campaign != null) continue; // an existing switch: any time, as the phone flips it
                 var check = Check(e.Agency, agencies, checks);
                 if (check.Error == null) continue;
                 row.Blocked = check;

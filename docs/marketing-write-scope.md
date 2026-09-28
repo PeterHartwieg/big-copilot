@@ -97,11 +97,12 @@ Shops and offices are covered. Headquarters have a promotion but no customers, s
   use the first agency whose `MarketingAgencySettings.marketingTypesAvailable` offers the type,
   found by walking the buildings. There is one campaign per type, as in the game: its dialog
   removes a type from every other agency when it sets that type.
-- **Only through agencies the player knows, and only while they are open** (Peter, 28 Sep 2026).
-  An agency can be used only when it is already a phone contact, which means the player has
-  visited it once, and only when it is open at the moment of the write. Open is the game's own
-  `BusinessHelper.IsBusinessOpen(reg, -1)`: not temporarily closed, today open, and the current
-  hour inside one of today's opening slots. The mod never adds a contact.
+- **Existing switches any time; new ones only through known, open agencies** (Peter, 28 Sep 2026,
+  revised the same evening). A campaign entry the business already has (a switch in BizMan)
+  can be turned on or off at any time, exactly as the phone does; no contact or opening check.
+  Only a NEW entry, a type the business has no switch for yet, needs its agency to be a phone
+  contact (the player visited it once) and open at the moment of the write. Open is the game's
+  own `BusinessHelper.IsBusinessOpen(reg, -1)`. The mod never adds a contact.
 - **Set-up, done by every write** (it replaces the call and the chat, not the first visit): the
   site gets an entry for every type each usable agency offers, the unused ones disabled. After
   one write, BizMan shows the full set of switches for that site, and the player can adjust it
@@ -110,10 +111,11 @@ Shops and offices are covered. Headquarters have a promotion but no customers, s
   notification says what changed.
 - **Seeding needs no consent from a closed agency:** new switch entries go only to agencies that
   are a contact and open; a closed or unknown agency just gets none, and that alone refuses nothing.
-- **What a row may touch:** every agency whose campaigns a row would change must be a contact
-  and open. That covers turning a type on or off and adding entries. Otherwise the row answers
-  `no_contact` or `agency_closed`, naming the agency and, when closed, its next opening hour, and
-  nothing is written for that row. Undo follows the same rule.
+- **What a row may touch:** flipping existing entries is never refused for agency reasons. A
+  row is refused with `no_contact` or `agency_closed` only when a type in `on` has no entry
+  and no agency selling it is a contact and open; the answer names the agency and, when
+  closed, its next opening. Undo only flips existing entries, so it is never refused for
+  agency reasons.
 - **Calls after the write:** `UpdatePromotion`, and `GameEvent ba:gameevent_newmarketing` when a
   campaign is added. The answer carries:
   - the resulting `promotion {trafficIndex, marketing, total}` and `dailyCost`, so each apply
@@ -176,8 +178,9 @@ and types no save has shown yet. Add both to the `docs/game-update.md` checklist
 Settled by Peter on 28 September 2026:
 - **Target:** promotion 100, or marketing 100 when promotion 100 is out of reach (section 2).
 - **Set-up:** the write replaces the call and the chat (section 3).
-- **Known and open agencies only:** the plan uses only types sold by agencies that are phone
-  contacts, and the write needs those agencies open (section 3). The board reads both from the
+- **Known and open agencies only for new switches:** the plan uses the types the business
+  already has a switch for, plus types sold by agencies that are phone contacts; a new switch
+  needs its agency open at the moment of the write (section 3). Existing switches change any time. The board reads both from the
   save: `Contacts` (`streetName`, `streetNumber`) and the agency registration's `scheduleDays`
   and `temporarilyClosed`, against the save's day and hour. So the line can say "CityAds opens at
   8:00" or "Visit CityAds once to add billboards" before the player clicks.

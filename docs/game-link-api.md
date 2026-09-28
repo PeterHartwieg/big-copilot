@@ -590,13 +590,15 @@ BizMan's Marketing page shows every switch for it. The scope and the game rules 
 the type. The map is the same in every save: Third Ave 17 sells the three internet types and
 Second Ave 5 the three billboards.
 
-**Only known agencies, and only while they are open.** An agency is **usable** when it is a
-phone contact (an entry of `GameInstance.Contacts` whose address is the agency's: the player
-has visited it once) and it is open now, by the game's own `BusinessHelper.IsBusinessOpen(reg,
--1)`: not `temporarilyClosed`, today's `ScheduleDay` open, and the current hour inside one of
-its opening slots. The mod never adds a contact. Every agency whose campaigns a row would
-change (a type turned on or off, or an entry added) must be usable; otherwise the row is
-refused `no_contact` or `agency_closed`, naming the agency, and nothing is written.
+**Existing switches any time; new ones only through known, open agencies.** A campaign entry
+the site already has (a switch in BizMan) is turned on or off at any time, as the phone does,
+whatever its agency. Only a **new** entry needs its agency to be **usable**: a phone contact (an
+entry of `GameInstance.Contacts` whose address is the agency's: the player has visited it
+once) and open now, by the game's own `BusinessHelper.IsBusinessOpen(reg, -1)`: not
+`temporarilyClosed`, today's `ScheduleDay` open, and the current hour inside one of its
+opening slots. The mod never adds a contact. A type in `on` that the site has no entry for,
+and that no usable agency sells, refuses the row `no_contact` or `agency_closed`, naming the
+first agency that sells it, and nothing is written.
 
 **Set-up, on every apply.** It replaces the call and the chat, not the first visit: the site
 gets a campaign entry for every type each **usable** agency offers, the ones not in `on`
@@ -650,8 +652,9 @@ reads "Big Copilot updated marketing at <business>".
   `no_business` (no business, or `ba:businesstype_empty`), `no_promotion` (the building type
   has no `hasmarketingpromotion` tag, so the game never scores its campaigns: a warehouse or a
   factory), `no_agency` (no agency in the city offers a type in `on`), then, for the first
-  change in type order whose agency is not usable, `no_contact` (not a phone contact) or
-  `agency_closed` (a contact, closed now). A type outside `on` that no agency offers gets no
+  type in `on` (in type order) that needs a new entry and that no usable agency sells,
+  `no_contact` (its first seller is not a phone contact) or `agency_closed` (a contact,
+  closed now). Switching an existing entry never answers either. A type outside `on` that no agency offers gets no
   entry and is no error. A refused row answers `before`, and `on`, `dailyCost` and
   `promotion` as they are now, with every list empty.
 - `agency` and `opens` are on every row, null except for those two errors:
@@ -676,11 +679,10 @@ reads "Big Copilot updated marketing at <business>".
 - **Undo.** `POST /write/undo {"kind": "marketing"}` puts back the enabled flag of each campaign
   the last marketing write switched, where it still holds what the write left; a campaign the
   write added and turned on is disabled again. The entries the set-up added stay, since they
-  cost nothing. A campaign switched by hand since (or gone) answers `changed` for its site; an
-  agency that is no longer a contact, or is closed now, answers `no_contact` or
-  `agency_closed` as for a write. Either way nothing is undone (a dry run `200` with `ok`
-  false, an apply `409`, `changed` when any row is `changed`, else `refused`), and the undo
-  stays available. The answer is the write's, with `"undo": true`, `before` the state the undo
+  cost nothing. An undo only switches existing entries, so it never looks at the agency: it
+  goes through whether the agency is a contact or open. A campaign switched by hand since (or
+  gone) answers `changed` for its site, and nothing is undone (a dry run `200` with `ok`
+  false, an apply `409 changed`); the undo stays available. The answer is the write's, with `"undo": true`, `before` the state the undo
   found, and `entriesAdded` empty.
 
 #### `POST /write/undo`
@@ -819,5 +821,5 @@ clock (`day` and `hour` as `/health` reports them, set by `--day`, `--hour` or
 (a warehouse, a home). `--agency-closed`, `--agency-open` and `--no-contact
 <street>:<number>` (repeatable), or `/debug/config` `agencyClosed`, `agencyOpen` and
 `noContact` as lists of `{street, number}`, force an agency closed (it then opens the next day
-at 8), open, or out of the phone's contacts. `--refuse-write refused` answers a marketing
+at 8), open, or out of the phone's contacts; as in the game, only new entries look at them. `--refuse-write refused` answers a marketing
 apply `agency_closed` at CityAds by default.

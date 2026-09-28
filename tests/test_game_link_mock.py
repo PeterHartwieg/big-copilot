@@ -1289,7 +1289,7 @@ class MockMarketing(MarketingMock):
         self.assertEqual(self.link.applied, [])
         self.assertEqual(self.link.campaigns, {}, "a refused apply writes nothing")
 
-    def test_an_agency_that_is_no_contact_refuses_only_a_row_that_changes_it(self):
+    def test_an_agency_that_is_no_contact_refuses_only_a_new_switch_the_plan_needs(self):
         self.config({"noContact": [CITYADS]})
         # Gifts keeps its small billboard as it is: CityAds is not touched, and gets
         # no switches either, since the set-up only uses agencies the player knows.
@@ -1301,14 +1301,19 @@ class MockMarketing(MarketingMock):
         self.assertEqual(row["waiting"], [{"type": "MediumBillboard", "agency": cityads, "opens": None},
                                           {"type": "LargeBillboard", "agency": cityads, "opens": None}],
                          "the billboard switches wait for the player to know CityAds")
-        # Turning the billboard off would change CityAds.
-        status, answer = self.post("marketing", {"dryRun": True, "sites": [self.site(on=("SmallInternet",))]})
+        # Gifts' existing billboard switch is flipped off like the phone does, contact or not.
+        _, answer = self.post("marketing", {"dryRun": True, "sites": [self.site(on=("SmallInternet",))]})
+        row = answer["rows"][0]
+        self.assertEqual((row["error"], row["turnedOff"]), (None, ["LargeInternet", "SmallBillboard"]))
+        # Bare has no billboard switch: turning one on needs a new entry at CityAds.
+        bare = self.site(BARE, on=("MediumBillboard",), was=())
+        status, answer = self.post("marketing", {"dryRun": True, "sites": [bare]})
         row = answer["rows"][0]
         self.assertEqual((status, answer["ok"], row["error"]), (200, False, "no_contact"))
-        self.assertEqual((row["agency"], row["opens"]), ({"name": "CityAds", "address": CITYADS}, None))
+        self.assertEqual((row["agency"], row["opens"]), (cityads, None))
         self.assertEqual((row["on"], row["entriesAdded"], row["campaigns"], row["waiting"]),
-                         (["LargeInternet", "SmallBillboard"], [], [], []), "a refused row lists nothing")
-        status, answer = self.post("marketing", {"sites": [self.site(on=("SmallInternet",))]})
+                         ([], [], [], []), "a refused row lists nothing")
+        status, answer = self.post("marketing", {"sites": [bare]})
         self.assertEqual((status, answer["error"], answer["rows"][0]["error"]), (409, "refused", "no_contact"))
         self.assertEqual(self.link.campaigns, {})
 
@@ -1372,17 +1377,23 @@ class MockMarketing(MarketingMock):
         self.assertEqual(row["waiting"], [], "an undo adds no switches")
         self.assertEqual(self.post("undo", {"kind": "marketing"}), (409, {"error": "nothing_to_undo"}))
 
-    def test_an_undo_follows_the_agency_rule(self):
+    def test_an_undo_only_flips_existing_switches_so_closed_agencies_do_not_matter(self):
         self.assertEqual(self.post("marketing", {"sites": [self.site()]})[0], 200)
-        self.config({"agencyClosed": [MCCAINS]})
+        self.config({"agencyClosed": [MCCAINS], "noContact": [CITYADS]})
         status, answer = self.post("undo", {"kind": "marketing", "dryRun": True})
-        row = answer["rows"][0]
-        self.assertEqual((status, answer["ok"], row["error"], row["agency"]["address"]), (200, False, "agency_closed", MCCAINS))
+        self.assertEqual((status, answer["ok"], answer["rows"][0]["error"]), (200, True, None))
         status, answer = self.post("undo", {"kind": "marketing"})
-        self.assertEqual((status, answer["error"]), (409, "refused"))
-        self.assertIn("marketing", self.link.undo, "still there to undo once the agency opens")
-        self.config({"agencyClosed": []})
-        self.assertEqual(self.post("undo", {"kind": "marketing"})[0], 200)
+        self.assertEqual((status, answer["rows"][0]["on"]), (200, ["LargeInternet", "SmallBillboard"]))
+
+    def test_existing_switches_flip_while_every_agency_is_closed(self):
+        # Gifts runs a large internet campaign and a small billboard: switching the
+        # small billboard off and the large internet on again needs no new entry.
+        self.config({"agencyClosed": [MCCAINS, CITYADS]})
+        status, answer = self.post("marketing", {"sites": [self.site(on=("LargeInternet",))]})
+        row = answer["rows"][0]
+        self.assertEqual((status, row["error"], row["turnedOff"], row["entriesAdded"]), (200, None, ["SmallBillboard"], []))
+        self.assertEqual([w["type"] for w in row["waiting"]],
+                         ["SmallInternet", "MediumInternet", "MediumBillboard", "LargeBillboard"])
 
     def test_an_undo_after_a_switch_by_hand_is_changed_and_undoes_nothing(self):
         self.assertEqual(self.post("marketing", {"sites": [self.site()]})[0], 200)
@@ -1438,11 +1449,14 @@ class MockMarketingWeekdays(MarketingMock):
     CITYADS_WEEK = week(days=range(1, 6))
 
     def test_a_closed_agency_names_its_next_opening(self):
-        _, answer = self.post("marketing", {"dryRun": True, "sites": [self.site(on=("SmallInternet",))]})
+        _, answer = self.post("marketing", {"dryRun": True, "sites": [self.site(BARE, on=("SmallBillboard",), was=())]})
         row = answer["rows"][0]
         self.assertEqual((row["error"], row["agency"], row["opens"]),
                          ("agency_closed", {"name": "CityAds", "address": CITYADS}, {"day": 36, "hour": 8}))
-        # A row that leaves CityAds alone goes through, without billboard switches.
+        # Gifts' own billboard switch flips off while CityAds is closed.
+        _, answer = self.post("marketing", {"dryRun": True, "sites": [self.site(on=("SmallInternet",))]})
+        self.assertEqual(answer["rows"][0]["error"], None)
+        # A row that needs no new CityAds switch goes through, without billboard switches.
         _, answer = self.post("marketing", {"dryRun": True, "sites": [self.site()]})
         self.assertEqual((answer["rows"][0]["error"], answer["rows"][0]["entriesAdded"]),
                          (None, ["SmallInternet", "MediumInternet"]))
@@ -1457,7 +1471,7 @@ class MockMarketingTemporarilyClosed(MarketingMock):
     CITYADS_TEMPORARILY_CLOSED = True
 
     def test_a_closed_agency_names_its_next_opening(self):
-        _, answer = self.post("marketing", {"dryRun": True, "sites": [self.site(on=("SmallInternet",))]})
+        _, answer = self.post("marketing", {"dryRun": True, "sites": [self.site(BARE, on=("SmallBillboard",), was=())]})
         row = answer["rows"][0]
         self.assertEqual((row["error"], row["agency"]["name"], row["opens"]), ("agency_closed", "CityAds", None))
         _, answer = self.post("marketing", {"dryRun": True, "sites": [self.site()]})

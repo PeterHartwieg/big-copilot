@@ -48,13 +48,14 @@ A marketing write (POST /write/marketing) reads each site's campaigns and the
 phone's contacts from the save, takes the city's two agencies from a table
 (MARKETING_AGENCIES: the map is the same in every save), and answers the
 promotion the board's own model gives (marketing_score in ba_dashboard, over
-ba_buildings.json). It uses only agencies that are phone contacts (the
-save's Contacts) and open at the mock's clock (the agency registration's
-scheduleDays and temporarilyClosed), never adds a contact, keeps the campaigns
-and promotion an apply left in memory, and undoes the enabled flags it
-switched. --agency-closed / --agency-open / --no-contact STREET:NUMBER (or
-/debug/config "agencyClosed", "agencyOpen", "noContact") force an agency
-closed, open, or out of the phone's contacts.
+ba_buildings.json). It switches a site's existing entries any time, and adds
+a new entry only at an agency that is a phone contact (the save's Contacts)
+and open at the mock's clock (the agency registration's scheduleDays and
+temporarilyClosed); it never adds a contact, keeps the campaigns and promotion
+an apply left in memory, and undoes the enabled flags it switched.
+--agency-closed / --agency-open / --no-contact STREET:NUMBER (or /debug/config
+"agencyClosed", "agencyOpen", "noContact") force an agency closed, open, or out
+of the phone's contacts, which only new entries look at.
 """
 from __future__ import annotations
 
@@ -495,11 +496,9 @@ class Link:
                     "dryRun": False, "undo": True}
             if target == "uniforms":
                 return 409, dict(head, error="changed", rows=[{"error": "changed"}])
-            if target == "marketing":
-                if rule not in ("changed", "no_contact", "agency_closed"):
-                    rule = "agency_closed"
-                return 409, dict(head, error="changed" if rule == "changed" else "refused",
-                                 rows=[dict({"error": rule, "waiting": []}, **self._forced_agency(rule))])
+            if target == "marketing":  # an undo is only ever refused as changed
+                return 409, dict(head, error="changed",
+                                 rows=[dict({"error": "changed", "waiting": []}, **self._forced_agency("changed"))])
             if target == "schedule":
                 return 409, dict(head, siteError=rule, rows=[] if rule == "changed" else [{"error": rule}])
             row = {"error": rule, "products": []}
@@ -766,7 +765,7 @@ class Link:
         return row
 
     def _blocking(self, save, changes, contacts, cache):
-        """The first agency, in type order, that a change touches and the player
+        """The first agency, in type order, that a new entry needs and the player
         may not use now: (error, check), or (None, None)."""
         for c in sorted(changes, key=lambda c: c["type"]):
             check = self._agency_check(save, c["agency"], contacts, cache)
@@ -858,8 +857,10 @@ class Link:
                 for c in mine:
                     c["enabled"] = c is keep and kind in on
             was_on = [c["enabled"] for c in before] + [None] * len(added)
-            changes = [c for c, w in zip(after, was_on) if w != c["enabled"]]
-            error, check = self._blocking(save, changes, contacts, cache)
+            # Only a new entry needs its agency usable now; an existing switch is
+            # flipped any time, as the phone does.
+            new = [c for c, w in zip(after, was_on) if w is None]
+            error, check = self._blocking(save, new, contacts, cache)
             if error:
                 rows.append(self._refused_row(save, reg, address, before, error, check))
                 continue
@@ -891,11 +892,11 @@ class Link:
         return 200, answer
 
     def _undo_marketing(self, record, dry):
-        """Each switched flag back, where it still holds what the write left and
-        its agency is a contact and open now."""
+        """Each switched flag back, where it still holds what the write left. It
+        only flips existing entries, which the phone does any time: no agency
+        check."""
         save = self._save()
-        contacts, cache = self._contact_addresses(save), {}
-        rows, restores, changed, blocked = [], [], False, False
+        rows, restores, changed = [], [], False
         for site in record["sites"]:
             address = site["address"]
             reg = self._registration(save, address)
@@ -905,28 +906,24 @@ class Link:
                 continue
             now = self._campaigns(save, reg, address)
             after = [dict(c) for c in now]
-            error, check, switched = None, None, []
+            error = None
             for flip in site["flips"]:
                 held = next((c for c in after if c["type"] == flip["type"] and c["agency"] == flip["agency"]), None)
                 if held is None or held["enabled"] != flip["after"]:
                     error = "changed"
                     break
                 held["enabled"] = flip["before"]
-                switched.append(held)
-            if not error:
-                error, check = self._blocking(save, switched, contacts, cache)
             if error:
-                changed, blocked = changed or error == "changed", blocked or error != "changed"
-                rows.append(self._refused_row(save, reg, address, now, error, check))
+                changed = True
+                rows.append(self._refused_row(save, reg, address, now, error))
                 continue
             on = {c["type"] for c in after if c["enabled"]}
             promotion = self._promotion(save, reg, address, on)
             rows.append(self._marketing_row(save, reg, address, now, after, [], promotion_after=promotion))
             restores.append((address, after, promotion))
-        failed = changed or blocked
-        answer = {"ok": not failed, "kind": "marketing", "dryRun": dry, "undo": True, "rows": rows}
-        if failed:
-            return (200, answer) if dry else (409, dict(answer, error="changed" if changed else "refused"))
+        answer = {"ok": not changed, "kind": "marketing", "dryRun": dry, "undo": True, "rows": rows}
+        if changed:
+            return (200, answer) if dry else (409, dict(answer, error="changed"))
         if not dry:
             for address, after, promotion in restores:
                 self.campaigns[address] = after
