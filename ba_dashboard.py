@@ -11867,8 +11867,9 @@ def payback_outcome(investment: float, days: list, exact: bool, opened: int, rat
     Otherwise, from the lease's start, `togo`: the days still needed at `rate`
     a day, or `never` when the rate earns nothing. From inside the lease the
     profit before the record is unknown, so neither can be said: `window`
-    gives the whole payback period at `rate` instead (`days`, absent when the
-    rate earns nothing). `unknown` with no rate at all.
+    gives the whole payback period at `rate` instead (`days`, and `day`, the
+    opening plus that; both absent when the rate earns nothing). `unknown`
+    with no rate at all, from the lease's start.
     """
     total = 0.0
     for day, profit in days:
@@ -11877,11 +11878,10 @@ def payback_outcome(investment: float, days: list, exact: bool, opened: int, rat
             if exact:
                 return {"state": "reached", "day": day, "after": day - opened}
             return {"state": "latest", "day": day}
-    if rate is None:
-        return {"state": "unknown"}
     if not exact:
-        if rate > 0:
-            return {"state": "window", "days": max(1, math.ceil(investment / rate))}
+        if rate is not None and rate > 0:
+            days = max(1, math.ceil(investment / rate))
+            return {"state": "window", "days": days, "day": opened + days}
         return {"state": "window"}
     if rate is None:
         return {"state": "unknown"}
@@ -11898,6 +11898,26 @@ def _payback_rate(days: list, opened: int):
     if not selling:
         return None
     recent = [p for day, p, _s in days[selling[0]:] if day > opened][-PAYBACK_RECENT_DAYS:]
+    return sum(recent) / len(recent) if recent else None
+
+
+def chain_window_day(members: list):
+    """The day a chain that grew over time pays back at recent profit: the
+    first day t, no earlier than its newest member's opening, on which
+    sum(rate x (t - opened)) over its members reaches sum(investment).
+    `members` are (opened, rate, investment); a rate of None earns nothing.
+    None when the members together earn nothing a day."""
+    slope = sum(rate or 0 for _o, rate, _i in members)
+    if not members or slope <= 0:
+        return None
+    need = sum(inv for _o, _r, inv in members) + sum((rate or 0) * opened for opened, rate, _i in members)
+    return max(max(opened for opened, _r, _i in members), math.ceil(need / slope - 1e-9))
+
+
+def _member_rate(days: list, opened: int):
+    """A cost centre's recent daily profit, sales or none: the average of its
+    last PAYBACK_RECENT_DAYS days after opening; None before that."""
+    recent = [p for day, p, _s in days if day > opened][-PAYBACK_RECENT_DAYS:]
     return sum(recent) / len(recent) if recent else None
 
 
@@ -12035,6 +12055,15 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
         if not isinstance(memory, dict) or memory.get("opened") != opened:
             memory = {"opened": opened}
         row = {"sites": members, "cost": cost, **_payback_row(days, cost, exact, opened, memory, last_day)}
+        # A chain that grew over time: each member pays from its own opening,
+        # at its own rate, so the day is not the first opening plus the whole.
+        for mode in ("firm", "self"):
+            if row[mode]["state"] == "window":
+                rates = [(sites[k]["opened"],
+                          _member_rate(series[k], sites[k]["opened"]) if sites[k]["costCentre"] else sites[k].get("rate"),
+                          sites[k]["cost"][mode]) for k in members]
+                day = chain_window_day(rates)
+                row[mode] = {"state": "window", "day": day} if day is not None else {"state": "window"}
         kept_chains[name] = memory
         out_chains[chain["sites"][0]] = row
     for name in [n for n in kept_chains if n not in {str(c["name"]) for c in chains}]:
@@ -21816,7 +21845,9 @@ const paybackChain = c => ((D.payback || {}).chains || {})[(c.sites || [])[0]] |
 /* The outcome in the mode on screen; null for a cost centre and a vacant lease. */
 const paybackOf = row => row && row[paybackMode()] || null;
 /* A window outcome's estimated day: the opening plus the payback period. */
-const paybackWindowDay = (o, row) => o && o.state === "window" && o.days && row ? (row.opened || 0) + o.days : null;
+/* Python sends it: the opening plus the payback period for a site, and for a
+   chain the first day its members, each from its own opening, pay it back. */
+const paybackWindowDay = o => o && o.state === "window" && Number.isFinite(o.day) ? o.day : null;
 function paybackSentence(o, row){
   switch(o && o.state){
     case "reached": return tt("co.payback.reached", {one: "Break even on day {day}, {n} day after opening",
@@ -21869,7 +21900,7 @@ function paybackTip(row, chain){
 function paybackCell(row, chain){
   const o = paybackOf(row);
   if(!o) return "—";
-  if(o.state === "unknown" || (o.state === "window" && !o.days))
+  if(o.state === "unknown" || (o.state === "window" && paybackWindowDay(o) === null))
     return `<span class="pb-cell quiet" data-tip="${attr(tt("co.payback.tip", "{what}. {basis}", {what: paybackSentence(o, row), basis: paybackTip(row, chain)}))}" tabindex="0">—</span>`;
   return `<span class="pb-cell${o.state === "never" ? " neg" : ""}" data-tip="${attr(tt("co.payback.tip", "{what}. {basis}", {what: paybackSentence(o, row), basis: paybackTip(row, chain)}))}" tabindex="0">${paybackShort(o, row)}</span>`;
 }
@@ -21879,7 +21910,7 @@ function paybackRank(row){
   if(!o) return -1;
   if(o.state === "reached" || o.state === "latest") return o.day;
   if(o.state === "togo") return ((D.meta || {}).day || 0) + o.days;
-  if(o.state === "window" && o.days) return paybackWindowDay(o, row);
+  if(paybackWindowDay(o) !== null) return paybackWindowDay(o);
   return o.state === "never" ? 1e9 : -1;
 }
 /* Arrived from search: the table may be wider than the page, so the Payback

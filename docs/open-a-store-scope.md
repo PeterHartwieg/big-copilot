@@ -51,6 +51,8 @@ For every business the player runs:
 - **Break-even day**: the first day that profit so far ≥ investment.
   - Exact when the lease's first statement is inside the 60-day window.
   - Otherwise "by day d at the latest" if the window alone reaches it, else unknown.
+  - Rent paid while a lease stood empty before the save's record is not counted, so a
+    business opened inside the record can break even a day or two early on paper.
   - Remember a reached day in the board's history (`History`, `market_history.json`), so it
     survives after the window moves on.
   - Opening day = `creationDay`.

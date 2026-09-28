@@ -3,7 +3,7 @@
     "pr": 175,
     "date": "2026-09-28",
     "title": "Time to break even for every business and chain",
-    "summary": "Businesses › Results has a Payback column. For each shop, office and chain it shows the day its setup was earned back, or how many days are still to go at recent profit; for a business older than the save's record, how many days of recent profit its setup takes. The setup counts the furniture, the deposit and the installation: the installation firm's fee by default, or the walls and floors you paid for when you switch to Self-installation above the table; where the save still holds the firm's real bill, that is what counts. Factories and warehouses count in their chain rather than on their own, so a shop fed by your own factory does not look free. The same line sits under a business's tiles on its own page."
+    "summary": "Businesses › Results has a Payback column. For each shop, office and chain it shows the day its setup was earned back, or how many days are still to go at recent profit; for a business older than the save's record, an estimated day counted from its opening at recent profit. The setup counts the furniture, the deposit and the installation: the installation firm's fee by default, or the walls and floors you paid for when you switch to Self-installation above the table; where the save still holds the firm's real bill, that is what counts. Factories and warehouses count in their chain rather than on their own, so a shop fed by your own factory does not look free. The same line sits under a business's tiles on its own page."
   },
   {
     "pr": 169,

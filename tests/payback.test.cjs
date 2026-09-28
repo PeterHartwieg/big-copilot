@@ -127,8 +127,8 @@ test('a real bill is the firm figure only, and an old lease reads as an estimate
   // day, whether it has passed or not, and sorted by that day.
   const day = await page.evaluate(() => D.meta.day);
   await page.evaluate(([k, g]) => {
-    D.payback.sites[k].opened = 10; D.payback.sites[k].firm = {state: 'window', days: 20};
-    D.payback.sites[g].opened = 10; D.payback.sites[g].firm = {state: 'window', days: 200};
+    D.payback.sites[k].opened = 10; D.payback.sites[k].firm = {state: 'window', days: 20, day: 30};
+    D.payback.sites[g].opened = 10; D.payback.sites[g].firm = {state: 'window', days: 200, day: 210};
     drawPortfolio();
   }, [SPIRITS, GIFTS]);
   assert.equal(await kidCell(page, SPIRITS), '~day 30');
@@ -139,4 +139,26 @@ test('a real bill is the firm figure only, and an old lease reads as an estimate
     /^Pays back around day 210 at recent profit/);
   assert.doesNotMatch(await page.$eval(`#portfolio tr.kid[data-key="${GIFTS}"] .pb-cell`, e => e.dataset.tip), /to go/);
   assert.deepEqual(await page.evaluate(([k, g]) => [paybackRank(paybackSite(k)), paybackRank(paybackSite(g))], [SPIRITS, GIFTS]), [30, 210]);
+});
+
+test('an old chain whose members opened on different days shows the day Python worked out for them', async t => {
+  const page = await board(t, await context(t));
+  // The Spirits chain: the shop from day 10, the brewery from day 50. Python
+  // counts each from its own opening (chain_window_day); the page shows that
+  // day, never the first opening plus a period, and sorts on it.
+  await page.evaluate(([k, f]) => {
+    D.payback.sites[k].opened = 10; D.payback.sites[f].opened = 50;
+    const c = D.payback.chains[k];
+    c.opened = 10; c.exact = false; c.firm = {state: 'window', day: 140};
+    drawPortfolio();
+  }, [SPIRITS, BREWERY]);
+  const name = await page.evaluate(k => enOf(D.chains.find(c => c.sites[0] === k), 'name'), SPIRITS);
+  const cell = await page.$eval(`#portfolio tr.chain[data-chain="${name}"] td:last-child`, td => td.innerText.trim());
+  assert.equal(cell, '~day 140');
+  assert.equal(await page.evaluate(k => paybackRank(D.payback.chains[k]), SPIRITS), 140);
+  // With no member earning, the plain wording and no day.
+  await page.evaluate(k => { D.payback.chains[k].firm = {state: 'window'}; drawPortfolio(); }, SPIRITS);
+  const plain = await page.$eval(`#portfolio tr.chain[data-chain="${name}"] .pb-cell`, e => [e.innerText.trim(), e.dataset.tip]);
+  assert.equal(plain[0], '—');
+  assert.match(plain[1], /^Opened before the save's record\./);
 });
