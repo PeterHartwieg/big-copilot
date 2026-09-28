@@ -58,8 +58,16 @@ let ipCounter = 0;
 
 /* ---------------------------------------------------------------- helpers */
 
-function bundleWorker() {
-  const result = require('esbuild').buildSync({
+// The vote contract needs ideas to vote on, and the real ballot
+// (server/features.json) can be empty between ideas, so the worker under test
+// is bundled with this one instead. The real file's shape has a test of its own.
+const BALLOT = [
+  {id: 'test-idea-one', title: 'Test idea one', description: 'A synthetic idea for the contract tests.'},
+  {id: 'test-idea-two', title: 'Test idea two', description: 'A second synthetic idea.'},
+];
+
+async function bundleWorker() {
+  const result = await require('esbuild').build({
     stdin: {resolveDir:ROOT, contents:`
       import worker from './server/worker.mjs';
       export default {...worker, async fetch(request,env,ctx) {
@@ -85,6 +93,10 @@ function bundleWorker() {
     format: 'esm',
     platform: 'browser',
     target: 'es2022',
+    plugins: [{name: 'test-ballot', setup(build) {
+      build.onLoad({filter: /[\\/]server[\\/]features\.json$/},
+        () => ({contents: JSON.stringify(BALLOT), loader: 'json'}));
+    }}],
   });
   return result.outputFiles[0].text;
 }
@@ -231,7 +243,7 @@ before(async () => {
     fs.existsSync(MIGRATION_PATH),
     `migrations/0001_community.sql not found - schema has not landed yet`,
   );
-  workerScript = bundleWorker();
+  workerScript = await bundleWorker();
   mf = new Miniflare(convertV4MiniflareOptions(baseOptions()));
   await mf.ready;
   db = await mf.getD1Database('COMMUNITY_DB');
@@ -500,13 +512,25 @@ test('scheduled cleanup removes old presence and ended polls while retaining rec
   await db.batch([90000,3600,0].map(age=>db.prepare(
     'INSERT INTO community_presence(browser_id,last_seen) VALUES (?,?)'
   ).bind(crypto.randomUUID(),nowSec()-age)));
-  const openPoll = JSON.parse(fs.readFileSync(path.join(ROOT,'server','features.json'),'utf8'))[0].id;
+  const openPoll = BALLOT[0].id;
   await db.prepare('INSERT INTO community_votes VALUES (?,?,?)').bind(openPoll,'test-hash',nowSec()-90000).run();
   await db.prepare('INSERT INTO community_votes VALUES (?,?,?)').bind('retired-poll','test-hash',nowSec()).run();
   assert.equal((await mf.dispatchFetch('https://cleanup.test/__test/scheduled')).status,200);
   assert.equal(await tableRowCount(SCHEMA.presenceTable),2);
   const votes = (await db.prepare(`SELECT feature_id FROM "${SCHEMA.votesTable}"`).all()).results;
   assert.deepEqual(votes.map(v=>v.feature_id),[openPoll]);
+});
+
+test('features: the real ballot is a list of ideas with unique ids, and may be empty', () => {
+  const ballot = JSON.parse(fs.readFileSync(path.join(ROOT, 'server', 'features.json'), 'utf8'));
+  assert.ok(Array.isArray(ballot), 'server/features.json is a list');
+  for (const feature of ballot) {
+    for (const field of ['id', 'title', 'description']) {
+      assert.equal(typeof feature[field], 'string', `feature ${field}`);
+      assert.ok(feature[field].length > 0, `feature ${field} must be non-empty`);
+    }
+  }
+  assert.equal(new Set(ballot.map((f) => f.id)).size, ballot.length, 'ids are unique');
 });
 
 test('features: curated listing starts at zero votes with nothing voted', async () => {
@@ -521,8 +545,7 @@ test('features: curated listing starts at zero votes with nothing voted', async 
     `per-IP features response must not be publicly cacheable, got "${cc}"`,
   );
 
-  const curated = JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'server', 'features.json'), 'utf8'));
-  assert.equal(body.features.length, curated.length, 'exactly the curated voting options');
+  assert.equal(body.features.length, BALLOT.length, 'exactly the curated voting options');
   const ids = new Set();
   for (const feature of body.features) {
     assert.equal(typeof feature.id, 'string', 'feature id');
