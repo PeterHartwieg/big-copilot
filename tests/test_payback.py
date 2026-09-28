@@ -147,6 +147,9 @@ class OutcomeTest(unittest.TestCase):
         # A factory losing money counts against the shops.
         self.assertEqual(chain_window_day([(10, 1000, 100000), (10, -500, 0)]), 210)
         self.assertIsNone(chain_window_day([(10, None, 1000), (20, -5, 1000)]))
+        # Paid back by the day the newest opened, though it loses money now:
+        # 1,000 x 90 = 90,000 of 60,000 by day 100.
+        self.assertEqual(chain_window_day([(10, 1000, 50000), (100, -1500, 10000)]), 100)
 
     def test_no_rate_is_unknown(self):
         self.assertEqual(payback_outcome(2000, [(10, -100)], True, 9, None), {"state": "unknown"})
@@ -238,6 +241,18 @@ class PaybackTest(PricesTestCase):
         expected = math.ceil((invested + 1000 * 30 + 3000 * 90) / 4000)
         self.assertEqual(chain["firm"], {"state": "window", "day": expected})
         self.assertGreaterEqual(expected, 90)
+
+    def test_an_old_chain_s_member_with_no_sale_still_costs_its_rent(self):
+        # Two shops before the record: one earning 2,000 a day, the other
+        # never sold anything and pays 500 a day of rent and wages.
+        save, regs, businesses, _ = self.company()
+        businesses[1] = business(BREWERY, 30)
+        chains = [{"name": "Liquor Stores", "sites": [KEY_SHOP, KEY_BREWERY]}]
+        rows = [(d, {SHOP: (2000, 2500), BREWERY: (-500, 0)}) for d in range(100, 161)]
+        out = _payback(save, Names({}), regs, businesses, chains, statements(rows), History(None), "CHAR")
+        invested = out["sites"][KEY_SHOP]["cost"]["firm"] + out["sites"][KEY_BREWERY]["cost"]["firm"]
+        self.assertEqual(out["chains"][KEY_SHOP]["firm"],
+                         {"state": "window", "day": 30 + math.ceil(invested / 1500)})
 
     def test_a_chain_of_cost_centres_that_sells_outside_has_a_row(self):
         save, regs, businesses, _ = self.company()

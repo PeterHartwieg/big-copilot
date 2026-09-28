@@ -155,6 +155,8 @@ test('an old chain whose members opened on different days shows the day Python w
   const name = await page.evaluate(k => enOf(D.chains.find(c => c.sites[0] === k), 'name'), SPIRITS);
   const cell = await page.$eval(`#portfolio tr.chain[data-chain="${name}"] td:last-child`, td => td.innerText.trim());
   assert.equal(cell, '~day 140');
+  assert.match(await page.$eval(`#portfolio tr.chain[data-chain="${name}"] .pb-cell`, e => e.dataset.tip),
+    /^Pays back around day 140 at recent profit, counted from each site's opening/);
   assert.equal(await page.evaluate(k => paybackRank(D.payback.chains[k]), SPIRITS), 140);
   // With no member earning, the plain wording and no day.
   await page.evaluate(k => { D.payback.chains[k].firm = {state: 'window'}; drawPortfolio(); }, SPIRITS);
