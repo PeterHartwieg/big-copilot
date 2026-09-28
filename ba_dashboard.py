@@ -12692,13 +12692,13 @@ def _alerts(
         note(
             "warn", msg("f.site.company", "Company"), "companydemand",
             msg("f.companydemand.insurance", {
-                "one": "{n} staff member with demands only you can meet: {demands}. Health insurance comes through "
+                "one": "{n} staff member with unmet demands: {demands}. Health insurance comes through "
                        "an HR manager's plan",
-                "other": "{n} staff with demands only you can meet: {demands}. Health insurance comes through "
+                "other": "{n} staff with unmet demands: {demands}. Health insurance comes through "
                          "an HR manager's plan"}, n=lacking, demands=demands)
             if insured else
-            msg("f.companydemand", {"one": "{n} staff member with demands only you can meet: {demands}",
-                                    "other": "{n} staff with demands only you can meet: {demands}"},
+            msg("f.companydemand", {"one": "{n} staff member with unmet demands: {demands}",
+                                    "other": "{n} staff with unmet demands: {demands}"},
                 n=lacking, demands=demands),
             always=True,
         )
