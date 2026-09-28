@@ -663,19 +663,20 @@
    "marketing": 0.0,
    "marketingIndex": 0,
    "marketingPlan": {
+    "agencies": [],
     "costNow": 0,
-    "costPlan": 6350,
+    "costPlan": null,
     "marketingNow": 0,
-    "marketingPlan": 100,
-    "needsSetup": true,
-    "on": [
-     "SmallInternet",
-     "MediumInternet",
-     "LargeBillboard"
-    ],
+    "marketingPlan": null,
+    "needsSetup": false,
+    "on": null,
     "promotionNow": 0,
-    "promotionPlan": 70,
-    "target": "marketing",
+    "promotionPlan": null,
+    "target": null,
+    "visit": [
+     "ba:street_secondavenue#5",
+     "ba:street_thirdavenue#17"
+    ],
     "was": []
    },
    "missingAmenities": [
@@ -864,17 +865,19 @@
    "marketing": 0.0,
    "marketingIndex": 0,
    "marketingPlan": {
+    "agencies": [],
     "costNow": 0,
-    "costPlan": 2500,
+    "costPlan": null,
     "marketingNow": 0,
-    "marketingPlan": 100,
-    "needsSetup": true,
-    "on": [
-     "MediumBillboard"
-    ],
+    "marketingPlan": null,
+    "needsSetup": false,
+    "on": null,
     "promotionNow": 0,
-    "promotionPlan": 90,
-    "target": "marketing",
+    "promotionPlan": null,
+    "target": null,
+    "visit": [
+     "ba:street_secondavenue#5"
+    ],
     "was": []
    },
    "missingAmenities": [
@@ -1332,6 +1335,54 @@
   "trendDays": 0,
   "types": []
  },
+ "marketingAgencies": [
+  {
+   "address": "17 Third Avenue",
+   "closed": false,
+   "contact": false,
+   "hours": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ],
+   "key": "ba:street_thirdavenue#17",
+   "name": "McCain's eMarketing",
+   "open": false,
+   "opens": null,
+   "types": [
+    "SmallInternet",
+    "MediumInternet",
+    "LargeInternet"
+   ]
+  },
+  {
+   "address": "5 Second Avenue",
+   "closed": false,
+   "contact": false,
+   "hours": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ],
+   "key": "ba:street_secondavenue#5",
+   "name": "CityAds",
+   "open": false,
+   "opens": null,
+   "types": [
+    "SmallBillboard",
+    "MediumBillboard",
+    "LargeBillboard"
+   ]
+  }
+ ],
  "meta": {
   "build": null,
   "character": "default",

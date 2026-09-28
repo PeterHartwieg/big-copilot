@@ -26,10 +26,19 @@ const STUB = '<script>window.mkWrites = []; window.LEDGER_SOURCE = {label: "Live
   + 'name: async () => null, watch(h){ window.calmWatch = h; }, link: () => window.mkLink || null, '
   + 'write: async (kind, body, o) => { window.mkWrites.push({kind, body: JSON.parse(JSON.stringify(body)), dryRun: !!(o && o.dryRun)}); '
   + 'return window.mkAnswer ? window.mkAnswer(kind, body, o) : {status: 0, error: "unreachable", body: null}; }};</script>';
-const LINK = {writes: ['uniforms', 'imports', 'schedule', 'hire', 'marketing'], day: 34, hour: 14, minute: 0, character: 'default', company: 'Link Co'};
+// Day 36 is a Monday: both agencies open 8 to 17 on weekdays.
+const LINK = {writes: ['uniforms', 'imports', 'schedule', 'hire', 'marketing'], day: 36, hour: 14, minute: 0, character: 'default', company: 'Link Co'};
+const NET = 'ba:street_thirdavenue#17', ADS = 'ba:street_secondavenue#5';
+const WEEK = [[], [[8, 17]], [[8, 17]], [[8, 17]], [[8, 17]], [[8, 17]], []];
+const AGENCIES = [
+  {key: NET, name: "McCain's eMarketing", address: '17 Third Avenue', contact: true, types: ['SmallInternet', 'MediumInternet', 'LargeInternet'],
+   hours: WEEK, closed: false, open: true, opens: null},
+  {key: ADS, name: 'CityAds', address: '5 Second Avenue', contact: true, types: ['SmallBillboard', 'MediumBillboard', 'LargeBillboard'],
+   hours: WEEK, closed: false, open: true, opens: null},
+];
 
 const plan = (on, was, o = {}) => Object.assign({on, was, costNow: 0, costPlan: 0, marketingNow: 0, marketingPlan: 0,
-  promotionNow: 0, promotionPlan: 100, target: 'promotion', needsSetup: true}, o);
+  promotionNow: 0, promotionPlan: 100, target: 'promotion', needsSetup: true, agencies: [NET, ADS], visit: []}, o);
 // Gifts runs Large internet and the plan is Small internet and Small billboard;
 // Bare runs its plan but misses switches; the office overspends and is set up.
 function withMarketing(text) {
@@ -41,14 +50,15 @@ function withMarketing(text) {
       {costNow: 500, costPlan: 600, marketingNow: 43, marketingPlan: 57, promotionNow: 90})});
   Object.assign(at(B), {promotion: 100, traffic: 70, marketingIndex: 40,
     campaigns: [{type: 'MediumBillboard', agency: 'ba:street_secondavenue#5', enabled: true}],
-    marketingPlan: plan(['MediumBillboard'], ['MediumBillboard'], {costNow: 2500, costPlan: 2500, promotionNow: 100})});
+    marketingPlan: plan(['MediumBillboard'], ['MediumBillboard'], {costNow: 2500, costPlan: 2500, promotionNow: 100, agencies: [NET]})});
   d.businesses.push(Object.assign(JSON.parse(JSON.stringify(at(G))), {key: O, name: 'HART. Law', code: 'MH',
     status: 'office', type: 'Law Firm', typeSlug: 'ba:businesstype_lawfirm', address: '88 Park Avenue', amenities: null,
     uniformGaps: [], uniformGapSkills: [], missingUniformLocker: false, promotion: 100, traffic: 70, marketingIndex: 100,
     campaigns: ['SmallInternet', 'MediumInternet', 'LargeInternet', 'SmallBillboard', 'MediumBillboard', 'LargeBillboard']
       .map(type => ({type, agency: 'ba:street_secondavenue#5', enabled: type === 'SmallBillboard' || type === 'LargeBillboard'})),
     marketingPlan: plan(['SmallBillboard'], ['SmallBillboard', 'LargeBillboard'],
-      {costNow: 6500, costPlan: 500, promotionNow: 100, needsSetup: false})}));
+      {costNow: 6500, costPlan: 500, promotionNow: 100, needsSetup: false, agencies: [ADS]})}));
+  d.marketingAgencies = AGENCIES;
   // The promotion finding alone, so no other warning folds it away.
   d.alerts = [{level: 'warn', site: 'HART. Gifts', group: 'promotion', siteKey: G, id: 'promo-gifts', worth: null, unit: '',
     text: 'HART. Gifts promotes at 90% of the 100% cap: 60% foot traffic and 43% marketing. The address sets the foot traffic, so the missing 10 points have to come from campaigns'}];
@@ -215,4 +225,79 @@ test('the promotion finding and Standards: every site at once, a site on plan on
   assert.equal(await dlg.locator('[data-gw-b="apply"]').isDisabled(), false);
   assert.equal(await dlg.locator('h2').textContent(), 'Set the cheapest mix at 1 site');
   assert.deepEqual((await writes(page)).at(-1).body.sites.map(s => s.address.number), [10]);
+});
+
+test('an agency the write needs is shut: the button waits and the line says when it opens', async (t) => {
+  // Monday 20:00: shut until Tuesday 8:00.
+  const page = await board(t, {link: Object.assign({}, LINK, {hour: 20})});
+  await openSite(page, G);
+  const set = page.locator('#sp-pull [data-gw="marketing"]');
+  assert.equal(await set.getAttribute('aria-disabled'), 'true');
+  assert.equal(await set.getAttribute('data-tip'), "McCain's eMarketing opens Tuesday at 8:00, CityAds opens Tuesday at 8:00.");
+  assert.match(await page.locator('#sp-pull .spmk').innerText(), /CityAds opens Tuesday at 8:00\./);
+  // Before opening on the same day: the hour alone.
+  const early = await board(t, {link: Object.assign({}, LINK, {hour: 7})});
+  await openSite(early, O);
+  assert.equal(await early.locator('#sp-pull [data-gw="marketing"]').getAttribute('data-tip'), 'CityAds opens at 8:00.');
+  // The finding's action for every site waits too.
+  await early.evaluate(() => { showPage('today'); });
+  assert.equal(await early.locator('#alerts .find[data-kind="promotion"] [data-gw="marketing"]').getAttribute('aria-disabled'), 'true');
+});
+
+test('no agency in the phone yet: the line names where to go, and there is no button', async (t) => {
+  const d = JSON.parse(payload);
+  d.marketingAgencies.forEach(a => { a.contact = false; });
+  Object.assign(d.businesses.find(b => b.key === G).marketingPlan, {on: null, costPlan: null, promotionPlan: null, marketingPlan: null,
+    target: null, agencies: [], visit: [NET, ADS]});
+  const page = await board(t, {data: JSON.stringify(d)});
+  await openSite(page, G);
+  assert.equal((await page.locator('#sp-pull .spmk').innerText()).trim(),
+    "No campaigns can be booked from here yet: visit McCain's eMarketing (17 Third Avenue), CityAds (5 Second Avenue) once.");
+  assert.equal(await page.locator('#sp-pull [data-gw]').count(), 0);
+  // An agency that would make a better plan: one hint under the plan.
+  const better = JSON.parse(payload);
+  better.businesses.find(b => b.key === B).marketingPlan.visit = [NET];
+  const hint = await board(t, {data: JSON.stringify(better)});
+  await openSite(hint, B);
+  assert.match(await hint.locator('#sp-pull .spmk').innerText(), /Visit McCain's eMarketing \(17 Third Avenue\) once to plan with its campaigns too\./);
+});
+
+test('the game refuses a row for a shut or unknown agency, and an undo while it is shut', async (t) => {
+  const page = await board(t);
+  await answering(page, {errors: {[G]: 'agency_closed'}});
+  await openSite(page, G);
+  await page.locator('#sp-pull [data-gw="marketing"]').click();
+  await phase(page, 'ready');
+  const dlg = page.locator('dialog.gw-dlg');
+  // The row names the agency by the board's name for its address; the
+  // answer's own opening hour is said.
+  await page.evaluate(() => { window.mkAnswer = async (kind, body) => ({status: 200, error: null, body: {ok: false, kind: 'marketing', dryRun: true,
+    rows: body.sites.map(s => ({address: s.address, error: 'agency_closed', agency: {address: {street: 'ba:street_secondavenue', number: 5}},
+      opens: {day: 37, hour: 8}}))}}); });
+  await dlg.locator('[data-gw-b="retry"]').click();
+  await page.waitForFunction(() => /CityAds is closed right now/.test(document.querySelector('dialog.gw-dlg .gw-no')?.textContent || ''));
+  assert.match(await dlg.locator('.gw-no').innerText(), /It opens Tuesday at 8:00: try again then\./);
+  assert.equal(await dlg.locator('[data-gw-b="apply"]').isDisabled(), true);
+  await page.evaluate(() => { window.mkAnswer = async (kind, body) => ({status: 200, error: null, body: {ok: false, kind: 'marketing', dryRun: true,
+    rows: body.sites.map(s => ({address: s.address, error: 'no_contact', agency: {name: 'CityAds'}}))}}); });
+  await dlg.locator('[data-gw-b="retry"]').click();
+  await page.waitForFunction(() => /CityAds is not in your phone's contacts/.test(document.querySelector('dialog.gw-dlg .gw-no')?.textContent || ''));
+  // An apply, then the undo refused while the agency is shut.
+  await answering(page);
+  await dlg.locator('[data-gw-b="retry"]').click();
+  await phase(page, 'ready');
+  await dlg.locator('[data-gw-b="apply"]').click();
+  await phase(page, 'done');
+  // The mod refuses the undo as a write: 409 refused, the row naming the agency.
+  await page.evaluate(g => { window.mkAnswer = async () => ({status: 409, error: 'refused',
+    body: {ok: false, kind: 'marketing', undo: true, rows: [{address: g, error: 'agency_closed', agency: {name: 'CityAds', address: {street: 'ba:street_secondavenue', number: 5}},
+      opens: {day: 36, hour: 16}}]}}); }, addr(G));
+  await dlg.locator('[data-gw-b="undo"]').click();
+  await phase(page, 'failed');
+  assert.match(await dlg.locator('.gw-no').innerText(), /CityAds is closed right now\.[\s\S]*It opens at 16:00: try again then\./);
+  // The undo stays: Try again asks the game to undo once more.
+  assert.equal(await dlg.locator('[data-gw-again]').count(), 1);
+  await answering(page);
+  await dlg.locator('[data-gw-again]').click();
+  await phase(page, 'undone');
 });

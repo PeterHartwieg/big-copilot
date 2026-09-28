@@ -953,8 +953,16 @@ and dims the rest; clicking scrolls there.
   past 100. With the game link it carries a **Set** button: a dry run first, then the game
   switches the mix on and every other campaign off (never removed), and Undo puts the
   switches back. Every write also sets the site up so BizMan's Marketing page shows a switch
-  for all six types, which otherwise takes a visit to each agency and a call; a site that
-  runs its mix but misses a switch gets a **Set up** button for that alone. Without the
+  for every type its agencies sell, which otherwise takes a call to each agency; a site that
+  runs its mix but misses a switch gets a **Set up** button for that alone.
+
+  Campaigns go only through an agency the player has visited once (it is then a phone
+  contact), and only while it is open (8:00 to 17:00 on weekdays in the cities seen). The plan
+  uses only the types the known agencies sell, and keeps any other campaign as it runs. With
+  no agency known and a change needed there is no plan: the line names the agencies to visit,
+  with their addresses. An agency not known yet whose campaigns would make a better plan gets
+  one line, "Visit … once". While an agency the write needs is closed, the button waits and
+  the line says when it opens; an Undo while it is closed is refused the same way. Without the
   link, or with a mod older than 0.4.0, the line says which switches to flip in BizMan
   instead. The Promotion finding offers the cheapest mix at every site it would change,
   and Businesses › Standards also offers the set-up for every shop and office missing a

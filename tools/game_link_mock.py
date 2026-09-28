@@ -48,8 +48,13 @@ A marketing write (POST /write/marketing) reads each site's campaigns and the
 phone's contacts from the save, takes the city's two agencies from a table
 (MARKETING_AGENCIES: the map is the same in every save), and answers the
 promotion the board's own model gives (marketing_score in ba_dashboard, over
-ba_buildings.json). It keeps the campaigns, contacts and promotion an apply
-left in memory, and undoes the enabled flags it switched.
+ba_buildings.json). It uses only agencies that are phone contacts (the
+save's Contacts) and open at the mock's clock (the agency registration's
+scheduleDays and temporarilyClosed), never adds a contact, keeps the campaigns
+and promotion an apply left in memory, and undoes the enabled flags it
+switched. --agency-closed / --agency-open / --no-contact STREET:NUMBER (or
+/debug/config "agencyClosed", "agencyOpen", "noContact") force an agency
+closed, open, or out of the phone's contacts.
 """
 from __future__ import annotations
 
@@ -96,7 +101,7 @@ ENDPOINTS = (["/health", "/save", "/refresh"] + [f"/write/{k}" for k in (*WRITE_
              + ["/pair/request", "/pair/status"])
 # The refusal --refuse-write refused answers per kind when it names no rule.
 REFUSED_DEFAULT = {"uniforms": "no_locker", "imports": "locked", "schedule": "screen_open", "hire": "screen_open",
-                   "marketing": "no_promotion"}
+                   "marketing": "agency_closed"}
 UNDOABLE = ("uniforms", "imports", "schedule", "marketing")  # a hire has no undo
 HQ_TYPE = "ba:businesstype_headquarters"
 CLEANING_STATION = "ba:itemname_cleaningstation"
@@ -156,10 +161,10 @@ def _wire(address: tuple[str, int]) -> dict:
 
 
 def _cli_address(text: str) -> tuple[str, int]:
-    """--screen-open's STREET:NUMBER as an address; the street may hold a colon."""
+    """A flag's STREET:NUMBER as an address; the street may hold a colon."""
     street, _, number = text.rpartition(":")
     if not street or not number.isdigit():
-        raise SystemExit(f"--screen-open {text!r} must be STREET:NUMBER")
+        raise SystemExit(f"{text!r} must be STREET:NUMBER")
     return street, int(number)
 
 
@@ -176,7 +181,8 @@ class Link:
                  pair: str = "approve", writes: list | None = list(WRITE_KINDS),
                  refuse_write: str | None = None, busy_writes: int = 0,
                  hire_gone: list | None = None, myemployees: bool = False,
-                 screen_open: list | None = None):
+                 screen_open: list | None = None, agency_open: list | None = None,
+                 agency_closed: list | None = None, no_contact: list | None = None):
         self.path = path
         self.character, self.company = character, company
         self._loaded = (character, company)  # what a reset puts back
@@ -207,7 +213,11 @@ class Link:
         self.uniforms: dict = {}    # address -> {skill: preset id}
         self.campaigns: dict = {}   # address -> [{type, agency, enabled}], a marketing apply's
         self.promotions: dict = {}  # address -> the promotion a marketing apply left
-        self.contacts: set = set()  # agency addresses a marketing apply made phone contacts
+        # Marketing agencies forced open or closed, and contacts dropped from the
+        # phone (addresses), so the page's tests reach no_contact and agency_closed.
+        self.agency_open: set = set(agency_open or ())
+        self.agency_closed: set = set(agency_closed or ())
+        self.no_contact: set = set(no_contact or ())
         self.products: dict = {}    # (contract id, item, address) -> amount
         self.contracts: dict = {}   # contract id -> {active, repeating, nextDeliveryDay}
         self.order: list | None = None
@@ -434,6 +444,15 @@ class Link:
             answer["stamp"] = before
         return status, answer
 
+    def _forced_agency(self, rule: str) -> dict:
+        """The agency a forced no_contact or agency_closed names: the billboard
+        agency, and for closed, tomorrow at 8."""
+        if rule not in ("no_contact", "agency_closed"):
+            return {"agency": None, "opens": None}
+        where, name, _ = MARKETING_AGENCIES[1]
+        return {"agency": {"name": name, "address": _wire(where)},
+                "opens": {"day": self.day + 1, "hour": 8} if rule == "agency_closed" else None}
+
     def _refusal(self, kind: str, body: dict) -> tuple[int, dict]:
         error, _, detail = self.refuse_write.partition(":")
         if error == "not_paired":
@@ -460,6 +479,8 @@ class Link:
             for row in rows:
                 if "error" in row:
                     row["error"] = rule
+                if kind == "marketing":
+                    row.update(self._forced_agency(rule))
                 if rule == "locked":
                     # The mod's ReopenDay(): Monday 08:00, tomorrow on a Sunday.
                     row["reopens"] = {"day": self._imminent_monday(), "hour": 8}
@@ -472,8 +493,13 @@ class Link:
             rule = "changed" if error == "changed" else detail or REFUSED_DEFAULT.get(target, "screen_open")
             head = {"error": "changed" if rule == "changed" else "refused", "ok": False, "kind": target,
                     "dryRun": False, "undo": True}
-            if target in ("uniforms", "marketing"):
+            if target == "uniforms":
                 return 409, dict(head, error="changed", rows=[{"error": "changed"}])
+            if target == "marketing":
+                if rule not in ("changed", "no_contact", "agency_closed"):
+                    rule = "agency_closed"
+                return 409, dict(head, error="changed" if rule == "changed" else "refused",
+                                 rows=[dict({"error": rule}, **self._forced_agency(rule))])
             if target == "schedule":
                 return 409, dict(head, siteError=rule, rows=[] if rule == "changed" else [{"error": rule}])
             row = {"error": rule, "products": []}
@@ -617,11 +643,11 @@ class Link:
         return out
 
     def _contact_addresses(self, save) -> set:
-        """The addresses the phone's contacts are linked to, and the agencies an
-        apply has added."""
+        """The addresses the phone's contacts are linked to (Contact.Address),
+        less the ones /debug/config "noContact" drops. The write never adds one."""
         held = {(c.get("streetName"), c.get("streetNumber")) for c in save.items(save.root.get("Contacts"))
-                if isinstance(c, dict)}
-        return held | self.contacts
+                if isinstance(c, dict) and c.get("streetName")}
+        return held - self.no_contact
 
     def _agency_name(self, save, agency) -> str:
         reg = self._registration(save, agency)
@@ -633,6 +659,47 @@ class Link:
     def _agency_for(kind: int):
         """The first agency that sells this type, as the game's walk finds it."""
         return next((where for where, _name, kinds in MARKETING_AGENCIES if kind in kinds), None)
+
+    @staticmethod
+    def _open_at(save, reg, day: int, hour: int) -> bool:
+        """BusinessHelper.IsBusinessOpen over the registration's own week: today's
+        ScheduleDay (weekday Monday 1 to Sunday 7, TimeHelper.GetDayOfWeek) open,
+        and the hour inside one of its opening slots. Temporarily closed is the
+        caller's."""
+        weekday = (day - 1) % 7 + 1
+        today = next((d for d in save.items(reg.get("scheduleDays"))
+                      if isinstance(d, dict) and d.get("day") == weekday), None)
+        if not today or not today.get("isOpen"):
+            return False
+        return any(isinstance(s, dict) and (s.get("startingHour") or 0) <= hour < (s.get("endingHour") or 0)
+                   for s in save.items(today.get("openingHourSlots")))
+
+    def _agency_check(self, save, agency, contacts, cache) -> dict:
+        """{error, name, opens} for an agency, now: a phone contact, and open by
+        its registration's week and temporarilyClosed at the mock's clock (the
+        live game's, which /health reports), unless /debug/config forces it."""
+        if agency in cache:
+            return cache[agency]
+        check = {"error": None, "name": self._agency_name(save, agency), "opens": None}
+        reg = self._registration(save, agency)
+        if agency not in contacts:
+            check["error"] = "no_contact"
+        elif agency in self.agency_open:
+            pass
+        elif agency in self.agency_closed or reg is None or reg.get("temporarilyClosed") \
+                or not self._open_at(save, reg, self.day, self.hour):
+            check["error"] = "agency_closed"
+            if agency not in self.agency_closed and reg is not None and not reg.get("temporarilyClosed"):
+                for step in range(1, 8 * 24 + 1):
+                    day, hour = self.day + (self.hour + step) // 24, (self.hour + step) % 24
+                    if self._open_at(save, reg, day, hour):
+                        check["opens"] = {"day": day, "hour": hour}
+                        break
+            elif agency in self.agency_closed:
+                # Forced closed: the next hour its week opens, else tomorrow at 8.
+                check["opens"] = {"day": self.day + 1, "hour": 8}
+        cache[agency] = check
+        return check
 
     def _promotion(self, save, reg, address, on) -> dict | None:
         """{trafficIndex, marketing, total} for the site running `on` (type ids),
@@ -665,6 +732,12 @@ class Link:
         running = sorted({c["type"] for c in campaigns if c["enabled"]})
         return [types[k][0] for k in running], float(sum(types[c["type"]][1] for c in campaigns if c["enabled"]))
 
+    @staticmethod
+    def _marketing_blank(address, business=None, error=None) -> dict:
+        return {"address": _wire(address), "business": business, "before": None, "on": [], "dailyCost": 0.0,
+                "promotion": None, "turnedOn": [], "turnedOff": [], "entriesAdded": [], "campaigns": [],
+                "error": error, "agency": None, "opens": None}
+
     def _marketing_row(self, save, reg, address, before_campaigns, after_campaigns, added, *, promotion_after):
         types = self._marketing_types()
         before_on, before_cost = self._marketing_state(before_campaigns)
@@ -678,8 +751,28 @@ class Link:
             "entriesAdded": [types[k][0] for k in added],
             "campaigns": [{"type": types[c["type"]][0], "agency": _wire(c["agency"]) if c["agency"] else None,
                            "enabled": c["enabled"]} for c in sorted(after_campaigns, key=lambda c: c["type"])],
-            "error": None,
+            "error": None, "agency": None, "opens": None,
         }
+
+    def _refused_row(self, save, reg, address, campaigns, error, check=None) -> dict:
+        """A refused row: the site as it is, nothing planned, and the agency a
+        no_contact or agency_closed names."""
+        row = self._marketing_row(save, reg, address, campaigns, campaigns, [],
+                                  promotion_after=self._promotion_now(save, reg, address))
+        row.update(turnedOn=[], turnedOff=[], campaigns=[], error=error)
+        if check is not None:
+            row["agency"] = {"name": check["name"], "address": _wire(check["address"])}
+            row["opens"] = check["opens"]
+        return row
+
+    def _blocking(self, save, changes, contacts, cache):
+        """The first agency, in type order, that a change touches and the player
+        may not use now: (error, check), or (None, None)."""
+        for c in sorted(changes, key=lambda c: c["type"]):
+            check = self._agency_check(save, c["agency"], contacts, cache)
+            if check["error"]:
+                return check["error"], dict(check, address=c["agency"])
+        return None, None
 
     def _marketing(self, save, body, dry):
         from ba_dashboard import MARKETING_REACH, load_buildings
@@ -707,18 +800,19 @@ class Link:
             seen.add(address)
             parsed.append((address, type_ids(site.get("on"), "sites[].on"), type_ids(site.get("was"), "sites[].was")))
 
-        contacts = self._contact_addresses(save)
-        rows, plans, contacts_added = [], [], {}
+        contacts, cache = self._contact_addresses(save), {}
+
+        def usable(agency) -> bool:
+            return self._agency_check(save, agency, contacts, cache)["error"] is None
+
+        rows, plans = [], []
         for address, on, was in parsed:
-            blank = {"address": _wire(address), "business": None, "before": None, "on": [], "dailyCost": 0.0,
-                     "promotion": None, "turnedOn": [], "turnedOff": [], "entriesAdded": [], "campaigns": [],
-                     "error": None}
             if other_save:
-                rows.append(dict(blank, error="changed"))  # another company's building, never touched
+                rows.append(self._marketing_blank(address, error="changed"))  # another company's building
                 continue
             reg = self._registration(save, address)
             if reg is None:
-                rows.append(dict(blank, error="not_found"))
+                rows.append(self._marketing_blank(address, error="not_found"))
                 continue
             before = self._campaigns(save, reg, address)
             running = {c["type"] for c in before if c["enabled"]}
@@ -735,20 +829,19 @@ class Link:
             elif any(self._agency_for(k) is None for k in on):
                 error = "no_agency"
             if error:
-                row = self._marketing_row(save, reg, address, before, before, [],
-                                          promotion_after=self._promotion_now(save, reg, address))
-                row["turnedOn"] = row["turnedOff"] = []
-                row["campaigns"] = []
-                row["error"] = error
-                rows.append(row)
+                rows.append(self._refused_row(save, reg, address, before, error))
                 continue
-            # The set-up: an entry for every type an agency sells, then each type
-            # on at one agency (the one the site already uses) and off elsewhere.
+            # Each type on at one agency (the one the site already uses) and off
+            # elsewhere; the set-up adds a disabled entry only where the player may
+            # use the agency now.
             after, added = [dict(c) for c in before], []
             for kind in range(len(names)):
                 mine = [c for c in after if c["type"] == kind]
                 if not mine:
-                    agency = self._agency_for(kind)
+                    sellers = [where for where, _name, kinds in MARKETING_AGENCIES if kind in kinds]
+                    agency = next((a for a in sellers if usable(a)), None)
+                    if agency is None and kind in on:
+                        agency = sellers[0]
                     if agency is None:
                         continue
                     mine = [{"type": kind, "agency": agency, "enabled": False}]
@@ -757,21 +850,21 @@ class Link:
                 keep = next((c for c in mine if c["enabled"]), mine[0])
                 for c in mine:
                     c["enabled"] = c is keep and kind in on
+            was_on = [c["enabled"] for c in before] + [None] * len(added)
+            changes = [c for c, w in zip(after, was_on) if w != c["enabled"]]
+            error, check = self._blocking(save, changes, contacts, cache)
+            if error:
+                rows.append(self._refused_row(save, reg, address, before, error, check))
+                continue
             promotion = self._promotion(save, reg, address, on)
             rows.append(self._marketing_row(save, reg, address, before, after, added, promotion_after=promotion))
-            for c in after:
-                if c["agency"] and c["agency"] not in contacts and c["agency"] not in contacts_added:
-                    contacts_added[c["agency"]] = self._agency_name(save, c["agency"])
             # What undo restores: each campaign whose flag the write switched.
-            flips = [{"type": c["type"], "agency": c["agency"], "before": was_on, "after": c["enabled"]}
-                     for c, was_on in zip(after, [c["enabled"] for c in before] + [False] * len(added))
-                     if was_on != c["enabled"]]
+            flips = [{"type": c["type"], "agency": c["agency"], "before": bool(w), "after": c["enabled"]}
+                     for c, w in zip(after, was_on) if bool(w) != c["enabled"]]
             plans.append((address, reg.get("BusinessName"), after, promotion, flips))
 
         ok = all(row["error"] is None for row in rows)
-        answer = {"ok": ok, "kind": "marketing", "dryRun": dry,
-                  "contactsAdded": [{"name": name, "address": _wire(where)} for where, name in contacts_added.items()],
-                  "rows": rows}
+        answer = {"ok": ok, "kind": "marketing", "dryRun": dry, "rows": rows}
         if dry:
             return 200, answer
         if not ok:
@@ -781,7 +874,6 @@ class Link:
             self.campaigns[address] = after
             if promotion is not None:
                 self.promotions[address] = promotion
-        self.contacts |= set(contacts_added)
         undo = [{"address": address, "business": business, "flips": flips}
                 for address, business, _after, _promotion, flips in plans if flips]
         if undo:
@@ -791,41 +883,42 @@ class Link:
         return 200, answer
 
     def _undo_marketing(self, record, dry):
-        """Each switched flag back, where it still holds what the write left."""
+        """Each switched flag back, where it still holds what the write left and
+        its agency is a contact and open now."""
         save = self._save()
-        rows, restores, changed = [], [], False
+        contacts, cache = self._contact_addresses(save), {}
+        rows, restores, changed, blocked = [], [], False, False
         for site in record["sites"]:
             address = site["address"]
             reg = self._registration(save, address)
             if reg is None:
                 changed = True
-                rows.append({"address": _wire(address), "business": site["business"], "before": None, "on": [],
-                             "dailyCost": 0.0, "promotion": None, "turnedOn": [], "turnedOff": [],
-                             "entriesAdded": [], "campaigns": [], "error": "changed"})
+                rows.append(self._marketing_blank(address, site["business"], "changed"))
                 continue
             now = self._campaigns(save, reg, address)
             after = [dict(c) for c in now]
-            error = None
+            error, check, switched = None, None, []
             for flip in site["flips"]:
                 held = next((c for c in after if c["type"] == flip["type"] and c["agency"] == flip["agency"]), None)
                 if held is None or held["enabled"] != flip["after"]:
                     error = "changed"
                     break
                 held["enabled"] = flip["before"]
+                switched.append(held)
+            if not error:
+                error, check = self._blocking(save, switched, contacts, cache)
             if error:
-                changed = True
-                row = self._marketing_row(save, reg, address, now, now, [],
-                                          promotion_after=self._promotion_now(save, reg, address))
-                row.update(turnedOn=[], turnedOff=[], campaigns=[], error=error)
-                rows.append(row)
+                changed, blocked = changed or error == "changed", blocked or error != "changed"
+                rows.append(self._refused_row(save, reg, address, now, error, check))
                 continue
             on = {c["type"] for c in after if c["enabled"]}
             promotion = self._promotion(save, reg, address, on)
             rows.append(self._marketing_row(save, reg, address, now, after, [], promotion_after=promotion))
             restores.append((address, after, promotion))
-        answer = {"ok": not changed, "kind": "marketing", "dryRun": dry, "undo": True, "contactsAdded": [], "rows": rows}
-        if changed:
-            return (200, answer) if dry else (409, dict(answer, error="changed"))
+        failed = changed or blocked
+        answer = {"ok": not failed, "kind": "marketing", "dryRun": dry, "undo": True, "rows": rows}
+        if failed:
+            return (200, answer) if dry else (409, dict(answer, error="changed" if changed else "refused"))
         if not dry:
             for address, after, promotion in restores:
                 self.campaigns[address] = after
@@ -1567,7 +1660,8 @@ class Link:
                 self.applied, self.undo, self.order = [], {}, None
                 self.uniforms, self.products, self.contracts, self.schedules = {}, {}, {}, {}
                 self.opened, self.terms = {}, {}
-                self.campaigns, self.promotions, self.contacts = {}, {}, set()
+                self.campaigns, self.promotions = {}, {}
+                self.agency_open, self.agency_closed, self.no_contact = set(), set(), set()
                 self.moved, self.hired, self.gone, self.myemployees = {}, set(), set(), False
                 self.screen_open = set()
                 self.pair, self.pair_delay, self.pair_requests, self.tokens = "approve", PAIR_DELAY, {}, {}
@@ -1606,6 +1700,12 @@ class Link:
                 self.myemployees = bool(body["myEmployees"])
             if "screenOpen" in body:  # the sites BizMan's schedule screen is open on
                 self.screen_open = {_address(a, "screenOpen[]") for a in body["screenOpen"] or ()}
+            if "agencyOpen" in body:  # marketing agencies open whatever their hours say
+                self.agency_open = {_address(a, "agencyOpen[]") for a in body["agencyOpen"] or ()}
+            if "agencyClosed" in body:  # marketing agencies closed whatever their hours say
+                self.agency_closed = {_address(a, "agencyClosed[]") for a in body["agencyClosed"] or ()}
+            if "noContact" in body:  # agencies the phone's contacts do not hold, whatever the save says
+                self.no_contact = {_address(a, "noContact[]") for a in body["noContact"] or ()}
             return {"refuseWrite": self.refuse_write, "busyWrites": self.busy_writes,
                     "writes": self.writes, "applied": len(self.applied)}
 
@@ -1894,6 +1994,13 @@ def main() -> None:
     ap.add_argument("--screen-open", action="append", default=[], metavar="STREET:NUMBER",
                     help="BizMan's schedule screen is open on this site (repeatable): "
                          "a schedule or hire write touching it is refused screen_open")
+    ap.add_argument("--agency-closed", action="append", default=[], metavar="STREET:NUMBER",
+                    help="a marketing agency closed whatever its hours say (repeatable): a marketing write "
+                         "that changes a campaign there answers agency_closed")
+    ap.add_argument("--agency-open", action="append", default=[], metavar="STREET:NUMBER",
+                    help="a marketing agency open whatever its hours say (repeatable)")
+    ap.add_argument("--no-contact", action="append", default=[], metavar="STREET:NUMBER",
+                    help="a marketing agency the phone's contacts do not hold (repeatable): answers no_contact")
     args = ap.parse_args()
     if not os.path.isfile(args.save):
         raise SystemExit(f"{args.save} is not a file")
@@ -1902,7 +2009,10 @@ def main() -> None:
                 cash=args.cash, build=args.build, schema=args.schema, throttle=args.throttle, refuse=args.refuse,
                 pair=args.pair, writes=writes, refuse_write=args.refuse_write, busy_writes=args.busy_writes,
                 hire_gone=args.hire_gone, myemployees=args.myemployees,
-                screen_open=[_cli_address(a) for a in args.screen_open])
+                screen_open=[_cli_address(a) for a in args.screen_open],
+                agency_closed=[_cli_address(a) for a in args.agency_closed],
+                agency_open=[_cli_address(a) for a in args.agency_open],
+                no_contact=[_cli_address(a) for a in args.no_contact])
     server = MockServer(link, args.port).start()
     print(f"Serving {args.save} as the game link at {server.url}/  (Ctrl+C to stop)", flush=True)
     try:

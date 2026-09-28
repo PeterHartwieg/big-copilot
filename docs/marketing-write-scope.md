@@ -108,6 +108,8 @@ Shops and offices are covered. Headquarters have a promotion but no customers, s
   by hand from then on. A disabled entry costs nothing: billing, reach and the billboards in the
   world all count enabled campaigns only. The write adds no chat messages; the mod's usual
   notification says what changed.
+- **Seeding needs no consent from a closed agency:** new switch entries go only to agencies that
+  are a contact and open; a closed or unknown agency just gets none, and that alone refuses nothing.
 - **What a row may touch:** every agency whose campaigns a row would change must be a contact
   and open. That covers turning a type on or off and adding entries. Otherwise the row answers
   `no_contact` or `agency_closed`, naming the agency and, when closed, its next opening hour, and
@@ -121,7 +123,7 @@ Shops and offices are covered. Headquarters have a promotion but no customers, s
   tagged), `no_agency` (no agency offers the type), `no_contact`, `agency_closed`.
 - **Undo:** `POST /write/undo {"kind": "marketing"}` restores the previous enabled flags on
   campaigns that are still as the write left them. Campaigns the write added are disabled
-  again. The added entries and contacts stay, because they are set-up and cost nothing.
+  again. The added entries stay, because they are set-up and cost nothing.
 - Everything in "Every write" applies unchanged: pairing, `busy`, `cannot_write`, the notify
   message, 256 KiB.
 

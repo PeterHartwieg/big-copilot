@@ -997,19 +997,20 @@
    "marketing": 0.0,
    "marketingIndex": 20.0,
    "marketingPlan": {
+    "agencies": [],
     "costNow": 0,
-    "costPlan": 1100,
+    "costPlan": null,
     "marketingNow": 20.0,
-    "marketingPlan": 80,
-    "needsSetup": true,
-    "on": [
-     "SmallInternet",
-     "LargeInternet",
-     "SmallBillboard"
-    ],
+    "marketingPlan": null,
+    "needsSetup": false,
+    "on": null,
     "promotionNow": 120.0,
-    "promotionPlan": 100,
-    "target": "promotion",
+    "promotionPlan": null,
+    "target": null,
+    "visit": [
+     "ba:street_secondavenue#5",
+     "ba:street_thirdavenue#17"
+    ],
     "was": []
    },
    "missingAmenities": [
@@ -1321,18 +1322,20 @@
    "marketing": 0.0,
    "marketingIndex": 0.0,
    "marketingPlan": {
+    "agencies": [],
     "costNow": 0,
-    "costPlan": 600,
+    "costPlan": null,
     "marketingNow": 0.0,
-    "marketingPlan": 53,
-    "needsSetup": true,
-    "on": [
-     "SmallInternet",
-     "SmallBillboard"
-    ],
+    "marketingPlan": null,
+    "needsSetup": false,
+    "on": null,
     "promotionNow": 80.0,
-    "promotionPlan": 100,
-    "target": "promotion",
+    "promotionPlan": null,
+    "target": null,
+    "visit": [
+     "ba:street_secondavenue#5",
+     "ba:street_thirdavenue#17"
+    ],
     "was": []
    },
    "missingAmenities": [
@@ -7077,6 +7080,54 @@
    }
   ]
  },
+ "marketingAgencies": [
+  {
+   "address": "17 Third Avenue",
+   "closed": false,
+   "contact": false,
+   "hours": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ],
+   "key": "ba:street_thirdavenue#17",
+   "name": "McCain's eMarketing",
+   "open": false,
+   "opens": null,
+   "types": [
+    "SmallInternet",
+    "MediumInternet",
+    "LargeInternet"
+   ]
+  },
+  {
+   "address": "5 Second Avenue",
+   "closed": false,
+   "contact": false,
+   "hours": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ],
+   "key": "ba:street_secondavenue#5",
+   "name": "CityAds",
+   "open": false,
+   "opens": null,
+   "types": [
+    "SmallBillboard",
+    "MediumBillboard",
+    "LargeBillboard"
+   ]
+  }
+ ],
  "meta": {
   "build": 3671,
   "character": "PAYLOADco",

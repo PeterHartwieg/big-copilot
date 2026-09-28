@@ -13,12 +13,14 @@ namespace BigCopilotLink
     /// "ba:gameevent_newmarketing", and removes unticked types (the write never
     /// removes: it disables, as the phone does, so undo stays exact). BizMan draws a
     /// block of switches only for agencies the site has an entry with, and only for a
-    /// phone contact; the contact is BuildingRegistration.GetOrAddBusinessContact on
-    /// the agency, the call SpecialEmployeeController makes when the player talks to
-    /// its employee. So every write gives the site an entry for every type an agency
-    /// sells (the unused ones disabled, which costs nothing: MarketingHelper.RunDaily,
-    /// GetMarketingEfficiency and GetDailyMarketingExpenses all count enabled ones
-    /// only) and makes each agency it names a contact.
+    /// phone contact. The write goes only through agencies the player already knows (a
+    /// phone contact: they visited once) and only while they are open
+    /// (BusinessHelper.IsBusinessOpen, the game's own check); it never adds a contact
+    /// (Peter, 28 Sep 2026). Every write gives the site an entry for every type such an
+    /// agency sells (the unused ones disabled, which costs nothing: MarketingHelper.RunDaily,
+    /// GetMarketingEfficiency and GetDailyMarketingExpenses all count enabled ones only),
+    /// so BizMan shows every switch from then on. A row that would change a campaign at
+    /// an agency that is not a contact, or is closed, is refused whole.
     /// </summary>
     public static class MarketingWrite
     {
@@ -69,6 +71,16 @@ namespace BigCopilotLink
             public List<int> Types;
         }
 
+        /// <summary>Whether an agency may be used now: Error null, "no_contact" or "agency_closed".</summary>
+        private sealed class AgencyCheck
+        {
+            public WireAddress Address;
+            public string Name;
+            public string Error;
+            /// <summary>{day, hour} of the next opening, for agency_closed; null when none is known.</summary>
+            public int[] Opens;
+        }
+
         /// <summary>One campaign entry of a site as the write leaves it.</summary>
         private sealed class Entry
         {
@@ -85,6 +97,8 @@ namespace BigCopilotLink
             public BuildingRegistration Registration;
             public string Business;
             public string Error;
+            /// <summary>The agency a no_contact or agency_closed names.</summary>
+            public AgencyCheck Blocked;
             public readonly List<Entry> Entries = new List<Entry>();
             public readonly List<int> Added = new List<int>();
             // Before: what the game holds.
@@ -145,6 +159,7 @@ namespace BigCopilotLink
                 (req.ExpectCharacter != null && !string.Equals(req.ExpectCharacter, game.characterId ?? "", StringComparison.Ordinal)) ||
                 (req.ExpectCompany != null && !string.Equals(req.ExpectCompany, game.SaveGameName ?? "", StringComparison.Ordinal));
             var agencies = Agencies();
+            var checks = new Dictionary<string, AgencyCheck>(StringComparer.Ordinal);
             var rows = new List<Row>();
             var failed = false;
 
@@ -159,27 +174,11 @@ namespace BigCopilotLink
                     continue;
                 }
                 row.Error = CheckSite(row, site, agencies);
-                if (row.Error != null)
-                {
-                    failed = true;
-                    continue;
-                }
-                Plan(row, site.On, agencies);
+                if (row.Error == null) row.Error = Plan(row, site.On, agencies, checks);
+                if (row.Error != null) failed = true;
             }
 
-            // The agencies the call makes phone contacts, once each.
-            var contacts = new List<Agency>();
-            foreach (var row in rows)
-            {
-                if (row.Error != null) continue;
-                foreach (var e in row.Entries)
-                {
-                    var agency = agencies.Find(a => a.Address.Is(e.Agency.Street, e.Agency.Number));
-                    if (agency != null && !contacts.Contains(agency) && !IsContact(agency)) contacts.Add(agency);
-                }
-            }
-
-            if (dryRun || failed) return Answer(rows, contacts, dryRun, failed, false, null);
+            if (dryRun || failed) return Answer(rows, dryRun, failed, false, null);
 
             var undo = new UndoState();
             var turnedOn = false;
@@ -210,26 +209,26 @@ namespace BigCopilotLink
                 AfterChange(row);
                 if (changed) touched.Add(row);
             }
-            foreach (var agency in contacts) AddContact(agency);
             if (turnedOn) Fire(NewMarketingEvent);
             // The last write of the kind is what undo restores, even one that switched nothing.
             ws.MarketingUndo = undo.Flips.Count > 0 ? undo : null;
 
             string stamp;
-            if (touched.Count > 0 || contacts.Count > 0)
+            if (touched.Count > 0)
             {
-                var named = touched.Count > 0 ? touched : rows;
-                var business = named.Count == 1 ? named[0].Business : WriteService.Count(named.Count, "business", "businesses");
+                var business = touched.Count == 1 ? touched[0].Business : WriteService.Count(touched.Count, "business", "businesses");
                 stamp = ws.Applied("bigcopilotlink_notify_marketing", business);
             }
             else stamp = ws.RefreshAfterWrite();
-            return Answer(rows, contacts, false, false, false, stamp);
+            return Answer(rows, false, false, false, stamp);
         }
 
         public static WriteAnswer Undo(WriteService ws, UndoState state, bool dryRun)
         {
             var rows = new List<Row>();
             var changed = false;
+            var agencies = Agencies();
+            var checks = new Dictionary<string, AgencyCheck>(StringComparer.Ordinal);
             foreach (var flip in state.Flips)
             {
                 var row = rows.Find(r => r.Address.Is(flip.Site.Street, flip.Site.Number));
@@ -260,14 +259,24 @@ namespace BigCopilotLink
                 }
                 entry.Now = flip.Before;
             }
+            // The same rule as the write: every agency whose campaign undo switches back
+            // must be a contact and open now.
+            var blocked = false;
             foreach (var row in rows)
             {
                 if (row.Error != null) continue;
+                row.Error = CheckChanges(row, agencies, checks);
+                if (row.Error != null)
+                {
+                    blocked = true;
+                    continue;
+                }
                 row.AfterCost = Cost(row.Entries);
                 row.AfterPromotion = Predict(row.Registration, Running(row.Entries));
             }
 
-            if (dryRun || changed) return Answer(rows, new List<Agency>(), dryRun, changed, true, null);
+            var failed = changed || blocked;
+            if (dryRun || failed) return Answer(rows, dryRun, failed, true, null);
 
             foreach (var row in rows)
             {
@@ -278,7 +287,7 @@ namespace BigCopilotLink
 
             var business = rows.Count == 1 ? rows[0].Business : WriteService.Count(rows.Count, "business", "businesses");
             var stamp = ws.Applied("bigcopilotlink_notify_undo_marketing", business);
-            return Answer(rows, new List<Agency>(), false, false, true, stamp);
+            return Answer(rows, false, false, true, stamp);
         }
 
         /// <summary>The site rules, in the contract's order; sets Registration and the before state on the way.</summary>
@@ -301,11 +310,15 @@ namespace BigCopilotLink
         }
 
         /// <summary>
-        /// The set-up and the switches: for every type an agency sells, an entry (the one
-        /// the site has, the enabled one first, else a new one at the first agency that
-        /// sells it), on when the type is in `on`; every other entry of that type off.
+        /// The set-up and the switches. For each type: the site's own entries, the enabled
+        /// one kept on when the type is in `on` and every other entry of that type off; with
+        /// none, a new entry at the first agency that sells it (one the player may use now,
+        /// if there is one), on when asked for. A type not asked for gets a new, disabled
+        /// entry only at an agency the player may use now: the set-up never needs one that
+        /// is closed or unknown. Then every agency a change touches must be usable, or the
+        /// row is refused. Answers the row error, or null.
         /// </summary>
-        private static void Plan(Row row, HashSet<int> on, List<Agency> agencies)
+        private static string Plan(Row row, HashSet<int> on, List<Agency> agencies, Dictionary<string, AgencyCheck> checks)
         {
             var existing = Campaigns(row.Registration);
             for (var type = 0; type < TypeNames.Length; type++)
@@ -313,8 +326,9 @@ namespace BigCopilotLink
                 var mine = existing.FindAll(c => (int)c.marketingTypeName == type);
                 if (mine.Count == 0)
                 {
-                    var agency = AgencyFor(agencies, type);
-                    if (agency == null) continue; // nobody sells it, and it is not asked for (checked)
+                    var usable = agencies.Find(a => a.Types.Contains(type) && Check(a.Address, agencies, checks).Error == null);
+                    var agency = on.Contains(type) ? usable ?? AgencyFor(agencies, type) : usable;
+                    if (agency == null) continue; // nobody may be asked for it now, and it is not wanted
                     row.Entries.Add(new Entry { Agency = agency.Address, Type = type, Was = false, Now = on.Contains(type) });
                     row.Added.Add(type);
                     continue;
@@ -330,8 +344,30 @@ namespace BigCopilotLink
                 if (t < 0 || t >= TypeNames.Length)
                     row.Entries.Add(new Entry { Campaign = c, Agency = Wire(c.agencyAddress), Type = t, Was = c.enabled, Now = c.enabled });
             }
+            var error = CheckChanges(row, agencies, checks);
+            if (error != null) return error;
             row.AfterCost = Cost(row.Entries);
             row.AfterPromotion = Predict(row.Registration, Running(row.Entries));
+            return null;
+        }
+
+        /// <summary>
+        /// Every entry the row adds or switches, in type order: its agency must be a phone
+        /// contact and open now. The first that is not refuses the row, naming it.
+        /// </summary>
+        private static string CheckChanges(Row row, List<Agency> agencies, Dictionary<string, AgencyCheck> checks)
+        {
+            var entries = new List<Entry>(row.Entries);
+            entries.Sort((a, b) => a.Type.CompareTo(b.Type));
+            foreach (var e in entries)
+            {
+                if (e.Campaign != null && e.Was == e.Now) continue;
+                var check = Check(e.Agency, agencies, checks);
+                if (check.Error == null) continue;
+                row.Blocked = check;
+                return check.Error;
+            }
+            return null;
         }
 
         private static List<Entities.MarketingCampaign> Campaigns(BuildingRegistration reg)
@@ -412,37 +448,63 @@ namespace BigCopilotLink
         }
 
         /// <summary>
-        /// Contact.GetContact's own test: a contact whose id is the agency's business name
-        /// and whose description its business type. An agency with no registration yet
-        /// takes the names its special service would give one.
+        /// Whether the player may use this agency now, worked out once per call: a phone
+        /// contact (an entry of GameInstance.Contacts at the agency's address, as
+        /// Contact.Address and HasAddressAssigned read it), and open now by the game's own
+        /// BusinessHelper.IsBusinessOpen(reg, -1): not temporarily closed, today open, and
+        /// this hour inside one of today's opening slots. An agency with no registration
+        /// has no schedule, so it is closed, as the game's check reads it.
         /// </summary>
-        private static bool IsContact(Agency agency)
+        private static AgencyCheck Check(WireAddress address, List<Agency> agencies, Dictionary<string, AgencyCheck> checks)
+        {
+            var key = address.Street + "|" + address.Number;
+            AgencyCheck check;
+            if (checks.TryGetValue(key, out check)) return check;
+            var reg = WriteService.FindRegistration(address);
+            var agency = agencies.Find(a => a.Address.Is(address.Street, address.Number));
+            check = new AgencyCheck { Address = address };
+            if (reg != null && !string.IsNullOrEmpty(reg.BusinessName)) check.Name = reg.BusinessName;
+            else if (agency != null) check.Name = agency.Building.SpecialService.businessName;
+            if (!IsContact(address)) check.Error = "no_contact";
+            else if (reg == null || !Helpers.BusinessHelper.IsBusinessOpen(reg, -1))
+            {
+                check.Error = "agency_closed";
+                check.Opens = reg != null ? NextOpening(reg) : null;
+            }
+            checks[key] = check;
+            return check;
+        }
+
+        private static bool IsContact(WireAddress address)
         {
             var contacts = SaveGameManager.Current.Contacts;
             if (contacts == null) return false;
-            var reg = WriteService.FindRegistration(agency.Address);
-            var name = reg != null ? reg.BusinessName : agency.Building.SpecialService.businessName;
-            var description = reg != null ? reg.businessTypeName : agency.Building.SpecialService.businessTypeName;
-            return contacts.Exists(c => c != null && c.id == name && c.description == description);
+            return contacts.Exists(c => c != null && !string.IsNullOrEmpty(c.streetName) && address.Is(c.streetName, c.streetNumber));
         }
 
         /// <summary>
-        /// The agency in the phone's contacts: GetOrAddBusinessContact on its registration,
-        /// as the game does when the player talks to its employee, but without the welcome
-        /// chat (ContactsHelper.UnlockAllContacts passes false the same way). The building's
-        /// GetRegistration makes one if the agency has none yet, as entering it would.
+        /// The first whole hour after now at which IsBusinessOpen would answer true, from the
+        /// registration's scheduleDays (the weekday of a day number is
+        /// TimeHelper.GetDayOfWeek(day), Monday 1 to Sunday 7), looking eight days ahead.
+        /// Null while temporarily closed (no schedule says when that ends) or with no
+        /// opening in that time.
         /// </summary>
-        private static void AddContact(Agency agency)
+        private static int[] NextOpening(BuildingRegistration reg)
         {
-            try
+            if (reg.temporarilyClosed || reg.scheduleDays == null) return null;
+            var day = TimeHelper.CurrentDay;
+            var hour = SaveGameManager.Current.Hour;
+            for (var step = 1; step <= 8 * 24; step++)
             {
-                var reg = agency.Building.GetRegistration();
-                if (reg != null) reg.GetOrAddBusinessContact(false);
+                var d = day + (hour + step) / 24;
+                var h = (hour + step) % 24;
+                var weekday = TimeHelper.GetDayOfWeek(d);
+                var today = reg.scheduleDays.Find(x => x != null && x.day == weekday);
+                if (today == null || !today.isOpen || today.openingHourSlots == null) continue;
+                if (today.openingHourSlots.Exists(slot => slot != null && h >= slot.startingHour && h < slot.endingHour))
+                    return new[] { d, h };
             }
-            catch (Exception e)
-            {
-                LinkMod.LogWarn("could not add the marketing agency as a contact: " + e.Message);
-            }
+            return null;
         }
 
         /// <summary>BusinessHelper.UpdatePromotion acts only on building types tagged hasmarketingpromotion.</summary>
@@ -543,7 +605,7 @@ namespace BigCopilotLink
             return type >= 0 && type < TypeNames.Length ? TypeNames[type] : type.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
-        private static WriteAnswer Answer(List<Row> rows, List<Agency> contacts, bool dryRun, bool failed, bool undo, string stamp)
+        private static WriteAnswer Answer(List<Row> rows, bool dryRun, bool failed, bool undo, string stamp)
         {
             var anyChanged = rows.Exists(r => r.Error == "changed");
             var w = new JsonWriter();
@@ -559,17 +621,6 @@ namespace BigCopilotLink
             w.Prop("dryRun", dryRun);
             if (undo) w.Prop("undo", true);
             if (stamp != null) w.Prop("stamp", stamp);
-
-            w.BeginArray("contactsAdded");
-            foreach (var agency in contacts)
-            {
-                var reg = WriteService.FindRegistration(agency.Address);
-                w.BeginObject();
-                w.Prop("name", reg != null ? reg.BusinessName : agency.Building.SpecialService.businessName);
-                WriteService.WriteAddress(w, "address", agency.Address.Street, agency.Address.Number);
-                w.EndObject();
-            }
-            w.EndArray();
 
             w.BeginArray("rows");
             foreach (var row in rows) WriteRow(w, row);
@@ -627,6 +678,26 @@ namespace BigCopilotLink
             }
             w.EndArray();
             w.Prop("error", row.Error);
+            if (row.Blocked == null)
+            {
+                w.PropNull("agency");
+                w.PropNull("opens");
+            }
+            else
+            {
+                w.BeginObject("agency");
+                w.Prop("name", row.Blocked.Name);
+                WriteService.WriteAddress(w, "address", row.Blocked.Address.Street, row.Blocked.Address.Number);
+                w.EndObject();
+                if (row.Blocked.Opens == null) w.PropNull("opens");
+                else
+                {
+                    w.BeginObject("opens");
+                    w.Prop("day", row.Blocked.Opens[0]);
+                    w.Prop("hour", row.Blocked.Opens[1]);
+                    w.EndObject();
+                }
+            }
             w.EndObject();
         }
 

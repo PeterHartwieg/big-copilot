@@ -185,7 +185,10 @@ So are the six campaign types' prices and reach in `MARKETING_TYPES`
 (`MarketingTypeSettings..cctor`) and the formula `marketing_score()` repeats
 (`BuildingRegistration.GetMarketingEfficiency`, `BusinessHelper.UpdatePromotion`):
 `tests/test_marketing_plan.py` holds the formula against every promotion the saves on the
-machine store, so run it after loading and saving a game on the new build.
+machine store, so run it after loading and saving a game on the new build. `MARKETING_AGENCIES`
+(the two agencies' addresses and the types each sells, `MarketingAgencySettings` in the
+`defaultlocalgroup_assets_buildings_*` bundle) and `open_at()` (`BusinessHelper.IsBusinessOpen`)
+were read by hand at build 3682; `bundles.py` does not compare them.
 
 `tools/game_update/bundles.py` re-reads the five bundles and prints one line per
 difference. It needs UnityPy, which is an owner-side dependency installed outside the

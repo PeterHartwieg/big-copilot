@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "5977d3356e";</script>
-<link rel="stylesheet" href="community.css?v=5977d3356e">
+<script>window.LEDGER_BUILD = "84c2a94eaf";</script>
+<link rel="stylesheet" href="community.css?v=84c2a94eaf">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=5977d3356e">
+<link rel="stylesheet" href="fonts/fonts.css?v=84c2a94eaf">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -5556,7 +5556,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"5977d3356e","latest":{"pr":169,"date":"2026-09-28","title":"A new layout: problems first, and a sidebar with five places to fix them","summary":"The board is rebuilt around what needs your attention. The Overview opens on Needs attention, each finding with a button that takes you to the exact setting, and a way back to where you were. A sidebar on the left holds five places, the open one with its views under it: the Overview, Businesses (results, cash and loans, prices against the market, a standards comparison with uniforms you can set from it, milestones), Supply (the changes to make, imports, deliveries, production, and a goods flow you can drag and zoom like the map), Staffing (schedules, staff needs, payroll) and Expansion (demand, finding a location, planning a factory), then the City map and the Wiki. The button at its foot folds the sidebar to a strip of icons, and the board remembers it. Every business page links to its schedule, deliveries and prices. Changes you mark, apply through the game link, or that a later save confirms now look different, and preferences and help sit under the one ··· menu at the sidebar's foot. Old links keep working."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"84c2a94eaf","latest":{"pr":169,"date":"2026-09-28","title":"A new layout: problems first, and a sidebar with five places to fix them","summary":"The board is rebuilt around what needs your attention. The Overview opens on Needs attention, each finding with a button that takes you to the exact setting, and a way back to where you were. A sidebar on the left holds five places, the open one with its views under it: the Overview, Businesses (results, cash and loans, prices against the market, a standards comparison with uniforms you can set from it, milestones), Supply (the changes to make, imports, deliveries, production, and a goods flow you can drag and zoom like the map), Staffing (schedules, staff needs, payroll) and Expansion (demand, finding a location, planning a factory), then the City map and the Wiki. The button at its foot folds the sidebar to a strip of icons, and the board remembers it. Every business page links to its schedule, deliveries and prices. Changes you mark, apply through the game link, or that a later save confirms now look different, and preferences and help sit under the one ··· menu at the sidebar's foot. Old links keep working."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -5644,8 +5644,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=5977d3356e"></script>
-<script src="community.js?v=5977d3356e"></script>
+<script src="app.js?v=84c2a94eaf"></script>
+<script src="community.js?v=84c2a94eaf"></script>
 
 <script>
 
@@ -27771,21 +27771,61 @@ function gwMkName(type){
   return spEsc(type);
 }
 const gwMkMix = types => types.length ? types.map(gwMkName).join(" + ") : tt("sp.mk.none", "no campaigns");
-const gwMkSame = p => p.on.length === p.was.length && p.on.every(t => p.was.includes(t));
+const gwMkSame = p => !!p.on && p.on.length === p.was.length && p.on.every(t => p.was.includes(t));
 /* The sites a marketing write covers: `mix`, every one whose plan differs
-   from what runs; `setup`, every one missing a switch in BizMan. */
-const gwMkSites = mode => (D.businesses || []).filter(b => b.marketingPlan
+   from what runs; `setup`, every one missing a switch in BizMan. A site with
+   no plan (no agency is a phone contact yet) is in neither. */
+const gwMkSites = mode => (D.businesses || []).filter(b => b.marketingPlan && b.marketingPlan.on
   && (mode === "setup" ? b.marketingPlan.needsSetup : !gwMkSame(b.marketingPlan)));
 const gwMkCan = () => { const l = gwLink(); return !!l && (l.writes || []).includes("marketing"); };
+/* The agencies (payload marketingAgencies), and whether one is open: the
+   game's own rule (open_at() in Python) at the game's clock now, as the link
+   last read it, else as the board was read. */
+const gwMkAgency = key => (D.marketingAgencies || []).find(a => a.key === key) || null;
+function gwMkClock(){
+  const l = gwLink(), m = (D && D.meta) || {};
+  const day = Number(l ? l.day : m.day), hour = Math.floor(Number(l ? l.hour : m.hour));
+  return Number.isFinite(day) && Number.isFinite(hour) ? {day, hour} : null;
+}
+const gwMkOpenAt = (a, day, hour) => !a.closed && ((a.hours || [])[((day % 7) + 7) % 7] || []).some(([s, e]) => s <= hour && hour < e);
+function gwMkNext(a, c){
+  if(a.closed) return null;
+  for(let k = 0; k < 8 * 24; k++){
+    const day = c.day + Math.floor((c.hour + k) / 24), hour = (c.hour + k) % 24;
+    if(gwMkOpenAt(a, day, hour)) return {day, hour};
+  }
+  return null;
+}
+/* The agencies among `keys` that are shut right now, with when each opens:
+   "CityAds opens at 8:00", tomorrow's by its weekday. */
+function gwMkShut(keys){
+  const c = gwMkClock();
+  if(!c) return [];
+  return [...new Set(keys)].map(gwMkAgency).filter(a => a && !gwMkOpenAt(a, c.day, c.hour)).map(a => {
+    const next = gwMkNext(a, c), name = spEsc(a.name), at = next ? `${next.hour}:00` : "";
+    return !next ? tt("sp.mk.shut", "{agency} is closed", {agency: name})
+      : next.day === c.day ? tt("sp.mk.opens", "{agency} opens at {at}", {agency: name, at})
+      : tt("sp.mk.opens.day", "{agency} opens {d:day} at {at}", {agency: name, d: next.day % 7, at});
+  });
+}
+/* The agencies a write to these sites touches (each plan's `agencies`). */
+const gwMkTouch = sites => sites.flatMap(b => (b.marketingPlan && b.marketingPlan.agencies) || []);
+/* "Visit CityAds (5 Second Avenue) once": the agencies a site's plan waits on. */
+const gwMkVisit = keys => todayList(keys.map(gwMkAgency).filter(Boolean).map(a =>
+  tt("sp.mk.agency", "{agency} ({address})", {agency: spEsc(a.name), address: spEsc(a.address || "")})));
 /* The Promotion block's last line: the plan, and its Set button. Where the
    board cannot write it, what to switch in BizMan instead. */
 function spMkLine(b){
   const p = b.marketingPlan;
   if(!p) return "";
+  /* No agency is a phone contact yet: the plan waits on a first visit. */
+  if(!p.on) return p.visit.length ? `<div class="spmk"><p>${tt("sp.mk.novisit", "No campaigns can be booked from here yet: visit {agencies} once.", {agencies: gwMkVisit(p.visit)})}</p></div>` : "";
   const same = gwMkSame(p);
   const mix = `<b>${gwMkMix(p.on)}</b>`;
   const line = same ? tt("sp.mk.running", "Cheapest mix, running: {mix} · {cost:$}/day", {mix, cost: p.costPlan})
     : tt("sp.mk.line", "Cheapest mix: {mix} · {cost:$}/day · {p}%", {mix, cost: p.costPlan, p: p.promotionPlan});
+  /* A better mix needs an agency not in the phone's contacts yet. */
+  const better = p.visit.length ? tt("sp.mk.better", {one: "Visit {agencies} once to plan with its campaigns too.", other: "Visit {agencies} once to plan with their campaigns too."}, {n: p.visit.length, agencies: gwMkVisit(p.visit)}) : "";
   /* BizMan shows a switch only for a type the site already has an entry
      for; any other is booked at a marketing agency. */
   const entered = new Set((b.campaigns || []).map(c => c.type));
@@ -27796,21 +27836,29 @@ function spMkLine(b){
     : on.length ? tt("sp.mk.hand.on", "In BizMan › Marketing, switch on {on}.", {on: todayList(on)})
     : off.length ? tt("sp.mk.hand.off", "In BizMan › Marketing, switch off {off}.", {off: todayList(off)}) : "";
   const book = visit.length ? tt("sp.mk.hand.visit", "Book {types} at a marketing agency: BizMan has no switch for them yet.", {types: todayList(visit)}) : "";
-  const hand = same || gwMkCan() ? "" : [flip, book].filter(Boolean).join(" ");
+  const can = gwMkCan();
+  const hand = same || can ? "" : [flip, book].filter(Boolean).join(" ");
+  /* A switch goes on or off only at an open agency: shut, the button waits
+     and the line says when. Set-up alone never waits: a shut agency just
+     gets no new switches. */
+  const shut = !same && can ? gwMkShut(p.agencies || []) : [];
+  const why = shut.length ? `${todayList(shut)}.` : "";
   const sites = `data-gw-sites="${attr(JSON.stringify([b.key]))}"`;
-  const btn = !same ? gwButton("marketing", tt("sp.mk.set", "Set"), `${sites} data-gw-mode="mix"`, "", {name: tt("sp.mk.set.name", "Set the cheapest mix")})
-    : p.needsSetup ? gwButton("marketing", tt("sp.mk.setup", "Set up"), `${sites} data-gw-mode="setup"`, "", {alt: true, name: tt("sp.mk.setup.name", "Add every campaign switch to BizMan")})
+  const btn = !same ? gwButton("marketing", tt("sp.mk.set", "Set"), `${sites} data-gw-mode="mix"`, why, {name: tt("sp.mk.set.name", "Set the cheapest mix"), icon: "clock"})
+    : p.needsSetup ? gwButton("marketing", tt("sp.mk.setup", "Set up"), `${sites} data-gw-mode="setup"`, why, {alt: true, icon: "clock", name: tt("sp.mk.setup.name", "Add every campaign switch to BizMan")})
     : "";
-  return `<div class="spmk"><p>${line}</p>${hand ? `<p class="spmk-hand">${hand}</p>` : ""}${btn ? `<div class="gw-acts gw-panel">${btn}</div>` : ""}</div>`;
+  const notes = [hand, why, better].filter(Boolean).map(t => `<p class="spmk-hand">${t}</p>`).join("");
+  return `<div class="spmk"><p>${line}</p>${notes}${btn ? `<div class="gw-acts gw-panel">${btn}</div>` : ""}</div>`;
 }
 /* Every site at once: the cheapest mix wherever it differs, or the set-up
-   wherever a switch is missing. */
+   wherever a switch is missing; it waits while an agency it needs is shut. */
 function gwMkAll(mode, alt){
-  const n = gwMkSites(mode).length;
+  const sites = gwMkSites(mode), n = sites.length;
   if(!n) return "";
   const label = mode === "setup" ? tt("sp.gw.mk.setupall", {one: "Set up {n} site", other: "Set up all {n} sites"}, {n})
     : tt("sp.gw.mk.all", {one: "Set the cheapest mix at {n} site", other: "Set the cheapest mix at {n} sites"}, {n});
-  return gwButton("marketing", label, `data-gw-mk-all data-gw-mode="${mode}"`, "", {alt});
+  const shut = gwMkCan() ? gwMkShut(gwMkTouch(sites)) : [];
+  return gwButton("marketing", label, `data-gw-mk-all data-gw-mode="${mode}"`, shut.length ? `${todayList(shut)}.` : "", {alt, icon: "clock"});
 }
 
 /* Campaigns at one site, or at many. The game sets all of them or none, so a
@@ -27830,7 +27878,7 @@ function gwMarketing(keys, mode){
   if(!first) return;
   const refusal = r => {
     const known = GW_REFUSE.marketing[r.error] || GW_REFUSE.any[r.error];
-    return known || {rule: tt("sp.gw.uni.refused", "The game refused this ({code})", {code: spEsc(r.error)}), fix: ""};
+    return (typeof known === "function" ? known(r) : known) || {rule: tt("sp.gw.uni.refused", "The game refused this ({code})", {code: spEsc(r.error)}), fix: ""};
   };
   const row = (r, phase) => {
     const b = gwSiteOf(r.address), p = plan(r), key = gwKeyOf(r.address);
@@ -27920,12 +27968,34 @@ function gwMarketing(keys, mode){
   });
 }
 
+/* The agency a marketing refusal names: its own name, else the board's name
+   for its address, else a plain word. */
+function gwMkAgencyOf(r){
+  const a = r && (r.agency || r.agencies && r.agencies[0]);
+  if(a && a.name) return spEsc(a.name);
+  const known = a && gwMkAgency(a.address ? gwKeyOf(a.address) : a.street ? gwKeyOf(a) : String(a));
+  return known ? spEsc(known.name) : tt("nav.dlg.refuse.anagency", "The marketing agency");
+}
+/* When a closed agency opens, as the refusal says it ({day, hour}), else as
+   the board works it out: {at: "8:00", d}, `d` the weekday when it is not
+   today, else null. */
+function gwMkOpensOf(r){
+  const a = r && (r.agency || r.agencies && r.agencies[0]) || {};
+  let at = r && (r.opens || a.opens || r.reopens);
+  const known = !at && gwMkAgency(a.address ? gwKeyOf(a.address) : a.street ? gwKeyOf(a) : "");
+  const c = gwMkClock();
+  if(!at && known && c) at = gwMkNext(known, c);
+  if(!at || !Number.isFinite(Number(at.hour))) return null;
+  const other = c && Number.isFinite(Number(at.day)) && Number(at.day) !== c.day;
+  return {at: `${Number(at.hour)}:00`, d: other ? Number(at.day) % 7 : null};
+}
+
 /* The refusals the player can fix in the game while the same request stays
    valid (a screen closed, a locker placed, a week's lock over). Try again is
    offered only when every error the answer names is one of them; the rest
    ask for another request, or a refreshed board. */
 const GW_FIXABLE = new Set(["screen_open", "no_locker", "no_preset", "no_business", "no_agent", "no_warehouse",
-  "locked", "backorder", "not_assigned", "myemployees"]);
+  "locked", "backorder", "not_assigned", "myemployees", "no_contact", "agency_closed"]);
 const gwFixable = answer => {
   const a = answer || {};
   /* A hire's dry run names an app open in the game as `blocked`. */
@@ -27971,6 +28041,15 @@ const GW_REFUSE = {
     no_business: {get rule(){ return tt("nav.dlg.refuse.nobusiness.rule", "No business is set up here"); }, get fix(){ return tt("nav.dlg.refuse.nobusiness.fix", "Set one up in BizMan first."); }},
     no_promotion: {get rule(){ return tt("nav.dlg.refuse.nopromotion.rule", "Campaigns bring this business no promotion"); }, get fix(){ return tt("nav.dlg.refuse.nopromotion.fix", "Leave it out."); }},
     no_agency: {get rule(){ return tt("nav.dlg.refuse.noagency.rule", "No marketing agency in the city offers a campaign in this mix"); }, get fix(){ return tt("nav.dlg.refuse.noagency.fix", "Refresh the board."); }},
+    no_contact: r => ({rule: tt("nav.dlg.refuse.nocontact.rule", "{agency} is not in your phone's contacts", {agency: gwMkAgencyOf(r)}),
+      fix: tt("nav.dlg.refuse.nocontact.fix", "Visit it once in the game, then try again.")}),
+    agency_closed: r => {
+      const o = gwMkOpensOf(r);
+      return {rule: tt("nav.dlg.refuse.closed.rule", "{agency} is closed right now", {agency: gwMkAgencyOf(r)}),
+        fix: !o ? tt("nav.dlg.refuse.closed.fix", "Try again once it opens.")
+          : o.d === null ? tt("nav.dlg.refuse.closed.at", "It opens at {at}: try again then.", {at: o.at})
+          : tt("nav.dlg.refuse.closed.day", "It opens {d:day} at {at}: try again then.", {d: o.d, at: o.at})};
+    },
   },
   schedule: {
     headquarters: {get rule(){ return tt("nav.dlg.refuse.hq.rule", "A headquarters' schedule is not written from here"); }, get fix(){ return tt("nav.dlg.refuse.hq.fix", "Change it in BizMan in the game."); }},

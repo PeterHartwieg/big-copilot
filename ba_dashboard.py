@@ -908,6 +908,15 @@ MARKETING_REACH = {"retail": 1.0, "office": 1.0, "cinema": 2.0, "theater": 2.0}
 # Headquarters sit in office buildings and have a promotion, but no customers:
 # the plan covers the shops and offices a player runs (RETAIL_TYPES, OFFICE_TYPES).
 MARKETING_ALL = frozenset(range(len(MARKETING_TYPES)))
+# The city's marketing agencies and the types each sells
+# (MarketingAgencySettings.marketingTypesAvailable in the buildings bundle at
+# build 3682: McCainseMarketingSettings [0, 1, 2], CityAdsSettings [3, 4, 5]).
+# The map is the same in every save; the name is the fallback for a save whose
+# registration has none.
+MARKETING_AGENCIES = {
+    ("ba:street_thirdavenue", 17): ("McCain's eMarketing", (0, 1, 2)),
+    ("ba:street_secondavenue", 5): ("CityAds", (3, 4, 5)),
+}
 
 
 def _marketing_building(type_slug: str) -> str | None:
@@ -943,18 +952,24 @@ def marketing_score(traffic, on_ids, sqm, type_slug, neighbourhood) -> tuple[int
     return marketing, total
 
 
-def marketing_plan(traffic, was_ids, sqm, type_slug, neighbourhood) -> dict:
+def marketing_plan(traffic, was_ids, sqm, type_slug, neighbourhood, free_ids=None) -> dict:
     """The cheapest mix of campaigns for one site, from all 64.
 
     The cheapest mix that brings promotion to 100; when none can, the cheapest
     that brings marketing to 100 (or, in a building too big for that, to the
     most it can reach). No tolerance: 99 is short. Ties go to fewer campaigns,
     then to the mix the site runs now (`was_ids`). Settled by Peter, 28 Sep 2026.
+    `free_ids` are the types the plan may switch, those sold by an agency that
+    is a phone contact (every type when None); the rest stay as they run now.
     """
     was = frozenset(was_ids)
+    free = MARKETING_ALL if free_ids is None else frozenset(free_ids)
+    fixed = was - free
     mixes = []
     for mask in range(1 << len(MARKETING_TYPES)):
         on = frozenset(i for i in MARKETING_ALL if mask >> i & 1)
+        if on - free != fixed:
+            continue
         marketing, total = marketing_score(traffic, on, sqm, type_slug, neighbourhood)
         cost = sum(MARKETING_TYPES[i][1] for i in on)
         mixes.append((on, cost, marketing, total, mask))
@@ -1856,12 +1871,13 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
     stmt_history = _statement_history(save, summaries)
     latest = stmt_history[-1][1] if stmt_history else {}
 
+    agencies = _marketing_agencies(save, names)
     businesses = []
     for b in buildings:
         addr = (b["StreetName"], b["StreetNumber"])
         if addr in residential:
             continue
-        row = _business(save, names, b, addr, latest, stmt_history, staff_by_addr, day)
+        row = _business(save, names, b, addr, latest, stmt_history, staff_by_addr, day, agencies)
         # The game's own switch that shuts a site's doors, which the
         # not-trading finding names as a reason of its own.
         row["closed"] = bool(b.get("temporarilyClosed"))
@@ -2038,6 +2054,7 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         "names": _game_names(names),
         # The game's name for every skill a station can ask for, so the write
         # dialogs never spell a role from its slug ("Securityguard").
+        "marketingAgencies": agencies,
         "skillNames": {skill: names.label(skill) for skill in sorted({s for v in STATION_SKILLS.values() for s in v})},
         "cashFlow": _cash_flow(ledger, daily, day),
         "ledgerDays": len(ledger),
@@ -2552,7 +2569,7 @@ def shift_print(entries) -> str:
     return f"{value:08x}"
 
 
-def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict:
+def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencies=None) -> dict:
     st = latest.get(addr, {})
     name = b.get("BusinessName")
     tag = ""
@@ -2732,7 +2749,7 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
     )
     wants_uniforms = status == "retail" and UNIFORM_DEMAND not in not_made
     uniform_gaps = _uniform_gaps(save, b, crew, names) if wants_uniforms else []
-    campaigns, marketing = _marketing(save, b, building, status, neighbourhood, promo)
+    campaigns, marketing = _marketing(save, b, building, status, neighbourhood, promo, agencies)
 
     return {
         "name": name or "Vacant lease",
@@ -2820,15 +2837,94 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
     }
 
 
-def _marketing(save, b, building, status, neighbourhood, promo) -> tuple[list, dict | None]:
+def _open_hours(save, reg) -> list:
+    """A registration's opening slots per board weekday (0 is Sunday), [] shut.
+
+    ScheduleDay.day is the game day modulo 7, with 7 for Sunday's 0.
+    """
+    hours = [[] for _ in range(7)]
+    for scheduled in save.items(reg.get("scheduleDays")):
+        if not scheduled.get("isOpen") or not isinstance(scheduled.get("day"), int):
+            continue
+        hours[scheduled["day"] % 7] = sorted(
+            [max(0, slot.get("startingHour") or 0), min(24, slot.get("endingHour") or 0)]
+            for slot in save.items(scheduled.get("openingHourSlots"))
+            if (slot.get("endingHour") or 0) > (slot.get("startingHour") or 0))
+    return hours
+
+
+def open_at(hours, closed, day, hour) -> bool:
+    """BusinessHelper.IsBusinessOpen at a game day and whole hour (build 3682
+    IL): not temporarily closed, and the hour inside one of that weekday's
+    slots, start included and end excluded. Minutes are never looked at, and
+    no slot runs past midnight."""
+    return not closed and any(start <= hour < end for start, end in hours[day % 7])
+
+
+def next_open(hours, closed, day, hour) -> dict | None:
+    """The first whole hour from (day, hour) on at which the place is open,
+    as {day, hour}; None when it is temporarily closed or never opens."""
+    if closed:
+        return None
+    for step in range(8 * 24):
+        d, h = day + (hour + step) // 24, (hour + step) % 24
+        if open_at(hours, False, d, h):
+            return {"day": d, "hour": h}
+    return None
+
+
+def _marketing_agencies(save, names=None) -> list:
+    """The city's marketing agencies, as the board plans and writes with them.
+
+    Per agency: its site key and name, whether it is a phone contact (the
+    player has visited it once; the write works only through those), the
+    types it sells, its opening slots per board weekday and whether it is
+    temporarily closed, and, at the save's clock, whether it is open now and
+    when it next opens (the write works only while it is open).
+    """
+    root = save.root
+    contacts = {(c.get("streetName"), c.get("streetNumber"))
+                for c in save.items(root.get("Contacts")) if isinstance(c, dict)}
+    regs = {(r.get("StreetName"), r.get("StreetNumber")): r
+            for r in save.items(root.get("BuildingRegistrations")) if isinstance(r, dict)}
+    day, hour = root.get("Day") or 0, int(root.get("Hour") or 0)
+    out = []
+    for addr, (name, kinds) in MARKETING_AGENCIES.items():
+        reg = regs.get(addr) or {}
+        hours, closed = _open_hours(save, reg), bool(reg.get("temporarilyClosed"))
+        out.append({
+            "key": site_key(addr),
+            "name": reg.get("BusinessName") or name,
+            "address": f"{house_number(addr[1])} {names.street(addr[0]) if names else _plain(addr[0].removeprefix('ba:street_'))}",
+            "contact": addr in contacts,
+            "types": [MARKETING_TYPES[k][0] for k in kinds],
+            "hours": hours,
+            "closed": closed,
+            "open": open_at(hours, closed, day, hour),
+            "opens": next_open(hours, closed, day, hour),
+        })
+    return out
+
+
+def _marketing(save, b, building, status, neighbourhood, promo, agencies=None) -> tuple[list, dict | None]:
     """A site's campaigns, and its cheapest mix (marketing_plan()).
 
     `campaigns` is one row per entry the game holds: the type's enum name, the
     agency's site key and whether it runs. The plan is for a shop or an office
     in a building whose type carries a promotion, with its m² and neighbourhood
     known; anything else gets None. `on` and `was` are enum names, as the write
-    sends them. `needsSetup`: an entry is missing for one of the six types, so
-    BizMan does not show every switch for the site yet.
+    sends them.
+
+    Only an agency that is a phone contact can be used (Peter, 28 Sep 2026):
+    a type is free to plan when the agency the write would use for it (the one
+    the site already books it with, else the first that sells it) is one; any
+    other type stays as it runs. With no type free the plan's `on` is None.
+    `visit` names the agencies, not contacts yet, whose types would make a
+    better plan (a higher promotion, or the same for less). `agencies` are the
+    agencies whose campaigns the plan turns on or off, which must be open for
+    the write; new switch entries go only to open contacts, and never block it.
+    `needsSetup`: a type a contacted agency sells has no entry, so BizMan does
+    not show its switch yet.
     """
     campaigns = []
     for c in save.items(b.get("marketingCampaigns")):
@@ -2843,21 +2939,46 @@ def _marketing(save, b, building, status, neighbourhood, promo) -> tuple[list, d
     sqm, kind = building.get("m"), building.get("t")
     if not sqm or kind not in MARKETING_REACH or neighbourhood not in MARKETING_STRENGTH:
         return campaigns, None
+    if agencies is None:
+        agencies = _marketing_agencies(save)
     was = {MARKETING_IDS[c["type"]] for c in campaigns if c["enabled"]}
+    entered = {MARKETING_IDS[c["type"]] for c in campaigns}
+    contact = {a["key"] for a in agencies if a["contact"]}
+    seller = {}
+    for a in agencies:
+        for t in a["types"]:
+            seller.setdefault(MARKETING_IDS[t], a["key"])
+    # The agency the write uses for a type: the site's own booking of it (the
+    # running one first), else the first agency that sells it.
+    use = dict(seller)
+    for c in sorted(campaigns, key=lambda c: c["enabled"]):
+        if c["agency"]:
+            use[MARKETING_IDS[c["type"]]] = c["agency"]
+    free = {t for t, a in use.items() if a in contact}
     traffic = promo.get("trafficIndex", 0) or 0
-    plan = marketing_plan(traffic, was, sqm, kind, neighbourhood)
+    best = marketing_plan(traffic, was, sqm, kind, neighbourhood)
+    plan = marketing_plan(traffic, was, sqm, kind, neighbourhood, free)
+    # With no agency to book through, a site that needs a change has no plan.
+    if not free and set(best["on"]) != was:
+        plan = None
+    better = plan is None or (best["promotion"], -best["cost"]) > (plan["promotion"], -plan["cost"])
+    visit = sorted({use[t] for t in set(best["on"]) ^ was if use.get(t) not in contact}) if better else []
+    setup = {t for t in free if t not in entered}
+    changes = set(plan["on"]) ^ was if plan else set()
     name = lambda ids: [MARKETING_TYPES[i][0] for i in sorted(ids)]  # noqa: E731
     return campaigns, {
-        "on": name(plan["on"]),
+        "on": name(plan["on"]) if plan else None,
         "was": name(was),
-        "costNow": plan["costNow"],
-        "costPlan": plan["cost"],
+        "costNow": best["costNow"],
+        "costPlan": plan["cost"] if plan else None,
         "marketingNow": promo.get("marketing", 0),
-        "marketingPlan": plan["marketing"],
+        "marketingPlan": plan["marketing"] if plan else None,
         "promotionNow": promo.get("total", 0),
-        "promotionPlan": plan["promotion"],
-        "target": plan["target"],
-        "needsSetup": {c["type"] for c in campaigns} != {t[0] for t in MARKETING_TYPES},
+        "promotionPlan": plan["promotion"] if plan else None,
+        "target": plan["target"] if plan else None,
+        "needsSetup": bool(setup),
+        "agencies": sorted({use[t] for t in changes}),
+        "visit": visit,
     }
 
 
@@ -35627,21 +35748,61 @@ function gwMkName(type){
   return spEsc(type);
 }
 const gwMkMix = types => types.length ? types.map(gwMkName).join(" + ") : tt("sp.mk.none", "no campaigns");
-const gwMkSame = p => p.on.length === p.was.length && p.on.every(t => p.was.includes(t));
+const gwMkSame = p => !!p.on && p.on.length === p.was.length && p.on.every(t => p.was.includes(t));
 /* The sites a marketing write covers: `mix`, every one whose plan differs
-   from what runs; `setup`, every one missing a switch in BizMan. */
-const gwMkSites = mode => (D.businesses || []).filter(b => b.marketingPlan
+   from what runs; `setup`, every one missing a switch in BizMan. A site with
+   no plan (no agency is a phone contact yet) is in neither. */
+const gwMkSites = mode => (D.businesses || []).filter(b => b.marketingPlan && b.marketingPlan.on
   && (mode === "setup" ? b.marketingPlan.needsSetup : !gwMkSame(b.marketingPlan)));
 const gwMkCan = () => { const l = gwLink(); return !!l && (l.writes || []).includes("marketing"); };
+/* The agencies (payload marketingAgencies), and whether one is open: the
+   game's own rule (open_at() in Python) at the game's clock now, as the link
+   last read it, else as the board was read. */
+const gwMkAgency = key => (D.marketingAgencies || []).find(a => a.key === key) || null;
+function gwMkClock(){
+  const l = gwLink(), m = (D && D.meta) || {};
+  const day = Number(l ? l.day : m.day), hour = Math.floor(Number(l ? l.hour : m.hour));
+  return Number.isFinite(day) && Number.isFinite(hour) ? {day, hour} : null;
+}
+const gwMkOpenAt = (a, day, hour) => !a.closed && ((a.hours || [])[((day % 7) + 7) % 7] || []).some(([s, e]) => s <= hour && hour < e);
+function gwMkNext(a, c){
+  if(a.closed) return null;
+  for(let k = 0; k < 8 * 24; k++){
+    const day = c.day + Math.floor((c.hour + k) / 24), hour = (c.hour + k) % 24;
+    if(gwMkOpenAt(a, day, hour)) return {day, hour};
+  }
+  return null;
+}
+/* The agencies among `keys` that are shut right now, with when each opens:
+   "CityAds opens at 8:00", tomorrow's by its weekday. */
+function gwMkShut(keys){
+  const c = gwMkClock();
+  if(!c) return [];
+  return [...new Set(keys)].map(gwMkAgency).filter(a => a && !gwMkOpenAt(a, c.day, c.hour)).map(a => {
+    const next = gwMkNext(a, c), name = spEsc(a.name), at = next ? `${next.hour}:00` : "";
+    return !next ? tt("sp.mk.shut", "{agency} is closed", {agency: name})
+      : next.day === c.day ? tt("sp.mk.opens", "{agency} opens at {at}", {agency: name, at})
+      : tt("sp.mk.opens.day", "{agency} opens {d:day} at {at}", {agency: name, d: next.day % 7, at});
+  });
+}
+/* The agencies a write to these sites touches (each plan's `agencies`). */
+const gwMkTouch = sites => sites.flatMap(b => (b.marketingPlan && b.marketingPlan.agencies) || []);
+/* "Visit CityAds (5 Second Avenue) once": the agencies a site's plan waits on. */
+const gwMkVisit = keys => todayList(keys.map(gwMkAgency).filter(Boolean).map(a =>
+  tt("sp.mk.agency", "{agency} ({address})", {agency: spEsc(a.name), address: spEsc(a.address || "")})));
 /* The Promotion block's last line: the plan, and its Set button. Where the
    board cannot write it, what to switch in BizMan instead. */
 function spMkLine(b){
   const p = b.marketingPlan;
   if(!p) return "";
+  /* No agency is a phone contact yet: the plan waits on a first visit. */
+  if(!p.on) return p.visit.length ? `<div class="spmk"><p>${tt("sp.mk.novisit", "No campaigns can be booked from here yet: visit {agencies} once.", {agencies: gwMkVisit(p.visit)})}</p></div>` : "";
   const same = gwMkSame(p);
   const mix = `<b>${gwMkMix(p.on)}</b>`;
   const line = same ? tt("sp.mk.running", "Cheapest mix, running: {mix} · {cost:$}/day", {mix, cost: p.costPlan})
     : tt("sp.mk.line", "Cheapest mix: {mix} · {cost:$}/day · {p}%", {mix, cost: p.costPlan, p: p.promotionPlan});
+  /* A better mix needs an agency not in the phone's contacts yet. */
+  const better = p.visit.length ? tt("sp.mk.better", {one: "Visit {agencies} once to plan with its campaigns too.", other: "Visit {agencies} once to plan with their campaigns too."}, {n: p.visit.length, agencies: gwMkVisit(p.visit)}) : "";
   /* BizMan shows a switch only for a type the site already has an entry
      for; any other is booked at a marketing agency. */
   const entered = new Set((b.campaigns || []).map(c => c.type));
@@ -35652,21 +35813,29 @@ function spMkLine(b){
     : on.length ? tt("sp.mk.hand.on", "In BizMan › Marketing, switch on {on}.", {on: todayList(on)})
     : off.length ? tt("sp.mk.hand.off", "In BizMan › Marketing, switch off {off}.", {off: todayList(off)}) : "";
   const book = visit.length ? tt("sp.mk.hand.visit", "Book {types} at a marketing agency: BizMan has no switch for them yet.", {types: todayList(visit)}) : "";
-  const hand = same || gwMkCan() ? "" : [flip, book].filter(Boolean).join(" ");
+  const can = gwMkCan();
+  const hand = same || can ? "" : [flip, book].filter(Boolean).join(" ");
+  /* A switch goes on or off only at an open agency: shut, the button waits
+     and the line says when. Set-up alone never waits: a shut agency just
+     gets no new switches. */
+  const shut = !same && can ? gwMkShut(p.agencies || []) : [];
+  const why = shut.length ? `${todayList(shut)}.` : "";
   const sites = `data-gw-sites="${attr(JSON.stringify([b.key]))}"`;
-  const btn = !same ? gwButton("marketing", tt("sp.mk.set", "Set"), `${sites} data-gw-mode="mix"`, "", {name: tt("sp.mk.set.name", "Set the cheapest mix")})
-    : p.needsSetup ? gwButton("marketing", tt("sp.mk.setup", "Set up"), `${sites} data-gw-mode="setup"`, "", {alt: true, name: tt("sp.mk.setup.name", "Add every campaign switch to BizMan")})
+  const btn = !same ? gwButton("marketing", tt("sp.mk.set", "Set"), `${sites} data-gw-mode="mix"`, why, {name: tt("sp.mk.set.name", "Set the cheapest mix"), icon: "clock"})
+    : p.needsSetup ? gwButton("marketing", tt("sp.mk.setup", "Set up"), `${sites} data-gw-mode="setup"`, why, {alt: true, icon: "clock", name: tt("sp.mk.setup.name", "Add every campaign switch to BizMan")})
     : "";
-  return `<div class="spmk"><p>${line}</p>${hand ? `<p class="spmk-hand">${hand}</p>` : ""}${btn ? `<div class="gw-acts gw-panel">${btn}</div>` : ""}</div>`;
+  const notes = [hand, why, better].filter(Boolean).map(t => `<p class="spmk-hand">${t}</p>`).join("");
+  return `<div class="spmk"><p>${line}</p>${notes}${btn ? `<div class="gw-acts gw-panel">${btn}</div>` : ""}</div>`;
 }
 /* Every site at once: the cheapest mix wherever it differs, or the set-up
-   wherever a switch is missing. */
+   wherever a switch is missing; it waits while an agency it needs is shut. */
 function gwMkAll(mode, alt){
-  const n = gwMkSites(mode).length;
+  const sites = gwMkSites(mode), n = sites.length;
   if(!n) return "";
   const label = mode === "setup" ? tt("sp.gw.mk.setupall", {one: "Set up {n} site", other: "Set up all {n} sites"}, {n})
     : tt("sp.gw.mk.all", {one: "Set the cheapest mix at {n} site", other: "Set the cheapest mix at {n} sites"}, {n});
-  return gwButton("marketing", label, `data-gw-mk-all data-gw-mode="${mode}"`, "", {alt});
+  const shut = gwMkCan() ? gwMkShut(gwMkTouch(sites)) : [];
+  return gwButton("marketing", label, `data-gw-mk-all data-gw-mode="${mode}"`, shut.length ? `${todayList(shut)}.` : "", {alt, icon: "clock"});
 }
 
 /* Campaigns at one site, or at many. The game sets all of them or none, so a
@@ -35686,7 +35855,7 @@ function gwMarketing(keys, mode){
   if(!first) return;
   const refusal = r => {
     const known = GW_REFUSE.marketing[r.error] || GW_REFUSE.any[r.error];
-    return known || {rule: tt("sp.gw.uni.refused", "The game refused this ({code})", {code: spEsc(r.error)}), fix: ""};
+    return (typeof known === "function" ? known(r) : known) || {rule: tt("sp.gw.uni.refused", "The game refused this ({code})", {code: spEsc(r.error)}), fix: ""};
   };
   const row = (r, phase) => {
     const b = gwSiteOf(r.address), p = plan(r), key = gwKeyOf(r.address);
@@ -35776,12 +35945,34 @@ function gwMarketing(keys, mode){
   });
 }
 
+/* The agency a marketing refusal names: its own name, else the board's name
+   for its address, else a plain word. */
+function gwMkAgencyOf(r){
+  const a = r && (r.agency || r.agencies && r.agencies[0]);
+  if(a && a.name) return spEsc(a.name);
+  const known = a && gwMkAgency(a.address ? gwKeyOf(a.address) : a.street ? gwKeyOf(a) : String(a));
+  return known ? spEsc(known.name) : tt("nav.dlg.refuse.anagency", "The marketing agency");
+}
+/* When a closed agency opens, as the refusal says it ({day, hour}), else as
+   the board works it out: {at: "8:00", d}, `d` the weekday when it is not
+   today, else null. */
+function gwMkOpensOf(r){
+  const a = r && (r.agency || r.agencies && r.agencies[0]) || {};
+  let at = r && (r.opens || a.opens || r.reopens);
+  const known = !at && gwMkAgency(a.address ? gwKeyOf(a.address) : a.street ? gwKeyOf(a) : "");
+  const c = gwMkClock();
+  if(!at && known && c) at = gwMkNext(known, c);
+  if(!at || !Number.isFinite(Number(at.hour))) return null;
+  const other = c && Number.isFinite(Number(at.day)) && Number(at.day) !== c.day;
+  return {at: `${Number(at.hour)}:00`, d: other ? Number(at.day) % 7 : null};
+}
+
 /* The refusals the player can fix in the game while the same request stays
    valid (a screen closed, a locker placed, a week's lock over). Try again is
    offered only when every error the answer names is one of them; the rest
    ask for another request, or a refreshed board. */
 const GW_FIXABLE = new Set(["screen_open", "no_locker", "no_preset", "no_business", "no_agent", "no_warehouse",
-  "locked", "backorder", "not_assigned", "myemployees"]);
+  "locked", "backorder", "not_assigned", "myemployees", "no_contact", "agency_closed"]);
 const gwFixable = answer => {
   const a = answer || {};
   /* A hire's dry run names an app open in the game as `blocked`. */
@@ -35827,6 +36018,15 @@ const GW_REFUSE = {
     no_business: {get rule(){ return tt("nav.dlg.refuse.nobusiness.rule", "No business is set up here"); }, get fix(){ return tt("nav.dlg.refuse.nobusiness.fix", "Set one up in BizMan first."); }},
     no_promotion: {get rule(){ return tt("nav.dlg.refuse.nopromotion.rule", "Campaigns bring this business no promotion"); }, get fix(){ return tt("nav.dlg.refuse.nopromotion.fix", "Leave it out."); }},
     no_agency: {get rule(){ return tt("nav.dlg.refuse.noagency.rule", "No marketing agency in the city offers a campaign in this mix"); }, get fix(){ return tt("nav.dlg.refuse.noagency.fix", "Refresh the board."); }},
+    no_contact: r => ({rule: tt("nav.dlg.refuse.nocontact.rule", "{agency} is not in your phone's contacts", {agency: gwMkAgencyOf(r)}),
+      fix: tt("nav.dlg.refuse.nocontact.fix", "Visit it once in the game, then try again.")}),
+    agency_closed: r => {
+      const o = gwMkOpensOf(r);
+      return {rule: tt("nav.dlg.refuse.closed.rule", "{agency} is closed right now", {agency: gwMkAgencyOf(r)}),
+        fix: !o ? tt("nav.dlg.refuse.closed.fix", "Try again once it opens.")
+          : o.d === null ? tt("nav.dlg.refuse.closed.at", "It opens at {at}: try again then.", {at: o.at})
+          : tt("nav.dlg.refuse.closed.day", "It opens {d:day} at {at}: try again then.", {d: o.d, at: o.at})};
+    },
   },
   schedule: {
     headquarters: {get rule(){ return tt("nav.dlg.refuse.hq.rule", "A headquarters' schedule is not written from here"); }, get fix(){ return tt("nav.dlg.refuse.hq.fix", "Change it in BizMan in the game."); }},

@@ -101,13 +101,34 @@ class MarketingPlan(unittest.TestCase):
 
 
 class _Save:
-    """Just enough of ba_save.Save for _marketing()."""
+    """Just enough of ba_save.Save for _marketing() and _marketing_agencies()."""
+
+    def __init__(self, root=None):
+        self.root = root or {}
 
     def items(self, value):
         return list(value or [])
 
     def address(self, value):
         return (value["streetName"], value["streetNumber"]) if value else None
+
+
+INTERNET, BILLBOARDS = "ba:street_thirdavenue#17", "ba:street_secondavenue#5"
+WEEKDAYS_8_TO_17 = [{"day": k, "isOpen": k <= 5, "openingHourSlots": [{"startingHour": 8, "endingHour": 17}]}
+                    for k in range(1, 8)]
+
+
+def _agency_reg(street, number, name, closed=False):
+    return {"StreetName": street, "StreetNumber": number, "BusinessName": name,
+            "temporarilyClosed": closed, "scheduleDays": WEEKDAYS_8_TO_17}
+
+
+def _city(contacts=(INTERNET, BILLBOARDS), day=1, hour=10, closed=False):
+    """The two agencies as a save holds them, and the phone's contacts."""
+    rows = [{"streetName": k.split("#")[0], "streetNumber": int(k.split("#")[1])} for k in contacts]
+    return _Save({"Day": day, "Hour": hour, "Contacts": rows, "BuildingRegistrations": [
+        _agency_reg("ba:street_thirdavenue", 17, "McCain's eMarketing"),
+        _agency_reg("ba:street_secondavenue", 5, "CityAds", closed)]})
 
 
 def _camp(kind, enabled, street="ba:street_thirdavenue", number=17):
@@ -119,9 +140,10 @@ class Extraction(unittest.TestCase):
     building = {"t": "retail", "m": 100}
     promo = {"trafficIndex": 60, "marketing": 100, "total": 100}
 
-    def plan(self, campaigns, status="retail", building=None, hood=LOWER):
+    def plan(self, campaigns, status="retail", building=None, hood=LOWER, contacts=(INTERNET, BILLBOARDS), promo=None):
+        agencies = d._marketing_agencies(_city(contacts))
         return d._marketing(_Save(), {"marketingCampaigns": campaigns}, building or self.building,
-                            status, hood, self.promo)
+                            status, hood, promo or self.promo, agencies)
 
     def test_campaigns_and_the_plan(self):
         rows, plan = self.plan([_camp(SB, True), _camp(LB, True, "ba:street_secondavenue", 5), _camp(SI, False)])
@@ -138,6 +160,41 @@ class Extraction(unittest.TestCase):
         _rows, plan = self.plan([_camp(k, k == MI) for k in range(6)])
         self.assertFalse(plan["needsSetup"])
         self.assertEqual(plan["on"], plan["was"])
+        self.assertEqual(plan["agencies"], [])
+
+    def test_needs_setup_counts_only_contacted_agencies(self):
+        # The three internet entries, and only McCain's in the phone: set up.
+        internet = [_camp(k, k == MI) for k in (SI, MI, LI)]
+        self.assertFalse(self.plan(internet, contacts=(INTERNET,))[1]["needsSetup"])
+        self.assertTrue(self.plan(internet)[1]["needsSetup"])
+
+    def test_no_contact_no_plan_and_the_agencies_to_visit(self):
+        _rows, plan = self.plan([], contacts=())
+        self.assertIsNone(plan["on"])
+        self.assertIsNone(plan["costPlan"])
+        # 60 traffic on 100 m²: Medium internet, sold by McCain's.
+        self.assertEqual(plan["visit"], [INTERNET])
+        # Nothing to change, nothing to visit for: the street is enough.
+        _rows, plan = self.plan([], contacts=(), promo={"trafficIndex": 100, "marketing": 0, "total": 100})
+        self.assertEqual((plan["on"], plan["visit"]), ([], []))
+
+    def test_only_contacted_agencies_types_are_planned(self):
+        # Only CityAds is a contact: Small billboard (100 m², so 100) at $500
+        # instead of Medium internet at $250, and McCain's is the hint.
+        _rows, plan = self.plan([], contacts=(BILLBOARDS,))
+        self.assertEqual((plan["on"], plan["costPlan"], plan["visit"]), (["SmallBillboard"], 500, [INTERNET]))
+        self.assertEqual(plan["agencies"], [BILLBOARDS])
+        # A type booked with an agency that is not a contact stays as it runs.
+        _rows, plan = self.plan([_camp(LI, True)], contacts=(BILLBOARDS,))
+        self.assertEqual(plan["on"], ["LargeInternet"])
+        self.assertNotIn(INTERNET, plan["agencies"])
+
+    def test_the_agencies_a_write_touches(self):
+        _rows, plan = self.plan([_camp(SB, True, "ba:street_secondavenue", 5)])
+        # Small billboard off at CityAds, Medium internet on at McCain's, and
+        # the missing entries at both.
+        self.assertEqual(plan["on"], ["MediumInternet"])
+        self.assertEqual(plan["agencies"], [BILLBOARDS, INTERNET])
 
     def test_only_shops_and_offices_in_a_promotion_building(self):
         self.assertIsNotNone(self.plan([], status="office", building={"t": "office", "m": 100})[1])
@@ -145,6 +202,35 @@ class Extraction(unittest.TestCase):
         self.assertIsNone(self.plan([], building={"t": "warehouse", "m": 100})[1])
         self.assertIsNone(self.plan([], hood="")[1])
         self.assertIsNone(self.plan([], building={"t": "retail"})[1])
+
+
+class Agencies(unittest.TestCase):
+    def test_open_is_the_games_rule(self):
+        hours = d._open_hours(_Save(), {"scheduleDays": WEEKDAYS_8_TO_17})
+        # Day 1 is a Monday: ScheduleDay.day 1. Day 7 is Sunday, its day 7.
+        self.assertEqual(hours[1], [[8, 17]])
+        self.assertEqual(hours[0], [])
+        self.assertTrue(d.open_at(hours, False, 1, 8))
+        self.assertFalse(d.open_at(hours, False, 1, 17), "the end hour is shut")
+        self.assertFalse(d.open_at(hours, False, 1, 7))
+        self.assertFalse(d.open_at(hours, True, 1, 10), "temporarily closed")
+        self.assertFalse(d.open_at(hours, False, 6, 10), "Saturday")
+
+    def test_next_opening(self):
+        hours = d._open_hours(_Save(), {"scheduleDays": WEEKDAYS_8_TO_17})
+        self.assertEqual(d.next_open(hours, False, 1, 7), {"day": 1, "hour": 8})
+        self.assertEqual(d.next_open(hours, False, 1, 10), {"day": 1, "hour": 10})
+        # Friday evening: Monday, day 8, at 8.
+        self.assertEqual(d.next_open(hours, False, 5, 17), {"day": 8, "hour": 8})
+        self.assertIsNone(d.next_open(hours, True, 5, 17))
+
+    def test_the_agencies_from_the_save(self):
+        rows = d._marketing_agencies(_city(contacts=(BILLBOARDS,), day=5, hour=18, closed=True))
+        self.assertEqual([(a["key"], a["name"], a["contact"]) for a in rows],
+                         [(INTERNET, "McCain's eMarketing", False), (BILLBOARDS, "CityAds", True)])
+        self.assertEqual(rows[0]["types"], ["SmallInternet", "MediumInternet", "LargeInternet"])
+        self.assertEqual((rows[0]["open"], rows[0]["opens"]), (False, {"day": 8, "hour": 8}))
+        self.assertEqual((rows[1]["closed"], rows[1]["open"], rows[1]["opens"]), (True, False, None))
 
 
 class AgainstTheSaves(unittest.TestCase):
