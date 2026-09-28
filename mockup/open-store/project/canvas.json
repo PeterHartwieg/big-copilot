@@ -1,0 +1,155 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-09-28T16:00:00Z"
+ },
+ "title": "Big Copilot Open a new store",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [],
+ "boards": {
+  "Main.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1280,
+   "h": 900,
+   "title": "1 · What to open",
+   "is_interactive": true
+  },
+  "DemandCell.dc.html": {
+   "x": 1360,
+   "y": 0,
+   "w": 1280,
+   "h": 760,
+   "title": "1b · From the Demand grid",
+   "is_interactive": true
+  },
+  "Location.dc.html": {
+   "x": 2720,
+   "y": 0,
+   "w": 1280,
+   "h": 940,
+   "title": "2 · Where: Find a location, filtered",
+   "is_interactive": true
+  },
+  "Investment.dc.html": {
+   "x": 0,
+   "y": 1360,
+   "w": 1280,
+   "h": 1310,
+   "title": "3 · Investment: installation firm",
+   "is_interactive": true
+  },
+  "InvestmentSelf.dc.html": {
+   "x": 1360,
+   "y": 1360,
+   "w": 1280,
+   "h": 1420,
+   "title": "3b · Investment: self-installation",
+   "is_interactive": true
+  },
+  "BreakEven.dc.html": {
+   "x": 2720,
+   "y": 1360,
+   "w": 1280,
+   "h": 780,
+   "title": "4 · Break even",
+   "is_interactive": true
+  },
+  "Checklist.dc.html": {
+   "x": 0,
+   "y": 3200,
+   "w": 1280,
+   "h": 800,
+   "title": "5 · Until opening · game linked",
+   "is_interactive": true
+  },
+  "ChecklistNoLink.dc.html": {
+   "x": 1360,
+   "y": 3200,
+   "w": 1280,
+   "h": 900,
+   "title": "5b · Until opening · not linked",
+   "is_interactive": true
+  },
+  "AfterOpening.dc.html": {
+   "x": 2720,
+   "y": 3200,
+   "w": 1280,
+   "h": 1090,
+   "title": "6 · After opening: paying back",
+   "is_interactive": true
+  },
+  "Results.dc.html": {
+   "x": 0,
+   "y": 4710,
+   "w": 1280,
+   "h": 820,
+   "title": "7 · Businesses › Results: break-even column and the interior toggle",
+   "is_interactive": true
+  },
+  "SitePanel.dc.html": {
+   "x": 1360,
+   "y": 4710,
+   "w": 1280,
+   "h": 720,
+   "title": "7b · Site page: the break-even row",
+   "is_interactive": true
+  },
+  "SiteStates.dc.html": {
+   "x": 2720,
+   "y": 4710,
+   "w": 900,
+   "h": 640,
+   "title": "7c · The row's states",
+   "is_interactive": true
+  }
+ },
+ "order": [
+  "Main.dc.html",
+  "DemandCell.dc.html",
+  "Location.dc.html",
+  "Investment.dc.html",
+  "InvestmentSelf.dc.html",
+  "BreakEven.dc.html",
+  "Checklist.dc.html",
+  "ChecklistNoLink.dc.html",
+  "AfterOpening.dc.html",
+  "Results.dc.html",
+  "SitePanel.dc.html",
+  "SiteStates.dc.html"
+ ],
+ "notes": {
+  "row0": {
+   "x": 0,
+   "y": -240,
+   "text": "Open a store: what and where",
+   "kind": "title1",
+   "maxW": 4080
+  },
+  "row1": {
+   "x": 0,
+   "y": 1120,
+   "text": "The investment and its break even",
+   "kind": "title1",
+   "maxW": 4080
+  },
+  "row2": {
+   "x": 0,
+   "y": 2960,
+   "text": "Until opening, and after",
+   "kind": "title1",
+   "maxW": 4080
+  },
+  "row3": {
+   "x": 0,
+   "y": 4470,
+   "text": "Phase 1: break-even core",
+   "kind": "title1",
+   "maxW": 4080
+  }
+ },
+ "designSystems": []
+}
