@@ -12,9 +12,9 @@ A new view under Expansion, beside Demand, Find a location and Plan a factory:
 2. **Suggest a location**: Find a location, filtered to that type (`web/map.js`).
 3. **Investment**: a shopping list grouped by store, with the stores as map pins, for
    self-installation; or the installation firm's price. It is a toggle, and the deposit always counts.
-4. **Break-even indication** for that selection: investment ÷ expected daily profit, where the
-   expected profit comes from the player's own sites of the same type. Where they run none, show
-   the investment only.
+4. **Break-even indication** for that selection: investment ÷ expected daily profit. The expected
+   profit comes from the game's own rules (see "Expected profit" below), not from the player's other
+   shops. It is shown as a range, with an after-tax figure, and with an optional financing panel.
 5. **Checklist until the store can open.** It ticks itself from the save where it can: required
    furniture placed, every customer demand met, staff covering the opening hours, uniforms set,
    marketing running, logistics set up. Quick buttons: hire from the Headhunter list (mod `hire`
@@ -28,7 +28,7 @@ A new view under Expansion, beside Demand, Find a location and Plan a factory:
 Never suggest opening a store because another is at building capacity (AGENTS.md). The flow
 starts only when the player opens it.
 
-## Phase 1: break-even core (ships first, closes the ballot)
+## Phase 1: break-even core (closes the ballot)
 
 For every business the player runs:
 
@@ -118,3 +118,82 @@ main checkout. The research folder is gitignored.
 
 - Which gym items give distinct workout types (the gym's variety demand).
 - Wall counts for layouts not seen in a save.
+
+## Release and decisions (28 September 2026, later)
+
+- **One release.** Phase 1 does not ship alone. PR #175 stays a draft, and phases 2 to 4 are built on
+  branch `break-even-core`. It releases as one update, after PR #174 (the marketing write, mod 0.4.0)
+  has shipped, so the marketing button works on day one.
+- **The canvas is approved as designed:** https://claude.ai/artifact/BEGQSRsuicrWSpGFsRd4mo (generator
+  and NOTES.md on branch `open-store-canvas`, `mockup/open-store/`). The financing panel is new, so
+  design it in the canvas's style inside the break-even step.
+- **Financing is for planned stores only.** The game books loans to the company, not to a shop.
+- **Walls and floors:** Peter believes the installation firm charges for materials. The game code and
+  all six real bills say it does not. Peter can confirm in game by changing a blueprint's wall
+  material and seeing whether the quote moves. If it does, add materials to firm mode.
+
+## Expected profit (phase 2)
+
+Full rules, sources and validation are in `research/break-even-2026-09-28/PROFIT_MODEL.md`, with
+`PROFIT_GAME_RULES.md` and `PROFIT_COSTS.md` beside it. That folder is in the main checkout and
+gitignored. Put the rules you implement into `docs/dashboard-reference.md`.
+
+- **Cost of goods:** always the import cost: wholesale price × the save's daily price index × the
+  difficulty's price multiplier × any purchasing-agent discount. Never the income statement's
+  resources, which are near zero for shops the player's own factories supply.
+- **Price:** the highest price every customer accepts, i.e. the default price (or a cheaper rival's)
+  × the neighbourhood index, +0.3 with a monopoly.
+- **Arrivals per open hour:** ceil(min(C × promo × dayMult × hourMult, C)).
+  - C is the size's customer capacity for games started at build 2847 or later.
+  - promo = baseCustomerPromotionMultiplier + 0.75 × promotion/100.
+  - Pick the best of the 64 marketing combinations automatically.
+  - The staffing assistant's `_arrival_ceiling()` still uses the pre-2847 rule; a separate session
+    fixes that. Share one helper.
+- **Units bought:** units per product = arrivals × sales ratio × neighbourhood demand × satisfaction ×
+  the type's factor × the acceptance at that price. Neighbourhood demand falls with the number of
+  shops selling the product, and the new shop counts itself, so it also lowers demand at the
+  player's own shops in that neighbourhood. Show that.
+- **Wages:** the staffing assistant's cost for the predicted hour grid, with the structural formula
+  as a fallback. Rent comes from `_rent_estimate`, marketing from the chosen mix.
+- **What the board shows:**
+  - profit × [0.80, 1.05], and the break-even range that follows;
+  - a separate after-tax line (taxPercentage from the difficulty);
+  - "your shops of this type earn x% of this", where the player runs that type, as a line and not a
+    correction.
+- **Validation:** 108 real shops across 4 characters. With each shop's own prices, the median
+  actual ÷ model is 0.97, and 70% fall within ±15%. Offices are within about 5%.
+- **Not modelled:** cinemas and theatres come out 2 to 4 times too high, so show them as investment
+  only, with no profit estimate. Shelf space per product is also open.
+
+## Financing (phase 2, break-even step)
+
+Full rules are in `research/break-even-2026-09-28/LOANS.md`.
+
+- **Lenders** (`BankSettings`):
+  - Vantander Bank: 12% a year over 4 game-years, at most $2,000,000 per bank.
+  - Jensen Capital: 20% a year over 2 game-years, at most $40,000.
+  - A game-year is `daysPerYear` days (60 in every save). The minimum loan is $500.
+- **Interest** is flat on the original amount: floor(L × rate × bankInterestMultiplier / 100 /
+  daysPerYear) a day. It does not fall as the loan is repaid. The multiplier is 0.7 on Easy and
+  Normal, 1.3 on Hard, or the Custom value.
+- **Repayment** is max(5, floor(L / term days)) a day. Both are charged at midnight. Early payoff
+  carries no penalty.
+- **The most you can borrow** is the lower of two limits:
+  - the bank's cap minus what you owe it;
+  - max(cash + investments + assets, ¼ × the last 7 days' average daily profit × the term) minus
+    everything you owe.
+- **What the panel shows:**
+  - an amount (up to the investment and that limit) and a lender;
+  - the cash needed upfront;
+  - the daily repayment + interest against the expected daily profit;
+  - the total interest over the term, and with early payoff;
+  - the break-even day with and without the loan, side by side.
+
+## Checklist buttons (phase 3)
+
+- **Hire:** the mod's `hire` write.
+- **Uniforms:** the mod's `uniforms` write.
+- **Marketing:** PR #174's write. Build against its contract in `docs/game-link-api.md` on branch
+  `marketing-write` until it merges; the button shows only when the game link lists that write.
+- **Logistics:** a link to Plan a factory, and later to issue #172's flow.
+- **Without the game link:** each button is a short in-game instruction.
