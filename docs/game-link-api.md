@@ -600,7 +600,8 @@ refused `no_contact` or `agency_closed`, naming the agency, and nothing is writt
 
 **Set-up, on every apply.** It replaces the call and the chat, not the first visit: the site
 gets a campaign entry for every type each **usable** agency offers, the ones not in `on`
-disabled. An agency that is not usable gets no new entries, and that alone refuses nothing. A
+disabled. An agency that is not usable gets no new entries, and that alone refuses nothing:
+the row lists those switches in `waiting`. A
 disabled entry costs nothing: billing, reach and the billboards in the world count enabled
 campaigns only. After one write BizMan shows the full set of switches for that site's known
 agencies, and the player can change them by hand from then on. The write adds no chat
@@ -621,6 +622,9 @@ reads "Big Copilot updated marketing at <business>".
            "entriesAdded": ["SmallInternet", "MediumInternet", "MediumBillboard", "LargeBillboard"],
            "campaigns": [{"type": "SmallInternet", "agency": {"street": "ba:street_thirdavenue", "number": 17},
                           "enabled": true}],
+           "waiting": [{"type": "MediumBillboard",
+                        "agency": {"name": "CityAds", "address": {"street": "ba:street_secondavenue", "number": 5}},
+                        "opens": {"day": 36, "hour": 8}}],
            "error": null, "agency": null, "opens": null}]}
 ```
 
@@ -634,6 +638,13 @@ reads "Big Copilot updated marketing at <business>".
 - `entriesAdded` lists the types the set-up adds as entries (disabled unless in `on`).
   `campaigns` is every entry of the site after the write, in enum order, with its agency and
   `enabled`.
+- `waiting` lists, in enum order, the switch entries the set-up would add but skipped because
+  no agency that sells the type is usable now: a type the site has no entry for and that is
+  not in `on`. Each names the first agency that sells it and `opens` as for `agency_closed`
+  (null when that agency is not a contact, or is temporarily closed). It is the game's own
+  answer to "why is this switch missing", so the page need not guess from its clock. Empty
+  when nothing was skipped, on every refused row, and on every undo row (an undo adds no
+  entries). Additive: `schemaVersion` stays 1.
 - Row `error`, in the order checked: `changed` (another save, as above), `not_found` (no
   registration at that address), `changed` (`was` differs from the game), `not_rented`,
   `no_business` (no business, or `ba:businesstype_empty`), `no_promotion` (the building type

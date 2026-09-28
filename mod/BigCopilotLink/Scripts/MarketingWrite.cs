@@ -99,6 +99,8 @@ namespace BigCopilotLink
             public string Error;
             /// <summary>The agency a no_contact or agency_closed names.</summary>
             public AgencyCheck Blocked;
+            /// <summary>The switches the set-up would add but skipped: its agency is not usable now.</summary>
+            public readonly List<KeyValuePair<int, AgencyCheck>> Waiting = new List<KeyValuePair<int, AgencyCheck>>();
             public readonly List<Entry> Entries = new List<Entry>();
             public readonly List<int> Added = new List<int>();
             // Before: what the game holds.
@@ -328,7 +330,14 @@ namespace BigCopilotLink
                 {
                     var usable = agencies.Find(a => a.Types.Contains(type) && Check(a.Address, agencies, checks).Error == null);
                     var agency = on.Contains(type) ? usable ?? AgencyFor(agencies, type) : usable;
-                    if (agency == null) continue; // nobody may be asked for it now, and it is not wanted
+                    if (agency == null)
+                    {
+                        // Not wanted, and nobody may be asked for it now: the switch waits
+                        // for the first agency that sells it (none sells it: nothing waits).
+                        var seller = AgencyFor(agencies, type);
+                        if (seller != null) row.Waiting.Add(new KeyValuePair<int, AgencyCheck>(type, Check(seller.Address, agencies, checks)));
+                        continue;
+                    }
                     row.Entries.Add(new Entry { Agency = agency.Address, Type = type, Was = false, Now = on.Contains(type) });
                     row.Added.Add(type);
                     continue;
@@ -677,28 +686,43 @@ namespace BigCopilotLink
                 }
             }
             w.EndArray();
+            w.BeginArray("waiting");
+            if (planned)
+            {
+                foreach (var pair in row.Waiting)
+                {
+                    w.BeginObject();
+                    w.Prop("type", Name(pair.Key));
+                    WriteAgency(w, pair.Value);
+                    w.EndObject();
+                }
+            }
+            w.EndArray();
             w.Prop("error", row.Error);
             if (row.Blocked == null)
             {
                 w.PropNull("agency");
                 w.PropNull("opens");
             }
+            else WriteAgency(w, row.Blocked);
+            w.EndObject();
+        }
+
+        /// <summary>"agency": {name, address} and "opens": {day, hour} or null.</summary>
+        private static void WriteAgency(JsonWriter w, AgencyCheck check)
+        {
+            w.BeginObject("agency");
+            w.Prop("name", check.Name);
+            WriteService.WriteAddress(w, "address", check.Address.Street, check.Address.Number);
+            w.EndObject();
+            if (check.Opens == null) w.PropNull("opens");
             else
             {
-                w.BeginObject("agency");
-                w.Prop("name", row.Blocked.Name);
-                WriteService.WriteAddress(w, "address", row.Blocked.Address.Street, row.Blocked.Address.Number);
+                w.BeginObject("opens");
+                w.Prop("day", check.Opens[0]);
+                w.Prop("hour", check.Opens[1]);
                 w.EndObject();
-                if (row.Blocked.Opens == null) w.PropNull("opens");
-                else
-                {
-                    w.BeginObject("opens");
-                    w.Prop("day", row.Blocked.Opens[0]);
-                    w.Prop("hour", row.Blocked.Opens[1]);
-                    w.EndObject();
-                }
             }
-            w.EndObject();
         }
 
         private static void Types(JsonWriter w, string key, List<int> types)

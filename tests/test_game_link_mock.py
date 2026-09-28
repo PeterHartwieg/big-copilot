@@ -1255,7 +1255,8 @@ class MockMarketing(MarketingMock):
         self.assertEqual((answer["ok"], answer["kind"], answer["dryRun"]), (True, "marketing", True))
         self.assertNotIn("contactsAdded", answer, "the write never adds a contact")
         row = answer["rows"][0]
-        self.assertEqual((row["business"], row["error"], row["agency"], row["opens"]), ("HART. Gifts", None, None, None))
+        self.assertEqual((row["business"], row["error"], row["agency"], row["opens"], row["waiting"]),
+                         ("HART. Gifts", None, None, None, []), "nothing waits when both agencies are open")
         self.assertEqual(row["before"], {"on": ["LargeInternet", "SmallBillboard"], "dailyCost": 1000.0,
                                          "promotion": {"trafficIndex": 74, "marketing": 24, "total": 91}})
         self.assertEqual((row["on"], row["dailyCost"]), (["SmallInternet", "SmallBillboard"], 600.0))
@@ -1296,15 +1297,42 @@ class MockMarketing(MarketingMock):
         row = answer["rows"][0]
         self.assertEqual((row["error"], row["entriesAdded"]), (None, ["SmallInternet", "MediumInternet"]))
         self.assertEqual({c["agency"]["number"] for c in row["campaigns"] if c["type"].endswith("Billboard")}, {5})
+        cityads = {"name": "CityAds", "address": CITYADS}
+        self.assertEqual(row["waiting"], [{"type": "MediumBillboard", "agency": cityads, "opens": None},
+                                          {"type": "LargeBillboard", "agency": cityads, "opens": None}],
+                         "the billboard switches wait for the player to know CityAds")
         # Turning the billboard off would change CityAds.
         status, answer = self.post("marketing", {"dryRun": True, "sites": [self.site(on=("SmallInternet",))]})
         row = answer["rows"][0]
         self.assertEqual((status, answer["ok"], row["error"]), (200, False, "no_contact"))
         self.assertEqual((row["agency"], row["opens"]), ({"name": "CityAds", "address": CITYADS}, None))
-        self.assertEqual((row["on"], row["entriesAdded"], row["campaigns"]), (["LargeInternet", "SmallBillboard"], [], []))
+        self.assertEqual((row["on"], row["entriesAdded"], row["campaigns"], row["waiting"]),
+                         (["LargeInternet", "SmallBillboard"], [], [], []), "a refused row lists nothing")
         status, answer = self.post("marketing", {"sites": [self.site(on=("SmallInternet",))]})
         self.assertEqual((status, answer["error"], answer["rows"][0]["error"]), (409, "refused", "no_contact"))
         self.assertEqual(self.link.campaigns, {})
+
+    def test_a_switch_waits_for_an_agency_closed_by_the_knob_or_the_clock(self):
+        # CityAds forced closed: Gifts' plan leaves its billboard alone, so it goes
+        # through, and the two billboard switches wait for tomorrow at 8.
+        self.config({"agencyClosed": [CITYADS]})
+        _, answer = self.post("marketing", {"dryRun": True, "sites": [self.site()]})
+        row = answer["rows"][0]
+        self.assertEqual(row["error"], None)
+        self.assertEqual([(w["type"], w["agency"]["name"], w["opens"]) for w in row["waiting"]],
+                         [("MediumBillboard", "CityAds", {"day": 35, "hour": 8}),
+                          ("LargeBillboard", "CityAds", {"day": 35, "hour": 8})])
+        # Both open again, but the clock past 17:00: every switch to add waits for 8.
+        self.config({"agencyClosed": [], "hour": 19})
+        _, answer = self.post("marketing", {"dryRun": True, "sites": [self.site(BARE, on=(), was=())]})
+        row = answer["rows"][0]
+        self.assertEqual((row["error"], row["entriesAdded"]), (None, []))
+        self.assertEqual([w["type"] for w in row["waiting"]], ALL_TYPES)
+        self.assertEqual({(w["agency"]["address"]["number"], str(w["opens"])) for w in row["waiting"]},
+                         {(17, str({"day": 35, "hour": 8})), (5, str({"day": 35, "hour": 8}))})
+        # The apply answers the same list; an undo adds nothing, so nothing waits.
+        status, answer = self.post("marketing", {"sites": [self.site(BARE, on=(), was=())]})
+        self.assertEqual((status, len(answer["rows"][0]["waiting"])), (200, 6))
 
     def test_a_closed_agency_names_its_next_opening(self):
         self.config({"agencyClosed": [MCCAINS]})
@@ -1341,6 +1369,7 @@ class MockMarketing(MarketingMock):
         self.assertEqual((row["before"]["on"], row["on"]), (["SmallInternet", "SmallBillboard"], ["LargeInternet", "SmallBillboard"]))
         self.assertEqual(row["promotion"], {"trafficIndex": 74, "marketing": 24, "total": 91})
         self.assertEqual(len(row["campaigns"]), 6, "the entries the set-up added stay")
+        self.assertEqual(row["waiting"], [], "an undo adds no switches")
         self.assertEqual(self.post("undo", {"kind": "marketing"}), (409, {"error": "nothing_to_undo"}))
 
     def test_an_undo_follows_the_agency_rule(self):
@@ -1417,6 +1446,8 @@ class MockMarketingWeekdays(MarketingMock):
         _, answer = self.post("marketing", {"dryRun": True, "sites": [self.site()]})
         self.assertEqual((answer["rows"][0]["error"], answer["rows"][0]["entriesAdded"]),
                          (None, ["SmallInternet", "MediumInternet"]))
+        self.assertEqual([(w["type"], w["opens"]) for w in answer["rows"][0]["waiting"]],
+                         [("MediumBillboard", {"day": 36, "hour": 8}), ("LargeBillboard", {"day": 36, "hour": 8})])
 
 
 class MockMarketingTemporarilyClosed(MarketingMock):
@@ -1429,3 +1460,6 @@ class MockMarketingTemporarilyClosed(MarketingMock):
         _, answer = self.post("marketing", {"dryRun": True, "sites": [self.site(on=("SmallInternet",))]})
         row = answer["rows"][0]
         self.assertEqual((row["error"], row["agency"]["name"], row["opens"]), ("agency_closed", "CityAds", None))
+        _, answer = self.post("marketing", {"dryRun": True, "sites": [self.site()]})
+        self.assertEqual([(w["type"], w["opens"]) for w in answer["rows"][0]["waiting"]],
+                         [("MediumBillboard", None), ("LargeBillboard", None)], "no schedule says until when")

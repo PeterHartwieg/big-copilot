@@ -480,7 +480,7 @@ class Link:
                 if "error" in row:
                     row["error"] = rule
                 if kind == "marketing":
-                    row.update(self._forced_agency(rule))
+                    row.update(self._forced_agency(rule), waiting=[])
                 if rule == "locked":
                     # The mod's ReopenDay(): Monday 08:00, tomorrow on a Sunday.
                     row["reopens"] = {"day": self._imminent_monday(), "hour": 8}
@@ -499,7 +499,7 @@ class Link:
                 if rule not in ("changed", "no_contact", "agency_closed"):
                     rule = "agency_closed"
                 return 409, dict(head, error="changed" if rule == "changed" else "refused",
-                                 rows=[dict({"error": rule}, **self._forced_agency(rule))])
+                                 rows=[dict({"error": rule, "waiting": []}, **self._forced_agency(rule))])
             if target == "schedule":
                 return 409, dict(head, siteError=rule, rows=[] if rule == "changed" else [{"error": rule}])
             row = {"error": rule, "products": []}
@@ -736,7 +736,7 @@ class Link:
     def _marketing_blank(address, business=None, error=None) -> dict:
         return {"address": _wire(address), "business": business, "before": None, "on": [], "dailyCost": 0.0,
                 "promotion": None, "turnedOn": [], "turnedOff": [], "entriesAdded": [], "campaigns": [],
-                "error": error, "agency": None, "opens": None}
+                "waiting": [], "error": error, "agency": None, "opens": None}
 
     def _marketing_row(self, save, reg, address, before_campaigns, after_campaigns, added, *, promotion_after):
         types = self._marketing_types()
@@ -751,7 +751,7 @@ class Link:
             "entriesAdded": [types[k][0] for k in added],
             "campaigns": [{"type": types[c["type"]][0], "agency": _wire(c["agency"]) if c["agency"] else None,
                            "enabled": c["enabled"]} for c in sorted(after_campaigns, key=lambda c: c["type"])],
-            "error": None, "agency": None, "opens": None,
+            "waiting": [], "error": None, "agency": None, "opens": None,
         }
 
     def _refused_row(self, save, reg, address, campaigns, error, check=None) -> dict:
@@ -759,7 +759,7 @@ class Link:
         no_contact or agency_closed names."""
         row = self._marketing_row(save, reg, address, campaigns, campaigns, [],
                                   promotion_after=self._promotion_now(save, reg, address))
-        row.update(turnedOn=[], turnedOff=[], campaigns=[], error=error)
+        row.update(turnedOn=[], turnedOff=[], campaigns=[], waiting=[], error=error)
         if check is not None:
             row["agency"] = {"name": check["name"], "address": _wire(check["address"])}
             row["opens"] = check["opens"]
@@ -834,7 +834,7 @@ class Link:
             # Each type on at one agency (the one the site already uses) and off
             # elsewhere; the set-up adds a disabled entry only where the player may
             # use the agency now.
-            after, added = [dict(c) for c in before], []
+            after, added, waiting = [dict(c) for c in before], [], []
             for kind in range(len(names)):
                 mine = [c for c in after if c["type"] == kind]
                 if not mine:
@@ -843,6 +843,13 @@ class Link:
                     if agency is None and kind in on:
                         agency = sellers[0]
                     if agency is None:
+                        # Not wanted, and no seller usable now: the switch waits for
+                        # the first agency that sells it.
+                        if sellers:
+                            check = self._agency_check(save, sellers[0], contacts, cache)
+                            waiting.append({"type": names[kind],
+                                            "agency": {"name": check["name"], "address": _wire(sellers[0])},
+                                            "opens": check["opens"]})
                         continue
                     mine = [{"type": kind, "agency": agency, "enabled": False}]
                     after.append(mine[0])
@@ -857,7 +864,8 @@ class Link:
                 rows.append(self._refused_row(save, reg, address, before, error, check))
                 continue
             promotion = self._promotion(save, reg, address, on)
-            rows.append(self._marketing_row(save, reg, address, before, after, added, promotion_after=promotion))
+            rows.append(dict(self._marketing_row(save, reg, address, before, after, added, promotion_after=promotion),
+                             waiting=waiting))
             # What undo restores: each campaign whose flag the write switched.
             flips = [{"type": c["type"], "agency": c["agency"], "before": bool(w), "after": c["enabled"]}
                      for c, w in zip(after, was_on) if bool(w) != c["enabled"]]

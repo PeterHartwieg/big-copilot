@@ -21393,6 +21393,14 @@ function ovShownRows(bands, below, switchedOff){
 }
 /* The rows drawAlerts() last gave the all-sites buttons, asked again. */
 let ovAllPicks = () => [gwUniformAllId, gwMkAllId];
+/* When a row carrying one is silenced, filtered or brought back, the list is
+   drawn again; true when it was. */
+function ovMovePicks(){
+  const [u, m] = ovAllPicks();
+  if(u === gwUniformAllId && m === gwMkAllId) return false;
+  drawAlerts();
+  return true;
+}
 /* Whether a figure only repeats a number of the sentence beside it: "1 staff"
    beside "1 staff with unmet demands", "64%" beside "at 64.0%". */
 function ovEcho(amt, sentence){
@@ -34893,10 +34901,8 @@ const bindSev = once(() => on("click", ".sev[data-kind]", s => {
   applySev();
   /* An all-sites button whose row the filter hid moves to the first row
      still shown: the list is drawn again, the focus kept on the filter. */
-  const [u, m] = ovAllPicks();
-  if(u !== gwUniformAllId || m !== gwMkAllId){
-    const kind = s.dataset.kind;
-    drawAlerts();
+  const kind = s.dataset.kind;
+  if(ovMovePicks()){
     const again = document.querySelector(`#alertHead .sev[data-kind="${kind}"]`);
     if(again) again.focus();
   }
@@ -34925,12 +34931,18 @@ const bindFinds = once(() => {
     if(f.dataset.id){ silencedIds.add(f.dataset.id); saveSilenced(); }
     silencedLine();
     gwRelabelAll();
+    /* It carried an all-sites button: the list is drawn again so the button
+       moves to the next row shown, and the focus goes to the silenced line. */
+    if(ovMovePicks()){ const undo = document.querySelector("#silenced a"); if(undo) undo.focus(); }
   }, true);
   on("click", ".silenced a", (a, e) => {
     e.preventDefault();
     silencedIds.clear(); saveSilenced();
     $$(".find.gone").forEach(f => findGone(f, false));
     silencedLine();
+    /* The rows are back: the button returns to the first one shown, and the
+       focus to the list, since this line folds away. */
+    if(ovMovePicks()){ const row = document.querySelector("#alerts .find:not(.gone) .what"); if(row) row.focus(); }
   });
 });
 function wireFinds(){
@@ -35886,7 +35898,7 @@ function spMkLine(b){
   const sites = `data-gw-sites="${attr(JSON.stringify([b.key]))}"`;
   const btn = !same ? gwButton("marketing", tt("sp.mk.set", "Set"), `${sites} data-gw-mode="mix"`, why, {name: tt("sp.mk.set.name", "Set the cheapest mix"), icon: "clock"})
     : p.needsSetup ? gwButton("marketing", tt("sp.mk.setup", "Set up"), `${sites} data-gw-mode="setup"`, why, {alt: true, icon: "clock",
-      name: can && gwMkClosed(from).length ? tt("sp.mk.setup.now", "Add the campaign switches open agencies can add now")
+      name: can && !why && gwMkClosed(from).length ? tt("sp.mk.setup.now", "Add the campaign switches open agencies can add now")
         : tt("sp.mk.setup.name", "Add every campaign switch to BizMan")})
     : "";
   const notes = [hand, why, better].filter(Boolean).map(t => `<p class="spmk-hand">${t}</p>`).join("");
@@ -35929,18 +35941,42 @@ function gwMarketing(keys, mode){
     return missing.filter(t => !shut.has(sellerOf(p, t)));
   };
   const sellerOf = (p, t) => (p.setupAgencies || []).find(k => ((gwMkAgency(k) || {}).types || []).includes(t)) || "";
-  /* A missing switch the game does not add waits for its agency when that
-     is closed now; with the agency open, the game found it there already
-     (added in the game since the board was read). */
+  /* A missing switch the game does not add either waits for its agency (the
+     answer's `waiting`: not a contact, or not open, with when it opens) or
+     was there already (added in the game since the board was read). Only an
+     older answer without `waiting` leaves the board to guess, by its own
+     clock. */
   const missed = r => { const p = plan(r) || {}, got = added(r); return (p.setupTypes || []).filter(t => !got.includes(t)); };
-  const shutKeys = r => new Set(gwMkClosed((plan(r) || {}).setupAgencies || []).map(a => a.key));
-  const waiting = r => { const p = plan(r) || {}, shut = shutKeys(r); return missed(r).filter(t => shut.has(sellerOf(p, t))); };
+  const waitList = r => {
+    const p = plan(r) || {}, left = missed(r);
+    if(Array.isArray(r.waiting)) return r.waiting.filter(w => w && left.includes(w.type)).map(w => {
+      const known = w.agency && w.agency.address ? gwMkAgency(gwKeyOf(w.agency.address)) : null;
+      return {type: w.type, agency: gwMkAgencyOf({agency: w.agency}), opens: w.opens ? gwMkOpensOf({opens: w.opens}) : null,
+        visit: !w.opens && !!known && !known.contact};
+    });
+    const shut = new Set(gwMkClosed(p.setupAgencies || []).map(a => a.key));
+    return left.filter(t => shut.has(sellerOf(p, t))).map(t => {
+      const k = sellerOf(p, t);
+      return {type: t, agency: spEsc((gwMkAgency(k) || {}).name || ""), opens: gwMkOpensOf({agency: {address: gwAddress(k)}})};
+    });
+  };
+  const waiting = r => waitList(r).map(w => w.type);
   const there = r => { const w = waiting(r); return missed(r).filter(t => !w.includes(t)); };
   const waits = r => {
-    const p = plan(r) || {}, by = new Map();
-    waiting(r).forEach(t => { const k = sellerOf(p, t); by.set(k, [...(by.get(k) || []), t]); });
-    const parts = [...by].map(([k, ts]) => tt("sp.gw.mk.waits", {one: "{types} switch waits for {agency} to open", other: "{types} switches wait for {agency} to open"},
-      {n: ts.length, types: todayList(ts.map(gwMkName)), agency: spEsc((gwMkAgency(k) || {}).name || "")}));
+    const by = new Map();
+    waitList(r).forEach(w => {
+      const k = `${w.agency}|${w.visit}|${w.opens ? `${w.opens.d}|${w.opens.h}` : ""}`;
+      if(!by.has(k)) by.set(k, {agency: w.agency, opens: w.opens, visit: w.visit, types: []});
+      by.get(k).types.push(w.type);
+    });
+    const parts = [...by.values()].map(({agency, opens, visit, types}) => {
+      const o = {n: types.length, types: todayList(types.map(gwMkName)), agency};
+      return visit ? tt("sp.gw.mk.waits.visit", {one: "{types} switch waits for a first visit to {agency}", other: "{types} switches wait for a first visit to {agency}"}, o)
+        : !opens ? tt("sp.gw.mk.waits", {one: "{types} switch waits for {agency} to open", other: "{types} switches wait for {agency} to open"}, o)
+        : opens.d === null ? tt("sp.gw.mk.waits.at", {one: "{types} switch waits for {agency}, open at {h}:00", other: "{types} switches wait for {agency}, open at {h}:00"}, Object.assign(o, {h: opens.h}))
+        : tt("sp.gw.mk.waits.day", {one: "{types} switch waits for {agency}, open {d:day} at {h}:00", other: "{types} switches wait for {agency}, open {d:day} at {h}:00"},
+          Object.assign(o, {h: opens.h, d: opens.d}));
+    });
     const had = there(r);
     if(had.length) parts.push(tt("sp.gw.mk.there", {one: "{types} switch already in BizMan", other: "{types} switches already in BizMan"},
       {n: had.length, types: todayList(had.map(gwMkName))}));
@@ -35959,13 +35995,15 @@ function gwMarketing(keys, mode){
     const b = gwSiteOf(r.address), p = plan(r), key = gwKeyOf(r.address);
     if(!p) return "";
     const back = phase === "undone";
-    const got = added(r), wait = back || r.error ? "" : waits(r);
+    /* A refused row adds nothing, whatever the board would have guessed. */
+    const got = r.error ? [] : added(r), wait = back || r.error ? "" : waits(r);
     const setupOnly = !got.length ? "" : wait ? tt("sp.gw.mk.setupsome", {one: "{types} switch added, nothing else changes", other: "{types} switches added, nothing else changes"},
       {n: got.length, types: todayList(got.map(gwMkName))})
-      : tt("sp.gw.mk.setuponly", "switches added, nothing else changes");
+      : tt("sp.gw.mk.setuponly", {one: "switch added, nothing else changes", other: "switches added, nothing else changes"}, {n: got.length});
     /* A site on its plan, undone or refused, still says what the row is. */
     const change = [gwMkSame(p) ? setupOnly : `${gwMkMix(back ? p.on : p.was)} <em>→ ${gwMkMix(back ? p.was : p.on)}</em>`, wait]
-      .filter(Boolean).join(" · ") || (back ? tt("sp.gw.mk.nochange", "no change") : tt("sp.gw.mk.setupplan", "missing switches only"));
+      .filter(Boolean).join(" · ") || (back ? tt("sp.gw.mk.nochange", "no change")
+        : r.error ? tt("sp.gw.mk.setupplan", "missing switches only") : tt("sp.gw.mk.nothing2", "nothing to add"));
     const cost = gwMkSame(p) ? tt("sp.gw.mk.perday", "{w:$}/day", {w: p.costNow})
       : tt("sp.gw.mk.costs", "{a:$} → {b:$}/day", {a: back ? p.costPlan : p.costNow, b: back ? p.costNow : p.costPlan});
     /* The game's own reckoning, before and after an apply; said only where
