@@ -7280,7 +7280,10 @@ def _hire_weeks(slots: list) -> list:
         floor = max(floor, math.ceil(sum(s["to"] - s["from"] for s in day) / SHIFT_CAP))
         for hour in range(24):
             floor = max(floor, sum(1 for s in day if s["from"] <= hour < s["to"]))
-    for count in range(floor, len(worst)):
+    # Up to and including first fit's own count: at that count the balanced
+    # packing still spreads the week, where first fit filled the first hire to
+    # 45 hours and left the second 18 (one register open 9 to 18 every day).
+    for count in range(floor, len(worst) + 1):
         for order in HIRE_ORDERS:
             packed = _pack_hire_weeks(slots, count, order)
             if packed is not None:
