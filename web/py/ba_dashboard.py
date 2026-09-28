@@ -11295,7 +11295,7 @@ class History:
         return [dict(store[d], day=int(d)) for d in sorted(store, key=int) if int(d) <= day]
 
     def payback(self, character: str) -> dict:
-        """What the statements forget after 60 days, kept for _payback(): per
+        """What the statements forget after 61 days, kept for _payback(): per
         site key, {"opened", "bill", "firm": [day, investment], "self": [...]};
         per chain name the same without the bill. Changed in place; a record
         whose `opened` no longer matches is a new business at that address."""
@@ -11877,8 +11877,10 @@ def payback_outcome(investment: float, days: list, exact: bool, opened: int, rat
             if exact:
                 return {"state": "reached", "day": day, "after": day - opened}
             return {"state": "latest", "day": day}
+    if rate is None:
+        return {"state": "unknown"}
     if not exact:
-        if rate is not None and rate > 0:
+        if rate > 0:
             return {"state": "window", "days": max(1, math.ceil(investment / rate))}
         return {"state": "window"}
     if rate is None:
@@ -11948,12 +11950,17 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
     # Fewer statements than the game keeps: nothing has dropped out yet.
     whole = len(stmt_history) < STATEMENT_WINDOW
     store = history.payback(character)
-    older = (isinstance(store.get("day"), int) and last_day is not None
-             and last_day < store["day"])
+    # How far this save reaches: its last statement, or the day before its
+    # own for a save with none yet (a first day), to compare with the newest
+    # save the memory has seen before anything in it changes.
+    today = save.root.get("Day")
+    now = last_day if last_day is not None else (today - 1 if isinstance(today, int) else None)
+    kept_day = store.get("day") if isinstance(store.get("day"), int) else None
+    older = kept_day is not None and (now is None or now < kept_day)
     if older:  # read the newer save's memory, write none of it
         store = json.loads(json.dumps(store))
-    elif last_day is not None:
-        store["day"] = last_day
+    elif now is not None:
+        store["day"] = now
     kept_sites, kept_chains = store["sites"], store["chains"]
 
     sites, series = {}, {}
@@ -11965,7 +11972,10 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
         days = [(day, by[addr].get("TotalProfit", 0), by[addr].get("TotalSales", 0))
                 for day, by in stmt_history if addr in by]
         opened = b["opened"]
-        exact = bool(days) and (whole or days[0][0] > start)
+        # The record reaches back to the lease, or at least to the opening:
+        # rent paid on an empty lease before the record is the lease's own,
+        # not trading the record has lost.
+        exact = not days or whole or days[0][0] > start or opened > start
         # Sales before the opening day were another business on the same
         # lease, whose setup is not this one's: count from the day after them.
         prior = [i for i, (day, _p, sales) in enumerate(days) if day < opened and sales > 0]
@@ -21805,7 +21815,9 @@ const paybackSite = key => ((D.payback || {}).sites || {})[key] || null;
 const paybackChain = c => ((D.payback || {}).chains || {})[(c.sites || [])[0]] || null;
 /* The outcome in the mode on screen; null for a cost centre and a vacant lease. */
 const paybackOf = row => row && row[paybackMode()] || null;
-function paybackSentence(o){
+/* A window outcome's estimated day: the opening plus the payback period. */
+const paybackWindowDay = (o, row) => o && o.state === "window" && o.days && row ? (row.opened || 0) + o.days : null;
+function paybackSentence(o, row){
   switch(o && o.state){
     case "reached": return tt("co.payback.reached", {one: "Break even on day {day}, {n} day after opening",
       other: "Break even on day {day}, {n} days after opening"}, {day: o.day, n: o.after});
@@ -21814,21 +21826,25 @@ function paybackSentence(o){
     case "never": return tt("co.payback.never", "Not paying back at current profit");
     /* Opened before the save's record: what it earned before is unknown, so
        the whole payback period at recent profit stands in. */
-    case "window": return o.days ? tt("co.payback.window", {one: "Pays back in about {n} day of profit; opened before the save's record",
-      other: "Pays back in about {n} days of profit; opened before the save's record"}, {n: o.days})
-      : tt("co.payback.window.none", "Opened before the save's record");
+    case "window": {
+      const day = paybackWindowDay(o, row);
+      if(day === null) return tt("co.payback.window.none", "Opened before the save's record");
+      return day <= ((D.meta || {}).day || 0)
+        ? tt("co.payback.window.past", "Paid back around day {day}, an estimate from recent profit: earlier profit is outside the save's record", {day})
+        : tt("co.payback.window.ahead", "Pays back around day {day} at recent profit, counted from the opening: earlier profit is outside the save's record", {day});
+    }
     case "unknown": return tt("co.payback.unknown", "No trading day finished yet");
   }
   return "";
 }
 /* The column's short form; the sentence is the cell's tip. */
-function paybackShort(o){
+function paybackShort(o, row){
   switch(o && o.state){
     case "reached": return tt("co.payback.cell.reached", "day {day}", {day: o.day});
     case "latest": return tt("co.payback.cell.latest", "≤ day {day}", {day: o.day});
     case "togo": return tt("co.payback.cell.togo", "{n:,} d", {n: o.days});
     case "never": return tt("co.payback.cell.never", "no payback");
-    case "window": return o.days ? tt("co.payback.cell.window", "~{n:,} d", {n: o.days}) : "—";
+    case "window": { const day = paybackWindowDay(o, row); return day === null ? "—" : tt("co.payback.cell.window", "~day {day}", {day}); }
   }
   return "—";
 }
@@ -21837,7 +21853,7 @@ function paybackShort(o){
 function paybackTip(row, chain){
   const c = row.cost || {}, mode = paybackMode(), w = c[mode] || 0;
   const cost = chain ? tt("co.payback.cost.chain", "Invested {w:$} across the chain's sites, deposits included.", {w})
-    : c.billed ? tt("co.payback.cost.billed", "Invested {w:$}: the installation firm's bill {bill:$} and the deposit {dep:$}.", {w, bill: c.billed, dep: c.deposit})
+    : c.billed && mode === "firm" ? tt("co.payback.cost.billed", "Invested {w:$}: the installation firm's bill {bill:$} and the deposit {dep:$}.", {w, bill: c.billed, dep: c.deposit})
     : mode === "self" ? tt("co.payback.cost.self", "Invested {w:$}: furniture {f:$}, walls and floors {m:$}, deposit {dep:$}.", {w, f: c.furniture, m: c.materials, dep: c.deposit})
     : tt("co.payback.cost.firm", "Invested {w:$}: furniture {f:$}, the installation firm's fee {fee:$}, deposit {dep:$}.", {w, f: c.furniture, fee: c.fee, dep: c.deposit});
   const profit = row.since === null || row.since === undefined ? ""
@@ -21854,15 +21870,16 @@ function paybackCell(row, chain){
   const o = paybackOf(row);
   if(!o) return "—";
   if(o.state === "unknown" || (o.state === "window" && !o.days))
-    return `<span class="pb-cell quiet" data-tip="${attr(tt("co.payback.tip", "{what}. {basis}", {what: paybackSentence(o), basis: paybackTip(row, chain)}))}" tabindex="0">—</span>`;
-  return `<span class="pb-cell${o.state === "never" ? " neg" : ""}" data-tip="${attr(tt("co.payback.tip", "{what}. {basis}", {what: paybackSentence(o), basis: paybackTip(row, chain)}))}" tabindex="0">${paybackShort(o)}</span>`;
+    return `<span class="pb-cell quiet" data-tip="${attr(tt("co.payback.tip", "{what}. {basis}", {what: paybackSentence(o, row), basis: paybackTip(row, chain)}))}" tabindex="0">—</span>`;
+  return `<span class="pb-cell${o.state === "never" ? " neg" : ""}" data-tip="${attr(tt("co.payback.tip", "{what}. {basis}", {what: paybackSentence(o, row), basis: paybackTip(row, chain)}))}" tabindex="0">${paybackShort(o, row)}</span>`;
 }
 /* Sorting: the day it paid back or will, the ones that never will last. */
 function paybackRank(row){
   const o = paybackOf(row);
   if(!o) return -1;
   if(o.state === "reached" || o.state === "latest") return o.day;
-  if(o.state === "togo" || (o.state === "window" && o.days)) return ((D.meta || {}).day || 0) + o.days;
+  if(o.state === "togo") return ((D.meta || {}).day || 0) + o.days;
+  if(o.state === "window" && o.days) return paybackWindowDay(o, row);
   return o.state === "never" ? 1e9 : -1;
 }
 /* Arrived from search: the table may be wider than the page, so the Payback
@@ -24544,7 +24561,7 @@ function spPayback(b){
   const row = paybackSite(b.key), o = paybackOf(row);
   if(!o) return "";
   return `<p class="sp-read sp-pay" data-tip="${attr(paybackTip(row))}" tabindex="0">${
-    tt("sp.payback.line", "Payback: {what}", {what: paybackSentence(o)})}</p>`;
+    tt("sp.payback.line", "Payback: {what}", {what: paybackSentence(o, row)})}</p>`;
 }
 function drawSite(){
   const sec = $("secDetail");

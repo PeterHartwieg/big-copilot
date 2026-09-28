@@ -128,7 +128,9 @@ class OutcomeTest(unittest.TestCase):
         # but the whole setup over the recent rate.
         self.assertEqual(payback_outcome(2000, self.DAYS, False, 9, 250), {"state": "window", "days": 8})
         self.assertEqual(payback_outcome(2000, self.DAYS, False, 9, -50), {"state": "window"})
-        self.assertEqual(payback_outcome(2000, self.DAYS, False, 9, None), {"state": "window"})
+
+    def test_no_rate_is_unknown_even_from_inside_the_lease(self):
+        self.assertEqual(payback_outcome(2000, [(10, -100)], False, 9, None), {"state": "unknown"})
 
     def test_no_rate_is_unknown(self):
         self.assertEqual(payback_outcome(2000, [(10, -100)], True, 9, None), {"state": "unknown"})
@@ -157,12 +159,12 @@ class AddressWordsTest(unittest.TestCase):
 class PaybackTest(PricesTestCase):
     """A liquor store fed by a brewery: one chain, the brewery a cost centre."""
 
-    def company(self, transactions=(), shop_items=None):
+    def company(self, transactions=(), shop_items=None, opened=30, day=None):
         shop = registration(SHOP, shop_items or [("ba:itemname_cashregister", 900), ("ba:itemname_storageshelf", 0)],
                             [["FLOORpaid", "WALLpaid"]], 5880)
         brewery = registration(BREWERY, [("ba:itemname_bottlingmachine", 50000)], [["FLOORpaid"]], 20000)
-        save = Save({"Transactions": coll(transactions)}, {}, "synthetic")
-        businesses = [business(SHOP, 30), business(BREWERY, 30, cost_centre=True, status="support")]
+        save = Save({"Transactions": coll(transactions), "Day": day}, {}, "synthetic")
+        businesses = [business(SHOP, opened), business(BREWERY, 30, cost_centre=True, status="support")]
         chains = [{"name": "Liquor Stores", "sites": [KEY_SHOP, KEY_BREWERY]}]
         return save, [shop, brewery], businesses, chains
 
@@ -248,6 +250,31 @@ class PaybackTest(PricesTestCase):
         later, _ = self.run_payback(rows + [(33, {SHOP: (-98, 0)})], history)
         self.assertEqual(later["sites"][KEY_SHOP]["cost"]["firm"], 120000.5 + 5880)
 
+    def test_a_lease_held_empty_before_the_record_and_opened_inside_it(self):
+        # Rent on the empty lease since before the record, opened on day 140,
+        # set up by the firm the day before, selling from day 141.
+        rows = [(d, {SHOP: (-98, 0) if d <= 140 else (20000, 25000)}) for d in range(100, 161)]
+        out, _ = self.run_payback(rows, opened=140, transactions=[bill("5 8th Street", 150000, 139)])
+        site = out["sites"][KEY_SHOP]
+        self.assertTrue(site["exact"])
+        self.assertEqual(site["cost"]["billed"], 150000)
+        # 4,018 of rent over 41 days, then 20,000 a day: 155,880 is covered on day 148.
+        self.assertEqual(site["firm"], {"state": "reached", "day": 148, "after": 8})
+
+    def test_a_site_opened_inside_the_record_with_no_sale_yet_is_unknown(self):
+        rows = [(d, {SHOP: (-98, 0)}) for d in range(100, 161)]
+        out, _ = self.run_payback(rows, opened=159)
+        self.assertEqual(out["sites"][KEY_SHOP]["firm"], {"state": "unknown"})
+
+    def test_a_site_rented_today_has_no_statement_and_is_unknown(self):
+        rows = [(d, {BREWERY: (-500, 0)}) for d in range(100, 161)]
+        out, _ = self.run_payback(rows, opened=161)
+        site = out["sites"][KEY_SHOP]
+        self.assertTrue(site["exact"])
+        self.assertEqual(site["firm"], {"state": "unknown"})
+        # Nor does its chain, which has sold nothing, say anything more.
+        self.assertEqual(out["chains"][KEY_SHOP]["firm"], {"state": "unknown"})
+
     def test_a_later_re_layout_s_bill_is_not_the_setup(self):
         # Trading since day 32; the firm re-laid the shop out on day 36.
         rows = [(d, {SHOP: (-98 if d < 32 else 500, 0 if d < 32 else 900)}) for d in range(30, 40)]
@@ -300,6 +327,11 @@ class PaybackTest(PricesTestCase):
         save, regs, businesses, chains = self.company()
         _payback(save, Names({}), regs[1:], businesses[1:], [{"name": "Head office and support",
                  "sites": [KEY_BREWERY]}], statements([(20, {BREWERY: (-500, 0)})]), history, "CHAR")
+        self.assertEqual(history.payback("CHAR"), before)
+        # A first-day save of the same character has no statement at all.
+        save, regs, businesses, chains = self.company(day=1)
+        _payback(save, Names({}), regs[1:], businesses[1:], [{"name": "Head office and support",
+                 "sites": [KEY_BREWERY]}], [], history, "CHAR")
         self.assertEqual(history.payback("CHAR"), before)
         # And the newer save again, its statements rolled on past the opening.
         later = [(d, {SHOP: (100, 50000)}) for d in range(100, 161)]

@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "b49ddb017f";</script>
-<link rel="stylesheet" href="community.css?v=b49ddb017f">
+<script>window.LEDGER_BUILD = "bb080cd8cd";</script>
+<link rel="stylesheet" href="community.css?v=bb080cd8cd">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=b49ddb017f">
+<link rel="stylesheet" href="fonts/fonts.css?v=bb080cd8cd">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -5555,7 +5555,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"b49ddb017f","latest":{"pr":175,"date":"2026-09-28","title":"Time to break even for every business and chain","summary":"Businesses › Results has a Payback column. For each shop, office and chain it shows the day its setup was earned back, or how many days are still to go at recent profit; for a business older than the save's record, how many days of recent profit its setup takes. The setup counts the furniture, the deposit and the installation: the installation firm's fee by default, or the walls and floors you paid for when you switch to Self-installation above the table; where the save still holds the firm's real bill, that is what counts. Factories and warehouses count in their chain rather than on their own, so a shop fed by your own factory does not look free. The same line sits under a business's tiles on its own page."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"bb080cd8cd","latest":{"pr":175,"date":"2026-09-28","title":"Time to break even for every business and chain","summary":"Businesses › Results has a Payback column. For each shop, office and chain it shows the day its setup was earned back, or how many days are still to go at recent profit; for a business older than the save's record, how many days of recent profit its setup takes. The setup counts the furniture, the deposit and the installation: the installation firm's fee by default, or the walls and floors you paid for when you switch to Self-installation above the table; where the save still holds the firm's real bill, that is what counts. Factories and warehouses count in their chain rather than on their own, so a shop fed by your own factory does not look free. The same line sits under a business's tiles on its own page."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -5643,8 +5643,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=b49ddb017f"></script>
-<script src="community.js?v=b49ddb017f"></script>
+<script src="app.js?v=bb080cd8cd"></script>
+<script src="community.js?v=bb080cd8cd"></script>
 
 <script>
 
@@ -9414,7 +9414,9 @@ const paybackSite = key => ((D.payback || {}).sites || {})[key] || null;
 const paybackChain = c => ((D.payback || {}).chains || {})[(c.sites || [])[0]] || null;
 /* The outcome in the mode on screen; null for a cost centre and a vacant lease. */
 const paybackOf = row => row && row[paybackMode()] || null;
-function paybackSentence(o){
+/* A window outcome's estimated day: the opening plus the payback period. */
+const paybackWindowDay = (o, row) => o && o.state === "window" && o.days && row ? (row.opened || 0) + o.days : null;
+function paybackSentence(o, row){
   switch(o && o.state){
     case "reached": return tt("co.payback.reached", {one: "Break even on day {day}, {n} day after opening",
       other: "Break even on day {day}, {n} days after opening"}, {day: o.day, n: o.after});
@@ -9423,21 +9425,25 @@ function paybackSentence(o){
     case "never": return tt("co.payback.never", "Not paying back at current profit");
     /* Opened before the save's record: what it earned before is unknown, so
        the whole payback period at recent profit stands in. */
-    case "window": return o.days ? tt("co.payback.window", {one: "Pays back in about {n} day of profit; opened before the save's record",
-      other: "Pays back in about {n} days of profit; opened before the save's record"}, {n: o.days})
-      : tt("co.payback.window.none", "Opened before the save's record");
+    case "window": {
+      const day = paybackWindowDay(o, row);
+      if(day === null) return tt("co.payback.window.none", "Opened before the save's record");
+      return day <= ((D.meta || {}).day || 0)
+        ? tt("co.payback.window.past", "Paid back around day {day}, an estimate from recent profit: earlier profit is outside the save's record", {day})
+        : tt("co.payback.window.ahead", "Pays back around day {day} at recent profit, counted from the opening: earlier profit is outside the save's record", {day});
+    }
     case "unknown": return tt("co.payback.unknown", "No trading day finished yet");
   }
   return "";
 }
 /* The column's short form; the sentence is the cell's tip. */
-function paybackShort(o){
+function paybackShort(o, row){
   switch(o && o.state){
     case "reached": return tt("co.payback.cell.reached", "day {day}", {day: o.day});
     case "latest": return tt("co.payback.cell.latest", "≤ day {day}", {day: o.day});
     case "togo": return tt("co.payback.cell.togo", "{n:,} d", {n: o.days});
     case "never": return tt("co.payback.cell.never", "no payback");
-    case "window": return o.days ? tt("co.payback.cell.window", "~{n:,} d", {n: o.days}) : "—";
+    case "window": { const day = paybackWindowDay(o, row); return day === null ? "—" : tt("co.payback.cell.window", "~day {day}", {day}); }
   }
   return "—";
 }
@@ -9446,7 +9452,7 @@ function paybackShort(o){
 function paybackTip(row, chain){
   const c = row.cost || {}, mode = paybackMode(), w = c[mode] || 0;
   const cost = chain ? tt("co.payback.cost.chain", "Invested {w:$} across the chain's sites, deposits included.", {w})
-    : c.billed ? tt("co.payback.cost.billed", "Invested {w:$}: the installation firm's bill {bill:$} and the deposit {dep:$}.", {w, bill: c.billed, dep: c.deposit})
+    : c.billed && mode === "firm" ? tt("co.payback.cost.billed", "Invested {w:$}: the installation firm's bill {bill:$} and the deposit {dep:$}.", {w, bill: c.billed, dep: c.deposit})
     : mode === "self" ? tt("co.payback.cost.self", "Invested {w:$}: furniture {f:$}, walls and floors {m:$}, deposit {dep:$}.", {w, f: c.furniture, m: c.materials, dep: c.deposit})
     : tt("co.payback.cost.firm", "Invested {w:$}: furniture {f:$}, the installation firm's fee {fee:$}, deposit {dep:$}.", {w, f: c.furniture, fee: c.fee, dep: c.deposit});
   const profit = row.since === null || row.since === undefined ? ""
@@ -9463,15 +9469,16 @@ function paybackCell(row, chain){
   const o = paybackOf(row);
   if(!o) return "—";
   if(o.state === "unknown" || (o.state === "window" && !o.days))
-    return `<span class="pb-cell quiet" data-tip="${attr(tt("co.payback.tip", "{what}. {basis}", {what: paybackSentence(o), basis: paybackTip(row, chain)}))}" tabindex="0">—</span>`;
-  return `<span class="pb-cell${o.state === "never" ? " neg" : ""}" data-tip="${attr(tt("co.payback.tip", "{what}. {basis}", {what: paybackSentence(o), basis: paybackTip(row, chain)}))}" tabindex="0">${paybackShort(o)}</span>`;
+    return `<span class="pb-cell quiet" data-tip="${attr(tt("co.payback.tip", "{what}. {basis}", {what: paybackSentence(o, row), basis: paybackTip(row, chain)}))}" tabindex="0">—</span>`;
+  return `<span class="pb-cell${o.state === "never" ? " neg" : ""}" data-tip="${attr(tt("co.payback.tip", "{what}. {basis}", {what: paybackSentence(o, row), basis: paybackTip(row, chain)}))}" tabindex="0">${paybackShort(o, row)}</span>`;
 }
 /* Sorting: the day it paid back or will, the ones that never will last. */
 function paybackRank(row){
   const o = paybackOf(row);
   if(!o) return -1;
   if(o.state === "reached" || o.state === "latest") return o.day;
-  if(o.state === "togo" || (o.state === "window" && o.days)) return ((D.meta || {}).day || 0) + o.days;
+  if(o.state === "togo") return ((D.meta || {}).day || 0) + o.days;
+  if(o.state === "window" && o.days) return paybackWindowDay(o, row);
   return o.state === "never" ? 1e9 : -1;
 }
 /* Arrived from search: the table may be wider than the page, so the Payback
@@ -12153,7 +12160,7 @@ function spPayback(b){
   const row = paybackSite(b.key), o = paybackOf(row);
   if(!o) return "";
   return `<p class="sp-read sp-pay" data-tip="${attr(paybackTip(row))}" tabindex="0">${
-    tt("sp.payback.line", "Payback: {what}", {what: paybackSentence(o)})}</p>`;
+    tt("sp.payback.line", "Payback: {what}", {what: paybackSentence(o, row)})}</p>`;
 }
 function drawSite(){
   const sec = $("secDetail");

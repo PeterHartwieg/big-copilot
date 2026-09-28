@@ -113,3 +113,30 @@ test('the site panel has a Payback line for a shop and none for a factory', asyn
   await page.waitForFunction(k => siteKey === k, BREWERY);
   assert.equal(await page.locator('#sitePanel .sp-pay').count(), 0);
 });
+
+test('a real bill is the firm figure only, and an old lease reads as an estimated day', async t => {
+  const page = await board(t, await context(t));
+  const tip = () => page.$eval(`#portfolio tr.kid[data-key="${SPIRITS}"] .pb-cell`, e => e.dataset.tip);
+  await page.evaluate(k => { D.payback.sites[k].cost.billed = 120000; drawPortfolio(); }, SPIRITS);
+  assert.match(await tip(), /the installation firm's bill \$120,000/);
+  await page.click('#paybackMode a[data-id="self"]');
+  assert.doesNotMatch(await tip(), /bill/);
+  assert.match(await tip(), /walls and floors/);
+  await page.click('#paybackMode a[data-id="firm"]');
+  // A lease older than the record: the opening plus the payback period, as a
+  // day, whether it has passed or not, and sorted by that day.
+  const day = await page.evaluate(() => D.meta.day);
+  await page.evaluate(([k, g]) => {
+    D.payback.sites[k].opened = 10; D.payback.sites[k].firm = {state: 'window', days: 20};
+    D.payback.sites[g].opened = 10; D.payback.sites[g].firm = {state: 'window', days: 200};
+    drawPortfolio();
+  }, [SPIRITS, GIFTS]);
+  assert.equal(await kidCell(page, SPIRITS), '~day 30');
+  assert.match(await tip(), /^Paid back around day 30, an estimate from recent profit/);
+  assert.equal(await kidCell(page, GIFTS), '~day 210');
+  assert.ok(210 > day);
+  assert.match(await page.$eval(`#portfolio tr.kid[data-key="${GIFTS}"] .pb-cell`, e => e.dataset.tip),
+    /^Pays back around day 210 at recent profit/);
+  assert.doesNotMatch(await page.$eval(`#portfolio tr.kid[data-key="${GIFTS}"] .pb-cell`, e => e.dataset.tip), /to go/);
+  assert.deepEqual(await page.evaluate(([k, g]) => [paybackRank(paybackSite(k)), paybackRank(paybackSite(g))], [SPIRITS, GIFTS]), [30, 210]);
+});
