@@ -34948,7 +34948,12 @@ const bindFinds = once(() => {
     const shown = f => f && !f.closest(".hide") && f.getClientRects().length > 0;
     const row = [...document.querySelectorAll("#alerts .find, #alertMinor .find")].find(f => f.dataset.id === last && shown(f))
       || [...document.querySelectorAll("#alerts .find:not(.hide), #alertMinor .find:not(.hide)")].find(shown);
-    const to = row && row.querySelector(".what");
+    /* No row shown at all (the filters hide every one): the severity filter
+       of the row's band, else the first, which is always there. */
+    const was = [...document.querySelectorAll(".find")].find(f => f.dataset.id === last);
+    const band = was && ["crit", "watch", "opp"].find(k => was.classList.contains(k));
+    const to = (row && row.querySelector(".what"))
+      || document.querySelector(`#alertHead .sev[data-kind="${band}"]`) || document.querySelector("#alertHead .sev");
     if(to) to.focus();
   });
 });
@@ -35998,7 +36003,9 @@ function gwMarketing(keys, mode){
   const waitingN = answer => okRows(answer).reduce((n, r) => n + waiting(r).length, 0);
   /* Every waiting switch waits only for an agency to open (the answer names
      its opening): only then is "closed" the reason. */
-  const closedOnly = answer => okRows(answer).every(r => waitList(r).every(w => w.why === "open"));
+  const closedOnly = answer => okRows(answer).every(r => waitList(r).every(w => w.why === "open" || w.why === "reopen"));
+  /* Every waiting switch waits for a first visit to its agency. */
+  const visitOnly = answer => okRows(answer).every(r => waitList(r).every(w => w.why === "visit"));
   const first = site(keys[0]);
   if(!first) return;
   const refusal = r => {
@@ -36097,14 +36104,16 @@ function gwMarketing(keys, mode){
       const n = moved(answer).length;
       if(answer.undo) return n > 1 ? tt("sp.gw.mk.undone.many", "Undone: campaigns back as they were at {n} sites.", {n})
         : tt("sp.gw.mk.undone", "Undone: campaigns back as they were.");
-      const k = addedN(answer), left = waitingN(answer), shut = closedOnly(answer);
+      const k = addedN(answer), left = waitingN(answer), shut = closedOnly(answer), visit = !shut && visitOnly(answer);
       const rest = !left ? "" : ` ${shut ? tt("sp.gw.mk.done.wait", {one: "{n} switch waits for an agency to open.", other: "{n} switches wait for an agency to open."}, {n: left})
+        : visit ? tt("sp.gw.mk.done.waitvisit", {one: "{n} switch waits for a first visit to an agency.", other: "{n} switches wait for a first visit to an agency."}, {n: left})
         : tt("sp.gw.mk.done.waitany", {one: "{n} switch waits for an agency.", other: "{n} switches wait for an agency."}, {n: left})}`;
       /* Every switch is added, found there already, or waiting for an
          agency, as the answer's `waiting` says; "closed" only when each wait
          is for an agency to open, and "every switch" only when none waits. */
       if(!n) return left ? (k ? `${tt("sp.gw.mk.done.some", {one: "{n} switch added to BizMan.", other: "{n} switches added to BizMan."}, {n: k})}${rest}`
           : shut ? tt("sp.gw.mk.done.none", "No switch was added: the agencies it needs are closed.")
+          : visit ? tt("sp.gw.mk.done.nonevisit", "No switch was added: each one waits for a first visit to an agency.")
           : tt("sp.gw.mk.done.noneany", "No switch was added: each one waits for an agency."))
         : k ? tt("sp.gw.mk.done.setup", "Every campaign switch is in BizMan now.")
         : tt("sp.gw.mk.done.there", "No switches were added: they are in BizMan already.");

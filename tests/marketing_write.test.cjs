@@ -474,6 +474,13 @@ test('undoing a silence puts the focus on the row it brings back, or on the firs
   await page.locator('#alertHead .sev[data-kind="opp"]').click();
   await page.locator('#silenced a').click();
   assert.equal(await focused(), 'promo-gifts');
+  // The opportunities still filtered, Gifts' warning silenced and the
+  // warnings filtered too: no row is shown, so the focus goes to the filter
+  // of the band the row belongs to.
+  await page.locator('#alerts .find[data-id="promo-gifts"] .mark').click();
+  await page.locator('#alertHead .sev[data-kind="watch"]').click();
+  await page.locator('#silenced a').click();
+  assert.equal(await page.evaluate(() => document.activeElement.matches('#alertHead .sev[data-kind="watch"]')), true);
 });
 
 test('a switch waiting for an agency the board thinks is a contact is not called closed', async (t) => {
@@ -510,5 +517,22 @@ test('switches of an agency the board knows is no contact: a first visit, never 
     'Small internet, Medium internet, Large internet switches added, nothing else changes · Small billboard, Large billboard switches wait for a first visit to CityAds');
   await dlg.locator('[data-gw-b="apply"]').click();
   await phase(page, 'done');
-  assert.equal(await dlg.locator('.gw-said').textContent(), '3 switches added to BizMan. 2 switches wait for an agency.');
+  assert.equal(await dlg.locator('.gw-said').textContent(), '3 switches added to BizMan. 2 switches wait for a first visit to an agency.');
+});
+
+test('a temporarily closed agency the board knows of counts as closed', async (t) => {
+  const d = JSON.parse(payload);
+  d.marketingAgencies.find(a => a.key === ADS).closed = true;
+  const page = await board(t, {data: JSON.stringify(d)});
+  await answering(page, {entries: {[B]: []}, waiting: {[B]: [
+    {type: 'SmallBillboard', agency: CITYADS, opens: null}, {type: 'LargeBillboard', agency: CITYADS, opens: null}]}});
+  await openSite(page, B);
+  await page.locator('#sp-pull [data-gw="marketing"]').click();
+  await phase(page, 'ready');
+  const dlg = page.locator('dialog.gw-dlg');
+  assert.match(await dlg.locator('.gw-mkrow .gw-mk').innerText(), /Small billboard, Large billboard switches wait for CityAds to reopen/);
+  assert.match(await dlg.locator('.gw-verdict').innerText(), /No switch can be added until an agency opens/);
+  await dlg.locator('[data-gw-b="apply"]').click();
+  await phase(page, 'done');
+  assert.equal(await dlg.locator('.gw-said').textContent(), 'No switch was added: the agencies it needs are closed.');
 });
