@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "16f819e03e";</script>
-<link rel="stylesheet" href="community.css?v=16f819e03e">
+<script>window.LEDGER_BUILD = "e88cbf7a74";</script>
+<link rel="stylesheet" href="community.css?v=e88cbf7a74">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=16f819e03e">
+<link rel="stylesheet" href="fonts/fonts.css?v=e88cbf7a74">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -5555,7 +5555,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"16f819e03e","latest":{"pr":175,"date":"2026-09-28","title":"Time to break even for every business and chain","summary":"Businesses › Results has a Payback column. For each shop, office and chain it shows the day its setup was earned back, or how many days are still to go at recent profit; for a business older than the save's record, an estimated day counted from its opening at recent profit. The setup counts the furniture, the deposit and the installation: the installation firm's fee by default, or the walls and floors you paid for when you switch to Self-installation above the table; where the save still holds the firm's real bill, that is what counts. Factories and warehouses count in their chain rather than on their own, so a shop fed by your own factory does not look free. The same line sits under a business's tiles on its own page."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"e88cbf7a74","latest":{"pr":175,"date":"2026-09-28","title":"Time to break even for every business and chain","summary":"Businesses › Results has a Payback column. For each shop, office and chain it shows the day its setup was earned back, or how many days are still to go at recent profit; for a business older than the save's record, an estimated day counted from its opening at recent profit. The setup counts the furniture, the deposit and the installation: the installation firm's fee by default, or the walls and floors you paid for when you switch to Self-installation above the table; where the save still holds the firm's real bill, that is what counts. Factories and warehouses count in their chain rather than on their own, so a shop fed by your own factory does not look free. The same line sits under a business's tiles on its own page."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -5643,8 +5643,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=16f819e03e"></script>
-<script src="community.js?v=16f819e03e"></script>
+<script src="app.js?v=e88cbf7a74"></script>
+<script src="community.js?v=e88cbf7a74"></script>
 
 <script>
 
@@ -13253,8 +13253,7 @@ const PG_KEEP_DAYS = 14;
 const pgMemo = new Map();
 const pgWho = () => (typeof D !== "undefined" && D && D.meta && D.meta.character) || "";
 /* The company's boards are counted in its store (`n`), so "a board after
-   the write" holds across a reload; `PG_LOAD` names this page load. */
-const PG_LOAD = `${Date.now().toString(36)}.${Math.random().toString(36).slice(2, 8)}`;
+   the write" holds across a reload. */
 function pgStore(){
   const who = pgWho();
   if(!pgMemo.has(who)){
@@ -13318,8 +13317,11 @@ function pgBoard(){
   const saved = pgSaved(who);
   if(Object.keys(recs).length || (saved && Object.keys(saved.recs).length)) pgSave(saved);
 }
-/* The game's clock as minutes: the link's, where it reads one, else the board's. */
-const pgMinutes = c => c && Number.isFinite(Number(c.day)) ? (Number(c.day) * 24 + (Number(c.hour) || 0)) * 60 + (Number(c.minute) || 0) : null;
+/* The game's clock as minutes: the link's, where it reads one, else the board's.
+   Whole minutes: the link's minute is the game's float, the board's the save's
+   whole number, so a paused game would otherwise leave the write for ever
+   later than every board after it. */
+const pgMinutes = c => c && Number.isFinite(Number(c.day)) ? (Number(c.day) * 24 + (Number(c.hour) || 0)) * 60 + Math.floor(Number(c.minute) || 0) : null;
 function pgClockNow(){
   const l = typeof gwLink === "function" ? gwLink() : null;
   const m = l && Number.isFinite(Number(l.day)) ? l : (D && D.meta) || {};
@@ -13330,7 +13332,7 @@ function pgClockNow(){
 function pgRecord(rec){
   const {recs, memo} = pgStore();
   memo.gone.delete(rec.id); memo.mine.add(rec.id); memo.synced.delete(rec.id);
-  recs[rec.id] = Object.assign({}, rec, {state: "applied", at: Date.now(), seq: memo.n, load: PG_LOAD, clock: pgClockNow()});
+  recs[rec.id] = Object.assign({}, rec, {state: "applied", at: Date.now(), seq: memo.n, clock: pgClockNow()});
   pgSave();
   if(typeof sbStamp !== "undefined") sbStamp++;
 }
@@ -13392,9 +13394,11 @@ function pgPeopleSites(){
 }
 /* Every Applied record is judged once on each board built after its write:
    the company's board count must be past the write's and the game's clock not
-   earlier. After a reload the clock must have moved on too: a save file read
-   again at the write's own minute may hold the bytes from before it. A record
-   stays PG_KEEP_DAYS game days, then goes; a judged one keeps what it saw. */
+   earlier. A board at the write's own minute may confirm it but never says
+   Not confirmed: a read taken just before the write can arrive just after it,
+   and a save file read again after a reload may hold the bytes from before
+   it, and Not confirmed is final. A record stays PG_KEEP_DAYS game days, then goes; a
+   judged one keeps what it saw. */
 let pgJudged = 0;
 function pgEvaluate(){
   if(!hasData() || pgJudged === boardSeq) return;
@@ -13406,10 +13410,10 @@ function pgEvaluate(){
     const made = pgMinutes(rec.clock);
     if(now !== null && made !== null && now - made > PG_KEEP_DAYS * 1440){ delete recs[id]; memo.gone.add(id); memo.mine.delete(id); touched = true; return; }
     if(!["applied", "partly", "unseen"].includes(rec.state) || !(memo.n > rec.seq)) return;
-    if(now !== null && made !== null && (now < made || (now === made && rec.load !== PG_LOAD))) return;
+    if(now !== null && made !== null && now < made) return;
     let v = null;
     try{ v = PG_CHECK[rec.family] ? PG_CHECK[rec.family](rec) : null; }catch(e){ v = null; }
-    if(!v) return;
+    if(!v || (v.state === "changed" && now !== null && now === made)) return;
     Object.assign(rec, v, {seen: {day: D.meta.day, hour: D.meta.hour, minute: D.meta.minute}});
     memo.mine.add(id);
     touched = true;

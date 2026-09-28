@@ -19,14 +19,12 @@ got no answer records nothing; the dialog says what happened, as before.
 
 "Later" is both: the company's board count (`n` in its store, one more for every board of that
 company taken in, kept across reloads) is past the write's, and the game clock the board was read
-at is not earlier than the link's clock at the write. After a reload the clock must have moved on
-too (`load` names the page load of the write): a save file read again at the write's own minute
-may hold the bytes from before it. A save file of the same company read afterwards counts only if
-it was saved after the write.
-
-Known and left: a read already in flight when the write is applied (the game paused, Update
-clicked seconds before Apply) can be judged in the same page load as later, and its pre-write
-bytes then say *Not confirmed*. A judged record is not judged again.
+at is not earlier than the link's clock at the write, both in whole minutes (the link reads the
+game's minute as a fraction, the save holds a whole one). A board at the write's own minute may
+confirm the write but never says *Not confirmed*: a read already in flight when the write is
+applied (the game paused, Update clicked seconds before Apply), or a save file read again after a
+reload, may hold the bytes from before it. A save file of the same company read afterwards counts
+only if it was saved after the write. A judged record is not judged again.
 
 ## Records
 
