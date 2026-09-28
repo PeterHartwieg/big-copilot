@@ -36001,8 +36001,9 @@ function gwMarketing(keys, mode){
   const okRows = answer => (answer.rows || []).filter(r => !r.error && plan(r));
   const addedN = answer => okRows(answer).reduce((n, r) => n + added(r).length, 0);
   const waitingN = answer => okRows(answer).reduce((n, r) => n + waiting(r).length, 0);
-  /* Every waiting switch waits only for an agency to open (the answer names
-     its opening): only then is "closed" the reason. */
+  /* Every waiting switch waits for a closed agency: one the answer gives an
+     opening time for, or one the board knows is temporarily closed. Only
+     then is "closed" the reason. */
   const closedOnly = answer => okRows(answer).every(r => waitList(r).every(w => w.why === "open" || w.why === "reopen"));
   /* Every waiting switch waits for a first visit to its agency. */
   const visitOnly = answer => okRows(answer).every(r => waitList(r).every(w => w.why === "visit"));
@@ -36067,6 +36068,7 @@ function gwMarketing(keys, mode){
       return n ? `<b>${tt("sp.gw.mk.change", {one: "The game will change the campaigns at {n} site", other: "The game will change the campaigns at {n} sites"}, {n})}</b>`
         : k ? `<b>${tt("sp.gw.mk.switches", {one: "The game will add {n} switch", other: "The game will add {n} switches"}, {n: k})}</b>`
         : waitingN(answer) ? `<b>${closedOnly(answer) ? tt("sp.gw.mk.noswitch", "No switch can be added until an agency opens")
+          : visitOnly(answer) ? tt("sp.gw.mk.noswitch.visit", "No switch can be added before a first visit to an agency")
           : tt("sp.gw.mk.noswitch.now", "No switch can be added now")}</b>`
         : `<b>${tt("sp.gw.mk.noneneeded", "No switches to add")}</b>`;
     },
