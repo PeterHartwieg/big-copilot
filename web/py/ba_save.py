@@ -46,6 +46,7 @@ Usage
 
 from __future__ import annotations
 
+import gc
 import gzip
 import json
 import os
@@ -152,15 +153,18 @@ class _Reader:
 
     # --- structure -----------------------------------------------------
     def value(self, tag: int):
+        # Tested in the order a real save uses them, commonest first: this runs
+        # once for every value in the file, well over a million times.
         if tag == 0x17:
             return self.i32()
-        if tag == 0x1F:
-            return self.f32()
-        if tag == 0x21:
-            # Real-estate purchasePrice; a float loses whole dollars past ~16M.
-            return self.f64()
+        if tag == 0x01:
+            return self.instance(with_ref_id=True)
         if tag == 0x27:
             return self.string()
+        if tag == 0x1F:
+            return self.f32()
+        if tag == 0x03:
+            return self.instance(with_ref_id=False)
         if tag == 0x2B:
             return bool(self.u8())
         if tag == 0x2D:
@@ -171,14 +175,14 @@ class _Reader:
             return self.u8()
         if tag == 0x09:
             return {"$ref": self.i32()}
-        if tag == 0x01:
-            return self.instance(with_ref_id=True)
-        if tag == 0x03:
-            return self.instance(with_ref_id=False)
+        if tag == 0x21:
+            # Real-estate purchasePrice; a float loses whole dollars past ~16M.
+            return self.f64()
         raise SaveFormatError(self._where(f"value tag {tag:#04x}"))
 
     def instance(self, with_ref_id: bool):
-        head = self.u8()
+        head = self.d[self.p]  # u8(), in place: once per object in the save
+        self.p += 1
         type_name = None
         if head in (0x00, 0x2D):
             return None
@@ -206,35 +210,63 @@ class _Reader:
             obj["$type"] = type_name
         if ref_id is not None:
             obj["$id"] = ref_id
+        # This loop sees every property of every object in the save, well over
+        # a million, so its common case is read in place with the position in
+        # a local: the tag, a key already in the string cache, and the two
+        # commonest values, an int32 and a float. Anything else goes through
+        # the methods above, with the position handed over and taken back.
+        d, strings = self.d, self._strings
+        p = self.p
         while True:
-            tag = self.u8()
+            tag = d[p]
+            p += 1
+            if tag in PROP_TAGS:
+                key = None
+                if d[p] == 1:  # a string, not null: 01 <int32 chars> <utf-16>
+                    end = p + 5 + _I32(d, p + 1)[0] * 2
+                    key = strings.get(d[p + 5 : end])
+                if key is None:
+                    self.p = p
+                    key = self.string()
+                    p = self.p
+                else:
+                    p = end
+                if tag == 0x17:
+                    obj[key] = _I32(d, p)[0]
+                    p += 4
+                elif tag == 0x1F:
+                    obj[key] = _F32(d, p)[0]
+                    p += 4
+                else:
+                    self.p = p
+                    obj[key] = self.value(tag)
+                    p = self.p
+                continue
+            self.p = p
             if tag == END_OBJECT:
                 return obj
             if tag == BEGIN_ITEMS:
                 obj["$items"] = self.items()
-                continue
-            if tag == PACKED_ITEMS:
+            elif tag == PACKED_ITEMS:
                 obj["$items"] = self.packed(type_name)
-                continue
-            if tag in PROP_TAGS:
-                key = self.string()
-                obj[key] = self.value(tag)
-                continue
-            if tag - 1 in PROP_TAGS:
+            elif tag - 1 in PROP_TAGS:
                 obj.setdefault("$vals", []).append(self.value(tag - 1))
-                continue
-            raise SaveFormatError(self._where(f"body tag {tag:#04x} in {type_name}"))
+            else:
+                raise SaveFormatError(self._where(f"body tag {tag:#04x} in {type_name}"))
+            p = self.p
 
     def items(self) -> list:
         self.i64()  # declared count; the terminator is authoritative
         out = []
+        d, value = self.d, self.value
         while True:
-            mark = self.u8()
+            mark = d[self.p]
+            self.p += 1
             if mark == END_ITEMS:
                 return out
             if mark - 1 not in PROP_TAGS:
                 raise SaveFormatError(self._where(f"element marker {mark:#04x}"))
-            out.append(self.value(mark - 1))
+            out.append(value(mark - 1))
 
     def packed(self, type_name: str | None) -> list:
         count = self.i32()
@@ -262,7 +294,10 @@ class Save:
     def deref(self, value):
         """Follow back-references until a real object (or None) is reached."""
         seen = 0
-        while isinstance(value, dict) and set(value) == {"$ref"}:
+        # A reference is a dict holding "$ref" and nothing else. Tested by size
+        # and key rather than as a set of keys: every element of every
+        # collection passes through here, and most are whole objects.
+        while isinstance(value, dict) and len(value) == 1 and "$ref" in value:
             value = self.refs.get(value["$ref"])
             seen += 1
             if seen > 32:
@@ -290,7 +325,17 @@ def load_save(path: str) -> Save:
     r = _Reader(data)
     if r.u8() != 0x02:
         raise SaveFormatError("not an Easy Save 3 stream")
-    root = r.instance(with_ref_id=True)
+    # The tree holds no cycles (a back-reference is an id, not a link), so the
+    # cyclic collector has nothing to find in it, and walking the growing tree
+    # again and again cost a tenth of the parse in the browser. Paused until
+    # the tree is built, and left as the caller had it.
+    collecting = gc.isenabled()
+    gc.disable()
+    try:
+        root = r.instance(with_ref_id=True)
+    finally:
+        if collecting:
+            gc.enable()
     if r.p != len(data):
         raise SaveFormatError(f"stopped at {r.p:#x} of {len(data):#x}")
     return Save(root, r.refs, path)
