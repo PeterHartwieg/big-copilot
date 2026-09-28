@@ -11906,7 +11906,9 @@ def chain_window_day(members: list):
     first day t, no earlier than its newest member's opening, on which
     sum(rate x (t - opened)) over its members reaches sum(investment).
     `members` are (opened, rate, investment); a rate of None earns nothing.
-    None when the members together earn nothing a day."""
+    The newest member's opening when the members before it had already
+    covered the investment by then; None when they had not and together
+    earn nothing a day."""
     if not members:
         return None
     newest = max(opened for opened, _r, _i in members)
@@ -11923,7 +11925,8 @@ def chain_window_day(members: list):
 
 
 def _member_rate(days: list, opened: int):
-    """A cost centre's recent daily profit, sales or none: the average of its
+    """A chain member's recent daily profit, sales or none (a cost centre, or
+    a site with no sale yet): the average of its
     last PAYBACK_RECENT_DAYS days after opening; None before that."""
     recent = [p for day, p, _s in days if day > opened][-PAYBACK_RECENT_DAYS:]
     return sum(recent) / len(recent) if recent else None
@@ -21872,7 +21875,7 @@ function paybackSentence(o, row){
       if(day === null) return tt("co.payback.window.none", "Opened before the save's record");
       return day <= ((D.meta || {}).day || 0)
         ? tt("co.payback.window.past", "Paid back around day {day}, an estimate from recent profit: earlier profit is outside the save's record", {day})
-        : row && row.sites
+        : row && row.sites && row.sites.length > 1
           ? tt("co.payback.window.ahead.chain", "Pays back around day {day} at recent profit, counted from each site's opening: earlier profit is outside the save's record", {day})
           : tt("co.payback.window.ahead", "Pays back around day {day} at recent profit, counted from the opening: earlier profit is outside the save's record", {day});
     }
