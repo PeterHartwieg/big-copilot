@@ -6568,10 +6568,61 @@ def _capped_cells(grid: dict) -> set:
     }
 
 
-def _arrival_ceiling(
+# CustomerEntriesCalculatorRetail.BuildNumberToStartCappingInitialCustomers: a
+# game started at this build or later sizes a shop's arrivals off its building's
+# customer capacity; an older game keeps sizing them off its shelves.
+CAPPED_INITIAL_BUILD = 2847
+
+
+def _initial_customers(
+    build_at_start: int | None,
+    size_cap,
     type_slug: str,
     sqm: float,
-    products,
+    products=(),
+) -> float:
+    """CustomerEntriesCalculatorRetail.GetInitialCustomers: a shop's base arrivals.
+
+    For a game started at CAPPED_INITIAL_BUILD or later, which is every new
+    game, it is the customer capacity of the building's size (`size_cap`, one
+    entry of _door_caps()), whatever the shop holds. For an older game it is the
+    largest productSalesRatio among the products the shop has on hand that are
+    primary for its type, times the building's square metres. `build_at_start`
+    is the save's buildNumberAtStart; a save without one reads as 0, the old
+    rule, the way the game's own default does. A cinema or theater size whose
+    layouts seat different crowds comes as [min, max]; its top is taken, which
+    keeps the ceiling an upper bound, and the door clips it to the building's
+    own number anyway.
+
+    0 where it cannot be known: an unknown size, a type the curves file does not
+    carry, or an old game's shop holding none of its type's primary products.
+    """
+    if (build_at_start or 0) >= CAPPED_INITIAL_BUILD:
+        if isinstance(size_cap, list):
+            size_cap = max(size_cap, default=0)
+        return size_cap if isinstance(size_cap, (int, float)) and size_cap > 0 else 0
+    curves = load_demand_curves()
+    curve = curves["types"].get(type_slug)
+    if not curve:
+        return 0
+    ratios = curves["items"]
+    primary = set(curve.get("p") or ())
+    # A save hands back whatever is in the list, and a product entry is not
+    # always the string it is supposed to be; an unhashable one would otherwise
+    # take the whole board down on the set test.
+    return max(
+        (
+            ratios.get(name, 0.0)
+            for name in products
+            if isinstance(name, str) and name in primary
+        ),
+        default=0.0,
+    ) * (sqm or 0)
+
+
+def _arrival_ceiling(
+    type_slug: str,
+    initial: float,
     promotion: float,
     base_promotion: float,
     door: int,
@@ -6581,44 +6632,27 @@ def _arrival_ceiling(
         ceil(min(initial x promotion x dayMultiplier x hourMultiplier,
                  the building's customer capacity))
 
-    `initial` is the largest productSalesRatio among the products the shop has
-    on hand that are primary for its type, times the building's square metres.
-    `promotion` is the save's own baseCustomerPromotionMultiplier plus
-    0.75 x the promotion total over 100.
+    `initial` is _initial_customers(). `promotion` is the save's own
+    baseCustomerPromotionMultiplier plus 0.75 x the promotion total over 100.
+    `door` is the registration's customerCapacity, the grid's door. The game
+    sends arrivals in open hours only; which those are is the caller's to know.
 
-    **This is an upper bound on arrivals, never the demand, and the board must
-    never print it as one.** It over-predicts served customers four times over
-    on a clothing store, because it counts arrivals the game then turns away for
-    having nothing they want to buy. It has exactly two jobs: bounding a
+    **These are the game's arrivals, an upper bound on customers served, never
+    the demand, and the board must never print them as one.** An arrival is
+    lost when the hour's staffed stations are full, and buys nothing when the
+    shop holds nothing they want. It has exactly two jobs here: bounding a
     censored hour from above in _need_curve(), and answering "how much more
-    could there be".
+    could there be". Break-even's profit estimate reuses the pair of helpers.
 
     None where the curves file is missing, where it does not know the type, or
-    where `initial` works out at nothing -- an unknown size, or a shop holding
-    none of its type's primary products. None of those is an error, and none of
-    them is a ceiling of zero: a grid of zeros would silently cancel the
-    censored estimate's "one more station" and read off the page as "no arrivals
-    are possible here". Every number the board states comes off the measured
-    grid either way.
+    where `initial` is nothing (see _initial_customers()). None of those is an
+    error, and none of them is a ceiling of zero: a grid of zeros would silently
+    cancel the censored estimate's "one more station" and read off the page as
+    "no arrivals are possible here". Every number the board states comes off the
+    measured grid either way.
     """
-    curves = load_demand_curves()
-    curve = curves["types"].get(type_slug)
-    if not curve:
-        return None
-    ratios = curves["items"]
-    primary = set(curve.get("p") or ())
-    # A save hands back whatever is in the list, and a product entry is not
-    # always the string it is supposed to be; an unhashable one would otherwise
-    # take the whole board down on the set test.
-    initial = max(
-        (
-            ratios.get(name, 0.0)
-            for name in products
-            if isinstance(name, str) and name in primary
-        ),
-        default=0.0,
-    ) * (sqm or 0)
-    if initial <= 0:
+    curve = load_demand_curves()["types"].get(type_slug)
+    if not curve or not initial or initial <= 0:
         return None
     promo = base_promotion + 0.75 * (promotion or 0) / 100
     day, hour = curve["d"], curve["h"]
@@ -8408,6 +8442,7 @@ def _staffing(
     everyone_on_bench = list(bench)
     curves = load_demand_curves()
     table = load_buildings()
+    caps = _door_caps(names)
 
     # One week per person for the whole save, not one per site. A person
     # assigned to a site appears in that site's pool alone, but a bench member
@@ -8456,7 +8491,7 @@ def _staffing(
         }
         try:
             site = _plan_site(save, names, business, building, grid, people,
-                              list(bench), scratch, curves, table, base_promotion)
+                              list(bench), scratch, curves, table, base_promotion, caps)
         except Exception:
             sites.append((business, None))
             continue
@@ -9556,7 +9591,7 @@ def _plan_fields(week: dict, table: dict, names, people: dict, cost: dict) -> di
 
 def _plan_site(
     save, names, business, building, grid, people, bench, state, curves, table,
-    base_promotion,
+    base_promotion, caps,
 ) -> dict:
     """One retail site's demand plan, and what its full-cover plan will need.
 
@@ -9567,17 +9602,24 @@ def _plan_site(
     off the bench; _finish_site() then builds the row from both.
     """
     # The arrival ceiling, for bounding a censored hour only. Never a target.
-    # It is sized off the products the game itself says are on the shelves,
-    # cachedAvailableProducts, which is what GetCustomersByHour reads; the
-    # board's own lines table is sales and stock history and holds items the
-    # shop has stopped carrying. A missing building row means the size is
-    # unknown, and _arrival_ceiling() answers None rather than zero.
+    # A current game sizes it off the building's size; an old one off the
+    # products the game itself says are on the shelves, cachedAvailableProducts,
+    # which is what GetInitialCustomers reads -- the board's own lines table is
+    # sales and stock history and holds items the shop has stopped carrying. A
+    # missing building row means the size is unknown, and _arrival_ceiling()
+    # answers None rather than zero.
     curve = curves["types"].get(business["typeSlug"]) or {}
-    row = table.get(_address_of(building))
+    row = table.get(_address_of(building)) or {}
+    initial = _initial_customers(
+        save.root.get("buildNumberAtStart"),
+        caps.get(row.get("t"), {}).get(row.get("z")),
+        business["typeSlug"],
+        row.get("m") or 0,
+        save.items(building.get("cachedAvailableProducts")),
+    )
     ceiling = _arrival_ceiling(
         business["typeSlug"],
-        (row or {}).get("m") or 0,
-        save.items(building.get("cachedAvailableProducts")),
+        initial,
         business.get("promotion") or 0,
         base_promotion,
         grid["door"],
