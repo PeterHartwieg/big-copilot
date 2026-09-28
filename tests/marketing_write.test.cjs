@@ -330,6 +330,7 @@ test('set-up while an agency is shut: waits when every one is, says what waits w
   await openSite(page, B);
   const btn = page.locator('#sp-pull [data-gw="marketing"]');
   assert.equal(await btn.getAttribute('aria-disabled'), null, 'one agency is open');
+  assert.equal(await btn.getAttribute('aria-label'), 'Add the campaign switches open agencies can add now');
   await btn.click();
   await phase(page, 'ready');
   const dlg = page.locator('dialog.gw-dlg');
@@ -340,15 +341,33 @@ test('set-up while an agency is shut: waits when every one is, says what waits w
   await phase(page, 'done');
   assert.equal(await dlg.locator('.gw-said').textContent(), '3 switches added to BizMan. 2 switches wait for an agency to open.');
   assert.doesNotMatch(await dlg.innerText(), /Every campaign switch/);
-  // Nothing added: said so, never "every switch".
+  // Nothing added: McCain's is open, so its three were there already, and
+  // CityAds' two wait. Never "every switch".
   await page.keyboard.press('Escape');
   await answering(page, {entries: {[B]: []}});
   await btn.click();
   await phase(page, 'ready');
   assert.match(await dlg.locator('.gw-verdict').innerText(), /No switch can be added until an agency opens/);
+  assert.equal(await dlg.locator('.gw-mkrow .gw-mk').innerText(),
+    'Small billboard, Large billboard switches wait for CityAds to open · Small internet, Medium internet, Large internet switches already in BizMan');
   await dlg.locator('[data-gw-b="apply"]').click();
   await phase(page, 'done');
-  assert.equal(await dlg.locator('.gw-said').textContent(), 'No switch was added: the agencies are closed.');
+  assert.equal(await dlg.locator('.gw-said').textContent(), 'No switch was added: the agencies it needs are closed.');
+
+  // Both agencies open and nothing added: the switches were there already,
+  // never "closed". The button's name says it adds what it can now.
+  const open = await board(t);
+  await answering(open, {entries: {[B]: []}});
+  await openSite(open, B);
+  assert.equal(await open.locator('#sp-pull [data-gw="marketing"]').getAttribute('aria-label'), 'Add every campaign switch to BizMan');
+  await open.locator('#sp-pull [data-gw="marketing"]').click();
+  await phase(open, 'ready');
+  const d2 = open.locator('dialog.gw-dlg');
+  assert.match(await d2.locator('.gw-verdict').innerText(), /No switches to add/);
+  assert.doesNotMatch(await d2.innerText(), /closed|opens/);
+  await d2.locator('[data-gw-b="apply"]').click();
+  await phase(open, 'done');
+  assert.equal(await d2.locator('.gw-said').textContent(), 'No switches were added: they are in BizMan already.');
 });
 
 test('every site at once counts only the sites the game takes now, on one finding', async (t) => {
@@ -363,4 +382,19 @@ test('every site at once counts only the sites the game takes now, on one findin
   await acts.click();
   await phase(page, 'ready');
   assert.deepEqual((await writes(page)).at(-1).body.sites.map(s => s.address.number), [10]);
+});
+
+test('the all-sites button rides on the first promotion finding shown', async (t) => {
+  const d = JSON.parse(earlyMorning());
+  // Gifts' finding an opportunity, Bare's a warning: the warning is drawn first.
+  d.alerts[0].level = 'info';
+  const page = await board(t, {link: Object.assign({}, LINK, {hour: 7}), data: JSON.stringify(d)});
+  await page.evaluate(() => { showPage('today'); });
+  const carrier = () => page.locator('#alerts .find[data-kind="promotion"]:has([data-gw="marketing"])').getAttribute('data-id');
+  assert.equal(await carrier(), 'promo-bare');
+  // The warnings filtered out: the button moves to the row still shown.
+  await page.locator('#alertHead .sev[data-kind="watch"]').click();
+  assert.equal(await carrier(), 'promo-gifts');
+  assert.equal(await page.locator('#alerts [data-gw="marketing"]').count(), 1);
+  assert.equal(await page.evaluate(() => document.activeElement.dataset.kind), 'watch');
 });
