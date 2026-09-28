@@ -38,7 +38,8 @@ const AGENCIES = [
 ];
 
 const plan = (on, was, o = {}) => Object.assign({on, was, costNow: 0, costPlan: 0, marketingNow: 0, marketingPlan: 0,
-  promotionNow: 0, promotionPlan: 100, target: 'promotion', needsSetup: true, agencies: [NET, ADS], visit: []}, o);
+  promotionNow: 0, promotionPlan: 100, target: 'promotion', needsSetup: true, agencies: [NET, ADS], visit: [],
+  setupTypes: ['SmallInternet', 'MediumInternet', 'SmallBillboard', 'MediumBillboard', 'LargeBillboard'], setupAgencies: [NET, ADS]}, o);
 // Gifts runs Large internet and the plan is Small internet and Small billboard;
 // Bare runs its plan but misses switches; the office overspends and is set up.
 function withMarketing(text) {
@@ -50,14 +51,15 @@ function withMarketing(text) {
       {costNow: 500, costPlan: 600, marketingNow: 43, marketingPlan: 57, promotionNow: 90})});
   Object.assign(at(B), {promotion: 100, traffic: 70, marketingIndex: 40,
     campaigns: [{type: 'MediumBillboard', agency: 'ba:street_secondavenue#5', enabled: true}],
-    marketingPlan: plan(['MediumBillboard'], ['MediumBillboard'], {costNow: 2500, costPlan: 2500, promotionNow: 100, agencies: [NET]})});
+    marketingPlan: plan(['MediumBillboard'], ['MediumBillboard'], {costNow: 2500, costPlan: 2500, promotionNow: 100, agencies: [],
+      setupTypes: ['SmallInternet', 'MediumInternet', 'LargeInternet', 'SmallBillboard', 'LargeBillboard']})});
   d.businesses.push(Object.assign(JSON.parse(JSON.stringify(at(G))), {key: O, name: 'HART. Law', code: 'MH',
     status: 'office', type: 'Law Firm', typeSlug: 'ba:businesstype_lawfirm', address: '88 Park Avenue', amenities: null,
     uniformGaps: [], uniformGapSkills: [], missingUniformLocker: false, promotion: 100, traffic: 70, marketingIndex: 100,
     campaigns: ['SmallInternet', 'MediumInternet', 'LargeInternet', 'SmallBillboard', 'MediumBillboard', 'LargeBillboard']
       .map(type => ({type, agency: 'ba:street_secondavenue#5', enabled: type === 'SmallBillboard' || type === 'LargeBillboard'})),
     marketingPlan: plan(['SmallBillboard'], ['SmallBillboard', 'LargeBillboard'],
-      {costNow: 6500, costPlan: 500, promotionNow: 100, needsSetup: false, agencies: [ADS]})}));
+      {costNow: 6500, costPlan: 500, promotionNow: 100, needsSetup: false, agencies: [ADS], setupTypes: [], setupAgencies: []})}));
   d.marketingAgencies = AGENCIES;
   // The promotion finding alone, so no other warning folds it away.
   d.alerts = [{level: 'warn', site: 'HART. Gifts', group: 'promotion', siteKey: G, id: 'promo-gifts', worth: null, unit: '',
@@ -104,17 +106,20 @@ const phase = (page, p) => page.waitForFunction(p => document.querySelector('dia
 const writes = page => page.evaluate(() => window.mkWrites);
 // The game's answer: every site as the page asked, at 100 unless a test says
 // otherwise, and `error` per site key.
-async function answering(page, {errors = {}, total = {}} = {}) {
-  await page.evaluate(({errors, total}) => {
+// `entries`: per site key, the switches the game adds (entriesAdded); a site
+// left out answers none of its own, and the board reckons them.
+async function answering(page, {errors = {}, total = {}, entries = {}} = {}) {
+  await page.evaluate(({errors, total, entries}) => {
     const key = a => `${a.street}#${a.number}`;
     window.mkAnswer = async (kind, body, o) => {
       if (kind === 'undo') return {status: 200, error: null, body: {ok: true, kind: 'marketing', undo: true, rows: []}};
       const rows = body.sites.map(s => ({address: s.address, business: key(s.address), on: s.on, dailyCost: 0,
         promotion: {trafficIndex: 60, marketing: 57, total: total[key(s.address)] ?? 100},
-        turnedOn: [], turnedOff: [], entriesAdded: [], campaigns: [], error: errors[key(s.address)] || null}));
+        turnedOn: [], turnedOff: [], campaigns: [], error: errors[key(s.address)] || null,
+        ...(entries[key(s.address)] ? {entriesAdded: entries[key(s.address)]} : {})}));
       return {status: 200, error: null, body: {ok: !rows.some(r => r.error), kind: 'marketing', dryRun: !!o.dryRun, contactsAdded: [], rows}};
     };
-  }, {errors, total});
+  }, {errors, total, entries});
 }
 
 test('a shop: the cheapest mix, a dry run, Apply and Undo', async (t) => {
@@ -233,7 +238,7 @@ test('an agency the write needs is shut: the button waits and the line says when
   await openSite(page, G);
   const set = page.locator('#sp-pull [data-gw="marketing"]');
   assert.equal(await set.getAttribute('aria-disabled'), 'true');
-  assert.equal(await set.getAttribute('data-tip'), "McCain's eMarketing opens Tuesday at 8:00, CityAds opens Tuesday at 8:00.");
+  assert.equal(await set.getAttribute('data-tip'), "McCain's eMarketing opens Tuesday at 8:00. CityAds opens Tuesday at 8:00.");
   assert.match(await page.locator('#sp-pull .spmk').innerText(), /CityAds opens Tuesday at 8:00\./);
   // Before opening on the same day: the hour alone.
   const early = await board(t, {link: Object.assign({}, LINK, {hour: 7})});
@@ -300,4 +305,62 @@ test('the game refuses a row for a shut or unknown agency, and an undo while it 
   await answering(page);
   await dlg.locator('[data-gw-again]').click();
   await phase(page, 'undone');
+});
+
+// Monday 7:00: CityAds opens at 8:00; McCain's, in this variant, is open
+// around the clock. Gifts' plan switches at McCain's alone.
+function earlyMorning() {
+  const d = JSON.parse(payload);
+  d.marketingAgencies.find(a => a.key === NET).hours = WEEK.map(() => [[0, 24]]);
+  d.businesses.find(b => b.key === G).marketingPlan.agencies = [NET];
+  // A second promotion finding: the all-sites action still shows once.
+  d.alerts.push(Object.assign({}, d.alerts[0], {id: 'promo-bare', site: 'HART. Bare', siteKey: B}));
+  return JSON.stringify(d);
+}
+
+test('set-up while an agency is shut: waits when every one is, says what waits when one is', async (t) => {
+  const shut = await board(t, {link: Object.assign({}, LINK, {hour: 7})});
+  await openSite(shut, B);
+  const setup = shut.locator('#sp-pull [data-gw="marketing"]');
+  assert.equal(await setup.getAttribute('aria-disabled'), 'true');
+  assert.equal(await setup.getAttribute('data-tip'), "McCain's eMarketing opens at 8:00. CityAds opens at 8:00.");
+
+  const page = await board(t, {link: Object.assign({}, LINK, {hour: 7}), data: earlyMorning()});
+  await answering(page, {entries: {[B]: ['SmallInternet', 'MediumInternet', 'LargeInternet']}});
+  await openSite(page, B);
+  const btn = page.locator('#sp-pull [data-gw="marketing"]');
+  assert.equal(await btn.getAttribute('aria-disabled'), null, 'one agency is open');
+  await btn.click();
+  await phase(page, 'ready');
+  const dlg = page.locator('dialog.gw-dlg');
+  assert.match(await dlg.locator('.gw-verdict').innerText(), /The game will add 3 switches/);
+  assert.equal(await dlg.locator('.gw-mkrow .gw-mk').innerText(),
+    'Small internet, Medium internet, Large internet switches added, nothing else changes · Small billboard, Large billboard switches wait for CityAds to open');
+  await dlg.locator('[data-gw-b="apply"]').click();
+  await phase(page, 'done');
+  assert.equal(await dlg.locator('.gw-said').textContent(), '3 switches added to BizMan. 2 switches wait for an agency to open.');
+  assert.doesNotMatch(await dlg.innerText(), /Every campaign switch/);
+  // Nothing added: said so, never "every switch".
+  await page.keyboard.press('Escape');
+  await answering(page, {entries: {[B]: []}});
+  await btn.click();
+  await phase(page, 'ready');
+  assert.match(await dlg.locator('.gw-verdict').innerText(), /No switch can be added until an agency opens/);
+  await dlg.locator('[data-gw-b="apply"]').click();
+  await phase(page, 'done');
+  assert.equal(await dlg.locator('.gw-said').textContent(), 'No switch was added: the agencies are closed.');
+});
+
+test('every site at once counts only the sites the game takes now, on one finding', async (t) => {
+  const page = await board(t, {link: Object.assign({}, LINK, {hour: 7}), data: earlyMorning()});
+  await page.evaluate(() => { showPage('today'); });
+  const acts = page.locator('#alerts .find[data-kind="promotion"] [data-gw="marketing"]');
+  // Gifts switches at McCain's, open; the office waits for CityAds.
+  assert.equal(await acts.count(), 1);
+  assert.equal(await acts.innerText(), 'Set the cheapest mix at 1 site');
+  assert.equal(await acts.getAttribute('aria-disabled'), null);
+  await answering(page);
+  await acts.click();
+  await phase(page, 'ready');
+  assert.deepEqual((await writes(page)).at(-1).body.sites.map(s => s.address.number), [10]);
 });

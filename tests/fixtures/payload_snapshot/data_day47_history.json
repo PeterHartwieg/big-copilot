@@ -1006,6 +1006,8 @@
     "on": null,
     "promotionNow": 120.0,
     "promotionPlan": null,
+    "setupAgencies": [],
+    "setupTypes": [],
     "target": null,
     "visit": [
      "ba:street_secondavenue#5",
@@ -1331,6 +1333,8 @@
     "on": null,
     "promotionNow": 80.0,
     "promotionPlan": null,
+    "setupAgencies": [],
+    "setupTypes": [],
     "target": null,
     "visit": [
      "ba:street_secondavenue#5",

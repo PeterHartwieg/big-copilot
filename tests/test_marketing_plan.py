@@ -41,6 +41,12 @@ class MarketingScore(unittest.TestCase):
         self.assertEqual(d.marketing_score(97, [SI], 400, "retail", GARMENT), (5, 100))
         self.assertEqual(d.marketing_score(90, [SI], 400, "retail", GARMENT), (5, 94))
 
+    def test_single_precision_as_the_il_computes(self):
+        # 45 marketing at Hell's Kitchen's 0.7: 31.4999… in double, 31.5 in
+        # float, which rounds to 32 (the even neighbour). The IL is float.
+        hk = d.HOOD_PREFIX + "hellskitchen"
+        self.assertEqual(d.marketing_score(0, [SI, LI, SB], 400, "retail", hk), (45, 32))
+
     def test_an_unknown_figure_is_never_guessed(self):
         with self.assertRaises(KeyError):
             d.marketing_score(40, [SI], 200, "warehouse", MIDTOWN)
@@ -195,6 +201,12 @@ class Extraction(unittest.TestCase):
         # the missing entries at both.
         self.assertEqual(plan["on"], ["MediumInternet"])
         self.assertEqual(plan["agencies"], [BILLBOARDS, INTERNET])
+        # The switches still missing, and who sells them.
+        self.assertEqual(plan["setupTypes"], ["SmallInternet", "MediumInternet", "LargeInternet",
+                                              "MediumBillboard", "LargeBillboard"])
+        self.assertEqual(plan["setupAgencies"], [BILLBOARDS, INTERNET])
+        _rows, plan = self.plan([_camp(SB, True, "ba:street_secondavenue", 5)], contacts=(BILLBOARDS,))
+        self.assertEqual((plan["setupTypes"], plan["setupAgencies"]), (["MediumBillboard", "LargeBillboard"], [BILLBOARDS]))
 
     def test_only_shops_and_offices_in_a_promotion_building(self):
         self.assertIsNotNone(self.plan([], status="office", building={"t": "office", "m": 100})[1])

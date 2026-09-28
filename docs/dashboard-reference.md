@@ -962,7 +962,10 @@ and dims the rest; clicking scrolls there.
   no agency known and a change needed there is no plan: the line names the agencies to visit,
   with their addresses. An agency not known yet whose campaigns would make a better plan gets
   one line, "Visit … once". While an agency the write needs is closed, the button waits and
-  the line says when it opens; an Undo while it is closed is refused the same way. Without the
+  the line says when it opens; an Undo while it is closed is refused the same way. A closed
+  agency gets no new switches: a set-up waits only while every agency it needs is closed,
+  and otherwise adds what it can and says which switches wait for which agency. The
+  all-sites actions count only the sites the game takes now. Without the
   link, or with a mod older than 0.4.0, the line says which switches to flip in BizMan
   instead. The Promotion finding offers the cheapest mix at every site it would change,
   and Businesses › Standards also offers the set-up for every shop and office missing a
