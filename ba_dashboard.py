@@ -8552,8 +8552,13 @@ def _open_need(site: dict) -> dict:
 
 
 def _open_floor(need: dict, grid: dict) -> dict:
-    """A need curve with every open hour it reads nothing for (`none`) staffed in full."""
-    stations = collections.Counter(s["skill"] for s in grid["stations"])
+    """A need curve with every open hour it reads nothing for (`none`) staffed in full.
+
+    The curve is keyed by role (_station_role()), not by skill: a hairdresser's
+    head wash is a role of its own under the Hair Stylist skill, and counting
+    stations by skill gave it none and its chairs the head washes' as well.
+    """
+    stations = collections.Counter(_station_role(s) for s in grid["stations"])
     out = {}
     for skill, row in need.items():
         count = stations.get(skill, 0)
@@ -10080,16 +10085,28 @@ def _unstaffed(row: dict, shifts, own: set, training=frozenset()) -> dict | None
     Counted per role, weekday and hour: the site's own people the plan puts
     on the role then, less everybody on the role's stations in the game's
     week then, never below none -- so somebody on register 2 where the plan
-    uses register 1 is not a gap. Only hours a planned shift gives the site's
-    own people count, so a hire's week is never counted here as well. Only
-    roles where some of them (`idle`) have no hours at the site at all in the
-    game's week, and nobody in training: a plan that merely differs from the
-    week is the site page's to show. Returns {hours, roles: [{skill, hours,
-    idle}]}, or None.
+    uses register 1 is not a gap. A role is the row's own (`roles[].key`):
+    a hairdresser's head wash and its chairs share the Hair Stylist skill,
+    and busy chairs must not hide an empty head wash. Only hours a planned
+    shift gives the site's own people count, so a hire's week is never
+    counted here as well. Only roles where some of them (`idle`) have no
+    hours at the site at all in the game's week, and nobody in training: a
+    plan that merely differs from the week is the site page's to show.
+    Returns {hours, roles: [{skill, hours, idle}]}, one entry a skill, or
+    None.
     """
     stations, people = row.get("stations") or [], row.get("people") or []
     person = lambda p: people[p]["id"] if p is not None and 0 <= p < len(people) else None  # noqa: E731
-    skill = lambda s: stations[s].get("skill") if s is not None and 0 <= s < len(stations) else None  # noqa: E731
+    role_of = {}
+    for entry in row.get("roles") or ():
+        for index in entry.get("stations") or ():
+            role_of[index] = entry.get("key", entry.get("skill"))
+    skill_of = lambda s: stations[s].get("skill") if s is not None and 0 <= s < len(stations) else None  # noqa: E731
+    skill = lambda s: role_of.get(s, skill_of(s))  # noqa: E731
+    # The skill each role is worked in, which is what the page names.
+    named = {}
+    for index, station in enumerate(stations):
+        named.setdefault(skill(index), station.get("skill"))
     now = collections.Counter()
     working = set()
     for entry in (row.get("current") or {}).get("list") or ():
@@ -10114,16 +10131,22 @@ def _unstaffed(row: dict, shifts, own: set, training=frozenset()) -> dict | None
         gap[role] += max(0, n - now[(role, day, hour)])
     # Idle: nothing at the site in the game's week, not in training, and some
     # of their own planned hours left with nobody on.
-    idle = collections.Counter(
-        role for (role, pid), hours in cells.items()
-        if pid not in working and pid not in training
-        and any(want[(role, d, h)] > now[(role, d, h)] for d, h in hours)
-    )
+    idle = collections.defaultdict(set)
+    for (role, pid), hours in cells.items():
+        if pid not in working and pid not in training \
+                and any(want[(role, d, h)] > now[(role, d, h)] for d, h in hours):
+            idle[role].add(pid)
+    # Judged per role, told per skill: the head wash's hours and the chairs'
+    # are one Hair Stylist line, and somebody idle in both is one person.
+    hours_of, idle_of = collections.Counter(), collections.defaultdict(set)
+    for role in gap:
+        if gap[role] and idle[role]:
+            hours_of[named.get(role, role)] += gap[role]
+            idle_of[named.get(role, role)] |= idle[role]
     roles = [
-        {"skill": role, "hours": gap[role], "idle": idle[role]}
-        for role in _in_order(gap) if gap[role]
+        {"skill": name, "hours": hours_of[name], "idle": len(idle_of[name])}
+        for name in _in_order(hours_of)
     ]
-    roles = [r for r in roles if r["idle"]]
     total = sum(r["hours"] for r in roles)
     if total < UNSTAFFED_MIN_HOURS:
         return None

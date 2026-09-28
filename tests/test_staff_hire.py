@@ -532,6 +532,23 @@ class UnstaffedTest(unittest.TestCase):
         plan = [{"d": d, "s": 0, "f": 0, "t": 12, "p": 0} for d in range(4)]
         self.assertIsNone(ba_dashboard._unstaffed(self.ROW, plan, {"p1"}, training={"p1"}))
 
+    def test_busy_chairs_do_not_hide_an_empty_head_wash(self):
+        """A hairdresser's chairs and head wash share the Hair Stylist skill but
+        are two roles: three stylists on the chairs now do not work the head
+        wash the plan gives an idle stylist of the site's own."""
+        stylist = "ba:skill_hairstylist"
+        wash = f"{stylist}|ba:itemname_hairdresserheadwash"
+        row = {"stations": [{"id": c, "skill": stylist} for c in ("c1", "c2", "c3", "w1")],
+               "people": [{"id": p} for p in ("a", "b", "c", "idle")],
+               "roles": [{"skill": stylist, "stations": [0, 1, 2]},
+                         {"skill": stylist, "key": wash, "stations": [3]}],
+               "current": {"list": [{"d": d, "s": s, "f": 9, "t": 17, "p": s}
+                                    for d in range(7) for s in range(3)]}}
+        plan = [{"d": d, "s": s, "f": 9, "t": 17, "p": s} for d in range(7) for s in range(2)]
+        plan += [{"d": d, "s": 3, "f": 9, "t": 17, "p": 3} for d in range(4)]
+        gap = ba_dashboard._unstaffed(row, plan, {"a", "b", "c", "idle"})
+        self.assertEqual(gap, {"hours": 32, "roles": [{"skill": stylist, "hours": 32, "idle": 1}]})
+
     def test_the_hiring_payload_carries_it(self):
         # On the site, per plan the Staffing block writes (demand, full cover).
         _row, site = shop_hiring(weeks=2)
