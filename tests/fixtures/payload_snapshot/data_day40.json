@@ -10163,6 +10163,9 @@
    },
    "people": [
     {
+     "demands": [
+      "ba:jobdemand_freeweekends"
+     ],
      "id": "EMPana",
      "name": "Ana Silva"
     },

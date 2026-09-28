@@ -85,9 +85,14 @@ function business(){
   };
 }
 
-/** Open the site panel on one of the planner's rows, optionally edited first. */
-async function shop(which = 'full', edit, boot){
+/** Open the site panel on one of the planner's rows, optionally edited first.
+ *  A shop whose demand data is not complete is on its open-hours plan
+ *  (spPlanOf()); most tests here are about the demand plan's own view, cover
+ *  only included, which a shop without that plan still shows, so it is taken
+ *  off unless `open` keeps it. */
+async function shop(which = 'full', edit, boot, {open = false} = {}){
   const row = copy(ROWS[which]);
+  if(!open) delete row.openCover;
   if(edit) edit(row);
   const page = await browser.newPage({viewport: {width: 1440, height: 1200}});
   await page.route('https://**', r => r.abort());
@@ -2147,4 +2152,30 @@ test('no hand-over line on a shop whose demand data is not complete', async () =
       assert.doesNotMatch(card, /Demand data complete/, which);
     } finally { await page.close(); }
   }
+});
+
+test('a shop without complete data is on its open-hours plan: every station the hours it opens', async () => {
+  // The staffing revisit (28 September 2026): the Staff page hired a new shop
+  // into its open-hours plan while this block showed and wrote cover only,
+  // so writing it after a hire took the hires' serving hours away again.
+  const page = await shop('newshop', null, null, {open: true});
+  try {
+    assert.equal(ROWS.newshop.openCover.complete, false);
+    assert.deepEqual(await pickText(page), [['Open hours', true], ['Full cover 24/7', false]]);
+    // The registers are staffed the hours it opens, never an hour more.
+    const regs = await page.locator(mon + '.sp-shift:not(.sp-clean):not(.sp-security)').count();
+    assert.ok(regs > 0, 'serving entries on Monday');
+    const same = await page.evaluate(k => {
+      const row = gwRosterPlan(k), base = spRosterRow(k);
+      return {on: spPlanOf(base), variant: row.variant, full: row.full,
+        shifts: JSON.stringify(row.shifts) === JSON.stringify(base.openCover.shifts),
+        open: row.openAllHours, unmeasured: !!document.querySelector('#sp-roster .sp-unmline')};
+    }, KEY);
+    assert.deepEqual(same, {on: 'open', variant: 'open', full: false, shifts: true, open: false, unmeasured: false});
+    // The demand test is still one click away, and back.
+    await page.evaluate(() => q('#sp-roster [data-plan="full"]').click());
+    assert.deepEqual(await pickText(page), [['Open hours', false], ['Full cover 24/7', true]]);
+    await page.evaluate(() => q('#sp-roster [data-plan="demand"]').click());
+    assert.deepEqual(await pickText(page), [['Open hours', true], ['Full cover 24/7', false]]);
+  } finally { await page.close(); }
 });
