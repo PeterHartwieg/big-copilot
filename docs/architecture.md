@@ -79,6 +79,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `market` | `_market()`; its `catalogue` key is popped out and handed to `_plan()` | `drawMovers`, `drawMarket`; `web/wiki.js` `wikiOwn`, `wikiGuidePrices` |
 | `premises` | `_premises()`, with `_premises_status()`, `_premises_demand()`, `_rent_estimate()`, `_deposit_estimate()`, `_deposit_check()`, `_door_caps()`, `_rival_numbers()`, `_rival_names()` | `drawFindLocation`, `finderPreset`, `wireCards`; `web/map.js` `premises` |
 | `chains` | `_chains()` | `drawPortfolio`, `siteCrumbs` |
+| `payback` | `_payback()`, with `_site_setup()` and `setup_cost()` (the investment in both install modes, reusable for a store not yet rented), `_install_bills()`, `_payback_row()`, `payback_outcome()` and `_payback_rate()`; `History.payback()` keeps the firm's bill and each reached break-even day after the save forgets them. `{sites: {key: …}, chains: {first site key: …}, recentDays}` | `paybackSite`, `paybackChain`, through `drawPortfolio`'s Payback column and `spPayback()` in `drawSite()` |
 | `trends` | `_site_trends()` | `indexTrends` |
 | `hypeExposure` | `_hype_exposure()`; `extract()` also passes the same list to `_alerts()`, where the `hype` findings come from | `spHypeRow` (a `const` arrow function, called from `spPull()` for the site panel's Promotion block) |
 | `hours` | `_hourly()`, the sites with hour reports behind them | `drawSite` |
@@ -603,7 +604,7 @@ What `page_html()` produces, top of the file down:
 5. The board script, the last `<script>` block of `TEMPLATE`.
 
 Before any of that, `main()` refreshes `web/wiki-data.json`, copies `ba_save.py`,
-`ba_dashboard.py`, `ba_buildings.json` and `ba_demand_curves.json` into `web/py/`, and
+`ba_dashboard.py`, `ba_buildings.json`, `ba_demand_curves.json` and `ba_item_prices.json` into `web/py/`, and
 writes `web/py/gametext.json` and `web/names/<lang>.json` (`write_name_tables()`) from the installed locale — everything `stamp()` hashes has to be in place before
 `release_info()` runs. `main()` then writes `web/index.html` and `web/version.json`.
 
@@ -1073,10 +1074,11 @@ the unstamped `dev` build):
 
 - `ba_save.py` and `ba_dashboard.py` — a failed fetch throws and the worker never becomes
   ready.
-- `gametext.json`, `ba_buildings.json` and `ba_demand_curves.json` — written into the
-  virtual filesystem only when the fetch succeeds, so a build missing one still boots and
-  degrades instead: without the curves the board states no arrival ceiling, and every number
-  it does state still comes off the measured hour grid.
+- `gametext.json`, `ba_buildings.json`, `ba_demand_curves.json` and `ba_item_prices.json` —
+  written into the virtual filesystem only when the fetch succeeds, so a build missing one
+  still boots and degrades instead: without the curves the board states no arrival ceiling,
+  and every number it does state still comes off the measured hour grid; without the prices
+  furniture counts at what the save says was paid, and walls and floors at nothing.
 
 Gradual (percentage) deployments are unsupported for that reason: while two versions serve
 side by side, a `/py/` file from the old one could be cached immutably under the new stamp.

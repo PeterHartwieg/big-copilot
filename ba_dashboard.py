@@ -612,6 +612,43 @@ def load_demand_curves() -> dict:
     return _demand_curves
 
 
+# The game's furniture prices and wall and floor materials, from its bundles:
+# make_item_prices.py generates ba_item_prices.json beside this file and the
+# browser worker writes it to /data/, as with the curves. Read lazily, never at
+# import time.
+_item_prices = None
+
+
+def load_item_prices() -> dict:
+    """ba_item_prices.json as {"items": {...}, "materials": {...}}, read once.
+
+    Per item name: `p` Item.defaultMarketPrice, `t` its type bit flags. Per
+    material uuid (the MaterialID a save's interiorDesigns slots hold): `t` 1
+    floor or 2 wall, `p` InteriorMaterialPreset.price, `b` whether it can be
+    bought. A missing file is not an error: an item then counts at what the
+    save says was paid for it, and materials at nothing.
+    """
+    global _item_prices
+    if _item_prices is None:
+        for path in (
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "ba_item_prices.json"),
+            "/data/ba_item_prices.json",  # where the worker puts it in a browser
+        ):
+            try:
+                with open(path, encoding="utf-8") as fh:
+                    loaded = json.load(fh)
+                _item_prices = {
+                    "items": loaded.get("items") or {},
+                    "materials": loaded.get("materials") or {},
+                }
+                break
+            except (OSError, ValueError, AttributeError):
+                continue  # not here, or unreadable: try the next place
+        else:
+            _item_prices = {"items": {}, "materials": {}}
+    return _item_prices
+
+
 # Business types that sell to walk-in customers; the rest are support sites.
 # Every physical retail floor the game documents with an F1 help page (the
 # handful of pure office agencies — law firm, travel agency and the like — say
@@ -1803,6 +1840,8 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
 
     trends = _site_trends(businesses, day)
     chains = _chains(save, businesses, trends)
+    # Before history.write(): it remembers bills and break-even days.
+    payback = _payback(save, names, buildings, businesses, chains, stmt_history, history, character)
     hype = _hype_exposure(businesses, market)
 
     # Every trading site, measured or not. The page's hour grid takes only the
@@ -1919,6 +1958,9 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         "market": market,
         "premises": _premises(save, names, market),
         "chains": chains,
+        # Investment, profit so far and break-even, per site and per chain
+        # (_payback(), docs/open-a-store-scope.md).
+        "payback": payback,
         "trends": trends,
         "hypeExposure": hype,
         "hours": grids,
@@ -11252,6 +11294,19 @@ class History:
         # when that later save is opened again, but never read as today's run.
         return [dict(store[d], day=int(d)) for d in sorted(store, key=int) if int(d) <= day]
 
+    def payback(self, character: str) -> dict:
+        """What the statements forget after 60 days, kept for _payback(): per
+        site key, {"opened", "bill", "firm": [day, investment], "self": [...]};
+        per chain name the same without the bill. Changed in place; a record
+        whose `opened` no longer matches is a new business at that address."""
+        store = self._for(character).setdefault("payback", {})
+        if not isinstance(store, dict):
+            store = self._for(character)["payback"] = {}
+        for part in ("sites", "chains"):
+            if not isinstance(store.get(part), dict):
+                store[part] = {}
+        return store
+
     def named(self, character: str, updates: dict | None = None) -> dict:
         """Lines the player named by hand, by recipe id; a None clears one."""
         store = self._for(character).setdefault("lineNames", {})
@@ -11680,6 +11735,276 @@ def _site_trends(businesses: list, day: int) -> list:
         )
         out.append(row)
     return out
+
+
+# ------------------------------------------------------------------- payback
+# What a site cost to set up, and when its profit paid that back
+# (docs/open-a-store-scope.md, "Phase 1"). The rules are the game's own, read
+# from its code on 28 Sep 2026 and checked against six real bills to the coin:
+#   installation firm  586 x the building's m² + every item at its default
+#                      price; walls and floors cost nothing
+#                      (InteriorInstallationFirmHelper.GetInstallationFee)
+#   self-installation  every item at its default price + each paid wall and
+#                      floor slot at its material's price
+# and the deposit in both, although the game refunds it when the lease ends.
+# The firm's real bill also credits a trade-in of what stood in the building
+# (sellingMultiplier x its worth, stock included). An estimate leaves that out
+# on purpose: it depends on what the building held, not on the store.
+INSTALL_FEE_PER_M2 = 586
+# The forward estimate's rate: the average day over the last this many finished
+# days since the site first sold anything, closed days included, because rent
+# is paid on those too and the estimate counts calendar days.
+PAYBACK_RECENT_DAYS = 14
+# How many days of statements the game keeps; a shorter run has lost nothing.
+STATEMENT_WINDOW = 60
+# A remembered break-even day stands while the investment it was reached
+# against moves by less than this share (a painting added, a plant sold).
+PAYBACK_REMEMBER_SLACK = 0.01
+
+_ORDINAL_WORDS = (
+    "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth",
+    "ninth", "tenth", "eleventh", "twelfth", "thirteenth", "fourteenth",
+    "fifteenth", "sixteenth", "seventeenth", "eighteenth", "nineteenth", "twentieth",
+)
+
+
+def _ordinal(n: int) -> str:
+    return f"{n}{'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
+
+
+_ORDINALS = {word: _ordinal(i) for i, word in enumerate(_ORDINAL_WORDS, 1)}
+
+
+def _address_words(text: str) -> str:
+    """An address as comparable words: "4 Third Avenue" and the game's own
+    "4 3rd Avenue" (the text a transaction carries) read the same."""
+    words = re.findall(r"[a-z0-9]+", str(text or "").lower())
+    return " ".join(_ORDINALS.get(w, w) for w in words)
+
+
+def item_price(name: str, paid, prices: dict | None = None) -> float:
+    """What a piece of furniture is worth: what was paid for it, or its default
+    price where the save records nothing, as the game's ItemHelper.GetWorth does."""
+    if paid:
+        return float(paid)
+    table = (prices if prices is not None else load_item_prices())["items"]
+    return float((table.get(name) or {}).get("p") or 0)
+
+
+def setup_cost(items, materials, square_metres, deposit, prices: dict | None = None) -> dict:
+    """What a store costs to set up, in both install modes.
+
+    `items` are (item name, price paid) pairs, the paid price 0 or None where
+    nothing was paid yet; `materials` the MaterialIDs of the wall and floor
+    slots; `square_metres` the building's floor (ba_buildings.json `m`). A store
+    that exists passes its save's furniture and slots and its lastDeposit; a
+    planned one passes its shopping list and its deposit estimate. `firm` and
+    `self` are the investment in each mode, deposit included.
+    """
+    prices = prices if prices is not None else load_item_prices()
+    furniture = sum(item_price(name, paid, prices) for name, paid in items)
+    table = prices["materials"]
+    walls = sum(float((table.get(m) or {}).get("p") or 0) for m in materials)
+    fee = INSTALL_FEE_PER_M2 * float(square_metres or 0)
+    deposit = float(deposit or 0)
+    return {
+        "furniture": money(furniture),
+        "materials": money(walls),
+        "fee": money(fee),
+        "deposit": money(deposit),
+        "firm": money(furniture + fee + deposit),
+        "self": money(furniture + walls + deposit),
+    }
+
+
+def _site_setup(save: Save, registration: dict, addr, prices: dict) -> dict:
+    """setup_cost() for a rented building, read off its registration."""
+    items = []
+    # Stacked items are top-level instances too; stackedItems only points at them.
+    for holder in save.items(registration.get("itemInstances")):
+        item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
+        if item and item.get("itemName"):
+            items.append((item["itemName"], item.get("priceOnPurchase")))
+    materials = []
+    for design in save.items(registration.get("interiorDesigns")):
+        for slot in save.items((save.deref(design) or {}).get("materials")):
+            if isinstance(slot, dict) and slot.get("MaterialID"):
+                materials.append(slot["MaterialID"])
+    building = load_buildings().get(addr) or {}
+    return setup_cost(items, materials, building.get("m"), registration.get("lastDeposit"), prices)
+
+
+def _install_bills(save: Save, names: Names, addresses: dict) -> dict:
+    """The installation firm's bills the transaction log still holds (about a
+    week), per site key: [(day, amount)]. A bill names its address as text,
+    "4 3rd Avenue"; `addresses` maps each site key to its (street, number)."""
+    by_words = {_address_words(names.addr(addr)): key for key, addr in addresses.items()
+                if isinstance(addr[0], str)}
+    by_addr = {addr: key for key, addr in addresses.items()}
+    out = collections.defaultdict(list)
+    for t in save.items(save.root.get("Transactions")):
+        if not isinstance(t, dict) or t.get("transactionType") != "ba:transaction_interiorinstallation":
+            continue
+        key = by_addr.get(save.address(t.get("address")))
+        if key is None:
+            data = {e.get("$k"): e.get("$v") for e in save.items(t.get("transactionData"))
+                    if isinstance(e, dict)}
+            key = by_words.get(_address_words(data.get("address")))
+        if key is None:
+            continue
+        day = (save.deref(t.get("timestamp")) or {}).get("Day")
+        out[key].append((day, -float(t.get("amount") or 0)))
+    return out
+
+
+def payback_outcome(investment: float, days: list, exact: bool, opened: int, rate) -> dict:
+    """When `days` of profit, (day, profit) oldest first, pay `investment` back.
+
+    `reached`: the first day the running total reached it, and how many days
+    after opening, where `days` start with the lease. `latest`: the same day
+    where they start inside it, so the site paid back by then at the latest.
+    Otherwise `togo`, the days still needed at `rate` a day; `never` when the
+    rate earns nothing; `unknown` with no rate at all.
+    """
+    total = 0.0
+    for day, profit in days:
+        total += profit
+        if total >= investment:
+            if exact:
+                return {"state": "reached", "day": day, "after": day - opened}
+            return {"state": "latest", "day": day}
+    if rate is None:
+        return {"state": "unknown"}
+    if rate <= 0:
+        return {"state": "never"}
+    return {"state": "togo", "days": max(1, math.ceil((investment - total) / rate))}
+
+
+def _payback_rate(days: list, opened: int):
+    """The average day over the last PAYBACK_RECENT_DAYS finished days after
+    opening, counted from the first day anything sold; None before that.
+    `days` are (day, profit, sales)."""
+    selling = [i for i, (day, _p, sales) in enumerate(days) if day > opened and sales > 0]
+    if not selling:
+        return None
+    recent = [p for day, p, _s in days[selling[0]:] if day > opened][-PAYBACK_RECENT_DAYS:]
+    return sum(recent) / len(recent) if recent else None
+
+
+def _payback_row(days: list, cost: dict, exact: bool, opened: int, memory: dict, last_day) -> dict:
+    """Profit so far, the recent rate and the outcome in each install mode,
+    with a break-even day remembered from an earlier save where the statements
+    no longer reach it."""
+    rate = _payback_rate(days, opened)
+    row = {
+        "since": days[0][0] if days else None,
+        "exact": exact,
+        "opened": opened,
+        "profit": money(sum(p for _d, p, _s in days)),
+        "rate": money(rate) if rate is not None else None,
+    }
+    for mode in ("firm", "self"):
+        outcome = payback_outcome(cost[mode], [(d, p) for d, p, _s in days], exact, opened, rate)
+        kept = memory.get(mode)
+        if outcome["state"] == "reached":
+            memory[mode] = [outcome["day"], cost[mode]]
+        elif (isinstance(kept, list) and len(kept) == 2 and last_day is not None
+              and kept[0] <= last_day
+              and abs(kept[1] - cost[mode]) <= PAYBACK_REMEMBER_SLACK * max(cost[mode], 1)):
+            outcome = {"state": "reached", "day": kept[0], "after": kept[0] - opened, "kept": True}
+        row[mode] = outcome
+    return row
+
+
+def _payback(save: Save, names: Names, buildings: list, businesses: list, chains: list,
+             stmt_history: list, history, character: str) -> dict:
+    """Investment, profit so far and break-even per site and per chain.
+
+    A factory, a depot and a head office are cost centres: they get no payback
+    of their own, and their investment counts in their chain, where a shop fed
+    by its own factory stops looking free of goods costs. A chain's investment
+    and profit are the sums over its sites; a chain of cost centres alone earns
+    nothing to pay anything back with, so it has no row.
+    """
+    prices = load_item_prices()
+    regs = {site_key((b["StreetName"], b["StreetNumber"])): b for b in buildings}
+    addresses = {key: (b["StreetName"], b["StreetNumber"]) for key, b in regs.items()}
+    bills = _install_bills(save, names, addresses)
+    start = stmt_history[0][0] if stmt_history else None
+    last_day = stmt_history[-1][0] if stmt_history else None
+    # Fewer statements than the game keeps: nothing has dropped out yet.
+    whole = len(stmt_history) < STATEMENT_WINDOW
+    store = history.payback(character)
+    kept_sites, kept_chains = store["sites"], store["chains"]
+
+    sites, series = {}, {}
+    for b in businesses:
+        key = b["key"]
+        if b["status"] == "vacant" or key not in regs:
+            continue
+        addr = addresses[key]
+        days = [(day, by[addr].get("TotalProfit", 0), by[addr].get("TotalSales", 0))
+                for day, by in stmt_history if addr in by]
+        opened = b["opened"]
+        exact = bool(days) and (whole or days[0][0] > start)
+        # Sales before the opening day were another business on the same
+        # lease, whose setup is not this one's: count from the day after them.
+        prior = [i for i, (day, _p, sales) in enumerate(days) if day < opened and sales > 0]
+        if prior:
+            days, exact = days[prior[-1] + 1:], True
+        first = days[0][0] if days else None
+        memory = kept_sites.get(key)
+        if not isinstance(memory, dict) or memory.get("opened") != opened:
+            memory = {"opened": opened}
+        cost = _site_setup(save, regs[key], addr, prices)
+        # The firm's real bill where the log still holds it, and remembered
+        # after it drops out, so the investment does not jump a week later.
+        lease = min(opened, first) if first is not None else opened
+        billed = sum(amount for day, amount in bills.get(key, ()) if day is None or day >= lease)
+        if billed:
+            memory["bill"] = money(billed)
+        billed = memory.get("bill") or 0
+        if billed:
+            cost["billed"] = money(billed)
+            cost["firm"] = cost["self"] = money(cost["deposit"] + billed)
+        kept_sites[key] = memory
+        series[key] = days
+        row = {"costCentre": b["costCentre"], "cost": cost}
+        if b["costCentre"]:
+            row.update(since=first, exact=exact, opened=opened,
+                       profit=money(sum(p for _d, p, _s in days)))
+        else:
+            row.update(_payback_row(days, cost, exact, opened, memory, last_day))
+        sites[key] = row
+    # A site given up since the last save leaves the memory with it.
+    for key in [k for k in kept_sites if k not in sites]:
+        del kept_sites[key]
+
+    out_chains = {}
+    for chain in chains:
+        members = [k for k in chain["sites"] if k in sites]
+        if not members or all(sites[k]["costCentre"] for k in members):
+            continue
+        cost = {field: money(sum(sites[k]["cost"].get(field, 0) for k in members))
+                for field in ("furniture", "materials", "fee", "deposit", "billed", "firm", "self")}
+        by_day = collections.defaultdict(lambda: [0.0, 0.0])
+        for k in members:
+            for day, profit, sales in series[k]:
+                by_day[day][0] += profit
+                by_day[day][1] += sales
+        days = [(day, p, s) for day, (p, s) in sorted(by_day.items())]
+        opened = min(sites[k]["opened"] for k in members)
+        exact = all(sites[k]["exact"] for k in members)
+        name = str(chain["name"])
+        memory = kept_chains.get(name)
+        if not isinstance(memory, dict) or memory.get("opened") != opened:
+            memory = {"opened": opened}
+        row = {"sites": members, "cost": cost, **_payback_row(days, cost, exact, opened, memory, last_day)}
+        kept_chains[name] = memory
+        out_chains[chain["sites"][0]] = row
+    for name in [n for n in kept_chains if n not in {str(c["name"]) for c in chains}]:
+        del kept_chains[name]
+    return {"sites": sites, "chains": out_chains, "recentDays": PAYBACK_RECENT_DAYS}
 
 
 def _hype_exposure(businesses: list, market: dict) -> list:
@@ -18560,6 +18885,9 @@ const VIEWS = {
       [tt("co.col.theft", "Theft"), b=>b.theft?fmt(-b.theft):"—", "", b=>b.theft],
       [tt("co.col.profit", "Profit"), b=>`<span class="${sign(b.profit)}">${fmt(b.profit)}</span>`, "", b=>b.profit],
       [tt("co.col.margin", "Margin"), b=>b.margin===null?"—":`${b.margin.toFixed(1)}%`, "", b=>b.margin??-999],
+      /* When the investment is earned back (paybackCell()); a cost centre's
+         counts in its chain's row, not its own. */
+      [tt("co.col.payback", "Payback"), b=>paybackCell(paybackSite(b.key)), "", b=>paybackRank(paybackSite(b.key))],
     ]; },
     /* The point of the chain row: revenue, every cost, and the margin the whole
        operation actually runs at. */
@@ -18568,11 +18896,12 @@ const VIEWS = {
                  fmt(-c.cogs), fmt(-c.wages), fmt(-c.rent),
                  fmt(-c.marketing), c.theft?fmt(-c.theft):"—",
                  `<b class="${sign(c.profit)}">${fmt(c.profit)}</b>`,
-                 c.margin===null?"—":`${c.margin.toFixed(1)}%`],
-    chainKey: (c, i) => i === 2 ? c.change ?? -999 : VIEWS.pnl.cols[i][3](c),
+                 c.margin===null?"—":`${c.margin.toFixed(1)}%`,
+                 paybackCell(paybackChain(c), true)],
+    chainKey: (c, i) => i === 2 ? c.change ?? -999 : i === 10 ? paybackRank(paybackChain(c)) : VIEWS.pnl.cols[i][3](c),
     total: bs => ["", fmt(sum(bs,"revenue")), "", fmt(-sum(bs,"cogs")), fmt(-sum(bs,"wages")),
                   fmt(-sum(bs,"rent")), fmt(-sum(bs,"marketing")), fmt(-sum(bs,"theft")),
-                  `<span class="${sign(sum(bs,"profit"))}">${fmt(sum(bs,"profit"))}</span>`, ""],
+                  `<span class="${sign(sum(bs,"profit"))}">${fmt(sum(bs,"profit"))}</span>`, "", ""],
   },
   ops: {
     get label(){ return tt("co.ops.label", "Operations"); },
@@ -21425,6 +21754,76 @@ function xlKind(w, n, slug){
   const type = /^ba:[a-z0-9_]+$/i.test(slug || "") ? `\u27e6${slug}|${w}\u27e7` : w;
   return tt("co.chain.kind", {one: "{n} {kind}", other: "{n} {kinds}"}, {n, kind: w, kinds: many, kind_name: type});
 }
+/* --- payback: the investment against the profit so far ----------------------
+   _payback() sends every site's and chain's outcome in both install modes;
+   the reader picks the mode, kept per character. The installation firm is the
+   default: the higher, more careful figure. */
+const PAYBACK_KEY = "ba_dash_payback";
+const paybackStore = () => `${PAYBACK_KEY}:${(D && D.meta && D.meta.character) || "default"}`;
+function paybackMode(){
+  try { if(localStorage.getItem(paybackStore()) === "self") return "self"; } catch(e) {}
+  return "firm";
+}
+function paybackSetMode(mode){
+  try { localStorage.setItem(paybackStore(), mode); } catch(e) {}
+}
+const paybackSite = key => ((D.payback || {}).sites || {})[key] || null;
+/* A chain is filed under its first site's key. */
+const paybackChain = c => ((D.payback || {}).chains || {})[(c.sites || [])[0]] || null;
+/* The outcome in the mode on screen; null for a cost centre and a vacant lease. */
+const paybackOf = row => row && row[paybackMode()] || null;
+function paybackSentence(o){
+  switch(o && o.state){
+    case "reached": return tt("co.payback.reached", {one: "Break even on day {day}, {n} day after opening",
+      other: "Break even on day {day}, {n} days after opening"}, {day: o.day, n: o.after});
+    case "latest": return tt("co.payback.latest", "Paid back by day {day} at the latest", {day: o.day});
+    case "togo": return tt("co.payback.togo", {one: "{n} day to go at recent profit", other: "{n} days to go at recent profit"}, {n: o.days});
+    case "never": return tt("co.payback.never", "Not paying back at current profit");
+    case "unknown": return tt("co.payback.unknown", "No trading day finished yet");
+  }
+  return "";
+}
+function paybackShort(o){
+  switch(o && o.state){
+    case "reached": return tt("co.payback.cell.reached", "day {day}", {day: o.day});
+    case "latest": return tt("co.payback.cell.latest", "by day {day}", {day: o.day});
+    case "togo": return tt("co.payback.cell.togo", {one: "{n} day to go", other: "{n} days to go"}, {n: o.days});
+    case "never": return tt("co.payback.cell.never", "not paying back");
+  }
+  return "—";
+}
+/* What the figure rests on, for a tip: the investment and its parts in the
+   mode on screen, the profit so far, the recent rate. */
+function paybackTip(row, chain){
+  const c = row.cost || {}, mode = paybackMode(), w = c[mode] || 0;
+  const cost = chain ? tt("co.payback.cost.chain", "Invested {w:$} across the chain's sites, deposits included.", {w})
+    : c.billed ? tt("co.payback.cost.billed", "Invested {w:$}: the installation firm's bill {bill:$} and the deposit {dep:$}.", {w, bill: c.billed, dep: c.deposit})
+    : mode === "self" ? tt("co.payback.cost.self", "Invested {w:$}: furniture {f:$}, walls and floors {m:$}, deposit {dep:$}.", {w, f: c.furniture, m: c.materials, dep: c.deposit})
+    : tt("co.payback.cost.firm", "Invested {w:$}: furniture {f:$}, the installation firm's fee {fee:$}, deposit {dep:$}.", {w, f: c.furniture, fee: c.fee, dep: c.deposit});
+  const profit = row.since === null || row.since === undefined ? ""
+    : row.exact ? tt("co.payback.profit", "Profit since day {day}: {w:$}.", {day: row.since, w: row.profit})
+    : tt("co.payback.profit.window", "Profit since day {day}, the oldest day the save keeps: {w:$}.", {day: row.since, w: row.profit});
+  const rate = row.rate === null || row.rate === undefined ? ""
+    : tt("co.payback.rate", "Recent profit {w:$} a day.", {w: row.rate});
+  const o = paybackOf(row);
+  const kept = o && o.kept ? tt("co.payback.kept", "The break-even day is remembered from an earlier save.") : "";
+  return [cost, profit, rate, kept].filter(Boolean).join(" ");
+}
+/* A table cell: the short form, the whole sentence and its basis on hover. */
+function paybackCell(row, chain){
+  const o = paybackOf(row);
+  if(!o) return "—";
+  return `<span class="pb-cell${o.state === "never" ? " neg" : ""}" data-tip="${attr(tt("co.payback.tip", "{what}. {basis}", {what: paybackSentence(o), basis: paybackTip(row, chain)}))}" tabindex="0">${paybackShort(o)}</span>`;
+}
+/* Sorting: the day it paid back or will, the ones that never will last. */
+function paybackRank(row){
+  const o = paybackOf(row);
+  if(!o) return -1;
+  if(o.state === "reached" || o.state === "latest") return o.day;
+  if(o.state === "togo") return ((D.meta || {}).day || 0) + o.days;
+  return o.state === "never" ? 1e9 : -1;
+}
+
 function chainRow(c, v){
   const cells = v.chain(c);
   const note = c.external
@@ -21462,8 +21861,9 @@ function outsideRows(span){
     : tt("co.outside.other", "other {w:$}", {w});
   const tip = tt("co.outside.tip", "Day {day}: {parts}. The company pays these, no site does.",
     {day: last.day, parts: parts.map(([id, n]) => part(id, n)).join(", ")});
-  const row = (label, n, cls, t) => `<tr class="td-outside${cls}"><td class="l" colspan="${span - 2}"${
-    t ? ` data-tip="${attr(t)}" tabindex="0"` : ""}>${label}</td><td><span class="${sign(n)}">${fmt(n)}</span></td><td></td></tr>`;
+  /* The profit column is the third from the end, before Margin and Payback. */
+  const row = (label, n, cls, t) => `<tr class="td-outside${cls}"><td class="l" colspan="${span - 3}"${
+    t ? ` data-tip="${attr(t)}" tabindex="0"` : ""}>${label}</td><td><span class="${sign(n)}">${fmt(n)}</span></td><td></td><td></td></tr>`;
   return row(tt("co.outside.costs", "Company costs outside sites"), -outside, "", tip)
     + row(tt("co.outside.profit", "Company profit"), last.profit, " td-net",
       tt("co.outside.profit.tip", "The same figure as the Overview's Profit yesterday"));
@@ -21471,10 +21871,15 @@ function outsideRows(span){
 
 function drawPortfolio(){
   const v = VIEWS[view];
+  /* Profit & loss carries the Payback column, and with it the install mode. */
+  const payback = view === "pnl" && !!D.payback;
   $("portHead").innerHTML = sechead(tt("co.port.title", "Portfolio"), {
     why: tt("co.port.why", "{note}. Click a chain to open its sites, a site to open its detail. Click a column to sort chains and their sites by it.",
       {note: v.note}),
+    aside: payback ? `<span id="paybackMode" aria-label="${attr(tt("co.payback.mode.label", "How the setup is valued"))}"></span>` : null,
   });
+  if(payback) seg("paybackMode", [["firm", tt("co.payback.mode.firm", "Installation firm")], ["self", tt("co.payback.mode.self", "Self-installation")]],
+    paybackMode, paybackSetMode, () => { drawPortfolio(); if(siteOpen) drawSite(); });
   /* Profit & loss on Results, Operations on Standards: the view's tab is the
      switch (ROUTES["businesses/standards"]). */
   const byKey = {};
@@ -24085,6 +24490,14 @@ function xlArrive(sel, hit = ""){
   setTimeout(() => lit.forEach(el => el.classList.remove("sp-hit")), 3200);
 }
 
+/* The site's payback in the install mode the portfolio shows, one line under
+   its tiles; its basis on hover. A cost centre has none of its own. */
+function spPayback(b){
+  const row = paybackSite(b.key), o = paybackOf(row);
+  if(!o) return "";
+  return `<p class="sp-read sp-pay" data-tip="${attr(paybackTip(row))}" tabindex="0">${
+    tt("sp.payback.line", "Payback: {what}", {what: paybackSentence(o)})}</p>`;
+}
 function drawSite(){
   const sec = $("secDetail");
   spViewCache = null;
@@ -24529,6 +24942,7 @@ function drawSite(){
     ${spFinds(finds, b, kind)}
     ${vacant ? "" : spBody || `
     <div class="sstats rv" data-block="tiles" id="sp-tiles">${stats}</div>
+    ${sp ? spPayback(b) : ""}
     ${sp ? `<div class="duo sec"${kind === "retail" ? ` style="grid-template-columns:3fr 2fr"` : ""}>
       <section class="rv" data-block="standards" id="sp-standards" data-readzone>
         ${sechead(tt("sp.sat.title", "Satisfaction"), {icon: "standards", why: office
@@ -33260,10 +33674,9 @@ const SS_VIEWS = [
   {id: "portfolio", get t(){ return tt("nav.search.portfolio.title", "Portfolio"); },
    get p(){ return tt("nav.search.portfolio.line", "Businesses › Results · profit and loss by chain"); }, ic: "company",
    syn: ["sites", "chains", "margin", "break even", "payback", "losing money"],
-   /* The board has no break-even figure yet, and says so rather than land the
-      player on a table that looks as if it should hold one. */
-   synP: {get "break even"(){ return tt("nav.search.portfolio.breakeven", "no break-even figure yet · Businesses › Results · profit and loss by chain"); },
-          get "payback"(){ return tt("nav.search.portfolio.payback", "no payback figure yet · Businesses › Results · profit and loss by chain"); }},
+   /* Break-even is the portfolio's Payback column, per chain and per site. */
+   synP: {get "break even"(){ return tt("nav.search.portfolio.breakeven", "the Payback column · Businesses › Results · break-even day by chain and site"); },
+          get "payback"(){ return tt("nav.search.portfolio.payback", "the Payback column · Businesses › Results · break-even day by chain and site"); }},
    go(){ view = "pnl"; sortKey = null; drawPortfolio(); reveal("secPortfolio"); }},
   {id: "ops", get t(){ return tt("nav.search.ops.title", "Standards"); },
    get p(){ return tt("nav.search.ops.line", "Businesses › Standards · satisfaction, promotion, amenities, uniforms"); }, ic: "company",

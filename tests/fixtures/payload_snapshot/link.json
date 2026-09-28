@@ -1336,6 +1336,121 @@
  },
  "officeStaffing": [],
  "ownedBuildings": [],
+ "payback": {
+  "chains": {
+   "ba:street_secondavenue#10": {
+    "cost": {
+     "billed": 0.0,
+     "deposit": 0.0,
+     "fee": 518610.0,
+     "firm": 525510.0,
+     "furniture": 6900.0,
+     "materials": 0.0,
+     "self": 6900.0
+    },
+    "exact": false,
+    "firm": {
+     "state": "unknown"
+    },
+    "opened": 0,
+    "profit": 0.0,
+    "rate": null,
+    "self": {
+     "state": "unknown"
+    },
+    "since": null,
+    "sites": [
+     "ba:street_secondavenue#10",
+     "ba:street_broadway#2",
+     "ba:street_fifthavenue#4"
+    ]
+   }
+  },
+  "recentDays": 14,
+  "sites": {
+   "ba:street_broadway#2": {
+    "cost": {
+     "deposit": 0.0,
+     "fee": 0.0,
+     "firm": 2950.0,
+     "furniture": 2950.0,
+     "materials": 0.0,
+     "self": 2950.0
+    },
+    "costCentre": false,
+    "exact": false,
+    "firm": {
+     "state": "unknown"
+    },
+    "opened": 0,
+    "profit": 0.0,
+    "rate": null,
+    "self": {
+     "state": "unknown"
+    },
+    "since": null
+   },
+   "ba:street_fifthavenue#4": {
+    "cost": {
+     "deposit": 0.0,
+     "fee": 131850.0,
+     "firm": 132850.0,
+     "furniture": 1000.0,
+     "materials": 0.0,
+     "self": 1000.0
+    },
+    "costCentre": false,
+    "exact": false,
+    "firm": {
+     "state": "unknown"
+    },
+    "opened": 0,
+    "profit": 0.0,
+    "rate": null,
+    "self": {
+     "state": "unknown"
+    },
+    "since": null
+   },
+   "ba:street_pier#9": {
+    "cost": {
+     "deposit": 0.0,
+     "fee": 404340.0,
+     "firm": 404340.0,
+     "furniture": 0.0,
+     "materials": 0.0,
+     "self": 0.0
+    },
+    "costCentre": true,
+    "exact": false,
+    "opened": 0,
+    "profit": 0.0,
+    "since": null
+   },
+   "ba:street_secondavenue#10": {
+    "cost": {
+     "deposit": 0.0,
+     "fee": 386760.0,
+     "firm": 389710.0,
+     "furniture": 2950.0,
+     "materials": 0.0,
+     "self": 2950.0
+    },
+    "costCentre": false,
+    "exact": false,
+    "firm": {
+     "state": "unknown"
+    },
+    "opened": 0,
+    "profit": 0.0,
+    "rate": null,
+    "self": {
+     "state": "unknown"
+    },
+    "since": null
+   }
+  }
+ },
  "plan": {
   "catalogue": {},
   "items": {},

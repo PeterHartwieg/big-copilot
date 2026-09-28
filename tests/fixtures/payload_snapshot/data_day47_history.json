@@ -7361,6 +7361,148 @@
    "purchasePrice": 250000.0
   }
  ],
+ "payback": {
+  "chains": {
+   "ba:street_broadwaystreet#19": {
+    "cost": {
+     "billed": 0.0,
+     "deposit": 0.0,
+     "fee": 131850.0,
+     "firm": 132750.0,
+     "furniture": 900.0,
+     "materials": 0.0,
+     "self": 900.0
+    },
+    "exact": true,
+    "firm": {
+     "days": 316,
+     "state": "togo"
+    },
+    "opened": 3,
+    "profit": 8295.0,
+    "rate": 395.0,
+    "self": {
+     "after": 24,
+     "day": 27,
+     "state": "reached"
+    },
+    "since": 26,
+    "sites": [
+     "ba:street_broadwaystreet#19"
+    ]
+   },
+   "ba:street_eighthstreet#5": {
+    "cost": {
+     "billed": 0.0,
+     "deposit": 0.0,
+     "fee": 1646074.0,
+     "firm": 1704024.0,
+     "furniture": 57950.0,
+     "materials": 0.0,
+     "self": 57950.0
+    },
+    "exact": true,
+    "firm": {
+     "state": "never"
+    },
+    "opened": 3,
+    "profit": -12822.0,
+    "rate": -539.71,
+    "self": {
+     "state": "never"
+    },
+    "since": 26,
+    "sites": [
+     "ba:street_eighthstreet#5",
+     "ba:street_eighthavenue#4",
+     "ba:street_eighthavenue#8"
+    ]
+   }
+  },
+  "recentDays": 14,
+  "sites": {
+   "ba:street_broadwaystreet#19": {
+    "cost": {
+     "deposit": 0.0,
+     "fee": 131850.0,
+     "firm": 132750.0,
+     "furniture": 900.0,
+     "materials": 0.0,
+     "self": 900.0
+    },
+    "costCentre": false,
+    "exact": true,
+    "firm": {
+     "days": 316,
+     "state": "togo"
+    },
+    "opened": 3,
+    "profit": 8295.0,
+    "rate": 395.0,
+    "self": {
+     "after": 24,
+     "day": 27,
+     "state": "reached"
+    },
+    "since": 26
+   },
+   "ba:street_eighthavenue#4": {
+    "cost": {
+     "deposit": 0.0,
+     "fee": 757112.0,
+     "firm": 757112.0,
+     "furniture": 0.0,
+     "materials": 0.0,
+     "self": 0.0
+    },
+    "costCentre": true,
+    "exact": true,
+    "opened": 3,
+    "profit": -9660.0,
+    "since": 26
+   },
+   "ba:street_eighthavenue#8": {
+    "cost": {
+     "deposit": 0.0,
+     "fee": 757112.0,
+     "firm": 812112.0,
+     "furniture": 55000.0,
+     "materials": 0.0,
+     "self": 55000.0
+    },
+    "costCentre": true,
+    "exact": true,
+    "opened": 3,
+    "profit": -18837.0,
+    "since": 26
+   },
+   "ba:street_eighthstreet#5": {
+    "cost": {
+     "deposit": 0.0,
+     "fee": 131850.0,
+     "firm": 134800.0,
+     "furniture": 2950.0,
+     "materials": 0.0,
+     "self": 2950.0
+    },
+    "costCentre": false,
+    "exact": true,
+    "firm": {
+     "days": 146,
+     "state": "togo"
+    },
+    "opened": 3,
+    "profit": 15675.0,
+    "rate": 817.29,
+    "self": {
+     "after": 27,
+     "day": 30,
+     "state": "reached"
+    },
+    "since": 26
+   }
+  }
+ },
  "plan": {
   "catalogue": {
    "ba:businesstype_giftshop": {
