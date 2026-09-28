@@ -64,6 +64,8 @@ force is enough.
 - The plan is the **cheapest mix that brings promotion to 100**.
 - If no mix can do that, the plan is the **cheapest mix that brings marketing to 100**.
 - There is no tolerance: 99 is short.
+- Only types sold by agencies that are phone contacts count. With none, there is no plan, and the
+  line names the agencies to visit once.
 - Ties go to fewer campaigns, then to the mix the shop already runs.
 
 The same search also drops campaigns that only push past the target, so one button covers both
@@ -95,23 +97,28 @@ Shops and offices are covered. Headquarters have a promotion but no customers, s
   use the first agency whose `MarketingAgencySettings.marketingTypesAvailable` offers the type,
   found by walking the buildings. There is one campaign per type, as in the game: its dialog
   removes a type from every other agency when it sets that type.
-- **Set-up, done by every write** (it replaces the visit, the call and the chat):
-  1. Call `GetOrAddBusinessContact()` on each agency the site uses. This is the game's own call,
-     and it puts the agency in the phone's contacts.
-  2. Make sure the site has an entry for **all six types**, the unused ones disabled.
-
-  After one write, BizMan shows the full set of switches for that shop, and the player can
-  adjust it by hand from then on. A disabled entry costs nothing: billing, reach and the
-  billboards in the world all count enabled campaigns only. The write adds no chat messages;
-  the mod's usual notification says what changed.
+- **Only through agencies the player knows, and only while they are open** (Peter, 28 Sep 2026).
+  An agency can be used only when it is already a phone contact, which means the player has
+  visited it once, and only when it is open at the moment of the write. Open is the game's own
+  `BusinessHelper.IsBusinessOpen(reg, -1)`: not temporarily closed, today open, and the current
+  hour inside one of today's opening slots. The mod never adds a contact.
+- **Set-up, done by every write** (it replaces the call and the chat, not the first visit): the
+  site gets an entry for every type each usable agency offers, the unused ones disabled. After
+  one write, BizMan shows the full set of switches for that site, and the player can adjust it
+  by hand from then on. A disabled entry costs nothing: billing, reach and the billboards in the
+  world all count enabled campaigns only. The write adds no chat messages; the mod's usual
+  notification says what changed.
+- **What a row may touch:** every agency whose campaigns a row would change must be a contact
+  and open. That covers turning a type on or off and adding entries. Otherwise the row answers
+  `no_contact` or `agency_closed`, naming the agency and, when closed, its next opening hour, and
+  nothing is written for that row. Undo follows the same rule.
 - **Calls after the write:** `UpdatePromotion`, and `GameEvent ba:gameevent_newmarketing` when a
   campaign is added. The answer carries:
   - the resulting `promotion {trafficIndex, marketing, total}` and `dailyCost`, so each apply
     checks the board's model against the game
-  - `contactsAdded`
   - `entriesAdded`
 - **Row errors:** `not_found`, `not_rented`, `no_business`, `no_promotion` (the type is not
-  tagged), `no_agency` (no agency offers the type).
+  tagged), `no_agency` (no agency offers the type), `no_contact`, `agency_closed`.
 - **Undo:** `POST /write/undo {"kind": "marketing"}` restores the previous enabled flags on
   campaigns that are still as the write left them. Campaigns the write added are disabled
   again. The added entries and contacts stay, because they are set-up and cost nothing.
@@ -166,7 +173,12 @@ and types no save has shown yet. Add both to the `docs/game-update.md` checklist
 
 Settled by Peter on 28 September 2026:
 - **Target:** promotion 100, or marketing 100 when promotion 100 is out of reach (section 2).
-- **Set-up:** the write replaces the agency visit, the call and the chat (section 3).
+- **Set-up:** the write replaces the call and the chat (section 3).
+- **Known and open agencies only:** the plan uses only types sold by agencies that are phone
+  contacts, and the write needs those agencies open (section 3). The board reads both from the
+  save: `Contacts` (`streetName`, `streetNumber`) and the agency registration's `scheduleDays`
+  and `temporarilyClosed`, against the save's day and hour. So the line can say "CityAds opens at
+  8:00" or "Visit CityAds once to add billboards" before the player clicks.
 
 - **Offices are included**, like shops. Headquarters, warehouses and factories are not: they
   have no customers, or no `hasmarketingpromotion` tag.
