@@ -263,7 +263,7 @@ class Check(unittest.TestCase):
     def test_build_web_check_reports_the_pages(self):
         with tempfile.TemporaryDirectory() as tmp:
             for rel in ("web/wiki-data.json", *build_web.STAMP_INPUTS, "web/version.json",
-                        "web/index.html", "web/update.js", "ba_buildings.json", "ba_demand_curves.json", "ba_item_prices.json",
+                        "web/index.html", "web/update.js", "ba_buildings.json", "ba_demand_curves.json", "ba_item_prices.json", "ba_store_rules.json",
                         "web/py/ba_save.py", "web/py/ba_dashboard.py", "web/py/ba_buildings.json",
                         "web/py/ba_demand_curves.json"):
                 target = Path(tmp, rel)

@@ -1879,6 +1879,11 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         _ingredient_prices(save, names, supply, businesses),
         rhythm,
     )
+    premises = _premises(save, names, market)
+    # Expansion › Open a store: the facts a plan for a new store is worked
+    # out from (_open_store(), docs/open-a-store-scope.md).
+    open_store = _open_store(save, names, buildings, businesses, premises, all_grids,
+                             stmt_history, daily, staff)
     net_worth = _net_worth(root, history, character, day)
     entry = {
         "hour": root["Hour"],
@@ -1960,11 +1965,14 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         "supply": supply,
         "rhythm": rhythm,
         "market": market,
-        "premises": _premises(save, names, market),
+        "premises": premises,
         "chains": chains,
         # Investment, profit so far and break-even, per site and per chain
         # (_payback(), docs/open-a-store-scope.md).
         "payback": payback,
+        # Expansion › Open a store: outfits, market, own shops, loans
+        # (_open_store()).
+        "openStore": open_store,
         "trends": trends,
         "hypeExposure": hype,
         "hours": grids,
@@ -6652,14 +6660,14 @@ def _arrival_ceiling(
     # A save hands back whatever is in the list, and a product entry is not
     # always the string it is supposed to be; an unhashable one would otherwise
     # take the whole board down on the set test.
-    initial = max(
+    initial = initial_customers(door, sqm, max(
         (
             ratios.get(name, 0.0)
             for name in products
             if isinstance(name, str) and name in primary
         ),
         default=0.0,
-    ) * (sqm or 0)
+    ))
     if initial <= 0:
         return None
     promo = base_promotion + 0.75 * (promotion or 0) / 100
@@ -12189,6 +12197,684 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
     for name in [n for n in kept_chains if n not in {str(c["name"]) for c in chains}]:
         del kept_chains[name]
     return {"sites": sites, "chains": out_chains, "recentDays": PAYBACK_RECENT_DAYS}
+
+
+# ------------------------------------------------------------- open a store
+# Expansion › Open a store (docs/open-a-store-scope.md, phase 2): the facts a
+# plan for a store that does not exist yet is worked out from. Python says what
+# the save and the game's tables hold -- what a type needs to be fully outfitted
+# in each layout, what every product meets in every neighbourhood, the player's
+# own shops of the type and what they really earn, the company's borrowing room
+# -- and the board script does the arithmetic the reader moves: the building,
+# the install mode, the marketing mix and the loan, as Plan a factory does.
+# The profit rules are the game's own, read from its code and checked against
+# 108 real shops; docs/dashboard-reference.md, "Open a store", writes them out.
+
+_store_rules = None
+
+
+def load_store_rules() -> dict:
+    """ba_store_rules.json, read once: the game's tables a plan needs.
+
+    `products` per item (wholesale and default price, sales ratio, whether it
+    has a neighbourhood demand, a service, a ticket), `furniture` per item (the
+    customers an hour it adds, the products it holds, its tags, what it stands
+    on, who sells it), `types` per business type (products and their impact,
+    requirements, customer demands), `hoods`, `banks` and `vendors`. Generated
+    by make_store_rules.py and written to /data/ by the browser worker. A
+    missing file is not an error: the view then has nothing to plan with.
+    """
+    global _store_rules
+    if _store_rules is None:
+        for path in (
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "ba_store_rules.json"),
+            "/data/ba_store_rules.json",  # where the worker puts it in a browser
+        ):
+            try:
+                with open(path, encoding="utf-8") as fh:
+                    loaded = json.load(fh)
+                _store_rules = {part: loaded.get(part) or {} for part in STORE_RULE_PARTS}
+                break
+            except (OSError, ValueError, AttributeError):
+                continue  # not here, or unreadable: try the next place
+        else:
+            _store_rules = {part: {} for part in STORE_RULE_PARTS}
+    return _store_rules
+
+
+STORE_RULE_PARTS = ("products", "furniture", "types", "hoods", "banks", "vendors")
+# The building kinds a store can be planned in.
+PLAN_KINDS = ("retail", "office", "cinema", "theater")
+# The structural wage estimate (research PROFIT_MODEL.md, "Costs"): base
+# hourly wages of a cashier, a cleaner and a security guard, which a skill of
+# 100 lifts by 1 + 1.05^100 / 100, and the customers an hour one cashier serves.
+PLAN_WAGES = {"cashier": 16, "cleaner": 12, "guard": 15, "perCashier": 30}
+# The six campaigns, hard-coded in MarketingTypeSettings..cctor: price a day
+# and the square metres each reaches. One of each at most per business.
+MARKETING_CAMPAIGNS = (
+    ("smallinternet", 100, 20), ("mediuminternet", 250, 40), ("largeinternet", 500, 60),
+    ("smallbillboard", 500, 100), ("mediumbillboard", 2500, 250), ("largebillboard", 6000, 600),
+)
+# The lenders' BankSettings assets carry rates and caps but no name and no
+# address; these are the banks the game shows (research LOANS.md, section 1).
+BANK_PLACES = {
+    "VantanderBankSettings": ("Vantander Bank", ("ba:street_secondavenue", 6)),
+    "JensenCapitalSettings": ("Jensen Capital", ("ba:street_fourthavenue", 17)),
+}
+LOAN_MINIMUM = 500  # Dialogs.BankDialog: less is "too low"
+# CustomerEntriesCalculatorRetail.BuildNumberToStartCappingInitialCustomers: a
+# game started on this build or later starts every open hour from the
+# building's customer capacity; an older one from the best primary product's
+# sales ratio times the floor.
+CAP_INITIAL_BUILD = 2847
+# The satisfaction a well-run new shop settles at (all four parts near 95)
+# where the player runs none of the type to take it from.
+PLAN_SATISFACTION = 95
+# What a shop of the player's own is measured over: its last finished trading
+# days after the opening, the window the profit model was validated on.
+OWN_PROFIT_DAYS = 14
+# The shops a new one would take demand from, measured over their last week.
+SALES_DAYS = 7
+# FurnitureStoreManagerDialog: one flat fee per furniture delivery contract.
+FURNITURE_DELIVERY_FEE = 250
+# The item type bits that meet a customer demand (the items bundle's flags).
+MUSIC_FLAG, SEATING_FLAG, SINK_FLAG, TOILET_FLAG = 1024, 4096, 16777216, 33554432
+# Interior elements, floor slots and wall slots of each layout, read from the
+# interiorDesigns of real saves (research NOTES.md, section 3); a layout the
+# player rents is read from their own save instead. Wall counts vary by one or
+# two between saves of the same layout.
+LAYOUT_SLOTS = {
+    "A1": (121, 75, 61), "A2": (176, 120, 74), "B1": (102, 54, 49), "C1": (290, 225, 84),
+    "C2": (306, 225, 114), "D2": (416, 345, 95), "F1": (158, 96, 82), "J1": (444, 360, 107),
+    "K1": (789, 660, 183), "L1": (294, 204, 114), "M1": (1296, 1131, 212),
+    "R1": (2575, 1947, 1019), "S1": (2356, 1821, 943),
+}
+
+
+def initial_customers(door, sqm, best_ratio, build_at_start=None) -> float:
+    """The start of every open hour's arrivals (GetInitialCustomers).
+
+    A game started on CAP_INITIAL_BUILD or later begins from the building's
+    customer capacity, `door`; an older one, or a caller that does not know
+    when the game started, from the best primary product's sales ratio times
+    the floor. The staffing assistant's ceiling (_arrival_ceiling()) and the
+    store plan share this one rule.
+    """
+    if build_at_start is not None and build_at_start >= CAP_INITIAL_BUILD and door:
+        return float(door)
+    return float(best_ratio or 0) * float(sqm or 0)
+
+
+def demand_with(providers: int, default_price: float) -> float:
+    """A product's expected neighbourhood demand with `providers` sellers
+    (ProductMarketHelper.CalculateDemand): 100 less a step per seller past the
+    few the item's price makes room for, drawn one below or at it, and 29 to
+    34 once it bottoms out."""
+    opt = optimal_providers(default_price)
+    base = 100 - (providers * 100) // opt
+    return min(100.0, base - 0.5) if base >= 30 else 31.5
+
+
+def optimal_providers(default_price: float) -> int:
+    """Item.GetOptimalProviders: how many sellers a neighbourhood holds before
+    demand starts to fall, fewer for dear goods."""
+    if not default_price:
+        return 7
+    return min(math.ceil(math.sqrt(1300 / default_price)), 7)
+
+
+def decor_route(elements: int, floor_slots: int, wall_slots: int, materials: dict, target: int) -> dict | None:
+    """The cheapest paid walls and floors that lift a bare shell to `target`.
+
+    The game's score (InteriorScoreCalculator) is the floor of the average of
+    two parts: the spend per interior element, at most 100, and the share of
+    slots with a paid material. Every paid slot adds to both, so the cheapest
+    route paints the cheapest kind of slot first. `materials` is
+    ba_item_prices.json's table; only materials the designer sells count. None
+    when the layout's slots are unknown or the target cannot be reached.
+    """
+    if not elements or not floor_slots and not wall_slots:
+        return None
+    if target <= 0:
+        return {"floors": 0, "walls": 0, "floor": None, "wall": None, "cost": 0, "score": 0}
+
+    def cheapest(kind):
+        paid = [(m["p"], uuid) for uuid, m in materials.items()
+                if m.get("t") == kind and m.get("b") and (m.get("p") or 0) > 0]
+        return min(paid) if paid else None
+
+    floor, wall = cheapest(1), cheapest(2)
+    kinds = sorted([k for k in ((floor, floor_slots, "floor"), (wall, wall_slots, "wall")) if k[0]],
+                   key=lambda k: k[0][0])
+    slots = floor_slots + wall_slots
+    painted = {"floor": 0, "wall": 0}
+    spend = 0.0
+    for (price, _uuid), room, kind in kinds:
+        for _ in range(room):
+            if math.floor((min(spend / elements, 100) + 100 * sum(painted.values()) / slots) / 2) >= target:
+                break
+            painted[kind] += 1
+            spend += price
+    score = math.floor((min(spend / elements, 100) + 100 * sum(painted.values()) / slots) / 2)
+    if score < target:
+        return None
+    return {"floors": painted["floor"], "walls": painted["wall"],
+            "floor": floor[1] if floor and painted["floor"] else None,
+            "wall": wall[1] if wall and painted["wall"] else None,
+            "floorPrice": floor[0] if floor else None, "wallPrice": wall[0] if wall else None,
+            "cost": money(spend), "score": score}
+
+
+def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=None) -> list:
+    """What a 100% outfitted store of a type holds, as shopping-list lines.
+
+    Each line is {"item", "qty", "group", "why"}: `group` is "req" (the
+    type's requirements, one each), "cap" (the more of a capacity station it
+    takes for its customers an hour to cover the building's `cap`), "dem" (one
+    item per customer demand the type makes) or "shelf" (the displays), and
+    `why` what the line answers: a requirement's name, a demand, or the
+    products a display holds. Every item is one somebody sells, at its default
+    price, and made for the type where the item names the types it is for;
+    the cheapest one that does the job wins.
+
+    The displays are `copied` -- (item, qty, products) from the player's own
+    site of the type and layout -- or else, per product the type sells, enough
+    of its cheapest display for the building's customers an hour: a single one
+    would cap the whole shop at its own rate (the game groups shelf capacity
+    per product), and the profit model stocks the type's whole range. The
+    interior-design demand is walls and floors, not an item, and a gym's
+    workout variety is not modelled.
+    """
+    t = (rules.get("types") or {}).get(type_slug) or {}
+    furniture = rules.get("furniture") or {}
+    table = prices.get("items") or {}
+    products = rules.get("products") or {}
+    cap = cap[0] if isinstance(cap, (list, tuple)) else cap
+    cap = int(cap or 0)
+
+    def price(name):
+        return float((table.get(name) or {}).get("p") or 0)
+
+    def flags(name):
+        return int((table.get(name) or {}).get("t") or 0)
+
+    def facts(name):
+        return furniture.get(name) or {}
+
+    kind = type_slug.removeprefix("ba:businesstype_")
+
+    def sold(name):
+        """On sale, and made for this type where the item says what it is for
+        (the designer's categories): a liquor store gets no cinema register."""
+        fits = facts(name).get("bt")
+        return price(name) > 0 and bool(facts(name).get("v")) and (not fits or kind in fits)
+
+    def mount(name):
+        """The cheapest thing a station has to stand on, if it needs one."""
+        under = [m for m in facts(name).get("m") or () if sold(m)]
+        return min(under, key=lambda m: (price(m), m)) if under else None
+
+    def unit_cost(name):
+        under = mount(name)
+        return price(name) + (price(under) if under else 0)
+
+    def cheapest(names):
+        names = [n for n in names if sold(n)]
+        return min(names, key=lambda n: (unit_cost(n), n)) if names else None
+
+    def sized(names):
+        """The station that covers `cap` customers an hour for the least."""
+        best = None
+        for n in _in_order(set(names)):
+            if not sold(n):
+                continue
+            rate = facts(n).get("c") or 0
+            qty = max(1, math.ceil(cap / rate)) if rate and cap else 1
+            key = (qty * unit_cost(n), -rate, n)
+            if best is None or key < best[0]:
+                best = (key, n, qty)
+        return (best[1], best[2]) if best else (None, 0)
+
+    lines = []
+
+    def add(item, qty, group, why):
+        if not item or qty <= 0:
+            return
+        lines.append({"item": item, "qty": int(qty), "group": group, "why": why})
+        under = mount(item)
+        if under:
+            lines.append({"item": under, "qty": int(qty), "group": group, "why": "mount"})
+
+    def held():
+        return {line["item"] for line in lines}
+
+    shelf_products = []
+    for req in t.get("rq") or ():
+        if req.get("any") or req.get("lic"):
+            continue  # a product on a shelf (the displays), or a fee paid in game
+        if req.get("i"):
+            names = [n for n in req["i"] if n in furniture]
+            if not names:
+                # A requirement for stock on a shelf (a hairdresser's hair-care
+                # product) is a display for that product.
+                shelf_products.extend(n for n in req["i"] if n in products)
+                continue
+        elif req.get("t"):
+            names = [n for n, row in table.items() if flags(n) & req["t"] and n in furniture]
+        else:
+            continue
+        name = req.get("n") or ""
+        if req.get("sq"):
+            item = cheapest(names)
+            qty = min(math.ceil(float(sqm or 0) / req["sq"]), req.get("mx") or 1) if sqm else 1
+            add(item, max(1, qty), "req", name)
+            continue
+        item, qty = sized(names)
+        add(item, 1, "req", name)
+        if qty > 1:
+            add(item, qty - 1, "cap", name)
+
+    demands = [d for d, weight in t.get("dm") or () if weight and weight > 0]
+
+    def has(pred):
+        return any(pred(n) for n in held())
+
+    for demand in demands:
+        if demand == "music" and not has(lambda n: flags(n) & MUSIC_FLAG):
+            add(cheapest([n for n in furniture if flags(n) & MUSIC_FLAG]), 1, "dem", demand)
+        elif demand == "seating" and not has(lambda n: flags(n) & SEATING_FLAG):
+            add(cheapest([n for n in furniture if flags(n) & SEATING_FLAG]), 1, "dem", demand)
+        elif demand == "sink" and not has(lambda n: flags(n) & SINK_FLAG):
+            add(cheapest([n for n in furniture if flags(n) & SINK_FLAG]), 1, "dem", demand)
+        elif demand == "employeeuniforms" and not has(lambda n: "uniform" in (facts(n).get("x") or ())):
+            add(cheapest([n for n in furniture if "uniform" in (facts(n).get("x") or ())]), 1, "dem", demand)
+        elif demand in ("toilet", "toiletprivacy") and not has(lambda n: flags(n) & TOILET_FLAG):
+            # One stall meets both: it is a toilet, and the first toilet found
+            # carries the privacy tag. A plain toilet beside it could be the
+            # one found first and fail the privacy demand.
+            private = "toiletprivacy" in demands
+            pool = [n for n in furniture if flags(n) & TOILET_FLAG
+                    and (not private or "privacy" in (facts(n).get("x") or ()))]
+            add(cheapest(pool), 1, "dem", "toilet+privacy" if private and "toilet" in demands else demand)
+
+    if copied:
+        for item, qty, held_products in copied:
+            add(item, qty, "shelf", list(held_products) or "storage")
+    else:
+        for p in [*(p for p, _impact in t.get("i") or ()), *shelf_products]:
+            row = products.get(p) or {}
+            if row.get("s") or row.get("k") or p in (t.get("f"), t.get("fw")):
+                continue  # a service, a ticket or an entrance fee has no shelf
+            shows = [n for n, f in furniture.items() if p in (f.get("h") or ()) and (f.get("c") or 0) > 0]
+            item, qty = sized(shows)
+            if not item:
+                continue
+            same = next((l for l in lines if l["group"] == "shelf" and l["item"] == item), None)
+            if same:
+                same["qty"] += qty
+                same["why"].append(p)
+            else:
+                add(item, qty, "shelf", [p])
+    return lines
+
+
+def _setup_items(lines: list) -> list:
+    """Outfit lines as setup_cost()'s (item, price paid) pairs: nothing is paid
+    yet, so every piece counts at its default price."""
+    return [(line["item"], None) for line in lines for _ in range(line["qty"])]
+
+
+def _layout_slots(save: Save, regs: list, prices: dict) -> dict:
+    """{layout: (elements, floor slots, wall slots)}: LAYOUT_SLOTS, with each
+    layout the player rents read off its own interiorDesigns."""
+    table = load_buildings()
+    materials = prices.get("materials") or {}
+    out = dict(LAYOUT_SLOTS)
+    for reg in regs:
+        layout = _layout(table.get((reg.get("StreetName"), reg.get("StreetNumber"))) or {})
+        if not layout:
+            continue
+        designs = list(save.items(reg.get("interiorDesigns")))
+        floors = walls = 0
+        for design in designs:
+            for slot in save.items((save.deref(design) or {}).get("materials")):
+                kind = (materials.get(slot.get("MaterialID")) or {}).get("t") if isinstance(slot, dict) else None
+                floors += kind == 1
+                walls += kind == 2
+        if designs and floors:
+            out[layout] = (len(designs), floors, walls)
+    return out
+
+
+def _copied_shelving(save: Save, reg: dict, type_slug: str, rules: dict) -> list:
+    """The displays and stock shelves at one of the player's own sites, as
+    (item, count, products it holds for the type) -- what a plan of the same
+    type and layout copies."""
+    furniture = rules.get("furniture") or {}
+    sells = {p for p, _impact in ((rules.get("types") or {}).get(type_slug) or {}).get("i") or ()}
+    counts = collections.Counter()
+    for holder in save.items(reg.get("itemInstances")):
+        item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
+        name = (item or {}).get("itemName")
+        if name:
+            counts[name] += 1
+    out = []
+    for name in _in_order(counts):
+        facts = furniture.get(name) or {}
+        holds = sorted(sells & set(facts.get("h") or ()))
+        if holds or "storage" in (facts.get("x") or ()):
+            out.append((name, counts[name], holds))
+    return out
+
+
+def _store_market(save: Save, rules: dict, items: set, mpm: float, agent: int) -> dict:
+    """What each product meets in each neighbourhood today.
+
+    Per item: its default price, sales ratio, whether it has a neighbourhood
+    demand, whether it is a service, how many sellers the market holds before
+    demand falls (`opt`) and the import unit cost -- wholesale x the save's
+    import price index x the difficulty's price multiplier x the best
+    purchasing agent's discount, never the income statement's goods, which
+    are near nothing where the player's own factories supply. Per
+    neighbourhood: the sellers there now (the player's included), whether a
+    rival company sells it (no monopoly bonus then), and the lowest price
+    another business asks.
+    """
+    table = load_buildings()
+    products = rules.get("products") or {}
+    idx, sellers = {}, {}
+    for entry in save.items(save.root.get("productMarketEntries")):
+        name = entry.get("itemName") if isinstance(entry, dict) else None
+        if name not in items:
+            continue
+        idx[name] = entry.get("importPriceIndex") or 1.0
+        for value in save.items(entry.get("demandValues")):
+            hood = value.get("neighborhood")
+            if hood and hood != GLOBAL_HOOD:
+                sellers[(name, hood)] = int(value.get("providers") or 0)
+    rival_sells, lowest = set(), {}
+    for reg in save.items(save.root.get("BuildingRegistrations")):
+        if not reg or reg.get("RentedByPlayer") or not reg.get("BusinessName") or reg.get("temporarilyClosed"):
+            continue
+        hood = hood_key(table.get((reg.get("StreetName"), reg.get("StreetNumber"))))
+        if not hood:
+            continue
+        for line in save.items(reg.get("retailPrices")):
+            name = line.get("itemName") if isinstance(line, dict) else None
+            price = _configured_price(line.get("price")) if name in items else None
+            if price:
+                lowest[(name, hood)] = min(lowest.get((name, hood), price), price)
+        if reg.get("businessOwnerRivalId"):
+            for name in save.items(reg.get("cachedAvailableProducts")):
+                if name in items:
+                    rival_sells.add((name, hood))
+    discount = 1 - 0.25 * max(0, min(100, agent)) / 100
+    hoods = _in_order({h for (_n, h) in sellers} | {h for (_n, h) in lowest})
+    out = {}
+    for name in _in_order(items):
+        row = products.get(name) or {}
+        out[name] = {
+            "p": row.get("p") or 0,
+            "r": row.get("r") or 0,
+            "d": row.get("d") or 0,
+            "s": row.get("s") or 0,
+            "opt": optimal_providers(row.get("p") or 0),
+            "cost": round((row.get("w") or 0) * idx.get(name, 1.0) * mpm * discount, 4),
+            **({"only": row["l"]} if row.get("l") else {}),
+            "hoods": {hood: [sellers.get((name, hood), 0), int((name, hood) in rival_sells),
+                             lowest.get((name, hood))] for hood in hoods},
+        }
+    return out
+
+
+def _own_shops(save: Save, regs: dict, businesses: list, grids: list, stmt_history: list,
+               market: dict, caps: dict, day: int) -> dict:
+    """Per business type, each of the player's trading shops as the profit
+    model sees it, with what it really earned.
+
+    What it earned is the average of its last OWN_PROFIT_DAYS finished days
+    after the opening: sales less every unit sold at the import cost, wages,
+    rent, marketing and licensing fees. The board runs the model over the
+    shop's own building, hours and marketing and puts the two side by side.
+    """
+    table = load_buildings()
+    hours = {g["key"]: g.get("open") for g in grids}
+    out = collections.defaultdict(list)
+    for b in businesses:
+        slug = b.get("typeSlug")
+        reg = regs.get(b["key"])
+        if b.get("status") not in ("retail", "office") or not reg:
+            continue
+        addr = (reg["StreetName"], reg["StreetNumber"])
+        row = table.get(addr) or {}
+        opened = b.get("opened") or 0
+        by_day = {d: by[addr] for d, by in stmt_history if addr in by and opened + 1 < d < day}
+        orders = {e.get("dayNumber"): e for e in save.items(reg.get("orderHistory"))}
+        days = sorted(d for d in by_day if d in orders)[-OWN_PROFIT_DAYS:]
+        if len(days) < 3:
+            continue
+        cost = 0.0
+        sold = collections.Counter()
+        for d in days:
+            for sale in save.items(orders[d].get("itemSales")):
+                name = sale.get("itemName")
+                sold[name] += sale.get("amountSold", 0)
+                cost += sale.get("amountSold", 0) * ((market.get(name) or {}).get("cost") or 0)
+        n = len(days)
+        total = sum(by_day[d].get("TotalSales", 0) - by_day[d].get("SalaryExpenses", 0)
+                    - by_day[d].get("RentExpenses", 0) - by_day[d].get("MarketingExpenses", 0)
+                    - by_day[d].get("LicensingFees", 0) for d in days)
+        door = caps.get(row.get("t"), {}).get(row.get("z"))
+        out[slug].append({
+            "key": b["key"],
+            "hood": b.get("neighbourhood"),
+            "layout": _layout(row),
+            "m2": row.get("m"),
+            "cap": door[0] if isinstance(door, list) else door,
+            "promo": b.get("promotion") or 0,
+            "marketing": money(sum(by_day[d].get("MarketingExpenses", 0) for d in days) / n),
+            "open": hours.get(b["key"]),
+            "sat": (b.get("satisfaction") or {}).get("overall"),
+            "actual": money((total - cost) / n),
+            "days": n,
+        })
+    return {slug: sorted(rows, key=lambda r: r["key"]) for slug, rows in out.items()}
+
+
+def _own_sales(save: Save, regs: dict, businesses: list, market: dict, day: int) -> dict:
+    """{hood: {item: [[site key, units a day, margin a unit]]}}: what the
+    player's own shops sell of each planned product in each neighbourhood over
+    their last SALES_DAYS days, for the demand a new shop there takes away."""
+    out = collections.defaultdict(lambda: collections.defaultdict(list))
+    for b in businesses:
+        reg = regs.get(b["key"])
+        hood = b.get("neighbourhood")
+        if not reg or not hood or b.get("status") != "retail":
+            continue
+        recent = [e for e in save.items(reg.get("orderHistory")) if e.get("dayNumber", day) < day][-SALES_DAYS:]
+        if not recent:
+            continue
+        units, takings = collections.Counter(), collections.Counter()
+        for entry in recent:
+            for sale in save.items(entry.get("itemSales")):
+                name = sale.get("itemName")
+                if name in market:
+                    units[name] += sale.get("amountSold", 0)
+                    takings[name] += sale.get("totalPrice", 0)
+        for name in _in_order(units):
+            if units[name] <= 0:
+                continue
+            per_unit = takings[name] / units[name] - market[name]["cost"]
+            out[hood][name].append([b["key"], round(units[name] / len(recent), 2), round(per_unit, 2)])
+    return {hood: dict(items) for hood, items in sorted(out.items())}
+
+
+def _finance_facts(save: Save, daily: list, rules: dict) -> dict:
+    """What the banks weigh before they lend (Dialogs.BankDialog.LoanRequest),
+    and their terms.
+
+    The most a bank lends is the lower of its own cap less what the company
+    owes it, and the larger of the player's wealth and a quarter of the last
+    seven days' average profit over the loan's term, less everything owed.
+    Wealth is cash, investment funds and property bought; vehicles and boats
+    count in the game too but their prices are not in the save, so the figure
+    here can come out a little low.
+    """
+    root = save.root
+    gv = save.deref(root.get("gameVariables")) or {}
+    funds = 0.0
+    for fund in save.items(root.get("investmentFunds")):
+        fund = save.deref(fund) or {}
+        funds += (fund.get("initialDeposit") or 0) + (fund.get("additionalInvestment") or 0) \
+            - (fund.get("withdrawal") or 0) + (fund.get("interestPayment") or 0)
+    property_ = sum((save.deref(e) or {}).get("purchasePrice") or 0 for e in save.items(root.get("realEstate")))
+    places = {site_key(addr): bank for bank, (_n, addr) in BANK_PLACES.items()}
+    owed = collections.Counter()
+    for loan in save.items(root.get("Loans")):
+        loan = save.deref(loan) or {}
+        addr = save.address(loan.get("bankAddress"))
+        owed[places.get(site_key(addr)) if addr else None] += loan.get("remainingAmount") or 0
+    last = [d["profit"] for d in daily[-7:]]
+    per_year = gv.get("daysPerYear") or 60
+    banks = []
+    for bank, terms in sorted((rules.get("banks") or {}).items()):
+        name, addr = BANK_PLACES.get(bank, (bank, None))
+        banks.append({
+            "id": bank, "name": name, "key": site_key(addr) if addr else None,
+            "rate": terms.get("r") or 0, "years": terms.get("y") or 0, "max": terms.get("x") or 0,
+            "term": per_year * (terms.get("y") or 0), "owed": money(owed.get(bank, 0)),
+        })
+    return {
+        "cash": money(root.get("Money") or 0),
+        "wealth": money((root.get("Money") or 0) + funds + property_),
+        "profit7": money(sum(last) / 7) if last else 0,
+        "owed": money(sum(owed.values())),
+        "multiplier": round(gv.get("bankInterestMultiplier") or 0.7, 4),
+        "year": per_year,
+        "minimum": LOAN_MINIMUM,
+        "banks": banks,
+    }
+
+
+def _open_store(save: Save, names: Names, regs_list: list, businesses: list, premises: dict,
+                grids: list, stmt_history: list, daily: list, staff: list) -> dict:
+    """The facts Expansion › Open a store plans with (see the section note)."""
+    rules = load_store_rules()
+    if not rules.get("types"):
+        return {}
+    prices = load_item_prices()
+    root = save.root
+    day = root["Day"]
+    gv = save.deref(root.get("gameVariables")) or {}
+    mpm = gv.get("marketPriceMultiplier") or 1.0
+    # The best purchasing agent's skill sets the import discount; a company
+    # with none yet is planned as if it hires a good one, as its shops will.
+    agents = [p.get("level") or 0 for p in staff if p.get("skill") == "ba:skill_purchasingagent"]
+    agent = int(max(agents)) if agents else 100
+    regs = {site_key((r["StreetName"], r["StreetNumber"])): r for r in regs_list}
+    caps = premises.get("caps") or {}
+    buildings = premises.get("buildings") or []
+
+    types, items_used, product_items = {}, set(), set()
+    slots = _layout_slots(save, regs_list, prices)
+    for slug, t in sorted((rules.get("types") or {}).items()):
+        cat = t.get("b")
+        if not t.get("c") or slug not in RETAIL_TYPES | OFFICE_TYPES or cat not in PLAN_KINDS:
+            continue
+        own = [b for b in businesses if b.get("typeSlug") == slug and b.get("status") != "vacant"]
+        layouts = {}
+        for layout in _in_order({b["layout"] for b in buildings if b["type"] == cat and b.get("layout")
+                                 and b["status"] in ("vacant", "rival")}):
+            sample = next(b for b in buildings if b["type"] == cat and b.get("layout") == layout)
+            source = None
+            same = [b for b in own if b["key"] in regs
+                    and _layout(load_buildings().get((regs[b["key"]]["StreetName"], regs[b["key"]]["StreetNumber"])) or {}) == layout]
+            if same:
+                source = max(same, key=lambda b: (sum(s["profit"] for s in (b.get("series") or [])[-7:]), b["key"]))
+            copied = _copied_shelving(save, regs[source["key"]], slug, rules) if source else None
+            lines = outfit_lines(slug, rules, prices, sample.get("cap"), sample.get("m2"), copied)
+            cost = setup_cost(_setup_items(lines), [], sample.get("m2"), 0, prices)
+            items_used.update(line["item"] for line in lines)
+            layouts[layout] = {
+                "lines": [[line["item"], line["qty"], line["group"], line["why"]] for line in lines],
+                "furniture": cost["furniture"],
+                "fee": cost["fee"],
+                "from": source["key"] if source else None,
+            }
+        if not layouts:
+            continue
+        sells = [[p, round(impact, 4)] for p, impact in t.get("i") or ()]
+        product_items.update(p for p, _i in sells)
+        product_items.update(x for x in (t.get("f"), t.get("fw")) if x)
+        curve = load_demand_curves()["types"].get(slug) or {}
+        types[slug] = {
+            "cat": cat,
+            # The rules reproduce shops and offices; a cinema's screens and seats
+            # and a theatre's actors cap them in ways the model does not follow.
+            "model": "office" if slug in OFFICE_TYPES else None if cat in ("cinema", "theater") else "retail",
+            "products": sells,
+            "fee": t.get("f"),
+            "feeWeekend": t.get("fw"),
+            "amt": t.get("a") or 1,
+            "noOrder": bool(t.get("n")),
+            "days": curve.get("d") or [1.0] * 7,
+            "hours": curve.get("h") or [1.0] * 24,
+            "demands": [[d, w] for d, w in t.get("dm") or ()],
+            "run": len(own),
+            "layouts": layouts,
+        }
+
+    market = _store_market(save, rules, product_items, mpm, agent)
+    decor = {}
+    materials = prices.get("materials") or {}
+    target = max([(h.get("mi") or 0) for h in (rules.get("hoods") or {}).values()] or [0])
+    for layout in _in_order({layout for t in types.values() for layout in t["layouts"]}):
+        # A layout nobody has read is costed as another version of its size.
+        near = layout if layout in slots else next((k for k in sorted(slots) if k[:1] == layout[:1]), None)
+        route = decor_route(*slots[near], materials, target) if near else None
+        if route:
+            decor[layout] = {**route, **({"like": near} if near != layout else {})}
+    hoods = {}
+    for hood, h in sorted((rules.get("hoods") or {}).items()):
+        shares = (h.get("w") or 0, h.get("m") or 0, h.get("u") or 0)
+        total = sum(shares) or 1
+        hoods[hood] = {
+            # CitizenHelper.Init: the price everyone accepts, as a multiple of
+            # the reference price.
+            "idx": round((1.2 * shares[0] + 1.4 * shares[1] + 1.7 * shares[2]) / total, 4),
+            "strength": h.get("ms") or 0,
+            "demands": h.get("cw") or 0,
+            "interior": h.get("mi") or 0,
+        }
+    furniture = rules.get("furniture") or {}
+    table = prices.get("items") or {}
+    vendors = rules.get("vendors") or {}
+    used_vendors = {v for item in items_used for v in (furniture.get(item) or {}).get("v") or ()}
+    return {
+        "game": {
+            "promo": round(gv.get("baseCustomerPromotionMultiplier") or 0.55, 4),
+            "prices": round(mpm, 4),
+            "wages": round(gv.get("employeeHourlySalaryMultiplier") or 0.7, 4),
+            "tax": gv.get("taxPercentage") or 0,
+            "capInitial": (root.get("buildNumberAtStart") or 0) >= CAP_INITIAL_BUILD,
+            "agent": agent,
+            "installFee": INSTALL_FEE_PER_M2,
+            "delivery": FURNITURE_DELIVERY_FEE,
+            "satisfaction": PLAN_SATISFACTION,
+            "wageBase": PLAN_WAGES,
+        },
+        "types": types,
+        "market": market,
+        "hoods": hoods,
+        "decor": decor,
+        "items": {item: {"p": float((table.get(item) or {}).get("p") or 0),
+                         "v": (furniture.get(item) or {}).get("v") or []} for item in _in_order(items_used)},
+        "vendors": {key: vendors[key] for key in _in_order(used_vendors) if key in vendors},
+        "own": _own_shops(save, regs, businesses, grids, stmt_history, market, caps, day),
+        "sales": _own_sales(save, regs, businesses, market, day),
+        "campaigns": [list(c) for c in MARKETING_CAMPAIGNS],
+        "finance": _finance_facts(save, daily, rules),
+    }
 
 
 def _hype_exposure(businesses: list, market: dict) -> list:

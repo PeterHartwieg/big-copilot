@@ -604,7 +604,7 @@ What `page_html()` produces, top of the file down:
 5. The board script, the last `<script>` block of `TEMPLATE`.
 
 Before any of that, `main()` refreshes `web/wiki-data.json`, copies `ba_save.py`,
-`ba_dashboard.py`, `ba_buildings.json`, `ba_demand_curves.json` and `ba_item_prices.json` into `web/py/`, and
+`ba_dashboard.py`, `ba_buildings.json`, `ba_demand_curves.json`, `ba_item_prices.json` and `ba_store_rules.json` into `web/py/`, and
 writes `web/py/gametext.json` and `web/names/<lang>.json` (`write_name_tables()`) from the installed locale — everything `stamp()` hashes has to be in place before
 `release_info()` runs. `main()` then writes `web/index.html` and `web/version.json`.
 
@@ -1074,11 +1074,13 @@ the unstamped `dev` build):
 
 - `ba_save.py` and `ba_dashboard.py` — a failed fetch throws and the worker never becomes
   ready.
-- `gametext.json`, `ba_buildings.json`, `ba_demand_curves.json` and `ba_item_prices.json` —
+- `gametext.json`, `ba_buildings.json`, `ba_demand_curves.json`, `ba_item_prices.json` and
+  `ba_store_rules.json` —
   written into the virtual filesystem only when the fetch succeeds, so a build missing one
   still boots and degrades instead: without the curves the board states no arrival ceiling,
   and every number it does state still comes off the measured hour grid; without the prices
-  furniture counts at what the save says was paid, and walls and floors at nothing.
+  furniture counts at what the save says was paid, and walls and floors at nothing; without
+  the store rules the store planner has no game data to plan a new store with.
 
 Gradual (percentage) deployments are unsupported for that reason: while two versions serve
 side by side, a `/py/` file from the old one could be cached immutably under the new stamp.
