@@ -1627,7 +1627,10 @@ test('imports: the ranked list is the game\'s order, read only, and a write send
   const list = importRow(page, 'Paperbag').locator('.imp-contracts');
   // textContent: a section off screen skips its rendering, and innerText with it.
   assert.match(await list.textContent(),
-    /1\. 1 Pier · keeps 3,800 in stock.*2\. 2 Pier · 0 a week · paused.*In delivery order, set at the headquarters in game/);
+    /1\. 1 Pier · keeps 3,800 in stock.*2\. 2 Pier · 0 a week · paused/);
+  assert.match(await list.getAttribute('data-tip'), /In delivery order, set at the headquarters in game/);
+  // The contract whose level the box sets stands out.
+  assert.equal(await list.locator('.imp-lvl').textContent(), '1. 1 Pier · keeps 3,800 in stock');
   assert.equal(await list.locator('button').count(), 0);
   await setTo(page, 'Paperbag', 4200);
   await applyImports(page).click();

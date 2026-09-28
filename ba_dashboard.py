@@ -437,15 +437,19 @@ def _wire_msgs(payload):
     """Every field holding a Msg gets row["i18n"][field] = [key, params] beside
     it, so the page can write the sentence in the UI language. One pass over
     the whole payload, at the end of extract()."""
+    # Only a dict or a list can hold a Msg further down, so nothing else is
+    # descended into: the payload's numbers and strings run to six figures.
     if isinstance(payload, dict):
         wires = {k: v.wire() for k, v in payload.items() if isinstance(v, Msg) and v.key}
         for v in payload.values():
-            _wire_msgs(v)
+            if isinstance(v, (dict, list)):
+                _wire_msgs(v)
         if wires:
             payload.setdefault("i18n", {}).update(wires)
     elif isinstance(payload, list):
         for v in payload:
-            _wire_msgs(v)
+            if isinstance(v, (dict, list)):
+                _wire_msgs(v)
     return payload
 
 
@@ -7166,6 +7170,27 @@ def _copy_state(entry: dict) -> dict:
     }
 
 
+def _week_without(entry: dict, shift: dict) -> dict:
+    """One person's week with one of their entries taken off, to test a swap on.
+
+    Only as deep as a test reads: the hours, the days and the entry's own day
+    are the copy's, the other six days and the stations are the original's.
+    Read it, never fill it in; `_copy_state()` is the one to write to.
+    """
+    wd = shift["wd"]
+    busy = list(entry["busy"])
+    busy[wd] = busy[wd].difference(range(shift["from"], shift["to"]))
+    days = set(entry["days"])
+    if not busy[wd]:
+        days.discard(wd)
+    return {
+        "hours": entry["hours"] - (shift["to"] - shift["from"]),
+        "busy": busy,
+        "days": days,
+        "stations": entry["stations"],
+    }
+
+
 def _usable(person: dict, skill: str | None, kind: str) -> bool:
     """Whether the plan would ever put this person on that role at all.
 
@@ -7200,16 +7225,45 @@ def _can_work(person: dict, state: dict, slot: dict) -> bool:
     is the honest answer: hire a cleaner.
 
     A slot nobody passes becomes a hiring line, never a broken demand.
+
+    Two halves, because the placer asks this a million times on a big save:
+    `_may_take()` is the part no week can change, so the placer asks it once
+    per slot shape, and `_has_room()` the part that moves as the week fills.
     """
-    start, end, wd = slot["from"], slot["to"], slot["wd"]
-    hours = end - start
+    return _may_take(person, slot) and _has_room(person, state, slot)
+
+
+def _may_take(person: dict, slot: dict) -> bool:
+    """The rules of `_can_work()` that read the person and the slot, never the week.
+
+    The role, free weekends and blackout windows: for one person, the same
+    answer for every slot of one skill, kind, day and hours, however far the
+    week has filled.
+    """
     if not _usable(person, slot["skill"], slot["kind"]):
         return False
-    if person["weekendsOff"] and wd in WEEKEND_WEEKDAYS:
+    if person["weekendsOff"] and slot["wd"] in WEEKEND_WEEKDAYS:
         return False
-    if any(hour in state["busy"][wd] for hour in range(start, end)):
+    # The game's own test is any overlap with the window, not containment.
+    start, end = slot["from"], slot["to"]
+    return not any(low < end and start < high for low, high in person["blackouts"])
+
+
+def _slot_shape(slot: dict) -> tuple:
+    """What `_may_take()` reads of a slot: slots alike in it get one answer."""
+    return (slot["skill"], slot["kind"], slot["wd"], slot["from"], slot["to"])
+
+
+def _has_room(person: dict, state: dict, slot: dict) -> bool:
+    """The rules of `_can_work()` that read the person's week as it stands."""
+    start, end, wd = slot["from"], slot["to"], slot["wd"]
+    hours = end - start
+    # The 12-hour day before the overlap: it is one comparison. Every test here
+    # is a veto, so their order only decides how soon the answer is known.
+    busy = state["busy"][wd]
+    if len(busy) + hours > SHIFT_CAP:
         return False
-    if len(state["busy"][wd]) + hours > SHIFT_CAP:
+    if not busy.isdisjoint(range(start, end)):
         return False
     # The week's ceiling. Their own band's if they have one, and full time's 50
     # if they do not: that is not a demand invented for somebody who holds none
@@ -7219,14 +7273,11 @@ def _can_work(person: dict, state: dict, slot: dict) -> bool:
     # hours, twelve a day for seven days.
     if state["hours"] + hours > (person["band"] or FULL_TIME)[1]:
         return False
-    if (
+    return not (
         person["days"] is not None
         and wd not in state["days"]
         and len(state["days"]) >= person["days"]
-    ):
-        return False
-    # The game's own test is any overlap with the window, not containment.
-    return not any(low < end and start < high for low, high in person["blackouts"])
+    )
 
 
 def _placement_rank(person: dict, state: dict, slot: dict, here: dict) -> tuple:
@@ -7279,10 +7330,13 @@ def _placement_rank(person: dict, state: dict, slot: dict, here: dict) -> tuple:
         and slot["wd"] not in state["days"]
         and len(state["days"]) < person["days"]
     )
-    adjacent = any(
-        (slot["station"], (slot["wd"] + step) % 7) in state["stations"]
-        for step in (-1, 1)
+    adjacent = (
+        (slot["station"], (slot["wd"] - 1) % 7) in state["stations"]
+        or (slot["station"], (slot["wd"] + 1) % 7) in state["stations"]
     )
+    # Asked once and read by two keys below: this runs for every candidate of
+    # every slot.
+    fits = _desk_fits(person, slot, here)
     short = state["hours"] < floor
     # Which keys are live at all: a name already on this roster is being filled
     # up, a name that is not is being chosen, and those are different questions.
@@ -7297,7 +7351,7 @@ def _placement_rank(person: dict, state: dict, slot: dict, here: dict) -> tuple:
         # at a desk that breaks it. Only where the site's furniture is known
         # (an office), and never somebody from the bench over the site's own.
         0 if here.get("groups") and person["addr"] and person.get("desks")
-        and _desk_fits(person, slot, here) else 1,
+        and fits else 1,
         # Then whose floor is still at stake, emptiest week first. A part-timer
         # already past their ten hours waits behind a full-timer still under
         # thirty, and two people under theirs rise towards it together. Past the
@@ -7331,7 +7385,7 @@ def _placement_rank(person: dict, state: dict, slot: dict, here: dict) -> tuple:
         # station that meets theirs first, then the one they work now, so a
         # new week does not move a whole office to other desks (Peter's
         # in-game test, 25 September 2026).
-        0 if _desk_fits(person, slot, here) else 1,
+        0 if fits else 1,
         0 if slot["station"] in (person.get("home") or ()) else 1,
         0 if adjacent else 1,
         # A bench member is a last resort even at equal hours: drawing one costs
@@ -7784,24 +7838,29 @@ def _site_pool(people: dict, business: dict, bench: list) -> list:
     a site has given a bench member hours they belong to it and no later site
     may count on them.
     """
+    # Picked out first and then put in order: sorting only this site's people
+    # gives them the same order as sorting everybody would.
     here = [
         people[pid]
-        for pid in _in_order(people)
-        if people[pid]["addr"] and site_key(people[pid]["addr"]) == business["key"]
+        for pid in _in_order(
+            pid for pid in people
+            if people[pid]["addr"] and site_key(people[pid]["addr"]) == business["key"]
+        )
     ]
     return here + list(bench)
 
 
-def _role_wage(people: dict, business: dict, bench: list, skill: str | None) -> float:
+def _role_wage(site_pool: list, skill: str | None) -> float:
     """What an hour of this role costs, for pricing a bridged trough.
 
-    The mean of the people who could actually work it here; with nobody
-    qualified yet the gap is free to bridge, which is the honest answer when
-    the hours are going to be a hiring line either way.
+    The mean of the people who could actually work it here (`site_pool`, from
+    _site_pool()); with nobody qualified yet the gap is free to bridge, which
+    is the honest answer when the hours are going to be a hiring line either
+    way.
     """
     wages = [
         person["wage"]
-        for person in _site_pool(people, business, bench)
+        for person in site_pool
         if not skill or skill in person["skills"]
     ]
     return sum(wages) / len(wages) if wages else 0.0
@@ -7824,7 +7883,7 @@ def _cover_posts(save: Save, building: dict, names: Names) -> list:
     return out
 
 
-def _by_fewest_eligible(slots: list, pool: list, state: dict) -> list:
+def _by_fewest_eligible(slots: list, allowed: dict, state: dict) -> list:
     """The order slots are filled in: minimum remaining values, ties broken by the clock.
 
     Someone demanding "no afternoon shifts" has only the night shift open to
@@ -7832,11 +7891,23 @@ def _by_fewest_eligible(slots: list, pool: list, state: dict) -> list:
     staff take it. Placing them last is what makes a schedule unsatisfiable.
     The count is taken against the week as it stands when the pass starts --
     empty for the serving pass, part filled for the cover pass that follows --
-    and eligibility is re-tested at the moment of placing.
+    and eligibility is re-tested at the moment of placing. `allowed` is the
+    pool by `_slot_shape()`, each list the people `_may_take()` passes.
+
+    Slots of one shape -- two registers over the same hours -- have the same
+    count against the same week, so it is taken once per shape.
     """
+    eligible = {}
+    for slot in slots:
+        shape = _slot_shape(slot)
+        if shape not in eligible:
+            eligible[shape] = sum(
+                1 for person in allowed[shape]
+                if _has_room(person, state[person["id"]], slot)
+            )
     counted = [
         (
-            sum(1 for person in pool if _can_work(person, state[person["id"]], slot)),
+            eligible[_slot_shape(slot)],
             slot["wd"],
             slot["from"],
             slot["to"],
@@ -7852,13 +7923,16 @@ def _by_fewest_eligible(slots: list, pool: list, state: dict) -> list:
 def _take_slot(slot: dict, pool: list, state: dict, shifts: list, here: dict) -> bool:
     """Give one slot to the best eligible person, or report that nobody is.
 
+    `pool` is everybody `_may_take()` already passes for this slot, in pool
+    order, so only their weeks are left to test.
+
     `here` is what the rank knows about this site and nothing else: `rostered`,
     who it has already given a shift to, and `flex`, how many of its roles each
     person could work. `rostered` is the site's own set rather than something
     read back off `state`, because a bench member offered around carries the
     hours of whichever site took them, and those are not this site's roster.
     """
-    able = [person for person in pool if _can_work(person, state[person["id"]], slot)]
+    able = [person for person in pool if _has_room(person, state[person["id"]], slot)]
     if not able:
         return False
     person = min(able, key=lambda p: _placement_rank(p, state[p["id"]], slot, here))
@@ -7990,7 +8064,8 @@ def _fill_by_exchange(shifts: list, pool: list, state: dict, rostered: set) -> i
     So each open line is offered to somebody already on this roster who is
     free that day but full for the week, if they can hand one of their own
     entries to another person on the roster who has room for it. Both moves
-    are tested with `_can_work()` against the weeks as they would stand, and
+    are tested with `_can_work()`'s two halves, `_may_take()` for who may take
+    the line at all and `_has_room()` against the weeks as they would stand, and
     the giver with `_keeps_floors()` too, so no rule bends, no met demand is
     broken, and nobody new is started. The taker only gains. Deterministic: open
     lines by the clock, people and their entries by id and the clock.
@@ -8001,40 +8076,51 @@ def _fill_by_exchange(shifts: list, pool: list, state: dict, rostered: set) -> i
     by_id = {person["id"]: person for person in pool}
     people = [by_id[pid] for pid in sorted(rostered, key=str) if pid in by_id]
     clock = lambda s: (s["wd"], s["from"], s["to"], str(s["station"]))  # noqa: E731
+    # Who on the roster could take each entry off its giver, by the entry, and
+    # everybody's entries in clock order. Neither depends on the line being
+    # filled, only on the weeks, and the weeks only move when a line is placed:
+    # a line nobody could be swapped onto leaves both standing for the next
+    # one. Both are dropped the moment a line is placed.
+    takers, by_person = {}, None
+    # And who on the roster `_may_take()` passes at all, by slot shape, which no
+    # swap changes.
+    allowed = {}
+
+    def may_take(slot) -> list:
+        shape = _slot_shape(slot)
+        if shape not in allowed:
+            allowed[shape] = [person for person in people if _may_take(person, slot)]
+        return allowed[shape]
+
     for hole in sorted((s for s in shifts if s["employee"] is None), key=clock):
         placed = False
-        by_person = collections.defaultdict(list)
-        for s in shifts:
-            by_person[s["employee"]].append(s)
-        for giver in people:
-            # What no handed-over entry could change: the role, free weekends
-            # and blackout windows. Tested first, because this runs per line.
-            if (
-                not _usable(giver, hole["skill"], hole["kind"])
-                or (giver["weekendsOff"] and hole["wd"] in WEEKEND_WEEKDAYS)
-                or any(low < hole["to"] and hole["from"] < high
-                       for low, high in giver["blackouts"])
-            ):
-                continue
-            for given in sorted(by_person[giver["id"]], key=clock):
-                trial = _copy_state(state[giver["id"]])
-                trial["hours"] -= given["to"] - given["from"]
-                trial["busy"][given["wd"]].difference_update(range(given["from"], given["to"]))
-                if not trial["busy"][given["wd"]]:
-                    trial["days"].discard(given["wd"])
-                if not _can_work(giver, trial, hole):
+        if by_person is None:
+            by_person = collections.defaultdict(list)
+            for s in shifts:
+                by_person[s["employee"]].append(s)
+            for entries in by_person.values():
+                entries.sort(key=clock)
+        # The givers: only what no handed-over entry could change is asked
+        # here, the role, free weekends and blackout windows (`_may_take()`).
+        for giver in may_take(hole):
+            for given in by_person[giver["id"]]:
+                trial = _week_without(state[giver["id"]], given)
+                if not _has_room(giver, trial, hole):
                     continue
                 if not _keeps_floors(giver, state[giver["id"]], trial, hole):
                     continue
-                taker = next(
-                    (q for q in people
-                     if q["id"] != giver["id"] and _can_work(q, state[q["id"]], given)),
-                    None,
-                )
+                if id(given) not in takers:
+                    takers[id(given)] = next(
+                        (q for q in may_take(given)
+                         if q["id"] != giver["id"] and _has_room(q, state[q["id"]], given)),
+                        None,
+                    )
+                taker = takers[id(given)]
                 if taker is None:
                     continue
                 _hand_over(given, giver, taker, state, shifts)
                 _take_over(hole, giver, state)
+                takers, by_person = {}, None
                 placed = True
                 placed_count += 1
                 break
@@ -9243,10 +9329,11 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
 
     # a. Per-station cover, b. the cut, with the troughs bridged in between.
     wanted, role_wages = {}, {}
+    site_pool = _site_pool(people, business, bench)  # one list for every role's wage
     for role in grid["roles"]:
         skill, role_key = role["skill"], _role_key(role)
         posts = [s for s in grid["stations"] if _station_role(s) == role_key]
-        role_wages[role_key] = _role_wage(people, business, bench, skill)
+        role_wages[role_key] = _role_wage(site_pool, skill)
         # A factory hands each machine's hours over itself (`stations`, see
         # _factory_staffing()); a shop's come from its need curve. Copied,
         # because the bridging below writes into them.
@@ -9358,9 +9445,17 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
             for person in pool
         },
     }
+    # Who may take each shape of slot at all, in pool order: the half of
+    # `_can_work()` no week changes (`_may_take()`), asked once per shape
+    # rather than for every slot, and never of the whole bench again.
+    allowed = {}
+    for slot in slots + cover_slots:
+        shape = _slot_shape(slot)
+        if shape not in allowed:
+            allowed[shape] = [person for person in pool if _may_take(person, slot)]
     for group in (slots, cover_slots):
-        for slot in _by_fewest_eligible(group, pool, state):
-            if not _take_slot(slot, pool, state, shifts, here):
+        for slot in _by_fewest_eligible(group, allowed, state):
+            if not _take_slot(slot, allowed[_slot_shape(slot)], state, shifts, here):
                 uncovered[slot["skill"]].append(slot)
                 # A slot nobody here may legally work is still a line of the
                 # week: it is the one the player has to hire for, and leaving
@@ -9377,8 +9472,17 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
     # week without them meets. A swap that is fair to the giver can still take
     # away the room the settling pass needed for somebody else.
     plain_shifts = [dict(shift) for shift in shifts]
-    plain_state = {person["id"]: _copy_state(state[person["id"]]) for person in pool}
+    # A swap only ever moves hours between people on this roster, so their
+    # weeks are the ones kept as they were; everybody else's week is the same
+    # after the swaps as before, and is copied only when a swap was made.
+    unswapped = {pid: _copy_state(state[pid]) for pid in here["rostered"]}
     swapped = _fill_by_exchange(shifts, pool, state, here["rostered"])
+    plain_state = None
+    if swapped:
+        plain_state = {
+            pid: unswapped[pid] if pid in unswapped else _copy_state(state[pid])
+            for pid in (person["id"] for person in pool)
+        }
     # The residue the one-at-a-time fill leaves on whoever was admitted last:
     # the same lines, a name or two different, and one fewer failed demand.
     _top_up_short(shifts, pool, state, here["rostered"])
@@ -10271,8 +10375,9 @@ def _unstaffed(row: dict, shifts, own: set, training=frozenset()) -> dict | None
     now = collections.Counter()
     working = set()
     for entry in (row.get("current") or {}).get("list") or ():
+        role, day = skill(entry.get("s")), entry.get("d")
         for hour in range(entry.get("f", 0), entry.get("t", 0)):
-            now[(skill(entry.get("s")), entry.get("d"), hour)] += 1
+            now[(role, day, hour)] += 1
         if person(entry.get("p")) and entry.get("t", 0) > entry.get("f", 0):
             working.add(person(entry.get("p")))
     want = collections.Counter()
@@ -10281,10 +10386,11 @@ def _unstaffed(row: dict, shifts, own: set, training=frozenset()) -> dict | None
         pid = person(entry.get("p"))
         if pid is None or pid not in own:
             continue
-        role = skill(entry.get("s"))
+        role, day = skill(entry.get("s")), entry.get("d")
+        mine = cells[(role, pid)]
         for hour in range(entry.get("f", 0), entry.get("t", 0)):
-            want[(role, entry.get("d"), hour)] += 1
-            cells[(role, pid)].add((entry.get("d"), hour))
+            want[(role, day, hour)] += 1
+            mine.add((day, hour))
     gap = collections.Counter()
     for (role, day, hour), n in want.items():
         gap[role] += max(0, n - now[(role, day, hour)])
@@ -12652,13 +12758,13 @@ def _alerts(
         note(
             "warn", msg("f.site.company", "Company"), "companydemand",
             msg("f.companydemand.insurance", {
-                "one": "{n} staff member with demands only you can meet: {demands}. Health insurance comes through "
+                "one": "{n} staff member with unmet demands: {demands}. Health insurance comes through "
                        "an HR manager's plan",
-                "other": "{n} staff with demands only you can meet: {demands}. Health insurance comes through "
+                "other": "{n} staff with unmet demands: {demands}. Health insurance comes through "
                          "an HR manager's plan"}, n=lacking, demands=demands)
             if insured else
-            msg("f.companydemand", {"one": "{n} staff member with demands only you can meet: {demands}",
-                                    "other": "{n} staff with demands only you can meet: {demands}"},
+            msg("f.companydemand", {"one": "{n} staff member with unmet demands: {demands}",
+                                    "other": "{n} staff with unmet demands: {demands}"},
                 n=lacking, demands=demands),
             always=True,
         )
@@ -15435,7 +15541,7 @@ html:has(dialog:modal){overflow:hidden}
 #pageSupply td.imp-to > .chip{margin-left:6px}
 #pageSupply .imp-contracts{min-width:12rem}
 #pageSupply .imp-contracts > span{display:block}
-#pageSupply .imp-contracts > .imp-order{font-style:italic}
+#pageSupply .imp-contracts > .imp-lvl{color:var(--ink)}
 #pageSupply .up{cursor:default}
 
 @media(max-width:760px){
@@ -25503,8 +25609,7 @@ const PG_KEEP_DAYS = 14;
 const pgMemo = new Map();
 const pgWho = () => (typeof D !== "undefined" && D && D.meta && D.meta.character) || "";
 /* The company's boards are counted in its store (`n`), so "a board after
-   the write" holds across a reload; `PG_LOAD` names this page load. */
-const PG_LOAD = `${Date.now().toString(36)}.${Math.random().toString(36).slice(2, 8)}`;
+   the write" holds across a reload. */
 function pgStore(){
   const who = pgWho();
   if(!pgMemo.has(who)){
@@ -25568,8 +25673,11 @@ function pgBoard(){
   const saved = pgSaved(who);
   if(Object.keys(recs).length || (saved && Object.keys(saved.recs).length)) pgSave(saved);
 }
-/* The game's clock as minutes: the link's, where it reads one, else the board's. */
-const pgMinutes = c => c && Number.isFinite(Number(c.day)) ? (Number(c.day) * 24 + (Number(c.hour) || 0)) * 60 + (Number(c.minute) || 0) : null;
+/* The game's clock as minutes: the link's, where it reads one, else the board's.
+   Whole minutes: the link's minute is the game's float, the board's the save's
+   whole number, so a paused game would otherwise leave the write for ever
+   later than every board after it. */
+const pgMinutes = c => c && Number.isFinite(Number(c.day)) ? (Number(c.day) * 24 + (Number(c.hour) || 0)) * 60 + Math.floor(Number(c.minute) || 0) : null;
 function pgClockNow(){
   const l = typeof gwLink === "function" ? gwLink() : null;
   const m = l && Number.isFinite(Number(l.day)) ? l : (D && D.meta) || {};
@@ -25580,7 +25688,7 @@ function pgClockNow(){
 function pgRecord(rec){
   const {recs, memo} = pgStore();
   memo.gone.delete(rec.id); memo.mine.add(rec.id); memo.synced.delete(rec.id);
-  recs[rec.id] = Object.assign({}, rec, {state: "applied", at: Date.now(), seq: memo.n, load: PG_LOAD, clock: pgClockNow()});
+  recs[rec.id] = Object.assign({}, rec, {state: "applied", at: Date.now(), seq: memo.n, clock: pgClockNow()});
   pgSave();
   if(typeof sbStamp !== "undefined") sbStamp++;
 }
@@ -25642,9 +25750,11 @@ function pgPeopleSites(){
 }
 /* Every Applied record is judged once on each board built after its write:
    the company's board count must be past the write's and the game's clock not
-   earlier. After a reload the clock must have moved on too: a save file read
-   again at the write's own minute may hold the bytes from before it. A record
-   stays PG_KEEP_DAYS game days, then goes; a judged one keeps what it saw. */
+   earlier. A board at the write's own minute may confirm it but never says
+   Not confirmed: a read taken just before the write can arrive just after it,
+   and a save file read again after a reload may hold the bytes from before
+   it, and Not confirmed is final. A record stays PG_KEEP_DAYS game days, then goes; a
+   judged one keeps what it saw. */
 let pgJudged = 0;
 function pgEvaluate(){
   if(!hasData() || pgJudged === boardSeq) return;
@@ -25656,10 +25766,10 @@ function pgEvaluate(){
     const made = pgMinutes(rec.clock);
     if(now !== null && made !== null && now - made > PG_KEEP_DAYS * 1440){ delete recs[id]; memo.gone.add(id); memo.mine.delete(id); touched = true; return; }
     if(!["applied", "partly", "unseen"].includes(rec.state) || !(memo.n > rec.seq)) return;
-    if(now !== null && made !== null && (now < made || (now === made && rec.load !== PG_LOAD))) return;
+    if(now !== null && made !== null && now < made) return;
     let v = null;
     try{ v = PG_CHECK[rec.family] ? PG_CHECK[rec.family](rec) : null; }catch(e){ v = null; }
-    if(!v) return;
+    if(!v || (v.state === "changed" && now !== null && now === made)) return;
     Object.assign(rec, v, {seen: {day: D.meta.day, hour: D.meta.hour, minute: D.meta.minute}});
     memo.mine.add(id);
     touched = true;
@@ -26210,7 +26320,7 @@ function supplyChecklistRows(){
               /* What the import must bring: none where a route covers it, and none
                  to resume where the contract is paused and Python does not call it so. */
               covered, need: covered || (setting.paused && fact.st !== "paused") ? 0 : fact.need, users: drawers[`${s}|${slug}`] || [], ...setting, impId,
-              arrived: contract.arrivedLastWeek, contracts: contract.contracts || [], stock: held(s, slug)};
+              arrived: contract.arrivedLastWeek, contracts: contract.contracts || [], levelId: contract.levelId ?? null, stock: held(s, slug)};
     }).sort((a, b) => (b.total || 0) - (a.total || 0));
     if(rows.length) importRows.push({s, rows});
   });
@@ -26835,12 +26945,12 @@ function sbImportCtx(d){
     : tt("sb.imp.route.backup", "A route brings what leaves; the import is a backup");
   const unit = smart => smart ? `<small class="imp-unit" data-tip="${attr(SMART_TIP)}">${tt("sb.unit.stock", "in stock")}</small>`
     : `<small class="imp-unit">${tt("sb.unit.week", "a week")}</small>`;
-  /* Beside a level: which contract holds it, a plain amount delivered before
-     it (which counts toward the level, as the top-up is only what is
-     missing), and one delivered after it (which comes on top). */
+  /* Beside a level: a plain amount delivered before it (which counts toward
+     the level, as the top-up is only what is missing), and one delivered
+     after it (which comes on top). Which contract holds the level is marked
+     in the contract list. */
   const aroundLevel = r => !r.smart ? ""
-    : (r.levelName && (r.contracts || []).length > 1 ? `<span class="sub">${tt("sb.imp.at", "at {name}", {name: attr(r.levelName)})}</span>` : "")
-    + (!r.plainBefore ? "" : r.plainBefore >= r.inGame
+    : (!r.plainBefore ? "" : r.plainBefore >= r.inGame
       ? `<span class="sub" data-tip="${attr(tt("sb.imp.before.over.tip", "A plain contract the game delivers before the level already brings the level or more, so the level brings nothing"))}">${
         r.plainBefore > r.inGame ? tt("sb.imp.before.passes", "{n:,} a week delivered first already passes it", {n: r.plainBefore})
           : tt("sb.imp.before.reaches", "{n:,} a week delivered first already reaches it", {n: r.plainBefore})}</span>`
@@ -26890,12 +27000,14 @@ function sbImportCtx(d){
   const resetTip = r => suggests(r) ? tt("sb.imp.reset.suggestion", "Back to the board's suggestion, {n:,}", {n: r.suggested})
     : tt("sb.imp.reset.game", "Back to the figure in game, {n:,}", {n: r.inGame ?? 0});
   /* Two or more contracts on one line: each is listed in the order the game
-     delivers them, with its importer, how it is set and whether it runs. */
+     delivers them, with its importer, how it is set and whether it runs. The
+     one whose level the box sets stands out; where the order is set is the
+     list's tip. */
   const contractLines = r => r.contracts.length < 2 ? ""
-    : `<span class="sub imp-contracts">${r.contracts.map((c, i) => `<span>${i + 1}. ${attr(c.importer || tt("sb.imp.importer", "Importer"))} · ${
+    : `<span class="sub imp-contracts" data-tip="${attr(tt("sb.imp.order", "In delivery order, set at the headquarters in game"))}">${
+      r.contracts.map((c, i) => `<span${r.smart && c.id === r.levelId ? ` class="imp-lvl"` : ""}>${i + 1}. ${attr(c.importer || tt("sb.imp.importer", "Importer"))} · ${
         c.smart ? tt("sb.imp.keeps", "keeps {n:,} in stock", {n: c.amount}) : tt("sb.imp.perWeek", "{n:,} a week", {n: c.amount})}${
-        c.active ? "" : ` · ${tt("sb.imp.paused", "paused")}`}</span>`).join("")}<span class="imp-order">${
-        tt("sb.imp.order", "In delivery order, set at the headquarters in game")}</span></span>`;
+        c.active ? "" : ` · ${tt("sb.imp.paused", "paused")}`}</span>`).join("")}</span>`;
   /* The setting cell: the figure in game, the arrow, the Set to box, and what
      the box is about. */
   const cell = r => {

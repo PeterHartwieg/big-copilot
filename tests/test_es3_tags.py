@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(HERE))
 from es3_fixture import (  # noqa: E402
     Byte, Enum, Float32, Instance, NullInstance, Packed, Ref, Shared, Unnamed, encode,
 )
-from ba_save import load_save  # noqa: E402
+from ba_save import STRING_CACHE_CHARS, load_save  # noqa: E402
 
 BIG_ENUM = 2**40 + 3  # needs all eight bytes of the int64
 
@@ -146,6 +146,32 @@ class EveryTagRoundTrip(unittest.TestCase):
             + (4).to_bytes(4, "little") + (5).to_bytes(4, "little") + b"\x05"
             + b"\x05",
         )
+
+
+class PropertyKeys(unittest.TestCase):
+    """The body loop reads a key it has already decoded, and the int32 or float
+    after it, in place; a new key, and one too long to keep, go through
+    string(). Every path has to give the same object, in the same key order."""
+
+    def test_repeated_new_and_long_keys_read_alike(self):
+        long_key = "k" * (STRING_CACHE_CHARS + 16)  # never kept, always decoded
+        rows = [
+            {"id": n, "rate": Float32(n / 2), "name": f"row {n}", long_key: n * 10,
+             "": n, "money": n + 0.25, "ok": bool(n % 2)}
+            for n in range(3)
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "keys.hsg")
+            with open(path, "wb") as fh:
+                fh.write(encode({"rows": rows}))
+            got = load_save(path).root["rows"]["$items"]
+        want = [
+            {"id": n, "rate": n / 2, "name": f"row {n}", long_key: n * 10,
+             "": n, "money": n + 0.25, "ok": bool(n % 2)}
+            for n in range(3)
+        ]
+        self.assertEqual(got, want)
+        self.assertEqual([list(row) for row in got], [list(row) for row in want])
 
 
 if __name__ == "__main__":

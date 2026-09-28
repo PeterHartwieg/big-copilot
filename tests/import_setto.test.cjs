@@ -231,7 +231,7 @@ const mixed = () => {
   Object.assign(data.supply.factories.depots[0], {
     // Level first, then a plain 400 on top: at most 1,400 a week.
     hops: {weekly: 1400, pausedWeekly: 0, smart: true, target: 1000, plain: 400, plainBefore: 0, plainAfter: 400,
-      levelImporter: 'Pier 1', levelAt: 0, pass: [{amount: 1000, smart: true}, {amount: 400, smart: false}],
+      levelImporter: 'Pier 1', levelId: 'c4', levelAt: 0, pass: [{amount: 1000, smart: true}, {amount: 400, smart: false}],
       arrivedLastWeek: 1400, contracts: [contractOf(4, 'Pier 1', true, 1000), contractOf(5, 'Pier 2', false, 400)]},
     // Plain first: the 400 lands inside the level.
     malt: {weekly: 1000, pausedWeekly: 0, smart: true, target: 1000, plain: 400, plainBefore: 400, plainAfter: 0,
@@ -265,10 +265,11 @@ test('a mixed line shows its level, and only a plain amount after it comes on to
   const page = await board({data: mixed()});
   try{
     const rows = Object.fromEntries((await cells(page)).map(r => [r.item, r]));
-    // The contract holding the level is named; plain amounts are placed
-    // before or after it as the game delivers them.
-    assert.match(rows.Hops.inGame, /^1,000 in stock\s*at Pier 1\s*plus 400 a week$/);
-    assert.match(rows.Malt.inGame, /^1,000 in stock\s*at Pier 1\s*400 a week delivered first counts toward it$/);
+    // Plain amounts are placed before or after the level as the game
+    // delivers them; the contract holding it stands out in the list.
+    assert.match(rows.Hops.inGame, /^1,000 in stock\s*plus 400 a week$/);
+    assert.match(rows.Malt.inGame, /^1,000 in stock\s*400 a week delivered first counts toward it$/);
+    assert.match(await page.locator('#secImports tr[data-slug]', {hasText: 'Hops'}).locator('.imp-lvl').textContent(), /^1\. Pier 1 · keeps 1,000 in stock$/);
     // Delivered first and already above the level: the level brings nothing.
     assert.match(rows.Rye.inGame, /1,400 a week delivered first already passes it$/);
     assert.doesNotMatch(rows.Rye.inGame, /plus/);

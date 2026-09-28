@@ -140,7 +140,7 @@ test('both demand findings can be filtered and link somewhere', async () => {
     // The amount column carries the people, since these findings have no money.
     const amounts = await page.evaluate(() => [
       findingAmount({group: 'jobdemand', text: '2 staff with unmet demands: Mouse Pad for 2 (nice to have)'}),
-      findingAmount({group: 'companydemand', text: '11 staff with demands only you can meet: Gold Health Insurance for 4'}),
+      findingAmount({group: 'companydemand', text: '11 staff with unmet demands: Gold Health Insurance for 4'}),
       splitFinding({group: 'jobdemand', site: 'HART. Gifts', text: '2 staff with unmet demands: Mouse Pad for 2 (nice to have)'}).what,
     ]);
     assert.deepEqual(amounts, ['2<small>staff</small>', '11<small>staff</small>', '2 staff with unmet demands']);
@@ -162,7 +162,7 @@ test('the company-wide demand finding lands on the Crew with the most people lac
       siteOpen = false; drawSite();
       // The finding as _alerts() writes it: about "Company", with no site key.
       goToAlert({id: 'c1', level: 'warn', site: 'Company', siteKey: null, group: 'companydemand',
-                 text: '4 staff with demands only you can meet: Gold Health Insurance for 4'});
+                 text: '4 staff with unmet demands: Gold Health Insurance for 4'});
     }, [insurance(1), insurance(3)]);
     assert.equal(await page.evaluate(() => [page, siteOpen, siteKey].join(' ')),
                  'company true ba:street_broadway#2');

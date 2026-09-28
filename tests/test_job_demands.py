@@ -272,7 +272,7 @@ class JobDemandFindingTests(unittest.TestCase):
         staff = [employee(["ba:jobdemand_goldhealthinsurance", "ba:jobdemand_peacefulworkenvironment"])]
         [line] = self.alerts(evaluate(staff, happiness=10))
         self.assertEqual((line["group"], line["site"], line["siteKey"]), ("companydemand", "Company", None))
-        self.assertTrue(plain(line["text"]).startswith("1 staff member with demands only you can meet: "))
+        self.assertTrue(plain(line["text"]).startswith("1 staff member with unmet demands: "))
         self.assertIn("Gold Health Insurance for 1", plain(line["text"]))
         self.assertIn("Happy boss for 1", plain(line["text"]))
         self.assertIn("HR manager's plan", plain(line["text"]))

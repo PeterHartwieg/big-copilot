@@ -470,7 +470,7 @@ test('every finding is reached from the keyboard, a synthetic one too, and lands
       siteOpen = false; drawSite();
       // As _alerts() writes it: about "Company", with no site of its own.
       D.alerts = [{id: 'c1', level: 'warn', site: 'Company', siteKey: null, group: 'companydemand',
-                   text: '1 staff with demands only you can meet: Gold Health Insurance for 1'}, f];
+                   text: '1 staff with unmet demands: Gold Health Insurance for 1'}, f];
       drawAlerts(); showPage('today');
       document.activeElement?.blur();
     }, FINDING);
@@ -491,7 +491,7 @@ test('every finding is reached from the keyboard, a synthetic one too, and lands
       'a button: no link, so no new-tab expectation to break');
     // Its name says whose finding it is, and the row opens its detail as it
     // does under the pointer.
-    assert.equal(await page.getByRole('button', {name: /^Company: 1 staff with demands only you can meet/}).count(), 1);
+    assert.equal(await page.getByRole('button', {name: /^Company: 1 staff with unmet demands/}).count(), 1);
     // The detail fades in under the focus: wait for the fade to finish, then
     // say what it shows.
     await page.waitForFunction(() => !document.querySelector('#alertSection .find[data-id="c1"] .more').getAnimations().length,
