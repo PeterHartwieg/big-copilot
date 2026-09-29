@@ -374,11 +374,22 @@ test('staff needs hours on the schedule and nobody left without them, and "has t
   await page.evaluate(() => { D.businesses.find(x => x.key === osPlan().key).stationShifts = 6; });
   await hiring(page, {...HIRES, weeks: []});
   assert.equal((await rows(page))[2].state, 'done');
-  /* people assigned to the shop, with no hours: the hiring model's own list of them */
-  await hiring(page, {...HIRES, weeks: [], site: {unstaffed: [{name: 'Sam'}]}});
+  /* people assigned to the shop with no hours in the plan mode it uses: its own text, not "no hours scheduled yet" */
+  const gap = {hours: 12, roles: [{skill: 'ba:skill_cleaning', idle: 1}]};
+  await hiring(page, {...HIRES, weeks: [], site: {kind: 'shop', unstaffed: {demand: gap}}});
   r = (await rows(page))[2];
   assert.equal(r.state, 'todo');
-  assert.match(r.sub, /no hours scheduled yet/);
+  assert.match(r.sub, /4 on staff · 1 person has no hours/);
+  assert.doesNotMatch(r.sub, /scheduled yet/);
+  await hiring(page, {...HIRES, weeks: [], site: {kind: 'shop', unstaffed: {demand: {hours: 3, roles: [{skill: 'ba:skill_cleaning', idle: 2}, {skill: 'ba:skill_securityguard', idle: 1}]}}}});
+  assert.match((await rows(page))[2].sub, /3 people have no hours/);
+  /* a gap in the plan mode the site does not use blocks nothing: the shop is on the demand plan, the gap is the full one */
+  await hiring(page, {...HIRES, weeks: [], site: {kind: 'shop', unstaffed: {full: gap}}});
+  assert.equal((await rows(page))[2].state, 'done');
+  await hiring(page, {...HIRES, weeks: [], site: {kind: 'office', unstaffed: {office: gap}}});
+  assert.match((await rows(page))[2].sub, /1 person has no hours/);
+  await hiring(page, {...HIRES, weeks: [], site: {kind: 'office', unstaffed: {demand: gap}}});
+  assert.equal((await rows(page))[2].state, 'done');
   /* a night-time shop whose last statement is empty has still traded */
   await page.evaluate(() => { const b = D.businesses.find(x => x.key === osPlan().key); Object.assign(b, {revenue: 0, customers: 0, hasTraded: true}); });
   await hiring(page, {planned: true, variant: 'demand', weeks: []});
@@ -545,12 +556,14 @@ test('an office needs no deliveries, before opening too and with no factory butt
   await opened(page, {staff: 1, stationShifts: 1}, FULL);
   const out = await page.evaluate(() => { const T = osFacts().types, type = 'ba:businesstype_testoffice', b = osOpenedAt(osPlan());
     T[type] = {cat: 'office', model: 'office', products: [], demands: []};
-    const ask = (plan, biz) => { const r = osCkLogistics(plan, biz); return {state: r.state, sub: r.sub.replace(/<[^>]+>/g, ''), act: r.act}; };
+    const ask = (plan, biz) => { const r = osCkLogistics(plan, biz); return {state: r.state, sub: r.sub.replace(/<[^>]+>/g, ''), ok: /class="ok"/.test(r.sub), act: r.act}; };
     return {opened: ask({type, key: b.key}, b), vacant: ask({type, key: 'ba:street_nowhere#1'}, null)}; });
   assert.equal(out.opened.state, 'done');
   assert.match(out.opened.sub, /No deliveries needed/);
   assert.equal(out.vacant.state, 'todo');
   assert.match(out.vacant.sub, /No deliveries needed/);
+  assert.ok(!out.vacant.ok, 'a to-do row has no green text');
+  assert.ok(out.opened.ok, 'an opened office says it in green');
   assert.equal(out.vacant.act, '');
 });
 
@@ -687,4 +700,13 @@ test('a running campaign, from the save\'s enabled set, leaves the marketing row
   /* money spent last week is no proof: with no campaign enabled the row is a to-do */
   await page.evaluate(() => { const b = D.businesses.find(x => x.key === osPlan().key); b.marketingOn = []; b.marketing = 350; b.marketingIndex = 20; drawOpenStore(); });
   assert.equal((await rows(page))[5].state, 'todo');
+});
+
+test('an unmet hairdresser shelf is named in words, not by its id', async t => {
+  const page = await board(t);
+  await until(page);
+  await opened(page, {staff: 1, stationShifts: 1}, {placed: 20, req: [['shelfwithhaircareproducts', 1, 0]], seating: false});
+  const r = (await rows(page))[1];
+  assert.match(r.sub, /missing A shelf with hair-care products on it/);
+  assert.doesNotMatch(r.sub, /Shelfwithhaircareproducts/i);
 });

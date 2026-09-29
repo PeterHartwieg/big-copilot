@@ -2512,7 +2512,11 @@ def shift_print(entries) -> str:
 
 
 def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict:
-    st = latest.get(addr, {})
+    # The address keeps its takings after a business closes: a statement from
+    # before this business opened (or from a day it did not exist) is the old
+    # tenant's, not this one's.
+    since = b.get("creationDay", 0)
+    st = latest.get(addr, {}) if not history or history[-1][0] >= since else {}
     name = b.get("BusinessName")
     tag = ""
     if name and name.startswith("[") and "]" in name:
@@ -2764,7 +2768,8 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
         "stationShifts": sum(1 for _ in _station_shifts(save, b, crew)),
         # Whether the shop has ever booked a sale: the last statement alone is
         # zero on a day the shop stood closed.
-        "hasTraded": revenue > 0 or any(by_addr.get(addr, {}).get("TotalSales", 0) > 0 for _day, by_addr in history),
+        "hasTraded": revenue > 0
+        or any(dayno >= since and by_addr.get(addr, {}).get("TotalSales", 0) > 0 for dayno, by_addr in history),
         "staff": len(crew),
         "staffCost": sum(c["daily"] for c in crew),
         "crew": _crew(crew),
@@ -12837,13 +12842,16 @@ def _placed_items(save: Save, reg: dict) -> collections.Counter:
     return placed
 
 
-def _stocked_products(save: Save, reg: dict) -> set:
-    """The products actually on a building's displays: cargo with an amount."""
+def _stocked_products(save: Save, reg: dict, furniture: dict) -> set:
+    """The products actually on a building's displays: cargo with an amount,
+    held by an item whose furniture facts (`h`) list that product. Stock in
+    storage shelving is not on display."""
     out = set()
     for holder in save.items(reg.get("itemInstances")):
         item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
+        shows = set((furniture.get((item or {}).get("itemName")) or {}).get("h") or ())
         for cargo in save.items((item or {}).get("cargoInstances")):
-            if cargo.get("itemName") and (cargo.get("amount") or 0) > 0:
+            if cargo.get("itemName") in shows and (cargo.get("amount") or 0) > 0:
                 out.add(cargo["itemName"])
     return out
 
@@ -12864,7 +12872,7 @@ def _opened_stores(save: Save, regs: dict, businesses: list, types: dict, rules:
         out[b["key"]] = {
             "placed": sum(placed.values()),
             "req": required_placed(placed, b["typeSlug"], rules, prices, _building_row(reg).get("m"), available,
-                                   _stocked_products(save, reg)),
+                                   _stocked_products(save, reg, rules.get("furniture") or {})),
             "seating": any(int((table.get(n) or {}).get("t") or 0) & SEATING_FLAG for n in placed),
         }
     return out
@@ -30837,7 +30845,9 @@ function osAct(kind, label, ico, data, ingame){
 function osReqName(plan, b, name){
   const out = osOutfit(plan, b), line = out && out.lines.find(l => l[3] === name);
   if(line) return spEsc(osItemName(line[0]));
-  return name === "anyprimaryproduct" ? tt("gr.os.ck.furn.product", "A shelf holding a product it sells") : spEsc(prettySlug(name));
+  if(name === "anyprimaryproduct") return tt("gr.os.ck.furn.product", "A shelf holding a product it sells");
+  if(name === "shelfwithhaircareproducts") return tt("gr.os.ck.furn.haircare", "A shelf with hair-care products on it");
+  return spEsc(prettySlug(name));
 }
 function osCkFurniture(plan, b){
   const title = tt("gr.os.ck.furn", "Furniture");
@@ -30862,12 +30872,17 @@ function osCkStaff(plan, opened){
   if(!S || !S.planned || S.site.noHours || !S.variant) return osCk("people", "todo", title,
     tt("gr.os.ck.staff.nohours", "No opening hours set yet: set them in BizMan, and the board plans the staff"));
   const need = S.weeks.length;
-  const scheduled = opened.stationShifts > 0 && !S.site.unstaffed;
+  const scheduled = opened.stationShifts > 0, gap = hrUnstaffedOf(S);
   if(!need){
-    if(have > 0 && scheduled && (S.variant !== "demand" || opened.hasTraded)) return osCk("people", "done", title, tt("gr.os.ck.staff.done",
+    if(have > 0 && scheduled && !gap && (S.variant !== "demand" || opened.hasTraded)) return osCk("people", "done", title, tt("gr.os.ck.staff.done",
       {one: "{n} person · <span class=\"ok\">the opening hours are covered</span>", other: "{n} people · <span class=\"ok\">the opening hours are covered</span>"}, {n: have}));
     if(have > 0 && !scheduled) return osCk("people", "todo", title, tt("gr.os.ck.staff.idle",
       {one: "{n} person on staff · <span class=\"w\">no hours scheduled yet</span>", other: "{n} people on staff · <span class=\"w\">no hours scheduled yet</span>"}, {n: have}));
+    if(have > 0 && gap){
+      const idle = (gap.roles || []).reduce((a, r) => a + (r.idle || 0), 0) || have;
+      return osCk("people", "todo", title, tt("gr.os.ck.staff.nohours2",
+        {one: "{have} on staff · <span class=\"w\">{n} person has no hours</span>", other: "{have} on staff · <span class=\"w\">{n} people have no hours</span>"}, {have, n: idle}));
+    }
     return osCk("people", "todo", title, have > 0
       ? tt("gr.os.ck.staff.unsized", {one: "{n} person on staff · <span class=\"w\">the board sizes the staff once the shop has sales</span>",
         other: "{n} people on staff · <span class=\"w\">the board sizes the staff once the shop has sales</span>"}, {n: have})
@@ -30966,7 +30981,9 @@ function osCkLogistics(plan, opened){
   const title = tt("gr.os.ck.log", "Logistics");
   const go = `<button type="button" class="os-btn" data-os-route="expansion/factory">${osIcon("factory")}${tt("gr.os.ck.log.go", "Plan a factory")}${osIcon("chev")}</button>`;
   const t = osType(plan.type) || {};
-  if(t.model === "office") return osCk("truck", opened ? "done" : "todo", title, tt("gr.os.ck.log.office", "<span class=\"ok\">No deliveries needed</span> · an office holds no stock"));
+  if(t.model === "office") return osCk("truck", opened ? "done" : "todo", title, opened
+    ? tt("gr.os.ck.log.office", "<span class=\"ok\">No deliveries needed</span> · an office holds no stock")
+    : tt("gr.os.ck.log.office.todo", "No deliveries needed · an office holds no stock"));
   if(!opened) return osCk("truck", "todo", title, tt("gr.os.ck.log.todo", "Deliveries are set up once the business exists"), go);
   const M = osFacts().market || {};
   const wanted = [...new Set((t.products || []).map(([p]) => p).filter(p => M[p] && !M[p].s))];
@@ -32055,11 +32072,13 @@ function hrNoHoursHtml(){
    hours with nobody on, where the site's own people would work them (the
    plan's `unstaffed`); nothing is hired for those, so the order would say
    nothing. The link opens the site's Staffing, whose write puts the week in. */
+/* The plan the site's Staffing block shows and writes, as it picks it: its gap of people with no hours, or undefined. */
+function hrUnstaffedOf(S){
+  const u = S.site.unstaffed || {};
+  return S.site.kind === "office" ? u.office : spOffersFull(spRosterRow(S.key)) && spPlanRead(S.key) === "full" && u.full ? u.full : u.demand;
+}
 function hrIdleHtml(m){
-  /* The plan the site's Staffing block shows and writes, as it picks it. */
-  const of = S => { const u = S.site.unstaffed || {};
-    const base = spRosterRow(S.key);
-    return S.site.kind === "office" ? u.office : spOffersFull(base) && spPlanRead(S.key) === "full" && u.full ? u.full : u.demand; };
+  const of = hrUnstaffedOf;
   const rows = m.sites.filter(S => (S.site.kind === "shop" || S.site.kind === "office") && of(S)).map(S => {
     const u = of(S), name = spEsc(S.b ? shortName(S.b) : S.site.name || "A site");
     const who = (u.roles || []).filter(r => r.idle).map(r => `your ${hrNum(r.idle)} ${hrRole(r.skill)} staff ${r.idle === 1 ? "has" : "have"} no hours`);

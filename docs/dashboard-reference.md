@@ -935,11 +935,12 @@ business exists every row is a to-do (Furniture is judged from `openStore.built`
 
 - **Furniture**: the required items placed (`openStore.built.req`); a requirement that names
   a product (a hairdresser's shelf of hair-care products) is met only by the product being
-  available to the player or by cargo of it on a placed display; an empty shelf does not
-  count. The "any primary product" requirement still counts a display that can hold one.
+  available to the player or by cargo of it on a display that can hold it; an empty shelf and
+  stock in storage shelving do not count. The "any primary product" requirement still counts a display that can hold one.
 - **Staff**: done only with opening hours set (BizMan), somebody hired, hours on the schedule
-  (`stationShifts > 0`, and nobody assigned to the shop without hours) and, on a demand plan,
-  a trading history (`hasTraded`: any day with sales, not the last statement). A shop with no
+  (`stationShifts > 0`, and nobody left without hours in the plan mode the shop uses) and, on a
+  demand plan, a trading history (`hasTraded`: any day with sales since this business opened,
+  not the last statement and not an earlier business at the address). A shop with no
   hours or a never-traded shop is a to-do. Hire weeks filled by moving people offer **Hire n ·
   move m**, the full staff review for this site; with nobody to hire the row says to ask a
   headhunter.

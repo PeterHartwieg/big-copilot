@@ -34,8 +34,12 @@ artboard 6 of the canvas. Step 6 (payback after opening) is still the phase 4 pl
   at the address (`osOpenedAt`); a business of another type gets a note (`osOtherType`).
 - Staff (`osCkStaff`) reads `hrModel().sites`. No hours (`site.noHours` or no variant) is a
   to-do. With nothing to hire it is done only when somebody is hired, `stationShifts > 0`,
-  `site.unstaffed` is empty and, on a demand plan, `hasTraded` (any day with sales in the
-  trading history; the last statement can be empty for a night shop). Hire weeks that move
+  the gap for the plan mode the site uses is empty (`hrUnstaffedOf`, the same pick as the idle
+  list, not either mode's) and, on a demand plan, `hasTraded` (any day with sales in the trading
+  history since the business's `creationDay`; an earlier business at the address does not count,
+  and `revenue` takes the same bound; the last statement can be empty for a night shop). People
+  on staff with no hours read "n people have no hours"; "no hours scheduled yet" is only for
+  `stationShifts` 0. Hire weeks that move
   people offer "Hire n · move m" (the full review for this site, `hrReview({site})`); with no
   candidate the row points at a headhunter. "Pick N more" keeps the review's site
   (`hrLast.site`, `hrUi.more.site`).
@@ -47,14 +51,16 @@ artboard 6 of the canvas. Step 6 (payback after opening) is still the phase 4 pl
 - Marketing is done when `marketingOn` (the enabled campaigns) is not empty. The write sends
   that set as `was` (PR #174's compare-and-set) and omits `expect` without a character and
   company.
-- Logistics: an office says "No deliveries needed" (done once opened, a to-do before, never
-  with a factory button). A shop is set up when every non-service product in the type's list
+- Logistics: an office says "No deliveries needed" (done and green once opened, a plain to-do
+  before, never with a factory button). A shop is set up when every non-service product in the type's list
   has a route (`osRoutes`, over the new `supply.routed` pairs `[shop index, product]`): a stock
   target above zero in a logistics plan, or a weekly wholesale contract, whatever the shop's
   sales rate. Graph links carry no target amount, so they are not read. Registered in
   `docs/architecture.md`.
 - Furniture: `required_placed` takes `cachedAvailableProducts` and the cargo on the displays
-  (`_stocked_products`); a product requirement (a hairdresser's shelf with hair-care products)
+  (`_stocked_products(save, reg, rules["furniture"])`: only on an item whose furniture `h` lists the
+  product, so stock in storage shelving is not on display); an unmet hairdresser shelf reads
+  "A shelf with hair-care products on it"; a product requirement (a hairdresser's shelf with hair-care products)
   is met by availability or stocked cargo, not by an empty shelf. The "any primary product"
   requirement is unchanged and still counts what a display can hold.
 - The marketing write is built against PR #174's contract (`POST /write/marketing`, body
@@ -91,7 +97,7 @@ python build_web.py && python build_web.py --check
 python check_saves.py
 ```
 
-`tests/open_store.test.cjs` (step 5, 28 tests) covers the step bar, the to-do rows before
+`tests/open_store.test.cjs` (step 5, 36 tests) covers the step bar, the to-do rows before
 a business, ticking, a half-done store, zero-need and no-hours staff, the real `hrModel` over
 the payload's `hiring.sites` (Hire count and the scoped review through `hrReview` and
 `hrRequest`), Hire and Assign uniforms clicks, moves, headhunter, link off/on/missing write,

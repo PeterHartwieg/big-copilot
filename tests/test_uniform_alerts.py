@@ -375,8 +375,10 @@ class AmenityAlertTests(unittest.TestCase):
 
     # --- the checklist's readings of the same shifts --------------------
 
-    def business(self, latest=None, history=(), **options):
+    def business(self, latest=None, history=(), opened=None, **options):
         save, building, addr = self.site(**options)
+        if opened is not None:
+            building["creationDay"] = opened
         by_addr, _ = _staff(save, Names({}))
         latest = {addr: {"TotalSales": 0, "TotalProfit": 0}} if latest is None else {addr: latest}
         return _business(save, Names({}), building, addr, latest,
@@ -395,12 +397,39 @@ class AmenityAlertTests(unittest.TestCase):
         self.assertTrue(self.business(latest=zero, history=[(6, {"TotalSales": 420, "TotalProfit": 90}), (7, zero)])["hasTraded"])
         self.assertTrue(self.business(latest={"TotalSales": 55, "TotalProfit": 5})["hasTraded"])
 
+    def test_sales_at_the_address_before_this_business_opened_are_not_its_own(self):
+        sold = {"TotalSales": 420, "TotalProfit": 90}
+        zero = {"TotalSales": 0, "TotalProfit": 0}
+        # The old tenant sold on days 2-4; this business opened on day 6.
+        old_tenant = [(2, sold), (3, sold), (4, sold), (5, zero)]
+        b = self.business(latest=zero, history=old_tenant + [(7, zero)], opened=6)
+        self.assertFalse(b["hasTraded"])
+        self.assertEqual(b["revenue"], 0)
+        # Its own opening day and after count.
+        self.assertTrue(self.business(latest=zero, history=old_tenant + [(6, sold), (7, zero)], opened=6)["hasTraded"])
+        # The last statement is itself from before the opening: not this shop's takings.
+        stale = self.business(latest=sold, history=[(4, sold)], opened=6)
+        self.assertEqual((stale["revenue"], stale["hasTraded"]), (0, False))
+        # A statement on or after the opening day is.
+        fresh = self.business(latest=sold, history=[(7, sold)], opened=6)
+        self.assertEqual((fresh["revenue"], fresh["hasTraded"]), (420, True))
+
     def test_only_cargo_with_an_amount_counts_as_stocked(self):
         shelf = lambda amount: {"itemName": "ba:itemname_shelf", "cargoInstances": {"$items": [
             {"itemName": "ba:itemname_beer", "amount": amount}]}}
+        furniture = {"ba:itemname_shelf": {"h": ["ba:itemname_beer"]}}
         for amount, expected in ((0, set()), (12, {"ba:itemname_beer"})):
             save, building, _addr = self.site(items=[shelf(amount)])
-            self.assertEqual(_stocked_products(save, building), expected)
+            self.assertEqual(_stocked_products(save, building, furniture), expected)
+
+    def test_cargo_held_in_storage_is_not_on_display(self):
+        held = lambda name: {"itemName": name, "cargoInstances": {"$items": [
+            {"itemName": "ba:itemname_beer", "amount": 12}]}}
+        furniture = {"ba:itemname_shelf": {"h": ["ba:itemname_beer"]}, "ba:itemname_storageshelf": {"h": []}}
+        save, building, _addr = self.site(items=[held("ba:itemname_storageshelf")])
+        self.assertEqual(_stocked_products(save, building, furniture), set())
+        save, building, _addr = self.site(items=[held("ba:itemname_storageshelf"), held("ba:itemname_shelf")])
+        self.assertEqual(_stocked_products(save, building, furniture), {"ba:itemname_beer"})
 
     # --- sites with no shop floor --------------------------------------
 
