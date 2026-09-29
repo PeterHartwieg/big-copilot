@@ -8910,8 +8910,14 @@ def _staffing(
         except Exception:
             sites.append((business, None))
             continue
-        state.update(scratch)
         sites.append((business, site))
+        if _opens_first(site, business):
+            # The site is on its open-hours plan: its demand plan may draw on
+            # the bench but reserves nobody, so only its own people's weeks
+            # are written back.
+            state.update({pid: entry for pid, entry in scratch.items() if people[pid]["addr"]})
+            continue
+        state.update(scratch)
         # Whoever this site drew off the bench now works here, so they leave it.
         taken = {p["id"] for p in site["took"]}
         bench = [person for person in bench if person["id"] not in taken]
@@ -8977,18 +8983,32 @@ def _staffing(
         except Exception:
             out[index] = failed(business)
             continue
-        # Whom either plan draws off the bench is this site's either way: the
-        # site panel follows full cover, the Staff page the open-hours plan.
-        drew_open = {p["id"] for p in opened["took"]} if opened else set()
-        for pid in free:
-            shared[pid] = opened_scratch[pid] if pid in drew_open and pid not in {
-                p["id"] for p in full["took"]} else scratch[pid]
-        drawn = {p["id"] for p in full["took"]} | drew_open
-        left = [person for person in left if person["id"] not in drawn]
+        # Only the plan the site is on by default reserves whom it draws off
+        # the bench, before the offices and factories are planned: the demand
+        # plan did above, or the open-hours plan here for a shop that opens on
+        # it (_opens_first()). Full cover, and whichever of the two the site
+        # is not on, may draw on the bench but hold nobody back from others.
+        if opened is not None and _opens_first(site, business):
+            drawn = {p["id"] for p in opened["took"]}
+            for pid in drawn & free:
+                shared[pid] = opened_scratch[pid]
+            left = [person for person in left if person["id"] not in drawn]
         out[index] = row
     state.update(shared)
     world["bench"] = left
     return out
+
+
+def _opens_first(site: dict, business: dict) -> bool:
+    """Whether a shop is on its open-hours plan by default, as the board picks it.
+
+    The board's spOpenFirst(): a shop whose demand data is not complete, or
+    one nobody works at yet, is on the open-hours plan; any other on its
+    demand plan, until the player picks the 24/7 test.
+    """
+    grid = site["grid"]
+    offered = any(s["skill"] for s in grid["stations"]) and any(grid["open"])
+    return offered and (site["run"] < DEMAND_RUN_DAYS or not business.get("staff"))
 
 
 def _open_is_full(site: dict) -> bool:

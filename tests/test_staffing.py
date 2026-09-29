@@ -543,6 +543,9 @@ def plan_inputs(specs, employees, status="retail", day=None, build_at_start=None
     """What plan_sites() hands _staffing(): (save, names, sites, grids, staff)."""
     specs = [dict(spec) for spec in specs]
     opened = [spec.pop("days_open", 14) for spec in specs]
+    # How many people work there, where a test says: the board opens a shop
+    # nobody works at on its open-hours plan (_opens_first()).
+    manned = [spec.pop("staff", None) for spec in specs]
     regs = [registration(**spec) for spec in specs]
     save = Save(
         {
@@ -557,8 +560,8 @@ def plan_inputs(specs, employees, status="retail", day=None, build_at_start=None
         "test.hsg",
     )
     sites = [
-        business(status, reg["StreetNumber"], days)
-        for reg, days in zip(regs, opened)
+        dict(business(status, reg["StreetNumber"], days), **({"staff": n} if n else {}))
+        for reg, days, n in zip(regs, opened, manned)
     ]
     _by_addr, staff = _staff(save, LABELS)
     crew = {p["id"]: p["skill"] for p in staff}
@@ -1507,8 +1510,10 @@ class OneWeekPerPersonTest(unittest.TestCase):
     def sites(self):
         return plan_sites(
             [
-                dict(items=[(1, REGISTER)], hourly={h: 1 for h in range(24)}, number=12),
-                dict(items=[(2, REGISTER)], hourly={h: 1 for h in range(24)}, number=14),
+                dict(items=[(1, REGISTER)], hourly={h: 1 for h in range(24)}, number=12,
+                     staff=1),
+                dict(items=[(2, REGISTER)], hourly={h: 1 for h in range(24)}, number=14,
+                     staff=1),
             ],
             [employee("free", [SERVICE], here=False,
                       demands=("ba:jobdemand_fulltime",))],
@@ -1550,6 +1555,35 @@ class OneWeekPerPersonTest(unittest.TestCase):
         first = json.dumps([r["shifts"] for r in self.sites()], sort_keys=True)
         second = json.dumps([r["shifts"] for r in self.sites()], sort_keys=True)
         self.assertEqual(first, second)
+
+
+class BenchReservationTest(unittest.TestCase):
+    """Only the plan a shop is on by default holds a bench member back from the
+    offices and factories (review round 1, item 4)."""
+
+    def world_after(self, spec, crew):
+        save, names, sites, grids, staff = plan_inputs([spec], crew)
+        world = ba_dashboard._plan_world(save, staff)
+        [row] = _staffing(save, names, sites, grids, staff, 0.55, world)
+        return row, [p["id"] for p in world["bench"]]
+
+    def test_full_cover_draws_on_the_bench_but_reserves_nobody(self):
+        # A measured shop with a cashier of its own, on its demand plan: its
+        # 24/7 full cover needs more hands and draws the unassigned one.
+        crew = [employee("own", [SERVICE], demands=("ba:jobdemand_fulltime",)),
+                employee("free", [SERVICE], here=False)]
+        row, left = self.world_after(dict(items=[(1, REGISTER)], hourly={h: 1 for h in range(8, 12)},
+                                          opens=((8, 12),), staff=1), crew)
+        self.assertEqual(row["bench"], [])
+        self.assertTrue(row["fullCover"]["bench"])
+        self.assertEqual(left, ["free"])
+
+    def test_the_open_hours_plan_of_a_new_shop_reserves_its_draw(self):
+        crew = [employee("free", [SERVICE], here=False)]
+        row, left = self.world_after(dict(items=[(1, REGISTER)], hourly={}, weeks=0,
+                                          opens=((8, 20),)), crew)
+        self.assertTrue(row["openCover"]["bench"])
+        self.assertEqual(left, [])
 
 
 class UnmeasuredSiteTest(unittest.TestCase):

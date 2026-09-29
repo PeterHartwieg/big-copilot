@@ -265,7 +265,8 @@ class FullCoverRulesTest(unittest.TestCase):
         rows = plan_sites(
             [
                 dict(items=[(1, REGISTER)], hourly={}, weeks=0, number=12),
-                dict(items=[(2, REGISTER)], hourly={h: 1 for h in range(24)}, number=14),
+                dict(items=[(2, REGISTER)], hourly={h: 1 for h in range(24)}, number=14,
+                     staff=1),
             ],
             [employee("free", [SERVICE], here=False)],
         )
