@@ -7263,6 +7263,8 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
     the floor of 30 hours and the 12-hour day like anybody, and somebody here
     may hand a hire whole shifts, or the tail of one, out of the hours above
     their own floor, so a hire gets a full week where the site can spare it.
+    Only the hires' weeks are settled here: everybody else's was settled
+    already, and gives to a hire without being reshuffled for itself.
 
     N starts at the open lines' hours over a full week (_hire_bound()) and
     rises one at a time for a skill whose lines are still open, up to one
@@ -7300,7 +7302,8 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
                                                     str(r["station"]))):
             _fill_hole(row, allowed[_slot_shape(row)], state, here)
         _repair_week(rows, everyone, state, here["rostered"],
-                     dict(before, **{hire["id"]: (0.0, 0) for hire in hires}))
+                     {**before, **{hire["id"]: (0.0, 0) for hire in hires}},
+                     only={hire["id"] for hire in hires})
         left = {row["skill"] for row in rows if row["employee"] is None}
         grow = [skill for skill in _in_order(left) if count.get(skill, 0) < limit.get(skill, 0)]
         if not grow:
@@ -7833,7 +7836,7 @@ def _fill_by_exchange(shifts: list, pool: list, state: dict, rostered: set) -> i
     return placed_count
 
 
-def _top_up_short(shifts: list, pool: list, state: dict, rostered: set) -> None:
+def _top_up_short(shifts: list, pool: list, state: dict, rostered: set, only=None) -> None:
     """Settle what the one-at-a-time fill leaves owing, without adding a name.
 
     Two demands are settled here, in the order the player ranked them.
@@ -7865,6 +7868,11 @@ def _top_up_short(shifts: list, pool: list, state: dict, rostered: set) -> None:
     no shortfall is ever traded for another. And a week that cannot be made up at
     all is left alone: 56 station-hours will not give two people thirty each
     however the shifts move, so it is reported rather than shuffled.
+
+    `only` limits whose week is settled to those ids: the hires, once the
+    week has been settled for everybody else (_place_hires()). The others
+    then only give, never take, so a week that needs a hire is not also
+    reshuffled for the people it had settled already.
     """
     by_id = {person["id"]: person for person in pool}
     floor_of = {
@@ -8029,6 +8037,7 @@ def _top_up_short(shifts: list, pool: list, state: dict, rostered: set) -> None:
                 (state[pid]["hours"] - floor_of[pid], str(pid))
                 for pid in roster
                 if state[pid]["hours"] < floor_of[pid] and pid not in tried
+                and (only is None or pid in only)
             )
             if not short:
                 break
@@ -8075,6 +8084,7 @@ def _top_up_short(shifts: list, pool: list, state: dict, rostered: set) -> None:
     for taker in [
         person for person in pool
         if person["band"] and person["addr"] and not state[person["id"]]["hours"]
+        and only is None
     ]:
         for giver_id in [pid for pid in roster if not by_id[pid]["band"]]:
             mine = [row for row in shifts if row["employee"] == giver_id]
@@ -8236,6 +8246,7 @@ def _top_up_short(shifts: list, pool: list, state: dict, rostered: set) -> None:
             for pid in roster
             if by_id[pid]["days"] is not None
             and len(state[pid]["days"]) < by_id[pid]["days"]
+            and (only is None or pid in only)
         ):
             for want in range(7):
                 if want in state[pid]["days"]:
@@ -8261,7 +8272,8 @@ def _top_up_short(shifts: list, pool: list, state: dict, rostered: set) -> None:
     settle_everybody()
 
 
-def _repair_week(shifts: list, pool: list, state: dict, rostered: set, before: dict) -> None:
+def _repair_week(shifts: list, pool: list, state: dict, rostered: set, before: dict,
+                 only=None) -> None:
     """Settle what the one-at-a-time fill left: the swaps, then _top_up_short().
 
     The lines the one-at-a-time fill could not place, offered round the
@@ -8269,12 +8281,13 @@ def _repair_week(shifts: list, pool: list, state: dict, rostered: set, before: d
     week without the swaps is kept beside it and both are settled by
     _top_up_short(); the swaps are kept only if they break no demand the
     week without them meets. A swap that is fair to the giver can still take
-    away the room the settling pass needed for somebody else.
+    away the room the settling pass needed for somebody else. `only`: see
+    _top_up_short().
     """
     # A swap only ever fills an open line, so a week with none has nothing to
     # keep a copy of.
     if not any(shift["employee"] is None for shift in shifts):
-        _top_up_short(shifts, pool, state, rostered)
+        _top_up_short(shifts, pool, state, rostered, only)
         return
     plain_shifts = [dict(shift) for shift in shifts]
     # A swap only ever moves hours between people on this roster, so their
@@ -8290,9 +8303,9 @@ def _repair_week(shifts: list, pool: list, state: dict, rostered: set, before: d
         }
     # The residue the one-at-a-time fill leaves on whoever was admitted last:
     # the same lines, a name or two different, and one fewer failed demand.
-    _top_up_short(shifts, pool, state, rostered)
+    _top_up_short(shifts, pool, state, rostered, only)
     if swapped:
-        _top_up_short(plain_shifts, pool, plain_state, rostered)
+        _top_up_short(plain_shifts, pool, plain_state, rostered, only)
         if not _broken(pool, state, before, shifts) <= _broken(
             pool, plain_state, before, plain_shifts
         ):
