@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import copy
 import datetime as dt
 import decimal
 import fractions
@@ -8613,11 +8614,16 @@ def _staffing(
                 site["own"] + site_bench, people, business, site_bench, scratch,
                 current=site["current"]["list"],
             )
-            opened = _place_week(
-                grid, _open_need(site), grid["open"], site["coverPosts"],
-                site["own"] + site_bench, people, business, site_bench, opened_scratch,
-                current=site["current"]["list"],
-            ) if offered else None
+            if not offered:
+                opened = None
+            elif _open_is_full(site):
+                opened = _copy_week(full)
+            else:
+                opened = _place_week(
+                    grid, _open_need(site), grid["open"], site["coverPosts"],
+                    site["own"] + site_bench, people, business, site_bench, opened_scratch,
+                    current=site["current"]["list"],
+                )
             row = _finish_site(site, full, names, people, opened)
         except Exception:
             out[index] = failed(business)
@@ -8634,6 +8640,41 @@ def _staffing(
     state.update(shared)
     world["bench"] = left
     return out
+
+
+def _open_is_full(site: dict) -> bool:
+    """Whether a shop's open-hours plan is its full-cover plan, placed a second time.
+
+    A shop with complete data whose doors are already open every hour: its
+    open-hours need is full cover's (_open_need()), and the hours it is cut
+    against are 0 to 24 on every day either way. The one thing that tells the
+    two apart, the slots the doors are held in, only decides which gaps may be
+    bridged, and a need of every station every hour leaves no gap. The two
+    placements start from copies of one week with one pool, so the second is
+    the first again; _staffing() copies it (_copy_week()) instead.
+    """
+    return site["run"] >= DEMAND_RUN_DAYS and _open_all_hours(site["grid"]["open"])
+
+
+def _copy_week(week: dict) -> dict:
+    """A placement's result another plan carries as its own, with no row shared.
+
+    The rows are copied and the hire weeks pointed at the copies, because
+    _hire_fields() finds a hire's rows by identity; the headcount is copied
+    because the payload carries its entries as they are.
+    """
+    shifts = [dict(shift) for shift in week["shifts"]]
+    twin = {id(old): new for old, new in zip(week["shifts"], shifts)}
+    return dict(
+        week,
+        shifts=shifts,
+        headcount={skill: dict(entry) for skill, entry in week["headcount"].items()},
+        hireWeeks={
+            skill: [dict(hire, slots=[twin[id(s)] for s in hire["slots"]],
+                         busy=[set(hours) for hours in hire["busy"]]) for hire in hires]
+            for skill, hires in week["hireWeeks"].items()
+        },
+    )
 
 
 def _open_need(site: dict) -> dict:
@@ -8789,13 +8830,25 @@ def _factory_staffing(save: Save, names, businesses: list, factories: dict, staf
         ]
         wage_day = money(sum(p["daily"] for p in workers) / len(workers)) if workers else 0.0
         drawn = set()
+        rows = {}
         for mode in SIZING_MODES:
+            # Both sizings asking for the same hours of every line is one week
+            # placed twice over (a factory whose lines run all day either way):
+            # the second is a copy of the first, never the same row.
+            twin = next((other for other in rows if _factory_hours(site, other)
+                         == _factory_hours(site, mode)), None)
             try:
-                row = _factory_site_plan(save, building, site, business, posts_of, pool, people,
-                                         mode, label, names, wage_day, world["state"])
+                if twin is not None:
+                    row = copy.deepcopy(rows[twin])
+                else:
+                    row = _factory_site_plan(save, building, site, business, posts_of, pool,
+                                             people, mode, label, names, wage_day, world["state"])
             except Exception:
                 row = {"key": business["key"], "s": site["s"], "name": business["name"],
                        "failed": True}
+            rows[mode] = row
+        for mode in SIZING_MODES:
+            row = rows[mode]
             if row is not None and not detail and not row.get("failed"):
                 # The week itself stays (stations, people, shifts), so the Staff
                 # page can write it; the placer's own tables go.
@@ -8808,6 +8861,13 @@ def _factory_staffing(save: Save, names, businesses: list, factories: dict, staf
         # as a shop's two plans share theirs.
         world["bench"] = [p for p in world["bench"] if p["id"] not in drawn]
     return out
+
+
+def _factory_hours(site: dict, mode: str) -> list:
+    """The hours a day each line of a factory runs in one sizing, as _factory_site_plan() reads them."""
+    return ([line["needHours"][mode] for line in site["lines"]]
+            + [24 if mode == "cap" or not line.get("hoursNow") else line["hoursNow"]
+               for line in site.get("unnamed", []) if line.get("rid") is not None])
 
 
 def _factory_site_plan(save, building, site, business, posts_of, pool, people, mode, label,

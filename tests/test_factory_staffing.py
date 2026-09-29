@@ -12,7 +12,9 @@ import os
 import subprocess
 import sys
 import unittest
+import unittest.mock
 
+import ba_dashboard
 from ba_dashboard import (SHIFT_CAP, SUPPLY_MARGIN, _factory_run_start, _factory_staffing,
                           _line_hours, site_key)
 from test_supply_facts import (FACTORY, HUB, RID, SHOP_A, BEER, WATER, Company, beer_chain)
@@ -359,6 +361,51 @@ class StaffFindingTests(unittest.TestCase):
         [dem] = self.staff(c, "dem")
         self.assertEqual(cap["id"], dem["id"])
         self.assertIn("35 of 56 hours needed", dem["text"])
+
+
+class SameHoursBothSizingsTest(unittest.TestCase):
+    """Both sizings asking every line for the same hours is one week, placed once."""
+
+    LINES = [("beer", 2, 24, 24, 24), ("water", 1, 16, 16, 0)]
+
+    def rows(self):
+        people = People().add(5).add(2, demands=("ba:jobdemand_fulltime",))
+        return hand_rows(self.LINES, people)
+
+    def test_the_copy_is_the_week_placed_again(self):
+        placed = []
+        real = ba_dashboard._factory_site_plan
+
+        def counting(*a, **k):
+            placed.append(a[7])  # the sizing
+            return real(*a, **k)
+
+        with unittest.mock.patch.object(ba_dashboard, "_factory_site_plan", counting):
+            rows = self.rows()
+        self.assertEqual(placed, ["cap"])
+        # Placed twice over, the week is the same week.
+        with unittest.mock.patch.object(ba_dashboard, "_factory_hours",
+                                        lambda site, mode: [mode]):
+            twice = self.rows()
+        self.assertEqual(json.dumps(rows, sort_keys=True, default=str),
+                         json.dumps(twice, sort_keys=True, default=str))
+        # And nothing of it is shared: the Staff page takes each `_hire` off.
+        [cap], [dem] = rows["cap"], rows["dem"]
+        self.assertIsNot(cap["_hire"], dem["_hire"])
+        self.assertIsNot(cap["shifts"], dem["shifts"])
+
+    def test_different_hours_are_placed_each(self):
+        lines = [("beer", 2, 24, 12, 24)]
+        placed = []
+        real = ba_dashboard._factory_site_plan
+
+        def counting(*a, **k):
+            placed.append(a[7])
+            return real(*a, **k)
+
+        with unittest.mock.patch.object(ba_dashboard, "_factory_site_plan", counting):
+            hand_rows(lines, People().add(3))
+        self.assertEqual(placed, ["cap", "dem"])
 
 
 if __name__ == "__main__":

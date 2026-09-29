@@ -824,6 +824,44 @@ class HireCountTest(unittest.TestCase):
             self.assert_legal(week)
 
 
+class OpenIsFullTest(unittest.TestCase):
+    """A measured shop already open around the clock: its open-hours plan is full cover's."""
+
+    def row(self, **kw):
+        crew_ = [employee(f"s{i}", [SERVICE], demands=(FULLTIME,)) for i in range(3)] + \
+            [employee("c0", [CLEANING])]
+        return plan([(1, REGISTER), (2, REGISTER), (8, CLEAN_STATION)], crew_, BUSY,
+                    opens=((0, 12), (12, 24)), **kw)
+
+    def test_it_is_copied_and_the_copy_is_the_plan_placed_again(self):
+        row = self.row()
+        self.assertTrue(row["openCover"]["complete"])
+        with unittest.mock.patch.object(ba_dashboard, "_open_is_full", lambda site: False):
+            placed = self.row()
+        self.assertEqual(row["openCover"], placed["openCover"])
+        # The open-hours plan keeps its own frame: the doors as they are.
+        self.assertFalse(row["openCover"]["openAllHours"])
+        self.assertEqual(row["openCover"]["open"], placed["openCover"]["open"])
+        self.assertEqual(row["openCover"]["shifts"], row["fullCover"]["shifts"])
+        self.assertIsNot(row["openCover"]["_hire"], row["fullCover"]["_hire"])
+
+    def test_only_where_the_data_is_complete_and_the_doors_never_shut(self):
+        calls = []
+        real = ba_dashboard._place_week
+
+        def counting(*a, **k):
+            calls.append(a[2])  # the hours it is cut against
+            return real(*a, **k)
+
+        with unittest.mock.patch.object(ba_dashboard, "_place_week", counting):
+            self.row()
+        self.assertEqual(len(calls), 2)  # the demand plan and full cover
+        calls.clear()
+        with unittest.mock.patch.object(ba_dashboard, "_place_week", counting):
+            plan([(1, REGISTER)], [employee("s0", [SERVICE])], BUSY, opens=((8, 20),))
+        self.assertEqual(len(calls), 3)
+
+
 class ExchangeKeepsDemandsTest(unittest.TestCase):
     """The swap pass never breaks a demand the week without it meets.
 
