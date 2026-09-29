@@ -254,6 +254,34 @@ changed, commit both and rebuild. `build_web.py` refuses a
 floor-plan set that is missing a layout `ba_buildings.json` uses
 (`tests/test_floor_plans.py`).
 
+### Hand-read tables no script checks
+
+Two more groups of constants in `ba_dashboard.py` were read from the game by hand.
+`tools/game_update/bundles.py` compares only the three tables above and no test reads the
+game, so a patch can change either group without anything failing.
+
+- `ASSIGN_SKILLS`, with `_SHOP_SKILLS`, decides which skills a business accepts when
+  somebody is assigned to it, so the Staff page never proposes a hire the mod refuses
+  (`no_skill`). It comes from two bundles: `defaultlocalgroup_assets_businesstypes_*`
+  (`employeePrimarySkills`) and `defaultlocalgroup_assets_buildingtypes_*`
+  (`requiredBuildingSkills`, which puts Cleaning on a type, or Delivery Driver where a type
+  requires one, which none does at build 3682; and the `allowtheft` tag, which puts Security
+  Guard on it). On a new build, re-read those fields for every type in the
+  table and compare by eye. Its tests, in `tests/test_staff_hire.py`
+  ("test_accepts_follows_the_game_s_assign_check" and
+  "test_every_assign_table_type_is_one_the_board_knows"), pin three sites' results and that
+  each type is one the board knows, not the game's values.
+- Under the "roster building" banner, re-check `SHIFT_CAP` against `BigAmbitions.dll`
+  (`ScheduleHelper.ShiftLengthCap`, `ScheduleAutoFiller.MaxEmployeeHoursPerDay`), `FULL_TIME`
+  against the fulltime demand in `JOB_DEMANDS`, and `WEEKEND_WEEKDAYS` against the game's day
+  numbering and its freeweekends demand. Section 2 of `docs/staffing-assistant-scope.md`
+  quotes the game's rules, and "Reading the game's code" below says how to read the IL.
+  `SLACK_SHARE`, `MIN_SPLIT` and `COVER_STATIONS` are the board's own planning choices, not
+  the game's: `COVER_STATIONS` gives the cleaning and security stations one person for every
+  open hour because the game stores no need for them (the same document, "Cleaning and
+  security: full opening-hour cover"). The banner says these rules were read "at
+  VERIFIED_BUILD", so re-check them before bumping it in "5. Bump the build" below.
+
 ### Values measured from saves
 
 A few numbers were fitted to real saves rather than read from a file, so a patch can move
