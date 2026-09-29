@@ -193,5 +193,60 @@ class FindingGroupTests(unittest.TestCase):
             doc_side="on the board (ALERT_GROUPS)", code_side="emitted by Python (note()/_finding())"))
 
 
+class RegistryPointerTests(unittest.TestCase):
+    """(d) Each table a checklist under Registries names by its declaration
+    carries a `Registry: "<heading>"` comment just above it in ba_dashboard.py,
+    so a reader who lands on the table finds the checklist. Only the comment
+    directly above the declaration counts, not a neighbour's."""
+
+    HEADINGS = ("A finding kind", "A view or a page")
+    SKIPPED = {"ALERT_DEFAULTS_V1"}
+
+    @staticmethod
+    def named_tables(heading: str) -> set:
+        start = ARCH.index("### " + heading + "\n")
+        end = ARCH.index("\n### ", start + 1)
+        names = set()
+        for span in re.findall(r"`([^`]+)`", ARCH[start:end]):
+            names.update(re.findall(r"(?:const )?(?<![A-Z0-9_])([A-Z][A-Z0-9_]+) =", span))
+        return names
+
+    @staticmethod
+    def comment_above(lines: list, at: int) -> str:
+        found, i, in_block = [], at - 1, False
+        while i >= 0:
+            line = lines[i].rstrip()
+            if in_block:
+                found.append(line)
+                in_block = "/*" not in line
+            elif line.endswith("*/"):
+                found.append(line)
+                in_block = "/*" not in line
+            elif line.startswith("#"):
+                found.append(line)
+            else:
+                break
+            i -= 1
+        return "\n".join(found)
+
+    def test_every_declared_table_points_at_its_checklist(self):
+        lines = DASHBOARD.split("\n")
+        for heading in self.HEADINGS:
+            tag = 'Registry: "%s"' % heading
+            missing = []
+            tables = self.named_tables(heading) - self.SKIPPED
+            for name in sorted(tables):
+                decl = re.compile(r"^(?:const )?%s\s*=" % name)
+                at = [i for i, line in enumerate(lines) if decl.match(line)]
+                if not at:
+                    continue
+                if tag not in self.comment_above(lines, at[0]):
+                    missing.append(name)
+            self.assertFalse(missing, (
+                "%s has no %s comment above its declaration in ba_dashboard.py: add the "
+                "block or the only-if pointer, as the tables beside it have"
+                % (", ".join(missing), tag)))
+
+
 if __name__ == "__main__":
     unittest.main()

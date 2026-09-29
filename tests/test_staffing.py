@@ -21,11 +21,13 @@ from ba_dashboard import (
     SHIFT_CAP,
     WEEKEND_WEEKDAYS,
     COVER_STATIONS,
+    CAPPED_INITIAL_BUILD,
     _arrival_ceiling,
     _bridge_troughs,
     _cut_run,
     _fill_stations,
     _hourly,
+    _initial_customers,
     _need_curve,
     _staff,
     _staffing,
@@ -273,19 +275,15 @@ class ArrivalCeilingTest(unittest.TestCase):
     def tearDown(self):
         ba_dashboard._demand_curves = self.saved
 
-    def ceiling(self, **kw):
-        args = dict(
-            type_slug=SHOP,
-            sqm=100,
-            products=["ba:itemname_shirt", "ba:itemname_towel"],
-            promotion=0,
-            base_promotion=0.55,
-            door=0,
-        )
-        args.update(kw)
-        return _arrival_ceiling(**args)
+    def ceiling(self, build=CAPPED_INITIAL_BUILD - 1, size_cap=30, sqm=100,
+                products=("ba:itemname_shirt", "ba:itemname_towel"), type_slug=SHOP,
+                promotion=0, door=0):
+        initial = _initial_customers(build, size_cap, type_slug, sqm, products)
+        return _arrival_ceiling(type_slug, initial, promotion, 0.55, door)
 
-    def test_only_the_types_own_primary_products_size_it(self):
+    # A game started before build 2847 sizes a shop off its shelves.
+
+    def test_only_the_types_own_primary_products_size_an_old_game(self):
         # 0.5 x 100 sqm x 0.55, rounded up. The towel's 9.0 is not primary here.
         self.assertEqual(self.ceiling()[1][12], 28)
 
@@ -308,6 +306,51 @@ class ArrivalCeilingTest(unittest.TestCase):
 
     def test_an_unknown_building_size_has_no_ceiling_either(self):
         self.assertIsNone(self.ceiling(sqm=0))
+
+    def test_a_save_that_does_not_say_when_it_started_is_an_old_game(self):
+        self.assertEqual(self.ceiling(build=None)[1][12], 28)
+
+    # Every game started at build 2847 or later sizes it off the building.
+
+    def test_a_new_game_sizes_it_off_the_buildings_capacity(self):
+        # 30 x 0.55 = 16.5, rounded up; square metres and products play no part.
+        new = CAPPED_INITIAL_BUILD
+        self.assertEqual(self.ceiling(build=new)[1][12], 17)
+        self.assertEqual(self.ceiling(build=new, sqm=0, products=())[1][12], 17)
+
+    def test_a_new_games_promotion_lifts_it_to_the_door(self):
+        # 30 x 1.3 = 39, and the registration's own capacity clips it.
+        self.assertEqual(self.ceiling(build=3682, promotion=100)[1][12], 39)
+        self.assertEqual(self.ceiling(build=3682, promotion=100, door=30)[1][12], 30)
+
+    def test_a_capacity_range_takes_its_top_so_it_stays_a_bound(self):
+        self.assertEqual(self.ceiling(build=3682, size_cap=[100, 150])[1][12], 83)
+
+    def test_a_new_game_on_an_unknown_size_has_no_ceiling(self):
+        self.assertIsNone(self.ceiling(build=3682, size_cap=None))
+
+    def test_a_new_game_of_an_unknown_type_has_no_ceiling(self):
+        self.assertIsNone(self.ceiling(build=3682, type_slug="ba:businesstype_nowhere"))
+
+
+class SiteCeilingTest(unittest.TestCase):
+    """_staffing() picks the game's rule from the save's buildNumberAtStart."""
+
+    def test_a_new_game_sizes_the_ceiling_off_its_buildings_capacity(self):
+        # Second Avenue 12 is a C retail floor: 30 customers, whatever it stocks.
+        row = plan([(1, REGISTER)], [employee("p0", [SERVICE])], FLAT,
+                   build_at_start=3682)
+        curve = load_demand_curves()["types"][SHOP]
+        self.assertEqual(row["ceiling"], [
+            [math.ceil(min(30 * 0.55 * curve["d"][wd] * curve["h"][h], 100))
+             for h in range(24)]
+            for wd in range(7)
+        ])
+
+    def test_an_old_game_holding_no_primary_product_has_no_ceiling(self):
+        row = plan([(1, REGISTER)], [employee("p0", [SERVICE])], FLAT,
+                   build_at_start=CAPPED_INITIAL_BUILD - 1)
+        self.assertIsNone(row["ceiling"])
 
 
 class DemandCurvesFileTest(unittest.TestCase):
@@ -485,7 +528,7 @@ def business(status="retail", number=NUMBER, days_open=14):
     }
 
 
-def plan_sites(specs, employees, status="retail", day=None):
+def plan_sites(specs, employees, status="retail", day=None, build_at_start=None):
     """Several rented sites and one staff list, planned together.
 
     A spec may carry `days_open`, which belongs to the business rather than to
@@ -502,6 +545,7 @@ def plan_sites(specs, employees, status="retail", day=None):
                 "$items": [dict(reg, RentedByPlayer=True) for reg in regs]
             },
             **({"Day": day} if day is not None else {}),
+            **({"buildNumberAtStart": build_at_start} if build_at_start else {}),
         },
         {},
         "test.hsg",
@@ -516,9 +560,10 @@ def plan_sites(specs, employees, status="retail", day=None):
     return _staffing(save, LABELS, sites, grids, staff, 0.55)
 
 
-def plan(items, employees, hourly, day=None, **kw):
+def plan(items, employees, hourly, day=None, build_at_start=None, **kw):
     """Run the whole chain one site's row comes out of, and return that row."""
-    rows = plan_sites([dict(kw, items=items, hourly=hourly)], employees, day=day)
+    rows = plan_sites([dict(kw, items=items, hourly=hourly)], employees, day=day,
+                      build_at_start=build_at_start)
     return rows[0] if rows else None
 
 
@@ -1228,6 +1273,107 @@ class MultiRoleTest(unittest.TestCase):
         self.assertIn(1, served)
         # One pool of Hair Stylists, not one per queue.
         self.assertEqual(list(row["headcount"]), [stylist])
+
+
+class HeadWashTest(unittest.TestCase):
+    """The head wash is its own role in every plan, not only the demand plan.
+
+    The open-hours plan staffs an hour nothing has read with every station of
+    the role (_open_floor()), and it counted stations by skill while the need
+    is keyed by role: the head wash got none, so a new hairdresser was hired
+    chair stylists and nobody for the head wash (staffing revisit, 28
+    September 2026). Two head washes and three chairs, open 9 to 21, 8
+    customers an hour where anything is read.
+    """
+
+    STYLIST, CHAIR, WASH = ("ba:skill_hairstylist", "ba:itemname_hairdresserchair",
+                            "ba:itemname_hairdresserheadwash")
+
+    def shop(self, stylists, day=None, **reg):
+        def help_page(fees):
+            return ("is a special *employee station*\n\n"
+                    + "".join(f"* [x](fees-{fee})\n" for fee in fees))
+
+        names = Names(dict(LABELS.locale, **{
+            self.STYLIST: "Hair Stylist", self.CHAIR: "Hairdresser Chair",
+            self.WASH: "Hairdresser Head Wash",
+            f"help_{self.CHAIR}_content": help_page(["haircuttingfee", "hairstylingfee"]),
+            f"help_{self.WASH}_content": help_page(["hairshampooingfee"]),
+        }))
+        stations = {self.CHAIR: (self.STYLIST, 5), self.WASH: (self.STYLIST, 10)}
+        items = [(1, self.WASH), (2, self.WASH), (3, self.CHAIR), (4, self.CHAIR), (5, self.CHAIR)]
+        days_open = reg.pop("days_open")
+        r = registration(items=items, hourly={h: 8 for h in range(24)}, opens=((9, 21),), **reg)
+        people = [employee(f"p{i}", [self.STYLIST]) for i in range(stylists)]
+        save = Save({"EmployeeInstances": {"$items": people},
+                     "BuildingRegistrations": {"$items": [dict(r, RentedByPlayer=True)]},
+                     **({"Day": day} if day is not None else {})},
+                    {}, "test.hsg")
+        sites = [dict(business(days_open=days_open), typeSlug="ba:businesstype_hairdresser",
+                      staff=stylists)]
+        _by_addr, staff = _staff(save, names)
+        grids = _hourly(save, [r], sites, stations, set(), {p["id"]: p["skill"] for p in staff}, names)
+        [row] = _staffing(save, names, sites, grids, staff, 0.55)
+        [site] = ba_dashboard._hiring(save, sites, [row], {}, [])["sites"]
+        return row, site
+
+    def washes(self, row):
+        return {i for i, s in enumerate(row["stations"]) if s["id"] in (1, 2)}
+
+    def serving(self, row, shifts):
+        """Hours a week on the head washes and on the chairs."""
+        wash = self.washes(row)
+        out = collections.Counter()
+        for s in shifts:
+            if kind(s) == "serve":
+                out["wash" if s["s"] in wash else "chair"] += s["t"] - s["f"]
+        return out
+
+    def check(self, row, site, plans):
+        split = f"{self.STYLIST}|{self.WASH}"
+        variants = {"demand": row["shifts"], "fullCover": row["fullCover"]["shifts"],
+                    "openCover": row["openCover"]["shifts"]}
+        for name in plans:
+            hours = self.serving(row, variants[name])
+            self.assertGreater(hours["wash"], 0, name)
+            self.assertGreater(hours["chair"], 0, name)
+        # Every open hour nothing has read has both head washes on in the
+        # open-hours plan.
+        wash = self.washes(row)
+        on = collections.Counter()
+        for s in row["openCover"]["shifts"]:
+            if s["s"] in wash:
+                for hour in range(s["f"], s["t"]):
+                    on[(s["d"], hour)] += 1
+        unread = [(wd, h) for wd in range(7) for h in range(9, 21) if row["basis"][split][wd][h] == "none"]
+        self.assertTrue(unread)
+        self.assertEqual({on[cell] for cell in unread}, {2})
+        # The Staff page hires into that plan, head washes included.
+        weeks = site["plans"]["open"]["hireWeeks"]
+        at = collections.Counter()
+        for week in weeks:
+            for slot in week["slots"]:
+                at["wash" if slot["station"] in (1, 2) else "chair"] += slot["t"] - slot["f"]
+        self.assertGreater(at["wash"], 0)
+        self.assertGreater(at["chair"], 0)
+        return split
+
+    def test_a_new_shop_never_read_plans_its_head_washes_everywhere(self):
+        row, site = self.shop(2, weeks=0, days_open=1)
+        self.check(row, site, ("fullCover", "openCover"))
+
+    def test_a_shop_with_under_nine_days_plans_its_head_washes_everywhere(self):
+        # Two weeks of reports for 10 to 14 only, six days since it opened.
+        row, site = self.shop(2, day=7, weeks=2, days_open=6, hours=set(range(10, 14)))
+        self.assertFalse(row["openCover"]["complete"])
+        self.check(row, site, ("demand", "fullCover", "openCover"))
+        # Staff with no hours on that plan: both stylists have none in the
+        # game's week, so every hour the plan gives them counts, head wash too.
+        own = [s for s in row["openCover"]["shifts"] if s["p"] is not None and kind(s) == "serve"]
+        self.assertGreater(self.serving(row, own)["wash"], 0)
+        gap = site["unstaffed"]["open"]
+        self.assertEqual(gap["hours"], sum(s["t"] - s["f"] for s in own))
+        self.assertEqual([(r["skill"], r["idle"]) for r in gap["roles"]], [(self.STYLIST, 2)])
 
 
 class SurvivalTest(unittest.TestCase):

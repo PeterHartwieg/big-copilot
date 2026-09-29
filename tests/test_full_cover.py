@@ -730,6 +730,17 @@ class HireCountTest(unittest.TestCase):
         self.assertEqual(_pack_hires(slots, None, HIRE_ORDERS[1]), 3)
         self.assertEqual(_hires_for(slots), 2)
 
+    def test_at_first_fit_s_own_count_the_week_is_still_balanced(self):
+        """One register open 9 to 18 every day is 63 hours, two hires at the
+        least. First fit packs them 45 and 18 (the second on two days); the
+        balanced packing at the same count was never tried and should be."""
+        slots = [{"wd": wd, "station": 1, "from": f, "to": t, "skill": "x", "kind": "serve"}
+                 for wd in range(7) for f, t in _cut_run(9, 18)]
+        self.assertEqual(min(_pack_hires(slots, None, o) for o in HIRE_ORDERS), 2)
+        weeks = ba_dashboard._hire_weeks(slots)
+        self.assertEqual(sorted(w["hours"] for w in weeks), [27, 36])
+        self.assertEqual(sorted(len({s["wd"] for s in w["slots"]}) for w in weeks), [3, 4])
+
     def test_never_above_either_first_fit_order(self):
         rng = random.Random(5)
         for _ in range(300):

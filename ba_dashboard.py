@@ -498,10 +498,10 @@ GAME_NAME_LANGS = {
 # i18n/<lang>.json each; tests/test_game_names.py holds the three together).
 # The footer's Language list shows them first, as "Whole page"; every other
 # entry of GAME_NAME_LANGS changes only the game's names.
-UI_LANGS = ("en", "de", "es", "fr", "pt", "ru", "ko")
+UI_LANGS = ("en", "de", "es", "fr", "pt", "ru", "ko", "tr")
 # The ones still mostly machine-drafted (i18n/<lang>.ai.json): the footer says
 # so under the picker, with a link to help check them.
-UI_LANGS_DRAFTED = ("es", "fr", "pt", "ru", "ko")
+UI_LANGS_DRAFTED = ("es", "fr", "pt", "ru", "ko", "tr")
 TRANSLATING_URL = f"{REPO_URL}/blob/main/docs/translating.md"
 # A language whose file names fewer of the English name keys than this is left
 # out rather than shown half in English (the game's ar.json names none).
@@ -653,6 +653,7 @@ def load_item_prices() -> dict:
     return _item_prices
 
 
+# ---------------------------------------------------------------- game tables
 # Business types that sell to walk-in customers; the rest are support sites.
 # Every physical retail floor the game documents with an F1 help page (the
 # handful of pure office agencies — law firm, travel agency and the like — say
@@ -739,6 +740,7 @@ STOCK_COVER_DAYS = 7  # window used for the average daily sales rate
 # cachedFulfilledCustomerDemands calls it when present. The uniform demand is
 # read from the save's own roster instead — see _uniform_gaps() — because the
 # cached answer is a snapshot of one moment and cannot be trusted either way.
+# Registry: "A finding kind" (only if: see the checklist).
 AMENITY_DEMANDS = {
     "ba:customerdemand_toilet": ("bathroom", msg("f.amenity.bathroom", "No customer bathroom here")),
     "ba:customerdemand_toiletprivacy": (
@@ -764,7 +766,7 @@ AMENITY_DEMANDS = {
 # test_every_retail_type_was_checked_against_the_games_own_table pins the sixteen
 # that were read off the bundle. That test only catches the list changing; it
 # cannot tell whether a later game build changed a type's demands, which is what
-# the bundle re-read in the game-update checklist is for.
+# the bundle re-read in docs/game-update.md ("The game tables") is for.
 DEMANDS_NOT_MADE = {
     "ba:businesstype_hairdresser": {"ba:customerdemand_employeeuniforms"},
     "ba:businesstype_florist": {"ba:customerdemand_music"},
@@ -779,9 +781,9 @@ UNIFORM_DEMAND = "ba:customerdemand_employeeuniforms"
 # suitableSkills list at build 3680, read from the defaultlocalgroup_assets_items
 # bundle. A station missing from the table asks for no uniform, so a game that
 # adds one goes quiet here rather than guessing at a role — which is why the
-# bundle is re-read as part of the game-update checklist. The row count is
-# pinned in tests/test_uniform_alerts.py, but that only catches this table being
-# edited, not the game growing a station it does not have.
+# bundle is re-read as part of docs/game-update.md ("The game tables"). The row
+# count is pinned in tests/test_uniform_alerts.py, but that only catches this
+# table being edited, not the game growing a station it does not have.
 OFFICE_SKILLS = (
     "ba:skill_lawyer",
     "ba:skill_purchasingagent",
@@ -894,6 +896,8 @@ JOB_DEMAND_PRIORITY = ("Nice to have", "Important", "Critical")
 # Day 1 of a save is a Monday, so day % 7 gives the weekday directly. Confirmed
 # against payroll (hours logged this week) and against import delivery days.
 WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+
+# --- the board's own thresholds, not read from the game ---------------------
 
 # Idle stock thresholds: enough weeks of cover, and enough units, to be worth saying.
 IDLE_WEEKS = 4.0
@@ -1465,6 +1469,15 @@ def _door_caps(names: Names) -> dict:
     return caps
 
 
+def _size_cap(row: dict, caps: dict):
+    """The customer capacity a building row's size buys, out of _door_caps().
+
+    A number, [min, max] for a venue whose layouts seat different crowds, or
+    None for a type or size the table does not know.
+    """
+    return caps.get(row.get("t"), {}).get(row.get("z"))
+
+
 def _rent_estimate(row: dict) -> int | None:
     """Estimated rent per day for one building, from the static table's row."""
     # The rates were fitted and written down by neighbourhood name.
@@ -1712,7 +1725,7 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
                 "layout": _layout(row),
                 "m2": row["m"],
                 "traffic": row["x"],
-                "cap": caps.get(row["t"], {}).get(row["z"]),
+                "cap": _size_cap(row, caps),
                 "rent": rent,
                 "deposit": _deposit_estimate(row, rent),
                 "status": status,
@@ -3093,6 +3106,7 @@ def _goals(save: Save, names: Names, businesses: list) -> dict:
     }
 
 
+# --------------------------------------------------------------------- supply
 def _deepest_use(per_day, weekly, day, until, left_today, rounds=False):
     """The most a walk from now to the start of `until` has used at any point.
 
@@ -5515,6 +5529,7 @@ def _ceil_ten(value: float) -> int:
     return int(math.ceil(value / SUPPLY_ROUND_TO) * SUPPLY_ROUND_TO)
 
 
+# ------------------------------------------------------------------ factories
 def _parked(flow: dict, index: dict, machines: dict, slug: str) -> dict:
     """What each factory sent, day by day, to depots where nothing uses `slug`.
 
@@ -6678,8 +6693,11 @@ def _initial_customers(
     keeps the ceiling an upper bound, and the door clips it to the building's
     own number anyway.
 
-    0 where it cannot be known: an unknown size, a type the curves file does not
-    carry, or an old game's shop holding none of its type's primary products.
+    0 where it cannot be known: a new game's building of unknown size, or an old
+    game's shop with no known floor area, holding none of its type's primary
+    products, or of a type the curves file does not carry. A new game's type is
+    not looked up here; _arrival_ceiling() answers None for a type it has no
+    curves for.
     """
     if (build_at_start or 0) >= CAPPED_INITIAL_BUILD:
         if isinstance(size_cap, list):
@@ -6706,8 +6724,7 @@ def _initial_customers(
 
 def _arrival_ceiling(
     type_slug: str,
-    sqm: float,
-    products,
+    initial: float,
     promotion: float,
     base_promotion: float,
     door: int,
@@ -6717,44 +6734,29 @@ def _arrival_ceiling(
         ceil(min(initial x promotion x dayMultiplier x hourMultiplier,
                  the building's customer capacity))
 
-    `initial` is the largest productSalesRatio among the products the shop has
-    on hand that are primary for its type, times the building's square metres.
-    `promotion` is the save's own baseCustomerPromotionMultiplier plus
-    0.75 x the promotion total over 100.
+    `initial` is _initial_customers(). `promotion` is the save's own
+    baseCustomerPromotionMultiplier plus 0.75 x the promotion total over 100.
+    `door` is the registration's customerCapacity, the grid's door. The game
+    sends arrivals in open hours only; which those are is the caller's to know.
+    Where `initial` is the top of a cinema's or theater's capacity range, the
+    grid is a bound on that venue's arrivals rather than the game's exact number.
 
-    **This is an upper bound on arrivals, never the demand, and the board must
-    never print it as one.** It over-predicts served customers four times over
-    on a clothing store, because it counts arrivals the game then turns away for
-    having nothing they want to buy. It has exactly two jobs: bounding a
+    **These are the game's arrivals, an upper bound on customers served, never
+    the demand, and the board must never print them as one.** An arrival is
+    lost when the hour's staffed stations are full, and buys nothing when the
+    shop holds nothing they want. It has exactly two jobs here: bounding a
     censored hour from above in _need_curve(), and answering "how much more
-    could there be".
+    could there be". Break-even's profit estimate is to reuse the pair of helpers.
 
     None where the curves file is missing, where it does not know the type, or
-    where `initial` works out at nothing -- an unknown size, or a shop holding
-    none of its type's primary products. None of those is an error, and none of
-    them is a ceiling of zero: a grid of zeros would silently cancel the
-    censored estimate's "one more station" and read off the page as "no arrivals
-    are possible here". Every number the board states comes off the measured
-    grid either way.
+    where `initial` is nothing (see _initial_customers()). None of those is an
+    error, and none of them is a ceiling of zero: a grid of zeros would silently
+    cancel the censored estimate's "one more station" and read off the page as
+    "no arrivals are possible here". Every number the board states comes off the
+    measured grid either way.
     """
-    curves = load_demand_curves()
-    curve = curves["types"].get(type_slug)
-    if not curve:
-        return None
-    ratios = curves["items"]
-    primary = set(curve.get("p") or ())
-    # A save hands back whatever is in the list, and a product entry is not
-    # always the string it is supposed to be; an unhashable one would otherwise
-    # take the whole board down on the set test.
-    initial = max(
-        (
-            ratios.get(name, 0.0)
-            for name in products
-            if isinstance(name, str) and name in primary
-        ),
-        default=0.0,
-    ) * (sqm or 0)
-    if initial <= 0:
+    curve = load_demand_curves()["types"].get(type_slug)
+    if not curve or not initial or initial <= 0:
         return None
     promo = base_promotion + 0.75 * (promotion or 0) / 100
     day, hour = curve["d"], curve["h"]
@@ -7416,7 +7418,10 @@ def _hire_weeks(slots: list) -> list:
         floor = max(floor, math.ceil(sum(s["to"] - s["from"] for s in day) / SHIFT_CAP))
         for hour in range(24):
             floor = max(floor, sum(1 for s in day if s["from"] <= hour < s["to"]))
-    for count in range(floor, len(worst)):
+    # Up to and including first fit's own count: at that count the balanced
+    # packing still spreads the week, where first fit filled the first hire to
+    # 45 hours and left the second 18 (one register open 9 to 18 every day).
+    for count in range(floor, len(worst) + 1):
         for order in HIRE_ORDERS:
             packed = _pack_hire_weeks(slots, count, order)
             if packed is not None:
@@ -8443,6 +8448,12 @@ def _shift_row(shift: dict, table: dict) -> dict:
     return row
 
 
+def _schedule_demands(person: dict | None) -> list:
+    """The demands of a person the week they work decides (DEMAND_SCOPE `schedule`)."""
+    return [slug for slug in (person or {}).get("demands") or ()
+            if DEMAND_SCOPE.get(JOB_DEMANDS.get(slug, (None,))[0]) == "schedule"]
+
+
 def _index_table(posts: list, station_rows, person_rows, people: dict) -> dict:
     """The two lookup tables a site's rows point into, and the maps to build them.
 
@@ -8490,8 +8501,12 @@ def _index_table(posts: list, station_rows, person_rows, people: dict) -> dict:
     return {
         "stations": stations,
         "station": station_index,
+        # A person's schedule demands, where they hold any: the board checks
+        # every week it is about to write against them (gwWeekCheck()).
         "people": [
-            {"id": pid, "name": (people.get(pid) or {}).get("name")} for pid in order
+            {"id": pid, "name": (people.get(pid) or {}).get("name"),
+             **({"demands": held} if (held := _schedule_demands(people.get(pid))) else {})}
+            for pid in order
         ],
         "person": person_index,
     }
@@ -8544,6 +8559,7 @@ def _staffing(
     everyone_on_bench = list(bench)
     curves = load_demand_curves()
     table = load_buildings()
+    caps = _door_caps(names)
 
     # One week per person for the whole save, not one per site. A person
     # assigned to a site appears in that site's pool alone, but a bench member
@@ -8592,7 +8608,7 @@ def _staffing(
         }
         try:
             site = _plan_site(save, names, business, building, grid, people,
-                              list(bench), scratch, curves, table, base_promotion)
+                              list(bench), scratch, curves, table, base_promotion, caps)
         except Exception:
             sites.append((business, None))
             continue
@@ -8685,8 +8701,13 @@ def _open_need(site: dict) -> dict:
 
 
 def _open_floor(need: dict, grid: dict) -> dict:
-    """A need curve with every open hour it reads nothing for (`none`) staffed in full."""
-    stations = collections.Counter(s["skill"] for s in grid["stations"])
+    """A need curve with every open hour it reads nothing for (`none`) staffed in full.
+
+    The curve is keyed by role (_station_role()), not by skill: a hairdresser's
+    head wash is a role of its own under the Hair Stylist skill, and counting
+    stations by skill gave it none and its chairs the head washes' as well.
+    """
+    stations = collections.Counter(_station_role(s) for s in grid["stations"])
     out = {}
     for skill, row in need.items():
         count = stations.get(skill, 0)
@@ -9692,7 +9713,7 @@ def _plan_fields(week: dict, table: dict, names, people: dict, cost: dict) -> di
 
 def _plan_site(
     save, names, business, building, grid, people, bench, state, curves, table,
-    base_promotion,
+    base_promotion, caps,
 ) -> dict:
     """One retail site's demand plan, and what its full-cover plan will need.
 
@@ -9703,17 +9724,24 @@ def _plan_site(
     off the bench; _finish_site() then builds the row from both.
     """
     # The arrival ceiling, for bounding a censored hour only. Never a target.
-    # It is sized off the products the game itself says are on the shelves,
-    # cachedAvailableProducts, which is what GetCustomersByHour reads; the
-    # board's own lines table is sales and stock history and holds items the
-    # shop has stopped carrying. A missing building row means the size is
-    # unknown, and _arrival_ceiling() answers None rather than zero.
+    # A current game sizes it off the building's size; an old one off the
+    # products the game itself says are on the shelves, cachedAvailableProducts,
+    # which is what GetInitialCustomers reads -- the board's own lines table is
+    # sales and stock history and holds items the shop has stopped carrying. A
+    # missing building row means the size is unknown, and _arrival_ceiling()
+    # answers None rather than zero.
     curve = curves["types"].get(business["typeSlug"]) or {}
-    row = table.get(_address_of(building))
+    row = table.get(_address_of(building)) or {}
+    initial = _initial_customers(
+        save.root.get("buildNumberAtStart"),
+        _size_cap(row, caps),
+        business["typeSlug"],
+        row.get("m") or 0,
+        save.items(building.get("cachedAvailableProducts")),
+    )
     ceiling = _arrival_ceiling(
         business["typeSlug"],
-        (row or {}).get("m") or 0,
-        save.items(building.get("cachedAvailableProducts")),
+        initial,
         business.get("promotion") or 0,
         base_promotion,
         grid["door"],
@@ -9886,8 +9914,8 @@ def _finish_site(site, full, names, people, opened=None) -> dict:
 # retail, office, cinema and theatre buildings need cleaning; warehouses (which
 # factories use) need nothing, and no building type requires a driver. A type
 # missing here accepts nobody, so the page proposes no hire there rather than
-# one the mod refuses (`no_skill`); the game-update checklist re-reads the
-# bundles.
+# one the mod refuses (`no_skill`). On a new build the bundles are re-read by
+# hand: docs/game-update.md, "Hand-read tables no script checks".
 _SHOP_SKILLS = ("ba:skill_customerservice", "ba:skill_securityguard", CLEANING_SKILL)
 ASSIGN_SKILLS = {
     "ba:businesstype_bookstore": _SHOP_SKILLS,
@@ -10213,16 +10241,28 @@ def _unstaffed(row: dict, shifts, own: set, training=frozenset()) -> dict | None
     Counted per role, weekday and hour: the site's own people the plan puts
     on the role then, less everybody on the role's stations in the game's
     week then, never below none -- so somebody on register 2 where the plan
-    uses register 1 is not a gap. Only hours a planned shift gives the site's
-    own people count, so a hire's week is never counted here as well. Only
-    roles where some of them (`idle`) have no hours at the site at all in the
-    game's week, and nobody in training: a plan that merely differs from the
-    week is the site page's to show. Returns {hours, roles: [{skill, hours,
-    idle}]}, or None.
+    uses register 1 is not a gap. A role is the row's own (`roles[].key`):
+    a hairdresser's head wash and its chairs share the Hair Stylist skill,
+    and busy chairs must not hide an empty head wash. Only hours a planned
+    shift gives the site's own people count, so a hire's week is never
+    counted here as well. Only roles where some of them (`idle`) have no
+    hours at the site at all in the game's week, and nobody in training: a
+    plan that merely differs from the week is the site page's to show.
+    Returns {hours, roles: [{skill, hours, idle}]}, one entry a skill, or
+    None.
     """
     stations, people = row.get("stations") or [], row.get("people") or []
     person = lambda p: people[p]["id"] if p is not None and 0 <= p < len(people) else None  # noqa: E731
-    skill = lambda s: stations[s].get("skill") if s is not None and 0 <= s < len(stations) else None  # noqa: E731
+    role_of = {}
+    for entry in row.get("roles") or ():
+        for index in entry.get("stations") or ():
+            role_of[index] = entry.get("key", entry.get("skill"))
+    skill_of = lambda s: stations[s].get("skill") if s is not None and 0 <= s < len(stations) else None  # noqa: E731
+    skill = lambda s: role_of.get(s, skill_of(s))  # noqa: E731
+    # The skill each role is worked in, which is what the page names.
+    named = {}
+    for index, station in enumerate(stations):
+        named.setdefault(skill(index), station.get("skill"))
     now = collections.Counter()
     working = set()
     for entry in (row.get("current") or {}).get("list") or ():
@@ -10247,16 +10287,22 @@ def _unstaffed(row: dict, shifts, own: set, training=frozenset()) -> dict | None
         gap[role] += max(0, n - now[(role, day, hour)])
     # Idle: nothing at the site in the game's week, not in training, and some
     # of their own planned hours left with nobody on.
-    idle = collections.Counter(
-        role for (role, pid), hours in cells.items()
-        if pid not in working and pid not in training
-        and any(want[(role, d, h)] > now[(role, d, h)] for d, h in hours)
-    )
+    idle = collections.defaultdict(set)
+    for (role, pid), hours in cells.items():
+        if pid not in working and pid not in training \
+                and any(want[(role, d, h)] > now[(role, d, h)] for d, h in hours):
+            idle[role].add(pid)
+    # Judged per role, told per skill: the head wash's hours and the chairs'
+    # are one Hair Stylist line, and somebody idle in both is one person.
+    hours_of, idle_of = collections.Counter(), collections.defaultdict(set)
+    for role in gap:
+        if gap[role] and idle[role]:
+            hours_of[named.get(role, role)] += gap[role]
+            idle_of[named.get(role, role)] |= idle[role]
     roles = [
-        {"skill": role, "hours": gap[role], "idle": idle[role]}
-        for role in _in_order(gap) if gap[role]
+        {"skill": name, "hours": hours_of[name], "idle": len(idle_of[name])}
+        for name in _in_order(hours_of)
     ]
-    roles = [r for r in roles if r["idle"]]
     total = sum(r["hours"] for r in roles)
     if total < UNSTAFFED_MIN_HOURS:
         return None
@@ -10442,14 +10488,16 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
             if found is not None:
                 plans["office"] = found
         # Staff with no hours (_unstaffed()): the hours a site's own people
-        # would work that nobody works in the game's week now, against the
-        # plans its Staffing block writes -- a shop's demand plan and full
-        # cover, which the page picks between as that block does; an office's
-        # office default.
+        # would work that nobody works in the game's week now, against every
+        # plan a shop's Staffing block may write -- the demand plan, full
+        # cover, and the open-hours plan it writes for a new shop or one
+        # without complete data -- which the page picks between as that block
+        # does (spPlanOf()); an office's office default.
         unstaffed = {}
         base = shops.get(business["key"]) if kind == "shop" else offices.get(business["key"]) if kind == "office" else None
         if base and not base.get("failed"):
-            pairs = (("demand", base.get("shifts")), ("full", (base.get("fullCover") or {}).get("shifts"))) \
+            pairs = (("demand", base.get("shifts")), ("full", (base.get("fullCover") or {}).get("shifts")),
+                     ("open", (base.get("openCover") or {}).get("shifts"))) \
                 if kind == "shop" else (("office", base.get("shifts")),)
             for mode, shifts in pairs:
                 gap = _unstaffed(base, shifts or (), own.get(business["key"], set()), training)
@@ -10883,6 +10931,7 @@ def _idle_parts(parts: list, default):
     return said
 
 
+# --------------------------------------------------------------------- market
 GLOBAL_HOOD = "ba:neighborhood_global"
 HYPE_EVENT = 2  # "Citizens in {hood} are showing strong demand for {item}"
 SUPPLIER_EVENTS = {
@@ -13334,6 +13383,7 @@ def _hype_exposure(businesses: list, market: dict) -> list:
     return out
 
 
+# ----------------------------------------------------------------------- plan
 def _ingredient_prices(save: Save, names: Names, supply: dict, businesses: list) -> dict:
     """What a unit of each raw material actually cost, from the owner's books.
 
@@ -13614,9 +13664,17 @@ def _plan(
     }
 
 
+# --------------------------------------------------------------------- alerts
 # What the number in a finding's "worth" is counted in, for the page to print
 # under the amount. Only groups whose worth carries money get a unit; the rest
 # are left empty because their worth is always None.
+# Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
+# needs: its group, emitted by note() in _alerts() or _finding() in a helper
+# such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
+# FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
+# ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
+# search words, if players have any; its line under "What counts as a finding"
+# in docs/dashboard-reference.md. The checklist has the only-if tables.
 ALERT_UNITS = {
     "notrading": msg("f.unit.rent", "/day rent"),
     "vacant": msg("f.unit.rent", "/day rent"),
@@ -13726,6 +13784,13 @@ def _finding(
     }
 
 
+# Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
+# needs: its group, emitted by note() in _alerts() or _finding() in a helper
+# such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
+# FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
+# ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
+# search words, if players have any; its line under "What counts as a finding"
+# in docs/dashboard-reference.md. The checklist has the only-if tables.
 def _alerts(
     businesses: list,
     supply: dict,
@@ -14977,6 +15042,7 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
 # How a pile of same-shaped findings at one site reads as a single line: n
 # findings, and the one named first. A line stands for CONDENSE_AT or more, so
 # the "one" forms are there for a translation's plural rules, not the English.
+# Registry: "A finding kind" (only if: see the checklist).
 SUMMARIES = {
     "shortfall": lambda n, subject: msg("f.sum.shortfall", {
         "one": "{n} item runs dry before its next delivery; soonest {subject}",
@@ -15024,6 +15090,7 @@ SUMMARIES = {
         "other": "{n} top-up targets are set far above what sells; {subject} the deepest"}, n=n, subject=subject),
 }
 CONDENSE_AT = 3  # three or more of a kind at one site becomes one line
+# Registry: "A finding kind" (only if: see the checklist).
 WORST_FIRST = {"wholesale"}  # condensed by severity first, then rank
 
 
@@ -15795,6 +15862,7 @@ html:has(dialog:modal){overflow:hidden}
 .gw-call b{color:var(--ink);font-weight:600}
 .gw-call.gw-warn>.gw-i{color:var(--warn)}.gw-call.gw-neg>.gw-i{color:var(--neg)}.gw-call.info>.gw-i{color:var(--info)}.gw-call.ok>.gw-i{color:var(--accent)}
 .gw-call.gw-neg b{color:var(--neg)}
+.gw-call .gw-chk{margin:4px 0 0;padding-left:16px}
 .gw-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
 .gw-chip{display:inline-flex;align-items:center;gap:6px;min-height:24px;padding:3px 9px;box-sizing:border-box;border-radius:6px;background:var(--raised);font:500 11.5px/1.3 "IBM Plex Mono",monospace;color:var(--ink-2);max-width:100%;overflow-wrap:anywhere}
 .gw-dlg .gw-chip svg{width:12px;height:12px}
@@ -19630,6 +19698,7 @@ function sparkHtml(values, labels){
 /* --- the redesign's shared vocabulary ---------------------------------------
    Icons are inline stroke SVG on a 24 grid, never glyphs. Every view builds
    its section heads, chips, ? marks and segmented controls from these. */
+/* Registry: "A view or a page" (only if: see the checklist). */
 const ICON = {
   today: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"></path></svg>',
   results: '<svg viewBox="0 0 24 24"><path d="M4 19h16"></path><path d="M5 15l4-5 4 3 6-7"></path></svg>',
@@ -22042,6 +22111,13 @@ function drawKpiLine(){
    one named, or with view "route" the view of the finding's route), or the
    site's own page. A finding is a headline; the link is the rest of the
    story. */
+/* Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
+   needs: its group, emitted by note() in _alerts() or _finding() in a helper
+   such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
+   FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
+   ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
+   search words, if players have any; its line under "What counts as a finding"
+   in docs/dashboard-reference.md. The checklist has the only-if tables. */
 const ALERT_LINKS = {
   /* A supply finding lands on its Supply view (the route's), on its row, lit:
      an import on Imports (a depot's and a factory's own contract alike), a
@@ -22071,6 +22147,11 @@ const ALERT_LINKS = {
 /* Which page, and which view on it, each section lives on. A finding's link
    opens that page first, then scrolls; the reader never lands on a hidden
    section. */
+/* Registry: "A view or a page" (docs/architecture.md, Registries). A new view
+   needs its section markup (class "sec rv", an id starting sec, and data-sub),
+   SUBS, SEC_PAGE, PAGE_DRAWS and SS_VIEWS; for its route also ROUTES, AREAS
+   (the area's views) and routeViewLabel(), and HOST_ROUTES if a host view shows
+   it by default. The checklist has the only-if rows. */
 const SEC_PAGE = {
   alertSection:["today"], secMoves:["today"],
   /* secRhythm was Weekly rhythm, folded into Daily result's By weekday: an
@@ -22093,6 +22174,7 @@ const SEC_PAGE = {
   secPayroll:["staffing","payroll"],
 };
 /* Sections that have gone, and the section that took their place. */
+/* Registry: "A view or a page" (only if: see the checklist). */
 const SEC_MOVED = {secRhythm: "secDaily", secLogistics: "secImports", secStock: "secDeliveries", secShops: "secDeliveries",
   secWarehouses: "secImports", secFactories: "secProduction", sbStrip: "secChanges"};
 /* Put something at the top of the window and keep it there while the page
@@ -22160,6 +22242,7 @@ function alertSite(a){
 /* A finding about the company as a whole carries no site, yet it is still
    shown on one: `site` picks the site where it bites hardest, `otherwise` is
    where the link goes when no site has it. */
+/* Registry: "A finding kind" (only if: see the checklist). */
 const ALERT_SITE_PICK = {
   /* Health insurance and a happy boss are asked for at each site and settled
      company-wide, so the Crew with the most people lacking one of them is the
@@ -22244,6 +22327,7 @@ const alertPage = a => (SEC_PAGE[(ALERT_LINKS[a.group] || {}).sec] || ["today"])
    kind's link targets the site (ALERT_LINKS site:true), it lands on that
    line's row, lit. The kinds that link to a Checks view today are listed so
    they behave alike the moment they do. */
+/* Registry: "A finding kind" (only if: see the checklist). */
 const ALERT_LANDS_ON_ROW = new Set(["wholesale", "topup", "outruns", "unplanned", "shortfall", "order",
                                     "paused", "notrouted", "feed"]);
 
@@ -22254,6 +22338,13 @@ const ALERT_LANDS_ON_ROW = new Set(["wholesale", "topup", "outruns", "unplanned"
    depot or a factory keeps the same finding somewhere else, and spEvidence()
    drops any block the open kind does not draw, so a row never lights nothing
    and scrolls nowhere. */
+/* Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
+   needs: its group, emitted by note() in _alerts() or _finding() in a helper
+   such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
+   FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
+   ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
+   search words, if players have any; its line under "What counts as a finding"
+   in docs/dashboard-reference.md. The checklist has the only-if tables. */
 const ALERT_EVIDENCE = {
   notrading: {block: "tiles"},
   loss: {block: "tiles"},
@@ -22522,6 +22613,13 @@ const kindOff = a => alertGroupPrefs[a.group] === false;
    section 7); where that home is still an existing view, ALERT_LINKS above is
    the landing inside it, and docs/ui-route-migration.md names each one. `pick`
    decides between two homes by the finding's own site or sentence. */
+/* Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
+   needs: its group, emitted by note() in _alerts() or _finding() in a helper
+   such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
+   FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
+   ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
+   search words, if players have any; its line under "What counts as a finding"
+   in docs/dashboard-reference.md. The checklist has the only-if tables. */
 const FINDING_ROUTES = {
   notrading: {route: "businesses/results", act: "readiness"},
   vacant: {route: "businesses/results", act: "costs"},
@@ -23928,8 +24026,8 @@ const SP_ROSTER_STORE = "ba_dash_roster:";
 const spRosterRow = key => (D.staffing || []).find(r => r.key === key) || null;
 /* Whether the plan rests on a measured hour at all. Every serving role thin
    all week means the planner cut no serving shifts, and there is nothing
-   honest to put on the strip: the game's own arrival ceiling over-predicts a
-   shop like this fourfold, so it is never shown as demand. */
+   honest to put on the strip: the game's own arrival ceiling counts everyone
+   who may walk in, not the customers served, so it is never shown as demand. */
 const spRosterMeasured = row => !!row && !row.failed && Object.keys(row.basis || {}).some(
   skill => (row.basis[skill] || []).some(day => (day || []).some(b => b && b !== "none")));
 /* Whether the doors are open that hour. The game keeps a list of slots a day,
@@ -24109,10 +24207,57 @@ const spFullNeed = row => {
 };
 const spFullRow = row => Object.assign({}, row, spFullNeed(row), row.fullCover,
   {fullCover: null, full: true});
-/* The plan a shop shows: full cover where the reader picked it and the shop
-   offers it, else the demand plan. Its Staffing block, its write and Staffing ›
-   Schedules all read this one, so the three never describe different weeks. */
-const spShownRow = base => spOffersFull(base) && spPlanRead(base.key) === "full" ? spFullRow(base) : base;
+/* Whether the other choice to full cover is the open-hours plan (`openCover`)
+   rather than the demand plan: a shop whose demand data is not complete, or
+   that nobody works at yet. Its demand plan staffs no hour it has not read,
+   so the open-hours plan puts every station on every hour it opens and
+   nothing has read, and never opens it longer (_open_need()). */
+const spOpenFirst = base => {
+  if(!base || base.failed || !base.openCover) return false;
+  if(!base.openCover.complete) return true;
+  const b = (D.businesses || []).find(x => x.key === base.key);
+  return !!b && !b.staff;
+};
+/* The plan a shop is on: "full" where the reader picked the 24/7 test and the
+   shop offers it, "open" where the other choice is the open-hours plan
+   (spOpenFirst()), else "demand"; null with no plan. The shop's Staffing
+   block, its write, Staffing › Schedules, the Staff page (hrVariant()) and
+   Staff with no hours (hrIdleHtml()) all read this one, so none of them
+   describes or writes a different week. */
+const spPlanOf = base => !base || base.failed ? null
+  : spOffersFull(base) && spPlanRead(base.key) === "full" ? "full"
+  : spOpenFirst(base) ? "open" : "demand";
+/* The open-hours plan's own need, which the payload leaves out as it does
+   full cover's (_open_need()): with complete data every station of every
+   role the hours the shop opens; without, the demand plan's need, with
+   every open hour nothing has read (`none`) given every station of the
+   role. Those hours read `open` on the strip: the demand plan's need there
+   is nothing, and showing it beside a week that staffs them said no hour
+   was needed. */
+const spOpenNeed = row => {
+  const need = {}, basis = {}, complete = !!(row.openCover || {}).complete;
+  (row.roles || []).forEach(r => {
+    const key = spRoleKey(r), n = (r.stations || []).length;
+    need[key] = [...Array(7)].map((_, wd) => [...Array(24)].map((_, h) => {
+      const was = (((row.need || {})[key] || [])[wd] || [])[h] || 0;
+      const read = ((((row.basis || {})[key] || [])[wd] || [])[h]) || "none";
+      return (complete || read === "none") && spOpenAt((row.open || [])[wd], h) ? n : was;
+    }));
+    basis[key] = [...Array(7)].map((_, wd) => [...Array(24)].map((_, h) => {
+      const read = ((((row.basis || {})[key] || [])[wd] || [])[h]) || "none";
+      return (complete || read === "none") && spOpenAt((row.open || [])[wd], h) ? (complete ? "openall" : "open") : read;
+    }));
+  });
+  return {need, basis};
+};
+/* The open-hours plan as a row the block draws like any other, as spFullRow()
+   does for full cover. It keeps the shop's own opening hours. */
+const spOpenRow = row => Object.assign({}, row, spOpenNeed(row), row.openCover,
+  {openCover: null, full: false, variant: "open", openComplete: !!(row.openCover || {}).complete});
+const spShownRow = base => {
+  const plan = spPlanOf(base);
+  return plan === "full" ? spFullRow(base) : plan === "open" ? spOpenRow(base) : base;
+};
 /* The ticks of each plan are kept apart: an entry ticked on one is not an
    entry typed for the other. The full-cover ticks are kept per company as
    well, and not at all on a board with no character id; the demand plan's
@@ -24224,6 +24369,8 @@ const SP_BASIS_READ = {
   get scaled(){ return " · " + tt("sp.basis.scaled", "<b>scaled from the best measured day</b> through the game's day curve; this weekday rests on under two weeks"); },
   get measured(){ return " · " + tt("sp.basis.measured", "measured"); },
   get full(){ return " · " + tt("sp.basis.full", "<b>full cover</b>: every station, every hour, to measure demand"); },
+  get open(){ return " · " + tt("sp.basis.open", "<b>every station</b>: no customers read for this hour yet"); },
+  get openall(){ return " · " + tt("sp.basis.openall", "<b>every station</b>, every hour the shop opens, while nobody works here yet"); },
 };
 function spNeedAt(row, wd, h){
   let n = 0, basis = null;
@@ -24314,6 +24461,7 @@ const spPri = p => `<span class="sp-pri${p >= 2 ? " hi" : ""}">${
 let spFindsAll = false, spArrived = null;
 /* A group whose evidence depends on the site: the uniform finding is about the
    locker while there is none, and about the roles once there is one. */
+/* Registry: "A finding kind" (only if: see the checklist). */
 const SP_EVIDENCE_HIT = {uniform: b => b.missingUniformLocker ? "locker" : "uniform"};
 /* Which blocks each kind of panel actually draws. A finding pointing anywhere
    else gets no data-ev at all, rather than dimming the page and scrolling
@@ -24337,6 +24485,7 @@ const SP_BLOCKS = {
    - `staff` is "No staff assigned" on a shop and a machine nobody is posted to
      on a factory;
    - neither draws a profit chart, so a trend lands on the tiles. */
+/* Registry: "A finding kind" (only if: see the checklist). */
 const SP_EVIDENCE_KIND = {
   depot: {trend: "tiles", dead: "stock", target: "stock", feed: "stock", notrouted: "stock",
           topup: "stock", wholesale: "stock", shortfall: "stock", order: "stock", paused: "stock"},
@@ -24655,8 +24804,9 @@ function spDesks(grid){
    Schedule, and a tick per line once they have. */
 
 /* The empty state. A shop too new to have been measured is not given a guess:
-   the game's own arrival ceiling over-predicts a shop like it fourfold, and a
-   roster cut from that would be a fiction with a shift count on it. */
+   the game's own arrival ceiling counts everyone who may walk in, not the
+   customers served, and a roster cut from that would be a fiction with a shift
+   count on it. */
 function spRosterNone(row, pick){
   const stations = (row && row.stations) || [];
   const codes = spStationCodes(stations);
@@ -24667,7 +24817,7 @@ function spRosterNone(row, pick){
   return `<section class="sec rv" data-block="roster" id="sp-roster"${pick ? ` data-site="${attr(row.key)}"` : ""}>
     ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster", why: failed
       ? tt("sp.roster.failed.why", "This site's schedule or stations could not be read, so no week is suggested for it. Nothing else on the board is affected.")
-      : tt("sp.roster.none.why", "A week is cut from the hours this site has already served, and there is no cleaning or security station here to cover in the meantime. The game's own arrival ceiling over-predicts a shop like this fourfold, so nothing is suggested from it.")})}
+      : tt("sp.roster.none.why", "A week is cut from the hours this site has already served, and there is no cleaning or security station here to cover in the meantime. The game's own arrival ceiling counts everyone who may walk in, not the customers a shop like this serves, so nothing is suggested from it.")})}
     ${pick || ""}
     <div class="chartbox sp-gantt sp-empty">${rows}</div>
     <div class="sp-read">${failed ? tt("sp.roster.failed", "Plan unavailable") : tt("sp.roster.none", "Nothing to schedule")}</div>
@@ -24708,7 +24858,7 @@ function spRosterDay(c, wd, on){
   /* Open hours no report has measured yet, on the demand plan: marked on the
      strip, since the plan reads them as no customers. */
   const unmeasured = [];
-  if(!c.full) ((c.row.unmeasured || [])[wd] || []).forEach(h => {
+  if(!c.full && c.row.variant !== "open") ((c.row.unmeasured || [])[wd] || []).forEach(h => {
     unmeasured.push(`<i class="sp-unmh" style="grid-column:${h + 2}" data-read="${attr(
       tt("sp.need.unmeasured", "<b>{when}</b> no customers on file: counted as none", {when: spWhenShort(wd, h)}))}"></i>`);
   });
@@ -24717,6 +24867,9 @@ function spRosterDay(c, wd, on){
     : bases.some(b => b === "scaled") ? "scaled" : "none";
   let out = `<div class="sp-grow sp-needrow${cells.length ? "" : " sp-unmeas"}"><span class="lab" tabindex="0" data-read="${attr(
     c.full ? tt("sp.need.full", "Every station, every hour: the demand test, {d:day}", {d: wd})
+      : c.row.variant === "open" && cells.length ? (c.row.openComplete
+        ? tt("sp.need.openall", "Every station, the hours the shop opens, {d:day}", {d: wd})
+        : tt("sp.need.open", "Stations the plan asks for, {d:day}: what the measured hours ask for, and every station in the hours nothing is read yet", {d: wd}))
       : cells.length ? tt("sp.need.asks", "Stations the measured hours ask for, {d:day}", {d: wd})
       /* The doors decide before the measurement does, here as everywhere else
          in the block: a shop shut on Sunday has not measured nothing, it has
@@ -25125,7 +25278,9 @@ function spUnmeasuredLine(row){
 }
 
 function spPlanPick(base, full){
-  const first = spCoverOnly(base) ? tt("sp.new.label.cover", "Cover only") : tt("sp.pick.demand", "Demand plan");
+  /* The open-hours plan where it is the other choice (spOpenFirst()). */
+  const first = spOpenFirst(base) ? tt("sp.pick.open", "Open hours")
+    : spCoverOnly(base) ? tt("sp.new.label.cover", "Cover only") : tt("sp.pick.demand", "Demand plan");
   /* Progress, on the test's own view: finished days since the shop first
      opened, against the days that make the data complete. */
   const fc = base.fullCover || {};
@@ -25185,7 +25340,7 @@ function spRosterBlock(b){
   const base = spRosterRow(b.key);
   const offer = spOffersFull(base);
   const row = spShownRow(base);
-  const full = offer && row !== base;
+  const full = offer && !!row.full;
   const pick = offer ? spPlanPick(base, full) : "";
   /* A week with nothing in it is the only empty state. A shop too new to have
      been measured still has cleaning and security cover to type -- and that is
@@ -25363,7 +25518,7 @@ function spRosterBlock(b){
     ${/* Which shop it is about rides in the heading: the Optimize staffing
           card lands here with the shop's own heading scrolled off the top. */""}
     ${pick}
-    ${c.full ? "" : spUnmeasuredLine(row)}
+    ${c.full || row.variant === "open" ? "" : spUnmeasuredLine(row)}
     ${c.cover ? spRosterNew(c, counts) : ""}
     <div class="sp-ba">
       <div tabindex="0" data-read="${attr(`${(() => {
@@ -27385,7 +27540,7 @@ function pgScheduleDone(key, last, answer){
   const row = last && last.row;
   const b = (D.businesses || []).find(x => x.key === key);
   const id = `schedule|${key}|${print}`;
-  pgRecord({id, family: "schedule", target: {site: key, plan: row && row.office ? "office" : row && row.full ? "full" : "demand"},
+  pgRecord({id, family: "schedule", target: {site: key, plan: row && row.office ? "office" : row && row.full ? "full" : row && row.variant === "open" ? "open" : "demand"},
     expect: {print, added: Number(answer.added) || 0, removed: Number(answer.removed) || 0}, rowKeys: [], label: b ? shortName(b) : key});
   if(typeof nxSchedStale === "function") nxSchedStale();
   return [id];
@@ -27475,7 +27630,9 @@ function pgStateAt(siteKey, slug){
    of their own. Every figure is a fact's (supplyFact) and every change a row
    of the one checklist (buildOrderChecklist); the views lay them out, and a
    row with a change carries its tick. */
+/* Registry: "A view or a page" (only if: see the checklist). */
 const SB_VIEWS = ["changes", "imports", "deliveries", "production", "flow"];
+/* Registry: "A view or a page" (only if: see the checklist). */
 const SB_SEC = {changes: "secChanges", imports: "secImports", deliveries: "secDeliveries", production: "secProduction", flow: "secFlow"};
 const SB_LABEL = {shops: "Shops", warehouses: "Warehouses", factories: "Factories"};
 /* The view each kind of change is typed on. A catch-up belongs to the import
@@ -31608,16 +31765,17 @@ function hrBreaks(slug, w, row){
 }
 const hrKind = slug => ((D.hiring || {}).demandKinds || {})[slug] || null;
 
-/* A planned site's plan as the Staff page reads it: a new shop full cover,
-   else the roster's own pick; a factory the sizing on Supply; an office its
-   own. `row` is the plan row the hire weeks point into. */
+/* A planned site's plan as the Staff page reads it: a shop the plan its
+   Staffing block is on (spPlanOf()); a factory the sizing on Supply; an
+   office its own. `row` is the plan row the hire weeks point into. */
 function hrVariant(site){
   const plans = site.plans || {};
   if(site.kind === "shop"){
     /* Never full cover, whose write opens a shop 0 to 24: the open-hours
-       plan where the data is not complete (it is then the only one), or
-       where the player runs full cover or the shop is new; else demand. */
-    if(plans.open && (!plans.demand || site.new || spPlanRead(site.key) === "full")) return "open";
+       plan in its place, as where the shop is on it (a new shop, or one
+       whose data is not complete, when it is often the only one). */
+    const on = spPlanOf(spRosterRow(site.key));
+    if(plans.open && (on === "open" || on === "full" || !plans.demand)) return "open";
     return plans.demand ? "demand" : null;
   }
   if(site.kind === "factory") return plans[sizing] ? sizing : Object.keys(plans)[0] || null;
@@ -31627,7 +31785,7 @@ function hrPlanRow(site, variant){
   if(site.kind === "shop"){
     const base = spRosterRow(site.key);
     if(!base || base.failed) return null;
-    if(variant === "open" && base.openCover) return Object.assign({}, base, base.openCover, {openCover: null, fullCover: null, full: false});
+    if(variant === "open" && base.openCover) return spOpenRow(base);
     return variant === "full" && base.fullCover ? spFullRow(base) : base;
   }
   if(site.kind === "factory") return (((D.factoryStaffing || {})[variant]) || []).find(r => r.key === site.key && !r.failed) || null;
@@ -31648,6 +31806,10 @@ const hrPerson = (id, row) => {
   return p;
 };
 
+/* The schedule demands a person's week `x` ({w, S}) breaks, and whether it
+   breaks none: the hard filter automatic picks and moves go through. */
+const hrFails = (p, x) => (p.demands || []).filter(d => hrKind(d) === "schedule" && hrBreaks(d, x.w, x.S && x.S.row));
+const hrFits = (p, x) => !hrFails(p, x).length;
 /* The page's whole answer, deterministic for one payload, one set of
    filters and one set of ticks:
      sites  one per hiring site: {site, b, variant, plan, row, weeks, planned}
@@ -31688,7 +31850,11 @@ function hrModel(){
   /* 2. Spare people, and the unassigned nobody plans on, into another site's
      week in the role they are spare in (the unassigned: their best skill);
      the sites' spares in list order, then the rest. Someone spare in two
-     roles tries the one they are better at first. */
+     roles tries the one they are better at first. Their schedule demands
+     are a hard filter (Peter, 28 September 2026): only a week that meets
+     them all, at the first site in list order that has one, and there the
+     one at a desk that meets their desk demands first. Nobody is moved into
+     a week they would not keep; they stay spare. */
   const counted = new Set(sites.flatMap(S => S.plan.bench || []));
   const spares = [];
   sites.forEach(S => (S.plan.spare || []).forEach(id => spares.push({id, from: S})));
@@ -31702,9 +31868,10 @@ function hrModel(){
     const level = k => { const x = (p.skills || []).find(y => y && y.skill === k); return x ? Number(x.level) || 0 : k === p.skill ? Number(p.level) || 0 : -1; };
     const ordered = roles.slice().sort((a, b) => level(b) - level(a));
     for(const skill of ordered){
-      const S = sites.find(x => x !== from && (x.site.accepts || []).includes(skill) && x.weeks.some(y => !y.taken && y.w.skill === skill));
-      if(!S) continue;
-      const open = S.weeks.filter(y => !y.taken && y.w.skill === skill);
+      const fit = sites.filter(x => x !== from && (x.site.accepts || []).includes(skill))
+        .flatMap(x => x.weeks.filter(y => !y.taken && y.w.skill === skill && hrFits(p, y)));
+      if(!fit.length) continue;
+      const S = fit[0].S, open = fit.filter(y => y.S === S);
       const wk = open.find(y => !hrDeskMiss(p.demands, S, y.w).length) || open[0];
       wk.taken = true;
       moved.add(id);
@@ -31751,19 +31918,25 @@ function hrModel(){
       if(ui.skip.has(c.id)) return;
       const barred = x => pt && !forced && hrAsksPt(c) && atShop(x);
       const free = open.filter(x => !x.who && !barred(x));
-      if(free.length){
-        /* The first site in list order with a place left; there, the first
-           week whose schedule demands they meet, else the first, warned. */
-        const S = free[0].S, mine = free.filter(x => x.S === S);
-        const fails = x => (c.demands || []).filter(d => hrKind(d) === "schedule" && hrBreaks(d, x.w, S.row));
-        /* The weeks of a role are interchangeable, so the one at a desk
-           that meets their desk and chair demands goes first. */
-        const fit = mine.find(x => !fails(x).length && !hrDeskMiss(c.demands, S, x.w).length) || mine.find(x => !fails(x).length);
-        const wk = fit || mine[0];
-        wk.who = {type: "hire", c, misfit: fit ? [] : fails(wk)};
+      /* Their schedule demands are a hard filter (Peter, 28 September 2026):
+         the first site in list order with a week they meet, at every site's
+         open weeks of the role; there the one at a desk that meets their
+         desk and chair demands first, the weeks of a role being otherwise
+         interchangeable. Nobody no week fits is picked: the next best is.
+         Only someone the player ticks in by hand (Change picks) takes a week
+         that breaks a demand, the first free one, and is hired anyway,
+         warned. */
+      const fits = free.filter(x => hrFits(c, x));
+      if(fits.length || (free.length && forced)){
+        const pool = fits.length ? fits : free;
+        const S = pool[0].S, mine = pool.filter(x => x.S === S);
+        const wk = mine.find(x => !hrDeskMiss(c.demands, S, x.w).length) || mine[0];
+        wk.who = {type: "hire", c, misfit: fits.length ? [] : hrFails(c, wk)};
         role.picked.push(c);
         role.at.set(c.id, {week: wk});
         used.set(c.id, wk.S);
+      } else if(free.length){
+        role.at.set(c.id, {nofit: true});
       } else if(forced){
         const S = weeks.length ? weeks[0].S : null;
         if(!S) return;
@@ -31889,13 +32062,6 @@ function hrWeek(S, fill, away, arriving, lost){
   }
   return [...days].sort((a, b) => a[0] - b[0]).map(([d, shifts]) => ({d, shifts: shifts.sort((a, b) => a.f - b.f || a.t - b.t)}));
 }
-/* Whether a person has hours at a site in the game now. */
-const hrWorksAt = (S, id) => {
-  const row = S && S.row;
-  if(!row) return false;
-  const p = (row.people || []).findIndex(x => x.id === id);
-  return p >= 0 && ((row.current || {}).list || []).some(s => s.p === p);
-};
 /* The request, and what the review needs to name every row of it. `only`
    ({"<site key>|<skill>": n}) keeps the hires to that many weeks a site and
    role and sends no move: the partial result's "Pick more". */
@@ -31913,7 +32079,11 @@ function hrRequest(m, only, scope){
     arriving.add(x.id);
     const at = touch(x.to);
     if(x.week) at.fill.push({id: x.id, w: x.week.w});
-    if(x.from){ away.add(x.id); if(hrWorksAt(x.from, x.id)) touch(x.from).rewrite = true; }
+    /* The site they leave is not written: its week changes only by their
+       entries, which the game's move clears by itself, and writing it from
+       its plan would change everybody else's week there too. The review
+       names the hours the move leaves empty there (hrLeftEmpty()). */
+    if(x.from) away.add(x.id);
   });
   const hire = (c, S, w, skill) => {
     hires.push({candidateId: c.id, address: gwAddress(S.key), expect: {wage: c.wage}, seenHoursLeft: c.hoursLeft ?? null});
@@ -32072,10 +32242,10 @@ function hrNoHoursHtml(){
    hours with nobody on, where the site's own people would work them (the
    plan's `unstaffed`); nothing is hired for those, so the order would say
    nothing. The link opens the site's Staffing, whose write puts the week in. */
-/* The plan the site's Staffing block shows and writes, as it picks it: its gap of people with no hours, or undefined. */
+/* The plan the site's Staffing block shows and writes (spPlanOf()): its gap of people with no hours, or undefined. */
 function hrUnstaffedOf(S){
   const u = S.site.unstaffed || {};
-  return S.site.kind === "office" ? u.office : spOffersFull(spRosterRow(S.key)) && spPlanRead(S.key) === "full" && u.full ? u.full : u.demand;
+  return S.site.kind === "office" ? u.office : u[spPlanOf(spRosterRow(S.key)) || "demand"];
 }
 function hrIdleHtml(m){
   const of = hrUnstaffedOf;
@@ -32233,6 +32403,7 @@ function hrCandRow(m, r, c){
   const noShop = !picked && !elsewhere && r.pt && r.shop && !r.allShop && hrAsksPt(c);
   const to = elsewhere ? `<span class="dim">picked for ${spEsc(hrSiteName(elsewhere))}</span>`
     : noShop ? `<span class="dim">not for shop weeks (Part-time)</span>`
+    : at && at.nofit ? `<span class="dim">${tt("co.hire.nofit", "no open week meets their schedule demands")}</span>`
     : S ? `${spEsc(hrSiteName(S))}${at.over ? ` <span class="warn">over the plan</span>` : ""}` : `<span class="dim">–</span>`;
   const soon = Number(c.hoursLeft) < 24;
   return `<tr class="${picked ? "on" : ""}" data-hr-cand="${attr(c.id)}">
@@ -32551,25 +32722,46 @@ function hrQuickPlan(sites, cands, used){
   /* The plan's weeks in this role here that nobody reassigned takes. */
   out.plan = !!(S.planned && S.row);
   const open = out.plan ? S.weeks.filter(x => x.w.skill === q.skill && !x.who) : [];
-  out.picks = out.matches.slice(0, q.n).map(c => {
-    const fails = x => (c.demands || []).filter(d => hrKind(d) === "schedule" && hrBreaks(d, x.w, S.row));
-    const wk = open.find(x => !fails(x).length && !hrDeskMiss(c.demands, S, x.w).length)
-      || open.find(x => !fails(x).length) || open[0] || null;
-    if(wk){ open.splice(open.indexOf(wk), 1); if(hold){ wk.who = {type: "quick", c}; out.held++; } }
+  /* Best match first. While the plan has weeks left here, a match takes one
+     that meets their schedule demands, at a desk that meets their desk
+     demands first; a match no week left fits is held back (Peter, 28
+     September 2026). The places still to fill then go, best match first,
+     to everyone not placed, those held back included, with no hours, as at
+     a site with no plan. The picks are listed best first. */
+  const placed = new Map();  // candidate id -> the plan week they take
+  const held = new Map();    // candidate id -> the demands no open week met
+  for(const c of out.matches){
+    if(placed.size >= q.n || !open.length) break;
+    const fit = open.filter(x => hrFits(c, x));
+    if(!fit.length){ held.set(c.id, [...new Set(open.flatMap(x => hrFails(c, x)))]); continue; }
+    const wk = fit.find(x => !hrDeskMiss(c.demands, S, x.w).length) || fit[0];
+    open.splice(open.indexOf(wk), 1);
+    placed.set(c.id, wk);
+  }
+  let left = q.n - placed.size;
+  out.picks = out.matches.filter(c => placed.has(c.id) || (left > 0 && left-- > 0)).map(c => {
+    const wk = placed.get(c.id) || null;
+    if(wk && hold){ wk.who = {type: "quick", c}; out.held++; }
     if(hold) used.set(c.id, S);
-    return {c, w: wk ? wk.w : null, misfit: wk ? fails(wk) : []};
+    /* Held back and placed past the weeks anyway: `nofit` names why. */
+    return Object.assign({c, w: wk ? wk.w : null, misfit: []}, !wk && held.has(c.id) ? {nofit: held.get(c.id)} : {});
   });
-  out.short = Math.max(0, q.n - out.matches.length);
+  out.short = Math.max(0, q.n - out.picks.length);
   return out;
 }
 const hrQuickModel = m => m.quick;
+/* The shortest shift a clash may leave of a plan slot, as the planner's
+   MIN_SPLIT: a shorter stub is not worth typing. */
+const HR_MIN_SPLIT = 4;
 /* The request: the hires, and, when any of them gets hours, the site's week
-   as the game has it now plus their shifts. A shift that meets one already
-   there on the same station or for the same person is left out; nobody
-   else's hours change. `hours` is each hire's kept hours by id. */
+   as the game has it now plus their shifts. Where a shift meets one already
+   there on the same station or for the same person, only the parts of it
+   that meet nothing are kept, each HR_MIN_SPLIT hours or longer; nobody
+   else's hours change. `hours` is each hire's kept hours by id, `misfits`
+   the schedule demands their kept week breaks. */
 function hrQuickRequest(Q){
-  const S = Q.S, hires = [], names = new Map(), hours = new Map();
-  if(!S) return {body: {sites: [], hires: [], moves: []}, names, hours, given: 0};
+  const S = Q.S, hires = [], names = new Map(), hours = new Map(), misfits = new Map();
+  if(!S) return {body: {sites: [], hires: [], moves: []}, names, hours, misfits, given: 0};
   const row = S.row || {};
   const now = Q.plan && row.current && Array.isArray(row.current.list) ? row.current.list : null;
   const week = [];
@@ -32583,16 +32775,27 @@ function hrQuickRequest(Q){
     hires.push({candidateId: c.id, address: gwAddress(S.key), expect: {wage: c.wage}, seenHoursLeft: c.hoursLeft ?? null});
     names.set(c.id, {name: c.name, skill: Q.q.skill, c});
     let kept = 0, met = false;
+    const mine = [];  // the slots kept, cut to the parts that meet nothing
     if(now && w) (w.slots || []).forEach(sl => {
       const sh = (row.shifts || [])[sl.shift];
       const st = sh ? (row.stations || [])[sh.s] : null;
       const x = {d: sl.d, f: sl.f, t: sl.t, employeeId: c.id, itemInstanceId: sl.station || (st && st.id)};
       if(!(x.d >= 0 && x.d < 7) || !spHasId(x.itemInstanceId)) return;
-      if(week.some(y => meets(x, y))){ met = true; return; }
-      week.push(x);
-      kept += x.t - x.f;
+      const hits = week.filter(y => meets(x, y));
+      if(hits.length) met = true;
+      let parts = [[x.f, x.t]];
+      hits.forEach(y => { parts = parts.flatMap(([f, t]) => y.t <= f || t <= y.f ? [[f, t]]
+        : [[f, Math.min(t, y.f)], [Math.max(f, y.t), t]].filter(([a, b]) => a < b)); });
+      parts.filter(([f, t]) => !hits.length || t - f >= HR_MIN_SPLIT).forEach(([f, t]) => {
+        week.push(Object.assign({}, x, {f, t}));
+        mine.push(Object.assign({}, sl, {f, t}));
+        kept += t - f;
+      });
     });
     hours.set(c.id, kept);
+    /* Judged on the week they keep, not the plan's, an empty one too when
+       every hour of their plan week meets hours already set there. */
+    misfits.set(c.id, w ? hrFails(c, {w: {skill: Q.q.skill, slots: mine}, S}) : []);
     if(met && !kept) clash.add(c.id);
   });
   const given = [...hours.values()].filter(h => h > 0).length;
@@ -32604,20 +32807,37 @@ function hrQuickRequest(Q){
     ? {address: gwAddress(S.key), expect: S.b && typeof S.b.shiftPrint === "string" ? S.b.shiftPrint : null,
        openAllHours: false, days}
     : {address: gwAddress(S.key), expect: null, days: null};
-  return {body: {sites: hires.length ? [site] : [], hires, moves: []}, names, hours, given, clashed, now: !!now};
+  return {body: {sites: hires.length ? [site] : [], hires, moves: []}, names, hours, misfits, given, clashed, clash, now: !!now};
 }
-/* A pick whose plan week breaks one of their schedule demands, in orange. */
-const hrQuickMisfit = misfit => misfit.length ? `<small class="warn">hours break ${misfit.map(hrName).join(", ")}</small>` : "";
+/* A pick whose kept week breaks one of their schedule demands, in orange. */
+const hrQuickMisfit = misfit => misfit.length ? `<small class="warn">${tt("co.hire.misfit", "hours break {demands}", {demands: misfit.map(hrName).join(", ")})}</small>` : "";
+/* The note beside a pick: a match held back from the plan's weeks names the
+   demands none of them met; anyone else, what their kept week breaks. */
+const hrQuickNote = (p, req) => {
+  const id = p.c.id;
+  if(p.nofit) return `<small class="warn">${tt("co.hire.quick.nofit", "no open week fits {demands}", {demands: p.nofit.map(hrName).join(", ")})}</small>`;
+  /* Why somebody at a planned site joins with no hours, each their own:
+     their plan hours met hours already set there, or no plan week was left
+     for them (or none of its hours could be sent). */
+  const none = req.now && !(req.hours.get(id) || 0)
+    ? (req.clash || new Set()).has(id) ? tt("co.hire.quick.clash", "their plan hours meet hours already set there")
+    : tt("co.hire.quick.noweek", "no open hours left in the plan") : "";
+  return [none ? `<small>${none}</small>` : "", hrQuickMisfit(req.misfits.get(id) || [])].filter(Boolean).join(" ");
+};
 function hrQuickHtml(m){
   const Q = hrQuickModel(m), q = Q.q;
   const l = gwLink(), off = !l || !(l.writes || []).includes("hire");
   const kind = S => { const k = HR_KIND_WORDS[S.site.kind]; return S.b && S.b.type ? S.b.type : k ? k[0] : S.site.kind; };
   const k = Q.picks.length, n = Q.matches.length;
+  /* The warnings are the kept week's, after the hours already set there. */
+  const kept = Q.ready ? hrQuickRequest(Q) : {misfits: new Map(), hours: new Map()};
   const match = !Q.ready ? ""
-    : !n ? `<p class="hs-match none">Nobody matches.</p>`
-    : `<details class="hs-match" data-hq-list${q.open ? " open" : ""}><summary><b>${hrNum(n)}</b> match · ${
-        Q.short ? `<span class="warn">only ${hrNum(n)} ${n === 1 ? "matches" : "match"}</span>` : k === n ? (k === 1 ? "picked" : `all ${hrNum(k)} are picked`) : k === 1 ? "the best is picked" : `the best ${hrNum(k)} are picked`}${hrChev()}</summary>
-      <ul>${Q.picks.map(({c, misfit}) => `<li><span>${spEsc(c.name || "?")}${hrQuickMisfit(misfit)}</span><span class="m">${Math.round(hrLevel(c, q.skill))}%</span><span class="m">${hrWage(c.wage)}/h</span></li>`).join("")}</ul></details>`;
+    : !n ? `<p class="hs-match none">${tt("co.hire.quick.none", "Nobody matches.")}</p>`
+    : `<details class="hs-match" data-hq-list${q.open ? " open" : ""}><summary>${
+        Q.short ? tt("co.hire.quick.short", {one: "<b>{n}</b> match · <span class='warn'>only {n} candidate matches</span>", other: "<b>{n}</b> match · <span class='warn'>only {n} candidates match</span>"}, {n})
+        : k === n ? tt("co.hire.quick.all", {one: "<b>{n}</b> match · picked", other: "<b>{n}</b> match · all {n} are picked"}, {n})
+        : tt("co.hire.quick.best", {one: "<b>{m}</b> match · the best is picked", other: "<b>{m}</b> match · the best {n} are picked"}, {m: n, n: k})}${hrChev()}</summary>
+      <ul>${Q.picks.map(p => { const {c} = p; return `<li><span>${spEsc(c.name || "?")}${hrQuickNote(p, kept)}</span><span class="m">${Math.round(hrLevel(c, q.skill))}%</span><span class="m">${hrWage(c.wage)}/h</span></li>`; }).join("")}</ul></details>`;
   const busy = !!hrUi.quickPending;
   const dis = !Q.ready || !k || off || busy;
   return `<div class="qh"><span class="hs-i">${hrSvg("hire")}</span><h3>Quick hire</h3></div>
@@ -32664,15 +32884,16 @@ function hrQuickReview(){
   const nameOf = id => ((hrQuickLast.req.names.get(id) || {}).name) || "someone";
   const list = gone => {
     const {Q, req} = hrQuickLast;
-    return `<ul class="hs-qlist">${Q.picks.map(({c, misfit}) => { const h = req.hours.get(c.id) || 0; return `<li class="${req.given ? "h" : ""}"><span>${gone.has(c.id) ? `<span class="hr-struck">${spEsc(c.name || "?")}</span>` : spEsc(c.name || "?")}${h ? hrQuickMisfit(misfit) : ""}</span><span class="m">${
-      Math.round(hrLevel(c, Q.q.skill))}%</span><span class="m">${hrWage(c.wage)}/h</span>${req.given ? `<span class="m${h && misfit.length ? " warn" : ""}">${h ? `${hrNum(h)} h` : "–"}</span>` : ""}</li>`; }).join("")}</ul>`;
+    return `<ul class="hs-qlist">${Q.picks.map(p => { const {c} = p, h = req.hours.get(c.id) || 0, misfit = req.misfits.get(c.id) || []; return `<li class="${req.given ? "h" : ""}"><span>${gone.has(c.id) ? `<span class="hr-struck">${spEsc(c.name || "?")}</span>` : spEsc(c.name || "?")}${hrQuickNote(p, req)}</span><span class="m">${
+      Math.round(hrLevel(c, Q.q.skill))}%</span><span class="m">${hrWage(c.wage)}/h</span>${req.given ? `<span class="m${misfit.length ? " warn" : ""}">${h ? `${hrNum(h)} h` : "–"}</span>` : ""}</li>`; }).join("")}</ul>`;
   };
   /* What the hires' hours are, and that nobody else's change. */
   const hours = () => {
     const {Q, req} = hrQuickLast, k = n();
     if(!Q.plan || !req.now) return gwCall("", "clock", "No hours yet: set them in the game.");
-    if(!req.given) return gwCall("", "clock", req.clashed ? "Their plan hours meet hours already set there: they join with no hours."
-      : `No open hours in ${at()}'s plan: they join with no hours.`);
+    /* Why each of them has no hours is beside their name (hrQuickNote()):
+       the reasons differ from one to the next, so the line says none. */
+    if(!req.given) return gwCall("", "clock", tt("co.hire.quick.nohours.all", "They join with no hours."));
     const hs = [...req.hours.values()].filter(h => h > 0), lo = Math.min(...hs), hi = Math.max(...hs);
     const each = `${lo === hi ? hrNum(lo) : `${hrNum(lo)}–${hrNum(hi)}`} h a week${req.given > 1 ? " each" : ""}`;
     const none = k - req.given;
@@ -32703,9 +32924,11 @@ function hrQuickReview(){
       const lo = Math.min(...wages), hi = Math.max(...wages);
       const left = (answer.sites || []).flatMap(s => (s && s.leftWithout || []).map(p => `<span class="person"><i>${spEsc(gwInitials(p.name))}</i>${spEsc(p.name || "someone")}</span>`));
       const blocked = answer.blocked === "myemployees" ? `<div class="gw-no"><span class="ic">${hrSvg("phone")}</span><div class="rule">MyEmployees is open in the game.</div><div class="fix">${gwSvg("right")}<span>Close the MyEmployees app on your in-game phone, then try again.</span></div></div>` : "";
+      const site = hrQuickLast.req.body.sites.find(x => x.days);
+      const checked = site ? gwCheckLines(gwWeekCheck(Q.S && Q.S.row, site.days)) : "";
       return `${blocked}${gwTiles([["Hire", null, hrNum(n())], ["Role", null, `<span class="hr-u">${hrRole(Q.q.skill)}</span>`],
           ["Wages", null, `${lo === hi ? hrWage(lo) : `${hrWage(lo)}–${hrWage(hi)}`}<small class="hr-u">/h</small>`]])}
-        ${list(gone)}${hours()}${goneCall(gone)}${left.length ? `<div class="gw-box">${gwCall("", "exit", "<b>No hours after this</b> for these people here, the game says. It takes them off their work and adds a to-do.")}<div class="gw-pills">${left.join("")}</div></div>` : ""}
+        ${list(gone)}${hours()}${goneCall(gone)}${phase === "done" ? "" : checked}${left.length ? `<div class="gw-box">${gwCall("", "exit", "<b>No hours after this</b> for these people here, the game says. It takes them off their work and adds a to-do.")}<div class="gw-pills">${left.join("")}</div></div>` : ""}
         <p class="hr-lock">${gwSvg("lock")}<span>No undo.</span></p>`;
     },
     hint: "Nothing changes until you click Hire.",
@@ -32953,7 +33176,7 @@ function hrReviewSites(m, req, phase, gone){
         hrBenchSlots(S, x), `${hrSlotHours(hrBenchSlots(S, x))} h`)).join("")}${
       gaps.map(x => person("Nobody", {t: `no ${hrRole(x.w.skill)} matches`}, hrRole(x.w.skill), "–", "–", x.w.slots, `${x.w.hours || 0} h`, "gap")).join("")}</div>` : "";
     const counts = `${hired.length + got.length} ${phase === "done" ? "hired" : "new"}${moves.length ? `<span class="mvc">+${moves.length} reassigned</span>` : ""}${
-      missed ? `<span class="mvc gap">${missed} still open</span>` : ""}${at && at.rewrite && !(phase === "done" ? hired.length + got.length : hires.length) && !moves.length ? `<span class="mvc">week rewritten</span>` : ""}`;
+      missed ? `<span class="mvc gap">${missed} still open</span>` : ""}`;
     return `<div class="hr-dsite${open ? " open" : ""}"><button type="button" class="hr-dhead" data-hr-site="${attr(S.key)}" aria-expanded="${open}">
       <span><span class="nm">${hoodHtml(S.b)}<span class="s">${spEsc(S.b ? shortName(S.b) : S.site.name || "?")}</span>${S.site.new ? `<span class="hr-new">new</span>` : ""}</span><span class="plan">${spEsc(S.b && S.b.type ? S.b.type : S.site.kind)} · ${plan}</span></span>
       <span class="hr-dots">${dots}</span><span class="c">${counts}<span class="cst">+${fmt(cost)}</span></span>${hrSvg("chev")}</button>${people}</div>`;
@@ -33058,10 +33281,17 @@ function hrReview(o = {}){
           <p class="hr-lock">${gwSvg("lock")}<span>No undo. To let someone go, fire them in MyEmployees in the game.</span></p>`;
       }
       const blocked = answer.blocked === "myemployees" ? `<div class="gw-no"><span class="ic">${hrSvg("phone")}</span><div class="rule">MyEmployees is open in the game.</div><div class="fix">${gwSvg("right")}<span>Close the MyEmployees app on your in-game phone, then try again.</span></div></div>` : "";
+      /* Every week this call writes, checked per person (gwWeekCheck()). */
+      const written = req.body.sites.filter(x => x.days), away = new Set(req.body.moves.map(x => x.employeeId));
+      const checked = written.flatMap(x => {
+        const S = m.sites.find(y => y.key === gwKeyOf(x.address));
+        return gwWeekCheck(S && S.row, x.days, away).map(p => Object.assign(p, written.length > 1 && S ? {site: spEsc(hrSiteName(S))} : {}));
+      });
       return `${blocked}${gwTiles([["Hire", null, c.hire], ["Reassign", null, c.move], ["Added wages", null, `+${fmt(bill)}<small class="hr-u">/day</small>`]])}
         <p class="gw-lead">Who goes where. Open a site to see each person and the days they work.</p>
         ${sites}${goneCall}${said}${fewerCall}${emptyCall}${displacedCall}${left.length ? `<div class="gw-box">${gwCall("", "exit", "<b>No hours after this</b> for these people at the sites whose week is replaced. The game takes them off their work there and adds a to-do.")}<div class="gw-pills">${left.join("")}</div></div>` : ""}
         ${gapText ? `<div class="gw-call gw-warn">${gwI("alert")}<div>${gapText}.</div></div>` : ""}
+        ${gwCheckLines(checked)}
         ${warned.length ? `<div class="gw-call">${gwI("info")}<div>${plural(warned.length, "person asks", "people ask")} for something their site does not meet (marked orange in Change picks). They are hired anyway.</div></div>` : ""}`;
     },
     hint: "Hiring cannot be undone. To let someone go later, fire them in the MyEmployees app in the game.",
@@ -33389,8 +33619,11 @@ function drawFindLocation(){
    to the measurement wording, and a board built before the feature says
    nothing at all. Ties go to the name, so the card does not move between runs
    of the same save. */
-const spRosterPlans = () => (D.staffing || []).filter(
-  r => !r.failed && (r.shifts || []).length);
+/* Each shop's plan as its Staffing block shows and writes it (spShownRow(),
+   through spPlanOf()), so the card never quotes a week the block does not:
+   a new shop is sized by its open-hours plan, not its cover-only one. */
+const spRosterPlans = () => (D.staffing || []).filter(r => !r.failed)
+  .map(spShownRow).filter(r => (r.shifts || []).length);
 /* The week the card sizes a plan by. Usually the lines with somebody on them,
    but a shop with no staff at all is twenty-one lines waiting on hires, and
    calling that "a week of 0 shifts to enter" sizes the one plan on the board
@@ -34171,6 +34404,7 @@ function renderCalm(lazy = true){
    today; the redesign's later chunks change what a route shows, never its id
    (docs/ui-route-migration.md). Which page and which view are remembered on
    this device and mirrored in the hash. */
+/* Registry: "A view or a page" (only if: see the checklist). */
 const PAGES = [
   /* Each label is read in the UI language every time it is asked for. */
   {id:"today",   get label(){ return tt("nav.area.overview", "Overview"); },     host:"pageToday"},
@@ -34196,10 +34430,17 @@ function navSubLabel(pageId, id){
 }
 /* Hashes that named a page which has since become a view of another. Every link
    already saved, printed or shared keeps working, without a page behind it. */
+/* Registry: "A view or a page" (only if: see the checklist). */
 const PAGE_ALIASES = {results: ["company", "results"]};
 /* The board opens on the Game guide with no save at all, so everything the
    pages do with numbers asks first. */
 const hasData = () => typeof D !== "undefined" && !!D;
+/* The views of each page. */
+/* Registry: "A view or a page" (docs/architecture.md, Registries). A new view
+   needs its section markup (class "sec rv", an id starting sec, and data-sub),
+   SUBS, SEC_PAGE, PAGE_DRAWS and SS_VIEWS; for its route also ROUTES, AREAS
+   (the area's views) and routeViewLabel(), and HOST_ROUTES if a host view shows
+   it by default. The checklist has the only-if rows. */
 const SUBS = {
   company: {host:"pageCompany", nav:"companyNav", key:"ba_dash_company", start:"results",
             items:[navView("results", () => tt("nav.view.results", "Results"), "secDaily"),
@@ -34260,6 +34501,7 @@ Object.entries(SUBS).forEach(([id, sv]) => {
    presentation there, and `scopes`, on Supply, are the tabs the route may be
    read on. docs/ui-route-migration.md is this table in words, with the old
    hashes that still land on each route. */
+/* Registry: "A view or a page" (for a route: see the checklist). */
 const AREAS = [
   {id:"overview", icon:"today", get label(){ return tt("nav.area.overview", "Overview"); }},
   {id:"businesses", icon:"company", get label(){ return tt("nav.area.businesses", "Businesses"); },
@@ -34275,6 +34517,11 @@ const REFS = [
   {id:"map", icon:"map", newFeature:"map", get label(){ return tt("nav.ref.map", "City map"); }},
   ...(typeof showWikiRoute === "function" ? [{id:"wiki", icon:"wiki", newFeature:"wiki", get label(){ return tt("nav.ref.wiki2", "Wiki"); }}] : []),
 ];
+/* Registry: "A view or a page" (docs/architecture.md, Registries). A new view
+   needs its section markup (class "sec rv", an id starting sec, and data-sub),
+   SUBS, SEC_PAGE, PAGE_DRAWS and SS_VIEWS; for its route also ROUTES, AREAS
+   (the area's views) and routeViewLabel(), and HOST_ROUTES if a host view shows
+   it by default. The checklist has the only-if rows. */
 const ROUTES = {
   "overview": {host: ["today"]},
   /* The portfolio is one table on two views: Standards shows its
@@ -34350,6 +34597,7 @@ const ROUTES = {
 };
 /* The route a host page and view shows when nothing more precise was asked
    for: a finding, a search or the reader's own click on a scope tab. */
+/* Registry: "A view or a page" (only if: see the checklist). */
 const HOST_ROUTES = {today: "overview", map: "map", wiki: "wiki",
   "company/results": "businesses/results", "company/products": "businesses/prices",
   "company/standards": "businesses/standards", "company/milestones": "businesses/milestones",
@@ -34416,6 +34664,7 @@ function areaEntry(id){
    else (a page's own name, a section, a wiki page) is resolved elsewhere. */
 /* Old page names that are routes now: Payroll and Staff (main's Company
    views, issue #89) are Staffing's, the Wiki is the Game guide. */
+/* Registry: "A view or a page" (only if: see the checklist). */
 const ROUTE_ALIASES = {today: "overview", payroll: "staffing/payroll", staff: "staffing/needs", guide: "wiki"};
 /* Where an old word lands inside its route: #staff was main's Staff page, the
    hiring block on Staff needs (after the staff demands). */
@@ -34536,6 +34785,11 @@ function routeCarry(id){
    search index -- is drawn by renderAll() itself on every refresh. Each row
    calls its function by name when it runs, so a test that swaps one out is
    heard. */
+/* Registry: "A view or a page" (docs/architecture.md, Registries). A new view
+   needs its section markup (class "sec rv", an id starting sec, and data-sub),
+   SUBS, SEC_PAGE, PAGE_DRAWS and SS_VIEWS; for its route also ROUTES, AREAS
+   (the area's views) and routeViewLabel(), and HOST_ROUTES if a host view shows
+   it by default. The checklist has the only-if rows. */
 const PAGE_DRAWS = [
   ["today", () => drawKpis()], ["today", () => drawAlerts()], ["today", () => drawTools()],
   ["company/results", () => drawChart()], ["company/results", () => drawFinance()], ["company/results company/standards", () => drawPortfolio()],
@@ -35374,6 +35628,13 @@ window.addEventListener("hashchange", () => {
 /* Every "group" a finding in the Needs attention panel can carry — see note()
    and _idle_notes() in the Python build. Kept in sync by hand since the two
    sides only share the group key, not a label. */
+/* Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
+   needs: its group, emitted by note() in _alerts() or _finding() in a helper
+   such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
+   FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
+   ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
+   search words, if players have any; its line under "What counts as a finding"
+   in docs/dashboard-reference.md. The checklist has the only-if tables. */
 const ALERT_GROUPS = [
   /* Each label and note is read in the UI language every time. */
   {id:"notrading", get label(){ return tt("nav.kind.notrading.label", "Not trading yet"); }, get note(){ return tt("nav.kind.notrading.note", "Temporarily closed, or open but with no staff, no prices, no stock or no trading day"); }, on:true},
@@ -36442,6 +36703,11 @@ const ssWorst = rows => rows.map(r => SS_SEV[r.level] || "opp")
    hand, next to what they name: `need` is false for what works without a save,
    and `each`, where one view answers for several things, gives one entry per
    thing (its own id, line and go) in place of the view's single one. */
+/* Registry: "A view or a page" (docs/architecture.md, Registries). A new view
+   needs its section markup (class "sec rv", an id starting sec, and data-sub),
+   SUBS, SEC_PAGE, PAGE_DRAWS and SS_VIEWS; for its route also ROUTES, AREAS
+   (the area's views) and routeViewLabel(), and HOST_ROUTES if a host view shows
+   it by default. The checklist has the only-if rows. */
 const SS_VIEWS = [
   {id: "alerts", get t(){ return tt("nav.search.alerts.title", "Needs attention"); },
    get p(){ return tt("nav.search.alerts.line", "Overview"); }, ic: "today", syn: ["problems", "alerts", "warnings", "findings", "to do", "today"],
@@ -36583,6 +36849,13 @@ const SS_VIEWS = [
    go(){ const d = $("changelogDialog"); if(d && !d.open){ d.showModal(); featureDiscovery.visit("changelog"); d.scrollTop = 0; } }},
 ];
 /* The words players use for a kind of finding. */
+/* Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
+   needs: its group, emitted by note() in _alerts() or _finding() in a helper
+   such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
+   FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
+   ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
+   search words, if players have any; its line under "What counts as a finding"
+   in docs/dashboard-reference.md. The checklist has the only-if tables. */
 const SS_KIND_SYN = {feed: ["fed", "inputs", "ingredients", "starved"], atcap: ["capacity", "full", "ceiling", "turned away"],
   idlestaff: ["overstaffed", "idle staff", "too many staff", "hire"], staff: ["unstaffed", "no staff", "staffing", "hire", "on shift"],
   jobdemand: ["demands", "unhappy staff", "quit", "hire"], companydemand: ["insurance", "health insurance", "hr manager"],
@@ -39968,6 +40241,122 @@ function gwRosterPlan(key){
   const row = spShownRow(base);
   return (row.shifts || []).length ? row : null;
 }
+/* --- every week a write sends, checked per person ------------------------
+   The game takes whatever week the mod hands it, and the mod checks overlap,
+   not contracts: the office default's additive write once gave a lawyer 60
+   hours. So each week a write is about to send (a Staffing write, a hire,
+   Quick hire) is checked here, person by person, against the rules the
+   planner keeps -- 12 hours an entry and a day, one entry at a time -- and
+   their own schedule demands: the hours band (at most 50 without one), an
+   exact four or five days, free weekends, the hours they keep free, no
+   cleaning. What is still broken is named in the review before the confirm;
+   nothing here blocks a write. */
+const GW_BANDS = {"ba:jobdemand_fulltime": [30, 50], "ba:jobdemand_parttime": [10, 30]};
+const GW_DAYS = {"ba:jobdemand_fourdaysweek": 4, "ba:jobdemand_fivedaysweek": 5};
+const GW_CAP = 12, GW_MOST = 50;
+/* One person's entries ({d, f, t, st}) against those rules: [{k, ...}]. */
+function gwPersonBreaks(list, demands, clean){
+  const out = [], dem = demands || [];
+  const hours = list.reduce((n, e) => n + e.t - e.f, 0);
+  const band = dem.map(d => GW_BANDS[d]).find(Boolean);
+  const [lo, hi] = band || [0, GW_MOST];
+  if(hours > hi || (band && hours < lo)) out.push({k: band ? "hours" : "most", n: hours, lo, hi});
+  const days = new Set(list.map(e => e.d));
+  const want = dem.map(d => GW_DAYS[d]).find(Boolean);
+  if(want && days.size !== want) out.push({k: "days", n: days.size, want});
+  [...days].sort((a, b) => HR_DAYS.indexOf(a) - HR_DAYS.indexOf(b)).forEach(d => {
+    const day = list.filter(e => e.d === d).sort((a, b) => a.f - b.f);
+    const long = day.find(e => e.t - e.f > GW_CAP);
+    const total = day.reduce((n, e) => n + e.t - e.f, 0);
+    /* One long entry is the long day too: said once. */
+    if(long) out.push({k: "entry", d, n: long.t - long.f});
+    else if(total > GW_CAP) out.push({k: "day", d, n: total});
+    if(day.some((e, i) => i && e.f < day[i - 1].t)) out.push({k: "twice", d});
+  });
+  dem.forEach(slug => {
+    const hit = slug === "ba:jobdemand_freeweekends" ? list.some(e => e.d === 6 || e.d === 0)
+      : slug === "ba:jobdemand_nocleaning" ? list.some(e => clean(e.st))
+      : !!HR_WINDOWS[slug] && list.some(e => HR_WINDOWS[slug].some(([a, b]) => a < e.t && e.f < b));
+    if(hit) out.push({k: "demand", slug});
+  });
+  return out;
+}
+/* Whether one more entry `e` on a person's week `list` would break a rule:
+   past the top of their hours, a day more than their four or five, a long
+   entry or day, an overlap, or a demand the entry itself breaks. Only what
+   adding can break: a week short of hours is not one entry's doing. */
+function gwAddBreaks(list, e, demands, clean){
+  const dem = demands || [];
+  const band = dem.map(d => GW_BANDS[d]).find(Boolean), want = dem.map(d => GW_DAYS[d]).find(Boolean);
+  const day = list.filter(x => x.d === e.d), sum = xs => xs.reduce((n, x) => n + x.t - x.f, 0);
+  return sum(list) + e.t - e.f > (band ? band[1] : GW_MOST)
+    || (!!want && !day.length && new Set(list.map(x => x.d)).size >= want)
+    || e.t - e.f > GW_CAP || sum(day) + e.t - e.f > GW_CAP
+    || day.some(x => x.f < e.t && e.f < x.t)
+    || gwPersonBreaks([e], dem.filter(d => !GW_BANDS[d] && !GW_DAYS[d]), clean).some(b => b.k === "demand");
+}
+/* Who someone is to the check: a row's people carry their schedule demands;
+   a candidate or somebody moved in carries theirs on the hiring payload. */
+const gwWho = (id, row) => {
+  const p = ((row || {}).people || []).find(x => x.id === id) || {};
+  const h = ((D.hiring || {}).people || {})[id] || {};
+  const c = (D.candidates || []).find(x => x.id === id) || {};
+  return {name: p.name || h.name || c.name || null, demands: p.demands || h.demands || c.demands || []};
+};
+/* A row's cleaning stations, by the game's id. */
+const gwCleanOf = row => {
+  const ids = new Set(((row || {}).stations || []).filter(s => s && s.skill === "ba:skill_cleaning").map(s => s.id));
+  return st => ids.has(st);
+};
+/* The people a week (`days`, as a write sends it) leaves breaking something,
+   against the site's row: [{id, name, breaks}]. Somebody whose entries the
+   write leaves exactly as the game has them is not the write's to answer
+   for. Somebody with hours here now and none in the week is checked against
+   an empty week: a write that takes a full-timer's whole week away says so.
+   `away` are people the same write moves elsewhere, whose week is there. */
+function gwWeekCheck(row, days, away){
+  const mine = new Map(), now = new Map();
+  (days || []).forEach(({d, shifts}) => (shifts || []).forEach(s => {
+    if(!mine.has(s.employeeId)) mine.set(s.employeeId, []);
+    mine.get(s.employeeId).push({d, f: s.f, t: s.t, st: s.itemInstanceId});
+  }));
+  (((row || {}).current || {}).list || []).forEach(s => {
+    const who = ((row.people || [])[s.p] || {}).id, st = ((row.stations || [])[s.s] || {}).id;
+    if(!spHasId(who)) return;
+    if(!now.has(who)) now.set(who, []);
+    now.get(who).push(`${s.d}|${s.f}|${s.t}|${st}`);
+  });
+  const sig = list => list.slice().sort().join(",");
+  const clean = gwCleanOf(row), out = [];
+  const check = (id, list) => {
+    const who = gwWho(id, row);
+    const breaks = gwPersonBreaks(list, who.demands, clean);
+    if(breaks.length) out.push({id, name: who.name, breaks});
+  };
+  mine.forEach((list, id) => {
+    if(sig(list.map(e => `${e.d}|${e.f}|${e.t}|${e.st}`)) !== sig(now.get(id) || [])) check(id, list);
+  });
+  now.forEach((_list, id) => { if(!mine.has(id) && !(away && away.has(id))) check(id, []); });
+  return out;
+}
+/* What the check found, one line a break, each its own sentence; `site`
+   names the site on a write that touches several. */
+function gwCheckLines(found){
+  const line = (b, who) => b.k === "hours" ? tt("sp.gw.chk.hours", "<b>{who}</b>: {n} h a week, asks for {lo} to {hi}", {who, n: b.n, lo: b.lo, hi: b.hi})
+    : b.k === "most" ? tt("sp.gw.chk.most", "<b>{who}</b>: {n} h a week, more than {hi}", {who, n: b.n, hi: b.hi})
+    : b.k === "days" ? tt("sp.gw.chk.days", "<b>{who}</b>: {n} days a week, asks for {want}", {who, n: b.n, want: b.want})
+    : b.k === "entry" ? tt("sp.gw.chk.entry", "<b>{who}</b>: an entry of {n} h on {day}", {who, n: b.n, day: ttDay(b.d)})
+    : b.k === "day" ? tt("sp.gw.chk.day", "<b>{who}</b>: {n} h on {day}", {who, n: b.n, day: ttDay(b.d)})
+    : b.k === "twice" ? tt("sp.gw.chk.twice", "<b>{who}</b>: two entries at once on {day}", {who, day: ttDay(b.d)})
+    : tt("sp.gw.chk.demand", "<b>{who}</b>: the week breaks {demand}", {who, demand: hrName(b.slug)});
+  const lines = found.map(p => {
+    const name = spEsc(p.name || tt("sp.gw.someone.cap", "Someone"));
+    const who = p.site ? tt("sp.gw.chk.who.at", "{name} at {site}", {name, site: p.site}) : name;
+    return p.breaks.map(b => `<li>${line(b, who)}</li>`).join("");
+  }).join("");
+  return found.length ? gwCall("warn", "alert", `${tt("sp.gw.chk.head", {one: "This week breaks a rule or a demand for {n} person:",
+    other: "This week breaks a rule or a demand for {n} people:"}, {n: found.length})}<ul class="gw-chk">${lines}</ul>`) : "";
+}
 /* The week a write sends, from the plan's rows, their station and person
    indices turned back into the game's ids. Only the people already working
    here: a hire's entry has nobody on it and a bench member's somebody not
@@ -39977,8 +40366,9 @@ function gwRosterPlan(key){
 function gwRosterWeek(row){
   const bench = new Set([...(row.bench || []), ...((row.addPeople || {}).assign || [])].map(r => r.p));
   const days = new Map();
-  let sent = 0, kept = 0, unreadable = 0;
+  let sent = 0, kept = 0, unreadable = 0, dropped = 0;
   const added = [];  // an office's: the planned entries the write adds
+  const left = new Map();  // an office's: person index -> planned hours left out
   const put = s => {
     const st = (row.stations || [])[s.s], who = (row.people || [])[s.p];
     if(!st || !spHasId(st.id) || !who || !spHasId(who.id) || !(s.d >= 0 && s.d < 7)) return false;
@@ -39998,18 +40388,29 @@ function gwRosterWeek(row){
     const busy = [];
     unreadable += Number(row.unrepresentable) || 0;
     const clash = s => busy.some(b => b.d === s.d && b.f < s.t && s.f < b.t && (b.p === s.p || b.s === s.s));
+    /* Each person's week at the office as the write leaves it: an entry
+       is added only where their week can take it (gwAddBreaks()), since
+       the entries already there are kept whatever they come to. */
+    const weeks = new Map(), clean = gwCleanOf(row);
+    const entry = s => ({d: s.d, f: s.f, t: s.t, st: ((row.stations || [])[s.s] || {}).id});
+    const weekOf = p => { if(!weeks.has(p)) weeks.set(p, []); return weeks.get(p); };
     ((row.current || {}).list || []).forEach(s => {
       busy.push({d: s.d, f: s.f, t: s.t, p: s.p, s: s.s});
+      if(!spNobody(s.p)) weekOf(s.p).push(entry(s));
       if(put(s)) kept++; else unreadable++;
     });
     (row.shifts || []).forEach(s => {
       if(spNobody(s.p) || bench.has(s.p) || clash(s)) return;
-      if(put(s)){ sent++; added.push(s); busy.push({d: s.d, f: s.f, t: s.t, p: s.p, s: s.s}); }
+      if(gwAddBreaks(weekOf(s.p), entry(s), ((row.people || [])[s.p] || {}).demands, clean)){
+        dropped++; left.set(s.p, (left.get(s.p) || 0) + s.t - s.f); return;
+      }
+      if(put(s)){ sent++; added.push(s); busy.push({d: s.d, f: s.f, t: s.t, p: s.p, s: s.s}); weekOf(s.p).push(entry(s)); }
     });
   } else (row.shifts || []).forEach(s => { if(!spNobody(s.p) && !bench.has(s.p) && put(s)) sent++; });
   if(!row.office && !row.full && spCoverOnly(row))
     ((row.current || {}).list || []).filter(s => !s.k).forEach(s => { if(put(s)) kept++; });
-  return {days: [...days].sort((a, b) => a[0] - b[0]).map(([d, shifts]) => ({d, shifts})), sent, kept, unreadable, added};
+  return {days: [...days].sort((a, b) => a[0] - b[0]).map(([d, shifts]) => ({d, shifts})), sent, kept, unreadable, added, dropped,
+    leftOut: [...left].map(([p, hours]) => ({p, hours}))};
 }
 /* Whether the game's schedule already is this week, entry for entry (and
    open around the clock where the plan wants that). */
@@ -40046,7 +40447,8 @@ function gwRosterButtons(key){
   if(!row) return "";
   const one = gwButton("schedule", tt("sp.gw.sch.one", "Write this schedule to the game"), `data-gw-sites="${attr(JSON.stringify([key]))}"`,
     row.office && gwRosterWeek(row).unreadable ? tt("sp.gw.sch.office.unreadable", "An entry here can't be read; change it in the game first")
-      : gwRosterWeek(row).sent ? "" : row.office ? tt("sp.gw.sch.office.written", "Every entry the office default can add is in the game")
+      : gwRosterWeek(row).sent ? "" : row.office ? (gwRosterWeek(row).dropped ? tt("sp.gw.sch.office.full", "Nothing more fits: the rest of the office default is more than its staff's weeks can take")
+        : tt("sp.gw.sch.office.written", "Every entry the office default can add is in the game"))
       : tt("sp.gw.sch.blocked", "Every entry in this plan waits on somebody who does not work here yet: add them first"), {icon: "hire"});
   const all = gwScheduleSites();
   const many = all.length > 1
@@ -40173,6 +40575,7 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
       const whole = tt("sp.gw.plan.whole", "replaces the whole week");
       const which = row.office ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.gw.plan.office", "Office default")}</span><span class="gw-only">${tt("sp.gw.plan.adds", "adds to the week")}</span>`
         : row.full ? `<span class="gw-plan full">${gwSvg("sun")}${tt("sp.pick.full", "Full cover 24/7")}</span><span class="gw-only">${tt("sp.gw.plan.every", "every station, every hour")}</span>`
+        : row.variant === "open" ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.pick.open", "Open hours")}</span><span class="gw-only">${whole}</span>`
         : spCoverOnly(row) ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.gw.plan.cover", "Cleaning and security")}</span><span class="gw-only">${whole}</span>`
         : `<span class="gw-plan">${gwSvg("roster")}${tt("sp.pick.demand", "Demand plan")}</span><span class="gw-only">${whole}</span>`;
       const kept = week.kept && !row.office ? gwCall("info", "info", tt("sp.gw.sch.kept", {
@@ -40204,8 +40607,13 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
         const added = week.days.flatMap(({d, shifts}) => shifts.map(s => Object.assign({d}, s)))
           .filter(s => !had.has(`${s.d}|${s.f}|${s.t}|${s.employeeId}|${s.itemInstanceId}`));
         const who = [...new Set(added.map(s => s.employeeId))].map(id => spEsc(((row.people || []).find(p => p.id === id) || {}).name || tt("sp.gw.someone", "someone")));
-        adds = added.length ? gwCall("info", "roster", tt("sp.gw.sch.adds", "<b>Adds {h} h for {who}</b>; nobody's current hours change.", {h: gwHours(added), who: who.join(", ")}))
-          : gwCall("info", "roster", tt("sp.gw.sch.office.written", "Every entry the office default can add is in the game"));
+        adds = (added.length ? gwCall("info", "roster", tt("sp.gw.sch.adds", "<b>Adds {h} h for {who}</b>; nobody's current hours change.", {h: gwHours(added), who: who.join(", ")}))
+          : week.dropped ? gwCall("info", "roster", tt("sp.gw.sch.office.full", "Nothing more fits: the rest of the office default is more than its staff's weeks can take"))
+          : gwCall("info", "roster", tt("sp.gw.sch.office.written", "Every entry the office default can add is in the game")))
+          /* The office default's hours left out for someone, one line each. */
+          + (week.leftOut || []).map(x => gwCall("warn", "alert", tt("sp.gw.sch.office.left",
+            "<b>{name}</b>: {h} h of the office default left out, more than their week can take",
+            {name: spEsc(((row.people || [])[x.p] || {}).name || tt("sp.gw.someone.cap", "Someone")), h: x.hours}))).join("");
       }
       const over = (answer.warnings || []).filter(w => w.type === "overworked").map(w =>
         gwCall("warn", "flame", tt("sp.gw.over", "<b>{name}</b> works {n} h on {day}. The game allows it.",
@@ -40214,7 +40622,8 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
         + gwTiles([[labels[0], now.length, sentList.length], [labels[1], gwHours(now), gwHours(sentList)], [labels[2], nowPeople, afterPeople]])
         + gwWeek(now, week.days) + kept + toggle
         + (left.length ? `<div class="gw-box">${gwCall("", "exit", tt("sp.gw.left", "<b>No hours here after this</b>. The game takes them off their work here and adds a to-do, as its own schedule does."))}<div class="gw-pills">${left.join("")}</div></div>` : "")
-        + adds + (add.people ? gwAddBox(add, gwHours(sentList)) : "") + over.join("");
+        + adds + (add.people ? gwAddBox(add, gwHours(sentList)) : "") + over.join("")
+        + gwCheckLines(gwWeekCheck(row, week.days));
     },
     bind: (dlg, replan) => {
       const sw = dlg.querySelector("[data-gw-open]");
@@ -40451,6 +40860,7 @@ if(LIVE) startWatching();
 """
 
 
+# ------------------------------------------------------- cli and watch server
 def newest_under(target: str) -> str:
     """The most recently written save at or below `target`."""
     if os.path.isfile(target):
