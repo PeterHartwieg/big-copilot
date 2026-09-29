@@ -2149,10 +2149,10 @@ class ExchangeTest(unittest.TestCase):
 
     def test_a_cut_that_leaves_a_guard_short_is_not_made(self):
         """Round 7: the same locker, the no-mornings guard on a four-day week.
-        The pieces went out a line at a time: seven mornings to one guard and
-        four afternoons to the other, 42 h and 24 h, one hire for the three
-        afternoons left -- a full-time guard at 24 h. All or nothing: both
-        spare, two hires, as the owner accepts."""
+        The pieces go out a line at a time, and after four afternoons that
+        guard may take no more: four days cut, 24 h each, three for a hire,
+        two full-time guards under 30. The role's pass is all or nothing, so
+        it is undone: both spare and two hires, as the owner accepts."""
         row = plan([(9, LOCKER)], [
             employee("g1", [GUARD], demands=("ba:jobdemand_fulltime", "ba:jobdemand_noevenings")),
             employee("g2", [GUARD], demands=("ba:jobdemand_fulltime", "ba:jobdemand_nomornings",
@@ -2163,6 +2163,33 @@ class ExchangeTest(unittest.TestCase):
             if who == "G2":
                 self.assertEqual(len(week["days"]), 4)
         self.assertEqual(sum(h["hire"] for h in row["headcount"].values()), 2)
+
+    def test_one_role_s_failed_cut_leaves_another_s_alone(self):
+        """Round 8: a cleaning station and a locker, both 08-20, each with one
+        member of staff who will not work evenings and one who will not work
+        mornings; the second guard also on a four-day week. The guards' cut
+        is undone, and the cleaners' stands: no cleaner to hire."""
+        row = plan([(8, CLEAN_STATION), (9, LOCKER)], [
+            employee("c1", [CLEANING], demands=("ba:jobdemand_fulltime", "ba:jobdemand_noevenings")),
+            employee("c2", [CLEANING], demands=("ba:jobdemand_fulltime", "ba:jobdemand_nomornings")),
+            employee("g1", [GUARD], demands=("ba:jobdemand_fulltime", "ba:jobdemand_noevenings")),
+            employee("g2", [GUARD], demands=("ba:jobdemand_fulltime", "ba:jobdemand_nomornings",
+                                             "ba:jobdemand_fourdaysweek")),
+        ], FLAT, opens=((8, 20),))
+        self.assertEqual(row["headcount"][CLEANING]["hire"], 0)
+        self.assert_no_short_week(row, {"C1": 30, "C2": 30, "G1": 30, "G2": 30})
+
+    def test_another_cut_hour_where_the_middle_leaves_a_line(self):
+        """Round 8: six days of a locker 08-20, a full-time guard with no
+        evenings and a part-time one with no mornings. Cut at 14 the part-timer
+        reaches 30 h on the fifth afternoon and the sixth goes to a hire; cut
+        at 15 it is 42 h and 30 h, and nobody to hire."""
+        row = plan([(9, LOCKER)], [
+            employee("g1", [GUARD], demands=("ba:jobdemand_fulltime", "ba:jobdemand_noevenings")),
+            employee("g2", [GUARD], demands=("ba:jobdemand_parttime", "ba:jobdemand_nomornings")),
+        ], FLAT, opens=((8, 20),), open_days=(0, 1, 2, 3, 4, 5))
+        self.assertEqual(sum(h["hire"] for h in row["headcount"].values()), 0)
+        self.assertEqual(sorted(week["hours"] for week in self.weeks(row).values()), [30, 42])
 
     def test_a_full_timer_is_not_cut_to_part_time_by_the_pieces(self):
         """Round 7: four days open, a full-time guard with no evenings and a

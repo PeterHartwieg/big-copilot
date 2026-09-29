@@ -7415,7 +7415,76 @@ def _may_split(rows: list, hires: list, state: dict) -> bool:
     return bool(owed) and all(hours <= room[skill] for skill, hours in owed.items())
 
 
-def _cut_for_pool(row: dict, rows: list, pool: list, state: dict, here: dict) -> bool:
+def _cut_role(indices: list, rows: list, pool: list, by_id: dict, state: dict, here: dict,
+              before: dict) -> None:
+    """Cut one role's lines nobody here may take whole, for people here (_cut_for_pool()).
+
+    All or nothing for the role: the pieces go out a line at a time, so where
+    they leave anybody who took one short of a demand -- under their band's
+    floor, off an exact day count -- that their week before the pass met, or
+    had no hours at all, the role's pass is undone and its lines are the
+    hires'. A guard with a four-day week cannot hold seven afternoons, and 24
+    hours of pieces is not a full-time week; spare (no hours) is fine, and
+    somebody already short is not held to a demand the pass only brings
+    nearer. One role never undoes another's cut.
+
+    Each line is cut nearest its middle first. Where that leaves lines for
+    hires, or fails, the pass is asked again with one cut hour for every line
+    (up to eight of them, nearest the middle first): six days of a locker
+    08-20 cut 08-14 and 14-20 run a part-time guard to 30 hours on the fifth
+    afternoon, where 08-15 and 15-20 cover all six. The pass that covers the
+    most lines and passes is kept, the earlier one on a tie. `indices` are
+    the role's lines in `rows`, which a cut appends to.
+    """
+    snapshot = ([dict(row) for row in rows],
+                {person["id"]: _copy_state(state[person["id"]]) for person in pool},
+                set(here["rostered"]))
+
+    def restore():
+        rows[:] = [dict(row) for row in snapshot[0]]
+        for pid, entry in snapshot[1].items():
+            state[pid] = _copy_state(entry)
+        here["rostered"] = set(snapshot[2])
+
+    def short(pid, entry):
+        return _short_of_demands(by_id[pid], entry, before.get(pid, (0.0, 0)))
+
+    def run(at):
+        """How many lines one pass covers, or None where it leaves somebody short."""
+        failed, took, covered = set(), set(), 0
+        for index in indices:
+            row = rows[index]
+            if _slot_shape(row) in failed:
+                continue  # a cut only fills weeks, so it fails again
+            cut = _cut_for_pool(row, rows, pool, state, here, at)
+            if cut:
+                took.update(cut)
+                covered += 1
+            else:
+                failed.add(_slot_shape(row))
+        # Short before the pass (with hours) is no veto: the pieces only add.
+        if any(short(pid, state[pid]) and not short(pid, snapshot[1][pid]) for pid in took):
+            return None
+        return covered
+
+    best = (run(None), None)
+    if best[0] != len(indices):
+        middle = sum(rows[i]["from"] + rows[i]["to"] for i in indices) / (2 * len(indices))
+        points = sorted({at for i in indices
+                         for at in range(rows[i]["from"] + MIN_SPLIT, rows[i]["to"] - MIN_SPLIT + 1)},
+                        key=lambda at: (abs(at - middle), at))[:8]
+        for at in points:
+            restore()
+            covered = run(at)
+            if covered is not None and (best[0] is None or covered > best[0]):
+                best = (covered, at)
+        restore()
+        if best[0]:
+            run(best[1])
+
+
+def _cut_for_pool(row: dict, rows: list, pool: list, state: dict, here: dict,
+                  at=None) -> tuple:
     """Cut one line nobody here may take whole between two people who may each take a piece.
 
     A line runs the whole of a station's day, so somebody with no mornings or
@@ -7423,13 +7492,15 @@ def _cut_for_pool(row: dict, rows: list, pool: list, state: dict, here: dict) ->
     of a shop's guards and hired two more, where the game's own week had them
     share it. The cut nearest the middle first, both pieces MIN_SPLIT or
     longer; each piece to whom `_best_for()` puts first among those
-    `_may_take()` passes for that piece, two different people. The head keeps
-    the row, the tail is appended to `rows`. Returns the two people's ids, or
-    () where no cut fits.
+    `_may_take()` passes for that piece, two different people; or at `at`
+    alone, where given. The head keeps the row, the tail is appended to
+    `rows`. Returns the two people's ids, or () where no cut fits.
     """
     start, end = row["from"], row["to"]
     points = sorted(range(start + MIN_SPLIT, end - MIN_SPLIT + 1),
-                    key=lambda at: (abs(2 * at - start - end), at))
+                    key=lambda cut: (abs(2 * cut - start - end), cut))
+    if at is not None:
+        points = [at] if at in points else []
     for at in points:
         head, tail = dict(row, to=at), dict(row, **{"from": at})
         first = _best_for(head, [p for p in pool if _may_take(p, head)], state, here)
@@ -7739,32 +7810,16 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
     # locker open 08-20 and two guards, one with no mornings and one with no
     # evenings, is 08-14 and 14-20 for them, not two guards to hire. A line
     # only too long for the room people have left stays whole, for the hires:
-    # cutting those as well spent the room the swaps needed. All or nothing:
-    # the pieces go out a line at a time, so where they leave anybody who
-    # took one short of a demand -- under their band's floor, off an exact
-    # day count -- the whole pass is undone and those lines are the hires'.
-    # A guard with a four-day week cannot hold seven afternoons, and 24 hours
-    # of pieces is not a full-time week; spare (no hours) is fine.
-    undo, failed, cut_for = None, set(), set()
-    for row in sorted((r for r in first if r["employee"] is None), key=clock):
-        # A shape nobody could share fails again: a cut only fills weeks.
-        if _slot_shape(row) in failed or allowed[_slot_shape(row)]:
-            continue
-        if undo is None:
-            undo = ([dict(r) for r in first],
-                    {person["id"]: _copy_state(state[person["id"]]) for person in pool},
-                    set(here["rostered"]))
-        cut = _cut_for_pool(row, first, pool, state, here)
-        if cut:
-            cut_for.update(cut)
-        else:
-            failed.add(_slot_shape(row))
+    # cutting those as well spent the room the swaps needed. A role at a time
+    # (_cut_role()), all or nothing for that role.
     by_id = {person["id"]: person for person in pool}
-    if any(_short_of_demands(by_id[pid], state[pid], before.get(pid, (0.0, 0)))
-           for pid in cut_for):
-        first[:] = undo[0]
-        state.update(undo[1])
-        here["rostered"] = undo[2]
+    cut_rows = collections.defaultdict(list)
+    for index, row in enumerate(first):
+        if row["employee"] is None and not allowed[_slot_shape(row)]:
+            cut_rows[row["skill"]].append(index)
+    for skill in _in_order(cut_rows):
+        _cut_role(sorted(cut_rows[skill], key=lambda i: clock(first[i])), first, pool, by_id,
+                  state, here, before)
     saved = {person["id"]: _copy_state(state[person["id"]]) for person in pool}
     saved_rostered = set(here["rostered"])
 
@@ -24150,7 +24205,8 @@ function spRosterCount(c){
     const isNew = h.kind === "security" && h.hire;
     const hiredAt = new Set((c.row.shifts || []).filter(s => spNobody(s.p)
       && (c.stations[s.s] || {}).skill === skill).map(s => s.s));
-    const nobodyNow = isNew && !((c.row.current || {}).list || []).some(s => hiredAt.has(s.s));
+    const nobodyNow = isNew && !((c.row.current || {}).list || []).some(
+      s => hiredAt.has(s.s) && !spNobody(s.p));
     /* The band is the fewest people who could cover the hours to the most who
        could still be given a full week, and on a thin role the second is the
        smaller of the two: 56 hours of security needs two people, because
