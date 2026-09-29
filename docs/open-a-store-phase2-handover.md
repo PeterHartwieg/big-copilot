@@ -5,6 +5,8 @@
 - Python: `# --- open a store` in `ba_dashboard.py` (after `_payback()`), payload key `openStore`. `_plan_initial()` goes through
   `_initial_customers()`, which sits before `_arrival_ceiling()` with the same name, signature and text as branch
   `arrival-ceiling` (df11550). `_arrival_ceiling()` itself is main's: when that branch merges, it takes its own version.
+  A trial merge of df11550 gives one conflict, just before `def _arrival_ceiling(`: take that branch's side (drop
+  this branch's copy of the helper); `tests.test_staffing` and `tests.test_open_store` pass on the result.
 - Board: `drawOpenStore()` and the `os*` functions (section `/* --- Expansion › Open a store`), markup `#secOpen`,
   registrations (SUBS, AREAS, ROUTES, HOST_ROUTES, routeViewLabel, SEC_PAGE, PAGE_DRAWS, SS_VIEWS, wireAll), the New badge
   (`VIEW_NEW` in `paintLocal()`), the news strip (`BANNER`), the os- CSS from the canvas, the Demand cell popover (`demCellPop()`).
