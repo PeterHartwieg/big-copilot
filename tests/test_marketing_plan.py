@@ -190,17 +190,30 @@ class Extraction(unittest.TestCase):
         _rows, plan = self.plan([], contacts=(BILLBOARDS,))
         self.assertEqual((plan["on"], plan["costPlan"], plan["visit"]), (["SmallBillboard"], 500, [INTERNET]))
         self.assertEqual(plan["agencies"], [BILLBOARDS])
-        # A type booked with an agency that is not a contact stays as it runs.
+        # A type the site has no entry for, sold by no contact, stays off:
+        # Medium internet would need a new switch at McCain's.
+        self.assertNotIn("MediumInternet", plan["on"])
+
+    def test_an_existing_switch_flips_whatever_its_agency(self):
+        # Peter's rule: a switch the site has is turned on or off at any time,
+        # contact or not. Medium internet's entry at McCain's, with no contact
+        # at all, is still planned, and needs no agency for the write.
+        _rows, plan = self.plan([_camp(SB, True, "ba:street_secondavenue", 5), _camp(MI, False)], contacts=())
+        self.assertEqual((plan["on"], plan["costPlan"]), (["MediumInternet"], 250))
+        self.assertEqual(plan["agencies"], [])
+        self.assertEqual((plan["needsSetup"], plan["setupTypes"]), (False, []))
+        # A type booked with an agency that is not a contact is free too: the
+        # Large internet entry stays on, as cheap as Small billboard and
+        # already running, and nothing new is needed.
         _rows, plan = self.plan([_camp(LI, True)], contacts=(BILLBOARDS,))
-        self.assertEqual(plan["on"], ["LargeInternet"])
-        self.assertNotIn(INTERNET, plan["agencies"])
+        self.assertEqual((plan["on"], plan["agencies"]), (["LargeInternet"], []))
 
     def test_the_agencies_a_write_touches(self):
         _rows, plan = self.plan([_camp(SB, True, "ba:street_secondavenue", 5)])
-        # Small billboard off at CityAds, Medium internet on at McCain's, and
-        # the missing entries at both.
+        # Small billboard off at CityAds, which needs no agency, and Medium
+        # internet on, a new switch from McCain's.
         self.assertEqual(plan["on"], ["MediumInternet"])
-        self.assertEqual(plan["agencies"], [BILLBOARDS, INTERNET])
+        self.assertEqual(plan["agencies"], [INTERNET])
         # The switches still missing, and who sells them.
         self.assertEqual(plan["setupTypes"], ["SmallInternet", "MediumInternet", "LargeInternet",
                                               "MediumBillboard", "LargeBillboard"])
@@ -243,6 +256,59 @@ class Agencies(unittest.TestCase):
         self.assertEqual(rows[0]["types"], ["SmallInternet", "MediumInternet", "LargeInternet"])
         self.assertEqual((rows[0]["open"], rows[0]["opens"]), (False, {"day": 8, "hour": 8}))
         self.assertEqual((rows[1]["closed"], rows[1]["open"], rows[1]["opens"]), (True, False, None))
+
+
+def _mk(on, was, now=100, then=100, cost_now=0, cost_plan=0, visit=()):
+    return {"on": on, "was": was, "promotionNow": now, "promotionPlan": then, "costNow": cost_now,
+            "costPlan": cost_plan, "visit": list(visit)}
+
+
+def _site(key, name, plan, status="retail"):
+    """The fields _alerts() reads off a business (test_site_panel_fields.stub())."""
+    return {"key": key, "name": name, "status": status, "typeSlug": "", "revenue": 10.0, "profit": 0.0,
+            "opened": 1, "rent": 100.0, "staff": 1, "customers": 3, "costCentre": True, "lines": [], "crew": [],
+            "satisfaction": {"overall": None}, "staffDemands": [], "quitWarnings": 0,
+            "promotion": plan["promotionNow"], "missingUniformLocker": False, "uniformGaps": [],
+            "missingAmenities": [], "traffic": 0, "marketingIndex": 0, "marketingPlan": plan}
+
+
+def _promotion(businesses):
+    out = d._alerts(businesses, {"graph": {"links": []}, "shops": [], "idle": [], "imports": []},
+                    [], [], [], [], [], 60, 0.0, agencies=[{"key": INTERNET, "name": "McCain's eMarketing"},
+                                                           {"key": BILLBOARDS, "name": "CityAds"}])
+    return [r for r in out["lines"] + out["minor"]["rows"] if r["group"] == "promotion"]
+
+
+class Finding(unittest.TestCase):
+    """The promotion finding: every shop and office whose plan differs."""
+
+    def test_a_short_site_the_plan_fixes_is_a_warning(self):
+        rows = _promotion([_site("a", "HART. Books", _mk(["SmallBillboard"], [], 77, 100, 0, 500))])
+        self.assertEqual([(r["level"], r["text"]) for r in rows],
+                         [("warn", "HART. Books can reach 100% promotion for $500/day more")])
+
+    def test_several_sites_lead_with_the_gain(self):
+        rows = _promotion([
+            _site("a", "A", _mk(["SmallBillboard"], ["LargeBillboard"], 82, 100, 6000, 500)),
+            _site("b", "B", _mk(["MediumInternet"], ["SmallBillboard"], 100, 100, 500, 250), status="office")])
+        self.assertEqual([(r["level"], r["site"], r["text"]) for r in rows],
+                         [("warn", "2 sites", "2 sites can reach 100% promotion for less: A 82% → 100%, B $500 → $250/day")])
+
+    def test_overspend_and_a_small_gap_are_opportunities(self):
+        rows = _promotion([_site("a", "Gym", _mk(["SmallBillboard"], ["SmallBillboard", "MediumInternet"], 100, 100, 750, 500))])
+        self.assertEqual([(r["level"], r["text"]) for r in rows], [("info", "Gym can save $250/day at the same promotion")])
+        rows = _promotion([_site("a", "Shop", _mk(["SmallInternet"], [], 99, 100, 0, 100))])
+        self.assertEqual(rows[0]["level"], "info")
+
+    def test_set_up_only_or_on_plan_is_no_finding(self):
+        self.assertEqual(_promotion([_site("a", "A", _mk(["SmallInternet"], ["SmallInternet"], 90, 90))]), [])
+
+    def test_no_agency_known_is_its_own_line(self):
+        rows = _promotion([_site("a", "A", _mk(None, [], 70, None, visit=[BILLBOARDS]))])
+        self.assertEqual([(r["level"], r["text"]) for r in rows],
+                         [("info", "Visit CityAds once: no campaign can be set at A before that")])
+        # At the cap already: nothing to visit for.
+        self.assertEqual(_promotion([_site("a", "A", _mk(None, [], 100, None, visit=[BILLBOARDS]))]), [])
 
 
 class AgainstTheSaves(unittest.TestCase):

@@ -300,28 +300,6 @@
    "worth": null
   },
   {
-   "group": "promotion",
-   "i18n": {
-    "text": [
-     "f.promotion",
-     {
-      "marketing": 0.0,
-      "n": 20.0,
-      "promotion": 80.0,
-      "site": "HART. Gifts",
-      "traffic": 50.0
-     }
-    ]
-   },
-   "id": "f2450926c3",
-   "level": "warn",
-   "site": "HART. Gifts",
-   "siteKey": "ba:street_broadwaystreet#19",
-   "text": "HART. Gifts promotes at 80.0% of the 100% cap: 50.0% foot traffic and 0.0% marketing. The address sets the foot traffic, so the missing 20.0 points have to come from campaigns",
-   "unit": "",
-   "worth": null
-  },
-  {
    "ev": {
     "slug": "ba:itemname_cheapgift"
    },
@@ -457,6 +435,34 @@
    "site": "HART. Brewery",
    "siteKey": "ba:street_eighthavenue#8",
    "text": "⟦ba:itemname_beer|Beer⟧ machine at list position 1 is staffed 84 of 168 hours; nobody on it Mon-Sun 0-8, 20-24; 300 a day not made",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "promotion",
+   "i18n": {
+    "text": [
+     "f.promotion.visit",
+     {
+      "agencies": {
+       "m": [
+        "f.list.last",
+        {
+         "a": "CityAds",
+         "b": "McCain's eMarketing"
+        },
+        "CityAds, McCain's eMarketing"
+       ]
+      },
+      "sites": "HART. Gifts"
+     }
+    ]
+   },
+   "id": "f2450926c3",
+   "level": "info",
+   "site": "HART. Gifts",
+   "siteKey": "ba:street_broadwaystreet#19",
+   "text": "Visit CityAds, McCain's eMarketing once: no campaign can be set at HART. Gifts before that",
    "unit": "",
    "worth": null
   }
@@ -712,28 +718,6 @@
     "worth": null
    },
    {
-    "group": "promotion",
-    "i18n": {
-     "text": [
-      "f.promotion",
-      {
-       "marketing": 0.0,
-       "n": 20.0,
-       "promotion": 80.0,
-       "site": "HART. Gifts",
-       "traffic": 50.0
-      }
-     ]
-    },
-    "id": "f2450926c3",
-    "level": "warn",
-    "site": "HART. Gifts",
-    "siteKey": "ba:street_broadwaystreet#19",
-    "text": "HART. Gifts promotes at 80.0% of the 100% cap: 50.0% foot traffic and 0.0% marketing. The address sets the foot traffic, so the missing 20.0 points have to come from campaigns",
-    "unit": "",
-    "worth": null
-   },
-   {
     "ev": {
      "slug": "ba:itemname_cheapgift"
     },
@@ -785,6 +769,34 @@
     "site": "HART. Gifts",
     "siteKey": "ba:street_broadwaystreet#19",
     "text": "⟦ba:itemname_umbrella|Umbrella⟧ is on no distribution plan: 30 left at 21/day",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "promotion",
+    "i18n": {
+     "text": [
+      "f.promotion.visit",
+      {
+       "agencies": {
+        "m": [
+         "f.list.last",
+         {
+          "a": "CityAds",
+          "b": "McCain's eMarketing"
+         },
+         "CityAds, McCain's eMarketing"
+        ]
+       },
+       "sites": "HART. Gifts"
+      }
+     ]
+    },
+    "id": "f2450926c3",
+    "level": "info",
+    "site": "HART. Gifts",
+    "siteKey": "ba:street_broadwaystreet#19",
+    "text": "Visit CityAds, McCain's eMarketing once: no campaign can be set at HART. Gifts before that",
     "unit": "",
     "worth": null
    }

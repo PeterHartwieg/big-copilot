@@ -307,6 +307,49 @@
    "text": "Interior design falls short of what customers expect here",
    "unit": "",
    "worth": null
+  },
+  {
+   "group": "promotion",
+   "i18n": {
+    "site": [
+     "f.site.sites",
+     {
+      "n": 2
+     }
+    ],
+    "text": [
+     "f.promotion.visit",
+     {
+      "agencies": {
+       "m": [
+        "f.list.last",
+        {
+         "a": "CityAds",
+         "b": "McCain's eMarketing"
+        },
+        "CityAds, McCain's eMarketing"
+       ]
+      },
+      "sites": {
+       "m": [
+        "f.list.last",
+        {
+         "a": "HART. Gifts",
+         "b": "HART. Bare"
+        },
+        "HART. Gifts, HART. Bare"
+       ]
+      }
+     }
+    ]
+   },
+   "id": "7f324eddaf",
+   "level": "info",
+   "site": "2 sites",
+   "siteKey": null,
+   "text": "Visit CityAds, McCain's eMarketing once: no campaign can be set at HART. Gifts, HART. Bare before that",
+   "unit": "",
+   "worth": null
   }
  ],
  "alertsDemand": {
@@ -616,6 +659,49 @@
     "site": "HART. Bare",
     "siteKey": "ba:street_fifthavenue#4",
     "text": "Interior design falls short of what customers expect here",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "promotion",
+    "i18n": {
+     "site": [
+      "f.site.sites",
+      {
+       "n": 2
+      }
+     ],
+     "text": [
+      "f.promotion.visit",
+      {
+       "agencies": {
+        "m": [
+         "f.list.last",
+         {
+          "a": "CityAds",
+          "b": "McCain's eMarketing"
+         },
+         "CityAds, McCain's eMarketing"
+        ]
+       },
+       "sites": {
+        "m": [
+         "f.list.last",
+         {
+          "a": "HART. Gifts",
+          "b": "HART. Bare"
+         },
+         "HART. Gifts, HART. Bare"
+        ]
+       }
+      }
+     ]
+    },
+    "id": "7f324eddaf",
+    "level": "info",
+    "site": "2 sites",
+    "siteKey": null,
+    "text": "Visit CityAds, McCain's eMarketing once: no campaign can be set at HART. Gifts, HART. Bare before that",
     "unit": "",
     "worth": null
    }

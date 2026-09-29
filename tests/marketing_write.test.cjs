@@ -141,6 +141,7 @@ test('a shop: the cheapest mix, a dry run, Apply and Undo', async (t) => {
   const row = dlg.locator('.gw-mkrow');
   assert.equal(await row.locator('.gw-mk').innerText(), 'Large internet → Small internet + Small billboard');
   assert.equal(await row.locator('.c').innerText(), '$500 → $600/day');
+  assert.equal(await row.getAttribute('data-read'), 'Promotion 90% → 100%', 'the read-out adds what the row does not show');
   assert.deepEqual(await writes(page), [{kind: 'marketing', dryRun: true,
     body: {sites: [{address: addr(G), on: ['SmallInternet', 'SmallBillboard'], was: ['LargeInternet']}]}}]);
   await dlg.locator('[data-gw-b="apply"]').click();
@@ -217,7 +218,7 @@ test('the promotion finding and Standards: every site at once, a site on plan on
   const dlg = page.locator('dialog.gw-dlg');
   assert.equal(await dlg.locator('h2').textContent(), 'Set up marketing at 2 sites');
   assert.deepEqual((await writes(page))[0].body.sites.map(s => `${s.address.street}#${s.address.number}`), [G, B]);
-  assert.match(await dlg.locator('.gw-mkrow').nth(1).innerText(), /switches added, nothing else changes/);
+  assert.match(await dlg.locator('.gw-mkrow').nth(1).innerText(), /\+5 switches/);
   assert.match(await dlg.locator('.gw-tally').innerText(), /\$3,000[\s\S]*\$3,100/);
   // A refused site in a run of many is said in its row, with Leave it out.
   await page.keyboard.press('Escape');
@@ -234,21 +235,61 @@ test('the promotion finding and Standards: every site at once, a site on plan on
   assert.deepEqual((await writes(page)).at(-1).body.sites.map(s => s.address.number), [10]);
 });
 
-test('an agency the write needs is shut: the button waits and the line says when it opens', async (t) => {
-  // Monday 20:00: shut until Tuesday 8:00.
+test('a new switch from a shut agency: the button waits and one line beside it says when', async (t) => {
+  // Monday 20:00: shut until Tuesday 8:00. Gifts' plan needs new switches at both.
   const page = await board(t, {link: Object.assign({}, LINK, {hour: 20})});
   await openSite(page, G);
   const set = page.locator('#sp-pull [data-gw="marketing"]');
   assert.equal(await set.getAttribute('aria-disabled'), 'true');
-  assert.equal(await set.getAttribute('data-tip'), "McCain's eMarketing opens Tuesday at 8:00. CityAds opens Tuesday at 8:00.");
-  assert.match(await page.locator('#sp-pull .spmk').innerText(), /CityAds opens Tuesday at 8:00\./);
-  // Before opening on the same day: the hour alone.
+  assert.equal(await page.locator('#sp-pull .spmk-why').innerText(), 'Agencies open Tuesday at 8:00');
+  assert.equal(await set.getAttribute('data-tip'), null, 'hover does not repeat the line beside it');
+  assert.equal(await set.getAttribute('aria-label'), 'Set the cheapest mix: Agencies open Tuesday at 8:00');
+  // Before opening on the same day: the hour alone, and one agency by name.
   const early = await board(t, {link: Object.assign({}, LINK, {hour: 7})});
   await openSite(early, O);
-  assert.equal(await early.locator('#sp-pull [data-gw="marketing"]').getAttribute('data-tip'), 'CityAds opens at 8:00.');
-  // The finding's action for every site waits too.
+  assert.equal(await early.locator('#sp-pull .spmk-why').innerText(), 'CityAds opens at 8:00');
+  // The finding's action for every site waits too, its reason on hover.
   await early.evaluate(() => { showPage('today'); });
-  assert.equal(await early.locator('#alerts .find[data-kind="promotion"] [data-gw="marketing"]').getAttribute('aria-disabled'), 'true');
+  const all = early.locator('#alerts .find[data-kind="promotion"] [data-gw="marketing"]');
+  assert.equal(await all.getAttribute('aria-disabled'), 'true');
+  assert.equal(await all.getAttribute('data-tip'), 'Agencies open at 8:00');
+  // An agency not in the phone yet: a first visit.
+  const d = JSON.parse(payload);
+  d.marketingAgencies.find(a => a.key === ADS).contact = false;
+  const stranger = await board(t, {data: JSON.stringify(d)});
+  await openSite(stranger, O);
+  assert.equal(await stranger.locator('#sp-pull .spmk-why').innerText(), 'Visit CityAds once');
+});
+
+// Peter's rule: a switch the site already has flips at any time, like the
+// phone; only a new one needs its agency known and open.
+function flipsOnly() {
+  const d = JSON.parse(payload);
+  const g = d.businesses.find(b => b.key === G);
+  g.campaigns = ['LargeInternet', 'SmallInternet', 'SmallBillboard'].map(type =>
+    ({type, agency: type.endsWith('Billboard') ? ADS : NET, enabled: type === 'LargeInternet'}));
+  Object.assign(g.marketingPlan, {agencies: []});
+  return JSON.stringify(d);
+}
+test('a plan that only flips switches the site has goes through while the agencies are shut', async (t) => {
+  // Monday 17:45: both agencies shut.
+  const page = await board(t, {link: Object.assign({}, LINK, {hour: 17, minute: 45}), data: flipsOnly()});
+  await openSite(page, G);
+  const set = page.locator('#sp-pull [data-gw="marketing"]');
+  assert.equal(await set.getAttribute('aria-disabled'), null);
+  assert.equal(await page.locator('#sp-pull .spmk-why').count(), 0);
+  await page.evaluate(() => { showPage('today'); });
+  assert.equal(await page.locator('#alerts .find[data-kind="promotion"] [data-gw="marketing"]').getAttribute('aria-disabled'), null);
+});
+
+test('the game\'s clock turning the hour redraws the gate, with no new board', async (t) => {
+  // 16:00: open. The link's clock moves to 17:00 without new bytes.
+  const page = await board(t, {link: Object.assign({}, LINK, {hour: 16})});
+  await openSite(page, G);
+  assert.equal(await page.locator('#sp-pull [data-gw="marketing"]').getAttribute('aria-disabled'), null);
+  await page.evaluate(() => { window.mkLink = Object.assign({}, window.mkLink, {hour: 17}); window.calmWatch.linkClock(); });
+  assert.equal(await page.locator('#sp-pull [data-gw="marketing"]').getAttribute('aria-disabled'), 'true');
+  assert.equal(await page.locator('#sp-pull .spmk-why').innerText(), 'Agencies open Tuesday at 8:00');
 });
 
 test('no agency in the phone yet: the line names where to go, and there is no button', async (t) => {
@@ -259,14 +300,14 @@ test('no agency in the phone yet: the line names where to go, and there is no bu
   const page = await board(t, {data: JSON.stringify(d)});
   await openSite(page, G);
   assert.equal((await page.locator('#sp-pull .spmk').innerText()).trim(),
-    "No campaigns can be booked from here yet: visit McCain's eMarketing (17 Third Avenue), CityAds (5 Second Avenue) once.");
+    "Visit McCain's eMarketing (17 Third Avenue), CityAds (5 Second Avenue) once to book campaigns.");
   assert.equal(await page.locator('#sp-pull [data-gw]').count(), 0);
   // An agency that would make a better plan: one hint under the plan.
   const better = JSON.parse(payload);
   better.businesses.find(b => b.key === B).marketingPlan.visit = [NET];
   const hint = await board(t, {data: JSON.stringify(better)});
   await openSite(hint, B);
-  assert.match(await hint.locator('#sp-pull .spmk').innerText(), /Visit McCain's eMarketing \(17 Third Avenue\) once to plan with its campaigns too\./);
+  assert.match(await hint.locator('#sp-pull .spmk').innerText(), /Visit McCain's eMarketing \(17 Third Avenue\) once for a better mix\./);
 });
 
 test('the game refuses a row for a shut or unknown agency, and an undo while it is shut', async (t) => {
@@ -325,7 +366,7 @@ test('set-up while an agency is shut: waits when every one is, says what waits w
   await openSite(shut, B);
   const setup = shut.locator('#sp-pull [data-gw="marketing"]');
   assert.equal(await setup.getAttribute('aria-disabled'), 'true');
-  assert.equal(await setup.getAttribute('data-tip'), "McCain's eMarketing opens at 8:00. CityAds opens at 8:00.");
+  assert.equal(await shut.locator('#sp-pull .spmk-why').innerText(), 'Agencies open at 8:00');
   assert.match(await setup.getAttribute('aria-label'), /^Add every campaign switch to BizMan: /);
 
   const page = await board(t, {link: Object.assign({}, LINK, {hour: 7}), data: earlyMorning()});
@@ -341,29 +382,25 @@ test('set-up while an agency is shut: waits when every one is, says what waits w
   await phase(page, 'ready');
   const dlg = page.locator('dialog.gw-dlg');
   assert.match(await dlg.locator('.gw-verdict').innerText(), /The game will add 3 switches/);
-  assert.equal(await dlg.locator('.gw-mkrow .gw-mk').innerText(),
-    'Small internet, Medium internet, Large internet switches added, nothing else changes · Small billboard, Large billboard switches wait for CityAds, open at 8:00');
+  assert.equal(await dlg.locator('.gw-mkrow .gw-mk').innerText(), '+3 switches · 2 switches later, 8:00');
+  assert.equal(await dlg.locator('.gw-mkrow').getAttribute('data-read'), null, 'no read-out repeating the row');
   await dlg.locator('[data-gw-b="apply"]').click();
   await phase(page, 'done');
-  assert.equal(await dlg.locator('.gw-said').textContent(), '3 switches added to BizMan. 2 switches wait for an agency to open.');
-  assert.doesNotMatch(await dlg.innerText(), /Every campaign switch/);
-  // Nothing added: McCain's is open, so its three were there already, and
-  // CityAds' two wait. Never "every switch".
+  assert.equal(await dlg.locator('.gw-said').textContent(), '3 switches added to BizMan. 2 switches come later.');
+  // Nothing added: McCain's three were there already, and CityAds' two wait.
+  // One line, and no Apply that would do nothing.
   await page.keyboard.press('Escape');
   await answering(page);
   await page.evaluate(() => { const was = window.mkAnswer; window.mkAnswer = async (...a) => {
     const res = await was(...a); res.body.rows.forEach(r => { r.entriesAdded = []; }); return res; }; });
   await btn.click();
   await phase(page, 'ready');
-  assert.match(await dlg.locator('.gw-verdict').innerText(), /No switch can be added until an agency opens/);
-  assert.equal(await dlg.locator('.gw-mkrow .gw-mk').innerText(),
-    'Small billboard, Large billboard switches wait for CityAds, open at 8:00 · Small internet, Medium internet, Large internet switches already in BizMan');
-  await dlg.locator('[data-gw-b="apply"]').click();
-  await phase(page, 'done');
-  assert.equal(await dlg.locator('.gw-said').textContent(), 'No switch was added: the agencies it needs are closed.');
+  assert.equal(await dlg.locator('.gw-verdict b').innerText(), 'Nothing can change before 8:00, when CityAds opens');
+  assert.equal(await dlg.locator('.gw-body').innerText(), '');
+  assert.equal(await dlg.locator('[data-gw-b="apply"]').isDisabled(), true);
+  assert.equal(await dlg.locator('[data-gw-b="apply"]').getAttribute('title'), null);
 
-  // Both agencies open and nothing added: the switches were there already,
-  // never "closed". The button's name says it adds what it can now.
+  // Both agencies open and nothing added: the switches were there already.
   const open = await board(t);
   await answering(open, {entries: {[B]: []}});
   await openSite(open, B);
@@ -371,11 +408,8 @@ test('set-up while an agency is shut: waits when every one is, says what waits w
   await open.locator('#sp-pull [data-gw="marketing"]').click();
   await phase(open, 'ready');
   const d2 = open.locator('dialog.gw-dlg');
-  assert.match(await d2.locator('.gw-verdict').innerText(), /No switches to add/);
-  assert.doesNotMatch(await d2.innerText(), /closed|opens/);
-  await d2.locator('[data-gw-b="apply"]').click();
-  await phase(open, 'done');
-  assert.equal(await d2.locator('.gw-said').textContent(), 'No switches were added: they are in BizMan already.');
+  assert.equal(await d2.locator('.gw-verdict b').innerText(), 'Nothing to change: every switch is in BizMan already');
+  assert.equal(await d2.locator('[data-gw-b="apply"]').isDisabled(), true);
 });
 
 test('every site at once counts only the sites the game takes now, on one finding', async (t) => {
@@ -418,12 +452,8 @@ test('the game says what waits: its `waiting`, not the board\'s clock', async (t
   await page.locator('#sp-pull [data-gw="marketing"]').click();
   await phase(page, 'ready');
   const dlg = page.locator('dialog.gw-dlg');
-  assert.match(await dlg.locator('.gw-verdict').innerText(), /No switch can be added until an agency opens/);
-  assert.equal(await dlg.locator('.gw-mkrow .gw-mk').innerText(),
-    'Small billboard, Large billboard switches wait for CityAds, open Tuesday at 8:00 · Small internet, Medium internet, Large internet switches already in BizMan');
-  await dlg.locator('[data-gw-b="apply"]').click();
-  await phase(page, 'done');
-  assert.equal(await dlg.locator('.gw-said').textContent(), 'No switch was added: the agencies it needs are closed.');
+  assert.equal(await dlg.locator('.gw-verdict b').innerText(), 'Nothing can change before Tuesday at 8:00, when CityAds opens');
+  assert.equal(await dlg.locator('[data-gw-b="apply"]').isDisabled(), true);
 });
 
 test('one switch added says so in the singular; a refused row adds nothing', async (t) => {
@@ -435,7 +465,7 @@ test('one switch added says so in the singular; a refused row adds nothing', asy
   await page.locator('#sp-pull [data-gw="marketing"]').click();
   await phase(page, 'ready');
   const dlg = page.locator('dialog.gw-dlg');
-  assert.equal(await dlg.locator('.gw-mkrow .gw-mk').innerText(), 'switch added, nothing else changes');
+  assert.equal(await dlg.locator('.gw-mkrow .gw-mk').innerText(), '+1 switch');
   assert.match(await dlg.locator('.gw-verdict').innerText(), /The game will add 1 switch(\n|$)/);
   await page.keyboard.press('Escape');
   await answering(page, {errors: {[B]: 'agency_closed'}});
@@ -491,13 +521,9 @@ test('a switch waiting for an agency the board thinks is a contact is not called
   await page.locator('#sp-pull [data-gw="marketing"]').click();
   await phase(page, 'ready');
   const dlg = page.locator('dialog.gw-dlg');
-  assert.match(await dlg.locator('.gw-verdict').innerText(), /No switch can be added now/);
-  assert.equal(await dlg.locator('.gw-mkrow .gw-mk').innerText(),
-    'Small billboard, Large billboard switches wait for CityAds · Small internet, Medium internet, Large internet switches already in BizMan');
-  assert.doesNotMatch(await dlg.innerText(), /closed|to open/);
-  await dlg.locator('[data-gw-b="apply"]').click();
-  await phase(page, 'done');
-  assert.equal(await dlg.locator('.gw-said').textContent(), 'No switch was added: each one waits for an agency.');
+  assert.equal(await dlg.locator('.gw-verdict b').innerText(), 'Nothing can change now: no agency can add these switches');
+  assert.doesNotMatch(await dlg.innerText(), /closed|opens/);
+  assert.equal(await dlg.locator('[data-gw-b="apply"]').isDisabled(), true);
 });
 
 test('switches of an agency the board knows is no contact: a first visit, never "every switch"', async (t) => {
@@ -513,11 +539,17 @@ test('switches of an agency the board knows is no contact: a first visit, never 
   await page.locator('#sp-pull [data-gw="marketing"]').click();
   await phase(page, 'ready');
   const dlg = page.locator('dialog.gw-dlg');
-  assert.equal(await dlg.locator('.gw-mkrow .gw-mk').innerText(),
-    'Small internet, Medium internet, Large internet switches added, nothing else changes · Small billboard, Large billboard switches wait for a first visit to CityAds');
+  assert.equal(await dlg.locator('.gw-mkrow .gw-mk').innerText(), '+3 switches · 2 switches later: first visit to CityAds');
   await dlg.locator('[data-gw-b="apply"]').click();
   await phase(page, 'done');
-  assert.equal(await dlg.locator('.gw-said').textContent(), '3 switches added to BizMan. 2 switches wait for a first visit to an agency.');
+  assert.equal(await dlg.locator('.gw-said').textContent(), '3 switches added to BizMan. 2 switches come later.');
+  // With nothing to add, the one line names the visit.
+  await page.keyboard.press('Escape');
+  await answering(page, {entries: {[B]: []}, waiting: {[B]: [
+    {type: 'SmallBillboard', agency: CITYADS, opens: null}, {type: 'LargeBillboard', agency: CITYADS, opens: null}]}});
+  await page.locator('#sp-pull [data-gw="marketing"]').click();
+  await phase(page, 'ready');
+  assert.equal(await dlg.locator('.gw-verdict b').innerText(), 'Nothing can change before a first visit to CityAds');
 });
 
 test('a temporarily closed agency the board knows of counts as closed', async (t) => {
@@ -530,9 +562,6 @@ test('a temporarily closed agency the board knows of counts as closed', async (t
   await page.locator('#sp-pull [data-gw="marketing"]').click();
   await phase(page, 'ready');
   const dlg = page.locator('dialog.gw-dlg');
-  assert.match(await dlg.locator('.gw-mkrow .gw-mk').innerText(), /Small billboard, Large billboard switches wait for CityAds to reopen/);
-  assert.match(await dlg.locator('.gw-verdict').innerText(), /No switch can be added until an agency opens/);
-  await dlg.locator('[data-gw-b="apply"]').click();
-  await phase(page, 'done');
-  assert.equal(await dlg.locator('.gw-said').textContent(), 'No switch was added: the agencies it needs are closed.');
+  assert.equal(await dlg.locator('.gw-verdict b').innerText(), 'Nothing can change before CityAds reopens');
+  assert.equal(await dlg.locator('[data-gw-b="apply"]').isDisabled(), true);
 });

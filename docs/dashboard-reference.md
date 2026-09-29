@@ -309,12 +309,17 @@ What is on the list is what moves the number:
   one company line instead. Once somebody with an unmet demand has warned they will quit,
   the site's line turns critical and names those company-wide demands too, since they may
   be all that person lacks.
-- **Promotion left on the table.** A shop's promotion is the foot traffic its address
-  comes with plus what its marketing campaigns add, held at 100%. The address cannot be
-  changed, so any shop selling something is either at the 100% cap or at 100% marketing.
-  Anything else is campaigns not bought, and the shops it applies to read as one line with
-  each one's shortfall. The three figures sit side by side in Businesses › Standards
-  view, which is where the finding's *details ›* link lands.
+- **Campaign mix.** A shop's or office's promotion is the foot traffic its address comes
+  with plus what its marketing campaigns add, held at 100%. Every shop and office whose
+  cheapest mix (the Promotion block's last line, below) differs from what it runs reads as
+  one line that leads with the gain: "3 sites can reach 100% promotion for less", "HART.
+  Gym can save $150/day at the same promotion", with each site's promotion or cost, now and
+  after, in the details. It is a warning when a site is short of its target by 10 points or
+  more and the mix fixes that; overspending and smaller gaps are opportunities. A mix that
+  only adds missing switches changes neither and is no finding. A site short of 100 with
+  no mix, because no agency is a phone contact yet, gets its own line naming the agencies
+  to visit once. With the game link the finding carries "Set the cheapest mix at N
+  sites"; its *details ›* link lands on Businesses › Standards.
 
 ## The weekly rhythm
 
@@ -956,16 +961,23 @@ and dims the rest; clicking scrolls there.
   for every type its agencies sell, which otherwise takes a call to each agency; a site that
   runs its mix but misses a switch gets a **Set up** button for that alone.
 
-  Campaigns go only through an agency the player has visited once (it is then a phone
-  contact), and only while it is open (8:00 to 17:00 on weekdays in the cities seen). The plan
-  uses only the types the known agencies sell, and keeps any other campaign as it runs. With
-  no agency known and a change needed there is no plan: the line names the agencies to visit,
-  with their addresses. An agency not known yet whose campaigns would make a better plan gets
-  one line, "Visit … once". While an agency the write needs is closed, the button waits and
-  the line says when it opens; an Undo while it is closed is refused the same way. A closed
-  agency gets no new switches: a set-up waits only while every agency it needs is closed,
-  and otherwise adds what it can and says which switches wait for which agency. The
-  all-sites actions count only the sites the game takes now. Without the
+  A switch the site already has (a campaign entry, on or off) is flipped at any time, as the
+  phone does, whatever its agency. Only a new switch needs its agency to be one the player
+  has visited once (it is then a phone contact) and open (8:00 to 17:00 on weekdays in the
+  cities seen). So the plan uses the types the site has a switch for plus the types the
+  known agencies sell. With neither and a change needed there is no plan: the line names
+  the agencies to visit, with their addresses. An agency not known yet whose campaigns would
+  make a better plan gets one line, "Visit … once for a better mix". The button waits only
+  while a new switch the plan needs has no agency to add it now, with one line beside it:
+  "CityAds opens Tuesday at 8:00", "Agencies open at 8:00" or "Visit CityAds once". It
+  follows the game's clock as the link reads it, so it opens and shuts on the hour without a
+  new save. An Undo only flips switches and is never refused for an agency. A set-up waits
+  only while every agency it adds from is closed or unknown; otherwise it adds what it can,
+  and a row says in one clause how many switches come later and when ("2 switches later,
+  Tuesday 8:00"). A dry run that would change nothing is one line ("Nothing can change
+  before 8:00, when CityAds opens"), with no Apply. Hovering a row shows only what it does
+  not: the promotion the mix moves. The all-sites actions count only the sites the game
+  takes now. Without the
   link, or with a mod older than 0.4.0, the line says which switches to flip in BizMan
   instead. The Promotion finding offers the cheapest mix at every site it would change,
   and Businesses › Standards also offers the set-up for every shop and office missing a

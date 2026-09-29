@@ -664,6 +664,13 @@
   // The /health body read with the newest bytes, for the strip; after a
   // failed build it names the failed bytes' game, not the board's.
   let linkHealth = null;
+  // The game's clock ({day, hour, minute}) at the newest /health of that same
+  // game, read by any caller: it moves on every read, new bytes or not, so
+  // what the board judges by the hour (a marketing agency open now, the import
+  // lock window) follows the game. Null until a read after the bytes; the
+  // strip keeps naming the bytes' own time from linkHealth.
+  let linkNow = null;
+  const linkTime = () => (linkNow || linkHealth);
   // The schemaVersion this page speaks, and the one in the last health object
   // any caller read, the watcher's included. linkHealth moves only with new
   // bytes, so a mod updated under an open tab shows here first: writes go
@@ -827,6 +834,7 @@
     linkUrl = null;
     lastLinkStamp = "";
     linkHealth = null;
+    linkNow = null;
     linkSchema = LINK_SCHEMA;
     linkGone = false;
     linkNotReady = 0;
@@ -841,6 +849,7 @@
     // first stamp the mod answers has to be read, whatever it is.
     lastLinkStamp = "";
     linkHealth = null;
+    linkNow = null;
     linkSchema = LINK_SCHEMA;
     linkGone = false;
     linkNotReady = 0;
@@ -875,7 +884,24 @@
     const spoke = linkSpeaks();
     linkSchema = body.schemaVersion;
     if (spoke !== linkSpeaks()) linkMoved();
+    tickClock(body);
     return body;
+  }
+  // The game's clock from a health answer of the game behind the board (same
+  // character and company as linkHealth): kept in linkNow, and when it has
+  // crossed into another hour the board hears of it (linkClock), so an
+  // agency's opening is seen without new bytes.
+  function tickClock(body) {
+    if (!linkHealth || body.schemaVersion !== LINK_SCHEMA) return;
+    if ((body.character || "") !== (linkHealth.character || "") || (body.company || "") !== (linkHealth.company || "")) return;
+    const day = Number(body.day), hour = Number(body.hour);
+    if (!Number.isFinite(day) || !Number.isFinite(hour)) return;
+    const was = linkTime();
+    linkNow = {day: body.day, hour: body.hour, minute: body.minute};
+    if (day === Number(was.day) && Math.floor(hour) === Math.floor(Number(was.hour))) return;
+    if (handlers && handlers.linkClock) {
+      try { handlers.linkClock(); } catch (e) {}
+    }
   }
   // False when the mod speaks this page's version; otherwise the bad state
   // is on screen and the caller returns. A not-ready answer is not judged.
@@ -974,6 +1000,7 @@
         // linkHealth now, not after the build: the strip's line while the
         // bytes are read should be the day they carry.
         linkHealth = health;
+        linkNow = null;
         const file = new File([bytes], `${health.character}-live.hsg`,
           {lastModified: Date.parse(health.refreshedAt) || Date.now()});
         file.linkStamp = res.headers.get("X-Game-Link-Stamp") || health.stamp;
@@ -2321,7 +2348,7 @@
     // `stamp`: the stamp of the bytes behind the board on screen; `source`:
     // which choice of source the board is from, new with each.
     link: () => (linkUrl && linkHealth ? {writes: linkWrites(), character: linkHealth.character || "",
-      company: linkHealth.company || "", day: linkHealth.day, hour: linkHealth.hour, minute: linkHealth.minute,
+      company: linkHealth.company || "", day: linkTime().day, hour: linkTime().hour, minute: linkTime().minute,
       mod: typeof linkHealth.modVersion === "string" ? linkHealth.modVersion : "",
       approved: !!approvalToken(linkUrl), stamp: lastLinkStamp, source: sourceGen} : null),
     // Resolves to {status, error, body}; see gameWrite().
