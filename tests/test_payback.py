@@ -444,6 +444,46 @@ class PaybackTest(PricesTestCase):
         self.assertNotIn("days", site)
         self.assertEqual(site["firm"]["state"], "window")
 
+    def test_the_trail_grows_with_each_save_to_its_cap(self):
+        # Saves one record apart: days 30-89, 90-150, 151-211, 212-272. The
+        # shop earns 500 a day against 139,830, so only the 180-day cap stops
+        # the trail: days 30 to 209.
+        history = History(None)
+        def rows(first, last):
+            return [(d, {SHOP: (500, 900)}) for d in range(first, last + 1)]
+        self.run_payback(rows(30, 89), history)
+        second, _ = self.run_payback(rows(90, 150), history)
+        self.assertTrue(second["sites"][KEY_SHOP]["exact"])
+        self.assertEqual(second["sites"][KEY_SHOP]["days"][-1][0], 150)
+        third, _ = self.run_payback(rows(151, 211), history)
+        site = third["sites"][KEY_SHOP]
+        self.assertTrue(site["exact"], "the trail kept from the second save meets the third record")
+        self.assertEqual(len(site["days"]), 182)
+        self.assertEqual(site["profit"], 182 * 500)
+        memory = history.payback("CHAR")["sites"][KEY_SHOP]
+        self.assertEqual(memory["trail"][-1][0], 209, "180 days from the opening at most")
+        fourth, _ = self.run_payback(rows(212, 272), history)
+        site = fourth["sites"][KEY_SHOP]
+        self.assertFalse(site["exact"])
+        self.assertTrue(site["rolled"])
+        memory = history.payback("CHAR")["sites"][KEY_SHOP]
+        self.assertNotIn("trail", memory)
+        self.assertTrue(memory["rolled"])
+
+    def test_a_one_site_chain_agrees_with_its_site_past_the_record(self):
+        save, regs, businesses, _ = self.company()
+        chains = [{"name": "Liquor Stores", "sites": [KEY_SHOP]}, {"name": "Brewery", "sites": [KEY_BREWERY]}]
+        history = History(None)
+        def run(first, last):
+            rows = [(d, {SHOP: (500, 900), BREWERY: (10, 10)}) for d in range(first, last + 1)]
+            return _payback(save, Names({}), regs, businesses, chains, statements(rows), history, "CHAR")
+        run(30, 89)
+        out = run(90, 150)
+        site, chain = out["sites"][KEY_SHOP], out["chains"][KEY_SHOP]
+        self.assertTrue(chain["exact"])
+        self.assertEqual(chain["profit"], site["profit"])
+        self.assertEqual(chain["firm"], site["firm"])
+
     def test_the_trail_stops_a_month_after_break_even(self):
         history = History(None)
         rows = [(d, {SHOP: (40000, 50000)}) for d in range(30, 89)]

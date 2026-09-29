@@ -883,7 +883,9 @@ the score's two halves (spend per interior element, and the share of slots paint
 
 **Break even** is the investment divided by the expected profit a day. Everywhere Open a
 store shows a range of profit or of days, it shows the middle as one figure and the range on
-hover (a dotted underline). The range:
+hover (a dotted underline). The single figure of days is the day the running profit at the
+middle of the profit range covers the investment, which is also the point the chart marks
+and what the financing panel counts. The range:
 the profit times 0.80 to 1.05, the spread of real shops against these rules. The profit is
 the game's own arithmetic for a store run well, not an average of your other stores:
 
@@ -999,7 +1001,9 @@ What the plan said is kept in the plan while the address is still empty (its inv
 part, profit a day, days to break even and the first 30 days one by one). The first time the
 store is seen, the plan keeps its opening day and never takes figures again. If that store
 closes, or another business opens in its place (of another type, or the same type opened on
-another day), the plan reads **Closed**, says what stands there now, and attaches to nothing.
+another day), the plan reads **Closed**, says what stands there now, and attaches to nothing;
+its checklist then writes nothing to the game. A save from before the opening shows the plan
+as not open yet and changes nothing in it.
 A plan made before its figures were kept compares the investment only.
 
 - **The strip** shows only what and where; the tiles carry the numbers.
@@ -1007,26 +1011,27 @@ A plan made before its figures were kept compares the investment only.
   with the days since the opening, the share paid back, and break even: the day it was reached
   and how many days after opening, the days to go at recent profit and the calendar day that
   lands on, "Not paying back" at recent profit, or nothing before a day with sales.
-- **Past the record's reach.** The save keeps 61 days of statements. While they reach the
-  opening, the board keeps the site's days from the opening in its history (up to break even
-  plus 30 days, 180 at most), and later saves add the record's newer days to them, so the
-  run stays whole. Where the kept days and the record no longer meet, the tile reads "Profit
-  in the record" and the share paid back is unknown, unless break even was reached and
-  remembered (then 100%).
+- **Past the record's reach.** The save keeps 61 days of statements. The board keeps the
+  site's days from the opening in its history and every later save adds the record's newer
+  days to them (up to break even plus 30 days, 180 at most), so the run stays whole, for the
+  Payback column too; a chain whose sites all have whole runs is judged on their sum. Where
+  the kept days and the record no longer meet, the kept days are dropped, the tile reads
+  "Profit in the record" and the share paid back is unknown, unless break even was reached
+  and remembered (then 100%).
 - **Chart**: profit since the opening day by day (`payback.sites[key].days`, with the lease's
   cost before the opening as `before`), a bar per day, the investment, the plan's line from
-  the first day with sales, and while it pays back a dashed line on at recent profit. Its
-  points are labelled in days after opening, as its axis; the calendar day is the tile's. It is
-  drawn only where the whole run from the opening is known.
+  the first day with sales at the middle of its profit range, and while it pays back a dashed
+  line on at recent profit. Its x axis and its points are days after opening (the opening
+  day is 0), the same count as the tile's "n days after opening"; the calendar day is the
+  tile's. It is drawn only where the whole run from the opening is known.
 - **Plan and now**: furniture, the installation fee (or the firm's real bill where the save
   holds it, or walls and floors for self-installation), the deposit and the total; the profit
   a day against the recent days; the first five days with sales against the plan's first days,
   which count the ramp and a first seller's hype; and the days to break even, both counted
   from the first day with sales as day 1.
-- **Financing**, where the plan had a loan: the plan's loan is the first loan from its bank
-  that was not in the save when the plan was made (of two loans of one amount, the one with
-  more left is the newer). Until one appears, the card gives the bank's whole debt and says
-  it cannot be told apart. A matched loan gone from the save is repaid.
+- **Financing**, where the plan had a loan: the loan as planned (bank, amount, repayment and
+  interest a day) beside what the save says that bank is owed now and charges a day, called
+  the bank's total, not this store's: the game books loans to the company.
 - **Links**: Site page, Payback in Businesses › Results, and, while the checklist has rows
   left, Until opening with how many are done. Paid back, a strip says the day and the plan's
   figure and carries the same links.

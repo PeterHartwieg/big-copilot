@@ -11549,9 +11549,14 @@ class History:
 
     def payback(self, character: str) -> dict:
         """What the statements forget after 61 days, kept for _payback(): per
-        site key, {"opened", "bill", "firm": [day, investment], "self": [...]};
-        per chain name the same without the bill. Changed in place; a record
-        whose `opened` no longer matches is a new business at that address."""
+        site key, {"opened", "bill", "firm": [day, investment], "self": [...]},
+        and for a trading site its run from the opening (_payback_trail()):
+        "trail" ([day, profit, sales] from the opening, capped), "before" (the
+        lease's cost before the opening), "since" (the first day the record
+        held), or "rolled" once the record moved past the trail; per chain
+        name the same without the bill and the trail. Changed in place; a
+        record whose `opened` no longer matches is a new business at that
+        address."""
         store = self._for(character).setdefault("payback", {})
         if not isinstance(store, dict):
             store = self._for(character)["payback"] = {}
@@ -12195,48 +12200,56 @@ PAYBACK_TRAIL_AFTER = 30
 def _payback_trail(days: list, exact: bool, opened: int, memory: dict, invest: float):
     """A trading site's days from its opening, beyond the record's 61.
 
-    While the record reaches the opening (`exact`), its days from the opening
-    are kept in `memory["trail"]` ([day, profit, sales], capped: see
-    PAYBACK_TRAIL_DAYS, and PAYBACK_TRAIL_AFTER days past the day the larger
-    investment, `invest`, is covered), with the lease's cost before the opening as
-    `memory["before"]` and the record's first day as `memory["since"]`. Once
-    the record starts after the opening, the kept trail and the record's newer
-    days together are the whole run, as long as they meet.
+    The whole run from the opening is the record's own days while the record
+    reaches the opening (`exact`), and after that the kept trail with the
+    record's newer days after it, as long as the two meet. Every save that
+    knows the whole run writes it back to `memory["trail"]` ([day, profit,
+    sales] from the opening), with the lease's cost before the opening as
+    `memory["before"]` and the first day the record held as `memory["since"]`,
+    capped at PAYBACK_TRAIL_DAYS days, and at PAYBACK_TRAIL_AFTER days past the
+    day the larger investment, `invest`, is covered.
+
+    Once the record starts after the trail's last day, the days between are
+    lost: the trail is dropped and `memory["rolled"]` set, for good.
 
     Returns ((trail, before, since), rolled): the whole run where it is known,
-    else None; `rolled` is True where a trail was kept but no longer meets the
-    record, so the days between are lost.
+    else None; `rolled` is True for a site whose trail rolled off.
     """
     if exact:
-        trail = [[d, money(p), money(s)] for d, p, s in days if d >= opened]
+        full = [[d, money(p), money(s)] for d, p, s in days if d >= opened]
         before = money(sum(p for d, p, _s in days if d < opened))
         since = days[0][0] if days else None
-        kept, reached = [], None
-        total = before
-        for d in trail:
-            total += d[1]
-            if reached is None and total >= invest:
-                reached = d[0]
-            if len(kept) >= PAYBACK_TRAIL_DAYS or (reached is not None and d[0] > reached + PAYBACK_TRAIL_AFTER):
-                break
-            kept.append(d)
-        memory["trail"], memory["before"], memory["since"] = kept, before, since
-        return (trail, before, since), False
-    kept = memory.get("trail")
-    if not isinstance(kept, list) or not kept:
-        return None, False
-    try:
-        kept = [[int(d), float(p), float(s)] for d, p, s in kept]
-    except (TypeError, ValueError):
-        return None, False
-    newer = [[d, money(p), money(s)] for d, p, s in days if d > kept[-1][0]]
-    # The record must pick up the day after the trail ends, or the days
-    # between are unknown.
-    if days and days[0][0] > kept[-1][0] + 1:
-        return None, True
-    before = memory.get("before") or 0
-    since = memory.get("since")
-    return (kept + newer, money(before), since if isinstance(since, int) else None), False
+        memory.pop("rolled", None)
+    else:
+        if memory.get("rolled"):
+            return None, True
+        kept = memory.get("trail")
+        try:
+            kept = [[int(d), float(p), float(s)] for d, p, s in kept] if isinstance(kept, list) else []
+        except (TypeError, ValueError):
+            kept = []
+        if not kept:
+            return None, False
+        # The record must pick up the day after the trail ends, or the days
+        # between are unknown.
+        if days and days[0][0] > kept[-1][0] + 1:
+            for field in ("trail", "before", "since"):
+                memory.pop(field, None)
+            memory["rolled"] = True
+            return None, True
+        full = kept + [[d, money(p), money(s)] for d, p, s in days if d > kept[-1][0]]
+        before = money(memory.get("before") or 0)
+        since = memory.get("since") if isinstance(memory.get("since"), int) else None
+    capped, reached, total = [], None, before
+    for d in full:
+        total += d[1]
+        if reached is None and total >= invest:
+            reached = d[0]
+        if len(capped) >= PAYBACK_TRAIL_DAYS or (reached is not None and d[0] > reached + PAYBACK_TRAIL_AFTER):
+            break
+        capped.append(d)
+    memory["trail"], memory["before"], memory["since"] = capped, before, since
+    return (full, before, since), False
 
 
 def _payback_row(days: list, cost: dict, exact: bool, opened: int, memory: dict, last_day) -> dict:
@@ -12301,7 +12314,7 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
         store["day"] = now
     kept_sites, kept_chains = store["sites"], store["chains"]
 
-    sites, series, window_exact = {}, {}, {}
+    sites, series, window_exact, runs = {}, {}, {}, {}
     for b in businesses:
         key = b["key"]
         if b["status"] == "vacant" or key not in regs:
@@ -12345,6 +12358,8 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
         if b["costCentre"]:
             row.update(since=first, exact=exact, opened=opened,
                        profit=money(sum(p for _d, p, _s in days)))
+            if exact:
+                runs[key] = days
         else:
             window_exact[key] = exact
             full, rolled = _payback_trail(days, exact, opened, memory, max(cost["firm"], cost["self"]))
@@ -12353,6 +12368,7 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
                 # The whole run from the lease on: the record's own days, or
                 # the kept trail with the record's newer days after it.
                 run = ([(since, before, 0)] if since is not None and since < opened else []) + [tuple(d) for d in trail]
+                runs[key] = run
                 row.update(_payback_row(run, cost, True, opened, memory, last_day))
                 row["since"] = since if since is not None else row["since"]
                 # Day by day from the opening, for a plan's After opening
@@ -12365,7 +12381,7 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
                 row.update(_payback_row(days, cost, exact, opened, memory, last_day))
                 if rolled:
                     # The site was seen from its opening once, but the days
-                    # between the kept trail and the record are lost.
+                    # between the kept trail and the record were lost.
                     row["rolled"] = True
         sites[key] = row
     # A site given up since the last save leaves the memory with it.
@@ -12380,15 +12396,18 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
             continue
         cost = {field: money(sum(sites[k]["cost"].get(field, 0) for k in members))
                 for field in ("furniture", "materials", "fee", "deposit", "billed", "firm", "self")}
+        # Every member's whole run known (the record's, or a kept trail): the
+        # chain's is their sum and exact. Otherwise the record's days, and
+        # the record's own reach.
+        whole = all(k in runs for k in members)
         by_day = collections.defaultdict(lambda: [0.0, 0.0])
         for k in members:
-            for day, profit, sales in series[k]:
+            for day, profit, sales in (runs[k] if whole else series[k]):
                 by_day[day][0] += profit
                 by_day[day][1] += sales
         days = [(day, p, s) for day, (p, s) in sorted(by_day.items())]
         opened = min(sites[k]["opened"] for k in members)
-        # The record's own reach: a member's kept trail is its own, not the chain's.
-        exact = all(window_exact.get(k, sites[k]["exact"]) for k in members)
+        exact = whole or all(window_exact.get(k, sites[k]["exact"]) for k in members)
         name = str(chain["name"])
         memory = kept_chains.get(name)
         if not isinstance(memory, dict) or memory.get("opened") != opened:
@@ -30244,16 +30263,17 @@ function osLoad(){
   try{
     const raw = JSON.parse(localStorage.getItem(who));
     if(raw && Array.isArray(raw.plans)){
-      osPlans = osCapPlans(raw.plans.filter(p => p && typeof p.id === "string" && typeof p.type === "string")
+      osPlans = raw.plans.filter(p => p && typeof p.id === "string" && typeof p.type === "string")
         .map(p => ({id: p.id, type: p.type, hood: typeof p.hood === "string" ? p.hood : null,
           key: typeof p.key === "string" ? p.key : null, mode: p.mode === "self" ? "self" : p.mode === "firm" ? "firm" : null,
           finance: p.finance && typeof p.finance === "object" ? {on: !!p.finance.on,
             amount: p.finance.amount == null || !Number.isFinite(+p.finance.amount) ? null : Math.max(0, +p.finance.amount),
             bank: typeof p.finance.bank === "string" ? p.finance.bank : null} : {on: false, amount: null, bank: null},
           step: OS_STEPS.includes(p.step) ? p.step : "what", made: +p.made || null, snap: osSnapClean(p.snap),
-          opened: Number.isFinite(p.opened) ? p.opened : null, paid: !!p.paid,
-          debts: Array.isArray(p.debts) ? p.debts.filter(d => Array.isArray(d) && typeof d[0] === "string" && Number.isFinite(d[1])).map(d => [d[0], d[1]]) : null,
-          loan: p.loan && typeof p.loan.key === "string" && Number.isFinite(p.loan.total) ? {key: p.loan.key, total: p.loan.total, day: Number.isFinite(p.loan.day) ? p.loan.day : null} : null})));
+          opened: Number.isFinite(p.opened) ? p.opened : null, paid: !!p.paid}));
+      /* The stores that opened since the last visit are history before the caps count. */
+      osReconcile();
+      osPlans = osCapPlans(osPlans);
       osCur = osPlans.some(p => p.id === raw.current) ? raw.current : null;
     }
   }catch(e){}
@@ -30285,6 +30305,7 @@ function osCapPlans(list){
    and twelve that all have one take no more (osNew() answers null). A plan
    whose store opened no longer counts: it is history (osCapPlans()). */
 function osNew(type, hood){
+  osReconcile();
   const same = osPlans.find(p => p.type === type && (p.hood || null) === (hood || null) && !p.key);
   if(same){
     osPlans = [same, ...osPlans.filter(p => p !== same)];
@@ -30299,7 +30320,7 @@ function osNew(type, hood){
   }
   const id = `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   osPlans.unshift({id, type, hood: hood || null, key: null, mode: null, finance: {on: false, amount: null, bank: null},
-    step: "where", made: (D.meta || {}).day || null, snap: null, opened: null, paid: false, debts: osDebts(), loan: null});
+    step: "where", made: (D.meta || {}).day || null, snap: null, opened: null, paid: false});
   osPlans = osCapPlans(osPlans);
   osCur = id; osStep = "where";
   osSave();
@@ -30731,7 +30752,7 @@ function osStripHtml(plan){
 }
 /* A range shown as its middle, the range itself on hover: "30 days" over
    "26–33 days". One figure where the range closes up. */
-const osMid = d => d && d.low != null && d.high != null ? Math.round((d.low + d.high) / 2) : d && d.low != null ? d.low : null;
+const osMid = d => d && d.mid != null ? d.mid : d && d.low != null && d.high != null ? Math.round((d.low + d.high) / 2) : d && d.low != null ? d.low : null;
 const osTipped = (shown, whole) => `<span class="os-rng" data-tip="${attr(whole)}" tabindex="0">${shown}</span>`;
 function osMidMoney(lo, hi){
   return Math.round(lo) === Math.round(hi) ? fmt(lo) : osTipped(fmt((lo + hi) / 2), tt("gr.os.money.range", "{lo}–{hi}", {lo: fmt(lo), hi: fmt(hi)}));
@@ -30753,7 +30774,9 @@ function osEstimate(plan, b){
   const hyped = m.office ? [] : osHyped(plan.type, b.hood);
   const mh = hyped.length ? osModel(plan.type, b, {reach: m.reach, cost: m.marketing, hype: hyped}) : null;
   const day = k => osDayProfit(m, mh, k);
-  const days = mode => ({low: osBreakDay(inv[mode], day, OS_HIGH), high: osBreakDay(inv[mode], day, OS_LOW)});
+  /* `mid` is the day at the middle of the profit range, the one figure shown
+     (the range is on hover), and the chart's point. */
+  const days = mode => ({low: osBreakDay(inv[mode], day, OS_HIGH), mid: osBreakDay(inv[mode], day, OS_MID), high: osBreakDay(inv[mode], day, OS_LOW)});
   return {model: m, profit: m.profit, inv, day, hyped: mh ? hyped : [], days: {firm: days("firm"), self: days("self")}};
 }
 
@@ -31030,7 +31053,8 @@ function osOwnHtml(plan, own){
     <div class="os-sites os-own">${rows}</div></div>`;
 }
 /* Cumulative profit from the opening against both investments, the range as
-   a band. The first days bend the line: the ramp, and a first seller's hype. */
+   a band and its middle as the line, whose crossings are the days the
+   headline gives. The first days bend the line: the ramp, and a first seller's hype. */
 function osChart(est, mode){
   const W = 560, H = 262, x0 = 58, y0 = 16, x1 = W - 16, y1 = H - 40, p = est.profit;
   if(!(p > 0)) return `<p class="quiet">${tt("gr.os.be.noChart", "At this profit the store does not earn its investment back.")}</p>`;
@@ -31054,18 +31078,18 @@ function osChart(est, mode){
      point. */
   const other = mode === "firm" ? "self" : "firm";
   const near = Math.abs(Y(inv.firm) - Y(inv.self)) < 18;
-  const early = key => { const d = osBreakDay(inv[key], est.day); return !!d && d <= dmax * 0.4; };
-  const mark = (key, cls, alt) => { const v = inv[key], d = osBreakDay(v, est.day);
+  const early = key => { const d = osBreakDay(inv[key], est.day, OS_MID); return !!d && d <= dmax * 0.4; };
+  const mark = (key, cls, alt) => { const v = inv[key], d = osBreakDay(v, est.day, OS_MID);
     const right = alt ? !early(mode) : early(key);
     const label = `${key === "firm" ? tt("gr.os.inv.firm", "Installation firm") : tt("gr.os.inv.self", "Self-installation")} ${fmt(v)}`;
     return `<line class="${cls}" x1="${x0}" x2="${x1}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"></line><text class="lbl ${cls === "inv" ? "w" : "i"}" x="${right ? x1 - 6 : x0 + 6}" y="${(Y(v) - 7).toFixed(1)}"${
       right ? ` text-anchor="end"` : ""}>${label}</text>${
       d && d <= dmax ? `<circle class="hit" cx="${X(d).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="5"></circle><text class="lbl" x="${(X(d) + 9).toFixed(1)}" y="${(Y(v) + (alt ? -20 : 16)).toFixed(1)}">${
-      tt("gr.os.be.day", "day {n}", {n: d})}</text>` : ""}`; };
+      tt("gr.os.days", {one: "{n} day", other: "{n} days"}, {n: d})}</text>` : ""}`; };
   return `<svg class="os-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${attr(tt("gr.os.be.chart", "Profit from the opening against the investment"))}">
     ${g.join("")}<line class="ax" x1="${x0}" x2="${x1}" y1="${y1}" y2="${y1}"></line>
     <path class="band" d="${band}"></path>${mark(mode, "inv", false)}${mark(other, "inv2", near)}
-    <path class="line" d="M${pts(1).join(" L")}"></path><text x="${x1}" y="${y1 + 34}" text-anchor="end">${tt("gr.os.be.axis", "days after opening")}</text></svg>`;
+    <path class="line" d="M${pts(OS_MID).join(" L")}"></path><text x="${x1}" y="${y1 + 34}" text-anchor="end">${tt("gr.os.be.axis", "days after opening")}</text></svg>`;
 }
 const osNiceStep = v => { const e = Math.pow(10, Math.floor(Math.log10(Math.max(v, 1)))); const f = v / e; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * e; };
 
@@ -31095,12 +31119,13 @@ function osFinHtml(plan, est){
     <div class="os-finfacts" id="osFinFacts">${osFinFacts(plan, est, bank, amount)}</div></div>`;
 }
 function osFinFacts(plan, est, bank, amount){
-  const f = osFacts().finance || {}, mode = osMode(plan), inv = est.inv[mode], p = est.profit;
+  /* On the same basis as the headline: the middle of the profit range. */
+  const f = osFacts().finance || {}, mode = osMode(plan), inv = est.inv[mode], p = est.profit * OS_MID, day = k => est.day(k) * OS_MID;
   const loan = osLoan(amount, bank);
   const cell = (lab, value, sub) => `<div><span class="os-lab">${lab}</span><b>${value}</b><small>${sub}</small></div>`;
   if(!loan) return cell(tt("gr.os.fin.upfront", "Cash upfront"), fmt(inv), tt("gr.os.fin.min", "a bank lends {w} at least", {w: fmt(f.minimum || 0)}));
   const own = inv - amount, daily = loan.interest + loan.repay;
-  const without = osBreakDay(inv, est.day), with_ = osLoanDays(own, est.day, loan);
+  const without = osBreakDay(inv, day), with_ = osLoanDays(own, day, loan);
   const payoff = without != null && without < loan.days ? without * loan.interest : null;
   const dayText = n => n == null ? tt("gr.os.be.never", "not at this profit") : tt("gr.os.days", {one: "{n} day", other: "{n} days"}, {n: num(n)});
   return cell(tt("gr.os.fin.upfront", "Cash upfront"), fmt(own), tt("gr.os.fin.upfront.sub", "{w} borrowed", {w: fmt(amount)}))
@@ -31309,7 +31334,7 @@ function osCkLogistics(plan, opened){
     {items: osNames(bare.map(s => spEsc(itemName(s))))}), go, Math.round(100 * (wanted.length - bare.length) / wanted.length));
 }
 function osUntilRows(plan){
-  const b = osBuilding(plan.key), rented = osRented(plan), opened = osOpenedAt(plan), address = osCkAddress(plan);
+  const b = osBuilding(plan.key), rented = osRented(plan), opened = osClosed(plan) ? null : osAttached(plan), address = osCkAddress(plan);
   const uni = osCkUniforms(plan, opened);
   return [
     osCk("key", opened ? "done" : "todo", tt("gr.os.ck.lease", "Lease"), opened
@@ -31321,6 +31346,7 @@ function osUntilRows(plan){
     osCkMarketing(plan, b, opened), osCkLogistics(plan, opened)];
 }
 function osUntilHtml(plan){
+  if(osClosed(plan)) return osRoiClosed(plan);
   const rows = osUntilRows(plan), done = rows.filter(r => r.state === "done").length, link = gwLink(), m = D.meta || {};
   const clock = Number.isFinite(Number(m.day)) ? tt("gr.os.ck.read", "from the save · day {day}, {time}",
     {day: num(m.day), time: `${String(Number(m.hour) || 0).padStart(2, "0")}:${String(Math.floor(Number(m.minute) || 0)).padStart(2, "0")}`}) : "";
@@ -31341,7 +31367,7 @@ function osUntilHtml(plan){
 }
 /* Marketing at the plan's business: the most profitable mix the estimate settled on. */
 function osMarketingWrite(plan){
-  const b = osBuilding(plan.key), est = b && osEstimate(plan, b), link = gwLink(), site = osOpenedAt(plan);
+  const b = osBuilding(plan.key), est = b && osEstimate(plan, b), link = gwLink(), site = osClosed(plan) ? null : osAttached(plan);
   const mix = est && est.model ? est.model.mix || [] : [];
   if(!link || !site || !mix.length) return;
   const on = mix.map(id => OS_MK_WIRE[id]).filter(Boolean);
@@ -31413,7 +31439,7 @@ function osSnapClean(s){
   const n = v => Number.isFinite(+v) ? +v : 0, day = v => Number.isFinite(v) ? v : null;
   const inv = {};
   OS_SNAP_INV.forEach(k => inv[k] = n(s.inv[k]));
-  const range = d => d && typeof d === "object" ? {low: day(d.low), high: day(d.high)} : {low: null, high: null};
+  const range = d => d && typeof d === "object" ? {low: day(d.low), mid: day(d.mid), high: day(d.high)} : {low: null, mid: null, high: null};
   return {inv, profit: Number.isFinite(s.profit) ? s.profit : null,
     days: s.days && typeof s.days === "object" ? {firm: range(s.days.firm), self: range(s.days.self)} : null,
     curve: Array.isArray(s.curve) ? s.curve.filter(Number.isFinite).slice(0, OS_SNAP_DAYS) : null};
@@ -31424,8 +31450,10 @@ function osAttached(plan){
   const b = plan && plan.key ? osOpenedAt(plan) : null;
   return b && (plan.opened == null || b.opened === plan.opened) ? b : null;
 }
-/* A plan whose store opened and no longer trades there: closed, or replaced. */
-const osClosed = plan => !!plan && plan.opened != null && !osAttached(plan);
+/* A plan whose store opened and no longer trades there: closed, or replaced.
+   A save from before the opening says nothing either way: the plan is then
+   simply not open yet. */
+const osClosed = plan => !!plan && plan.opened != null && !osAttached(plan) && ((D.meta || {}).day || 0) > plan.opened;
 /* Kept while the address holds nothing of the planned type; never after. */
 function osSnapTake(plan){
   if(!plan || !plan.key || plan.opened != null || osOpenedAt(plan)) return false;
@@ -31434,44 +31462,37 @@ function osSnapTake(plan){
   plan.snap = snap;
   return true;
 }
-/* The loans at the plan's bank, as [key, original amount]: the ones the save
-   held when the plan was made are not the plan's. */
-const osDebts = () => (D.loans || []).filter(l => l && l.key).map(l => [l.key, Math.round(l.total || 0)]);
-/* The plan's loan, once it can be told: the first loan from the plan's bank
-   that was not there when the plan was made, its bank and original amount
-   kept (the save gives a loan no id). */
-function osLoanTake(plan){
-  const fin = plan.finance || {};
-  if(!fin.on || plan.loan || !Array.isArray(plan.debts)) return false;
-  const bank = osBank(fin.bank);
-  if(!bank) return false;
-  const had = plan.debts.filter(d => d[0] === bank.key).map(d => d[1]);
-  const fresh = (D.loans || []).filter(l => l.key === bank.key).filter(l => {
-    const i = had.indexOf(Math.round(l.total || 0));
-    if(i < 0) return true;
-    had.splice(i, 1);
-    return false;
-  });
-  if(!fresh.length) return false;
-  plan.loan = {key: bank.key, total: Math.round(fresh[0].total || 0), day: ((D.meta || {}).day) || null};
-  return true;
-}
 const osBank = id => { const banks = (osFacts().finance || {}).banks || [];
   return banks.find(x => x.id === id) || banks.find(x => x.id === "VantanderBankSettings") || banks[0] || null; };
-/* Every plan, on every draw: its figures while its address is empty, its
-   store's opening day and paid-back mark once it trades, its loan once it
-   appears. Saved only when something changed. */
+/* Every plan, on every draw: its store's opening day and paid-back mark
+   (osReconcile()), and its figures while its address is empty, taken again
+   only when the board or the plan's building changed. Saved only when
+   something changed. */
 function osMarkPlans(){
-  let changed = false;
+  let changed = osReconcile();
+  if(osSnapFor !== D){ osSnapSeen = new Map(); osSnapFor = D; }
   osPlans.forEach(p => {
+    /* The inputs a snapshot rests on: the board read and the plan's type and building. */
+    const seen = `${p.type}|${p.key}`;
+    if(osSnapSeen.get(p.id) === seen) return;
+    osSnapSeen.set(p.id, seen);
     if(osSnapTake(p)) changed = true;
-    const b = osAttached(p);
-    if(b && p.opened == null){ p.opened = b.opened; changed = true; }
-    if(b && !p.paid && osPaidBack(osNowOf(paybackSite(p.key)))){ p.paid = true; changed = true; }
-    if(p.opened != null && osLoanTake(p)) changed = true;
   });
   if(changed) osSave();
 }
+/* Each plan's store as the save shows it: its opening day kept the first
+   time it trades, and the paid-back mark. Before the caps, so a store that
+   opened counts as history, not as a plan on its way. */
+function osReconcile(){
+  let changed = false;
+  osPlans.forEach(p => {
+    const b = osAttached(p);
+    if(b && p.opened == null){ p.opened = b.opened; changed = true; }
+    if(b && !p.paid && osPaidBack(osNowOf(paybackSite(p.key)))){ p.paid = true; changed = true; }
+  });
+  return changed;
+}
+let osSnapSeen = new Map(), osSnapFor = null;
 /* The plan's side of step 6: the kept figures, else the investment alone. */
 function osPlanned(plan){
   if(plan.snap) return {snap: plan.snap, live: false};
@@ -31525,22 +31546,25 @@ function osProgress(row, o, inv){
 /* Cumulative profit from the opening and each day's profit as a bar, against
    the investment and the plan's line from the first day with sales; while it
    pays back, a dashed line on at recent profit to the day it gets there. Days
-   on the chart are days after opening, as its axis says. */
+   on the chart are days after opening, as its axis and the tile's sentence
+   say; the plan's line is the middle of its profit range. */
 function osRoiChart(row, snap, planMode, inv, o, opened){
   const days = row.days || [];
   if(!days.length) return "";
   const W = 900, H = 282, x0 = 64, y0 = 18, x1 = W - 18, y1 = H - 42;
-  const cum = [row.before || 0];
-  days.forEach(d => cum.push(cum[cum.length - 1] + d[1]));
-  const now = days.length, got = cum[now];
+  /* x is days after opening: the opening day's close at 0, the lease's cost
+     before it included. */
+  const cum = [];
+  days.forEach((d, i) => cum.push((i ? cum[i - 1] : row.before || 0) + d[1]));
+  const last = days.length - 1, got = cum[last];
   const first = days.findIndex(d => d[2] > 0), anchor = first < 0 ? null : first;
-  const curve = snap && snap.curve && snap.curve.length ? snap.curve : null, steady = snap ? snap.profit : null;
-  const planAt = k => curve && k < curve.length ? curve[k] : steady || 0;
-  const range = snap && snap.days ? snap.days[planMode] : null, planDay = range ? range.high || range.low : null;
-  const fcEnd = o && o.state === "togo" ? now + o.days : null;
-  const hit = o && o.state === "reached" ? o.day - opened + 1 : fcEnd;
-  const want = Math.max(10, now, fcEnd || 0, anchor !== null && planDay ? anchor + planDay : 0, hit || 0);
-  const dmax = Math.min(Math.ceil(want * 1.1 / 5) * 5, Math.max(40, Math.ceil(now * 4 / 5) * 5));
+  const curve = snap && snap.curve && snap.curve.length ? snap.curve : null, steady = snap && snap.profit != null ? snap.profit * OS_MID : null;
+  const planAt = k => curve && k < curve.length ? curve[k] * OS_MID : steady || 0;
+  const range = snap && snap.days ? snap.days[planMode] : null, planDay = osMid(range);
+  const fcEnd = o && o.state === "togo" ? last + o.days : null;
+  const hit = o && o.state === "reached" ? o.day - opened : fcEnd;
+  const want = Math.max(10, last, fcEnd || 0, anchor !== null && planDay ? anchor + planDay - 1 : 0, hit || 0);
+  const dmax = Math.min(Math.ceil(want * 1.1 / 5) * 5, Math.max(40, Math.ceil(last * 4 / 5) * 5));
   const vmin = Math.min(0, ...cum), vmax = Math.max(inv * 1.15, Math.max(...cum) * 1.05, 1);
   /* Yu is not held inside the chart: the lines past its top are clipped, not flattened. */
   const X = d => x0 + (x1 - x0) * d / dmax, Yu = v => y1 - (y1 - y0) * (v - vmin) / (vmax - vmin), Y = v => Yu(Math.max(vmin, Math.min(v, vmax)));
@@ -31550,24 +31574,26 @@ function osRoiChart(row, snap, planMode, inv, o, opened){
   for(let d = 0; d <= dmax; d += dstep) g.push(`<text x="${X(d).toFixed(1)}" y="${y1 + 18}" text-anchor="middle">${d}</text>`);
   /* The bars share the money axis, scaled so the biggest day is a third of it. */
   const big = Math.max(...days.map(d => Math.abs(d[1])), 1), k = (vmax - vmin) * 0.3 / big, bw = Math.max(1.5, (x1 - x0) / dmax * 0.8);
-  const bars = days.map((d, i) => { if(i >= dmax) return ""; const top = Y(Math.max(0, d[1] * k)), bot = Y(Math.min(0, d[1] * k));
-    return `<rect class="os-dbar${d[1] < 0 ? " neg" : ""}" x="${X(i + 0.1).toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0.5, bot - top).toFixed(1)}"></rect>`; }).join("");
+  const bars = days.map((d, i) => { if(i > dmax) return ""; const top = Y(Math.max(0, d[1] * k)), bot = Y(Math.min(0, d[1] * k));
+    return `<rect class="os-dbar${d[1] < 0 ? " neg" : ""}" x="${(X(i) - bw / 2).toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0.5, bot - top).toFixed(1)}"></rect>`; }).join("");
   const line = cum.map((v, d) => `${X(d).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
-  const todayRight = X(Math.min(now, dmax)) > x1 - 150;
+  const todayRight = X(Math.min(last, dmax)) > x1 - 190;
   let planLine = "", planLbl = "";
   if(anchor !== null && steady != null){
-    const pts = [`${X(anchor).toFixed(1)},${Y(0).toFixed(1)}`];
+    const pts = [];
     let run = 0;
-    for(let j = 0; anchor + j + 1 <= dmax; j++){ run += planAt(j); pts.push(`${X(anchor + j + 1).toFixed(1)},${Yu(run).toFixed(1)}`); }
+    for(let j = 0; anchor + j <= dmax; j++){ run += planAt(j); pts.push(`${X(anchor + j).toFixed(1)},${Yu(run).toFixed(1)}`); }
     planLine = `<polyline class="plan" points="${pts.join(" ")}"></polyline>`;
     planLbl = `<text class="lbl i" x="${x1 - 6}" y="${y0 + (todayRight ? 28 : 10)}" text-anchor="end">${tt("gr.os.roi.planLine", "plan {w}/day", {w: fmt(steady)})}</text>`;
   }
-  const fcTo = fcEnd && fcEnd > dmax ? got + (inv - got) * (dmax - now) / (fcEnd - now) : inv;
-  const fc = fcEnd && now < dmax ? `<line class="fc" x1="${X(now).toFixed(1)}" y1="${Y(got).toFixed(1)}" x2="${X(Math.min(fcEnd, dmax)).toFixed(1)}" y2="${Yu(fcTo).toFixed(1)}"></line>` : "";
-  const mark = hit && hit <= dmax ? `<circle class="hit" cx="${X(hit).toFixed(1)}" cy="${Y(inv).toFixed(1)}" r="5"></circle><text class="lbl" x="${(X(hit) + 9).toFixed(1)}" y="${(Y(inv) + 16).toFixed(1)}">${
-    tt("gr.os.be.day", "day {n}", {n: hit})}</text>` : "";
-  const today = now <= dmax ? `<line class="today" x1="${X(now).toFixed(1)}" x2="${X(now).toFixed(1)}" y1="${y0}" y2="${y1}"></line>
-    <text class="lbl" x="${(X(now) + (todayRight ? -6 : 6)).toFixed(1)}" y="${y0 + 10}"${todayRight ? ` text-anchor="end"` : ""}>${tt("gr.os.roi.today", "today, day {n}", {n: now})}</text>` : "";
+  const fcTo = fcEnd && fcEnd > dmax ? got + (inv - got) * (dmax - last) / (fcEnd - last) : inv;
+  const fc = fcEnd && last < dmax ? `<line class="fc" x1="${X(last).toFixed(1)}" y1="${Y(got).toFixed(1)}" x2="${X(Math.min(fcEnd, dmax)).toFixed(1)}" y2="${Yu(fcTo).toFixed(1)}"></line>` : "";
+  /* The chart's own words for a point: days after opening, as its axis and the tile's sentence. */
+  const after = n => tt("gr.os.roi.chart.after", {one: "{n} day after opening", other: "{n} days after opening"}, {n});
+  const mark = hit != null && hit <= dmax ? `<circle class="hit" cx="${X(hit).toFixed(1)}" cy="${Y(inv).toFixed(1)}" r="5"></circle><text class="lbl" x="${(X(hit) + (X(hit) > x1 - 170 ? -9 : 9)).toFixed(1)}" y="${(Y(inv) + 16).toFixed(1)}"${
+    X(hit) > x1 - 170 ? ` text-anchor="end"` : ""}>${after(hit)}</text>` : "";
+  const today = last <= dmax ? `<line class="today" x1="${X(last).toFixed(1)}" x2="${X(last).toFixed(1)}" y1="${y0}" y2="${y1}"></line>
+    <text class="lbl" x="${(X(last) + (todayRight ? -6 : 6)).toFixed(1)}" y="${y0 + 10}"${todayRight ? ` text-anchor="end"` : ""}>${tt("gr.os.roi.chart.today", "today, {after}", {after: after(last)})}</text>` : "";
   return `<div class="os-card os-roic"><svg class="os-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${attr(tt("gr.os.roi.chart", "Profit since the opening against the investment and the plan"))}">
     <defs><clipPath id="osRoiClip"><rect x="${x0}" y="${y0 - 4}" width="${x1 - x0}" height="${y1 - y0 + 4}"></rect></clipPath></defs>
     ${g.join("")}${bars}<line class="ax" x1="${x0}" x2="${x1}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}"></line>
@@ -31617,7 +31643,7 @@ function osRoiTable(row, snap, planMode, o){
         : `<td class="${rate >= lo ? "d" : "dn"}">${osSigned(rate - mid)}</td>`));
     const sold = osSelling(row), n = Math.min(OS_RAMP_SHOWN, sold.length);
     if(n && snap.curve && snap.curve.length >= n){
-      const was = snap.curve.slice(0, n).reduce((a, b) => a + b, 0), now = sold.slice(0, n).reduce((a, d) => a + d[1], 0);
+      const was = Math.round(snap.curve.slice(0, n).reduce((a, b) => a + b, 0) * OS_MID), now = sold.slice(0, n).reduce((a, d) => a + d[1], 0);
       rows.push(tr(tt("gr.os.roi.ramp", {one: "The first day", other: "The first {n} days"}, {n}),
         tt("gr.os.roi.ramp.sub", "from the first day with sales; the plan's first days earn less while the store settles"), fmt(was), fmt(now),
         Math.abs(now - was) < 0.5 ? `<td>–</td>` : `<td class="${now >= was ? "d" : "dn"}">${osSigned(now - was)}</td>`));
@@ -31641,34 +31667,26 @@ function osRoiTable(row, snap, planMode, o){
     <table class="os-pvsa"><thead><tr><th class="l"></th><th>${planHead}</th><th>${nowHead}</th><th>${
       tt("gr.os.roi.col.diff", "Difference")}</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
 }
-/* The plan's loan: the one osLoanTake() matched, repaid so far. Before it is
-   matched, only the bank's whole debt can be said, and it is called that. */
+/* The plan's loan as planned, beside what the save says the bank is owed
+   now: the game books loans to the company, so the bank's debt is its total,
+   not this store's, and is called that. */
 function osRoiLoan(plan, snap, mode){
   const fin = plan.finance || {}, bank = osBank(fin.bank);
   if(!fin.on || !bank) return "";
   const inv = snap ? snap.inv[mode] : 0, amount = fin.amount ?? Math.round(inv / 2), planned = osLoan(amount, bank);
-  const cell = (lab, value, sub, extra = "") => `<div><span class="os-lab">${lab}</span><b>${value}</b>${extra}<small>${sub}</small></div>`;
+  const cell = (lab, value, sub) => `<div><span class="os-lab">${lab}</span><b>${value}</b><small>${sub}</small></div>`;
   const plannedCell = cell(tt("gr.os.roi.loan.plan", "Planned"), fmt(amount), planned ? tt("gr.os.roi.loan.plan.sub", "{bank} · {r} repaid + {i} interest a day for {n} days",
     {bank: bank.name, r: fmt(planned.repay), i: fmt(planned.interest), n: num(planned.days)}) : spEsc(bank.name));
   const atBank = (D.loans || []).filter(x => x.key === bank.key);
-  let now;
-  if(plan.loan){
-    /* Two loans of one amount from one bank repay alike: the one with more
-       left is the newer, and the plan's is newer than any it found. */
-    const l = atBank.filter(x => Math.round(x.total || 0) === plan.loan.total).sort((a, b) => b.remaining - a.remaining)[0];
-    now = l ? cell(tt("gr.os.roi.loan.repaid", "Repaid"), `${Math.round(l.repaid)}%`, tt("gr.os.roi.loan.repaid.sub", "{w} of {total} · {left} left",
-        {w: fmt(l.total - l.remaining), total: fmt(l.total), left: fmt(l.remaining)}), `<span class="os-meter" style="--w:${Math.max(0, Math.min(100, l.repaid))}%"><i></i></span>`)
-      + cell(tt("gr.os.roi.loan.daily", "A day now"), fmt(l.dailyPayment + l.dailyInterest), tt("gr.os.roi.loan.daily.sub", "{r} repaid + {i} interest", {r: fmt(l.dailyPayment), i: fmt(l.dailyInterest)}))
-      : cell(tt("gr.os.roi.loan.repaid", "Repaid"), "100%", tt("gr.os.roi.loan.gone", "The {w} loan from {bank} is no longer in the save: repaid", {w: fmt(plan.loan.total), bank: bank.name}),
-        `<span class="os-meter" style="--w:100%"><i></i></span>`);
-  } else {
-    const owed = atBank.reduce((a, x) => a + (x.remaining || 0), 0);
-    now = cell(tt("gr.os.roi.loan.bank", "Owed to {bank}", {bank: bank.name}), atBank.length ? fmt(owed) : "–", atBank.length
-      ? tt("gr.os.roi.loan.bank.sub", "every loan from the bank; none can be told apart as this plan's")
-      : tt("gr.os.roi.loan.none2", "No loan from {bank} since the plan was made", {bank: bank.name}));
-  }
+  const owed = atBank.reduce((a, x) => a + (x.remaining || 0), 0);
+  const pay = atBank.reduce((a, x) => a + (x.dailyPayment || 0), 0), interest = atBank.reduce((a, x) => a + (x.dailyInterest || 0), 0);
+  const bankCells = atBank.length
+    ? cell(tt("gr.os.roi.loan.owed", "Owed to {bank} now", {bank: bank.name}), fmt(owed), tt("gr.os.roi.loan.owed.sub",
+        {one: "{n} loan · the bank's total, not this store's", other: "{n} loans · the bank's total, not this store's"}, {n: atBank.length}))
+      + cell(tt("gr.os.roi.loan.daily", "A day now"), fmt(pay + interest), tt("gr.os.roi.loan.daily.sub2", "{r} repaid + {i} interest, to the bank in all", {r: fmt(pay), i: fmt(interest)}))
+    : cell(tt("gr.os.roi.loan.owed", "Owed to {bank} now", {bank: bank.name}), "–", tt("gr.os.roi.loan.nothing", "no loan from the bank in the save"));
   return `<div class="os-card os-fin os-roiloan"><div class="os-finhead"><h3>${osIcon("bank")}${tt("gr.os.fin.title", "Financing")}</h3></div>
-    <div class="os-finfacts">${plannedCell}${now}</div></div>`;
+    <div class="os-finfacts">${plannedCell}${bankCells}</div></div>`;
 }
 const osRoiSiteBtn = key => `<a class="os-btn" href="${attr(siteHref(key) || "#")}" data-os-site="${attr(key)}">${tt("gr.os.roi.site", "Site page")}${icon("chev")}</a>`;
 const osRoiResultsBtn = () => `<button type="button" class="os-btn" data-os-results>${tt("gr.os.roi.results", "Payback in Businesses › Results")}${icon("chev")}</button>`;
@@ -31808,7 +31826,8 @@ function wireOpenStore(){
   on("click", "[data-os-route]", (el, e) => { e.preventDefault(); openRoute(el.dataset.osRoute); });
   on("click", "[data-os-write]", el => {
     const plan = osPlan(), kind = el.dataset.osWrite;
-    if(!plan) return;
+    /* A write acts on the plan's own store only, never on one that replaced it. */
+    if(!plan || osClosed(plan)) return;
     if(kind === "hire") hrReview(Object.assign({site: plan.key}, el.dataset.osOnly ? {only: JSON.parse(el.dataset.osOnly)} : {}));
     else if(kind === "uniforms") gwUniforms([plan.key]);
     else if(kind === "marketing") osMarketingWrite(plan);

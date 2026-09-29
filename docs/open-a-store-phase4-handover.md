@@ -84,6 +84,29 @@ generated files, rebuilt. The payload snapshots moved because main's fixture now
 - News: Open a store stays in the strip; `upd.news.lang-tr` and `upd.news.help-translate`
   are no longer in the page but remain in the `i18n/` catalogues, left for the i18n round.
 
+## Review round 2 (29 Sep 2026)
+
+- **Trail.** `_payback_trail()` writes the whole known run back to the history on every save
+  (capped at break even + 30 days, 180 at most) and drops it, marking `rolled`, once the
+  record starts after its last day. Tested over four saves a record apart.
+- **Chains** whose members all have whole runs (a trading site's run, or a cost centre the
+  record reaches) sum those runs and are exact, so a one-site chain agrees with its site.
+- **Older saves.** `osClosed()` needs the save's day past `plan.opened`; before that the plan
+  is simply not open and nothing is rewritten.
+- **Closed plans** show the closed note on Until opening too; the checklist, the marketing
+  write and every `data-os-write` act only on `osAttached(plan)`.
+- **Cap.** `osReconcile()` fills `plan.opened` before `osCapPlans()` in `osLoad()` and before
+  the room check in `osNew()`.
+- **Loans** simplified: the planned loan beside the bank's total debt and daily charges from
+  the save, labelled the bank's; no per-plan loan matching (`plan.debts`/`plan.loan` gone).
+- **One basis for days.** `est.days[mode].mid` is the break-even day at the middle of the
+  profit range (`OS_MID`); the headline, the step 4 chart's line and points, the strip, the
+  financing panel and step 6's plan line and first days all use it. Step 6's chart counts
+  days after opening from 0 at the opening day, like the tile, with its own key
+  (`gr.os.roi.chart.after`).
+- `osMarkPlans()` takes a plan's snapshot again only when the board or the plan's type or
+  building changed.
+
 ## Open items
 
 - The in-game paths in step 5's instruction boxes are still unchecked (phase 3).
