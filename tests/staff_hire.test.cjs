@@ -218,6 +218,16 @@ const ONE = {writes: ['uniforms', 'imports', 'schedule', 'hire'], features: ['hi
   character: 'default', company: 'Link Co'};
 const REVIEW = '#hsOrder button.hs-cta[data-hs-review]';
 const phase = (page, p) => page.waitForFunction(p => document.querySelector('dialog.gw-dlg')?.dataset.phase === p, p);
+// Corner's game week with a Wednesday for Cy that its plan drops: its week is
+// one to write even when Sam, not reassigned, keeps his hours there.
+const cyWednesday = (data = payload) => {
+  const d = JSON.parse(data);
+  const cur = d.staffing.find(r => r.key === C).current;
+  cur.list.push({d: 3, s: 0, f: 8, t: 20, p: 0});
+  cur.shifts = cur.list.length;
+  return JSON.stringify(d);
+};
+const SAM_TUE = {d: 2, shifts: [{f: 8, t: 20, employeeId: 'SPARE1', itemInstanceId: 'REG-C'}]};
 // Adds candidates to the payload.
 const withCands = (...more) => { const d = JSON.parse(payload); d.candidates.push(...more); return JSON.stringify(d); };
 
@@ -291,9 +301,10 @@ test('netting: the bench a plan counts on, then spare people, then hires, best f
   ]);
   assert.equal(await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).isChecked(), false);
   assert.equal((await page.locator(REVIEW).textContent()).trim(), 'Staff all sites');
-  // Corner keeps Sam now, whose Tuesday the plan does not have: its week is
-  // one to write as well, and the order counts it.
-  assert.match(await order.locator('.hs-ol').textContent(), /Hire8.*Weeks5/);
+  // Corner keeps Sam now, and with him his Tuesday, which the plan does not
+  // have: nobody is left at 0 hours, and Corner's week is the game's, so
+  // there is no week to write there.
+  assert.match(await order.locator('.hs-ol').textContent(), /Hire8.*Weeks4/);
 });
 
 test('ties past the wage go to the id, and the sizing on Supply picks the factory plan', async (t) => {
@@ -1086,9 +1097,10 @@ test('Quick hire where the plan has no open week: no hours, and says so', async 
   // for Gifts; no week is held.
   assert.deepEqual((await quick(page)).picks, [['c2', null]]);
   assert.deepEqual((await model(page)).weeks[0], [G, 'demand', ['move:SPARE1', 'hire:c2']]);
-  // Hire and schedule writes Corner's week on its plan all the same.
+  // Hire and schedule writes Corner's week on its plan all the same, and Sam,
+  // whom Quick hire does not reassign, keeps his Tuesday there.
   assert.deepEqual((await quickRequest(page)).sites, [{address: addr(C), expect: corner, openAllHours: false,
-    days: [{d: 1, shifts: [{f: 8, t: 20, employeeId: 'CCCCemployeeCCCCCCCCCCCC', itemInstanceId: 'REG-C'}]}]}]);
+    days: [{d: 1, shifts: [{f: 8, t: 20, employeeId: 'CCCCemployeeCCCCCCCCCCCC', itemInstanceId: 'REG-C'}]}, SAM_TUE]}]);
   assert.deepEqual((await quickRequest(page, 'hire')).sites, [{address: addr(C), expect: null, days: null}]);
   const dlg = await quickConfirm(page);
   assert.deepEqual((await model(page)).weeks[0], [G, 'demand', ['move:SPARE1', 'hire:c1']]);
@@ -2023,13 +2035,13 @@ test('Quick hire with several picks gives each their own reason: only the one no
 // --- one action, undone in one step (staffing revisit, 29 September 2026) --------------
 
 test('with mod 0.4.0 Staff all sites is one call, the weeks no hire reaches with it, undone in one step', async (t) => {
-  const page = await board(t, {link: ONE});
-  // Sam stays at Corner (his reassign unticked): Corner's week has him on
-  // Tuesday and its plan does not, a week no hire or move reaches.
+  const page = await board(t, {link: ONE, data: cyWednesday()});
+  // Sam stays at Corner (his reassign unticked) and keeps his Tuesday; Cy's
+  // Wednesday is not in the plan: a week no hire or move reaches.
   await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
   const body = await request(page);
   assert.deepEqual(body.sites.map(s => s.address.number), [10, 2, 4, 3, 88]);
-  assert.deepEqual(body.sites[1].days, [{d: 1, shifts: [{f: 8, t: 20, employeeId: 'CCCCemployeeCCCCCCCCCCCC', itemInstanceId: 'REG-C'}]}]);
+  assert.deepEqual(body.sites[1].days, [{d: 1, shifts: [{f: 8, t: 20, employeeId: 'CCCCemployeeCCCCCCCCCCCC', itemInstanceId: 'REG-C'}]}, SAM_TUE]);
   // An older mod takes the same week only after the hire, on its own.
   assert.deepEqual(await page.evaluate(() => { const r = hrRequest(hrModel(), {one: false}); return [r.body.sites.map(s => s.address.number), r.rest.map(x => x.S.key)]; }),
     [[10, 4, 3, 88], [C]]);
@@ -2104,7 +2116,7 @@ test('with staff already employed, the hint promises the one-step Undo', async (
 });
 
 test('an older mod: the weeks no hire reaches are written one by one after the hire, and each site says how it went', async (t) => {
-  const page = await board(t);
+  const page = await board(t, {data: cyWednesday()});
   await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
   await page.evaluate(src => {
     window.answerFor = eval(src);
@@ -2121,13 +2133,14 @@ test('an older mod: the weeks no hire reaches are written one by one after the h
   await page.evaluate(k => { gwUndoable.schedule = {spec: {kind: 'schedule', title: 'x', sites: [k]}, text: 'x', sub: '', whose: gwWhose(), at: 1, sites: [k]}; }, B);
   await dlg.locator('.gw-foot [data-gw-b="apply"]').click();
   await phase(page, 'done');
-  assert.match(await dlg.textContent(), /1 more week is being written, one at a time\./);
-  await page.waitForFunction(() => window.hrWrites.some(w => w.kind === 'schedule'));
+  // Done is said once the week after the call is answered, with what came of it.
+  assert.match(await dlg.textContent(), /4 weeks written\. 1 week not written\./);
+  assert.doesNotMatch(await dlg.textContent(), /being written/);
+  assert.equal(await dlg.locator('.hr-st.wait').count(), 0);
   const sched = await page.evaluate(() => window.hrWrites.filter(w => w.kind === 'schedule'));
   assert.deepEqual(sched.map(w => [w.body.address, w.body.openAllHours, w.dryRun]), [[addr(C), false, false]]);
   // Corner's week, refused because the game moved on, says so; the rest are done.
   const corner = dlg.locator('.hr-dsite', {has: page.locator(`[data-hr-site="${C}"]`)});
-  await corner.locator('.hr-st.no').waitFor();
   assert.match(await corner.locator('.hr-st').textContent(), /changed in the game: not written/);
   assert.equal(await dlg.locator('.hr-st.ok').count(), 4);
   assert.equal(await dlg.locator('.gw-foot [data-gw-b="undo"]').count(), 0);
@@ -2136,7 +2149,7 @@ test('an older mod: the weeks no hire reaches are written one by one after the h
 });
 
 test('an older mod: two weeks after the hire are named as two, and a write with no answer says so', async (t) => {
-  const page = await board(t);
+  const page = await board(t, {data: cyWednesday()});
   await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
   const out = await page.evaluate(() => {
     const r = hrRequest(hrModel(), {one: false});
@@ -2150,7 +2163,7 @@ test('an older mod: two weeks after the hire are named as two, and a write with 
 });
 
 test('an older mod, schedule only: no empty hire call, and every week it writes is counted', async (t) => {
-  const page = await board(t);
+  const page = await board(t, {data: cyWednesday()});
   await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
   await page.evaluate(src => {
     window.answerFor = eval(src);
@@ -2171,9 +2184,10 @@ test('an older mod, schedule only: no empty hire call, and every week it writes 
   // The hire call would have carried nothing: it is never sent.
   assert.deepEqual(await page.evaluate(() => window.hrWrites.filter(w => w.kind === 'hire').map(w => w.dryRun)), [true], 'only the dry run of the first choice');
   assert.doesNotMatch(await dlg.textContent(), /Nothing changed in the game/);
-  assert.match(await dlg.textContent(), /2 more weeks are being written, one at a time\./);
-  await dlg.locator('.hr-st.wait').first().waitFor({state: 'detached'});
+  assert.match(await dlg.textContent(), /2 weeks written\./);
+  assert.equal(await dlg.locator('.hr-st.wait').count(), 0);
   assert.equal(await dlg.locator('.hr-st.ok').count(), 2);
+  assert.equal((await dlg.locator('.gw-tile', {hasText: 'Weeks'}).locator('.v').textContent()).trim(), '2');
 });
 
 test('with mod 0.4.0 the one call drops the board\'s schedule Undo for a site it writes, and an Undo the mod did not keep is not offered', async (t) => {
@@ -2211,7 +2225,7 @@ test('with mod 0.4.0 the one call drops the board\'s schedule Undo for a site it
 });
 
 test('an older mod: a chained week written drops the board\'s schedule Undo for a site the hire call never touched', async (t) => {
-  const page = await board(t);
+  const page = await board(t, {data: cyWednesday()});
   await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
   await page.evaluate(src => {
     window.answerFor = eval(src);
@@ -2355,10 +2369,11 @@ test('hire only and schedule only: the pick changes what is sent and the verb of
   await dlg.locator('[data-hr-mode="week"]').click();
   await page.waitForFunction(() => document.querySelector('dialog.gw-dlg').dataset.phase === 'ready' && !window.hrWrites.at(-1).body.hires.length);
   body = await last();
-  // The weeks alone: Corner (Sam's Tuesday is not in its plan) and Works.
+  // The weeks alone: Works. Sam is not reassigned, so he keeps his Tuesday at
+  // Corner and its week is the game's: nothing to write there.
   assert.deepEqual(body.moves, []);
-  assert.deepEqual(body.sites.map(s => s.address.number), [2, 3]);
-  assert.equal(await apply.textContent(), 'Write 2 weeks');
+  assert.deepEqual(body.sites.map(s => s.address.number), [3]);
+  assert.equal(await apply.textContent(), 'Write 1 week');
 });
 
 test('Staff this site on a shop\'s Staffing: its hires and reassigns and its week, in place of the MyEmployees step', async (t) => {
@@ -2429,4 +2444,82 @@ test('an entry the game holds past 12 hours goes back as the same hours in piece
     return hrDiffers(S.row, hrWeek(S, [], new Set(), new Set(), {hours: 0}), new Set());
   }, F);
   assert.equal(same, false, 'Fay on Monday and Dee as she is: the cut alone is no change');
+});
+
+// --- browser QA of PR #185, 29 September 2026 ----------------------------------------
+
+test('Staff this site reassigns its own spare to the week that fits them elsewhere, and the review shows it', async (t) => {
+  const page = await board(t, {link: ONE});
+  const body = await page.evaluate(k => hrRequest(hrModel(), {site: k, one: true}).body, C);
+  assert.deepEqual(body.moves, [{employeeId: 'SPARE1', from: addr(C), to: addr(G)}]);
+  const gifts = body.sites.find(s => s.address.number === 10);
+  assert.ok(gifts && gifts.days.some(d => d.shifts.some(x => x.employeeId === 'SPARE1')), 'Sam gets his week at Gifts');
+  assert.equal(await page.evaluate(k => hrSitePeople(k), C), 1);
+  await answering(page, []);
+  await page.evaluate(k => hrReview({scope: 'site', site: k}), C);
+  await phase(page, 'ready');
+  const dlg = page.locator('dialog.gw-dlg');
+  await dlg.locator(`[data-hr-site="${G}"]`).click();
+  assert.match(await dlg.locator('.hr-dsite.open').textContent(), /Sam Spare[\s\S]*reassigned from HART\. Corner/);
+});
+
+test('a spare no open week fits keeps their week at their site, in one site\'s action and in Staff all sites', async (t) => {
+  // Sam asks for a four-day week and every open week is two or three days.
+  const d = JSON.parse(cyWednesday());
+  d.hiring.people.SPARE1.demands = ['ba:jobdemand_fourdaysweek'];
+  d.hiring.demandKinds['ba:jobdemand_fourdaysweek'] = 'schedule';
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  assert.deepEqual((await model(page)).moves.map(x => x.id), ['BENCH1']);
+  const CY_MON = {d: 1, shifts: [{f: 8, t: 20, employeeId: 'CCCCemployeeCCCCCCCCCCCC', itemInstanceId: 'REG-C'}]};
+  const site = await page.evaluate(k => hrRequest(hrModel(), {site: k, one: true}).body, C);
+  assert.deepEqual(site.moves, []);
+  assert.deepEqual(site.sites.find(s => s.address.number === 2).days, [CY_MON, SAM_TUE], 'Corner keeps Sam\'s Tuesday');
+  const all = await request(page);
+  assert.deepEqual(all.sites.find(s => s.address.number === 2).days, [CY_MON, SAM_TUE]);
+  // Schedule only keeps him too.
+  const week = await page.evaluate(() => hrRequest(hrModel(), {mode: 'week', one: true}).body);
+  assert.deepEqual(week.sites.find(s => s.address.number === 2).days, [CY_MON, SAM_TUE]);
+});
+
+test('Quick hire whose only pick has left the candidates: nobody to hire, and Apply stays off', async (t) => {
+  const page = await board(t);
+  await page.locator('#hsQuick [data-hq-role]').selectOption(HRM);
+  await page.locator('#hsQuick [data-hq-site]').selectOption(Q);
+  const id = (await quickRequest(page, 'hire')).hires[0].candidateId;
+  await page.evaluate(([src, id]) => {
+    window.answerFor = eval(src);
+    window.hrAnswer = async (kind, body, o) => ({status: 200, error: null, body: window.answerFor(body, {dryRun: !!o.dryRun, gone: [id]})});
+  }, [`(${answerFor.toString()})`, id]);
+  await page.locator('#hsQuick [data-hq-go]').click();
+  await phase(page, 'ready');
+  const dlg = page.locator('dialog.gw-dlg');
+  assert.match(await dlg.locator('.gw-verdict').textContent(), /Nobody to hire: the application ran out since the board read the game\. Refresh the board to pick again\./);
+  assert.equal(await dlg.locator('.gw-foot [data-gw-b="apply"]').isDisabled(), true);
+  assert.deepEqual(await page.evaluate(() => window.hrWrites.map(w => w.dryRun)), [true], 'nothing applied');
+});
+
+test('an older mod: the dialog stays applying while the weeks after the hire are written, and says how far it is', async (t) => {
+  const page = await board(t, {data: cyWednesday()});
+  await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
+  await page.evaluate(src => {
+    window.answerFor = eval(src);
+    window.release = null;
+    window.hrAnswer = async (kind, body, o) => kind === 'schedule'
+      ? new Promise(done => { window.release = () => done({status: 200, error: null, body: {ok: true, kind: 'schedule', dryRun: false, stamp: 's',
+          before: {shifts: 1, print: 'a'}, after: {shifts: 2, print: 'b'}, removed: 1, added: 2, openedHours: false, leftWithout: [], warnings: [], siteError: null, rows: []}}); })
+      : {status: 200, error: null, body: window.answerFor(body, {dryRun: !!o.dryRun})};
+  }, `(${answerFor.toString()})`);
+  await page.locator(REVIEW).click();
+  await phase(page, 'ready');
+  const dlg = page.locator('dialog.gw-dlg');
+  await dlg.locator('.gw-foot [data-gw-b="apply"]').click();
+  await page.waitForFunction(() => typeof window.release === 'function');
+  // The hire call is answered, the week after it is not: still applying.
+  assert.equal(await dlg.getAttribute('data-phase'), 'applying');
+  assert.match(await dlg.locator('.gw-verdict').textContent(), /Writing the other weeks: 0 of 1…/);
+  assert.equal(await dlg.locator('.gw-foot [data-gw-b="undo"]').count(), 0);
+  await page.evaluate(() => window.release());
+  await phase(page, 'done');
+  assert.match(await dlg.textContent(), /5 weeks written\./);
+  assert.equal(await dlg.locator('.hr-st.wait').count(), 0);
 });

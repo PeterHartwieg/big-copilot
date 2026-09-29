@@ -30604,18 +30604,22 @@ function hrChainSay(res){
    /write/schedule, where the mod cannot take them in the same call (before
    0.4.0). Each site says how it went, in the review it came from. */
 async function hrChain(last, dlg){
+  /* While the dialog is applying, its verdict says how far the chain is. */
+  const far = () => {
+    if(!dlg || !dlg.open || dlg.dataset.phase !== "applying") return;
+    const say = dlg.querySelector(".gw-verdict b");
+    const k = Object.values(last.chain).filter(x => x !== "wait").length;
+    if(say) say.textContent = tt("co.hire.chain.writing", "Writing the other weeks: {k} of {n}…", {k, n: last.req.rest.length});
+  };
   for(const {S, body} of last.req.rest){
+    far();
     const res = await SOURCE.write("schedule", body, {dryRun: false, approval: gwApprovalView(dlg, () => {})});
     last.chain[S.key] = res.error ? {say: hrChainSay(res), error: res.error} : "done";
     /* Each week written this way replaces the game's one schedule undo, so the
        board's Undo for an earlier schedule write would undo the wrong site. */
     if(!res.error || res.error === "uncertain"){ delete gwUndoable.schedule; gwToast(); }
     if(!dlg || !dlg.open || !["applying", "done"].includes(dlg.dataset.phase)) continue;
-    if(dlg.dataset.phase === "applying"){
-      const say = dlg.querySelector(".gw-verdict b");
-      const k = Object.values(last.chain).filter(x => x !== "wait").length;
-      if(say) say.textContent = tt("co.hire.chain.writing", "Writing the other weeks: {k} of {n}…", {k, n: last.req.rest.length});
-    }
+    far();
     const list = dlg.querySelector(".hr-dsites");
     if(!list) continue;
     const gone = new Set(((last.answer || {}).skipped || []).filter(s => s && s.reason === "gone").map(s => s.candidateId));
