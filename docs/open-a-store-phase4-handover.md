@@ -57,10 +57,35 @@ generated files, rebuilt. The payload snapshots moved because main's fixture now
 - Paid back = `reached`, `latest`, or a `window` day already past, as the portfolio says it.
 - Changelog: PR 175's entry now describes the whole feature (checklist and after opening).
 
+## Review round 1 (29 Sep 2026)
+
+- **Peter's UI requests.** A range of profit or days shows its middle, the range on hover
+  (`osRange()`, `osMidMoney()`, `.os-rng`), in every step. Step 6's strip shows Open and
+  Where only (`.os-pb2`). The checklist line became a third link button, "Until opening ·
+  n of 7" (`osRoiUntilBtn()`), gone once all seven are done.
+- **Window roll-off.** `_payback_trail()` keeps a site's days from its opening in the payback
+  history while the record reaches it (to break even + 30 days, 180 at most) and joins them
+  to the record's newer days later, so the row stays exact. Chains still judge by the
+  record's own reach. Where the trail and the record no longer meet the row says `rolled`;
+  step 6 then shows "Profit in the record" and an unknown share, 100% for a remembered break
+  even (`osProgress()`).
+- **Plan identity.** `plan.opened` is kept the first time the store is seen (`osMarkPlans()`,
+  every plan on every draw); snapshots stop for good. `osAttached()` wants the same opening
+  day; otherwise `osClosed()`: step 6 and the list say Closed and what stands there now.
+- **Mode.** "Now" follows `paybackMode()`, as Results and the site page; the plan column
+  keeps the plan's mode, both headed with their mode when they differ, no difference drawn.
+- **Plan cap.** `osCapPlans()`: 12 unfinished, 24 opened (oldest paid-back dropped first);
+  `osLoad()` and `osNew()` both apply it.
+- **Loan.** `plan.debts` (the loans at creation) and `plan.loan` (bank key and original
+  amount of the first new loan from the plan's bank, `osLoanTake()`); two same-amount loans
+  are told apart by what is left. Before a match the card shows the bank's whole debt.
+- **Chart** points are in days after opening; the calendar day stays in the tile.
+- A plan without a snapshot compares the investment only.
+- News: Open a store stays in the strip; `upd.news.lang-tr` and `upd.news.help-translate`
+  are no longer in the page but remain in the `i18n/` catalogues, left for the i18n round.
+
 ## Open items
 
-- The 12-plan cap (`OS_MAX_PLANS`) still only drops plans with no building, so twelve
-  opened plans block a new one. Consider letting a paid-back plan make room.
 - The in-game paths in step 5's instruction boxes are still unchecked (phase 3).
 - Wages still use the structural formula (phase 2 follow-up).
 - New `gr.os.roi.*` keys are English only, like the rest of `gr.os.*`.
@@ -73,7 +98,7 @@ node --test --test-concurrency=2 tests/open_store.test.cjs tests/payback.test.cj
 python build_web.py && python build_web.py --check
 ```
 
-`tests/open_store.test.cjs` has six step 6 tests: the snapshot frozen at opening and the
+`tests/open_store.test.cjs` has twelve step 6 tests (round 1 added mode, window roll-off, closure and replacement, the cap, two loans, a forecast past the edge, a cost centre and a real `_payback()` row); the first six were: the snapshot frozen at opening and the
 step unlocking, just opened with no sales, trading and paying back (tiles, chart, ramp,
 days), paid back (done strip, plan list, both links), not paying back with a loan, and an
 unfinished checklist plus a plan without kept figures.

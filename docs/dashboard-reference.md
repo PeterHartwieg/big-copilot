@@ -881,7 +881,9 @@ reach its interior score of 50: the cheapest floors first, then the cheapest wal
 the score's two halves (spend per interior element, and the share of slots painted) average
 50. The toggle is the same one Businesses › Results uses.
 
-**Break even** is the investment divided by the expected profit a day, shown as a range:
+**Break even** is the investment divided by the expected profit a day. Everywhere Open a
+store shows a range of profit or of days, it shows the middle as one figure and the range on
+hover (a dotted underline). The range:
 the profit times 0.80 to 1.05, the spread of real shops against these rules. The profit is
 the game's own arithmetic for a store run well, not an average of your other stores:
 
@@ -988,34 +990,50 @@ under the list goes to step 6.
 
 **After opening** (step 6) opens once a business of the planned type stands at the plan's
 address. It holds the plan against the site's own payback, the same row Businesses › Results
-and the site's page show (`payback.sites`), in the plan's install mode; nothing is estimated
-again. What the plan said is kept in the plan while the address is still empty (its
-investment by part, profit a day, days to break even and the first 30 days one by one) and
-frozen once the store opens, so a later change in prices or rivals does not move it. A plan
-first opened after its store already traded works its side out from the save on screen, and
-says so.
+and the site's page show (`payback.sites`); nothing is estimated again. The "now" figures
+follow the install mode Results uses, so a link from step 6 lands on the same numbers. The
+plan column keeps the plan's own mode; where the two differ, both headings name their mode, a
+line says so, and no difference is drawn.
 
-- **Tiles**: the investment (with "as planned" within 1%, else the plan's figure), profit so
-  far with the days since the opening, the share paid back, and break even: the day it was
-  reached and how many days after opening, the days to go at recent profit and the day that
+What the plan said is kept in the plan while the address is still empty (its investment by
+part, profit a day, days to break even and the first 30 days one by one). The first time the
+store is seen, the plan keeps its opening day and never takes figures again. If that store
+closes, or another business opens in its place (of another type, or the same type opened on
+another day), the plan reads **Closed**, says what stands there now, and attaches to nothing.
+A plan made before its figures were kept compares the investment only.
+
+- **The strip** shows only what and where; the tiles carry the numbers.
+- **Tiles**: the investment ("as planned" within 1%, else the plan's figure), profit so far
+  with the days since the opening, the share paid back, and break even: the day it was reached
+  and how many days after opening, the days to go at recent profit and the calendar day that
   lands on, "Not paying back" at recent profit, or nothing before a day with sales.
+- **Past the record's reach.** The save keeps 61 days of statements. While they reach the
+  opening, the board keeps the site's days from the opening in its history (up to break even
+  plus 30 days, 180 at most), and later saves add the record's newer days to them, so the
+  run stays whole. Where the kept days and the record no longer meet, the tile reads "Profit
+  in the record" and the share paid back is unknown, unless break even was reached and
+  remembered (then 100%).
 - **Chart**: profit since the opening day by day (`payback.sites[key].days`, with the lease's
   cost before the opening as `before`), a bar per day, the investment, the plan's line from
-  the first day with sales, and while it pays back a dashed line on at recent profit. It is
-  drawn only where the save's record reaches the opening.
+  the first day with sales, and while it pays back a dashed line on at recent profit. Its
+  points are labelled in days after opening, as its axis; the calendar day is the tile's. It is
+  drawn only where the whole run from the opening is known.
 - **Plan and now**: furniture, the installation fee (or the firm's real bill where the save
   holds it, or walls and floors for self-installation), the deposit and the total; the profit
-  a day as the plan's range against the recent days; the first five days with sales against
-  the plan's first days, which count the ramp and a first seller's hype; and the days to break
-  even, both counted from the first day with sales as day 1.
-- **Financing**, where the plan had a loan: the loan planned beside the save's loan from that
-  bank (the closest in amount), its share repaid and what it costs a day now.
-- Paid back, the plan is done: a strip says the day and the plan's range and hands over to
-  the site's page. **Site page** and **Payback in Businesses › Results** are there in every
-  state. A checklist that is not complete leaves a note with a way back to it.
+  a day against the recent days; the first five days with sales against the plan's first days,
+  which count the ramp and a first seller's hype; and the days to break even, both counted
+  from the first day with sales as day 1.
+- **Financing**, where the plan had a loan: the plan's loan is the first loan from its bank
+  that was not in the save when the plan was made (of two loans of one amount, the one with
+  more left is the newer). Until one appears, the card gives the bank's whole debt and says
+  it cannot be told apart. A matched loan gone from the save is repaid.
+- **Links**: Site page, Payback in Businesses › Results, and, while the checklist has rows
+  left, Until opening with how many are done. Paid back, a strip says the day and the plan's
+  figure and carries the same links.
 
-A plan stays in Your plans after its store opens, marked **Open** with the share paid back,
-and opens on step 6.
+A plan stays in Your plans after its store opens, marked **Open** with the share paid back
+(or **Closed**), and opens on step 6. Twelve plans that have not opened are the limit; opened
+plans are history, kept apart up to 24, the oldest paid-back one making room first.
 
 ## The portfolio, by chain
 

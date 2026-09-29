@@ -414,6 +414,46 @@ class PaybackTest(PricesTestCase):
         self.assertNotIn("days", old["sites"][KEY_SHOP])
         self.assertNotIn("days", old["sites"][KEY_BREWERY])
 
+    def test_the_days_from_the_opening_outlive_the_record(self):
+        # Opened on day 30 at -98 a day for two days, then 500 a day: the
+        # investment (139,830 by the firm) is far off, so the trail is kept.
+        def rows(first, last):
+            return [(d, {SHOP: ((-98, 0) if d < 32 else (500, 900)), BREWERY: (-500, 0)}) for d in range(first, last + 1)]
+        history = History(None)
+        seen, _ = self.run_payback(rows(30, 89), history)
+        self.assertTrue(seen["sites"][KEY_SHOP]["exact"])
+        # 61 statements from day 50: the record starts after the opening, but
+        # the kept trail meets it, so the run from the opening is whole.
+        later, _ = self.run_payback(rows(50, 110), history)
+        site = later["sites"][KEY_SHOP]
+        self.assertTrue(site["exact"])
+        self.assertEqual(site["days"][0], [30, -98, 0])
+        self.assertEqual(site["days"][-1], [110, 500, 900])
+        self.assertEqual(len(site["days"]), 81)
+        self.assertEqual(site["profit"], -196 + 79 * 500)
+        self.assertEqual(site["since"], 30)
+        self.assertEqual(site["firm"]["state"], "togo")
+        self.assertNotIn("rolled", site)
+        # The chain still judges by the record's own reach.
+        self.assertFalse(later["chains"][KEY_SHOP]["exact"])
+        # A save months on: the days between the trail and the record are lost.
+        gone, _ = self.run_payback(rows(300, 360), history)
+        site = gone["sites"][KEY_SHOP]
+        self.assertFalse(site["exact"])
+        self.assertTrue(site["rolled"])
+        self.assertNotIn("days", site)
+        self.assertEqual(site["firm"]["state"], "window")
+
+    def test_the_trail_stops_a_month_after_break_even(self):
+        history = History(None)
+        rows = [(d, {SHOP: (40000, 50000)}) for d in range(30, 89)]
+        out, _ = self.run_payback(rows, history)
+        # 139,830 by the firm is covered on day 33; the trail ends 30 days on.
+        self.assertEqual(out["sites"][KEY_SHOP]["firm"]["day"], 33)
+        trail = history.payback("CHAR")["sites"][KEY_SHOP]["trail"]
+        self.assertEqual(trail[-1][0], 63)
+        self.assertEqual(len(out["sites"][KEY_SHOP]["days"]), 59, "the payload has every day the record holds")
+
     def test_a_site_given_up_leaves_the_memory(self):
         history = History(None)
         self.run_payback([(30, {SHOP: (1, 1)})], history)

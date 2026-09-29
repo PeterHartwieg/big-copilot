@@ -146,7 +146,9 @@ test('Break even shows both install modes from the game\'s rules, a range, tax, 
   assert.match(big[1], /SELF-INSTALLATION/i);
   assert.equal(await page.locator('#osBody svg.os-chart').count(), 1);
   const notes = await page.locator('#osBody .os-note').allInnerTexts();
-  assert.match(notes[0], /^Between \$[\d,]+ and \$[\d,]+ a day if it is priced, stocked and staffed as planned\.$/);
+  assert.match(notes[0], /^About \$[\d,]+ a day if it is priced, stocked and staffed as planned\.$/);
+  // The range behind the single figure is on hover.
+  assert.match(await page.locator('#osBody .os-note .os-rng').first().getAttribute('data-tip'), /^\$[\d,]+–\$[\d,]+$/);
   assert.match(notes[1], /^After 5% tax: \$[\d,]+ a day\.$/);
   // The player's own liquor store against the same rules, as a line and its own card.
   assert.ok(notes.some(n => /Your liquor store earns \d+% of what these rules give its own building\./.test(n)), notes.join('\n'));
@@ -711,27 +713,27 @@ test('an unmet hairdresser shelf is named in words, not by its id', async t => {
   assert.doesNotMatch(r.sub, /Shelfwithhaircareproducts/i);
 });
 
+
 /* --- step 6: after opening ------------------------------------------------------ */
 /* The plan's store opened on day 30 and has traded to the save's day 47: the
    business at the plan's address, and phase 1's payback row for it as
    _payback() sends one (tests/test_payback.py holds the arithmetic). `daily`
    is each day's profit from the first day with sales, the opening day's
-   `first` before it; `state` and its figures are the outcome. */
+   `first` before it; `state` and its figures are the outcome, in both modes. */
 const OPENED = 30;
-const traded = (page, {daily = [], first = -400, state, extra = {}, cost = null} = {}) => page.evaluate(({site, daily, first, state, extra, cost, opened}) => {
+const traded = (page, {daily = [], first = -400, state, extra = {}, cost = null, row = {}} = {}) => page.evaluate(({site, daily, first, state, extra, cost, opened, patch}) => {
   const snap = osPlan().snap, inv = cost || {furniture: snap.inv.furniture, materials: snap.inv.decor, fee: snap.inv.fee,
     deposit: snap.inv.deposit, firm: snap.inv.firm, self: snap.inv.furniture + snap.inv.decor + snap.inv.deposit};
   const days = [[opened, first, 0], ...daily.map((p, i) => [opened + 1 + i, p, p > 0 ? p * 2 : 50])];
   const profit = days.reduce((a, d) => a + d[1], 0);
   const recent = days.slice(1).slice(-14), rate = recent.length ? recent.reduce((a, d) => a + d[1], 0) / recent.length : null;
-  const row = {costCentre: false, cost: inv, exact: true, opened, since: opened, profit, rate, days, before: 0,
-    firm: Object.assign({state}, extra), self: Object.assign({state}, extra)};
-  D.payback.sites[site] = row;
+  D.payback.sites[site] = Object.assign({costCentre: false, cost: inv, exact: true, opened, since: opened, profit, rate, days, before: 0,
+    firm: Object.assign({state}, extra), self: Object.assign({state}, extra)}, patch);
   const b = D.businesses.find(x => x.key === site);
   Object.assign(b, {opened, staff: 3, stationShifts: 5, hasTraded: daily.length > 0, revenue: daily.length ? 900 : 0});
   drawOpenStore();
   return {inv: inv.firm, profit, rate};
-}, {site: SITE, daily, first, state, extra, cost, opened: OPENED});
+}, {site: SITE, daily, first, state, extra, cost, opened: OPENED, patch: row});
 /* A plan walked to its building, then the store opened there. */
 async function openedPlan(page, patch = {}){
   await planned(page);
@@ -739,8 +741,10 @@ async function openedPlan(page, patch = {}){
 }
 const tiles = page => page.$$eval('#osBody .os-roi .kpi', ks => ks.map(k => k.innerText.replace(/\s+/g, ' ').trim()));
 const pvsa = page => page.$$eval('#osBody .os-pvsa tbody tr', trs => trs.map(tr => [...tr.cells].map(td => td.innerText.replace(/\s+/g, ' ').trim())));
+const pvRow = async (page, name) => (await pvsa(page)).find(x => x[0].startsWith(name));
+const goOpen = async page => { await page.locator('#osCtl [data-os-step="open"]').click(); await page.waitForFunction(() => osStep === 'open'); };
 
-test('once the planned store stands at the address the plan keeps what it said, and the Open step unlocks', async t => {
+test('once the planned store stands at the address the plan keeps what it said and its opening day, and the Open step unlocks', async t => {
   const page = await board(t);
   await planned(page);
   const snap = await page.evaluate(() => JSON.stringify(osPlan().snap));
@@ -750,6 +754,7 @@ test('once the planned store stands at the address the plan keeps what it said, 
   assert.equal(JSON.parse(snap).curve[0], est.day0, 'the opening day is ramped as the plan drew it');
   assert.equal(await page.locator('#osCtl [data-os-step="open"]').isDisabled(), true);
   await opened(page, {opened: OPENED}, FULL);
+  assert.equal(await page.evaluate(() => osPlan().opened), OPENED, 'the store the plan attached to');
   // A rival that lowers the price the plan was made at no longer moves it.
   await page.evaluate(() => { Object.values(osFacts().market).forEach(m => { if(m.p) m.p *= 0.5; }); osBest = new Map(); drawOpenStore(); });
   assert.equal(await page.evaluate(() => JSON.stringify(osPlan().snap)), snap, 'frozen once the store opened');
@@ -759,16 +764,17 @@ test('once the planned store stands at the address the plan keeps what it said, 
   await page.locator('#osCtl [data-os-step="opening"]').click();
   await page.locator('#osBody .os-links [data-os-step="open"]').click();
   await page.waitForFunction(() => osStep === 'open');
-  // The stored plan keeps its figures across a reload's checks.
-  const kept = await page.evaluate(() => osSnapClean(JSON.parse(localStorage.getItem(osStore())).plans[0].snap));
-  assert.deepEqual(kept, JSON.parse(snap));
+  // Step 6's strip says what and where only; the tiles carry the numbers.
+  assert.deepEqual((await strip(page)).map(c => c.split(' ')[0]), ['OPEN', 'WHERE']);
+  const kept = await page.evaluate(() => { const p = JSON.parse(localStorage.getItem(osStore())).plans[0]; return {snap: osSnapClean(p.snap), opened: p.opened}; });
+  assert.deepEqual(kept, {snap: JSON.parse(snap), opened: OPENED});
 });
 
 test('just opened with no sales: invested, nothing earned, no day to go yet', async t => {
   const page = await board(t);
   await openedPlan(page, {hasTraded: false, revenue: 0});
   const {inv} = await traded(page, {state: 'unknown'});
-  await page.locator('#osCtl [data-os-step="open"]').click();
+  await goOpen(page);
   const k = await tiles(page);
   assert.match(k[0], new RegExp(`INVESTED \\$${inv.toLocaleString('en-US')} as planned`));
   assert.match(k[1], /PROFIT SO FAR -\$400 1 day · since day 30/);
@@ -778,11 +784,14 @@ test('just opened with no sales: invested, nothing earned, no day to go yet', as
   const r = await pvsa(page);
   assert.deepEqual(r.map(x => x[0].split(' ')[0]), ['Furniture', 'Installation', 'Deposit', 'Investment', 'Profit', 'Days']);
   assert.equal(r[4][2], '–', 'no recent profit before a sale');
-  // The links: the site's page and the Payback column.
-  assert.equal(await page.locator('#osBody .os-links [data-os-site]').count(), 1);
-  assert.equal(await page.locator('#osBody .os-links [data-os-results]').count(), 1);
-  // The strip's last cell is the store's, not the estimate's.
-  assert.match((await strip(page))[3], /BREAK EVEN – no day with sales yet · plan \d/);
+  // The plan's profit and days are single figures, the range on hover.
+  assert.match(r[4][1], /^\$[\d,]+$/);
+  assert.match(await page.locator('#osBody .os-pvsa .os-rng').first().getAttribute('data-tip'), /^\$[\d,]+–\$[\d,]+$/);
+  // The links: the site's page, the Payback column and the checklist, in one row.
+  const links = await page.locator('#osBody .os-links > *').allInnerTexts();
+  assert.equal(links.length, 3);
+  assert.match(links[2], /^Until opening · \d of 7$/);
+  assert.equal(await page.locator('#osBody p', {hasText: 'on the checklist until opening'}).count(), 0);
 });
 
 test('trading and paying back: profit so far, the share paid back, days to go against the plan and its ramp', async t => {
@@ -792,29 +801,43 @@ test('trading and paying back: profit so far, the share paid back, days to go ag
   const day = Math.round(snap.inv.firm / 40);
   const daily = Array.from({length: 16}, (_, i) => i < 2 ? Math.round(day * 0.6) : day);
   const {inv, profit, rate} = await traded(page, {daily, state: 'togo', extra: {days: 25}});
-  await page.locator('#osCtl [data-os-step="open"]').click();
+  await goOpen(page);
   const k = await tiles(page);
   assert.match(k[1], new RegExp(`PROFIT SO FAR \\$${profit.toLocaleString('en-US')} 17 days · since day 30`));
   assert.match(k[2], new RegExp(`PAID BACK ${Math.floor(profit / inv * 100)}%`));
   assert.match(k[3], /BREAK EVEN 25 days to go about day 71/);
   assert.equal(await page.locator('#osBody .os-roi .os-meter').getAttribute('style'), `--w:${(profit / inv * 100).toFixed(1)}%`);
-  // The chart: the running total, a bar a day, the investment, the plan's line and the way on.
+  // The chart: the running total, a bar a day, the investment, the plan's line and the way on,
+  // its points in days after opening as the axis says (the calendar day is the tile's).
   const chart = page.locator('#osBody svg.os-chart');
   assert.equal(await chart.locator('.os-dbar').count(), 17);
   assert.equal(await chart.locator('polyline.plan').count(), 1);
   assert.equal(await chart.locator('line.fc').count(), 1);
   assert.match(await chart.textContent(), /today, day 17/);
-  assert.match(await chart.textContent(), /day 71/);
-  const r = await pvsa(page);
-  const row = name => r.find(x => x[0].startsWith(name));
-  // The profit a day: the plan's range against the recent days.
-  assert.match(row('Profit a day')[1], /^\$[\d,]+–\$[\d,]+$/);
-  assert.equal(row('Profit a day')[2], '$' + Math.round(rate).toLocaleString('en-US'));
+  assert.match(await chart.textContent(), /day 42/);
+  assert.doesNotMatch(await chart.textContent(), /day 71/);
+  const mid = Math.round(snap.profit * (0.8 + 1.05) / 2);
+  const row = await pvRow(page, 'Profit a day');
+  assert.equal(money(row[1]), mid);
+  assert.equal(row[2], '$' + Math.round(rate).toLocaleString('en-US'));
   // The first five days with sales against the plan's ramped first days.
   const ramp = snap.curve.slice(0, 5).reduce((a, b) => a + b, 0), first = daily.slice(0, 5).reduce((a, b) => a + b, 0);
-  assert.deepEqual(row('The first 5 days').slice(1, 3), ['$' + ramp.toLocaleString('en-US'), '$' + first.toLocaleString('en-US')]);
+  assert.deepEqual((await pvRow(page, 'The first 5 days')).slice(1, 3), ['$' + ramp.toLocaleString('en-US'), '$' + first.toLocaleString('en-US')]);
   // Days to break even, counted as the plan counts them: the first day with sales is day 1.
-  assert.match(row('Days to break even')[2], /^about 41 days$/);
+  assert.match((await pvRow(page, 'Days to break even'))[2], /^about 41 days$/);
+});
+
+test('a forecast past the chart\'s edge is cut at it, and the chart keeps its own days', async t => {
+  const page = await board(t);
+  await openedPlan(page);
+  await traded(page, {daily: Array(16).fill(100), state: 'togo', extra: {days: 5000}});
+  await goOpen(page);
+  const fc = page.locator('#osBody svg.os-chart line.fc');
+  assert.equal(await fc.count(), 1);
+  const x2 = +(await fc.getAttribute('x2'));
+  assert.ok(x2 <= 900 - 18 + 0.5, `the forecast stops at the chart's right edge (${x2})`);
+  assert.equal(await page.locator('#osBody svg.os-chart circle.hit').count(), 0, 'no break-even point off the chart');
+  assert.match((await tiles(page))[3], /5,000 days to go/);
 });
 
 test('paid back: the day it broke even, the plan beside it, and the way to the site page and the Payback column', async t => {
@@ -823,64 +846,180 @@ test('paid back: the day it broke even, the plan beside it, and the way to the s
   const snap = await page.evaluate(() => osPlan().snap);
   const day = Math.ceil(snap.inv.firm / 8);
   await traded(page, {daily: Array(16).fill(day), state: 'reached', extra: {day: 39, after: 9}});
-  await page.locator('#osCtl [data-os-step="open"]').click();
+  await goOpen(page);
   const k = await tiles(page);
   assert.match(k[2], /PAID BACK 100%/);
   assert.match(k[3], /BREAK EVEN day 39 9 days after opening/);
   const done = page.locator('#osBody .os-done');
-  assert.match(await done.innerText(), /Break even on day 39, 9 days after opening[\s\S]*Plan .*The site page keeps the row; the plan is done\./);
-  assert.match(await page.locator('#osBody .os-state').innerText(), /PAID BACK/);
+  assert.match(await done.innerText(), /Break even on day 39, 9 days after opening[\s\S]*Plan \d+ days?\. The site page keeps the row; the plan is done\./);
   assert.equal(await page.locator('#osBody .os-links').count(), 0, 'the done strip carries the links');
-  assert.match((await pvsa(page)).find(x => x[0].startsWith('Days to break even'))[2], /^9 days$/);
+  assert.match((await pvRow(page, 'Days to break even'))[2], /^9 days$/);
+  assert.equal(await page.evaluate(() => osPlan().paid), true);
   // Listed as open and paid back.
   await page.locator('#osCtl select[data-os-plan]').selectOption('');
   assert.match(await page.locator('#osBody .os-plan').innerText(), /Liquor Store\s*Open[\s\S]*Open · paid back/i);
   assert.match(await page.locator('#osCtl select[data-os-plan] option').nth(1).textContent(), /Liquor Store · 9 Broadway Street · open/);
-  // Opening it from the list lands on After opening.
   await page.locator('#osBody [data-os-open]').click();
   await page.waitForFunction(() => osStep === 'open');
-  // Payback in Businesses › Results.
   await page.locator('#osBody .os-done [data-os-results]').click();
   await page.waitForFunction(() => page === 'company' && view === 'pnl');
   assert.equal(await page.locator('#secPortfolio').isVisible(), true);
-  // And the site page.
   await page.evaluate(() => openRoute('expansion/open'));
   await page.locator('#osBody .os-done [data-os-site]').click();
   await page.waitForFunction(site => siteOpen && siteKey === site, SITE);
 });
 
-test('not paying back: said plainly, with the financing it was planned with and what is repaid', async t => {
+test('the figures follow the install mode Results and the site page use; the plan keeps its own, labelled', async t => {
   const page = await board(t);
   await openedPlan(page);
-  await page.evaluate(() => { const p = osPlan(); p.finance = {on: true, amount: 20000, bank: 'VantanderBankSettings'}; osSave();
-    const bank = osFacts().finance.banks.find(b => b.id === 'VantanderBankSettings');
-    D.loans.push({bank: 'Vantander', key: bank.key, total: 20000, remaining: 15000, repaid: 25, dailyPayment: 83, dailyInterest: 28}); });
+  const snap = await page.evaluate(() => osPlan().snap);
+  // Paid back on self-installation, days to go on the firm's price.
+  await page.evaluate(({site, snap}) => { D.payback.sites[site] = {costCentre: false, cost: {furniture: snap.inv.furniture, materials: 0, fee: snap.inv.fee, deposit: snap.inv.deposit,
+    firm: snap.inv.firm, self: snap.inv.furniture + snap.inv.deposit}, exact: true, opened: 30, since: 30, profit: snap.inv.firm / 2, rate: 1000,
+    days: [[30, snap.inv.firm / 2, 10]], before: 0, firm: {state: 'togo', days: 300}, self: {state: 'reached', day: 30, after: 0}}; }, {site: SITE, snap});
+  await page.evaluate(() => { osPlan().mode = 'firm'; paybackSetMode('self'); drawOpenStore(); });
+  await goOpen(page);
+  const k = await tiles(page);
+  assert.match(k[0], new RegExp(`INVESTED \\$${Math.round(snap.inv.furniture + snap.inv.deposit).toLocaleString('en-US')} Self-installation`));
+  assert.match(k[3], /BREAK EVEN day 30/);
+  const head = await page.$$eval('#osBody .os-pvsa thead th', ths => ths.map(th => th.innerText.trim()));
+  assert.match(head[1], /PLAN · INSTALLATION FIRM/i);
+  assert.match(head[2], /NOW · SELF-INSTALLATION/i);
+  assert.match(await page.locator('#osBody').innerText(), /The plan was made for Installation firm; now follows Businesses › Results, set to Self-installation\./);
+  assert.equal((await pvRow(page, 'Investment'))[3], '', 'no difference across two modes');
+  // The site's page says the same.
+  await page.locator('#osBody .os-done [data-os-site]').click();
+  await page.waitForFunction(site => siteOpen && siteKey === site, SITE);
+  await page.locator('.sp-pay').first().waitFor();
+  assert.match(await page.locator('.sp-pay').first().innerText(), /Payback: Break even on day 30/);
+});
+
+test('past the record\'s reach: profit is the record\'s, the share unknown, unless break even was reached', async t => {
+  const page = await board(t);
+  await openedPlan(page);
+  await traded(page, {daily: Array(16).fill(1000), state: 'window', row: {exact: false, days: undefined, before: undefined, since: 40}});
+  await page.evaluate(site => { const r = D.payback.sites[site]; delete r.days; delete r.before; drawOpenStore(); }, SITE);
+  await goOpen(page);
+  let k = await tiles(page);
+  assert.match(k[1], /PROFIT IN THE RECORD .* since day 40, the oldest the save keeps/);
+  assert.match(k[2], /PAID BACK – the days since the opening are not all in the save/);
+  assert.equal(await page.locator('#osBody svg.os-chart').count(), 0);
+  assert.match(await page.locator('#osBody').innerText(), /The save's record starts after the opening/);
+  // Seen from its opening once, but the days between are lost.
+  await page.evaluate(site => { D.payback.sites[site].rolled = true; drawOpenStore(); }, SITE);
+  assert.match(await page.locator('#osBody').innerText(), /no longer reaches the opening, and the days between were not kept/);
+  assert.doesNotMatch(await page.locator('#osBody').innerText(), /record starts after the opening/);
+  // A remembered break even: 100%, and the paid-back strip.
+  await page.evaluate(site => { const r = D.payback.sites[site]; r.firm = r.self = {state: 'reached', day: 40, after: 10, kept: true}; drawOpenStore(); }, SITE);
+  k = await tiles(page);
+  assert.match(k[2], /PAID BACK 100%/);
+  assert.equal(await page.locator('#osBody .os-done').count(), 1);
+});
+
+test('a store that closed, or another in its place, leaves the plan as history attached to nothing', async t => {
+  const page = await board(t);
+  await openedPlan(page);
+  await traded(page, {daily: Array(16).fill(1000), state: 'togo', extra: {days: 50}});
+  await goOpen(page);
+  const snap = await page.evaluate(() => JSON.stringify(osPlan().snap));
+  // Closed: nothing at the address.
+  await page.evaluate(site => { D.businesses.find(b => b.key === site).status = 'vacant'; drawOpenStore(); }, SITE);
+  assert.match(await page.locator('#osBody .os-state').innerText(), /CLOSED\s*The liquor store this plan opened on day 30 no longer trades\./);
+  assert.match(await page.locator('#osBody').innerText(), /Nothing trades at 9 Broadway Street now\./);
+  assert.equal(await page.locator('#osBody .os-roi').count(), 0);
+  assert.equal(await page.evaluate(() => JSON.stringify(osPlan().snap)), snap, 'the plan\'s figures are never taken again');
+  // Another type in its place.
+  await page.evaluate(site => { Object.assign(D.businesses.find(b => b.key === site), {status: 'retail', typeSlug: 'ba:businesstype_giftshop', type: 'Gift Shop', opened: 44}); drawOpenStore(); }, SITE);
+  assert.match(await page.locator('#osBody').innerText(), /9 Broadway Street now holds a Gift Shop, opened on day 44\./);
+  assert.equal(await page.evaluate(() => JSON.stringify(osPlan().snap)), snap);
+  // The same type again, opened later: a new business, not this plan's.
+  await page.evaluate(site => { Object.assign(D.businesses.find(b => b.key === site), {typeSlug: 'ba:businesstype_liquorstore', type: 'Liquor Store', opened: 45}); drawOpenStore(); }, SITE);
+  assert.match(await page.locator('#osBody').innerText(), /now holds a Liquor Store, opened on day 45\./);
+  assert.equal(await page.locator('#osBody .os-roi').count(), 0);
+  // Listed as closed.
+  await page.locator('#osCtl select[data-os-plan]').selectOption('');
+  assert.match(await page.locator('#osBody .os-plan').innerText(), /Closed/);
+  assert.match(await page.locator('#osCtl select[data-os-plan] option').nth(1).textContent(), /· closed$/);
+});
+
+test('opened plans are history: twelve of them leave room for new plans, across a reload', async t => {
+  const context = await browser.newContext({viewport: {width: 1280, height: 900}, reducedMotion: 'reduce'});
+  t.after(() => context.close());
+  const page = await board(t, {context});
+  await page.evaluate(() => {
+    const plans = [];
+    for(let i = 0; i < 12; i++) plans.push({id: `h${i}`, type: 'ba:businesstype_liquorstore', hood: null, key: `ba:street_gone#${i}`, mode: 'firm',
+      finance: {on: false}, step: 'open', made: 1, opened: 5 + i, paid: i % 2 === 0});
+    for(let i = 0; i < 12; i++) plans.push({id: `u${i}`, type: 'ba:businesstype_liquorstore', hood: null, key: null, mode: null,
+      finance: {on: false}, step: 'where', made: 1});
+    localStorage.setItem(osStore(), JSON.stringify({plans, current: null}));
+  });
+  await page.reload();
+  await page.waitForFunction(() => typeof hasData === 'function' && hasData());
+  await page.evaluate(() => openRoute('expansion/open'));
+  assert.equal(await page.evaluate(() => osPlans.length), 24, 'a reload keeps twelve of each');
+  // A thirteenth unfinished plan pushes out the oldest unfinished one, never history.
+  await page.locator('#osBody .os-type[data-os-new="ba:businesstype_giftshop"]').click();
+  const ids = await page.evaluate(() => osPlans.map(p => p.id));
+  assert.equal(ids.length, 24);
+  assert.equal(ids.filter(id => /^h/.test(id)).length, 12);
+  assert.ok(!ids.includes('u11'));
+  // History past its own limit drops the oldest paid-back plan first.
+  const capped = await page.evaluate(() => osCapPlans(Array.from({length: 26}, (_, i) => ({id: `x${i}`, opened: 1, paid: i === 3 || i === 20}))).map(p => p.id));
+  assert.equal(capped.length, 24);
+  assert.ok(!capped.includes('x20') && !capped.includes('x3'));
+});
+
+test('not paying back, with the plan\'s loan told apart from an older one at the same bank', async t => {
+  const page = await board(t);
+  const bankKey = await page.evaluate(() => osFacts().finance.banks.find(b => b.id === 'VantanderBankSettings').key);
+  // A loan from the bank before the plan was made.
+  await page.evaluate(key => { D.loans.push({bank: 'Vantander', key, total: 20000, remaining: 4000, repaid: 80, dailyPayment: 83, dailyInterest: 28}); }, bankKey);
+  await openedPlan(page);
+  await page.evaluate(() => { const p = osPlan(); p.finance = {on: true, amount: 20000, bank: 'VantanderBankSettings'}; osSave(); });
   await traded(page, {daily: Array(16).fill(-150), state: 'never'});
-  await page.locator('#osCtl [data-os-step="open"]').click();
+  await goOpen(page);
   const k = await tiles(page);
   assert.match(k[1], /PROFIT SO FAR -\$2,800/);
   assert.match(k[3], /BREAK EVEN Not paying back at recent profit/);
   assert.match(await page.locator('#osBody .os-state').innerText(), /NOT PAYING BACK\s*At recent profit, -\$150 a day, the store does not earn its investment back\./);
-  assert.match((await pvsa(page)).find(x => x[0].startsWith('Days to break even'))[2], /not at this profit/);
-  const loan = await page.locator('#osBody .os-roiloan').innerText();
+  // Only the older loan: bank-wide debt, said as such.
+  let loan = await page.locator('#osBody .os-roiloan').innerText();
   assert.match(loan, /PLANNED\s*\$20,000[\s\S]*\$83 repaid \+ \$28 interest a day for 241 days/);
-  assert.match(loan, /REPAID\s*25%\s*\$5,000 of \$20,000 · \$15,000 left/);
-  assert.match(loan, /A DAY NOW\s*\$111/);
-  // No loan from that bank in the save any more.
+  assert.match(loan, /OWED TO VANTANDER BANK\s*\$4,000\s*every loan from the bank; none can be told apart as this plan's/);
+  // The plan's loan appears: the same bank, the same amount, and it is the new one.
+  await page.evaluate(key => { D.loans.push({bank: 'Vantander', key, total: 20000, remaining: 15000, repaid: 25, dailyPayment: 83, dailyInterest: 28}); drawOpenStore(); }, bankKey);
+  assert.deepEqual(await page.evaluate(() => osPlan().loan.total), 20000);
+  // The save lists loans largest remaining first: this plan's is matched by what it was not before.
+  loan = await page.locator('#osBody .os-roiloan').innerText();
+  assert.match(loan, /REPAID\s*25%\s*\$5,000 of \$20,000 · \$15,000 left/, 'the newer of the two, not the older one');
+  // Repaid in full: gone from the save.
   await page.evaluate(() => { D.loans = []; drawOpenStore(); });
-  assert.match(await page.locator('#osBody .os-roiloan').innerText(), /No loan from Vantander Bank in the save: repaid, or not taken/);
+  assert.match(await page.locator('#osBody .os-roiloan').innerText(), /REPAID\s*100%[\s\S]*no longer in the save: repaid/);
 });
 
-test('an unfinished checklist still shows the payback, with a note; a plan without kept figures says so', async t => {
+test('a cost centre\'s row is no payback; a plan kept before its figures were compares the investment only', async t => {
   const page = await board(t);
-  await openedPlan(page, {stationShifts: 0});
+  await openedPlan(page);
   await traded(page, {daily: Array(16).fill(500), state: 'togo', extra: {days: 300}});
-  await page.evaluate(() => { const b = D.businesses.find(x => x.key === osPlan().key); b.stationShifts = 0; b.marketingOn = []; drawOpenStore(); });
-  await page.locator('#osCtl [data-os-step="open"]').click();
-  const note = page.locator('#osBody .os-payback', {hasText: 'on the checklist until opening are done'});
-  assert.match(await note.innerText(), /^\d of 7 on the checklist until opening are done\. Until opening$/);
-  await note.locator('[data-os-step="opening"]').click();
-  await page.waitForFunction(() => osStep === 'opening');
-  await page.evaluate(() => { delete osPlan().snap; osGo('open'); });
-  assert.match(await page.locator('#osBody').innerText(), /The plan's own figures were not kept before the store opened/);
+  await goOpen(page);
+  await page.evaluate(() => { delete osPlan().snap; drawOpenStore(); });
+  assert.match(await page.locator('#osBody').innerText(), /This plan was made before its figures were kept, so the plan column has the investment only\./);
+  assert.deepEqual((await pvsa(page)).map(r => r[0].split(' ')[0]), ['Furniture', 'Installation', 'Deposit', 'Investment']);
+  await page.evaluate(site => { D.payback.sites[site] = {costCentre: true, cost: {firm: 1, self: 1}, exact: true, opened: 30, profit: -5}; drawOpenStore(); }, SITE);
+  assert.match(await page.locator('#osBody').innerText(), /The save holds no payback for 9 Broadway Street yet\./);
+});
+
+test('a real _payback() row from a payload snapshot draws in step 6', async t => {
+  const page = await board(t);
+  await openedPlan(page, {opened: 3});
+  const real = JSON.parse(require('node:fs').readFileSync(path.join(ROOT, 'tests/fixtures/payload_snapshot/data_day40.json'), 'utf8')).payback.sites['ba:street_broadwaystreet#19'];
+  assert.ok(real.days && real.days.length, 'the snapshot carries the days');
+  await page.evaluate(({site, real}) => { D.payback.sites[site] = real; osPlan().opened = null; drawOpenStore(); }, {site: SITE, real});
+  await goOpen(page);
+  const k = await tiles(page);
+  assert.match(k[0], new RegExp(`INVESTED \\$${Math.round(real.cost.firm).toLocaleString('en-US')}`));
+  assert.match(k[1], new RegExp(`PROFIT SO FAR \\$${Math.round(real.profit).toLocaleString('en-US')}`));
+  assert.match(k[3], new RegExp(`${real.firm.days.toLocaleString('en-US')} days to go`));
+  assert.equal(await page.locator('#osBody svg.os-chart .os-dbar').count(), Math.min(real.days.length, 9999));
 });
