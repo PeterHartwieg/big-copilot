@@ -177,9 +177,13 @@ test('a table of codes keyed by game key keeps its codes, whatever the language'
   const table = Object.assign({}, FIX.de, {'ba:jobdemand_fulltime': 'Vollzeit'});
   const {context, run} = seam({table});
   context.__raw = {names: Object.assign({}, FIX.payload.names, {'ba:jobdemand_fulltime': 'Full-time'}),
-    hiring: {demandKinds: {'ba:jobdemand_fulltime': 'schedule'}}, skillNames: {'ba:jobdemand_fulltime': 'Full-time'}};
+    hiring: {demandKinds: {'ba:jobdemand_fulltime': 'schedule'}, company: {'ba:jobdemand_fulltime': 'plan'}},
+    skillNames: {'ba:jobdemand_fulltime': 'Full-time'},
+    grid: [{skill: 'ba:jobdemand_fulltime', role: 'ba:jobdemand_fulltime|ba:itemname_x'}]};
   run('takeData(__raw)');
   assert.equal(context.D.hiring.demandKinds['ba:jobdemand_fulltime'], 'schedule');
+  assert.equal(context.D.hiring.company['ba:jobdemand_fulltime'], 'plan');
+  assert.equal(context.D.grid[0].role, 'ba:jobdemand_fulltime|ba:itemname_x');
   // A table of names beside it is still swapped.
   assert.equal(context.D.skillNames['ba:jobdemand_fulltime'], 'Vollzeit');
 });

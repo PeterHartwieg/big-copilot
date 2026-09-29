@@ -18188,8 +18188,10 @@ const gnSwap = (T, EN, key, english, loose) =>
 const GN_PAIRS = [["slug", ["item", "type", "demand"], ["name"]], ["typeSlug", ["type"], ["sub"]],
   ["skill", ["label", "role"], []], ["demand", ["label"], []], ["hood", [], ["where"]],
   ["workstationKey", ["workstation"], []]];
-/* Tables keyed by game key whose values are codes, never names. */
-const GN_CODE_TABLES = new Set(["demandKinds"]);
+/* Tables keyed by game key whose values are codes, never names:
+   hiring.demandKinds (a demand's kind) and hiring.company ("plan" where an HR
+   plan offers the cover), both read by the Staff page. */
+const GN_CODE_TABLES = new Set(["demandKinds", "company"]);
 /* Lists of names with their keys in a list beside them, index for index. */
 const GN_LISTS = [["items", "slugs"], ["fees", "feeSlugs"], ["lines", "lineSlugs"], ["uniformGaps", "uniformGapSkills"],
   ["missing", "missingSlugs"], ["waitingOn", "waitingOnSlugs"]];
@@ -18218,7 +18220,9 @@ function gnWalk(v, T, EN, at){
   for(const [k, loose, strict] of GN_PAIRS){
     const key = typeof v[k] === "string" && /^ba:/.test(v[k]) ? v[k] : null;
     if(!key) continue;
-    loose.forEach(f => { const s = gnSwap(T, EN, key, v[f], true); if(s) o[f] = s; });
+    /* A split role ("skill|station") is a key the board reads, not a name. */
+    loose.forEach(f => { if(typeof v[f] === "string" && v[f].indexOf("|") >= 0) return;
+      const s = gnSwap(T, EN, key, v[f], true); if(s) o[f] = s; });
     strict.forEach(f => { const s = gnSwap(T, EN, key, v[f]); if(s) o[f] = s; });
   }
   if(/^ba:/.test(at) && typeof v.slug !== "string" && typeof v.typeSlug !== "string")
