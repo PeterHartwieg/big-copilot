@@ -18188,6 +18188,8 @@ const gnSwap = (T, EN, key, english, loose) =>
 const GN_PAIRS = [["slug", ["item", "type", "demand"], ["name"]], ["typeSlug", ["type"], ["sub"]],
   ["skill", ["label", "role"], []], ["demand", ["label"], []], ["hood", [], ["where"]],
   ["workstationKey", ["workstation"], []]];
+/* Tables keyed by game key whose values are codes, never names. */
+const GN_CODE_TABLES = new Set(["demandKinds"]);
 /* Lists of names with their keys in a list beside them, index for index. */
 const GN_LISTS = [["items", "slugs"], ["fees", "feeSlugs"], ["lines", "lineSlugs"], ["uniformGaps", "uniformGapSkills"],
   ["missing", "missingSlugs"], ["waitingOn", "waitingOnSlugs"]];
@@ -18224,8 +18226,10 @@ function gnWalk(v, T, EN, at){
   for(const [names, keys] of GN_LISTS)
     if(Array.isArray(v[names]) && Array.isArray(v[keys]))
       o[names] = v[names].map((s, i) => gnSwap(T, EN, v[keys][i], s) || o[names][i]);
-  /* A table of names by key (names, skillNames, plan.items). */
-  for(const k of Object.keys(v))
+  /* A table of names by key (names, skillNames, plan.items). A table keyed
+     the same way whose values are codes the board reads, not names
+     (hiring.demandKinds: a demand's kind), is left as Python wrote it. */
+  if(!GN_CODE_TABLES.has(at)) for(const k of Object.keys(v))
     if(k.startsWith("ba:")){ const s = gnSwap(T, EN, k, v[k], true); if(s) o[k] = s; }
   return o;
 }

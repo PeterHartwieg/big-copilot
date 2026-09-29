@@ -171,6 +171,19 @@ test('a name two keys share stays English where it comes without its key', () =>
   assert.deepEqual(context.D.rows.map(r => r.item), ['Beutel mit Salat', 'Beutel Salat']);
 });
 
+test('a table of codes keyed by game key keeps its codes, whatever the language', () => {
+  // hiring.demandKinds maps a demand to its kind ("schedule"); the Staff page's
+  // demand filter reads it, so a name table must never swap a kind for a name.
+  const table = Object.assign({}, FIX.de, {'ba:jobdemand_fulltime': 'Vollzeit'});
+  const {context, run} = seam({table});
+  context.__raw = {names: Object.assign({}, FIX.payload.names, {'ba:jobdemand_fulltime': 'Full-time'}),
+    hiring: {demandKinds: {'ba:jobdemand_fulltime': 'schedule'}}, skillNames: {'ba:jobdemand_fulltime': 'Full-time'}};
+  run('takeData(__raw)');
+  assert.equal(context.D.hiring.demandKinds['ba:jobdemand_fulltime'], 'schedule');
+  // A table of names beside it is still swapped.
+  assert.equal(context.D.skillNames['ba:jobdemand_fulltime'], 'Vollzeit');
+});
+
 test('a name written into a sentence as a token reads in the language on screen', () => {
   const {context, run} = seam({table: FIX.de});
   const said = '2 ⟦ba:skill_customerservice|Customer Service⟧ short at HART. Gifts';
