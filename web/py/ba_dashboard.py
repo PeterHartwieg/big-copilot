@@ -30183,6 +30183,11 @@ function hrBreaks(slug, w, row){
   const slots = w.slots || [];
   const hours = Number.isFinite(Number(w.hours)) && w.hours !== undefined ? Number(w.hours) : slots.reduce((n, s) => n + s.t - s.f, 0);
   const days = Number.isFinite(Number(w.days)) && w.days !== undefined ? Number(w.days) : new Set(slots.map(s => s.d)).size;
+  /* A plan week says which contract it suits (`band`, _hire_band() in
+     Python: "full" from 30 h, "part" from 10 h, "short" under): a part-timer
+     takes a part-time week only, a full-timer a full-time week only. */
+  if(w.band && slug === "ba:jobdemand_fulltime") return w.band !== "full" || hours > 50;
+  if(w.band && slug === "ba:jobdemand_parttime") return w.band !== "part";
   switch(slug){
     case "ba:jobdemand_fulltime": return hours < 30 || hours > 50;
     case "ba:jobdemand_parttime": return hours < 10 || hours > 30;
@@ -30354,7 +30359,9 @@ function hrModel(){
       if(used.has(c.id)){ role.at.set(c.id, {elsewhere: used.get(c.id)}); return; }
       if(ui.skip.has(c.id)) return;
       const barred = x => pt && !forced && hrAsksPt(c) && atShop(x);
-      const free = open.filter(x => !x.who && !barred(x));
+      /* A week too short for any contract (`band` "short") is no hire's
+         unless the player ticks one in by hand. */
+      const free = open.filter(x => !x.who && !barred(x) && (forced || x.w.band !== "short"));
       /* Their schedule demands are a hard filter (Peter, 28 September 2026):
          the first site in list order with a week they meet, at every site's
          open weeks of the role; there the one at a desk that meets their
@@ -31431,7 +31438,7 @@ function hrQuickPlan(sites, cands, used){
     && !(c.demands || []).some(d => ex.includes(d))).sort(hrRank(q.skill));
   /* The plan's weeks in this role here that nobody reassigned takes. */
   out.plan = !!(S.planned && S.row);
-  const open = out.plan ? S.weeks.filter(x => x.w.skill === q.skill && !x.who) : [];
+  const open = out.plan ? S.weeks.filter(x => x.w.skill === q.skill && !x.who && x.w.band !== "short") : [];
   /* Best match first. While the plan has weeks left here, a match takes one
      that meets their schedule demands, at a desk that meets their desk
      demands first; a match no week left fits is held back (Peter, 28
@@ -31780,7 +31787,8 @@ function hrReviewSites(req, phase, gone, status){
           : tt("co.hire.p.fromnone", "reassigned, unassigned before"), mv: true},
         hrRole(x.skill), x.p.level !== undefined ? `${Math.round(x.p.level)}%` : "–", x.p.wage !== undefined ? hrWage(x.p.wage) : "–",
         weekly ? hrBenchSlots(S, x) : [], weekly ? `${hrSlotHours(hrBenchSlots(S, x))} h` : "–")).join("")}${
-      gaps.map(x => person(tt("co.hire.p.nobody", "Nobody"), {t: tt("co.hire.p.nomatch", "no {role} matches", {role: hrRole(x.w.skill)})}, hrRole(x.w.skill), "–", "–",
+      gaps.map(x => person(tt("co.hire.p.nobody", "Nobody"), {t: x.w.band === "short" ? tt("co.hire.p.short", "too few hours for a hire")
+          : tt("co.hire.p.nomatch", "no {role} matches", {role: hrRole(x.w.skill)})}, hrRole(x.w.skill), "–", "–",
         x.w.slots, `${x.w.hours || 0} h`, "gap")).join("")}</div>` : "";
     const counts = !people && !missed ? (weekly ? tt("co.hire.c.week", "week only") : "–")
       : `${phase === "done" ? tt("co.hire.c.hired", "{n} hired", {n: hired.length + got.length}) : tt("co.hire.c.new", "{n} new", {n: hired.length + got.length})}${
@@ -31960,7 +31968,13 @@ function hrReview(o = {}, hooks = {}){
       /* The wages a day of those hired onto a week: nobody is paid for hours they are not given. */
       const bill = [...req.touched.values()].filter(at => at.week).reduce((n, at) => n + at.hires.filter(h => h.w && !gone.has(h.c.id))
         .reduce((k, h) => k + Number(h.c.wage || 0) * Number(h.w.hours || 0) / 7, 0), 0);
-      const gaps = [...req.gaps].flatMap(([key, list]) => list.map(x => ({S: m.sites.find(y => y.key === key), x})));
+      const allGaps = [...req.gaps].flatMap(([key, list]) => list.map(x => ({S: m.sites.find(y => y.key === key), x})));
+      /* A week too short for any contract is hours left open, said apart. */
+      const gaps = allGaps.filter(g => g.x.w.band !== "short");
+      const shortGaps = [...new Map(allGaps.filter(g => g.x.w.band === "short").map(({S, x}) => [`${S.key}|${x.w.skill}`, {S, skill: x.w.skill,
+        h: allGaps.filter(g => g.S === S && g.x.w.skill === x.w.skill && g.x.w.band === "short").reduce((n, g) => n + Number(g.x.w.hours || 0), 0)}])).values()];
+      const shortCall = shortGaps.length ? gwCall("", "clock", shortGaps.map(g => tt("co.hire.gap.short", "<b>{site}</b>: {h} h a week of {role} too few for a hire, left open.",
+        {site: spEsc(g.S.b ? shortName(g.S.b) : tt("co.hire.asite.cap", "A site")), h: g.h, role: hrRole(g.skill)})).join(" ")) : "";
       const gapText = [...new Map(gaps.map(({S, x}) => [`${S.key}|${x.w.skill}`, {S, skill: x.w.skill,
         n: gaps.filter(g => g.S === S && g.x.w.skill === x.w.skill).length,
         h: gaps.filter(g => g.S === S && g.x.w.skill === x.w.skill).reduce((n, g) => n + Number(g.x.w.hours || 0), 0)}])).values()]
@@ -31991,7 +32005,7 @@ function hrReview(o = {}, hooks = {}){
             ...(mode === "hire" ? [] : [[tt("co.hire.tile.weeks", "Weeks"), null, hrNum(weeks)]]),
             [tt("co.hire.tile.wages", "Added wages"), null, `+${fmt(bill)}<small class="hr-u">${tt("co.hire.perday", "/day")}</small>`]])}
           ${mode === "hire" ? "" : `<p class="gw-lead">${tt("co.hire.starts", "Everyone starts on their hours from the next hour in the game.")}</p>`}${sites}${goneCall}${emptyCall}${more}${first}
-          ${gapText ? gwCall("warn", "alert", `${gapText}. ${tt("co.hire.gap.stays", "It stays on the Staff page until someone matches.")}`) : ""}
+          ${gapText ? gwCall("warn", "alert", `${gapText}. ${tt("co.hire.gap.stays", "It stays on the Staff page until someone matches.")}`) : ""}${shortCall}
           ${hrLast.one ? "" : `<p class="hr-lock">${gwSvg("lock")}<span>${tt("co.hire.noundo.done", "No undo with this mod. To let someone go, fire them in MyEmployees in the game.")}</span></p>`}`;
       }
       const blocked = answer.blocked === "myemployees" ? `<div class="gw-no"><span class="ic">${hrSvg("phone")}</span><div class="rule">${tt("co.hire.myemployees", "MyEmployees is open in the game.")}</div><div class="fix">${
@@ -32087,7 +32101,7 @@ function hrReview(o = {}, hooks = {}){
           [tt("co.hire.tile.wages", "Added wages"), null, `+${fmt(bill)}<small class="hr-u">${tt("co.hire.perday", "/day")}</small>`]])}
         <p class="gw-lead">${tt("co.hire.lead", "Who goes where. Open a site to see each person and the days they work.")}</p>
         ${stranded}${sites}${goneCall}${zero}${fewerCall}${emptyCall}${displacedCall}${left.length ? `<div class="gw-box">${gwCall("", "exit", tt("co.hire.left", "<b>No hours after this</b> for these people at the sites whose week is replaced. The game takes them off their work there and adds a to-do."))}<div class="gw-pills">${left.join("")}</div></div>` : ""}
-        ${gapText ? gwCall("warn", "alert", `${gapText}.`) : ""}${chain}
+        ${gapText ? gwCall("warn", "alert", `${gapText}.`) : ""}${shortCall}${chain}
         ${gwCheckLines(checked)}${officeLeft}
         ${warned.length ? gwCall("info", "info", tt("co.hire.warned", {one: "{n} person asks for something their site does not meet (marked orange in Change picks). They are hired anyway.",
           other: "{n} people ask for something their site does not meet (marked orange in Change picks). They are hired anyway."}, {n: warned.length})) : ""}`;

@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "ea963a774d";</script>
-<link rel="stylesheet" href="community.css?v=ea963a774d">
+<script>window.LEDGER_BUILD = "9ad0b6b130";</script>
+<link rel="stylesheet" href="community.css?v=9ad0b6b130">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=ea963a774d">
+<link rel="stylesheet" href="fonts/fonts.css?v=9ad0b6b130">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -5569,7 +5569,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"ea963a774d","latest":{"pr":185,"date":"2026-09-29","title":"Staff a site in one step, and undo it in one","summary":"A shop's or an office's Staffing has Staff this site, and Staffing › Staff needs has Staff all sites. One review hires the best candidates, moves spare staff across, and writes the new week at every site it reaches, including sites that only need new hours; each site then says whether its week was written. Pick Hire and schedule, Hire only (assigned with no hours, as at a headquarters or a warehouse) or Schedule only; Quick hire works the same way. A shop you put on full cover 24/7 is staffed around the clock. With Big Copilot Link 0.4.0 it all goes to the game in one step, and one Undo takes back every hire, move and week, until the game's next day. Older versions of the mod still hire, then write the other weeks one by one, without undo."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"9ad0b6b130","latest":{"pr":185,"date":"2026-09-29","title":"Staff a site in one step, and undo it in one","summary":"A shop's or an office's Staffing has Staff this site, and Staffing › Staff needs has Staff all sites. One review hires the best candidates, moves spare staff across, and writes the new week at every site it reaches, including sites that only need new hours; each site then says whether its week was written. Pick Hire and schedule, Hire only (assigned with no hours, as at a headquarters or a warehouse) or Schedule only; Quick hire works the same way. A shop you put on full cover 24/7 is staffed around the clock. With Big Copilot Link 0.4.0 it all goes to the game in one step, and one Undo takes back every hire, move and week, until the game's next day. Older versions of the mod still hire, then write the other weeks one by one, without undo."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -5657,8 +5657,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=ea963a774d"></script>
-<script src="community.js?v=ea963a774d"></script>
+<script src="app.js?v=9ad0b6b130"></script>
+<script src="community.js?v=9ad0b6b130"></script>
 
 <script>
 
@@ -16530,6 +16530,11 @@ function hrBreaks(slug, w, row){
   const slots = w.slots || [];
   const hours = Number.isFinite(Number(w.hours)) && w.hours !== undefined ? Number(w.hours) : slots.reduce((n, s) => n + s.t - s.f, 0);
   const days = Number.isFinite(Number(w.days)) && w.days !== undefined ? Number(w.days) : new Set(slots.map(s => s.d)).size;
+  /* A plan week says which contract it suits (`band`, _hire_band() in
+     Python: "full" from 30 h, "part" from 10 h, "short" under): a part-timer
+     takes a part-time week only, a full-timer a full-time week only. */
+  if(w.band && slug === "ba:jobdemand_fulltime") return w.band !== "full" || hours > 50;
+  if(w.band && slug === "ba:jobdemand_parttime") return w.band !== "part";
   switch(slug){
     case "ba:jobdemand_fulltime": return hours < 30 || hours > 50;
     case "ba:jobdemand_parttime": return hours < 10 || hours > 30;
@@ -16701,7 +16706,9 @@ function hrModel(){
       if(used.has(c.id)){ role.at.set(c.id, {elsewhere: used.get(c.id)}); return; }
       if(ui.skip.has(c.id)) return;
       const barred = x => pt && !forced && hrAsksPt(c) && atShop(x);
-      const free = open.filter(x => !x.who && !barred(x));
+      /* A week too short for any contract (`band` "short") is no hire's
+         unless the player ticks one in by hand. */
+      const free = open.filter(x => !x.who && !barred(x) && (forced || x.w.band !== "short"));
       /* Their schedule demands are a hard filter (Peter, 28 September 2026):
          the first site in list order with a week they meet, at every site's
          open weeks of the role; there the one at a desk that meets their
@@ -17778,7 +17785,7 @@ function hrQuickPlan(sites, cands, used){
     && !(c.demands || []).some(d => ex.includes(d))).sort(hrRank(q.skill));
   /* The plan's weeks in this role here that nobody reassigned takes. */
   out.plan = !!(S.planned && S.row);
-  const open = out.plan ? S.weeks.filter(x => x.w.skill === q.skill && !x.who) : [];
+  const open = out.plan ? S.weeks.filter(x => x.w.skill === q.skill && !x.who && x.w.band !== "short") : [];
   /* Best match first. While the plan has weeks left here, a match takes one
      that meets their schedule demands, at a desk that meets their desk
      demands first; a match no week left fits is held back (Peter, 28
@@ -18127,7 +18134,8 @@ function hrReviewSites(req, phase, gone, status){
           : tt("co.hire.p.fromnone", "reassigned, unassigned before"), mv: true},
         hrRole(x.skill), x.p.level !== undefined ? `${Math.round(x.p.level)}%` : "–", x.p.wage !== undefined ? hrWage(x.p.wage) : "–",
         weekly ? hrBenchSlots(S, x) : [], weekly ? `${hrSlotHours(hrBenchSlots(S, x))} h` : "–")).join("")}${
-      gaps.map(x => person(tt("co.hire.p.nobody", "Nobody"), {t: tt("co.hire.p.nomatch", "no {role} matches", {role: hrRole(x.w.skill)})}, hrRole(x.w.skill), "–", "–",
+      gaps.map(x => person(tt("co.hire.p.nobody", "Nobody"), {t: x.w.band === "short" ? tt("co.hire.p.short", "too few hours for a hire")
+          : tt("co.hire.p.nomatch", "no {role} matches", {role: hrRole(x.w.skill)})}, hrRole(x.w.skill), "–", "–",
         x.w.slots, `${x.w.hours || 0} h`, "gap")).join("")}</div>` : "";
     const counts = !people && !missed ? (weekly ? tt("co.hire.c.week", "week only") : "–")
       : `${phase === "done" ? tt("co.hire.c.hired", "{n} hired", {n: hired.length + got.length}) : tt("co.hire.c.new", "{n} new", {n: hired.length + got.length})}${
@@ -18307,7 +18315,13 @@ function hrReview(o = {}, hooks = {}){
       /* The wages a day of those hired onto a week: nobody is paid for hours they are not given. */
       const bill = [...req.touched.values()].filter(at => at.week).reduce((n, at) => n + at.hires.filter(h => h.w && !gone.has(h.c.id))
         .reduce((k, h) => k + Number(h.c.wage || 0) * Number(h.w.hours || 0) / 7, 0), 0);
-      const gaps = [...req.gaps].flatMap(([key, list]) => list.map(x => ({S: m.sites.find(y => y.key === key), x})));
+      const allGaps = [...req.gaps].flatMap(([key, list]) => list.map(x => ({S: m.sites.find(y => y.key === key), x})));
+      /* A week too short for any contract is hours left open, said apart. */
+      const gaps = allGaps.filter(g => g.x.w.band !== "short");
+      const shortGaps = [...new Map(allGaps.filter(g => g.x.w.band === "short").map(({S, x}) => [`${S.key}|${x.w.skill}`, {S, skill: x.w.skill,
+        h: allGaps.filter(g => g.S === S && g.x.w.skill === x.w.skill && g.x.w.band === "short").reduce((n, g) => n + Number(g.x.w.hours || 0), 0)}])).values()];
+      const shortCall = shortGaps.length ? gwCall("", "clock", shortGaps.map(g => tt("co.hire.gap.short", "<b>{site}</b>: {h} h a week of {role} too few for a hire, left open.",
+        {site: spEsc(g.S.b ? shortName(g.S.b) : tt("co.hire.asite.cap", "A site")), h: g.h, role: hrRole(g.skill)})).join(" ")) : "";
       const gapText = [...new Map(gaps.map(({S, x}) => [`${S.key}|${x.w.skill}`, {S, skill: x.w.skill,
         n: gaps.filter(g => g.S === S && g.x.w.skill === x.w.skill).length,
         h: gaps.filter(g => g.S === S && g.x.w.skill === x.w.skill).reduce((n, g) => n + Number(g.x.w.hours || 0), 0)}])).values()]
@@ -18338,7 +18352,7 @@ function hrReview(o = {}, hooks = {}){
             ...(mode === "hire" ? [] : [[tt("co.hire.tile.weeks", "Weeks"), null, hrNum(weeks)]]),
             [tt("co.hire.tile.wages", "Added wages"), null, `+${fmt(bill)}<small class="hr-u">${tt("co.hire.perday", "/day")}</small>`]])}
           ${mode === "hire" ? "" : `<p class="gw-lead">${tt("co.hire.starts", "Everyone starts on their hours from the next hour in the game.")}</p>`}${sites}${goneCall}${emptyCall}${more}${first}
-          ${gapText ? gwCall("warn", "alert", `${gapText}. ${tt("co.hire.gap.stays", "It stays on the Staff page until someone matches.")}`) : ""}
+          ${gapText ? gwCall("warn", "alert", `${gapText}. ${tt("co.hire.gap.stays", "It stays on the Staff page until someone matches.")}`) : ""}${shortCall}
           ${hrLast.one ? "" : `<p class="hr-lock">${gwSvg("lock")}<span>${tt("co.hire.noundo.done", "No undo with this mod. To let someone go, fire them in MyEmployees in the game.")}</span></p>`}`;
       }
       const blocked = answer.blocked === "myemployees" ? `<div class="gw-no"><span class="ic">${hrSvg("phone")}</span><div class="rule">${tt("co.hire.myemployees", "MyEmployees is open in the game.")}</div><div class="fix">${
@@ -18434,7 +18448,7 @@ function hrReview(o = {}, hooks = {}){
           [tt("co.hire.tile.wages", "Added wages"), null, `+${fmt(bill)}<small class="hr-u">${tt("co.hire.perday", "/day")}</small>`]])}
         <p class="gw-lead">${tt("co.hire.lead", "Who goes where. Open a site to see each person and the days they work.")}</p>
         ${stranded}${sites}${goneCall}${zero}${fewerCall}${emptyCall}${displacedCall}${left.length ? `<div class="gw-box">${gwCall("", "exit", tt("co.hire.left", "<b>No hours after this</b> for these people at the sites whose week is replaced. The game takes them off their work there and adds a to-do."))}<div class="gw-pills">${left.join("")}</div></div>` : ""}
-        ${gapText ? gwCall("warn", "alert", `${gapText}.`) : ""}${chain}
+        ${gapText ? gwCall("warn", "alert", `${gapText}.`) : ""}${shortCall}${chain}
         ${gwCheckLines(checked)}${officeLeft}
         ${warned.length ? gwCall("info", "info", tt("co.hire.warned", {one: "{n} person asks for something their site does not meet (marked orange in Change picks). They are hired anyway.",
           other: "{n} people ask for something their site does not meet (marked orange in Change picks). They are hired anyway."}, {n: warned.length})) : ""}`;

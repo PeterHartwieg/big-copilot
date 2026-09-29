@@ -2864,3 +2864,38 @@ test('an unticked spare whose own week is free is told to tick it, even when ano
   await phase(page, 'ready');
   assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), /Sid Spare: tick their reassign to HART\. Bare to give them its week\./);
 });
+
+// --- PR #187's week bands, 29 September 2026 ------------------------------------------
+
+test('a part-timer takes a part-time week and a full-timer a full-time one, by the week\'s band', async (t) => {
+  // Gifts: a 30 h full-time week, then a 24 h part-time one. Bram (first by
+  // rank) asks for part-time, Ada for full-time. Sam's reassign is unticked.
+  const d = JSON.parse(payload);
+  d.candidates.find(c => c.id === 'c2').demands = ['ba:jobdemand_parttime'];
+  d.candidates.find(c => c.id === 'c1').demands = ['ba:jobdemand_fulltime'];
+  d.hiring.demandKinds['ba:jobdemand_parttime'] = 'schedule';
+  d.hiring.sites.find(s => s.key === G).plans.demand.hireWeeks = [
+    {skill: CS, hours: 30, days: 3, band: 'full', slots: [slot(2, 3, 8, 20, 'REG-G'), slot(3, 4, 8, 20, 'REG-G'), slot(4, 5, 8, 14, 'REG-G')]},
+    {skill: CS, hours: 24, days: 2, band: 'part', slots: [slot(5, 6, 8, 20, 'REG-G'), slot(6, 0, 8, 20, 'REG-G')]}];
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
+  // Part-time askers are left out of shop roles by default: let them in.
+  await page.evaluate(() => { hrFilters().company.ex = []; });
+  assert.deepEqual((await model(page)).weeks[0], [G, 'demand', ['hire:c1', 'hire:c2']]);
+});
+
+test('a week too short for any contract is never given to a hire, and the review says the hours stay open', async (t) => {
+  const d = JSON.parse(payload);
+  d.hiring.sites.find(s => s.key === G).plans.demand.hireWeeks[0] =
+    {skill: CS, hours: 6, days: 1, band: 'short', slots: [slot(2, 3, 8, 14, 'REG-G')]};
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
+  const weeks = (await model(page)).weeks[0];
+  assert.equal(weeks[2][0], null, 'the 6 h week stays open');
+  await answering(page, []);
+  await page.evaluate(k => hrReview({scope: 'site', site: k}), G);
+  await phase(page, 'ready');
+  const text = await page.locator('dialog.gw-dlg .gw-body').textContent();
+  assert.match(text, /HART\. Gifts: 6 h a week of Customer Service too few for a hire, left open\./);
+  assert.doesNotMatch(text, /keeps 1 Customer Service place open/);
+});
