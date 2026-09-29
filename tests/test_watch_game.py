@@ -264,6 +264,8 @@ class GameLinkAgainstMock(unittest.TestCase):
 
     def test_wait_for_save_falls_through_on_a_throttle(self):
         """Inside the window the mod refuses; the bytes it serves are read as they are."""
+        # Pinned to setUp's read, so a slow setUp cannot let the window lift.
+        self.mock.clock = lambda: self.mock.last_refresh
         self.assertEqual(self.game.refresh()[0], 429, "setUp's read left the mock inside its window")
         path = self.game.wait_for_save(seconds=5)
         self.assertIsNotNone(path)

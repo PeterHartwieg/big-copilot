@@ -381,9 +381,10 @@ namespace BigCopilotLink
                 {
                     // The main thread has not taken it yet: mid-load, or a long frame.
                     // The request stays queued and runs when the thread is free; the
-                    // throttle folds it into any refresh that ran meanwhile. Clients
-                    // abort a call after five seconds, so the answer has to come now:
-                    // accepted, and the stamp to watch /health for.
+                    // throttle folds it into a refresh still in flight or started
+                    // within the request's window. Clients abort a call after five
+                    // seconds, so the answer has to come now: accepted, and the
+                    // stamp to watch /health for.
                     result = RefreshResult.Started();
                 }
             }

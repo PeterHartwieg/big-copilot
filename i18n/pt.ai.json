@@ -1,4 +1,6 @@
 {
+ "app.link.askagain": "claude-opus-5-5",
+ "app.link.recent": "claude-opus-5-5",
  "app.menu.src.file": "gpt-6-sol",
  "app.menu.src.folder": "gpt-6-sol",
  "app.menu.src.link": "gpt-6-sol",

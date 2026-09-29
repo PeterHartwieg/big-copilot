@@ -79,7 +79,8 @@ from ba_dashboard import ASSIGN_SKILLS, STATION_SKILLS, _uniform_gaps, money, sc
 
 SCHEMA_VERSION = 1
 DEFAULT_PORT = 8322
-REFRESH_WINDOW = 15  # seconds between refreshes, as the mod throttles
+REFRESH_WINDOW = 15  # the mod's window for its automatic refreshes; --throttle's retryAfter
+REQUEST_WINDOW = 3  # a POST /refresh waits this long since the last refresh, as the mod from 0.4.0
 ALLOWED_ORIGINS = ("https://bigcopilot.com", "https://www.bigcopilot.com")
 # As the mod matches them (LinkHttpServer.IsAllowedOrigin): in any case.
 LOCAL_ORIGIN = re.compile(r"^http://(?:127\.0\.0\.1|localhost)(?::[0-9]{1,5})?$", re.IGNORECASE)
@@ -205,6 +206,7 @@ class Link:
         self.stamp = ""
         self.refreshed_at = None
         self.last_refresh = 0.0
+        self.clock = time.monotonic  # what refresh() measures its window by; tests pin it
         self.busy = False
         self._mtime = None
         self._last_seconds = 0
@@ -245,11 +247,14 @@ class Link:
     def refresh(self, force: bool = False) -> tuple[int, dict]:
         """Re-read the file. Returns the status and body /refresh would answer."""
         with self.lock:
-            now = time.monotonic()
+            now = self.clock()
             if self.refuse and not force:
                 return 409, {"error": "cannot_save", "reason": self.refuse}
-            if not force and (self.busy or self.throttle or now - self.last_refresh < REFRESH_WINDOW):
-                wait = REFRESH_WINDOW if self.throttle else int(REFRESH_WINDOW - (now - self.last_refresh)) + 1
+            # The mock's own refreshes (the file changing, an apply) are forced,
+            # so only a POST /refresh meets a window, and it is the request's.
+            since = now - self.last_refresh
+            if not force and (self.busy or self.throttle or since < REQUEST_WINDOW):
+                wait = REFRESH_WINDOW if self.throttle else max(1, math.ceil(REQUEST_WINDOW - since))
                 return 429, {"error": "throttled", "retryAfter": wait}
             before = self.stamp
             self.busy = True
