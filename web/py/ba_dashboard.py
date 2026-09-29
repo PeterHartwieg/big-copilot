@@ -727,7 +727,7 @@ AMENITY_DEMANDS = {
 # test_every_retail_type_was_checked_against_the_games_own_table pins the sixteen
 # that were read off the bundle. That test only catches the list changing; it
 # cannot tell whether a later game build changed a type's demands, which is what
-# the bundle re-read in the game-update checklist is for.
+# the bundle re-read in docs/game-update.md ("The game tables") is for.
 DEMANDS_NOT_MADE = {
     "ba:businesstype_hairdresser": {"ba:customerdemand_employeeuniforms"},
     "ba:businesstype_florist": {"ba:customerdemand_music"},
@@ -742,9 +742,9 @@ UNIFORM_DEMAND = "ba:customerdemand_employeeuniforms"
 # suitableSkills list at build 3680, read from the defaultlocalgroup_assets_items
 # bundle. A station missing from the table asks for no uniform, so a game that
 # adds one goes quiet here rather than guessing at a role — which is why the
-# bundle is re-read as part of the game-update checklist. The row count is
-# pinned in tests/test_uniform_alerts.py, but that only catches this table being
-# edited, not the game growing a station it does not have.
+# bundle is re-read as part of docs/game-update.md ("The game tables"). The row
+# count is pinned in tests/test_uniform_alerts.py, but that only catches this
+# table being edited, not the game growing a station it does not have.
 OFFICE_SKILLS = (
     "ba:skill_lawyer",
     "ba:skill_purchasingagent",
@@ -3029,6 +3029,7 @@ def _goals(save: Save, names: Names, businesses: list) -> dict:
     }
 
 
+# --------------------------------------------------------------------- supply
 def _deepest_use(per_day, weekly, day, until, left_today, rounds=False):
     """The most a walk from now to the start of `until` has used at any point.
 
@@ -5440,6 +5441,7 @@ def _ceil_ten(value: float) -> int:
     return int(math.ceil(value / SUPPLY_ROUND_TO) * SUPPLY_ROUND_TO)
 
 
+# ------------------------------------------------------------------ factories
 def _parked(flow: dict, index: dict, machines: dict, slug: str) -> dict:
     """What each factory sent, day by day, to depots where nothing uses `slug`.
 
@@ -9824,8 +9826,8 @@ def _finish_site(site, full, names, people, opened=None) -> dict:
 # retail, office, cinema and theatre buildings need cleaning; warehouses (which
 # factories use) need nothing, and no building type requires a driver. A type
 # missing here accepts nobody, so the page proposes no hire there rather than
-# one the mod refuses (`no_skill`); the game-update checklist re-reads the
-# bundles.
+# one the mod refuses (`no_skill`). On a new build the bundles are re-read by
+# hand; docs/game-update.md ("The game tables") does not list this table yet.
 _SHOP_SKILLS = ("ba:skill_customerservice", "ba:skill_securityguard", CLEANING_SKILL)
 ASSIGN_SKILLS = {
     "ba:businesstype_bookstore": _SHOP_SKILLS,
@@ -10841,6 +10843,7 @@ def _idle_parts(parts: list, default):
     return said
 
 
+# --------------------------------------------------------------------- market
 GLOBAL_HOOD = "ba:neighborhood_global"
 HYPE_EVENT = 2  # "Citizens in {hood} are showing strong demand for {item}"
 SUPPLIER_EVENTS = {
@@ -11971,6 +11974,7 @@ def _hype_exposure(businesses: list, market: dict) -> list:
     return out
 
 
+# ----------------------------------------------------------------------- plan
 def _ingredient_prices(save: Save, names: Names, supply: dict, businesses: list) -> dict:
     """What a unit of each raw material actually cost, from the owner's books.
 
@@ -12251,9 +12255,13 @@ def _plan(
     }
 
 
+# --------------------------------------------------------------------- alerts
 # What the number in a finding's "worth" is counted in, for the page to print
 # under the amount. Only groups whose worth carries money get a unit; the rest
 # are left empty because their worth is always None.
+# Siblings: ALERT_LINKS, ALERT_EVIDENCE, ALERT_GROUPS, SS_KIND_SYN,
+# FINDING_ROUTES and the note() groups in _alerts() (Python). Checklist:
+# "A finding kind" under Registries in docs/architecture.md.
 ALERT_UNITS = {
     "notrading": msg("f.unit.rent", "/day rent"),
     "vacant": msg("f.unit.rent", "/day rent"),
@@ -12363,6 +12371,9 @@ def _finding(
     }
 
 
+# Siblings: ALERT_UNITS, ALERT_LINKS, ALERT_EVIDENCE, ALERT_GROUPS, SS_KIND_SYN
+# and FINDING_ROUTES, for the note() groups below. Checklist: "A finding kind"
+# under Registries in docs/architecture.md.
 def _alerts(
     businesses: list,
     supply: dict,
@@ -20385,7 +20396,10 @@ function drawKpiLine(){
 /* Where each kind of finding is spelt out on the board: a Supply view (the
    one named, or with view "route" the view of the finding's route), or the
    site's own page. A finding is a headline; the link is the rest of the
-   story. */
+   story.
+   Siblings: ALERT_UNITS, ALERT_EVIDENCE, ALERT_GROUPS, SS_KIND_SYN and FINDING_ROUTES
+   and the note() groups in _alerts() (Python). Checklist: "A finding kind"
+   under Registries in docs/architecture.md. */
 const ALERT_LINKS = {
   /* A supply finding lands on its Supply view (the route's), on its row, lit:
      an import on Imports (a depot's and a factory's own contract alike), a
@@ -20414,7 +20428,9 @@ const ALERT_LINKS = {
 };
 /* Which page, and which view on it, each section lives on. A finding's link
    opens that page first, then scrolls; the reader never lands on a hidden
-   section. */
+   section.
+   Siblings: SUBS, PAGE_DRAWS, SS_VIEWS and ROUTES.
+   Checklist: "A view or a page" under Registries in docs/architecture.md. */
 const SEC_PAGE = {
   alertSection:["today"], secMoves:["today"],
   /* secRhythm was Weekly rhythm, folded into Daily result's By weekday: an
@@ -20597,7 +20613,10 @@ const ALERT_LANDS_ON_ROW = new Set(["wholesale", "topup", "outruns", "unplanned"
    the shop and office panel's answer; SP_EVIDENCE_KIND overrides it where a
    depot or a factory keeps the same finding somewhere else, and spEvidence()
    drops any block the open kind does not draw, so a row never lights nothing
-   and scrolls nowhere. */
+   and scrolls nowhere.
+   Siblings: ALERT_UNITS, ALERT_LINKS, ALERT_GROUPS, SS_KIND_SYN and FINDING_ROUTES
+   and the note() groups in _alerts() (Python). Checklist: "A finding kind"
+   under Registries in docs/architecture.md. */
 const ALERT_EVIDENCE = {
   notrading: {block: "tiles"},
   loss: {block: "tiles"},
@@ -20865,7 +20884,10 @@ const kindOff = a => alertGroupPrefs[a.group] === false;
    is the finding's final home in the redesign (docs/ui-structure-proposal.md,
    section 7); where that home is still an existing view, ALERT_LINKS above is
    the landing inside it, and docs/ui-route-migration.md names each one. `pick`
-   decides between two homes by the finding's own site or sentence. */
+   decides between two homes by the finding's own site or sentence.
+   Siblings: ALERT_UNITS, ALERT_LINKS, ALERT_EVIDENCE, ALERT_GROUPS and SS_KIND_SYN
+   and the note() groups in _alerts() (Python). Checklist: "A finding kind"
+   under Registries in docs/architecture.md. */
 const FINDING_ROUTES = {
   notrading: {route: "businesses/results", act: "readiness"},
   vacant: {route: "businesses/results", act: "costs"},
@@ -31338,6 +31360,9 @@ const PAGE_ALIASES = {results: ["company", "results"]};
 /* The board opens on the Game guide with no save at all, so everything the
    pages do with numbers asks first. */
 const hasData = () => typeof D !== "undefined" && !!D;
+/* The views of each page.
+   Siblings: SEC_PAGE, PAGE_DRAWS, SS_VIEWS and ROUTES.
+   Checklist: "A view or a page" under Registries in docs/architecture.md. */
 const SUBS = {
   company: {host:"pageCompany", nav:"companyNav", key:"ba_dash_company", start:"results",
             items:[navView("results", () => tt("nav.view.results", "Results"), "secDaily"),
@@ -31412,6 +31437,9 @@ const REFS = [
   {id:"map", icon:"map", newFeature:"map", get label(){ return tt("nav.ref.map", "City map"); }},
   ...(typeof showWikiRoute === "function" ? [{id:"wiki", icon:"wiki", newFeature:"wiki", get label(){ return tt("nav.ref.wiki2", "Wiki"); }}] : []),
 ];
+/* Where each route is hosted.
+   Siblings: SUBS, SEC_PAGE, PAGE_DRAWS and SS_VIEWS.
+   Checklist: "A view or a page" under Registries in docs/architecture.md. */
 const ROUTES = {
   "overview": {host: ["today"]},
   /* The portfolio is one table on two views: Standards shows its
@@ -31665,7 +31693,9 @@ function routeCarry(id){
    chips, the city maps (the location-map dialog opens from any page), the
    search index -- is drawn by renderAll() itself on every refresh. Each row
    calls its function by name when it runs, so a test that swaps one out is
-   heard. */
+   heard.
+   Siblings: SUBS, SEC_PAGE, SS_VIEWS and ROUTES.
+   Checklist: "A view or a page" under Registries in docs/architecture.md. */
 const PAGE_DRAWS = [
   ["today", () => drawKpis()], ["today", () => drawAlerts()], ["today", () => drawTools()],
   ["company/results", () => drawChart()], ["company/results", () => drawFinance()], ["company/results company/standards", () => drawPortfolio()],
@@ -32495,7 +32525,10 @@ window.addEventListener("hashchange", () => {
 /* --- which kinds of finding make the list ------------------------------- */
 /* Every "group" a finding in the Needs attention panel can carry — see note()
    and _idle_notes() in the Python build. Kept in sync by hand since the two
-   sides only share the group key, not a label. */
+   sides only share the group key, not a label.
+   Siblings: ALERT_UNITS, ALERT_LINKS, ALERT_EVIDENCE, SS_KIND_SYN and FINDING_ROUTES
+   and the note() groups in _alerts() (Python). Checklist: "A finding kind"
+   under Registries in docs/architecture.md. */
 const ALERT_GROUPS = [
   /* Each label and note is read in the UI language every time. */
   {id:"notrading", get label(){ return tt("nav.kind.notrading.label", "Not trading yet"); }, get note(){ return tt("nav.kind.notrading.note", "Temporarily closed, or open but with no staff, no prices, no stock or no trading day"); }, on:true},
@@ -33563,7 +33596,9 @@ const ssWorst = rows => rows.map(r => SS_SEV[r.level] || "opp")
 /* The board's pages and views, and the words players use for them. Kept by
    hand, next to what they name: `need` is false for what works without a save,
    and `each`, where one view answers for several things, gives one entry per
-   thing (its own id, line and go) in place of the view's single one. */
+   thing (its own id, line and go) in place of the view's single one.
+   Siblings: SUBS, SEC_PAGE, PAGE_DRAWS and ROUTES.
+   Checklist: "A view or a page" under Registries in docs/architecture.md. */
 const SS_VIEWS = [
   {id: "alerts", get t(){ return tt("nav.search.alerts.title", "Needs attention"); },
    get p(){ return tt("nav.search.alerts.line", "Overview"); }, ic: "today", syn: ["problems", "alerts", "warnings", "findings", "to do", "today"],
@@ -33701,7 +33736,10 @@ const SS_VIEWS = [
    get p(){ return tt("nav.search.changelog.line", "More · what's new"); }, ic: "list", syn: ["new", "updates", "release notes"], need: false,
    go(){ const d = $("changelogDialog"); if(d && !d.open){ d.showModal(); featureDiscovery.visit("changelog"); d.scrollTop = 0; } }},
 ];
-/* The words players use for a kind of finding. */
+/* The words players use for a kind of finding.
+   Siblings: ALERT_UNITS, ALERT_LINKS, ALERT_EVIDENCE, ALERT_GROUPS and FINDING_ROUTES
+   and the note() groups in _alerts() (Python). Checklist: "A finding kind"
+   under Registries in docs/architecture.md. */
 const SS_KIND_SYN = {feed: ["fed", "inputs", "ingredients", "starved"], atcap: ["capacity", "full", "ceiling", "turned away"],
   idlestaff: ["overstaffed", "idle staff", "too many staff", "hire"], staff: ["unstaffed", "no staff", "staffing", "hire", "on shift"],
   jobdemand: ["demands", "unhappy staff", "quit", "hire"], companydemand: ["insurance", "health insurance", "hr manager"],

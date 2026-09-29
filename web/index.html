@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "2bf4d37042";</script>
-<link rel="stylesheet" href="community.css?v=2bf4d37042">
+<script>window.LEDGER_BUILD = "a6956aa515";</script>
+<link rel="stylesheet" href="community.css?v=a6956aa515">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=2bf4d37042">
+<link rel="stylesheet" href="fonts/fonts.css?v=a6956aa515">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -5549,7 +5549,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"2bf4d37042","latest":{"pr":169,"date":"2026-09-28","title":"A new layout: problems first, and a sidebar with five places to fix them","summary":"The board is rebuilt around what needs your attention. The Overview opens on Needs attention, each finding with a button that takes you to the exact setting, and a way back to where you were. A sidebar on the left holds five places, the open one with its views under it: the Overview, Businesses (results, cash and loans, prices against the market, a standards comparison with uniforms you can set from it, milestones), Supply (the changes to make, imports, deliveries, production, and a goods flow you can drag and zoom like the map), Staffing (schedules, staff needs, payroll) and Expansion (demand, finding a location, planning a factory), then the City map and the Wiki. The button at its foot folds the sidebar to a strip of icons, and the board remembers it. Every business page links to its schedule, deliveries and prices. Changes you mark, apply through the game link, or that a later save confirms now look different, and preferences and help sit under the one ··· menu at the sidebar's foot. Old links keep working."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"a6956aa515","latest":{"pr":169,"date":"2026-09-28","title":"A new layout: problems first, and a sidebar with five places to fix them","summary":"The board is rebuilt around what needs your attention. The Overview opens on Needs attention, each finding with a button that takes you to the exact setting, and a way back to where you were. A sidebar on the left holds five places, the open one with its views under it: the Overview, Businesses (results, cash and loans, prices against the market, a standards comparison with uniforms you can set from it, milestones), Supply (the changes to make, imports, deliveries, production, and a goods flow you can drag and zoom like the map), Staffing (schedules, staff needs, payroll) and Expansion (demand, finding a location, planning a factory), then the City map and the Wiki. The button at its foot folds the sidebar to a strip of icons, and the board remembers it. Every business page links to its schedule, deliveries and prices. Changes you mark, apply through the game link, or that a later save confirms now look different, and preferences and help sit under the one ··· menu at the sidebar's foot. Old links keep working."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -5637,8 +5637,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=2bf4d37042"></script>
-<script src="community.js?v=2bf4d37042"></script>
+<script src="app.js?v=a6956aa515"></script>
+<script src="community.js?v=a6956aa515"></script>
 
 <script>
 
@@ -8145,7 +8145,10 @@ function drawKpiLine(){
 /* Where each kind of finding is spelt out on the board: a Supply view (the
    one named, or with view "route" the view of the finding's route), or the
    site's own page. A finding is a headline; the link is the rest of the
-   story. */
+   story.
+   Siblings: ALERT_UNITS, ALERT_EVIDENCE, ALERT_GROUPS, SS_KIND_SYN and FINDING_ROUTES
+   and the note() groups in _alerts() (Python). Checklist: "A finding kind"
+   under Registries in docs/architecture.md. */
 const ALERT_LINKS = {
   /* A supply finding lands on its Supply view (the route's), on its row, lit:
      an import on Imports (a depot's and a factory's own contract alike), a
@@ -8174,7 +8177,9 @@ const ALERT_LINKS = {
 };
 /* Which page, and which view on it, each section lives on. A finding's link
    opens that page first, then scrolls; the reader never lands on a hidden
-   section. */
+   section.
+   Siblings: SUBS, PAGE_DRAWS, SS_VIEWS and ROUTES.
+   Checklist: "A view or a page" under Registries in docs/architecture.md. */
 const SEC_PAGE = {
   alertSection:["today"], secMoves:["today"],
   /* secRhythm was Weekly rhythm, folded into Daily result's By weekday: an
@@ -8357,7 +8362,10 @@ const ALERT_LANDS_ON_ROW = new Set(["wholesale", "topup", "outruns", "unplanned"
    the shop and office panel's answer; SP_EVIDENCE_KIND overrides it where a
    depot or a factory keeps the same finding somewhere else, and spEvidence()
    drops any block the open kind does not draw, so a row never lights nothing
-   and scrolls nowhere. */
+   and scrolls nowhere.
+   Siblings: ALERT_UNITS, ALERT_LINKS, ALERT_GROUPS, SS_KIND_SYN and FINDING_ROUTES
+   and the note() groups in _alerts() (Python). Checklist: "A finding kind"
+   under Registries in docs/architecture.md. */
 const ALERT_EVIDENCE = {
   notrading: {block: "tiles"},
   loss: {block: "tiles"},
@@ -8625,7 +8633,10 @@ const kindOff = a => alertGroupPrefs[a.group] === false;
    is the finding's final home in the redesign (docs/ui-structure-proposal.md,
    section 7); where that home is still an existing view, ALERT_LINKS above is
    the landing inside it, and docs/ui-route-migration.md names each one. `pick`
-   decides between two homes by the finding's own site or sentence. */
+   decides between two homes by the finding's own site or sentence.
+   Siblings: ALERT_UNITS, ALERT_LINKS, ALERT_EVIDENCE, ALERT_GROUPS and SS_KIND_SYN
+   and the note() groups in _alerts() (Python). Checklist: "A finding kind"
+   under Registries in docs/architecture.md. */
 const FINDING_ROUTES = {
   notrading: {route: "businesses/results", act: "readiness"},
   vacant: {route: "businesses/results", act: "costs"},
@@ -23429,6 +23440,9 @@ const PAGE_ALIASES = {results: ["company", "results"]};
 /* The board opens on the Game guide with no save at all, so everything the
    pages do with numbers asks first. */
 const hasData = () => typeof D !== "undefined" && !!D;
+/* The views of each page.
+   Siblings: SEC_PAGE, PAGE_DRAWS, SS_VIEWS and ROUTES.
+   Checklist: "A view or a page" under Registries in docs/architecture.md. */
 const SUBS = {
   company: {host:"pageCompany", nav:"companyNav", key:"ba_dash_company", start:"results",
             items:[navView("results", () => tt("nav.view.results", "Results"), "secDaily"),
@@ -23503,6 +23517,9 @@ const REFS = [
   {id:"map", icon:"map", newFeature:"map", get label(){ return tt("nav.ref.map", "City map"); }},
   ...(typeof showWikiRoute === "function" ? [{id:"wiki", icon:"wiki", newFeature:"wiki", get label(){ return tt("nav.ref.wiki2", "Wiki"); }}] : []),
 ];
+/* Where each route is hosted.
+   Siblings: SUBS, SEC_PAGE, PAGE_DRAWS and SS_VIEWS.
+   Checklist: "A view or a page" under Registries in docs/architecture.md. */
 const ROUTES = {
   "overview": {host: ["today"]},
   /* The portfolio is one table on two views: Standards shows its
@@ -23756,7 +23773,9 @@ function routeCarry(id){
    chips, the city maps (the location-map dialog opens from any page), the
    search index -- is drawn by renderAll() itself on every refresh. Each row
    calls its function by name when it runs, so a test that swaps one out is
-   heard. */
+   heard.
+   Siblings: SUBS, SEC_PAGE, SS_VIEWS and ROUTES.
+   Checklist: "A view or a page" under Registries in docs/architecture.md. */
 const PAGE_DRAWS = [
   ["today", () => drawKpis()], ["today", () => drawAlerts()], ["today", () => drawTools()],
   ["company/results", () => drawChart()], ["company/results", () => drawFinance()], ["company/results company/standards", () => drawPortfolio()],
@@ -24586,7 +24605,10 @@ window.addEventListener("hashchange", () => {
 /* --- which kinds of finding make the list ------------------------------- */
 /* Every "group" a finding in the Needs attention panel can carry — see note()
    and _idle_notes() in the Python build. Kept in sync by hand since the two
-   sides only share the group key, not a label. */
+   sides only share the group key, not a label.
+   Siblings: ALERT_UNITS, ALERT_LINKS, ALERT_EVIDENCE, SS_KIND_SYN and FINDING_ROUTES
+   and the note() groups in _alerts() (Python). Checklist: "A finding kind"
+   under Registries in docs/architecture.md. */
 const ALERT_GROUPS = [
   /* Each label and note is read in the UI language every time. */
   {id:"notrading", get label(){ return tt("nav.kind.notrading.label", "Not trading yet"); }, get note(){ return tt("nav.kind.notrading.note", "Temporarily closed, or open but with no staff, no prices, no stock or no trading day"); }, on:true},
@@ -25654,7 +25676,9 @@ const ssWorst = rows => rows.map(r => SS_SEV[r.level] || "opp")
 /* The board's pages and views, and the words players use for them. Kept by
    hand, next to what they name: `need` is false for what works without a save,
    and `each`, where one view answers for several things, gives one entry per
-   thing (its own id, line and go) in place of the view's single one. */
+   thing (its own id, line and go) in place of the view's single one.
+   Siblings: SUBS, SEC_PAGE, PAGE_DRAWS and ROUTES.
+   Checklist: "A view or a page" under Registries in docs/architecture.md. */
 const SS_VIEWS = [
   {id: "alerts", get t(){ return tt("nav.search.alerts.title", "Needs attention"); },
    get p(){ return tt("nav.search.alerts.line", "Overview"); }, ic: "today", syn: ["problems", "alerts", "warnings", "findings", "to do", "today"],
@@ -25792,7 +25816,10 @@ const SS_VIEWS = [
    get p(){ return tt("nav.search.changelog.line", "More · what's new"); }, ic: "list", syn: ["new", "updates", "release notes"], need: false,
    go(){ const d = $("changelogDialog"); if(d && !d.open){ d.showModal(); featureDiscovery.visit("changelog"); d.scrollTop = 0; } }},
 ];
-/* The words players use for a kind of finding. */
+/* The words players use for a kind of finding.
+   Siblings: ALERT_UNITS, ALERT_LINKS, ALERT_EVIDENCE, ALERT_GROUPS and FINDING_ROUTES
+   and the note() groups in _alerts() (Python). Checklist: "A finding kind"
+   under Registries in docs/architecture.md. */
 const SS_KIND_SYN = {feed: ["fed", "inputs", "ingredients", "starved"], atcap: ["capacity", "full", "ceiling", "turned away"],
   idlestaff: ["overstaffed", "idle staff", "too many staff", "hire"], staff: ["unstaffed", "no staff", "staffing", "hire", "on shift"],
   jobdemand: ["demands", "unhappy staff", "quit", "hire"], companydemand: ["insurance", "health insurance", "hr manager"],
