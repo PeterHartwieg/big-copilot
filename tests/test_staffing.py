@@ -522,6 +522,28 @@ def plan_inputs(specs, employees, status="retail", day=None):
     return save, LABELS, sites, grids, staff
 
 
+def place_station_hours(days, people=(), skill=SERVICE, current=None):
+    """_place_week() on one station of `skill` wanted the given runs: {weekday: [(from, to)]}.
+
+    The factory's way of handing the placer its hours (need `stations`), so
+    no need curve stands between a test and the week it asks for.
+    """
+    grid = {"roles": [{"skill": skill, "label": "x"}],
+            "stations": [{"id": "st", "skill": skill, "rate": 1, "name": "St"}]}
+    runs = {0: [set() for _ in range(7)]}
+    for wd, spans in days.items():
+        for start, end in spans:
+            runs[0][wd].update(range(start, end))
+    need = {skill: {"need": [[1 if h in runs[0][wd] else 0 for h in range(24)] for wd in range(7)],
+                    "basis": [["test"] * 24 for _ in range(7)], "stations": runs}}
+    people = list(people)
+    business = {"key": site_key((STREET, NUMBER)), "name": "Test"}
+    state = {p["id"]: ba_dashboard._fresh_state() for p in people}
+    return ba_dashboard._place_week(grid, need, ba_dashboard.ALL_DAY_OPEN, [], people,
+                                    {p["id"]: p for p in people}, business, [], state,
+                                    current=current)
+
+
 def plan(items, employees, hourly, day=None, **kw):
     """Run the whole chain one site's row comes out of, and return that row."""
     rows = plan_sites([dict(kw, items=items, hourly=hourly)], employees, day=day)
@@ -663,18 +685,23 @@ class TwelveHourDayTest(unittest.TestCase):
         self.assertFalse(ba_dashboard._can_work(self.person(), state, self.slot(10, 15)))
 
     def test_a_hire_with_eight_hours_takes_four_more_and_not_five(self):
-        hire = {"hours": 8.0, "busy": [set() for _ in range(7)], "slots": []}
-        hire["busy"][2].update(range(0, 8))
-        self.assertTrue(ba_dashboard._hire_fits(self.slot(10, 14), hire))
-        self.assertFalse(ba_dashboard._hire_fits(self.slot(10, 15), hire))
+        # A hire is a placeholder person the same rules are asked of.
+        hire = ba_dashboard._placeholder(SERVICE, 0)
+        state = ba_dashboard._fresh_state()
+        state["busy"][2].update(range(0, 8))
+        state["hours"] = 8.0
+        state["days"].add(2)
+        self.assertTrue(ba_dashboard._can_work(hire, state, self.slot(10, 14)))
+        self.assertFalse(ba_dashboard._can_work(hire, state, self.slot(10, 15)))
 
     def test_a_day_of_two_long_entries_needs_two_hires(self):
         # 0-7 and 12-19 are 14 hours with no overlap: one person under the old
         # 14-hour day, two under the 12-hour one.
-        weeks = ba_dashboard._hire_weeks([self.slot(0, 7), self.slot(12, 19)])
-        self.assertEqual(len(weeks), 2)
-        for week in weeks:
-            self.assertTrue(all(len(day) <= SHIFT_CAP for day in week["busy"]))
+        week = place_station_hours({2: [(0, 7), (12, 19)]})
+        self.assertEqual(week["headcount"][SERVICE]["hire"], 2)
+        self.assertEqual(sorted(w["hours"] for w in week["hireWeeks"][SERVICE]), [7, 7])
+        for hire in week["hireWeeks"][SERVICE]:
+            self.assertTrue(all(len(day) <= SHIFT_CAP for day in hire["busy"]))
 
 
 class RosterRulesTest(unittest.TestCase):
@@ -1586,7 +1613,9 @@ class HiringResidueTest(unittest.TestCase):
         The same fixture: the board says "hire 2", and the player's next
         question is *for when*. Those four twelve-hour lines are the answer,
         and they are in `shifts` with nobody on them so the page can draw them
-        where they fall rather than only counting them.
+        where they fall rather than only counting them. The two hires also
+        take a weekday line each off the staff's surplus, so each of them has
+        a full week rather than 24 hours (_place_hires()).
         """
         people = [
             employee(f"p{i}", [SERVICE], demands=("ba:jobdemand_freeweekends",))
@@ -1594,16 +1623,20 @@ class HiringResidueTest(unittest.TestCase):
         ]
         row = plan([(1, REGISTER)], people, {h: 1 for h in range(24)})
         open_rows = open_lines(row)
-        self.assertEqual({r["d"] for r in open_rows}, {6, 0})
         self.assertEqual(
-            sorted((r["d"], r["f"], r["t"]) for r in open_rows),
+            sorted((r["d"], r["f"], r["t"]) for r in open_rows if r["d"] in (6, 0)),
             [(0, 0, 12), (0, 12, 24), (6, 0, 12), (6, 12, 24)],
         )
+        self.assertEqual([r for r in staffed(row) if r["d"] in (6, 0)], [])
         # Still one line per station per hour, and still priced at nothing:
         # there is no wage to quote until somebody is hired at one.
         self.assertEqual({r["s"] for r in open_rows}, {0})
-        weekend = sum(hours(r) for r in open_rows)
+        weekend = sum(hours(r) for r in open_rows if r["d"] in (6, 0))
         self.assertEqual(weekend, 48)
+        weeks = row["_hire"]["hireWeeks"]
+        self.assertEqual(len(weeks), 2)
+        self.assertTrue(all(w["hours"] >= FULL_TIME[0] for w in weeks), weeks)
+        self.assertEqual(sum(w["hours"] for w in weeks), sum(hours(r) for r in open_rows))
         # `cost.weekly` still means what it always did: what the plan pays the
         # people it can price. The same week without the hiring lines costs
         # exactly the same, which is the whole claim.
@@ -1914,16 +1947,16 @@ class DayCountTest(unittest.TestCase):
     def test_a_day_nobody_can_spare_is_reported_rather_than_forced(self):
         """A site whose every week is already full has no day left to share.
 
-        One person assigned to a shop open twelve hours a day: they take four
-        days and stop at the fifty hours full time allows. The fifth day would
-        have to come out of somebody else's shift, and there is nobody else --
-        the rest of the week is hiring lines.
+        One person assigned to a shop open twelve hours a day, four days a
+        week: they take all four days, 48 hours. The fifth day would have to
+        come out of somebody else's shift, and there is nobody else.
         """
+        # Open four days: with a fifth, a hire would work it and share it.
         people = [
             employee("a_five", [SERVICE],
                      demands=("ba:jobdemand_fulltime", "ba:jobdemand_fivedaysweek"))
         ]
-        row = plan([(1, REGISTER)], people, FLAT, opens=((8, 20),))
+        row = plan([(1, REGISTER)], people, FLAT, opens=((8, 20),), open_days=(1, 2, 3, 4))
         short = {row["people"][r["p"]]["name"]: (r["days"], r["want"])
                  for r in row["shortDays"]}
         self.assertEqual(short, {"A_FIVE": (4, 5)})

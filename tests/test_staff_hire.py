@@ -864,12 +864,14 @@ class OfficeStaffingTest(unittest.TestCase):
         self.assertTrue(hire["hireWeeks"])
         slots_point_at_open_entries(self, row, hire)
 
-    def test_a_hire_gets_a_full_week_and_nobody_here_works_less(self):
+    def test_a_hire_gets_a_full_week_and_nobody_here_is_left_short(self):
         """Peter's in-game test (25 September 2026): the lawyers already there
         filled every day but one, and the hires got that one day, 7 to 14
-        hours each. Now the open hours are spread over the week by swapping
-        days with the staff, and each hire takes a full-time week, with
-        nobody here planned under the 40 hours the game has them on."""
+        hours each. Now the hires are people in the one placer, and each
+        takes a full-time week out of the lines nobody here may work and the
+        hours the staff hold above their own full time: nobody here is
+        planned under the thirty hours their contract asks for (the rule for
+        the people a site already has: _worse_off())."""
         for n in (14, 20):
             people = [dict(lawyer(f"l{i:02d}"), assignedWeeklyHours=40) for i in range(n)]
             _save, _b, [row] = office_rows(10, [[[0, 24]] for _ in range(7)], people)
@@ -886,7 +888,7 @@ class OfficeStaffingTest(unittest.TestCase):
                 if s["p"] is not None:
                     worked[s["p"]] += s["t"] - s["f"]
             self.assertEqual(len(worked), n)
-            self.assertGreaterEqual(min(worked.values()), 40, n)
+            self.assertGreaterEqual(min(worked.values()), FULL_TIME[0], n)
             slots_point_at_open_entries(self, row, row["_hire"])
 
     def test_the_bench_is_drawn_unless_a_shop_counts_on_them(self):
