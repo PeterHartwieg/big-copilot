@@ -7799,8 +7799,14 @@ def _fill_by_exchange(shifts: list, pool: list, state: dict, rostered: set) -> i
             allowed[shape] = [person for person in people if _may_take(person, slot)]
         return allowed[shape]
 
+    # A line of one shape nobody could be swapped onto fails the same way for
+    # the next line of that shape -- two counters open the same hours -- until
+    # a placement moves somebody's week.
+    failed = set()
     for hole in sorted((s for s in shifts if s["employee"] is None), key=clock):
         placed = False
+        if _slot_shape(hole) in failed:
+            continue
         if by_person is None:
             by_person = collections.defaultdict(list)
             for s in shifts:
@@ -7828,11 +7834,14 @@ def _fill_by_exchange(shifts: list, pool: list, state: dict, rostered: set) -> i
                 _hand_over(given, giver, taker, state, shifts)
                 _take_over(hole, giver, state)
                 takers, by_person = {}, None
+                failed = set()
                 placed = True
                 placed_count += 1
                 break
             if placed:
                 break
+        if not placed:
+            failed.add(_slot_shape(hole))
     return placed_count
 
 
@@ -7947,11 +7956,20 @@ def _top_up_short(shifts: list, pool: list, state: dict, rostered: set, only=Non
         def spare_of(other) -> float:
             return week(other)["hours"] - keep[other]
 
+        static = {}
+
         def allowed(row, start, stop) -> bool:
-            return _can_work(taker, weeks[pid], {
-                "from": start, "to": stop, "wd": row["wd"], "skill": row["skill"],
-                "kind": row["kind"], "station": row["station"],
-            })
+            # _can_work()'s two halves, the one no week changes asked once a
+            # shape: the settling pass asks it of every line of the week.
+            shape = (row["skill"], row["kind"], row["wd"], start, stop)
+            ok = static.get(shape)
+            if ok is False:
+                return False
+            slot = {"from": start, "to": stop, "wd": row["wd"], "skill": row["skill"],
+                    "kind": row["kind"], "station": row["station"]}
+            if ok is None:
+                ok = static[shape] = _may_take(taker, slot)
+            return ok and _has_room(taker, weeks[pid], slot)
 
         def order():
             """The same fullest-week-first order the day pass uses."""
