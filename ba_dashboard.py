@@ -7434,6 +7434,66 @@ def _spread_open(residue: list, shifts: list, pool: list, state: dict, before: d
 
 
 
+# A hire week of at least FULL_TIME[0] hours is a full-time week; from
+# PART_TIME_FLOOR a part-time one (JOB_DEMANDS' parttime band, 10 to 30);
+# under it no hours demand the game has is met, and the week is said to be one
+# nobody would take (_hire_band()).
+PART_TIME_FLOOR = 10
+
+
+def _hire_band(hours: float) -> str:
+    """Which contract a hire week suits: `full`, `part`, or `short` (none)."""
+    if hours >= FULL_TIME[0]:
+        return "full"
+    return "part" if hours >= PART_TIME_FLOOR else "short"
+
+
+def _absorb_scraps(rows: list, hires: list, pool: list, state: dict, here: dict) -> None:
+    """Hand a hire week too short for any contract to somebody else, whole or not at all.
+
+    A hire under PART_TIME_FLOOR hours is a week no candidate asks for. Its
+    lines go to whoever the rank puts first among those with room -- somebody
+    here, then another hire -- all of them or none, so no week is left in
+    pieces. The shortest such week first; deterministic.
+    """
+    clock = HIRE_ORDERS[0]
+    for hire in sorted(hires, key=lambda h: (state[h["id"]]["hours"], h["id"])):
+        mine = sorted((row for row in rows if row["employee"] == hire["id"]), key=clock)
+        if not mine or state[hire["id"]]["hours"] >= PART_TIME_FLOOR:
+            continue
+        others = [p for p in pool + hires if p["id"] != hire["id"]]
+        saved = {p["id"]: _copy_state(state[p["id"]]) for p in pool + hires}
+        rostered = set(here["rostered"])
+        moved = []
+        for row in mine:
+            _week_off(row, hire, state, rows)
+            taker = _best_for(row, [p for p in others if _may_take(p, row)], state, here)
+            if taker is None:
+                break
+            here["rostered"].add(taker["id"])
+            _take_over(row, taker, state)
+            moved.append(row)
+        if len(moved) < len(mine):
+            for row in mine:
+                row.update(employee=hire["id"], name=None, fromBench=True)
+            state.update(saved)
+            here["rostered"] = rostered
+
+
+def _week_off(row: dict, person: dict, state: dict, rows: list) -> None:
+    """Take one of a person's lines off their week, leaving the row nobody's."""
+    mine = state[person["id"]]
+    mine["hours"] -= row["to"] - row["from"]
+    mine["busy"][row["wd"]].difference_update(range(row["from"], row["to"]))
+    if not mine["busy"][row["wd"]]:
+        mine["days"].discard(row["wd"])
+    if not any(other is not row and other["employee"] == person["id"]
+               and other["station"] == row["station"] and other["wd"] == row["wd"]
+               for other in rows):
+        mine["stations"].discard((row["station"], row["wd"]))
+    row.update(employee=None, name=None, fromBench=False)
+
+
 def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict) -> tuple:
     """Hire for the lines nobody here can work: (the week, {skill: hire weeks}).
 
@@ -7513,6 +7573,7 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
             break
         for skill in grow:
             count[skill] += 1
+    _absorb_scraps(rows, hires, pool, state, here)
     ids = {hire["id"]: hire for hire in hires}
     theirs = collections.defaultdict(list)
     for row in rows:
@@ -8110,7 +8171,7 @@ def _top_up_short(shifts: list, pool: list, state: dict, rostered: set, only=Non
     # reached; where it is not, nothing moves and the shortfall is reported as
     # it stands. That also retires the old guess at whether a week could be made
     # up at all, which was generous on purpose and wrong often enough to matter.
-    def settle(taker) -> bool:
+    def settle(taker, goal=None) -> bool:
         """Reach this person's floor out of other people's slack, or leave it.
 
         A hire (_placeholder()) is paid out of the hours above each donor's own
@@ -8177,8 +8238,9 @@ def _top_up_short(shifts: list, pool: list, state: dict, rostered: set, only=Non
                     rows[index]["from"], rows[index]["to"], str(rows[index]["station"])),
             )
 
-        while weeks[pid]["hours"] < floor_of[pid]:
-            gap = floor_of[pid] - weeks[pid]["hours"]
+        goal = floor_of[pid] if goal is None else goal
+        while weeks[pid]["hours"] < goal:
+            gap = goal - weeks[pid]["hours"]
             picked = None
             # Nothing moves until a shift is picked, so one order serves
             # both the whole shifts and the pieces.
@@ -8257,7 +8319,11 @@ def _top_up_short(shifts: list, pool: list, state: dict, rostered: set, only=Non
                 break
             pid = short[0][1]
             tried.add(pid)
-            settle(by_id[pid])
+            # A hire that cannot reach a full week is still lifted to a
+            # part-time one where it can (_hire_band()).
+            if (not settle(by_id[pid]) and by_id[pid].get("hire")
+                    and state[pid]["hours"] < PART_TIME_FLOOR):
+                settle(by_id[pid], PART_TIME_FLOOR)
 
     settle_everybody()
 
@@ -9940,10 +10006,14 @@ def _hire_fields(week: dict) -> dict:
         packed.sort(key=lambda e: (-sum(s["to"] - s["from"] for s in e[0]),
                                    [slot_key(s) for s in e[0]]))
         for slots, _hire in packed:
+            hours = sum(s["to"] - s["from"] for s in slots)
             weeks.append({
                 "skill": skill,
-                "hours": sum(s["to"] - s["from"] for s in slots),
+                "hours": hours,
                 "days": len({s["wd"] for s in slots}),
+                # Which contract the week suits (_hire_band()): the Staff
+                # page matches part-timers to a `part` week.
+                "band": _hire_band(hours),
                 "slots": [
                     {"shift": index[id(s)], "d": s["wd"], "f": s["from"], "t": s["to"],
                      "station": s["station"]}
@@ -9952,6 +10022,10 @@ def _hire_fields(week: dict) -> dict:
             })
     return {
         "hireWeeks": weeks,
+        # Hire weeks no hours demand is met by (under PART_TIME_FLOOR), said
+        # the way shortHours says a person's: {skill, hours}.
+        "shortHires": [{"skill": w["skill"], "hours": w["hours"]}
+                       for w in weeks if w["band"] == "short" and w["slots"]],
         "spare": list(week["spareIds"]),
         "spareSkills": {pid: list(skills) for pid, skills in (week.get("spareSkills") or {}).items()},
         "bench": [row["employee"] for row in week["bench"]],

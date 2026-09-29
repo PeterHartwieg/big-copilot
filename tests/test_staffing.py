@@ -749,6 +749,37 @@ class TwelveHourDayTest(unittest.TestCase):
             self.assertTrue(all(len(day) <= SHIFT_CAP for day in hire["busy"]))
 
 
+class HireBandTest(unittest.TestCase):
+    """A hire week says which contract it suits (review round 1, item 2)."""
+
+    FULL = {"id": "f", "name": "F", "skills": {SERVICE}, "wage": 20.0, "addr": (STREET, NUMBER),
+            "demands": [], "band": (30, 50), "days": None, "weekendsOff": False, "blackouts": [],
+            "nocleaning": False, "training": False, "now": 0, "home": set(), "desks": []}
+
+    def test_a_hire_too_short_for_full_time_is_lifted_to_part_time(self):
+        # Four twelve-hour days and a six-hour one: the full-timer takes the
+        # four, the hire the six. Thirty is out of reach (18 spare), ten is not.
+        week = place_station_hours({0: [(8, 20)], 1: [(8, 20)], 2: [(8, 20)], 3: [(8, 20)],
+                                    4: [(8, 14)]}, people=[dict(self.FULL)])
+        [hire] = week["hireWeeks"][SERVICE]
+        self.assertGreaterEqual(hire["hours"], ba_dashboard.PART_TIME_FLOOR)
+        self.assertLess(hire["hours"], FULL_TIME[0])
+        fields = ba_dashboard._hire_fields(dict(week, spareIds=[], bench=[]))
+        self.assertEqual([w["band"] for w in fields["hireWeeks"]], ["part"])
+        self.assertEqual(fields["shortHires"], [])
+
+    def test_a_hire_nobody_can_lift_is_said(self):
+        week = place_station_hours({2: [(0, 7), (12, 19)]})
+        fields = ba_dashboard._hire_fields(dict(week, spareIds=[], bench=[]))
+        self.assertEqual([w["band"] for w in fields["hireWeeks"]], ["short", "short"])
+        self.assertEqual(fields["shortHires"], [{"skill": SERVICE, "hours": 7},
+                                                {"skill": SERVICE, "hours": 7}])
+
+    def test_the_bands(self):
+        self.assertEqual([ba_dashboard._hire_band(h) for h in (48, 30, 29, 10, 9, 0)],
+                         ["full", "full", "part", "part", "short", "short"])
+
+
 class RosterRulesTest(unittest.TestCase):
     """A property test: no produced shift may break any rule, on any fixture."""
 

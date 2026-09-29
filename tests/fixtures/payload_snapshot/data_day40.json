@@ -3081,6 +3081,7 @@
       ],
       "hireWeeks": [
        {
+        "band": "full",
         "days": 7,
         "hours": 49,
         "skill": "ba:skill_cleaning",
@@ -3137,6 +3138,7 @@
         ]
        },
        {
+        "band": "full",
         "days": 4,
         "hours": 31,
         "skill": "ba:skill_customerservice",
@@ -3179,6 +3181,7 @@
         ]
        }
       ],
+      "shortHires": [],
       "spare": [],
       "spareSkills": {}
      },
@@ -3206,6 +3209,7 @@
       ],
       "hireWeeks": [
        {
+        "band": "full",
         "days": 7,
         "hours": 49,
         "skill": "ba:skill_cleaning",
@@ -3262,6 +3266,7 @@
         ]
        },
        {
+        "band": "full",
         "days": 4,
         "hours": 31,
         "skill": "ba:skill_customerservice",
@@ -3304,6 +3309,7 @@
         ]
        }
       ],
+      "shortHires": [],
       "spare": [],
       "spareSkills": {}
      }
@@ -3347,6 +3353,7 @@
       ],
       "hireWeeks": [
        {
+        "band": "full",
         "days": 3,
         "hours": 30,
         "skill": "ba:skill_customerservice",
@@ -3375,6 +3382,7 @@
         ]
        }
       ],
+      "shortHires": [],
       "spare": [],
       "spareSkills": {}
      },
@@ -3390,6 +3398,7 @@
       ],
       "hireWeeks": [
        {
+        "band": "full",
         "days": 3,
         "hours": 30,
         "skill": "ba:skill_customerservice",
@@ -3418,6 +3427,7 @@
         ]
        }
       ],
+      "shortHires": [],
       "spare": [],
       "spareSkills": {}
      }
@@ -3485,6 +3495,7 @@
       ],
       "hireWeeks": [
        {
+        "band": "full",
         "days": 4,
         "hours": 48,
         "skill": "ba:skill_factoryworker",
@@ -3520,6 +3531,7 @@
         ]
        },
        {
+        "band": "full",
         "days": 4,
         "hours": 48,
         "skill": "ba:skill_factoryworker",
@@ -3555,6 +3567,7 @@
         ]
        },
        {
+        "band": "full",
         "days": 4,
         "hours": 48,
         "skill": "ba:skill_factoryworker",
@@ -3590,6 +3603,7 @@
         ]
        },
        {
+        "band": "full",
         "days": 4,
         "hours": 48,
         "skill": "ba:skill_factoryworker",
@@ -3625,6 +3639,7 @@
         ]
        },
        {
+        "band": "full",
         "days": 4,
         "hours": 48,
         "skill": "ba:skill_factoryworker",
@@ -3660,6 +3675,7 @@
         ]
        },
        {
+        "band": "full",
         "days": 4,
         "hours": 48,
         "skill": "ba:skill_factoryworker",
@@ -3695,6 +3711,7 @@
         ]
        }
       ],
+      "shortHires": [],
       "spare": [],
       "spareSkills": {}
      },
@@ -3710,6 +3727,7 @@
       ],
       "hireWeeks": [
        {
+        "band": "full",
         "days": 7,
         "hours": 49,
         "skill": "ba:skill_factoryworker",
@@ -3766,6 +3784,7 @@
         ]
        }
       ],
+      "shortHires": [],
       "spare": [],
       "spareSkills": {}
      }
