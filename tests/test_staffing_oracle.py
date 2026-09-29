@@ -781,19 +781,28 @@ class HireCountTest(unittest.TestCase):
         self.assertEqual(self.office_hires(33, 4), [3])
 
     def cuts_kept(self):
-        """(hires, lines cut) of each week _place_hires() returns, while patched."""
+        """(hires, lines cut) of each week _place_hires() returns, while patched.
+
+        By the hours, not the row objects, which the settling may copy: a
+        line of the week kept that no line of the week asked about matches,
+        where some cut made one just like it.
+        """
         real_split, real_place = ba_dashboard._split_open, ba_dashboard._place_hires
-        cut, seen = {}, []
+        cut, seen = set(), []
+
+        def span(row):
+            return (str(row["station"]), row["wd"], row["from"], row["to"])
 
         def split(rows, *rest):
-            before = len(rows)
+            before = {id(row): span(row) for row in rows}
             real_split(rows, *rest)
-            cut.setdefault(id(rows), []).extend(rows[before:])
+            cut.update(span(row) for row in rows if before.get(id(row)) != span(row))
 
-        def place(*args):
+        def place(shifts, *rest):
             cut.clear()
-            rows, weeks = real_place(*args)
-            kept = [piece for piece in cut.get(id(rows), ()) if any(piece is r for r in rows)]
+            asked = {span(row) for row in shifts}
+            rows, weeks = real_place(shifts, *rest)
+            kept = [row for row in rows if span(row) in cut and span(row) not in asked]
             seen.append((sum(len(found) for found in weeks.values()), len(kept)))
             return rows, weeks
 
@@ -822,21 +831,34 @@ class HireCountTest(unittest.TestCase):
         the swaps where the cut after them covered left it at 20."""
         self.assertEqual(self.office_hires(2, 0), [19])
 
-    def test_a_shorter_piece_where_the_longest_clashes(self):
-        """Round 5: a 00-12 line and two hires at 44 and 43 hours, one at
-        work 05-09 that day and the other 00-04: the longest pieces (6 and 7
-        hours from 00) clash, the cut at 05 fits, 5 hours and 7."""
+    def cut_between(self, hires):
+        """A 00-12 line on Tuesday offered to two hires: [(hours, hire), ...] as it is cut."""
         line = dict(self.line(2, 0, 12), employee=None, name=None)
-        one = ba_dashboard._placeholder(SERVICE, 0)
-        two = ba_dashboard._placeholder(SERVICE, 1)
-        state = {one["id"]: ba_dashboard._fresh_state(), two["id"]: ba_dashboard._fresh_state()}
-        for hire, hours, busy in ((one, 44, range(5, 9)), (two, 43, range(0, 4))):
+        placeholders = [ba_dashboard._placeholder(SERVICE, n) for n in range(len(hires))]
+        state = {}
+        for hire, (hours, busy) in zip(placeholders, hires):
+            state[hire["id"]] = ba_dashboard._fresh_state()
             state[hire["id"]].update(hours=float(hours), days={2})
             state[hire["id"]]["busy"][2] = set(busy)
         rows = [line]
-        ba_dashboard._split_open(rows, [one, two], state, {"rostered": set()})
-        self.assertEqual(sorted((r["from"], r["to"], r["employee"]) for r in rows),
-                         [(0, 5, one["id"]), (5, 12, two["id"])])
+        ba_dashboard._split_open(rows, placeholders, state, {"rostered": set()})
+        return sorted((r["from"], r["to"], r["employee"] and r["employee"][-1]) for r in rows)
+
+    def test_a_piece_either_end_of_the_line(self):
+        """Round 5: hires at 44 and 43 hours, at work 05-09 and 00-04 that
+        day. The first hire's 6 hours clash at either end, its 5-hour head
+        fits, and the second takes the 7 hours after it."""
+        self.assertEqual(self.cut_between([(44, range(5, 9)), (43, range(0, 4))]),
+                         [(0, 5, "0"), (5, 12, "1")])
+
+    def test_every_cut_point_is_asked(self):
+        """Round 6: both hires at 42 hours, the first at work at 07 and the
+        second at 05. The longest piece either could take, 8 hours, clashes
+        at both ends for both, so a cut at the longest alone leaves the line
+        open; the 7-hour head fits the first and the 5 hours after it the
+        second."""
+        self.assertEqual(self.cut_between([(42, {7}), (42, {5})]),
+                         [(0, 7, "0"), (7, 12, "1")])
 
     def test_the_review_s_three_shops_hire_what_main_did(self):
         """Main at 77a2375 hired 2, 2 and 5 people for these demand plans."""

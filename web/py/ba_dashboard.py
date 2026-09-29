@@ -7652,13 +7652,16 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
     out with nobody to swap with). A deal alone is cheap, so the least N some
     deal covers is searched first: from the open hours over 50 (never under
     the bound), up in doubling steps and back by halves. Below that, down to
-    the bound, all ten tries are dealt again with the swaps
-    (_fill_by_exchange()) after them, however many lines the deal left, a
-    skill at a time and one fewer at a time, while one still covers every
-    line. The week kept is the first try, in that order, that
-    covers at the N found, settled in full. The fewest people first, as for
-    everybody; deterministic throughout, each try starting from the week as
-    it was, so an answer asked twice is looked up, not worked out again.
+    the bound, all ten tries are asked in four ways, in this order: whole
+    lines dealt, whole lines with the swaps (_fill_by_exchange()) after them,
+    a line cut between two hires straight after the deal (_split_open()), and
+    a line cut after the swaps, a skill at a time and one fewer at a time,
+    while one still covers every line. So a line is only cut where no try
+    covers with whole lines at that count. The week kept is the first try,
+    in that order, that covers at the N found, settled in full in the order
+    that covered it. The fewest people first, as for everybody;
+    deterministic throughout, each try starting from the week as it was, so
+    an answer asked twice is looked up, not worked out again.
 
     A hire week is `{"hours", "busy", "slots"}`, the slots being the week's
     own rows, which then have nobody on them again (`p: null` on the page).
@@ -7840,7 +7843,8 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
         return covered, None
 
     def screen():
-        """A deal alone, each try: nothing is settled."""
+        """A deal alone, each try, whole lines and then a line cut: nothing
+        is settled, so it only finds the count to search down from."""
         return run_all(((False, False), (True, False)))
 
     def settle_all():
@@ -7892,35 +7896,46 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
                 count[skill] += 1
                 break
             found = below
-    # 3. The week at that count: the first covering deal settled, or the
-    #    first covering settled try; where neither covers (the tries do not
-    #    cover in step with the count), the count rises for what is left.
+    def keep(found):
+        """The week at the count found, settled in full, as the winning try covered it.
+
+        The settling keeps the swaps only where they break no demand, so it
+        can leave a line the proof covered open. Defensive, as no sweep has
+        met it: the same try with a line cut, in the other orders, is asked
+        before a hire more, and the first week is kept where none covers.
+        """
+        packing, spread, split, how = found
+        hires, rows, left = attempt(packing, spread, split, True, how)
+        if not left:
+            return hires, rows, left
+        ids = list(saved) + [hire["id"] for hire in hires]
+        first = (hires, rows, left, {pid: _copy_state(state[pid]) for pid in ids},
+                 set(here["rostered"]))
+        others = [("swaps" if how is False else False)] if split else [False, "swaps"]
+        for other in others:
+            again = attempt(packing, spread, True, True, other)
+            if not again[2]:
+                return again
+        hires, rows, left, weeks, rostered = first
+        for pid, entry in weeks.items():
+            state[pid] = entry
+        here["rostered"] = rostered
+        return hires, rows, left
+
+    # 3. The week at that count: the first try, in the order settle_all()
+    #    asks them, settled in full (keep()); where nothing covers at that
+    #    count (the tries do not cover in step with the count), the count
+    #    rises for what is left.
     while True:
         if found is None:
             _covered, found = settle_all()
         if found is not None:
-            hires, rows, left = attempt(*found[:3], True, found[3])
-            if left and found[2]:
-                # Cut in the other order before a hire more.
-                for hire in hires:
-                    del state[hire["id"]]
-                other = "swaps" if found[3] is False else False
-                hires, rows, left = attempt(*found[:3], True, other)
-                if not left:
-                    break
-                for hire in hires:
-                    del state[hire["id"]]
-                hires, rows, left = attempt(*found[:3], True, found[3])
-            if not left:
+            hires, rows, left = keep(found)
+            grow = [skill for skill in _in_order(left) if count[skill] < limit[skill]]
+            if not left or not grow:
                 break
-            # The swaps covered it, and the settling took one back where it
-            # would have broken a demand the week without it meets.
             for hire in hires:
                 del state[hire["id"]]
-            grow = [skill for skill in _in_order(left) if count[skill] < limit[skill]]
-            if not grow:
-                hires, rows, left = attempt(*found[:3], True, found[3])
-                break
             for skill in grow:
                 count[skill] += 1
             found = None
