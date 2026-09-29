@@ -32,15 +32,14 @@ async function setup(t, options = {}) {
   return page;
 }
 
-test('the strip shows on first load with its text, translation link and named Dismiss', async t => {
+test('the strip shows on first load with its text, its link to the new view and named Dismiss', async t => {
   const page = await setup(t);
   const strip = page.getByRole('complementary', {name:'News'});
   assert.equal(await strip.isVisible(), true);
-  assert.match(await strip.innerText(), /Big Copilot now comes in Korean, thanks to Chanwoo Kim \(kcw2034\)/);
-  const link = page.getByRole('link', {name:'Help translate Big Copilot'});
-  assert.equal(await link.getAttribute('href'), 'https://github.com/PeterHartwieg/big-copilot/blob/main/docs/translating.md');
-  assert.equal(await link.getAttribute('target'), '_blank');
-  assert.match(await link.getAttribute('rel'), /noopener/);
+  assert.match(await strip.innerText(), /Plan your next store: Expansion › Open a store prices a fully outfitted store/);
+  const link = page.getByRole('link', {name:'Open a store'});
+  assert.equal(await link.getAttribute('href'), '#expansion/open');
+  assert.equal(await link.getAttribute('target'), null, 'a place on the board, not another tab');
   assert.equal(await page.getByRole('button', {name:'Dismiss this news'}).isVisible(), true);
 });
 
