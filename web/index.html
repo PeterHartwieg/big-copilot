@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "70466a4742";</script>
-<link rel="stylesheet" href="community.css?v=70466a4742">
+<script>window.LEDGER_BUILD = "f134d4cb25";</script>
+<link rel="stylesheet" href="community.css?v=f134d4cb25">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=70466a4742">
+<link rel="stylesheet" href="fonts/fonts.css?v=f134d4cb25">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -4451,9 +4451,10 @@ const TT_EMBED = null;
 const TT_SITE = true;
 const TT_KEY = "ba_dash_names";
 /* The languages Big Copilot's own text comes in, English first. */
-const TT_LANGS = ["en", "de", "pt", "fr", "es", "ru", "ko"];
+const TT_LANGS = ["en", "de", "pt", "fr", "es", "ru", "ko", "tr"];
 /* Numbers follow the UI language: English is always en-US. */
-const TT_NUM_LOCALES = {en: "en-US", de: "de-DE", pt: "pt-BR", fr: "fr-FR", es: "es-ES", ru: "ru-RU", ko: "ko-KR"};
+const TT_NUM_LOCALES = {en: "en-US", de: "de-DE", pt: "pt-BR", fr: "fr-FR", es: "es-ES", ru: "ru-RU", ko: "ko-KR",
+                        tr: "tr-TR"};
 /* A placeholder: {name} or {name:spec}; single braces, as SUMMARIES writes them. */
 const TT_SPEC = /\{(\w+)(?::([^{}]+))?\}/g;
 /* A game name inside a sentence (tok() in Python), for a page without the
@@ -5012,8 +5013,8 @@ details.help[open] summary::after{content:"\2013"}
 <!-- One-time news strip. For the next announcement replace data-news-id and the
      copy, and give the copy a new data-tt key: a new id shows again to everyone
      who dismissed this one (web/update.js). -->
-<aside class="news-strip" id="newsStrip" data-news-id="lang-ko" aria-label="News" data-tt-aria-label="upd.news" hidden>
-  <p class="news-copy"><b class="news-tag" data-tt="upd.news.tag">New</b><span data-tt="upd.news.lang-ko">Big Copilot now comes in Korean, thanks to Chanwoo Kim (kcw2034), who translated it. Thank you! Speak another language? Your translation is welcome too.</span><a id="newsLink" href="https://github.com/PeterHartwieg/big-copilot/blob/main/docs/translating.md" target="_blank" rel="noopener" data-tt="upd.news.help-translate">Help translate Big Copilot</a></p>
+<aside class="news-strip" id="newsStrip" data-news-id="lang-tr" aria-label="News" data-tt-aria-label="upd.news" hidden>
+  <p class="news-copy"><b class="news-tag" data-tt="upd.news.tag">New</b><span data-tt="upd.news.lang-tr">Big Copilot now comes in Turkish, thanks to Hakan (HakanGorkem), who added it. Thank you! Speak another language? Your translation is welcome too.</span><a id="newsLink" href="https://github.com/PeterHartwieg/big-copilot/blob/main/docs/translating.md" target="_blank" rel="noopener" data-tt="upd.news.help-translate">Help translate Big Copilot</a></p>
   <button type="button" class="news-dismiss" id="newsDismiss" aria-label="Dismiss this news" title="Dismiss this news" data-tt-aria-label="upd.news.dismiss" data-tt-title="upd.news.dismiss"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button>
 </aside>
 <section class="landing" id="landing">
@@ -5126,7 +5127,7 @@ details.help[open] summary::after{content:"\2013"}
            are both here until the board replaces the landing. -->
       <div class="sf-col sf-gn">
         <h2 class="sf-head" id="gnHeadL" data-tt="foot.lang.head">Language</h2>
-        <div class="gn-pick" data-gn-pick data-value="en" data-drafted="es fr pt ru ko"><button type="button" class="gn-btn" id="gnHeadLBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="gnHeadL gnHeadLBtn" data-tt-title="foot.lang.tip" title="Big Copilot&#39;s own words and the game&#39;s names for items, business types, neighbourhoods, stations and skills. A language under &#34;Game names only&#34; changes the names, and the rest stays English."><span class="gn-glyph" aria-hidden="true"><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.3 3.6 5.1 3.6 8.5s-1.2 6.2-3.6 8.5c-2.4-2.3-3.6-5.1-3.6-8.5s1.2-6.2 3.6-8.5z"/></svg></span><span class="gn-cur" lang="en" translate="no">English</span><svg class="sf-ic gn-chev" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button><ul class="gn-opts" hidden><li data-value="en" data-group="page" lang="en" translate="no">English</li><li data-value="de" data-group="page" lang="de" translate="no">Deutsch</li><li data-value="es" data-group="page" lang="es" translate="no">Español</li><li data-value="fr" data-group="page" lang="fr" translate="no">Français</li><li data-value="pt" data-group="page" lang="pt" translate="no">Português (Brasil)</li><li data-value="ru" data-group="page" lang="ru" translate="no">Русский</li><li data-value="ko" data-group="page" lang="ko" translate="no">한국어</li><li data-value="cs" data-group="names" lang="cs" translate="no">Čeština</li><li data-value="da" data-group="names" lang="da" translate="no">Dansk</li><li data-value="it" data-group="names" lang="it" translate="no">Italiano</li><li data-value="lt" data-group="names" lang="lt" translate="no">Lietuvių</li><li data-value="hu" data-group="names" lang="hu" translate="no">Magyar</li><li data-value="nl" data-group="names" lang="nl" translate="no">Nederlands</li><li data-value="pl" data-group="names" lang="pl" translate="no">Polski</li><li data-value="ro" data-group="names" lang="ro" translate="no">Română</li><li data-value="fi" data-group="names" lang="fi" translate="no">Suomi</li><li data-value="tr" data-group="names" lang="tr" translate="no">Türkçe</li><li data-value="el" data-group="names" lang="el" translate="no">Ελληνικά</li><li data-value="uk" data-group="names" lang="uk" translate="no">Українська</li><li data-value="ja" data-group="names" lang="ja" translate="no">日本語</li><li data-value="zh-cn" data-group="names" lang="zh-cn" translate="no">简体中文</li><li data-value="zh-tw" data-group="names" lang="zh-tw" translate="no">繁體中文</li></ul></div>
+        <div class="gn-pick" data-gn-pick data-value="en" data-drafted="es fr pt ru ko tr"><button type="button" class="gn-btn" id="gnHeadLBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="gnHeadL gnHeadLBtn" data-tt-title="foot.lang.tip" title="Big Copilot&#39;s own words and the game&#39;s names for items, business types, neighbourhoods, stations and skills. A language under &#34;Game names only&#34; changes the names, and the rest stays English."><span class="gn-glyph" aria-hidden="true"><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.3 3.6 5.1 3.6 8.5s-1.2 6.2-3.6 8.5c-2.4-2.3-3.6-5.1-3.6-8.5s1.2-6.2 3.6-8.5z"/></svg></span><span class="gn-cur" lang="en" translate="no">English</span><svg class="sf-ic gn-chev" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button><ul class="gn-opts" hidden><li data-value="en" data-group="page" lang="en" translate="no">English</li><li data-value="de" data-group="page" lang="de" translate="no">Deutsch</li><li data-value="es" data-group="page" lang="es" translate="no">Español</li><li data-value="fr" data-group="page" lang="fr" translate="no">Français</li><li data-value="pt" data-group="page" lang="pt" translate="no">Português (Brasil)</li><li data-value="tr" data-group="page" lang="tr" translate="no">Türkçe</li><li data-value="ru" data-group="page" lang="ru" translate="no">Русский</li><li data-value="ko" data-group="page" lang="ko" translate="no">한국어</li><li data-value="cs" data-group="names" lang="cs" translate="no">Čeština</li><li data-value="da" data-group="names" lang="da" translate="no">Dansk</li><li data-value="it" data-group="names" lang="it" translate="no">Italiano</li><li data-value="lt" data-group="names" lang="lt" translate="no">Lietuvių</li><li data-value="hu" data-group="names" lang="hu" translate="no">Magyar</li><li data-value="nl" data-group="names" lang="nl" translate="no">Nederlands</li><li data-value="pl" data-group="names" lang="pl" translate="no">Polski</li><li data-value="ro" data-group="names" lang="ro" translate="no">Română</li><li data-value="fi" data-group="names" lang="fi" translate="no">Suomi</li><li data-value="el" data-group="names" lang="el" translate="no">Ελληνικά</li><li data-value="uk" data-group="names" lang="uk" translate="no">Українська</li><li data-value="ja" data-group="names" lang="ja" translate="no">日本語</li><li data-value="zh-cn" data-group="names" lang="zh-cn" translate="no">简体中文</li><li data-value="zh-tw" data-group="names" lang="zh-tw" translate="no">繁體中文</li></ul></div>
         <a class="gn-note" data-gn-note href="https://github.com/PeterHartwieg/big-copilot/blob/main/docs/translating.md" target="_blank" rel="noopener" hidden><span data-tt="foot.lang.drafted">Machine-translated. Help check it</span></a>
       </div>
       <div class="sf-col sf-theme">
@@ -5433,7 +5434,7 @@ details.help[open] summary::after{content:"\2013"}
            are both here until the board replaces the landing. -->
       <div class="sf-col sf-gn">
         <h2 class="sf-head" id="gnHead" data-tt="foot.lang.head">Language</h2>
-        <div class="gn-pick" data-gn-pick data-value="en" data-drafted="es fr pt ru ko"><button type="button" class="gn-btn" id="gnHeadBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="gnHead gnHeadBtn" data-tt-title="foot.lang.tip" title="Big Copilot&#39;s own words and the game&#39;s names for items, business types, neighbourhoods, stations and skills. A language under &#34;Game names only&#34; changes the names, and the rest stays English."><span class="gn-glyph" aria-hidden="true"><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.3 3.6 5.1 3.6 8.5s-1.2 6.2-3.6 8.5c-2.4-2.3-3.6-5.1-3.6-8.5s1.2-6.2 3.6-8.5z"/></svg></span><span class="gn-cur" lang="en" translate="no">English</span><svg class="sf-ic gn-chev" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button><ul class="gn-opts" hidden><li data-value="en" data-group="page" lang="en" translate="no">English</li><li data-value="de" data-group="page" lang="de" translate="no">Deutsch</li><li data-value="es" data-group="page" lang="es" translate="no">Español</li><li data-value="fr" data-group="page" lang="fr" translate="no">Français</li><li data-value="pt" data-group="page" lang="pt" translate="no">Português (Brasil)</li><li data-value="ru" data-group="page" lang="ru" translate="no">Русский</li><li data-value="ko" data-group="page" lang="ko" translate="no">한국어</li><li data-value="cs" data-group="names" lang="cs" translate="no">Čeština</li><li data-value="da" data-group="names" lang="da" translate="no">Dansk</li><li data-value="it" data-group="names" lang="it" translate="no">Italiano</li><li data-value="lt" data-group="names" lang="lt" translate="no">Lietuvių</li><li data-value="hu" data-group="names" lang="hu" translate="no">Magyar</li><li data-value="nl" data-group="names" lang="nl" translate="no">Nederlands</li><li data-value="pl" data-group="names" lang="pl" translate="no">Polski</li><li data-value="ro" data-group="names" lang="ro" translate="no">Română</li><li data-value="fi" data-group="names" lang="fi" translate="no">Suomi</li><li data-value="tr" data-group="names" lang="tr" translate="no">Türkçe</li><li data-value="el" data-group="names" lang="el" translate="no">Ελληνικά</li><li data-value="uk" data-group="names" lang="uk" translate="no">Українська</li><li data-value="ja" data-group="names" lang="ja" translate="no">日本語</li><li data-value="zh-cn" data-group="names" lang="zh-cn" translate="no">简体中文</li><li data-value="zh-tw" data-group="names" lang="zh-tw" translate="no">繁體中文</li></ul></div>
+        <div class="gn-pick" data-gn-pick data-value="en" data-drafted="es fr pt ru ko tr"><button type="button" class="gn-btn" id="gnHeadBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="gnHead gnHeadBtn" data-tt-title="foot.lang.tip" title="Big Copilot&#39;s own words and the game&#39;s names for items, business types, neighbourhoods, stations and skills. A language under &#34;Game names only&#34; changes the names, and the rest stays English."><span class="gn-glyph" aria-hidden="true"><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.3 3.6 5.1 3.6 8.5s-1.2 6.2-3.6 8.5c-2.4-2.3-3.6-5.1-3.6-8.5s1.2-6.2 3.6-8.5z"/></svg></span><span class="gn-cur" lang="en" translate="no">English</span><svg class="sf-ic gn-chev" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button><ul class="gn-opts" hidden><li data-value="en" data-group="page" lang="en" translate="no">English</li><li data-value="de" data-group="page" lang="de" translate="no">Deutsch</li><li data-value="es" data-group="page" lang="es" translate="no">Español</li><li data-value="fr" data-group="page" lang="fr" translate="no">Français</li><li data-value="pt" data-group="page" lang="pt" translate="no">Português (Brasil)</li><li data-value="tr" data-group="page" lang="tr" translate="no">Türkçe</li><li data-value="ru" data-group="page" lang="ru" translate="no">Русский</li><li data-value="ko" data-group="page" lang="ko" translate="no">한국어</li><li data-value="cs" data-group="names" lang="cs" translate="no">Čeština</li><li data-value="da" data-group="names" lang="da" translate="no">Dansk</li><li data-value="it" data-group="names" lang="it" translate="no">Italiano</li><li data-value="lt" data-group="names" lang="lt" translate="no">Lietuvių</li><li data-value="hu" data-group="names" lang="hu" translate="no">Magyar</li><li data-value="nl" data-group="names" lang="nl" translate="no">Nederlands</li><li data-value="pl" data-group="names" lang="pl" translate="no">Polski</li><li data-value="ro" data-group="names" lang="ro" translate="no">Română</li><li data-value="fi" data-group="names" lang="fi" translate="no">Suomi</li><li data-value="el" data-group="names" lang="el" translate="no">Ελληνικά</li><li data-value="uk" data-group="names" lang="uk" translate="no">Українська</li><li data-value="ja" data-group="names" lang="ja" translate="no">日本語</li><li data-value="zh-cn" data-group="names" lang="zh-cn" translate="no">简体中文</li><li data-value="zh-tw" data-group="names" lang="zh-tw" translate="no">繁體中文</li></ul></div>
         <a class="gn-note" data-gn-note href="https://github.com/PeterHartwieg/big-copilot/blob/main/docs/translating.md" target="_blank" rel="noopener" hidden><span data-tt="foot.lang.drafted">Machine-translated. Help check it</span></a>
       </div>
       <div class="sf-col sf-theme">
@@ -5548,7 +5549,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"70466a4742","latest":{"pr":169,"date":"2026-09-28","title":"A new layout: problems first, and a sidebar with five places to fix them","summary":"The board is rebuilt around what needs your attention. The Overview opens on Needs attention, each finding with a button that takes you to the exact setting, and a way back to where you were. A sidebar on the left holds five places, the open one with its views under it: the Overview, Businesses (results, cash and loans, prices against the market, a standards comparison with uniforms you can set from it, milestones), Supply (the changes to make, imports, deliveries, production, and a goods flow you can drag and zoom like the map), Staffing (schedules, staff needs, payroll) and Expansion (demand, finding a location, planning a factory), then the City map and the Wiki. The button at its foot folds the sidebar to a strip of icons, and the board remembers it. Every business page links to its schedule, deliveries and prices. Changes you mark, apply through the game link, or that a later save confirms now look different, and preferences and help sit under the one ··· menu at the sidebar's foot. Old links keep working."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"f134d4cb25","latest":{"pr":169,"date":"2026-09-28","title":"A new layout: problems first, and a sidebar with five places to fix them","summary":"The board is rebuilt around what needs your attention. The Overview opens on Needs attention, each finding with a button that takes you to the exact setting, and a way back to where you were. A sidebar on the left holds five places, the open one with its views under it: the Overview, Businesses (results, cash and loans, prices against the market, a standards comparison with uniforms you can set from it, milestones), Supply (the changes to make, imports, deliveries, production, and a goods flow you can drag and zoom like the map), Staffing (schedules, staff needs, payroll) and Expansion (demand, finding a location, planning a factory), then the City map and the Wiki. The button at its foot folds the sidebar to a strip of icons, and the board remembers it. Every business page links to its schedule, deliveries and prices. Changes you mark, apply through the game link, or that a later save confirms now look different, and preferences and help sit under the one ··· menu at the sidebar's foot. Old links keep working."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -5636,8 +5637,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=70466a4742"></script>
-<script src="community.js?v=70466a4742"></script>
+<script src="app.js?v=f134d4cb25"></script>
+<script src="community.js?v=f134d4cb25"></script>
 
 <script>
 
@@ -9930,8 +9931,8 @@ const SP_ROSTER_STORE = "ba_dash_roster:";
 const spRosterRow = key => (D.staffing || []).find(r => r.key === key) || null;
 /* Whether the plan rests on a measured hour at all. Every serving role thin
    all week means the planner cut no serving shifts, and there is nothing
-   honest to put on the strip: the game's own arrival ceiling over-predicts a
-   shop like this fourfold, so it is never shown as demand. */
+   honest to put on the strip: the game's own arrival ceiling counts everyone
+   who may walk in, not the customers served, so it is never shown as demand. */
 const spRosterMeasured = row => !!row && !row.failed && Object.keys(row.basis || {}).some(
   skill => (row.basis[skill] || []).some(day => (day || []).some(b => b && b !== "none")));
 /* Whether the doors are open that hour. The game keeps a list of slots a day,
@@ -10131,10 +10132,33 @@ const spOpenFirst = base => {
 const spPlanOf = base => !base || base.failed ? null
   : spOffersFull(base) && spPlanRead(base.key) === "full" ? "full"
   : spOpenFirst(base) ? "open" : "demand";
+/* The open-hours plan's own need, which the payload leaves out as it does
+   full cover's (_open_need()): with complete data every station of every
+   role the hours the shop opens; without, the demand plan's need, with
+   every open hour nothing has read (`none`) given every station of the
+   role. Those hours read `open` on the strip: the demand plan's need there
+   is nothing, and showing it beside a week that staffs them said no hour
+   was needed. */
+const spOpenNeed = row => {
+  const need = {}, basis = {}, complete = !!(row.openCover || {}).complete;
+  (row.roles || []).forEach(r => {
+    const key = spRoleKey(r), n = (r.stations || []).length;
+    need[key] = [...Array(7)].map((_, wd) => [...Array(24)].map((_, h) => {
+      const was = (((row.need || {})[key] || [])[wd] || [])[h] || 0;
+      const read = ((((row.basis || {})[key] || [])[wd] || [])[h]) || "none";
+      return (complete || read === "none") && spOpenAt((row.open || [])[wd], h) ? n : was;
+    }));
+    basis[key] = [...Array(7)].map((_, wd) => [...Array(24)].map((_, h) => {
+      const read = ((((row.basis || {})[key] || [])[wd] || [])[h]) || "none";
+      return (complete || read === "none") && spOpenAt((row.open || [])[wd], h) ? (complete ? "openall" : "open") : read;
+    }));
+  });
+  return {need, basis};
+};
 /* The open-hours plan as a row the block draws like any other, as spFullRow()
    does for full cover. It keeps the shop's own opening hours. */
-const spOpenRow = row => Object.assign({}, row, row.openCover,
-  {openCover: null, full: false, variant: "open"});
+const spOpenRow = row => Object.assign({}, row, spOpenNeed(row), row.openCover,
+  {openCover: null, full: false, variant: "open", openComplete: !!(row.openCover || {}).complete});
 const spShownRow = base => {
   const plan = spPlanOf(base);
   return plan === "full" ? spFullRow(base) : plan === "open" ? spOpenRow(base) : base;
@@ -10250,6 +10274,8 @@ const SP_BASIS_READ = {
   get scaled(){ return " · " + tt("sp.basis.scaled", "<b>scaled from the best measured day</b> through the game's day curve; this weekday rests on under two weeks"); },
   get measured(){ return " · " + tt("sp.basis.measured", "measured"); },
   get full(){ return " · " + tt("sp.basis.full", "<b>full cover</b>: every station, every hour, to measure demand"); },
+  get open(){ return " · " + tt("sp.basis.open", "<b>every station</b>: no customers read for this hour yet"); },
+  get openall(){ return " · " + tt("sp.basis.openall", "<b>every station</b>, every hour the shop opens, while nobody works here yet"); },
 };
 function spNeedAt(row, wd, h){
   let n = 0, basis = null;
@@ -10681,8 +10707,9 @@ function spDesks(grid){
    Schedule, and a tick per line once they have. */
 
 /* The empty state. A shop too new to have been measured is not given a guess:
-   the game's own arrival ceiling over-predicts a shop like it fourfold, and a
-   roster cut from that would be a fiction with a shift count on it. */
+   the game's own arrival ceiling counts everyone who may walk in, not the
+   customers served, and a roster cut from that would be a fiction with a shift
+   count on it. */
 function spRosterNone(row, pick){
   const stations = (row && row.stations) || [];
   const codes = spStationCodes(stations);
@@ -10693,7 +10720,7 @@ function spRosterNone(row, pick){
   return `<section class="sec rv" data-block="roster" id="sp-roster"${pick ? ` data-site="${attr(row.key)}"` : ""}>
     ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster", why: failed
       ? tt("sp.roster.failed.why", "This site's schedule or stations could not be read, so no week is suggested for it. Nothing else on the board is affected.")
-      : tt("sp.roster.none.why", "A week is cut from the hours this site has already served, and there is no cleaning or security station here to cover in the meantime. The game's own arrival ceiling over-predicts a shop like this fourfold, so nothing is suggested from it.")})}
+      : tt("sp.roster.none.why", "A week is cut from the hours this site has already served, and there is no cleaning or security station here to cover in the meantime. The game's own arrival ceiling counts everyone who may walk in, not the customers a shop like this serves, so nothing is suggested from it.")})}
     ${pick || ""}
     <div class="chartbox sp-gantt sp-empty">${rows}</div>
     <div class="sp-read">${failed ? tt("sp.roster.failed", "Plan unavailable") : tt("sp.roster.none", "Nothing to schedule")}</div>
@@ -10734,7 +10761,7 @@ function spRosterDay(c, wd, on){
   /* Open hours no report has measured yet, on the demand plan: marked on the
      strip, since the plan reads them as no customers. */
   const unmeasured = [];
-  if(!c.full) ((c.row.unmeasured || [])[wd] || []).forEach(h => {
+  if(!c.full && c.row.variant !== "open") ((c.row.unmeasured || [])[wd] || []).forEach(h => {
     unmeasured.push(`<i class="sp-unmh" style="grid-column:${h + 2}" data-read="${attr(
       tt("sp.need.unmeasured", "<b>{when}</b> no customers on file: counted as none", {when: spWhenShort(wd, h)}))}"></i>`);
   });
@@ -10743,6 +10770,9 @@ function spRosterDay(c, wd, on){
     : bases.some(b => b === "scaled") ? "scaled" : "none";
   let out = `<div class="sp-grow sp-needrow${cells.length ? "" : " sp-unmeas"}"><span class="lab" tabindex="0" data-read="${attr(
     c.full ? tt("sp.need.full", "Every station, every hour: the demand test, {d:day}", {d: wd})
+      : c.row.variant === "open" && cells.length ? (c.row.openComplete
+        ? tt("sp.need.openall", "Every station, the hours the shop opens, {d:day}", {d: wd})
+        : tt("sp.need.open", "Stations the plan asks for, {d:day}: what the measured hours ask for, and every station in the hours nothing is read yet", {d: wd}))
       : cells.length ? tt("sp.need.asks", "Stations the measured hours ask for, {d:day}", {d: wd})
       /* The doors decide before the measurement does, here as everywhere else
          in the block: a shop shut on Sunday has not measured nothing, it has
@@ -17038,7 +17068,7 @@ function hrCandRow(m, r, c){
   const noShop = !picked && !elsewhere && r.pt && r.shop && !r.allShop && hrAsksPt(c);
   const to = elsewhere ? `<span class="dim">picked for ${spEsc(hrSiteName(elsewhere))}</span>`
     : noShop ? `<span class="dim">not for shop weeks (Part-time)</span>`
-    : at && at.nofit ? `<span class="dim">${tt("co.hire.nofit", "no open week meets their hours demands")}</span>`
+    : at && at.nofit ? `<span class="dim">${tt("co.hire.nofit", "no open week meets their schedule demands")}</span>`
     : S ? `${spEsc(hrSiteName(S))}${at.over ? ` <span class="warn">over the plan</span>` : ""}` : `<span class="dim">–</span>`;
   const soon = Number(c.hoursLeft) < 24;
   return `<tr class="${picked ? "on" : ""}" data-hr-cand="${attr(c.id)}">
@@ -17359,19 +17389,28 @@ function hrQuickPlan(sites, cands, used){
   const open = out.plan ? S.weeks.filter(x => x.w.skill === q.skill && !x.who) : [];
   /* Best match first. While the plan has weeks left here, a match takes one
      that meets their schedule demands, at a desk that meets their desk
-     demands first; a match no week left fits is not picked, the next is
-     (Peter, 28 September 2026). Past the plan's weeks they join with no
-     hours, as at a site with no plan. */
-  out.picks = [];
+     demands first; a match no week left fits is held back (Peter, 28
+     September 2026). The places still to fill then go, best match first,
+     to everyone not placed, those held back included, with no hours, as at
+     a site with no plan. The picks are listed best first. */
+  const placed = new Map();  // candidate id -> the plan week they take
+  const held = new Map();    // candidate id -> the demands no open week met
   for(const c of out.matches){
-    if(out.picks.length >= q.n) break;
+    if(placed.size >= q.n || !open.length) break;
     const fit = open.filter(x => hrFits(c, x));
-    if(open.length && !fit.length) continue;
-    const wk = fit.find(x => !hrDeskMiss(c.demands, S, x.w).length) || fit[0] || null;
-    if(wk){ open.splice(open.indexOf(wk), 1); if(hold){ wk.who = {type: "quick", c}; out.held++; } }
-    if(hold) used.set(c.id, S);
-    out.picks.push({c, w: wk ? wk.w : null, misfit: []});
+    if(!fit.length){ held.set(c.id, [...new Set(open.flatMap(x => hrFails(c, x)))]); continue; }
+    const wk = fit.find(x => !hrDeskMiss(c.demands, S, x.w).length) || fit[0];
+    open.splice(open.indexOf(wk), 1);
+    placed.set(c.id, wk);
   }
+  let left = q.n - placed.size;
+  out.picks = out.matches.filter(c => placed.has(c.id) || (left > 0 && left-- > 0)).map(c => {
+    const wk = placed.get(c.id) || null;
+    if(wk && hold){ wk.who = {type: "quick", c}; out.held++; }
+    if(hold) used.set(c.id, S);
+    /* Held back and placed past the weeks anyway: `nofit` names why. */
+    return Object.assign({c, w: wk ? wk.w : null, misfit: []}, !wk && held.has(c.id) ? {nofit: held.get(c.id)} : {});
+  });
   out.short = Math.max(0, q.n - out.picks.length);
   return out;
 }
@@ -17419,8 +17458,9 @@ function hrQuickRequest(Q){
       });
     });
     hours.set(c.id, kept);
-    /* Judged on the week they keep, not the plan's. */
-    misfits.set(c.id, kept ? hrFails(c, {w: {skill: Q.q.skill, slots: mine}, S}) : []);
+    /* Judged on the week they keep, not the plan's, an empty one too when
+       every hour of their plan week meets hours already set there. */
+    misfits.set(c.id, w ? hrFails(c, {w: {skill: Q.q.skill, slots: mine}, S}) : []);
     if(met && !kept) clash.add(c.id);
   });
   const given = [...hours.values()].filter(h => h > 0).length;
@@ -17432,23 +17472,37 @@ function hrQuickRequest(Q){
     ? {address: gwAddress(S.key), expect: S.b && typeof S.b.shiftPrint === "string" ? S.b.shiftPrint : null,
        openAllHours: false, days}
     : {address: gwAddress(S.key), expect: null, days: null};
-  return {body: {sites: hires.length ? [site] : [], hires, moves: []}, names, hours, misfits, given, clashed, now: !!now};
+  return {body: {sites: hires.length ? [site] : [], hires, moves: []}, names, hours, misfits, given, clashed, clash, now: !!now};
 }
 /* A pick whose kept week breaks one of their schedule demands, in orange. */
-const hrQuickMisfit = misfit => misfit.length ? `<small class="warn">hours break ${misfit.map(hrName).join(", ")}</small>` : "";
+const hrQuickMisfit = misfit => misfit.length ? `<small class="warn">${tt("co.hire.misfit", "hours break {demands}", {demands: misfit.map(hrName).join(", ")})}</small>` : "";
+/* The note beside a pick: a match held back from the plan's weeks names the
+   demands none of them met; anyone else, what their kept week breaks. */
+const hrQuickNote = (p, req) => {
+  const id = p.c.id;
+  if(p.nofit) return `<small class="warn">${tt("co.hire.quick.nofit", "no open week fits {demands}", {demands: p.nofit.map(hrName).join(", ")})}</small>`;
+  /* Why somebody at a planned site joins with no hours, each their own:
+     their plan hours met hours already set there, or no plan week was left
+     for them (or none of its hours could be sent). */
+  const none = req.now && !(req.hours.get(id) || 0)
+    ? (req.clash || new Set()).has(id) ? tt("co.hire.quick.clash", "their plan hours meet hours already set there")
+    : tt("co.hire.quick.noweek", "no open hours left in the plan") : "";
+  return [none ? `<small>${none}</small>` : "", hrQuickMisfit(req.misfits.get(id) || [])].filter(Boolean).join(" ");
+};
 function hrQuickHtml(m){
   const Q = hrQuickModel(m), q = Q.q;
   const l = gwLink(), off = !l || !(l.writes || []).includes("hire");
   const kind = S => { const k = HR_KIND_WORDS[S.site.kind]; return S.b && S.b.type ? S.b.type : k ? k[0] : S.site.kind; };
   const k = Q.picks.length, n = Q.matches.length;
   /* The warnings are the kept week's, after the hours already set there. */
-  const kept = Q.ready ? hrQuickRequest(Q) : {misfits: new Map()};
+  const kept = Q.ready ? hrQuickRequest(Q) : {misfits: new Map(), hours: new Map()};
   const match = !Q.ready ? ""
-    : !n ? `<p class="hs-match none">Nobody matches.</p>`
-    : `<details class="hs-match" data-hq-list${q.open ? " open" : ""}><summary><b>${hrNum(n)}</b> match · ${
-        Q.short ? `<span class="warn">${k < n ? tt("co.hire.quickfit", {one: "only {n} fits the plan's hours", other: "only {n} fit the plan's hours"}, {n: k})
-          : `only ${hrNum(n)} ${n === 1 ? "matches" : "match"}`}</span>` : k === n ? (k === 1 ? "picked" : `all ${hrNum(k)} are picked`) : k === 1 ? "the best is picked" : `the best ${hrNum(k)} are picked`}${hrChev()}</summary>
-      <ul>${Q.picks.map(({c}) => `<li><span>${spEsc(c.name || "?")}${hrQuickMisfit(kept.misfits.get(c.id) || [])}</span><span class="m">${Math.round(hrLevel(c, q.skill))}%</span><span class="m">${hrWage(c.wage)}/h</span></li>`).join("")}</ul></details>`;
+    : !n ? `<p class="hs-match none">${tt("co.hire.quick.none", "Nobody matches.")}</p>`
+    : `<details class="hs-match" data-hq-list${q.open ? " open" : ""}><summary>${
+        Q.short ? tt("co.hire.quick.short", {one: "<b>{n}</b> match · <span class='warn'>only {n} candidate matches</span>", other: "<b>{n}</b> match · <span class='warn'>only {n} candidates match</span>"}, {n})
+        : k === n ? tt("co.hire.quick.all", {one: "<b>{n}</b> match · picked", other: "<b>{n}</b> match · all {n} are picked"}, {n})
+        : tt("co.hire.quick.best", {one: "<b>{m}</b> match · the best is picked", other: "<b>{m}</b> match · the best {n} are picked"}, {m: n, n: k})}${hrChev()}</summary>
+      <ul>${Q.picks.map(p => { const {c} = p; return `<li><span>${spEsc(c.name || "?")}${hrQuickNote(p, kept)}</span><span class="m">${Math.round(hrLevel(c, q.skill))}%</span><span class="m">${hrWage(c.wage)}/h</span></li>`; }).join("")}</ul></details>`;
   const busy = !!hrUi.quickPending;
   const dis = !Q.ready || !k || off || busy;
   return `<div class="qh"><span class="hs-i">${hrSvg("hire")}</span><h3>Quick hire</h3></div>
@@ -17495,15 +17549,16 @@ function hrQuickReview(){
   const nameOf = id => ((hrQuickLast.req.names.get(id) || {}).name) || "someone";
   const list = gone => {
     const {Q, req} = hrQuickLast;
-    return `<ul class="hs-qlist">${Q.picks.map(({c}) => { const h = req.hours.get(c.id) || 0, misfit = req.misfits.get(c.id) || []; return `<li class="${req.given ? "h" : ""}"><span>${gone.has(c.id) ? `<span class="hr-struck">${spEsc(c.name || "?")}</span>` : spEsc(c.name || "?")}${h ? hrQuickMisfit(misfit) : ""}</span><span class="m">${
-      Math.round(hrLevel(c, Q.q.skill))}%</span><span class="m">${hrWage(c.wage)}/h</span>${req.given ? `<span class="m${h && misfit.length ? " warn" : ""}">${h ? `${hrNum(h)} h` : "–"}</span>` : ""}</li>`; }).join("")}</ul>`;
+    return `<ul class="hs-qlist">${Q.picks.map(p => { const {c} = p, h = req.hours.get(c.id) || 0, misfit = req.misfits.get(c.id) || []; return `<li class="${req.given ? "h" : ""}"><span>${gone.has(c.id) ? `<span class="hr-struck">${spEsc(c.name || "?")}</span>` : spEsc(c.name || "?")}${hrQuickNote(p, req)}</span><span class="m">${
+      Math.round(hrLevel(c, Q.q.skill))}%</span><span class="m">${hrWage(c.wage)}/h</span>${req.given ? `<span class="m${misfit.length ? " warn" : ""}">${h ? `${hrNum(h)} h` : "–"}</span>` : ""}</li>`; }).join("")}</ul>`;
   };
   /* What the hires' hours are, and that nobody else's change. */
   const hours = () => {
     const {Q, req} = hrQuickLast, k = n();
     if(!Q.plan || !req.now) return gwCall("", "clock", "No hours yet: set them in the game.");
-    if(!req.given) return gwCall("", "clock", req.clashed ? "Their plan hours meet hours already set there: they join with no hours."
-      : `No open hours in ${at()}'s plan: they join with no hours.`);
+    /* Why each of them has no hours is beside their name (hrQuickNote()):
+       the reasons differ from one to the next, so the line says none. */
+    if(!req.given) return gwCall("", "clock", tt("co.hire.quick.nohours.all", "They join with no hours."));
     const hs = [...req.hours.values()].filter(h => h > 0), lo = Math.min(...hs), hi = Math.max(...hs);
     const each = `${lo === hi ? hrNum(lo) : `${hrNum(lo)}–${hrNum(hi)}`} h a week${req.given > 1 ? " each" : ""}`;
     const none = k - req.given;
@@ -17892,10 +17947,10 @@ function hrReview(o = {}){
       }
       const blocked = answer.blocked === "myemployees" ? `<div class="gw-no"><span class="ic">${hrSvg("phone")}</span><div class="rule">MyEmployees is open in the game.</div><div class="fix">${gwSvg("right")}<span>Close the MyEmployees app on your in-game phone, then try again.</span></div></div>` : "";
       /* Every week this call writes, checked per person (gwWeekCheck()). */
-      const written = req.body.sites.filter(x => x.days);
+      const written = req.body.sites.filter(x => x.days), away = new Set(req.body.moves.map(x => x.employeeId));
       const checked = written.flatMap(x => {
         const S = m.sites.find(y => y.key === gwKeyOf(x.address));
-        return gwWeekCheck(S && S.row, x.days).map(p => Object.assign(p, written.length > 1 && S ? {site: spEsc(hrSiteName(S))} : {}));
+        return gwWeekCheck(S && S.row, x.days, away).map(p => Object.assign(p, written.length > 1 && S ? {site: spEsc(hrSiteName(S))} : {}));
       });
       return `${blocked}${gwTiles([["Hire", null, c.hire], ["Reassign", null, c.move], ["Added wages", null, `+${fmt(bill)}<small class="hr-u">/day</small>`]])}
         <p class="gw-lead">Who goes where. Open a site to see each person and the days they work.</p>
@@ -29088,8 +29143,10 @@ const gwCleanOf = row => {
 /* The people a week (`days`, as a write sends it) leaves breaking something,
    against the site's row: [{id, name, breaks}]. Somebody whose entries the
    write leaves exactly as the game has them is not the write's to answer
-   for. */
-function gwWeekCheck(row, days){
+   for. Somebody with hours here now and none in the week is checked against
+   an empty week: a write that takes a full-timer's whole week away says so.
+   `away` are people the same write moves elsewhere, whose week is there. */
+function gwWeekCheck(row, days, away){
   const mine = new Map(), now = new Map();
   (days || []).forEach(({d, shifts}) => (shifts || []).forEach(s => {
     if(!mine.has(s.employeeId)) mine.set(s.employeeId, []);
@@ -29103,28 +29160,31 @@ function gwWeekCheck(row, days){
   });
   const sig = list => list.slice().sort().join(",");
   const clean = gwCleanOf(row), out = [];
-  mine.forEach((list, id) => {
-    if(sig(list.map(e => `${e.d}|${e.f}|${e.t}|${e.st}`)) === sig(now.get(id) || [])) return;
+  const check = (id, list) => {
     const who = gwWho(id, row);
     const breaks = gwPersonBreaks(list, who.demands, clean);
     if(breaks.length) out.push({id, name: who.name, breaks});
+  };
+  mine.forEach((list, id) => {
+    if(sig(list.map(e => `${e.d}|${e.f}|${e.t}|${e.st}`)) !== sig(now.get(id) || [])) check(id, list);
   });
+  now.forEach((_list, id) => { if(!mine.has(id) && !(away && away.has(id))) check(id, []); });
   return out;
 }
-/* What the check found, one line a person; `site` names the site on a write
-   that touches several. */
+/* What the check found, one line a break, each its own sentence; `site`
+   names the site on a write that touches several. */
 function gwCheckLines(found){
-  const what = b => b.k === "hours" ? tt("sp.gw.chk.hours", "{n} h a week, asks for {lo} to {hi}", {n: b.n, lo: b.lo, hi: b.hi})
-    : b.k === "most" ? tt("sp.gw.chk.most", "{n} h a week, more than {hi}", {n: b.n, hi: b.hi})
-    : b.k === "days" ? tt("sp.gw.chk.days", "{n} days a week, asks for {want}", {n: b.n, want: b.want})
-    : b.k === "entry" ? tt("sp.gw.chk.entry", "an entry of {n} h on {day}", {n: b.n, day: ttDay(b.d)})
-    : b.k === "day" ? tt("sp.gw.chk.day", "{n} h on {day}", {n: b.n, day: ttDay(b.d)})
-    : b.k === "twice" ? tt("sp.gw.chk.twice", "two entries at once on {day}", {day: ttDay(b.d)})
-    : tt("sp.gw.chk.demand", "breaks {demand}", {demand: hrName(b.slug)});
+  const line = (b, who) => b.k === "hours" ? tt("sp.gw.chk.hours", "<b>{who}</b>: {n} h a week, asks for {lo} to {hi}", {who, n: b.n, lo: b.lo, hi: b.hi})
+    : b.k === "most" ? tt("sp.gw.chk.most", "<b>{who}</b>: {n} h a week, more than {hi}", {who, n: b.n, hi: b.hi})
+    : b.k === "days" ? tt("sp.gw.chk.days", "<b>{who}</b>: {n} days a week, asks for {want}", {who, n: b.n, want: b.want})
+    : b.k === "entry" ? tt("sp.gw.chk.entry", "<b>{who}</b>: an entry of {n} h on {day}", {who, n: b.n, day: ttDay(b.d)})
+    : b.k === "day" ? tt("sp.gw.chk.day", "<b>{who}</b>: {n} h on {day}", {who, n: b.n, day: ttDay(b.d)})
+    : b.k === "twice" ? tt("sp.gw.chk.twice", "<b>{who}</b>: two entries at once on {day}", {who, day: ttDay(b.d)})
+    : tt("sp.gw.chk.demand", "<b>{who}</b>: the week breaks {demand}", {who, demand: hrName(b.slug)});
   const lines = found.map(p => {
-    const name = spEsc(p.name || tt("sp.gw.someone.cap", "Someone")), list = p.breaks.map(what).join("; ");
-    return `<li>${p.site ? tt("sp.gw.chk.person.at", "<b>{name}</b> at {site}: {what}", {name, site: p.site, what: list})
-      : tt("sp.gw.chk.person", "<b>{name}</b>: {what}", {name, what: list})}</li>`;
+    const name = spEsc(p.name || tt("sp.gw.someone.cap", "Someone"));
+    const who = p.site ? tt("sp.gw.chk.who.at", "{name} at {site}", {name, site: p.site}) : name;
+    return p.breaks.map(b => `<li>${line(b, who)}</li>`).join("");
   }).join("");
   return found.length ? gwCall("warn", "alert", `${tt("sp.gw.chk.head", {one: "This week breaks a rule or a demand for {n} person:",
     other: "This week breaks a rule or a demand for {n} people:"}, {n: found.length})}<ul class="gw-chk">${lines}</ul>`) : "";
@@ -29140,6 +29200,7 @@ function gwRosterWeek(row){
   const days = new Map();
   let sent = 0, kept = 0, unreadable = 0, dropped = 0;
   const added = [];  // an office's: the planned entries the write adds
+  const left = new Map();  // an office's: person index -> planned hours left out
   const put = s => {
     const st = (row.stations || [])[s.s], who = (row.people || [])[s.p];
     if(!st || !spHasId(st.id) || !who || !spHasId(who.id) || !(s.d >= 0 && s.d < 7)) return false;
@@ -29172,13 +29233,16 @@ function gwRosterWeek(row){
     });
     (row.shifts || []).forEach(s => {
       if(spNobody(s.p) || bench.has(s.p) || clash(s)) return;
-      if(gwAddBreaks(weekOf(s.p), entry(s), ((row.people || [])[s.p] || {}).demands, clean)){ dropped++; return; }
+      if(gwAddBreaks(weekOf(s.p), entry(s), ((row.people || [])[s.p] || {}).demands, clean)){
+        dropped++; left.set(s.p, (left.get(s.p) || 0) + s.t - s.f); return;
+      }
       if(put(s)){ sent++; added.push(s); busy.push({d: s.d, f: s.f, t: s.t, p: s.p, s: s.s}); weekOf(s.p).push(entry(s)); }
     });
   } else (row.shifts || []).forEach(s => { if(!spNobody(s.p) && !bench.has(s.p) && put(s)) sent++; });
   if(!row.office && !row.full && spCoverOnly(row))
     ((row.current || {}).list || []).filter(s => !s.k).forEach(s => { if(put(s)) kept++; });
-  return {days: [...days].sort((a, b) => a[0] - b[0]).map(([d, shifts]) => ({d, shifts})), sent, kept, unreadable, added, dropped};
+  return {days: [...days].sort((a, b) => a[0] - b[0]).map(([d, shifts]) => ({d, shifts})), sent, kept, unreadable, added, dropped,
+    leftOut: [...left].map(([p, hours]) => ({p, hours}))};
 }
 /* Whether the game's schedule already is this week, entry for entry (and
    open around the clock where the plan wants that). */
@@ -29215,7 +29279,8 @@ function gwRosterButtons(key){
   if(!row) return "";
   const one = gwButton("schedule", tt("sp.gw.sch.one", "Write this schedule to the game"), `data-gw-sites="${attr(JSON.stringify([key]))}"`,
     row.office && gwRosterWeek(row).unreadable ? tt("sp.gw.sch.office.unreadable", "An entry here can't be read; change it in the game first")
-      : gwRosterWeek(row).sent ? "" : row.office ? tt("sp.gw.sch.office.written", "Every entry the office default can add is in the game")
+      : gwRosterWeek(row).sent ? "" : row.office ? (gwRosterWeek(row).dropped ? tt("sp.gw.sch.office.full", "Nothing more fits: the rest of the office default is more than its staff's weeks can take")
+        : tt("sp.gw.sch.office.written", "Every entry the office default can add is in the game"))
       : tt("sp.gw.sch.blocked", "Every entry in this plan waits on somebody who does not work here yet: add them first"), {icon: "hire"});
   const all = gwScheduleSites();
   const many = all.length > 1
@@ -29374,8 +29439,13 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
         const added = week.days.flatMap(({d, shifts}) => shifts.map(s => Object.assign({d}, s)))
           .filter(s => !had.has(`${s.d}|${s.f}|${s.t}|${s.employeeId}|${s.itemInstanceId}`));
         const who = [...new Set(added.map(s => s.employeeId))].map(id => spEsc(((row.people || []).find(p => p.id === id) || {}).name || tt("sp.gw.someone", "someone")));
-        adds = added.length ? gwCall("info", "roster", tt("sp.gw.sch.adds", "<b>Adds {h} h for {who}</b>; nobody's current hours change.", {h: gwHours(added), who: who.join(", ")}))
-          : gwCall("info", "roster", tt("sp.gw.sch.office.written", "Every entry the office default can add is in the game"));
+        adds = (added.length ? gwCall("info", "roster", tt("sp.gw.sch.adds", "<b>Adds {h} h for {who}</b>; nobody's current hours change.", {h: gwHours(added), who: who.join(", ")}))
+          : week.dropped ? gwCall("info", "roster", tt("sp.gw.sch.office.full", "Nothing more fits: the rest of the office default is more than its staff's weeks can take"))
+          : gwCall("info", "roster", tt("sp.gw.sch.office.written", "Every entry the office default can add is in the game")))
+          /* The office default's hours left out for someone, one line each. */
+          + (week.leftOut || []).map(x => gwCall("warn", "alert", tt("sp.gw.sch.office.left",
+            "<b>{name}</b>: {h} h of the office default left out, more than their week can take",
+            {name: spEsc(((row.people || [])[x.p] || {}).name || tt("sp.gw.someone.cap", "Someone")), h: x.hours}))).join("");
       }
       const over = (answer.warnings || []).filter(w => w.type === "overworked").map(w =>
         gwCall("warn", "flame", tt("sp.gw.over", "<b>{name}</b> works {n} h on {day}. The game allows it.",

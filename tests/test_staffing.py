@@ -21,11 +21,13 @@ from ba_dashboard import (
     SHIFT_CAP,
     WEEKEND_WEEKDAYS,
     COVER_STATIONS,
+    CAPPED_INITIAL_BUILD,
     _arrival_ceiling,
     _bridge_troughs,
     _cut_run,
     _fill_stations,
     _hourly,
+    _initial_customers,
     _need_curve,
     _staff,
     _staffing,
@@ -273,19 +275,15 @@ class ArrivalCeilingTest(unittest.TestCase):
     def tearDown(self):
         ba_dashboard._demand_curves = self.saved
 
-    def ceiling(self, **kw):
-        args = dict(
-            type_slug=SHOP,
-            sqm=100,
-            products=["ba:itemname_shirt", "ba:itemname_towel"],
-            promotion=0,
-            base_promotion=0.55,
-            door=0,
-        )
-        args.update(kw)
-        return _arrival_ceiling(**args)
+    def ceiling(self, build=CAPPED_INITIAL_BUILD - 1, size_cap=30, sqm=100,
+                products=("ba:itemname_shirt", "ba:itemname_towel"), type_slug=SHOP,
+                promotion=0, door=0):
+        initial = _initial_customers(build, size_cap, type_slug, sqm, products)
+        return _arrival_ceiling(type_slug, initial, promotion, 0.55, door)
 
-    def test_only_the_types_own_primary_products_size_it(self):
+    # A game started before build 2847 sizes a shop off its shelves.
+
+    def test_only_the_types_own_primary_products_size_an_old_game(self):
         # 0.5 x 100 sqm x 0.55, rounded up. The towel's 9.0 is not primary here.
         self.assertEqual(self.ceiling()[1][12], 28)
 
@@ -308,6 +306,51 @@ class ArrivalCeilingTest(unittest.TestCase):
 
     def test_an_unknown_building_size_has_no_ceiling_either(self):
         self.assertIsNone(self.ceiling(sqm=0))
+
+    def test_a_save_that_does_not_say_when_it_started_is_an_old_game(self):
+        self.assertEqual(self.ceiling(build=None)[1][12], 28)
+
+    # Every game started at build 2847 or later sizes it off the building.
+
+    def test_a_new_game_sizes_it_off_the_buildings_capacity(self):
+        # 30 x 0.55 = 16.5, rounded up; square metres and products play no part.
+        new = CAPPED_INITIAL_BUILD
+        self.assertEqual(self.ceiling(build=new)[1][12], 17)
+        self.assertEqual(self.ceiling(build=new, sqm=0, products=())[1][12], 17)
+
+    def test_a_new_games_promotion_lifts_it_to_the_door(self):
+        # 30 x 1.3 = 39, and the registration's own capacity clips it.
+        self.assertEqual(self.ceiling(build=3682, promotion=100)[1][12], 39)
+        self.assertEqual(self.ceiling(build=3682, promotion=100, door=30)[1][12], 30)
+
+    def test_a_capacity_range_takes_its_top_so_it_stays_a_bound(self):
+        self.assertEqual(self.ceiling(build=3682, size_cap=[100, 150])[1][12], 83)
+
+    def test_a_new_game_on_an_unknown_size_has_no_ceiling(self):
+        self.assertIsNone(self.ceiling(build=3682, size_cap=None))
+
+    def test_a_new_game_of_an_unknown_type_has_no_ceiling(self):
+        self.assertIsNone(self.ceiling(build=3682, type_slug="ba:businesstype_nowhere"))
+
+
+class SiteCeilingTest(unittest.TestCase):
+    """_staffing() picks the game's rule from the save's buildNumberAtStart."""
+
+    def test_a_new_game_sizes_the_ceiling_off_its_buildings_capacity(self):
+        # Second Avenue 12 is a C retail floor: 30 customers, whatever it stocks.
+        row = plan([(1, REGISTER)], [employee("p0", [SERVICE])], FLAT,
+                   build_at_start=3682)
+        curve = load_demand_curves()["types"][SHOP]
+        self.assertEqual(row["ceiling"], [
+            [math.ceil(min(30 * 0.55 * curve["d"][wd] * curve["h"][h], 100))
+             for h in range(24)]
+            for wd in range(7)
+        ])
+
+    def test_an_old_game_holding_no_primary_product_has_no_ceiling(self):
+        row = plan([(1, REGISTER)], [employee("p0", [SERVICE])], FLAT,
+                   build_at_start=CAPPED_INITIAL_BUILD - 1)
+        self.assertIsNone(row["ceiling"])
 
 
 class DemandCurvesFileTest(unittest.TestCase):
@@ -485,18 +528,18 @@ def business(status="retail", number=NUMBER, days_open=14):
     }
 
 
-def plan_sites(specs, employees, status="retail", day=None):
+def plan_sites(specs, employees, status="retail", day=None, build_at_start=None):
     """Several rented sites and one staff list, planned together.
 
     A spec may carry `days_open`, which belongs to the business rather than to
     the registration: it is how long the doors have been open, and the page
     calls a shop new by it.
     """
-    save, names, sites, grids, staff = plan_inputs(specs, employees, status, day)
+    save, names, sites, grids, staff = plan_inputs(specs, employees, status, day, build_at_start)
     return _staffing(save, names, sites, grids, staff, 0.55)
 
 
-def plan_inputs(specs, employees, status="retail", day=None):
+def plan_inputs(specs, employees, status="retail", day=None, build_at_start=None):
     """What plan_sites() hands _staffing(): (save, names, sites, grids, staff)."""
     specs = [dict(spec) for spec in specs]
     opened = [spec.pop("days_open", 14) for spec in specs]
@@ -508,6 +551,7 @@ def plan_inputs(specs, employees, status="retail", day=None):
                 "$items": [dict(reg, RentedByPlayer=True) for reg in regs]
             },
             **({"Day": day} if day is not None else {}),
+            **({"buildNumberAtStart": build_at_start} if build_at_start else {}),
         },
         {},
         "test.hsg",
@@ -544,9 +588,10 @@ def place_station_hours(days, people=(), skill=SERVICE, current=None):
                                     current=current)
 
 
-def plan(items, employees, hourly, day=None, **kw):
+def plan(items, employees, hourly, day=None, build_at_start=None, **kw):
     """Run the whole chain one site's row comes out of, and return that row."""
-    rows = plan_sites([dict(kw, items=items, hourly=hourly)], employees, day=day)
+    rows = plan_sites([dict(kw, items=items, hourly=hourly)], employees, day=day,
+                      build_at_start=build_at_start)
     return rows[0] if rows else None
 
 

@@ -1,9 +1,9 @@
 # Checking a translation
 
-Big Copilot's own words come in English, German, Spanish, French, Portuguese, Russian and Korean.
-Most of the Spanish, French, Portuguese, Russian and Korean was drafted by a language model and
-has not been read by a native speaker yet. If you speak one of them, checking it is the
-most useful help there is, and a single page at a time is welcome.
+Big Copilot's own words come in English, German, Spanish, French, Portuguese, Russian, Korean
+and Turkish. Most of the Spanish, French, Portuguese, Russian, Korean and Turkish was drafted by
+a language model and has not been read by a native speaker yet. If you speak one of them,
+checking it is the most useful help there is, and a single page at a time is welcome.
 
 ## See it
 
