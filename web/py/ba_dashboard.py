@@ -2945,9 +2945,13 @@ def _loans(save: Save, names: Names) -> list:
     for l in save.items(save.root["Loans"]):
         remaining = money(l.get("remainingAmount", 0))
         total = money(l.get("totalAmount", 0))
+        bank = save.address(l.get("bankAddress"))
         out.append(
             {
-                "bank": names.addr(save.address(l.get("bankAddress"))),
+                "bank": names.addr(bank),
+                # The bank's site key, as openStore.finance names each bank: a
+                # plan's loan is looked up by it (Open a store, step 6).
+                "key": site_key(bank),
                 "total": total,
                 "remaining": remaining,
                 "repaid": round((1 - remaining / total) * 100, 1) if total else 0,
@@ -12289,6 +12293,13 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
                        profit=money(sum(p for _d, p, _s in days)))
         else:
             row.update(_payback_row(days, cost, exact, opened, memory, last_day))
+            if exact:
+                # Day by day from the opening, for a plan's After opening
+                # (Open a store, step 6): [day, profit, sales]. What the lease
+                # cost before the opening day is one sum, `before`; both add up
+                # to `profit`. Only where the record reaches the opening.
+                row["days"] = [[d, money(p), money(s)] for d, p, s in days if d >= opened]
+                row["before"] = money(sum(p for d, p, _s in days if d < opened))
         sites[key] = row
     # A site given up since the last save leaves the memory with it.
     for key in [k for k in kept_sites if k not in sites]:
@@ -19049,7 +19060,7 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
 .os-steps button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .os-steps .sep{width:10px;height:1px;background:var(--rule)}
 .os-planpick{position:relative;display:inline-flex;align-items:center;gap:8px;min-width:0;max-width:100%;height:34px;padding:0 10px 0 12px;border:1px solid var(--rule);border-radius:9px;background:var(--surface);color:var(--ink-2);font-size:12.5px;white-space:nowrap}
-.os-planpick select{appearance:none;-webkit-appearance:none;min-width:0;max-width:260px;text-overflow:ellipsis;padding:0 16px 0 0;border:0;background:none;color:var(--ink);font:600 12.5px/1 Archivo,sans-serif;cursor:pointer}
+.os-planpick select{appearance:none;-webkit-appearance:none;min-width:0;max-width:200px;text-overflow:ellipsis;padding:0 16px 0 0;border:0;background:none;color:var(--ink);font:600 12.5px/1 Archivo,sans-serif;cursor:pointer}
 .os-planpick select:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:3px}
 .os-planpick option{background:var(--surface);color:var(--ink)}
 .os-planpick svg{position:absolute;right:10px;width:12px;height:12px;stroke:var(--ink-3);fill:none;stroke-width:2;transform:rotate(90deg);pointer-events:none}
@@ -19104,6 +19115,7 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
 .os-gate b{color:var(--ink);font-weight:600}
 .os-gate .os-btn{margin-left:auto}
 .os-payback{margin-top:18px;font-size:12.5px;color:var(--ink-3)}
+.os-payback button.os-link{padding:0;border:0;border-bottom:1px solid var(--rule);background:none;cursor:pointer}
 @media(max-width:760px){.os-prog{flex-wrap:wrap}.os-prog .aside{margin-left:0;flex-wrap:wrap}.os-ck{grid-template-columns:30px minmax(0,1fr)}.os-ck .ic{display:none}.os-ck .act{grid-column:2;justify-content:flex-start}}
 /* cards and headings ---------------------------------------------------------------- */
 .os-h{display:flex;align-items:center;gap:12px;margin:34px 0 14px}
@@ -19278,8 +19290,42 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
 .os-finfacts>div:first-child{border-left:0}
 .os-finfacts b{font:500 17px/1.1 "IBM Plex Mono",monospace}
 .os-finfacts small{font-size:12px;line-height:1.4;color:var(--ink-3)}
+/* step 6: after opening ------------------------------------------------------------------ */
+.os-roi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-top:22px}
+.os-roi .kpi .v{font-size:25px}
+.os-roi .kpi .v small{font-family:Archivo,sans-serif;font-size:13px;letter-spacing:0;color:var(--ink-3)}
+.os-roi .kpi .v.os-word{font-size:17px;line-height:1.25;letter-spacing:-.01em}
+.os-roi .kpi .sub small{color:var(--ink-3)}
+.os-roi .kpi .os-meter{height:5px;margin-top:10px}
+.os-roic{margin-top:18px}
+.os-chart .plan{fill:none;stroke:var(--ink-3);stroke-width:1.6;stroke-dasharray:5 5}
+.os-chart .fc{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-dasharray:5 5;opacity:.7}
+.os-chart .today{stroke:var(--ink-2);stroke-width:1}
+.os-chart .os-dbar{fill:var(--accent);opacity:.3}
+.os-chart .os-dbar.neg{fill:var(--neg)}
+.os-pvsa{margin-top:0}
+.os-pvsa th,.os-pvsa td{padding:10px 12px}
+.os-pvsa td.l{font-family:Archivo,sans-serif;font-size:13.5px}
+.os-pvsa td .sub{margin-top:2px}
+.os-pvsa tr.os-sum td{font-weight:600}
+.os-pvsa td.d{color:var(--accent)}
+.os-pvsa td.dn{color:var(--warn)}
+.os-state{display:flex;align-items:baseline;gap:12px;margin:34px 0 12px}
+.os-state b{font:600 11px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;color:var(--accent)}
+.os-state b.w{color:var(--warn)}
+.os-state span{font-size:13px;color:var(--ink-2)}
+.os-done{display:flex;align-items:center;flex-wrap:wrap;gap:14px;padding:14px 16px;border-radius:12px;border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);background:color-mix(in srgb,var(--accent) 7%,transparent);font-size:13px;color:var(--ink-2)}
+.os-done .ic{display:grid;place-items:center;flex:none;width:30px;height:30px;border-radius:50%;background:var(--accent);color:var(--on-accent)}
+.os-done .ic svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.os-done b{color:var(--ink);font-weight:600;font-size:14px}
+.os-done>span:nth-child(2){flex:1;min-width:220px}
+.os-done .os-btn,.os-links .os-btn{gap:4px}
+.os-done .os-btn svg,.os-links .os-btn svg{width:12px;height:12px}
+.os-links{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:22px}
+.os-roiloan .os-meter{margin-top:4px}
 @media (max-width:1100px){
   .os-two,.os-be,.os-self{grid-template-columns:minmax(0,1fr)}
+  .os-roi{grid-template-columns:repeat(2,minmax(0,1fr))}
   .os-pb,.os-finfacts{grid-template-columns:repeat(2,minmax(0,1fr))}
   .os-pb>div:nth-child(3),.os-finfacts>div:nth-child(3){border-left:0}
   .os-pb>div:nth-child(n+3),.os-finfacts>div:nth-child(n+3){border-top:1px solid var(--rule-soft)}
@@ -19291,7 +19337,7 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
   .os-none>div:first-child{border-top:0}
   .os-plango{grid-template-columns:minmax(0,1fr) 90px 16px}
   .os-plango>span:nth-child(2){display:none}
-  .os-inv,.os-dl{display:block;overflow-x:auto}
+  .os-inv,.os-dl,.os-pvsa{display:block;overflow-x:auto}
 }
 
 </style>
@@ -30076,7 +30122,9 @@ function drawMarket(){
    the type), the investment for a 100% outfitted store in that building in
    either install mode, and when it breaks even, with a loan if the reader
    wants one. Step 5 is the checklist until opening (osUntilHtml()); step 6,
-   payback once the store trades, comes with phase 4 and is not yet reachable.
+   after opening (osRoiHtml()), holds the plan against the payback once a
+   business of the planned type stands at its address. A plan stays after its
+   store opens: the list keeps it, marked open, as the plan history.
 
    Python sends the facts (_open_store(): each type's outfit per layout, what
    every product meets in every neighbourhood, the player's own shops, the
@@ -30129,7 +30177,7 @@ function osLoad(){
           finance: p.finance && typeof p.finance === "object" ? {on: !!p.finance.on,
             amount: p.finance.amount == null || !Number.isFinite(+p.finance.amount) ? null : Math.max(0, +p.finance.amount),
             bank: typeof p.finance.bank === "string" ? p.finance.bank : null} : {on: false, amount: null, bank: null},
-          step: OS_STEPS.includes(p.step) ? p.step : "what", made: +p.made || null}));
+          step: OS_STEPS.includes(p.step) ? p.step : "what", made: +p.made || null, snap: osSnapClean(p.snap)}));
       osCur = osPlans.some(p => p.id === raw.current) ? raw.current : null;
     }
   }catch(e){}
@@ -30539,20 +30587,20 @@ function osLoanDays(own, profit, loan){
 const osStepLabel = s => ({what: tt("gr.os.step.what", "What"), where: tt("gr.os.step.where", "Where"),
   investment: tt("gr.os.step.investment", "Investment"), breakeven: tt("gr.os.step.breakeven", "Break even"),
   opening: tt("gr.os.step.opening", "Until opening"), open: tt("gr.os.step.open", "Open")})[s];
-/* A step can be opened once what it needs is chosen; the last comes with
-   payback monitoring. */
+/* A step can be opened once what it needs is chosen; the last once the
+   store trades. */
 function osStepReady(s, plan){
   if(s === "what") return true;
   if(s === "where") return !!plan;
   if(s === "investment" || s === "breakeven" || s === "opening") return !!(plan && osBuilding(plan.key));
-  return false;
+  return !!(plan && plan.key && osOpenedAt(plan));
 }
 function osCtlHtml(plan){
   const at = OS_STEPS.indexOf(osStep);
   const steps = OS_STEPS.map((s, i) => {
     const ready = osStepReady(s, plan), done = i < at && ready, cls = s === osStep ? "on" : done ? "done" : "";
     const mark = done ? icon("tick") : String(i + 1);
-    const later = s === "open";
+    const later = s === "open" && !ready;
     return `${i ? `<span class="sep" aria-hidden="true"></span>` : ""}<button type="button" class="${cls}" data-os-step="${s}"${
       ready ? "" : ` disabled`}${s === osStep ? ` aria-current="step"` : ""}${later ? ` data-tip="${attr(tt("gr.os.step.payback",
       "Payback monitoring comes once the store trades."))}"` : ""}><i>${mark}</i>${osStepLabel(s)}</button>`;
@@ -30564,6 +30612,7 @@ function osCtlHtml(plan){
 }
 const osPlanName = p => {
   const b = osBuilding(p.key);
+  if(b && p.key && osOpenedAt(p)) return tt("gr.os.plan.nameOpen", "{type} · {address} · open", {type: osTypeName(p.type), address: b.address});
   return b ? tt("gr.os.plan.name", "{type} · {address}", {type: osTypeName(p.type), address: b.address}) : osTypeName(p.type);
 };
 /* The plan, one strip under the steps: what, where, how much, how long. */
@@ -30581,7 +30630,8 @@ function osStripHtml(plan){
   const invest = inv ? `<b class="m">${fmt(inv[mode])}</b><small>${mode === "self" ? tt("gr.os.strip.self", "Self-installation · deposit included")
     : tt("gr.os.strip.firm", "Installation firm · deposit included")}</small>` : `<b class="dim">–</b><small>${tt("gr.os.strip.afterWhere", "after the location")}</small>`;
   const est = b && inv ? osEstimate(plan, b) : null;
-  const be = est && est.days ? `<b class="m">${osRange(est.days[mode])}</b><small>${tt("gr.os.strip.be", "after opening · at {w}/day", {w: fmt(est.profit)})}</small>`
+  const opened = plan.key && osOpenedAt(plan) ? osStripOpen(plan) : null;
+  const be = opened ? opened : est && est.days ? `<b class="m">${osRange(est.days[mode])}</b><small>${tt("gr.os.strip.be", "after opening · at {w}/day", {w: fmt(est.profit)})}</small>`
     : est && est.none ? `<b class="dim">${tt("gr.os.none.short", "No estimate")}</b><small>${est.none}</small>`
     : `<b class="dim">–</b><small>${tt("gr.os.strip.afterInvest", "after the investment")}</small>`;
   return `<div class="os-pb">${cell(tt("gr.os.strip.open", "Open"), what)}${cell(tt("gr.os.strip.whereLab", "Where"), where)}${
@@ -30652,13 +30702,18 @@ function osPlansHtml(){
   if(!osPlans.length) return "";
   const rows = osPlans.map(p => {
     const b = osBuilding(p.key), inv = osInvestment(p, b), mode = osMode(p);
-    const stage = !b ? [17, tt("gr.os.stage.where", "Where")] : p.step === "breakeven" ? [50, tt("gr.os.stage.be", "Break even")]
-      : [33, tt("gr.os.stage.invest", "Investment")];
+    /* A plan whose store trades is marked open, and its bar is the share paid back. */
+    const open = p.key && osOpenedAt(p), row = open && paybackSite(p.key), cost = row && (row.cost || {})[mode];
+    const paid = row && cost > 0 ? Math.max(0, Math.min(100, Math.floor(100 * (row.profit || 0) / cost))) : 0;
+    const stage = open ? (osPaidBack(row && row[mode]) ? [100, tt("gr.os.stage.paid", "Open · paid back")] : [paid, tt("gr.os.stage.open", "Open · {n}% paid back", {n: paid})])
+      : !b ? [17, tt("gr.os.stage.where", "Where")] : p.step === "opening" ? [67, tt("gr.os.stage.opening", "Until opening")]
+      : p.step === "breakeven" ? [50, tt("gr.os.stage.be", "Break even")] : [33, tt("gr.os.stage.invest", "Investment")];
     const sub = b ? tt("gr.os.plans.at", "{address} · {hood}", {address: b.address, hood: hoodName(b.hood)})
       : p.hood ? tt("gr.os.plans.hood", "{hood} · no location yet", {hood: hoodName(p.hood)}) : tt("gr.os.plans.none", "no location yet");
-    return `<div class="os-plan"><button type="button" class="os-plango" data-os-open="${attr(p.id)}"><span><b>${spEsc(osTypeName(p.type))}</b><small>${spEsc(sub)}</small></span>
+    return `<div class="os-plan${open ? " open" : ""}"><button type="button" class="os-plango" data-os-open="${attr(p.id)}"><span><b>${spEsc(osTypeName(p.type))}${
+      open ? ` <span class="os-tag req">${tt("gr.os.plans.open", "Open")}</span>` : ""}</b><small>${spEsc(sub)}</small></span>
       <span><span class="os-lab">${stage[1]}</span><span class="os-meter" style="--w:${stage[0]}%"><i></i></span></span>
-      <span class="v">${inv ? fmt(inv[mode]) : `<span class="os-dim">–</span>`}</span>${icon("chev")}</button>
+      <span class="v">${cost ? fmt(cost) : inv ? fmt(inv[mode]) : `<span class="os-dim">–</span>`}</span>${icon("chev")}</button>
       <button type="button" class="os-x" data-os-drop="${attr(p.id)}" aria-label="${attr(tt("gr.os.plans.drop", "Delete the plan {name}", {name: osPlanName(p)}))}" data-tip="${
         attr(tt("gr.os.plans.dropTip", "Delete this plan"))}">×</button></div>`;
   }).join("");
@@ -31180,7 +31235,8 @@ function osUntilHtml(plan){
     tt("gr.os.ck.count", "{n} of {of}", {n: done, of: rows.length})}</span><div class="aside">${live}<span>${clock}</span></div></div>
     <div class="os-cks">${rows.map(r => `<div class="os-ck ${r.state}"${r.state === "part" ? ` style="--p:${r.p}%"` : ""}><span class="st">${
       r.state === "done" ? osIcon("tick") : ""}</span><span class="ic">${osIcon(r.icon)}</span><div class="tx"><b>${r.title}</b><small>${r.sub}</small></div><div class="act">${r.act}</div></div>`).join("")}</div>
-    ${gate}${note}<p class="os-payback">${tt("gr.os.ck.payback", "Once the store trades, the payback shows here.")}</p>`;
+    ${gate}${note}${osOpenedAt(plan) ? `<div class="os-links"><button type="button" class="os-btn" data-os-step="open">${tt("gr.os.ck.paybackGo", "After opening: the payback")}${icon("chev")}</button></div>`
+      : `<p class="os-payback">${tt("gr.os.ck.payback", "Once the store trades, the payback shows here.")}</p>`}`;
 }
 /* Marketing at the plan's business: the most profitable mix the estimate settled on. */
 function osMarketingWrite(plan){
@@ -31218,6 +31274,273 @@ function osMarketingWrite(plan){
   });
 }
 
+/* --- step 6: after opening ---------------------------------------------------
+   Once a business of the planned type stands at the plan's address
+   (osOpenedAt()), the plan attaches to it and is held against phase 1's
+   payback for the site (_payback(), paybackSite()): the investment, the daily
+   profit since the opening, break even. Nothing is worked out again here: the
+   investment, profit so far, recent rate and outcome are the payback row's, in
+   the plan's install mode. The plan's side is what it said before the store
+   opened: osSnapTake() keeps its figures in the plan while there is nothing at
+   the address yet, and stops once there is. A plan that never saw its building
+   empty works them out from the save on screen, and says so. */
+const OS_SNAP_DAYS = 30, OS_RAMP_SHOWN = 5;
+const OS_SNAP_INV = ["furniture", "fee", "deposit", "decor", "delivery", "firm", "self"];
+/* The plan's figures as osEstimate() gives them now: the investment's parts,
+   the steady profit a day, the days to break even in each mode, and the first
+   OS_SNAP_DAYS days one by one (the ramp and a first seller's hype). */
+function osSnapOf(plan, b){
+  const est = osEstimate(plan, b);
+  if(!est || !est.inv) return null;
+  const inv = {};
+  OS_SNAP_INV.forEach(k => inv[k] = Math.round(est.inv[k] || 0));
+  if(est.none) return {inv, profit: null, days: null, curve: null};
+  return {inv, profit: Math.round(est.profit), days: est.days,
+    curve: Array.from({length: OS_SNAP_DAYS}, (_, k) => Math.round(est.day(k)))};
+}
+/* A stored snapshot, checked field by field as osLoad() checks the rest. */
+function osSnapClean(s){
+  if(!s || typeof s !== "object" || !s.inv || typeof s.inv !== "object") return null;
+  const n = v => Number.isFinite(+v) ? +v : 0, day = v => Number.isFinite(v) ? v : null;
+  const inv = {};
+  OS_SNAP_INV.forEach(k => inv[k] = n(s.inv[k]));
+  const range = d => d && typeof d === "object" ? {low: day(d.low), high: day(d.high)} : {low: null, high: null};
+  return {inv, profit: Number.isFinite(s.profit) ? s.profit : null,
+    days: s.days && typeof s.days === "object" ? {firm: range(s.days.firm), self: range(s.days.self)} : null,
+    curve: Array.isArray(s.curve) ? s.curve.filter(Number.isFinite).slice(0, OS_SNAP_DAYS) : null};
+}
+/* Kept while the address holds nothing of the planned type; frozen after. */
+function osSnapTake(plan){
+  if(!plan || !plan.key || osOpenedAt(plan)) return;
+  const b = osBuilding(plan.key), snap = b && osSnapOf(plan, b);
+  if(!snap || JSON.stringify(snap) === JSON.stringify(plan.snap || null)) return;
+  plan.snap = snap;
+  osSave();
+}
+/* The plan's side of step 6: the kept figures, else today's. */
+function osPlanned(plan){
+  if(plan.snap) return {snap: plan.snap, live: false};
+  const b = osBuilding(plan.key);
+  return {snap: b ? osSnapOf(plan, b) : null, live: true};
+}
+const osSigned = v => `${v > 0 ? "+" : ""}${fmt(v)}`;
+const osLastDay = row => (row.days || []).length ? row.days[row.days.length - 1][0] : ((D.meta || {}).day || 1) - 1;
+/* The payback row's days from the first with sales on: the plan's day 1. */
+const osSelling = row => { const d = row.days || [], i = d.findIndex(x => x[2] > 0); return i < 0 ? [] : d.slice(i); };
+/* Days to break even counted as the plan counts them, the first day with
+   sales as day 1; null where the payback row cannot say. */
+function osNowDays(row, o){
+  const sold = osSelling(row);
+  if(!sold.length || !o) return null;
+  const first = sold[0][0];
+  if(o.state === "reached") return o.day - first + 1;
+  if(o.state === "togo") return osLastDay(row) - first + 1 + o.days;
+  return null;
+}
+/* The break-even tile and the strip's cell: what the payback says, short. */
+function osRoiBe(row, o){
+  switch(o && o.state){
+    case "reached": case "latest": return {v: tt("gr.os.be.day", "day {n}", {n: o.day}), sub: o.state === "reached"
+      ? tt("gr.os.roi.after", {one: "{n} day after opening", other: "{n} days after opening"}, {n: o.after}) : tt("gr.os.roi.latest", "at the latest")};
+    case "togo": return {v: `${num(o.days)} <small>${tt("gr.os.roi.togo", {one: "day to go", other: "days to go"}, {n: o.days})}</small>`,
+      sub: tt("gr.os.roi.about", "about day {n}", {n: osLastDay(row) + o.days})};
+    case "never": return {v: tt("gr.os.roi.never", "Not paying back"), word: true, sub: tt("gr.os.roi.never.sub", "at recent profit")};
+    case "window": return {v: paybackShort(o), sub: tt("gr.os.roi.window", "an estimate from recent profit")};
+  }
+  return {v: "–", sub: tt("gr.os.roi.unknown", "no day with sales yet")};
+}
+/* Paid back, as the site's page and the portfolio say it. */
+const osPaidBack = o => !!o && (o.state === "reached" || o.state === "latest"
+  || (paybackWindowDay(o) !== null && paybackWindowDay(o) <= ((D.meta || {}).day || 0)));
+
+/* Cumulative profit from the opening and each day's profit as a bar, against
+   the investment and the plan's line from the first day with sales; while it
+   pays back, a dashed line on at recent profit to the day it gets there. */
+function osRoiChart(plan, row, snap, inv, o, opened){
+  const days = row.days || [];
+  if(!days.length) return "";
+  const W = 900, H = 282, x0 = 64, y0 = 18, x1 = W - 18, y1 = H - 42, mode = osMode(plan);
+  const cum = [row.before || 0];
+  days.forEach(d => cum.push(cum[cum.length - 1] + d[1]));
+  const now = days.length, got = cum[now];
+  const first = days.findIndex(d => d[2] > 0), anchor = first < 0 ? null : first;
+  const curve = snap && snap.curve && snap.curve.length ? snap.curve : null, steady = snap ? snap.profit : null;
+  const planAt = k => curve && k < curve.length ? curve[k] : steady || 0;
+  const range = snap && snap.days ? snap.days[mode] : null, planDay = range ? range.high || range.low : null;
+  const fcEnd = o && o.state === "togo" ? now + o.days : null;
+  const hit = o && o.state === "reached" ? o.day - opened + 1 : fcEnd;
+  const want = Math.max(10, now, fcEnd || 0, anchor !== null && planDay ? anchor + planDay : 0, hit || 0);
+  const dmax = Math.min(Math.ceil(want * 1.1 / 5) * 5, Math.max(40, Math.ceil(now * 4 / 5) * 5));
+  const vmin = Math.min(0, ...cum), vmax = Math.max(inv * 1.15, Math.max(...cum) * 1.05, 1);
+  /* Yu is not held inside the chart: the lines past its top are clipped, not flattened. */
+  const X = d => x0 + (x1 - x0) * d / dmax, Yu = v => y1 - (y1 - y0) * (v - vmin) / (vmax - vmin), Y = v => Yu(Math.max(vmin, Math.min(v, vmax)));
+  const step = osNiceStep((vmax - vmin) / 4), dstep = osNiceStep(dmax / 8);
+  const g = [];
+  for(let v = Math.ceil(vmin / step) * step; v <= vmax + 1e-6; v += step) g.push(`<line class="grid" x1="${x0}" x2="${x1}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"></line><text x="${x0 - 8}" y="${(Y(v) + 3.5).toFixed(1)}" text-anchor="end">${money(v)}</text>`);
+  for(let d = 0; d <= dmax; d += dstep) g.push(`<text x="${X(d).toFixed(1)}" y="${y1 + 18}" text-anchor="middle">${d}</text>`);
+  /* The bars share the money axis, scaled so the biggest day is a third of it. */
+  const big = Math.max(...days.map(d => Math.abs(d[1])), 1), k = (vmax - vmin) * 0.3 / big, bw = Math.max(1.5, (x1 - x0) / dmax * 0.8);
+  const bars = days.map((d, i) => { const top = Y(Math.max(0, d[1] * k)), bot = Y(Math.min(0, d[1] * k));
+    return `<rect class="os-dbar${d[1] < 0 ? " neg" : ""}" x="${X(i + 0.1).toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0.5, bot - top).toFixed(1)}"></rect>`; }).join("");
+  const line = cum.map((v, d) => `${X(d).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
+  const todayRight = X(now) > x1 - 150;
+  let planLine = "", planLbl = "";
+  if(anchor !== null && steady != null){
+    const pts = [`${X(anchor).toFixed(1)},${Y(0).toFixed(1)}`];
+    let run = 0;
+    for(let j = 0; anchor + j + 1 <= dmax; j++){ run += planAt(j); pts.push(`${X(anchor + j + 1).toFixed(1)},${Yu(run).toFixed(1)}`); }
+    planLine = `<polyline class="plan" points="${pts.join(" ")}"></polyline>`;
+    planLbl = `<text class="lbl i" x="${x1 - 6}" y="${y0 + (todayRight ? 28 : 10)}" text-anchor="end">${tt("gr.os.roi.planLine", "plan {w}/day", {w: fmt(steady)})}</text>`;
+  }
+  const fcTo = fcEnd && fcEnd > dmax ? got + (inv - got) * (dmax - now) / (fcEnd - now) : inv;
+  const fc = fcEnd ? `<line class="fc" x1="${X(now).toFixed(1)}" y1="${Y(got).toFixed(1)}" x2="${X(Math.min(fcEnd, dmax)).toFixed(1)}" y2="${Y(fcTo).toFixed(1)}"></line>` : "";
+  const mark = hit && hit <= dmax ? `<circle class="hit" cx="${X(hit).toFixed(1)}" cy="${Y(inv).toFixed(1)}" r="5"></circle><text class="lbl" x="${(X(hit) + 9).toFixed(1)}" y="${(Y(inv) + 16).toFixed(1)}">${
+    tt("gr.os.be.day", "day {n}", {n: opened + hit - 1})}</text>` : "";
+  return `<div class="os-card os-roic"><svg class="os-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${attr(tt("gr.os.roi.chart", "Profit since the opening against the investment and the plan"))}">
+    <defs><clipPath id="osRoiClip"><rect x="${x0}" y="${y0 - 4}" width="${x1 - x0}" height="${y1 - y0 + 4}"></rect></clipPath></defs>
+    ${g.join("")}${bars}<line class="ax" x1="${x0}" x2="${x1}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}"></line>
+    <line class="inv" x1="${x0}" x2="${x1}" y1="${Y(inv).toFixed(1)}" y2="${Y(inv).toFixed(1)}"></line>
+    <text class="lbl w" x="${x0 + 6}" y="${(Y(inv) - 7).toFixed(1)}">${tt("gr.os.roi.invested.line", "Invested {w}", {w: fmt(inv)})}</text>
+    <g clip-path="url(#osRoiClip)">${planLine}<polyline class="line" points="${line}"></polyline>${fc}</g>${planLbl}
+    <line class="today" x1="${X(now).toFixed(1)}" x2="${X(now).toFixed(1)}" y1="${y0}" y2="${y1}"></line>
+    <text class="lbl" x="${(X(now) + (todayRight ? -6 : 6)).toFixed(1)}" y="${y0 + 10}"${todayRight ? ` text-anchor="end"` : ""}>${tt("gr.os.roi.today", "today, day {n}", {n: now})}</text>
+    ${mark}<text x="${x1}" y="${y1 + 34}" text-anchor="end">${tt("gr.os.be.axis", "days after opening")}</text></svg></div>`;
+}
+
+/* Plan and now: the investment's parts in the plan's mode, the profit a day,
+   the first days against the ramp, and the days to break even. */
+function osRoiTable(plan, row, snap, mode, o){
+  const c = row.cost || {}, p = snap ? snap.inv : null, recent = (D.payback || {}).recentDays || 14;
+  const diff = (now, was, costly) => {
+    if(now == null || was == null) return `<td></td>`;
+    const d = now - was;
+    if(Math.abs(d) < 0.5) return `<td>–</td>`;
+    return `<td class="${(d > 0) === costly ? "dn" : "d"}">${osSigned(d)}</td>`;
+  };
+  const tr = (label, sub, was, now, cell, cls = "") => `<tr${cls ? ` class="${cls}"` : ""}><td class="l">${label}${sub ? `<span class="sub">${sub}</span>` : ""}</td><td>${was}</td><td>${now}</td>${cell}</tr>`;
+  const m = v => v == null ? "–" : fmt(v);
+  const rows = [];
+  if(mode === "firm" && c.billed){
+    const plan_ = p ? p.furniture + p.fee : null;
+    rows.push(tr(tt("gr.os.roi.bill", "Installation firm's bill"), tt("gr.os.roi.bill.sub", "furniture and the fee, less the trade-in"),
+      m(plan_), m(c.billed), diff(c.billed, plan_, true)));
+  } else {
+    const furn = p ? p.furniture + (mode === "self" ? p.delivery : 0) : null;
+    rows.push(tr(mode === "self" ? tt("gr.os.roi.furnSelf", "Furniture and deliveries") : tt("gr.os.roi.furn", "Furniture"),
+      tt("gr.os.roi.furn.sub", "at the game's default prices"), m(furn), m(c.furniture), diff(c.furniture, furn, true)));
+    if(mode === "self") rows.push(tr(tt("gr.os.inv.walls", "Walls and floors"), "", m(p && p.decor), m(c.materials), diff(c.materials, p && p.decor, true)));
+    else rows.push(tr(tt("gr.os.inv.fee", "Installation fee"), "", m(p && p.fee), m(c.fee), diff(c.fee, p && p.fee, true)));
+  }
+  rows.push(tr(tt("gr.os.inv.deposit", "Deposit"), "", m(p && p.deposit), m(c.deposit), diff(c.deposit, p && p.deposit, true)));
+  rows.push(tr(tt("gr.os.inv.total", "Investment"), mode === "self" ? tt("gr.os.inv.self", "Self-installation") : tt("gr.os.inv.firm", "Installation firm"),
+    m(p && p[mode]), m(c[mode]), diff(c[mode], p && p[mode], true), "os-sum"));
+  const steady = snap ? snap.profit : null;
+  if(steady != null){
+    const lo = steady * OS_LOW, hi = steady * OS_HIGH, rate = row.rate;
+    const cell = rate == null ? `<td></td>` : rate >= lo && rate <= hi ? `<td class="d">${tt("gr.os.roi.inRange", "in the range")}</td>`
+      : `<td class="${rate > hi ? "d" : "dn"}">${osSigned(rate - (rate > hi ? hi : lo))}</td>`;
+    rows.push(tr(tt("gr.os.roi.day", "Profit a day"), tt("gr.os.roi.day.sub", {one: "the last day", other: "the last {n} days"}, {n: recent}),
+      tt("gr.os.roi.range", "{lo}–{hi}", {lo: fmt(lo), hi: fmt(hi)}), m(rate), cell));
+    const sold = osSelling(row), n = Math.min(OS_RAMP_SHOWN, sold.length);
+    if(n && snap.curve && snap.curve.length >= n){
+      const was = snap.curve.slice(0, n).reduce((a, b) => a + b, 0), now = sold.slice(0, n).reduce((a, d) => a + d[1], 0);
+      rows.push(tr(tt("gr.os.roi.ramp", {one: "The first day", other: "The first {n} days"}, {n}),
+        tt("gr.os.roi.ramp.sub", "from the first day with sales; the plan's first days earn less while the store settles"), fmt(was), fmt(now), diff(now, was, false)));
+    }
+    const range = snap.days && snap.days[mode], nowDays = osNowDays(row, o);
+    if(range && range.low != null){
+      const cell = nowDays == null ? `<td></td>` : nowDays < range.low ? `<td class="d">${tt("gr.os.roi.sooner", {one: "{n} day sooner", other: "{n} days sooner"}, {n: range.low - nowDays})}</td>`
+        : range.high != null && nowDays > range.high ? `<td class="dn">${tt("gr.os.roi.later", {one: "{n} day later", other: "{n} days later"}, {n: nowDays - range.high})}</td>`
+        : `<td class="d">${tt("gr.os.roi.inRange", "in the range")}</td>`;
+      const nowText = nowDays == null ? (o && o.state === "never" ? tt("gr.os.be.never", "not at this profit") : "–")
+        : o.state === "togo" ? tt("gr.os.roi.aboutDays", {one: "about {n} day", other: "about {n} days"}, {n: nowDays}) : tt("gr.os.days", {one: "{n} day", other: "{n} days"}, {n: nowDays});
+      rows.push(tr(tt("gr.os.roi.be", "Days to break even"), tt("gr.os.roi.be.sub", "the first day with sales is day 1"), osRange(range), nowText, cell));
+    }
+  }
+  return `<div class="os-h"><h2>${tt("gr.os.roi.pvsa", "Plan and now")}</h2></div>
+    <table class="os-pvsa"><thead><tr><th class="l"></th><th>${tt("gr.os.roi.col.plan", "Plan")}</th><th>${tt("gr.os.roi.col.now", "Now")}</th><th>${
+      tt("gr.os.roi.col.diff", "Difference")}</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
+}
+/* The plan's loan, where it had one: repaid so far, read off the save's loan
+   from the plan's bank (the game books it to the company, not the store). */
+function osRoiLoan(plan, snap, mode){
+  const fin = plan.finance || {}, f = osFacts().finance || {}, banks = f.banks || [];
+  if(!fin.on || !banks.length) return "";
+  const bank = banks.find(x => x.id === fin.bank) || banks.find(x => x.id === "VantanderBankSettings") || banks[0];
+  const inv = snap ? snap.inv[mode] : 0, amount = fin.amount ?? Math.round(inv / 2), planned = osLoan(amount, bank);
+  const cell = (lab, value, sub, extra = "") => `<div><span class="os-lab">${lab}</span><b>${value}</b>${extra}<small>${sub}</small></div>`;
+  const l = (D.loans || []).filter(x => x.key === bank.key).sort((a, b) => Math.abs(a.total - amount) - Math.abs(b.total - amount))[0];
+  const plannedCell = cell(tt("gr.os.roi.loan.plan", "Planned"), fmt(amount), planned ? tt("gr.os.roi.loan.plan.sub", "{bank} · {r} repaid + {i} interest a day for {n} days",
+    {bank: bank.name, r: fmt(planned.repay), i: fmt(planned.interest), n: num(planned.days)}) : spEsc(bank.name));
+  const now = l ? cell(tt("gr.os.roi.loan.repaid", "Repaid"), `${Math.round(l.repaid)}%`, tt("gr.os.roi.loan.repaid.sub", "{w} of {total} · {left} left",
+      {w: fmt(l.total - l.remaining), total: fmt(l.total), left: fmt(l.remaining)}), `<span class="os-meter" style="--w:${Math.max(0, Math.min(100, l.repaid))}%"><i></i></span>`)
+    + cell(tt("gr.os.roi.loan.daily", "A day now"), fmt(l.dailyPayment + l.dailyInterest), tt("gr.os.roi.loan.daily.sub", "{r} repaid + {i} interest", {r: fmt(l.dailyPayment), i: fmt(l.dailyInterest)}))
+    : cell(tt("gr.os.roi.loan.repaid", "Repaid"), "–", tt("gr.os.roi.loan.none", "No loan from {bank} in the save: repaid, or not taken", {bank: bank.name}));
+  return `<div class="os-card os-fin os-roiloan"><div class="os-finhead"><h3>${osIcon("bank")}${tt("gr.os.fin.title", "Financing")}</h3></div>
+    <div class="os-finfacts">${plannedCell}${now}</div></div>`;
+}
+const osRoiSiteBtn = key => `<a class="os-btn" href="${attr(siteHref(key) || "#")}" data-os-site="${attr(key)}">${tt("gr.os.roi.site", "Site page")}${icon("chev")}</a>`;
+const osRoiResultsBtn = () => `<button type="button" class="os-btn" data-os-results>${tt("gr.os.roi.results", "Payback in Businesses › Results")}${icon("chev")}</button>`;
+
+function osRoiHtml(plan){
+  const site = osOpenedAt(plan);
+  if(!site) return `<p class="quiet os-gap">${tt("gr.os.roi.none", "Nothing of the planned type trades at this address yet.")}</p>`;
+  const row = paybackSite(plan.key), mode = osMode(plan);
+  if(!row || row.costCentre) return `<p class="quiet os-gap">${tt("gr.os.roi.norow", "The save holds no payback for {address} yet.", {address: osCkAddress(plan)})}</p>`;
+  const {snap, live} = osPlanned(plan);
+  const inv = (row.cost || {})[mode] || 0, o = row[mode] || null, got = row.profit || 0, opened = site.opened;
+  const pct = inv > 0 ? Math.max(0, Math.min(100, got / inv * 100)) : 0;
+  const was = snap ? snap.inv[mode] : null;
+  const invSub = was == null ? "" : Math.abs(inv - was) <= 0.01 * Math.max(was, 1)
+    ? tt("gr.os.roi.asPlanned", "as planned") : tt("gr.os.roi.plannedAt", "plan {w}", {w: fmt(was)});
+  const n = (row.days || []).length;
+  const soFarSub = n ? `${tt("gr.os.roi.days", {one: "{n} day", other: "{n} days"}, {n})} · <small>${tt("gr.os.roi.since", "since day {n}", {n: opened})}</small>`
+    : tt("gr.os.roi.since", "since day {n}", {n: opened});
+  const be = osRoiBe(row, o);
+  const kpi = (lab, v, sub, cls = "", extra = "") => `<div class="kpi"><span class="lab">${lab}</span><span class="v${cls}">${v}</span>${extra}${sub ? `<span class="sub">${sub}</span>` : ""}</div>`;
+  const tiles = `<div class="os-roi">${kpi(tt("gr.os.roi.invested", "Invested"), fmt(inv), invSub)}${
+    kpi(tt("gr.os.roi.soFar", "Profit so far"), fmt(got), soFarSub, got < 0 ? " neg" : got > 0 ? " pos" : "")}${
+    kpi(tt("gr.os.roi.paid", "Paid back"), `${Math.floor(pct)}%`, "", "", `<span class="os-meter" style="--w:${pct.toFixed(1)}%"><i></i></span>`)}${
+    kpi(tt("gr.os.strip.beLab", "Break even"), be.v, be.sub, be.word ? " os-word" : "")}</div>`;
+  const notes = [];
+  if(live) notes.push(tt("gr.os.roi.live", "The plan's own figures were not kept before the store opened, so the plan column is worked out from this save."));
+  if(row.exact === false) notes.push(tt("gr.os.roi.old", "The save's record starts after the opening, so the days since are not drawn."));
+  const rows = osUntilRows(plan), done = rows.filter(r => r.state === "done").length;
+  const ck = done < rows.length ? `<p class="os-payback">${tt("gr.os.roi.checklist", "{n} of {of} on the checklist until opening are done.", {n: done, of: rows.length})} <button type="button" class="os-link" data-os-step="opening">${
+    tt("gr.os.step.opening", "Until opening")}</button></p>` : "";
+  let state = "";
+  if(osPaidBack(o)){
+    const range = snap && snap.days && snap.days[mode];
+    state = `<div class="os-state"><b>${tt("gr.os.roi.paidBack", "PAID BACK")}</b></div><div class="os-done"><span class="ic">${osIcon("tick")}</span><span><b>${paybackSentence(o, row)}</b><br>${
+      range && range.low != null ? tt("gr.os.roi.done.plan", "Plan {range}. The site page keeps the row; the plan is done.", {range: osRange(range)}) : tt("gr.os.roi.done", "The site page keeps the row; the plan is done.")}</span>${
+      osRoiSiteBtn(plan.key)}${osRoiResultsBtn()}</div>`;
+  } else if(o && o.state === "never"){
+    state = `<div class="os-state"><b class="w">${tt("gr.os.roi.notPaying", "NOT PAYING BACK")}</b><span>${tt("gr.os.roi.never.note",
+      "At recent profit, {w} a day, the store does not earn its investment back.", {w: fmt(row.rate || 0)})}</span></div>`;
+  } else if(!o || o.state === "unknown"){
+    state = `<p class="os-payback">${tt("gr.os.roi.noSales", "No day with sales has finished yet: the recent profit and the days to go start with the first one.")}</p>`;
+  }
+  const links = osPaidBack(o) ? "" : `<div class="os-links">${osRoiSiteBtn(plan.key)}${osRoiResultsBtn()}</div>`;
+  return `${tiles}${osRoiChart(plan, row, snap, inv, o, opened)}${notes.map(t => `<p class="os-payback">${t}</p>`).join("")}${
+    osRoiTable(plan, row, snap, mode, o)}${state}${osRoiLoan(plan, snap, mode)}${links}${ck}`;
+}
+/* The strip's break-even cell once the store trades. */
+function osStripOpen(plan){
+  const row = paybackSite(plan.key), o = row && row[osMode(plan)];
+  if(!row || !o) return null;
+  const be = osRoiBe(row, o), range = plan.snap && plan.snap.days ? plan.snap.days[osMode(plan)] : null;
+  const planned = range && range.low != null ? tt("gr.os.strip.beOpenPlan", "{sub} · plan {range}", {sub: be.sub, range: osRange(range)}) : be.sub;
+  return `<b class="${be.word ? "" : "m"}">${be.v}</b><small>${planned}</small>`;
+}
+/* Businesses › Results with the Payback column in sight, as search goes there. */
+function osToResults(){
+  if(typeof siteShut === "function") siteShut();
+  view = "pnl"; sortKey = null;
+  drawPortfolio();
+  reveal("secPortfolio");
+  paybackIntoView();
+}
+
 /* The whole view, drawn for the step on screen. The embedded finder is kept
    between draws: it is built once and handed the plan's type again. */
 function drawOpenStore(){
@@ -31225,13 +31548,15 @@ function drawOpenStore(){
   if(!sec || !hasData()) return;
   osLoad();
   const F = osFacts(), plan = osPlan();
-  if(!OS_STEPS.slice(0, 5).includes(osStep) || !osStepReady(osStep, plan)) osStep = plan ? (osBuilding(plan.key) ? "investment" : "where") : "what";
+  if(!OS_STEPS.includes(osStep) || !osStepReady(osStep, plan)) osStep = plan ? (osBuilding(plan.key) ? "investment" : "where") : "what";
+  if(plan && F.types) osSnapTake(plan);
   $("osCtl").innerHTML = F.types ? osCtlHtml(plan) : "";
   $("osStrip").innerHTML = plan && osStep !== "what" ? osStripHtml(plan) : "";
   const where = osStep === "where" && !!plan;
   $("osWhere").hidden = !where;
   $("osBody").innerHTML = !F.types ? `<p class="quiet os-gap">${tt("gr.os.nodata", "This build carries no store rules, so there is nothing to plan with.")}</p>`
-    : osStep === "what" ? osWhatHtml() : osStep === "investment" ? osInvestHtml(plan) : osStep === "breakeven" ? osBreakHtml(plan) : osStep === "opening" ? osUntilHtml(plan) : "";
+    : osStep === "what" ? osWhatHtml() : osStep === "investment" ? osInvestHtml(plan) : osStep === "breakeven" ? osBreakHtml(plan)
+    : osStep === "opening" ? osUntilHtml(plan) : osStep === "open" ? osRoiHtml(plan) : "";
   if(where) osShowFinder(plan);
   if(osStep === "investment" && plan && osMode(plan) === "self") osPaintMini();
   if(typeof wireTips === "function") wireTips();
@@ -31267,7 +31592,11 @@ function wireOpenStore(){
     osSave(); drawOpenStore();
   });
   on("click", "[data-os-new]", (el, e) => { e.preventDefault(); osStart(el.dataset.osNew, el.dataset.osHood || null); if(typeof settleScroll === "function") settleScroll($("secOpen")); });
-  on("click", "[data-os-open]", (el, e) => { e.preventDefault(); osCur = el.dataset.osOpen; const plan = osPlan(); osStep = plan ? plan.step : "what"; osSave(); drawOpenStore(); });
+  /* A plan whose store trades opens on After opening. */
+  on("click", "[data-os-open]", (el, e) => { e.preventDefault(); osCur = el.dataset.osOpen; const plan = osPlan();
+    osStep = plan ? (plan.key && osOpenedAt(plan) ? "open" : plan.step) : "what"; osSave(); drawOpenStore(); });
+  on("click", "[data-os-site]", (el, e) => { if(e.metaKey || e.ctrlKey || e.shiftKey || e.button) return; e.preventDefault(); openSite(el.dataset.osSite); });
+  on("click", "[data-os-results]", () => osToResults());
   on("click", "[data-os-drop]", (el, e) => {
     e.preventDefault();
     osPlans = osPlans.filter(p => p.id !== el.dataset.osDrop);

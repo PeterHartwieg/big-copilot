@@ -398,6 +398,22 @@ class PaybackTest(PricesTestCase):
         self.assertEqual(site["profit"], -98 * 5 + 1000 * 35)
         self.assertEqual(site["firm"]["state"], "togo")
 
+    def test_the_days_from_the_opening_and_the_lease_before_it(self):
+        # Rent on the empty lease from day 100, opened on day 140, selling from
+        # day 141: step 6 of Open a store draws these day by day.
+        rows = [(d, {SHOP: (-98, 0) if d <= 140 else (20000, 25000)}) for d in range(100, 161)]
+        out, _ = self.run_payback(rows, opened=140)
+        site = out["sites"][KEY_SHOP]
+        self.assertEqual(site["before"], -98 * 40)
+        self.assertEqual(site["days"][0], [140, -98, 0])
+        self.assertEqual(site["days"][1], [141, 20000, 25000])
+        self.assertEqual(len(site["days"]), 21)
+        self.assertEqual(site["before"] + sum(p for _d, p, _s in site["days"]), site["profit"])
+        # Neither where the record starts inside the lease, nor for a cost centre.
+        old, _ = self.run_payback([(d, {SHOP: (100, 50000), BREWERY: (-1, 0)}) for d in range(100, 161)])
+        self.assertNotIn("days", old["sites"][KEY_SHOP])
+        self.assertNotIn("days", old["sites"][KEY_BREWERY])
+
     def test_a_site_given_up_leaves_the_memory(self):
         history = History(None)
         self.run_payback([(30, {SHOP: (1, 1)})], history)
@@ -426,6 +442,10 @@ class ExtractTest(unittest.TestCase):
         for key in trading:
             self.assertIn(payback["sites"][key]["firm"]["state"],
                           ("reached", "latest", "togo", "never", "unknown"))
+        # Each loan names its bank's site key, as openStore.finance's banks do.
+        self.assertTrue(data["loans"])
+        for loan in data["loans"]:
+            self.assertRegex(loan["key"], r"^ba:street_[a-z0-9]+#\d+$")
 
 
 if __name__ == "__main__":

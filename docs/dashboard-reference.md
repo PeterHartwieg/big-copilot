@@ -983,8 +983,39 @@ opens the Staff page's hiring dialog for this site only, **Assign uniforms** the
 write, **Set up marketing** the marketing write with the most profitable mix the estimate
 settled on, sent with the campaigns running now as `was`. Otherwise the button is a short
 instruction for the game, and a strip under the list says the game can be linked and where
-to find the mod. **Plan a factory** goes to Expansion › Plan a factory. Step 6, the payback
-after opening, is not built yet.
+to find the mod. **Plan a factory** goes to Expansion › Plan a factory. Once the store trades, a button
+under the list goes to step 6.
+
+**After opening** (step 6) opens once a business of the planned type stands at the plan's
+address. It holds the plan against the site's own payback, the same row Businesses › Results
+and the site's page show (`payback.sites`), in the plan's install mode; nothing is estimated
+again. What the plan said is kept in the plan while the address is still empty (its
+investment by part, profit a day, days to break even and the first 30 days one by one) and
+frozen once the store opens, so a later change in prices or rivals does not move it. A plan
+first opened after its store already traded works its side out from the save on screen, and
+says so.
+
+- **Tiles**: the investment (with "as planned" within 1%, else the plan's figure), profit so
+  far with the days since the opening, the share paid back, and break even: the day it was
+  reached and how many days after opening, the days to go at recent profit and the day that
+  lands on, "Not paying back" at recent profit, or nothing before a day with sales.
+- **Chart**: profit since the opening day by day (`payback.sites[key].days`, with the lease's
+  cost before the opening as `before`), a bar per day, the investment, the plan's line from
+  the first day with sales, and while it pays back a dashed line on at recent profit. It is
+  drawn only where the save's record reaches the opening.
+- **Plan and now**: furniture, the installation fee (or the firm's real bill where the save
+  holds it, or walls and floors for self-installation), the deposit and the total; the profit
+  a day as the plan's range against the recent days; the first five days with sales against
+  the plan's first days, which count the ramp and a first seller's hype; and the days to break
+  even, both counted from the first day with sales as day 1.
+- **Financing**, where the plan had a loan: the loan planned beside the save's loan from that
+  bank (the closest in amount), its share repaid and what it costs a day now.
+- Paid back, the plan is done: a strip says the day and the plan's range and hands over to
+  the site's page. **Site page** and **Payback in Businesses › Results** are there in every
+  state. A checklist that is not complete leaves a note with a way back to it.
+
+A plan stays in Your plans after its store opens, marked **Open** with the share paid back,
+and opens on step 6.
 
 ## The portfolio, by chain
 

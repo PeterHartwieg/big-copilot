@@ -1517,6 +1517,7 @@
   "recentDays": 14,
   "sites": {
    "ba:street_broadway#2": {
+    "before": 0.0,
     "cost": {
      "deposit": 0.0,
      "fee": 0.0,
@@ -1526,6 +1527,7 @@
      "self": 2950.0
     },
     "costCentre": false,
+    "days": [],
     "exact": true,
     "firm": {
      "state": "unknown"
@@ -1539,6 +1541,7 @@
     "since": null
    },
    "ba:street_fifthavenue#4": {
+    "before": 0.0,
     "cost": {
      "deposit": 0.0,
      "fee": 131850.0,
@@ -1548,6 +1551,7 @@
      "self": 1000.0
     },
     "costCentre": false,
+    "days": [],
     "exact": true,
     "firm": {
      "state": "unknown"
@@ -1576,6 +1580,7 @@
     "since": null
    },
    "ba:street_secondavenue#10": {
+    "before": 0.0,
     "cost": {
      "deposit": 0.0,
      "fee": 386760.0,
@@ -1585,6 +1590,7 @@
      "self": 2950.0
     },
     "costCentre": false,
+    "days": [],
     "exact": true,
     "firm": {
      "state": "unknown"
