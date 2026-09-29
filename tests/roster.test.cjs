@@ -86,13 +86,15 @@ function business(){
 }
 
 /** Open the site panel on one of the planner's rows, optionally edited first.
- *  A shop whose demand data is not complete is on its open-hours plan
- *  (spPlanOf()); most tests here are about the demand plan's own view, cover
- *  only included, which a shop without that plan still shows, so it is taken
- *  off unless `open` keeps it. */
-async function shop(which = 'full', edit, boot, {open = false} = {}){
+ *  `noOpenPlan` (the default) simulates a row the planner gives no
+ *  open-hours plan (`openCover`), as for a shop with no serving station open
+ *  any hour: the block then shows the demand plan, cover only included,
+ *  which is what most tests here are about. A shop whose demand data is not
+ *  complete has that plan and is on it (spPlanOf()); `noOpenPlan: false`
+ *  keeps the planner's row whole. */
+async function shop(which = 'full', edit, boot, {noOpenPlan = true} = {}){
   const row = copy(ROWS[which]);
-  if(!open) delete row.openCover;
+  if(noOpenPlan) delete row.openCover;
   if(edit) edit(row);
   const page = await browser.newPage({viewport: {width: 1440, height: 1200}});
   await page.route('https://**', r => r.abort());
@@ -2158,7 +2160,7 @@ test('a shop without complete data is on its open-hours plan: every station the 
   // The staffing revisit (28 September 2026): the Staff page hired a new shop
   // into its open-hours plan while this block showed and wrote cover only,
   // so writing it after a hire took the hires' serving hours away again.
-  const page = await shop('newshop', null, null, {open: true});
+  const page = await shop('newshop', null, null, {noOpenPlan: false});
   try {
     assert.equal(ROWS.newshop.openCover.complete, false);
     assert.deepEqual(await pickText(page), [['Open hours', true], ['Full cover 24/7', false]]);
@@ -2183,7 +2185,7 @@ test('a shop without complete data is on its open-hours plan: every station the 
 test('the Optimize staffing card sizes a new shop by the plan its Staffing shows', async () => {
   // The card read the demand plan (cover only) while the block showed and
   // wrote the open-hours plan: the two quoted different weeks.
-  const page = await shop('newshop', null, null, {open: true});
+  const page = await shop('newshop', null, null, {noOpenPlan: false});
   try {
     const out = await page.evaluate(k => {
       drawOptimizeStaffing();
@@ -2198,5 +2200,20 @@ test('the Optimize staffing card sizes a new shop by the plan its Staffing shows
     assert.equal(out.same, true);
     assert.equal(out.badge, out.want);
     assert.notEqual(out.badge, `${out.cover} HOURS`, 'not the cover-only week');
+  } finally { await page.close(); }
+});
+
+test('the open-hours plan draws its own need: every station the hours it opens and nothing has read', async () => {
+  // Review round 1: the block drew the demand plan's need beside the
+  // open-hours week, so a new shop's strip said no hour needed anybody.
+  const page = await shop('newshop', null, null, {noOpenPlan: false});
+  try {
+    const regs = await page.evaluate(k => (spRosterRow(k).roles || []).reduce((n, r) => n + (r.stations || []).length, 0), KEY);
+    const cells = await page.locator(mon + '.sp-need').evaluateAll(n => n.map(x => [x.style.gridColumn, x.style.getPropertyValue('--n'), x.dataset.read]));
+    // Open 8 to 20: twelve hours, each every serving station, said as such.
+    assert.equal(cells.length, 12);
+    assert.ok(cells.every(([, n]) => n === String(regs)), JSON.stringify(cells));
+    assert.ok(cells.every(([, , read]) => /every station/.test(read)), cells[0][2]);
+    assert.equal(await page.locator(mon + '.sp-unmh').count(), 0, 'no hour marked as counted as none');
   } finally { await page.close(); }
 });

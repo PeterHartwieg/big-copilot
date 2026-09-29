@@ -234,16 +234,17 @@ the map.
   - *Quick hire* hires the best matches for one role at any site (headquarters and
     warehouses included), from the candidates the open places have not picked. At a site
     with a plan they get the plan's open weeks in that role that meet their schedule
-    demands (a match no open week fits is passed over); past those, and at a site with no
-    plan, they join with no hours. The site's week stays as the game has it: where a plan
+    demands, best match first; the places left then go, best match first, to everyone else
+    (a match no open week fits included) with no hours, as at a site with no plan. The site's week stays as the game has it: where a plan
     entry meets hours already set there, only its parts that meet nothing and run 4 hours
     or more are added, and a warning is judged on the hours they keep.
   - *Before any write* (a site's Staffing, Staff needs, Quick hire), every week it would
     send is checked person by person: at most 12 hours an entry and a day, one entry at a
     time, the hours band (at most 50 without one), an exact four or five days, free
     weekends, the hours kept free and no cleaning. Whatever is still broken is named in the
-    confirm, one line a person; nothing is refused for it. An office's write, which adds
-    the office default to the week as it stands, leaves out an entry that would break one.
+    confirm, one line a break, including someone the write leaves with no hours at all; nothing is
+    refused for it. An office's write, which adds the office default to the week as it
+    stands, leaves out an entry that would break one and names the hours it left out.
 
   *Payroll* names two wage figures:
   "Wages a day" is every hourly wage times its assigned weekly hours over seven,
