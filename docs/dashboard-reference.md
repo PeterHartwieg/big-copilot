@@ -895,7 +895,7 @@ the game's own arithmetic for a store run well, not an average of your other sto
   four after it; rent, wages and marketing are paid in full. The first store in a
   neighbourhood to sell a product nobody has sold there for 21 days gets +20 demand on it for
   14 days; the plan counts that for every product nobody sells there now and nobody has sold
-  for 21 days (the save's last day sold; a save older than build 3675, which lacks it, counts
+  for 21 days (the save's last day sold; a save from before the builds the board reads (MIN_BUILD), which lacks it, counts
   a product nobody sells as never sold). The days to break even add the running profit up day
   by day.
 - Cinemas and theatres show the investment only: their screens, seats and actors cap them in

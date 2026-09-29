@@ -320,7 +320,7 @@ class MarketTests(unittest.TestCase):
         root = {"productMarketEntries": coll([entry]), "BuildingRegistrations": coll([])}
         got = ba_dashboard._store_market(Save(root, {}, "synthetic"), self.RULES, {"ba:itemname_beer"}, 1.0, 0)
         self.assertEqual(got["ba:itemname_beer"]["hoods"]["ba:neighborhood_midtown"], [0, 0, None, 33])
-        # A save without the field (older than build 3675) sends None.
+        # A save without the field (older than MIN_BUILD) sends None.
         del entry["demandValues"]["$items"][0]["lastDaySold"]
         got = ba_dashboard._store_market(Save(root, {}, "synthetic"), self.RULES, {"ba:itemname_beer"}, 1.0, 0)
         self.assertIsNone(got["ba:itemname_beer"]["hoods"]["ba:neighborhood_midtown"][3])

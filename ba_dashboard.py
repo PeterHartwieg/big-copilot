@@ -12766,7 +12766,7 @@ def _store_market(save: Save, rules: dict, items: set, mpm: float, agent: int) -
             if hood and hood != GLOBAL_HOOD:
                 sellers[(name, hood)] = int(value.get("providers") or 0)
                 # NeighborhoodDemand.lastDaySold: a hype waits on 21 days without
-                # it. Every save from build 3675 on has it; None where one does not.
+                # it. Every save the board reads (MIN_BUILD on) has it; None where one does not.
                 last = value.get("lastDaySold")
                 last_sold[(name, hood)] = int(last) if isinstance(last, (int, float)) else None
     # The lowest price a customer sees there: the player's own shops at their
@@ -30127,7 +30127,7 @@ function osHyped(slug, hood){
   return (t ? t.products : []).map(([p]) => p).filter(p => {
     const m = M[p];
     if(!m || !m.d || !(m.cost > 0) || (m.only && !m.only.includes(hood))) return false;
-    /* A save without the last day sold (older than build 3675) reads as never
+    /* A save without the last day sold (older than MIN_BUILD) reads as never
        sold: nobody selling now, and the game 21 days old or more. */
     const row = (m.hoods || {})[hood] || [0, 0, null, null];
     return !(row[0] > 0) && (row[3] ?? 0) + OS_HYPE.idle <= ((D && D.meta) || {}).day;
