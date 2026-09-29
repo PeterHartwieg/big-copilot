@@ -12500,11 +12500,14 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
 
     kind = type_slug.removeprefix("ba:businesstype_")
 
-    def sold(name):
+    def sold(name, typed=True):
         """On sale, and made for this type where the item says what it is for
-        (the designer's categories): a liquor store gets no cinema register."""
+        (the designer's categories): a liquor store gets no cinema register.
+        Those tags only sort the catalogue (FurnitureTagMatcher), never where
+        a piece may stand, so an item that answers a customer demand (a
+        speaker, a sink) is any the stores sell: `typed` False."""
         fits = facts(name).get("bt")
-        return price(name) > 0 and bool(facts(name).get("v")) and (not fits or kind in fits)
+        return price(name) > 0 and bool(facts(name).get("v")) and (not typed or not fits or kind in fits)
 
     def mounts(name):
         """What a station has to be attached to: the cheapest sold piece of
@@ -12530,8 +12533,8 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
     def unit_cost(name):
         return price(name) + sum(price(under) for under in mounts(name))
 
-    def cheapest(names):
-        names = [n for n in names if sold(n)]
+    def cheapest(names, typed=True):
+        names = [n for n in names if sold(n, typed)]
         return min(names, key=lambda n: (unit_cost(n), n)) if names else None
 
     def sized(names):
@@ -12592,13 +12595,13 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
 
     for demand in demands:
         if demand == "music" and not has(lambda n: flags(n) & MUSIC_FLAG):
-            add(cheapest([n for n in furniture if flags(n) & MUSIC_FLAG]), 1, "dem", demand)
+            add(cheapest([n for n in furniture if flags(n) & MUSIC_FLAG], False), 1, "dem", demand)
         elif demand == "seating" and not has(lambda n: flags(n) & SEATING_FLAG):
-            add(cheapest([n for n in furniture if flags(n) & SEATING_FLAG]), 1, "dem", demand)
+            add(cheapest([n for n in furniture if flags(n) & SEATING_FLAG], False), 1, "dem", demand)
         elif demand == "sink" and not has(lambda n: flags(n) & SINK_FLAG):
-            add(cheapest([n for n in furniture if flags(n) & SINK_FLAG]), 1, "dem", demand)
+            add(cheapest([n for n in furniture if flags(n) & SINK_FLAG], False), 1, "dem", demand)
         elif demand == "employeeuniforms" and not has(lambda n: "uniform" in (facts(n).get("x") or ())):
-            add(cheapest([n for n in furniture if "uniform" in (facts(n).get("x") or ())]), 1, "dem", demand)
+            add(cheapest([n for n in furniture if "uniform" in (facts(n).get("x") or ())], False), 1, "dem", demand)
         elif demand in ("toilet", "toiletprivacy") and not has(lambda n: flags(n) & TOILET_FLAG):
             # One stall meets both: it is a toilet, and the first toilet found
             # carries the privacy tag. A plain toilet beside it could be the
@@ -12606,7 +12609,7 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
             private = "toiletprivacy" in demands
             pool = [n for n in furniture if flags(n) & TOILET_FLAG
                     and (not private or "privacy" in (facts(n).get("x") or ()))]
-            add(cheapest(pool), 1, "dem", "toilet+privacy" if private and "toilet" in demands else demand)
+            add(cheapest(pool, False), 1, "dem", "toilet+privacy" if private and "toilet" in demands else demand)
         elif demand == "workoutvariety":
             # The cheapest machine of each workout type the gym does not train
             # yet, until WORKOUT_VARIETY distinct types stand in it.
@@ -12619,6 +12622,16 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
                         offer[facts(n)["wt"]] = (key, n)
             for _key, n in sorted(offer.values())[:max(0, WORKOUT_VARIETY - len(trained))]:
                 add(n, 1, "dem", demand)
+
+    # A cinema's or a theatre's audience sits: the seats made for the venue
+    # (the cheapest a seat), enough for the building's customers an hour,
+    # shared across a cinema's screens so each screen seats its part.
+    if t.get("b") in ("cinema", "theater") and cap:
+        seats = [n for n in furniture if (facts(n).get("st") or 0) > 0 and kind in (facts(n).get("bt") or ()) and sold(n)]
+        if seats:
+            screens = sum(line["qty"] for line in lines if line["why"] == "cinemascreen") or 1
+            for seat, qty in _cheapest_cover(math.ceil(cap / screens), {n: (facts(n)["st"], unit_cost(n)) for n in seats}):
+                add(seat, screens * qty, "cap", "seats")
 
     covered = set()
     for item, qty, held_products in copied or ():
@@ -12646,16 +12659,63 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
 
 def plan_layout(row: dict) -> str | None:
     """What a plan's outfit is kept by: a building's layout (size and version,
-    a premises row's `layout` or a ba_buildings.json row), or for a cinema or
-    a theatre, which have no floor plans, its size alone. The board reads the
-    same key off a premises row (osLayout())."""
+    a premises row's `layout` or a ba_buildings.json row). A cinema or a
+    theatre has no floor plan, so no `layout`, but each version seats its own
+    crowd (S1 150, S3 100): its size and version from the building table.
+    The board reads the same key (osLayout(), from `venues`)."""
     if "layout" in row or "size" in row:
-        return row.get("layout") or row.get("size")
+        if row.get("layout"):
+            return row["layout"]
+        street, _, number = str(row.get("key") or "").partition("#")
+        found = load_buildings().get((street, int(number))) if number.isdigit() else None
+        return plan_layout(found) if found else row.get("size")
+    if row.get("z") and row.get("v") is not None and not _layout(row):
+        return f"{row['z']}{row['v']}"
     return _layout(row) or row.get("z")
+
+
+def _venue_caps(names: Names) -> dict:
+    """{size and version: customer capacity} for the cinemas and theatres
+    (S1 150, S2 125, S3 100; R1 200 ...), from the help text _door_caps()
+    reads by letter alone."""
+    out, section = {}, None
+    code = re.compile(r"^\*\s*\*\*([A-Z]+\d+)\*\*:.*?/\s*([\d,]+)\s*customer capacity", re.I)
+    for line in (names.locale.get("help_building_types_content") or "").split("\n"):
+        line = line.strip()
+        head = _CAP_SECTION_RE.match(line)
+        if head:
+            section = head.group(1).strip().lower()
+            continue
+        size = code.match(line)
+        if size and section in ("cinema", "theater"):
+            out[size.group(1).upper()] = int(size.group(2).replace(",", ""))
+    return out
 
 
 def _building_row(reg: dict) -> dict:
     return load_buildings().get((reg.get("StreetName"), reg.get("StreetNumber"))) or {}
+
+
+def _cheapest_cover(need: int, pieces: dict) -> list:
+    """[(piece, count)] whose places add up to `need` or more for the least:
+    `pieces` is {piece: (places, price)}. Six four-seat rows and a single seat
+    can beat seven rows."""
+    if need <= 0 or not pieces:
+        return []
+    top = need + max(places for places, _price in pieces.values())
+    best = [(0.0, None)] + [(math.inf, None)] * top
+    for total in range(1, top + 1):
+        for name in sorted(pieces):
+            places, price = pieces[name]
+            if places <= total and best[total - places][0] + price < best[total][0]:
+                best[total] = (best[total - places][0] + price, name)
+    total = min(range(need, top + 1), key=lambda n: (best[n][0], n))
+    counts = collections.Counter()
+    while total > 0 and best[total][1]:
+        name = best[total][1]
+        counts[name] += 1
+        total -= pieces[name][0]
+    return sorted(counts.items())
 
 
 def _setup_items(lines: list) -> list:
@@ -12820,12 +12880,14 @@ def _store_market(save: Save, rules: dict, items: set, mpm: float, agent: int) -
     purchasing agent's discount, never the income statement's goods, which
     are near nothing where the player's own factories supply. Per
     neighbourhood: the sellers there now (the player's included), whether a
-    rival company sells it (no monopoly bonus then), and the lowest price any
-    shop that stocks it asks, the player's own included.
+    rival company sells it (no monopoly bonus then), the lowest price asked
+    there (a rival's for what it stocks, the player's as set), and the last day
+    anyone sold it there (NeighborhoodDemand.lastDaySold), which a first
+    seller's hype waits on.
     """
     table = load_buildings()
     products = rules.get("products") or {}
-    idx, sellers = {}, {}
+    idx, sellers, last_sold = {}, {}, {}
     for entry in save.items(save.root.get("productMarketEntries")):
         name = entry.get("itemName") if isinstance(entry, dict) else None
         if name not in items:
@@ -12835,9 +12897,13 @@ def _store_market(save: Save, rules: dict, items: set, mpm: float, agent: int) -
             hood = value.get("neighborhood")
             if hood and hood != GLOBAL_HOOD:
                 sellers[(name, hood)] = int(value.get("providers") or 0)
-    # The lowest price a customer sees there: every shop that has the item on
-    # its shelves (cachedAvailableProducts), the player's own included; a price
-    # set for an item a shop does not stock is nobody's offer.
+                # NeighborhoodDemand.lastDaySold: a hype waits on 21 days without
+                # it. Every save the board reads (MIN_BUILD on) has it; None where one does not.
+                last = value.get("lastDaySold")
+                last_sold[(name, hood)] = int(last) if isinstance(last, (int, float)) else None
+    # The lowest price a customer sees there: the player's own shops at their
+    # configured price, stocked or not (PROFIT_MODEL.md), and a rival's only
+    # for an item on its shelves (cachedAvailableProducts).
     rival_sells, lowest = set(), {}
     for reg in save.items(save.root.get("BuildingRegistrations")):
         if not reg or not reg.get("BusinessName") or reg.get("temporarilyClosed"):
@@ -12848,7 +12914,8 @@ def _store_market(save: Save, rules: dict, items: set, mpm: float, agent: int) -
         stocked = {n for n in save.items(reg.get("cachedAvailableProducts")) if isinstance(n, str) and n in items}
         for line in save.items(reg.get("retailPrices")):
             name = line.get("itemName") if isinstance(line, dict) else None
-            price = _configured_price(line.get("price")) if name in stocked else None
+            price = _configured_price(line.get("price")) if name in stocked or (
+                reg.get("RentedByPlayer") and name in items) else None
             if price:
                 lowest[(name, hood)] = min(lowest.get((name, hood), price), price)
         if reg.get("businessOwnerRivalId"):
@@ -12867,7 +12934,7 @@ def _store_market(save: Save, rules: dict, items: set, mpm: float, agent: int) -
             "cost": round((row.get("w") or 0) * idx.get(name, 1.0) * mpm * discount, 4),
             **({"only": row["l"]} if row.get("l") else {}),
             "hoods": {hood: [sellers.get((name, hood), 0), int((name, hood) in rival_sells),
-                             lowest.get((name, hood))] for hood in hoods},
+                             lowest.get((name, hood)), last_sold.get((name, hood))] for hood in hoods},
         }
     return out
 
@@ -13050,6 +13117,7 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
     buildings = premises.get("buildings") or []
 
     types, items_used, product_items, models = {}, set(), set(), {}
+    venue_caps = _venue_caps(names)
     slots = _layout_slots(save, regs_list, prices)
     build_at_start = root.get("buildNumberAtStart")
     for slug, t in sorted((rules.get("types") or {}).items()):
@@ -13071,7 +13139,9 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
             if same:
                 source = max(same, key=lambda b: (sum(s["profit"] for s in (b.get("series") or [])[-7:]), b["key"]))
             copied = _copied_shelving(save, regs[source["key"]], slug, rules) if source else None
-            lines = outfit_lines(slug, rules, prices, sample.get("cap"), sample.get("m2"), copied)
+            # A venue's own version seats its own crowd, not the size's lowest.
+            cap = venue_caps.get(layout, sample.get("cap")) if cat in ("cinema", "theater") else sample.get("cap")
+            lines = outfit_lines(slug, rules, prices, cap, sample.get("m2"), copied)
             cost = setup_cost(_setup_items(lines), [], sample.get("m2"), 0, prices)
             items_used.update(line["item"] for line in lines)
             layouts[layout] = {
@@ -13081,7 +13151,7 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
                 "from": source["key"] if source else None,
             }
             # The shop fully stocked with the type's range, as the plan has it.
-            initial[layout] = round(_plan_initial(build_at_start, model, sample.get("cap"), slug,
+            initial[layout] = round(_plan_initial(build_at_start, model, cap, slug,
                                                   sample.get("m2"), [p for p, _i in sells]), 4)
         if not layouts:
             continue
@@ -13160,6 +13230,9 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
         "sales": _own_sales(save, regs, businesses, market, day),
         "built": _opened_stores(save, regs, businesses, types, rules, prices),
         "campaigns": [list(c) for c in MARKETING_CAMPAIGNS],
+        # Each cinema and theatre: its size and version, and what that seats.
+        "venues": {b["key"]: [plan_layout(b), venue_caps.get(plan_layout(b))]
+                   for b in buildings if b["type"] in ("cinema", "theater") and plan_layout(b)},
         "finance": _finance_facts(save, daily, rules),
     }
 
@@ -29942,7 +30015,8 @@ function osSetMode(mode){
 /* --- what the plan stands on ---------------------------------------------- */
 const osType = slug => (osFacts().types || {})[slug] || null;
 const osBuilding = key => key && typeof premises === "function" && premises() ? premises().buildings.find(b => b.key === key) || null : null;
-const osCap = b => Array.isArray(b && b.cap) ? b.cap[0] : (b && b.cap) || 0;
+const osCap = b => { const v = b && (osFacts().venues || {})[b.key];
+  return v && v[1] ? v[1] : Array.isArray(b && b.cap) ? b.cap[0] : (b && b.cap) || 0; };
 const osTypeName = slug => gameName(slug) || String(slug || "").replace(/^ba:businesstype_/, "");
 const osItemName = item => gameName(item) || prettySlug(String(item || ""));
 /* A type's name, lowered, and for more than one in English its plural
@@ -29957,7 +30031,7 @@ function osTypePlural(slug){
 /* The outfit for the building's layout: its lines and furniture total. */
 /* The key an outfit is kept by: the layout, or a cinema's or theatre's size
    (Python's plan_layout()). */
-const osLayout = b => (b && (b.layout || b.size)) || "";
+const osLayout = b => (b && (b.layout || ((osFacts().venues || {})[b.key] || [])[0] || b.size)) || "";
 const osOutfit = (plan, b) => { const t = plan && osType(plan.type); return t && b ? (t.layouts || {})[osLayout(b)] || null : null; };
 /* The interior score the neighbourhood asks for (Midtown's 50), and the
    cheapest walls and floors that reach it in this layout. */
@@ -30219,19 +30293,22 @@ const osDays = (inv, profit) => profit > 0 ? Math.max(1, Math.ceil(inv / profit)
    the steady one, from the opening day (0) on; rent, wages and marketing are
    paid in full from the start. The first shop in a neighbourhood to sell a
    product nobody has sold there for 21 days gets +20 demand on it for 14
-   days (ProductMarketHelper.CreateHypeEventsForNewItemsAddedToANeighbourhood);
-   the save does not say when an item was last sold, so "nobody sells it there
-   now" stands in for the 21 days. */
+   days (ProductMarketHelper.CreateHypeEventsForNewItemsAddedToANeighbourhood,
+   NeighborhoodDemand.IsHypeEventAvailable: lastDaySold + 21 <= Day). */
 const OS_RAMP = [0.55, 0.92, 0.94, 0.97, 0.99];
-const OS_HYPE = {demand: 20, days: 14};
+const OS_HYPE = {demand: 20, days: 14, idle: 21};
 /* The products a new store of `slug` would be the first to sell in `hood`:
-   demanded goods with a wholesale price (a service or a fee never hypes). */
+   demanded goods with a wholesale price (a service or a fee never hypes),
+   nobody selling them there now and nobody for the last 21 days. */
 function osHyped(slug, hood){
   const t = osType(slug), M = osFacts().market || {};
   return (t ? t.products : []).map(([p]) => p).filter(p => {
     const m = M[p];
     if(!m || !m.d || !(m.cost > 0) || (m.only && !m.only.includes(hood))) return false;
-    return !(((m.hoods || {})[hood] || [0])[0] > 0);
+    /* A save without the last day sold (older than MIN_BUILD) reads as never
+       sold: nobody selling now, and the game 21 days old or more. */
+    const row = (m.hoods || {})[hood] || [0, 0, null, null];
+    return !(row[0] > 0) && (row[3] ?? 0) + OS_HYPE.idle <= ((D && D.meta) || {}).day;
   });
 }
 /* Day k's profit after the opening (k = 0 is the opening day): the steady
@@ -30453,11 +30530,11 @@ function osWhy(group, why){
     return names.length > 2 ? tt("gr.os.why.more", "{items} +{n}", {items: names.slice(0, 2).join(", "), n: names.length - 2}) : names.join(", ");
   }
   if(why === "mount") return tt("gr.os.why.mount", "Stands on it");
-  if(group === "cap") return tt("gr.os.why.cap", "Capacity");
+  if(group === "cap") return why === "seats" ? tt("gr.os.why.seats", "Seats") : tt("gr.os.why.cap", "Capacity");
   if(group === "req") return why === "pointofsales" ? tt("gr.os.why.pos", "Point of sale") : tt("gr.os.why.req", "Required");
   return ({music: tt("gr.os.why.music", "Music"), seating: tt("gr.os.why.seating", "Seating"), sink: tt("gr.os.why.sink", "Sink"),
     toilet: tt("gr.os.why.toilet", "Toilet"), toiletprivacy: tt("gr.os.why.privacy", "Privacy"), "toilet+privacy": tt("gr.os.why.toiletPrivacy", "Toilet, privacy"),
-    employeeuniforms: tt("gr.os.why.uniforms", "Uniforms"), workoutvariety: tt("gr.os.why.workout", "Workout variety")})[why] || String(why);
+    employeeuniforms: tt("gr.os.why.uniforms", "Uniforms"), seats: tt("gr.os.why.seats", "Seats"), workoutvariety: tt("gr.os.why.workout", "Workout variety")})[why] || String(why);
 }
 const osTag = (group, why) => `<span class="os-tag ${group === "req" ? "req" : group === "dem" ? "dem" : group === "cap" ? "cap" : ""}"${
   group === "shelf" && Array.isArray(why) && why.length > 2 ? ` data-tip="${attr(why.map(osItemName).join(", "))}" tabindex="0"` : ""}>${spEsc(osWhy(group, why))}</span>`;
@@ -30649,14 +30726,24 @@ function osChart(est, mode){
   for(let d = 0; d <= dmax; d += dstep) g.push(`<text x="${X(d).toFixed(1)}" y="${y1 + 18}" text-anchor="middle">${d}</text>`);
   const pts = k => cum.map((v, d) => `${X(d).toFixed(1)},${Y(v * k).toFixed(1)}`);
   const band = `M${pts(OS_HIGH).join(" L")} L${pts(OS_LOW).reverse().join(" L")} Z`;
-  const mark = (key, cls) => { const v = inv[key], d = osBreakDay(v, est.day);
-    return `<line class="${cls}" x1="${x0}" x2="${x1}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"></line><text class="lbl ${cls === "inv" ? "w" : "i"}" x="${x0 + 6}" y="${(Y(v) - 7).toFixed(1)}">${
-      key === "firm" ? tt("gr.os.inv.firm", "Installation firm") : tt("gr.os.inv.self", "Self-installation")} ${fmt(v)}</text>${
-      d && d <= dmax ? `<circle class="hit" cx="${X(d).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="5"></circle><text class="lbl" x="${(X(d) + 9).toFixed(1)}" y="${(Y(v) + 16).toFixed(1)}">${
+  /* A line crossed early runs through the left of its label, which then
+     stands at the right edge. Two investments close together (a store that
+     pays back in a day or two) would print over each other: the second's
+     label takes the other edge from the first's, and its day goes above its
+     point. */
+  const other = mode === "firm" ? "self" : "firm";
+  const near = Math.abs(Y(inv.firm) - Y(inv.self)) < 18;
+  const early = key => { const d = osBreakDay(inv[key], est.day); return !!d && d <= dmax * 0.4; };
+  const mark = (key, cls, alt) => { const v = inv[key], d = osBreakDay(v, est.day);
+    const right = alt ? !early(mode) : early(key);
+    const label = `${key === "firm" ? tt("gr.os.inv.firm", "Installation firm") : tt("gr.os.inv.self", "Self-installation")} ${fmt(v)}`;
+    return `<line class="${cls}" x1="${x0}" x2="${x1}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"></line><text class="lbl ${cls === "inv" ? "w" : "i"}" x="${right ? x1 - 6 : x0 + 6}" y="${(Y(v) - 7).toFixed(1)}"${
+      right ? ` text-anchor="end"` : ""}>${label}</text>${
+      d && d <= dmax ? `<circle class="hit" cx="${X(d).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="5"></circle><text class="lbl" x="${(X(d) + 9).toFixed(1)}" y="${(Y(v) + (alt ? -20 : 16)).toFixed(1)}">${
       tt("gr.os.be.day", "day {n}", {n: d})}</text>` : ""}`; };
   return `<svg class="os-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${attr(tt("gr.os.be.chart", "Profit from the opening against the investment"))}">
     ${g.join("")}<line class="ax" x1="${x0}" x2="${x1}" y1="${y1}" y2="${y1}"></line>
-    <path class="band" d="${band}"></path>${mark(mode, "inv")}${mark(mode === "firm" ? "self" : "firm", "inv2")}
+    <path class="band" d="${band}"></path>${mark(mode, "inv", false)}${mark(other, "inv2", near)}
     <path class="line" d="M${pts(1).join(" L")}"></path><text x="${x1}" y="${y1 + 34}" text-anchor="end">${tt("gr.os.be.axis", "days after opening")}</text></svg>`;
 }
 const osNiceStep = v => { const e = Math.pow(10, Math.floor(Math.log10(Math.max(v, 1)))); const f = v / e; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * e; };

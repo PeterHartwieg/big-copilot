@@ -141,8 +141,14 @@ test('the first seller in a neighbourhood gets +20 demand on the product for its
   facts.types.T.products = [['P', 1], ['Q', 1], ['S', 1]];
   facts.market.Q = {p: 10, r: 0.5, d: 1, cost: 4, hoods: {H: [2, 1, null]}};   // two sellers there already
   facts.market.S = {p: 10, r: 0.5, d: 1, s: 1, cost: 0, hoods: {H: [0, 0, null]}}; // a service never hypes
+  facts.market.R = {p: 10, r: 0.5, d: 1, cost: 4, hoods: {H: [0, 0, null, 30]}};  // nobody now, but sold on day 30
+  facts.types.T.products.push(['R', 1]);
   const ctx = model(facts);
+  // Day 40: P was last sold on day 0 (21 days ago or more), R on day 30.
   assert.equal(JSON.stringify(ctx.osHyped('T', 'H')), JSON.stringify(['P']));
+  ctx.D.meta.day = 51;
+  assert.equal(JSON.stringify(ctx.osHyped('T', 'H')), JSON.stringify(['P', 'R']), '21 days after its last sale R hypes too');
+  ctx.D.meta.day = 40;
   const plain = ctx.osModel('T', SHOP, {sat: 50, open: HOUR});
   const hyped = ctx.osModel('T', SHOP, {sat: 50, open: HOUR, hype: ['P']});
   assert.equal(hyped.lines[0].demand, Math.min(100, plain.lines[0].demand + 20));
@@ -163,4 +169,16 @@ test('a cinema or a theatre shows its investment and no estimate', () => {
   const est = vm.runInContext('osEstimate({type: "C", key: "c", mode: "firm"}, osBuilding("c"))', ctx);
   assert.equal(est.inv.firm, 1600, 'kept by the building\'s size, having no layout');
   assert.match(est.none, /screens, seats and actors/);
+});
+
+test('a store that pays back in a day or two keeps its two investment labels on opposite edges', () => {
+  const ctx = model(RETAIL);
+  Object.assign(ctx, {fmt: n => `$${Math.round(n)}`, money: n => `$${Math.round(n)}`, attr: s => s});
+  const m = {revenue: 12000, cogs: 2000, wages: 500, rent: 200, marketing: 300, profit: 9000};
+  const est = {profit: m.profit, inv: {firm: 12000, self: 10000}, day: k => ctx.osDayProfit(m, null, k)};
+  const svg = vm.runInContext('osChart', ctx)(est, 'firm');
+  const label = cls => (svg.match(new RegExp(`<text class="lbl ${cls}"[^>]*>`)) || [''])[0];
+  const w = label('w'), i = label('i');
+  assert.ok(w && i, 'both labels drawn');
+  assert.notEqual(/text-anchor="end"/.test(w), /text-anchor="end"/.test(i), `${w} ${i}`);
 });

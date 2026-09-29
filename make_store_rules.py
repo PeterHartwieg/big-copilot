@@ -40,7 +40,9 @@ Five bundles under <game>/Big Ambitions_Data/StreamingAssets/aa/StandaloneWindow
   defaultlocalgroup_assets_prefabs_*.bundle
       the gym machines' controllers (WorkoutMachineController, and the
       treadmill's own), each naming its item and pointing at the
-      WorkoutExercise whose workoutType the gym's workout-variety demand counts
+      WorkoutExercise whose workoutType the gym's workout-variety demand counts, and every seat's
+      controller (SeatController, SeatFoldingController) with one sitting
+      position per seat
 
 Which furniture store sells which piece is not in any bundle. It is in the
 game's help text, which tools/build_wiki_data.py has already parsed into the
@@ -63,6 +65,7 @@ where noted):
                               "m": [[furniture it must be attached to], ...], one
                                     group per placement requirement: one of each group,
                                     "wt": the WorkoutExercise.workoutType a gym machine trains,
+                                    "st": the seats a seat carries (its sittingPositions),
                               "v": [vendor site keys]}},  (lists omitted when empty)
      "types": {"<business type>": {"b": building type, "c": 1 player can create,
                                    "i": [[item, impact], ...], "a": maxAmountPerProduct,
@@ -343,6 +346,24 @@ def _vehicles(root: str) -> dict:
     return out
 
 
+def _seats(root: str) -> dict:
+    """{item: seats} for every seat: its SeatController (or folding theatre
+    seat) in the prefab bundle lists one sitting position per seat."""
+    out = {}
+    for obj in UnityPy.load(_bundle(root, "defaultlocalgroup_assets_prefabs")).objects:
+        if obj.type.name != "MonoBehaviour":
+            continue
+        try:
+            script = obj.read(check_read=False).m_Script.read().m_ClassName
+        except Exception:  # a component whose script this build cannot resolve
+            continue
+        if script in ("SeatController", "SeatFoldingController"):
+            tree = obj.read_typetree()
+            if tree.get("itemName") and tree.get("sittingPositions"):
+                out[tree["itemName"]] = len(tree["sittingPositions"])
+    return out
+
+
 def _workout_types(root: str) -> dict:
     """{item: workoutType} for every gym machine: its controller in the prefab
     bundle names the item and points at the WorkoutExercise it trains."""
@@ -443,6 +464,9 @@ def main() -> None:
     for item, kind in _workout_types(root).items():
         if item in furniture:
             furniture[item]["wt"] = kind
+    for item, seats in _seats(root).items():
+        if item in furniture:
+            furniture[item]["st"] = seats
     vendors = _vendors(furniture)
     out = {
         "products": _products(items, types),

@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "d7a2348b0a";</script>
-<link rel="stylesheet" href="community.css?v=d7a2348b0a">
+<script>window.LEDGER_BUILD = "5686a28748";</script>
+<link rel="stylesheet" href="community.css?v=5686a28748">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=d7a2348b0a">
+<link rel="stylesheet" href="fonts/fonts.css?v=5686a28748">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -5845,7 +5845,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"d7a2348b0a","latest":{"pr":175,"date":"2026-09-29","title":"Open a new store: the investment, and the days to earn it back","summary":"Expansion has a new view, Open a store. Pick a type from the neighbourhoods with the most demand, from any type, or from a Demand cell's new Open a store here, then pick the building in Find a location, fixed to that type. The board lists everything a fully outfitted store of that type needs in that building: what the type requires to open, an item for each customer demand, enough tills for the building's capacity and shelving copied from your own store of the same layout, with the installation firm's price or, for self-installation, a shopping list by furniture store on the map, and the deposit. It then estimates the profit a day from the game's own rules for customers, prices, demand and wages, with the best marketing mix, and shows how many days it takes to earn the investment back, as a range, after tax, against what your own stores of that type earn, and with an optional bank loan. Offices are estimated too; cinemas and theatres show the investment only. Your plans are kept per character. Businesses › Results also has a Payback column: for each shop, office and chain, the day its setup was earned back or how many days are still to go, with the same line on a business's own page."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"5686a28748","latest":{"pr":175,"date":"2026-09-29","title":"Open a new store: the investment, and the days to earn it back","summary":"Expansion has a new view, Open a store. Pick a type from the neighbourhoods with the most demand, from any type, or from a Demand cell's new Open a store here, then pick the building in Find a location, fixed to that type. The board lists everything a fully outfitted store of that type needs in that building: what the type requires to open, an item for each customer demand, enough tills for the building's capacity and shelving copied from your own store of the same layout, with the installation firm's price or, for self-installation, a shopping list by furniture store on the map, and the deposit. It then estimates the profit a day from the game's own rules for customers, prices, demand and wages, with the best marketing mix, and shows how many days it takes to earn the investment back, as a range, after tax, against what your own stores of that type earn, and with an optional bank loan. Offices are estimated too; cinemas and theatres show the investment only. Your plans are kept per character. Businesses › Results also has a Payback column: for each shop, office and chain, the day its setup was earned back or how many days are still to go, with the same line on a business's own page."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -5933,8 +5933,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=d7a2348b0a"></script>
-<script src="community.js?v=d7a2348b0a"></script>
+<script src="app.js?v=5686a28748"></script>
+<script src="community.js?v=5686a28748"></script>
 
 <script>
 
@@ -16427,7 +16427,8 @@ function osSetMode(mode){
 /* --- what the plan stands on ---------------------------------------------- */
 const osType = slug => (osFacts().types || {})[slug] || null;
 const osBuilding = key => key && typeof premises === "function" && premises() ? premises().buildings.find(b => b.key === key) || null : null;
-const osCap = b => Array.isArray(b && b.cap) ? b.cap[0] : (b && b.cap) || 0;
+const osCap = b => { const v = b && (osFacts().venues || {})[b.key];
+  return v && v[1] ? v[1] : Array.isArray(b && b.cap) ? b.cap[0] : (b && b.cap) || 0; };
 const osTypeName = slug => gameName(slug) || String(slug || "").replace(/^ba:businesstype_/, "");
 const osItemName = item => gameName(item) || prettySlug(String(item || ""));
 /* A type's name, lowered, and for more than one in English its plural
@@ -16442,7 +16443,7 @@ function osTypePlural(slug){
 /* The outfit for the building's layout: its lines and furniture total. */
 /* The key an outfit is kept by: the layout, or a cinema's or theatre's size
    (Python's plan_layout()). */
-const osLayout = b => (b && (b.layout || b.size)) || "";
+const osLayout = b => (b && (b.layout || ((osFacts().venues || {})[b.key] || [])[0] || b.size)) || "";
 const osOutfit = (plan, b) => { const t = plan && osType(plan.type); return t && b ? (t.layouts || {})[osLayout(b)] || null : null; };
 /* The interior score the neighbourhood asks for (Midtown's 50), and the
    cheapest walls and floors that reach it in this layout. */
@@ -16704,19 +16705,22 @@ const osDays = (inv, profit) => profit > 0 ? Math.max(1, Math.ceil(inv / profit)
    the steady one, from the opening day (0) on; rent, wages and marketing are
    paid in full from the start. The first shop in a neighbourhood to sell a
    product nobody has sold there for 21 days gets +20 demand on it for 14
-   days (ProductMarketHelper.CreateHypeEventsForNewItemsAddedToANeighbourhood);
-   the save does not say when an item was last sold, so "nobody sells it there
-   now" stands in for the 21 days. */
+   days (ProductMarketHelper.CreateHypeEventsForNewItemsAddedToANeighbourhood,
+   NeighborhoodDemand.IsHypeEventAvailable: lastDaySold + 21 <= Day). */
 const OS_RAMP = [0.55, 0.92, 0.94, 0.97, 0.99];
-const OS_HYPE = {demand: 20, days: 14};
+const OS_HYPE = {demand: 20, days: 14, idle: 21};
 /* The products a new store of `slug` would be the first to sell in `hood`:
-   demanded goods with a wholesale price (a service or a fee never hypes). */
+   demanded goods with a wholesale price (a service or a fee never hypes),
+   nobody selling them there now and nobody for the last 21 days. */
 function osHyped(slug, hood){
   const t = osType(slug), M = osFacts().market || {};
   return (t ? t.products : []).map(([p]) => p).filter(p => {
     const m = M[p];
     if(!m || !m.d || !(m.cost > 0) || (m.only && !m.only.includes(hood))) return false;
-    return !(((m.hoods || {})[hood] || [0])[0] > 0);
+    /* A save without the last day sold (older than MIN_BUILD) reads as never
+       sold: nobody selling now, and the game 21 days old or more. */
+    const row = (m.hoods || {})[hood] || [0, 0, null, null];
+    return !(row[0] > 0) && (row[3] ?? 0) + OS_HYPE.idle <= ((D && D.meta) || {}).day;
   });
 }
 /* Day k's profit after the opening (k = 0 is the opening day): the steady
@@ -16938,11 +16942,11 @@ function osWhy(group, why){
     return names.length > 2 ? tt("gr.os.why.more", "{items} +{n}", {items: names.slice(0, 2).join(", "), n: names.length - 2}) : names.join(", ");
   }
   if(why === "mount") return tt("gr.os.why.mount", "Stands on it");
-  if(group === "cap") return tt("gr.os.why.cap", "Capacity");
+  if(group === "cap") return why === "seats" ? tt("gr.os.why.seats", "Seats") : tt("gr.os.why.cap", "Capacity");
   if(group === "req") return why === "pointofsales" ? tt("gr.os.why.pos", "Point of sale") : tt("gr.os.why.req", "Required");
   return ({music: tt("gr.os.why.music", "Music"), seating: tt("gr.os.why.seating", "Seating"), sink: tt("gr.os.why.sink", "Sink"),
     toilet: tt("gr.os.why.toilet", "Toilet"), toiletprivacy: tt("gr.os.why.privacy", "Privacy"), "toilet+privacy": tt("gr.os.why.toiletPrivacy", "Toilet, privacy"),
-    employeeuniforms: tt("gr.os.why.uniforms", "Uniforms"), workoutvariety: tt("gr.os.why.workout", "Workout variety")})[why] || String(why);
+    employeeuniforms: tt("gr.os.why.uniforms", "Uniforms"), seats: tt("gr.os.why.seats", "Seats"), workoutvariety: tt("gr.os.why.workout", "Workout variety")})[why] || String(why);
 }
 const osTag = (group, why) => `<span class="os-tag ${group === "req" ? "req" : group === "dem" ? "dem" : group === "cap" ? "cap" : ""}"${
   group === "shelf" && Array.isArray(why) && why.length > 2 ? ` data-tip="${attr(why.map(osItemName).join(", "))}" tabindex="0"` : ""}>${spEsc(osWhy(group, why))}</span>`;
@@ -17134,14 +17138,24 @@ function osChart(est, mode){
   for(let d = 0; d <= dmax; d += dstep) g.push(`<text x="${X(d).toFixed(1)}" y="${y1 + 18}" text-anchor="middle">${d}</text>`);
   const pts = k => cum.map((v, d) => `${X(d).toFixed(1)},${Y(v * k).toFixed(1)}`);
   const band = `M${pts(OS_HIGH).join(" L")} L${pts(OS_LOW).reverse().join(" L")} Z`;
-  const mark = (key, cls) => { const v = inv[key], d = osBreakDay(v, est.day);
-    return `<line class="${cls}" x1="${x0}" x2="${x1}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"></line><text class="lbl ${cls === "inv" ? "w" : "i"}" x="${x0 + 6}" y="${(Y(v) - 7).toFixed(1)}">${
-      key === "firm" ? tt("gr.os.inv.firm", "Installation firm") : tt("gr.os.inv.self", "Self-installation")} ${fmt(v)}</text>${
-      d && d <= dmax ? `<circle class="hit" cx="${X(d).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="5"></circle><text class="lbl" x="${(X(d) + 9).toFixed(1)}" y="${(Y(v) + 16).toFixed(1)}">${
+  /* A line crossed early runs through the left of its label, which then
+     stands at the right edge. Two investments close together (a store that
+     pays back in a day or two) would print over each other: the second's
+     label takes the other edge from the first's, and its day goes above its
+     point. */
+  const other = mode === "firm" ? "self" : "firm";
+  const near = Math.abs(Y(inv.firm) - Y(inv.self)) < 18;
+  const early = key => { const d = osBreakDay(inv[key], est.day); return !!d && d <= dmax * 0.4; };
+  const mark = (key, cls, alt) => { const v = inv[key], d = osBreakDay(v, est.day);
+    const right = alt ? !early(mode) : early(key);
+    const label = `${key === "firm" ? tt("gr.os.inv.firm", "Installation firm") : tt("gr.os.inv.self", "Self-installation")} ${fmt(v)}`;
+    return `<line class="${cls}" x1="${x0}" x2="${x1}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"></line><text class="lbl ${cls === "inv" ? "w" : "i"}" x="${right ? x1 - 6 : x0 + 6}" y="${(Y(v) - 7).toFixed(1)}"${
+      right ? ` text-anchor="end"` : ""}>${label}</text>${
+      d && d <= dmax ? `<circle class="hit" cx="${X(d).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="5"></circle><text class="lbl" x="${(X(d) + 9).toFixed(1)}" y="${(Y(v) + (alt ? -20 : 16)).toFixed(1)}">${
       tt("gr.os.be.day", "day {n}", {n: d})}</text>` : ""}`; };
   return `<svg class="os-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${attr(tt("gr.os.be.chart", "Profit from the opening against the investment"))}">
     ${g.join("")}<line class="ax" x1="${x0}" x2="${x1}" y1="${y1}" y2="${y1}"></line>
-    <path class="band" d="${band}"></path>${mark(mode, "inv")}${mark(mode === "firm" ? "self" : "firm", "inv2")}
+    <path class="band" d="${band}"></path>${mark(mode, "inv", false)}${mark(other, "inv2", near)}
     <path class="line" d="M${pts(1).join(" L")}"></path><text x="${x1}" y="${y1 + 34}" text-anchor="end">${tt("gr.os.be.axis", "days after opening")}</text></svg>`;
 }
 const osNiceStep = v => { const e = Math.pow(10, Math.floor(Math.log10(Math.max(v, 1)))); const f = v / e; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * e; };

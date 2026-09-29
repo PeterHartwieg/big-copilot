@@ -68,24 +68,19 @@ HARMLESS_MODS = ("Big Copilot Link", "BigCopilotLink", "Camera Tools", "HART Fre
 
 
 def modded(save, path: str) -> bool:
-    """Whether a mod that could change what shops earn ran on this save.
-
-    A mod active at the last save (the .hsg.meta's activeModsAtLastSave) that
-    is not one of HARMLESS_MODS says so. So does the save's own
-    hasEverUsedMods when nothing listed now explains it: a save that ran some
-    other mod earlier and names only Big Copilot Link today (a player who only
-    ever ran the Link is counted as modded too; the flag cannot tell)."""
+    """Whether a mod that could change what shops earn ran on this save: one
+    active at the last save (the .hsg.meta's activeModsAtLastSave) that is
+    not in HARMLESS_MODS. The save's own hasEverUsedMods is not the test: Big
+    Copilot Link alone sets it, as it does on nearly every save that links;
+    it decides only where the meta is missing or unreadable."""
     try:
         with open(path + ".meta", encoding="utf-8-sig") as fh:
             active = json.load(fh).get("activeModsAtLastSave") or []
     except (OSError, ValueError):
-        active = []
+        # No readable meta: the save's own flag is all there is to go on.
+        return bool(save.root.get("hasEverUsedMods"))
     words = [f"{m.get('modDisplayName') or ''} {m.get('modId') or ''}" for m in active]
-    harmless = [w for w in words if any(h in w for h in HARMLESS_MODS)]
-    if len(harmless) < len(words):
-        return True
-    explained = [w for w in harmless if "Big Copilot" not in w and "BigCopilot" not in w]
-    return bool(save.root.get("hasEverUsedMods")) and not explained
+    return any(not any(h in w for h in HARMLESS_MODS) for w in words)
 
 
 def board_model() -> str:
@@ -172,7 +167,7 @@ def main(argv: list) -> int:
         if group:
             print(line(label, [r["ratio"] for r in group if not r["modded"] and settled(r)]))
     print("the rest")
-    for label, pick in (("shops, modded saves", lambda r: r["modded"] and settled(r)),
+    for label, pick in (("shops, saves with gameplay mods", lambda r: r["modded"] and settled(r)),
                         (f"shops, open < {OWN_PROFIT_DAYS} days (held to the ramp)", lambda r: not settled(r)),
                         ("shops, all", lambda r: True)):
         group = [r["ratio"] for r in shops if pick(r)]
