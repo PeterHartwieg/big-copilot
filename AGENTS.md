@@ -53,8 +53,8 @@ Searching:
 
 - A root `.ignore` hides the generated copies (`web/py/`, `web/index.html`, `web/wiki/`,
   `web/wiki-data.json`) and the design canvases from `rg`. `rg -uu` searches them too.
-- `rg -n "^# -{6,}|^/\* --- " ba_dashboard.py` lists the file's section banners, a table of
-  contents for both the Python and the board script.
+- `rg -n "^# ---|^/\* (---|=====)" ba_dashboard.py` lists the file's section banners and
+  sub-banners, a table of contents for the Python, the board's CSS and the board script.
 
 ## Names on screen and in code
 

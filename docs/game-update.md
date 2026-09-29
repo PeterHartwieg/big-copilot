@@ -244,6 +244,30 @@ changed, commit both and rebuild. `build_web.py` refuses a
 floor-plan set that is missing a layout `ba_buildings.json` uses
 (`tests/test_floor_plans.py`).
 
+### Hand-read tables no script checks
+
+Two more groups of constants in `ba_dashboard.py` were read from the game by hand.
+`tools/game_update/bundles.py` compares only the three tables above and no test reads the
+game, so a patch can change either group without anything failing.
+
+- `ASSIGN_SKILLS`, with `_SHOP_SKILLS`, decides which skills a business accepts when
+  somebody is assigned to it, so the Staff page never proposes a hire the mod refuses
+  (`no_skill`). It comes from two bundles: `defaultlocalgroup_assets_businesstypes_*`
+  (`employeePrimarySkills`) and `defaultlocalgroup_assets_buildingtypes_*`
+  (`requiredBuildingSkills`, which puts Cleaning on a type, and the `allowtheft` tag, which
+  puts Security Guard on it). On a new build, re-read those fields for every type in the
+  table and compare by eye. Its tests, in `tests/test_staff_hire.py`
+  ("test_accepts_follows_the_game_s_assign_check" and
+  "test_every_assign_table_type_is_one_the_board_knows"), pin three sites' results and that
+  each type is one the board knows, not the game's values.
+- The shift rules under the "roster building" banner (`SHIFT_CAP` and the rest) come from
+  `BigAmbitions.dll`, not a bundle. Section 2 of `docs/staffing-assistant-scope.md` quotes
+  the source of each, and "Reading the game's code" below says how to read the IL.
+  `COVER_STATIONS`, the cleaning and security stations that get one person for every open
+  hour, is a choice of the board's, since the game stores no need for them (the same
+  document, "Cleaning and security: full opening-hour cover"). The comment above these
+  says "at VERIFIED_BUILD", so re-read the rules before bumping it (section 5).
+
 ### Values measured from saves
 
 A few numbers were fitted to real saves rather than read from a file, so a patch can move
