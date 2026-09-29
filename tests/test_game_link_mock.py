@@ -953,7 +953,7 @@ class MockHire(LinkedMock):
         status, answer = self.post("schedule", {"dryRun": True, "address": GIFTS, "expect": new_print,
                                                 "days": [{"d": 5, "shifts": [shift(IDA, CLEAN)]}]})
         self.assertTrue(answer["ok"], answer)
-        # A mod before 0.5.0 (no hire.undo) never undoes a hire.
+        # A mod before 0.4.0 (no hire.undo) never undoes a hire.
         self.link.configure({"features": []})
         self.assertEqual(self.post("undo", {"kind": "hire"}), (409, {"error": "no_undo"}))
         self.assertEqual(self.post("undo", {"kind": "hire", "dryRun": True}), (409, {"error": "no_undo"}))
@@ -1159,16 +1159,22 @@ DEE_PRINT = shift_print([(4, 8, 20, DEE, REGISTER, 1)])
 
 
 class MockHireOneAction(LinkedMock):
-    """Mod 0.5.0's hire call (features hire.reschedule and hire.undo): weeks
+    """Mod 0.4.0's hire call (features hire.reschedule and hire.undo): weeks
     no hire or move reaches, and the undo of the whole call."""
 
-    def setUp(self):
+    def setUp(self, bonus_used=True):
         super().setUp()
         # The synthetic company with Dee working at Bare, where nobody else does.
         company = es3_fixture.link_company()
         company["EmployeeInstances"].append({
             "id": DEE, "characterData": {"name": "Dee Park", "skills": [{"name": "ba:skill_customerservice", "value": 50.0}]},
             "assignedAddress": es3_fixture.address("ba:street_fifthavenue", 4)})
+        # A company that has had employees: the game's once-only first-employee
+        # bonus is used, so an undo has nothing it cannot give back.
+        if bonus_used:
+            company["usedHappinessModifiers"] = ["ba:happinessmodifier_first_employee"]
+        else:
+            company.pop("usedHappinessModifiers", None)
         with open(self.path, "wb") as fh:
             fh.write(es3_fixture.encode(company))
         self.link.refresh(force=True)
@@ -1230,7 +1236,7 @@ class MockHireOneAction(LinkedMock):
         # A reschedule-only site with no week does nothing: 400.
         status, answer = self.post("hire", dict(only, sites=[{"address": BARE, "expect": None, "days": None}]))
         self.assertEqual((status, answer["error"]), (400, "bad_request"))
-        # Without hire.reschedule, as before 0.5.0.
+        # Without hire.reschedule, as before 0.4.0.
         self.link.configure({"features": ["hire.undo"]})
         status, answer = self.post("hire", dict(only, dryRun=True))
         self.assertEqual((status, answer["error"]), (400, "bad_request"))
@@ -1335,23 +1341,50 @@ class MockHireOneAction(LinkedMock):
         self.assertNotIn("hire", self.link.undo)
         self.assertEqual(self.post("undo", {"kind": "hire"}), (409, {"error": "nothing_to_undo"}))
 
-    def test_the_undo_gives_a_mover_their_shifts_back_where_the_call_only_cleared_them(self):
+    def test_the_undo_refuses_a_mover_with_hours_where_it_restores_no_week(self):
         # Gifts is not rewritten: the move alone clears Ana's two shifts there.
         move = {"hires": [], "moves": [{"employeeId": ANA, "from": GIFTS, "to": CORNER}],
                 "sites": [{"address": CORNER, "expect": None, "days": None}]}
         self.assertEqual(self.post("hire", move)[0], 200)
         self.assertEqual(self.prints()[("ba:street_secondavenue", 10)], shift_print([]))
-        # A later schedule write gives her hours at Corner; the undo takes them with her.
+        # A later schedule write gives her hours at Corner, whose week the undo
+        # does not restore: clearing them would leave nothing to put back, so the
+        # undo refuses, as the mod does (HireWrite.Undo), and nothing changes.
         corner = self.prints()[("ba:street_broadway", 2)]
         self.assertEqual(self.post("schedule", {"address": CORNER, "expect": corner, "days": [
             {"d": 2, "shifts": [shift(CY, CORNER_REGISTER)]}, {"d": 5, "shifts": [shift(ANA, CORNER_REGISTER)]}]})[0], 200)
+        kept = self.state()
+        self.assertEqual(self.post("undo", {"kind": "hire"}), (409, {"error": "changed", "rows": [
+            {"scope": "move", "id": ANA, "error": "changed"}]}))
+        self.assertEqual(self.state(), kept)
+
+    def test_the_undo_gives_a_mover_their_shifts_back_where_the_call_only_cleared_them(self):
+        move = {"hires": [], "moves": [{"employeeId": ANA, "from": GIFTS, "to": CORNER}],
+                "sites": [{"address": CORNER, "expect": None, "days": None}]}
+        self.assertEqual(self.post("hire", move)[0], 200)
         status, undo = self.post("undo", {"kind": "hire"})
         self.assertEqual(status, 200, undo)
-        self.assertEqual(undo["moved"], [{"employeeId": ANA, "name": "Ana Silva", "from": "HART. Corner",
-                                          "to": "HART. Gifts", "shiftsCleared": 1}])
         self.assertEqual([(s["business"], s["after"]["print"]) for s in undo["sites"]], [("HART. Gifts", GIFTS_PRINT)])
         self.assertEqual(self.prints()[("ba:street_secondavenue", 10)], GIFTS_PRINT)
-        self.assertEqual(self.prints()[("ba:street_broadway", 2)], CORNER_PRINT)
+
+    def test_the_apply_says_it_can_be_undone_and_keeps_no_week_it_left_as_it_was(self):
+        # Bare's week sent as it stands: nothing for the undo to put back there.
+        body = self.call_body()
+        body["sites"][2] = {"address": BARE, "expect": shift_print([]), "days": []}
+        status, done = self.post("hire", body)
+        self.assertEqual((status, done["undoable"]), (200, True))
+        self.assertNotIn(("ba:street_fifthavenue", 4), self.link.undo["hire"]["sites"])
+        self.assertEqual(self.post("hire", dict(body, dryRun=True))[1].get("undoable"), None, "a dry run does not say")
+
+    def test_refusals_come_in_site_order_screen_open_among_them(self):
+        self.assertEqual(self.post("hire", self.call_body())[0], 200)
+        corner = self.prints()[("ba:street_broadway", 2)]
+        self.assertEqual(self.post("schedule", {"address": CORNER, "expect": corner,
+                                                "days": [{"d": 2, "shifts": [shift(CY, CORNER_REGISTER)]}]})[0], 200)
+        self.link.configure({"screenOpen": [GIFTS]})
+        _, dry = self.post("undo", {"kind": "hire", "dryRun": True})
+        self.assertEqual(dry["rows"], [{"scope": "site", "address": GIFTS, "error": "screen_open"},
+                                       {"scope": "site", "address": CORNER, "error": "changed"}])
 
     def test_no_undo_without_the_feature(self):
         self.link.configure({"features": ["hire.reschedule"]})
@@ -1407,3 +1440,36 @@ class MockOfficeSchedule(LinkedMock):
         self.assertEqual(status, 200)
         self.assertTrue(answer["ok"], answer)
         self.assertEqual((answer["added"], answer["openedHours"], answer["siteError"]), (2, False, None))
+
+
+class MockHireFirstEmployee(MockHireOneAction):
+    """A company whose first employee the call hires: the game's once-only
+    bonus comes with it, which no undo can take back."""
+
+    def setUp(self):
+        super().setUp(bonus_used=False)
+
+    def test_the_undo_refuses_the_call_that_hired_the_first_employee(self):
+        status, done = self.post("hire", self.call_body())
+        self.assertEqual(status, 200, done)
+        kept = self.state()
+        self.assertEqual(self.post("undo", {"kind": "hire"}), (409, {"error": "changed", "rows": [
+            {"scope": "hire", "id": IDA, "error": "changed"}]}))
+        self.assertEqual(self.state(), kept)
+        # A call with no hire grants nothing, and is undone.
+        only = {"hires": [], "moves": [], "sites": [{"address": BARE, "expect": self.prints()[("ba:street_fifthavenue", 4)],
+                                                     "days": [{"d": 5, "shifts": [shift(DEE, REGISTER)]}]}]}
+        self.assertEqual(self.post("hire", only)[0], 200)
+        self.assertEqual(self.post("undo", {"kind": "hire"})[0], 200)
+
+    # The inherited cases run with the bonus used only.
+    test_the_undo_takes_the_whole_call_back = None
+    test_the_undo_refuses_when_the_game_has_moved_on = None
+    test_a_later_hire_replaces_the_undo_and_one_that_changes_nothing_clears_it = None
+    test_the_undo_refuses_a_mover_with_hours_where_it_restores_no_week = None
+    test_the_undo_gives_a_mover_their_shifts_back_where_the_call_only_cleared_them = None
+    test_the_apply_says_it_can_be_undone_and_keeps_no_week_it_left_as_it_was = None
+    test_refusals_come_in_site_order_screen_open_among_them = None
+    test_health_lists_the_features_and_config_changes_them = None
+    test_a_reschedule_only_site_is_written_with_the_feature_and_400_without = None
+    test_no_undo_without_the_feature = None

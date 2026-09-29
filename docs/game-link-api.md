@@ -129,9 +129,9 @@ state from the listener's threads.
   carried a token the game approved for its origin, so a poll without one always says
   false. Both are
   additive: `schemaVersion` stays 1.
-- `features` (mod 0.5.0 and later) lists what a write kind can do beyond what its version
-  of the contract first said; a mod before 0.5.0 sends none, which a client reads as `[]`.
-  0.5.0 lists `hire.reschedule` (a `hire` call may carry weeks no hire or move reaches) and
+- `features` (mod 0.4.0 and later) lists what a write kind can do beyond what its version
+  of the contract first said; a mod before 0.4.0 sends none, which a client reads as `[]`.
+  0.4.0 lists `hire.reschedule` (a `hire` call may carry weeks no hire or move reaches) and
   `hire.undo` (`POST /write/undo {"kind": "hire"}` undoes a hire call). A client asks for
   a feature only when it is listed, and says nothing about a token it does not know.
   Additive: `schemaVersion` stays 1. A capability is named rather than read off
@@ -191,9 +191,9 @@ Every JSON answer, `/health` included, carries `Cache-Control: no-store`: a cach
 
 Mod 0.2.0 and later. Three kinds change the game — `uniforms`, `imports`, `schedule` —
 and a fourth undoes the last write of a kind. Mod 0.3.0 adds `hire`, which hires candidates,
-moves staff between sites and writes their weeks in one call. Mod 0.5.0 lets that call carry
+moves staff between sites and writes their weeks in one call. Mod 0.4.0 lets that call carry
 the weeks of sites no hire or move reaches, and undoes it in one step (`features`
-`hire.reschedule` and `hire.undo`); before 0.5.0 a hire has no undo. The scope and the game rules behind each are
+`hire.reschedule` and `hire.undo`); before 0.4.0 a hire has no undo. The scope and the game rules behind each are
 `docs/mod-write-back-scope.md`; this section is only the wire.
 
 **Every write** is `POST /write/<kind>` with a JSON body (`Content-Type: application/json`,
@@ -452,11 +452,11 @@ A test vector both sides pin: the two lines
 #### `POST /write/hire`
 
 Mod 0.3.0 and later. Hires headhunter candidates and assigns them to a site, moves employees
-between sites, and writes the weeks of the sites involved, in one call. From 0.5.0 the same
+between sites, and writes the weeks of the sites involved, in one call. From 0.4.0 the same
 call may also write the weeks of sites nobody is hired into or moved to or from
 (`hire.reschedule`), so the board's whole staffing action is one call, and it has an undo
 (`hire.undo`, under "Undoing a hire" below). Everything in "Every
-write" above holds, except that a mod before 0.5.0 has no undo for it and a candidate who has left the game's list
+write" above holds, except that a mod before 0.4.0 has no undo for it and a candidate who has left the game's list
 is skipped rather than refused (below). The game rules behind it are
 `docs/mod-write-back-scope.md` section 11.
 
@@ -488,8 +488,8 @@ working as they are.
 - `moves[]`: an employee assigned to `to`. `from` is where the bytes had them, `null` for an
   unassigned employee; it is the move's compare-and-set. `from` equal to `to` is `400`.
 - `sites[]`: every address a hire or a move targets, plus any move source whose week the
-  page rewrites; before 0.5.0 nothing else (`400`). A target with no `sites[]` entry is `400`.
-  From 0.5.0 (`hire.reschedule`) an entry may name any other site with a week (`days` not
+  page rewrites; before 0.4.0 nothing else (`400`). A target with no `sites[]` entry is `400`.
+  From 0.4.0 (`hire.reschedule`) an entry may name any other site with a week (`days` not
   null): a **reschedule-only** site, checked and written like the others. A reschedule-only
   entry with `days: null` would do nothing and is still `400`. A call may hold only
   reschedule-only sites, with `hires` and `moves` empty.
@@ -514,7 +514,7 @@ working as they are.
   the mover's shifts.
 - Where the player put a shop on full cover (24/7), its week is cut against 0 to 24 and its
   entry sends `openAllHours: true`; every other entry sends `false`.
-- With a mod before 0.5.0 the page sends the weeks no hire or move reaches as
+- With a mod before 0.4.0 the page sends the weeks no hire or move reaches as
   `/write/schedule` calls, one site after another, after the hire call; none of them can be
   undone with the hire.
 - People in training (`EmployeeInstance.trainingSession` set, the game's `IsTraining`) are
@@ -534,11 +534,11 @@ working as they are.
 4. Each `sites[]` entry with `days`: the schedule write's apply, unchanged.
 5. `MarkChange()`, one notification ("Big Copilot hired 34 and moved 3"), a refresh. The
    `schedule` kind's undo is cleared if it belongs to a site this call wrote (a move that
-   cleared someone's shifts counts as writing the site they left). From 0.5.0 the call's own
+   cleared someone's shifts counts as writing the site they left). From 0.4.0 the call's own
    undo replaces the `hire` kind's (below); an apply that changed nothing replaces it with
    nothing, as for every kind.
 
-From 0.5.0 the mod records, before step 2, what the undo will need: the game's day and hour;
+From 0.4.0 the mod records, before step 2, what the undo will need: the game's day and hour;
 the days (shifts and opening hours) of every site with `days` and of every move source where
 the mover holds shifts; each mover's business, and whether the move takes a delivery
 vehicle or an import contract off them; each candidate's place in `CandidateEmployeeInstances`,
@@ -576,6 +576,10 @@ confirm.
 - `skipped[]`: each gone candidate; `name` is null when the mod no longer knows them, and
   `hoursDropped` sums the hours of the shifts dropped for them.
 - `wageAdded` is the sum of `hourlyWage` over `hired`, per hour (the page turns it into a day).
+- `undoable` (an apply from mod 0.4.0, `hire.undo`): whether the mod kept this call's undo.
+  False when the call changed nothing, or when the mod could not record what the undo needs
+  before it applied (the call still applies; the page then offers no Undo). Absent from a
+  dry run and from older mods.
 - `sites[]`, one per request entry, in request order, with the schedule write's answer fields.
   An assign-only site answers `before` and `after` null and `removed`/`added` 0.
   `leftWithout` does not list people this call moves away. `siteError` repeats the site's
@@ -600,11 +604,11 @@ list, so the board never proposes a `no_skill` row.
 An apply with any row answers `409` with the rows: `changed` when any row's error is
 `changed` (the page refreshes and re-plans), else `refused`. Nothing is written.
 
-Before 0.5.0 a hire has no undo: `POST /write/undo {"kind": "hire"}` answers
+Before 0.4.0 a hire has no undo: `POST /write/undo {"kind": "hire"}` answers
 `409 {"error":"no_undo"}`, and to let someone go the player uses MyEmployees in the game.
 The game's approval popup names hiring among what the board may change.
 
-##### Undoing a hire (mod 0.5.0, `hire.undo`)
+##### Undoing a hire (mod 0.4.0, `hire.undo`)
 
 `POST /write/undo {"kind": "hire", "dryRun": false}` takes back the last applied hire call of
 this city session, **all or nothing**, and only on the game day it was made:
@@ -623,10 +627,11 @@ this city session, **all or nothing**, and only on the game day it was made:
   `nextSickDay` and complaint state as before, and a salary negotiation the hire ended open
   again. Their to-dos go; the game rebuilds the idle and unassigned ones for everyone else.
 
-**What it cannot restore**, and never refuses for: a first-hire happiness bonus the game
-grants once (it stays), a personal goal or achievement the head count completed, sales made
-and work done in the minutes they were employed, and those hours (the game pays wages per
-hour worked at the day's end, so a hire undone the same day costs nothing and is never paid).
+**What it cannot restore**, and never refuses for: a personal goal or achievement the head
+count completed, sales made and work done in the minutes they were employed, and those hours
+(the game pays wages per hour worked at the day's end, so a hire undone the same day costs
+nothing and is never paid). The game's once-only first-employee happiness bonus it cannot take
+back either, so a call that granted it is refused (`hire` row below).
 
 **It refuses up front** rather than half-undo, `409 {"error": "changed", "rows": [...]}` with
 nothing changed, each row `{"scope", "id" | "address", "error": "changed"}`, when:
@@ -635,8 +640,8 @@ nothing changed, each row `{"scope", "id" | "address", "error": "changed"}`, whe
 | --- | --- |
 | `day` | the game's day has moved on since the call (the day's wages and the daily run have happened) |
 | `site` | its shift print is not what the call left, a day it opened is no longer open 0 to 24, it is no longer rented, or a shift it would put back no longer passes the schedule write's checks (a person moved away, a station sold) |
-| `move` | the person is no longer employed, not at the site the call moved them to, in training, driving a vehicle or on an import contract now; the call's move took a delivery vehicle or an import contract off them (the undo cannot give those back); the site they came from is no longer rented or no longer a business; they hold hours at a site whose week the undo does not restore |
-| `hire` | the person is no longer employed, back among the candidates, assigned elsewhere, in training or on a training day, on an HR manager's plan, being replaced, poached or complaining, driving a vehicle, a purchasing agent on a contract, or on another wage; they hold hours at a site whose week the undo does not restore |
+| `move` | the person is no longer employed, not at the site the call moved them to, in training, driving a vehicle or on an import contract now, or on another HR manager's plan than at the call (`assignedHrManagerPlanId`); the call's move took a delivery vehicle or an import contract off them (the undo cannot give those back); the site they came from is no longer rented or no longer a business; they hold hours at a site whose week the undo does not restore |
+| `hire` | the person is no longer employed, back among the candidates, assigned elsewhere, in training or on a training day, on an HR manager's plan, being replaced, poached or complaining, driving a vehicle, a purchasing agent on a contract, or on another wage; they hold hours at a site whose week the undo does not restore; the call hired the company's first employee, and the game's once-only first-employee bonus (`usedHappinessModifiers`) came with it (every hire of that call answers the row) |
 
 A site with BizMan's schedule screen open answers `409 {"error": "refused", "rows":
 [{"scope": "site", "address", "error": "screen_open"}]}`, and an apply while MyEmployees
@@ -681,8 +686,8 @@ or a station sold since answers `changed`). Answers like the write it undoes, wi
 skills it cleared in `set`; imports and schedule answer `before` as the state the undo
 found and the values as they now stand;
 `409 {"error":"nothing_to_undo"}` when there is none; `409 {"error":"changed"}` when the
-game has moved on; `409 {"error":"no_undo"}` for `"kind": "hire"` from a mod before 0.5.0,
-which never undoes a hire (from 0.5.0: "Undoing a hire" above). An undo is not itself undoable; a new write of the kind replaces what
+game has moved on; `409 {"error":"no_undo"}` for `"kind": "hire"` from a mod before 0.4.0,
+which never undoes a hire (from 0.4.0: "Undoing a hire" above). An undo is not itself undoable; a new write of the kind replaces what
 undo would restore. One board per game: with two boards writing the same kind, an undo
 restores whichever write came last.
 
@@ -785,7 +790,7 @@ last refresh (the mock has no main-thread fallback).
 `--throttle`, `--refuse <reason>` and `--schema <n>` exercise the clients' error paths.
 For the writes, `--refuse-write <error>[:<detail>]`, `--busy-writes <n>` and `--writes <kinds>`
 do the same; `--features <list>` names what `/health` lists as `features` (by default
-`hire.reschedule,hire.undo`, as mod 0.5.0; `""` for an older mod, whose hire call then refuses
+`hire.reschedule,hire.undo`, as mod 0.4.0; `""` for an older mod, whose hire call then refuses
 a reschedule-only site with `400` and whose hire undo answers `no_undo`), and for `hire`, `--hire-gone <candidateId>` (repeatable) makes a candidate gone
 and `--myemployees` opens the phone's MyEmployees app. For `schedule` and `hire`,
 `--screen-open <street>:<number>` (repeatable) opens BizMan's schedule screen on a site: a

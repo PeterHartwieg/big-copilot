@@ -14,7 +14,7 @@ namespace BigCopilotLink
     /// closure, build 3682 IL), the hires its "Assign business and hire"
     /// (AssignToBusinessAndHireMassAction.HireAndAssignBusiness's closure), calling the
     /// same game helpers rather than copying their bodies; the weeks are ScheduleWrite's
-    /// checks and apply, judged as if the call's moves and hires had happened. From 0.5.0 a
+    /// checks and apply, judged as if the call's moves and hires had happened. From 0.4.0 a
     /// call may also write the weeks of sites no hire or move reaches (hire.reschedule), and
     /// an applied call can be undone the same game day (hire.undo, Undo below). A candidate
     /// who has left the game's list is skipped, never refused.
@@ -189,7 +189,7 @@ namespace BigCopilotLink
 
             foreach (var target in targets)
                 if (!siteKeys.Contains(target)) throw new BadRequestException("every hire's and move's target needs its body.sites entry");
-            // From 0.5.0 (hire.reschedule) a site no hire or move touches is written for its
+            // From 0.4.0 (hire.reschedule) a site no hire or move touches is written for its
             // week alone; with days null it would do nothing.
             foreach (var site in assignOnly)
                 if (!targets.Contains(site) && !sources.Contains(site))
@@ -465,7 +465,7 @@ namespace BigCopilotLink
             string weekBusiness = null;
             var weeks = 0;
             // What the undo needs, taken before anything changes. Should the record fail,
-            // the call still runs, without an undo.
+            // the call still runs, without an undo, and its answer says so (undoable false).
             UndoState undo = null;
             try
             {
@@ -519,7 +519,9 @@ namespace BigCopilotLink
                 }
             }
             var stamp = Finish(ws, hired.Count, moved.Count, weeks, weekBusiness);
-            return Answer(false, true, false, stamp, hired, moved, skipped, sites, away, rows);
+            // Whether this call can be undone: false where the record failed, so the page
+            // never offers an Undo the mod cannot keep.
+            return Answer(false, true, false, stamp, hired, moved, skipped, sites, away, rows, ws.HireUndo != null);
         }
 
         /// <summary>
@@ -599,7 +601,7 @@ namespace BigCopilotLink
             }
         }
 
-        // ---- the undo (0.5.0, hire.undo) ----------------------------------------------
+        // ---- the undo (0.4.0, hire.undo) ----------------------------------------------
 
         /// <summary>
         /// What the last applied hire call changed, taken before its moves and hires
@@ -616,6 +618,10 @@ namespace BigCopilotLink
             internal List<ScheduleWrite.UndoState> Sites = new List<ScheduleWrite.UndoState>();
             /// <summary>Each entry of Sites' print before the call; dropped once the call is kept.</summary>
             internal List<string> PrintsBefore = new List<string>();
+            /// <summary>The game's once-only first-employee bonus was not used before the call.</summary>
+            internal bool BonusFree;
+            /// <summary>The call granted that bonus: the undo cannot take it back, so it refuses.</summary>
+            internal bool GrantedBonus;
         }
 
         /// <summary>One hired candidate as they were before EmployeeHelper.HireCandidate.</summary>
@@ -667,6 +673,8 @@ namespace BigCopilotLink
             /// <summary>The move cleared their delivery vehicle slot or cut their import contract: the undo cannot give those back.</summary>
             internal bool TookVehicle;
             internal bool TookContract;
+            /// <summary>The HR manager's plan they were on at the write (assignedHrManagerPlanId), empty for none.</summary>
+            internal string HrPlan;
         }
 
         /// <summary>EmployeeInstance.lastWorkedDay is private (build 3682); null when the field is not found.</summary>
@@ -678,6 +686,10 @@ namespace BigCopilotLink
         {
             var game = SaveGameManager.Current;
             var undo = new UndoState { Day = game.Day, Hour = TimeHelper.CurrentHour };
+            // HireCandidate grants the game's once-only first-employee happiness bonus
+            // (HappinessHelper.AddModifier, remembered in usedHappinessModifiers); an undo
+            // cannot give that back.
+            undo.BonusFree = hired.Count > 0 && !FirstBonusUsed(game);
 
             var drivers = Drivers();
             foreach (var m in moved)
@@ -686,7 +698,8 @@ namespace BigCopilotLink
                 {
                     Id = m.Req.EmployeeId, Employee = m.Employee, Name = m.Name, Target = m.Req.To,
                     Source = m.Employee.assignedAddress,
-                    Drove = drivers.Contains(m.Req.EmployeeId), HadContract = HasContract(m.Req.EmployeeId)
+                    Drove = drivers.Contains(m.Req.EmployeeId), HadContract = HasContract(m.Req.EmployeeId),
+                    HrPlan = m.Employee.assignedHrManagerPlanId ?? ""
                 });
             }
 
@@ -778,6 +791,7 @@ namespace BigCopilotLink
             }
             undo.Sites = kept;
             undo.PrintsBefore = null;
+            undo.GrantedBonus = undo.BonusFree && FirstBonusUsed(SaveGameManager.Current);
 
             var drivers = Drivers();
             foreach (var m in undo.Moves)
@@ -802,6 +816,16 @@ namespace BigCopilotLink
                     if (slot != null && !string.IsNullOrEmpty(slot.employeeDriverId)) ids.Add(slot.employeeDriverId);
             }
             return ids;
+        }
+
+        private const string FirstEmployeeBonus = "ba:happinessmodifier_first_employee";
+
+        /// <summary>Whether the game has used its once-only first-employee bonus (GameInstance.usedHappinessModifiers); happiness switched off counts as used.</summary>
+        private static bool FirstBonusUsed(GameInstance game)
+        {
+            if (game == null) return true;
+            if (game.gameVariables != null && game.gameVariables.disableHappiness) return true;
+            return game.usedHappinessModifiers != null && game.usedHappinessModifiers.Contains(FirstEmployeeBonus);
         }
 
         /// <summary>A purchasing agent on an import contract (what EmployeeInstance.UnAssignWork cuts).</summary>
@@ -891,6 +915,8 @@ namespace BigCopilotLink
                     // Shifts at a site whose week the undo does not put back: they would
                     // be cleared with nothing to restore them.
                     || (!restoredKeys.Contains(Key(m.Target)) && ShiftsOf(targetReg, m.Id) > 0)
+                    // An HR manager's plan they joined since the write.
+                    || (e.assignedHrManagerPlanId ?? "") != (m.HrPlan ?? "")
                     || !CanReturnTo(m.Source);
                 if (changed)
                 {
@@ -925,7 +951,9 @@ namespace BigCopilotLink
                     || (e.complaintData != null && e.complaintData.isComplaining)
                     || drivers.Contains(h.Id) || HasContract(h.Id)
                     || Math.Abs(e.hourlyWage - h.Wage) > 0.005
-                    || (!restoredKeys.Contains(Key(h.Target)) && ShiftsOf(targetReg, h.Id) > 0);
+                    || (!restoredKeys.Contains(Key(h.Target)) && ShiftsOf(targetReg, h.Id) > 0)
+                    // The call hired the company's first employee: the game's once-only bonus stays.
+                    || state.GrantedBonus;
                 if (changed)
                 {
                     rows.Add(new Row { Scope = "hire", Id = h.Id, Error = "changed" });
@@ -988,6 +1016,16 @@ namespace BigCopilotLink
             var touched = new Dictionary<string, Address>(StringComparer.Ordinal);
             try
             {
+                // Weeks first: once they are back no shift names a hire, so a throw
+                // further on never leaves shifts pointing at a candidate. A mover's source
+                // week names them while they are still at the target for a moment;
+                // MoveBack's unassign clears shifts at their assigned business only (the
+                // target, restored already), never at the source (build 3682 IL).
+                foreach (var r in restores)
+                {
+                    Touch(touched, r.State.Address);
+                    ScheduleWrite.RestoreDays(r.State);
+                }
                 foreach (var m in moves)
                 {
                     Touch(touched, m.M.Target);
@@ -1001,11 +1039,6 @@ namespace BigCopilotLink
                 {
                     Touch(touched, h.H.Target);
                     UnHire(h.H, elapsed);
-                }
-                foreach (var r in restores)
-                {
-                    Touch(touched, r.State.Address);
-                    ScheduleWrite.RestoreDays(r.State);
                 }
             }
             catch (Exception e)
@@ -1238,12 +1271,20 @@ namespace BigCopilotLink
         private static WriteAnswer Answer(bool dryRun, bool ok, bool blocked, string stamp, List<Hired> hired, List<Moved> moved,
             List<Skipped> skipped, List<SiteState> sites, HashSet<string> away, List<Row> rows)
         {
+            return Answer(dryRun, ok, blocked, stamp, hired, moved, skipped, sites, away, rows, null);
+        }
+
+        /// <summary>The answer; <paramref name="undoable"/>, on an apply, whether the call can be undone.</summary>
+        private static WriteAnswer Answer(bool dryRun, bool ok, bool blocked, string stamp, List<Hired> hired, List<Moved> moved,
+            List<Skipped> skipped, List<SiteState> sites, HashSet<string> away, List<Row> rows, bool? undoable)
+        {
             var w = new JsonWriter();
             w.BeginObject();
             w.Prop("ok", ok);
             w.Prop("kind", "hire");
             w.Prop("dryRun", dryRun);
             if (stamp != null) w.Prop("stamp", stamp);
+            if (undoable.HasValue) w.Prop("undoable", undoable.Value);
             if (blocked) w.Prop("blocked", "myemployees");
 
             var wageAdded = 0.0;

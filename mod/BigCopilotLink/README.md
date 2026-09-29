@@ -53,7 +53,7 @@ Mod Builder.
   `HKEY_CURRENT_USER\Software\Hovgaard Games\Big Ambitions`, a plist on a Mac), where the
   SDK keeps mod options too. **Forget approved browsers** in the mod's options empties it.
 
-## What it changes (0.2.0, 0.3.0 and 0.5.0)
+## What it changes (0.2.0 to 0.4.0)
 
 Five `POST` endpoints, all in [`docs/game-link-api.md`](../../docs/game-link-api.md)
 under "Writes":
@@ -63,8 +63,8 @@ under "Writes":
 | `/write/uniforms` | Puts a preset (the one named "Default" unless the page names another) on every skill of a site's Uniforms window that has no uniform yet (or on the skills the page names). A skill you dressed yourself is never touched. From 0.3.1 a page may send the character and company it read the plan from; when the game has another save loaded, every site answers `changed` and nothing is set. |
 | `/write/imports` | Sets purchasing-agent contract amounts, switches a stopped contract back on (with Repeating), and reorders contracts in the plan order. It never stops a contract, and never adds or removes a product. |
 | `/write/schedule` | Replaces one business's seven days of shifts; with `openAllHours`, also opens every day 0 to 24. Never at a headquarters. |
-| `/write/hire` | From 0.3.0. Hires headhunter candidates into businesses, moves employees from one business to another, and writes the weeks of the businesses involved, in one call: what MyEmployees' "Assign business and hire" and "Assign business" do, then the schedule write for each week sent. A candidate who has left the game's list since the board read it is skipped, and their shifts are left empty; anything else refused refuses the whole call. From 0.5.0 the same call also writes the weeks of businesses nobody is hired into or moved to or from (reschedule-only sites, `features` `hire.reschedule`), so the board's whole staffing action is one call, and it can be undone (`hire.undo`). |
-| `/write/undo` | Puts back what the last write of a kind changed, in this city session, where the game still holds what that write left. From 0.5.0 also a hire call, all or nothing and only on the game day it was made: moves reversed, hires taken back quietly into the candidate list (never fired), every week and opened day as before. Before 0.5.0 a hire answers `no_undo`. |
+| `/write/hire` | From 0.3.0. Hires headhunter candidates into businesses, moves employees from one business to another, and writes the weeks of the businesses involved, in one call: what MyEmployees' "Assign business and hire" and "Assign business" do, then the schedule write for each week sent. A candidate who has left the game's list since the board read it is skipped, and their shifts are left empty; anything else refused refuses the whole call. From 0.4.0 the same call also writes the weeks of businesses nobody is hired into or moved to or from (reschedule-only sites, `features` `hire.reschedule`), so the board's whole staffing action is one call, and it can be undone (`hire.undo`). |
+| `/write/undo` | Puts back what the last write of a kind changed, in this city session, where the game still holds what that write left. From 0.4.0 also a hire call, all or nothing and only on the game day it was made: moves reversed, hires taken back quietly into the candidate list (never fired), every week and opened day as before. Before 0.4.0 a hire answers `no_undo`. |
 
 - **Approving a browser.** Every write needs `Authorization: Bearer <token>`, a token
   the game gives a browser once you allow it. The first write from a browser asks in the
@@ -192,7 +192,7 @@ the worker thread failed again on its second chance; serializing on the main thr
    | ModId | `BigCopilotLink` |
    | DisplayName | `Big Copilot Link` |
    | Author | `Peter Hartwieg` |
-   | Version | `0.5.0` |
+   | Version | `0.4.0` |
    | Mod Assembly | drag `BigCopilotLink.asmdef` into the field |
    | Locales Folder | drag the `Locales` folder into the field; the option labels are keys in `Locales/en.json` |
 
@@ -232,7 +232,7 @@ Launch the game, enable **Big Copilot Link** in the Mods menu, load a save, then
 curl http://127.0.0.1:8322/health
 ```
 
-Expect `{"ok":true,"schemaVersion":1,"modVersion":"0.5.0","source":"game",…,"writes":["uniforms","imports","schedule","hire"],"features":["hire.reschedule","hire.undo"],"paired":false}` and a
+Expect `{"ok":true,"schemaVersion":1,"modVersion":"0.4.0","source":"game",…,"writes":["uniforms","imports","schedule","hire"],"features":["hire.reschedule","hire.undo"],"paired":false}` and a
 `[BigCopilotLink] serving the game to Big Copilot on http://127.0.0.1:8322/` line in
 the player log (`%USERPROFILE%\AppData\LocalLow\Hovgaard Games\Big Ambitions\Player.log`;
 on a Mac, `~/Library/Logs/Hovgaard Games/Big Ambitions/Player.log`), then, a few
@@ -426,10 +426,12 @@ http://127.0.0.1:8322/health` answers `"modVersion":"0.3.1"`.
    `changed`, and the apply (`"dryRun":false`) answers `409 {"error":"changed",…}` with
    nothing set in the Uniforms window. Leave `expect` out: it answers as in 0.3.0.
 
-### In-game checklist for 0.5.0
+### In-game checklist for 0.4.0
+
+#### Staffing: one call, and its undo
 
 The board's staffing action as one call, and its undo. Built as above; `curl
-http://127.0.0.1:8322/health` answers `"modVersion":"0.5.0"` and `"features":
+http://127.0.0.1:8322/health` answers `"modVersion":"0.4.0"` and `"features":
 ["hire.reschedule","hire.undo"]`. Before each step note, in MyEmployees and BizMan →
 Schedule, what the sites involved hold, so the undo can be compared with it. Close
 MyEmployees before every apply and undo.
@@ -469,10 +471,21 @@ MyEmployees before every apply and undo.
    the contract back) and nothing changes.
 9. **Save and reload after an undo.** The candidate is still a candidate, with their
    expiry; the moved spare still at B.
+10. **A delivery driver moved from a shop.** The game's own move
+    (`UnassignEmployeeFromAllWorkshifts`) leaves a driver-skilled person's shifts at a
+    business that is not a warehouse. Move such a person from a shop with the hire call:
+    note whether their hours at the shop stay in BizMan → Schedule, and whether the
+    answer's `shiftsCleared` counted them; then undo, and check the shop's week and the
+    person are as before (or that the undo refuses with a `move` or `site` row).
+11. **The first employee.** In a company with nobody employed yet, hire one person
+    with the call, then undo: `409 changed` with a `hire` row (the game's once-only
+    first-employee bonus cannot be taken back), and nothing changes.
+12. **An HR manager's plan.** Move someone with the call, add them to an HR manager's
+    plan at the headquarters, then undo: `409 changed` with their `move` row.
 
-What the undo cannot restore, and never refuses for (the contract lists these): the
-game's once-only first-employee happiness bonus, a personal goal or achievement the head
-count completed, sales made and work done while they were employed. The hourly tick's
+What the undo cannot restore, and never refuses for (the contract lists these): a
+personal goal or achievement the head count completed, sales made and work done while
+they were employed. The first-employee bonus it refuses for (item 11). The hourly tick's
 counters (hours worked today and this week, days worked, satisfaction) are put back from
 the record; the private `lastWorkedDay` is put back by reflection, and left as it is if
 that field is not found. The mod keeps one undo per city session: loading another save
@@ -536,13 +549,13 @@ Read by reflection and confirmed by the Mac compile. Public unless noted.
 | `GameInstance.CandidateEmployeeInstances` (`List<EmployeeInstance>`); `EmployeeInstance` fields `id`, `hourlyWage`, `assignedAddress`, `characterData` (`name`, `skills[].name`), `candidateInfo` (`CandidateInfo.hoursUntilExpiring`), properties `IsCandidate` (`candidateInfo != null`) and `IsTraining` (`trainingSession != null`), `IsAssignedToAnyBusiness()`, `AddTodoTask(TodoTaskType, bool)` with `TodoTaskType.EmployeeIdle` (5) and `EmployeeUnassigned` (13); static `EmployeeHelper.GetEmployeeById(id, false)`, `HireCandidate(EmployeeInstance)`, `UnassignEmployeeFromAllWorkshifts(EmployeeInstance)`; static `Entities.CustomerDemandHelper.ReloadCachedFulfilled(Address)`; the property `BuildingRegistration.Address` | 0.3.0, hire and move: the calls MyEmployees' mass actions make (`AssignToBusinessAndHireMassAction` and `AssignBusinessMassAction` closures). `GetEmployeeById` also finds candidates (the dictionary holds them; `DiscardCandidate` removes them), so the write treats an `IsCandidate` result as nobody's staff |
 | `Helpers.BusinessTypeHelper.GetData(reg)` (`BusinessType`: `employeePrimarySkills`, `HasTag(TagRef.Businesstag.allowtheft)`), `Buildings.BuildingTypeHelper.GetData(reg)` (`BuildingTypeData`: property `NeedsCleaning`, `requiredBuildingSkills`) | 0.3.0: the skills a business takes a person for, as the mass actions' assign check builds them |
 | `UIs.Instance.fullMenu.myEmployees` (`UI.Smartphone.Apps.MyEmployees.MyEmployees`, a `MonoBehaviour`) and its `isActiveAndEnabled` | 0.3.0: "is MyEmployees open". `FullMenu.SelectApp` activates only the chosen app under `appsContainer` and closing the menu deactivates it when the fade ends; the app reloads its lists in `OnEnable`, so the mod does not touch its scrollers. **Unverified in game**: 0.3.0 checklist item 2 |
-| `GameInstance.EmployeeInstances`, `CandidateEmployeeInstances` (`Remove`, `Insert`, `IndexOf`), `candidateSalaryNegotiations` (`CandidateSalaryNegotiation.employeeInstance`, `completed`, `accepted`), `TodoTasks` (`TodoTask.employeeId`), `Day`; static `EmployeeHelper.EmployeeInstancesDictionary` | 0.5.0, the hire undo: the quiet un-hire, the reverse of `HireCandidate` (its IL: list moves, dictionary `TryAdd`, `FinishPendingNegotiation` which is **private** and so re-done from its IL on the negotiation's public fields). The expiry of an application that ran out meanwhile removes the person from the list and the dictionary as `EmployeeHelper.RunHourly` does |
-| `EmployeeInstance` fields `dayHired`, `nextSickDay`, `workedHoursToday`, `workedHoursThisWeek`, `workedDays`, `satisfaction`, `assignedWeeklyHours`, `assignedWeeklyDays` (`List<DayOfWeekOrdered>`), `assignedWorkStationItems` (`List<string>`), `trainingSession`, `isTrainingDay`, `assignedHrManagerPlanId`, `isBeingReplaced`, `poached`, `complaintData` (`EmployeeComplaintData`: `isComplaining`, `hoursUntilNextComplaint`, `complaintDeadlineHours`, `hasRival`, `currentComplaint`); `CandidateInfo.hoursUntilExpiring`; `EmployeeInstance.lastWorkedDay` (**private**, reflection, left alone when not found) | 0.5.0: what `HireCandidate` and the hourly tick change, recorded before the hire and put back by the undo; the rest are the undo's refusals |
-| `Entities.Warehouse.vehicleSlots` (`VehicleSlot.employeeDriverId`), static `Buildings.Office.Headquarters.PurchasingAgentHelper.GetAssignedPlanForPurchasingAgent(id)` | 0.5.0: who drives a delivery vehicle and who holds an import contract, before and after a move (`UnassignEmployeeFromAllWorkshifts` clears a driver's slot at a warehouse and `UnAssignWork` cuts a purchasing agent's contract), and the undo's refusals |
-| `TasksUI.InstantlyCompleteListOfTasks(IEnumerable<TodoTask>)`, `UIs.Instance.smartphoneUI.UpdateBadgeCount(AppName.MyEmployees, false)`, `MyEmployees.UpdateBadge()` | 0.5.0: an un-hired person's to-dos off the screen (it removes from `TodoTasks` only those it found on screen, so the mod removes the rest), and the badges `HireCandidate` updates |
+| `GameInstance.EmployeeInstances`, `CandidateEmployeeInstances` (`Remove`, `Insert`, `IndexOf`), `candidateSalaryNegotiations` (`CandidateSalaryNegotiation.employeeInstance`, `completed`, `accepted`), `TodoTasks` (`TodoTask.employeeId`), `Day`; static `EmployeeHelper.EmployeeInstancesDictionary` | 0.4.0, the hire undo: the quiet un-hire, the reverse of `HireCandidate` (its IL: list moves, dictionary `TryAdd`, `FinishPendingNegotiation` which is **private** and so re-done from its IL on the negotiation's public fields). The expiry of an application that ran out meanwhile removes the person from the list and the dictionary as `EmployeeHelper.RunHourly` does |
+| `EmployeeInstance` fields `dayHired`, `nextSickDay`, `workedHoursToday`, `workedHoursThisWeek`, `workedDays`, `satisfaction`, `assignedWeeklyHours`, `assignedWeeklyDays` (`List<DayOfWeekOrdered>`), `assignedWorkStationItems` (`List<string>`), `trainingSession`, `isTrainingDay`, `assignedHrManagerPlanId`, `isBeingReplaced`, `poached`, `complaintData` (`EmployeeComplaintData`: `isComplaining`, `hoursUntilNextComplaint`, `complaintDeadlineHours`, `hasRival`, `currentComplaint`); `CandidateInfo.hoursUntilExpiring`; `EmployeeInstance.lastWorkedDay` (**private**, reflection, left alone when not found) | 0.4.0: what `HireCandidate` and the hourly tick change, recorded before the hire and put back by the undo; the rest are the undo's refusals |
+| `Entities.Warehouse.vehicleSlots` (`VehicleSlot.employeeDriverId`), static `Buildings.Office.Headquarters.PurchasingAgentHelper.GetAssignedPlanForPurchasingAgent(id)` | 0.4.0: who drives a delivery vehicle and who holds an import contract, before and after a move (`UnassignEmployeeFromAllWorkshifts` clears a driver's slot at a warehouse and `UnAssignWork` cuts a purchasing agent's contract), and the undo's refusals |
+| `TasksUI.InstantlyCompleteListOfTasks(IEnumerable<TodoTask>)`, `UIs.Instance.smartphoneUI.UpdateBadgeCount(AppName.MyEmployees, false)`, `MyEmployees.UpdateBadge()` | 0.4.0: an un-hired person's to-dos off the screen (it removes from `TodoTasks` only those it found on screen, so the mod removes the rest), and the badges `HireCandidate` updates |
 
 The 0.3.0 rows were read from build 3682's IL and by reflection on 25 September 2026 and
-have not been compiled yet. The 0.5.0 rows were read from build 3682's IL, their
+have not been compiled yet. The 0.4.0 rows were read from build 3682's IL, their
 visibility checked member by member by reflection (`IsPublic`), and compiled on
 29 September 2026 against the game's DLLs with the C# 5 compiler (every script but
 `LinkMod.cs`, whose SDK types were stubbed); not yet built in the SDK's Unity project or

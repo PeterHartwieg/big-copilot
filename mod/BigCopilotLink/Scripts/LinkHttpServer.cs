@@ -321,7 +321,7 @@ namespace BigCopilotLink
             w.BeginArray("writes");
             foreach (var kind in WriteService.Kinds) w.Value(kind);
             w.EndArray();
-            // Additive in 0.5.0: what a kind can do beyond its first contract.
+            // Additive in 0.4.0: what a kind can do beyond its first contract.
             w.BeginArray("features");
             foreach (var feature in WriteService.Features) w.Value(feature);
             w.EndArray();

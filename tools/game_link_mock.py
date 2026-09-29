@@ -44,7 +44,7 @@ it is refused screen_open. --hire-gone <id> (or /debug/config "hireGone") makes 
 --myemployees (or "myEmployees") the phone's MyEmployees app open.
 
 --features (or /debug/config "features") names what /health lists as
-`features`, by default hire.reschedule,hire.undo as mod 0.5.0 does; "" is an
+`features`, by default hire.reschedule,hire.undo as mod 0.4.0 does; "" is an
 older mod. With hire.reschedule a hire call may carry the week of a site no
 hire or move touches; with hire.undo POST /write/undo {"kind": "hire"} takes
 the last applied hire call back: the weeks it wrote, its moves and its hires
@@ -99,7 +99,7 @@ ENDPOINTS = (["/health", "/save", "/refresh"] + [f"/write/{k}" for k in (*WRITE_
 # The refusal --refuse-write refused answers per kind when it names no rule.
 REFUSED_DEFAULT = {"uniforms": "no_locker", "imports": "locked", "schedule": "screen_open", "hire": "screen_open"}
 UNDOABLE = ("uniforms", "imports", "schedule", "hire")  # hire only with the hire.undo feature
-# What /health lists as `features` by default, as mod 0.5.0 does.
+# What /health lists as `features` by default, as mod 0.4.0 does.
 FEATURES = ("hire.reschedule", "hire.undo")
 HQ_TYPE = "ba:businesstype_headquarters"
 CLEANING_STATION = "ba:itemname_cleaningstation"
@@ -188,7 +188,7 @@ class Link:
         self.pair_requests: dict = {}  # id -> {origin, name, at, state, token, handed}
         self.tokens: dict = {}         # token -> origin
         self.writes = writes  # None: the key is left out, as a 0.1.0 mod does
-        self.features = list(features or ())  # []: a mod before 0.5.0
+        self.features = list(features or ())  # []: a mod before 0.4.0
         self.refuse_write, self.busy_writes = refuse_write, busy_writes
         self.lock = threading.Lock()
         self.data = b""
@@ -417,7 +417,7 @@ class Link:
                 self.busy_writes -= 1
                 return 503, {"error": "busy"}
             if kind == "undo" and body.get("kind") == "hire" and "hire.undo" not in self.features:
-                return 409, {"error": "no_undo"}  # a mod before 0.5.0 never undoes a hire
+                return 409, {"error": "no_undo"}  # a mod before 0.4.0 never undoes a hire
             if not dry and self.refuse_write:
                 return self._refusal(kind, body)
             if kind == "undo":
@@ -1239,7 +1239,10 @@ class Link:
         # What the undo will need (hire.undo), read before anything changes:
         # the week of every site the call writes, its own and the move sources
         # whose entries the move clears, as they stand now.
-        record = {"day": self.day, "sites": {}, "moves": [], "hires": []}
+        record = {"day": self.day, "sites": {}, "moves": [], "hires": [],
+                  # The game's once-only first-employee bonus comes with the first
+                  # hire (HireCandidate): an undo cannot give it back, so it refuses.
+                  "grantedBonus": bool(hired) and not self._first_bonus_used(save)}
         for address, _after, opens in writes:
             record["sites"][address] = {"before": list(self._entries(save, regs[address], address)),
                                         "fromBytes": address not in self.schedules, "opened": sorted(opens)}
@@ -1275,14 +1278,26 @@ class Link:
         if "hire.undo" in self.features:
             for address, site in record["sites"].items():
                 site["after"] = list(self.schedules[address])
+            # As the mod's KeepUndo: a week the call left as it was, opening
+            # nothing, is not the undo's to put back.
+            record["sites"] = {address: site for address, site in record["sites"].items()
+                               if site["opened"] or sorted(site["after"]) != sorted(site["before"])}
             # An apply that changed nothing leaves nothing to undo.
-            if (record["moves"] or record["hires"]
-                    or any(site["opened"] or sorted(site["after"]) != sorted(site["before"])
-                           for site in record["sites"].values())):
+            if record["moves"] or record["hires"] or record["sites"]:
                 self.undo["hire"] = record
             else:
                 self.undo.pop("hire", None)
+            result["undoable"] = "hire" in self.undo
         return 200, result
+
+    @staticmethod
+    def _first_bonus_used(save) -> bool:
+        """The game's once-only first-employee bonus used (usedHappinessModifiers),
+        or happiness switched off."""
+        variables = save.deref(save.root.get("gameVariables")) or {}
+        if variables.get("disableHappiness"):
+            return True
+        return "ba:happinessmodifier_first_employee" in set(save.items(save.root.get("usedHappinessModifiers")))
 
     # undo -----------------------------------------------------------------------
     def _undo(self, body, dry):
@@ -1382,15 +1397,23 @@ class Link:
         rows = []
         if self.day != record["day"]:
             rows.append({"scope": "day", "error": "changed"})
+        def holds_unrestored(who, target):
+            """Hours at a site whose week the undo does not put back: the mod refuses
+            (HireWrite.Undo), since clearing them would leave nothing to restore."""
+            if target in record["sites"]:
+                return False
+            reg = self._registration(save, target)
+            return any(e[3] == who for e in (self._entries(save, reg, target) if reg is not None else []))
+
         for m in moves:
             person = people.get(m["id"])
             if (person is None or self._where(save, m["id"], person) != m["to"]
-                    or person.get("trainingSession")):
+                    or person.get("trainingSession") or holds_unrestored(m["id"], m["to"])):
                 rows.append({"scope": "move", "id": m["id"], "error": "changed"})
         for h in hires:
-            if h["id"] not in self.hired or self.moved.get(h["id"]) != h["to"]:
+            if (h["id"] not in self.hired or self.moved.get(h["id"]) != h["to"]
+                    or holds_unrestored(h["id"], h["to"]) or record.get("grantedBonus")):
                 rows.append({"scope": "hire", "id": h["id"], "error": "changed"})
-        screen = []
         found = {}
         for address, site in record["sites"].items():
             reg = self._registration(save, address)
@@ -1411,11 +1434,10 @@ class Link:
                 # save holds from an older build goes back as it was).
                 if any(r["error"] in ("not_assigned", "no_station", "no_skill") for r in refused):
                     error = "changed"  # a person moved away or a station sold since
+            if error is None and address in self.screen_open:
+                error = "screen_open"  # in site order, as the mod lists them
             if error:
                 rows.append({"scope": "site", "address": _wire(address), "error": error})
-            elif address in self.screen_open:
-                screen.append({"scope": "site", "address": _wire(address), "error": "screen_open"})
-        rows += screen
         # The answer: the people it un-hires and moves back, and each week restored.
         candidates = {c.get("id"): c for c in save.items(save.root.get("CandidateEmployeeInstances"))
                       if isinstance(c, dict)}
@@ -1469,15 +1491,6 @@ class Link:
         for h in hires:
             self.hired.discard(h["id"])
             self.moved.pop(h["id"], None)
-        # Their shifts where they leave go with them, at a site whose week the
-        # call did not write (an assign-only target a later write gave them hours at).
-        for target in {m["to"] for m in moves} | {h["to"] for h in hires}:
-            if target in record["sites"]:
-                continue
-            reg = self._registration(save, target)
-            entries = self._entries(save, reg, target) if reg is not None else []
-            if any(e[3] in leaving for e in entries):
-                self.schedules[target] = [e for e in entries if e[3] not in leaving]
         del self.undo["hire"]  # an undo is not itself undoable
         return 200, result
 
@@ -1510,7 +1523,7 @@ class Link:
                 self.busy_writes = int(body["busyWrites"] or 0)
             if "writes" in body:
                 self.writes = body["writes"]
-            if "features" in body:  # what /health lists as features; [] for a mod before 0.5.0
+            if "features" in body:  # what /health lists as features; [] for a mod before 0.4.0
                 features = body["features"] or []
                 if not (isinstance(features, list) and all(isinstance(f, str) for f in features)):
                     raise BadRequest("features must be a list of strings")
@@ -1809,7 +1822,7 @@ def main() -> None:
     ap.add_argument("--writes", default=",".join(WRITE_KINDS),
                     help='the write kinds /health lists, comma-separated; "" leaves the key out, as mod 0.1.0 does')
     ap.add_argument("--features", default=",".join(FEATURES),
-                    help='what /health lists as features, comma-separated (default: %(default)s, as mod 0.5.0); '
+                    help='what /health lists as features, comma-separated (default: %(default)s, as mod 0.4.0); '
                          '"" for an older mod: a hire refuses a reschedule-only site with 400 and its undo is no_undo')
     ap.add_argument("--refuse-write", metavar="ERROR[:DETAIL]",
                     help="answer every apply with this refusal: changed, refused[:rule], cannot_write[:reason], "

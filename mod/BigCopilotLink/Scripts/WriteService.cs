@@ -64,7 +64,7 @@ namespace BigCopilotLink
     /// POST /write/* (docs/game-link-api.md, "Writes"): the approval check, the body, the
     /// parse, and the trip to the main thread, for every kind; the kinds themselves are
     /// UniformWrite, ImportWrite, ScheduleWrite and (from 0.3.0) HireWrite. One per city
-    /// load, like SaveService: the undo it keeps belongs to that city session. From 0.5.0
+    /// load, like SaveService: the undo it keeps belongs to that city session. From 0.4.0
     /// a hire has one too (hire.undo).
     ///
     /// Threading. The handler threads parse the body and touch nothing of the game. The
@@ -82,7 +82,7 @@ namespace BigCopilotLink
         public static readonly string[] Kinds = { "uniforms", "imports", "schedule", "hire" };
 
         /// <summary>
-        /// /health "features" (0.5.0): what a kind can do beyond what its version of the
+        /// /health "features" (0.4.0): what a kind can do beyond what its version of the
         /// contract first said. hire.reschedule: a hire call may carry weeks no hire or
         /// move reaches. hire.undo: POST /write/undo {"kind": "hire"}.
         /// </summary>
