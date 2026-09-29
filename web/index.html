@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "a387da737e";</script>
-<link rel="stylesheet" href="community.css?v=a387da737e">
+<script>window.LEDGER_BUILD = "9694b2071e";</script>
+<link rel="stylesheet" href="community.css?v=9694b2071e">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=a387da737e">
+<link rel="stylesheet" href="fonts/fonts.css?v=9694b2071e">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -5569,7 +5569,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"a387da737e","latest":{"pr":185,"date":"2026-09-29","title":"Staff a site in one step, and undo it in one","summary":"A shop's or an office's Staffing has Staff this site, and Staffing › Staff needs has Staff all sites. One review hires the best candidates, moves spare staff across, and writes the new week at every site it reaches, including sites that only need new hours; each site then says whether its week was written. Pick Hire and schedule, Hire only (assigned with no hours, as at a headquarters or a warehouse) or Schedule only; Quick hire works the same way. A shop you put on full cover 24/7 is staffed around the clock. With Big Copilot Link 0.4.0 it all goes to the game in one step, and one Undo takes back every hire, move and week, until the game's next day. Older versions of the mod still hire, then write the other weeks one by one, without undo."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"9694b2071e","latest":{"pr":185,"date":"2026-09-29","title":"Staff a site in one step, and undo it in one","summary":"A shop's or an office's Staffing has Staff this site, and Staffing › Staff needs has Staff all sites. One review hires the best candidates, moves spare staff across, and writes the new week at every site it reaches, including sites that only need new hours; each site then says whether its week was written. Pick Hire and schedule, Hire only (assigned with no hours, as at a headquarters or a warehouse) or Schedule only; Quick hire works the same way. A shop you put on full cover 24/7 is staffed around the clock. With Big Copilot Link 0.4.0 it all goes to the game in one step, and one Undo takes back every hire, move and week, until the game's next day. Older versions of the mod still hire, then write the other weeks one by one, without undo."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -5657,8 +5657,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=a387da737e"></script>
-<script src="community.js?v=a387da737e"></script>
+<script src="app.js?v=9694b2071e"></script>
+<script src="community.js?v=9694b2071e"></script>
 
 <script>
 
@@ -16790,12 +16790,21 @@ function hrWeek(S, fill, away, arriving, lost){
     parts.forEach(([f, t]) => { for(let a = f; a < t; a += GW_CAP) put(s.d, a, Math.min(t, a + GW_CAP), who.id, st.id); });
   };
   const now = (row.current || {}).list || [];
+  const kept = new Set();
   if(S.site.kind === "shop"){
-    if(!row.full && spCoverOnly(row)) now.filter(s => !s.k).forEach(keep);
+    if(!row.full && spCoverOnly(row)) now.filter(s => !s.k).forEach(s => kept.add(s));
   } else {
     const owned = new Set((row.shifts || []).map(s => s.s));
-    now.filter(s => !owned.has(s.s) && !((row.stations || [])[s.s] || {}).skill).forEach(keep);
+    now.filter(s => !owned.has(s.s) && !((row.stations || [])[s.s] || {}).skill).forEach(s => kept.add(s));
   }
+  /* The site's own people the plan gives no hours (`spare`) whom this call
+     does not move away (no open week elsewhere fits them, or the player
+     unticked the move) keep their week here, cut around the plan's entries
+     like any kept shift: nobody stays assigned at 0 hours (Peter, 29
+     September 2026). */
+  const stay = new Set((S.plan.spare || []).filter(id => !away.has(id)));
+  if(stay.size) now.filter(s => stay.has(((row.people || [])[s.p] || {}).id)).forEach(s => kept.add(s));
+  now.filter(s => kept.has(s)).forEach(keep);
   return [...days].sort((a, b) => a[0] - b[0]).map(([d, shifts]) => ({d, shifts: shifts.sort((a, b) => a.f - b.f || a.t - b.t)}));
 }
 /* How many people Staff this site would hire or reassign into a site: its
@@ -16912,7 +16921,11 @@ function hrRequest(m, o = {}){
     if(Q){
       if(Q.S) Q.picks.forEach(p => hire(p.c, Q.S, p.w, Q.q.skill, p.misfit, p.nofit));
     } else {
-      if(!only) t.moves.filter(x => inScope(x.to)).forEach(x => {
+      /* One site's action also moves its own spare people out to the week the
+         page found them elsewhere, as Staff all sites does: the plan leaves
+         them no hours here, and nobody stays assigned at 0 hours when a week
+         that fits them is open (Peter, 29 September 2026). */
+      if(!only) t.moves.filter(x => inScope(x.to) || (!!o.site && !!x.from && x.from.key === o.site)).forEach(x => {
         moves.push({employeeId: x.id, from: x.from ? gwAddress(x.from.key) : null, to: gwAddress(x.to.key)});
         names.set(x.id, {name: x.p.name, skill: x.skill, move: x});
         arriving.add(x.id);
@@ -17998,11 +18011,16 @@ function hrChainSay(res){
 async function hrChain(last, dlg){
   for(const {S, body} of last.req.rest){
     const res = await SOURCE.write("schedule", body, {dryRun: false, approval: gwApprovalView(dlg, () => {})});
-    last.chain[S.key] = res.error ? {say: hrChainSay(res)} : "done";
+    last.chain[S.key] = res.error ? {say: hrChainSay(res), error: res.error} : "done";
     /* Each week written this way replaces the game's one schedule undo, so the
        board's Undo for an earlier schedule write would undo the wrong site. */
     if(!res.error || res.error === "uncertain"){ delete gwUndoable.schedule; gwToast(); }
-    if(!dlg || !dlg.open || dlg.dataset.phase !== "done") continue;
+    if(!dlg || !dlg.open || !["applying", "done"].includes(dlg.dataset.phase)) continue;
+    if(dlg.dataset.phase === "applying"){
+      const say = dlg.querySelector(".gw-verdict b");
+      const k = Object.values(last.chain).filter(x => x !== "wait").length;
+      if(say) say.textContent = tt("co.hire.chain.writing", "Writing the other weeks: {k} of {n}…", {k, n: last.req.rest.length});
+    }
     const list = dlg.querySelector(".hr-dsites");
     if(!list) continue;
     const gone = new Set(((last.answer || {}).skipped || []).filter(s => s && s.reason === "gone").map(s => s.candidateId));
@@ -18053,6 +18071,13 @@ function hrReview(o = {}, hooks = {}){
   const firstHire = () => !!hrLast.one && hrLast.mode !== "week" && counts().hire > 0 && !(D.staff && D.staff.total);
   let firstAsked = false;  /* as the last dry run judged it: an apply rebuilds hrLast */
   const weeksOf = answer => (answer.sites || []).filter(s => s && s.before && s.after).length;
+  /* An older mod's weeks written after the call (hrChain()): written, refused
+     or not written, and those that got no answer. */
+  const chainTally = () => {
+    const ch = Object.values(hrLast.chain || {});
+    return {done: ch.filter(x => x === "done").length, none: ch.filter(x => x && x.error === "uncertain").length,
+            failed: ch.filter(x => x && x.error && x.error !== "uncertain").length, all: ch.length};
+  };
   let written = [];  // the progress records of the apply (pgHireDone())
   let applied = null;  // the action as applied, for its Undo
   gwConfirm({
@@ -18124,8 +18149,10 @@ function hrReview(o = {}, hooks = {}){
         /* Why there is no Undo: the first hire's bonus (firstHire()). */
         const first = firstAsked && answer.undoable === false && hired ? gwCall("info", "info",
           tt("co.hire.done.first", "No Undo: this was your company's first hire, and the game's one-time first-employee bonus cannot be taken back.")) : "";
+        /* An older mod's weeks after the call count once written. */
+        const ch = chainTally(), weeks = c.weeks - (ch.all - ch.done);
         return `${gwTiles([[tt("co.hire.tile.hired", "Hired"), null, hrNum(hired)], [tt("co.hire.tile.moved", "Reassigned"), null, hrNum(moved)],
-            ...(mode === "hire" ? [] : [[tt("co.hire.tile.weeks", "Weeks"), null, hrNum(c.weeks)]]),
+            ...(mode === "hire" ? [] : [[tt("co.hire.tile.weeks", "Weeks"), null, hrNum(weeks)]]),
             [tt("co.hire.tile.wages", "Added wages"), null, `+${fmt(bill)}<small class="hr-u">${tt("co.hire.perday", "/day")}</small>`]])}
           ${mode === "hire" ? "" : `<p class="gw-lead">${tt("co.hire.starts", "Everyone starts on their hours from the next hour in the game.")}</p>`}${sites}${goneCall}${emptyCall}${more}${first}
           ${gapText ? gwCall("warn", "alert", `${gapText}. ${tt("co.hire.gap.stays", "It stays on the Staff page until someone matches.")}`) : ""}
@@ -18194,6 +18221,16 @@ function hrReview(o = {}, hooks = {}){
       : tt("co.hire.hint.noundo", "This mod cannot undo a hire. To let someone go later, fire them in the MyEmployees app in the game."); },
     refusedHint: answer => answer.blocked === "myemployees" ? tt("co.hire.refused.myemployees", "The game cannot hire while you are in that app.") : tt("sp.gw.unchanged", "Nothing was changed."),
     learn: answer => { hrLast.answer = answer; if(answer.dryRun !== false) firstAsked = firstHire(); },
+    /* Every person picked has left the candidate list since the board read
+       the game: a Quick hire, or a hire with nobody to reassign, would only
+       write the week (and open a shop around the clock) with nobody on it.
+       Apply stays off until the board reads the game again. */
+    idle: answer => {
+      const b = hrLast.req.body, n = b.hires.length;
+      if(!n || goneOf(answer).size < n || (b.moves.length && o.scope !== "quick")) return "";
+      return tt("co.hire.idle.gone", {one: "Nobody to hire: the application ran out since the board read the game. Refresh the board to pick again.",
+        other: "Nobody to hire: all {n} applications ran out since the board read the game. Refresh the board to pick again."}, {n});
+    },
     /* The verb says which of the three it does. */
     applyLabel: () => {
       const c = counts(), mode = hrLast.mode;
@@ -18210,10 +18247,12 @@ function hrReview(o = {}, hooks = {}){
     done: answer => {
       if(answer.undo) return tt("co.hire.undone", "Undone: every hire, reassign and week of that step is back as it was.");
       /* The weeks an older mod writes after the call are counted too. */
-      const n = people(answer), w = weeksOf(answer), later = answer.dryRun === false && !hrLast.one ? hrLast.req.rest.length : 0;
+      const n = people(answer), ch = answer.dryRun === false && !hrLast.one ? chainTally() : {done: 0, none: 0, failed: 0};
+      const w = weeksOf(answer) + ch.done;
       const said = [n ? tt("co.hire.done.people", {one: "{n} person hired or reassigned in the game.", other: "{n} people hired or reassigned in the game."}, {n}) : "",
         w ? tt("co.hire.done.weeks", {one: "{n} week written.", other: "{n} weeks written."}, {n: w}) : "",
-        later ? tt("co.hire.done.later", {one: "{n} more week is being written, one at a time.", other: "{n} more weeks are being written, one at a time."}, {n: later}) : ""]
+        ch.failed ? tt("co.hire.done.failed", {one: "{n} week not written.", other: "{n} weeks not written."}, {n: ch.failed}) : "",
+        ch.none ? tt("co.hire.done.noanswer", {one: "{n} week got no answer: check it in the game.", other: "{n} weeks got no answer: check them in the game."}, {n: ch.none}) : ""]
         .filter(Boolean).join(" ");
       return said || tt("co.hire.done.none", "Nothing changed in the game.");
     },
@@ -18245,10 +18284,12 @@ function hrReview(o = {}, hooks = {}){
       if(last.req.rest.length){
         last.req.rest.forEach(({S}) => { last.chain[S.key] = "wait"; });
         const dlg = gwOpen;
-        Promise.resolve().then(() => hrChain(last, dlg));
+        last.chainRun = Promise.resolve().then(() => hrChain(last, dlg));
       }
       if(hooks.onDone) hooks.onDone(answer);
     },
+    /* Done is said once an older mod's weeks after the call are all answered. */
+    settle: () => (applied && applied.chainRun) || null,
     onFailed: res => { if(hooks.onFailed) hooks.onFailed(res); },
     /* Undone: whoever it hired is a candidate again, and its records go. */
     /* The call this Undo is for (`applied`), not the review on screen now: the
@@ -29039,6 +29080,8 @@ function gwFailed(dlg, spec, res, retry, recheck){
      more                      optional, {label, go}: a second way on
                                beside Close once an apply went through
      onDone(answer)            optional: heard once an apply went through
+     settle(answer)            optional: a promise the dialog waits on, still
+                               applying, before it says Done
      onFailed(res)             optional: heard when an apply fails (not
                                when the game approved afresh in an open
                                dialog, which asks the game again)
@@ -29172,6 +29215,10 @@ function gwConfirm(spec){
                                            whose: gwWhose(), at: Date.now(), sites: spec.sites ? spec.sites() : null};
     else delete gwUndoable[spec.kind];
     if(spec.onDone) spec.onDone(answer);
+    /* Work the kind does after the write (an older mod's chained weeks): the
+       dialog stays applying until it is over. */
+    const settling = spec.settle ? spec.settle(answer) : null;
+    if(settling) await settling;
     if(!dlg.open) return gwToast();
     gwHead(dlg, title(), where());
     /* The board reads the game again; the line under the drawing says when it has. */
