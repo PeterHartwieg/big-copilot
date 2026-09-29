@@ -21,9 +21,10 @@ const TT_EMBED = /*__UI_TABLE__*/null;
 const TT_SITE = /*__TT_SITE__*/false;
 const TT_KEY = "ba_dash_names";
 /* The languages Big Copilot's own text comes in, English first. */
-const TT_LANGS = ["en", "de", "pt", "fr", "es", "ru", "ko"];
+const TT_LANGS = ["en", "de", "pt", "fr", "es", "ru", "ko", "tr"];
 /* Numbers follow the UI language: English is always en-US. */
-const TT_NUM_LOCALES = {en: "en-US", de: "de-DE", pt: "pt-BR", fr: "fr-FR", es: "es-ES", ru: "ru-RU", ko: "ko-KR"};
+const TT_NUM_LOCALES = {en: "en-US", de: "de-DE", pt: "pt-BR", fr: "fr-FR", es: "es-ES", ru: "ru-RU", ko: "ko-KR",
+                        tr: "tr-TR"};
 /* A placeholder: {name} or {name:spec}; single braces, as SUMMARIES writes them. */
 const TT_SPEC = /\{(\w+)(?::([^{}]+))?\}/g;
 /* A game name inside a sentence (tok() in Python), for a page without the
