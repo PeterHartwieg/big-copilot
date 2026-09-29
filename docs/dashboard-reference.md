@@ -629,17 +629,16 @@ covering hours that would go uncovered if they were moved, so the honest line is
 site has nothing left to give them — a longer week here is not on offer, and neither is half
 a week at each of two shops.
 
-**Nobody already working at a site is left worse off.** Somebody may lose hours only if the
-new week still meets every schedule demand they hold (Peter, 28 September 2026): their
-hours band's minimum and an exact four- or five-day week (free weekends, hours kept free and
-no cleaning the plan never breaks). Somebody under their minimum now may stay there, not
-sink further; somebody with no hours demand may be cut to anything. Where the plan of the
-fewest people would break that — a shop with more full-timers than its demand needs — the
-week is planned again with everybody it protects on the schedule from the start, so they
-all come up to their minimum before anybody else is started; whoever is still worse off
-keeps the week they have at the site, as much of it as the rules allow, and the rest of the
-plan is placed around it. A cut that leaves them satisfied is made, and named in the Staff
-page's "fewer hours than now".
+**Nobody already working at a site is cut short.** Somebody may be given no hours at all —
+they are spare, and the Staff page offers to move them — or a week that still meets every
+schedule demand they hold (Peter, 28 and 29 September 2026): their hours band's minimum and
+an exact four- or five-day week (free weekends, hours kept free and no cleaning the plan
+never breaks). Somebody under their minimum now may stay there, not sink further; somebody
+with no hours demand may be cut to anything. Where the plan would leave somebody on a
+partial week short of that — the last name the fill starts, on the scraps — they keep the
+week they have at the site, as much of it as the rules allow, and the rest of the plan is
+placed around it. A cut that leaves them satisfied is made, and named in the Staff page's
+"fewer hours than now".
 
 **A week can change hands whole.** Which name the plan starts is decided before anybody has
 an hour, so a cheaper person with no hours demand can end up holding a week a full-timer

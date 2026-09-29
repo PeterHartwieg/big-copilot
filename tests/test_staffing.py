@@ -2511,11 +2511,10 @@ class RosterInvariantTest(unittest.TestCase):
 
 
 class KeptWeekTest(unittest.TestCase):
-    """Somebody already working here loses hours only if the week still meets
-    every demand they hold (Peter, 28 September 2026).
-
-    Peter Hart's Midtown jewelry shop took ten full-timers off the week to 0 of
-    30 hours in the demand plan the site block writes; the rule keeps them.
+    """Somebody already working here may be given no hours, or a week that
+    still meets every demand they hold; nothing in between (Peter, 28 and 29
+    September 2026: "0 h is fine" -- they are spare, and the Staff page offers
+    to move them). A week that would cut them short keeps the week they have.
     """
 
     def shop(self, crew, shifts, hourly=None, **kw):
@@ -2534,9 +2533,10 @@ class KeptWeekTest(unittest.TestCase):
             out[who(row, s)] += hours(s)
         return out
 
-    def test_nobody_satisfied_now_is_taken_under_their_floor(self):
+    def test_nobody_satisfied_now_is_cut_to_a_stub(self):
         # Two registers; each of six full-timers works two days 06-18 and two
-        # evenings 18-22 on one of them now, 32 hours.
+        # evenings 18-22 on one of them now, 32 hours, and the customers want
+        # about one register 08-20.
         crew = [employee(f"s{i}", [SERVICE], demands=(FULLTIME,)) for i in range(6)]
         pairs = [(reg, day) for reg in (1, 2) for day in range(7)]
         shifts = []
@@ -2548,14 +2548,30 @@ class KeptWeekTest(unittest.TestCase):
             got = {}
             for s in staffed(plan_row):
                 got[who(row, s)] = got.get(who(row, s), 0) + hours(s)
-            self.assertEqual(sorted(got), [f"s{i}" for i in range(6)])
             self.assertTrue(all(h >= 30 for h in got.values()), got)
-            self.assertEqual(plan_row["shortHours"], [])
-        # Without the rule the fewest people take the week, and the rest are
-        # left with none: the test above would fail.
+            # Everybody else here has no week at all: spare, to be moved.
+            idle = {f"s{i}" for i in range(6)} - set(got)
+            self.assertEqual(set(plan_row["_hire"]["spare"]), idle)
+
+    def test_a_stub_keeps_the_week_they_have(self):
+        """56 hours of one register 08-16 and two full-timers on 32 each now:
+        the fewest people is 48 and 8, and no swap lifts the 8 to 30. The one
+        it would cut short keeps their week; without the rule they would not."""
+        crew = [employee("a", [SERVICE], demands=(FULLTIME,)),
+                employee("b", [SERVICE], demands=(FULLTIME,))]
+        shifts = self.week("a", [0, 1, 2, 3], 8, 16) + self.week("b", [3, 4, 5, 6], 8, 16, 2)
+
+        def run():
+            row = plan([(1, REGISTER), (2, REGISTER)], crew,
+                       {h: (12 if 8 <= h < 16 else 0) for h in range(24)},
+                       opens=((8, 16),), shifts=shifts)
+            return self.hours(row)
+
+        got = run()
+        self.assertTrue(all(h == 0 or h >= 30 for h in got.values()), got)
         with unittest.mock.patch.object(ba_dashboard, "_weeks_now", lambda current, pool: {}):
-            bare = self.shop(crew, shifts)
-        self.assertLess(len(self.hours(bare)), 6)
+            bare = run()
+        self.assertTrue(any(0 < h < 30 for h in bare.values()), bare)
 
     def test_a_cut_that_keeps_them_satisfied_is_made_and_named(self):
         """50 hours now, a plan needing fewer: they may go down to their floor."""
@@ -2583,13 +2599,13 @@ class KeptWeekTest(unittest.TestCase):
         self.assertLessEqual(got["a"] + got["z"], 42)
 
     def test_somebody_short_now_is_not_made_shorter(self):
-        """20 of 30 hours now: they may stay short, not sink under 20."""
+        """20 of 30 hours now: they may stay short, or go, not sink under 20."""
         crew = [employee(f"s{i}", [SERVICE], demands=(FULLTIME,)) for i in range(4)]
         shifts = []
         shifts += self.week(0, [0, 1, 2]) + self.week(1, [3, 4, 5])
         shifts += self.week(2, [6, 0, 1], register=2) + self.week(3, [3, 4], 8, 18, register=2)
         row = self.shop(crew, shifts, {h: (6 if 8 <= h < 14 else 0) for h in range(24)})
-        self.assertGreaterEqual(self.hours(row)["s3"], 20)
+        self.assertTrue(self.hours(row)["s3"] == 0 or self.hours(row)["s3"] >= 20)
 
 
 class CurrentSecurityTest(unittest.TestCase):

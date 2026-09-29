@@ -15,8 +15,9 @@ snapshot fixtures. It tells two things apart:
   plan wants and has no line for (every role, the head wash included, in every
   variant), a hire week that breaks the same rules or points at a line that is
   not open, an unassigned person promised to two sites, and a person already
-  working at the site left further from an hours band or a day count than the
-  week they have (the owner's rule of 28 September 2026);
+  working at the site given some hours but left further from an hours band or
+  a day count than the week they have (the owner's rule of 28-29 September
+  2026: no hours at all is fine, they are spare);
 - **reported infeasibility**, which is allowed: a band's floor or an exact day
   count the week cannot reach, provided it is in `shortHours` / `shortDays`
   with the right figures -- and nothing is there that is not so.
@@ -286,7 +287,9 @@ def problems(row: dict, plan: dict, variant: str, people: dict, site: str,
                        and not (k == "clean" and (rule["nocleaning"] or SERVICE_SKILL in rule["skills"]))
                        for skill, k in planned):
                 continue  # the plan staffs nothing they could work
-            mine = weeks.get(pid) or {"hours": 0, "days": set()}
+            mine = weeks.get(pid)
+            if not mine:
+                continue  # no hours at all is spare, never worse off (29 September)
             band, want = rule["band"], rule["days"]
             if band and mine["hours"] < band[0] and mine["hours"] < cur["hours"]:
                 out.append(("kept", f"{variant}: {pid} works {cur['hours']} h here now, "
@@ -743,33 +746,40 @@ class OracleControlTest(unittest.TestCase):
             found = {k for k, _t in problems(row, row["openCover"], "open", crew, row["key"])}
             self.assertEqual("cover" in found, patched)
 
-    def overstaffed(self):
-        """Six full-timers on two registers, each 32 hours over four days now
-        (two days 06-18 and two evenings 18-22), and customers enough for
-        one register 08-20: a plan of the fewest people takes most of them
-        off the week."""
-        crew = [employee(f"s{i}", [SERVICE], demands=(FULLTIME,)) for i in range(6)]
-        pairs = [(reg, day) for reg in (1, 2) for day in range(7)]
-        shifts = []
-        for i in range(6):
-            for reg, day in pairs[2 * i:2 * i + 2]:
-                shifts.append({"wd": day, "employeeId": f"s{i}", "itemInstanceId": reg,
-                               "startingHour": 6, "endingHour": 18, "type": 1})
-                shifts.append({"wd": (day + 3) % 7, "employeeId": f"s{i}", "itemInstanceId": reg,
-                               "startingHour": 18, "endingHour": 22, "type": 1})
+    def stub(self):
+        """Two full-timers on 32 hours each now, on two registers, and customers
+        for one register 08-16, 56 hours: the fewest people is one on 48 and
+        the other on a stub of 8, which no swap can lift to 30."""
+        crew = [employee("a", [SERVICE], demands=(FULLTIME,)),
+                employee("b", [SERVICE], demands=(FULLTIME,))]
+        shifts = [{"wd": wd, "employeeId": who, "itemInstanceId": reg, "startingHour": 8,
+                   "endingHour": 16, "type": 1}
+                  for who, reg, days in (("a", 1, (0, 1, 2, 3)), ("b", 2, (3, 4, 5, 6)))
+                  for wd in days]
         sc = dict(items=[(1, REGISTER), (2, REGISTER)], employees=crew,
-                  hourly={h: (12 if 8 <= h < 20 else 0) for h in range(24)}, opens=((6, 22),),
+                  hourly={h: (12 if 8 <= h < 16 else 0) for h in range(24)}, opens=((8, 16),),
                   weeks=2)
         return sc, shifts
 
-    def test_without_the_rule_for_existing_staff_a_week_is_taken_away(self):
-        sc, shifts = self.overstaffed()
+    def test_without_the_rule_for_existing_staff_a_week_is_cut_short(self):
+        sc, shifts = self.stub()
         row, people = plan_with(sc, shifts)
         self.assertEqual({k for k, _t in problems(row, row, "demand", people, row["key"])}
                          & {"kept"}, set())
         with unittest.mock.patch.object(ba_dashboard, "_weeks_now", lambda current, pool: {}):
             row, people = plan_with(sc, shifts)
         self.assertIn("kept", {k for k, _t in problems(row, row, "demand", people, row["key"])})
+
+    def test_no_hours_at_all_is_not_worse_off(self):
+        """The owner's answer (29 September 2026): 0 h is fine, the person is spare."""
+        sc, shifts = self.stub()
+        row, people = plan_with(sc, shifts)
+        emptied = json.loads(json.dumps(row))
+        b = next(i for i, p in enumerate(emptied["people"]) if p["id"] == "b")
+        emptied["shifts"] = [x for x in emptied["shifts"] if x.get("p") != b]
+        emptied["shortHours"] = [{"p": b, "hours": 0.0, "min": 30, "planned": True}]
+        self.assertEqual({k for k, _t in problems(emptied, emptied, "demand", people,
+                                                  emptied["key"], coverage=False)}, set())
 
     def test_a_hire_ranks_after_every_real_person(self):
         """A placeholder holds one skill, so the scarcity key alone would start

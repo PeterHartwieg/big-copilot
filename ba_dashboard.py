@@ -7337,12 +7337,13 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
     return rows, dict(weeks)
 
 
-# --- the rule for the people a site already has (Peter, 28 September 2026)
-# Somebody already working here may lose hours only if the week still meets
-# every schedule demand they hold; somebody it does not meet now may be moved
-# any way that leaves them no further from it. Where a plan would break that,
-# their week here as it stands is kept, as much of it as is legal, and the
-# rest is planned around it.
+# --- the rule for the people a site already has (Peter, 28-29 September 2026)
+# Somebody already working here may be given no hours (they are spare, and
+# the Staff page offers to move them), or a week that still meets every
+# schedule demand they hold; somebody it does not meet now may be moved any
+# way that leaves them no further from it. Where a plan would cut them short
+# of that, their week here as it stands is kept, as much of it as is legal,
+# and the rest is planned around it.
 def _weeks_now(current, pool: list) -> dict:
     """Each of the site's own people's week here now: {id: {hours, days, rows}}."""
     own = {person["id"] for person in pool if person["addr"]}
@@ -7359,35 +7360,24 @@ def _weeks_now(current, pool: list) -> dict:
 
 
 def _worse_off(person: dict, entry: dict, before: tuple, now: dict) -> bool:
-    """Whether a planned week leaves somebody further from a demand than the week they have.
+    """Whether a planned week cuts somebody short of a demand the week they have meets better.
 
-    The hours band's floor (its ceiling and the rest are never broken by the
-    placer), and an exact day count. A person with no hours demand may be cut
-    to anything; one under their floor now may stay there, not sink further.
+    No hours at all is never worse off: the person is spare, and the Staff
+    page offers to move them (Peter, 29 September 2026: "0 h is fine"). A
+    week with hours in it has to keep the hours band's floor (its ceiling and
+    the rest are never broken by the placer) and an exact day count, or leave
+    them no further from it than now: a person with no hours demand may be cut
+    to anything, one under their floor now may stay there, not sink further.
     """
     hours = entry["hours"] - before[0]
+    if not hours:
+        return False
     days = len(entry["days"]) - before[1]
     band = person["band"]
     if band and hours < band[0] and hours < now["hours"]:
         return True
     want = person["days"]
     return want is not None and abs(days - want) > abs(len(now["days"]) - want)
-
-
-def _left_off(protected: list, rostered: set, pool: list) -> bool:
-    """Whether a fill left somebody the rule protects off the roster for good.
-
-    The settling passes only give hours to people on the roster, bar one: a
-    week handed whole from somebody with no hours demand to somebody with a
-    band and no hours (_top_up_short()). Somebody left off with no way into
-    that is left with no hours, which is worse off for everybody _place_week()
-    protects (they work here now, holding a band or a day count).
-    """
-    bandless = any(not person["band"] for person in pool if person["id"] in rostered)
-    return any(
-        person["id"] not in rostered and not (person["band"] and bandless)
-        for person in protected
-    )
 
 
 def _pin_weeks(ids: list, now: dict, stations: dict, open_hours: list, by_id: dict) -> list:
@@ -9028,16 +9018,9 @@ def _factory_site_plan(save, building, site, business, posts_of, pool, people, m
         _current_roster(save, building, {s["id"]: dict(s, slug=None) for s in stations + idle})
         if building is not None else {"shifts": 0, "fragments": 0, "list": []}
     )
-    # Somebody working here now whom a week without them would leave worse off
-    # (_worse_off()): they are in every trial, first, so the placer can keep
-    # their week where a plan would break it.
-    now = _weeks_now(current["list"], pool)
-    kept = {p["id"] for p in pool
-            if p["id"] in now and (p["band"] or p["days"] is not None)}
     ranked = sorted(
         enumerate(pool),
         key=lambda entry: (
-            entry[1]["id"] not in kept,
             not entry[1]["addr"],
             sum(1 for low, high in pieces for a, b in entry[1]["blackouts"]
                 if a < high and low < b),
@@ -9048,8 +9031,7 @@ def _factory_site_plan(save, building, site, business, posts_of, pool, people, m
     )
     ranked = [person for _index, person in ranked]
     needed = sum(len(hours) for days in runs.values() for hours in days)
-    least = min(max(math.ceil(needed / FULL_TIME[1]), len(kept)), len(ranked))
-    for count in range(least, len(ranked) + 1):
+    for count in range(min(math.ceil(needed / FULL_TIME[1]), len(ranked)), len(ranked) + 1):
         trial = ranked[:count]
         trial_state = {
             person["id"]: _copy_state(state[person["id"]]) if state else _fresh_state()
@@ -9458,9 +9440,9 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
         # has the building: a desk demand is met at a station, not a site.
         return {"groups": groups or {}, "rostered": set(), "flex": flex}
 
-    # The people already working here whom a plan could leave worse off than
-    # the week they have (_worse_off()): those holding an hours band or a day
-    # count, with a week here now, in a role this plan staffs.
+    # The people already working here whom a plan could cut short of the week
+    # they have (_worse_off()): those holding an hours band or a day count,
+    # with a week here now, in a role this plan staffs.
     now = _weeks_now(current, pool)
     planned_roles = {(slot["skill"], slot["kind"]) for slot in slots + cover_slots}
     protected = [
@@ -9472,45 +9454,32 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
     pins, kept, rounds, allowed = [], [], 0, {}
     while True:
         here = fresh_here()
-        if rounds:
-            # Everybody the rule protects is on the roster from the start, so
-            # the fill brings them all up to their floor together before it
-            # starts anybody else, and the settling passes top up whoever is
-            # still short: the fewest names is what broke the rule.
-            here["rostered"].update(person["id"] for person in protected)
         shifts = _fill_week(slots, cover_slots, pool, state, here, pins, allowed)
-        if protected and not rounds and _left_off(protected, here["rostered"], pool):
-            worse = True  # settling cannot change it: no need to settle it
-        else:
-            _repair_week(shifts, pool, state, here["rostered"], before)
-            worse = [
+        _repair_week(shifts, pool, state, here["rostered"], before)
+        worse = [
+            person["id"] for person in protected
+            if person["id"] not in kept
+            and _worse_off(person, state[person["id"]], before[person["id"]], now[person["id"]])
+        ]
+        if worse and rounds:
+            # Kept weeks already pushed somebody else short: the site holds
+            # fewer hours than its people's weeks, so everybody it now gives
+            # some hours but fewer than they have is kept too, rather than
+            # found one round at a time.
+            worse += [
                 person["id"] for person in protected
-                if person["id"] not in kept
-                and _worse_off(person, state[person["id"]], before[person["id"]],
-                               now[person["id"]])
+                if person["id"] not in kept and person["id"] not in worse
+                and 0 < state[person["id"]]["hours"] - before[person["id"]][0]
+                < now[person["id"]]["hours"]
             ]
-            if worse and rounds >= 2:
-                # Kept weeks already pushed somebody else under: the site holds
-                # fewer hours than its people's weeks, so everybody it now gives
-                # fewer hours than they have is kept too, rather than found one
-                # round at a time.
-                worse += [
-                    person["id"] for person in protected
-                    if person["id"] not in kept and person["id"] not in worse
-                    and state[person["id"]]["hours"] - before[person["id"]][0]
-                    < now[person["id"]]["hours"]
-                ]
         if not worse:
             break
+        # Keep their week as it stands and plan everybody else round it, from
+        # the start. Whose week is kept changes what the rest are given, so the
+        # test is asked again until nobody new is cut short.
         for pid, entry in start.items():
             state[pid] = _copy_state(entry)
         rounds += 1
-        if rounds == 1:
-            continue
-        # Still worse off with everybody on the roster: keep their week as it
-        # stands and plan everybody else round it. Whose week is kept changes
-        # what the rest are given, so the test is asked again until nobody
-        # new is left worse off.
         kept += worse
         role_of = {s["id"]: _station_role(s) for s in grid["stations"]}
         staffed_roles = {role_of.get(slot["station"]) for slot in slots}
