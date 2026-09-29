@@ -257,8 +257,8 @@ the map.
     send is checked person by person: at most 12 hours an entry and a day, one entry at a
     time, the hours band (at most 50 without one), an exact four or five days, free
     weekends, the hours kept free and no cleaning. Whatever is still broken is named in the
-    confirm, one line a break, including someone the write leaves with no hours at all; nothing is
-    refused for it. An office's write, which adds the office default to the week as it
+    confirm, one line a break; nothing is refused for it. Somebody the write leaves with no
+    hours at all is no break: they stay on as spare, named once in a plain note. An office's write, which adds the office default to the week as it
     stands, leaves out an entry that would break one and names the hours it left out.
 
   *Payroll* names two wage figures:

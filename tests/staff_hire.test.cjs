@@ -1809,7 +1809,8 @@ test('every week a write sends is checked per person: hours, days, 12 hours, ove
       people: [{id: 'a', name: 'Ana', demands: ['ba:jobdemand_parttime', 'ba:jobdemand_fivedaysweek']},
         {id: 'b', name: 'Ben', demands: ['ba:jobdemand_freeweekends', 'ba:jobdemand_nocleaning', 'ba:jobdemand_nomornings']},
         {id: 'c', name: 'Cy'}, {id: 'x', name: 'Xan'}, {id: 'z', name: 'Zia', demands: ['ba:jobdemand_fulltime']}],
-      // Zia works 36 h here now and the week gives her none at all.
+      // Zia works 36 h here now and the week gives her none at all: no
+      // break, she stays on as spare (Peter, 29 September 2026).
       current: {list: [{d: 1, s: 0, f: 8, t: 20, p: 2}, ...[4, 5, 6].map(d => ({d, s: 0, f: 8, t: 20, p: 4}))]}};
     const e = (id, st, f, t) => ({f, t, employeeId: id, itemInstanceId: st});
     const days = [
@@ -1830,12 +1831,11 @@ test('every week a write sends is checked per person: hours, days, 12 hours, ove
     ['a', ['hours', 'days']],
     ['x', ['most', 'entry:1', 'day:2', 'twice:2']],
     ['b', ['demand:freeweekends', 'demand:nocleaning', 'demand:nomornings']],
-    ['z', ['hours']],
   ]);
   // One sentence a break.
   assert.deepEqual(out.text.slice(0, 6), ['Ana: 36 h a week, asks for 10 to 30', 'Ana: 3 days a week, asks for 5',
     'Xan: 58 h a week, more than 50', 'Xan: an entry of 14 h on Monday', 'Xan: 16 h on Tuesday', 'Xan: two entries at once on Tuesday']);
-  assert.equal(out.text.at(-1), 'Zia: 0 h a week, asks for 30 to 50');
+  assert.ok(!out.text.some(x => x.startsWith('Zia')));
 });
 
 test('an office write adds no entry that takes someone past their hours: the 60-hour week', async (t) => {
@@ -2491,8 +2491,7 @@ test('a spare changes nobody\'s planned hours: the plan keeps its week, and the 
   await page.locator(REVIEW).click();
   await phase(page, 'ready');
   const text = await page.locator('dialog.gw-dlg .gw-body').textContent();
-  assert.match(text, /No hours after this for 1 person the plan does not need here\./);
-  assert.match(text, /Sam Spare: tick their reassign to HART\. Gifts to give them its week\./);
+  assert.match(text, /No hours here after this[\s\S]*Sam Spare/);
   assert.doesNotMatch(text, /Cy Moss \(HART\. Corner/, 'Cy keeps the plan\'s hours');
 });
 
@@ -2513,14 +2512,16 @@ test('a spare left with no hours is named with the reason and what to do, never 
   await phase(page, 'ready');
   const dlg = page.locator('dialog.gw-dlg');
   let text = await dlg.locator('.gw-body').textContent();
-  assert.match(text, /No hours after this for 1 person the plan does not need here\./);
-  assert.match(text, /Sam Spare: tick their reassign to HART\. Gifts to give them its week\./);
-  assert.match(text, /Hire only leaves the weeks as they are\./);
+  assert.match(text, /No hours here after this[\s\S]*Sam Spare/);
   // The mod's own list of those left with no hours does not name him again,
   // by id: another Sam Spare stays on it.
+  // One plain note lists them: this Sam once (the week's and the game's
+  // answer agree), the other Sam as well; no check line names either.
   const pills = dlg.locator('.gw-box .gw-pills .person');
-  assert.equal(await pills.count(), 1);
-  assert.match(await pills.first().textContent(), /Sam Spare/);
+  assert.equal(await pills.count(), 2);
+  assert.deepEqual(await pills.allTextContents(), ['SSSam Spare', 'SSSam Spare']);
+  assert.doesNotMatch(text, /Sam Spare: 0 h a week/);
+  assert.equal(await dlg.locator('.gw-box').filter({hasText: 'No hours here after this'}).count(), 1);
   // Schedule only, the reassign ticked: it is not part of this, and Hire only
   // is not the way.
   const week = await board(t, {link: ONE, data: JSON.stringify(cornerMonday(8, 20))});
@@ -2532,8 +2533,7 @@ test('a spare left with no hours is named with the reason and what to do, never 
   await week.waitForFunction(() => document.querySelector('dialog.gw-dlg').dataset.phase === 'ready'
     && /Write/.test(document.querySelector('dialog.gw-dlg .gw-foot [data-gw-b="apply"]').textContent));
   text = await wdlg.locator('.gw-body').textContent();
-  assert.match(text, /Sam Spare: Hire and schedule reassigns them to HART\. Gifts\./);
-  assert.match(text, /Close to leave the weeks as they are\./);
+  assert.match(text, /No hours here after this[\s\S]*Sam Spare/);
   assert.doesNotMatch(text, /Hire only leaves/);
 });
 
@@ -2545,7 +2545,7 @@ test('a spare no open week fits, left with no hours, is named as such', async (t
   await answering(page, []);
   await page.locator(REVIEW).click();
   await phase(page, 'ready');
-  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), /Sam Spare: no open week elsewhere fits them\./);
+  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), /No hours here after this[\s\S]*Sam Spare/);
 });
 
 test('an arriving bench member\'s hours are never cut for someone who works there now', async (t) => {
@@ -2586,7 +2586,7 @@ test('a spare reassigned out of Staff this site: never opens the other shop 24/7
   await answering(page, []);
   await page.evaluate(k => hrReview({scope: 'site', site: k}), C);
   await phase(page, 'ready');
-  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), /Sam Spare: the open week at HART\. Gifts runs in hours it is closed\./);
+  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), /No hours here after this[\s\S]*Sam Spare/);
   const week = await page.evaluate(k => { const m = hrModel(), r = hrRequest(m, {site: k, mode: 'week', one: true});
     return (r.touched.get(k) || {}).stranded; }, C);
   assert.deepEqual(week, ['SPARE1']);
@@ -2610,7 +2610,7 @@ test('a spare no open week fits ends at 0 h and is named with why: Staff this si
   await page.evaluate(k => hrReview({scope: 'site', site: k}), C);
   await phase(page, 'ready');
   const text = await page.locator('dialog.gw-dlg .gw-body').textContent();
-  assert.match(text, /Sam Spare: no open week elsewhere fits them\./);
+  assert.match(text, /No hours here after this[\s\S]*Sam Spare/);
   assert.match(text, /Fewer hours than now.*Cy Moss \(HART\. Corner, 24 → 12 h\)/);
 });
 
@@ -2620,7 +2620,7 @@ test('Quick hire at a site with a spare: Staff all sites is what reassigns them'
   await box.locator('[data-hq-role]').selectOption(CS);
   await box.locator('[data-hq-site]').selectOption(C);
   const dlg = await quickConfirm(page);
-  assert.match(await dlg.locator('.gw-body').textContent(), /Sam Spare: Staff all sites reassigns them to HART\. Gifts\./);
+  assert.match(await dlg.locator('.gw-body').textContent(), /No hours here after this[\s\S]*Sam Spare/);
 });
 
 test('Quick hire whose only pick has left the candidates: nobody to hire, and Apply stays off', async (t) => {
@@ -2699,7 +2699,7 @@ test('no week the action can write: no move, the other site\'s week untouched, a
   await page.evaluate(k => hrReview({scope: 'site', site: k}), C);
   await phase(page, 'ready');
   const text = await page.locator('dialog.gw-dlg .gw-body').textContent();
-  assert.match(text, /Sam Spare: the open week at HART\. Gifts runs in hours someone already works there\./);
+  assert.match(text, /No hours here after this[\s\S]*Sam Spare/);
   assert.doesNotMatch(text, /tick their reassign/);
 });
 
@@ -2712,15 +2712,14 @@ test('the cause says every step: closed hours in Schedule only, an unticked reas
   await page.evaluate(k => hrReview({scope: 'site', site: k, mode: 'week'}), C);
   await phase(page, 'ready');
   let text = await page.locator('dialog.gw-dlg .gw-body').textContent();
-  assert.match(text, /Sam Spare: the open week at HART\. Gifts runs in hours it is closed\./);
-  assert.match(text, /Close to leave the weeks as they are\./);
+  assert.match(text, /No hours here after this[\s\S]*Sam Spare/);
   // Unticked, and ticking it would not help: still the closed hours.
   await page.locator('dialog.gw-dlg [data-gw-close]').click();
   await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
   await page.evaluate(k => hrReview({scope: 'site', site: k}), C);
   await phase(page, 'ready');
   text = await page.locator('dialog.gw-dlg .gw-body').textContent();
-  assert.match(text, /Sam Spare: the open week at HART\. Gifts runs in hours it is closed\./);
+  assert.match(text, /No hours here after this[\s\S]*Sam Spare/);
   assert.doesNotMatch(text, /tick their reassign/);
   // Staff all sites, Schedule only, the reassign unticked: both steps.
   page = await board(t, {link: ONE, data: JSON.stringify(giftsOpen())});
@@ -2729,14 +2728,14 @@ test('the cause says every step: closed hours in Schedule only, an unticked reas
   await page.evaluate(() => hrReview({scope: 'all', mode: 'week'}));
   await phase(page, 'ready');
   assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(),
-    /Sam Spare: tick their reassign to HART\. Gifts and choose Hire and schedule\./);
+    /No hours here after this[\s\S]*Sam Spare/);
   // Quick hire, the reassign unticked: tick it, then Staff all sites.
   await page.locator('dialog.gw-dlg [data-gw-close]').click();
   const box = page.locator('#hsQuick');
   await box.locator('[data-hq-role]').selectOption(CS);
   await box.locator('[data-hq-site]').selectOption(C);
   const dlg = await quickConfirm(page);
-  assert.match(await dlg.locator('.gw-body').textContent(), /Sam Spare: tick their reassign to HART\. Gifts, then use Staff all sites\./);
+  assert.match(await dlg.locator('.gw-body').textContent(), /No hours here after this[\s\S]*Sam Spare/);
 });
 
 // --- review round 8, 29 September 2026 ------------------------------------------------
@@ -2796,13 +2795,13 @@ test('the advice names the reassign line to tick and where this action really se
   await phase(page, 'ready');
   const dlg = page.locator('dialog.gw-dlg');
   assert.match(await dlg.locator('.gw-body').textContent(),
-    /Sam Spare: tick their reassign to HART\. Gifts, and this action sends them to HART\. Bare, where a week fits\./);
+    /No hours here after this[\s\S]*Sam Spare/);
   // Schedule only: the mode to choose as well.
   await dlg.locator('[data-hr-mode="week"]').click();
   await page.waitForFunction(() => document.querySelector('dialog.gw-dlg').dataset.phase === 'ready'
     && /Write/.test(document.querySelector('dialog.gw-dlg .gw-foot [data-gw-b="apply"]').textContent));
   assert.match(await dlg.locator('.gw-body').textContent(),
-    /Sam Spare: tick their reassign to HART\. Gifts and choose Hire and schedule, which sends them to HART\. Bare, where a week fits\./);
+    /No hours here after this[\s\S]*Sam Spare/);
 });
 
 // --- review round 9, 29 September 2026 ------------------------------------------------
@@ -2826,13 +2825,13 @@ test('a spare the model did not move: Schedule only names Hire and schedule, Qui
   await answering(page, []);
   await page.evaluate(k => hrReview({scope: 'site', site: k, mode: 'week'}), C);
   await phase(page, 'ready');
-  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), /Sam Spare: Hire and schedule reassigns them to HART\. Bare\./);
+  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), /No hours here after this[\s\S]*Sam Spare/);
   await page.locator('dialog.gw-dlg [data-gw-close]').click();
   const box = page.locator('#hsQuick');
   await box.locator('[data-hq-role]').selectOption(CS);
   await box.locator('[data-hq-site]').selectOption(C);
   const dlg = await quickConfirm(page);
-  assert.match(await dlg.locator('.gw-body').textContent(), /Sam Spare: Staff this site sends them to HART\. Bare\./);
+  assert.match(await dlg.locator('.gw-body').textContent(), /No hours here after this[\s\S]*Sam Spare/);
 });
 
 test('a spare in training is never sent, and says so', async (t) => {
@@ -2845,7 +2844,7 @@ test('a spare in training is never sent, and says so', async (t) => {
   await answering(page, []);
   await page.evaluate(k => hrReview({scope: 'site', site: k, mode: 'week'}), C);
   await phase(page, 'ready');
-  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), /Sam Spare: in training, not reassigned\./);
+  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), /No hours here after this[\s\S]*Sam Spare/);
 });
 
 test('an unticked spare whose own week is free is told to tick it, even when another spare\'s search may take it', async (t) => {
@@ -2862,7 +2861,7 @@ test('an unticked spare whose own week is free is told to tick it, even when ano
   await answering(page, []);
   await page.evaluate(k => hrReview({scope: 'site', site: k}), C);
   await phase(page, 'ready');
-  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), /Sid Spare: tick their reassign to HART\. Bare to give them its week\./);
+  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), /No hours here after this[\s\S]*Sid Spare/);
 });
 
 // --- PR #187's week bands, 29 September 2026 ------------------------------------------

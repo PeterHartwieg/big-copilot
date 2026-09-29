@@ -32048,7 +32048,7 @@ function hrReview(o = {}, hooks = {}){
       const goneCall = gone.size ? gwCall("warn", "alert", `${tt("co.hire.gone", {one: "<b>{n} application expired before the game reached it:</b>", other: "<b>{n} applications expired before the game reached them:</b>"}, {n: gone.size})} ${
         [...gone].map(id => `<span class="hr-struck">${spEsc(nameOf(id))}</span>`).join(", ")}. ${tt("co.hire.gone.empty", "Their hours stay empty.")}`) : "";
       const emptied = hrLeftEmpty(req, answer);
-      const emptyCall = emptied.length ? gwCall("warn", "alert", tt("co.hire.emptied", "<b>Hours left empty</b> where a reassign takes someone away and the week is not replaced: {who}. The game clears their hours there and adds a to-do; nobody takes those hours.",
+      const emptyCall = emptied.length ? gwCall("warn", "alert", tt("co.hire.emptied", "<b>Hours left empty</b> where a reassign takes someone away and the week is not replaced: {who}. Nobody takes those hours.",
         {who: emptied.map(({x, n}) => tt("co.hire.emptied.one", {one: "{name} ({n} stretch of hours at {site})", other: "{name} ({n} stretches of hours at {site})"},
           {name: spEsc(x.p.name || tt("co.hire.someone", "someone")), n, site: spEsc(x.from.b ? shortName(x.from.b) : tt("co.hire.asite", "a site"))})).join(", ")})) : "";
       if(phase === "done"){
@@ -32076,11 +32076,22 @@ function hrReview(o = {}, hooks = {}){
       const blocked = answer.blocked === "myemployees" ? `<div class="gw-no"><span class="ic">${hrSvg("phone")}</span><div class="rule">${tt("co.hire.myemployees", "MyEmployees is open in the game.")}</div><div class="fix">${
         gwSvg("right")}<span>${tt("co.hire.myemployees.fix", "Close the MyEmployees app on your in-game phone, then try again.")}</span></div></div>` : "";
       const rewritten = (answer.sites || []).filter(s => s && s.before && s.after);
-      const strandedIdSet = new Set([...req.touched.values()].flatMap(at => at.stranded || []));
-      const strandedNames = new Set([...req.touched.values()].flatMap(at => (at.stranded || []).map(id => gwWho(id, at.S.row).name)).filter(Boolean));
-      const named = p => p && (p.employeeId ? strandedIdSet.has(p.employeeId) : strandedNames.has(p.name));
-      const left = rewritten.flatMap(s => (s.leftWithout || []).filter(p => !named(p))
-        .map(p => `<span class="person"><i>${spEsc(gwInitials(p.name))}</i>${spEsc(p.name || tt("co.hire.someone", "someone"))}</span>`));
+      /* Who this leaves with no hours at a site: the site's own people the
+         week gives none (`stranded`) and those the game's answer names
+         (`leftWithout`), each once, in one plain note: they stay on as spare,
+         which is fine (Peter, 29 September 2026). */
+      const spare = new Map();
+      [...req.touched.values()].forEach(at => (at.stranded || []).forEach(id => {
+        if(!spare.has(id)) spare.set(id, gwWho(id, at.S.row).name);
+      }));
+      const spareNames = new Set([...spare.values()].filter(Boolean));
+      rewritten.forEach(s => (s.leftWithout || []).forEach(p => {
+        if(!p) return;
+        const key = p.employeeId || `name:${p.name}`;
+        if(spare.has(key) || (!p.employeeId && spareNames.has(p.name))) return;
+        spare.set(key, p.name);
+      }));
+      const left = [...spare.values()].map(name => `<span class="person"><i>${spEsc(gwInitials(name))}</i>${spEsc(name || tt("co.hire.someone", "someone"))}</span>`);
       const fewer = hrFewer(m, req, rewritten);
       const fewerCall = fewer.length ? gwCall("", "roster", tt("co.hire.fewer", "<b>Fewer hours than now</b> in the week sent: {who}.",
         {who: fewer.map(({S, r}) => tt("co.hire.fewer.one", "{name} ({site}, {now} → {h} h)", {name: spEsc(r.name || tt("co.hire.someone", "someone")),
@@ -32109,55 +32120,6 @@ function hrReview(o = {}, hooks = {}){
         return gwWeekCheck(row, x.days, away).map(p => Object.assign(p, writes.length > 1 && S ? {site: spEsc(hrSiteName(S))} : {}));
       });
       const warned = [...req.touched.values()].flatMap(at => at.hires.filter(h => hrWarns(m, h.c, at.S, h.w ? {w: h.w, S: at.S} : null).length));
-      /* The site's own people this week leaves with no hours there: named
-         first, since nobody is meant to stay assigned at 0 hours. */
-      const strandedIds = [...req.touched.values()].flatMap(at => (at.stranded || []).map(id => ({id, at})));
-      /* Why each is left without hours, from the page's own moves, whatever
-         this mode sends, and what it takes to give them a week: a week this
-         action cannot write is said as such (no tick fixes it); an unticked
-         reassign in an action that does not reassign needs both steps. */
-      const strandedWhy = ({id, at}) => {
-        const name = spEsc(gwWho(id, at.S.row).name || tt("sp.gw.someone.cap", "Someone"));
-        const siteOf = T => spEsc(hrSiteName(T));
-        if((((D.hiring || {}).people || {})[id] || {}).training)
-          return tt("co.hire.stranded.training", "<b>{name}</b>: in training, not reassigned.", {name});
-        /* Quick hire and Pick more never reassign: Staff all sites does, with
-           the destination in its scope, or Staff this site, as it would. */
-        const all = req.quick || req.only;
-        const r = all ? hrOutPlan(m, at.S).get(id) : req.out ? req.out.get(id) : null;
-        const found = m.moves.find(x => x.id === id && x.from === at.S);
-        if(all && !found && r && r.x) return tt("co.hire.stranded.site", "<b>{name}</b>: Staff this site sends them to {site}.", {name, site: siteOf(r.x.to)});
-        /* A spare only this action moves (the model gave their week to
-           another site's spare): Hire and schedule does it. */
-        if(!found && r && r.x) return tt("co.hire.stranded.mode", "<b>{name}</b>: Hire and schedule reassigns them to {site}.", {name, site: siteOf(r.x.to)});
-        if(!found && !(r && !r.x && r.why !== "none")) return tt("co.hire.stranded.nofit", "<b>{name}</b>: no open week elsewhere fits them.", {name});
-        const mv = found || r.x || {to: r.S, off: false};
-        if(r && !r.x && !(all && found)){
-          if(r.why === "closed") return tt("co.hire.stranded.closed", "<b>{name}</b>: the open week at {site} runs in hours it is closed.", {name, site: siteOf(r.S)});
-          if(r.why === "busy") return tt("co.hire.stranded.busy", "<b>{name}</b>: the open week at {site} runs in hours someone already works there.", {name, site: siteOf(r.S)});
-          return tt("co.hire.stranded.nofit", "<b>{name}</b>: no open week elsewhere fits them.", {name});
-        }
-        /* The reassign line on the Staff page names the model's site; this
-           action may send them elsewhere (hrOutWeek()), which is said too. */
-        const line = siteOf(mv.to), dest = !all && r && r.x ? r.x.to : mv.to, site = siteOf(dest), other = dest !== mv.to;
-        if(mv.off){
-          if(all) return tt("co.hire.stranded.off.all", "<b>{name}</b>: tick their reassign to {site}, then use Staff all sites.", {name, site: line});
-          if(mode === "week") return other
-            ? tt("co.hire.stranded.off.week.dest", "<b>{name}</b>: tick their reassign to {line} and choose Hire and schedule, which sends them to {site}, where a week fits.", {name, line, site})
-            : tt("co.hire.stranded.off.week", "<b>{name}</b>: tick their reassign to {site} and choose Hire and schedule.", {name, site});
-          return other
-            ? tt("co.hire.stranded.off.dest", "<b>{name}</b>: tick their reassign to {line}, and this action sends them to {site}, where a week fits.", {name, line, site})
-            : tt("co.hire.stranded.off", "<b>{name}</b>: tick their reassign to {site} to give them its week.", {name, site});
-        }
-        if(all) return tt("co.hire.stranded.all", "<b>{name}</b>: Staff all sites reassigns them to {site}.", {name, site: line});
-        return tt("co.hire.stranded.mode", "<b>{name}</b>: Hire and schedule reassigns them to {site}.", {name, site});
-      };
-      const stranded = strandedIds.length ? gwCall("warn", "alert", `${tt("co.hire.stranded.spare", {
-        one: "<b>No hours after this</b> for {n} person the plan does not need here.",
-        other: "<b>No hours after this</b> for {n} people the plan does not need here."}, {n: strandedIds.length})}<ul class="gw-chk">${
-        strandedIds.map(x => `<li>${strandedWhy(x)}</li>`).join("")}</ul>${mode === "week"
-          ? tt("co.hire.stranded.week", "Close to leave the weeks as they are.")
-          : hrLast.modes.includes("hire") ? tt("co.hire.stranded.both", "Hire only leaves the weeks as they are.") : ""}`) : "";
       const officeLeft = [...req.touched.values()].flatMap(at => (at.leftOut || []).map(x => gwCall("warn", "alert", tt("sp.gw.sch.office.left",
         "<b>{name}</b>: {h} h of the office default left out, more than their week can take",
         {name: spEsc(x.name || tt("sp.gw.someone.cap", "Someone")), h: x.hours})))).join("");
@@ -32165,7 +32127,7 @@ function hrReview(o = {}, hooks = {}){
           ...(mode === "hire" ? [] : [[tt("co.hire.tile.weeks", "Weeks"), null, hrNum(c.weeks)]]),
           [tt("co.hire.tile.wages", "Added wages"), null, `+${fmt(bill)}<small class="hr-u">${tt("co.hire.perday", "/day")}</small>`]])}
         <p class="gw-lead">${tt("co.hire.lead", "Who goes where. Open a site to see each person and the days they work.")}</p>
-        ${stranded}${sites}${goneCall}${zero}${fewerCall}${emptyCall}${displacedCall}${left.length ? `<div class="gw-box">${gwCall("", "exit", tt("co.hire.left", "<b>No hours after this</b> for these people at the sites whose week is replaced. The game takes them off their work there and adds a to-do."))}<div class="gw-pills">${left.join("")}</div></div>` : ""}
+        ${sites}${goneCall}${zero}${fewerCall}${emptyCall}${displacedCall}${left.length ? `<div class="gw-box">${gwCall("", "exit", tt("sp.gw.left.head", "<b>No hours here after this</b>"))}<div class="gw-pills">${left.join("")}</div></div>` : ""}
         ${gapText ? gwCall("warn", "alert", `${gapText}.`) : ""}${shortCall}${chain}
         ${gwCheckLines(checked)}${officeLeft}
         ${warned.length ? gwCall("info", "info", tt("co.hire.warned", {one: "{n} person asks for something their site does not meet (marked orange in Change picks). They are hired anyway.",
@@ -39573,6 +39535,9 @@ const GW_DAYS = {"ba:jobdemand_fourdaysweek": 4, "ba:jobdemand_fivedaysweek": 5}
 const GW_CAP = 12, GW_MOST = 50;
 /* One person's entries ({d, f, t, st}) against those rules: [{k, ...}]. */
 function gwPersonBreaks(list, demands, clean){
+  /* No hours at all is no break: whoever a write leaves with none stays on
+     as spare, which is fine (Peter, 29 September 2026). */
+  if(!list.length) return [];
   const out = [], dem = demands || [];
   const hours = list.reduce((n, e) => n + e.t - e.f, 0);
   const band = dem.map(d => GW_BANDS[d]).find(Boolean);
@@ -39653,7 +39618,6 @@ function gwWeekCheck(row, days, away){
   mine.forEach((list, id) => {
     if(sig(list.map(e => `${e.d}|${e.f}|${e.t}|${e.st}`)) !== sig(now.get(id) || [])) check(id, list);
   });
-  now.forEach((_list, id) => { if(!mine.has(id) && !(away && away.has(id))) check(id, []); });
   return out;
 }
 /* What the check found, one line a break, each its own sentence; `site`
@@ -39945,7 +39909,7 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
       return `<div class="gw-planrow">${which}</div>`
         + gwTiles([[labels[0], now.length, sentList.length], [labels[1], gwHours(now), gwHours(sentList)], [labels[2], nowPeople, afterPeople]])
         + gwWeek(now, week.days) + kept + toggle
-        + (left.length ? `<div class="gw-box">${gwCall("", "exit", tt("sp.gw.left", "<b>No hours here after this</b>. The game takes them off their work here and adds a to-do, as its own schedule does."))}<div class="gw-pills">${left.join("")}</div></div>` : "")
+        + (left.length ? `<div class="gw-box">${gwCall("", "exit", tt("sp.gw.left.head", "<b>No hours here after this</b>"))}<div class="gw-pills">${left.join("")}</div></div>` : "")
         + adds + (add.people ? gwAddBox(add, gwHours(sentList)) : "") + over.join("")
         + gwCheckLines(gwWeekCheck(row, week.days));
     },

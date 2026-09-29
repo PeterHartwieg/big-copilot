@@ -463,15 +463,12 @@ in the main checkout). What changed on the board, over 3.2 to 3.4 and 2.4b:
   in list order with an open week that meets their schedule demands, lies inside its
   opening hours and is free there, a desk that meets their desk demands first. With none,
   the spare is not moved, and the review names the first week it passed over and why
-  (closed hours, or hours someone already works). Quick hire and Pick more reassign nobody:
-  the review says whether Staff all sites or Staff this site would. Where the action sends a spare to another site than the Staff
-  page's reassign line names, the review names both: the line to tick, and where they go. A spare who is not moved ends the week at 0 h at their site
-  (accepted), and the review names them first under "No hours after this", each with the
-  cause: no open week elsewhere fits them, the week elsewhere runs in closed hours or hours
-  someone works there (no tick fixes that), their reassign is unticked (with the mode change
-  too where the action does not reassign), or this action does not reassign (Schedule only:
-  Hire and schedule does; Quick hire and Pick more: Staff all sites does). The advice follows the
-  mode (Schedule only: close; otherwise Hire only). "Staff this site" counts only who comes
+  (closed hours, or hours someone already works). Quick hire and Pick more reassign nobody.
+  A spare who is not moved ends the week at 0 h at their site, which is fine (Peter's in-game
+  test, 29 September 2026): the review lists everyone it leaves with no hours at a site, the
+  week's own and those the game's answer names (`leftWithout`), once each, in one plain note
+  ("No hours here after this: these people stay on as spare"), with no warning and no advice,
+  and the week check never counts 0 hours as a break. "Staff this site" counts only who comes
   into the site. "Fewer hours than now" compares the week sent with the game's week.
 - **Done and failed per site**: once applied, each site in the review says "week written",
   "assigned", "writing the week…" or why its week was not written.
