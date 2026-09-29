@@ -442,13 +442,17 @@ in the main checkout). What changed on the board, over 3.2 to 3.4 and 2.4b:
   spare is never kept on their old week. "Staff this site" also sends the site's own spares to
   the open week `hrModel()` found them elsewhere, as "Staff all sites" does (the hard demand
   filter holds). A destination outside the action's scope gets an additive week (the game's
-  week with the mover's hours added, never `openAllHours`), and a shop there only takes the
-  spare when every hour of their week lies inside its opening hours (`hrFitsOpen()`) and is
-  free at that station in the site's week as the game has it (`hrFitsFree()`): an additive
-  week never cuts anybody's hours. "Staff this site" takes the first open week elsewhere that
-  passes all of that (`hrOutWeek()`), the model's own first; with none, the spare is not
+  week with the mover's hours added, never `openAllHours`). At a shop there, every hour of
+  the spare's week must lie inside its opening hours (`hrFitsOpen()`); at any site there,
+  every hour must be free at that station in the site's week as the game has it
+  (`hrFitsFree()`), so an additive week never cuts anybody's hours. "Staff this site" looks
+  at every spare its plan names, not only those the company-wide model moved (a week another
+  site's spare took there is free when only this site is staffed). Each ticked spare keeps
+  their own model week where it passes; the others take the first open week elsewhere that
+  passes all of that and no other spare has (`hrOutWeek()`). With none, the spare is not
   moved, and the review names the first week it passed over and why (closed hours, or hours
-  someone already works). A spare who is not moved ends the week at 0 h at their site
+  someone already works). Where the action sends a spare to another site than the Staff
+  page's reassign line names, the review names both: the line to tick, and where they go. A spare who is not moved ends the week at 0 h at their site
   (accepted), and the review names them first under "No hours after this", each with the
   cause: no open week elsewhere fits them, the week elsewhere runs in closed hours or hours
   someone works there (no tick fixes that), their reassign is unticked (with the mode change

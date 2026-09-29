@@ -2738,3 +2738,69 @@ test('the cause says every step: closed hours in Schedule only, an unticked reas
   const dlg = await quickConfirm(page);
   assert.match(await dlg.locator('.gw-body').textContent(), /Sam Spare: tick their reassign to HART\. Gifts, then use Staff all sites\./);
 });
+
+// --- review round 8, 29 September 2026 ------------------------------------------------
+
+test('Staff this site looks at every spare of its own: a week another site\'s spare took is free when only this site is staffed', async (t) => {
+  // Sam (Corner) and Sue (Gifts, earlier in the list) both ask for free
+  // weekends; Gifts' weeks run into the weekend, so Bare's first week is the
+  // only one that fits, and the company-wide model gives it to Sue.
+  const d = JSON.parse(payload);
+  d.hiring.people.SPARE1.demands = ['ba:jobdemand_freeweekends'];
+  d.hiring.people.SPARE2 = {name: 'Sue Spare', skills: [{skill: CS, level: 70}], wage: 20, site: G, hours: 12, demands: ['ba:jobdemand_freeweekends']};
+  const gp = d.hiring.sites.find(s => s.key === G).plans.demand;
+  gp.spare = ['SPARE2'];
+  gp.hireWeeks[0] = {skill: CS, hours: 24, days: 2, slots: [slot(2, 6, 8, 20, 'REG-G'), slot(3, 0, 8, 20, 'REG-G')]};
+  d.staffing.find(r => r.key === G).people.push({id: 'SPARE2', name: 'Sue Spare'});
+  d.staffing.find(r => r.key === B).open = Array.from({length: 7}, () => [[0, 24]]);
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  const m = await model(page);
+  assert.deepEqual(m.moves.filter(x => x.id !== 'BENCH1').map(x => [x.id, x.to]), [['SPARE2', B]]);
+  const body = await page.evaluate(k => hrRequest(hrModel(), {site: k, one: true}).body, C);
+  assert.deepEqual(body.moves, [{employeeId: 'SPARE1', from: addr(C), to: addr(B)}]);
+});
+
+// Corner with a second spare, Sid; Gifts opens 8 to 20 with Ana's entries
+// `busy` in its game week; Bare opens around the clock.
+const twoSpares = (busy) => {
+  const d = JSON.parse(payload);
+  d.hiring.people.SPARE3 = {name: 'Sid Spare', skills: [{skill: CS, level: 60}], wage: 19, site: C, hours: 0, demands: []};
+  d.hiring.sites.find(s => s.key === C).plans.demand.spare = ['SPARE1', 'SPARE3'];
+  d.staffing.find(r => r.key === C).people.push({id: 'SPARE3', name: 'Sid Spare'});
+  const gifts = d.staffing.find(r => r.key === G);
+  gifts.open = Array.from({length: 7}, () => [[8, 20]]);
+  gifts.current.list.push(...busy);
+  d.staffing.find(r => r.key === B).open = Array.from({length: 7}, () => [[0, 24]]);
+  return d;
+};
+
+test('a ticked spare keeps their own writable week: another spare\'s search never takes it', async (t) => {
+  // Sam's model week at Gifts (Wednesday, Thursday) clashes with Ana's hours;
+  // Sid's (Friday to Sunday) is free and stays his; Sam goes to Bare.
+  const page = await board(t, {link: ONE, data: JSON.stringify(twoSpares([{d: 3, s: 0, f: 10, t: 14, p: 0}]))});
+  assert.deepEqual((await model(page)).moves.filter(x => x.id !== 'BENCH1').map(x => [x.id, x.to]), [['SPARE1', G], ['SPARE3', G]]);
+  const body = await page.evaluate(k => hrRequest(hrModel(), {site: k, one: true}).body, C);
+  assert.deepEqual(body.moves.map(x => [x.employeeId, x.to.number]).sort(), [['SPARE1', 4], ['SPARE3', 10]]);
+});
+
+test('the advice names the reassign line to tick and where this action really sends them', async (t) => {
+  // Both of Gifts' weeks clash with Ana's hours: Staff this site would send
+  // Sam to Bare, though the Staff page's line says Gifts.
+  // Corner hires into one week of its own, so Hire and schedule is offered.
+  const d = twoSpares([{d: 3, s: 0, f: 10, t: 14, p: 0}, {d: 5, s: 0, f: 10, t: 14, p: 0}]);
+  d.hiring.sites.find(s => s.key === C).plans.demand.hireWeeks = [{skill: CS, hours: 12, days: 1, slots: [slot(0, 4, 8, 20, 'REG-C')]}];
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
+  await answering(page, []);
+  await page.evaluate(k => hrReview({scope: 'site', site: k}), C);
+  await phase(page, 'ready');
+  const dlg = page.locator('dialog.gw-dlg');
+  assert.match(await dlg.locator('.gw-body').textContent(),
+    /Sam Spare: tick their reassign to HART\. Gifts, and this action sends them to HART\. Bare, where a week fits\./);
+  // Schedule only: the mode to choose as well.
+  await dlg.locator('[data-hr-mode="week"]').click();
+  await page.waitForFunction(() => document.querySelector('dialog.gw-dlg').dataset.phase === 'ready'
+    && /Write/.test(document.querySelector('dialog.gw-dlg .gw-foot [data-gw-b="apply"]').textContent));
+  assert.match(await dlg.locator('.gw-body').textContent(),
+    /Sam Spare: tick their reassign to HART\. Gifts and choose Hire and schedule, which sends them to HART\. Bare, where a week fits\./);
+});
