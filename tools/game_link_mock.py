@@ -1406,7 +1406,10 @@ class Link:
                           for i, e in enumerate(site["before"])]
                 refused, _ = self._check_shifts(save, reg, address, shifts, where_after,
                                                 lambda who: self._skills(save, people[who]) if who in people else set())
-                if refused:
+                # As the mod's CheckPost: who works here, the station, the skill. The
+                # hours and overlaps were the game's own week (a 13-hour shift a
+                # save holds from an older build goes back as it was).
+                if any(r["error"] in ("not_assigned", "no_station", "no_skill") for r in refused):
                     error = "changed"  # a person moved away or a station sold since
             if error:
                 rows.append({"scope": "site", "address": _wire(address), "error": error})
