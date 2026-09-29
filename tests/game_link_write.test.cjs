@@ -161,6 +161,21 @@ async function holdSave(page) {
   });
   return release;
 }
+// Holds the board's refresh requests until the test lets them go. The mock takes a
+// request 3 s after the last refresh, as the mod from 0.4.0 does, and answers at
+// once, so a reread could replace what the dialog says before the test has seen it.
+async function holdRefresh(page) {
+  let release;
+  const held = new Promise((resolve) => { release = resolve; });
+  const handler = async (route) => {
+    if (route.request().method() === 'POST') await held;
+    await route.continue().catch((err) => {
+      if (!/disposed|closed/i.test(err.message)) throw err;
+    });
+  };
+  await page.route(`${mockUrl}/refresh`, handler);
+  return async () => { release(); await page.unroute(`${mockUrl}/refresh`, handler); };
+}
 const dialog = (page) => page.locator('dialog.gw-dlg');
 // The game's approval is asked inside the write's own dialog, while it waits.
 const pair = (page) => page.locator('dialog.gw-dlg[data-phase="approval"]');
@@ -916,9 +931,11 @@ test('an apply that gets no answer is not sent again: the board reads the game, 
     return route.abort();
   });
   const refresh = page.waitForRequest((req) => req.url().endsWith('/refresh') && req.method() === 'POST');
+  const release = await holdRefresh(page);
   await button(page, GIFTS).click();
   await dialog(page).getByRole('button', {name: SET}).click();
   await dialog(page).getByText('The game did not answer, so this may or may not have been applied.').waitFor();
+  await release();
   await refresh;  // the board asks the game for its state first
   await ready(page, 20000);
   assert.equal(await dialog(page).getByRole('button', {name: SET}).isEnabled(), true);
@@ -936,9 +953,11 @@ test('an apply whose answer cannot be read is uncertain too', async (t) => {
     const res = await route.fetch();  // applied in the mock, then the answer is garbled
     return route.fulfill({response: res, body: '{"ok": tr'});
   });
+  const release = await holdRefresh(page);
   await button(page, GIFTS).click();
   await dialog(page).getByRole('button', {name: SET}).click();
   await dialog(page).getByText('The game did not answer, so this may or may not have been applied.').waitFor();
+  await release();
   await ready(page, 20000);
   assert.equal(applies, 1);
   // The fresh dry run shows what the game now holds: the role is dressed.
@@ -1149,8 +1168,10 @@ test('an apply answering ok false, or for another kind, is uncertain and sent on
   for (const wrong of [{ok: false, kind: 'uniforms'}, {ok: true, kind: 'imports'}]) {
     answer = {...wrong, dryRun: false, stamp: 'x', rows: []};
     const sent = applies;
+    const release = await holdRefresh(page);
     await dialog(page).getByRole('button', {name: SET}).click();
     await dialog(page).getByText('The game did not answer, so this may or may not have been applied.').waitFor();
+    await release();
     await dialog(page).getByRole('button', {name: SET}).waitFor({timeout: 30000});
     assert.equal(applies, sent + 1, JSON.stringify(wrong));
   }
