@@ -437,6 +437,20 @@ in the main checkout). What changed on the board, over 3.2 to 3.4 and 2.4b:
   for the hire write (schedule only) is not sent at all; each chained week drops the board's
   Undo for an earlier schedule write (the game keeps one), as the one call does for a site it
   writes. Undo is offered only where the apply answers `undoable` true.
+- **Spare people** (browser QA and Peter's decision, 29 September 2026). The plan staffs its
+  hours with the fewest people: nobody's planned hours are cut to keep somebody else on, and a
+  spare is never kept on their old week. "Staff this site" also sends the site's own spares to
+  the open week `hrModel()` found them elsewhere, as "Staff all sites" does (the hard demand
+  filter holds). A destination outside the action's scope gets an additive week (the game's
+  week with the mover's hours added, never `openAllHours`), and a shop there only takes the
+  spare when every hour of their week lies inside its opening hours (`hrFitsOpen()`); else the
+  move is left out (`closed`). A spare who is not moved ends the week at 0 h at their site
+  (accepted), and the review names them first under "No hours after this", each with the
+  cause: no open week elsewhere fits them, their reassign is unticked, the week elsewhere runs
+  in hours that shop is closed, or this action does not reassign (Schedule only: Hire and
+  schedule does; Quick hire and Pick more: Staff all sites does). The advice follows the
+  mode (Schedule only: close; otherwise Hire only). "Staff this site" counts only who comes
+  into the site. "Fewer hours than now" compares the week sent with the game's week.
 - **Done and failed per site**: once applied, each site in the review says "week written",
   "assigned", "writing the week…" or why its week was not written.
 
