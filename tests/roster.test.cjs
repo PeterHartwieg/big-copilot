@@ -539,7 +539,8 @@ test('a security locker nobody staffs is shown as new spending, in hours it can 
   const page = await shop('full');
   try {
     const guard = page.locator('#sp-roster .sp-hc .sp-new').first();
-    assert.match(await guard.innerText(), /\+90 h\/wk/);
+    // The hires' weeks' own hours (eleven twelve-hour lines), not 30 a hire.
+    assert.match(await guard.innerText(), /\+132 h\/wk/);
     assert.match(await guard.getAttribute('data-read'), /new wages.*nobody covers this locker today/);
     // "Customer Service" and "Cleaning station" are both CS: the codes on the
     // line have to stay apart or the shop looks like it has two of one role.
