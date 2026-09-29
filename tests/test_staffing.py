@@ -1275,6 +1275,107 @@ class MultiRoleTest(unittest.TestCase):
         self.assertEqual(list(row["headcount"]), [stylist])
 
 
+class HeadWashTest(unittest.TestCase):
+    """The head wash is its own role in every plan, not only the demand plan.
+
+    The open-hours plan staffs an hour nothing has read with every station of
+    the role (_open_floor()), and it counted stations by skill while the need
+    is keyed by role: the head wash got none, so a new hairdresser was hired
+    chair stylists and nobody for the head wash (staffing revisit, 28
+    September 2026). Two head washes and three chairs, open 9 to 21, 8
+    customers an hour where anything is read.
+    """
+
+    STYLIST, CHAIR, WASH = ("ba:skill_hairstylist", "ba:itemname_hairdresserchair",
+                            "ba:itemname_hairdresserheadwash")
+
+    def shop(self, stylists, day=None, **reg):
+        def help_page(fees):
+            return ("is a special *employee station*\n\n"
+                    + "".join(f"* [x](fees-{fee})\n" for fee in fees))
+
+        names = Names(dict(LABELS.locale, **{
+            self.STYLIST: "Hair Stylist", self.CHAIR: "Hairdresser Chair",
+            self.WASH: "Hairdresser Head Wash",
+            f"help_{self.CHAIR}_content": help_page(["haircuttingfee", "hairstylingfee"]),
+            f"help_{self.WASH}_content": help_page(["hairshampooingfee"]),
+        }))
+        stations = {self.CHAIR: (self.STYLIST, 5), self.WASH: (self.STYLIST, 10)}
+        items = [(1, self.WASH), (2, self.WASH), (3, self.CHAIR), (4, self.CHAIR), (5, self.CHAIR)]
+        days_open = reg.pop("days_open")
+        r = registration(items=items, hourly={h: 8 for h in range(24)}, opens=((9, 21),), **reg)
+        people = [employee(f"p{i}", [self.STYLIST]) for i in range(stylists)]
+        save = Save({"EmployeeInstances": {"$items": people},
+                     "BuildingRegistrations": {"$items": [dict(r, RentedByPlayer=True)]},
+                     **({"Day": day} if day is not None else {})},
+                    {}, "test.hsg")
+        sites = [dict(business(days_open=days_open), typeSlug="ba:businesstype_hairdresser",
+                      staff=stylists)]
+        _by_addr, staff = _staff(save, names)
+        grids = _hourly(save, [r], sites, stations, set(), {p["id"]: p["skill"] for p in staff}, names)
+        [row] = _staffing(save, names, sites, grids, staff, 0.55)
+        [site] = ba_dashboard._hiring(save, sites, [row], {}, [])["sites"]
+        return row, site
+
+    def washes(self, row):
+        return {i for i, s in enumerate(row["stations"]) if s["id"] in (1, 2)}
+
+    def serving(self, row, shifts):
+        """Hours a week on the head washes and on the chairs."""
+        wash = self.washes(row)
+        out = collections.Counter()
+        for s in shifts:
+            if kind(s) == "serve":
+                out["wash" if s["s"] in wash else "chair"] += s["t"] - s["f"]
+        return out
+
+    def check(self, row, site, plans):
+        split = f"{self.STYLIST}|{self.WASH}"
+        variants = {"demand": row["shifts"], "fullCover": row["fullCover"]["shifts"],
+                    "openCover": row["openCover"]["shifts"]}
+        for name in plans:
+            hours = self.serving(row, variants[name])
+            self.assertGreater(hours["wash"], 0, name)
+            self.assertGreater(hours["chair"], 0, name)
+        # Every open hour nothing has read has both head washes on in the
+        # open-hours plan.
+        wash = self.washes(row)
+        on = collections.Counter()
+        for s in row["openCover"]["shifts"]:
+            if s["s"] in wash:
+                for hour in range(s["f"], s["t"]):
+                    on[(s["d"], hour)] += 1
+        unread = [(wd, h) for wd in range(7) for h in range(9, 21) if row["basis"][split][wd][h] == "none"]
+        self.assertTrue(unread)
+        self.assertEqual({on[cell] for cell in unread}, {2})
+        # The Staff page hires into that plan, head washes included.
+        weeks = site["plans"]["open"]["hireWeeks"]
+        at = collections.Counter()
+        for week in weeks:
+            for slot in week["slots"]:
+                at["wash" if slot["station"] in (1, 2) else "chair"] += slot["t"] - slot["f"]
+        self.assertGreater(at["wash"], 0)
+        self.assertGreater(at["chair"], 0)
+        return split
+
+    def test_a_new_shop_never_read_plans_its_head_washes_everywhere(self):
+        row, site = self.shop(2, weeks=0, days_open=1)
+        self.check(row, site, ("fullCover", "openCover"))
+
+    def test_a_shop_with_under_nine_days_plans_its_head_washes_everywhere(self):
+        # Two weeks of reports for 10 to 14 only, six days since it opened.
+        row, site = self.shop(2, day=7, weeks=2, days_open=6, hours=set(range(10, 14)))
+        self.assertFalse(row["openCover"]["complete"])
+        self.check(row, site, ("demand", "fullCover", "openCover"))
+        # Staff with no hours on that plan: both stylists have none in the
+        # game's week, so every hour the plan gives them counts, head wash too.
+        own = [s for s in row["openCover"]["shifts"] if s["p"] is not None and kind(s) == "serve"]
+        self.assertGreater(self.serving(row, own)["wash"], 0)
+        gap = site["unstaffed"]["open"]
+        self.assertEqual(gap["hours"], sum(s["t"] - s["f"] for s in own))
+        self.assertEqual([(r["skill"], r["idle"]) for r in gap["roles"]], [(self.STYLIST, 2)])
+
+
 class SurvivalTest(unittest.TestCase):
     """Saves are messy: none of this may raise."""
 

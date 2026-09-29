@@ -203,8 +203,10 @@ the map.
   Staff needs adds up, per role, the people each shop,
   office and factory still needs, then fills them: spare people moved between sites
   first, then the headhunters' candidates. Its numbers:
-  - *Needs* are the hire weeks of the plan each site follows: a shop's schedule (the
-    full-cover week for a shop nobody works yet), a factory's in the sizing the Supply
+  - *Needs* are the hire weeks of the plan each site follows: a shop's the plan its
+    Staffing shows (the open-hours plan, every station every open hour nothing has read
+    yet, for a shop nobody works at yet or whose demand data is not complete; its
+    opening hours never change), a factory's in the sizing the Supply
     switch shows, an office's by the office default. Each hire week is a week one new
     person could work under the game's rules (12 hours a day, 50 a week),
     so the count is people, not hours divided by 40.
@@ -218,16 +220,31 @@ the map.
     cheapest. "Hours left" is the game's countdown at the save; a candidate leaves at 0.
   - A candidate's demand is judged three ways: hours and days against the week they would
     get, site demands (coffee machine, clean workplace, a desk item) against the site, and
-    health insurance and a happy boss once for the company. A site or company demand not
-    met is a warning, never a reason to skip the person.
+    health insurance and a happy boss once for the company. The schedule demands (hours,
+    four or five days, free weekends, hours kept free, no cleaning) decide: a candidate or
+    a spare person is placed only in a week that meets them all, at the first site in the
+    list with one; somebody no open week fits is not picked, and the next best is. Only
+    someone ticked in by hand in Change picks takes a week that breaks one, with a
+    warning. A site or company demand not met is a warning, never a reason to skip the
+    person.
   - A site accepts the roles the game lets you assign there: the business type's own,
     cleaning in a shop, office, cinema or theatre, security where theft is possible.
   - *Part-time* is left out by default for every role hired into a shop: a shop's plan
     gives full weeks. The filter bar's "Leave out who asks for" list takes it back.
   - *Quick hire* hires the best matches for one role at any site (headquarters and
     warehouses included), from the candidates the open places have not picked. At a site
-    with a plan they get the plan's open weeks in that role; past those, and at a site
-    with no plan, they join with no hours.
+    with a plan they get the plan's open weeks in that role that meet their schedule
+    demands, best match first; the places left then go, best match first, to everyone else
+    (a match no open week fits included, and named so) with no hours, as at a site with no plan. The site's week stays as the game has it: where a plan
+    entry meets hours already set there, only its parts that meet nothing and run 4 hours
+    or more are added, and a warning is judged on the hours they keep.
+  - *Before any write* (a site's Staffing, Staff needs, Quick hire), every week it would
+    send is checked person by person: at most 12 hours an entry and a day, one entry at a
+    time, the hours band (at most 50 without one), an exact four or five days, free
+    weekends, the hours kept free and no cleaning. Whatever is still broken is named in the
+    confirm, one line a break, including someone the write leaves with no hours at all; nothing is
+    refused for it. An office's write, which adds the office default to the week as it
+    stands, leaves out an entry that would break one and names the hours it left out.
 
   *Payroll* names two wage figures:
   "Wages a day" is every hourly wage times its assigned weekly hours over seven,
@@ -557,7 +574,8 @@ is cover alone they do not, and quoting the first would promise a saving made of
 hours nobody is replacing.
 
 **Two tables, and indices into them.** A site's row lists its `stations` and its `people`
-once each, and every entry, hiring note and placement below points at them by position
+once each (a person with schedule demands carries them, `demands`, for the check before a
+write), and every entry, hiring note and placement below points at them by position
 rather than repeating the game's 24-character ids. The two long lists — the plan's `shifts`
 and the current schedule's `current.list` — share one compact row: `d` weekday, `s` station,
 `f` and `t` the hours it runs from and to, `p` the person, and `k` the kind of duty, which

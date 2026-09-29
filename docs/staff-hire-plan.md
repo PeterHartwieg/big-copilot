@@ -39,9 +39,9 @@ interactive with "hours left" marked as of the save; wording follows the staffin
 Decided here (not blockers, flagged for review):
 
 - **Every site the call touches has its week replaced by the plan the page shows**, exactly as
-  "Write this week to the game" does today. That includes a move's source site when the person
-  moved has shifts there now (the game's move clears their shifts anyway; writing the source's
-  plan keeps it covered). The review lists each such site with shifts removed and added.
+  "Write this week to the game" does today. A move's source site is not one of them (28 September
+  2026): the game's move clears the mover's shifts there, and writing the source's plan changed
+  everybody else's week there too; the review names the hours the move leaves empty.
 - `hoursUntilExpiring` is not a compare-and-set value: it falls every game hour, so an exact
   expect would refuse any call made an hour after the save. The candidate's presence in the
   game's list is the check (`gone`), and its wage is the compare-and-set (`changed`).
@@ -254,8 +254,10 @@ Where the build differs from or adds to 2.1-2.4; the board worker reads these to
   or the game's Recruitment Agency; a headhunter already recruiting it is said
   (`hiring.recruiting`, from `headhunterPlans`).
 - **Staff with no hours** (Peter's live game, 26 September 2026): a shop's `unstaffed`
-  (`{demand, full}` for a shop, read as its Staffing block picks them; `{office}` for an
-  office, the office default) is, per role, weekday and hour, the site's own people the plan puts on
+  (`{demand, full, open}` for a shop, read as the plan its Staffing block is on,
+  `spPlanOf()`; `{office}` for an office, the office default) is, per role (a role's own key,
+  so busy chairs do not hide a hairdresser's empty head wash), weekday and hour, the site's own
+  people the plan puts on
   the role less everybody on its stations in the game's week (never below none), in roles
   where some of them (not in training, with some of their own planned hours unstaffed)
   have no hours at the site at all, from
@@ -269,7 +271,9 @@ Where the build differs from or adds to 2.1-2.4; the board worker reads these to
   undo as a shop's, `openAllHours` always false; "Write all planned sites" includes offices.
   An office's write **adds**, like Quick hire: `gwRosterWeek()` sends every entry at the
   office as it stands, plus the office default's entries for the office's own people where
-  that computer and that person are free then. Nobody's hours change, so nobody is taken
+  that computer and that person are free then, and where their week can take the entry
+  (`gwAddBreaks()`: not past their hours band, or 50, not a day past their four or five,
+  12 hours a day, their demands). Nobody's hours change, so nobody is taken
   off the office; the confirm says "Adds N h for …; nobody's current hours change". An
   office counts as written once nothing is left to add. The write is refused ("an entry
   here can't be read; change it in the game first") while any entry at the office cannot
@@ -307,9 +311,10 @@ two `PYTHONHASHSEED` values.
 
 ### 3.2 What the page computes (JS, deterministic)
 
-For each planned site, the variant: a shop that is `new` uses `full`; otherwise the roster's own
-pick (`spPlanRead`, demand unless the player picked full); factories the Supply sizing; offices
-`office`. Needs per role = that variant's `hireWeeks` for the role.
+For each planned site, the variant: a shop the plan its Staffing block is on (`spPlanOf()`:
+`open` for a new shop or one without complete data, `demand`, or `full`, which the page takes as
+`open`); factories the Supply sizing; offices `office`. Needs per role = that variant's
+`hireWeeks` for the role.
 
 Netting, in this order, per role:
 
@@ -317,7 +322,8 @@ Netting, in this order, per role:
    week in the plan).
 2. Moves: a `spare` person at one site fills a hire week at another site in the same role
    (`accepts` must hold at the target). Spares are taken in site list order, targets in site
-   list order; each move takes the target's first unfilled hire week. Moves are rows with a
+   list order; each move takes the first unfilled hire week, at any site, whose schedule demands
+   the person meets (none: they are not moved). Moves are rows with a
    checkbox, ticked by default; unticking one returns that week to hiring.
 3. Hires: the remaining hire weeks, filled by auto-pick.
 
@@ -329,9 +335,11 @@ Auto-pick (the reference is the canvas's `pick(pool)`, changed as section 1 says
   Filters live in `localStorage` per character, wrapped in try/catch.
 - Order: level of the role's skill descending, wage ascending, id ascending.
 - Sites in list order; within a site, hire weeks in payload order. A candidate takes the first
-  unfilled week whose schedule demands it meets; if none of the site's weeks fits, the first
-  unfilled week, with a warning. Site and company demands never block; they become warnings on
-  the person and the site chip (red: not met anywhere; amber: not met at this site).
+  unfilled week, at any site, whose schedule demands it meets (a hard filter, Peter, 28 September
+  2026); if no week fits, the candidate is not picked and the next best is. A candidate ticked in
+  by hand takes the first unfilled week anyway, with a warning. Site and company demands never
+  block; they become warnings on the person and the site chip (red: not met anywhere; amber: not
+  met at this site).
 - Unticking frees the week for the next best; ticking an extra person over-picks and says "over
   the plan" (placed at the first site with a week in that role, sharing it: no shifts, assign only).
 - A role with fewer passing candidates than weeks shows the hatched short part and "N short".
@@ -580,17 +588,20 @@ Questions (blocking only where said):
 
 1. **The office default: answered** (25 Sep 2026): Peter's office default in section 2.4.
 2. **Moving someone with shifts: answered.** A person can only belong to one business in the game,
-   so a move always takes them off the source site; the source site's week is rewritten without
-   them (the game's own UnassignEmployeeFromAllWorkshifts does this) and the review shows it. Only
-   people the source site's plan does not need (spare) are offered as moves.
+   so a move always takes them off the source site; the game's own
+   UnassignEmployeeFromAllWorkshifts clears their shifts there, the page does not rewrite the
+   source's week (28 September 2026), and the review names the hours left empty. Only people the
+   source site's plan does not need (spare) are offered as moves.
 
 Risks:
 
 - The MyEmployees detection is unverified (step 3.2 on the Mac is the check).
 - No factory or office week has been written through the mod before (step 3.6).
-- The hire week a candidate gets is the planner's hypothetical week with no demands; a person
-  with schedule demands may get a week that breaks one. The page warns; the next plan (after the
-  refresh) re-plans with the real people, and the roster's own write can fix it.
+- The hire week a candidate gets is the planner's hypothetical week with no demands. Since 28
+  September 2026 automatic picks and moves take only a week that meets their schedule demands,
+  so a demanding candidate may find none; only a hand pick takes a breaking week, warned. Every
+  week a write sends is checked per person (`gwWeekCheck()`) and what is still broken is named
+  in the confirm.
 - Candidates that expire between the save and the confirm: `gone` handles it; the review shows
   "leaves within a day" from the save's `hoursLeft`, which can be up to the save's age out of date
   when not linked.
