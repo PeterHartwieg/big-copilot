@@ -377,6 +377,18 @@ class BenchTest(unittest.TestCase):
         self.assertEqual([a["id"] for a in row["addPeople"]["assign"]],
                          ["w03", "w04", "w05", "w06"])
 
+    def test_the_bench_does_not_move_the_line(self):
+        """Review round 1, item 3: three unassigned workers who refuse mornings
+        moved a twelve-hour line off 06:00 though the factory's own four cover it."""
+        people = People().add(4).add(3, demands=[NOMORNINGS], addr=None)
+        [row] = hand_rows([("beer", 1, 24, 12, 24)], people)["dem"]
+        [line] = row["lines"]
+        self.assertEqual((line["from"], line["to"]), (6, 18))
+        # With nobody of its own, the bench decides.
+        people = People().add(3, demands=[NOMORNINGS], addr=None)
+        [row] = hand_rows([("beer", 1, 24, 12, 24)], people)["dem"]
+        self.assertEqual(row["lines"][0]["from"], 10)
+
     def test_the_factory_s_own_first_and_the_bench_it_draws_leaves_it(self):
         people = People().add(7).add(2, addr=None)
         world = ba_dashboard._plan_world(Bare(people), people.staff)

@@ -9252,7 +9252,10 @@ def _factory_site_plan(save, building, site, business, posts_of, pool, people, m
             continue
         if unnamed:
             unnamed_machines += len(posts)
-        start = _factory_run_start(hours, pool)
+        # Around the factory's own staff's demands: the bench is only who
+        # might be drawn, and an unassigned worker nobody uses must not move
+        # the line. The bench alone decides where the factory has nobody.
+        start = _factory_run_start(hours, [p for p in pool if p["addr"]] or pool)
         for position, post in zip(line["slots"], posts):
             runs[len(stations)] = [set(range(start, start + hours)) for _ in range(7)]
             stations.append({"id": post, "skill": FACTORY_SKILL, "rate": 1,
