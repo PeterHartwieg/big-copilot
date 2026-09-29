@@ -2449,18 +2449,53 @@ test('an entry the game holds past 12 hours goes back as the same hours in piece
 // --- browser QA of PR #185, 29 September 2026 ----------------------------------------
 
 test('Staff this site reassigns its own spare to the week that fits them elsewhere, and the review shows it', async (t) => {
-  const page = await board(t, {link: ONE});
+  // Gifts' game week has Ana on Thursday too, which Gifts' own plan drops.
+  const d = JSON.parse(payload);
+  d.staffing.find(r => r.key === G).current.list.push({d: 5, s: 0, f: 8, t: 20, p: 0});
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
   const body = await page.evaluate(k => hrRequest(hrModel(), {site: k, one: true}).body, C);
   assert.deepEqual(body.moves, [{employeeId: 'SPARE1', from: addr(C), to: addr(G)}]);
-  const gifts = body.sites.find(s => s.address.number === 10);
-  assert.ok(gifts && gifts.days.some(d => d.shifts.some(x => x.employeeId === 'SPARE1')), 'Sam gets his week at Gifts');
-  assert.equal(await page.evaluate(k => hrSitePeople(k), C), 1);
+  // Gifts is outside this action: its week as the game has it, Sam's added,
+  // and none of Gifts' own plan (its other open week stays as it is).
+  const ana = (day, f = 8, t = 20) => ({d: day, shifts: [{f, t, employeeId: 'AAAAemployeeAAAAAAAAAAAA', itemInstanceId: 'REG-G'}]});
+  const sam = day => ({d: day, shifts: [{f: 8, t: 20, employeeId: 'SPARE1', itemInstanceId: 'REG-G'}]});
+  assert.deepEqual(body.sites.find(s => s.address.number === 10).days, [ana(1), ana(2), sam(3), sam(4), ana(5)]);
+  // Nobody comes into Corner: its Staff this site counts nobody.
+  assert.equal(await page.evaluate(k => hrSitePeople(k), C), 0);
   await answering(page, []);
   await page.evaluate(k => hrReview({scope: 'site', site: k}), C);
   await phase(page, 'ready');
   const dlg = page.locator('dialog.gw-dlg');
   await dlg.locator(`[data-hr-site="${G}"]`).click();
-  assert.match(await dlg.locator('.hr-dsite.open').textContent(), /Sam Spare[\s\S]*reassigned from HART\. Corner/);
+  assert.match(await dlg.locator('.hr-dsite.open').textContent(), /its week as it is, with the reassigned hours added[\s\S]*Sam Spare[\s\S]*reassigned from HART\. Corner/);
+});
+
+test('a spare whose hours the plan gave to someone else keeps them, the other trimmed, where the other\'s week still holds', async (t) => {
+  // Sam works Monday 8 to 14 at Corner's register; the plan gives Cy all of
+  // Monday there. Cy asks for nothing: trimmed to 14 to 20, Sam keeps his.
+  const d = JSON.parse(payload);
+  const corner = d.staffing.find(r => r.key === C);
+  corner.current.list = [{d: 1, s: 0, f: 8, t: 20, p: 0}, {d: 1, s: 0, f: 8, t: 14, p: 1}];
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
+  const days = await page.evaluate(k => { const S = hrModel().sites.find(x => x.key === k); return hrWeek(S, [], new Set(), new Set(), {}); }, C);
+  assert.deepEqual(days, [{d: 1, shifts: [{f: 8, t: 14, employeeId: 'SPARE1', itemInstanceId: 'REG-C'},
+    {f: 14, t: 20, employeeId: 'CCCCemployeeCCCCCCCCCCCC', itemInstanceId: 'REG-C'}]}]);
+});
+
+test('a spare whose whole week the plan gives to someone else is named in the review: no hours after this', async (t) => {
+  // Sam works Monday 8 to 20, all of Cy's planned Monday: trimming Cy would
+  // leave him nothing, so Sam's week is cut to nothing and the review says so.
+  const d = JSON.parse(payload);
+  const corner = d.staffing.find(r => r.key === C);
+  corner.current.list = [{d: 1, s: 0, f: 8, t: 20, p: 0}, {d: 1, s: 0, f: 8, t: 20, p: 1}, {d: 3, s: 0, f: 8, t: 20, p: 0}];
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
+  await answering(page, []);
+  await page.locator(REVIEW).click();
+  await phase(page, 'ready');
+  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(),
+    /Sam Spare: no hours after this\. The plan gives their hours to someone else and no open week elsewhere fits them, so they stay assigned with none\./);
 });
 
 test('a spare no open week fits keeps their week at their site, in one site\'s action and in Staff all sites', async (t) => {
