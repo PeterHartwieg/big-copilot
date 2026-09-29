@@ -827,7 +827,7 @@
  "gr.os.be.never": "이 이익으로는 회수 불가",
  "gr.os.be.noChart": "이 이익으로는 매장이 투자금을 회수하지 못해요.",
  "gr.os.be.nowhere": "먼저 위치를 선택하세요.",
- "gr.os.be.own_other": "이 유형의 매장 {n}곳은 이 규칙이 각 건물에 주는 금액의 {pct}%를 벌고 있습니다.",
+ "gr.os.be.own_other": "이 유형의 매장 {n}곳은 추정치의 {pct}%를 벌고 있습니다.",
  "gr.os.be.profit": "예상 하루 이익",
  "gr.os.be.rent": "임대료",
  "gr.os.be.revenue": "매출",

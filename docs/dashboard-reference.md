@@ -927,8 +927,8 @@ the game's own arithmetic for a store run well, not an average of your other sto
   ways the rules here do not follow.
 
 Under the estimate: the profit after tax, and, where you run the type, "your stores of this
-type earn x% of what these rules give their own buildings", each of them beside the rules'
-figure for its own building, hours and marketing. It is a line, not a correction. Where your
+type earn x% of their estimate", each store measured against the rules' figure for its own
+building, hours and marketing. It is a line, not a correction. Where your
 own stores in the neighbourhood sell the same products, the demand the new store takes from
 them is said too, for every product it sells; so is being the first to sell a product there.
 
