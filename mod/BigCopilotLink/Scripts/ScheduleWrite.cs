@@ -183,12 +183,7 @@ namespace BigCopilotLink
             // Apply. The before-state is kept as copies: the game's own ClearWorkShifts
             // blanks the employeeId of the shifts it removes, so live objects would not
             // survive as a record.
-            var undo = new UndoState { Address = req.Address };
-            foreach (var sd in liveDays)
-            {
-                if (sd == null) continue;
-                DayRecord(undo, sd, dayByD.ContainsValue(sd) && opens.Contains(DayIndex(sd)));
-            }
+            var undo = Record(reg, req.Address, opens);
 
             ReplaceDays(dayByD, checks, opens);
 
@@ -280,6 +275,26 @@ namespace BigCopilotLink
             }
         }
 
+        /// <summary>
+        /// A business's days as they stand, kept as copies, before a write replaces them:
+        /// the game's own ClearWorkShifts blanks the employeeId of the shifts it removes,
+        /// so live objects would not survive as a record. <paramref name="opens"/>: the
+        /// weekdays whose hours the write opens. PrintAfter is the caller's, once written.
+        /// Also the hire write's undo, one per site it writes.
+        /// </summary>
+        internal static UndoState Record(BuildingRegistration reg, WireAddress address, HashSet<int> opens)
+        {
+            var undo = new UndoState { Address = address };
+            var liveDays = reg.scheduleDays ?? new List<ScheduleDay>();
+            var dayByD = DaysByIndex(liveDays);
+            foreach (var sd in liveDays)
+            {
+                if (sd == null) continue;
+                DayRecord(undo, sd, dayByD.ContainsValue(sd) && opens.Contains(DayIndex(sd)));
+            }
+            return undo;
+        }
+
         /// <summary>One day's before-state; <paramref name="opened"/>: the write opens this day's hours.</summary>
         private static void DayRecord(UndoState undo, ScheduleDay sd, bool opened)
         {
@@ -294,8 +309,33 @@ namespace BigCopilotLink
         public static WriteAnswer Undo(WriteService ws, UndoState state, bool dryRun)
         {
             var reg = WriteService.FindRegistration(state.Address);
+            var siteError = UndoSiteError(reg, state, null);
+            var restore = PrepareRestore(reg, state);
+
+            var failed = siteError != null;
+            var noChecks = new List<ShiftCheck>();
+            if (dryRun || failed)
+                return Answer(state.Address, reg, dryRun, failed, true, null, siteError, noChecks, restore.Current, restore.Restored, restore.OpenAfter, state.OpenedHours);
+
+            RestoreDays(state);
+            AfterRestore(restore);
+            ws.ScheduleUndo = null;
+            var stamp = ws.Applied("bigcopilotlink_notify_undo_schedule", reg.BusinessName);
+            return Answer(state.Address, reg, false, false, true, stamp, null, noChecks, restore.Current, restore.Restored, restore.OpenAfter, state.OpenedHours);
+        }
+
+        /// <summary>
+        /// Whether a recorded week may be put back, in the undo's order: changed (gone,
+        /// the print is not what the write left, a day entry replaced, or a day it opened
+        /// no longer open 0 to 24), not_rented, screen_open, then changed again when a
+        /// shift it would put back no longer passes the grid's rules. Null: it may.
+        /// <paramref name="calls"/> is null for the schedule kind; the hire undo passes
+        /// where its own reversal leaves people (movers back where they came from, hires
+        /// gone).
+        /// </summary>
+        internal static string UndoSiteError(BuildingRegistration reg, UndoState state, Assignments calls)
+        {
             var liveDays = reg != null && reg.scheduleDays != null ? reg.scheduleDays : new List<ScheduleDay>();
-            var current = Lines(liveDays);
 
             // The hours are checked only on the days the write opened; a day it left
             // alone may have changed since without blocking the undo.
@@ -303,27 +343,45 @@ namespace BigCopilotLink
             for (var i = 0; i < state.Days.Count; i++)
                 if (state.Opened[i] && !IsOpenAllDay(state.Days[i])) hoursHold = false;
 
-            string siteError = null;
-            if (reg == null || Print(current) != state.PrintAfter || !state.Days.TrueForAll(liveDays.Contains) || !hoursHold)
-                siteError = "changed";
-            else if (!reg.RentedByPlayer) siteError = "not_rented";
-            else if (WriteService.ScheduleScreenOpenOn(reg)) siteError = "screen_open";
-            else if (!StillValid(reg, state)) siteError = "changed";
+            if (reg == null || Print(Lines(liveDays)) != state.PrintAfter || !state.Days.TrueForAll(liveDays.Contains) || !hoursHold)
+                return "changed";
+            if (!reg.RentedByPlayer) return "not_rented";
+            if (WriteService.ScheduleScreenOpenOn(reg)) return "screen_open";
+            if (!StillValid(reg, state, calls)) return "changed";
+            return null;
+        }
 
-            var restored = new List<Line>();
-            var openAfter = new Dictionary<int, bool>();
+        /// <summary>A recorded week against the live one, for the answer and the calls after the restore.</summary>
+        internal sealed class Restore
+        {
+            internal UndoState State;
+            internal BuildingRegistration Reg;
+            internal List<Line> Current;
+            internal List<Line> Restored;
+            internal Dictionary<int, bool> OpenAfter;
+        }
+
+        /// <summary>Main thread, before anything is put back: the live shifts, the recorded ones, and which days are open once restored.</summary>
+        internal static Restore PrepareRestore(BuildingRegistration reg, UndoState state)
+        {
+            var liveDays = reg != null && reg.scheduleDays != null ? reg.scheduleDays : new List<ScheduleDay>();
+            var restore = new Restore
+            {
+                State = state, Reg = reg, Current = Lines(liveDays),
+                Restored = new List<Line>(), OpenAfter = new Dictionary<int, bool>()
+            };
             for (var i = 0; i < state.Days.Count; i++)
             {
                 var d = DayIndex(state.Days[i]);
-                foreach (var ws0 in state.Shifts[i]) restored.Add(ToLine(d, ws0));
-                openAfter[d] = state.Opened[i] ? state.WasOpen[i] : state.Days[i].isOpen;
+                foreach (var ws0 in state.Shifts[i]) restore.Restored.Add(ToLine(d, ws0));
+                restore.OpenAfter[d] = state.Opened[i] ? state.WasOpen[i] : state.Days[i].isOpen;
             }
+            return restore;
+        }
 
-            var failed = siteError != null;
-            var noChecks = new List<ShiftCheck>();
-            if (dryRun || failed)
-                return Answer(state.Address, reg, dryRun, failed, true, null, siteError, noChecks, current, restored, openAfter, state.OpenedHours);
-
+        /// <summary>The recorded shifts cloned back in, and the hours only on the days the write opened.</summary>
+        internal static void RestoreDays(UndoState state)
+        {
             for (var i = 0; i < state.Days.Count; i++)
             {
                 var sd = state.Days[i];
@@ -336,11 +394,18 @@ namespace BigCopilotLink
                 sd.openingHourSlots.Clear();
                 sd.openingHourSlots.AddRange(CloneSlots(state.Slots[i]));
             }
+        }
 
-            AfterShiftChange(reg, Employees(current, restored));
-            ws.ScheduleUndo = null;
-            var stamp = ws.Applied("bigcopilotlink_notify_undo_schedule", reg.BusinessName);
-            return Answer(state.Address, reg, false, false, true, stamp, null, noChecks, current, restored, openAfter, state.OpenedHours);
+        /// <summary>The game's calls after a schedule change, for everyone on the site's shifts before or after the restore.</summary>
+        internal static void AfterRestore(Restore restore)
+        {
+            AfterShiftChange(restore.Reg, Employees(restore.Current, restore.Restored));
+        }
+
+        /// <summary>A restore's answer fields: before as the undo found the week, after as restored.</summary>
+        internal static void WriteRestore(JsonWriter w, Restore restore)
+        {
+            WeekFields(w, restore.Current, restore.Restored, restore.OpenAfter, restore.State.OpenedHours, null);
         }
 
         // ---- for the hire write -----------------------------------------------------
@@ -551,14 +616,14 @@ namespace BigCopilotLink
         /// has moved on, and the undo answers changed rather than write what the grid
         /// would refuse.
         /// </summary>
-        private static bool StillValid(BuildingRegistration reg, UndoState state)
+        private static bool StillValid(BuildingRegistration reg, UndoState state, Assignments calls)
         {
             var site = new Site(reg);
             foreach (var shifts in state.Shifts)
             foreach (var ws in shifts)
             {
                 WorkShiftType type;
-                if (CheckPost(site, ws.employeeId, ws.itemInstanceId, null, out type) != null) return false;
+                if (CheckPost(site, ws.employeeId, ws.itemInstanceId, calls, out type) != null) return false;
             }
             return true;
         }
@@ -639,7 +704,9 @@ namespace BigCopilotLink
             foreach (var id in employeeIds)
             {
                 var employee = Helpers.EmployeeHelper.GetEmployeeById(id, false);
-                if (employee == null) continue;
+                // The hire undo puts people back among the candidates (the employee
+                // dictionary holds those too): nobody's staff, so no work to update.
+                if (employee == null || employee.IsCandidate) continue;
                 Guard("the employee update", () =>
                 {
                     // null: the employee's own business's days, which are these for

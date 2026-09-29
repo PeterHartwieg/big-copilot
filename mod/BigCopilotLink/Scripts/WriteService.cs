@@ -64,8 +64,8 @@ namespace BigCopilotLink
     /// POST /write/* (docs/game-link-api.md, "Writes"): the approval check, the body, the
     /// parse, and the trip to the main thread, for every kind; the kinds themselves are
     /// UniformWrite, ImportWrite, ScheduleWrite and (from 0.3.0) HireWrite. One per city
-    /// load, like SaveService: the undo it keeps belongs to that city session. A hire has
-    /// no undo.
+    /// load, like SaveService: the undo it keeps belongs to that city session. From 0.5.0
+    /// a hire has one too (hire.undo).
     ///
     /// Threading. The handler threads parse the body and touch nothing of the game. The
     /// check-and-apply runs whole on the main thread, and only while no refresh is in
@@ -80,6 +80,13 @@ namespace BigCopilotLink
     public sealed class WriteService
     {
         public static readonly string[] Kinds = { "uniforms", "imports", "schedule", "hire" };
+
+        /// <summary>
+        /// /health "features" (0.5.0): what a kind can do beyond what its version of the
+        /// contract first said. hire.reschedule: a hire call may carry weeks no hire or
+        /// move reaches. hire.undo: POST /write/undo {"kind": "hire"}.
+        /// </summary>
+        public static readonly string[] Features = { "hire.reschedule", "hire.undo" };
 
         private const int MaxBodyBytes = 256 * 1024;
 
@@ -101,6 +108,7 @@ namespace BigCopilotLink
         internal UniformWrite.UndoState UniformUndo;
         internal ImportWrite.UndoState ImportUndo;
         internal ScheduleWrite.UndoState ScheduleUndo;
+        internal HireWrite.UndoState HireUndo;
 
         public WriteService(SaveService saves, ApprovalService approvals)
         {
@@ -114,6 +122,7 @@ namespace BigCopilotLink
             UniformUndo = null;
             ImportUndo = null;
             ScheduleUndo = null;
+            HireUndo = null;
         }
 
         // ---- the HTTP side ---------------------------------------------------------
@@ -145,9 +154,6 @@ namespace BigCopilotLink
             {
                 return WriteAnswer.BadRequest(e.Message);
             }
-
-            // Nothing to ask the game: a hire is never undone.
-            if (job == NoUndo) return WriteAnswer.Error(409, "no_undo");
 
             return RunOnMainThread(job, dryRun);
         }
@@ -181,15 +187,11 @@ namespace BigCopilotLink
                 {
                     var target = JsonReader.Str(root, "kind", "body", true);
                     if (Array.IndexOf(Kinds, target) < 0)
-                        throw new BadRequestException("body.kind must be one of uniforms, imports, schedule, hire");
-                    if (target == "hire") return NoUndo;
+                        throw new BadRequestException("body.kind must be one of uniforms, imports, schedule, hire (each undoable)");
                     return (ws, dryRun) => ws.Undo(target, dryRun);
                 }
             }
         }
-
-        /// <summary>The undo of a hire: answered 409 no_undo by Handle, never run.</summary>
-        private static readonly Func<WriteService, bool, WriteAnswer> NoUndo = (ws, dryRun) => WriteAnswer.Error(409, "no_undo");
 
         /// <summary>
         /// Null text when the bytes are not UTF-8; false when the body is over the cap.
@@ -355,6 +357,9 @@ namespace BigCopilotLink
                 case "imports":
                     if (ImportUndo == null) return WriteAnswer.Error(409, "nothing_to_undo");
                     return ImportWrite.Undo(this, ImportUndo, dryRun);
+                case "hire":
+                    if (HireUndo == null) return WriteAnswer.Error(409, "nothing_to_undo");
+                    return HireWrite.Undo(this, HireUndo, dryRun);
                 default:
                     if (ScheduleUndo == null) return WriteAnswer.Error(409, "nothing_to_undo");
                     return ScheduleWrite.Undo(this, ScheduleUndo, dryRun);
