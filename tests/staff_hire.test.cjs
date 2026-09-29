@@ -3095,5 +3095,60 @@ test('Quick hire at a shop: a part-timer past the part week is left out, never g
   assert.deepEqual(picks.slice(0, 2), [['c2', 20], ['c3', 30]]);
   assert.equal(picks.length, 3);
   assert.notEqual(picks[2][0], 'c1');
-  assert.doesNotMatch(await box.locator('.hs-match').textContent(), /no open week fits\s*(<|$)/);
+  assert.equal(await page.evaluate(() => 'nofit' in hrQuickModel(hrModel()).picks[2]), false);
+});
+
+// --- review round 13 --------------------------------------------------------------------
+
+const quickAtGifts = async (page, more = 0) => {
+  const box = page.locator('#hsQuick');
+  await box.locator('[data-hq-role]').selectOption(CS);
+  await box.locator('[data-hq-site]').selectOption(G);
+  for(let i = 0; i < more; i++) await box.locator('[data-hq-more]').click();
+  return box;
+};
+
+test('Quick hire counts as matches only those it can pick: a part-timer left out is none', async (t) => {
+  // Skill 90 and up: Ada and Bram, both asking for part-time. Bram takes
+  // the part week; Ada could only join with no hours, which the shop's
+  // default does not allow.
+  const d = fullPart();
+  d.candidates.find(c => c.id === 'c1').demands = ['ba:jobdemand_parttime'];
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
+  await page.locator('#hsOpen [data-hr-min]').selectOption('90');
+  const box = await quickAtGifts(page, 1);
+  assert.deepEqual((await quick(page)).picks, [['c2', 20]]);
+  assert.match(await box.locator('.hs-match summary').textContent(), /^1 match · only 1 candidate matches/);
+});
+
+test('Quick hire: a part-timer held back by a demand gets no place with no hours once the part week is gone', async (t) => {
+  // Ada (cheaper, so first) asks for part-time and free weekends; the part
+  // week runs on the weekend, so she is held back, and Bram takes it.
+  const d = fullPart();
+  const ada = d.candidates.find(c => c.id === 'c1');
+  ada.demands = ['ba:jobdemand_parttime', 'ba:jobdemand_freeweekends'];
+  ada.wage = 20;
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
+  // Skill 90 and up: only the two of them; the full week stays open.
+  await page.locator('#hsOpen [data-hr-min]').selectOption('90');
+  await quickAtGifts(page, 2);
+  assert.deepEqual((await quick(page)).picks, [['c2', 20]], 'Ada is not given a place with no hours');
+});
+
+test('a hand-ticked candidate goes to a site with a real week before one whose only week is short', async (t) => {
+  // Gifts has only a 6 h week, Bare a 36 h one (and its cleaning week).
+  const d = JSON.parse(payload);
+  d.hiring.sites.find(s => s.key === G).plans.demand.hireWeeks = [
+    {skill: CS, hours: 6, days: 1, band: 'short', slots: [slot(2, 3, 8, 14, 'REG-G')]}];
+  const bare = d.hiring.sites.find(s => s.key === B).plans.open;
+  bare.hireWeeks = [{skill: CS, hours: 36, days: 3, band: 'full', slots: [slot(0, 1, 0, 12, 'REG-B'), slot(1, 2, 0, 12, 'REG-B'), slot(2, 3, 0, 12, 'REG-B')]},
+    ...bare.hireWeeks.filter(w => w.skill !== CS)];
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
+  await page.evaluate(() => { hrUi.force.add('c2'); });
+  const m = await model(page);
+  assert.deepEqual(m.weeks[0], [G, 'demand', [null]]);
+  assert.equal(m.weeks[2][2][0], 'hire:c2');
 });

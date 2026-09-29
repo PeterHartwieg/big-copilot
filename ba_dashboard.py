@@ -30263,7 +30263,10 @@ const hrWants = c => hrAsksPt(c) ? "part" : (c.demands || []).includes("ba:jobde
 function hrPickWeek(c, pool){
   const want = hrWants(c);
   const own = want ? pool.filter(x => x.w.band === want) : [];
-  const S = (own.length ? own : pool)[0].S;
+  /* With none of their own contract, a site with a week a contract suits
+     before one whose only week is too short for any. */
+  const real = pool.filter(x => x.w.band !== "short");
+  const S = (own.length ? own : real.length ? real : pool)[0].S;
   const rank = x => (x.w.band === "short" ? 2 : 0) + (!want && Number(x.w.hours) === 30 ? 1 : 0);
   const here = pool.filter(x => x.S === S).map((x, i) => [x, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(e => e[0]);
   const pref = want ? here.filter(x => x.w.band === want) : [];
@@ -31487,22 +31490,27 @@ function hrQuickPlan(sites, cands, used){
      asker to its part-time weeks, and to none once those are taken (no
      place with no hours either). */
   const ptBar = c => shop && f.ex.includes(HR_PT) && hrAsksPt(c);
-  const barred = new Set();
   for(const c of out.matches){
     if(placed.size >= q.n || !open.length) break;
-    if(ptBar(c) && !open.some(x => x.w.band === "part")){ barred.add(c.id); continue; }
+    if(ptBar(c) && !open.some(x => x.w.band === "part")) continue;
     const fit = open.filter(x => hrFits(c, x) && !(ptBar(c) && x.w.band !== "part"));
     if(!fit.length){
-      const why = [...new Set(open.filter(x => !(ptBar(c) && x.w.band !== "part")).flatMap(x => hrFails(c, x)))];
-      if(why.length) held.set(c.id, why);
+      /* Never empty: a part-time asker reaches here only with a part week
+         still open, which their demands broke. */
+      held.set(c.id, [...new Set(open.filter(x => !(ptBar(c) && x.w.band !== "part")).flatMap(x => hrFails(c, x)))]);
       continue;
     }
     const wk = hrPickWeek(c, fit);
     open.splice(open.indexOf(wk), 1);
     placed.set(c.id, wk);
   }
+  /* With no part week left open, a part-time asker not placed gets no place
+     with no hours at such a shop, held back or not; they are no match here. */
+  const partLeft = open.some(x => x.w.band === "part");
+  const out1 = c => !placed.has(c.id) && ptBar(c) && !partLeft;
+  out.leftOut = out.matches.filter(out1).length;
   let left = q.n - placed.size;
-  out.picks = out.matches.filter(c => placed.has(c.id) || (!barred.has(c.id) && !(ptBar(c) && !open.length) && left > 0 && left-- > 0)).map(c => {
+  out.picks = out.matches.filter(c => placed.has(c.id) || (!out1(c) && left > 0 && left-- > 0)).map(c => {
     const wk = placed.get(c.id) || null;
     if(wk && hold){ wk.who = {type: "quick", c}; out.held++; }
     if(hold) used.set(c.id, S);
@@ -31527,7 +31535,8 @@ function hrQuickHtml(m){
   const Q = hrQuickModel(m), q = Q.q;
   const l = gwLink(), off = !l || !(l.writes || []).includes("hire");
   const kind = S => { const k = HR_KIND_WORDS[S.site.kind]; return S.b && S.b.type ? S.b.type : k ? k[0] : S.site.kind; };
-  const k = Q.picks.length, n = Q.matches.length;
+  /* The matches that can be picked: not a part-time asker the shop's default leaves out. */
+  const k = Q.picks.length, n = Q.matches.length - (Q.leftOut || 0);
   const match = !Q.ready ? ""
     : !n ? `<p class="hs-match none">${tt("co.hire.quick.none", "Nobody matches.")}</p>`
     : `<details class="hs-match" data-hq-list${q.open ? " open" : ""}><summary>${
