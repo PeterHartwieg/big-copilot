@@ -3032,4 +3032,68 @@ test('across sites, a candidate goes to the first site with a week of their own 
   const m = await model(page);
   assert.deepEqual(m.weeks[0], [G, 'demand', ['hire:c1']]);
   assert.equal(m.weeks[2][2][0], 'hire:c2');
+  // Bare's cleaning week goes to its cleaner, as before.
+  assert.deepEqual(m.weeks[2], [B, 'open', ['hire:c2', 'hire:k1']]);
+});
+
+// --- review round 12 --------------------------------------------------------------------
+
+test('rank wins over a desk: a hand-ticked candidate takes the 36 h week, not the short one with their chair', async (t) => {
+  const d = JSON.parse(payload);
+  d.hiring.sites.find(s => s.key === G).plans.demand.hireWeeks = [
+    {skill: CS, hours: 6, days: 1, band: 'short', slots: [slot(2, 3, 8, 14, 'REG-G2')]},
+    {skill: CS, hours: 36, days: 3, band: 'full', slots: [slot(4, 5, 8, 20, 'REG-G'), slot(5, 6, 8, 20, 'REG-G'), slot(6, 0, 8, 20, 'REG-G')]}];
+  d.hiring.sites.find(s => s.key === G).stations = {'REG-G2': ['ba:jobdemand_chair']};
+  d.hiring.demandKinds['ba:jobdemand_chair'] = 'station';
+  d.candidates.find(c => c.id === 'c2').demands = ['ba:jobdemand_chair'];
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
+  await page.evaluate(() => { hrUi.force.add('c2'); });
+  assert.deepEqual((await model(page)).weeks[0], [G, 'demand', [null, 'hire:c2']]);
+});
+
+test('rank wins over a desk: someone asking for no contract leaves the 30 h week with their chair to a full-timer', async (t) => {
+  const d = fullPart();
+  d.hiring.sites.find(s => s.key === G).plans.demand.hireWeeks[0].slots.forEach(sl => { sl.station = 'REG-G2'; });
+  d.hiring.sites.find(s => s.key === G).stations = {'REG-G2': ['ba:jobdemand_chair']};
+  d.hiring.demandKinds['ba:jobdemand_chair'] = 'station';
+  d.candidates.find(c => c.id === 'c2').demands = ['ba:jobdemand_chair'];
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
+  assert.deepEqual((await model(page)).weeks[0], [G, 'demand', ['hire:c1', 'hire:c2']]);
+});
+
+test('the Change picks sheet counts the places the role row counts', async (t) => {
+  const d = JSON.parse(payload);
+  d.hiring.sites.find(s => s.key === G).plans.demand.hireWeeks[0] =
+    {skill: CS, hours: 6, days: 1, band: 'short', slots: [slot(2, 3, 8, 14, 'REG-G')]};
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
+  const cells = await page.locator(`#hsOpen tr[data-hr-role="${CS}"] td`).allTextContents();
+  const open = Number(cells[1]), own = cells[2] === '–' ? 0 : Number(cells[2]);
+  await page.locator(`button[data-hr-open="${CS}"]`).click();
+  const sheet = await page.locator('.hs-sheet').first().textContent();
+  assert.match(sheet, new RegExp(`Picked[0-9]+ of ${open - own}(?![0-9])`));
+});
+
+test('Quick hire at a shop: a part-timer past the part week is left out, never given a place with no hours ahead of others', async (t) => {
+  // Bram and Ada ask for part-time, Cleo for full-time; Gifts has one 20 h
+  // part week and one 30 h full week. Three to hire: Bram takes the part
+  // week, Cleo the full one, and the third place goes to the next match,
+  // not to Ada with no hours.
+  const d = fullPart();
+  d.candidates.find(c => c.id === 'c1').demands = ['ba:jobdemand_parttime'];
+  d.candidates.find(c => c.id === 'c3').demands = ['ba:jobdemand_fulltime'];
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
+  const box = page.locator('#hsQuick');
+  await box.locator('[data-hq-role]').selectOption(CS);
+  await box.locator('[data-hq-site]').selectOption(G);
+  await box.locator('[data-hq-more]').click();
+  await box.locator('[data-hq-more]').click();
+  const picks = (await quick(page)).picks;
+  assert.deepEqual(picks.slice(0, 2), [['c2', 20], ['c3', 30]]);
+  assert.equal(picks.length, 3);
+  assert.notEqual(picks[2][0], 'c1');
+  assert.doesNotMatch(await box.locator('.hs-match').textContent(), /no open week fits\s*(<|$)/);
 });

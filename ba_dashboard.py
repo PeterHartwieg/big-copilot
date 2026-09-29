@@ -30255,10 +30255,11 @@ const hrWants = c => hrAsksPt(c) ? "part" : (c.demands || []).includes("ba:jobde
    order). The fewest people for the hours: the first site in list order with
    a week of the contract they ask for (a part-timer a "part" week, a
    full-timer a "full" one), else the first site with any; there, a week of
-   their own contract, else any, a week too short for any contract last
-   (only one ticked in by hand gets one) and, for someone who asks for
-   neither, a 30 h week (which either contract may take) after the others;
-   then a desk that meets their desk demands. */
+   their own contract, else any; among those the best tier first (a week
+   too short for any contract last, which only one ticked in by hand gets,
+   and for someone who asks for neither a 30 h week, which either contract
+   may take, after the others), and only within that tier a desk that meets
+   their desk demands. */
 function hrPickWeek(c, pool){
   const want = hrWants(c);
   const own = want ? pool.filter(x => x.w.band === want) : [];
@@ -30267,7 +30268,8 @@ function hrPickWeek(c, pool){
   const here = pool.filter(x => x.S === S).map((x, i) => [x, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(e => e[0]);
   const pref = want ? here.filter(x => x.w.band === want) : [];
   const set = pref.length ? pref : here;
-  return set.find(x => !hrDeskMiss(c.demands, S, x.w).length) || set[0];
+  const top = set.filter(x => rank(x) === rank(set[0]));
+  return top.find(x => !hrDeskMiss(c.demands, S, x.w).length) || set[0];
 }
 /* The schedule demands a person's week `x` ({w, S}) breaks, and whether it
    breaks none: the hard filter automatic picks and moves go through. */
@@ -30898,7 +30900,7 @@ function hrReLine(g){
 function hrRoleRow(m, r, lines){
   const sites = [];
   r.weeks.forEach(x => { if(!sites.includes(x.S)) sites.push(x.S); });
-  const hires = r.weeks.filter(x => x.who && x.who.type === "hire" && x.w.band !== "short");
+  const hires = r.weeks.filter(x => x.who && x.who.type === "hire");
   const overs = m.overs.filter(o => o.skill === r.skill);
   const people = [...hires.map(x => x.who.c), ...overs.map(o => o.c)];
   const bill = hires.reduce((n, x) => n + Number(x.who.c.wage || 0) * Number(x.w.hours || 0) / 7, 0);
@@ -30958,7 +30960,6 @@ function hrOpenHtml(m){
     const idle = hrIdleHtml(m);
     return `${head}${idle ? "" : `<p class="hs-note">Every planned site has its people.</p>`}${stray ? `<div class="hs-scroll">${stray}</div>` : ""}${idle}${facts}`;
   }
-  const own = m.roles.reduce((n, r) => n + r.moved, 0);
   return `${head}${hrFbar("", f, match ? `<b>${hrNum(match)}</b> match` : "")}
     <div class="hs-scroll"><table class="hs-t hs-roles"><thead><tr><th class="l">Role</th><th class="opt">Open</th><th class="opt">Own staff</th><th>New hires</th><th>Stays open</th><th class="opt">Wages/day</th><th><span class="gw-sr">Change picks</span></th></tr></thead>
     <tbody>${m.roles.map(r => hrRoleRow(m, r, lines(r.skill))).join("")}${stray ? `<tr class="hs-subrow"><td class="l" colspan="7">${stray}</td></tr>` : ""}</tbody></table></div>
@@ -31160,9 +31161,12 @@ function hrCandRow(m, r, c){
 }
 const HR_CAND_HEAD = `<thead><tr><th class="l" style="width:34px"><span class="gw-sr">Pick</span></th><th class="l">Candidate</th><th class="l">Skill</th><th>Wage/h</th><th class="l">Goes to</th><th class="l opt">Asks for</th><th>Expires in</th></tr></thead>`;
 function hrSheetHtml(m, r){
-  const need = r.weeks.length - r.moved;
+  /* The places hires fill, as the role row counts them: no week too short
+     for any contract, none a reassign takes. */
+  const places = r.weeks.filter(x => x.w.band !== "short" && !(x.who && x.who.type === "move"));
+  const need = places.length;
   const sites = [];
-  r.weeks.forEach(x => { if(x.who && x.who.type === "move") return; const s = sites.find(y => y.S === x.S); if(s) s.n++; else sites.push({S: x.S, n: 1}); });
+  places.forEach(x => { const s = sites.find(y => y.S === x.S); if(s) s.n++; else sites.push({S: x.S, n: 1}); });
   const own = !!hrFilters().roles[r.skill];
   /* The filter as it applies here: the company's Part-time shows only where
      it bars a week of this role (a shop's). */
@@ -31479,18 +31483,26 @@ function hrQuickPlan(sites, cands, used){
      a site with no plan. The picks are listed best first. */
   const placed = new Map();  // candidate id -> the plan week they take
   const held = new Map();    // candidate id -> the demands no open week met
+  /* As Open places: at a shop, the Part-time default keeps a part-time
+     asker to its part-time weeks, and to none once those are taken (no
+     place with no hours either). */
+  const ptBar = c => shop && f.ex.includes(HR_PT) && hrAsksPt(c);
+  const barred = new Set();
   for(const c of out.matches){
     if(placed.size >= q.n || !open.length) break;
-    /* As Open places: at a shop, the Part-time default keeps a part-time
-       asker off its full-time weeks. */
-    const fit = open.filter(x => hrFits(c, x) && !(shop && f.ex.includes(HR_PT) && hrAsksPt(c) && x.w.band !== "part"));
-    if(!fit.length){ held.set(c.id, [...new Set(open.flatMap(x => hrFails(c, x)))]); continue; }
+    if(ptBar(c) && !open.some(x => x.w.band === "part")){ barred.add(c.id); continue; }
+    const fit = open.filter(x => hrFits(c, x) && !(ptBar(c) && x.w.band !== "part"));
+    if(!fit.length){
+      const why = [...new Set(open.filter(x => !(ptBar(c) && x.w.band !== "part")).flatMap(x => hrFails(c, x)))];
+      if(why.length) held.set(c.id, why);
+      continue;
+    }
     const wk = hrPickWeek(c, fit);
     open.splice(open.indexOf(wk), 1);
     placed.set(c.id, wk);
   }
   let left = q.n - placed.size;
-  out.picks = out.matches.filter(c => placed.has(c.id) || (left > 0 && left-- > 0)).map(c => {
+  out.picks = out.matches.filter(c => placed.has(c.id) || (!barred.has(c.id) && !(ptBar(c) && !open.length) && left > 0 && left-- > 0)).map(c => {
     const wk = placed.get(c.id) || null;
     if(wk && hold){ wk.who = {type: "quick", c}; out.held++; }
     if(hold) used.set(c.id, S);
