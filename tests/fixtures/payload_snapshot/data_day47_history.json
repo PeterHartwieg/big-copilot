@@ -2561,7 +2561,7 @@
      {
       "d": 2,
       "f": 0,
-      "p": null,
+      "p": 0,
       "s": 0,
       "t": 12
      },
@@ -2694,7 +2694,7 @@
      {
       "d": 6,
       "f": 12,
-      "p": 0,
+      "p": null,
       "s": 1,
       "t": 24
      }
@@ -2860,7 +2860,7 @@
      {
       "d": 1,
       "f": 6,
-      "p": null,
+      "p": 0,
       "s": 0,
       "t": 14
      },
@@ -2937,7 +2937,7 @@
      {
       "d": 6,
       "f": 6,
-      "p": 0,
+      "p": null,
       "s": 1,
       "t": 14
      }
@@ -3519,24 +3519,24 @@
           "t": 12
          },
          {
+          "d": 3,
+          "f": 12,
+          "shift": 14,
+          "station": "MACHINEone",
+          "t": 24
+         },
+         {
           "d": 4,
           "f": 0,
-          "shift": 16,
-          "station": "MACHINEone",
+          "shift": 17,
+          "station": "MACHINEtwo",
           "t": 12
          },
          {
           "d": 5,
           "f": 0,
-          "shift": 20,
-          "station": "MACHINEone",
-          "t": 12
-         },
-         {
-          "d": 6,
-          "f": 0,
-          "shift": 24,
-          "station": "MACHINEone",
+          "shift": 21,
+          "station": "MACHINEtwo",
           "t": 12
          }
         ]
@@ -3569,10 +3569,10 @@
           "t": 12
          },
          {
-          "d": 3,
+          "d": 6,
           "f": 0,
-          "shift": 13,
-          "station": "MACHINEtwo",
+          "shift": 24,
+          "station": "MACHINEone",
           "t": 12
          }
         ]
@@ -3605,11 +3605,11 @@
           "t": 24
          },
          {
-          "d": 3,
-          "f": 12,
-          "shift": 14,
-          "station": "MACHINEone",
-          "t": 24
+          "d": 6,
+          "f": 0,
+          "shift": 25,
+          "station": "MACHINEtwo",
+          "t": 12
          }
         ]
        },
@@ -3641,10 +3641,10 @@
           "t": 24
          },
          {
-          "d": 3,
+          "d": 6,
           "f": 12,
-          "shift": 15,
-          "station": "MACHINEtwo",
+          "shift": 26,
+          "station": "MACHINEone",
           "t": 24
          }
         ]
@@ -3663,40 +3663,11 @@
           "t": 12
          },
          {
-          "d": 4,
-          "f": 0,
-          "shift": 17,
+          "d": 3,
+          "f": 12,
+          "shift": 15,
           "station": "MACHINEtwo",
-          "t": 12
-         },
-         {
-          "d": 5,
-          "f": 0,
-          "shift": 21,
-          "station": "MACHINEtwo",
-          "t": 12
-         },
-         {
-          "d": 6,
-          "f": 0,
-          "shift": 25,
-          "station": "MACHINEtwo",
-          "t": 12
-         }
-        ]
-       },
-       {
-        "band": "full",
-        "days": 4,
-        "hours": 48,
-        "skill": "ba:skill_factoryworker",
-        "slots": [
-         {
-          "d": 2,
-          "f": 0,
-          "shift": 8,
-          "station": "MACHINEone",
-          "t": 12
+          "t": 24
          },
          {
           "d": 4,
@@ -3711,12 +3682,41 @@
           "shift": 22,
           "station": "MACHINEone",
           "t": 24
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_factoryworker",
+        "slots": [
+         {
+          "d": 3,
+          "f": 0,
+          "shift": 13,
+          "station": "MACHINEtwo",
+          "t": 12
+         },
+         {
+          "d": 4,
+          "f": 0,
+          "shift": 16,
+          "station": "MACHINEone",
+          "t": 12
+         },
+         {
+          "d": 5,
+          "f": 0,
+          "shift": 20,
+          "station": "MACHINEone",
+          "t": 12
          },
          {
           "d": 6,
           "f": 12,
-          "shift": 26,
-          "station": "MACHINEone",
+          "shift": 27,
+          "station": "MACHINEtwo",
           "t": 24
          }
         ]
@@ -3751,9 +3751,9 @@
           "t": 14
          },
          {
-          "d": 1,
+          "d": 2,
           "f": 6,
-          "shift": 3,
+          "shift": 5,
           "station": "MACHINEtwo",
           "t": 14
          },
@@ -3772,10 +3772,10 @@
           "t": 14
          },
          {
-          "d": 5,
+          "d": 6,
           "f": 6,
-          "shift": 11,
-          "station": "MACHINEtwo",
+          "shift": 12,
+          "station": "MACHINEone",
           "t": 14
          }
         ]
@@ -3796,22 +3796,22 @@
          {
           "d": 1,
           "f": 6,
-          "shift": 2,
-          "station": "MACHINEone",
+          "shift": 3,
+          "station": "MACHINEtwo",
           "t": 14
          },
          {
-          "d": 2,
+          "d": 5,
           "f": 6,
-          "shift": 5,
+          "shift": 11,
           "station": "MACHINEtwo",
           "t": 14
          },
          {
           "d": 6,
           "f": 6,
-          "shift": 12,
-          "station": "MACHINEone",
+          "shift": 13,
+          "station": "MACHINEtwo",
           "t": 14
          }
         ]
@@ -8518,14 +8518,14 @@
        "skill": "ba:skill_customerservice"
       }
      ],
-     "hoursUncovered": 120,
+     "hoursUncovered": 132,
      "people": 3
     },
     "bench": [],
     "cost": {
      "current": 1260.0,
      "currentCover": 0.0,
-     "weekly": 864.0
+     "weekly": 648.0
     },
     "daysMeasured": 14,
     "daysNeeded": 9,
@@ -8593,7 +8593,7 @@
      {
       "d": 0,
       "f": 0,
-      "p": 0,
+      "p": null,
       "s": 0,
       "t": 12
      },
@@ -9749,14 +9749,14 @@
        "skill": "ba:skill_customerservice"
       }
      ],
-     "hoursUncovered": 204,
+     "hoursUncovered": 216,
      "people": 5
     },
     "bench": [],
     "cost": {
      "current": 3192.0,
      "currentCover": 1176.0,
-     "weekly": 2184.0
+     "weekly": 2016.0
     },
     "daysMeasured": 14,
     "daysNeeded": 9,
@@ -9832,14 +9832,6 @@
     "placed": [
      {
       "demand": "ba:jobdemand_freeweekends",
-      "from": 12,
-      "label": "Free weekends",
-      "p": 0,
-      "to": 24,
-      "wd": 1
-     },
-     {
-      "demand": "ba:jobdemand_freeweekends",
       "from": 0,
       "label": "Free weekends",
       "p": 0,
@@ -9861,6 +9853,14 @@
       "p": 0,
       "to": 12,
       "wd": 4
+     },
+     {
+      "demand": "ba:jobdemand_freeweekends",
+      "from": 12,
+      "label": "Free weekends",
+      "p": 0,
+      "to": 24,
+      "wd": 5
      }
     ],
     "shifts": [
@@ -9868,7 +9868,7 @@
       "d": 0,
       "f": 0,
       "k": "clean",
-      "p": 2,
+      "p": null,
       "s": 1,
       "t": 12
      },
@@ -9920,7 +9920,7 @@
      {
       "d": 1,
       "f": 12,
-      "p": 0,
+      "p": null,
       "s": 0,
       "t": 24
      },
@@ -10040,7 +10040,7 @@
      {
       "d": 5,
       "f": 12,
-      "p": null,
+      "p": 0,
       "s": 0,
       "t": 24
      },

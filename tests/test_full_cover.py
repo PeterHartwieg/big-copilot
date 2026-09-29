@@ -637,8 +637,9 @@ class AddPeopleTest(unittest.TestCase):
     def test_a_hand_worked_site(self):
         row = self.row()
         add = row["addPeople"]
-        # "a" works 48 of the register's 168 hours; the bench cleaner 48 of the
-        # mop's. The rest is ten twelve-hour entries each, three hires each.
+        # "a" works at least 30 of the register's 168 hours (48 of them before
+        # a hire is lifted to a full week out of the rest); the bench cleaner
+        # 48 of the mop's. The rest is three hires each.
         self.assertEqual([(r["id"], r["name"], r["skill"], r["role"]) for r in add["assign"]],
                          [("b", "B", CLEANING, "Cleaning")])
         self.assertEqual(row["people"][add["assign"][0]["p"]]["id"], "b")
@@ -649,7 +650,8 @@ class AddPeopleTest(unittest.TestCase):
         self.assertEqual(add["people"], 7)
         own = sum(hours(s) for s in row["shifts"] if s["p"] is not None
                   and row["people"][s["p"]]["id"] == "a")
-        self.assertEqual(own, 48)
+        self.assertGreaterEqual(own, FULL_TIME[0])
+        self.assertLessEqual(own, 48)
         self.assertEqual(add["hoursUncovered"], 2 * WEEK - own)
 
     def test_the_count_agrees_with_the_plan_in_both_plans(self):

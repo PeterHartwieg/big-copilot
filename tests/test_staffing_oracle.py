@@ -359,13 +359,30 @@ def shop_plans(row: dict):
         yield "open", row["openCover"], row["openCover"].get("_hire")
 
 
-def one_business_each(rows: list) -> list:
-    """Anybody with a week at two sites of one save (the bench is shared)."""
+def one_business_each(payload: dict) -> list:
+    """Anybody with a week at two sites of one save (the bench is shared).
+
+    Every site's week that holds people back from the others: a shop's the
+    plan it is on by default (the board's spOpenFirst(): the open-hours plan
+    without complete data or with nobody working there, the demand plan
+    otherwise; full cover and the other plan may draw on the bench without
+    holding anybody), an office's, and a factory's in both sizings.
+    """
+    staff = {b["key"]: b.get("staff") for b in payload.get("businesses") or ()}
     seen = collections.defaultdict(set)
-    for row in rows:
-        for _variant, plan, _hire in shop_plans(row):
-            for pid in week_of(row, plan["shifts"]):
-                seen[pid].add(row["key"])
+    weeks = []
+    for row in payload.get("staffing") or ():
+        if row.get("failed"):
+            continue
+        open_ = row.get("openCover")
+        on = open_ if open_ and (not open_.get("complete") or not staff.get(row["key"])) else row
+        weeks.append((row, on))
+    weeks += [(row, row) for row in payload.get("officeStaffing") or () if not row.get("failed")]
+    for rows in (payload.get("factoryStaffing") or {}).values():
+        weeks += [(row, row) for row in rows if not row.get("failed")]
+    for row, plan in weeks:
+        for pid in week_of(row, plan["shifts"]):
+            seen[pid].add(row["key"])
     return [("site", f"{pid} works at {sorted(keys)}") for pid, keys in seen.items() if len(keys) > 1]
 
 
@@ -707,8 +724,7 @@ class OracleSnapshotTest(unittest.TestCase):
                                               coverage=False, own_all=False)
                                      + factory_cover(row), [], label)
                     checked += 1
-            self.assertEqual(one_business_each(
-                [r for r in payload["staffing"] if not r.get("failed")]), [], label)
+            self.assertEqual(one_business_each(payload), [], label)
         self.assertGreater(checked, 5)
 
 

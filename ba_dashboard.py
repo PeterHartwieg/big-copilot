@@ -7314,6 +7314,11 @@ HIRE_ORDERS = (
     lambda s: (s["wd"], -(s["to"] - s["from"]), s["from"], str(s["station"])),
 )
 HIRE_PACKINGS = tuple((order, balanced) for balanced in (False, True) for order in HIRE_ORDERS)
+# Tried before those: the weekend's lines dealt first, by the clock, so they
+# land on as few hires as the count allows and the rest keep their weekends
+# free, which a good share of candidates ask for.
+WEEKEND_FIRST = (lambda s: (s["wd"] not in WEEKEND_WEEKDAYS, s["wd"], s["from"], s["to"],
+                            str(s["station"])), False)
 
 
 def _deal_hires(rows: list, hires: list, state: dict, here: dict, order, balanced) -> None:
@@ -7558,7 +7563,8 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
         left = {row["skill"] for row in rows if row["employee"] is None}
         return hires, rows, left
 
-    tries = [(packing, spread) for spread in (False, True) for packing in HIRE_PACKINGS]
+    tries = [(packing, spread) for spread in (False, True)
+             for packing in (WEEKEND_FIRST,) + HIRE_PACKINGS]
     while True:
         for packing, spread in tries:
             hires, rows, left = attempt(packing, spread)
@@ -9731,7 +9737,10 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
     # The people already working here whom a plan could cut short of the week
     # they have (_worse_off()): those holding an hours band or a day count,
     # with a week here now, in a role this plan staffs.
-    now = _weeks_now(current, pool)
+    # Only the hours on stations this plan owns: a factory's delivery driver
+    # entries, say, are no part of the week it plans or writes.
+    owned = {s["id"] for s in grid["stations"]} | {post["id"] for post in cover_posts}
+    now = _weeks_now([row for row in current or () if row["station"] in owned], pool)
     planned_roles = {(slot["skill"], slot["kind"]) for slot in slots + cover_slots}
     protected = [
         person for person in pool
@@ -9739,7 +9748,7 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
         and any(_usable(person, skill, kind) for skill, kind in planned_roles)
     ]
     start = {pid: _copy_state(state[pid]) for pid in before} if protected else None
-    pins, kept, rounds, allowed = [], [], 0, {}
+    pins, kept, allowed = [], [], {}
     while True:
         here = fresh_here()
         shifts = _fill_week(slots, cover_slots, pool, state, here, pins, allowed)
@@ -9749,17 +9758,6 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
             if person["id"] not in kept
             and _worse_off(person, state[person["id"]], before[person["id"]], now[person["id"]])
         ]
-        if worse and rounds:
-            # Kept weeks already pushed somebody else short: the site holds
-            # fewer hours than its people's weeks, so everybody it now gives
-            # some hours but fewer than they have is kept too, rather than
-            # found one round at a time.
-            worse += [
-                person["id"] for person in protected
-                if person["id"] not in kept and person["id"] not in worse
-                and 0 < state[person["id"]]["hours"] - before[person["id"]][0]
-                < now[person["id"]]["hours"]
-            ]
         if not worse:
             break
         # Keep their week as it stands and plan everybody else round it, from
@@ -9767,7 +9765,6 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
         # test is asked again until nobody new is cut short.
         for pid, entry in start.items():
             state[pid] = _copy_state(entry)
-        rounds += 1
         kept += worse
         role_of = {s["id"]: _station_role(s) for s in grid["stations"]}
         staffed_roles = {role_of.get(slot["station"]) for slot in slots}
