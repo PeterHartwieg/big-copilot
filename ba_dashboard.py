@@ -7029,6 +7029,9 @@ def _placement_rank(person: dict, state: dict, slot: dict, here: dict) -> tuple:
     member, the cheaper wage, and the employee id. The last one is not cosmetic:
     a roster that reshuffles names between two runs of the same save is unusable,
     because the player is halfway through typing it.
+
+    Before all of it, a hire (_placeholder()) after every real person: a line
+    goes to a hire only where nobody the site has, or the bench, can take it.
     """
     floor = person["band"][0] if person["band"] else 0
     # A four- or five-day week is exactly four or five, so somebody still short
@@ -9476,7 +9479,7 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
             # still short: the fewest names is what broke the rule.
             here["rostered"].update(person["id"] for person in protected)
         shifts = _fill_week(slots, cover_slots, pool, state, here, pins, allowed)
-        if not rounds and _left_off(protected, here["rostered"], pool):
+        if protected and not rounds and _left_off(protected, here["rostered"], pool):
             worse = True  # settling cannot change it: no need to settle it
         else:
             _repair_week(shifts, pool, state, here["rostered"], before)
@@ -9518,9 +9521,9 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
         by_id = {person["id"]: person for person in pool}
         pins = _pin_weeks(kept, now, stations_ok, open_hours, by_id)
 
-    # e. The lines nobody here may work: the same week re-placed with hires in
-    # the pool, only where there are such lines, so a week that needs nobody
-    # new is exactly the week above (_place_hires()).
+    # e. The lines nobody here may work: offered again with hires in the pool
+    # and the week settled for them, only where there are such lines, so a
+    # week that needs nobody new is exactly the week above (_place_hires()).
     hire_weeks = {}
     if hires and any(shift["employee"] is None for shift in shifts):
         shifts, hire_weeks = _place_hires(shifts, pool, state, here, before)
@@ -9572,7 +9575,7 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
     # plan leaves short of what their contract demands is a jobdemand warning
     # the player is about to earn, so it is said rather than bent away.
     # The hires' weeks are kept per role (hireWeeks, for the Staff page): one
-    # week per person hired. `hire` can only exceed the packing where `min -
+    # week per person hired. `hire` can only exceed those weeks where `min -
     # have` says so with nothing left open, which the arithmetic rules out (the
     # people working a role's slots are all counted in its `have`); an empty
     # week pads it anyway, so the page's count and the weeks always agree.

@@ -144,7 +144,8 @@ def wanted(row: dict, plan: dict, variant: str) -> dict:
 
 
 def problems(row: dict, plan: dict, variant: str, people: dict, site: str,
-             hire: dict | None = None, coverage=True, protect=True, own_all=True) -> list:
+             hire: dict | None = None, coverage=True, protect=True, own_all=True,
+             skilled_only=False) -> list:
     """Every rule `plan` (one variant of `row`) breaks, as (kind, text); [] when it keeps them all.
 
     `people` are the contracts (contracts()); `site` the row's business key, so
@@ -153,7 +154,8 @@ def problems(row: dict, plan: dict, variant: str, people: dict, site: str,
     `own_all` false owes a report only for the site's own people the row
     names at all: a factory's week leaves out whom its count search leaves
     spare, and says nothing of them (their hours now are none, or they would
-    be in it).
+    be in it). `skilled_only` owes it only for those holding a skill of the
+    row's stations: an office plans its professionals and nobody else there.
     """
     out = []
     shifts = plan["shifts"]
@@ -205,8 +207,10 @@ def problems(row: dict, plan: dict, variant: str, people: dict, site: str,
                 out.append(("day", f"{pid} {len(busy)} h on day {wd}"))
     # Reported infeasibility, both ways: owed and said.
     named = {p["id"] for p in row["people"]}
+    skills = {st.get("skill") for st in row["stations"]}
     here = {pid for pid, rule in people.items()
-            if rule["site"] == site and (own_all or pid in named)} | set(weeks)
+            if rule["site"] == site and (own_all or pid in named)
+            and (not skilled_only or rule["skills"] & skills)} | set(weeks)
     owed_hours = {pid: (float(weeks[pid]["hours"] if pid in weeks else 0), people[pid]["band"][0])
                   for pid in here if pid in people and people[pid]["band"]
                   and (weeks[pid]["hours"] if pid in weeks else 0) < people[pid]["band"][0]}
@@ -487,7 +491,7 @@ class OracleSweepTest(unittest.TestCase):
             people = contracts({"EmployeeInstances": {"$items": crew}})
             for row in rows:
                 found = problems(row, row, "office", people, row["key"], row.get("_hire"),
-                                 coverage=False)
+                                 coverage=False, skilled_only=True)
                 self.assertEqual(found, [], n)
                 self.assertEqual(office_cover(row), [], n)
 
@@ -608,7 +612,8 @@ class OracleSnapshotTest(unittest.TestCase):
                     continue
                 hire = (hiring.get(row["key"]) or {"plans": {}})["plans"].get("office")
                 self.assertEqual(problems(row, row, "office", people, row["key"], hire,
-                                          coverage=False) + office_cover(row), [], label)
+                                          coverage=False, skilled_only=True)
+                                 + office_cover(row), [], label)
                 checked += 1
             for mode, rows in (payload.get("factoryStaffing") or {}).items():
                 for row in rows:
