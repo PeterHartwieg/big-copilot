@@ -234,16 +234,17 @@ the map.
   - *Quick hire* hires the best matches for one role at any site (headquarters and
     warehouses included), from the candidates the open places have not picked. At a site
     with a plan they get the plan's open weeks in that role that meet their schedule
-    demands (a match no open week fits is passed over); past those, and at a site with no
-    plan, they join with no hours. The site's week stays as the game has it: where a plan
+    demands, best match first; the places left then go, best match first, to everyone else
+    (a match no open week fits included, and named so) with no hours, as at a site with no plan. The site's week stays as the game has it: where a plan
     entry meets hours already set there, only its parts that meet nothing and run 4 hours
     or more are added, and a warning is judged on the hours they keep.
   - *Before any write* (a site's Staffing, Staff needs, Quick hire), every week it would
     send is checked person by person: at most 12 hours an entry and a day, one entry at a
     time, the hours band (at most 50 without one), an exact four or five days, free
     weekends, the hours kept free and no cleaning. Whatever is still broken is named in the
-    confirm, one line a person; nothing is refused for it. An office's write, which adds
-    the office default to the week as it stands, leaves out an entry that would break one.
+    confirm, one line a break, including someone the write leaves with no hours at all; nothing is
+    refused for it. An office's write, which adds the office default to the week as it
+    stands, leaves out an entry that would break one and names the hours it left out.
 
   *Payroll* names two wage figures:
   "Wages a day" is every hourly wage times its assigned weekly hours over seven,
@@ -531,9 +532,12 @@ thin gets no serving hours at all, rather than a guess.
 
 **Only a measured hour is a target.** The board never presents a censored hour as a number
 to aim at, and never prints the arrival ceiling as demand: the ceiling is the game's own
-arrivals formula, and on a clothing store it over-predicts the customers actually served
-four times over, because it counts arrivals the game then turns away for having nothing
-they want to buy. It is carried to bound a censored hour from above, and for nothing else.
+arrivals formula, and an arrival is lost when the hour's staffed stations are full and buys
+nothing when the shop holds nothing they want. For a game started at build 2847 or later,
+which is every new game, it is sized off the building's customer capacity; an older game
+sizes it off the square metres times the highest sales ratio, in the game's own item data,
+among the primary products on the shelves. It is carried to bound a censored hour from
+above, and for nothing else.
 
 **The entries.** Each role's stations are manned from the largest throughput down, the hours
 they are wanted are joined into runs, and each run is cut into the fewest entries of at most
