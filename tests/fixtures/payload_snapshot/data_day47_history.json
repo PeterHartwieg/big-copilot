@@ -958,6 +958,7 @@
    "customerRhythm": null,
    "customers": 192,
    "daysOpen": 44,
+   "hasTraded": true,
    "key": "ba:street_eighthstreet#5",
    "licensing": 0.0,
    "lines": [
@@ -1267,6 +1268,7 @@
    "customerRhythm": null,
    "customers": 70,
    "daysOpen": 44,
+   "hasTraded": true,
    "key": "ba:street_broadwaystreet#19",
    "licensing": 0.0,
    "lines": [
@@ -1547,6 +1549,7 @@
    "customerRhythm": null,
    "customers": 0,
    "daysOpen": 44,
+   "hasTraded": false,
    "key": "ba:street_eighthavenue#4",
    "licensing": 0.0,
    "lines": [
@@ -1761,6 +1764,7 @@
    "customerRhythm": null,
    "customers": 0,
    "daysOpen": 44,
+   "hasTraded": false,
    "key": "ba:street_eighthavenue#8",
    "licensing": 0.0,
    "lines": [
@@ -16895,6 +16899,20 @@
   "nextImportDay": 50,
   "nextImportWeekday": "Monday",
   "roundTo": 10,
+  "routed": [
+   [
+    0,
+    "ba:itemname_beer"
+   ],
+   [
+    1,
+    "ba:itemname_cheapgift"
+   ],
+   [
+    3,
+    "ba:itemname_water"
+   ]
+  ],
   "shops": [
    {
     "from": null,

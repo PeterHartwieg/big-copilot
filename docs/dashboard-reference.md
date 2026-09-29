@@ -922,25 +922,33 @@ the loan.
 **Until opening** (step 5) is a checklist of seven rows for the plan's building: Lease,
 Furniture, Staff for the opening hours, Uniforms, Customer demands, Marketing and
 Logistics. A row reads done only when the save proves it; whatever the save cannot say stays
-a to-do with "check in the game". Before the save shows a business of the planned type at
-that address every row but Lease is a to-do (Furniture is judged from `openStore.built`, and
-a business of another type at the address is named in a note and ignored).
+a to-do with "check in the game". Lease ticks only once a business of the planned type stands
+at the address: a rented address that is still vacant, or holds another type, reads "Rented"
+and stays a to-do (the other type also gets a note, and its business is ignored). Before that
+business exists every row is a to-do (Furniture is judged from `openStore.built`).
 
 - **Furniture**: the required items placed (`openStore.built.req`); a requirement that names
-  a product is met by the product being available to the player or held by a placed display.
-- **Staff**: done only with opening hours set (BizMan), somebody hired and, on a demand plan,
-  sales to size it by. A shop with no hours or a never-traded shop is a to-do. Hire weeks
-  filled by moving people offer **Hire n · move m**, the full staff review for this site;
-  with nobody to hire the row says to ask a headhunter.
+  a product (a hairdresser's shelf of hair-care products) is met only by the product being
+  available to the player or by cargo of it on a placed display; an empty shelf does not
+  count. The "any primary product" requirement still counts a display that can hold one.
+- **Staff**: done only with opening hours set (BizMan), somebody hired, hours on the schedule
+  (`stationShifts > 0`, and nobody assigned to the shop without hours) and, on a demand plan,
+  a trading history (`hasTraded`: any day with sales, not the last statement). A shop with no
+  hours or a never-traded shop is a to-do. Hire weeks filled by moving people offer **Hire n ·
+  move m**, the full staff review for this site; with nobody to hire the row says to ask a
+  headhunter.
 - **Uniforms**: done when the type asks for none, or staff have station hours and every role
-  has one; without hours yet it says "Set once staff have hours".
+  has one; without hours yet it says "Set once staff have hours". `stationShifts` counts only
+  hours on open days, for people on staff, the same shifts the uniform gaps look at.
 - **Customer demands**: every demand the type makes. Amenities, uniforms and seating
   (`built.seating`, any placed seat) come from the save; workout variety and any demand the
   save cannot answer stay unchecked with an in-game instruction, so the row cannot be done.
 - **Marketing**: done when a campaign is enabled (`marketingOn`), not from money spent.
-- **Logistics**: an office needs no deliveries. A shop is set up when each product on its
-  shelves that the type sells has a delivery route or an import (a logistics plan into the
-  site, or a weekly delivery); a supply status is not a route.
+- **Logistics**: an office needs no deliveries, before opening too (no factory button). A
+  shop is set up when every product the type sells, not only those already on its shelves,
+  has a delivery route: a logistics plan with a stock target above zero, or a weekly
+  wholesale contract, whatever the shop's sales rate (`supply.routed`). A graph link, a
+  zero target and a supply status are not routes.
 
 A row that needs a write has a button when the game link's `writes` lists it: **Hire N**
 opens the Staff page's hiring dialog for this site only, **Assign uniforms** the uniforms

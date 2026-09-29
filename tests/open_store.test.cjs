@@ -245,13 +245,16 @@ const line = slug => ({slug, item: slug, units: 400, rate: 20, tradeRate: 20, so
 const opened = (page, patch = {}, built = null) => page.evaluate(({site, patch, built, lines}) => {
   D.businesses.push(Object.assign({}, D.businesses[0], {key: site, status: 'retail', name: 'Liquor', neighbourhood: 'ba:neighborhood_midtown', typeSlug: 'ba:businesstype_liquorstore', staff: 0, missingAmenities: [],
     amenities: {bathroom: true, interior: true, music: true, sink: true, toiletprivacy: true}, uniformGaps: [], uniformGapSkills: [], lines,
-    marketing: 0, marketingIndex: 0, marketingOn: [], stationShifts: 0, revenue: 900, customers: 60}, patch));
+    marketing: 0, marketingIndex: 0, marketingOn: [], stationShifts: 0, revenue: 900, customers: 60, hasTraded: true}, patch));
   if(built) D.openStore.built[site] = built;
   drawOpenStore();
 }, {site: SITE, patch, built, lines: [line(BEER), line(WHISKY)]});
 const linked = (page, link = LINK) => page.evaluate(l => { SOURCE.link = () => l; drawOpenStore(); }, link);
-/* Something delivers these products into the plan's shop: a logistics plan or an import. */
-const routed = (page, slugs) => page.evaluate(({site, slugs}) => { D.supply.graph.links.push({from: 'import:ba:street_pier#1', to: site, slugs, cadence: 'weekly', paused: false}); drawOpenStore(); }, {site: SITE, slugs});
+/* A stock target above zero or a wholesale contract delivers these products into the plan's shop: supply.routed pairs, whatever it sells. */
+const routed = (page, slugs) => page.evaluate(({site, slugs}) => { const i = D.businesses.findIndex(b => b.key === site);
+  D.supply.routed = (D.supply.routed || []).concat(slugs.map(p => [i, p])); drawOpenStore(); }, {site: SITE, slugs});
+/* Every product the plan's type sells that is not a service: what Logistics has to see delivered. */
+const wanted = page => page.evaluate(() => { const M = osFacts().market || {}; return [...new Set((osType(osPlan().type).products || []).map(([p]) => p).filter(p => M[p] && !M[p].s))]; });
 const FULL = {placed: 61, req: [['pointofsales', 1, 1], ['anyprimaryproduct', 1, 1]], seating: false};
 const HIRES = {planned: true, variant: 'open', weeks: [['ba:skill_cleaning', 'hire'], ['ba:skill_customerservice', 'hire'], ['ba:skill_customerservice', 'hire'], ['ba:skill_securityguard', null]]};
 /* The hiring model stubbed as it would read with candidates for the plan's building. */
@@ -312,7 +315,7 @@ test('the rows tick themselves from the save once a business stands at the addre
   await until(page);
   await opened(page, {staff: 3, marketingOn: ['smallinternet'], stationShifts: 5}, FULL);
   await hiring(page, {...HIRES, weeks: []});
-  await routed(page, [BEER, WHISKY]);
+  await routed(page, await wanted(page));
   const r = await rows(page);
   assert.deepEqual(r.map(x => x.state), ['done', 'done', 'done', 'done', 'done', 'done', 'done']);
   assert.match(await page.locator('#osBody .os-prog').innerText(), /7 of 7/);
@@ -325,14 +328,14 @@ test('a half-done store shows what is missing', async t => {
     amenities: {bathroom: true, interior: true, music: false, sink: false, toiletprivacy: true}},
     {placed: 3, req: [['anyprimaryproduct', 1, 0], ['pointofsales', 1, 1]], seating: false});
   await hiring(page);
-  await routed(page, [BEER]);
+  await routed(page, (await wanted(page)).slice(0, 1));
   const r = await rows(page);
   assert.equal(r[0].state, 'done');
   assert.equal(r[1].state, 'part');
   assert.equal(r[3].state, 'todo');
   assert.equal(r[4].state, 'part');
   assert.equal(r[6].state, 'part');
-  assert.match(r[6].sub, /No delivery route or import for Whisky|No delivery route or import for/);
+  assert.match(r[6].sub, /No delivery route or import for/);
 });
 
 test('staff never ticks without opening hours or verified cover', async t => {
@@ -345,7 +348,7 @@ test('staff never ticks without opening hours or verified cover', async t => {
   assert.equal(r[2].state, 'todo');
   assert.match(r[2].sub, /No opening hours set yet/);
   /* a shop that has never traded, on a demand plan with no hire weeks */
-  await page.evaluate(() => { const b = D.businesses.find(x => x.key === osPlan().key); b.revenue = 0; b.customers = 0; });
+  await page.evaluate(() => { const b = D.businesses.find(x => x.key === osPlan().key); b.revenue = 0; b.customers = 0; b.hasTraded = false; });
   await hiring(page, {planned: true, variant: 'demand', weeks: []});
   r = await rows(page);
   assert.equal(r[2].state, 'todo');
@@ -355,7 +358,29 @@ test('staff never ticks without opening hours or verified cover', async t => {
   await hiring(page, {...HIRES, weeks: []});
   assert.equal((await rows(page))[2].state, 'todo');
   /* the same shop once it trades and is covered */
-  await page.evaluate(() => { const b = D.businesses.find(x => x.key === osPlan().key); b.staff = 4; b.revenue = 900; b.customers = 60; });
+  await page.evaluate(() => { const b = D.businesses.find(x => x.key === osPlan().key); b.staff = 4; b.revenue = 900; b.customers = 60; b.hasTraded = true; });
+  await hiring(page, {planned: true, variant: 'demand', weeks: []});
+  assert.equal((await rows(page))[2].state, 'done');
+});
+
+test('staff needs hours on the schedule and nobody left without them, and "has traded" is the history, not the last day', async t => {
+  const page = await board(t);
+  await until(page);
+  await opened(page, {staff: 4, stationShifts: 0}, FULL);
+  await hiring(page, {...HIRES, weeks: []});
+  let r = (await rows(page))[2];
+  assert.equal(r.state, 'todo');
+  assert.match(r.sub, /4 people on staff · no hours scheduled yet/);
+  await page.evaluate(() => { D.businesses.find(x => x.key === osPlan().key).stationShifts = 6; });
+  await hiring(page, {...HIRES, weeks: []});
+  assert.equal((await rows(page))[2].state, 'done');
+  /* people assigned to the shop, with no hours: the hiring model's own list of them */
+  await hiring(page, {...HIRES, weeks: [], site: {unstaffed: [{name: 'Sam'}]}});
+  r = (await rows(page))[2];
+  assert.equal(r.state, 'todo');
+  assert.match(r.sub, /no hours scheduled yet/);
+  /* a night-time shop whose last statement is empty has still traded */
+  await page.evaluate(() => { const b = D.businesses.find(x => x.key === osPlan().key); Object.assign(b, {revenue: 0, customers: 0, hasTraded: true}); });
   await hiring(page, {planned: true, variant: 'demand', weeks: []});
   assert.equal((await rows(page))[2].state, 'done');
 });
@@ -514,22 +539,60 @@ test('a coffee shop without chairs does not meet its seating demand; a gym\'s wo
   assert.match(out.gym.act, /Check Workout variety in the game/);
 });
 
-test('an office needs no deliveries; a shop needs a route or an import, not a supply status', async t => {
+test('an office needs no deliveries, before opening too and with no factory button', async t => {
   const page = await board(t);
   await until(page);
   await opened(page, {staff: 1, stationShifts: 1}, FULL);
-  const office = await page.evaluate(() => { const T = osFacts().types, type = 'ba:businesstype_testoffice', b = osOpenedAt(osPlan());
+  const out = await page.evaluate(() => { const T = osFacts().types, type = 'ba:businesstype_testoffice', b = osOpenedAt(osPlan());
     T[type] = {cat: 'office', model: 'office', products: [], demands: []};
-    const r = osCkLogistics({type, key: b.key}, b); return {state: r.state, sub: r.sub.replace(/<[^>]+>/g, '')}; });
-  assert.equal(office.state, 'done');
-  assert.match(office.sub, /No deliveries needed/);
+    const ask = (plan, biz) => { const r = osCkLogistics(plan, biz); return {state: r.state, sub: r.sub.replace(/<[^>]+>/g, ''), act: r.act}; };
+    return {opened: ask({type, key: b.key}, b), vacant: ask({type, key: 'ba:street_nowhere#1'}, null)}; });
+  assert.equal(out.opened.state, 'done');
+  assert.match(out.opened.sub, /No deliveries needed/);
+  assert.equal(out.vacant.state, 'todo');
+  assert.match(out.vacant.sub, /No deliveries needed/);
+  assert.equal(out.vacant.act, '');
+});
+
+test('a shop needs a route for every product it sells, from a stock target or a wholesale contract, not a supply status', async t => {
+  const page = await board(t);
+  await until(page);
+  await opened(page, {staff: 1, stationShifts: 1}, FULL);
+  const all = await wanted(page);
+  assert.ok(all.length >= 2, 'the type sells several products');
   /* a shop whose products are only "covered" in the supply facts has no route */
   await page.evaluate(() => { D.supply.facts[D.businesses.length - 1] = {'ba:itemname_beer': {st: 'covered'}, 'ba:itemname_whisky': {st: 'covered'}}; drawOpenStore(); });
-  assert.equal((await rows(page))[6].state, 'todo');
-  await routed(page, [BEER]);
-  assert.equal((await rows(page))[6].state, 'part');
-  await routed(page, [WHISKY]);
+  let r = (await rows(page))[6];
+  assert.equal(r.state, 'todo');
+  assert.match(r.act, /Plan a factory/);
+  /* a product the shop stocks but has not sold yet counts as much as one it sells: the pairs are not tied to sales rows */
+  await routed(page, [all[0]]);
+  r = (await rows(page))[6];
+  assert.equal(r.state, 'part');
+  assert.match(r.sub, /No delivery route or import for/);
+  await routed(page, all.slice(1));
   assert.equal((await rows(page))[6].state, 'done');
+});
+
+test('a product with a zero stock target is not routed, and nothing in D.supply.routed for it means no delivery', async t => {
+  const page = await board(t);
+  await until(page);
+  await opened(page, {staff: 1, stationShifts: 1}, FULL);
+  const all = await wanted(page);
+  await routed(page, all.slice(1));
+  const r = (await rows(page))[6];
+  assert.equal(r.state, 'part');
+  assert.ok(r.sub.includes(await page.evaluate(p => itemName(p), all[0])), r.sub);
+  assert.match(r.act, /Plan a factory/);
+});
+
+test('a link on the graph is not a route: only a stock target or a wholesale contract is', async t => {
+  const page = await board(t);
+  await until(page);
+  await opened(page, {staff: 1, stationShifts: 1}, FULL);
+  const all = await wanted(page);
+  await page.evaluate(({site, slugs}) => { D.supply.graph.links.push({from: 'import:ba:street_pier#1', to: site, slugs, cadence: 'daily', paused: false}); drawOpenStore(); }, {site: SITE, slugs: all});
+  assert.equal((await rows(page))[6].state, 'todo');
 });
 
 test('a different business at the address is named, and the rows wait for the planned one', async t => {
@@ -537,9 +600,44 @@ test('a different business at the address is named, and the rows wait for the pl
   await until(page);
   await opened(page, {staff: 3, typeSlug: 'ba:businesstype_bakery', type: 'Bakery', stationShifts: 2}, FULL);
   const r = await rows(page);
-  assert.equal(r[0].state, 'done');
+  assert.equal(r[0].state, 'todo');
+  assert.match(r[0].sub, /^Rented · /);
   assert.deepEqual(r.slice(1).map(x => x.state), ['todo', 'todo', 'todo', 'todo', 'todo', 'todo']);
   assert.match(await page.locator('#osBody').innerText(), /is a Bakery, not the .* you planned/);
+});
+
+test('a rented address with nothing opened there yet leaves the lease a to-do', async t => {
+  const page = await board(t);
+  await until(page);
+  await opened(page, {status: 'vacant', staff: 0});
+  const r = await rows(page);
+  assert.equal(r[0].state, 'todo');
+  assert.match(r[0].sub, /^Rented · .*nothing opened there yet/);
+  assert.match(await page.locator('#osBody .os-prog').innerText(), /0 of 7/);
+  /* once a business of the planned type stands there, the lease ticks */
+  await page.evaluate(() => { D.businesses.find(x => x.key === osPlan().key).status = 'retail'; drawOpenStore(); });
+  assert.equal((await rows(page))[0].state, 'done');
+});
+
+test('"Pick N more" after a partial hire keeps the site the review was scoped to', async t => {
+  const page = await board(t);
+  await until(page);
+  await opened(page, {staff: 1, stationShifts: 2}, FULL);
+  await realHiring(page);
+  await linked(page);
+  await spy(page);
+  await page.locator('#osBody [data-os-write="hire"]').click();
+  await page.locator('dialog.gw-dlg').waitFor();
+  assert.equal(await page.evaluate(() => hrLast.site), SITE);
+  const calls = await page.evaluate(() => {
+    window.__more = [];
+    window.hrReview = o => window.__more.push(o);
+    bindHireReview();
+    hrUi.more = {only: {[`${osPlan().key}|ba:skill_cleaning`]: 1}, board: {}, site: osPlan().key};
+    const b = document.createElement('button'); b.setAttribute('data-hr-more', ''); document.body.append(b); b.click();
+    return window.__more;
+  });
+  assert.deepEqual(calls, [{only: {[`${SITE}|ba:skill_cleaning`]: 1}, site: SITE}]);
 });
 
 test('Set up marketing previews first, sends the running campaigns as `was` and explains a refusal', async t => {

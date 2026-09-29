@@ -10,7 +10,7 @@ import unittest
 from ba_dashboard import (
     plain,
     AMENITY_DEMANDS, DEMANDS_NOT_MADE, OFFICE_SKILLS, RETAIL_TYPES,
-    STATION_SKILLS, _alerts, _business, _staff,
+    STATION_SKILLS, _alerts, _business, _staff, _stocked_products,
 )
 from ba_save import Names, Save
 
@@ -372,6 +372,35 @@ class AmenityAlertTests(unittest.TestCase):
         self.assertEqual(business["uniformGapSkills"], sorted([GUARD, SERVICE]))
         self.assertEqual(business["uniformGaps"],
                          [locale[skill] for skill in business["uniformGapSkills"]])
+
+    # --- the checklist's readings of the same shifts --------------------
+
+    def business(self, latest=None, history=(), **options):
+        save, building, addr = self.site(**options)
+        by_addr, _ = _staff(save, Names({}))
+        latest = {addr: {"TotalSales": 0, "TotalProfit": 0}} if latest is None else {addr: latest}
+        return _business(save, Names({}), building, addr, latest,
+                         [(d, {addr: st}) for d, st in history], by_addr, 8)
+
+    def test_station_shifts_count_open_days_of_people_on_staff(self):
+        post = [((GUARD,), GUARD_POST)]
+        self.assertEqual(self.business(items=[LOCKER], posts=post)["stationShifts"], 1)
+        self.assertEqual(self.business(items=[LOCKER], posts=post, is_open=False)["stationShifts"], 0)
+        self.assertEqual(self.business(items=[LOCKER], posts=post, strand_shifts=True)["stationShifts"], 0)
+        self.assertEqual(self.business(items=[LOCKER], posts=post, shift_type=CLEANING_SHIFT)["stationShifts"], 0)
+
+    def test_a_shop_has_traded_when_any_day_sold_not_only_the_last_statement(self):
+        zero = {"TotalSales": 0, "TotalProfit": 0}
+        self.assertFalse(self.business(latest=zero, history=[(6, zero)])["hasTraded"])
+        self.assertTrue(self.business(latest=zero, history=[(6, {"TotalSales": 420, "TotalProfit": 90}), (7, zero)])["hasTraded"])
+        self.assertTrue(self.business(latest={"TotalSales": 55, "TotalProfit": 5})["hasTraded"])
+
+    def test_only_cargo_with_an_amount_counts_as_stocked(self):
+        shelf = lambda amount: {"itemName": "ba:itemname_shelf", "cargoInstances": {"$items": [
+            {"itemName": "ba:itemname_beer", "amount": amount}]}}
+        for amount, expected in ((0, set()), (12, {"ba:itemname_beer"})):
+            save, building, _addr = self.site(items=[shelf(amount)])
+            self.assertEqual(_stocked_products(save, building), expected)
 
     # --- sites with no shop floor --------------------------------------
 

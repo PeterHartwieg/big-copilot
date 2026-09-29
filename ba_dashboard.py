@@ -2418,6 +2418,23 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
         b["quitWarnings"] = people[b["key"]]["quitting"]
 
 
+def _station_shifts(save: Save, b: dict, crew: list):
+    """(shift, person) for every station shift on an open day worked by someone
+    on the staff: the shifts the game's uniform demand walks."""
+    by_id = {p["id"]: p for p in crew if p.get("id") is not None}
+    for schedule_day in save.items(b.get("scheduleDays")):
+        if not schedule_day.get("isOpen"):
+            continue
+        for shift in save.items(schedule_day.get("workShifts")):
+            # The game asks for a Default shift by type, not for "not cleaning",
+            # so a type a later build adds is left out rather than counted in.
+            if shift.get("type") != STATION_SHIFT:
+                continue
+            person = by_id.get(shift.get("employeeId"))
+            if person:
+                yield shift, person
+
+
 def _uniform_gaps(save: Save, b: dict, crew: list, names: Names) -> list:
     """The skill ids working this floor that have no uniform, as the game scores it.
 
@@ -2445,26 +2462,14 @@ def _uniform_gaps(save: Save, b: dict, crew: list, names: Names) -> list:
         item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
         if item:
             stations[holder.get("$k")] = item.get("itemName")
-    by_id = {p["id"]: p for p in crew if p.get("id") is not None}
-
     gaps = set()
-    for schedule_day in save.items(b.get("scheduleDays")):
-        if not schedule_day.get("isOpen"):
-            continue
-        for shift in save.items(schedule_day.get("workShifts")):
-            # The game asks for a Default shift by type, not for "not cleaning",
-            # so a type a later build adds is left out rather than counted in.
-            if shift.get("type") != STATION_SHIFT:
-                continue
-            person = by_id.get(shift.get("employeeId"))
-            if not person:
-                continue
-            held = set(person.get("skills") or ())
-            for skill in STATION_SKILLS.get(stations.get(shift.get("itemInstanceId")), ()):
-                if skill in held:
-                    if skill not in uniforms:
-                        gaps.add(skill)
-                    break  # the game checks the first match and stops
+    for shift, person in _station_shifts(save, b, crew):
+        held = set(person.get("skills") or ())
+        for skill in STATION_SKILLS.get(stations.get(shift.get("itemInstanceId")), ()):
+            if skill in held:
+                if skill not in uniforms:
+                    gaps.add(skill)
+                break  # the game checks the first match and stops
     # A set decides these, so sort before they reach the payload. The caller
     # labels them; the ids stay for a write that sets the uniforms.
     return sorted(gaps)
@@ -2756,7 +2761,10 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
         # A type whose customers never ask about uniforms needs neither.
         "missingUniformLocker": wants_uniforms and not has_uniform_locker,
         # Shifts at a named station: without one no uniform is asked for yet.
-        "stationShifts": sum(1 for e in schedule_entries(save, b) if e[5] == STATION_SHIFT),
+        "stationShifts": sum(1 for _ in _station_shifts(save, b, crew)),
+        # Whether the shop has ever booked a sale: the last statement alone is
+        # zero on a day the shop stood closed.
+        "hasTraded": revenue > 0 or any(by_addr.get(addr, {}).get("TotalSales", 0) > 0 for _day, by_addr in history),
         "staff": len(crew),
         "staffCost": sum(c["daily"] for c in crew),
         "crew": _crew(crew),
@@ -4830,6 +4838,17 @@ def _supply(
         # The shops a repeating wholesale contract delivers to: a standing
         # supply that draws no link on the graph.
         "wholesaleShops": sorted({index[shop] for shop, _item in wholesale}),
+        # The (shop index, product) pairs a plan or a wholesale contract really
+        # delivers: a stock target above zero, or a repeating contract, whatever
+        # the shop's sales rate. shops[] holds a row only for a selling line.
+        "routed": sorted(
+            [index[shop], item]
+            for shop, item in (
+                {k for k, (amount, _src) in target_at.items() if amount > 0}
+                | set(wholesale)
+            )
+            if shop in index
+        ),
         "imports": import_rows,
         "idle": idle_rows,
         "idleWeeks": IDLE_WEEKS,
@@ -12689,7 +12708,7 @@ def _copied_shelving(save: Save, reg: dict, type_slug: str, rules: dict) -> list
 
 
 def required_placed(placed: collections.Counter, type_slug: str, rules: dict, prices: dict, sqm,
-                    available=None) -> list:
+                    available=None, stocked=None) -> list:
     """What a business of a type still lacks of its opening requirements.
 
     `placed` counts the item names standing in it. Each row is [requirement
@@ -12697,12 +12716,13 @@ def required_placed(placed: collections.Counter, type_slug: str, rules: dict, pr
     or carrying its tag, one of them, or for a per-area one (sinks and toilet
     stalls in an office) one per `sq` m², at most `mx` when the rule has one.
     The stock shelf every shop needs (`any`) is met by a display for a product
-    the type sells; a named set that holds products (a hairdresser's shelf of
-    haircare products) is met by a display holding one of them. `available` is
+    the type sells. `available` is
     the registration's cachedAvailableProducts, when the save has it: a
     product the shop lists as available meets either requirement even where
-    the displays are not known to hold it. A fee paid in game (`lic`) is not
-    furniture and has no row.
+    the displays are not known to hold it. A requirement that names a product
+    is met only by that availability or by the product actually on a display
+    (`stocked`, the cargo in the placed items): an empty shelf can hold it but
+    does not. A fee paid in game (`lic`) is not furniture and has no row.
     """
     t = (rules.get("types") or {}).get(type_slug) or {}
     furniture = rules.get("furniture") or {}
@@ -12712,6 +12732,8 @@ def required_placed(placed: collections.Counter, type_slug: str, rules: dict, pr
 
     def holding(products) -> int:
         return sum(n for name, n in placed.items() if products & set((furniture.get(name) or {}).get("h") or ()))
+
+    on_display = set(stocked or ())
 
     out = []
     for req in t.get("rq") or ():
@@ -12725,8 +12747,8 @@ def required_placed(placed: collections.Counter, type_slug: str, rules: dict, pr
             continue
         if req.get("i") and any(n not in furniture for n in req["i"]):
             products = {n for n in req["i"] if n not in furniture}
-            have = holding(products) + sum(placed[n] for n in req["i"] if n in furniture and n in placed)
-            if not have and products & offered:
+            have = sum(placed[n] for n in req["i"] if n in furniture and n in placed)
+            if not have and products & (offered | on_display):
                 have = 1
             out.append([req.get("n") or "", 1, have])
             continue
@@ -12755,6 +12777,17 @@ def _placed_items(save: Save, reg: dict) -> collections.Counter:
     return placed
 
 
+def _stocked_products(save: Save, reg: dict) -> set:
+    """The products actually on a building's displays: cargo with an amount."""
+    out = set()
+    for holder in save.items(reg.get("itemInstances")):
+        item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
+        for cargo in save.items((item or {}).get("cargoInstances")):
+            if cargo.get("itemName") and (cargo.get("amount") or 0) > 0:
+                out.add(cargo["itemName"])
+    return out
+
+
 def _opened_stores(save: Save, regs: dict, businesses: list, types: dict, rules: dict, prices: dict) -> dict:
     """{site key: {"placed", "req", "seating"}} for every business of a planned
     type: how much furniture stands in it, which opening requirements it meets
@@ -12770,7 +12803,8 @@ def _opened_stores(save: Save, regs: dict, businesses: list, types: dict, rules:
         available = {n for n in save.items(reg.get("cachedAvailableProducts")) if isinstance(n, str)}
         out[b["key"]] = {
             "placed": sum(placed.values()),
-            "req": required_placed(placed, b["typeSlug"], rules, prices, _building_row(reg).get("m"), available),
+            "req": required_placed(placed, b["typeSlug"], rules, prices, _building_row(reg).get("m"), available,
+                                   _stocked_products(save, reg)),
             "seating": any(int((table.get(n) or {}).get("t") or 0) & SEATING_FLAG for n in placed),
         }
     return out
@@ -30741,10 +30775,12 @@ function osCkStaff(plan, opened){
   if(!S || !S.planned || S.site.noHours || !S.variant) return osCk("people", "todo", title,
     tt("gr.os.ck.staff.nohours", "No opening hours set yet: set them in BizMan, and the board plans the staff"));
   const need = S.weeks.length;
-  const sales = (opened.revenue || 0) > 0 || (opened.customers || 0) > 0;
+  const scheduled = opened.stationShifts > 0 && !S.site.unstaffed;
   if(!need){
-    if(have > 0 && (S.variant !== "demand" || sales)) return osCk("people", "done", title, tt("gr.os.ck.staff.done",
+    if(have > 0 && scheduled && (S.variant !== "demand" || opened.hasTraded)) return osCk("people", "done", title, tt("gr.os.ck.staff.done",
       {one: "{n} person · <span class=\"ok\">the opening hours are covered</span>", other: "{n} people · <span class=\"ok\">the opening hours are covered</span>"}, {n: have}));
+    if(have > 0 && !scheduled) return osCk("people", "todo", title, tt("gr.os.ck.staff.idle",
+      {one: "{n} person on staff · <span class=\"w\">no hours scheduled yet</span>", other: "{n} people on staff · <span class=\"w\">no hours scheduled yet</span>"}, {n: have}));
     return osCk("people", "todo", title, have > 0
       ? tt("gr.os.ck.staff.unsized", {one: "{n} person on staff · <span class=\"w\">the board sizes the staff once the shop has sales</span>",
         other: "{n} people on staff · <span class=\"w\">the board sizes the staff once the shop has sales</span>"}, {n: have})
@@ -30833,37 +30869,37 @@ function osCkMarketing(plan, b, opened){
   return osCk("megaphone", "todo", title, tt("gr.os.ck.mk.none", "<span class=\"w\">No campaign</span> for {address}", {address: osCkAddress(plan)}),
     mix.length ? osAct("marketing", tt("gr.os.ck.mk.setup", "Set up marketing"), "megaphone", "", ingame) : osIngame(ingame));
 }
-/* The products the plan's business holds that something delivers: a logistics plan or an import into it, or a weekly wholesale delivery.
-   A supply status (covered, short, idle) is not a route, so it is not read here. */
+/* The products a plan or a weekly wholesale contract delivers to the plan's business: supply.routed holds the (shop, product) pairs
+   with a stock target above zero or a contract, whatever the shop sells. A supply status (covered, short, idle) is not a route. */
 function osRoutes(opened, key){
-  const S = D.supply || {}, idx = (D.businesses || []).indexOf(opened);
-  const routed = new Set();
-  ((S.graph || {}).links || []).forEach(l => { if(l.to === key && !l.paused) (l.slugs || []).forEach(p => routed.add(p)); });
-  (S.shops || []).forEach(r => { if(r.s === idx && (r.target > 0 || r.wholesale !== undefined)) routed.add(r.slug); });
-  return routed;
+  const idx = (D.businesses || []).indexOf(opened);
+  return new Set(((D.supply || {}).routed || []).filter(r => r[0] === idx).map(r => r[1]));
 }
 function osCkLogistics(plan, opened){
   const title = tt("gr.os.ck.log", "Logistics");
   const go = `<button type="button" class="os-btn" data-os-route="expansion/factory">${osIcon("factory")}${tt("gr.os.ck.log.go", "Plan a factory")}${osIcon("chev")}</button>`;
-  if(!opened) return osCk("truck", "todo", title, tt("gr.os.ck.log.todo", "Deliveries are set up once the business exists"), go);
   const t = osType(plan.type) || {};
-  if(t.model === "office") return osCk("truck", "done", title, tt("gr.os.ck.log.office", "<span class=\"ok\">No deliveries needed</span> · an office holds no stock"));
+  if(t.model === "office") return osCk("truck", opened ? "done" : "todo", title, tt("gr.os.ck.log.office", "<span class=\"ok\">No deliveries needed</span> · an office holds no stock"));
+  if(!opened) return osCk("truck", "todo", title, tt("gr.os.ck.log.todo", "Deliveries are set up once the business exists"), go);
   const M = osFacts().market || {};
-  const wanted = new Set((t.products || []).map(([p]) => p).filter(p => M[p] && !M[p].s));
-  const held = (opened.lines || []).map(l => l.slug).filter(p => wanted.has(p));
-  if(!held.length) return osCk("truck", "todo", title, tt("gr.os.ck.log.nothing", "<span class=\"w\">Nothing delivers here yet</span>"), go);
-  const routed = osRoutes(opened, plan.key), bare = held.filter(p => !routed.has(p));
+  const wanted = [...new Set((t.products || []).map(([p]) => p).filter(p => M[p] && !M[p].s))];
+  if(!wanted.length) return osCk("truck", "done", title, tt("gr.os.ck.log.nostock", "<span class=\"ok\">No deliveries needed</span> · this type sells no stock"));
+  const routed = osRoutes(opened, plan.key), bare = wanted.filter(p => !routed.has(p));
+  if(bare.length === wanted.length) return osCk("truck", "todo", title, tt("gr.os.ck.log.none", "<span class=\"w\">No delivery route or import for {items}</span>",
+    {items: osNames(bare.map(s => spEsc(itemName(s))))}), go);
   if(!bare.length) return osCk("truck", "done", title, tt("gr.os.ck.log.done", "<span class=\"ok\">Every product it holds has a delivery route or an import</span>"));
-  return osCk("truck", bare.length < held.length ? "part" : "todo", title, tt("gr.os.ck.log.part", "<span class=\"w\">No delivery route or import for {items}</span>",
-    {items: osNames(bare.map(s => spEsc(itemName(s))))}), go, Math.round(100 * (held.length - bare.length) / held.length));
+  return osCk("truck", "part", title, tt("gr.os.ck.log.part", "<span class=\"w\">No delivery route or import for {items}</span>",
+    {items: osNames(bare.map(s => spEsc(itemName(s))))}), go, Math.round(100 * (wanted.length - bare.length) / wanted.length));
 }
 function osUntilRows(plan){
   const b = osBuilding(plan.key), rented = osRented(plan), opened = osOpenedAt(plan), address = osCkAddress(plan);
   const uni = osCkUniforms(plan, opened);
   return [
-    osCk("key", rented ? "done" : "todo", tt("gr.os.ck.lease", "Lease"), rented
+    osCk("key", opened ? "done" : "todo", tt("gr.os.ck.lease", "Lease"), opened
       ? tt("gr.os.ck.lease.done", "<span class=\"ok\">Rented</span> · {address}", {address})
-      : tt("gr.os.ck.lease.todo", "{address} · not rented yet", {address})),
+      : !rented ? tt("gr.os.ck.lease.todo", "{address} · not rented yet", {address})
+      : osOtherType(plan) ? tt("gr.os.ck.lease.rented", "Rented · {address}", {address})
+      : tt("gr.os.ck.lease.vacant", "Rented · {address} · <span class=\"w\">nothing opened there yet</span>", {address})),
     osCkFurniture(plan, b), osCkStaff(plan, opened), uni, osCkDemands(plan, opened, uni),
     osCkMarketing(plan, b, opened), osCkLogistics(plan, opened)];
 }
@@ -32838,7 +32874,7 @@ function hrReview(o = {}){
   const build = () => {
     const m = hrModel();
     const req = hrRequest(m, only, o.site || null);
-    hrLast = {m, req, only};
+    hrLast = {m, req, only, site: o.site || null};
     return hrLast;
   };
   build();
@@ -32943,7 +32979,7 @@ function hrReview(o = {}){
         const x = hrLast.m.sites.flatMap(S => S.weeks).find(w => w.who && w.who.type === "hire" && w.who.c.id === h.candidateId);
         if(x){ const k = `${x.S.key}|${x.w.skill}`; only[k] = (only[k] || 0) + 1; }
       });
-      hrUi.more = Object.keys(only).length ? {only, board: D} : null;
+      hrUi.more = Object.keys(only).length ? {only, board: D, site: hrLast.site} : null;
       /* Placed people leave the page's ticks: they are staff now. */
       hrLast.req.body.hires.forEach(h => { hrUi.force.delete(h.candidateId); hrUi.skip.delete(h.candidateId); });
       hrHiredAdd((answer.hired || []).map(h => h && h.candidateId));
@@ -32981,7 +33017,7 @@ function bindHireReview(){
     const more = hrUi.more;
     if(!more || more.board === D) return;
     hrUi.more = null;
-    hrReview({only: more.only});
+    hrReview(more.site ? {only: more.only, site: more.site} : {only: more.only});
   });
 }
 /* The button waits for the board read after the apply. */

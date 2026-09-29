@@ -26,28 +26,37 @@ artboard 6 of the canvas. Step 6 (payback after opening) is still the phase 4 pl
 
 ## Decisions
 
-- Lease is done when any `D.businesses` record has the plan's key. "Opened" (rows tick from
-  the save) means that record's status is not `vacant`.
+- Lease is done only when `osOpenedAt(plan)` is set: a record at the plan's key whose status
+  is not `vacant` and whose type is the planned one. A rented vacant address, or one holding
+  another type, reads "Rented" and stays a to-do.
 - Rule: a row never reads done unless the save proves it; otherwise it is a to-do with
   "check in the game". The seven rows are to-dos until a business of the planned type stands
   at the address (`osOpenedAt`); a business of another type gets a note (`osOtherType`).
 - Staff (`osCkStaff`) reads `hrModel().sites`. No hours (`site.noHours` or no variant) is a
-  to-do. With nothing to hire it is done only when somebody is hired and, on a demand plan,
-  the shop has sales. Hire weeks that move people offer "Hire n · move m" (the full review
-  for this site, `hrReview({site})`); with no candidate the row points at a headhunter.
+  to-do. With nothing to hire it is done only when somebody is hired, `stationShifts > 0`,
+  `site.unstaffed` is empty and, on a demand plan, `hasTraded` (any day with sales in the
+  trading history; the last statement can be empty for a night shop). Hire weeks that move
+  people offer "Hire n · move m" (the full review for this site, `hrReview({site})`); with no
+  candidate the row points at a headhunter. "Pick N more" keeps the review's site
+  (`hrLast.site`, `hrUi.more.site`).
 - Uniforms: done when the type asks for none, or staff have station hours
-  (`stationShifts > 0`) and no uniform gap. Customer demands cover every demand of the type:
+  (`stationShifts > 0`: `_station_shifts()`, open days, people on staff, the filters
+  `uniform_gaps` uses) and no uniform gap. Customer demands cover every demand of the type:
   seating from `built.seating`, workout variety and unknown demands stay unchecked (an
   in-game check, never done).
 - Marketing is done when `marketingOn` (the enabled campaigns) is not empty. The write sends
   that set as `was` (PR #174's compare-and-set) and omits `expect` without a character and
   company.
-- Logistics: an office is done ("No deliveries needed"). A shop is set up when every product
-  in its lines that the type sells (products the type lists, not services) has a route
-  (`osRoutes`: a logistics link to the site, or a `supply.shops` delivery). This compares the
-  shop's own lines, not the full product list, so a product never put on a shelf is not asked for.
-- Furniture: `required_placed` takes `cachedAvailableProducts`; a product requirement (a
-  hairdresser's shelf with hair-care products) is met by availability or a display holding it.
+- Logistics: an office says "No deliveries needed" (done once opened, a to-do before, never
+  with a factory button). A shop is set up when every non-service product in the type's list
+  has a route (`osRoutes`, over the new `supply.routed` pairs `[shop index, product]`): a stock
+  target above zero in a logistics plan, or a weekly wholesale contract, whatever the shop's
+  sales rate. Graph links carry no target amount, so they are not read. Registered in
+  `docs/architecture.md`.
+- Furniture: `required_placed` takes `cachedAvailableProducts` and the cargo on the displays
+  (`_stocked_products`); a product requirement (a hairdresser's shelf with hair-care products)
+  is met by availability or stocked cargo, not by an empty shelf. The "any primary product"
+  requirement is unchanged and still counts what a display can hold.
 - The marketing write is built against PR #174's contract (`POST /write/marketing`, body
   `{dryRun, expect, sites: [{address, on, was}]}`); it carries its own `expect` because
   `SOURCE.write` adds one only for `uniforms`. Its refusals `no_promotion`, `no_agency`,
@@ -82,10 +91,12 @@ python build_web.py && python build_web.py --check
 python check_saves.py
 ```
 
-`tests/open_store.test.cjs` (step 5, 22 tests) covers the step bar, the to-do rows before
+`tests/open_store.test.cjs` (step 5, 28 tests) covers the step bar, the to-do rows before
 a business, ticking, a half-done store, zero-need and no-hours staff, the real `hrModel` over
 the payload's `hiring.sites` (Hire count and the scoped review through `hrReview` and
 `hrRequest`), Hire and Assign uniforms clicks, moves, headhunter, link off/on/missing write,
-uniforms without shifts, seating and workout variety, office logistics, a different-type
-business, and the marketing wire (`dryRun`, `was`, no `expect`) and a running campaign.
+uniforms without shifts, seating and workout variety, office logistics (also vacant), logistics
+over all products (a partial route, a link that is not a route), staff with no shifts, unstaffed
+or not yet traded, the lease with a vacant or different-type business, "Pick N more" keeping
+its site, and the marketing wire (`dryRun`, `was`, no `expect`) and a running campaign.
 `check_saves.py`: 32 supported saves OK, 0 failed.

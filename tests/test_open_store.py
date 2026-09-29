@@ -189,14 +189,15 @@ class RequiredPlacedTests(unittest.TestCase):
         got = ba_dashboard.required_placed(collections.Counter(), SHOP, rules, PRICES, 950)
         self.assertEqual(got, [["sinks", 10, 0]])
 
-    def test_a_requirement_naming_a_product_is_met_by_a_display_that_holds_it(self):
+    def test_a_requirement_naming_a_product_is_met_by_cargo_on_a_display_not_by_an_empty_shelf(self):
         rules = {"types": {SHOP: {**RULES["types"][SHOP], "rq": [{"n": "shelfwithbeer", "i": ["ba:itemname_beer"]}]}},
                  "furniture": RULES["furniture"]}
-        rows = lambda placed, available=None: ba_dashboard.required_placed(
-            collections.Counter(placed), SHOP, rules, PRICES, 100, available)
+        rows = lambda placed, available=None, stocked=None: ba_dashboard.required_placed(
+            collections.Counter(placed), SHOP, rules, PRICES, 100, available, stocked)
         self.assertEqual(rows({}), [["shelfwithbeer", 1, 0]])
         self.assertEqual(rows({"ba:itemname_shelf": 2}), [["shelfwithbeer", 1, 0]])
-        self.assertEqual(rows({"ba:itemname_fridge": 2}), [["shelfwithbeer", 1, 2]])
+        self.assertEqual(rows({"ba:itemname_fridge": 2}), [["shelfwithbeer", 1, 0]])
+        self.assertEqual(rows({"ba:itemname_fridge": 2}, None, {"ba:itemname_beer"}), [["shelfwithbeer", 1, 1]])
 
     def test_a_product_the_shop_lists_as_available_meets_the_product_requirements(self):
         rules = {"types": {SHOP: {**RULES["types"][SHOP], "rq": [
