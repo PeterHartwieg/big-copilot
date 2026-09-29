@@ -29447,14 +29447,27 @@ function hrWeek(S, fill, away, arriving, lost, o = {}){
      mover's entry is never trimmed. Otherwise their week is cut around the
      plan's, like any kept shift, and whoever ends with no hours is named in
      the review (`o.stranded`). */
+  /* The shifts the plan does not own that stay as the game has them (a
+     cover-only shop's serving entries; a factory's or an office's stations
+     the plan does not staff). */
+  const kept = new Set();
+  if(o.additive) now.forEach(s => kept.add(s));
+  else if(S.site.kind === "shop"){
+    if(!row.full && spCoverOnly(row)) now.filter(s => !s.k).forEach(s => kept.add(s));
+  } else {
+    const owned = new Set((row.shifts || []).map(s => s.s));
+    now.filter(s => !owned.has(s.s) && !((row.stations || [])[s.s] || {}).skill).forEach(s => kept.add(s));
+  }
   const inWeek = new Set(flat().map(x => x.employeeId));
   const stay = [...new Set(now.map(idOf))].filter(id => spHasId(id) && !away.has(id) && !inWeek.has(id));
+  /* A hire's, a mover's or an arriving bench member's entry is never trimmed. */
+  const fixed = who => fillIds.has(who) || !!(arriving && arriving.has(who));
   if(!o.additive) stay.forEach(id => {
     const mine = now.filter(s => idOf(s) === id);
     const hit = x => mine.some(s => x.d === s.d && x.itemInstanceId === stOf(s) && x.f < s.t && s.f < x.t);
     const all = flat();
-    if(all.some(x => fillIds.has(x.employeeId) && hit(x))) return;
-    const trim = x => x.employeeId !== id && !fillIds.has(x.employeeId) && hit(x);
+    if(all.some(x => fixed(x.employeeId) && hit(x))) return;
+    const trim = x => x.employeeId !== id && !fixed(x.employeeId) && hit(x);
     const victims = [...new Set(all.filter(trim).map(x => x.employeeId))];
     if(!victims.length) return;
     const cut = x => {
@@ -29466,10 +29479,17 @@ function hrWeek(S, fill, away, arriving, lost, o = {}){
     };
     const after = all.flatMap(x => trim(x) ? cut(x) : [x]);
     const clean = gwCleanOf(row);
-    const breaks = (list, who) => gwPersonBreaks(list.filter(x => x.employeeId === who).map(x => ({d: x.d, f: x.f, t: x.t, st: x.itemInstanceId})),
-      gwWho(who, row).demands, clean).length;
+    /* A person's breaks over their whole week here: the plan's entries and
+       the shifts they keep that the plan does not own, each break by kind,
+       day and demand. The trim stands only where every break it leaves was
+       there before it. */
+    const breaks = (list, who) => new Set(gwPersonBreaks([
+      ...list.filter(x => x.employeeId === who).map(x => ({d: x.d, f: x.f, t: x.t, st: x.itemInstanceId})),
+      ...now.filter(s => kept.has(s) && idOf(s) === who).map(s => ({d: s.d, f: s.f, t: s.t, st: stOf(s)}))],
+      gwWho(who, row).demands, clean).map(b => `${b.k}|${b.d === undefined ? "" : b.d}|${b.slug || ""}`));
     /* Nobody trimmed to no hours at all: that only moves the problem. */
-    if(victims.some(v => breaks(after, v) > breaks(all, v) || !after.some(x => x.employeeId === v))) return;
+    const worse = v => { const was = breaks(all, v); return [...breaks(after, v)].some(b => !was.has(b)); };
+    if(victims.some(v => worse(v) || !after.some(x => x.employeeId === v))) return;
     days.clear();
     after.forEach(x => put(x.d, x.f, x.t, x.employeeId, x.itemInstanceId));
   });
@@ -29490,14 +29510,6 @@ function hrWeek(S, fill, away, arriving, lost, o = {}){
        write replaces the week whole, and the grid refuses a longer entry. */
     parts.forEach(([f, t]) => { for(let a = f; a < t; a += GW_CAP) put(s.d, a, Math.min(t, a + GW_CAP), who.id, st.id); });
   };
-  const kept = new Set();
-  if(o.additive) now.forEach(s => kept.add(s));
-  else if(S.site.kind === "shop"){
-    if(!row.full && spCoverOnly(row)) now.filter(s => !s.k).forEach(s => kept.add(s));
-  } else {
-    const owned = new Set((row.shifts || []).map(s => s.s));
-    now.filter(s => !owned.has(s.s) && !((row.stations || [])[s.s] || {}).skill).forEach(s => kept.add(s));
-  }
   const staying = new Set(stay);
   now.filter(s => staying.has(idOf(s))).forEach(s => kept.add(s));
   now.filter(s => kept.has(s)).forEach(keep);
@@ -29609,6 +29621,7 @@ function hrRequest(m, o = {}){
   };
   const names = new Map();    // id -> {name, skill, c | move}
   const hires = [], moves = [], away = new Set(), arriving = new Set(), zero = [];
+  const closed = new Map();  // id -> the out-of-scope shop whose week for them falls in its closed hours
   const left = Object.assign({}, only || {});
   const hire = (c, S, w, skill, misfit, nofit) => {
     hires.push({candidateId: c.id, address: gwAddress(S.key), expect: {wage: c.wage}, seenHoursLeft: c.hoursLeft ?? null});
@@ -29628,7 +29641,17 @@ function hrRequest(m, o = {}){
          page found them elsewhere, as Staff all sites does: the plan leaves
          them no hours here, and nobody stays assigned at 0 hours when a week
          that fits them is open (Peter, 29 September 2026). */
+      /* A shop outside the scope keeps its own opening hours (its write is
+         additive and never opens it around the clock): the spare goes only
+         where every hour of the week found for them falls inside them, and
+         otherwise stays, with that said (`closed`). */
+      const fitsOpen = x => {
+        if(inScope(x.to) || x.to.site.kind !== "shop" || !x.week) return true;
+        const open = (spRosterRow(x.to.key) || {}).open || [];
+        return (x.week.w.slots || []).every(sl => (open[sl.d] || []).some(([a, b]) => a <= sl.f && sl.t <= b));
+      };
       if(!only) t.moves.filter(x => inScope(x.to) || (!!o.site && !!x.from && x.from.key === o.site)).forEach(x => {
+        if(!fitsOpen(x)){ closed.set(x.id, x.to); return; }
         moves.push({employeeId: x.id, from: x.from ? gwAddress(x.from.key) : null, to: gwAddress(x.to.key)});
         names.set(x.id, {name: x.p.name, skill: x.skill, move: x});
         arriving.add(x.id);
@@ -29670,11 +29693,13 @@ function hrRequest(m, o = {}){
        as an older build could leave): the call is all or nothing, and a
        site nobody arrives at is not worth refusing the rest for. */
     if(!at && (expect === null || !hrSendable(wk.days))) return;
-    const entry = {address, expect, openAllHours: !!(S.row && S.row.full), days: wk.days};
+    const additive = !!(at && at.additive && !inScope(S));
+    const entry = {address, expect, openAllHours: !!(S.row && S.row.full) && !additive, days: wk.days};
     const own = touch(S);
     own.lost = wk.lost;
     own.leftOut = wk.leftOut || [];
     own.stranded = wk.stranded || [];
+    own.additive = additive;
     own.week = true;
     if(at || one || sources.has(S.key)) sites.push(entry);
     else { own.rest = true; rest.push({S, body: entry}); }
@@ -29687,7 +29712,7 @@ function hrRequest(m, o = {}){
     if(open.length) gaps.set(S.key, open);
   });
   const shown = m.sites.filter(S => touched.has(S.key) || gaps.has(S.key));
-  return {body: {sites, hires, moves}, names, touched, rest, zero, gaps, shown, mode, one,
+  return {body: {sites, hires, moves}, names, touched, rest, zero, gaps, shown, mode, one, closed,
           weeks: sites.filter(s => s.days).length + rest.length};
 }
 /* --- drawing -------------------------------------------------------------- */
@@ -30722,29 +30747,30 @@ const hrSitesPhase = (phase, chain) => phase === "applying" ? (Object.keys(chain
    /write/schedule, where the mod cannot take them in the same call (before
    0.4.0). Each site says how it went, in the review it came from. */
 async function hrChain(last, dlg){
-  /* While the dialog is applying, its verdict says how far the chain is. */
-  const far = () => {
-    if(!dlg || !dlg.open || dlg.dataset.phase !== "applying") return;
-    const say = dlg.querySelector(".gw-verdict b");
+  /* While the dialog shows the action, its site list says each site's own
+     outcome (the sites the hire call wrote are done from the start), and
+     while it is applying, the verdict says how far the chain is. */
+  const paint = () => {
+    if(!dlg || !dlg.open || !["applying", "done"].includes(dlg.dataset.phase)) return;
+    const say = dlg.dataset.phase === "applying" && dlg.querySelector(".gw-verdict b");
     const k = Object.values(last.chain).filter(x => x !== "wait").length;
     if(say) say.textContent = tt("co.hire.chain.writing", "Writing the other weeks: {k} of {n}…", {k, n: last.req.rest.length});
-  };
-  for(const {S, body} of last.req.rest){
-    far();
-    const res = await SOURCE.write("schedule", body, {dryRun: false, approval: gwApprovalView(dlg, () => {})});
-    last.chain[S.key] = res.error ? {say: hrChainSay(res), error: res.error} : "done";
-    /* Each week written this way replaces the game's one schedule undo, so the
-       board's Undo for an earlier schedule write would undo the wrong site. */
-    if(!res.error || res.error === "uncertain"){ delete gwUndoable.schedule; gwToast(); }
-    if(!dlg || !dlg.open || !["applying", "done"].includes(dlg.dataset.phase)) continue;
-    far();
     const list = dlg.querySelector(".hr-dsites");
-    if(!list) continue;
+    if(!list) return;
     const gone = new Set(((last.answer || {}).skipped || []).filter(s => s && s.reason === "gone").map(s => s.candidateId));
     const tmp = document.createElement("div");
     tmp.innerHTML = hrReviewSites(last.req, hrSitesPhase(dlg.dataset.phase, last.chain), gone, last.chain);
     list.replaceWith(tmp.firstElementChild);
     wireTips();
+  };
+  for(const {S, body} of last.req.rest){
+    paint();
+    const res = await SOURCE.write("schedule", body, {dryRun: false, approval: gwApprovalView(dlg, () => {})});
+    last.chain[S.key] = res.error ? {say: hrChainSay(res), error: res.error} : "done";
+    /* Each week written this way replaces the game's one schedule undo, so the
+       board's Undo for an earlier schedule write would undo the wrong site. */
+    if(!res.error || res.error === "uncertain"){ delete gwUndoable.schedule; gwToast(); }
+    paint();
   }
 }
 /* The board's schedule Undo goes where the game's does: a hire call or its
@@ -30878,7 +30904,10 @@ function hrReview(o = {}, hooks = {}){
       const blocked = answer.blocked === "myemployees" ? `<div class="gw-no"><span class="ic">${hrSvg("phone")}</span><div class="rule">${tt("co.hire.myemployees", "MyEmployees is open in the game.")}</div><div class="fix">${
         gwSvg("right")}<span>${tt("co.hire.myemployees.fix", "Close the MyEmployees app on your in-game phone, then try again.")}</span></div></div>` : "";
       const rewritten = (answer.sites || []).filter(s => s && s.before && s.after);
-      const left = rewritten.flatMap(s => (s.leftWithout || []).map(p => `<span class="person"><i>${spEsc(gwInitials(p.name))}</i>${spEsc(p.name || tt("co.hire.someone", "someone"))}</span>`));
+      const strandedNames = new Set([...req.touched.values()].flatMap(at => (at.stranded || []).map(id => gwWho(id, at.S.row).name)).filter(Boolean));
+      const strandedIdSet = new Set([...req.touched.values()].flatMap(at => at.stranded || []));
+      const left = rewritten.flatMap(s => (s.leftWithout || []).filter(p => !(p && (strandedIdSet.has(p.employeeId) || strandedNames.has(p.name))))
+        .map(p => `<span class="person"><i>${spEsc(gwInitials(p.name))}</i>${spEsc(p.name || tt("co.hire.someone", "someone"))}</span>`));
       const fewer = hrFewer(m, req, rewritten);
       const fewerCall = fewer.length ? gwCall("", "roster", tt("co.hire.fewer", "<b>Fewer hours than now</b> in the plan's week: {who}.",
         {who: fewer.map(({S, r}) => tt("co.hire.fewer.one", "{name} ({site}, {now} → {h} h)", {name: spEsc(r.name || tt("co.hire.someone", "someone")),
@@ -30892,9 +30921,9 @@ function hrReview(o = {}, hooks = {}){
       /* Each with their own reason, as Quick hire's list gives it (PR #184). */
       const zeroWhy = z => z.nofit ? tt("co.hire.quick.nofit", "no open week fits {demands}", {demands: z.nofit.map(hrName).join(", ")})
         : tt("co.hire.zero.noweek", "the plan has no open week left for them");
-      const zero = mode === "both" && req.zero.length ? gwCall("warn", "clock", `${tt("co.hire.zero",
-        {one: "<b>{n} hire joins with no hours</b>. Choose Hire only to hire without hours, or hire fewer.",
-         other: "<b>{n} hires join with no hours</b>. Choose Hire only to hire without hours, or hire fewer."}, {n: req.zero.length})}<ul class="gw-chk">${
+      const zero = mode === "both" && req.zero.length ? gwCall("warn", "clock", `${tt("co.hire.zero.head",
+        {one: "<b>{n} hire joins with no hours</b>.", other: "<b>{n} hires join with no hours</b>."}, {n: req.zero.length})} ${
+        tt("co.hire.zero.fix", "Choose Hire only to hire without hours, or hire fewer.")}<ul class="gw-chk">${
         req.zero.map(z => `<li>${tt("co.hire.zero.one", "<b>{name}</b>: {why}", {name: spEsc(z.c.name || "?"), why: zeroWhy(z)})}</li>`).join("")}</ul>`) : "";
       const chain = !hrLast.one && req.rest.length ? hrChainNote(req.rest.length) : "";
       /* Every week this call writes, checked per person (gwWeekCheck()). */
@@ -30910,10 +30939,23 @@ function hrReview(o = {}, hooks = {}){
       /* The site's own people this week leaves with no hours there: named
          first, since nobody is meant to stay assigned at 0 hours. */
       const strandedIds = [...req.touched.values()].flatMap(at => (at.stranded || []).map(id => ({id, at})));
-      const stranded = strandedIds.length ? gwCall("warn", "alert", tt("co.hire.stranded", {
-        one: "<b>{names}: no hours after this.</b> The plan gives their hours to someone else and no open week elsewhere fits them, so they stay assigned with none. Choose Hire only to leave the weeks as they are.",
-        other: "<b>{names}: no hours after this.</b> The plan gives their hours to someone else and no open week elsewhere fits them, so they stay assigned with none. Choose Hire only to leave the weeks as they are."},
-        {n: strandedIds.length, names: strandedIds.map(({id, at}) => spEsc(gwWho(id, at.S.row).name || tt("sp.gw.someone.cap", "Someone"))).join(", ")})) : "";
+      const strandedSet = new Set(strandedIds.map(x => x.id));
+      /* Why each is left without hours, from the page's own moves. */
+      const strandedWhy = ({id, at}) => {
+        const name = spEsc(gwWho(id, at.S.row).name || tt("sp.gw.someone.cap", "Someone"));
+        const siteOf = T => spEsc(hrSiteName(T));
+        if(req.closed && req.closed.has(id)) return tt("co.hire.stranded.closed", "<b>{name}</b>: the open week at {site} runs in hours it is closed.", {name, site: siteOf(req.closed.get(id))});
+        const mv = m.moves.find(x => x.id === id && x.from === at.S);
+        if(mv && mv.off) return tt("co.hire.stranded.off", "<b>{name}</b>: tick their reassign to {site} to give them its week.", {name, site: siteOf(mv.to)});
+        if(mv && !req.body.moves.some(x => x.employeeId === id)) return tt("co.hire.stranded.mode", "<b>{name}</b>: Hire and schedule reassigns them to {site}.", {name, site: siteOf(mv.to)});
+        return tt("co.hire.stranded.nofit", "<b>{name}</b>: no open week elsewhere fits them.", {name});
+      };
+      const stranded = strandedIds.length ? gwCall("warn", "alert", `${tt("co.hire.stranded.head", {
+        one: "<b>No hours after this</b> for {n} person: the plan gives their hours to someone else.",
+        other: "<b>No hours after this</b> for {n} people: the plan gives their hours to someone else."}, {n: strandedIds.length})}<ul class="gw-chk">${
+        strandedIds.map(x => `<li>${strandedWhy(x)}</li>`).join("")}</ul>${mode === "week"
+          ? tt("co.hire.stranded.week", "Close to leave the weeks as they are.")
+          : hrLast.modes.includes("hire") ? tt("co.hire.stranded.both", "Hire only leaves the weeks as they are.") : ""}`) : "";
       const officeLeft = [...req.touched.values()].flatMap(at => (at.leftOut || []).map(x => gwCall("warn", "alert", tt("sp.gw.sch.office.left",
         "<b>{name}</b>: {h} h of the office default left out, more than their week can take",
         {name: spEsc(x.name || tt("sp.gw.someone.cap", "Someone")), h: x.hours})))).join("");
@@ -31042,8 +31084,23 @@ function hrReview(o = {}, hooks = {}){
 function hrFewer(m, req, rewritten){
   const keys = new Set([...(rewritten || []).map(s => s && s.address && gwKeyOf(s.address)).filter(Boolean),
     ...((req && req.rest) || []).map(r => r.S.key)]);
+  /* The week each site is sent, against the game's: hours per person. */
+  const sent = new Map([...req.body.sites.filter(x => x.days).map(x => [gwKeyOf(x.address), x.days]),
+    ...(req.rest || []).map(r => [r.S.key, r.body.days])]);
+  const away = new Set(req.body.moves.map(x => x.employeeId));
+  const sum = (map, id, h) => map.set(id, (map.get(id) || 0) + h);
   return m.sites.filter(S => keys.has(S.key) && !(S.site.kind === "office" && !((req.touched.get(S.key) || {}).inbound)))
-    .flatMap(S => (S.plan.fewer || []).map(r => ({S, r})));
+    .flatMap(S => {
+      const row = S.row || {};
+      /* A row that does not carry the game's week: the plan's own figures. */
+      if(!row.current || !sent.has(S.key)) return (S.plan.fewer || []).map(r => ({S, r}));
+      const now = new Map(), then = new Map();
+      (row.current.list || []).forEach(s => { const id = ((row.people || [])[s.p] || {}).id; if(spHasId(id)) sum(now, id, s.t - s.f); });
+      sent.get(S.key).forEach(({shifts}) => (shifts || []).forEach(x => sum(then, x.employeeId, x.t - x.f)));
+      /* Nobody moved away, and nobody left with none (named on their own). */
+      return [...now].filter(([id, h]) => !away.has(id) && (then.get(id) || 0) > 0 && then.get(id) < h)
+        .map(([id, h]) => ({S, r: {id, name: gwWho(id, row).name, now: h, hours: then.get(id)}}));
+    });
 }
 /* A site row in the review opens for its people. */
 let hrReviewBound = false;
@@ -31054,7 +31111,7 @@ function bindHireReview(){
     if(!hrLast) return;
     const key = b.dataset.hrSite, dlg = b.closest("dialog");
     hrUi.reviewOpen = hrUi.reviewOpen === key ? null : key;
-    const phase = dlg.dataset.phase === "done" ? "done" : dlg.dataset.phase === "applying" ? "wait" : "ready";
+    const phase = hrSitesPhase(dlg.dataset.phase, hrLast.chain);
     const gone = new Set(((hrLast.answer || {}).skipped || []).filter(s => s && s.reason === "gone").map(s => s.candidateId));
     const tmp = document.createElement("div");
     tmp.innerHTML = hrReviewSites(hrLast.req, phase, gone, hrLast.chain);
