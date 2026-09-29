@@ -12,7 +12,9 @@ import os
 import subprocess
 import sys
 import unittest
+import unittest.mock
 
+import ba_dashboard
 from ba_dashboard import (SHIFT_CAP, SUPPLY_MARGIN, _factory_run_start, _factory_staffing,
                           _line_hours, site_key)
 from test_supply_facts import (FACTORY, HUB, RID, SHOP_A, BEER, WATER, Company, beer_chain)
@@ -359,6 +361,95 @@ class StaffFindingTests(unittest.TestCase):
         [dem] = self.staff(c, "dem")
         self.assertEqual(cap["id"], dem["id"])
         self.assertIn("35 of 56 hours needed", dem["text"])
+
+
+class BenchTest(unittest.TestCase):
+    """Factories draw on the unassigned factory workers the shops and offices left."""
+
+    def test_the_bench_is_drawn_before_anybody_is_hired(self):
+        people = People().add(3).add(4, addr=None)
+        [row] = hand_rows([("beer", 2, 24, 24, 24)], people)["cap"]
+        # 336 machine-hours: seven people, three here and four off the bench.
+        self.assertEqual(row["headcount"]["hire"], 0)
+        self.assertEqual(row["headcount"]["have"], 7)
+        self.assertEqual(row["headcount"]["spare"], 0)
+        self.assertEqual(sorted(row["_hire"]["bench"]), ["w03", "w04", "w05", "w06"])
+        self.assertEqual([a["id"] for a in row["addPeople"]["assign"]],
+                         ["w03", "w04", "w05", "w06"])
+
+    def test_the_bench_does_not_move_the_line(self):
+        """Review round 1, item 3: three unassigned workers who refuse mornings
+        moved a twelve-hour line off 06:00 though the factory's own four cover it."""
+        people = People().add(4).add(3, demands=[NOMORNINGS], addr=None)
+        [row] = hand_rows([("beer", 1, 24, 12, 24)], people)["dem"]
+        [line] = row["lines"]
+        self.assertEqual((line["from"], line["to"]), (6, 18))
+        # With nobody of its own, the bench decides.
+        people = People().add(3, demands=[NOMORNINGS], addr=None)
+        [row] = hand_rows([("beer", 1, 24, 12, 24)], people)["dem"]
+        self.assertEqual(row["lines"][0]["from"], 10)
+
+    def test_the_factory_s_own_first_and_the_bench_it_draws_leaves_it(self):
+        people = People().add(7).add(2, addr=None)
+        world = ba_dashboard._plan_world(Bare(people), people.staff)
+        business = [{"key": KEY, "name": "Brewery", "status": "support"}]
+        rows = _factory_staffing(Bare(people), None, business,
+                                 hand_factory([("beer", 2, 24, 24, 24)]), people.staff,
+                                 detail=True, world=world)
+        [row] = rows["cap"]
+        self.assertEqual(row["_hire"]["bench"], [])
+        self.assertEqual([p["id"] for p in world["bench"]], ["w07", "w08"])
+        people = People().add(5).add(3, addr=None)
+        world = ba_dashboard._plan_world(Bare(people), people.staff)
+        _factory_staffing(Bare(people), None, business, hand_factory([("beer", 2, 24, 24, 24)]),
+                          people.staff, detail=True, world=world)
+        # Two drawn to make seven, one left for whoever plans next.
+        self.assertEqual([p["id"] for p in world["bench"]], ["w07"])
+
+
+class SameHoursBothSizingsTest(unittest.TestCase):
+    """Both sizings asking every line for the same hours is one week, placed once."""
+
+    LINES = [("beer", 2, 24, 24, 24), ("water", 1, 16, 16, 0)]
+
+    def rows(self):
+        people = People().add(5).add(2, demands=("ba:jobdemand_fulltime",))
+        return hand_rows(self.LINES, people)
+
+    def test_the_copy_is_the_week_placed_again(self):
+        placed = []
+        real = ba_dashboard._factory_site_plan
+
+        def counting(*a, **k):
+            placed.append(a[7])  # the sizing
+            return real(*a, **k)
+
+        with unittest.mock.patch.object(ba_dashboard, "_factory_site_plan", counting):
+            rows = self.rows()
+        self.assertEqual(placed, ["cap"])
+        # Placed twice over, the week is the same week.
+        with unittest.mock.patch.object(ba_dashboard, "_factory_hours",
+                                        lambda site, mode: [mode]):
+            twice = self.rows()
+        self.assertEqual(json.dumps(rows, sort_keys=True, default=str),
+                         json.dumps(twice, sort_keys=True, default=str))
+        # And nothing of it is shared: the Staff page takes each `_hire` off.
+        [cap], [dem] = rows["cap"], rows["dem"]
+        self.assertIsNot(cap["_hire"], dem["_hire"])
+        self.assertIsNot(cap["shifts"], dem["shifts"])
+
+    def test_different_hours_are_placed_each(self):
+        lines = [("beer", 2, 24, 12, 24)]
+        placed = []
+        real = ba_dashboard._factory_site_plan
+
+        def counting(*a, **k):
+            placed.append(a[7])
+            return real(*a, **k)
+
+        with unittest.mock.patch.object(ba_dashboard, "_factory_site_plan", counting):
+            hand_rows(lines, People().add(3))
+        self.assertEqual(placed, ["cap", "dem"])
 
 
 if __name__ == "__main__":
