@@ -313,7 +313,7 @@ class StationFactsTest(unittest.TestCase):
         _by_addr, staff = _staff(save, Names({}))
         grids = _hourly(save, [reg], [business], {}, {COMPUTER},
                         {p["id"]: p["skill"] for p in staff}, Names({}))
-        [row] = _office_staffing(save, Names({}), [business], grids, staff, set())
+        [row] = _office_staffing(save, Names({}), [business], grids, staff)
         on = collections.defaultdict(set)
         for s in row["shifts"]:
             if s["p"] is not None:
@@ -482,7 +482,13 @@ class OpenPlanBenchTest(unittest.TestCase):
             ids = set(row["openCover"]["_hire"]["bench"]) | set(row["fullCover"]["_hire"]["bench"])
             if "free" in ids:
                 self.assertIn("free", row["openCover"]["_hire"]["bench"])
-        self.assertIn("free", ba_dashboard._bench_claimed(rows))
+        # And it has left the bench the offices and factories plan over next.
+        spec12, spec14 = spec(12), spec(14)
+        _save, _names, _sites, _grids, staff = ts.plan_inputs([spec12, spec14],
+                                                             [ts.employee("free", [SERVICE], here=False)])
+        world = ba_dashboard._plan_world(_save, staff)
+        ba_dashboard._staffing(_save, _names, _sites, _grids, staff, 0.55, world)
+        self.assertEqual(world["bench"], [])
 
 
 class UnstaffedTest(unittest.TestCase):
@@ -790,8 +796,11 @@ def office_rows(computers, opens, employees, claimed=()):
     _by_addr, staff = _staff(save, Names({}))
     grids = _hourly(save, [reg], [business], {}, {COMPUTER},
                     {p["id"]: p["skill"] for p in staff}, Names({}))
-    return save, business, _office_staffing(save, Names({}), [business], grids, staff,
-                                            set(claimed))
+    # Somebody a shop's plan already counts on has left the one pool's bench
+    # before the offices are planned (_staff_plans()).
+    world = ba_dashboard._plan_world(save, staff)
+    world["bench"] = [p for p in world["bench"] if p["id"] not in set(claimed)]
+    return save, business, _office_staffing(save, Names({}), [business], grids, staff, world)
 
 
 def lawyer(eid, here=True):
@@ -859,12 +868,14 @@ class OfficeStaffingTest(unittest.TestCase):
         self.assertTrue(hire["hireWeeks"])
         slots_point_at_open_entries(self, row, hire)
 
-    def test_a_hire_gets_a_full_week_and_nobody_here_works_less(self):
+    def test_a_hire_gets_a_full_week_and_nobody_here_is_left_short(self):
         """Peter's in-game test (25 September 2026): the lawyers already there
         filled every day but one, and the hires got that one day, 7 to 14
-        hours each. Now the open hours are spread over the week by swapping
-        days with the staff, and each hire takes a full-time week, with
-        nobody here planned under the 40 hours the game has them on."""
+        hours each. Now the hires are people in the one placer, and each
+        takes a full-time week out of the lines nobody here may work and the
+        hours the staff hold above their own full time: nobody here is
+        planned under the thirty hours their contract asks for (the rule for
+        the people a site already has: _worse_off())."""
         for n in (14, 20):
             people = [dict(lawyer(f"l{i:02d}"), assignedWeeklyHours=40) for i in range(n)]
             _save, _b, [row] = office_rows(10, [[[0, 24]] for _ in range(7)], people)
@@ -881,7 +892,7 @@ class OfficeStaffingTest(unittest.TestCase):
                 if s["p"] is not None:
                     worked[s["p"]] += s["t"] - s["f"]
             self.assertEqual(len(worked), n)
-            self.assertGreaterEqual(min(worked.values()), 40, n)
+            self.assertGreaterEqual(min(worked.values()), FULL_TIME[0], n)
             slots_point_at_open_entries(self, row, row["_hire"])
 
     def test_the_bench_is_drawn_unless_a_shop_counts_on_them(self):

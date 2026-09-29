@@ -2248,7 +2248,7 @@
      "ba:skill_cleaning": {
       "have": 0,
       "hire": 4,
-      "hireHours": 120,
+      "hireHours": 168,
       "kind": "clean",
       "max": 5,
       "min": 4,
@@ -2531,7 +2531,7 @@
      "ba:skill_cleaning": {
       "have": 0,
       "hire": 4,
-      "hireHours": 120,
+      "hireHours": 168,
       "kind": "clean",
       "max": 5,
       "min": 4,
@@ -2832,7 +2832,7 @@
      "ba:skill_cleaning": {
       "have": 0,
       "hire": 4,
-      "hireHours": 120,
+      "hireHours": 168,
       "kind": "clean",
       "max": 5,
       "min": 4,

@@ -1028,6 +1028,8 @@
  "sp.gw.sch.reread.office": "gpt-6-sol",
  "sp.gw.staff": "gpt-6-sol",
  "sp.gw.uni.keptlead": "gpt-6-sol",
+ "sp.hc.newhours": "gpt-6-sol",
+ "sp.hc.newhours.more": "gpt-6-sol",
  "sp.idle.sentence": "claude-opus-5-5",
  "sp.lines.all2": "gpt-6-sol",
  "sp.lines.why": "gpt-6-sol",
