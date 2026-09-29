@@ -18563,6 +18563,10 @@ const gnSwap = (T, EN, key, english, loose) =>
 const GN_PAIRS = [["slug", ["item", "type", "demand"], ["name"]], ["typeSlug", ["type"], ["sub"]],
   ["skill", ["label", "role"], []], ["demand", ["label"], []], ["hood", [], ["where"]],
   ["workstationKey", ["workstation"], []]];
+/* Tables keyed by game key whose values are codes, never names:
+   hiring.demandKinds (a demand's kind) and hiring.company ("plan" where an HR
+   plan offers the cover), both read by the Staff page. */
+const GN_CODE_TABLES = new Set(["demandKinds", "company"]);
 /* Lists of names with their keys in a list beside them, index for index. */
 const GN_LISTS = [["items", "slugs"], ["fees", "feeSlugs"], ["lines", "lineSlugs"], ["uniformGaps", "uniformGapSkills"],
   ["missing", "missingSlugs"], ["waitingOn", "waitingOnSlugs"]];
@@ -18591,7 +18595,9 @@ function gnWalk(v, T, EN, at){
   for(const [k, loose, strict] of GN_PAIRS){
     const key = typeof v[k] === "string" && /^ba:/.test(v[k]) ? v[k] : null;
     if(!key) continue;
-    loose.forEach(f => { const s = gnSwap(T, EN, key, v[f], true); if(s) o[f] = s; });
+    /* A split role ("skill|station") is a key the board reads, not a name. */
+    loose.forEach(f => { if(typeof v[f] === "string" && v[f].indexOf("|") >= 0) return;
+      const s = gnSwap(T, EN, key, v[f], true); if(s) o[f] = s; });
     strict.forEach(f => { const s = gnSwap(T, EN, key, v[f]); if(s) o[f] = s; });
   }
   if(/^ba:/.test(at) && typeof v.slug !== "string" && typeof v.typeSlug !== "string")
@@ -18599,8 +18605,10 @@ function gnWalk(v, T, EN, at){
   for(const [names, keys] of GN_LISTS)
     if(Array.isArray(v[names]) && Array.isArray(v[keys]))
       o[names] = v[names].map((s, i) => gnSwap(T, EN, v[keys][i], s) || o[names][i]);
-  /* A table of names by key (names, skillNames, plan.items). */
-  for(const k of Object.keys(v))
+  /* A table of names by key (names, skillNames, plan.items). A table keyed
+     the same way whose values are codes the board reads, not names
+     (hiring.demandKinds: a demand's kind), is left as Python wrote it. */
+  if(!GN_CODE_TABLES.has(at)) for(const k of Object.keys(v))
     if(k.startsWith("ba:")){ const s = gnSwap(T, EN, k, v[k], true); if(s) o[k] = s; }
   return o;
 }
