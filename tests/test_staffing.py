@@ -492,6 +492,12 @@ def plan_sites(specs, employees, status="retail", day=None):
     the registration: it is how long the doors have been open, and the page
     calls a shop new by it.
     """
+    save, names, sites, grids, staff = plan_inputs(specs, employees, status, day)
+    return _staffing(save, names, sites, grids, staff, 0.55)
+
+
+def plan_inputs(specs, employees, status="retail", day=None):
+    """What plan_sites() hands _staffing(): (save, names, sites, grids, staff)."""
     specs = [dict(spec) for spec in specs]
     opened = [spec.pop("days_open", 14) for spec in specs]
     regs = [registration(**spec) for spec in specs]
@@ -513,7 +519,7 @@ def plan_sites(specs, employees, status="retail", day=None):
     _by_addr, staff = _staff(save, LABELS)
     crew = {p["id"]: p["skill"] for p in staff}
     grids = _hourly(save, regs, sites, STATIONS, set(), crew, LABELS)
-    return _staffing(save, LABELS, sites, grids, staff, 0.55)
+    return save, LABELS, sites, grids, staff
 
 
 def plan(items, employees, hourly, day=None, **kw):

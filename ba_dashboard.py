@@ -1820,16 +1820,6 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
     grids = [grid for grid in all_grids if grid["reported"]]
     service_wage = _service_wages(staff, {b["key"]: b["status"] for b in businesses})
     hour_findings = _hour_findings(grids, businesses, service_wage)
-    staffing = _staffing(
-        save,
-        names,
-        businesses,
-        all_grids,
-        staff,
-        (save.deref(root.get("gameVariables")) or {}).get(
-            "baseCustomerPromotionMultiplier", 0.55
-        ),
-    )
     plan = _plan(
         save,
         names,
@@ -1851,14 +1841,16 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
     ledger = history.ledger(character, day, entry)
     history.write()
     gate = max(profit_avg7 * MATERIAL_SHARE, MATERIAL_FLOOR)
-    # Staffing for factory lines, in each sizing; takes the lines' _posts.
-    factory_staffing = _factory_staffing(
-        save, names, businesses, supply.get("factories", {}), staff)
-    # Offices by Peter's office default, drawing on the unassigned people no
-    # shop's plan counts on; then the Staff page's key, which takes every
-    # plan's private `_hire` part off its row.
-    office_staffing = _office_staffing(
-        save, names, businesses, all_grids, staff, _bench_claimed(staffing))
+    # Every site's week over one pool of people: shops, then offices by Peter's
+    # office default, then factory lines in each sizing (which takes the
+    # lines' _posts); then the Staff page's key, which takes every plan's
+    # private `_hire` part off its row.
+    staffing, office_staffing, factory_staffing = _staff_plans(
+        save, names, businesses, all_grids, supply.get("factories", {}), staff,
+        (save.deref(root.get("gameVariables")) or {}).get(
+            "baseCustomerPromotionMultiplier", 0.55
+        ),
+    )
     hiring = _hiring(save, businesses, staffing, factory_staffing, office_staffing)
     alerts = _alerts(
         businesses, supply, chains, trends, hype, hour_findings, grids, day, gate
@@ -8382,6 +8374,39 @@ def _current_cost(current: dict, wage_of: dict) -> float:
     )
 
 
+def _plan_world(save: Save, staff: list) -> dict:
+    """The one pool of people every plan of a save draws on, and their weeks.
+
+    `people` is _plan_people() once for the whole save; `state` one week per
+    person, which every placement writes into its own copy of and commits back;
+    `bench` the unassigned people nobody is in training among, which each plan
+    that gives one of them hours takes them off. Shops, then offices, then
+    factories plan over the same three (_staff_plans()), so an unassigned
+    person is promised to one site at most, whichever kind it is.
+    """
+    people = _plan_people(save, staff)
+    return {
+        "people": people,
+        "state": {pid: _fresh_state() for pid in people},
+        "bench": [people[pid] for pid in _in_order(people)
+                  if not people[pid]["addr"] and not people[pid]["training"]],
+    }
+
+
+def _staff_plans(save: Save, names: Names, businesses: list, grids: list, factories: dict,
+                 staff: list, base_promotion: float) -> tuple:
+    """Every site's week, over one pool: (staffing, officeStaffing, factoryStaffing).
+
+    Shops first, in their order, then offices, then factories, each drawing on
+    the unassigned people the ones before it left (_plan_world()).
+    """
+    world = _plan_world(save, staff)
+    staffing = _staffing(save, names, businesses, grids, staff, base_promotion, world)
+    offices = _office_staffing(save, names, businesses, grids, staff, world)
+    factory = _factory_staffing(save, names, businesses, factories, staff, world=world)
+    return staffing, offices, factory
+
+
 def _staffing(
     save: Save,
     names: Names,
@@ -8389,6 +8414,7 @@ def _staffing(
     grids: list,
     staff: list,
     base_promotion: float,
+    world: dict | None = None,
 ) -> list:
     """A roster the player can type in, one row per retail site.
 
@@ -8407,7 +8433,9 @@ def _staffing(
     order, against the bench the demand plans left, each taking whom it uses
     off a shared copy of it. A site's full-cover plan may also use whoever its
     own demand plan took, since the player follows one plan or the other there.
-    So no unassigned person is promised to two shops.
+    So no unassigned person is promised to two shops. `world` is the save's
+    one pool (_plan_world()), which the offices and factories plan over next;
+    the bench this leaves in it is everybody no shop plan counts on.
     """
     by_key = {b["key"]: b for b in businesses}
     buildings = {
@@ -8415,9 +8443,9 @@ def _staffing(
         for b in save.items(save.root.get("BuildingRegistrations"))
         if b.get("RentedByPlayer")
     }
-    people = _plan_people(save, staff)
-    bench = [people[pid] for pid in _in_order(people)
-             if not people[pid]["addr"] and not people[pid]["training"]]
+    world = world or _plan_world(save, staff)
+    people = world["people"]
+    bench = list(world["bench"])
     everyone_on_bench = list(bench)
     curves = load_demand_curves()
     table = load_buildings()
@@ -8428,7 +8456,7 @@ def _staffing(
     # would put the same employee on the same Monday morning at three shops at
     # once. The sites are planned in their payload order so the bench goes to
     # the same site on every run.
-    state = {person["id"]: _fresh_state() for person in people.values()}
+    state = world["state"]
     planned = sorted(
         (
             (by_key[grid["key"]], buildings[grid["key"]], grid)
@@ -8542,6 +8570,8 @@ def _staffing(
         drawn = {p["id"] for p in full["took"]} | drew_open
         left = [person for person in left if person["id"] not in drawn]
         out[index] = row
+    state.update(shared)
+    world["bench"] = left
     return out
 
 
@@ -8642,7 +8672,7 @@ def _factory_run_start(hours: int, pool: list) -> int:
 
 
 def _factory_staffing(save: Save, names, businesses: list, factories: dict, staff: list,
-                      detail: bool = False) -> dict:
+                      detail: bool = False, world: dict | None = None) -> dict:
     """Staffing for factory lines, once per sizing: {cap: [row], dem: [row]}.
 
     The shop roster's placer (_place_week) over a synthetic grid: one role,
@@ -8650,7 +8680,9 @@ def _factory_staffing(save: Save, names, businesses: list, factories: dict, staf
     cleaning or security. Each line runs its needed hours a day (24 sized
     24/7, `needHours.dem` sized for demand) as one run from
     _factory_run_start(), cut into shifts of at most 12 hours. The pool is the
-    factory's own staff, nobody unassigned. `headcount.needed` is the week's
+    factory's own staff, then the unassigned factory workers the shops and
+    offices left on `world`'s bench (_staff_plans()), whom either sizing's
+    week draws off it. `headcount.needed` is the week's
     machine-hours; `wageDay` the mean day's wage of the factory's factory
     workers; `delta` what hiring the plan's `hire` and letting its `spare` go
     does to the headcount and the day's wage bill. A factory the placer falls
@@ -8675,7 +8707,8 @@ def _factory_staffing(save: Save, names, businesses: list, factories: dict, staf
             posts_of[("line", site["s"], i)] = line.pop("_posts", [])
         for i, line in enumerate(site.get("unnamed", [])):
             posts_of[("unnamed", site["s"], i)] = line.pop("_posts", [])
-    people = _plan_people(save, staff)
+    world = world or _plan_world(save, staff)
+    people = world["people"]
     label = names.label(FACTORY_SKILL) if names else FACTORY_SKILL
     buildings = {
         site_key(_address_of(b)): b
@@ -8686,17 +8719,19 @@ def _factory_staffing(save: Save, names, businesses: list, factories: dict, staf
     for site in sites:
         business = businesses[site["s"]]
         building = buildings.get(business["key"])
-        pool = [p for p in _site_pool(people, business, []) if _usable(p, FACTORY_SKILL, "serve")]
+        pool = [p for p in _site_pool(people, business, world["bench"])
+                if _usable(p, FACTORY_SKILL, "serve")]
         workers = [
             p for p in staff
             if p["addr"] and site_key(p["addr"]) == business["key"]
             and FACTORY_SKILL in (p["skills"] or ())
         ]
         wage_day = money(sum(p["daily"] for p in workers) / len(workers)) if workers else 0.0
+        drawn = set()
         for mode in SIZING_MODES:
             try:
                 row = _factory_site_plan(save, building, site, business, posts_of, pool, people,
-                                         mode, label, names, wage_day)
+                                         mode, label, names, wage_day, world["state"])
             except Exception:
                 row = {"key": business["key"], "s": site["s"], "name": business["name"],
                        "failed": True}
@@ -8706,12 +8741,16 @@ def _factory_staffing(save: Save, names, businesses: list, factories: dict, staf
                 for field in ("placed", "shortHours"):
                     row.pop(field, None)
             if row is not None:
+                drawn.update(row.pop("_took", ()))
                 out[mode].append(row)
+        # Whom either sizing draws off the bench is this factory's either way,
+        # as a shop's two plans share theirs.
+        world["bench"] = [p for p in world["bench"] if p["id"] not in drawn]
     return out
 
 
 def _factory_site_plan(save, building, site, business, posts_of, pool, people, mode, label,
-                       names, wage_day):
+                       names, wage_day, state=None):
     """One factory's row of _factory_staffing() in one sizing, or None with no line.
 
     `current` is the factory's schedule as it stands (_current_roster()), so the
@@ -8766,12 +8805,14 @@ def _factory_site_plan(save, building, site, business, posts_of, pool, people, m
     # The fewest of the factory's own workers that cover the week. The placer
     # spreads a week over everybody it is given, so it is given the least
     # ceil(machine-hours / 50) first, and one more while a line is left with
-    # nobody on it: whoever it is not given is spare. Those whose blackout
-    # windows touch the fewest shifts are kept first, then the pool's order.
+    # nobody on it: whoever it is not given is spare. The factory's own staff
+    # before anybody off the bench, then those whose blackout windows touch
+    # the fewest shifts, then the pool's order.
     pieces = [cut for line in lines for cut in line["cuts"]]
     ranked = sorted(
         enumerate(pool),
         key=lambda entry: (
+            not entry[1]["addr"],
             sum(1 for low, high in pieces for a, b in entry[1]["blackouts"]
                 if a < high and low < b),
             entry[1]["weekendsOff"],
@@ -8783,8 +8824,12 @@ def _factory_site_plan(save, building, site, business, posts_of, pool, people, m
     needed = sum(len(hours) for days in runs.values() for hours in days)
     for count in range(min(math.ceil(needed / FULL_TIME[1]), len(ranked)), len(ranked) + 1):
         trial = ranked[:count]
-        state = {person["id"]: _fresh_state() for person in trial}
-        week = _place_week(grid, need, ALL_DAY_OPEN, [], trial, people, business, [], state)
+        trial_state = {
+            person["id"]: _copy_state(state[person["id"]]) if state else _fresh_state()
+            for person in trial
+        }
+        week = _place_week(grid, need, ALL_DAY_OPEN, [], trial, people, business,
+                           [p for p in trial if not p["addr"]], trial_state)
         if all(shift["employee"] is not None for shift in week["shifts"]):
             break
     current = (
@@ -8796,13 +8841,16 @@ def _factory_site_plan(save, building, site, business, posts_of, pool, people, m
                          people)
     count = week["headcount"][FACTORY_SKILL]
     worked = {shift["employee"] for shift in week["shifts"] if shift["employee"] is not None}
-    headcount = {"needed": count["needed"], "min": count["min"], "have": len(pool),
-                 "spare": len(pool) - len(worked), "hire": count["hire"]}
+    own = {p["id"] for p in pool if p["addr"]}
+    took = [p for p in pool if not p["addr"] and p["id"] in worked]
+    headcount = {"needed": count["needed"], "min": count["min"], "have": len(own) + len(took),
+                 "spare": len(own - worked), "hire": count["hire"]}
     workers = headcount["hire"] - headcount["spare"]
     # The whole pool's spare, not only the trial's: everybody here the week
     # gives no hours. The week was placed on its own trial, so its own ids
-    # are overwritten.
-    week["spareIds"] = _in_order({p["id"] for p in pool} - worked)
+    # are overwritten. Only the factory's own: a bench member the week does
+    # not use was never this factory's.
+    week["spareIds"] = _in_order(own - worked)
     week["spareSkills"] = {pid: [FACTORY_SKILL] for pid in week["spareIds"]}
     return {
         "key": business["key"],
@@ -8835,6 +8883,8 @@ def _factory_site_plan(save, building, site, business, posts_of, pool, people, m
         "addPeople": _add_people(week, people, names),
         # The Staff page's part, taken off by _hiring(). See _hire_fields().
         "_hire": _hire_fields(week),
+        # Whom this week draws off the bench, taken off by _factory_staffing().
+        "_took": [p["id"] for p in took],
     }
 
 
@@ -9864,16 +9914,16 @@ def _office_runs(computers: int, open_hours: list, door: int) -> tuple:
 
 
 def _office_staffing(save: Save, names, businesses: list, grids: list, staff: list,
-                     claimed: set) -> list:
+                     world: dict | None = None) -> list:
     """A week for every office by Peter's office default, one row per office.
 
     The shop placer (_place_week) over a synthetic grid, as a factory's is: one
     role, the office's professional skill (its type's first accepted skill),
     one station per computer, the hours _office_runs() gives each. The pool is
     the office's own staff with that skill, then the unassigned people no
-    shop's plan counts on (`claimed` are the ones some shop plan does), handed
-    out in office order the way _staffing() hands out the bench. An office the
-    placer falls over on is one `failed` row.
+    shop's plan counts on (`world`'s bench, which _staffing() has already
+    taken its own off), handed out in office order the way _staffing() hands
+    out the bench. An office the placer falls over on is one `failed` row.
 
     The row has the shop row's fields a write reads (`stations`, `people`,
     `shifts`, `current`, `roles`, `open`, `openAllHours` false) and its plan
@@ -9886,12 +9936,9 @@ def _office_staffing(save: Save, names, businesses: list, grids: list, staff: li
         for b in save.items(save.root.get("BuildingRegistrations"))
         if b.get("RentedByPlayer")
     }
-    people = _plan_people(save, staff)
-    bench = [
-        people[pid] for pid in _in_order(people)
-        if not people[pid]["addr"] and not people[pid]["training"] and pid not in claimed
-    ]
-    state = {pid: _fresh_state() for pid in people}
+    world = world or _plan_world(save, staff)
+    people, state = world["people"], world["state"]
+    bench = list(world["bench"])
     offices = sorted(
         (
             (by_key[g["key"]], buildings[g["key"]], g)
@@ -9919,6 +9966,7 @@ def _office_staffing(save: Save, names, businesses: list, grids: list, staff: li
         taken = {p["id"] for p in took}
         bench = [p for p in bench if p["id"] not in taken]
         out.append(row)
+    world["bench"] = bench
     return out
 
 
@@ -10247,15 +10295,6 @@ def _company_facts(save: Save) -> dict:
             out[slug] = "plan" if best >= setting else False
         elif kind == "happiness":
             out[slug] = happiness >= setting
-    return out
-
-
-def _bench_claimed(staffing: list) -> set:
-    """The unassigned people some shop's plan (either variant) counts on."""
-    out = set()
-    for row in staffing:
-        for plan in (row, row.get("fullCover") or {}, row.get("openCover") or {}):
-            out.update((plan.get("_hire") or {}).get("bench", ()))
     return out
 
 

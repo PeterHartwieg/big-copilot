@@ -313,7 +313,7 @@ class StationFactsTest(unittest.TestCase):
         _by_addr, staff = _staff(save, Names({}))
         grids = _hourly(save, [reg], [business], {}, {COMPUTER},
                         {p["id"]: p["skill"] for p in staff}, Names({}))
-        [row] = _office_staffing(save, Names({}), [business], grids, staff, set())
+        [row] = _office_staffing(save, Names({}), [business], grids, staff)
         on = collections.defaultdict(set)
         for s in row["shifts"]:
             if s["p"] is not None:
@@ -480,7 +480,13 @@ class OpenPlanBenchTest(unittest.TestCase):
             ids = set(row["openCover"]["_hire"]["bench"]) | set(row["fullCover"]["_hire"]["bench"])
             if "free" in ids:
                 self.assertIn("free", row["openCover"]["_hire"]["bench"])
-        self.assertIn("free", ba_dashboard._bench_claimed(rows))
+        # And it has left the bench the offices and factories plan over next.
+        spec12, spec14 = spec(12), spec(14)
+        _save, _names, _sites, _grids, staff = ts.plan_inputs([spec12, spec14],
+                                                             [ts.employee("free", [SERVICE], here=False)])
+        world = ba_dashboard._plan_world(_save, staff)
+        ba_dashboard._staffing(_save, _names, _sites, _grids, staff, 0.55, world)
+        self.assertEqual(world["bench"], [])
 
 
 class UnstaffedTest(unittest.TestCase):
@@ -786,8 +792,11 @@ def office_rows(computers, opens, employees, claimed=()):
     _by_addr, staff = _staff(save, Names({}))
     grids = _hourly(save, [reg], [business], {}, {COMPUTER},
                     {p["id"]: p["skill"] for p in staff}, Names({}))
-    return save, business, _office_staffing(save, Names({}), [business], grids, staff,
-                                            set(claimed))
+    # Somebody a shop's plan already counts on has left the one pool's bench
+    # before the offices are planned (_staff_plans()).
+    world = ba_dashboard._plan_world(save, staff)
+    world["bench"] = [p for p in world["bench"] if p["id"] not in set(claimed)]
+    return save, business, _office_staffing(save, Names({}), [business], grids, staff, world)
 
 
 def lawyer(eid, here=True):
