@@ -519,8 +519,8 @@ arrivals formula, and an arrival is lost when the hour's staffed stations are fu
 nothing when the shop holds nothing they want. For a game started at build 2847 or later,
 which is every new game, it is sized off the building's customer capacity; an older game
 sizes it off the square metres times the highest sales ratio, in the game's own item data,
-among the primary products on the shelves. It is
-carried to bound a censored hour from above, and for nothing else.
+among the primary products on the shelves. It is carried to bound a censored hour from
+above, and for nothing else.
 
 **The entries.** Each role's stations are manned from the largest throughput down, the hours
 they are wanted are joined into runs, and each run is cut into the fewest entries of at most

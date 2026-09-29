@@ -6603,10 +6603,11 @@ def _initial_customers(
     keeps the ceiling an upper bound, and the door clips it to the building's
     own number anyway.
 
-    0 where it cannot be known: an unknown size, or an old game's shop holding
-    none of its type's primary products or of a type the curves file does not
-    carry. A new game's type is not looked up here; _arrival_ceiling() answers
-    None for a type it has no curves for.
+    0 where it cannot be known: a new game's building of unknown size, or an old
+    game's shop with no known floor area, holding none of its type's primary
+    products, or of a type the curves file does not carry. A new game's type is
+    not looked up here; _arrival_ceiling() answers None for a type it has no
+    curves for.
     """
     if (build_at_start or 0) >= CAPPED_INITIAL_BUILD:
         if isinstance(size_cap, list):
@@ -6647,8 +6648,8 @@ def _arrival_ceiling(
     baseCustomerPromotionMultiplier plus 0.75 x the promotion total over 100.
     `door` is the registration's customerCapacity, the grid's door. The game
     sends arrivals in open hours only; which those are is the caller's to know.
-    Where `initial` is the top of a cinema's capacity range, the grid is a bound
-    on that cinema's arrivals rather than the game's exact number.
+    Where `initial` is the top of a cinema's or theater's capacity range, the
+    grid is a bound on that venue's arrivals rather than the game's exact number.
 
     **These are the game's arrivals, an upper bound on customers served, never
     the demand, and the board must never print them as one.** An arrival is

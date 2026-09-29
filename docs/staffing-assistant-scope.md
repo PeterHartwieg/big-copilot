@@ -728,7 +728,6 @@ From `AGENTS.md`, both of which apply:
   popover belongs on `<body>` with `position:fixed`.
 
 And one from this feature: **never print the arrival ceiling as demand.** It
-counts arrivals, not customers served (amended 29 Sep 2026: the fourfold gap
-measured here was the old-game rule applied to a new game). A
+counts arrivals, not customers served. A
 confident wrong number that tells the player to hire is the worst outcome
 available here.
