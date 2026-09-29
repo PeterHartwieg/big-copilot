@@ -265,7 +265,14 @@ test('uniforms: Applied from the write\'s answer, Confirmed once a later board s
   const k = await keys(page);
   const skill = 'ba:skill_customerservice';
   const state = () => page.evaluate(key => { const u = pgUniformState(key); return u ? u.state : null; }, k.gifts);
-  const pill = () => page.locator(`#secStandards tr[data-std-row="${k.gifts}"] .nx-st`).innerText().catch(() => '');
+  // textContent, not innerText: the table sits in a section{content-visibility:auto},
+  // and Chromium gives innerText as '' while that section is off screen or its
+  // visibility not yet settled after a redraw. The draws here are synchronous,
+  // so the pill's words are in the DOM the moment the evaluate returns.
+  const pill = () => page.evaluate(key => {
+    const el = document.querySelector(`#secStandards tr[data-std-row="${CSS.escape(key)}"] .nx-st`);
+    return el ? el.textContent : '';
+  }, k.gifts);
   await page.evaluate(([key, skill]) => {
     const [street, number] = [key.slice(0, key.lastIndexOf('#')), Number(key.slice(key.lastIndexOf('#') + 1))];
     // The locker is in place now; the write dressed the one role.
