@@ -498,10 +498,10 @@ GAME_NAME_LANGS = {
 # i18n/<lang>.json each; tests/test_game_names.py holds the three together).
 # The footer's Language list shows them first, as "Whole page"; every other
 # entry of GAME_NAME_LANGS changes only the game's names.
-UI_LANGS = ("en", "de", "es", "fr", "pt", "ru", "ko")
+UI_LANGS = ("en", "de", "es", "fr", "pt", "ru", "ko", "tr")
 # The ones still mostly machine-drafted (i18n/<lang>.ai.json): the footer says
 # so under the picker, with a link to help check them.
-UI_LANGS_DRAFTED = ("es", "fr", "pt", "ru", "ko")
+UI_LANGS_DRAFTED = ("es", "fr", "pt", "ru", "ko", "tr")
 TRANSLATING_URL = f"{REPO_URL}/blob/main/docs/translating.md"
 # A language whose file names fewer of the English name keys than this is left
 # out rather than shown half in English (the game's ar.json names none).

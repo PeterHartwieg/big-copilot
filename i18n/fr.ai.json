@@ -4277,7 +4277,7 @@
  "upd.news": "gpt-6-sol",
  "upd.news.dismiss": "gpt-6-sol",
  "upd.news.help-translate": "claude-opus-5-5",
- "upd.news.lang-ko": "claude-opus-5-5",
+ "upd.news.lang-tr": "claude-opus-5-5",
  "upd.news.tag": "gpt-6-sol",
  "upd.reload": "gpt-6-sol",
  "wiki.absent": "gpt-6-sol",
