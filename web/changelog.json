@@ -3,7 +3,7 @@
     "pr": 0,
     "date": "2026-09-29",
     "title": "Staff a site in one step, and undo it in one",
-    "summary": "A shop's or an office's Staffing has Staff this site, and Staffing › Staff needs has Staff all sites. One review hires the best candidates, moves spare staff across, and writes the new week at every site it reaches, including sites that only need new hours; each site then says whether its week was written. Pick Hire and schedule, Hire only (assigned with no hours, as at a headquarters or a warehouse) or Schedule only; Quick hire works the same way. A shop you put on full cover 24/7 is staffed around the clock. With Big Copilot Link 0.5.0 it all goes to the game in one step, and one Undo takes back every hire, move and week, until the game's next day. Older versions of the mod still hire, then write the other weeks one by one, without undo."
+    "summary": "A shop's or an office's Staffing has Staff this site, and Staffing › Staff needs has Staff all sites. One review hires the best candidates, moves spare staff across, and writes the new week at every site it reaches, including sites that only need new hours; each site then says whether its week was written. Pick Hire and schedule, Hire only (assigned with no hours, as at a headquarters or a warehouse) or Schedule only; Quick hire works the same way. A shop you put on full cover 24/7 is staffed around the clock. With Big Copilot Link 0.4.0 it all goes to the game in one step, and one Undo takes back every hire, move and week, until the game's next day. Older versions of the mod still hire, then write the other weeks one by one, without undo."
   },
   {
     "pr": 169,

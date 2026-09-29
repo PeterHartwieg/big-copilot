@@ -2347,7 +2347,7 @@ test('hire: a dry run and an apply through the page, which then reads the game a
   assert.deepEqual((await applied()).map((w) => w.kind), ['hire']);
   // The board follows the stamp the apply moved, as after any write.
   await page.waitForFunction((n) => window.builds > n, builds);
-  // Mod 0.5.0 (the mock's features by default): the whole call is undone,
+  // Mod 0.4.0 (the mock's features by default): the whole call is undone,
   // Ida and Oskar back among the candidates and Ben back at Gifts.
   const undo = await sourceWrite(page, 'undo', {kind: 'hire'}, false);
   assert.deepEqual([undo.status, undo.error, undo.body.kind, undo.body.undo], [200, null, 'hire', true]);
@@ -2358,7 +2358,7 @@ test('hire: a dry run and an apply through the page, which then reads the game a
   assert.deepEqual([again.status, again.error], [409, 'nothing_to_undo']);
 });
 
-test('hire: a mod before 0.5.0 lists no features, and has no undo for a hire', async (t) => {
+test('hire: a mod before 0.4.0 lists no features, and has no undo for a hire', async (t) => {
   const page = await linked(t, {writes: WRITES_WITH_HIRE, approved: true});
   await configure({features: []});
   const done = await sourceWrite(page, 'hire', hireBody(), false);
