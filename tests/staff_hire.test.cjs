@@ -219,7 +219,7 @@ const ONE = {writes: ['uniforms', 'imports', 'schedule', 'hire'], features: ['hi
 const REVIEW = '#hsOrder button.hs-cta[data-hs-review]';
 const phase = (page, p) => page.waitForFunction(p => document.querySelector('dialog.gw-dlg')?.dataset.phase === p, p);
 // Corner's game week with a Wednesday for Cy that its plan drops: its week is
-// one to write even when Sam, not reassigned, keeps his hours there.
+// one to write whether or not Sam is reassigned.
 const cyWednesday = (data = payload) => {
   const d = JSON.parse(data);
   const cur = d.staffing.find(r => r.key === C).current;
@@ -663,7 +663,7 @@ test('Review: the dry run, who goes where, one confirm with no undo, and a parti
   // This mod writes it all in the hire call, and has no undo for it.
   assert.match(await dlg.locator('.gw-foot').textContent(), /This mod cannot undo a hire/);
   // Somebody the plan's week gives fewer hours than now is named before the confirm.
-  assert.match(await dlg.locator('.gw-body').textContent(), /Fewer hours than now in the plan's week: Lena Voss \(HART\. Law, 48 → 40 h\)\./);
+  assert.match(await dlg.locator('.gw-body').textContent(), /Fewer hours than now in the week sent: Lena Voss \(HART\. Law, 48 → 40 h\)\./);
   const bare = dlg.locator('.hr-dsite', {has: page.locator(`[data-hr-site="${B}"]`)});
   assert.match(await bare.locator('.c').textContent(), /^3 new\+1 reassigned/);
   // A site opens for its people and their days.
@@ -2497,15 +2497,15 @@ test('a spare changes nobody\'s planned hours: the plan keeps its week, and the 
 });
 
 test('a spare left with no hours is named with the reason and what to do, never twice', async (t) => {
-  // Sam works all of Monday 8 to 20: trimming Cy would leave him nothing, so
-  // Sam's hours are cut to none.
+  // Sam works all of Monday 8 to 20, and the plan gives Monday to Cy: Sam's
+  // hours are cut to none.
   const page = await board(t, {link: ONE, data: JSON.stringify(cornerMonday(8, 20))});
   await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
   await page.evaluate(src => {
     window.answerFor = eval(src);
     window.hrAnswer = async (kind, body, o) => {
       const a = window.answerFor(body, {dryRun: !!o.dryRun});
-      a.sites.forEach(s => { if(s.address.number === 2) s.leftWithout = [{employeeId: 'SPARE1', name: 'Sam Spare'}]; });
+      a.sites.forEach(s => { if(s.address.number === 2) s.leftWithout = [{employeeId: 'SPARE1', name: 'Sam Spare'}, {employeeId: 'OTHER1', name: 'Sam Spare'}]; });
       return {status: 200, error: null, body: a};
     };
   }, `(${answerFor.toString()})`);
@@ -2516,8 +2516,11 @@ test('a spare left with no hours is named with the reason and what to do, never 
   assert.match(text, /No hours after this for 1 person the plan does not need here\./);
   assert.match(text, /Sam Spare: tick their reassign to HART\. Gifts to give them its week\./);
   assert.match(text, /Hire only leaves the weeks as they are\./);
-  // The mod's own list of those left with no hours does not name him again.
-  assert.doesNotMatch(text, /for these people at the sites whose week is replaced/);
+  // The mod's own list of those left with no hours does not name him again,
+  // by id: another Sam Spare stays on it.
+  const pills = dlg.locator('.gw-box .gw-pills .person');
+  assert.equal(await pills.count(), 1);
+  assert.match(await pills.first().textContent(), /Sam Spare/);
   // Schedule only, the reassign ticked: it is not part of this, and Hire only
   // is not the way.
   const week = await board(t, {link: ONE, data: JSON.stringify(cornerMonday(8, 20))});
@@ -2545,7 +2548,7 @@ test('a spare no open week fits, left with no hours, is named as such', async (t
   assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), /Sam Spare: no open week elsewhere fits them\./);
 });
 
-test('an arriving bench member\'s hours are never trimmed for someone kept', async (t) => {
+test('an arriving bench member\'s hours are never cut for someone who works there now', async (t) => {
   // Stan works Bare's cleaning station on Monday now; the plan has Bo, who
   // arrives from the bench, there then.
   const d = JSON.parse(payload);
@@ -2564,7 +2567,7 @@ test('a spare reassigned out of Staff this site: never opens the other shop 24/7
   const gifts = d.staffing.find(r => r.key === G);
   gifts.fullCover = {openNow: false, shifts: [{d: 1, s: 0, f: 0, t: 12, p: 0}, {d: 1, s: 0, f: 12, t: 24, p: null}]};
   d.hiring.sites.find(s => s.key === G).plans.full = {spare: [], bench: [], hireWeeks: [
-    {skill: CS, hours: 12, days: 1, slots: [slot(1, 1, 12, 24, 'REG-G')]}]};
+    {skill: CS, hours: 12, days: 1, slots: [slot(1, 3, 12, 24, 'REG-G')]}]};
   gifts.open = Array.from({length: 7}, () => [[0, 24]]);
   let page = await board(t, {link: ONE, data: JSON.stringify(d)});
   await page.evaluate(k => spPlanWrite(k, 'full'), G);
@@ -2572,13 +2575,13 @@ test('a spare reassigned out of Staff this site: never opens the other shop 24/7
   assert.deepEqual(body.moves.map(x => x.employeeId), ['SPARE1']);
   const at = body.sites.find(s => s.address.number === 10);
   assert.equal(at.openAllHours, false, 'an additive week never opens the shop around the clock');
-  // Gifts opens 9 to 17: the week found for Sam, Monday 12 to 24, is not in it.
+  // Gifts opens 9 to 17: the week found for Sam, Wednesday 12 to 24, is not in it.
   gifts.open = Array.from({length: 7}, () => [[9, 17]]);
   page = await board(t, {link: ONE, data: JSON.stringify(d)});
   await page.evaluate(k => spPlanWrite(k, 'full'), G);
   body = await page.evaluate(k => hrRequest(hrModel(), {site: k, one: true}).body, C);
   assert.deepEqual(body.moves, []);
-  assert.equal(await page.evaluate(k => hrRequest(hrModel(), {site: k, one: true}).closed.has('SPARE1'), C), true);
+  assert.equal(await page.evaluate(k => hrRequest(hrModel(), {site: k, one: true}).out.get('SPARE1').why, C), 'closed');
   // He is spare at Corner with no hours, and the review says why, in either mode.
   await answering(page, []);
   await page.evaluate(k => hrReview({scope: 'site', site: k}), C);
@@ -2589,7 +2592,7 @@ test('a spare reassigned out of Staff this site: never opens the other shop 24/7
   assert.deepEqual(week, ['SPARE1']);
 });
 
-test('a spare no open week fits ends at 0 h and is named with why: Staff this site, Staff all sites, Quick hire', async (t) => {
+test('a spare no open week fits ends at 0 h and is named with why: Staff this site, Staff all sites, Schedule only', async (t) => {
   // Sam asks for a four-day week and every open week is two or three days.
   const d = JSON.parse(cyWednesday());
   d.hiring.people.SPARE1.demands = ['ba:jobdemand_fourdaysweek'];
@@ -2661,4 +2664,77 @@ test('an older mod: the dialog stays applying while the weeks after the hire are
   await phase(page, 'done');
   assert.match(await dlg.textContent(), /5 weeks written\./);
   assert.equal(await dlg.locator('.hr-st.wait').count(), 0);
+});
+
+// --- review round 7, 29 September 2026 ------------------------------------------------
+
+// Gifts opens 8 to 20 every day; `busy` adds Ana's entries to its game week.
+const giftsOpen = (busy = []) => {
+  const d = JSON.parse(payload);
+  const gifts = d.staffing.find(r => r.key === G);
+  gifts.open = Array.from({length: 7}, () => [[8, 20]]);
+  gifts.current.list.push(...busy);
+  return d;
+};
+
+test('Staff this site sends its spare to the next open week it can write when the first clashes with hours worked there', async (t) => {
+  // Ana works Wednesday 10 to 14 at Gifts' register: the first week (Wednesday
+  // and Thursday) clashes; the second (Friday to Sunday) is free.
+  const page = await board(t, {link: ONE, data: JSON.stringify(giftsOpen([{d: 3, s: 0, f: 10, t: 14, p: 0}]))});
+  const body = await page.evaluate(k => hrRequest(hrModel(), {site: k, one: true}).body, C);
+  assert.deepEqual(body.moves, [{employeeId: 'SPARE1', from: addr(C), to: addr(G)}]);
+  const ana = (day, f = 8, t = 20) => ({d: day, shifts: [{f, t, employeeId: 'AAAAemployeeAAAAAAAAAAAA', itemInstanceId: 'REG-G'}]});
+  const sam = day => ({d: day, shifts: [{f: 8, t: 20, employeeId: 'SPARE1', itemInstanceId: 'REG-G'}]});
+  // Ana's hours stay whole; Sam's week is the free one.
+  assert.deepEqual(body.sites.find(s => s.address.number === 10).days, [sam(0), ana(1), ana(2), ana(3, 10, 14), sam(5), sam(6)]);
+});
+
+test('no week the action can write: no move, the other site\'s week untouched, and the spare named with why', async (t) => {
+  // Ana works Wednesday and Friday mornings: both of Gifts' weeks clash.
+  const page = await board(t, {link: ONE, data: JSON.stringify(giftsOpen([{d: 3, s: 0, f: 10, t: 14, p: 0}, {d: 5, s: 0, f: 10, t: 14, p: 0}]))});
+  const body = await page.evaluate(k => hrRequest(hrModel(), {site: k, one: true}).body, C);
+  assert.deepEqual(body.moves, []);
+  assert.ok(!body.sites.some(s => s.address.number === 10), 'Gifts is not written');
+  await answering(page, []);
+  await page.evaluate(k => hrReview({scope: 'site', site: k}), C);
+  await phase(page, 'ready');
+  const text = await page.locator('dialog.gw-dlg .gw-body').textContent();
+  assert.match(text, /Sam Spare: the open week at HART\. Gifts runs in hours someone already works there\./);
+  assert.doesNotMatch(text, /tick their reassign/);
+});
+
+test('the cause says every step: closed hours in Schedule only, an unticked reassign with the mode to choose', async (t) => {
+  // Gifts opens 9 to 17: Staff this site cannot send Sam there, in any mode.
+  const d = giftsOpen();
+  d.staffing.find(r => r.key === G).open = Array.from({length: 7}, () => [[9, 17]]);
+  let page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  await answering(page, []);
+  await page.evaluate(k => hrReview({scope: 'site', site: k, mode: 'week'}), C);
+  await phase(page, 'ready');
+  let text = await page.locator('dialog.gw-dlg .gw-body').textContent();
+  assert.match(text, /Sam Spare: the open week at HART\. Gifts runs in hours it is closed\./);
+  assert.match(text, /Close to leave the weeks as they are\./);
+  // Unticked, and ticking it would not help: still the closed hours.
+  await page.locator('dialog.gw-dlg [data-gw-close]').click();
+  await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
+  await page.evaluate(k => hrReview({scope: 'site', site: k}), C);
+  await phase(page, 'ready');
+  text = await page.locator('dialog.gw-dlg .gw-body').textContent();
+  assert.match(text, /Sam Spare: the open week at HART\. Gifts runs in hours it is closed\./);
+  assert.doesNotMatch(text, /tick their reassign/);
+  // Staff all sites, Schedule only, the reassign unticked: both steps.
+  page = await board(t, {link: ONE, data: JSON.stringify(giftsOpen())});
+  await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
+  await answering(page, []);
+  await page.evaluate(() => hrReview({scope: 'all', mode: 'week'}));
+  await phase(page, 'ready');
+  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(),
+    /Sam Spare: tick their reassign to HART\. Gifts and choose Hire and schedule\./);
+  // Quick hire, the reassign unticked: tick it, then Staff all sites.
+  await page.locator('dialog.gw-dlg [data-gw-close]').click();
+  const box = page.locator('#hsQuick');
+  await box.locator('[data-hq-role]').selectOption(CS);
+  await box.locator('[data-hq-site]').selectOption(C);
+  const dlg = await quickConfirm(page);
+  assert.match(await dlg.locator('.gw-body').textContent(), /Sam Spare: tick their reassign to HART\. Gifts, then use Staff all sites\./);
 });

@@ -29419,6 +29419,39 @@ const hrFitsOpen = x => {
   const open = (spRosterRow(x.to.key) || {}).open || [];
   return (x.week.w.slots || []).every(sl => (open[sl.d] || []).some(([a, b]) => a <= sl.f && sl.t <= b));
 };
+/* Whether every hour of that week is free at its station in the site's week
+   as the game has it: an additive week never cuts anybody's hours there. */
+const hrFitsFree = x => {
+  if(!x.week) return true;
+  const row = x.to.row || {}, st = i => ((row.stations || [])[i] || {}).id;
+  const now = (row.current || {}).list || [];
+  return (x.week.w.slots || []).every(sl => {
+    const sh = (row.shifts || [])[sl.shift], at = sl.station || (sh && st(sh.s));
+    return !now.some(s => s.d === sl.d && st(s.s) === at && s.f < sl.t && sl.f < s.t);
+  });
+};
+/* Where one site's action can send its own spare `x` (a move of the page's
+   model): the model's week first, then every other open week elsewhere in a
+   role they are spare in, at a site that takes it, meeting their schedule
+   demands, inside its opening hours and on hours free there (every site but
+   theirs is outside that action's scope). {x: the move with that week}, or
+   {why: "closed" | "busy", S} for the first week it had to pass over, or
+   {why: "none"}. `taken`: weeks already given to another spare. */
+function hrOutWeek(m, x, taken){
+  const roles = ((x.from.plan.spareSkills || {})[x.id]) || [x.skill];
+  const weeks = [x.week, ...m.sites.filter(S => S !== x.from).flatMap(S => S.weeks)]
+    .filter((y, i, all) => y && all.indexOf(y) === i && !taken.has(y) && roles.includes(y.w.skill)
+      && (y.S.site.accepts || []).includes(y.w.skill) && hrFits(x.p, y));
+  let why = null;
+  for(const y of weeks){
+    const mv = Object.assign({}, x, {to: y.S, week: y, skill: y.w.skill,
+      group: `${x.from.key}|${y.S.key}|${y.w.skill}`});
+    if(!hrFitsOpen(mv)){ why = why || {why: "closed", S: y.S}; continue; }
+    if(!hrFitsFree(mv)){ why = why || {why: "busy", S: y.S}; continue; }
+    return {x: mv};
+  }
+  return why || {why: "none"};
+}
 function hrWeek(S, fill, away, arriving, lost, o = {}){
   const row = S.row || {};
   const days = new Map();
@@ -29467,9 +29500,10 @@ function hrWeek(S, fill, away, arriving, lost, o = {}){
     const st = (row.stations || [])[s.s], who = (row.people || [])[s.p];
     if(!st || !who || away.has(who.id)) return;
     /* The parts of the shift no planned entry for the same person or
-       station covers. */
+       station covers; an additive week keeps it whole (the mover's hours
+       are free there, hrFitsFree()). */
     let parts = [[s.f, s.t]];
-    planned.filter(x => x.d === s.d && (x.employeeId === who.id || x.itemInstanceId === st.id)).forEach(x => {
+    if(!o.additive) planned.filter(x => x.d === s.d && (x.employeeId === who.id || x.itemInstanceId === st.id)).forEach(x => {
       parts = parts.flatMap(([f, t]) => x.t <= f || t <= x.f ? [[f, t]] : [[f, Math.min(t, x.f)], [Math.max(f, x.t), t]].filter(([a, b]) => a < b));
     });
     const kept = parts.reduce((n, [f, t]) => n + t - f, 0);
@@ -29480,7 +29514,7 @@ function hrWeek(S, fill, away, arriving, lost, o = {}){
     parts.forEach(([f, t]) => { for(let a = f; a < t; a += GW_CAP) put(s.d, a, Math.min(t, a + GW_CAP), who.id, st.id); });
   };
   now.filter(s => kept.has(s)).forEach(keep);
-  if(o.stranded){
+  if(o.stranded && !o.additive){
     const has = new Set(flat().map(x => x.employeeId));
     stay.filter(id => !has.has(id)).forEach(id => o.stranded.push(id));
   }
@@ -29588,7 +29622,17 @@ function hrRequest(m, o = {}){
   };
   const names = new Map();    // id -> {name, skill, c | move}
   const hires = [], moves = [], away = new Set(), arriving = new Set(), zero = [];
-  const closed = new Map();  // id -> the out-of-scope shop whose week for them falls in its closed hours
+  /* One site's action: where each of its own spares can go (hrOutWeek()),
+     worked out whatever the mode, for the review to say why. */
+  const out = new Map();
+  if(o.site && !Q && !only){
+    const taken = new Set();
+    m.moves.filter(x => x.from && x.from.key === o.site).forEach(x => {
+      const r = hrOutWeek(m, x, taken);
+      out.set(x.id, r);
+      if(r.x && !x.off) taken.add(r.x.week);
+    });
+  }
   const left = Object.assign({}, only || {});
   const hire = (c, S, w, skill, misfit, nofit) => {
     hires.push({candidateId: c.id, address: gwAddress(S.key), expect: {wage: c.wage}, seenHoursLeft: c.hoursLeft ?? null});
@@ -29608,12 +29652,14 @@ function hrRequest(m, o = {}){
          page found them elsewhere, as Staff all sites does: the plan leaves
          them no hours here, and nobody stays assigned at 0 hours when a week
          that fits them is open (Peter, 29 September 2026). */
-      /* A shop outside the scope keeps its own opening hours (its write is
-         additive and never opens it around the clock): the spare goes only
-         where every hour of the week found for them falls inside them, and
-         is otherwise left spare, with that said (`closed`). */
-      if(!only) t.moves.filter(x => inScope(x.to) || (!!o.site && !!x.from && x.from.key === o.site)).forEach(x => {
-        if(!inScope(x.to) && !hrFitsOpen(x)){ closed.set(x.id, x.to); return; }
+      /* A site outside the scope gets an additive week, never opened around
+         the clock: the spare goes to a week inside its opening hours and on
+         hours free there (hrOutWeek()), or is left spare, with that said. */
+      const sent = t.moves.flatMap(x => {
+        if(o.site && x.from && x.from.key === o.site){ const r = out.get(x.id); return r && r.x ? [r.x] : []; }
+        return inScope(x.to) ? [x] : [];
+      });
+      if(!only) sent.forEach(x => {
         moves.push({employeeId: x.id, from: x.from ? gwAddress(x.from.key) : null, to: gwAddress(x.to.key)});
         names.set(x.id, {name: x.p.name, skill: x.skill, move: x});
         arriving.add(x.id);
@@ -29674,7 +29720,7 @@ function hrRequest(m, o = {}){
     if(open.length) gaps.set(S.key, open);
   });
   const shown = m.sites.filter(S => touched.has(S.key) || gaps.has(S.key));
-  return {body: {sites, hires, moves}, names, touched, rest, zero, gaps, shown, mode, one, closed, inScope, quick: !!Q, only: !!only,
+  return {body: {sites, hires, moves}, names, touched, rest, zero, gaps, shown, mode, one, out, inScope, quick: !!Q, only: !!only,
           weeks: sites.filter(s => s.days).length + rest.length};
 }
 /* --- drawing -------------------------------------------------------------- */
@@ -30872,7 +30918,7 @@ function hrReview(o = {}, hooks = {}){
       const left = rewritten.flatMap(s => (s.leftWithout || []).filter(p => !named(p))
         .map(p => `<span class="person"><i>${spEsc(gwInitials(p.name))}</i>${spEsc(p.name || tt("co.hire.someone", "someone"))}</span>`));
       const fewer = hrFewer(m, req, rewritten);
-      const fewerCall = fewer.length ? gwCall("", "roster", tt("co.hire.fewer", "<b>Fewer hours than now</b> in the plan's week: {who}.",
+      const fewerCall = fewer.length ? gwCall("", "roster", tt("co.hire.fewer", "<b>Fewer hours than now</b> in the week sent: {who}.",
         {who: fewer.map(({S, r}) => tt("co.hire.fewer.one", "{name} ({site}, {now} → {h} h)", {name: spEsc(r.name || tt("co.hire.someone", "someone")),
           site: spEsc(S.b ? shortName(S.b) : tt("co.hire.asite", "a site")), now: hrNum(r.now), h: hrNum(r.hours)})).join(", ")})) : "";
       const displaced = [...req.touched.values()].filter(at => at.lost && at.lost.hours > 0);
@@ -30903,19 +30949,31 @@ function hrReview(o = {}, hooks = {}){
          first, since nobody is meant to stay assigned at 0 hours. */
       const strandedIds = [...req.touched.values()].flatMap(at => (at.stranded || []).map(id => ({id, at})));
       /* Why each is left without hours, from the page's own moves, whatever
-         this mode sends. */
+         this mode sends, and what it takes to give them a week: a week this
+         action cannot write is said as such (no tick fixes it); an unticked
+         reassign in an action that does not reassign needs both steps. */
       const strandedWhy = ({id, at}) => {
         const name = spEsc(gwWho(id, at.S.row).name || tt("sp.gw.someone.cap", "Someone"));
         const siteOf = T => spEsc(hrSiteName(T));
         const mv = m.moves.find(x => x.id === id && x.from === at.S);
         if(!mv) return tt("co.hire.stranded.nofit", "<b>{name}</b>: no open week elsewhere fits them.", {name});
-        if(mv.off) return tt("co.hire.stranded.off", "<b>{name}</b>: tick their reassign to {site} to give them its week.", {name, site: siteOf(mv.to)});
-        /* Quick hire and Pick more never reassign: Staff all sites does, with the
-           destination in its scope. */
-        if(req.quick || req.only) return tt("co.hire.stranded.all", "<b>{name}</b>: Staff all sites reassigns them to {site}.", {name, site: siteOf(mv.to)});
-        if((req.closed && req.closed.has(id)) || (!req.inScope(mv.to) && !hrFitsOpen(mv)))
-          return tt("co.hire.stranded.closed", "<b>{name}</b>: the open week at {site} runs in hours it is closed.", {name, site: siteOf(mv.to)});
-        return tt("co.hire.stranded.mode", "<b>{name}</b>: Hire and schedule reassigns them to {site}.", {name, site: siteOf(mv.to)});
+        /* Quick hire and Pick more never reassign: Staff all sites does, with
+           the destination in its scope. */
+        const all = req.quick || req.only;
+        const r = !all && req.out ? req.out.get(id) : null;
+        if(r && !r.x){
+          if(r.why === "closed") return tt("co.hire.stranded.closed", "<b>{name}</b>: the open week at {site} runs in hours it is closed.", {name, site: siteOf(r.S)});
+          if(r.why === "busy") return tt("co.hire.stranded.busy", "<b>{name}</b>: the open week at {site} runs in hours someone already works there.", {name, site: siteOf(r.S)});
+          return tt("co.hire.stranded.nofit", "<b>{name}</b>: no open week elsewhere fits them.", {name});
+        }
+        const site = siteOf(r && r.x ? r.x.to : mv.to);
+        if(mv.off){
+          if(all) return tt("co.hire.stranded.off.all", "<b>{name}</b>: tick their reassign to {site}, then use Staff all sites.", {name, site});
+          if(mode === "week") return tt("co.hire.stranded.off.week", "<b>{name}</b>: tick their reassign to {site} and choose Hire and schedule.", {name, site});
+          return tt("co.hire.stranded.off", "<b>{name}</b>: tick their reassign to {site} to give them its week.", {name, site});
+        }
+        if(all) return tt("co.hire.stranded.all", "<b>{name}</b>: Staff all sites reassigns them to {site}.", {name, site});
+        return tt("co.hire.stranded.mode", "<b>{name}</b>: Hire and schedule reassigns them to {site}.", {name, site});
       };
       const stranded = strandedIds.length ? gwCall("warn", "alert", `${tt("co.hire.stranded.spare", {
         one: "<b>No hours after this</b> for {n} person the plan does not need here.",

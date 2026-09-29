@@ -443,12 +443,17 @@ in the main checkout). What changed on the board, over 3.2 to 3.4 and 2.4b:
   the open week `hrModel()` found them elsewhere, as "Staff all sites" does (the hard demand
   filter holds). A destination outside the action's scope gets an additive week (the game's
   week with the mover's hours added, never `openAllHours`), and a shop there only takes the
-  spare when every hour of their week lies inside its opening hours (`hrFitsOpen()`); else the
-  move is left out (`closed`). A spare who is not moved ends the week at 0 h at their site
+  spare when every hour of their week lies inside its opening hours (`hrFitsOpen()`) and is
+  free at that station in the site's week as the game has it (`hrFitsFree()`): an additive
+  week never cuts anybody's hours. "Staff this site" takes the first open week elsewhere that
+  passes all of that (`hrOutWeek()`), the model's own first; with none, the spare is not
+  moved, and the review names the first week it passed over and why (closed hours, or hours
+  someone already works). A spare who is not moved ends the week at 0 h at their site
   (accepted), and the review names them first under "No hours after this", each with the
-  cause: no open week elsewhere fits them, their reassign is unticked, the week elsewhere runs
-  in hours that shop is closed, or this action does not reassign (Schedule only: Hire and
-  schedule does; Quick hire and Pick more: Staff all sites does). The advice follows the
+  cause: no open week elsewhere fits them, the week elsewhere runs in closed hours or hours
+  someone works there (no tick fixes that), their reassign is unticked (with the mode change
+  too where the action does not reassign), or this action does not reassign (Schedule only:
+  Hire and schedule does; Quick hire and Pick more: Staff all sites does). The advice follows the
   mode (Schedule only: close; otherwise Hire only). "Staff this site" counts only who comes
   into the site. "Fewer hours than now" compares the week sent with the game's week.
 - **Done and failed per site**: once applied, each site in the review says "week written",
