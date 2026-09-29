@@ -207,3 +207,29 @@ test('an office is planned by the office rules: fee-hours from its capacity, its
   assert.equal(m.cogs, 0);
   assert.ok(m.wages > 0 && m.revenue > m.wages);
 });
+
+test('the loan amount: past the limit the field snaps to it, and 0 stays 0 across a redraw and a reload', async t => {
+  const context = await browser.newContext({viewport: {width: 1280, height: 900}, reducedMotion: 'reduce'});
+  t.after(() => context.close());
+  const page = await board(t, {context});
+  await planned(page);
+  await page.locator('#osCtl [data-os-step="breakeven"]').click();
+  await page.locator('#osFin [data-os-fin-on]').check();
+  await page.locator('#osFin [data-os-bank="JensenCapitalSettings"]').click();
+  const field = page.locator('#osFin [data-os-fin-amount]');
+  const limit = await page.evaluate(() => Math.min(osLoanLimit(osFacts().finance.banks.find(b => b.id === 'JensenCapitalSettings')),
+    Math.floor(osInvestment(osPlan(), osBuilding(osPlan().key)).firm)));
+  await field.fill('9999999');
+  assert.equal(+(await field.inputValue()), limit, 'the field says the loan the figures use');
+  assert.ok((await page.locator('#osFinFacts').innerText()).includes('$' + limit.toLocaleString('en-US') + ' borrowed'));
+  await field.fill('0');
+  assert.equal(await page.evaluate(() => osPlan().finance.amount), 0);
+  await page.locator('#osCtl [data-os-step="investment"]').click();
+  await page.locator('#osCtl [data-os-step="breakeven"]').click();
+  assert.equal(await page.locator('#osFin [data-os-fin-amount]').inputValue(), '0', 'a redraw keeps 0');
+  await page.reload();
+  await page.waitForFunction(() => typeof hasData === 'function' && hasData());
+  await page.evaluate(() => openRoute('expansion/open'));
+  await page.waitForFunction(() => osStep === 'breakeven');
+  assert.equal(await page.locator('#osFin [data-os-fin-amount]').inputValue(), '0', 'and so does a reload');
+});

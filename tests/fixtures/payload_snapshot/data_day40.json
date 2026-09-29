@@ -7302,14 +7302,16 @@
   ],
   "decor": {
    "M1": {
-    "cost": 9195.0,
-    "floor": "f6ziX3fRZEKK04LyuFsYlw==",
-    "floorPrice": 5,
-    "floors": 1131,
-    "score": 50,
-    "wall": "4B8VksD+f0iunv1XsGj78Q==",
-    "wallPrice": 30,
-    "walls": 118
+    "50": {
+     "cost": 9195.0,
+     "floor": "f6ziX3fRZEKK04LyuFsYlw==",
+     "floorPrice": 5,
+     "floors": 1131,
+     "score": 50,
+     "wall": "4B8VksD+f0iunv1XsGj78Q==",
+     "wallPrice": 30,
+     "walls": 118
+    }
    }
   },
   "finance": {
@@ -7336,6 +7338,7 @@
     }
    ],
    "cash": 25000.0,
+   "floor": 0,
    "minimum": 500,
    "multiplier": 0.7,
    "owed": 32000.0,
@@ -7415,6 +7418,12 @@
     "p": 20.0,
     "v": [
      "ba:street_seventhavenue#5"
+    ]
+   },
+   "ba:itemname_boxingbag": {
+    "p": 450.0,
+    "v": [
+     "ba:street_eleventhstreet#16"
     ]
    },
    "ba:itemname_cashregister": {
@@ -7499,6 +7508,12 @@
      "ba:street_eleventhstreet#16"
     ]
    },
+   "ba:itemname_fitnesstrampoline": {
+    "p": 525.0,
+    "v": [
+     "ba:street_eleventhstreet#16"
+    ]
+   },
    "ba:itemname_flatwoodendisplaystand": {
     "p": 400.0,
     "v": [
@@ -7578,6 +7593,12 @@
      "ba:street_seventhavenue#13"
     ]
    },
+   "ba:itemname_loadedbarbell": {
+    "p": 2100.0,
+    "v": [
+     "ba:street_eleventhstreet#16"
+    ]
+   },
    "ba:itemname_loudspeaker4": {
     "p": 80.0,
     "v": [
@@ -7614,6 +7635,13 @@
     "p": 2600.0,
     "v": [
      "ba:street_eleventhstreet#16"
+    ]
+   },
+   "ba:itemname_pullupbar": {
+    "p": 280.0,
+    "v": [
+     "ba:street_eleventhstreet#16",
+     "ba:street_fourthstreet#50"
     ]
    },
    "ba:itemname_roundedshelf": {
@@ -7784,7 +7812,7 @@
      "ba:neighborhood_midtown": [
       2,
       0,
-      4.5
+      null
      ]
     },
     "opt": 7,
@@ -7934,7 +7962,7 @@
      "ba:neighborhood_midtown": [
       2,
       0,
-      11.0
+      null
      ]
     },
     "opt": 7,
@@ -10286,7 +10314,7 @@
      "M1": {
       "fee": 586000.0,
       "from": null,
-      "furniture": 59100.0,
+      "furniture": 60510.0,
       "lines": [
        [
         "ba:itemname_cashregister",
@@ -10353,7 +10381,7 @@
        ],
        [
         "ba:itemname_counter1",
-        3,
+        6,
         "shelf",
         "mount"
        ],
@@ -10686,7 +10714,7 @@
      "M1": {
       "fee": 586000.0,
       "from": null,
-      "furniture": 106664.0,
+      "furniture": 108544.0,
       "lines": [
        [
         "ba:itemname_cashregister",
@@ -10753,7 +10781,7 @@
        ],
        [
         "ba:itemname_counter1",
-        4,
+        8,
         "shelf",
         "mount"
        ],
@@ -11532,7 +11560,7 @@
      "M1": {
       "fee": 586000.0,
       "from": null,
-      "furniture": 47730.0,
+      "furniture": 51085.0,
       "lines": [
        [
         "ba:itemname_fitball",
@@ -11593,6 +11621,30 @@
         1,
         "dem",
         "employeeuniforms"
+       ],
+       [
+        "ba:itemname_pullupbar",
+        1,
+        "dem",
+        "workoutvariety"
+       ],
+       [
+        "ba:itemname_boxingbag",
+        1,
+        "dem",
+        "workoutvariety"
+       ],
+       [
+        "ba:itemname_fitnesstrampoline",
+        1,
+        "dem",
+        "workoutvariety"
+       ],
+       [
+        "ba:itemname_loadedbarbell",
+        1,
+        "dem",
+        "workoutvariety"
        ],
        [
         "ba:itemname_toiletstall",

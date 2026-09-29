@@ -27,7 +27,7 @@ import sys
 import tempfile
 
 from ba_save import load_locale, load_save, newest_save
-from ba_dashboard import MIN_BUILD, Names, extract
+from ba_dashboard import MIN_BUILD, OWN_PROFIT_DAYS, Names, extract
 from check_saves import SAVE_ROOT
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -51,12 +51,41 @@ for(const file of process.argv.slice(3)){
     const r = ctx.osOwnRatio(slug);
     if(!r) continue;
     const model = ((P.openStore.types || {})[slug] || {}).model;
-    r.rows.forEach(x => rows.push({save: P.who, type: slug.replace('ba:businesstype_', ''), model, key: x.key,
-      actual: x.actual, predicted: x.model, ratio: x.ratio}));
+    r.rows.forEach(x => rows.push({save: P.who, modded: P.modded, type: slug.replace('ba:businesstype_', ''), model, key: x.key,
+      actual: x.actual, predicted: x.model, ratio: x.ratio, days: x.days}));
   }
 }
 console.log(JSON.stringify(rows));
 """
+
+
+# Mods that change the camera, the interface or placement, add a job or an
+# objective (the HART ones are the owner's), or only read the game (Big
+# Copilot Link): none of them touches what a shop earns. Checked by name on 29
+# Sep 2026; a mod not listed here counts as one that might.
+HARMLESS_MODS = ("Big Copilot Link", "BigCopilotLink", "Camera Tools", "HART Free Camera", "Campaign Objectives",
+                 "HARTDeliveryDrive", "HARTCampaign", "Immersion - RPG Camera", "Continuous Placement", "BrandSystem")
+
+
+def modded(save, path: str) -> bool:
+    """Whether a mod that could change what shops earn ran on this save.
+
+    A mod active at the last save (the .hsg.meta's activeModsAtLastSave) that
+    is not one of HARMLESS_MODS says so. So does the save's own
+    hasEverUsedMods when nothing listed now explains it: a save that ran some
+    other mod earlier and names only Big Copilot Link today (a player who only
+    ever ran the Link is counted as modded too; the flag cannot tell)."""
+    try:
+        with open(path + ".meta", encoding="utf-8-sig") as fh:
+            active = json.load(fh).get("activeModsAtLastSave") or []
+    except (OSError, ValueError):
+        active = []
+    words = [f"{m.get('modDisplayName') or ''} {m.get('modId') or ''}" for m in active]
+    harmless = [w for w in words if any(h in w for h in HARMLESS_MODS)]
+    if len(harmless) < len(words):
+        return True
+    explained = [w for w in harmless if "Big Copilot" not in w and "BigCopilot" not in w]
+    return bool(save.root.get("hasEverUsedMods")) and not explained
 
 
 def board_model() -> str:
@@ -78,15 +107,15 @@ def stats(values: list) -> dict:
 
 
 def line(label: str, values: list) -> str:
+    if not values:
+        return f"{label:<26} n   0"
     s = stats(values)
     return (f"{label:<26} n {s['n']:>3}  median {s['median']:.3f}  p10 {s['p10']:.2f}  p25 {s['p25']:.2f}  "
             f"p75 {s['p75']:.2f}  p90 {s['p90']:.2f}  within 15% {s['within15']}%  within 30% {s['within30']}%")
 
 
-def main(argv: list) -> int:
-    verbose = "-v" in argv
-    args = [a for a in argv if a != "-v"]
-    root = args[0] if args else SAVE_ROOT
+def collect(root: str) -> tuple[int, list]:
+    """(saves read, one row per shop and office the model priced)."""
     names = Names(load_locale())
     scratch = tempfile.mkdtemp(prefix="profit_model_")
     try:
@@ -95,7 +124,8 @@ def main(argv: list) -> int:
             if not folder.is_dir():
                 continue
             try:
-                save = load_save(newest_save(folder.path))
+                path = newest_save(folder.path)
+                save = load_save(path)
             except Exception:  # noqa: BLE001 -- a folder with no readable save is skipped
                 continue
             if (save.root.get("buildNumberAtLastSave") or 0) < MIN_BUILD:
@@ -103,13 +133,13 @@ def main(argv: list) -> int:
             payload = extract(save, names, None)
             out = {k: payload.get(k) for k in ("openStore", "businesses", "premises", "meta", "names")}
             out["who"] = folder.name[:8]
-            path = os.path.join(scratch, f"{len(files)}.json")
-            with open(path, "w", encoding="utf-8") as fh:
+            out["modded"] = modded(save, path)
+            file = os.path.join(scratch, f"{len(files)}.json")
+            with open(file, "w", encoding="utf-8") as fh:
                 json.dump(out, fh, separators=(",", ":"))
-            files.append(path)
+            files.append(file)
         if not files:
-            print("no save at or above MIN_BUILD under", root)
-            return 1
+            return 0, []
         model = os.path.join(scratch, "model.js")
         with open(model, "w", encoding="utf-8") as fh:
             fh.write(board_model())
@@ -118,27 +148,44 @@ def main(argv: list) -> int:
             fh.write(RUNNER)
         done = subprocess.run(["node", runner, model, *files], capture_output=True, text=True, encoding="utf-8")
         if done.returncode:
-            print(done.stderr)
-            return 1
-        rows = json.loads(done.stdout)
+            raise SystemExit(done.stderr)
+        return len(files), json.loads(done.stdout)
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
 
+
+def main(argv: list) -> int:
+    verbose = "-v" in argv
+    args = [a for a in argv if a != "-v"]
+    root = args[0] if args else SAVE_ROOT
+    saves, rows = collect(root)
+    if not saves:
+        print("no save at or above MIN_BUILD under", root)
+        return 1
     paid = [r for r in rows if r["actual"] > 0]
     shops = [r for r in paid if r["model"] == "retail"]
     offices = [r for r in paid if r["model"] == "office"]
-    print(f"{len(files)} saves, {len(rows)} shops and offices, {len(rows) - len(paid)} with no profit left out")
-    if shops:
-        print(line("shops", [r["ratio"] for r in shops]))
-    if offices:
-        print(line("offices", [r["ratio"] for r in offices]))
+    settled = lambda r: r["days"] >= OWN_PROFIT_DAYS  # noqa: E731 -- open long enough for a full window
+    print(f"{saves} saves, {len(rows)} shops and offices, {len(rows) - len(paid)} with no profit left out")
+    print(f"headline: unmodded saves, open {OWN_PROFIT_DAYS} days or more")
+    for label, group in (("shops", shops), ("offices", offices)):
+        if group:
+            print(line(label, [r["ratio"] for r in group if not r["modded"] and settled(r)]))
+    print("the rest")
+    for label, pick in (("shops, modded saves", lambda r: r["modded"] and settled(r)),
+                        (f"shops, open < {OWN_PROFIT_DAYS} days (held to the ramp)", lambda r: not settled(r)),
+                        ("shops, all", lambda r: True)):
+        group = [r["ratio"] for r in shops if pick(r)]
+        if group:
+            print(line(label, group))
     for kind in sorted({r["type"] for r in paid}):
         print(line("  " + kind, [r["ratio"] for r in paid if r["type"] == kind]))
     for who in sorted({r["save"] for r in paid}):
-        print(line("  save " + who, [r["ratio"] for r in paid if r["save"] == who]))
+        mod = next(r["modded"] for r in paid if r["save"] == who)
+        print(line(f"  save {who}{' (modded)' if mod else ''}", [r["ratio"] for r in paid if r["save"] == who]))
     if verbose:
         for r in sorted(paid, key=lambda r: r["ratio"]):
-            print(f"{r['save']} {r['type']:<22} {r['key']:<34} {r['actual']:>9.0f} {r['predicted']:>9.0f} {r['ratio']:.2f}")
+            print(f"{r['save']} {r['type']:<22} {r['key']:<34} {r['actual']:>9.0f} {r['predicted']:>9.0f} {r['ratio']:.2f} {r['days']:>2}d")
     return 0
 
 

@@ -1393,6 +1393,7 @@
     }
    ],
    "cash": 10000.0,
+   "floor": 0,
    "minimum": 500,
    "multiplier": 0.7,
    "owed": 0.0,

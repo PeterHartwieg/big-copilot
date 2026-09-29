@@ -12294,7 +12294,7 @@ def load_store_rules() -> dict:
     return _store_rules
 
 
-STORE_RULE_PARTS = ("products", "furniture", "types", "hoods", "banks", "vendors")
+STORE_RULE_PARTS = ("products", "furniture", "types", "hoods", "banks", "vendors", "vehicles")
 # The building kinds a store can be planned in.
 PLAN_KINDS = ("retail", "office", "cinema", "theater")
 # The structural wage estimate (research PROFIT_MODEL.md, "Costs"): base
@@ -12320,18 +12320,32 @@ BANK_PLACES = {
     "JensenCapitalSettings": ("Jensen Capital", ("ba:street_fourthavenue", 17)),
 }
 LOAN_MINIMUM = 500  # Dialogs.BankDialog: less is "too low"
+# Dialogs.BankDialog: while the tutorial is on and its objective "Get a $15,000
+# loan from Jensen Capital" is open, a bank lends against at least this.
+TUTORIAL_LOAN_FLOOR = 15500
+TUTORIAL_LOAN_OBJECTIVE = "tutorial_quest_establish_first_business_objective_1"
+# BoatTypes..cctor: each BoatData.type's price, which counts as the player's
+# wealth. Hard-coded in the game, as the marketing campaigns are.
+BOAT_PRICES = {0: 3_200_000, 1: 2_500_000, 2: 90_000_000}
 # The satisfaction a well-run new shop settles at (all four parts near 95)
 # where the player runs none of the type to take it from.
 PLAN_SATISFACTION = 95
 # What a shop of the player's own is measured over: its last finished trading
 # days after the opening, the window the profit model was validated on.
 OWN_PROFIT_DAYS = 14
+# The days after its first sale a new shop still earns below its steady
+# state (research RAMP.md: satisfaction starts at 50, new staff climb 0.6 an
+# hour); the board's OS_RAMP holds the factors.
+RAMP_DAYS = 5
 # The shops a new one would take demand from, measured over their last week.
 SALES_DAYS = 7
 # FurnitureStoreManagerDialog: one flat fee per furniture delivery contract.
 FURNITURE_DELIVERY_FEE = 250
 # The item type bits that meet a customer demand (the items bundle's flags).
 MUSIC_FLAG, SEATING_FLAG, SINK_FLAG, TOILET_FLAG = 1024, 4096, 16777216, 33554432
+# WorkoutVarietyCustomerDemand: a gym's machines train this many distinct
+# WorkoutExercise.workoutTypes (research NOTES.md, customer demands).
+WORKOUT_VARIETY = 5
 # Interior elements, floor slots and wall slots of each layout, read from the
 # interiorDesigns of real saves (research NOTES.md, section 3); a layout the
 # player rents is read from their own save instead. Wall counts vary by one or
@@ -12429,12 +12443,15 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
     the cheapest one that does the job wins.
 
     The displays are `copied` -- (item, qty, products) from the player's own
-    site of the type and layout -- or else, per product the type sells, enough
-    of its cheapest display for the building's customers an hour: a single one
-    would cap the whole shop at its own rate (the game groups shelf capacity
-    per product), and the profit model stocks the type's whole range. The
-    interior-design demand is walls and floors, not an item, and a gym's
-    workout variety is not modelled.
+    site of the type and layout -- and, for every product the type sells that
+    those do not hold (all of them with nothing to copy), enough of its
+    cheapest display for the building's customers an hour: a single one would
+    cap the whole shop at its own rate (the game groups shelf capacity per
+    product), and the profit model sells the type's whole range. A station
+    that must stand on or beside other furniture (a computer on a desk, with a
+    chair) takes the cheapest of each placement requirement's group. A gym's
+    workout variety is WORKOUT_VARIETY distinct workout types among its
+    machines. The interior-design demand is walls and floors, not an item.
     """
     t = (rules.get("types") or {}).get(type_slug) or {}
     furniture = rules.get("furniture") or {}
@@ -12460,14 +12477,29 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
         fits = facts(name).get("bt")
         return price(name) > 0 and bool(facts(name).get("v")) and (not fits or kind in fits)
 
-    def mount(name):
-        """The cheapest thing a station has to stand on, if it needs one."""
-        under = [m for m in facts(name).get("m") or () if sold(m)]
-        return min(under, key=lambda m: (price(m), m)) if under else None
+    def mounts(name):
+        """What a station has to be attached to: the cheapest sold piece of
+        each placement requirement's group (a desk and a chair for a
+        computer). A table written before the groups is one group."""
+        groups = facts(name).get("m") or []
+        if groups and not isinstance(groups[0], list):
+            groups = [groups]
+        out = []
+        for group in groups:
+            under = [m for m in group if sold(m)]
+            # Where the designer made pieces for this type, one of those; else
+            # one the station's own store sells, bought with it on the same
+            # delivery (a computer's chair from the computer shop, not the
+            # beach towel that also seats and costs least).
+            stores = set(facts(name).get("v") or ())
+            under = ([m for m in under if kind in (facts(m).get("bt") or ())]
+                     or [m for m in under if stores & set(facts(m).get("v") or ())] or under)
+            if under:
+                out.append(min(under, key=lambda m: (price(m), m)))
+        return out
 
     def unit_cost(name):
-        under = mount(name)
-        return price(name) + (price(under) if under else 0)
+        return price(name) + sum(price(under) for under in mounts(name))
 
     def cheapest(names):
         names = [n for n in names if sold(n)]
@@ -12492,8 +12524,7 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
         if not item or qty <= 0:
             return
         lines.append({"item": item, "qty": int(qty), "group": group, "why": why})
-        under = mount(item)
-        if under:
+        for under in mounts(item):
             lines.append({"item": under, "qty": int(qty), "group": group, "why": "mount"})
 
     def held():
@@ -12547,26 +12578,55 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
             pool = [n for n in furniture if flags(n) & TOILET_FLAG
                     and (not private or "privacy" in (facts(n).get("x") or ()))]
             add(cheapest(pool), 1, "dem", "toilet+privacy" if private and "toilet" in demands else demand)
+        elif demand == "workoutvariety":
+            # The cheapest machine of each workout type the gym does not train
+            # yet, until WORKOUT_VARIETY distinct types stand in it.
+            trained = {facts(n).get("wt") for n in held() if facts(n).get("wt") is not None}
+            offer = {}
+            for n in _in_order({n for n in furniture if facts(n).get("wt") is not None}):
+                if sold(n) and facts(n)["wt"] not in trained:
+                    key = (unit_cost(n), n)
+                    if facts(n)["wt"] not in offer or key < offer[facts(n)["wt"]][0]:
+                        offer[facts(n)["wt"]] = (key, n)
+            for _key, n in sorted(offer.values())[:max(0, WORKOUT_VARIETY - len(trained))]:
+                add(n, 1, "dem", demand)
 
-    if copied:
-        for item, qty, held_products in copied:
-            add(item, qty, "shelf", list(held_products) or "storage")
-    else:
-        for p in [*(p for p, _impact in t.get("i") or ()), *shelf_products]:
-            row = products.get(p) or {}
-            if row.get("s") or row.get("k") or p in (t.get("f"), t.get("fw")):
-                continue  # a service, a ticket or an entrance fee has no shelf
-            shows = [n for n, f in furniture.items() if p in (f.get("h") or ()) and (f.get("c") or 0) > 0]
-            item, qty = sized(shows)
-            if not item:
-                continue
-            same = next((l for l in lines if l["group"] == "shelf" and l["item"] == item), None)
-            if same:
-                same["qty"] += qty
-                same["why"].append(p)
-            else:
-                add(item, qty, "shelf", [p])
+    covered = set()
+    for item, qty, held_products in copied or ():
+        add(item, qty, "shelf", list(held_products) or "storage")
+        covered.update(held_products)
+    # Every product the model sells needs a display: the copied shelves' own,
+    # else enough of its cheapest. A display several products share is summed
+    # first and added once, so what it stands on counts it whole.
+    shelves = {}
+    for p in [*(p for p, _impact in t.get("i") or ()), *shelf_products]:
+        row = products.get(p) or {}
+        if p in covered or row.get("s") or row.get("k") or p in (t.get("f"), t.get("fw")):
+            continue  # shown already, or a service, a ticket or an entrance fee: no shelf
+        shows = [n for n, f in furniture.items() if p in (f.get("h") or ()) and (f.get("c") or 0) > 0]
+        item, qty = sized(shows)
+        if not item:
+            continue
+        got = shelves.setdefault(item, [0, []])
+        got[0] += qty
+        got[1].append(p)
+    for item, (qty, held_products) in shelves.items():
+        add(item, qty, "shelf", held_products)
     return lines
+
+
+def plan_layout(row: dict) -> str | None:
+    """What a plan's outfit is kept by: a building's layout (size and version,
+    a premises row's `layout` or a ba_buildings.json row), or for a cinema or
+    a theatre, which have no floor plans, its size alone. The board reads the
+    same key off a premises row (osLayout())."""
+    if "layout" in row or "size" in row:
+        return row.get("layout") or row.get("size")
+    return _layout(row) or row.get("z")
+
+
+def _building_row(reg: dict) -> dict:
+    return load_buildings().get((reg.get("StreetName"), reg.get("StreetNumber"))) or {}
 
 
 def _setup_items(lines: list) -> list:
@@ -12628,8 +12688,8 @@ def _store_market(save: Save, rules: dict, items: set, mpm: float, agent: int) -
     purchasing agent's discount, never the income statement's goods, which
     are near nothing where the player's own factories supply. Per
     neighbourhood: the sellers there now (the player's included), whether a
-    rival company sells it (no monopoly bonus then), and the lowest price
-    another business asks.
+    rival company sells it (no monopoly bonus then), and the lowest price any
+    shop that stocks it asks, the player's own included.
     """
     table = load_buildings()
     products = rules.get("products") or {}
@@ -12643,22 +12703,24 @@ def _store_market(save: Save, rules: dict, items: set, mpm: float, agent: int) -
             hood = value.get("neighborhood")
             if hood and hood != GLOBAL_HOOD:
                 sellers[(name, hood)] = int(value.get("providers") or 0)
+    # The lowest price a customer sees there: every shop that has the item on
+    # its shelves (cachedAvailableProducts), the player's own included; a price
+    # set for an item a shop does not stock is nobody's offer.
     rival_sells, lowest = set(), {}
     for reg in save.items(save.root.get("BuildingRegistrations")):
-        if not reg or reg.get("RentedByPlayer") or not reg.get("BusinessName") or reg.get("temporarilyClosed"):
+        if not reg or not reg.get("BusinessName") or reg.get("temporarilyClosed"):
             continue
         hood = hood_key(table.get((reg.get("StreetName"), reg.get("StreetNumber"))))
         if not hood:
             continue
+        stocked = {n for n in save.items(reg.get("cachedAvailableProducts")) if isinstance(n, str) and n in items}
         for line in save.items(reg.get("retailPrices")):
             name = line.get("itemName") if isinstance(line, dict) else None
-            price = _configured_price(line.get("price")) if name in items else None
+            price = _configured_price(line.get("price")) if name in stocked else None
             if price:
                 lowest[(name, hood)] = min(lowest.get((name, hood), price), price)
         if reg.get("businessOwnerRivalId"):
-            for name in save.items(reg.get("cachedAvailableProducts")):
-                if name in items:
-                    rival_sells.add((name, hood))
+            rival_sells.update((name, hood) for name in stocked)
     discount = 1 - 0.25 * max(0, min(100, agent)) / 100
     hoods = _in_order({h for (_n, h) in sellers} | {h for (_n, h) in lowest})
     out = {}
@@ -12684,9 +12746,14 @@ def _own_shops(save: Save, regs: dict, businesses: list, grids: list, stmt_histo
     model sees it, with what it really earned.
 
     What it earned is the average of its last OWN_PROFIT_DAYS finished days
-    after the opening: sales less every unit sold at the import cost, wages,
-    rent, marketing and licensing fees. The board runs the model over the
-    shop's own building, hours and marketing and puts the two side by side.
+    after its first day with sales: sales less every unit sold at the import
+    cost, wages, rent, marketing and licensing fees. A shop can stand a few
+    days between its setup and its first sale, and those days hold costs and
+    no sales, so the window starts from the sales, not the lease (research
+    RAMP.md, 3c). The board runs the model over the shop's own building,
+    hours and marketing and puts the two side by side; `k`, for a shop still
+    in its first days, is each window day's distance from that first sale, so
+    the board holds it to its ramp (osDayProfit()).
     """
     table = load_buildings()
     hours = {g["key"]: g.get("open") for g in grids}
@@ -12702,8 +12769,12 @@ def _own_shops(save: Save, regs: dict, businesses: list, grids: list, stmt_histo
         addr = (reg["StreetName"], reg["StreetNumber"])
         row = table.get(addr) or {}
         opened = b.get("opened") or 0
-        by_day = {d: by[addr] for d, by in stmt_history if addr in by and opened + 1 < d < day}
         orders = {e.get("dayNumber"): e for e in save.items(reg.get("orderHistory"))}
+        sold_on = [d for d, by in stmt_history if addr in by and d >= opened and (by[addr].get("TotalSales") or 0) > 0]
+        sold_on += [d for d, e in orders.items() if isinstance(d, int) and d >= opened
+                    and any((s.get("amountSold") or 0) > 0 for s in save.items(e.get("itemSales")))]
+        first = min(sold_on) if sold_on else opened + 1
+        by_day = {d: by[addr] for d, by in stmt_history if addr in by and first < d < day}
         days = sorted(d for d in by_day if d in orders)[-OWN_PROFIT_DAYS:]
         if len(days) < 3:
             continue
@@ -12726,7 +12797,7 @@ def _own_shops(save: Save, regs: dict, businesses: list, grids: list, stmt_histo
         out[slug].append({
             "key": b["key"],
             "hood": b.get("neighbourhood"),
-            "layout": _layout(row),
+            "layout": plan_layout(row),
             "m2": row.get("m"),
             "cap": door[0] if isinstance(door, list) else door,
             "initial": round(initial, 4),
@@ -12736,6 +12807,7 @@ def _own_shops(save: Save, regs: dict, businesses: list, grids: list, stmt_histo
             "sat": (b.get("satisfaction") or {}).get("overall"),
             "actual": money((total - cost) / n),
             "days": n,
+            **({"k": [d - first for d in days]} if days[0] - first < RAMP_DAYS else {}),
             **({"staffed": staffed[b["key"]]} if models.get(slug) == "office" and staffed.get(b["key"]) else {}),
         })
     return {slug: sorted(rows, key=lambda r: r["key"]) for slug, rows in out.items()}
@@ -12774,11 +12846,14 @@ def _finance_facts(save: Save, daily: list, rules: dict) -> dict:
     and their terms.
 
     The most a bank lends is the lower of its own cap less what the company
-    owes it, and the larger of the player's wealth and a quarter of the last
-    seven days' average profit over the loan's term, less everything owed.
-    Wealth is cash, investment funds and property bought; vehicles and boats
-    count in the game too but their prices are not in the save, so the figure
-    here can come out a little low.
+    owes it, and the largest of the player's wealth, a quarter of the last
+    seven days' average profit over the loan's term and, while the tutorial
+    still asks for the first loan, TUTORIAL_LOAN_FLOOR, less everything owed.
+    Wealth (PlayerHelper.GetPersonalWealth) is cash, investment funds, the
+    motor vehicles at their type's price (ba_store_rules.json), the boats at
+    theirs (BOAT_PRICES) and the property bought. A loan is the bank's whose
+    address it names; one at an address that is no bank still counts in
+    what is owed overall.
     """
     root = save.root
     gv = save.deref(root.get("gameVariables")) or {}
@@ -12788,6 +12863,12 @@ def _finance_facts(save: Save, daily: list, rules: dict) -> dict:
         funds += (fund.get("initialDeposit") or 0) + (fund.get("additionalInvestment") or 0) \
             - (fund.get("withdrawal") or 0) + (fund.get("interestPayment") or 0)
     property_ = sum((save.deref(e) or {}).get("purchasePrice") or 0 for e in save.items(root.get("realEstate")))
+    prices = rules.get("vehicles") or {}
+    vehicles = sum(prices.get((save.deref(v) or {}).get("vehicleTypeName"), 0)
+                   for v in save.items(root.get("VehicleInstances")))
+    boats = sum(BOAT_PRICES.get((save.deref(b) or {}).get("type"), 0) for b in save.items(root.get("playerBoats")))
+    done = set(save.items(root.get("CompletedQuestEntries")))
+    tutorial = bool(gv.get("tutorialEnabled")) and TUTORIAL_LOAN_OBJECTIVE not in done
     places = {site_key(addr): bank for bank, (_n, addr) in BANK_PLACES.items()}
     owed = collections.Counter()
     for loan in save.items(root.get("Loans")):
@@ -12806,7 +12887,8 @@ def _finance_facts(save: Save, daily: list, rules: dict) -> dict:
         })
     return {
         "cash": money(root.get("Money") or 0),
-        "wealth": money((root.get("Money") or 0) + funds + property_),
+        "wealth": money((root.get("Money") or 0) + funds + vehicles + boats + property_),
+        "floor": TUTORIAL_LOAN_FLOOR if tutorial else 0,
         "profit7": money(sum(last) / 7) if last else 0,
         "owed": money(sum(owed.values())),
         "multiplier": round(gv.get("bankInterestMultiplier") or 0.7, 4),
@@ -12849,12 +12931,11 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
         sells = [[p, round(impact, 4)] for p, impact in t.get("i") or ()]
         own = [b for b in businesses if b.get("typeSlug") == slug and b.get("status") != "vacant"]
         layouts, initial = {}, {}
-        for layout in _in_order({b["layout"] for b in buildings if b["type"] == cat and b.get("layout")
+        for layout in _in_order({plan_layout(b) for b in buildings if b["type"] == cat and plan_layout(b)
                                  and b["status"] in ("vacant", "rival")}):
-            sample = next(b for b in buildings if b["type"] == cat and b.get("layout") == layout)
+            sample = next(b for b in buildings if b["type"] == cat and plan_layout(b) == layout)
             source = None
-            same = [b for b in own if b["key"] in regs
-                    and _layout(load_buildings().get((regs[b["key"]]["StreetName"], regs[b["key"]]["StreetNumber"])) or {}) == layout]
+            same = [b for b in own if b["key"] in regs and plan_layout(_building_row(regs[b["key"]])) == layout]
             if same:
                 source = max(same, key=lambda b: (sum(s["profit"] for s in (b.get("series") or [])[-7:]), b["key"]))
             copied = _copied_shelving(save, regs[source["key"]], slug, rules) if source else None
@@ -12895,15 +12976,18 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
         }
 
     market = _store_market(save, rules, product_items, mpm, agent)
+    # The cheapest walls and floors to each interior score a neighbourhood
+    # asks for (Midtown's 50 today), per layout: {layout: {score: route}}.
     decor = {}
     materials = prices.get("materials") or {}
-    target = max([(h.get("mi") or 0) for h in (rules.get("hoods") or {}).values()] or [0])
+    targets = sorted({int(h.get("mi") or 0) for h in (rules.get("hoods") or {}).values()} - {0})
     for layout in _in_order({layout for t in types.values() for layout in t["layouts"]}):
         # A layout nobody has read is costed as another version of its size.
         near = layout if layout in slots else next((k for k in sorted(slots) if k[:1] == layout[:1]), None)
-        route = decor_route(*slots[near], materials, target) if near else None
-        if route:
-            decor[layout] = {**route, **({"like": near} if near != layout else {})}
+        for target in targets:
+            route = decor_route(*slots[near], materials, target) if near else None
+            if route:
+                decor.setdefault(layout, {})[str(target)] = {**route, **({"like": near} if near != layout else {})}
     hoods = {}
     for hood, h in sorted((rules.get("hoods") or {}).items()):
         shares = (h.get("w") or 0, h.get("m") or 0, h.get("u") or 0)
@@ -29604,7 +29688,7 @@ const OS_STEPS = ["what", "where", "investment", "breakeven", "opening", "open"]
 /* The range the estimate is shown as: the p25 and p90 of the validation's
    actual ÷ model on real shops (research PROFIT_MODEL.md, section 6). */
 const OS_LOW = 0.8, OS_HIGH = 1.05;
-let osPlans = [], osPlansFor = null, osCur = null, osStep = "what", osFinder = null, osBest = new Map();
+let osPlans = [], osPlansFor = null, osCur = null, osStep = "what", osFinder = null, osBest = new Map(), osBestFor = null, osNotice = "";
 const osFacts = () => (typeof D !== "undefined" && D && D.openStore) || {};
 const osStore = () => `${OS_KEY}:${(D && D.meta && D.meta.character) || "default"}`;
 const OS_ICON = {
@@ -29626,8 +29710,9 @@ function osLoad(){
       osPlans = raw.plans.filter(p => p && typeof p.id === "string" && typeof p.type === "string").slice(0, OS_MAX_PLANS)
         .map(p => ({id: p.id, type: p.type, hood: typeof p.hood === "string" ? p.hood : null,
           key: typeof p.key === "string" ? p.key : null, mode: p.mode === "self" ? "self" : p.mode === "firm" ? "firm" : null,
-          finance: p.finance && typeof p.finance === "object" ? {on: !!p.finance.on, amount: Math.max(0, +p.finance.amount || 0),
-            bank: typeof p.finance.bank === "string" ? p.finance.bank : null} : {on: false, amount: 0, bank: null},
+          finance: p.finance && typeof p.finance === "object" ? {on: !!p.finance.on,
+            amount: p.finance.amount == null || !Number.isFinite(+p.finance.amount) ? null : Math.max(0, +p.finance.amount),
+            bank: typeof p.finance.bank === "string" ? p.finance.bank : null} : {on: false, amount: null, bank: null},
           step: OS_STEPS.includes(p.step) ? p.step : "what", made: +p.made || null}));
       osCur = osPlans.some(p => p.id === raw.current) ? raw.current : null;
     }
@@ -29641,13 +29726,27 @@ function osSave(){
   try{ localStorage.setItem(osStore(), JSON.stringify({plans: osPlans, current: osCur})); }catch(e){}
 }
 const osPlan = () => osPlans.find(p => p.id === osCur) || null;
-/* A new plan for a type, from a Demand cell (its neighbourhood preselected)
-   or the type grid. The newest plan comes first; the oldest drops past twelve. */
+/* A plan for a type, from a Demand cell (its neighbourhood preselected) or
+   the type grid. A plan for the same type and neighbourhood that has no
+   building yet is taken up again rather than doubled. The newest plan comes
+   first; past twelve, the oldest plan with no building makes room, and a list
+   of twelve that all have one takes no more (osNew() answers null). */
 function osNew(type, hood){
+  const same = osPlans.find(p => p.type === type && (p.hood || null) === (hood || null) && !p.key);
+  if(same){
+    osPlans = [same, ...osPlans.filter(p => p !== same)];
+    osCur = same.id; osStep = "where";
+    osSave();
+    return same;
+  }
+  if(osPlans.length >= OS_MAX_PLANS){
+    const spare = [...osPlans].reverse().find(p => !p.key);
+    if(!spare) return null;
+    osPlans = osPlans.filter(p => p !== spare);
+  }
   const id = `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-  osPlans.unshift({id, type, hood: hood || null, key: null, mode: null, finance: {on: false, amount: 0, bank: null},
+  osPlans.unshift({id, type, hood: hood || null, key: null, mode: null, finance: {on: false, amount: null, bank: null},
     step: "where", made: (D.meta || {}).day || null});
-  osPlans = osPlans.slice(0, OS_MAX_PLANS);
   osCur = id; osStep = "where";
   osSave();
   return osPlan();
@@ -29668,10 +29767,24 @@ const osBuilding = key => key && typeof premises === "function" && premises() ? 
 const osCap = b => Array.isArray(b && b.cap) ? b.cap[0] : (b && b.cap) || 0;
 const osTypeName = slug => gameName(slug) || String(slug || "").replace(/^ba:businesstype_/, "");
 const osItemName = item => gameName(item) || prettySlug(String(item || ""));
+/* A type's name, lowered, and for more than one in English its plural
+   ("liquor stores", "travel agencies"); another language's sentence has the
+   name as the game gives it. */
+const osTypeLower = slug => gnLower(osTypeName(slug));
+function osTypePlural(slug){
+  const w = osTypeLower(slug);
+  if(typeof gnLang !== "undefined" && gnLang !== "en") return w;
+  return /s$/.test(w) ? w : /(sh|ch|x|z)$/.test(w) ? `${w}es` : /[^aeiou]y$/.test(w) ? `${w.slice(0, -1)}ies` : `${w}s`;
+}
 /* The outfit for the building's layout: its lines and furniture total. */
-const osOutfit = (plan, b) => { const t = plan && osType(plan.type); return t && b ? (t.layouts || {})[b.layout] || null : null; };
-/* Midtown asks for an interior score; the walls and floors that reach it. */
-const osDecor = b => b && ((osFacts().hoods || {})[b.hood] || {}).interior > 0 ? (osFacts().decor || {})[b.layout] || null : null;
+/* The key an outfit is kept by: the layout, or a cinema's or theatre's size
+   (Python's plan_layout()). */
+const osLayout = b => (b && (b.layout || b.size)) || "";
+const osOutfit = (plan, b) => { const t = plan && osType(plan.type); return t && b ? (t.layouts || {})[osLayout(b)] || null : null; };
+/* The interior score the neighbourhood asks for (Midtown's 50), and the
+   cheapest walls and floors that reach it in this layout. */
+const osDecor = b => { const need = b && ((osFacts().hoods || {})[b.hood] || {}).interior;
+  return need > 0 ? ((osFacts().decor || {})[osLayout(b)] || {})[String(need)] || null : null; };
 
 /* The investment in each mode, as setup_cost() counts it: the firm's fee on
    the floor, every item at its default price, the deposit; self-installation
@@ -29755,7 +29868,7 @@ function osSatisfaction(slug){
    staffing assistant): the shop's own figure where it is known, else the
    layout's, else the building's capacity (a current game) or the floor. */
 function osInitial(t, b, o){
-  const known = o.initial ?? (t.initial || {})[b.layout];
+  const known = o.initial ?? (t.initial || {})[osLayout(b)];
   if(known > 0) return known;
   return (osFacts().game || {}).capInitial || t.model === "office" ? osCap(b) : (b.m2 || 0);
 }
@@ -29780,7 +29893,9 @@ function osModel(slug, b, o = {}){
   const lines = range.map(([p, impact]) => {
     const m = F.market[p] || {};
     const amt = t.amt <= 1 ? t.amt : impact >= 1 ? (1 + t.amt) / 2 : 1;
-    return {p, impact, amt, r: m.r || 1, demand: osDemand(p, b.hood, o.existing), service: !!m.s, cost: m.cost || 0, ...osPrice(p, b.hood), units: 0};
+    const hyped = (o.hype || []).includes(p);
+    return {p, impact, amt, r: m.r || 1, demand: Math.min(100, osDemand(p, b.hood, o.existing) + (hyped ? OS_HYPE.demand : 0)), hyped,
+      service: !!m.s, cost: m.cost || 0, ...osPrice(p, b.hood), units: 0};
   });
   const slots = o.open || Array.from({length: 7}, () => [[0, 24]]);
   let customers = 0, fees = 0, open = 0;
@@ -29864,7 +29979,9 @@ function osOfficeModel(slug, t, b, h, o){
 /* The best of the 64 marketing mixes for this building: one of each
    campaign at most, kept when it adds more than it costs. */
 function osBestModel(slug, b){
-  const id = `${slug}|${b.key}|${(D.meta || {}).day}`;
+  /* A new board (a refresh, another save) starts the cache afresh. */
+  if(osBestFor !== D){ osBest = new Map(); osBestFor = D; }
+  const id = `${slug}|${b.key}`;
   if(osBest.has(id)) return osBest.get(id);
   const camps = osFacts().campaigns || [];
   let best = null;
@@ -29872,7 +29989,7 @@ function osBestModel(slug, b){
     let reach = 0, cost = 0;
     camps.forEach(([, price, sqm], i) => { if(mask >> i & 1){ reach += sqm; cost += price; } });
     const m = osModel(slug, b, {reach, cost});
-    if(m && (!best || m.profit > best.profit)) best = {...m, mix: camps.filter((c, i) => mask >> i & 1).map(c => c[0])};
+    if(m && (!best || m.profit > best.profit)) best = {...m, reach, mix: camps.filter((c, i) => mask >> i & 1).map(c => c[0])};
   }
   osBest.set(id, best);
   return best;
@@ -29885,7 +30002,9 @@ function osOwnRatio(slug){
   const rows = own.map(s => {
     const m = osModel(slug, {hood: s.hood, cap: s.cap, m2: s.m2, key: s.key, layout: s.layout}, {promoTotal: s.promo, cost: s.marketing,
       open: s.open, sat: s.sat, existing: true, initial: s.initial, staffed: s.staffed, rent: (byKey.get(s.key) || {}).rent || 0});
-    return m && m.profit > 0 ? {...s, model: m.profit, ratio: s.actual / m.profit} : null;
+    /* A shop in its first days is held to its ramp over the very days measured. */
+    const expect = m && Array.isArray(s.k) && s.k.length ? s.k.reduce((t, k) => t + osDayProfit(m, null, k), 0) / s.k.length : m && m.profit;
+    return m && expect > 0 ? {...s, model: expect, ratio: s.actual / expect} : null;
   }).filter(Boolean);
   if(!rows.length) return null;
   const sorted = rows.map(r => r.ratio).sort((a, b) => a - b);
@@ -29893,15 +30012,16 @@ function osOwnRatio(slug){
   return {ratio: mid, rows};
 }
 /* What the player's own shops in the neighbourhood lose: a new seller moves
-   every product's demand one step down there, for them too. */
+   the demand for every product it sells one step down there, for them too,
+   whatever the product's weight for either type. */
 function osCannibal(slug, hood){
   const t = osType(slug), sales = ((osFacts().sales || {})[hood]) || {};
   const shops = new Set(), items = [];
   let loss = 0;
-  (t ? t.products : []).forEach(([p, impact]) => {
+  (t ? t.products : []).forEach(([p]) => {
     const rows = sales[p];
     const m = (osFacts().market || {})[p];
-    if(impact < 1 || !rows || !m || !m.d) return;
+    if(!rows || !m || !m.d) return;
     const n = ((m.hoods || {})[hood] || [0])[0] || 0;
     const now = osDemandWith(n, m.p), after = osDemandWith(n + 1, m.p);
     if(now <= 0 || after >= now) return;
@@ -29913,17 +30033,63 @@ function osCannibal(slug, hood){
 /* Days to earn `inv` back at `profit` a day; null when it never does. */
 const osDays = (inv, profit) => profit > 0 ? Math.max(1, Math.ceil(inv / profit)) : null;
 
+/* --- the first days (research RAMP.md) ---------------------------------------
+   A new store earns less at first. The opening day is a partial day at
+   satisfaction 50 all round, taken as 0.8 of a day; new staff start at 50
+   satisfaction and climb 0.6 an hour, and the shop's customer service
+   follows them a day late. OS_RAMP is each day's gross margin as a share of
+   the steady one, from the opening day (0) on; rent, wages and marketing are
+   paid in full from the start. The first shop in a neighbourhood to sell a
+   product nobody has sold there for 21 days gets +20 demand on it for 14
+   days (ProductMarketHelper.CreateHypeEventsForNewItemsAddedToANeighbourhood);
+   the save does not say when an item was last sold, so "nobody sells it there
+   now" stands in for the 21 days. */
+const OS_RAMP = [0.55, 0.92, 0.94, 0.97, 0.99];
+const OS_HYPE = {demand: 20, days: 14};
+/* The products a new store of `slug` would be the first to sell in `hood`:
+   demanded goods with a wholesale price (a service or a fee never hypes). */
+function osHyped(slug, hood){
+  const t = osType(slug), M = osFacts().market || {};
+  return (t ? t.products : []).map(([p]) => p).filter(p => {
+    const m = M[p];
+    if(!m || !m.d || !(m.cost > 0) || (m.only && !m.only.includes(hood))) return false;
+    return !(((m.hoods || {})[hood] || [0])[0] > 0);
+  });
+}
+/* Day k's profit after the opening (k = 0 is the opening day): the steady
+   model `m`, the hyped one `mh` on days 1 to 14, each day's gross margin
+   ramped, the fixed costs whole. */
+function osDayProfit(m, mh, k){
+  const x = mh && k >= 1 && k <= OS_HYPE.days ? mh : m;
+  if(x === m && k >= OS_RAMP.length) return m.profit;
+  const r = k < OS_RAMP.length ? OS_RAMP[k] : 1;
+  return r * (x.revenue - x.cogs) - (x.wages + x.rent + x.marketing);
+}
+/* The day the running profit first covers `inv`, day by day: 1 is the
+   opening day. `factor` scales every day, for the range. Null when the
+   steady profit never gets there. */
+function osBreakDay(inv, day, factor = 1){
+  let got = 0;
+  for(let k = 0; k < 20000; k++){
+    got += factor * day(k);
+    if(got >= inv) return k + 1;
+    if(k > OS_HYPE.days && day(k) <= 0) return null;
+  }
+  return null;
+}
+
 /* --- financing ---------------------------------------------------------------
    LoanHelper: flat interest on the amount borrowed, floor(L x rate x the
    difficulty's multiplier / 100 / days a year) a day, and max(5, floor(L /
    term)) of the principal, both at midnight. A bank lends up to its cap less
-   what it is owed, and the company up to the larger of its wealth and a
-   quarter of last week's daily profit over the term, less all it owes. */
+   what it is owed, and the company up to the largest of its wealth, a
+   quarter of last week's daily profit over the term and the tutorial's floor
+   while its first-loan objective is open, less all it owes. */
 function osLoanLimit(bank){
   const f = osFacts().finance || {};
   if(!bank) return 0;
   const room = Math.max(0, bank.max - (bank.owed || 0));
-  const economy = Math.floor(Math.max(0, Math.max(f.wealth || 0, 0.25 * (f.profit7 || 0) * bank.term) - (f.owed || 0)));
+  const economy = Math.floor(Math.max(0, Math.max(f.floor || 0, f.wealth || 0, 0.25 * (f.profit7 || 0) * bank.term) - (f.owed || 0)));
   return Math.min(room, economy);
 }
 function osLoan(amount, bank){
@@ -29938,11 +30104,13 @@ function osLoan(amount, bank){
    while the loan runs, the whole profit after it. */
 function osLoanDays(own, profit, loan){
   if(own <= 0) return 0;
+  /* `profit` is a day's profit, or osDayProfit() for the day after the opening. */
+  const day = typeof profit === "function" ? profit : () => profit;
   let got = 0;
   for(let d = 1; d <= 20000; d++){
-    got += profit - (d <= loan.days ? loan.interest + loan.repay : 0);
+    got += day(d - 1) - (d <= loan.days ? loan.interest + loan.repay : 0);
     if(got >= own) return d;
-    if(d > loan.days && profit <= 0) return null;
+    if(d > loan.days && d > OS_HYPE.days + 1 && day(d - 1) <= 0) return null;
   }
   return null;
 }
@@ -29987,7 +30155,7 @@ function osStripHtml(plan){
   const what = `<b>${spEsc(osTypeName(plan.type))}</b><small>${plan.hood && demand != null
     ? tt("gr.os.strip.demand", "Demand in {hood} {n}", {hood: hoodName(plan.hood), n: demand}) : anyHood}</small>`;
   const where = b ? `<b>${spEsc(b.address)}</b><small>${tt("gr.os.strip.where", "{hood} · {layout} · {m2} m² · rent {rent}/day",
-      {hood: hoodName(b.hood), layout: b.layout || b.size || "", m2: num(b.m2), rent: fmt(b.rent || 0)})}</small>`
+      {hood: hoodName(b.hood), layout: osLayout(b), m2: num(b.m2), rent: fmt(b.rent || 0)})}</small>`
     : `<b class="dim">${tt("gr.os.strip.nowhere", "Not picked yet")}</b><small>${tt("gr.os.strip.nowhere.sub", "{type}, {where}",
       {type: osTypeName(plan.type), where: plan.hood ? hoodName(plan.hood) : anyHood})}</small>`;
   const invest = inv ? `<b class="m">${fmt(inv[mode])}</b><small>${mode === "self" ? tt("gr.os.strip.self", "Self-installation · deposit included")
@@ -30014,8 +30182,11 @@ function osEstimate(plan, b){
     ? tt("gr.os.none.venue", "the game's rules for screens, seats and actors are not modelled") : tt("gr.os.none.type", "this type is not modelled")};
   const m = osBestModel(plan.type, b);
   if(!m) return {inv, none: tt("gr.os.none.data", "the save lacks what the estimate needs")};
-  const days = mode => ({low: osDays(inv[mode], m.profit * OS_HIGH), high: osDays(inv[mode], m.profit * OS_LOW)});
-  return {model: m, profit: m.profit, inv, days: {firm: days("firm"), self: days("self")}};
+  const hyped = m.office ? [] : osHyped(plan.type, b.hood);
+  const mh = hyped.length ? osModel(plan.type, b, {reach: m.reach, cost: m.marketing, hype: hyped}) : null;
+  const day = k => osDayProfit(m, mh, k);
+  const days = mode => ({low: osBreakDay(inv[mode], day, OS_HIGH), high: osBreakDay(inv[mode], day, OS_LOW)});
+  return {model: m, profit: m.profit, inv, day, hyped: mh ? hyped : [], days: {firm: days("firm"), self: days("self")}};
 }
 
 /* Step 1: what to open. */
@@ -30042,7 +30213,9 @@ function osWhatHtml(){
     t.run ? `<small>${t.run}</small>` : ""}</button>`;
   const shops = kinds.filter(([, t]) => t.cat !== "office").map(typeBtn).join("");
   const offices = kinds.filter(([, t]) => t.cat === "office").map(typeBtn).join("");
-  return `<div class="os-two os-start">
+  const notice = osNotice ? `<p class="os-note os-full" role="status">${osNotice}</p>` : "";
+  osNotice = "";
+  return `${notice}<div class="os-two os-start">
   <div class="os-card"><h3>${tt("gr.os.what.demand", "From demand")}</h3>
     ${top.length ? `<table class="os-dl"><thead><tr><th class="l">${tt("gr.os.what.col.type", "Type")}</th><th class="l">${tt("gr.os.what.col.where", "Where")}</th>
       <th>${tt("gr.os.what.col.demand", "Demand")}</th><th>${tt("gr.os.what.col.rivals", "Rivals")}</th><th></th></tr></thead><tbody>${demandRows}</tbody></table>`
@@ -30106,7 +30279,7 @@ function osWhy(group, why){
   if(group === "req") return why === "pointofsales" ? tt("gr.os.why.pos", "Point of sale") : tt("gr.os.why.req", "Required");
   return ({music: tt("gr.os.why.music", "Music"), seating: tt("gr.os.why.seating", "Seating"), sink: tt("gr.os.why.sink", "Sink"),
     toilet: tt("gr.os.why.toilet", "Toilet"), toiletprivacy: tt("gr.os.why.privacy", "Privacy"), "toilet+privacy": tt("gr.os.why.toiletPrivacy", "Toilet, privacy"),
-    employeeuniforms: tt("gr.os.why.uniforms", "Uniforms")})[why] || String(why);
+    employeeuniforms: tt("gr.os.why.uniforms", "Uniforms"), workoutvariety: tt("gr.os.why.workout", "Workout variety")})[why] || String(why);
 }
 const osTag = (group, why) => `<span class="os-tag ${group === "req" ? "req" : group === "dem" ? "dem" : group === "cap" ? "cap" : ""}"${
   group === "shelf" && Array.isArray(why) && why.length > 2 ? ` data-tip="${attr(why.map(osItemName).join(", "))}" tabindex="0"` : ""}>${spEsc(osWhy(group, why))}</span>`;
@@ -30124,7 +30297,7 @@ function osGroupNote(group, b, out){
   if(group === "dem") return tt("gr.os.grp.dem.note", "{hood}: each customer asks with a {n}% chance times the demand's weight", {hood: hoodName(b.hood), n: Math.round((h.demands || 0) * 100)});
   if(group === "cap") return tt("gr.os.grp.cap.note", "stations for {n} customers an hour", {n: osCap(b)});
   const from = out.from && (D.businesses || []).find(x => x.key === out.from);
-  return from ? tt("gr.os.grp.shelf.copied", "as at {address}, same layout {layout}", {address: from.address, layout: b.layout})
+  return from ? tt("gr.os.grp.shelf.copied", "as at {address}, same layout {layout}", {address: from.address, layout: osLayout(b)})
     : tt("gr.os.grp.shelf.note", "per product, enough for {n} customers an hour", {n: osCap(b)});
 }
 const OS_GROUPS = [["req", () => tt("gr.os.grp.req", "Required to open")], ["dem", () => tt("gr.os.grp.dem", "Customer demands")],
@@ -30153,7 +30326,7 @@ function osFirmHtml(b, out, inv){
     });
   });
   rows.push(grp(tt("gr.os.inv.deposit", "Deposit"), tt("gr.os.inv.deposit.note", "refunded when the lease ends"), inv.deposit));
-  rows.push(`<tr><td class="l">${tt("gr.os.inv.deposit.row", "60 days of rent")}<span class="sub">${tt("gr.os.inv.deposit.sub", "60 × {rent}", {rent: fmt(b.rent || 0)})}</span></td><td class="w"></td><td></td><td></td><td>${fmt(inv.deposit)}</td></tr>`);
+  rows.push(`<tr><td class="l">${tt("gr.os.inv.deposit.est", "Estimated deposit")}<span class="sub">${tt("gr.os.inv.deposit.estSub", "about 60 days of rent, with the building's own fittings")}</span></td><td class="w"></td><td></td><td></td><td>${fmt(inv.deposit)}</td></tr>`);
   return `<table class="os-inv"><thead><tr><th class="l">${tt("gr.os.inv.col.item", "Item")}</th><th class="l">${tt("gr.os.inv.col.why", "Why")}</th>
     <th>${tt("gr.os.inv.col.qty", "Qty")}</th><th>${tt("gr.os.inv.col.each", "Each")}</th><th>${tt("gr.os.inv.col.total", "Total")}</th></tr></thead>
     <tbody>${rows.join("")}</tbody><tfoot><tr><td class="l">${tt("gr.os.inv.total", "Investment")}</td><td></td><td></td><td></td><td>${fmt(inv.firm)}</td></tr></tfoot></table>`;
@@ -30179,7 +30352,7 @@ function osSelfHtml(b, out, inv){
     <table><tbody>${decor.floors ? `<tr><td class="l">${tt("gr.os.self.floors", "{n} floor tiles at {p}", {n: num(decor.floors), p: fmt(decor.floorPrice)})}</td><td class="w">${interior}</td><td>${fmt(decor.floors * decor.floorPrice)}</td></tr>` : ""}${
       decor.walls ? `<tr><td class="l">${tt("gr.os.self.wallslots", "{n} wall slots at {p}", {n: num(decor.walls), p: fmt(decor.wallPrice)})}</td><td class="w">${interior}</td><td>${fmt(decor.walls * decor.wallPrice)}</td></tr>` : ""}</tbody></table></div>` : "";
   const dep = `<div class="os-store"><div class="os-sh"><span class="k p">${osIcon("key")}</span><span><b>${tt("gr.os.inv.deposit", "Deposit")}</b><small>${
-    tt("gr.os.self.deposit.sub", "60 × {rent} rent · refunded when the lease ends", {rent: fmt(b.rent || 0)})}</small></span><span class="t">${fmt(inv.deposit)}</span></div></div>`;
+    tt("gr.os.self.deposit.est", "estimated: about 60 days of rent, with the building's own fittings · refunded when the lease ends")}</small></span><span class="t">${fmt(inv.deposit)}</span></div></div>`;
   const legend = stores.map((s, i) => `<div><i>${osLetter(i)}</i><span>${spEsc((vendors[s.key] || {}).n || s.key)}</span><b>${fmt(storeTotal(s))}</b></div>`).join("")
     + `<div><i class="n">${tt("gr.os.map.new", "NEW")}</i><span>${spEsc(b.address)}</span><b></b></div>`;
   const note = unsold.length ? `<p class="quiet os-gap">${tt("gr.os.self.unsold", "No store the game's help names sells these: {items}.", {items: unsold.map(l => osItemName(l[0])).join(", ")})}</p>` : "";
@@ -30242,21 +30415,24 @@ function osBreakHtml(plan){
     tax ? `<p class="os-note">${tt("gr.os.be.tax", "After {n}% tax: {w} a day.", {n: tax, w: fmt(p * (1 - tax / 100))})}</p>` : "",
     own ? `<p class="os-note">${tt("gr.os.be.own", {one: "Your {type} earns {pct}% of what these rules give its own building.",
       other: "Your {n} {types} earn {pct}% of what these rules give their own buildings."},
-      {n: own.rows.length, type: gnLower(osTypeName(plan.type)), types: gnLower(osTypeName(plan.type)), pct: Math.round(own.ratio * 100)})}</p>` : "",
+      {n: own.rows.length, type: osTypeLower(plan.type), types: osTypePlural(plan.type), pct: Math.round(own.ratio * 100)})}</p>` : "",
+    est.hyped.length ? `<p class="os-note">${tt("gr.os.be.hype", "First to sell {items} in {hood}: extra demand on them for the first 14 days.",
+      {items: est.hyped.map(osItemName).join(", "), hood: hoodName(b.hood)})}</p>` : "",
     cann ? `<p class="os-note">${tt("gr.os.be.cannibal", {one: "Your shop in {hood} that sells {items} loses about {w} a day: a new seller moves demand down there too.",
       other: "Your {n} shops in {hood} that sell {items} lose about {w} a day between them: a new seller moves demand down there too."},
       {n: cann.shops, hood: hoodName(b.hood), items: cann.items.map(osItemName).join(", "), w: fmt(cann.loss)})}</p>` : "",
   ].join("");
   const assume = m.office
-    ? tt("gr.os.be.assumeOffice", "Open 24/7 with one person at a computer for every client an hour brings, the fee at the highest price every client in {hood} accepts, satisfaction {sat}, the best marketing: {mix}. Bills {n} hours a day.",
-      {hood: hoodName(b.hood), sat: osSatisfaction(plan.type), mix, n: num(Math.round(m.customers))})
-    : tt("gr.os.be.assume", "Open 24/7, the type's whole range at the highest price every customer in {hood} accepts, satisfaction {sat}, the best marketing: {mix}. Sold {units} units to {n} customers a day.",
+    ? tt("gr.os.be.assumeOffice2", "Open 24/7: {always} of the {n2} computers staffed around the clock, every computer 8 to 22 on weekdays and half of them at weekends. The fee at the highest price every client in {hood} accepts, satisfaction {sat}, the best marketing: {mix}. Bills {n} hours a day. The first five days earn less while satisfaction and new staff settle, and the days to break even count that.",
+      {hood: hoodName(b.hood), sat: osSatisfaction(plan.type), mix, n: num(Math.round(m.customers)), n2: osCap(b),
+        always: osOfficeStaffed(osCap(b), osCap(b), 1, 3)})
+    : tt("gr.os.be.assume2", "Open 24/7, the type's whole range at the highest price every customer in {hood} accepts, satisfaction {sat}, the best marketing: {mix}. Sold {units} units to {n} customers a day. The first five days earn less while satisfaction and new staff settle, and the days to break even count that.",
       {hood: hoodName(b.hood), sat: osSatisfaction(plan.type), mix, units: num(Math.round(m.lines.reduce((s, l) => s + l.units, 0))), n: num(Math.round(m.customers))});
   return `<div class="os-be">
   <div class="os-card"><div class="os-big">${big(mode)}${big(other, true)}</div>${osChart(est, mode)}</div>
   <div class="os-card"><h3>${tt("gr.os.be.profit", "Expected profit a day")}</h3>
     <div class="os-sites">${detail}<div class="os-site avg"><span><b>${tt("gr.os.be.estimate", "The game's rules")}</b><small>${
-      tt("gr.os.be.estimate.sub", "{hood}, {layout}, {cap} customers an hour at most", {hood: hoodName(b.hood), layout: b.layout || "", cap: osCap(b)})}</small></span><span class="v${p < 0 ? " neg" : ""}">${fmt(p)}</span></div></div>
+      tt("gr.os.be.estimate.sub", "{hood}, {layout}, {cap} customers an hour at most", {hood: hoodName(b.hood), layout: osLayout(b), cap: osCap(b)})}</small></span><span class="v${p < 0 ? " neg" : ""}">${fmt(p)}</span></div></div>
     ${lines}<p class="os-assume" data-tip="${attr(assume)}" tabindex="0">${tt("gr.os.be.assumeLab", "What the estimate assumes")}</p>
   </div></div>
   ${own ? osOwnHtml(plan, own) : ""}
@@ -30273,34 +30449,37 @@ function osOwnHtml(plan, own){
   const rows = own.rows.map(r => { const b = byKey.get(r.key) || {};
     return `<div class="os-site"><span><b>${spEsc(b.address || r.key)}</b><small><span class="hood">${spEsc(HOOD_TAGS[r.hood] || "")}</span> ${spEsc(r.layout || "")}</small></span>
       <span class="bar"><i style="width:${Math.max(2, r.actual / top * 100).toFixed(0)}%"></i></span><span class="v">${fmt(r.actual)}</span><span class="v os-dim">${Math.round(r.ratio * 100)}%</span></div>`; }).join("");
-  return `<div class="os-card os-ownc"><h3>${tt("gr.os.own.title", "Your {types} against the same rules", {types: gnLower(osTypeName(plan.type))})}</h3>
+  return `<div class="os-card os-ownc"><h3>${tt("gr.os.own.title", "Your {types} against the same rules", {types: own.rows.length > 1 ? osTypePlural(plan.type) : osTypeLower(plan.type)})}</h3>
     <p class="quiet">${tt("gr.os.own.note", "Profit a day over their last two weeks, goods at import prices, beside the rules' figure for each one's own building, hours and marketing.")}</p>
     <div class="os-sites os-own">${rows}</div></div>`;
 }
 /* Cumulative profit from the opening against both investments, the range as
-   a band. */
+   a band. The first days bend the line: the ramp, and a first seller's hype. */
 function osChart(est, mode){
   const W = 560, H = 262, x0 = 58, y0 = 16, x1 = W - 16, y1 = H - 40, p = est.profit;
   if(!(p > 0)) return `<p class="quiet">${tt("gr.os.be.noChart", "At this profit the store does not earn its investment back.")}</p>`;
   const inv = est.inv, hi = Math.max(inv.firm, inv.self);
-  const dmax = Math.max(10, Math.ceil((hi / (p * OS_LOW)) * 1.15 / 5) * 5);
-  const vmax = p * OS_HIGH * dmax;
-  const X = d => x0 + (x1 - x0) * d / dmax, Y = v => y1 - (y1 - y0) * Math.min(v, vmax) / vmax;
+  const last = osBreakDay(hi, est.day, OS_LOW) || Math.ceil(hi / (p * OS_LOW));
+  const dmax = Math.max(10, Math.ceil(last * 1.15 / 5) * 5);
+  const cum = [0];
+  for(let d = 1; d <= dmax; d++) cum.push(cum[d - 1] + est.day(d - 1));
+  const vmax = Math.max(cum[dmax] * OS_HIGH, hi * 1.05, 1);
+  const X = d => x0 + (x1 - x0) * d / dmax, Y = v => y1 - (y1 - y0) * Math.max(0, Math.min(v, vmax)) / vmax;
   const step = osNiceStep(vmax / 4), dstep = osNiceStep(dmax / 5);
   const g = [];
   for(let v = 0; v <= vmax + 1e-6; v += step) g.push(`<line class="grid" x1="${x0}" x2="${x1}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"></line><text x="${x0 - 8}" y="${(Y(v) + 3.5).toFixed(1)}" text-anchor="end">${money(v)}</text>`);
   for(let d = 0; d <= dmax; d += dstep) g.push(`<text x="${X(d).toFixed(1)}" y="${y1 + 18}" text-anchor="middle">${d}</text>`);
-  const line = k => `M${X(0).toFixed(1)},${Y(0).toFixed(1)} L${X(dmax).toFixed(1)},${Y(p * k * dmax).toFixed(1)}`;
-  const band = `M${X(0).toFixed(1)},${Y(0).toFixed(1)} L${X(dmax).toFixed(1)},${Y(p * OS_HIGH * dmax).toFixed(1)} L${X(dmax).toFixed(1)},${Y(p * OS_LOW * dmax).toFixed(1)} Z`;
-  const mark = (key, cls) => { const v = inv[key], d = v / p;
+  const pts = k => cum.map((v, d) => `${X(d).toFixed(1)},${Y(v * k).toFixed(1)}`);
+  const band = `M${pts(OS_HIGH).join(" L")} L${pts(OS_LOW).reverse().join(" L")} Z`;
+  const mark = (key, cls) => { const v = inv[key], d = osBreakDay(v, est.day);
     return `<line class="${cls}" x1="${x0}" x2="${x1}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"></line><text class="lbl ${cls === "inv" ? "w" : "i"}" x="${x0 + 6}" y="${(Y(v) - 7).toFixed(1)}">${
       key === "firm" ? tt("gr.os.inv.firm", "Installation firm") : tt("gr.os.inv.self", "Self-installation")} ${fmt(v)}</text>${
-      d <= dmax ? `<circle class="hit" cx="${X(d).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="5"></circle><text class="lbl" x="${(X(d) + 9).toFixed(1)}" y="${(Y(v) + 16).toFixed(1)}">${
-      tt("gr.os.be.day", "day {n}", {n: Math.ceil(d)})}</text>` : ""}`; };
+      d && d <= dmax ? `<circle class="hit" cx="${X(d).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="5"></circle><text class="lbl" x="${(X(d) + 9).toFixed(1)}" y="${(Y(v) + 16).toFixed(1)}">${
+      tt("gr.os.be.day", "day {n}", {n: d})}</text>` : ""}`; };
   return `<svg class="os-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${attr(tt("gr.os.be.chart", "Profit from the opening against the investment"))}">
     ${g.join("")}<line class="ax" x1="${x0}" x2="${x1}" y1="${y1}" y2="${y1}"></line>
     <path class="band" d="${band}"></path>${mark(mode, "inv")}${mark(mode === "firm" ? "self" : "firm", "inv2")}
-    <path class="line" d="${line(1)}"></path><text x="${x1}" y="${y1 + 34}" text-anchor="end">${tt("gr.os.be.axis", "days after opening")}</text></svg>`;
+    <path class="line" d="M${pts(1).join(" L")}"></path><text x="${x1}" y="${y1 + 34}" text-anchor="end">${tt("gr.os.be.axis", "days after opening")}</text></svg>`;
 }
 const osNiceStep = v => { const e = Math.pow(10, Math.floor(Math.log10(Math.max(v, 1)))); const f = v / e; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * e; };
 
@@ -30320,7 +30499,8 @@ function osFinHtml(plan, est){
     tt("gr.os.fin.rate", "{r}% a year · {d} days", {r: num(Math.round(b.rate * (f.multiplier || 0) * 10) / 10), d: b.term})}</b></button>`).join("");
   const mode = osMode(plan), inv = est.inv[mode];
   const limit = Math.min(osLoanLimit(bank), Math.floor(inv));
-  const amount = Math.max(0, Math.min(limit, fin.amount || Math.round(inv / 2)));
+  /* Half the investment until the reader picks an amount; 0 is a choice too. */
+  const amount = Math.max(0, Math.min(limit, fin.amount ?? Math.round(inv / 2)));
   return `<div class="os-card os-fin" id="osFin">${head}
     <div class="os-finctl"><div class="os-fr"><span>${tt("gr.os.fin.lender", "Lender")}</span><nav class="os-seg">${lenders}</nav></div>
     <div class="os-fr"><span>${tt("gr.os.fin.amount", "Amount")}</span><div class="os-amount"><label class="os-num">$<input type="number" min="0" max="${limit}" step="1000" value="${Math.round(amount)}" data-os-fin-amount aria-label="${attr(tt("gr.os.fin.amountAria", "Amount to borrow"))}"></label>
@@ -30334,7 +30514,7 @@ function osFinFacts(plan, est, bank, amount){
   const cell = (lab, value, sub) => `<div><span class="os-lab">${lab}</span><b>${value}</b><small>${sub}</small></div>`;
   if(!loan) return cell(tt("gr.os.fin.upfront", "Cash upfront"), fmt(inv), tt("gr.os.fin.min", "a bank lends {w} at least", {w: fmt(f.minimum || 0)}));
   const own = inv - amount, daily = loan.interest + loan.repay;
-  const without = osDays(inv, p), with_ = osLoanDays(own, p, loan);
+  const without = osBreakDay(inv, est.day), with_ = osLoanDays(own, est.day, loan);
   const payoff = without != null && without < loan.days ? without * loan.interest : null;
   const dayText = n => n == null ? tt("gr.os.be.never", "not at this profit") : tt("gr.os.days", {one: "{n} day", other: "{n} days"}, {n: num(n)});
   return cell(tt("gr.os.fin.upfront", "Cash upfront"), fmt(own), tt("gr.os.fin.upfront.sub", "{w} borrowed", {w: fmt(amount)}))
@@ -30350,13 +30530,17 @@ function osFinUpdate(amount){
   const banks = (osFacts().finance || {}).banks || [];
   const bank = banks.find(x => x.id === (plan.finance || {}).bank) || banks.find(x => x.id === "VantanderBankSettings") || banks[0];
   const limit = Math.min(osLoanLimit(bank), Math.floor(est.inv[osMode(plan)]));
-  amount = Math.max(0, Math.min(limit, Math.round(+amount || 0)));
+  const asked = Math.round(+amount || 0);
+  amount = Math.max(0, Math.min(limit, asked));
   plan.finance.amount = amount;
   osSave();
   const facts = $("osFinFacts");
   if(facts) facts.innerHTML = osFinFacts(plan, est, bank, amount);
+  /* The field says the loan the figures use: past the limit it snaps back,
+     even while it is being typed in. */
   const fin = $("osFin");
-  if(fin) fin.querySelectorAll("[data-os-fin-amount], [data-os-fin-range]").forEach(i => { if(document.activeElement !== i) i.value = amount; });
+  if(fin) fin.querySelectorAll("[data-os-fin-amount], [data-os-fin-range]").forEach(i => {
+    if(document.activeElement !== i || asked !== amount) i.value = amount; });
 }
 
 /* The whole view, drawn for the step on screen. The embedded finder is kept
@@ -30388,7 +30572,10 @@ function osGo(step){
 /* A new plan for a type, from a Demand cell, the grid of types or search. */
 function osStart(type, hood){
   osLoad();
-  osNew(type, hood);
+  if(!osNew(type, hood)){
+    osCur = null; osStep = "what";
+    osNotice = tt("gr.os.plans.full", "All twelve plans have a building. Delete one to start another.");
+  }
   drawOpenStore();
 }
 /* A function, not once(): the helper is declared further down the script,

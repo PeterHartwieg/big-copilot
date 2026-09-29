@@ -184,7 +184,8 @@ and never attach one to an issue.
   strings, so when you change a comment or declaration near such an anchor, update the test
   to match. In `ba_dashboard.py`: `tests/alert_kinds.test.cjs`, `tests/fold_views.test.cjs`,
   `tests/milestones.test.cjs`, `tests/navigation.test.cjs`,
-  `tests/order_checklist.test.cjs`, `tests/search.test.cjs`. In `web/app.js`:
+  `tests/order_checklist.test.cjs`, `tests/search.test.cjs`, `tests/open_store_model.test.cjs`
+  (and `check_profit_model.py`, which runs the same section). In `web/app.js`:
   `tests/game_link.test.cjs`, `tests/game_text.test.cjs`, `tests/performance.test.cjs`,
   `tests/resume.test.cjs`, `tests/save_location.test.cjs`. `tests/alert_kinds.test.cjs` also
   matches a fragment of the findings loop in `mapFindings()` in `web/map.js` with a regex.

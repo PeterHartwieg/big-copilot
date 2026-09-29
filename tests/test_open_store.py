@@ -24,7 +24,7 @@ import save_fixtures  # noqa: E402
 from ba_dashboard import (  # noqa: E402
     CAPPED_INITIAL_BUILD, _plan_initial, decor_route, demand_with, optimal_providers, outfit_lines,
 )
-from ba_save import Names, load_save  # noqa: E402
+from ba_save import Names, Save, load_save  # noqa: E402
 
 POS, MUSIC, SINK, TOILET = 8, ba_dashboard.MUSIC_FLAG, ba_dashboard.SINK_FLAG, ba_dashboard.TOILET_FLAG
 SHOP = "ba:businesstype_liquorstore"
@@ -100,10 +100,66 @@ class OutfitTests(unittest.TestCase):
         self.assertEqual(fridge["why"], ["ba:itemname_beer", "ba:itemname_sodacan"])
         self.assertEqual(got[("ba:itemname_shelf", "shelf")]["qty"], 2)
 
-    def test_the_players_own_shelving_is_copied_instead(self):
+    def test_the_players_own_shelving_is_copied_and_whatever_it_does_not_hold_is_added(self):
         got = lines_of(30, 225, copied=[("ba:itemname_shelf", 9, ["ba:itemname_whisky"])])
         self.assertEqual(got[("ba:itemname_shelf", "shelf")]["qty"], 9)
-        self.assertNotIn(("ba:itemname_fridge", "shelf"), got)
+        # The model sells beer and soda too: the copied shop has no fridge for
+        # them, so the fallback adds one per product as if nothing were copied.
+        fridge = got[("ba:itemname_fridge", "shelf")]
+        self.assertEqual((fridge["qty"], fridge["why"]), (6, ["ba:itemname_beer", "ba:itemname_sodacan"]))
+
+    def test_a_display_several_products_share_stands_on_its_whole_count(self):
+        rules = json.loads(json.dumps(RULES))
+        rules["furniture"]["ba:itemname_fridge"]["m"] = [["ba:itemname_plinth"]]
+        rules["furniture"]["ba:itemname_plinth"] = {"v": VENDOR}
+        prices = {"items": {**PRICES["items"], "ba:itemname_plinth": {"p": 5}}}
+        got = {(l["item"], l["group"], str(l["why"])): l["qty"] for l in outfit_lines(SHOP, rules, prices, 30, 225)}
+        self.assertEqual(got[("ba:itemname_fridge", "shelf", "['ba:itemname_beer', 'ba:itemname_sodacan']")], 6)
+        self.assertEqual(got[("ba:itemname_plinth", "shelf", "mount")], 6)
+
+    def test_a_station_takes_the_cheapest_piece_of_each_placement_requirement(self):
+        # A computer needs a desk and a chair: one of each, not the cheapest of both.
+        rules = json.loads(json.dumps(RULES))
+        for till in ("ba:itemname_till", "ba:itemname_bigtill"):
+            rules["furniture"][till]["m"] = [["ba:itemname_towel", "ba:itemname_chair"], ["ba:itemname_desk", "ba:itemname_bigdesk"]]
+        rules["furniture"].update({n: {"v": VENDOR} for n in ("ba:itemname_towel", "ba:itemname_chair", "ba:itemname_desk", "ba:itemname_bigdesk")})
+        prices = {"items": {**PRICES["items"], "ba:itemname_towel": {"p": 10}, "ba:itemname_chair": {"p": 90},
+                            "ba:itemname_desk": {"p": 300}, "ba:itemname_bigdesk": {"p": 700}}}
+        got = [(l["item"], l["group"], l["qty"]) for l in outfit_lines(SHOP, rules, prices, 30, 225) if l["why"] == "mount"
+               and l["group"] in ("req", "cap")]
+        self.assertEqual(sorted(got), [("ba:itemname_desk", "cap", 1), ("ba:itemname_desk", "req", 1),
+                                       ("ba:itemname_towel", "cap", 1), ("ba:itemname_towel", "req", 1)])
+
+    def test_a_piece_the_stations_own_store_sells_goes_with_it(self):
+        rules = json.loads(json.dumps(RULES))
+        for till in ("ba:itemname_till", "ba:itemname_bigtill"):
+            rules["furniture"][till]["m"] = [["ba:itemname_towel", "ba:itemname_chair"]]
+        rules["furniture"]["ba:itemname_towel"] = {"v": ["ba:street_seventhavenue#5"]}   # a beach shop
+        rules["furniture"]["ba:itemname_chair"] = {"v": VENDOR}                          # the till's own store
+        prices = {"items": {**PRICES["items"], "ba:itemname_towel": {"p": 10}, "ba:itemname_chair": {"p": 90}}}
+        mounts = {l["item"] for l in outfit_lines(SHOP, rules, prices, 30, 225) if l["why"] == "mount"}
+        self.assertEqual(mounts, {"ba:itemname_chair"})
+
+    def test_a_gym_holds_five_distinct_workout_types_the_cheapest_way(self):
+        gym = "ba:businesstype_gym"
+        rules = {"types": {gym: {"b": "retail", "c": 1, "i": [], "dm": [["workoutvariety", 1]],
+                                 "rq": [{"n": "workoutmachine", "t": 1048576}]}},
+                 "furniture": {}, "products": {}}
+        machines = {"mat": (150, 2), "ball": (60, 2), "bar": (280, 6), "bag": (450, 3), "trampoline": (525, 0),
+                    "barbell": (2100, 8), "treadmill": (5250, 1), "bell": (20, 7)}
+        prices = {"items": {}}
+        for name, (price, kind) in machines.items():
+            item = f"ba:itemname_{name}"
+            rules["furniture"][item] = {"c": 2, "wt": kind, "v": [] if name == "bell" else VENDOR}  # nobody sells the kettlebell
+            prices["items"][item] = {"p": price, "t": 1048576}
+        lines = outfit_lines(gym, rules, prices, 4, 225)
+        kinds = {rules["furniture"][l["item"]]["wt"] for l in lines}
+        self.assertEqual(len(kinds), 5)
+        # The requirement's two fitballs (4 customers an hour, 2 each), then the
+        # four cheapest other types; the mat trains what the ball does.
+        self.assertEqual(sorted((l["item"], l["group"]) for l in lines if l["group"] == "dem"),
+                         [("ba:itemname_bag", "dem"), ("ba:itemname_bar", "dem"), ("ba:itemname_barbell", "dem"),
+                          ("ba:itemname_trampoline", "dem")])
 
 
 class DemandTests(unittest.TestCase):
@@ -158,6 +214,79 @@ class InitialTests(unittest.TestCase):
         law = "ba:businesstype_lawfirm"
         self.assertEqual(_plan_initial(2701, "office", 50, law, 660, ["ba:itemname_hourlylawyerfee"]), 50)
         self.assertEqual(_plan_initial(None, "office", 10, law, 285, []), 10)
+
+
+def coll(items):
+    return {"$items": list(items)}
+
+
+class FinanceTests(unittest.TestCase):
+    """_finance_facts(): the wealth and debts the banks weigh (LOANS.md)."""
+    RULES = {"banks": {"VantanderBankSettings": {"r": 12, "y": 4, "x": 2000000},
+                       "JensenCapitalSettings": {"r": 20, "y": 2, "x": 40000}},
+             "vehicles": {"ba:vehicletype_vordv150": 44000}}
+
+    def facts(self, **root):
+        base = {"Money": 10000.0, "gameVariables": {"daysPerYear": 60, "bankInterestMultiplier": 0.7}}
+        save = Save({**base, **root}, {}, "synthetic")
+        daily = [{"profit": p} for p in (100, 200, 300, 400, 500, 600, 700, 800)]
+        return ba_dashboard._finance_facts(save, daily, self.RULES)
+
+    def test_wealth_counts_cash_funds_motor_vehicles_boats_and_property(self):
+        f = self.facts(
+            investmentFunds=coll([{"initialDeposit": 5000, "additionalInvestment": 1000, "withdrawal": 500, "interestPayment": 20}]),
+            VehicleInstances=coll([{"vehicleTypeName": "ba:vehicletype_vordv150"}, {"vehicleTypeName": "ba:vehicletype_handtruck"}]),
+            playerBoats=coll([{"type": 1}]),
+            realEstate=coll([{"purchasePrice": 300000}]))
+        self.assertEqual(f["wealth"], 10000 + 5520 + 44000 + 2_500_000 + 300000)
+        # The last seven days' average profit: 200 to 800.
+        self.assertEqual(f["profit7"], 500)
+        self.assertEqual(f["floor"], 0)
+
+    def test_each_loan_is_owed_to_the_bank_at_its_address(self):
+        vantander = {"streetName": "ba:street_secondavenue", "streetNumber": 6}
+        jensen = {"streetName": "ba:street_fourthavenue", "streetNumber": 17}
+        nowhere = {"streetName": "ba:street_broadwaystreet", "streetNumber": 1}
+        f = self.facts(Loans=coll([{"bankAddress": vantander, "remainingAmount": 1000},
+                                   {"bankAddress": jensen, "remainingAmount": 250},
+                                   {"bankAddress": nowhere, "remainingAmount": 30}]))
+        owed = {b["id"]: b["owed"] for b in f["banks"]}
+        self.assertEqual(owed, {"VantanderBankSettings": 1000, "JensenCapitalSettings": 250})
+        # A loan at an address no bank has is owed all the same, overall.
+        self.assertEqual(f["owed"], 1280)
+
+    def test_the_tutorials_floor_holds_while_its_first_loan_is_asked_for(self):
+        on = {"daysPerYear": 60, "tutorialEnabled": True}
+        self.assertEqual(self.facts(gameVariables=on)["floor"], ba_dashboard.TUTORIAL_LOAN_FLOOR)
+        done = coll([ba_dashboard.TUTORIAL_LOAN_OBJECTIVE])
+        self.assertEqual(self.facts(gameVariables=on, CompletedQuestEntries=done)["floor"], 0)
+
+
+class MarketTests(unittest.TestCase):
+    """_store_market(): the lowest price a customer sees, from shops that stock the item."""
+    RULES = {"products": {"ba:itemname_beer": {"p": 4, "w": 1, "r": 0.5, "d": 1}}}
+
+    def market(self, *regs):
+        root = {"productMarketEntries": coll([]), "BuildingRegistrations": coll(regs)}
+        return ba_dashboard._store_market(Save(root, {}, "synthetic"), self.RULES, {"ba:itemname_beer"}, 1.0, 0)
+
+    @staticmethod
+    def shop(number, price, stocks=True, rival=None, mine=False):
+        return {"StreetName": "ba:street_eighthstreet", "StreetNumber": number, "BusinessName": "Shop",
+                "RentedByPlayer": mine, "businessOwnerRivalId": rival,
+                "retailPrices": coll([{"itemName": "ba:itemname_beer", "price": price}]),
+                "cachedAvailableProducts": coll(["ba:itemname_beer"] if stocks else [])}
+
+    def test_a_rival_that_stocks_the_item_sets_the_price_and_takes_the_monopoly(self):
+        row = self.market(self.shop(5, 3.5, rival="r1"))["ba:itemname_beer"]["hoods"]["ba:neighborhood_midtown"]
+        self.assertEqual(row[1:], [1, 3.5])
+
+    def test_the_players_own_cheap_shop_counts_and_an_unstocked_price_does_not(self):
+        got = self.market(self.shop(5, 3.0, mine=True), self.shop(9, 2.0, stocks=False, rival="r1"))
+        hoods = got["ba:itemname_beer"]["hoods"]
+        self.assertEqual(hoods["ba:neighborhood_midtown"][1:], [0, 3.0])
+        # The rival in Lower Manhattan prices beer but holds none: no offer, no rival seller.
+        self.assertNotIn("ba:neighborhood_lowermanhattan", hoods)
 
 
 class PayloadTests(unittest.TestCase):

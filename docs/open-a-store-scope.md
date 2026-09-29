@@ -166,9 +166,12 @@ gitignored. Put the rules you implement into `docs/dashboard-reference.md`.
     correction.
 - **Validation:** 108 real shops across 4 characters. With each shop's own prices, the median
   actual ÷ model is 0.97, and 70% fall within ±15%. Offices are within about 5%.
-  - The board's own model with its planner defaults (`check_profit_model.py`, 29 September 2026):
-    102 shops at a median of 0.96 (p25 0.76, p75 1.00, p90 1.08, 55% within ±15%, 78% within
-    ±30%); 12 offices, on their own staffing, at 0.99 (p25 0.93, p90 1.12, 75% within ±15%).
+  - The board's own model with its planner defaults (`check_profit_model.py`, 29 September 2026,
+    each store measured from its first day with sales): on saves without game-changing mods and
+    stores open 14 days or more, 55 shops at a median of 0.98 (p25 0.88, p75 1.03, p90 1.16,
+    65% within ±15%, 89% within ±30%) and 4 offices at 0.97 on their own staffing; stores in
+    their first 14 days, held to the ramp (research RAMP.md), 7 at 0.98; the modded save's 38
+    shops at 0.83.
 - **Not modelled:** cinemas and theatres come out 2 to 4 times too high, so show them as investment
   only, with no profit estimate. Shelf space per product is also open.
 

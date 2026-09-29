@@ -18,6 +18,20 @@
   entry for PR 175 describes phases 1 and 2.
 - Validation: `python check_profit_model.py` (see dashboard-reference for the numbers).
 
+## Review round 1 (29 Sep 2026)
+- `make_store_rules.py`: `m` is a list of groups (one per placement requirement); `wt`, each gym machine's workout type
+  from the prefab bundle's controllers; `vehicles`, motor vehicle prices. Boat prices are hard-coded (`BOAT_PRICES`, from
+  `BoatTypes..cctor`).
+- Outfit: one mount per group, from the station's own store where it sells one; copied shelving plus fallback displays for
+  products it does not hold; a gym's five workout types; cinemas and theatres planned by size (`plan_layout()`).
+- Model: first days ramp and first-seller hype (`osDayProfit()`, `osBreakDay()`, research RAMP.md); `_own_shops()` from
+  the first day with sales; price reference from shops that stock the item, the player's included; cannibalisation on
+  every product; borrowing limit with vehicles, boats and the tutorial floor.
+- The fixture's loan sits at 1 Broadway Street, no bank, so both banks show 0 owed there while the total is 29,900; real
+  saves' loans name the banks' addresses (checked).
+- `check_profit_model.py`: headline on unmodded saves (`HARMLESS_MODS`) and stores open 14+ days; young stores against the
+  ramp.
+
 ## Next
 1. Phase 3: the checklist until opening (step 5) and its buttons (hire, uniforms, marketing after PR #174, logistics).
 2. Phase 4: after opening, the plan attaches to the site at its address (step 6).

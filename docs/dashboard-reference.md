@@ -836,12 +836,17 @@ never suggests opening a store on its own.
   does not;
 - one item per customer demand the type makes: music, seating, a sink, a toilet, a toilet
   stall for privacy (one stall meets both), a uniform locker;
+- a gym's machines: five distinct workout types, the cheapest machine of each type the
+  gym does not train yet (each machine's type is its prefab's WorkoutExercise);
 - the displays: copied from your own store of the same type and layout when you run one,
-  otherwise, per product, enough of its cheapest display for the building's customers an
-  hour;
+  and for every product those do not hold, as for a type you do not run, enough of its
+  cheapest display for the building's customers an hour;
+- what a station must be attached to, one piece per placement requirement: a computer
+  takes a desk and a chair, from its own store where that store sells one;
 - only items a furniture store sells, and, where the game says what an item is for, only
   items made for this type;
-- the deposit, 60 days of rent.
+- the deposit, as the finder estimates it: about 60 days of rent, with the building's own
+  fittings.
 
 The **installation firm** charges 586 a square metre on top of every item at its default
 price, and lays the walls and floors free. **Self-installation** is the items, $250 a
@@ -866,8 +871,8 @@ the game's own arithmetic for a store run well, not an average of your other sto
   takes. The new store counts as one more seller, so demand is a step lower than today's.
   Satisfaction is the median of your own stores of the type, else 95.
 - **Price.** The highest price every customer in the neighbourhood accepts: the default
-  price, or a rival's lower one, times the neighbourhood's price level, plus 0.3 while no
-  rival company sells the product.
+  price, or the lowest price of any shop there that stocks the product (yours included),
+  times the neighbourhood's price level, plus 0.3 while no rival company sells it.
 - **Cost of goods** is always the import price: wholesale × the save's import price index ×
   the difficulty's price multiplier × your best purchasing agent's discount. Never the
   income statement's goods, which are near zero where your own factories supply a shop.
@@ -876,9 +881,17 @@ the game's own arithmetic for a store run well, not an average of your other sto
 - **Offices** bill one client an hour per staffed computer. Clients come at the building's
   capacity × satisfaction × promotion × the day's and the hour's multipliers × the fee's
   neighbourhood demand, whatever build the game started on. The computers are staffed as
-  the board's office default (a few around the clock, all from 8 to 22 on weekdays, half at
-  the weekend), each paid for every hour it is staffed, with a cleaner through the open
-  hours.
+  the board's office default (3 around the clock in a building for 50, fewer in smaller
+  ones, at least 1; every computer from 8 to 22 on weekdays, half of them at the weekend),
+  each paid for every hour it is staffed, with a cleaner through the open hours.
+- **The first days.** A new store earns less at first: the opening day is a partial day at
+  satisfaction 50 all round (taken as 0.8 of a day), and new staff start at 50 satisfaction
+  and climb 0.6 an hour, which the shop's customer service follows a day late. The gross
+  margin runs at 0.55, 0.92, 0.94, 0.97 and 0.99 of the steady one on the opening day and the
+  four after it; rent, wages and marketing are paid in full. The first store in a
+  neighbourhood to sell a product nobody has sold there for 21 days gets +20 demand on it for
+  14 days; the plan counts that for every product nobody sells there now. The days to break
+  even add the running profit up day by day.
 - Cinemas and theatres show the investment only: their screens, seats and actors cap them in
   ways the rules here do not follow.
 
@@ -886,17 +899,20 @@ Under the estimate: the profit after tax, and, where you run the type, "your sto
 type earn x% of what these rules give their own buildings", each of them beside the rules'
 figure for its own building, hours and marketing. It is a line, not a correction. Where your
 own stores in the neighbourhood sell the same products, the demand the new store takes from
-them is said too.
+them is said too, for every product it sells; so is being the first to sell a product there.
 
 `check_profit_model.py` runs this model over every store you run, on every save on the
-machine. On 29 September 2026: 102 shops at a median of 0.96 (p25 0.76, p90 1.08; 55% within
-15%), 12 offices at 0.99 (p25 0.93, p90 1.12; 75% within 15%). The shops that fall far short
-priced below what customers accept, ran out of stock or had too little shelving.
+machine, from each store's first day with sales. On 29 September 2026, on saves without mods
+that change the game and stores open 14 days or more: 55 shops at a median of 0.98 (p25 0.88,
+p90 1.16; 65% within 15%, 89% within 30%), 4 offices at 0.97. Stores in their first 14 days,
+held to the ramp above: 7 at a median of 0.98. The shops that fall far short priced below what
+customers accept, ran out of stock or had too little shelving; the one modded save runs at 0.83.
 
 **Financing** is for a planned store only, since the game books a loan to the company. Pick
 a lender and an amount up to what it lends you now: the lower of its cap less what you owe
-it, and the larger of your cash, investments and property or a quarter of last week's
-average daily profit over the loan's term, less everything you owe. Interest is flat on the
+it, and the largest of your wealth (cash, investments, motor vehicles and boats at their
+prices, and property), a quarter of last week's average daily profit over the loan's term,
+and $15,500 while the tutorial still asks for its first loan, less everything you owe. Interest is flat on the
 amount borrowed, floor(amount × rate × the difficulty's multiplier / 100 / days a year) a
 day, and the repayment max(5, amount / the term's days) a day, both at midnight. The panel
 shows the cash upfront, the loan's cost a day against the expected profit, the interest over
