@@ -2216,6 +2216,26 @@ test('the open-hours plan draws its own need: every station the hours it opens a
     assert.ok(cells.every(([, , read]) => /every station/.test(read)), cells[0][2]);
     assert.equal(await page.locator(mon + '.sp-unmh').count(), 0, 'no hour marked as counted as none');
     // The row's label says whose need it is: not the measured hours'.
-    assert.match(await page.locator(mon + '.sp-needrow .lab').getAttribute('data-read'), /every station where no customers are read yet/);
+    assert.match(await page.locator(mon + '.sp-needrow .lab').getAttribute('data-read'), /the measured hours', and every station where nothing is read yet/);
+  } finally { await page.close(); }
+});
+
+test('a shop nobody works at any more is on its open-hours plan, and the need row says every station the hours it opens', async () => {
+  // Complete data, and the staff all gone: the open-hours plan is every
+  // station of every role each hour the shop opens (sp.need.openall).
+  const page = await shop('full', null, null, {noOpenPlan: false});
+  try {
+    assert.equal(ROWS.full.openCover.complete, true);
+    const out = await page.evaluate(k => {
+      D.businesses[0].staff = 0;
+      drawShop();
+      const base = spRosterRow(k);
+      return {on: spPlanOf(base), regs: (base.roles || []).reduce((n, r) => n + (r.stations || []).length, 0)};
+    }, KEY);
+    assert.equal(out.on, 'open');
+    assert.match(await page.locator(mon + '.sp-needrow .lab').getAttribute('data-read'), /Every station, the hours the shop opens/);
+    const cells = await page.locator(mon + '.sp-need').evaluateAll(n => n.map(x => [x.style.getPropertyValue('--n'), x.dataset.read]));
+    assert.ok(cells.length > 0);
+    assert.ok(cells.every(([n, read]) => n === String(out.regs) && /while nobody works here yet/.test(read)), JSON.stringify(cells[0]));
   } finally { await page.close(); }
 });
