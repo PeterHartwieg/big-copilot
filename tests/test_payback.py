@@ -484,6 +484,33 @@ class PaybackTest(PricesTestCase):
         self.assertEqual(chain["profit"], site["profit"])
         self.assertEqual(chain["firm"], site["firm"])
 
+    def test_an_older_save_sees_no_day_a_newer_one_added(self):
+        history = History(None)
+        def rows(first, last):
+            return [(d, {SHOP: (500, 900)}) for d in range(first, last + 1)]
+        self.run_payback(rows(30, 89), history)
+        newer, _ = self.run_payback(rows(90, 150), history)
+        self.assertEqual(newer["sites"][KEY_SHOP]["days"][-1][0], 150)
+        # A save of the same character from day 121: its record ends on day 120.
+        older, _ = self.run_payback(rows(60, 120), history)
+        site = older["sites"][KEY_SHOP]
+        self.assertTrue(site["exact"])
+        self.assertEqual(site["days"][-1][0], 120)
+        self.assertEqual(site["profit"], 91 * 500)
+        # ... and it changed nothing the newer save keeps.
+        self.assertEqual(history.payback("CHAR")["sites"][KEY_SHOP]["trail"][-1][0], 150)
+
+    def test_a_chain_is_not_paid_back_before_its_newest_member_opens(self):
+        # The shop from day 30 at 100,000 a day covers the whole chain's
+        # investment by day 39, but the brewery, most of it, opens on day 60.
+        save, regs, businesses, chains = self.company()
+        businesses[1]["opened"] = 60
+        rows = [(d, {SHOP: (100000, 120000), **({BREWERY: (-500, 0)} if d >= 60 else {})}) for d in range(30, 90)]
+        out = _payback(save, Names({}), regs, businesses, chains, statements(rows), History(None), "CHAR")
+        chain = out["chains"][KEY_SHOP]
+        self.assertEqual(chain["firm"]["state"], "reached")
+        self.assertEqual(chain["firm"]["day"], 60)
+
     def test_the_trail_stops_a_month_after_break_even(self):
         history = History(None)
         rows = [(d, {SHOP: (40000, 50000)}) for d in range(30, 89)]

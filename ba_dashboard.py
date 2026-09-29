@@ -12116,7 +12116,7 @@ def _install_bills(save: Save, names: Names, addresses: dict) -> dict:
     return out
 
 
-def payback_outcome(investment: float, days: list, exact: bool, opened: int, rate) -> dict:
+def payback_outcome(investment: float, days: list, exact: bool, opened: int, rate, not_before=None) -> dict:
     """When `days` of profit, (day, profit) oldest first, pay `investment` back.
 
     `reached`: the first day the running total reached it, and how many days
@@ -12128,11 +12128,14 @@ def payback_outcome(investment: float, days: list, exact: bool, opened: int, rat
     gives the whole payback period at `rate` instead (`days`, and `day`, the
     opening plus that; both absent when the rate earns nothing). `unknown`
     with no rate at all, from the lease's start.
+
+    `not_before`: no day earlier counts as the crossing -- a chain's newest
+    member's opening, before which its investment was not yet spent.
     """
     total = 0.0
     for day, profit in days:
         total += profit
-        if total >= investment:
+        if total >= investment and (not_before is None or day >= not_before):
             if exact:
                 return {"state": "reached", "day": day, "after": day - opened}
             return {"state": "latest", "day": day}
@@ -12197,7 +12200,7 @@ PAYBACK_TRAIL_DAYS = 180
 PAYBACK_TRAIL_AFTER = 30
 
 
-def _payback_trail(days: list, exact: bool, opened: int, memory: dict, invest: float):
+def _payback_trail(days: list, exact: bool, opened: int, memory: dict, invest: float, last_day=None):
     """A trading site's days from its opening, beyond the record's 61.
 
     The whole run from the opening is the record's own days while the record
@@ -12211,6 +12214,10 @@ def _payback_trail(days: list, exact: bool, opened: int, memory: dict, invest: f
 
     Once the record starts after the trail's last day, the days between are
     lost: the trail is dropped and `memory["rolled"]` set, for good.
+
+    A trail a newer save wrote may run past this save's last statement,
+    `last_day`: only the days up to it are this save's, so the rest is left
+    out before the two are joined and before the gap is judged.
 
     Returns ((trail, before, since), rolled): the whole run where it is known,
     else None; `rolled` is True for a site whose trail rolled off.
@@ -12228,6 +12235,8 @@ def _payback_trail(days: list, exact: bool, opened: int, memory: dict, invest: f
             kept = [[int(d), float(p), float(s)] for d, p, s in kept] if isinstance(kept, list) else []
         except (TypeError, ValueError):
             kept = []
+        if last_day is not None:
+            kept = [d for d in kept if d[0] <= last_day]
         if not kept:
             return None, False
         # The record must pick up the day after the trail ends, or the days
@@ -12252,10 +12261,11 @@ def _payback_trail(days: list, exact: bool, opened: int, memory: dict, invest: f
     return (full, before, since), False
 
 
-def _payback_row(days: list, cost: dict, exact: bool, opened: int, memory: dict, last_day) -> dict:
+def _payback_row(days: list, cost: dict, exact: bool, opened: int, memory: dict, last_day,
+                 not_before=None) -> dict:
     """Profit so far, the recent rate and the outcome in each install mode,
     with a break-even day remembered from an earlier save where the statements
-    no longer reach it."""
+    no longer reach it. `not_before` as payback_outcome() takes it."""
     rate = _payback_rate(days, opened)
     row = {
         "since": days[0][0] if days else None,
@@ -12265,12 +12275,12 @@ def _payback_row(days: list, cost: dict, exact: bool, opened: int, memory: dict,
         "rate": money(rate) if rate is not None else None,
     }
     for mode in ("firm", "self"):
-        outcome = payback_outcome(cost[mode], [(d, p) for d, p, _s in days], exact, opened, rate)
+        outcome = payback_outcome(cost[mode], [(d, p) for d, p, _s in days], exact, opened, rate, not_before)
         kept = memory.get(mode)
         if outcome["state"] == "reached":
             memory[mode] = [outcome["day"], cost[mode]]
         elif (isinstance(kept, list) and len(kept) == 2 and last_day is not None
-              and kept[0] <= last_day
+              and kept[0] <= last_day and (not_before is None or kept[0] >= not_before)
               and abs(kept[1] - cost[mode]) <= PAYBACK_REMEMBER_SLACK * max(cost[mode], 1)):
             outcome = {"state": "reached", "day": kept[0], "after": kept[0] - opened, "kept": True}
         row[mode] = outcome
@@ -12362,7 +12372,7 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
                 runs[key] = days
         else:
             window_exact[key] = exact
-            full, rolled = _payback_trail(days, exact, opened, memory, max(cost["firm"], cost["self"]))
+            full, rolled = _payback_trail(days, exact, opened, memory, max(cost["firm"], cost["self"]), last_day)
             if full is not None:
                 trail, before, since = full
                 # The whole run from the lease on: the record's own days, or
@@ -12412,7 +12422,11 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
         memory = kept_chains.get(name)
         if not isinstance(memory, dict) or memory.get("opened") != opened:
             memory = {"opened": opened}
-        row = {"sites": members, "cost": cost, **_payback_row(days, cost, exact, opened, memory, last_day)}
+        # Each member's investment is spent on its own opening day: the whole
+        # is not paid back before the newest member has opened, whatever the
+        # others earned before it (as chain_window_day() counts it).
+        newest = max(sites[k]["opened"] for k in members)
+        row = {"sites": members, "cost": cost, **_payback_row(days, cost, exact, opened, memory, last_day, newest)}
         # A chain that grew over time: each member pays from its own opening,
         # at its own rate, so the day is not the first opening plus the whole.
         for mode in ("firm", "self"):
@@ -30260,6 +30274,7 @@ function osLoad(){
   const who = osStore();
   if(osPlansFor === who) return;
   osPlansFor = who; osPlans = []; osCur = null; osStep = "what"; osBest = new Map();
+  let dirty = false;
   try{
     const raw = JSON.parse(localStorage.getItem(who));
     if(raw && Array.isArray(raw.plans)){
@@ -30272,13 +30287,17 @@ function osLoad(){
           step: OS_STEPS.includes(p.step) ? p.step : "what", made: +p.made || null, snap: osSnapClean(p.snap),
           opened: Number.isFinite(p.opened) ? p.opened : null, paid: !!p.paid}));
       /* The stores that opened since the last visit are history before the caps count. */
-      osReconcile();
+      dirty = osReconcile();
+      const before = osPlans.length;
       osPlans = osCapPlans(osPlans);
+      if(osPlans.length !== before) dirty = true;
       osCur = osPlans.some(p => p.id === raw.current) ? raw.current : null;
     }
   }catch(e){}
   const plan = osPlan();
   osStep = plan ? plan.step : "what";
+  /* What the save told (an opening, a plan paid back) is kept straight away. */
+  if(dirty) osSave();
 }
 function osSave(){
   const plan = osPlan();
@@ -30305,7 +30324,7 @@ function osCapPlans(list){
    and twelve that all have one take no more (osNew() answers null). A plan
    whose store opened no longer counts: it is history (osCapPlans()). */
 function osNew(type, hood){
-  osReconcile();
+  if(osReconcile()) osSave();
   const same = osPlans.find(p => p.type === type && (p.hood || null) === (hood || null) && !p.key);
   if(same){
     osPlans = [same, ...osPlans.filter(p => p !== same)];
@@ -31596,7 +31615,7 @@ function osRoiChart(row, snap, planMode, inv, o, opened){
     <text class="lbl" x="${(X(last) + (todayRight ? -6 : 6)).toFixed(1)}" y="${y0 + 10}"${todayRight ? ` text-anchor="end"` : ""}>${tt("gr.os.roi.chart.today", "today, {after}", {after: after(last)})}</text>` : "";
   return `<div class="os-card os-roic"><svg class="os-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${attr(tt("gr.os.roi.chart", "Profit since the opening against the investment and the plan"))}">
     <defs><clipPath id="osRoiClip"><rect x="${x0}" y="${y0 - 4}" width="${x1 - x0}" height="${y1 - y0 + 4}"></rect></clipPath></defs>
-    ${g.join("")}${bars}<line class="ax" x1="${x0}" x2="${x1}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}"></line>
+    ${g.join("")}<g clip-path="url(#osRoiClip)">${bars}</g><line class="ax" x1="${x0}" x2="${x1}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}"></line>
     <line class="inv" x1="${x0}" x2="${x1}" y1="${Y(inv).toFixed(1)}" y2="${Y(inv).toFixed(1)}"></line>
     <text class="lbl w" x="${x0 + 6}" y="${(Y(inv) - 7).toFixed(1)}">${tt("gr.os.roi.invested.line", "Invested {w}", {w: fmt(inv)})}</text>
     <g clip-path="url(#osRoiClip)">${planLine}<polyline class="line" points="${line}"></polyline>${fc}</g>${planLbl}

@@ -1030,6 +1030,10 @@ test('a store that opened since the last visit is history before the cap counts,
   }, keys);
   await page.reload();
   await page.waitForFunction(() => typeof hasData === 'function' && hasData());
+  await page.evaluate(() => { osPlansFor = null; osLoad(); });
+  // The openings the save showed are kept in storage by the load itself.
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem(osStore())).plans);
+  assert.ok(stored.filter(p => /^o/.test(p.id)).every(p => Number.isFinite(p.opened)), JSON.stringify(stored.map(p => [p.id, p.opened])));
   await page.evaluate(() => osStart('ba:businesstype_giftshop', 'ba:neighborhood_midtown'));
   const ids = await page.evaluate(() => osPlans.map(p => p.id));
   assert.equal(ids.length, 14, 'twelve stores that opened are history, and a new plan still finds room');

@@ -107,6 +107,17 @@ generated files, rebuilt. The payload snapshots moved because main's fixture now
 - `osMarkPlans()` takes a plan's snapshot again only when the board or the plan's type or
   building changed.
 
+## Review round 3 (29 Sep 2026)
+
+- An older save sees only its own days: `_payback_trail()` clips a trail a newer save wrote
+  to the viewed save's last statement before joining it and judging the gap.
+- A chain is never paid back before its newest member opens (`not_before` through
+  `_payback_row()` and `payback_outcome()`, a remembered day included): each member's
+  investment is spent on its own opening, as `chain_window_day()` counts it.
+- `osLoad()` and `osNew()` save what `osReconcile()` found (openings, paid back), so a reload
+  after saving in the game keeps them.
+- Step 6's bars are drawn inside the chart's clip.
+
 ## Open items
 
 - The in-game paths in step 5's instruction boxes are still unchecked (phase 3).
