@@ -7323,14 +7323,23 @@ WEEKEND_FIRST = (lambda s: (s["wd"] not in WEEKEND_WEEKDAYS, s["wd"], s["from"],
 
 def _deal_hires(rows: list, hires: list, state: dict, here: dict, order, balanced) -> None:
     """Deal the open lines out to the hires, in `order`, first fit or balanced."""
+    by_skill = collections.defaultdict(list)
+    for hire in hires:
+        by_skill[hire["skill"]].append(hire)
     for row in sorted(rows, key=order):
         if row["employee"] is not None:
             continue
-        able = [hire for hire in hires
-                if _may_take(hire, row) and _has_room(hire, state[hire["id"]], row)]
-        if not able:
+        # Placeholders of one skill hold no demand, so one answers for all.
+        mine = by_skill.get(row["skill"], ())
+        if not mine or not _may_take(mine[0], row):
             continue
-        hire = min(able, key=lambda h: state[h["id"]]["hours"]) if balanced else able[0]
+        if balanced:
+            able = [hire for hire in mine if _has_room(hire, state[hire["id"]], row)]
+            hire = min(able, key=lambda h: state[h["id"]]["hours"]) if able else None
+        else:
+            hire = next((h for h in mine if _has_room(h, state[h["id"]], row)), None)
+        if hire is None:
+            continue
         here["rostered"].add(hire["id"])
         _take_over(row, hire, state)
 
@@ -7530,11 +7539,22 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
             holes[row["skill"]].append(row)
     limit = {skill: len(rows) for skill, rows in holes.items()}
     count = {skill: min(_hire_bound(rows), limit[skill]) for skill, rows in holes.items()}
+    clock = HIRE_ORDERS[0]
+    # The pool's own turn at the open lines, the same for every try: somebody
+    # the settling passes left room for takes a line ahead of any hire.
+    first = [dict(row) for row in shifts]
+    allowed = {}
+    open_rows = [row for row in first if row["employee"] is None]
+    for row in open_rows:
+        shape = _slot_shape(row)
+        if shape not in allowed:
+            allowed[shape] = [person for person in pool if _may_take(person, row)]
+    for row in sorted(open_rows, key=clock):
+        _fill_hole(row, allowed[_slot_shape(row)], state, here)
     saved = {person["id"]: _copy_state(state[person["id"]]) for person in pool}
     saved_rostered = set(here["rostered"])
-    clock = HIRE_ORDERS[0]
 
-    def attempt(packing, spread):
+    def attempt(packing, spread, settle=True):
         hires = [_placeholder(skill, n) for skill in _in_order(count) for n in range(count[skill])]
         everyone = pool + hires
         for pid, entry in saved.items():
@@ -7542,21 +7562,16 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
         for hire in hires:
             state[hire["id"]] = _fresh_state()
         here["rostered"] = set(saved_rostered)
-        rows = [dict(row) for row in shifts]
-        allowed = {}
+        rows = [dict(row) for row in first]
         open_rows = [row for row in rows if row["employee"] is None]
-        for row in open_rows:
-            shape = _slot_shape(row)
-            if shape not in allowed:
-                allowed[shape] = [person for person in pool if _may_take(person, row)]
-        for row in sorted(open_rows, key=clock):
-            _fill_hole(row, allowed[_slot_shape(row)], state, here)
         if spread:
             for skill in _in_order(count):
                 _spread_open([row for row in rows if row["employee"] is None
                               and row["skill"] == skill], rows, pool, state, before, count[skill])
             open_rows = [row for row in rows if row["employee"] is None]
         _deal_hires(open_rows, hires, state, here, *packing)
+        if not settle:
+            return hires, rows, {row["skill"] for row in rows if row["employee"] is None}
         _repair_week(rows, everyone, state, here["rostered"],
                      {**before, **{hire["id"]: (0.0, 0) for hire in hires}},
                      only={hire["id"] for hire in hires})
@@ -7566,7 +7581,16 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
     tries = [(packing, spread) for spread in (False, True)
              for packing in (WEEKEND_FIRST,) + HIRE_PACKINGS]
     while True:
-        for packing, spread in tries:
+        # A deal of the weekend first that covers every line needs no swap,
+        # and keeps the most hires' weekends free; the settling never opens a
+        # line, so it is asked first on its own and settled if it covers.
+        # Otherwise every packing is tried with the swaps, which can cover
+        # what a deal alone cannot, before the count rises.
+        hires, rows, left = attempt(WEEKEND_FIRST, False, settle=False)
+        for hire in hires:
+            del state[hire["id"]]
+        dealt = (WEEKEND_FIRST, False) if not left else None
+        for packing, spread in [dealt] if dealt else tries:
             hires, rows, left = attempt(packing, spread)
             if not left:
                 break
