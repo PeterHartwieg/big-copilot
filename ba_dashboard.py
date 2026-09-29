@@ -18853,6 +18853,39 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
 .os-cta:focus-visible,.os-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .os-link{color:var(--ink-2);text-decoration:none;border-bottom:1px solid var(--rule);font-size:12.5px}
 .os-link:hover{color:var(--ink);border-color:var(--ink-3)}
+/* step 5: until opening ------------------------------------------------------------- */
+.os-prog{display:flex;align-items:center;gap:14px;margin-top:26px}
+.os-prog h2{margin:0;font-size:17px;font-weight:600}
+.os-prog .m{flex:0 0 180px;height:6px;border-radius:3px;background:var(--rule);overflow:hidden}
+.os-prog .m i{display:block;height:100%;width:var(--w);background:var(--accent);border-radius:3px}
+.os-prog .c{font:500 13px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.os-prog .aside{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--ink-3)}
+.os-live{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-2);white-space:nowrap}
+.os-live i{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
+.os-live.off i{background:var(--ink-3);box-shadow:0 0 0 4px color-mix(in srgb,var(--ink-3) 20%,transparent)}
+.os-cks{display:flex;flex-direction:column;margin-top:14px;border-top:1px solid var(--rule)}
+.os-ck{display:grid;grid-template-columns:30px 34px minmax(0,1fr) auto;gap:14px;align-items:center;min-height:68px;padding:10px 4px;border-bottom:1px solid var(--rule-soft)}
+.os-ck .st{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;border:1.5px solid var(--rule)}
+.os-ck .st svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.os-ck.done .st{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.os-ck.part .st{border-color:var(--warn);background:conic-gradient(var(--warn) 0 var(--p),transparent var(--p) 100%)}
+.os-ck .ic{display:grid;place-items:center;width:34px;height:34px;border-radius:9px;background:var(--raised);color:var(--ink-2)}
+.os-ck .ic svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.os-ck.done .ic{color:var(--ink-3)}
+.os-ck .tx b{display:block;font-size:14px;font-weight:600}
+.os-ck.done .tx b{color:var(--ink-2);font-weight:500}
+.os-ck .tx small{display:block;margin-top:3px;font-size:12.5px;color:var(--ink-3);line-height:1.4}
+.os-ck .tx small .w{color:var(--warn)}
+.os-ck .tx small .ok{color:var(--accent)}
+.os-ck .act{display:flex;align-items:center;gap:8px;justify-content:flex-end}
+.os-ingame{display:flex;align-items:flex-start;gap:9px;max-width:360px;padding:9px 12px;border-radius:9px;border:1px dashed var(--rule);font-size:12.5px;line-height:1.45;color:var(--ink-2);text-align:left}
+.os-ingame svg{width:15px;height:15px;margin-top:1px;flex:none;stroke:var(--ink-3);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.os-ingame b{color:var(--ink);font-weight:600}
+.os-gate{display:flex;align-items:center;gap:12px;margin-top:18px;padding:12px 14px;border-radius:10px;border:1px dashed var(--rule);font-size:12.5px;color:var(--ink-2)}
+.os-gate b{color:var(--ink);font-weight:600}
+.os-gate .os-btn{margin-left:auto}
+.os-payback{margin-top:18px;font-size:12.5px;color:var(--ink-3)}
+@media(max-width:760px){.os-prog{flex-wrap:wrap}.os-prog .aside{margin-left:0;flex-wrap:wrap}.os-ck{grid-template-columns:30px minmax(0,1fr)}.os-ck .ic{display:none}.os-ck .act{grid-column:2;justify-content:flex-start}}
 /* cards and headings ---------------------------------------------------------------- */
 .os-h{display:flex;align-items:center;gap:12px;margin:34px 0 14px}
 .os-h h2{margin:0;font-size:17px;font-weight:600;letter-spacing:-.01em}
@@ -29734,8 +29767,8 @@ function drawMarket(){
    (a type, or a Demand cell), where (Find a location, embedded and fixed to
    the type), the investment for a 100% outfitted store in that building in
    either install mode, and when it breaks even, with a loan if the reader
-   wants one. Steps 5 and 6 (the checklist until opening, and payback once it
-   trades) come with phase 3 and 4; they stand in the bar, not yet reachable.
+   wants one. Step 5 is the checklist until opening (osUntilHtml()); step 6,
+   payback once the store trades, comes with phase 4 and is not yet reachable.
 
    Python sends the facts (_open_store(): each type's outfit per layout, what
    every product meets in every neighbourhood, the player's own shops, the
@@ -29759,6 +29792,18 @@ const OS_ICON = {
   paint: '<rect x="4" y="3" width="14" height="6" rx="1.5"></rect><path d="M18 6h2v5h-8v3"></path><rect x="10.5" y="14" width="3" height="7" rx="1"></rect>',
   key: '<circle cx="8" cy="15" r="4"></circle><path d="M11 12l9-9M16 7l3 3"></path>',
   bank: '<path d="M3 10h18L12 4z"></path><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18"></path>',
+  shelves: '<path d="M4 3v18M20 3v18M4 8h16M4 14h16M4 20h16"></path><path d="M8 8V5.5M12 8V5M16 14v-2.5M9 14v-3"></path>',
+  people: '<circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path>',
+  shirt: '<path d="M8 4L3 7l2 4 2-1v10h10V10l2 1 2-4-5-3a4 4 0 0 1-8 0z"></path>',
+  heart: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"></path>',
+  megaphone: '<path d="M3 10v4h3l6 4V6L6 10z"></path><path d="M16 9a4 4 0 0 1 0 6M19 6.5a8 8 0 0 1 0 11"></path>',
+  truck: '<path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.5" cy="17.5" r="1.8"></circle><circle cx="16.5" cy="17.5" r="1.8"></circle>',
+  factory: '<path d="M3 20V10l5 3V10l5 3V6h4v14z"></path><path d="M17 20h4V4h-4M3 20h18"></path>',
+  hire: '<circle cx="10" cy="8" r="3.5"></circle><path d="M3.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6"></path>',
+  game: '<path d="M7 8.5h10a4.5 4.5 0 0 1 4.4 5.4l-.6 2.9a2.2 2.2 0 0 1-3.8 1L15 15.5H9l-2 2.3a2.2 2.2 0 0 1-3.8-1l-.6-2.9A4.5 4.5 0 0 1 7 8.5z"></path><path d="M8.5 11.5v3M7 13h3M15.5 12.3v.01M17.3 13.8v.01"></path>',
+  plug: '<path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"></path>',
+  tick: '<path d="M5 12.5l4.5 4.5L19 7"></path>',
+  chev: '<path d="M9 6l6 6-6 6"></path>',
 };
 const osIcon = name => OS_ICON[name] ? `<svg class="os-ico" viewBox="0 0 24 24" aria-hidden="true">${OS_ICON[name]}</svg>` : icon(name);
 
@@ -30182,12 +30227,12 @@ function osLoanDays(own, profit, loan){
 const osStepLabel = s => ({what: tt("gr.os.step.what", "What"), where: tt("gr.os.step.where", "Where"),
   investment: tt("gr.os.step.investment", "Investment"), breakeven: tt("gr.os.step.breakeven", "Break even"),
   opening: tt("gr.os.step.opening", "Until opening"), open: tt("gr.os.step.open", "Open")})[s];
-/* A step can be opened once what it needs is chosen; the last two come with
-   the checklist and payback monitoring. */
+/* A step can be opened once what it needs is chosen; the last comes with
+   payback monitoring. */
 function osStepReady(s, plan){
   if(s === "what") return true;
   if(s === "where") return !!plan;
-  if(s === "investment" || s === "breakeven") return !!(plan && osBuilding(plan.key));
+  if(s === "investment" || s === "breakeven" || s === "opening") return !!(plan && osBuilding(plan.key));
   return false;
 }
 function osCtlHtml(plan){
@@ -30195,10 +30240,10 @@ function osCtlHtml(plan){
   const steps = OS_STEPS.map((s, i) => {
     const ready = osStepReady(s, plan), done = i < at && ready, cls = s === osStep ? "on" : done ? "done" : "";
     const mark = done ? icon("tick") : String(i + 1);
-    const later = s === "opening" || s === "open";
+    const later = s === "open";
     return `${i ? `<span class="sep" aria-hidden="true"></span>` : ""}<button type="button" class="${cls}" data-os-step="${s}"${
-      ready ? "" : ` disabled`}${s === osStep ? ` aria-current="step"` : ""}${later ? ` data-tip="${attr(tt("gr.os.step.later",
-      "Comes with the checklist until opening and payback once the store trades."))}"` : ""}><i>${mark}</i>${osStepLabel(s)}</button>`;
+      ready ? "" : ` disabled`}${s === osStep ? ` aria-current="step"` : ""}${later ? ` data-tip="${attr(tt("gr.os.step.payback",
+      "Payback monitoring comes once the store trades."))}"` : ""}><i>${mark}</i>${osStepLabel(s)}</button>`;
   }).join("");
   const opts = osPlans.map(p => `<option value="${attr(p.id)}"${p.id === osCur ? " selected" : ""}>${spEsc(osPlanName(p))}</option>`).join("");
   return `<nav class="os-steps" aria-label="${attr(tt("gr.os.steps.label", "Open a store, step by step"))}">${steps}</nav>
@@ -30606,6 +30651,186 @@ function osFinUpdate(amount){
     if(document.activeElement !== i || asked !== amount) i.value = amount; });
 }
 
+/* --- step 5: until opening ---------------------------------------------------
+   The seven rows tick from the save once a business stands at the plan's
+   address; before that they are to-dos. A button writes through the game link
+   when the mod lists the write, and is a short in-game instruction otherwise. */
+const OS_MK_WIRE = {smallinternet: "SmallInternet", mediuminternet: "MediumInternet", largeinternet: "LargeInternet",
+  smallbillboard: "SmallBillboard", mediumbillboard: "MediumBillboard", largebillboard: "LargeBillboard"};
+const OS_DEMAND_GROUP = {toilet: "bathroom", toiletprivacy: "toiletprivacy", sink: "sink", music: "music", interiordesign: "interior"};
+const osRented = plan => (D.businesses || []).find(b => b.key === plan.key) || null;
+const osOpenedAt = plan => { const b = osRented(plan); return b && b.status !== "vacant" ? b : null; };
+const osCk = (icon, state, title, sub, act, p) => ({icon, state, title, sub, act: act || "", p: p || 0});
+const osCkAddress = plan => { const b = osBuilding(plan.key); return spEsc(b ? b.address : plan.key); };
+/* Names in a sentence: the first two, and how many more. */
+const osNames = names => names.length > 2
+  ? tt("gr.os.why.more", "{items} +{n}", {items: names.slice(0, 2).join(", "), n: names.length - 2}) : names.join(", ");
+const osIngame = html => `<div class="os-ingame">${osIcon("game")}<span>${html}</span></div>`;
+/* A write as a button when the game link lists it, else what to do in the game. */
+function osAct(kind, label, ico, data, ingame){
+  const link = gwLink();
+  if(link && (link.writes || []).includes(kind))
+    return `<button type="button" class="os-cta sm" data-os-write="${kind}" ${data || ""}>${osIcon(ico)}${spEsc(label)}</button>`;
+  return osIngame(ingame);
+}
+function osReqName(plan, b, name){
+  const out = osOutfit(plan, b), line = out && out.lines.find(l => l[3] === name);
+  if(line) return spEsc(osItemName(line[0]));
+  return name === "anyprimaryproduct" ? tt("gr.os.ck.furn.product", "A shelf holding a product it sells") : spEsc(prettySlug(name));
+}
+function osCkFurniture(plan, b){
+  const title = tt("gr.os.ck.furn", "Furniture");
+  const built = ((D.openStore || {}).built || {})[plan.key];
+  if(!built){
+    const inv = osInvestment(plan, b);
+    return osCk("shelves", "todo", title, inv ? tt("gr.os.ck.furn.todo", {one: "{n} item to place", other: "{n} items to place"}, {n: inv.items}) : "");
+  }
+  const req = built.req || [], met = req.filter(r => r[2] >= r[1]).length;
+  const missing = req.filter(r => r[2] < r[1]).map(r => osReqName(plan, b, r[0]));
+  if(!missing.length) return osCk("shelves", "done", title, tt("gr.os.ck.furn.done",
+    {one: "{n} item placed · <span class=\"ok\">every required item is there</span>", other: "{n} items placed · <span class=\"ok\">every required item is there</span>"}, {n: built.placed}));
+  return osCk("shelves", built.placed > 0 ? "part" : "todo", title, tt("gr.os.ck.furn.part",
+    {one: "{n} item placed · <span class=\"w\">missing {items}</span>", other: "{n} items placed · <span class=\"w\">missing {items}</span>"},
+    {n: built.placed, items: osNames(missing)}), "", req.length ? Math.round(100 * met / req.length) : 0);
+}
+function osCkStaff(plan, opened){
+  const title = tt("gr.os.ck.staff", "Staff for the opening hours");
+  if(!opened) return osCk("people", "todo", title, tt("gr.os.ck.staff.todo", "Hired once the business is set up"));
+  const have = opened.staff || 0;
+  const S = hrModel().sites.find(s => s.key === plan.key);
+  if(!S || !S.planned) return osCk("people", have > 0 ? "done" : "todo", title, have > 0
+    ? tt("gr.os.ck.staff.have", {one: "{n} person on staff", other: "{n} people on staff"}, {n: have})
+    : tt("gr.os.ck.staff.nohours", "No opening hours set yet: set them in BizMan, and the board plans the staff"));
+  const need = S.weeks.length;
+  if(!need && have > 0) return osCk("people", "done", title, tt("gr.os.ck.staff.done", {one: "{n} person · <span class=\"ok\">the opening hours are covered</span>",
+    other: "{n} people · <span class=\"ok\">the opening hours are covered</span>"}, {n: have}));
+  const bySkill = new Map(), hires = new Map();
+  S.weeks.forEach(x => {
+    bySkill.set(x.w.skill, (bySkill.get(x.w.skill) || 0) + 1);
+    if(x.who && x.who.type === "hire") hires.set(x.w.skill, (hires.get(x.w.skill) || 0) + 1);
+  });
+  const roles = m => osNames([...m].map(([skill, n]) => `${n} ${hrRoles(skill, n)}`));
+  const nHire = [...hires.values()].reduce((a, n) => a + n, 0);
+  const total = have + need;
+  let sub = tt("gr.os.ck.staff.need", "{have} of {total} people · <span class=\"w\">{need} more: {roles}</span>",
+    {have, total, need, roles: roles(bySkill)});
+  const bare = S.weeks.filter(x => !x.who).length;
+  if(bare) sub += ` · ${tt("gr.os.ck.staff.nocand", {one: "{n} without a candidate in your headhunters' lists", other: "{n} without a candidate in your headhunters' lists"}, {n: bare})}`;
+  const only = {};
+  hires.forEach((n, skill) => { only[`${plan.key}|${skill}`] = n; });
+  const act = nHire ? osAct("hire", tt("gr.os.ck.staff.hire", "Hire {n}", {n: nHire}), "hire", `data-os-only="${attr(JSON.stringify(only))}"`,
+    tt("gr.os.ck.staff.ingame", "<b>MyEmployees</b> on your phone: hire {roles} from your headhunters' candidates, at {address}.", {roles: roles(hires), address: osCkAddress(plan)})) : "";
+  return osCk("people", have > 0 ? "part" : "todo", title, sub, act, Math.round(100 * have / total));
+}
+function osCkUniforms(plan, opened){
+  const title = tt("gr.os.ck.uni", "Uniforms");
+  const asks = ((osType(plan.type) || {}).demands || []).some(d => d[0] === "employeeuniforms");
+  if(!asks) return osCk("shirt", "done", title, tt("gr.os.ck.uni.none", "This type does not ask for uniforms"));
+  if(!opened) return osCk("shirt", "todo", title, tt("gr.os.ck.uni.todo", "Set for each role once the shop has staff"));
+  if(opened.missingUniformLocker) return osCk("shirt", "todo", title, tt("gr.os.ck.uni.locker", "<span class=\"w\">No uniform locker</span> · the game sets uniforms only where one stands"),
+    osIngame(tt("gr.os.ck.uni.locker.ingame", "Place a <b>Uniform locker</b> in the shop, then set the uniforms.")));
+  const gaps = opened.uniformGaps || [];
+  if(!gaps.length) return osCk("shirt", opened.staff ? "done" : "todo", title, opened.staff
+    ? tt("gr.os.ck.uni.done", "<span class=\"ok\">Every role has one</span>") : tt("gr.os.ck.uni.nostaff", "Set once the shop has staff"));
+  const roles = osNames(gaps.map(spEsc));
+  return osCk("shirt", "todo", title, tt("gr.os.ck.uni.gaps", "<span class=\"w\">None set for {roles}</span>", {roles}),
+    osAct("uniforms", tt("gr.os.ck.uni.assign", "Assign uniforms"), "shirt", `data-os-key="${attr(plan.key)}"`,
+      tt("gr.os.ck.uni.ingame", "<b>BizMan › {address} › Uniforms</b>: set one for {roles}.", {address: osCkAddress(plan), roles})));
+}
+function osCkDemands(plan, opened, uni){
+  const title = tt("gr.os.ck.dem", "Customer demands");
+  const items = [];
+  for(const [slug] of (osType(plan.type) || {}).demands || []){
+    if(slug === "employeeuniforms"){ items.push([tt("gr.os.ck.dem.uniforms", "Uniforms"), !!opened && uni.state === "done"]); continue; }
+    const g = OS_DEMAND_GROUP[slug];
+    if(!g) continue;
+    const met = !!opened && (opened.amenities ? opened.amenities[g] !== false : !(opened.missingAmenities || []).includes(`ba:customerdemand_${slug}`));
+    items.push([SP_AMENITY_WORD[g] || spEsc(prettySlug(slug)), met]);
+  }
+  if(!items.length) return osCk("heart", "done", title, tt("gr.os.ck.dem.none", "This type makes no demands beyond its products"));
+  if(!opened) return osCk("heart", "todo", title, tt("gr.os.ck.dem.todo", {one: "{n} demand to meet", other: "{n} demands to meet"}, {n: items.length}));
+  const met = items.filter(x => x[1]).length, missing = items.filter(x => !x[1]).map(x => x[0]);
+  if(!missing.length) return osCk("heart", "done", title, tt("gr.os.ck.dem.done", {one: "<span class=\"ok\">{n} demand met</span>", other: "<span class=\"ok\">All {n} demands met</span>"}, {n: items.length}));
+  return osCk("heart", met ? "part" : "todo", title, tt("gr.os.ck.dem.part", "{met} of {total} met · <span class=\"w\">missing {items}</span>",
+    {met, total: items.length, items: osNames(missing)}), "", Math.round(100 * met / items.length));
+}
+function osCkMarketing(plan, b, opened){
+  const title = tt("gr.os.ck.mk", "Marketing");
+  if(!opened) return osCk("megaphone", "todo", title, tt("gr.os.ck.mk.todo", "A campaign can start once the business exists"));
+  if((opened.marketingIndex || 0) > 0 || (opened.marketing || 0) > 0)
+    return osCk("megaphone", "done", title, tt("gr.os.ck.mk.done", "<span class=\"ok\">A campaign is running</span>"));
+  const est = b && osEstimate(plan, b), mix = est && est.model ? est.model.mix || [] : [];
+  const ingame = tt("gr.os.ck.mk.ingame", "<b>BizMan › Marketing</b>: start a campaign for {address}.", {address: osCkAddress(plan)});
+  return osCk("megaphone", "todo", title, tt("gr.os.ck.mk.none", "<span class=\"w\">No campaign</span> for {address}", {address: osCkAddress(plan)}),
+    mix.length ? osAct("marketing", tt("gr.os.ck.mk.setup", "Set up marketing"), "megaphone", "", ingame) : osIngame(ingame));
+}
+function osCkLogistics(plan, opened){
+  const title = tt("gr.os.ck.log", "Logistics");
+  const go = `<button type="button" class="os-btn" data-os-route="expansion/factory">${osIcon("factory")}${tt("gr.os.ck.log.go", "Plan a factory")}${osIcon("chev")}</button>`;
+  if(!opened) return osCk("truck", "todo", title, tt("gr.os.ck.log.todo", "Deliveries are set up once the business exists"), go);
+  const facts = ((D.supply || {}).facts || {})[(D.businesses || []).indexOf(opened)] || {};
+  const slugs = Object.keys(facts);
+  if(!slugs.length) return osCk("truck", "todo", title, tt("gr.os.ck.log.nothing", "<span class=\"w\">Nothing delivers here yet</span>"), go);
+  const bare = slugs.filter(s => ["noplan", "paused"].includes((supplyFact(D.businesses.indexOf(opened), s) || {}).st));
+  if(!bare.length) return osCk("truck", "done", title, tt("gr.os.ck.log.done", "<span class=\"ok\">Every product has a delivery or a route</span>"));
+  return osCk("truck", bare.length < slugs.length ? "part" : "todo", title, tt("gr.os.ck.log.part", "<span class=\"w\">No delivery for {items}</span>",
+    {items: osNames(bare.map(s => spEsc(itemName(s))))}), go, Math.round(100 * (slugs.length - bare.length) / slugs.length));
+}
+function osUntilRows(plan){
+  const b = osBuilding(plan.key), rented = osRented(plan), opened = osOpenedAt(plan), address = osCkAddress(plan);
+  const uni = osCkUniforms(plan, opened);
+  return [
+    osCk("key", rented ? "done" : "todo", tt("gr.os.ck.lease", "Lease"), rented
+      ? tt("gr.os.ck.lease.done", "<span class=\"ok\">Rented</span> · {address}", {address})
+      : tt("gr.os.ck.lease.todo", "{address} · not rented yet", {address})),
+    osCkFurniture(plan, b), osCkStaff(plan, opened), uni, osCkDemands(plan, opened, uni),
+    osCkMarketing(plan, b, opened), osCkLogistics(plan, opened)];
+}
+function osUntilHtml(plan){
+  const rows = osUntilRows(plan), done = rows.filter(r => r.state === "done").length, link = gwLink(), m = D.meta || {};
+  const clock = Number.isFinite(Number(m.day)) ? tt("gr.os.ck.read", "from the save · day {day}, {time}",
+    {day: num(m.day), time: `${String(Number(m.hour) || 0).padStart(2, "0")}:${String(Math.floor(Number(m.minute) || 0)).padStart(2, "0")}`}) : "";
+  const live = link ? `<span class="os-live"><i></i>${tt("gr.os.ck.live", "Game linked")}</span>`
+    : `<span class="os-live off"><i></i>${tt("gr.os.ck.live.off", "Save file · game not linked")}</span>`;
+  const gate = link ? "" : `<div class="os-gate">${osIcon("plug")}<span>${tt("gr.os.ck.gate", "<b>Link the game</b> and these become buttons.")}</span><button type="button" class="os-btn" data-os-howlink>${
+    tt("gr.os.ck.gate.how", "How to link")}</button></div>`;
+  return `<div class="os-prog"><h2>${tt("gr.os.ck.title", "Until opening")}</h2><span class="m" style="--w:${Math.round(100 * done / rows.length)}%"><i></i></span><span class="c">${
+    tt("gr.os.ck.count", "{n} of {of}", {n: done, of: rows.length})}</span><div class="aside">${live}<span>${clock}</span></div></div>
+    <div class="os-cks">${rows.map(r => `<div class="os-ck ${r.state}"${r.state === "part" ? ` style="--p:${r.p}%"` : ""}><span class="st">${
+      r.state === "done" ? osIcon("tick") : ""}</span><span class="ic">${osIcon(r.icon)}</span><div class="tx"><b>${r.title}</b><small>${r.sub}</small></div><div class="act">${r.act}</div></div>`).join("")}</div>
+    ${gate}<p class="os-payback">${tt("gr.os.ck.payback", "Once the store trades, the payback shows here.")}</p>`;
+}
+/* Marketing at the plan's business: the cheapest mix the estimate settled on. */
+function osMarketingWrite(plan){
+  const b = osBuilding(plan.key), est = b && osEstimate(plan, b), link = gwLink(), site = osOpenedAt(plan);
+  const mix = est && est.model ? est.model.mix || [] : [];
+  if(!link || !site || !mix.length) return;
+  const on = mix.map(id => OS_MK_WIRE[id]).filter(Boolean);
+  const names = () => mix.map(osCampaignName).join(", ");
+  const row = answer => (answer.rows || [])[0] || {};
+  gwConfirm({
+    kind: "marketing", icon: "megaphone",
+    title: () => tt("gr.os.ck.mk.setup", "Set up marketing"),
+    where: () => gwWhere(site),
+    body: () => ({expect: {character: link.character, company: link.company}, sites: [{address: gwAddress(plan.key), on, was: []}]}),
+    verdict: answer => row(answer).error ? `<b>${tt("sp.gw.refuses", "The game refuses this")}</b>`
+      : `<b>${tt("gr.os.ck.mk.will", {one: "The game will start {n} campaign", other: "The game will start {n} campaigns"}, {n: (row(answer).turnedOn || []).length})}</b>`,
+    draw: answer => {
+      const r = row(answer);
+      return `<p class="gw-said">${spEsc(names())}</p><div class="gw-tally"><div><span class="gw-lab">${tt("gr.os.ck.mk.day", "A day")}</span><span class="gw-big">${
+        r.error ? "–" : money(Number(r.dailyCost) || 0)}</span></div><div><span class="gw-lab">${tt("gr.os.ck.mk.promo", "Promotion")}</span><span class="gw-big dim">${
+        r.error || !r.promotion ? "–" : num(r.promotion.total)}</span></div></div>`;
+    },
+    refusedHint: () => tt("sp.gw.unchanged", "Nothing was changed."),
+    object: r => gwSiteName(r),
+    applyLabel: () => tt("gr.os.ck.mk.setup", "Set up marketing"),
+    applying: tt("gr.os.ck.mk.applying", "Setting up marketing in the game…"),
+    changed: answer => (row(answer).turnedOn || []).length > 0,
+    done: answer => answer.undo ? tt("sp.gw.undone", "Undone.")
+      : tt("gr.os.ck.mk.done.text", {one: "{n} campaign is running at {shop}.", other: "{n} campaigns are running at {shop}."}, {n: (row(answer).on || []).length, shop: gwSiteName(row(answer))}),
+  });
+}
+
 /* The whole view, drawn for the step on screen. The embedded finder is kept
    between draws: it is built once and handed the plan's type again. */
 function drawOpenStore(){
@@ -30613,13 +30838,13 @@ function drawOpenStore(){
   if(!sec || !hasData()) return;
   osLoad();
   const F = osFacts(), plan = osPlan();
-  if(!OS_STEPS.slice(0, 4).includes(osStep) || !osStepReady(osStep, plan)) osStep = plan ? (osBuilding(plan.key) ? "investment" : "where") : "what";
+  if(!OS_STEPS.slice(0, 5).includes(osStep) || !osStepReady(osStep, plan)) osStep = plan ? (osBuilding(plan.key) ? "investment" : "where") : "what";
   $("osCtl").innerHTML = F.types ? osCtlHtml(plan) : "";
   $("osStrip").innerHTML = plan && osStep !== "what" ? osStripHtml(plan) : "";
   const where = osStep === "where" && !!plan;
   $("osWhere").hidden = !where;
   $("osBody").innerHTML = !F.types ? `<p class="quiet os-gap">${tt("gr.os.nodata", "This build carries no store rules, so there is nothing to plan with.")}</p>`
-    : osStep === "what" ? osWhatHtml() : osStep === "investment" ? osInvestHtml(plan) : osStep === "breakeven" ? osBreakHtml(plan) : "";
+    : osStep === "what" ? osWhatHtml() : osStep === "investment" ? osInvestHtml(plan) : osStep === "breakeven" ? osBreakHtml(plan) : osStep === "opening" ? osUntilHtml(plan) : "";
   if(where) osShowFinder(plan);
   if(osStep === "investment" && plan && osMode(plan) === "self") osPaintMini();
   if(typeof wireTips === "function") wireTips();
@@ -30663,6 +30888,17 @@ function wireOpenStore(){
     osSave(); drawOpenStore();
   });
   on("click", "[data-os-route]", (el, e) => { e.preventDefault(); openRoute(el.dataset.osRoute); });
+  on("click", "[data-os-write]", el => {
+    const plan = osPlan(), kind = el.dataset.osWrite;
+    if(!plan) return;
+    if(kind === "hire") hrReview({only: JSON.parse(el.dataset.osOnly || "{}")});
+    else if(kind === "uniforms") gwUniforms([plan.key]);
+    else if(kind === "marketing") osMarketingWrite(plan);
+  });
+  on("click", "[data-os-howlink]", () => {
+    const a = document.querySelector('a[data-visit-feature="game-link"]');
+    if(a && a.href) window.open(a.href, "_blank", "noopener");
+  });
   on("click", "[data-os-mode]", el => { osSetMode(el.dataset.osMode); drawOpenStore(); });
   on("change", "[data-os-fin-on]", el => { const plan = osPlan(); if(!plan) return; plan.finance = {...(plan.finance || {}), on: el.checked}; osSave(); drawOpenStore(); });
   on("click", "[data-os-bank]", el => { const plan = osPlan(); if(!plan) return; plan.finance = {...(plan.finance || {}), bank: el.dataset.osBank}; osSave(); drawOpenStore(); });
@@ -38027,6 +38263,7 @@ const GW_P = {
   truck: '<path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.5" cy="17.5" r="1.8"></circle><circle cx="16.5" cy="17.5" r="1.8"></circle>',
   lock: '<rect x="5" y="10.5" width="14" height="10" rx="2"></rect><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"></path>',
   tick: '<path d="M5 12.5l4.5 4.5L19 7"></path>',
+  megaphone: '<path d="M3 10v4h3l6 4V6L6 10z"></path><path d="M16 9a4 4 0 0 1 0 6M19 6.5a8 8 0 0 1 0 11"></path>',
   close: '<path d="M6 6l12 12M18 6L6 18"></path>',
   right: '<path d="M5 12h14M13 6l6 6-6 6"></path>',
   undo: '<path d="M9 14L4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path>',
@@ -38288,7 +38525,7 @@ function gwUniforms(keys){
    offered only when every error the answer names is one of them; the rest
    ask for another request, or a refreshed board. */
 const GW_FIXABLE = new Set(["screen_open", "no_locker", "no_preset", "no_business", "no_agent", "no_warehouse",
-  "locked", "backorder", "not_assigned", "myemployees"]);
+  "locked", "backorder", "not_assigned", "myemployees", "no_contact", "agency_closed"]);
 const gwFixable = answer => {
   const a = answer || {};
   /* A hire's dry run names an app open in the game as `blocked`. */
@@ -38329,6 +38566,19 @@ const GW_REFUSE = {
         fix: tt("nav.dlg.refuse.overcap.fix", "Lower the amount, or bring the rest through another importer.")};
     },
     bad_amount: {get rule(){ return tt("nav.dlg.refuse.badamount.rule", "An amount is not a whole number of 0 or more"); }, get fix(){ return tt("nav.dlg.refuse.badamount.fix", "Correct it, then try again."); }},
+  },
+  marketing: {
+    no_business: {get rule(){ return tt("nav.dlg.refuse.nobusiness.rule", "No business is set up here"); }, get fix(){ return tt("nav.dlg.refuse.nobusiness.fix", "Set one up in BizMan first."); }},
+    no_promotion: {get rule(){ return tt("nav.dlg.refuse.nopromotion.rule", "This kind of building takes no campaigns"); }, get fix(){ return tt("nav.dlg.refuse.nopromotion.fix", "Promotion does not apply to it."); }},
+    no_agency: {get rule(){ return tt("nav.dlg.refuse.noagency.rule", "No marketing agency in the city offers this campaign"); }, get fix(){ return tt("nav.dlg.refuse.noagency.fix", "Start it from BizMan in the game."); }},
+    no_contact: r => ({rule: tt("nav.dlg.refuse.nocontact.rule", "{agency} is not in your phone yet", {agency: spEsc((r.agency || {}).name || tt("nav.dlg.refuse.agency", "The agency"))}),
+      fix: tt("nav.dlg.refuse.nocontact.fix", "Visit it once in the game, then try again.")}),
+    agency_closed: r => {
+      const o = r.opens, name = spEsc((r.agency || {}).name || tt("nav.dlg.refuse.agency", "The agency"));
+      return {rule: tt("nav.dlg.refuse.agencyclosed.rule", "{agency} is closed", {agency: name}),
+        fix: o && Number.isFinite(Number(o.day)) ? tt("nav.dlg.refuse.agencyclosed.opens", "It opens on day {day} at {hour}:00: try again then.", {day: o.day, hour: String(Number(o.hour) || 0).padStart(2, "0")})
+          : tt("nav.dlg.refuse.agencyclosed.fix", "Try again when it is open.")};
+    },
   },
   schedule: {
     headquarters: {get rule(){ return tt("nav.dlg.refuse.hq.rule", "A headquarters' schedule is not written from here"); }, get fix(){ return tt("nav.dlg.refuse.hq.fix", "Change it in BizMan in the game."); }},

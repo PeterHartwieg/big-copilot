@@ -233,3 +233,135 @@ test('the loan amount: past the limit the field snaps to it, and 0 stays 0 acros
   await page.waitForFunction(() => osStep === 'breakeven');
   assert.equal(await page.locator('#osFin [data-os-fin-amount]').inputValue(), '0', 'and so does a reload');
 });
+
+/* --- step 5: the checklist until opening ------------------------------------ */
+const LINK = {writes: ['hire', 'uniforms', 'marketing'], character: 'PAYLOADco', company: 'Payload Co', approved: true, day: 47, hour: 14, minute: 30};
+const rows = page => page.$$eval('#osBody .os-ck', rs => rs.map(r => ({state: r.className.replace('os-ck ', ''), title: r.querySelector('b').textContent,
+  sub: r.querySelector('small').innerText.replace(/\s+/g, ' '), act: r.querySelector('.act').innerText.replace(/\s+/g, ' ').trim(), p: r.style.getPropertyValue('--p')})));
+const until = async page => { await planned(page); await page.locator('#osCtl [data-os-step="opening"]').click(); };
+/* The business the save shows once the player has opened the plan's building. */
+const opened = (page, patch = {}, built = null) => page.evaluate(({site, patch, built}) => {
+  D.businesses.push(Object.assign({}, D.businesses[0], {key: site, status: 'retail', name: 'Liquor', neighbourhood: 'ba:neighborhood_midtown', typeSlug: 'ba:businesstype_liquorstore', staff: 0, missingAmenities: [],
+    amenities: {bathroom: true, interior: true, music: true, sink: true, toiletprivacy: true}, uniformGaps: [], uniformGapSkills: [],
+    marketing: 0, marketingIndex: 0}, patch));
+  if(built) D.openStore.built[site] = built;
+  drawOpenStore();
+}, {site: SITE, patch, built});
+const linked = (page, link = LINK) => page.evaluate(l => { SOURCE.link = () => l; drawOpenStore(); }, link);
+const HIRES = {planned: true, weeks: [['ba:skill_cleaning', 'hire'], ['ba:skill_customerservice', 'hire'], ['ba:skill_customerservice', 'hire'], ['ba:skill_securityguard', null]]};
+/* The hiring model as it would read with candidates for the plan's building. */
+const hiring = page => page.evaluate(({site, h}) => {
+  window.hrModel = () => ({sites: [{key: site, planned: h.planned, weeks: h.weeks.map(([skill, type]) => ({w: {skill}, who: type ? {type} : null}))}], moves: [], roles: [], overs: [], cands: [], byId: new Map(), used: new Set(), quick: []});
+  drawOpenStore();
+}, {site: SITE, h: HIRES});
+
+test('the Until opening step opens with a plan\'s building; Open stays for payback', async t => {
+  const page = await board(t);
+  await planned(page);
+  assert.equal(await page.locator('#osCtl [data-os-step="opening"]').isDisabled(), false);
+  await page.locator('#osCtl [data-os-step="opening"]').click();
+  await page.waitForFunction(() => osStep === 'opening');
+  assert.equal(await page.locator('#osCtl [data-os-step="open"]').isDisabled(), true);
+  assert.match(await page.locator('#osCtl [data-os-step="open"]').getAttribute('data-tip'), /ayback/);
+  assert.equal(await page.locator('#osBody .os-prog h2').textContent(), 'Until opening');
+});
+
+test('before the business exists every row is a to-do, and only logistics has a button', async t => {
+  const page = await board(t);
+  await until(page);
+  const r = await rows(page);
+  assert.deepEqual(r.map(x => [x.title, x.state]), [['Lease', 'todo'], ['Furniture', 'todo'], ['Staff for the opening hours', 'todo'],
+    ['Uniforms', 'todo'], ['Customer demands', 'todo'], ['Marketing', 'todo'], ['Logistics', 'todo']]);
+  assert.deepEqual(r.map(x => x.act), ['', '', '', '', '', '', 'Plan a factory']);
+  assert.match(await page.locator('#osBody .os-prog').innerText(), /0 of 7/);
+  await page.locator('#osBody [data-route="expansion/factory"], #osBody [data-os-route="expansion/factory"]').first().click();
+  await page.waitForFunction(() => route === 'expansion/factory');
+});
+
+test('the rows tick themselves from the save once a business stands at the address', async t => {
+  const page = await board(t);
+  await until(page);
+  await opened(page, {staff: 3, marketingIndex: 20}, {placed: 61, req: [['pointofsales', 1, 1], ['anyprimaryproduct', 1, 1]]});
+  await page.evaluate(() => { D.supply.facts[D.businesses.length - 1] = {'ba:item_x': {st: 'covered'}}; drawOpenStore(); });
+  const r = await rows(page);
+  assert.deepEqual(r.map(x => x.state), ['done', 'done', 'done', 'done', 'done', 'done', 'done']);
+  assert.match(await page.locator('#osBody .os-prog').innerText(), /7 of 7/);
+});
+
+test('a half-done store shows what is missing', async t => {
+  const page = await board(t);
+  await until(page);
+  await opened(page, {staff: 2, uniformGaps: ['Customer Service', 'Cleaning'], missingAmenities: ['ba:customerdemand_music'],
+    amenities: {bathroom: true, interior: true, music: false, sink: false, toiletprivacy: true}},
+    {placed: 3, req: [['anyprimaryproduct', 1, 0], ['pointofsales', 1, 1]]});
+  await page.evaluate(() => { D.supply.facts[D.businesses.length - 1] = {'ba:item_x': {st: 'noplan'}, 'ba:item_y': {st: 'covered'}}; drawOpenStore(); });
+  const r = await rows(page);
+  assert.equal(r[0].state, 'done');
+  assert.equal(r[1].state, 'part');
+  assert.equal(r[3].state, 'todo');
+  assert.equal(r[4].state, 'part');
+  assert.equal(r[6].state, 'part');
+});
+
+test('without the game link every write is an instruction in the game, under a link strip', async t => {
+  const page = await board(t);
+  await until(page);
+  await opened(page, {staff: 1, uniformGaps: ['Customer Service']});
+  await hiring(page);
+  assert.equal(await page.locator('#osBody [data-os-write]').count(), 0);
+  assert.equal(await page.locator('#osBody .os-ck .os-ingame').count(), 3);
+  assert.match(await page.locator('#osBody .os-gate').innerText(), /Link the game and these become buttons\./);
+  assert.equal(await page.locator('#osBody [data-os-howlink]').count(), 1);
+});
+
+test('with the game link the same rows carry buttons', async t => {
+  const page = await board(t);
+  await until(page);
+  await opened(page, {staff: 1, uniformGaps: ['Customer Service']});
+  await hiring(page);
+  await linked(page);
+  assert.equal(await page.locator('#osBody .os-ck .os-ingame').count(), 0);
+  assert.equal(await page.locator('#osBody .os-gate').count(), 0);
+  assert.deepEqual(await page.$$eval('#osBody [data-os-write]', bs => bs.map(b => [b.dataset.osWrite, b.innerText.trim()])),
+    [['hire', 'Hire 3'], ['uniforms', 'Assign uniforms'], ['marketing', 'Set up marketing']]);
+});
+
+test('a write the mod lacks turns only its own button into the instruction', async t => {
+  const page = await board(t);
+  await until(page);
+  await opened(page, {staff: 1, uniformGaps: ['Customer Service']});
+  await hiring(page);
+  await linked(page, {...LINK, writes: ['hire', 'uniforms']});
+  assert.deepEqual(await page.$$eval('#osBody [data-os-write]', bs => bs.map(b => b.dataset.osWrite)), ['hire', 'uniforms']);
+  assert.equal(await page.locator('#osBody .os-ck .os-ingame').count(), 1);
+  assert.equal(await page.locator('#osBody .os-gate').count(), 0);
+});
+
+test('Set up marketing sends the wire body and explains a refusal', async t => {
+  const page = await board(t);
+  await until(page);
+  await opened(page, {staff: 1});
+  await linked(page);
+  await page.evaluate(() => { window.__writes = [];
+    SOURCE.write = async (kind, body, o) => { window.__writes.push({kind, body});
+      return {body: {ok: false, rows: [{error: 'no_contact', agency: {name: 'CityAds', address: {street: 'ba:street_secondavenue', number: 5}}, opens: null, address: body.sites[0].address}]}}; }; });
+  await page.locator('#osBody [data-os-write="marketing"]').click();
+  const dlg = page.locator('dialog.gw-dlg');
+  await dlg.waitFor();
+  const sent = await page.evaluate(() => window.__writes[0]);
+  assert.equal(sent.kind, 'marketing');
+  assert.deepEqual(sent.body.expect, {character: 'PAYLOADco', company: 'Payload Co'});
+  assert.deepEqual(sent.body.sites[0].address, {street: 'ba:street_broadwaystreet', number: 9});
+  assert.ok(sent.body.sites[0].on.length && sent.body.sites[0].on.every(x => /^(Small|Medium|Large)(Internet|Billboard)$/.test(x)));
+  assert.match(await dlg.innerText(), /not in your phone yet/);
+});
+
+test('a running campaign leaves the marketing row done with no button', async t => {
+  const page = await board(t);
+  await until(page);
+  await linked(page);
+  await opened(page, {staff: 1, marketing: 350});
+  const r = await rows(page);
+  assert.equal(r[5].state, 'done');
+  assert.equal(r[5].act, '');
+});
