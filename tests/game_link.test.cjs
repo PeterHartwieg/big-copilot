@@ -1017,7 +1017,7 @@ test('a mod that now speaks another version takes no writes until it speaks this
 // every /health, new bytes or not; the strip keeps the bytes' own time.
 test('the game clock moves with every health read, and the board hears when the hour turns', async () => {
   const h = harness({routes: {health: HEALTH}});
-  h.run(`linkHealth = ${JSON.stringify(HEALTH)}`);
+  h.run(`linkHealth = ${JSON.stringify(HEALTH)}; lastLinkStamp = "s1"`);
   const ticks = [];
   h.context.handlers = {linkClock: () => ticks.push(h.run('linkTime().hour'))};
   h.routes.health = {...HEALTH, minute: 40};
@@ -1034,6 +1034,12 @@ test('the game clock moves with every health read, and the board hears when the 
   assert.equal(h.run('linkTime().hour'), 17);
   assert.deepEqual(ticks, [17]);
   assert.equal(h.run('linkHealth.hour'), 14, 'the bytes keep their own time for the strip');
+  // Newer bytes waiting: the clock moves, but the board is not drawn again
+  // before the build that follows draws it.
+  h.routes.health = {...HEALTH, hour: 18, stamp: 's2'};
+  await h.run('readHealth()');
+  assert.equal(h.run('linkTime().hour'), 18);
+  assert.deepEqual(ticks, [17]);
 });
 
 test('marketing and uniforms name the save they were planned from; the other kinds do not', async () => {

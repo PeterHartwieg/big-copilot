@@ -1,8 +1,9 @@
 # Marketing write: one click to the cheapest campaign mix
 
 Scope, 28 September 2026. It follows the uniforms write (`docs/mod-write-back-scope.md`
-section 3, `POST /write/uniforms`): the board already warns ("Promotion below cap", finding
-kind `promotion`); this adds a button that fixes it through the game link mod.
+section 3, `POST /write/uniforms`): the board's finding kind `promotion` (labelled "Campaign
+mix", formerly "Promotion below cap") names the sites whose cheapest mix differs from what
+they run; this adds a button that sets it through the game link mod.
 
 ## 1. How the game works (read from `BigAmbitions.dll`, build 3680)
 
@@ -139,17 +140,30 @@ Shops and offices are covered. Headquarters have a promotion but no customers, s
   billboard · $600/day · 100%" and a **Set** button. The button shows when the plan differs
   from now, or when the shop lacks any of the six entries. Without the mod, the line tells the
   player what to tick in BizMan.
-- **Finding `promotion`:** an action in its popover, "Set the cheapest mix at N shops". It opens
-  the same dry-run dialog as the uniforms write (the write-dialogs canvas), with one row per
-  shop: now → plan, and $/day before → after.
-- **Set up all sites:** a Marketing action for every shop or office missing entries, so a new
-  site needs no phone call. It applies each site's plan, which already includes the set-up. It
-  runs one write, so it shares the dialog above. Sites already on plan are listed as "switches
-  added, nothing else changes".
-- **Offices:** the office site page gets the same Promotion line and button. The `promotion`
-  finding stays about shops, but its action and "Set up all sites" include offices.
-- **No new finding kind.** Overspend is small, and it is fixed by the same button when the panel
-  shows a saving.
+- **Finding `promotion`** (Peter, 29 Sep 2026, after the in-game test), plan-based, shops and
+  offices alike, sites not trading yet left to their own finding. Up to four lines, each
+  with its own subject and so its own id:
+  - the sites the plan raises, leading with the gain ("3 sites can reach 100% promotion for
+    less: …"); a warning when one gains `PROMOTION_GAP` points or more, else an opportunity;
+  - the sites that only pay for campaigns past the target ("HART. Gym can save $150/day at
+    the same promotion"), an opportunity;
+  - the sites with no plan, since they have no switch and no agency is a contact ("Visit
+    CityAds once: no campaign can be set at … before that");
+  - the sites on the best mix their known agencies allow, short of 100, that a first visit
+    would raise ("Visit CityAds once to raise promotion at …").
+
+  A plan that only adds missing switches changes neither cost nor promotion and is no
+  finding. The first promotion line shown carries "Set the cheapest mix at N sites". It
+  opens the same dry-run dialog as the uniforms write (the write-dialogs canvas), with one
+  row per site: now → plan, and $/day before → after.
+- **Set up all sites:** a Marketing action in Businesses › Standards for every shop or office
+  missing entries, so a new site needs no phone call. It applies each site's plan, which
+  already includes the set-up. It runs one write, so it shares the dialog above. A site
+  already on plan reads "+3 switches", and switches that wait for an agency are one short
+  clause ("2 switches later, Tuesday 8:00"). A dry run that would change nothing is one line
+  with no Apply.
+- **Offices:** the office site page gets the same Promotion line and button, and the finding
+  and both all-sites actions include offices.
 
 ## 5. Work and order
 

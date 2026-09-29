@@ -212,7 +212,8 @@ test('the promotion finding and Standards: every site at once, a site on plan on
   assert.equal(await act.innerText(), 'Set the cheapest mix at 2 sites');
   await page.evaluate(() => openRoute('businesses/standards'));
   const std = page.locator('#secStandards .bz-mk [data-gw="marketing"]');
-  assert.deepEqual(await std.allInnerTexts(), ['Set the cheapest mix at 2 sites', 'Set up all 2 sites']);
+  // textContent: the section may not be laid out yet when it is read.
+  assert.deepEqual(await std.evaluateAll(bs => bs.map(b => b.textContent.trim())), ['Set the cheapest mix at 2 sites', 'Set up all 2 sites']);
   await std.nth(1).click();
   await phase(page, 'ready');
   const dlg = page.locator('dialog.gw-dlg');
@@ -454,6 +455,32 @@ test('the game says what waits: its `waiting`, not the board\'s clock', async (t
   const dlg = page.locator('dialog.gw-dlg');
   assert.equal(await dlg.locator('.gw-verdict b').innerText(), 'Nothing can change before Tuesday at 8:00, when CityAds opens');
   assert.equal(await dlg.locator('[data-gw-b="apply"]').isDisabled(), true);
+});
+
+test('an idle dry run offers Try again, and asks the game again when its hour turns', async (t) => {
+  const page = await board(t);
+  await answering(page, {entries: {[B]: []}, waiting: {[B]: [{type: 'SmallBillboard', agency: CITYADS, opens: {day: 37, hour: 8}}]}});
+  await openSite(page, B);
+  await page.locator('#sp-pull [data-gw="marketing"]').click();
+  await phase(page, 'ready');
+  const dlg = page.locator('dialog.gw-dlg');
+  assert.equal(await dlg.locator('.gw-verdict b').innerText(), 'Nothing can change before Tuesday at 8:00, when CityAds opens');
+  assert.equal(await dlg.locator('[data-gw-b="retry"]').count(), 1);
+  const asked = (await writes(page)).length;
+  // Tuesday 8:00: the game now adds the switch.
+  await answering(page, {entries: {[B]: ['SmallBillboard']}});
+  await page.evaluate(() => { window.mkLink = Object.assign({}, window.mkLink, {day: 37, hour: 8}); window.calmWatch.linkClock(); });
+  await page.waitForFunction(() => /The game will add 1 switch/.test(document.querySelector('dialog.gw-dlg .gw-verdict')?.textContent || ''));
+  assert.equal((await writes(page)).length, asked + 1);
+  assert.equal(await dlg.locator('[data-gw-b="apply"]').isDisabled(), false);
+});
+
+test('a site not trading yet is left to its own finding: the all-sites count leaves it out too', async (t) => {
+  const d = JSON.parse(payload);
+  d.businesses.find(b => b.key === G).notTrading = [];
+  const page = await board(t, {data: JSON.stringify(d)});
+  await page.evaluate(() => { showPage('today'); });
+  assert.equal(await page.locator('#alerts .find[data-kind="promotion"] [data-gw="marketing"]').innerText(), 'Set the cheapest mix at 1 site');
 });
 
 test('one switch added says so in the singular; a refused row adds nothing', async (t) => {

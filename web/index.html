@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "9497c77bf7";</script>
-<link rel="stylesheet" href="community.css?v=9497c77bf7">
+<script>window.LEDGER_BUILD = "afb9a43f2f";</script>
+<link rel="stylesheet" href="community.css?v=afb9a43f2f">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=9497c77bf7">
+<link rel="stylesheet" href="fonts/fonts.css?v=afb9a43f2f">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -5559,7 +5559,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"9497c77bf7","latest":{"pr":174,"date":"2026-09-28","title":"Marketing: the cheapest campaigns for 100% promotion, set in one click","summary":"Every shop and office page now shows the cheapest set of marketing campaigns that brings its promotion to 100%, or its marketing to 100% where the street's foot traffic can't get it there, with the cost per day before and after. With the Big Copilot Link mod 0.4.0 one click books it in the game, for one site or all of them at once, and adds a switch for every campaign type to the business's BizMan Marketing page, so no phone call or chat with the agency is needed. It works through the marketing agencies already in your phone's contacts while they are open, and says when an agency opens or which one to visit first. Undo puts the campaigns back as they were."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"afb9a43f2f","latest":{"pr":174,"date":"2026-09-28","title":"Marketing: the cheapest campaigns for 100% promotion, set in one click","summary":"Every shop and office page now shows the cheapest set of marketing campaigns that brings its promotion to 100%, or its marketing to 100% where the street's foot traffic can't get it there, with the cost per day before and after. With the Big Copilot Link mod 0.4.0 one click books it in the game, for one site or all of them at once, and adds a switch for every campaign type to the business's BizMan Marketing page, so no phone call or chat with the agency is needed. It works through the marketing agencies already in your phone's contacts while they are open, and says when an agency opens or which one to visit first. Undo puts the campaigns back as they were."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -5647,8 +5647,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=9497c77bf7"></script>
-<script src="community.js?v=9497c77bf7"></script>
+<script src="app.js?v=afb9a43f2f"></script>
+<script src="community.js?v=afb9a43f2f"></script>
 
 <script>
 
@@ -27844,8 +27844,9 @@ const gwMkMix = types => types.length ? types.map(gwMkName).join(" + ") : tt("sp
 const gwMkSame = p => !!p.on && p.on.length === p.was.length && p.on.every(t => p.was.includes(t));
 /* The sites a marketing write is for: `mix`, every one whose plan differs
    from what runs; `setup`, every one missing a switch in BizMan. A site with
-   no plan (no agency is a phone contact yet) is in neither. */
-const gwMkWants = mode => (D.businesses || []).filter(b => b.marketingPlan && b.marketingPlan.on
+   no plan (no agency is a phone contact yet) is in neither, and nor is one
+   not trading yet (b.notTrading), which the promotion finding leaves out too. */
+const gwMkWants = mode => (D.businesses || []).filter(b => b.marketingPlan && b.marketingPlan.on && b.notTrading === undefined
   && (mode === "setup" ? b.marketingPlan.needsSetup : !gwMkSame(b.marketingPlan)));
 /* Of those, the ones the game takes now: a plan that only flips switches the
    site has, always; one that needs new switches, when every agency adding
@@ -27973,6 +27974,8 @@ function gwMkOpenSig(){
 }
 function gwMkTick(){
   if(!hasData()) return;
+  /* A dialog that said nothing could change asks the game again. */
+  if(gwOpen && gwOpen._gwIdle && gwOpen.dataset.phase === "ready") gwOpen._gwIdle();
   const sig = gwMkOpenSig();
   if(sig === gwMkSig) return;
   gwMkSig = sig;
@@ -28721,10 +28724,13 @@ function gwConfirm(spec){
         /* The game moved on since the board was read: the way on is to read it again. */
         ...(gwMovedOn(answer) ? [[tt("nav.dlg.refresh", "Refresh the board"), () => spec.refreshBoard(), {kind: "go", icon: "refresh"}]]
           /* Refused: fixed in the game, the game is asked again from here. */
-          : [...(answer.ok || !gwFixable(answer) ? [] : [[tt("nav.dlg.tryagain", "Try again"), () => plan(), {kind: "ghost", icon: "refresh", key: "retry"}]]),
+          : [...(idle || (!answer.ok && gwFixable(answer)) ? [[tt("nav.dlg.tryagain", "Try again"), () => plan(), {kind: "ghost", icon: "refresh", key: "retry"}]] : []),
              [spec.applyLabel(answer), apply, {kind: "go", icon: "right", disabled: !answer.ok || !!idle,
                why: idle ? "" : tt("nav.dlg.wouldrefuse", "The game would refuse this; see above"), key: "apply"}]])]});
     allowed = false;
+    /* An idle answer is asked again when the game's clock turns the hour
+       (gwMkTick()), or at the player's Try again: an agency may have opened. */
+    dlg._gwIdle = idle ? () => plan({soft: true}) : null;
     if(spec.bind) spec.bind(dlg, from => plan({soft: true, from}));
   };
   /* The game asked again from a dialog that shows its answer: the answer on

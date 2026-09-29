@@ -974,8 +974,10 @@ def marketing_plan(traffic, was_ids, sqm, type_slug, neighbourhood, free_ids=Non
     that brings marketing to 100 (or, in a building too big for that, to the
     most it can reach). No tolerance: 99 is short. Ties go to fewer campaigns,
     then to the mix the site runs now (`was_ids`). Settled by Peter, 28 Sep 2026.
-    `free_ids` are the types the plan may switch, those sold by an agency that
-    is a phone contact (every type when None); the rest stay as they run now.
+    `free_ids` are the types the plan may use (every type when None): the ones
+    the site has a switch for and the ones a contacted agency sells
+    (_marketing()). They hold every type running now, so a type outside them
+    is one the plan leaves off; one running outside them would stay on.
     """
     was = frozenset(was_ids)
     free = MARKETING_ALL if free_ids is None else frozenset(free_ids)
@@ -12774,13 +12776,17 @@ def _alerts(
     # Promotion is the foot traffic the address comes with plus whatever the
     # marketing campaigns add, held at 100. Each shop's and office's plan
     # (_marketing()) is the cheapest mix that brings it to 100, or marketing
-    # to 100 where 100 is out of reach. A site whose plan differs from what it
-    # runs is listed, short of the target or paying for campaigns that only
-    # push past it; one short by PROMOTION_GAP or more that the plan fixes is
-    # a warning. A plan that only adds missing switches changes neither cost
-    # nor promotion and is no finding. A site short of 100 with no plan, since
-    # no agency is a phone contact yet, gets its own line naming the agencies.
-    moves, unplanned = [], []
+    # to 100 where 100 is out of reach. The sites whose plan differs from what
+    # they run make up to two lines: those it raises (a warning when one gains
+    # PROMOTION_GAP points or more), and those that pay for campaigns that only
+    # push past the target. A plan that only adds missing switches changes
+    # neither cost nor promotion and is no finding. A site short of 100 whose
+    # plan waits on a first visit to an agency gets a line naming it: one with
+    # no plan at all (no switch, no agency known), and one already on the best
+    # mix its known agencies allow. Each line has its own subject, so its id
+    # is its own. The sites not trading yet are the not-trading line's.
+    raised, saved, unplanned, capped = [], [], [], []
+    gain = lambda b: b["marketingPlan"]["promotionPlan"] - b["marketingPlan"]["promotionNow"]  # noqa: E731
     for b in businesses:
         p = b.get("marketingPlan")
         if b["status"] not in ("retail", "office") or b["key"] in silent or not p:
@@ -12789,42 +12795,16 @@ def _alerts(
             if p["visit"] and p["promotionNow"] < PROMOTION_CAP:
                 unplanned.append(b)
         elif set(p["on"]) != set(p["was"]):
-            moves.append(b)
-    gain = lambda b: b["marketingPlan"]["promotionPlan"] - b["marketingPlan"]["promotionNow"]  # noqa: E731
-    # A site whose plan costs more is raising its promotion, even where the
-    # promotion the save stores already reads higher than the model's.
-    raises = lambda b: gain(b) > 0 or b["marketingPlan"]["costPlan"] > b["marketingPlan"]["costNow"]  # noqa: E731
-    moves.sort(key=lambda b: (-gain(b), b["name"]))
-    if moves:
-        raised = [b for b in moves if raises(b)]
-        extra = sum(b["marketingPlan"]["costPlan"] - b["marketingPlan"]["costNow"] for b in moves)
-        one, n = len(moves) == 1, len(moves)
-        site, top = moves[0]["name"], moves[0]["marketingPlan"]["promotionPlan"]
-        full = all(b["marketingPlan"]["promotionPlan"] >= PROMOTION_CAP for b in raised)
-        if not raised:
-            head = (msg("f.promotion.save.one", "{site} can save {w:$}/day at the same promotion", site=site, w=-extra)
-                    if one else
-                    msg("f.promotion.save.many", "{n} sites can save {w:$}/day at the same promotion", n=n, w=-extra))
-        elif one:
-            head = (msg("f.promotion.reach.less.one", "{site} can reach {p}% promotion for less", site=site, p=top)
-                    if extra < 0 else
-                    msg("f.promotion.reach.more.one", "{site} can reach {p}% promotion for {w:$}/day more",
-                        site=site, p=top, w=extra)
-                    if extra > 0 else
-                    msg("f.promotion.reach.one", "{site} can reach {p}% promotion", site=site, p=top))
-        elif full:
-            head = (msg("f.promotion.reach.less.many", "{n} sites can reach 100% promotion for less", n=n)
-                    if extra < 0 else
-                    msg("f.promotion.reach.more.many", "{n} sites can reach 100% promotion for {w:$}/day more",
-                        n=n, w=extra)
-                    if extra > 0 else
-                    msg("f.promotion.reach.many", "{n} sites can reach 100% promotion", n=n))
-        else:
-            head = (msg("f.promotion.gain.less.many", "{n} sites can gain promotion for less", n=n)
-                    if extra < 0 else
-                    msg("f.promotion.gain.more.many", "{n} sites can gain promotion for {w:$}/day more", n=n, w=extra)
-                    if extra > 0 else
-                    msg("f.promotion.gain.many", "{n} sites can gain promotion", n=n))
+            # A site whose plan costs more is raising its promotion, even where
+            # the promotion the save stores already reads higher than the model's.
+            (raised if gain(b) > 0 or p["costPlan"] > p["costNow"] else saved).append(b)
+        elif p["visit"] and p["promotionPlan"] < PROMOTION_CAP and p["promotionNow"] < PROMOTION_CAP:
+            capped.append(b)
+    sites_of = lambda group: msg("f.site.sites", {"one": "{n} site", "other": "{n} sites"}, n=len(group))  # noqa: E731
+    if raised:
+        raised.sort(key=lambda b: (-gain(b), b["name"]))
+        extra = sum(b["marketingPlan"]["costPlan"] - b["marketingPlan"]["costNow"] for b in raised)
+        n, site, top = len(raised), raised[0]["name"], raised[0]["marketingPlan"]["promotionPlan"]
 
         def item(b):
             p = b["marketingPlan"]
@@ -12833,27 +12813,69 @@ def _alerts(
                            a=p["promotionNow"], b=p["promotionPlan"])
             return msg("f.promotion.item.save", "{site} {a:$} → {b:$}/day", site=b["name"],
                        a=p["costNow"], b=p["costPlan"])
-        text = head if one else msg("f.promotion.sites", "{head}: {sites}", head=head,
-                                    sites=_msg_list([item(b) for b in moves]))
+        sites = _msg_list([item(b) for b in raised])
+        if n == 1:
+            text = (msg("f.promotion.reach.less.one", "{site} can reach {p}% promotion for less", site=site, p=top)
+                    if extra < 0 else
+                    msg("f.promotion.reach.more.one", "{site} can reach {p}% promotion for {w:$}/day more",
+                        site=site, p=top, w=extra)
+                    if extra > 0 else
+                    msg("f.promotion.reach.one", "{site} can reach {p}% promotion", site=site, p=top))
+        elif all(b["marketingPlan"]["promotionPlan"] >= PROMOTION_CAP for b in raised):
+            text = (msg("f.promotion.reach.less.many", "{n} sites can reach 100% promotion for less: {sites}",
+                        n=n, sites=sites)
+                    if extra < 0 else
+                    msg("f.promotion.reach.more.many",
+                        "{n} sites can reach 100% promotion for {w:$}/day more: {sites}", n=n, w=extra, sites=sites)
+                    if extra > 0 else
+                    msg("f.promotion.reach.many", "{n} sites can reach 100% promotion: {sites}", n=n, sites=sites))
+        else:
+            text = (msg("f.promotion.gain.less.many", "{n} sites can gain promotion for less: {sites}",
+                        n=n, sites=sites)
+                    if extra < 0 else
+                    msg("f.promotion.gain.more.many", "{n} sites can gain promotion for {w:$}/day more: {sites}",
+                        n=n, w=extra, sites=sites)
+                    if extra > 0 else
+                    msg("f.promotion.gain.many", "{n} sites can gain promotion: {sites}", n=n, sites=sites))
         note(
-            "warn" if any(gain(b) >= PROMOTION_GAP for b in moves) else "info",
-            site if one else msg("f.site.sites", {"one": "{n} site", "other": "{n} sites"}, n=n),
-            "promotion", text, rank=-max(gain(b) for b in moves), always=True,
-            key=moves[0]["key"] if one else None,
+            "warn" if any(gain(b) >= PROMOTION_GAP for b in raised) else "info",
+            site if n == 1 else sites_of(raised), "promotion", text, rank=-max(gain(b) for b in raised),
+            subject="mix-raise", always=True, key=raised[0]["key"] if n == 1 else None,
         )
+    if saved:
+        saved.sort(key=lambda b: (b["marketingPlan"]["costPlan"] - b["marketingPlan"]["costNow"], b["name"]))
+        w = sum(b["marketingPlan"]["costNow"] - b["marketingPlan"]["costPlan"] for b in saved)
+        if len(saved) == 1:
+            text = msg("f.promotion.save.one", "{site} can save {w:$}/day at the same promotion",
+                       site=saved[0]["name"], w=w)
+        else:
+            text = msg("f.promotion.save.many", "{n} sites can save {w:$}/day at the same promotion: {sites}",
+                       n=len(saved), w=w, sites=_msg_list([
+                           msg("f.promotion.item.save", "{site} {a:$} → {b:$}/day", site=b["name"],
+                               a=b["marketingPlan"]["costNow"], b=b["marketingPlan"]["costPlan"])
+                           for b in saved]))
+        note(
+            "info", saved[0]["name"] if len(saved) == 1 else sites_of(saved), "promotion", text,
+            subject="mix-save", always=True, key=saved[0]["key"] if len(saved) == 1 else None,
+        )
+    by_key = {a["key"]: a["name"] for a in agencies}
+    agencies_of = lambda group: _msg_list([by_key.get(k) or k for k in  # noqa: E731
+                                           sorted({k for b in group for k in b["marketingPlan"]["visit"]})])
     if unplanned:
-        by_key = {a["key"]: a["name"] for a in agencies}
-        visit = sorted({k for b in unplanned for k in b["marketingPlan"]["visit"]})
         one = len(unplanned) == 1
         note(
-            "info",
-            unplanned[0]["name"] if one
-            else msg("f.site.sites", {"one": "{n} site", "other": "{n} sites"}, n=len(unplanned)),
-            "promotion",
+            "info", unplanned[0]["name"] if one else sites_of(unplanned), "promotion",
             msg("f.promotion.visit", "Visit {agencies} once: no campaign can be set at {sites} before that",
-                agencies=_msg_list([by_key.get(k) or k for k in visit]),
-                sites=_msg_list([b["name"] for b in unplanned])),
-            always=True, key=unplanned[0]["key"] if one else None,
+                agencies=agencies_of(unplanned), sites=_msg_list([b["name"] for b in unplanned])),
+            subject="visit-first", always=True, key=unplanned[0]["key"] if one else None,
+        )
+    if capped:
+        one = len(capped) == 1
+        note(
+            "info", capped[0]["name"] if one else sites_of(capped), "promotion",
+            msg("f.promotion.visit.more", "Visit {agencies} once to raise promotion at {sites}",
+                agencies=agencies_of(capped), sites=_msg_list([b["name"] for b in capped])),
+            subject="visit-more", always=True, key=capped[0]["key"] if one else None,
         )
 
     # --- what a hype wave is carrying, and what the day it ends costs
@@ -35983,8 +36005,9 @@ const gwMkMix = types => types.length ? types.map(gwMkName).join(" + ") : tt("sp
 const gwMkSame = p => !!p.on && p.on.length === p.was.length && p.on.every(t => p.was.includes(t));
 /* The sites a marketing write is for: `mix`, every one whose plan differs
    from what runs; `setup`, every one missing a switch in BizMan. A site with
-   no plan (no agency is a phone contact yet) is in neither. */
-const gwMkWants = mode => (D.businesses || []).filter(b => b.marketingPlan && b.marketingPlan.on
+   no plan (no agency is a phone contact yet) is in neither, and nor is one
+   not trading yet (b.notTrading), which the promotion finding leaves out too. */
+const gwMkWants = mode => (D.businesses || []).filter(b => b.marketingPlan && b.marketingPlan.on && b.notTrading === undefined
   && (mode === "setup" ? b.marketingPlan.needsSetup : !gwMkSame(b.marketingPlan)));
 /* Of those, the ones the game takes now: a plan that only flips switches the
    site has, always; one that needs new switches, when every agency adding
@@ -36112,6 +36135,8 @@ function gwMkOpenSig(){
 }
 function gwMkTick(){
   if(!hasData()) return;
+  /* A dialog that said nothing could change asks the game again. */
+  if(gwOpen && gwOpen._gwIdle && gwOpen.dataset.phase === "ready") gwOpen._gwIdle();
   const sig = gwMkOpenSig();
   if(sig === gwMkSig) return;
   gwMkSig = sig;
@@ -36860,10 +36885,13 @@ function gwConfirm(spec){
         /* The game moved on since the board was read: the way on is to read it again. */
         ...(gwMovedOn(answer) ? [[tt("nav.dlg.refresh", "Refresh the board"), () => spec.refreshBoard(), {kind: "go", icon: "refresh"}]]
           /* Refused: fixed in the game, the game is asked again from here. */
-          : [...(answer.ok || !gwFixable(answer) ? [] : [[tt("nav.dlg.tryagain", "Try again"), () => plan(), {kind: "ghost", icon: "refresh", key: "retry"}]]),
+          : [...(idle || (!answer.ok && gwFixable(answer)) ? [[tt("nav.dlg.tryagain", "Try again"), () => plan(), {kind: "ghost", icon: "refresh", key: "retry"}]] : []),
              [spec.applyLabel(answer), apply, {kind: "go", icon: "right", disabled: !answer.ok || !!idle,
                why: idle ? "" : tt("nav.dlg.wouldrefuse", "The game would refuse this; see above"), key: "apply"}]])]});
     allowed = false;
+    /* An idle answer is asked again when the game's clock turns the hour
+       (gwMkTick()), or at the player's Try again: an agency may have opened. */
+    dlg._gwIdle = idle ? () => plan({soft: true}) : null;
     if(spec.bind) spec.bind(dlg, from => plan({soft: true, from}));
   };
   /* The game asked again from a dialog that shows its answer: the answer on

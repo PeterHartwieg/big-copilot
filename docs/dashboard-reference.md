@@ -310,16 +310,18 @@ What is on the list is what moves the number:
   the site's line turns critical and names those company-wide demands too, since they may
   be all that person lacks.
 - **Campaign mix.** A shop's or office's promotion is the foot traffic its address comes
-  with plus what its marketing campaigns add, held at 100%. Every shop and office whose
-  cheapest mix (the Promotion block's last line, below) differs from what it runs reads as
-  one line that leads with the gain: "3 sites can reach 100% promotion for less", "HART.
-  Gym can save $150/day at the same promotion", with each site's promotion or cost, now and
-  after, in the details. It is a warning when a site is short of its target by 10 points or
-  more and the mix fixes that; overspending and smaller gaps are opportunities. A mix that
-  only adds missing switches changes neither and is no finding. A site short of 100 with
-  no mix, because no agency is a phone contact yet, gets its own line naming the agencies
-  to visit once. With the game link the finding carries "Set the cheapest mix at N
-  sites"; its *details ›* link lands on Businesses › Standards.
+  with plus what its marketing campaigns add, held at 100%. The shops and offices whose
+  cheapest mix (the Promotion block's last line, below) differs from what they run read as
+  up to two lines that lead with the gain: the ones it raises ("3 sites can reach 100%
+  promotion for less", each site's promotion now and after in the details), a warning when
+  one is short of its target by 10 points or more; and the ones that only overspend ("HART.
+  Gym can save $150/day at the same promotion"), an opportunity. A mix that only adds
+  missing switches changes neither and is no finding. A site short of 100 that waits on a
+  first visit to an agency gets its own line naming it: one with no mix at all ("Visit
+  CityAds once: no campaign can be set at … before that"), and one already on the best mix
+  its known agencies allow ("Visit CityAds once to raise promotion at …"). Sites not trading
+  yet are left to their own finding. With the game link the first line carries "Set the
+  cheapest mix at N sites"; its *details ›* link lands on Businesses › Standards.
 
 ## The weekly rhythm
 

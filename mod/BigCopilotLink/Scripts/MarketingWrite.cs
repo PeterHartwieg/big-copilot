@@ -305,12 +305,13 @@ namespace BigCopilotLink
 
         /// <summary>
         /// The set-up and the switches. For each type: the site's own entries, the enabled
-        /// one kept on when the type is in `on` and every other entry of that type off; with
-        /// none, a new entry at the first agency that sells it (one the player may use now,
-        /// if there is one), on when asked for. A type not asked for gets a new, disabled
-        /// entry only at an agency the player may use now: the set-up never needs one that
-        /// is closed or unknown. Then every agency a change touches must be usable, or the
-        /// row is refused. Answers the row error, or null.
+        /// one kept on when the type is in `on` and every other entry of that type off,
+        /// whatever their agency (an existing switch flips any time, as the phone does); with
+        /// none, a new entry at the first agency the player may use now (a phone contact,
+        /// open) that sells it, or, for a type in `on` with no such agency, at the first that
+        /// sells it. A type not asked for gets a new, disabled entry only at a usable agency,
+        /// and otherwise waits (`Waiting`). Then only the new entries need a usable agency
+        /// (CheckChanges()), or the row is refused. Answers the row error, or null.
         /// </summary>
         private static string Plan(Row row, HashSet<int> on, List<Agency> agencies, Dictionary<string, AgencyCheck> checks)
         {

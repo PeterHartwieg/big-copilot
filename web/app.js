@@ -899,6 +899,9 @@
     const was = linkTime();
     linkNow = {day: body.day, hour: body.hour, minute: body.minute};
     if (day === Number(was.day) && Math.floor(hour) === Math.floor(Number(was.hour))) return;
+    // Newer bytes are on the way: the board they build is drawn at this
+    // hour anyway, so the old one is not drawn again first.
+    if (body.stamp && !body.busy && body.stamp !== lastLinkStamp) return;
     if (handlers && handlers.linkClock) {
       try { handlers.linkClock(); } catch (e) {}
     }
