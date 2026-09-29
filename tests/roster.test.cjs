@@ -891,7 +891,7 @@ test('a shop with nothing at all to schedule gets the empty state', async () => 
     assert.equal(await page.locator('#sp-roster .sp-read').innerText(), 'Nothing to schedule');
     assert.equal(await page.locator('#sp-roster .sp-daytabs').count(), 0);
     assert.match(await page.locator('#sp-roster .sechead .why').getAttribute('data-tip'),
-      /arrival ceiling over-predicts a shop like this fourfold/);
+      /arrival ceiling counts everyone who may walk in/);
     assert.equal(await page.locator('#sp-roster .sp-gantt .sp-grow').count(), 3,
       'the stations are still named');
   } finally { await page.close(); }

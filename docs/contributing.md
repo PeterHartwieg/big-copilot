@@ -95,6 +95,21 @@ the entry in the footer changelog on both the landing screen and the dashboard.
 Entries appear newest first and link to their PR; reading them does not require
 GitHub access.
 
+## Merging a green pull request
+
+When a pull request's CI is green and merging main into it conflicts only in generated
+files (the table in AGENTS.md, "Sources and generated files"):
+
+1. Take either side of each conflict, run `python build_web.py`, then
+   `python build_web.py --check`. The rebuild is the resolution.
+2. Commit the merge and push it.
+3. `git fetch origin`. If main has not moved since that merge, merge the pull request
+   straight away, without waiting for another CI run: the green run already covers every
+   hand-written file, and the merge added only rebuilt output.
+4. If main moved in the meantime, merge it in again and go back to step 1.
+
+Wait for CI again when any hand-written file conflicted.
+
 ## Deployment baseline
 
 `python build_web.py` also generates `web/version.json` with the same content

@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "40b91174d6";</script>
-<link rel="stylesheet" href="community.css?v=40b91174d6">
+<script>window.LEDGER_BUILD = "1d0e4363bc";</script>
+<link rel="stylesheet" href="community.css?v=1d0e4363bc">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=40b91174d6">
+<link rel="stylesheet" href="fonts/fonts.css?v=1d0e4363bc">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -4451,9 +4451,10 @@ const TT_EMBED = null;
 const TT_SITE = true;
 const TT_KEY = "ba_dash_names";
 /* The languages Big Copilot's own text comes in, English first. */
-const TT_LANGS = ["en", "de", "pt", "fr", "es", "ru", "ko"];
+const TT_LANGS = ["en", "de", "pt", "fr", "es", "ru", "ko", "tr"];
 /* Numbers follow the UI language: English is always en-US. */
-const TT_NUM_LOCALES = {en: "en-US", de: "de-DE", pt: "pt-BR", fr: "fr-FR", es: "es-ES", ru: "ru-RU", ko: "ko-KR"};
+const TT_NUM_LOCALES = {en: "en-US", de: "de-DE", pt: "pt-BR", fr: "fr-FR", es: "es-ES", ru: "ru-RU", ko: "ko-KR",
+                        tr: "tr-TR"};
 /* A placeholder: {name} or {name:spec}; single braces, as SUMMARIES writes them. */
 const TT_SPEC = /\{(\w+)(?::([^{}]+))?\}/g;
 /* A game name inside a sentence (tok() in Python), for a page without the
@@ -5012,8 +5013,8 @@ details.help[open] summary::after{content:"\2013"}
 <!-- One-time news strip. For the next announcement replace data-news-id and the
      copy, and give the copy a new data-tt key: a new id shows again to everyone
      who dismissed this one (web/update.js). -->
-<aside class="news-strip" id="newsStrip" data-news-id="lang-ko" aria-label="News" data-tt-aria-label="upd.news" hidden>
-  <p class="news-copy"><b class="news-tag" data-tt="upd.news.tag">New</b><span data-tt="upd.news.lang-ko">Big Copilot now comes in Korean, thanks to Chanwoo Kim (kcw2034), who translated it. Thank you! Speak another language? Your translation is welcome too.</span><a id="newsLink" href="https://github.com/PeterHartwieg/big-copilot/blob/main/docs/translating.md" target="_blank" rel="noopener" data-tt="upd.news.help-translate">Help translate Big Copilot</a></p>
+<aside class="news-strip" id="newsStrip" data-news-id="lang-tr" aria-label="News" data-tt-aria-label="upd.news" hidden>
+  <p class="news-copy"><b class="news-tag" data-tt="upd.news.tag">New</b><span data-tt="upd.news.lang-tr">Big Copilot now comes in Turkish, thanks to Hakan (HakanGorkem), who added it. Thank you! Speak another language? Your translation is welcome too.</span><a id="newsLink" href="https://github.com/PeterHartwieg/big-copilot/blob/main/docs/translating.md" target="_blank" rel="noopener" data-tt="upd.news.help-translate">Help translate Big Copilot</a></p>
   <button type="button" class="news-dismiss" id="newsDismiss" aria-label="Dismiss this news" title="Dismiss this news" data-tt-aria-label="upd.news.dismiss" data-tt-title="upd.news.dismiss"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button>
 </aside>
 <section class="landing" id="landing">
@@ -5126,7 +5127,7 @@ details.help[open] summary::after{content:"\2013"}
            are both here until the board replaces the landing. -->
       <div class="sf-col sf-gn">
         <h2 class="sf-head" id="gnHeadL" data-tt="foot.lang.head">Language</h2>
-        <div class="gn-pick" data-gn-pick data-value="en" data-drafted="es fr pt ru ko"><button type="button" class="gn-btn" id="gnHeadLBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="gnHeadL gnHeadLBtn" data-tt-title="foot.lang.tip" title="Big Copilot&#39;s own words and the game&#39;s names for items, business types, neighbourhoods, stations and skills. A language under &#34;Game names only&#34; changes the names, and the rest stays English."><span class="gn-glyph" aria-hidden="true"><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.3 3.6 5.1 3.6 8.5s-1.2 6.2-3.6 8.5c-2.4-2.3-3.6-5.1-3.6-8.5s1.2-6.2 3.6-8.5z"/></svg></span><span class="gn-cur" lang="en" translate="no">English</span><svg class="sf-ic gn-chev" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button><ul class="gn-opts" hidden><li data-value="en" data-group="page" lang="en" translate="no">English</li><li data-value="de" data-group="page" lang="de" translate="no">Deutsch</li><li data-value="es" data-group="page" lang="es" translate="no">Español</li><li data-value="fr" data-group="page" lang="fr" translate="no">Français</li><li data-value="pt" data-group="page" lang="pt" translate="no">Português (Brasil)</li><li data-value="ru" data-group="page" lang="ru" translate="no">Русский</li><li data-value="ko" data-group="page" lang="ko" translate="no">한국어</li><li data-value="cs" data-group="names" lang="cs" translate="no">Čeština</li><li data-value="da" data-group="names" lang="da" translate="no">Dansk</li><li data-value="it" data-group="names" lang="it" translate="no">Italiano</li><li data-value="lt" data-group="names" lang="lt" translate="no">Lietuvių</li><li data-value="hu" data-group="names" lang="hu" translate="no">Magyar</li><li data-value="nl" data-group="names" lang="nl" translate="no">Nederlands</li><li data-value="pl" data-group="names" lang="pl" translate="no">Polski</li><li data-value="ro" data-group="names" lang="ro" translate="no">Română</li><li data-value="fi" data-group="names" lang="fi" translate="no">Suomi</li><li data-value="tr" data-group="names" lang="tr" translate="no">Türkçe</li><li data-value="el" data-group="names" lang="el" translate="no">Ελληνικά</li><li data-value="uk" data-group="names" lang="uk" translate="no">Українська</li><li data-value="ja" data-group="names" lang="ja" translate="no">日本語</li><li data-value="zh-cn" data-group="names" lang="zh-cn" translate="no">简体中文</li><li data-value="zh-tw" data-group="names" lang="zh-tw" translate="no">繁體中文</li></ul></div>
+        <div class="gn-pick" data-gn-pick data-value="en" data-drafted="es fr pt ru ko tr"><button type="button" class="gn-btn" id="gnHeadLBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="gnHeadL gnHeadLBtn" data-tt-title="foot.lang.tip" title="Big Copilot&#39;s own words and the game&#39;s names for items, business types, neighbourhoods, stations and skills. A language under &#34;Game names only&#34; changes the names, and the rest stays English."><span class="gn-glyph" aria-hidden="true"><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.3 3.6 5.1 3.6 8.5s-1.2 6.2-3.6 8.5c-2.4-2.3-3.6-5.1-3.6-8.5s1.2-6.2 3.6-8.5z"/></svg></span><span class="gn-cur" lang="en" translate="no">English</span><svg class="sf-ic gn-chev" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button><ul class="gn-opts" hidden><li data-value="en" data-group="page" lang="en" translate="no">English</li><li data-value="de" data-group="page" lang="de" translate="no">Deutsch</li><li data-value="es" data-group="page" lang="es" translate="no">Español</li><li data-value="fr" data-group="page" lang="fr" translate="no">Français</li><li data-value="pt" data-group="page" lang="pt" translate="no">Português (Brasil)</li><li data-value="tr" data-group="page" lang="tr" translate="no">Türkçe</li><li data-value="ru" data-group="page" lang="ru" translate="no">Русский</li><li data-value="ko" data-group="page" lang="ko" translate="no">한국어</li><li data-value="cs" data-group="names" lang="cs" translate="no">Čeština</li><li data-value="da" data-group="names" lang="da" translate="no">Dansk</li><li data-value="it" data-group="names" lang="it" translate="no">Italiano</li><li data-value="lt" data-group="names" lang="lt" translate="no">Lietuvių</li><li data-value="hu" data-group="names" lang="hu" translate="no">Magyar</li><li data-value="nl" data-group="names" lang="nl" translate="no">Nederlands</li><li data-value="pl" data-group="names" lang="pl" translate="no">Polski</li><li data-value="ro" data-group="names" lang="ro" translate="no">Română</li><li data-value="fi" data-group="names" lang="fi" translate="no">Suomi</li><li data-value="el" data-group="names" lang="el" translate="no">Ελληνικά</li><li data-value="uk" data-group="names" lang="uk" translate="no">Українська</li><li data-value="ja" data-group="names" lang="ja" translate="no">日本語</li><li data-value="zh-cn" data-group="names" lang="zh-cn" translate="no">简体中文</li><li data-value="zh-tw" data-group="names" lang="zh-tw" translate="no">繁體中文</li></ul></div>
         <a class="gn-note" data-gn-note href="https://github.com/PeterHartwieg/big-copilot/blob/main/docs/translating.md" target="_blank" rel="noopener" hidden><span data-tt="foot.lang.drafted">Machine-translated. Help check it</span></a>
       </div>
       <div class="sf-col sf-theme">
@@ -5433,7 +5434,7 @@ details.help[open] summary::after{content:"\2013"}
            are both here until the board replaces the landing. -->
       <div class="sf-col sf-gn">
         <h2 class="sf-head" id="gnHead" data-tt="foot.lang.head">Language</h2>
-        <div class="gn-pick" data-gn-pick data-value="en" data-drafted="es fr pt ru ko"><button type="button" class="gn-btn" id="gnHeadBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="gnHead gnHeadBtn" data-tt-title="foot.lang.tip" title="Big Copilot&#39;s own words and the game&#39;s names for items, business types, neighbourhoods, stations and skills. A language under &#34;Game names only&#34; changes the names, and the rest stays English."><span class="gn-glyph" aria-hidden="true"><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.3 3.6 5.1 3.6 8.5s-1.2 6.2-3.6 8.5c-2.4-2.3-3.6-5.1-3.6-8.5s1.2-6.2 3.6-8.5z"/></svg></span><span class="gn-cur" lang="en" translate="no">English</span><svg class="sf-ic gn-chev" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button><ul class="gn-opts" hidden><li data-value="en" data-group="page" lang="en" translate="no">English</li><li data-value="de" data-group="page" lang="de" translate="no">Deutsch</li><li data-value="es" data-group="page" lang="es" translate="no">Español</li><li data-value="fr" data-group="page" lang="fr" translate="no">Français</li><li data-value="pt" data-group="page" lang="pt" translate="no">Português (Brasil)</li><li data-value="ru" data-group="page" lang="ru" translate="no">Русский</li><li data-value="ko" data-group="page" lang="ko" translate="no">한국어</li><li data-value="cs" data-group="names" lang="cs" translate="no">Čeština</li><li data-value="da" data-group="names" lang="da" translate="no">Dansk</li><li data-value="it" data-group="names" lang="it" translate="no">Italiano</li><li data-value="lt" data-group="names" lang="lt" translate="no">Lietuvių</li><li data-value="hu" data-group="names" lang="hu" translate="no">Magyar</li><li data-value="nl" data-group="names" lang="nl" translate="no">Nederlands</li><li data-value="pl" data-group="names" lang="pl" translate="no">Polski</li><li data-value="ro" data-group="names" lang="ro" translate="no">Română</li><li data-value="fi" data-group="names" lang="fi" translate="no">Suomi</li><li data-value="tr" data-group="names" lang="tr" translate="no">Türkçe</li><li data-value="el" data-group="names" lang="el" translate="no">Ελληνικά</li><li data-value="uk" data-group="names" lang="uk" translate="no">Українська</li><li data-value="ja" data-group="names" lang="ja" translate="no">日本語</li><li data-value="zh-cn" data-group="names" lang="zh-cn" translate="no">简体中文</li><li data-value="zh-tw" data-group="names" lang="zh-tw" translate="no">繁體中文</li></ul></div>
+        <div class="gn-pick" data-gn-pick data-value="en" data-drafted="es fr pt ru ko tr"><button type="button" class="gn-btn" id="gnHeadBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="gnHead gnHeadBtn" data-tt-title="foot.lang.tip" title="Big Copilot&#39;s own words and the game&#39;s names for items, business types, neighbourhoods, stations and skills. A language under &#34;Game names only&#34; changes the names, and the rest stays English."><span class="gn-glyph" aria-hidden="true"><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.3 3.6 5.1 3.6 8.5s-1.2 6.2-3.6 8.5c-2.4-2.3-3.6-5.1-3.6-8.5s1.2-6.2 3.6-8.5z"/></svg></span><span class="gn-cur" lang="en" translate="no">English</span><svg class="sf-ic gn-chev" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button><ul class="gn-opts" hidden><li data-value="en" data-group="page" lang="en" translate="no">English</li><li data-value="de" data-group="page" lang="de" translate="no">Deutsch</li><li data-value="es" data-group="page" lang="es" translate="no">Español</li><li data-value="fr" data-group="page" lang="fr" translate="no">Français</li><li data-value="pt" data-group="page" lang="pt" translate="no">Português (Brasil)</li><li data-value="tr" data-group="page" lang="tr" translate="no">Türkçe</li><li data-value="ru" data-group="page" lang="ru" translate="no">Русский</li><li data-value="ko" data-group="page" lang="ko" translate="no">한국어</li><li data-value="cs" data-group="names" lang="cs" translate="no">Čeština</li><li data-value="da" data-group="names" lang="da" translate="no">Dansk</li><li data-value="it" data-group="names" lang="it" translate="no">Italiano</li><li data-value="lt" data-group="names" lang="lt" translate="no">Lietuvių</li><li data-value="hu" data-group="names" lang="hu" translate="no">Magyar</li><li data-value="nl" data-group="names" lang="nl" translate="no">Nederlands</li><li data-value="pl" data-group="names" lang="pl" translate="no">Polski</li><li data-value="ro" data-group="names" lang="ro" translate="no">Română</li><li data-value="fi" data-group="names" lang="fi" translate="no">Suomi</li><li data-value="el" data-group="names" lang="el" translate="no">Ελληνικά</li><li data-value="uk" data-group="names" lang="uk" translate="no">Українська</li><li data-value="ja" data-group="names" lang="ja" translate="no">日本語</li><li data-value="zh-cn" data-group="names" lang="zh-cn" translate="no">简体中文</li><li data-value="zh-tw" data-group="names" lang="zh-tw" translate="no">繁體中文</li></ul></div>
         <a class="gn-note" data-gn-note href="https://github.com/PeterHartwieg/big-copilot/blob/main/docs/translating.md" target="_blank" rel="noopener" hidden><span data-tt="foot.lang.drafted">Machine-translated. Help check it</span></a>
       </div>
       <div class="sf-col sf-theme">
@@ -5548,7 +5549,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"40b91174d6","latest":{"pr":169,"date":"2026-09-28","title":"A new layout: problems first, and a sidebar with five places to fix them","summary":"The board is rebuilt around what needs your attention. The Overview opens on Needs attention, each finding with a button that takes you to the exact setting, and a way back to where you were. A sidebar on the left holds five places, the open one with its views under it: the Overview, Businesses (results, cash and loans, prices against the market, a standards comparison with uniforms you can set from it, milestones), Supply (the changes to make, imports, deliveries, production, and a goods flow you can drag and zoom like the map), Staffing (schedules, staff needs, payroll) and Expansion (demand, finding a location, planning a factory), then the City map and the Wiki. The button at its foot folds the sidebar to a strip of icons, and the board remembers it. Every business page links to its schedule, deliveries and prices. Changes you mark, apply through the game link, or that a later save confirms now look different, and preferences and help sit under the one ··· menu at the sidebar's foot. Old links keep working."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"1d0e4363bc","latest":{"pr":169,"date":"2026-09-28","title":"A new layout: problems first, and a sidebar with five places to fix them","summary":"The board is rebuilt around what needs your attention. The Overview opens on Needs attention, each finding with a button that takes you to the exact setting, and a way back to where you were. A sidebar on the left holds five places, the open one with its views under it: the Overview, Businesses (results, cash and loans, prices against the market, a standards comparison with uniforms you can set from it, milestones), Supply (the changes to make, imports, deliveries, production, and a goods flow you can drag and zoom like the map), Staffing (schedules, staff needs, payroll) and Expansion (demand, finding a location, planning a factory), then the City map and the Wiki. The button at its foot folds the sidebar to a strip of icons, and the board remembers it. Every business page links to its schedule, deliveries and prices. Changes you mark, apply through the game link, or that a later save confirms now look different, and preferences and help sit under the one ··· menu at the sidebar's foot. Old links keep working."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -5636,8 +5637,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=40b91174d6"></script>
-<script src="community.js?v=40b91174d6"></script>
+<script src="app.js?v=1d0e4363bc"></script>
+<script src="community.js?v=1d0e4363bc"></script>
 
 <script>
 
@@ -9930,8 +9931,8 @@ const SP_ROSTER_STORE = "ba_dash_roster:";
 const spRosterRow = key => (D.staffing || []).find(r => r.key === key) || null;
 /* Whether the plan rests on a measured hour at all. Every serving role thin
    all week means the planner cut no serving shifts, and there is nothing
-   honest to put on the strip: the game's own arrival ceiling over-predicts a
-   shop like this fourfold, so it is never shown as demand. */
+   honest to put on the strip: the game's own arrival ceiling counts everyone
+   who may walk in, not the customers served, so it is never shown as demand. */
 const spRosterMeasured = row => !!row && !row.failed && Object.keys(row.basis || {}).some(
   skill => (row.basis[skill] || []).some(day => (day || []).some(b => b && b !== "none")));
 /* Whether the doors are open that hour. The game keeps a list of slots a day,
@@ -10706,8 +10707,9 @@ function spDesks(grid){
    Schedule, and a tick per line once they have. */
 
 /* The empty state. A shop too new to have been measured is not given a guess:
-   the game's own arrival ceiling over-predicts a shop like it fourfold, and a
-   roster cut from that would be a fiction with a shift count on it. */
+   the game's own arrival ceiling counts everyone who may walk in, not the
+   customers served, and a roster cut from that would be a fiction with a shift
+   count on it. */
 function spRosterNone(row, pick){
   const stations = (row && row.stations) || [];
   const codes = spStationCodes(stations);
@@ -10718,7 +10720,7 @@ function spRosterNone(row, pick){
   return `<section class="sec rv" data-block="roster" id="sp-roster"${pick ? ` data-site="${attr(row.key)}"` : ""}>
     ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster", why: failed
       ? tt("sp.roster.failed.why", "This site's schedule or stations could not be read, so no week is suggested for it. Nothing else on the board is affected.")
-      : tt("sp.roster.none.why", "A week is cut from the hours this site has already served, and there is no cleaning or security station here to cover in the meantime. The game's own arrival ceiling over-predicts a shop like this fourfold, so nothing is suggested from it.")})}
+      : tt("sp.roster.none.why", "A week is cut from the hours this site has already served, and there is no cleaning or security station here to cover in the meantime. The game's own arrival ceiling counts everyone who may walk in, not the customers a shop like this serves, so nothing is suggested from it.")})}
     ${pick || ""}
     <div class="chartbox sp-gantt sp-empty">${rows}</div>
     <div class="sp-read">${failed ? tt("sp.roster.failed", "Plan unavailable") : tt("sp.roster.none", "Nothing to schedule")}</div>

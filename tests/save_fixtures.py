@@ -337,7 +337,8 @@ def data_company(day: int = DAY) -> dict:
 
     root = {
         "Day": day, "Hour": 14, "Minute": 30, "Money": 25000.0 + 80.0 * (day - DAY),
-        "SaveGameName": "Payload Co", "characterId": CHARACTER, "buildNumberAtLastSave": 3671 if day <= DAY else 3682,
+        "SaveGameName": "Payload Co", "characterId": CHARACTER, "buildNumberAtStart": 3671,
+        "buildNumberAtLastSave": 3671 if day <= DAY else 3682,
         "Happiness": 60.0,
         "gameVariables": {"daysPerYear": 60, "difficulty": 2, "startingMoney": 10000.0,
                           "marketPriceMultiplier": 0.7, "employeeHourlySalaryMultiplier": 0.9,

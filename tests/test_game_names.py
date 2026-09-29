@@ -142,7 +142,7 @@ class Picker(unittest.TestCase):
             with self.subTest(landing=landing):
                 markup = footer_html(landing=landing, site=True)
                 self.assertIn(">Language</h2>", markup)
-                self.assertIn('<div class="gn-pick" data-gn-pick data-value="en" data-drafted="es fr pt ru ko">', markup)
+                self.assertIn('<div class="gn-pick" data-gn-pick data-value="en" data-drafted="es fr pt ru ko tr">', markup)
                 self.assertIn('aria-haspopup="listbox"', markup)
                 # The button shows the first choice until the script paints the kept one.
                 self.assertIn('<span class="gn-cur" lang="en" translate="no">English</span>', markup)
