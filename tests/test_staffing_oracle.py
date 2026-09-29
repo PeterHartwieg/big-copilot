@@ -669,6 +669,41 @@ class HireCountTest(unittest.TestCase):
         self.assertGreater(len(seen), 80)
         self.assertEqual([pair for pair in seen if pair[0] > pair[1]], [])
 
+    def line(self, wd, start, end):
+        return {"wd": wd, "from": start, "to": end, "skill": SERVICE, "kind": "serve", "station": 1}
+
+    def test_the_bound_holds_where_lines_can_be_cut(self):
+        """Review round 3: nine eleven-hour lines are 99 hours, two hires at
+        50 and 49 once one line is cut; three seven-hour lines back to back
+        on four days are two hires at 48 and 36. The count may start no
+        higher than that."""
+        nine = [self.line(wd, a, a + 11) for wd in range(4) for a in (0, 11)] + [self.line(4, 0, 11)]
+        self.assertLessEqual(ba_dashboard._hire_bound(nine, []), 2)
+        sevens = [self.line(wd, a, a + 7) for wd in range(4) for a in (0, 7, 14)]
+        self.assertLessEqual(ba_dashboard._hire_bound(sevens, []), 2)
+
+    def test_the_bound_counts_the_room_the_staff_have(self):
+        # A locker around the clock (168 hours) and a part-time guard who may
+        # hold 30 of them: 138 hours, three hires, not four.
+        locker = [self.line(wd, a, a + 12) for wd in range(7) for a in (0, 12)]
+        guard = {"band": (10, 30)}
+        self.assertEqual(ba_dashboard._hire_bound(locker, [guard]), 3)
+
+    def test_the_review_s_counts(self):
+        """Seed 573 needs 4 hires on its demand plan and 9 on its open-hours
+        plan; seeds 30 and 77, planned again from a week of their own at half
+        the customers, 7 and 13 on full cover."""
+        row, _ = plan_with(scenario(random.Random(1573)))
+        self.assertEqual(sum(h["hire"] for h in row["headcount"].values()), 4)
+        self.assertEqual(sum(h["hire"] for h in row["openCover"]["headcount"].values()), 9)
+        for n, want in ((30, 7), (77, 13)):
+            sc = scenario(random.Random(1000 + n))
+            row, _ = plan_with(sc)
+            week = current_from(row, row, random.Random(n))
+            again, _ = plan_with(sc, week, {h: c // 2 for h, c in sc["hourly"].items()})
+            self.assertEqual(sum(h["hire"] for h in again["fullCover"]["headcount"].values()),
+                             want, n)
+
     def test_the_review_s_three_shops_hire_what_main_did(self):
         """Main at 77a2375 hired 2, 2 and 5 people for these demand plans."""
         for n, main in ((154, 2), (185, 2), (212, 5)):

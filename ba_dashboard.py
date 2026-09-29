@@ -7283,28 +7283,27 @@ def _placeholder(skill, n: int) -> dict:
     }
 
 
-def _hire_bound(lines: list, rows: list, people: list) -> int:
-    """Where the search for the number of hires starts: the least that could work the open lines.
+def _hire_bound(lines: list, people: list) -> int:
+    """The fewest hires a role's week could need: where the search for the count starts.
 
-    Their hours over what one hire can hold in a week: 50, or where every
-    line of the role is L hours long, the most whole lines of L under 50 (48
-    in twelve-hour lines). And the lines crowding one hour, or one day's
-    twelve-hour stints, or its lines over six hours (no two of which fit one
-    person's day), less what the people here who may work the role could
-    take of them by swapping their own days: each takes at most one line at
-    a time and twelve hours a day. The lines' crowding alone is no bound --
-    it is where the one-at-a-time fill happened to leave them, and the swaps
-    spread them over the week (a law firm's 267 open hours all on a Friday,
-    22 of them at one hour, are six people's work, not 22) -- but with
-    nobody to swap with, it is. The count rises from here while a line is
-    left open.
+    `lines` are all the week's lines of the role, open or held; `people` the
+    people here who may work it. Each term holds whoever holds which line and
+    however lines are cut between people:
+
+    - every hour of the lines is worked by somebody here, at most their band's
+      ceiling (50 without one) each, or by a hire, at most 50 each;
+    - every hour of one day's lines by somebody working at most 12 hours that
+      day;
+    - and the lines running at one hour by as many people at that hour, one
+      line each.
+
+    Nothing about where the one-at-a-time fill left the open lines is a
+    bound: the swaps spread them over the week (a law firm's 267 open hours
+    all on a Friday, 22 of them at one hour, are six people's work, not 22).
     """
-    lengths = {s["to"] - s["from"] for s in rows if s["skill"] == lines[0]["skill"]}
-    week = FULL_TIME[1]
-    if len(lengths) == 1:
-        length = next(iter(lengths))
-        week = max(length, FULL_TIME[1] // length * length)
-    bound = math.ceil(sum(s["to"] - s["from"] for s in lines) / week)
+    hours = sum(s["to"] - s["from"] for s in lines)
+    held = sum((person["band"] or FULL_TIME)[1] for person in people)
+    bound = math.ceil(max(0, hours - held) / FULL_TIME[1])
     helpers = len(people)
     for wd in range(7):
         day = [s for s in lines if s["wd"] == wd]
@@ -7312,10 +7311,8 @@ def _hire_bound(lines: list, rows: list, people: list) -> int:
             continue
         bound = max(bound, math.ceil(sum(s["to"] - s["from"] for s in day) / SHIFT_CAP) - helpers)
         at = max(sum(1 for s in day if s["from"] <= hour < s["to"]) for hour in range(24))
-        # Two lines over half the 12-hour day never share one person's day.
-        long = sum(1 for s in day if 2 * (s["to"] - s["from"]) > SHIFT_CAP)
-        bound = max(bound, at - helpers, long - helpers)
-    return bound
+        bound = max(bound, at - helpers)
+    return max(bound, 0)
 
 
 def _fill_hole(row: dict, pool: list, state: dict, here: dict) -> bool:
@@ -7548,17 +7545,19 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
     above other people's floors, but nobody already here is reshuffled for
     their own sake.
 
-    N starts at the least the open lines allow (_hire_bound()). At each N
-    the lines are dealt five ways -- the weekend's lines first, then
+    N starts at the fewest the role's week could need (_hire_bound()). The
+    tries are ten: the lines dealt five ways -- the weekend's lines first,
+    which comes first so the other hires keep their weekends free, then
     HIRE_PACKINGS: by the clock or the longest line of each day first, first
     fit or balanced -- and the five again after the open lines are spread off
-    the days they crowd by swapping days with the staff (_spread_open()).
-    Each deal is asked first on its own, and the first that covers every
-    line is settled; where none does, the weekend-first deal is settled
-    with and without the spread, since the swaps can cover what a deal
-    cannot. N rises for a skill no try covered, up to one hire per open line,
-    which always covers them. The fewest people first, as for everybody;
-    deterministic throughout, each try starting from the week as it was.
+    the days they crowd by swapping days with the staff (_spread_open(); left
+    out with nobody to swap with). A deal alone is cheap, so the least N some
+    deal covers is searched by halves between the bound and what first fit
+    takes; below that, every try is settled, a skill at a time and one fewer
+    at a time, while the swaps still cover every line. The week kept is the
+    first try, in that order, that covers at the N found. The fewest people
+    first, as for everybody; deterministic throughout, each try starting
+    from the week as it was.
 
     A hire week is `{"hours", "busy", "slots"}`, the slots being the week's
     own rows, which then have nobody on them again (`p: null` on the page).
@@ -7569,7 +7568,8 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
             holes[row["skill"]].append(row)
     limit = {skill: len(rows) for skill, rows in holes.items()}
     count = {
-        skill: min(_hire_bound(rows, shifts, [p for p in pool if _usable(p, skill, rows[0]["kind"])]),
+        skill: min(_hire_bound([row for row in shifts if row["skill"] == skill],
+                               [p for p in pool if _usable(p, skill, rows[0]["kind"])]),
                    limit[skill])
         for skill, rows in holes.items()
     }
@@ -7612,41 +7612,99 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
         left = {row["skill"] for row in rows if row["employee"] is None}
         return hires, rows, left
 
-    tries = [(packing, spread) for spread in (False, True)
+    # The spread swaps days with the people here who may work a role: with
+    # nobody of the kind, the tries with it are the tries without it again.
+    spreads = (False, True) if any(
+        _usable(person, rows[0]["skill"], rows[0]["kind"])
+        for rows in holes.values() for person in pool) else (False,)
+    tries = [(packing, spread) for spread in spreads
              for packing in (WEEKEND_FIRST,) + HIRE_PACKINGS]
-    while True:
-        # Every deal is asked first on its own: one that covers every line
-        # needs no swap, and the settling never opens a line, so the first
-        # that covers is the one settled. Otherwise the swaps may still cover
-        # what no deal can, so the weekend-first deal is settled, with and
-        # without the spread, before the count rises -- for a skill no try
-        # covered.
-        covered, dealt = set(), None
+
+    def screen():
+        """The skills some try's deal alone covers, and the first try covering all."""
+        covered = set()
         for packing, spread in tries:
-            hires, rows, left = attempt(packing, spread, settle=False)
+            hires, _rows, left = attempt(packing, spread, settle=False)
             for hire in hires:
                 del state[hire["id"]]
             covered |= set(count) - left
             if not left:
-                dealt = (packing, spread)
-                break
-        settled = [dealt] if dealt else [(WEEKEND_FIRST, False), (WEEKEND_FIRST, True)]
-        for packing, spread in settled:
-            hires, rows, left = attempt(packing, spread)
-            if not left:
-                break
-            covered |= set(count) - left
+                return covered, (packing, spread)
+        return covered, None
+
+    def settle_all():
+        """The skills some settled try covers, and the first try covering all."""
+        covered = set()
+        for packing, spread in tries:
+            hires, _rows, left = attempt(packing, spread)
             for hire in hires:
                 del state[hire["id"]]
-        if not left:
+            covered |= set(count) - left
+            if not left:
+                return covered, (packing, spread)
+        return covered, None
+
+    # 1. The least count a deal alone covers, per skill, searched by halves
+    #    between the bound and what first fit by the clock takes with a hire
+    #    for every line (which always covers). A deal is cheap: nothing is
+    #    settled.
+    start = dict(count)
+    count.update(limit)
+    hires, first_fit, _left = attempt(HIRE_PACKINGS[0], False, settle=False)
+    for hire in hires:
+        del state[hire["id"]]
+    skill_of = {hire["id"]: hire["skill"] for hire in hires}
+    used = collections.Counter(
+        skill_of[pid] for pid in {row["employee"] for row in first_fit} if pid in skill_of)
+    count.update(start)
+    failed = {skill: count[skill] - 1 for skill in count}
+    enough = {skill: max(used[skill], count[skill]) for skill in count}
+    step = {skill: 1 for skill in count}
+    while True:
+        todo = [skill for skill in count
+                if enough[skill] is None or enough[skill] - failed[skill] > 1]
+        if not todo:
             break
-        grow = [skill for skill in _in_order(set(count) - covered)
-                if count[skill] < limit[skill]]
-        if not grow:
-            grow = [skill for skill in _in_order(left) if count[skill] < limit[skill]]
-        if not grow:
-            hires, rows, left = attempt(HIRE_PACKINGS[0], False)
+        for skill in count:
+            if skill not in todo:
+                count[skill] = enough[skill]
+            elif enough[skill] is None:
+                count[skill] = min(limit[skill], failed[skill] + step[skill])
+            else:
+                count[skill] = (failed[skill] + enough[skill]) // 2
+        covered, _ = screen()
+        for skill in todo:
+            if skill in covered or count[skill] >= limit[skill]:
+                enough[skill] = count[skill]
+            else:
+                failed[skill] = count[skill]
+                step[skill] *= 2
+    # 2. Below it, a count the swaps can still cover: every try settled, a
+    #    skill at a time, one fewer while some try covers every line.
+    count.update(enough)
+    for skill in _in_order(count):
+        while count[skill] > start[skill]:
+            count[skill] -= 1
+            _covered, found = settle_all()
+            if found is None:
+                count[skill] += 1
+                break
+    # 3. The week at that count: the first covering deal settled, or the
+    #    first covering settled try; where neither covers (the tries do not
+    #    cover in step with the count), the count rises for what is left.
+    while True:
+        _covered, found = screen()
+        if found is None:
+            _covered, found = settle_all()
+        if found is not None:
+            hires, rows, left = attempt(*found)
             break
+        hires, rows, left = attempt(HIRE_PACKINGS[0], False)
+        grow = [skill for skill in _in_order(left) if count[skill] < limit[skill]]
+        if not left or not grow:
+            break
+        for hire in hires:
+            del state[hire["id"]]
         for skill in grow:
             count[skill] += 1
     _absorb_scraps(rows, hires, pool, state, here)
@@ -8111,7 +8169,7 @@ def _fill_by_exchange(shifts: list, pool: list, state: dict, rostered: set) -> i
     by_id = {person["id"]: person for person in pool}
     people = [by_id[pid] for pid in sorted(rostered, key=str) if pid in by_id]
     clock = lambda s: (s["wd"], s["from"], s["to"], str(s["station"]))  # noqa: E731
-    # Who on the roster could take each entry off its giver, by the entry, and
+    # Who on the roster could take each entry off its giver, by the entry's shape, and
     # everybody's entries in clock order. Neither depends on the line being
     # filled, only on the weeks, and the weeks only move when a line is placed:
     # a line nobody could be swapped onto leaves both standing for the next
@@ -8150,13 +8208,14 @@ def _fill_by_exchange(shifts: list, pool: list, state: dict, rostered: set) -> i
                     continue
                 if not _keeps_floors(giver, state[giver["id"]], trial, hole):
                     continue
-                if id(given) not in takers:
-                    takers[id(given)] = next(
-                        (q for q in may_take(given)
-                         if q["id"] != giver["id"] and _has_room(q, state[q["id"]], given)),
-                        None,
-                    )
-                taker = takers[id(given)]
+                # Whoever may take an entry depends on its shape alone, so the
+                # first two with room are kept a shape: one of them is not
+                # the giver.
+                shape = _slot_shape(given)
+                if shape not in takers:
+                    room = (q for q in may_take(given) if _has_room(q, state[q["id"]], given))
+                    takers[shape] = [q for q, _ in zip(room, range(2))]
+                taker = next((q for q in takers[shape] if q["id"] != giver["id"]), None)
                 if taker is None:
                     continue
                 _hand_over(given, giver, taker, state, shifts)
@@ -23778,7 +23837,7 @@ function spRosterCount(c){
       {label: spEsc(label), n: h.needed, band})} · <b>${here}</b>${h.hire > h.max && h.max >= h.min
         ? `: ${tt("sp.hc.over", "more people than those hours would pay a full week, because nobody may work more than twelve hours in a day")}` : ""}${h.spare
         ? ` · ${tt("sp.hc.spare.read", "<b>{n} with no hours in this plan</b>: this site has no week for them", {n: h.spare})}` : ""}${isNew
-        ? ` · ${tt("sp.hc.new", "<b>{n} h a week of new wages</b>, the least a full-time hire may be given: nobody covers this locker today", {n: h.hireHours})}` : ""}`;
+        ? ` · ${tt("sp.hc.newhours", "<b>{n} h a week of new wages</b>, the hours the hires would work: nobody covers this locker today", {n: h.hireHours})}` : ""}`;
     return `<span${isNew ? ` class="sp-new"` : ""} tabindex="0" data-tip="${attr(spEsc(label))}" data-read="${
       attr(read)}"><span class="sp-code">${
       spEsc(codes[si])}</span><span class="sp-dots">${dots(have)}${dots(bench, "sp-bench")}${
