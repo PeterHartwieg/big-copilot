@@ -160,10 +160,18 @@ class OutfitTests(unittest.TestCase):
         prices = {"items": {"ba:itemname_screen": {"p": 2800}, "ba:itemname_seat": {"p": 250},
                             "ba:itemname_row": {"p": 800}, "ba:itemname_armchair": {"p": 100}}}
         lines = {(l["item"], l["group"]): l["qty"] for l in outfit_lines(cinema, rules, prices, [100, 150], 2000)}
-        # Four screens for 100 an hour at 25 each; 25 seats each, as rows of 4 (200 a seat): 7 rows a screen.
+        # Four screens for 100 an hour at 25 each; 25 seats each for the least:
+        # six rows of 4 and one single (5,050) beat seven rows (5,600).
         self.assertEqual(lines[("ba:itemname_screen", "req")] + lines[("ba:itemname_screen", "cap")], 4)
-        self.assertEqual(lines[("ba:itemname_row", "cap")], 28)
+        self.assertEqual((lines[("ba:itemname_row", "cap")], lines[("ba:itemname_seat", "cap")]), (24, 4))
         self.assertNotIn(("ba:itemname_armchair", "cap"), lines)
+
+    def test_each_venue_version_keeps_its_own_capacity(self):
+        # 15 Third Avenue is an S3; 4 Broadway Street an S1.
+        self.assertEqual(ba_dashboard.plan_layout({"key": "ba:street_thirdavenue#15", "layout": None, "size": "S"}), "S3")
+        self.assertEqual(ba_dashboard.plan_layout({"key": "ba:street_broadwaystreet#4", "layout": None, "size": "S"}), "S1")
+        text = chr(10).join(["**Cinema**", "* **S1**: 2,000m / 150 customer capacity", "* **S3**: 2,000m / 100 customer capacity"])
+        self.assertEqual(ba_dashboard._venue_caps(Names({"help_building_types_content": text})), {"S1": 150, "S3": 100})
 
     def test_a_gym_holds_five_distinct_workout_types_the_cheapest_way(self):
         gym = "ba:businesstype_gym"
@@ -312,6 +320,10 @@ class MarketTests(unittest.TestCase):
         root = {"productMarketEntries": coll([entry]), "BuildingRegistrations": coll([])}
         got = ba_dashboard._store_market(Save(root, {}, "synthetic"), self.RULES, {"ba:itemname_beer"}, 1.0, 0)
         self.assertEqual(got["ba:itemname_beer"]["hoods"]["ba:neighborhood_midtown"], [0, 0, None, 33])
+        # A save without the field (older than build 3675) sends None.
+        del entry["demandValues"]["$items"][0]["lastDaySold"]
+        got = ba_dashboard._store_market(Save(root, {}, "synthetic"), self.RULES, {"ba:itemname_beer"}, 1.0, 0)
+        self.assertIsNone(got["ba:itemname_beer"]["hoods"]["ba:neighborhood_midtown"][3])
 
     def test_the_players_own_price_counts_stocked_or_not_and_a_rivals_unstocked_price_does_not(self):
         got = self.market(self.shop(5, 3.0, stocks=False, mine=True), self.shop(9, 2.0, stocks=False, rival="r1"))

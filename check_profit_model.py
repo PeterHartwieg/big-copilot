@@ -71,12 +71,14 @@ def modded(save, path: str) -> bool:
     """Whether a mod that could change what shops earn ran on this save: one
     active at the last save (the .hsg.meta's activeModsAtLastSave) that is
     not in HARMLESS_MODS. The save's own hasEverUsedMods is not the test: Big
-    Copilot Link alone sets it, as it does on nearly every save that links."""
+    Copilot Link alone sets it, as it does on nearly every save that links;
+    it decides only where the meta is missing or unreadable."""
     try:
         with open(path + ".meta", encoding="utf-8-sig") as fh:
             active = json.load(fh).get("activeModsAtLastSave") or []
     except (OSError, ValueError):
-        active = []
+        # No readable meta: the save's own flag is all there is to go on.
+        return bool(save.root.get("hasEverUsedMods"))
     words = [f"{m.get('modDisplayName') or ''} {m.get('modId') or ''}" for m in active]
     return any(not any(h in w for h in HARMLESS_MODS) for w in words)
 

@@ -170,3 +170,15 @@ test('a cinema or a theatre shows its investment and no estimate', () => {
   assert.equal(est.inv.firm, 1600, 'kept by the building\'s size, having no layout');
   assert.match(est.none, /screens, seats and actors/);
 });
+
+test('a store that pays back in a day or two keeps its two investment labels on opposite edges', () => {
+  const ctx = model(RETAIL);
+  Object.assign(ctx, {fmt: n => `$${Math.round(n)}`, money: n => `$${Math.round(n)}`, attr: s => s});
+  const m = {revenue: 12000, cogs: 2000, wages: 500, rent: 200, marketing: 300, profit: 9000};
+  const est = {profit: m.profit, inv: {firm: 12000, self: 10000}, day: k => ctx.osDayProfit(m, null, k)};
+  const svg = vm.runInContext('osChart', ctx)(est, 'firm');
+  const label = cls => (svg.match(new RegExp(`<text class="lbl ${cls}"[^>]*>`)) || [''])[0];
+  const w = label('w'), i = label('i');
+  assert.ok(w && i, 'both labels drawn');
+  assert.notEqual(/text-anchor="end"/.test(w), /text-anchor="end"/.test(i), `${w} ${i}`);
+});

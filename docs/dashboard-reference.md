@@ -843,8 +843,9 @@ never suggests opening a store on its own.
   cheapest display for the building's customers an hour;
 - what a station must be attached to, one piece per placement requirement: a computer
   takes a desk and a chair, from its own store where that store sells one;
-- a cinema's or a theatre's seats, made for the venue, enough for the building's customers
-  an hour, shared across a cinema's screens;
+- a cinema's or a theatre's seats, made for the venue, enough for its version's customers an
+  hour (S1 150 down to S3 100; R1 200 down to R3 150), shared across a cinema's screens, in the
+  cheapest mix of rows and single seats;
 - only items a furniture store sells, and, where the game says what an item is for, only
   items made for this type (those tags only sort the catalogue, so an item that answers a
   customer demand, such as a speaker or a sink, is any a store sells);
@@ -894,7 +895,8 @@ the game's own arithmetic for a store run well, not an average of your other sto
   four after it; rent, wages and marketing are paid in full. The first store in a
   neighbourhood to sell a product nobody has sold there for 21 days gets +20 demand on it for
   14 days; the plan counts that for every product nobody sells there now and nobody has sold
-  for 21 days (the save's last day sold). The days to break even add the running profit up day
+  for 21 days (the save's last day sold; a save older than build 3675, which lacks it, counts
+  a product nobody sells as never sold). The days to break even add the running profit up day
   by day.
 - Cinemas and theatres show the investment only: their screens, seats and actors cap them in
   ways the rules here do not follow.
