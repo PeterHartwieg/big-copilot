@@ -31,6 +31,7 @@ plan's; that a hire week reaches thirty hours (it is counted, not required);
 and, for a kept week, which of the person's current shifts it keeps.
 """
 import collections
+import contextlib
 import json
 import math
 import os
@@ -756,9 +757,9 @@ class HireCountTest(unittest.TestCase):
 
     def test_round_four_s_counts(self):
         """Seed 133, planned again from a week of its own at half the
-        customers, hires 6 on its demand plan (7 once the swaps were asked of
-        short deals only); the twelfth of the offices of Random(119) hires 8
-        (10 with the descent over six tries)."""
+        customers, hires 6 on its demand plan, and the twelfth of the offices
+        of Random(119) 8: 7 and 10 while the swaps were asked only of deals
+        that left six lines or fewer."""
         sc = scenario(random.Random(1133))
         row, _ = plan_with(sc)
         week = current_from(row, row, random.Random(133))
@@ -768,6 +769,74 @@ class HireCountTest(unittest.TestCase):
             if n == 11:
                 self.assertEqual([sum(h["hire"] for h in row["headcount"].values())
                                   for row in rows], [8])
+
+    def office_hires(self, seed, n):
+        for index, rows in random_offices(seed, n + 1):
+            if index == n:
+                return [sum(h["hire"] for h in row["headcount"].values()) for row in rows]
+
+    def test_the_descent_asks_all_ten_tries(self):
+        """The fifth office of Random(133) hires 3: 4 with the descent below
+        the dealt count over six of the ten tries."""
+        self.assertEqual(self.office_hires(33, 4), [3])
+
+    def cuts_kept(self):
+        """(hires, lines cut) of each week _place_hires() returns, while patched."""
+        real_split, real_place = ba_dashboard._split_open, ba_dashboard._place_hires
+        cut, seen = {}, []
+
+        def split(rows, *rest):
+            before = len(rows)
+            real_split(rows, *rest)
+            cut.setdefault(id(rows), []).extend(rows[before:])
+
+        def place(*args):
+            cut.clear()
+            rows, weeks = real_place(*args)
+            kept = [piece for piece in cut.get(id(rows), ()) if any(piece is r for r in rows)]
+            seen.append((sum(len(found) for found in weeks.values()), len(kept)))
+            return rows, weeks
+
+        stack = contextlib.ExitStack()
+        stack.enter_context(unittest.mock.patch.object(ba_dashboard, "_split_open", split))
+        stack.enter_context(unittest.mock.patch.object(ba_dashboard, "_place_hires", place))
+        return stack, seen
+
+    def test_no_line_is_cut_where_whole_lines_and_the_swaps_cover(self):
+        """Round 5: seeds 143 and 16, planned again from a week of their own
+        at half the customers, hire 8 and 5 on full cover with every line
+        whole; the week kept used to cut lines the swaps covered whole."""
+        for n, want in ((143, 8), (16, 5)):
+            sc = scenario(random.Random(1000 + n))
+            row, _ = plan_with(sc)
+            week = current_from(row, row, random.Random(n))
+            stack, seen = self.cuts_kept()
+            with stack:
+                again, _ = plan_with(sc, week, {h: c // 2 for h, c in sc["hourly"].items()})
+            self.assertEqual(sum(h["hire"] for h in again["fullCover"]["headcount"].values()),
+                             want, n)
+            self.assertEqual([pair for pair in seen if pair[1]], [], n)
+
+    def test_the_week_kept_cuts_in_the_order_that_covered(self):
+        """Round 5: the first office of Random(102) hires 19; cutting before
+        the swaps where the cut after them covered left it at 20."""
+        self.assertEqual(self.office_hires(2, 0), [19])
+
+    def test_a_shorter_piece_where_the_longest_clashes(self):
+        """Round 5: a 00-12 line and two hires at 44 and 43 hours, one at
+        work 05-09 that day and the other 00-04: the longest pieces (6 and 7
+        hours from 00) clash, the cut at 05 fits, 5 hours and 7."""
+        line = dict(self.line(2, 0, 12), employee=None, name=None)
+        one = ba_dashboard._placeholder(SERVICE, 0)
+        two = ba_dashboard._placeholder(SERVICE, 1)
+        state = {one["id"]: ba_dashboard._fresh_state(), two["id"]: ba_dashboard._fresh_state()}
+        for hire, hours, busy in ((one, 44, range(5, 9)), (two, 43, range(0, 4))):
+            state[hire["id"]].update(hours=float(hours), days={2})
+            state[hire["id"]]["busy"][2] = set(busy)
+        rows = [line]
+        ba_dashboard._split_open(rows, [one, two], state, {"rostered": set()})
+        self.assertEqual(sorted((r["from"], r["to"], r["employee"]) for r in rows),
+                         [(0, 5, one["id"]), (5, 12, two["id"])])
 
     def test_the_review_s_three_shops_hire_what_main_did(self):
         """Main at 77a2375 hired 2, 2 and 5 people for these demand plans."""
