@@ -300,28 +300,6 @@
    "worth": null
   },
   {
-   "group": "promotion",
-   "i18n": {
-    "text": [
-     "f.promotion",
-     {
-      "marketing": 0.0,
-      "n": 20.0,
-      "promotion": 80.0,
-      "site": "HART. Gifts",
-      "traffic": 50.0
-     }
-    ]
-   },
-   "id": "f2450926c3",
-   "level": "warn",
-   "site": "HART. Gifts",
-   "siteKey": "ba:street_broadwaystreet#19",
-   "text": "HART. Gifts promotes at 80.0% of the 100% cap: 50.0% foot traffic and 0.0% marketing. The address sets the foot traffic, so the missing 20.0 points have to come from campaigns",
-   "unit": "",
-   "worth": null
-  },
-  {
    "ev": {
     "slug": "ba:itemname_cheapgift"
    },
@@ -457,6 +435,34 @@
    "site": "HART. Brewery",
    "siteKey": "ba:street_eighthavenue#8",
    "text": "⟦ba:itemname_beer|Beer⟧ machine at list position 1 is staffed 84 of 168 hours; nobody on it Mon-Sun 0-8, 20-24; 300 a day not made",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "promotion",
+   "i18n": {
+    "text": [
+     "f.promotion.visit",
+     {
+      "agencies": {
+       "m": [
+        "f.list.last",
+        {
+         "a": "CityAds",
+         "b": "McCain's eMarketing"
+        },
+        "CityAds, McCain's eMarketing"
+       ]
+      },
+      "sites": "HART. Gifts"
+     }
+    ]
+   },
+   "id": "e03ef5477e",
+   "level": "info",
+   "site": "HART. Gifts",
+   "siteKey": "ba:street_broadwaystreet#19",
+   "text": "Visit CityAds, McCain's eMarketing once: no campaign can be set at HART. Gifts before that",
    "unit": "",
    "worth": null
   }
@@ -712,28 +718,6 @@
     "worth": null
    },
    {
-    "group": "promotion",
-    "i18n": {
-     "text": [
-      "f.promotion",
-      {
-       "marketing": 0.0,
-       "n": 20.0,
-       "promotion": 80.0,
-       "site": "HART. Gifts",
-       "traffic": 50.0
-      }
-     ]
-    },
-    "id": "f2450926c3",
-    "level": "warn",
-    "site": "HART. Gifts",
-    "siteKey": "ba:street_broadwaystreet#19",
-    "text": "HART. Gifts promotes at 80.0% of the 100% cap: 50.0% foot traffic and 0.0% marketing. The address sets the foot traffic, so the missing 20.0 points have to come from campaigns",
-    "unit": "",
-    "worth": null
-   },
-   {
     "ev": {
      "slug": "ba:itemname_cheapgift"
     },
@@ -785,6 +769,34 @@
     "site": "HART. Gifts",
     "siteKey": "ba:street_broadwaystreet#19",
     "text": "⟦ba:itemname_umbrella|Umbrella⟧ is on no distribution plan: 30 left at 21/day",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "promotion",
+    "i18n": {
+     "text": [
+      "f.promotion.visit",
+      {
+       "agencies": {
+        "m": [
+         "f.list.last",
+         {
+          "a": "CityAds",
+          "b": "McCain's eMarketing"
+         },
+         "CityAds, McCain's eMarketing"
+        ]
+       },
+       "sites": "HART. Gifts"
+      }
+     ]
+    },
+    "id": "e03ef5477e",
+    "level": "info",
+    "site": "HART. Gifts",
+    "siteKey": "ba:street_broadwaystreet#19",
+    "text": "Visit CityAds, McCain's eMarketing once: no campaign can be set at HART. Gifts before that",
     "unit": "",
     "worth": null
    }
@@ -934,6 +946,7 @@
     "toiletprivacy": false
    },
    "basket": 9.38,
+   "campaigns": [],
    "capacity": 30,
    "closed": false,
    "code": "MT",
@@ -995,6 +1008,26 @@
    "margin": 42.2,
    "marketing": 0.0,
    "marketingIndex": 20.0,
+   "marketingPlan": {
+    "agencies": [],
+    "costNow": 0,
+    "costPlan": null,
+    "marketingNow": 20.0,
+    "marketingPlan": null,
+    "needsSetup": false,
+    "on": null,
+    "promotionNow": 120.0,
+    "promotionPlan": null,
+    "setupAgencies": [],
+    "setupTypes": [],
+    "target": null,
+    "visit": [
+     "ba:street_secondavenue#5",
+     "ba:street_thirdavenue#17"
+    ],
+    "visitRaises": true,
+    "was": []
+   },
    "missingAmenities": [
     "ba:customerdemand_toiletprivacy",
     "ba:customerdemand_music",
@@ -1248,6 +1281,7 @@
     "toiletprivacy": false
    },
    "basket": 18.0,
+   "campaigns": [],
    "capacity": 30,
    "closed": false,
    "code": "LM",
@@ -1302,6 +1336,26 @@
    "margin": 27.8,
    "marketing": 0.0,
    "marketingIndex": 0.0,
+   "marketingPlan": {
+    "agencies": [],
+    "costNow": 0,
+    "costPlan": null,
+    "marketingNow": 0.0,
+    "marketingPlan": null,
+    "needsSetup": false,
+    "on": null,
+    "promotionNow": 80.0,
+    "promotionPlan": null,
+    "setupAgencies": [],
+    "setupTypes": [],
+    "target": null,
+    "visit": [
+     "ba:street_secondavenue#5",
+     "ba:street_thirdavenue#17"
+    ],
+    "visitRaises": true,
+    "was": []
+   },
    "missingAmenities": [
     "ba:customerdemand_toiletprivacy",
     "ba:customerdemand_sink",
@@ -1534,6 +1588,7 @@
    "address": "4 Eighth Avenue",
    "amenities": null,
    "basket": null,
+   "campaigns": [],
    "capacity": 0,
    "closed": false,
    "code": "IC",
@@ -1565,6 +1620,7 @@
    "margin": null,
    "marketing": 0.0,
    "marketingIndex": 0,
+   "marketingPlan": null,
    "missingAmenities": [],
    "missingUniformLocker": false,
    "name": "HART. Hub",
@@ -1738,6 +1794,7 @@
    "address": "8 Eighth Avenue",
    "amenities": null,
    "basket": null,
+   "campaigns": [],
    "capacity": 0,
    "closed": false,
    "code": "IC",
@@ -1792,6 +1849,7 @@
    "margin": null,
    "marketing": 0.0,
    "marketingIndex": 0,
+   "marketingPlan": null,
    "missingAmenities": [],
    "missingUniformLocker": false,
    "name": "HART. Brewery",
@@ -7320,6 +7378,54 @@
    }
   ]
  },
+ "marketingAgencies": [
+  {
+   "address": "17 Third Avenue",
+   "closed": false,
+   "contact": false,
+   "hours": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ],
+   "key": "ba:street_thirdavenue#17",
+   "name": "McCain's eMarketing",
+   "open": false,
+   "opens": null,
+   "types": [
+    "SmallInternet",
+    "MediumInternet",
+    "LargeInternet"
+   ]
+  },
+  {
+   "address": "5 Second Avenue",
+   "closed": false,
+   "contact": false,
+   "hours": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ],
+   "key": "ba:street_secondavenue#5",
+   "name": "CityAds",
+   "open": false,
+   "opens": null,
+   "types": [
+    "SmallBillboard",
+    "MediumBillboard",
+    "LargeBillboard"
+   ]
+  }
+ ],
  "meta": {
   "build": 3671,
   "character": "PAYLOADco",

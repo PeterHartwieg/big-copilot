@@ -525,6 +525,8 @@ class FindingsHalfA(unittest.TestCase):
             stub("k0", "New", "retail", opened=59, staff=0),
             stub("k1", "Lease", "vacant"),
             shop("k2", "A", promotion=60, traffic=40, marketingIndex=20, customers=3, profit=-50.0, costCentre=False,
+                 marketingPlan={"on": ["SmallBillboard"], "was": [], "promotionNow": 60, "promotionPlan": 100,
+                                "costNow": 0, "costPlan": 500, "visit": []},
                  satisfaction={"overall": 70}, uniformGaps=["Cashier"], uniformGapSkills=["ba:skill_customerservice"],
                  staffLacking=2, staffLackingCompany=1, quitWarnings=1, staffDemands=[
                      {"slug": "ba:jobdemand_fulltime", "demand": "Full-time", "count": 2, "priority": 2,

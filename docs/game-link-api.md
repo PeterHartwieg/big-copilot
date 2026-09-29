@@ -109,7 +109,7 @@ state from the listener's threads.
   "busy": false,
   "size": 5123456,
   "refreshedAt": "2026-09-22T14:33:20Z",
-  "writes": ["uniforms", "imports", "schedule", "hire"],
+  "writes": ["uniforms", "imports", "schedule", "hire", "marketing"],
   "features": ["hire.reschedule", "hire.undo"],
   "paired": false
 }
@@ -125,7 +125,8 @@ state from the listener's threads.
   than the served bytes.
 - `writes` lists the write kinds this mod accepts (see "Writes" below); a mod before 0.2.0
   sends no `writes`, which a client reads as `[]`. Mod 0.2.0 lists `uniforms`, `imports`,
-  `schedule`; 0.3.0 adds `hire`, and a client offers a kind only when it is listed. `paired` is true only when this request
+  `schedule`; 0.3.0 adds `hire`; 0.4.0 adds `marketing`. A client offers a kind only when it
+  is listed, and tells the player to update the mod when the kind is missing. `paired` is true only when this request
   carried a token the game approved for its origin, so a poll without one always says
   false. Both are
   additive: `schemaVersion` stays 1.
@@ -193,8 +194,10 @@ Mod 0.2.0 and later. Three kinds change the game — `uniforms`, `imports`, `sch
 and a fourth undoes the last write of a kind. Mod 0.3.0 adds `hire`, which hires candidates,
 moves staff between sites and writes their weeks in one call. Mod 0.4.0 lets that call carry
 the weeks of sites no hire or move reaches, and undoes it in one step (`features`
-`hire.reschedule` and `hire.undo`); before 0.4.0 a hire has no undo. The scope and the game rules behind each are
-`docs/mod-write-back-scope.md`; this section is only the wire.
+`hire.reschedule` and `hire.undo`); before 0.4.0 a hire has no undo. Mod 0.4.0 also adds `marketing`, which sets the marketing
+campaigns each site runs. The scope and the game rules behind each are
+`docs/mod-write-back-scope.md` (`docs/marketing-write-scope.md` for `marketing`); this
+section is only the wire.
 
 **Every write** is `POST /write/<kind>` with a JSON body (`Content-Type: application/json`,
 at most 256 KiB, a `hire` body at most 2 MiB, else `413 {"error":"too_large"}`) and the header
@@ -675,6 +678,133 @@ already undone). A dry run answers the verdict with `200`, `ok` false and the ro
 - Then `MarkChange()`, one notification ("Big Copilot undid the staffing change"), a refresh,
   and the `hire` kind's undo is gone: an undo is not itself undoable.
 
+#### `POST /write/marketing`
+
+Mod 0.4.0 and later. Sets which marketing campaigns each site runs, and sets the site up so
+BizMan's Marketing page shows every switch for it. The scope and the game rules behind it are
+`docs/marketing-write-scope.md`.
+
+```json
+{"dryRun": true,
+ "expect": {"character": "58e6a328-…", "company": "HART. YT"},
+ "sites": [{"address": {"street": "ba:street_secondavenue", "number": 12},
+            "on": ["SmallInternet", "SmallBillboard"],
+            "was": ["SmallBillboard", "LargeInternet"]}]}
+```
+
+- Types are named as the game's enum `Entities.MarketingTypeName` names them: `SmallInternet`,
+  `MediumInternet`, `LargeInternet`, `SmallBillboard`, `MediumBillboard`, `LargeBillboard`. Any
+  other name is `400`; a name listed twice counts once.
+- `on` is the full set of types the site runs after the write. Every other campaign of the
+  site is **disabled, never removed**, as the phone's switches do it.
+- `was` is the set of types the page read as running (a type runs when at least one of the
+  site's campaigns of that type is enabled). It is the compare-and-set: when the game's set
+  differs, the row answers `changed`.
+- `expect` is the uniforms write's same-save guard, unchanged: a `character` or `company` that
+  differs from the loaded game answers every row `changed`, before `not_found`.
+- `on` and `was` are both required; one site twice is `400`.
+
+**Which agency.** For each type, the agency the site already has a campaign of that type with
+(the enabled one when there are two). Otherwise the first agency, walking the city's buildings
+(`BuildingHelper.allBuildings`), whose `MarketingAgencySettings.marketingTypesAvailable` offers
+the type. The map is the same in every save: Third Ave 17 sells the three internet types and
+Second Ave 5 the three billboards.
+
+**Existing switches any time; new ones only through known, open agencies.** A campaign entry
+the site already has (a switch in BizMan) is turned on or off at any time, as the phone does,
+whatever its agency. Only a **new** entry needs its agency to be **usable**: a phone contact (an
+entry of `GameInstance.Contacts` whose address is the agency's: the player has visited it
+once) and open now, by the game's own `BusinessHelper.IsBusinessOpen(reg, -1)`: not
+`temporarilyClosed`, today's `ScheduleDay` open, and the current hour inside one of its
+opening slots. The mod never adds a contact. A type in `on` that the site has no entry for,
+and that no usable agency sells, refuses the row `no_contact` or `agency_closed`, naming the
+first agency that sells it, and nothing is written.
+
+**Set-up, on every apply.** It replaces the call and the chat, not the first visit: the site
+gets a campaign entry for every type each **usable** agency offers, the ones not in `on`
+disabled. An agency that is not usable gets no new entries, and that alone refuses nothing:
+the row lists those switches in `waiting`. A
+disabled entry costs nothing: billing, reach and the billboards in the world count enabled
+campaigns only. After one write BizMan shows the full set of switches for that site's known
+agencies, and the player can change them by hand from then on. The write adds no chat
+messages.
+
+**Then**, on an apply: `BusinessHelper.UpdatePromotion` for each site, and the game event
+`ba:gameevent_newmarketing` once when the write turned any campaign on. The notification
+reads "Big Copilot updated marketing at <business>".
+
+```json
+{"ok": true, "kind": "marketing", "dryRun": true,
+ "rows": [{"address": {}, "business": "Costy Co 2",
+           "before": {"on": ["LargeInternet", "SmallBillboard"], "dailyCost": 1000.0,
+                      "promotion": {"trafficIndex": 40, "marketing": 53, "total": 77}},
+           "on": ["SmallInternet", "SmallBillboard"], "dailyCost": 600.0,
+           "promotion": {"trafficIndex": 40, "marketing": 50, "total": 75},
+           "turnedOn": ["SmallInternet"], "turnedOff": ["LargeInternet"],
+           "entriesAdded": ["SmallInternet", "MediumInternet", "MediumBillboard", "LargeBillboard"],
+           "campaigns": [{"type": "SmallInternet", "agency": {"street": "ba:street_thirdavenue", "number": 17},
+                          "enabled": true}],
+           "waiting": [{"type": "MediumBillboard",
+                        "agency": {"name": "CityAds", "address": {"street": "ba:street_secondavenue", "number": 5}},
+                        "opens": {"day": 36, "hour": 8}}],
+           "error": null, "agency": null, "opens": null}]}
+```
+
+- `before` is the site as the game holds it: the running types, `dailyCost` (the game's
+  `GetDailyMarketingExpenses`, $ a day) and `promotion` as the registration stores it.
+- `on`, `dailyCost` and `promotion` are the site after the write. After an apply `promotion` is
+  what `UpdatePromotion` wrote; a dry run answers the mod's reckoning of the same formula
+  (`GetMarketingEfficiency` over the planned set, then `UpdatePromotion`'s total), so the page
+  can hold it against its own plan.
+- `turnedOn` and `turnedOff` are the types whose running state the write changes.
+- `entriesAdded` lists the types the set-up adds as entries (disabled unless in `on`).
+  `campaigns` is every entry of the site after the write, in enum order, with its agency and
+  `enabled`.
+- `waiting` lists, in enum order, the switch entries the set-up would add but skipped because
+  no agency that sells the type is usable now: a type the site has no entry for and that is
+  not in `on`. Each names the first agency that sells it and `opens` as for `agency_closed`
+  (null when that agency is not a contact, or is temporarily closed). It is the game's own
+  answer to "why is this switch missing", so the page need not guess from its clock. Empty
+  when nothing was skipped, on every refused row, and on every undo row (an undo adds no
+  entries). Additive: `schemaVersion` stays 1.
+- Row `error`, in the order checked: `changed` (another save, as above), `not_found` (no
+  registration at that address), `changed` (`was` differs from the game), `not_rented`,
+  `no_business` (no business, or `ba:businesstype_empty`), `no_promotion` (the building type
+  has no `hasmarketingpromotion` tag, so the game never scores its campaigns: a warehouse or a
+  factory), `no_agency` (no agency in the city offers a type in `on`), then, for the first
+  type in `on` (in type order) that needs a new entry and that no usable agency sells,
+  `no_contact` (its first seller is not a phone contact) or `agency_closed` (a contact,
+  closed now). Switching an existing entry never answers either. A type outside `on` that no agency offers gets no
+  entry and is no error. A refused row answers `before`, and `on`, `dailyCost` and
+  `promotion` as they are now, with every list empty.
+- `agency` and `opens` are on every row, null except for those two errors:
+
+  ```json
+  {"error": "no_contact",
+   "agency": {"name": "CityAds", "address": {"street": "ba:street_secondavenue", "number": 5}},
+   "opens": null}
+  {"error": "agency_closed",
+   "agency": {"name": "CityAds", "address": {"street": "ba:street_secondavenue", "number": 5}},
+   "opens": {"day": 36, "hour": 8}}
+  ```
+
+  `opens` is the next whole hour, after the current one, at which the agency is open by its
+  registration's `scheduleDays` (the weekday of a game day is `(day - 1) % 7 + 1`, Monday 1 to
+  Sunday 7), looking eight days ahead; null while it is `temporarilyClosed` (nothing says until
+  when) or with no opening in that time.
+- An apply with any row error answers `409` with the rows, `changed` when any row's error is
+  `changed`, else `refused`. Nothing is written.
+- **An apply that switches nothing** (every site already runs its `on`) still does the set-up,
+  answers `200` with a stamp, and leaves nothing to undo.
+- **Undo.** `POST /write/undo {"kind": "marketing"}` puts back the enabled flag of each campaign
+  the last marketing write switched, where it still holds what the write left; a campaign the
+  write added and turned on is disabled again. The entries the set-up added stay, since they
+  cost nothing. An undo only switches existing entries, so it never looks at the agency: it
+  goes through whether the agency is a contact or open. A campaign switched by hand since (or
+  gone) answers `changed` for its site, and nothing is undone (a dry run `200` with `ok`
+  false, an apply `409 changed`); the undo stays available. The answer is the write's, with `"undo": true`, `before` the state the undo
+  found, and `entriesAdded` empty.
+
 #### `POST /write/undo`
 
 ```json
@@ -686,7 +816,8 @@ the target still holds what that write left there: uniforms only on the skills i
 still holding its preset; imports the amounts, running state, Repeating, urgent flag, next
 delivery day and plan order; the schedule the shifts and, when it opened them, the
 opening hours, after checking the restored shifts as a write would (a person moved away
-or a station sold since answers `changed`). Answers like the write it undoes, with `"undo": true`: uniforms list the
+or a station sold since answers `changed`); marketing the enabled flags its write switched.
+Answers like the write it undoes, with `"undo": true`: uniforms list the
 skills it cleared in `set`; imports and schedule answer `before` as the state the undo
 found and the values as they now stand;
 `409 {"error":"nothing_to_undo"}` when there is none; `409 {"error":"changed"}` when the
@@ -699,7 +830,8 @@ restores whichever write came last.
 
 `404 {"error": "not_found", "endpoints": [...]}`, listing the paths above: 0.1.0 lists
 `/health`, `/save`, `/refresh`; 0.2.0 adds `/write/uniforms`, `/write/imports`,
-`/write/schedule`, `/write/undo`, `/pair/request`, `/pair/status`; 0.3.0 adds `/write/hire`.
+`/write/schedule`, `/write/undo`, `/pair/request`, `/pair/status`; 0.3.0 adds `/write/hire`;
+0.4.0 adds `/write/marketing`.
 Methods other than the ones above answer `405`.
 
 ## CORS and the browser
@@ -813,3 +945,16 @@ site's stations stand in. The mock takes a hire body up to 2 MiB and every other
 where the bytes can tell (`day` from `/debug/config` `day`, a site's print, a person
 moved or hired since by another apply, `screen_open`, `myemployees`); a hire it undoes goes
 back among the candidates it serves, and the moves and weeks come back as they were.
+For `marketing` it holds the city's two agencies as a table (Third
+Ave 17: the internet types; Second Ave 5: the billboards), reads each site's campaigns, the
+phone's contacts (`Contacts`, by `streetName` and `streetNumber`) and each agency's
+`scheduleDays` and `temporarilyClosed` from the save, and judges opening hours at its own
+clock (`day` and `hour` as `/health` reports them, set by `--day`, `--hour` or
+`/debug/config`). It works out the promotion with the board's own model (`marketing_score` in
+`ba_dashboard.py`, over `ba_buildings.json`): a site the building table does not know answers
+`promotion` null, and `no_promotion` is a building type the model has no reach multiplier for
+(a warehouse, a home). `--agency-closed`, `--agency-open` and `--no-contact
+<street>:<number>` (repeatable), or `/debug/config` `agencyClosed`, `agencyOpen` and
+`noContact` as lists of `{street, number}`, force an agency closed (it then opens the next day
+at 8), open, or out of the phone's contacts; as in the game, only new entries look at them. `--refuse-write refused` answers a marketing
+apply `agency_closed` at CityAds by default.

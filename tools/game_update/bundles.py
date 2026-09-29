@@ -1,4 +1,4 @@
-"""Compare DEMANDS_NOT_MADE, STATION_SKILLS and JOB_DEMANDS with the game's bundles.
+"""Compare DEMANDS_NOT_MADE, STATION_SKILLS, JOB_DEMANDS and the marketing tables with the game's bundles.
 
 In PowerShell:
 
@@ -23,6 +23,11 @@ StandaloneWindows64/:
       suitableSkills per itemName, in the game's order -> STATION_SKILLS
   defaultlocalgroup_assets_jobdemands_*.bundle
       demandName, priority and itemNames -> JOB_DEMANDS
+  defaultlocalgroup_assets_neighborhoods_*.bundle
+      marketingStrength per neighbourhood -> MARKETING_STRENGTH
+  defaultlocalgroup_assets_buildingtypes_*.bundle
+      marketingReachMultiplier and the hasmarketingpromotion tag per
+      buildingType -> MARKETING_REACH, which lists the tagged types only
 
 This re-reads them with the helpers make_demand_curves.py uses, so it needs
 UnityPy and the installed game, found the same way (BA_LOCALE, then the usual
@@ -48,11 +53,13 @@ sys.path.insert(0, ROOT)
 
 import make_demand_curves as curves  # noqa: E402  (exits with install steps without UnityPy)
 from ba_dashboard import (  # noqa: E402
-    AMENITY_DEMANDS, COST_CENTRE_TYPES, DEMANDS_NOT_MADE, EMPTY_TYPE, JOB_DEMANDS,
-    OFFICE_TYPES, RETAIL_TYPES, STATION_SKILLS, UNIFORM_DEMAND,
+    AMENITY_DEMANDS, COST_CENTRE_TYPES, DEMANDS_NOT_MADE, EMPTY_TYPE, GLOBAL_HOOD, JOB_DEMANDS,
+    MARKETING_REACH, MARKETING_STRENGTH, OFFICE_TYPES, RETAIL_TYPES, STATION_SKILLS, UNIFORM_DEMAND,
 )
 
 ITEM_PREFIX = "ba:itemname_"
+BUILDING_PREFIX = "ba:buildingtype_"
+PROMOTION_TAG = "ba:buildingtypetag_hasmarketingpromotion"
 
 # Business types in the build-3682 bundle that the board has no set for: the
 # city's own businesses (banks, the wholesalers, the importers, the IRS), which
@@ -143,9 +150,25 @@ def main() -> None:
             if items != set(setting):
                 report("JOB_DEMANDS", slug, "items", sorted(items), "board", sorted(setting))
 
+    # The marketing tables: each neighbourhood's strength, and the reach
+    # multiplier of every building type tagged with a promotion.
+    strength = {t["neighbourhood"]: curves._round(t["marketingStrength"])
+                for t in read("neighborhoods") if t.get("neighbourhood") and "marketingStrength" in t}
+    strength.pop(GLOBAL_HOOD, None)  # no site stands in "global"
+    for hood in sorted(set(strength) | set(MARKETING_STRENGTH)):
+        if strength.get(hood) != MARKETING_STRENGTH.get(hood):
+            report("MARKETING_STRENGTH", hood, "game", strength.get(hood), "board", MARKETING_STRENGTH.get(hood))
+    reach = {t["buildingType"].removeprefix(BUILDING_PREFIX): curves._round(t["marketingReachMultiplier"])
+             for t in read("buildingtypes")
+             if t.get("buildingType") and PROMOTION_TAG in (t.get("tags") or []) and "marketingReachMultiplier" in t}
+    for kind in sorted(set(reach) | set(MARKETING_REACH)):
+        if reach.get(kind) != MARKETING_REACH.get(kind):
+            report("MARKETING_REACH", kind, "game", reach.get(kind), "board", MARKETING_REACH.get(kind))
+
     named = len([n for n in types if n])
     print(f"{named} business types, {len(RETAIL_TYPES)} retail types, "
-          f"{len(stations)} stations, {len(demands)} job demands read; "
+          f"{len(stations)} stations, {len(demands)} job demands, {len(strength)} neighbourhoods, "
+          f"{len(reach)} promotion building types read; "
           f"{differences} difference(s)")
 
 

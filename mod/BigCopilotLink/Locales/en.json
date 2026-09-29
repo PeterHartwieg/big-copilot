@@ -17,9 +17,9 @@
   "bigcopilotlink_forget_notification": "Big Copilot: forgot {count} approved browser(s)",
 
   "bigcopilotlink_pair_title": "Allow Big Copilot to change your game?",
-  "bigcopilotlink_pair_body": "{origin} ({name}) asks to set uniforms, imports and staff schedules, and to hire and move staff, in this game when you confirm them on the board. Allow once for this browser; Mod options can forget it.",
-  "bigcopilotlink_pair_body_local": "A program on this computer ({name}) asks to set uniforms, imports and staff schedules, and to hire and move staff, in this game. Allow once for it; Mod options can forget it.",
-  "bigcopilotlink_pair_body_local_unnamed": "A program on this computer asks to set uniforms, imports and staff schedules, and to hire and move staff, in this game. Allow once for it; Mod options can forget it.",
+  "bigcopilotlink_pair_body": "{origin} ({name}) asks to set uniforms, imports, staff schedules and marketing, and to hire and move staff, in this game when you confirm them on the board. Allow once for this browser; Mod options can forget it.",
+  "bigcopilotlink_pair_body_local": "A program on this computer ({name}) asks to set uniforms, imports, staff schedules and marketing, and to hire and move staff, in this game. Allow once for it; Mod options can forget it.",
+  "bigcopilotlink_pair_body_local_unnamed": "A program on this computer asks to set uniforms, imports, staff schedules and marketing, and to hire and move staff, in this game. Allow once for it; Mod options can forget it.",
   "bigcopilotlink_pair_allow": "Allow",
   "bigcopilotlink_pair_deny": "Deny",
 
@@ -29,8 +29,10 @@
   "bigcopilotlink_notify_hire": "Big Copilot hired {hired} new staff",
   "bigcopilotlink_notify_move": "Big Copilot moved {moved} staff",
   "bigcopilotlink_notify_hire_move": "Big Copilot hired {hired} and moved {moved} staff",
+  "bigcopilotlink_notify_marketing": "Big Copilot updated marketing at {business}",
   "bigcopilotlink_notify_undo_uniforms": "Big Copilot undid its uniforms at {business}",
   "bigcopilotlink_notify_undo_imports": "Big Copilot undid its import changes at {business}",
   "bigcopilotlink_notify_undo_schedule": "Big Copilot undid its schedule at {business}",
-  "bigcopilotlink_notify_undo_hire": "Big Copilot undid the staffing change"
+  "bigcopilotlink_notify_undo_hire": "Big Copilot undid the staffing change",
+  "bigcopilotlink_notify_undo_marketing": "Big Copilot undid its marketing changes at {business}"
 }
