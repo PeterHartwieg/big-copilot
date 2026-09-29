@@ -659,9 +659,21 @@ class HireCountTest(unittest.TestCase):
 
         with unittest.mock.patch.object(ba_dashboard, "_place_hires", compare):
             for n in (112, 143, 148, 154, 168, 185, 212, 252) + tuple(range(40)):
-                plan_with(scenario(random.Random(1000 + n)))
-        self.assertGreater(len(seen), 40)
+                sc = scenario(random.Random(1000 + n))
+                row, _people = plan_with(sc)
+                # And planned again from a week of its own with fewer
+                # customers, where the rule for existing staff keeps weeks.
+                rng = random.Random(n)
+                week = current_from(row, row, rng)
+                plan_with(sc, week, {h: c // 2 for h, c in sc["hourly"].items()})
+        self.assertGreater(len(seen), 80)
         self.assertEqual([pair for pair in seen if pair[0] > pair[1]], [])
+
+    def test_the_review_s_three_shops_hire_what_main_did(self):
+        """Main at 77a2375 hired 2, 2 and 5 people for these demand plans."""
+        for n, main in ((154, 2), (185, 2), (212, 5)):
+            row, _people = plan_with(scenario(random.Random(1000 + n)))
+            self.assertLessEqual(sum(h["hire"] for h in row["headcount"].values()), main, n)
 
 
 class OracleSnapshotTest(unittest.TestCase):

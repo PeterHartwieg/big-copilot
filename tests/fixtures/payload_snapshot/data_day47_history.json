@@ -2505,7 +2505,7 @@
      {
       "d": 0,
       "f": 0,
-      "p": null,
+      "p": 0,
       "s": 0,
       "t": 12
      },
@@ -2533,7 +2533,7 @@
      {
       "d": 1,
       "f": 0,
-      "p": null,
+      "p": 0,
       "s": 0,
       "t": 12
      },
@@ -2638,7 +2638,7 @@
      {
       "d": 4,
       "f": 12,
-      "p": 0,
+      "p": null,
       "s": 1,
       "t": 24
      },
@@ -2666,7 +2666,7 @@
      {
       "d": 5,
       "f": 12,
-      "p": 0,
+      "p": null,
       "s": 1,
       "t": 24
      },
@@ -3514,50 +3514,7 @@
          {
           "d": 0,
           "f": 0,
-          "shift": 0,
-          "station": "MACHINEone",
-          "t": 12
-         },
-         {
-          "d": 3,
-          "f": 12,
-          "shift": 14,
-          "station": "MACHINEone",
-          "t": 24
-         },
-         {
-          "d": 4,
-          "f": 0,
-          "shift": 17,
-          "station": "MACHINEtwo",
-          "t": 12
-         },
-         {
-          "d": 5,
-          "f": 0,
-          "shift": 21,
-          "station": "MACHINEtwo",
-          "t": 12
-         }
-        ]
-       },
-       {
-        "band": "full",
-        "days": 4,
-        "hours": 48,
-        "skill": "ba:skill_factoryworker",
-        "slots": [
-         {
-          "d": 0,
-          "f": 0,
           "shift": 1,
-          "station": "MACHINEtwo",
-          "t": 12
-         },
-         {
-          "d": 1,
-          "f": 0,
-          "shift": 5,
           "station": "MACHINEtwo",
           "t": 12
          },
@@ -3569,11 +3526,18 @@
           "t": 12
          },
          {
-          "d": 6,
+          "d": 4,
           "f": 0,
-          "shift": 24,
+          "shift": 16,
           "station": "MACHINEone",
           "t": 12
+         },
+         {
+          "d": 5,
+          "f": 12,
+          "shift": 22,
+          "station": "MACHINEone",
+          "t": 24
          }
         ]
        },
@@ -3591,17 +3555,89 @@
           "t": 24
          },
          {
-          "d": 1,
+          "d": 2,
           "f": 12,
-          "shift": 6,
+          "shift": 10,
           "station": "MACHINEone",
+          "t": 24
+         },
+         {
+          "d": 4,
+          "f": 0,
+          "shift": 17,
+          "station": "MACHINEtwo",
+          "t": 12
+         },
+         {
+          "d": 5,
+          "f": 12,
+          "shift": 23,
+          "station": "MACHINEtwo",
+          "t": 24
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_factoryworker",
+        "slots": [
+         {
+          "d": 0,
+          "f": 12,
+          "shift": 3,
+          "station": "MACHINEtwo",
           "t": 24
          },
          {
           "d": 2,
           "f": 12,
-          "shift": 10,
+          "shift": 11,
+          "station": "MACHINEtwo",
+          "t": 24
+         },
+         {
+          "d": 4,
+          "f": 12,
+          "shift": 18,
           "station": "MACHINEone",
+          "t": 24
+         },
+         {
+          "d": 6,
+          "f": 0,
+          "shift": 24,
+          "station": "MACHINEone",
+          "t": 12
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_factoryworker",
+        "slots": [
+         {
+          "d": 1,
+          "f": 0,
+          "shift": 5,
+          "station": "MACHINEtwo",
+          "t": 12
+         },
+         {
+          "d": 3,
+          "f": 0,
+          "shift": 13,
+          "station": "MACHINEtwo",
+          "t": 12
+         },
+         {
+          "d": 4,
+          "f": 12,
+          "shift": 19,
+          "station": "MACHINEtwo",
           "t": 24
          },
          {
@@ -3620,25 +3656,25 @@
         "skill": "ba:skill_factoryworker",
         "slots": [
          {
-          "d": 0,
-          "f": 12,
-          "shift": 3,
-          "station": "MACHINEtwo",
-          "t": 24
-         },
-         {
           "d": 1,
           "f": 12,
-          "shift": 7,
-          "station": "MACHINEtwo",
+          "shift": 6,
+          "station": "MACHINEone",
           "t": 24
          },
          {
-          "d": 2,
+          "d": 3,
           "f": 12,
-          "shift": 11,
-          "station": "MACHINEtwo",
+          "shift": 14,
+          "station": "MACHINEone",
           "t": 24
+         },
+         {
+          "d": 5,
+          "f": 0,
+          "shift": 20,
+          "station": "MACHINEone",
+          "t": 12
          },
          {
           "d": 6,
@@ -3657,10 +3693,10 @@
         "slots": [
          {
           "d": 1,
-          "f": 0,
-          "shift": 4,
-          "station": "MACHINEone",
-          "t": 12
+          "f": 12,
+          "shift": 7,
+          "station": "MACHINEtwo",
+          "t": 24
          },
          {
           "d": 3,
@@ -3670,46 +3706,10 @@
           "t": 24
          },
          {
-          "d": 4,
-          "f": 12,
-          "shift": 18,
-          "station": "MACHINEone",
-          "t": 24
-         },
-         {
           "d": 5,
-          "f": 12,
-          "shift": 22,
-          "station": "MACHINEone",
-          "t": 24
-         }
-        ]
-       },
-       {
-        "band": "full",
-        "days": 4,
-        "hours": 48,
-        "skill": "ba:skill_factoryworker",
-        "slots": [
-         {
-          "d": 3,
           "f": 0,
-          "shift": 13,
+          "shift": 21,
           "station": "MACHINEtwo",
-          "t": 12
-         },
-         {
-          "d": 4,
-          "f": 0,
-          "shift": 16,
-          "station": "MACHINEone",
-          "t": 12
-         },
-         {
-          "d": 5,
-          "f": 0,
-          "shift": 20,
-          "station": "MACHINEone",
           "t": 12
          },
          {
@@ -8533,7 +8533,7 @@
      "ba:skill_customerservice": {
       "have": 1,
       "hire": 3,
-      "hireHours": 90,
+      "hireHours": 132,
       "kind": "serve",
       "max": 5,
       "min": 4,
@@ -9749,14 +9749,14 @@
        "skill": "ba:skill_customerservice"
       }
      ],
-     "hoursUncovered": 216,
+     "hoursUncovered": 204,
      "people": 5
     },
     "bench": [],
     "cost": {
      "current": 3192.0,
      "currentCover": 1176.0,
-     "weekly": 2016.0
+     "weekly": 2184.0
     },
     "daysMeasured": 14,
     "daysNeeded": 9,
@@ -9764,7 +9764,7 @@
      "ba:skill_cleaning": {
       "have": 1,
       "hire": 3,
-      "hireHours": 90,
+      "hireHours": 120,
       "kind": "clean",
       "max": 5,
       "min": 4,
@@ -9774,7 +9774,7 @@
      "ba:skill_customerservice": {
       "have": 2,
       "hire": 2,
-      "hireHours": 60,
+      "hireHours": 84,
       "kind": "serve",
       "max": 5,
       "min": 4,
@@ -9832,6 +9832,14 @@
     "placed": [
      {
       "demand": "ba:jobdemand_freeweekends",
+      "from": 12,
+      "label": "Free weekends",
+      "p": 0,
+      "to": 24,
+      "wd": 1
+     },
+     {
+      "demand": "ba:jobdemand_freeweekends",
       "from": 0,
       "label": "Free weekends",
       "p": 0,
@@ -9853,14 +9861,6 @@
       "p": 0,
       "to": 12,
       "wd": 4
-     },
-     {
-      "demand": "ba:jobdemand_freeweekends",
-      "from": 12,
-      "label": "Free weekends",
-      "p": 0,
-      "to": 24,
-      "wd": 5
      }
     ],
     "shifts": [
@@ -9868,7 +9868,7 @@
       "d": 0,
       "f": 0,
       "k": "clean",
-      "p": null,
+      "p": 2,
       "s": 1,
       "t": 12
      },
@@ -9920,7 +9920,7 @@
      {
       "d": 1,
       "f": 12,
-      "p": null,
+      "p": 0,
       "s": 0,
       "t": 24
      },
@@ -10040,7 +10040,7 @@
      {
       "d": 5,
       "f": 12,
-      "p": 0,
+      "p": null,
       "s": 0,
       "t": 24
      },
@@ -10087,7 +10087,7 @@
     "ba:skill_cleaning": {
      "have": 1,
      "hire": 1,
-     "hireHours": 30,
+     "hireHours": 49,
      "kind": "clean",
      "max": 3,
      "min": 2,
@@ -10097,7 +10097,7 @@
     "ba:skill_customerservice": {
      "have": 2,
      "hire": 1,
-     "hireHours": 30,
+     "hireHours": 31,
      "kind": "serve",
      "max": 3,
      "min": 2,
@@ -10371,7 +10371,7 @@
      "ba:skill_cleaning": {
       "have": 1,
       "hire": 1,
-      "hireHours": 30,
+      "hireHours": 49,
       "kind": "clean",
       "max": 3,
       "min": 2,
@@ -10381,7 +10381,7 @@
      "ba:skill_customerservice": {
       "have": 2,
       "hire": 1,
-      "hireHours": 30,
+      "hireHours": 31,
       "kind": "serve",
       "max": 3,
       "min": 2,

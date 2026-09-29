@@ -6,7 +6,7 @@
 // over them, and this suite runs that module once and reads the rows off its
 // stdout. A hand-written fixture drifts from what the Python emits — a
 // `current.shifts` that does not match `current.list`, a `hireHours` that is
-// not `hire * 30`, a `p: null` the planner never wrote — and a block that
+// not its hire weeks' hours, a `p: null` the planner never wrote — and a block that
 // passes on those is not known to work on anything.
 //
 // Install Playwright and its Chromium browser to run; NODE_PATH may point at an
@@ -184,8 +184,8 @@ test('the planner writes the hiring lines the block draws', () => {
   // And the fixtures are internally consistent, which a hand-made one is not.
   for(const [name, row] of Object.entries(ROWS)){
     assert.equal(row.current.shifts, row.current.list.length, name);
-    for(const h of Object.values(row.headcount))
-      assert.equal(h.hireHours, h.hire * 30, `${name} ${h.kind}`);
+    for(const [skill, h] of Object.entries(row.headcount))
+      assert.equal(h.hireHours, (row._hire.hireWeeks || []).filter(w => w.skill === skill).reduce((n, w) => n + w.hours, 0), `${name} ${h.kind}`);
     for(const s of row.shifts){
       assert.ok(row.stations[s.s], `${name}: station ${s.s}`);
       assert.ok(s.p === null || row.people[s.p], `${name}: person ${s.p}`);

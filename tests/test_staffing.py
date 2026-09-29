@@ -946,7 +946,10 @@ class HeadcountTest(unittest.TestCase):
         guard = row["headcount"][GUARD]
         self.assertEqual(guard["kind"], "security")
         self.assertEqual((guard["have"], guard["hire"]), (0, 4))
-        self.assertEqual(guard["hireHours"], 120)
+        # The hours the four hires' weeks hold: the locker's whole week.
+        self.assertEqual(guard["hireHours"], 168)
+        self.assertEqual(guard["hireHours"],
+                         sum(w["hours"] for w in row["_hire"]["hireWeeks"] if w["skill"] == GUARD))
         self.assertEqual(row["headcount"][SERVICE]["kind"], "serve")
 
     def test_a_site_with_nobody_assigned_gets_hiring_lines_and_no_shifts(self):
