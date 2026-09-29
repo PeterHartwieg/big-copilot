@@ -65,8 +65,10 @@ force is enough.
 - The plan is the **cheapest mix that brings promotion to 100**.
 - If no mix can do that, the plan is the **cheapest mix that brings marketing to 100**.
 - There is no tolerance: 99 is short.
-- Only types sold by agencies that are phone contacts count. With none, there is no plan, and the
-  line names the agencies to visit once.
+- The types the site already has a switch for always count: an existing switch flips at any
+  time (section 3). A type with no switch counts only when an agency that sells it is a phone
+  contact. With neither and a change needed there is no plan, and the line names the agencies
+  to visit once; a site whose plan a first visit would improve gets a "Visit … once" hint.
 - Ties go to fewer campaigns, then to the mix the shop already runs.
 
 The same search also drops campaigns that only push past the target, so one button covers both
@@ -150,14 +152,15 @@ Shops and offices are covered. Headquarters have a promotion but no customers, s
   - the sites with no plan, since they have no switch and no agency is a contact ("Visit
     CityAds once: no campaign can be set at … before that");
   - the sites on the best mix their known agencies allow, short of 100, that a first visit
-    would raise ("Visit CityAds once to raise promotion at …").
+    would raise ("Visit CityAds once to raise promotion at …"); a visit that would only save
+    money is the Promotion block's hint alone.
 
   A plan that only adds missing switches changes neither cost nor promotion and is no
-  finding. The first promotion line shown carries "Set the cheapest mix at N sites". It
-  opens the same dry-run dialog as the uniforms write (the write-dialogs canvas), with one
+  finding. Each of the two mix lines carries its own "Set the cheapest mix at N sites",
+  over exactly its own sites. It opens the same dry-run dialog as the uniforms write (the write-dialogs canvas), with one
   row per site: now → plan, and $/day before → after.
 - **Set up all sites:** a Marketing action in Businesses › Standards for every shop or office
-  missing entries, so a new site needs no phone call. It applies each site's plan, which
+  missing entries, one not trading yet included, so a new site needs no phone call. It applies each site's plan, which
   already includes the set-up. It runs one write, so it shares the dialog above. A site
   already on plan reads "+3 switches", and switches that wait for an agency are one short
   clause ("2 switches later, Tuesday 8:00"). A dry run that would change nothing is one line

@@ -802,6 +802,7 @@
  "f.promotion.shops_other": "gpt-6-sol",
  "f.promotion.sites": "gpt-6-sol",
  "f.promotion.visit": "claude-opus-5-5",
+ "f.promotion.visit.more": "claude-opus-5-5",
  "f.promotion_few": "gpt-6-sol",
  "f.promotion_many": "gpt-6-sol",
  "f.promotion_one": "gpt-6-sol",

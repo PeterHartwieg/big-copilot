@@ -1025,6 +1025,7 @@
      "ba:street_secondavenue#5",
      "ba:street_thirdavenue#17"
     ],
+    "visitRaises": true,
     "was": []
    },
    "missingAmenities": [
@@ -1352,6 +1353,7 @@
      "ba:street_secondavenue#5",
      "ba:street_thirdavenue#17"
     ],
+    "visitRaises": true,
     "was": []
    },
    "missingAmenities": [

@@ -221,6 +221,18 @@ class Extraction(unittest.TestCase):
         _rows, plan = self.plan([_camp(SB, True, "ba:street_secondavenue", 5)], contacts=(BILLBOARDS,))
         self.assertEqual((plan["setupTypes"], plan["setupAgencies"]), (["MediumBillboard", "LargeBillboard"], [BILLBOARDS]))
 
+    def test_a_visit_that_only_saves_is_not_called_a_raise(self):
+        # Midtown, 80 m², 30 traffic, only McCain's known: Small and Large
+        # internet ($600) reach marketing 100, as Small billboard alone would
+        # for $500. The same promotion either way: a visit saves, it raises nothing.
+        _rows, plan = self.plan([], building={"t": "retail", "m": 80}, hood=MIDTOWN, contacts=(INTERNET,),
+                                promo={"trafficIndex": 30, "marketing": 0, "total": 30})
+        self.assertEqual((plan["on"], plan["costPlan"], plan["promotionPlan"]), (["SmallInternet", "LargeInternet"], 600, 80))
+        self.assertEqual((plan["visit"], plan["visitRaises"]), ([BILLBOARDS], False))
+        # No switch and no agency known: any plan a visit brings raises it.
+        _rows, plan = self.plan([], contacts=(), promo={"trafficIndex": 60, "marketing": 0, "total": 60})
+        self.assertTrue(plan["visitRaises"])
+
     def test_only_shops_and_offices_in_a_promotion_building(self):
         self.assertIsNotNone(self.plan([], status="office", building={"t": "office", "m": 100})[1])
         self.assertIsNone(self.plan([], status="overhead")[1])
@@ -258,9 +270,9 @@ class Agencies(unittest.TestCase):
         self.assertEqual((rows[1]["closed"], rows[1]["open"], rows[1]["opens"]), (True, False, None))
 
 
-def _mk(on, was, now=100, then=100, cost_now=0, cost_plan=0, visit=()):
+def _mk(on, was, now=100, then=100, cost_now=0, cost_plan=0, visit=(), raises=None):
     return {"on": on, "was": was, "promotionNow": now, "promotionPlan": then, "costNow": cost_now,
-            "costPlan": cost_plan, "visit": list(visit)}
+            "costPlan": cost_plan, "visit": list(visit), "visitRaises": bool(visit) if raises is None else raises}
 
 
 def _site(key, name, plan, status="retail"):
@@ -337,6 +349,10 @@ class Finding(unittest.TestCase):
     def test_on_its_best_known_mix_but_a_visit_would_raise_it(self):
         rows = _promotion([_site("a", "A", _mk(["SmallInternet"], ["SmallInternet"], 80, 90, 100, 100, visit=[BILLBOARDS]))])
         self.assertEqual([(r["level"], r["text"]) for r in rows], [("info", "Visit CityAds once to raise promotion at A")])
+        # A visit that would only make the same promotion cheaper: the site
+        # panel's hint, no overview line.
+        self.assertEqual(_promotion([_site("a", "A", _mk(["SmallInternet"], ["SmallInternet"], 80, 90, 100, 100,
+                                                        visit=[BILLBOARDS], raises=False))]), [])
         # Its plan reaches 100 with what it knows: no line.
         self.assertEqual(_promotion([_site("a", "A", _mk(["SmallInternet"], ["SmallInternet"], 80, 100, 100, 100,
                                                         visit=[BILLBOARDS]))]), [])

@@ -319,9 +319,12 @@ What is on the list is what moves the number:
   missing switches changes neither and is no finding. A site short of 100 that waits on a
   first visit to an agency gets its own line naming it: one with no mix at all ("Visit
   CityAds once: no campaign can be set at … before that"), and one already on the best mix
-  its known agencies allow ("Visit CityAds once to raise promotion at …"). Sites not trading
-  yet are left to their own finding. With the game link the first line carries "Set the
-  cheapest mix at N sites"; its *details ›* link lands on Businesses › Standards.
+  its known agencies allow that a visit would raise ("Visit CityAds once to raise promotion
+  at …"); a visit that would only make the same promotion cheaper is the Promotion block's
+  hint alone. Sites not trading yet are left to their own finding. With the game link each
+  of the two mix lines carries its own "Set the cheapest mix at N sites", over exactly its
+  own sites; its *details ›* link lands on Businesses › Standards, whose "Set up all" keeps
+  a new site, the set-up's first case.
 
 ## The weekly rhythm
 

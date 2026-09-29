@@ -575,6 +575,7 @@
  "f.promotion.shops_other": "gpt-6-sol",
  "f.promotion.sites": "gpt-6-sol",
  "f.promotion.visit": "gpt-6-sol",
+ "f.promotion.visit.more": "gpt-6-sol",
  "f.promotion_many": "gpt-6-sol",
  "f.promotion_one": "gpt-6-sol",
  "f.promotion_other": "gpt-6-sol",

@@ -61,9 +61,16 @@ function withMarketing(text) {
     marketingPlan: plan(['SmallBillboard'], ['SmallBillboard', 'LargeBillboard'],
       {costNow: 6500, costPlan: 500, promotionNow: 100, needsSetup: false, agencies: [ADS], setupTypes: [], setupAgencies: []})}));
   d.marketingAgencies = AGENCIES;
-  // The promotion finding alone, so no other warning folds it away.
-  d.alerts = [{level: 'warn', site: 'HART. Gifts', group: 'promotion', siteKey: G, id: 'promo-gifts', worth: null, unit: '',
-    text: 'HART. Gifts promotes at 90% of the 100% cap: 60% foot traffic and 43% marketing. The address sets the foot traffic, so the missing 10 points have to come from campaigns'}];
+  // The promotion findings alone, so no other warning folds them away: the
+  // line of the sites the plan raises (Gifts) and of those it only saves at
+  // (the office), each told apart by its sentence's key, as _alerts() writes them.
+  d.alerts = [
+    {level: 'warn', site: 'HART. Gifts', group: 'promotion', siteKey: G, id: 'promo-gifts', worth: null, unit: '',
+     text: 'HART. Gifts can reach 100% promotion for $100/day more',
+     i18n: {text: ['f.promotion.reach.more.one', {site: 'HART. Gifts', p: 100, w: 100}]}},
+    {level: 'info', site: 'HART. Law', group: 'promotion', siteKey: O, id: 'promo-law', worth: null, unit: '',
+     text: 'HART. Law can save $6,000/day at the same promotion',
+     i18n: {text: ['f.promotion.save.one', {site: 'HART. Law', w: 6000}]}}];
   return JSON.stringify(d);
 }
 
@@ -207,9 +214,12 @@ test('the promotion finding and Standards: every site at once, a site on plan on
   const page = await board(t);
   await answering(page, {errors: {[O]: 'no_agency'}});
   await page.evaluate(() => { showPage('today'); });
-  const act = page.locator('#alerts .find[data-kind="promotion"] [data-gw="marketing"]');
   // Gifts and the office run another mix than their plan; Bare runs its own.
-  assert.equal(await act.innerText(), 'Set the cheapest mix at 2 sites');
+  // Each line's button is over its own sites alone.
+  const act = page.locator('#alerts .find[data-id="promo-gifts"] [data-gw="marketing"]');
+  const save = page.locator('#alerts .find[data-id="promo-law"] [data-gw="marketing"]');
+  assert.equal(await act.innerText(), 'Set the cheapest mix at 1 site');
+  assert.equal(await save.innerText(), 'Set the cheapest mix at 1 site');
   await page.evaluate(() => openRoute('businesses/standards'));
   const std = page.locator('#secStandards .bz-mk [data-gw="marketing"]');
   // textContent: the section may not be laid out yet when it is read.
@@ -223,8 +233,7 @@ test('the promotion finding and Standards: every site at once, a site on plan on
   assert.match(await dlg.locator('.gw-tally').innerText(), /\$3,000[\s\S]*\$3,100/);
   // A refused site in a run of many is said in its row, with Leave it out.
   await page.keyboard.press('Escape');
-  await page.evaluate(() => { showPage('today'); });
-  await act.click();
+  await std.nth(0).click();
   await phase(page, 'ready');
   const bad = dlg.locator('.gw-mkrow.bad');
   assert.match(await bad.innerText(), /No marketing agency in the city offers a campaign in this mix/);
@@ -234,6 +243,12 @@ test('the promotion finding and Standards: every site at once, a site on plan on
   assert.equal(await dlg.locator('[data-gw-b="apply"]').isDisabled(), false);
   assert.equal(await dlg.locator('h2').textContent(), 'Set the cheapest mix at 1 site');
   assert.deepEqual((await writes(page)).at(-1).body.sites.map(s => s.address.number), [10]);
+  // The savings line's button sends the office alone.
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => { showPage('today'); });
+  await save.click();
+  await phase(page, 'ready');
+  assert.deepEqual((await writes(page)).at(-1).body.sites.map(s => s.address.number), [88]);
 });
 
 test('a new switch from a shut agency: the button waits and one line beside it says when', async (t) => {
@@ -249,9 +264,9 @@ test('a new switch from a shut agency: the button waits and one line beside it s
   const early = await board(t, {link: Object.assign({}, LINK, {hour: 7})});
   await openSite(early, O);
   assert.equal(await early.locator('#sp-pull .spmk-why').innerText(), 'CityAds opens at 8:00');
-  // The finding's action for every site waits too, its reason on hover.
+  // The raise line's action waits too, its reason on hover.
   await early.evaluate(() => { showPage('today'); });
-  const all = early.locator('#alerts .find[data-kind="promotion"] [data-gw="marketing"]');
+  const all = early.locator('#alerts .find[data-id="promo-gifts"] [data-gw="marketing"]');
   assert.equal(await all.getAttribute('aria-disabled'), 'true');
   assert.equal(await all.getAttribute('data-tip'), 'Agencies open at 8:00');
   // An agency not in the phone yet: a first visit.
@@ -280,7 +295,7 @@ test('a plan that only flips switches the site has goes through while the agenci
   assert.equal(await set.getAttribute('aria-disabled'), null);
   assert.equal(await page.locator('#sp-pull .spmk-why').count(), 0);
   await page.evaluate(() => { showPage('today'); });
-  assert.equal(await page.locator('#alerts .find[data-kind="promotion"] [data-gw="marketing"]').getAttribute('aria-disabled'), null);
+  assert.equal(await page.locator('#alerts .find[data-id="promo-gifts"] [data-gw="marketing"]').getAttribute('aria-disabled'), null);
 });
 
 test('the game\'s clock turning the hour redraws the gate, with no new board', async (t) => {
@@ -357,8 +372,6 @@ function earlyMorning() {
   const d = JSON.parse(payload);
   d.marketingAgencies.find(a => a.key === NET).hours = WEEK.map(() => [[0, 24]]);
   d.businesses.find(b => b.key === G).marketingPlan.agencies = [NET];
-  // A second promotion finding: the all-sites action still shows once.
-  d.alerts.push(Object.assign({}, d.alerts[0], {id: 'promo-bare', site: 'HART. Bare', siteKey: B}));
   return JSON.stringify(d);
 }
 
@@ -413,32 +426,30 @@ test('set-up while an agency is shut: waits when every one is, says what waits w
   assert.equal(await d2.locator('[data-gw-b="apply"]').isDisabled(), true);
 });
 
-test('every site at once counts only the sites the game takes now, on one finding', async (t) => {
+test('each line\'s button counts only the sites the game takes now', async (t) => {
   const page = await board(t, {link: Object.assign({}, LINK, {hour: 7}), data: earlyMorning()});
   await page.evaluate(() => { showPage('today'); });
-  const acts = page.locator('#alerts .find[data-kind="promotion"] [data-gw="marketing"]');
   // Gifts switches at McCain's, open; the office waits for CityAds.
-  assert.equal(await acts.count(), 1);
-  assert.equal(await acts.innerText(), 'Set the cheapest mix at 1 site');
-  assert.equal(await acts.getAttribute('aria-disabled'), null);
+  const raise = page.locator('#alerts .find[data-id="promo-gifts"] [data-gw="marketing"]');
+  const save = page.locator('#alerts .find[data-id="promo-law"] [data-gw="marketing"]');
+  assert.equal(await raise.innerText(), 'Set the cheapest mix at 1 site');
+  assert.equal(await raise.getAttribute('aria-disabled'), null);
+  assert.equal(await save.getAttribute('aria-disabled'), 'true');
+  assert.equal(await save.getAttribute('data-tip'), 'CityAds opens at 8:00');
   await answering(page);
-  await acts.click();
+  await raise.click();
   await phase(page, 'ready');
   assert.deepEqual((await writes(page)).at(-1).body.sites.map(s => s.address.number), [10]);
 });
 
-test('the all-sites button rides on the first promotion finding shown', async (t) => {
-  const d = JSON.parse(earlyMorning());
-  // Gifts' finding an opportunity, Bare's a warning: the warning is drawn first.
-  d.alerts[0].level = 'info';
-  const page = await board(t, {link: Object.assign({}, LINK, {hour: 7}), data: JSON.stringify(d)});
+test('each promotion line carries its own button, and a filter hides it with its row', async (t) => {
+  const page = await board(t, {link: Object.assign({}, LINK, {hour: 7}), data: earlyMorning()});
   await page.evaluate(() => { showPage('today'); });
-  const carrier = () => page.locator('#alerts .find[data-kind="promotion"]:has([data-gw="marketing"])').getAttribute('data-id');
-  assert.equal(await carrier(), 'promo-bare');
-  // The warnings filtered out: the button moves to the row still shown.
+  const buttons = () => page.locator('#alerts .find:not(.hide) [data-gw="marketing"]')
+    .evaluateAll(bs => bs.map(b => [b.closest('.find').dataset.id, b.dataset.gwMkLine]));
+  assert.deepEqual(await buttons(), [['promo-gifts', 'raise'], ['promo-law', 'save']]);
   await page.locator('#alertHead .sev[data-kind="watch"]').click();
-  assert.equal(await carrier(), 'promo-gifts');
-  assert.equal(await page.locator('#alerts [data-gw="marketing"]').count(), 1);
+  assert.deepEqual(await buttons(), [['promo-law', 'save']]);
   assert.equal(await page.evaluate(() => document.activeElement.dataset.kind), 'watch');
 });
 
@@ -475,12 +486,38 @@ test('an idle dry run offers Try again, and asks the game again when its hour tu
   assert.equal(await dlg.locator('[data-gw-b="apply"]').isDisabled(), false);
 });
 
-test('a site not trading yet is left to its own finding: the all-sites count leaves it out too', async (t) => {
+test('an idle dialog asks again when the hour turns with a new board, as the mod refreshes on the hour', async (t) => {
+  const page = await board(t);
+  await answering(page, {entries: {[B]: []}, waiting: {[B]: [{type: 'SmallBillboard', agency: CITYADS, opens: {day: 37, hour: 8}}]}});
+  await openSite(page, B);
+  await page.locator('#sp-pull [data-gw="marketing"]').click();
+  await phase(page, 'ready');
+  const asked = (await writes(page)).length;
+  // A board built from new bytes at the same hour asks nothing.
+  await page.evaluate(p => window.calmWatch.changed(JSON.parse(p)), payload);
+  assert.equal((await writes(page)).length, asked);
+  // The new bytes come with Tuesday 8:00, with no clock tick of their own.
+  await answering(page, {entries: {[B]: ['SmallBillboard']}});
+  await page.evaluate(p => { window.mkLink = Object.assign({}, window.mkLink, {day: 37, hour: 8}); window.calmWatch.changed(JSON.parse(p)); }, payload);
+  await page.waitForFunction(() => /The game will add 1 switch/.test(document.querySelector('dialog.gw-dlg .gw-verdict')?.textContent || ''));
+  assert.equal((await writes(page)).length, asked + 1);
+});
+
+test('a site not trading yet: left out of the cheapest mix for all, kept in the set-up for all', async (t) => {
   const d = JSON.parse(payload);
   d.businesses.find(b => b.key === G).notTrading = [];
   const page = await board(t, {data: JSON.stringify(d)});
   await page.evaluate(() => { showPage('today'); });
-  assert.equal(await page.locator('#alerts .find[data-kind="promotion"] [data-gw="marketing"]').innerText(), 'Set the cheapest mix at 1 site');
+  // Its promotion is the not-trading finding's business, as in _alerts().
+  assert.equal(await page.locator('#alerts .find[data-id="promo-gifts"] [data-gw="marketing"]').count(), 0);
+  await page.evaluate(() => openRoute('businesses/standards'));
+  const std = page.locator('#secStandards .bz-mk [data-gw="marketing"]');
+  // A new site is the set-up's first case: it stays in "Set up all".
+  assert.deepEqual(await std.evaluateAll(bs => bs.map(b => b.textContent.trim())), ['Set the cheapest mix at 1 site', 'Set up all 2 sites']);
+  await answering(page);
+  await std.nth(1).click();
+  await phase(page, 'ready');
+  assert.deepEqual((await writes(page)).at(-1).body.sites.map(s => `${s.address.street}#${s.address.number}`), [G, B]);
 });
 
 test('one switch added says so in the singular; a refused row adds nothing', async (t) => {
@@ -501,33 +538,32 @@ test('one switch added says so in the singular; a refused row adds nothing', asy
   assert.equal(await dlg.locator('.gw-mkrow .gw-mk').innerText(), 'missing switches only');
 });
 
-test('silencing the row with the all-sites button moves it, and undo brings it back', async (t) => {
+test('silencing a promotion line takes its button with it, and undo brings both back', async (t) => {
   const page = await board(t, {link: Object.assign({}, LINK, {hour: 7}), data: earlyMorning()});
   await page.evaluate(() => { showPage('today'); });
-  const carrier = () => page.locator('#alerts .find[data-kind="promotion"]:not(.gone):has([data-gw="marketing"])').getAttribute('data-id');
-  assert.equal(await carrier(), 'promo-gifts');
+  const carriers = () => page.locator('#alerts .find[data-kind="promotion"]:not(.gone) [data-gw="marketing"]')
+    .evaluateAll(bs => bs.map(b => b.closest('.find').dataset.id));
+  assert.deepEqual(await carriers(), ['promo-gifts', 'promo-law']);
   await page.locator('#alerts .find[data-id="promo-gifts"] .mark').click();
-  assert.equal(await carrier(), 'promo-bare');
-  assert.equal(await page.locator('#alerts [data-gw="marketing"]').count(), 1);
-  assert.equal(await page.evaluate(() => document.activeElement === document.querySelector('#silenced a')), true);
+  assert.deepEqual(await carriers(), ['promo-law']);
   await page.locator('#silenced a').click();
-  assert.equal(await carrier(), 'promo-gifts');
+  assert.deepEqual(await carriers(), ['promo-gifts', 'promo-law']);
   // The focus goes back to the row that was silenced.
   assert.equal(await page.evaluate(() => document.activeElement.closest('.find')?.dataset.id), 'promo-gifts');
 });
 
 test('undoing a silence puts the focus on the row it brings back, or on the first row shown', async (t) => {
   const d = JSON.parse(earlyMorning());
-  d.alerts[1].level = 'info';  // Bare's finding an opportunity
+  d.alerts[1].level = 'info';  // the office's finding an opportunity
   const page = await board(t, {link: Object.assign({}, LINK, {hour: 7}), data: JSON.stringify(d)});
   await page.evaluate(() => { showPage('today'); });
   const focused = () => page.evaluate(() => document.activeElement.closest('.find')?.dataset.id || null);
   // No button moves here: the focus still goes to the row brought back.
-  await page.locator('#alerts .find[data-id="promo-bare"] .mark').click();
+  await page.locator('#alerts .find[data-id="promo-law"] .mark').click();
   await page.locator('#silenced a').click();
-  assert.equal(await focused(), 'promo-bare');
+  assert.equal(await focused(), 'promo-law');
   // Its band filtered away: the first row shown takes the focus instead.
-  await page.locator('#alerts .find[data-id="promo-bare"] .mark').click();
+  await page.locator('#alerts .find[data-id="promo-law"] .mark').click();
   await page.locator('#alertHead .sev[data-kind="opp"]').click();
   await page.locator('#silenced a').click();
   assert.equal(await focused(), 'promo-gifts');

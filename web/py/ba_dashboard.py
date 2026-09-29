@@ -2941,7 +2941,8 @@ def _marketing(save, b, building, status, neighbourhood, promo, agencies=None) -
     with an entry and the types a contacted agency sells; any other stays off.
     With no type free and a change wanted the plan's `on` is None.
     `visit` names the agencies, not contacts yet, whose types would make a
-    better plan (a higher promotion, or the same for less). `setupTypes` and
+    better plan (a higher promotion, or the same for less); `visitRaises`, that
+    it would be higher, not only cheaper. `setupTypes` and
     `setupAgencies` are the switches a contacted agency could add and who
     sells them. `agencies` are the agencies the plan needs a NEW switch from,
     each of which must be open at the write; flipping an existing switch needs
@@ -3003,6 +3004,8 @@ def _marketing(save, b, building, status, neighbourhood, promo, agencies=None) -
         "setupAgencies": sorted({seller[t] for t in setup}),
         "agencies": sorted({seller[t] for t in fresh}),
         "visit": visit,
+        # Whether those visits would raise promotion, not only save money.
+        "visitRaises": bool(visit) and (plan is None or best["promotion"] > plan["promotion"]),
     }
 
 
@@ -12783,8 +12786,10 @@ def _alerts(
     # neither cost nor promotion and is no finding. A site short of 100 whose
     # plan waits on a first visit to an agency gets a line naming it: one with
     # no plan at all (no switch, no agency known), and one already on the best
-    # mix its known agencies allow. Each line has its own subject, so its id
-    # is its own. The sites not trading yet are the not-trading line's.
+    # mix its known agencies allow that a visit would raise (a visit that would
+    # only save money is the site panel's hint alone). Each line has its own
+    # subject, so its id is its own. The sites not trading yet are the
+    # not-trading line's.
     raised, saved, unplanned, capped = [], [], [], []
     gain = lambda b: b["marketingPlan"]["promotionPlan"] - b["marketingPlan"]["promotionNow"]  # noqa: E731
     for b in businesses:
@@ -12798,7 +12803,7 @@ def _alerts(
             # A site whose plan costs more is raising its promotion, even where
             # the promotion the save stores already reads higher than the model's.
             (raised if gain(b) > 0 or p["costPlan"] > p["costNow"] else saved).append(b)
-        elif p["visit"] and p["promotionPlan"] < PROMOTION_CAP and p["promotionNow"] < PROMOTION_CAP:
+        elif p.get("visitRaises") and p["promotionPlan"] < PROMOTION_CAP and p["promotionNow"] < PROMOTION_CAP:
             capped.append(b)
     sites_of = lambda group: msg("f.site.sites", {"one": "{n} site", "other": "{n} sites"}, n=len(group))  # noqa: E731
     if raised:
@@ -21504,8 +21509,8 @@ function findingRow(a, o = {}){
   /* In linked mode a shop's missing uniforms can be set from here; one row,
      picked by drawAlerts(), also offers every shop at once. */
   const writes = gwDressable(a) ? gwUniformButtons(b, a.id === gwUniformAllId)
-    /* The promotion finding: the cheapest mix at every site it would change. */
-    : a.id === gwMkAllId ? gwMkAll("mix") : "";
+    /* A promotion line: the cheapest mix at exactly the sites it names. */
+    : a.group === "promotion" && gwMkLineOf(a) ? gwMkAll("mix", false, gwMkLineOf(a)) : "";
   /* Three shops can share a name; the pill already tells them apart, so the
      neighbourhood shortName() would add is only spelt out when there is no pill. */
   /* The name is a way to the site's own page; the rest of the row still opens
@@ -21561,12 +21566,12 @@ function ovShownRows(bands, below, switchedOff){
   return shown.concat(showMinor ? below : [], showSwitchedOff ? switchedOff : []);
 }
 /* The rows drawAlerts() last gave the all-sites buttons, asked again. */
-let ovAllPicks = () => [gwUniformAllId, gwMkAllId];
+let ovAllPicks = () => [gwUniformAllId];
 /* When a row carrying one is silenced, filtered or brought back, the list is
    drawn again; true when it was. */
 function ovMovePicks(){
-  const [u, m] = ovAllPicks();
-  if(u === gwUniformAllId && m === gwMkAllId) return false;
+  const [u] = ovAllPicks();
+  if(u === gwUniformAllId) return false;
   drawAlerts();
   return true;
 }
@@ -21670,14 +21675,14 @@ function drawAlerts(){
   $("alertTuneSlot").replaceWith(tune);
 
   /* "Set for all" rides on the first row shown that can set uniforms and is
-     not silenced, the smaller findings included, so it is on the page once;
-     the cheapest mix for every site likewise, on the first promotion finding.
-     A severity filter that hides that row draws the list again (bindSev). */
+     not silenced, the smaller findings included, so it is on the page once.
+     A severity filter that hides that row draws the list again (bindSev).
+     Each promotion line carries its own button (findingRow()). */
   ovAllPicks = () => {
     const pick = pred => (ovShownRows(bands, below, switchedOff).find(x => pred(x) && !silencedIds.has(x.id)) || {}).id ?? null;
-    return [pick(gwDressable), pick(x => x.group === "promotion")];
+    return [pick(gwDressable)];
   };
-  [gwUniformAllId, gwMkAllId] = ovAllPicks();
+  [gwUniformAllId] = ovAllPicks();
   /* Every critical finding shows; the warnings and opportunities after them
      show five and fold the rest behind "Show N more", counted. */
   let html = "", k = 0;
@@ -35796,7 +35801,6 @@ const gwUniformSites = () => (D.businesses || []).filter(b => (b.uniformGapSkill
    shop such a finding names that the player has not silenced. */
 const gwDressable = x => { const s = x.group === "uniform" && alertSite(x); return !!s && gwUniformSites().includes(s); };
 let gwUniformAllId = null;  // the finding row that carries "Set for all"; drawAlerts() picks it
-let gwMkAllId = null;       // the promotion finding that carries the cheapest mix for all; drawAlerts() picks it
 function gwUniformAll(){
   const finds = [...alertLines(), ...(alertMinor().rows || [])]
     .filter(x => gwDressable(x) && !silencedIds.has(x.id));
@@ -36003,12 +36007,27 @@ function gwMkName(type){
 }
 const gwMkMix = types => types.length ? types.map(gwMkName).join(" + ") : tt("sp.mk.none", "no campaigns");
 const gwMkSame = p => !!p.on && p.on.length === p.was.length && p.on.every(t => p.was.includes(t));
+/* A plan's promotion line, as _alerts() splits them: "raise", a plan that
+   raises promotion (or costs more to), else "save", one that only saves. */
+const gwMkLine = p => p.promotionPlan > p.promotionNow || p.costPlan > p.costNow ? "raise" : "save";
+/* The line a promotion finding is, by its sentence's key; null for a
+   "Visit … once" line, which has no mix to set. */
+const gwMkLineOf = a => {
+  const key = ((a.i18n && a.i18n.text) || [])[0] || "";
+  return /^f\.promotion\.(reach|gain)\./.test(key) ? "raise" : /^f\.promotion\.save\./.test(key) ? "save" : null;
+};
 /* The sites a marketing write is for: `mix`, every one whose plan differs
-   from what runs; `setup`, every one missing a switch in BizMan. A site with
-   no plan (no agency is a phone contact yet) is in neither, and nor is one
-   not trading yet (b.notTrading), which the promotion finding leaves out too. */
-const gwMkWants = mode => (D.businesses || []).filter(b => b.marketingPlan && b.marketingPlan.on && b.notTrading === undefined
-  && (mode === "setup" ? b.marketingPlan.needsSetup : !gwMkSame(b.marketingPlan)));
+   from what runs (of one promotion line, when `line` names it), less the
+   ones not trading yet (b.notTrading), which the promotion finding leaves to
+   their own; `setup`, every one missing a switch in BizMan, a new site above
+   all. A site with no plan (no switch, no agency a phone contact) is in
+   neither. */
+const gwMkWants = (mode, line = null) => (D.businesses || []).filter(b => {
+  const p = b.marketingPlan;
+  if(!p || !p.on) return false;
+  if(mode === "setup") return !!p.needsSetup;
+  return !gwMkSame(p) && b.notTrading === undefined && (!line || gwMkLine(p) === line);
+});
 /* Of those, the ones the game takes now: a plan that only flips switches the
    site has, always; one that needs new switches, when every agency adding
    them can now; a set-up, while at least one agency it adds from can. */
@@ -36018,7 +36037,7 @@ const gwMkReady = b => {
   const from = [...new Set(p.setupAgencies || [])];
   return gwMkBlocked(from).length < from.length;
 };
-const gwMkSites = mode => gwMkWants(mode).filter(gwMkReady);
+const gwMkSites = (mode, line = null) => gwMkWants(mode, line).filter(gwMkReady);
 const gwMkCan = () => { const l = gwLink(); return !!l && (l.writes || []).includes("marketing"); };
 /* The agencies (payload marketingAgencies), and whether one is open: the
    game's own rule (open_at() in Python) at the game's clock now, as the link
@@ -36115,15 +36134,15 @@ function spMkLine(b){
 /* Every site at once: the cheapest mix wherever it differs, or the set-up
    wherever a switch is missing. It counts only the sites the game takes now;
    with none, it waits and says why. */
-function gwMkAll(mode, alt){
-  const wants = gwMkWants(mode);
+function gwMkAll(mode, alt, line = null){
+  const wants = gwMkWants(mode, line);
   if(!wants.length) return "";
   const ready = wants.filter(gwMkReady), n = ready.length || wants.length;
   const label = mode === "setup" ? tt("sp.gw.mk.setupall", {one: "Set up {n} site", other: "Set up all {n} sites"}, {n})
     : tt("sp.gw.mk.all", {one: "Set the cheapest mix at {n} site", other: "Set the cheapest mix at {n} sites"}, {n});
   const why = ready.length || !gwMkCan() ? ""
     : gwMkWhy(wants.flatMap(b => gwMkSame(b.marketingPlan) ? b.marketingPlan.setupAgencies || [] : b.marketingPlan.agencies || []));
-  return gwButton("marketing", label, `data-gw-mk-all data-gw-mode="${mode}"`, why, {alt, icon: "clock"});
+  return gwButton("marketing", label, `data-gw-mk-all data-gw-mode="${mode}"${line ? ` data-gw-mk-line="${line}"` : ""}`, why, {alt, icon: "clock"});
 }
 /* The game's clock moved (web/app.js reads it with every /health): where an
    agency opened or shut since the page was drawn, the pages on screen are
@@ -36135,8 +36154,7 @@ function gwMkOpenSig(){
 }
 function gwMkTick(){
   if(!hasData()) return;
-  /* A dialog that said nothing could change asks the game again. */
-  if(gwOpen && gwOpen._gwIdle && gwOpen.dataset.phase === "ready") gwOpen._gwIdle();
+  gwIdleAgain();
   const sig = gwMkOpenSig();
   if(sig === gwMkSig) return;
   gwMkSig = sig;
@@ -36277,6 +36295,7 @@ function gwMarketing(keys, mode){
       return {sites: sites.map(b => ({address: gwAddress(b.key), on: b.marketingPlan.on.slice(), was: b.marketingPlan.was.slice()}))};
     },
     idle,
+    idleAt: () => { const c = gwMkClock(); return c ? `${c.day}|${c.hour}` : ""; },
     verdict: answer => {
       const rows = answer.rows || [], bad = rows.filter(r => r.error).length, n = moved(answer).length;
       if(bad) return many ? `<b>${tt("sp.gw.mk.refuses", "The game refuses {n} of {of} sites", {n: bad, of: rows.length})}</b>`
@@ -36889,9 +36908,10 @@ function gwConfirm(spec){
              [spec.applyLabel(answer), apply, {kind: "go", icon: "right", disabled: !answer.ok || !!idle,
                why: idle ? "" : tt("nav.dlg.wouldrefuse", "The game would refuse this; see above"), key: "apply"}]])]});
     allowed = false;
-    /* An idle answer is asked again when the game's clock turns the hour
-       (gwMkTick()), or at the player's Try again: an agency may have opened. */
-    dlg._gwIdle = idle ? () => plan({soft: true}) : null;
+    /* An idle answer is asked again at the player's Try again, and by
+       itself once `spec.idleAt()` moves on (gwIdleAgain(), after every
+       render and every tick of the game's clock): an agency may have opened. */
+    dlg._gwIdle = idle ? {at: spec.idleAt ? spec.idleAt() : "", now: spec.idleAt || null, ask: () => plan({soft: true})} : null;
     if(spec.bind) spec.bind(dlg, from => plan({soft: true, from}));
   };
   /* The game asked again from a dialog that shows its answer: the answer on
@@ -37078,9 +37098,21 @@ function gwToast(){
   bar.querySelector("[data-gw-undo]").onclick = () => gwUndo(spec);
   bar.querySelector("[data-gw-dismiss]").onclick = () => { delete gwUndoable[spec.kind]; gwToast(); };
 }
+/* A dialog that said nothing could change asks the game again once the
+   hour it asked at has passed, whether the hour came with a new board or
+   only with the game's clock. */
+function gwIdleAgain(){
+  const dlg = gwOpen, idle = dlg && dlg._gwIdle;
+  if(!idle || !idle.now || dlg.dataset.phase !== "ready" || idle.now() === idle.at) return;
+  dlg._gwIdle = null;
+  idle.ask();
+}
 /* After every render: an open dialog whose apply the board has now read
    says so under its drawing. */
 function gwReadBack(){
+  gwIdleAgain();
+  /* The pages on screen are drawn at the game's hour now. */
+  if(hasData()) gwMkSig = gwMkOpenSig();
   const dlg = gwOpen;
   /* A dialog waiting on an undo's gate says only what the gate says. */
   if(dlg && dlg._gwGate) return dlg._gwGate();
@@ -37919,7 +37951,7 @@ const bindWrites = once(() => {
     else if(kind === "schedule") gwSchedule(JSON.parse(btn.dataset.gwSites || "[]"));
     else if(kind === "hire") hrReview();
     else if(kind === "marketing") gwMarketing(btn.hasAttribute("data-gw-mk-all")
-      ? gwMkSites(btn.dataset.gwMode).map(b => b.key) : JSON.parse(btn.dataset.gwSites || "[]"), btn.dataset.gwMode);
+      ? gwMkSites(btn.dataset.gwMode, btn.dataset.gwMkLine || null).map(b => b.key) : JSON.parse(btn.dataset.gwSites || "[]"), btn.dataset.gwMode);
   }, true);
 });
 function wireWrites(){ bindWrites(); gwToast(); gwReadBack(); }

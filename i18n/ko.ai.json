@@ -583,6 +583,7 @@
  "f.promotion.shops_other": "claude-opus-5-5",
  "f.promotion.sites": "gpt-6-sol",
  "f.promotion.visit": "gpt-6-sol",
+ "f.promotion.visit.more": "gpt-6-sol",
  "f.promotion_other": "claude-opus-5-5",
  "f.satisfaction": "claude-opus-5-5",
  "f.shortfall": "claude-opus-5-5",
