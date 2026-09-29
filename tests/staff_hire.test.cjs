@@ -213,7 +213,7 @@ const quick = page => page.evaluate(() => {
   return {ready: Q.ready, ex: Q.ex, matches: Q.matches.map(c => c.id), picks: Q.picks.map(p => [p.c.id, p.w ? p.w.hours : null]), short: Q.short};
 });
 const quickRequest = (page, mode = 'both') => page.evaluate(mode => { const m = hrModel(); return hrRequest(m, {mode, quick: m.quick}).body; }, mode);
-// The link of a mod that takes the whole action in one call, with its undo (0.5.0).
+// The link of a mod that takes the whole action in one call, with its undo (0.4.0).
 const ONE = {writes: ['uniforms', 'imports', 'schedule', 'hire'], features: ['hire.reschedule', 'hire.undo'], day: 34, hour: 14, minute: 0,
   character: 'default', company: 'Link Co'};
 const REVIEW = '#hsOrder button.hs-cta[data-hs-review]';
@@ -2022,7 +2022,7 @@ test('Quick hire with several picks gives each their own reason: only the one no
 
 // --- one action, undone in one step (staffing revisit, 29 September 2026) --------------
 
-test('with mod 0.5.0 Staff all sites is one call, the weeks no hire reaches with it, undone in one step', async (t) => {
+test('with mod 0.4.0 Staff all sites is one call, the weeks no hire reaches with it, undone in one step', async (t) => {
   const page = await board(t, {link: ONE});
   // Sam stays at Corner (his reassign unticked): Corner's week has him on
   // Tuesday and its plan does not, a week no hire or move reaches.
@@ -2082,9 +2082,13 @@ test('an older mod: the weeks no hire reaches are written one by one after the h
   await page.locator(REVIEW).click();
   await phase(page, 'ready');
   const dlg = page.locator('dialog.gw-dlg');
-  assert.match(await dlg.locator('.gw-body').textContent(), /This mod takes 1 of the weeks only after the hire, one at a time, and cannot undo any of it\./);
+  assert.match(await dlg.locator('.gw-body').textContent(),
+    /This mod writes 1 more week after the hire, on its own, and cannot undo any of it\. Big Copilot Link 0\.4\.0 does it all in one step, with Undo\./);
+  // An earlier schedule write's Undo, which the chained write will replace in the game.
+  await page.evaluate(k => { gwUndoable.schedule = {spec: {kind: 'schedule', title: 'x', sites: [k]}, text: 'x', sub: '', whose: gwWhose(), at: 1, sites: [k]}; }, B);
   await dlg.locator('.gw-foot [data-gw-b="apply"]').click();
   await phase(page, 'done');
+  assert.match(await dlg.textContent(), /1 more week is being written, one at a time\./);
   await page.waitForFunction(() => window.hrWrites.some(w => w.kind === 'schedule'));
   const sched = await page.evaluate(() => window.hrWrites.filter(w => w.kind === 'schedule'));
   assert.deepEqual(sched.map(w => [w.body.address, w.body.openAllHours, w.dryRun]), [[addr(C), false, false]]);
@@ -2094,6 +2098,136 @@ test('an older mod: the weeks no hire reaches are written one by one after the h
   assert.match(await corner.locator('.hr-st').textContent(), /changed in the game: not written/);
   assert.equal(await dlg.locator('.hr-st.ok').count(), 4);
   assert.equal(await dlg.locator('.gw-foot [data-gw-b="undo"]').count(), 0);
+  // The chained write replaced the game's schedule undo: the board's goes too.
+  assert.equal(await page.evaluate(() => !!gwUndoable.schedule), false);
+});
+
+test('an older mod: two weeks after the hire are named as two, and a write with no answer says so', async (t) => {
+  const page = await board(t);
+  await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
+  const out = await page.evaluate(() => {
+    const r = hrRequest(hrModel(), {one: false});
+    r.rest.push(r.rest[0]);
+    hrLast = {req: r, one: false};
+    return [r.rest.length, hrChainSay({error: 'uncertain'})];
+  });
+  assert.deepEqual(out, [2, 'no answer came: check this week in the game']);
+  const text = await page.evaluate(() => { const el = document.createElement('div'); el.innerHTML = hrChainNote(2); return el.textContent; });
+  assert.match(text, /This mod writes the other 2 weeks after the hire, one at a time, and cannot undo any of it\./);
+});
+
+test('an older mod, schedule only: no empty hire call, and every week it writes is counted', async (t) => {
+  const page = await board(t);
+  await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
+  await page.evaluate(src => {
+    window.answerFor = eval(src);
+    window.hrAnswer = async (kind, body, o) => kind === 'schedule'
+      ? {status: 200, error: null, body: {ok: true, kind: 'schedule', dryRun: false, stamp: 's', before: {shifts: 1, print: 'a'}, after: {shifts: 2, print: 'b'},
+          removed: 1, added: 2, openedHours: false, leftWithout: [], warnings: [], siteError: null, rows: []}}
+      : {status: 200, error: null, body: window.answerFor(body, {dryRun: !!o.dryRun})};
+  }, `(${answerFor.toString()})`);
+  await page.locator(REVIEW).click();
+  await phase(page, 'ready');
+  const dlg = page.locator('dialog.gw-dlg');
+  await dlg.locator('[data-hr-mode="week"]').click();
+  await page.waitForFunction(() => document.querySelector('dialog.gw-dlg').dataset.phase === 'ready'
+    && /Write/.test(document.querySelector('dialog.gw-dlg .gw-foot [data-gw-b="apply"]').textContent));
+  await dlg.locator('.gw-foot [data-gw-b="apply"]').click();
+  await phase(page, 'done');
+  await page.waitForFunction(() => window.hrWrites.filter(w => w.kind === 'schedule').length === 2);
+  // The hire call would have carried nothing: it is never sent.
+  assert.deepEqual(await page.evaluate(() => window.hrWrites.filter(w => w.kind === 'hire').map(w => w.dryRun)), [true], 'only the dry run of the first choice');
+  assert.doesNotMatch(await dlg.textContent(), /Nothing changed in the game/);
+  assert.match(await dlg.textContent(), /2 more weeks are being written, one at a time\./);
+  await dlg.locator('.hr-st.wait').first().waitFor({state: 'detached'});
+  assert.equal(await dlg.locator('.hr-st.ok').count(), 2);
+});
+
+test('with mod 0.4.0 the one call drops the board\'s schedule Undo for a site it writes, and an Undo the mod did not keep is not offered', async (t) => {
+  const page = await board(t, {link: ONE});
+  await page.evaluate(src => {
+    window.answerFor = eval(src);
+    window.hrAnswer = async (kind, body, o) => ({status: 200, error: null, body: window.answerFor(body, {dryRun: !!o.dryRun,
+      extra: o.dryRun ? {} : {undoable: window.keep !== false}})});
+  }, `(${answerFor.toString()})`);
+  await page.evaluate(k => { gwUndoable.schedule = {spec: {kind: 'schedule', title: 'x'}, text: 'x', sub: '', whose: gwWhose(), at: 1, sites: [k]}; }, G);
+  await page.locator(REVIEW).click();
+  await phase(page, 'ready');
+  const dlg = page.locator('dialog.gw-dlg');
+  await dlg.locator('.gw-foot [data-gw-b="apply"]').click();
+  await phase(page, 'done');
+  assert.equal(await page.evaluate(() => !!gwUndoable.schedule), false, 'the game dropped it with the call');
+  assert.equal(await dlg.locator('.gw-foot [data-gw-b="undo"]').count(), 1);
+  await dlg.locator('[data-gw-close]').click();
+  // The mod could not record what the undo needs: no Undo is offered.
+  await page.evaluate(() => { window.keep = false; delete gwUndoable.hire; });
+  await page.locator(REVIEW).click();
+  await phase(page, 'ready');
+  await dlg.locator('.gw-foot [data-gw-b="apply"]').click();
+  await phase(page, 'done');
+  assert.equal(await dlg.locator('.gw-foot [data-gw-b="undo"]').count(), 0);
+});
+
+test('the Undo strip takes back the call it was made for, whatever review opened since', async (t) => {
+  const page = await board(t, {link: ONE});
+  await page.evaluate(src => {
+    window.answerFor = eval(src);
+    window.hrAnswer = async (kind, body, o) => kind === 'undo'
+      ? {status: 200, error: null, body: {ok: true, kind: 'hire', dryRun: false, undo: true, stamp: 's2', hired: [], moved: [], skipped: [], sites: [], wageAdded: 0, rows: []}}
+      : {status: 200, error: null, body: window.answerFor(body, {dryRun: !!o.dryRun, extra: o.dryRun ? {} : {undoable: true}})};
+  }, `(${answerFor.toString()})`);
+  await page.locator(REVIEW).click();
+  await phase(page, 'ready');
+  const dlg = page.locator('dialog.gw-dlg');
+  await dlg.locator('.gw-foot [data-gw-b="apply"]').click();
+  await phase(page, 'done');
+  assert.equal(await page.evaluate(() => hrUi.hired.ids.has('c2')), true);
+  await dlg.locator('[data-gw-close]').click();
+  // Another review opens and closes: hrLast is its now.
+  await page.evaluate(() => { hrReview({scope: 'site', site: 'ba:street_industry#3'}); });
+  await phase(page, 'ready');
+  await page.locator('dialog.gw-dlg [data-gw-close]').click();
+  await page.locator('#gwToast [data-gw-undo]').click();
+  await phase(page, 'undone');
+  assert.equal(await page.evaluate(() => hrUi.hired.ids.has('c2')), false, 'the first call\'s hires are candidates again');
+});
+
+test('the hire undo refused for the day says the undo only works on the day of the write', async (t) => {
+  const page = await board(t, {link: ONE});
+  const p = await page.evaluate(() => gwProblem({status: 409, error: 'changed', body: {error: 'changed', rows: [{scope: 'day', error: 'changed'}]}}));
+  assert.match(p.text, /Undo only works on the game day of the write\./);
+  assert.ok(!p.refresh, 'reading the game again would not help');
+});
+
+test('a Staffing block builds the Staff page\'s model once, and a mod that cannot hire keeps the MyEmployees step', async (t) => {
+  const d = JSON.parse(payload);
+  d.staffing.find(r => r.key === G).addPeople = {assign: [], hire: [{skill: CS, role: 'Customer Service', people: 2}], people: 2, hoursUncovered: 60};
+  const data = JSON.stringify(d);
+  const page = await board(t, {link: ONE, data});
+  const calls = await page.evaluate(([G]) => {
+    const real = hrModel;
+    let n = 0;
+    window.hrModel = () => { n++; return real(); };
+    openRoute('staffing/schedules', {pick: G});
+    window.hrModel = real;
+    return n;
+  }, [G]);
+  assert.ok(calls <= 1, `hrModel built ${calls} times`);
+  const old = await board(t, {link: {writes: ['uniforms', 'imports', 'schedule'], day: 34, hour: 14}, data});
+  await old.evaluate(([G]) => openRoute('staffing/schedules', {pick: G}), [G]);
+  assert.equal(await old.locator('#schDetail #sp-roster .sp-add').count(), 1);
+  assert.equal(await old.locator('#schDetail #sp-roster [data-hr-staff]').count(), 0);
+});
+
+test('shops that open no hour are named in one sentence, in the plural where there are several', async (t) => {
+  const page = await board(t);
+  const text = await page.evaluate(([G, C]) => {
+    D.hiring.sites.filter(s => s.key === G || s.key === C).forEach(s => { s.noHours = true; });
+    const el = document.createElement('div'); el.innerHTML = hrNoHoursHtml(); return el.textContent;
+  }, [G, C]);
+  assert.equal(text, 'HART. Gifts, HART. Corner open no hour in the game: set their opening hours first.');
+  const src = await page.evaluate(() => hrNoHoursHtml.toString());
+  assert.match(src, /tt\("co\.hire\.nohours\.shut"/);
 });
 
 test('hire only and schedule only: the pick changes what is sent and the verb of the confirm', async (t) => {

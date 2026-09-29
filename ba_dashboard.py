@@ -23646,7 +23646,7 @@ function spRosterBlock(b){
   const adding = (add.assign || []).length + (add.hire || []).reduce((n, h) => n + (h.people || 0), 0);
   /* Linked, and the Staff page's plan has people for this site: its "Staff
      this site" (gwRosterButtons()) does this step, so it is not a tick. */
-  const addStep = adding && !(gwLink() && hrSitePeople(b.key))
+  const addStep = adding && !(hrCanHire() && hrSitePeople(b.key))
     ? `<button type="button" class="sp-step sp-add"${add.hoursUncovered || counts.hire ? ` data-tip="${attr(
       `${add.hoursUncovered ? `${tt("sp.step.empty", "{n} h a week stay empty until they are added: a week can only be set for people already working here.", {n: add.hoursUncovered})} ` : ""}${
       counts.hire ? tt("sp.step.hiretip", "{hirefor}. A full-time employee works 30 to 50 hours a week, so each hire adds at least 30 hours of wages.", {hirefor: hireFor}) : ""}`)}"` : ""}><span class="sp-box">${
@@ -28997,15 +28997,25 @@ function hrWeek(S, fill, away, arriving, lost){
 /* How many people Staff this site would hire or reassign into a site: its
    share of the Staff page's plan. None where the site plans no staffing, or
    the board has no hiring payload. */
+let hrSiteMemo = null;  // {board, key, model}: one Staff page model a board and a set of picks
 function hrSitePeople(key){
   const site = ((D.hiring || {}).sites || []).find(s => s.key === key);
   if(!site || !site.planned) return 0;
-  const r = hrRequest(hrModel(), {mode: "hire", site: key, one: true});
+  /* The model is the Staff page's, which the filters, the ticks and a Quick
+     hire's hold decide; a site block asks twice as it draws. */
+  const ui = hrTicks(), set = x => [...(x || [])].sort().join(",");
+  const picks = [JSON.stringify(hrFilters()), set(ui.skip), set(ui.force), set(ui.moveOff), String(ui.quickHold || ""),
+    JSON.stringify(ui.quick), ui.hired && ui.hired.board === D ? set(ui.hired.ids) : ""].join("|");
+  if(!hrSiteMemo || hrSiteMemo.board !== D || hrSiteMemo.key !== picks) hrSiteMemo = {board: D, key: picks, model: hrModel()};
+  const r = hrRequest(hrSiteMemo.model, {mode: "hire", site: key, one: true});
   return r.body.hires.length + r.body.moves.length;
 }
+/* A mod that takes the hire write: Staff this site stands in for the step
+   that sends the player to MyEmployees only then. */
+const hrCanHire = () => { const l = gwLink(); return !!l && (l.writes || []).includes("hire"); };
 /* Whether the linked mod takes the whole staffing action in one call, undone
    in one step (docs/game-link-api.md: /health `features` lists
-   "hire.reschedule" and "hire.undo", mod 0.5.0). An older mod hires and moves
+   "hire.reschedule" and "hire.undo", mod 0.4.0). An older mod hires and moves
    in one call, and the other weeks follow one by one, with no undo. */
 const hrOneCall = () => {
   const f = (gwLink() || {}).features;
@@ -29280,8 +29290,10 @@ function hrNoHoursHtml(){
   /* A shop the player put on full cover (24/7) is planned 0 to 24 all the same. */
   const shut = ((D.hiring || {}).sites || []).filter(s => s.noHours && !((s.plans || {}).full && spPlanOf(spRosterRow(s.key)) === "full"));
   const byKey = new Map((D.businesses || []).map(b => [b.key, b]));
-  return shut.length ? `<p class="hs-note hs-nohours">${shut.map(s => spEsc(byKey.get(s.key) ? shortName(byKey.get(s.key)) : s.name || "A shop")).join(", ")} ${
-    shut.length === 1 ? "opens" : "open"} no hour in the game: set ${shut.length === 1 ? "its" : "their"} opening hours first.</p>` : "";
+  const names = shut.map(s => spEsc(byKey.get(s.key) ? shortName(byKey.get(s.key)) : s.name || tt("co.hire.ashop", "A shop"))).join(", ");
+  return shut.length ? `<p class="hs-note hs-nohours">${tt("co.hire.nohours.shut", {
+    one: "{names} opens no hour in the game: set its opening hours first.",
+    other: "{names} open no hour in the game: set their opening hours first."}, {n: shut.length, names})}</p>` : "";
 }
 /* Staff with no hours: planned sites whose week in the game leaves the plan's
    hours with nobody on, where the site's own people would work them (the
@@ -30038,7 +30050,7 @@ function wireStaff(){ bindStaff(); bindHireReview(); hrMoreReady(); }
 /* --- the review: gwConfirm, kind "hire" ----------------------------------- */
 /* One action (Peter, 28 September 2026): "Staff this site" on a site's
    Staffing, "Staff all sites" on this page and Quick hire all open this
-   review, one confirm and, with mod 0.5.0, one undo. What it does is one of
+   review, one confirm and, with mod 0.4.0, one undo. What it does is one of
    three, picked at the top of the review, and the confirm's verb says which:
    hire and schedule (the hires and moves, and the new week at every site it
    reaches or whose week changes), hire only (assigned, no hours), schedule
@@ -30167,17 +30179,22 @@ function hrModesOf(o, reqs){
 /* A week an older mod writes after the hire: what it answered, in a few words. */
 function hrChainSay(res){
   if(res.error === "changed") return tt("co.hire.st.changed", "changed in the game: not written");
+  /* No answer: it may or may not have been written. */
+  if(res.error === "uncertain") return tt("co.hire.st.uncertain", "no answer came: check this week in the game");
   const row = res.error === "refused" && ((res.body || {}).rows || []).find(r => r && r.error);
   const known = row && (GW_REFUSE.schedule[row.error] || GW_REFUSE.any[row.error]);
   return known ? spEsc(typeof known === "function" ? known(row).rule : known.rule) : tt("co.hire.st.failed", "week not written");
 }
 /* The weeks no hire or move reached, written one by one after the hire as
    /write/schedule, where the mod cannot take them in the same call (before
-   0.5.0). Each site says how it went, in the review it came from. */
+   0.4.0). Each site says how it went, in the review it came from. */
 async function hrChain(last, dlg){
   for(const {S, body} of last.req.rest){
     const res = await SOURCE.write("schedule", body, {dryRun: false, approval: gwApprovalView(dlg, () => {})});
     last.chain[S.key] = res.error ? {say: hrChainSay(res)} : "done";
+    /* Each week written this way replaces the game's one schedule undo, so the
+       board's Undo for an earlier schedule write would undo the wrong site. */
+    if(!res.error || res.error === "uncertain"){ delete gwUndoable.schedule; gwToast(); }
     if(!dlg || !dlg.open || dlg.dataset.phase !== "done") continue;
     const list = dlg.querySelector(".hr-dsites");
     if(!list) continue;
@@ -30188,6 +30205,11 @@ async function hrChain(last, dlg){
     wireTips();
   }
 }
+/* What an older mod does with the weeks no hire or move reaches, `n` of them. */
+const hrChainNote = n => gwCall("info", "roster", `${tt("co.hire.chain.later", {
+  one: "This mod writes {n} more week after the hire, on its own, and cannot undo any of it.",
+  other: "This mod writes the other {n} weeks after the hire, one at a time, and cannot undo any of it."}, {n})} ${
+  tt("co.hire.chain.update", "Big Copilot Link 0.4.0 does it all in one step, with Undo.")}`);
 /* The action's review and confirm. `o`: {scope: "all" | "site" | "quick",
    site (a key), only (Pick more), mode (the one to open on)}; `hooks`:
    onDone, onFailed and more, for Quick hire's hold. */
@@ -30215,6 +30237,7 @@ function hrReview(o = {}, hooks = {}){
   const people = answer => (answer.hired || []).length + (answer.moved || []).length;
   const weeksOf = answer => (answer.sites || []).filter(s => s && s.before && s.after).length;
   let written = [];  // the progress records of the apply (pgHireDone())
+  let applied = null;  // the action as applied, for its Undo
   gwConfirm({
     kind: "hire", icon: "hire",
     title: () => o.only ? tt("co.hire.title.more", "Pick more")
@@ -30276,8 +30299,11 @@ function hrReview(o = {}, hooks = {}){
         /* "Pick N more" re-picks week hires only: a gone hire with no hours is not a place. */
         const open = req.body.hires.filter(h => gone.has(h.candidateId)
           && [...req.touched.values()].some(at => at.hires.some(x => x.c.id === h.candidateId && x.w))).length;
-        const more = open ? gwCall("", "hire", `${tt("co.hire.more.open", {one: "{n} place still open.", other: "{n} places still open."}, {n: open})} <button type="button" class="gw-mini-b" data-hr-more disabled title="${
-          attr(tt("co.hire.more.wait", "Waiting for the board to read the game"))}">${tt("co.hire.more.button", "Pick {n} more", {n: open})}</button> ${tt("co.hire.more.what", "opens the review for those only.")}`) : "";
+        const button = `<button type="button" class="gw-mini-b" data-hr-more disabled title="${
+          attr(tt("co.hire.more.wait", "Waiting for the board to read the game"))}">${tt("co.hire.more.button", "Pick {n} more", {n: open})}</button>`;
+        const more = open ? gwCall("", "hire", tt("co.hire.more.said", {
+          one: "{n} place still open: {button} opens the review for it alone.",
+          other: "{n} places still open: {button} opens the review for those alone."}, {n: open, button})) : "";
         return `${gwTiles([[tt("co.hire.tile.hired", "Hired"), null, hrNum(hired)], [tt("co.hire.tile.moved", "Reassigned"), null, hrNum(moved)],
             ...(mode === "hire" ? [] : [[tt("co.hire.tile.weeks", "Weeks"), null, hrNum(c.weeks)]]),
             [tt("co.hire.tile.wages", "Added wages"), null, `+${fmt(bill)}<small class="hr-u">${tt("co.hire.perday", "/day")}</small>`]])}
@@ -30306,9 +30332,7 @@ function hrReview(o = {}, hooks = {}){
         {one: "<b>{n} hire joins with no hours</b>. Choose Hire only to hire without hours, or hire fewer.",
          other: "<b>{n} hires join with no hours</b>. Choose Hire only to hire without hours, or hire fewer."}, {n: req.zero.length})}<ul class="gw-chk">${
         req.zero.map(z => `<li>${tt("co.hire.zero.one", "<b>{name}</b>: {why}", {name: spEsc(z.c.name || "?"), why: zeroWhy(z)})}</li>`).join("")}</ul>`) : "";
-      const chain = !hrLast.one && req.rest.length ? gwCall("info", "roster", tt("co.hire.chain",
-        {one: "This mod takes {n} of the weeks only after the hire, one at a time, and cannot undo any of it. Big Copilot Link 0.5.0 does it all in one step, with Undo.",
-         other: "This mod takes {n} of the weeks only after the hire, one at a time, and cannot undo any of it. Big Copilot Link 0.5.0 does it all in one step, with Undo."}, {n: req.rest.length})) : "";
+      const chain = !hrLast.one && req.rest.length ? hrChainNote(req.rest.length) : "";
       /* Every week this call writes, checked per person (gwWeekCheck()). */
       /* Somebody the call moves elsewhere is checked where they go, not left
          an empty week where they were (PR #184). */
@@ -30341,6 +30365,10 @@ function hrReview(o = {}, hooks = {}){
         replan(b);
       }; });
     },
+    /* An older mod's schedule only: the hire call would carry nothing, and
+       MyEmployees open would still refuse it. The weeks go one by one. */
+    local: (body, dryRun) => !hrLast.one && !body.hires.length && !body.moves.length && !body.sites.length
+      ? {ok: true, kind: "hire", dryRun, hired: [], moved: [], skipped: [], sites: [], wageAdded: 0, rows: []} : null,
     get hint(){ return hrLast.one ? tt("co.hire.hint.undo", "Undo takes every hire, reassign and week of this back in one step.")
       : tt("co.hire.hint.noundo", "This mod cannot undo a hire. To let someone go later, fire them in the MyEmployees app in the game."); },
     refusedHint: answer => answer.blocked === "myemployees" ? tt("co.hire.refused.myemployees", "The game cannot hire while you are in that app.") : tt("sp.gw.unchanged", "Nothing was changed."),
@@ -30354,21 +30382,32 @@ function hrReview(o = {}, hooks = {}){
         : tt("co.hire.go.both", "Hire and schedule");
     },
     applying: tt("co.hire.applying", "Hiring, reassigning and writing the weeks…"),
-    /* One undo for the whole of it, from mod 0.5.0; none before. */
-    changed: answer => !!hrLast.one && (people(answer) > 0
+    /* One undo for the whole of it, from mod 0.4.0 (none before), where the
+       mod says it kept it (`undoable`). */
+    changed: answer => !!hrLast.one && answer.undoable !== false && (people(answer) > 0
       || (answer.sites || []).some(s => s && s.before && s.after && (s.before.print !== s.after.print || s.openedHours))),
     done: answer => {
       if(answer.undo) return tt("co.hire.undone", "Undone: every hire, reassign and week of that step is back as it was.");
-      const n = people(answer), w = weeksOf(answer);
+      /* The weeks an older mod writes after the call are counted too. */
+      const n = people(answer), w = weeksOf(answer), later = answer.dryRun === false && !hrLast.one ? hrLast.req.rest.length : 0;
       const said = [n ? tt("co.hire.done.people", {one: "{n} person hired or reassigned in the game.", other: "{n} people hired or reassigned in the game."}, {n}) : "",
-        w ? tt("co.hire.done.weeks", {one: "{n} week written.", other: "{n} weeks written."}, {n: w}) : ""].filter(Boolean).join(" ");
+        w ? tt("co.hire.done.weeks", {one: "{n} week written.", other: "{n} weeks written."}, {n: w}) : "",
+        later ? tt("co.hire.done.later", {one: "{n} more week is being written, one at a time.", other: "{n} more weeks are being written, one at a time."}, {n: later}) : ""]
+        .filter(Boolean).join(" ");
       return said || tt("co.hire.done.none", "Nothing changed in the game.");
     },
     undoHint: () => tt("co.hire.undohint", "Undo takes it all back, until the game's next day."),
     onDone: answer => {
       const last = hrLast;
       last.answer = answer;
+      applied = last;
       written = pgHireDone(last.req.body, answer);
+      /* The game drops its schedule undo for a site this call wrote (HireWrite's
+         ForgetScheduleUndo): so does the board. */
+      const wrote = new Set([...(answer.sites || []).filter(x => x && x.after).map(x => gwKeyOf(x.address)),
+        ...(answer.moved || []).filter(x => x && x.shiftsCleared).map(x => ((last.req.names.get(x.employeeId) || {}).move || {}).from).filter(Boolean).map(S => S.key)]);
+      const sched = gwUndoable.schedule;
+      if(sched && (sched.sites || []).some(k => wrote.has(k))) delete gwUndoable.schedule;
       const gone = goneOf(answer);
       const only = {};
       last.req.body.hires.forEach(h => {
@@ -30391,9 +30430,11 @@ function hrReview(o = {}, hooks = {}){
     },
     onFailed: res => { if(hooks.onFailed) hooks.onFailed(res); },
     /* Undone: whoever it hired is a candidate again, and its records go. */
+    /* The call this Undo is for (`applied`), not the review on screen now: the
+       strip's Undo can come after another review opened. */
     onUndo: () => {
       pgDrop(written); written = [];
-      const back = new Set((((hrLast || {}).answer || {}).hired || []).map(h => h && h.candidateId));
+      const back = new Set((((applied || {}).answer || {}).hired || []).map(h => h && h.candidateId));
       if(hrUi.hired) back.forEach(id => hrUi.hired.ids.delete(id));
       hrUi.more = null;
       hrStale();
@@ -36089,7 +36130,12 @@ function gwProblem(res){
   const say = words => `<b>${words}</b>`;
   const unchanged = tt("nav.dlg.unchanged", "Nothing was changed."), unsent = tt("nav.dlg.unsent", "Nothing was sent.");
   switch(res.error){
-    case "changed": return {wire: "moved", say: say(tt("nav.dlg.say.moved", "The game moved on")),
+    /* A hire's undo keeps only to the game day of its write: reading the game
+       again cannot help. */
+    case "changed": if(((body.rows) || []).some(r => r && r.scope === "day")) return {wire: "moved",
+      say: say(tt("nav.dlg.say.toolate", "Too late to undo")), box: ["clock", "dim"],
+      text: tt("nav.dlg.undo.day", "Undo only works on the game day of the write. Nothing was changed.")};
+      return {wire: "moved", say: say(tt("nav.dlg.say.moved", "The game moved on")),
       text: unchanged,
       drift: true, sub: tt("nav.dlg.moved.sub", "Something was hired, set or sold in the game meanwhile. Refresh, and the board plans again from what the game holds."), refresh: true};
     /* A refusal the player fixes in the game (a BizMan screen closed, a
@@ -36457,7 +36503,10 @@ function gwConfirm(spec){
     else asking();
     const body = spec.body();
     const sent = JSON.stringify(body), game = gwWhose();
-    const res = await SOURCE.write(spec.kind, body, {dryRun: true, approval: view, asked: typeof o.asked === "string" ? o.asked : ""});
+    /* A write with nothing for the game to do answers here (spec.local). */
+    const here = spec.local ? spec.local(body, true) : null;
+    const res = here ? {status: 200, error: null, body: here}
+      : await SOURCE.write(spec.kind, body, {dryRun: true, approval: view, asked: typeof o.asked === "string" ? o.asked : ""});
     if(!dlg.open || mine !== seq) return;
     /* "Allowed." is said once: a Try again after this does not say it again. */
     if(res.error){ allowed = false; return gwFailed(dlg, spec, res, () => plan(), () => plan()); }
@@ -36506,7 +36555,8 @@ function gwConfirm(spec){
     applying = true;
     gwPaint(dlg, {phase: "applying", wire: "ask", say: `<b>${spec.applying}</b>`, body: spec.draw(last || {}, "applying"),
       buttons: ["|", [tt("nav.dlg.applying", "Applying"), null, {kind: "go", busy: true, disabled: true}]]});
-    const res = await SOURCE.write(spec.kind, JSON.parse(judged), {dryRun: false, approval: view});
+    const local = spec.local ? spec.local(JSON.parse(judged), false) : null;
+    const res = local ? {status: 200, error: null, body: local} : await SOURCE.write(spec.kind, JSON.parse(judged), {dryRun: false, approval: view});
     if(res.error){
       /* No answer: whether the game holds it is unknown, and so is what an
          undo would restore. */
@@ -36524,7 +36574,7 @@ function gwConfirm(spec){
     /* An apply replaces its kind's undo, with nothing when it changed nothing. */
     const undoable = !spec.changed || spec.changed(answer);
     if(undoable) gwUndoable[spec.kind] = {spec, text: spec.done(answer), sub: stays(),
-                                           whose: gwWhose(), at: Date.now()};
+                                           whose: gwWhose(), at: Date.now(), sites: spec.sites ? spec.sites() : null};
     else delete gwUndoable[spec.kind];
     if(spec.onDone) spec.onDone(answer);
     if(!dlg.open) return gwToast();
@@ -37367,7 +37417,7 @@ function gwRosterButtons(key){
   /* Staff this site: the one action, where the Staff page's plan hires or
      reassigns somebody into this site (hrSitePeople()); it writes the week
      with them on it, so the "add them first" note below it goes. */
-  const people = hrSitePeople(key);
+  const people = hrCanHire() ? hrSitePeople(key) : 0;
   const staff = people ? gwButton("hire", tt("sp.gw.staff", "Staff this site"), `data-hr-staff="${attr(key)}"`, "", {count: people}) : "";
   const one = gwButton("schedule", tt("sp.gw.sch.one", "Write this schedule to the game"), `data-gw-sites="${attr(JSON.stringify([key]))}"`,
     row.office && gwRosterWeek(row).unreadable ? tt("sp.gw.sch.office.unreadable", "An entry here can't be read; change it in the game first")
@@ -37455,6 +37505,8 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
   let openAll = true, last = null, schedWritten = [];
   gwConfirm({
     kind: "schedule", icon: "roster", againLabel: tt("sp.gw.sch.again", "Write again"),
+    /* The site its Undo is for: a later write of the site elsewhere drops it. */
+    sites: () => [key],
     title: many ? tt("sp.gw.sch.all", "Write all {n} planned sites", {n: keys.length}) : tt("sp.gw.sch.one", "Write this schedule to the game"),
     where: () => many ? `${gwSteps(keys, run, i)}<span>${tt("sp.gw.run.where", "{n} of {of} · {name}", {n: i + 1, of: keys.length, name})}</span>` : gwWhere(b),
     nothing: () => !gwRosterPlan(key) ? (b.status === "office" ? tt("sp.gw.sch.noplan.office", "This office has no plan to write any more.")

@@ -30,7 +30,7 @@ Peter's (25 Sep 2026):
 - Candidates in a drawer under each role (canvas option A). Option B's table is what the
   HQ/warehouse Candidates buttons open, and "Show all N who pass".
 - Apply = review (who goes where, their days, the added wage bill) + one confirm. No undo
-  (until 29 September 2026: with mod 0.5.0 the whole call has one undo, section 3.5).
+  (until 29 September 2026: with mod 0.4.0 the whole call has one undo, section 3.5).
 - Old Payroll content stays at the bottom of the page.
 
 Designer defaults kept: the working state is an indeterminate bar; the not-linked page is fully
@@ -428,12 +428,15 @@ in the main checkout). What changed on the board, over 3.2 to 3.4 and 2.4b:
   reassigns on their weeks; an office nobody arrives at keeps its additive write
   (`gwRosterWeek()`). Quick hire now writes its site's plan week too, with the hires on
   their plan weeks, instead of adding to the week as it stands.
-- **One call, one undo** with mod 0.5.0 (`/health` `features` `hire.reschedule` and
+- **One call, one undo** with mod 0.4.0 (`/health` `features` `hire.reschedule` and
   `hire.undo`, docs/game-link-api.md): the reschedule-only sites ride in the hire call and the
   dialog offers Undo, which `POST /write/undo {"kind": "hire"}` takes back whole until the
   game's next day. With 0.3.x/0.4.x the call carries the hires, the reassigns, their sites and
   the sources that change, and the other weeks follow as `/write/schedule` calls one by one
-  (`hrChain()`), each site saying done or why not; nothing can be undone.
+  (`hrChain()`), each site saying done or why not; nothing can be undone. A call with nothing
+  for the hire write (schedule only) is not sent at all; each chained week drops the board's
+  Undo for an earlier schedule write (the game keeps one), as the one call does for a site it
+  writes. Undo is offered only where the apply answers `undoable` true.
 - **Done and failed per site**: once applied, each site in the review says "week written",
   "assigned", "writing the week…" or why its week was not written.
 
