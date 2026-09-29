@@ -21510,7 +21510,7 @@ function findingRow(a, o = {}){
      picked by drawAlerts(), also offers every shop at once. */
   const writes = gwDressable(a) ? gwUniformButtons(b, a.id === gwUniformAllId)
     /* A promotion line: the cheapest mix at exactly the sites it names. */
-    : a.group === "promotion" && gwMkLineOf(a) ? gwMkAll("mix", false, gwMkLineOf(a)) : "";
+    : (line => line ? gwMkAll("mix", false, line) : "")(a.group === "promotion" && gwMkLineOf(a));
   /* Three shops can share a name; the pill already tells them apart, so the
      neighbourhood shortName() would add is only spelt out when there is no pill. */
   /* The name is a way to the site's own page; the rest of the row still opens
@@ -36013,7 +36013,7 @@ const gwMkLine = p => p.promotionPlan > p.promotionNow || p.costPlan > p.costNow
 /* The line a promotion finding is, by its sentence's key; null for a
    "Visit … once" line, which has no mix to set. */
 const gwMkLineOf = a => {
-  const key = ((a.i18n && a.i18n.text) || [])[0] || "";
+  const key = ovKey(a);
   return /^f\.promotion\.(reach|gain)\./.test(key) ? "raise" : /^f\.promotion\.save\./.test(key) ? "save" : null;
 };
 /* The sites a marketing write is for: `mix`, every one whose plan differs
