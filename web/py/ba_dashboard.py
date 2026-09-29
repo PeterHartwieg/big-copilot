@@ -30254,7 +30254,8 @@ const hrWants = c => hrAsksPt(c) ? "part" : (c.demands || []).includes("ba:jobde
 /* The week to give candidate `c` from weeks that fit them (`pool`, site list
    order). The fewest people for the hours: the first site in list order with
    a week of the contract they ask for (a part-timer a "part" week, a
-   full-timer a "full" one), else the first site with any; there, a week of
+   full-timer a "full" one), else the first with a week some contract suits,
+   else the first with any; there, a week of
    their own contract, else any; among those the best tier first (a week
    too short for any contract last, which only one ticked in by hand gets,
    and for someone who asks for neither a 30 h week, which either contract
@@ -31484,31 +31485,39 @@ function hrQuickPlan(sites, cands, used){
      September 2026). The places still to fill then go, best match first,
      to everyone not placed, those held back included, with no hours, as at
      a site with no plan. The picks are listed best first. */
-  const placed = new Map();  // candidate id -> the plan week they take
-  const held = new Map();    // candidate id -> the demands no open week met
   /* As Open places: at a shop, the Part-time default keeps a part-time
      asker to its part-time weeks, and to none once those are taken (no
      place with no hours either). */
   const ptBar = c => shop && f.ex.includes(HR_PT) && hrAsksPt(c);
-  for(const c of out.matches){
-    if(placed.size >= q.n || !open.length) break;
-    if(ptBar(c) && !open.some(x => x.w.band === "part")) continue;
-    const fit = open.filter(x => hrFits(c, x) && !(ptBar(c) && x.w.band !== "part"));
-    if(!fit.length){
-      /* Never empty: a part-time asker reaches here only with a part week
-         still open, which their demands broke. */
-      held.set(c.id, [...new Set(open.filter(x => !(ptBar(c) && x.w.band !== "part")).flatMap(x => hrFails(c, x)))]);
-      continue;
+  /* The plan weeks given out, best match first, `cap` of them at most:
+     {placed: id -> week, held: id -> the demands no open week met, open}. */
+  const place = cap => {
+    const weeks = open.slice(), placed = new Map(), held = new Map();
+    for(const c of out.matches){
+      if(placed.size >= cap || !weeks.length) break;
+      if(ptBar(c) && !weeks.some(x => x.w.band === "part")) continue;
+      const fit = weeks.filter(x => hrFits(c, x) && !(ptBar(c) && x.w.band !== "part"));
+      if(!fit.length){
+        /* Never empty: a part-time asker reaches here only with a part week
+           still open, which their demands broke. */
+        held.set(c.id, [...new Set(weeks.filter(x => !(ptBar(c) && x.w.band !== "part")).flatMap(x => hrFails(c, x)))]);
+        continue;
+      }
+      const wk = hrPickWeek(c, fit);
+      weeks.splice(weeks.indexOf(wk), 1);
+      placed.set(c.id, wk);
     }
-    const wk = hrPickWeek(c, fit);
-    open.splice(open.indexOf(wk), 1);
-    placed.set(c.id, wk);
-  }
+    return {placed, held, open: weeks};
+  };
+  /* A part-time asker who gets no part week however many are asked for is
+     no match here (the headline count does not move with How many). */
+  const all = place(Infinity);
+  out.leftOut = out.matches.filter(c => !all.placed.has(c.id) && ptBar(c)).length;
+  const capped = place(q.n), {placed, held} = capped;
+  const partLeft = capped.open.some(x => x.w.band === "part");
   /* With no part week left open, a part-time asker not placed gets no place
-     with no hours at such a shop, held back or not; they are no match here. */
-  const partLeft = open.some(x => x.w.band === "part");
+     with no hours at such a shop, held back or not. */
   const out1 = c => !placed.has(c.id) && ptBar(c) && !partLeft;
-  out.leftOut = out.matches.filter(out1).length;
   let left = q.n - placed.size;
   out.picks = out.matches.filter(c => placed.has(c.id) || (!out1(c) && left > 0 && left-- > 0)).map(c => {
     const wk = placed.get(c.id) || null;

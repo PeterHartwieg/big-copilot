@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "93b9ac05e6";</script>
-<link rel="stylesheet" href="community.css?v=93b9ac05e6">
+<script>window.LEDGER_BUILD = "c0bc4b388a";</script>
+<link rel="stylesheet" href="community.css?v=c0bc4b388a">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=93b9ac05e6">
+<link rel="stylesheet" href="fonts/fonts.css?v=c0bc4b388a">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -5570,7 +5570,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"93b9ac05e6","latest":{"pr":185,"date":"2026-09-29","title":"Staff a site in one step, and undo it in one","summary":"A shop's or an office's Staffing has Staff this site, and Staffing › Staff needs has Staff all sites. One review hires the best candidates, moves spare staff across, and writes the new week at every site it reaches, including sites that only need new hours; each site then says whether its week was written. Pick Hire and schedule, Hire only (assigned with no hours, as at a headquarters or a warehouse) or Schedule only; Quick hire works the same way. A shop you put on full cover 24/7 is staffed around the clock. With Big Copilot Link 0.4.0 it all goes to the game in one step, and one Undo takes back every hire, move and week, until the game's next day. Older versions of the mod still hire, then write the other weeks one by one, without undo."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"c0bc4b388a","latest":{"pr":185,"date":"2026-09-29","title":"Staff a site in one step, and undo it in one","summary":"A shop's or an office's Staffing has Staff this site, and Staffing › Staff needs has Staff all sites. One review hires the best candidates, moves spare staff across, and writes the new week at every site it reaches, including sites that only need new hours; each site then says whether its week was written. Pick Hire and schedule, Hire only (assigned with no hours, as at a headquarters or a warehouse) or Schedule only; Quick hire works the same way. A shop you put on full cover 24/7 is staffed around the clock. With Big Copilot Link 0.4.0 it all goes to the game in one step, and one Undo takes back every hire, move and week, until the game's next day. Older versions of the mod still hire, then write the other weeks one by one, without undo."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -5658,8 +5658,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=93b9ac05e6"></script>
-<script src="community.js?v=93b9ac05e6"></script>
+<script src="app.js?v=c0bc4b388a"></script>
+<script src="community.js?v=c0bc4b388a"></script>
 
 <script>
 
@@ -16601,7 +16601,8 @@ const hrWants = c => hrAsksPt(c) ? "part" : (c.demands || []).includes("ba:jobde
 /* The week to give candidate `c` from weeks that fit them (`pool`, site list
    order). The fewest people for the hours: the first site in list order with
    a week of the contract they ask for (a part-timer a "part" week, a
-   full-timer a "full" one), else the first site with any; there, a week of
+   full-timer a "full" one), else the first with a week some contract suits,
+   else the first with any; there, a week of
    their own contract, else any; among those the best tier first (a week
    too short for any contract last, which only one ticked in by hand gets,
    and for someone who asks for neither a 30 h week, which either contract
@@ -17831,31 +17832,39 @@ function hrQuickPlan(sites, cands, used){
      September 2026). The places still to fill then go, best match first,
      to everyone not placed, those held back included, with no hours, as at
      a site with no plan. The picks are listed best first. */
-  const placed = new Map();  // candidate id -> the plan week they take
-  const held = new Map();    // candidate id -> the demands no open week met
   /* As Open places: at a shop, the Part-time default keeps a part-time
      asker to its part-time weeks, and to none once those are taken (no
      place with no hours either). */
   const ptBar = c => shop && f.ex.includes(HR_PT) && hrAsksPt(c);
-  for(const c of out.matches){
-    if(placed.size >= q.n || !open.length) break;
-    if(ptBar(c) && !open.some(x => x.w.band === "part")) continue;
-    const fit = open.filter(x => hrFits(c, x) && !(ptBar(c) && x.w.band !== "part"));
-    if(!fit.length){
-      /* Never empty: a part-time asker reaches here only with a part week
-         still open, which their demands broke. */
-      held.set(c.id, [...new Set(open.filter(x => !(ptBar(c) && x.w.band !== "part")).flatMap(x => hrFails(c, x)))]);
-      continue;
+  /* The plan weeks given out, best match first, `cap` of them at most:
+     {placed: id -> week, held: id -> the demands no open week met, open}. */
+  const place = cap => {
+    const weeks = open.slice(), placed = new Map(), held = new Map();
+    for(const c of out.matches){
+      if(placed.size >= cap || !weeks.length) break;
+      if(ptBar(c) && !weeks.some(x => x.w.band === "part")) continue;
+      const fit = weeks.filter(x => hrFits(c, x) && !(ptBar(c) && x.w.band !== "part"));
+      if(!fit.length){
+        /* Never empty: a part-time asker reaches here only with a part week
+           still open, which their demands broke. */
+        held.set(c.id, [...new Set(weeks.filter(x => !(ptBar(c) && x.w.band !== "part")).flatMap(x => hrFails(c, x)))]);
+        continue;
+      }
+      const wk = hrPickWeek(c, fit);
+      weeks.splice(weeks.indexOf(wk), 1);
+      placed.set(c.id, wk);
     }
-    const wk = hrPickWeek(c, fit);
-    open.splice(open.indexOf(wk), 1);
-    placed.set(c.id, wk);
-  }
+    return {placed, held, open: weeks};
+  };
+  /* A part-time asker who gets no part week however many are asked for is
+     no match here (the headline count does not move with How many). */
+  const all = place(Infinity);
+  out.leftOut = out.matches.filter(c => !all.placed.has(c.id) && ptBar(c)).length;
+  const capped = place(q.n), {placed, held} = capped;
+  const partLeft = capped.open.some(x => x.w.band === "part");
   /* With no part week left open, a part-time asker not placed gets no place
-     with no hours at such a shop, held back or not; they are no match here. */
-  const partLeft = open.some(x => x.w.band === "part");
+     with no hours at such a shop, held back or not. */
   const out1 = c => !placed.has(c.id) && ptBar(c) && !partLeft;
-  out.leftOut = out.matches.filter(out1).length;
   let left = q.n - placed.size;
   out.picks = out.matches.filter(c => placed.has(c.id) || (!out1(c) && left > 0 && left-- > 0)).map(c => {
     const wk = placed.get(c.id) || null;

@@ -3152,3 +3152,24 @@ test('a hand-ticked candidate goes to a site with a real week before one whose o
   assert.deepEqual(m.weeks[0], [G, 'demand', [null]]);
   assert.equal(m.weeks[2][2][0], 'hire:c2');
 });
+
+test('Quick hire\'s headline count does not drop when How many goes up', async (t) => {
+  // Two part weeks at Gifts. Bram (part-time) takes one; Cleo, who asks for
+  // no contract, takes the other only when two are asked for; Ada
+  // (part-time, ranked below them) then gets none either way.
+  const d = JSON.parse(payload);
+  d.candidates.find(c => c.id === 'c2').demands = ['ba:jobdemand_parttime'];
+  Object.assign(d.candidates.find(c => c.id === 'c1'), {demands: ['ba:jobdemand_parttime'], level: 70, skills: [{skill: CS, level: 70}]});
+  d.candidates.find(c => c.id === 'c3').demands = [];
+  d.hiring.demandKinds['ba:jobdemand_parttime'] = 'schedule';
+  d.hiring.sites.find(s => s.key === G).plans.demand.hireWeeks = [
+    {skill: CS, hours: 20, days: 2, band: 'part', slots: [slot(2, 3, 8, 18, 'REG-G'), slot(3, 4, 8, 18, 'REG-G')]},
+    {skill: CS, hours: 20, days: 2, band: 'part', slots: [slot(4, 5, 8, 18, 'REG-G'), slot(5, 6, 8, 18, 'REG-G')]}];
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
+  const box = await quickAtGifts(page, 0);
+  const count = async () => Number((await box.locator('.hs-match summary b').first().textContent()).trim());
+  const one = await count();
+  await box.locator('[data-hq-more]').click();
+  assert.equal(await count(), one);
+});
