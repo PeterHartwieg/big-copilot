@@ -7338,12 +7338,6 @@ HIRE_ORDERS = (
     lambda s: (s["wd"], -(s["to"] - s["from"]), s["from"], str(s["station"])),
 )
 HIRE_PACKINGS = tuple((order, balanced) for balanced in (False, True) for order in HIRE_ORDERS)
-# The most open lines a deal may leave for the swaps still to be asked to cover
-# them when the count is searched: over 700 re-planned random shops the swaps
-# covered a deal's last lines 319 times, never more than nine, only six times
-# more than six, and failed some 6,000 times, so a deal leaving more is not
-# settled there (the week finally kept is always settled in full).
-SWAP_REACH = 6
 # Tried before those: the weekend's lines dealt first, by the clock, so they
 # land on as few hires as the count allows and the rest keep their weekends
 # free, which a good share of candidates ask for.
@@ -7400,6 +7394,63 @@ def _deal_hires(rows: list, hires: list, state: dict, here: dict, order, balance
         _take_over(row, hire, state)
         if state[hire["id"]]["hours"] + shortest[row["skill"]] > ceiling:
             mine[:] = [entry for entry in mine if entry[0] is not hire]
+
+
+def _may_split(rows: list, hires: list, state: dict) -> bool:
+    """Whether the lines a deal left open could still go to its hires in two pieces each.
+
+    Only what no cut changes: every open line long enough for two pieces of
+    MIN_SPLIT, a hire of its role to take them, and the role's open hours
+    within the room those hires have left under 50.
+    """
+    room = collections.Counter()
+    for hire in hires:
+        room[hire["skill"]] += max(0, FULL_TIME[1] - state[hire["id"]]["hours"])
+    owed = collections.Counter()
+    for row in rows:
+        if row["employee"] is None:
+            if row["to"] - row["from"] < 2 * MIN_SPLIT or not room[row["skill"]]:
+                return False
+            owed[row["skill"]] += row["to"] - row["from"]
+    return bool(owed) and all(hours <= room[skill] for skill, hours in owed.items())
+
+
+def _split_open(rows: list, hires: list, state: dict, here: dict) -> None:
+    """Cut each line still open between two hires: the head to one, the rest to another.
+
+    Deals and swaps move whole lines, so nine 11-hour lines -- a station
+    22 hours on four days and 11 on a fifth -- come out three hires where two
+    can work them: 44 hours each, and the fifth day's line cut 6 and 5, 50 and
+    49 hours. The head is as long as the first hire (in order) has room for,
+    leaving the rest at least MIN_SPLIT; both pieces pass `_has_room()`.
+    Asked only where the whole lines left a hire short (_place_hires()).
+    """
+    clock = HIRE_ORDERS[0]
+    for row in sorted((r for r in rows if r["employee"] is None), key=clock):
+        mine = [hire for hire in hires if hire["skill"] == row["skill"]]
+        if not mine or not _may_take(mine[0], row):
+            continue
+        length = row["to"] - row["from"]
+        for first in mine:
+            week = state[first["id"]]
+            cut = min(FULL_TIME[1] - week["hours"], SHIFT_CAP - len(week["busy"][row["wd"]]),
+                      length - MIN_SPLIT)
+            if cut < MIN_SPLIT:
+                continue
+            head = dict(row, to=row["from"] + int(cut))
+            tail = dict(row, **{"from": head["to"]})
+            if not _has_room(first, week, head):
+                continue
+            second = next((hire for hire in mine if hire is not first
+                           and _has_room(hire, state[hire["id"]], tail)), None)
+            if second is None:
+                continue
+            row["to"] = head["to"]
+            _take_over(row, first, state)
+            _take_over(tail, second, state)
+            rows.append(tail)
+            here["rostered"].update((first["id"], second["id"]))
+            break
 
 
 def _spread_open(residue: list, shifts: list, pool: list, state: dict, before: dict,
@@ -7588,9 +7639,10 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
     out with nobody to swap with). A deal alone is cheap, so the least N some
     deal covers is searched first: from the open hours over 50 (never under
     the bound), up in doubling steps and back by halves. Below that, down to
-    the bound, the tries are dealt again with the swaps (_fill_by_exchange())
-    after them, a skill at a time and one fewer at a time, while one still
-    covers every line. The week kept is the first try, in that order, that
+    the bound, all ten tries are dealt again with the swaps
+    (_fill_by_exchange()) after them, however many lines the deal left, a
+    skill at a time and one fewer at a time, while one still covers every
+    line. The week kept is the first try, in that order, that
     covers at the N found, settled in full. The fewest people first, as for
     everybody; deterministic throughout, each try starting from the week as
     it was, so an answer asked twice is looked up, not worked out again.
@@ -7630,36 +7682,59 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
     # try: the search asks the same again, and each attempt starts from the
     # same week, so the answer is the same.
     known = {}
+    swapped = {}
+    swap_may = {}
 
     def counted():
         return tuple(sorted(count.items(), key=lambda item: str(item[0])))
 
-    def attempt(packing, spread, settle=True):
+    def attempt(packing, spread, split=False, settle=True):
         if settle is not True:
-            key = (counted(), packing, spread)
+            key = (counted(), packing, spread, split)
             if (key, settle) in known:
                 return [], None, known[key, settle][0]
-            if settle == "swaps" and (key, False) in known:
-                left, n_open = known[key, False]
-                if not n_open or n_open > SWAP_REACH:
-                    return [], None, left
-            hires, rows, left = attempt_now(packing, spread, settle)
-            known[key, settle] = (left, sum(1 for row in rows if row["employee"] is None))
+            if settle == "swaps" and (key, False) in known and not known[key, False][0]:
+                return [], None, set()
+            hires, rows, left = attempt_now(packing, spread, split, settle)
+            near = bool(left) and _may_split(rows, hires, state)
+            known[key, settle] = (left, near)
+            if near and settle == "swaps" and not split:
+                # The week the swaps left, for the same try with the lines
+                # cut to start from rather than swap all over again.
+                swapped[key] = ([dict(row) for row in rows],
+                                {pid: _copy_state(state[pid])
+                                 for pid in list(saved) + [hire["id"] for hire in hires]},
+                                set(here["rostered"]))
             return hires, rows, left
-        return attempt_now(packing, spread, settle)
+        return attempt_now(packing, spread, split, settle)
 
-    def attempt_now(packing, spread, settle):
+    def may_split(packing, spread, settle):
+        """Whether the whole-line try left lines its hires could take in pieces."""
+        entry = known.get(((counted(), packing, spread, False), settle))
+        return bool(entry and entry[1])
+
+    def attempt_now(packing, spread, split, settle):
         hires = [_placeholder(skill, n) for skill in _in_order(count) for n in range(count[skill])]
+        key = counted()
+        if split and settle == "swaps" and (key, packing, spread, False) in swapped:
+            kept_rows, kept_state, kept_rostered = swapped[key, packing, spread, False]
+            rows = [dict(row) for row in kept_rows]
+            for pid, entry in kept_state.items():
+                state[pid] = _copy_state(entry)
+            here["rostered"] = set(kept_rostered)
+            _split_open(rows, hires, state, here)
+            return hires, rows, {row["skill"] for row in rows if row["employee"] is None}
         for hire in hires:
             state[hire["id"]] = _fresh_state()
         here["rostered"] = set(saved_rostered)
-        key = counted()
         if settle is False and (not spread or key in spreads_done):
             # A deal alone reads and writes only the hires' weeks and the open
             # lines, so nobody else's week is set back and nothing else copied.
             source = spreads_done[key][0] if spread else first
             open_rows = [dict(row) for row in source if row["employee"] is None]
             _deal_hires(open_rows, hires, state, here, *packing, hire_may)
+            if split:
+                _split_open(open_rows, hires, state, here)
             return hires, open_rows, {row["skill"] for row in open_rows if row["employee"] is None}
         everyone = pool + hires
         for pid, entry in saved.items():
@@ -7684,16 +7759,31 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
             open_rows = [row for row in rows if row["employee"] is None]
         _deal_hires(open_rows, hires, state, here, *packing, hire_may)
         if not settle:
+            if split:
+                _split_open(rows, hires, state, here)
             return hires, rows, {row["skill"] for row in rows if row["employee"] is None}
         if settle == "swaps":
             # The swaps alone: all the settling does to open lines (the rest
             # moves hours between people and never opens one).
-            if 0 < sum(1 for row in rows if row["employee"] is None) <= SWAP_REACH:
-                _fill_by_exchange(rows, everyone, state, here["rostered"])
+            if any(row["employee"] is None for row in rows):
+                # Whether the week covers is all that is asked here, and a
+                # line the swaps leave open that no cut could place either
+                # decides it: too short for two pieces, or no hire of its role.
+                _fill_by_exchange(rows, everyone, state, here["rostered"],
+                                  final=lambda row: row["to"] - row["from"] < 2 * MIN_SPLIT
+                                  or not count.get(row["skill"]), answers=swap_may)
+            if split and any(row["employee"] is None for row in rows):
+                _split_open(rows, hires, state, here)
             return hires, rows, {row["skill"] for row in rows if row["employee"] is None}
+        # Cut where the deal left lines, as the screen did, and again after
+        # the settling for what only the swaps brought within reach.
+        if split and any(row["employee"] is None for row in rows):
+            _split_open(rows, hires, state, here)
         _repair_week(rows, everyone, state, here["rostered"],
                      {**before, **{hire["id"]: (0.0, 0) for hire in hires}},
                      only={hire["id"] for hire in hires})
+        if split and any(row["employee"] is None for row in rows):
+            _split_open(rows, hires, state, here)
         left = {row["skill"] for row in rows if row["employee"] is None}
         return hires, rows, left
 
@@ -7713,29 +7803,34 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
         return [(packing, spread) for packing, spread in among
                 if spread not in seen and not seen.add(spread)]
 
-    def screen():
-        """The skills some try's deal alone covers, and the first try covering all."""
+    def run_all(settle):
+        """The skills some try covers, and the first try covering all.
+
+        Whole lines first, every try; only where none covers, the tries whose
+        leftover lines the hires have room for again, the lines cut in two
+        (_split_open()), so no line is cut where whole lines would do.
+        """
         covered = set()
-        for packing, spread in distinct(tries):
-            hires, _rows, left = attempt(packing, spread, settle=False)
-            for hire in hires:
-                del state[hire["id"]]
-            covered |= set(count) - left
-            if not left:
-                return covered, (packing, spread)
+        among = distinct(tries)
+        for split in (False, True):
+            for packing, spread in among:
+                if split and not may_split(packing, spread, settle):
+                    continue
+                hires, _rows, left = attempt(packing, spread, split, settle)
+                for hire in hires:
+                    del state[hire["id"]]
+                covered |= set(count) - left
+                if not left:
+                    return covered, (packing, spread, split)
         return covered, None
 
-    def settle_all(among=None):
-        """The skills some try covers with the swaps, and the first try covering all."""
-        covered = set()
-        for packing, spread in distinct(among or tries):
-            hires, _rows, left = attempt(packing, spread, "swaps")
-            for hire in hires:
-                del state[hire["id"]]
-            covered |= set(count) - left
-            if not left:
-                return covered, (packing, spread)
-        return covered, None
+    def screen():
+        """A deal alone, each try: nothing is settled."""
+        return run_all(False)
+
+    def settle_all():
+        """Each try's deal with the swaps after it."""
+        return run_all("swaps")
 
     # 1. The least count some deal alone covers, per skill: from a first
     #    guess, the open lines' hours over 50 (never under the bound), up in
@@ -7766,20 +7861,16 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
             else:
                 failed[skill] = count[skill]
                 step[skill] = step[skill] * 2 if step[skill] else 1
-    # 2. Below it, down to the bound, the tries with the swaps, which can
+    # 2. Below it, down to the bound, every try with the swaps, which can
     #    cover what a deal cannot: a skill at a time, one fewer while one of
-    #    them covers every line. All but the spread of HIRE_PACKINGS: over
-    #    1,800 random plans and 300 re-plans those four never covered a count
-    #    the other six did not, and the swaps, run for all ten, took most of
-    #    the search's time on a big save.
+    #    them covers every line. All ten, and the swaps however many lines
+    #    the deal left: each cut once cost a shop or an office a hire more.
     count.update(enough)
     found = None
-    descent = [(packing, spread) for packing, spread in tries
-               if packing is WEEKEND_FIRST or not spread]
     for skill in _in_order(count):
         while count[skill] > start[skill]:
             count[skill] -= 1
-            _covered, below = settle_all(descent)
+            _covered, below = settle_all()
             if below is None:
                 count[skill] += 1
                 break
@@ -8256,7 +8347,8 @@ def _broken(pool: list, state: dict, before: dict, shifts: list) -> set:
     return out
 
 
-def _fill_by_exchange(shifts: list, pool: list, state: dict, rostered: set) -> int:
+def _fill_by_exchange(shifts: list, pool: list, state: dict, rostered: set,
+                      final=None, answers=None) -> int:
     """Give a line nobody could take to somebody on the roster, by a swap.
 
     Filling one person at a time works the first names up to their ceiling on
@@ -8271,6 +8363,11 @@ def _fill_by_exchange(shifts: list, pool: list, state: dict, rostered: set) -> i
     the giver with `_keeps_floors()` too, so no rule bends, no met demand is
     broken, and nobody new is started. The taker only gains. Deterministic: open
     lines by the clock, people and their entries by id and the clock.
+
+    Each line is offered once, so one no swap places stays open. `final`,
+    when given, says of such a line whether that settles the question the
+    caller asks, and the pass stops there. `answers` keeps `_may_take()`'s
+    answer by person and slot shape across calls over the same people.
 
     Returns how many lines it placed.
     """
@@ -8287,11 +8384,18 @@ def _fill_by_exchange(shifts: list, pool: list, state: dict, rostered: set) -> i
     # And who on the roster `_may_take()` passes at all, by slot shape, which no
     # swap changes.
     allowed = {}
+    answers = {} if answers is None else answers
+
+    def asked(person, slot, shape) -> bool:
+        key = (person["id"], shape)
+        if key not in answers:
+            answers[key] = _may_take(person, slot)
+        return answers[key]
 
     def may_take(slot) -> list:
         shape = _slot_shape(slot)
         if shape not in allowed:
-            allowed[shape] = [person for person in people if _may_take(person, slot)]
+            allowed[shape] = [person for person in people if asked(person, slot, shape)]
         return allowed[shape]
 
     # A line of one shape nobody could be swapped onto fails the same way for
@@ -8345,6 +8449,8 @@ def _fill_by_exchange(shifts: list, pool: list, state: dict, rostered: set) -> i
                 break
         if not placed:
             failed.add(_slot_shape(hole))
+            if final is not None and final(hole):
+                return placed_count
     return placed_count
 
 

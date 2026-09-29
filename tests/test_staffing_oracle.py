@@ -630,6 +630,25 @@ def old_packer_count(lines: list) -> int:
     return worst
 
 
+def random_offices(seed: int, upto: int):
+    """The review's random offices: up to 20 lawyers, 1 to 10 computers, Random(100 + seed).
+
+    Yields each office's rows in turn, the n-th after the n before it, as
+    they share one generator.
+    """
+    from test_staff_hire import office_rows, lawyer
+    rng = random.Random(100 + seed)
+    for n in range(upto):
+        crew = []
+        for i in range(rng.randint(0, 20)):
+            person = lawyer(f"l{i:02d}", here=rng.random() < .85)
+            person["demands"] = {"$items": list(rng.choice(EMPLOYEE_SHAPES))}
+            crew.append(person)
+        opens = rng.choice([[[[8, 20]] for _ in range(7)], [[[0, 24]] for _ in range(7)],
+                            [[[9, 17]] if wd not in (6, 0) else [] for wd in range(7)]])
+        yield n, office_rows(rng.randint(1, 10), opens, crew)[2]
+
+
 class HireCountTest(unittest.TestCase):
     """No week needs more hires than the packer the one placer replaced took.
 
@@ -640,9 +659,9 @@ class HireCountTest(unittest.TestCase):
     the one placer's count may not pass it.
     """
 
-    def test_a_sweep_never_hires_more_than_the_old_packer(self):
+    def old_packer_beside(self, seen: list):
+        """_place_hires(), noting (its count, the old packer's) for each call in `seen`."""
         real = ba_dashboard._place_hires
-        seen = []
 
         def compare(shifts, pool, state, here, before):
             rows = [dict(r) for r in shifts]
@@ -657,7 +676,11 @@ class HireCountTest(unittest.TestCase):
             seen.append((sum(len(w) for w in out[1].values()), old))
             return out
 
-        with unittest.mock.patch.object(ba_dashboard, "_place_hires", compare):
+        return unittest.mock.patch.object(ba_dashboard, "_place_hires", compare)
+
+    def test_a_sweep_never_hires_more_than_the_old_packer(self):
+        seen = []
+        with self.old_packer_beside(seen):
             for n in (112, 143, 148, 154, 168, 185, 212, 252) + tuple(range(40)):
                 sc = scenario(random.Random(1000 + n))
                 row, _people = plan_with(sc)
@@ -669,14 +692,23 @@ class HireCountTest(unittest.TestCase):
         self.assertGreater(len(seen), 80)
         self.assertEqual([pair for pair in seen if pair[0] > pair[1]], [])
 
+    def test_an_office_sweep_never_hires_more_than_the_old_packer(self):
+        seen = []
+        with self.old_packer_beside(seen):
+            for seed in range(8):
+                for _n, _rows in random_offices(seed, 4):
+                    pass
+        self.assertGreater(len(seen), 20)
+        self.assertEqual([pair for pair in seen if pair[0] > pair[1]], [])
+
     def line(self, wd, start, end):
         return {"wd": wd, "from": start, "to": end, "skill": SERVICE, "kind": "serve", "station": 1}
 
     def test_the_bound_holds_where_lines_can_be_cut(self):
         """Review round 3: nine eleven-hour lines are 99 hours, two hires at
         50 and 49 once one line is cut; three seven-hour lines back to back
-        on four days are two hires at 48 and 36. The count may start no
-        higher than that."""
+        on four days would be two hires at 48 and 36 if a line could be cut
+        into 5 and 2. The count may start no higher than that."""
         nine = [self.line(wd, a, a + 11) for wd in range(4) for a in (0, 11)] + [self.line(4, 0, 11)]
         self.assertLessEqual(ba_dashboard._hire_bound(nine, []), 2)
         sevens = [self.line(wd, a, a + 7) for wd in range(4) for a in (0, 7, 14)]
@@ -688,6 +720,24 @@ class HireCountTest(unittest.TestCase):
         locker = [self.line(wd, a, a + 12) for wd in range(7) for a in (0, 12)]
         guard = {"band": (10, 30)}
         self.assertEqual(ba_dashboard._hire_bound(locker, [guard]), 3)
+
+    def placed(self, lines):
+        weeks = ba_dashboard._place_hires([dict(line, employee=None, name=None) for line in lines],
+                                          [], {}, {"rostered": set()}, {})[1]
+        return sorted(week["hours"] for found in weeks.values() for week in found)
+
+    def test_a_line_is_cut_between_two_hires_where_it_saves_one(self):
+        """Round 4: the nine eleven-hour lines are hired as two, the fifth
+        day's line cut 6 and 5 (50 and 49 hours), not three whole-line weeks."""
+        nine = [self.line(wd, a, a + 11) for wd in range(4) for a in (0, 11)] + [self.line(4, 0, 11)]
+        self.assertEqual(self.placed(nine), [49, 50])
+
+    def test_no_piece_under_the_shortest_split(self):
+        """Three seven-hour lines back to back on four days are 21 hours a
+        day, past one person's 12: two hires would need a 7-hour line cut 5
+        and 2, and no piece is cut shorter than MIN_SPLIT (4), so three."""
+        sevens = [self.line(wd, a, a + 7) for wd in range(4) for a in (0, 7, 14)]
+        self.assertEqual(len(self.placed(sevens)), 3)
 
     def test_the_review_s_counts(self):
         """Seed 573 needs 4 hires on its demand plan and 9 on its open-hours
@@ -703,6 +753,21 @@ class HireCountTest(unittest.TestCase):
             again, _ = plan_with(sc, week, {h: c // 2 for h, c in sc["hourly"].items()})
             self.assertEqual(sum(h["hire"] for h in again["fullCover"]["headcount"].values()),
                              want, n)
+
+    def test_round_four_s_counts(self):
+        """Seed 133, planned again from a week of its own at half the
+        customers, hires 6 on its demand plan (7 once the swaps were asked of
+        short deals only); the twelfth of the offices of Random(119) hires 8
+        (10 with the descent over six tries)."""
+        sc = scenario(random.Random(1133))
+        row, _ = plan_with(sc)
+        week = current_from(row, row, random.Random(133))
+        again, _ = plan_with(sc, week, {h: c // 2 for h, c in sc["hourly"].items()})
+        self.assertEqual(sum(h["hire"] for h in again["headcount"].values()), 6)
+        for n, rows in random_offices(19, 12):
+            if n == 11:
+                self.assertEqual([sum(h["hire"] for h in row["headcount"].values())
+                                  for row in rows], [8])
 
     def test_the_review_s_three_shops_hire_what_main_did(self):
         """Main at 77a2375 hired 2, 2 and 5 people for these demand plans."""
