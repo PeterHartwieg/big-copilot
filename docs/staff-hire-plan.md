@@ -447,11 +447,15 @@ in the main checkout). What changed on the board, over 3.2 to 3.4 and 2.4b:
   every hour must be free at that station in the site's week as the game has it
   (`hrFitsFree()`), so an additive week never cuts anybody's hours. "Staff this site" looks
   at every spare its plan names, not only those the company-wide model moved (a week another
-  site's spare took there is free when only this site is staffed). Each ticked spare keeps
-  their own model week where it passes; the others take the first open week elsewhere that
-  passes all of that and no other spare has (`hrOutWeek()`). With none, the spare is not
-  moved, and the review names the first week it passed over and why (closed hours, or hours
-  someone already works). Where the action sends a spare to another site than the Staff
+  site's spare took there is free when only this site is staffed), and never at anyone in
+  training (said as such). Each spare's search (`hrOutPlan()`, `hrOutWeek()`) tries their
+  own model week first, which a ticked spare keeps from every other spare's search; then,
+  as `hrModel()` picks, the roles they are spare in, best first, and in each the first site
+  in list order with an open week that meets their schedule demands, lies inside its
+  opening hours and is free there, a desk that meets their desk demands first. With none,
+  the spare is not moved, and the review names the first week it passed over and why
+  (closed hours, or hours someone already works). Quick hire and Pick more reassign nobody:
+  the review says whether Staff all sites or Staff this site would. Where the action sends a spare to another site than the Staff
   page's reassign line names, the review names both: the line to tick, and where they go. A spare who is not moved ends the week at 0 h at their site
   (accepted), and the review names them first under "No hours after this", each with the
   cause: no open week elsewhere fits them, the week elsewhere runs in closed hours or hours
