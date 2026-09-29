@@ -827,6 +827,7 @@
  "gr.os.be.never": "not at this profit",
  "gr.os.be.noChart": "At this profit the store does not earn its investment back.",
  "gr.os.be.nowhere": "Pick a location first.",
+ "gr.os.be.own_other": "Your {n} shops of this type earn {pct}% of what these rules give their own buildings.",
  "gr.os.be.profit": "Expected profit a day",
  "gr.os.be.rent": "Rent",
  "gr.os.be.revenue": "Sales",

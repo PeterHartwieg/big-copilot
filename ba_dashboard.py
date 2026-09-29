@@ -31031,9 +31031,9 @@ function osBreakHtml(plan){
   const lines = [
     `<p class="os-note">${tt("gr.os.be.mid", "About {w} a day if it is priced, stocked and staffed as planned.", {w: osMidMoney(p * OS_LOW, p * OS_HIGH)})}</p>`,
     tax ? `<p class="os-note">${tt("gr.os.be.tax", "After {n}% tax: {w} a day.", {n: tax, w: fmt(p * (1 - tax / 100))})}</p>` : "",
-    own ? `<p class="os-note">${tt("gr.os.be.own", {one: "Your {type} earns {pct}% of what these rules give its own building.",
-      other: "Your {n} {types} earn {pct}% of what these rules give their own buildings."},
-      {n: own.rows.length, type: osTypeLower(plan.type), types: osTypePlural(plan.type), pct: Math.round(own.ratio * 100)})}</p>` : "",
+    own ? `<p class="os-note">${tt("gr.os.be.own", {one: "Your shop of this type earns {pct}% of what these rules give its own building.",
+      other: "Your {n} shops of this type earn {pct}% of what these rules give their own buildings."},
+      {n: own.rows.length, pct: Math.round(own.ratio * 100)})}</p>` : "",
     est.hyped.length ? `<p class="os-note">${tt("gr.os.be.hype", "First to sell {items} in {hood}: extra demand on them for the first 14 days.",
       {items: est.hyped.map(osItemName).join(", "), hood: hoodName(b.hood)})}</p>` : "",
     cann ? `<p class="os-note">${tt("gr.os.be.cannibal", {one: "Your shop in {hood} that sells {items} loses about {w} a day: a new seller moves demand down there too.",

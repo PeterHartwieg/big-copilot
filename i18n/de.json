@@ -969,6 +969,8 @@
  "gr.os.be.never": "nicht bei diesem Gewinn",
  "gr.os.be.noChart": "Bei diesem Gewinn verdient der Laden seine Investition nicht zurück.",
  "gr.os.be.nowhere": "Wähle zuerst einen Standort.",
+ "gr.os.be.own_one": "Dein Geschäft dieses Typs erzielt {pct} % dessen, was diese Regeln seinem eigenen Gebäude geben.",
+ "gr.os.be.own_other": "Deine {n} Geschäfte dieses Typs erzielen {pct} % dessen, was diese Regeln ihren eigenen Gebäuden geben.",
  "gr.os.be.profit": "Erwarteter Gewinn pro Tag",
  "gr.os.be.rent": "Miete",
  "gr.os.be.revenue": "Umsatz",

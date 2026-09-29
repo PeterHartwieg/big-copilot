@@ -151,7 +151,7 @@ test('Break even shows both install modes from the game\'s rules, a range, tax, 
   assert.match(await page.locator('#osBody .os-note .os-rng').first().getAttribute('data-tip'), /^\$[\d,]+–\$[\d,]+$/);
   assert.match(notes[1], /^After 5% tax: \$[\d,]+ a day\.$/);
   // The player's own liquor store against the same rules, as a line and its own card.
-  assert.ok(notes.some(n => /Your liquor store earns \d+% of what these rules give its own building\./.test(n)), notes.join('\n'));
+  assert.ok(notes.some(n => /Your shop of this type earns \d+% of what these rules give its own building\./.test(n)), notes.join('\n'));
   assert.equal(await page.locator('#osBody .os-ownc .os-site').count(), 1);
   // Financing: off until asked for; then the amount moves only the figures.
   assert.match(await page.locator('#osFin').innerText(), /The game books the loan to the company, not to the store\./);
