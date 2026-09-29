@@ -2722,6 +2722,14 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
         "promotion": promo.get("total", 0),
         "traffic": promo.get("trafficIndex", 0),
         "marketingIndex": promo.get("marketing", 0),
+        # The campaign types switched on now, as the save's marketingCampaigns
+        # holds them (MarketingTypeName is an index into the six).
+        "marketingOn": [
+            MARKETING_CAMPAIGNS[c["marketingTypeName"]][0]
+            for c in save.items(b.get("marketingCampaigns"))
+            if isinstance(c, dict) and c.get("enabled") and isinstance(c.get("marketingTypeName"), int)
+            and 0 <= c["marketingTypeName"] < len(MARKETING_CAMPAIGNS)
+        ],
         "missingAmenities": missing_amenities,
         # The same walk, amenity by amenity: True is the game cached the demand
         # as fulfilled, False is looked for and missed. A demand the type never
@@ -2747,6 +2755,8 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day) -> dict
         # directly rather than through any demand; one still in cargo is boxed.
         # A type whose customers never ask about uniforms needs neither.
         "missingUniformLocker": wants_uniforms and not has_uniform_locker,
+        # Shifts at a named station: without one no uniform is asked for yet.
+        "stationShifts": sum(1 for e in schedule_entries(save, b) if e[5] == STATION_SHIFT),
         "staff": len(crew),
         "staffCost": sum(c["daily"] for c in crew),
         "crew": _crew(crew),
@@ -12678,26 +12688,46 @@ def _copied_shelving(save: Save, reg: dict, type_slug: str, rules: dict) -> list
     return out
 
 
-def required_placed(placed: collections.Counter, type_slug: str, rules: dict, prices: dict, sqm) -> list:
+def required_placed(placed: collections.Counter, type_slug: str, rules: dict, prices: dict, sqm,
+                    available=None) -> list:
     """What a business of a type still lacks of its opening requirements.
 
     `placed` counts the item names standing in it. Each row is [requirement
     name, needed, placed]: a requirement is met by any item of its named set
     or carrying its tag, one of them, or for a per-area one (sinks and toilet
-    stalls in an office) one per `sq` m², at most `mx`. The stock shelf every
-    shop needs (`any`) is met by a display for a product the type sells; a
-    fee paid in game (`lic`) is not furniture and has no row.
+    stalls in an office) one per `sq` m², at most `mx` when the rule has one.
+    The stock shelf every shop needs (`any`) is met by a display for a product
+    the type sells; a named set that holds products (a hairdresser's shelf of
+    haircare products) is met by a display holding one of them. `available` is
+    the registration's cachedAvailableProducts, when the save has it: a
+    product the shop lists as available meets either requirement even where
+    the displays are not known to hold it. A fee paid in game (`lic`) is not
+    furniture and has no row.
     """
     t = (rules.get("types") or {}).get(type_slug) or {}
     furniture = rules.get("furniture") or {}
     table = prices.get("items") or {}
     sells = {p for p, _impact in t.get("i") or ()}
+    offered = set(available or ())
+
+    def holding(products) -> int:
+        return sum(n for name, n in placed.items() if products & set((furniture.get(name) or {}).get("h") or ()))
+
     out = []
     for req in t.get("rq") or ():
         if req.get("lic"):
             continue
         if req.get("any"):
-            have = sum(n for name, n in placed.items() if sells & set((furniture.get(name) or {}).get("h") or ()))
+            have = holding(sells)
+            if not have and sells & offered:
+                have = 1
+            out.append([req.get("n") or "", 1, have])
+            continue
+        if req.get("i") and any(n not in furniture for n in req["i"]):
+            products = {n for n in req["i"] if n not in furniture}
+            have = holding(products) + sum(placed[n] for n in req["i"] if n in furniture and n in placed)
+            if not have and products & offered:
+                have = 1
             out.append([req.get("n") or "", 1, have])
             continue
         if req.get("i"):
@@ -12708,7 +12738,9 @@ def required_placed(placed: collections.Counter, type_slug: str, rules: dict, pr
             continue
         need = 1
         if req.get("sq"):
-            need = max(1, min(math.ceil(float(sqm or 0) / req["sq"]), req.get("mx") or 1)) if sqm else 1
+            need = max(1, math.ceil(float(sqm) / req["sq"])) if sqm else 1
+            if req.get("mx"):
+                need = min(need, req["mx"])
         out.append([req.get("n") or "", need, sum(placed[n] for n in names if n in placed)])
     return out
 
@@ -12724,18 +12756,22 @@ def _placed_items(save: Save, reg: dict) -> collections.Counter:
 
 
 def _opened_stores(save: Save, regs: dict, businesses: list, types: dict, rules: dict, prices: dict) -> dict:
-    """{site key: {"placed", "req"}} for every business of a planned type: how
-    much furniture stands in it and which opening requirements it meets. The
-    checklist until opening reads it (Open a store, step 5)."""
+    """{site key: {"placed", "req", "seating"}} for every business of a planned
+    type: how much furniture stands in it, which opening requirements it meets
+    and whether anything to sit on does. The checklist until opening reads it
+    (Open a store, step 5)."""
     out = {}
+    table = prices.get("items") or {}
     for b in businesses:
         reg = regs.get(b.get("key"))
         if reg is None or b.get("typeSlug") not in types or b.get("status") == "vacant":
             continue
         placed = _placed_items(save, reg)
+        available = {n for n in save.items(reg.get("cachedAvailableProducts")) if isinstance(n, str)}
         out[b["key"]] = {
             "placed": sum(placed.values()),
-            "req": required_placed(placed, b["typeSlug"], rules, prices, _building_row(reg).get("m")),
+            "req": required_placed(placed, b["typeSlug"], rules, prices, _building_row(reg).get("m"), available),
+            "seating": any(int((table.get(n) or {}).get("t") or 0) & SEATING_FLAG for n in placed),
         }
     return out
 
@@ -30658,8 +30694,12 @@ function osFinUpdate(amount){
 const OS_MK_WIRE = {smallinternet: "SmallInternet", mediuminternet: "MediumInternet", largeinternet: "LargeInternet",
   smallbillboard: "SmallBillboard", mediumbillboard: "MediumBillboard", largebillboard: "LargeBillboard"};
 const OS_DEMAND_GROUP = {toilet: "bathroom", toiletprivacy: "toiletprivacy", sink: "sink", music: "music", interiordesign: "interior"};
+let osLinkHint = false;
 const osRented = plan => (D.businesses || []).find(b => b.key === plan.key) || null;
-const osOpenedAt = plan => { const b = osRented(plan); return b && b.status !== "vacant" ? b : null; };
+/* A business stands at the address and is the type that was planned: only then does the save tell anything about the plan. */
+const osOpenedAt = plan => { const b = osRented(plan); return b && b.status !== "vacant" && (!b.typeSlug || b.typeSlug === plan.type) ? b : null; };
+const osOtherType = plan => { const b = osRented(plan); return b && b.status !== "vacant" && b.typeSlug && b.typeSlug !== plan.type ? b : null; };
+const osBuilt = plan => osOtherType(plan) ? null : ((D.openStore || {}).built || {})[plan.key] || null;
 const osCk = (icon, state, title, sub, act, p) => ({icon, state, title, sub, act: act || "", p: p || 0});
 const osCkAddress = plan => { const b = osBuilding(plan.key); return spEsc(b ? b.address : plan.key); };
 /* Names in a sentence: the first two, and how many more. */
@@ -30680,7 +30720,7 @@ function osReqName(plan, b, name){
 }
 function osCkFurniture(plan, b){
   const title = tt("gr.os.ck.furn", "Furniture");
-  const built = ((D.openStore || {}).built || {})[plan.key];
+  const built = osBuilt(plan);
   if(!built){
     const inv = osInvestment(plan, b);
     return osCk("shelves", "todo", title, inv ? tt("gr.os.ck.furn.todo", {one: "{n} item to place", other: "{n} items to place"}, {n: inv.items}) : "");
@@ -30698,40 +30738,61 @@ function osCkStaff(plan, opened){
   if(!opened) return osCk("people", "todo", title, tt("gr.os.ck.staff.todo", "Hired once the business is set up"));
   const have = opened.staff || 0;
   const S = hrModel().sites.find(s => s.key === plan.key);
-  if(!S || !S.planned) return osCk("people", have > 0 ? "done" : "todo", title, have > 0
-    ? tt("gr.os.ck.staff.have", {one: "{n} person on staff", other: "{n} people on staff"}, {n: have})
-    : tt("gr.os.ck.staff.nohours", "No opening hours set yet: set them in BizMan, and the board plans the staff"));
+  if(!S || !S.planned || S.site.noHours || !S.variant) return osCk("people", "todo", title,
+    tt("gr.os.ck.staff.nohours", "No opening hours set yet: set them in BizMan, and the board plans the staff"));
   const need = S.weeks.length;
-  if(!need && have > 0) return osCk("people", "done", title, tt("gr.os.ck.staff.done", {one: "{n} person · <span class=\"ok\">the opening hours are covered</span>",
-    other: "{n} people · <span class=\"ok\">the opening hours are covered</span>"}, {n: have}));
-  const bySkill = new Map(), hires = new Map();
+  const sales = (opened.revenue || 0) > 0 || (opened.customers || 0) > 0;
+  if(!need){
+    if(have > 0 && (S.variant !== "demand" || sales)) return osCk("people", "done", title, tt("gr.os.ck.staff.done",
+      {one: "{n} person · <span class=\"ok\">the opening hours are covered</span>", other: "{n} people · <span class=\"ok\">the opening hours are covered</span>"}, {n: have}));
+    return osCk("people", "todo", title, have > 0
+      ? tt("gr.os.ck.staff.unsized", {one: "{n} person on staff · <span class=\"w\">the board sizes the staff once the shop has sales</span>",
+        other: "{n} people on staff · <span class=\"w\">the board sizes the staff once the shop has sales</span>"}, {n: have})
+      : tt("gr.os.ck.staff.nobody", "Nobody is hired yet"));
+  }
+  const bySkill = new Map(), hires = new Map(), moves = new Map();
   S.weeks.forEach(x => {
     bySkill.set(x.w.skill, (bySkill.get(x.w.skill) || 0) + 1);
     if(x.who && x.who.type === "hire") hires.set(x.w.skill, (hires.get(x.w.skill) || 0) + 1);
+    if(x.who && x.who.type === "move") moves.set(x.w.skill, (moves.get(x.w.skill) || 0) + 1);
   });
   const roles = m => osNames([...m].map(([skill, n]) => `${n} ${hrRoles(skill, n)}`));
-  const nHire = [...hires.values()].reduce((a, n) => a + n, 0);
-  const total = have + need;
+  const count = m => [...m.values()].reduce((a, n) => a + n, 0);
+  const nHire = count(hires), nMove = count(moves);
+  const total = have + need, address = osCkAddress(plan);
   let sub = tt("gr.os.ck.staff.need", "{have} of {total} people · <span class=\"w\">{need} more: {roles}</span>",
     {have, total, need, roles: roles(bySkill)});
   const bare = S.weeks.filter(x => !x.who).length;
   if(bare) sub += ` · ${tt("gr.os.ck.staff.nocand", {one: "{n} without a candidate in your headhunters' lists", other: "{n} without a candidate in your headhunters' lists"}, {n: bare})}`;
-  const only = {};
-  hires.forEach((n, skill) => { only[`${plan.key}|${skill}`] = n; });
-  const act = nHire ? osAct("hire", tt("gr.os.ck.staff.hire", "Hire {n}", {n: nHire}), "hire", `data-os-only="${attr(JSON.stringify(only))}"`,
-    tt("gr.os.ck.staff.ingame", "<b>MyEmployees</b> on your phone: hire {roles} from your headhunters' candidates, at {address}.", {roles: roles(hires), address: osCkAddress(plan)})) : "";
+  let act = "";
+  if(nMove){
+    const ingame = nHire
+      ? tt("gr.os.ck.staff.ingame.mixed", "<b>MyEmployees</b> on your phone: hire {roles} from your headhunters' candidates and move {moves}, at {address}.", {roles: roles(hires), moves: roles(moves), address})
+      : tt("gr.os.ck.staff.ingame.move", "<b>MyEmployees</b> on your phone: move {moves} to {address}.", {moves: roles(moves), address});
+    act = osAct("hire", nHire ? tt("gr.os.ck.staff.hiremove", "Hire {n} · move {m}", {n: nHire, m: nMove}) : tt("gr.os.ck.staff.move", "Move {n}", {n: nMove}),
+      "hire", `data-os-site="1"`, ingame);
+  } else if(nHire){
+    const only = {};
+    hires.forEach((n, skill) => { only[`${plan.key}|${skill}`] = n; });
+    act = osAct("hire", tt("gr.os.ck.staff.hire", "Hire {n}", {n: nHire}), "hire", `data-os-only="${attr(JSON.stringify(only))}" data-os-site="1"`,
+      tt("gr.os.ck.staff.ingame", "<b>MyEmployees</b> on your phone: hire {roles} from your headhunters' candidates, at {address}.", {roles: roles(hires), address}));
+  } else if(bare){
+    act = osIngame(tt("gr.os.ck.staff.headhunter", "No candidate fits yet: ask a <b>headhunter</b> for {roles}, at {address}.", {roles: roles(bySkill), address}));
+  }
   return osCk("people", have > 0 ? "part" : "todo", title, sub, act, Math.round(100 * have / total));
 }
 function osCkUniforms(plan, opened){
   const title = tt("gr.os.ck.uni", "Uniforms");
   const asks = ((osType(plan.type) || {}).demands || []).some(d => d[0] === "employeeuniforms");
+  if(!opened) return osCk("shirt", "todo", title, asks ? tt("gr.os.ck.uni.todo", "Set for each role once the shop has staff")
+    : tt("gr.os.ck.uni.none.todo", "This type does not ask for uniforms: nothing to set"));
   if(!asks) return osCk("shirt", "done", title, tt("gr.os.ck.uni.none", "This type does not ask for uniforms"));
-  if(!opened) return osCk("shirt", "todo", title, tt("gr.os.ck.uni.todo", "Set for each role once the shop has staff"));
   if(opened.missingUniformLocker) return osCk("shirt", "todo", title, tt("gr.os.ck.uni.locker", "<span class=\"w\">No uniform locker</span> · the game sets uniforms only where one stands"),
     osIngame(tt("gr.os.ck.uni.locker.ingame", "Place a <b>Uniform locker</b> in the shop, then set the uniforms.")));
+  if(!opened.staff) return osCk("shirt", "todo", title, tt("gr.os.ck.uni.nostaff", "Set once the shop has staff"));
+  if(!(opened.stationShifts > 0)) return osCk("shirt", "todo", title, tt("gr.os.ck.uni.noshifts", "Set once staff have hours"));
   const gaps = opened.uniformGaps || [];
-  if(!gaps.length) return osCk("shirt", opened.staff ? "done" : "todo", title, opened.staff
-    ? tt("gr.os.ck.uni.done", "<span class=\"ok\">Every role has one</span>") : tt("gr.os.ck.uni.nostaff", "Set once the shop has staff"));
+  if(!gaps.length) return osCk("shirt", "done", title, tt("gr.os.ck.uni.done", "<span class=\"ok\">Every role has one</span>"));
   const roles = osNames(gaps.map(spEsc));
   return osCk("shirt", "todo", title, tt("gr.os.ck.uni.gaps", "<span class=\"w\">None set for {roles}</span>", {roles}),
     osAct("uniforms", tt("gr.os.ck.uni.assign", "Assign uniforms"), "shirt", `data-os-key="${attr(plan.key)}"`,
@@ -30739,42 +30800,62 @@ function osCkUniforms(plan, opened){
 }
 function osCkDemands(plan, opened, uni){
   const title = tt("gr.os.ck.dem", "Customer demands");
-  const items = [];
+  const built = osBuilt(plan);
+  const items = [], unchecked = [];
   for(const [slug] of (osType(plan.type) || {}).demands || []){
     if(slug === "employeeuniforms"){ items.push([tt("gr.os.ck.dem.uniforms", "Uniforms"), !!opened && uni.state === "done"]); continue; }
+    if(slug === "seating"){ items.push([tt("gr.os.ck.dem.seating", "Seating"), !!opened && !!built && built.seating === true]); continue; }
+    if(slug === "workoutvariety"){ unchecked.push(tt("gr.os.ck.dem.variety", "Workout variety")); continue; }
     const g = OS_DEMAND_GROUP[slug];
-    if(!g) continue;
+    if(!g){ unchecked.push(spEsc(prettySlug(slug))); continue; }
     const met = !!opened && (opened.amenities ? opened.amenities[g] !== false : !(opened.missingAmenities || []).includes(`ba:customerdemand_${slug}`));
     items.push([SP_AMENITY_WORD[g] || spEsc(prettySlug(slug)), met]);
   }
-  if(!items.length) return osCk("heart", "done", title, tt("gr.os.ck.dem.none", "This type makes no demands beyond its products"));
-  if(!opened) return osCk("heart", "todo", title, tt("gr.os.ck.dem.todo", {one: "{n} demand to meet", other: "{n} demands to meet"}, {n: items.length}));
+  const all = items.length + unchecked.length;
+  if(!all) return osCk("heart", opened ? "done" : "todo", title, tt("gr.os.ck.dem.none", "This type makes no demands beyond its products"));
+  if(!opened) return osCk("heart", "todo", title, tt("gr.os.ck.dem.todo", {one: "{n} demand to meet", other: "{n} demands to meet"}, {n: all}));
   const met = items.filter(x => x[1]).length, missing = items.filter(x => !x[1]).map(x => x[0]);
-  if(!missing.length) return osCk("heart", "done", title, tt("gr.os.ck.dem.done", {one: "<span class=\"ok\">{n} demand met</span>", other: "<span class=\"ok\">All {n} demands met</span>"}, {n: items.length}));
-  return osCk("heart", met ? "part" : "todo", title, tt("gr.os.ck.dem.part", "{met} of {total} met · <span class=\"w\">missing {items}</span>",
-    {met, total: items.length, items: osNames(missing)}), "", Math.round(100 * met / items.length));
+  const ingame = unchecked.length ? osIngame(tt("gr.os.ck.dem.ingame", "Check {items} in the game: the save does not say whether {address} meets it.",
+    {items: `<b>${osNames(unchecked)}</b>`, address: osCkAddress(plan)})) : "";
+  if(!missing.length && !unchecked.length) return osCk("heart", "done", title, tt("gr.os.ck.dem.done", {one: "<span class=\"ok\">{n} demand met</span>", other: "<span class=\"ok\">All {n} demands met</span>"}, {n: items.length}));
+  const sub = missing.length
+    ? tt("gr.os.ck.dem.part", "{met} of {total} met · <span class=\"w\">missing {items}</span>", {met, total: all, items: osNames(missing)})
+    : tt("gr.os.ck.dem.check", "{met} of {total} met · <span class=\"w\">check {items} in the game</span>", {met, total: all, items: osNames(unchecked)});
+  return osCk("heart", met ? "part" : "todo", title, sub, ingame, Math.round(100 * met / all));
 }
 function osCkMarketing(plan, b, opened){
   const title = tt("gr.os.ck.mk", "Marketing");
   if(!opened) return osCk("megaphone", "todo", title, tt("gr.os.ck.mk.todo", "A campaign can start once the business exists"));
-  if((opened.marketingIndex || 0) > 0 || (opened.marketing || 0) > 0)
+  if((opened.marketingOn || []).length)
     return osCk("megaphone", "done", title, tt("gr.os.ck.mk.done", "<span class=\"ok\">A campaign is running</span>"));
   const est = b && osEstimate(plan, b), mix = est && est.model ? est.model.mix || [] : [];
   const ingame = tt("gr.os.ck.mk.ingame", "<b>BizMan › Marketing</b>: start a campaign for {address}.", {address: osCkAddress(plan)});
   return osCk("megaphone", "todo", title, tt("gr.os.ck.mk.none", "<span class=\"w\">No campaign</span> for {address}", {address: osCkAddress(plan)}),
     mix.length ? osAct("marketing", tt("gr.os.ck.mk.setup", "Set up marketing"), "megaphone", "", ingame) : osIngame(ingame));
 }
+/* The products the plan's business holds that something delivers: a logistics plan or an import into it, or a weekly wholesale delivery.
+   A supply status (covered, short, idle) is not a route, so it is not read here. */
+function osRoutes(opened, key){
+  const S = D.supply || {}, idx = (D.businesses || []).indexOf(opened);
+  const routed = new Set();
+  ((S.graph || {}).links || []).forEach(l => { if(l.to === key && !l.paused) (l.slugs || []).forEach(p => routed.add(p)); });
+  (S.shops || []).forEach(r => { if(r.s === idx && (r.target > 0 || r.wholesale !== undefined)) routed.add(r.slug); });
+  return routed;
+}
 function osCkLogistics(plan, opened){
   const title = tt("gr.os.ck.log", "Logistics");
   const go = `<button type="button" class="os-btn" data-os-route="expansion/factory">${osIcon("factory")}${tt("gr.os.ck.log.go", "Plan a factory")}${osIcon("chev")}</button>`;
   if(!opened) return osCk("truck", "todo", title, tt("gr.os.ck.log.todo", "Deliveries are set up once the business exists"), go);
-  const facts = ((D.supply || {}).facts || {})[(D.businesses || []).indexOf(opened)] || {};
-  const slugs = Object.keys(facts);
-  if(!slugs.length) return osCk("truck", "todo", title, tt("gr.os.ck.log.nothing", "<span class=\"w\">Nothing delivers here yet</span>"), go);
-  const bare = slugs.filter(s => ["noplan", "paused"].includes((supplyFact(D.businesses.indexOf(opened), s) || {}).st));
-  if(!bare.length) return osCk("truck", "done", title, tt("gr.os.ck.log.done", "<span class=\"ok\">Every product has a delivery or a route</span>"));
-  return osCk("truck", bare.length < slugs.length ? "part" : "todo", title, tt("gr.os.ck.log.part", "<span class=\"w\">No delivery for {items}</span>",
-    {items: osNames(bare.map(s => spEsc(itemName(s))))}), go, Math.round(100 * (slugs.length - bare.length) / slugs.length));
+  const t = osType(plan.type) || {};
+  if(t.model === "office") return osCk("truck", "done", title, tt("gr.os.ck.log.office", "<span class=\"ok\">No deliveries needed</span> · an office holds no stock"));
+  const M = osFacts().market || {};
+  const wanted = new Set((t.products || []).map(([p]) => p).filter(p => M[p] && !M[p].s));
+  const held = (opened.lines || []).map(l => l.slug).filter(p => wanted.has(p));
+  if(!held.length) return osCk("truck", "todo", title, tt("gr.os.ck.log.nothing", "<span class=\"w\">Nothing delivers here yet</span>"), go);
+  const routed = osRoutes(opened, plan.key), bare = held.filter(p => !routed.has(p));
+  if(!bare.length) return osCk("truck", "done", title, tt("gr.os.ck.log.done", "<span class=\"ok\">Every product it holds has a delivery route or an import</span>"));
+  return osCk("truck", bare.length < held.length ? "part" : "todo", title, tt("gr.os.ck.log.part", "<span class=\"w\">No delivery route or import for {items}</span>",
+    {items: osNames(bare.map(s => spEsc(itemName(s))))}), go, Math.round(100 * (held.length - bare.length) / held.length));
 }
 function osUntilRows(plan){
   const b = osBuilding(plan.key), rented = osRented(plan), opened = osOpenedAt(plan), address = osCkAddress(plan);
@@ -30792,15 +30873,19 @@ function osUntilHtml(plan){
     {day: num(m.day), time: `${String(Number(m.hour) || 0).padStart(2, "0")}:${String(Math.floor(Number(m.minute) || 0)).padStart(2, "0")}`}) : "";
   const live = link ? `<span class="os-live"><i></i>${tt("gr.os.ck.live", "Game linked")}</span>`
     : `<span class="os-live off"><i></i>${tt("gr.os.ck.live.off", "Save file · game not linked")}</span>`;
-  const gate = link ? "" : `<div class="os-gate">${osIcon("plug")}<span>${tt("gr.os.ck.gate", "<b>Link the game</b> and these become buttons.")}</span><button type="button" class="os-btn" data-os-howlink>${
+  const gate = link ? "" : `<div class="os-gate">${osIcon("plug")}<span>${tt("gr.os.ck.gate", "<b>Link the game</b> and these become buttons.")}${
+    osLinkHint ? ` ${tt("gr.os.ck.gate.hint", "Find <b>Big Copilot Link</b> on the Steam Workshop.")}` : ""}</span><button type="button" class="os-btn" data-os-howlink>${
     tt("gr.os.ck.gate.how", "How to link")}</button></div>`;
+  const other = osOtherType(plan);
+  const note = other ? `<p class="os-payback">${tt("gr.os.ck.othertype", "The business at {address} is a {type}, not the {planned} you planned, so these rows wait for the planned one.",
+    {address: osCkAddress(plan), type: spEsc(other.type || osTypeName(other.typeSlug)), planned: spEsc(osTypeName(plan.type))})}</p>` : "";
   return `<div class="os-prog"><h2>${tt("gr.os.ck.title", "Until opening")}</h2><span class="m" style="--w:${Math.round(100 * done / rows.length)}%"><i></i></span><span class="c">${
     tt("gr.os.ck.count", "{n} of {of}", {n: done, of: rows.length})}</span><div class="aside">${live}<span>${clock}</span></div></div>
     <div class="os-cks">${rows.map(r => `<div class="os-ck ${r.state}"${r.state === "part" ? ` style="--p:${r.p}%"` : ""}><span class="st">${
       r.state === "done" ? osIcon("tick") : ""}</span><span class="ic">${osIcon(r.icon)}</span><div class="tx"><b>${r.title}</b><small>${r.sub}</small></div><div class="act">${r.act}</div></div>`).join("")}</div>
-    ${gate}<p class="os-payback">${tt("gr.os.ck.payback", "Once the store trades, the payback shows here.")}</p>`;
+    ${gate}${note}<p class="os-payback">${tt("gr.os.ck.payback", "Once the store trades, the payback shows here.")}</p>`;
 }
-/* Marketing at the plan's business: the cheapest mix the estimate settled on. */
+/* Marketing at the plan's business: the most profitable mix the estimate settled on. */
 function osMarketingWrite(plan){
   const b = osBuilding(plan.key), est = b && osEstimate(plan, b), link = gwLink(), site = osOpenedAt(plan);
   const mix = est && est.model ? est.model.mix || [] : [];
@@ -30812,7 +30897,12 @@ function osMarketingWrite(plan){
     kind: "marketing", icon: "megaphone",
     title: () => tt("gr.os.ck.mk.setup", "Set up marketing"),
     where: () => gwWhere(site),
-    body: () => ({expect: {character: link.character, company: link.company}, sites: [{address: gwAddress(plan.key), on, was: []}]}),
+    body: () => {
+      const was = (site.marketingOn || []).map(id => OS_MK_WIRE[id]).filter(Boolean);
+      const body = {sites: [{address: gwAddress(plan.key), on, was}]};
+      if(link.character && link.company) body.expect = {character: link.character, company: link.company};
+      return body;
+    },
     verdict: answer => row(answer).error ? `<b>${tt("sp.gw.refuses", "The game refuses this")}</b>`
       : `<b>${tt("gr.os.ck.mk.will", {one: "The game will start {n} campaign", other: "The game will start {n} campaigns"}, {n: (row(answer).turnedOn || []).length})}</b>`,
     draw: answer => {
@@ -30891,13 +30981,14 @@ function wireOpenStore(){
   on("click", "[data-os-write]", el => {
     const plan = osPlan(), kind = el.dataset.osWrite;
     if(!plan) return;
-    if(kind === "hire") hrReview({only: JSON.parse(el.dataset.osOnly || "{}")});
+    if(kind === "hire") hrReview(Object.assign({site: plan.key}, el.dataset.osOnly ? {only: JSON.parse(el.dataset.osOnly)} : {}));
     else if(kind === "uniforms") gwUniforms([plan.key]);
     else if(kind === "marketing") osMarketingWrite(plan);
   });
   on("click", "[data-os-howlink]", () => {
     const a = document.querySelector('a[data-visit-feature="game-link"]');
     if(a && a.href) window.open(a.href, "_blank", "noopener");
+    else { osLinkHint = true; drawOpenStore(); }
   });
   on("click", "[data-os-mode]", el => { osSetMode(el.dataset.osMode); drawOpenStore(); });
   on("change", "[data-os-fin-on]", el => { const plan = osPlan(); if(!plan) return; plan.finance = {...(plan.finance || {}), on: el.checked}; osSave(); drawOpenStore(); });
@@ -31668,14 +31759,15 @@ const hrWorksAt = (S, id) => {
 /* The request, and what the review needs to name every row of it. `only`
    ({"<site key>|<skill>": n}) keeps the hires to that many weeks a site and
    role and sends no move: the partial result's "Pick more". */
-function hrRequest(m, only){
+function hrRequest(m, only, scope){
   const t = hrTotals(m);
+  const inScope = S => !scope || S.key === scope;
   const touched = new Map();  // key -> {S, fill: [{id, w}]}
   const touch = S => { if(!touched.has(S.key)) touched.set(S.key, {S, fill: []}); return touched.get(S.key); };
   const names = new Map();    // id -> {name, what}
   const hires = [], moves = [], away = new Set(), arriving = new Set();
   const left = Object.assign({}, only || {});
-  if(!only) t.moves.forEach(x => {
+  if(!only) t.moves.filter(x => inScope(x.to)).forEach(x => {
     moves.push({employeeId: x.id, from: x.from ? gwAddress(x.from.key) : null, to: gwAddress(x.to.key)});
     names.set(x.id, {name: x.p.name, skill: x.skill, move: x});
     arriving.add(x.id);
@@ -31689,13 +31781,13 @@ function hrRequest(m, only){
     const at = touch(S);
     if(w) at.fill.push({id: c.id, w});
   };
-  m.sites.forEach(S => S.weeks.forEach(x => {
+  m.sites.filter(inScope).forEach(S => S.weeks.forEach(x => {
     if(!x.who || x.who.type !== "hire") return;
     const k = `${S.key}|${x.w.skill}`;
     if(only){ if(!(left[k] > 0)) return; left[k]--; }
     hire(x.who.c, S, x.w, x.w.skill);
   }));
-  if(!only) m.overs.forEach(o => hire(o.c, o.S, null, o.skill));
+  if(!only) m.overs.filter(o => inScope(o.S)).forEach(o => hire(o.c, o.S, null, o.skill));
   const sites = m.sites.filter(S => touched.has(S.key)).map(S => {
     const at = touched.get(S.key);
     if(!S.planned || !S.row) return {address: gwAddress(S.key), expect: null, days: null};
@@ -31704,7 +31796,7 @@ function hrRequest(m, only){
                  openAllHours: false, days: hrWeek(S, at.fill, away, arriving, at.lost)};
     return out;
   });
-  return {body: {sites, hires, moves}, names, touched};
+  return {body: {sites, hires, moves}, names, touched, scope: scope || null};
 }
 
 /* --- drawing -------------------------------------------------------------- */
@@ -32683,7 +32775,7 @@ function hrReviewSites(m, req, phase, gone){
   const rows = m.sites.map(S => {
     const at = req.touched.get(S.key);
     const gaps = S.weeks.filter(x => !x.who || (x.who.type === "move" && x.who.m.off));
-    if(!at && !gaps.length) return "";
+    if(!at && (req.scope || !gaps.length)) return "";
     const hires = S.weeks.filter(x => x.who && x.who.type === "hire" && req.names.has(x.who.c.id));
     const extra = m.overs.filter(o => o.S === S && req.names.has(o.c.id));
     const moves = m.moves.filter(x => !x.off && x.to === S && req.names.has(x.id));
@@ -32745,7 +32837,7 @@ function hrReview(o = {}){
   const only = o.only || null;
   const build = () => {
     const m = hrModel();
-    const req = hrRequest(m, only);
+    const req = hrRequest(m, only, o.site || null);
     hrLast = {m, req, only};
     return hrLast;
   };
@@ -32790,12 +32882,12 @@ function hrReview(o = {}){
         const x = m.sites.flatMap(S => S.weeks).find(w => w.who && w.who.type === "hire" && w.who.c.id === h.candidateId);
         return n + (x && !gone.has(h.candidateId) ? Number(x.who.c.wage || 0) * Number(x.w.hours || 0) / 7 : 0);
       }, 0);
-      const gaps = m.sites.flatMap(S => S.weeks.filter(x => !x.who || (x.who.type === "move" && x.who.m.off)).map(x => ({S, x})));
+      const gaps = m.sites.filter(S => !req.scope || S.key === req.scope).flatMap(S => S.weeks.filter(x => !x.who || (x.who.type === "move" && x.who.m.off)).map(x => ({S, x})));
       const gapText = [...new Map(gaps.map(({S, x}) => [`${S.key}|${x.w.skill}`, {S, skill: x.w.skill,
         n: gaps.filter(g => g.S === S && g.x.w.skill === x.w.skill).length,
         h: gaps.filter(g => g.S === S && g.x.w.skill === x.w.skill).reduce((n, g) => n + Number(g.x.w.hours || 0), 0)}])).values()]
         .map(g => `<b>${spEsc(g.S.b ? shortName(g.S.b) : "A site")} keeps ${g.n} ${hrRole(g.skill)} ${g.n === 1 ? "place" : "places"} open</b> (${g.h} hours a week)`).join("; ");
-      const warned = m.sites.flatMap(S => S.weeks.filter(x => x.who && x.who.type === "hire" && hrWarns(m, x.who.c, S, x).length));
+      const warned = m.sites.filter(S => !req.scope || S.key === req.scope).flatMap(S => S.weeks.filter(x => x.who && x.who.type === "hire" && hrWarns(m, x.who.c, S, x).length));
       const rewritten = (answer.sites || []).filter(s => s && s.before && s.after);
       const said = rewritten.length ? `<div class="gw-call info">${gwI("roster")}<div>The week is replaced at ${rewritten.map(s =>
         `<b>${gwSiteName(s)}</b> (${Number(s.removed) || 0} entries out, ${Number(s.added) || 0} in${s.openedHours ? ", open 0 to 24" : ""})`).join(", ")}.</div></div>` : "";

@@ -995,6 +995,7 @@
    "margin": 42.2,
    "marketing": 0.0,
    "marketingIndex": 20.0,
+   "marketingOn": [],
    "missingAmenities": [
     "ba:customerdemand_toiletprivacy",
     "ba:customerdemand_music",
@@ -1226,6 +1227,7 @@
    "staffLacking": 1,
    "staffLackingAny": 1,
    "staffLackingCompany": 0,
+   "stationShifts": 14,
    "status": "retail",
    "swing": 50,
    "tag": "",
@@ -1302,6 +1304,7 @@
    "margin": 27.8,
    "marketing": 0.0,
    "marketingIndex": 0.0,
+   "marketingOn": [],
    "missingAmenities": [
     "ba:customerdemand_toiletprivacy",
     "ba:customerdemand_sink",
@@ -1514,6 +1517,7 @@
    "staffLacking": 0,
    "staffLackingAny": 0,
    "staffLackingCompany": 0,
+   "stationShifts": 7,
    "status": "retail",
    "swing": 54,
    "tag": "",
@@ -1565,6 +1569,7 @@
    "margin": null,
    "marketing": 0.0,
    "marketingIndex": 0,
+   "marketingOn": [],
    "missingAmenities": [],
    "missingUniformLocker": false,
    "name": "HART. Hub",
@@ -1722,6 +1727,7 @@
    "staffLacking": 0,
    "staffLackingAny": 0,
    "staffLackingCompany": 0,
+   "stationShifts": 0,
    "status": "overhead",
    "swing": 0,
    "tag": "",
@@ -1792,6 +1798,7 @@
    "margin": null,
    "marketing": 0.0,
    "marketingIndex": 0,
+   "marketingOn": [],
    "missingAmenities": [],
    "missingUniformLocker": false,
    "name": "HART. Brewery",
@@ -1956,6 +1963,7 @@
    "staffLacking": 0,
    "staffLackingAny": 0,
    "staffLackingCompany": 0,
+   "stationShifts": 7,
    "status": "support",
    "swing": 0,
    "tag": "",
@@ -7373,7 +7381,8 @@
       1,
       0
      ]
-    ]
+    ],
+    "seating": false
    },
    "ba:street_eighthstreet#5": {
     "placed": 5,
@@ -7393,7 +7402,8 @@
       1,
       0
      ]
-    ]
+    ],
+    "seating": false
    }
   },
   "campaigns": [

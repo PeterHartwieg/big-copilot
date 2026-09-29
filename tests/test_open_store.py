@@ -184,6 +184,30 @@ class RequiredPlacedTests(unittest.TestCase):
         self.assertEqual(self.rows({}, 900)["sinks"], [2, 0])
         self.assertEqual(self.rows({}, None)["sinks"], [1, 0])
 
+    def test_a_per_area_rule_without_a_cap_is_not_capped(self):
+        rules = {"types": {SHOP: {**RULES["types"][SHOP], "rq": [{"n": "sinks", "t": SINK, "sq": 100}]}}}
+        got = ba_dashboard.required_placed(collections.Counter(), SHOP, rules, PRICES, 950)
+        self.assertEqual(got, [["sinks", 10, 0]])
+
+    def test_a_requirement_naming_a_product_is_met_by_a_display_that_holds_it(self):
+        rules = {"types": {SHOP: {**RULES["types"][SHOP], "rq": [{"n": "shelfwithbeer", "i": ["ba:itemname_beer"]}]}},
+                 "furniture": RULES["furniture"]}
+        rows = lambda placed, available=None: ba_dashboard.required_placed(
+            collections.Counter(placed), SHOP, rules, PRICES, 100, available)
+        self.assertEqual(rows({}), [["shelfwithbeer", 1, 0]])
+        self.assertEqual(rows({"ba:itemname_shelf": 2}), [["shelfwithbeer", 1, 0]])
+        self.assertEqual(rows({"ba:itemname_fridge": 2}), [["shelfwithbeer", 1, 2]])
+
+    def test_a_product_the_shop_lists_as_available_meets_the_product_requirements(self):
+        rules = {"types": {SHOP: {**RULES["types"][SHOP], "rq": [
+            {"n": "anyprimaryproduct", "any": 1}, {"n": "shelfwithbeer", "i": ["ba:itemname_beer"]}]}},
+            "furniture": RULES["furniture"]}
+        got = lambda available: {r[0]: r[2] for r in ba_dashboard.required_placed(
+            collections.Counter(), SHOP, rules, PRICES, 100, available)}
+        self.assertEqual(got(set()), {"anyprimaryproduct": 0, "shelfwithbeer": 0})
+        self.assertEqual(got({"ba:itemname_whisky"}), {"anyprimaryproduct": 1, "shelfwithbeer": 0})
+        self.assertEqual(got({"ba:itemname_beer"}), {"anyprimaryproduct": 1, "shelfwithbeer": 1})
+
     def test_a_fee_paid_in_game_has_no_row(self):
         rules = {"types": {SHOP: {**RULES["types"][SHOP], "rq": [{"n": "paidlicensingfees", "lic": 1}]}}}
         self.assertEqual(ba_dashboard.required_placed(collections.Counter(), SHOP, rules, PRICES, 100), [])
@@ -363,10 +387,17 @@ class PayloadTests(unittest.TestCase):
         expected = {b["key"] for b in self.payload["businesses"] if b["typeSlug"] in planned and b["status"] != "vacant"}
         self.assertEqual(set(built), expected)
         for row in built.values():
+            self.assertIsInstance(row["seating"], bool)
             self.assertGreaterEqual(row["placed"], 0)
             for name, need, have in row["req"]:
                 self.assertGreaterEqual(need, 1)
                 self.assertGreaterEqual(have, 0)
+
+    def test_every_business_reports_its_running_campaigns_and_station_shifts(self):
+        for b in self.payload["businesses"]:
+            self.assertIsInstance(b["marketingOn"], list, b["key"])
+            self.assertTrue(set(b["marketingOn"]) <= {c[0] for c in ba_dashboard.MARKETING_CAMPAIGNS})
+            self.assertIsInstance(b["stationShifts"], int, b["key"])
 
     def test_a_players_own_shop_carries_what_the_model_needs_to_price_it(self):
         own = [row for rows in self.facts["own"].values() for row in rows]

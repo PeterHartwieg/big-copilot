@@ -921,14 +921,34 @@ the loan.
 
 **Until opening** (step 5) is a checklist of seven rows for the plan's building: Lease,
 Furniture, Staff for the opening hours, Uniforms, Customer demands, Marketing and
-Logistics. Before the save shows a business at that address the rows are to-dos; from then
-on each ticks itself from the save (`D.businesses`, and `openStore.built` for the required
-furniture placed). A row that needs a write has a button when the game link's `writes`
-lists it: **Hire N** opens the Staff page's hiring dialog for the roles and counts the plan
-needs, **Assign uniforms** the uniforms write, **Set up marketing** the marketing write with
-the cheapest mix the estimate chose. Otherwise the button is a short instruction for the
-game, and a strip under the list says the game can be linked. **Plan a factory** goes to
-Expansion › Plan a factory. Step 6, the payback after opening, is not built yet.
+Logistics. A row reads done only when the save proves it; whatever the save cannot say stays
+a to-do with "check in the game". Before the save shows a business of the planned type at
+that address every row but Lease is a to-do (Furniture is judged from `openStore.built`, and
+a business of another type at the address is named in a note and ignored).
+
+- **Furniture**: the required items placed (`openStore.built.req`); a requirement that names
+  a product is met by the product being available to the player or held by a placed display.
+- **Staff**: done only with opening hours set (BizMan), somebody hired and, on a demand plan,
+  sales to size it by. A shop with no hours or a never-traded shop is a to-do. Hire weeks
+  filled by moving people offer **Hire n · move m**, the full staff review for this site;
+  with nobody to hire the row says to ask a headhunter.
+- **Uniforms**: done when the type asks for none, or staff have station hours and every role
+  has one; without hours yet it says "Set once staff have hours".
+- **Customer demands**: every demand the type makes. Amenities, uniforms and seating
+  (`built.seating`, any placed seat) come from the save; workout variety and any demand the
+  save cannot answer stay unchecked with an in-game instruction, so the row cannot be done.
+- **Marketing**: done when a campaign is enabled (`marketingOn`), not from money spent.
+- **Logistics**: an office needs no deliveries. A shop is set up when each product on its
+  shelves that the type sells has a delivery route or an import (a logistics plan into the
+  site, or a weekly delivery); a supply status is not a route.
+
+A row that needs a write has a button when the game link's `writes` lists it: **Hire N**
+opens the Staff page's hiring dialog for this site only, **Assign uniforms** the uniforms
+write, **Set up marketing** the marketing write with the most profitable mix the estimate
+settled on, sent with the campaigns running now as `was`. Otherwise the button is a short
+instruction for the game, and a strip under the list says the game can be linked and where
+to find the mod. **Plan a factory** goes to Expansion › Plan a factory. Step 6, the payback
+after opening, is not built yet.
 
 ## The portfolio, by chain
 
