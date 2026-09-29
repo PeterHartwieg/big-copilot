@@ -927,7 +927,8 @@ last refresh (the mock has no main-thread fallback).
 For the writes, `--refuse-write <error>[:<detail>]`, `--busy-writes <n>` and `--writes <kinds>`
 do the same; `--features <list>` names what `/health` lists as `features` (by default
 `hire.reschedule,hire.undo`, as mod 0.4.0; `""` for an older mod, whose hire call then refuses
-a reschedule-only site with `400` and whose hire undo answers `no_undo`), and for `hire`, `--hire-gone <candidateId>` (repeatable) makes a candidate gone
+a reschedule-only site with `400`, whose hire undo answers `no_undo` and whose default `writes`
+leave out `marketing`), and for `hire`, `--hire-gone <candidateId>` (repeatable) makes a candidate gone
 and `--myemployees` opens the phone's MyEmployees app. For `schedule` and `hire`,
 `--screen-open <street>:<number>` (repeatable) opens BizMan's schedule screen on a site: a
 write touching it answers the site error `screen_open`, in the mod's order, for assign-only

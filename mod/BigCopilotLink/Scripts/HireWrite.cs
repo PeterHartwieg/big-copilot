@@ -934,7 +934,8 @@ namespace BigCopilotLink
                 {
                     M = m, From = targetReg != null ? targetReg.BusinessName : null,
                     To = sourceReg != null ? sourceReg.BusinessName : null,
-                    ShiftsCleared = ShiftsOf(targetReg, m.Id)
+                    // As the forward move: the game clears none of a driver's shifts.
+                    ShiftsCleared = e.HasSkill(DriverSkill) ? 0 : ShiftsOf(targetReg, m.Id)
                 });
             }
 

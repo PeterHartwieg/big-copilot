@@ -30643,6 +30643,10 @@ function hrReview(o = {}, hooks = {}){
   const siteB = () => o.scope === "site" ? (D.businesses || []).find(b => b.key === o.site) || null
     : o.scope === "quick" && hrLast.m.quick.S ? hrLast.m.quick.S.b : null;
   const people = answer => (answer.hired || []).length + (answer.moved || []).length;
+  /* The company's first hire comes with the game's one-time first-employee
+     bonus, which no undo takes back: the mod answers it `undoable` false. */
+  const firstHire = () => !!hrLast.one && hrLast.mode !== "week" && counts().hire > 0 && !(D.staff && D.staff.total);
+  let firstAsked = false;  /* as the last dry run judged it: an apply rebuilds hrLast */
   const weeksOf = answer => (answer.sites || []).filter(s => s && s.before && s.after).length;
   let written = [];  // the progress records of the apply (pgHireDone())
   let applied = null;  // the action as applied, for its Undo
@@ -30712,10 +30716,13 @@ function hrReview(o = {}, hooks = {}){
         const more = open ? gwCall("", "hire", tt("co.hire.more.said", {
           one: "{n} place still open: {button} opens the review for it alone.",
           other: "{n} places still open: {button} opens the review for those alone."}, {n: open, button})) : "";
+        /* Why there is no Undo: the first hire's bonus (firstHire()). */
+        const first = firstAsked && answer.undoable === false && hired ? gwCall("info", "info",
+          tt("co.hire.done.first", "No Undo: this was your company's first hire, and the game's one-time first-employee bonus cannot be taken back.")) : "";
         return `${gwTiles([[tt("co.hire.tile.hired", "Hired"), null, hrNum(hired)], [tt("co.hire.tile.moved", "Reassigned"), null, hrNum(moved)],
             ...(mode === "hire" ? [] : [[tt("co.hire.tile.weeks", "Weeks"), null, hrNum(c.weeks)]]),
             [tt("co.hire.tile.wages", "Added wages"), null, `+${fmt(bill)}<small class="hr-u">${tt("co.hire.perday", "/day")}</small>`]])}
-          ${mode === "hire" ? "" : `<p class="gw-lead">${tt("co.hire.starts", "Everyone starts on their hours from the next hour in the game.")}</p>`}${sites}${goneCall}${emptyCall}${more}
+          ${mode === "hire" ? "" : `<p class="gw-lead">${tt("co.hire.starts", "Everyone starts on their hours from the next hour in the game.")}</p>`}${sites}${goneCall}${emptyCall}${more}${first}
           ${gapText ? gwCall("warn", "alert", `${gapText}. ${tt("co.hire.gap.stays", "It stays on the Staff page until someone matches.")}`) : ""}
           ${hrLast.one ? "" : `<p class="hr-lock">${gwSvg("lock")}<span>${tt("co.hire.noundo.done", "No undo with this mod. To let someone go, fire them in MyEmployees in the game.")}</span></p>`}`;
       }
@@ -30777,10 +30784,11 @@ function hrReview(o = {}, hooks = {}){
        MyEmployees open would still refuse it. The weeks go one by one. */
     local: (body, dryRun) => !hrLast.one && !body.hires.length && !body.moves.length && !body.sites.length
       ? {ok: true, kind: "hire", dryRun, hired: [], moved: [], skipped: [], sites: [], wageAdded: 0, rows: []} : null,
-    get hint(){ return hrLast.one ? tt("co.hire.hint.undo", "Undo takes every hire, reassign and week of this back in one step.")
+    get hint(){ return firstHire() ? tt("co.hire.hint.first", "Your company's first hire cannot be undone: the game gives its one-time first-employee bonus with it.")
+      : hrLast.one ? tt("co.hire.hint.undo", "Undo takes every hire, reassign and week of this back in one step.")
       : tt("co.hire.hint.noundo", "This mod cannot undo a hire. To let someone go later, fire them in the MyEmployees app in the game."); },
     refusedHint: answer => answer.blocked === "myemployees" ? tt("co.hire.refused.myemployees", "The game cannot hire while you are in that app.") : tt("sp.gw.unchanged", "Nothing was changed."),
-    learn: answer => { hrLast.answer = answer; },
+    learn: answer => { hrLast.answer = answer; if(answer.dryRun !== false) firstAsked = firstHire(); },
     /* The verb says which of the three it does. */
     applyLabel: () => {
       const c = counts(), mode = hrLast.mode;

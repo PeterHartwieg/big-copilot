@@ -1399,11 +1399,16 @@ class MockHireOneAction(LinkedMock):
         self.link.refresh(force=True)
         before = self.prints()[("ba:street_secondavenue", 10)]
         move = {"hires": [], "moves": [{"employeeId": ANA, "from": GIFTS, "to": CORNER}],
-                "sites": [{"address": CORNER, "expect": None, "days": None}]}
+                "sites": [{"address": CORNER, "expect": self.prints()[("ba:street_broadway", 2)],
+                           "days": [{"d": 2, "shifts": [shift(ANA, CORNER_REGISTER)]}]}]}
         status, done = self.post("hire", move)
         self.assertEqual(status, 200, done)
         self.assertEqual(done["moved"][0]["shiftsCleared"], 0)
         self.assertEqual(self.prints()[("ba:street_secondavenue", 10)], before)
+        # The undo moves them back the same way: nothing cleared where they were sent.
+        status, undo = self.post("undo", {"kind": "hire"})
+        self.assertEqual(status, 200, undo)
+        self.assertEqual(undo["moved"][0]["shiftsCleared"], 0)
 
     def test_screen_open_comes_before_changed_for_one_site(self):
         self.assertEqual(self.post("hire", self.call_body())[0], 200)

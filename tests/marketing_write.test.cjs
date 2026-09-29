@@ -326,7 +326,7 @@ test('no agency in the phone yet: the line names where to go, and there is no bu
   assert.match(await hint.locator('#sp-pull .spmk').innerText(), /Visit McCain's eMarketing \(17 Third Avenue\) once for a better mix\./);
 });
 
-test('the game refuses a row for a shut or unknown agency, and an undo while it is shut', async (t) => {
+test('the game refuses a row for a shut or unknown agency, and an undo goes through while it is shut', async (t) => {
   const page = await board(t);
   await answering(page, {errors: {[G]: 'agency_closed'}});
   await openSite(page, G);
@@ -346,24 +346,37 @@ test('the game refuses a row for a shut or unknown agency, and an undo while it 
     rows: body.sites.map(s => ({address: s.address, error: 'no_contact', agency: {name: 'CityAds'}}))}}); });
   await dlg.locator('[data-gw-b="retry"]').click();
   await page.waitForFunction(() => /CityAds is not in your phone's contacts/.test(document.querySelector('dialog.gw-dlg .gw-no')?.textContent || ''));
-  // An apply, then the undo refused while the agency is shut.
+  // An apply, then its undo after the agencies have shut: the mod only flips
+  // switches the site has, so it goes through (MarketingWrite's undo).
   await answering(page);
   await dlg.locator('[data-gw-b="retry"]').click();
   await phase(page, 'ready');
   await dlg.locator('[data-gw-b="apply"]').click();
   await phase(page, 'done');
-  // The mod refuses the undo as a write: 409 refused, the row naming the agency.
-  await page.evaluate(g => { window.mkAnswer = async () => ({status: 409, error: 'refused',
-    body: {ok: false, kind: 'marketing', undo: true, rows: [{address: g, error: 'agency_closed', agency: {name: 'CityAds', address: {street: 'ba:street_secondavenue', number: 5}},
-      opens: {day: 36, hour: 16}}]}}); }, addr(G));
+  await page.evaluate(() => { window.mkLink = Object.assign({}, window.mkLink, {hour: 18}); window.calmWatch.linkClock(); });
+  await dlg.locator('[data-gw-b="undo"]').click();
+  await phase(page, 'undone');
+  const sent = await writes(page);
+  assert.deepEqual([sent.at(-1).kind, sent.at(-1).body], ['undo', {kind: 'marketing'}]);
+});
+
+test('an undo after a switch was flipped by hand is refused as changed, and not offered again', async (t) => {
+  const page = await board(t);
+  await answering(page);
+  await openSite(page, G);
+  await page.locator('#sp-pull [data-gw="marketing"]').click();
+  await phase(page, 'ready');
+  const dlg = page.locator('dialog.gw-dlg');
+  await dlg.locator('[data-gw-b="apply"]').click();
+  await phase(page, 'done');
+  await page.evaluate(g => { window.mkAnswer = async () => ({status: 409, error: 'changed',
+    body: {error: 'changed', rows: [{address: g, error: 'changed'}]}}); }, addr(G));
   await dlg.locator('[data-gw-b="undo"]').click();
   await phase(page, 'failed');
-  assert.match(await dlg.locator('.gw-no').innerText(), /CityAds is closed right now\.[\s\S]*It opens at 16:00: try again then\./);
-  // The undo stays: Try again asks the game to undo once more.
-  assert.equal(await dlg.locator('[data-gw-again]').count(), 1);
-  await answering(page);
-  await dlg.locator('[data-gw-again]').click();
-  await phase(page, 'undone');
+  // The game has moved on: nothing was put back, and the way on is a refresh.
+  assert.match(await dlg.innerText(), /The game moved on[\s\S]*Nothing was changed\./);
+  assert.equal(await dlg.locator('[data-gw-again]').count(), 0);
+  assert.equal(await page.evaluate(() => 'marketing' in gwUndoable), false);
 });
 
 // Monday 7:00: CityAds opens at 8:00; McCain's, in this variant, is open

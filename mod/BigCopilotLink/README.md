@@ -233,7 +233,7 @@ Launch the game, enable **Big Copilot Link** in the Mods menu, load a save, then
 curl http://127.0.0.1:8322/health
 ```
 
-Expect `{"ok":true,"schemaVersion":1,"modVersion":"0.4.0","source":"game",…,"writes":["uniforms","imports","schedule","hire"],"features":["hire.reschedule","hire.undo"],"paired":false}` and a
+Expect `{"ok":true,"schemaVersion":1,"modVersion":"0.4.0","source":"game",…,"writes":["uniforms","imports","schedule","hire","marketing"],"features":["hire.reschedule","hire.undo"],"paired":false}` and a
 `[BigCopilotLink] serving the game to Big Copilot on http://127.0.0.1:8322/` line in
 the player log (`%USERPROFILE%\AppData\LocalLow\Hovgaard Games\Big Ambitions\Player.log`;
 on a Mac, `~/Library/Logs/Hovgaard Games/Big Ambitions/Player.log`), then, a few

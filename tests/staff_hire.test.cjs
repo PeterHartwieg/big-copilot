@@ -2070,6 +2070,39 @@ test('with mod 0.4.0 Staff all sites is one call, the weeks no hire reaches with
   assert.equal(await page.evaluate(() => pgOfFamily('hire').length), 0);
 });
 
+test('the company\'s first hire: the hint says it cannot be undone, and the done screen says why there is no Undo', async (t) => {
+  const d = JSON.parse(payload);
+  d.staff = Object.assign({}, d.staff, {total: 0});
+  const page = await board(t, {data: JSON.stringify(d), link: ONE});
+  await page.evaluate(src => {
+    window.answerFor = eval(src);
+    window.hrAnswer = async (kind, body, o) => ({status: 200, error: null,
+      body: window.answerFor(body, {dryRun: !!o.dryRun, extra: o.dryRun ? {} : {undoable: false}})});
+  }, `(${answerFor.toString()})`);
+  await page.locator(REVIEW).click();
+  await phase(page, 'ready');
+  const dlg = page.locator('dialog.gw-dlg');
+  const foot = await dlg.locator('.gw-foot').textContent();
+  assert.match(foot, /Your company's first hire cannot be undone: the game gives its one-time first-employee bonus with it\./);
+  assert.doesNotMatch(foot, /Undo takes every hire/);
+  await dlg.locator('.gw-foot [data-gw-b="apply"]').click();
+  await phase(page, 'done');
+  assert.equal(await dlg.locator('.gw-foot [data-gw-b="undo"]').count(), 0);
+  assert.match(await dlg.locator('.gw-body').textContent(),
+    /No Undo: this was your company's first hire, and the game's one-time first-employee bonus cannot be taken back\./);
+});
+
+test('with staff already employed, the hint promises the one-step Undo', async (t) => {
+  const d = JSON.parse(payload);
+  d.staff = Object.assign({}, d.staff, {total: 3});
+  const page = await board(t, {data: JSON.stringify(d), link: ONE});
+  await page.evaluate(src => { window.answerFor = eval(src);
+    window.hrAnswer = async (kind, body, o) => ({status: 200, error: null, body: window.answerFor(body, {dryRun: !!o.dryRun})}); }, `(${answerFor.toString()})`);
+  await page.locator(REVIEW).click();
+  await phase(page, 'ready');
+  assert.match(await page.locator('dialog.gw-dlg .gw-foot').textContent(), /Undo takes every hire, reassign and week of this back in one step\./);
+});
+
 test('an older mod: the weeks no hire reaches are written one by one after the hire, and each site says how it went', async (t) => {
   const page = await board(t);
   await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
