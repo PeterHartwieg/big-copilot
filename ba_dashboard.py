@@ -7415,6 +7415,38 @@ def _may_split(rows: list, hires: list, state: dict) -> bool:
     return bool(owed) and all(hours <= room[skill] for skill, hours in owed.items())
 
 
+def _cut_for_pool(row: dict, rows: list, pool: list, state: dict, here: dict) -> bool:
+    """Cut one line nobody here may take whole between two people who may each take a piece.
+
+    A line runs the whole of a station's day, so somebody with no mornings or
+    no evenings can never take it whole: a locker open 08-20 turned away both
+    of a shop's guards and hired two more, where the game's own week had them
+    share it. The cut nearest the middle first, both pieces MIN_SPLIT or
+    longer; each piece to whom `_best_for()` puts first among those
+    `_may_take()` passes for that piece, two different people. The head keeps
+    the row, the tail is appended to `rows`. Returns whether it cut.
+    """
+    start, end = row["from"], row["to"]
+    points = sorted(range(start + MIN_SPLIT, end - MIN_SPLIT + 1),
+                    key=lambda at: (abs(2 * at - start - end), at))
+    for at in points:
+        head, tail = dict(row, to=at), dict(row, **{"from": at})
+        first = _best_for(head, [p for p in pool if _may_take(p, head)], state, here)
+        if first is None:
+            continue
+        second = _best_for(tail, [p for p in pool if p is not first and _may_take(p, tail)],
+                           state, here)
+        if second is None:
+            continue
+        row["to"] = at
+        for piece, person in ((row, first), (tail, second)):
+            here["rostered"].add(person["id"])
+            _take_over(piece, person, state)
+        rows.append(tail)
+        return True
+    return False
+
+
 def _split_open(rows: list, hires: list, state: dict, here: dict) -> None:
     """Cut each line still open between two hires, a piece each.
 
@@ -7689,6 +7721,20 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
             allowed[shape] = [person for person in pool if _may_take(person, row)]
     for row in sorted(open_rows, key=clock):
         _fill_hole(row, allowed[_slot_shape(row)], state, here)
+    # And a line nobody here may take whole at all -- the role, free
+    # weekends, the hours they will not work -- cut in two for two of them: a
+    # locker open 08-20 and two guards, one with no mornings and one with no
+    # evenings, is 08-14 and 14-20 for them, not two guards to hire. A line
+    # only too long for the room people have left stays whole, for the hires:
+    # cutting those as well spent the room the swaps needed.
+    failed = set()
+    for row in sorted((r for r in first if r["employee"] is None), key=clock):
+        if _slot_shape(row) in failed or allowed[_slot_shape(row)]:
+            continue
+        if _cut_for_pool(row, first, pool, state, here):
+            failed.clear()
+        else:
+            failed.add(_slot_shape(row))
     saved = {person["id"]: _copy_state(state[person["id"]]) for person in pool}
     saved_rostered = set(here["rostered"])
 
@@ -24068,7 +24114,9 @@ function spRosterCount(c){
     const h = c.row.headcount[skill] || {};
     const label = labelOf(skill);
     const bench = benchOf(skill), have = Math.max(0, (h.have || 0) - bench);
-    const isNew = h.kind === "security" && h.hire;
+    /* "Nobody covers this locker today" is said of the game's own week, not
+       the plan's: a locker the current week has guards on is not new wages. */
+    const isNew = h.kind === "security" && h.hire && !(c.row.current || {}).security;
     /* The band is the fewest people who could cover the hours to the most who
        could still be given a full week, and on a thin role the second is the
        smaller of the two: 56 hours of security needs two people, because

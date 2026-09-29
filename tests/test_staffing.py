@@ -2126,6 +2126,23 @@ class ExchangeTest(unittest.TestCase):
             self.assertGreaterEqual(week["hours"], 10, who)
             self.assertLessEqual(week["hours"], FULL_TIME[1], who)
 
+    def test_two_guards_who_share_the_locker_are_kept(self):
+        """QA on a real hub-and-spoke save: a locker open 08-20 and two
+        full-time guards, one with no evenings and one with no mornings.
+        Neither may take the 08-20 line whole, and the game's own week has
+        them share it; the plan used to give both no hours and hire two more.
+        It cuts the line for them instead: no hire, both kept."""
+        row = plan([(9, LOCKER)], [
+            employee("g1", [GUARD], demands=("ba:jobdemand_fulltime", "ba:jobdemand_noevenings")),
+            employee("g2", [GUARD], demands=("ba:jobdemand_fulltime", "ba:jobdemand_nomornings")),
+        ], FLAT, opens=((8, 20),))
+        self.assertEqual(sum(h["hire"] for h in row["headcount"].values()), 0)
+        weeks = self.weeks(row)
+        self.assertEqual(sorted(weeks), ["G1", "G2"])
+        for who, week in weeks.items():
+            self.assertGreaterEqual(week["hours"], 30, who)
+        self.assertEqual(sum(week["hours"] for week in weeks.values()), 84)
+
     def test_a_week_that_cannot_be_reached_is_not_cut_at_all(self):
         """All or nothing: a shortfall that cannot be closed moves no shift.
 

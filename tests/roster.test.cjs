@@ -519,6 +519,19 @@ test('a tick kept from a plan that has changed does not count', async () => {
 
 // --- the rest of the block ---------------------------------------------------
 
+test("a locker the game's own week has guards on is not called uncovered", async () => {
+  // QA on a real save: the plan hired for a locker two guards were covering,
+  // and the line said nobody covers it today. That is the game's week to say.
+  const page = await shop('full', row => {
+    row.current = Object.assign({}, row.current, {security: 14});
+  });
+  try {
+    const reads = await page.$$eval('#sp-roster .sp-hc [data-read]', es => es.map(e => e.dataset.read));
+    assert.ok(reads.some(r => /to hire/.test(r)), 'the locker still has hires on this plan');
+    assert.deepEqual(reads.filter(r => /nobody covers this locker/.test(r)), []);
+  } finally { await page.close(); }
+});
+
 test('a day that is an earlier day again is marked as its copy', async () => {
   const page = await shop('shut');
   try {
