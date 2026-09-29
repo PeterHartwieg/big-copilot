@@ -412,6 +412,7 @@ const MAP_WORDS = {
   get showTakeoverTip(){ return finderShowTip("takeover"); },
   get showSale(){ return finderShowName("sale"); },
   get showSaleTip(){ return finderShowTip("sale"); },
+  get fromPlan(){ return tt("map.fplan.from", "from the plan"); },
 };
 /* The MAP_WORDS key of a finder category or list. */
 const mapWordKey = (lead, k) => lead + k.charAt(0).toUpperCase() + k.slice(1);
@@ -433,13 +434,20 @@ if(typeof ttOnChange === "function") ttOnChange(() => mapViews.forEach(view => m
 
 class CityMapView {
   /* options.panel: the page shows chips, search and the places panel; the
-     shortcut dialog shows the stage and the card only. */
+     shortcut dialog shows the stage and the card only.
+     options.plan: the finder embedded in a plan (Expansion › Open a store),
+     {preset, onPlan(key), label()}. It is always on, fixed to the plan's type,
+     lists premises to rent, stores nothing and never touches the history
+     entry; its card carries the button that hands the building to the plan.
+     Only the City map page's own view (cityMapPage) remembers anything. */
   constructor(root, options = {}){
     this.root = root; this.selected = null; this.box = null; this.hot = null;
-    this.panel = options.panel !== false;
+    this.planning = options.plan || null;
+    this.panel = options.panel !== false || !!this.planning;
     this.layers = {mine:true, own:true, home:true, fnd:true, all:false}; this.query = "";
-    this.fs = finderDefaults();
+    this.fs = this.planning ? this.planState(this.planning.preset) : finderDefaults();
     this.root.classList.add("city-map");
+    this.root.classList.toggle("fplan", !!this.planning);
     this.buildToken = 0;
     // One breakpoint for CSS and script alike: the panel floats over the map
     // on wide stages and drops under it on narrow ones.
@@ -471,6 +479,8 @@ class CityMapView {
       if(action === 'reset') this.reset(true);
       if(action === 'full') this.toggleFullscreen();
       if(action === 'close') this.deselect();
+      // A plan's finder hands the picked building to the plan.
+      if(action === 'plan' && this.planning && this.selected) this.planning.onPlan?.(this.selected);
       // "its page" carries the site's address, which the board opens itself.
       if(action === 'details' && !inSiteLink(e)){
         e.preventDefault();
@@ -511,7 +521,8 @@ class CityMapView {
     // in the map window and its filters in the panel. A chip's accessible name
     // is what it shows, "Mine 2", so a spoken command matches the word on it;
     // the note says the rest.
-    const head = this.panel ? `<div class="sechead map-head moff">
+    // A plan's finder is always on, so it has no plain map's header at all.
+    const head = this.panel && !this.planning ? `<div class="sechead map-head moff">
       <span class="layers" role="group" aria-label="${attr(MAP_WORDS.layers)}" data-mw-aria="layers">
         <button type="button" class="sev lay mine" data-l="mine" aria-pressed="true" data-tip="${attr(MAP_WORDS.mineTip)}" data-mw-tip="mineTip"><i></i><span class="lw" data-mw="mine">${mapText(MAP_WORDS.mine)}</span><span class="n">0</span></button>
         <button type="button" class="sev lay own" data-l="own" aria-pressed="true" data-tip="${attr(MAP_WORDS.ownTip)}" data-mw-tip="ownTip"><i></i><span class="lw" data-mw="own">${mapText(MAP_WORDS.own)}</span><span class="n">0</span></button>
@@ -529,10 +540,10 @@ class CityMapView {
       <g class="map-pips"></g></g></svg>
       <div class="layer">${(a.districtLabels || []).map(l=>`<span class="dlabel" data-x="${l.anchor[0]}" data-y="${l.anchor[1]}">${mapText(l.label)}</span>`).join('')}
         <div class="shadow" aria-hidden="true"></div><div class="ball" aria-hidden="true"><i></i><u></u></div>
-        <div class="site" role="region" aria-live="polite" hidden><span class="tail"></span><button type="button" class="x" aria-label="${attr(MAP_WORDS.close)}" data-mw-aria="close">${ICON.x}</button><h3></h3><div class="sub"></div><div class="nums"></div><div class="st" hidden></div><div class="facts" hidden></div><div class="lp-plan" hidden></div><div class="fit" hidden></div><p class="why" hidden></p><div class="finds2"></div><a class="go2 ss-pagego" href="#detail" data-action="details" data-mw="itsPage">${SS_PAGE}${mapText(MAP_WORDS.itsPage)}</a></div>
+        <div class="site" role="region" aria-live="polite" hidden><span class="tail"></span><button type="button" class="x" aria-label="${attr(MAP_WORDS.close)}" data-mw-aria="close">${ICON.x}</button><h3></h3><div class="sub"></div><div class="nums"></div><div class="st" hidden></div><div class="facts" hidden></div><div class="lp-plan" hidden></div><div class="fit" hidden></div><p class="why" hidden></p><div class="finds2"></div><button type="button" class="os-cta sm fplan-go" data-action="plan" hidden></button><a class="go2 ss-pagego" href="#detail" data-action="details" data-mw="itsPage">${SS_PAGE}${mapText(MAP_WORDS.itsPage)}</a></div>
       </div>
       ${this.panel ? this.finderControls() : ""}
-      <div class="zoomer" role="group" aria-label="${attr(MAP_WORDS.zoom)}" data-mw-aria="zoom"><button type="button" class="ibtn" data-action="in" aria-label="${attr(MAP_WORDS.zoomIn)}" data-mw-aria="zoomIn">+</button><button type="button" class="ibtn" data-action="out" aria-label="${attr(MAP_WORDS.zoomOut)}" data-mw-aria="zoomOut">−</button><button type="button" class="ibtn" data-action="reset" aria-label="${attr(MAP_WORDS.city)}" data-mw-aria="city"${this.panel ? ` data-tip="${attr(MAP_WORDS.city)}" data-mw-tip="city"` : ''}>${ICON.home}</button>${this.panel && document.fullscreenEnabled ? `<button type="button" class="ibtn" data-action="full" aria-label="${attr(MAP_WORDS.full)}" data-mw-aria="full" data-tip="${attr(MAP_WORDS.full)}" data-mw-tip="full">${ICON.full}</button>` : ''}</div>
+      <div class="zoomer" role="group" aria-label="${attr(MAP_WORDS.zoom)}" data-mw-aria="zoom"><button type="button" class="ibtn" data-action="in" aria-label="${attr(MAP_WORDS.zoomIn)}" data-mw-aria="zoomIn">+</button><button type="button" class="ibtn" data-action="out" aria-label="${attr(MAP_WORDS.zoomOut)}" data-mw-aria="zoomOut">−</button><button type="button" class="ibtn" data-action="reset" aria-label="${attr(MAP_WORDS.city)}" data-mw-aria="city"${this.panel ? ` data-tip="${attr(MAP_WORDS.city)}" data-mw-tip="city"` : ''}>${ICON.home}</button>${this.panel && !this.planning && document.fullscreenEnabled ? `<button type="button" class="ibtn" data-action="full" aria-label="${attr(MAP_WORDS.full)}" data-mw-aria="full" data-tip="${attr(MAP_WORDS.full)}" data-mw-tip="full">${ICON.full}</button>` : ''}</div>
     </div>${this.panel ? `<aside class="places fonly" aria-label="${attr(MAP_WORDS.found)}" data-mw-aria="found">${this.finderPanel()}<div class="list"></div></aside>` : ""}</div>`;
     this.svg = this.root.querySelector('.map-canvas');
     this.stage = this.root.querySelector('[data-stage]');
@@ -590,7 +601,8 @@ class CityMapView {
      for sits in the panel above its own results, so the section reads as one
      thing rather than as chrome scattered over the map. */
   finderControls(){
-    if(!premises()) return "";
+    // A plan's finder cannot be switched off.
+    if(!premises() || this.planning) return "";
     /* A chip with its name on it: a bare pin in the corner was the most
        hidden way into a headline feature. */
     return `<div class="fswitch"><button type="button" class="ibtn" data-f="tog" aria-pressed="false" data-visit-feature="floor-plans">${ICON.pin}<span data-mw="finder">${mapText(MAP_WORDS.finder)}</span><span class="feature-new" data-new-feature="floor-plans" aria-hidden="true" data-mw="isNew" hidden>${mapText(MAP_WORDS.isNew)}</span></button></div>`;
@@ -607,10 +619,16 @@ class CityMapView {
     const numChip = (f, aria, unit = false) => `<label class="fchip num" data-mw="${f.startsWith("min") ? "min" : "max"}">${
       mapText(f.startsWith("min") ? MAP_WORDS.min : MAP_WORDS.max)}<input type="number" min="0" data-f="${f}" value="0" aria-label="${attr(MAP_WORDS[aria])}" data-mw-aria="${aria}">${
       unit ? `<b data-mw="m2">${mapText(MAP_WORDS.m2)}</b>` : ""}</label>`;
+    /* In a plan the type is the plan's: one chip naming it, in place of the
+       kind and the type picker. Only premises to rent are a new store, and a
+       saved search belongs to the City map's finder. */
+    const plan = this.planning;
+    const typeRow = plan ? row('rowType', `<span class="fchip on fplan-type"></span><span class="fplan-note" data-mw="fromPlan">${mapText(MAP_WORDS.fromPlan)}</span>`, ' ftype')
+      : row('rowType', `<label class="fsel"><select data-f="type" aria-label="${attr(MAP_WORDS.typeAria)}" data-mw-aria="typeAria"><option value="">${mapText(MAP_WORDS.anyType)}</option></select><i class="fchev">${ICON.chev}</i></label>`, ' ftype');
     return `<div class="filters fonly">
-      ${row('rowKind', kinds)}
-      ${row('rowType', `<label class="fsel"><select data-f="type" aria-label="${attr(MAP_WORDS.typeAria)}" data-mw-aria="typeAria"><option value="">${mapText(MAP_WORDS.anyType)}</option></select><i class="fchev">${ICON.chev}</i></label>`, ' ftype')}
-      ${row('rowShow', FINDER_SHOWS.map(key =>
+      ${plan ? "" : row('rowKind', kinds)}
+      ${typeRow}
+      ${row('rowShow', (plan ? ["rent"] : FINDER_SHOWS).map(key =>
         `<button type="button" class="fchip show" data-show="${key}" aria-pressed="false" data-tip="${attr(finderShowTip(key))}" data-mw-tip="${mapWordKey("show", key)}Tip" data-mw="${mapWordKey("show", key)}">${mapText(finderShowName(key))}<b>0</b></button>`).join('')
         + `<span class="why" tabindex="0" data-tip=""><i>?</i></span>`)}
       ${row('rowWhere', hoods)}
@@ -620,7 +638,7 @@ class CityMapView {
         ${numChip("maxCap", "maxCap")}`)}
       ${row('rowTraffic', `${numChip("minTraffic", "minTraffic")}`)}
       ${row('rowLayout', `<span class="flays" role="group" aria-label="${attr(MAP_WORDS.layouts)}" data-mw-aria="layouts"></span>`, ' flayout')}
-      ${row('rowSaved', `<span class="fsaved" role="group" aria-label="${attr(MAP_WORDS.saved)}" data-mw-aria="saved"><span class="fsaved-list"></span><span class="fsaved-new">
+      ${plan ? "" : row('rowSaved', `<span class="fsaved" role="group" aria-label="${attr(MAP_WORDS.saved)}" data-mw-aria="saved"><span class="fsaved-list"></span><span class="fsaved-new">
         <label class="fchip fname" hidden><input type="text" maxlength="24" data-f="name" aria-label="${attr(MAP_WORDS.nameAria)}" data-mw-aria="nameAria"></label>
         <span class="fsave"><button type="button" class="fchip fnew" data-f="save" data-tip="${attr(MAP_WORDS.saveTip)}" data-mw-tip="saveTip" data-mw="save">${ICON.plus}${mapText(MAP_WORDS.save)}</button><button type="button" class="fdel" data-f="cancel" aria-label="${attr(MAP_WORDS.cancel)}" data-mw-aria="cancel" hidden>${ICON.x}</button></span>
       </span></span>`, ' fsaves')}
@@ -629,7 +647,8 @@ class CityMapView {
   wireFinder(){
     if(!premises() || !this.panel) return;
     const changed = () => { this.showAll = false; this.saveFinder(); this.update(); };
-    this.root.querySelector('[data-f="tog"]').onclick = () => {
+    const tog = this.root.querySelector('[data-f="tog"]');
+    if(tog) tog.onclick = () => {
       this.fs.on = !this.fs.on; this.deselect(); changed();
       // On, the page is Expansion › Find a location; off, the City map. Each
       // is a visit of its own, so Back from one returns to the other.
@@ -646,7 +665,8 @@ class CityMapView {
       this.clampSort();
       changed();
     });
-    this.root.querySelector('[data-f="type"]').onchange = e => { this.fs.type = e.target.value; changed(); };
+    const type = this.root.querySelector('[data-f="type"]');
+    if(type) type.onchange = e => { this.fs.type = e.target.value; changed(); };
     // One of the three is always chosen, so a click picks rather than toggles.
     this.root.querySelectorAll('.fchip.show').forEach(chip => chip.onclick = () => {
       if(this.fs.show === chip.dataset.show) return;
@@ -677,6 +697,7 @@ class CityMapView {
     // Save or Enter keeps the name, the x or Escape drops it, and pressing
     // anything else leaves the field as it is.
     const saved = this.root.querySelector('.fsaved');
+    if(!saved) return;
     saved.addEventListener('click', e => {
       const use = e.target.closest('[data-saved]'), drop = e.target.closest('[data-unsave]');
       if(use) this.applySaved(use.dataset.saved);
@@ -725,6 +746,8 @@ class CityMapView {
   /* The filters and the chip travel with the character, like the import marks. */
   finderStore(){ const who = mapCharacter(); return who ? `${FINDER_KEY}:${who}` : null; }
   loadFinder(){
+    // A plan's finder holds the plan's question, never the character's filters.
+    if(this.planning) return;
     const who = mapCharacter();
     if(this.fsCharacter === who) return;
     this.fsCharacter = who;
@@ -746,6 +769,8 @@ class CityMapView {
     this.fs.on = false;   // a new load opens the plain map; only the filters are stored
   }
   saveFinder(){
+    // A plan's finder stores nothing: its filters last as long as the view.
+    if(this.planning) return;
     const store = this.finderStore(); if(!store) return;
     // The switch lasts the session, not the storage: it stays on across pages,
     // and a new load opens the plain map with the filters where they were left.
@@ -766,6 +791,37 @@ class CityMapView {
     this.selected = null; this.showAll = false;  // back to the 80-row cap
     finderPickRemember(this);
     this.ready.then(ok => { if(ok) this.update(); });
+  }
+  /* A plan's question, as setFinder() applies a preset: premises to rent, no
+     limits, the category's own sort, the type and neighbourhoods the plan names. */
+  planState(preset = {}){
+    const fs = {...finderDefaults(), ...preset, on:true, show:'rent', layouts:[], sortPicked:false};
+    if(!FINDER_CATS.includes(fs.cat)) fs.cat = "retail";
+    fs.type = typeof fs.type === "string" ? fs.type : "";
+    fs.hoods = Array.isArray(fs.hoods) && fs.hoods.length ? fs.hoods.slice() : null;
+    fs.sort = fs.cat === 'warehouse' ? 'm2' : 'score';
+    return fs;
+  }
+  /* The plan's type or neighbourhood changed: its question starts afresh, at
+     the top of the list with nothing picked. The same question again (the
+     plan's view drawn anew) keeps the reader's filters, pick and place. */
+  planFor(preset = {}){
+    if(!this.planning) return;
+    const next = this.planState(preset), was = this.planState(this.planning.preset);
+    const same = next.cat === was.cat && next.type === was.type && JSON.stringify(next.hoods) === JSON.stringify(was.hoods);
+    this.planning.preset = preset;
+    // Its host may have been hidden since, which stops the ball (wakeBall()).
+    if(same){ this.ready.then(ok => { if(ok){ this.update(); this.wakeBall(); } }); return; }
+    this.fs = next;
+    this.selected = null; this.onSettled = null; this.showAll = false;
+    // A limit field keeps what is typed while it has the focus (paintControls);
+    // a new question empties it, so it lets go.
+    if(this.root.contains(document.activeElement)) document.activeElement.blur?.();
+    this.ready.then(ok => {
+      if(!ok) return;
+      this.root.querySelectorAll('.places, .places .list').forEach(el => { el.scrollTop = 0; });
+      this.update(); this.reset(true); this.wakeBall();
+    });
   }
   /* --- saved searches ---------------------------------------------------------
      A saved search read against this save: a neighbourhood the save does not
@@ -1090,7 +1146,7 @@ class CityMapView {
     const stat = (v, lab, cls = "") => `<div class="num"><b class="mono${cls}">${v}</b><span>${mapText(lab)}</span></div>`;
     // The demand is the Growth grid's own reading, so it leads back to that
     // type's row there.
-    const demand = f.slug
+    const demand = f.slug && !this.planning
       ? `<a class="num mf-grow" href="#secMarket" data-grow="${mapText(f.slug)}" data-tip="${
           mapText(tt("map.demand.tip", "{type} in every neighbourhood, on Expansion › Demand", {type: f.fit}))}"><b class="mono">${f.demand}</b><span>${
           mapText(tt("map.stat.demandgo", "demand ›"))}</span></a>`
@@ -1114,7 +1170,7 @@ class CityMapView {
     const who = b.occupant;
     // A place you rent is yours whether or not a business trades from it.
     // Your own is named by a way to its page.
-    if(b.status === 'mine') return who?.name ? tt("map.renter.mine", "{name} (you)", {name: siteLink({key: b.key, name: who.name}, who.name)})
+    if(b.status === 'mine') return who?.name ? tt("map.renter.mine", "{name} (you)", {name: this.planning ? mapText(who.name) : siteLink({key: b.key, name: who.name}, who.name)})
       : mapText(tt("map.owner.you", "You"));
     if(!who) return mapText(tt("map.renter.none", "Nobody"));
     // A hospital or a casino is occupied while still being unavailable, so the
@@ -1157,23 +1213,28 @@ class CityMapView {
     const mark = (el, chosen) => { if(!el) return; el.classList.toggle('on', !!chosen); el.setAttribute('aria-pressed', String(!!chosen)); };
     const tog = this.root.querySelector('[data-f="tog"]');
     mark(tog, on);
-    tog.dataset.tip = on ? tt("map.finder.tip.on", "Find a location is on: the list ranks premises you could take. Click to go back to the plain map.")
+    if(tog) tog.dataset.tip = on ? tt("map.finder.tip.on", "Find a location is on: the list ranks premises you could take. Click to go back to the plain map.")
       : tt("map.finder.tip.off", "Find a location: rank premises you could take by the neighbourhood's demand and the building's foot traffic. Click to switch it on.");
     // The rent check comes from the payload, so it is written on every update.
     this.root.querySelector('.filters .why').dataset.tip = `${finderWhy()} ${rentNote()}`;
     this.root.querySelectorAll('.fchip.cat').forEach(chip => mark(chip, chip.dataset.cat === this.fs.cat));
     const select = this.root.querySelector('[data-f="type"]');
-    const types = this.catTypes(this.fs.cat);
-    const options = [...types].sort((a, b) => mapCompare(a[1], b[1]));
-    if(this.fs.type && !types.has(this.fs.type)) this.fs.type = "";
-    // Rebuilt only when the list changed: replacing the options closes a list
-    // the player has open, and a live refresh rarely changes them.
-    const html = `<option value="">${mapText(MAP_WORDS.anyType)}</option>` + options.map(([slug, label]) =>
-      `<option value="${attr(slug)}"${slug === this.fs.type ? ' selected' : ''}>${mapText(label)}</option>`).join('');
-    if(select.typesHtml !== html){ select.innerHTML = html; select.typesHtml = html; }
-    if(select.value !== this.fs.type) select.value = this.fs.type;
-    select.disabled = !options.length;
-    select.closest('.fsel').classList.toggle('on', !!this.fs.type);
+    // A plan's type is fixed, even one this save has no demand reading for.
+    const fixed = this.root.querySelector('.fplan-type');
+    if(fixed) fixed.textContent = this.typeName(this.fs.type) || mapKindName(this.fs.cat);
+    if(select){
+      const types = this.catTypes(this.fs.cat);
+      const options = [...types].sort((a, b) => mapCompare(a[1], b[1]));
+      if(this.fs.type && !types.has(this.fs.type)) this.fs.type = "";
+      // Rebuilt only when the list changed: replacing the options closes a list
+      // the player has open, and a live refresh rarely changes them.
+      const html = `<option value="">${mapText(MAP_WORDS.anyType)}</option>` + options.map(([slug, label]) =>
+        `<option value="${attr(slug)}"${slug === this.fs.type ? ' selected' : ''}>${mapText(label)}</option>`).join('');
+      if(select.typesHtml !== html){ select.innerHTML = html; select.typesHtml = html; }
+      if(select.value !== this.fs.type) select.value = this.fs.type;
+      select.disabled = !options.length;
+      select.closest('.fsel').classList.toggle('on', !!this.fs.type);
+    }
     this.root.querySelector('.frow.ftype').hidden = this.saleView();
     // A game service is occupied but never on offer, so it counts for nothing.
     const counts = {rent:0, takeover:0};
@@ -1522,7 +1583,7 @@ class CityMapView {
     this.stale = false;
     // A view built before a save was open has no finder controls; the first
     // payload that carries premises brings them in.
-    if(this.panel && premises() && !this.root.querySelector('[data-f="tog"]')) this.build();
+    if(this.panel && premises() && !this.root.querySelector('.places .filters')) this.build();
     this.businesses = mapBusinesses(); this.findings = mapFindings();
     this.owned = new Map((D?.ownedBuildings || []).map(b=>[b.key,b]));
     this.homes = new Map((D?.homes || []).map(h=>[h.key,h]));
@@ -1585,7 +1646,8 @@ class CityMapView {
     const title = owned && (!b || b.status === 'vacant') ? owned.address : b?.name || home?.address || loc?.address || owned?.address || tt("map.card.unavailable", "Location unavailable");
     /* A business's or a home's name is a way to its own page, as it is
        everywhere else on the board. */
-    const siteAddr = (b || home) && typeof siteHref === 'function' ? siteHref(key) : '';
+    // A plan's finder stays on the plan: no way off to a site's page.
+    const siteAddr = (b || home) && !this.planning && typeof siteHref === 'function' ? siteHref(key) : '';
     const shown = mapText(title.replace(/^\[\w+\]\s*/, ''));
     card.querySelector('h3').innerHTML = siteAddr ? `<a class="ss-sl" href="${attr(siteAddr)}" data-tip="${attr(tt("map.site.open", "Open its page"))}">${shown}</a>` : shown;
     const sub = b ? `${mapText(b.address)} · ${mapText(b.type)}`
@@ -1609,11 +1671,21 @@ class CityMapView {
        always had one; a home has one too, and it is the only way in — a flat
        is in no picker. */
     const go = card.querySelector('.go2');
-    go.hidden = !b && !home;
+    go.hidden = (!b && !home) || !!this.planning;
     go.setAttribute('href', siteAddr || '#detail');
+    this.paintPlanGo(key);
     this.paintFacts(key, focusGrow);
     this.paintCardPlan(key);
     if(card.classList.contains('in')) this.placeCard();
+  }
+  /* The plan's button, on a building the plan could open in: premises of its
+     kind to rent. The label is the plan's own, read afresh in the UI language. */
+  paintPlanGo(key){
+    const go = this.card.querySelector('.fplan-go'); if(!go) return;
+    const b = this.planning && key ? this.sites?.get(key) : null;
+    go.hidden = !(b && b.type === this.fs.cat && this.candidate(b));
+    if(go.hidden) return;
+    go.textContent = this.planning.label?.() || tt("map.fplan.go", "Plan here");
   }
   showCard(){
     const card = this.card; if(!card || !this.selected) return;
@@ -1683,9 +1755,18 @@ class CityMapView {
     finderPickRemember(this);
     this.update();
   }
+  /* Let go of a view whose host has left the page: nothing refreshes or
+     relabels it again, and it no longer follows the pointer. */
+  drop(){
+    mapViews.delete(this);
+    this.resizeObserver?.disconnect();
+    if(this.ballHover) document.removeEventListener('mousemove', this.ballHover);
+    this.buildToken++;
+  }
   resetCharacter(){
     this.selected=null; this.query=''; this.hot=null; this.onSettled=null;
-    this.fsCharacter = undefined; this.fs = finderDefaults(); this.showAll = false;
+    this.fsCharacter = undefined; this.showAll = false;
+    this.fs = this.planning ? this.planState(this.planning.preset) : finderDefaults();
     this.savedUsed = null; this.closeNaming();
     if(this.orb) this.orb.size = 170;
     if(this.svg){ if(this.search) this.search.value=''; this.layers = {mine:true, own:true, home:true, fnd:true, all:false};
@@ -1825,7 +1906,11 @@ function refreshCityMaps(){
   // A view off screen is only marked, and takes the new numbers when it is
   // shown, as a PAGE_DRAWS row does; one on screen keeps an open Type list open
   // unless its types changed (paintControls).
-  mapViews.forEach(view=>{ if(view.root.getClientRects().length) view.update(); else view.stale = true; });
+  mapViews.forEach(view=>{
+    // A plan's finder whose host the board drew away is gone for good.
+    if(view.planning && !view.root.isConnected){ view.drop(); return; }
+    if(view.root.getClientRects().length) view.update(); else view.stale = true;
+  });
 }
 function openLocationMap(key, trigger){
   const dialog=$('locationMapDialog');

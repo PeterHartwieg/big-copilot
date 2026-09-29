@@ -1335,6 +1335,139 @@
   "ba:neighborhood_thehamptons": "The Hamptons"
  },
  "officeStaffing": [],
+ "openStore": {
+  "campaigns": [
+   [
+    "smallinternet",
+    100,
+    20
+   ],
+   [
+    "mediuminternet",
+    250,
+    40
+   ],
+   [
+    "largeinternet",
+    500,
+    60
+   ],
+   [
+    "smallbillboard",
+    500,
+    100
+   ],
+   [
+    "mediumbillboard",
+    2500,
+    250
+   ],
+   [
+    "largebillboard",
+    6000,
+    600
+   ]
+  ],
+  "decor": {},
+  "finance": {
+   "banks": [
+    {
+     "id": "JensenCapitalSettings",
+     "key": "ba:street_fourthavenue#17",
+     "max": 40000,
+     "name": "Jensen Capital",
+     "owed": 0.0,
+     "rate": 20,
+     "term": 120,
+     "years": 2
+    },
+    {
+     "id": "VantanderBankSettings",
+     "key": "ba:street_secondavenue#6",
+     "max": 2000000,
+     "name": "Vantander Bank",
+     "owed": 0.0,
+     "rate": 12,
+     "term": 240,
+     "years": 4
+    }
+   ],
+   "cash": 10000.0,
+   "minimum": 500,
+   "multiplier": 0.7,
+   "owed": 0.0,
+   "profit7": 0,
+   "wealth": 10000.0,
+   "year": 60
+  },
+  "game": {
+   "agent": 100,
+   "capInitial": false,
+   "delivery": 250,
+   "installFee": 586,
+   "prices": 1.0,
+   "promo": 0.55,
+   "satisfaction": 95,
+   "tax": 0,
+   "wageBase": {
+    "cashier": 16,
+    "cleaner": 12,
+    "guard": 15,
+    "perCashier": 30
+   },
+   "wages": 0.7
+  },
+  "hoods": {
+   "ba:neighborhood_garmentdistrict": {
+    "demands": 0.2,
+    "idx": 1.284,
+    "interior": 0,
+    "strength": 0.9
+   },
+   "ba:neighborhood_hellskitchen": {
+    "demands": 0.7,
+    "idx": 1.424,
+    "interior": 0,
+    "strength": 0.7
+   },
+   "ba:neighborhood_industrycity": {
+    "demands": 0.1,
+    "idx": 1.246,
+    "interior": 0,
+    "strength": 1
+   },
+   "ba:neighborhood_lowermanhattan": {
+    "demands": 0.15,
+    "idx": 1.258,
+    "interior": 0,
+    "strength": 1
+   },
+   "ba:neighborhood_midtown": {
+    "demands": 0.9,
+    "idx": 1.682,
+    "interior": 50,
+    "strength": 0.5
+   },
+   "ba:neighborhood_murrayhill": {
+    "demands": 0.4,
+    "idx": 1.342,
+    "interior": 0,
+    "strength": 0.8
+   },
+   "ba:neighborhood_thehamptons": {
+    "demands": 0.1,
+    "idx": 1.636,
+    "interior": 0,
+    "strength": 1
+   }
+  },
+  "items": {},
+  "market": {},
+  "own": {},
+  "sales": {},
+  "types": {},
+  "vendors": {}
+ },
  "ownedBuildings": [],
  "payback": {
   "chains": {

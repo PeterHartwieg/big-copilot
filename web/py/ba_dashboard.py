@@ -6618,6 +6618,58 @@ def _capped_cells(grid: dict) -> set:
     }
 
 
+# CustomerEntriesCalculatorRetail.BuildNumberToStartCappingInitialCustomers: a
+# game started at this build or later sizes a shop's arrivals off its building's
+# customer capacity; an older game keeps sizing them off its shelves.
+CAPPED_INITIAL_BUILD = 2847
+
+
+def _initial_customers(
+    build_at_start: int | None,
+    size_cap,
+    type_slug: str,
+    sqm: float,
+    products=(),
+) -> float:
+    """CustomerEntriesCalculatorRetail.GetInitialCustomers: a shop's base arrivals.
+
+    For a game started at CAPPED_INITIAL_BUILD or later, which is every new
+    game, it is the customer capacity of the building's size (`size_cap`, one
+    entry of _door_caps()), whatever the shop holds. For an older game it is the
+    largest productSalesRatio among the products the shop has on hand that are
+    primary for its type, times the building's square metres. `build_at_start`
+    is the save's buildNumberAtStart; a save without one reads as 0, the old
+    rule, the way the game's own default does. A cinema or theater size whose
+    layouts seat different crowds comes as [min, max]; its top is taken, which
+    keeps the ceiling an upper bound, and the door clips it to the building's
+    own number anyway.
+
+    0 where it cannot be known: an unknown size, a type the curves file does not
+    carry, or an old game's shop holding none of its type's primary products.
+    """
+    if (build_at_start or 0) >= CAPPED_INITIAL_BUILD:
+        if isinstance(size_cap, list):
+            size_cap = max(size_cap, default=0)
+        return size_cap if isinstance(size_cap, (int, float)) and size_cap > 0 else 0
+    curves = load_demand_curves()
+    curve = curves["types"].get(type_slug)
+    if not curve:
+        return 0
+    ratios = curves["items"]
+    primary = set(curve.get("p") or ())
+    # A save hands back whatever is in the list, and a product entry is not
+    # always the string it is supposed to be; an unhashable one would otherwise
+    # take the whole board down on the set test.
+    return max(
+        (
+            ratios.get(name, 0.0)
+            for name in products
+            if isinstance(name, str) and name in primary
+        ),
+        default=0.0,
+    ) * (sqm or 0)
+
+
 def _arrival_ceiling(
     type_slug: str,
     sqm: float,
@@ -6660,14 +6712,14 @@ def _arrival_ceiling(
     # A save hands back whatever is in the list, and a product entry is not
     # always the string it is supposed to be; an unhashable one would otherwise
     # take the whole board down on the set test.
-    initial = initial_customers(door, sqm, max(
+    initial = max(
         (
             ratios.get(name, 0.0)
             for name in products
             if isinstance(name, str) and name in primary
         ),
         default=0.0,
-    ))
+    ) * (sqm or 0)
     if initial <= 0:
         return None
     promo = base_promotion + 0.75 * (promotion or 0) / 100
@@ -12249,6 +12301,12 @@ PLAN_KINDS = ("retail", "office", "cinema", "theater")
 # hourly wages of a cashier, a cleaner and a security guard, which a skill of
 # 100 lifts by 1 + 1.05^100 / 100, and the customers an hour one cashier serves.
 PLAN_WAGES = {"cashier": 16, "cleaner": 12, "guard": 15, "perCashier": 30}
+# An office's staff are its own profession (SkillData.baseHourlyWage, research
+# PROFIT_COSTS.md, C1): one person at a computer bills one client an hour.
+PLAN_OFFICE_WAGES = {
+    "ba:skill_lawyer": 50, "ba:skill_programmer": 36, "ba:skill_graphicdesigner": 35,
+    "ba:skill_eventplanner": 33, "ba:skill_travelagent": 31,
+}
 # The six campaigns, hard-coded in MarketingTypeSettings..cctor: price a day
 # and the square metres each reaches. One of each at most per business.
 MARKETING_CAMPAIGNS = (
@@ -12262,11 +12320,6 @@ BANK_PLACES = {
     "JensenCapitalSettings": ("Jensen Capital", ("ba:street_fourthavenue", 17)),
 }
 LOAN_MINIMUM = 500  # Dialogs.BankDialog: less is "too low"
-# CustomerEntriesCalculatorRetail.BuildNumberToStartCappingInitialCustomers: a
-# game started on this build or later starts every open hour from the
-# building's customer capacity; an older one from the best primary product's
-# sales ratio times the floor.
-CAP_INITIAL_BUILD = 2847
 # The satisfaction a well-run new shop settles at (all four parts near 95)
 # where the player runs none of the type to take it from.
 PLAN_SATISFACTION = 95
@@ -12291,18 +12344,16 @@ LAYOUT_SLOTS = {
 }
 
 
-def initial_customers(door, sqm, best_ratio, build_at_start=None) -> float:
-    """The start of every open hour's arrivals (GetInitialCustomers).
-
-    A game started on CAP_INITIAL_BUILD or later begins from the building's
-    customer capacity, `door`; an older one, or a caller that does not know
-    when the game started, from the best primary product's sales ratio times
-    the floor. The staffing assistant's ceiling (_arrival_ceiling()) and the
-    store plan share this one rule.
-    """
-    if build_at_start is not None and build_at_start >= CAP_INITIAL_BUILD and door:
-        return float(door)
-    return float(best_ratio or 0) * float(sqm or 0)
+def _plan_initial(build_at_start, model: str | None, size_cap, type_slug: str, sqm, products) -> float:
+    """The start of every open hour's arrivals for a store the model plans:
+    _initial_customers(), shared with the staffing assistant's ceiling. An
+    office starts from its building's customer capacity whatever build the
+    game started on: every office in the saves checked on 29 Sep 2026, a game
+    started on build 2701 among them, bills at the rate that capacity gives
+    (check_profit_model.py), not its floor times the fee's sales ratio."""
+    if model == "office":
+        return _initial_customers(CAPPED_INITIAL_BUILD, size_cap, type_slug, sqm, products)
+    return _initial_customers(build_at_start, size_cap, type_slug, sqm, products)
 
 
 def demand_with(providers: int, default_price: float) -> float:
@@ -12628,7 +12679,7 @@ def _store_market(save: Save, rules: dict, items: set, mpm: float, agent: int) -
 
 
 def _own_shops(save: Save, regs: dict, businesses: list, grids: list, stmt_history: list,
-               market: dict, caps: dict, day: int) -> dict:
+               market: dict, caps: dict, day: int, models: dict) -> dict:
     """Per business type, each of the player's trading shops as the profit
     model sees it, with what it really earned.
 
@@ -12639,6 +12690,9 @@ def _own_shops(save: Save, regs: dict, businesses: list, grids: list, stmt_histo
     """
     table = load_buildings()
     hours = {g["key"]: g.get("open") for g in grids}
+    # An office bills one client an hour per staffed computer, so its own
+    # staffing bounds what it can earn; a shop's stations are the model's.
+    staffed = {g["key"]: g.get("staffed") for g in grids if g.get("office")}
     out = collections.defaultdict(list)
     for b in businesses:
         slug = b.get("typeSlug")
@@ -12665,18 +12719,24 @@ def _own_shops(save: Save, regs: dict, businesses: list, grids: list, stmt_histo
                     - by_day[d].get("RentExpenses", 0) - by_day[d].get("MarketingExpenses", 0)
                     - by_day[d].get("LicensingFees", 0) for d in days)
         door = caps.get(row.get("t"), {}).get(row.get("z"))
+        # What the game starts each hour from for this shop: its own shelves
+        # in an old game, as _plan_site() reads them.
+        initial = _plan_initial(save.root.get("buildNumberAtStart"), models.get(slug), door, slug,
+                                row.get("m") or 0, save.items(reg.get("cachedAvailableProducts")))
         out[slug].append({
             "key": b["key"],
             "hood": b.get("neighbourhood"),
             "layout": _layout(row),
             "m2": row.get("m"),
             "cap": door[0] if isinstance(door, list) else door,
+            "initial": round(initial, 4),
             "promo": b.get("promotion") or 0,
             "marketing": money(sum(by_day[d].get("MarketingExpenses", 0) for d in days) / n),
             "open": hours.get(b["key"]),
             "sat": (b.get("satisfaction") or {}).get("overall"),
             "actual": money((total - cost) / n),
             "days": n,
+            **({"staffed": staffed[b["key"]]} if models.get(slug) == "office" and staffed.get(b["key"]) else {}),
         })
     return {slug: sorted(rows, key=lambda r: r["key"]) for slug, rows in out.items()}
 
@@ -12775,14 +12835,20 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
     caps = premises.get("caps") or {}
     buildings = premises.get("buildings") or []
 
-    types, items_used, product_items = {}, set(), set()
+    types, items_used, product_items, models = {}, set(), set(), {}
     slots = _layout_slots(save, regs_list, prices)
+    build_at_start = root.get("buildNumberAtStart")
     for slug, t in sorted((rules.get("types") or {}).items()):
         cat = t.get("b")
         if not t.get("c") or slug not in RETAIL_TYPES | OFFICE_TYPES or cat not in PLAN_KINDS:
             continue
+        # The rules reproduce shops and offices; a cinema's screens and seats
+        # and a theatre's actors cap them in ways the model does not follow.
+        model = "office" if slug in OFFICE_TYPES else None if cat in ("cinema", "theater") else "retail"
+        models[slug] = model
+        sells = [[p, round(impact, 4)] for p, impact in t.get("i") or ()]
         own = [b for b in businesses if b.get("typeSlug") == slug and b.get("status") != "vacant"]
-        layouts = {}
+        layouts, initial = {}, {}
         for layout in _in_order({b["layout"] for b in buildings if b["type"] == cat and b.get("layout")
                                  and b["status"] in ("vacant", "rival")}):
             sample = next(b for b in buildings if b["type"] == cat and b.get("layout") == layout)
@@ -12801,17 +12867,17 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
                 "fee": cost["fee"],
                 "from": source["key"] if source else None,
             }
+            # The shop fully stocked with the type's range, as the plan has it.
+            initial[layout] = round(_plan_initial(build_at_start, model, sample.get("cap"), slug,
+                                                  sample.get("m2"), [p for p, _i in sells]), 4)
         if not layouts:
             continue
-        sells = [[p, round(impact, 4)] for p, impact in t.get("i") or ()]
         product_items.update(p for p, _i in sells)
         product_items.update(x for x in (t.get("f"), t.get("fw")) if x)
         curve = load_demand_curves()["types"].get(slug) or {}
         types[slug] = {
             "cat": cat,
-            # The rules reproduce shops and offices; a cinema's screens and seats
-            # and a theatre's actors cap them in ways the model does not follow.
-            "model": "office" if slug in OFFICE_TYPES else None if cat in ("cinema", "theater") else "retail",
+            "model": model,
             "products": sells,
             "fee": t.get("f"),
             "feeWeekend": t.get("fw"),
@@ -12822,6 +12888,10 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
             "demands": [[d, w] for d, w in t.get("dm") or ()],
             "run": len(own),
             "layouts": layouts,
+            "initial": initial,
+            # An office's hourly wage at skill 0 for the profession it bills.
+            **({"wage": max((PLAN_OFFICE_WAGES.get(k, 0) for k in t.get("sk") or ()), default=0)}
+               if model == "office" else {}),
         }
 
     market = _store_market(save, rules, product_items, mpm, agent)
@@ -12856,7 +12926,7 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
             "prices": round(mpm, 4),
             "wages": round(gv.get("employeeHourlySalaryMultiplier") or 0.7, 4),
             "tax": gv.get("taxPercentage") or 0,
-            "capInitial": (root.get("buildNumberAtStart") or 0) >= CAP_INITIAL_BUILD,
+            "capInitial": (build_at_start or 0) >= CAPPED_INITIAL_BUILD,
             "agent": agent,
             "installFee": INSTALL_FEE_PER_M2,
             "delivery": FURNITURE_DELIVERY_FEE,
@@ -12870,7 +12940,7 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
         "items": {item: {"p": float((table.get(item) or {}).get("p") or 0),
                          "v": (furniture.get(item) or {}).get("v") or []} for item in _in_order(items_used)},
         "vendors": {key: vendors[key] for key in _in_order(used_vendors) if key in vendors},
-        "own": _own_shops(save, regs, businesses, grids, stmt_history, market, caps, day),
+        "own": _own_shops(save, regs, businesses, grids, stmt_history, market, caps, day, models),
         "sales": _own_sales(save, regs, businesses, market, day),
         "campaigns": [list(c) for c in MARKETING_CAMPAIGNS],
         "finance": _finance_facts(save, daily, rules),
@@ -18587,6 +18657,243 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
   body:not(.sd-rail) .nx-ctl{margin-left:0}
 }
 @media (prefers-reduced-motion:reduce){.sd,body.sd-open .sd,.sd-scrim,.sd .ss-q{transition:none}.sd .ss-q:hover .ss-lens{animation:none}}
+/* ----- Expansion › Open a store (drawOpenStore()), ported from the approved
+   canvas (mockup/open-store on branch open-store-canvas, OS_CSS); every class
+   is os-, and #demCellPop is the Demand cell's popover ----- */
+.os-ico{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.os-lab{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.os-dim{color:var(--ink-3)}
+.os-gap{margin:22px 0 0}
+/* Buttons read as text until a class says otherwise; :where() keeps this below every os- rule. */
+:where(#secOpen) button{font:inherit;color:inherit}
+/* the six steps, and the plan picker ------------------------------------------ */
+.os-ctl{display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px;margin:0}
+.os-ctl{min-width:0;max-width:100%}
+.os-ctl .aside{margin-left:auto;display:flex;align-items:center;gap:10px;min-width:0;max-width:100%}
+.os-steps{display:flex;align-items:center;flex-wrap:wrap;gap:2px}
+.os-steps button{display:flex;align-items:center;gap:8px;height:34px;padding:0 12px 0 6px;border:0;border-radius:17px;background:none;color:var(--ink-3);font-size:13px;font-weight:500;white-space:nowrap;cursor:pointer}
+.os-steps button:hover:not(:disabled){color:var(--ink)}
+.os-steps button:disabled{cursor:default;opacity:.75}
+.os-steps button i{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;border:1px solid var(--rule);font:600 11px/1 "IBM Plex Mono",monospace;font-style:normal}
+.os-steps button i svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.os-steps button.done{color:var(--ink-2)}
+.os-steps button.done i{background:var(--accent-soft);border-color:transparent;color:var(--accent)}
+.os-steps button.on{background:var(--surface);color:var(--ink);box-shadow:inset 0 0 0 1px var(--rule)}
+.os-steps button.on i{background:var(--ink);border-color:var(--ink);color:var(--ground)}
+.os-steps button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.os-steps .sep{width:10px;height:1px;background:var(--rule)}
+.os-planpick{position:relative;display:inline-flex;align-items:center;gap:8px;min-width:0;max-width:100%;height:34px;padding:0 10px 0 12px;border:1px solid var(--rule);border-radius:9px;background:var(--surface);color:var(--ink-2);font-size:12.5px;white-space:nowrap}
+.os-planpick select{appearance:none;-webkit-appearance:none;min-width:0;max-width:260px;text-overflow:ellipsis;padding:0 16px 0 0;border:0;background:none;color:var(--ink);font:600 12.5px/1 Archivo,sans-serif;cursor:pointer}
+.os-planpick select:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:3px}
+.os-planpick option{background:var(--surface);color:var(--ink)}
+.os-planpick svg{position:absolute;right:10px;width:12px;height:12px;stroke:var(--ink-3);fill:none;stroke-width:2;transform:rotate(90deg);pointer-events:none}
+/* the plan, one strip ---------------------------------------------------------- */
+.os-pb{display:grid;grid-template-columns:1fr 1.5fr 1.15fr 1.15fr;margin-top:22px;border:1px solid var(--rule-soft);border-radius:12px;background:var(--surface)}
+.os-pb>div{display:flex;flex-direction:column;gap:6px;min-width:0;padding:13px 16px 12px;border-left:1px solid var(--rule-soft)}
+.os-pb>div:first-child{border-left:0}
+.os-pb b{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.os-pb b.m{font:500 17px/1.1 "IBM Plex Mono",monospace;letter-spacing:-.01em}
+.os-pb small{font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.os-pb .dim{color:var(--ink-3);font-weight:500}
+/* buttons and links -------------------------------------------------------------- */
+.os-cta{display:inline-flex;align-items:center;justify-content:center;gap:9px;height:40px;padding:0 16px;border-radius:10px;border:1px solid var(--accent);background:var(--accent);color:var(--on-accent);font:600 13.5px/1 Archivo,sans-serif;text-decoration:none;white-space:nowrap;cursor:pointer}
+.os-cta:hover{filter:brightness(1.08);color:var(--on-accent)}
+.os-cta svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.os-cta.sm{height:34px;padding:0 13px;font-size:12.5px;border-radius:9px}
+.os-btn{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 12px;border-radius:9px;border:1px solid var(--rule);background:var(--surface);color:var(--ink);font:500 12.5px/1 Archivo,sans-serif;text-decoration:none;white-space:nowrap;cursor:pointer}
+.os-btn:hover{border-color:var(--ink-3);color:var(--ink)}
+.os-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.os-cta:focus-visible,.os-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.os-link{color:var(--ink-2);text-decoration:none;border-bottom:1px solid var(--rule);font-size:12.5px}
+.os-link:hover{color:var(--ink);border-color:var(--ink-3)}
+/* cards and headings ---------------------------------------------------------------- */
+.os-h{display:flex;align-items:center;gap:12px;margin:34px 0 14px}
+.os-h h2{margin:0;font-size:17px;font-weight:600;letter-spacing:-.01em}
+.os-h .c{font:500 12.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.os-card{padding:18px 20px;border-radius:12px;background:var(--surface);border:1px solid var(--rule-soft);min-width:0}
+.os-card h3{display:flex;align-items:center;gap:8px;margin:0 0 12px;font-size:14.5px;font-weight:600}
+.os-two{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:24px;align-items:start;margin-top:28px}
+.os-tag{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 7px;border-radius:5px;background:var(--raised);border:1px solid var(--rule-soft);color:var(--ink-2);font:500 11.5px/1 Archivo,sans-serif;white-space:nowrap}
+.os-tag.dem{background:var(--info-soft);border-color:transparent;color:var(--info)}
+.os-tag.req{background:var(--accent-soft);border-color:transparent;color:var(--accent)}
+.os-tag.cap{background:var(--warn-soft);border-color:transparent;color:var(--warn)}
+/* step 1: what ------------------------------------------------------------------------ */
+.os-dl td{padding:11px 10px}
+.os-dl td.l b{display:block;font-family:Archivo,sans-serif;font-weight:600;color:var(--ink)}
+.os-dl td.l{font-family:Archivo,sans-serif}
+.os-dl .sc{display:inline-grid;place-items:center;width:40px;height:26px;border-radius:6px;font:500 12px/1 "IBM Plex Mono",monospace;color:var(--ink)}
+.os-dl td.go{width:1%;padding-right:2px}
+.os-dl td.go button{display:inline-grid;place-items:center;width:30px;height:30px;padding:0;border-radius:8px;border:1px solid var(--rule);background:none;color:var(--ink-2);cursor:pointer}
+.os-dl td.go button:hover{border-color:var(--ink-3);color:var(--ink)}
+.os-dl td.go button svg{width:14px;height:14px}
+.os-more{margin:12px 0 0}
+.os-types{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.os-type{display:flex;align-items:center;gap:8px;min-height:40px;padding:0 12px;border-radius:9px;border:1px solid var(--rule-soft);background:var(--ground);color:var(--ink);font-size:13px;font-weight:500;text-align:left;cursor:pointer}
+.os-type:hover{border-color:var(--ink-3)}
+.os-type small{margin-left:auto;font:500 11px/1 "IBM Plex Mono",monospace;color:var(--accent)}
+.os-sub{margin:16px 0 8px;font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.os-plans{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
+.os-plan{display:flex;align-items:center;border-bottom:1px solid var(--rule-soft)}
+.os-plango{flex:1;display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1.2fr) 130px 20px;gap:16px;align-items:center;min-height:62px;padding:8px 6px;border:0;background:none;text-align:left;cursor:pointer}
+.os-plango:hover{background:var(--surface)}
+.os-plango b{display:block;font-size:14px;font-weight:600}
+.os-plango small{display:block;margin-top:3px;font-size:12px;color:var(--ink-3)}
+.os-plango .v{font:500 13px/1.3 "IBM Plex Mono",monospace;text-align:right}
+.os-plango>svg{width:14px;height:14px;stroke:var(--ink-3)}
+.os-x{width:30px;height:30px;margin:0 4px;padding:0;border:0;border-radius:8px;background:none;color:var(--ink-3);font-size:18px;line-height:1;cursor:pointer}
+.os-x:hover{background:var(--surface);color:var(--neg)}
+.os-meter{display:block;height:4px;margin-top:7px;border-radius:2px;background:var(--rule);overflow:hidden}
+.os-meter i{display:block;height:100%;width:var(--w);background:var(--accent);border-radius:2px}
+/* the Demand cell's popover -------------------------------------------------------------- */
+.os-pop{position:fixed;z-index:60;width:300px;padding:16px;border-radius:12px;background:var(--surface);border:1px solid var(--rule);box-shadow:0 24px 60px -18px #000d}
+:root[data-theme="light"] .os-pop{box-shadow:0 24px 60px -24px #1a1f1c77}
+.os-pop[hidden]{display:none}
+.os-pop::before{content:"";position:absolute;left:calc(var(--arrow,150px) - 6px);top:-7px;width:12px;height:12px;background:var(--surface);border-left:1px solid var(--rule);border-top:1px solid var(--rule);transform:rotate(45deg)}
+.os-pop.up::before{top:auto;bottom:-7px;transform:rotate(225deg)}
+.os-pop h4{margin:0;font-size:15px;font-weight:600}
+.os-pop .fx{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0 14px}
+.os-pop .fx div{display:flex;flex-direction:column;gap:5px}
+.os-pop .fx b{font:500 16px/1 "IBM Plex Mono",monospace}
+.os-pop .acts{display:flex;flex-direction:column;gap:8px}
+.os-pop .acts .os-cta,.os-pop .acts .os-btn{justify-content:center}
+.heat .cell[aria-expanded="true"]{outline:2px solid var(--ink);outline-offset:-2px;z-index:2}
+.os-pop .acts svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+/* step 2: where, the finder in plan mode ------------------------------------------------ */
+.os-where{margin-top:22px}
+.os-finder{position:relative;border-radius:14px}
+/* step 3: investment ------------------------------------------------------------------ */
+.os-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:16px;margin-top:26px}
+.os-toolbar .aside{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--ink-3)}
+.os-toolbar .aside b{font:500 13px/1 "IBM Plex Mono",monospace;color:var(--ink)}
+.os-seg{display:inline-flex;padding:3px;gap:2px;border:1px solid var(--rule);border-radius:9px;background:var(--surface)}
+.os-seg button{display:inline-flex;align-items:center;gap:8px;height:30px;padding:0 12px;border:0;border-radius:6px;background:none;color:var(--ink-2);font-size:12.5px;font-weight:500;white-space:nowrap;cursor:pointer}
+.os-seg button:hover{color:var(--ink)}
+.os-seg button.on{background:var(--ink);color:var(--ground)}
+.os-seg button b{font:500 12px/1 "IBM Plex Mono",monospace}
+.os-seg button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.os-seg.big button{height:40px;padding:0 16px;font-size:13.5px}
+.os-seg.big button b{font-size:13.5px}
+.os-inv{margin-top:16px}
+.os-inv th,.os-inv td{padding:9px 12px}
+.os-inv td.l{font-family:Archivo,sans-serif;font-size:13.5px}
+.os-inv td.w{text-align:left;font-family:Archivo,sans-serif}
+.os-inv td .sub{margin-top:2px}
+.os-inv tr.grp td{padding:14px 12px 7px;background:none;border-bottom:1px solid var(--rule);font:500 10.5px/1.3 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);text-align:left;white-space:normal}
+.os-inv tr.grp td span{margin-left:10px;letter-spacing:0;text-transform:none;font-family:Archivo,sans-serif;font-size:12px;color:var(--ink-3)}
+.os-inv tr.grp td b{float:right;letter-spacing:0;color:var(--ink-2);font-weight:500}
+.os-inv td.free{color:var(--accent)}
+.os-inv tfoot td{padding:14px 12px;font:500 15px/1.2 "IBM Plex Mono",monospace;border-bottom:0}
+.os-inv tfoot td.l{font-family:Archivo,sans-serif;font-weight:600}
+.os-self{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:24px;align-items:start;margin-top:16px}
+.os-store{border:1px solid var(--rule-soft);border-radius:12px;background:var(--surface);overflow:hidden}
+.os-store+.os-store,.os-store+.os-gap{margin-top:14px}
+.os-sh{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--rule-soft)}
+.os-store>.os-sh:last-child{border-bottom:0}
+.os-sh .k{display:grid;place-items:center;flex:none;width:26px;height:26px;border-radius:13px;background:#6ea8ff;color:#0d100f;font:600 12px/1 "IBM Plex Mono",monospace}
+.os-sh .k.p{background:var(--ink-2);color:var(--ground)}
+.os-sh b{font-size:14px;font-weight:600}
+.os-sh small{display:block;margin-top:2px;font-size:12px;color:var(--ink-3)}
+.os-sh .t{margin-left:auto;font:500 15px/1 "IBM Plex Mono",monospace}
+.os-store table th,.os-store table td{padding:7px 16px;font-size:12.5px}
+.os-store table td.l{font-family:Archivo,sans-serif}
+.os-store table td.w{text-align:left;font-family:Archivo,sans-serif}
+.os-store table tr.del td{color:var(--ink-3);border-bottom:0}
+.os-total{display:flex;align-items:baseline;gap:14px;margin-top:18px;padding:16px;border-radius:12px;border:1px solid var(--rule);background:var(--surface)}
+.os-total b{margin-left:auto;font:500 22px/1 "IBM Plex Mono",monospace}
+.os-total span{font-size:14px;font-weight:600}
+.os-total small{font-size:12px;color:var(--ink-3)}
+.os-mini{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;border:1px solid var(--rule-soft);background:#0d100f}
+.os-mini svg{display:block;width:100%;height:100%}
+.os-pin{position:absolute;transform:translate(-50%,-100%);display:flex;flex-direction:column;align-items:center;pointer-events:none}
+.os-pin b{display:grid;place-items:center;min-width:22px;height:22px;padding:0 5px;border-radius:11px;background:#6ea8ff;color:#0d100f;font:600 11px/1 "IBM Plex Mono",monospace;box-shadow:0 0 0 3px #0d100fcc}
+.os-pin i{width:2px;height:8px;background:#6ea8ff}
+.os-pin.new b{background:#e9ece6;color:#0d100f;letter-spacing:.08em;font-size:10px}
+.os-pin.new i{background:#e9ece6}
+.os-pin em{margin-top:3px;padding:2px 6px;border-radius:4px;background:#0d100fdd;color:#e9ece6;font:500 10.5px/1.2 Archivo,sans-serif;font-style:normal;white-space:nowrap}
+.os-maplist{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.os-maplist div{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:center;font-size:12.5px;color:var(--ink-2)}
+.os-maplist i{display:grid;place-items:center;width:20px;height:20px;border-radius:10px;background:#6ea8ff;color:#0d100f;font:600 10.5px/1 "IBM Plex Mono",monospace;font-style:normal}
+.os-maplist i.n{background:var(--ink);color:var(--ground);font-size:8.5px}
+.os-maplist b{font:500 12.5px/1 "IBM Plex Mono",monospace;color:var(--ink)}
+/* step 4: break even ----------------------------------------------------------------- */
+.os-be{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:22px;margin-top:22px;align-items:start}
+.os-big{display:flex;flex-wrap:wrap;gap:12px 28px;margin-bottom:12px}
+.os-big div{display:flex;flex-direction:column;gap:6px}
+.os-big b{font:500 30px/1 "IBM Plex Mono",monospace;letter-spacing:-.02em}
+.os-big .alt b{color:var(--ink-2);font-size:22px}
+.os-chart{display:block;width:100%;height:auto;overflow:visible}
+.os-chart text{font:500 10.5px "IBM Plex Mono",monospace;fill:var(--ink-3)}
+.os-chart .ax{stroke:var(--rule);stroke-width:1}
+.os-chart .grid{stroke:var(--rule-soft);stroke-width:1}
+.os-chart .line{fill:none;stroke:var(--accent);stroke-width:2.2;stroke-linejoin:round;stroke-linecap:round}
+.os-chart .band{fill:var(--accent);opacity:.1}
+.os-chart .inv{stroke:var(--warn);stroke-width:1.5;stroke-dasharray:3 4}
+.os-chart .inv2{stroke:var(--ink-2);stroke-width:1.5;stroke-dasharray:3 4}
+.os-chart .hit{fill:var(--ground);stroke:var(--accent);stroke-width:2}
+.os-chart .lbl{fill:var(--ink);font-size:11.5px}
+.os-chart .lbl.w{fill:var(--warn)}
+.os-chart .lbl.i{fill:var(--ink-2)}
+.os-sites{display:flex;flex-direction:column}
+.os-site{display:grid;grid-template-columns:minmax(0,1fr) 110px;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--rule-soft);font-size:13px}
+.os-site b{display:block;font-weight:600}
+.os-site small{display:block;margin-top:2px;font-size:11.5px;color:var(--ink-3)}
+.os-site .v{font:500 13px/1 "IBM Plex Mono",monospace;text-align:right}
+.os-site .v.neg{color:var(--neg)}
+.os-site.avg{border-bottom:0;padding-top:12px}
+.os-site.avg .v{font-size:15px;color:var(--accent)}
+.os-site.avg .v.neg{color:var(--neg)}
+.os-own .os-site{grid-template-columns:minmax(0,1fr) 110px 76px 48px}
+.os-site .bar{display:block;height:6px;border-radius:3px;background:var(--rule);overflow:hidden}
+.os-site .bar i{display:block;height:100%;background:var(--accent);border-radius:3px}
+.os-ownc{margin-top:22px}
+.os-ownc .quiet{margin:0 0 6px}
+.os-note{margin:12px 0 0;font-size:12.5px;line-height:1.5;color:var(--ink-2)}
+.os-assume{display:inline-block;margin:12px 0 0;font-size:12.5px;color:var(--ink-3);border-bottom:1px dotted var(--ink-3);cursor:help}
+.os-none{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:22px;border:1px dashed var(--rule);border-radius:12px}
+.os-none>div{display:flex;flex-direction:column;gap:7px;padding:16px 18px;border-left:1px dashed var(--rule)}
+.os-none>div:first-child{border-left:0}
+.os-none b{font:500 20px/1.1 "IBM Plex Mono",monospace}
+.os-none b.dim{color:var(--ink-3);font-family:Archivo,sans-serif;font-size:15px;font-weight:600}
+.os-none small{font-size:12px;color:var(--ink-3)}
+/* the financing panel, in the break-even step --------------------------------------------- */
+.os-fin{margin-top:22px}
+.os-finhead{display:flex;align-items:center;gap:14px}
+.os-finhead h3{margin:0}
+.os-finhead h3 svg{width:17px;height:17px;stroke:var(--ink-2)}
+.os-switch{margin-left:auto;display:inline-flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-2);cursor:pointer}
+.os-switch input{width:16px;height:16px;accent-color:var(--accent)}
+.os-fin>.quiet{margin:10px 0 0}
+.os-finctl{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.os-fr{display:grid;grid-template-columns:78px minmax(0,1fr);gap:10px;align-items:center;min-height:34px}
+.os-fr>span:first-child{font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.os-fr .os-seg{justify-self:start;flex-wrap:wrap}
+.os-amount{display:flex;align-items:center;flex-wrap:wrap;gap:10px 14px}
+.os-num{display:inline-flex;align-items:center;gap:4px;height:34px;padding:0 10px;border:1px solid var(--rule);border-radius:9px;background:var(--ground);font:500 13px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.os-num input{width:110px;border:0;background:none;color:var(--ink);font:inherit}
+.os-num input:focus{outline:none}
+.os-num:focus-within{border-color:var(--accent)}
+.os-amount input[type=range]{flex:1;min-width:160px;accent-color:var(--accent)}
+.os-amount small{flex-basis:100%;font-size:12px;color:var(--ink-3)}
+.os-finfacts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin-top:16px;border:1px solid var(--rule-soft);border-radius:12px;background:var(--ground)}
+.os-finfacts>div{display:flex;flex-direction:column;gap:6px;min-width:0;padding:13px 16px 12px;border-left:1px solid var(--rule-soft)}
+.os-finfacts>div:first-child{border-left:0}
+.os-finfacts b{font:500 17px/1.1 "IBM Plex Mono",monospace}
+.os-finfacts small{font-size:12px;line-height:1.4;color:var(--ink-3)}
+@media (max-width:1100px){
+  .os-two,.os-be,.os-self{grid-template-columns:minmax(0,1fr)}
+  .os-pb,.os-finfacts{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .os-pb>div:nth-child(3),.os-finfacts>div:nth-child(3){border-left:0}
+  .os-pb>div:nth-child(n+3),.os-finfacts>div:nth-child(n+3){border-top:1px solid var(--rule-soft)}
+}
+@media (max-width:620px){
+  .os-types{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .os-none{grid-template-columns:minmax(0,1fr)}
+  .os-none>div{border-left:0;border-top:1px dashed var(--rule)}
+  .os-none>div:first-child{border-top:0}
+  .os-plango{grid-template-columns:minmax(0,1fr) 90px 16px}
+  .os-plango>span:nth-child(2){display:none}
+  .os-inv,.os-dl{display:block;overflow-x:auto}
+}
 
 </style>
 <script>
@@ -18716,6 +19023,18 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
         <div class="aside"><span class="seg" id="marketTools" aria-label="Market views" data-tt-aria-label="gr.market.views"></span></div></div>
       <div class="waves" id="movers"></div>
       <div class="heat" id="market"></div>
+    </section>
+
+    <!-- Expansion › Open a store (drawOpenStore(), docs/open-a-store-scope.md):
+         the steps and the plan picker in #osCtl (beside the view's tabs), the
+         plan's strip, the embedded finder for step 2 (#osFinderMap, a
+         CityMapView in plan mode, kept between draws) and the step's body. -->
+    <section class="sec rv" id="secOpen" data-sub="open">
+      <h2 class="nx-sr" data-tt="gr.os.title">Open a store</h2>
+      <div class="sechead os-ctl" id="osCtl" data-view-ctl="expansion/open"></div>
+      <div id="osStrip"></div>
+      <div id="osWhere" class="os-where" hidden><div class="os-finder" id="osFinderMap"></div></div>
+      <div id="osBody"></div>
     </section>
 
     <section class="sec rv" id="secPlan" data-sub="plan">
@@ -21433,7 +21752,7 @@ const SEC_PAGE = {
      opens the view that took their place. */
   secShops:["supply","deliveries"], secWarehouses:["supply","imports"], secFactories:["supply","production"],
   secLogistics:["supply","imports"], secStock:["supply","deliveries"], sbStrip:["supply","changes"],
-  secMarket:["growth","market"], secPlan:["growth","plan"], secIngredients:["growth","plan"],  // changed for growth: no secExpand
+  secMarket:["growth","market"], secOpen:["growth","open"], secPlan:["growth","plan"], secIngredients:["growth","plan"],  // changed for growth: no secExpand
   secProducts:["company","products"], secPrices:["company","products"], secStandards:["company","standards"],
   secGoals:["company","milestones"],
   /* Staffing: the schedules, the staff needs (main's Staff page, issue #89,
@@ -29263,6 +29582,843 @@ function drawMarket(){
   wireTips();
 }
 
+/* --- Expansion › Open a store ------------------------------------------------
+   docs/open-a-store-scope.md, phase 2. A plan walks four steps: what to open
+   (a type, or a Demand cell), where (Find a location, embedded and fixed to
+   the type), the investment for a 100% outfitted store in that building in
+   either install mode, and when it breaks even, with a loan if the reader
+   wants one. Steps 5 and 6 (the checklist until opening, and payback once it
+   trades) come with phase 3 and 4; they stand in the bar, not yet reachable.
+
+   Python sends the facts (_open_store(): each type's outfit per layout, what
+   every product meets in every neighbourhood, the player's own shops, the
+   banks); everything the reader moves is worked out here: the profit model
+   runs in osModel() over the building on screen, the best of the 64
+   marketing mixes is picked for it, and the loan is priced as the game does.
+   The plans are kept per character in localStorage, like the finder's saved
+   searches, and every read and write is guarded: a browser that refuses
+   storage keeps the plans for the visit. */
+const OS_KEY = "ba_open_store_v1";
+const OS_MAX_PLANS = 12;
+const OS_STEPS = ["what", "where", "investment", "breakeven", "opening", "open"];
+/* The range the estimate is shown as: the p25 and p90 of the validation's
+   actual ÷ model on real shops (research PROFIT_MODEL.md, section 6). */
+const OS_LOW = 0.8, OS_HIGH = 1.05;
+let osPlans = [], osPlansFor = null, osCur = null, osStep = "what", osFinder = null, osBest = new Map();
+const osFacts = () => (typeof D !== "undefined" && D && D.openStore) || {};
+const osStore = () => `${OS_KEY}:${(D && D.meta && D.meta.character) || "default"}`;
+const OS_ICON = {
+  store: '<path d="M4 10v10h16V10"></path><path d="M3 10l2-6h14l2 6"></path><path d="M3 10c0 1.7 1.3 3 3 3s3-1.3 3-3c0 1.7 1.3 3 3 3s3-1.3 3-3c0 1.7 1.3 3 3 3s3-1.3 3-3"></path><path d="M10 20v-5h4v5"></path>',
+  paint: '<rect x="4" y="3" width="14" height="6" rx="1.5"></rect><path d="M18 6h2v5h-8v3"></path><rect x="10.5" y="14" width="3" height="7" rx="1"></rect>',
+  key: '<circle cx="8" cy="15" r="4"></circle><path d="M11 12l9-9M16 7l3 3"></path>',
+  bank: '<path d="M3 10h18L12 4z"></path><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18"></path>',
+};
+const osIcon = name => OS_ICON[name] ? `<svg class="os-ico" viewBox="0 0 24 24" aria-hidden="true">${OS_ICON[name]}</svg>` : icon(name);
+
+/* --- the plans, per character -------------------------------------------- */
+function osLoad(){
+  const who = osStore();
+  if(osPlansFor === who) return;
+  osPlansFor = who; osPlans = []; osCur = null; osStep = "what"; osBest = new Map();
+  try{
+    const raw = JSON.parse(localStorage.getItem(who));
+    if(raw && Array.isArray(raw.plans)){
+      osPlans = raw.plans.filter(p => p && typeof p.id === "string" && typeof p.type === "string").slice(0, OS_MAX_PLANS)
+        .map(p => ({id: p.id, type: p.type, hood: typeof p.hood === "string" ? p.hood : null,
+          key: typeof p.key === "string" ? p.key : null, mode: p.mode === "self" ? "self" : p.mode === "firm" ? "firm" : null,
+          finance: p.finance && typeof p.finance === "object" ? {on: !!p.finance.on, amount: Math.max(0, +p.finance.amount || 0),
+            bank: typeof p.finance.bank === "string" ? p.finance.bank : null} : {on: false, amount: 0, bank: null},
+          step: OS_STEPS.includes(p.step) ? p.step : "what", made: +p.made || null}));
+      osCur = osPlans.some(p => p.id === raw.current) ? raw.current : null;
+    }
+  }catch(e){}
+  const plan = osPlan();
+  osStep = plan ? plan.step : "what";
+}
+function osSave(){
+  const plan = osPlan();
+  if(plan) plan.step = osStep;
+  try{ localStorage.setItem(osStore(), JSON.stringify({plans: osPlans, current: osCur})); }catch(e){}
+}
+const osPlan = () => osPlans.find(p => p.id === osCur) || null;
+/* A new plan for a type, from a Demand cell (its neighbourhood preselected)
+   or the type grid. The newest plan comes first; the oldest drops past twelve. */
+function osNew(type, hood){
+  const id = `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  osPlans.unshift({id, type, hood: hood || null, key: null, mode: null, finance: {on: false, amount: 0, bank: null},
+    step: "where", made: (D.meta || {}).day || null});
+  osPlans = osPlans.slice(0, OS_MAX_PLANS);
+  osCur = id; osStep = "where";
+  osSave();
+  return osPlan();
+}
+/* The install mode: the plan's own once chosen, else the portfolio's
+   (paybackMode(), kept per character); a switch here moves both. */
+const osMode = plan => (plan && plan.mode) || paybackMode();
+function osSetMode(mode){
+  const plan = osPlan();
+  if(plan) plan.mode = mode;
+  paybackSetMode(mode);
+  osSave();
+}
+
+/* --- what the plan stands on ---------------------------------------------- */
+const osType = slug => (osFacts().types || {})[slug] || null;
+const osBuilding = key => key && typeof premises === "function" && premises() ? premises().buildings.find(b => b.key === key) || null : null;
+const osCap = b => Array.isArray(b && b.cap) ? b.cap[0] : (b && b.cap) || 0;
+const osTypeName = slug => gameName(slug) || String(slug || "").replace(/^ba:businesstype_/, "");
+const osItemName = item => gameName(item) || prettySlug(String(item || ""));
+/* The outfit for the building's layout: its lines and furniture total. */
+const osOutfit = (plan, b) => { const t = plan && osType(plan.type); return t && b ? (t.layouts || {})[b.layout] || null : null; };
+/* Midtown asks for an interior score; the walls and floors that reach it. */
+const osDecor = b => b && ((osFacts().hoods || {})[b.hood] || {}).interior > 0 ? (osFacts().decor || {})[b.layout] || null : null;
+
+/* The investment in each mode, as setup_cost() counts it: the firm's fee on
+   the floor, every item at its default price, the deposit; self-installation
+   the items, a delivery per store, and the walls and floors where the
+   neighbourhood asks for them. */
+function osInvestment(plan, b){
+  const out = osOutfit(plan, b);
+  if(!out || !b) return null;
+  const deposit = b.deposit || 0, decor = osDecor(b);
+  const stores = osStores(out).length;
+  const delivery = stores * ((osFacts().game || {}).delivery || 0);
+  return {furniture: out.furniture, fee: out.fee, deposit, stores, delivery, decor: decor ? decor.cost : 0,
+    firm: out.furniture + out.fee + deposit, self: out.furniture + delivery + (decor ? decor.cost : 0) + deposit,
+    items: out.lines.reduce((n, l) => n + l[1], 0)};
+}
+/* Self-installation's shopping list by store: each item from a store that
+   sells it, as few stores as will do, the one that sells the most first. */
+function osStores(out){
+  const items = osFacts().items || {};
+  let left = out.lines.map((l, i) => i);
+  const stores = [];
+  while(left.length){
+    const count = new Map();
+    left.forEach(i => ((items[out.lines[i][0]] || {}).v || []).forEach(v => count.set(v, (count.get(v) || 0) + 1)));
+    if(!count.size) break;
+    const [best] = [...count.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+    const mine = left.filter(i => ((items[out.lines[i][0]] || {}).v || []).includes(best));
+    stores.push({key: best, lines: mine});
+    left = left.filter(i => !mine.includes(i));
+  }
+  return stores;
+}
+
+/* --- the profit model ------------------------------------------------------
+   CustomerEntriesCalculatorRetail, per open hour: arrivals are the building's
+   capacity (or, in a game started before build 2847, the best primary
+   product's sales ratio times the floor) times the promotion, the day's and
+   the hour's multipliers, never above the capacity. Each product then sells
+   arrivals x its sales ratio x the neighbourhood's demand x the satisfaction
+   multiplier x its impact for the type x the amount a customer takes, 30% of
+   the time rounded up and otherwise to the nearest. Arrivals with nothing to
+   buy leave (not at a gym, a nightclub or a cinema). The price is the highest
+   every customer accepts: the default, or a rival's lower one, times the
+   neighbourhood's price index, +0.3 while no rival company sells it. Goods
+   cost the import price; wages are the structural estimate. */
+const osUnits = x => x <= 0 ? 0 : 0.3 * Math.ceil(x) + 0.7 * Math.floor(x + 0.5);
+const osDemandWith = (n, price) => {
+  const opt = !price ? 7 : Math.min(Math.ceil(Math.sqrt(1300 / price)), 7);
+  const base = 100 - Math.floor(n * 100 / opt);
+  return base >= 30 ? Math.min(100, base - 0.5) : 31.5;
+};
+/* The price everyone in the neighbourhood accepts, and whether it carries
+   the monopoly's +0.3. */
+function osPrice(item, hood){
+  const m = (osFacts().market || {})[item], h = (osFacts().hoods || {})[hood];
+  if(!m || !h) return {price: 0, mono: false};
+  const row = (m.hoods || {})[hood] || [0, 0, null];
+  const mono = !!m.d && !row[1];
+  const ref = row[2] ? Math.min(m.p, row[2]) : m.p;
+  return {price: ref * (h.idx + (mono ? 0.3 : 0)), mono};
+}
+/* A new shop counts itself among the sellers; an existing one already is. */
+function osDemand(item, hood, existing){
+  const m = (osFacts().market || {})[item];
+  if(!m) return 0;
+  if(!m.d) return 100;
+  if(m.only && !m.only.includes(hood)) return 0;
+  const row = (m.hoods || {})[hood] || [0];
+  return osDemandWith((row[0] || 0) + (existing ? 0 : 1), m.p);
+}
+/* The satisfaction the plan settles at: the player's own shops of the type,
+   their median, else a well-run shop's. */
+function osSatisfaction(slug){
+  const seen = ((osFacts().own || {})[slug] || []).map(s => s.sat).filter(v => Number.isFinite(v)).sort((a, b) => a - b);
+  return seen.length ? seen[Math.floor(seen.length / 2)] : ((osFacts().game || {}).satisfaction || 95);
+}
+/* One day of a store of type `slug` in building `b`. `o`: reach (m² of
+   marketing) and cost, or promoTotal for a shop whose promotion is known;
+   open (per weekday [start, end) slots, 24/7 by default); sat; existing. */
+/* What every open hour starts from (Python's _plan_initial(), shared with the
+   staffing assistant): the shop's own figure where it is known, else the
+   layout's, else the building's capacity (a current game) or the floor. */
+function osInitial(t, b, o){
+  const known = o.initial ?? (t.initial || {})[b.layout];
+  if(known > 0) return known;
+  return (osFacts().game || {}).capInitial || t.model === "office" ? osCap(b) : (b.m2 || 0);
+}
+/* The promotion total a building reaches with `reach` m² of marketing:
+   its traffic plus the share of the floor the campaigns cover times the
+   neighbourhood's marketing strength, never above 100. */
+const osPromo = (b, h, o) => o.promoTotal ?? Math.min(100, Math.round((b.traffic || 0)
+  + Math.round(Math.min((o.reach || 0) / (b.m2 || 1), 1) * 100) * h.strength));
+function osModel(slug, b, o = {}){
+  const F = osFacts(), t = osType(slug), g = F.game || {}, h = (F.hoods || {})[b.hood];
+  if(!t || !h) return null;
+  if(t.model === "office") return osOfficeModel(slug, t, b, h, o);
+  if(t.model !== "retail") return null;
+  const cap = osCap(b);
+  const total = osPromo(b, h, o);
+  const promo = (g.promo || 0) + 0.75 * total / 100;
+  /* The whole range the type sells, as the outfit stocks it: the validation's
+     planner default. */
+  const range = t.products.filter(([p]) => p !== t.fee && p !== t.feeWeekend);
+  const initial = osInitial(t, b, o);
+  const sat = 1 + ((o.sat ?? osSatisfaction(slug)) - 50) / 100;
+  const lines = range.map(([p, impact]) => {
+    const m = F.market[p] || {};
+    const amt = t.amt <= 1 ? t.amt : impact >= 1 ? (1 + t.amt) / 2 : 1;
+    return {p, impact, amt, r: m.r || 1, demand: osDemand(p, b.hood, o.existing), service: !!m.s, cost: m.cost || 0, ...osPrice(p, b.hood), units: 0};
+  });
+  const slots = o.open || Array.from({length: 7}, () => [[0, 24]]);
+  let customers = 0, fees = 0, open = 0;
+  const feePrice = wd => { const f = t.feeWeekend && (wd === 0 || wd === 6) ? t.feeWeekend : t.fee; return f ? osPrice(f, b.hood).price : 0; };
+  for(let wd = 0; wd < 7; wd++){
+    for(const [a, z] of slots[wd] || []){
+      for(let hr = a; hr < z; hr++){
+        open++;
+        const raw = initial * promo * (t.days[wd] || 0) * (t.hours[hr] || 0);
+        const n = raw > 0 ? Math.ceil(Math.min(raw, cap)) : 0;
+        if(n <= 0) continue;
+        let none = 1;
+        lines.forEach(l => {
+          const u = osUnits(n * l.r * l.demand / 100 * sat * l.impact * l.amt);
+          l.units += u;
+          none *= l.service ? Math.max(0, 1 - Math.min(u, n) / n) : n > 1 ? Math.pow(1 - 1 / n, u) : (u >= 1 ? 0 : 1 - u);
+        });
+        const served = t.noOrder ? n : n * (1 - none);
+        customers += served;
+        fees += served * feePrice(wd);
+      }
+    }
+  }
+  let revenue = fees / 7, cogs = 0;
+  lines.forEach(l => { l.units /= 7; revenue += l.units * l.price; cogs += l.units * l.cost; });
+  /* A hairdresser's service uses one hair-care product at its cost. */
+  const care = (F.market || {})["ba:itemname_haircareproduct"];
+  if(slug === "ba:businesstype_hairdresser" && care) cogs += lines.filter(l => l.service).reduce((s, l) => s + l.units, 0) * care.cost;
+  const w = g.wageBase || {}, rate = (1 + Math.pow(1.05, 100) / 100) * (g.wages || 0);
+  const wages = open / 7 * (Math.ceil(cap / (w.perCashier || 30)) * (w.cashier || 0) + (w.cleaner || 0) + (w.guard || 0)) * rate;
+  const rent = o.rent ?? (b.rent || 0), marketing = o.cost || 0;
+  return {revenue, cogs, wages, rent, marketing, profit: revenue - cogs - wages - rent - marketing,
+    customers: customers / 7, fees: fees / 7, lines, promo: total};
+}
+/* CustomerEntriesCalculatorOffice, per open hour: the clients who come are
+   ceil(initial x satisfaction x promotion x the day's and the hour's
+   multipliers x the fee's neighbourhood demand / 100 - 0.2), never more than
+   the computers staffed that hour, one client each. The computers are staffed
+   as the board's office default writes them (_office_runs() in Python: a few
+   around the clock, every computer 8 to 22 on weekdays, half of them 8 to 22
+   at the weekend), and each is paid for every hour it is staffed, busy or
+   not, with a cleaner through every open hour as in a shop. The fee is priced
+   as a shop's goods are: the highest every client accepts. */
+const OS_OFFICE = {always: 3, fullDoor: 50, day: [8, 22]};
+function osOfficeStaffed(computers, cap, wd, hr){
+  const always = Math.min(computers, Math.max(1, Math.round(OS_OFFICE.always * cap / OS_OFFICE.fullDoor)));
+  if(hr < OS_OFFICE.day[0] || hr >= OS_OFFICE.day[1]) return always;
+  return wd === 0 || wd === 6 ? Math.max(always, Math.ceil(computers / 2)) : computers;
+}
+function osOfficeModel(slug, t, b, h, o){
+  const F = osFacts(), g = F.game || {};
+  const fee = (t.products[0] || [])[0];
+  if(!fee || !(F.market || {})[fee]) return null;
+  const cap = osCap(b);
+  const total = osPromo(b, h, o);
+  const promo = (g.promo || 0) + 0.75 * total / 100;
+  const initial = osInitial(t, b, o);
+  const sat = 1 + ((o.sat ?? osSatisfaction(slug)) - 50) / 100;
+  const demand = osDemand(fee, b.hood, o.existing), {price, mono} = osPrice(fee, b.hood);
+  const wage = (t.wage || 0) * (1 + Math.pow(1.05, 100) / 100) * (g.wages || 0);
+  const slots = o.open || Array.from({length: 7}, () => [[0, 24]]);
+  const computers = o.computers || cap;
+  let billed = 0, staffed = 0, open = 0;
+  for(let wd = 0; wd < 7; wd++){
+    for(const [a, z] of slots[wd] || []){
+      for(let hr = a; hr < z; hr++){
+        const on = o.staffed ? ((o.staffed[wd] || [])[hr] || 0) : osOfficeStaffed(computers, cap, wd, hr);
+        const raw = Math.ceil(initial * sat * promo * (t.days[wd] || 0) * (t.hours[hr] || 0) * demand / 100 - 0.2);
+        staffed += on; open++;
+        if(raw > 0) billed += Math.min(raw, on, cap);
+      }
+    }
+  }
+  const units = billed / 7;
+  const skill = 1 + Math.pow(1.05, 100) / 100;
+  const revenue = units * price, wages = (staffed * wage + open * ((g.wageBase || {}).cleaner || 0) * skill * (g.wages || 0)) / 7;
+  const rent = o.rent ?? (b.rent || 0), marketing = o.cost || 0;
+  return {revenue, cogs: 0, wages, rent, marketing, profit: revenue - wages - rent - marketing,
+    customers: units, fees: 0, office: true, lines: [{p: fee, impact: 1, amt: 1, r: 1, demand, service: true, cost: 0, price, mono, units}], promo: total};
+}
+/* The best of the 64 marketing mixes for this building: one of each
+   campaign at most, kept when it adds more than it costs. */
+function osBestModel(slug, b){
+  const id = `${slug}|${b.key}|${(D.meta || {}).day}`;
+  if(osBest.has(id)) return osBest.get(id);
+  const camps = osFacts().campaigns || [];
+  let best = null;
+  for(let mask = 0; mask < 1 << camps.length; mask++){
+    let reach = 0, cost = 0;
+    camps.forEach(([, price, sqm], i) => { if(mask >> i & 1){ reach += sqm; cost += price; } });
+    const m = osModel(slug, b, {reach, cost});
+    if(m && (!best || m.profit > best.profit)) best = {...m, mix: camps.filter((c, i) => mask >> i & 1).map(c => c[0])};
+  }
+  osBest.set(id, best);
+  return best;
+}
+/* How the player's own shops of the type do against the same rules on their
+   own buildings, hours and marketing: the median of actual ÷ model. */
+function osOwnRatio(slug){
+  const own = (osFacts().own || {})[slug] || [];
+  const byKey = new Map((D.businesses || []).map(b => [b.key, b]));
+  const rows = own.map(s => {
+    const m = osModel(slug, {hood: s.hood, cap: s.cap, m2: s.m2, key: s.key, layout: s.layout}, {promoTotal: s.promo, cost: s.marketing,
+      open: s.open, sat: s.sat, existing: true, initial: s.initial, staffed: s.staffed, rent: (byKey.get(s.key) || {}).rent || 0});
+    return m && m.profit > 0 ? {...s, model: m.profit, ratio: s.actual / m.profit} : null;
+  }).filter(Boolean);
+  if(!rows.length) return null;
+  const sorted = rows.map(r => r.ratio).sort((a, b) => a - b);
+  const mid = sorted.length % 2 ? sorted[(sorted.length - 1) / 2] : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
+  return {ratio: mid, rows};
+}
+/* What the player's own shops in the neighbourhood lose: a new seller moves
+   every product's demand one step down there, for them too. */
+function osCannibal(slug, hood){
+  const t = osType(slug), sales = ((osFacts().sales || {})[hood]) || {};
+  const shops = new Set(), items = [];
+  let loss = 0;
+  (t ? t.products : []).forEach(([p, impact]) => {
+    const rows = sales[p];
+    const m = (osFacts().market || {})[p];
+    if(impact < 1 || !rows || !m || !m.d) return;
+    const n = ((m.hoods || {})[hood] || [0])[0] || 0;
+    const now = osDemandWith(n, m.p), after = osDemandWith(n + 1, m.p);
+    if(now <= 0 || after >= now) return;
+    rows.forEach(([key, units, margin]) => { loss += units * Math.max(0, margin) * (1 - after / now); shops.add(key); });
+    items.push(p);
+  });
+  return shops.size ? {loss, shops: shops.size, items} : null;
+}
+/* Days to earn `inv` back at `profit` a day; null when it never does. */
+const osDays = (inv, profit) => profit > 0 ? Math.max(1, Math.ceil(inv / profit)) : null;
+
+/* --- financing ---------------------------------------------------------------
+   LoanHelper: flat interest on the amount borrowed, floor(L x rate x the
+   difficulty's multiplier / 100 / days a year) a day, and max(5, floor(L /
+   term)) of the principal, both at midnight. A bank lends up to its cap less
+   what it is owed, and the company up to the larger of its wealth and a
+   quarter of last week's daily profit over the term, less all it owes. */
+function osLoanLimit(bank){
+  const f = osFacts().finance || {};
+  if(!bank) return 0;
+  const room = Math.max(0, bank.max - (bank.owed || 0));
+  const economy = Math.floor(Math.max(0, Math.max(f.wealth || 0, 0.25 * (f.profit7 || 0) * bank.term) - (f.owed || 0)));
+  return Math.min(room, economy);
+}
+function osLoan(amount, bank){
+  const f = osFacts().finance || {};
+  if(!bank || amount < (f.minimum || 0)) return null;
+  const interest = Math.floor(amount * bank.rate * (f.multiplier || 0) / 100 / (f.year || 60) + 1e-6);
+  const repay = Math.max(5, Math.floor(amount / (bank.term || 1)));
+  const days = Math.ceil(amount / repay);
+  return {amount, interest, repay, days, total: days * interest};
+}
+/* The day the owner's own cash is back: the profit less the installments
+   while the loan runs, the whole profit after it. */
+function osLoanDays(own, profit, loan){
+  if(own <= 0) return 0;
+  let got = 0;
+  for(let d = 1; d <= 20000; d++){
+    got += profit - (d <= loan.days ? loan.interest + loan.repay : 0);
+    if(got >= own) return d;
+    if(d > loan.days && profit <= 0) return null;
+  }
+  return null;
+}
+
+/* --- the view ----------------------------------------------------------------- */
+const osStepLabel = s => ({what: tt("gr.os.step.what", "What"), where: tt("gr.os.step.where", "Where"),
+  investment: tt("gr.os.step.investment", "Investment"), breakeven: tt("gr.os.step.breakeven", "Break even"),
+  opening: tt("gr.os.step.opening", "Until opening"), open: tt("gr.os.step.open", "Open")})[s];
+/* A step can be opened once what it needs is chosen; the last two come with
+   the checklist and payback monitoring. */
+function osStepReady(s, plan){
+  if(s === "what") return true;
+  if(s === "where") return !!plan;
+  if(s === "investment" || s === "breakeven") return !!(plan && osBuilding(plan.key));
+  return false;
+}
+function osCtlHtml(plan){
+  const at = OS_STEPS.indexOf(osStep);
+  const steps = OS_STEPS.map((s, i) => {
+    const ready = osStepReady(s, plan), done = i < at && ready, cls = s === osStep ? "on" : done ? "done" : "";
+    const mark = done ? icon("tick") : String(i + 1);
+    const later = s === "opening" || s === "open";
+    return `${i ? `<span class="sep" aria-hidden="true"></span>` : ""}<button type="button" class="${cls}" data-os-step="${s}"${
+      ready ? "" : ` disabled`}${s === osStep ? ` aria-current="step"` : ""}${later ? ` data-tip="${attr(tt("gr.os.step.later",
+      "Comes with the checklist until opening and payback once the store trades."))}"` : ""}><i>${mark}</i>${osStepLabel(s)}</button>`;
+  }).join("");
+  const opts = osPlans.map(p => `<option value="${attr(p.id)}"${p.id === osCur ? " selected" : ""}>${spEsc(osPlanName(p))}</option>`).join("");
+  return `<nav class="os-steps" aria-label="${attr(tt("gr.os.steps.label", "Open a store, step by step"))}">${steps}</nav>
+    <div class="aside"><label class="os-planpick"><span>${tt("gr.os.plan.pick", "Plan")}</span><select data-os-plan aria-label="${attr(tt("gr.os.plan.pickAria", "Which plan"))}">
+      <option value=""${osCur ? "" : " selected"}>${tt("gr.os.plan.new", "New plan")}</option>${opts}</select>${icon("chev")}</label></div>`;
+}
+const osPlanName = p => {
+  const b = osBuilding(p.key);
+  return b ? tt("gr.os.plan.name", "{type} · {address}", {type: osTypeName(p.type), address: b.address}) : osTypeName(p.type);
+};
+/* The plan, one strip under the steps: what, where, how much, how long. */
+function osStripHtml(plan){
+  const b = osBuilding(plan.key), inv = osInvestment(plan, b), mode = osMode(plan);
+  const cell = (lab, body) => `<div><span class="os-lab">${lab}</span>${body}</div>`;
+  const demand = plan.hood ? ((((D.premises || {}).demand || {})[plan.hood] || []).find(d => d.slug === plan.type) || {}).demand : null;
+  const anyHood = tt("gr.os.strip.anyhood", "any neighbourhood");
+  const what = `<b>${spEsc(osTypeName(plan.type))}</b><small>${plan.hood && demand != null
+    ? tt("gr.os.strip.demand", "Demand in {hood} {n}", {hood: hoodName(plan.hood), n: demand}) : anyHood}</small>`;
+  const where = b ? `<b>${spEsc(b.address)}</b><small>${tt("gr.os.strip.where", "{hood} · {layout} · {m2} m² · rent {rent}/day",
+      {hood: hoodName(b.hood), layout: b.layout || b.size || "", m2: num(b.m2), rent: fmt(b.rent || 0)})}</small>`
+    : `<b class="dim">${tt("gr.os.strip.nowhere", "Not picked yet")}</b><small>${tt("gr.os.strip.nowhere.sub", "{type}, {where}",
+      {type: osTypeName(plan.type), where: plan.hood ? hoodName(plan.hood) : anyHood})}</small>`;
+  const invest = inv ? `<b class="m">${fmt(inv[mode])}</b><small>${mode === "self" ? tt("gr.os.strip.self", "Self-installation · deposit included")
+    : tt("gr.os.strip.firm", "Installation firm · deposit included")}</small>` : `<b class="dim">–</b><small>${tt("gr.os.strip.afterWhere", "after the location")}</small>`;
+  const est = b && inv ? osEstimate(plan, b) : null;
+  const be = est && est.days ? `<b class="m">${osRange(est.days[mode])}</b><small>${tt("gr.os.strip.be", "after opening · at {w}/day", {w: fmt(est.profit)})}</small>`
+    : est && est.none ? `<b class="dim">${tt("gr.os.none.short", "No estimate")}</b><small>${est.none}</small>`
+    : `<b class="dim">–</b><small>${tt("gr.os.strip.afterInvest", "after the investment")}</small>`;
+  return `<div class="os-pb">${cell(tt("gr.os.strip.open", "Open"), what)}${cell(tt("gr.os.strip.whereLab", "Where"), where)}${
+    cell(tt("gr.os.strip.invest", "Investment"), invest)}${cell(tt("gr.os.strip.beLab", "Break even"), be)}</div>`;
+}
+/* "26–33 days", or one figure where the range closes up. */
+function osRange(d){
+  if(!d || d.low == null) return tt("gr.os.be.never", "not at this profit");
+  if(d.high == null) return tt("gr.os.days.from", "from {n} days", {n: num(d.low)});
+  return d.low === d.high ? tt("gr.os.days", {one: "{n} day", other: "{n} days"}, {n: d.low})
+    : tt("gr.os.days.range", "{lo}–{hi} days", {lo: num(d.low), hi: num(d.high)});
+}
+/* The estimate behind steps 3 and 4 for a plan in its building. */
+function osEstimate(plan, b){
+  const t = osType(plan.type), inv = osInvestment(plan, b);
+  if(!t || !inv) return null;
+  if(t.model !== "retail" && t.model !== "office") return {inv, none: t.cat === "cinema" || t.cat === "theater"
+    ? tt("gr.os.none.venue", "the game's rules for screens, seats and actors are not modelled") : tt("gr.os.none.type", "this type is not modelled")};
+  const m = osBestModel(plan.type, b);
+  if(!m) return {inv, none: tt("gr.os.none.data", "the save lacks what the estimate needs")};
+  const days = mode => ({low: osDays(inv[mode], m.profit * OS_HIGH), high: osDays(inv[mode], m.profit * OS_LOW)});
+  return {model: m, profit: m.profit, inv, days: {firm: days("firm"), self: days("self")}};
+}
+
+/* Step 1: what to open. */
+function osWhatHtml(){
+  const F = osFacts(), M = D.market || {};
+  const hoods = M.hoods || [];
+  const rows = [];
+  [...(M.types || []), ...(M.offices || [])].forEach(r => {
+    if(!(F.types || {})[r.slug]) return;
+    (r.cells || []).forEach((c, i) => { if(c && !c.here && hoods[i]) rows.push({slug: r.slug, hood: hoods[i], demand: c.demand, rivals: c.providers || 0}); });
+  });
+  rows.sort((a, b) => b.demand - a.demand || a.rivals - b.rivals || gnCompare(osTypeName(a.slug), osTypeName(b.slug)));
+  const top = rows.slice(0, 6);
+  const shade = v => `background:color-mix(in srgb,var(--accent) ${Math.max(8, Math.min(78, Math.round((v - 40) / 60 * 70 + 8)))}%,var(--surface))`;
+  const runs = slug => ((F.types || {})[slug] || {}).run || 0;
+  const demandRows = top.map(r => `<tr><td class="l"><b>${spEsc(osTypeName(r.slug))}</b><span class="sub">${runs(r.slug)
+      ? tt("gr.os.what.run", {one: "You run {n} elsewhere", other: "You run {n} elsewhere"}, {n: runs(r.slug)}) : tt("gr.os.what.none", "You run none")}</span></td>
+    <td class="l"><span class="hood">${spEsc(HOOD_TAGS[r.hood] || "")}</span> <span class="os-dim">${spEsc(hoodName(r.hood))}</span></td>
+    <td><span class="sc" style="${shade(r.demand)}">${r.demand}</span></td><td>${r.rivals}</td>
+    <td class="go"><button type="button" data-os-new="${attr(r.slug)}" data-os-hood="${attr(r.hood)}" aria-label="${attr(tt("gr.os.what.go",
+      "Plan a {type} in {hood}", {type: osTypeName(r.slug), hood: hoodName(r.hood)}))}">${icon("chev")}</button></td></tr>`).join("");
+  const kinds = Object.entries(F.types || {}).sort((a, b) => gnCompare(osTypeName(a[0]), osTypeName(b[0])));
+  const typeBtn = ([slug, t]) => `<button type="button" class="os-type" data-os-new="${attr(slug)}">${spEsc(osTypeName(slug))}${
+    t.run ? `<small>${t.run}</small>` : ""}</button>`;
+  const shops = kinds.filter(([, t]) => t.cat !== "office").map(typeBtn).join("");
+  const offices = kinds.filter(([, t]) => t.cat === "office").map(typeBtn).join("");
+  return `<div class="os-two os-start">
+  <div class="os-card"><h3>${tt("gr.os.what.demand", "From demand")}</h3>
+    ${top.length ? `<table class="os-dl"><thead><tr><th class="l">${tt("gr.os.what.col.type", "Type")}</th><th class="l">${tt("gr.os.what.col.where", "Where")}</th>
+      <th>${tt("gr.os.what.col.demand", "Demand")}</th><th>${tt("gr.os.what.col.rivals", "Rivals")}</th><th></th></tr></thead><tbody>${demandRows}</tbody></table>`
+      : `<p class="quiet">${tt("gr.os.what.demand.none", "No neighbourhood reading yet.")}</p>`}
+    <p class="os-more"><a class="os-link" href="#expansion/demand" data-os-route="expansion/demand">${tt("gr.os.what.grid", "Demand grid")}</a></p>
+  </div>
+  <div class="os-card"><h3>${tt("gr.os.what.pick", "Or pick a type")}</h3>
+    <div class="os-types">${shops}</div>
+    ${offices ? `<div class="os-sub">${tt("gr.os.what.offices", "Offices")}</div><div class="os-types">${offices}</div>` : ""}
+  </div></div>
+  ${osPlansHtml()}`;
+}
+function osPlansHtml(){
+  if(!osPlans.length) return "";
+  const rows = osPlans.map(p => {
+    const b = osBuilding(p.key), inv = osInvestment(p, b), mode = osMode(p);
+    const stage = !b ? [17, tt("gr.os.stage.where", "Where")] : p.step === "breakeven" ? [50, tt("gr.os.stage.be", "Break even")]
+      : [33, tt("gr.os.stage.invest", "Investment")];
+    const sub = b ? tt("gr.os.plans.at", "{address} · {hood}", {address: b.address, hood: hoodName(b.hood)})
+      : p.hood ? tt("gr.os.plans.hood", "{hood} · no location yet", {hood: hoodName(p.hood)}) : tt("gr.os.plans.none", "no location yet");
+    return `<div class="os-plan"><button type="button" class="os-plango" data-os-open="${attr(p.id)}"><span><b>${spEsc(osTypeName(p.type))}</b><small>${spEsc(sub)}</small></span>
+      <span><span class="os-lab">${stage[1]}</span><span class="os-meter" style="--w:${stage[0]}%"><i></i></span></span>
+      <span class="v">${inv ? fmt(inv[mode]) : `<span class="os-dim">–</span>`}</span>${icon("chev")}</button>
+      <button type="button" class="os-x" data-os-drop="${attr(p.id)}" aria-label="${attr(tt("gr.os.plans.drop", "Delete the plan {name}", {name: osPlanName(p)}))}" data-tip="${
+        attr(tt("gr.os.plans.dropTip", "Delete this plan"))}">×</button></div>`;
+  }).join("");
+  return `<div class="os-h"><h2>${tt("gr.os.plans.title", "Your plans")}</h2><span class="c">${osPlans.length}</span></div><div class="os-plans">${rows}</div>`;
+}
+
+/* Step 2: Find a location, embedded, fixed to the plan's type. */
+function osShowFinder(plan){
+  if(typeof CityMapView !== "function" || !premises()) return;
+  const t = osType(plan.type);
+  const preset = {cat: t ? t.cat : "retail", type: plan.type, hoods: plan.hood ? [plan.hood] : null};
+  if(!osFinder || !osFinder.root.isConnected){
+    osFinder = new CityMapView($("osFinderMap"), {plan: {preset, onPlan: key => osPick(key), label: () => tt("gr.os.where.go", "Plan here")}});
+  } else osFinder.planFor(preset);
+}
+function osPick(key){
+  const plan = osPlan();
+  if(!plan) return;
+  plan.key = key;
+  if(!plan.hood){ const b = osBuilding(key); if(b) plan.hood = b.hood; }
+  osStep = "investment";
+  osSave();
+  drawOpenStore();
+  if(typeof settleScroll === "function") settleScroll($("secOpen"));
+}
+
+/* Step 3: the investment. */
+/* A display that holds many products names two and counts the rest; its tag's
+   tip names them all (osTag()). */
+function osWhy(group, why){
+  if(group === "shelf"){
+    if(!Array.isArray(why) || !why.length) return tt("gr.os.why.stock", "Stock");
+    const names = why.map(osItemName);
+    return names.length > 2 ? tt("gr.os.why.more", "{items} +{n}", {items: names.slice(0, 2).join(", "), n: names.length - 2}) : names.join(", ");
+  }
+  if(why === "mount") return tt("gr.os.why.mount", "Stands on it");
+  if(group === "cap") return tt("gr.os.why.cap", "Capacity");
+  if(group === "req") return why === "pointofsales" ? tt("gr.os.why.pos", "Point of sale") : tt("gr.os.why.req", "Required");
+  return ({music: tt("gr.os.why.music", "Music"), seating: tt("gr.os.why.seating", "Seating"), sink: tt("gr.os.why.sink", "Sink"),
+    toilet: tt("gr.os.why.toilet", "Toilet"), toiletprivacy: tt("gr.os.why.privacy", "Privacy"), "toilet+privacy": tt("gr.os.why.toiletPrivacy", "Toilet, privacy"),
+    employeeuniforms: tt("gr.os.why.uniforms", "Uniforms")})[why] || String(why);
+}
+const osTag = (group, why) => `<span class="os-tag ${group === "req" ? "req" : group === "dem" ? "dem" : group === "cap" ? "cap" : ""}"${
+  group === "shelf" && Array.isArray(why) && why.length > 2 ? ` data-tip="${attr(why.map(osItemName).join(", "))}" tabindex="0"` : ""}>${spEsc(osWhy(group, why))}</span>`;
+function osToolbar(plan, inv, out){
+  const mode = osMode(plan);
+  return `<div class="os-toolbar"><nav class="os-seg big" aria-label="${attr(tt("gr.os.inv.mode", "Interior"))}">
+    <button type="button" class="${mode === "firm" ? "on" : ""}" data-os-mode="firm" aria-pressed="${mode === "firm"}">${tt("gr.os.inv.firm", "Installation firm")} <b>${fmt(inv.firm)}</b></button>
+    <button type="button" class="${mode === "self" ? "on" : ""}" data-os-mode="self" aria-pressed="${mode === "self"}">${tt("gr.os.inv.self", "Self-installation")} <b>${fmt(inv.self)}</b></button></nav>
+    <div class="aside"><span>${tt("gr.os.inv.outfitted", "100% outfitted")}</span><b>${tt("gr.os.inv.items", {one: "{n} item", other: "{n} items"}, {n: inv.items})}</b>
+    <span>${tt("gr.os.inv.itemsLab", "Items")}</span><b>${fmt(out.furniture)}</b></div></div>`;
+}
+function osGroupNote(group, b, out){
+  const h = (osFacts().hoods || {})[b.hood] || {};
+  if(group === "req") return tt("gr.os.grp.req.note", "what the type needs to open");
+  if(group === "dem") return tt("gr.os.grp.dem.note", "{hood}: each customer asks with a {n}% chance times the demand's weight", {hood: hoodName(b.hood), n: Math.round((h.demands || 0) * 100)});
+  if(group === "cap") return tt("gr.os.grp.cap.note", "stations for {n} customers an hour", {n: osCap(b)});
+  const from = out.from && (D.businesses || []).find(x => x.key === out.from);
+  return from ? tt("gr.os.grp.shelf.copied", "as at {address}, same layout {layout}", {address: from.address, layout: b.layout})
+    : tt("gr.os.grp.shelf.note", "per product, enough for {n} customers an hour", {n: osCap(b)});
+}
+const OS_GROUPS = [["req", () => tt("gr.os.grp.req", "Required to open")], ["dem", () => tt("gr.os.grp.dem", "Customer demands")],
+  ["cap", () => tt("gr.os.grp.cap", "Building capacity")], ["shelf", () => tt("gr.os.grp.shelf", "Shelves and displays")]];
+function osInvestHtml(plan){
+  const b = osBuilding(plan.key), out = osOutfit(plan, b), inv = osInvestment(plan, b);
+  if(!b || !out || !inv) return `<p class="quiet os-gap">${tt("gr.os.inv.none", "No outfit is known for this building's layout.")}</p>`;
+  return osToolbar(plan, inv, out) + (osMode(plan) === "self" ? osSelfHtml(b, out, inv) : osFirmHtml(b, out, inv));
+}
+function osFirmHtml(b, out, inv){
+  const items = osFacts().items || {}, decor = osDecor(b), fee = (osFacts().game || {}).installFee || 586;
+  const grp = (title, note, total) => `<tr class="grp"><td colspan="5">${title}${note ? `<span>${note}</span>` : ""}<b>${fmt(total)}</b></td></tr>`;
+  const rows = [grp(tt("gr.os.inv.firm", "Installation firm"), "", inv.fee),
+    `<tr><td class="l">${tt("gr.os.inv.fee", "Installation fee")}<span class="sub">${tt("gr.os.inv.fee.sub", "{fee} × {m2} m²", {fee: num(fee), m2: num(b.m2)})}</span></td><td class="w"></td><td></td><td></td><td>${fmt(inv.fee)}</td></tr>`,
+    `<tr><td class="l">${tt("gr.os.inv.walls", "Walls and floors")}<span class="sub">${decor ? tt("gr.os.inv.walls.met", "{hood} asks for an interior score of {n}: the firm lays them",
+      {hood: hoodName(b.hood), n: ((osFacts().hoods || {})[b.hood] || {}).interior}) : tt("gr.os.inv.walls.free", "the firm lays them at no charge")}</span></td>
+      <td class="w">${decor ? `<span class="os-tag dem">${tt("gr.os.why.interior", "Interior")}</span>` : ""}</td><td></td><td></td><td class="free">${tt("gr.os.inv.free", "free")}</td></tr>`];
+  OS_GROUPS.forEach(([g, title]) => {
+    const lines = out.lines.filter(l => l[2] === g);
+    if(!lines.length) return;
+    const total = lines.reduce((s, l) => s + l[1] * ((items[l[0]] || {}).p || 0), 0);
+    rows.push(grp(title(), osGroupNote(g, b, out), total));
+    lines.forEach(([item, qty, group, why]) => {
+      const each = (items[item] || {}).p || 0;
+      rows.push(`<tr><td class="l">${spEsc(osItemName(item))}</td><td class="w">${osTag(group, why)}</td><td>${qty}</td><td>${fmt(each)}</td><td>${fmt(each * qty)}</td></tr>`);
+    });
+  });
+  rows.push(grp(tt("gr.os.inv.deposit", "Deposit"), tt("gr.os.inv.deposit.note", "refunded when the lease ends"), inv.deposit));
+  rows.push(`<tr><td class="l">${tt("gr.os.inv.deposit.row", "60 days of rent")}<span class="sub">${tt("gr.os.inv.deposit.sub", "60 × {rent}", {rent: fmt(b.rent || 0)})}</span></td><td class="w"></td><td></td><td></td><td>${fmt(inv.deposit)}</td></tr>`);
+  return `<table class="os-inv"><thead><tr><th class="l">${tt("gr.os.inv.col.item", "Item")}</th><th class="l">${tt("gr.os.inv.col.why", "Why")}</th>
+    <th>${tt("gr.os.inv.col.qty", "Qty")}</th><th>${tt("gr.os.inv.col.each", "Each")}</th><th>${tt("gr.os.inv.col.total", "Total")}</th></tr></thead>
+    <tbody>${rows.join("")}</tbody><tfoot><tr><td class="l">${tt("gr.os.inv.total", "Investment")}</td><td></td><td></td><td></td><td>${fmt(inv.firm)}</td></tr></tfoot></table>`;
+}
+const osLetter = i => String.fromCharCode(65 + i);
+function osSelfHtml(b, out, inv){
+  const F = osFacts(), items = F.items || {}, vendors = F.vendors || {}, fee = (F.game || {}).delivery || 0, decor = osDecor(b);
+  const stores = osStores(out);
+  const storeTotal = s => s.lines.reduce((t, k) => t + out.lines[k][1] * ((items[out.lines[k][0]] || {}).p || 0), 0) + fee;
+  const tagCell = (group, why) => `<td class="w">${osTag(group, why)}</td>`;
+  const cards = stores.map((s, i) => {
+    const v = vendors[s.key] || {};
+    const rows = s.lines.map(k => { const [item, qty, group, why] = out.lines[k];
+      return `<tr><td class="l">${tt("gr.os.self.line", "{n} × {item}", {n: qty, item: osItemName(item)})}</td>${tagCell(group, why)}<td>${fmt(qty * ((items[item] || {}).p || 0))}</td></tr>`; }).join("");
+    return `<div class="os-store"><div class="os-sh"><span class="k">${osLetter(i)}</span><span><b>${spEsc(v.n || s.key)}</b><small>${spEsc(v.a || "")}${
+      v.h ? ` · ${spEsc(hoodName(v.h))}` : ""}</small></span><span class="t">${fmt(storeTotal(s))}</span></div>
+      <table><tbody>${rows}<tr class="del"><td class="l">${tt("gr.os.self.delivery", "Delivery")}</td><td class="w"></td><td>${fmt(fee)}</td></tr></tbody></table></div>`;
+  }).join("");
+  const unsold = out.lines.filter((l, k) => !stores.some(s => s.lines.includes(k)));
+  const interior = `<span class="os-tag dem">${tt("gr.os.why.interior", "Interior")}</span>`;
+  const paint = decor ? `<div class="os-store"><div class="os-sh"><span class="k p">${osIcon("paint")}</span><span><b>${tt("gr.os.self.walls", "Walls and floors")}</b><small>${
+      tt("gr.os.self.walls.sub", "Interior Designer · {hood} asks for a score of {n}", {hood: hoodName(b.hood), n: ((F.hoods || {})[b.hood] || {}).interior})}</small></span><span class="t">${fmt(decor.cost)}</span></div>
+    <table><tbody>${decor.floors ? `<tr><td class="l">${tt("gr.os.self.floors", "{n} floor tiles at {p}", {n: num(decor.floors), p: fmt(decor.floorPrice)})}</td><td class="w">${interior}</td><td>${fmt(decor.floors * decor.floorPrice)}</td></tr>` : ""}${
+      decor.walls ? `<tr><td class="l">${tt("gr.os.self.wallslots", "{n} wall slots at {p}", {n: num(decor.walls), p: fmt(decor.wallPrice)})}</td><td class="w">${interior}</td><td>${fmt(decor.walls * decor.wallPrice)}</td></tr>` : ""}</tbody></table></div>` : "";
+  const dep = `<div class="os-store"><div class="os-sh"><span class="k p">${osIcon("key")}</span><span><b>${tt("gr.os.inv.deposit", "Deposit")}</b><small>${
+    tt("gr.os.self.deposit.sub", "60 × {rent} rent · refunded when the lease ends", {rent: fmt(b.rent || 0)})}</small></span><span class="t">${fmt(inv.deposit)}</span></div></div>`;
+  const legend = stores.map((s, i) => `<div><i>${osLetter(i)}</i><span>${spEsc((vendors[s.key] || {}).n || s.key)}</span><b>${fmt(storeTotal(s))}</b></div>`).join("")
+    + `<div><i class="n">${tt("gr.os.map.new", "NEW")}</i><span>${spEsc(b.address)}</span><b></b></div>`;
+  const note = unsold.length ? `<p class="quiet os-gap">${tt("gr.os.self.unsold", "No store the game's help names sells these: {items}.", {items: unsold.map(l => osItemName(l[0])).join(", ")})}</p>` : "";
+  const pins = JSON.stringify([...stores.map((s, i) => [s.key, osLetter(i), "store"]), [b.key, tt("gr.os.map.new", "NEW"), "new"]]);
+  const sub = decor ? tt("gr.os.self.total.subWalls", "{n} items · {d} deliveries · walls and floors · deposit", {n: inv.items, d: stores.length})
+    : tt("gr.os.self.total.sub", "{n} items · {d} deliveries · deposit", {n: inv.items, d: stores.length});
+  return `<div class="os-self"><div>${cards}${paint}${dep}${note}
+    <div class="os-total"><span>${tt("gr.os.inv.total", "Investment")}</span><small>${sub}</small><b>${fmt(inv.self)}</b></div></div>
+    <div><div class="os-mini" id="osMini" data-pins="${attr(pins)}"></div><div class="os-maplist">${legend}</div></div></div>`;
+}
+/* The city with the stores and the new site pinned at their addresses: a
+   still crop of the map around them, not the whole interactive map. */
+function osPaintMini(){
+  const host = $("osMini");
+  if(!host || typeof loadCityMap !== "function") return;
+  let pins = [];
+  try{ pins = JSON.parse(host.dataset.pins || "[]"); }catch(e){}
+  loadCityMap().then(a => {
+    if(!host.isConnected) return;
+    const at = pins.map(([key, label, kind]) => ({key, label, kind, b: a.byKey.get(key)})).filter(p => p.b && p.b.anchor);
+    if(!at.length){ host.hidden = true; return; }
+    const xs = at.map(p => p.b.anchor[0]), ys = at.map(p => p.b.anchor[1]);
+    const pad = 60, side = Math.max(Math.max(...xs) - Math.min(...xs) + 2 * pad, Math.max(...ys) - Math.min(...ys) + 2 * pad, 260);
+    /* Centred on the pins, kept inside the map where the map is big enough. */
+    const fit = (mid, size) => size > side ? Math.max(0, Math.min(mid - side / 2, size - side)) : mid - side / 2;
+    const x = fit((Math.min(...xs) + Math.max(...xs)) / 2, a.viewBox[2]), y = fit((Math.min(...ys) + Math.max(...ys)) / 2, a.viewBox[3]);
+    host.innerHTML = `<svg viewBox="${x.toFixed(1)} ${y.toFixed(1)} ${side.toFixed(1)} ${side.toFixed(1)}" aria-hidden="true"><image href="${attr(a.imageUrl)}" x="0" y="0" width="${a.viewBox[2]}" height="${a.viewBox[3]}"></image></svg>`
+      + at.map(p => `<span class="os-pin ${p.kind}" style="left:${((p.b.anchor[0] - x) / side * 100).toFixed(2)}%;top:${((p.b.anchor[1] - y) / side * 100).toFixed(2)}%"><b>${spEsc(p.label)}</b><i></i>${
+        p.kind === "new" ? `<em>${spEsc(p.b.address)}</em>` : ""}</span>`).join("");
+    host.setAttribute("role", "img");
+    host.setAttribute("aria-label", tt("gr.os.map.aria", "The stores and the new site on the city map"));
+  }).catch(() => { host.hidden = true; });
+}
+
+/* Step 4: break even. */
+function osBreakHtml(plan){
+  const b = osBuilding(plan.key), est = b && osEstimate(plan, b), mode = osMode(plan);
+  if(!b || !est) return `<p class="quiet os-gap">${tt("gr.os.be.nowhere", "Pick a location first.")}</p>`;
+  const inv = est.inv;
+  if(est.none) return `<div class="os-none">
+    <div><span class="os-lab">${tt("gr.os.inv.firm", "Installation firm")}</span><b>${fmt(inv.firm)}</b><small>${tt("gr.os.be.investment", "investment")}</small></div>
+    <div><span class="os-lab">${tt("gr.os.inv.self", "Self-installation")}</span><b>${fmt(inv.self)}</b><small>${tt("gr.os.be.investment", "investment")}</small></div>
+    <div><span class="os-lab">${tt("gr.os.strip.beLab", "Break even")}</span><b class="dim">${tt("gr.os.none.short", "No estimate")}</b><small>${est.none}</small></div></div>`;
+  const m = est.model, p = est.profit, other = mode === "firm" ? "self" : "firm";
+  const big = (key, alt) => `<div${alt ? ` class="alt"` : ""}><span class="os-lab">${key === "firm" ? tt("gr.os.inv.firm", "Installation firm") : tt("gr.os.inv.self", "Self-installation")}</span><b>${
+    p > 0 ? osRange(est.days[key]) : tt("gr.os.be.never", "not at this profit")}</b></div>`;
+  const tax = (osFacts().game || {}).tax || 0;
+  const t = osType(plan.type), own = osOwnRatio(plan.type), cann = osCannibal(plan.type, b.hood);
+  const row = (label, value, cls = "") => `<div class="os-site${cls}"><span><b>${label}</b></span><span class="v">${value}</span></div>`;
+  const mix = (m.mix || []).length ? m.mix.map(osCampaignName).join(", ") : tt("gr.os.be.mix.none", "none");
+  const detail = [
+    row(m.office ? tt("gr.os.be.fees", "Fees billed") : tt("gr.os.be.revenue", "Sales"), fmt(m.revenue)),
+    m.office ? "" : row(tt("gr.os.be.goods", "Goods, at import prices"), fmt(-m.cogs)),
+    row(tt("gr.os.be.wages", "Wages"), fmt(-m.wages)),
+    row(tt("gr.os.be.rent", "Rent"), fmt(-m.rent)),
+    row(tt("gr.os.be.marketing", "Marketing"), fmt(-m.marketing)),
+  ].join("");
+  const lines = [
+    `<p class="os-note">${tt("gr.os.be.range", "Between {lo} and {hi} a day if it is priced, stocked and staffed as planned.", {lo: fmt(p * OS_LOW), hi: fmt(p * OS_HIGH)})}</p>`,
+    tax ? `<p class="os-note">${tt("gr.os.be.tax", "After {n}% tax: {w} a day.", {n: tax, w: fmt(p * (1 - tax / 100))})}</p>` : "",
+    own ? `<p class="os-note">${tt("gr.os.be.own", {one: "Your {type} earns {pct}% of what these rules give its own building.",
+      other: "Your {n} {types} earn {pct}% of what these rules give their own buildings."},
+      {n: own.rows.length, type: gnLower(osTypeName(plan.type)), types: gnLower(osTypeName(plan.type)), pct: Math.round(own.ratio * 100)})}</p>` : "",
+    cann ? `<p class="os-note">${tt("gr.os.be.cannibal", {one: "Your shop in {hood} that sells {items} loses about {w} a day: a new seller moves demand down there too.",
+      other: "Your {n} shops in {hood} that sell {items} lose about {w} a day between them: a new seller moves demand down there too."},
+      {n: cann.shops, hood: hoodName(b.hood), items: cann.items.map(osItemName).join(", "), w: fmt(cann.loss)})}</p>` : "",
+  ].join("");
+  const assume = m.office
+    ? tt("gr.os.be.assumeOffice", "Open 24/7 with one person at a computer for every client an hour brings, the fee at the highest price every client in {hood} accepts, satisfaction {sat}, the best marketing: {mix}. Bills {n} hours a day.",
+      {hood: hoodName(b.hood), sat: osSatisfaction(plan.type), mix, n: num(Math.round(m.customers))})
+    : tt("gr.os.be.assume", "Open 24/7, the type's whole range at the highest price every customer in {hood} accepts, satisfaction {sat}, the best marketing: {mix}. Sold {units} units to {n} customers a day.",
+      {hood: hoodName(b.hood), sat: osSatisfaction(plan.type), mix, units: num(Math.round(m.lines.reduce((s, l) => s + l.units, 0))), n: num(Math.round(m.customers))});
+  return `<div class="os-be">
+  <div class="os-card"><div class="os-big">${big(mode)}${big(other, true)}</div>${osChart(est, mode)}</div>
+  <div class="os-card"><h3>${tt("gr.os.be.profit", "Expected profit a day")}</h3>
+    <div class="os-sites">${detail}<div class="os-site avg"><span><b>${tt("gr.os.be.estimate", "The game's rules")}</b><small>${
+      tt("gr.os.be.estimate.sub", "{hood}, {layout}, {cap} customers an hour at most", {hood: hoodName(b.hood), layout: b.layout || "", cap: osCap(b)})}</small></span><span class="v${p < 0 ? " neg" : ""}">${fmt(p)}</span></div></div>
+    ${lines}<p class="os-assume" data-tip="${attr(assume)}" tabindex="0">${tt("gr.os.be.assumeLab", "What the estimate assumes")}</p>
+  </div></div>
+  ${own ? osOwnHtml(plan, own) : ""}
+  ${osFinHtml(plan, est)}`;
+}
+const osCampaignName = id => ({smallinternet: tt("gr.os.mk.smallinternet", "Small internet"), mediuminternet: tt("gr.os.mk.mediuminternet", "Medium internet"),
+  largeinternet: tt("gr.os.mk.largeinternet", "Large internet"), smallbillboard: tt("gr.os.mk.smallbillboard", "Small billboard"),
+  mediumbillboard: tt("gr.os.mk.mediumbillboard", "Medium billboard"), largebillboard: tt("gr.os.mk.largebillboard", "Large billboard")})[id] || id;
+/* Your own shops of the type: what each really earns beside what the same
+   rules give its building. */
+function osOwnHtml(plan, own){
+  const byKey = new Map((D.businesses || []).map(b => [b.key, b]));
+  const top = Math.max(...own.rows.map(r => Math.max(r.actual, r.model)), 1);
+  const rows = own.rows.map(r => { const b = byKey.get(r.key) || {};
+    return `<div class="os-site"><span><b>${spEsc(b.address || r.key)}</b><small><span class="hood">${spEsc(HOOD_TAGS[r.hood] || "")}</span> ${spEsc(r.layout || "")}</small></span>
+      <span class="bar"><i style="width:${Math.max(2, r.actual / top * 100).toFixed(0)}%"></i></span><span class="v">${fmt(r.actual)}</span><span class="v os-dim">${Math.round(r.ratio * 100)}%</span></div>`; }).join("");
+  return `<div class="os-card os-ownc"><h3>${tt("gr.os.own.title", "Your {types} against the same rules", {types: gnLower(osTypeName(plan.type))})}</h3>
+    <p class="quiet">${tt("gr.os.own.note", "Profit a day over their last two weeks, goods at import prices, beside the rules' figure for each one's own building, hours and marketing.")}</p>
+    <div class="os-sites os-own">${rows}</div></div>`;
+}
+/* Cumulative profit from the opening against both investments, the range as
+   a band. */
+function osChart(est, mode){
+  const W = 560, H = 262, x0 = 58, y0 = 16, x1 = W - 16, y1 = H - 40, p = est.profit;
+  if(!(p > 0)) return `<p class="quiet">${tt("gr.os.be.noChart", "At this profit the store does not earn its investment back.")}</p>`;
+  const inv = est.inv, hi = Math.max(inv.firm, inv.self);
+  const dmax = Math.max(10, Math.ceil((hi / (p * OS_LOW)) * 1.15 / 5) * 5);
+  const vmax = p * OS_HIGH * dmax;
+  const X = d => x0 + (x1 - x0) * d / dmax, Y = v => y1 - (y1 - y0) * Math.min(v, vmax) / vmax;
+  const step = osNiceStep(vmax / 4), dstep = osNiceStep(dmax / 5);
+  const g = [];
+  for(let v = 0; v <= vmax + 1e-6; v += step) g.push(`<line class="grid" x1="${x0}" x2="${x1}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"></line><text x="${x0 - 8}" y="${(Y(v) + 3.5).toFixed(1)}" text-anchor="end">${money(v)}</text>`);
+  for(let d = 0; d <= dmax; d += dstep) g.push(`<text x="${X(d).toFixed(1)}" y="${y1 + 18}" text-anchor="middle">${d}</text>`);
+  const line = k => `M${X(0).toFixed(1)},${Y(0).toFixed(1)} L${X(dmax).toFixed(1)},${Y(p * k * dmax).toFixed(1)}`;
+  const band = `M${X(0).toFixed(1)},${Y(0).toFixed(1)} L${X(dmax).toFixed(1)},${Y(p * OS_HIGH * dmax).toFixed(1)} L${X(dmax).toFixed(1)},${Y(p * OS_LOW * dmax).toFixed(1)} Z`;
+  const mark = (key, cls) => { const v = inv[key], d = v / p;
+    return `<line class="${cls}" x1="${x0}" x2="${x1}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"></line><text class="lbl ${cls === "inv" ? "w" : "i"}" x="${x0 + 6}" y="${(Y(v) - 7).toFixed(1)}">${
+      key === "firm" ? tt("gr.os.inv.firm", "Installation firm") : tt("gr.os.inv.self", "Self-installation")} ${fmt(v)}</text>${
+      d <= dmax ? `<circle class="hit" cx="${X(d).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="5"></circle><text class="lbl" x="${(X(d) + 9).toFixed(1)}" y="${(Y(v) + 16).toFixed(1)}">${
+      tt("gr.os.be.day", "day {n}", {n: Math.ceil(d)})}</text>` : ""}`; };
+  return `<svg class="os-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${attr(tt("gr.os.be.chart", "Profit from the opening against the investment"))}">
+    ${g.join("")}<line class="ax" x1="${x0}" x2="${x1}" y1="${y1}" y2="${y1}"></line>
+    <path class="band" d="${band}"></path>${mark(mode, "inv")}${mark(mode === "firm" ? "self" : "firm", "inv2")}
+    <path class="line" d="${line(1)}"></path><text x="${x1}" y="${y1 + 34}" text-anchor="end">${tt("gr.os.be.axis", "days after opening")}</text></svg>`;
+}
+const osNiceStep = v => { const e = Math.pow(10, Math.floor(Math.log10(Math.max(v, 1)))); const f = v / e; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * e; };
+
+/* The financing panel: part of the investment borrowed, what that costs a
+   day against the expected profit, and break even with and without it. */
+function osFinHtml(plan, est){
+  const f = osFacts().finance || {}, banks = f.banks || [];
+  if(!banks.length) return "";
+  const fin = plan.finance || (plan.finance = {on: false, amount: 0, bank: null});
+  const on = !!fin.on;
+  const head = `<div class="os-finhead"><h3>${osIcon("bank")}${tt("gr.os.fin.title", "Financing")}</h3>
+    <label class="os-switch"><input type="checkbox" data-os-fin-on${on ? " checked" : ""}><span>${tt("gr.os.fin.on", "Borrow part of it")}</span></label></div>`;
+  if(!on) return `<div class="os-card os-fin" id="osFin">${head}<p class="quiet">${tt("gr.os.fin.off",
+    "A bank loan pays part of the investment now and costs interest every day until it is repaid. The game books the loan to the company, not to the store.")}</p></div>`;
+  const bank = banks.find(b => b.id === fin.bank) || banks.find(b => b.id === "VantanderBankSettings") || banks[0];
+  const lenders = banks.map(b => `<button type="button" class="${b.id === bank.id ? "on" : ""}" data-os-bank="${attr(b.id)}" aria-pressed="${b.id === bank.id}">${spEsc(b.name)} <b>${
+    tt("gr.os.fin.rate", "{r}% a year · {d} days", {r: num(Math.round(b.rate * (f.multiplier || 0) * 10) / 10), d: b.term})}</b></button>`).join("");
+  const mode = osMode(plan), inv = est.inv[mode];
+  const limit = Math.min(osLoanLimit(bank), Math.floor(inv));
+  const amount = Math.max(0, Math.min(limit, fin.amount || Math.round(inv / 2)));
+  return `<div class="os-card os-fin" id="osFin">${head}
+    <div class="os-finctl"><div class="os-fr"><span>${tt("gr.os.fin.lender", "Lender")}</span><nav class="os-seg">${lenders}</nav></div>
+    <div class="os-fr"><span>${tt("gr.os.fin.amount", "Amount")}</span><div class="os-amount"><label class="os-num">$<input type="number" min="0" max="${limit}" step="1000" value="${Math.round(amount)}" data-os-fin-amount aria-label="${attr(tt("gr.os.fin.amountAria", "Amount to borrow"))}"></label>
+      <input type="range" min="0" max="${limit}" step="${Math.max(500, osNiceStep(limit / 100))}" value="${Math.round(amount)}" data-os-fin-range aria-label="${attr(tt("gr.os.fin.amountAria", "Amount to borrow"))}">
+      <small>${tt("gr.os.fin.limit", "{bank} lends you up to {w} now", {bank: bank.name, w: fmt(osLoanLimit(bank))})}</small></div></div></div>
+    <div class="os-finfacts" id="osFinFacts">${osFinFacts(plan, est, bank, amount)}</div></div>`;
+}
+function osFinFacts(plan, est, bank, amount){
+  const f = osFacts().finance || {}, mode = osMode(plan), inv = est.inv[mode], p = est.profit;
+  const loan = osLoan(amount, bank);
+  const cell = (lab, value, sub) => `<div><span class="os-lab">${lab}</span><b>${value}</b><small>${sub}</small></div>`;
+  if(!loan) return cell(tt("gr.os.fin.upfront", "Cash upfront"), fmt(inv), tt("gr.os.fin.min", "a bank lends {w} at least", {w: fmt(f.minimum || 0)}));
+  const own = inv - amount, daily = loan.interest + loan.repay;
+  const without = osDays(inv, p), with_ = osLoanDays(own, p, loan);
+  const payoff = without != null && without < loan.days ? without * loan.interest : null;
+  const dayText = n => n == null ? tt("gr.os.be.never", "not at this profit") : tt("gr.os.days", {one: "{n} day", other: "{n} days"}, {n: num(n)});
+  return cell(tt("gr.os.fin.upfront", "Cash upfront"), fmt(own), tt("gr.os.fin.upfront.sub", "{w} borrowed", {w: fmt(amount)}))
+    + cell(tt("gr.os.fin.daily", "A day while it runs"), fmt(daily), tt("gr.os.fin.daily.sub", "{r} repaid + {i} interest, against {p} profit", {r: fmt(loan.repay), i: fmt(loan.interest), p: fmt(p)}))
+    + cell(tt("gr.os.fin.interest", "Interest"), fmt(loan.total), payoff != null ? tt("gr.os.fin.interest.early", "over {n} days; {w} if paid off at break even", {n: num(loan.days), w: fmt(payoff)})
+      : tt("gr.os.fin.interest.term", "over {n} days, flat on the amount borrowed", {n: num(loan.days)}))
+    + cell(tt("gr.os.fin.be", "Your own cash back"), dayText(with_), tt("gr.os.fin.be.sub", "{d} without the loan", {d: dayText(without)}));
+}
+/* Only the figures move while the amount is typed or dragged. */
+function osFinUpdate(amount){
+  const plan = osPlan(), b = plan && osBuilding(plan.key), est = b && osEstimate(plan, b);
+  if(!plan || !est || !est.inv) return;
+  const banks = (osFacts().finance || {}).banks || [];
+  const bank = banks.find(x => x.id === (plan.finance || {}).bank) || banks.find(x => x.id === "VantanderBankSettings") || banks[0];
+  const limit = Math.min(osLoanLimit(bank), Math.floor(est.inv[osMode(plan)]));
+  amount = Math.max(0, Math.min(limit, Math.round(+amount || 0)));
+  plan.finance.amount = amount;
+  osSave();
+  const facts = $("osFinFacts");
+  if(facts) facts.innerHTML = osFinFacts(plan, est, bank, amount);
+  const fin = $("osFin");
+  if(fin) fin.querySelectorAll("[data-os-fin-amount], [data-os-fin-range]").forEach(i => { if(document.activeElement !== i) i.value = amount; });
+}
+
+/* The whole view, drawn for the step on screen. The embedded finder is kept
+   between draws: it is built once and handed the plan's type again. */
+function drawOpenStore(){
+  const sec = $("secOpen");
+  if(!sec || !hasData()) return;
+  osLoad();
+  const F = osFacts(), plan = osPlan();
+  if(!OS_STEPS.slice(0, 4).includes(osStep) || !osStepReady(osStep, plan)) osStep = plan ? (osBuilding(plan.key) ? "investment" : "where") : "what";
+  $("osCtl").innerHTML = F.types ? osCtlHtml(plan) : "";
+  $("osStrip").innerHTML = plan && osStep !== "what" ? osStripHtml(plan) : "";
+  const where = osStep === "where" && !!plan;
+  $("osWhere").hidden = !where;
+  $("osBody").innerHTML = !F.types ? `<p class="quiet os-gap">${tt("gr.os.nodata", "This build carries no store rules, so there is nothing to plan with.")}</p>`
+    : osStep === "what" ? osWhatHtml() : osStep === "investment" ? osInvestHtml(plan) : osStep === "breakeven" ? osBreakHtml(plan) : "";
+  if(where) osShowFinder(plan);
+  if(osStep === "investment" && plan && osMode(plan) === "self") osPaintMini();
+  if(typeof wireTips === "function") wireTips();
+}
+function osGo(step){
+  const plan = osPlan();
+  if(!osStepReady(step, plan)) return;
+  osStep = step;
+  osSave();
+  drawOpenStore();
+  if(typeof settleScroll === "function") settleScroll($("secOpen"));
+}
+/* A new plan for a type, from a Demand cell, the grid of types or search. */
+function osStart(type, hood){
+  osLoad();
+  osNew(type, hood);
+  drawOpenStore();
+}
+/* A function, not once(): the helper is declared further down the script,
+   and this runs at its first call from wireAll(). */
+let osWired = false;
+function wireOpenStore(){
+  if(osWired) return;
+  osWired = true;
+  on("click", "[data-os-step]", el => osGo(el.dataset.osStep));
+  on("change", "[data-os-plan]", el => {
+    osCur = el.value || null;
+    const plan = osPlan();
+    osStep = plan ? plan.step : "what";
+    osSave(); drawOpenStore();
+  });
+  on("click", "[data-os-new]", (el, e) => { e.preventDefault(); osStart(el.dataset.osNew, el.dataset.osHood || null); if(typeof settleScroll === "function") settleScroll($("secOpen")); });
+  on("click", "[data-os-open]", (el, e) => { e.preventDefault(); osCur = el.dataset.osOpen; const plan = osPlan(); osStep = plan ? plan.step : "what"; osSave(); drawOpenStore(); });
+  on("click", "[data-os-drop]", (el, e) => {
+    e.preventDefault();
+    osPlans = osPlans.filter(p => p.id !== el.dataset.osDrop);
+    if(!osPlan()) osCur = null;
+    osSave(); drawOpenStore();
+  });
+  on("click", "[data-os-route]", (el, e) => { e.preventDefault(); openRoute(el.dataset.osRoute); });
+  on("click", "[data-os-mode]", el => { osSetMode(el.dataset.osMode); drawOpenStore(); });
+  on("change", "[data-os-fin-on]", el => { const plan = osPlan(); if(!plan) return; plan.finance = {...(plan.finance || {}), on: el.checked}; osSave(); drawOpenStore(); });
+  on("click", "[data-os-bank]", el => { const plan = osPlan(); if(!plan) return; plan.finance = {...(plan.finance || {}), bank: el.dataset.osBank}; osSave(); drawOpenStore(); });
+  on("input", "[data-os-fin-amount], [data-os-fin-range]", el => osFinUpdate(el.value));
+}
+
 /* --- plan a chain -----------------------------------------------------
    The recipes, the workstations and the prices come across from the save as
    they were read; every number is worked out in the browser, so a stepper is
@@ -32346,6 +33502,7 @@ const SUBS = {
                     navView("payroll", () => tt("nav.view.payroll", "Payroll"), "secPayroll")]},
   growth: {host:"pageGrowth", nav:"growthNav", key:"ba_dash_growth", start:"market",
            items:[navView("market", () => tt("nav.view.demand", "Demand"), "secMarket"),
+                  navView("open", () => tt("nav.view.open", "Open a store"), "secOpen"),
                   navView("plan", () => tt("nav.view.factory", "Plan a factory"), "secPlan")]},
 };
 const PAGE_KEY = "ba_dash_page";
@@ -32392,7 +33549,7 @@ const AREAS = [
   {id:"staffing", icon:"people", get label(){ return tt("nav.area.staffing", "Staffing"); },
    views:["schedules", "needs", "payroll"], start:"schedules"},
   {id:"expansion", icon:"growth", get label(){ return tt("nav.area.expansion", "Expansion"); },
-   views:["demand", "finder", "factory"], start:"demand"},
+   views:["demand", "finder", "open", "factory"], start:"demand"},
 ];
 const REFS = [
   {id:"map", icon:"map", newFeature:"map", get label(){ return tt("nav.ref.map", "City map"); }},
@@ -32454,6 +33611,12 @@ const ROUTES = {
     if(o.preset && typeof openFinder === "function") openFinder(o.preset, !!o.focus);
     else if(typeof showFinder === "function") showFinder(o.historyMode || "push");
     if(typeof cityMapPage !== "undefined" && cityMapPage) cityMapPage.ready.then(() => drawFinderCtx()); }},
+  /* A Demand cell's "Open a store here" starts a plan for its type and
+     neighbourhood (o.osType, o.osHood); any visit marks the view's New badge seen. */
+  "expansion/open": {host: ["growth", "open"], after(o){
+    featureDiscovery.visit("open-store");
+    if(o.osType && typeof osStart === "function" && hasData()) osStart(o.osType, o.osHood || null);
+  }},
   "expansion/factory": {host: ["growth", "plan"]},
   /* The map as the reader left it: with the finder on, that is Find a
      location, and the address says so (routeFor()). */
@@ -32473,7 +33636,7 @@ const HOST_ROUTES = {today: "overview", map: "map", wiki: "wiki",
   "supply/changes": "supply/changes", "supply/imports": "supply/imports", "supply/deliveries": "supply/deliveries",
   "supply/production": "supply/production", "supply/flow": "supply/flow",
   "staffing/schedules": "staffing/schedules", "staffing/needs": "staffing/needs", "staffing/payroll": "staffing/payroll",
-  "growth/market": "expansion/demand", "growth/plan": "expansion/factory"};
+  "growth/market": "expansion/demand", "growth/open": "expansion/open", "growth/plan": "expansion/factory"};
 const ROUTE_KEY = "ba_dash_route";
 /* The portfolio's view before Standards switched it to Operations. */
 let routeStdWas = null;
@@ -32510,6 +33673,7 @@ function routeViewLabel(id){
     case "staffing/payroll": return tt("nav.view.payroll", "Payroll");
     case "expansion/demand": return tt("nav.view.demand", "Demand");
     case "expansion/finder": return tt("nav.view.finder", "Find a location");
+    case "expansion/open": return tt("nav.view.open", "Open a store");
     case "expansion/factory": return tt("nav.view.factory", "Plan a factory");
     case "map": return tt("nav.ref.map", "City map");
     case "wiki": return tt("nav.ref.wiki2", "Wiki");
@@ -32660,7 +33824,8 @@ const PAGE_DRAWS = [
   ["today supply/changes supply/imports supply/deliveries supply/production supply/flow", () => drawSupplyStrip()],
   ["supply/changes", () => drawChangesView()], ["supply/imports", () => drawImportsView()], ["supply/deliveries", () => drawDeliveriesView()],
   ["supply/production", () => drawProductionView()], ["supply/flow", () => drawFlowView()], ["supply/flow", () => drawFlow()],
-  ["growth/market", () => drawMovers()], ["growth/market", () => drawMarket()], ["growth/plan", () => drawPlan()],  // changed for growth: no drawExpansion()
+  ["growth/market", () => drawMovers()], ["growth/market", () => drawMarket()], ["growth/open", () => drawOpenStore()],
+  ["growth/plan", () => drawPlan()],  // changed for growth: no drawExpansion()
   ["company/products", () => drawPriceShops()], ["company/products", () => drawProducts()],
   // A third element names a row other code marks stale on its own (hrStale(), nxSchedStale()).
   ["staffing/schedules", () => drawSchedules(), "schedules"], ["staffing/needs", () => drawNeeds()], ["staffing/needs", () => drawStaff(), "staff"],
@@ -33023,6 +34188,10 @@ function paintShell(){
   /* A place picked in the phone's drawer is where the reader is going. */
   sdDrawer(false);
 }
+/* A view that is new carries the New badge in its area's row until it is
+   opened (featureDiscovery); docs/contributing.md, "New feature badges". A var:
+   paintLocal() runs before this line on load, as viewTips below does. */
+var VIEW_NEW = {"expansion/open": "open-store"};
 function paintLocal(){
   const host = $("localNav");
   if(!host) return;
@@ -33035,9 +34204,12 @@ function paintLocal(){
   host.innerHTML = a.views.map(v => {
     const id = `${a.id}/${v}`, n = routeCount(id);
     const tip = viewTips[id];
+    const fresh = (VIEW_NEW || {})[id];
     return `<a href="#${id}" data-route="${id}"${id === r ? ` class="on" aria-current="page"` : ""}${tip ? ` data-tip="${attr(tip)}"` : ""}>${spEsc(routeViewLabel(id))}${
-      n ? `<small aria-label="${attr(tt("nav.local.count", {one: "{n} to do", other: "{n} to do"}, {n}))}">${n}</small>` : ""}</a>`;
+      n ? `<small aria-label="${attr(tt("nav.local.count", {one: "{n} to do", other: "{n} to do"}, {n}))}">${n}</small>` : ""}${
+      fresh ? `<span class="feature-new" data-new-feature="${fresh}" hidden>${tt("nav.new", "New")}</span>` : ""}</a>`;
   }).join("");
+  featureDiscovery.refresh();
   sdPlaceViews();
   ctlHoist();
 }
@@ -34655,6 +35827,10 @@ const SS_VIEWS = [
   {id: "market", get t(){ return tt("nav.search.market.title", "Market demand"); },
    get p(){ return tt("nav.search.market.line", "Expansion › Demand"); }, ic: "growth", syn: ["demand", "hype", "waves", "neighbourhood", "market"],
    go: () => openRoute("expansion/demand")},
+  {id: "open", get t(){ return tt("nav.search.open.title", "Open a store"); },
+   get p(){ return tt("nav.search.open.line", "Expansion › Open a store · investment and break even"); }, ic: "growth",
+   syn: ["new store", "new shop", "open a shop", "break even", "investment", "outfit", "installation firm", "loan", "second store"],
+   go: () => openRoute("expansion/open")},
   {id: "plan", get t(){ return tt("nav.search.plan.title", "Plan a factory"); },
    get p(){ return tt("nav.search.plan.line", "Expansion › Plan a factory"); }, ic: "growth", syn: ["new factory", "recipe plan", "expand", "plan a chain"],
    go: () => openRoute("expansion/factory")},
@@ -36034,18 +37210,20 @@ const wireHeat = once(() => {
     $$(`.heat .h[data-c="${CSS.escape(c.dataset.c)}"], .heat .r[data-r="${CSS.escape(c.dataset.r)}"]`).forEach(x => x.classList.add("hl"));
   });
   onLeave(".heat .cell", () => $$(".hl").forEach(x => x.classList.remove("hl")));
-  /* A cell opens the map with the finder on, this type chosen and only this
-     neighbourhood left standing; Enter and Space do what a click does. */
+  /* A cell asks what to do there (demCellPop()): open a store of this type
+     here, or find a location; Enter and Space do what a click does. */
   on("click", ".heat .cell", c => {
-    const go = finderPreset(c.dataset.slug, c.dataset.hood);
-    if(!go) return;
-    /* The cell's own question: its type and its neighbourhood go to the one
-       finder, and the way back returns to this cell (nxDem on Demand's
-       entry). */
-    const type = demTypeName(c.dataset.slug, c.dataset.hood);
-    demRemember({slug: c.dataset.slug, hood: c.dataset.hood, view: marketView});
-    openRoute("expansion/finder", {preset: go, focus: true, arrival: {what: tt("gr.arrive.cell", "Demand for {type} in {hood}",
-      {type, hood: hoodName(c.dataset.hood)}), pos: "", back: "expansion/demand", backLabel: tt("nav.view.demand", "Demand"), depth: 1}});
+    if(!finderPreset(c.dataset.slug, c.dataset.hood)) return;
+    if(demPopCell === c && demPop && !demPop.hidden){ demPopClose(true); return; }
+    demCellPop(c);
+  });
+  on("click", "#demCellPop [data-dem-go]", (el, e) => {
+    e.preventDefault();
+    const cell = demPopCell;
+    if(!cell) return;
+    const slug = cell.dataset.slug, hood = cell.dataset.hood;
+    demPopClose(false);
+    if(el.dataset.demGo === "open") demOpenStore(slug, hood); else demFindLocation(slug, hood);
   });
   on("keydown", ".heat .cell[role=button]", (c, e) => {
     if(e.key !== "Enter" && e.key !== " ") return;
@@ -36059,6 +37237,95 @@ const wireHeat = once(() => {
     reveal("secPlan");
   });
 });
+/* A cell's two ways on, the way back returning to it (nxDem on Demand's
+   entry): the finder on its type with only its neighbourhood left standing,
+   or a new plan in Expansion › Open a store. */
+function demFindLocation(slug, hood){
+  const go = finderPreset(slug, hood);
+  if(!go) return;
+  const type = demTypeName(slug, hood);
+  demRemember({slug, hood, view: marketView});
+  openRoute("expansion/finder", {preset: go, focus: true, arrival: {what: tt("gr.arrive.cell", "Demand for {type} in {hood}",
+    {type, hood: hoodName(hood)}), pos: "", back: "expansion/demand", backLabel: tt("nav.view.demand", "Demand"), depth: 1}});
+}
+function demOpenStore(slug, hood){
+  const type = demTypeName(slug, hood);
+  demRemember({slug, hood, view: marketView});
+  openRoute("expansion/open", {osType: slug, osHood: hood, arrival: {what: tt("gr.arrive.cell", "Demand for {type} in {hood}",
+    {type, hood: hoodName(hood)}), pos: "", back: "expansion/demand", backLabel: tt("nav.view.demand", "Demand"), depth: 1}});
+}
+/* The cell's popover: its demand, the sellers there and the buildings of its
+   kind to rent, then Open a store here (where Open a store knows the type)
+   and Find a location. One element at body level, placed against the cell,
+   the way #alertPop is: a section's paint containment would clip it. */
+let demPop = null, demPopCell = null;
+function demCellPop(cell){
+  const slug = cell.dataset.slug, hood = cell.dataset.hood, go = finderPreset(slug, hood);
+  if(!go) return;
+  if(!demPop){
+    demPop = document.createElement("div");
+    demPop.id = "demCellPop";
+    demPop.className = "os-pop";
+    demPop.setAttribute("role", "dialog");
+    demPop.tabIndex = -1;
+    demPop.hidden = true;
+    document.body.appendChild(demPop);
+    /* An outside press closes it; mousedown, so the click that follows lands
+       on whatever was pressed. */
+    document.addEventListener("mousedown", e => {
+      if(demPop.hidden || demPop.contains(e.target) || (demPopCell && demPopCell.contains(e.target))) return;
+      demPopClose(false);
+    });
+    document.addEventListener("keydown", e => { if(e.key === "Escape" && !demPop.hidden){ e.preventDefault(); demPopClose(true); } });
+    window.addEventListener("resize", () => demPopClose(false));
+    document.addEventListener("scroll", () => { if(!demPop.hidden) demPopPlace(); }, true);
+  }
+  if(demPopCell && demPopCell !== cell) demPopCell.setAttribute("aria-expanded", "false");
+  demPopCell = cell;
+  const M = D.market || {}, at = (M.hoods || []).indexOf(hood);
+  const row = [...(M.types || []), ...(M.offices || [])].find(r => r.slug === slug);
+  const c = row && at >= 0 ? row.cells[at] : null;
+  const rent = ((D.premises || {}).buildings || []).filter(b => b.type === go.cat && b.hood === hood && b.status === "vacant").length;
+  const type = demTypeName(slug, hood);
+  const plan = typeof osType === "function" && !!osType(slug);
+  const fact = (lab, v) => `<div><span class="os-lab">${lab}</span><b>${v}</b></div>`;
+  demPop.setAttribute("aria-label", tt("gr.pop.aria", "{type} in {hood}", {type, hood: hoodName(hood)}));
+  demPop.innerHTML = `<h4>${spEsc(tt("gr.pop.title", "{type} · {hood}", {type, hood: hoodName(hood)}))}</h4>
+    <div class="fx">${fact(tt("gr.pop.demand", "Demand"), c ? c.demand : "–")}${fact(tt("gr.pop.rivals", "Sellers"), c ? c.providers || 0 : "–")}${
+      fact(tt("gr.pop.rent", "To rent"), rent)}</div>
+    <div class="acts">${plan ? `<button type="button" class="os-cta" data-dem-go="open">${osIcon("store")}${tt("gr.pop.open", "Open a store here")}</button>` : ""}
+      <button type="button" class="os-btn" data-dem-go="find">${icon("pin")}${tt("gr.pop.find", "Find a location")}</button></div>`;
+  demPop.hidden = false;
+  cell.setAttribute("aria-expanded", "true");
+  if(typeof hideTip === "function") hideTip();
+  demPopPlace();
+  (demPop.querySelector("[data-dem-go]") || demPop).focus({preventScroll: true});
+}
+function demPopPlace(){
+  if(!demPop || demPop.hidden || !demPopCell) return;
+  if(!demPopCell.isConnected || !demPopCell.getClientRects().length){ demPopClose(false); return; }
+  const vw = document.documentElement.clientWidth || window.innerWidth;
+  const vh = document.documentElement.clientHeight || window.innerHeight;
+  const r = demPopCell.getBoundingClientRect(), w = demPop.offsetWidth, h = demPop.offsetHeight;
+  /* Under the cell, its arrow on the cell's middle; above it when the window
+     has no room below. */
+  let y = r.bottom + 10;
+  const up = y + h > vh - 12 && r.top - 10 - h >= 12;
+  if(up) y = r.top - 10 - h;
+  const x = Math.max(12, Math.min(r.left + r.width / 2 - w / 2, vw - w - 12));
+  demPop.classList.toggle("up", up);
+  demPop.style.left = `${x}px`;
+  demPop.style.top = `${Math.max(12, y)}px`;
+  demPop.style.setProperty("--arrow", `${Math.max(16, Math.min(w - 16, r.left + r.width / 2 - x))}px`);
+}
+/* `restore` hands focus back to the cell (Esc, or the cell clicked again). */
+function demPopClose(restore){
+  if(!demPop || demPop.hidden) return;
+  demPop.hidden = true;
+  const cell = demPopCell;
+  if(cell) cell.setAttribute("aria-expanded", "false");
+  if(restore && cell && cell.isConnected){ cell.focus({preventScroll: true}); if(typeof hideTip === "function") hideTip(); }
+}
 /* The finder preset a Growth cell opens: its type, the type's category and
    only its neighbourhood. A cell with no demand reading has no type to look
    for, and a board built before the premises payload has nowhere to send it. */
@@ -36109,8 +37376,8 @@ function demArrive(cell){
   if(!at.hasAttribute("tabindex")) at.setAttribute("tabindex", "-1");
   at.focus({preventScroll: true});
 }
-/* A cell that opens the finder is a button to the keyboard as well. */
-const cellGo = (slug, hood) => finderPreset(slug, hood) ? ` role="button" tabindex="0"` : "";
+/* A cell that opens its popover (the finder, a new store) is a button to the keyboard as well. */
+const cellGo = (slug, hood) => finderPreset(slug, hood) ? ` role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false"` : "";
 /* The finder's Demand figure comes back here: the By type view, the type's row
    scrolled to and ringed once, its cells with it. A type the grid has no row
    for lands on the grid itself. */
@@ -38325,7 +39592,7 @@ function wireAll(){
      not a business's page has been drawn in this visit. */
   wireRoster();
   wireFlow(); bindSupply();
-  wireHeat(); wirePlan();
+  wireHeat(); wirePlan(); wireOpenStore();
   wireReveal(); wireWrites(); wireStaff();
 }
 
