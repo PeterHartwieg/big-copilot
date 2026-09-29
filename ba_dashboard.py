@@ -860,6 +860,8 @@ JOB_DEMAND_PRIORITY = ("Nice to have", "Important", "Critical")
 # against payroll (hours logged this week) and against import delivery days.
 WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
+# --- the board's own thresholds, not read from the game ---------------------
+
 # Idle stock thresholds: enough weeks of cover, and enough units, to be worth saying.
 IDLE_WEEKS = 4.0
 IDLE_UNITS = 500
@@ -12262,11 +12264,12 @@ def _plan(
 # under the amount. Only groups whose worth carries money get a unit; the rest
 # are left empty because their worth is always None.
 # Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
-# needs: its group, emitted by note() in _alerts() or _finding() in a _*_notes
-# helper (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
+# needs: its group, emitted by note() in _alerts() or _finding() in a helper
+# such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
 # FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
 # ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
-# search words, if players have any. The checklist has the only-if tables.
+# search words, if players have any; its line under "What counts as a finding"
+# in docs/dashboard-reference.md. The checklist has the only-if tables.
 ALERT_UNITS = {
     "notrading": msg("f.unit.rent", "/day rent"),
     "vacant": msg("f.unit.rent", "/day rent"),
@@ -12377,11 +12380,12 @@ def _finding(
 
 
 # Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
-# needs: its group, emitted by note() in _alerts() or _finding() in a _*_notes
-# helper (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
+# needs: its group, emitted by note() in _alerts() or _finding() in a helper
+# such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
 # FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
 # ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
-# search words, if players have any. The checklist has the only-if tables.
+# search words, if players have any; its line under "What counts as a finding"
+# in docs/dashboard-reference.md. The checklist has the only-if tables.
 def _alerts(
     businesses: list,
     supply: dict,
@@ -20409,11 +20413,12 @@ function drawKpiLine(){
    site's own page. A finding is a headline; the link is the rest of the
    story. */
 /* Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
-   needs: its group, emitted by note() in _alerts() or _finding() in a _*_notes
-   helper (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
+   needs: its group, emitted by note() in _alerts() or _finding() in a helper
+   such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
    FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
    ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
-   search words, if players have any. The checklist has the only-if tables. */
+   search words, if players have any; its line under "What counts as a finding"
+   in docs/dashboard-reference.md. The checklist has the only-if tables. */
 const ALERT_LINKS = {
   /* A supply finding lands on its Supply view (the route's), on its row, lit:
      an import on Imports (a depot's and a factory's own contract alike), a
@@ -20635,11 +20640,12 @@ const ALERT_LANDS_ON_ROW = new Set(["wholesale", "topup", "outruns", "unplanned"
    drops any block the open kind does not draw, so a row never lights nothing
    and scrolls nowhere. */
 /* Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
-   needs: its group, emitted by note() in _alerts() or _finding() in a _*_notes
-   helper (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
+   needs: its group, emitted by note() in _alerts() or _finding() in a helper
+   such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
    FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
    ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
-   search words, if players have any. The checklist has the only-if tables. */
+   search words, if players have any; its line under "What counts as a finding"
+   in docs/dashboard-reference.md. The checklist has the only-if tables. */
 const ALERT_EVIDENCE = {
   notrading: {block: "tiles"},
   loss: {block: "tiles"},
@@ -20909,11 +20915,12 @@ const kindOff = a => alertGroupPrefs[a.group] === false;
    the landing inside it, and docs/ui-route-migration.md names each one. `pick`
    decides between two homes by the finding's own site or sentence. */
 /* Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
-   needs: its group, emitted by note() in _alerts() or _finding() in a _*_notes
-   helper (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
+   needs: its group, emitted by note() in _alerts() or _finding() in a helper
+   such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
    FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
    ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
-   search words, if players have any. The checklist has the only-if tables. */
+   search words, if players have any; its line under "What counts as a finding"
+   in docs/dashboard-reference.md. The checklist has the only-if tables. */
 const FINDING_ROUTES = {
   notrading: {route: "businesses/results", act: "readiness"},
   vacant: {route: "businesses/results", act: "costs"},
@@ -32570,11 +32577,12 @@ window.addEventListener("hashchange", () => {
    and _idle_notes() in the Python build. Kept in sync by hand since the two
    sides only share the group key, not a label. */
 /* Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
-   needs: its group, emitted by note() in _alerts() or _finding() in a _*_notes
-   helper (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
+   needs: its group, emitted by note() in _alerts() or _finding() in a helper
+   such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
    FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
    ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
-   search words, if players have any. The checklist has the only-if tables. */
+   search words, if players have any; its line under "What counts as a finding"
+   in docs/dashboard-reference.md. The checklist has the only-if tables. */
 const ALERT_GROUPS = [
   /* Each label and note is read in the UI language every time. */
   {id:"notrading", get label(){ return tt("nav.kind.notrading.label", "Not trading yet"); }, get note(){ return tt("nav.kind.notrading.note", "Temporarily closed, or open but with no staff, no prices, no stock or no trading day"); }, on:true},
@@ -33787,11 +33795,12 @@ const SS_VIEWS = [
 ];
 /* The words players use for a kind of finding. */
 /* Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
-   needs: its group, emitted by note() in _alerts() or _finding() in a _*_notes
-   helper (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
+   needs: its group, emitted by note() in _alerts() or _finding() in a helper
+   such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
    FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
    ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
-   search words, if players have any. The checklist has the only-if tables. */
+   search words, if players have any; its line under "What counts as a finding"
+   in docs/dashboard-reference.md. The checklist has the only-if tables. */
 const SS_KIND_SYN = {feed: ["fed", "inputs", "ingredients", "starved"], atcap: ["capacity", "full", "ceiling", "turned away"],
   idlestaff: ["overstaffed", "idle staff", "too many staff", "hire"], staff: ["unstaffed", "no staff", "staffing", "hire", "on shift"],
   jobdemand: ["demands", "unhappy staff", "quit", "hire"], companydemand: ["insurance", "health insurance", "hr manager"],

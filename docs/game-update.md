@@ -254,19 +254,23 @@ game, so a patch can change either group without anything failing.
   somebody is assigned to it, so the Staff page never proposes a hire the mod refuses
   (`no_skill`). It comes from two bundles: `defaultlocalgroup_assets_businesstypes_*`
   (`employeePrimarySkills`) and `defaultlocalgroup_assets_buildingtypes_*`
-  (`requiredBuildingSkills`, which puts Cleaning on a type, and the `allowtheft` tag, which
-  puts Security Guard on it). On a new build, re-read those fields for every type in the
+  (`requiredBuildingSkills`, which puts Cleaning on a type, or Delivery Driver where a type
+  requires one, which none does at build 3682; and the `allowtheft` tag, which puts Security
+  Guard on it). On a new build, re-read those fields for every type in the
   table and compare by eye. Its tests, in `tests/test_staff_hire.py`
   ("test_accepts_follows_the_game_s_assign_check" and
   "test_every_assign_table_type_is_one_the_board_knows"), pin three sites' results and that
   each type is one the board knows, not the game's values.
-- The shift rules under the "roster building" banner (`SHIFT_CAP` and the rest) come from
-  `BigAmbitions.dll`, not a bundle. Section 2 of `docs/staffing-assistant-scope.md` quotes
-  the source of each, and "Reading the game's code" below says how to read the IL.
-  `COVER_STATIONS`, the cleaning and security stations that get one person for every open
-  hour, is a choice of the board's, since the game stores no need for them (the same
-  document, "Cleaning and security: full opening-hour cover"). The comment above these
-  says "at VERIFIED_BUILD", so re-read the rules before bumping it (section 5).
+- Under the "roster building" banner, re-check `SHIFT_CAP` against `BigAmbitions.dll`
+  (`ScheduleHelper.ShiftLengthCap`, `ScheduleAutoFiller.MaxEmployeeHoursPerDay`), `FULL_TIME`
+  against the fulltime demand in `JOB_DEMANDS`, and `WEEKEND_WEEKDAYS` against the game's day
+  numbering and its freeweekends demand. Section 2 of `docs/staffing-assistant-scope.md`
+  quotes the game's rules, and "Reading the game's code" below says how to read the IL.
+  `SLACK_SHARE`, `MIN_SPLIT` and `COVER_STATIONS` are the board's own planning choices, not
+  the game's: `COVER_STATIONS` gives the cleaning and security stations one person for every
+  open hour because the game stores no need for them (the same document, "Cleaning and
+  security: full opening-hour cover"). The banner says these rules were read "at
+  VERIFIED_BUILD", so re-check them before bumping it in "5. Bump the build" below.
 
 ### Values measured from saves
 

@@ -937,8 +937,9 @@ view search cannot find. Each checklist below names the anchor to grep, what goe
 and the test that covers the table ("none" means no test reads it). A few tables are held
 to each other or to this document, so a missing row fails with its name: the finding-kind
 tables (`tests/alert_kinds.test.cjs`), the view tables (`tests/navigation.test.cjs`), and
-the payload table, the private build tokens and the finding groups
-(`tests/test_doc_registries.py`). The other covering tests check the entries that exist
+the payload table, the private build tokens, the finding groups, and the
+`Registry: "<heading>"` comment each table named in the two checklists below carries
+above its declaration (`tests/test_doc_registries.py`). The other covering tests check the entries that exist
 today, so extend them for the new entry. Rows marked
 *only if* apply to some entries, not all. All anchors are in `ba_dashboard.py` unless a row
 says otherwise; "board script" means the last `<script>` block of its `TEMPLATE`.
@@ -948,8 +949,9 @@ says otherwise; "board script" means the last `<script>` block of its `TEMPLATE`
 A kind needs its group (from `note()`, a `_finding()` call or `AMENITY_DEMANDS`), and
 rows in `ALERT_GROUPS`, `ALERT_LINKS`, `FINDING_ROUTES` and `ALERT_EVIDENCE` (or
 `NO_EVIDENCE` in `tests/alert_kinds.test.cjs`); `ALERT_UNITS` if its worth is money
-(else `NOT_MONEY` there); and `SS_KIND_SYN` if players have words for it. Every other
-row is *only if*. The same summary sits above each of those tables in
+(else `NOT_MONEY` there); `SS_KIND_SYN` if players have words for it; and its
+player-facing line under "What counts as a finding" in `docs/dashboard-reference.md`.
+Every other row is *only if*. The same summary sits above each of those tables in
 `ba_dashboard.py`.
 
 | Anchor | What goes in it | Test that covers it |
@@ -998,7 +1000,7 @@ all three.
 | `function showPage(` (board script) | *Only if* the page loads or draws when shown, as the Map does | none |
 | `const SB_VIEWS =`, `const SB_SEC =` (board script) | *Only for* a new Supply view: its section, keyed by the view id. Also its `supply` item in `SUBS`, its route in `ROUTES` and `HOST_ROUTES`, its drawer in `drawSupplyView()`'s dispatch map (a missing view draws Changes) and its `PAGE_DRAWS` row; `sbViewOf()`, which puts a kind of change on a view, and the view-keyed objects in `sbData()` (`byView`), `sbUpdateStrip()` (`sbLeft`), `sbMode` and `sbScope` | `tests/navigation.test.cjs`, "Supply is five task views …"; `tests/import_routes.test.cjs`; `tests/progress.test.cjs` |
 | `const PAGE_ALIASES =`, `const SEC_MOVED =` (board script) | *Only when* renaming or moving an old page or section | `tests/navigation.test.cjs` |
-| `const quietRender =` in `tests/search.test.cjs` | A new draw function, in the list the test stubs | that test |
+| `const quietRender =` in `tests/search.test.cjs` | *Only if* the view adds a draw function: the function, in the list the test stubs | that test |
 | `tests/milestones.test.cjs` | Nothing, but mind its four slices, which it runs in a VM: `const fmt =` to `const compact =`, `const attr =` to `/* Tooltips are plain text`, `const plural =` to `/* A rival per dot`, and `function drawGoals(){` to `/* Next moves: the Plan imports card`. A function declared inside one is harmless; a top-level statement there runs in the test, and moving or rewording a start or end anchor breaks the slice | that test |
 | The `later()` change in `const MOVED =` in `tests/calm_refresh.test.cjs` | *Only if* the view should prove it redraws on a refresh: the fixture save is `tests/es3_fixture.py`'s `link_company()`, whose lists are often empty (`"Loans": []`), so `later()` has to add the data the view shows | `tests/calm_refresh.test.cjs` |
 
