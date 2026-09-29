@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "980b25f8ed";</script>
-<link rel="stylesheet" href="community.css?v=980b25f8ed">
+<script>window.LEDGER_BUILD = "7b300cb99b";</script>
+<link rel="stylesheet" href="community.css?v=7b300cb99b">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=980b25f8ed">
+<link rel="stylesheet" href="fonts/fonts.css?v=7b300cb99b">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -5556,7 +5556,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"980b25f8ed","latest":{"pr":0,"date":"2026-09-29","title":"Staff a site in one step, and undo it in one","summary":"A shop's or an office's Staffing has Staff this site, and Staffing › Staff needs has Staff all sites. One review hires the best candidates, moves spare staff across, and writes the new week at every site it reaches, including sites that only need new hours; each site then says whether its week was written. Pick Hire and schedule, Hire only (assigned with no hours, as at a headquarters or a warehouse) or Schedule only; Quick hire works the same way. A shop you put on full cover 24/7 is staffed around the clock. With Big Copilot Link 0.5.0 it all goes to the game in one step, and one Undo takes back every hire, move and week, until the game's next day. Older versions of the mod still hire, then write the other weeks one by one, without undo."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"7b300cb99b","latest":{"pr":0,"date":"2026-09-29","title":"Staff a site in one step, and undo it in one","summary":"A shop's or an office's Staffing has Staff this site, and Staffing › Staff needs has Staff all sites. One review hires the best candidates, moves spare staff across, and writes the new week at every site it reaches, including sites that only need new hours; each site then says whether its week was written. Pick Hire and schedule, Hire only (assigned with no hours, as at a headquarters or a warehouse) or Schedule only; Quick hire works the same way. A shop you put on full cover 24/7 is staffed around the clock. With Big Copilot Link 0.5.0 it all goes to the game in one step, and one Undo takes back every hire, move and week, until the game's next day. Older versions of the mod still hire, then write the other weeks one by one, without undo."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -5644,8 +5644,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=980b25f8ed"></script>
-<script src="community.js?v=980b25f8ed"></script>
+<script src="app.js?v=7b300cb99b"></script>
+<script src="community.js?v=7b300cb99b"></script>
 
 <script>
 
@@ -16705,7 +16705,10 @@ function hrWeek(S, fill, away, arriving, lost){
     });
     const kept = parts.reduce((n, [f, t]) => n + t - f, 0);
     if(lost && kept < s.t - s.f) lost.hours = (lost.hours || 0) + (s.t - s.f - kept);
-    parts.forEach(([f, t]) => put(s.d, f, t, who.id, st.id));
+    /* An entry the game holds past the grid's 12 hours (an older build could
+       leave one) goes back as the same hours in pieces of 12 at most: the
+       write replaces the week whole, and the grid refuses a longer entry. */
+    parts.forEach(([f, t]) => { for(let a = f; a < t; a += GW_CAP) put(s.d, a, Math.min(t, a + GW_CAP), who.id, st.id); });
   };
   const now = (row.current || {}).list || [];
   if(S.site.kind === "shop"){
@@ -16743,9 +16746,16 @@ function hrDiffers(row, days, away){
   const want = days.flatMap(({d, shifts}) => shifts.map(s => line(d, s))).sort();
   const have = ((row.current || {}).list || []).map(s => ({d: s.d, f: s.f, t: s.t,
     employeeId: ((row.people || [])[s.p] || {}).id, itemInstanceId: ((row.stations || [])[s.s] || {}).id}))
-    .filter(x => !away.has(x.employeeId)).map(x => line(x.d, x)).sort();
+    .filter(x => !away.has(x.employeeId))
+    /* Cut as hrWeek() sends an entry longer than the grid takes, so the cut alone is no change. */
+    .flatMap(x => { const out = []; for(let a = x.f; a < x.t; a += GW_CAP) out.push(line(x.d, Object.assign({}, x, {f: a, t: Math.min(x.t, a + GW_CAP)}))); return out; })
+    .sort();
   return want.length !== have.length || want.some((x, i) => x !== have[i]);
 }
+/* Whether the game's grid takes every entry of a week as it is: whole hours
+   within the day, 12 at most (ScheduleWrite's bad_hours). */
+const hrSendable = days => days.every(({shifts}) => shifts.every(s => Number.isInteger(s.f) && Number.isInteger(s.t)
+  && s.f >= 0 && s.f < s.t && s.t <= 24 && s.t - s.f <= 12));
 /* One planned site's week in the action: {days, lost, changes}. An office
    nobody arrives at keeps its own additive write (gwRosterWeek(): every entry
    as it stands, the office default added where computer and person are free),
@@ -16842,8 +16852,11 @@ function hrRequest(m, o = {}){
     if(!at && !wk.changes) return;
     const expect = S.b && typeof S.b.shiftPrint === "string" ? S.b.shiftPrint : null;
     /* A week this board cannot compare with the game's is not written unless
-       somebody arrives there (and then the review asks for a new read). */
-    if(!at && expect === null) return;
+       somebody arrives there (and then the review asks for a new read); nor
+       one that keeps an entry the game's grid refuses (longer than 12 hours,
+       as an older build could leave): the call is all or nothing, and a
+       site nobody arrives at is not worth refusing the rest for. */
+    if(!at && (expect === null || !hrSendable(wk.days))) return;
     const entry = {address, expect, openAllHours: !!(S.row && S.row.full), days: wk.days};
     const own = touch(S);
     own.lost = wk.lost;

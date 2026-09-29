@@ -1993,3 +1993,22 @@ test('full cover picked on a shop: the Staff page hires into its 24/7 week, and 
   // Every other site keeps its hours.
   assert.ok(body.sites.filter(s => s.address.number !== 10).every(s => s.openAllHours === false));
 });
+
+test('an entry the game holds past 12 hours goes back as the same hours in pieces the grid takes, and is no change on its own', async (t) => {
+  const d = JSON.parse(payload);
+  // Works: Dee drives 0 to 16 on Tuesday, as an older build could leave it.
+  const fac = d.factoryStaffing.cap[0];
+  fac.stations.push({id: 'VAN-1', name: null, skill: null});
+  fac.people.push({id: 'DRV1', name: 'Dee Driver'});
+  fac.current = {shifts: 2, fragments: 0, list: [{d: 1, s: 0, f: 0, t: 12, p: 0}, {d: 2, s: 1, f: 0, t: 16, p: 1}]};
+  const page = await board(t, {data: JSON.stringify(d), link: ONE});
+  const works = (await request(page)).sites.find(s => s.address.number === 3);
+  assert.deepEqual(works.days.find(x => x.d === 2).shifts.filter(s => s.employeeId === 'DRV1'),
+    [{f: 0, t: 12, employeeId: 'DRV1', itemInstanceId: 'VAN-1'}, {f: 12, t: 16, employeeId: 'DRV1', itemInstanceId: 'VAN-1'}]);
+  // Its week with nobody hired: the same as the game's, entry for entry but the cut.
+  const same = await page.evaluate(k => {
+    const S = hrModel().sites.find(x => x.key === k);
+    return hrDiffers(S.row, hrWeek(S, [], new Set(), new Set(), {hours: 0}), new Set());
+  }, F);
+  assert.equal(same, false, 'Fay on Monday and Dee as she is: the cut alone is no change');
+});

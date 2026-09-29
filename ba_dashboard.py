@@ -28895,7 +28895,10 @@ function hrWeek(S, fill, away, arriving, lost){
     });
     const kept = parts.reduce((n, [f, t]) => n + t - f, 0);
     if(lost && kept < s.t - s.f) lost.hours = (lost.hours || 0) + (s.t - s.f - kept);
-    parts.forEach(([f, t]) => put(s.d, f, t, who.id, st.id));
+    /* An entry the game holds past the grid's 12 hours (an older build could
+       leave one) goes back as the same hours in pieces of 12 at most: the
+       write replaces the week whole, and the grid refuses a longer entry. */
+    parts.forEach(([f, t]) => { for(let a = f; a < t; a += GW_CAP) put(s.d, a, Math.min(t, a + GW_CAP), who.id, st.id); });
   };
   const now = (row.current || {}).list || [];
   if(S.site.kind === "shop"){
@@ -28933,9 +28936,16 @@ function hrDiffers(row, days, away){
   const want = days.flatMap(({d, shifts}) => shifts.map(s => line(d, s))).sort();
   const have = ((row.current || {}).list || []).map(s => ({d: s.d, f: s.f, t: s.t,
     employeeId: ((row.people || [])[s.p] || {}).id, itemInstanceId: ((row.stations || [])[s.s] || {}).id}))
-    .filter(x => !away.has(x.employeeId)).map(x => line(x.d, x)).sort();
+    .filter(x => !away.has(x.employeeId))
+    /* Cut as hrWeek() sends an entry longer than the grid takes, so the cut alone is no change. */
+    .flatMap(x => { const out = []; for(let a = x.f; a < x.t; a += GW_CAP) out.push(line(x.d, Object.assign({}, x, {f: a, t: Math.min(x.t, a + GW_CAP)}))); return out; })
+    .sort();
   return want.length !== have.length || want.some((x, i) => x !== have[i]);
 }
+/* Whether the game's grid takes every entry of a week as it is: whole hours
+   within the day, 12 at most (ScheduleWrite's bad_hours). */
+const hrSendable = days => days.every(({shifts}) => shifts.every(s => Number.isInteger(s.f) && Number.isInteger(s.t)
+  && s.f >= 0 && s.f < s.t && s.t <= 24 && s.t - s.f <= 12));
 /* One planned site's week in the action: {days, lost, changes}. An office
    nobody arrives at keeps its own additive write (gwRosterWeek(): every entry
    as it stands, the office default added where computer and person are free),
@@ -29032,8 +29042,11 @@ function hrRequest(m, o = {}){
     if(!at && !wk.changes) return;
     const expect = S.b && typeof S.b.shiftPrint === "string" ? S.b.shiftPrint : null;
     /* A week this board cannot compare with the game's is not written unless
-       somebody arrives there (and then the review asks for a new read). */
-    if(!at && expect === null) return;
+       somebody arrives there (and then the review asks for a new read); nor
+       one that keeps an entry the game's grid refuses (longer than 12 hours,
+       as an older build could leave): the call is all or nothing, and a
+       site nobody arrives at is not worth refusing the rest for. */
+    if(!at && (expect === null || !hrSendable(wk.days))) return;
     const entry = {address, expect, openAllHours: !!(S.row && S.row.full), days: wk.days};
     const own = touch(S);
     own.lost = wk.lost;
