@@ -3406,7 +3406,7 @@
  "sp.roster.failed": "Plan nicht verfügbar",
  "sp.roster.failed.why": "Dienstplan oder Stationen dieses Standorts ließen sich nicht lesen, also wird keine Woche vorgeschlagen. Sonst ist nichts auf dem Board betroffen.",
  "sp.roster.none": "Nichts einzuplanen",
- "sp.roster.none.why": "Eine Woche wird aus den bereits bedienten Stunden dieses Standorts geschnitten, und hier gibt es keine Reinigungs- oder Sicherheitsstation, die solange zu decken wäre. Die eigene Ankunftsgrenze des Spiels überschätzt einen Laden wie diesen um das Vierfache, also wird daraus nichts vorgeschlagen.",
+ "sp.roster.none.why": "Eine Woche wird aus den bereits bedienten Stunden dieses Standorts geschnitten, und hier gibt es keine Reinigungs- oder Sicherheitsstation, die solange zu decken wäre. Die eigene Ankunftsgrenze des Spiels zählt alle, die hereinkommen könnten, nicht die Kunden, die ein Laden wie dieser bedient, also wird daraus nichts vorgeschlagen.",
  "sp.roster.title": "Personal",
  "sp.roster.why.demand": "Eine Woche zum Übertragen in BizMan › Zeitplan, Tag für Tag.",
  "sp.roster.why.entries": "Ein Eintrag ist eine Person an einer Station für einen Stundenblock. Niemand bekommt mehr als die 12 Stunden am Tag, die das Spiel erlaubt, und niemand wird in ein Zeitfenster gelegt, das er freihalten wollte. Hak einen Eintrag ab, sobald er im Spiel ist. Die Haken bleiben in diesem Browser und ändern nichts am Spielstand.",
