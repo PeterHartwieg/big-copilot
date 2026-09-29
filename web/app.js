@@ -1207,6 +1207,11 @@
   // that has since answered in another schema version takes none from here.
   const linkWrites = () => (linkUrl && linkHealth && linkSpeaks() && Array.isArray(linkHealth.writes)
     ? linkHealth.writes.slice() : []);
+  // What those kinds can do beyond their first contract (mod 0.5.0: the hire
+  // call's reschedule-only weeks and its undo); a mod before it lists none.
+  // Only strings: a token this page does not know is passed on and ignored.
+  const linkFeatures = () => (linkUrl && linkHealth && linkSpeaks() && Array.isArray(linkHealth.features)
+    ? linkHealth.features.filter((f) => typeof f === "string") : []);
 
   // What a write or an ask is bound to: the mod address, the source, and the
   // character and company it started with. Any of them moving ends it before
@@ -2318,7 +2323,7 @@
     // health (the import lock window), or null when the board is not linked.
     // `stamp`: the stamp of the bytes behind the board on screen; `source`:
     // which choice of source the board is from, new with each.
-    link: () => (linkUrl && linkHealth ? {writes: linkWrites(), character: linkHealth.character || "",
+    link: () => (linkUrl && linkHealth ? {writes: linkWrites(), features: linkFeatures(), character: linkHealth.character || "",
       company: linkHealth.company || "", day: linkHealth.day, hour: linkHealth.hour, minute: linkHealth.minute,
       mod: typeof linkHealth.modVersion === "string" ? linkHealth.modVersion : "",
       approved: !!approvalToken(linkUrl), stamp: lastLinkStamp, source: sourceGen} : null),

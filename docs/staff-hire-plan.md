@@ -29,7 +29,8 @@ Peter's (25 Sep 2026):
 - The best people go to sites in list order.
 - Candidates in a drawer under each role (canvas option A). Option B's table is what the
   HQ/warehouse Candidates buttons open, and "Show all N who pass".
-- Apply = review (who goes where, their days, the added wage bill) + one confirm. No undo.
+- Apply = review (who goes where, their days, the added wage bill) + one confirm. No undo
+  (until 29 September 2026: with mod 0.5.0 the whole call has one undo, section 3.5).
 - Old Payroll content stays at the bottom of the page.
 
 Designer defaults kept: the working state is an indeterminate bar; the not-linked page is fully
@@ -218,7 +219,8 @@ Where the build differs from or adds to 2.1-2.4; the board worker reads these to
 
 - **Every open hour is staffed, never an hour more** (Peter, 26 September 2026: "Staff
   the hours it's open, never change opening"). The Staff page never uses full cover and
-  every hire request sends `openAllHours: false`. Every shop that full cover is offered at
+  every hire request sends `openAllHours: false` (since 29 September 2026: except where the
+  player put the shop on full cover, section 3.5). Every shop that full cover is offered at
   and that opens some hour gets `openCover` (`_open_need()`), placed beside full cover
   with its bench draws recorded like full cover's (`_bench_claimed()` reads it too):
   without complete data, the demand curve with every open hour whose basis is `none`
@@ -396,6 +398,44 @@ shop (demand and full), a factory, an office, an HQ assign-only, and a move with
 rewritten; the review dialog from a dry-run answer; partial, refused and not-linked states;
 Review disabled without `"hire"` in `writes`; phone width without sideways scroll; calm refresh
 does not redraw Staff while hidden. Plus the moved Payroll anchors.
+
+### 3.5 One action, undone in one step (29 September 2026)
+
+Peter's decisions of 28 September 2026 (research/staffing-revisit-2026-09-28/brief-3-one-action.md
+in the main checkout). What changed on the board, over 3.2 to 3.4 and 2.4b:
+
+- **One plan choice.** A shop the player put on full cover (24/7) on its Staffing block is
+  hired into its full-cover plan (`hiring.sites[].plans.full`, which `_hiring()` now
+  publishes beside `demand` and `open`), and its entry sends `openAllHours: true`; every
+  other entry sends `false`, so the 26 September rule "Staff writes never open a shop" holds
+  everywhere else. The site block, the Staff page, "Staff with no hours" and the action all
+  read `spPlanOf()` (`hrVariant()` maps it to the variant).
+- **Entry points.** "Staff this site" in a shop's or an office's Staffing block
+  (`gwRosterButtons()`, where the Staff page's plan hires or reassigns somebody into the site;
+  it replaces the "Add N people … MyEmployees" step in linked mode), "Staff all sites" on the
+  Staff page (the order panel's button, which also counts the weeks it writes), and Quick hire.
+  All three open one review (`hrReview(o)`, `o.scope` `all`, `site` or `quick`).
+- **What it does**, picked at the top of the review (pills, `data-hr-mode`), the confirm's verb
+  following: **Hire and schedule** (the hires and reassigns, and the new week of every site
+  the call reaches and, in scope, every planned site whose week is not its plan's yet,
+  reschedule-only sites included; a move's source only where its week changes by more than
+  the mover's entries), **Hire only** (every site assign-only, no hours) and **Schedule only**
+  (the weeks alone). Only the ones that would do something are offered; the first is the
+  default, so a headquarters or a warehouse (no plan) gets hire only. A hire that would join a
+  written site with no hours (a pick over the plan, a Quick hire past its open weeks) is said,
+  pointing at Hire only.
+- **The weeks** are `hrRequest()`'s: a site's plan week (`hrWeek()`) with its hires and
+  reassigns on their weeks; an office nobody arrives at keeps its additive write
+  (`gwRosterWeek()`). Quick hire now writes its site's plan week too, with the hires on
+  their plan weeks, instead of adding to the week as it stands.
+- **One call, one undo** with mod 0.5.0 (`/health` `features` `hire.reschedule` and
+  `hire.undo`, docs/game-link-api.md): the reschedule-only sites ride in the hire call and the
+  dialog offers Undo, which `POST /write/undo {"kind": "hire"}` takes back whole until the
+  game's next day. With 0.3.x/0.4.x the call carries the hires, the reassigns, their sites and
+  the sources that change, and the other weeks follow as `/write/schedule` calls one by one
+  (`hrChain()`), each site saying done or why not; nothing can be undone.
+- **Done and failed per site**: once applied, each site in the review says "week written",
+  "assigned", "writing the week…" or why its week was not written.
 
 ## 4. Wire contract: `POST /write/hire`
 

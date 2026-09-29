@@ -1173,7 +1173,142 @@
     "new": false,
     "noHours": true,
     "planned": true,
-    "plans": {},
+    "plans": {
+     "full": {
+      "bench": [],
+      "fewer": [],
+      "hireWeeks": [
+       {
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 0,
+          "f": 0,
+          "shift": 0,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 2,
+          "f": 0,
+          "shift": 4,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 4,
+          "f": 0,
+          "shift": 8,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 6,
+          "f": 0,
+          "shift": 12,
+          "station": null,
+          "t": 12
+         }
+        ]
+       },
+       {
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 0,
+          "f": 12,
+          "shift": 1,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 2,
+          "f": 12,
+          "shift": 5,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 4,
+          "f": 12,
+          "shift": 9,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 6,
+          "f": 12,
+          "shift": 13,
+          "station": null,
+          "t": 24
+         }
+        ]
+       },
+       {
+        "days": 3,
+        "hours": 36,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 1,
+          "f": 0,
+          "shift": 2,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 3,
+          "f": 0,
+          "shift": 6,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 5,
+          "f": 0,
+          "shift": 10,
+          "station": null,
+          "t": 12
+         }
+        ]
+       },
+       {
+        "days": 3,
+        "hours": 36,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 1,
+          "f": 12,
+          "shift": 3,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 3,
+          "f": 12,
+          "shift": 7,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 5,
+          "f": 12,
+          "shift": 11,
+          "station": null,
+          "t": 24
+         }
+        ]
+       }
+      ],
+      "spare": [],
+      "spareSkills": {}
+     }
+    },
     "stations": {}
    },
    {
@@ -1201,7 +1336,142 @@
     "new": false,
     "noHours": true,
     "planned": true,
-    "plans": {},
+    "plans": {
+     "full": {
+      "bench": [],
+      "fewer": [],
+      "hireWeeks": [
+       {
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 0,
+          "f": 0,
+          "shift": 0,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 2,
+          "f": 0,
+          "shift": 4,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 4,
+          "f": 0,
+          "shift": 8,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 6,
+          "f": 0,
+          "shift": 12,
+          "station": null,
+          "t": 12
+         }
+        ]
+       },
+       {
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 0,
+          "f": 12,
+          "shift": 1,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 2,
+          "f": 12,
+          "shift": 5,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 4,
+          "f": 12,
+          "shift": 9,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 6,
+          "f": 12,
+          "shift": 13,
+          "station": null,
+          "t": 24
+         }
+        ]
+       },
+       {
+        "days": 3,
+        "hours": 36,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 1,
+          "f": 0,
+          "shift": 2,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 3,
+          "f": 0,
+          "shift": 6,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 5,
+          "f": 0,
+          "shift": 10,
+          "station": null,
+          "t": 12
+         }
+        ]
+       },
+       {
+        "days": 3,
+        "hours": 36,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 1,
+          "f": 12,
+          "shift": 3,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 3,
+          "f": 12,
+          "shift": 7,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 5,
+          "f": 12,
+          "shift": 11,
+          "station": null,
+          "t": 24
+         }
+        ]
+       }
+      ],
+      "spare": [],
+      "spareSkills": {}
+     }
+    },
     "stations": {}
    },
    {
@@ -1229,7 +1499,142 @@
     "new": true,
     "noHours": true,
     "planned": true,
-    "plans": {},
+    "plans": {
+     "full": {
+      "bench": [],
+      "fewer": [],
+      "hireWeeks": [
+       {
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 0,
+          "f": 0,
+          "shift": 0,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 2,
+          "f": 0,
+          "shift": 4,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 4,
+          "f": 0,
+          "shift": 8,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 6,
+          "f": 0,
+          "shift": 12,
+          "station": null,
+          "t": 12
+         }
+        ]
+       },
+       {
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 0,
+          "f": 12,
+          "shift": 1,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 2,
+          "f": 12,
+          "shift": 5,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 4,
+          "f": 12,
+          "shift": 9,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 6,
+          "f": 12,
+          "shift": 13,
+          "station": null,
+          "t": 24
+         }
+        ]
+       },
+       {
+        "days": 3,
+        "hours": 36,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 1,
+          "f": 0,
+          "shift": 2,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 3,
+          "f": 0,
+          "shift": 6,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 5,
+          "f": 0,
+          "shift": 10,
+          "station": null,
+          "t": 12
+         }
+        ]
+       },
+       {
+        "days": 3,
+        "hours": 36,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 1,
+          "f": 12,
+          "shift": 3,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 3,
+          "f": 12,
+          "shift": 7,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 5,
+          "f": 12,
+          "shift": 11,
+          "station": null,
+          "t": 24
+         }
+        ]
+       }
+      ],
+      "spare": [],
+      "spareSkills": {}
+     }
+    },
     "stations": {}
    },
    {
