@@ -8,6 +8,7 @@ and the arrivals each open hour starts from. The fixtures are synthetic: small
 hand-made rule and price tables, and tests/save_fixtures.py's trading company
 for the payload end to end. Never a real save.
 """
+import collections
 import json
 import math
 import os
@@ -160,6 +161,32 @@ class OutfitTests(unittest.TestCase):
         self.assertEqual(sorted((l["item"], l["group"]) for l in lines if l["group"] == "dem"),
                          [("ba:itemname_bag", "dem"), ("ba:itemname_bar", "dem"), ("ba:itemname_barbell", "dem"),
                           ("ba:itemname_trampoline", "dem")])
+
+
+class RequiredPlacedTests(unittest.TestCase):
+    def rows(self, placed, sqm=150):
+        return {r[0]: r[1:] for r in ba_dashboard.required_placed(collections.Counter(placed), SHOP, RULES, PRICES, sqm)}
+
+    def test_a_bare_shop_lacks_everything(self):
+        self.assertEqual(self.rows({}), {"anyprimaryproduct": [1, 0], "pointofsales": [1, 0],
+                                         "stackofshoppingbaskets": [1, 0], "sinks": [2, 0]})
+
+    def test_each_requirement_counts_its_items_by_name_or_tag(self):
+        got = self.rows({"ba:itemname_bigtill": 1, "ba:itemname_till": 2, "ba:itemname_baskets": 1,
+                         "ba:itemname_sink": 1, "ba:itemname_shelf": 3, "ba:itemname_speaker": 4})
+        self.assertEqual(got["pointofsales"], [1, 3])
+        self.assertEqual(got["stackofshoppingbaskets"], [1, 1])
+        self.assertEqual(got["sinks"], [2, 1])
+        self.assertEqual(got["anyprimaryproduct"], [1, 3])
+
+    def test_a_sink_is_needed_per_area_at_most_the_cap(self):
+        self.assertEqual(self.rows({}, 60)["sinks"], [1, 0])
+        self.assertEqual(self.rows({}, 900)["sinks"], [2, 0])
+        self.assertEqual(self.rows({}, None)["sinks"], [1, 0])
+
+    def test_a_fee_paid_in_game_has_no_row(self):
+        rules = {"types": {SHOP: {**RULES["types"][SHOP], "rq": [{"n": "paidlicensingfees", "lic": 1}]}}}
+        self.assertEqual(ba_dashboard.required_placed(collections.Counter(), SHOP, rules, PRICES, 100), [])
 
 
 class DemandTests(unittest.TestCase):
@@ -328,6 +355,18 @@ class PayloadTests(unittest.TestCase):
         for item, row in self.facts["market"].items():
             self.assertGreaterEqual(row["cost"], 0, item)
             self.assertEqual(row["opt"], optimal_providers(row["p"]))
+
+    def test_every_running_business_of_a_planned_type_reports_its_placed_furniture(self):
+        built = self.facts["built"]
+        json.dumps(built)
+        planned = set(self.facts["types"])
+        expected = {b["key"] for b in self.payload["businesses"] if b["typeSlug"] in planned and b["status"] != "vacant"}
+        self.assertEqual(set(built), expected)
+        for row in built.values():
+            self.assertGreaterEqual(row["placed"], 0)
+            for name, need, have in row["req"]:
+                self.assertGreaterEqual(need, 1)
+                self.assertGreaterEqual(have, 0)
 
     def test_a_players_own_shop_carries_what_the_model_needs_to_price_it(self):
         own = [row for rows in self.facts["own"].values() for row in rows]

@@ -12678,6 +12678,68 @@ def _copied_shelving(save: Save, reg: dict, type_slug: str, rules: dict) -> list
     return out
 
 
+def required_placed(placed: collections.Counter, type_slug: str, rules: dict, prices: dict, sqm) -> list:
+    """What a business of a type still lacks of its opening requirements.
+
+    `placed` counts the item names standing in it. Each row is [requirement
+    name, needed, placed]: a requirement is met by any item of its named set
+    or carrying its tag, one of them, or for a per-area one (sinks and toilet
+    stalls in an office) one per `sq` m², at most `mx`. The stock shelf every
+    shop needs (`any`) is met by a display for a product the type sells; a
+    fee paid in game (`lic`) is not furniture and has no row.
+    """
+    t = (rules.get("types") or {}).get(type_slug) or {}
+    furniture = rules.get("furniture") or {}
+    table = prices.get("items") or {}
+    sells = {p for p, _impact in t.get("i") or ()}
+    out = []
+    for req in t.get("rq") or ():
+        if req.get("lic"):
+            continue
+        if req.get("any"):
+            have = sum(n for name, n in placed.items() if sells & set((furniture.get(name) or {}).get("h") or ()))
+            out.append([req.get("n") or "", 1, have])
+            continue
+        if req.get("i"):
+            names = set(req["i"])
+        elif req.get("t"):
+            names = {n for n in placed if int((table.get(n) or {}).get("t") or 0) & req["t"]}
+        else:
+            continue
+        need = 1
+        if req.get("sq"):
+            need = max(1, min(math.ceil(float(sqm or 0) / req["sq"]), req.get("mx") or 1)) if sqm else 1
+        out.append([req.get("n") or "", need, sum(placed[n] for n in names if n in placed)])
+    return out
+
+
+def _placed_items(save: Save, reg: dict) -> collections.Counter:
+    """The furniture standing in a rented building, per item name."""
+    placed = collections.Counter()
+    for holder in save.items(reg.get("itemInstances")):
+        item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
+        if item and item.get("itemName"):
+            placed[item["itemName"]] += 1
+    return placed
+
+
+def _opened_stores(save: Save, regs: dict, businesses: list, types: dict, rules: dict, prices: dict) -> dict:
+    """{site key: {"placed", "req"}} for every business of a planned type: how
+    much furniture stands in it and which opening requirements it meets. The
+    checklist until opening reads it (Open a store, step 5)."""
+    out = {}
+    for b in businesses:
+        reg = regs.get(b.get("key"))
+        if reg is None or b.get("typeSlug") not in types or b.get("status") == "vacant":
+            continue
+        placed = _placed_items(save, reg)
+        out[b["key"]] = {
+            "placed": sum(placed.values()),
+            "req": required_placed(placed, b["typeSlug"], rules, prices, _building_row(reg).get("m")),
+        }
+    return out
+
+
 def _store_market(save: Save, rules: dict, items: set, mpm: float, agent: int) -> dict:
     """What each product meets in each neighbourhood today.
 
@@ -13026,6 +13088,7 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
         "vendors": {key: vendors[key] for key in _in_order(used_vendors) if key in vendors},
         "own": _own_shops(save, regs, businesses, grids, stmt_history, market, caps, day, models),
         "sales": _own_sales(save, regs, businesses, market, day),
+        "built": _opened_stores(save, regs, businesses, types, rules, prices),
         "campaigns": [list(c) for c in MARKETING_CAMPAIGNS],
         "finance": _finance_facts(save, daily, rules),
     }

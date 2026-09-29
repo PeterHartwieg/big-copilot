@@ -7354,6 +7354,48 @@
  },
  "officeStaffing": [],
  "openStore": {
+  "built": {
+   "ba:street_broadwaystreet#19": {
+    "placed": 3,
+    "req": [
+     [
+      "anyprimaryproduct",
+      1,
+      0
+     ],
+     [
+      "pointofsales",
+      1,
+      1
+     ],
+     [
+      "stackofshoppingbaskets",
+      1,
+      0
+     ]
+    ]
+   },
+   "ba:street_eighthstreet#5": {
+    "placed": 5,
+    "req": [
+     [
+      "anyprimaryproduct",
+      1,
+      0
+     ],
+     [
+      "pointofsales",
+      1,
+      1
+     ],
+     [
+      "stackofshoppingbaskets",
+      1,
+      0
+     ]
+    ]
+   }
+  },
   "campaigns": [
    [
     "smallinternet",
