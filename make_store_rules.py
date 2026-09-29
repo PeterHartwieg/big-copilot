@@ -34,6 +34,13 @@ Five bundles under <game>/Big Ambitions_Data/StreamingAssets/aa/StandaloneWindow
       minimum interior score
   defaultlocalgroup_assets_buildings_*.bundle
       the banks' loan terms (VantanderBankSettings, JensenCapitalSettings)
+  defaultlocalgroup_assets_vehicletypes_*.bundle
+      each VehicleType's price; a motor vehicle (maxFuel above 0) counts
+      towards the wealth a bank lends against (PlayerHelper.GetTotalAssetsWorth)
+  defaultlocalgroup_assets_prefabs_*.bundle
+      the gym machines' controllers (WorkoutMachineController, and the
+      treadmill's own), each naming its item and pointing at the
+      WorkoutExercise whose workoutType the gym's workout-variety demand counts
 
 Which furniture store sells which piece is not in any bundle. It is in the
 game's help text, which tools/build_wiki_data.py has already parsed into the
@@ -53,7 +60,9 @@ where noted):
      "furniture": {"<item>": {"c": customers per hour (omitted when 0),
                               "h": [products it holds], "x": [short tags],
                               "bt": [business types its tags name, no prefix],
-                              "m": [furniture it must be attached to],
+                              "m": [[furniture it must be attached to], ...], one
+                                    group per placement requirement: one of each group,
+                                    "wt": the WorkoutExercise.workoutType a gym machine trains,
                               "v": [vendor site keys]}},  (lists omitted when empty)
      "types": {"<business type>": {"b": building type, "c": 1 player can create,
                                    "i": [[item, impact], ...], "a": maxAmountPerProduct,
@@ -67,7 +76,8 @@ where noted):
                                    "mi": minimumInteriorScore}},
      "banks": {"<asset name>": {"r": annual interest %, "y": years, "x": max loan,
                                 "e": 1 emergency loan}},
-     "vendors": {"<site key>": {"n": name, "a": street label, "h": neighbourhood}}}
+     "vendors": {"<site key>": {"n": name, "a": street label, "h": neighbourhood}},
+     "vehicles": {"<vehicle type>": price}}  (motor vehicles only: what a bank counts as wealth)
 
 `products` holds every item a business type sells (the gifts and flowers are
 furniture too, and sit in both tables), every entrance fee, and every other
@@ -189,15 +199,19 @@ def _furniture(items: dict, placement: dict, by_type: dict, type_slugs: set) -> 
                        if tag.removeprefix("ba:itemtag_") in type_slugs)
         if kinds:
             row["bt"] = kinds
-        needs = set()
+        # Each placement requirement is a group of its own: a computer needs a
+        # desk and a chair, one of each, never the cheapest of all of them.
+        needs = []
         for ref in tree.get("furnitureRequirements") or []:
             req = placement.get(ref.get("m_PathID"))
             if req is None or ref.get("m_FileID"):
                 unresolved.add(str(ref))
                 continue
-            needs.update(_requirement_items(req, by_type))
+            group = _names(_requirement_items(req, by_type))
+            if group and group not in needs:
+                needs.append(group)
         if needs:
-            row["m"] = sorted(needs)
+            row["m"] = needs
         out[name] = row
     if unresolved:
         raise SystemExit(f"furniture requirements outside the items bundle: {sorted(unresolved)}")
@@ -318,6 +332,54 @@ def _banks(root: str) -> dict:
     return out
 
 
+def _vehicles(root: str) -> dict:
+    """{vehicle type: price} for the motor vehicles (maxFuel above 0), the ones
+    VehicleType.IsMotorVehicle counts as the player's assets."""
+    out = {}
+    for tree in _behaviours(_bundle(root, "defaultlocalgroup_assets_vehicletypes")):
+        name = tree.get("vehicleTypeName")
+        if name and float(tree.get("maxFuel") or 0) > 0:
+            out[name] = _price(tree.get("price"))
+    return out
+
+
+def _workout_types(root: str) -> dict:
+    """{item: workoutType} for every gym machine: its controller in the prefab
+    bundle names the item and points at the WorkoutExercise it trains."""
+    env = UnityPy.load(_bundle(root, "defaultlocalgroup_assets_prefabs"))
+    exercises, controllers = {}, []
+    for obj in env.objects:
+        if obj.type.name != "MonoBehaviour":
+            continue
+        try:
+            script = obj.read(check_read=False).m_Script.read().m_ClassName
+        except Exception:  # a component whose script this build cannot resolve
+            continue
+        if script == "WorkoutExercise":
+            exercises[obj.path_id] = int(obj.read_typetree()["workoutType"])
+        elif "Workout" in script or "Treadmill" in script:
+            controllers.append(obj.read_typetree())
+    def trains(value):
+        """The workout types a controller's fields point at, however nested."""
+        if isinstance(value, dict):
+            if value.get("m_PathID") in exercises:
+                yield exercises[value["m_PathID"]]
+            for inner in value.values():
+                yield from trains(inner)
+        elif isinstance(value, list):
+            for inner in value:
+                yield from trains(inner)
+
+    out = {}
+    for tree in controllers:
+        kinds = sorted(set(trains(tree)))
+        if tree.get("itemName") and len(kinds) == 1:
+            out[tree["itemName"]] = kinds[0]
+        elif tree.get("itemName") and kinds:
+            raise SystemExit(f"{tree['itemName']} trains {kinds}; the planner counts one type a machine")
+    return out
+
+
 def _vendors(furniture: dict) -> dict:
     """Fill each piece's "v" from the help text and return the vendor table."""
     with open(os.path.join(HERE, "web", "wiki-data.json"), encoding="utf-8") as fh:
@@ -378,6 +440,9 @@ def main() -> None:
 
     type_slugs = {t["businessTypeName"].removeprefix("ba:businesstype_") for t in types}
     furniture = _furniture(items, placement, by_type, type_slugs)
+    for item, kind in _workout_types(root).items():
+        if item in furniture:
+            furniture[item]["wt"] = kind
     vendors = _vendors(furniture)
     out = {
         "products": _products(items, types),
@@ -386,6 +451,7 @@ def main() -> None:
         "hoods": _hoods(root),
         "banks": _banks(root),
         "vendors": vendors,
+        "vehicles": _vehicles(root),
     }
     if not all(out.values()):
         raise SystemExit(
