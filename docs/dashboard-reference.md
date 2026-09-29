@@ -588,10 +588,14 @@ instead, one total per role — and a Security guard locker nobody staffs is rea
 rather than another entry, which is why `headcount` says which kind each line is. A hiring
 line counts people, not hours: four uncovered twelve-hour weekend entries are 48 hours but
 need two hires, because nobody may work two of them on the same day. It is the fewest
-people who can work those lines: the count is searched upwards from the least the hours
-and the busiest day allow, spreading the lines evenly over the hires at each count, so two
-registers open around the clock are seven people and not the eight a first-come fill
-needs, and never more than first fit in either order gave. The placer realises that count: a
+people who can work those lines, and the hires are planned as people: the week is placed
+again with that many placeholder hires in it, full time and nothing else asked of them,
+ranked after everybody the site has, the count searched upwards from the lines' hours
+over 50 until no line is left open. They go through the same swaps and the same settling
+as everybody, so a hire's week keeps the 12-hour day and the 50-hour week, and somebody
+here with hours above their own minimum hands a hire whole entries, or the tail of one,
+until the hire has a full week too; the count is never more than a first-come fill of the
+lines would take. The placer realises that count: a
 line the one-at-a-time fill leaves open is offered to somebody on the schedule who is free
 that day but full for the week, if they can hand one of their own entries to somebody else
 on the schedule with room for it, both moves tested against every rule, and the giver kept at
@@ -625,6 +629,18 @@ covering hours that would go uncovered if they were moved, so the honest line is
 site has nothing left to give them — a longer week here is not on offer, and neither is half
 a week at each of two shops.
 
+**Nobody already working at a site is left worse off.** Somebody may lose hours only if the
+new week still meets every schedule demand they hold (Peter, 28 September 2026): their
+hours band's minimum and an exact four- or five-day week (free weekends, hours kept free and
+no cleaning the plan never breaks). Somebody under their minimum now may stay there, not
+sink further; somebody with no hours demand may be cut to anything. Where the plan of the
+fewest people would break that — a shop with more full-timers than its demand needs — the
+week is planned again with everybody it protects on the schedule from the start, so they
+all come up to their minimum before anybody else is started; whoever is still worse off
+keeps the week they have at the site, as much of it as the rules allow, and the rest of the
+plan is placed around it. A cut that leaves them satisfied is made, and named in the Staff
+page's "fewer hours than now".
+
 **A week can change hands whole.** Which name the plan starts is decided before anybody has
 an hour, so a cheaper person with no hours demand can end up holding a week a full-timer
 beside them needed. Once the hours are settled that week is handed over entire where it fits
@@ -636,7 +652,8 @@ settle its *Critical*.
 **Somebody hired and not yet assigned anywhere belongs to one building.** The bench is
 offered to each site in turn, and the first site to give a bench member hours keeps them:
 they appear in that site's `bench`, count towards that site's `headcount.have`, and are
-gone from every later site's pool. One person's week is one week across the whole save, so
+gone from every later site's pool. Shops are planned first, then offices, then factories,
+so a factory takes on the unassigned factory workers nobody else used before it hires. One person's week is one week across the whole save, so
 nobody is scheduled at two shops in the same hour.
 
 **Who has to be added first.** `addPeople` says, per plan, who the plan counts on that does
