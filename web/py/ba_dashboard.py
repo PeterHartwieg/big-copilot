@@ -22342,7 +22342,7 @@ const spOpenNeed = row => {
 /* The open-hours plan as a row the block draws like any other, as spFullRow()
    does for full cover. It keeps the shop's own opening hours. */
 const spOpenRow = row => Object.assign({}, row, spOpenNeed(row), row.openCover,
-  {openCover: null, full: false, variant: "open"});
+  {openCover: null, full: false, variant: "open", openComplete: !!(row.openCover || {}).complete});
 const spShownRow = base => {
   const plan = spPlanOf(base);
   return plan === "full" ? spFullRow(base) : plan === "open" ? spOpenRow(base) : base;
@@ -22953,6 +22953,9 @@ function spRosterDay(c, wd, on){
     : bases.some(b => b === "scaled") ? "scaled" : "none";
   let out = `<div class="sp-grow sp-needrow${cells.length ? "" : " sp-unmeas"}"><span class="lab" tabindex="0" data-read="${attr(
     c.full ? tt("sp.need.full", "Every station, every hour: the demand test, {d:day}", {d: wd})
+      : c.row.variant === "open" && cells.length ? (c.row.openComplete
+        ? tt("sp.need.openall", "Every station, the hours the shop opens, {d:day}", {d: wd})
+        : tt("sp.need.open", "Stations the plan asks for, {d:day}: every station where no customers are read yet", {d: wd}))
       : cells.length ? tt("sp.need.asks", "Stations the measured hours ask for, {d:day}", {d: wd})
       /* The doors decide before the measurement does, here as everywhere else
          in the block: a shop shut on Sunday has not measured nothing, it has
@@ -29574,10 +29577,11 @@ function hrQuickPlan(sites, cands, used){
      to everyone not placed, those held back included, with no hours, as at
      a site with no plan. The picks are listed best first. */
   const placed = new Map();  // candidate id -> the plan week they take
+  const held = new Map();    // candidate id -> the demands no open week met
   for(const c of out.matches){
     if(placed.size >= q.n || !open.length) break;
     const fit = open.filter(x => hrFits(c, x));
-    if(!fit.length) continue;
+    if(!fit.length){ held.set(c.id, [...new Set(open.flatMap(x => hrFails(c, x)))]); continue; }
     const wk = fit.find(x => !hrDeskMiss(c.demands, S, x.w).length) || fit[0];
     open.splice(open.indexOf(wk), 1);
     placed.set(c.id, wk);
@@ -29587,7 +29591,8 @@ function hrQuickPlan(sites, cands, used){
     const wk = placed.get(c.id) || null;
     if(wk && hold){ wk.who = {type: "quick", c}; out.held++; }
     if(hold) used.set(c.id, S);
-    return {c, w: wk ? wk.w : null, misfit: []};
+    /* Held back and placed past the weeks anyway: `nofit` names why. */
+    return Object.assign({c, w: wk ? wk.w : null, misfit: []}, !wk && held.has(c.id) ? {nofit: held.get(c.id)} : {});
   });
   out.short = Math.max(0, q.n - out.picks.length);
   return out;
@@ -29654,6 +29659,11 @@ function hrQuickRequest(Q){
 }
 /* A pick whose kept week breaks one of their schedule demands, in orange. */
 const hrQuickMisfit = misfit => misfit.length ? `<small class="warn">${tt("co.hire.misfit", "hours break {demands}", {demands: misfit.map(hrName).join(", ")})}</small>` : "";
+/* The note beside a pick: a match held back from the plan's weeks names the
+   demands none of them met; anyone else, what their kept week breaks. */
+const hrQuickNote = (p, misfit) => p.nofit
+  ? `<small class="warn">${tt("co.hire.quick.nofit", "no open week fits {demands}", {demands: p.nofit.map(hrName).join(", ")})}</small>`
+  : hrQuickMisfit(misfit);
 function hrQuickHtml(m){
   const Q = hrQuickModel(m), q = Q.q;
   const l = gwLink(), off = !l || !(l.writes || []).includes("hire");
@@ -29664,10 +29674,10 @@ function hrQuickHtml(m){
   const match = !Q.ready ? ""
     : !n ? `<p class="hs-match none">${tt("co.hire.quick.none", "Nobody matches.")}</p>`
     : `<details class="hs-match" data-hq-list${q.open ? " open" : ""}><summary>${
-        Q.short ? tt("co.hire.quick.short", {one: "<b>{n}</b> match · <span class='warn'>only {n} matches</span>", other: "<b>{n}</b> match · <span class='warn'>only {n} match</span>"}, {n})
+        Q.short ? tt("co.hire.quick.short", {one: "<b>{n}</b> match · <span class='warn'>only {n} candidate matches</span>", other: "<b>{n}</b> match · <span class='warn'>only {n} candidates match</span>"}, {n})
         : k === n ? tt("co.hire.quick.all", {one: "<b>{n}</b> match · picked", other: "<b>{n}</b> match · all {n} are picked"}, {n})
         : tt("co.hire.quick.best", {one: "<b>{m}</b> match · the best is picked", other: "<b>{m}</b> match · the best {n} are picked"}, {m: n, n: k})}${hrChev()}</summary>
-      <ul>${Q.picks.map(({c}) => `<li><span>${spEsc(c.name || "?")}${hrQuickMisfit(kept.misfits.get(c.id) || [])}</span><span class="m">${Math.round(hrLevel(c, q.skill))}%</span><span class="m">${hrWage(c.wage)}/h</span></li>`).join("")}</ul></details>`;
+      <ul>${Q.picks.map(p => { const {c} = p; return `<li><span>${spEsc(c.name || "?")}${hrQuickNote(p, kept.misfits.get(c.id) || [])}</span><span class="m">${Math.round(hrLevel(c, q.skill))}%</span><span class="m">${hrWage(c.wage)}/h</span></li>`; }).join("")}</ul></details>`;
   const busy = !!hrUi.quickPending;
   const dis = !Q.ready || !k || off || busy;
   return `<div class="qh"><span class="hs-i">${hrSvg("hire")}</span><h3>Quick hire</h3></div>
@@ -29714,14 +29724,17 @@ function hrQuickReview(){
   const nameOf = id => ((hrQuickLast.req.names.get(id) || {}).name) || "someone";
   const list = gone => {
     const {Q, req} = hrQuickLast;
-    return `<ul class="hs-qlist">${Q.picks.map(({c}) => { const h = req.hours.get(c.id) || 0, misfit = req.misfits.get(c.id) || []; return `<li class="${req.given ? "h" : ""}"><span>${gone.has(c.id) ? `<span class="hr-struck">${spEsc(c.name || "?")}</span>` : spEsc(c.name || "?")}${hrQuickMisfit(misfit)}</span><span class="m">${
+    return `<ul class="hs-qlist">${Q.picks.map(p => { const {c} = p, h = req.hours.get(c.id) || 0, misfit = req.misfits.get(c.id) || []; return `<li class="${req.given ? "h" : ""}"><span>${gone.has(c.id) ? `<span class="hr-struck">${spEsc(c.name || "?")}</span>` : spEsc(c.name || "?")}${hrQuickNote(p, misfit)}</span><span class="m">${
       Math.round(hrLevel(c, Q.q.skill))}%</span><span class="m">${hrWage(c.wage)}/h</span>${req.given ? `<span class="m${misfit.length ? " warn" : ""}">${h ? `${hrNum(h)} h` : "–"}</span>` : ""}</li>`; }).join("")}</ul>`;
   };
   /* What the hires' hours are, and that nobody else's change. */
   const hours = () => {
     const {Q, req} = hrQuickLast, k = n();
     if(!Q.plan || !req.now) return gwCall("", "clock", "No hours yet: set them in the game.");
+    /* "No open hours" only where no week was open to them: a match held
+       back had weeks to take and fitted none of them. */
     if(!req.given) return gwCall("", "clock", req.clashed ? "Their plan hours meet hours already set there: they join with no hours."
+      : Q.picks.some(p => p.nofit) ? tt("co.hire.quick.fitnone", "Their schedule demands fit none of the plan's open weeks: they join with no hours.")
       : `No open hours in ${at()}'s plan: they join with no hours.`);
     const hs = [...req.hours.values()].filter(h => h > 0), lo = Math.min(...hs), hi = Math.max(...hs);
     const each = `${lo === hi ? hrNum(lo) : `${hrNum(lo)}–${hrNum(hi)}`} h a week${req.given > 1 ? " each" : ""}`;
@@ -37112,7 +37125,7 @@ function gwRosterButtons(key){
   if(!row) return "";
   const one = gwButton("schedule", tt("sp.gw.sch.one", "Write this schedule to the game"), `data-gw-sites="${attr(JSON.stringify([key]))}"`,
     row.office && gwRosterWeek(row).unreadable ? tt("sp.gw.sch.office.unreadable", "An entry here can't be read; change it in the game first")
-      : gwRosterWeek(row).sent ? "" : row.office ? (gwRosterWeek(row).dropped ? tt("sp.gw.sch.office.full", "Nothing more fits: the rest of the office default is past the hours or days its staff ask for")
+      : gwRosterWeek(row).sent ? "" : row.office ? (gwRosterWeek(row).dropped ? tt("sp.gw.sch.office.full", "Nothing more fits: the rest of the office default is more than its staff's weeks can take")
         : tt("sp.gw.sch.office.written", "Every entry the office default can add is in the game"))
       : tt("sp.gw.sch.blocked", "Every entry in this plan waits on somebody who does not work here yet: add them first"), {icon: "hire"});
   const all = gwScheduleSites();
@@ -37273,11 +37286,11 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
           .filter(s => !had.has(`${s.d}|${s.f}|${s.t}|${s.employeeId}|${s.itemInstanceId}`));
         const who = [...new Set(added.map(s => s.employeeId))].map(id => spEsc(((row.people || []).find(p => p.id === id) || {}).name || tt("sp.gw.someone", "someone")));
         adds = (added.length ? gwCall("info", "roster", tt("sp.gw.sch.adds", "<b>Adds {h} h for {who}</b>; nobody's current hours change.", {h: gwHours(added), who: who.join(", ")}))
-          : week.dropped ? gwCall("info", "roster", tt("sp.gw.sch.office.full", "Nothing more fits: the rest of the office default is past the hours or days its staff ask for"))
+          : week.dropped ? gwCall("info", "roster", tt("sp.gw.sch.office.full", "Nothing more fits: the rest of the office default is more than its staff's weeks can take"))
           : gwCall("info", "roster", tt("sp.gw.sch.office.written", "Every entry the office default can add is in the game")))
           /* The office default's hours left out for someone, one line each. */
           + (week.leftOut || []).map(x => gwCall("warn", "alert", tt("sp.gw.sch.office.left",
-            "<b>{name}</b>: {h} h of the office default left out, past the hours or days they ask for",
+            "<b>{name}</b>: {h} h of the office default left out, more than their week can take",
             {name: spEsc(((row.people || [])[x.p] || {}).name || tt("sp.gw.someone.cap", "Someone")), h: x.hours}))).join("");
       }
       const over = (answer.warnings || []).filter(w => w.type === "overworked").map(w =>

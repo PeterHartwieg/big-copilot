@@ -235,7 +235,7 @@ the map.
     warehouses included), from the candidates the open places have not picked. At a site
     with a plan they get the plan's open weeks in that role that meet their schedule
     demands, best match first; the places left then go, best match first, to everyone else
-    (a match no open week fits included) with no hours, as at a site with no plan. The site's week stays as the game has it: where a plan
+    (a match no open week fits included, and named so) with no hours, as at a site with no plan. The site's week stays as the game has it: where a plan
     entry meets hours already set there, only its parts that meet nothing and run 4 hours
     or more are added, and a warning is judged on the hours they keep.
   - *Before any write* (a site's Staffing, Staff needs, Quick hire), every week it would

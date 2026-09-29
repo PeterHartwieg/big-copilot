@@ -842,8 +842,8 @@ test('Quick hire: the best matches for one role at the headquarters, with no hou
     moves: []});
   // Fewer match than asked: the button drops to the matches.
   await page.locator('#hsOpen [data-hr-min]').selectOption('90');
-  assert.match(await list.locator('summary').textContent(), /^1 match · only 1 matches/);
-  assert.equal(await list.locator('summary .warn').textContent(), 'only 1 matches');
+  assert.match(await list.locator('summary').textContent(), /^1 match · only 1 candidate matches/);
+  assert.equal(await list.locator('summary .warn').textContent(), 'only 1 candidate matches');
   assert.equal(await box.locator('[data-hq-go]').textContent(), 'Hire 1');
   await page.locator('#hsOpen [data-hr-min]').selectOption('100');
   assert.equal(await box.locator('.hs-match.none').textContent(), 'Nobody matches.');
@@ -1887,7 +1887,7 @@ test('an office write adds no entry that takes someone past their hours: the 60-
   await page.locator('#schDetail #sp-roster [data-gw-sites]').first().click();
   await phase(page, 'ready');
   assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(),
-    /Lena Voss: 12 h of the office default left out, past the hours or days they ask for/);
+    /Lena Voss: 12 h of the office default left out, more than their week can take/);
 });
 
 test('an office whose office default is all past its staff hours does not call itself written', async (t) => {
@@ -1905,7 +1905,7 @@ test('an office whose office default is all past its staff hours does not call i
     const b = document.querySelector('#schDetail #sp-roster [data-gw-sites]');
     return b && (b.getAttribute('aria-label') || b.title || b.textContent);
   }, [O]);
-  assert.match(why, /Nothing more fits: the rest of the office default is past the hours or days its staff ask for/);
+  assert.match(why, /Nothing more fits: the rest of the office default is more than its staff's weeks can take/);
   assert.doesNotMatch(why, /Every entry the office default can add is in the game/);
 });
 
@@ -1990,4 +1990,36 @@ test('Quick hire: a better match no plan week fits still joins, with no hours, p
   await box.locator('[data-hq-site]').selectOption(G);
   assert.deepEqual((await quick(page)).picks, [['c2', null]]);
   assert.equal(await box.locator('[data-hq-go]').getAttribute('aria-disabled'), null);
+});
+
+test('Quick hire says why a match held back from the plan weeks joins with no hours', async (t) => {
+  const d = JSON.parse(payload);
+  d.names['ba:jobdemand_freeweekends'] = 'Free weekends';
+  d.candidates.forEach(c => { c.demands = ['ba:jobdemand_freeweekends']; });
+  const page = await board(t, {data: JSON.stringify(d)});
+  const box = page.locator('#hsQuick');
+  await box.locator('[data-hq-role]').selectOption(CS);
+  await box.locator('[data-hq-site]').selectOption(G);
+  // Gifts had an open week, Friday to Sunday: Bram fits none of it.
+  assert.match(await box.locator('.hs-match').textContent(), /Bram Castellno open week fits Free weekends/);
+  const dlg = await quickConfirm(page);
+  const text = await dlg.locator('.gw-body').textContent();
+  assert.match(text, /Bram Castellno open week fits Free weekends/);
+  assert.match(text, /Their schedule demands fit none of the plan's open weeks: they join with no hours\./);
+  assert.doesNotMatch(text, /No open hours in/);
+});
+
+test('Quick hire says there are no open hours only where the plan has none', async (t) => {
+  const d = JSON.parse(payload);
+  // Gifts' plan weeks all taken: Sam's reassign takes one, the other is gone.
+  d.hiring.sites.find(s => s.key === G).plans.demand.hireWeeks.pop();
+  const page = await board(t, {data: JSON.stringify(d)});
+  const box = page.locator('#hsQuick');
+  await box.locator('[data-hq-role]').selectOption(CS);
+  await box.locator('[data-hq-site]').selectOption(G);
+  assert.deepEqual((await quick(page)).picks, [['c2', null]]);
+  const dlg = await quickConfirm(page);
+  const text = await dlg.locator('.gw-body').textContent();
+  assert.match(text, /No open hours in HART\. Gifts's plan: they join with no hours\./);
+  assert.doesNotMatch(text, /no open week fits/);
 });

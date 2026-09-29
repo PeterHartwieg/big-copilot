@@ -2215,5 +2215,7 @@ test('the open-hours plan draws its own need: every station the hours it opens a
     assert.ok(cells.every(([, n]) => n === String(regs)), JSON.stringify(cells));
     assert.ok(cells.every(([, , read]) => /every station/.test(read)), cells[0][2]);
     assert.equal(await page.locator(mon + '.sp-unmh').count(), 0, 'no hour marked as counted as none');
+    // The row's label says whose need it is: not the measured hours'.
+    assert.match(await page.locator(mon + '.sp-needrow .lab').getAttribute('data-read'), /every station where no customers are read yet/);
   } finally { await page.close(); }
 });
