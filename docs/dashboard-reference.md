@@ -843,8 +843,11 @@ never suggests opening a store on its own.
   cheapest display for the building's customers an hour;
 - what a station must be attached to, one piece per placement requirement: a computer
   takes a desk and a chair, from its own store where that store sells one;
+- a cinema's or a theatre's seats, made for the venue, enough for the building's customers
+  an hour, shared across a cinema's screens;
 - only items a furniture store sells, and, where the game says what an item is for, only
-  items made for this type;
+  items made for this type (those tags only sort the catalogue, so an item that answers a
+  customer demand, such as a speaker or a sink, is any a store sells);
 - the deposit, as the finder estimates it: about 60 days of rent, with the building's own
   fittings.
 
@@ -871,7 +874,7 @@ the game's own arithmetic for a store run well, not an average of your other sto
   takes. The new store counts as one more seller, so demand is a step lower than today's.
   Satisfaction is the median of your own stores of the type, else 95.
 - **Price.** The highest price every customer in the neighbourhood accepts: the default
-  price, or the lowest price of any shop there that stocks the product (yours included),
+  price, or the lowest price asked there (a rival's for what it stocks, yours as you set it),
   times the neighbourhood's price level, plus 0.3 while no rival company sells it.
 - **Cost of goods** is always the import price: wholesale × the save's import price index ×
   the difficulty's price multiplier × your best purchasing agent's discount. Never the
@@ -890,8 +893,9 @@ the game's own arithmetic for a store run well, not an average of your other sto
   margin runs at 0.55, 0.92, 0.94, 0.97 and 0.99 of the steady one on the opening day and the
   four after it; rent, wages and marketing are paid in full. The first store in a
   neighbourhood to sell a product nobody has sold there for 21 days gets +20 demand on it for
-  14 days; the plan counts that for every product nobody sells there now. The days to break
-  even add the running profit up day by day.
+  14 days; the plan counts that for every product nobody sells there now and nobody has sold
+  for 21 days (the save's last day sold). The days to break even add the running profit up day
+  by day.
 - Cinemas and theatres show the investment only: their screens, seats and actors cap them in
   ways the rules here do not follow.
 
@@ -902,11 +906,11 @@ own stores in the neighbourhood sell the same products, the demand the new store
 them is said too, for every product it sells; so is being the first to sell a product there.
 
 `check_profit_model.py` runs this model over every store you run, on every save on the
-machine, from each store's first day with sales. On 29 September 2026, on saves without mods
-that change the game and stores open 14 days or more: 55 shops at a median of 0.98 (p25 0.88,
-p90 1.16; 65% within 15%, 89% within 30%), 4 offices at 0.97. Stores in their first 14 days,
-held to the ramp above: 7 at a median of 0.98. The shops that fall far short priced below what
-customers accept, ran out of stock or had too little shelving; the one modded save runs at 0.83.
+machine, from each store's first day with sales. On 29 September 2026 (no save ran a mod that
+changes the game), stores open 14 days or more: 94 shops at a median of 0.96 (p25 0.80, p90
+1.08; 59% within 15%, 82% within 30%), 12 offices at 0.99 (75% within 15%). Stores in their
+first 14 days, held to the ramp above: 8 at a median of 0.97. The shops that fall far short
+priced below what customers accept, ran out of stock or had too little shelving.
 
 **Financing** is for a planned store only, since the game books a loan to the company. Pick
 a lender and an amount up to what it lends you now: the lower of its cap less what you owe

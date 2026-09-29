@@ -140,6 +140,31 @@ class OutfitTests(unittest.TestCase):
         mounts = {l["item"] for l in outfit_lines(SHOP, rules, prices, 30, 225) if l["why"] == "mount"}
         self.assertEqual(mounts, {"ba:itemname_chair"})
 
+    def test_an_item_for_a_customer_demand_is_any_the_stores_sell_whatever_its_catalogue_tags(self):
+        # The designer's type tags sort the catalogue; a nightclub's speaker plays in a liquor store.
+        rules = json.loads(json.dumps(RULES))
+        rules["furniture"]["ba:itemname_clubspeaker"] = {"v": VENDOR, "bt": ["nightclub"]}
+        prices = {"items": {**PRICES["items"], "ba:itemname_clubspeaker": {"p": 40, "t": MUSIC}}}
+        music = [l["item"] for l in outfit_lines(SHOP, rules, prices, 30, 225) if l["why"] == "music"]
+        self.assertEqual(music, ["ba:itemname_clubspeaker"])
+
+    def test_a_cinema_seats_its_capacity_across_its_screens(self):
+        cinema = "ba:businesstype_cinema"
+        rules = {"types": {cinema: {"b": "cinema", "c": 1, "i": [], "dm": [],
+                                    "rq": [{"n": "cinemascreen", "i": ["ba:itemname_screen"]}]}},
+                 "furniture": {"ba:itemname_screen": {"c": 25, "v": VENDOR, "bt": ["cinema"]},
+                               "ba:itemname_seat": {"st": 1, "v": VENDOR, "bt": ["cinema"]},
+                               "ba:itemname_row": {"st": 4, "v": VENDOR, "bt": ["cinema"]},
+                               "ba:itemname_armchair": {"st": 1, "v": VENDOR}},
+                 "products": {}}
+        prices = {"items": {"ba:itemname_screen": {"p": 2800}, "ba:itemname_seat": {"p": 250},
+                            "ba:itemname_row": {"p": 800}, "ba:itemname_armchair": {"p": 100}}}
+        lines = {(l["item"], l["group"]): l["qty"] for l in outfit_lines(cinema, rules, prices, [100, 150], 2000)}
+        # Four screens for 100 an hour at 25 each; 25 seats each, as rows of 4 (200 a seat): 7 rows a screen.
+        self.assertEqual(lines[("ba:itemname_screen", "req")] + lines[("ba:itemname_screen", "cap")], 4)
+        self.assertEqual(lines[("ba:itemname_row", "cap")], 28)
+        self.assertNotIn(("ba:itemname_armchair", "cap"), lines)
+
     def test_a_gym_holds_five_distinct_workout_types_the_cheapest_way(self):
         gym = "ba:businesstype_gym"
         rules = {"types": {gym: {"b": "retail", "c": 1, "i": [], "dm": [["workoutvariety", 1]],
@@ -279,12 +304,19 @@ class MarketTests(unittest.TestCase):
 
     def test_a_rival_that_stocks_the_item_sets_the_price_and_takes_the_monopoly(self):
         row = self.market(self.shop(5, 3.5, rival="r1"))["ba:itemname_beer"]["hoods"]["ba:neighborhood_midtown"]
-        self.assertEqual(row[1:], [1, 3.5])
+        self.assertEqual(row[1:3], [1, 3.5])
 
-    def test_the_players_own_cheap_shop_counts_and_an_unstocked_price_does_not(self):
-        got = self.market(self.shop(5, 3.0, mine=True), self.shop(9, 2.0, stocks=False, rival="r1"))
+    def test_the_last_day_anyone_sold_the_item_there_is_kept(self):
+        entry = {"itemName": "ba:itemname_beer", "importPriceIndex": 1.0, "demandValues": coll([
+            {"neighborhood": "ba:neighborhood_midtown", "providers": 0, "lastDaySold": 33}])}
+        root = {"productMarketEntries": coll([entry]), "BuildingRegistrations": coll([])}
+        got = ba_dashboard._store_market(Save(root, {}, "synthetic"), self.RULES, {"ba:itemname_beer"}, 1.0, 0)
+        self.assertEqual(got["ba:itemname_beer"]["hoods"]["ba:neighborhood_midtown"], [0, 0, None, 33])
+
+    def test_the_players_own_price_counts_stocked_or_not_and_a_rivals_unstocked_price_does_not(self):
+        got = self.market(self.shop(5, 3.0, stocks=False, mine=True), self.shop(9, 2.0, stocks=False, rival="r1"))
         hoods = got["ba:itemname_beer"]["hoods"]
-        self.assertEqual(hoods["ba:neighborhood_midtown"][1:], [0, 3.0])
+        self.assertEqual(hoods["ba:neighborhood_midtown"][1:3], [0, 3.0])
         # The rival in Lower Manhattan prices beer but holds none: no offer, no rival seller.
         self.assertNotIn("ba:neighborhood_lowermanhattan", hoods)
 

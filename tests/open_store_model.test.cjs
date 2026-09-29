@@ -141,8 +141,14 @@ test('the first seller in a neighbourhood gets +20 demand on the product for its
   facts.types.T.products = [['P', 1], ['Q', 1], ['S', 1]];
   facts.market.Q = {p: 10, r: 0.5, d: 1, cost: 4, hoods: {H: [2, 1, null]}};   // two sellers there already
   facts.market.S = {p: 10, r: 0.5, d: 1, s: 1, cost: 0, hoods: {H: [0, 0, null]}}; // a service never hypes
+  facts.market.R = {p: 10, r: 0.5, d: 1, cost: 4, hoods: {H: [0, 0, null, 30]}};  // nobody now, but sold on day 30
+  facts.types.T.products.push(['R', 1]);
   const ctx = model(facts);
+  // Day 40: P was last sold on day 0 (21 days ago or more), R on day 30.
   assert.equal(JSON.stringify(ctx.osHyped('T', 'H')), JSON.stringify(['P']));
+  ctx.D.meta.day = 51;
+  assert.equal(JSON.stringify(ctx.osHyped('T', 'H')), JSON.stringify(['P', 'R']), '21 days after its last sale R hypes too');
+  ctx.D.meta.day = 40;
   const plain = ctx.osModel('T', SHOP, {sat: 50, open: HOUR});
   const hyped = ctx.osModel('T', SHOP, {sat: 50, open: HOUR, hype: ['P']});
   assert.equal(hyped.lines[0].demand, Math.min(100, plain.lines[0].demand + 20));

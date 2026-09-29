@@ -7823,22 +7823,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -7853,22 +7857,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -7883,22 +7891,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       1,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       3,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       2,
       0,
-      null
+      6.0,
+      0
      ]
     },
     "opt": 7,
@@ -7913,22 +7925,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -7943,22 +7959,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -7973,22 +7993,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -8003,22 +8027,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -8033,22 +8061,26 @@
      "ba:neighborhood_hellskitchen": [
       1,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       1,
       0,
-      null
+      12.0,
+      0
      ],
      "ba:neighborhood_midtown": [
       2,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -8063,22 +8095,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 3,
@@ -8093,22 +8129,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -8123,22 +8163,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -8153,22 +8197,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 5,
@@ -8183,22 +8231,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 5,
@@ -8213,22 +8265,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 4,
@@ -8243,22 +8299,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 4,
@@ -8273,22 +8333,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -8303,22 +8367,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -8333,22 +8401,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -8363,22 +8435,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -8393,22 +8469,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -8423,22 +8503,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -8453,22 +8537,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 3,
@@ -8483,22 +8571,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -8513,22 +8605,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 6,
@@ -8543,22 +8639,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -8573,22 +8673,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 2,
@@ -8603,22 +8707,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -8633,22 +8741,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -8663,22 +8775,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -8693,22 +8809,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -8723,22 +8843,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -8753,22 +8877,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 3,
@@ -8783,22 +8911,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 5,
@@ -8813,22 +8945,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 5,
@@ -8843,22 +8979,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 4,
@@ -8873,22 +9013,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 2,
@@ -8903,22 +9047,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -8933,22 +9081,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -8963,22 +9115,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -8993,22 +9149,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -9023,22 +9183,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 4,
@@ -9053,22 +9217,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -9083,22 +9251,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -9113,22 +9285,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 5,
@@ -9143,22 +9319,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 5,
@@ -9173,22 +9353,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 4,
@@ -9203,22 +9387,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 4,
@@ -9233,22 +9421,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -9263,22 +9455,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -9293,22 +9489,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -9323,22 +9523,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -9353,22 +9557,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -9383,22 +9591,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -9413,22 +9625,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -9443,22 +9659,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -9473,22 +9693,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 2,
@@ -9503,22 +9727,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 2,
@@ -9533,22 +9761,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 2,
@@ -9563,22 +9795,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 3,
@@ -9593,22 +9829,26 @@
      "ba:neighborhood_hellskitchen": [
       1,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       1,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       2,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       5,
       0,
-      null
+      2.5,
+      0
      ]
     },
     "opt": 7,
@@ -9623,22 +9863,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 6,
@@ -9653,22 +9897,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -9683,22 +9931,26 @@
      "ba:neighborhood_hellskitchen": [
       2,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       1,
       0,
-      null
+      15.0,
+      0
      ],
      "ba:neighborhood_midtown": [
       4,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -9713,22 +9965,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
@@ -9743,22 +9999,26 @@
      "ba:neighborhood_hellskitchen": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_industrycity": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_lowermanhattan": [
       0,
       0,
-      null
+      null,
+      0
      ],
      "ba:neighborhood_midtown": [
       0,
       0,
-      null
+      null,
+      0
      ]
     },
     "opt": 7,
