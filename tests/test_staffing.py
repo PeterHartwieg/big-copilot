@@ -2510,6 +2510,88 @@ class RosterInvariantTest(unittest.TestCase):
                 self.assertEqual(drawn[skill], count["needed"], f"{label}: {skill}")
 
 
+class KeptWeekTest(unittest.TestCase):
+    """Somebody already working here loses hours only if the week still meets
+    every demand they hold (Peter, 28 September 2026).
+
+    Peter Hart's Midtown jewelry shop took ten full-timers off the week to 0 of
+    30 hours in the demand plan the site block writes; the rule keeps them.
+    """
+
+    def shop(self, crew, shifts, hourly=None, **kw):
+        return plan([(1, REGISTER), (2, REGISTER)], crew,
+                    hourly or {h: (12 if 8 <= h < 20 else 0) for h in range(24)},
+                    opens=((6, 22),), shifts=shifts, **kw)
+
+    def week(self, i, days, start=6, end=18, register=1):
+        """Shifts now for s<i> (or the id `i` itself, a string)."""
+        return [{"wd": d, "employeeId": i if isinstance(i, str) else f"s{i}", "itemInstanceId": register,
+                 "startingHour": start, "endingHour": end, "type": 1} for d in days]
+
+    def hours(self, row):
+        out = collections.Counter()
+        for s in staffed(row):
+            out[who(row, s)] += hours(s)
+        return out
+
+    def test_nobody_satisfied_now_is_taken_under_their_floor(self):
+        # Two registers; each of six full-timers works two days 06-18 and two
+        # evenings 18-22 on one of them now, 32 hours.
+        crew = [employee(f"s{i}", [SERVICE], demands=(FULLTIME,)) for i in range(6)]
+        pairs = [(reg, day) for reg in (1, 2) for day in range(7)]
+        shifts = []
+        for i in range(6):
+            for reg, day in pairs[2 * i:2 * i + 2]:
+                shifts += self.week(i, [day], 6, 18, reg) + self.week(i, [(day + 3) % 7], 18, 22, reg)
+        row = self.shop(crew, shifts)
+        for plan_row in (row, row["fullCover"], row["openCover"]):
+            got = {}
+            for s in staffed(plan_row):
+                got[who(row, s)] = got.get(who(row, s), 0) + hours(s)
+            self.assertEqual(sorted(got), [f"s{i}" for i in range(6)])
+            self.assertTrue(all(h >= 30 for h in got.values()), got)
+            self.assertEqual(plan_row["shortHours"], [])
+        # Without the rule the fewest people take the week, and the rest are
+        # left with none: the test above would fail.
+        with unittest.mock.patch.object(ba_dashboard, "_weeks_now", lambda current, pool: {}):
+            bare = self.shop(crew, shifts)
+        self.assertLess(len(self.hours(bare)), 6)
+
+    def test_a_cut_that_keeps_them_satisfied_is_made_and_named(self):
+        """50 hours now, a plan needing fewer: they may go down to their floor."""
+        crew = [employee("a", [SERVICE], demands=(FULLTIME,)),
+                employee("b", [SERVICE], demands=(FULLTIME,))]
+        for e in crew:
+            e["assignedWeeklyHours"] = 48
+        shifts = self.week(0, [0, 1, 2, 3], 8, 20) + self.week(1, [4, 5, 6, 0], 8, 20, register=2)
+        row = self.shop(crew, shifts, {h: (6 if 8 <= h < 20 else 0) for h in range(24)})
+        got = self.hours(row)
+        self.assertTrue(all(h >= 30 for h in got.values()), got)
+        self.assertEqual(row["shortHours"], [])
+        cut = {pid for pid, h in got.items() if h < 48}
+        self.assertTrue(cut)
+        self.assertEqual({f["id"] for f in row["_hire"]["fewer"]}, cut)
+
+    def test_somebody_with_no_hours_demand_gives_way(self):
+        """Six hours a day for one register: the full-timer keeps a full week,
+        and whoever holds no hours demand works what is left, or nothing."""
+        crew = [employee("a", [SERVICE], demands=(FULLTIME,)), employee("z", [SERVICE])]
+        shifts = self.week("a", [0, 1, 2]) + self.week("z", [3, 4, 5], register=2)
+        row = self.shop(crew, shifts, {h: (6 if 8 <= h < 14 else 0) for h in range(24)})
+        got = self.hours(row)
+        self.assertGreaterEqual(got["a"], 30)
+        self.assertLessEqual(got["a"] + got["z"], 42)
+
+    def test_somebody_short_now_is_not_made_shorter(self):
+        """20 of 30 hours now: they may stay short, not sink under 20."""
+        crew = [employee(f"s{i}", [SERVICE], demands=(FULLTIME,)) for i in range(4)]
+        shifts = []
+        shifts += self.week(0, [0, 1, 2]) + self.week(1, [3, 4, 5])
+        shifts += self.week(2, [6, 0, 1], register=2) + self.week(3, [3, 4], 8, 18, register=2)
+        row = self.shop(crew, shifts, {h: (6 if 8 <= h < 14 else 0) for h in range(24)})
+        self.assertGreaterEqual(self.hours(row)["s3"], 20)
+
+
 class CurrentSecurityTest(unittest.TestCase):
     """A guard on a locker is security, not service (item 8)."""
 
