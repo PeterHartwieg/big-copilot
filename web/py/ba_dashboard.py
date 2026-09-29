@@ -23012,7 +23012,7 @@ function spRosterDay(c, wd, on){
     c.full ? tt("sp.need.full", "Every station, every hour: the demand test, {d:day}", {d: wd})
       : c.row.variant === "open" && cells.length ? (c.row.openComplete
         ? tt("sp.need.openall", "Every station, the hours the shop opens, {d:day}", {d: wd})
-        : tt("sp.need.open", "Stations the plan asks for, {d:day}: the measured hours', and every station where nothing is read yet", {d: wd}))
+        : tt("sp.need.open", "Stations the plan asks for, {d:day}: what the measured hours ask for, and every station in the hours nothing is read yet", {d: wd}))
       : cells.length ? tt("sp.need.asks", "Stations the measured hours ask for, {d:day}", {d: wd})
       /* The doors decide before the measurement does, here as everywhere else
          in the block: a shop shut on Sunday has not measured nothing, it has
@@ -29726,7 +29726,7 @@ const hrQuickNote = (p, req) => {
      for them (or none of its hours could be sent). */
   const none = req.now && !(req.hours.get(id) || 0)
     ? (req.clash || new Set()).has(id) ? tt("co.hire.quick.clash", "their plan hours meet hours already set there")
-    : tt("co.hire.quick.noweek", "no open hours in the plan") : "";
+    : tt("co.hire.quick.noweek", "no open hours left in the plan") : "";
   return [none ? `<small>${none}</small>` : "", hrQuickMisfit(req.misfits.get(id) || [])].filter(Boolean).join(" ");
 };
 function hrQuickHtml(m){
@@ -29798,7 +29798,7 @@ function hrQuickReview(){
     if(!Q.plan || !req.now) return gwCall("", "clock", "No hours yet: set them in the game.");
     /* Why each of them has no hours is beside their name (hrQuickNote()):
        the reasons differ from one to the next, so the line says none. */
-    if(!req.given) return gwCall("", "clock", tt("co.hire.quick.nohours", {one: "{n} joins with no hours.", other: "{n} join with no hours."}, {n: k}));
+    if(!req.given) return gwCall("", "clock", tt("co.hire.quick.nohours.all", "They join with no hours."));
     const hs = [...req.hours.values()].filter(h => h > 0), lo = Math.min(...hs), hi = Math.max(...hs);
     const each = `${lo === hi ? hrNum(lo) : `${hrNum(lo)}–${hrNum(hi)}`} h a week${req.given > 1 ? " each" : ""}`;
     const none = k - req.given;

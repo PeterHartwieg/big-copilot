@@ -248,7 +248,7 @@
  "co.hire.quick.best_other": "gpt-6-sol",
  "co.hire.quick.clash": "gpt-6-sol",
  "co.hire.quick.nofit": "gpt-6-sol",
- "co.hire.quick.nohours_other": "gpt-6-sol",
+ "co.hire.quick.nohours.all": "gpt-6-sol",
  "co.hire.quick.none": "gpt-6-sol",
  "co.hire.quick.noweek": "gpt-6-sol",
  "co.hire.quick.short_other": "gpt-6-sol",

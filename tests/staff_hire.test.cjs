@@ -1075,7 +1075,7 @@ test('Quick hire whose plan hours all meet hours already set there joins with no
   const dlg = await quickConfirm(page);
   const text = await dlg.locator('.gw-body').textContent();
   assert.match(text, /Bram Castelltheir plan hours meet hours already set there/);
-  assert.match(text, /1 joins with no hours\./);
+  assert.match(text, /They join with no hours\./);
 });
 
 test('Quick hire takes a role Open places had filled while its confirm is open, and Open places shrinks', async (t) => {
@@ -1125,8 +1125,8 @@ test('Quick hire where the plan has no open week: no hours, and says so', async 
   assert.deepEqual((await model(page)).weeks[0], [G, 'demand', ['move:SPARE1', 'hire:c1']]);
   assert.equal(await page.locator('#hsOrder .hs-held').count(), 0);
   const text = await dlg.locator('.gw-body').textContent();
-  assert.match(text, /Bram Castellno open hours in the plan/);
-  assert.match(text, /1 joins with no hours\./);
+  assert.match(text, /Bram Castellno open hours left in the plan/);
+  assert.match(text, /They join with no hours\./);
 });
 
 test('Part-time is left out per destination: a shop week, not an office week of the same role', async (t) => {
@@ -1406,8 +1406,8 @@ test('a plan week whose slots are all unusable is no clash: no open hours', asyn
   assert.deepEqual(r, {sites: [{address: addr(G), expect: null, days: null}], given: 0, clashed: 0});
   const dlg = await quickConfirm(page);
   const text = await dlg.locator('.gw-body').textContent();
-  assert.match(text, /Bram Castellno open hours in the plan/);
-  assert.match(text, /1 joins with no hours\./);
+  assert.match(text, /Bram Castellno open hours left in the plan/);
+  assert.match(text, /They join with no hours\./);
   assert.doesNotMatch(text, /meet hours already set there/);
 });
 
@@ -2010,7 +2010,7 @@ test('Quick hire says why a match held back from the plan weeks joins with no ho
   const dlg = await quickConfirm(page);
   const text = await dlg.locator('.gw-body').textContent();
   assert.match(text, /Bram Castellno open week fits Free weekends/);
-  assert.match(text, /1 joins with no hours\./);
+  assert.match(text, /They join with no hours\./);
   assert.doesNotMatch(text, /No open hours in/);
 });
 
@@ -2025,8 +2025,8 @@ test('Quick hire says there are no open hours only where the plan has none', asy
   assert.deepEqual((await quick(page)).picks, [['c2', null]]);
   const dlg = await quickConfirm(page);
   const text = await dlg.locator('.gw-body').textContent();
-  assert.match(text, /Bram Castellno open hours in the plan/);
-  assert.match(text, /1 joins with no hours\./);
+  assert.match(text, /Bram Castellno open hours left in the plan/);
+  assert.match(text, /They join with no hours\./);
   assert.doesNotMatch(text, /no open week fits/);
 });
 
@@ -2049,6 +2049,5 @@ test('Quick hire with several picks at no hours gives each their own reason', as
   const text = await dlg.locator('.gw-body').textContent();
   assert.match(text, /Bram Castellno open week fits Free weekends/);
   assert.match(text, /Ada Brandttheir plan hours meet hours already set there/);
-  assert.match(text, /2 join with no hours\./);
-  assert.doesNotMatch(text, /they join with no hours/);
+  assert.match(text, /They join with no hours\./);
 });
