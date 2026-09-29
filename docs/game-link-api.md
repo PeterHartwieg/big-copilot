@@ -54,12 +54,12 @@ clock, so clients must not rely on it.
 - on the frame the player enters or leaves a building (option "Refresh when a
   building loads", **off** by default, a backup: the hourly and game-save refreshes
   make it redundant): the screen is black between the fade-out and the
-  fade-in, so the serialize is not seen, and this trigger alone may pass the
-  fifteen-second window below (a refresh already in flight still blocks it; the
-  refresh then runs once the window lifts);
+  fade-in, so the serialize is not seen, and this trigger, like a write's refresh,
+  may pass either window below (a refresh already in flight still blocks it; the
+  refresh then runs once the fifteen-second window lifts);
 - after any game save completes, so the served bytes are never older than the
   player's own save;
-- on `POST /refresh`;
+- on `POST /refresh`, with a window of its own (below);
 - as a floor, every 5 real minutes while attached;
 - on every change of the in-game hour, with the option "Refresh every game hour",
   which is **on** by default: while the worker path holds, it costs nothing visible.
@@ -76,8 +76,14 @@ installed mod costs a player nothing while the board is closed.
 
 A refresh is skipped, and the previous bytes kept, while `SaveGameManager.SavingGameInProgress`
 is true or `SaveGameManager.CanSave()` is false (interior designer, placement mode, the
-casino boat). Refreshes never overlap: one in flight at a time, at most one every 15
-seconds, except that a building load may pass that window (never an in-flight one).
+casino boat). Refreshes never overlap: one in flight at a time. The automatic triggers
+above run at most one every 15 seconds; a `POST /refresh` needs only 3 seconds since the
+last refresh started, whatever started it, while the mod is on its worker-thread path.
+After a fallback to the main thread, where every walk is a stall, `POST /refresh` keeps
+the 15 seconds until the worker path is tried again. A building load and a write's
+refresh may pass either window (never an in-flight one). Mods before 0.4.0 applied the
+15 seconds to `POST /refresh` always; clients honour `retryAfter` either way, so
+`schemaVersion` stays 1.
 
 ## Endpoints
 
@@ -154,8 +160,13 @@ the mod sees it. Browsers' `fetch` and Python's `urllib` send it; curl does not,
   about thirty seconds later (one window per failed walk; after the second failure
   the main thread takes it). The clients' wait allows that. Clients time out a call
   after five seconds; the mod never holds one longer than that.
-- `429 {"error": "throttled", "retryAfter": <seconds>}` inside the 15-second window
-  or while one is in flight; the client waits and polls `/health` as above.
+- `429 {"error": "throttled", "retryAfter": <seconds>}` within 3 seconds of the last
+  refresh starting (15 seconds after a fallback to the main thread, and always before
+  mod 0.4.0), or while one is in flight;
+  `retryAfter` is what is left of that window, at least 1. The client reads `/health` to
+  tell the two apart: in the quiet window (`busy` false) it may build a newer stamp the
+  mod already holds; either way it waits out `retryAfter`, asks again, and polls
+  `/health` as above.
 - `409 {"error": "cannot_save", "reason": "saving" | "placement" | "interior" | "casino" | "other"}`
   when the game refuses; the client shows the reason and keeps the last bytes.
   `"other"` is `CanSave()` false for a reason the mod cannot name, no loaded game
@@ -206,7 +217,7 @@ approved it (see "Approving a browser" below).
   the page's wait ends; it replaces the kind's undo with nothing.
 - **After an apply** the mod calls `SaveGameManager.MarkChange()`, shows an in-game
   notification ("Big Copilot updated <what> at <business>"), and starts a refresh that may
-  pass the fifteen-second window (never an in-flight one). The answer carries `stamp`,
+  pass either window (never an in-flight one). The answer carries `stamp`,
   the stamp before that refresh; the page polls `/health` until it moves, as after
   `POST /refresh`, and rebuilds from the new bytes. No game save.
 
@@ -646,8 +657,14 @@ unverified.
    `schemaVersion`, say the same about the port; with one this client does not know,
    stop and say which version it needs.
 3. If `stamp` differs from the stamp of the board on screen and `busy` is false,
-   `GET /save` with `If-None-Match` and build from the bytes.
-4. Update means `POST /refresh`, then step 1 until the stamp moves.
+   `GET /save` with `If-None-Match` and build from the bytes. While watching, after a
+   build the page takes step 1 once more at once, so a refresh that landed while it
+   built is read now, not on the next watch. Once only: a build that look starts leaves
+   the rest to the watch.
+4. Update means `POST /refresh`, then step 1 until the stamp moves (the page asks every
+   250 ms, which the mod answers from its cache). A `429` is handled as that answer
+   says above: the page builds a newer stamp the mod already holds, then still asks
+   again once the window lifts, so Update ends on a refresh taken after the click.
 5. Watching means step 1 every 30 seconds while the page is visible, which also keeps
    the mod attached. A watcher that meets ten answers in a row that were never health,
    or a health object that is not this client's version, says so once under the board
@@ -662,6 +679,8 @@ python tools/game_link_mock.py <save.hsg> [--port 8322] [--character ID] [--comp
 Serves the file with this contract, `source: "mock"`. `POST /refresh` and a change of
 the file's modification time both re-read it and issue a new stamp, so pointing the
 mock at the game's own autosave folder gives a live-looking link without the mod.
+`POST /refresh` is throttled as the mod's is on its worker path, 3 seconds since the
+last refresh (the mock has no main-thread fallback).
 `--throttle`, `--refuse <reason>` and `--schema <n>` exercise the clients' error paths.
 For the writes, `--refuse-write <error>[:<detail>]`, `--busy-writes <n>` and `--writes <kinds>`
 do the same, and for `hire`, `--hire-gone <candidateId>` (repeatable) makes a candidate gone
