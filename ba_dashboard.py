@@ -29223,7 +29223,7 @@ function hrCandRow(m, r, c){
   const noShop = !picked && !elsewhere && r.pt && r.shop && !r.allShop && hrAsksPt(c);
   const to = elsewhere ? `<span class="dim">picked for ${spEsc(hrSiteName(elsewhere))}</span>`
     : noShop ? `<span class="dim">not for shop weeks (Part-time)</span>`
-    : at && at.nofit ? `<span class="dim">${tt("hr.cand.nofit", "no open week meets their hours demands")}</span>`
+    : at && at.nofit ? `<span class="dim">${tt("co.hire.nofit", "no open week meets their hours demands")}</span>`
     : S ? `${spEsc(hrSiteName(S))}${at.over ? ` <span class="warn">over the plan</span>` : ""}` : `<span class="dim">–</span>`;
   const soon = Number(c.hoursLeft) < 24;
   return `<tr class="${picked ? "on" : ""}" data-hr-cand="${attr(c.id)}">
@@ -29631,7 +29631,7 @@ function hrQuickHtml(m){
   const match = !Q.ready ? ""
     : !n ? `<p class="hs-match none">Nobody matches.</p>`
     : `<details class="hs-match" data-hq-list${q.open ? " open" : ""}><summary><b>${hrNum(n)}</b> match · ${
-        Q.short ? `<span class="warn">${k < n ? tt("hr.quick.fit", {one: "only {n} fits the plan's hours", other: "only {n} fit the plan's hours"}, {n: k})
+        Q.short ? `<span class="warn">${k < n ? tt("co.hire.quickfit", {one: "only {n} fits the plan's hours", other: "only {n} fit the plan's hours"}, {n: k})
           : `only ${hrNum(n)} ${n === 1 ? "matches" : "match"}`}</span>` : k === n ? (k === 1 ? "picked" : `all ${hrNum(k)} are picked`) : k === 1 ? "the best is picked" : `the best ${hrNum(k)} are picked`}${hrChev()}</summary>
       <ul>${Q.picks.map(({c}) => `<li><span>${spEsc(c.name || "?")}${hrQuickMisfit(kept.misfits.get(c.id) || [])}</span><span class="m">${Math.round(hrLevel(c, q.skill))}%</span><span class="m">${hrWage(c.wage)}/h</span></li>`).join("")}</ul></details>`;
   const busy = !!hrUi.quickPending;
@@ -30414,8 +30414,11 @@ function drawFindLocation(){
    to the measurement wording, and a board built before the feature says
    nothing at all. Ties go to the name, so the card does not move between runs
    of the same save. */
-const spRosterPlans = () => (D.staffing || []).filter(
-  r => !r.failed && (r.shifts || []).length);
+/* Each shop's plan as its Staffing block shows and writes it (spShownRow(),
+   through spPlanOf()), so the card never quotes a week the block does not:
+   a new shop is sized by its open-hours plan, not its cover-only one. */
+const spRosterPlans = () => (D.staffing || []).filter(r => !r.failed)
+  .map(spShownRow).filter(r => (r.shifts || []).length);
 /* The week the card sizes a plan by. Usually the lines with somebody on them,
    but a shop with no staff at all is twenty-one lines waiting on hires, and
    calling that "a week of 0 shifts to enter" sizes the one plan on the board
@@ -36965,19 +36968,19 @@ function gwWeekCheck(row, days){
 /* What the check found, one line a person; `site` names the site on a write
    that touches several. */
 function gwCheckLines(found){
-  const what = b => b.k === "hours" ? tt("gw.chk.hours", "{n} h a week, asks for {lo} to {hi}", {n: b.n, lo: b.lo, hi: b.hi})
-    : b.k === "most" ? tt("gw.chk.most", "{n} h a week, more than {hi}", {n: b.n, hi: b.hi})
-    : b.k === "days" ? tt("gw.chk.days", "{n} days a week, asks for {want}", {n: b.n, want: b.want})
-    : b.k === "entry" ? tt("gw.chk.entry", "an entry of {n} h on {day}", {n: b.n, day: ttDay(b.d)})
-    : b.k === "day" ? tt("gw.chk.day", "{n} h on {day}", {n: b.n, day: ttDay(b.d)})
-    : b.k === "twice" ? tt("gw.chk.twice", "two entries at once on {day}", {day: ttDay(b.d)})
-    : tt("gw.chk.demand", "breaks {demand}", {demand: hrName(b.slug)});
+  const what = b => b.k === "hours" ? tt("sp.gw.chk.hours", "{n} h a week, asks for {lo} to {hi}", {n: b.n, lo: b.lo, hi: b.hi})
+    : b.k === "most" ? tt("sp.gw.chk.most", "{n} h a week, more than {hi}", {n: b.n, hi: b.hi})
+    : b.k === "days" ? tt("sp.gw.chk.days", "{n} days a week, asks for {want}", {n: b.n, want: b.want})
+    : b.k === "entry" ? tt("sp.gw.chk.entry", "an entry of {n} h on {day}", {n: b.n, day: ttDay(b.d)})
+    : b.k === "day" ? tt("sp.gw.chk.day", "{n} h on {day}", {n: b.n, day: ttDay(b.d)})
+    : b.k === "twice" ? tt("sp.gw.chk.twice", "two entries at once on {day}", {day: ttDay(b.d)})
+    : tt("sp.gw.chk.demand", "breaks {demand}", {demand: hrName(b.slug)});
   const lines = found.map(p => {
     const name = spEsc(p.name || tt("sp.gw.someone.cap", "Someone")), list = p.breaks.map(what).join("; ");
-    return `<li>${p.site ? tt("gw.chk.person.at", "<b>{name}</b> at {site}: {what}", {name, site: p.site, what: list})
-      : tt("gw.chk.person", "<b>{name}</b>: {what}", {name, what: list})}</li>`;
+    return `<li>${p.site ? tt("sp.gw.chk.person.at", "<b>{name}</b> at {site}: {what}", {name, site: p.site, what: list})
+      : tt("sp.gw.chk.person", "<b>{name}</b>: {what}", {name, what: list})}</li>`;
   }).join("");
-  return found.length ? gwCall("warn", "alert", `${tt("gw.chk.head", {one: "This week breaks a rule or a demand for {n} person:",
+  return found.length ? gwCall("warn", "alert", `${tt("sp.gw.chk.head", {one: "This week breaks a rule or a demand for {n} person:",
     other: "This week breaks a rule or a demand for {n} people:"}, {n: found.length})}<ul class="gw-chk">${lines}</ul>`) : "";
 }
 /* The week a write sends, from the plan's rows, their station and person

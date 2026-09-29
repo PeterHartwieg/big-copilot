@@ -7280,7 +7280,10 @@ def _hire_weeks(slots: list) -> list:
         floor = max(floor, math.ceil(sum(s["to"] - s["from"] for s in day) / SHIFT_CAP))
         for hour in range(24):
             floor = max(floor, sum(1 for s in day if s["from"] <= hour < s["to"]))
-    for count in range(floor, len(worst)):
+    # Up to and including first fit's own count: at that count the balanced
+    # packing still spreads the week, where first fit filled the first hire to
+    # 45 hours and left the second 18 (one register open 9 to 18 every day).
+    for count in range(floor, len(worst) + 1):
         for order in HIRE_ORDERS:
             packed = _pack_hire_weeks(slots, count, order)
             if packed is not None:
@@ -8307,6 +8310,12 @@ def _shift_row(shift: dict, table: dict) -> dict:
     return row
 
 
+def _schedule_demands(person: dict | None) -> list:
+    """The demands of a person the week they work decides (DEMAND_SCOPE `schedule`)."""
+    return [slug for slug in (person or {}).get("demands") or ()
+            if DEMAND_SCOPE.get(JOB_DEMANDS.get(slug, (None,))[0]) == "schedule"]
+
+
 def _index_table(posts: list, station_rows, person_rows, people: dict) -> dict:
     """The two lookup tables a site's rows point into, and the maps to build them.
 
@@ -8354,8 +8363,12 @@ def _index_table(posts: list, station_rows, person_rows, people: dict) -> dict:
     return {
         "stations": stations,
         "station": station_index,
+        # A person's schedule demands, where they hold any: the board checks
+        # every week it is about to write against them (gwWeekCheck()).
         "people": [
-            {"id": pid, "name": (people.get(pid) or {}).get("name")} for pid in order
+            {"id": pid, "name": (people.get(pid) or {}).get("name"),
+             **({"demands": held} if (held := _schedule_demands(people.get(pid))) else {})}
+            for pid in order
         ],
         "person": person_index,
     }
@@ -8549,8 +8562,13 @@ def _open_need(site: dict) -> dict:
 
 
 def _open_floor(need: dict, grid: dict) -> dict:
-    """A need curve with every open hour it reads nothing for (`none`) staffed in full."""
-    stations = collections.Counter(s["skill"] for s in grid["stations"])
+    """A need curve with every open hour it reads nothing for (`none`) staffed in full.
+
+    The curve is keyed by role (_station_role()), not by skill: a hairdresser's
+    head wash is a role of its own under the Hair Stylist skill, and counting
+    stations by skill gave it none and its chairs the head washes' as well.
+    """
+    stations = collections.Counter(_station_role(s) for s in grid["stations"])
     out = {}
     for skill, row in need.items():
         count = stations.get(skill, 0)
@@ -10077,16 +10095,28 @@ def _unstaffed(row: dict, shifts, own: set, training=frozenset()) -> dict | None
     Counted per role, weekday and hour: the site's own people the plan puts
     on the role then, less everybody on the role's stations in the game's
     week then, never below none -- so somebody on register 2 where the plan
-    uses register 1 is not a gap. Only hours a planned shift gives the site's
-    own people count, so a hire's week is never counted here as well. Only
-    roles where some of them (`idle`) have no hours at the site at all in the
-    game's week, and nobody in training: a plan that merely differs from the
-    week is the site page's to show. Returns {hours, roles: [{skill, hours,
-    idle}]}, or None.
+    uses register 1 is not a gap. A role is the row's own (`roles[].key`):
+    a hairdresser's head wash and its chairs share the Hair Stylist skill,
+    and busy chairs must not hide an empty head wash. Only hours a planned
+    shift gives the site's own people count, so a hire's week is never
+    counted here as well. Only roles where some of them (`idle`) have no
+    hours at the site at all in the game's week, and nobody in training: a
+    plan that merely differs from the week is the site page's to show.
+    Returns {hours, roles: [{skill, hours, idle}]}, one entry a skill, or
+    None.
     """
     stations, people = row.get("stations") or [], row.get("people") or []
     person = lambda p: people[p]["id"] if p is not None and 0 <= p < len(people) else None  # noqa: E731
-    skill = lambda s: stations[s].get("skill") if s is not None and 0 <= s < len(stations) else None  # noqa: E731
+    role_of = {}
+    for entry in row.get("roles") or ():
+        for index in entry.get("stations") or ():
+            role_of[index] = entry.get("key", entry.get("skill"))
+    skill_of = lambda s: stations[s].get("skill") if s is not None and 0 <= s < len(stations) else None  # noqa: E731
+    skill = lambda s: role_of.get(s, skill_of(s))  # noqa: E731
+    # The skill each role is worked in, which is what the page names.
+    named = {}
+    for index, station in enumerate(stations):
+        named.setdefault(skill(index), station.get("skill"))
     now = collections.Counter()
     working = set()
     for entry in (row.get("current") or {}).get("list") or ():
@@ -10111,16 +10141,22 @@ def _unstaffed(row: dict, shifts, own: set, training=frozenset()) -> dict | None
         gap[role] += max(0, n - now[(role, day, hour)])
     # Idle: nothing at the site in the game's week, not in training, and some
     # of their own planned hours left with nobody on.
-    idle = collections.Counter(
-        role for (role, pid), hours in cells.items()
-        if pid not in working and pid not in training
-        and any(want[(role, d, h)] > now[(role, d, h)] for d, h in hours)
-    )
+    idle = collections.defaultdict(set)
+    for (role, pid), hours in cells.items():
+        if pid not in working and pid not in training \
+                and any(want[(role, d, h)] > now[(role, d, h)] for d, h in hours):
+            idle[role].add(pid)
+    # Judged per role, told per skill: the head wash's hours and the chairs'
+    # are one Hair Stylist line, and somebody idle in both is one person.
+    hours_of, idle_of = collections.Counter(), collections.defaultdict(set)
+    for role in gap:
+        if gap[role] and idle[role]:
+            hours_of[named.get(role, role)] += gap[role]
+            idle_of[named.get(role, role)] |= idle[role]
     roles = [
-        {"skill": role, "hours": gap[role], "idle": idle[role]}
-        for role in _in_order(gap) if gap[role]
+        {"skill": name, "hours": hours_of[name], "idle": len(idle_of[name])}
+        for name in _in_order(hours_of)
     ]
-    roles = [r for r in roles if r["idle"]]
     total = sum(r["hours"] for r in roles)
     if total < UNSTAFFED_MIN_HOURS:
         return None
@@ -10306,14 +10342,16 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
             if found is not None:
                 plans["office"] = found
         # Staff with no hours (_unstaffed()): the hours a site's own people
-        # would work that nobody works in the game's week now, against the
-        # plans its Staffing block writes -- a shop's demand plan and full
-        # cover, which the page picks between as that block does; an office's
-        # office default.
+        # would work that nobody works in the game's week now, against every
+        # plan a shop's Staffing block may write -- the demand plan, full
+        # cover, and the open-hours plan it writes for a new shop or one
+        # without complete data -- which the page picks between as that block
+        # does (spPlanOf()); an office's office default.
         unstaffed = {}
         base = shops.get(business["key"]) if kind == "shop" else offices.get(business["key"]) if kind == "office" else None
         if base and not base.get("failed"):
-            pairs = (("demand", base.get("shifts")), ("full", (base.get("fullCover") or {}).get("shifts"))) \
+            pairs = (("demand", base.get("shifts")), ("full", (base.get("fullCover") or {}).get("shifts")),
+                     ("open", (base.get("openCover") or {}).get("shifts"))) \
                 if kind == "shop" else (("office", base.get("shifts")),)
             for mode, shifts in pairs:
                 gap = _unstaffed(base, shifts or (), own.get(business["key"], set()), training)
@@ -14338,6 +14376,7 @@ html:has(dialog:modal){overflow:hidden}
 .gw-call b{color:var(--ink);font-weight:600}
 .gw-call.gw-warn>.gw-i{color:var(--warn)}.gw-call.gw-neg>.gw-i{color:var(--neg)}.gw-call.info>.gw-i{color:var(--info)}.gw-call.ok>.gw-i{color:var(--accent)}
 .gw-call.gw-neg b{color:var(--neg)}
+.gw-call .gw-chk{margin:4px 0 0;padding-left:16px}
 .gw-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
 .gw-chip{display:inline-flex;align-items:center;gap:6px;min-height:24px;padding:3px 9px;box-sizing:border-box;border-radius:6px;background:var(--raised);font:500 11.5px/1.3 "IBM Plex Mono",monospace;color:var(--ink-2);max-width:100%;overflow-wrap:anywhere}
 .gw-dlg .gw-chip svg{width:12px;height:12px}
@@ -22257,10 +22296,34 @@ const spFullNeed = row => {
 };
 const spFullRow = row => Object.assign({}, row, spFullNeed(row), row.fullCover,
   {fullCover: null, full: true});
-/* The plan a shop shows: full cover where the reader picked it and the shop
-   offers it, else the demand plan. Its Staffing block, its write and Staffing ›
-   Schedules all read this one, so the three never describe different weeks. */
-const spShownRow = base => spOffersFull(base) && spPlanRead(base.key) === "full" ? spFullRow(base) : base;
+/* Whether the other choice to full cover is the open-hours plan (`openCover`)
+   rather than the demand plan: a shop whose demand data is not complete, or
+   that nobody works at yet. Its demand plan staffs no hour it has not read,
+   so the open-hours plan puts every station on every hour it opens and
+   nothing has read, and never opens it longer (_open_need()). */
+const spOpenFirst = base => {
+  if(!base || base.failed || !base.openCover) return false;
+  if(!base.openCover.complete) return true;
+  const b = (D.businesses || []).find(x => x.key === base.key);
+  return !!b && !b.staff;
+};
+/* The plan a shop is on: "full" where the reader picked the 24/7 test and the
+   shop offers it, "open" where the other choice is the open-hours plan
+   (spOpenFirst()), else "demand"; null with no plan. The shop's Staffing
+   block, its write, Staffing › Schedules, the Staff page (hrVariant()) and
+   Staff with no hours (hrIdleHtml()) all read this one, so none of them
+   describes or writes a different week. */
+const spPlanOf = base => !base || base.failed ? null
+  : spOffersFull(base) && spPlanRead(base.key) === "full" ? "full"
+  : spOpenFirst(base) ? "open" : "demand";
+/* The open-hours plan as a row the block draws like any other, as spFullRow()
+   does for full cover. It keeps the shop's own opening hours. */
+const spOpenRow = row => Object.assign({}, row, row.openCover,
+  {openCover: null, full: false, variant: "open"});
+const spShownRow = base => {
+  const plan = spPlanOf(base);
+  return plan === "full" ? spFullRow(base) : plan === "open" ? spOpenRow(base) : base;
+};
 /* The ticks of each plan are kept apart: an entry ticked on one is not an
    entry typed for the other. The full-cover ticks are kept per company as
    well, and not at all on a board with no character id; the demand plan's
@@ -23273,7 +23336,9 @@ function spUnmeasuredLine(row){
 }
 
 function spPlanPick(base, full){
-  const first = spCoverOnly(base) ? tt("sp.new.label.cover", "Cover only") : tt("sp.pick.demand", "Demand plan");
+  /* The open-hours plan where it is the other choice (spOpenFirst()). */
+  const first = spOpenFirst(base) ? tt("sp.pick.open", "Open hours")
+    : spCoverOnly(base) ? tt("sp.new.label.cover", "Cover only") : tt("sp.pick.demand", "Demand plan");
   /* Progress, on the test's own view: finished days since the shop first
      opened, against the days that make the data complete. */
   const fc = base.fullCover || {};
@@ -23333,7 +23398,7 @@ function spRosterBlock(b){
   const base = spRosterRow(b.key);
   const offer = spOffersFull(base);
   const row = spShownRow(base);
-  const full = offer && row !== base;
+  const full = offer && !!row.full;
   const pick = offer ? spPlanPick(base, full) : "";
   /* A week with nothing in it is the only empty state. A shop too new to have
      been measured still has cleaning and security cover to type -- and that is
@@ -23511,7 +23576,7 @@ function spRosterBlock(b){
     ${/* Which shop it is about rides in the heading: the Optimize staffing
           card lands here with the shop's own heading scrolled off the top. */""}
     ${pick}
-    ${c.full ? "" : spUnmeasuredLine(row)}
+    ${c.full || row.variant === "open" ? "" : spUnmeasuredLine(row)}
     ${c.cover ? spRosterNew(c, counts) : ""}
     <div class="sp-ba">
       <div tabindex="0" data-read="${attr(`${(() => {
@@ -25524,7 +25589,7 @@ function pgScheduleDone(key, last, answer){
   const row = last && last.row;
   const b = (D.businesses || []).find(x => x.key === key);
   const id = `schedule|${key}|${print}`;
-  pgRecord({id, family: "schedule", target: {site: key, plan: row && row.office ? "office" : row && row.full ? "full" : "demand"},
+  pgRecord({id, family: "schedule", target: {site: key, plan: row && row.office ? "office" : row && row.full ? "full" : row && row.variant === "open" ? "open" : "demand"},
     expect: {print, added: Number(answer.added) || 0, removed: Number(answer.removed) || 0}, rowKeys: [], label: b ? shortName(b) : key});
   if(typeof nxSchedStale === "function") nxSchedStale();
   return [id];
@@ -28524,16 +28589,17 @@ function hrBreaks(slug, w, row){
 }
 const hrKind = slug => ((D.hiring || {}).demandKinds || {})[slug] || null;
 
-/* A planned site's plan as the Staff page reads it: a new shop full cover,
-   else the roster's own pick; a factory the sizing on Supply; an office its
-   own. `row` is the plan row the hire weeks point into. */
+/* A planned site's plan as the Staff page reads it: a shop the plan its
+   Staffing block is on (spPlanOf()); a factory the sizing on Supply; an
+   office its own. `row` is the plan row the hire weeks point into. */
 function hrVariant(site){
   const plans = site.plans || {};
   if(site.kind === "shop"){
     /* Never full cover, whose write opens a shop 0 to 24: the open-hours
-       plan where the data is not complete (it is then the only one), or
-       where the player runs full cover or the shop is new; else demand. */
-    if(plans.open && (!plans.demand || site.new || spPlanRead(site.key) === "full")) return "open";
+       plan in its place, as where the shop is on it (a new shop, or one
+       whose data is not complete, when it is often the only one). */
+    const on = spPlanOf(spRosterRow(site.key));
+    if(plans.open && (on === "open" || on === "full" || !plans.demand)) return "open";
     return plans.demand ? "demand" : null;
   }
   if(site.kind === "factory") return plans[sizing] ? sizing : Object.keys(plans)[0] || null;
@@ -28543,7 +28609,7 @@ function hrPlanRow(site, variant){
   if(site.kind === "shop"){
     const base = spRosterRow(site.key);
     if(!base || base.failed) return null;
-    if(variant === "open" && base.openCover) return Object.assign({}, base, base.openCover, {openCover: null, fullCover: null, full: false});
+    if(variant === "open" && base.openCover) return spOpenRow(base);
     return variant === "full" && base.fullCover ? spFullRow(base) : base;
   }
   if(site.kind === "factory") return (((D.factoryStaffing || {})[variant]) || []).find(r => r.key === site.key && !r.failed) || null;
@@ -28564,6 +28630,10 @@ const hrPerson = (id, row) => {
   return p;
 };
 
+/* The schedule demands a person's week `x` ({w, S}) breaks, and whether it
+   breaks none: the hard filter automatic picks and moves go through. */
+const hrFails = (p, x) => (p.demands || []).filter(d => hrKind(d) === "schedule" && hrBreaks(d, x.w, x.S && x.S.row));
+const hrFits = (p, x) => !hrFails(p, x).length;
 /* The page's whole answer, deterministic for one payload, one set of
    filters and one set of ticks:
      sites  one per hiring site: {site, b, variant, plan, row, weeks, planned}
@@ -28604,7 +28674,11 @@ function hrModel(){
   /* 2. Spare people, and the unassigned nobody plans on, into another site's
      week in the role they are spare in (the unassigned: their best skill);
      the sites' spares in list order, then the rest. Someone spare in two
-     roles tries the one they are better at first. */
+     roles tries the one they are better at first. Their schedule demands
+     are a hard filter (Peter, 28 September 2026): only a week that meets
+     them all, at the first site in list order that has one, and there the
+     one at a desk that meets their desk demands first. Nobody is moved into
+     a week they would not keep; they stay spare. */
   const counted = new Set(sites.flatMap(S => S.plan.bench || []));
   const spares = [];
   sites.forEach(S => (S.plan.spare || []).forEach(id => spares.push({id, from: S})));
@@ -28618,9 +28692,10 @@ function hrModel(){
     const level = k => { const x = (p.skills || []).find(y => y && y.skill === k); return x ? Number(x.level) || 0 : k === p.skill ? Number(p.level) || 0 : -1; };
     const ordered = roles.slice().sort((a, b) => level(b) - level(a));
     for(const skill of ordered){
-      const S = sites.find(x => x !== from && (x.site.accepts || []).includes(skill) && x.weeks.some(y => !y.taken && y.w.skill === skill));
-      if(!S) continue;
-      const open = S.weeks.filter(y => !y.taken && y.w.skill === skill);
+      const fit = sites.filter(x => x !== from && (x.site.accepts || []).includes(skill))
+        .flatMap(x => x.weeks.filter(y => !y.taken && y.w.skill === skill && hrFits(p, y)));
+      if(!fit.length) continue;
+      const S = fit[0].S, open = fit.filter(y => y.S === S);
       const wk = open.find(y => !hrDeskMiss(p.demands, S, y.w).length) || open[0];
       wk.taken = true;
       moved.add(id);
@@ -28667,19 +28742,25 @@ function hrModel(){
       if(ui.skip.has(c.id)) return;
       const barred = x => pt && !forced && hrAsksPt(c) && atShop(x);
       const free = open.filter(x => !x.who && !barred(x));
-      if(free.length){
-        /* The first site in list order with a place left; there, the first
-           week whose schedule demands they meet, else the first, warned. */
-        const S = free[0].S, mine = free.filter(x => x.S === S);
-        const fails = x => (c.demands || []).filter(d => hrKind(d) === "schedule" && hrBreaks(d, x.w, S.row));
-        /* The weeks of a role are interchangeable, so the one at a desk
-           that meets their desk and chair demands goes first. */
-        const fit = mine.find(x => !fails(x).length && !hrDeskMiss(c.demands, S, x.w).length) || mine.find(x => !fails(x).length);
-        const wk = fit || mine[0];
-        wk.who = {type: "hire", c, misfit: fit ? [] : fails(wk)};
+      /* Their schedule demands are a hard filter (Peter, 28 September 2026):
+         the first site in list order with a week they meet, at every site's
+         open weeks of the role; there the one at a desk that meets their
+         desk and chair demands first, the weeks of a role being otherwise
+         interchangeable. Nobody no week fits is picked: the next best is.
+         Only someone the player ticks in by hand (Change picks) takes a week
+         that breaks a demand, the first free one, and is hired anyway,
+         warned. */
+      const fits = free.filter(x => hrFits(c, x));
+      if(fits.length || (free.length && forced)){
+        const pool = fits.length ? fits : free;
+        const S = pool[0].S, mine = pool.filter(x => x.S === S);
+        const wk = mine.find(x => !hrDeskMiss(c.demands, S, x.w).length) || mine[0];
+        wk.who = {type: "hire", c, misfit: fits.length ? [] : hrFails(c, wk)};
         role.picked.push(c);
         role.at.set(c.id, {week: wk});
         used.set(c.id, wk.S);
+      } else if(free.length){
+        role.at.set(c.id, {nofit: true});
       } else if(forced){
         const S = weeks.length ? weeks[0].S : null;
         if(!S) return;
@@ -28805,13 +28886,6 @@ function hrWeek(S, fill, away, arriving, lost){
   }
   return [...days].sort((a, b) => a[0] - b[0]).map(([d, shifts]) => ({d, shifts: shifts.sort((a, b) => a.f - b.f || a.t - b.t)}));
 }
-/* Whether a person has hours at a site in the game now. */
-const hrWorksAt = (S, id) => {
-  const row = S && S.row;
-  if(!row) return false;
-  const p = (row.people || []).findIndex(x => x.id === id);
-  return p >= 0 && ((row.current || {}).list || []).some(s => s.p === p);
-};
 /* The request, and what the review needs to name every row of it. `only`
    ({"<site key>|<skill>": n}) keeps the hires to that many weeks a site and
    role and sends no move: the partial result's "Pick more". */
@@ -28828,7 +28902,11 @@ function hrRequest(m, only){
     arriving.add(x.id);
     const at = touch(x.to);
     if(x.week) at.fill.push({id: x.id, w: x.week.w});
-    if(x.from){ away.add(x.id); if(hrWorksAt(x.from, x.id)) touch(x.from).rewrite = true; }
+    /* The site they leave is not written: its week changes only by their
+       entries, which the game's move clears by itself, and writing it from
+       its plan would change everybody else's week there too. The review
+       names the hours the move leaves empty there (hrLeftEmpty()). */
+    if(x.from) away.add(x.id);
   });
   const hire = (c, S, w, skill) => {
     hires.push({candidateId: c.id, address: gwAddress(S.key), expect: {wage: c.wage}, seenHoursLeft: c.hoursLeft ?? null});
@@ -28988,10 +29066,9 @@ function hrNoHoursHtml(){
    plan's `unstaffed`); nothing is hired for those, so the order would say
    nothing. The link opens the site's Staffing, whose write puts the week in. */
 function hrIdleHtml(m){
-  /* The plan the site's Staffing block shows and writes, as it picks it. */
+  /* The plan the site's Staffing block shows and writes (spPlanOf()). */
   const of = S => { const u = S.site.unstaffed || {};
-    const base = spRosterRow(S.key);
-    return S.site.kind === "office" ? u.office : spOffersFull(base) && spPlanRead(S.key) === "full" && u.full ? u.full : u.demand; };
+    return S.site.kind === "office" ? u.office : u[spPlanOf(spRosterRow(S.key)) || "demand"]; };
   const rows = m.sites.filter(S => (S.site.kind === "shop" || S.site.kind === "office") && of(S)).map(S => {
     const u = of(S), name = spEsc(S.b ? shortName(S.b) : S.site.name || "A site");
     const who = (u.roles || []).filter(r => r.idle).map(r => `your ${hrNum(r.idle)} ${hrRole(r.skill)} staff ${r.idle === 1 ? "has" : "have"} no hours`);
@@ -29146,6 +29223,7 @@ function hrCandRow(m, r, c){
   const noShop = !picked && !elsewhere && r.pt && r.shop && !r.allShop && hrAsksPt(c);
   const to = elsewhere ? `<span class="dim">picked for ${spEsc(hrSiteName(elsewhere))}</span>`
     : noShop ? `<span class="dim">not for shop weeks (Part-time)</span>`
+    : at && at.nofit ? `<span class="dim">${tt("co.hire.nofit", "no open week meets their hours demands")}</span>`
     : S ? `${spEsc(hrSiteName(S))}${at.over ? ` <span class="warn">over the plan</span>` : ""}` : `<span class="dim">–</span>`;
   const soon = Number(c.hoursLeft) < 24;
   return `<tr class="${picked ? "on" : ""}" data-hr-cand="${attr(c.id)}">
@@ -29464,25 +29542,37 @@ function hrQuickPlan(sites, cands, used){
   /* The plan's weeks in this role here that nobody reassigned takes. */
   out.plan = !!(S.planned && S.row);
   const open = out.plan ? S.weeks.filter(x => x.w.skill === q.skill && !x.who) : [];
-  out.picks = out.matches.slice(0, q.n).map(c => {
-    const fails = x => (c.demands || []).filter(d => hrKind(d) === "schedule" && hrBreaks(d, x.w, S.row));
-    const wk = open.find(x => !fails(x).length && !hrDeskMiss(c.demands, S, x.w).length)
-      || open.find(x => !fails(x).length) || open[0] || null;
+  /* Best match first. While the plan has weeks left here, a match takes one
+     that meets their schedule demands, at a desk that meets their desk
+     demands first; a match no week left fits is not picked, the next is
+     (Peter, 28 September 2026). Past the plan's weeks they join with no
+     hours, as at a site with no plan. */
+  out.picks = [];
+  for(const c of out.matches){
+    if(out.picks.length >= q.n) break;
+    const fit = open.filter(x => hrFits(c, x));
+    if(open.length && !fit.length) continue;
+    const wk = fit.find(x => !hrDeskMiss(c.demands, S, x.w).length) || fit[0] || null;
     if(wk){ open.splice(open.indexOf(wk), 1); if(hold){ wk.who = {type: "quick", c}; out.held++; } }
     if(hold) used.set(c.id, S);
-    return {c, w: wk ? wk.w : null, misfit: wk ? fails(wk) : []};
-  });
-  out.short = Math.max(0, q.n - out.matches.length);
+    out.picks.push({c, w: wk ? wk.w : null, misfit: []});
+  }
+  out.short = Math.max(0, q.n - out.picks.length);
   return out;
 }
 const hrQuickModel = m => m.quick;
+/* The shortest shift a clash may leave of a plan slot, as the planner's
+   MIN_SPLIT: a shorter stub is not worth typing. */
+const HR_MIN_SPLIT = 4;
 /* The request: the hires, and, when any of them gets hours, the site's week
-   as the game has it now plus their shifts. A shift that meets one already
-   there on the same station or for the same person is left out; nobody
-   else's hours change. `hours` is each hire's kept hours by id. */
+   as the game has it now plus their shifts. Where a shift meets one already
+   there on the same station or for the same person, only the parts of it
+   that meet nothing are kept, each HR_MIN_SPLIT hours or longer; nobody
+   else's hours change. `hours` is each hire's kept hours by id, `misfits`
+   the schedule demands their kept week breaks. */
 function hrQuickRequest(Q){
-  const S = Q.S, hires = [], names = new Map(), hours = new Map();
-  if(!S) return {body: {sites: [], hires: [], moves: []}, names, hours, given: 0};
+  const S = Q.S, hires = [], names = new Map(), hours = new Map(), misfits = new Map();
+  if(!S) return {body: {sites: [], hires: [], moves: []}, names, hours, misfits, given: 0};
   const row = S.row || {};
   const now = Q.plan && row.current && Array.isArray(row.current.list) ? row.current.list : null;
   const week = [];
@@ -29496,16 +29586,26 @@ function hrQuickRequest(Q){
     hires.push({candidateId: c.id, address: gwAddress(S.key), expect: {wage: c.wage}, seenHoursLeft: c.hoursLeft ?? null});
     names.set(c.id, {name: c.name, skill: Q.q.skill, c});
     let kept = 0, met = false;
+    const mine = [];  // the slots kept, cut to the parts that meet nothing
     if(now && w) (w.slots || []).forEach(sl => {
       const sh = (row.shifts || [])[sl.shift];
       const st = sh ? (row.stations || [])[sh.s] : null;
       const x = {d: sl.d, f: sl.f, t: sl.t, employeeId: c.id, itemInstanceId: sl.station || (st && st.id)};
       if(!(x.d >= 0 && x.d < 7) || !spHasId(x.itemInstanceId)) return;
-      if(week.some(y => meets(x, y))){ met = true; return; }
-      week.push(x);
-      kept += x.t - x.f;
+      const hits = week.filter(y => meets(x, y));
+      if(hits.length) met = true;
+      let parts = [[x.f, x.t]];
+      hits.forEach(y => { parts = parts.flatMap(([f, t]) => y.t <= f || t <= y.f ? [[f, t]]
+        : [[f, Math.min(t, y.f)], [Math.max(f, y.t), t]].filter(([a, b]) => a < b)); });
+      parts.filter(([f, t]) => !hits.length || t - f >= HR_MIN_SPLIT).forEach(([f, t]) => {
+        week.push(Object.assign({}, x, {f, t}));
+        mine.push(Object.assign({}, sl, {f, t}));
+        kept += t - f;
+      });
     });
     hours.set(c.id, kept);
+    /* Judged on the week they keep, not the plan's. */
+    misfits.set(c.id, kept ? hrFails(c, {w: {skill: Q.q.skill, slots: mine}, S}) : []);
     if(met && !kept) clash.add(c.id);
   });
   const given = [...hours.values()].filter(h => h > 0).length;
@@ -29517,20 +29617,23 @@ function hrQuickRequest(Q){
     ? {address: gwAddress(S.key), expect: S.b && typeof S.b.shiftPrint === "string" ? S.b.shiftPrint : null,
        openAllHours: false, days}
     : {address: gwAddress(S.key), expect: null, days: null};
-  return {body: {sites: hires.length ? [site] : [], hires, moves: []}, names, hours, given, clashed, now: !!now};
+  return {body: {sites: hires.length ? [site] : [], hires, moves: []}, names, hours, misfits, given, clashed, now: !!now};
 }
-/* A pick whose plan week breaks one of their schedule demands, in orange. */
+/* A pick whose kept week breaks one of their schedule demands, in orange. */
 const hrQuickMisfit = misfit => misfit.length ? `<small class="warn">hours break ${misfit.map(hrName).join(", ")}</small>` : "";
 function hrQuickHtml(m){
   const Q = hrQuickModel(m), q = Q.q;
   const l = gwLink(), off = !l || !(l.writes || []).includes("hire");
   const kind = S => { const k = HR_KIND_WORDS[S.site.kind]; return S.b && S.b.type ? S.b.type : k ? k[0] : S.site.kind; };
   const k = Q.picks.length, n = Q.matches.length;
+  /* The warnings are the kept week's, after the hours already set there. */
+  const kept = Q.ready ? hrQuickRequest(Q) : {misfits: new Map()};
   const match = !Q.ready ? ""
     : !n ? `<p class="hs-match none">Nobody matches.</p>`
     : `<details class="hs-match" data-hq-list${q.open ? " open" : ""}><summary><b>${hrNum(n)}</b> match · ${
-        Q.short ? `<span class="warn">only ${hrNum(n)} ${n === 1 ? "matches" : "match"}</span>` : k === n ? (k === 1 ? "picked" : `all ${hrNum(k)} are picked`) : k === 1 ? "the best is picked" : `the best ${hrNum(k)} are picked`}${hrChev()}</summary>
-      <ul>${Q.picks.map(({c, misfit}) => `<li><span>${spEsc(c.name || "?")}${hrQuickMisfit(misfit)}</span><span class="m">${Math.round(hrLevel(c, q.skill))}%</span><span class="m">${hrWage(c.wage)}/h</span></li>`).join("")}</ul></details>`;
+        Q.short ? `<span class="warn">${k < n ? tt("co.hire.quickfit", {one: "only {n} fits the plan's hours", other: "only {n} fit the plan's hours"}, {n: k})
+          : `only ${hrNum(n)} ${n === 1 ? "matches" : "match"}`}</span>` : k === n ? (k === 1 ? "picked" : `all ${hrNum(k)} are picked`) : k === 1 ? "the best is picked" : `the best ${hrNum(k)} are picked`}${hrChev()}</summary>
+      <ul>${Q.picks.map(({c}) => `<li><span>${spEsc(c.name || "?")}${hrQuickMisfit(kept.misfits.get(c.id) || [])}</span><span class="m">${Math.round(hrLevel(c, q.skill))}%</span><span class="m">${hrWage(c.wage)}/h</span></li>`).join("")}</ul></details>`;
   const busy = !!hrUi.quickPending;
   const dis = !Q.ready || !k || off || busy;
   return `<div class="qh"><span class="hs-i">${hrSvg("hire")}</span><h3>Quick hire</h3></div>
@@ -29577,7 +29680,7 @@ function hrQuickReview(){
   const nameOf = id => ((hrQuickLast.req.names.get(id) || {}).name) || "someone";
   const list = gone => {
     const {Q, req} = hrQuickLast;
-    return `<ul class="hs-qlist">${Q.picks.map(({c, misfit}) => { const h = req.hours.get(c.id) || 0; return `<li class="${req.given ? "h" : ""}"><span>${gone.has(c.id) ? `<span class="hr-struck">${spEsc(c.name || "?")}</span>` : spEsc(c.name || "?")}${h ? hrQuickMisfit(misfit) : ""}</span><span class="m">${
+    return `<ul class="hs-qlist">${Q.picks.map(({c}) => { const h = req.hours.get(c.id) || 0, misfit = req.misfits.get(c.id) || []; return `<li class="${req.given ? "h" : ""}"><span>${gone.has(c.id) ? `<span class="hr-struck">${spEsc(c.name || "?")}</span>` : spEsc(c.name || "?")}${h ? hrQuickMisfit(misfit) : ""}</span><span class="m">${
       Math.round(hrLevel(c, Q.q.skill))}%</span><span class="m">${hrWage(c.wage)}/h</span>${req.given ? `<span class="m${h && misfit.length ? " warn" : ""}">${h ? `${hrNum(h)} h` : "–"}</span>` : ""}</li>`; }).join("")}</ul>`;
   };
   /* What the hires' hours are, and that nobody else's change. */
@@ -29616,9 +29719,11 @@ function hrQuickReview(){
       const lo = Math.min(...wages), hi = Math.max(...wages);
       const left = (answer.sites || []).flatMap(s => (s && s.leftWithout || []).map(p => `<span class="person"><i>${spEsc(gwInitials(p.name))}</i>${spEsc(p.name || "someone")}</span>`));
       const blocked = answer.blocked === "myemployees" ? `<div class="gw-no"><span class="ic">${hrSvg("phone")}</span><div class="rule">MyEmployees is open in the game.</div><div class="fix">${gwSvg("right")}<span>Close the MyEmployees app on your in-game phone, then try again.</span></div></div>` : "";
+      const site = hrQuickLast.req.body.sites.find(x => x.days);
+      const checked = site ? gwCheckLines(gwWeekCheck(Q.S && Q.S.row, site.days)) : "";
       return `${blocked}${gwTiles([["Hire", null, hrNum(n())], ["Role", null, `<span class="hr-u">${hrRole(Q.q.skill)}</span>`],
           ["Wages", null, `${lo === hi ? hrWage(lo) : `${hrWage(lo)}–${hrWage(hi)}`}<small class="hr-u">/h</small>`]])}
-        ${list(gone)}${hours()}${goneCall(gone)}${left.length ? `<div class="gw-box">${gwCall("", "exit", "<b>No hours after this</b> for these people here, the game says. It takes them off their work and adds a to-do.")}<div class="gw-pills">${left.join("")}</div></div>` : ""}
+        ${list(gone)}${hours()}${goneCall(gone)}${phase === "done" ? "" : checked}${left.length ? `<div class="gw-box">${gwCall("", "exit", "<b>No hours after this</b> for these people here, the game says. It takes them off their work and adds a to-do.")}<div class="gw-pills">${left.join("")}</div></div>` : ""}
         <p class="hr-lock">${gwSvg("lock")}<span>No undo.</span></p>`;
     },
     hint: "Nothing changes until you click Hire.",
@@ -29866,7 +29971,7 @@ function hrReviewSites(m, req, phase, gone){
         hrBenchSlots(S, x), `${hrSlotHours(hrBenchSlots(S, x))} h`)).join("")}${
       gaps.map(x => person("Nobody", {t: `no ${hrRole(x.w.skill)} matches`}, hrRole(x.w.skill), "–", "–", x.w.slots, `${x.w.hours || 0} h`, "gap")).join("")}</div>` : "";
     const counts = `${hired.length + got.length} ${phase === "done" ? "hired" : "new"}${moves.length ? `<span class="mvc">+${moves.length} reassigned</span>` : ""}${
-      missed ? `<span class="mvc gap">${missed} still open</span>` : ""}${at && at.rewrite && !(phase === "done" ? hired.length + got.length : hires.length) && !moves.length ? `<span class="mvc">week rewritten</span>` : ""}`;
+      missed ? `<span class="mvc gap">${missed} still open</span>` : ""}`;
     return `<div class="hr-dsite${open ? " open" : ""}"><button type="button" class="hr-dhead" data-hr-site="${attr(S.key)}" aria-expanded="${open}">
       <span><span class="nm">${hoodHtml(S.b)}<span class="s">${spEsc(S.b ? shortName(S.b) : S.site.name || "?")}</span>${S.site.new ? `<span class="hr-new">new</span>` : ""}</span><span class="plan">${spEsc(S.b && S.b.type ? S.b.type : S.site.kind)} · ${plan}</span></span>
       <span class="hr-dots">${dots}</span><span class="c">${counts}<span class="cst">+${fmt(cost)}</span></span>${hrSvg("chev")}</button>${people}</div>`;
@@ -29971,10 +30076,17 @@ function hrReview(o = {}){
           <p class="hr-lock">${gwSvg("lock")}<span>No undo. To let someone go, fire them in MyEmployees in the game.</span></p>`;
       }
       const blocked = answer.blocked === "myemployees" ? `<div class="gw-no"><span class="ic">${hrSvg("phone")}</span><div class="rule">MyEmployees is open in the game.</div><div class="fix">${gwSvg("right")}<span>Close the MyEmployees app on your in-game phone, then try again.</span></div></div>` : "";
+      /* Every week this call writes, checked per person (gwWeekCheck()). */
+      const written = req.body.sites.filter(x => x.days);
+      const checked = written.flatMap(x => {
+        const S = m.sites.find(y => y.key === gwKeyOf(x.address));
+        return gwWeekCheck(S && S.row, x.days).map(p => Object.assign(p, written.length > 1 && S ? {site: spEsc(hrSiteName(S))} : {}));
+      });
       return `${blocked}${gwTiles([["Hire", null, c.hire], ["Reassign", null, c.move], ["Added wages", null, `+${fmt(bill)}<small class="hr-u">/day</small>`]])}
         <p class="gw-lead">Who goes where. Open a site to see each person and the days they work.</p>
         ${sites}${goneCall}${said}${fewerCall}${emptyCall}${displacedCall}${left.length ? `<div class="gw-box">${gwCall("", "exit", "<b>No hours after this</b> for these people at the sites whose week is replaced. The game takes them off their work there and adds a to-do.")}<div class="gw-pills">${left.join("")}</div></div>` : ""}
         ${gapText ? `<div class="gw-call gw-warn">${gwI("alert")}<div>${gapText}.</div></div>` : ""}
+        ${gwCheckLines(checked)}
         ${warned.length ? `<div class="gw-call">${gwI("info")}<div>${plural(warned.length, "person asks", "people ask")} for something their site does not meet (marked orange in Change picks). They are hired anyway.</div></div>` : ""}`;
     },
     hint: "Hiring cannot be undone. To let someone go later, fire them in the MyEmployees app in the game.",
@@ -30302,8 +30414,11 @@ function drawFindLocation(){
    to the measurement wording, and a board built before the feature says
    nothing at all. Ties go to the name, so the card does not move between runs
    of the same save. */
-const spRosterPlans = () => (D.staffing || []).filter(
-  r => !r.failed && (r.shifts || []).length);
+/* Each shop's plan as its Staffing block shows and writes it (spShownRow(),
+   through spPlanOf()), so the card never quotes a week the block does not:
+   a new shop is sized by its open-hours plan, not its cover-only one. */
+const spRosterPlans = () => (D.staffing || []).filter(r => !r.failed)
+  .map(spShownRow).filter(r => (r.shifts || []).length);
 /* The week the card sizes a plan by. Usually the lines with somebody on them,
    but a shop with no staff at all is twenty-one lines waiting on hires, and
    calling that "a week of 0 shifts to enter" sizes the one plan on the board
@@ -36757,6 +36872,117 @@ function gwRosterPlan(key){
   const row = spShownRow(base);
   return (row.shifts || []).length ? row : null;
 }
+/* --- every week a write sends, checked per person ------------------------
+   The game takes whatever week the mod hands it, and the mod checks overlap,
+   not contracts: the office default's additive write once gave a lawyer 60
+   hours. So each week a write is about to send (a Staffing write, a hire,
+   Quick hire) is checked here, person by person, against the rules the
+   planner keeps -- 12 hours an entry and a day, one entry at a time -- and
+   their own schedule demands: the hours band (at most 50 without one), an
+   exact four or five days, free weekends, the hours they keep free, no
+   cleaning. What is still broken is named in the review before the confirm;
+   nothing here blocks a write. */
+const GW_BANDS = {"ba:jobdemand_fulltime": [30, 50], "ba:jobdemand_parttime": [10, 30]};
+const GW_DAYS = {"ba:jobdemand_fourdaysweek": 4, "ba:jobdemand_fivedaysweek": 5};
+const GW_CAP = 12, GW_MOST = 50;
+/* One person's entries ({d, f, t, st}) against those rules: [{k, ...}]. */
+function gwPersonBreaks(list, demands, clean){
+  const out = [], dem = demands || [];
+  const hours = list.reduce((n, e) => n + e.t - e.f, 0);
+  const band = dem.map(d => GW_BANDS[d]).find(Boolean);
+  const [lo, hi] = band || [0, GW_MOST];
+  if(hours > hi || (band && hours < lo)) out.push({k: band ? "hours" : "most", n: hours, lo, hi});
+  const days = new Set(list.map(e => e.d));
+  const want = dem.map(d => GW_DAYS[d]).find(Boolean);
+  if(want && days.size !== want) out.push({k: "days", n: days.size, want});
+  [...days].sort((a, b) => HR_DAYS.indexOf(a) - HR_DAYS.indexOf(b)).forEach(d => {
+    const day = list.filter(e => e.d === d).sort((a, b) => a.f - b.f);
+    const long = day.find(e => e.t - e.f > GW_CAP);
+    const total = day.reduce((n, e) => n + e.t - e.f, 0);
+    /* One long entry is the long day too: said once. */
+    if(long) out.push({k: "entry", d, n: long.t - long.f});
+    else if(total > GW_CAP) out.push({k: "day", d, n: total});
+    if(day.some((e, i) => i && e.f < day[i - 1].t)) out.push({k: "twice", d});
+  });
+  dem.forEach(slug => {
+    const hit = slug === "ba:jobdemand_freeweekends" ? list.some(e => e.d === 6 || e.d === 0)
+      : slug === "ba:jobdemand_nocleaning" ? list.some(e => clean(e.st))
+      : !!HR_WINDOWS[slug] && list.some(e => HR_WINDOWS[slug].some(([a, b]) => a < e.t && e.f < b));
+    if(hit) out.push({k: "demand", slug});
+  });
+  return out;
+}
+/* Whether one more entry `e` on a person's week `list` would break a rule:
+   past the top of their hours, a day more than their four or five, a long
+   entry or day, an overlap, or a demand the entry itself breaks. Only what
+   adding can break: a week short of hours is not one entry's doing. */
+function gwAddBreaks(list, e, demands, clean){
+  const dem = demands || [];
+  const band = dem.map(d => GW_BANDS[d]).find(Boolean), want = dem.map(d => GW_DAYS[d]).find(Boolean);
+  const day = list.filter(x => x.d === e.d), sum = xs => xs.reduce((n, x) => n + x.t - x.f, 0);
+  return sum(list) + e.t - e.f > (band ? band[1] : GW_MOST)
+    || (!!want && !day.length && new Set(list.map(x => x.d)).size >= want)
+    || e.t - e.f > GW_CAP || sum(day) + e.t - e.f > GW_CAP
+    || day.some(x => x.f < e.t && e.f < x.t)
+    || gwPersonBreaks([e], dem.filter(d => !GW_BANDS[d] && !GW_DAYS[d]), clean).some(b => b.k === "demand");
+}
+/* Who someone is to the check: a row's people carry their schedule demands;
+   a candidate or somebody moved in carries theirs on the hiring payload. */
+const gwWho = (id, row) => {
+  const p = ((row || {}).people || []).find(x => x.id === id) || {};
+  const h = ((D.hiring || {}).people || {})[id] || {};
+  const c = (D.candidates || []).find(x => x.id === id) || {};
+  return {name: p.name || h.name || c.name || null, demands: p.demands || h.demands || c.demands || []};
+};
+/* A row's cleaning stations, by the game's id. */
+const gwCleanOf = row => {
+  const ids = new Set(((row || {}).stations || []).filter(s => s && s.skill === "ba:skill_cleaning").map(s => s.id));
+  return st => ids.has(st);
+};
+/* The people a week (`days`, as a write sends it) leaves breaking something,
+   against the site's row: [{id, name, breaks}]. Somebody whose entries the
+   write leaves exactly as the game has them is not the write's to answer
+   for. */
+function gwWeekCheck(row, days){
+  const mine = new Map(), now = new Map();
+  (days || []).forEach(({d, shifts}) => (shifts || []).forEach(s => {
+    if(!mine.has(s.employeeId)) mine.set(s.employeeId, []);
+    mine.get(s.employeeId).push({d, f: s.f, t: s.t, st: s.itemInstanceId});
+  }));
+  (((row || {}).current || {}).list || []).forEach(s => {
+    const who = ((row.people || [])[s.p] || {}).id, st = ((row.stations || [])[s.s] || {}).id;
+    if(!spHasId(who)) return;
+    if(!now.has(who)) now.set(who, []);
+    now.get(who).push(`${s.d}|${s.f}|${s.t}|${st}`);
+  });
+  const sig = list => list.slice().sort().join(",");
+  const clean = gwCleanOf(row), out = [];
+  mine.forEach((list, id) => {
+    if(sig(list.map(e => `${e.d}|${e.f}|${e.t}|${e.st}`)) === sig(now.get(id) || [])) return;
+    const who = gwWho(id, row);
+    const breaks = gwPersonBreaks(list, who.demands, clean);
+    if(breaks.length) out.push({id, name: who.name, breaks});
+  });
+  return out;
+}
+/* What the check found, one line a person; `site` names the site on a write
+   that touches several. */
+function gwCheckLines(found){
+  const what = b => b.k === "hours" ? tt("sp.gw.chk.hours", "{n} h a week, asks for {lo} to {hi}", {n: b.n, lo: b.lo, hi: b.hi})
+    : b.k === "most" ? tt("sp.gw.chk.most", "{n} h a week, more than {hi}", {n: b.n, hi: b.hi})
+    : b.k === "days" ? tt("sp.gw.chk.days", "{n} days a week, asks for {want}", {n: b.n, want: b.want})
+    : b.k === "entry" ? tt("sp.gw.chk.entry", "an entry of {n} h on {day}", {n: b.n, day: ttDay(b.d)})
+    : b.k === "day" ? tt("sp.gw.chk.day", "{n} h on {day}", {n: b.n, day: ttDay(b.d)})
+    : b.k === "twice" ? tt("sp.gw.chk.twice", "two entries at once on {day}", {day: ttDay(b.d)})
+    : tt("sp.gw.chk.demand", "breaks {demand}", {demand: hrName(b.slug)});
+  const lines = found.map(p => {
+    const name = spEsc(p.name || tt("sp.gw.someone.cap", "Someone")), list = p.breaks.map(what).join("; ");
+    return `<li>${p.site ? tt("sp.gw.chk.person.at", "<b>{name}</b> at {site}: {what}", {name, site: p.site, what: list})
+      : tt("sp.gw.chk.person", "<b>{name}</b>: {what}", {name, what: list})}</li>`;
+  }).join("");
+  return found.length ? gwCall("warn", "alert", `${tt("sp.gw.chk.head", {one: "This week breaks a rule or a demand for {n} person:",
+    other: "This week breaks a rule or a demand for {n} people:"}, {n: found.length})}<ul class="gw-chk">${lines}</ul>`) : "";
+}
 /* The week a write sends, from the plan's rows, their station and person
    indices turned back into the game's ids. Only the people already working
    here: a hire's entry has nobody on it and a bench member's somebody not
@@ -36766,7 +36992,7 @@ function gwRosterPlan(key){
 function gwRosterWeek(row){
   const bench = new Set([...(row.bench || []), ...((row.addPeople || {}).assign || [])].map(r => r.p));
   const days = new Map();
-  let sent = 0, kept = 0, unreadable = 0;
+  let sent = 0, kept = 0, unreadable = 0, dropped = 0;
   const added = [];  // an office's: the planned entries the write adds
   const put = s => {
     const st = (row.stations || [])[s.s], who = (row.people || [])[s.p];
@@ -36787,18 +37013,26 @@ function gwRosterWeek(row){
     const busy = [];
     unreadable += Number(row.unrepresentable) || 0;
     const clash = s => busy.some(b => b.d === s.d && b.f < s.t && s.f < b.t && (b.p === s.p || b.s === s.s));
+    /* Each person's week at the office as the write leaves it: an entry
+       is added only where their week can take it (gwAddBreaks()), since
+       the entries already there are kept whatever they come to. */
+    const weeks = new Map(), clean = gwCleanOf(row);
+    const entry = s => ({d: s.d, f: s.f, t: s.t, st: ((row.stations || [])[s.s] || {}).id});
+    const weekOf = p => { if(!weeks.has(p)) weeks.set(p, []); return weeks.get(p); };
     ((row.current || {}).list || []).forEach(s => {
       busy.push({d: s.d, f: s.f, t: s.t, p: s.p, s: s.s});
+      if(!spNobody(s.p)) weekOf(s.p).push(entry(s));
       if(put(s)) kept++; else unreadable++;
     });
     (row.shifts || []).forEach(s => {
       if(spNobody(s.p) || bench.has(s.p) || clash(s)) return;
-      if(put(s)){ sent++; added.push(s); busy.push({d: s.d, f: s.f, t: s.t, p: s.p, s: s.s}); }
+      if(gwAddBreaks(weekOf(s.p), entry(s), ((row.people || [])[s.p] || {}).demands, clean)){ dropped++; return; }
+      if(put(s)){ sent++; added.push(s); busy.push({d: s.d, f: s.f, t: s.t, p: s.p, s: s.s}); weekOf(s.p).push(entry(s)); }
     });
   } else (row.shifts || []).forEach(s => { if(!spNobody(s.p) && !bench.has(s.p) && put(s)) sent++; });
   if(!row.office && !row.full && spCoverOnly(row))
     ((row.current || {}).list || []).filter(s => !s.k).forEach(s => { if(put(s)) kept++; });
-  return {days: [...days].sort((a, b) => a[0] - b[0]).map(([d, shifts]) => ({d, shifts})), sent, kept, unreadable, added};
+  return {days: [...days].sort((a, b) => a[0] - b[0]).map(([d, shifts]) => ({d, shifts})), sent, kept, unreadable, added, dropped};
 }
 /* Whether the game's schedule already is this week, entry for entry (and
    open around the clock where the plan wants that). */
@@ -36962,6 +37196,7 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
       const whole = tt("sp.gw.plan.whole", "replaces the whole week");
       const which = row.office ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.gw.plan.office", "Office default")}</span><span class="gw-only">${tt("sp.gw.plan.adds", "adds to the week")}</span>`
         : row.full ? `<span class="gw-plan full">${gwSvg("sun")}${tt("sp.pick.full", "Full cover 24/7")}</span><span class="gw-only">${tt("sp.gw.plan.every", "every station, every hour")}</span>`
+        : row.variant === "open" ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.pick.open", "Open hours")}</span><span class="gw-only">${whole}</span>`
         : spCoverOnly(row) ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.gw.plan.cover", "Cleaning and security")}</span><span class="gw-only">${whole}</span>`
         : `<span class="gw-plan">${gwSvg("roster")}${tt("sp.pick.demand", "Demand plan")}</span><span class="gw-only">${whole}</span>`;
       const kept = week.kept && !row.office ? gwCall("info", "info", tt("sp.gw.sch.kept", {
@@ -37003,7 +37238,8 @@ function gwSchedule(keys, i = 0, run = [], o = {}){
         + gwTiles([[labels[0], now.length, sentList.length], [labels[1], gwHours(now), gwHours(sentList)], [labels[2], nowPeople, afterPeople]])
         + gwWeek(now, week.days) + kept + toggle
         + (left.length ? `<div class="gw-box">${gwCall("", "exit", tt("sp.gw.left", "<b>No hours here after this</b>. The game takes them off their work here and adds a to-do, as its own schedule does."))}<div class="gw-pills">${left.join("")}</div></div>` : "")
-        + adds + (add.people ? gwAddBox(add, gwHours(sentList)) : "") + over.join("");
+        + adds + (add.people ? gwAddBox(add, gwHours(sentList)) : "") + over.join("")
+        + gwCheckLines(gwWeekCheck(row, week.days));
     },
     bind: (dlg, replan) => {
       const sw = dlg.querySelector("[data-gw-open]");

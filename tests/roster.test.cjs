@@ -2179,3 +2179,24 @@ test('a shop without complete data is on its open-hours plan: every station the 
     assert.deepEqual(await pickText(page), [['Open hours', true], ['Full cover 24/7', false]]);
   } finally { await page.close(); }
 });
+
+test('the Optimize staffing card sizes a new shop by the plan its Staffing shows', async () => {
+  // The card read the demand plan (cover only) while the block showed and
+  // wrote the open-hours plan: the two quoted different weeks.
+  const page = await shop('newshop', null, null, {open: true});
+  try {
+    const out = await page.evaluate(k => {
+      drawOptimizeStaffing();
+      const best = spBestRoster(), shown = spShownRow(spRosterRow(k)), c = spRosterCounts(shown);
+      const want = best.saves ? `\u2212${spRosterNow(shown) - c.staffed} ENTRIES` : `${spPlanHours(shown)} HOURS`;
+      return {variant: best.row.variant, key: best.row.key, same: best.row.shifts === shown.shifts,
+        badge: $('optimizeStaffingCard').querySelector('.soon').textContent, want,
+        cover: spPlanHours(spRosterRow(k))};
+    }, KEY);
+    assert.equal(out.variant, 'open');
+    assert.equal(out.key, KEY);
+    assert.equal(out.same, true);
+    assert.equal(out.badge, out.want);
+    assert.notEqual(out.badge, `${out.cover} HOURS`, 'not the cover-only week');
+  } finally { await page.close(); }
+});
