@@ -953,7 +953,8 @@ class MockHire(LinkedMock):
         status, answer = self.post("schedule", {"dryRun": True, "address": GIFTS, "expect": new_print,
                                                 "days": [{"d": 5, "shifts": [shift(IDA, CLEAN)]}]})
         self.assertTrue(answer["ok"], answer)
-        # No undo, ever.
+        # A mod before 0.5.0 (no hire.undo) never undoes a hire.
+        self.link.configure({"features": []})
         self.assertEqual(self.post("undo", {"kind": "hire"}), (409, {"error": "no_undo"}))
         self.assertEqual(self.post("undo", {"kind": "hire", "dryRun": True}), (409, {"error": "no_undo"}))
 
@@ -1151,6 +1152,213 @@ class MockHire(LinkedMock):
         self.assertEqual(self.post("hire", self.body(dryRun=False)),
                          (409, {"error": "cannot_write", "reason": "myemployees"}))
         self.assertEqual(self.post("hire", self.body())[0], 200)
+
+
+DEE = "DDDDemployeeDDDDDDDDDDDD"
+DEE_PRINT = shift_print([(4, 8, 20, DEE, REGISTER, 1)])
+
+
+class MockHireOneAction(LinkedMock):
+    """Mod 0.5.0's hire call (features hire.reschedule and hire.undo): weeks
+    no hire or move reaches, and the undo of the whole call."""
+
+    def setUp(self):
+        super().setUp()
+        # The synthetic company with Dee working at Bare, where nobody else does.
+        company = es3_fixture.link_company()
+        company["EmployeeInstances"].append({
+            "id": DEE, "characterData": {"name": "Dee Park", "skills": [{"name": "ba:skill_customerservice", "value": 50.0}]},
+            "assignedAddress": es3_fixture.address("ba:street_fifthavenue", 4)})
+        with open(self.path, "wb") as fh:
+            fh.write(es3_fixture.encode(company))
+        self.link.refresh(force=True)
+
+    def call_body(self, **over):
+        """Ida hired into Gifts, whose week opens all hours; Ana moved from
+        Gifts (where she has two shifts) to Corner; Bare's week, which no hire
+        or move reaches, rewritten."""
+        body = {"dryRun": False,
+                "sites": [{"address": GIFTS, "expect": GIFTS_PRINT, "openAllHours": True,
+                           "days": [{"d": 3, "shifts": [shift(IDA, REGISTER)]}]},
+                          {"address": CORNER, "expect": CORNER_PRINT, "openAllHours": False,
+                           "days": [{"d": 2, "shifts": [shift(CY, CORNER_REGISTER)]},
+                                    {"d": 3, "shifts": [shift(ANA, CORNER_REGISTER)]}]},
+                          {"address": BARE, "expect": shift_print([]), "openAllHours": False,
+                           "days": [{"d": 4, "shifts": [shift(DEE, REGISTER)]}]}],
+                "hires": [{"candidateId": IDA, "address": GIFTS, "expect": {"wage": 26.5}}],
+                "moves": [{"employeeId": ANA, "from": GIFTS, "to": CORNER}]}
+        body.update(over)
+        return body
+
+    def prints(self):
+        """Each site's print now, as the next write would compare it."""
+        save = self.link._save()
+        return {key: shift_print(self.link._entries(save, self.link._registration(save, key), key))
+                for key in (("ba:street_secondavenue", 10), ("ba:street_broadway", 2), ("ba:street_fifthavenue", 4))}
+
+    def state(self):
+        return (json.dumps({str(k): v for k, v in self.link.schedules.items()}, sort_keys=True),
+                sorted(map(str, self.link.moved.items())), sorted(self.link.hired),
+                {str(k): sorted(v) for k, v in self.link.opened.items()}, "hire" in self.link.undo, self.stamp())
+
+    def test_health_lists_the_features_and_config_changes_them(self):
+        health = json.loads(call(self.url + "/health")[2])
+        self.assertEqual(health["features"], ["hire.reschedule", "hire.undo"])
+        self.assertEqual(self.link.configure({"features": []})["features"], [])
+        self.assertEqual(json.loads(call(self.url + "/health")[2])["features"], [])
+        self.link.configure({"reset": True})
+        self.assertEqual(json.loads(call(self.url + "/health")[2])["features"], ["hire.reschedule", "hire.undo"])
+        # --features "" is a Link with none; a 0.1.0 mock lists neither key.
+        older = game_link_mock.Link(self.path, character="abc", company="Mock Co", day=34, hour=14, cash=1.5,
+                                    build=3680, schema=1, throttle=False, refuse=None, features=[])
+        self.assertEqual(older.health()["features"], [])
+        older.writes = None
+        self.assertNotIn("features", older.health())
+
+    def test_a_reschedule_only_site_is_written_with_the_feature_and_400_without(self):
+        only = {"hires": [], "moves": [], "sites": [self.call_body()["sites"][2]]}
+        status, answer = self.post("hire", dict(only, dryRun=True))
+        self.assertEqual(status, 200)
+        self.assertTrue(answer["ok"], answer)
+        self.assertEqual(answer["sites"][0]["after"]["print"], DEE_PRINT)
+        status, answer = self.post("hire", only)
+        self.assertEqual(status, 200, answer)
+        self.assertEqual(self.prints()[("ba:street_fifthavenue", 4)], DEE_PRINT)
+        # Checked like any site with a week: a stale print is changed.
+        status, answer = self.post("hire", only)
+        self.assertEqual((status, answer["rows"]), (409, [{"scope": "site", "address": BARE, "error": "changed"}]))
+        # A reschedule-only site with no week does nothing: 400.
+        status, answer = self.post("hire", dict(only, sites=[{"address": BARE, "expect": None, "days": None}]))
+        self.assertEqual((status, answer["error"]), (400, "bad_request"))
+        # Without hire.reschedule, as before 0.5.0.
+        self.link.configure({"features": ["hire.undo"]})
+        status, answer = self.post("hire", dict(only, dryRun=True))
+        self.assertEqual((status, answer["error"]), (400, "bad_request"))
+
+    def test_the_undo_takes_the_whole_call_back(self):
+        before = self.prints()
+        status, done = self.post("hire", self.call_body())
+        self.assertEqual(status, 200, done)
+        self.assertEqual([s["openedHours"] for s in done["sites"]], [True, False, False])
+        self.assertEqual(self.link.opened[("ba:street_secondavenue", 10)], {0, 1})
+        self.assertEqual(self.link.moved[ANA], ("ba:street_broadway", 2))
+        # A dry run of the undo answers the verdict and changes nothing.
+        kept = self.state()
+        status, dry = self.post("undo", {"kind": "hire", "dryRun": True})
+        self.assertEqual((status, dry["ok"], dry["dryRun"], dry["undo"], dry["rows"]), (200, True, True, True, []))
+        self.assertEqual(self.state(), kept)
+        stamp = self.stamp()
+        status, undo = self.post("undo", {"kind": "hire"})
+        self.assertEqual(status, 200, undo)
+        self.assertEqual((undo["ok"], undo["kind"], undo["dryRun"], undo["undo"], undo["stamp"]),
+                         (True, "hire", False, True, stamp))
+        self.assertEqual(undo["hired"], [{"candidateId": IDA, "name": "Ida Nord", "business": "HART. Gifts",
+                                          "wage": 26.5, "hoursLeft": 71}])
+        self.assertEqual(undo["moved"], [{"employeeId": ANA, "name": "Ana Silva", "from": "HART. Corner",
+                                          "to": "HART. Gifts", "shiftsCleared": 1}])
+        self.assertEqual((undo["skipped"], undo["wageAdded"], undo["rows"]), ([], -26.5, []))
+        self.assertEqual([(s["business"], s["before"]["print"], s["after"]["print"], s["openedHours"])
+                          for s in undo["sites"]],
+                         [("HART. Gifts", done["sites"][0]["after"]["print"], GIFTS_PRINT, True),
+                          ("HART. Corner", done["sites"][1]["after"]["print"], CORNER_PRINT, False),
+                          ("HART. Bare", DEE_PRINT, shift_print([]), False)])
+        self.assertEqual([w["kind"] for w in self.link.applied], ["hire", "undo"])
+        # Every week as it was, the opened days closed again.
+        self.assertEqual(self.prints(), before)
+        self.assertEqual(self.link.opened[("ba:street_secondavenue", 10)], set())
+        _, again = self.post("schedule", {"dryRun": True, "address": GIFTS, "expect": GIFTS_PRINT,
+                                          "openAllHours": True, "days": []})
+        self.assertTrue(again["openedHours"], "Gifts' days are not open all day any more")
+        # Ida is a candidate again, and hireable again; Ana is back at Gifts.
+        self.assertIn(IDA, self.link._candidates(self.link._save()))
+        _, again = self.post("hire", dict(self.call_body(), dryRun=True))
+        self.assertTrue(again["ok"], again)
+        self.assertEqual(([h["candidateId"] for h in again["hired"]], again["skipped"]), ([IDA], []))
+        self.assertNotIn(ANA, self.link.moved)
+        # An undo is not itself undoable.
+        self.assertEqual(self.post("undo", {"kind": "hire"}), (409, {"error": "nothing_to_undo"}))
+
+    def test_the_undo_refuses_when_the_game_has_moved_on(self):
+        self.assertEqual(self.post("hire", self.call_body())[0], 200)
+        # The day has moved on.
+        self.link.configure({"day": 35})
+        day = [{"scope": "day", "error": "changed"}]
+        self.assertEqual(self.post("undo", {"kind": "hire"}), (409, {"error": "changed", "rows": day}))
+        status, dry = self.post("undo", {"kind": "hire", "dryRun": True})
+        self.assertEqual((status, dry["ok"], dry["rows"]), (200, False, day))
+        self.link.configure({"day": 34})
+        # A person not where the call left them, a hire no longer hired.
+        self.link.moved[ANA] = ("ba:street_fifthavenue", 4)
+        self.link.hired.discard(IDA)
+        _, dry = self.post("undo", {"kind": "hire", "dryRun": True})
+        self.assertEqual(dry["rows"], [{"scope": "move", "id": ANA, "error": "changed"},
+                                       {"scope": "hire", "id": IDA, "error": "changed"}])
+        self.link.moved[ANA] = ("ba:street_broadway", 2)
+        self.link.hired.add(IDA)
+        # BizMan's schedule screen open on a site it restores.
+        self.link.configure({"screenOpen": [BARE]})
+        refused = {"error": "refused", "rows": [{"scope": "site", "address": BARE, "error": "screen_open"}]}
+        self.assertEqual(self.post("undo", {"kind": "hire"}), (409, refused))
+        status, dry = self.post("undo", {"kind": "hire", "dryRun": True})
+        self.assertEqual((status, dry["ok"], dry["rows"]), (200, False, refused["rows"]))
+        self.link.configure({"screenOpen": []})
+        # MyEmployees open: the apply cannot write, the dry run is blocked.
+        self.link.configure({"myEmployees": True})
+        self.assertEqual(self.post("undo", {"kind": "hire"}), (409, {"error": "cannot_write", "reason": "myemployees"}))
+        status, dry = self.post("undo", {"kind": "hire", "dryRun": True})
+        self.assertEqual((status, dry["ok"], dry["blocked"], dry["rows"]), (200, False, "myemployees", []))
+        self.link.configure({"myEmployees": False})
+        # --refuse-write answers as the hire write's refusal.
+        self.link.refuse_write = "refused"
+        self.assertEqual(self.post("undo", {"kind": "hire"}), (409, {"error": "refused", "rows": [
+            {"scope": "site", "address": GIFTS, "error": "screen_open"}]}))
+        self.link.refuse_write = None
+        # A later schedule write to a site the call wrote: its print is not the call's.
+        corner = self.prints()[("ba:street_broadway", 2)]
+        status, _ = self.post("schedule", {"address": CORNER, "expect": corner,
+                                           "days": [{"d": 2, "shifts": [shift(CY, CORNER_REGISTER)]}]})
+        self.assertEqual(status, 200)
+        self.assertEqual(self.post("undo", {"kind": "hire"}), (409, {"error": "changed", "rows": [
+            {"scope": "site", "address": CORNER, "error": "changed"}]}))
+        self.assertEqual([w["kind"] for w in self.link.applied], ["hire", "schedule"])
+
+    def test_a_later_hire_replaces_the_undo_and_one_that_changes_nothing_clears_it(self):
+        self.assertEqual(self.post("hire", self.call_body())[0], 200)
+        first = self.link.undo["hire"]
+        only = {"hires": [], "moves": [], "sites": [{"address": BARE, "expect": DEE_PRINT,
+                                                     "days": [{"d": 5, "shifts": [shift(DEE, REGISTER)]}]}]}
+        self.assertEqual(self.post("hire", only)[0], 200)
+        self.assertIsNot(self.link.undo["hire"], first)
+        self.assertEqual(list(self.link.undo["hire"]["sites"]), [("ba:street_fifthavenue", 4)])
+        same = dict(only, sites=[dict(only["sites"][0], expect=self.prints()[("ba:street_fifthavenue", 4)])])
+        self.assertEqual(self.post("hire", same)[0], 200)
+        self.assertNotIn("hire", self.link.undo)
+        self.assertEqual(self.post("undo", {"kind": "hire"}), (409, {"error": "nothing_to_undo"}))
+
+    def test_the_undo_gives_a_mover_their_shifts_back_where_the_call_only_cleared_them(self):
+        # Gifts is not rewritten: the move alone clears Ana's two shifts there.
+        move = {"hires": [], "moves": [{"employeeId": ANA, "from": GIFTS, "to": CORNER}],
+                "sites": [{"address": CORNER, "expect": None, "days": None}]}
+        self.assertEqual(self.post("hire", move)[0], 200)
+        self.assertEqual(self.prints()[("ba:street_secondavenue", 10)], shift_print([]))
+        # A later schedule write gives her hours at Corner; the undo takes them with her.
+        corner = self.prints()[("ba:street_broadway", 2)]
+        self.assertEqual(self.post("schedule", {"address": CORNER, "expect": corner, "days": [
+            {"d": 2, "shifts": [shift(CY, CORNER_REGISTER)]}, {"d": 5, "shifts": [shift(ANA, CORNER_REGISTER)]}]})[0], 200)
+        status, undo = self.post("undo", {"kind": "hire"})
+        self.assertEqual(status, 200, undo)
+        self.assertEqual(undo["moved"], [{"employeeId": ANA, "name": "Ana Silva", "from": "HART. Corner",
+                                          "to": "HART. Gifts", "shiftsCleared": 1}])
+        self.assertEqual([(s["business"], s["after"]["print"]) for s in undo["sites"]], [("HART. Gifts", GIFTS_PRINT)])
+        self.assertEqual(self.prints()[("ba:street_secondavenue", 10)], GIFTS_PRINT)
+        self.assertEqual(self.prints()[("ba:street_broadway", 2)], CORNER_PRINT)
+
+    def test_no_undo_without_the_feature(self):
+        self.link.configure({"features": ["hire.reschedule"]})
+        self.assertEqual(self.post("hire", self.call_body())[0], 200)
+        self.assertNotIn("hire", self.link.undo)
+        self.assertEqual(self.post("undo", {"kind": "hire"}), (409, {"error": "no_undo"}))
+        self.assertEqual(self.post("undo", {"kind": "hire", "dryRun": True}), (409, {"error": "no_undo"}))
 
 
 if __name__ == "__main__":
