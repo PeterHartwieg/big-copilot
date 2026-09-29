@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "72f37924ca";</script>
-<link rel="stylesheet" href="community.css?v=72f37924ca">
+<script>window.LEDGER_BUILD = "46250e0d33";</script>
+<link rel="stylesheet" href="community.css?v=46250e0d33">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=72f37924ca">
+<link rel="stylesheet" href="fonts/fonts.css?v=46250e0d33">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -5547,7 +5547,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"72f37924ca","latest":{"pr":169,"date":"2026-09-28","title":"A new layout: problems first, and a sidebar with five places to fix them","summary":"The board is rebuilt around what needs your attention. The Overview opens on Needs attention, each finding with a button that takes you to the exact setting, and a way back to where you were. A sidebar on the left holds five places, the open one with its views under it: the Overview, Businesses (results, cash and loans, prices against the market, a standards comparison with uniforms you can set from it, milestones), Supply (the changes to make, imports, deliveries, production, and a goods flow you can drag and zoom like the map), Staffing (schedules, staff needs, payroll) and Expansion (demand, finding a location, planning a factory), then the City map and the Wiki. The button at its foot folds the sidebar to a strip of icons, and the board remembers it. Every business page links to its schedule, deliveries and prices. Changes you mark, apply through the game link, or that a later save confirms now look different, and preferences and help sit under the one ··· menu at the sidebar's foot. Old links keep working."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"46250e0d33","latest":{"pr":169,"date":"2026-09-28","title":"A new layout: problems first, and a sidebar with five places to fix them","summary":"The board is rebuilt around what needs your attention. The Overview opens on Needs attention, each finding with a button that takes you to the exact setting, and a way back to where you were. A sidebar on the left holds five places, the open one with its views under it: the Overview, Businesses (results, cash and loans, prices against the market, a standards comparison with uniforms you can set from it, milestones), Supply (the changes to make, imports, deliveries, production, and a goods flow you can drag and zoom like the map), Staffing (schedules, staff needs, payroll) and Expansion (demand, finding a location, planning a factory), then the City map and the Wiki. The button at its foot folds the sidebar to a strip of icons, and the board remembers it. Every business page links to its schedule, deliveries and prices. Changes you mark, apply through the game link, or that a later save confirms now look different, and preferences and help sit under the one ··· menu at the sidebar's foot. Old links keep working."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -5635,8 +5635,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=72f37924ca"></script>
-<script src="community.js?v=72f37924ca"></script>
+<script src="app.js?v=46250e0d33"></script>
+<script src="community.js?v=46250e0d33"></script>
 
 <script>
 
@@ -9929,8 +9929,8 @@ const SP_ROSTER_STORE = "ba_dash_roster:";
 const spRosterRow = key => (D.staffing || []).find(r => r.key === key) || null;
 /* Whether the plan rests on a measured hour at all. Every serving role thin
    all week means the planner cut no serving shifts, and there is nothing
-   honest to put on the strip: the game's own arrival ceiling over-predicts a
-   shop like this fourfold, so it is never shown as demand. */
+   honest to put on the strip: the game's own arrival ceiling counts everyone
+   who may walk in, not the customers served, so it is never shown as demand. */
 const spRosterMeasured = row => !!row && !row.failed && Object.keys(row.basis || {}).some(
   skill => (row.basis[skill] || []).some(day => (day || []).some(b => b && b !== "none")));
 /* Whether the doors are open that hour. The game keeps a list of slots a day,
@@ -10656,8 +10656,9 @@ function spDesks(grid){
    Schedule, and a tick per line once they have. */
 
 /* The empty state. A shop too new to have been measured is not given a guess:
-   the game's own arrival ceiling over-predicts a shop like it fourfold, and a
-   roster cut from that would be a fiction with a shift count on it. */
+   the game's own arrival ceiling counts everyone who may walk in, not the
+   customers served, and a roster cut from that would be a fiction with a shift
+   count on it. */
 function spRosterNone(row, pick){
   const stations = (row && row.stations) || [];
   const codes = spStationCodes(stations);
@@ -10668,7 +10669,7 @@ function spRosterNone(row, pick){
   return `<section class="sec rv" data-block="roster" id="sp-roster"${pick ? ` data-site="${attr(row.key)}"` : ""}>
     ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster", why: failed
       ? tt("sp.roster.failed.why", "This site's schedule or stations could not be read, so no week is suggested for it. Nothing else on the board is affected.")
-      : tt("sp.roster.none.why", "A week is cut from the hours this site has already served, and there is no cleaning or security station here to cover in the meantime. The game's own arrival ceiling over-predicts a shop like this fourfold, so nothing is suggested from it.")})}
+      : tt("sp.roster.none.why", "A week is cut from the hours this site has already served, and there is no cleaning or security station here to cover in the meantime. The game's own arrival ceiling counts everyone who may walk in, not the customers a shop like this serves, so nothing is suggested from it.")})}
     ${pick || ""}
     <div class="chartbox sp-gantt sp-empty">${rows}</div>
     <div class="sp-read">${failed ? tt("sp.roster.failed", "Plan unavailable") : tt("sp.roster.none", "Nothing to schedule")}</div>

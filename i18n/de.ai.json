@@ -712,6 +712,7 @@
  "sp.off.openh": "gpt-6-sol",
  "sp.off.people": "gpt-6-sol",
  "sp.off.quiet": "gpt-6-sol",
+ "sp.roster.none.why": "claude-opus-5-5",
  "sp.sched.finds_one": "gpt-6-sol",
  "sp.sched.finds_other": "gpt-6-sol",
  "sp.sched.open": "gpt-6-sol",

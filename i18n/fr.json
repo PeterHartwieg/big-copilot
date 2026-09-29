@@ -3735,7 +3735,7 @@
  "sp.roster.failed": "Planning indisponible",
  "sp.roster.failed.why": "Impossible de lire le planning ou les stations de ce site : aucune semaine proposée. Le reste du tableau de bord reste disponible.",
  "sp.roster.none": "Rien à planifier",
- "sp.roster.none.why": "La semaine proposée repose sur les heures déjà assurées ici. Aucune station de nettoyage ou de sécurité n'est à couvrir entre-temps. Le plafond d'arrivées du jeu surestime la demande de ce type de magasin par un facteur quatre ; il ne permet donc aucune proposition.",
+ "sp.roster.none.why": "La semaine proposée repose sur les heures déjà assurées ici. Aucune station de nettoyage ou de sécurité n'est à couvrir entre-temps. Le plafond d'arrivées du jeu compte tous ceux qui pourraient entrer, pas les clients que sert ce type de magasin ; il ne permet donc aucune proposition.",
  "sp.roster.title": "Personnel",
  "sp.roster.why.demand": "Une semaine à copier dans BizMan › Planning, jour par jour.",
  "sp.roster.why.entries": "Chaque ligne affecte une personne à une station pour plusieurs heures de suite. Personne ne dépasse les 12 h par jour autorisées par le jeu ni ne travaille pendant ses heures d'indisponibilité. Cochez une ligne après l'avoir saisie dans le jeu. Les coches restent dans ce navigateur et ne modifient pas la sauvegarde.",

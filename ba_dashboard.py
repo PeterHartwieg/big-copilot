@@ -1428,6 +1428,15 @@ def _door_caps(names: Names) -> dict:
     return caps
 
 
+def _size_cap(row: dict, caps: dict):
+    """The customer capacity a building row's size buys, out of _door_caps().
+
+    A number, [min, max] for a venue whose layouts seat different crowds, or
+    None for a type or size the table does not know.
+    """
+    return caps.get(row.get("t"), {}).get(row.get("z"))
+
+
 def _rent_estimate(row: dict) -> int | None:
     """Estimated rent per day for one building, from the static table's row."""
     # The rates were fitted and written down by neighbourhood name.
@@ -1675,7 +1684,7 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
                 "layout": _layout(row),
                 "m2": row["m"],
                 "traffic": row["x"],
-                "cap": caps.get(row["t"], {}).get(row["z"]),
+                "cap": _size_cap(row, caps),
                 "rent": rent,
                 "deposit": _deposit_estimate(row, rent),
                 "status": status,
@@ -6594,8 +6603,10 @@ def _initial_customers(
     keeps the ceiling an upper bound, and the door clips it to the building's
     own number anyway.
 
-    0 where it cannot be known: an unknown size, a type the curves file does not
-    carry, or an old game's shop holding none of its type's primary products.
+    0 where it cannot be known: an unknown size, or an old game's shop holding
+    none of its type's primary products or of a type the curves file does not
+    carry. A new game's type is not looked up here; _arrival_ceiling() answers
+    None for a type it has no curves for.
     """
     if (build_at_start or 0) >= CAPPED_INITIAL_BUILD:
         if isinstance(size_cap, list):
@@ -6636,13 +6647,15 @@ def _arrival_ceiling(
     baseCustomerPromotionMultiplier plus 0.75 x the promotion total over 100.
     `door` is the registration's customerCapacity, the grid's door. The game
     sends arrivals in open hours only; which those are is the caller's to know.
+    Where `initial` is the top of a cinema's capacity range, the grid is a bound
+    on that cinema's arrivals rather than the game's exact number.
 
     **These are the game's arrivals, an upper bound on customers served, never
     the demand, and the board must never print them as one.** An arrival is
     lost when the hour's staffed stations are full, and buys nothing when the
     shop holds nothing they want. It has exactly two jobs here: bounding a
     censored hour from above in _need_curve(), and answering "how much more
-    could there be". Break-even's profit estimate reuses the pair of helpers.
+    could there be". Break-even's profit estimate is to reuse the pair of helpers.
 
     None where the curves file is missing, where it does not know the type, or
     where `initial` is nothing (see _initial_customers()). None of those is an
@@ -9612,7 +9625,7 @@ def _plan_site(
     row = table.get(_address_of(building)) or {}
     initial = _initial_customers(
         save.root.get("buildNumberAtStart"),
-        caps.get(row.get("t"), {}).get(row.get("z")),
+        _size_cap(row, caps),
         business["typeSlug"],
         row.get("m") or 0,
         save.items(building.get("cachedAvailableProducts")),
@@ -22118,8 +22131,8 @@ const SP_ROSTER_STORE = "ba_dash_roster:";
 const spRosterRow = key => (D.staffing || []).find(r => r.key === key) || null;
 /* Whether the plan rests on a measured hour at all. Every serving role thin
    all week means the planner cut no serving shifts, and there is nothing
-   honest to put on the strip: the game's own arrival ceiling over-predicts a
-   shop like this fourfold, so it is never shown as demand. */
+   honest to put on the strip: the game's own arrival ceiling counts everyone
+   who may walk in, not the customers served, so it is never shown as demand. */
 const spRosterMeasured = row => !!row && !row.failed && Object.keys(row.basis || {}).some(
   skill => (row.basis[skill] || []).some(day => (day || []).some(b => b && b !== "none")));
 /* Whether the doors are open that hour. The game keeps a list of slots a day,
@@ -22845,8 +22858,9 @@ function spDesks(grid){
    Schedule, and a tick per line once they have. */
 
 /* The empty state. A shop too new to have been measured is not given a guess:
-   the game's own arrival ceiling over-predicts a shop like it fourfold, and a
-   roster cut from that would be a fiction with a shift count on it. */
+   the game's own arrival ceiling counts everyone who may walk in, not the
+   customers served, and a roster cut from that would be a fiction with a shift
+   count on it. */
 function spRosterNone(row, pick){
   const stations = (row && row.stations) || [];
   const codes = spStationCodes(stations);
@@ -22857,7 +22871,7 @@ function spRosterNone(row, pick){
   return `<section class="sec rv" data-block="roster" id="sp-roster"${pick ? ` data-site="${attr(row.key)}"` : ""}>
     ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster", why: failed
       ? tt("sp.roster.failed.why", "This site's schedule or stations could not be read, so no week is suggested for it. Nothing else on the board is affected.")
-      : tt("sp.roster.none.why", "A week is cut from the hours this site has already served, and there is no cleaning or security station here to cover in the meantime. The game's own arrival ceiling over-predicts a shop like this fourfold, so nothing is suggested from it.")})}
+      : tt("sp.roster.none.why", "A week is cut from the hours this site has already served, and there is no cleaning or security station here to cover in the meantime. The game's own arrival ceiling counts everyone who may walk in, not the customers a shop like this serves, so nothing is suggested from it.")})}
     ${pick || ""}
     <div class="chartbox sp-gantt sp-empty">${rows}</div>
     <div class="sp-read">${failed ? tt("sp.roster.failed", "Plan unavailable") : tt("sp.roster.none", "Nothing to schedule")}</div>

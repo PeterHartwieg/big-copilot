@@ -3735,7 +3735,7 @@
  "sp.roster.failed": "Plan no disponible",
  "sp.roster.failed.why": "No se pudo leer el horario o las estaciones de este local, así que no se propone una semana. El resto del panel no se ve afectado.",
  "sp.roster.none": "Nada que programar",
- "sp.roster.none.why": "La semana se calcula con las horas ya atendidas en este local y aquí no hay estación de limpieza ni de seguridad que cubrir mientras tanto. El límite de llegadas del juego cuadruplica la previsión para una tienda así, por lo que no se propone ningún plan.",
+ "sp.roster.none.why": "La semana se calcula con las horas ya atendidas en este local y aquí no hay estación de limpieza ni de seguridad que cubrir mientras tanto. El límite de llegadas del juego cuenta a todos los que podrían entrar, no a los clientes que atiende una tienda así, por lo que no se propone ningún plan.",
  "sp.roster.title": "Cobertura",
  "sp.roster.why.demand": "Una semana para copiar en BizMan › Horario, día por día.",
  "sp.roster.why.entries": "Cada entrada asigna una persona a una estación durante varias horas seguidas. Nadie supera las 12 horas diarias que permite el juego ni trabaja en las horas que pidió libres. Marca cada entrada cuando la pongas en el juego. Las marcas se guardan en este navegador y no cambian la partida guardada.",

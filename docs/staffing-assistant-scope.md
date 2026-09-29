@@ -267,8 +267,10 @@ ceil( min( initial x promotionMultiplier x dayMultiplier x hourMultiplier,
 
 - `initial` = largest `productSalesRatio` among the shop's
   `cachedAvailableProducts` that are **primary** for its type (`impact >= 1.0`),
-  times the building's square metres (`BusinessHelper.GetMaxHcpsqmForRegistration`;
-  this branch applies from `buildNumberAtStart >= 2847` — `HART. YT` is 3675)
+  times the building's square metres (`BusinessHelper.GetMaxHcpsqmForRegistration`)
+  — **amended 29 Sep 2026:** this is the rule only for a game whose `buildNumberAtStart`
+  is below 2847. A game started at 2847 or later, `HART. YT` (3675) included, starts
+  from the building size's customer capacity instead (`_initial_customers()`)
 - `promotionMultiplier` = `gameVariables.baseCustomerPromotionMultiplier + 0.75 x promotion.total / 100`
 - `dayMultiplier`, `hourMultiplier` = per-business-type curves
   (`dayFactorMultipliers`, `hourlyFactorMultipliers`)
@@ -726,6 +728,7 @@ From `AGENTS.md`, both of which apply:
   popover belongs on `<body>` with `position:fixed`.
 
 And one from this feature: **never print the arrival ceiling as demand.** It
-over-predicts served customers by up to four times on a clothing store. A
+counts arrivals, not customers served (amended 29 Sep 2026: the fourfold gap
+measured here was the old-game rule applied to a new game). A
 confident wrong number that tells the player to hire is the worst outcome
 available here.

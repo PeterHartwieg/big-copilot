@@ -3735,7 +3735,7 @@
  "sp.roster.failed": "Plano indisponível",
  "sp.roster.failed.why": "Não foi possível ler o horário ou as estações desta unidade, então não há semana sugerida. O resto do painel não foi afetado.",
  "sp.roster.none": "Nada para planejar",
- "sp.roster.none.why": "A semana usa as horas que esta unidade já atendeu, e não há estação de limpeza ou segurança para cobrir enquanto isso. O limite de chegada do jogo superestima uma loja assim em quatro vezes, então não há sugestão baseada nele.",
+ "sp.roster.none.why": "A semana usa as horas que esta unidade já atendeu, e não há estação de limpeza ou segurança para cobrir enquanto isso. O limite de chegada do jogo conta todos que podem entrar, não os clientes que uma loja assim atende, então não há sugestão baseada nele.",
  "sp.roster.title": "Equipe",
  "sp.roster.why.demand": "Uma semana para copiar no BizMan › Horário, um dia por vez.",
  "sp.roster.why.entries": "Cada entrada é uma pessoa em uma estação por um período de horas. Ninguém recebe mais de 12 horas por dia nem trabalha em um horário que pediu para manter livre. Marque a entrada depois de lançá-la no jogo. As marcas ficam neste navegador e não mudam nada no save.",

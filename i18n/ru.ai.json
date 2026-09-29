@@ -4069,7 +4069,7 @@
  "sp.roster.failed": "gpt-6-sol",
  "sp.roster.failed.why": "gpt-6-sol",
  "sp.roster.none": "gpt-6-sol",
- "sp.roster.none.why": "gpt-6-sol",
+ "sp.roster.none.why": "claude-opus-5-5",
  "sp.roster.title": "gpt-6-sol",
  "sp.roster.why.demand": "gpt-6-sol",
  "sp.roster.why.entries": "gpt-6-sol",
