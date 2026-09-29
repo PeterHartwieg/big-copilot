@@ -6854,6 +6854,8 @@ def _plan_people(save: Save, staff: list) -> dict:
             "home": home.get(person["id"], set()),
             # Each desk or chair demand, as the item names that meet it.
             "desks": [tuple("ba:itemname_" + name for name in r[1]) for r in rules if r[0] == "desk"],
+            # The site they work at, as a business is keyed (_site_pool()).
+            "site": site_key(person["addr"]) if person["addr"] else None,
         }
     return out
 
@@ -7043,8 +7045,9 @@ def _placement_rank(person: dict, state: dict, slot: dict, here: dict) -> tuple:
         or (slot["station"], (slot["wd"] + 1) % 7) in state["stations"]
     )
     # Asked once and read by two keys below: this runs for every candidate of
-    # every slot.
-    fits = _desk_fits(person, slot, here)
+    # every slot, and only somebody holding a desk demand at a site whose
+    # furniture is known has a desk to test.
+    fits = _desk_fits(person, slot, here) if person.get("desks") and here.get("groups") else True
     short = state["hours"] < floor
     # Which keys are live at all: a name already on this roster is being filled
     # up, a name that is not is being chosen, and those are different questions.
@@ -7369,6 +7372,22 @@ def _worse_off(person: dict, entry: dict, before: tuple, now: dict) -> bool:
     return want is not None and abs(days - want) > abs(len(now["days"]) - want)
 
 
+def _left_off(protected: list, rostered: set, pool: list) -> bool:
+    """Whether a fill left somebody the rule protects off the roster for good.
+
+    The settling passes only give hours to people on the roster, bar one: a
+    week handed whole from somebody with no hours demand to somebody with a
+    band and no hours (_top_up_short()). Somebody left off with no way into
+    that is left with no hours, which is worse off for everybody _place_week()
+    protects (they work here now, holding a band or a day count).
+    """
+    bandless = any(not person["band"] for person in pool if person["id"] in rostered)
+    return any(
+        person["id"] not in rostered and not (person["band"] and bandless)
+        for person in protected
+    )
+
+
 def _pin_weeks(ids: list, now: dict, stations: dict, open_hours: list, by_id: dict) -> list:
     """The weeks kept as they are, as shift rows, as much of each as is legal.
 
@@ -7509,7 +7528,8 @@ def _site_pool(people: dict, business: dict, bench: list) -> list:
         people[pid]
         for pid in _in_order(
             pid for pid in people
-            if people[pid]["addr"] and site_key(people[pid]["addr"]) == business["key"]
+            if people[pid]["addr"] and (people[pid]["site"] if "site" in people[pid]
+                                        else site_key(people[pid]["addr"])) == business["key"]
         )
     ]
     return here + list(bench)
@@ -7899,15 +7919,29 @@ def _top_up_short(shifts: list, pool: list, state: dict, rostered: set) -> None:
             else FULL_TIME[0]
             for other in by_id
         }
-        weeks = {other: _copy_state(state[other]) for other in set(roster) | {pid}}
+        # The weeks as they would stand, copied only once the plan writes to
+        # one: until then a week reads as it stands in `state`.
+        weeks = {pid: _copy_state(state[pid])}
+        on_roster = set(roster) | {pid}
+
+        def week(other) -> dict:
+            return weeks[other] if other in weeks else state[other]
+
+        def own(other) -> dict:
+            if other not in weeks:
+                weeks[other] = _copy_state(state[other])
+            return weeks[other]
+
         # A shadow of the week to plan against, so nothing on the page moves
         # until the whole sequence is known to work. It stays index-for-index
         # with `shifts`, and `_piece_over()` appends to both in the same order.
-        rows = [dict(row) for row in shifts]
+        # Its rows are the week's own until one changes: a changed row is a
+        # new one, never the old one edited.
+        rows = list(shifts)
         moves = []
 
         def spare_of(other) -> float:
-            return weeks[other]["hours"] - keep[other]
+            return week(other)["hours"] - keep[other]
 
         def allowed(row, start, stop) -> bool:
             return _can_work(taker, weeks[pid], {
@@ -7919,22 +7953,25 @@ def _top_up_short(shifts: list, pool: list, state: dict, rostered: set) -> None:
             """The same fullest-week-first order the day pass uses."""
             return sorted(
                 (index for index, row in enumerate(rows)
-                 if row["employee"] in weeks and row["employee"] != pid),
+                 if row["employee"] in on_roster and row["employee"] != pid),
                 key=lambda index: (
-                    -weeks[rows[index]["employee"]]["hours"], rows[index]["wd"],
+                    -week(rows[index]["employee"])["hours"], rows[index]["wd"],
                     rows[index]["from"], rows[index]["to"], str(rows[index]["station"])),
             )
 
         while weeks[pid]["hours"] < floor_of[pid]:
             gap = floor_of[pid] - weeks[pid]["hours"]
             picked = None
-            for index in order():
+            # Nothing moves until a shift is picked, so one order serves
+            # both the whole shifts and the pieces.
+            donors_now = order()
+            for index in donors_now:
                 row = rows[index]
                 length = row["to"] - row["from"]
                 giver = by_id[row["employee"]]
                 if spare_of(giver["id"]) < length:
                     continue  # the fix would only move the shortfall along
-                if giver["days"] is not None and weeks[giver["id"]]["busy"][row["wd"]] \
+                if giver["days"] is not None and week(giver["id"])["busy"][row["wd"]] \
                         == set(range(row["from"], row["to"])):
                     continue  # their only shift that day, and days are a demand
                 if allowed(row, row["from"], row["to"]):
@@ -7948,7 +7985,7 @@ def _top_up_short(shifts: list, pool: list, state: dict, rostered: set) -> None:
                 # because a two-hour gap closed with a two-hour line is a scrap
                 # of the kind this feature exists to clear, and an hour or two
                 # over the floor costs the player nothing.
-                for index in order():
+                for index in donors_now:
                     row = rows[index]
                     room = min(spare_of(row["employee"]),
                                row["to"] - row["from"] - MIN_SPLIT)
@@ -7964,7 +8001,7 @@ def _top_up_short(shifts: list, pool: list, state: dict, rostered: set) -> None:
             index, take = picked
             row = rows[index]
             start = row["to"] - take
-            mine, theirs = weeks[row["employee"]], weeks[pid]
+            mine, theirs = own(row["employee"]), weeks[pid]
             mine["hours"] -= take
             mine["busy"][row["wd"]].difference_update(range(start, row["to"]))
             theirs["hours"] += take
@@ -8109,6 +8146,14 @@ def _top_up_short(shifts: list, pool: list, state: dict, rostered: set) -> None:
         theirs["days"].add(shift["wd"])
         return True
 
+    def can_land(taker, shift, take) -> bool:
+        """`leg()`'s own test of the taker, against their week as it stands."""
+        start = shift["to"] - take
+        return _can_work(taker, dict(state[taker["id"]], hours=0.0), {
+            "from": start, "to": shift["to"], "wd": shift["wd"],
+            "skill": shift["skill"], "kind": shift["kind"], "station": shift["station"],
+        })
+
     def share(taker, want) -> bool:
         """Buy the taker the day `want`, at nobody else's expense."""
         for shift, donor in donors(taker):
@@ -8161,7 +8206,15 @@ def _top_up_short(shifts: list, pool: list, state: dict, rostered: set) -> None:
                                  and len(state[other]["days"]) < by_id[other]["days"])
                     ]
                 ]
+            # Each leg's own test reads nobody's week but the day it lands on,
+            # which the other leg never touches, so it is asked of the weeks
+            # as they stand first, and the weeks are only copied for an
+            # exchange that passes both.
+            if not can_land(taker, shift, take):
+                continue
             for offer in offers:
+                if offer and not can_land(offer[2], offer[0], offer[1]):
+                    continue
                 weeks = {pid: _copy_state(state[pid])
                          for pid in {taker["id"], donor["id"]}
                          | ({offer[2]["id"]} if offer else set())}
@@ -8222,6 +8275,11 @@ def _repair_week(shifts: list, pool: list, state: dict, rostered: set, before: d
     week without them meets. A swap that is fair to the giver can still take
     away the room the settling pass needed for somebody else.
     """
+    # A swap only ever fills an open line, so a week with none has nothing to
+    # keep a copy of.
+    if not any(shift["employee"] is None for shift in shifts):
+        _top_up_short(shifts, pool, state, rostered)
+        return
     plain_shifts = [dict(shift) for shift in shifts]
     # A swap only ever moves hours between people on this roster, so their
     # weeks are the ones kept as they were; everybody else's week is the same
@@ -8247,13 +8305,15 @@ def _repair_week(shifts: list, pool: list, state: dict, rostered: set, before: d
 
 
 def _fill_week(slots: list, cover_slots: list, pool: list, state: dict, here: dict,
-               before: dict, pins=()) -> list:
-    """One week placed on the pool and settled; the lines nobody may work stay open.
+               pins=(), allowed=None) -> list:
+    """One week placed on the pool a slot at a time; the lines nobody may work stay open.
 
-    `pins` are weeks kept as they stand (_pin_weeks()): written into their
-    people's weeks first, their people counted on the roster, and their hours
-    taken out of the slots, and never handed on by a repair pass, because they
-    are not in the list it works on.
+    _repair_week() settles it. `pins` are weeks kept as they stand
+    (_pin_weeks()): written into their people's weeks first, their people
+    counted on the roster, and their hours taken out of the slots, and never
+    handed on by a repair pass, because they are not in the list it works on.
+    `allowed` keeps who may take each shape of slot between two fills of one
+    pool, since no week changes it.
     """
     by_id = {person["id"]: person for person in pool}
     for row in pins:
@@ -8264,7 +8324,7 @@ def _fill_week(slots: list, cover_slots: list, pool: list, state: dict, here: di
     # Who may take each shape of slot at all, in pool order: the half of
     # `_can_work()` no week changes (`_may_take()`), asked once per shape
     # rather than for every slot, and never of the whole bench again.
-    allowed = {}
+    allowed = {} if allowed is None else allowed
     for slot in slots + cover_slots:
         shape = _slot_shape(slot)
         if shape not in allowed:
@@ -8280,7 +8340,6 @@ def _fill_week(slots: list, cover_slots: list, pool: list, state: dict, here: di
                 # goes in with no employee, which is what `p: null` means on
                 # the page.
                 shifts.append(_open_slot(slot))
-    _repair_week(shifts, pool, state, here["rostered"], before)
     return shifts
 
 
@@ -9375,7 +9434,7 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
         and any(_usable(person, skill, kind) for skill, kind in planned_roles)
     ]
     start = {pid: _copy_state(state[pid]) for pid in before} if protected else None
-    pins, kept, rounds = [], [], 0
+    pins, kept, rounds, allowed = [], [], 0, {}
     while True:
         here = fresh_here()
         if rounds:
@@ -9384,12 +9443,28 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
             # starts anybody else, and the settling passes top up whoever is
             # still short: the fewest names is what broke the rule.
             here["rostered"].update(person["id"] for person in protected)
-        shifts = _fill_week(slots, cover_slots, pool, state, here, before, pins)
-        worse = [
-            person["id"] for person in protected
-            if person["id"] not in kept
-            and _worse_off(person, state[person["id"]], before[person["id"]], now[person["id"]])
-        ]
+        shifts = _fill_week(slots, cover_slots, pool, state, here, pins, allowed)
+        if not rounds and _left_off(protected, here["rostered"], pool):
+            worse = True  # settling cannot change it: no need to settle it
+        else:
+            _repair_week(shifts, pool, state, here["rostered"], before)
+            worse = [
+                person["id"] for person in protected
+                if person["id"] not in kept
+                and _worse_off(person, state[person["id"]], before[person["id"]],
+                               now[person["id"]])
+            ]
+            if worse and rounds >= 2:
+                # Kept weeks already pushed somebody else under: the site holds
+                # fewer hours than its people's weeks, so everybody it now gives
+                # fewer hours than they have is kept too, rather than found one
+                # round at a time.
+                worse += [
+                    person["id"] for person in protected
+                    if person["id"] not in kept and person["id"] not in worse
+                    and state[person["id"]]["hours"] - before[person["id"]][0]
+                    < now[person["id"]]["hours"]
+                ]
         if not worse:
             break
         for pid, entry in start.items():
@@ -10260,7 +10335,29 @@ def _station_groups(save: Save, registration: dict) -> dict:
 UNSTAFFED_MIN_HOURS = 8
 
 
-def _unstaffed(row: dict, shifts, own: set, training=frozenset()) -> dict | None:
+def _unstaffed_now(row: dict) -> tuple:
+    """What _unstaffed() reads off a row's own week, the game's: (role of a
+    station, staffed now per role/day/hour, the people with hours at the site)."""
+    stations, people = row.get("stations") or [], row.get("people") or []
+    person = lambda p: people[p]["id"] if p is not None and 0 <= p < len(people) else None  # noqa: E731
+    role_of = {}
+    for entry in row.get("roles") or ():
+        for index in entry.get("stations") or ():
+            role_of[index] = entry.get("key", entry.get("skill"))
+    skill_of = lambda s: stations[s].get("skill") if s is not None and 0 <= s < len(stations) else None  # noqa: E731
+    skill = lambda s: role_of.get(s, skill_of(s))  # noqa: E731
+    now = collections.Counter()
+    working = set()
+    for entry in (row.get("current") or {}).get("list") or ():
+        role, day = skill(entry.get("s")), entry.get("d")
+        for hour in range(entry.get("f", 0), entry.get("t", 0)):
+            now[(role, day, hour)] += 1
+        if person(entry.get("p")) and entry.get("t", 0) > entry.get("f", 0):
+            working.add(person(entry.get("p")))
+    return skill, now, working
+
+
+def _unstaffed(row: dict, shifts, own: set, training=frozenset(), read=None) -> dict | None:
     """The plan's hours the site's own people would work that nobody works in
     the game's week now, when there are UNSTAFFED_MIN_HOURS or more.
 
@@ -10281,28 +10378,15 @@ def _unstaffed(row: dict, shifts, own: set, training=frozenset()) -> dict | None
     hours at the site at all in the game's week, and nobody in training: a
     plan that merely differs from the week is the site page's to show.
     Returns {hours, roles: [{skill, hours, idle}]}, one entry a skill, or
-    None.
+    None. `read` is _unstaffed_now() of the row, where the caller has it.
     """
     stations, people = row.get("stations") or [], row.get("people") or []
     person = lambda p: people[p]["id"] if p is not None and 0 <= p < len(people) else None  # noqa: E731
-    role_of = {}
-    for entry in row.get("roles") or ():
-        for index in entry.get("stations") or ():
-            role_of[index] = entry.get("key", entry.get("skill"))
-    skill_of = lambda s: stations[s].get("skill") if s is not None and 0 <= s < len(stations) else None  # noqa: E731
-    skill = lambda s: role_of.get(s, skill_of(s))  # noqa: E731
+    skill, now, working = read or _unstaffed_now(row)
     # The skill each role is worked in, which is what the page names.
     named = {}
     for index, station in enumerate(stations):
         named.setdefault(skill(index), station.get("skill"))
-    now = collections.Counter()
-    working = set()
-    for entry in (row.get("current") or {}).get("list") or ():
-        role, day = skill(entry.get("s")), entry.get("d")
-        for hour in range(entry.get("f", 0), entry.get("t", 0)):
-            now[(role, day, hour)] += 1
-        if person(entry.get("p")) and entry.get("t", 0) > entry.get("f", 0):
-            working.add(person(entry.get("p")))
     want = collections.Counter()
     cells = collections.defaultdict(set)  # (role, person): their planned hours
     for entry in shifts:
@@ -10522,8 +10606,18 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
             pairs = (("demand", base.get("shifts")), ("full", (base.get("fullCover") or {}).get("shifts")),
                      ("open", (base.get("openCover") or {}).get("shifts"))) \
                 if kind == "shop" else (("office", base.get("shifts")),)
+            # The game's week is read once a site, and two plans with the same
+            # rows (a shop's full cover and its open-hours plan, on a shop
+            # open around the clock) have the same answer.
+            done, now = [], _unstaffed_now(base)
             for mode, shifts in pairs:
-                gap = _unstaffed(base, shifts or (), own.get(business["key"], set()), training)
+                shifts = shifts or ()
+                gap = next((copy.deepcopy(found) for other, found in done if other == shifts),
+                           False)
+                if gap is False:
+                    gap = _unstaffed(base, shifts, own.get(business["key"], set()), training,
+                                     now)
+                done.append((shifts, gap))
                 if gap:
                     unstaffed[mode] = gap
         sites.append({
