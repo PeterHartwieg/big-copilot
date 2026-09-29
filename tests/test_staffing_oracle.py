@@ -567,6 +567,86 @@ def factory_cover(row: dict) -> list:
     return out
 
 
+def old_packer_count(lines: list) -> int:
+    """How many hires the packer the one placer replaced took for these open lines.
+
+    Its first fit in two orders as the ceiling, and its balanced packing in
+    both orders searched from the hours, the busiest day and the busiest hour
+    up to that ceiling (main at 77a2375, `_hire_weeks()`), written out here as
+    the oracle for the hire count.
+    """
+    if not lines:
+        return 0
+    orders = (lambda s: (s["wd"], s["from"], s["to"], str(s["station"])),
+              lambda s: (s["wd"], -(s["to"] - s["from"]), s["from"], str(s["station"])))
+
+    def pack(count, order):
+        hires = [] if count is None else [[0, [set() for _ in range(7)]] for _ in range(count)]
+        for s in sorted(lines, key=order):
+            span = set(range(s["from"], s["to"]))
+            able = [i for i, (h, busy) in enumerate(hires)
+                    if h + len(span) <= FULL_TIME[1] and len(busy[s["wd"]]) + len(span) <= SHIFT_CAP
+                    and busy[s["wd"]].isdisjoint(span)]
+            if count is None:
+                if not able:
+                    hires.append([0, [set() for _ in range(7)]])
+                    able = [len(hires) - 1]
+                i = able[0]
+            elif able:
+                i = min(able, key=lambda k: (hires[k][0], k))
+            else:
+                return None
+            hires[i][0] += len(span)
+            hires[i][1][s["wd"]] |= span
+        return len(hires)
+
+    worst = min(pack(None, order) for order in orders)
+    floor = math.ceil(sum(s["to"] - s["from"] for s in lines) / FULL_TIME[1])
+    for wd in range(7):
+        day = [s for s in lines if s["wd"] == wd]
+        if day:
+            floor = max(floor, math.ceil(sum(s["to"] - s["from"] for s in day) / SHIFT_CAP),
+                        max(sum(1 for s in day if s["from"] <= h < s["to"]) for h in range(24)))
+    for count in range(floor, worst + 1):
+        if any(pack(count, order) is not None for order in orders):
+            return count
+    return worst
+
+
+class HireCountTest(unittest.TestCase):
+    """No week needs more hires than the packer the one placer replaced took.
+
+    The review's comparison with main (300 random shops) found eight plans
+    with one hire more once the open lines were no longer spread off the days
+    they crowd and packed four ways. Here every plan's open lines are handed
+    to the old packer after the same spread (_spread_open()) it ran first, and
+    the one placer's count may not pass it.
+    """
+
+    def test_a_sweep_never_hires_more_than_the_old_packer(self):
+        real = ba_dashboard._place_hires
+        seen = []
+
+        def compare(shifts, pool, state, here, before):
+            rows = [dict(r) for r in shifts]
+            weeks = {pid: ba_dashboard._copy_state(state[pid]) for pid in state}
+            old = 0
+            for skill in ba_dashboard._in_order({r["skill"] for r in rows if r["employee"] is None}):
+                lines = [r for r in rows if r["employee"] is None and r["skill"] == skill]
+                limit = max(1, math.ceil(sum(r["to"] - r["from"] for r in lines) / FULL_TIME[1]))
+                spread = ba_dashboard._spread_open(lines, rows, pool, weeks, before, limit)
+                old += old_packer_count(spread)
+            out = real(shifts, pool, state, here, before)
+            seen.append((sum(len(w) for w in out[1].values()), old))
+            return out
+
+        with unittest.mock.patch.object(ba_dashboard, "_place_hires", compare):
+            for n in (112, 143, 148, 154, 168, 185, 212, 252) + tuple(range(40)):
+                plan_with(scenario(random.Random(1000 + n)))
+        self.assertGreater(len(seen), 40)
+        self.assertEqual([pair for pair in seen if pair[0] > pair[1]], [])
+
+
 class OracleSnapshotTest(unittest.TestCase):
     """The payload snapshot fixtures' plans, through extract() as the board gets them."""
 
