@@ -616,6 +616,7 @@ def load_demand_curves() -> dict:
     return _demand_curves
 
 
+# ---------------------------------------------------------------- game tables
 # Business types that sell to walk-in customers; the rest are support sites.
 # Every physical retail floor the game documents with an F1 help page (the
 # handful of pure office agencies — law firm, travel agency and the like — say
@@ -702,6 +703,7 @@ STOCK_COVER_DAYS = 7  # window used for the average daily sales rate
 # cachedFulfilledCustomerDemands calls it when present. The uniform demand is
 # read from the save's own roster instead — see _uniform_gaps() — because the
 # cached answer is a snapshot of one moment and cannot be trusted either way.
+# Registry: "A finding kind" (only if: see the checklist).
 AMENITY_DEMANDS = {
     "ba:customerdemand_toilet": ("bathroom", msg("f.amenity.bathroom", "No customer bathroom here")),
     "ba:customerdemand_toiletprivacy": (
@@ -727,7 +729,7 @@ AMENITY_DEMANDS = {
 # test_every_retail_type_was_checked_against_the_games_own_table pins the sixteen
 # that were read off the bundle. That test only catches the list changing; it
 # cannot tell whether a later game build changed a type's demands, which is what
-# the bundle re-read in the game-update checklist is for.
+# the bundle re-read in docs/game-update.md ("The game tables") is for.
 DEMANDS_NOT_MADE = {
     "ba:businesstype_hairdresser": {"ba:customerdemand_employeeuniforms"},
     "ba:businesstype_florist": {"ba:customerdemand_music"},
@@ -742,9 +744,9 @@ UNIFORM_DEMAND = "ba:customerdemand_employeeuniforms"
 # suitableSkills list at build 3680, read from the defaultlocalgroup_assets_items
 # bundle. A station missing from the table asks for no uniform, so a game that
 # adds one goes quiet here rather than guessing at a role — which is why the
-# bundle is re-read as part of the game-update checklist. The row count is
-# pinned in tests/test_uniform_alerts.py, but that only catches this table being
-# edited, not the game growing a station it does not have.
+# bundle is re-read as part of docs/game-update.md ("The game tables"). The row
+# count is pinned in tests/test_uniform_alerts.py, but that only catches this
+# table being edited, not the game growing a station it does not have.
 OFFICE_SKILLS = (
     "ba:skill_lawyer",
     "ba:skill_purchasingagent",
@@ -857,6 +859,8 @@ JOB_DEMAND_PRIORITY = ("Nice to have", "Important", "Critical")
 # Day 1 of a save is a Monday, so day % 7 gives the weekday directly. Confirmed
 # against payroll (hours logged this week) and against import delivery days.
 WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+
+# --- the board's own thresholds, not read from the game ---------------------
 
 # Idle stock thresholds: enough weeks of cover, and enough units, to be worth saying.
 IDLE_WEEKS = 4.0
@@ -3029,6 +3033,7 @@ def _goals(save: Save, names: Names, businesses: list) -> dict:
     }
 
 
+# --------------------------------------------------------------------- supply
 def _deepest_use(per_day, weekly, day, until, left_today, rounds=False):
     """The most a walk from now to the start of `until` has used at any point.
 
@@ -5440,6 +5445,7 @@ def _ceil_ten(value: float) -> int:
     return int(math.ceil(value / SUPPLY_ROUND_TO) * SUPPLY_ROUND_TO)
 
 
+# ------------------------------------------------------------------ factories
 def _parked(flow: dict, index: dict, machines: dict, slug: str) -> dict:
     """What each factory sent, day by day, to depots where nothing uses `slug`.
 
@@ -9824,8 +9830,8 @@ def _finish_site(site, full, names, people, opened=None) -> dict:
 # retail, office, cinema and theatre buildings need cleaning; warehouses (which
 # factories use) need nothing, and no building type requires a driver. A type
 # missing here accepts nobody, so the page proposes no hire there rather than
-# one the mod refuses (`no_skill`); the game-update checklist re-reads the
-# bundles.
+# one the mod refuses (`no_skill`). On a new build the bundles are re-read by
+# hand: docs/game-update.md, "Hand-read tables no script checks".
 _SHOP_SKILLS = ("ba:skill_customerservice", "ba:skill_securityguard", CLEANING_SKILL)
 ASSIGN_SKILLS = {
     "ba:businesstype_bookstore": _SHOP_SKILLS,
@@ -10841,6 +10847,7 @@ def _idle_parts(parts: list, default):
     return said
 
 
+# --------------------------------------------------------------------- market
 GLOBAL_HOOD = "ba:neighborhood_global"
 HYPE_EVENT = 2  # "Citizens in {hood} are showing strong demand for {item}"
 SUPPLIER_EVENTS = {
@@ -11971,6 +11978,7 @@ def _hype_exposure(businesses: list, market: dict) -> list:
     return out
 
 
+# ----------------------------------------------------------------------- plan
 def _ingredient_prices(save: Save, names: Names, supply: dict, businesses: list) -> dict:
     """What a unit of each raw material actually cost, from the owner's books.
 
@@ -12251,9 +12259,17 @@ def _plan(
     }
 
 
+# --------------------------------------------------------------------- alerts
 # What the number in a finding's "worth" is counted in, for the page to print
 # under the amount. Only groups whose worth carries money get a unit; the rest
 # are left empty because their worth is always None.
+# Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
+# needs: its group, emitted by note() in _alerts() or _finding() in a helper
+# such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
+# FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
+# ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
+# search words, if players have any; its line under "What counts as a finding"
+# in docs/dashboard-reference.md. The checklist has the only-if tables.
 ALERT_UNITS = {
     "notrading": msg("f.unit.rent", "/day rent"),
     "vacant": msg("f.unit.rent", "/day rent"),
@@ -12363,6 +12379,13 @@ def _finding(
     }
 
 
+# Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
+# needs: its group, emitted by note() in _alerts() or _finding() in a helper
+# such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
+# FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
+# ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
+# search words, if players have any; its line under "What counts as a finding"
+# in docs/dashboard-reference.md. The checklist has the only-if tables.
 def _alerts(
     businesses: list,
     supply: dict,
@@ -13614,6 +13637,7 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
 # How a pile of same-shaped findings at one site reads as a single line: n
 # findings, and the one named first. A line stands for CONDENSE_AT or more, so
 # the "one" forms are there for a translation's plural rules, not the English.
+# Registry: "A finding kind" (only if: see the checklist).
 SUMMARIES = {
     "shortfall": lambda n, subject: msg("f.sum.shortfall", {
         "one": "{n} item runs dry before its next delivery; soonest {subject}",
@@ -13661,6 +13685,7 @@ SUMMARIES = {
         "other": "{n} top-up targets are set far above what sells; {subject} the deepest"}, n=n, subject=subject),
 }
 CONDENSE_AT = 3  # three or more of a kind at one site becomes one line
+# Registry: "A finding kind" (only if: see the checklist).
 WORST_FIRST = {"wholesale"}  # condensed by severity first, then rank
 
 
@@ -17978,6 +18003,7 @@ function sparkHtml(values, labels){
 /* --- the redesign's shared vocabulary ---------------------------------------
    Icons are inline stroke SVG on a 24 grid, never glyphs. Every view builds
    its section heads, chips, ? marks and segmented controls from these. */
+/* Registry: "A view or a page" (only if: see the checklist). */
 const ICON = {
   today: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"></path></svg>',
   results: '<svg viewBox="0 0 24 24"><path d="M4 19h16"></path><path d="M5 15l4-5 4 3 6-7"></path></svg>',
@@ -20386,6 +20412,13 @@ function drawKpiLine(){
    one named, or with view "route" the view of the finding's route), or the
    site's own page. A finding is a headline; the link is the rest of the
    story. */
+/* Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
+   needs: its group, emitted by note() in _alerts() or _finding() in a helper
+   such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
+   FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
+   ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
+   search words, if players have any; its line under "What counts as a finding"
+   in docs/dashboard-reference.md. The checklist has the only-if tables. */
 const ALERT_LINKS = {
   /* A supply finding lands on its Supply view (the route's), on its row, lit:
      an import on Imports (a depot's and a factory's own contract alike), a
@@ -20415,6 +20448,11 @@ const ALERT_LINKS = {
 /* Which page, and which view on it, each section lives on. A finding's link
    opens that page first, then scrolls; the reader never lands on a hidden
    section. */
+/* Registry: "A view or a page" (docs/architecture.md, Registries). A new view
+   needs its section markup (class "sec rv", an id starting sec, and data-sub),
+   SUBS, SEC_PAGE, PAGE_DRAWS and SS_VIEWS; for its route also ROUTES, AREAS
+   (the area's views) and routeViewLabel(), and HOST_ROUTES if a host view shows
+   it by default. The checklist has the only-if rows. */
 const SEC_PAGE = {
   alertSection:["today"], secMoves:["today"],
   /* secRhythm was Weekly rhythm, folded into Daily result's By weekday: an
@@ -20437,6 +20475,7 @@ const SEC_PAGE = {
   secPayroll:["staffing","payroll"],
 };
 /* Sections that have gone, and the section that took their place. */
+/* Registry: "A view or a page" (only if: see the checklist). */
 const SEC_MOVED = {secRhythm: "secDaily", secLogistics: "secImports", secStock: "secDeliveries", secShops: "secDeliveries",
   secWarehouses: "secImports", secFactories: "secProduction", sbStrip: "secChanges"};
 /* Put something at the top of the window and keep it there while the page
@@ -20504,6 +20543,7 @@ function alertSite(a){
 /* A finding about the company as a whole carries no site, yet it is still
    shown on one: `site` picks the site where it bites hardest, `otherwise` is
    where the link goes when no site has it. */
+/* Registry: "A finding kind" (only if: see the checklist). */
 const ALERT_SITE_PICK = {
   /* Health insurance and a happy boss are asked for at each site and settled
      company-wide, so the Crew with the most people lacking one of them is the
@@ -20588,6 +20628,7 @@ const alertPage = a => (SEC_PAGE[(ALERT_LINKS[a.group] || {}).sec] || ["today"])
    kind's link targets the site (ALERT_LINKS site:true), it lands on that
    line's row, lit. The kinds that link to a Checks view today are listed so
    they behave alike the moment they do. */
+/* Registry: "A finding kind" (only if: see the checklist). */
 const ALERT_LANDS_ON_ROW = new Set(["wholesale", "topup", "outruns", "unplanned", "shortfall", "order",
                                     "paused", "notrouted", "feed"]);
 
@@ -20598,6 +20639,13 @@ const ALERT_LANDS_ON_ROW = new Set(["wholesale", "topup", "outruns", "unplanned"
    depot or a factory keeps the same finding somewhere else, and spEvidence()
    drops any block the open kind does not draw, so a row never lights nothing
    and scrolls nowhere. */
+/* Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
+   needs: its group, emitted by note() in _alerts() or _finding() in a helper
+   such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
+   FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
+   ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
+   search words, if players have any; its line under "What counts as a finding"
+   in docs/dashboard-reference.md. The checklist has the only-if tables. */
 const ALERT_EVIDENCE = {
   notrading: {block: "tiles"},
   loss: {block: "tiles"},
@@ -20866,6 +20914,13 @@ const kindOff = a => alertGroupPrefs[a.group] === false;
    section 7); where that home is still an existing view, ALERT_LINKS above is
    the landing inside it, and docs/ui-route-migration.md names each one. `pick`
    decides between two homes by the finding's own site or sentence. */
+/* Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
+   needs: its group, emitted by note() in _alerts() or _finding() in a helper
+   such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
+   FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
+   ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
+   search words, if players have any; its line under "What counts as a finding"
+   in docs/dashboard-reference.md. The checklist has the only-if tables. */
 const FINDING_ROUTES = {
   notrading: {route: "businesses/results", act: "readiness"},
   vacant: {route: "businesses/results", act: "costs"},
@@ -22606,6 +22661,7 @@ const spPri = p => `<span class="sp-pri${p >= 2 ? " hi" : ""}">${
 let spFindsAll = false, spArrived = null;
 /* A group whose evidence depends on the site: the uniform finding is about the
    locker while there is none, and about the roles once there is one. */
+/* Registry: "A finding kind" (only if: see the checklist). */
 const SP_EVIDENCE_HIT = {uniform: b => b.missingUniformLocker ? "locker" : "uniform"};
 /* Which blocks each kind of panel actually draws. A finding pointing anywhere
    else gets no data-ev at all, rather than dimming the page and scrolling
@@ -22629,6 +22685,7 @@ const SP_BLOCKS = {
    - `staff` is "No staff assigned" on a shop and a machine nobody is posted to
      on a factory;
    - neither draws a profit chart, so a trend lands on the tiles. */
+/* Registry: "A finding kind" (only if: see the checklist). */
 const SP_EVIDENCE_KIND = {
   depot: {trend: "tiles", dead: "stock", target: "stock", feed: "stock", notrouted: "stock",
           topup: "stock", wholesale: "stock", shortfall: "stock", order: "stock", paused: "stock"},
@@ -25764,7 +25821,9 @@ function pgStateAt(siteKey, slug){
    of their own. Every figure is a fact's (supplyFact) and every change a row
    of the one checklist (buildOrderChecklist); the views lay them out, and a
    row with a change carries its tick. */
+/* Registry: "A view or a page" (only if: see the checklist). */
 const SB_VIEWS = ["changes", "imports", "deliveries", "production", "flow"];
+/* Registry: "A view or a page" (only if: see the checklist). */
 const SB_SEC = {changes: "secChanges", imports: "secImports", deliveries: "secDeliveries", production: "secProduction", flow: "secFlow"};
 const SB_LABEL = {shops: "Shops", warehouses: "Warehouses", factories: "Factories"};
 /* The view each kind of change is typed on. A catch-up belongs to the import
@@ -31309,6 +31368,7 @@ function renderCalm(lazy = true){
    today; the redesign's later chunks change what a route shows, never its id
    (docs/ui-route-migration.md). Which page and which view are remembered on
    this device and mirrored in the hash. */
+/* Registry: "A view or a page" (only if: see the checklist). */
 const PAGES = [
   /* Each label is read in the UI language every time it is asked for. */
   {id:"today",   get label(){ return tt("nav.area.overview", "Overview"); },     host:"pageToday"},
@@ -31334,10 +31394,17 @@ function navSubLabel(pageId, id){
 }
 /* Hashes that named a page which has since become a view of another. Every link
    already saved, printed or shared keeps working, without a page behind it. */
+/* Registry: "A view or a page" (only if: see the checklist). */
 const PAGE_ALIASES = {results: ["company", "results"]};
 /* The board opens on the Game guide with no save at all, so everything the
    pages do with numbers asks first. */
 const hasData = () => typeof D !== "undefined" && !!D;
+/* The views of each page. */
+/* Registry: "A view or a page" (docs/architecture.md, Registries). A new view
+   needs its section markup (class "sec rv", an id starting sec, and data-sub),
+   SUBS, SEC_PAGE, PAGE_DRAWS and SS_VIEWS; for its route also ROUTES, AREAS
+   (the area's views) and routeViewLabel(), and HOST_ROUTES if a host view shows
+   it by default. The checklist has the only-if rows. */
 const SUBS = {
   company: {host:"pageCompany", nav:"companyNav", key:"ba_dash_company", start:"results",
             items:[navView("results", () => tt("nav.view.results", "Results"), "secDaily"),
@@ -31397,6 +31464,7 @@ Object.entries(SUBS).forEach(([id, sv]) => {
    presentation there, and `scopes`, on Supply, are the tabs the route may be
    read on. docs/ui-route-migration.md is this table in words, with the old
    hashes that still land on each route. */
+/* Registry: "A view or a page" (for a route: see the checklist). */
 const AREAS = [
   {id:"overview", icon:"today", get label(){ return tt("nav.area.overview", "Overview"); }},
   {id:"businesses", icon:"company", get label(){ return tt("nav.area.businesses", "Businesses"); },
@@ -31412,6 +31480,11 @@ const REFS = [
   {id:"map", icon:"map", newFeature:"map", get label(){ return tt("nav.ref.map", "City map"); }},
   ...(typeof showWikiRoute === "function" ? [{id:"wiki", icon:"wiki", newFeature:"wiki", get label(){ return tt("nav.ref.wiki2", "Wiki"); }}] : []),
 ];
+/* Registry: "A view or a page" (docs/architecture.md, Registries). A new view
+   needs its section markup (class "sec rv", an id starting sec, and data-sub),
+   SUBS, SEC_PAGE, PAGE_DRAWS and SS_VIEWS; for its route also ROUTES, AREAS
+   (the area's views) and routeViewLabel(), and HOST_ROUTES if a host view shows
+   it by default. The checklist has the only-if rows. */
 const ROUTES = {
   "overview": {host: ["today"]},
   /* The portfolio is one table on two views: Standards shows its
@@ -31481,6 +31554,7 @@ const ROUTES = {
 };
 /* The route a host page and view shows when nothing more precise was asked
    for: a finding, a search or the reader's own click on a scope tab. */
+/* Registry: "A view or a page" (only if: see the checklist). */
 const HOST_ROUTES = {today: "overview", map: "map", wiki: "wiki",
   "company/results": "businesses/results", "company/products": "businesses/prices",
   "company/standards": "businesses/standards", "company/milestones": "businesses/milestones",
@@ -31546,6 +31620,7 @@ function areaEntry(id){
    else (a page's own name, a section, a wiki page) is resolved elsewhere. */
 /* Old page names that are routes now: Payroll and Staff (main's Company
    views, issue #89) are Staffing's, the Wiki is the Game guide. */
+/* Registry: "A view or a page" (only if: see the checklist). */
 const ROUTE_ALIASES = {today: "overview", payroll: "staffing/payroll", staff: "staffing/needs", guide: "wiki"};
 /* Where an old word lands inside its route: #staff was main's Staff page, the
    hiring block on Staff needs (after the staff demands). */
@@ -31666,6 +31741,11 @@ function routeCarry(id){
    search index -- is drawn by renderAll() itself on every refresh. Each row
    calls its function by name when it runs, so a test that swaps one out is
    heard. */
+/* Registry: "A view or a page" (docs/architecture.md, Registries). A new view
+   needs its section markup (class "sec rv", an id starting sec, and data-sub),
+   SUBS, SEC_PAGE, PAGE_DRAWS and SS_VIEWS; for its route also ROUTES, AREAS
+   (the area's views) and routeViewLabel(), and HOST_ROUTES if a host view shows
+   it by default. The checklist has the only-if rows. */
 const PAGE_DRAWS = [
   ["today", () => drawKpis()], ["today", () => drawAlerts()], ["today", () => drawTools()],
   ["company/results", () => drawChart()], ["company/results", () => drawFinance()], ["company/results company/standards", () => drawPortfolio()],
@@ -32496,6 +32576,13 @@ window.addEventListener("hashchange", () => {
 /* Every "group" a finding in the Needs attention panel can carry — see note()
    and _idle_notes() in the Python build. Kept in sync by hand since the two
    sides only share the group key, not a label. */
+/* Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
+   needs: its group, emitted by note() in _alerts() or _finding() in a helper
+   such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
+   FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
+   ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
+   search words, if players have any; its line under "What counts as a finding"
+   in docs/dashboard-reference.md. The checklist has the only-if tables. */
 const ALERT_GROUPS = [
   /* Each label and note is read in the UI language every time. */
   {id:"notrading", get label(){ return tt("nav.kind.notrading.label", "Not trading yet"); }, get note(){ return tt("nav.kind.notrading.note", "Temporarily closed, or open but with no staff, no prices, no stock or no trading day"); }, on:true},
@@ -33564,6 +33651,11 @@ const ssWorst = rows => rows.map(r => SS_SEV[r.level] || "opp")
    hand, next to what they name: `need` is false for what works without a save,
    and `each`, where one view answers for several things, gives one entry per
    thing (its own id, line and go) in place of the view's single one. */
+/* Registry: "A view or a page" (docs/architecture.md, Registries). A new view
+   needs its section markup (class "sec rv", an id starting sec, and data-sub),
+   SUBS, SEC_PAGE, PAGE_DRAWS and SS_VIEWS; for its route also ROUTES, AREAS
+   (the area's views) and routeViewLabel(), and HOST_ROUTES if a host view shows
+   it by default. The checklist has the only-if rows. */
 const SS_VIEWS = [
   {id: "alerts", get t(){ return tt("nav.search.alerts.title", "Needs attention"); },
    get p(){ return tt("nav.search.alerts.line", "Overview"); }, ic: "today", syn: ["problems", "alerts", "warnings", "findings", "to do", "today"],
@@ -33702,6 +33794,13 @@ const SS_VIEWS = [
    go(){ const d = $("changelogDialog"); if(d && !d.open){ d.showModal(); featureDiscovery.visit("changelog"); d.scrollTop = 0; } }},
 ];
 /* The words players use for a kind of finding. */
+/* Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
+   needs: its group, emitted by note() in _alerts() or _finding() in a helper
+   such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
+   FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
+   ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
+   search words, if players have any; its line under "What counts as a finding"
+   in docs/dashboard-reference.md. The checklist has the only-if tables. */
 const SS_KIND_SYN = {feed: ["fed", "inputs", "ingredients", "starved"], atcap: ["capacity", "full", "ceiling", "turned away"],
   idlestaff: ["overstaffed", "idle staff", "too many staff", "hire"], staff: ["unstaffed", "no staff", "staffing", "hire", "on shift"],
   jobdemand: ["demands", "unhappy staff", "quit", "hire"], companydemand: ["insurance", "health insurance", "hr manager"],
@@ -37601,6 +37700,7 @@ if(LIVE) startWatching();
 """
 
 
+# ------------------------------------------------------- cli and watch server
 def newest_under(target: str) -> str:
     """The most recently written save at or below `target`."""
     if os.path.isfile(target):
