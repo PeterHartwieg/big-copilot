@@ -30184,14 +30184,14 @@ function hrBreaks(slug, w, row){
   const slots = w.slots || [];
   const hours = Number.isFinite(Number(w.hours)) && w.hours !== undefined ? Number(w.hours) : slots.reduce((n, s) => n + s.t - s.f, 0);
   const days = Number.isFinite(Number(w.days)) && w.days !== undefined ? Number(w.days) : new Set(slots.map(s => s.d)).size;
-  /* A plan week says which contract it suits (`band`, _hire_band() in
-     Python: "full" from 30 h, "part" from 10 h, "short" under): a part-timer
-     takes a part-time week only, a full-timer a full-time week only. */
-  if(w.band && slug === "ba:jobdemand_fulltime") return w.band !== "full" || hours > 50;
-  if(w.band && slug === "ba:jobdemand_parttime") return w.band !== "part";
+  /* The hours demands are the game's own (JOB_DEMANDS,
+     HoursWorkingPerWeek.Fulfilled), both ends included: a part-timer takes a
+     week of 10 to 30 hours (a "part" week, or a "full" one of exactly 30), a
+     full-timer 30 to 50. The plan's `band` names the contract a week suits;
+     the demand is judged on its hours. */
   switch(slug){
     case "ba:jobdemand_fulltime": return hours < 30 || hours > 50;
-    case "ba:jobdemand_parttime": return hours < 10 || hours >= 30;
+    case "ba:jobdemand_parttime": return hours < 10 || hours > 30;
     case "ba:jobdemand_fourdaysweek": return days !== 4;
     case "ba:jobdemand_fivedaysweek": return days !== 5;
     case "ba:jobdemand_freeweekends": return slots.some(s => s.d === 6 || s.d === 0);
@@ -30380,7 +30380,12 @@ function hrModel(){
       const fits = free.filter(x => hrFits(c, x));
       if(fits.length || (free.length && forced)){
         const pool = fits.length ? fits : free;
-        const S = pool[0].S, mine = pool.filter(x => x.S === S);
+        const S = pool[0].S;
+        /* There, a week of the contract they ask for first (a part-timer a
+           "part" week before a "full" one of 30 h), then a desk that meets
+           their desk demands. */
+        const want = hrAsksPt(c) ? "part" : (c.demands || []).includes("ba:jobdemand_fulltime") ? "full" : null;
+        const mine = pool.filter(x => x.S === S).sort((a, b) => (want && b.w.band === want) - (want && a.w.band === want));
         const wk = mine.find(x => !hrDeskMiss(c.demands, S, x.w).length) || mine[0];
         wk.who = {type: "hire", c, misfit: fits.length ? [] : hrFails(c, wk)};
         role.picked.push(c);
@@ -39528,9 +39533,7 @@ function gwPersonBreaks(list, demands, clean){
   const hours = list.reduce((n, e) => n + e.t - e.f, 0);
   const band = dem.map(d => GW_BANDS[d]).find(Boolean);
   const [lo, hi] = band || [0, GW_MOST];
-  /* Part-time is under 30 h: a week of 30 is a full-time one (_hire_band()). */
-  const part = dem.includes("ba:jobdemand_parttime");
-  if(hours > hi || (part && hours >= hi) || (band && hours < lo)) out.push({k: band ? "hours" : "most", n: hours, lo, hi: part ? hi - 1 : hi});
+  if(hours > hi || (band && hours < lo)) out.push({k: band ? "hours" : "most", n: hours, lo, hi});
   const days = new Set(list.map(e => e.d));
   const want = dem.map(d => GW_DAYS[d]).find(Boolean);
   if(want && days.size !== want) out.push({k: "days", n: days.size, want});
@@ -39559,7 +39562,7 @@ function gwAddBreaks(list, e, demands, clean){
   const dem = demands || [];
   const band = dem.map(d => GW_BANDS[d]).find(Boolean), want = dem.map(d => GW_DAYS[d]).find(Boolean);
   const day = list.filter(x => x.d === e.d), sum = xs => xs.reduce((n, x) => n + x.t - x.f, 0);
-  return sum(list) + e.t - e.f > (band ? band[1] : GW_MOST) - (dem.includes("ba:jobdemand_parttime") ? 1 : 0)
+  return sum(list) + e.t - e.f > (band ? band[1] : GW_MOST)
     || (!!want && !day.length && new Set(list.map(x => x.d)).size >= want)
     || e.t - e.f > GW_CAP || sum(day) + e.t - e.f > GW_CAP
     || day.some(x => x.f < e.t && e.f < x.t)

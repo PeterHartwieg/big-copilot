@@ -1833,7 +1833,7 @@ test('every week a write sends is checked per person: hours, days, 12 hours, ove
     ['z', ['hours']],
   ]);
   // One sentence a break.
-  assert.deepEqual(out.text.slice(0, 6), ['Ana: 36 h a week, asks for 10 to 29', 'Ana: 3 days a week, asks for 5',
+  assert.deepEqual(out.text.slice(0, 6), ['Ana: 36 h a week, asks for 10 to 30', 'Ana: 3 days a week, asks for 5',
     'Xan: 58 h a week, more than 50', 'Xan: an entry of 14 h on Monday', 'Xan: 16 h on Tuesday', 'Xan: two entries at once on Tuesday']);
   assert.equal(out.text.at(-1), 'Zia: 0 h a week, asks for 30 to 50');
 });
@@ -2916,15 +2916,6 @@ test('a shop with a part-time week takes a part-time candidate, the filter untou
   assert.deepEqual((await model(page)).weeks[0], [G, 'demand', ['move:SPARE1', 'hire:c2']]);
 });
 
-test('the band decides a full-timer\'s week, whatever its hours say', async (t) => {
-  const d = JSON.parse(payload);
-  d.candidates.find(c => c.id === 'c2').demands = ['ba:jobdemand_fulltime'];
-  d.hiring.sites.find(s => s.key === G).plans.demand.hireWeeks = [
-    {skill: CS, hours: 30, days: 3, band: 'part', slots: [slot(2, 3, 8, 18, 'REG-G'), slot(3, 4, 8, 18, 'REG-G'), slot(4, 5, 8, 18, 'REG-G')]}];
-  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
-  await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
-  assert.notDeepEqual((await model(page)).weeks[0][2], ['hire:c2']);
-});
 
 test('a short week is no open place: the role table says its hours quietly, with no advice to recruit', async (t) => {
   const d = JSON.parse(payload);
@@ -2959,10 +2950,20 @@ test('Quick hire skips a short week, and says so when only short weeks are left'
   assert.match(await box.locator('.hs-match').textContent(), /too few hours for a hire/);
 });
 
-test('a part-time week of 30 h is a break in the week check too, as the orange mark says', async (t) => {
-  const page = await board(t);
+test('a part-timer may take a full-time week of exactly 30 h, as the game\'s rule has it: no orange, no break', async (t) => {
+  // Gifts has one open week, 30 h and "full"; Bram asks for part-time.
+  // Sam's reassign is unticked; part-timers are let into the role.
+  const d = JSON.parse(payload);
+  d.candidates.find(c => c.id === 'c2').demands = ['ba:jobdemand_parttime'];
+  d.hiring.demandKinds['ba:jobdemand_parttime'] = 'schedule';
+  d.hiring.sites.find(s => s.key === G).plans.demand.hireWeeks = [
+    {skill: CS, hours: 30, days: 3, band: 'full', slots: [slot(2, 3, 8, 18, 'REG-G'), slot(3, 4, 8, 18, 'REG-G'), slot(4, 5, 8, 18, 'REG-G')]}];
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
+  await page.evaluate(() => { hrFilters().company.ex = []; });
+  assert.deepEqual((await model(page)).weeks[0], [G, 'demand', ['hire:c2']]);
+  assert.equal(await page.evaluate(() => { const x = hrModel().sites[0].weeks[0]; return hrFails(x.who.c, x).length; }), 0, 'no orange mark');
   const breaks = await page.evaluate(() => gwPersonBreaks([{d: 1, f: 8, t: 18, st: 'x'}, {d: 2, f: 8, t: 18, st: 'x'}, {d: 3, f: 8, t: 18, st: 'x'}],
     ['ba:jobdemand_parttime'], () => false));
-  assert.deepEqual(breaks, [{k: 'hours', n: 30, lo: 10, hi: 29}]);
-  assert.equal(await page.evaluate(() => hrBreaks('ba:jobdemand_parttime', {hours: 30, days: 3, slots: []})), true);
+  assert.deepEqual(breaks, [], 'no break line');
 });

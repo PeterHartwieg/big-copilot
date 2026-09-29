@@ -146,8 +146,9 @@ A `<site>` for every business the player runs (the `businesses` order):
   the page against the hire week the person gets), `site` (judged by `facts`), `company` (health
   insurance tiers, happy boss: judged once by `company`).
 - Hire weeks carry `band` (PR #187, `_hire_band()`): `full` from 30 h, `part` from 10 h to under
-  30, `short` under 10. The page judges the hours demands by it (a part-timer takes `part` weeks
-  only, a full-timer `full` weeks only), never gives a `short` week to a hire (a hand-ticked one
+  30, `short` under 10. The hours demands are judged as the game does, both ends included (a
+  part-timer takes a week of 10 to 30 h, a `part` week first; a full-timer 30 to 50); the page
+  never gives a `short` week to a hire (a hand-ticked one
   takes it last), counts no `short` week as an open place, and says its hours as "too few for a
   hire". The shop default that leaves part-time askers out bars them from `full` shop weeks only.
 - `shiftPrint` is already on every business row (`businesses[].shiftPrint`); the hire write's
