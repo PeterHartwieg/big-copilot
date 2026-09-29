@@ -519,6 +519,19 @@ test('a tick kept from a plan that has changed does not count', async () => {
 
 // --- the rest of the block ---------------------------------------------------
 
+test("a locker line in the game's week with nobody on it is not a guard", async () => {
+  const page = await shop('full', row => {
+    const locker = row.stations.findIndex(st => st.skill === 'ba:skill_securityguard');
+    const cur = row.current || {list: []};
+    row.current = Object.assign({}, cur, {security: 1,
+      list: (cur.list || []).concat([{d: 0, s: locker, f: 8, t: 14, p: null, k: 'security'}])});
+  });
+  try {
+    const guard = page.locator('#sp-roster .sp-hc .sp-new').first();
+    assert.match(await guard.getAttribute('data-read'), /nobody covers this locker today/);
+  } finally { await page.close(); }
+});
+
 test("a locker the game's own week has guards on is not called uncovered", async () => {
   // QA on a real save: the plan hired for a locker two guards were covering,
   // and the line said nobody covers it today. That is the game's week to say,

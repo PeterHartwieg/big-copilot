@@ -2192,15 +2192,34 @@ class ExchangeTest(unittest.TestCase):
         self.assertEqual(sorted(week["hours"] for week in self.weeks(row).values()), [30, 42])
 
     def test_a_full_timer_is_not_cut_to_part_time_by_the_pieces(self):
-        """Round 7: four days open, a full-time guard with no evenings and a
-        part-time one with no mornings. The cut nearest the middle is 08-14
-        and 14-20, four days of it: 24 h, under the full-timer's 30. The pass
-        is undone rather than leave them there."""
+        """Round 7 and 9: four days open, a full-time guard with no evenings
+        and a part-time one with no mornings. Cut at 14 the full-timer would
+        have 24 h, under their 30, so that pass fails; the cut at 16 gives
+        32 h and 16 h, both bands met, and nobody to hire."""
         row = plan([(9, LOCKER)], [
             employee("g1", [GUARD], demands=("ba:jobdemand_fulltime", "ba:jobdemand_noevenings")),
             employee("g2", [GUARD], demands=("ba:jobdemand_parttime", "ba:jobdemand_nomornings")),
         ], FLAT, opens=((8, 20),), open_days=(0, 1, 2, 3))
         self.assert_no_short_week(row, {"G1": 30, "G2": 10})
+        self.assertEqual(sum(h["hire"] for h in row["headcount"].values()), 0)
+        self.assertEqual({who: week["hours"] for who, week in self.weeks(row).items()},
+                         {"G1": 32, "G2": 16})
+
+    def test_one_role_s_undo_keeps_a_two_role_person_s_other_pieces(self):
+        """Round 9: X cleans and guards and will not work mornings. The
+        cleaners' cut pairs X with C1; the guards' cut, a four-day guard
+        short, is undone, and X keeps the cleaning afternoons."""
+        row = plan([(8, CLEAN_STATION), (9, LOCKER)], [
+            employee("c1", [CLEANING], demands=("ba:jobdemand_fulltime", "ba:jobdemand_noevenings")),
+            employee("x", [CLEANING, GUARD],
+                     demands=("ba:jobdemand_fulltime", "ba:jobdemand_nomornings")),
+            employee("g1", [GUARD], demands=("ba:jobdemand_fulltime", "ba:jobdemand_noevenings")),
+            employee("g2", [GUARD], demands=("ba:jobdemand_fulltime", "ba:jobdemand_nomornings",
+                                             "ba:jobdemand_fourdaysweek")),
+        ], FLAT, opens=((8, 20),))
+        self.assertEqual(row["headcount"][CLEANING]["hire"], 0)
+        self.assertEqual(self.weeks(row)["X"]["hours"], 42)
+        self.assert_no_short_week(row, {"C1": 30, "X": 30, "G1": 30, "G2": 30})
 
     def test_a_week_that_cannot_be_reached_is_not_cut_at_all(self):
         """All or nothing: a shortfall that cannot be closed moves no shift.

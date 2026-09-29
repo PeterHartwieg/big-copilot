@@ -7469,9 +7469,11 @@ def _cut_role(indices: list, rows: list, pool: list, by_id: dict, state: dict, h
 
     best = (run(None), None)
     if best[0] != len(indices):
-        middle = sum(rows[i]["from"] + rows[i]["to"] for i in indices) / (2 * len(indices))
-        points = sorted({at for i in indices
-                         for at in range(rows[i]["from"] + MIN_SPLIT, rows[i]["to"] - MIN_SPLIT + 1)},
+        # From the lines as they were: the pass just run cut them.
+        lines = [snapshot[0][i] for i in indices]
+        middle = sum(line["from"] + line["to"] for line in lines) / (2 * len(lines))
+        points = sorted({at for line in lines
+                         for at in range(line["from"] + MIN_SPLIT, line["to"] - MIN_SPLIT + 1)},
                         key=lambda at: (abs(at - middle), at))[:8]
         for at in points:
             restore()
@@ -7751,7 +7753,8 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
     pool again first -- somebody the settling passes left room for takes one
     ahead of any hire, and a line nobody here may take whole at all is cut in
     two for two of them where every demand of theirs still holds, all or
-    nothing (_cut_for_pool()) -- then dealt to N placeholders per skill
+    nothing a role at a time (_cut_role()) -- then dealt to N placeholders
+    per skill
     (_placeholder()), and the week settled by the same repair passes
     (_repair_week()). The swaps may still move a line between somebody here
     and a hire, so a hire's day can be one a person here gave up; the settling
