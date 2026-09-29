@@ -234,7 +234,10 @@ the map.
     are the game's own, both ends included: a candidate who asks for part-time takes a week
     of 10 to 30 hours (a part-time week first, or a full-time week of exactly 30), one who
     asks for full-time a week of 30 to 50; the orange mark and the week check before a write
-    say the same. A week under 10 hours is never given to a hire (only to one ticked in by
+    say the same. Each goes to the first site in the list with a week of their own contract,
+    else the first with any week that fits, and there to a week of their own contract before
+    a desk that meets their desk demands; somebody who asks for neither takes a 30-hour week
+    (which either contract may take) last. Quick hire picks the same way. A week under 10 hours is never given to a hire (only to one ticked in by
     hand, after every other week): it is no open place, and Staff needs, the review and
     Quick hire say its hours as "too few for a hire". A spare person may still be moved
     into one.

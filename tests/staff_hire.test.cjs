@@ -2967,3 +2967,69 @@ test('a part-timer may take a full-time week of exactly 30 h, as the game\'s rul
     ['ba:jobdemand_parttime'], () => false));
   assert.deepEqual(breaks, [], 'no break line');
 });
+
+// --- review round 11: the contract first, everywhere ------------------------------------
+
+const fullPart = (extra = {}) => {
+  const d = JSON.parse(payload);
+  d.candidates.find(c => c.id === 'c2').demands = ['ba:jobdemand_parttime'];
+  d.candidates.find(c => c.id === 'c1').demands = ['ba:jobdemand_fulltime'];
+  d.hiring.demandKinds['ba:jobdemand_parttime'] = 'schedule';
+  d.hiring.sites.find(s => s.key === G).plans.demand.hireWeeks = [
+    {skill: CS, hours: 30, days: 3, band: 'full', slots: [slot(2, 3, 8, 18, 'REG-G'), slot(3, 4, 8, 18, 'REG-G'), slot(4, 5, 8, 18, 'REG-G')]},
+    {skill: CS, hours: 20, days: 2, band: 'part', slots: [slot(5, 6, 8, 18, 'REG-G'), slot(6, 0, 8, 18, 'REG-G')]}];
+  return Object.assign(d, extra);
+};
+
+test('Quick hire gives each their own contract\'s week: a part-timer the part week, a full-timer the 30 h one', async (t) => {
+  const page = await board(t, {link: ONE, data: JSON.stringify(fullPart())});
+  await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
+  const box = page.locator('#hsQuick');
+  await box.locator('[data-hq-role]').selectOption(CS);
+  await box.locator('[data-hq-site]').selectOption(G);
+  await box.locator('[data-hq-more]').click();
+  const picks = (await quick(page)).picks;
+  assert.deepEqual(picks, [['c2', 20], ['c1', 30]]);
+});
+
+test('a desk demand does not trump the contract: the part-timer takes the part week, desk or not', async (t) => {
+  // The full week is on a register with a chair Bram asks for; the part week
+  // is not. His contract comes first.
+  const d = fullPart();
+  d.hiring.sites.find(s => s.key === G).plans.demand.hireWeeks[0].slots.forEach(sl => { sl.station = 'REG-G2'; });
+  d.hiring.sites.find(s => s.key === G).stations = {'REG-G2': ['ba:jobdemand_chair']};
+  d.hiring.demandKinds['ba:jobdemand_chair'] = 'station';
+  d.candidates.find(c => c.id === 'c2').demands = ['ba:jobdemand_parttime', 'ba:jobdemand_chair'];
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
+  await page.evaluate(() => { hrFilters().company.ex = []; });
+  assert.deepEqual((await model(page)).weeks[0], [G, 'demand', ['hire:c1', 'hire:c2']]);
+});
+
+test('a candidate ticked in by hand takes a part week before a short one listed first', async (t) => {
+  const d = JSON.parse(payload);
+  d.hiring.sites.find(s => s.key === G).plans.demand.hireWeeks = [
+    {skill: CS, hours: 6, days: 1, band: 'short', slots: [slot(2, 3, 8, 14, 'REG-G')]},
+    {skill: CS, hours: 20, days: 2, band: 'part', slots: [slot(5, 6, 8, 18, 'REG-G'), slot(6, 0, 8, 18, 'REG-G')]}];
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
+  await page.evaluate(() => { hrUi.force.add('c2'); });
+  assert.deepEqual((await model(page)).weeks[0], [G, 'demand', [null, 'hire:c2']]);
+});
+
+test('across sites, a candidate goes to the first site with a week of their own contract', async (t) => {
+  // Gifts has only a 30 h full week, Bare only a 20 h part week (and its
+  // cleaning week). Bram, part-time, ranks first: he goes to Bare, and Ada,
+  // full-time, to Gifts.
+  const d = fullPart();
+  d.hiring.sites.find(s => s.key === G).plans.demand.hireWeeks.splice(1);
+  const bare = d.hiring.sites.find(s => s.key === B).plans.open;
+  bare.hireWeeks = [{skill: CS, hours: 20, days: 2, band: 'part', slots: [slot(0, 1, 0, 10, 'REG-B'), slot(1, 2, 0, 10, 'REG-B')]},
+    ...bare.hireWeeks.filter(w => w.skill !== CS)];
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
+  await page.evaluate(() => { hrFilters().company.ex = []; });
+  const m = await model(page);
+  assert.deepEqual(m.weeks[0], [G, 'demand', ['hire:c1']]);
+  assert.equal(m.weeks[2][2][0], 'hire:c2');
+});

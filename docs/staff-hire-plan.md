@@ -147,7 +147,9 @@ A `<site>` for every business the player runs (the `businesses` order):
   insurance tiers, happy boss: judged once by `company`).
 - Hire weeks carry `band` (PR #187, `_hire_band()`): `full` from 30 h, `part` from 10 h to under
   30, `short` under 10. The hours demands are judged as the game does, both ends included (a
-  part-timer takes a week of 10 to 30 h, a `part` week first; a full-timer 30 to 50); the page
+  part-timer takes a week of 10 to 30 h, a `part` week first; a full-timer 30 to 50).
+  `hrPickWeek()` places each at the first site in list order with a week of their own contract
+  (else the first with any that fits), their own contract before a desk, as Quick hire does; the page
   never gives a `short` week to a hire (a hand-ticked one
   takes it last), counts no `short` week as an open place, and says its hours as "too few for a
   hire". The shop default that leaves part-time askers out bars them from `full` shop weeks only.

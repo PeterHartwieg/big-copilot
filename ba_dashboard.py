@@ -30249,6 +30249,26 @@ const hrPerson = (id, row) => {
   return p;
 };
 
+/* The contract a candidate asks for: "part", "full" or none. */
+const hrWants = c => hrAsksPt(c) ? "part" : (c.demands || []).includes("ba:jobdemand_fulltime") ? "full" : null;
+/* The week to give candidate `c` from weeks that fit them (`pool`, site list
+   order). The fewest people for the hours: the first site in list order with
+   a week of the contract they ask for (a part-timer a "part" week, a
+   full-timer a "full" one), else the first site with any; there, a week of
+   their own contract, else any, a week too short for any contract last
+   (only one ticked in by hand gets one) and, for someone who asks for
+   neither, a 30 h week (which either contract may take) after the others;
+   then a desk that meets their desk demands. */
+function hrPickWeek(c, pool){
+  const want = hrWants(c);
+  const own = want ? pool.filter(x => x.w.band === want) : [];
+  const S = (own.length ? own : pool)[0].S;
+  const rank = x => (x.w.band === "short" ? 2 : 0) + (!want && Number(x.w.hours) === 30 ? 1 : 0);
+  const here = pool.filter(x => x.S === S).map((x, i) => [x, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(e => e[0]);
+  const pref = want ? here.filter(x => x.w.band === want) : [];
+  const set = pref.length ? pref : here;
+  return set.find(x => !hrDeskMiss(c.demands, S, x.w).length) || set[0];
+}
 /* The schedule demands a person's week `x` ({w, S}) breaks, and whether it
    breaks none: the hard filter automatic picks and moves go through. */
 const hrFails = (p, x) => (p.demands || []).filter(d => hrKind(d) === "schedule" && hrBreaks(d, x.w, x.S && x.S.row));
@@ -30354,8 +30374,10 @@ function hrModel(){
     const partOpen = open.some(x => x.w.band === "part");
     /* A Part-time asker passes a role with a week they may take. */
     const passes = c => hrPasses(c, skill, f) && !(pt && allShop && !partOpen && hrAsksPt(c));
+    /* Weeks too short for any contract are no places: counted nowhere. */
+    const places = weeks.filter(x => x.w.band !== "short");
     const role = {skill, f, pt, shop, allShop, passes, own: !!hrFilters().roles[skill], pool, weeks, need: open.length,
-                  moved: weeks.length - open.length, picked: [], pass: 0, out: 0, at: new Map()};
+                  moved: places.filter(x => x.who).length, picked: [], pass: 0, out: 0, at: new Map()};
     pool.forEach(c => {
       const forced = ui.force.has(c.id);
       const pass = passes(c);
@@ -30366,9 +30388,7 @@ function hrModel(){
       const barred = x => pt && !forced && hrAsksPt(c) && atShop(x) && x.w.band !== "part";
       /* A week too short for any contract (`band` "short") is no hire's
          unless the player ticks one in by hand. */
-      const free = open.filter(x => !x.who && !barred(x) && (forced || x.w.band !== "short"))
-        /* Ticked in by hand, a week a contract suits comes before a short one. */
-        .sort((a, b) => (a.w.band === "short") - (b.w.band === "short"));
+      const free = open.filter(x => !x.who && !barred(x) && (forced || x.w.band !== "short"));
       /* Their schedule demands are a hard filter (Peter, 28 September 2026):
          the first site in list order with a week they meet, at every site's
          open weeks of the role; there the one at a desk that meets their
@@ -30379,14 +30399,7 @@ function hrModel(){
          warned. */
       const fits = free.filter(x => hrFits(c, x));
       if(fits.length || (free.length && forced)){
-        const pool = fits.length ? fits : free;
-        const S = pool[0].S;
-        /* There, a week of the contract they ask for first (a part-timer a
-           "part" week before a "full" one of 30 h), then a desk that meets
-           their desk demands. */
-        const want = hrAsksPt(c) ? "part" : (c.demands || []).includes("ba:jobdemand_fulltime") ? "full" : null;
-        const mine = pool.filter(x => x.S === S).sort((a, b) => (want && b.w.band === want) - (want && a.w.band === want));
-        const wk = mine.find(x => !hrDeskMiss(c.demands, S, x.w).length) || mine[0];
+        const wk = hrPickWeek(c, fits.length ? fits : free);
         wk.who = {type: "hire", c, misfit: fits.length ? [] : hrFails(c, wk)};
         role.picked.push(c);
         role.at.set(c.id, {week: wk});
@@ -30459,9 +30472,8 @@ function hrTotals(m){
   const moves = m.moves.filter(x => !x.off);
   const touched = new Set([...hires.map(x => x.S.key), ...moves.map(x => x.to.key), ...m.overs.map(x => x.S.key)]);
   const bill = hires.reduce((n, x) => n + Number(x.who.c.wage || 0) * Number(x.w.hours || 0) / 7, 0);
-  const needed = m.roles.reduce((n, r) => n + r.weeks.filter(x => x.w.band !== "short").length, 0);
   return {hire: hires.length + m.overs.length, weeks: hires, move: moves.length, moves, sites: touched.size,
-          bill, needed, short: m.roles.reduce((n, r) => n + r.short, 0)};
+          bill, short: m.roles.reduce((n, r) => n + r.short, 0)};
 }
 
 /* --- the write: POST /write/hire (docs/game-link-api.md) ------------------ */
@@ -30886,7 +30898,7 @@ function hrReLine(g){
 function hrRoleRow(m, r, lines){
   const sites = [];
   r.weeks.forEach(x => { if(!sites.includes(x.S)) sites.push(x.S); });
-  const hires = r.weeks.filter(x => x.who && x.who.type === "hire");
+  const hires = r.weeks.filter(x => x.who && x.who.type === "hire" && x.w.band !== "short");
   const overs = m.overs.filter(o => o.skill === r.skill);
   const people = [...hires.map(x => x.who.c), ...overs.map(o => o.c)];
   const bill = hires.reduce((n, x) => n + Number(x.who.c.wage || 0) * Number(x.w.hours || 0) / 7, 0);
@@ -31469,9 +31481,11 @@ function hrQuickPlan(sites, cands, used){
   const held = new Map();    // candidate id -> the demands no open week met
   for(const c of out.matches){
     if(placed.size >= q.n || !open.length) break;
-    const fit = open.filter(x => hrFits(c, x));
+    /* As Open places: at a shop, the Part-time default keeps a part-time
+       asker off its full-time weeks. */
+    const fit = open.filter(x => hrFits(c, x) && !(shop && f.ex.includes(HR_PT) && hrAsksPt(c) && x.w.band !== "part"));
     if(!fit.length){ held.set(c.id, [...new Set(open.flatMap(x => hrFails(c, x)))]); continue; }
-    const wk = fit.find(x => !hrDeskMiss(c.demands, S, x.w).length) || fit[0];
+    const wk = hrPickWeek(c, fit);
     open.splice(open.indexOf(wk), 1);
     placed.set(c.id, wk);
   }
