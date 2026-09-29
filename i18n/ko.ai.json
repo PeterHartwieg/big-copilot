@@ -359,6 +359,7 @@
  "co.hire.quick.title": "gpt-6-sol",
  "co.hire.refused.myemployees": "gpt-6-sol",
  "co.hire.reread": "gpt-6-sol",
+ "co.hire.role.toofew": "gpt-6-sol",
  "co.hire.someone": "gpt-6-sol",
  "co.hire.st.assigned": "gpt-6-sol",
  "co.hire.st.changed": "gpt-6-sol",

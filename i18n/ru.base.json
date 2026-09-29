@@ -454,6 +454,7 @@
  "co.hire.quick.title": "Quick hire",
  "co.hire.refused.myemployees": "The game cannot hire while you are in that app.",
  "co.hire.reread": "Read the game again first: this board does not know a site's schedule well enough to replace it.",
+ "co.hire.role.toofew": "{h} h a week too few for a hire",
  "co.hire.someone": "someone",
  "co.hire.st.assigned": "assigned",
  "co.hire.st.changed": "changed in the game: not written",

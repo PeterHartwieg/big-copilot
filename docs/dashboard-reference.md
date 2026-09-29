@@ -229,8 +229,16 @@ the map.
     person.
   - A site accepts the roles the game lets you assign there: the business type's own,
     cleaning in a shop, office, cinema or theatre, security where theft is possible.
-  - *Part-time* is left out by default for every role hired into a shop: a shop's plan
-    gives full weeks. The filter bar's "Leave out who asks for" list takes it back.
+  - Each plan week says which contract it suits (`band`): full-time from 30 hours,
+    part-time from 10 to under 30, and a week under 10 hours suits none. A candidate who
+    asks for part-time takes a part-time week only, one who asks for full-time a full-time
+    week only; the week check before a write says the same (a part-time week of 30 hours is
+    a break). A week under 10 hours is never given to a hire (only to one ticked in by hand,
+    after every other week): it is no open place, and Staff needs, the review and Quick hire
+    say its hours as "too few for a hire". A spare person may still be moved into one.
+  - *Part-time* is left out by default for shop roles, and only from full-time shop weeks:
+    a role with an open part-time week takes part-time askers for it, and Quick hire does
+    the same at a shop. The filter bar's "Leave out who asks for" list takes it back.
   - *Quick hire* hires the best matches for one role at any site (headquarters and
     warehouses included), from the candidates the open places have not picked. At a site
     with a plan they get the plan's open weeks in that role that meet their schedule

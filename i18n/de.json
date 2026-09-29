@@ -396,6 +396,7 @@
  "co.hire.quick.title": "Schnelleinstellung",
  "co.hire.refused.myemployees": "Solange du in dieser App bist, kann das Spiel niemanden einstellen.",
  "co.hire.reread": "Lies zuerst das Spiel erneut ein: Das Dashboard kennt den Wochenplan eines Betriebs nicht gut genug, um ihn zu ersetzen.",
+ "co.hire.role.toofew": "{h} Std. pro Woche, zu wenig für eine Einstellung",
  "co.hire.someone": "jemand",
  "co.hire.st.assigned": "zugewiesen",
  "co.hire.st.changed": "im Spiel geändert: nicht übertragen",

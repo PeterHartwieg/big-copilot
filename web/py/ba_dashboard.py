@@ -18642,6 +18642,7 @@ button.nx-card{appearance:none}
 .hs-t td.hs-rn small{display:block;margin-top:3px;font-size:12px;color:var(--ink-3);line-height:1.45}
 .hs-t td.num{color:var(--ink)}
 .hs-t td.num small{display:block;margin:4px 0 0;color:var(--ink-3);font-size:11.5px}
+.hs-t td .hs-toofew{display:block;margin:4px 0 0;color:var(--ink-3);font-size:11.5px;white-space:normal}
 .hs-t td.warn,.hs-t td .warn{color:var(--warn)}
 .hs-t td.dim{color:var(--ink-3)}
 .hs-t td.act{width:1%;padding-right:4px;text-align:right}
@@ -30190,7 +30191,7 @@ function hrBreaks(slug, w, row){
   if(w.band && slug === "ba:jobdemand_parttime") return w.band !== "part";
   switch(slug){
     case "ba:jobdemand_fulltime": return hours < 30 || hours > 50;
-    case "ba:jobdemand_parttime": return hours < 10 || hours > 30;
+    case "ba:jobdemand_parttime": return hours < 10 || hours >= 30;
     case "ba:jobdemand_fourdaysweek": return days !== 4;
     case "ba:jobdemand_fivedaysweek": return days !== 5;
     case "ba:jobdemand_freeweekends": return slots.some(s => s.d === 6 || s.d === 0);
@@ -30347,8 +30348,12 @@ function hrModel(){
     const atShop = x => x.S.site.kind === "shop";
     const shop = weeks.some(atShop), allShop = weeks.every(atShop);
     const open = weeks.filter(x => !x.who);
+    /* The shop default that leaves Part-time askers out predates part-time
+       weeks: it bars them from full-time shop weeks only, and a role with an
+       open part-time week lets them in (PR #187's `band`). */
+    const partOpen = open.some(x => x.w.band === "part");
     /* A Part-time asker passes a role with a week they may take. */
-    const passes = c => hrPasses(c, skill, f) && !(pt && allShop && hrAsksPt(c));
+    const passes = c => hrPasses(c, skill, f) && !(pt && allShop && !partOpen && hrAsksPt(c));
     const role = {skill, f, pt, shop, allShop, passes, own: !!hrFilters().roles[skill], pool, weeks, need: open.length,
                   moved: weeks.length - open.length, picked: [], pass: 0, out: 0, at: new Map()};
     pool.forEach(c => {
@@ -30358,10 +30363,12 @@ function hrModel(){
       if(!pass && !forced) return;
       if(used.has(c.id)){ role.at.set(c.id, {elsewhere: used.get(c.id)}); return; }
       if(ui.skip.has(c.id)) return;
-      const barred = x => pt && !forced && hrAsksPt(c) && atShop(x);
+      const barred = x => pt && !forced && hrAsksPt(c) && atShop(x) && x.w.band !== "part";
       /* A week too short for any contract (`band` "short") is no hire's
          unless the player ticks one in by hand. */
-      const free = open.filter(x => !x.who && !barred(x) && (forced || x.w.band !== "short"));
+      const free = open.filter(x => !x.who && !barred(x) && (forced || x.w.band !== "short"))
+        /* Ticked in by hand, a week a contract suits comes before a short one. */
+        .sort((a, b) => (a.w.band === "short") - (b.w.band === "short"));
       /* Their schedule demands are a hard filter (Peter, 28 September 2026):
          the first site in list order with a week they meet, at every site's
          open weeks of the role; there the one at a desk that meets their
@@ -30390,7 +30397,10 @@ function hrModel(){
         used.set(c.id, S);
       }
     });
-    role.short = open.filter(x => !x.who).length;
+    /* Places that stay open; a week too short for any contract is no place,
+       only hours no hire can take (`tooFew`). */
+    role.short = open.filter(x => !x.who && x.w.band !== "short").length;
+    role.tooFew = open.filter(x => !x.who && x.w.band === "short").reduce((n, x) => n + Number(x.w.hours || 0), 0);
     return role;
   });
   return {sites, moves, roles, overs, cands, byId, used, quick};
@@ -30444,7 +30454,7 @@ function hrTotals(m){
   const moves = m.moves.filter(x => !x.off);
   const touched = new Set([...hires.map(x => x.S.key), ...moves.map(x => x.to.key), ...m.overs.map(x => x.S.key)]);
   const bill = hires.reduce((n, x) => n + Number(x.who.c.wage || 0) * Number(x.w.hours || 0) / 7, 0);
-  const needed = m.roles.reduce((n, r) => n + r.weeks.length, 0);
+  const needed = m.roles.reduce((n, r) => n + r.weeks.filter(x => x.w.band !== "short").length, 0);
   return {hire: hires.length + m.overs.length, weeks: hires, move: moves.length, moves, sites: touched.size,
           bill, needed, short: m.roles.reduce((n, r) => n + r.short, 0)};
 }
@@ -30881,10 +30891,11 @@ function hrRoleRow(m, r, lines){
     : `<td class="act"><button type="button" class="hs-btn" data-hr-open="${attr(r.skill)}" aria-label="${attr(`Change picks: ${gameName(r.skill) || r.skill}`)}"><span class="t">Change picks</span>${hrChev()}</button></td>`;
   const row = `<tr class="${lines ? "has-sub" : ""}" data-hr-role="${attr(r.skill)}">
     <td class="l hs-rn"><b>${hrRole(r.skill)}</b><small>${hrWhere(sites)}</small></td>
-    <td class="num opt">${hrNum(r.weeks.length)}</td>
+    <td class="num opt">${hrNum(r.weeks.filter(x => x.w.band !== "short").length)}</td>
     <td class="${r.moved ? "num" : "dim"} opt">${r.moved ? hrNum(r.moved) : "–"}</td>
     <td class="${people.length ? "num" : r.short ? "warn" : "dim"}" data-l="New hires">${hrNum(people.length)}${people.length ? `<small>${Math.round(avg(c => hrLevel(c, r.skill)))}% · ${hrWage(Math.round(avg(c => Number(c.wage) || 0)))}/h</small>` : ""}</td>
-    <td class="${r.short ? "warn" : "dim"}" data-l="Stays open">${r.short ? hrNum(r.short) : "–"}</td>
+    <td class="${r.short ? "warn" : "dim"}" data-l="Stays open">${r.short ? hrNum(r.short) : "–"}${r.tooFew
+      ? `<small class="hs-toofew">${tt("co.hire.role.toofew", "{h} h a week too few for a hire", {h: hrNum(r.tooFew)})}</small>` : ""}</td>
     <td class="${bill ? "num" : "dim"} opt">${bill ? `+${fmt(bill)}` : "–"}</td>${act}</tr>`;
   return row + (lines ? `<tr class="hs-subrow"><td class="l" colspan="7">${lines}</td></tr>` : "");
 }
@@ -31423,9 +31434,11 @@ function hrQuickPlan(sites, cands, used){
   const S = q.site ? at.find(x => x.key === q.site) : null;
   const shop = !!S && S.site.kind === "shop";
   /* The page's own filters (declutter T9): part-time left out at a shop only,
-     as Open places does. */
+     as Open places does, and there only while the role has no open
+     part-time week. */
+  const partOpen = !!S && !!q.skill && (S.weeks || []).some(x => x.w.skill === q.skill && !x.who && x.w.band === "part");
   const f = hrFilters().company;
-  const ex = f.ex.filter(d => d !== HR_PT || shop);
+  const ex = f.ex.filter(d => d !== HR_PT || (shop && !partOpen));
   q.min = f.min;
   /* Its plan weeks are held, and its picks kept from Open places, only while
      its confirm is open or its write is under way (hrUi.quickHold); a form
@@ -31439,6 +31452,8 @@ function hrQuickPlan(sites, cands, used){
   /* The plan's weeks in this role here that nobody reassigned takes. */
   out.plan = !!(S.planned && S.row);
   const open = out.plan ? S.weeks.filter(x => x.w.skill === q.skill && !x.who && x.w.band !== "short") : [];
+  /* Weeks too short for any contract left here, and nothing else. */
+  out.tooFew = out.plan && !open.length && S.weeks.some(x => x.w.skill === q.skill && !x.who && x.w.band === "short");
   /* Best match first. While the plan has weeks left here, a match takes one
      that meets their schedule demands, at a desk that meets their desk
      demands first; a match no week left fits is held back (Peter, 28
@@ -31474,6 +31489,7 @@ const hrQuickModel = m => m.quick;
    can cut it: the kept-week clash of the additive write is gone with it.) */
 const hrQuickNote = (p, Q) => {
   if(p.nofit) return `<small class="warn">${tt("co.hire.quick.nofit", "no open week fits {demands}", {demands: p.nofit.map(hrName).join(", ")})}</small>`;
+  if(!p.w && Q.plan && Q.tooFew) return `<small>${tt("co.hire.p.short", "too few hours for a hire")}</small>`;
   return !p.w && Q.plan ? `<small>${tt("co.hire.quick.noweek", "no open hours left in the plan")}</small>` : "";
 };
 function hrQuickHtml(m){
@@ -39512,7 +39528,9 @@ function gwPersonBreaks(list, demands, clean){
   const hours = list.reduce((n, e) => n + e.t - e.f, 0);
   const band = dem.map(d => GW_BANDS[d]).find(Boolean);
   const [lo, hi] = band || [0, GW_MOST];
-  if(hours > hi || (band && hours < lo)) out.push({k: band ? "hours" : "most", n: hours, lo, hi});
+  /* Part-time is under 30 h: a week of 30 is a full-time one (_hire_band()). */
+  const part = dem.includes("ba:jobdemand_parttime");
+  if(hours > hi || (part && hours >= hi) || (band && hours < lo)) out.push({k: band ? "hours" : "most", n: hours, lo, hi: part ? hi - 1 : hi});
   const days = new Set(list.map(e => e.d));
   const want = dem.map(d => GW_DAYS[d]).find(Boolean);
   if(want && days.size !== want) out.push({k: "days", n: days.size, want});
@@ -39541,7 +39559,7 @@ function gwAddBreaks(list, e, demands, clean){
   const dem = demands || [];
   const band = dem.map(d => GW_BANDS[d]).find(Boolean), want = dem.map(d => GW_DAYS[d]).find(Boolean);
   const day = list.filter(x => x.d === e.d), sum = xs => xs.reduce((n, x) => n + x.t - x.f, 0);
-  return sum(list) + e.t - e.f > (band ? band[1] : GW_MOST)
+  return sum(list) + e.t - e.f > (band ? band[1] : GW_MOST) - (dem.includes("ba:jobdemand_parttime") ? 1 : 0)
     || (!!want && !day.length && new Set(list.map(x => x.d)).size >= want)
     || e.t - e.f > GW_CAP || sum(day) + e.t - e.f > GW_CAP
     || day.some(x => x.f < e.t && e.f < x.t)

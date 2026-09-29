@@ -145,6 +145,11 @@ A `<site>` for every business the player runs (the `businesses` order):
   weekends, part-time, full-time, four-day week, no morning/evening, no cleaning shifts: judged by
   the page against the hire week the person gets), `site` (judged by `facts`), `company` (health
   insurance tiers, happy boss: judged once by `company`).
+- Hire weeks carry `band` (PR #187, `_hire_band()`): `full` from 30 h, `part` from 10 h to under
+  30, `short` under 10. The page judges the hours demands by it (a part-timer takes `part` weeks
+  only, a full-timer `full` weeks only), never gives a `short` week to a hire (a hand-ticked one
+  takes it last), counts no `short` week as an open place, and says its hours as "too few for a
+  hire". The shop default that leaves part-time askers out bars them from `full` shop weeks only.
 - `shiftPrint` is already on every business row (`businesses[].shiftPrint`); the hire write's
   per-site `expect` uses it. The extraction worker makes sure factories and offices carry it too.
 

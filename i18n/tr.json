@@ -377,6 +377,7 @@
  "co.hire.quick.title": "Hızlı işe al",
  "co.hire.refused.myemployees": "Bu uygulamadayken oyun işe alım yapamaz.",
  "co.hire.reread": "Önce oyunu yeniden okuyun: panel, bir işletmenin programını değiştirmek için yeterli bilgiye sahip değil.",
+ "co.hire.role.toofew": "İşe almak için haftada {h} saat çok az",
  "co.hire.someone": "birisi",
  "co.hire.st.assigned": "atandı",
  "co.hire.st.changed": "oyunda değişti: yazılmadı",

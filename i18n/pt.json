@@ -425,6 +425,7 @@
  "co.hire.quick.title": "Contratação rápida",
  "co.hire.refused.myemployees": "O jogo não pode contratar enquanto você está nesse aplicativo.",
  "co.hire.reread": "Leia o jogo novamente primeiro: o painel não conhece bem o horário de uma unidade para substituí-lo.",
+ "co.hire.role.toofew": "{h} h por semana, poucas demais para contratar",
  "co.hire.someone": "alguém",
  "co.hire.st.assigned": "atribuído",
  "co.hire.st.changed": "alterado no jogo: não aplicado",

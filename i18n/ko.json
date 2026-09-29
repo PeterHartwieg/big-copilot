@@ -359,6 +359,7 @@
  "co.hire.quick.title": "빠른 채용",
  "co.hire.refused.myemployees": "해당 앱을 사용 중일 때는 게임에서 채용할 수 없습니다.",
  "co.hire.reread": "먼저 게임 정보를 다시 읽으세요. 이 대시보드는 해당 사업장의 스케줄을 교체할 만큼 충분히 파악하지 못했습니다.",
+ "co.hire.role.toofew": "주당 {h}시간은 채용하기에 부족합니다",
  "co.hire.someone": "직원",
  "co.hire.st.assigned": "배정됨",
  "co.hire.st.changed": "게임에서 변경됨: 적용하지 않음",

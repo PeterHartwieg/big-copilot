@@ -425,6 +425,7 @@
  "co.hire.quick.title": "Embauche rapide",
  "co.hire.refused.myemployees": "Le jeu ne peut pas embaucher tant que vous êtes dans cette application.",
  "co.hire.reread": "Relisez d’abord les données du jeu : le tableau de bord ne connaît pas assez bien le planning d’un site pour le remplacer.",
+ "co.hire.role.toofew": "{h} h par semaine, trop peu pour embaucher",
  "co.hire.someone": "quelqu’un",
  "co.hire.st.assigned": "affecté",
  "co.hire.st.changed": "modifié dans le jeu : non enregistré",
