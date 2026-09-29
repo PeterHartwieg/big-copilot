@@ -7972,10 +7972,15 @@ def _top_up_short(shifts: list, pool: list, state: dict, rostered: set, only=Non
             return ok and _has_room(taker, weeks[pid], slot)
 
         def order():
-            """The same fullest-week-first order the day pass uses."""
+            """The same fullest-week-first order the day pass uses.
+
+            Only the lines of somebody with an hour to spare: both passes
+            below skip everybody else, the whole lines for want of the
+            line's length and the pieces for want of one hour.
+            """
+            spare = {other: spare_of(other) >= 1 for other in on_roster if other != pid}
             return sorted(
-                (index for index, row in enumerate(rows)
-                 if row["employee"] in on_roster and row["employee"] != pid),
+                (index for index, row in enumerate(rows) if spare.get(row["employee"])),
                 key=lambda index: (
                     -week(rows[index]["employee"])["hours"], rows[index]["wd"],
                     rows[index]["from"], rows[index]["to"], str(rows[index]["station"])),
