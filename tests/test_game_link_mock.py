@@ -1162,7 +1162,7 @@ class MockHireOneAction(LinkedMock):
     """Mod 0.4.0's hire call (features hire.reschedule and hire.undo): weeks
     no hire or move reaches, and the undo of the whole call."""
 
-    def setUp(self, bonus_used=True):
+    def setUp(self, bonus_used=True, employees=True):
         super().setUp()
         # The synthetic company with Dee working at Bare, where nobody else does.
         company = es3_fixture.link_company()
@@ -1175,6 +1175,8 @@ class MockHireOneAction(LinkedMock):
             company["usedHappinessModifiers"] = ["ba:happinessmodifier_first_employee"]
         else:
             company.pop("usedHappinessModifiers", None)
+        if not employees:
+            company["EmployeeInstances"] = []
         with open(self.path, "wb") as fh:
             fh.write(es3_fixture.encode(company))
         self.link.refresh(force=True)
@@ -1386,6 +1388,32 @@ class MockHireOneAction(LinkedMock):
         self.assertEqual(dry["rows"], [{"scope": "site", "address": GIFTS, "error": "screen_open"},
                                        {"scope": "site", "address": CORNER, "error": "changed"}])
 
+    def test_a_driver_moved_keeps_their_hours_where_they_were(self):
+        # Ana can drive: the game's move (UnassignEmployeeFromAllWorkshifts)
+        # clears no shift of a delivery driver's, so none is counted or cleared.
+        company = es3_fixture.link_company()
+        ana = next(e for e in company["EmployeeInstances"] if e["id"] == ANA)
+        ana["characterData"]["skills"] = list(ana["characterData"]["skills"]) + [{"name": "ba:skill_deliverydriver", "value": 40.0}]
+        with open(self.path, "wb") as fh:
+            fh.write(es3_fixture.encode(company))
+        self.link.refresh(force=True)
+        before = self.prints()[("ba:street_secondavenue", 10)]
+        move = {"hires": [], "moves": [{"employeeId": ANA, "from": GIFTS, "to": CORNER}],
+                "sites": [{"address": CORNER, "expect": None, "days": None}]}
+        status, done = self.post("hire", move)
+        self.assertEqual(status, 200, done)
+        self.assertEqual(done["moved"][0]["shiftsCleared"], 0)
+        self.assertEqual(self.prints()[("ba:street_secondavenue", 10)], before)
+
+    def test_screen_open_comes_before_changed_for_one_site(self):
+        self.assertEqual(self.post("hire", self.call_body())[0], 200)
+        corner = self.prints()[("ba:street_broadway", 2)]
+        self.assertEqual(self.post("schedule", {"address": CORNER, "expect": corner,
+                                                "days": [{"d": 2, "shifts": [shift(CY, CORNER_REGISTER)]}]})[0], 200)
+        self.link.configure({"screenOpen": [CORNER]})
+        _, dry = self.post("undo", {"kind": "hire", "dryRun": True})
+        self.assertEqual(dry["rows"], [{"scope": "site", "address": CORNER, "error": "screen_open"}])
+
     def test_no_undo_without_the_feature(self):
         self.link.configure({"features": ["hire.reschedule"]})
         self.assertEqual(self.post("hire", self.call_body())[0], 200)
@@ -1443,30 +1471,36 @@ class MockOfficeSchedule(LinkedMock):
 
 
 class MockHireFirstEmployee(MockHireOneAction):
-    """A company whose first employee the call hires: the game's once-only
-    bonus comes with it, which no undo can take back."""
+    """A company with nobody employed yet, whose first employee the call hires:
+    the game's once-only bonus comes with it, which no undo can take back."""
 
     def setUp(self):
-        super().setUp(bonus_used=False)
+        super().setUp(bonus_used=False, employees=False)
 
-    def test_the_undo_refuses_the_call_that_hired_the_first_employee(self):
-        status, done = self.post("hire", self.call_body())
-        self.assertEqual(status, 200, done)
+    def test_the_first_employee_call_is_not_undoable_and_later_hires_are(self):
+        first = {"hires": [{"candidateId": IDA, "address": GIFTS, "expect": {"wage": 26.5}}], "moves": [],
+                 "sites": [{"address": GIFTS, "expect": None, "days": None}]}
+        status, done = self.post("hire", first)
+        self.assertEqual((status, done["undoable"]), (200, False), done)
         kept = self.state()
         self.assertEqual(self.post("undo", {"kind": "hire"}), (409, {"error": "changed", "rows": [
             {"scope": "hire", "id": IDA, "error": "changed"}]}))
         self.assertEqual(self.state(), kept)
-        # A call with no hire grants nothing, and is undone.
-        only = {"hires": [], "moves": [], "sites": [{"address": BARE, "expect": self.prints()[("ba:street_fifthavenue", 4)],
-                                                     "days": [{"d": 5, "shifts": [shift(DEE, REGISTER)]}]}]}
-        self.assertEqual(self.post("hire", only)[0], 200)
-        self.assertEqual(self.post("undo", {"kind": "hire"})[0], 200)
+        # The bonus is used now: the next hire's call is undone as usual.
+        second = {"hires": [{"candidateId": OSKAR, "address": GIFTS, "expect": {"wage": 22.0}}], "moves": [],
+                  "sites": [{"address": GIFTS, "expect": None, "days": None}]}
+        status, done = self.post("hire", second)
+        self.assertEqual((status, done["undoable"]), (200, True), done)
+        status, undo = self.post("undo", {"kind": "hire"})
+        self.assertEqual((status, [h["candidateId"] for h in undo["hired"]]), (200, [OSKAR]))
 
     # The inherited cases run with the bonus used only.
     test_the_undo_takes_the_whole_call_back = None
     test_the_undo_refuses_when_the_game_has_moved_on = None
     test_a_later_hire_replaces_the_undo_and_one_that_changes_nothing_clears_it = None
     test_the_undo_refuses_a_mover_with_hours_where_it_restores_no_week = None
+    test_a_driver_moved_keeps_their_hours_where_they_were = None
+    test_screen_open_comes_before_changed_for_one_site = None
     test_the_undo_gives_a_mover_their_shifts_back_where_the_call_only_cleared_them = None
     test_the_apply_says_it_can_be_undone_and_keeps_no_week_it_left_as_it_was = None
     test_refusals_come_in_site_order_screen_open_among_them = None

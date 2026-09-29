@@ -297,7 +297,7 @@
  "co.hire.chain.later_many": "This mod writes the other {n} weeks after the hire, one at a time, and cannot undo any of it.",
  "co.hire.chain.later_one": "This mod writes {n} more week after the hire, on its own, and cannot undo any of it.",
  "co.hire.chain.later_other": "This mod writes the other {n} weeks after the hire, one at a time, and cannot undo any of it.",
- "co.hire.chain.update": "Big Copilot Link 0.4.0 does it all in one step, with Undo.",
+ "co.hire.chain.update": "A newer Big Copilot Link does it all in one step, with Undo.",
  "co.hire.chain_few": "This mod takes {n} of the weeks only after the hire, one at a time, and cannot undo any of it. Big Copilot Link 0.5.0 does it all in one step, with Undo.",
  "co.hire.chain_many": "This mod takes {n} of the weeks only after the hire, one at a time, and cannot undo any of it. Big Copilot Link 0.5.0 does it all in one step, with Undo.",
  "co.hire.chain_one": "This mod takes {n} of the weeks only after the hire, one at a time, and cannot undo any of it. Big Copilot Link 0.5.0 does it all in one step, with Undo.",

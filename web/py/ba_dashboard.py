@@ -29005,7 +29005,10 @@ function hrSitePeople(key){
      hire's hold decide; a site block asks twice as it draws. */
   const ui = hrTicks(), set = x => [...(x || [])].sort().join(",");
   const picks = [JSON.stringify(hrFilters()), set(ui.skip), set(ui.force), set(ui.moveOff), String(ui.quickHold || ""),
-    JSON.stringify(ui.quick), ui.hired && ui.hired.board === D ? set(ui.hired.ids) : ""].join("|");
+    JSON.stringify(ui.quick), ui.hired && ui.hired.board === D ? set(ui.hired.ids) : "",
+    /* The plan each site is on (a shop's pick of full cover, the factories'
+       sizing on Supply) decides its weeks too. */
+    (((D.hiring || {}).sites) || []).map(x => x.planned ? hrVariant(x) || "" : "").join(",")].join("|");
   if(!hrSiteMemo || hrSiteMemo.board !== D || hrSiteMemo.key !== picks) hrSiteMemo = {board: D, key: picks, model: hrModel()};
   const r = hrRequest(hrSiteMemo.model, {mode: "hire", site: key, one: true});
   return r.body.hires.length + r.body.moves.length;
@@ -30205,11 +30208,17 @@ async function hrChain(last, dlg){
     wireTips();
   }
 }
+/* The board's schedule Undo goes where the game's does: a hire call or its
+   undo that touched its site drops it. */
+function hrUndoTouched(keys){
+  const sched = gwUndoable.schedule;
+  if(sched && (sched.sites || []).some(k => keys.has(k))){ delete gwUndoable.schedule; gwToast(); }
+}
 /* What an older mod does with the weeks no hire or move reaches, `n` of them. */
 const hrChainNote = n => gwCall("info", "roster", `${tt("co.hire.chain.later", {
   one: "This mod writes {n} more week after the hire, on its own, and cannot undo any of it.",
   other: "This mod writes the other {n} weeks after the hire, one at a time, and cannot undo any of it."}, {n})} ${
-  tt("co.hire.chain.update", "Big Copilot Link 0.4.0 does it all in one step, with Undo.")}`);
+  tt("co.hire.chain.update", "A newer Big Copilot Link does it all in one step, with Undo.")}`);
 /* The action's review and confirm. `o`: {scope: "all" | "site" | "quick",
    site (a key), only (Pick more), mode (the one to open on)}; `hooks`:
    onDone, onFailed and more, for Quick hire's hold. */
@@ -30384,7 +30393,7 @@ function hrReview(o = {}, hooks = {}){
     applying: tt("co.hire.applying", "Hiring, reassigning and writing the weeks…"),
     /* One undo for the whole of it, from mod 0.4.0 (none before), where the
        mod says it kept it (`undoable`). */
-    changed: answer => !!hrLast.one && answer.undoable !== false && (people(answer) > 0
+    changed: answer => !!hrLast.one && answer.undoable === true && (people(answer) > 0
       || (answer.sites || []).some(s => s && s.before && s.after && (s.before.print !== s.after.print || s.openedHours))),
     done: answer => {
       if(answer.undo) return tt("co.hire.undone", "Undone: every hire, reassign and week of that step is back as it was.");
@@ -30435,6 +30444,11 @@ function hrReview(o = {}, hooks = {}){
     onUndo: () => {
       pgDrop(written); written = [];
       const back = new Set((((applied || {}).answer || {}).hired || []).map(h => h && h.candidateId));
+      /* The mod drops its schedule undo for every site the hire undo touched
+         (ForgetScheduleUndo): so does the board. */
+      const b = ((applied || {}).req || {}).body || {};
+      hrUndoTouched(new Set([...(b.sites || []).map(x => x.address), ...(b.hires || []).map(x => x.address),
+        ...(b.moves || []).flatMap(x => [x.to, x.from])].filter(Boolean).map(gwKeyOf)));
       if(hrUi.hired) back.forEach(id => hrUi.hired.ids.delete(id));
       hrUi.more = null;
       hrStale();

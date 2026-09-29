@@ -218,6 +218,7 @@ class Link:
         self.hired: set = set()
         self.gone: set = set(hire_gone or ())
         self.myemployees = myemployees
+        self.bonus_used = False  # an apply hired someone: the first-employee bonus is used
         # The sites BizMan's schedule screen is open on (addresses): a schedule
         # or hire write touching one is refused screen_open.
         self.screen_open: set = set(screen_open or ())
@@ -1144,7 +1145,9 @@ class Link:
                 continue
             source = move["from"]
             cleared = 0
-            if source is not None:
+            # The game's move (UnassignEmployeeFromAllWorkshifts) clears no shift of
+            # someone who can drive a delivery vehicle: theirs stay where they were.
+            if source is not None and "ba:skill_deliverydriver" not in self._skills(save, person):
                 reg = self._registration(save, source)
                 cleared = sum(1 for e in (self._entries(save, reg, source) if reg else []) if e[3] == move["id"])
             moved.append({"employeeId": move["id"], "name": names.get(move["id"]), "from": business(source),
@@ -1287,13 +1290,18 @@ class Link:
                 self.undo["hire"] = record
             else:
                 self.undo.pop("hire", None)
-            result["undoable"] = "hire" in self.undo
+            # A call that granted the once-only first-employee bonus is kept, and
+            # refused, but never offered as undoable (HireWrite: undoable).
+            result["undoable"] = "hire" in self.undo and not record["grantedBonus"]
+        if hired:
+            self.bonus_used = True  # the game's usedHappinessModifiers now holds it
         return 200, result
 
-    @staticmethod
-    def _first_bonus_used(save) -> bool:
-        """The game's once-only first-employee bonus used (usedHappinessModifiers),
-        or happiness switched off."""
+    def _first_bonus_used(self, save) -> bool:
+        """The game's once-only first-employee bonus used (usedHappinessModifiers,
+        or an apply's first hire since the bytes), or happiness switched off."""
+        if self.bonus_used:
+            return True
         variables = save.deref(save.root.get("gameVariables")) or {}
         if variables.get("disableHappiness"):
             return True
@@ -1434,8 +1442,8 @@ class Link:
                 # save holds from an older build goes back as it was).
                 if any(r["error"] in ("not_assigned", "no_station", "no_skill") for r in refused):
                     error = "changed"  # a person moved away or a station sold since
-            if error is None and address in self.screen_open:
-                error = "screen_open"  # in site order, as the mod lists them
+            if address in self.screen_open and reg is not None:
+                error = "screen_open"  # before changed, and in site order, as the mod has them
             if error:
                 rows.append({"scope": "site", "address": _wire(address), "error": error})
         # The answer: the people it un-hires and moves back, and each week restored.
@@ -1503,6 +1511,7 @@ class Link:
                 self.opened, self.terms = {}, {}
                 self.moved, self.hired, self.gone, self.myemployees = {}, set(), set(), False
                 self.screen_open, self.features = set(), list(FEATURES)
+                self.bonus_used = False
                 self.pair, self.pair_delay, self.pair_requests, self.tokens = "approve", PAIR_DELAY, {}, {}
                 self.pair_cooldowns, self.strikes, self.reject_tokens = list(PAIR_COOLDOWNS), {}, False
                 self.day, self.hour = self._clock

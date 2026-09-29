@@ -273,7 +273,7 @@
  "co.hire.c.week": "nur Wochenplan",
  "co.hire.chain.later_one": "Dieser Mod trägt nach dem Einstellen selbstständig {n} weiteren Wochenplan ins Spiel ein und kann keinen Schritt rückgängig machen.",
  "co.hire.chain.later_other": "Dieser Mod trägt nach dem Einstellen die übrigen {n} Wochenpläne einzeln ins Spiel ein und kann keinen Schritt rückgängig machen.",
- "co.hire.chain.update": "Big Copilot Link 0.4.0 erledigt alles in einem Schritt, den du rückgängig machen kannst.",
+ "co.hire.chain.update": "Eine neuere Version von Big Copilot Link erledigt alles in einem Schritt – mit Rückgängig.",
  "co.hire.chain_one": "Dieser Mod überträgt den {n} Wochenplan erst nach dem Einstellen, einzeln, und kann nichts davon rückgängig machen. Big Copilot Link 0.5.0 erledigt alles in einem Schritt, mit Rückgängig.",
  "co.hire.chain_other": "Dieser Mod überträgt die {n} Wochenpläne erst nach dem Einstellen, einzeln, und kann nichts davon rückgängig machen. Big Copilot Link 0.5.0 erledigt alles in einem Schritt, mit Rückgängig.",
  "co.hire.displaced": "<b>Vom Plan verdrängte Arbeitszeiten</b>: Arbeitszeiten außerhalb des Plans, die sich mit seinen überschneiden, werden passend gekürzt, {where}. Die Betroffenen behalten ihre Arbeitszeiten außerhalb des Plans.",

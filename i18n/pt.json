@@ -285,7 +285,7 @@
  "co.hire.chain.later_many": "Este mod grava as outras {n} programações semanais após a contratação, uma por vez, e não pode desfazer nenhuma delas.",
  "co.hire.chain.later_one": "Este mod grava {n} programação semanal a mais após a contratação, por conta própria, e não pode desfazer essa ação.",
  "co.hire.chain.later_other": "Este mod grava as outras {n} programações semanais após a contratação, uma por vez, e não pode desfazer nenhuma delas.",
- "co.hire.chain.update": "Big Copilot Link 0.4.0 faz tudo em uma etapa, com Desfazer.",
+ "co.hire.chain.update": "Uma versão mais recente do Big Copilot Link faz tudo em uma etapa, com Desfazer.",
  "co.hire.chain_many": "Este mod aplica {n} programações semanais só depois da contratação, uma por vez, e não pode desfazer essas ações. O Big Copilot Link 0.5.0 faz tudo em uma etapa, com Desfazer.",
  "co.hire.chain_one": "Este mod aplica {n} programação semanal só depois da contratação, uma por vez, e não pode desfazer essas ações. O Big Copilot Link 0.5.0 faz tudo em uma etapa, com Desfazer.",
  "co.hire.chain_other": "Este mod aplica {n} programações semanais só depois da contratação, uma por vez, e não pode desfazer essas ações. O Big Copilot Link 0.5.0 faz tudo em uma etapa, com Desfazer.",

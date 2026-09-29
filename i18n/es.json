@@ -285,7 +285,7 @@
  "co.hire.chain.later_many": "Este mod pasa los otros {n} horarios semanales al juego tras contratar, uno a uno, y no puede deshacer nada.",
  "co.hire.chain.later_one": "Este mod pasa {n} horario semanal más al juego tras contratar, por sí solo, y no puede deshacer nada.",
  "co.hire.chain.later_other": "Este mod pasa los otros {n} horarios semanales al juego tras contratar, uno a uno, y no puede deshacer nada.",
- "co.hire.chain.update": "Big Copilot Link 0.4.0 lo hace todo en un solo paso, con Deshacer.",
+ "co.hire.chain.update": "Una versión más reciente de Big Copilot Link lo hace todo en un paso, con Deshacer.",
  "co.hire.chain_many": "Este mod aplica {n} horarios semanales después de contratar, uno a uno, y no permite deshacer nada. Big Copilot Link 0.5.0 lo hace todo en un paso, con Deshacer.",
  "co.hire.chain_one": "Este mod aplica {n} horario semanal después de contratar, uno a uno, y no permite deshacer nada. Big Copilot Link 0.5.0 lo hace todo en un paso, con Deshacer.",
  "co.hire.chain_other": "Este mod aplica {n} horarios semanales después de contratar, uno a uno, y no permite deshacer nada. Big Copilot Link 0.5.0 lo hace todo en un paso, con Deshacer.",

@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "2fc55e5646";</script>
-<link rel="stylesheet" href="community.css?v=2fc55e5646">
+<script>window.LEDGER_BUILD = "bb1e725ec0";</script>
+<link rel="stylesheet" href="community.css?v=bb1e725ec0">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=2fc55e5646">
+<link rel="stylesheet" href="fonts/fonts.css?v=bb1e725ec0">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -5557,7 +5557,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"2fc55e5646","latest":{"pr":0,"date":"2026-09-29","title":"Staff a site in one step, and undo it in one","summary":"A shop's or an office's Staffing has Staff this site, and Staffing › Staff needs has Staff all sites. One review hires the best candidates, moves spare staff across, and writes the new week at every site it reaches, including sites that only need new hours; each site then says whether its week was written. Pick Hire and schedule, Hire only (assigned with no hours, as at a headquarters or a warehouse) or Schedule only; Quick hire works the same way. A shop you put on full cover 24/7 is staffed around the clock. With Big Copilot Link 0.4.0 it all goes to the game in one step, and one Undo takes back every hire, move and week, until the game's next day. Older versions of the mod still hire, then write the other weeks one by one, without undo."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"bb1e725ec0","latest":{"pr":0,"date":"2026-09-29","title":"Staff a site in one step, and undo it in one","summary":"A shop's or an office's Staffing has Staff this site, and Staffing › Staff needs has Staff all sites. One review hires the best candidates, moves spare staff across, and writes the new week at every site it reaches, including sites that only need new hours; each site then says whether its week was written. Pick Hire and schedule, Hire only (assigned with no hours, as at a headquarters or a warehouse) or Schedule only; Quick hire works the same way. A shop you put on full cover 24/7 is staffed around the clock. With Big Copilot Link 0.4.0 it all goes to the game in one step, and one Undo takes back every hire, move and week, until the game's next day. Older versions of the mod still hire, then write the other weeks one by one, without undo."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -5645,8 +5645,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=2fc55e5646"></script>
-<script src="community.js?v=2fc55e5646"></script>
+<script src="app.js?v=bb1e725ec0"></script>
+<script src="community.js?v=bb1e725ec0"></script>
 
 <script>
 
@@ -16760,7 +16760,10 @@ function hrSitePeople(key){
      hire's hold decide; a site block asks twice as it draws. */
   const ui = hrTicks(), set = x => [...(x || [])].sort().join(",");
   const picks = [JSON.stringify(hrFilters()), set(ui.skip), set(ui.force), set(ui.moveOff), String(ui.quickHold || ""),
-    JSON.stringify(ui.quick), ui.hired && ui.hired.board === D ? set(ui.hired.ids) : ""].join("|");
+    JSON.stringify(ui.quick), ui.hired && ui.hired.board === D ? set(ui.hired.ids) : "",
+    /* The plan each site is on (a shop's pick of full cover, the factories'
+       sizing on Supply) decides its weeks too. */
+    (((D.hiring || {}).sites) || []).map(x => x.planned ? hrVariant(x) || "" : "").join(",")].join("|");
   if(!hrSiteMemo || hrSiteMemo.board !== D || hrSiteMemo.key !== picks) hrSiteMemo = {board: D, key: picks, model: hrModel()};
   const r = hrRequest(hrSiteMemo.model, {mode: "hire", site: key, one: true});
   return r.body.hires.length + r.body.moves.length;
@@ -17960,11 +17963,17 @@ async function hrChain(last, dlg){
     wireTips();
   }
 }
+/* The board's schedule Undo goes where the game's does: a hire call or its
+   undo that touched its site drops it. */
+function hrUndoTouched(keys){
+  const sched = gwUndoable.schedule;
+  if(sched && (sched.sites || []).some(k => keys.has(k))){ delete gwUndoable.schedule; gwToast(); }
+}
 /* What an older mod does with the weeks no hire or move reaches, `n` of them. */
 const hrChainNote = n => gwCall("info", "roster", `${tt("co.hire.chain.later", {
   one: "This mod writes {n} more week after the hire, on its own, and cannot undo any of it.",
   other: "This mod writes the other {n} weeks after the hire, one at a time, and cannot undo any of it."}, {n})} ${
-  tt("co.hire.chain.update", "Big Copilot Link 0.4.0 does it all in one step, with Undo.")}`);
+  tt("co.hire.chain.update", "A newer Big Copilot Link does it all in one step, with Undo.")}`);
 /* The action's review and confirm. `o`: {scope: "all" | "site" | "quick",
    site (a key), only (Pick more), mode (the one to open on)}; `hooks`:
    onDone, onFailed and more, for Quick hire's hold. */
@@ -18139,7 +18148,7 @@ function hrReview(o = {}, hooks = {}){
     applying: tt("co.hire.applying", "Hiring, reassigning and writing the weeks…"),
     /* One undo for the whole of it, from mod 0.4.0 (none before), where the
        mod says it kept it (`undoable`). */
-    changed: answer => !!hrLast.one && answer.undoable !== false && (people(answer) > 0
+    changed: answer => !!hrLast.one && answer.undoable === true && (people(answer) > 0
       || (answer.sites || []).some(s => s && s.before && s.after && (s.before.print !== s.after.print || s.openedHours))),
     done: answer => {
       if(answer.undo) return tt("co.hire.undone", "Undone: every hire, reassign and week of that step is back as it was.");
@@ -18190,6 +18199,11 @@ function hrReview(o = {}, hooks = {}){
     onUndo: () => {
       pgDrop(written); written = [];
       const back = new Set((((applied || {}).answer || {}).hired || []).map(h => h && h.candidateId));
+      /* The mod drops its schedule undo for every site the hire undo touched
+         (ForgetScheduleUndo): so does the board. */
+      const b = ((applied || {}).req || {}).body || {};
+      hrUndoTouched(new Set([...(b.sites || []).map(x => x.address), ...(b.hires || []).map(x => x.address),
+        ...(b.moves || []).flatMap(x => [x.to, x.from])].filter(Boolean).map(gwKeyOf)));
       if(hrUi.hired) back.forEach(id => hrUi.hired.ids.delete(id));
       hrUi.more = null;
       hrStale();

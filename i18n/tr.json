@@ -254,7 +254,7 @@
  "co.hire.c.week": "yalnızca program",
  "co.hire.chain.later_one": "Bu mod, işe alımdan sonra {n} haftalık çalışma programını daha kendi başına oyuna yazar; hiçbirini geri alamazsınız.",
  "co.hire.chain.later_other": "Bu mod, işe alımdan sonra kalan {n} haftalık çalışma programını teker teker oyuna yazar; hiçbirini geri alamazsınız.",
- "co.hire.chain.update": "Big Copilot Link 0.4.0 hepsini tek adımda yapar ve Geri Al ile geri alabilirsiniz.",
+ "co.hire.chain.update": "Big Copilot Link'in daha yeni bir sürümü, tümünü Geri Al seçeneğiyle tek adımda yapar.",
  "co.hire.chain_one": "Bu mod, {n} haftalık programı ancak işe alımdan sonra tek tek yazar; hiçbirini Geri Al ile geri alamaz. Big Copilot Link 0.5.0 hepsini Geri Al seçeneğiyle tek adımda yapar.",
  "co.hire.chain_other": "Bu mod, {n} haftalık programı ancak işe alımdan sonra tek tek yazar; hiçbirini Geri Al ile geri alamaz. Big Copilot Link 0.5.0 hepsini Geri Al seçeneğiyle tek adımda yapar.",
  "co.hire.displaced": "<b>Planın devraldığı saatler</b>: plan dışındaki çakışan çalışma saatleri, {where} için plana uyacak şekilde kısaltılır. Çalışanların plan dışındaki saatleri korunur.",

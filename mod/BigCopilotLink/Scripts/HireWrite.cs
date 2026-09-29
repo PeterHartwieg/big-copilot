@@ -258,7 +258,10 @@ namespace BigCopilotLink
                 moved.Add(new Moved
                 {
                     Req = move, Employee = employee, Target = target, Source = source,
-                    Name = NameOf(employee), ShiftsCleared = ShiftsOf(source, move.EmployeeId)
+                    // The game's move (UnassignEmployeeFromAllWorkshifts) clears no shift of
+                    // someone who can drive a delivery vehicle (build 3682 IL: HasSkill first):
+                    // theirs stay where they were, so none is counted as cleared.
+                    Name = NameOf(employee), ShiftsCleared = employee.HasSkill(DriverSkill) ? 0 : ShiftsOf(source, move.EmployeeId)
                 });
             }
 
@@ -521,7 +524,10 @@ namespace BigCopilotLink
             var stamp = Finish(ws, hired.Count, moved.Count, weeks, weekBusiness);
             // Whether this call can be undone: false where the record failed, so the page
             // never offers an Undo the mod cannot keep.
-            return Answer(false, true, false, stamp, hired, moved, skipped, sites, away, rows, ws.HireUndo != null);
+            // A call that granted the once-only first-employee bonus keeps its record,
+            // and its undo refuses (the bonus stays): never offered as undoable.
+            return Answer(false, true, false, stamp, hired, moved, skipped, sites, away, rows,
+                ws.HireUndo != null && !ws.HireUndo.GrantedBonus);
         }
 
         /// <summary>

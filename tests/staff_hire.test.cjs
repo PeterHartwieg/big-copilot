@@ -2039,7 +2039,7 @@ test('with mod 0.4.0 Staff all sites is one call, the weeks no hire reaches with
       ? {status: 200, error: null, body: {ok: true, kind: 'hire', dryRun: false, undo: true, stamp: 's2',
           hired: [{candidateId: 'c2', name: 'Bram Castell', business: 'HART. Gifts', wage: 25, hoursLeft: 99}],
           moved: [], skipped: [], sites: [], wageAdded: -25, rows: []}}
-      : {status: 200, error: null, body: window.answerFor(body, {dryRun: !!o.dryRun})};
+      : {status: 200, error: null, body: window.answerFor(body, {dryRun: !!o.dryRun, extra: o.dryRun ? {} : {undoable: true}})};
   }, `(${answerFor.toString()})`);
   await page.locator(REVIEW).click();
   await phase(page, 'ready');
@@ -2083,7 +2083,7 @@ test('an older mod: the weeks no hire reaches are written one by one after the h
   await phase(page, 'ready');
   const dlg = page.locator('dialog.gw-dlg');
   assert.match(await dlg.locator('.gw-body').textContent(),
-    /This mod writes 1 more week after the hire, on its own, and cannot undo any of it\. Big Copilot Link 0\.4\.0 does it all in one step, with Undo\./);
+    /This mod writes 1 more week after the hire, on its own, and cannot undo any of it\. A newer Big Copilot Link does it all in one step, with Undo\./);
   // An earlier schedule write's Undo, which the chained write will replace in the game.
   await page.evaluate(k => { gwUndoable.schedule = {spec: {kind: 'schedule', title: 'x', sites: [k]}, text: 'x', sub: '', whose: gwWhose(), at: 1, sites: [k]}; }, B);
   await dlg.locator('.gw-foot [data-gw-b="apply"]').click();
@@ -2166,7 +2166,79 @@ test('with mod 0.4.0 the one call drops the board\'s schedule Undo for a site it
   await dlg.locator('.gw-foot [data-gw-b="apply"]').click();
   await phase(page, 'done');
   assert.equal(await dlg.locator('.gw-foot [data-gw-b="undo"]').count(), 0);
+  await dlg.locator('[data-gw-close]').click();
+  // A 0.4.0 answer that does not say `undoable` is not taken as undoable.
+  await page.evaluate(() => { window.keep = undefined; delete gwUndoable.hire;
+    const was = window.hrAnswer; window.hrAnswer = async (kind, body, o) => { const r = await was(kind, body, o); if(r.body) delete r.body.undoable; return r; }; });
+  await page.locator(REVIEW).click();
+  await phase(page, 'ready');
+  await dlg.locator('.gw-foot [data-gw-b="apply"]').click();
+  await phase(page, 'done');
+  assert.equal(await dlg.locator('.gw-foot [data-gw-b="undo"]').count(), 0);
 });
+
+test('an older mod: a chained week written drops the board\'s schedule Undo for a site the hire call never touched', async (t) => {
+  const page = await board(t);
+  await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
+  await page.evaluate(src => {
+    window.answerFor = eval(src);
+    window.hrAnswer = async (kind, body, o) => kind === 'schedule'
+      ? {status: 200, error: null, body: {ok: true, kind: 'schedule', dryRun: false, stamp: 's', before: {shifts: 1, print: 'a'}, after: {shifts: 2, print: 'b'},
+          removed: 1, added: 2, openedHours: false, leftWithout: [], warnings: [], siteError: null, rows: []}}
+      : {status: 200, error: null, body: window.answerFor(body, {dryRun: !!o.dryRun})};
+  }, `(${answerFor.toString()})`);
+  await page.evaluate(k => { gwUndoable.schedule = {spec: {kind: 'schedule', title: 'x'}, text: 'x', sub: '', whose: gwWhose(), at: 1, sites: [k]}; }, W);
+  await page.locator(REVIEW).click();
+  await phase(page, 'ready');
+  const dlg = page.locator('dialog.gw-dlg');
+  await dlg.locator('.gw-foot [data-gw-b="apply"]').click();
+  await phase(page, 'done');
+  // The hire call writes no week at the depot: its Undo stands until the chain writes.
+  await page.waitForFunction(() => window.hrWrites.some(w => w.kind === 'schedule'));
+  await page.locator('dialog.gw-dlg .hr-st.wait').first().waitFor({state: 'detached'});
+  assert.equal(await page.evaluate(() => !!gwUndoable.schedule), false);
+});
+
+test('undoing the hire drops the board\'s schedule Undo for a site it touched, and keeps one elsewhere', async (t) => {
+  const page = await board(t, {link: ONE});
+  await page.evaluate(src => {
+    window.answerFor = eval(src);
+    window.hrAnswer = async (kind, body, o) => kind === 'undo'
+      ? {status: 200, error: null, body: {ok: true, kind: 'hire', dryRun: false, undo: true, stamp: 's2', hired: [], moved: [], skipped: [], sites: [], wageAdded: 0, rows: []}}
+      : {status: 200, error: null, body: window.answerFor(body, {dryRun: !!o.dryRun, extra: o.dryRun ? {} : {undoable: true}})};
+  }, `(${answerFor.toString()})`);
+  await page.locator(REVIEW).click();
+  await phase(page, 'ready');
+  const dlg = page.locator('dialog.gw-dlg');
+  await dlg.locator('.gw-foot [data-gw-b="apply"]').click();
+  await phase(page, 'done');
+  // A schedule write at Bare after the call: the hire undo restores Bare's week.
+  await page.evaluate(k => { gwUndoable.schedule = {spec: {kind: 'schedule', title: 'x'}, text: 'x', sub: '', whose: gwWhose(), at: 1, sites: [k]}; }, B);
+  await dlg.locator('.gw-foot [data-gw-b="undo"]').click();
+  await phase(page, 'undone');
+  assert.equal(await page.evaluate(() => !!gwUndoable.schedule), false);
+  // One at the depot, which the call never touched, stays.
+  await page.evaluate(k => { gwUndoable.schedule = {spec: {kind: 'schedule', title: 'x'}, text: 'x', sub: '', whose: gwWhose(), at: 1, sites: [k]}; }, W);
+  const kept = await page.evaluate(k => { hrUndoTouched(new Set([k])); return !!gwUndoable.schedule; }, G);
+  assert.equal(kept, true);
+});
+
+test('Staff this site counts again when the shop is put on full cover or the factory sizing changes', async (t) => {
+  const d = JSON.parse(payload);
+  d.staffing.find(r => r.key === G).fullCover = {openNow: false, shifts: [{d: 1, s: 0, f: 0, t: 12, p: 0}, {d: 1, s: 0, f: 12, t: 24, p: null}]};
+  d.hiring.sites.find(s => s.key === G).plans.full = {spare: [], bench: [], hireWeeks: [
+    {skill: CS, hours: 12, days: 1, slots: [slot(1, 1, 12, 24, 'REG-G')]}]};
+  const page = await board(t, {data: JSON.stringify(d), link: ONE});
+  const count = () => page.evaluate(k => hrSitePeople(k), G);
+  assert.equal(await count(), 2, 'Sam reassigned and Bram hired, on the demand plan');
+  await page.evaluate(k => spPlanWrite(k, 'full'), G);
+  assert.equal(await count(), 1, 'the 24/7 plan has one open week: Sam takes it');
+  const works = () => page.evaluate(k => hrSitePeople(k), F);
+  assert.equal(await works(), 2);
+  await page.evaluate(() => { sizing = 'dem'; });
+  assert.equal(await works(), 1);
+});
+
 
 test('the Undo strip takes back the call it was made for, whatever review opened since', async (t) => {
   const page = await board(t, {link: ONE});

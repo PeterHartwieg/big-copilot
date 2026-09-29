@@ -509,7 +509,7 @@ working as they are.
 - `days` replaces all seven days, so for a factory or an office the page keeps, in `days`,
   the site's live shifts on stations its plan does not own (drivers, cleaners).
 - A move source whose week the page does not rewrite loses the mover's shifts there (the
-  game's move clears them; `moved[].shiftsCleared` says how many). The page names that in its
+  game's move clears them, except a delivery driver's; `moved[].shiftsCleared` says how many). The page names that in its
   review before the confirm. It rewrites a source only where its week changes by more than
   the mover's shifts.
 - Where the player put a shop on full cover (24/7), its week is cut against 0 to 24 and its
@@ -572,14 +572,18 @@ confirm.
 - `hired` and `moved` are what the call did (a dry run: would do), in request order: every
   hire and move with no row error of its own. `hired[].wage` is the live `hourlyWage`, `hoursLeft` the live
   `hoursUntilExpiring`. `moved[].from` is the business the person leaves (`null` from the
-  bench); `shiftsCleared` how many shifts they held there.
+  bench); `shiftsCleared` how many shifts the move clears there. From 0.4.0 that is 0 for
+  someone who can drive a delivery vehicle: the game's move (`UnassignEmployeeFromAllWorkshifts`)
+  clears no shift of theirs, which stay at the business they leave (a known game behaviour;
+  mods before 0.4.0 counted them anyway).
 - `skipped[]`: each gone candidate; `name` is null when the mod no longer knows them, and
   `hoursDropped` sums the hours of the shifts dropped for them.
 - `wageAdded` is the sum of `hourlyWage` over `hired`, per hour (the page turns it into a day).
 - `undoable` (an apply from mod 0.4.0, `hire.undo`): whether the mod kept this call's undo.
-  False when the call changed nothing, or when the mod could not record what the undo needs
-  before it applied (the call still applies; the page then offers no Undo). Absent from a
-  dry run and from older mods.
+  False when the call changed nothing, when the mod could not record what the undo needs
+  before it applied (the call still applies; the page then offers no Undo), or when the call
+  hired the company's first employee (its undo would refuse: `hire` row below). Absent from a
+  dry run and from older mods. A page offers Undo for a 0.4.0 apply only where it is `true`.
 - `sites[]`, one per request entry, in request order, with the schedule write's answer fields.
   An assign-only site answers `before` and `after` null and `removed`/`added` 0.
   `leftWithout` does not list people this call moves away. `siteError` repeats the site's
