@@ -7227,21 +7227,17 @@ def _placeholder(skill, n: int) -> dict:
 
 
 def _hire_bound(lines: list) -> int:
-    """The fewest people who could work these lines between them.
+    """Where the search for the number of hires starts: the open lines' hours over 50.
 
-    The most of them open at any one hour, the busiest day's hours over the
-    12-hour day, and all their hours over a full week's 50: however the lines
-    are shared out, no fewer people could hold them.
+    Nobody here had room for these hours, so hires work them, at most a full
+    week's 50 each. The lines' own crowding -- how many are open at one hour,
+    or on one day -- is no bound: it is where the one-at-a-time fill happened
+    to leave them, and the swaps spread them over the week onto whatever days
+    the hires are free (a law firm's 267 open hours all on a Friday, 22 of
+    them at one hour, are six people's work, not 22). The count rises from
+    here while a line is left open.
     """
-    bound = math.ceil(sum(s["to"] - s["from"] for s in lines) / FULL_TIME[1])
-    for wd in range(7):
-        day = [s for s in lines if s["wd"] == wd]
-        if not day:
-            continue
-        bound = max(bound, math.ceil(sum(s["to"] - s["from"] for s in day) / SHIFT_CAP))
-        for hour in range(24):
-            bound = max(bound, sum(1 for s in day if s["from"] <= hour < s["to"]))
-    return bound
+    return math.ceil(sum(s["to"] - s["from"] for s in lines) / FULL_TIME[1])
 
 
 def _fill_hole(row: dict, pool: list, state: dict, here: dict) -> bool:
@@ -7268,9 +7264,9 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
     may hand a hire whole shifts, or the tail of one, out of the hours above
     their own floor, so a hire gets a full week where the site can spare it.
 
-    N starts at the least the open lines allow (_hire_bound()) and rises one
-    at a time for a skill whose lines are still open, up to one hire per open
-    line, which always covers them. The fewest people first, as for everybody.
+    N starts at the open lines' hours over a full week (_hire_bound()) and
+    rises one at a time for a skill whose lines are still open, up to one
+    hire per open line, which always covers them. The fewest people first, as for everybody.
     Each try starts from the week as it was; deterministic throughout.
 
     A hire week is `{"hours", "busy", "slots"}`, the slots being the week's
