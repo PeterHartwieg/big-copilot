@@ -43,6 +43,13 @@ Everything else:
   `ba_dashboard.py`, the `payback` payload key, drawn as the Payback column of
   Businesses › Results and a line in the site panel; prices from `ba_item_prices.json`
   (`make_item_prices.py`); the rules are in `docs/open-a-store-scope.md`
+- open a store (Expansion › Open a store: investment and break-even for a store not yet
+  rented): the facts are `_open_store()` in `ba_dashboard.py` (the `openStore` payload key,
+  over `ba_store_rules.json` from `make_store_rules.py`); the model, the steps and the loan are
+  `drawOpenStore()` and the `os*` functions in the board script; step 2 is the finder's plan
+  mode (`options.plan` in `web/map.js`); a Demand cell's popover is `demCellPop()`. The rules
+  are in `docs/dashboard-reference.md`, "Open a store"; `check_profit_model.py` checks the
+  model against the player's own shops on every save on the machine
 - community API: `server/`, `migrations/`, `web/community.js`
 - changelog: `web/changelog.json`
 - UI text in other languages: `tt()` and the loader in `web/i18n.js`, `msg()` in
@@ -125,11 +132,12 @@ side and rebuild — the rebuild is the resolution.
 | `build_web.py` `BANNER` or `BEFORE_SCRIPT` (landing screen, news strip) | `python build_web.py` first, since the Node tests and `tests.test_privacy_promises` read the built page; then `node --test tests/news.test.cjs tests/release.test.cjs tests/update.test.cjs` and `python -m unittest tests.test_privacy_promises tests.test_footer` |
 | `web/changelog.json` | `python -m unittest tests.test_release_latest`, then `python build_web.py`: the file is a build stamp input |
 | A new finding kind, view, payload key, finder filter, footer link or news item | the matching checklist in the Registries section of `docs/architecture.md`, and the tests it names. `python -m unittest tests.test_doc_registries` holds the doc's payload table and private build tokens, and the finding groups, to the code; `node --test tests/alert_kinds.test.cjs tests/navigation.test.cjs` holds the finding-kind and view tables to each other |
-| `web/map.js`, `web/map.css` | `node --test tests/map.test.cjs tests/finder.test.cjs` and `python -m unittest discover -s tests -p test_map_assets.py`, then `python build_web.py`. The finder lives in `web/map.js`; `tests/finder.test.cjs` also covers `drawFindLocation` in `ba_dashboard.py`, and `finderPreset`, through a Growth › Demand cell opening the finder |
+| `web/map.js`, `web/map.css` | `node --test tests/map.test.cjs tests/finder.test.cjs tests/finder_plan.test.cjs` and `python -m unittest discover -s tests -p test_map_assets.py`, then `python build_web.py`. The finder lives in `web/map.js`; `tests/finder.test.cjs` also covers `drawFindLocation` in `ba_dashboard.py`, and `finderPreset`, through a Growth › Demand cell opening the finder |
 | `tools/*.py` (the wiki pipeline, not `tools/game_update/` or `tools/game_link_mock.py`), `tools/wiki_sample.json`, `tools/wiki_topics.json`, `web/wiki.js`, `web/wiki.css` | `python -m unittest discover -s tests -p "test_wiki*.py"` (the hand-written articles are `tests/test_wiki_build.py`) and `node --test tests/wiki*.test.cjs`, then `python build_web.py` |
 | `server/`, `migrations/` | `npm run test:community` and `npm run check:worker` |
 | `web/community.js`, `web/community.css` | those two npm commands, then `python build_web.py` — both files are cache-busted by the build stamp |
 | `make_buildings.py`, `make_floor_plans.py` or what they write | `python -m unittest tests.test_floor_plans tests.test_premises`, then `python build_web.py` |
+| `_open_store()` and its helpers, `ba_store_rules.json`, or the board's `os*` functions (Open a store) | `python -m unittest tests.test_open_store` and `node --test tests/open_store.test.cjs tests/finder_plan.test.cjs`, then `python build_web.py`; after a change to the profit model, `python check_profit_model.py` and compare its numbers with `docs/dashboard-reference.md`, "Open a store" |
 | `make_item_prices.py`, `ba_item_prices.json`, or the payback figures (`_payback()`, the Payback column, `spPayback()`) | `python -m unittest tests.test_payback` and `node --test tests/payback.test.cjs`, then `python build_web.py` |
 | Added or changed UI text (`tt()`, `data-tt*`, `msg()`), `web/i18n.js`, `tools/i18n.py`, `i18n/` | `python -m unittest discover -s tests -p "test_i18n*.py"` and `node --test tests/i18n_*.test.cjs`, then `python build_web.py`, plus the rows for the files the text is in |
 | `tools/Invoke-ZaiClaude.ps1` | `python -m unittest tests.test_agent_cli` |

@@ -147,8 +147,12 @@ gitignored. Put the rules you implement into `docs/dashboard-reference.md`.
   - C is the size's customer capacity for games started at build 2847 or later.
   - promo = baseCustomerPromotionMultiplier + 0.75 × promotion/100.
   - Pick the best of the 64 marketing combinations automatically.
-  - The staffing assistant's `_arrival_ceiling()` still uses the pre-2847 rule; a separate session
-    fixes that. Share one helper.
+  - One helper, `_initial_customers(build_at_start, size_cap, type_slug, sqm, products)`, as on
+    branch `arrival-ceiling` (which moves the staffing assistant's `_arrival_ceiling()` onto it);
+    the plan calls it through `_plan_initial()`.
+  - Offices start from the building's customer capacity whatever build the game started on:
+    every office in the saves checked on 29 September 2026 bills at the rate that gives, a game
+    started on build 2701 among them.
 - **Units bought:** units per product = arrivals × sales ratio × neighbourhood demand × satisfaction ×
   the type's factor × the acceptance at that price. Neighbourhood demand falls with the number of
   shops selling the product, and the new shop counts itself, so it also lowers demand at the
@@ -162,6 +166,9 @@ gitignored. Put the rules you implement into `docs/dashboard-reference.md`.
     correction.
 - **Validation:** 108 real shops across 4 characters. With each shop's own prices, the median
   actual ÷ model is 0.97, and 70% fall within ±15%. Offices are within about 5%.
+  - The board's own model with its planner defaults (`check_profit_model.py`, 29 September 2026):
+    102 shops at a median of 0.96 (p25 0.76, p75 1.00, p90 1.08, 55% within ±15%, 78% within
+    ±30%); 12 offices, on their own staffing, at 0.99 (p25 0.93, p90 1.12, 75% within ±15%).
 - **Not modelled:** cinemas and theatres come out 2 to 4 times too high, so show them as investment
   only, with no profit estimate. Shelf space per product is also open.
 

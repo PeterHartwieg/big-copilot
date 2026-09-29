@@ -818,6 +818,91 @@ say so. The cash figure states its own coverage: *one week of stock costs $X acr
 of 22 ingredients this company already buys*. Estimating the other ten would be inventing
 a price list.
 
+## Open a store
+
+Expansion › Open a store plans a store that does not exist yet, in four steps: what to
+open, where, the investment, and when it breaks even. A plan is kept per character in this
+browser. Start one from the neighbourhoods with the most demand for a type you do not run
+there, from the grid of types, or from a Demand cell's **Open a store here**. The board
+never suggests opening a store on its own.
+
+**Where** is Find a location, fixed to the plan's type. It lists buildings to rent;
+**Plan here** on a building's card picks it.
+
+**The investment** is a 100% outfitted store in that building:
+
+- the type's requirements (the Wiki's "To open" list), one of each; the point of sale is
+  the cheapest that covers the building's customer capacity, and more of them where one
+  does not;
+- one item per customer demand the type makes: music, seating, a sink, a toilet, a toilet
+  stall for privacy (one stall meets both), a uniform locker;
+- the displays: copied from your own store of the same type and layout when you run one,
+  otherwise, per product, enough of its cheapest display for the building's customers an
+  hour;
+- only items a furniture store sells, and, where the game says what an item is for, only
+  items made for this type;
+- the deposit, 60 days of rent.
+
+The **installation firm** charges 586 a square metre on top of every item at its default
+price, and lays the walls and floors free. **Self-installation** is the items, $250 a
+delivery per furniture store (the list is grouped by store, the fewest stores that sell
+everything, with the stores pinned on the map), and, in Midtown, the walls and floors that
+reach its interior score of 50: the cheapest floors first, then the cheapest walls, until
+the score's two halves (spend per interior element, and the share of slots painted) average
+50. The toggle is the same one Businesses › Results uses.
+
+**Break even** is the investment divided by the expected profit a day, shown as a range:
+the profit times 0.80 to 1.05, the spread of real shops against these rules. The profit is
+the game's own arithmetic for a store run well, not an average of your other stores:
+
+- **Customers.** Every open hour starts from the building's customer capacity (in a game
+  started before build 2847, from the best primary product's sales ratio times the floor),
+  times the promotion multiplier, the day's and the hour's multipliers, never more than the
+  capacity. Promotion is the building's traffic plus the share of the floor the marketing
+  reaches times the neighbourhood's marketing strength. The board tries all 64 marketing
+  mixes and keeps the most profitable.
+- **What each customer buys.** Per product: the sales ratio × the neighbourhood's demand ×
+  the satisfaction multiplier × the product's weight for the type × the amount a customer
+  takes. The new store counts as one more seller, so demand is a step lower than today's.
+  Satisfaction is the median of your own stores of the type, else 95.
+- **Price.** The highest price every customer in the neighbourhood accepts: the default
+  price, or a rival's lower one, times the neighbourhood's price level, plus 0.3 while no
+  rival company sells the product.
+- **Cost of goods** is always the import price: wholesale × the save's import price index ×
+  the difficulty's price multiplier × your best purchasing agent's discount. Never the
+  income statement's goods, which are near zero where your own factories supply a shop.
+- **Wages**: open hours × (a cashier per 30 customers an hour at the building's capacity, a
+  cleaner and a security guard), each at a skill of 100. Rent is the building's.
+- **Offices** bill one client an hour per staffed computer. Clients come at the building's
+  capacity × satisfaction × promotion × the day's and the hour's multipliers × the fee's
+  neighbourhood demand, whatever build the game started on. The computers are staffed as
+  the board's office default (a few around the clock, all from 8 to 22 on weekdays, half at
+  the weekend), each paid for every hour it is staffed, with a cleaner through the open
+  hours.
+- Cinemas and theatres show the investment only: their screens, seats and actors cap them in
+  ways the rules here do not follow.
+
+Under the estimate: the profit after tax, and, where you run the type, "your stores of this
+type earn x% of what these rules give their own buildings", each of them beside the rules'
+figure for its own building, hours and marketing. It is a line, not a correction. Where your
+own stores in the neighbourhood sell the same products, the demand the new store takes from
+them is said too.
+
+`check_profit_model.py` runs this model over every store you run, on every save on the
+machine. On 29 September 2026: 102 shops at a median of 0.96 (p25 0.76, p90 1.08; 55% within
+15%), 12 offices at 0.99 (p25 0.93, p90 1.12; 75% within 15%). The shops that fall far short
+priced below what customers accept, ran out of stock or had too little shelving.
+
+**Financing** is for a planned store only, since the game books a loan to the company. Pick
+a lender and an amount up to what it lends you now: the lower of its cap less what you owe
+it, and the larger of your cash, investments and property or a quarter of last week's
+average daily profit over the loan's term, less everything you owe. Interest is flat on the
+amount borrowed, floor(amount × rate × the difficulty's multiplier / 100 / days a year) a
+day, and the repayment max(5, amount / the term's days) a day, both at midnight. The panel
+shows the cash upfront, the loan's cost a day against the expected profit, the interest over
+the term and if paid off at break even, and the day your own cash is back with and without
+the loan.
+
 ## The portfolio, by chain
 
 A shop, the depot that fills it and the factory behind that depot are one trading

@@ -1,0 +1,146 @@
+"""Check Open a store's profit model against the player's own shops, on every save here.
+
+    python check_profit_model.py                     # the newest save of each character
+    python check_profit_model.py "path\\to\\folder"    # a different save root to walk
+    python check_profit_model.py -v                  # also list every shop, worst first
+
+For each character's newest save at or above MIN_BUILD, extract() builds the payload
+and the board's own model (the "Expansion › Open a store" section of the board
+script in ba_dashboard.py, run in Node) prices each of the player's trading shops
+and offices on its own building, hours, promotion and satisfaction. The ratio is
+what the shop really earned a day over its last finished days
+(_own_shops(), goods at import prices) against what the rules give it. Above 1
+means the model under-predicts. docs/open-a-store-scope.md, "Expected profit", has
+the numbers this is held to; the range the board shows is the p25 to p90.
+
+Nothing is written but a scratch folder under the system temp directory, which is
+removed afterwards; no save or payload is kept. Needs `node` on PATH.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+
+from ba_save import load_locale, load_save, newest_save
+from ba_dashboard import MIN_BUILD, Names, extract
+from check_saves import SAVE_ROOT
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+START = "/* --- Expansion › Open a store ---"
+END = "/* --- plan a chain ---"
+
+# Runs the board's model over one payload per argument and prints one JSON
+# row per shop. The board's helpers the model touches are stubbed.
+RUNNER = r"""
+const fs = require('fs'), vm = require('vm');
+const code = fs.readFileSync(process.argv[2], 'utf8');
+const rows = [];
+for(const file of process.argv.slice(3)){
+  const P = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const ctx = {D: P, gameName: k => (P.names || {})[k] || '', icon: () => '', prettySlug: s => s, paybackMode: () => 'firm',
+    premises: () => P.premises, localStorage: {getItem(){ return null; }, setItem(){}}, tt: (k, en) => typeof en === 'string' ? en : '',
+    once: f => f, Map, Math, JSON, Number, Array, String, Object, Set, console};
+  vm.createContext(ctx);
+  vm.runInContext(code + '\n;this.osOwnRatio = osOwnRatio;', ctx);
+  for(const slug of Object.keys((P.openStore || {}).own || {})){
+    const r = ctx.osOwnRatio(slug);
+    if(!r) continue;
+    const model = ((P.openStore.types || {})[slug] || {}).model;
+    r.rows.forEach(x => rows.push({save: P.who, type: slug.replace('ba:businesstype_', ''), model, key: x.key,
+      actual: x.actual, predicted: x.model, ratio: x.ratio}));
+  }
+}
+console.log(JSON.stringify(rows));
+"""
+
+
+def board_model() -> str:
+    """The Open a store section of the board script, as the page runs it."""
+    with open(os.path.join(HERE, "ba_dashboard.py"), encoding="utf-8") as fh:
+        text = fh.read()
+    start = text.index(START)
+    return text[start:text.index(END, start)]
+
+
+def stats(values: list) -> dict:
+    v = sorted(values)
+    n = len(v)
+    at = lambda p: v[min(n - 1, int(p * n))]  # noqa: E731
+    mid = v[(n - 1) // 2] if n % 2 else (v[n // 2 - 1] + v[n // 2]) / 2
+    within = lambda w: round(100 * sum(1 for x in v if 1 - w <= x <= 1 + w) / n)  # noqa: E731
+    return {"n": n, "median": round(mid, 3), "p10": round(at(.1), 2), "p25": round(at(.25), 2),
+            "p75": round(at(.75), 2), "p90": round(at(.9), 2), "within15": within(.15), "within30": within(.3)}
+
+
+def line(label: str, values: list) -> str:
+    s = stats(values)
+    return (f"{label:<26} n {s['n']:>3}  median {s['median']:.3f}  p10 {s['p10']:.2f}  p25 {s['p25']:.2f}  "
+            f"p75 {s['p75']:.2f}  p90 {s['p90']:.2f}  within 15% {s['within15']}%  within 30% {s['within30']}%")
+
+
+def main(argv: list) -> int:
+    verbose = "-v" in argv
+    args = [a for a in argv if a != "-v"]
+    root = args[0] if args else SAVE_ROOT
+    names = Names(load_locale())
+    scratch = tempfile.mkdtemp(prefix="profit_model_")
+    try:
+        files = []
+        for folder in sorted(os.scandir(root), key=lambda e: e.name):
+            if not folder.is_dir():
+                continue
+            try:
+                save = load_save(newest_save(folder.path))
+            except Exception:  # noqa: BLE001 -- a folder with no readable save is skipped
+                continue
+            if (save.root.get("buildNumberAtLastSave") or 0) < MIN_BUILD:
+                continue
+            payload = extract(save, names, None)
+            out = {k: payload.get(k) for k in ("openStore", "businesses", "premises", "meta", "names")}
+            out["who"] = folder.name[:8]
+            path = os.path.join(scratch, f"{len(files)}.json")
+            with open(path, "w", encoding="utf-8") as fh:
+                json.dump(out, fh, separators=(",", ":"))
+            files.append(path)
+        if not files:
+            print("no save at or above MIN_BUILD under", root)
+            return 1
+        model = os.path.join(scratch, "model.js")
+        with open(model, "w", encoding="utf-8") as fh:
+            fh.write(board_model())
+        runner = os.path.join(scratch, "run.cjs")
+        with open(runner, "w", encoding="utf-8") as fh:
+            fh.write(RUNNER)
+        done = subprocess.run(["node", runner, model, *files], capture_output=True, text=True, encoding="utf-8")
+        if done.returncode:
+            print(done.stderr)
+            return 1
+        rows = json.loads(done.stdout)
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+    paid = [r for r in rows if r["actual"] > 0]
+    shops = [r for r in paid if r["model"] == "retail"]
+    offices = [r for r in paid if r["model"] == "office"]
+    print(f"{len(files)} saves, {len(rows)} shops and offices, {len(rows) - len(paid)} with no profit left out")
+    if shops:
+        print(line("shops", [r["ratio"] for r in shops]))
+    if offices:
+        print(line("offices", [r["ratio"] for r in offices]))
+    for kind in sorted({r["type"] for r in paid}):
+        print(line("  " + kind, [r["ratio"] for r in paid if r["type"] == kind]))
+    for who in sorted({r["save"] for r in paid}):
+        print(line("  save " + who, [r["ratio"] for r in paid if r["save"] == who]))
+    if verbose:
+        for r in sorted(paid, key=lambda r: r["ratio"]):
+            print(f"{r['save']} {r['type']:<22} {r['key']:<34} {r['actual']:>9.0f} {r['predicted']:>9.0f} {r['ratio']:.2f}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

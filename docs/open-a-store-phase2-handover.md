@@ -1,24 +1,34 @@
-# Open a store, phase 2: handover (WIP, 28 Sep 2026)
+# Open a store, phase 2: handover (29 Sep 2026)
 
 ## Done
-- `make_store_rules.py` → `ba_store_rules.json` (+ `web/py/` copy): products, furniture (cph `c`, holds `h`, tags `x`, mounts `m`, vendors `v`, type tags `bt`), types, hoods, banks, vendors. Wired in `build_web.py`, `web/worker.js`, AGENTS.md, docs/game-update.md, docs/architecture.md, the worker/stamp tests.
-- `ba_dashboard.py` Python, section `# --- open a store` (after `_payback()`): `load_store_rules()`, `initial_customers()` (shared with `_arrival_ceiling()`), `demand_with()`, `optimal_providers()`, `decor_route()`, `outfit_lines()`, `_layout_slots()`, `_copied_shelving()`, `_store_market()`, `_own_shops()`, `_own_sales()`, `_finance_facts()`, `_open_store()`; payload key `openStore` wired in `extract()` (premises now computed before the return dict).
-- Profit model validated in JS (`docs/open-a-store-phase2-wip/val.cjs` over payloads from `dump.py`): 102 real shops, actual/model median 0.958, p25 0.76, p75 1.00, p90 1.08, ±15% 55%, ±30% 78% (research B: 0.95 / 0.79 / 0.99 / 1.06 / 60% / 79%). Needs the type's full product range, not primary only.
-
-## Half-done
-- Board script: `docs/open-a-store-phase2-wip/open_store_board.js` holds the whole view (plans in localStorage, `osModel`, `osBestModel`, `osOwnRatio`, `osCannibal`, loans, steps 1–4, `drawOpenStore`, `wireOpenStore`). NOT yet inserted into `TEMPLATE` in `ba_dashboard.py`. Offices: `osEstimate` calls `osBestModel`, which returns null for `model: "office"` (office formula not written).
+- Phase 1 (payback) and phase 2 (Expansion › Open a store, steps 1–4) on branch `break-even-core`, PR #175 (draft).
+- Python: `# --- open a store` in `ba_dashboard.py` (after `_payback()`), payload key `openStore`. `_plan_initial()` goes through
+  `_initial_customers()`, which sits before `_arrival_ceiling()` with the same name, signature and text as branch
+  `arrival-ceiling` (df11550). `_arrival_ceiling()` itself is main's: when that branch merges, it takes its own version.
+- Board: `drawOpenStore()` and the `os*` functions (section `/* --- Expansion › Open a store`), markup `#secOpen`,
+  registrations (SUBS, AREAS, ROUTES, HOST_ROUTES, routeViewLabel, SEC_PAGE, PAGE_DRAWS, SS_VIEWS, wireAll), the New badge
+  (`VIEW_NEW` in `paintLocal()`), the news strip (`BANNER`), the os- CSS from the canvas, the Demand cell popover (`demCellPop()`).
+- `web/map.js`: the finder's plan mode (`options.plan`, `planFor()`, the card's Plan here).
+- Office model (`osOfficeModel()`): clients from the building's capacity, computers staffed by the office default.
+- Tests: `tests/test_open_store.py`, `tests/open_store.test.cjs`, `tests/finder_plan.test.cjs`; cell clicks in
+  `tests/finder.test.cjs` and `tests/businesses_expansion.test.cjs` go through the popover. Snapshots updated.
+- Docs: architecture (payload row, Growth views), ui-route-migration, dashboard-reference "Open a store", AGENTS.md; changelog
+  entry for PR 175 describes phases 1 and 2.
+- Validation: `python check_profit_model.py` (see dashboard-reference for the numbers).
 
 ## Next
-1. Insert the JS into the board script (before `/* --- plan a chain`), add markup `<section class="sec rv" id="secOpen" data-sub="open">` with `#osCtl` (data-view-ctl="expansion/open"), `#osStrip`, `#osBody`, `#osWhere > #osFinderMap` between secMarket and secPlan; register SUBS growth item, AREAS views, ROUTES `expansion/open` (+HOST_ROUTES, routeViewLabel), SEC_PAGE, PAGE_DRAWS `["growth/open", () => drawOpenStore()]`, SS_VIEWS, `wireOpenStore()` in `wireAll`, New badge (`open-store`) in `paintLocal`, news strip in `build_web.py` BANNER.
-2. `web/map.js`: CityMapView `options.plan` mode (`planFor(preset)`, no persistence in `finderStore()`/`loadFinder()`, type row fixed, "Plan here" button in the card calling `plan.onPlan(key)`).
-3. Port the canvas's os- CSS (canvas generator on branch `open-store-canvas`, `OS_CSS`) into `TEMPLATE`; Demand-cell popover (`#osCellPop` on body, position:fixed; "Open a store here" + "Find a location"), updating tests/finder.test.cjs and tests/businesses_expansion.test.cjs cell clicks; Python tests (synthetic) for outfit_lines/decor_route/_open_store; Playwright test of the steps; payload snapshots (`python tests/test_payload_snapshot.py --update`); docs (architecture payload row, dashboard-reference rules); changelog; `python build_web.py`.
+1. Phase 3: the checklist until opening (step 5) and its buttons (hire, uniforms, marketing after PR #174, logistics).
+2. Phase 4: after opening, the plan attaches to the site at its address (step 6).
+3. Wages from the staffing assistant's hour grid instead of the structural formula.
 
 ## Decisions
 - Toilet + privacy demands: one toilet stall (it is a toilet and carries the privacy tag); a plain toilet beside it could fail privacy.
-- Fallback displays: per product the type sells, enough of its cheapest display to cover building capacity (one display caps the shop at its rate).
-- Items limited to those whose designer tags name the type (`bt`) — keeps cinema registers and bar shelves out of a liquor store.
-- Wages: the structural formula (staffing assistant not wired). Events (hype, backorder) left out of the steady state. Purchasing agent: best on staff, else 100.
+- Fallback displays: per product the type sells, enough of its cheapest display to cover building capacity.
+- Items limited to those whose designer tags name the type (`bt`).
+- Wages: the structural formula. Events (hype, backorder) left out of the steady state. Purchasing agent: best on staff, else 100.
 - Model sells the full range (validation: primary-only gives median 1.07, ±15% 36%).
-
-## Verify
-`python dump.py` (in the wip folder, paths inside) then `node val.cjs open_store_board.js`; `python -m unittest discover -s tests`; `python build_web.py --check`.
+- Offices: initial = building capacity for every build (measured on every office in the saves); staffing = the office default;
+  a cleaner every open hour. The validation runs own offices on their own staffing grid.
+- The embedded finder shows only buildings to rent; Plan here shows on a vacant building of the plan's kind.
+- UI text keys live under `gr.os.*` (the catalogue's areas are fixed; Expansion is `gr`).
+- Inner cards are `div.os-card`, not `section`: `section{content-visibility:auto}` would skip their rendering off screen.
