@@ -23025,7 +23025,7 @@ function spRosterDay(c, wd, on){
     c.full ? tt("sp.need.full", "Every station, every hour: the demand test, {d:day}", {d: wd})
       : c.row.variant === "open" && cells.length ? (c.row.openComplete
         ? tt("sp.need.openall", "Every station, the hours the shop opens, {d:day}", {d: wd})
-        : tt("sp.need.open", "Stations the plan asks for, {d:day}: the measured hours', and every station where nothing is read yet", {d: wd}))
+        : tt("sp.need.open", "Stations the plan asks for, {d:day}: what the measured hours ask for, and every station in the hours nothing is read yet", {d: wd}))
       : cells.length ? tt("sp.need.asks", "Stations the measured hours ask for, {d:day}", {d: wd})
       /* The doors decide before the measurement does, here as everywhere else
          in the block: a shop shut on Sunday has not measured nothing, it has
@@ -29810,7 +29810,7 @@ const hrQuickModel = m => m.quick;
    can cut it: the kept-week clash of the additive write is gone with it.) */
 const hrQuickNote = (p, Q) => {
   if(p.nofit) return `<small class="warn">${tt("co.hire.quick.nofit", "no open week fits {demands}", {demands: p.nofit.map(hrName).join(", ")})}</small>`;
-  return !p.w && Q.plan ? `<small>${tt("co.hire.quick.noweek", "no open hours in the plan")}</small>` : "";
+  return !p.w && Q.plan ? `<small>${tt("co.hire.quick.noweek", "no open hours left in the plan")}</small>` : "";
 };
 function hrQuickHtml(m){
   const Q = hrQuickModel(m), q = Q.q;

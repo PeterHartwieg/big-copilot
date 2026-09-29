@@ -1094,7 +1094,7 @@ test('Quick hire where the plan has no open week: no hours, and says so', async 
   assert.deepEqual((await model(page)).weeks[0], [G, 'demand', ['move:SPARE1', 'hire:c1']]);
   assert.equal(await page.locator('#hsOrder .hs-held').count(), 0);
   // Each with their own reason, beside the name in the form and in the confirm (PR #184).
-  assert.match(await page.locator('#hsQuick .hs-match').textContent(), /Bram Castellno open hours in the plan/);
+  assert.match(await page.locator('#hsQuick .hs-match').textContent(), /Bram Castellno open hours left in the plan/);
   const text = await dlg.locator('.gw-body').textContent();
   assert.match(text, /1 hire joins with no hours\. Choose Hire only/);
   assert.match(text, /Bram Castell: the plan has no open week left for them/);
@@ -1990,7 +1990,7 @@ test('Quick hire says there are no open hours only where the plan has none', asy
   await box.locator('[data-hq-role]').selectOption(CS);
   await box.locator('[data-hq-site]').selectOption(G);
   assert.deepEqual((await quick(page)).picks, [['c2', null]]);
-  assert.match(await box.locator('.hs-match').textContent(), /Bram Castellno open hours in the plan/);
+  assert.match(await box.locator('.hs-match').textContent(), /Bram Castellno open hours left in the plan/);
   const dlg = await quickConfirm(page);
   const text = await dlg.locator('.gw-body').textContent();
   assert.match(text, /Bram Castell: the plan has no open week left for them/);

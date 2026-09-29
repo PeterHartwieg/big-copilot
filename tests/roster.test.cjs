@@ -2216,7 +2216,7 @@ test('the open-hours plan draws its own need: every station the hours it opens a
     assert.ok(cells.every(([, , read]) => /every station/.test(read)), cells[0][2]);
     assert.equal(await page.locator(mon + '.sp-unmh').count(), 0, 'no hour marked as counted as none');
     // The row's label says whose need it is: not the measured hours'.
-    assert.match(await page.locator(mon + '.sp-needrow .lab').getAttribute('data-read'), /the measured hours', and every station where nothing is read yet/);
+    assert.match(await page.locator(mon + '.sp-needrow .lab').getAttribute('data-read'), /what the measured hours ask for, and every station in the hours nothing is read yet/);
   } finally { await page.close(); }
 });
 
