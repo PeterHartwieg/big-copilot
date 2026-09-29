@@ -3463,6 +3463,7 @@
  "sp.hc.here.hire": "{n} aqui, {hire} a contratar",
  "sp.hc.hire": "contrate {n}",
  "sp.hc.newhours": "<b>{n} h semanais de novos salários</b>, as horas que os novos contratados trabalhariam: ninguém cobre este armário hoje",
+ "sp.hc.newhours.more": "<b>{n} h semanais de novos salários</b>, as horas que os novos contratados trabalhariam",
  "sp.hc.newshort": "+{n} h/sem",
  "sp.hc.none": "nenhum",
  "sp.hc.over": "São necessárias mais pessoas do que essas horas ocupariam numa semana inteira, pois ninguém pode trabalhar mais de 12 horas por dia.",

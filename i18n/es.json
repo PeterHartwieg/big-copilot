@@ -3463,6 +3463,7 @@
  "sp.hc.here.hire": "{n} aquí, {hire} por contratar",
  "sp.hc.hire": "fichar {n}",
  "sp.hc.newhours": "<b>{n} h semanales de nuevo salario</b>, las horas que trabajarían los nuevos empleados: hoy nadie cubre esta taquilla",
+ "sp.hc.newhours.more": "<b>{n} h semanales de nuevo salario</b>, las horas que trabajarían los nuevos empleados",
  "sp.hc.newshort": "+{n} h/sem.",
  "sp.hc.none": "nadie",
  "sp.hc.over": "Se necesitan más personas de las que cubrirían esas horas con semanas completas: nadie puede trabajar más de 12 horas al día.",

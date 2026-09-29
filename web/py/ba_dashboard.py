@@ -7424,7 +7424,8 @@ def _cut_for_pool(row: dict, rows: list, pool: list, state: dict, here: dict) ->
     share it. The cut nearest the middle first, both pieces MIN_SPLIT or
     longer; each piece to whom `_best_for()` puts first among those
     `_may_take()` passes for that piece, two different people. The head keeps
-    the row, the tail is appended to `rows`. Returns whether it cut.
+    the row, the tail is appended to `rows`. Returns the two people's ids, or
+    () where no cut fits.
     """
     start, end = row["from"], row["to"]
     points = sorted(range(start + MIN_SPLIT, end - MIN_SPLIT + 1),
@@ -7443,8 +7444,18 @@ def _cut_for_pool(row: dict, rows: list, pool: list, state: dict, here: dict) ->
             here["rostered"].add(person["id"])
             _take_over(piece, person, state)
         rows.append(tail)
+        return (first["id"], second["id"])
+    return ()
+
+
+def _short_of_demands(person: dict, entry: dict, before: tuple) -> bool:
+    """Whether a week here with hours in it misses the band's floor or an exact day count."""
+    hours = entry["hours"] - before[0]
+    if not hours:
+        return False
+    if person["band"] and hours < person["band"][0]:
         return True
-    return False
+    return person["days"] is not None and len(entry["days"]) - before[1] != person["days"]
 
 
 def _split_open(rows: list, hires: list, state: dict, here: dict) -> None:
@@ -7667,7 +7678,9 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
 
     The week as the ordinary placement left it, its open lines offered to the
     pool again first -- somebody the settling passes left room for takes one
-    ahead of any hire -- then dealt to N placeholders per skill
+    ahead of any hire, and a line nobody here may take whole at all is cut in
+    two for two of them where every demand of theirs still holds, all or
+    nothing (_cut_for_pool()) -- then dealt to N placeholders per skill
     (_placeholder()), and the week settled by the same repair passes
     (_repair_week()). The swaps may still move a line between somebody here
     and a hire, so a hire's day can be one a person here gave up; the settling
@@ -7726,15 +7739,32 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
     # locker open 08-20 and two guards, one with no mornings and one with no
     # evenings, is 08-14 and 14-20 for them, not two guards to hire. A line
     # only too long for the room people have left stays whole, for the hires:
-    # cutting those as well spent the room the swaps needed.
-    failed = set()
+    # cutting those as well spent the room the swaps needed. All or nothing:
+    # the pieces go out a line at a time, so where they leave anybody who
+    # took one short of a demand -- under their band's floor, off an exact
+    # day count -- the whole pass is undone and those lines are the hires'.
+    # A guard with a four-day week cannot hold seven afternoons, and 24 hours
+    # of pieces is not a full-time week; spare (no hours) is fine.
+    undo, failed, cut_for = None, set(), set()
     for row in sorted((r for r in first if r["employee"] is None), key=clock):
+        # A shape nobody could share fails again: a cut only fills weeks.
         if _slot_shape(row) in failed or allowed[_slot_shape(row)]:
             continue
-        if _cut_for_pool(row, first, pool, state, here):
-            failed.clear()
+        if undo is None:
+            undo = ([dict(r) for r in first],
+                    {person["id"]: _copy_state(state[person["id"]]) for person in pool},
+                    set(here["rostered"]))
+        cut = _cut_for_pool(row, first, pool, state, here)
+        if cut:
+            cut_for.update(cut)
         else:
             failed.add(_slot_shape(row))
+    by_id = {person["id"]: person for person in pool}
+    if any(_short_of_demands(by_id[pid], state[pid], before.get(pid, (0.0, 0)))
+           for pid in cut_for):
+        first[:] = undo[0]
+        state.update(undo[1])
+        here["rostered"] = undo[2]
     saved = {person["id"]: _copy_state(state[person["id"]]) for person in pool}
     saved_rostered = set(here["rostered"])
 
@@ -24114,9 +24144,13 @@ function spRosterCount(c){
     const h = c.row.headcount[skill] || {};
     const label = labelOf(skill);
     const bench = benchOf(skill), have = Math.max(0, (h.have || 0) - bench);
-    /* "Nobody covers this locker today" is said of the game's own week, not
-       the plan's: a locker the current week has guards on is not new wages. */
-    const isNew = h.kind === "security" && h.hire && !(c.row.current || {}).security;
+    /* A locker the plan hires for is new wages, in hours, whatever the game's
+       week holds. "Nobody covers this locker today" is said only where no
+       locker the hires stand at has a guard in the game's own week. */
+    const isNew = h.kind === "security" && h.hire;
+    const hiredAt = new Set((c.row.shifts || []).filter(s => spNobody(s.p)
+      && (c.stations[s.s] || {}).skill === skill).map(s => s.s));
+    const nobodyNow = isNew && !((c.row.current || {}).list || []).some(s => hiredAt.has(s.s));
     /* The band is the fewest people who could cover the hours to the most who
        could still be given a full week, and on a thin role the second is the
        smaller of the two: 56 hours of security needs two people, because
@@ -24148,7 +24182,9 @@ function spRosterCount(c){
       {label: spEsc(label), n: h.needed, band})} · <b>${here}</b>${h.hire > h.max && h.max >= h.min
         ? `: ${tt("sp.hc.over", "more people than those hours would pay a full week, because nobody may work more than twelve hours in a day")}` : ""}${h.spare
         ? ` · ${tt("sp.hc.spare.read", "<b>{n} with no hours in this plan</b>: this site has no week for them", {n: h.spare})}` : ""}${isNew
-        ? ` · ${tt("sp.hc.newhours", "<b>{n} h a week of new wages</b>, the hours the hires would work: nobody covers this locker today", {n: h.hireHours})}` : ""}`;
+        ? ` · ${nobodyNow
+          ? tt("sp.hc.newhours", "<b>{n} h a week of new wages</b>, the hours the hires would work: nobody covers this locker today", {n: h.hireHours})
+          : tt("sp.hc.newhours.more", "<b>{n} h a week of new wages</b>, the hours the hires would work", {n: h.hireHours})}` : ""}`;
     return `<span${isNew ? ` class="sp-new"` : ""} tabindex="0" data-tip="${attr(spEsc(label))}" data-read="${
       attr(read)}"><span class="sp-code">${
       spEsc(codes[si])}</span><span class="sp-dots">${dots(have)}${dots(bench, "sp-bench")}${

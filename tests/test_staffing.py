@@ -2143,6 +2143,38 @@ class ExchangeTest(unittest.TestCase):
             self.assertGreaterEqual(week["hours"], 30, who)
         self.assertEqual(sum(week["hours"] for week in weeks.values()), 84)
 
+    def assert_no_short_week(self, row, band_floor):
+        for who, week in self.weeks(row).items():
+            self.assertFalse(0 < week["hours"] < band_floor[who], (who, week))
+
+    def test_a_cut_that_leaves_a_guard_short_is_not_made(self):
+        """Round 7: the same locker, the no-mornings guard on a four-day week.
+        The pieces went out a line at a time: seven mornings to one guard and
+        four afternoons to the other, 42 h and 24 h, one hire for the three
+        afternoons left -- a full-time guard at 24 h. All or nothing: both
+        spare, two hires, as the owner accepts."""
+        row = plan([(9, LOCKER)], [
+            employee("g1", [GUARD], demands=("ba:jobdemand_fulltime", "ba:jobdemand_noevenings")),
+            employee("g2", [GUARD], demands=("ba:jobdemand_fulltime", "ba:jobdemand_nomornings",
+                                             "ba:jobdemand_fourdaysweek")),
+        ], FLAT, opens=((8, 20),))
+        self.assert_no_short_week(row, {"G1": 30, "G2": 30})
+        for who, week in self.weeks(row).items():
+            if who == "G2":
+                self.assertEqual(len(week["days"]), 4)
+        self.assertEqual(sum(h["hire"] for h in row["headcount"].values()), 2)
+
+    def test_a_full_timer_is_not_cut_to_part_time_by_the_pieces(self):
+        """Round 7: four days open, a full-time guard with no evenings and a
+        part-time one with no mornings. The cut nearest the middle is 08-14
+        and 14-20, four days of it: 24 h, under the full-timer's 30. The pass
+        is undone rather than leave them there."""
+        row = plan([(9, LOCKER)], [
+            employee("g1", [GUARD], demands=("ba:jobdemand_fulltime", "ba:jobdemand_noevenings")),
+            employee("g2", [GUARD], demands=("ba:jobdemand_parttime", "ba:jobdemand_nomornings")),
+        ], FLAT, opens=((8, 20),), open_days=(0, 1, 2, 3))
+        self.assert_no_short_week(row, {"G1": 30, "G2": 10})
+
     def test_a_week_that_cannot_be_reached_is_not_cut_at_all(self):
         """All or nothing: a shortfall that cannot be closed moves no shift.
 

@@ -521,14 +521,20 @@ test('a tick kept from a plan that has changed does not count', async () => {
 
 test("a locker the game's own week has guards on is not called uncovered", async () => {
   // QA on a real save: the plan hired for a locker two guards were covering,
-  // and the line said nobody covers it today. That is the game's week to say.
+  // and the line said nobody covers it today. That is the game's week to say,
+  // locker by locker; the new wages are still new wages.
   const page = await shop('full', row => {
-    row.current = Object.assign({}, row.current, {security: 14});
+    const locker = row.stations.findIndex(st => st.skill === 'ba:skill_securityguard');
+    const cur = row.current || {list: []};
+    row.current = Object.assign({}, cur, {security: 1,
+      list: (cur.list || []).concat([{d: 0, s: locker, f: 8, t: 14, p: 0, k: 'security'}])});
   });
   try {
-    const reads = await page.$$eval('#sp-roster .sp-hc [data-read]', es => es.map(e => e.dataset.read));
-    assert.ok(reads.some(r => /to hire/.test(r)), 'the locker still has hires on this plan');
-    assert.deepEqual(reads.filter(r => /nobody covers this locker/.test(r)), []);
+    const guard = page.locator('#sp-roster .sp-hc .sp-new').first();
+    assert.match(await guard.innerText(), /\+96 h\/wk/);
+    const read = await guard.getAttribute('data-read');
+    assert.match(read, /new wages/);
+    assert.doesNotMatch(read, /nobody covers this locker/);
   } finally { await page.close(); }
 });
 

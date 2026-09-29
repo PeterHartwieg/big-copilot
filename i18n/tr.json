@@ -2818,6 +2818,7 @@
  "sp.hc.here.both": "{n} burada, yedekten {bench}, işe alınacak {hire}",
  "sp.hc.here.hire": "{n} burada, işe alınacak {hire}",
  "sp.hc.newhours": "<b>Haftada {n} sa yeni maaş</b>, işe alınanların çalışacağı saatler: bugün bu dolabı kimse kapsamıyor",
+ "sp.hc.newhours.more": "<b>Haftada {n} sa yeni maaş</b>, işe alınanların çalışacağı saatler",
  "sp.hc.newshort": "+{n} sa/hf",
  "sp.hc.none": "yok",
  "sp.hc.over": "bu saatlerin tam bir haftayı ödeyeceğinden daha fazla kişi, çünkü hiç kimse günde on iki saatten fazla çalışamaz",
