@@ -919,6 +919,17 @@ shows the cash upfront, the loan's cost a day against the expected profit, the i
 the term and if paid off at break even, and the day your own cash is back with and without
 the loan.
 
+**Until opening** (step 5) is a checklist of seven rows for the plan's building: Lease,
+Furniture, Staff for the opening hours, Uniforms, Customer demands, Marketing and
+Logistics. Before the save shows a business at that address the rows are to-dos; from then
+on each ticks itself from the save (`D.businesses`, and `openStore.built` for the required
+furniture placed). A row that needs a write has a button when the game link's `writes`
+lists it: **Hire N** opens the Staff page's hiring dialog for the roles and counts the plan
+needs, **Assign uniforms** the uniforms write, **Set up marketing** the marketing write with
+the cheapest mix the estimate chose. Otherwise the button is a short instruction for the
+game, and a strip under the list says the game can be linked. **Plan a factory** goes to
+Expansion › Plan a factory. Step 6, the payback after opening, is not built yet.
+
 ## The portfolio, by chain
 
 A shop, the depot that fills it and the factory behind that depot are one trading
