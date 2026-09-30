@@ -1437,8 +1437,11 @@ its own is asked by a route for no more than the route's target a day: what it n
 that is its own import's to bring, and raising the target (its own finding) is the other
 way, never both. A shop or a depot with no supply of its own is asked for all it needs, so
 raising its target and the import behind it together cover it. Where several sites top a
-depot up, each round brings no more than its own target: where the share the one with
-room is asked for passes its target, that target is the one to raise.
+depot up, their targets are levels, not amounts added together: each round tops the line
+up to its own target from what its sender has, so the line holds after the morning's
+rounds no more than the highest target, in the worse of the orders the rounds can run in.
+Short of the day, the target to raise is that of the sender with the most to send, to the
+day's need.
 Two sites topping one up split its need by their targets, but one asked across its routes
 for more than it has hands the rest to the others with room, in both bases alike (and a
 factory in Shop demand is held to what it can make across all the sites it tops up). What a sender merely holds is no supply, and what a line at the

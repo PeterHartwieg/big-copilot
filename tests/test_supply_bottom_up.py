@@ -1043,8 +1043,10 @@ class RoundSixTests(unittest.TestCase):
     def test_a_low_target_from_the_hub_with_room_is_the_one_to_raise(self):
         """A brewery (720 a day) tops the warehouse up to 10,000; a hub
         importing 20,000 a week tops it up to only 1,000; the shop sells
-        2,400 a day. The rounds bring at most 1,720: the hub's target is
-        short, raised to 2,040, and the finding names the hub's plan."""
+        2,400 a day. The line holds at most 1,720 after the rounds: the
+        hub's target is the one to raise, to the day's need of 2,760 (a
+        level, not an amount added), and the finding names the hub's plan
+        at the 1,000 it holds."""
         c = Chain()
         hub = ("hub_road", 9)
         c.factory(BREWERY, "Brewery", machines=1)
@@ -1061,7 +1063,7 @@ class RoundSixTests(unittest.TestCase):
         c.run()
         fact = c.fact(WH, BEER)
         self.assertEqual((fact["st"], fact["why"], fact["have"], fact["setTo"], fact["from"]),
-                         ("short", "target", 1720, 2040, c.index(hub)))
+                         ("short", "target", 1000, 2760, c.index(hub)))
         self.assertEqual(len(c.notes(WH, "topup")), 1)
 
     def test_two_hubs_the_one_with_room_on_a_small_target(self):
@@ -1083,3 +1085,81 @@ class RoundSixTests(unittest.TestCase):
         fact = c.fact(WH, BEER)
         self.assertEqual((fact["st"], fact["why"], fact["from"]), ("short", "target", c.index(b)))
         self.assertGreater(fact["setTo"], 500)
+
+
+def replay_rounds(targets, can):
+    """What a line holds after one morning's rounds, in each order they can
+    run: each tops the line up TO its target from what its sender can send."""
+    held = []
+    for order in (list(targets), list(targets)[::-1]):
+        level = 0.0
+        for sender in order:
+            level = max(level, min(targets[sender], level + can[sender]))
+        held.append(level)
+    return held
+
+
+class RoundSevenTests(unittest.TestCase):
+    """Review round 7: top-up targets are levels, never added together."""
+
+    def two_hubs(self, targets, sold):
+        c = Chain()
+        hubs = (("hub_a", 7), ("hub_b", 8))
+        for hub, target in zip(hubs, targets):
+            c.site(hub, "Hub " + hub[0][-1])
+            c.hold(hub, BEER, 30000)
+            c.contract(hub, BEER, 60000)
+            c.plan(hub, WH, BEER, target)
+        c.site(WH, "Depot")
+        c.hold(WH, BEER, 3000)
+        c.plan(WH, SHOP, BEER, 10000)
+        c.shop(SHOP, "Shop")
+        c.hold(SHOP, BEER, 2000, sold)
+        c.run()
+        return c
+
+    def test_two_targets_are_a_level_not_a_sum(self):
+        """Targets of 5,000 and 1,000 hold the line at 5,000, against a 6,000
+        day: short, raised to the day's 6,900, with a finding."""
+        c = self.two_hubs((5000, 1000), 6000)
+        fact = c.fact(WH, BEER)
+        self.assertEqual((fact["st"], fact["why"], fact["have"], fact["setTo"]), ("short", "target", 5000, 6900))
+        self.assertEqual(len(c.notes(WH, "topup")), 1)
+
+    def test_equal_targets_ask_once_for_the_day(self):
+        """1,000 and 1,000 against 2,400 a day: one target raised to 2,760,
+        which holds the day; after that nothing is asked again."""
+        c = self.two_hubs((1000, 1000), 2400)
+        fact = c.fact(WH, BEER)
+        self.assertEqual((fact["st"], fact["setTo"]), ("short", 2760))
+        raised = [2760 if index == fact["from"] else 1000
+                  for index in (c.index(("hub_a", 7)), c.index(("hub_b", 8)))]
+        after = self.two_hubs(tuple(raised), 2400)
+        self.assertEqual((after.fact(WH, BEER)["st"], after.fact(WH, BEER)["setTo"]), ("covered", None))
+
+    def test_the_suggested_level_holds_the_day_in_either_order(self):
+        """The brewery makes 720 a day; the hub's plan is raised to the 2,760
+        suggested. Replayed round by round, in both orders, the line holds
+        the 2,400 sold; the board says covered, holding 2,760, not the
+        brewery's 10,000 it cannot fill."""
+        held = replay_rounds({"brewery": 10000, "hub": 2760}, {"brewery": 720, "hub": 20000 / 7})
+        self.assertGreaterEqual(min(held), 2400)
+        self.assertLess(min(replay_rounds({"brewery": 10000, "hub": 2040},
+                                          {"brewery": 720, "hub": 20000 / 7})), 2400)
+        c = Chain()
+        hub = ("hub_road", 9)
+        c.factory(BREWERY, "Brewery", machines=1)
+        c.site(hub, "Hub")
+        c.hold(hub, BEER, 5000)
+        c.contract(hub, BEER, 20000)
+        c.site(WH, "WH")
+        c.hold(WH, BEER, 5000)
+        c.plan(BREWERY, WH, BEER, 10000)
+        c.plan(hub, WH, BEER, 2760)
+        c.plan(WH, SHOP, BEER, 3000)
+        c.shop(SHOP, "Shop")
+        c.hold(SHOP, BEER, 1000, 2400)
+        c.run()
+        fact = c.fact(WH, BEER)
+        self.assertEqual(fact["st"], "covered")
+        self.assertLess(fact["have"], 10000)

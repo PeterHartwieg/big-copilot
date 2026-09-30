@@ -3817,6 +3817,11 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
             "own": own(n),
             "credit": brings,
             "supplied": sum(g[1] for g in got),
+            # What each sender has to send a day in all, its targets aside
+            # (a site the board cannot read: whatever is asked of it).
+            "sendable": {s: (max(0.0, spare((s, n[1])))
+                             if spare((s, n[1])) is not None else float(ln + sn))
+                         for s in _in_order({s for s, _t in legs})},
             "potential": potential,
             "covered": covered,
             "inbound": bool(legs),
@@ -5778,20 +5783,37 @@ def _supply_facts(ctx: dict) -> dict:
         factor, _day = ctx["peak"](businesses[index[key]])
         use, need = round(use_day * factor), round(need_day * factor)
         targets = node.get("routeTargets") or {}
-        asks = node.get("demand") or {}
-        if len(targets) > 1 and asks:
-            carry = sum(min(targets[s], asks.get(s, (0.0, 0.0))[1]) for s in targets)
-            over = {s: asks.get(s, (0.0, 0.0))[1] - targets[s] for s in targets
-                    if asks.get(s, (0.0, 0.0))[1] > targets[s] * (1 + FIT_NOISE)}
-            if over:
-                s_short = max(_in_order(over), key=lambda s: over[s])
-                carry_peak = round(carry * factor)
-                p = {"short": ["target"] if _below(carry_peak, use) else []}
+        can = node.get("sendable") or {}
+        if len(targets) > 1:
+            # A target is a level: each round tops the line up TO it, from
+            # what its sender can send, so the line holds after the morning's
+            # rounds at most the highest target, and at most what the senders
+            # bring on top of each other. Walked in either order the rounds
+            # can run in, the worse is what the line holds.
+            order = _in_order(targets)
+            held_after = []
+            for rounds in (order, order[::-1]):
+                level = 0.0
+                for sender in rounds:
+                    level = max(level, min(targets[sender], level + can.get(sender, 0.0)))
+                held_after.append(level)
+            carry = round(min(held_after))
+            if need and _below(carry, need):
+                # The target to raise is the one whose sender has the most to
+                # send, to the day's need: a level that holds the day in
+                # whichever order the rounds come.
+                s_short = max(order, key=lambda sender: (can.get(sender, 0.0), -order.index(sender)))
+                p = {"short": ["target"] if use and _below(carry, use) else []}
                 if not p["short"]:
                     p["tight"] = "target"
-                set_to = _ceil_ten((targets[s_short] + over[s_short]) * factor)
-                return p, {"use": use, "need": need, "have": carry_peak, "setTo": set_to, "imp": False,
-                           "from": index.get(s_short)}, "daily"
+                return p, {"use": use, "need": need, "have": targets[s_short], "setTo": _ceil_ten(need),
+                           "imp": False, "from": index.get(s_short)}, "daily"
+            # Covered: what the line holds after the rounds, never a target a
+            # sender cannot fill (a 10,000 target from a line making 720).
+            return {"short": [], "covered": "route"}, {
+                "use": use, "need": need, "have": carry, "setTo": None, "imp": False,
+                "from": index.get(max(order, key=lambda sender: (can.get(sender, 0.0), -order.index(sender))))
+            }, "daily"
         top = node.get("targets") or node.get("reach") or target_at[(key, slug)][0]
         source = target_at[(key, slug)][1]
         p = {"short": []}
