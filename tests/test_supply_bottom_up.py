@@ -1353,6 +1353,117 @@ class PooledRoomTests(unittest.TestCase):
                                                       days=70, judge_from=42), [])
 
 
+class ThroughputTests(unittest.TestCase):
+    """Round 13: a sender routes also feed is held to what it can pass on
+    (its own supply plus what its senders can bring it), so a depot's own
+    import further down brings what that leaves, in both sizings; and a
+    round's target caps its part in Demand sizing as in the walk."""
+
+    CENTRAL, REGIONAL, SHOP_R, ROOT = ("central", 31), ("regional", 32), ("shop_r", 33), ("root", 30)
+
+    def central_chain(self, central_import):
+        """A one-machine brewery (720 a day) tops Central up to 10,000;
+        Central tops Regional up to 10,000; Regional imports 7,000 a week
+        itself and feeds a shop selling 1,200 a day."""
+        c = Chain()
+        c.factory(BREWERY, "Brewery", machines=1)
+        c.hold(BREWERY, BEER, 500)
+        c.site(self.CENTRAL, "Central")
+        c.hold(self.CENTRAL, BEER, 3000)
+        if central_import:
+            c.contract(self.CENTRAL, BEER, central_import)
+        c.site(self.REGIONAL, "Regional")
+        c.hold(self.REGIONAL, BEER, 5000)
+        c.contract(self.REGIONAL, BEER, 7000)
+        c.shop(self.SHOP_R, "Shop")
+        c.hold(self.SHOP_R, BEER, 2000, 1200)
+        c.plan(BREWERY, self.CENTRAL, BEER, 10000)
+        c.plan(self.CENTRAL, self.REGIONAL, BEER, 10000)
+        c.plan(self.REGIONAL, self.SHOP_R, BEER, 100000)
+        c.run()
+        return c
+
+    def test_a_middle_depot_passes_on_what_its_brewery_makes(self):
+        """Central with no import passes on the brewery's 720 a day and
+        Regional's own import brings the rest: nothing asks, in both bases.
+        With Central importing 3,500 a week too, it passes on 1,220 a day and
+        still nothing asks: Regional's import is not left idle while Central
+        is asked to raise."""
+        for central_import in (0, 3500):
+            c = self.central_chain(central_import)
+            for mode in ("cap", "dem"):
+                with self.subTest(central_import=central_import, mode=mode):
+                    central, regional = c.fact(self.CENTRAL, BEER, mode), c.fact(self.REGIONAL, BEER, mode)
+                    self.assertEqual((central["st"], central["setTo"]), ("covered", None))
+                    self.assertEqual((regional["st"], regional["setTo"]), ("covered", None))
+                    self.assertEqual(c.notes(self.CENTRAL, "order") + c.notes(self.REGIONAL, "order"), [])
+
+    def test_an_import_passed_down_two_depots_is_not_asked_for_the_whole_need(self):
+        """Root imports 7,000 a week and tops Intermediate up, which tops
+        Regional up; Regional imports 14,000 a week itself; its shop sells
+        2,400 a day. 21,000 a week against 19,320: nothing asks, in both
+        bases (it asked Root for 19,320 before)."""
+        mid = ("intermediate", 34)
+        c = Chain()
+        for addr, name in ((self.ROOT, "Import root"), (mid, "Intermediate"), (self.REGIONAL, "Regional")):
+            c.site(addr, name)
+            c.hold(addr, BEER, 20000)
+        c.contract(self.ROOT, BEER, 7000)
+        c.contract(self.REGIONAL, BEER, 14000)
+        c.plan(self.ROOT, mid, BEER, 10000)
+        c.plan(mid, self.REGIONAL, BEER, 10000)
+        c.plan(self.REGIONAL, self.SHOP_R, BEER, 5000)
+        c.shop(self.SHOP_R, "Shop")
+        c.hold(self.SHOP_R, BEER, 2000, 2400)
+        c.run()
+        for mode in ("cap", "dem"):
+            with self.subTest(mode=mode):
+                self.assertEqual([(c.fact(a, BEER, mode)["st"], c.fact(a, BEER, mode)["setTo"])
+                                  for a in (self.ROOT, mid, self.REGIONAL)], [("covered", None)] * 3)
+
+    def test_demand_keeps_a_rounds_target_cap(self):
+        """A four-machine brewery tops a depot up to 1,000 a day; the depot
+        imports 14,000 a week and its shop sells 2,400 a day. The walk takes
+        the round at its 1,000; Demand sizes the brewery for that too, nine
+        hours (1,000 / 120 a machine-hour, not 23), and its 3,000-a-week
+        water import is not asked to rise in Demand."""
+        t = RoundEightTests()
+        c = t.build([(t.BREW_A, "brewery", 4, 1000, 5000)], 2400, depot_stock=15000, depot_import=14000)
+        c.contract(t.BREW_A, WATER, 3000)
+        c.hold(t.BREW_A, WATER, 10000)
+        c.run()
+        [line] = [l for site in c.supply["factories"]["sites"] for l in site["lines"]]
+        self.assertEqual(line["needHours"]["dem"], 9)
+        self.assertIsNone(c.fact(t.BREW_A, WATER, "dem")["setTo"])
+        self.assertEqual((c.fact(WH, BEER, "dem")["st"], c.fact(WH, BEER, "dem")["setTo"]), ("covered", None))
+
+    def test_a_hubs_timing_counts_the_plain_import_that_lands_below_it(self):
+        """A hub importing 7,000 a week feeds its own shop (500 a day) and
+        tops Regional up; Regional's plain import of 12,000 a week lands
+        whatever it holds, so the hub's round brings little. The hub's
+        import is not read as running dry."""
+        hub, hub_shop = ("hub_a", 7), ("shop_h", 8)
+        c = Chain()
+        c.site(hub, "Hub")
+        c.hold(hub, BEER, 3000)
+        c.contract(hub, BEER, 7000)
+        c.shop(hub_shop, "Hub shop")
+        c.hold(hub_shop, BEER, 1000, 500)
+        c.plan(hub, hub_shop, BEER, 100000)
+        c.site(self.REGIONAL, "Regional")
+        c.hold(self.REGIONAL, BEER, 5000)
+        c.contract(self.REGIONAL, BEER, 12000)
+        c.shop(self.SHOP_R, "Shop")
+        c.hold(self.SHOP_R, BEER, 2000, 1200)
+        c.plan(hub, self.REGIONAL, BEER, 10000)
+        c.plan(self.REGIONAL, self.SHOP_R, BEER, 100000)
+        c.run()
+        for mode in ("cap", "dem"):
+            with self.subTest(mode=mode):
+                self.assertEqual(c.fact(hub, BEER, mode)["st"], "covered")
+        self.assertEqual(c.notes(hub, "shortfall"), [])
+
+
 class RoundEightTests(unittest.TestCase):
     """Several sites topping one depot up, judged as two questions (targets
     on the busiest day, supply on an average day) and checked by applying

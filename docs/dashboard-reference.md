@@ -1452,18 +1452,23 @@ suggestion never lowers a target. Room short while the targets hold is the suppl
 fix: the depot shows a note, and the senders' own import or line findings ask. Where one
 of the senders has no import behind it (a factory making what it makes), the depot asks for
 an import of its own for the gap, and a sender's import is not asked for the same units.
-Two sites topping one up split its need by their targets, but one asked across its routes
-for more than it has hands the rest to the others with room, by one rule in both bases and
-in Shop demand's sizing alike: what it supplies (a factory's output, an import or wholesale
-delivery, both where it has both) goes first to the sites only it tops up, and what is
-left is pooled over the sites it tops up beside others, going where the other senders
-leave a need (room one site does not use goes to another); the rest goes to a sender with
-room, a factory with spare hours among them. The routes come first: a site's own import or
+One rule shares a site's need out, in both bases and in Shop demand's sizing alike. Its
+senders split it by their targets, and one asked across its routes for more than it can
+send hands the rest to the others with room. What a sender can send is what it supplies (a
+factory's output, an import or wholesale delivery, both where it has both) plus, for a
+site routes also bring it to, what its own senders can pass on to it, never past their
+targets, less its own use. That goes first to the sites only it tops up; what is left is
+pooled over the sites it tops up beside others, going where the other senders leave a need
+(room one site does not use goes to another), and the rest goes to a sender with room, a
+factory with spare hours among them. The routes come first: a site's own import or
 wholesale delivery brings only what its routes leave (in 24/7, what a factory at full rate
 cannot bring; in Shop demand, the factory is sized for the shops' need and the import is
-the top-up), in both bases and in Shop demand's sizing alike. A site routes also bring it to is judged
-further up. In Shop demand a line sends what it makes in the hours it is sized to, margin
-included. What a sender merely holds is no supply, and what a line at the
+the top-up), and a round capped by its target leaves the rest to that import. A plain
+import the routes fully cover gets no word. In Shop demand a line sends what it makes in
+the hours it is sized to, margin included. A sender's import row is sized on its planned
+share, but its run-dry timing charges what physically leaves it: a plain import at a
+depot it tops up lands whatever that depot holds, and the round brings only what it
+leaves. What a sender merely holds is no supply, and what a line at the
 site itself makes comes off its import's week. Two sites topping each other up with the
 same item form a loop, which counts one way only: from the site with a supply of its own
 toward the one without, then from the one with more left over after its own use to the

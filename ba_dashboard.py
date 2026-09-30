@@ -3785,15 +3785,36 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
         need_memo[n] = (lu, ln, su, sn)
         return need_memo[n]
 
-    def has(sender_node):
-        """What a sender with nothing coming in by route can send a day at
-        most (its own supply less its own use); None where routes bring it
-        some (its supply is judged further up) or it is a line the board
-        cannot read."""
-        if senders.get(sender_node) or sender_node in unknown:
+    def has(sender_node, memo=None, seen=frozenset()):
+        """What a sender can send a day at most: its own supply, plus what
+        the routes into it can bring (each sender's own throughput less what
+        its other sites are asked of it, never past the route's target, and
+        together never past the highest target), less its own use. None
+        where it is, or draws on, a line the board cannot read. `memo` is a
+        pass's: what the other sites are asked moves between passes."""
+        memo = {} if memo is None else memo
+        if sender_node in memo:
+            return memo[sender_node]
+        if sender_node in unknown or sender_node in seen:
             return None
+        key, item = sender_node
         own_need = eats.get(sender_node, (0.0, 0.0))[1] + leaves.get(sender_node, (0.0, 0.0))[1]
-        return max(0.0, own(sender_node) - own_need)
+        inbound = 0.0
+        for source in _in_order({s for s, _t in senders.get(sender_node, ())}):
+            if not capable(source, item):
+                continue
+            there = has((source, item), memo, seen | {sender_node})
+            if there is None:
+                memo[sender_node] = None
+                return None
+            other = sum(a[1] for dest, a in asked.get((source, item), {}).items() if dest != key)
+            bring = max(0.0, there - other)
+            target = route_cap.get((source, key, item), 0)
+            inbound += min(bring, target) if target > 0 else bring
+        if senders.get(sender_node):
+            inbound = min(inbound, reach(sender_node))
+        memo[sender_node] = max(0.0, own(sender_node) + inbound - own_need)
+        return memo[sender_node]
 
     # A sender asked for more than it has, across all its routes, hands the
     # rest to the other senders of the sites it tops up, as far as they have
@@ -3806,10 +3827,11 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
         for n in _in_order(nodes):
             total(n)
         sites, limits, fixed, caps_at = {}, {}, collections.defaultdict(float), {}
+        through = {}
         for d, need in residual_at.items():
             sites[d] = (need, {(s, d[1]): w for s, w in shares(d).items()}, own(d))
         for n in _in_order(asked):
-            limits[n] = has(n)
+            limits[n] = has(n, through)
             for dest, (_use, need) in asked[n].items():
                 d = (dest, n[1])
                 if own(d) > 0 or sum(1 for w in shares(d).values() if w > 0) > 1:
@@ -4445,6 +4467,22 @@ def _supply(
                 if per_day <= 0:
                     continue  # the graph's pipe then shows what arrived last week
                 driven = customer_driven(business["key"], item)
+                # The routes come first in the sizing, but a plain import at a
+                # depot this line tops up lands whatever that depot holds, and
+                # the round then brings only what is missing: the timing walk
+                # below charges this line what physically leaves it, its share
+                # of what the depots' plain imports leave (`physical`, a
+                # fraction of the draw).
+                off = 0.0
+                for dest, (asked_use, _asked_need) in node.get("asked", {}).items():
+                    dnode = walked[mode].get((dest, item)) or {}
+                    plain = sum(d["amount"] for d in drops.get((dest, item), ()) if not d.get("smart")) / 7
+                    routes_use = sum(u for u, _n in dnode.get("demand", {}).values())
+                    if plain <= 0 or routes_use <= 0:
+                        continue
+                    left = max(0.0, dnode.get("use", 0.0) - plain)
+                    off += asked_use * max(0.0, 1 - left / routes_use)
+                physical = max(0.0, 1 - off / per_day)
 
                 # Walk real days forward rather than dividing by an average: three
                 # days that land on a weekend eat more than three ordinary ones. Today
@@ -4490,7 +4528,10 @@ def _supply(
                 walk_routed = min(gross, node.get("reach", 0),
                                   node.get("potential", 0.0) + held_behind / to_drop) if node.get("inbound") else 0.0
                 walk_routed = max(walk_routed, routed)
+                walk_weekly, walk_per_day = weekly, per_day * physical
                 if walk_routed:
+                    walk_weekly = {wd: gross * physical * weekly[wd] - walk_routed for wd in range(7)}
+                    walk_per_day = 1.0
                     weekly = {wd: gross * weekly[wd] - walk_routed for wd in range(7)}
                     per_day = 1.0
                 # A depot its plans empty is emptied a round at a time: each round
@@ -4505,7 +4546,7 @@ def _supply(
                 remaining, cover, runs_out = line["units"], 0.0, None
                 for ahead in range(60):
                     share = today if ahead == 0 else 1.0
-                    today_use = per_day * weekly[(day + ahead) % 7] * share
+                    today_use = walk_per_day * walk_weekly[(day + ahead) % 7] * share
                     if today_use <= 0:
                         remaining -= today_use  # a route's surplus stays on the shelf
                         cover += share
@@ -4561,11 +4602,11 @@ def _supply(
                     "short" if short_by > slack else "tight" if short_by > 0 else "ok"
                 )
                 catch_up = _import_catch_up(
-                    line["units"], per_day, weekly, day,
+                    line["units"], walk_per_day, walk_weekly, day,
                     week_on if horizon else supply["arrives"], today, rounds
                 ) if supply["active"] or horizon else None
                 schedule = _scheduled_import_gap(
-                    line["units"], per_day, weekly, day, supply["deliveries"], today, rounds)
+                    line["units"], walk_per_day, walk_weekly, day, supply["deliveries"], today, rounds)
                 stock_cover = cover
                 if schedule:
                     cover, runs_out = schedule["cover"], schedule["runsOut"]
@@ -4782,11 +4823,12 @@ def _supply(
         # none of its own, or a line the board cannot read, taken to send
         # what it is asked with no known capacity.
         def own_supply(site, item):
-            # As the walk's has(): a site routes also bring it to is judged
-            # further up, and a line making it adds to an import beside it.
+            # What the site brings in itself a day: a line making it adds to
+            # an import beside it. None where a line makes it at a capacity
+            # the board cannot read, or nothing brings it here but routes
+            # (dem_levels() then adds what they can bring, as the walk's
+            # has() does).
             n = (site, item)
-            if senders.get(n):
-                return None
             brought = ((imports[n]["weekly"] / 7 if n in imports else 0.0)
                        + (wholesale[n]["weekly"] / 7 if n in wholesale else 0.0))
             if made(site, item):
@@ -4794,6 +4836,7 @@ def _supply(
                 return (making + brought) if making else None
             return brought if (n in imports or n in wholesale) else None
         dem_graph["cap"] = own_supply
+        dem_graph["made"] = made
         dem_drawn.clear()
         dem_levels_at.clear()
 
@@ -4830,15 +4873,60 @@ def _supply(
                 continue
             more, _behind = demand(dest, item, eats=eats, held_down=False)
             sites[dest] = (more, dict(weights), dem_own(dest, item))
+        own_use = {}
+
+        def used(site):
+            if site not in own_use:
+                own_use[site] = sold_dem.get(site, {}).get(item, 0.0) + (
+                    eats(site, item) if eats is not None else 0.0)
+            return own_use[site]
+
+        through_at = {}
+
+        def through(site, seen=frozenset()):
+            """What `site` can send a day, the margin included: what it
+            brings in itself, plus what the routes into it can bring (each
+            sender's own throughput less what it sends its other sites and
+            uses, never past the route's target, together never past the
+            highest), as the walk's has(). None where unknown."""
+            if site in through_at:
+                return through_at[site]
+            if site in seen:
+                return None
+            own_here = dem_graph["cap"](site, item)
+            legs = {s: w for s, w in (dem_graph["share"].get((site, item)) or {}).items() if w > 0}
+            if not legs:
+                through_at[site] = own_here
+                return own_here
+            if own_here is None and dem_graph["made"](site, item):
+                through_at[site] = None
+                return None
+            inbound, reach = 0.0, 0
+            for source in _in_order(legs):
+                there = through(source, seen | {site})
+                if there is None:
+                    through_at[site] = None
+                    return None
+                other = used(source)
+                for dest, (more, weights, _own) in sites.items():
+                    if dest != site and weights.get(source):
+                        other += more * weights[source] / sum(weights.values())
+                target = max((a for d, i, a in dem_graph["edges"].get(source, []) if d == site and i == item),
+                             default=0)
+                reach = max(reach, target)
+                bring = max(0.0, there - other * (1 + SUPPLY_MARGIN))
+                inbound += min(bring, target) if target else bring
+            through_at[site] = (own_here or 0.0) + (min(inbound, reach) if reach else inbound)
+            return through_at[site]
+
         for dest, (residual, weights, own_here) in sites.items():
             whole = sum(weights.values())
             several = own_here > 0 or sum(1 for w in weights.values() if w > 0) > 1
             for sender, w in weights.items():
                 if sender not in limits:
-                    cap = dem_graph["cap"](sender, item)
+                    cap = through(sender)
                     limits[sender] = None if cap is None else cap / (1 + SUPPLY_MARGIN)
-                    fixed[sender] += sold_dem.get(sender, {}).get(item, 0.0) + (
-                        eats(sender, item) if eats is not None else 0.0)
+                    fixed[sender] += used(sender)
                 if not several:
                     fixed[sender] += residual * w / whole if whole else 0.0
                 elif dem_own(dest, item) > 0:
@@ -4882,7 +4970,21 @@ def _supply(
                 levels = dem_levels(item, eats)
                 caps = {sender: levels[sender] * residual * w / sum(weights.values())
                         for sender, w in weights.items() if sender in levels}
-                total += _share_with_room(residual, weights, caps, dem_own(dest_key, item)).get(key, 0.0)
+                own_here = dem_own(dest_key, item)
+                targets = {}
+                if own_here > 0:
+                    # A round brings no more than its target a day where the
+                    # site has a supply of its own, as in the chain's walk:
+                    # the rest is that supply's to bring, even past what it
+                    # brings now (its own fact asks for it).
+                    for sender in weights:
+                        target = max((a for d, i, a in dem_graph["edges"].get(sender, [])
+                                      if d == dest_key and i == item), default=0)
+                        if target:
+                            targets[sender] = target / (1 + SUPPLY_MARGIN)
+                            caps[sender] = min(caps.get(sender, targets[sender]), targets[sender])
+                part = _share_with_room(residual, weights, caps, own_here).get(key, 0.0)
+                total += min(part, targets[key]) if key in targets else part
             else:
                 total += residual * weights[key] / sum(weights.values())
             ramp |= behind
