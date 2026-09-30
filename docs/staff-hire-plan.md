@@ -478,11 +478,15 @@ in the main checkout). What changed on the board, over 3.2 to 3.4 and 2.4b:
   schedule write's add box), the people elsewhere who fit (spares and unassigned staff the page
   moves in) come first: every hiring read-out of the site (its headcount line, hours tile,
   add step and tooltip, the Schedules status, the schedule dialog's add box and done text)
-  counts the rest (`spRowLess()`), and a note says "N can come from other sites", with Staff
-  this site to do it. Without a mod that hires, the full count stands and the note points at
-  MyEmployees. Staff this site shows also where the site has no week of its own to write. An open week nobody free can take says why ("the Customer Service free ask
-  for Full-time"), and Quick hire counts as matches only those who fit an open week at a
-  planned site. Every write dialog names its site (the imports dialog names its one depot too).
+  counts only the hires left (`spRowLess()`), and a note says "N can come from other sites",
+  with Staff this site to do it. The hours stay whole: they are empty until somebody works
+  them, so a schedule-only write says they wait on the people from other sites. Without a
+  mod that hires, the full count stands and the note points at MyEmployees. Staff this site
+  shows also where a shop or an office has no week of its own to write. An open week nobody
+  free can take says why ("the free Customer Service people ask for Full-time", or an
+  unticked reassign), counting candidates, spares elsewhere and unassigned staff, nobody in
+  training; Quick hire counts as matches only those who fit an open week at a planned site.
+  Every write dialog names its site (the imports dialog names its one depot too).
 - **Done and failed per site**: once applied, each site in the review says "week written",
   "assigned", "writing the week…" or why its week was not written.
 

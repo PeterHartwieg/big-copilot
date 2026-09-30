@@ -3235,7 +3235,7 @@ test('without a mod that hires, the full count stands and the note points at MyE
   const page = await board(t, {link: {writes: ['uniforms', 'imports', 'schedule'], day: 34, hour: 14}, data: giftsHiring()});
   const text = await (await siteBlock(page, G)).textContent();
   assert.match(text, /\+2 to hire/);
-  assert.match(text, /1 person at another site fits these hours: reassign them in MyEmployees\./);
+  assert.match(text, /1 person at another site fits these hours: reassign them in MyEmployees, then hire only the rest./);
   assert.doesNotMatch(text, /Staff this site reassigns/);
 });
 
@@ -3340,4 +3340,51 @@ test('on a phone, Staff all sites keeps its foot on screen and scrolls its rows'
   assert.ok(failedFoot.bottom <= failedFoot.height, 'the failed foot ends on screen');
   assert.ok(failedFoot.top >= 0, 'the failed foot starts on screen');
   assert.equal(await dlg.locator('.gw-foot').getByRole('button', {name: 'Try again', exact: true}).count(), 1);
+});
+
+test('a schedule-only write says the hours wait on the people from other sites, even with nobody to hire', async (t) => {
+  const d = giftsOpen();
+  const gifts = d.staffing.find(r => r.key === G);
+  gifts.addPeople = {assign: [], hire: [{skill: CS, role: 'Customer Service', people: 1}], people: 1, hoursUncovered: 24};
+  gifts.headcount = {[CS]: {needed: 48, min: 1, max: 2, have: 1, spare: 0, hire: 1}};
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  const block = await siteBlock(page, G);
+  await page.evaluate(() => {
+    window.hrAnswer = async (kind, body, o) => ({status: 200, error: null, body: {ok: true, kind: 'schedule', dryRun: !!o.dryRun, stamp: 's',
+      before: {shifts: 1, print: 'a'}, after: {shifts: 2, print: 'b'}, removed: 1, added: 2, openedHours: false, leftWithout: [], warnings: [], siteError: null, rows: []}});
+  });
+  await block.locator('[data-gw="schedule"]').first().click();
+  await phase(page, 'ready');
+  const dlg = page.locator('dialog.gw-dlg');
+  assert.doesNotMatch(await dlg.textContent(), /Add 1 person to fill this plan/);
+  assert.match(await dlg.textContent(), /1 person can come from another site/);
+  await dlg.locator('.gw-foot [data-gw-b="apply"]').click();
+  await phase(page, 'done');
+  assert.match(await dlg.textContent(), /24 h a week stay empty until 1 person comes from another site: Staff this site moves them\./);
+});
+
+test('the new wages of a hire leave out the weeks a person from another site takes', async (t) => {
+  const d = JSON.parse(giftsHiring());
+  d.staffing.find(r => r.key === G).headcount[CS].hireHours = 84;
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  await siteBlock(page, G);
+  const h = await page.evaluate(k => gwRosterPlan(k).headcount['ba:skill_customerservice'].hireHours, G);
+  assert.ok(h < 84);
+  const thatValue = await page.evaluate(k => hrMemoModel().moves.filter(x => x.id === 'SPARE1' && x.to && x.to.key === k)
+    .reduce((n, x) => n + x.week.w.hours, 0), G);
+  assert.equal(h, 84 - thatValue);
+  assert.ok(thatValue > 0);
+});
+
+test("an open week's reason leaves out a spare in training", async (t) => {
+  const d = JSON.parse(payload);
+  d.candidates.forEach(c => { if(c.skills.some(x => x.skill === CS)) c.demands = ['ba:jobdemand_fulltime']; });
+  d.hiring.people.SPARE1.training = true;
+  d.hiring.sites.find(s => s.key === G).plans.demand.hireWeeks = [
+    {skill: CS, hours: 24, days: 2, band: 'part', slots: [slot(2, 3, 8, 20, 'REG-G'), slot(3, 4, 8, 20, 'REG-G')]}];
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  await answering(page, []);
+  await page.evaluate(() => hrReview({scope: 'all'}));
+  await phase(page, 'ready');
+  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), /HART\. Gifts: the free Customer Service people ask for [^.]+\./);
 });

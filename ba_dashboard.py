@@ -24795,7 +24795,13 @@ function spRosterNew(c, counts){
      delete anything for. Then shifts the plan cannot replace, then a schedule
      it replaces whole, then no schedule at all. */
   const keptHead = tt("sp.care.keep.head", "<b>Do not clear the whole schedule.</b>");
-  const care = counts.now && !counts.staffed
+  /* Waiting on people from other sites alone: no hire to wait for. */
+  const fromOnly = !!c.row.fromOthers && !spPlanPosts(c.row);
+  const care = counts.now && !counts.staffed && fromOnly
+    ? `${counts.nowCover
+      ? tt("sp.care.from.cover", "<b>Staff this site before you clear.</b> Every entry here waits on somebody from another site, so clearing the schedule now would leave the shop with neither the cover it has nor the week below.")
+      : tt("sp.care.from", "<b>Staff this site before you clear.</b> Every entry here waits on somebody from another site, so clearing the schedule now would leave the shop with nothing at all.")}`
+    : counts.now && !counts.staffed
     ? `${counts.nowCover
       ? tt("sp.care.hire.cover", "<b>Hire before you clear.</b> Every entry here waits on somebody, so clearing the schedule now would leave the shop with neither the cover it has nor the week below.")
       : tt("sp.care.hire", "<b>Hire before you clear.</b> Every entry here waits on somebody, so clearing the schedule now would leave the shop with nothing at all.")}${
@@ -24810,7 +24816,7 @@ function spRosterNew(c, counts){
         : tt("sp.care.keep", {one: "The {n} serving entry in the game is not in this plan, and nothing here can put it back: delete the cleaning and security hours and set these instead.",
             other: "The {n} serving entries in the game are not in this plan, and nothing here can put them back: delete the cleaning and security hours and set these instead."}, {n: kept})}`
       : counts.now
-        ? counts.hire
+        ? counts.hire && spPlanPosts(c.row)
           ? tt("sp.care.cover.hire", {one: "Everything scheduled here is cleaning or security, so clearing it loses nothing this week does not put back, once the {n} hire is made.",
               other: "Everything scheduled here is cleaning or security, so clearing it loses nothing this week does not put back, once the {n} hires are made."}, {n: spPlanPosts(c.row)})
           : tt("sp.care.cover", "Everything scheduled here is cleaning or security, so clearing it loses nothing this week does not put back.")
@@ -24853,7 +24859,9 @@ function spRosterNew(c, counts){
       ? tt("sp.new.sum.progress", "{progress}. Until then the plan is <b>cleaning and security only</b>.", {progress})
       : tt("sp.new.sum", "Until {days} days after this shop's first customer, the plan is <b>cleaning and security only</b>.", {days});
   const head = counts.now && !counts.staffed
-    ? tt("sp.care.hire.head", "<b>Hire before you clear.</b> Every entry here waits on somebody.")
+    ? c.row.fromOthers && !spPlanPosts(c.row)
+      ? tt("sp.care.from.head", "<b>Staff this site before you clear.</b> Every entry here waits on somebody from another site.")
+      : tt("sp.care.hire.head", "<b>Hire before you clear.</b> Every entry here waits on somebody.")
     : kept
       ? `${keptHead} ${tt("sp.care.keep.short", {one: "The {n} serving entry in the game is not in this plan.",
         other: "The {n} serving entries in the game are not in this plan."}, {n: kept})}`
@@ -24972,7 +24980,12 @@ function spPlanPick(base, full){
    the week is the Staff page's and the game's; here it is the numbers. */
 function spOfficeRoster(b){
   const row = gwOfficeRow(b.key);
-  if(!row || !(row.shifts || []).length) return "";
+  /* No office default to add: Staff this site still, where people move in or out. */
+  if(!row || !(row.shifts || []).length){
+    const staff = gwLink() ? gwStaffButton(b.key, true) : "";
+    return staff ? `<section class="sec rv" data-block="roster" id="sp-roster" data-site="${attr(b.key)}">
+    ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster"})}${staff}</section>` : "";
+  }
   const comp = gwOfficeComputers(row);
   /* Now, and after the write adds what it can: it never takes an entry away. */
   const now = ((row.current || {}).list || []).filter(s => comp.has(s.s)), after = now.concat(gwRosterWeek(row).added);
@@ -30680,13 +30693,14 @@ function hrGapWhy(m, x){
   const r = (m.roles || []).find(y => y.skill === skill);
   const moved = new Set((m.moves || []).filter(v => !v.off).map(v => v.id));
   const free = r ? r.pool.filter(c => r.passes(c) && !m.used.has(c.id)) : [];
+  const training = id => !!((H.people || {})[id] || {}).training;
   (m.sites || []).forEach(S => (S.plan.spare || []).forEach(id => {
-    if(S === x.S || moved.has(id)) return;
+    if(S === x.S || moved.has(id) || training(id)) return;
     const q = hrPerson(id, S.row), roles = ((S.plan.spareSkills || {})[id]) || [q.skill];
     if(roles.includes(skill)) free.push(q);
   }));
   (H.bench || []).forEach(id => {
-    if(moved.has(id)) return;
+    if(moved.has(id) || training(id)) return;
     const q = hrPerson(id, null);
     if((q.skills || []).some(v => v && v.skill === skill)) free.push(q);
   });
@@ -30744,21 +30758,21 @@ function hrFromElsewhere(key){
   return {n: [...by.values()].reduce((a, b) => a + b, 0), by, hours};
 }
 /* The plan's "add these people" less those who can come from other sites:
-   {add (hires reduced by role, and the hours they bring), from (how many
-   can come)}. Only with a mod that hires: without one nothing is moved from
+   {add (hires reduced by role), from (how many can come)}. The hours stay
+   whole: they are empty until somebody actually works them, and a
+   schedule-only write leaves a mover's hours empty until Staff this site
+   moves them. Only with a mod that hires: without one nothing is moved from
    here, so the full count stands. */
 function hrAddLess(key, add){
-  const {by, hours} = hrFromElsewhere(key);
-  if(!add || !by.size || !hrCanHire()) return {add, from: 0, raw: [...by.values()].reduce((a, b) => a + b, 0)};
-  let from = 0, h = 0;
+  const {by} = hrFromElsewhere(key);
+  if(!add || !by.size || !hrCanHire()) return {add, from: 0};
+  let from = 0;
   const hire = (add.hire || []).map(x => {
     const k = Math.min(x.people || 0, by.get(x.skill) || 0);
     from += k;
-    if(k) h += Math.round((hours.get(x.skill) || 0) * k / (by.get(x.skill) || 1));
     return Object.assign({}, x, {people: (x.people || 0) - k});
   }).filter(x => x.people > 0);
-  return {add: Object.assign({}, add, {hire, people: Math.max(0, (add.people || 0) - from),
-    hoursUncovered: Math.max(0, (Number(add.hoursUncovered) || 0) - h)}), from, raw: from};
+  return {add: Object.assign({}, add, {hire, people: Math.max(0, (add.people || 0) - from)}), from};
 }
 /* A plan row with its hiring counts less the people who can come from other
    sites (hrAddLess()): `headcount[skill].hire`, `addPeople`, and
@@ -30766,7 +30780,7 @@ function hrAddLess(key, add){
    row this gives, so they agree. */
 function spRowLess(row){
   if(!row || !row.key || row.fromOthers !== undefined) return row;
-  const {by} = hrFromElsewhere(row.key);
+  const {by, hours} = hrFromElsewhere(row.key);
   const raw = [...by.values()].reduce((a, b) => a + b, 0);
   if(!raw) return Object.assign({}, row, {fromOthers: 0, fromHand: 0});
   if(!hrCanHire()) return Object.assign({}, row, {fromOthers: 0, fromHand: raw});
@@ -30775,7 +30789,10 @@ function spRowLess(row){
   Object.entries(row.headcount || {}).forEach(([skill, h]) => {
     const k = Math.min(h.hire || 0, by.get(skill) || 0);
     from += k;
-    headcount[skill] = Object.assign({}, h, {hire: (h.hire || 0) - k});
+    /* The new wages lose the hours of the weeks the movers take. */
+    const took = k ? Math.round((hours.get(skill) || 0) * k / (by.get(skill) || 1)) : 0;
+    headcount[skill] = Object.assign({}, h, {hire: (h.hire || 0) - k},
+      h.hireHours !== undefined ? {hireHours: Math.max(0, (Number(h.hireHours) || 0) - took)} : {});
   });
   const less = row.addPeople ? hrAddLess(row.key, row.addPeople) : {add: row.addPeople, from: 0};
   return Object.assign({}, row, {headcount, addPeople: less.add, fromOthers: Math.max(from, less.from), fromHand: 0});
@@ -30789,8 +30806,8 @@ const hrFromCall = (row, lift) => {
       one: "<b>{n} person can come from another site</b>: Staff this site reassigns them.",
       other: "<b>{n} people can come from other sites</b>: Staff this site reassigns them."}, {n})
     : m ? tt("co.hire.elsewhere.hand", {
-      one: "<b>{n} person at another site fits these hours</b>: reassign them in MyEmployees. Staffing › Staff needs names them.",
-      other: "<b>{n} people at other sites fit these hours</b>: reassign them in MyEmployees. Staffing › Staff needs names them."}, {n: m})
+      one: "<b>{n} person at another site fits these hours</b>: reassign them in MyEmployees, then hire only the rest. Staffing › Staff needs names them.",
+      other: "<b>{n} people at other sites fit these hours</b>: reassign them in MyEmployees, then hire only the rest. Staffing › Staff needs names them."}, {n: m})
     : "";
   return !text ? "" : lift ? gwLiftCall("info", "hire", text) : `<div class="hr-from">${gwCall("info", "hire", text)}</div>`;
 };
@@ -32774,7 +32791,7 @@ function drawOptimizeStaffing(){
      "108 shifts become 65" and stops has described a schedule the player
      cannot finish until four more people are on the books. */
   const people = !hiring && counts.hire
-    ? tt("today.moves.staff.people", {one: "{n} person", other: "{n} people"}, {n: spPlanPosts(row)}) : "";
+    ? (() => { const n = spPlanPosts(spRowLess(row)); return n ? tt("today.moves.staff.people", {one: "{n} person", other: "{n} people"}, {n}) : ""; })() : "";
   /* A shop with no hour reports of its own is compared on the shifts this plan
      would really replace, and says why: its registers are not in the plan, so
      they are not in the number beside it either. Against its whole schedule
@@ -38868,8 +38885,6 @@ function gwFailed(dlg, spec, res, retry, recheck){
                                when the game approved afresh in an open
                                dialog, which asks the game again)
      onUndo()                  optional: heard once its undo went through
-     startUndo                 optional: the dialog opens by undoing the
-                               kind's last write, then asks the game afresh
    The dialog dry-runs as it opens, offers Apply only when the game would take
    every row, and after an apply offers Undo until the next write of the kind. */
 function gwConfirm(spec){
@@ -39056,7 +39071,7 @@ function gwConfirm(spec){
     if(typeof SOURCE.refresh !== "function") return dlg.close();
     dlg.close(); return SOURCE.refresh();
   };
-  if(spec.startUndo) gwUndo(spec, dlg); else plan();
+  plan();
 }
 /* Undo the kind's last write. In the write's own dialog the dialog goes back
    to that write, asked afresh; from the strip, the dialog it opens says what
@@ -39831,9 +39846,6 @@ const gwOfficeRow = key => {
   return row ? Object.assign({}, row, {full: false, office: true}) : null;
 };
 
-/* The roster's own write, and every planned shop's in turn. How many people
-   the plan still waits on stays beside it until they are added, so a partial
-   write never reads as the whole week. */
 /* Staff this site: where the Staff page's plan hires or reassigns somebody
    into the site, or reassigns its own spares out; whether or not the site
    has a week of its own to write. `alone` wraps it as the block's only act. */
@@ -39844,6 +39856,9 @@ function gwStaffButton(key, alone){
   const b = gwButton("hire", tt("sp.gw.staff", "Staff this site"), `data-hr-staff="${attr(key)}"`, "", people ? {count: people} : {});
   return alone ? `<div class="gw-acts gw-panel">${b}</div>` : b;
 }
+/* The site's own write, Staff this site and Staff all sites. How many people
+   the plan still waits on stays beside them until they are added, so a
+   partial write never reads as the whole week. */
 function gwRosterButtons(key){
   if(!gwLink()) return "";
   const row = gwRosterPlan(key);
@@ -39912,7 +39927,7 @@ function gwAddBox(add, staffed){
 
 /* One site's schedule. Every planned site at once is Staff all sites
    (hrReview()), with the moves and one Undo (Peter, 29 September 2026). */
-function gwSchedule(key, o = {}){
+function gwSchedule(key){
   const site = () => (D.businesses || []).find(x => x.key === key) || null;
   const b = site();
   if(!b) return;
@@ -39962,7 +39977,9 @@ function gwSchedule(key, o = {}){
         + (add.people ? gwLiftCall("warn", "hire", tt("sp.gw.sch.doneempty", {
           one: "<b>{h} h a week stay empty</b> until you add {n} person. Write the schedule again then: the board keeps this note until it is full.",
           other: "<b>{h} h a week stay empty</b> until you add {n} people. Write the schedule again then: the board keeps this note until it is full."},
-          {h: add.hoursUncovered || 0, n: add.people})) : "");
+          {h: add.hoursUncovered || 0, n: add.people}))
+          /* Nobody to add, and somebody to come from another site: the hours wait on them. */
+          : row.fromOthers ? gwLiftCall("warn", "hire", gwFromWait(add.hoursUncovered, row.fromOthers)) : "");
       const whole = tt("sp.gw.plan.whole", "replaces the whole week");
       const which = row.office ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.gw.plan.office", "Office default")}</span><span class="gw-only">${tt("sp.gw.plan.adds", "adds to the week")}</span>`
         : row.full ? `<span class="gw-plan full">${gwSvg("sun")}${tt("sp.pick.full", "Full cover 24/7")}</span><span class="gw-only">${tt("sp.gw.plan.every", "every station, every hour")}</span>`
@@ -40033,7 +40050,6 @@ function gwSchedule(key, o = {}){
     applyLabel: () => tt("sp.gw.sch.apply", "Write the week"),
     applying: tt("sp.gw.sch.applying", "Writing the week in the game…"),
     changed: answer => (answer.before || {}).print !== (answer.after || {}).print || !!answer.openedHours,
-    startUndo: !!o.startUndo,
     onUndo: () => { pgDrop(schedWritten); schedWritten = []; },
     onDone: answer => { schedWritten = pgScheduleDone(key, last, answer); },
     doneBody: (answer, spec) => {
@@ -40046,14 +40062,19 @@ function gwSchedule(key, o = {}){
       if(answer.undo) return answer.openedHours
         ? tt("sp.gw.sch.undone.hours", "Undone: the schedule at {shop} is back as it was, opening hours too.", {shop})
         : tt("sp.gw.sch.undone", "Undone: the schedule at {shop} is back as it was.", {shop});
-      const add = (last && last.row.addPeople) || {};
+      const add = (last && last.row.addPeople) || {}, from = (last && last.row.fromOthers) || 0;
       return `${gwScheduleSaid(shop, answer)}${add.people ? ` ${tt("sp.gw.sch.stillempty", {
         one: "{h} h a week stay empty until you add {n} person; write it again then.",
-        other: "{h} h a week stay empty until you add {n} people; write it again then."}, {h: add.hoursUncovered || 0, n: add.people})}` : ""}`;
+        other: "{h} h a week stay empty until you add {n} people; write it again then."}, {h: add.hoursUncovered || 0, n: add.people})}`
+        : from ? ` ${gwFromWait(add.hoursUncovered, from)}` : ""}`;
     },
   });
 }
 
+/* The hours a schedule-only write leaves to the people from other sites. */
+const gwFromWait = (h, n) => tt("sp.gw.sch.fromwait", {
+  one: "<b>{h} h a week stay empty</b> until {n} person comes from another site: Staff this site moves them.",
+  other: "<b>{h} h a week stay empty</b> until {n} people come from other sites: Staff this site moves them."}, {h: Number(h) || 0, n});
 /* What one shop's write did, as the dialog and its toast say it. */
 const gwScheduleSaid = (shop, answer) => answer.openedHours
   ? tt("sp.gw.sch.said.open", {one: "{shop}: {n} entry set in place of {was}, open 0 to 24 every day.",
