@@ -1397,6 +1397,10 @@ class ThroughputTests(unittest.TestCase):
                     self.assertEqual((central["st"], central["setTo"]), ("covered", None))
                     self.assertEqual((regional["st"], regional["setTo"]), ("covered", None))
                     self.assertEqual(c.notes(self.CENTRAL, "order") + c.notes(self.REGIONAL, "order"), [])
+                    if central_import:
+                        # Round 14: the routes bring 1,220 of the 1,380 a day
+                        # with the margin; Regional's import shows its share.
+                        self.assertEqual(regional["need"], 7 * 160)
 
     def test_an_import_passed_down_two_depots_is_not_asked_for_the_whole_need(self):
         """Root imports 7,000 a week and tops Intermediate up, which tops
@@ -1436,6 +1440,27 @@ class ThroughputTests(unittest.TestCase):
         self.assertEqual(line["needHours"]["dem"], 9)
         self.assertIsNone(c.fact(t.BREW_A, WATER, "dem")["setTo"])
         self.assertEqual((c.fact(WH, BEER, "dem")["st"], c.fact(WH, BEER, "dem")["setTo"]), ("covered", None))
+        # Round 14: a Smart Delivery backup at or under the round's target
+        # brings nothing now, but the round is still capped at its target.
+        for level in (800, 1500):
+            with self.subTest(smart=level):
+                c = Chain()
+                c.profile = BUSY_WEEK
+                c.factory(t.BREW_A, "Brewery", machines=4)
+                c.hold(t.BREW_A, BEER, 5000)
+                c.contract(t.BREW_A, WATER, 3000)
+                c.hold(t.BREW_A, WATER, 10000)
+                c.plan(t.BREW_A, WH, BEER, 1000)
+                c.site(WH, "Depot")
+                c.hold(WH, BEER, 15000)
+                c.contract(WH, BEER, level, smart=True)
+                c.plan(WH, SHOP, BEER, 100000)
+                c.shop(SHOP, "Shop")
+                c.hold(SHOP, BEER, 2000, 2400)
+                c.run()
+                [line] = [l for site in c.supply["factories"]["sites"] for l in site["lines"]]
+                self.assertEqual(line["needHours"]["dem"], 9)
+                self.assertIsNone(c.fact(t.BREW_A, WATER, "dem")["setTo"])
 
     def test_a_hubs_timing_counts_the_plain_import_that_lands_below_it(self):
         """A hub importing 7,000 a week feeds its own shop (500 a day) and
@@ -1462,6 +1487,83 @@ class ThroughputTests(unittest.TestCase):
             with self.subTest(mode=mode):
                 self.assertEqual(c.fact(hub, BEER, mode)["st"], "covered")
         self.assertEqual(c.notes(hub, "shortfall"), [])
+
+    def test_a_downstream_import_counts_only_once_it_lands(self):
+        """Round 14: day 20; the hub holds 3,000, feeds its own shop 500 a
+        day and tops Regional up to 1,500; Regional holds 1,500 and its shop
+        sells 1,200 a day; both imports (7,000 and 12,000) land on day 24.
+        Until Regional's lands, its round draws what its stock cannot cover,
+        so the hub runs dry before its own import: a shortfall."""
+        hub, hub_shop = ("hub_a", 7), ("shop_h", 8)
+        c = Chain()
+        c.site(hub, "Hub")
+        c.hold(hub, BEER, 3000)
+        c.contract(hub, BEER, 7000)
+        c.shop(hub_shop, "Hub shop")
+        c.hold(hub_shop, BEER, 1000, 500)
+        c.plan(hub, hub_shop, BEER, 100000)
+        c.site(self.REGIONAL, "Regional")
+        c.hold(self.REGIONAL, BEER, 1500)
+        c.contract(self.REGIONAL, BEER, 12000)
+        c.shop(self.SHOP_R, "Shop")
+        c.hold(self.SHOP_R, BEER, 2000, 1200)
+        c.plan(hub, self.REGIONAL, BEER, 1500)
+        c.plan(self.REGIONAL, self.SHOP_R, BEER, 100000)
+        c.run()
+        self.assertEqual(c.day + 4, 24)
+        for mode in ("cap", "dem"):
+            with self.subTest(mode=mode):
+                self.assertEqual((c.fact(hub, BEER, mode)["st"], c.fact(hub, BEER, mode)["why"]),
+                                 ("short", "shortfall"))
+        self.assertEqual(len(c.notes(hub, "shortfall")), 1)
+
+    def test_a_relay_beside_an_importing_depot_settles(self):
+        """Round 14: a two-machine brewery (1,440 a day) tops Xdepot up (it
+        imports 14,000 a week; its shop sells 2,000 a day) and Central (no
+        import), which tops Regional up (it imports 7,000 a week; its shop
+        sells 1,000 a day). The brewery's split is solved before Central's
+        limit is read from it, so the passes settle well inside the bound
+        and nothing asks, in both bases."""
+        import ba_dashboard
+        xdep, shop_x = ("xdep", 35), ("shop_x", 36)
+        walk, passes = ba_dashboard._supply_walk, []
+
+        def counted(*args, **kwargs):
+            got = walk(*args, **kwargs)
+            passes.append(counted.passes)
+            return got
+
+        ba_dashboard._supply_walk = counted
+        try:
+            c = Chain()
+            c.factory(BREWERY, "Brewery", machines=2)
+            c.hold(BREWERY, BEER, 500)
+            c.site(xdep, "Xdepot")
+            c.hold(xdep, BEER, 20000)
+            c.contract(xdep, BEER, 14000)
+            c.shop(shop_x, "Shop X")
+            c.hold(shop_x, BEER, 2000, 2000)
+            c.site(self.CENTRAL, "Central")
+            c.hold(self.CENTRAL, BEER, 20000)
+            c.site(self.REGIONAL, "Regional")
+            c.hold(self.REGIONAL, BEER, 20000)
+            c.contract(self.REGIONAL, BEER, 7000)
+            c.shop(self.SHOP_R, "Shop R")
+            c.hold(self.SHOP_R, BEER, 2000, 1000)
+            c.plan(BREWERY, xdep, BEER, 10000)
+            c.plan(xdep, shop_x, BEER, 100000)
+            c.plan(BREWERY, self.CENTRAL, BEER, 10000)
+            c.plan(self.CENTRAL, self.REGIONAL, BEER, 10000)
+            c.plan(self.REGIONAL, self.SHOP_R, BEER, 100000)
+            c.run()
+        finally:
+            ba_dashboard._supply_walk = walk
+        self.assertEqual(len(passes), 2)
+        self.assertLess(max(passes), ba_dashboard.HAND_ON_PASSES)
+        for mode in ("cap", "dem"):
+            with self.subTest(mode=mode):
+                self.assertEqual([c.fact(a, BEER, mode)["setTo"] for a in (xdep, self.CENTRAL, self.REGIONAL)],
+                                 [None, None, None])
 
 
 class RoundEightTests(unittest.TestCase):

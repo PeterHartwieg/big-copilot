@@ -1456,19 +1456,22 @@ One rule shares a site's need out, in both bases and in Shop demand's sizing ali
 senders split it by their targets, and one asked across its routes for more than it can
 send hands the rest to the others with room. What a sender can send is what it supplies (a
 factory's output, an import or wholesale delivery, both where it has both) plus, for a
-site routes also bring it to, what its own senders can pass on to it, never past their
-targets, less its own use. That goes first to the sites only it tops up; what is left is
+site routes also bring it to, what its own senders can pass on to it (what the sites only
+they top up leave them, or at a site they share, their part as their own split allots it,
+worked out first), never past their targets, less its own use. That goes first to the sites only it tops up; what is left is
 pooled over the sites it tops up beside others, going where the other senders leave a need
 (room one site does not use goes to another), and the rest goes to a sender with room, a
 factory with spare hours among them. The routes come first: a site's own import or
 wholesale delivery brings only what its routes leave (in 24/7, what a factory at full rate
 cannot bring; in Shop demand, the factory is sized for the shops' need and the import is
-the top-up), and a round capped by its target leaves the rest to that import. A plain
-import the routes fully cover gets no word. In Shop demand a line sends what it makes in
+the top-up), and a round capped by its target leaves the rest to that import, whatever
+that import brings now (a Smart Delivery level at or under the target included). A plain
+import the routes fully cover gets no word; its figures show the share the routes leave it
+(the margin, where they bring the use). In Shop demand a line sends what it makes in
 the hours it is sized to, margin included. A sender's import row is sized on its planned
-share, but its run-dry timing charges what physically leaves it: a plain import at a
-depot it tops up lands whatever that depot holds, and the round brings only what it
-leaves. What a sender merely holds is no supply, and what a line at the
+share, but its run-dry timing charges what physically leaves it: until a plain import at
+a depot it tops up lands, the round brings what that depot's own stock cannot cover, and
+from the day it lands, only what it leaves. What a sender merely holds is no supply, and what a line at the
 site itself makes comes off its import's week. Two sites topping each other up with the
 same item form a loop, which counts one way only: from the site with a supply of its own
 toward the one without, then from the one with more left over after its own use to the
