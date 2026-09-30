@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "b3bcc9c825";</script>
-<link rel="stylesheet" href="community.css?v=b3bcc9c825">
+<script>window.LEDGER_BUILD = "d4e0509d8d";</script>
+<link rel="stylesheet" href="community.css?v=d4e0509d8d">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=b3bcc9c825">
+<link rel="stylesheet" href="fonts/fonts.css?v=d4e0509d8d">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -5558,7 +5558,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"b3bcc9c825","latest":{"pr":185,"date":"2026-09-29","title":"Staff a site in one step, and undo it in one","summary":"A shop's or an office's Staffing has Staff this site, and Staffing › Staff needs has Staff all sites. One review hires the best candidates, moves spare staff across, and writes the new week at every site it reaches, including sites that only need new hours; each site then says whether its week was written. Pick Hire and schedule, Hire only (assigned with no hours, as at a headquarters or a warehouse) or Schedule only; Quick hire works the same way. A shop you put on full cover 24/7 is staffed around the clock. With Big Copilot Link 0.4.0 it all goes to the game in one step, and one Undo takes back every hire, move and week, until the game's next day. Older versions of the mod still hire, then write the other weeks one by one, without undo."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"d4e0509d8d","latest":{"pr":185,"date":"2026-09-29","title":"Staff a site in one step, and undo it in one","summary":"A shop's or an office's Staffing has Staff this site, and Staffing › Staff needs has Staff all sites. One review hires the best candidates, moves spare staff across, and writes the new week at every site it reaches, including sites that only need new hours; each site then says whether its week was written. Pick Hire and schedule, Hire only (assigned with no hours, as at a headquarters or a warehouse) or Schedule only; Quick hire works the same way. A shop you put on full cover 24/7 is staffed around the clock. With Big Copilot Link 0.4.0 it all goes to the game in one step, and one Undo takes back every hire, move and week, until the game's next day. Older versions of the mod still hire, then write the other weeks one by one, without undo."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -5646,8 +5646,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=b3bcc9c825"></script>
-<script src="community.js?v=b3bcc9c825"></script>
+<script src="app.js?v=d4e0509d8d"></script>
+<script src="community.js?v=d4e0509d8d"></script>
 
 <script>
 
@@ -30590,11 +30590,14 @@ function gwWeek(now, days){
 }
 /* The add-people box: who to assign and whom to hire, and the hours written
    now against the hours that wait for them. */
-function gwAddBox(add, staffed){
+function gwAddBox(add, staffed, from = 0){
   const pills = (add.assign || []).map(p => `<span class="person bench"><i>${spEsc(gwInitials(p.name))}</i>${spEsc(p.name || "?")}<small>${tt("sp.gw.add.unassigned", "unassigned")}</small></span>`)
     .concat((add.hire || []).map(h => `<span class="person hire"><i>${gwSvg("plus")}</i>${h.people} × ${spEsc(h.role || "")}<small>${tt("sp.gw.add.tohire", "to hire")}</small></span>`));
   const empty = Number(add.hoursUncovered) || 0, total = staffed + empty;
-  return `<div class="gw-box gw-warn gw-lift">${gwCall("warn", "hire", tt("sp.gw.add", {
+  return `<div class="gw-box gw-warn gw-lift">${gwCall("warn", "hire", from ? tt("sp.gw.add.from", {
+    one: "<b>Add {n} person to fill this plan</b>: {who}; {h} h a week stay empty until then and until the people from other sites come.",
+    other: "<b>Add {n} people to fill this plan</b>: {who}; {h} h a week stay empty until then and until the people from other sites come."}, {n: add.people, who: spAddWords(add), h: empty})
+    : tt("sp.gw.add", {
     one: "<b>Add {n} person to fill this plan</b>: {who}; {h} h a week stay empty until then.",
     other: "<b>Add {n} people to fill this plan</b>: {who}; {h} h a week stay empty until then."}, {n: add.people, who: spAddWords(add), h: empty}))}${
     pills.length ? `<div class="gw-pills">${pills.join("")}</div>` : ""}${
@@ -30652,7 +30655,8 @@ function gwSchedule(key){
       }
       const labels = [tt("sp.gw.tile.entries", "Entries"), tt("sp.gw.tile.hours", "Hours / week"), tt("sp.gw.tile.people", "People")];
       if(phase === "done") return gwTiles([[labels[0], null, sentList.length], [labels[1], null, gwHours(sentList)], [labels[2], null, afterPeople]])
-        + (add.people ? gwLiftCall("warn", "hire", tt("sp.gw.sch.doneempty", {
+        + (add.people && row.fromOthers ? gwLiftCall("warn", "hire", gwBothWait(add.hoursUncovered, row.fromOthers, add.people))
+          : add.people ? gwLiftCall("warn", "hire", tt("sp.gw.sch.doneempty", {
           one: "<b>{h} h a week stay empty</b> until you add {n} person. Write the schedule again then: the board keeps this note until it is full.",
           other: "<b>{h} h a week stay empty</b> until you add {n} people. Write the schedule again then: the board keeps this note until it is full."},
           {h: add.hoursUncovered || 0, n: add.people}))
@@ -30710,7 +30714,7 @@ function gwSchedule(key){
         + (left.length ? `<div class="gw-box">${gwCall("", "exit", tt("sp.gw.left.head", "<b>No hours here after this</b>"))}<div class="gw-pills">${left.join("")}</div></div>` : "")
         /* People elsewhere who fit come before any hire (spRowLess()): said
            in the fixed strip with the add box. */
-        + adds + hrFromCall(row, true) + (add.people ? gwAddBox(add, gwHours(sentList)) : "") + over.join("")
+        + adds + hrFromCall(row, true) + (add.people ? gwAddBox(add, gwHours(sentList), row.fromOthers || 0) : "") + over.join("")
         + gwCheckLines(gwWeekCheck(row, week.days));
     },
     bind: (dlg, replan) => {
@@ -30741,7 +30745,7 @@ function gwSchedule(key){
         ? tt("sp.gw.sch.undone.hours", "Undone: the schedule at {shop} is back as it was, opening hours too.", {shop})
         : tt("sp.gw.sch.undone", "Undone: the schedule at {shop} is back as it was.", {shop});
       const add = (last && last.row.addPeople) || {}, from = (last && last.row.fromOthers) || 0;
-      return `${gwScheduleSaid(shop, answer)}${add.people ? ` ${tt("sp.gw.sch.stillempty", {
+      return `${gwScheduleSaid(shop, answer)}${add.people && from ? ` ${gwBothWait(add.hoursUncovered, from, add.people)}` : add.people ? ` ${tt("sp.gw.sch.stillempty", {
         one: "{h} h a week stay empty until you add {n} person; write it again then.",
         other: "{h} h a week stay empty until you add {n} people; write it again then."}, {h: add.hoursUncovered || 0, n: add.people})}`
         : from ? ` ${gwFromWait(add.hoursUncovered, from)}` : ""}`;
@@ -30749,6 +30753,11 @@ function gwSchedule(key){
   });
 }
 
+/* The hours that wait on people from other sites and on hires both. */
+const gwBothWait = (h, n, m) => tt("sp.gw.sch.bothwait", {
+  one: "<b>{h} h a week stay empty</b> until {n} person comes from another site and you add {m} more: Staff this site does both.",
+  other: "<b>{h} h a week stay empty</b> until {n} people come from other sites and you add {m} more: Staff this site does both."},
+  {h: Number(h) || 0, n, m});
 /* The hours a schedule-only write leaves to the people from other sites. */
 const gwFromWait = (h, n) => tt("sp.gw.sch.fromwait", {
   one: "<b>{h} h a week stay empty</b> until {n} person comes from another site: Staff this site moves them.",
