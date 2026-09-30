@@ -1347,6 +1347,7 @@
  "gr.os.ck.mk.none": "<span class=\"w\">No campaign</span> for {address}",
  "gr.os.ck.mk.todo": "A campaign can start once the business exists",
  "gr.os.ck.mk.unneeded": "<span class=\"ok\">No campaign needed</span> · promotion is full without one",
+ "gr.os.ck.mk.useless": "No campaign would raise promotion here",
  "gr.os.ck.othertype": "The business at {address} is a {type}, not the {planned} you planned, so these rows wait for the planned one.",
  "gr.os.ck.payback": "Once the store trades, the payback shows here.",
  "gr.os.ck.paybackGo": "After opening: the payback",

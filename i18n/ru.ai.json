@@ -1486,6 +1486,7 @@
  "gr.os.ck.mk.none": "gpt-6-sol",
  "gr.os.ck.mk.todo": "gpt-6-sol",
  "gr.os.ck.mk.unneeded": "gpt-6.1-sol",
+ "gr.os.ck.mk.useless": "gpt-6.1-sol",
  "gr.os.ck.othertype": "gpt-6-sol",
  "gr.os.ck.payback": "gpt-6-sol",
  "gr.os.ck.paybackGo": "gpt-6-sol",

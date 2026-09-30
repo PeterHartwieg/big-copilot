@@ -1152,6 +1152,7 @@
  "gr.os.ck.mk.none": "{address} için <span class=\"w\">kampanya yok</span>",
  "gr.os.ck.mk.todo": "İşletme kurulduktan sonra kampanya başlatılabilir",
  "gr.os.ck.mk.unneeded": "<span class=\"ok\">Kampanya gerekmiyor</span> · tanıtım kampanya olmadan da %100'e ulaşıyor",
+ "gr.os.ck.mk.useless": "Hiçbir kampanya burada tanıtımı artırmaz",
  "gr.os.ck.othertype": "{address} adresindeki işletmenin türü, planladığınız {planned} yerine {type}; bu yüzden bu satırlar planlanan işletmeyi bekliyor.",
  "gr.os.ck.payback": "Mağaza satışa başlayınca yatırımın geri dönüşü burada gösterilir.",
  "gr.os.ck.paybackGo": "Açılıştan sonra: geri dönüş",

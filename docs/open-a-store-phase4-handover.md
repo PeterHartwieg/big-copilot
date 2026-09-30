@@ -30,6 +30,11 @@ spare staff and planner) merged. Main wins on staffing and marketing; step 5 ada
   are no places: said as "n h a week too few for a hire", and the row stays pending until
   someone here works them. Unticked reassigns count as open places, not moves; the row
   reads `hrMemoModel()`. A marketing mix the write would not change has no button.
+  Review round 2: any short week keeps the row pending (a planned move onto it included:
+  Staff this site stays) until a later save no longer plans it; a linked player with nothing
+  for the action to do still sees the in-game step; the headhunter hint stays beside the
+  button. A mix of no campaigns reads "No campaign would raise promotion here" (done), but
+  keeps spMkLine's set-up button (`needsSetup`, mode "setup") and a better-mix visit hint.
 - **Marketing**: phase 3's own write (`osMarketingWrite`, `OS_MK_WIRE`, the `marketingOn`
   payload key) is gone. The row reads main's `campaigns` and `marketingPlan`, and the button,
   **Set the cheapest mix**, calls main's `gwMarketing([key], "mix")`; it is disabled with

@@ -1347,6 +1347,7 @@
  "gr.os.ck.mk.none": "<span class=\"w\">Sin campaña</span> para {address}",
  "gr.os.ck.mk.todo": "Se podrá iniciar una campaña cuando exista el negocio",
  "gr.os.ck.mk.unneeded": "<span class=\"ok\">No necesita campaña</span> · la promoción alcanza el 100 % sin ella",
+ "gr.os.ck.mk.useless": "Ninguna campaña aumentaría la promoción aquí",
  "gr.os.ck.othertype": "El negocio de {address} es de tipo {type}, no del tipo {planned} que planeaste, así que estas filas esperan al negocio planeado.",
  "gr.os.ck.payback": "Cuando la tienda empiece a vender, aquí aparecerá cuándo recupera la inversión.",
  "gr.os.ck.paybackGo": "Tras la apertura: recuperación",

@@ -1042,6 +1042,7 @@
  "gr.os.ck.mk.none": "주소 {address}: <span class=\"w\">캠페인 없음</span>",
  "gr.os.ck.mk.todo": "사업체가 생기면 캠페인을 시작할 수 있어요",
  "gr.os.ck.mk.unneeded": "<span class=\"ok\">캠페인 불필요</span> · 캠페인 없이도 홍보 수치가 100%예요",
+ "gr.os.ck.mk.useless": "어떤 캠페인도 이 매장의 홍보를 늘리지 못해요",
  "gr.os.ck.othertype": "주소 {address}: 현재 업종 {type}, 계획한 업종 {planned}. 이 항목은 계획한 업종이 들어설 때까지 대기해요.",
  "gr.os.ck.payback": "매장이 영업을 시작하면 투자금 회수 현황이 여기에 표시돼요.",
  "gr.os.ck.paybackGo": "개업 후: 투자금 회수",

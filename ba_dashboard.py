@@ -33094,10 +33094,10 @@ function osStaffWork(key){
   return r.body.hires.length + r.body.moves.length + r.weeks;
 }
 /* The row's action on every pending path: Staff this site where the mod
-   takes the hire write and the site-scoped action does something; without
-   that write, what to do in the game. */
-const osStaffAct = (plan, ingame) => hrCanHire()
-  ? (osStaffWork(plan.key) ? osAct("hire", tt("sp.gw.staff", "Staff this site"), "hire", "", ingame) : "")
+   takes the hire write and the site-scoped action does something; else
+   what to do in the game. */
+const osStaffAct = (plan, ingame) => hrCanHire() && osStaffWork(plan.key)
+  ? osAct("hire", tt("sp.gw.staff", "Staff this site"), "hire", "", ingame)
   : ingame ? osIngame(ingame) : "";
 function osReqName(plan, b, name){
   const out = osOutfit(plan, b), line = out && out.lines.find(l => l[3] === name);
@@ -33131,17 +33131,19 @@ function osCkStaff(plan, opened){
   const address = osCkAddress(plan);
   const week = tt("gr.os.ck.staff.ingame.week", "<b>BizMan › Schedule</b>: give your staff at {address} their hours.", {address});
   /* A week too short for any contract (band "short") is no place to hire
-     for: its hours stay open, said as the Staff page says them, and the row
-     stays pending until somebody here works them. */
+     for: its hours are said as the Staff page says them (open ones only, as
+     role.tooFew), and any short week at all keeps the row pending, planned
+     move included, until a later save shows the hours worked. */
   const open = x => !x.who || (x.who.type === "move" && x.who.m.off);
   const places = S.weeks.filter(x => x.w.band !== "short");
+  const anyShort = S.weeks.some(x => x.w.band === "short");
   const shortH = S.weeks.filter(x => x.w.band === "short" && open(x)).reduce((n, x) => n + Number(x.w.hours || 0), 0);
   const tooFew = shortH ? ` · <span class="w">${tt("co.hire.role.toofew", "{h} h a week too few for a hire", {h: hrNum(shortH)})}</span>` : "";
   const need = places.length;
   const scheduled = opened.stationShifts > 0, gap = hrUnstaffedOf(S);
   if(!need){
     const covered = have > 0 && scheduled && !gap && (S.variant !== "demand" || opened.hasTraded);
-    if(covered && !shortH) return osCk("people", "done", title, tt("gr.os.ck.staff.done",
+    if(covered && !anyShort) return osCk("people", "done", title, tt("gr.os.ck.staff.done",
       {one: "{n} person · <span class=\"ok\">the opening hours are covered</span>", other: "{n} people · <span class=\"ok\">the opening hours are covered</span>"}, {n: have}));
     if(covered) return osCk("people", "todo", title, `${tt("gr.os.ck.staff.count", {one: "{n} person on staff", other: "{n} people on staff"}, {n: have})}${tooFew}`,
       osStaffAct(plan, week));
@@ -33187,9 +33189,12 @@ function osCkStaff(plan, opened){
     : nMove ? tt("gr.os.ck.staff.ingame.move", "<b>MyEmployees</b> on your phone: move {moves} to {address}.", {moves: roles(moves), address})
     : nHire ? tt("gr.os.ck.staff.ingame", "<b>MyEmployees</b> on your phone: hire {roles} from your headhunters' candidates, at {address}.", {roles: roles(hires), address})
     : "";
-  let act = osStaffAct(plan, ingame);
-  if(!act && bare)
-    act = osIngame(tt("gr.os.ck.staff.headhunter", "No candidate fits yet: ask a <b>headhunter</b> for {roles}, at {address}.", {roles: roles(bySkill), address}));
+  const work = hrCanHire() && osStaffWork(plan.key);
+  let act = work ? osAct("hire", tt("sp.gw.staff", "Staff this site"), "hire", "", ingame) : ingame ? osIngame(ingame) : "";
+  /* Places nobody can fill: the headhunter, beside the button too, but not
+     beside the in-game hiring step, which already names the roles. */
+  if(bare && (work || !ingame))
+    act += osIngame(tt("gr.os.ck.staff.headhunter", "No candidate fits yet: ask a <b>headhunter</b> for {roles}, at {address}.", {roles: roles(bySkill), address}));
   return osCk("people", used > 0 ? "part" : "todo", title, sub, act, Math.round(100 * used / total));
 }
 function osCkUniforms(plan, opened){
@@ -33243,13 +33248,26 @@ function osCkMarketing(plan, b, opened){
      panel's Promotion block sets: no campaign at all when promotion is full
      without one. */
   const p = opened.marketingPlan, address = osCkAddress(plan);
-  if(p && p.on && !p.on.length && p.promotionPlan >= 100)
-    return osCk("megaphone", "done", title, tt("gr.os.ck.mk.unneeded", "<span class=\"ok\">No campaign needed</span> · promotion is full without one"));
-  /* A mix the write would not change: nothing to set. */
-  if(p && gwMkSame(p)) return osCk("megaphone", "todo", title, tt("gr.os.ck.mk.none", "<span class=\"w\">No campaign</span> for {address}", {address}),
-    osIngame(tt("gr.os.ck.mk.ingame", "<b>BizMan › Marketing</b>: start a campaign for {address}.", {address})));
   const none = tt("gr.os.ck.mk.none", "<span class=\"w\">No campaign</span> for {address}", {address});
   const ingame = tt("gr.os.ck.mk.ingame", "<b>BizMan › Marketing</b>: start a campaign for {address}.", {address});
+  if(p && p.on && !p.on.length && p.promotionPlan >= 100)
+    return osCk("megaphone", "done", title, tt("gr.os.ck.mk.unneeded", "<span class=\"ok\">No campaign needed</span> · promotion is full without one"));
+  /* A mix the write would not change is no campaign at all (none runs):
+     none of the campaigns the site can book would raise its promotion. As
+     spMkLine() does, a missing BizMan switch is still set up, and an agency
+     not visited yet may sell a better one. */
+  if(p && gwMkSame(p)){
+    const useless = tt("gr.os.ck.mk.useless", "No campaign would raise promotion here");
+    if(p.needsSetup){
+      const from = [...new Set(p.setupAgencies || [])];
+      const why = gwMkCan() && from.length && gwMkBlocked(from).length === from.length ? gwMkWhy(from) : "";
+      return osCk("megaphone", "todo", title, `${useless}${why ? ` · <span class="w">${why}</span>` : ""}`,
+        osAct("marketing", tt("sp.mk.setup.name", "Add every campaign switch to BizMan"), "megaphone", `data-os-mode="setup"${why ? ` aria-disabled="true"` : ""}`, ingame));
+    }
+    if(p.visit.length) return osCk("megaphone", "todo", title, useless,
+      osIngame(tt("sp.mk.better2", "Visit {agencies} once for a better mix.", {agencies: gwMkVisit(p.visit)})));
+    return osCk("megaphone", "done", title, `<span class="ok">${useless}</span>`);
+  }
   if(!p) return osCk("megaphone", "todo", title, none, osIngame(ingame));
   /* No agency is a phone contact yet: the mix waits on a first visit. */
   if(!p.on) return osCk("megaphone", "todo", title, none,
@@ -33746,7 +33764,7 @@ function wireOpenStore(){
     if(!plan || osClosed(plan)) return;
     if(kind === "hire") hrReview({scope: "site", site: plan.key});
     else if(kind === "uniforms") gwUniforms([plan.key]);
-    else if(kind === "marketing") gwMarketing([plan.key], "mix");
+    else if(kind === "marketing") gwMarketing([plan.key], el.dataset.osMode || "mix");
   });
   on("click", "[data-os-howlink]", () => {
     const a = document.querySelector('a[data-visit-feature="game-link"]');

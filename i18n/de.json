@@ -1212,6 +1212,7 @@
  "gr.os.ck.mk.none": "<span class=\"w\">Keine Kampagne</span> für {address}",
  "gr.os.ck.mk.todo": "Eine Kampagne kann starten, sobald das Unternehmen besteht",
  "gr.os.ck.mk.unneeded": "<span class=\"ok\">Keine Kampagne nötig</span> · die Bekanntheit erreicht auch ohne Kampagne 100 %",
+ "gr.os.ck.mk.useless": "Keine Kampagne würde hier die Bekanntheit erhöhen",
  "gr.os.ck.othertype": "Das Unternehmen an {address} gehört zum Typ {type}, geplant war jedoch {planned}. Daher warten diese Zeilen auf das geplante Unternehmen.",
  "gr.os.ck.payback": "Sobald der Laden Umsatz macht, erscheint hier die Amortisation.",
  "gr.os.ck.paybackGo": "Nach Eröffnung: Amortisation",

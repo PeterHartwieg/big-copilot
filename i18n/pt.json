@@ -1347,6 +1347,7 @@
  "gr.os.ck.mk.none": "<span class=\"w\">Sem campanha</span> para {address}",
  "gr.os.ck.mk.todo": "Uma campanha pode começar quando a empresa existir",
  "gr.os.ck.mk.unneeded": "<span class=\"ok\">Não precisa de campanha</span> · a divulgação chega a 100% sem campanha",
+ "gr.os.ck.mk.useless": "Nenhuma campanha aumentaria a divulgação aqui",
  "gr.os.ck.othertype": "A empresa em {address} é do tipo {type}, não do tipo {planned} que você planejou; estas linhas aguardam o tipo planejado.",
  "gr.os.ck.payback": "Quando a loja começar a vender, o retorno aparecerá aqui.",
  "gr.os.ck.paybackGo": "Após a abertura: retorno",

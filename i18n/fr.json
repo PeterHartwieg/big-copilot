@@ -1347,6 +1347,7 @@
  "gr.os.ck.mk.none": "<span class=\"w\">Aucune campagne</span> pour {address}",
  "gr.os.ck.mk.todo": "Une campagne peut démarrer une fois l'entreprise créée",
  "gr.os.ck.mk.unneeded": "<span class=\"ok\">Aucune campagne nécessaire</span> · la promotion atteint 100 % sans campagne",
+ "gr.os.ck.mk.useless": "Aucune campagne n'augmenterait la promotion ici",
  "gr.os.ck.othertype": "L'entreprise à {address} est de type {type}, alors que vous aviez prévu {planned} ; ces lignes attendent donc l'entreprise prévue.",
  "gr.os.ck.payback": "Une fois le magasin en activité, son amortissement apparaîtra ici.",
  "gr.os.ck.paybackGo": "Après l'ouverture : amortissement",
