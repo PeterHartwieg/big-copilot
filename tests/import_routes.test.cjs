@@ -840,3 +840,21 @@ for (const scenario of [
     } finally { await page.close(); }
   });
 }
+
+/* A shelf nothing upstream supplies has sold nothing, yet its finding lands
+   on its row: Python sends the shelf a row of its own (supply.shops). */
+test('an unsourced finding lands on its shelf on Deliveries', async () => {
+  const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
+    + 'from test_supply_bottom_up import cafe_board; print(json.dumps(cafe_board()))'));
+  const page = await board(data, {which: 'changes', tab: 'deliveries'});
+  try {
+    const got = await page.evaluate(() => {
+      const a = D.alerts.find(x => x.group === 'unsourced');
+      goToAlert(a);
+      const at = document.querySelector(`#${SB_SEC[sub.supply]} [data-sb-at]`);
+      return {tab: sub.supply, at: at ? `${at.dataset.s}:${at.dataset.slug}` : null};
+    });
+    assert.deepEqual(got, {tab: 'deliveries', at: '1:ba:itemname_beer'});
+    assert.equal(await page.locator('#secDeliveries tr.sb-arrived').getAttribute('data-slug'), 'ba:itemname_beer');
+  } finally { await page.close(); }
+});

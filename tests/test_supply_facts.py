@@ -27,7 +27,7 @@ RECIPES = {BEER: {"slug": BEER, "item": "Beer", "out": 30, "workstation": "bottl
                   "ingredients": [{"slug": WATER, "item": "Water", "per": 10}]}}
 FACT_KEYS = {"st", "why", "lvl", "role", "cad", "use", "need", "have", "setTo", "parts",
              "lower", "imp", "ramp", "unfed", "via", "dem", "import", "from", "wholesale", "day",
-             "catchUp", "lowers"}
+             "catchUp", "lowers", "lasts", "passes"}
 BASE_KEYS = {"st", "why", "lvl", "role", "cad", "use", "need", "have", "setTo", "imp"}
 
 
@@ -660,6 +660,7 @@ class IdleRuleTests(unittest.TestCase):
         c.hold(GYM, SODA, 1200, 120)
         c.hold(DISTRIB, WATER, 5000)              # not moving
         c.hold(SHOP_A, BEER, 6300, 225)           # a top-up target too high
+        c.hold(DISTRIB, BEER, 100)                # something for the top-up to send
         c.plan(DISTRIB, SHOP_A, BEER, 6300)
         c.run()
         idle = {(c.business_list[int(s)]["key"], slug)
@@ -975,8 +976,9 @@ class RoundOneFixTests(unittest.TestCase):
         fact = c.fact(DISTRIB, SODA)
         self.assertEqual((fact["st"], fact["why"], fact["cad"], fact["use"], fact["need"], fact["setTo"]),
                          ("noplan", "order", "weekly", 700, 805, 810))
-        # 5,300 held between them is weeks of it: a note, not a finding.
-        self.assertEqual(fact["lvl"], "info")
+        # 5,300 held between them is weeks of it: still a finding, a warning
+        # saying how long it lasts and naming the Hub's route.
+        self.assertEqual((fact["lvl"], fact["lasts"], fact["passes"]), ("warn", 53.0, c.index(HUB)))
 
     def test_n3_a_depot_only_a_route_feeds_is_judged_on_its_top_up(self):
         self.assertEqual((self.depot_fed(80)["st"], self.depot_fed(80)["why"]), ("short", "target"))
@@ -1347,7 +1349,7 @@ class FixtureKeyTests(unittest.TestCase):
     # Every (status word, reason) _supply_status() can send, and the fields the
     # rows Python sends always carry (a row may carry more).
     WHYS = {
-        "made": {None}, "paused": {"order", "topup"}, "noplan": {"target", "order"},
+        "made": {None}, "paused": {"order", "topup"}, "noplan": {"target", "order", "source", "priced"},
         "new": {"young", "firstFill"}, "short": {"order", "shortfall", "target", "dry"},
         "stalled": {"notDrawn", "waiting"},
         "idle": {"notMoving", "notRouted", "targetHigh", "importHigh", "overstock"},

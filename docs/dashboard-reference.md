@@ -315,18 +315,21 @@ What is on the list is what moves the number:
   previous week to be compared with and are left out.
 - **Real supply shortfalls.** A shelf that outsells its top-up, a depot that cannot reach
   its next import or route round, an order too small for the week it has to cover, a
-  paused import, a depot sending on more than its imports, its routes and its own
-  machines bring it (with the import to add), and stock no plan sends on while your own
-  sites sell it (*Not routed*). A shop too new to judge is told at once where its top-up
-  is already below what it has sold.
-- **Nothing upstream supplies it** (*unsourced*). A shelf topped up from a site that
-  neither holds the item, imports it, makes it, gets it wholesale nor is sent it by a
-  route of yours: the top-up can never fill. The line names that site and says to add the
-  item to an import there or to a route from a factory that makes it; the site's own row
-  carries the import to set, a week of what the shelves ask. A new shop (under a week of
-  trading) that prices one of its type's own products and has never held any, with no
-  top-up, wholesale delivery or import at all, gets the same line; a shop trading longer
-  than that has most likely chosen not to stock it, so there it is a note on Supply only.
+  paused import, and stock no plan sends on while your own sites sell it (*Not routed*).
+  A shop too new to judge is told at once where its top-up is already below what it has
+  sold. A missing standing supply is always on the list with the figure to set; what is
+  held only says how soon it bites: critical where the stock at the site, and at the
+  sites topping it up that only pass on what they hold, lasts under a week, a warning
+  otherwise that says how long it lasts and names the route passing it on.
+- **Nothing upstream supplies it** (*unsourced*). A shelf topped up only from sites that
+  neither hold the item, import it (a paused contract counts, and is said as paused),
+  make it, get it wholesale nor are sent it by a route of yours: the top-up can never
+  fill. So is anything a shop prices with no top-up, wholesale delivery or sales at all,
+  whatever the shop's type or age (a burger bar in a gym is a player's choice). One line
+  per shop lists its goods, naming the site where there is one; the site's own row carries
+  the import to set, a week of what the shelves ask. A depot sending on more than its
+  imports, its routes and its own machines bring it is the same kind of line, on the
+  depot, with the import to add; where only depots it tops up draw on it, they say it.
 - **Shops and offices at their ceiling, and staff standing idle.** Both come out of the
   hourly grid described below, and both carry the money they are worth. Every kind of
   site that serves a queue is in it, not only the ones with registers: a gym's boards, a
@@ -1184,8 +1187,10 @@ of its own starts from the one this browser kept before). **Full production** (t
 sizes every factory line at its rated capacity, round the clock, with no margin on top:
 the set-up for running flat out. **Shop demand** sizes each line on what the shops down the
 plan sell of its product, and what the factory lines along the way eat of it, plus the
-margin, never past capacity. An export (a plan to an address not yours, a pier) takes
-what is left and sizes nothing. A shop open under a week has not settled, so Shop demand reads
+margin, never past capacity; two sites topping one shop up split its demand by their
+targets. A factory's own sales and an export (a plan to an address not yours, a pier)
+take what is left and size nothing. Each basis walks its own import rows, so a depot
+feeding a line that runs below capacity is not called dry under Shop demand. A shop open under a week has not settled, so Shop demand reads
 its coming week off a straight line through its trading days and says the figure *may
 still be ramping*, naming the shops. Switching needs no refresh: both answers are
 already on the page. An import figure you type is kept with the basis it was typed under;
@@ -1407,8 +1412,11 @@ only what that supply does not bring; two sites topping one up split what is lef
 their targets, and one that only holds the item is asked last. Supply flows down: a route
 brings what the site it tops up needs, never more than its target a day (two routes into
 one line reach the higher target, not the sum), and no more than its sender's own
-supply lets it, shared between the sender's routes. What a sender merely holds is no
-supply. Tobacco leaving the import depot for a cigarette line is the line's need at the
+supply lets it, shared between the sender's routes, so one factory's output is never
+counted at two depots. What a sender merely holds is no supply, and what a line at the
+site itself makes comes off its import's week. Two sites topping each other up with the
+same item form a loop, which counts one way only: from the site with a supply of its own
+toward the one using it, whatever the order the sites happen to be read in. Tobacco leaving the import depot for a cigarette line is the line's need at the
 rate of its machines. Nothing drawing on it, there is no row. A depot that feeds machines
 rather than shelves is walked at a flat daily rate: the machines take the same on a
 Saturday as on a Tuesday.

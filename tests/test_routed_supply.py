@@ -444,11 +444,11 @@ class RoutedFactoryViewTests(unittest.TestCase):
 
     def test_the_no_import_finding_counts_what_the_route_leaves(self):
         """The hub can send half the week: the finding counts the depot's weeks
-        against the other half and says the route brings the rest. Holding
-        less than that half, the depot is a warning."""
+        against the other half and says the route brings the rest. The 400
+        held last three days of that half: critical."""
         fact, [note] = self.route_fact(120.0)
         self.assertEqual((fact["st"], fact["lvl"], fact["use"], fact["parts"]),
-                         ("noplan", "warn", 840, {"lines": 1680, "sites": 0, "route": 840}))
+                         ("noplan", "critical", 840, {"lines": 1680, "sites": 0, "route": 840}))
         self.assertIn("holds 400, 0.5 weeks of the 840 a week the factories eat "
                       "beyond the 840 a week a route brings", plain(note["text"]))
 

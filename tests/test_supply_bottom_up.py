@@ -93,9 +93,10 @@ class WarehouseFedByRouteTests(unittest.TestCase):
         2,415 rounded up. The two sites hold 600, under the week: a
         warning, and an order finding on the warehouse."""
         c = warehouse_fed_by_brewery(machines=0)
-        self.assertEqual(c.verdict(WH), {"st": "noplan", "why": "order", "lvl": "warn", "cad": "weekly",
+        # The 600 the two hold last two days of the 300 a day: critical.
+        self.assertEqual(c.verdict(WH), {"st": "noplan", "why": "order", "lvl": "critical", "cad": "weekly",
                                          "use": 2100, "need": 2415, "have": None, "setTo": 2420})
-        [note] = c.notes(WH, "order")
+        [note] = c.notes(WH, "unsourced")
         self.assertIn("import 2,420 a week", plain(note["text"]))
 
     def test_the_missing_import_is_said_once(self):
@@ -105,15 +106,21 @@ class WarehouseFedByRouteTests(unittest.TestCase):
         import."""
         c = warehouse_fed_by_brewery(machines=0)
         self.assertEqual((c.verdict(BREWERY)["st"], c.verdict(BREWERY)["lvl"]), ("noplan", "info"))
-        self.assertEqual(c.notes(BREWERY, "order"), [])
-        self.assertEqual(len(c.notes(WH, "order")), 1)
+        self.assertEqual(c.notes(BREWERY, "unsourced"), [])
+        self.assertEqual(len(c.notes(WH, "unsourced")), 1)
 
-    def test_a_warehouse_holding_the_week_is_only_noted(self):
+    def test_a_warehouse_holding_weeks_is_still_told_how_long_it_lasts(self):
         """The same warehouse holding 5,000: the import is still what it
-        lacks, but nothing runs out this week, so it is no finding."""
+        lacks, and stock never hides that. The 5,500 held between it and the
+        brewery passing its stock on last 18 days: a warning that says so and
+        names the route, with the import to set."""
         c = warehouse_fed_by_brewery(machines=0, wh_units=5000)
-        self.assertEqual((c.verdict(WH)["st"], c.verdict(WH)["lvl"]), ("noplan", "info"))
-        self.assertEqual(c.notes(WH, "order"), [])
+        fact = c.fact(WH, BEER)
+        self.assertEqual((fact["st"], fact["lvl"], fact["setTo"], fact["lasts"], fact["passes"]),
+                         ("noplan", "warn", 2420, 18.3, c.index(BREWERY)))
+        [note] = c.notes(WH, "unsourced")
+        self.assertIn("the route from Brewery only passes on what it holds, about 18 days",
+                      plain(note["text"]))
 
     def test_a_route_from_a_factory_that_makes_enough_is_judged_on_its_target(self):
         """The brewery's machine makes 720 a day: the route is the whole of the
@@ -214,38 +221,66 @@ class UnsourcedTests(unittest.TestCase):
                 self.assertEqual(c.notes(CAFE, "unsourced"), [])
 
     @staticmethod
-    def priced(trade_days, slug=BEER):
-        """A café pricing `slug`, never held and never sold, with no top-up,
-        no wholesale delivery and no import. Its type's help page lists beer
-        among the goods it primarily sells."""
+    def priced(trade_days, slugs=(BEER,)):
+        """A café pricing `slugs`, never held and never sold, with no top-up,
+        no wholesale delivery and no import."""
         c = Chain()
-        c.names = Names({"help_ba:businesstype_coffeeshop_content":
-                         "Businesses of this type primarily sell:\n* [Beer](products-beer)\n"})
         c.site(CAFE, "Cafe", status="retail", kind="ba:businesstype_coffeeshop", trade_days=trade_days)
-        c.hold(CAFE, slug, 0, 0)
+        for slug in slugs:
+            c.hold(CAFE, slug, 0, 0)
         c.run()
         return c
 
-    def test_a_new_shop_pricing_its_own_goods_with_nothing_bringing_them_is_told(self):
+    def test_a_shop_pricing_goods_nothing_brings_is_told(self):
         c = self.priced(trade_days=2)
         fact = c.fact(CAFE, BEER)
         self.assertEqual((fact["st"], fact["why"], fact["lvl"], fact["setTo"]),
-                         ("noplan", "source", "warn", None))
+                         ("noplan", "priced", "warn", None))
         [note] = c.notes(CAFE, "unsourced")
         self.assertIn("is priced here but nothing brings it", plain(note["text"]))
 
-    def test_a_shop_trading_for_weeks_that_never_stocked_it_is_only_noted(self):
-        """Priced and never held after a fortnight of trading: most likely a
-        choice not to stock it."""
-        c = self.priced(trade_days=14)
-        self.assertEqual((c.fact(CAFE, BEER)["st"], c.fact(CAFE, BEER)["lvl"]), ("noplan", "info"))
-        self.assertEqual(c.notes(CAFE, "unsourced"), [])
+    def test_whatever_its_age_or_type(self):
+        """A fortnight of trading, and water on a café's price list: players
+        sell what they like where they like, and a price with nothing
+        bringing it is said all the same."""
+        for days, slug in ((14, BEER), (2, WATER)):
+            with self.subTest(days=days, slug=slug):
+                c = self.priced(trade_days=days, slugs=(slug,))
+                self.assertEqual((c.fact(CAFE, slug)["st"], c.fact(CAFE, slug)["why"]), ("noplan", "priced"))
+                self.assertEqual(len(c.notes(CAFE, "unsourced")), 1)
 
-    def test_goods_not_of_its_type_are_no_finding(self):
-        """Water is not among a café's own goods: a price on it says nothing."""
-        c = self.priced(trade_days=2, slug=WATER)
-        self.assertNotEqual(c.fact(CAFE, WATER)["st"], "noplan")
+    def test_several_goods_at_one_shop_are_one_finding(self):
+        """Two priced goods nothing brings are one finding listing both."""
+        c = self.priced(trade_days=2, slugs=(BEER, WATER))
+        [note] = c.notes(CAFE, "unsourced")
+        self.assertIn("Nothing upstream supplies 2 goods Cafe is topped up with or prices", plain(note["text"]))
+
+    def test_a_second_route_from_a_site_with_supply_is_a_source(self):
+        """Topped up from an empty warehouse and from a hub that imports it:
+        the hub brings it, so nothing is unsourced, whichever plan is last."""
+        for hub_first in (True, False):
+            with self.subTest(hub_first=hub_first):
+                c = Chain()
+                c.site(WH, "Warehouse")
+                c.site(BREWERY, "Hub")
+                c.contract(BREWERY, BEER, 700)
+                c.site(CAFE, "Cafe", status="retail", kind="ba:businesstype_coffeeshop", trade_days=1)
+                plans = [(BREWERY, CAFE, BEER, 100), (WH, CAFE, BEER, 50)]
+                for plan in (plans if hub_first else plans[::-1]):
+                    c.plan(*plan)
+                c.run()
+                self.assertNotEqual(c.fact(CAFE, BEER)["st"], "noplan")
+                self.assertEqual(c.notes(CAFE, "unsourced"), [])
+
+    def test_a_paused_import_at_the_source_is_paused_not_unsourced(self):
+        c = Chain()
+        c.site(WH, "Warehouse")
+        c.contract(WH, BEER, 700, active=False)
+        c.site(CAFE, "Cafe", status="retail", kind="ba:businesstype_coffeeshop", trade_days=1)
+        c.plan(WH, CAFE, BEER, 45)
+        c.run()
         self.assertEqual(c.notes(CAFE, "unsourced"), [])
+        self.assertEqual(c.verdict(WH)["st"], "paused")
 
 
 class SmartDeliveryBesideARouteTests(unittest.TestCase):
@@ -386,3 +421,152 @@ class ParkedGoodsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ConservationTests(unittest.TestCase):
+    """A sender's output is shared between its routes, never counted twice."""
+
+    def test_one_brewery_cannot_cover_two_warehouses_with_one_output(self):
+        """One machine makes 720 a day for two warehouses, each importing
+        3,500 a week plain for a shop selling 500 a day. The route can bring
+        each only part of its 575 a day: neither import is taken for a backup,
+        and what the two routes are credited stays within the 5,040 made."""
+        c = Chain()
+        c.factory(BREWERY, "Brewery", machines=1)
+        wh2, shop2 = ("wh_road", 2), ("main_street", 5)
+        for wh, shop in ((WH, SHOP), (wh2, shop2)):
+            c.site(wh, "Warehouse " + wh[0][-1] + str(wh[1]))
+            c.hold(wh, BEER, 1000)
+            c.contract(wh, BEER, 3500)
+            c.shop(shop, "Shop " + str(shop[1]))
+            c.hold(shop, BEER, 400, 500)
+            c.plan(BREWERY, wh, BEER, 5000)
+            c.plan(wh, shop, BEER, 800)
+        c.run()
+        facts = [c.fact(wh, BEER) for wh in (WH, wh2)]
+        self.assertFalse(all(f["st"] == "covered" and f["why"] == "route" for f in facts), facts)
+        self.assertLessEqual(sum(f["parts"]["route"] for f in facts), 5040 + 10)
+
+
+class LoopTests(unittest.TestCase):
+    """Two sites topping each other up with the same item: the loop is cut the
+    same way whichever key sorts first."""
+
+    def verdicts(self, factory_addr, makes):
+        c = Chain()
+        shop = ("zz_shop", 9)
+        c.factory(factory_addr, "Factory", machines=1 if makes else 0)
+        c.hold(factory_addr, BEER, 100)
+        c.site(("bb_wh", 2), "Warehouse")
+        c.hold(("bb_wh", 2), BEER, 100)
+        c.contract(("bb_wh", 2), BEER, 700)
+        c.shop(shop, "Shop")
+        c.hold(shop, BEER, 400, 600)
+        c.plan(factory_addr, ("bb_wh", 2), BEER, 5000)
+        c.plan(("bb_wh", 2), factory_addr, BEER, 200)
+        c.plan(("bb_wh", 2), shop, BEER, 1000)
+        c.run()
+        pick = lambda f: f and {k: f.get(k) for k in ("st", "why", "lvl", "use", "setTo")}
+        return pick(c.fact(("bb_wh", 2), BEER)), pick(c.fact(factory_addr, BEER))
+
+    def test_the_verdicts_do_not_depend_on_the_addresses(self):
+        for makes in (True, False):
+            with self.subTest(makes=makes):
+                self.assertEqual(self.verdicts(("aa_fact", 1), makes), self.verdicts(("zz_fact", 1), makes))
+
+    def test_a_factory_making_it_covers_the_warehouse_either_way(self):
+        wh, _factory = self.verdicts(("zz_fact", 1), True)
+        self.assertEqual((wh["st"], wh["why"]), ("covered", "route"))
+
+    def test_a_factory_only_holding_it_leaves_one_finding(self):
+        """The factory holds 100 and makes none: the warehouse's import is
+        short, and the factory, which uses none itself, asks for nothing."""
+        wh, factory = self.verdicts(("aa_fact", 1), False)
+        self.assertEqual((wh["st"], wh["why"]), ("short", "order"))
+        self.assertNotEqual((factory or {}).get("st"), "noplan")
+
+
+class OwnProductionTests(unittest.TestCase):
+    def test_a_line_making_it_counts_before_the_import(self):
+        """A brewery makes 240 a day and imports 2,400 a week of the same,
+        for a shop selling 500 a day: 1,680 made plus 2,400 imported cover
+        the 4,025 needed, so the import is not short (and the 2,000 held
+        reaches the drop at the 260 a day the line leaves to it)."""
+        c = Chain(per_hour=10)
+        c.factory(BREWERY, "Brewery", machines=1)
+        c.hold(BREWERY, BEER, 2000)
+        c.contract(BREWERY, BEER, 2400)
+        c.shop(SHOP, "Shop")
+        c.hold(SHOP, BEER, 400, 500)
+        c.plan(BREWERY, SHOP, BEER, 800)
+        c.run()
+        fact = c.fact(BREWERY, BEER)
+        self.assertNotIn(fact["st"], ("short", "noplan"))
+        self.assertIsNone(fact["setTo"])
+
+
+class DemandSizingTests(unittest.TestCase):
+    """Demand sizing through the walk: the shops' need, shared between the
+    sites that top them up, and the import rows walked on it."""
+
+    def test_two_breweries_feeding_one_shop_share_its_demand(self):
+        """Each tops the bar up to 400; it sells 300 a day: 150 each, so each
+        line needs 150 x 1.15 / 30 = 5.75, six hours, not twelve."""
+        c = Chain()
+        b2 = ("brew_lane", 7)
+        for brewery in (BREWERY, b2):
+            c.factory(brewery, "Brewery " + str(brewery[1]), machines=1)
+            c.plan(brewery, SHOP, BEER, 400)
+        c.shop(SHOP, "Bar")
+        c.hold(SHOP, BEER, 400, 300)
+        c.run()
+        hours = [line["needHours"]["dem"] for site in c.supply["factories"]["sites"] for line in site["lines"]]
+        self.assertEqual(hours, [6, 6])
+
+    def test_a_factory_below_capacity_does_not_run_its_depot_dry_in_demand(self):
+        """The hub holds 500 water for a brewery that could eat 240 a day, but
+        whose bar sells 100 beer a day (33 water). At full production the
+        stock does not reach Monday's drop; in Demand sizing it does."""
+        c = Chain()
+        c.site(WH, "Hub")
+        c.hold(WH, WATER, 500)
+        c.contract(WH, WATER, 1700)
+        c.factory(BREWERY, "Brewery", machines=1)
+        c.plan(WH, BREWERY, WATER, 300)
+        c.plan(BREWERY, SHOP, BEER, 400)
+        c.shop(SHOP, "Bar")
+        c.hold(SHOP, BEER, 400, 100)
+        c.run()
+        self.assertEqual(c.fact(WH, WATER)["why"], "shortfall")
+        self.assertNotEqual(c.fact(WH, WATER, "dem")["why"], "shortfall")
+        dem = [n for n in _import_notes(c.business_list, c.supply, set(), "dem") if n["group"] == "shortfall"]
+        self.assertEqual(dem, [])
+
+    def test_the_margin_is_added_once_over_two_depot_levels(self):
+        """Hub, then a distributor, then a shop selling 100 a day: the hub's
+        import needs 700 a week, 805 with the margin, not 805 x 1.15."""
+        c = Chain()
+        c.site(WH, "Hub")
+        c.contract(WH, BEER, 500)
+        c.site(CAFE, "Distrib")
+        c.hold(CAFE, BEER, 50)
+        c.shop(SHOP, "Shop")
+        c.hold(SHOP, BEER, 100, 100)
+        c.plan(WH, CAFE, BEER, 300)
+        c.plan(CAFE, SHOP, BEER, 200)
+        c.run()
+        fact = c.fact(WH, BEER)
+        self.assertEqual((fact["use"], fact["need"]), (700, 805))
+
+
+def cafe_board():
+    """The café of UnsourcedTests as the board reads it: its supply, its
+    businesses and its findings. tests/import_routes.test.cjs lands its
+    unsourced finding on the shelf's row."""
+    c = UnsourcedTests().cafe()
+    alerts = [{k: v for k, v in n.items() if k not in ("rank", "subject", "named")}
+              for n in _shelf_notes(c.business_list, c.supply, set())
+              + _import_notes(c.business_list, c.supply, set())]
+    return {"meta": {"character": "bottom-up", "day": c.day, "save": "Fixture"},
+            "supply": c.supply, "businesses": c.business_list, "alerts": alerts,
+            "plan": {"recipes": []}}

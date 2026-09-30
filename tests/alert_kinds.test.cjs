@@ -311,7 +311,7 @@ test('the supply kinds land on the Supply view of their route', () => {
   const got = JSON.parse(ctx.out), links = got.ALERT_LINKS;
   const views = Object.fromEntries(Object.entries(links).filter(([, l]) => l.view).map(([id, l]) => [id, l.view]));
   assert.deepEqual(views, {shortfall: 'route', order: 'imports', paused: 'imports',
-    outruns: 'deliveries', unplanned: 'deliveries', unsourced: 'deliveries', dead: 'deliveries', target: 'deliveries', notrouted: 'deliveries',
+    outruns: 'deliveries', unplanned: 'deliveries', unsourced: 'route', dead: 'deliveries', target: 'deliveries', notrouted: 'deliveries',
     topup: 'deliveries', wholesale: 'deliveries',
     feed: 'production', staff: 'production', unnamed: 'production', unset: 'production'});
   const pages = got.SEC_PAGE;

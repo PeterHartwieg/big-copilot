@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "72b9636c87";</script>
-<link rel="stylesheet" href="community.css?v=72b9636c87">
+<script>window.LEDGER_BUILD = "cab6440d79";</script>
+<link rel="stylesheet" href="community.css?v=cab6440d79">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=72b9636c87">
+<link rel="stylesheet" href="fonts/fonts.css?v=cab6440d79">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -5549,7 +5549,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"72b9636c87","latest":{"pr":169,"date":"2026-09-28","title":"A new layout: problems first, and a sidebar with five places to fix them","summary":"The board is rebuilt around what needs your attention. The Overview opens on Needs attention, each finding with a button that takes you to the exact setting, and a way back to where you were. A sidebar on the left holds five places, the open one with its views under it: the Overview, Businesses (results, cash and loans, prices against the market, a standards comparison with uniforms you can set from it, milestones), Supply (the changes to make, imports, deliveries, production, and a goods flow you can drag and zoom like the map), Staffing (schedules, staff needs, payroll) and Expansion (demand, finding a location, planning a factory), then the City map and the Wiki. The button at its foot folds the sidebar to a strip of icons, and the board remembers it. Every business page links to its schedule, deliveries and prices. Changes you mark, apply through the game link, or that a later save confirms now look different, and preferences and help sit under the one ··· menu at the sidebar's foot. Old links keep working."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"cab6440d79","latest":{"pr":169,"date":"2026-09-28","title":"A new layout: problems first, and a sidebar with five places to fix them","summary":"The board is rebuilt around what needs your attention. The Overview opens on Needs attention, each finding with a button that takes you to the exact setting, and a way back to where you were. A sidebar on the left holds five places, the open one with its views under it: the Overview, Businesses (results, cash and loans, prices against the market, a standards comparison with uniforms you can set from it, milestones), Supply (the changes to make, imports, deliveries, production, and a goods flow you can drag and zoom like the map), Staffing (schedules, staff needs, payroll) and Expansion (demand, finding a location, planning a factory), then the City map and the Wiki. The button at its foot folds the sidebar to a strip of icons, and the board remembers it. Every business page links to its schedule, deliveries and prices. Changes you mark, apply through the game link, or that a later save confirms now look different, and preferences and help sit under the one ··· menu at the sidebar's foot. Old links keep working."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -5637,8 +5637,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=72b9636c87"></script>
-<script src="community.js?v=72b9636c87"></script>
+<script src="app.js?v=cab6440d79"></script>
+<script src="community.js?v=cab6440d79"></script>
 
 <script>
 
@@ -7615,6 +7615,12 @@ const SZ_NEW = {st: "new", why: "named", lvl: "info", use: null, need: null, hav
 /* And what it reads when Python judged nothing for it at all. */
 const SZ_NONE = {...SZ_NEW, why: "unjudged"};
 const szFact = (s, slug) => supplyFact(s, slug) || SZ_NONE;
+/* The import rows walked under the sizing on screen: Demand's own walk
+   (supply.importsDem) where Python sent one, else 24/7's (supply.imports). */
+function supplyImports(){
+  const s = (((typeof D !== "undefined" && D) || {}).supply || {});
+  return (sizing === "dem" && s.importsDem) || s.imports || [];
+}
 /* The nine words, and the chip colour from the fact's severity. */
 const SZ_WORD = {
   get covered(){ return tt("sb.word.covered", "covered"); }, get tight(){ return tt("sb.word.tight", "tight"); },
@@ -7637,6 +7643,7 @@ const SZ_WHY = {
   get "noplan:target"(){ return tt("sb.why.noplan.target", "No daily top-up plan brings it"); },
   get "noplan:order"(){ return tt("sb.why.noplan.order", "No standing import brings it"); },
   get "noplan:source"(){ return tt("sb.why.noplan.source", "Nothing brings it to the site that tops it up"); },
+  get "noplan:priced"(){ return tt("sb.why.noplan.priced", "Priced here, but no top-up, wholesale delivery or import brings it"); },
   get "new:young"(){ return tt("sb.why.new.young", "Too young to judge yet"); },
   get "new:firstFill"(){ return tt("sb.why.new.firstFill", "A first fill: one-off fills never count as use"); },
   get "new:named"(){ return tt("sb.why.new.named", "Named in this browser: judged at the next refresh"); },
@@ -8171,7 +8178,9 @@ const ALERT_LINKS = {
   shortfall: {sec:"secImports", view:"route"}, order: {sec:"secImports", view:"imports"},
   paused: {sec:"secImports", view:"imports"},
   outruns: {sec:"secDeliveries", view:"deliveries"}, unplanned: {sec:"secDeliveries", view:"deliveries"},
-  unsourced: {sec:"secDeliveries", view:"deliveries"},
+  /* A shelf nothing upstream supplies is a delivery; a depot nothing brings
+     its goods to is an import (FINDING_ROUTES picks it). */
+  unsourced: {sec:"secDeliveries", view:"route"},
   dead: {sec:"secDeliveries", view:"deliveries"}, target: {sec:"secDeliveries", view:"deliveries"},
   notrouted: {sec:"secDeliveries", view:"deliveries"},
   /* A depot only a route from your own site feeds, and a wholesale store's
@@ -8689,7 +8698,7 @@ const FINDING_ROUTES = {
   companydemand: {route: "staffing/needs", act: "demand"},
   hype: {route: "expansion/demand", act: "wave"},
   unplanned: {route: "supply/deliveries", act: "delivery"},
-  unsourced: {route: "supply/deliveries", act: "delivery"},
+  unsourced: {route: "supply/deliveries", act: "delivery", pick: a => /^f\.depot\.noplan(\.|$)/.test(ovKey(a)) ? {route: "supply/imports", act: "import"} : null},
   outruns: {route: "supply/deliveries", act: "delivery"},
   topup: {route: "supply/deliveries", act: "delivery"},
   wholesale: {route: "supply/deliveries", act: "delivery"},
@@ -10435,7 +10444,8 @@ const SP_BLOCKS = {
 /* Registry: "A finding kind" (only if: see the checklist). */
 const SP_EVIDENCE_KIND = {
   depot: {trend: "tiles", dead: "stock", target: "stock", feed: "stock", notrouted: "stock",
-          topup: "stock", wholesale: "stock", shortfall: "stock", order: "stock", paused: "stock"},
+          topup: "stock", wholesale: "stock", shortfall: "stock", order: "stock", paused: "stock",
+          unsourced: "stock"},
   factory: {trend: "tiles", staff: "lines", dead: "lines", target: "lines",
             feed: "inputs", shortfall: "inputs", order: "inputs", paused: "inputs"},
 };
@@ -11696,7 +11706,7 @@ function szEl(f){
 function spStockRows(b){
   const supply = D.supply || {};
   const today = supply.day;
-  const imports = (supply.imports || []).filter(r => r.s === siteTab);
+  const imports = supplyImports().filter(r => r.s === siteTab);
   const seen = new Set();
   const take = r => { const k = r.slug || r.item; if(seen.has(k)) return false; seen.add(k); return true; };
   const rows = [];
@@ -13993,7 +14003,7 @@ function supplyChecklistRows(){
   const deps = importRows.flatMap(x => x.rows.flatMap(r => r.deps.map(dep => ({...dep, for: r}))));
   const rows = buildOrderChecklist(importRows, looseRows, allSites,
     (D.supply.shops || []).map(r => ({...r, fact: szFact(r.s, r.slug), margin})),
-    (D.supply.imports || []).map(r => ({...r, fact: szFact(r.s, r.slug)})), D.businesses, depotTopups, wholesaleRows, lines, deps);
+    supplyImports().map(r => ({...r, fact: szFact(r.s, r.slug)})), D.businesses, depotTopups, wholesaleRows, lines, deps);
   return {f, importRows, looseRows, allSites, lines, rows, margin};
 }
 /* A fact under either basis, whatever is on screen. */
@@ -14681,7 +14691,7 @@ function sbDepotRows(d, claimed, s, slugs){
   const lineOf = slug => ((D.businesses[s] || {}).lines || []).find(l => l.slug === slug) || {};
   return slugs.map(slug => {
     const i = imp.get(slug), f = i ? i.fact : szFact(s, slug);
-    const ir = (D.supply.imports || []).find(x => x.s === s && x.slug === slug) || null;
+    const ir = supplyImports().find(x => x.s === s && x.slug === slug) || null;
     const item = i ? i.item : lineOf(slug).item || itemName(slug);
     const r = {s, slug, item, fact: f, imp: i || null, ir, stock: lineOf(slug).units ?? (i ? i.stock : 0),
       draw: ir ? ir.perDay : szWeekly(f) && f.use ? Math.round(f.use / 7) : null,
@@ -15331,7 +15341,7 @@ function sbImportCard(d){
   const b = D.businesses[sbSel.s];
   const close = `<button type="button" class="sbi-x" data-sb-unsel aria-label="${attr(tt("sb.card.close", "Close the review"))}">${gwSvg("close")}</button>`;
   if(!r || !b) return `<div class="sbi-card empty" id="sbCard"${sbArrive && sbArrive.view === "imports" ? " data-sb-at" : ""}><p>${tt("sb.card.gone", "This line has no import to review with the latest numbers.")}</p>${close}</div>`;
-  const ir = (D.supply.imports || []).find(x => x.s === r.s && x.slug === r.slug) || null;
+  const ir = supplyImports().find(x => x.s === r.s && x.slug === r.slug) || null;
   const weekly = d.rows.find(x => x.kind === "Weekly imports" && x.site === r.s && x.slug === r.slug) || null;
   const once = d.rows.find(x => x.kind === "Before the next delivery" && x.site === r.s && x.slug === r.slug && x.view === "imports") || null;
   const hours = weekly && weekly.hours ? weekly.hours : [];
@@ -24689,7 +24699,7 @@ const ALERT_GROUPS = [
   {id:"hype", get label(){ return tt("nav.kind.hype.label", "Demand wave ending"); }, get note(){ return tt("nav.kind.hype.note", "A wave with days left and a site trading under it"); }, on:false},
   {id:"trend", get label(){ return tt("nav.kind.trend.label", "Revenue trend"); }, get note(){ return tt("nav.kind.trend.note", "A shop's or office's week up or down by more than 15%"); }, on:true},
   {id:"unplanned", get label(){ return tt("nav.kind.unplanned.label", "No distribution plan"); }, get note(){ return tt("nav.kind.unplanned.note", "A shelf selling goods no plan tops up"); }, on:true},
-  {id:"unsourced", get label(){ return tt("nav.kind.unsourced.label", "Nothing upstream supplies it"); }, get note(){ return tt("nav.kind.unsourced.note", "A shelf topped up, or priced, for goods nothing brings to its source"); }, on:true},
+  {id:"unsourced", get label(){ return tt("nav.kind.unsourced.label", "Nothing upstream supplies it"); }, get note(){ return tt("nav.kind.unsourced.note", "Goods a shelf is topped up with or prices, or a depot sends on, that nothing brings in"); }, on:true},
   {id:"outruns", get label(){ return tt("nav.kind.outruns.label", "Outsells its top-up"); }, get note(){ return tt("nav.kind.outruns.note", "A peak day that empties the shelf before the next drop"); }, on:true},
   {id:"paused", get label(){ return tt("nav.kind.paused.label", "Import paused"); }, get note(){ return tt("nav.kind.paused.note", "An import switched off, not covered by a route, with the depot still drawing"); }, on:true},
   {id:"feed", get label(){ return tt("nav.kind.feed.label", "Factory inputs"); }, get note(){ return tt("nav.kind.feed.note", "An input arriving short of what the machines need"); }, on:true},

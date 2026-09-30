@@ -128,7 +128,9 @@ Four indirect routes an agent would otherwise miss:
   `szDaily()` and `szWeekOf()`. Every (`st`, `why`) pair `_supply_status()` can send
   has a line in `SZ_WHY`; `named` and `unjudged` are the board's own, for a row Python
   has not judged.
-- The facts are sized from the sources, never from the delivery log. `_supply_walk()`
+- The facts are sized from the sources, never from the delivery log. `_plan_dag()` first
+  cuts every loop in the plans the same way whatever the read order (from supply toward
+  use), then `_supply_walk()`
   (module level, called from `_supply()`'s `walk()`) carries need up the logistics plans
   from the ends (each shop's week of sales, or its top-up target before it has sold any,
   with `SUPPLY_MARGIN` added there only; each factory line's draw in each sizing mode) and
@@ -138,8 +140,9 @@ Four indirect routes an agent would otherwise miss:
   what a sender merely holds is no supply) and whether they cover it. `_factories()` calls
   `walk()` back through `flow["walk"]` once its lines are known, before its input
   verdicts, since both need the other: the walk needs what the lines make and eat, the
-  verdicts what the routes bring. The import rows (`supply.imports`) and the facts both
-  read the walk. The delivery log (`deliveryTransactions`, only a site's last sixty) is
+  verdicts what the routes bring. It walks once per sizing mode; the import rows are
+  walked per mode too (`supply.imports` for 24/7, `supply.importsDem` for Demand, which
+  the board reads through `supplyImports()`), and the facts read the walk of their mode. The delivery log (`deliveryTransactions`, only a site's last sixty) is
   still read for what it describes and nothing it sizes: a factory input's arrivals and a
   line's shipments (`_factories()`: stalled, dry, Produce up to, piling), a first fill,
   whether today's round has left (the import rows' round walk), the weekdays rounds leave

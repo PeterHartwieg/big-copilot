@@ -323,6 +323,27 @@
   },
   {
    "ev": {
+    "slug": "ba:itemname_sodacan"
+   },
+   "group": "unsourced",
+   "i18n": {
+    "text": [
+     "f.unsourced.priced",
+     {
+      "item": "⟦ba:itemname_sodacan|Soda Can⟧"
+     }
+    ]
+   },
+   "id": "7776e956a1",
+   "level": "warn",
+   "site": "HART. Spirits",
+   "siteKey": "ba:street_eighthstreet#5",
+   "text": "⟦ba:itemname_sodacan|Soda Can⟧ is priced here but nothing brings it: no top-up, wholesale delivery or import; add it to a route from a depot or factory",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "ev": {
     "slug": "ba:itemname_cheapgift"
    },
    "group": "wholesale",
@@ -496,41 +517,6 @@
     "site": "HART. Spirits",
     "siteKey": "ba:street_eighthstreet#5",
     "text": "1 staff with unmet demands: ⟦ba:jobdemand_freeweekends|Free weekends⟧ for 1 (important); 1 of them has warned they will quit",
-    "unit": "",
-    "worth": null
-   },
-   {
-    "ev": {
-     "slug": "ba:itemname_water"
-    },
-    "group": "shortfall",
-    "i18n": {
-     "text": [
-      "f.shortfall",
-      {
-       "arrives": 50,
-       "by": 2.75,
-       "item": "⟦ba:itemname_water|Water⟧",
-       "peak": 1200,
-       "rate": 1200,
-       "routed": 0,
-       "when": {
-        "m": [
-         "f.dry.on",
-         {
-          "d": 6
-         },
-         "on Saturday"
-        ]
-       }
-      }
-     ]
-    },
-    "id": "42238bb0be",
-    "level": "critical",
-    "site": "HART. Hub",
-    "siteKey": "ba:street_eighthavenue#4",
-    "text": "⟦ba:itemname_water|Water⟧ runs dry on Saturday, 2.8 days before Monday's import (1,200/day, 1,200 at peak)",
     "unit": "",
     "worth": null
    },
@@ -765,6 +751,27 @@
     "site": "HART. Gifts",
     "siteKey": "ba:street_broadwaystreet#19",
     "text": "HART. Gifts promotes at 80.0% of the 100% cap: 50.0% foot traffic and 0.0% marketing. The address sets the foot traffic, so the missing 20.0 points have to come from campaigns",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "ev": {
+     "slug": "ba:itemname_sodacan"
+    },
+    "group": "unsourced",
+    "i18n": {
+     "text": [
+      "f.unsourced.priced",
+      {
+       "item": "⟦ba:itemname_sodacan|Soda Can⟧"
+      }
+     ]
+    },
+    "id": "7776e956a1",
+    "level": "warn",
+    "site": "HART. Spirits",
+    "siteKey": "ba:street_eighthstreet#5",
+    "text": "⟦ba:itemname_sodacan|Soda Can⟧ is priced here but nothing brings it: no top-up, wholesale delivery or import; add it to a route from a depot or factory",
     "unit": "",
     "worth": null
    },
@@ -11361,13 +11368,13 @@
      "cad": "daily",
      "have": 0,
      "imp": false,
-     "lvl": "info",
+     "lvl": "warn",
      "need": 0,
      "role": "shelf",
      "setTo": null,
      "st": "noplan",
      "use": 0,
-     "why": "source"
+     "why": "priced"
     }
    },
    "1": {
@@ -11407,6 +11414,7 @@
     "ba:itemname_water": {
      "cad": "weekly",
      "dem": {
+      "lvl": "ok",
       "need": 2584,
       "parts": {
        "lines": 2247,
@@ -11414,11 +11422,13 @@
        "sites": 0
       },
       "setTo": null,
+      "st": "covered",
       "use": 2247,
-      "why": "shortfall"
+      "why": null
      },
      "have": 3000,
      "imp": true,
+     "lasts": 1.9,
      "lvl": "critical",
      "need": 8400,
      "parts": {
@@ -11755,6 +11765,73 @@
     "weekly": 3000
    }
   ],
+  "importsDem": [
+   {
+    "arrivedLastWeek": 3000,
+    "arrives": 50,
+    "basis": "sales",
+    "carry": null,
+    "catchUp": 0,
+    "contracts": [
+     {
+      "active": true,
+      "agent": false,
+      "amount": 3000,
+      "group": 0,
+      "id": "IMPORTwater",
+      "importer": "1 Pier",
+      "lastWeek": 3000,
+      "order": 0,
+      "product": 0,
+      "repeating": true,
+      "smart": false
+     }
+    ],
+    "cover": 4.7,
+    "coverFit": "ok",
+    "coverageUntil": 50,
+    "covered": false,
+    "daysOnHand": 4.7,
+    "due": 4.0,
+    "dueNeed": 1284,
+    "from": "1 Pier",
+    "importPerDay": 321,
+    "item": "Water",
+    "lastWeek": 3000,
+    "level": "ok",
+    "levelAt": null,
+    "levelId": null,
+    "levelImporter": null,
+    "levelName": null,
+    "orderFit": "ok",
+    "pass": [
+     {
+      "amount": 3000,
+      "smart": false
+     }
+    ],
+    "paused": false,
+    "peakDay": null,
+    "peakPerDay": 321,
+    "perDay": 321,
+    "plain": 3000,
+    "plainAfter": 0,
+    "plainBefore": 0,
+    "reason": null,
+    "rounds": true,
+    "routed": 0,
+    "runsOut": "Tuesday",
+    "s": 2,
+    "shortBy": 0.0,
+    "slug": "ba:itemname_water",
+    "smart": false,
+    "stock": 1500,
+    "stockCover": 4.7,
+    "target": null,
+    "weekNeed": 2247,
+    "weekly": 3000
+   }
+  ],
   "leftToday": 0.396,
   "margin": 0.15,
   "nextImportDay": 50,
@@ -11801,6 +11878,19 @@
     "sold": 321,
     "stock": 400,
     "target": 600
+   },
+   {
+    "from": null,
+    "item": "Soda Can",
+    "level": "warn",
+    "peakDay": null,
+    "peakSold": 0,
+    "pressure": null,
+    "s": 0,
+    "slug": "ba:itemname_sodacan",
+    "sold": 0,
+    "stock": 0,
+    "target": 0
    }
   ],
   "today": "Friday",
