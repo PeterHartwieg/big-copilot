@@ -858,3 +858,22 @@ test('an unsourced finding lands on its shelf on Deliveries', async () => {
     assert.equal(await page.locator('#secDeliveries tr.sb-arrived').getAttribute('data-slug'), 'ba:itemname_beer');
   } finally { await page.close(); }
 });
+
+/* A depot nothing brings its goods to is unsourced too, and its fix is an
+   import: its finding lands on Imports, whatever key its text has (a
+   condensed row carries f.sum.unsourced). */
+test('an unsourced finding on a depot lands on Imports', async () => {
+  const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
+    + 'from test_supply_bottom_up import depot_board; print(json.dumps(depot_board()))'));
+  const page = await board(data, {which: 'changes', tab: 'deliveries'});
+  try {
+    const got = await page.evaluate(() => {
+      const a = D.alerts.find(x => x.group === 'unsourced');
+      const summary = {...a, i18n: {text: ['f.sum.unsourced', {}]}};
+      const routes = [findingRoute(a).route, findingRoute(summary).route];
+      goToAlert(a);
+      return {routes, tab: sub.supply};
+    });
+    assert.deepEqual(got, {routes: ['supply/imports', 'supply/imports'], tab: 'imports'});
+  } finally { await page.close(); }
+});

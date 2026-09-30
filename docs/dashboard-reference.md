@@ -324,12 +324,17 @@ What is on the list is what moves the number:
 - **Nothing upstream supplies it** (*unsourced*). A shelf topped up only from sites that
   neither hold the item, import it (a paused contract counts, and is said as paused),
   make it, get it wholesale nor are sent it by a route of yours: the top-up can never
-  fill. So is anything a shop prices with no top-up, wholesale delivery or sales at all,
-  whatever the shop's type or age (a burger bar in a gym is a player's choice). One line
-  per shop lists its goods, naming the site where there is one; the site's own row carries
-  the import to set, a week of what the shelves ask. A depot sending on more than its
-  imports, its routes and its own machines bring it is the same kind of line, on the
-  depot, with the import to add; where only depots it tops up draw on it, they say it.
+  fill, sold out or not. Every shop's price list holds its type's whole range at the
+  game's default prices, so a price alone means nothing there; goods the player added from
+  outside the range (a burger bar in a gym), with none on the shelf and nothing bringing
+  any, get the same line, critical once they have been selling. Fees are never stock. One
+  line per shop lists its goods, naming the site where there is one; the site's own row
+  carries the import to set, a week of what the shelves ask. A depot that nothing brings
+  its goods to, or only a route passing on what its sender holds, is the same kind of
+  line, landing on Imports with the import to add; where only depots it tops up draw on
+  it, they say it, and where it falls short because the site topping it up is short of
+  its own import, that site's import says it and the depot's is a note naming it. Routes
+  that bring part of what a depot sends on leave an import to add, said as an order.
 - **Shops and offices at their ceiling, and staff standing idle.** Both come out of the
   hourly grid described below, and both carry the money they are worth. Every kind of
   site that serves a queue is in it, not only the ones with registers: a gym's boards, a
@@ -1188,7 +1193,9 @@ sizes every factory line at its rated capacity, round the clock, with no margin 
 the set-up for running flat out. **Shop demand** sizes each line on what the shops down the
 plan sell of its product, and what the factory lines along the way eat of it, plus the
 margin, never past capacity; two sites topping one shop up split its demand by their
-targets. A factory's own sales and an export (a plan to an address not yours, a pier)
+targets, among those with anything coming in, on the same plans, loops cut the same way,
+as the supply walk reads. Where several plans top one shelf up, the highest target of a
+site that has the item is the one it is judged on, whatever the plan order. A factory's own sales and an export (a plan to an address not yours, a pier)
 take what is left and size nothing. Each basis walks its own import rows, so a depot
 feeding a line that runs below capacity is not called dry under Shop demand. A shop open under a week has not settled, so Shop demand reads
 its coming week off a straight line through its trading days and says the figure *may
@@ -1405,7 +1412,9 @@ at a fraction of its pace.
 **Uses / day** for a depot is worked out from the sources, never read off the delivery
 log (a site keeps only its last sixty transactions, under three days at a busy depot).
 Need flows up the plans: each shop's own week of sales (its top-up target where it has
-sold none yet), with the 15% margin added there and nowhere else, and each factory line's
+sold none yet, in its first week of trading or for a line never yet on its shelf; a shop
+shut with the game's switch needs nothing), with the 15% margin added there and nowhere
+else, and each factory line's
 draw in the chosen sizing, summed up every plan that tops a site up. A site with a
 supply of its own (an import, a wholesale delivery, a line making the item) passes on
 only what that supply does not bring; two sites topping one up split what is left by

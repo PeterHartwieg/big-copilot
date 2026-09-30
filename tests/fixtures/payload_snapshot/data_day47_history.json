@@ -323,27 +323,6 @@
   },
   {
    "ev": {
-    "slug": "ba:itemname_sodacan"
-   },
-   "group": "unsourced",
-   "i18n": {
-    "text": [
-     "f.unsourced.priced",
-     {
-      "item": "⟦ba:itemname_sodacan|Soda Can⟧"
-     }
-    ]
-   },
-   "id": "7776e956a1",
-   "level": "warn",
-   "site": "HART. Spirits",
-   "siteKey": "ba:street_eighthstreet#5",
-   "text": "⟦ba:itemname_sodacan|Soda Can⟧ is priced here but nothing brings it: no top-up, wholesale delivery or import; add it to a route from a depot or factory",
-   "unit": "",
-   "worth": null
-  },
-  {
-   "ev": {
     "slug": "ba:itemname_cheapgift"
    },
    "group": "wholesale",
@@ -751,27 +730,6 @@
     "site": "HART. Gifts",
     "siteKey": "ba:street_broadwaystreet#19",
     "text": "HART. Gifts promotes at 80.0% of the 100% cap: 50.0% foot traffic and 0.0% marketing. The address sets the foot traffic, so the missing 20.0 points have to come from campaigns",
-    "unit": "",
-    "worth": null
-   },
-   {
-    "ev": {
-     "slug": "ba:itemname_sodacan"
-    },
-    "group": "unsourced",
-    "i18n": {
-     "text": [
-      "f.unsourced.priced",
-      {
-       "item": "⟦ba:itemname_sodacan|Soda Can⟧"
-      }
-     ]
-    },
-    "id": "7776e956a1",
-    "level": "warn",
-    "site": "HART. Spirits",
-    "siteKey": "ba:street_eighthstreet#5",
-    "text": "⟦ba:itemname_sodacan|Soda Can⟧ is priced here but nothing brings it: no top-up, wholesale delivery or import; add it to a route from a depot or factory",
     "unit": "",
     "worth": null
    },
@@ -11368,13 +11326,13 @@
      "cad": "daily",
      "have": 0,
      "imp": false,
-     "lvl": "warn",
+     "lvl": "ok",
      "need": 0,
      "role": "shelf",
      "setTo": null,
-     "st": "noplan",
+     "st": "covered",
      "use": 0,
-     "why": "priced"
+     "why": null
     }
    },
    "1": {
@@ -11878,19 +11836,6 @@
     "sold": 321,
     "stock": 400,
     "target": 600
-   },
-   {
-    "from": null,
-    "item": "Soda Can",
-    "level": "warn",
-    "peakDay": null,
-    "peakSold": 0,
-    "pressure": null,
-    "s": 0,
-    "slug": "ba:itemname_sodacan",
-    "sold": 0,
-    "stock": 0,
-    "target": 0
    }
   ],
   "today": "Friday",
