@@ -3254,6 +3254,193 @@
       "spare": [],
       "spareSkills": {}
      },
+     "full": {
+      "bench": [],
+      "fewer": [
+       {
+        "hours": 48.0,
+        "id": "EMPcy",
+        "name": "Cy Moss",
+        "now": 84
+       },
+       {
+        "hours": 36.0,
+        "id": "EMPben",
+        "name": "Ben Ode",
+        "now": 56
+       },
+       {
+        "hours": 48.0,
+        "id": "EMPana",
+        "name": "Ana Silva",
+        "now": 56
+       }
+      ],
+      "hireWeeks": [
+       {
+        "band": "full",
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 0,
+          "f": 12,
+          "shift": 2,
+          "station": "CLEANliquor",
+          "t": 24
+         },
+         {
+          "d": 1,
+          "f": 12,
+          "shift": 6,
+          "station": "CLEANliquor",
+          "t": 24
+         },
+         {
+          "d": 2,
+          "f": 12,
+          "shift": 10,
+          "station": "CLEANliquor",
+          "t": 24
+         },
+         {
+          "d": 3,
+          "f": 12,
+          "shift": 14,
+          "station": "CLEANliquor",
+          "t": 24
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 3,
+        "hours": 36,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 4,
+          "f": 0,
+          "shift": 16,
+          "station": "CLEANliquor",
+          "t": 12
+         },
+         {
+          "d": 5,
+          "f": 0,
+          "shift": 20,
+          "station": "CLEANliquor",
+          "t": 12
+         },
+         {
+          "d": 6,
+          "f": 0,
+          "shift": 24,
+          "station": "CLEANliquor",
+          "t": 12
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 3,
+        "hours": 36,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 4,
+          "f": 12,
+          "shift": 18,
+          "station": "CLEANliquor",
+          "t": 24
+         },
+         {
+          "d": 5,
+          "f": 12,
+          "shift": 22,
+          "station": "CLEANliquor",
+          "t": 24
+         },
+         {
+          "d": 6,
+          "f": 12,
+          "shift": 26,
+          "station": "CLEANliquor",
+          "t": 24
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_customerservice",
+        "slots": [
+         {
+          "d": 0,
+          "f": 12,
+          "shift": 3,
+          "station": "REGliquor",
+          "t": 24
+         },
+         {
+          "d": 3,
+          "f": 12,
+          "shift": 15,
+          "station": "REGliquor",
+          "t": 24
+         },
+         {
+          "d": 4,
+          "f": 12,
+          "shift": 19,
+          "station": "REGliquor",
+          "t": 24
+         },
+         {
+          "d": 5,
+          "f": 0,
+          "shift": 21,
+          "station": "REGliquor",
+          "t": 12
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 3,
+        "hours": 36,
+        "skill": "ba:skill_customerservice",
+        "slots": [
+         {
+          "d": 0,
+          "f": 0,
+          "shift": 1,
+          "station": "REGliquor",
+          "t": 12
+         },
+         {
+          "d": 5,
+          "f": 12,
+          "shift": 23,
+          "station": "REGliquor",
+          "t": 24
+         },
+         {
+          "d": 6,
+          "f": 12,
+          "shift": 27,
+          "station": "REGliquor",
+          "t": 24
+         }
+        ]
+       }
+      ],
+      "shortHires": [],
+      "spare": [],
+      "spareSkills": {}
+     },
      "open": {
       "bench": [],
       "fewer": [
@@ -3447,6 +3634,123 @@
           "shift": 6,
           "station": "REGgifts",
           "t": 19
+         }
+        ]
+       }
+      ],
+      "shortHires": [],
+      "spare": [],
+      "spareSkills": {}
+     },
+     "full": {
+      "bench": [],
+      "fewer": [
+       {
+        "hours": 36.0,
+        "id": "EMPdee",
+        "name": "Dee Park",
+        "now": 70
+       }
+      ],
+      "hireWeeks": [
+       {
+        "band": "full",
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_customerservice",
+        "slots": [
+         {
+          "d": 0,
+          "f": 12,
+          "shift": 1,
+          "station": "REGgifts",
+          "t": 24
+         },
+         {
+          "d": 1,
+          "f": 12,
+          "shift": 3,
+          "station": "REGgifts",
+          "t": 24
+         },
+         {
+          "d": 2,
+          "f": 12,
+          "shift": 5,
+          "station": "REGgifts",
+          "t": 24
+         },
+         {
+          "d": 6,
+          "f": 0,
+          "shift": 12,
+          "station": "REGgifts",
+          "t": 12
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_customerservice",
+        "slots": [
+         {
+          "d": 3,
+          "f": 12,
+          "shift": 7,
+          "station": "REGgifts",
+          "t": 24
+         },
+         {
+          "d": 4,
+          "f": 0,
+          "shift": 8,
+          "station": "REGgifts",
+          "t": 12
+         },
+         {
+          "d": 5,
+          "f": 0,
+          "shift": 10,
+          "station": "REGgifts",
+          "t": 12
+         },
+         {
+          "d": 6,
+          "f": 12,
+          "shift": 13,
+          "station": "REGgifts",
+          "t": 24
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 3,
+        "hours": 36,
+        "skill": "ba:skill_customerservice",
+        "slots": [
+         {
+          "d": 0,
+          "f": 0,
+          "shift": 0,
+          "station": "REGgifts",
+          "t": 12
+         },
+         {
+          "d": 4,
+          "f": 12,
+          "shift": 9,
+          "station": "REGgifts",
+          "t": 24
+         },
+         {
+          "d": 5,
+          "f": 12,
+          "shift": 11,
+          "station": "REGgifts",
+          "t": 24
          }
         ]
        }

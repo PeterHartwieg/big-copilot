@@ -1010,6 +1010,18 @@ test('a mod that now speaks another version takes no writes until it speaks this
   assert.equal(h.run('bindSource().holds()'), true);
 });
 
+// Mod 0.4.0 lists what its kinds can do beyond their first contract (the hire
+// call's reschedule-only weeks and its undo): the board reads it off link().
+test('the features a mod lists reach the board as strings; an older mod, or another version, lists none', async () => {
+  const h = harness({routes: {health: () => HEALTH}});
+  h.run(`linkUrl = "http://127.0.0.1:8322"; linkSchema = 1; linkHealth = ${JSON.stringify({...HEALTH, writes: ['hire'], features: ['hire.reschedule', 'hire.undo', 7]})}`);
+  assert.deepEqual(plain(h.run('linkFeatures()')), ['hire.reschedule', 'hire.undo']);
+  h.run(`linkHealth = ${JSON.stringify({...HEALTH, writes: ['hire']})}`);
+  assert.deepEqual(plain(h.run('linkFeatures()')), []);
+  h.run(`linkSchema = 2; linkHealth = ${JSON.stringify({...HEALTH, writes: ['hire'], features: ['hire.undo']})}`);
+  assert.deepEqual(plain(h.run('linkFeatures()')), []);
+});
+
 // Uniforms and marketing (mod 0.4.0) find their buildings by address alone:
 // they name the save the board was read from, so the mod answers `changed`
 // when the game has another one loaded. The other kinds carry their own ids.

@@ -229,8 +229,23 @@ the map.
     person.
   - A site accepts the roles the game lets you assign there: the business type's own,
     cleaning in a shop, office, cinema or theatre, security where theft is possible.
-  - *Part-time* is left out by default for every role hired into a shop: a shop's plan
-    gives full weeks. The filter bar's "Leave out who asks for" list takes it back.
+  - Each plan week says which contract it suits (`band`): full-time from 30 hours,
+    part-time from 10 to under 30, and a week under 10 hours suits none. The hours demands
+    are the game's own, both ends included: a candidate who asks for part-time takes a week
+    of 10 to 30 hours (a part-time week first, or a full-time week of exactly 30), one who
+    asks for full-time a week of 30 to 50; the orange mark and the week check before a write
+    say the same. Each goes to the first site in the list with a week of their own contract,
+    else the first with any week that fits. There a week of their own contract comes first,
+    then the rest by rank (a week under 10 hours last; for somebody who asks for neither, a
+    30-hour week, which either contract may take, after the others), and a desk that meets
+    their desk demands decides only among weeks of the same rank. Quick hire picks the same
+    way. A week under 10 hours is never given to a hire (only to one ticked in by
+    hand, after every other week): it is no open place, and Staff needs, the review and
+    Quick hire say its hours as "too few for a hire". A spare person may still be moved
+    into one.
+  - *Part-time* is left out by default for shop roles, and only from full-time shop weeks:
+    a role with an open part-time week takes part-time askers for it, and Quick hire does
+    the same at a shop. The filter bar's "Leave out who asks for" list takes it back.
   - *Quick hire* hires the best matches for one role at any site (headquarters and
     warehouses included), from the candidates the open places have not picked. At a site
     with a plan they get the plan's open weeks in that role that meet their schedule
@@ -242,8 +257,8 @@ the map.
     send is checked person by person: at most 12 hours an entry and a day, one entry at a
     time, the hours band (at most 50 without one), an exact four or five days, free
     weekends, the hours kept free and no cleaning. Whatever is still broken is named in the
-    confirm, one line a break, including someone the write leaves with no hours at all; nothing is
-    refused for it. An office's write, which adds the office default to the week as it
+    confirm, one line a break; nothing is refused for it. Somebody the write leaves with no
+    hours at all is no break: they stay on as spare, named once in a plain note. An office's write, which adds the office default to the week as it
     stands, leaves out an entry that would break one and names the hours it left out.
 
   *Payroll* names two wage figures:
