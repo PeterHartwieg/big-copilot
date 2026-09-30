@@ -438,10 +438,11 @@ class PayloadTests(unittest.TestCase):
                 self.assertGreaterEqual(need, 1)
                 self.assertGreaterEqual(have, 0)
 
-    def test_every_business_reports_its_running_campaigns_and_station_shifts(self):
+    def test_every_business_reports_its_campaigns_and_station_shifts(self):
         for b in self.payload["businesses"]:
-            self.assertIsInstance(b["marketingOn"], list, b["key"])
-            self.assertTrue(set(b["marketingOn"]) <= {c[0] for c in ba_dashboard.MARKETING_CAMPAIGNS})
+            # The checklist reads the marketing write's own field.
+            self.assertIsInstance(b["campaigns"], list, b["key"])
+            self.assertTrue({c["type"] for c in b["campaigns"]} <= {t[0] for t in ba_dashboard.MARKETING_TYPES})
             self.assertIsInstance(b["stationShifts"], int, b["key"])
 
     def test_a_players_own_shop_carries_what_the_model_needs_to_price_it(self):

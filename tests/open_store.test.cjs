@@ -237,6 +237,10 @@ test('the loan amount: past the limit the field snaps to it, and 0 stays 0 acros
 });
 
 /* --- step 5: the checklist until opening ------------------------------------ */
+/* The site's cheapest mix as _marketing() sends it (marketingPlan): one campaign to switch on, from no agency the board waits on. */
+const MKPLAN = {on: ['SmallInternet'], was: [], costNow: 0, costPlan: 100, marketingNow: 0, marketingPlan: 40, promotionNow: 60, promotionPlan: 100,
+  visit: [], visitRaises: false, agencies: [], setupTypes: [], setupAgencies: [], needsSetup: false};
+const running = type => [{type, agency: 'ba:street_secondavenue#5', enabled: true}];
 const LINK = {writes: ['hire', 'uniforms', 'marketing'], character: 'PAYLOADco', company: 'Payload Co', approved: true, day: 47, hour: 14, minute: 30};
 const rows = page => page.$$eval('#osBody .os-ck', rs => rs.map(r => ({state: r.className.replace('os-ck ', ''), title: r.querySelector('b').textContent,
   sub: r.querySelector('small').innerText.replace(/\s+/g, ' '), act: r.querySelector('.act').innerText.replace(/\s+/g, ' ').trim(), p: r.style.getPropertyValue('--p')})));
@@ -244,13 +248,13 @@ const until = async page => { await planned(page); await page.locator('#osCtl [d
 const BEER = 'ba:itemname_beer', WHISKY = 'ba:itemname_whisky';
 const line = slug => ({slug, item: slug, units: 400, rate: 20, tradeRate: 20, soldPerDay: 20, soldPerWeek: 140});
 /* The business the save shows once the player has opened the plan's building. A shop that trades, with two products on its shelves. */
-const opened = (page, patch = {}, built = null) => page.evaluate(({site, patch, built, lines}) => {
+const opened = (page, patch = {}, built = null) => page.evaluate(({site, patch, built, lines, mk}) => {
   D.businesses.push(Object.assign({}, D.businesses[0], {key: site, status: 'retail', name: 'Liquor', neighbourhood: 'ba:neighborhood_midtown', typeSlug: 'ba:businesstype_liquorstore', staff: 0, missingAmenities: [],
     amenities: {bathroom: true, interior: true, music: true, sink: true, toiletprivacy: true}, uniformGaps: [], uniformGapSkills: [], lines,
-    marketing: 0, marketingIndex: 0, marketingOn: [], stationShifts: 0, revenue: 900, customers: 60, hasTraded: true}, patch));
+    marketing: 0, marketingIndex: 0, campaigns: [], marketingPlan: mk, staffIdle: [], stationShifts: 0, revenue: 900, customers: 60, hasTraded: true}, patch));
   if(built) D.openStore.built[site] = built;
   drawOpenStore();
-}, {site: SITE, patch, built, lines: [line(BEER), line(WHISKY)]});
+}, {site: SITE, patch, built, lines: [line(BEER), line(WHISKY)], mk: MKPLAN});
 const linked = (page, link = LINK) => page.evaluate(l => { SOURCE.link = () => l; drawOpenStore(); }, link);
 /* A stock target above zero or a wholesale contract delivers these products into the plan's shop: supply.routed pairs, whatever it sells. */
 const routed = (page, slugs) => page.evaluate(({site, slugs}) => { const i = D.businesses.findIndex(b => b.key === site);
@@ -315,7 +319,7 @@ test('no row reads done before a business exists, whatever the type asks for', a
 test('the rows tick themselves from the save once a business stands at the address', async t => {
   const page = await board(t);
   await until(page);
-  await opened(page, {staff: 3, marketingOn: ['smallinternet'], stationShifts: 5}, FULL);
+  await opened(page, {staff: 3, campaigns: running('SmallInternet'), stationShifts: 5}, FULL);
   await hiring(page, {...HIRES, weeks: []});
   await routed(page, await wanted(page));
   const r = await rows(page);
@@ -410,10 +414,12 @@ test('through the real hiring model: no hours stays a to-do, and hires are count
   await linked(page);
   const staff = (await rows(page))[2];
   assert.equal(staff.state, 'todo');
-  assert.match(staff.act, new RegExp(`Hire ${weeks}`));
+  assert.match(staff.act, /Staff this site/);
+  /* The button is the site panel's Staff this site: the same count of people it hires here. */
+  assert.equal(await page.evaluate(k => hrSitePeople(k), SITE), weeks);
 });
 
-test('Hire opens the review for this site only, through hrReview and hrRequest', async t => {
+test('Staff this site opens the Staff page\'s review for this site only, through hrReview and hrRequest', async t => {
   const page = await board(t);
   await until(page);
   await opened(page, {staff: 1, stationShifts: 2}, FULL);
@@ -430,11 +436,12 @@ test('Hire opens the review for this site only, through hrReview and hrRequest',
   assert.equal(sent.body.hires.length, weeks);
   assert.deepEqual([...new Set(sent.body.hires.map(h => h.address.street + '#' + h.address.number))], ['ba:street_broadwaystreet#9']);
   assert.deepEqual(sent.body.sites.map(s => s.address), [{street: 'ba:street_broadwaystreet', number: 9}]);
-  assert.match(await dlg.innerText(), /1 site\b/);
+  assert.match(await dlg.locator('h2').innerText(), /^Staff /);
+  assert.deepEqual(await page.evaluate(() => hrLast.o), {scope: 'site', site: SITE});
   assert.equal(await dlg.locator('.hr-dsite').count(), 1);
 });
 
-test('the Hire button sends hrReview the plan\'s site and the counts, and Assign uniforms sends gwUniforms the key', async t => {
+test('Staff this site sends hrReview the plan\'s site, and Assign uniforms sends gwUniforms the key', async t => {
   const page = await board(t);
   await until(page);
   await opened(page, {staff: 1, stationShifts: 2, uniformGaps: ['Customer Service']}, FULL);
@@ -444,7 +451,7 @@ test('the Hire button sends hrReview the plan\'s site and the counts, and Assign
   await page.locator('#osBody [data-os-write="hire"]').click();
   await page.locator('#osBody [data-os-write="uniforms"]').click();
   const calls = await page.evaluate(() => window.__calls);
-  assert.deepEqual(calls[0], ['hire', {site: SITE, only: {[SITE + '|ba:skill_cleaning']: 1, [SITE + '|ba:skill_customerservice']: 2}}]);
+  assert.deepEqual(calls[0], ['hire', {scope: 'site', site: SITE}]);
   assert.deepEqual(calls[1], ['uniforms', [SITE]]);
 });
 
@@ -456,11 +463,10 @@ test('weeks filled by moving people offer the full staff review, or a way to do 
   await hiring(page, moveHires);
   assert.match((await rows(page))[2].act, /move the hiring here|Move .* in the game|move 1 Cleaning/i);
   await linked(page);
-  assert.equal(await page.locator('#osBody [data-os-write="hire"]').getAttribute('data-os-only'), null);
-  assert.equal((await page.locator('#osBody [data-os-write="hire"]').innerText()).trim(), 'Hire 1 · move 1');
+  assert.equal((await page.locator('#osBody [data-os-write="hire"]').innerText()).trim(), 'Staff this site');
   await page.evaluate(() => { window.__calls = []; window.hrReview = o => window.__calls.push(o); });
   await page.locator('#osBody [data-os-write="hire"]').click();
-  assert.deepEqual(await page.evaluate(() => window.__calls), [{site: SITE}]);
+  assert.deepEqual(await page.evaluate(() => window.__calls), [{scope: 'site', site: SITE}]);
 });
 
 test('nobody to hire says to ask a headhunter', async t => {
@@ -503,7 +509,7 @@ test('with the game link the same rows carry buttons', async t => {
   assert.equal(await page.locator('#osBody .os-ck .os-ingame').count(), 0);
   assert.equal(await page.locator('#osBody .os-gate').count(), 0);
   assert.deepEqual(await page.$$eval('#osBody [data-os-write]', bs => bs.map(b => [b.dataset.osWrite, b.innerText.trim()])),
-    [['hire', 'Hire 3'], ['uniforms', 'Assign uniforms'], ['marketing', 'Set up marketing']]);
+    [['hire', 'Staff this site'], ['uniforms', 'Assign uniforms'], ['marketing', 'Set the cheapest mix']]);
 });
 
 test('a write the mod lacks turns only its own button into the instruction', async t => {
@@ -634,74 +640,72 @@ test('a rented address with nothing opened there yet leaves the lease a to-do', 
   assert.equal((await rows(page))[0].state, 'done');
 });
 
-test('"Pick N more" after a partial hire keeps the site the review was scoped to', async t => {
+test('Set the cheapest mix opens the site panel\'s marketing write for the plan\'s store, and explains a refusal', async t => {
   const page = await board(t);
   await until(page);
-  await opened(page, {staff: 1, stationShifts: 2}, FULL);
-  await realHiring(page);
+  await opened(page, {staff: 1}, FULL);
   await linked(page);
-  await spy(page);
-  await page.locator('#osBody [data-os-write="hire"]').click();
-  await page.locator('dialog.gw-dlg').waitFor();
-  assert.equal(await page.evaluate(() => hrLast.site), SITE);
-  const calls = await page.evaluate(() => {
-    window.__more = [];
-    window.hrReview = o => window.__more.push(o);
-    bindHireReview();
-    hrUi.more = {only: {[`${osPlan().key}|ba:skill_cleaning`]: 1}, board: {}, site: osPlan().key};
-    const b = document.createElement('button'); b.setAttribute('data-hr-more', ''); document.body.append(b); b.click();
-    return window.__more;
-  });
-  assert.deepEqual(calls, [{only: {[`${SITE}|ba:skill_cleaning`]: 1}, site: SITE}]);
-});
-
-test('Set up marketing previews first, sends the running campaigns as `was` and explains a refusal', async t => {
-  const page = await board(t);
-  await until(page);
-  await opened(page, {staff: 1, marketingOn: []}, FULL);
-  await linked(page);
+  const r = (await rows(page))[5];
+  assert.equal(r.state, 'todo');
+  assert.match(r.sub, /No campaign for .* · Cheapest mix: Small internet · \$100\/day · 100%/i);
   await page.evaluate(() => { window.__writes = [];
     SOURCE.write = async (kind, body, o) => { window.__writes.push({kind, body, dryRun: o && o.dryRun});
       return {body: {ok: false, rows: [{error: 'no_contact', agency: {name: 'CityAds', address: {street: 'ba:street_secondavenue', number: 5}}, opens: null, address: body.sites[0].address}]}}; }; });
   await page.locator('#osBody [data-os-write="marketing"]').click();
   const dlg = page.locator('dialog.gw-dlg');
   await dlg.waitFor();
+  await page.waitForFunction(() => window.__writes.length > 0);
   const sent = await page.evaluate(() => window.__writes[0]);
   assert.equal(sent.kind, 'marketing');
   assert.equal(sent.dryRun, true);
-  assert.deepEqual(sent.body.expect, {character: 'PAYLOADco', company: 'Payload Co'});
-  assert.deepEqual(sent.body.sites[0].address, {street: 'ba:street_broadwaystreet', number: 9});
-  assert.deepEqual(sent.body.sites[0].was, []);
-  assert.ok(sent.body.sites[0].on.length && sent.body.sites[0].on.every(x => /^(Small|Medium|Large)(Internet|Billboard)$/.test(x)));
-  assert.match(await dlg.innerText(), /not in your phone yet/);
+  assert.deepEqual(sent.body.sites, [{address: {street: 'ba:street_broadwaystreet', number: 9}, on: ['SmallInternet'], was: []}]);
+  assert.equal(await dlg.locator('h2').innerText(), 'Set the cheapest mix');
+  assert.match(await dlg.innerText(), /CityAds is not in your phone's contacts/);
 });
 
-test('the marketing write sends the enabled campaigns as `was`, and no expect without a character and company', async t => {
+test('a mix that waits on an agency says why and its button does nothing; without the write it says what to switch in BizMan', async t => {
   const page = await board(t);
   await until(page);
-  await opened(page, {staff: 1, marketingOn: ['smallbillboard']}, FULL);
-  await page.evaluate(() => { const b = D.businesses.find(x => x.key === osPlan().key); b.marketingOn = []; });
-  await linked(page, {...LINK, character: null, company: null});
-  await page.evaluate(() => { const b = D.businesses.find(x => x.key === osPlan().key); b.marketingOn = ['smallbillboard']; window.__writes = [];
-    SOURCE.write = async (kind, body, o) => { window.__writes.push({kind, body, dryRun: o && o.dryRun}); return {body: {ok: true, rows: [{turnedOn: [], on: [], address: body.sites[0].address}]}}; };
-    osMarketingWrite(osPlan()); });
-  await page.locator('dialog.gw-dlg').waitFor();
-  const sent = await page.evaluate(() => window.__writes[0]);
-  assert.equal('expect' in sent.body, false);
-  assert.deepEqual(sent.body.sites[0].was, ['SmallBillboard']);
+  await opened(page, {staff: 1, marketingPlan: {...MKPLAN, agencies: ['ba:street_nowhere#1']}}, FULL);
+  await linked(page);
+  const r = (await rows(page))[5];
+  assert.match(r.sub, /No agency can add these switches/);
+  const btn = page.locator('#osBody [data-os-write="marketing"]');
+  assert.equal(await btn.getAttribute('aria-disabled'), 'true');
+  await btn.click({force: true});
+  assert.equal(await page.locator('dialog.gw-dlg[open]').count(), 0);
+  await linked(page, {...LINK, writes: ['hire', 'uniforms']});
+  assert.match((await rows(page))[5].act, /Book Small internet at a marketing agency/i);
 });
 
-test('a running campaign, from the save\'s enabled set, leaves the marketing row done with no button', async t => {
+test('no agency in the phone yet: the row says which to visit, with no button', async t => {
+  const page = await board(t);
+  await until(page);
+  await page.evaluate(() => { D.marketingAgencies = [{key: 'ba:street_secondavenue#5', name: 'CityAds', address: '5 Second Avenue', contact: false, types: ['SmallInternet'], hours: []}]; });
+  await opened(page, {staff: 1, marketingPlan: {...MKPLAN, on: null, visit: ['ba:street_secondavenue#5']}}, FULL);
+  await linked(page);
+  const r = (await rows(page))[5];
+  assert.equal(r.state, 'todo');
+  assert.match(r.act, /Visit CityAds \(5 Second Avenue\) once to book campaigns/);
+  assert.equal(await page.locator('#osBody [data-os-write="marketing"]').count(), 0);
+});
+
+test('a running campaign, from the save\'s enabled set, leaves the marketing row done with no button; so does a mix of none', async t => {
   const page = await board(t);
   await until(page);
   await linked(page);
-  await opened(page, {staff: 1, marketing: 0, marketingOn: ['mediuminternet']}, FULL);
+  await opened(page, {staff: 1, marketing: 0, campaigns: running('MediumInternet')}, FULL);
   const r = await rows(page);
   assert.equal(r[5].state, 'done');
   assert.equal(r[5].act, '');
   /* money spent last week is no proof: with no campaign enabled the row is a to-do */
-  await page.evaluate(() => { const b = D.businesses.find(x => x.key === osPlan().key); b.marketingOn = []; b.marketing = 350; b.marketingIndex = 20; drawOpenStore(); });
+  await page.evaluate(() => { const b = D.businesses.find(x => x.key === osPlan().key); b.campaigns[0].enabled = false; b.marketing = 350; b.marketingIndex = 20; drawOpenStore(); });
   assert.equal((await rows(page))[5].state, 'todo');
+  /* promotion already full without a campaign: nothing to start */
+  await page.evaluate(() => { const b = D.businesses.find(x => x.key === osPlan().key); b.marketingPlan = {...b.marketingPlan, on: [], costPlan: 0, promotionPlan: 100}; drawOpenStore(); });
+  const done = (await rows(page))[5];
+  assert.equal(done.state, 'done');
+  assert.match(done.sub, /No campaign needed/);
 });
 
 test('an unmet hairdresser shelf is named in words, not by its id', async t => {
@@ -1007,12 +1011,13 @@ test('a save from before the opening leaves the plan unopened, not closed; a clo
   assert.equal(await page.evaluate(() => osPlan().opened), OPENED, 'nothing rewritten');
   // Back to a later save where a new liquor store replaced it: Until opening says so and has no writes.
   await page.evaluate(({site, opened}) => { D.meta.day = 47; D.businesses.push(Object.assign({}, D.businesses[0], {key: site, status: 'retail', typeSlug: 'ba:businesstype_liquorstore',
-    type: 'Liquor Store', opened: opened + 10, staff: 0, stationShifts: 0, marketingOn: []})); drawOpenStore(); }, {site: SITE, opened: OPENED});
+    type: 'Liquor Store', opened: opened + 10, staff: 0, stationShifts: 0, campaigns: []})); drawOpenStore(); }, {site: SITE, opened: OPENED});
   await linked(page);
   await page.locator('#osCtl [data-os-step="opening"]').click();
   assert.match(await page.locator('#osBody').innerText(), /CLOSED/);
   assert.equal(await page.locator('#osBody [data-os-write]').count(), 0);
-  assert.equal(await page.evaluate(() => { osMarketingWrite(osPlan()); return document.querySelectorAll('dialog.gw-dlg[open]').length; }), 0);
+  assert.equal(await page.evaluate(() => { const b = document.createElement('button'); b.dataset.osWrite = 'marketing'; document.querySelector('#osBody').append(b); b.click();
+    return document.querySelectorAll('dialog.gw-dlg[open]').length; }), 0);
 });
 
 test('a store that opened since the last visit is history before the cap counts, on a reload and from a Demand cell', async t => {

@@ -300,28 +300,6 @@
    "worth": null
   },
   {
-   "group": "promotion",
-   "i18n": {
-    "text": [
-     "f.promotion",
-     {
-      "marketing": 0.0,
-      "n": 20.0,
-      "promotion": 80.0,
-      "site": "HART. Gifts",
-      "traffic": 50.0
-     }
-    ]
-   },
-   "id": "f2450926c3",
-   "level": "warn",
-   "site": "HART. Gifts",
-   "siteKey": "ba:street_broadwaystreet#19",
-   "text": "HART. Gifts promotes at 80.0% of the 100% cap: 50.0% foot traffic and 0.0% marketing. The address sets the foot traffic, so the missing 20.0 points have to come from campaigns",
-   "unit": "",
-   "worth": null
-  },
-  {
    "ev": {
     "slug": "ba:itemname_cheapgift"
    },
@@ -457,6 +435,34 @@
    "site": "HART. Brewery",
    "siteKey": "ba:street_eighthavenue#8",
    "text": "⟦ba:itemname_beer|Beer⟧ machine at list position 1 is staffed 84 of 168 hours; nobody on it Mon-Sun 0-8, 20-24; 300 a day not made",
+   "unit": "",
+   "worth": null
+  },
+  {
+   "group": "promotion",
+   "i18n": {
+    "text": [
+     "f.promotion.visit",
+     {
+      "agencies": {
+       "m": [
+        "f.list.last",
+        {
+         "a": "CityAds",
+         "b": "McCain's eMarketing"
+        },
+        "CityAds, McCain's eMarketing"
+       ]
+      },
+      "sites": "HART. Gifts"
+     }
+    ]
+   },
+   "id": "e03ef5477e",
+   "level": "info",
+   "site": "HART. Gifts",
+   "siteKey": "ba:street_broadwaystreet#19",
+   "text": "Visit CityAds, McCain's eMarketing once: no campaign can be set at HART. Gifts before that",
    "unit": "",
    "worth": null
   }
@@ -712,28 +718,6 @@
     "worth": null
    },
    {
-    "group": "promotion",
-    "i18n": {
-     "text": [
-      "f.promotion",
-      {
-       "marketing": 0.0,
-       "n": 20.0,
-       "promotion": 80.0,
-       "site": "HART. Gifts",
-       "traffic": 50.0
-      }
-     ]
-    },
-    "id": "f2450926c3",
-    "level": "warn",
-    "site": "HART. Gifts",
-    "siteKey": "ba:street_broadwaystreet#19",
-    "text": "HART. Gifts promotes at 80.0% of the 100% cap: 50.0% foot traffic and 0.0% marketing. The address sets the foot traffic, so the missing 20.0 points have to come from campaigns",
-    "unit": "",
-    "worth": null
-   },
-   {
     "ev": {
      "slug": "ba:itemname_cheapgift"
     },
@@ -785,6 +769,34 @@
     "site": "HART. Gifts",
     "siteKey": "ba:street_broadwaystreet#19",
     "text": "⟦ba:itemname_umbrella|Umbrella⟧ is on no distribution plan: 30 left at 21/day",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "group": "promotion",
+    "i18n": {
+     "text": [
+      "f.promotion.visit",
+      {
+       "agencies": {
+        "m": [
+         "f.list.last",
+         {
+          "a": "CityAds",
+          "b": "McCain's eMarketing"
+         },
+         "CityAds, McCain's eMarketing"
+        ]
+       },
+       "sites": "HART. Gifts"
+      }
+     ]
+    },
+    "id": "e03ef5477e",
+    "level": "info",
+    "site": "HART. Gifts",
+    "siteKey": "ba:street_broadwaystreet#19",
+    "text": "Visit CityAds, McCain's eMarketing once: no campaign can be set at HART. Gifts before that",
     "unit": "",
     "worth": null
    }
@@ -934,6 +946,7 @@
     "toiletprivacy": false
    },
    "basket": 9.38,
+   "campaigns": [],
    "capacity": 30,
    "closed": false,
    "code": "MT",
@@ -996,7 +1009,26 @@
    "margin": 42.2,
    "marketing": 0.0,
    "marketingIndex": 20.0,
-   "marketingOn": [],
+   "marketingPlan": {
+    "agencies": [],
+    "costNow": 0,
+    "costPlan": null,
+    "marketingNow": 20.0,
+    "marketingPlan": null,
+    "needsSetup": false,
+    "on": null,
+    "promotionNow": 120.0,
+    "promotionPlan": null,
+    "setupAgencies": [],
+    "setupTypes": [],
+    "target": null,
+    "visit": [
+     "ba:street_secondavenue#5",
+     "ba:street_thirdavenue#17"
+    ],
+    "visitRaises": true,
+    "was": []
+   },
    "missingAmenities": [
     "ba:customerdemand_toiletprivacy",
     "ba:customerdemand_music",
@@ -1225,6 +1257,7 @@
      "slug": "ba:jobdemand_freeweekends"
     }
    ],
+   "staffIdle": [],
    "staffLacking": 1,
    "staffLackingAny": 1,
    "staffLackingCompany": 0,
@@ -1251,6 +1284,7 @@
     "toiletprivacy": false
    },
    "basket": 18.0,
+   "campaigns": [],
    "capacity": 30,
    "closed": false,
    "code": "LM",
@@ -1306,7 +1340,26 @@
    "margin": 27.8,
    "marketing": 0.0,
    "marketingIndex": 0.0,
-   "marketingOn": [],
+   "marketingPlan": {
+    "agencies": [],
+    "costNow": 0,
+    "costPlan": null,
+    "marketingNow": 0.0,
+    "marketingPlan": null,
+    "needsSetup": false,
+    "on": null,
+    "promotionNow": 80.0,
+    "promotionPlan": null,
+    "setupAgencies": [],
+    "setupTypes": [],
+    "target": null,
+    "visit": [
+     "ba:street_secondavenue#5",
+     "ba:street_thirdavenue#17"
+    ],
+    "visitRaises": true,
+    "was": []
+   },
    "missingAmenities": [
     "ba:customerdemand_toiletprivacy",
     "ba:customerdemand_sink",
@@ -1516,6 +1569,7 @@
    "staff": 1,
    "staffCost": 180.0,
    "staffDemands": [],
+   "staffIdle": [],
    "staffLacking": 0,
    "staffLackingAny": 0,
    "staffLackingCompany": 0,
@@ -1540,6 +1594,7 @@
    "address": "4 Eighth Avenue",
    "amenities": null,
    "basket": null,
+   "campaigns": [],
    "capacity": 0,
    "closed": false,
    "code": "IC",
@@ -1572,7 +1627,7 @@
    "margin": null,
    "marketing": 0.0,
    "marketingIndex": 0,
-   "marketingOn": [],
+   "marketingPlan": null,
    "missingAmenities": [],
    "missingUniformLocker": false,
    "name": "HART. Hub",
@@ -1727,6 +1782,7 @@
    "staff": 0,
    "staffCost": 0,
    "staffDemands": [],
+   "staffIdle": [],
    "staffLacking": 0,
    "staffLackingAny": 0,
    "staffLackingCompany": 0,
@@ -1747,6 +1803,7 @@
    "address": "8 Eighth Avenue",
    "amenities": null,
    "basket": null,
+   "campaigns": [],
    "capacity": 0,
    "closed": false,
    "code": "IC",
@@ -1802,7 +1859,7 @@
    "margin": null,
    "marketing": 0.0,
    "marketingIndex": 0,
-   "marketingOn": [],
+   "marketingPlan": null,
    "missingAmenities": [],
    "missingUniformLocker": false,
    "name": "HART. Brewery",
@@ -1964,6 +2021,7 @@
    "staff": 1,
    "staffCost": 192.0,
    "staffDemands": [],
+   "staffIdle": [],
    "staffLacking": 0,
    "staffLackingAny": 0,
    "staffLackingCompany": 0,
@@ -2759,7 +2817,7 @@
        "skill": "ba:skill_factoryworker"
       }
      ],
-     "hoursUncovered": 64,
+     "hoursUncovered": 72,
      "people": 2
     },
     "current": {
@@ -2858,7 +2916,7 @@
      {
       "d": 0,
       "f": 6,
-      "p": 0,
+      "p": null,
       "s": 0,
       "t": 14
      },
@@ -3090,20 +3148,21 @@
         "now": 84
        },
        {
-        "hours": 35.0,
-        "id": "EMPana",
-        "name": "Ana Silva",
+        "hours": 32.0,
+        "id": "EMPben",
+        "name": "Ben Ode",
         "now": 56
        },
        {
-        "hours": 49.0,
-        "id": "EMPben",
-        "name": "Ben Ode",
+        "hours": 35.0,
+        "id": "EMPana",
+        "name": "Ana Silva",
         "now": 56
        }
       ],
       "hireWeeks": [
        {
+        "band": "full",
         "days": 7,
         "hours": 49,
         "skill": "ba:skill_cleaning",
@@ -3111,76 +3170,286 @@
          {
           "d": 0,
           "f": 15,
-          "shift": 2,
+          "shift": 3,
           "station": "CLEANliquor",
           "t": 22
          },
          {
           "d": 1,
           "f": 15,
-          "shift": 6,
+          "shift": 7,
           "station": "CLEANliquor",
           "t": 22
          },
          {
           "d": 2,
           "f": 15,
-          "shift": 10,
+          "shift": 11,
           "station": "CLEANliquor",
           "t": 22
          },
          {
           "d": 3,
           "f": 15,
-          "shift": 14,
+          "shift": 15,
           "station": "CLEANliquor",
           "t": 22
          },
          {
           "d": 4,
           "f": 15,
-          "shift": 18,
+          "shift": 19,
           "station": "CLEANliquor",
           "t": 22
          },
          {
           "d": 5,
           "f": 15,
-          "shift": 22,
+          "shift": 23,
           "station": "CLEANliquor",
-          "t": 22
-         },
-         {
-          "d": 6,
-          "f": 15,
-          "shift": 26,
-          "station": "CLEANliquor",
-          "t": 22
-         }
-        ]
-       },
-       {
-        "days": 2,
-        "hours": 14,
-        "skill": "ba:skill_customerservice",
-        "slots": [
-         {
-          "d": 0,
-          "f": 15,
-          "shift": 3,
-          "station": "REGliquor",
           "t": 22
          },
          {
           "d": 6,
           "f": 15,
           "shift": 27,
+          "station": "CLEANliquor",
+          "t": 22
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 4,
+        "hours": 31,
+        "skill": "ba:skill_customerservice",
+        "slots": [
+         {
+          "d": 0,
+          "f": 12,
+          "shift": 2,
+          "station": "REGliquor",
+          "t": 15
+         },
+         {
+          "d": 0,
+          "f": 15,
+          "shift": 4,
+          "station": "REGliquor",
+          "t": 22
+         },
+         {
+          "d": 1,
+          "f": 8,
+          "shift": 6,
+          "station": "REGliquor",
+          "t": 15
+         },
+         {
+          "d": 2,
+          "f": 15,
+          "shift": 12,
+          "station": "REGliquor",
+          "t": 22
+         },
+         {
+          "d": 6,
+          "f": 15,
+          "shift": 28,
           "station": "REGliquor",
           "t": 22
          }
         ]
        }
       ],
+      "shortHires": [],
+      "spare": [],
+      "spareSkills": {}
+     },
+     "full": {
+      "bench": [],
+      "fewer": [
+       {
+        "hours": 48.0,
+        "id": "EMPcy",
+        "name": "Cy Moss",
+        "now": 84
+       },
+       {
+        "hours": 36.0,
+        "id": "EMPben",
+        "name": "Ben Ode",
+        "now": 56
+       },
+       {
+        "hours": 48.0,
+        "id": "EMPana",
+        "name": "Ana Silva",
+        "now": 56
+       }
+      ],
+      "hireWeeks": [
+       {
+        "band": "full",
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 0,
+          "f": 12,
+          "shift": 2,
+          "station": "CLEANliquor",
+          "t": 24
+         },
+         {
+          "d": 1,
+          "f": 12,
+          "shift": 6,
+          "station": "CLEANliquor",
+          "t": 24
+         },
+         {
+          "d": 2,
+          "f": 12,
+          "shift": 10,
+          "station": "CLEANliquor",
+          "t": 24
+         },
+         {
+          "d": 3,
+          "f": 12,
+          "shift": 14,
+          "station": "CLEANliquor",
+          "t": 24
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 3,
+        "hours": 36,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 4,
+          "f": 0,
+          "shift": 16,
+          "station": "CLEANliquor",
+          "t": 12
+         },
+         {
+          "d": 5,
+          "f": 0,
+          "shift": 20,
+          "station": "CLEANliquor",
+          "t": 12
+         },
+         {
+          "d": 6,
+          "f": 0,
+          "shift": 24,
+          "station": "CLEANliquor",
+          "t": 12
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 3,
+        "hours": 36,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 4,
+          "f": 12,
+          "shift": 18,
+          "station": "CLEANliquor",
+          "t": 24
+         },
+         {
+          "d": 5,
+          "f": 12,
+          "shift": 22,
+          "station": "CLEANliquor",
+          "t": 24
+         },
+         {
+          "d": 6,
+          "f": 12,
+          "shift": 26,
+          "station": "CLEANliquor",
+          "t": 24
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_customerservice",
+        "slots": [
+         {
+          "d": 0,
+          "f": 12,
+          "shift": 3,
+          "station": "REGliquor",
+          "t": 24
+         },
+         {
+          "d": 3,
+          "f": 12,
+          "shift": 15,
+          "station": "REGliquor",
+          "t": 24
+         },
+         {
+          "d": 4,
+          "f": 12,
+          "shift": 19,
+          "station": "REGliquor",
+          "t": 24
+         },
+         {
+          "d": 5,
+          "f": 0,
+          "shift": 21,
+          "station": "REGliquor",
+          "t": 12
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 3,
+        "hours": 36,
+        "skill": "ba:skill_customerservice",
+        "slots": [
+         {
+          "d": 0,
+          "f": 0,
+          "shift": 1,
+          "station": "REGliquor",
+          "t": 12
+         },
+         {
+          "d": 5,
+          "f": 12,
+          "shift": 23,
+          "station": "REGliquor",
+          "t": 24
+         },
+         {
+          "d": 6,
+          "f": 12,
+          "shift": 27,
+          "station": "REGliquor",
+          "t": 24
+         }
+        ]
+       }
+      ],
+      "shortHires": [],
       "spare": [],
       "spareSkills": {}
      },
@@ -3194,20 +3463,21 @@
         "now": 84
        },
        {
-        "hours": 35.0,
-        "id": "EMPana",
-        "name": "Ana Silva",
+        "hours": 32.0,
+        "id": "EMPben",
+        "name": "Ben Ode",
         "now": 56
        },
        {
-        "hours": 49.0,
-        "id": "EMPben",
-        "name": "Ben Ode",
+        "hours": 35.0,
+        "id": "EMPana",
+        "name": "Ana Silva",
         "now": 56
        }
       ],
       "hireWeeks": [
        {
+        "band": "full",
         "days": 7,
         "hours": 49,
         "skill": "ba:skill_cleaning",
@@ -3215,76 +3485,99 @@
          {
           "d": 0,
           "f": 15,
-          "shift": 2,
+          "shift": 3,
           "station": "CLEANliquor",
           "t": 22
          },
          {
           "d": 1,
           "f": 15,
-          "shift": 6,
+          "shift": 7,
           "station": "CLEANliquor",
           "t": 22
          },
          {
           "d": 2,
           "f": 15,
-          "shift": 10,
+          "shift": 11,
           "station": "CLEANliquor",
           "t": 22
          },
          {
           "d": 3,
           "f": 15,
-          "shift": 14,
+          "shift": 15,
           "station": "CLEANliquor",
           "t": 22
          },
          {
           "d": 4,
           "f": 15,
-          "shift": 18,
+          "shift": 19,
           "station": "CLEANliquor",
           "t": 22
          },
          {
           "d": 5,
           "f": 15,
-          "shift": 22,
+          "shift": 23,
           "station": "CLEANliquor",
-          "t": 22
-         },
-         {
-          "d": 6,
-          "f": 15,
-          "shift": 26,
-          "station": "CLEANliquor",
-          "t": 22
-         }
-        ]
-       },
-       {
-        "days": 2,
-        "hours": 14,
-        "skill": "ba:skill_customerservice",
-        "slots": [
-         {
-          "d": 0,
-          "f": 15,
-          "shift": 3,
-          "station": "REGliquor",
           "t": 22
          },
          {
           "d": 6,
           "f": 15,
           "shift": 27,
+          "station": "CLEANliquor",
+          "t": 22
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 4,
+        "hours": 31,
+        "skill": "ba:skill_customerservice",
+        "slots": [
+         {
+          "d": 0,
+          "f": 12,
+          "shift": 2,
+          "station": "REGliquor",
+          "t": 15
+         },
+         {
+          "d": 0,
+          "f": 15,
+          "shift": 4,
+          "station": "REGliquor",
+          "t": 22
+         },
+         {
+          "d": 1,
+          "f": 8,
+          "shift": 6,
+          "station": "REGliquor",
+          "t": 15
+         },
+         {
+          "d": 2,
+          "f": 15,
+          "shift": 12,
+          "station": "REGliquor",
+          "t": 22
+         },
+         {
+          "d": 6,
+          "f": 15,
+          "shift": 28,
           "station": "REGliquor",
           "t": 22
          }
         ]
        }
       ],
+      "shortHires": [],
       "spare": [],
       "spareSkills": {}
      }
@@ -3320,7 +3613,7 @@
       "bench": [],
       "fewer": [
        {
-        "hours": 50.0,
+        "hours": 40.0,
         "id": "EMPdee",
         "name": "Dee Park",
         "now": 70
@@ -3328,10 +3621,18 @@
       ],
       "hireWeeks": [
        {
-        "days": 2,
-        "hours": 20,
+        "band": "full",
+        "days": 3,
+        "hours": 30,
         "skill": "ba:skill_customerservice",
         "slots": [
+         {
+          "d": 0,
+          "f": 9,
+          "shift": 0,
+          "station": "REGgifts",
+          "t": 19
+         },
          {
           "d": 5,
           "f": 9,
@@ -3349,6 +3650,124 @@
         ]
        }
       ],
+      "shortHires": [],
+      "spare": [],
+      "spareSkills": {}
+     },
+     "full": {
+      "bench": [],
+      "fewer": [
+       {
+        "hours": 36.0,
+        "id": "EMPdee",
+        "name": "Dee Park",
+        "now": 70
+       }
+      ],
+      "hireWeeks": [
+       {
+        "band": "full",
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_customerservice",
+        "slots": [
+         {
+          "d": 0,
+          "f": 12,
+          "shift": 1,
+          "station": "REGgifts",
+          "t": 24
+         },
+         {
+          "d": 1,
+          "f": 12,
+          "shift": 3,
+          "station": "REGgifts",
+          "t": 24
+         },
+         {
+          "d": 2,
+          "f": 12,
+          "shift": 5,
+          "station": "REGgifts",
+          "t": 24
+         },
+         {
+          "d": 6,
+          "f": 0,
+          "shift": 12,
+          "station": "REGgifts",
+          "t": 12
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_customerservice",
+        "slots": [
+         {
+          "d": 3,
+          "f": 12,
+          "shift": 7,
+          "station": "REGgifts",
+          "t": 24
+         },
+         {
+          "d": 4,
+          "f": 0,
+          "shift": 8,
+          "station": "REGgifts",
+          "t": 12
+         },
+         {
+          "d": 5,
+          "f": 0,
+          "shift": 10,
+          "station": "REGgifts",
+          "t": 12
+         },
+         {
+          "d": 6,
+          "f": 12,
+          "shift": 13,
+          "station": "REGgifts",
+          "t": 24
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 3,
+        "hours": 36,
+        "skill": "ba:skill_customerservice",
+        "slots": [
+         {
+          "d": 0,
+          "f": 0,
+          "shift": 0,
+          "station": "REGgifts",
+          "t": 12
+         },
+         {
+          "d": 4,
+          "f": 12,
+          "shift": 9,
+          "station": "REGgifts",
+          "t": 24
+         },
+         {
+          "d": 5,
+          "f": 12,
+          "shift": 11,
+          "station": "REGgifts",
+          "t": 24
+         }
+        ]
+       }
+      ],
+      "shortHires": [],
       "spare": [],
       "spareSkills": {}
      },
@@ -3356,7 +3775,7 @@
       "bench": [],
       "fewer": [
        {
-        "hours": 50.0,
+        "hours": 40.0,
         "id": "EMPdee",
         "name": "Dee Park",
         "now": 70
@@ -3364,10 +3783,18 @@
       ],
       "hireWeeks": [
        {
-        "days": 2,
-        "hours": 20,
+        "band": "full",
+        "days": 3,
+        "hours": 30,
         "skill": "ba:skill_customerservice",
         "slots": [
+         {
+          "d": 0,
+          "f": 9,
+          "shift": 0,
+          "station": "REGgifts",
+          "t": 19
+         },
          {
           "d": 5,
           "f": 9,
@@ -3385,6 +3812,7 @@
         ]
        }
       ],
+      "shortHires": [],
       "spare": [],
       "spareSkills": {}
      }
@@ -3452,6 +3880,7 @@
       ],
       "hireWeeks": [
        {
+        "band": "full",
         "days": 4,
         "hours": 48,
         "skill": "ba:skill_factoryworker",
@@ -3487,6 +3916,7 @@
         ]
        },
        {
+        "band": "full",
         "days": 4,
         "hours": 48,
         "skill": "ba:skill_factoryworker",
@@ -3522,6 +3952,7 @@
         ]
        },
        {
+        "band": "full",
         "days": 4,
         "hours": 48,
         "skill": "ba:skill_factoryworker",
@@ -3557,6 +3988,7 @@
         ]
        },
        {
+        "band": "full",
         "days": 4,
         "hours": 48,
         "skill": "ba:skill_factoryworker",
@@ -3592,6 +4024,7 @@
         ]
        },
        {
+        "band": "full",
         "days": 4,
         "hours": 48,
         "skill": "ba:skill_factoryworker",
@@ -3627,6 +4060,7 @@
         ]
        },
        {
+        "band": "full",
         "days": 4,
         "hours": 48,
         "skill": "ba:skill_factoryworker",
@@ -3662,6 +4096,7 @@
         ]
        }
       ],
+      "shortHires": [],
       "spare": [],
       "spareSkills": {}
      },
@@ -3669,7 +4104,7 @@
       "bench": [],
       "fewer": [
        {
-        "hours": 48.0,
+        "hours": 40.0,
         "id": "EMPeli",
         "name": "Eli Stone",
         "now": 84
@@ -3677,8 +4112,9 @@
       ],
       "hireWeeks": [
        {
-        "days": 4,
-        "hours": 32,
+        "band": "full",
+        "days": 5,
+        "hours": 40,
         "skill": "ba:skill_factoryworker",
         "slots": [
          {
@@ -3692,6 +4128,13 @@
           "d": 2,
           "f": 6,
           "shift": 5,
+          "station": "MACHINEtwo",
+          "t": 14
+         },
+         {
+          "d": 3,
+          "f": 6,
+          "shift": 7,
           "station": "MACHINEtwo",
           "t": 14
          },
@@ -3712,21 +4155,22 @@
         ]
        },
        {
+        "band": "full",
         "days": 4,
         "hours": 32,
         "skill": "ba:skill_factoryworker",
         "slots": [
          {
-          "d": 1,
+          "d": 0,
           "f": 6,
-          "shift": 3,
-          "station": "MACHINEtwo",
+          "shift": 0,
+          "station": "MACHINEone",
           "t": 14
          },
          {
-          "d": 3,
+          "d": 1,
           "f": 6,
-          "shift": 7,
+          "shift": 3,
           "station": "MACHINEtwo",
           "t": 14
          },
@@ -3747,6 +4191,7 @@
         ]
        }
       ],
+      "shortHires": [],
       "spare": [],
       "spareSkills": {}
      }
@@ -7139,6 +7584,54 @@
    }
   ]
  },
+ "marketingAgencies": [
+  {
+   "address": "17 Third Avenue",
+   "closed": false,
+   "contact": false,
+   "hours": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ],
+   "key": "ba:street_thirdavenue#17",
+   "name": "McCain's eMarketing",
+   "open": false,
+   "opens": null,
+   "types": [
+    "SmallInternet",
+    "MediumInternet",
+    "LargeInternet"
+   ]
+  },
+  {
+   "address": "5 Second Avenue",
+   "closed": false,
+   "contact": false,
+   "hours": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ],
+   "key": "ba:street_secondavenue#5",
+   "name": "CityAds",
+   "open": false,
+   "opens": null,
+   "types": [
+    "SmallBillboard",
+    "MediumBillboard",
+    "LargeBillboard"
+   ]
+  }
+ ],
  "meta": {
   "build": 3682,
   "character": "PAYLOADco",
@@ -14095,7 +14588,7 @@
       "skill": "ba:skill_customerservice"
      }
     ],
-    "hoursUncovered": 20,
+    "hoursUncovered": 30,
     "people": 1
    },
    "basis": {
@@ -14472,7 +14965,7 @@
    "cost": {
     "current": 1260.0,
     "currentCover": 0.0,
-    "weekly": 900.0
+    "weekly": 720.0
    },
    "current": {
     "cleaning": 0,
@@ -14543,14 +15036,14 @@
        "skill": "ba:skill_customerservice"
       }
      ],
-     "hoursUncovered": 120,
+     "hoursUncovered": 132,
      "people": 3
     },
     "bench": [],
     "cost": {
      "current": 1260.0,
      "currentCover": 0.0,
-     "weekly": 864.0
+     "weekly": 648.0
     },
     "daysMeasured": 14,
     "daysNeeded": 9,
@@ -14558,7 +15051,7 @@
      "ba:skill_customerservice": {
       "have": 1,
       "hire": 3,
-      "hireHours": 90,
+      "hireHours": 132,
       "kind": "serve",
       "max": 5,
       "min": 4,
@@ -14618,7 +15111,7 @@
      {
       "d": 0,
       "f": 0,
-      "p": 0,
+      "p": null,
       "s": 0,
       "t": 12
      },
@@ -14981,7 +15474,7 @@
        "skill": "ba:skill_customerservice"
       }
      ],
-     "hoursUncovered": 20,
+     "hoursUncovered": 30,
      "people": 1
     },
     "bench": [],
@@ -14989,7 +15482,7 @@
     "cost": {
      "current": 1260.0,
      "currentCover": 0.0,
-     "weekly": 900.0
+     "weekly": 720.0
     },
     "headcount": {
      "ba:skill_customerservice": {
@@ -15053,7 +15546,7 @@
      {
       "d": 0,
       "f": 9,
-      "p": 0,
+      "p": null,
       "s": 0,
       "t": 19
      },
@@ -15128,7 +15621,7 @@
     {
      "d": 0,
      "f": 9,
-     "p": 0,
+     "p": null,
      "s": 0,
      "t": 19
     },
@@ -15216,7 +15709,7 @@
       "skill": "ba:skill_customerservice"
      }
     ],
-    "hoursUncovered": 63,
+    "hoursUncovered": 80,
     "people": 2
    },
    "basis": {
@@ -15593,7 +16086,7 @@
    "cost": {
     "current": 3192.0,
     "currentCover": 1176.0,
-    "weekly": 2198.0
+    "weekly": 1892.0
    },
    "current": {
     "cleaning": 7,
@@ -15774,14 +16267,14 @@
        "skill": "ba:skill_customerservice"
       }
      ],
-     "hoursUncovered": 192,
+     "hoursUncovered": 204,
      "people": 5
     },
     "bench": [],
     "cost": {
      "current": 3192.0,
      "currentCover": 1176.0,
-     "weekly": 2400.0
+     "weekly": 2184.0
     },
     "daysMeasured": 14,
     "daysNeeded": 9,
@@ -15789,7 +16282,7 @@
      "ba:skill_cleaning": {
       "have": 1,
       "hire": 3,
-      "hireHours": 90,
+      "hireHours": 120,
       "kind": "clean",
       "max": 5,
       "min": 4,
@@ -15799,7 +16292,7 @@
      "ba:skill_customerservice": {
       "have": 2,
       "hire": 2,
-      "hireHours": 60,
+      "hireHours": 84,
       "kind": "serve",
       "max": 5,
       "min": 4,
@@ -15900,7 +16393,7 @@
      {
       "d": 0,
       "f": 0,
-      "p": 1,
+      "p": null,
       "s": 0,
       "t": 12
      },
@@ -16112,7 +16605,7 @@
     "ba:skill_cleaning": {
      "have": 1,
      "hire": 1,
-     "hireHours": 30,
+     "hireHours": 49,
      "kind": "clean",
      "max": 3,
      "min": 2,
@@ -16122,7 +16615,7 @@
     "ba:skill_customerservice": {
      "have": 2,
      "hire": 1,
-     "hireHours": 30,
+     "hireHours": 31,
      "kind": "serve",
      "max": 3,
      "min": 2,
@@ -16382,7 +16875,7 @@
        "skill": "ba:skill_customerservice"
       }
      ],
-     "hoursUncovered": 63,
+     "hoursUncovered": 80,
      "people": 2
     },
     "bench": [],
@@ -16390,13 +16883,13 @@
     "cost": {
      "current": 3192.0,
      "currentCover": 1176.0,
-     "weekly": 2198.0
+     "weekly": 1892.0
     },
     "headcount": {
      "ba:skill_cleaning": {
       "have": 1,
       "hire": 1,
-      "hireHours": 30,
+      "hireHours": 49,
       "kind": "clean",
       "max": 3,
       "min": 2,
@@ -16406,7 +16899,7 @@
      "ba:skill_customerservice": {
       "have": 2,
       "hire": 1,
-      "hireHours": 30,
+      "hireHours": 31,
       "kind": "serve",
       "max": 3,
       "min": 2,
@@ -16505,6 +16998,13 @@
      {
       "d": 0,
       "f": 8,
+      "p": 1,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 0,
+      "f": 8,
       "k": "clean",
       "p": 2,
       "s": 1,
@@ -16512,8 +17012,8 @@
      },
      {
       "d": 0,
-      "f": 8,
-      "p": 1,
+      "f": 12,
+      "p": null,
       "s": 0,
       "t": 15
      },
@@ -16543,7 +17043,7 @@
      {
       "d": 1,
       "f": 8,
-      "p": 1,
+      "p": null,
       "s": 0,
       "t": 15
      },
@@ -16588,7 +17088,7 @@
      {
       "d": 2,
       "f": 15,
-      "p": 1,
+      "p": null,
       "s": 0,
       "t": 22
      },
@@ -16793,6 +17293,13 @@
     {
      "d": 0,
      "f": 8,
+     "p": 1,
+     "s": 0,
+     "t": 12
+    },
+    {
+     "d": 0,
+     "f": 8,
      "k": "clean",
      "p": 2,
      "s": 1,
@@ -16800,8 +17307,8 @@
     },
     {
      "d": 0,
-     "f": 8,
-     "p": 1,
+     "f": 12,
+     "p": null,
      "s": 0,
      "t": 15
     },
@@ -16831,7 +17338,7 @@
     {
      "d": 1,
      "f": 8,
-     "p": 1,
+     "p": null,
      "s": 0,
      "t": 15
     },
@@ -16876,7 +17383,7 @@
     {
      "d": 2,
      "f": 15,
-     "p": 1,
+     "p": null,
      "s": 0,
      "t": 22
     },

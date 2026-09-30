@@ -13,9 +13,31 @@ arrival-ceiling fix is the same helper; main's copy kept), `hrIdleHtml()` (this 
 generated files, rebuilt. The payload snapshots moved because main's fixture now sets
 `buildNumberAtStart`.
 
+## Merge of main (30 Sep 2026)
+
+`origin/main` (122 commits: #174 marketing write, #185 staffing in one step, #189-#192
+spare staff and planner) merged. Main wins on staffing and marketing; step 5 adapts:
+
+- **Staff**: the button is main's **Staff this site** (`hrReview({scope: "site", site})`,
+  the site panel's action; `osStaffWork()` counts what it would do). Its `only` counts, the
+  "Hire n · move m" labels and the scoped "Pick N more" (`hrLast.site`) are gone; main's Pick
+  more is scoped by its `site|role` keys. People the plan gives no week (`spSpareIds()`) are
+  spare: not counted in "n of m people", never a warning. A gap the plan's own people would
+  work (`hrUnstaffedOf()`, kept) offers Staff this site too, which writes the week.
+- **Marketing**: phase 3's own write (`osMarketingWrite`, `OS_MK_WIRE`, the `marketingOn`
+  payload key) is gone. The row reads main's `campaigns` and `marketingPlan`, and the button,
+  **Set the cheapest mix**, calls main's `gwMarketing([key], "mix")`; it is disabled with
+  `gwMkWhy()`'s reason while an agency cannot add a switch, and without the write it shows
+  main's BizMan instruction (`gwMkHand()`, taken out of `spMkLine()`). A plan whose cheapest
+  mix is no campaign (promotion full) reads done. `MARKETING_CAMPAIGNS` is now derived from
+  main's `MARKETING_TYPES`. The GW refusal texts are main's.
+- `_business()` keeps this branch's "no statement before the business opened" rule with
+  main's `agencies` argument. i18n catalogues merged per key (main wins on a clash); this
+  branch's orphaned keys pruned; two new keys drafted by gpt-6.1-sol.
+
 ## What is built
 
-- **Step 6, `osRoiHtml()`**, in the board script after `osMarketingWrite()`. `Open` in the
+- **Step 6, `osRoiHtml()`**, in the board script after `osUntilHtml()`. `Open` in the
   step bar unlocks with `osOpenedAt(plan)`. Four tiles (Invested, Profit so far, Paid back,
   Break even), the chart (`osRoiChart()`), "Plan and now" (`osRoiTable()`), a PAID BACK
   strip or a NOT PAYING BACK line, the financing card (`osRoiLoan()`), and **Site page** /

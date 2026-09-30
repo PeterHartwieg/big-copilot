@@ -535,8 +535,17 @@ def plan_sites(specs, employees, status="retail", day=None, build_at_start=None)
     the registration: it is how long the doors have been open, and the page
     calls a shop new by it.
     """
+    save, names, sites, grids, staff = plan_inputs(specs, employees, status, day, build_at_start)
+    return _staffing(save, names, sites, grids, staff, 0.55)
+
+
+def plan_inputs(specs, employees, status="retail", day=None, build_at_start=None):
+    """What plan_sites() hands _staffing(): (save, names, sites, grids, staff)."""
     specs = [dict(spec) for spec in specs]
     opened = [spec.pop("days_open", 14) for spec in specs]
+    # How many people work there, where a test says: the board opens a shop
+    # nobody works at on its open-hours plan (_opens_first()).
+    manned = [spec.pop("staff", None) for spec in specs]
     regs = [registration(**spec) for spec in specs]
     save = Save(
         {
@@ -551,13 +560,35 @@ def plan_sites(specs, employees, status="retail", day=None, build_at_start=None)
         "test.hsg",
     )
     sites = [
-        business(status, reg["StreetNumber"], days)
-        for reg, days in zip(regs, opened)
+        dict(business(status, reg["StreetNumber"], days), **({"staff": n} if n else {}))
+        for reg, days, n in zip(regs, opened, manned)
     ]
     _by_addr, staff = _staff(save, LABELS)
     crew = {p["id"]: p["skill"] for p in staff}
     grids = _hourly(save, regs, sites, STATIONS, set(), crew, LABELS)
-    return _staffing(save, LABELS, sites, grids, staff, 0.55)
+    return save, LABELS, sites, grids, staff
+
+
+def place_station_hours(days, people=(), skill=SERVICE, current=None):
+    """_place_week() on one station of `skill` wanted the given runs: {weekday: [(from, to)]}.
+
+    The factory's way of handing the placer its hours (need `stations`), so
+    no need curve stands between a test and the week it asks for.
+    """
+    grid = {"roles": [{"skill": skill, "label": "x"}],
+            "stations": [{"id": "st", "skill": skill, "rate": 1, "name": "St"}]}
+    runs = {0: [set() for _ in range(7)]}
+    for wd, spans in days.items():
+        for start, end in spans:
+            runs[0][wd].update(range(start, end))
+    need = {skill: {"need": [[1 if h in runs[0][wd] else 0 for h in range(24)] for wd in range(7)],
+                    "basis": [["test"] * 24 for _ in range(7)], "stations": runs}}
+    people = list(people)
+    business = {"key": site_key((STREET, NUMBER)), "name": "Test"}
+    state = {p["id"]: ba_dashboard._fresh_state() for p in people}
+    return ba_dashboard._place_week(grid, need, ba_dashboard.ALL_DAY_OPEN, [], people,
+                                    {p["id"]: p for p in people}, business, [], state,
+                                    current=current)
 
 
 def plan(items, employees, hourly, day=None, build_at_start=None, **kw):
@@ -702,18 +733,54 @@ class TwelveHourDayTest(unittest.TestCase):
         self.assertFalse(ba_dashboard._can_work(self.person(), state, self.slot(10, 15)))
 
     def test_a_hire_with_eight_hours_takes_four_more_and_not_five(self):
-        hire = {"hours": 8.0, "busy": [set() for _ in range(7)], "slots": []}
-        hire["busy"][2].update(range(0, 8))
-        self.assertTrue(ba_dashboard._hire_fits(self.slot(10, 14), hire))
-        self.assertFalse(ba_dashboard._hire_fits(self.slot(10, 15), hire))
+        # A hire is a placeholder person the same rules are asked of.
+        hire = ba_dashboard._placeholder(SERVICE, 0)
+        state = ba_dashboard._fresh_state()
+        state["busy"][2].update(range(0, 8))
+        state["hours"] = 8.0
+        state["days"].add(2)
+        self.assertTrue(ba_dashboard._can_work(hire, state, self.slot(10, 14)))
+        self.assertFalse(ba_dashboard._can_work(hire, state, self.slot(10, 15)))
 
     def test_a_day_of_two_long_entries_needs_two_hires(self):
         # 0-7 and 12-19 are 14 hours with no overlap: one person under the old
         # 14-hour day, two under the 12-hour one.
-        weeks = ba_dashboard._hire_weeks([self.slot(0, 7), self.slot(12, 19)])
-        self.assertEqual(len(weeks), 2)
-        for week in weeks:
-            self.assertTrue(all(len(day) <= SHIFT_CAP for day in week["busy"]))
+        week = place_station_hours({2: [(0, 7), (12, 19)]})
+        self.assertEqual(week["headcount"][SERVICE]["hire"], 2)
+        self.assertEqual(sorted(w["hours"] for w in week["hireWeeks"][SERVICE]), [7, 7])
+        for hire in week["hireWeeks"][SERVICE]:
+            self.assertTrue(all(len(day) <= SHIFT_CAP for day in hire["busy"]))
+
+
+class HireBandTest(unittest.TestCase):
+    """A hire week says which contract it suits (review round 1, item 2)."""
+
+    FULL = {"id": "f", "name": "F", "skills": {SERVICE}, "wage": 20.0, "addr": (STREET, NUMBER),
+            "demands": [], "band": (30, 50), "days": None, "weekendsOff": False, "blackouts": [],
+            "nocleaning": False, "training": False, "now": 0, "home": set(), "desks": []}
+
+    def test_a_hire_too_short_for_full_time_is_lifted_to_part_time(self):
+        # Four twelve-hour days and a six-hour one: the full-timer takes the
+        # four, the hire the six. Thirty is out of reach (18 spare), ten is not.
+        week = place_station_hours({0: [(8, 20)], 1: [(8, 20)], 2: [(8, 20)], 3: [(8, 20)],
+                                    4: [(8, 14)]}, people=[dict(self.FULL)])
+        [hire] = week["hireWeeks"][SERVICE]
+        self.assertGreaterEqual(hire["hours"], ba_dashboard.PART_TIME_FLOOR)
+        self.assertLess(hire["hours"], FULL_TIME[0])
+        fields = ba_dashboard._hire_fields(dict(week, spareIds=[], bench=[]))
+        self.assertEqual([w["band"] for w in fields["hireWeeks"]], ["part"])
+        self.assertEqual(fields["shortHires"], [])
+
+    def test_a_hire_nobody_can_lift_is_said(self):
+        week = place_station_hours({2: [(0, 7), (12, 19)]})
+        fields = ba_dashboard._hire_fields(dict(week, spareIds=[], bench=[]))
+        self.assertEqual([w["band"] for w in fields["hireWeeks"]], ["short", "short"])
+        self.assertEqual(fields["shortHires"], [{"skill": SERVICE, "hours": 7},
+                                                {"skill": SERVICE, "hours": 7}])
+
+    def test_the_bands(self):
+        self.assertEqual([ba_dashboard._hire_band(h) for h in (48, 30, 29, 10, 9, 0)],
+                         ["full", "full", "part", "part", "short", "short"])
 
 
 class RosterRulesTest(unittest.TestCase):
@@ -879,7 +946,10 @@ class HeadcountTest(unittest.TestCase):
         guard = row["headcount"][GUARD]
         self.assertEqual(guard["kind"], "security")
         self.assertEqual((guard["have"], guard["hire"]), (0, 4))
-        self.assertEqual(guard["hireHours"], 120)
+        # The hours the four hires' weeks hold: the locker's whole week.
+        self.assertEqual(guard["hireHours"], 168)
+        self.assertEqual(guard["hireHours"],
+                         sum(w["hours"] for w in row["_hire"]["hireWeeks"] if w["skill"] == GUARD))
         self.assertEqual(row["headcount"][SERVICE]["kind"], "serve")
 
     def test_a_site_with_nobody_assigned_gets_hiring_lines_and_no_shifts(self):
@@ -1443,8 +1513,10 @@ class OneWeekPerPersonTest(unittest.TestCase):
     def sites(self):
         return plan_sites(
             [
-                dict(items=[(1, REGISTER)], hourly={h: 1 for h in range(24)}, number=12),
-                dict(items=[(2, REGISTER)], hourly={h: 1 for h in range(24)}, number=14),
+                dict(items=[(1, REGISTER)], hourly={h: 1 for h in range(24)}, number=12,
+                     staff=1),
+                dict(items=[(2, REGISTER)], hourly={h: 1 for h in range(24)}, number=14,
+                     staff=1),
             ],
             [employee("free", [SERVICE], here=False,
                       demands=("ba:jobdemand_fulltime",))],
@@ -1486,6 +1558,35 @@ class OneWeekPerPersonTest(unittest.TestCase):
         first = json.dumps([r["shifts"] for r in self.sites()], sort_keys=True)
         second = json.dumps([r["shifts"] for r in self.sites()], sort_keys=True)
         self.assertEqual(first, second)
+
+
+class BenchReservationTest(unittest.TestCase):
+    """Only the plan a shop is on by default holds a bench member back from the
+    offices and factories (review round 1, item 4)."""
+
+    def world_after(self, spec, crew):
+        save, names, sites, grids, staff = plan_inputs([spec], crew)
+        world = ba_dashboard._plan_world(save, staff)
+        [row] = _staffing(save, names, sites, grids, staff, 0.55, world)
+        return row, [p["id"] for p in world["bench"]]
+
+    def test_full_cover_draws_on_the_bench_but_reserves_nobody(self):
+        # A measured shop with a cashier of its own, on its demand plan: its
+        # 24/7 full cover needs more hands and draws the unassigned one.
+        crew = [employee("own", [SERVICE], demands=("ba:jobdemand_fulltime",)),
+                employee("free", [SERVICE], here=False)]
+        row, left = self.world_after(dict(items=[(1, REGISTER)], hourly={h: 1 for h in range(8, 12)},
+                                          opens=((8, 12),), staff=1), crew)
+        self.assertEqual(row["bench"], [])
+        self.assertTrue(row["fullCover"]["bench"])
+        self.assertEqual(left, ["free"])
+
+    def test_the_open_hours_plan_of_a_new_shop_reserves_its_draw(self):
+        crew = [employee("free", [SERVICE], here=False)]
+        row, left = self.world_after(dict(items=[(1, REGISTER)], hourly={}, weeks=0,
+                                          opens=((8, 20),)), crew)
+        self.assertTrue(row["openCover"]["bench"])
+        self.assertEqual(left, [])
 
 
 class UnmeasuredSiteTest(unittest.TestCase):
@@ -1625,7 +1726,9 @@ class HiringResidueTest(unittest.TestCase):
         The same fixture: the board says "hire 2", and the player's next
         question is *for when*. Those four twelve-hour lines are the answer,
         and they are in `shifts` with nobody on them so the page can draw them
-        where they fall rather than only counting them.
+        where they fall rather than only counting them. The two hires also
+        take a weekday line each off the staff's surplus, so each of them has
+        a full week rather than 24 hours (_place_hires()).
         """
         people = [
             employee(f"p{i}", [SERVICE], demands=("ba:jobdemand_freeweekends",))
@@ -1633,16 +1736,20 @@ class HiringResidueTest(unittest.TestCase):
         ]
         row = plan([(1, REGISTER)], people, {h: 1 for h in range(24)})
         open_rows = open_lines(row)
-        self.assertEqual({r["d"] for r in open_rows}, {6, 0})
         self.assertEqual(
-            sorted((r["d"], r["f"], r["t"]) for r in open_rows),
+            sorted((r["d"], r["f"], r["t"]) for r in open_rows if r["d"] in (6, 0)),
             [(0, 0, 12), (0, 12, 24), (6, 0, 12), (6, 12, 24)],
         )
+        self.assertEqual([r for r in staffed(row) if r["d"] in (6, 0)], [])
         # Still one line per station per hour, and still priced at nothing:
         # there is no wage to quote until somebody is hired at one.
         self.assertEqual({r["s"] for r in open_rows}, {0})
-        weekend = sum(hours(r) for r in open_rows)
+        weekend = sum(hours(r) for r in open_rows if r["d"] in (6, 0))
         self.assertEqual(weekend, 48)
+        weeks = row["_hire"]["hireWeeks"]
+        self.assertEqual(len(weeks), 2)
+        self.assertTrue(all(w["hours"] >= FULL_TIME[0] for w in weeks), weeks)
+        self.assertEqual(sum(w["hours"] for w in weeks), sum(hours(r) for r in open_rows))
         # `cost.weekly` still means what it always did: what the plan pays the
         # people it can price. The same week without the hiring lines costs
         # exactly the same, which is the whole claim.
@@ -1953,16 +2060,16 @@ class DayCountTest(unittest.TestCase):
     def test_a_day_nobody_can_spare_is_reported_rather_than_forced(self):
         """A site whose every week is already full has no day left to share.
 
-        One person assigned to a shop open twelve hours a day: they take four
-        days and stop at the fifty hours full time allows. The fifth day would
-        have to come out of somebody else's shift, and there is nobody else --
-        the rest of the week is hiring lines.
+        One person assigned to a shop open twelve hours a day, four days a
+        week: they take all four days, 48 hours. The fifth day would have to
+        come out of somebody else's shift, and there is nobody else.
         """
+        # Open four days: with a fifth, a hire would work it and share it.
         people = [
             employee("a_five", [SERVICE],
                      demands=("ba:jobdemand_fulltime", "ba:jobdemand_fivedaysweek"))
         ]
-        row = plan([(1, REGISTER)], people, FLAT, opens=((8, 20),))
+        row = plan([(1, REGISTER)], people, FLAT, opens=((8, 20),), open_days=(1, 2, 3, 4))
         short = {row["people"][r["p"]]["name"]: (r["days"], r["want"])
                  for r in row["shortDays"]}
         self.assertEqual(short, {"A_FIVE": (4, 5)})
@@ -2012,12 +2119,111 @@ class ExchangeTest(unittest.TestCase):
             [(1, REGISTER), (2, REGISTER), (8, CLEAN_STATION), (9, LOCKER)],
             people, FLAT, opens=((6, 23),), open_days=(0, 1, 2, 4, 5, 6),
         )
-        self.assertEqual(row["shortDays"], [], "every day count is met")
+        # Somebody with no hours at all is spare, not short (Peter, 29
+        # September 2026: "0 h is fine"): a part-timer the hires' settling cut
+        # to 21 hours is stood down whole where the others can take it.
+        self.assertEqual([r for r in row["shortDays"] if r["days"]], [],
+                         "every day count is met")
         self.assertEqual([r for r in row["shortHours"] if r["hours"]], [],
                          "nobody is left on a partial week")
         for who, week in self.weeks(row).items():
             self.assertGreaterEqual(week["hours"], 10, who)
             self.assertLessEqual(week["hours"], FULL_TIME[1], who)
+
+    def test_two_guards_who_share_the_locker_are_kept(self):
+        """QA on a real hub-and-spoke save: a locker open 08-20 and two
+        full-time guards, one with no evenings and one with no mornings.
+        Neither may take the 08-20 line whole, and the game's own week has
+        them share it; the plan used to give both no hours and hire two more.
+        It cuts the line for them instead: no hire, both kept."""
+        row = plan([(9, LOCKER)], [
+            employee("g1", [GUARD], demands=("ba:jobdemand_fulltime", "ba:jobdemand_noevenings")),
+            employee("g2", [GUARD], demands=("ba:jobdemand_fulltime", "ba:jobdemand_nomornings")),
+        ], FLAT, opens=((8, 20),))
+        self.assertEqual(sum(h["hire"] for h in row["headcount"].values()), 0)
+        weeks = self.weeks(row)
+        self.assertEqual(sorted(weeks), ["G1", "G2"])
+        for who, week in weeks.items():
+            self.assertGreaterEqual(week["hours"], 30, who)
+        self.assertEqual(sum(week["hours"] for week in weeks.values()), 84)
+
+    def assert_no_short_week(self, row, band_floor):
+        for who, week in self.weeks(row).items():
+            self.assertFalse(0 < week["hours"] < band_floor[who], (who, week))
+
+    def test_a_cut_that_leaves_a_guard_short_is_not_made(self):
+        """Round 7: the same locker, the no-mornings guard on a four-day week.
+        The pieces go out a line at a time, and after four afternoons that
+        guard may take no more: four days cut, 24 h each, three for a hire,
+        two full-time guards under 30. The role's pass is all or nothing, so
+        it is undone: both spare and two hires, as the owner accepts."""
+        row = plan([(9, LOCKER)], [
+            employee("g1", [GUARD], demands=("ba:jobdemand_fulltime", "ba:jobdemand_noevenings")),
+            employee("g2", [GUARD], demands=("ba:jobdemand_fulltime", "ba:jobdemand_nomornings",
+                                             "ba:jobdemand_fourdaysweek")),
+        ], FLAT, opens=((8, 20),))
+        self.assert_no_short_week(row, {"G1": 30, "G2": 30})
+        for who, week in self.weeks(row).items():
+            if who == "G2":
+                self.assertEqual(len(week["days"]), 4)
+        self.assertEqual(sum(h["hire"] for h in row["headcount"].values()), 2)
+
+    def test_one_role_s_failed_cut_leaves_another_s_alone(self):
+        """Round 8: a cleaning station and a locker, both 08-20, each with one
+        member of staff who will not work evenings and one who will not work
+        mornings; the second guard also on a four-day week. The guards' cut
+        is undone, and the cleaners' stands: no cleaner to hire."""
+        row = plan([(8, CLEAN_STATION), (9, LOCKER)], [
+            employee("c1", [CLEANING], demands=("ba:jobdemand_fulltime", "ba:jobdemand_noevenings")),
+            employee("c2", [CLEANING], demands=("ba:jobdemand_fulltime", "ba:jobdemand_nomornings")),
+            employee("g1", [GUARD], demands=("ba:jobdemand_fulltime", "ba:jobdemand_noevenings")),
+            employee("g2", [GUARD], demands=("ba:jobdemand_fulltime", "ba:jobdemand_nomornings",
+                                             "ba:jobdemand_fourdaysweek")),
+        ], FLAT, opens=((8, 20),))
+        self.assertEqual(row["headcount"][CLEANING]["hire"], 0)
+        self.assert_no_short_week(row, {"C1": 30, "C2": 30, "G1": 30, "G2": 30})
+
+    def test_another_cut_hour_where_the_middle_leaves_a_line(self):
+        """Round 8: six days of a locker 08-20, a full-time guard with no
+        evenings and a part-time one with no mornings. Cut at 14 the part-timer
+        reaches 30 h on the fifth afternoon and the sixth goes to a hire; cut
+        at 15 it is 42 h and 30 h, and nobody to hire."""
+        row = plan([(9, LOCKER)], [
+            employee("g1", [GUARD], demands=("ba:jobdemand_fulltime", "ba:jobdemand_noevenings")),
+            employee("g2", [GUARD], demands=("ba:jobdemand_parttime", "ba:jobdemand_nomornings")),
+        ], FLAT, opens=((8, 20),), open_days=(0, 1, 2, 3, 4, 5))
+        self.assertEqual(sum(h["hire"] for h in row["headcount"].values()), 0)
+        self.assertEqual(sorted(week["hours"] for week in self.weeks(row).values()), [30, 42])
+
+    def test_a_full_timer_is_not_cut_to_part_time_by_the_pieces(self):
+        """Round 7 and 9: four days open, a full-time guard with no evenings
+        and a part-time one with no mornings. Cut at 14 the full-timer would
+        have 24 h, under their 30, so that pass fails; the cut at 16 gives
+        32 h and 16 h, both bands met, and nobody to hire."""
+        row = plan([(9, LOCKER)], [
+            employee("g1", [GUARD], demands=("ba:jobdemand_fulltime", "ba:jobdemand_noevenings")),
+            employee("g2", [GUARD], demands=("ba:jobdemand_parttime", "ba:jobdemand_nomornings")),
+        ], FLAT, opens=((8, 20),), open_days=(0, 1, 2, 3))
+        self.assert_no_short_week(row, {"G1": 30, "G2": 10})
+        self.assertEqual(sum(h["hire"] for h in row["headcount"].values()), 0)
+        self.assertEqual({who: week["hours"] for who, week in self.weeks(row).items()},
+                         {"G1": 32, "G2": 16})
+
+    def test_one_role_s_undo_keeps_a_two_role_person_s_other_pieces(self):
+        """Round 9: X cleans and guards and will not work mornings. The
+        cleaners' cut pairs X with C1; the guards' cut, a four-day guard
+        short, is undone, and X keeps the cleaning afternoons."""
+        row = plan([(8, CLEAN_STATION), (9, LOCKER)], [
+            employee("c1", [CLEANING], demands=("ba:jobdemand_fulltime", "ba:jobdemand_noevenings")),
+            employee("x", [CLEANING, GUARD],
+                     demands=("ba:jobdemand_fulltime", "ba:jobdemand_nomornings")),
+            employee("g1", [GUARD], demands=("ba:jobdemand_fulltime", "ba:jobdemand_noevenings")),
+            employee("g2", [GUARD], demands=("ba:jobdemand_fulltime", "ba:jobdemand_nomornings",
+                                             "ba:jobdemand_fourdaysweek")),
+        ], FLAT, opens=((8, 20),))
+        self.assertEqual(row["headcount"][CLEANING]["hire"], 0)
+        self.assertEqual(self.weeks(row)["X"]["hours"], 42)
+        self.assert_no_short_week(row, {"C1": 30, "X": 30, "G1": 30, "G2": 30})
 
     def test_a_week_that_cannot_be_reached_is_not_cut_at_all(self):
         """All or nothing: a shortfall that cannot be closed moves no shift.
@@ -2514,6 +2720,104 @@ class RosterInvariantTest(unittest.TestCase):
                     drawn[post["skill"]] += hours(shift)
             for skill, count in row["headcount"].items():
                 self.assertEqual(drawn[skill], count["needed"], f"{label}: {skill}")
+
+
+class KeptWeekTest(unittest.TestCase):
+    """Somebody already working here may be given no hours, or a week that
+    still meets every demand they hold; nothing in between (Peter, 28 and 29
+    September 2026: "0 h is fine" -- they are spare, and the Staff page offers
+    to move them). A week that would cut them short keeps the week they have.
+    """
+
+    def shop(self, crew, shifts, hourly=None, **kw):
+        return plan([(1, REGISTER), (2, REGISTER)], crew,
+                    hourly or {h: (12 if 8 <= h < 20 else 0) for h in range(24)},
+                    opens=((6, 22),), shifts=shifts, **kw)
+
+    def week(self, i, days, start=6, end=18, register=1):
+        """Shifts now for s<i> (or the id `i` itself, a string)."""
+        return [{"wd": d, "employeeId": i if isinstance(i, str) else f"s{i}", "itemInstanceId": register,
+                 "startingHour": start, "endingHour": end, "type": 1} for d in days]
+
+    def hours(self, row):
+        out = collections.Counter()
+        for s in staffed(row):
+            out[who(row, s)] += hours(s)
+        return out
+
+    def test_nobody_satisfied_now_is_cut_to_a_stub(self):
+        # Two registers; each of six full-timers works two days 06-18 and two
+        # evenings 18-22 on one of them now, 32 hours, and the customers want
+        # about one register 08-20.
+        crew = [employee(f"s{i}", [SERVICE], demands=(FULLTIME,)) for i in range(6)]
+        pairs = [(reg, day) for reg in (1, 2) for day in range(7)]
+        shifts = []
+        for i in range(6):
+            for reg, day in pairs[2 * i:2 * i + 2]:
+                shifts += self.week(i, [day], 6, 18, reg) + self.week(i, [(day + 3) % 7], 18, 22, reg)
+        row = self.shop(crew, shifts)
+        for plan_row in (row, row["fullCover"], row["openCover"]):
+            got = {}
+            for s in staffed(plan_row):
+                got[who(row, s)] = got.get(who(row, s), 0) + hours(s)
+            self.assertTrue(all(h >= 30 for h in got.values()), got)
+            # Everybody else here has no week at all: spare, to be moved.
+            idle = {f"s{i}" for i in range(6)} - set(got)
+            self.assertEqual(set(plan_row["_hire"]["spare"]), idle)
+
+    def test_a_stub_keeps_the_week_they_have(self):
+        """56 hours of one register 08-16 and two full-timers on 32 each now:
+        the fewest people is 48 and 8, and no swap lifts the 8 to 30. The one
+        it would cut short keeps their week; without the rule they would not."""
+        crew = [employee("a", [SERVICE], demands=(FULLTIME,)),
+                employee("b", [SERVICE], demands=(FULLTIME,))]
+        shifts = self.week("a", [0, 1, 2, 3], 8, 16) + self.week("b", [3, 4, 5, 6], 8, 16, 2)
+
+        def run():
+            row = plan([(1, REGISTER), (2, REGISTER)], crew,
+                       {h: (12 if 8 <= h < 16 else 0) for h in range(24)},
+                       opens=((8, 16),), shifts=shifts)
+            return self.hours(row)
+
+        got = run()
+        self.assertTrue(all(h == 0 or h >= 30 for h in got.values()), got)
+        with unittest.mock.patch.object(ba_dashboard, "_weeks_now", lambda current, pool: {}):
+            bare = run()
+        self.assertTrue(any(0 < h < 30 for h in bare.values()), bare)
+
+    def test_a_cut_that_keeps_them_satisfied_is_made_and_named(self):
+        """50 hours now, a plan needing fewer: they may go down to their floor."""
+        crew = [employee("a", [SERVICE], demands=(FULLTIME,)),
+                employee("b", [SERVICE], demands=(FULLTIME,))]
+        for e in crew:
+            e["assignedWeeklyHours"] = 48
+        shifts = self.week(0, [0, 1, 2, 3], 8, 20) + self.week(1, [4, 5, 6, 0], 8, 20, register=2)
+        row = self.shop(crew, shifts, {h: (6 if 8 <= h < 20 else 0) for h in range(24)})
+        got = self.hours(row)
+        self.assertTrue(all(h >= 30 for h in got.values()), got)
+        self.assertEqual(row["shortHours"], [])
+        cut = {pid for pid, h in got.items() if h < 48}
+        self.assertTrue(cut)
+        self.assertEqual({f["id"] for f in row["_hire"]["fewer"]}, cut)
+
+    def test_somebody_with_no_hours_demand_gives_way(self):
+        """Six hours a day for one register: the full-timer keeps a full week,
+        and whoever holds no hours demand works what is left, or nothing."""
+        crew = [employee("a", [SERVICE], demands=(FULLTIME,)), employee("z", [SERVICE])]
+        shifts = self.week("a", [0, 1, 2]) + self.week("z", [3, 4, 5], register=2)
+        row = self.shop(crew, shifts, {h: (6 if 8 <= h < 14 else 0) for h in range(24)})
+        got = self.hours(row)
+        self.assertGreaterEqual(got["a"], 30)
+        self.assertLessEqual(got["a"] + got["z"], 42)
+
+    def test_somebody_short_now_is_not_made_shorter(self):
+        """20 of 30 hours now: they may stay short, or go, not sink under 20."""
+        crew = [employee(f"s{i}", [SERVICE], demands=(FULLTIME,)) for i in range(4)]
+        shifts = []
+        shifts += self.week(0, [0, 1, 2]) + self.week(1, [3, 4, 5])
+        shifts += self.week(2, [6, 0, 1], register=2) + self.week(3, [3, 4], 8, 18, register=2)
+        row = self.shop(crew, shifts, {h: (6 if 8 <= h < 14 else 0) for h in range(24)})
+        self.assertTrue(self.hours(row)["s3"] == 0 or self.hours(row)["s3"] >= 20)
 
 
 class CurrentSecurityTest(unittest.TestCase):

@@ -109,7 +109,8 @@ state from the listener's threads.
   "busy": false,
   "size": 5123456,
   "refreshedAt": "2026-09-22T14:33:20Z",
-  "writes": ["uniforms", "imports", "schedule", "hire"],
+  "writes": ["uniforms", "imports", "schedule", "hire", "marketing"],
+  "features": ["hire.reschedule", "hire.undo"],
   "paired": false
 }
 ```
@@ -124,10 +125,18 @@ state from the listener's threads.
   than the served bytes.
 - `writes` lists the write kinds this mod accepts (see "Writes" below); a mod before 0.2.0
   sends no `writes`, which a client reads as `[]`. Mod 0.2.0 lists `uniforms`, `imports`,
-  `schedule`; 0.3.0 adds `hire`, and a client offers a kind only when it is listed. `paired` is true only when this request
+  `schedule`; 0.3.0 adds `hire`; 0.4.0 adds `marketing`. A client offers a kind only when it
+  is listed, and tells the player to update the mod when the kind is missing. `paired` is true only when this request
   carried a token the game approved for its origin, so a poll without one always says
   false. Both are
   additive: `schemaVersion` stays 1.
+- `features` (mod 0.4.0 and later) lists what a write kind can do beyond what its version
+  of the contract first said; a mod before 0.4.0 sends none, which a client reads as `[]`.
+  0.4.0 lists `hire.reschedule` (a `hire` call may carry weeks no hire or move reaches) and
+  `hire.undo` (`POST /write/undo {"kind": "hire"}` undoes a hire call). A client asks for
+  a feature only when it is listed, and says nothing about a token it does not know.
+  Additive: `schemaVersion` stays 1. A capability is named rather than read off
+  `modVersion`, whose numbers may be renamed before a release.
 
 ### `GET /save`
 
@@ -183,8 +192,12 @@ Every JSON answer, `/health` included, carries `Cache-Control: no-store`: a cach
 
 Mod 0.2.0 and later. Three kinds change the game — `uniforms`, `imports`, `schedule` —
 and a fourth undoes the last write of a kind. Mod 0.3.0 adds `hire`, which hires candidates,
-moves staff between sites and writes their weeks in one call, and has no undo. The scope and the game rules behind each are
-`docs/mod-write-back-scope.md`; this section is only the wire.
+moves staff between sites and writes their weeks in one call. Mod 0.4.0 lets that call carry
+the weeks of sites no hire or move reaches, and undoes it in one step (`features`
+`hire.reschedule` and `hire.undo`); before 0.4.0 a hire has no undo. Mod 0.4.0 also adds `marketing`, which sets the marketing
+campaigns each site runs. The scope and the game rules behind each are
+`docs/mod-write-back-scope.md` (`docs/marketing-write-scope.md` for `marketing`); this
+section is only the wire.
 
 **Every write** is `POST /write/<kind>` with a JSON body (`Content-Type: application/json`,
 at most 256 KiB, a `hire` body at most 2 MiB, else `413 {"error":"too_large"}`) and the header
@@ -442,10 +455,19 @@ A test vector both sides pin: the two lines
 #### `POST /write/hire`
 
 Mod 0.3.0 and later. Hires headhunter candidates and assigns them to a site, moves employees
-between sites, and writes the weeks of the sites involved, in one call. Everything in "Every
-write" above holds, except that there is no undo and a candidate who has left the game's list
+between sites, and writes the weeks of the sites involved, in one call. From 0.4.0 the same
+call may also write the weeks of sites nobody is hired into or moved to or from
+(`hire.reschedule`), so the board's whole staffing action is one call, and it has an undo
+(`hire.undo`, under "Undoing a hire" below). Everything in "Every
+write" above holds, except that a mod before 0.4.0 has no undo for it and a candidate who has left the game's list
 is skipped rather than refused (below). The game rules behind it are
 `docs/mod-write-back-scope.md` section 11.
+
+Why the one action extends this call rather than adding a `/write/staff`: the body, the
+checks, the answer and the apply order are this call's already; the change is one parse rule
+relaxed (a `sites[]` entry no hire or move touches) and an undo recorded on apply. A client
+that does not see the features never sends such a site, so older mods and older pages keep
+working as they are.
 
 ```json
 {"dryRun": true,
@@ -469,7 +491,11 @@ is skipped rather than refused (below). The game rules behind it are
 - `moves[]`: an employee assigned to `to`. `from` is where the bytes had them, `null` for an
   unassigned employee; it is the move's compare-and-set. `from` equal to `to` is `400`.
 - `sites[]`: every address a hire or a move targets, plus any move source whose week the
-  page rewrites; nothing else (`400`). A target with no `sites[]` entry is `400`.
+  page rewrites; before 0.4.0 nothing else (`400`). A target with no `sites[]` entry is `400`.
+  From 0.4.0 (`hire.reschedule`) an entry may name any other site with a week (`days` not
+  null): a **reschedule-only** site, checked and written like the others. A reschedule-only
+  entry with `days: null` would do nothing and is still `400`. A call may hold only
+  reschedule-only sites, with `hires` and `moves` empty.
   - `days` has `/write/schedule`'s shape and rules and replaces the site's seven days;
     `expect` is then the site's shift print (a string) and `openAllHours` works as there.
   - `days: null` assigns only and leaves the week as it is; `expect` must then be `null`
@@ -486,8 +512,14 @@ is skipped rather than refused (below). The game rules behind it are
 - `days` replaces all seven days, so for a factory or an office the page keeps, in `days`,
   the site's live shifts on stations its plan does not own (drivers, cleaners).
 - A move source whose week the page does not rewrite loses the mover's shifts there (the
-  game's move clears them; `moved[].shiftsCleared` says how many). The page names that in its
-  review before the confirm.
+  game's move clears them, except a delivery driver's; `moved[].shiftsCleared` says how many). The page names that in its
+  review before the confirm. It rewrites a source only where its week changes by more than
+  the mover's shifts.
+- Where the player put a shop on full cover (24/7), its week is cut against 0 to 24 and its
+  entry sends `openAllHours: true`; every other entry sends `false`.
+- With a mod before 0.4.0 the page sends the weeks no hire or move reaches as
+  `/write/schedule` calls, one site after another, after the hire call; none of them can be
+  undone with the hire.
 - People in training (`EmployeeInstance.trainingSession` set, the game's `IsTraining`) are
   never proposed for a move; the mod would refuse them `in_training`.
 
@@ -505,7 +537,16 @@ is skipped rather than refused (below). The game rules behind it are
 4. Each `sites[]` entry with `days`: the schedule write's apply, unchanged.
 5. `MarkChange()`, one notification ("Big Copilot hired 34 and moved 3"), a refresh. The
    `schedule` kind's undo is cleared if it belongs to a site this call wrote (a move that
-   cleared someone's shifts counts as writing the site they left).
+   cleared someone's shifts counts as writing the site they left). From 0.4.0 the call's own
+   undo replaces the `hire` kind's (below); an apply that changed nothing replaces it with
+   nothing, as for every kind.
+
+From 0.4.0 the mod records, before step 2, what the undo will need: the game's day and hour;
+the days (shifts and opening hours) of every site with `days` and of every move source where
+the mover holds shifts; each mover's business, and whether the move takes a delivery
+vehicle or an import contract off them; each candidate's place in `CandidateEmployeeInstances`,
+their `candidateInfo`, `assignedAddress`, `dayHired`, `nextSickDay`, complaint state and any
+pending salary negotiation's flags.
 
 **Gone.** A candidate the game's list no longer holds (expired, hired or discarded in the
 phone since the bytes, or an id that never was one: the mod cannot tell these apart) is
@@ -534,10 +575,18 @@ confirm.
 - `hired` and `moved` are what the call did (a dry run: would do), in request order: every
   hire and move with no row error of its own. `hired[].wage` is the live `hourlyWage`, `hoursLeft` the live
   `hoursUntilExpiring`. `moved[].from` is the business the person leaves (`null` from the
-  bench); `shiftsCleared` how many shifts they held there.
+  bench); `shiftsCleared` how many shifts the move clears there. From 0.4.0 that is 0 for
+  someone who can drive a delivery vehicle: the game's move (`UnassignEmployeeFromAllWorkshifts`)
+  clears no shift of theirs, which stay at the business they leave (a known game behaviour;
+  mods before 0.4.0 counted them anyway).
 - `skipped[]`: each gone candidate; `name` is null when the mod no longer knows them, and
   `hoursDropped` sums the hours of the shifts dropped for them.
 - `wageAdded` is the sum of `hourlyWage` over `hired`, per hour (the page turns it into a day).
+- `undoable` (an apply from mod 0.4.0, `hire.undo`): whether the mod kept this call's undo.
+  False when the call changed nothing, when the mod could not record what the undo needs
+  before it applied (the call still applies; the page then offers no Undo), or when the call
+  hired the company's first employee (its undo would refuse: `hire` row below). Absent from a
+  dry run and from older mods. A page offers Undo for a 0.4.0 apply only where it is `true`.
 - `sites[]`, one per request entry, in request order, with the schedule write's answer fields.
   An assign-only site answers `before` and `after` null and `removed`/`added` 0.
   `leftWithout` does not list people this call moves away. `siteError` repeats the site's
@@ -562,9 +611,199 @@ list, so the board never proposes a `no_skill` row.
 An apply with any row answers `409` with the rows: `changed` when any row's error is
 `changed` (the page refreshes and re-plans), else `refused`. Nothing is written.
 
-A hire has no undo: `POST /write/undo {"kind": "hire"}` answers `409 {"error":"no_undo"}`.
-To let someone go, the player uses MyEmployees in the game. The game's approval popup names
-hiring among what the board may change.
+Before 0.4.0 a hire has no undo: `POST /write/undo {"kind": "hire"}` answers
+`409 {"error":"no_undo"}`, and to let someone go the player uses MyEmployees in the game.
+The game's approval popup names hiring among what the board may change.
+
+##### Undoing a hire (mod 0.4.0, `hire.undo`)
+
+`POST /write/undo {"kind": "hire", "dryRun": false}` takes back the last applied hire call of
+this city session, **all or nothing**, and only on the game day it was made:
+
+- every week it changed is put back: each site's shifts, and the opening hours of the days
+  it opened, where the site still holds exactly what the call left (its print);
+- every move is reversed as the game's own move is made: the person's shifts at the site
+  they were moved to are cleared, and they go back to the site they came from (or to no
+  site, for someone the call took from the bench); the source's week, restored above, gives
+  them their shifts there back;
+- every hire is reversed quietly, not fired: the person leaves the company and goes back
+  into `CandidateEmployeeInstances` at the place they held, with their `candidateInfo`
+  (headhunter, agency or job board) and the hours their application had left less the game
+  hours since the hire (an application that would have run out meanwhile is gone, as the
+  game's hourly expiry would have taken it), their `assignedAddress`, `dayHired`,
+  `nextSickDay` and complaint state as before, and a salary negotiation the hire ended open
+  again. Their to-dos go; the game rebuilds the idle and unassigned ones for everyone else.
+
+**What it cannot restore**, and never refuses for: a personal goal or achievement the head
+count completed, sales made and work done in the minutes they were employed, and those hours
+(the game pays wages per hour worked at the day's end, so a hire undone the same day costs
+nothing and is never paid). The game's once-only first-employee happiness bonus it cannot take
+back either, so a call that granted it is refused (`hire` row below).
+
+**It refuses up front** rather than half-undo, `409 {"error": "changed", "rows": [...]}` with
+nothing changed, each row `{"scope", "id" | "address", "error": "changed"}`, when:
+
+| Scope | When |
+| --- | --- |
+| `day` | the game's day has moved on since the call (the day's wages and the daily run have happened) |
+| `site` | its shift print is not what the call left, a day it opened is no longer open 0 to 24, it is no longer rented, or a shift it would put back no longer passes the schedule write's checks (a person moved away, a station sold) |
+| `move` | the person is no longer employed, not at the site the call moved them to, in training, driving a vehicle or on an import contract now, or on another HR manager's plan than at the call (`assignedHrManagerPlanId`); the call's move took a delivery vehicle or an import contract off them (the undo cannot give those back); the site they came from is no longer rented or no longer a business; they hold hours at a site whose week the undo does not restore |
+| `hire` | the person is no longer employed, back among the candidates, assigned elsewhere, in training or on a training day, on an HR manager's plan, being replaced, poached or complaining, driving a vehicle, a purchasing agent on a contract, or on another wage; they hold hours at a site whose week the undo does not restore; the call hired the company's first employee, and the game's once-only first-employee bonus (`usedHappinessModifiers`) came with it (every hire of that call answers the row) |
+
+A site with BizMan's schedule screen open answers `409 {"error": "refused", "rows":
+[{"scope": "site", "address", "error": "screen_open"}]}`, and an apply while MyEmployees
+is open `409 {"error": "cannot_write", "reason": "myemployees"}`, as the hire write does.
+`409 {"error": "nothing_to_undo"}` when there is none (none applied this city session, or
+already undone). A dry run answers the verdict with `200`, `ok` false and the rows.
+
+```json
+{"ok": true, "kind": "hire", "dryRun": false, "undo": true, "stamp": "…",
+ "hired": [{"candidateId": "…", "name": "Ada Brandt", "business": "Costy Co 2", "wage": 26.5, "hoursLeft": 69}],
+ "moved": [{"employeeId": "…", "name": "…", "from": "Costy Co 2", "to": "Costy Co 5", "shiftsCleared": 3}],
+ "skipped": [],
+ "sites": [{"address": {}, "business": "Costy Co 2", "before": {"shifts": 90, "print": "…"},
+            "after": {"shifts": 84, "print": "…"}, "removed": 90, "added": 84, "openedHours": false,
+            "leftWithout": [], "warnings": [], "siteError": null}],
+ "wageAdded": -26.5,
+ "rows": []}
+```
+
+- `hired`: the people it un-hired, with the business they leave and `hoursLeft` their
+  application now has (null when it ran out and they are gone).
+- `moved`: each move reversed, `from` the business they leave now and `to` the one they are
+  back at (`null`: the bench); `shiftsCleared` the shifts they held where they leave.
+- `sites`: one per site whose week it restores, `before` as the undo found it, `after`
+  restored; `openedHours` true where it closes hours the call had opened.
+- `wageAdded` is minus the wages per hour of those it un-hired.
+- Then `MarkChange()`, one notification ("Big Copilot undid the staffing change"), a refresh,
+  and the `hire` kind's undo is gone: an undo is not itself undoable.
+
+#### `POST /write/marketing`
+
+Mod 0.4.0 and later. Sets which marketing campaigns each site runs, and sets the site up so
+BizMan's Marketing page shows every switch for it. The scope and the game rules behind it are
+`docs/marketing-write-scope.md`.
+
+```json
+{"dryRun": true,
+ "expect": {"character": "58e6a328-…", "company": "HART. YT"},
+ "sites": [{"address": {"street": "ba:street_secondavenue", "number": 12},
+            "on": ["SmallInternet", "SmallBillboard"],
+            "was": ["SmallBillboard", "LargeInternet"]}]}
+```
+
+- Types are named as the game's enum `Entities.MarketingTypeName` names them: `SmallInternet`,
+  `MediumInternet`, `LargeInternet`, `SmallBillboard`, `MediumBillboard`, `LargeBillboard`. Any
+  other name is `400`; a name listed twice counts once.
+- `on` is the full set of types the site runs after the write. Every other campaign of the
+  site is **disabled, never removed**, as the phone's switches do it.
+- `was` is the set of types the page read as running (a type runs when at least one of the
+  site's campaigns of that type is enabled). It is the compare-and-set: when the game's set
+  differs, the row answers `changed`.
+- `expect` is the uniforms write's same-save guard, unchanged: a `character` or `company` that
+  differs from the loaded game answers every row `changed`, before `not_found`.
+- `on` and `was` are both required; one site twice is `400`.
+
+**Which agency.** For each type, the agency the site already has a campaign of that type with
+(the enabled one when there are two). Otherwise the first agency, walking the city's buildings
+(`BuildingHelper.allBuildings`), whose `MarketingAgencySettings.marketingTypesAvailable` offers
+the type. The map is the same in every save: Third Ave 17 sells the three internet types and
+Second Ave 5 the three billboards.
+
+**Existing switches any time; new ones only through known, open agencies.** A campaign entry
+the site already has (a switch in BizMan) is turned on or off at any time, as the phone does,
+whatever its agency. Only a **new** entry needs its agency to be **usable**: a phone contact (an
+entry of `GameInstance.Contacts` whose address is the agency's: the player has visited it
+once) and open now, by the game's own `BusinessHelper.IsBusinessOpen(reg, -1)`: not
+`temporarilyClosed`, today's `ScheduleDay` open, and the current hour inside one of its
+opening slots. The mod never adds a contact. A type in `on` that the site has no entry for,
+and that no usable agency sells, refuses the row `no_contact` or `agency_closed`, naming the
+first agency that sells it, and nothing is written.
+
+**Set-up, on every apply.** It replaces the call and the chat, not the first visit: the site
+gets a campaign entry for every type each **usable** agency offers, the ones not in `on`
+disabled. An agency that is not usable gets no new entries, and that alone refuses nothing:
+the row lists those switches in `waiting`. A
+disabled entry costs nothing: billing, reach and the billboards in the world count enabled
+campaigns only. After one write BizMan shows the full set of switches for that site's known
+agencies, and the player can change them by hand from then on. The write adds no chat
+messages.
+
+**Then**, on an apply: `BusinessHelper.UpdatePromotion` for each site, and the game event
+`ba:gameevent_newmarketing` once when the write turned any campaign on. The notification
+reads "Big Copilot updated marketing at <business>".
+
+```json
+{"ok": true, "kind": "marketing", "dryRun": true,
+ "rows": [{"address": {}, "business": "Costy Co 2",
+           "before": {"on": ["LargeInternet", "SmallBillboard"], "dailyCost": 1000.0,
+                      "promotion": {"trafficIndex": 40, "marketing": 53, "total": 77}},
+           "on": ["SmallInternet", "SmallBillboard"], "dailyCost": 600.0,
+           "promotion": {"trafficIndex": 40, "marketing": 50, "total": 75},
+           "turnedOn": ["SmallInternet"], "turnedOff": ["LargeInternet"],
+           "entriesAdded": ["SmallInternet", "MediumInternet", "MediumBillboard", "LargeBillboard"],
+           "campaigns": [{"type": "SmallInternet", "agency": {"street": "ba:street_thirdavenue", "number": 17},
+                          "enabled": true}],
+           "waiting": [{"type": "MediumBillboard",
+                        "agency": {"name": "CityAds", "address": {"street": "ba:street_secondavenue", "number": 5}},
+                        "opens": {"day": 36, "hour": 8}}],
+           "error": null, "agency": null, "opens": null}]}
+```
+
+- `before` is the site as the game holds it: the running types, `dailyCost` (the game's
+  `GetDailyMarketingExpenses`, $ a day) and `promotion` as the registration stores it.
+- `on`, `dailyCost` and `promotion` are the site after the write. After an apply `promotion` is
+  what `UpdatePromotion` wrote; a dry run answers the mod's reckoning of the same formula
+  (`GetMarketingEfficiency` over the planned set, then `UpdatePromotion`'s total), so the page
+  can hold it against its own plan.
+- `turnedOn` and `turnedOff` are the types whose running state the write changes.
+- `entriesAdded` lists the types the set-up adds as entries (disabled unless in `on`).
+  `campaigns` is every entry of the site after the write, in enum order, with its agency and
+  `enabled`.
+- `waiting` lists, in enum order, the switch entries the set-up would add but skipped because
+  no agency that sells the type is usable now: a type the site has no entry for and that is
+  not in `on`. Each names the first agency that sells it and `opens` as for `agency_closed`
+  (null when that agency is not a contact, or is temporarily closed). It is the game's own
+  answer to "why is this switch missing", so the page need not guess from its clock. Empty
+  when nothing was skipped, on every refused row, and on every undo row (an undo adds no
+  entries). Additive: `schemaVersion` stays 1.
+- Row `error`, in the order checked: `changed` (another save, as above), `not_found` (no
+  registration at that address), `changed` (`was` differs from the game), `not_rented`,
+  `no_business` (no business, or `ba:businesstype_empty`), `no_promotion` (the building type
+  has no `hasmarketingpromotion` tag, so the game never scores its campaigns: a warehouse or a
+  factory), `no_agency` (no agency in the city offers a type in `on`), then, for the first
+  type in `on` (in type order) that needs a new entry and that no usable agency sells,
+  `no_contact` (its first seller is not a phone contact) or `agency_closed` (a contact,
+  closed now). Switching an existing entry never answers either. A type outside `on` that no agency offers gets no
+  entry and is no error. A refused row answers `before`, and `on`, `dailyCost` and
+  `promotion` as they are now, with every list empty.
+- `agency` and `opens` are on every row, null except for those two errors:
+
+  ```json
+  {"error": "no_contact",
+   "agency": {"name": "CityAds", "address": {"street": "ba:street_secondavenue", "number": 5}},
+   "opens": null}
+  {"error": "agency_closed",
+   "agency": {"name": "CityAds", "address": {"street": "ba:street_secondavenue", "number": 5}},
+   "opens": {"day": 36, "hour": 8}}
+  ```
+
+  `opens` is the next whole hour, after the current one, at which the agency is open by its
+  registration's `scheduleDays` (the weekday of a game day is `(day - 1) % 7 + 1`, Monday 1 to
+  Sunday 7), looking eight days ahead; null while it is `temporarilyClosed` (nothing says until
+  when) or with no opening in that time.
+- An apply with any row error answers `409` with the rows, `changed` when any row's error is
+  `changed`, else `refused`. Nothing is written.
+- **An apply that switches nothing** (every site already runs its `on`) still does the set-up,
+  answers `200` with a stamp, and leaves nothing to undo.
+- **Undo.** `POST /write/undo {"kind": "marketing"}` puts back the enabled flag of each campaign
+  the last marketing write switched, where it still holds what the write left; a campaign the
+  write added and turned on is disabled again. The entries the set-up added stay, since they
+  cost nothing. An undo only switches existing entries, so it never looks at the agency: it
+  goes through whether the agency is a contact or open. A campaign switched by hand since (or
+  gone) answers `changed` for its site, and nothing is undone (a dry run `200` with `ok`
+  false, an apply `409 changed`); the undo stays available. The answer is the write's, with `"undo": true`, `before` the state the undo
+  found, and `entriesAdded` empty.
 
 #### `POST /write/undo`
 
@@ -577,11 +816,13 @@ the target still holds what that write left there: uniforms only on the skills i
 still holding its preset; imports the amounts, running state, Repeating, urgent flag, next
 delivery day and plan order; the schedule the shifts and, when it opened them, the
 opening hours, after checking the restored shifts as a write would (a person moved away
-or a station sold since answers `changed`). Answers like the write it undoes, with `"undo": true`: uniforms list the
+or a station sold since answers `changed`); marketing the enabled flags its write switched.
+Answers like the write it undoes, with `"undo": true`: uniforms list the
 skills it cleared in `set`; imports and schedule answer `before` as the state the undo
 found and the values as they now stand;
 `409 {"error":"nothing_to_undo"}` when there is none; `409 {"error":"changed"}` when the
-game has moved on; `409 {"error":"no_undo"}` for `"kind": "hire"`, which is never undone. An undo is not itself undoable; a new write of the kind replaces what
+game has moved on; `409 {"error":"no_undo"}` for `"kind": "hire"` from a mod before 0.4.0,
+which never undoes a hire (from 0.4.0: "Undoing a hire" above). An undo is not itself undoable; a new write of the kind replaces what
 undo would restore. One board per game: with two boards writing the same kind, an undo
 restores whichever write came last.
 
@@ -589,7 +830,8 @@ restores whichever write came last.
 
 `404 {"error": "not_found", "endpoints": [...]}`, listing the paths above: 0.1.0 lists
 `/health`, `/save`, `/refresh`; 0.2.0 adds `/write/uniforms`, `/write/imports`,
-`/write/schedule`, `/write/undo`, `/pair/request`, `/pair/status`; 0.3.0 adds `/write/hire`.
+`/write/schedule`, `/write/undo`, `/pair/request`, `/pair/status`; 0.3.0 adds `/write/hire`;
+0.4.0 adds `/write/marketing`.
 Methods other than the ones above answer `405`.
 
 ## CORS and the browser
@@ -683,12 +925,15 @@ mock at the game's own autosave folder gives a live-looking link without the mod
 last refresh (the mock has no main-thread fallback).
 `--throttle`, `--refuse <reason>` and `--schema <n>` exercise the clients' error paths.
 For the writes, `--refuse-write <error>[:<detail>]`, `--busy-writes <n>` and `--writes <kinds>`
-do the same, and for `hire`, `--hire-gone <candidateId>` (repeatable) makes a candidate gone
+do the same; `--features <list>` names what `/health` lists as `features` (by default
+`hire.reschedule,hire.undo`, as mod 0.4.0; `""` for an older mod, whose hire call then refuses
+a reschedule-only site with `400`, whose hire undo answers `no_undo` and whose default `writes`
+leave out `marketing`), and for `hire`, `--hire-gone <candidateId>` (repeatable) makes a candidate gone
 and `--myemployees` opens the phone's MyEmployees app. For `schedule` and `hire`,
 `--screen-open <street>:<number>` (repeatable) opens BizMan's schedule screen on a site: a
 write touching it answers the site error `screen_open`, in the mod's order, for assign-only
 hire sites too and in dry runs. `POST /debug/config` changes all of
-these while the mock runs (`refuseWrite`, `busyWrites`, `writes`, `hireGone`, `myEmployees`,
+these while the mock runs (`refuseWrite`, `busyWrites`, `writes`, `features`, `hireGone`, `myEmployees`,
 `screenOpen` as a list of `{street, number}`, `character` and `company` for another save
 loaded under the same bytes, `reset`), and `GET /debug/writes` lists the applies. The mock never rewrites the file: an
 apply is kept in memory over the bytes, so a later write sees it, but `/save` still serves the
@@ -697,4 +942,20 @@ file as it is. For `hire` it reads the candidates from the save's
 through the payload's own table (`ASSIGN_SKILLS` in `ba_dashboard.py`, read from the game's
 type data), so a warehouse takes drivers only. For a type that table does not know, the
 site's stations stand in. The mock takes a hire body up to 2 MiB and every other write up to
-256 KiB, as the mod does.
+256 KiB, as the mod does. Its hire undo keeps what the mod keeps and refuses as the mod does
+where the bytes can tell (`day` from `/debug/config` `day`, a site's print, a person
+moved or hired since by another apply, `screen_open`, `myemployees`); a hire it undoes goes
+back among the candidates it serves, and the moves and weeks come back as they were.
+For `marketing` it holds the city's two agencies as a table (Third
+Ave 17: the internet types; Second Ave 5: the billboards), reads each site's campaigns, the
+phone's contacts (`Contacts`, by `streetName` and `streetNumber`) and each agency's
+`scheduleDays` and `temporarilyClosed` from the save, and judges opening hours at its own
+clock (`day` and `hour` as `/health` reports them, set by `--day`, `--hour` or
+`/debug/config`). It works out the promotion with the board's own model (`marketing_score` in
+`ba_dashboard.py`, over `ba_buildings.json`): a site the building table does not know answers
+`promotion` null, and `no_promotion` is a building type the model has no reach multiplier for
+(a warehouse, a home). `--agency-closed`, `--agency-open` and `--no-contact
+<street>:<number>` (repeatable), or `/debug/config` `agencyClosed`, `agencyOpen` and
+`noContact` as lists of `{street, number}`, force an agency closed (it then opens the next day
+at 8), open, or out of the phone's contacts; as in the game, only new entries look at them. `--refuse-write refused` answers a marketing
+apply `agency_closed` at CityAds by default.

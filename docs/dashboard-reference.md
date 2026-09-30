@@ -229,8 +229,23 @@ the map.
     person.
   - A site accepts the roles the game lets you assign there: the business type's own,
     cleaning in a shop, office, cinema or theatre, security where theft is possible.
-  - *Part-time* is left out by default for every role hired into a shop: a shop's plan
-    gives full weeks. The filter bar's "Leave out who asks for" list takes it back.
+  - Each plan week says which contract it suits (`band`): full-time from 30 hours,
+    part-time from 10 to under 30, and a week under 10 hours suits none. The hours demands
+    are the game's own, both ends included: a candidate who asks for part-time takes a week
+    of 10 to 30 hours (a part-time week first, or a full-time week of exactly 30), one who
+    asks for full-time a week of 30 to 50; the orange mark and the week check before a write
+    say the same. Each goes to the first site in the list with a week of their own contract,
+    else the first with any week that fits. There a week of their own contract comes first,
+    then the rest by rank (a week under 10 hours last; for somebody who asks for neither, a
+    30-hour week, which either contract may take, after the others), and a desk that meets
+    their desk demands decides only among weeks of the same rank. Quick hire picks the same
+    way. A week under 10 hours is never given to a hire (only to one ticked in by
+    hand, after every other week): it is no open place, and Staff needs, the review and
+    Quick hire say its hours as "too few for a hire". A spare person may still be moved
+    into one.
+  - *Part-time* is left out by default for shop roles, and only from full-time shop weeks:
+    a role with an open part-time week takes part-time askers for it, and Quick hire does
+    the same at a shop. The filter bar's "Leave out who asks for" list takes it back.
   - *Quick hire* hires the best matches for one role at any site (headquarters and
     warehouses included), from the candidates the open places have not picked. At a site
     with a plan they get the plan's open weeks in that role that meet their schedule
@@ -242,8 +257,8 @@ the map.
     send is checked person by person: at most 12 hours an entry and a day, one entry at a
     time, the hours band (at most 50 without one), an exact four or five days, free
     weekends, the hours kept free and no cleaning. Whatever is still broken is named in the
-    confirm, one line a break, including someone the write leaves with no hours at all; nothing is
-    refused for it. An office's write, which adds the office default to the week as it
+    confirm, one line a break; nothing is refused for it. Somebody the write leaves with no
+    hours at all is no break: they stay on as spare, named once in a plain note. An office's write, which adds the office default to the week as it
     stands, leaves out an entry that would break one and names the hours it left out.
 
   *Payroll* names two wage figures:
@@ -326,12 +341,22 @@ What is on the list is what moves the number:
   one company line instead. Once somebody with an unmet demand has warned they will quit,
   the site's line turns critical and names those company-wide demands too, since they may
   be all that person lacks.
-- **Promotion left on the table.** A shop's promotion is the foot traffic its address
-  comes with plus what its marketing campaigns add, held at 100%. The address cannot be
-  changed, so any shop selling something is either at the 100% cap or at 100% marketing.
-  Anything else is campaigns not bought, and the shops it applies to read as one line with
-  each one's shortfall. The three figures sit side by side in Businesses › Standards
-  view, which is where the finding's *details ›* link lands.
+- **Campaign mix.** A shop's or office's promotion is the foot traffic its address comes
+  with plus what its marketing campaigns add, held at 100%. The shops and offices whose
+  cheapest mix (the Promotion block's last line, below) differs from what they run read as
+  up to two lines that lead with the gain: the ones it raises ("3 sites can reach 100%
+  promotion for less", each site's promotion now and after in the details), a warning when
+  one is short of its target by 10 points or more; and the ones that only overspend ("HART.
+  Gym can save $150/day at the same promotion"), an opportunity. A mix that only adds
+  missing switches changes neither and is no finding. A site short of 100 that waits on a
+  first visit to an agency gets its own line naming it: one with no mix at all ("Visit
+  CityAds once: no campaign can be set at … before that"), and one already on the best mix
+  its known agencies allow that a visit would raise ("Visit CityAds once to raise promotion
+  at …"); a visit that would only make the same promotion cheaper is the Promotion block's
+  hint alone. Sites not trading yet are left to their own finding. With the game link each
+  of the two mix lines carries its own "Set the cheapest mix at N sites", over exactly its
+  own sites; its *details ›* link lands on Businesses › Standards, whose "Set up all" keeps
+  a new site, the set-up's first case.
 
 ## The weekly rhythm
 
@@ -592,10 +617,14 @@ instead, one total per role — and a Security guard locker nobody staffs is rea
 rather than another entry, which is why `headcount` says which kind each line is. A hiring
 line counts people, not hours: four uncovered twelve-hour weekend entries are 48 hours but
 need two hires, because nobody may work two of them on the same day. It is the fewest
-people who can work those lines: the count is searched upwards from the least the hours
-and the busiest day allow, spreading the lines evenly over the hires at each count, so two
-registers open around the clock are seven people and not the eight a first-come fill
-needs, and never more than first fit in either order gave. The placer realises that count: a
+people who can work those lines, and the hires are planned as people: the week is placed
+again with that many placeholder hires in it, full time and nothing else asked of them,
+ranked after everybody the site has, the count searched upwards from the lines' hours
+over 50 until no line is left open. They go through the same swaps and the same settling
+as everybody, so a hire's week keeps the 12-hour day and the 50-hour week, and somebody
+here with hours above their own minimum hands a hire whole entries, or the tail of one,
+until the hire has a full week too; the count is never more than a first-come fill of the
+lines would take. The placer realises that count: a
 line the one-at-a-time fill leaves open is offered to somebody on the schedule who is free
 that day but full for the week, if they can hand one of their own entries to somebody else
 on the schedule with room for it, both moves tested against every rule, and the giver kept at
@@ -629,6 +658,17 @@ covering hours that would go uncovered if they were moved, so the honest line is
 site has nothing left to give them — a longer week here is not on offer, and neither is half
 a week at each of two shops.
 
+**Nobody already working at a site is cut short.** Somebody may be given no hours at all —
+they are spare, and the Staff page offers to move them — or a week that still meets every
+schedule demand they hold (Peter, 28 and 29 September 2026): their hours band's minimum and
+an exact four- or five-day week (free weekends, hours kept free and no cleaning the plan
+never breaks). Somebody under their minimum now may stay there, not sink further; somebody
+with no hours demand may be cut to anything. Where the plan would leave somebody on a
+partial week short of that — the last name the fill starts, on the scraps — they keep the
+week they have at the site, as much of it as the rules allow, and the rest of the plan is
+placed around it. A cut that leaves them satisfied is made, and named in the Staff page's
+"fewer hours than now".
+
 **A week can change hands whole.** Which name the plan starts is decided before anybody has
 an hour, so a cheaper person with no hours demand can end up holding a week a full-timer
 beside them needed. Once the hours are settled that week is handed over entire where it fits
@@ -640,7 +680,8 @@ settle its *Critical*.
 **Somebody hired and not yet assigned anywhere belongs to one building.** The bench is
 offered to each site in turn, and the first site to give a bench member hours keeps them:
 they appear in that site's `bench`, count towards that site's `headcount.have`, and are
-gone from every later site's pool. One person's week is one week across the whole save, so
+gone from every later site's pool. Shops are planned first, then offices, then factories,
+so a factory takes on the unassigned factory workers nobody else used before it hires. One person's week is one week across the whole save, so
 nobody is scheduled at two shops in the same hour.
 
 **Who has to be added first.** `addPeople` says, per plan, who the plan counts on that does
@@ -752,6 +793,13 @@ its code at build 3680:
 - **Health insurance and a happy boss.** Cover through an HR manager's plan at the
   demanded level or better, with that manager still employed; and your own happiness at 50%
   or more. No site can settle these, so they are one company line.
+
+Somebody given no hours at their site is left out of all of this: none of their demands
+is a finding while they have no week. They are counted instead, a quiet note in the site's
+Crew and one line on the Staff page, since moving them to a site that needs them, or letting
+them go, is a chance to run with fewer people. (The game pays wages for hours worked, so
+an employee with no shifts costs nothing but the place they hold; delivery drivers are the
+exception, paid for part of a day anyway.)
 
 The item lists and priorities are not in the help text; they come from the game's job
 demand data at build 3680, so they are worth checking again after a game update. A demand
@@ -963,29 +1011,33 @@ business exists every row is a to-do (Furniture is judged from `openStore.built`
   available to the player or by cargo of it on a display that can hold it; an empty shelf and
   stock in storage shelving do not count. The "any primary product" requirement still counts a display that can hold one.
 - **Staff**: done only with opening hours set (BizMan), somebody hired, hours on the schedule
-  (`stationShifts > 0`, and nobody left without hours in the plan mode the shop uses) and, on a
+  (`stationShifts > 0`, and nobody the plan uses left without hours in the plan mode the shop
+  uses; spare people the plan gives no week are neither counted nor warned about) and, on a
   demand plan, a trading history (`hasTraded`: any day with sales since this business opened,
   not the last statement and not an earlier business at the address). A shop with no
-  hours or a never-traded shop is a to-do. Hire weeks filled by moving people offer **Hire n ·
-  move m**, the full staff review for this site; with nobody to hire the row says to ask a
-  headhunter.
+  hours or a never-traded shop is a to-do. Where the Staff page's plan hires or moves people
+  into the site, or writes its week, the row offers **Staff this site**, the site panel's own
+  action; with nobody to hire it says to ask a headhunter.
 - **Uniforms**: done when the type asks for none, or staff have station hours and every role
   has one; without hours yet it says "Set once staff have hours". `stationShifts` counts only
   hours on open days, for people on staff, the same shifts the uniform gaps look at.
 - **Customer demands**: every demand the type makes. Amenities, uniforms and seating
   (`built.seating`, any placed seat) come from the save; workout variety and any demand the
   save cannot answer stay unchecked with an in-game instruction, so the row cannot be done.
-- **Marketing**: done when a campaign is enabled (`marketingOn`), not from money spent.
+- **Marketing**: done when a campaign is enabled (`campaigns`), not from money spent, or
+  when the site's cheapest mix (`marketingPlan`) is no campaign at all because promotion is
+  full without one. Otherwise the row names the cheapest mix, and why it waits on an agency;
+  with no agency in the phone yet it says which to visit.
 - **Logistics**: an office needs no deliveries, before opening too (no factory button). A
   shop is set up when every product the type sells, not only those already on its shelves,
   has a delivery route: a logistics plan with a stock target above zero, or a weekly
   wholesale contract, whatever the shop's sales rate (`supply.routed`). A graph link, a
   zero target and a supply status are not routes.
 
-A row that needs a write has a button when the game link's `writes` lists it: **Hire N**
-opens the Staff page's hiring dialog for this site only, **Assign uniforms** the uniforms
-write, **Set up marketing** the marketing write with the most profitable mix the estimate
-settled on, sent with the campaigns running now as `was`. Otherwise the button is a short
+A row that needs a write has a button when the game link's `writes` lists it: **Staff this
+site** opens the Staff page's review for this site (`hrReview({scope: "site"})`), **Assign
+uniforms** the uniforms write, **Set the cheapest mix** the site panel's marketing write
+(`gwMarketing()`), disabled while an agency it needs cannot add a switch. Otherwise the button is a short
 instruction for the game, and a strip under the list says the game can be linked and where
 to find the mod. **Plan a factory** goes to Expansion › Plan a factory. Once the store trades, a button
 under the list goes to step 6.
@@ -1155,11 +1207,51 @@ and dims the rest; clicking scrolls there.
   An office is never asked about bathrooms, music or uniforms, so it draws the bars alone
   and its workstations beside them, one square a desk, filled while somebody is placed at
   it at the busiest hour.
-- **Promotion** (a shop). Foot traffic and marketing against the game's own 100 cap, split
-  into what the street brings and what campaigns add, with security and how many shoppers
-  fit inside. A demand wave running over the shop adds a bar for the share of its takings
+- **Promotion** (a shop or an office). Foot traffic and marketing against the game's own 100
+  cap, split into what the street brings and what campaigns add, with security and how many
+  shoppers fit inside. A demand wave running over the shop adds a bar for the share of its takings
   riding on the wave and a pip a day left; with no baseline to measure the wave against,
-  the bar is hatched rather than guessed.
+  the bar is hatched rather than guessed. The big number is the game's own total: marketing
+  counts at the neighbourhood's marketing strength (half in Midtown, 0.7 in Hell's Kitchen,
+  0.8 in Murray Hill, 0.9 in the Garment District, in full elsewhere), so the two figures
+  need not add up to it.
+
+  The last line is the **cheapest mix**: of the 64 ways to run the six campaign types, the
+  cheapest a day that brings promotion to 100. Marketing is the campaigns' reach in m² over
+  the building's m² (a cinema's and a theater's reach counts twice), so a small shop needs
+  little. When no mix reaches 100, the plan is the cheapest that brings marketing to 100,
+  which is as high as promotion can go there. 99 is short. Of two mixes at the same price,
+  the one with fewer campaigns wins, then the one already running. The line reads *running*
+  when the site already runs it; otherwise it names the mix, its cost a day and the
+  promotion it gives, which also shows a shop overspending on campaigns that only push
+  past 100. With the game link it carries a **Set** button: a dry run first, then the game
+  switches the mix on and every other campaign off (never removed), and Undo puts the
+  switches back. Every write also sets the site up so BizMan's Marketing page shows a switch
+  for every type its agencies sell, which otherwise takes a call to each agency; a site that
+  runs its mix but misses a switch gets a **Set up** button for that alone.
+
+  A switch the site already has (a campaign entry, on or off) is flipped at any time, as the
+  phone does, whatever its agency. Only a new switch needs its agency to be one the player
+  has visited once (it is then a phone contact) and open (8:00 to 17:00 on weekdays in the
+  cities seen). So the plan uses the types the site has a switch for plus the types the
+  known agencies sell. With neither and a change needed there is no plan: the line names
+  the agencies to visit, with their addresses. An agency not known yet whose campaigns would
+  make a better plan gets one line, "Visit … once for a better mix". The button waits only
+  while a new switch the plan needs has no agency to add it now, with one line beside it:
+  "CityAds opens Tuesday at 8:00", "Agencies open at 8:00" or "Visit CityAds once". It
+  follows the game's clock as the link reads it, so it opens and shuts on the hour without a
+  new save. An Undo only flips switches and is never refused for an agency. A set-up waits
+  only while every agency it adds from is closed or unknown; otherwise it adds what it can,
+  and a row says in one clause how many switches come later and when ("2 switches later,
+  Tuesday 8:00"). A dry run that would change nothing is one line ("Nothing can change
+  before 8:00, when CityAds opens"), with no Apply. Hovering a row shows only what it does
+  not: the promotion the mix moves. The all-sites actions count only the sites the game
+  takes now. Without the
+  link, or with a mod older than 0.4.0, the line says which switches to flip in BizMan
+  instead. The Promotion finding offers the cheapest mix at every site it would change,
+  and Businesses › Standards also offers the set-up for every shop and office missing a
+  switch. Headquarters, warehouses and factories get no plan: they have no customers, or
+  campaigns bring them no promotion.
 - **Customers by hour.** The two things the grid can say that a daily total cannot are
   chips under it: what the ceiling costs, with the fix, and what idle hours cost. Hours
   held by the building's own capacity get a neutral chip with no fix, since that is not a
@@ -1177,7 +1269,8 @@ and dims the rest; clicking scrolls there.
   marks an entry placed where it is because of somebody's demand, and the bench mark says
   they have to be assigned to this shop in MyEmployees first. A day tab with a dash before
   it is an earlier day again, people and all: copy the schedule and paste it. Under the
-  grid, one entry a role with a dot a person, and the staff demands this plan would fail.
+  grid, one entry a role with a dot a person, and the staff demands this plan would fail
+  for somebody it gives some hours; somebody it gives none is counted as spare, not short.
   The toggle in the head swaps the plan for the schedule as it stands, so you can see what
   the plan replaces. Tick an entry once it is in the game. The ticks are kept in this
   browser, per shop, and a tick belongs to the entry itself, the weekday, the station, the

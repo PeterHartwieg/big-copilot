@@ -220,6 +220,24 @@ class JobDemandFindingTests(unittest.TestCase):
         [line] = self.alerts(b)
         self.assertEqual(line["level"], "warn")
 
+    def test_somebody_with_no_hours_holds_no_demand_here(self):
+        """Peter, 30 September 2026: staff given no hours are a chance to cut
+        the headcount, not a warning. A full-time cashier and a mouse-pad
+        lawyer with no hours raise no finding and count as idle; the one who
+        works still does."""
+        idle = [employee(["ba:jobdemand_fulltime", "ba:jobdemand_goldhealthinsurance"], eid="a",
+                         assignedWeeklyHours=0, assignedWeeklyDays={"$items": []},
+                         hasSendQuitWarning=True),
+                employee(["ba:jobdemand_hasmousepad"], eid="b", assignedWeeklyHours=0)]
+        b = evaluate(idle)
+        self.assertEqual((b["staffDemands"], b["staffLackingAny"], b["quitWarnings"],
+                          b["staffIdle"]), ([], 0, 0, ["a", "b"]))
+        self.assertEqual(self.alerts(b), [])
+        working = employee(["ba:jobdemand_hasmousepad"], eid="c")
+        b = evaluate(idle + [working])
+        self.assertEqual(([d["slug"] for d in b["staffDemands"]], b["staffIdle"]),
+                         (["ba:jobdemand_hasmousepad"], ["a", "b"]))
+
     def test_hours_and_days_have_upper_bounds_too(self):
         self.assertEqual(unmet("ba:jobdemand_fulltime", employee={"assignedWeeklyHours": 55}),
                          ["ba:jobdemand_fulltime"])
