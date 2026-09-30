@@ -29,7 +29,8 @@ Peter's (25 Sep 2026):
 - The best people go to sites in list order.
 - Candidates in a drawer under each role (canvas option A). Option B's table is what the
   HQ/warehouse Candidates buttons open, and "Show all N who pass".
-- Apply = review (who goes where, their days, the added wage bill) + one confirm. No undo.
+- Apply = review (who goes where, their days, the added wage bill) + one confirm. No undo
+  (until 29 September 2026: with mod 0.4.0 the whole call has one undo, section 3.5).
 - Old Payroll content stays at the bottom of the page.
 
 Designer defaults kept: the working state is an indeterminate bar; the not-linked page is fully
@@ -144,6 +145,15 @@ A `<site>` for every business the player runs (the `businesses` order):
   weekends, part-time, full-time, four-day week, no morning/evening, no cleaning shifts: judged by
   the page against the hire week the person gets), `site` (judged by `facts`), `company` (health
   insurance tiers, happy boss: judged once by `company`).
+- Hire weeks carry `band` (PR #187, `_hire_band()`): `full` from 30 h, `part` from 10 h to under
+  30, `short` under 10. The hours demands are judged as the game does, both ends included (a
+  part-timer takes a week of 10 to 30 h, a `part` week first; a full-timer 30 to 50).
+  `hrPickWeek()` places each at the first site in list order with a week of their own contract
+  (else the first with any that fits), their own contract first, then rank, then a desk within the
+  best rank, as Quick hire does; the page
+  never gives a `short` week to a hire (a hand-ticked one
+  takes it last), counts no `short` week as an open place, and says its hours as "too few for a
+  hire". The shop default that leaves part-time askers out bars them from `full` shop weeks only.
 - `shiftPrint` is already on every business row (`businesses[].shiftPrint`); the hire write's
   per-site `expect` uses it. The extraction worker makes sure factories and offices carry it too.
 
@@ -218,7 +228,8 @@ Where the build differs from or adds to 2.1-2.4; the board worker reads these to
 
 - **Every open hour is staffed, never an hour more** (Peter, 26 September 2026: "Staff
   the hours it's open, never change opening"). The Staff page never uses full cover and
-  every hire request sends `openAllHours: false`. Every shop that full cover is offered at
+  every hire request sends `openAllHours: false` (since 29 September 2026: except where the
+  player put the shop on full cover, section 3.5). Every shop that full cover is offered at
   and that opens some hour gets `openCover` (`_open_need()`), placed beside full cover
   with its bench draws recorded like full cover's (`_bench_claimed()` reads it too):
   without complete data, the demand curve with every open hour whose basis is `none`
@@ -268,7 +279,7 @@ Where the build differs from or adds to 2.1-2.4; the board worker reads these to
   Staffing block (`spOfficeRoster()`: hours and people now → the office default, hours
   waiting on a hire, and the write button). `gwRosterPlan()` gives an office's
   `officeStaffing` row, so `/write/schedule` takes it through the same review, confirm and
-  undo as a shop's, `openAllHours` always false; "Write all planned sites" includes offices.
+  undo as a shop's, `openAllHours` always false; Staff all sites includes offices.
   An office's write **adds**, like Quick hire: `gwRosterWeek()` sends every entry at the
   office as it stands, plus the office default's entries for the office's own people where
   that computer and that person are free then, and where their week can take the entry
@@ -396,6 +407,88 @@ shop (demand and full), a factory, an office, an HQ assign-only, and a move with
 rewritten; the review dialog from a dry-run answer; partial, refused and not-linked states;
 Review disabled without `"hire"` in `writes`; phone width without sideways scroll; calm refresh
 does not redraw Staff while hidden. Plus the moved Payroll anchors.
+
+### 3.5 One action, undone in one step (29 September 2026)
+
+Peter's decisions of 28 September 2026 (research/staffing-revisit-2026-09-28/brief-3-one-action.md
+in the main checkout). What changed on the board, over 3.2 to 3.4 and 2.4b:
+
+- **One plan choice.** A shop the player put on full cover (24/7) on its Staffing block is
+  hired into its full-cover plan (`hiring.sites[].plans.full`, which `_hiring()` now
+  publishes beside `demand` and `open`), and its entry sends `openAllHours: true`; every
+  other entry sends `false`, so the 26 September rule "Staff writes never open a shop" holds
+  everywhere else. The site block, the Staff page, "Staff with no hours" and the action all
+  read `spPlanOf()` (`hrVariant()` maps it to the variant).
+- **Entry points.** "Staff this site" in a shop's or an office's Staffing block
+  (`gwRosterButtons()`, where the Staff page's plan hires or reassigns somebody into the site;
+  it replaces the "Add N people … MyEmployees" step in linked mode), "Staff all sites" on the
+  Staff page (the order panel's button, which also counts the weeks it writes), and Quick hire.
+  All three open one review (`hrReview(o)`, `o.scope` `all`, `site` or `quick`).
+- **What it does**, picked at the top of the review (pills, `data-hr-mode`), the confirm's verb
+  following: **Hire and schedule** (the hires and reassigns, and the new week of every site
+  the call reaches and, in scope, every planned site whose week is not its plan's yet,
+  reschedule-only sites included; a move's source only where its week changes by more than
+  the mover's entries), **Hire only** (every site assign-only, no hours) and **Schedule only**
+  (the weeks alone). Only the ones that would do something are offered; the first is the
+  default, so a headquarters or a warehouse (no plan) gets hire only. A hire that would join a
+  written site with no hours (a pick over the plan, a Quick hire past its open weeks) is said,
+  pointing at Hire only.
+- **The weeks** are `hrRequest()`'s: a site's plan week (`hrWeek()`) with its hires and
+  reassigns on their weeks; an office nobody arrives at keeps its additive write
+  (`gwRosterWeek()`). Quick hire now writes its site's plan week too, with the hires on
+  their plan weeks, instead of adding to the week as it stands.
+- **One call, one undo** with mod 0.4.0 (`/health` `features` `hire.reschedule` and
+  `hire.undo`, docs/game-link-api.md): the reschedule-only sites ride in the hire call and the
+  dialog offers Undo, which `POST /write/undo {"kind": "hire"}` takes back whole until the
+  game's next day. With 0.3.x/0.4.x the call carries the hires, the reassigns, their sites and
+  the sources that change, and the other weeks follow as `/write/schedule` calls one by one
+  (`hrChain()`), each site saying done or why not; nothing can be undone. A call with nothing
+  for the hire write (schedule only) is not sent at all; each chained week drops the board's
+  Undo for an earlier schedule write (the game keeps one), as the one call does for a site it
+  writes. Undo is offered only where the apply answers `undoable` true.
+- **Spare people** (browser QA and Peter's decision, 29 September 2026). The plan staffs its
+  hours with the fewest people: nobody's planned hours are cut to keep somebody else on, and a
+  spare is never kept on their old week. "Staff this site" also sends the site's own spares to
+  the open week `hrModel()` found them elsewhere, as "Staff all sites" does (the hard demand
+  filter holds). A destination outside the action's scope gets an additive week (the game's
+  week with the mover's hours added, never `openAllHours`). At a shop there, every hour of
+  the spare's week must lie inside its opening hours (`hrFitsOpen()`); at any site there,
+  every hour must be free at that station in the site's week as the game has it
+  (`hrFitsFree()`), so an additive week never cuts anybody's hours. "Staff this site" looks
+  at every spare its plan names, not only those the company-wide model moved (a week another
+  site's spare took there is free when only this site is staffed), and never at anyone in
+  training (said as such). Each spare's search (`hrOutPlan()`, `hrOutWeek()`) tries their
+  own model week first, which a ticked spare keeps from every other spare's search; then,
+  as `hrModel()` picks, the roles they are spare in, best first, and in each the first site
+  in list order with an open week that meets their schedule demands, lies inside its
+  opening hours and is free there, a desk that meets their desk demands first. With none,
+  the spare is not moved, and the review names the first week it passed over and why
+  (closed hours, or hours someone already works). Quick hire and Pick more reassign nobody.
+  A spare who is not moved ends the week at 0 h at their site, which is fine (Peter's in-game
+  test, 29 September 2026): the review lists everyone it leaves with no hours at a site, the
+  week's own and those the game's answer names (`leftWithout`), once each, in one plain note
+  (the heading "No hours here after this" and the names), with no warning and no advice,
+  and the week check never counts 0 hours as a break. "Staff this site" counts only who comes
+  into the site. "Fewer hours than now" compares the week sent with the game's week.
+- **The owner's in-game test (29-30 September 2026).** The site block's "Write all N planned
+  sites" run of dialogs is gone: "Staff all sites" (the one action, spares moved first, one Undo,
+  opening on Schedule only where nobody is hired or moved) stands in its place; a site's own
+  "Write this schedule" stays. "Staff this site" is offered also where the only work is the
+  site's own spares moving out. Before any "hire N" (the site block's note, its add step, the
+  schedule write's add box), the people elsewhere who fit (spares and unassigned staff the page
+  moves in) come first: every hiring read-out of the site (its headcount line, hours tile,
+  add step and tooltip, the Schedules status, the schedule dialog's add box and done text)
+  counts only the hires left (`spRowLess()`), and a note says "N can come from other sites",
+  with Staff this site to do it. The hours stay whole: they are empty until somebody works
+  them, so a schedule-only write says they wait on the people from other sites. Without a
+  mod that hires, the full count stands and the note points at MyEmployees. Staff this site
+  shows also where a shop or an office has no week of its own to write. An open week nobody
+  free can take says why ("the free Customer Service people ask for Full-time", or an
+  unticked reassign), counting candidates, spares elsewhere and unassigned staff, nobody in
+  training; Quick hire counts as matches only those who fit an open week at a planned site.
+  Every write dialog names its site (the imports dialog names its one depot too).
+- **Done and failed per site**: once applied, each site in the review says "week written",
+  "assigned", "writing the week…" or why its week was not written.
 
 ## 4. Wire contract: `POST /write/hire`
 

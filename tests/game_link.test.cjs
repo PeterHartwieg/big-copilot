@@ -1010,6 +1010,76 @@ test('a mod that now speaks another version takes no writes until it speaks this
   assert.equal(h.run('bindSource().holds()'), true);
 });
 
+// Mod 0.4.0 lists what its kinds can do beyond their first contract (the hire
+// call's reschedule-only weeks and its undo): the board reads it off link().
+test('the features a mod lists reach the board as strings; an older mod, or another version, lists none', async () => {
+  const h = harness({routes: {health: () => HEALTH}});
+  h.run(`linkUrl = "http://127.0.0.1:8322"; linkSchema = 1; linkHealth = ${JSON.stringify({...HEALTH, writes: ['hire'], features: ['hire.reschedule', 'hire.undo', 7]})}`);
+  assert.deepEqual(plain(h.run('linkFeatures()')), ['hire.reschedule', 'hire.undo']);
+  h.run(`linkHealth = ${JSON.stringify({...HEALTH, writes: ['hire']})}`);
+  assert.deepEqual(plain(h.run('linkFeatures()')), []);
+  h.run(`linkSchema = 2; linkHealth = ${JSON.stringify({...HEALTH, writes: ['hire'], features: ['hire.undo']})}`);
+  assert.deepEqual(plain(h.run('linkFeatures()')), []);
+});
+
+// Uniforms and marketing (mod 0.4.0) find their buildings by address alone:
+// they name the save the board was read from, so the mod answers `changed`
+// when the game has another one loaded. The other kinds carry their own ids.
+// The board judges an agency open by the game's hour, so the clock moves on
+// every /health, new bytes or not; the strip keeps the bytes' own time.
+test('the game clock moves with every health read, and the board hears when the hour turns', async () => {
+  const h = harness({routes: {health: HEALTH}});
+  h.run(`linkHealth = ${JSON.stringify(HEALTH)}; lastLinkStamp = "s1"`);
+  const ticks = [];
+  h.context.handlers = {linkClock: () => ticks.push(h.run('linkTime().hour'))};
+  h.routes.health = {...HEALTH, minute: 40};
+  await h.run('readHealth()');
+  assert.deepEqual(plain(h.run('linkTime()')), {day: 34, hour: 14, minute: 40});
+  assert.deepEqual(ticks, [], 'the same hour: nothing to hear');
+  h.routes.health = {...HEALTH, hour: 17, minute: 45};
+  await h.run('readHealth()');
+  assert.deepEqual(plain(h.run('linkTime()')), {day: 34, hour: 17, minute: 45});
+  assert.deepEqual(ticks, [17]);
+  // Another game's health moves nothing: the board is not of it.
+  h.routes.health = {...HEALTH, character: 'other', hour: 20};
+  await h.run('readHealth()');
+  assert.equal(h.run('linkTime().hour'), 17);
+  assert.deepEqual(ticks, [17]);
+  assert.equal(h.run('linkHealth.hour'), 14, 'the bytes keep their own time for the strip');
+  // Newer bytes waiting: the clock moves, but the board is not drawn again
+  // before the build that follows draws it.
+  h.routes.health = {...HEALTH, hour: 18, stamp: 's2'};
+  await h.run('readHealth()');
+  assert.equal(h.run('linkTime().hour'), 18);
+  assert.deepEqual(ticks, [17]);
+});
+
+test('marketing and uniforms name the save they were planned from; the other kinds do not', async () => {
+  const health = {...HEALTH, writes: ['uniforms', 'imports', 'schedule', 'hire', 'marketing']};
+  const h = harness({routes: {health}});
+  h.run(`linkHealth = ${JSON.stringify(health)}; keepApproval(linkUrl, "approved-token")`);
+  const sent = [];
+  const reads = h.context.fetch;
+  h.context.fetch = async (url, init) => {
+    if (!String(url).includes('/write/')) return reads(url, init);
+    const kind = String(url).split('/write/')[1];
+    sent.push([kind, JSON.parse(init.body), init.headers.Authorization]);
+    return reply(200, {ok: true, kind, dryRun: true, rows: []});
+  };
+  for (const kind of ['marketing', 'uniforms', 'imports']) {
+    const got = await h.run(`gameWrite(${JSON.stringify(kind)}, {sites: []}, {dryRun: true})`);
+    assert.equal(got.error, null, kind);
+    assert.equal(got.body.kind, kind);
+  }
+  const save = {character: 'abc', company: 'Costy Co'};
+  assert.deepEqual(sent.map(([kind, body, auth]) => [kind, body.expect || null, body.dryRun, auth]), [
+    ['marketing', save, true, 'Bearer approved-token'],
+    ['uniforms', save, true, 'Bearer approved-token'],
+    ['imports', null, true, 'Bearer approved-token'],
+  ]);
+  assert.deepEqual(plain(h.run('linkWrites()')), health.writes, 'the board offers what the mod lists');
+});
+
 test('the refusal on Update is still the full one, and names the version this page needs', async () => {
   const h = harness({routes: {health: {...HEALTH, schemaVersion: 2}}});
   await h.run('loadFromLink("Linking to the game")');
