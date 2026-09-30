@@ -3228,7 +3228,13 @@ test('before "hire N", the people elsewhere who fit come first, in every hiring 
   await phase(page, 'ready');
   const dlg = await page.locator('dialog.gw-dlg').textContent();
   assert.match(dlg, /1 person can come from another site/);
-  assert.match(dlg, /Add 1 person to fill this plan: hire 1 Customer Service/);
+  assert.match(dlg, /Add 1 person to fill this plan: hire 1 Customer Service; 60 h a week stay empty until then and until the people from other sites come\./);
+  // Through Apply: the hours wait on both, named together.
+  await page.locator('dialog.gw-dlg .gw-foot [data-gw-b="apply"]').click();
+  await phase(page, 'done');
+  const done = await page.locator('dialog.gw-dlg').textContent();
+  assert.match(done, /60 h a week stay empty until 1 person comes from another site and you add 1 more: Staff this site does both\./);
+  assert.doesNotMatch(done, /until you add 1 person/);
 });
 
 test('without a mod that hires, the full count stands and the note points at MyEmployees', async (t) => {

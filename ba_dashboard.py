@@ -39912,11 +39912,14 @@ function gwWeek(now, days){
 }
 /* The add-people box: who to assign and whom to hire, and the hours written
    now against the hours that wait for them. */
-function gwAddBox(add, staffed){
+function gwAddBox(add, staffed, from = 0){
   const pills = (add.assign || []).map(p => `<span class="person bench"><i>${spEsc(gwInitials(p.name))}</i>${spEsc(p.name || "?")}<small>${tt("sp.gw.add.unassigned", "unassigned")}</small></span>`)
     .concat((add.hire || []).map(h => `<span class="person hire"><i>${gwSvg("plus")}</i>${h.people} × ${spEsc(h.role || "")}<small>${tt("sp.gw.add.tohire", "to hire")}</small></span>`));
   const empty = Number(add.hoursUncovered) || 0, total = staffed + empty;
-  return `<div class="gw-box gw-warn gw-lift">${gwCall("warn", "hire", tt("sp.gw.add", {
+  return `<div class="gw-box gw-warn gw-lift">${gwCall("warn", "hire", from ? tt("sp.gw.add.from", {
+    one: "<b>Add {n} person to fill this plan</b>: {who}; {h} h a week stay empty until then and until the people from other sites come.",
+    other: "<b>Add {n} people to fill this plan</b>: {who}; {h} h a week stay empty until then and until the people from other sites come."}, {n: add.people, who: spAddWords(add), h: empty})
+    : tt("sp.gw.add", {
     one: "<b>Add {n} person to fill this plan</b>: {who}; {h} h a week stay empty until then.",
     other: "<b>Add {n} people to fill this plan</b>: {who}; {h} h a week stay empty until then."}, {n: add.people, who: spAddWords(add), h: empty}))}${
     pills.length ? `<div class="gw-pills">${pills.join("")}</div>` : ""}${
@@ -39974,7 +39977,8 @@ function gwSchedule(key){
       }
       const labels = [tt("sp.gw.tile.entries", "Entries"), tt("sp.gw.tile.hours", "Hours / week"), tt("sp.gw.tile.people", "People")];
       if(phase === "done") return gwTiles([[labels[0], null, sentList.length], [labels[1], null, gwHours(sentList)], [labels[2], null, afterPeople]])
-        + (add.people ? gwLiftCall("warn", "hire", tt("sp.gw.sch.doneempty", {
+        + (add.people && row.fromOthers ? gwLiftCall("warn", "hire", gwBothWait(add.hoursUncovered, row.fromOthers, add.people))
+          : add.people ? gwLiftCall("warn", "hire", tt("sp.gw.sch.doneempty", {
           one: "<b>{h} h a week stay empty</b> until you add {n} person. Write the schedule again then: the board keeps this note until it is full.",
           other: "<b>{h} h a week stay empty</b> until you add {n} people. Write the schedule again then: the board keeps this note until it is full."},
           {h: add.hoursUncovered || 0, n: add.people}))
@@ -40032,7 +40036,7 @@ function gwSchedule(key){
         + (left.length ? `<div class="gw-box">${gwCall("", "exit", tt("sp.gw.left.head", "<b>No hours here after this</b>"))}<div class="gw-pills">${left.join("")}</div></div>` : "")
         /* People elsewhere who fit come before any hire (spRowLess()): said
            in the fixed strip with the add box. */
-        + adds + hrFromCall(row, true) + (add.people ? gwAddBox(add, gwHours(sentList)) : "") + over.join("")
+        + adds + hrFromCall(row, true) + (add.people ? gwAddBox(add, gwHours(sentList), row.fromOthers || 0) : "") + over.join("")
         + gwCheckLines(gwWeekCheck(row, week.days));
     },
     bind: (dlg, replan) => {
@@ -40063,7 +40067,7 @@ function gwSchedule(key){
         ? tt("sp.gw.sch.undone.hours", "Undone: the schedule at {shop} is back as it was, opening hours too.", {shop})
         : tt("sp.gw.sch.undone", "Undone: the schedule at {shop} is back as it was.", {shop});
       const add = (last && last.row.addPeople) || {}, from = (last && last.row.fromOthers) || 0;
-      return `${gwScheduleSaid(shop, answer)}${add.people ? ` ${tt("sp.gw.sch.stillempty", {
+      return `${gwScheduleSaid(shop, answer)}${add.people && from ? ` ${gwBothWait(add.hoursUncovered, from, add.people)}` : add.people ? ` ${tt("sp.gw.sch.stillempty", {
         one: "{h} h a week stay empty until you add {n} person; write it again then.",
         other: "{h} h a week stay empty until you add {n} people; write it again then."}, {h: add.hoursUncovered || 0, n: add.people})}`
         : from ? ` ${gwFromWait(add.hoursUncovered, from)}` : ""}`;
@@ -40071,6 +40075,11 @@ function gwSchedule(key){
   });
 }
 
+/* The hours that wait on people from other sites and on hires both. */
+const gwBothWait = (h, n, m) => tt("sp.gw.sch.bothwait", {
+  one: "<b>{h} h a week stay empty</b> until {n} person comes from another site and you add {m} more: Staff this site does both.",
+  other: "<b>{h} h a week stay empty</b> until {n} people come from other sites and you add {m} more: Staff this site does both."},
+  {h: Number(h) || 0, n, m});
 /* The hours a schedule-only write leaves to the people from other sites. */
 const gwFromWait = (h, n) => tt("sp.gw.sch.fromwait", {
   one: "<b>{h} h a week stay empty</b> until {n} person comes from another site: Staff this site moves them.",
