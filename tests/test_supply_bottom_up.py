@@ -14,7 +14,7 @@ C. a Smart Delivery import beside a factory route that covers the week.
 """
 import unittest
 
-from ba_dashboard import plain, Names, _import_notes, _shelf_notes, _supply
+from ba_dashboard import plain, Names, WEEKDAYS, _import_notes, _shelf_notes, _supply
 from test_supply_facts import BEER, RECIPES, WATER, Company
 
 WH, BREWERY, SHOP, CAFE = ("wh_road", 1), ("brew_lane", 2), ("main_street", 3), ("bean_street", 4)
@@ -29,10 +29,15 @@ class Chain(Company):
         super().__init__(**options)
         self.recipes = {BEER: dict(RECIPES[BEER], out=per_hour)}
         self.names = Names({})
+        # The company's weekday profile, by WEEKDAYS index (Sunday first), in
+        # hundredths of an average day; None for a flat week.
+        self.profile = None
 
     def run(self):
         self.business_list = self.businesses()
-        self.supply = _supply(self.save(), self.names, self.business_list, self.day, {}, self.recipes)
+        rhythm = ({"customers": [{"day": WEEKDAYS[wd], "index": v} for wd, v in enumerate(self.profile)]}
+                  if self.profile else {})
+        self.supply = _supply(self.save(), self.names, self.business_list, self.day, rhythm, self.recipes)
         return self.supply
 
     def verdict(self, addr, slug=BEER):
@@ -1087,18 +1092,6 @@ class RoundSixTests(unittest.TestCase):
         self.assertGreater(fact["setTo"], 500)
 
 
-def replay_rounds(targets, can):
-    """What a line holds after one morning's rounds, in each order they can
-    run: each tops the line up TO its target from what its sender can send."""
-    held = []
-    for order in (list(targets), list(targets)[::-1]):
-        level = 0.0
-        for sender in order:
-            level = max(level, min(targets[sender], level + can[sender]))
-        held.append(level)
-    return held
-
-
 class RoundSevenTests(unittest.TestCase):
     """Review round 7: top-up targets are levels, never added together."""
 
@@ -1139,13 +1132,8 @@ class RoundSevenTests(unittest.TestCase):
 
     def test_the_suggested_level_holds_the_day_in_either_order(self):
         """The brewery makes 720 a day; the hub's plan is raised to the 2,760
-        suggested. Replayed round by round, in both orders, the line holds
-        the 2,400 sold; the board says covered, holding 2,760, not the
-        brewery's 10,000 it cannot fill."""
-        held = replay_rounds({"brewery": 10000, "hub": 2760}, {"brewery": 720, "hub": 20000 / 7})
-        self.assertGreaterEqual(min(held), 2400)
-        self.assertLess(min(replay_rounds({"brewery": 10000, "hub": 2040},
-                                          {"brewery": 720, "hub": 20000 / 7})), 2400)
+        suggested: the board says covered, holding 2,760, not the brewery's
+        10,000 it cannot fill (the day-by-day replay is RoundEightTests')."""
         c = Chain()
         hub = ("hub_road", 9)
         c.factory(BREWERY, "Brewery", machines=1)
@@ -1163,3 +1151,191 @@ class RoundSevenTests(unittest.TestCase):
         fact = c.fact(WH, BEER)
         self.assertEqual(fact["st"], "covered")
         self.assertLess(fact["have"], 10000)
+
+
+# --- round 8: several sites topping one depot up, replayed day by day -------
+
+# A week with a busy Friday (WEEKDAYS index, Sunday first): the busiest day
+# is 130 against an average of 100.
+BUSY_WEEK = [95, 90, 90, 95, 100, 130, 100]
+
+
+def simulate_days(senders, targets, depot_stock, sales, profile, days=21, order=None):
+    """A plain day-by-day account of a depot several sites top up, written
+    from the game's rules and not from the board's code.
+
+    `senders` {name: {"stock": held, "made": a day made there, "import":
+    (units a week, landing weekday)}}. Every morning each sender in `order`
+    tops the depot up to its target from what it holds; then the depot's
+    shop draws its day (`sales` times the weekday's share of `profile`);
+    then each sender makes its day and an import lands on its weekday.
+    Returns the days the depot could not meet the draw."""
+    stock = {name: float(spec.get("stock", 0)) for name, spec in senders.items()}
+    depot = float(depot_stock)
+    order = list(order or senders)
+    dry = []
+    for day in range(days):
+        weekday = day % 7
+        for name in order:
+            give = max(0.0, min(targets[name] - depot, stock[name]))
+            depot += give
+            stock[name] -= give
+        draw = sales * profile[weekday] / 100
+        if depot + 1e-6 < draw:
+            dry.append(day)
+            depot = 0.0
+        else:
+            depot -= draw
+        for name, spec in senders.items():
+            stock[name] += spec.get("made", 0)
+            weekly = spec.get("import")
+            if weekly and weekday == weekly[1]:
+                stock[name] += weekly[0]
+    return dry
+
+
+class RoundEightTests(unittest.TestCase):
+    """Several sites topping one depot up, judged as two questions (targets
+    on the busiest day, supply on an average day) and checked by applying
+    every change the board suggests and replaying three weeks of rounds, in
+    both orders, against a week with a busy Friday."""
+
+    HUB_A, HUB_B, BREW_A, BREW_B = ("hub_a", 7), ("hub_b", 8), ("brew_a", 5), ("brew_b", 6)
+
+    def build(self, senders, sales, depot_stock=3000):
+        """`senders` [(addr, "hub" or "brewery", imported a week or
+        machines, target, stock)]; the depot tops a shop selling `sales` a
+        day up."""
+        c = Chain()
+        c.profile = BUSY_WEEK
+        for addr, kind, amount, target, held in senders:
+            if kind == "hub":
+                c.site(addr, "Hub " + addr[0][-1])
+                c.contract(addr, BEER, amount)
+            else:
+                c.factory(addr, "Brewery " + addr[0][-1], machines=amount)
+            c.hold(addr, BEER, held)
+            c.plan(addr, WH, BEER, target)
+        c.site(WH, "Depot")
+        c.hold(WH, BEER, depot_stock)
+        c.plan(WH, SHOP, BEER, 100000)
+        c.shop(SHOP, "Shop")
+        c.hold(SHOP, BEER, 2000, sales)
+        c.run()
+        return c
+
+    def settle(self, senders, sales):
+        """Apply every change the board suggests (each plan's top-up, each
+        hub's import) until it suggests none; returns the settled senders,
+        the board, and how many rounds of changes it took."""
+        senders = [list(s) for s in senders]
+        for rounds in range(4):
+            c = self.build(senders, sales)
+            depot = c.fact(WH, BEER)
+            changes = {}
+            if depot["setTo"] is not None and depot["role"] == "depot" and depot["cad"] == "daily":
+                for index, _have, level in [[depot["from"], None, depot["setTo"]]] + (depot.get("raise") or []):
+                    changes[("target", index)] = level
+            for spec in senders:
+                fact = c.fact(tuple(spec[0]), BEER)
+                if spec[1] == "hub" and fact and fact["setTo"] is not None and fact["cad"] == "weekly":
+                    changes[("import", c.index(tuple(spec[0])))] = fact["setTo"]
+            if not changes:
+                return senders, c, rounds
+            for spec in senders:
+                index = c.index(tuple(spec[0]))
+                if ("target", index) in changes:
+                    self.assertGreater(changes[("target", index)], spec[3], "a raise never lowers a target")
+                    spec[3] = changes[("target", index)]
+                if ("import", index) in changes:
+                    spec[2] = changes[("import", index)]
+        self.fail("the suggestions never settle")
+
+    def replay(self, senders, sales):
+        """Three weeks of rounds with the settled figures, in both orders."""
+        spec = {tuple(s[0]): {"stock": s[4], **({"import": (s[2], 3)} if s[1] == "hub" else {"made": 720 * s[2]})}
+                for s in senders}
+        targets = {tuple(s[0]): s[3] for s in senders}
+        return [simulate_days(spec, targets, 3000, sales, BUSY_WEEK, order=order)
+                for order in (list(spec), list(spec)[::-1])]
+
+    def check(self, senders, sales, most_rounds=1):
+        settled, board, rounds = self.settle(senders, sales)
+        self.assertLessEqual(rounds, most_rounds, "one pass of changes should do")
+        self.assertEqual(self.replay(settled, sales), [[], []], settled)
+        return settled, board
+
+    def test_two_hubs_short_of_imports_ask_there_not_at_the_depot(self):
+        """Two hubs importing 7,000 a week each top the depot up to 10,000;
+        the shop sells 2,400 a day. The targets hold the day; the imports do
+        not: a note at the depot, and each hub's import asks."""
+        senders = [(self.HUB_A, "hub", 7000, 10000, 5000), (self.HUB_B, "hub", 7000, 10000, 5000)]
+        c = self.build(senders, 2400)
+        self.assertEqual((c.fact(WH, BEER)["st"], c.fact(WH, BEER)["why"]), ("noplan", "upstream"))
+        self.assertEqual(c.notes(WH, "topup"), [])
+        self.check(senders, 2400)
+
+    def test_hubs_at_9000_a_week_are_not_a_tight_target(self):
+        senders = [(self.HUB_A, "hub", 9000, 10000, 5000), (self.HUB_B, "hub", 9000, 10000, 5000)]
+        c = self.build(senders, 2400)
+        self.assertNotIn(c.fact(WH, BEER)["st"], ("short", "tight"))
+        self.check(senders, 2400)
+
+    def test_the_boards_own_import_setting_reads_covered(self):
+        """Each hub imports the 9,660 the board would suggest: covered."""
+        senders = [(self.HUB_A, "hub", 9660, 10000, 5000), (self.HUB_B, "hub", 9660, 10000, 5000)]
+        c = self.build(senders, 2400)
+        self.assertEqual((c.fact(WH, BEER)["st"], c.fact(WH, BEER)["setTo"]), ("covered", None))
+        self.check(senders, 2400, most_rounds=0)
+
+    def test_hubs_short_behind_targets_that_hold_is_an_upstream_note(self):
+        """Hubs importing 700 a week top the depot up to 500; the shop sells
+        300 a day. The targets hold the day, the imports do not: no target
+        finding."""
+        senders = [(self.HUB_A, "hub", 700, 500, 1000), (self.HUB_B, "hub", 700, 500, 1000)]
+        c = self.build(senders, 300)
+        self.assertEqual((c.fact(WH, BEER)["st"], c.fact(WH, BEER)["why"]), ("noplan", "upstream"))
+        self.assertEqual(c.notes(WH, "topup"), [])
+        self.check(senders, 300)
+
+    def test_two_breweries_both_raised_when_neither_can_carry_the_day(self):
+        """Breweries making 720 a day each top the depot up to 500; the shop
+        sells 1,000 a day. Neither alone can make the busiest day: both
+        plans rise, to the same level, named in one finding."""
+        senders = [(self.BREW_A, "brewery", 1, 500, 0), (self.BREW_B, "brewery", 1, 500, 0)]
+        c = self.build(senders, 1000)
+        fact = c.fact(WH, BEER)
+        self.assertEqual((fact["st"], fact["why"]), ("short", "target"))
+        self.assertEqual(len(fact.get("raise") or []), 1)
+        [note] = c.notes(WH, "topup")
+        self.assertIn("raise the top-ups on the plans of", plain(note["text"]))
+        self.check(senders, 1000)
+
+    def test_a_brewery_beside_a_hub_on_a_low_target(self):
+        """Round 6's case: the brewery (720) at 10,000 and a hub importing
+        20,000 a week at 1,000; 2,400 a day. The hub's plan rises."""
+        senders = [(self.BREW_A, "brewery", 1, 10000, 0), (self.HUB_A, "hub", 20000, 1000, 5000)]
+        c = self.build(senders, 2400)
+        fact = c.fact(WH, BEER)
+        self.assertEqual((fact["st"], fact["why"], fact["from"], fact["have"]),
+                         ("short", "target", c.index(self.HUB_A), 1000))
+        self.check(senders, 2400)
+
+    def test_targets_are_levels_not_a_sum(self):
+        """5,000 and 1,000 against 6,000 a day; 1,000 and 1,000 against 2,400."""
+        for targets, sales in (((5000, 1000), 6000), ((1000, 1000), 2400)):
+            with self.subTest(targets=targets):
+                senders = [(self.HUB_A, "hub", 70000, targets[0], 30000),
+                           (self.HUB_B, "hub", 70000, targets[1], 30000)]
+                c = self.build(senders, sales)
+                self.assertEqual((c.fact(WH, BEER)["st"], c.fact(WH, BEER)["why"]), ("short", "target"))
+                self.check(senders, sales)
+
+
+def two_breweries_board():
+    """RoundEightTests' two breweries at 500 against 1,000 a day, as the board
+    reads it: tests/import_routes.test.cjs counts its top-up changes."""
+    t = RoundEightTests()
+    c = t.build([(t.BREW_A, "brewery", 1, 500, 0), (t.BREW_B, "brewery", 1, 500, 0)], 1000)
+    return {"meta": {"character": "bottom-up", "day": c.day, "save": "Fixture"},
+            "supply": c.supply, "businesses": c.business_list, "alerts": [], "plan": {"recipes": []}}

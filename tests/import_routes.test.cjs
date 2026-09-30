@@ -880,3 +880,16 @@ test('an unsourced finding on a depot lands on Imports', async () => {
     assert.equal(await page.locator('#secImports tr.sb-arrived').getAttribute('data-slug'), 'ba:itemname_beer');
   } finally { await page.close(); }
 });
+
+/* Several sites top a depot up and both targets have to rise: each plan is a
+   change of its own on the checklist, to the same level. */
+test('a depot two plans have to rise for lists both on the checklist', async () => {
+  const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
+    + 'from test_supply_bottom_up import two_breweries_board; print(json.dumps(two_breweries_board()))'));
+  const page = await board(data, {which: 'changes', tab: 'deliveries'});
+  try {
+    const got = await page.evaluate(() => supplyChecklistRows().rows
+      .filter(r => r.kind === 'Depot daily top-ups').map(r => [D.businesses[r.source].name, r.current, r.proposed]));
+    assert.deepEqual(got.sort(), [['Brewery a', 500, 1500], ['Brewery b', 500, 1500]]);
+  } finally { await page.close(); }
+});

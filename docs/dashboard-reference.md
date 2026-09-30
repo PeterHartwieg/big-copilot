@@ -1439,9 +1439,16 @@ way, never both. A shop or a depot with no supply of its own is asked for all it
 raising its target and the import behind it together cover it. Where several sites top a
 depot up, their targets are levels, not amounts added together: each round tops the line
 up to its own target from what its sender has, so the line holds after the morning's
-rounds no more than the highest target, in the worse of the orders the rounds can run in.
-Short of the day, the target to raise is that of the sender with the most to send, to the
-day's need.
+rounds no more than the highest target. Two questions are asked apart. The targets, on
+the busiest day: with every sender that has anything coming in taken as unlimited, does
+the highest target hold the busiest day's need? The supply, on an average day: do the
+senders have room for the day (each one's spare less what its other routes take), and do
+the rounds, replayed as levels within that room in both orders, hold it? Targets short on
+either count are a top-up finding naming every plan that has to rise (the fewest, those
+with the most room first, that between them can bring the busiest day), each to the
+busiest day's need, a level that holds the day whichever order the rounds run in; a
+suggestion never lowers a target. Room short while the targets hold is the supply's to
+fix: the depot shows a note, and the senders' own import or line findings ask.
 Two sites topping one up split its need by their targets, but one asked across its routes
 for more than it has hands the rest to the others with room, in both bases alike (and a
 factory in Shop demand is held to what it can make across all the sites it tops up). What a sender merely holds is no supply, and what a line at the

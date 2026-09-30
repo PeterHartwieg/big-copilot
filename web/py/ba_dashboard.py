@@ -3817,11 +3817,12 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
             "own": own(n),
             "credit": brings,
             "supplied": sum(g[1] for g in got),
-            # What each sender has to send a day in all, its targets aside
-            # (a site the board cannot read: whatever is asked of it).
-            "sendable": {s: (max(0.0, spare((s, n[1])))
-                             if spare((s, n[1])) is not None else float(ln + sn))
-                         for s in _in_order({s for s, _t in legs})},
+            # What each sender has room to send this line a day: its spare
+            # less what its other routes ask of it (None: a site the board
+            # cannot read, taken to send what is asked).
+            "room": {s: (None if spare((s, n[1])) is None else max(0.0, spare((s, n[1])) - sum(
+                         a[1] for d, a in asked.get((s, n[1]), {}).items() if d != n[0])))
+                     for s in _in_order({s for s, _t in legs})},
             "potential": potential,
             "covered": covered,
             "inbound": bool(legs),
@@ -5736,7 +5737,14 @@ def _supply_facts(ctx: dict) -> dict:
         a standing order does not; only the severity reads what they hold."""
         use_day, need_day = node.get("use", 0.0), node.get("need", 0.0)
         made = ctx.get("made", {}).get(mode, {}).get((key, slug), 0.0)
-        if use_day and _below(node.get("supplied", 0.0) + made, use_day):
+        several = len(node.get("routeTargets") or {}) > 1
+        supply_short = False
+        if several:
+            got = multi_route(key, slug, node, use_day, need_day)
+            if got is not None:
+                return got
+            supply_short = True  # the senders cannot bring the day: below
+        if use_day and (supply_short or _below(node.get("supplied", 0.0) + made, use_day)):
             credit = node.get("credit", 0.0) + made
             lines_use = 7 * node.get("lines", (0.0, 0.0))[0]
             use = round(max(0.0, use_day - credit) * 7)
@@ -5750,6 +5758,15 @@ def _supply_facts(ctx: dict) -> dict:
             # a note naming that site (why upstream).
             able = [s for s in node.get("senders", ()) if s not in node.get("passing", ())]
             if able and all(upstream_asks(s, slug, mode) for s in able):
+                if several:
+                    # multi_route() found the targets hold the day: only the
+                    # supply behind them is short, and it asks there.
+                    factor, _day = ctx["peak"](businesses[index[key]])
+                    biggest = max(able, key=lambda s: ((node.get("room") or {}).get(s) or 0.0, s))
+                    return {"noplan": "upstream", "noplanLvl": "info", "short": []}, {
+                        "use": round(use_day * factor), "need": round(need_day * factor),
+                        "have": max(node["routeTargets"].values()), "setTo": None, "imp": False,
+                        "from": index.get(upstream_root(biggest, slug, mode))}, "daily"
                 p, fields, cad = daily_route(key, slug, node, use_day, need_day)
                 if not p.get("short") and not p.get("tight"):
                     p = {"noplan": "upstream", "noplanLvl": "info", "short": []}
@@ -5772,48 +5789,77 @@ def _supply_facts(ctx: dict) -> dict:
             }, "weekly"
         return daily_route(key, slug, node, use_day, need_day)
 
-    def daily_route(key, slug, node, use_day, need_day):
-        """A route-fed depot's daily top-up against its busiest day's use.
+    def multi_route(key, slug, node, use_day, need_day):
+        """A route-fed depot several sites top up, as two questions.
 
-        With several sites topping it up, each round brings no more than its
-        own target, whatever its sender could spare: where the share of the
-        need a sender with room is asked for (the walk's hand-over) passes
-        its target, the routes together carry less than the day, and it is
-        that sender's target to raise (named in `from`)."""
+        Targets are levels: each morning round tops the line up TO its
+        target from what its sender has room for, so the line holds no more
+        than the highest target, and no more than the senders bring on top
+        of one another. (a) The targets, on the busiest day: with every
+        sender that has anything coming in taken as unlimited, does the
+        highest target hold the busiest day's need? (b) The supply, on an
+        average day: do the senders have room for the day (what each can
+        spare less what its other routes ask), and, replayed as levels in
+        both orders within that room, do the rounds hold the day?
+
+        Targets short on either count are a top-up finding, naming every
+        sender whose target has to rise (the fewest, those with the most
+        room first, that between them can bring the busiest day) and the
+        level each rises to: the busiest day's need, which then holds the
+        day whichever order the rounds run in. Room short with the targets
+        holding is no target finding: returns None, and route_fed() says
+        it as the supply's (the senders' own import or line findings ask).
+        Otherwise covered, holding what the rounds bring."""
         factor, _day = ctx["peak"](businesses[index[key]])
         use, need = round(use_day * factor), round(need_day * factor)
         targets = node.get("routeTargets") or {}
-        can = node.get("sendable") or {}
-        if len(targets) > 1:
-            # A target is a level: each round tops the line up TO it, from
-            # what its sender can send, so the line holds after the morning's
-            # rounds at most the highest target, and at most what the senders
-            # bring on top of each other. Walked in either order the rounds
-            # can run in, the worse is what the line holds.
-            order = _in_order(targets)
-            held_after = []
-            for rounds in (order, order[::-1]):
+        room = node.get("room") or {}
+        capable = [s for s in _in_order(targets) if room.get(s) is None or room[s] > 0]
+        cap = {s: float("inf") if room.get(s) is None else room[s] for s in capable}
+        enough = not _below(sum(cap.values()), need_day)
+
+        def replay(levels):
+            held = []
+            for order in (capable, capable[::-1]):
                 level = 0.0
-                for sender in rounds:
-                    level = max(level, min(targets[sender], level + can.get(sender, 0.0)))
-                held_after.append(level)
-            carry = round(min(held_after))
-            if need and _below(carry, need):
-                # The target to raise is the one whose sender has the most to
-                # send, to the day's need: a level that holds the day in
-                # whichever order the rounds come.
-                s_short = max(order, key=lambda sender: (can.get(sender, 0.0), -order.index(sender)))
-                p = {"short": ["target"] if use and _below(carry, use) else []}
-                if not p["short"]:
-                    p["tight"] = "target"
-                return p, {"use": use, "need": need, "have": targets[s_short], "setTo": _ceil_ten(need),
-                           "imp": False, "from": index.get(s_short)}, "daily"
-            # Covered: what the line holds after the rounds, never a target a
-            # sender cannot fill (a 10,000 target from a line making 720).
-            return {"short": [], "covered": "route"}, {
-                "use": use, "need": need, "have": carry, "setTo": None, "imp": False,
-                "from": index.get(max(order, key=lambda sender: (can.get(sender, 0.0), -order.index(sender))))
-            }, "daily"
+                for sender in order:
+                    level = max(level, min(levels[sender], level + cap[sender]))
+                held.append(level)
+            return min(held) if held else 0.0
+
+        top = max((targets[s] for s in capable), default=0)
+        held = replay(targets)
+        short = bool(use and (_below(top, use) or (enough and _below(held, use_day))))
+        tight = not short and bool(need and (_below(top, need) or (enough and _below(held, need_day))))
+        if short or tight:
+            level = _ceil_ten(need)
+            chosen, room_sum = [], 0.0
+            for sender in sorted(capable, key=lambda s: (-cap[s], -targets[s], s)):
+                if room_sum >= need:
+                    break
+                chosen.append(sender)
+                room_sum += cap[sender]
+            raise_ = [sender for sender in chosen if targets[sender] < level]
+            if raise_:
+                p = {"short": ["target"]} if short else {"short": [], "tight": "target"}
+                first = raise_[0]
+                return p, {"use": use, "need": need, "have": targets[first], "setTo": level, "imp": False,
+                           "from": index.get(first),
+                           **({"raise": [[index.get(sender), targets[sender], level] for sender in raise_[1:]]}
+                              if len(raise_) > 1 else {})}, "daily"
+        if not enough:
+            return None
+        # Covered: what the line holds after the rounds, never a target a
+        # sender cannot fill (a 10,000 target from a line making 720).
+        biggest = max(capable, key=lambda s: (cap[s], targets[s], s)) if capable else None
+        return {"short": [], "covered": "route"}, {
+            "use": use, "need": need, "have": round(min(held, max(targets.values()))), "setTo": None,
+            "imp": False, "from": index.get(biggest)}, "daily"
+
+    def daily_route(key, slug, node, use_day, need_day):
+        """A route-fed depot's daily top-up against its busiest day's use."""
+        factor, _day = ctx["peak"](businesses[index[key]])
+        use, need = round(use_day * factor), round(need_day * factor)
         top = node.get("targets") or node.get("reach") or target_at[(key, slug)][0]
         source = target_at[(key, slug)][1]
         p = {"short": []}
@@ -15096,8 +15142,14 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
                 if fact["st"] == "short" and fact["why"] == "target":
                     item = labels.get((s, slug), slug)
                     named = tok(slug, item)
+                    plans = [fact.get("from")] + [r[0] for r in fact.get("raise") or ()]
                     notes.append(_finding(
                         "critical", b["name"], "topup",
+                        msg("f.topup.several", "{item} is topped up to {have:,} a day against the {use:,} its busiest "
+                            "day sends on; raise the top-ups on the plans of {sites} to {set:,}",
+                            item=named, have=fact["have"], use=fact["use"], set=fact["setTo"],
+                            sites=_msg_list([businesses[x]["name"] for x in plans if x is not None]))
+                        if fact.get("raise") else
                         msg("f.topup", "{item} is topped up to {have:,} a day against the {use:,} its busiest day "
                             "sends on; raise the top-up to {set:,}",
                             item=named, have=fact["have"], use=fact["use"], set=fact["setTo"]),
@@ -27363,6 +27415,16 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
         tt("sb.ck.depot.busiest", {one: "Its busiest day sends on {n:,} unit{margin}.", other: "Its busiest day sends on {n:,} units{margin}."},
           {n: f.use || 0, margin: margin(r.margin)})]),
       src, null, false, f.st === "tight");
+    /* Several sites top it up and more than one target has to rise: each
+       plan is a change of its own, to the same level. */
+    (f.raise || []).forEach(([other, have, level]) => {
+      if(!Number.isInteger(other)) return;
+      add("Depot daily top-ups", r.s, r, Number.isFinite(have) ? have : 0, level,
+        sbCkJoin([tt("sb.ck.depot.plan", "Set on the plan of {site}.", {site: address(other)}),
+          tt("sb.ck.depot.busiest", {one: "Its busiest day sends on {n:,} unit{margin}.", other: "Its busiest day sends on {n:,} units{margin}."},
+            {n: f.use || 0, margin: margin(r.margin)})]),
+        other, null, false, f.st === "tight");
+    });
   });
   /* A factory line rostered fewer hours than the sizing on screen needs: the
      hours to post workers for. A line with more than it needs is a
