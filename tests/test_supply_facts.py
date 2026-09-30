@@ -828,11 +828,13 @@ class RoundOneFixTests(unittest.TestCase):
         # One daily word for the input, and its own contract judged beside it.
         self.assertEqual((fact["role"], fact["cad"], fact["imp"]), ("input", "daily", True))
         own = fact["import"]
-        self.assertEqual((own["cad"], own["have"], own["use"]), ("weekly", 1000, 1000))
+        # The route comes first (round 12, factory first): the Hub sends all
+        # 800 it imports, and the Mill's own contract brings the rest of the
+        # 1,680, 880 of its 1,000.
+        self.assertEqual((own["cad"], own["have"], own["use"]), ("weekly", 1000, 880))
         self.assertEqual(own["st"], "covered")
         self.assertEqual(set(own) - FACT_KEYS, set())
-        # The Hub answers for the rest of the 1,680.
-        self.assertEqual(c.fact(HUB, WATER)["use"], 680)
+        self.assertEqual(c.fact(HUB, WATER)["use"], 800)
 
     def test_m1_a_paused_own_import_the_input_is_short_without_warns_and_the_hub_carries_the_week(self):
         c = Company()

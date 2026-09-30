@@ -1458,8 +1458,10 @@ in Shop demand's sizing alike: what it supplies (a factory's output, an import o
 delivery, both where it has both) goes first to the sites only it tops up, and what is
 left is pooled over the sites it tops up beside others, going where the other senders
 leave a need (room one site does not use goes to another); the rest goes to a sender with
-room, a factory with spare hours among them. A site's own import comes off its need
-first, in Shop demand's sizing as in both bases. A site routes also bring it to is judged
+room, a factory with spare hours among them. The routes come first: a site's own import or
+wholesale delivery brings only what its routes leave (in 24/7, what a factory at full rate
+cannot bring; in Shop demand, the factory is sized for the shops' need and the import is
+the top-up), in both bases and in Shop demand's sizing alike. A site routes also bring it to is judged
 further up. In Shop demand a line sends what it makes in the hours it is sized to, margin
 included. What a sender merely holds is no supply, and what a line at the
 site itself makes comes off its import's week. Two sites topping each other up with the

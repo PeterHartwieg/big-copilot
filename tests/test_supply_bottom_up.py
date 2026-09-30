@@ -665,9 +665,9 @@ class EffectiveSenderTests(unittest.TestCase):
     def test_a_loop_keeps_the_brewerys_demand(self):
         """The brewery tops a warehouse up, which imports too and tops a bar
         selling 300 a day up, and sends some back to the brewery: Demand
-        still sizes the line on the bar, not all 24 hours. The warehouse's
-        own import (100 a day) comes off first, as in the chain's walk
-        (round 12): (300 x 1.15 - 100) / 30 = 8.2, nine hours."""
+        still sizes the line on the bar, twelve hours, not all 24: the
+        brewery's route comes first, and the warehouse's own import brings
+        only what it leaves (round 12, factory first)."""
         c = Chain()
         c.factory(BREWERY, "Brewery", machines=1)
         c.site(WH, "Warehouse")
@@ -679,7 +679,7 @@ class EffectiveSenderTests(unittest.TestCase):
         c.hold(SHOP, BEER, 400, 300)
         c.run()
         [line] = [l for site in c.supply["factories"]["sites"] for l in site["lines"]]
-        self.assertEqual((line["demBasis"], line["needHours"]["dem"]), ("sales", 9))
+        self.assertEqual((line["demBasis"], line["needHours"]["dem"]), ("sales", 12))
 
     def test_the_shelf_is_sized_on_the_supplying_target_whatever_the_plan_order(self):
         """An importing warehouse tops the shop up to 400; an empty depot's
@@ -1629,6 +1629,23 @@ class RoundEightTests(unittest.TestCase):
                 # own shop needs (the room model's known limit), so the replay
                 # judges the depot's shop.
                 self.check(senders, 2400, most_rounds=0, depot_only=True)
+
+    def test_the_factory_comes_before_the_depots_own_import(self):
+        """Round 12, factory first: the brewery-and-hub case above with the
+        depot importing 0, 7,000 or 14,000 a week as well. The routes come
+        first and the import brings only what they leave, so Demand keeps
+        the brewery at 21 hours whatever the import, and the depot reads
+        covered by its routes with nothing said about the import."""
+        for depot_import in (0, 7000, 14000):
+            with self.subTest(depot_import=depot_import):
+                senders = [(self.BREW_A, "brewery", 4, 4000, 0), (self.HUB_B, "hub", 7000, 3590, 5000, 600)]
+                c = self.build(senders, 2400, depot_import=depot_import)
+                [line] = [l for site in c.supply["factories"]["sites"] for l in site["lines"]]
+                self.assertEqual(line["needHours"], {"cap": 24, "dem": 21})
+                for mode in ("cap", "dem"):
+                    fact = c.fact(WH, BEER, mode)
+                    self.assertEqual((fact["st"], fact["setTo"], fact.get("lower")), ("covered", None, None))
+                self.assertEqual([n for group in ("order", "import", "topup", "dead") for n in c.notes(WH, group)], [])
 
     def test_a_lone_sender_short_of_its_day_takes_one_pass(self):
         """Round 11: a sender that is the only one topping its sites up has

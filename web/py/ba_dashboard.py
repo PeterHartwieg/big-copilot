@@ -3515,15 +3515,17 @@ def _share_out(total: float, weights: dict, caps: dict) -> dict:
     return parts
 
 
-def _share_with_room(total: float, weights: dict, caps: dict) -> dict:
+def _share_with_room(total: float, weights: dict, caps: dict, own: float = 0.0) -> dict:
     """`total` split between senders by `weights`, a sender held to its cap
     (caps: sender -> most it can take; absent for no cap) handing the rest to
-    those with room (_share_out()); what none has room for stays where the
-    weights put it, so the sender that cannot bring it is still the one asked.
-    Returns {sender: part}. The one routine the chain's walk and Demand
+    those with room (_share_out()). The routes come first: what none has room
+    for is the site's `own` supply's (its import or wholesale delivery) to
+    bring, as far as it goes, and what is left beyond that stays where the
+    weights put it, so the sender that cannot bring it is still the one
+    asked. Returns {sender: part}. The one routine the chain's walk and Demand
     sizing both share a site's need out with."""
     parts = _share_out(total, weights, caps)
-    left = total - sum(parts.values())
+    left = max(0.0, total - sum(parts.values()) - own)
     whole = sum(w for w in weights.values() if w > 0)
     if left > 1e-9 and whole:
         for sender, w in weights.items():
@@ -3563,20 +3565,22 @@ def _held_levels(sites: dict, limits: dict, fixed: dict, route_caps: dict | None
     """How far each sender with a known supply holds its shares down at the
     sites it tops up beside other senders, the one allocation the chain's
     walk and Demand sizing both share a site's need out with. `sites`
-    {site: (residual, {sender: weight})}: what the site needs beyond its own
-    supply and how its senders split it by target; `limits` {sender: what it
+    {site: (need, {sender: weight}, own)}: what the site needs, how its
+    senders split it by target, and what its own supply brings (its import:
+    the routes come first, and it brings what their room leaves, so a site
+    with one sender and an import of its own counts as shared); `limits` {sender: what it
     can send a day, or None where unknown}; `fixed` {sender: what it is asked
     where it is the only sender, and its own use}, which comes first, as no
     one else can bring it; `route_caps` {(sender, site): the most its round
-    brings there}. What is left of a sender's limit (within FIT_NOISE) fills
+    brings there}. What is left of a sender's limit fills
     its shares by _pooled_level(); what it cannot bring goes to the others
     with room (_share_with_room()). Solved by passes over the senders until
     no level moves. Returns {sender: level}: its part at a site is at most
     level x residual x weight."""
     route_caps = route_caps or {}
     shared = {site: (residual, {s: w for s, w in weights.items() if w > 0})
-              for site, (residual, weights) in sites.items()
-              if residual > 0 and sum(1 for w in weights.values() if w > 0) > 1}
+              for site, (residual, weights, own) in sites.items()
+              if residual > 0 and (own > 0 or sum(1 for w in weights.values() if w > 0) > 1)}
     by_sender = collections.defaultdict(list)
     for site, (_residual, weights) in shared.items():
         for sender in weights:
@@ -3596,7 +3600,7 @@ def _held_levels(sites: dict, limits: dict, fixed: dict, route_caps: dict | None
                 if (sender, site) in route_caps:
                     desired = min(desired, route_caps[(sender, site)])
                 wants.append((residual * weights[sender] / whole, desired))
-            level = _pooled_level(limits[sender] * (1 + FIT_NOISE) - fixed.get(sender, 0.0), wants)
+            level = _pooled_level(limits[sender] - fixed.get(sender, 0.0), wants)
             was = levels.get(sender)
             if level is None:
                 if was is not None:
@@ -3728,18 +3732,20 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
     # 1 until the first pass below finds a sender asked for more than it has.
     scale = {}
 
-    def portion(d, residual):
-        """How `d`'s need beyond its own supply is split between its senders:
-        by their targets (shares()), except that a sender asked for more than
-        it has in all (`scale`) is held to its part of what it has, and the
-        rest goes to the others with room (_share_out())."""
+    def portion(d, need):
+        """How `d`'s need is split between its senders, as a share of it: by
+        their targets (shares()), except that a sender asked for more than it
+        has in all (`scale`) is held to its part of what it has, the rest
+        going to the others with room, then to the site's own supply (its
+        import or wholesale delivery: the routes come first), and only what
+        none of them brings back to the senders (_share_with_room())."""
         weights = shares(d)
-        caps = {s: scale[(s, d[1])] * residual * w for s, w in weights.items()
+        caps = {s: scale[(s, d[1])] * need * w for s, w in weights.items()
                 if (s, d[1]) in scale}
-        if not caps or residual <= 0:
+        if need <= 0:
             return dict(weights)
-        parts = _share_with_room(residual, weights, caps)
-        return {s: part / residual for s, part in parts.items()}
+        parts = _share_with_room(need, weights, caps, own(d))
+        return {s: part / need for s, part in parts.items()}
 
     portions, residual_at = {}, {}
 
@@ -3760,11 +3766,10 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
             dneed = dln + dsn
             if dneed <= 0:
                 continue
-            rest = max(0.0, 1 - own(d) / dneed)
             if d not in portions:
-                residual_at[d] = dneed * rest
-                portions[d] = portion(d, dneed * rest)
-            f = rest * portions[d].get(key, 0.0)
+                residual_at[d] = dneed
+                portions[d] = portion(d, dneed)
+            f = portions[d].get(key, 0.0)
             asked_raw[n][dest] = dneed * f
             # A round a day brings no more than the route's target. Where the
             # site has a supply of its own, what it needs beyond the target is
@@ -3801,13 +3806,13 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
         for n in _in_order(nodes):
             total(n)
         sites, limits, fixed, caps_at = {}, {}, collections.defaultdict(float), {}
-        for d, residual in residual_at.items():
-            sites[d] = (residual, {(s, d[1]): w for s, w in shares(d).items()})
+        for d, need in residual_at.items():
+            sites[d] = (need, {(s, d[1]): w for s, w in shares(d).items()}, own(d))
         for n in _in_order(asked):
             limits[n] = has(n)
             for dest, (_use, need) in asked[n].items():
                 d = (dest, n[1])
-                if sum(1 for w in shares(d).values() if w > 0) > 1:
+                if own(d) > 0 or sum(1 for w in shares(d).values() if w > 0) > 1:
                     cap = route_cap.get((n[0], dest, n[1]), 0)
                     if cap > 0 and supplied(dest, n[1]):
                         caps_at[(n, d)] = cap
@@ -4796,8 +4801,8 @@ def _supply(
 
     def dem_own(site: str, item: str) -> float:
         """What a site's own import and wholesale delivery bring it a day, less
-        the margin: what Demand sizing takes off its draw before the senders
-        topping it up share the rest, as the chain's walk does."""
+        the margin: what brings the part of its draw the senders topping it
+        up have no room for, as in the chain's walk (the routes come first)."""
         n = (site, item)
         # A Smart Delivery level at or under the routes' target brings
         # nothing (the walk's own(): _import_drop() against that stock).
@@ -4811,8 +4816,8 @@ def _supply(
     def dem_levels(item: str, eats) -> dict:
         """How far each sender with a known capacity holds its shares down,
         {sender: level}: the chain's walk's own allocation (_held_levels()),
-        on what the sites down the plan draw (before any holding down), net
-        of their own supply. A factory's capacity and an import are taken
+        on what the sites down the plan draw (before any holding down), each
+        site's own supply bringing what its senders' room leaves. A factory's capacity and an import are taken
         less the margin (the line is sized on its share plus the margin,
         _line_hours(), and an import is judged against the need)."""
         memo = (item, eats is not None)
@@ -4824,10 +4829,10 @@ def _supply(
             if it != item or dest not in index:
                 continue
             more, _behind = demand(dest, item, eats=eats, held_down=False)
-            sites[dest] = (max(0.0, more - dem_own(dest, item)), dict(weights))
-        for dest, (residual, weights) in sites.items():
+            sites[dest] = (more, dict(weights), dem_own(dest, item))
+        for dest, (residual, weights, own_here) in sites.items():
             whole = sum(weights.values())
-            several = sum(1 for w in weights.values() if w > 0) > 1
+            several = own_here > 0 or sum(1 for w in weights.values() if w > 0) > 1
             for sender, w in weights.items():
                 if sender not in limits:
                     cap = dem_graph["cap"](sender, item)
@@ -4845,7 +4850,7 @@ def _supply(
         return dem_levels_at[memo]
 
     def demand(key: str, item: str, seen: frozenset = frozenset(), eats=None,
-               held_down: bool = True, net: bool = True) -> tuple:
+               held_down: bool = True) -> tuple:
         """What the ends draw of `item` a day from this site down the plan, as
         Demand sizing reads it, and the young shops behind that figure. The
         ends are the shelves and, given `eats(site, item)`, the factory lines
@@ -4854,7 +4859,7 @@ def _supply(
         chain's walk reads it, and sizes nothing."""
         if key not in index or key in seen:
             return 0.0, frozenset()
-        memo = (key, item, eats is not None, held_down, net)
+        memo = (key, item, eats is not None, held_down)
         if memo in dem_drawn:
             return dem_drawn[memo]
         total = sold_dem.get(key, {}).get(item, 0.0)
@@ -4865,11 +4870,10 @@ def _supply(
             weights = dem_graph["share"][(dest_key, item)]
             if not weights.get(key):
                 continue
-            more, behind = demand(dest_key, item, seen | {key}, eats, held_down, net)
-            # What the site's own import brings comes off first, as in the
-            # chain's walk; its senders share the rest. (`net` False: what
-            # the ends draw however it is brought.)
-            residual = max(0.0, more - dem_own(dest_key, item)) if net else more
+            more, behind = demand(dest_key, item, seen | {key}, eats, held_down)
+            # The routes come first, as in the chain's walk: the site's own
+            # import brings only what the senders' room leaves.
+            residual = more
             if held_down:
                 # A sender asked for more than it can make or bring in across
                 # all the sites it tops up is held to its level here
@@ -4878,7 +4882,7 @@ def _supply(
                 levels = dem_levels(item, eats)
                 caps = {sender: levels[sender] * residual * w / sum(weights.values())
                         for sender, w in weights.items() if sender in levels}
-                total += _share_with_room(residual, weights, caps).get(key, 0.0)
+                total += _share_with_room(residual, weights, caps, dem_own(dest_key, item)).get(key, 0.0)
             else:
                 total += residual * weights[key] / sum(weights.values())
             ramp |= behind
@@ -6960,10 +6964,6 @@ def _factories(
                 if wanted > 0 and capacity[slug]:
                     dem_makes = min(makes, wanted * makes / capacity[slug])
                     dem_basis = "sales"
-                elif capacity[slug] and demand(key, slug, eats=dem_eats, held_down=False, net=False)[0] > 0:
-                    # The ends draw it, and the imports at the sites it tops
-                    # up bring all of that: nothing is left for the line.
-                    dem_makes, dem_basis = 0.0, "sales"
             # What the line makes run the hours Demand sizes it to (its share
             # plus the margin, _line_hours()): what the chain's Demand walk
             # takes it to send, so the walk and the sizing agree on who
