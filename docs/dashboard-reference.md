@@ -1453,8 +1453,11 @@ fix: the depot shows a note, and the senders' own import or line findings ask. W
 of the senders has no import behind it (a factory making what it makes), the depot asks for
 an import of its own for the gap, and a sender's import is not asked for the same units.
 Two sites topping one up split its need by their targets, but one asked across its routes
-for more than it has hands the rest to the others with room, in both bases alike (and a
-factory in Shop demand is held to what it can make across all the sites it tops up). What a sender merely holds is no supply, and what a line at the
+for more than it has hands the rest to the others with room, in both bases alike (and in
+Shop demand a factory, or a site an import or a wholesale delivery brings it to, is held to
+what it can make or bring in across all the sites it tops up, the rest going to a factory
+with spare hours; a line there sends what it makes in the hours it is sized to, margin
+included). What a sender merely holds is no supply, and what a line at the
 site itself makes comes off its import's week. Two sites topping each other up with the
 same item form a loop, which counts one way only: from the site with a supply of its own
 toward the one without, then from the one with more left over after its own use to the

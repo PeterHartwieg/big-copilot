@@ -700,7 +700,7 @@
  "f.jobdemand_one": "{n} empleado con demandas sin cubrir: {demands}",
  "f.jobdemand_other": "{n} empleados con demandas sin cubrir: {demands}",
  "f.lasts.about_many": "unos {n:,} días",
- "f.lasts.about_one": "unos {n:,} día",
+ "f.lasts.about_one": "aproximadamente {n:,} día",
  "f.lasts.about_other": "unos {n:,} días",
  "f.lasts.over": "más de {n:,} días",
  "f.list": "{a}, {b}",

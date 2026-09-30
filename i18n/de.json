@@ -764,7 +764,7 @@
  "f.unplanned": "{item} steht in keinem Lieferplan: {units:,} übrig bei {rate:,}/Tag",
  "f.unset_one": "{n} Maschine hat kein Rezept ({spots}): mit Personal und Miete, stellt nichts her",
  "f.unset_other": "{n} Maschinen haben kein Rezept ({spots}): mit Personal und Miete, stellen nichts her",
- "f.unsourced": "{item} wird von {source} auf {have:,} aufgefüllt, doch dorthin kommt nichts: kein Bestand, Import, keine Fabriklinie oder Route; dort einem Import oder einer Route von einer Fabrik hinzufügen, die es herstellt",
+ "f.unsourced": "{item} wird von {source} auf {have:,} aufgefüllt, doch dorthin kommt nichts: kein Bestand, Import, keine Fabriklinie oder Route; es dort einem Import oder einer Route von einer Fabrik hinzufügen, die es herstellt",
  "f.unsourced.list": "Für {n} Waren, die bei {site} aufgefüllt oder bepreist werden, fehlt vorgelagerter Nachschub: {items}; einem Import oder einer Route von einer Fabrik hinzufügen, die sie herstellt",
  "f.unsourced.priced": "{item} hat hier einen Preis, doch nichts bringt es her: keine Auffüllung, Großhandelslieferung oder Import; einer Route von einem Depot oder einer Fabrik hinzufügen",
  "f.vacant_one": "{n} leerer Mietvertrag kostet ${rent:,.0f}/Tag Miete",

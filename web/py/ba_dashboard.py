@@ -3532,6 +3532,9 @@ def _share_with_room(total: float, weights: dict, caps: dict) -> dict:
     return parts
 
 
+HAND_ON_PASSES = 50  # the most passes _supply_walk() hands a short sender's rest on in
+
+
 def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dict,
                  drops: dict, unknown: set) -> dict:
     """The goods' flow worked out from the sources, never from the delivery log.
@@ -3712,8 +3715,9 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
 
     # A sender asked for more than it has, across all its routes, hands the
     # rest to the other senders of the sites it tops up, as far as they have
-    # room; a few passes settle it (each pass can only hold senders down).
-    for _pass in range(4):
+    # room; passes run until none is held down further (each pass can only
+    # hold senders down, so it settles; HAND_ON_PASSES only bounds it).
+    for _pass in range(HAND_ON_PASSES):
         for n in _in_order(nodes):
             total(n)
         changed = False
@@ -4675,19 +4679,29 @@ def _supply(
             for s, t in able:
                 share[line][s] += t / whole if whole else 1 / len(able)
         dem_graph["share"] = share
-        # What a factory can make of it a day: a sender whose shares would
-        # pass it hands the rest to the others (dem_scale()). None is no cap:
-        # a site that makes none, or a line the board cannot read, taken to
-        # make what it holds with no known capacity.
-        dem_graph["cap"] = lambda site, item: (made_amount(site, item) or None) if made(site, item) else None
+        # What a sender can bring of it a day: what a factory can make, or
+        # what an import or a wholesale delivery brings a site (the walk's
+        # has() in 24/7). A sender whose shares would pass it hands the rest
+        # to the others (dem_scale()). None is no cap: a site that brings
+        # none of its own, or a line the board cannot read, taken to send
+        # what it is asked with no known capacity.
+        def own_supply(site, item):
+            n = (site, item)
+            if made(site, item):
+                return made_amount(site, item) or None
+            if n in imports or n in wholesale:
+                return ((imports[n]["weekly"] / 7 if n in imports else 0.0)
+                        + (wholesale[n]["weekly"] / 7 if n in wholesale else 0.0))
+            return None
+        dem_graph["cap"] = own_supply
         dem_drawn.clear()
 
     dem_made(lambda _site, _item: False)
 
     def dem_scale(sender: str, item: str, eats) -> float:
-        """How far a factory's shares are held down so that what it is asked
-        for across all the sites it tops up stays within what it can make:
-        1 where it has room (or its capacity is not known)."""
+        """How far a sender's shares are held down so that what it is asked
+        for across all the sites it tops up stays within what it can make or
+        bring in: 1 where it has room (or its capacity is not known)."""
         cap = dem_graph["cap"](sender, item)
         if cap is None:
             return 1.0
@@ -5664,11 +5678,21 @@ def _supply_facts(ctx: dict) -> dict:
         # lacks (route_fed()): this one's share of it is what the route
         # brings now, so the one gap is asked for once. (With no import
         # here, said_downstream() already makes this one a note.)
+        # The ask comes off where the depot's own need lies: its factory
+        # lines' and its sites' parts, in the depot's own proportions.
         for dest, (asked_use, asked_need) in node.get("asked", {}).items():
             if (entry or {}).get("weekly") and asks_itself(dest, slug, mode):
-                now = (walked.get(mode, {}).get((dest, slug)) or {}).get("brings", {}).get(key, 0.0)
-                sites_use -= 7 * max(0.0, asked_use - now)
-                sites_need -= 7 * max(0.0, asked_need - now)
+                dnode = walked.get(mode, {}).get((dest, slug)) or {}
+                now = dnode.get("brings", {}).get(key, 0.0)
+                (dlu, dln), (dsu, dsn) = dnode.get("lines", (0.0, 0.0)), dnode.get("sites", (0.0, 0.0))
+                off_use, off_need = 7 * max(0.0, asked_use - now), 7 * max(0.0, asked_need - now)
+                share_use = dlu / (dlu + dsu) if dlu + dsu > 0 else 0.0
+                share_need = dln / (dln + dsn) if dln + dsn > 0 else 0.0
+                lines_use -= off_use * share_use
+                sites_use -= off_use * (1 - share_use)
+                lines_need -= off_need * share_need
+                sites_need -= off_need * (1 - share_need)
+        lines_use, lines_need = max(0.0, lines_use), max(0.0, lines_need)
         sites_use, sites_need = max(0.0, sites_use), max(0.0, sites_need)
         gross, gross_need = lines_use + sites_use, lines_need + sites_need
         row = import_rows_by.get(mode, import_rows_by["cap"]).get((s, slug))
@@ -6800,7 +6824,11 @@ def _factories(
                 if wanted > 0 and capacity[slug]:
                     dem_makes = min(makes, wanted * makes / capacity[slug])
                     dem_basis = "sales"
-            dem_out[(key, slug)] += dem_makes
+            # What the line makes run the hours Demand sizes it to (its share
+            # plus the margin, _line_hours()): what the chain's Demand walk
+            # takes it to send, so the walk and the sizing agree on who
+            # brings the margin.
+            dem_out[(key, slug)] += min(makes, dem_makes * (1 + SUPPLY_MARGIN))
             limit = line_limit(key, (station, rid))
             make_back = min(ships, makes / 24 * hours_today, (limit or 0) * LIMIT_SLACK)
             limit_held = limit is not None and stock > 0 and stock >= limit - make_back

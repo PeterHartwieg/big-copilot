@@ -719,7 +719,7 @@
  "f.unplanned": "{item} hiçbir dağıtım planında değil: günde {rate:,} ile {units:,} kaldı",
  "f.unset_one": "{spots} konumundaki {n} makinede tarif ayarlanmamış: personelli ve kiralı, hiçbir şey üretmiyor",
  "f.unset_other": "{spots} konumundaki {n} makinede tarif ayarlanmamış: personelli ve kiralı, hiçbir şey üretmiyor",
- "f.unsourced": "{item}, {source} üzerinden {have:,} miktarına tamamlanıyor; ancak {source} noktasına hiçbir şey getirmiyor: stok, ithalat, fabrika hattı veya rota yok. Buradaki bir ithalata ya da ürünü üreten fabrikadan gelen bir rotaya ekleyin",
+ "f.unsourced": "{item}, {source} üzerinden {have:,} miktarına tamamlanıyor; ancak {source} noktasına hiçbir şey getirmiyor: stok, ithalat, fabrika hattı veya rota yok. {source} noktasındaki bir ithalata ya da ürünü üreten fabrikadan gelen bir rotaya ekleyin",
  "f.unsourced.list": "{site} raflarına tamamlanan veya burada fiyatlandırılan {n} ürüne önceki aşamalardan tedarik yok: {items}; bunları bir ithalata veya üreten fabrikadan gelen bir rotaya ekleyin",
  "f.unsourced.priced": "{item} burada fiyatlandırılmış, ancak getiren bir tamamlama, toptan teslimat veya ithalat yok; bir depodan veya fabrikadan gelen rotaya ekleyin",
  "f.vacant_one": "{n} boş kiralama, günde ${rent:,.0f} kiraya mal oluyor",
