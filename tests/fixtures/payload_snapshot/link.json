@@ -814,6 +814,10 @@
    "staff": 2,
    "staffCost": 0.0,
    "staffDemands": [],
+   "staffIdle": [
+    "AAAAemployeeAAAAAAAAAAAA",
+    "BBBBemployeeBBBBBBBBBBBB"
+   ],
    "staffLacking": 0,
    "staffLackingAny": 0,
    "staffLackingCompany": 0,
@@ -908,6 +912,9 @@
    "staff": 1,
    "staffCost": 0.0,
    "staffDemands": [],
+   "staffIdle": [
+    "CCCCemployeeCCCCCCCCCCCC"
+   ],
    "staffLacking": 0,
    "staffLackingAny": 0,
    "staffLackingCompany": 0,
@@ -1005,6 +1012,7 @@
    "staff": 0,
    "staffCost": 0,
    "staffDemands": [],
+   "staffIdle": [],
    "staffLacking": 0,
    "staffLackingAny": 0,
    "staffLackingCompany": 0,
@@ -1068,6 +1076,7 @@
    "staff": 0,
    "staffCost": 0,
    "staffDemands": [],
+   "staffIdle": [],
    "staffLacking": 0,
    "staffLackingAny": 0,
    "staffLackingCompany": 0,

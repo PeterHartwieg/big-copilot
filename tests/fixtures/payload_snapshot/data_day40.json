@@ -1256,6 +1256,7 @@
      "slug": "ba:jobdemand_freeweekends"
     }
    ],
+   "staffIdle": [],
    "staffLacking": 1,
    "staffLackingAny": 1,
    "staffLackingCompany": 0,
@@ -1565,6 +1566,7 @@
    "staff": 1,
    "staffCost": 180.0,
    "staffDemands": [],
+   "staffIdle": [],
    "staffLacking": 0,
    "staffLackingAny": 0,
    "staffLackingCompany": 0,
@@ -1775,6 +1777,7 @@
    "staff": 0,
    "staffCost": 0,
    "staffDemands": [],
+   "staffIdle": [],
    "staffLacking": 0,
    "staffLackingAny": 0,
    "staffLackingCompany": 0,
@@ -2011,6 +2014,7 @@
    "staff": 1,
    "staffCost": 192.0,
    "staffDemands": [],
+   "staffIdle": [],
    "staffLacking": 0,
    "staffLackingAny": 0,
    "staffLackingCompany": 0,

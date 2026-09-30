@@ -794,6 +794,13 @@ its code at build 3680:
   demanded level or better, with that manager still employed; and your own happiness at 50%
   or more. No site can settle these, so they are one company line.
 
+Somebody given no hours at their site is left out of all of this: none of their demands
+is a finding while they have no week. They are counted instead, a quiet note in the site's
+Crew and one line on the Staff page, since moving them to a site that needs them, or letting
+them go, is a chance to run with fewer people. (The game pays wages for hours worked, so
+an employee with no shifts costs nothing but the place they hold; delivery drivers are the
+exception, paid for part of a day anyway.)
+
 The item lists and priorities are not in the help text; they come from the game's job
 demand data at build 3680, so they are worth checking again after a game update. A demand
 the table does not know, from a newer game, is left out rather than guessed at.
@@ -1057,7 +1064,8 @@ and dims the rest; clicking scrolls there.
   marks an entry placed where it is because of somebody's demand, and the bench mark says
   they have to be assigned to this shop in MyEmployees first. A day tab with a dash before
   it is an earlier day again, people and all: copy the schedule and paste it. Under the
-  grid, one entry a role with a dot a person, and the staff demands this plan would fail.
+  grid, one entry a role with a dot a person, and the staff demands this plan would fail
+  for somebody it gives some hours; somebody it gives none is counted as spare, not short.
   The toggle in the head swaps the plan for the schedule as it stands, so you can see what
   the plan replaces. Tick an entry once it is in the game. The ticks are kept in this
   browser, per shop, and a tick belongs to the entry itself, the weekday, the station, the
