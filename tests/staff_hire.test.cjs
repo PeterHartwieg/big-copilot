@@ -1685,13 +1685,12 @@ test('an office entry this board cannot read stops the office write, and still k
     const week = gwRosterWeek(gwRosterPlan(O));
     openRoute('staffing/schedules', {pick: O});
     const b = document.querySelector('#schDetail #sp-roster [data-gw-sites]');
-    return {unreadable: week.unreadable, days: week.days.map(x => x.d), listed: gwScheduleSites().includes(O),
+    return {unreadable: week.unreadable, days: week.days.map(x => x.d),
       off: b && (b.getAttribute('aria-disabled') === 'true' || b.disabled), why: b && (b.getAttribute('aria-label') || b.title || b.textContent)};
   }, [O]);
   // The unreadable Monday entry keeps Lena's Monday out; her Tuesday is added.
   assert.deepEqual(out.days, [2]);
   assert.equal(out.unreadable, 1);
-  assert.equal(out.listed, false);
   assert.equal(out.off, true);
   assert.match(out.why, /can't be read; change it in the game first/);
 });
@@ -1710,9 +1709,9 @@ test('an office write is refused while a shift cannot be carried, and nothing to
     delete row.unrepresentable;
     row.current = {list: [{d: 1, s: 0, f: 8, t: 22, p: 0}]};
     const written = gwRosterWeek(gwRosterPlan(O));
-    return {blocked, sent: written.sent, listed: gwScheduleSites().includes(O)};
+    return {blocked, sent: written.sent};
   }, [O]);
-  assert.deepEqual(out, {blocked: 1, sent: 0, listed: false});
+  assert.deepEqual(out, {blocked: 1, sent: 0});
 });
 
 // --- user testing, 28 September 2026 ---------------------------------------------------
@@ -3171,4 +3170,62 @@ test('Quick hire\'s headline count does not drop when How many goes up', async (
   const one = await count();
   await box.locator('[data-hq-more]').click();
   assert.equal(await count(), one);
+});
+
+// --- the owner's in-game test, 29-30 September 2026 --------------------------------------
+
+const siteBlock = async (page, key) => {
+  await page.evaluate(k => openRoute('staffing/schedules', {pick: k}), key);
+  return page.locator('#schDetail #sp-roster');
+};
+
+test('a site block offers Staff all sites, not a run of every planned site', async (t) => {
+  const page = await board(t, {link: ONE});
+  const block = await siteBlock(page, G);
+  assert.equal(await block.locator('[data-gw="hire"][data-hr-all]').count(), 1);
+  assert.doesNotMatch(await block.textContent(), /planned sites/);
+  await answering(page, []);
+  await block.locator('[data-hr-all]').click();
+  await phase(page, 'ready');
+  assert.equal(await page.locator('dialog.gw-dlg h2').textContent(), 'Staff all sites');
+});
+
+test('Staff this site is offered where the only work is the site\'s own spare moving out', async (t) => {
+  // Gifts opens 8 to 20, so Sam's week there is one Staff this site at Corner can write.
+  const page = await board(t, {link: ONE, data: JSON.stringify(giftsOpen())});
+  assert.equal(await page.evaluate(k => hrSitePeople(k), C), 0);
+  const block = await siteBlock(page, C);
+  assert.equal(await block.locator('[data-gw="hire"][data-hr-staff]').count(), 1);
+});
+
+test('before "hire N", the people elsewhere who fit come first: N can come from other sites', async (t) => {
+  const page = await board(t, {link: ONE});
+  // Sam, spare at Corner, fits Gifts' first week: one of two hires is his.
+  const less = await page.evaluate(k => {
+    const r = hrAddLess(k, {people: 2, hire: [{skill: 'ba:skill_customerservice', role: 'Customer Service', people: 2}], assign: []});
+    return [r.from, r.add.people, r.add.hire.map(h => h.people)];
+  }, G);
+  assert.deepEqual(less, [1, 1, [1]]);
+  const text = await page.evaluate(() => { const el = document.createElement('div'); el.innerHTML = hrFromCall(1); return el.textContent; });
+  assert.equal(text, '1 person can come from another site: Staff this site reassigns them.');
+});
+
+test('an open week nobody free can take says why, and Quick hire counts only matches that fit it', async (t) => {
+  // Gifts has one 24 h week; every Customer Service candidate asks for full time.
+  const d = JSON.parse(payload);
+  d.candidates.forEach(c => { if(c.skills.some(x => x.skill === CS)) c.demands = ['ba:jobdemand_fulltime']; });
+  d.hiring.sites.find(s => s.key === G).plans.demand.hireWeeks = [
+    {skill: CS, hours: 24, days: 2, band: 'part', slots: [slot(2, 3, 8, 20, 'REG-G'), slot(3, 4, 8, 20, 'REG-G')]}];
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
+  await answering(page, []);
+  await page.evaluate(() => hrReview({scope: 'all'}));
+  await phase(page, 'ready');
+  const dlg = page.locator('dialog.gw-dlg');
+  assert.match(await dlg.locator('.gw-body').textContent(), /HART\. Gifts keeps 1 Customer Service place open[^;]*· the Customer Service free ask for /);
+  await dlg.locator('[data-gw-close]').click();
+  const box = page.locator('#hsQuick');
+  await box.locator('[data-hq-role]').selectOption(CS);
+  await box.locator('[data-hq-site]').selectOption(G);
+  assert.match(await box.locator('.hs-match summary').textContent(), /^0 match fits an open week/);
 });

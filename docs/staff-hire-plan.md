@@ -279,7 +279,7 @@ Where the build differs from or adds to 2.1-2.4; the board worker reads these to
   Staffing block (`spOfficeRoster()`: hours and people now → the office default, hours
   waiting on a hire, and the write button). `gwRosterPlan()` gives an office's
   `officeStaffing` row, so `/write/schedule` takes it through the same review, confirm and
-  undo as a shop's, `openAllHours` always false; "Write all planned sites" includes offices.
+  undo as a shop's, `openAllHours` always false; Staff all sites includes offices.
   An office's write **adds**, like Quick hire: `gwRosterWeek()` sends every entry at the
   office as it stands, plus the office default's entries for the office's own people where
   that computer and that person are free then, and where their week can take the entry
@@ -470,6 +470,16 @@ in the main checkout). What changed on the board, over 3.2 to 3.4 and 2.4b:
   ("No hours here after this: these people stay on as spare"), with no warning and no advice,
   and the week check never counts 0 hours as a break. "Staff this site" counts only who comes
   into the site. "Fewer hours than now" compares the week sent with the game's week.
+- **The owner's in-game test (29-30 September 2026).** The site block's "Write all N planned
+  sites" run of dialogs is gone: "Staff all sites" (the one action, spares moved first, one Undo,
+  opening on Schedule only where nobody is hired or moved) stands in its place; a site's own
+  "Write this schedule" stays. "Staff this site" is offered also where the only work is the
+  site's own spares moving out. Before any "hire N" (the site block's note, its add step, the
+  schedule write's add box), the people elsewhere who fit (spares and unassigned staff the page
+  moves in) come first: "N can come from other sites", with Staff this site to do it; only the
+  rest are hires. An open week nobody free can take says why ("the Customer Service free ask
+  for Full-time"), and Quick hire counts as matches only those who fit an open week at a
+  planned site. Every write dialog names its site (the imports dialog names its one depot too).
 - **Done and failed per site**: once applied, each site in the review says "week written",
   "assigned", "writing the week…" or why its week was not written.
 
