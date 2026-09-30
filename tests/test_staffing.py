@@ -2119,7 +2119,11 @@ class ExchangeTest(unittest.TestCase):
             [(1, REGISTER), (2, REGISTER), (8, CLEAN_STATION), (9, LOCKER)],
             people, FLAT, opens=((6, 23),), open_days=(0, 1, 2, 4, 5, 6),
         )
-        self.assertEqual(row["shortDays"], [], "every day count is met")
+        # Somebody with no hours at all is spare, not short (Peter, 29
+        # September 2026: "0 h is fine"): a part-timer the hires' settling cut
+        # to 21 hours is stood down whole where the others can take it.
+        self.assertEqual([r for r in row["shortDays"] if r["days"]], [],
+                         "every day count is met")
         self.assertEqual([r for r in row["shortHours"] if r["hours"]], [],
                          "nobody is left on a partial week")
         for who, week in self.weeks(row).items():
