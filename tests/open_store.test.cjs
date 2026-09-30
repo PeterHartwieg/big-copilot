@@ -271,8 +271,10 @@ const SHORT6 = {band: 'short', hours: 6, days: 1, slots: [{d: 2, f: 8, t: 14}]};
 const hiring = (page, h = HIRES) => page.evaluate(({site, h}) => {
   const weeks = h.weeks.map(([skill, type, w]) => ({w: Object.assign({skill, hours: 40, band: 'full'}, w || {}),
     who: type ? {type, m: {off: false}} : null}));
-  window.hrModel = () => ({sites: [{key: site, planned: h.planned, variant: h.variant, site: h.site || {}, weeks}],
-    moves: [], roles: [], overs: [], cands: [], byId: new Map(), used: new Set(), quick: []});
+  const S = {key: site, planned: h.planned, variant: h.variant, site: h.site || {}, weeks};
+  /* `bench`: that many unassigned people the plan counts on, moves with no week (fixed), as hrModel() builds them */
+  const moves = Array.from({length: h.bench || 0}, (_, i) => ({id: `BENCH${i}`, from: null, to: S, week: null, skill: null, fixed: true}));
+  window.hrModel = () => ({sites: [S], moves, roles: [], overs: [], cands: [], byId: new Map(), used: new Set(), quick: []});
   hrSiteMemo = null;
   window.osStaffWork = () => h.work ?? weeks.filter(x => x.who && !x.who.m.off).length;
   drawOpenStore();
@@ -528,6 +530,8 @@ test('every pending path names the short week\'s planned hire or move in the gam
   const cases = [
     {name: 'need > 0', biz: {staff: 1, stationShifts: 2}, weeks: [['ba:skill_cleaning', 'hire']], text: /1 of 2 people/, schedule: false},
     {name: 'nobody hired', biz: {staff: 0, stationShifts: 0}, weeks: [], text: /Nobody is hired yet/, schedule: false},
+    {name: 'nobody hired, bench', biz: {staff: 0, stationShifts: 0}, weeks: [], bench: 2, text: /Nobody is hired yet/, schedule: false},
+    {name: 'need > 0, bench', biz: {staff: 1, stationShifts: 2}, weeks: [['ba:skill_cleaning', 'hire']], bench: 1, text: /1 of 2 people/, schedule: false},
     {name: 'no hours scheduled', biz: {staff: 2, stationShifts: 0}, weeks: [], text: /no hours scheduled yet/, schedule: true},
     {name: 'has no hours', biz: {staff: 2, stationShifts: 3}, weeks: [], site: GAP, text: /1 person has no hours/, schedule: true},
     {name: 'covered, short only', biz: {staff: 2, stationShifts: 3}, weeks: [], text: /^2 people on staff$/, schedule: false},
@@ -535,12 +539,14 @@ test('every pending path names the short week\'s planned hire or move in the gam
   for (const who of ['hire', 'move']) {
     for (const c of cases) {
       await page.evaluate(biz => { Object.assign(D.businesses.find(x => x.key === osPlan().key), biz); }, c.biz);
-      await hiring(page, {planned: true, variant: 'open', site: c.site, weeks: [...c.weeks, ['ba:skill_customerservice', who, SHORT6]]});
+      await hiring(page, {planned: true, variant: 'open', site: c.site, bench: c.bench, weeks: [...c.weeks, ['ba:skill_customerservice', who, SHORT6]]});
       const r = (await rows(page))[2];
       const label = `${c.name}, short week ${who}`;
-      assert.equal(r.state, c.name === 'need > 0' ? 'part' : 'todo', label);
+      assert.equal(r.state, c.name.startsWith('need > 0') ? 'part' : 'todo', label);
       assert.match(r.sub, c.text, label);
-      assert.match(r.act, who === 'hire' ? /hire (1 Cleaning and )?1 Customer Service|hire 1 Cleaning, 1 Customer Service|hire [^.]*Customer Service/ : /move 1 Customer Service/, label);
+      assert.match(r.act, who === 'hire' ? /hire (1 Cleaning, )?1 Customer Service from/ : /move 1 Customer Service to|and move 1 Customer Service,/, label);
+      if(c.bench) assert.match(r.act, new RegExp(`assign ${c.bench} ${c.bench === 1 ? 'person' : 'people'} from the bench to`), label);
+      else assert.doesNotMatch(r.act, /from the bench/, label);
       assert[c.schedule ? 'match' : 'doesNotMatch'](r.act, /BizMan › Schedule/, label);
     }
   }

@@ -1166,6 +1166,8 @@
  "gr.os.ck.staff.idle_one": "{n} personel var · <span class=\"w\">henüz çalışma saati planlanmadı</span>",
  "gr.os.ck.staff.idle_other": "{n} personel var · <span class=\"w\">henüz çalışma saati planlanmadı</span>",
  "gr.os.ck.staff.ingame": "Telefonunuzdaki <b>MyEmployees</b>: {address} adresi için Yetenek Avcılarınızın adayları arasından {roles} işe alın.",
+ "gr.os.ck.staff.ingame.bench_one": "Telefonunuzdaki <b>MyEmployees</b>: yedekten {n} kişiyi {address} adresine atayın.",
+ "gr.os.ck.staff.ingame.bench_other": "Telefonunuzdaki <b>MyEmployees</b>: yedekten {n} kişiyi {address} adresine atayın.",
  "gr.os.ck.staff.ingame.mixed": "Telefonunuzdaki <b>MyEmployees</b>: {address} adresi için Yetenek Avcılarınızın adayları arasından {roles} işe alın ve {moves} için nakil yapın.",
  "gr.os.ck.staff.ingame.move": "Telefonunuzdaki <b>MyEmployees</b>: {moves} için {address} adresine nakil yapın.",
  "gr.os.ck.staff.ingame.week": "<b>BizMan › Program</b>: {address} adresindeki personelinizin çalışma saatlerini belirleyin.",

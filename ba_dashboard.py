@@ -33125,7 +33125,7 @@ function osCkStaff(plan, opened){
   const title = tt("gr.os.ck.staff", "Staff for the opening hours");
   if(!opened) return osCk("people", "todo", title, tt("gr.os.ck.staff.todo", "Hired once the business is set up"));
   const have = opened.staff || 0;
-  const S = hrMemoModel().sites.find(s => s.key === plan.key);
+  const M = hrMemoModel(), S = M.sites.find(s => s.key === plan.key);
   if(!S || !S.planned || S.site.noHours || !S.variant) return osCk("people", "todo", title,
     tt("gr.os.ck.staff.nohours", "No opening hours set yet: set them in BizMan, and the board plans the staff"));
   const address = osCkAddress(plan);
@@ -33165,8 +33165,14 @@ function osCkStaff(plan, opened){
      people here have no hours or short hours stay open -- and, for regular
      places nobody can fill, the headhunter. */
   const handAll = handStep(places.concat(placedShorts));
-  const weekStep = have > 0 && (!scheduled || gap || shortH) ? week : "";
-  const act = osStaffAct(plan, [handAll, weekStep].filter(Boolean).join(" "))
+  /* The unassigned people the plan already counts on (its bench): moves
+     with no week of their own (hrModel()), assigned here in MyEmployees. */
+  const benched = (M.moves || []).filter(m => m.fixed && !m.off && m.to && m.to.key === plan.key).length;
+  const benchStep = benched ? tt("gr.os.ck.staff.ingame.bench", {one: "<b>MyEmployees</b> on your phone: assign {n} person from the bench to {address}.",
+    other: "<b>MyEmployees</b> on your phone: assign {n} people from the bench to {address}."}, {n: benched, address}) : "";
+  /* Hours are asked for the people the plan uses, never for spares. */
+  const weekStep = have - spSpareIds(opened).length > 0 && (!scheduled || gap || shortH) ? week : "";
+  const act = osStaffAct(plan, [handAll, benchStep, weekStep].filter(Boolean).join(" "))
     + (bare.size ? osIngame(tt("gr.os.ck.staff.headhunter", "No candidate fits yet: ask a <b>headhunter</b> for {roles}, at {address}.", {roles: roles(bare), address})) : "");
   if(!need){
     const covered = have > 0 && scheduled && !gap && (S.variant !== "demand" || opened.hasTraded);

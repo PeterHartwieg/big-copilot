@@ -508,6 +508,8 @@
  "gr.os.ck.staff.idle_one": "gpt-6-sol",
  "gr.os.ck.staff.idle_other": "gpt-6-sol",
  "gr.os.ck.staff.ingame": "gpt-6-sol",
+ "gr.os.ck.staff.ingame.bench_one": "gpt-6.1-sol",
+ "gr.os.ck.staff.ingame.bench_other": "gpt-6.1-sol",
  "gr.os.ck.staff.ingame.mixed": "gpt-6-sol",
  "gr.os.ck.staff.ingame.move": "gpt-6-sol",
  "gr.os.ck.staff.ingame.week": "gpt-6.1-sol",

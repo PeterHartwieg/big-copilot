@@ -1226,6 +1226,8 @@
  "gr.os.ck.staff.idle_one": "{n} Person im Personal · <span class=\"w\">noch keine Stunden eingeplant</span>",
  "gr.os.ck.staff.idle_other": "{n} Personen im Personal · <span class=\"w\">noch keine Stunden eingeplant</span>",
  "gr.os.ck.staff.ingame": "<b>MyEmployees</b> auf deinem Handy: Stell für {address} {roles} aus den Kandidaten deiner Headhunter ein.",
+ "gr.os.ck.staff.ingame.bench_one": "<b>MyEmployees</b> auf deinem Handy: Weise {n} Person aus der Reserve nach {address} zu.",
+ "gr.os.ck.staff.ingame.bench_other": "<b>MyEmployees</b> auf deinem Handy: Weise {n} Personen aus der Reserve nach {address} zu.",
  "gr.os.ck.staff.ingame.mixed": "<b>MyEmployees</b> auf deinem Handy: Stell für {address} {roles} aus den Kandidaten deiner Headhunter ein und versetze {moves} dorthin.",
  "gr.os.ck.staff.ingame.move": "<b>MyEmployees</b> auf deinem Handy: Versetze {moves} nach {address}.",
  "gr.os.ck.staff.ingame.week": "<b>BizMan › Zeitplan</b>: Plane die Arbeitsstunden deiner Mitarbeiter für {address}.",

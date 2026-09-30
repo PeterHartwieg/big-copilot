@@ -46,6 +46,8 @@ spare staff and planner) merged. Main wins on staffing and marketing; step 5 ada
   link can act, else every planned hire and move (regular or short) plus BizMan › Schedule
   where people here have no hours or short hours stay open, plus the headhunter for regular
   places with nobody. Only the row's text differs by path; a table-driven test covers them.
+  Review round 6: the plan's bench (fixed moves with no week in `S.weeks`) joins the step as
+  "assign n people from the bench"; the schedule step asks only for people the plan uses.
 - **Marketing**: phase 3's own write (`osMarketingWrite`, `OS_MK_WIRE`, the `marketingOn`
   payload key) is gone. The row reads main's `campaigns` and `marketingPlan`, and the button,
   **Set the cheapest mix**, calls main's `gwMarketing([key], "mix")`; it is disabled with

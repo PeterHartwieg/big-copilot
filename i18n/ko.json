@@ -1053,6 +1053,7 @@
  "gr.os.ck.staff.headhunter": "아직 맞는 지원자가 없어요. 주소 {address}에 필요한 직무 {roles}: <b>헤드헌터</b>에게 요청하세요.",
  "gr.os.ck.staff.idle_other": "직원 {n}명 · <span class=\"w\">아직 근무 시간 없음</span>",
  "gr.os.ck.staff.ingame": "휴대폰 <b>MyEmployees</b>에서 헤드헌터 지원자 중 {roles} 채용 후 주소 {address}에 배치하세요.",
+ "gr.os.ck.staff.ingame.bench_other": "휴대폰 <b>MyEmployees</b>에서 대기 인원에서 {n}명을 배정하세요. 대상 주소: {address}.",
  "gr.os.ck.staff.ingame.mixed": "휴대폰 <b>MyEmployees</b>에서 헤드헌터 지원자 중 {roles} 채용하고 {moves} 이동하세요. 대상 주소: {address}.",
  "gr.os.ck.staff.ingame.move": "휴대폰 <b>MyEmployees</b>에서 {moves} 이동하세요. 대상 주소: {address}.",
  "gr.os.ck.staff.ingame.week": "<b>BizMan › 스케줄</b>에서 주소 {address}의 직원들에게 근무 시간을 배정하세요.",

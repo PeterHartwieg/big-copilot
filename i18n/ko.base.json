@@ -1053,6 +1053,7 @@
  "gr.os.ck.staff.headhunter": "No candidate fits yet: ask a <b>headhunter</b> for {roles}, at {address}.",
  "gr.os.ck.staff.idle_other": "{n} people on staff · <span class=\"w\">no hours scheduled yet</span>",
  "gr.os.ck.staff.ingame": "<b>MyEmployees</b> on your phone: hire {roles} from your headhunters' candidates, at {address}.",
+ "gr.os.ck.staff.ingame.bench_other": "<b>MyEmployees</b> on your phone: assign {n} people from the bench to {address}.",
  "gr.os.ck.staff.ingame.mixed": "<b>MyEmployees</b> on your phone: hire {roles} from your headhunters' candidates and move {moves}, at {address}.",
  "gr.os.ck.staff.ingame.move": "<b>MyEmployees</b> on your phone: move {moves} to {address}.",
  "gr.os.ck.staff.ingame.week": "<b>BizMan › Schedule</b>: give your staff at {address} their hours.",
