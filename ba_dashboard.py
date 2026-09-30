@@ -3535,6 +3535,21 @@ def _share_with_room(total: float, weights: dict, caps: dict) -> dict:
 HAND_ON_PASSES = 50  # the most passes _supply_walk() hands a short sender's rest on in
 
 
+def _held_share(limit: float, fixed: float, shared: float) -> float | None:
+    """The most a sender with a known supply takes of the sites it tops up
+    beside other senders, as a multiple of its weighted share there: the one
+    rule the chain's walk and Demand sizing both share a site's need out
+    with. What it is asked where it is the only sender (`fixed`) comes first,
+    as no one else can bring it; what is left of its `limit` (within
+    FIT_NOISE) goes to its weighted shares beside others (`shared`). Under 1,
+    the rest of those shares goes to the other senders with room; over 1, it
+    has room to take what others hand on, up to its limit. None where it
+    tops up no site beside another sender."""
+    if shared <= 0:
+        return None
+    return max(0.0, (limit * (1 + FIT_NOISE) - fixed) / shared)
+
+
 def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dict,
                  drops: dict, unknown: set) -> dict:
     """The goods' flow worked out from the sources, never from the delivery log.
@@ -3659,13 +3674,13 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
         rest goes to the others with room (_share_out())."""
         weights = shares(d)
         caps = {s: scale[(s, d[1])] * residual * w for s, w in weights.items()
-                if scale.get((s, d[1]), 1.0) < 1.0}
+                if (s, d[1]) in scale}
         if not caps or residual <= 0:
             return dict(weights)
         parts = _share_with_room(residual, weights, caps)
         return {s: part / residual for s, part in parts.items()}
 
-    portions = {}
+    portions, residual_at = {}, {}
 
     def total(n, seen=frozenset()):
         """(lines use, lines need, sites use, sites need) a day at `n`."""
@@ -3686,6 +3701,7 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
                 continue
             rest = max(0.0, 1 - own(d) / dneed)
             if d not in portions:
+                residual_at[d] = dneed * rest
                 portions[d] = portion(d, dneed * rest)
             f = rest * portions[d].get(key, 0.0)
             asked_raw[n][dest] = dneed * f
@@ -3715,8 +3731,11 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
 
     # A sender asked for more than it has, across all its routes, hands the
     # rest to the other senders of the sites it tops up, as far as they have
-    # room; passes run until none is held down further (each pass can only
-    # hold senders down, so it settles; HAND_ON_PASSES only bounds it).
+    # room (_held_share(), solved for each sender at once, not stepped
+    # towards). A pass can change what the sites further up are asked, so
+    # passes run until no sender's hold moves; a sender that is the only one
+    # topping its sites up has no one to hand to and never holds anything
+    # down. HAND_ON_PASSES only bounds it.
     for _pass in range(HAND_ON_PASSES):
         for n in _in_order(nodes):
             total(n)
@@ -3725,9 +3744,22 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
             limit = has(n)
             if limit is None:
                 continue
-            asked_all = sum(a[1] for a in asked[n].values())
-            if asked_all > limit * (1 + FIT_NOISE) and asked_all > 0:
-                scale[n] = scale.get(n, 1.0) * limit / asked_all
+            fixed = shared = 0.0
+            for dest, (_use, need) in asked[n].items():
+                d = (dest, n[1])
+                weights = shares(d)
+                if sum(1 for w in weights.values() if w > 0) > 1:
+                    shared += residual_at.get(d, 0.0) * weights.get(n[0], 0.0)
+                else:
+                    fixed += need
+            k = _held_share(limit, fixed, shared)
+            was = scale.get(n)
+            if k is None:
+                if was is not None:
+                    del scale[n]
+                    changed = True
+            elif was is None or abs(k - was) > 1e-6 * max(1.0, was):
+                scale[n] = k
                 changed = True
         if not changed:
             break
@@ -3735,6 +3767,8 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
         asked.clear()
         asked_raw.clear()
         portions.clear()
+    # How many passes the last walk took, for the tests to hold it to.
+    _supply_walk.passes = _pass + 1
     for n in _in_order(nodes):
         total(n)
 
@@ -4686,30 +4720,49 @@ def _supply(
         # none of its own, or a line the board cannot read, taken to send
         # what it is asked with no known capacity.
         def own_supply(site, item):
+            # As the walk's has(): a site routes also bring it to is judged
+            # further up, and a line making it adds to an import beside it.
             n = (site, item)
+            if senders.get(n):
+                return None
+            brought = ((imports[n]["weekly"] / 7 if n in imports else 0.0)
+                       + (wholesale[n]["weekly"] / 7 if n in wholesale else 0.0))
             if made(site, item):
-                return made_amount(site, item) or None
-            if n in imports or n in wholesale:
-                return ((imports[n]["weekly"] / 7 if n in imports else 0.0)
-                        + (wholesale[n]["weekly"] / 7 if n in wholesale else 0.0))
-            return None
+                making = made_amount(site, item)
+                return (making + brought) if making else None
+            return brought if (n in imports or n in wholesale) else None
         dem_graph["cap"] = own_supply
         dem_drawn.clear()
 
     dem_made(lambda _site, _item: False)
 
-    def dem_scale(sender: str, item: str, eats) -> float:
-        """How far a sender's shares are held down so that what it is asked
-        for across all the sites it tops up stays within what it can make or
-        bring in: 1 where it has room (or its capacity is not known)."""
+    def dem_scale(sender: str, item: str, eats) -> float | None:
+        """The most a sender with a known capacity takes of the sites it tops
+        up beside other senders, as a multiple of its weighted share there
+        (_held_share(), the rule the chain's walk shares need out by): what
+        it can make or bring in, less its own use and what it alone tops up,
+        spread over those shares. None where it has no known capacity or
+        tops up no site beside another sender."""
         cap = dem_graph["cap"](sender, item)
         if cap is None:
-            return 1.0
-        # The line is sized on its share plus the margin (_line_hours), so
-        # the share it can take is what it makes less that margin.
+            return None
+        # The line is sized on its share plus the margin (_line_hours), and
+        # an import is judged against the need, so the share it can take is
+        # what it brings less that margin.
         cap = cap / (1 + SUPPLY_MARGIN)
-        asked_all = demand(sender, item, eats=eats, held_down=False)[0]
-        return 1.0 if asked_all <= cap or asked_all <= 0 else cap / asked_all
+        fixed = sold_dem.get(sender, {}).get(item, 0.0) + (eats(sender, item) if eats is not None else 0.0)
+        shared = 0.0
+        for dest_key in _in_order({d for d, i, _a in dem_graph["edges"].get(sender, []) if i == item and d != sender}):
+            weights = dem_graph["share"][(dest_key, item)]
+            if not weights.get(sender):
+                continue
+            more, _behind = demand(dest_key, item, frozenset({sender}), eats, held_down=False)
+            part = more * weights[sender] / sum(weights.values())
+            if sum(1 for w in weights.values() if w > 0) > 1:
+                shared += part
+            else:
+                fixed += part
+        return _held_share(cap, fixed, shared)
 
     def demand(key: str, item: str, seen: frozenset = frozenset(), eats=None,
                held_down: bool = True) -> tuple:
@@ -4740,7 +4793,7 @@ def _supply(
                 caps = {}
                 for sender, w in weights.items():
                     k = dem_scale(sender, item, eats)
-                    if k < 1.0:
+                    if k is not None:
                         caps[sender] = k * more * w / sum(weights.values())
                 total += _share_with_room(more, weights, caps).get(key, 0.0)
             else:

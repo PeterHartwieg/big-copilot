@@ -1304,10 +1304,21 @@ class RoundEightTests(unittest.TestCase):
                     spec[2] = changes[("import", index)]
         self.fail("the suggestions never settle")
 
-    def replay(self, senders, sales, depot_import=0):
+    def replay(self, senders, sales, depot_import=0, board=None, mode="cap"):
         """Six weeks of rounds from empty stock, in both orders, a sender's
-        own shop topped up before and after the depot; the last three judged."""
-        spec = {tuple(s[0]): {**({"import": (s[2], 3)} if s[1] == "hub" else {"made": 720 * s[2]}),
+        own shop topped up before and after the depot; the last three judged.
+        A brewery makes 30 an hour a machine for the hours `board` sizes its
+        line to in `mode` (24 without a board), so a Demand sizing too short
+        runs the depot dry."""
+        def hours(addr):
+            if board is None:
+                return 24
+            lines = [l for site in board.supply["factories"]["sites"] if site["s"] == board.index(addr)
+                     for l in site["lines"]]
+            return lines[0]["needHours"][mode] if lines else 24
+
+        spec = {tuple(s[0]): {**({"import": (s[2], 3)} if s[1] == "hub"
+                                 else {"made": 30 * s[2] * hours(tuple(s[0]))}),
                               **({"own": s[5]} if len(s) > 5 and s[5] else {})}
                 for s in senders}
         targets = {tuple(s[0]): s[3] for s in senders}
@@ -1315,16 +1326,21 @@ class RoundEightTests(unittest.TestCase):
                               depot_import=(depot_import, 3) if depot_import else None)
                 for order in (list(spec), list(spec)[::-1]) for own_first in (False, True)]
 
-    def check(self, senders, sales, most_rounds=1, replay=True):
+    def check(self, senders, sales, most_rounds=1, replay=True, depot_only=False):
         """Settle and replay in both sizings: the depot feeds a shop, which
         each sizes alike, so both must settle the same way. `replay` False
-        checks the settling alone."""
+        checks the settling alone; `depot_only` judges only the depot's shop
+        (a sender's own shop drained by its round running first is the room
+        model's known limit)."""
         for mode in ("cap", "dem"):
             with self.subTest(mode=mode):
                 settled, depot_import, board, rounds = self.settle(senders, sales, mode)
                 self.assertLessEqual(rounds, most_rounds, "one pass of changes should do")
                 if replay:
-                    self.assertEqual(self.replay(settled, sales, depot_import), [[]] * 4, settled)
+                    runs = self.replay(settled, sales, depot_import, board, mode)
+                    if depot_only:
+                        runs = [[dry for dry in run if dry[0] == "depot"] for run in runs]
+                    self.assertEqual(runs, [[]] * 4, settled)
         return settled, board
 
     def test_the_replay_catches_a_setup_left_short(self):
@@ -1469,6 +1485,37 @@ class RoundEightTests(unittest.TestCase):
         self.assertEqual(line["needHours"], {"cap": 24, "dem": 20})
         self.check(senders, 2400, most_rounds=0)
 
+    def test_a_hub_with_its_own_shop_keeps_its_import_beside_a_brewery(self):
+        """Round 11: a brewery (four or six machines) and a hub importing
+        7,000 a week top the depot up to 4,000 and 3,590; the depot's shop
+        sells 2,400 a day and the hub also tops its own shop up (600 or 850 a
+        day). The hub's import covers its own shop first and the depot with
+        what is left; the brewery brings the rest. Both bases ask for
+        nothing, and Demand sizes the brewery for its part: (2,400 - (1,000 /
+        1.15 - 600)) x 1.15 = 2,450 a day of 2,880, 21 hours; with six
+        machines and the 850 shop, (2,400 - 20) x 1.15 = 2,737 of 4,320, 16."""
+        for machines, own, dem_hours in ((4, 600, 21), (6, 850, 16)):
+            with self.subTest(machines=machines):
+                senders = [(self.BREW_A, "brewery", machines, 4000, 0), (self.HUB_B, "hub", 7000, 3590, 5000, own)]
+                c = self.build(senders, 2400)
+                [line] = [l for site in c.supply["factories"]["sites"] for l in site["lines"]]
+                self.assertEqual(line["needHours"], {"cap": 24, "dem": dem_hours})
+                # The hub's round running first tops the depot up from stock its
+                # own shop needs (the room model's known limit), so the replay
+                # judges the depot's shop.
+                self.check(senders, 2400, most_rounds=0, depot_only=True)
+
+    def test_a_lone_sender_short_of_its_day_takes_one_pass(self):
+        """Round 11: a sender that is the only one topping its sites up has
+        no one to hand its shortfall to: the walk settles at once rather
+        than holding it down pass after pass."""
+        from ba_dashboard import _supply_walk
+        c = self.build([(self.HUB_A, "hub", 7000, 10000, 5000)], 2400)
+        self.assertEqual(c.fact(self.HUB_A, BEER)["st"], "short")
+        self.assertEqual(_supply_walk.passes, 1)
+        self.build([(self.HUB_A, "hub", 7000, 10000, 5000), (self.HUB_B, "hub", 7000, 10000, 5000)], 2400)
+        self.assertLessEqual(_supply_walk.passes, 3)
+
     def test_a_factory_lines_gap_is_asked_for_once(self):
         """Round 10: the one-ask rule where the depot's need is factory
         lines. A brewery (720 a day) and a hub importing 7,000 a week top a
@@ -1480,7 +1527,7 @@ class RoundEightTests(unittest.TestCase):
         soda_rid = next(rid for rid, item in RECIPE_ITEMS.items() if item == soda)
         sodas = ("soda_street", 9)
 
-        def chain(depot_import=0):
+        def chain(depot_import=0, depot_stock=3000):
             c = Chain()
             c.recipes = {BEER: dict(RECIPES[BEER], out=30, ingredients=[]),
                          soda: {"slug": soda, "item": "Soda", "out": 30, "workstation": "bottledgoods",
@@ -1492,7 +1539,7 @@ class RoundEightTests(unittest.TestCase):
             c.factory(self.BREW_A, "Brewery a")
             c.plan(self.BREW_A, WH, BEER, 20000)
             c.site(WH, "Depot")
-            c.hold(WH, BEER, 3000)
+            c.hold(WH, BEER, depot_stock)
             if depot_import:
                 c.contract(WH, BEER, depot_import)
             c.plan(WH, sodas, BEER, 15000)
@@ -1502,12 +1549,19 @@ class RoundEightTests(unittest.TestCase):
             return c
 
         c = chain()
-        fact = c.fact(WH, BEER)
-        self.assertEqual((fact["st"], fact["why"], fact["setTo"]), ("noplan", "order", 7 * (3840 - 1720)))
-        self.assertEqual(fact["parts"]["lines"], 7 * 3840)
-        self.assertIsNone(c.fact(self.HUB_A, BEER)["setTo"])
-        settled = chain(depot_import=fact["setTo"])
-        self.assertEqual([settled.fact(a, BEER)["setTo"] for a in (WH, self.HUB_A)], [None, None])
+        # The soda line has no shelf behind it, so Demand sizes it as 24/7
+        # does: both bases ask the same, once, and settle.
+        for mode in ("cap", "dem"):
+            with self.subTest(mode=mode):
+                fact = c.fact(WH, BEER, mode)
+                self.assertEqual((fact["st"], fact["why"], fact["setTo"]), ("noplan", "order", 7 * (3840 - 1720)))
+                self.assertEqual(fact["parts"]["lines"], 7 * 3840)
+                self.assertIsNone(c.fact(self.HUB_A, BEER, mode)["setTo"])
+                # With a week's stock in hand, so the first import's timing
+                # (a finding of its own) is not what is judged.
+                settled = chain(depot_import=fact["setTo"], depot_stock=15000)
+                self.assertEqual([(settled.fact(a, BEER, mode)["st"], settled.fact(a, BEER, mode)["setTo"])
+                                  for a in (WH, self.HUB_A)], [("covered", None), ("covered", None)])
 
     def test_demand_sizing_keeps_only_its_own_plan_changes(self):
         """Round 9: two hubs top a water depot up to 100 each; it feeds a
