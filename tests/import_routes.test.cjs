@@ -805,7 +805,7 @@ for (const scenario of [
   {name: 'a short daily top-up', code: 'from test_import_routes import ImportRoutesTests,contract; '
     + 'd = ImportRoutesTests().build([contract(840,destination=("factory",0)),contract(900)],routed=True,target=130)'},
   {name: 'a line the route covers half of', code: 'from test_routed_supply import board_data,contract; '
-    + 'd = board_data(0.5,[contract(5000,5000,smart=False)],import_days=(7,))'},
+    + 'd = board_data(0.5,[contract(5000,5000,smart=False)])'},
   {name: 'a paused backup the route covers', code: 'from test_routed_supply import board_data,contract; '
     + 'd = board_data(1.0,[contract(5200,0,smart=True,active=False)])'},
 ]) {

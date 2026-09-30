@@ -311,7 +311,7 @@ test('the supply kinds land on the Supply view of their route', () => {
   const got = JSON.parse(ctx.out), links = got.ALERT_LINKS;
   const views = Object.fromEntries(Object.entries(links).filter(([, l]) => l.view).map(([id, l]) => [id, l.view]));
   assert.deepEqual(views, {shortfall: 'route', order: 'imports', paused: 'imports',
-    outruns: 'deliveries', unplanned: 'deliveries', dead: 'deliveries', target: 'deliveries', notrouted: 'deliveries',
+    outruns: 'deliveries', unplanned: 'deliveries', unsourced: 'deliveries', dead: 'deliveries', target: 'deliveries', notrouted: 'deliveries',
     topup: 'deliveries', wholesale: 'deliveries',
     feed: 'production', staff: 'production', unnamed: 'production', unset: 'production'});
   const pages = got.SEC_PAGE;
@@ -345,7 +345,7 @@ const NO_EVIDENCE = {
    every other kind's worth is always None. A new kind goes in one list or
    the other, so the choice is made rather than forgotten. */
 const NOT_MONEY = ['staff', 'satisfaction', 'promotion', 'uniform', 'bathroom', 'toiletprivacy',
-  'sink', 'music', 'interior', 'jobdemand', 'companydemand', 'unplanned', 'outruns', 'paused',
+  'sink', 'music', 'interior', 'jobdemand', 'companydemand', 'unplanned', 'unsourced', 'outruns', 'paused',
   'feed', 'unnamed', 'unset', 'shortfall', 'topup', 'wholesale', 'order', 'notrouted'];
 
 const registryGaps = (name, keys, exempt = []) => {

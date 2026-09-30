@@ -58,6 +58,7 @@ class Fixture:
         self.units = {FACTORY: {WATER: 50, BEER: 400}, HUB: {WATER: 3000}, DISTRIB: {},
                       FACTORY2: {WATER: 50, BEER: 400}}
         self.machine = {}
+        self.also_eats = []  # more ingredients of the beer recipe, beside its water
 
     def run(self, hour=12):
         save = SaveStub([[rid] for rid in self.rids], hours=24)
@@ -87,7 +88,7 @@ class Fixture:
                                    (DISTRIB, "Distrib", "warehouse")]
           + ([(FACTORY2, "Factory 2", "factory")] if len(self.rids) > 1 else [])]
         recipes = {BEER: {"slug": BEER, "item": "Beer", "out": 30, "workstation": "bottledgoods",
-                          "ingredients": [{"slug": WATER, "item": "Water", "per": 10}]}}
+                          "ingredients": [{"slug": WATER, "item": "Water", "per": 10}] + self.also_eats}}
         self.recipes = recipes
         self.supply = _supply(save, Names({}), self.businesses, DAY, {}, recipes)
         return self.supply
@@ -96,9 +97,6 @@ class Fixture:
     def need(self, slug=WATER, site=0):
         return next(n for s in self.supply["factories"]["sites"] if s["s"] == site
                     for n in s["needs"] if n["slug"] == slug)
-
-    def other(self, site=1):
-        return self.supply["factories"]["depotOther"].get(site, {})
 
     def row(self, slug=WATER):
         return next(r for r in self.supply["imports"] if r["s"] == 1 and r["slug"] == slug)
@@ -283,6 +281,7 @@ class RoundWalkTests(unittest.TestCase):
     def test_todays_round_is_read_per_item(self):
         """Two items, and only one of them has left in today's round so far."""
         f = Fixture()
+        f.also_eats = [{"slug": BAG, "item": "Paper Bag", "per": 10}]
         f.units[HUB] = {WATER: 1000, BAG: 1000}
         f.targets = [(HUB, FACTORY, WATER, 300), (HUB, FACTORY, BAG, 300)]
         f.contracts = [import_contract(WATER, 1700, smart=True, last=1680),
@@ -325,8 +324,10 @@ class FactoryChainTests(unittest.TestCase):
         self.assertEqual((second["from"], second["importSite"]), (0, 1))
         self.assertEqual((second["depotNeed"], second["importWeekly"]), (3360, 3400))
         self.assertEqual(second["status"], "covered")
-        # What the first factory passed on to the second is no other site's draw.
-        self.assertEqual(f.other()[WATER], 0)
+        # What the first factory passes on to the second is the second line's
+        # need, counted once: the hub's week is the two lines', no shop's.
+        fact = f.fact(1)
+        self.assertEqual((fact["use"], fact["parts"]["lines"], fact["parts"]["sites"]), (3360, 3360, 0))
 
 
 class RouteAdviceTests(unittest.TestCase):

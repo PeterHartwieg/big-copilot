@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "0481a568bd";</script>
-<link rel="stylesheet" href="community.css?v=0481a568bd">
+<script>window.LEDGER_BUILD = "484af2db45";</script>
+<link rel="stylesheet" href="community.css?v=484af2db45">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=0481a568bd">
+<link rel="stylesheet" href="fonts/fonts.css?v=484af2db45">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -5549,7 +5549,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"0481a568bd","latest":{"pr":169,"date":"2026-09-28","title":"A new layout: problems first, and a sidebar with five places to fix them","summary":"The board is rebuilt around what needs your attention. The Overview opens on Needs attention, each finding with a button that takes you to the exact setting, and a way back to where you were. A sidebar on the left holds five places, the open one with its views under it: the Overview, Businesses (results, cash and loans, prices against the market, a standards comparison with uniforms you can set from it, milestones), Supply (the changes to make, imports, deliveries, production, and a goods flow you can drag and zoom like the map), Staffing (schedules, staff needs, payroll) and Expansion (demand, finding a location, planning a factory), then the City map and the Wiki. The button at its foot folds the sidebar to a strip of icons, and the board remembers it. Every business page links to its schedule, deliveries and prices. Changes you mark, apply through the game link, or that a later save confirms now look different, and preferences and help sit under the one ··· menu at the sidebar's foot. Old links keep working."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"484af2db45","latest":{"pr":169,"date":"2026-09-28","title":"A new layout: problems first, and a sidebar with five places to fix them","summary":"The board is rebuilt around what needs your attention. The Overview opens on Needs attention, each finding with a button that takes you to the exact setting, and a way back to where you were. A sidebar on the left holds five places, the open one with its views under it: the Overview, Businesses (results, cash and loans, prices against the market, a standards comparison with uniforms you can set from it, milestones), Supply (the changes to make, imports, deliveries, production, and a goods flow you can drag and zoom like the map), Staffing (schedules, staff needs, payroll) and Expansion (demand, finding a location, planning a factory), then the City map and the Wiki. The button at its foot folds the sidebar to a strip of icons, and the board remembers it. Every business page links to its schedule, deliveries and prices. Changes you mark, apply through the game link, or that a later save confirms now look different, and preferences and help sit under the one ··· menu at the sidebar's foot. Old links keep working."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -5637,8 +5637,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=0481a568bd"></script>
-<script src="community.js?v=0481a568bd"></script>
+<script src="app.js?v=484af2db45"></script>
+<script src="community.js?v=484af2db45"></script>
 
 <script>
 
@@ -7636,6 +7636,7 @@ const SZ_WHY = {
   get "paused:topup"(){ return tt("sb.why.paused.topup", "Paused; a depot's daily top-up feeds the line"); },
   get "noplan:target"(){ return tt("sb.why.noplan.target", "No daily top-up plan brings it"); },
   get "noplan:order"(){ return tt("sb.why.noplan.order", "No standing import brings it"); },
+  get "noplan:source"(){ return tt("sb.why.noplan.source", "Nothing brings it to the site that tops it up"); },
   get "new:young"(){ return tt("sb.why.new.young", "Too young to judge yet"); },
   get "new:firstFill"(){ return tt("sb.why.new.firstFill", "A first fill: one-off fills never count as use"); },
   get "new:named"(){ return tt("sb.why.new.named", "Named in this browser: judged at the next refresh"); },
@@ -8170,6 +8171,7 @@ const ALERT_LINKS = {
   shortfall: {sec:"secImports", view:"route"}, order: {sec:"secImports", view:"imports"},
   paused: {sec:"secImports", view:"imports"},
   outruns: {sec:"secDeliveries", view:"deliveries"}, unplanned: {sec:"secDeliveries", view:"deliveries"},
+  unsourced: {sec:"secDeliveries", view:"deliveries"},
   dead: {sec:"secDeliveries", view:"deliveries"}, target: {sec:"secDeliveries", view:"deliveries"},
   notrouted: {sec:"secDeliveries", view:"deliveries"},
   /* A depot only a route from your own site feeds, and a wholesale store's
@@ -8372,7 +8374,7 @@ const alertPage = a => (SEC_PAGE[(ALERT_LINKS[a.group] || {}).sec] || ["today"])
    line's row, lit. The kinds that link to a Checks view today are listed so
    they behave alike the moment they do. */
 /* Registry: "A finding kind" (only if: see the checklist). */
-const ALERT_LANDS_ON_ROW = new Set(["wholesale", "topup", "outruns", "unplanned", "shortfall", "order",
+const ALERT_LANDS_ON_ROW = new Set(["wholesale", "topup", "outruns", "unplanned", "unsourced", "shortfall", "order",
                                     "paused", "notrouted", "feed"]);
 
 /* Where the same findings sit when the site's own panel is open: the block to
@@ -8413,6 +8415,7 @@ const ALERT_EVIDENCE = {
   promotion: {block: "pull"},
   outruns: {block: "shelves", hit: "outruns"},
   unplanned: {block: "shelves", hit: "noplan"},
+  unsourced: {block: "shelves", hit: "noplan"},
   target: {block: "shelves"},
   dead: {block: "shelves"},
   /* About the depot that holds the stock; its shelves-to-be are named in the sentence. */
@@ -8686,6 +8689,7 @@ const FINDING_ROUTES = {
   companydemand: {route: "staffing/needs", act: "demand"},
   hype: {route: "expansion/demand", act: "wave"},
   unplanned: {route: "supply/deliveries", act: "delivery"},
+  unsourced: {route: "supply/deliveries", act: "delivery"},
   outruns: {route: "supply/deliveries", act: "delivery"},
   topup: {route: "supply/deliveries", act: "delivery"},
   wholesale: {route: "supply/deliveries", act: "delivery"},
@@ -18492,7 +18496,7 @@ function drawTools(){
     if(words) el.removeAttribute("aria-label");
     else el.setAttribute("aria-label", tt("today.task.count", {one: "{n} finding", other: "{n} findings"}, {n}));
   };
-  set("deliveries", count(["unplanned", "outruns", "topup", "wholesale", "target", "dead", "notrouted"]));
+  set("deliveries", count(["unplanned", "unsourced", "outruns", "topup", "wholesale", "target", "dead", "notrouted"]));
   const factories = ((D.supply || {}).factories || {}).sites || [];
   if(!factories.length) set("production", 0, "q", tt("today.task.noFactory", "no factory yet"));
   else set("production", lines.filter(a => ["feed", "unnamed", "unset"].includes(a.group) || (a.group === "staff" && ovAtFactory(a))).length);
@@ -24685,6 +24689,7 @@ const ALERT_GROUPS = [
   {id:"hype", get label(){ return tt("nav.kind.hype.label", "Demand wave ending"); }, get note(){ return tt("nav.kind.hype.note", "A wave with days left and a site trading under it"); }, on:false},
   {id:"trend", get label(){ return tt("nav.kind.trend.label", "Revenue trend"); }, get note(){ return tt("nav.kind.trend.note", "A shop's or office's week up or down by more than 15%"); }, on:true},
   {id:"unplanned", get label(){ return tt("nav.kind.unplanned.label", "No distribution plan"); }, get note(){ return tt("nav.kind.unplanned.note", "A shelf selling goods no plan tops up"); }, on:true},
+  {id:"unsourced", get label(){ return tt("nav.kind.unsourced.label", "Nothing upstream supplies it"); }, get note(){ return tt("nav.kind.unsourced.note", "A shelf topped up, or priced, for goods nothing brings to its source"); }, on:true},
   {id:"outruns", get label(){ return tt("nav.kind.outruns.label", "Outsells its top-up"); }, get note(){ return tt("nav.kind.outruns.note", "A peak day that empties the shelf before the next drop"); }, on:true},
   {id:"paused", get label(){ return tt("nav.kind.paused.label", "Import paused"); }, get note(){ return tt("nav.kind.paused.note", "An import switched off, not covered by a route, with the depot still drawing"); }, on:true},
   {id:"feed", get label(){ return tt("nav.kind.feed.label", "Factory inputs"); }, get note(){ return tt("nav.kind.feed.note", "An input arriving short of what the machines need"); }, on:true},
@@ -25890,6 +25895,7 @@ const SS_KIND_SYN = {feed: ["fed", "inputs", "ingredients", "starved"], atcap: [
   dead: ["dead stock", "stock not moving", "not moving"], target: ["overstock"],
   notrouted: ["not routed", "no route", "unrouted", "stuck in the warehouse"],
   topup: ["top-up", "route too low", "depot top-up"],
+  unsourced: ["no supplier", "no source", "never stocked", "not supplied", "missing import"],
   wholesale: ["wholesale", "contract", "delivery"],
   satisfaction: ["standards"], promotion: ["pull"], hype: ["wave", "hype"], loss: ["loss", "losing"]};
 /* ...and for the wiki's pages, by title. */

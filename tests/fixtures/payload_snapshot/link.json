@@ -2498,7 +2498,6 @@
   "factories": {
    "aliases": {},
    "character": "default",
-   "depotOther": {},
    "depotRoutes": {},
    "depots": {
     "3": {

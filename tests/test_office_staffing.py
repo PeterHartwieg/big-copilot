@@ -224,7 +224,8 @@ class OfficeBusinessTests(unittest.TestCase):
         self.assertIn("staff", groups)
         self.assertIn("satisfaction", groups)
         self.assertFalse(groups & {"uniform", "bathroom", "sink", "music", "interior",
-                                   "toiletprivacy", "promotion", "unplanned", "outruns"})
+                                   "toiletprivacy", "promotion", "unplanned", "unsourced",
+                                   "outruns"})
 
     def test_a_new_office_is_not_short_of_stock_or_deliveries(self):
         [line] = [a for a in alerts([business(revenue=0)]) if a["group"] == "notrading"]

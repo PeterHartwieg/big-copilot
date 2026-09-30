@@ -315,7 +315,18 @@ What is on the list is what moves the number:
   previous week to be compared with and are left out.
 - **Real supply shortfalls.** A shelf that outsells its top-up, a depot that cannot reach
   its next import or route round, an order too small for the week it has to cover, a
-  paused import, and stock no plan sends on while your own sites sell it (*Not routed*).
+  paused import, a depot sending on more than its imports, its routes and its own
+  machines bring it (with the import to add), and stock no plan sends on while your own
+  sites sell it (*Not routed*). A shop too new to judge is told at once where its top-up
+  is already below what it has sold.
+- **Nothing upstream supplies it** (*unsourced*). A shelf topped up from a site that
+  neither holds the item, imports it, makes it, gets it wholesale nor is sent it by a
+  route of yours: the top-up can never fill. The line names that site and says to add the
+  item to an import there or to a route from a factory that makes it; the site's own row
+  carries the import to set, a week of what the shelves ask. A new shop (under a week of
+  trading) that prices one of its type's own products and has never held any, with no
+  top-up, wholesale delivery or import at all, gets the same line; a shop trading longer
+  than that has most likely chosen not to stock it, so there it is a note on Supply only.
 - **Shops and offices at their ceiling, and staff standing idle.** Both come out of the
   hourly grid described below, and both carry the money they are worth. Every kind of
   site that serves a queue is in it, not only the ones with registers: a gym's boards, a
@@ -1130,7 +1141,7 @@ earns a node by being on a plan or by holding something worth drawing; head offi
 keeping a dozen paper bags in a drawer is not a depot.
 A Smart Delivery import is drawn at the week it tops up, not at its stock level: in a
 steady week the depot starts Monday at the level less the week's use, so the top-up is
-that use (the depot's measured draw, else what arrived last week), up to the level.
+that use (what the plans draw from the depot, else what arrived last week), up to the level.
 
 Clicking a site dims everything it does not touch and opens its detail: what comes in
 and where from, what goes out and to whom, and a per-product table of **on hand** against
@@ -1172,8 +1183,9 @@ factory and depot pages, kept for each company in this browser (a company with n
 of its own starts from the one this browser kept before). **Full production** (the default)
 sizes every factory line at its rated capacity, round the clock, with no margin on top:
 the set-up for running flat out. **Shop demand** sizes each line on what the shops down the
-plan sell of its product (or what the log says left, where that is more), plus the
-margin, never past capacity. A shop open under a week has not settled, so Shop demand reads
+plan sell of its product, and what the factory lines along the way eat of it, plus the
+margin, never past capacity. An export (a plan to an address not yours, a pier) takes
+what is left and sizes nothing. A shop open under a week has not settled, so Shop demand reads
 its coming week off a straight line through its trading days and says the figure *may
 still be ramping*, naming the shops. Switching needs no refresh: both answers are
 already on the page. An import figure you type is kept with the basis it was typed under;
@@ -1195,7 +1207,9 @@ behind it. (A log that has reached its sixty entries and starts that very day ma
 lost older ones, so there it is no first fill.)
 
 A depot only a route from another of your sites feeds is judged as a shelf is, in a day's
-figures: its top-up against its busiest day's draw plus the margin, with the top-up to set;
+figures, as long as the sites topping it up can send what it uses (from their own imports,
+their machines or the routes into them; what they merely hold does not count, since it
+runs out): its top-up against its busiest day's draw plus the margin, with the top-up to set;
 a short one is a finding (*Depot top-up too low*, opening the depot's page), and its row
 on Warehouses carries the change, naming the site whose plan sets it. A depot a
 wholesale store delivers to is judged on that contract's week, as an import is. A factory input topped up from a depot and imported to the
@@ -1269,10 +1283,13 @@ Supply's views ask the questions that matter instead:
   twenty-three; charging a whole day would count Saturday twice and report a warehouse
   running dry that has more than enough. Both sides of the comparison are counted from
   now: the delivery lands at the start of its day, so a Saturday-night save with a Monday
-  import has 1.04 days to cover, not 2. A depot whose draw is its logged rounds is
-  emptied a round at a time instead: each morning's round leaves whole, today's counts
-  only until it is in the log, and the delivery day's own round counts too, because in
-  the save it leaves before the import lands.
+  import has 1.04 days to cover, not 2. A depot its plans empty is emptied a round at a
+  time instead: each morning's round leaves whole, today's counts only until it is in the
+  log (the one thing the walk reads there), and the delivery day's own round counts too,
+  because in the save it leaves before the import lands. A route from your own site into
+  the depot counts on the way to the drop for what its sender makes or is brought, and
+  also for what the sender holds, spread over the days to the drop: stock tells whether
+  the shelf lasts, never how big the standing order must be.
 - **Idle stock**, on the tab of the site that holds it: 500 or more held, four weeks or more of what draws on it (a warning
   at eight), or 1,000 or more that nothing draws on at all. What draws on it depends on
   where it sits: a shelf sells at its trading-day rate, once it has five trading days;
@@ -1380,16 +1397,21 @@ week ahead, walked day by day through the weekday profile, is a finding.
 opening day with at least one customer, so a new shop or one shut some days is not read
 at a fraction of its pace.
 
-**Uses / day** for a depot is measured, not inferred from the order. Every site keeps
-the game's own log of its last sixty delivery transactions (`deliveryTransactions`);
-the units a logistics round carried out, averaged over the days it ran, are the draw
-as it happened. That is the only figure that sees a factory: tobacco leaves the import
-depot at 9,600 a day and comes back as cigarettes, and neither is ever sold by the depot.
-Where the log is too short (fewer than three rounds) the shops down the chain are
-summed instead, and only when nothing has moved at all does last week's order stand in,
-shown as *est.*, and never judged, because an order cut from 103,600 to 70,000 is a
-change of mind, not a shortfall. A depot that feeds machines rather than shelves is also
-walked at a flat daily rate: the machines take the same on a Saturday as on a Tuesday.
+**Uses / day** for a depot is worked out from the sources, never read off the delivery
+log (a site keeps only its last sixty transactions, under three days at a busy depot).
+Need flows up the plans: each shop's own week of sales (its top-up target where it has
+sold none yet), with the 15% margin added there and nowhere else, and each factory line's
+draw in the chosen sizing, summed up every plan that tops a site up. A site with a
+supply of its own (an import, a wholesale delivery, a line making the item) passes on
+only what that supply does not bring; two sites topping one up split what is left by
+their targets, and one that only holds the item is asked last. Supply flows down: a route
+brings what the site it tops up needs, never more than its target a day (two routes into
+one line reach the higher target, not the sum), and no more than its sender's own
+supply lets it, shared between the sender's routes. What a sender merely holds is no
+supply. Tobacco leaving the import depot for a cigarette line is the line's need at the
+rate of its machines. Nothing drawing on it, there is no row. A depot that feeds machines
+rather than shelves is walked at a flat daily rate: the machines take the same on a
+Saturday as on a Tuesday.
 
 ## Setting imports and top-ups
 
@@ -1400,28 +1422,23 @@ columns of Supply's views.
   *Uses / week* is what all the factories drawing on it eat in a week (from their lines,
   in the chosen sizing: machines times recipe draw times 24 times 7 at Full production, what the
   shops sell of their products at Shop demand; a factory it feeds through another factory
-  counts too) plus what else leaves for other sites
-  (measured from the delivery log, leaving out the days an import can have landed, when
-  the log nets the arrival off what left; on a line a route from your own site feeds,
-  what left is read gross, before any arrival, so an import day is not left out for
-  that). A factory the depot tops up that also takes its own import of the material
-  still has that import's days left out, route or not, since the log cannot tell its
-  import from the depot's top-up. *Arrived last week* sums every contract's
+  counts too) plus what the shops down its plans sell, as *Uses / day* above works it
+  out. *Arrived last week* sums every contract's
   `amountOrderedLastWeek`, paused ones included, which is where an importer's weekly cap
   shows as an order cut short, under the material's name. The setting reads *now → box*:
   the figure in the purchasing agent's plan, "in stock" for a Smart Delivery level, "a
   week" for a plain amount, and a box: where the setting falls short of the week it holds the
   suggestion, elsewhere the figure in game. Where a logistics route from your own site
-  also feeds the line, *Uses / week* is the depot's measured draw, as the Stock view
-  measures it (never less than the factories eat at full rate), and what the route brings,
-  named on hover, comes off it: the import answers for the rest. A route that brings the
-  whole draw marks the line *covered by route*: the import is a backup, with nothing to
-  raise or resume, unless the factories' full-rate week is more than the depot's measured
-  draw (a starved factory), when the import still answers for what the route leaves. The
+  also feeds the line, what the route brings, named on hover, comes off the week: the
+  import answers for the rest. A route whose sender makes or is brought enough, with a
+  target that can carry it, brings the whole week and marks the line *covered by route*:
+  the import is a backup, with nothing to raise or resume. A Smart Delivery level at or
+  under the route's target brings nothing while the route keeps the depot above it. The
   same holds for a depot line with no import contract at all that a route feeds: it is not
-  asked for an import the route already brings. The table suggests imports only where an
-  import contract exists or a factory line needs the material; a depot line that only
-  shops draw, with no contract, is not in it. The suggestion covers the week plus the
+  asked for an import the route already brings; where the route's sender cannot bring
+  what the depot sends on, the line asks for an import of the rest. The table suggests
+  imports only where an import contract exists, a factory line needs the material, or
+  nothing brings what the depot sends on. The suggestion covers the week plus the
   margin where the shops' part is concerned (Full production adds none to the factory lines).
   For a plain order it is that week rounded up to the ten. For Smart Delivery it names
   one contract, the one whose level holds: the last that still brings something when the

@@ -110,10 +110,13 @@ class ImportRoutesTests(unittest.TestCase):
                            contract(0, last=500, pier=4)], routed=True)
         row = next(r for r in data["supply"]["imports"] if r["s"] == 1)
         self.assertEqual(row["lastWeek"], 3000)
-        self.assertEqual(row["perDay"], 429)
-        self.assertEqual(row["basis"], "order")
-        self.assertIsNone(row["reason"])
-        self.assertIsNone(row["catchUp"])
+        # The draw is the factory line's 240 a day down the plan, never last
+        # week's orders: those only say what was ordered.
+        self.assertEqual((row["perDay"], row["basis"]), (240, "sales"))
+        self.assertEqual((row["weekly"], row["orderFit"]), (3000, "ok"))
+        # The order is right; the 1,000 held does not reach Thursday's drop at
+        # a round of 240 a morning, which is a matter of stock, not of size.
+        self.assertEqual((row["coverFit"], row["reason"]), ("short", "shortfall"))
 
     def test_a_supply_row_carries_the_slug_its_label_cannot_be_matched_on(self):
         """A recipe's label for an input is not the depot line's label, so the
@@ -219,8 +222,9 @@ class ImportRoutesTests(unittest.TestCase):
         order = [contract(2000, destination=("factory", 0))]
         # What factory 2 eats, already in the plan: the week stays two factories long.
         self.assertEqual(self.held(self.build(order, second=True, shipped=240))["cycleNeed"], 3360)
-        # More leaves than the plan knows of: own machines plus the measured draw.
-        self.assertEqual(self.held(self.build(order, second=True, shipped=500))["cycleNeed"], 5180)
+        # More in the delivery log than the plan knows of changes nothing: the
+        # week is what the plans ask, never what the log saw leave.
+        self.assertEqual(self.held(self.build(order, second=True, shipped=500))["cycleNeed"], 3360)
 
     def test_factory_panel_leaves_an_imported_output_to_its_import(self):
         """An output also imported is not "made here", even in its first week,
@@ -352,14 +356,16 @@ class ImportRoutesTests(unittest.TestCase):
         import test_import_routes as fixtures
         real_supply = _supply
         def supply(save, names, businesses, *args, **kwargs):
-            businesses[1]["lines"][0].update(rate=240, units=4800)
+            businesses[1]["lines"][0].update(units=4800)
             return real_supply(save, names, businesses, *args, **kwargs)
         early, late = contract(50), contract(1950, pier=2)
         early["nextDeliveryDay"], late["nextDeliveryDay"] = 11, 16
+        # The depot tops the factory up; its line draws 240 a day.
         with patch.object(fixtures, "_supply", supply):
-            data = self.build([early, late])
+            data = self.build([early, late], routed=True)
         row = next(r for r in data["supply"]["imports"] if r["s"] == 1)
-        self.assertEqual(row["cover"], 5.5)
+        # Counted in morning rounds, today's still to go: through day 16's.
+        self.assertEqual(row["cover"], 7.0)
         self.assertEqual(row["stockCover"], 20)
         self.assertEqual(row["coverFit"], "ok")
 
@@ -367,10 +373,10 @@ class ImportRoutesTests(unittest.TestCase):
         import test_import_routes as fixtures
         real_supply = _supply
         def supply(save, names, businesses, *args, **kwargs):
-            businesses[1]["lines"][0].update(rate=200, units=20000)
+            businesses[1]["lines"][0].update(units=20000)
             return real_supply(save, names, businesses, *args, **kwargs)
         with patch.object(fixtures, "_supply", supply):
-            data = self.build([contract(0, last=1000)])
+            data = self.build([contract(0, last=1000)], routed=True)
         row = next(r for r in data["supply"]["imports"] if r["s"] == 1)
         self.assertEqual(row["orderFit"], "short")
         self.assertEqual(row["reason"], "order")

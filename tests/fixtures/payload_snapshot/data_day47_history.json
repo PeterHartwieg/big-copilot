@@ -501,6 +501,41 @@
    },
    {
     "ev": {
+     "slug": "ba:itemname_water"
+    },
+    "group": "shortfall",
+    "i18n": {
+     "text": [
+      "f.shortfall",
+      {
+       "arrives": 50,
+       "by": 2.75,
+       "item": "⟦ba:itemname_water|Water⟧",
+       "peak": 1200,
+       "rate": 1200,
+       "routed": 0,
+       "when": {
+        "m": [
+         "f.dry.on",
+         {
+          "d": 6
+         },
+         "on Saturday"
+        ]
+       }
+      }
+     ]
+    },
+    "id": "42238bb0be",
+    "level": "critical",
+    "site": "HART. Hub",
+    "siteKey": "ba:street_eighthavenue#4",
+    "text": "⟦ba:itemname_water|Water⟧ runs dry on Saturday, 2.8 days before Monday's import (1,200/day, 1,200 at peak)",
+    "unit": "",
+    "worth": null
+   },
+   {
+    "ev": {
      "slot": 2,
      "slug": "ba:itemname_beer"
     },
@@ -11029,14 +11064,6 @@
   "factories": {
    "aliases": {},
    "character": "PAYLOADco",
-   "depotOther": {
-    "2": {
-     "ba:itemname_water": 0
-    },
-    "3": {
-     "ba:itemname_beer": 1750
-    }
-   },
    "depotRoutes": {},
    "depots": {
     "2": {
@@ -11334,13 +11361,13 @@
      "cad": "daily",
      "have": 0,
      "imp": false,
-     "lvl": "ok",
+     "lvl": "info",
      "need": 0,
      "role": "shelf",
      "setTo": null,
-     "st": "covered",
+     "st": "noplan",
      "use": 0,
-     "why": null
+     "why": "source"
     }
    },
    "1": {
@@ -11380,16 +11407,14 @@
     "ba:itemname_water": {
      "cad": "weekly",
      "dem": {
-      "lvl": "warn",
-      "need": 2588,
+      "need": 2584,
       "parts": {
-       "lines": 2250,
+       "lines": 2247,
        "route": 0,
        "sites": 0
       },
       "setTo": null,
-      "st": "tight",
-      "use": 2250,
+      "use": 2247,
       "why": "shortfall"
      },
      "have": 3000,
@@ -11570,13 +11595,13 @@
      "items": [
       {
        "cadence": "weekly",
-       "cycleNeed": 2800,
+       "cycleNeed": 8400,
        "fit": "short",
        "item": "Water",
        "keeps": false,
        "low": true,
        "made": false,
-       "need": 1600,
+       "need": 4800,
        "provision": 3000,
        "short": true,
        "slug": "ba:itemname_water",
@@ -11667,9 +11692,9 @@
    {
     "arrivedLastWeek": 3000,
     "arrives": 50,
-    "basis": "shipped",
+    "basis": "sales",
     "carry": null,
-    "catchUp": 100,
+    "catchUp": 3300,
     "contracts": [
      {
       "active": true,
@@ -11685,23 +11710,23 @@
       "smart": false
      }
     ],
-    "cover": 3.8,
-    "coverFit": "tight",
+    "cover": 1.2,
+    "coverFit": "short",
     "coverageUntil": 50,
     "covered": false,
-    "daysOnHand": 3.8,
+    "daysOnHand": 1.2,
     "due": 4.0,
-    "dueNeed": 1600,
+    "dueNeed": 4800,
     "from": "1 Pier",
-    "importPerDay": 400,
+    "importPerDay": 1200,
     "item": "Water",
     "lastWeek": 3000,
-    "level": "warn",
+    "level": "critical",
     "levelAt": null,
     "levelId": null,
     "levelImporter": null,
     "levelName": null,
-    "orderFit": "ok",
+    "orderFit": "short",
     "pass": [
      {
       "amount": 3000,
@@ -11710,23 +11735,23 @@
     ],
     "paused": false,
     "peakDay": null,
-    "peakPerDay": 400,
-    "perDay": 400,
+    "peakPerDay": 1200,
+    "perDay": 1200,
     "plain": 3000,
     "plainAfter": 0,
     "plainBefore": 0,
-    "reason": "shortfall",
+    "reason": "order",
     "rounds": true,
     "routed": 0,
-    "runsOut": "Monday",
+    "runsOut": "Saturday",
     "s": 2,
-    "shortBy": 0.25,
+    "shortBy": 2.75,
     "slug": "ba:itemname_water",
     "smart": false,
     "stock": 1500,
-    "stockCover": 3.8,
+    "stockCover": 1.2,
     "target": null,
-    "weekNeed": 2800,
+    "weekNeed": 8400,
     "weekly": 3000
    }
   ],
