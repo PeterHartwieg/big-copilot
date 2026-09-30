@@ -1498,7 +1498,23 @@ test('staff with no hours are one neutral line on the Staff page, site by site',
     return el && el.textContent;
   });
   const names = await page.evaluate(() => D.businesses.slice(0, 2).map(b => shortName(b)));
-  assert.equal(note, `3 people have no hours: move them to a site that needs them, or let them go · ${names[0]} 1, ${names[1]} 2`);
+  assert.equal(note, `3 people aren't needed where they are: move them to a site that needs them, or let them go · ${names[0]} 1, ${names[1]} 2`);
+});
+
+test('the people of a shop the game opens no hour are not told to go', async (t) => {
+  // Review: a new shop with no opening hours has no plan that gives anybody
+  // a week, and the people just hired for it are not spare.
+  const page = await board(t);
+  const out = await page.evaluate(() => {
+    const site = D.hiring.sites.find(s => D.businesses.some(b => b.key === s.key));
+    const b = D.businesses.find(x => x.key === site.key);
+    D.businesses.forEach(x => { x.staffIdle = []; });
+    b.staffIdle = ['nobody-planned'];
+    const before = spSpareIds(b).length;
+    site.noHours = true;
+    return [before, spSpareIds(b).length];
+  });
+  assert.deepEqual(out, [1, 0]);
 });
 
 test('somebody idle in the game whom the plan on screen uses is not a person to let go', async (t) => {

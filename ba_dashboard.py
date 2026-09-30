@@ -24106,6 +24106,11 @@ const spSpareIds = b => {
   const ids = Array.isArray(b.staffIdle) ? b.staffIdle : [];
   if(!ids.length) return ids;
   const base = spRosterRow(b.key);
+  /* A shop the game opens no hour: nobody there has a week yet, and the
+     people just hired for it are not to be let go -- unless it is on full
+     cover, which plans every hour anyway. */
+  if(((D.hiring || {}).sites || []).some(s => s.key === b.key && s.noHours)
+     && spPlanOf(base) !== "full") return [];
   // An office's plan, or a factory's at its rated capacity, the one its
   // Staffing block draws first.
   const office = base ? null : [...(Array.isArray(D.officeStaffing) ? D.officeStaffing : []),
@@ -26374,8 +26379,8 @@ function drawSite(){
      good thing in this game. */
   const spareN = spSpareIds(b).length;
   const spareNote = spareN ? `<p class="quiet sp-spare" data-el="spare" style="margin:12px 0 0">${tt("sp.spare", {
-    one: "{n} person here has no hours: move them to a site that needs them, or let them go",
-    other: "{n} people here have no hours: move them to a site that needs them, or let them go"}, {n: spareN})}</p>` : "";
+    one: "{n} person here isn't needed: move them to a site that needs them, or let them go",
+    other: "{n} people here aren't needed: move them to a site that needs them, or let them go"}, {n: spareN})}</p>` : "";
 
   const vacant = b.status === "vacant";
   /* A shop under two weeks old that the not-trading finding speaks for: the
@@ -31369,7 +31374,7 @@ function hrIdleHtml(m){
 function hrSpareHtml(){
   const sites = (D.businesses || []).map(b => [b, spSpareIds(b).length]).filter(([, n]) => n);
   const n = sites.reduce((t, [, k]) => t + k, 0);
-  return n ? `<p class="hs-note hs-spare">${hrNum(n)} ${n === 1 ? "person has" : "people have"} no hours: move them to a site that needs them, or let them go · ${
+  return n ? `<p class="hs-note hs-spare">${hrNum(n)} ${n === 1 ? "person isn't" : "people aren't"} needed where they are: move them to a site that needs them, or let them go · ${
     sites.map(([b, k]) => `${spEsc(shortName(b))} ${hrNum(k)}`).join(", ")}</p>` : "";
 }
 /* Where to find them: for each role places stay open in, how many and where
