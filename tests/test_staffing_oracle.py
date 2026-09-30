@@ -844,29 +844,73 @@ class HireCountTest(unittest.TestCase):
         ba_dashboard._split_open(rows, placeholders, state, {"rostered": set()})
         return sorted((r["from"], r["to"], r["employee"] and r["employee"][-1]) for r in rows)
 
-    def lifted(self, weeks, blackouts):
-        """_place_hires() on a week of held and open lines: (hours worked by id, hire weeks' hours)."""
-        people = [dict(ba_dashboard._placeholder(SERVICE, 0), id=pid, name=pid, addr=("st", 1),
-                       demands=["ba:jobdemand_fulltime"], blackouts=blackouts.get(pid, []),
-                       hire=False) for pid in weeks if pid]
-        state = {p["id"]: ba_dashboard._fresh_state() for p in people}
+    def lifted(self, weeks, blackouts, **people):
+        """_place_hires() on a week of held and open lines: (hours worked by id, hire weeks' hours).
+
+        `weeks` maps an id (None for the open lines) to its lines; `people`
+        adds people with no lines, or overrides a field of somebody's.
+        """
+        def person(pid, **fields):
+            base = dict(ba_dashboard._placeholder(SERVICE, 0), id=pid, name=pid, addr=("st", 1),
+                        demands=["ba:jobdemand_fulltime"], blackouts=blackouts.get(pid, []),
+                        hire=False)
+            return dict(base, **fields)
+        ids = [pid for pid in weeks if pid] + [pid for pid in people if pid not in weeks]
+        pool = [person(pid, **people.get(pid, {})) for pid in ids]
+        state = {p["id"]: ba_dashboard._fresh_state() for p in pool}
         shifts = []
         for pid, lines in weeks.items():
             for wd, start, end in lines:
                 row = dict(self.line(wd, start, end), station=1 if end <= 15 else 2,
                            employee=None, name=None, hours=0, fromBench=False)
                 if pid:
-                    ba_dashboard._take_over(row, next(p for p in people if p["id"] == pid), state)
+                    ba_dashboard._take_over(row, next(p for p in pool if p["id"] == pid), state)
                 shifts.append(row)
-        here = {"rostered": {p["id"] for p in people}, "flex": {p["id"]: 1 for p in people},
+        here = {"rostered": {pid for pid in weeks if pid}, "flex": {p["id"]: 1 for p in pool},
                 "groups": {}}
-        rows, hires = ba_dashboard._place_hires(shifts, people, state, here,
-                                                {p["id"]: (0.0, 0) for p in people})
+        rows, hires = ba_dashboard._place_hires(shifts, pool, state, here,
+                                                {p["id"]: (0.0, 0) for p in pool})
         worked = collections.Counter()
         for row in rows:
             if row["employee"] in state:
                 worked[row["employee"]] += row["to"] - row["from"]
         return worked, [week["hours"] for found in hires.values() for week in found]
+
+    def test_nobody_is_started_on_a_scrap_to_lift_a_hire(self):
+        """Review round 1 (gpt-6.1-sol): standing A down (31 h) put a
+        Saturday 10-17 and a Sunday 06-14 on C and D, who had no hours
+        here: two people started on 7 and 8 hours for one stood down. Only
+        people already working here take a line, so A keeps their week."""
+        worked, hires = self.lifted(
+            {"a": [(1, 6, 14), (2, 6, 14), (6, 10, 17), (0, 6, 14)],
+             None: [(6, 17, 24), (0, 16, 24)]},
+            {"a": [(18, 22)], "c": [(18, 22)], "d": [(18, 22)]}, c={}, d={})
+        self.assertEqual(dict(worked), {"a": 31})
+        self.assertEqual(hires, [15])
+
+    def test_a_bench_member_stands_down_before_the_site_s_own(self):
+        """The same supermarket with Neal off the bench: the bench member is
+        stood down first, as the placer ranks them, and Ricky keeps his week."""
+        worked, hires = self.lifted(
+            {"neal": [(1, 6, 11), (2, 6, 15), (3, 6, 15), (4, 6, 15)],
+             "eva": [(wd, 15, 23) for wd in range(1, 6)],
+             "ricky": [(0, 6, 15), (1, 11, 15), (5, 6, 15), (6, 6, 15)],
+             None: [(0, 15, 23), (6, 15, 23)]},
+            {"neal": [(18, 22)], "ricky": [(18, 22)]}, neal={"addr": None})
+        self.assertNotIn("neal", worked)
+        self.assertEqual(worked["ricky"], 31)
+        self.assertGreaterEqual(hires[0], 30)
+
+    def test_somebody_with_no_hours_demand_is_not_trimmed_part_way(self):
+        """Review round 1 (gpt-6.1-sol): a server with no hours demand and no
+        evenings works three days 06-16, and the weekend's evenings are a
+        16-hour hire. Trimming the server to 10 hours kept two people where
+        the hire can work all 46: the server is stood down whole."""
+        worked, hires = self.lifted(
+            {"e": [(1, 6, 16), (2, 6, 16), (3, 6, 16)], None: [(6, 16, 24), (0, 16, 24)]},
+            {"e": [(18, 22)]}, e={"band": None, "demands": []})
+        self.assertNotIn("e", worked)
+        self.assertEqual(hires, [46])
 
     def test_a_hire_week_takes_hours_off_the_longest_week(self):
         """A server with no evenings works five mornings, 45 hours; the
