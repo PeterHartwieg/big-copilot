@@ -566,7 +566,19 @@ test('a bench person the plan counts on keeps a covered shop pending, with no sh
   assert.equal(r.state, 'todo');
   assert.match(r.sub, /^2 people on staff · 1 from the bench to assign$/);
   await hiring(page, {planned: true, variant: 'open', weeks: [], bench: 0});
-  assert.equal((await rows(page))[2].state, 'done');
+  const done = (await rows(page))[2];
+  assert.equal(done.state, 'done');
+  assert.match(done.sub, /the opening hours are covered/);
+});
+
+test('a demand plan before any sales: somebody hired early is not "on staff" and done, but waits for the sizing', async t => {
+  const page = await board(t);
+  await until(page);
+  await opened(page, {staff: 1, stationShifts: 0, staffIdle: ['sp1'], revenue: 0, customers: 0, hasTraded: false}, FULL);
+  await hiring(page, {planned: true, variant: 'demand', weeks: []});
+  const r = (await rows(page))[2];
+  assert.equal(r.state, 'todo');
+  assert.match(r.sub, /^1 person on staff · the board sizes the staff once the shop has sales$/);
 });
 
 test('linked, with nothing for Staff this site to do, the row still says the step in the game', async t => {

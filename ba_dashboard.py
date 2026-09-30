@@ -33186,11 +33186,14 @@ function osCkStaff(plan, opened){
     /* Hired before opening and not assigned anywhere yet: on the bench. */
     if(!have && benched) return osCk("people", "todo", title, tt("gr.os.ck.staff.benchonly",
       {one: "{n} person hired, on the bench · <span class=\"w\">assign them here</span>", other: "{n} people hired, on the bench · <span class=\"w\">assign them here</span>"}, {n: benched}) + tooFew, act);
+    /* A demand plan sizes the staff from sales: before any, somebody hired
+       early reads as spare, and the unsized reason is what to say. */
+    const sized = S.variant !== "demand" || opened.hasTraded;
     let sub;
-    if(have > 0 && (!usedHere || scheduled && !gap && (S.variant !== "demand" || opened.hasTraded))) sub = tt("gr.os.ck.staff.count", {one: "{n} person on staff", other: "{n} people on staff"}, {n: have});
-    else if(have > 0 && !scheduled) sub = tt("gr.os.ck.staff.idle",
+    if(have > 0 && sized && (!usedHere || scheduled && !gap)) sub = tt("gr.os.ck.staff.count", {one: "{n} person on staff", other: "{n} people on staff"}, {n: have});
+    else if(have > 0 && usedHere && !scheduled) sub = tt("gr.os.ck.staff.idle",
       {one: "{n} person on staff · <span class=\"w\">no hours scheduled yet</span>", other: "{n} people on staff · <span class=\"w\">no hours scheduled yet</span>"}, {n: have});
-    else if(have > 0 && gap){
+    else if(have > 0 && usedHere && gap){
       const idle = (gap.roles || []).reduce((a, r) => a + (r.idle || 0), 0) || have;
       sub = tt("gr.os.ck.staff.nohours2",
         {one: "{have} on staff · <span class=\"w\">{n} person has no hours</span>", other: "{have} on staff · <span class=\"w\">{n} people have no hours</span>"}, {have, n: idle});
