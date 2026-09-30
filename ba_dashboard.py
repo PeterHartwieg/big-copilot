@@ -2248,6 +2248,13 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
     them, who fail only on what they have already worked this week, carries
     workedOver: how many, and the most hours or days the demand allows. A demand
     the table does not know, from a newer game, is left out rather than guessed at.
+
+    Somebody given no hours at the site holds no demand here at all (Peter, 30
+    September 2026: "this should not be a warning, more an opportunity. You can
+    reduce your headcount"): a full-time or four-day demand is only unmet once
+    they have a week, and a desk, a building or insurance only matter while
+    they work. They are counted as staffIdle instead, the people the site
+    could move or let go.
     """
     root = save.root
     by_key = {b["key"]: b for b in businesses}
@@ -2333,6 +2340,9 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
         key = site_key(save.address(e.get("assignedAddress")))
         if key not in by_key or key not in regs:
             continue
+        if not (e.get("assignedWeeklyHours") or 0) > 0:
+            people[key]["idle"] += 1
+            continue
         lacks = set()
         for slug in dict.fromkeys(save.items(e.get("demands"))):  # one person, one count
             rule = JOB_DEMANDS.get(slug)
@@ -2372,6 +2382,7 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
         b["staffLackingCompany"] = people[b["key"]]["company"]
         b["staffLackingAny"] = people[b["key"]]["any"]
         b["quitWarnings"] = people[b["key"]]["quitting"]
+        b["staffIdle"] = people[b["key"]]["idle"]
 
 
 def _uniform_gaps(save: Save, b: dict, crew: list, names: Names) -> list:
@@ -24447,25 +24458,21 @@ function spRosterCount(c){
       spEsc(codes[si])}</span><span class="sp-dots">${dots(have)}${dots(bench, "sp-bench")}${
       dots(h.hire, "sp-hire")}</span>${words}${isNew ? ` · <b>${tt("sp.hc.newshort", "+{n} h/wk", {n: h.hireHours})}</b>` : ""}</span>`;
   }).join("");
-  /* Nobody works two businesses, so a week short here is short full stop. Which
-     answer that calls for depends on whether they work here at all: somebody
-     the plan gives nothing is a person to post elsewhere, but somebody on a
-     partial week is covering hours that would go uncovered if the player took
-     the advice meant for the first. */
-  const hoursWords = r => [`${r.hours}`, tt("sp.hc.h", "{n} h", {n: r.min}), r.hours
-    ? tt("sp.short.hours", {
+  /* Nobody works two businesses, so a week short here is short full stop.
+     Somebody the plan gives nothing is not short of anything: they are the
+     role's spare above, a person to post elsewhere or let go, and no demand
+     of theirs is a warning (Peter, 30 September 2026). So only a partial
+     week gets a chip, and the plan could not do better for them. */
+  const hoursWords = r => [`${r.hours}`, tt("sp.hc.h", "{n} h", {n: r.min}),
+    tt("sp.short.hours", {
       one: "<b>{name}</b> is given {n} hour here; their demand asks for {min}. They work one business, so there is nowhere to make the rest up, and the plan could not rearrange this week to reach {min}. Moving them would only uncover the hours they do work",
       other: "<b>{name}</b> is given {n} hours here; their demand asks for {min}. They work one business, so there is nowhere to make the rest up, and the plan could not rearrange this week to reach {min}. Moving them would only uncover the hours they do work"},
-      {name: spEsc(c.name(r.p)), n: r.hours, min: r.min})
-    : tt("sp.short.nohours", "<b>{name}</b> is given no hours here; their demand asks for {min}. This site has no week for them: move them to a site with the hours, or let them go",
-      {name: spEsc(c.name(r.p)), min: r.min})];
-  const daysWords = r => [`${r.days}`, tt("sp.hc.days", "{n} days", {n: r.want}), r.days
-    ? tt("sp.short.days", {
+      {name: spEsc(c.name(r.p)), n: r.hours, min: r.min})];
+  const daysWords = r => [`${r.days}`, tt("sp.hc.days", "{n} days", {n: r.want}),
+    tt("sp.short.days", {
       one: "<b>{name}</b> works {n} day here; their demand asks for {want}, and the game counts exactly that, not at least. The plan could not share this week's hours into {want} days for them",
       other: "<b>{name}</b> works {n} days here; their demand asks for {want}, and the game counts exactly that, not at least. The plan could not share this week's hours into {want} days for them"},
-      {name: spEsc(c.name(r.p)), n: r.days, want: r.want})
-    : tt("sp.short.nodays", "<b>{name}</b> works no days here; their demand asks for {want}, and the game counts exactly that, not at least. This site has no week for them: move them to a site with the days, or let them go",
-      {name: spEsc(c.name(r.p)), want: r.want})];
+      {name: spEsc(c.name(r.p)), n: r.days, want: r.want})];
   /* On a shop with no measured hour those answers are only right for somebody
      the plan could have used: a guard with no shifts in a cover week it really
      did work out is spare, and "post them elsewhere, or let them go" is what to
@@ -24479,12 +24486,12 @@ function spRosterCount(c){
        spShortNew() says so. A row that says neither -- an older payload than
        this board -- is not put in either bucket: the named chip offers to let
        people go, and the board will not do that on a guess. */
-    out += spShortChips(c, (c.row.shortHours || []).filter(r => r.planned === true), hoursWords);
-    out += spShortChips(c, (c.row.shortDays || []).filter(r => r.planned === true), daysWords);
+    out += spShortChips(c, (c.row.shortHours || []).filter(r => r.planned === true && r.hours), hoursWords);
+    out += spShortChips(c, (c.row.shortDays || []).filter(r => r.planned === true && r.days), daysWords);
     return `<div class="sp-hc">${out}${spShortNew(c)}</div>`;
   }
-  out += spShortChips(c, c.row.shortHours, hoursWords);
-  out += spShortChips(c, c.row.shortDays, daysWords);
+  out += spShortChips(c, (c.row.shortHours || []).filter(r => r.hours), hoursWords);
+  out += spShortChips(c, (c.row.shortDays || []).filter(r => r.days), daysWords);
   return `<div class="sp-hc">${out}</div>`;
 }
 
@@ -25920,6 +25927,13 @@ function drawSite(){
       {one: "{n} person here has warned they will quit", other: "{n} people here have warned they will quit"}, {n: b.quitWarnings}))}">${
       spI("exit")}<b>${b.quitWarnings}</b></span>` : ""}</div>` : "";
 
+  /* The people given no hours here: no demand of theirs is a warning while
+     they have no week (_job_demands()), and one fewer on the payroll is a
+     good thing in this game. */
+  const spareNote = b.staffIdle ? `<p class="quiet sp-idle" data-el="idle" style="margin:12px 0 0">${tt("sp.idle", {
+    one: "{n} person here has no hours: move them to a site that needs them, or let them go",
+    other: "{n} people here have no hours: move them to a site that needs them, or let them go"}, {n: b.staffIdle})}</p>` : "";
+
   const vacant = b.status === "vacant";
   /* A shop under two weeks old that the not-trading finding speaks for: the
      finding says what is missing, so its empty blocks are not drawn. */
@@ -26022,7 +26036,7 @@ function drawSite(){
       </section>` : ""}
       <section class="rv" data-block="crew" id="sp-crew">
         ${sechead(tt("sp.crew.title", "Crew"), {icon: "crew", why: roleTip || null, quiet: crewQuiet})}
-        ${crew}${demandChips}
+        ${crew}${demandChips}${spareNote}
       </section>
     </div>`;
   }
@@ -26070,7 +26084,7 @@ function drawSite(){
     </section>
     <section class="sec rv" data-block="crew" id="sp-crew">
       ${sechead(tt("sp.crew.title", "Crew"), {icon: "crew", why: roleTip || null, quiet: crewQuiet})}
-      ${crew}${demandChips}
+      ${crew}${demandChips}${spareNote}
     </section>`;
   }
   $("sitePanel").innerHTML = `${siteCrumbs(b.key, shortName(b), true)}
@@ -26134,7 +26148,7 @@ function drawSite(){
     <div class="duo sec"${fresh && !people.length && !shelves.length ? ` style="display:none"` : ` style="grid-template-columns:1fr 2fr"`}>
       <section class="rv" data-block="crew" id="sp-crew">
         ${sechead(tt("sp.crew.title", "Crew"), {icon: spAny ? "crew" : null, why: roleTip || null, quiet: crewQuiet})}
-        ${crew}${spAny ? demandChips : demandNote}
+        ${crew}${spAny ? demandChips : demandNote}${spareNote}
       </section>
       <section class="rv" data-block="shelves" id="sp-shelves">
         ${office ? sechead(tt("sp.fees.title", "Fees"), {icon: sp ? "fees" : null})
@@ -30429,13 +30443,13 @@ function hrOpenHtml(m){
   if(!m.roles.length){
     /* Nothing to hire, but maybe people to give hours: then not "has its people". */
     const idle = hrIdleHtml(m);
-    return `${head}${idle ? "" : `<p class="hs-note">Every planned site has its people.</p>`}${stray ? `<div class="hs-scroll">${stray}</div>` : ""}${idle}${facts}`;
+    return `${head}${idle ? "" : `<p class="hs-note">Every planned site has its people.</p>`}${stray ? `<div class="hs-scroll">${stray}</div>` : ""}${idle}${hrSpareHtml()}${facts}`;
   }
   const own = m.roles.reduce((n, r) => n + r.moved, 0);
   return `${head}${hrFbar("", f, match ? `<b>${hrNum(match)}</b> match` : "")}
     <div class="hs-scroll"><table class="hs-t hs-roles"><thead><tr><th class="l">Role</th><th class="opt">Open</th><th class="opt">Own staff</th><th>New hires</th><th>Stays open</th><th class="opt">Wages/day</th><th><span class="gw-sr">Change picks</span></th></tr></thead>
     <tbody>${m.roles.map(r => hrRoleRow(m, r, lines(r.skill))).join("")}${stray ? `<tr class="hs-subrow"><td class="l" colspan="7">${stray}</td></tr>` : ""}</tbody></table></div>
-    ${hrFindHtml(m)}${hrIdleHtml(m)}${facts}`;
+    ${hrFindHtml(m)}${hrIdleHtml(m)}${hrSpareHtml()}${facts}`;
 }
 /* Shops the game opens no hour: no plan, and nothing is hired for them,
    until the player sets their opening hours. */
@@ -30461,6 +30475,15 @@ function hrIdleHtml(m){
       href ? `<a class="to" href="${attr(href)}" data-hr-roster="${attr(S.key)}">${hrSvg("chev")}Write their week</a>` : ""}</li>`;
   }).join("");
   return rows ? `<div class="hs-find hs-idle"><h4>Staff with no hours</h4><ul>${rows}</ul></div>` : "";
+}
+/* The people the game's week gives no hours: no demand of theirs is a
+   warning (_job_demands() counts them as `staffIdle` instead), and fewer on
+   the payroll is a good thing in this game, so they are one neutral note. */
+function hrSpareHtml(){
+  const sites = (D.businesses || []).filter(b => b.staffIdle > 0);
+  const n = sites.reduce((t, b) => t + b.staffIdle, 0);
+  return n ? `<p class="hs-note hs-spare">${hrNum(n)} ${n === 1 ? "person has" : "people have"} no hours: move them to a site that needs them, or let them go · ${
+    sites.map(b => `${spEsc(shortName(b))} ${hrNum(b.staffIdle)}`).join(", ")}</p>` : "";
 }
 /* Where to find them: for each role places stay open in, how many and where
    the people come from, for an early company whose headhunters recruit few

@@ -22,11 +22,11 @@ before(async () => {
 });
 after(async () => { await browser?.close(); });
 
-async function site(demands, quit = 0) {
+async function site(demands, quit = 0, extra = {}) {
   const page = await browser.newPage({viewport: {width: 1280, height: 1000}});
   await page.route('https://**', route => route.abort());
   await page.setContent(html, {waitUntil: 'load'});
-  await page.evaluate(([demands, quit]) => {
+  await page.evaluate(([demands, quit, extra]) => {
     document.body.classList.add('has-board');
     const key = 'ba:street_secondavenue#10';
     D = {
@@ -37,14 +37,28 @@ async function site(demands, quit = 0) {
         cogs: 0, wages: 300, rent: 100, marketing: 0, theft: 0, licensing: 0, staff: 2, staffCost: 300,
         crew: [{role: 'Customer Service', count: 2, daily: 300, absent: 0}], people: [], lines: [],
         series: [], rhythm: null, peakDay: null, swing: 0, staffDemands: demands, quitWarnings: quit,
+        ...extra,
       }],
     };
     siteKey = key; siteOpen = true;
     drawSite();
-  }, [demands, quit]);
+  }, [demands, quit, extra]);
   require('./_payload_contract.cjs').assertPayloadShape(await page.evaluate(() => D), 'job_demands');
   return page;
 }
+
+test('staff with no hours are a quiet note under the crew, not a demand', async () => {
+  // Peter, 30 September 2026: people given no hours are a chance to cut the
+  // headcount. _job_demands() leaves their demands out and counts them.
+  const page = await site([], 0, {staffIdle: 2});
+  try {
+    assert.equal(await page.locator('#sitePanel .sp-dem').count(), 0);
+    const note = page.locator('#sitePanel .sp-idle');
+    assert.equal((await note.textContent()).trim(),
+                 '2 people here have no hours: move them to a site that needs them, or let them go');
+    assert.equal(await note.getAttribute('data-el'), 'idle');
+  } finally { await page.close(); }
+});
 
 test('a site lists its unmet staff demands as chips under the crew', async () => {
   const page = await site([

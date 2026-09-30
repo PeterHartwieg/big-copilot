@@ -1520,6 +1520,20 @@ test('the Staff page never opens a shop: full cover on the board maps to its ope
   assert.ok(body.sites.every(x => x.openAllHours === false));
 });
 
+test('staff with no hours are one neutral line on the Staff page, site by site', async (t) => {
+  // Peter, 30 September 2026: people given no hours are a chance to cut the
+  // headcount, not unmet demands (_job_demands() counts them as staffIdle).
+  const page = await board(t);
+  const note = await page.evaluate(() => {
+    D.businesses.forEach((b, i) => { b.staffIdle = i < 2 ? i + 1 : 0; });
+    drawStaff(); wireStaff();
+    const el = document.querySelector('#secStaff .hs-spare');
+    return el && el.textContent;
+  });
+  const names = await page.evaluate(() => D.businesses.slice(0, 2).map(b => shortName(b)));
+  assert.equal(note, `3 people have no hours: move them to a site that needs them, or let them go · ${names[0]} 1, ${names[1]} 2`);
+});
+
 test('a desk demand at a site with no plan is met at a desk there: seat them there', async (t) => {
   const page = await board(t);
   const out = await page.evaluate(() => {
