@@ -1515,7 +1515,70 @@ test('imports: an apply refused while a BizMan screen is open, and a refused dry
 const footOnScreen = (page) => dialog(page).evaluate((d) => [...d.querySelectorAll('.gw-foot, .gw-foot button')]
   .every((e) => { const r = e.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight + 0.5; }));
 for (const viewport of [{width: 390, height: 500}, {width: 740, height: 360}]) {
+  test(`on a short screen (${viewport.width}×${viewport.height}) the foot stays whole: refused, approval, undone`, async (t) => {
+    const page = await linked(t, {data: withRosters(), viewport});
+    await configure({pairDelay: 60});
+    await button(page, GIFTS).click();
+    await pair(page).getByText(WAITING).waitFor();
+    assert.equal(await footOnScreen(page), true, 'approval');
+    await dialog(page).evaluate((d) => d.close());
+    await configure({pairDelay: 0.25, tokens: {[TOKEN]: ORIGIN}});
+    await page.evaluate(({link, token}) => localStorage.setItem('ledger_link_approval', JSON.stringify({[link]: token})), {link: mockUrl, token: TOKEN});
+    const block = await roster(page, GIFTS);
+    await block.getByRole('button', {name: 'Write this schedule to the game'}).click();
+    await ready(page);
+    await configure({refuseWrite: 'refused:screen_open'});
+    await dialog(page).getByRole('button', {name: 'Write the week'}).click();
+    await page.locator('dialog.gw-dlg[data-phase="failed"]').waitFor();
+    assert.equal(await footOnScreen(page), true, 'refused');
+    await configure({refuseWrite: null});
+    await dialog(page).getByRole('button', {name: 'Try again'}).click();
+    await ready(page);
+    await dialog(page).getByRole('button', {name: 'Write the week'}).click();
+    await dialog(page).getByText(/^HART\. Gifts: 1 entry set in place of 2\./).waitFor();
+    await dialog(page).locator('.gw-foot').getByRole('button', {name: 'Undo'}).click();
+    await dialog(page).getByText('Undone: the schedule at HART. Gifts is back as it was.').waitFor();
+    assert.equal(await footOnScreen(page), true, 'undone');
+  });
 }
+
+test('the fixed strip: the read-again line turns done there', async (t) => {
+  const page = await linked(t, {approved: true, data: withRosters()});
+  const block = await roster(page, GIFTS);
+  await block.getByRole('button', {name: 'Write this schedule to the game'}).click();
+  await ready(page);
+  await dialog(page).getByRole('button', {name: 'Write the week'}).click();
+  await dialog(page).getByText(/^HART\. Gifts: 1 entry set in place of 2\./).waitFor();
+  await dialog(page).locator('.gw-fix .gw-reread.done', {hasText: 'The board shows the game as it now stands'}).waitFor({timeout: 20000});
+});
+
+test('schedule: on a phone, what decides the next step stays in view; only the rows scroll', async (t) => {
+  const page = await linked(t, {approved: true, data: withRosters(), viewport: {width: 390, height: 700}});
+  const block = await roster(page, GIFTS);
+  await block.getByRole('button', {name: 'Write this schedule to the game'}).click();
+  await ready(page);
+  // The add-people note sits in the fixed strip, the week in the body.
+  await dialog(page).locator('.gw-fix .gw-box.gw-warn', {hasText: 'Add 2 people to fill this plan'}).waitFor();
+  assert.equal(await dialog(page).locator('.gw-body .gw-week').count(), 1);
+  await configure({refuseWrite: 'refused:screen_open'});
+  await dialog(page).getByRole('button', {name: 'Write the week'}).click();
+  await page.locator('dialog.gw-dlg[data-phase="failed"]').waitFor();
+  await configure({refuseWrite: null});
+  // The refusal alone is fixed; the add-people note opens the scrolling body; the way on is in the foot.
+  assert.equal(await dialog(page).locator('.gw-fix .gw-no').count(), 1);
+  assert.equal(await dialog(page).locator('.gw-fix > :not(.gw-no)').count(), 0, 'only the refusal is fixed');
+  assert.equal(await dialog(page).locator('.gw-body > :first-child').evaluate((e) => e.matches('.gw-box.gw-warn')), true);
+  assert.equal(await dialog(page).locator('.gw-body .gw-no, .gw-body .gw-b').count(), 0, 'no refusal or button in the rows');
+  assert.equal(await dialog(page).locator('.gw-foot').getByRole('button', {name: 'Try again'}).count(), 1);
+  const m = await dialog(page).evaluate((d) => {
+    const box = (s) => d.querySelector(s).getBoundingClientRect();
+    const b = d.querySelector('.gw-body');
+    return {foot: box('.gw-foot').bottom, view: innerHeight, body: b.clientHeight, rows: b.scrollHeight};
+  });
+  assert.ok(m.foot <= m.view, 'the foot is on screen');
+  assert.ok(m.body >= 180, `the body keeps room (${m.body} px)`);
+  assert.ok(m.rows > m.body, 'the rows scroll');
+});
 
 test('Try again only when every error the game names can be fixed in the game', async (t) => {
   const page = await linked(t, {approved: true, data: withRosters()});

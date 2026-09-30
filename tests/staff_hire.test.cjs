@@ -3198,19 +3198,74 @@ test('Staff this site is offered where the only work is the site\'s own spare mo
   assert.equal(await block.locator('[data-gw="hire"][data-hr-staff]').count(), 1);
 });
 
-test('before "hire N", the people elsewhere who fit come first: N can come from other sites', async (t) => {
-  const page = await board(t, {link: ONE});
-  // Sam, spare at Corner, fits Gifts' first week: one of two hires is his.
-  const less = await page.evaluate(k => {
-    const r = hrAddLess(k, {people: 2, hire: [{skill: 'ba:skill_customerservice', role: 'Customer Service', people: 2}], assign: []});
-    return [r.from, r.add.people, r.add.hire.map(h => h.people)];
-  }, G);
-  assert.deepEqual(less, [1, 1, [1]]);
-  const text = await page.evaluate(() => { const el = document.createElement('div'); el.innerHTML = hrFromCall(1); return el.textContent; });
-  assert.equal(text, '1 person can come from another site: Staff this site reassigns them.');
+// Gifts waits on two Customer Service people; Sam, spare at Corner, fits its
+// open week (Gifts opens 8 to 20).
+const giftsHiring = () => {
+  const d = giftsOpen();
+  const gifts = d.staffing.find(r => r.key === G);
+  gifts.addPeople = {assign: [], hire: [{skill: CS, role: 'Customer Service', people: 2}], people: 2, hoursUncovered: 60};
+  gifts.headcount = {[CS]: {needed: 84, min: 2, max: 3, have: 1, spare: 0, hire: 2}};
+  return JSON.stringify(d);
+};
+
+test('before "hire N", the people elsewhere who fit come first, in every hiring read-out of the site', async (t) => {
+  const page = await board(t, {link: ONE, data: giftsHiring()});
+  const block = await siteBlock(page, G);
+  const text = await block.textContent();
+  assert.match(text, /1 person can come from another site: Staff this site reassigns them\./);
+  // The hours tile, and the headcount line's read-out, count the one hire left.
+  assert.match(text, /\+1 to hire/);
+  assert.doesNotMatch(text, /2 to hire|Add 2 people/);
+  assert.match(await block.evaluate(el => [...el.querySelectorAll('[data-read]')].map(x => x.dataset.read).join(' ')), /1 here, 1 to hire/);
+  assert.equal(await block.locator('.hr-from').count(), 1);
+  assert.equal(await block.locator('.sp-step .hr-from, .hr-from.sp-step').count(), 0, 'a note, not a step');
+  // The schedule dialog says the same, and its add box counts the rest.
+  await page.evaluate(() => {
+    window.hrAnswer = async (kind, body, o) => ({status: 200, error: null, body: {ok: true, kind: 'schedule', dryRun: !!o.dryRun, stamp: 's',
+      before: {shifts: 1, print: 'a'}, after: {shifts: 2, print: 'b'}, removed: 1, added: 2, openedHours: false, leftWithout: [], warnings: [], siteError: null, rows: []}});
+  });
+  await block.locator('[data-gw="schedule"]').first().click();
+  await phase(page, 'ready');
+  const dlg = await page.locator('dialog.gw-dlg').textContent();
+  assert.match(dlg, /1 person can come from another site/);
+  assert.match(dlg, /Add 1 person to fill this plan: hire 1 Customer Service/);
 });
 
-test('an open week nobody free can take says why, and Quick hire counts only matches that fit it', async (t) => {
+test('without a mod that hires, the full count stands and the note points at MyEmployees', async (t) => {
+  const page = await board(t, {link: {writes: ['uniforms', 'imports', 'schedule'], day: 34, hour: 14}, data: giftsHiring()});
+  const text = await (await siteBlock(page, G)).textContent();
+  assert.match(text, /\+2 to hire/);
+  assert.match(text, /1 person at another site fits these hours: reassign them in MyEmployees\./);
+  assert.doesNotMatch(text, /Staff this site reassigns/);
+});
+
+test('an outgoing-only site with nothing of its own to schedule still offers Staff this site', async (t) => {
+  const d = giftsOpen();
+  Object.assign(d.staffing.find(r => r.key === C), {shifts: []});
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  const block = await siteBlock(page, C);
+  assert.match(await block.textContent(), /Nothing to schedule/);
+  assert.equal(await block.locator('[data-gw="hire"][data-hr-staff]').count(), 1);
+});
+
+test('an open week says why nobody free takes it: a spare elsewhere and the candidates ask for more', async (t) => {
+  // Every Customer Service candidate asks for full time; Sam, spare at
+  // Corner, asks for a four-day week; Gifts has one 24 h week.
+  const d = JSON.parse(payload);
+  d.candidates.forEach(c => { if(c.skills.some(x => x.skill === CS)) c.demands = ['ba:jobdemand_fulltime']; });
+  d.hiring.people.SPARE1.demands = ['ba:jobdemand_fourdaysweek'];
+  d.hiring.demandKinds['ba:jobdemand_fourdaysweek'] = 'schedule';
+  d.hiring.sites.find(s => s.key === G).plans.demand.hireWeeks = [
+    {skill: CS, hours: 24, days: 2, band: 'part', slots: [slot(2, 3, 8, 20, 'REG-G'), slot(3, 4, 8, 20, 'REG-G')]}];
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  await answering(page, []);
+  await page.evaluate(() => hrReview({scope: 'all'}));
+  await phase(page, 'ready');
+  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), /HART\. Gifts: the free Customer Service people ask for [^.]+\./);
+});
+
+
+test('an open week an unticked reassign would take says so, and Quick hire counts only matches that fit it', async (t) => {
   // Gifts has one 24 h week; every Customer Service candidate asks for full time.
   const d = JSON.parse(payload);
   d.candidates.forEach(c => { if(c.skills.some(x => x.skill === CS)) c.demands = ['ba:jobdemand_fulltime']; });
@@ -3222,10 +3277,10 @@ test('an open week nobody free can take says why, and Quick hire counts only mat
   await page.evaluate(() => hrReview({scope: 'all'}));
   await phase(page, 'ready');
   const dlg = page.locator('dialog.gw-dlg');
-  assert.match(await dlg.locator('.gw-body').textContent(), /HART\. Gifts keeps 1 Customer Service place open[^;]*· the Customer Service free ask for /);
+  assert.match(await dlg.locator('.gw-body').textContent(), /HART\. Gifts keeps 1 Customer Service place open[\s\S]*HART\. Gifts: a reassign that would take this week is unticked\./);
   await dlg.locator('[data-gw-close]').click();
   const box = page.locator('#hsQuick');
   await box.locator('[data-hq-role]').selectOption(CS);
   await box.locator('[data-hq-site]').selectOption(G);
-  assert.match(await box.locator('.hs-match summary').textContent(), /^0 match fits an open week/);
+  assert.match(await box.locator('.hs-match summary').textContent(), /^0 fit an open week · 1 would join with no hours/);
 });

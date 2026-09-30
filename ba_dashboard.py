@@ -16053,19 +16053,6 @@ html:has(dialog:modal){overflow:hidden}
 .gw-hrs .h i.o{background:var(--ink-2)}
 .gw-hrs .h i.o.new{background:var(--accent)}
 .gw-toggle.off .gw-hrs .h i.o.new{background:var(--rule-soft)}
-.gw-steps{display:inline-flex;align-items:center;gap:5px;flex:none}
-.gw-steps i{width:9px;height:9px;border-radius:50%;background:var(--rule)}
-.gw-steps i.d{background:var(--accent)}
-.gw-steps i.s{background:none;box-shadow:inset 0 0 0 1.5px var(--ink-3)}
-.gw-steps i.c{background:var(--ink);box-shadow:0 0 0 3px var(--accent-soft);animation:gw-cur 1.6s ease-in-out infinite}
-@keyframes gw-cur{50%{box-shadow:0 0 0 5px var(--accent-soft)}}
-.gw-run{display:flex;flex-direction:column;border-top:1px solid var(--rule-soft)}
-.gw-run>div{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:center;min-height:42px;border-bottom:1px solid var(--rule-soft);font-size:13.5px}
-.gw-run .m{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--on-accent)}
-.gw-dlg .gw-run .m svg{width:11px;height:11px;stroke-width:2.6}
-.gw-run .m.s{background:none;box-shadow:inset 0 0 0 1.5px var(--ink-3);color:var(--ink-3)}
-.gw-run small{font:500 11.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
-.gw-run .skip{color:var(--ink-3)}
 
 /* permission, asked in the game: a sketch of its screen, the popup and a cursor
    heading for Allow. The mod draws the real one with the game's own popup. */
@@ -18643,6 +18630,7 @@ button.nx-card{appearance:none}
 .hs-t td.num{color:var(--ink)}
 .hs-t td.num small{display:block;margin:4px 0 0;color:var(--ink-3);font-size:11.5px}
 .hs-t td .hs-toofew{display:block;margin:4px 0 0;color:var(--ink-3);font-size:11.5px;white-space:normal}
+.hr-from{margin:10px 0 0}
 .hs-t td.warn,.hs-t td .warn{color:var(--warn)}
 .hs-t td.dim{color:var(--ink-3)}
 .hs-t td.act{width:1%;padding-right:4px;text-align:right}
@@ -23719,8 +23707,11 @@ const spPlanHours = row => {
 /* People to hire, which is not the number of nameless entries in the grid.
    The planner sizes a hire at the game's own full-time week, 30 to 50 hours,
    so fourteen unnamed entries can be three people. */
-const spPlanPosts = row => Object.values(row.headcount || {}).reduce(
-  (n, h) => n + (h.hire || 0), 0) || spRosterCounts(row).hire;
+const spPlanPosts = row => {
+  const n = Object.values(row.headcount || {}).reduce((k, h) => k + (h.hire || 0), 0);
+  /* Where people from other sites take the entries, the reduced count stands. */
+  return n || (row.fromOthers ? 0 : spRosterCounts(row).hire);
+};
 /* What a skill is called on the page. A serving role has its own label; a
    cleaning station and a security locker are not roles, so they are named by
    the station itself. */
@@ -24458,7 +24449,7 @@ function spDesks(grid){
    the game's own arrival ceiling counts everyone who may walk in, not the
    customers served, and a roster cut from that would be a fiction with a shift
    count on it. */
-function spRosterNone(row, pick){
+function spRosterNone(row, pick, key){
   const stations = (row && row.stations) || [];
   const codes = spStationCodes(stations);
   const rows = stations.map((st, k) => `<div class="sp-grow"><span class="lab">${spEsc(codes[k])}</span></div>`).join("");
@@ -24472,6 +24463,7 @@ function spRosterNone(row, pick){
     ${pick || ""}
     <div class="chartbox sp-gantt sp-empty">${rows}</div>
     <div class="sp-read">${failed ? tt("sp.roster.failed", "Plan unavailable") : tt("sp.roster.none", "Nothing to schedule")}</div>
+    ${key && gwLink() ? gwStaffButton(key, true) : ""}
   </section>`;
 }
 
@@ -24999,7 +24991,7 @@ function spOfficeRoster(b){
 function spRosterBlock(b){
   const base = spRosterRow(b.key);
   const offer = spOffersFull(base);
-  const row = spShownRow(base);
+  const row = spRowLess(spShownRow(base));
   const full = offer && !!row.full;
   const pick = offer ? spPlanPick(base, full) : "";
   /* A week with nothing in it is the only empty state. A shop too new to have
@@ -25007,7 +24999,7 @@ function spRosterBlock(b){
      where the block earns its keep, because an unmeasured shop is exactly the
      one whose schedule is 182 two-hour scraps -- so it gets the whole block
      with the need strip in its not-measured state, rather than nothing. */
-  if(!row || row.failed || !(row.shifts || []).length) return spRosterNone(row, pick);
+  if(!row || row.failed || !(row.shifts || []).length) return spRosterNone(row, pick, b.key);
   const stations = row.stations || [], people = row.people || [];
   const placed = {};
   (row.placed || []).forEach(r => { (placed[r.p] = placed[r.p] || []).push(r); });
@@ -25142,17 +25134,15 @@ function spRosterBlock(b){
      week's entries for them can only be set once they are assigned here, so
      the hours that wait on them are in the tip. A payload older than
      `addPeople` is read off the bench list and the headcount instead. */
-  let add = row.addPeople || {
+  const add = row.addPeople || {
     assign: (row.bench || []).map(r => ({p: r.p, name: c.name(r.p)})),
     hire: Object.keys(row.headcount || {}).filter(skill => (row.headcount[skill] || {}).hire)
       .map(skill => ({people: row.headcount[skill].hire, role: spSkillLabel(row, c.stations, skill)})),
   };
-  /* People elsewhere who fit come first (hrAddLess()); only the rest are
-     assigned or hired here. */
-  const less = hrAddLess(b.key, add);
-  add = less.add;
+  /* People elsewhere who fit come first: the row's counts are less them
+     already (spRowLess()); the note says so. */
   const adding = (add.assign || []).length + (add.hire || []).reduce((n, h) => n + (h.people || 0), 0);
-  const fromStep = less.from ? `<div class="sp-step sp-from">${hrFromCall(less.from)}</div>` : "";
+  const fromStep = hrFromCall(row);
   /* Linked, and the Staff page's plan has people for this site: its "Staff
      this site" (gwRosterButtons()) does this step, so it is not a tick. */
   const addStep = adding && !(hrCanHire() && hrSitePeople(b.key))
@@ -25198,7 +25188,7 @@ function spRosterBlock(b){
             : tt("sp.ba.hours.cover", "Cleaning and security hours to set for the week: <b>{h} h</b> in {entries}, against <b>{was} h</b> in {wasEntries} today", p)
           : frag ? tt("sp.ba.hours.frag", "Hours to set for the week: <b>{h} h</b> in {entries}, against <b>{was} h</b> in {wasEntries} today, {frag} of them two hours long", p)
             : tt("sp.ba.hours", "Hours to set for the week: <b>{h} h</b> in {entries}, against <b>{was} h</b> in {wasEntries} today", p);
-        })()}${counts.hire
+        })()}${counts.hire && posts
           ? ` · ${tt("sp.ba.hire", "{people} to hire for the {entries} drawn without a name, at 30 hours a week or more each",
             {people: tt("sp.n.people", {one: "{n} person", other: "{n} people"}, {n: posts}), entries: entries(counts.hire)})}` : ""}${
         keptWords}`)}"><span class="lab">${c.cover ? tt("sp.ba.lab.cover", "Cover hours / week") : tt("sp.ba.lab", "Hours / week")}</span><div class="v">${
@@ -25209,7 +25199,7 @@ function spRosterBlock(b){
            living in the read-out alone. */
         counts.staffed ? `<small style="font-size:12px;color:var(--ink-3)">${
           against === counts.staffed ? "" : `<s>${against}</s> `}${
-          entries(counts.staffed)}</small>` : ""}${counts.hire
+          entries(counts.staffed)}</small>` : ""}${counts.hire && posts
           ? `<small style="font-size:12px;color:var(--warn)">${tt("sp.ba.tohire", "+{n} to hire", {n: posts})}</small>` : ""}</div></div>
       <div tabindex="0" data-read="${attr(`${costKnown
         ? c.cover
@@ -25218,7 +25208,7 @@ function spRosterBlock(b){
           : tt("sp.ba.cost", "<b>{was}</b> a week for the schedule as it stands, <b>{w}</b> for the plan, for the staff the save prices",
             {was: fmt(againstCost), w: fmt(cost.weekly)})
         : tt("sp.ba.cost.unknown", "What the hours this plan replaces cost is not in this board's figures. <b>{w}</b> for the plan, for the staff the save prices",
-          {w: fmt(cost.weekly)})}${counts.hire
+          {w: fmt(cost.weekly)})}${counts.hire && posts
           ? ` · ${tt("sp.ba.cost.hire", {one: "the {n} person still to hire is not priced, because nobody is on {which} yet",
             other: "the {n} people still to hire are not priced, because nobody is on {which} yet"},
             {n: posts, which: tt("sp.ba.cost.which", {one: "that entry", other: "those entries"}, {n: counts.hire})})}` : ""}${sameCost
@@ -30677,20 +30667,47 @@ function hrMemoModel(){
   if(!hrSiteMemo || hrSiteMemo.board !== D || hrSiteMemo.key !== picks) hrSiteMemo = {board: D, key: picks, model: hrModel()};
   return hrSiteMemo.model;
 }
-/* Why an open week `x` stays open while candidates of its role are free:
-   the demand most of them ask for that the week breaks ("the Customer
-   Service free ask for Full-time"). Empty where someone free could take it
-   (the filters or the picks left it) or nobody of the role is free. */
+/* Why an open week `x` stays open: a reassign that would take it is
+   unticked ({off: move}), or everybody of its role who is free -- candidates
+   nobody picked, spares at other sites and unassigned staff nobody moves --
+   asks for something the week breaks ({demand}, the one most of them ask
+   for). Null where somebody free could take it (the filters or the picks
+   left it) or nobody of the role is free. */
 function hrGapWhy(m, x){
-  const r = (m.roles || []).find(y => y.skill === x.w.skill);
-  if(!r) return "";
-  const free = r.pool.filter(c => r.passes(c) && !m.used.has(c.id));
-  if(!free.length || free.some(c => !hrFails(c, x).length)) return "";
+  const off = (m.moves || []).find(v => v.off && v.week === x);
+  if(off) return {off};
+  const skill = x.w.skill, H = D.hiring || {};
+  const r = (m.roles || []).find(y => y.skill === skill);
+  const moved = new Set((m.moves || []).filter(v => !v.off).map(v => v.id));
+  const free = r ? r.pool.filter(c => r.passes(c) && !m.used.has(c.id)) : [];
+  (m.sites || []).forEach(S => (S.plan.spare || []).forEach(id => {
+    if(S === x.S || moved.has(id)) return;
+    const q = hrPerson(id, S.row), roles = ((S.plan.spareSkills || {})[id]) || [q.skill];
+    if(roles.includes(skill)) free.push(q);
+  }));
+  (H.bench || []).forEach(id => {
+    if(moved.has(id)) return;
+    const q = hrPerson(id, null);
+    if((q.skills || []).some(v => v && v.skill === skill)) free.push(q);
+  });
+  if(!free.length || free.some(c => !hrFails(c, x).length)) return null;
   const count = new Map();
   free.forEach(c => hrFails(c, x).forEach(d => count.set(d, (count.get(d) || 0) + 1)));
   const top = [...count].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])))[0];
-  return top ? tt("co.hire.gap.askfor", "the {role} free ask for {demand}", {role: hrRole(x.w.skill), demand: hrName(top[0])}) : "";
+  return top ? {demand: top[0]} : null;
 }
+/* The why, short, for a site's row in the review. */
+const hrGapWhyShort = (m, x) => {
+  const w = hrGapWhy(m, x);
+  return !w ? "" : w.off ? tt("co.hire.p.off", "a reassign that takes it is unticked")
+    : tt("co.hire.p.askfor", "the free {role} people ask for {demand}", {role: hrRole(x.w.skill), demand: hrName(w.demand)});
+};
+/* The why, a sentence, for the review's gap line. */
+const hrGapWhySentence = (m, S, x) => {
+  const w = hrGapWhy(m, x), site = spEsc(S && S.b ? shortName(S.b) : tt("co.hire.asite.cap", "A site"));
+  return !w ? "" : w.off ? tt("co.hire.gap.off", "<b>{site}</b>: a reassign that would take this week is unticked.", {site})
+    : tt("co.hire.gap.askfor.site", "<b>{site}</b>: the free {role} people ask for {demand}.", {site, role: hrRole(x.w.skill), demand: hrName(w.demand)});
+};
 /* How many sites Staff all sites would write or assign at. */
 function hrAllSites(){
   if(!D.hiring) return 0;
@@ -30718,29 +30735,65 @@ function hrSiteOut(key){
    which `addPeople` names already), by role. Said before "hire N": they come
    first, and only the rest are hires. */
 function hrFromElsewhere(key){
-  const by = new Map();
-  if(!D.hiring) return {n: 0, by};
-  hrMemoModel().moves.filter(x => !x.off && !x.fixed && x.to && x.to.key === key)
-    .forEach(x => by.set(x.skill, (by.get(x.skill) || 0) + 1));
-  return {n: [...by.values()].reduce((a, b) => a + b, 0), by};
+  const by = new Map(), hours = new Map();
+  if(!D.hiring) return {n: 0, by, hours};
+  hrMemoModel().moves.filter(x => !x.off && !x.fixed && x.to && x.to.key === key).forEach(x => {
+    by.set(x.skill, (by.get(x.skill) || 0) + 1);
+    hours.set(x.skill, (hours.get(x.skill) || 0) + Number((x.week && x.week.w.hours) || 0));
+  });
+  return {n: [...by.values()].reduce((a, b) => a + b, 0), by, hours};
 }
 /* The plan's "add these people" less those who can come from other sites:
-   {add (hires reduced by role), from (how many can come)}. */
+   {add (hires reduced by role, and the hours they bring), from (how many
+   can come)}. Only with a mod that hires: without one nothing is moved from
+   here, so the full count stands. */
 function hrAddLess(key, add){
-  const {by} = hrFromElsewhere(key);
-  if(!add || !by.size) return {add, from: 0};
-  let from = 0;
-  const hire = (add.hire || []).map(h => {
-    const k = Math.min(h.people || 0, by.get(h.skill) || 0);
+  const {by, hours} = hrFromElsewhere(key);
+  if(!add || !by.size || !hrCanHire()) return {add, from: 0, raw: [...by.values()].reduce((a, b) => a + b, 0)};
+  let from = 0, h = 0;
+  const hire = (add.hire || []).map(x => {
+    const k = Math.min(x.people || 0, by.get(x.skill) || 0);
     from += k;
-    return Object.assign({}, h, {people: (h.people || 0) - k});
-  }).filter(h => h.people > 0);
-  return {add: Object.assign({}, add, {hire, people: Math.max(0, (add.people || 0) - from)}), from};
+    if(k) h += Math.round((hours.get(x.skill) || 0) * k / (by.get(x.skill) || 1));
+    return Object.assign({}, x, {people: (x.people || 0) - k});
+  }).filter(x => x.people > 0);
+  return {add: Object.assign({}, add, {hire, people: Math.max(0, (add.people || 0) - from),
+    hoursUncovered: Math.max(0, (Number(add.hoursUncovered) || 0) - h)}), from, raw: from};
 }
-/* "N can come from other sites", with Staff this site to do it. */
-const hrFromCall = n => n ? gwCall("info", "hire", tt("co.hire.elsewhere", {
-  one: "<b>{n} person can come from another site</b>: Staff this site reassigns them.",
-  other: "<b>{n} people can come from other sites</b>: Staff this site reassigns them."}, {n})) : "";
+/* A plan row with its hiring counts less the people who can come from other
+   sites (hrAddLess()): `headcount[skill].hire`, `addPeople`, and
+   `fromOthers` / `fromHand` for the note. Every hiring read-out reads the
+   row this gives, so they agree. */
+function spRowLess(row){
+  if(!row || !row.key || row.fromOthers !== undefined) return row;
+  const {by} = hrFromElsewhere(row.key);
+  const raw = [...by.values()].reduce((a, b) => a + b, 0);
+  if(!raw) return Object.assign({}, row, {fromOthers: 0, fromHand: 0});
+  if(!hrCanHire()) return Object.assign({}, row, {fromOthers: 0, fromHand: raw});
+  const headcount = {};
+  let from = 0;
+  Object.entries(row.headcount || {}).forEach(([skill, h]) => {
+    const k = Math.min(h.hire || 0, by.get(skill) || 0);
+    from += k;
+    headcount[skill] = Object.assign({}, h, {hire: (h.hire || 0) - k});
+  });
+  const less = row.addPeople ? hrAddLess(row.key, row.addPeople) : {add: row.addPeople, from: 0};
+  return Object.assign({}, row, {headcount, addPeople: less.add, fromOthers: Math.max(from, less.from), fromHand: 0});
+}
+/* "N can come from other sites": with a mod that hires, Staff this site
+   does it; without, the player reassigns them by hand. Its own class: a
+   note, not a step to tick. */
+const hrFromCall = (row, lift) => {
+  const n = (row && row.fromOthers) || 0, m = (row && row.fromHand) || 0;
+  const text = n ? tt("co.hire.elsewhere", {
+      one: "<b>{n} person can come from another site</b>: Staff this site reassigns them.",
+      other: "<b>{n} people can come from other sites</b>: Staff this site reassigns them."}, {n})
+    : m ? tt("co.hire.elsewhere.hand", {
+      one: "<b>{n} person at another site fits these hours</b>: reassign them in MyEmployees. Staffing › Staff needs names them.",
+      other: "<b>{n} people at other sites fit these hours</b>: reassign them in MyEmployees. Staffing › Staff needs names them."}, {n: m})
+    : "";
+  return !text ? "" : lift ? gwLiftCall("info", "hire", text) : `<div class="hr-from">${gwCall("info", "hire", text)}</div>`;
+};
 /* A mod that takes the hire write: Staff this site stands in for the step
    that sends the player to MyEmployees only then. */
 const hrCanHire = () => { const l = gwLink(); return !!l && (l.writes || []).includes("hire"); };
@@ -31621,9 +31674,11 @@ function hrQuickHtml(m){
   const k = Q.picks.length, n = Q.fitting === null || Q.fitting === undefined ? pickable : Q.fitting;
   const match = !Q.ready ? ""
     : !pickable ? `<p class="hs-match none">${tt("co.hire.quick.none", "Nobody matches.")}</p>`
-    : !n ? `<details class="hs-match" data-hq-list${q.open ? " open" : ""}><summary>${tt("co.hire.quick.nofits",
-        {one: "<b>0</b> match fits an open week · <span class='warn'>{m} would join with no hours</span>", other: "<b>0</b> match fits an open week · <span class='warn'>{m} would join with no hours</span>"},
-        {m: pickable})}${hrChev()}</summary><ul>${Q.picks.map(p => { const {c} = p; return `<li><span>${spEsc(c.name || "?")}${hrQuickNote(p, Q)}</span><span class="m">${Math.round(hrLevel(c, q.skill))}%</span><span class="m">${hrWage(c.wage)}/h</span></li>`; }).join("")}</ul></details>`
+    /* Picks that would join with no hours are said apart from the matches
+       that fit an open week (item 6 of the in-game test). */
+    : Q.picks.some(p => !p.w) && Q.fitting !== null && Q.fitting !== undefined ? `<details class="hs-match" data-hq-list${q.open ? " open" : ""}><summary>${tt("co.hire.quick.fit",
+        {one: "<b>{n}</b> fits an open week · <span class='warn'>{k} would join with no hours</span>", other: "<b>{n}</b> fit an open week · <span class='warn'>{k} would join with no hours</span>"},
+        {n, k: Q.picks.filter(p => !p.w).length})}${hrChev()}</summary><ul>${Q.picks.map(p => { const {c} = p; return `<li><span>${spEsc(c.name || "?")}${hrQuickNote(p, Q)}</span><span class="m">${Math.round(hrLevel(c, q.skill))}%</span><span class="m">${hrWage(c.wage)}/h</span></li>`; }).join("")}</ul></details>`
     : `<details class="hs-match" data-hq-list${q.open ? " open" : ""}><summary>${
         Q.short ? tt("co.hire.quick.short", {one: "<b>{n}</b> match · <span class='warn'>only {n} candidate matches</span>", other: "<b>{n}</b> match · <span class='warn'>only {n} candidates match</span>"}, {n})
         : k >= n ? tt("co.hire.quick.all", {one: "<b>{n}</b> match · picked", other: "<b>{n}</b> match · all {n} are picked"}, {n})
@@ -31929,7 +31984,7 @@ function hrReviewSites(req, phase, gone, status){
         hrRole(x.skill), x.p.level !== undefined ? `${Math.round(x.p.level)}%` : "–", x.p.wage !== undefined ? hrWage(x.p.wage) : "–",
         weekly ? hrBenchSlots(S, x) : [], weekly ? `${hrSlotHours(hrBenchSlots(S, x))} h` : "–")).join("")}${
       gaps.map(x => person(tt("co.hire.p.nobody", "Nobody"), {t: x.w.band === "short" ? tt("co.hire.p.short", "too few hours for a hire")
-          : (hrLast && hrGapWhy(hrLast.m, x)) || tt("co.hire.p.nomatch", "no {role} matches", {role: hrRole(x.w.skill)})}, hrRole(x.w.skill), "–", "–",
+          : (hrLast && hrGapWhyShort(hrLast.m, x)) || tt("co.hire.p.nomatch", "no {role} matches", {role: hrRole(x.w.skill)})}, hrRole(x.w.skill), "–", "–",
         x.w.slots, `${x.w.hours || 0} h`, "gap")).join("")}</div>` : "";
     const counts = !people && !missed ? (weekly ? tt("co.hire.c.week", "week only") : "–")
       : `${phase === "done" ? tt("co.hire.c.hired", "{n} hired", {n: hired.length + got.length}) : tt("co.hire.c.new", "{n} new", {n: hired.length + got.length})}${
@@ -32116,13 +32171,14 @@ function hrReview(o = {}, hooks = {}){
         h: allGaps.filter(g => g.S === S && g.x.w.skill === x.w.skill && g.x.w.band === "short").reduce((n, g) => n + Number(g.x.w.hours || 0), 0)}])).values()];
       const shortCall = shortGaps.length ? gwCall("", "clock", shortGaps.map(g => tt("co.hire.gap.short", "<b>{site}</b>: {h} h a week of {role} too few for a hire, left open.",
         {site: spEsc(g.S.b ? shortName(g.S.b) : tt("co.hire.asite.cap", "A site")), h: g.h, role: hrRole(g.skill)})).join(" ")) : "";
-      const gapText = [...new Map(gaps.map(({S, x}) => [`${S.key}|${x.w.skill}`, {S, skill: x.w.skill, x,
+      const gapText = [...new Map(gaps.map(({S, x}) => [`${S.key}|${x.w.skill}`, {S, skill: x.w.skill,
         n: gaps.filter(g => g.S === S && g.x.w.skill === x.w.skill).length,
         h: gaps.filter(g => g.S === S && g.x.w.skill === x.w.skill).reduce((n, g) => n + Number(g.x.w.hours || 0), 0)}])).values()]
         .map(g => tt("co.hire.gap", {one: "<b>{site} keeps {n} {role} place open</b> ({h} hours a week)", other: "<b>{site} keeps {n} {role} places open</b> ({h} hours a week)"},
-          {site: spEsc(g.S.b ? shortName(g.S.b) : tt("co.hire.asite.cap", "A site")), n: g.n, role: hrRole(g.skill), h: g.h})
-          /* Why nobody free takes it, where candidates of the role are free. */
-          + (g.x && hrGapWhy(m, g.x) ? ` · ${hrGapWhy(m, g.x)}` : "")).join("; ");
+          {site: spEsc(g.S.b ? shortName(g.S.b) : tt("co.hire.asite.cap", "A site")), n: g.n, role: hrRole(g.skill), h: g.h})).join("; ");
+      /* Why nobody free takes them, a sentence each after the list. */
+      const gapWhy = [...new Map(gaps.map(({S, x}) => [`${S.key}|${x.w.skill}`, {S, x}])).values()]
+        .map(({S, x}) => hrGapWhySentence(m, S, x)).filter(Boolean).join(" ");
       const goneCall = gone.size ? gwCall("warn", "alert", `${tt("co.hire.gone", {one: "<b>{n} application expired before the game reached it:</b>", other: "<b>{n} applications expired before the game reached them:</b>"}, {n: gone.size})} ${
         [...gone].map(id => `<span class="hr-struck">${spEsc(nameOf(id))}</span>`).join(", ")}. ${tt("co.hire.gone.empty", "Their hours stay empty.")}`) : "";
       const emptied = hrLeftEmpty(req, answer);
@@ -32148,7 +32204,7 @@ function hrReview(o = {}, hooks = {}){
             ...(mode === "hire" ? [] : [[tt("co.hire.tile.weeks", "Weeks"), null, hrNum(weeks)]]),
             [tt("co.hire.tile.wages", "Added wages"), null, `+${fmt(bill)}<small class="hr-u">${tt("co.hire.perday", "/day")}</small>`]])}
           ${mode === "hire" ? "" : `<p class="gw-lead">${tt("co.hire.starts", "Everyone starts on their hours from the next hour in the game.")}</p>`}${sites}${goneCall}${emptyCall}${more}${first}
-          ${gapText ? gwCall("warn", "alert", `${gapText}. ${tt("co.hire.gap.stays", "It stays on the Staff page until someone matches.")}`) : ""}${shortCall}
+          ${gapText ? gwCall("warn", "alert", `${gapText}. ${gapWhy ? `${gapWhy} ` : ""}${tt("co.hire.gap.stays", "It stays on the Staff page until someone matches.")}`) : ""}${shortCall}
           ${hrLast.one ? "" : `<p class="hr-lock">${gwSvg("lock")}<span>${tt("co.hire.noundo.done", "No undo with this mod. To let someone go, fire them in MyEmployees in the game.")}</span></p>`}`;
       }
       const blocked = answer.blocked === "myemployees" ? `<div class="gw-no"><span class="ic">${hrSvg("phone")}</span><div class="rule">${tt("co.hire.myemployees", "MyEmployees is open in the game.")}</div><div class="fix">${
@@ -32206,7 +32262,7 @@ function hrReview(o = {}, hooks = {}){
           [tt("co.hire.tile.wages", "Added wages"), null, `+${fmt(bill)}<small class="hr-u">${tt("co.hire.perday", "/day")}</small>`]])}
         <p class="gw-lead">${tt("co.hire.lead", "Who goes where. Open a site to see each person and the days they work.")}</p>
         ${sites}${goneCall}${zero}${fewerCall}${emptyCall}${displacedCall}${left.length ? `<div class="gw-box">${gwCall("", "exit", tt("sp.gw.left.head", "<b>No hours here after this</b>"))}<div class="gw-pills">${left.join("")}</div></div>` : ""}
-        ${gapText ? gwCall("warn", "alert", `${gapText}.`) : ""}${shortCall}${chain}
+        ${gapText ? gwCall("warn", "alert", `${gapText}.${gapWhy ? ` ${gapWhy}` : ""}`) : ""}${shortCall}${chain}
         ${gwCheckLines(checked)}${officeLeft}
         ${warned.length ? gwCall("info", "info", tt("co.hire.warned", {one: "{n} person asks for something their site does not meet (marked orange in Change picks). They are hired anyway.",
           other: "{n} people ask for something their site does not meet (marked orange in Change picks). They are hired anyway."}, {n: warned.length})) : ""}`;
@@ -33053,7 +33109,7 @@ function schedStatus(b){
   if(!base) return tt("co.sched.none", "No plan yet");
   if(base.failed) return tt("co.sched.failed", "No plan: the planner could not read this shop");
   /* The plan the shop's own Staffing shows, full cover where it was picked. */
-  const r = spShownRow(base);
+  const r = spRowLess(spShownRow(base));
   if(!(r.shifts || []).length) return tt("co.sched.nothing", "Nothing to schedule yet");
   const c = spRosterCounts(r), people = c.hire ? spPlanPosts(r) : 0;
   return people ? tt("co.sched.plan.hire", {one: "{now} entries now, {week} in the plan, {n} person to hire", other: "{now} entries now, {week} in the plan, {n} people to hire"},
@@ -38739,12 +38795,9 @@ function gwApprovalView(dlg, allowed){
 }
 /* `retry` repeats what failed; `recheck` is what may follow a write that got
    no answer, once the board has read the game again: the dry run afresh,
-   never the write itself. In a run of shops, going on from a failure records
-   the shop as not written. */
+   never the write itself. */
 function gwFailed(dlg, spec, res, retry, recheck){
   const p = gwProblem(res);
-  const next = spec.next ? [[spec.next.go ? spec.next.label : tt("nav.dlg.endrun", "End the run"), () => spec.next.pass("not written"),
-    {kind: "go", icon: "right", key: "next"}]] : [];
   const close = [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "ghost"}];
   if(p.uncertain){
     gwPaint(dlg, {phase: "uncertain", wire: "wait", say: `<b>${tt("nav.dlg.say.noanswer", "No answer")}</b>`, meta: gwNow(),
@@ -38756,7 +38809,7 @@ function gwFailed(dlg, spec, res, retry, recheck){
       gwPaint(dlg, {phase: "uncertain", wire: "ok", say: `<b>${tt("nav.dlg.say.uptodate", "The board is up to date")}</b>`, meta: gwNow(),
         body: `<p class="gw-said gw-warn">${p.text}</p>${gwBox("refresh", "dim", `<b>${tt("nav.dlg.uptodate.lead", "The board now shows what the game holds.")}</b> ${
           tt("nav.dlg.uptodate.text", "Check it there: the warning is gone if it went through.")}`)}`,
-        buttons: ["|", [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: next.length ? "ghost" : "go"}], ...next]});
+        buttons: ["|", [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "go"}]]});
     });
     return;
   }
@@ -38772,8 +38825,7 @@ function gwFailed(dlg, spec, res, retry, recheck){
   gwPaint(dlg, {phase: "failed", wire: p.wire, say: p.say, meta: gwNow(), body, hint: refused ? tt("nav.dlg.unchanged", "Nothing was changed.") : "",
     buttons: [close, "|",
       ...(p.refresh ? [[tt("nav.dlg.refresh", "Refresh the board"), () => spec.refreshBoard ? spec.refreshBoard() : (dlg.close(), typeof SOURCE.refresh === "function" && SOURCE.refresh()), {kind: "go", icon: "refresh"}]]
-        : p.retry && retry ? [[again, retry, {kind: "go", icon: p.again ? "key" : "refresh", disabled: !!p.wait, why: p.wait ? p.text : "", again: true}]] : []),
-      ...next]});
+        : p.retry && retry ? [[again, retry, {kind: "go", icon: p.again ? "key" : "refresh", disabled: !!p.wait, why: p.wait ? p.text : "", again: true}]] : [])]});
   if(p.wait && p.retry && retry) setTimeout(() => {
     const b = dlg.querySelector("[data-gw-again]");
     if(b){ b.disabled = false; b.removeAttribute("title"); }
@@ -38807,10 +38859,6 @@ function gwFailed(dlg, spec, res, retry, recheck){
                                which leaves nothing to undo
      nothing()                 optional: why there is nothing to write, which
                                skips the dry run
-     next                      optional, a run of dialogs one site after
-                               another: {skip, pass(what), label, go}; pass
-                               leaves this site (skipped, not written...) and
-                               go, absent on the last, opens the next
      more                      optional, {label, go}: a second way on
                                beside Close once an apply went through
      onDone(answer)            optional: heard once an apply went through
@@ -38830,8 +38878,7 @@ function gwConfirm(spec){
   const dlg = gwDialog(spec.icon, title(), where());
   const stays = () => gwUndoStays(spec.kind);
   const cancel = [tt("nav.dlg.cancel", "Cancel"), () => dlg.close(), {kind: "ghost"}];
-  const skip = what => spec.next ? [[spec.next.skip || tt("nav.dlg.skip", "Skip"), () => spec.next.pass(what), {kind: "ghost", icon: "skip"}]] : [];
-  const left = spec.next ? [...skip("skipped"), "|"] : [cancel];
+  const left = [cancel];
   let applying = false;  // one apply per go: a second click must not send a second write
   let judged = "";       // the body the answer on screen judged, as sent
   let whose = "";        // and the game it judged it for
@@ -38841,7 +38888,7 @@ function gwConfirm(spec){
   const view = gwApprovalView(dlg, () => { allowed = true; asking(); });
   const nothing = none => gwPaint(dlg, {phase: "nothing", wire: "ok", say: (spec.nothingSay && spec.nothingSay()) || `<b>${tt("nav.dlg.say.nothing", "Nothing to write")}</b>`, meta: gwNow(),
     body: `<p class="gw-said">${none}</p>`,
-    buttons: ["|", [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: spec.next ? "ghost" : "go"}], ...skip("nothing to write")]});
+    buttons: ["|", [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "go"}]]});
   const asking = () => gwPaint(dlg, {phase: "asking", wire: "ask",
     say: allowed ? `<b>${tt("nav.dlg.say.allowed.lead", "Allowed.")}</b> ${tt("nav.dlg.say.allowed.asking", "Asking the game what it would do…")}`
       : `<b>${tt("nav.dlg.say.asking", "Asking the game…")}</b>`, meta: allowed ? "" : tt("nav.dlg.dryrun", "dry run"),
@@ -38887,7 +38934,7 @@ function gwConfirm(spec){
       hint: idle ? "" : answer.ok ? spec.hint || "" : spec.refusedHint ? spec.refusedHint(answer) : tt("nav.dlg.unchanged", "Nothing was changed."),
       warn: !answer.ok && !!spec.refusedHint,
       /* Refused, nothing is left to cancel: the dialog closes. */
-      buttons: [...(answer.ok || spec.next ? left : [[tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "ghost"}]]),
+      buttons: [...(answer.ok ? left : [[tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "ghost"}]]),
         /* The game moved on since the board was read: the way on is to read it again. */
         ...(gwMovedOn(answer) ? [[tt("nav.dlg.refresh", "Refresh the board"), () => spec.refreshBoard(), {kind: "go", icon: "refresh"}]]
           /* Refused: fixed in the game, the game is asked again from here. */
@@ -38963,7 +39010,7 @@ function gwConfirm(spec){
       hint: !undoable ? "" : typeof hint === "string" ? hint : "",
       buttons: [...(undoable ? [[spec.undoLabel ? spec.undoLabel() : tt("nav.dlg.undo.button", "Undo"), () => gwUndo(spec, dlg), {kind: "undo", icon: "undo", key: "undo"}]] : []), "|",
         ...(spec.more ? [[spec.more.label, spec.more.go, {kind: "ghost", key: "more"}]] : []),
-        spec.next && spec.next.go ? [spec.next.label, spec.next.go, {kind: "go", icon: "right", key: "next"}] : [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "go"}]]});
+        [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "go"}]]});
   };
   /* After an undo in this dialog: the undo said, and the write offered
      again once a board has been built since the undo answered, from the same
@@ -39004,13 +39051,10 @@ function gwConfirm(spec){
     dlg._gwGate = gate;
     gate(true);
   };
-  /* The board read again at the player's word: in a run the run stays, and
-     the game is asked afresh from the new board; else the dialog closes. */
+  /* The board read again at the player's word: the dialog closes. */
   spec.refreshBoard = () => {
     if(typeof SOURCE.refresh !== "function") return dlg.close();
-    if(!spec.next){ dlg.close(); return SOURCE.refresh(); }
-    asking();
-    Promise.resolve(SOURCE.refresh()).catch(() => {}).then(() => { if(dlg.open) plan(); });
+    dlg.close(); return SOURCE.refresh();
   };
   if(spec.startUndo) gwUndo(spec, dlg); else plan();
 }
@@ -39038,23 +39082,12 @@ async function gwUndo(spec, dlg){
      not take it now. */
   if(!res.error || ["changed", "nothing_to_undo", "uncertain"].includes(res.error)) delete gwUndoable[spec.kind];
   if(!dlg.open) return gwToast();
-  /* A run of dialogs does not go on from an undo; and an undo that got no
-     answer is never sent again on its own. */
+  /* An undo that got no answer is never sent again on its own. */
   if(res.error){
-    /* In a run the shop stays written, or unknown after an undo with no
-       answer, and the run goes on from it; reopened from the end of the
-       run, it goes back there. */
-    if(res.error === "uncertain" && spec.onUndoUnknown) spec.onUndoUnknown();
-    const onward = spec.backToRun ? {label: tt("nav.dlg.backtorun", "Back to the run"), go: spec.backToRun, pass: spec.backToRun}
-      : spec.next ? {label: spec.next.label, go: spec.next.go, pass: () => spec.next.go()} : null;
     /* A refresh after a failed undo reads the game and leaves the write as it
-       stands: the dialog is not asked about the write again, so in a run the
-       shop stays written and the way on is the run's. */
-    const refreshBoard = () => {
-      if(!onward) dlg.close();
-      if(typeof SOURCE.refresh === "function") SOURCE.refresh();
-    };
-    return gwFailed(dlg, Object.assign({}, spec, {next: onward, refreshBoard}), res, () => gwUndo(spec, dlg), null);
+       stands: the dialog is not asked about the write again. */
+    const refreshBoard = () => { dlg.close(); if(typeof SOURCE.refresh === "function") SOURCE.refresh(); };
+    return gwFailed(dlg, Object.assign({}, spec, {refreshBoard}), res, () => gwUndo(spec, dlg), null);
   }
   const answer = res.body || {};
   if(spec.onUndo) spec.onUndo();
@@ -39596,13 +39629,13 @@ function gwRosterPlan(key){
   /* An office: Peter's office default (officeStaffing), which never opens it. */
   if(b.status === "office"){
     const office = gwOfficeRow(key);
-    return office && (office.shifts || []).length ? office : null;
+    return office && (office.shifts || []).length ? spRowLess(office) : null;
   }
   if(b.status !== "retail") return null;
   const base = spRosterRow(key);
   if(!base || base.failed) return null;
   const row = spShownRow(base);
-  return (row.shifts || []).length ? row : null;
+  return (row.shifts || []).length ? spRowLess(row) : null;
 }
 /* --- every week a write sends, checked per person ------------------------
    The game takes whatever week the mod hands it, and the mod checks overlap,
@@ -39801,17 +39834,24 @@ const gwOfficeRow = key => {
 /* The roster's own write, and every planned shop's in turn. How many people
    the plan still waits on stays beside it until they are added, so a partial
    write never reads as the whole week. */
+/* Staff this site: where the Staff page's plan hires or reassigns somebody
+   into the site, or reassigns its own spares out; whether or not the site
+   has a week of its own to write. `alone` wraps it as the block's only act. */
+function gwStaffButton(key, alone){
+  if(!hrCanHire()) return "";
+  const people = hrSitePeople(key), out = people ? 0 : hrSiteOut(key);
+  if(!people && !out) return "";
+  const b = gwButton("hire", tt("sp.gw.staff", "Staff this site"), `data-hr-staff="${attr(key)}"`, "", people ? {count: people} : {});
+  return alone ? `<div class="gw-acts gw-panel">${b}</div>` : b;
+}
 function gwRosterButtons(key){
   if(!gwLink()) return "";
   const row = gwRosterPlan(key);
-  if(!row) return "";
+  if(!row) return gwStaffButton(key, true);
   /* Staff this site: the one action, where the Staff page's plan hires or
      reassigns somebody into this site (hrSitePeople()); it writes the week
      with them on it, so the "add them first" note below it goes. */
-  const people = hrCanHire() ? hrSitePeople(key) : 0;
-  /* Also where the only work is the site's own spares moving out. */
-  const out = hrCanHire() && !people ? hrSiteOut(key) : 0;
-  const staff = people || out ? gwButton("hire", tt("sp.gw.staff", "Staff this site"), `data-hr-staff="${attr(key)}"`, "", people ? {count: people} : {}) : "";
+  const staff = gwStaffButton(key);
   const one = gwButton("schedule", tt("sp.gw.sch.one", "Write this schedule to the game"), `data-gw-sites="${attr(JSON.stringify([key]))}"`,
     row.office && gwRosterWeek(row).unreadable ? tt("sp.gw.sch.office.unreadable", "An entry here can't be read; change it in the game first")
       : gwRosterWeek(row).sent ? "" : row.office ? (gwRosterWeek(row).dropped ? tt("sp.gw.sch.office.full", "Nothing more fits: the rest of the office default is more than its staff's weeks can take")
@@ -39822,7 +39862,7 @@ function gwRosterButtons(key){
      moved. Offered where it reaches more than this site. */
   const many = hrCanHire() && hrAllSites() > 1
     ? gwButton("hire", tt("co.hire.title.all", "Staff all sites"), "data-hr-all", "", {alt: true}) : "";
-  const add = hrAddLess(key, row.addPeople || {}).add || {};
+  const add = row.addPeople || {};
   return one ? `<div class="gw-acts gw-panel">${staff}${one}${many}${add.people && !staff ? `<span class="gw-note">${gwSvg("hire")}${
     tt("sp.gw.sch.empty", {one: "{h} h a week stay empty until {n} person is added", other: "{h} h a week stay empty until {n} people are added"},
       {h: add.hoursUncovered || 0, n: add.people})}</span>` : ""}</div>` : "";
@@ -39872,8 +39912,7 @@ function gwAddBox(add, staffed){
 
 /* One site's schedule. Every planned site at once is Staff all sites
    (hrReview()), with the moves and one Undo (Peter, 29 September 2026). */
-function gwSchedule(keys, o = {}){
-  const key = keys[0];
+function gwSchedule(key, o = {}){
   const site = () => (D.businesses || []).find(x => x.key === key) || null;
   const b = site();
   if(!b) return;
@@ -39974,11 +40013,9 @@ function gwSchedule(keys, o = {}){
         + gwTiles([[labels[0], now.length, sentList.length], [labels[1], gwHours(now), gwHours(sentList)], [labels[2], nowPeople, afterPeople]])
         + gwWeek(now, week.days) + kept + toggle
         + (left.length ? `<div class="gw-box">${gwCall("", "exit", tt("sp.gw.left.head", "<b>No hours here after this</b>"))}<div class="gw-pills">${left.join("")}</div></div>` : "")
-        + adds + (() => {
-          /* People elsewhere who fit come before any hire (hrAddLess()). */
-          const less = hrAddLess(key, add);
-          return hrFromCall(less.from) + (less.add.people ? gwAddBox(less.add, gwHours(sentList)) : "");
-        })() + over.join("")
+        /* People elsewhere who fit come before any hire (spRowLess()): said
+           in the fixed strip with the add box. */
+        + adds + hrFromCall(row, true) + (add.people ? gwAddBox(add, gwHours(sentList)) : "") + over.join("")
         + gwCheckLines(gwWeekCheck(row, week.days));
     },
     bind: (dlg, replan) => {
@@ -40004,7 +40041,6 @@ function gwSchedule(keys, o = {}){
       const said = `<p class="gw-said ok">${gwScheduleSaid(shop, answer)}</p>`;
       return said + spec.draw(answer, "done");
     },
-    undoHint: () => null,
     done: answer => {
       const shop = name;  // the board's name for it: the game's carries the [code] prefix
       if(answer.undo) return answer.openedHours
@@ -40033,7 +40069,7 @@ const bindWrites = once(() => {
     if(kind === "uniforms") gwUniforms(btn.hasAttribute("data-gw-all")
       ? gwUniformAll().map(b => b.key) : JSON.parse(btn.dataset.gwSites || "[]"));
     else if(kind === "imports") gwImports(btn.dataset.gwDepot || null, btn.dataset.gwLine || null);
-    else if(kind === "schedule") gwSchedule(JSON.parse(btn.dataset.gwSites || "[]"));
+    else if(kind === "schedule") gwSchedule(JSON.parse(btn.dataset.gwSites || "[]")[0]);
     else if(kind === "hire") hrReview(btn.dataset.hrStaff ? {scope: "site", site: btn.dataset.hrStaff} : {});
     else if(kind === "marketing") gwMarketing(btn.hasAttribute("data-gw-mk-all")
       ? gwMkSites(btn.dataset.gwMode, btn.dataset.gwMkLine || null).map(b => b.key) : JSON.parse(btn.dataset.gwSites || "[]"), btn.dataset.gwMode);
