@@ -742,6 +742,7 @@
    "customerRhythm": null,
    "customers": 0,
    "daysOpen": 1,
+   "hasTraded": false,
    "key": "ba:street_secondavenue#10",
    "licensing": 0.0,
    "lines": [],
@@ -821,6 +822,7 @@
    "staffLacking": 0,
    "staffLackingAny": 0,
    "staffLackingCompany": 0,
+   "stationShifts": 1,
    "status": "retail",
    "swing": 0,
    "tag": "",
@@ -865,6 +867,7 @@
    "customerRhythm": null,
    "customers": 0,
    "daysOpen": 1,
+   "hasTraded": false,
    "key": "ba:street_broadway#2",
    "licensing": 0.0,
    "lines": [],
@@ -918,6 +921,7 @@
    "staffLacking": 0,
    "staffLackingAny": 0,
    "staffLackingCompany": 0,
+   "stationShifts": 1,
    "status": "retail",
    "swing": 0,
    "tag": "",
@@ -954,6 +958,7 @@
    "customerRhythm": null,
    "customers": 0,
    "daysOpen": 1,
+   "hasTraded": false,
    "key": "ba:street_fifthavenue#4",
    "licensing": 0.0,
    "lines": [],
@@ -1016,6 +1021,7 @@
    "staffLacking": 0,
    "staffLackingAny": 0,
    "staffLackingCompany": 0,
+   "stationShifts": 0,
    "status": "retail",
    "swing": 0,
    "tag": "",
@@ -1042,6 +1048,7 @@
    "customerRhythm": null,
    "customers": 0,
    "daysOpen": 1,
+   "hasTraded": false,
    "key": "ba:street_pier#9",
    "licensing": 0.0,
    "lines": [],
@@ -1080,6 +1087,7 @@
    "staffLacking": 0,
    "staffLackingAny": 0,
    "staffLackingCompany": 0,
+   "stationShifts": 0,
    "status": "overhead",
    "swing": 0,
    "tag": "",
@@ -1943,7 +1951,264 @@
   "ba:neighborhood_thehamptons": "The Hamptons"
  },
  "officeStaffing": [],
+ "openStore": {
+  "built": {},
+  "campaigns": [
+   [
+    "smallinternet",
+    100,
+    20
+   ],
+   [
+    "mediuminternet",
+    250,
+    40
+   ],
+   [
+    "largeinternet",
+    500,
+    60
+   ],
+   [
+    "smallbillboard",
+    500,
+    100
+   ],
+   [
+    "mediumbillboard",
+    2500,
+    250
+   ],
+   [
+    "largebillboard",
+    6000,
+    600
+   ]
+  ],
+  "decor": {},
+  "finance": {
+   "banks": [
+    {
+     "id": "JensenCapitalSettings",
+     "key": "ba:street_fourthavenue#17",
+     "max": 40000,
+     "name": "Jensen Capital",
+     "owed": 0.0,
+     "rate": 20,
+     "term": 120,
+     "years": 2
+    },
+    {
+     "id": "VantanderBankSettings",
+     "key": "ba:street_secondavenue#6",
+     "max": 2000000,
+     "name": "Vantander Bank",
+     "owed": 0.0,
+     "rate": 12,
+     "term": 240,
+     "years": 4
+    }
+   ],
+   "cash": 10000.0,
+   "floor": 0,
+   "minimum": 500,
+   "multiplier": 0.7,
+   "owed": 0.0,
+   "profit7": 0,
+   "wealth": 10000.0,
+   "year": 60
+  },
+  "game": {
+   "agent": 100,
+   "capInitial": false,
+   "delivery": 250,
+   "installFee": 586,
+   "prices": 1.0,
+   "promo": 0.55,
+   "satisfaction": 95,
+   "tax": 0,
+   "wageBase": {
+    "cashier": 16,
+    "cleaner": 12,
+    "guard": 15,
+    "perCashier": 30
+   },
+   "wages": 0.7
+  },
+  "hoods": {
+   "ba:neighborhood_garmentdistrict": {
+    "demands": 0.2,
+    "idx": 1.284,
+    "interior": 0,
+    "strength": 0.9
+   },
+   "ba:neighborhood_hellskitchen": {
+    "demands": 0.7,
+    "idx": 1.424,
+    "interior": 0,
+    "strength": 0.7
+   },
+   "ba:neighborhood_industrycity": {
+    "demands": 0.1,
+    "idx": 1.246,
+    "interior": 0,
+    "strength": 1
+   },
+   "ba:neighborhood_lowermanhattan": {
+    "demands": 0.15,
+    "idx": 1.258,
+    "interior": 0,
+    "strength": 1
+   },
+   "ba:neighborhood_midtown": {
+    "demands": 0.9,
+    "idx": 1.682,
+    "interior": 50,
+    "strength": 0.5
+   },
+   "ba:neighborhood_murrayhill": {
+    "demands": 0.4,
+    "idx": 1.342,
+    "interior": 0,
+    "strength": 0.8
+   },
+   "ba:neighborhood_thehamptons": {
+    "demands": 0.1,
+    "idx": 1.636,
+    "interior": 0,
+    "strength": 1
+   }
+  },
+  "items": {},
+  "market": {},
+  "own": {},
+  "sales": {},
+  "types": {},
+  "vendors": {},
+  "venues": {}
+ },
  "ownedBuildings": [],
+ "payback": {
+  "chains": {
+   "ba:street_secondavenue#10": {
+    "cost": {
+     "billed": 0.0,
+     "deposit": 0.0,
+     "fee": 518610.0,
+     "firm": 525510.0,
+     "furniture": 6900.0,
+     "materials": 0.0,
+     "self": 6900.0
+    },
+    "exact": true,
+    "firm": {
+     "state": "unknown"
+    },
+    "opened": 0,
+    "profit": 0.0,
+    "rate": null,
+    "self": {
+     "state": "unknown"
+    },
+    "since": null,
+    "sites": [
+     "ba:street_secondavenue#10",
+     "ba:street_broadway#2",
+     "ba:street_fifthavenue#4"
+    ]
+   }
+  },
+  "recentDays": 14,
+  "sites": {
+   "ba:street_broadway#2": {
+    "before": 0.0,
+    "cost": {
+     "deposit": 0.0,
+     "fee": 0.0,
+     "firm": 2950.0,
+     "furniture": 2950.0,
+     "materials": 0.0,
+     "self": 2950.0
+    },
+    "costCentre": false,
+    "days": [],
+    "exact": true,
+    "firm": {
+     "state": "unknown"
+    },
+    "opened": 0,
+    "profit": 0.0,
+    "rate": null,
+    "self": {
+     "state": "unknown"
+    },
+    "since": null
+   },
+   "ba:street_fifthavenue#4": {
+    "before": 0.0,
+    "cost": {
+     "deposit": 0.0,
+     "fee": 131850.0,
+     "firm": 132850.0,
+     "furniture": 1000.0,
+     "materials": 0.0,
+     "self": 1000.0
+    },
+    "costCentre": false,
+    "days": [],
+    "exact": true,
+    "firm": {
+     "state": "unknown"
+    },
+    "opened": 0,
+    "profit": 0.0,
+    "rate": null,
+    "self": {
+     "state": "unknown"
+    },
+    "since": null
+   },
+   "ba:street_pier#9": {
+    "cost": {
+     "deposit": 0.0,
+     "fee": 404340.0,
+     "firm": 404340.0,
+     "furniture": 0.0,
+     "materials": 0.0,
+     "self": 0.0
+    },
+    "costCentre": true,
+    "exact": true,
+    "opened": 0,
+    "profit": 0.0,
+    "since": null
+   },
+   "ba:street_secondavenue#10": {
+    "before": 0.0,
+    "cost": {
+     "deposit": 0.0,
+     "fee": 386760.0,
+     "firm": 389710.0,
+     "furniture": 2950.0,
+     "materials": 0.0,
+     "self": 2950.0
+    },
+    "costCentre": false,
+    "days": [],
+    "exact": true,
+    "firm": {
+     "state": "unknown"
+    },
+    "opened": 0,
+    "profit": 0.0,
+    "rate": null,
+    "self": {
+     "state": "unknown"
+    },
+    "since": null
+   }
+  }
+ },
  "plan": {
   "catalogue": {},
   "items": {},
@@ -3327,6 +3592,7 @@
   "nextImportDay": 36,
   "nextImportWeekday": "Monday",
   "roundTo": 10,
+  "routed": [],
   "shops": [],
   "today": "Saturday",
   "wholesaleShops": []

@@ -315,6 +315,12 @@ class ShelfTests(unittest.TestCase):
         [finding] = [f for f in c.findings() if f["siteKey"] == site_key(SHOP_A)]
         self.assertEqual(finding["group"], "unplanned")
 
+    def test_routed_lists_a_positive_stock_target_and_not_a_zero_one(self):
+        c, _fact = self.verdict(target=120)
+        self.assertEqual(c.supply["routed"], [[c.index(SHOP_A), SODA]])
+        c, _fact = self.verdict(target=0)
+        self.assertEqual(c.supply["routed"], [])
+
     def test_a_shop_under_five_trading_days_is_new(self):
         _c, fact = self.verdict(target=120, trade_days=3)
         self.assertEqual((fact["st"], fact["why"], fact["lvl"]), ("new", "young", "info"))
@@ -377,6 +383,17 @@ class WholesaleTests(unittest.TestCase):
         [finding] = [f for f in c.findings() if f["siteKey"] == site_key(GYM)]
         self.assertIn("runs out before Tuesday's wholesale delivery", plain(finding["text"]))
         self.assertEqual(finding["group"], "wholesale")
+
+    def test_routed_lists_the_shelves_a_contract_delivers_whatever_they_sell(self):
+        c = Company()
+        c.site(HUB, "Import Hub")
+        c.shop(GYM, "Gym")
+        c.hold(HUB, SODA, 3000)
+        c.hold(GYM, SODA, 0, 0)
+        c.wholesale(GYM, SODA, 900)
+        c.run()
+        self.assertEqual(c.supply["routed"], [[c.index(GYM), SODA]])
+        self.assertEqual(c.supply["shops"], [])
 
     def test_a_shelf_on_a_wholesale_contract_is_never_not_routed(self):
         c, _fact = self.gym(900)

@@ -323,6 +323,11 @@ test('uniforms: Applied from the write\'s answer, Confirmed once a later board s
 
 /* A Demand cell by its type and neighbourhood. */
 const cell = (page, slug, hood) => page.locator(`#market .cell[data-slug="${slug}"][data-hood="${hood}"]`);
+/* A cell opens its popover; its Find a location asks the finder. */
+async function findFrom(page, slug, hood){
+  await cell(page, slug, hood).click();
+  await page.locator('#demCellPop [data-dem-go="find"]').click();
+}
 const finder = page => page.evaluate(() => ({route, on: cityMapPage.finderOn(), type: cityMapPage.fs.type,
   hoods: cityMapPage.fs.hoods, arrive: (document.querySelector('#arrive') || {}).innerText || ''}));
 
@@ -330,7 +335,7 @@ test('two Demand cells carry their own type and neighbourhood into the one finde
   const page = await board(t, {hash: '#expansion/demand'});
   const LIQ = 'ba:businesstype_liquorstore', GIFT = 'ba:businesstype_giftshop';
   const MID = 'ba:neighborhood_midtown', LOW = 'ba:neighborhood_lowermanhattan';
-  await cell(page, LIQ, MID).click();
+  await findFrom(page, LIQ, MID);
   await page.waitForFunction(() => typeof cityMapPage !== 'undefined' && cityMapPage && cityMapPage.finderOn());
   await page.evaluate(() => cityMapPage.ready);
   let f = await finder(page);
@@ -341,7 +346,7 @@ test('two Demand cells carry their own type and neighbourhood into the one finde
   assert.equal((await where(page)).route, 'expansion/demand');
   assert.deepEqual(await page.evaluate(() => [document.activeElement.dataset.slug, document.activeElement.dataset.hood]), [LIQ, MID]);
   // A second cell asks its own question.
-  await cell(page, GIFT, LOW).click();
+  await findFrom(page, GIFT, LOW);
   await page.waitForFunction(() => route === 'expansion/finder' && cityMapPage.fs.type === 'ba:businesstype_giftshop');
   f = await finder(page);
   assert.deepEqual([f.type, f.hoods], [GIFT, [LOW]]);
@@ -371,7 +376,7 @@ test('two Demand cells carry their own type and neighbourhood into the one finde
 
 test('Find a location keeps a picked building through a detour, and its strip leads back to Demand with the type ringed', async t => {
   const page = await board(t, {hash: '#expansion/demand'});
-  await cell(page, 'ba:businesstype_liquorstore', 'ba:neighborhood_midtown').click();
+  await findFrom(page, 'ba:businesstype_liquorstore', 'ba:neighborhood_midtown');
   await page.waitForFunction(() => typeof cityMapPage !== 'undefined' && cityMapPage && cityMapPage.finderOn());
   await page.evaluate(() => cityMapPage.ready);
   // No cards under the map repeat the tabs and the Wiki (declutter E4).

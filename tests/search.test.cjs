@@ -240,7 +240,7 @@ test('groups come best first; your sites lead a tie and the wiki waits', async (
   } finally { await page.close(); }
 });
 
-test('a synonym says so beside the real name, and "break even" says there is no such figure yet', async () => {
+test('a synonym says so beside the real name, and "break even" leads to the Payback column', async () => {
   const page = await board();
   try {
     await page.keyboard.press('/');
@@ -251,7 +251,7 @@ test('a synonym says so beside the real name, and "break even" says there is no 
     assert.equal((await groups(page))[0], 'Pages & views');
     await typed(page, 'break even');
     const row = page.locator('#ssRes .ss-row', {hasText: 'Portfolio'}).first();
-    assert.match(await row.locator('.p').innerText(), /^no break-even figure yet/);
+    assert.match(await row.locator('.p').innerText(), /^the Payback column · Businesses › Results/);
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });
@@ -914,7 +914,7 @@ test('profit: switching the portfolio to Operations takes the landing down', asy
    test board draws itself: a live refresh then runs as the app runs it. */
 const quietRender = page => page.evaluate(() => {
   ['indexTrends', 'drawMast', 'drawKpis', 'drawAlerts', 'drawRhythm', 'drawSupplyStrip', 'drawChangesView', 'drawImportsView', 'drawDeliveriesView', 'drawProductionView', 'drawFlowView',
-   'drawFlow', 'drawMovers', 'drawMarket', 'drawPlan', 'drawProducts', 'drawStaff', 'drawGoals', 'drawFindLocation',
+   'drawFlow', 'drawMovers', 'drawMarket', 'drawOpenStore', 'drawPlan', 'drawProducts', 'drawStaff', 'drawGoals', 'drawFindLocation',
    'drawOptimizeStaffing', 'drawFooter', 'wireAll', 'refreshCityMaps'].forEach(name => { window[name] = () => {}; });
 });
 

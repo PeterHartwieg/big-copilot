@@ -146,7 +146,8 @@ test('the Portfolio total meets Today\'s profit through the company costs', asyn
       t.innerHTML = `<tfoot>${outsideRows(10)}</tfoot>`;
       return [...t.querySelectorAll('tr')].map(tr => [...tr.cells].map(c => c.textContent.trim()).join('|'));
     });
-    assert.deepEqual(rows, ['Company costs outside sites|-$1,500|', 'Company profit|$10,000|']);
+    // The last cell is the Payback column's, blank on the company rows.
+    assert.deepEqual(rows, ['Company costs outside sites|-$1,500||', 'Company profit|$10,000||']);
     const tip = await page.evaluate(() => {
       const t = document.createElement('table');
       t.innerHTML = `<tfoot>${outsideRows(10)}</tfoot>`;

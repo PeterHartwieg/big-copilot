@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # The stamped assets, plus the copies and generated files check() compares.
 CHECK_INPUTS = tuple(dict.fromkeys(
     build_web.STAMP_INPUTS
-    + ("ba_buildings.json", "ba_demand_curves.json",
+    + ("ba_buildings.json", "ba_demand_curves.json", "ba_item_prices.json", "ba_store_rules.json",
        "web/py/ba_save.py", "web/py/ba_dashboard.py",
        "web/py/ba_buildings.json", "web/py/ba_demand_curves.json",
        "web/version.json", "web/index.html", "web/update.js")
