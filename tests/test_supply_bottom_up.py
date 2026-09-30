@@ -950,3 +950,87 @@ class RoundFourTests(unittest.TestCase):
         c.plan(WH, SHOP, BEER, 500)
         c.run()
         self.assertEqual(c.fact(WH, BEER, "cap")["st"], c.fact(WH, BEER, "dem")["st"])
+
+
+class RoundFiveTests(unittest.TestCase):
+    """Review round 5: a route's target caps only what a site with its own
+    supply asks; need goes to the senders with room, in both walks."""
+
+    @staticmethod
+    def hub_and_shop(hub_import, shop_target):
+        c = Chain()
+        c.site(WH, "Hub")
+        c.hold(WH, BEER, 2000)
+        c.contract(WH, BEER, hub_import)
+        c.shop(SHOP, "Shop")
+        c.hold(SHOP, BEER, 400, 300)
+        c.plan(WH, SHOP, BEER, shop_target)
+        c.run()
+        return c
+
+    def test_a_shop_topped_below_its_sales_still_asks_the_hub_for_them(self):
+        """The shop sells 300 a day on a top-up of 100; nothing else brings
+        it any, so the hub's import is sized on the 2,415 it needs."""
+        c = self.hub_and_shop(700, 100)
+        self.assertEqual((c.verdict(WH)["st"], c.verdict(WH)["setTo"]), ("short", 2420))
+        self.assertEqual(c.verdict(SHOP)["setTo"], 350)
+
+    def test_every_change_applied_together_covers_the_need(self):
+        """Set the hub's import and the shop's top-up to what the list says:
+        nothing is short any more, and nothing asks again."""
+        c = self.hub_and_shop(700, 100)
+        hub, shop = c.verdict(WH)["setTo"], c.verdict(SHOP)["setTo"]
+        after = self.hub_and_shop(hub, shop)
+        self.assertEqual([after.verdict(site)["setTo"] for site in (WH, SHOP)], [None, None])
+        self.assertNotIn(after.verdict(WH)["st"], ("short", "noplan"))
+
+    def depot_from(self, senders):
+        """A depot topped up to 10,000 by each of `senders` (a factory with n
+        machines, or a hub importing so much a week); its shop sells 2,400."""
+        c = Chain()
+        for n, (site, machines, imported) in enumerate(senders):
+            if machines:
+                c.factory(site, "Brewery %d" % n, machines=machines)
+            else:
+                c.site(site, "Hub %d" % n)
+                c.contract(site, BEER, imported)
+                c.hold(site, BEER, 20000)
+            c.plan(site, WH, BEER, 10000)
+        c.site(WH, "Depot")
+        c.hold(WH, BEER, 5000)
+        c.plan(WH, SHOP, BEER, 5000)
+        c.shop(SHOP, "Shop")
+        c.hold(SHOP, BEER, 2000, 2400)
+        c.run()
+        return c
+
+    def test_what_one_sender_cannot_send_goes_to_the_one_with_room(self):
+        """A brewery (720 a day) and a hub importing 20,000 a week both top
+        the depot up: 3,577 a day against 2,760 needed. No import to add."""
+        c = self.depot_from([(BREWERY, 1, 0), (CAFE, 0, 20000)])
+        self.assertEqual((c.verdict(WH)["st"], c.verdict(WH)["why"]), ("covered", "route"))
+        self.assertEqual(c.notes(WH, "order") + c.notes(WH, "unsourced"), [])
+
+    def test_two_unequal_breweries_cover_a_depot_between_them(self):
+        """720 and 2,160 a day against 2,760 needed: covered by the routes."""
+        c = self.depot_from([(BREWERY, 1, 0), (("brew_big", 2), 3, 0)])
+        self.assertEqual((c.verdict(WH)["st"], c.verdict(WH)["why"]), ("covered", "route"))
+
+    def test_demand_holds_a_factory_to_its_capacity_across_all_its_shops(self):
+        """Breweries making 720 and 2,160 a day each top up two shops selling
+        1,200 a day: the small one is held to 720 over both, and the big one
+        makes the rest, 2,400 between them."""
+        c = Chain()
+        small, big = ("brew_small", 1), ("brew_big", 2)
+        c.factory(small, "Small", machines=1)
+        c.factory(big, "Big", machines=3)
+        for shop in (SHOP, ("main_street", 5)):
+            c.shop(shop, "Shop %d" % shop[1])
+            c.hold(shop, BEER, 1000, 1200)
+            c.plan(small, shop, BEER, 3000)
+            c.plan(big, shop, BEER, 3000)
+        c.run()
+        made = {c.business_list[site["s"]]["name"]: line["needHours"]["dem"] * 30 * line["machines"]
+                for site in c.supply["factories"]["sites"] for line in site["lines"]}
+        self.assertEqual(made["Small"], 720)
+        self.assertGreaterEqual(sum(made.values()), 2400)

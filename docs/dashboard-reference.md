@@ -1432,9 +1432,14 @@ brings what the site it tops up needs, never more than its target a day (two rou
 one line reach the higher target, not the sum), and no more than its sender's own
 supply lets it, shared between the sender's routes out of one budget, first what each
 asks, then what is left over for the routes alone to cover a depot whose import becomes
-a backup, so one factory's output is never counted at two depots. A site is asked for no
-more than the route's target a day: what a depot needs beyond that is its own import's to
-bring, and raising the target (its own finding) is the other way, never both. What a sender merely holds is no supply, and what a line at the
+a backup, so one factory's output is never counted at two depots. A site with a supply of
+its own is asked by a route for no more than the route's target a day: what it needs beyond
+that is its own import's to bring, and raising the target (its own finding) is the other
+way, never both. A shop or a depot with nothing else is asked for all it needs, where it
+has one supply only, so raising its target and the import behind it together cover it.
+Two sites topping one up split its need by their targets, but one asked across its routes
+for more than it has hands the rest to the others with room, in both bases alike (and a
+factory in Shop demand is held to what it can make across all the sites it tops up). What a sender merely holds is no supply, and what a line at the
 site itself makes comes off its import's week. Two sites topping each other up with the
 same item form a loop, which counts one way only: from the site with a supply of its own
 toward the one without, then from the one with more left over after its own use to the

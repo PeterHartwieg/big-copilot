@@ -3515,6 +3515,23 @@ def _share_out(total: float, weights: dict, caps: dict) -> dict:
     return parts
 
 
+def _share_with_room(total: float, weights: dict, caps: dict) -> dict:
+    """`total` split between senders by `weights`, a sender held to its cap
+    (caps: sender -> most it can take; absent for no cap) handing the rest to
+    those with room (_share_out()); what none has room for stays where the
+    weights put it, so the sender that cannot bring it is still the one asked.
+    Returns {sender: part}. The one routine the chain's walk and Demand
+    sizing both share a site's need out with."""
+    parts = _share_out(total, weights, caps)
+    left = total - sum(parts.values())
+    whole = sum(w for w in weights.values() if w > 0)
+    if left > 1e-9 and whole:
+        for sender, w in weights.items():
+            if w > 0:
+                parts[sender] = parts.get(sender, 0.0) + left * w / whole
+    return parts
+
+
 def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dict,
                  drops: dict, unknown: set) -> dict:
     """The goods' flow worked out from the sources, never from the delivery log.
@@ -3627,6 +3644,26 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
         for dest, item, target in legs:
             route_cap[(source, dest, item)] = max(route_cap.get((source, dest, item), 0), target or 0)
 
+    # How far each sender's share of a site's need is held down because it
+    # cannot supply all it is asked across its routes: {sender node: k}.
+    # 1 until the first pass below finds a sender asked for more than it has.
+    scale = {}
+
+    def portion(d, residual):
+        """How `d`'s need beyond its own supply is split between its senders:
+        by their targets (shares()), except that a sender asked for more than
+        it has in all (`scale`) is held to its part of what it has, and the
+        rest goes to the others with room (_share_out())."""
+        weights = shares(d)
+        caps = {s: scale[(s, d[1])] * residual * w for s, w in weights.items()
+                if scale.get((s, d[1]), 1.0) < 1.0}
+        if not caps or residual <= 0:
+            return dict(weights)
+        parts = _share_with_room(residual, weights, caps)
+        return {s: part / residual for s, part in parts.items()}
+
+    portions = {}
+
     def total(n, seen=frozenset()):
         """(lines use, lines need, sites use, sites need) a day at `n`."""
         if n in need_memo:
@@ -3644,19 +3681,56 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
             dneed = dln + dsn
             if dneed <= 0:
                 continue
-            f = max(0.0, 1 - own(d) / dneed) * shares(d).get(key, 0.0)
+            rest = max(0.0, 1 - own(d) / dneed)
+            if d not in portions:
+                portions[d] = portion(d, dneed * rest)
+            f = rest * portions[d].get(key, 0.0)
             asked_raw[n][dest] = dneed * f
-            # A round a day brings no more than the route's target: what the
-            # site needs beyond it is its own import's to bring, and is never
-            # asked of this one as well (the top-up finding says to raise it).
+            # A round a day brings no more than the route's target. Where the
+            # site has a supply of its own, what it needs beyond the target is
+            # that supply's to bring, and is not asked of this one as well
+            # (the top-up finding says to raise the target instead). A shop
+            # or a depot with nothing else is asked for all of it: raising
+            # the target then needs the supply behind it.
             cap = route_cap.get((key, dest, item), 0)
-            if dneed * f > cap > 0:
+            if dneed * f > cap > 0 and supplied(dest, item):
                 f *= cap / (dneed * f)
             asked[n][dest] = ((dlu + dsu) * f, dneed * f)
             lu, ln, su, sn = lu + dlu * f, ln + dln * f, su + dsu * f, sn + dsn * f
         need_memo[n] = (lu, ln, su, sn)
         return need_memo[n]
 
+    def has(sender_node):
+        """What a sender with nothing coming in by route can send a day at
+        most (its own supply less its own use); None where routes bring it
+        some (its supply is judged further up) or it is a line the board
+        cannot read."""
+        if senders.get(sender_node) or sender_node in unknown:
+            return None
+        own_need = eats.get(sender_node, (0.0, 0.0))[1] + leaves.get(sender_node, (0.0, 0.0))[1]
+        return max(0.0, own(sender_node) - own_need)
+
+    # A sender asked for more than it has, across all its routes, hands the
+    # rest to the other senders of the sites it tops up, as far as they have
+    # room; a few passes settle it (each pass can only hold senders down).
+    for _pass in range(4):
+        for n in _in_order(nodes):
+            total(n)
+        changed = False
+        for n in _in_order(asked):
+            limit = has(n)
+            if limit is None:
+                continue
+            asked_all = sum(a[1] for a in asked[n].values())
+            if asked_all > limit * (1 + FIT_NOISE) and asked_all > 0:
+                scale[n] = scale.get(n, 1.0) * limit / asked_all
+                changed = True
+        if not changed:
+            break
+        need_memo.clear()
+        asked.clear()
+        asked_raw.clear()
+        portions.clear()
     for n in _in_order(nodes):
         total(n)
 
@@ -3697,7 +3771,8 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
                 legs[dest] = max(legs[dest], target or 0)
         want = {d: asked.get(s_node, {}).get(d, (0.0, 0.0))[1] for d in legs}
         raw = {d: asked_raw.get(s_node, {}).get(d, 0.0) for d in legs}
-        whole = {d: (total((d, item))[1] + total((d, item))[3]) * shares((d, item)).get(source, 0.0)
+        whole = {d: (total((d, item))[1] + total((d, item))[3])
+                    * portions.get((d, item), shares((d, item))).get(source, 0.0)
                  for d in legs}
         have = spare(s_node, seen)
         result = {}
@@ -4589,14 +4664,27 @@ def _supply(
             for s, t in able:
                 share[line][s] += t / whole if whole else 1 / len(able)
         dem_graph["share"] = share
-        # What a factory can make of it a day: a sender whose share would
-        # pass it hands the rest to the others (_share_out()).
+        # What a factory can make of it a day: a sender whose shares would
+        # pass it hands the rest to the others (dem_scale()). None is no cap:
+        # a site that makes none, or a line the board cannot read, taken to
+        # make what it holds with no known capacity.
         dem_graph["cap"] = lambda site, item: (made_amount(site, item) or None) if made(site, item) else None
         dem_drawn.clear()
 
     dem_made(lambda _site, _item: False)
 
-    def demand(key: str, item: str, seen: frozenset = frozenset(), eats=None) -> tuple:
+    def dem_scale(sender: str, item: str, eats) -> float:
+        """How far a factory's shares are held down so that what it is asked
+        for across all the sites it tops up stays within what it can make:
+        1 where it has room (or its capacity is not known)."""
+        cap = dem_graph["cap"](sender, item)
+        if cap is None:
+            return 1.0
+        asked_all = demand(sender, item, eats=eats, held_down=False)[0]
+        return 1.0 if asked_all <= cap or asked_all <= 0 else cap / asked_all
+
+    def demand(key: str, item: str, seen: frozenset = frozenset(), eats=None,
+               held_down: bool = True) -> tuple:
         """What the ends draw of `item` a day from this site down the plan, as
         Demand sizing reads it, and the young shops behind that figure. The
         ends are the shelves and, given `eats(site, item)`, the factory lines
@@ -4605,7 +4693,7 @@ def _supply(
         chain's walk reads it, and sizes nothing."""
         if key not in index or key in seen:
             return 0.0, frozenset()
-        memo = (key, item, eats is not None)
+        memo = (key, item, eats is not None, held_down)
         if memo in dem_drawn:
             return dem_drawn[memo]
         total = sold_dem.get(key, {}).get(item, 0.0)
@@ -4616,9 +4704,19 @@ def _supply(
             weights = dem_graph["share"][(dest_key, item)]
             if not weights.get(key):
                 continue
-            more, behind = demand(dest_key, item, seen | {key}, eats)
-            caps = {sender: dem_graph["cap"](sender, item) for sender in weights}
-            total += _share_out(more, weights, caps).get(key, 0.0)
+            more, behind = demand(dest_key, item, seen | {key}, eats, held_down)
+            if held_down:
+                # A factory asked for more than it can make across all the
+                # sites it tops up is held to its part of that here, and the
+                # rest goes to the other senders with room (_share_with_room).
+                caps = {}
+                for sender, w in weights.items():
+                    k = dem_scale(sender, item, eats)
+                    if k < 1.0:
+                        caps[sender] = k * more * w / sum(weights.values())
+                total += _share_with_room(more, weights, caps).get(key, 0.0)
+            else:
+                total += more * weights[key] / sum(weights.values())
             ramp |= behind
         dem_drawn[memo] = (total, frozenset(ramp))
         return dem_drawn[memo]
