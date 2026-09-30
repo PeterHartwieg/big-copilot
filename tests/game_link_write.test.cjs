@@ -1343,9 +1343,14 @@ function drawnPayload() {
     'import es3_fixture as f, ba_dashboard',
     'from ba_save import Names, load_save',
     'c = f.link_company()',
-    'depot = next(b for b in c["BuildingRegistrations"] if b["BusinessName"] == "HART. Depot")',
-    'depot["deliveryTransactions"] = [{"dayOfDelivery": d, "deliveryItems": [',
-    '    {"itemName": "ba:itemname_paperbag", "amountDelivered": -800}]} for d in range(27, 34)]',
+    // The depot's draw comes from the sources, not the delivery log: HART.
+    // Gifts sells 800 paper bags a day and the depot tops it up each morning.
+    'gifts = next(b for b in c["BuildingRegistrations"] if b["BusinessName"] == "HART. Gifts")',
+    'gifts["orderHistory"] = [{"dayNumber": d, "totalCustomers": 400, "itemSales": [',
+    '    {"itemName": "ba:itemname_paperbag", "amountSold": 800, "totalPrice": 800.0}]} for d in range(27, 34)]',
+    'c["logisticsManagerPlans"] = [{"targetAddress": f.address("ba:street_pier", 9), "destinations": [',
+    '    {"deliveryTargetAddress": f.address("ba:street_secondavenue", 10),',
+    '     "stockTargets": [{"itemName": "ba:itemname_paperbag", "targetAmount": 2000}]}]}]',
     `open(${JSON.stringify(file)}, "wb").write(f.encode(c))`,
     `sys.stdout.write(json.dumps(ba_dashboard.extract(load_save(${JSON.stringify(file)}), Names({}), None)))`,
   ].join('\n');
@@ -1358,7 +1363,8 @@ test('imports: the figure written is the one extraction worked out, the margin a
   const d = drawnPayload();
   const s = d.businesses.findIndex((b) => b.name === 'HART. Depot');
   const fact = d.supply.facts[s]['ba:itemname_paperbag'];
-  // 800 a day leave against a 3,800 level: Python calls it short and sizes it.
+  // HART. Gifts sells 800 a day, which the depot tops up against a 3,800
+  // level: Python calls it short and sizes it.
   assert.equal(fact.st, 'short');
   assert.ok(Number.isFinite(fact.setTo) && fact.setTo > 3800, JSON.stringify(fact));
   const page = await linked(t, {approved: true, data: JSON.stringify(d)});
