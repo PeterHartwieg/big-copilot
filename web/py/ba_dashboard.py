@@ -7740,27 +7740,30 @@ def _working_here(rows: list, pool: list, hires: list, state: dict, *leave) -> l
 
 
 def _lift_short_hires(rows: list, hires: list, pool: list, state: dict, here: dict,
-                      before: dict) -> None:
+                      before: dict, entry: dict) -> None:
     """Lift a hire week under full time's 30 hours to 30, or leave it as it is.
 
     Candidates ask for full time (Peter, 29 September 2026: "if there's 16 h
     left over, that means one needs to reduce the hours of another full-time
     worker to make room for another full-time worker at >30 h"), so a hire
-    week of 16 hours is a week nobody takes. Two ways, the first that works:
+    week of 16 hours is a week nobody takes. Three ways, the first that works:
 
-    1. Hours off the people here of the hire's role who have the most
-       (_lift_hire()): whole lines, or a piece of MIN_SPLIT or more, only
-       while they keep their own floor and day count.
-    2. Where the hours above everybody's floor are too few -- a supermarket's
-       three servers at 32, 40 and 31 hours and a 16-hour hire are 119 hours,
-       one short of four full weeks -- the site has one person too many: one
-       of that role gives up all of their week and is spare (no hours is fine,
-       rule 4), a bench member before the site's own, then the fewest hours
-       first. Their lines go to the hire first and then to whoever the rank
-       puts first among those already working here (_working_here()), never
-       to somebody not yet on the week, then step 1 again. Kept only where
-       everybody who took a line still meets the band floor and day count
-       they met before, so the site ends with one person fewer.
+    1. Hours off the full weeks here (_lift_hire()): the people and the other
+       hires of the role with the most hours first, whole lines or a piece of
+       MIN_SPLIT or more, each keeping 30 hours and their own floor and day
+       count -- only somebody on a full week gives.
+    2. Where that is too little -- a supermarket's three servers at 32, 40
+       and 31 hours and a 16-hour hire are 119 hours, one short of four full
+       weeks -- the site has one person too many: one of that role gives up
+       all of their week and is spare (no hours is fine, rule 4), a bench
+       member before the site's own, then the fewest hours first. Their lines
+       go to the hire first and then to whoever the rank puts first among
+       those already working here (_working_here()), never to somebody not
+       yet on the week; step 1 again after. A taker only gains, within their
+       ceiling and day count, so no demand of theirs breaks.
+    3. Where nobody can be spared either, step 1 with each giver keeping only
+       their own band's floor (none without one), so every demand of theirs
+       still holds.
 
     All or nothing a hire at a time; the shortest hire week first;
     deterministic.
@@ -7783,77 +7786,107 @@ def _lift_short_hires(rows: list, hires: list, pool: list, state: dict, here: di
         state.update(weeks)
         here["rostered"] = rostered
 
+    def givers(hire):
+        # The people here and the other hires: a hire that works gives too.
+        return {p["id"]: p for p in everyone if p["id"] != hire["id"]}
+
     for hire in sorted(hires, key=lambda h: (state[h["id"]]["hours"], h["id"])):
         hours = state[hire["id"]]["hours"]
         if not 0 < hours < floor:
             continue
         saved = snapshot()
-        if _lift_hire(hire, rows, by_id, state, before, floor):
+        if _lift_hire(hire, rows, givers(hire), state, before, floor, full=True):
             continue
         restore(saved)
-        own = collections.defaultdict(list)
-        for row in rows:
-            if row["employee"] in by_id:
-                own[row["employee"]].append(row)
-        spares = sorted(
-            (pid for pid, mine in own.items()
-             if any(row["skill"] == hire["skill"] for row in mine)
-             # Every hour of theirs here is one of these lines: a week kept
-             # as it stands (rule 4) is not theirs to give.
-             and state[pid]["hours"] - before.get(pid, (0.0, 0))[0]
-             == sum(row["to"] - row["from"] for row in mine)),
-            key=lambda pid: (by_id[pid]["addr"] is not None, state[pid]["hours"], str(pid)))
-        for pid in spares:
-            saved = snapshot()
-            person, moved, took = by_id[pid], True, set()
-            others = _working_here(rows, pool, hires, state, pid, hire["id"])
-            for row in sorted(own[pid], key=HIRE_ORDERS[0]):
-                _week_off(row, person, state, rows)
-                if _may_take(hire, row) and _has_room(hire, state[hire["id"]], row):
-                    taker = hire
-                else:
-                    taker = _best_for(row, [p for p in others if _may_take(p, row)], state, here)
-                if taker is None:
-                    moved = False
-                    break
-                took.add(taker["id"])
-                _take_over(row, taker, state)
-            everyone_by_id = {p["id"]: p for p in everyone}
-            if moved and (state[hire["id"]]["hours"] >= floor
-                          or _lift_hire(hire, rows, by_id, state, before, floor)) \
-                    and not any(
-                        _short_of_demands(everyone_by_id[tid], state[tid], before.get(tid, (0.0, 0)))
-                        and not _short_of_demands(everyone_by_id[tid], saved[2][tid],
-                                                  before.get(tid, (0.0, 0)))
-                        for tid in took if tid != hire["id"]):
-                here["rostered"].discard(pid)
-                break
+        if _stand_one_down(hire, rows, pool, hires, by_id, state, here, before, floor,
+                           snapshot, restore, givers(hire)):
+            continue
+        saved = snapshot()
+        if not _lift_hire(hire, rows, givers(hire), state, before, floor, full=False):
             restore(saved)
+    # And a week the hires' settling cut to a part week -- it lifts a hire to
+    # 30 out of hours above other people's floors, so a part-timer at 28 and
+    # a 16-hour hire come out 14 and 30 -- is one person too many where the
+    # hires and the people already working can take all of it. Only those
+    # this pass cut (`entry` is everybody's hours when it began): a part
+    # week the placement gave is not the hires' doing.
+    cut = {pid for pid in by_id if state[pid]["hours"] < entry.get(pid, 0)}
+    for hire in sorted(hires, key=lambda h: (state[h["id"]]["hours"], h["id"])):
+        if state[hire["id"]]["hours"] >= floor and cut:
+            _stand_one_down(hire, rows, pool, hires, by_id, state, here, before, floor,
+                            snapshot, restore, givers(hire), below=floor, among=cut)
 
 
-def _lift_hire(hire: dict, rows: list, by_id: dict, state: dict, before: dict,
-               floor: int) -> bool:
-    """Give a hire hours off the people here of their role until they reach `floor`.
+def _stand_one_down(hire, rows, pool, hires, by_id, state, here, before, floor,
+                    snapshot, restore, givers, below=None, among=None) -> bool:
+    """_lift_short_hires()'s second way: one person of the hire's role spare, all or nothing.
 
-    The people with the most hours first; their lines by the clock, whole
-    where the hire has room and the giver keeps their band's floor and day
-    count, or the end of one, at least MIN_SPLIT and leaving MIN_SPLIT.
-    Whether the hire reached the floor; the caller undoes it where not.
+    `below` and `among`, where given, limit it to people working fewer hours
+    than that here, and to those ids.
+    """
+    own = collections.defaultdict(list)
+    for row in rows:
+        if row["employee"] in by_id:
+            own[row["employee"]].append(row)
+    spares = sorted(
+        (pid for pid, mine in own.items()
+         if any(row["skill"] == hire["skill"] for row in mine)
+         # Every hour of theirs here is one of these lines: a week kept as it
+         # stands (rule 4) is not theirs to give.
+         and state[pid]["hours"] - before.get(pid, (0.0, 0))[0]
+         == sum(row["to"] - row["from"] for row in mine)
+         and (below is None or state[pid]["hours"] - before.get(pid, (0.0, 0))[0] < below)
+         and (among is None or pid in among)),
+        # The bench first (no address of their own here), as the placer ranks them.
+        key=lambda pid: (0 if not by_id[pid]["addr"] else 1, state[pid]["hours"], str(pid)))
+    for pid in spares:
+        saved = snapshot()
+        person, moved = by_id[pid], True
+        others = _working_here(rows, pool, hires, state, pid, hire["id"])
+        for row in sorted(own[pid], key=HIRE_ORDERS[0]):
+            _week_off(row, person, state, rows)
+            if _may_take(hire, row) and _has_room(hire, state[hire["id"]], row):
+                taker = hire
+            else:
+                taker = _best_for(row, [p for p in others if _may_take(p, row)], state, here)
+            if taker is None:
+                moved = False
+                break
+            _take_over(row, taker, state)
+        if moved and (state[hire["id"]]["hours"] >= floor
+                      or _lift_hire(hire, rows, {k: v for k, v in givers.items() if k != pid},
+                                    state, before, floor, full=True)):
+            here["rostered"].discard(pid)
+            return True
+        restore(saved)
+    return False
+
+
+def _lift_hire(hire: dict, rows: list, givers: dict, state: dict, before: dict,
+               floor: int, full: bool) -> bool:
+    """Give a hire hours off the people and hires here of their role until they reach `floor`.
+
+    The givers with the most hours first; their lines by the clock, whole
+    where the hire has room and the giver keeps what they must, or the end of
+    one, at least MIN_SPLIT and leaving MIN_SPLIT. With `full` a giver keeps
+    30 hours as well as their own floor, so only a full week gives; without
+    it their band's floor alone, none without a band. Their day count holds
+    either way. Whether the hire reached the floor; the caller undoes it
+    where not.
     """
     mine = state[hire["id"]]
     while mine["hours"] < floor:
         need = floor - mine["hours"]
         donors = sorted({row["employee"] for row in rows
-                         if row["employee"] in by_id and row["skill"] == hire["skill"]},
+                         if row["employee"] in givers and row["skill"] == hire["skill"]},
                         key=lambda pid: (-state[pid]["hours"], str(pid)))
         moved = False
         for pid in donors:
-            giver, week = by_id[pid], state[pid]
+            giver, week = givers[pid], state[pid]
             here_hours = week["hours"] - before.get(pid, (0.0, 0))[0]
-            # Somebody with no hours demand keeps a full week too: trimming
-            # them part way keeps an extra person on (step 2 stands them down
-            # whole where the site can do without them).
-            keep = giver["band"][0] if giver["band"] else FULL_TIME[0]
+            keep = giver["band"][0] if giver["band"] else 0
+            if full:
+                keep = max(keep, FULL_TIME[0])
             spare = here_hours - keep
             if spare < 1:
                 continue
@@ -7933,13 +7966,14 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
     deterministic throughout, each try starting from the week as it was, so
     an answer asked twice is looked up, not worked out again.
 
-    A hire week under 30 hours is then lifted to full time where the site
-    allows it (_lift_short_hires()), and one under 10 handed to others
-    (_absorb_scraps()).
+    A hire week under 10 hours is then handed to others (_absorb_scraps()),
+    and one under 30 lifted to full time where the site allows it
+    (_lift_short_hires()).
 
     A hire week is `{"hours", "busy", "slots"}`, the slots being the week's
     own rows, which then have nobody on them again (`p: null` on the page).
     """
+    entry = {person["id"]: state[person["id"]]["hours"] for person in pool}
     holes = collections.defaultdict(list)
     for row in shifts:
         if row["employee"] is None:
@@ -8238,7 +8272,7 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
         for skill in grow:
             count[skill] += 1
     _absorb_scraps(rows, hires, pool, state, here)
-    _lift_short_hires(rows, hires, pool, state, here, before)
+    _lift_short_hires(rows, hires, pool, state, here, before, entry)
     ids = {hire["id"]: hire for hire in hires}
     theirs = collections.defaultdict(list)
     for row in rows:
