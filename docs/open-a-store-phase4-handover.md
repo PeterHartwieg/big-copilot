@@ -48,6 +48,9 @@ spare staff and planner) merged. Main wins on staffing and marketing; step 5 ada
   places with nobody. Only the row's text differs by path; a table-driven test covers them.
   Review round 6: the plan's bench (fixed moves with no week in `S.weeks`) joins the step as
   "assign n people from the bench"; the schedule step asks only for people the plan uses.
+  Review round 7: the bench is state too: it blocks "covered", every text adds "n from the
+  bench to assign", and a store whose only people are on the bench says "n hired, on the
+  bench · assign them here".
 - **Marketing**: phase 3's own write (`osMarketingWrite`, `OS_MK_WIRE`, the `marketingOn`
   payload key) is gone. The row reads main's `campaigns` and `marketingPlan`, and the button,
   **Set the cheapest mix**, calls main's `gwMarketing([key], "mix")`; it is disabled with

@@ -530,11 +530,15 @@ test('every pending path names the short week\'s planned hire or move in the gam
   const cases = [
     {name: 'need > 0', biz: {staff: 1, stationShifts: 2}, weeks: [['ba:skill_cleaning', 'hire']], text: /1 of 2 people/, schedule: false},
     {name: 'nobody hired', biz: {staff: 0, stationShifts: 0}, weeks: [], text: /Nobody is hired yet/, schedule: false},
-    {name: 'nobody hired, bench', biz: {staff: 0, stationShifts: 0}, weeks: [], bench: 2, text: /Nobody is hired yet/, schedule: false},
-    {name: 'need > 0, bench', biz: {staff: 1, stationShifts: 2}, weeks: [['ba:skill_cleaning', 'hire']], bench: 1, text: /1 of 2 people/, schedule: false},
-    {name: 'no hours scheduled', biz: {staff: 2, stationShifts: 0}, weeks: [], text: /no hours scheduled yet/, schedule: true},
+    {name: 'nobody hired, bench', biz: {staff: 0, stationShifts: 0}, weeks: [], bench: 2, text: /^2 people hired, on the bench · assign them here$/, schedule: false},
+    {name: 'need > 0, bench', biz: {staff: 1, stationShifts: 2}, weeks: [['ba:skill_cleaning', 'hire']], bench: 1, text: /1 of 2 people .* · 1 from the bench to assign/, schedule: false},
+    {name: 'covered, bench', biz: {staff: 2, stationShifts: 3}, weeks: [], bench: 1, text: /^2 people on staff · 1 from the bench to assign$/, schedule: false},
+    /* the schedule step is for the people the plan uses: a spare alone gets none */
+    {name: 'no hours, only a spare', biz: {staff: 1, stationShifts: 0, staffIdle: ['sp1']}, weeks: [], text: /no hours scheduled yet/, schedule: false},
+    {name: 'no hours, one used and a spare', biz: {staff: 2, stationShifts: 0, staffIdle: ['sp1']}, weeks: [], text: /no hours scheduled yet/, schedule: true},
+    {name: 'no hours scheduled', biz: {staff: 2, stationShifts: 0, staffIdle: []}, weeks: [], text: /no hours scheduled yet/, schedule: true},
     {name: 'has no hours', biz: {staff: 2, stationShifts: 3}, weeks: [], site: GAP, text: /1 person has no hours/, schedule: true},
-    {name: 'covered, short only', biz: {staff: 2, stationShifts: 3}, weeks: [], text: /^2 people on staff$/, schedule: false},
+    {name: 'covered, short only', biz: {staff: 2, stationShifts: 3, staffIdle: []}, weeks: [], text: /^2 people on staff$/, schedule: false},
   ];
   for (const who of ['hire', 'move']) {
     for (const c of cases) {
@@ -654,7 +658,7 @@ test('the real staff gate offers Staff this site for a bench move with no hires'
   assert.ok(await page.evaluate(site => osStaffWork(site) > 0, SITE));
   const staff = (await rows(page))[2];
   assert.equal(staff.state, 'todo');
-  assert.match(staff.sub, /Nobody is hired yet/);
+  assert.match(staff.sub, /^1 person hired, on the bench · assign them here$/);
   assert.equal(staff.act, 'Staff this site');
   await page.evaluate(() => { window.__calls = []; window.hrReview = o => window.__calls.push(o); });
   await page.locator('#osBody .os-ck').nth(2).locator('[data-os-write="hire"]').click();

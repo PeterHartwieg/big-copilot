@@ -33174,12 +33174,18 @@ function osCkStaff(plan, opened){
   const weekStep = have - spSpareIds(opened).length > 0 && (!scheduled || gap || shortH) ? week : "";
   const act = osStaffAct(plan, [handAll, benchStep, weekStep].filter(Boolean).join(" "))
     + (bare.size ? osIngame(tt("gr.os.ck.staff.headhunter", "No candidate fits yet: ask a <b>headhunter</b> for {roles}, at {address}.", {roles: roles(bare), address})) : "");
+  /* Said in every text but the bench-only one: people the plan counts on
+     who are not assigned here yet. */
+  const benchTxt = benched ? ` · <span class="w">${tt("gr.os.ck.staff.bench", {one: "{n} from the bench to assign", other: "{n} from the bench to assign"}, {n: benched})}</span>` : "";
   if(!need){
-    const covered = have > 0 && scheduled && !gap && (S.variant !== "demand" || opened.hasTraded);
+    const covered = have > 0 && scheduled && !gap && !benched && (S.variant !== "demand" || opened.hasTraded);
     if(covered && !anyShort) return osCk("people", "done", title, tt("gr.os.ck.staff.done",
       {one: "{n} person · <span class=\"ok\">the opening hours are covered</span>", other: "{n} people · <span class=\"ok\">the opening hours are covered</span>"}, {n: have}));
+    /* Hired before opening and not assigned anywhere yet: on the bench. */
+    if(!have && benched) return osCk("people", "todo", title, tt("gr.os.ck.staff.benchonly",
+      {one: "{n} person hired, on the bench · <span class=\"w\">assign them here</span>", other: "{n} people hired, on the bench · <span class=\"w\">assign them here</span>"}, {n: benched}) + tooFew, act);
     let sub;
-    if(covered) sub = tt("gr.os.ck.staff.count", {one: "{n} person on staff", other: "{n} people on staff"}, {n: have});
+    if(have > 0 && scheduled && !gap && (S.variant !== "demand" || opened.hasTraded)) sub = tt("gr.os.ck.staff.count", {one: "{n} person on staff", other: "{n} people on staff"}, {n: have});
     else if(have > 0 && !scheduled) sub = tt("gr.os.ck.staff.idle",
       {one: "{n} person on staff · <span class=\"w\">no hours scheduled yet</span>", other: "{n} people on staff · <span class=\"w\">no hours scheduled yet</span>"}, {n: have});
     else if(have > 0 && gap){
@@ -33190,7 +33196,7 @@ function osCkStaff(plan, opened){
       ? tt("gr.os.ck.staff.unsized", {one: "{n} person on staff · <span class=\"w\">the board sizes the staff once the shop has sales</span>",
         other: "{n} people on staff · <span class=\"w\">the board sizes the staff once the shop has sales</span>"}, {n: have})
       : tt("gr.os.ck.staff.nobody", "Nobody is hired yet");
-    return osCk("people", "todo", title, sub + tooFew, act);
+    return osCk("people", "todo", title, sub + benchTxt + tooFew, act);
   }
   const bySkill = bySkillOf(places);
   /* People the plan gives no week (spSpareIds()) are spare, not staff it
@@ -33200,7 +33206,7 @@ function osCkStaff(plan, opened){
   let sub = tt("gr.os.ck.staff.need", "{have} of {total} people · <span class=\"w\">{need} more: {roles}</span>",
     {have: used, total, need, roles: roles(bySkill)});
   if(bare.size) sub += ` · ${tt("gr.os.ck.staff.nocand", {one: "{n} without a candidate in your headhunters' lists", other: "{n} without a candidate in your headhunters' lists"}, {n: count(bare)})}`;
-  return osCk("people", used > 0 ? "part" : "todo", title, sub + tooFew, act, Math.round(100 * used / total));
+  return osCk("people", used > 0 ? "part" : "todo", title, sub + benchTxt + tooFew, act, Math.round(100 * used / total));
 }
 function osCkUniforms(plan, opened){
   const title = tt("gr.os.ck.uni", "Uniforms");
