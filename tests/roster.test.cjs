@@ -599,17 +599,29 @@ test('a bench member is counted off every role they hold, not just the first', a
   } finally { await page.close(); }
 });
 
-test('only the first few people the plan would leave short are named', async () => {
+test('somebody the plan gives no hours is spare, not short of a demand', async () => {
   const page = await shop('full');
   try {
     const text = await page.locator('#sp-roster .sp-hc').innerText();
     // Two counters hold 168 hours, which is four full weeks: the full-timers
-    // left over get nothing here rather than a share of somebody else's week,
-    // because none of them can make the rest up at another shop. Five of them
-    // is more than the three the line has room for.
+    // left over get nothing here rather than a share of somebody else's week.
+    // They are spare -- a chance to run with fewer people (Peter, 30
+    // September 2026) -- so the role counts them and no chip names a demand.
     assert.equal(ROWS.full.shortHours.length, 5);
-    assert.match(text, /0\/30 h/);
-    assert.match(text, /9 spare/, 'and the role counts them all');
+    assert.ok(ROWS.full.shortHours.every(r => !r.hours));
+    assert.match(text, /9 spare/, 'the role counts them all');
+    assert.doesNotMatch(text, /0\/30 h/);
+    assert.equal(await page.locator('#sp-roster .sp-hc .sp-new[data-p]').count(), 0);
+  } finally { await page.close(); }
+});
+
+test('only the first few people the plan would leave short are named', async () => {
+  const page = await shop('full', row => {
+    row.shortHours = [1, 2, 3, 4, 5].map(p => ({p, hours: 20 + p, min: 30, planned: true}));
+  });
+  try {
+    const text = await page.locator('#sp-roster .sp-hc').innerText();
+    assert.match(text, /21\/30 h/);
     assert.match(text, /\+2 more/, 'five short, three named');
   } finally { await page.close(); }
 });

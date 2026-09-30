@@ -307,6 +307,49 @@
    "text": "Interior design falls short of what customers expect here",
    "unit": "",
    "worth": null
+  },
+  {
+   "group": "promotion",
+   "i18n": {
+    "site": [
+     "f.site.sites",
+     {
+      "n": 2
+     }
+    ],
+    "text": [
+     "f.promotion.visit",
+     {
+      "agencies": {
+       "m": [
+        "f.list.last",
+        {
+         "a": "CityAds",
+         "b": "McCain's eMarketing"
+        },
+        "CityAds, McCain's eMarketing"
+       ]
+      },
+      "sites": {
+       "m": [
+        "f.list.last",
+        {
+         "a": "HART. Gifts",
+         "b": "HART. Bare"
+        },
+        "HART. Gifts, HART. Bare"
+       ]
+      }
+     }
+    ]
+   },
+   "id": "5301e84e92",
+   "level": "info",
+   "site": "2 sites",
+   "siteKey": null,
+   "text": "Visit CityAds, McCain's eMarketing once: no campaign can be set at HART. Gifts, HART. Bare before that",
+   "unit": "",
+   "worth": null
   }
  ],
  "alertsDemand": {
@@ -618,6 +661,49 @@
     "text": "Interior design falls short of what customers expect here",
     "unit": "",
     "worth": null
+   },
+   {
+    "group": "promotion",
+    "i18n": {
+     "site": [
+      "f.site.sites",
+      {
+       "n": 2
+      }
+     ],
+     "text": [
+      "f.promotion.visit",
+      {
+       "agencies": {
+        "m": [
+         "f.list.last",
+         {
+          "a": "CityAds",
+          "b": "McCain's eMarketing"
+         },
+         "CityAds, McCain's eMarketing"
+        ]
+       },
+       "sites": {
+        "m": [
+         "f.list.last",
+         {
+          "a": "HART. Gifts",
+          "b": "HART. Bare"
+         },
+         "HART. Gifts, HART. Bare"
+        ]
+       }
+      }
+     ]
+    },
+    "id": "5301e84e92",
+    "level": "info",
+    "site": "2 sites",
+    "siteKey": null,
+    "text": "Visit CityAds, McCain's eMarketing once: no campaign can be set at HART. Gifts, HART. Bare before that",
+    "unit": "",
+    "worth": null
    }
   ],
   "minor": {
@@ -638,6 +724,7 @@
     "toiletprivacy": false
    },
    "basket": null,
+   "campaigns": [],
    "capacity": 0,
    "closed": false,
    "code": "HK",
@@ -661,6 +748,26 @@
    "margin": null,
    "marketing": 0.0,
    "marketingIndex": 0,
+   "marketingPlan": {
+    "agencies": [],
+    "costNow": 0,
+    "costPlan": null,
+    "marketingNow": 0,
+    "marketingPlan": null,
+    "needsSetup": false,
+    "on": null,
+    "promotionNow": 0,
+    "promotionPlan": null,
+    "setupAgencies": [],
+    "setupTypes": [],
+    "target": null,
+    "visit": [
+     "ba:street_secondavenue#5",
+     "ba:street_thirdavenue#17"
+    ],
+    "visitRaises": true,
+    "was": []
+   },
    "missingAmenities": [
     "ba:customerdemand_toilet",
     "ba:customerdemand_toiletprivacy",
@@ -707,6 +814,10 @@
    "staff": 2,
    "staffCost": 0.0,
    "staffDemands": [],
+   "staffIdle": [
+    "AAAAemployeeAAAAAAAAAAAA",
+    "BBBBemployeeBBBBBBBBBBBB"
+   ],
    "staffLacking": 0,
    "staffLackingAny": 0,
    "staffLackingCompany": 0,
@@ -736,6 +847,7 @@
     "toiletprivacy": false
    },
    "basket": null,
+   "campaigns": [],
    "capacity": 0,
    "closed": false,
    "code": "",
@@ -759,6 +871,7 @@
    "margin": null,
    "marketing": 0.0,
    "marketingIndex": 0,
+   "marketingPlan": null,
    "missingAmenities": [
     "ba:customerdemand_toilet",
     "ba:customerdemand_toiletprivacy",
@@ -799,6 +912,9 @@
    "staff": 1,
    "staffCost": 0.0,
    "staffDemands": [],
+   "staffIdle": [
+    "CCCCemployeeCCCCCCCCCCCC"
+   ],
    "staffLacking": 0,
    "staffLackingAny": 0,
    "staffLackingCompany": 0,
@@ -828,6 +944,7 @@
     "toiletprivacy": false
    },
    "basket": null,
+   "campaigns": [],
    "capacity": 0,
    "closed": false,
    "code": "GD",
@@ -843,6 +960,25 @@
    "margin": null,
    "marketing": 0.0,
    "marketingIndex": 0,
+   "marketingPlan": {
+    "agencies": [],
+    "costNow": 0,
+    "costPlan": null,
+    "marketingNow": 0,
+    "marketingPlan": null,
+    "needsSetup": false,
+    "on": null,
+    "promotionNow": 0,
+    "promotionPlan": null,
+    "setupAgencies": [],
+    "setupTypes": [],
+    "target": null,
+    "visit": [
+     "ba:street_secondavenue#5"
+    ],
+    "visitRaises": true,
+    "was": []
+   },
    "missingAmenities": [
     "ba:customerdemand_toilet",
     "ba:customerdemand_toiletprivacy",
@@ -876,6 +1012,7 @@
    "staff": 0,
    "staffCost": 0,
    "staffDemands": [],
+   "staffIdle": [],
    "staffLacking": 0,
    "staffLackingAny": 0,
    "staffLackingCompany": 0,
@@ -895,6 +1032,7 @@
    "address": "9 Pier",
    "amenities": null,
    "basket": null,
+   "campaigns": [],
    "capacity": 0,
    "closed": false,
    "code": "LM",
@@ -910,6 +1048,7 @@
    "margin": null,
    "marketing": 0.0,
    "marketingIndex": 0,
+   "marketingPlan": null,
    "missingAmenities": [],
    "missingUniformLocker": false,
    "name": "HART. Depot",
@@ -937,6 +1076,7 @@
    "staff": 0,
    "staffCost": 0,
    "staffDemands": [],
+   "staffIdle": [],
    "staffLacking": 0,
    "staffLackingAny": 0,
    "staffLackingCompany": 0,
@@ -1173,7 +1313,147 @@
     "new": false,
     "noHours": true,
     "planned": true,
-    "plans": {},
+    "plans": {
+     "full": {
+      "bench": [],
+      "fewer": [],
+      "hireWeeks": [
+       {
+        "band": "full",
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 0,
+          "f": 0,
+          "shift": 0,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 1,
+          "f": 0,
+          "shift": 2,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 2,
+          "f": 0,
+          "shift": 4,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 6,
+          "f": 0,
+          "shift": 12,
+          "station": null,
+          "t": 12
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 0,
+          "f": 12,
+          "shift": 1,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 1,
+          "f": 12,
+          "shift": 3,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 2,
+          "f": 12,
+          "shift": 5,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 6,
+          "f": 12,
+          "shift": 13,
+          "station": null,
+          "t": 24
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 3,
+        "hours": 36,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 3,
+          "f": 0,
+          "shift": 6,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 4,
+          "f": 0,
+          "shift": 8,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 5,
+          "f": 0,
+          "shift": 10,
+          "station": null,
+          "t": 12
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 3,
+        "hours": 36,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 3,
+          "f": 12,
+          "shift": 7,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 4,
+          "f": 12,
+          "shift": 9,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 5,
+          "f": 12,
+          "shift": 11,
+          "station": null,
+          "t": 24
+         }
+        ]
+       }
+      ],
+      "shortHires": [],
+      "spare": [],
+      "spareSkills": {}
+     }
+    },
     "stations": {}
    },
    {
@@ -1201,7 +1481,147 @@
     "new": false,
     "noHours": true,
     "planned": true,
-    "plans": {},
+    "plans": {
+     "full": {
+      "bench": [],
+      "fewer": [],
+      "hireWeeks": [
+       {
+        "band": "full",
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 0,
+          "f": 0,
+          "shift": 0,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 1,
+          "f": 0,
+          "shift": 2,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 2,
+          "f": 0,
+          "shift": 4,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 6,
+          "f": 0,
+          "shift": 12,
+          "station": null,
+          "t": 12
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 0,
+          "f": 12,
+          "shift": 1,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 1,
+          "f": 12,
+          "shift": 3,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 2,
+          "f": 12,
+          "shift": 5,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 6,
+          "f": 12,
+          "shift": 13,
+          "station": null,
+          "t": 24
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 3,
+        "hours": 36,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 3,
+          "f": 0,
+          "shift": 6,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 4,
+          "f": 0,
+          "shift": 8,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 5,
+          "f": 0,
+          "shift": 10,
+          "station": null,
+          "t": 12
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 3,
+        "hours": 36,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 3,
+          "f": 12,
+          "shift": 7,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 4,
+          "f": 12,
+          "shift": 9,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 5,
+          "f": 12,
+          "shift": 11,
+          "station": null,
+          "t": 24
+         }
+        ]
+       }
+      ],
+      "shortHires": [],
+      "spare": [],
+      "spareSkills": {}
+     }
+    },
     "stations": {}
    },
    {
@@ -1229,7 +1649,147 @@
     "new": true,
     "noHours": true,
     "planned": true,
-    "plans": {},
+    "plans": {
+     "full": {
+      "bench": [],
+      "fewer": [],
+      "hireWeeks": [
+       {
+        "band": "full",
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 0,
+          "f": 0,
+          "shift": 0,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 1,
+          "f": 0,
+          "shift": 2,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 2,
+          "f": 0,
+          "shift": 4,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 6,
+          "f": 0,
+          "shift": 12,
+          "station": null,
+          "t": 12
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 4,
+        "hours": 48,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 0,
+          "f": 12,
+          "shift": 1,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 1,
+          "f": 12,
+          "shift": 3,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 2,
+          "f": 12,
+          "shift": 5,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 6,
+          "f": 12,
+          "shift": 13,
+          "station": null,
+          "t": 24
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 3,
+        "hours": 36,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 3,
+          "f": 0,
+          "shift": 6,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 4,
+          "f": 0,
+          "shift": 8,
+          "station": null,
+          "t": 12
+         },
+         {
+          "d": 5,
+          "f": 0,
+          "shift": 10,
+          "station": null,
+          "t": 12
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 3,
+        "hours": 36,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 3,
+          "f": 12,
+          "shift": 7,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 4,
+          "f": 12,
+          "shift": 9,
+          "station": null,
+          "t": 24
+         },
+         {
+          "d": 5,
+          "f": 12,
+          "shift": 11,
+          "station": null,
+          "t": 24
+         }
+        ]
+       }
+      ],
+      "shortHires": [],
+      "spare": [],
+      "spareSkills": {}
+     }
+    },
     "stations": {}
    },
    {
@@ -1296,6 +1856,54 @@
   "trendDays": 0,
   "types": []
  },
+ "marketingAgencies": [
+  {
+   "address": "17 Third Avenue",
+   "closed": false,
+   "contact": false,
+   "hours": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ],
+   "key": "ba:street_thirdavenue#17",
+   "name": "McCain's eMarketing",
+   "open": false,
+   "opens": null,
+   "types": [
+    "SmallInternet",
+    "MediumInternet",
+    "LargeInternet"
+   ]
+  },
+  {
+   "address": "5 Second Avenue",
+   "closed": false,
+   "contact": false,
+   "hours": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ],
+   "key": "ba:street_secondavenue#5",
+   "name": "CityAds",
+   "open": false,
+   "opens": null,
+   "types": [
+    "SmallBillboard",
+    "MediumBillboard",
+    "LargeBillboard"
+   ]
+  }
+ ],
  "meta": {
   "build": null,
   "character": "default",

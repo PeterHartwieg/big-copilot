@@ -10,6 +10,7 @@ from ba_dashboard import (
     _chains,
     _hour_findings,
     _hourly,
+    _marketing_agencies,
     _office_posts,
     _plural,
     _service_wages,
@@ -207,7 +208,9 @@ EMPTY_SUPPLY = {"graph": {"links": []}, "shops": [], "idle": [], "nextImportWeek
 
 
 def alerts(businesses, hours=(), day=3):
-    result = _alerts(list(businesses), EMPTY_SUPPLY, [], [], [], list(hours), [], day, 0.0)
+    # The city's marketing agencies as an empty save has them: by name, none a contact.
+    agencies = _marketing_agencies(Save({}, {}, ""))
+    result = _alerts(list(businesses), EMPTY_SUPPLY, [], [], [], list(hours), [], day, 0.0, agencies=agencies)
     return result["lines"] + result["minor"]["rows"]
 
 
@@ -224,8 +227,14 @@ class OfficeBusinessTests(unittest.TestCase):
         self.assertIn("staff", groups)
         self.assertIn("satisfaction", groups)
         self.assertFalse(groups & {"uniform", "bathroom", "sink", "music", "interior",
-                                   "toiletprivacy", "promotion", "unplanned", "unsourced",
-                                   "outruns"})
+                                   "toiletprivacy", "unplanned", "unsourced", "outruns"})
+
+    def test_an_office_short_of_promotion_is_told_which_agency_to_visit(self):
+        # Offices run campaigns too (docs/marketing-write-scope.md): with no
+        # switch and no agency known, the line names the agencies by name.
+        rows = [a for a in alerts([business()]) if a["group"] == "promotion"]
+        self.assertEqual([(a["level"], a["text"]) for a in rows], [
+            ("info", "Visit CityAds, McCain's eMarketing once: no campaign can be set at HART. &Partners before that")])
 
     def test_a_new_office_is_not_short_of_stock_or_deliveries(self):
         [line] = [a for a in alerts([business(revenue=0)]) if a["group"] == "notrading"]

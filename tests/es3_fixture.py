@@ -297,6 +297,9 @@ def link_company() -> dict:
     cleans = {"name": "ba:skill_cleaning", "value": 40.0}
     return {
         "Day": 34, "Hour": 14, "Minute": 0, "Money": 10000.0, "SaveGameName": "Link Co",
+        # A company that has had employees: the game's once-only first-employee
+        # bonus is used (a hire's undo refuses a call that granted it).
+        "usedHappinessModifiers": ["ba:happinessmodifier_first_employee"],
         "gameVariables": {"daysPerYear": 60},
         **{key: [] for key in ("financialSummaries", "Loans", "logisticsManagerPlans", "marketEvents",
                                "productMarketEntries", "PlayerDiplomas", "completedPersonalGoals",

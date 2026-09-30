@@ -397,7 +397,9 @@ class UnreadShopTest(unittest.TestCase):
     def test_a_shop_open_10_to_18_with_no_data_is_staffed_10_to_18_only(self):
         row, site = shop_hiring(weeks=1, opens=((10, 18),))
         self.assertFalse(site["new"])
-        self.assertEqual(sorted(site["plans"]), ["open"])
+        # Full cover beside it, which the page reads only where the player
+        # put the shop on 24/7 (29 September 2026).
+        self.assertEqual(sorted(site["plans"]), ["full", "open"])
         plan = row["openCover"]
         self.assertIs(plan["openAllHours"], False)
         self.assertEqual(plan["open"], [[[10, 18]] for _ in range(7)])
@@ -423,7 +425,7 @@ class UnreadShopTest(unittest.TestCase):
         """Its open-hours plan is full cover of the hours it opens, for where
         the player runs full cover; the page never has full cover itself."""
         row, site = shop_hiring(weeks=2, opens=((10, 18),))
-        self.assertEqual(sorted(site["plans"]), ["demand", "open"])
+        self.assertEqual(sorted(site["plans"]), ["demand", "full", "open"])
         self.assertIs(row["openCover"]["complete"], True)
         self.assertIs(row["openCover"]["openAllHours"], False)
         self.assertTrue(all(10 <= s["f"] and s["t"] <= 18 for s in row["openCover"]["shifts"]))
@@ -443,7 +445,7 @@ class UnreadShopTest(unittest.TestCase):
                         {p["id"]: p["skill"] for p in staff}, ts.LABELS)
         [row] = _staffing(save, ts.LABELS, [business], grids, staff, 0.55)
         site = _hiring(save, [business], [row], {}, [])["sites"][0]
-        self.assertEqual(sorted(site["plans"]), ["open"])
+        self.assertEqual(sorted(site["plans"]), ["full", "open"])
         self.assertIs(row["openCover"]["complete"], False)
         cover = collections.defaultdict(set)
         for s in row["openCover"]["shifts"]:
@@ -589,7 +591,9 @@ class UnstaffedTest(unittest.TestCase):
 class NoOpeningHoursTest(unittest.TestCase):
     def test_a_shop_the_game_opens_no_hour_has_no_plan(self):
         row, site = shop_hiring(weeks=0, opens=())
-        self.assertEqual(site["plans"], {})
+        # Nothing on its own hours; full cover only, for a player who puts it
+        # on 24/7, which opens it (29 September 2026).
+        self.assertEqual(sorted(site["plans"]), ["full"])
         self.assertIs(site["noHours"], True)
         self.assertNotIn("openCover", row)
 
@@ -1024,8 +1028,9 @@ class HiringFromPlansTest(unittest.TestCase):
         business = dict(ts.business(), staff=1)
         hiring = _hiring(save, [business], rows, {}, [])
         [site] = hiring["sites"]
-        # Never full cover, whose write opens a shop 0 to 24: the open-hours plan.
-        self.assertEqual(sorted(site["plans"]), ["demand", "open"])
+        # Full cover as well, for a shop the player puts on 24/7: the page
+        # hires into it, and opens the shop 0 to 24, only there.
+        self.assertEqual(sorted(site["plans"]), ["demand", "full", "open"])
         self.assertNotIn("_hire", rows[0])
         self.assertNotIn("_hire", rows[0]["fullCover"])
         self.assertNotIn("_hire", rows[0]["openCover"])
