@@ -648,6 +648,7 @@
  "f.shortfall.route": "{item}, {when} tükeniyor, rotanın bir sonraki turundan önce; bir rota haftalık ihtiyacı getiriyor (günde {routed:,}) ama yoğun bir gün rafı aşıyor",
  "f.shortfall.route.paused": "{item}, {when} tükeniyor, rotanın bir sonraki turundan önce; bir rota haftalık ihtiyacı getiriyor (günde {routed:,}) ama yoğun bir gün rafı aşıyor; ithalat duraklatıldı",
  "f.shortfall.routed": "{item}, {when} tükeniyor, {arrives:day} ithalatından {by:.1f} gün önce (bir rotanın getirdiği günde {routed:,}'ın ötesinde, günde {rate:,})",
+ "f.shortfall.topup": "{item}, {when} tükeniyor, {arrives:day} ithalatından {by:.1f} gün önce: sabah turları, {site} noktasının kendi ithalatı gelmeden önce buradaki stoğu {target:,} miktarına tamamlıyor",
  "f.site.company": "Şirket",
  "f.site.leases_one": "{n} kiralama",
  "f.site.leases_other": "{n} kiralama",

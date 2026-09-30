@@ -758,6 +758,7 @@
  "f.shortfall.route": "{item} : rupture {when}, avant la prochaine tournée. La tournée couvre la consommation hebdomadaire ({routed:,}/jour), mais pas le jour le plus chargé",
  "f.shortfall.route.paused": "{item} : rupture {when}, avant la prochaine tournée. La tournée couvre la consommation hebdomadaire ({routed:,}/jour), mais pas le jour le plus chargé ; importation en pause",
  "f.shortfall.routed": "{item} : rupture {when}, {by:.1f} jours avant l'import ({arrives:day}) ; {rate:,}/jour en plus des {routed:,}/jour livrés par la tournée",
+ "f.shortfall.topup": "{item} : rupture {when}, {by:.1f} jours avant l'import ({arrives:day}) : les tournées du matin réassortissent {site} à hauteur de {target:,} avant l'arrivée de son propre import",
  "f.site.company": "Entreprise",
  "f.site.leases_many": "{n} baux",
  "f.site.leases_one": "{n} bail",

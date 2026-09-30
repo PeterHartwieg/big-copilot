@@ -200,6 +200,7 @@
  "f.order.passes": "gpt-6-sol",
  "f.order.smart.lasts": "gpt-6-sol",
  "f.order.smart.passes": "gpt-6-sol",
+ "f.shortfall.topup": "gpt-6-sol",
  "f.sum.unsourced_one": "gpt-6-sol",
  "f.sum.unsourced_other": "gpt-6-sol",
  "f.topup.several": "gpt-6-sol",

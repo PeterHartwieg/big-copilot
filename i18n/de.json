@@ -693,6 +693,7 @@
  "f.shortfall.route": "{item} läuft {when} leer, vor der nächsten Runde der Route; eine Route bringt den Wochenbedarf ({routed:,}/Tag), aber ein starker Tag leert das Regal",
  "f.shortfall.route.paused": "{item} läuft {when} leer, vor der nächsten Runde der Route; eine Route bringt den Wochenbedarf ({routed:,}/Tag), aber ein starker Tag leert das Regal; der Import ist pausiert",
  "f.shortfall.routed": "{item} läuft {when} leer, {by:.1f} Tage vor dem Import am {arrives:day} ({rate:,}/Tag über die {routed:,}/Tag einer Route hinaus)",
+ "f.shortfall.topup": "{item} läuft {when} leer, {by:.1f} Tage vor dem Import am {arrives:day}: Die morgendlichen Runden füllen {site} auf {target:,} auf, bevor der eigene Import eintrifft",
  "f.site.company": "Firma",
  "f.site.leases_one": "{n} Mietvertrag",
  "f.site.leases_other": "{n} Mietverträge",

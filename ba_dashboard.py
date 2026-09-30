@@ -4516,15 +4516,23 @@ def _supply(
                 # below charges this line what physically leaves it, its share
                 # of what the depots' plain imports leave (`physical`, a
                 # fraction of the draw).
-                # Until that import lands, and on its morning too (the round
-                # leaves before the import lands), each morning's round tops
-                # the depot up to its target from what this line holds, and
-                # the depot's own draw takes it down again: the walk charges
-                # those rounds as they fall, the first fill-up included
-                # (`before`, a day's units added to the walk's reduced draw,
-                # by day). Sizing keeps the standing shares; only the timing
-                # replays the rounds.
-                off, before = 0.0, collections.defaultdict(float)
+                # Until that import lands the walk replays the depot beside
+                # this line, day by day on the depot's own weekday rhythm (flat
+                # where it feeds machines), and charges this line's rounds to
+                # it (`before`, a day's units added to the walk's reduced draw,
+                # by day). A top-up to the target is a need only where the
+                # depot would otherwise fall short of its own draw before its
+                # import lands; the rest of a fill-up is stock moved, not lost,
+                # unless this line also serves sites with no import of their
+                # own (its own shelves, lines, other sites), which a fill-up
+                # then starves: there each morning's round is charged in full,
+                # up to the target, the landing morning's included (the round
+                # leaves before the import lands). Sizing keeps the standing
+                # shares; only the timing replays the rounds. Several senders
+                # into the depot share its rounds by what each is asked (a
+                # factory's round filling first is not modelled: that takes a
+                # depot with a factory route, a relay and an import at once).
+                off, before, replayed = 0.0, collections.defaultdict(float), []
                 for dest, (asked_use, _asked_need) in node.get("asked", {}).items():
                     dnode = walked[mode].get((dest, item)) or {}
                     plain = sum(d["amount"] for d in drops.get((dest, item), ()) if not d.get("smart")) / 7
@@ -4535,19 +4543,37 @@ def _supply(
                     left = max(0.0, dnode.get("use", 0.0) - plain)
                     reduced = asked_use * max(0.0, 1 - left / routes_use)
                     off += reduced
-                    dest_use = dnode.get("use", 0.0)
+                    replayed.append((dest, asked_use, reduced, routes_use, dnode.get("use", 0.0), there["arrives"]))
+                serves_more = per_day - sum(r[1] for r in replayed) > 0.5
+                tops_up = {}
+                for dest, asked_use, reduced, routes_use, dest_use, arrives in replayed:
                     dest_stock = held.get(dest, {}).get(item, 0)
+                    dest_week = (beat(businesses[index[dest]]) if customer_driven(dest, item)
+                                 else FLAT_WEEK)
                     target = max((a or 0 for d, i, a in edges.get(business["key"], ())
                                   if d == dest and i == item), default=0)
-                    for when in range(day, max(day, there["arrives"] + 1)):
-                        # This morning's round: up to the target, or where the
-                        # plan has none, what the day's draw leaves missing.
-                        fill = (max(0.0, target - dest_stock) if target
-                                else max(0.0, dest_use - dest_stock))
-                        dest_stock = max(dest_stock + fill - dest_use, 0.0)
+                    charged = 0.0
+                    last = arrives + 1 if serves_more else arrives
+                    for when in range(day, max(day, last)):
+                        draw = dest_use * dest_week[when % 7]
+                        if serves_more:
+                            # This morning's round: up to the target, or where
+                            # the plan has none, what the day's draw leaves
+                            # missing; then the day's draw.
+                            fill = (max(0.0, target - dest_stock) if target
+                                    else max(0.0, draw - dest_stock))
+                            dest_stock = max(dest_stock + fill - draw, 0.0)
+                        else:
+                            # Only what the depot needs to reach its import.
+                            fill = max(0.0, draw - dest_stock)
+                            dest_stock = max(dest_stock - draw, 0.0)
                         # This line's part of it, less the reduced draw the
                         # walk already charges.
-                        before[when] += fill * asked_use / routes_use - (asked_use - reduced)
+                        part = fill * asked_use / routes_use
+                        charged += part
+                        before[when] += part - (asked_use - reduced)
+                    if charged > 0:
+                        tops_up[dest] = (charged, target)
                 physical = max(0.0, 1 - off / per_day)
 
                 # Walk real days forward rather than dividing by an average: three
@@ -4609,22 +4635,27 @@ def _supply(
                     i == item and d != business["key"] for d, i, _a in edges.get(business["key"], ()))
                 today = ((0.0 if (business["key"], item) in rounds_today else 1.0)
                          if rounds else left_today)
-                remaining, cover, runs_out = line["units"], 0.0, None
-                for ahead in range(60):
-                    share = today if ahead == 0 else 1.0
-                    today_use = (walk_per_day * walk_weekly[(day + ahead) % 7] + before.get(day + ahead, 0.0)) * share
-                    if today_use <= 0:
-                        remaining -= today_use  # a route's surplus stays on the shelf
+                def cover_walk(extra):
+                    remaining, cover, runs_out = line["units"], 0.0, None
+                    for ahead in range(60):
+                        share = today if ahead == 0 else 1.0
+                        today_use = (walk_per_day * walk_weekly[(day + ahead) % 7]
+                                     + extra.get(day + ahead, 0.0)) * share
+                        if today_use <= 0:
+                            remaining -= today_use  # a route's surplus stays on the shelf
+                            cover += share
+                            continue
+                        if remaining <= today_use:
+                            cover += share * remaining / today_use
+                            runs_out = day + ahead
+                            break
+                        remaining -= today_use
                         cover += share
-                        continue
-                    if remaining <= today_use:
-                        cover += share * remaining / today_use
-                        runs_out = day + ahead
-                        break
-                    remaining -= today_use
-                    cover += share
-                else:
-                    cover = 60.0
+                    else:
+                        cover = 60.0
+                    return cover, runs_out
+
+                cover, runs_out = cover_walk(before)
 
                 # From now to the drop: the whole days before it plus what is left
                 # of today, and for a round-fed depot the delivery day's round too.
@@ -4710,12 +4741,23 @@ def _supply(
                     level, reason = "warn", "shortfall"
                 else:
                     level, reason = "ok", None
+                # A run-dry the rounds to a depot beside decide (the walk
+                # without them would reach the drop): the finding names that
+                # depot and its target, the biggest such round's.
+                tops = None
+                if reason == "shortfall" and tops_up and due is not None and cover_walk({})[0] >= due:
+                    dest = max(tops_up, key=lambda d: (tops_up[d][0], d))
+                    tops = [index[dest], tops_up[dest][1]]
                 rows.append(
                     {
                         "s": index[business["key"]],
                         "item": line["item"],
                         "slug": item,
                         "stock": line["units"],
+                        # [site, target]: the depot this line's morning rounds
+                        # top up before its own import lands, where those rounds
+                        # are what runs it dry; left off otherwise.
+                        **({"topsUp": tops} if tops else {}),
                         # What leaves a day, and of it what the company's own
                         # routes bring (routed) and what is left for the import
                         # (importPerDay): the week, cover and catch-up below are
@@ -4747,8 +4789,8 @@ def _supply(
                         # rounds where its plans empty it; a paused
                         # line is walked a week.
                         "dueNeed": round(_deepest_use(
-                            per_day, weekly, day,
-                            supply["arrives"] if supply["active"] else week_on, today, rounds)),
+                            walk_per_day, walk_weekly, day,
+                            supply["arrives"] if supply["active"] else week_on, today, rounds, before)),
                         "rounds": rounds,
                         "orderFit": order_fit,
                         "coverFit": cover_fit,
@@ -4764,9 +4806,9 @@ def _supply(
                         # rather than a busy day times the days.
                         "carry": round(max(
                             _deepest_use(
-                                per_day, weekly, day,
+                                walk_per_day, walk_weekly, day,
                                 week_on if horizon else supply["arrives"] if supply["active"] else until,
-                                today, rounds),
+                                today, rounds, before),
                             line["units"] + catch_up if catch_up else 0,
                         )) if walk_routed else None,
                         "paused": not supply["active"],
@@ -15616,7 +15658,7 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
             site, key = b["name"], b["key"]
             ev = {"slug": slug}
             if st == "short" and why == "shortfall" and row:
-                notes.append(_shortfall_note(row, item, site, key))
+                notes.append(_shortfall_note(row, item, site, key, businesses))
                 continue
             if st == "short" and fact["role"] == "depot" and fact.get("wholesale"):
                 # A depot a wholesale store delivers to: its contract, said on
@@ -15783,9 +15825,12 @@ def _runs_dry_when(row: dict):
     return msg("f.dry.in", {"one": "in {n} days", "other": "in {n} days"}, n=row["cover"])
 
 
-def _shortfall_note(row: dict, item: str, site: str, key: str) -> dict:
+def _shortfall_note(row: dict, item: str, site: str, key: str, businesses: list | None = None) -> dict:
     """A depot's stock that will not reach its next drop, or, where a route
-    brings the week, a busy day the shelf cannot carry to the next round."""
+    brings the week, a busy day the shelf cannot carry to the next round.
+    Where the morning rounds to a depot beside it are what runs it dry
+    before that depot's own import lands (`topsUp`), the finding names that
+    depot and the target the rounds fill it to."""
     named = tok(row["slug"], item)
     # The draw the import answers for; a route's share is named, not hidden.
     said = dict(item=named, when=_runs_dry_when(row), routed=row.get("routed"),
@@ -15797,6 +15842,11 @@ def _shortfall_note(row: dict, item: str, site: str, key: str) -> dict:
                 if row["paused"] else
                 msg("f.shortfall.route", "{item} runs dry {when}, before the route's next round; a route brings the "
                     "week's draw ({routed:,}/day) but a busy day outruns the shelf", **said))
+    elif row.get("topsUp") and businesses and 0 <= row["topsUp"][0] < len(businesses):
+        said.update(by=row["shortBy"], arrives=row.get("coverageUntil", row["arrives"]),
+                    site=businesses[row["topsUp"][0]]["name"], target=row["topsUp"][1])
+        text = msg("f.shortfall.topup", "{item} runs dry {when}, {by:.1f} days before {arrives:day}'s import: the "
+                   "morning rounds top {site} up to {target:,} before its own import lands", **said)
     else:
         said.update(by=row["shortBy"], arrives=row.get("coverageUntil", row["arrives"]))
         text = (msg("f.shortfall.routed", "{item} runs dry {when}, {by:.1f} days before {arrives:day}'s import "

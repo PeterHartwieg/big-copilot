@@ -593,6 +593,7 @@
  "f.shortfall.route": "claude-opus-5-5",
  "f.shortfall.route.paused": "claude-opus-5-5",
  "f.shortfall.routed": "claude-opus-5-5",
+ "f.shortfall.topup": "gpt-6-sol",
  "f.site.company": "claude-opus-5-5",
  "f.site.leases_other": "claude-opus-5-5",
  "f.site.offices_other": "claude-opus-5-5",

@@ -758,6 +758,7 @@
  "f.shortfall.route": "{item}: acaba {when}, antes da próxima rota. A rota cobre o consumo semanal ({routed:,}/dia), mas a prateleira esvazia em dia movimentado",
  "f.shortfall.route.paused": "{item}: acaba {when}, antes da próxima rota. A rota cobre o consumo semanal ({routed:,}/dia), mas a prateleira esvazia em dia movimentado; importação pausada",
  "f.shortfall.routed": "{item}: acaba {when}, {by:.1f} dias antes da importação de {arrives:day} ({rate:,}/dia além dos {routed:,}/dia da rota)",
+ "f.shortfall.topup": "{item}: acaba {when}, {by:.1f} dias antes da importação de {arrives:day}: as rotas da manhã repõem o estoque do local {site} até {target:,} antes da chegada da importação do próprio local",
  "f.site.company": "Empresa",
  "f.site.leases_many": "{n} aluguéis",
  "f.site.leases_one": "{n} aluguel",

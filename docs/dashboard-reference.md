@@ -1470,10 +1470,14 @@ import the routes fully cover gets no word; its figures show the share the route
 (the margin, where they bring the use). In Shop demand a line sends what it makes in
 the hours it is sized to, margin included. A sender's import row is sized on its planned
 share, but its run-dry timing replays what physically leaves it: until a plain import at
-a depot it tops up lands, and on its morning too (the round leaves before the import
-lands), each round tops that depot up to its target from what the sender holds (a first
-fill-up of a depot well under its target included) while the depot's own draw takes it
-down again, and from the day it lands, the round brings only what the import leaves. What a sender merely holds is no supply, and what a line at the
+a depot it tops up lands, the depot is replayed beside it, day by day on its own weekday
+rhythm. For a sender that only relays to such depots, a round counts only where the depot
+would otherwise run short before its import lands (the rest of a fill-up is stock moved,
+not lost); for one that also serves its own shelves, lines or sites with no import, each
+round tops the depot up to its target in full, the landing morning's included, since a
+fill-up then starves them. From the day the import lands, the round brings only what the
+import leaves. Where those rounds are what runs the sender dry, the finding names the depot
+and its target, and what the sender has to hold to the drop counts them. What a sender merely holds is no supply, and what a line at the
 site itself makes comes off its import's week. Two sites topping each other up with the
 same item form a loop, which counts one way only: from the site with a supply of its own
 toward the one without, then from the one with more left over after its own use to the

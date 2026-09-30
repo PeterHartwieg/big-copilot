@@ -1516,9 +1516,10 @@ class ThroughputTests(unittest.TestCase):
         its 10,000), dry on day 24, whose round leaves before the imports
         land. With 14,000 at the hub the rounds are carried: covered."""
         hub, hub_shop = ("hub_a", 7), ("shop_h", 8)
-        for hub_stock, reg_stock, target, verdict in ((3000, 1500, 1500, "short"), (4000, 500, 1500, "short"),
-                                                      (6000, 10000, 10000, "short"),
-                                                      (14000, 5000, 10000, "covered")):
+        for hub_stock, reg_stock, target, verdict, dry in ((3000, 1500, 1500, "short", "Monday"),
+                                                           (4000, 500, 1500, "short", "Monday"),
+                                                           (6000, 10000, 10000, "short", "Wednesday"),
+                                                           (14000, 5000, 10000, "covered", None)):
             with self.subTest(hub_stock=hub_stock, reg_stock=reg_stock, target=target):
                 c = Chain()
                 c.site(hub, "Hub")
@@ -1539,6 +1540,73 @@ class ThroughputTests(unittest.TestCase):
                 for mode in ("cap", "dem"):
                     self.assertEqual(c.fact(hub, BEER, mode)["st"], verdict, mode)
                 self.assertEqual(len(c.notes(hub, "shortfall")), 1 if verdict == "short" else 0)
+                if dry:
+                    # The day the independent replay of the rounds empties it
+                    # (day 20 is a Saturday; day 22 Monday, day 24 Wednesday).
+                    row = next(r for r in c.supply["imports"] if r["s"] == c.index(hub))
+                    self.assertEqual(row["runsOut"], dry)
+
+    def relay(self, hub_stock, reg_stock, target, own=0, profile=None):
+        """A hub importing 7,000 a week tops Regional up to `target`;
+        Regional imports 12,000 a week and its shop sells 1,200 a day; both
+        imports land on day 24 (day 20 is a Saturday). `own` a day the hub's
+        own shop sells, `profile` the company's weekday rhythm."""
+        hub, hub_shop = ("hub_a", 7), ("shop_h", 8)
+        c = Chain()
+        c.profile = profile
+        c.site(hub, "Hub")
+        c.hold(hub, BEER, hub_stock)
+        c.contract(hub, BEER, 7000)
+        if own:
+            c.shop(hub_shop, "Hub shop")
+            c.hold(hub_shop, BEER, 1000, own)
+            c.plan(hub, hub_shop, BEER, 100000)
+        c.site(self.REGIONAL, "Regional")
+        c.hold(self.REGIONAL, BEER, reg_stock)
+        c.contract(self.REGIONAL, BEER, 12000)
+        c.shop(self.SHOP_R, "Shop")
+        c.hold(self.SHOP_R, BEER, 2000, 1200)
+        c.plan(hub, self.REGIONAL, BEER, target)
+        c.plan(self.REGIONAL, self.SHOP_R, BEER, 100000)
+        c.run()
+        row = next(r for r in c.supply["imports"] if r["s"] == c.index(hub))
+        return c, hub, row
+
+    def test_a_pure_relay_runs_dry_only_when_the_depot_it_feeds_would(self):
+        """Round 16: a hub with nothing of its own to serve tops Regional up
+        to 10,000; Regional holds 8,000 (or 4,000), enough to reach its own
+        import: the fill-up is stock moved, not lost, and the hub reads
+        covered in both bases, with no finding. With Regional at 500 under a
+        1,500 target and the hub holding 4,000, Regional needs 700 on
+        Saturday and 1,200 a day after: 4,300 by Tuesday, so the hub runs dry
+        on Tuesday, and the finding names the round that does it."""
+        for hub_stock, reg_stock in ((5000, 8000), (5000, 4000)):
+            with self.subTest(hub_stock=hub_stock, reg_stock=reg_stock):
+                c, hub, row = self.relay(hub_stock, reg_stock, 10000)
+                for mode in ("cap", "dem"):
+                    self.assertEqual(c.fact(hub, BEER, mode)["st"], "covered", mode)
+                self.assertEqual(c.notes(hub, "shortfall"), [])
+        c, hub, row = self.relay(4000, 500, 1500)
+        for mode in ("cap", "dem"):
+            self.assertEqual((c.fact(hub, BEER, mode)["st"], c.fact(hub, BEER, mode)["why"]), ("short", "shortfall"))
+        self.assertEqual((row["runsOut"], row["topsUp"]), ("Tuesday", [c.index(self.REGIONAL), 1500]))
+        [note] = c.notes(hub, "shortfall")
+        self.assertIn("the morning rounds top Regional up to 1,500 before its own import lands", plain(note["text"]))
+
+    def test_the_rounds_follow_the_depots_weekday_rhythm(self):
+        """Round 16: weekends at 200%, weekdays at 60%. Saturday; the hub
+        holds 8,000, imports 7,000 a week and its own shop sells 500 a day;
+        it tops Regional up to 4,000; Regional holds 4,000, imports 12,000
+        a week and its shop sells 1,200 a day; both imports land on
+        Wednesday. Sunday's and Monday's rounds refill Regional's 2,400
+        weekend days: the hub runs dry on Tuesday, and what it has to hold
+        to the drop counts those rounds."""
+        c, hub, row = self.relay(8000, 4000, 4000, own=500, profile=[200, 60, 60, 60, 60, 60, 200])
+        self.assertEqual(WEEKDAYS[c.day % 7], "Saturday")
+        for mode in ("cap", "dem"):
+            self.assertEqual((c.fact(hub, BEER, mode)["st"], c.fact(hub, BEER, mode)["why"]), ("short", "shortfall"))
+        self.assertEqual(row["runsOut"], "Tuesday")
+        self.assertGreater(row["dueNeed"], row["stock"])
 
     def test_a_relay_beside_an_importing_depot_settles(self):
         """Round 14: a two-machine brewery (1,440 a day) tops Xdepot up to
@@ -1987,15 +2055,13 @@ class RoundEightTests(unittest.TestCase):
                 # With a week's stock in hand, so the first import's timing
                 # (a finding of its own) is not what is judged.
                 settled = chain(depot_import=fact["setTo"], depot_stock=15000)
-                # Changed in round 15: the hub's timing replays its rounds
-                # until the depot's import lands. The depot holds 15,000
-                # under the hub's 20,000 target, so the first morning's round
-                # takes all 5,000 the hub holds and the hub runs dry before
-                # its own import: a shortfall with nothing to set. Its import
-                # is still asked for nothing, and the depot is covered.
-                self.assertEqual([(settled.fact(a, BEER, mode)["st"], settled.fact(a, BEER, mode)["why"],
-                                   settled.fact(a, BEER, mode)["setTo"]) for a in (WH, self.HUB_A)],
-                                 [("covered", None, None), ("short", "shortfall", None)])
+                # Round 15 charged the hub's first fill-up of the depot (15,000
+                # under its 20,000 target) and read a shortfall. Round 16: the
+                # hub only relays to this depot, which holds a week's stock
+                # and its own import, so the fill-up is stock moved, not lost:
+                # nothing it serves goes short, and both read covered.
+                self.assertEqual([(settled.fact(a, BEER, mode)["st"], settled.fact(a, BEER, mode)["setTo"])
+                                  for a in (WH, self.HUB_A)], [("covered", None), ("covered", None)])
 
     def test_demand_sizing_keeps_only_its_own_plan_changes(self):
         """Round 9: two hubs top a water depot up to 100 each; it feeds a

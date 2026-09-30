@@ -758,6 +758,7 @@
  "f.shortfall.route": "{item} runs dry {when}, before the route's next round; a route brings the week's draw ({routed:,}/day) but a busy day outruns the shelf",
  "f.shortfall.route.paused": "{item} runs dry {when}, before the route's next round; a route brings the week's draw ({routed:,}/day) but a busy day outruns the shelf; the import is paused",
  "f.shortfall.routed": "{item} runs dry {when}, {by:.1f} days before {arrives:day}'s import ({rate:,}/day beyond the {routed:,}/day a route brings)",
+ "f.shortfall.topup": "{item} runs dry {when}, {by:.1f} days before {arrives:day}'s import: the morning rounds top {site} up to {target:,} before its own import lands",
  "f.site.company": "Company",
  "f.site.leases_many": "{n} leases",
  "f.site.leases_one": "{n} lease",

@@ -648,6 +648,7 @@
  "f.shortfall.route": "claude-sonnet-5",
  "f.shortfall.route.paused": "claude-sonnet-5",
  "f.shortfall.routed": "claude-sonnet-5",
+ "f.shortfall.topup": "gpt-6-sol",
  "f.site.company": "claude-sonnet-5",
  "f.site.leases_one": "claude-sonnet-5",
  "f.site.leases_other": "claude-sonnet-5",

@@ -593,6 +593,7 @@
  "f.shortfall.route": "{item}: 경로의 다음 회차 전인 {when} 바닥나요. 경로가 한 주 소비량(하루 {routed:,}개)을 가져오지만 바쁜 날엔 선반이 버티지 못해요",
  "f.shortfall.route.paused": "{item}: 경로의 다음 회차 전인 {when} 바닥나요. 경로가 한 주 소비량(하루 {routed:,}개)을 가져오지만 바쁜 날엔 선반이 버티지 못해요. 수입도 일시 중지됐어요",
  "f.shortfall.routed": "{item}: {when} 바닥나요. {arrives:day} 수입분보다 {by:.1f}일 빨라요 (경로가 가져오는 하루 {routed:,}개 외에 하루 {rate:,}개 필요)",
+ "f.shortfall.topup": "{item}: {when} 바닥나요. {arrives:day} 수입분보다 {by:.1f}일 빨라요. {site} 재고는 자체 수입분이 도착하기 전 아침 회차에 {target:,}개까지 보충돼요",
  "f.site.company": "회사",
  "f.site.leases_other": "임대 {n}건",
  "f.site.offices_other": "사무실 {n}곳",
