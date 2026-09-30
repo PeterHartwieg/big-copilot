@@ -7,8 +7,8 @@ serves the resulting bytes — a `.hsg` as the game would write it — over loop
 HTTP. It holds no model of the game. From 0.2.0 it also makes the changes the board
 proposes, and only when you confirm them on the board from a browser you approved in
 the game: default uniforms, import contract amounts, a business's staff schedule and,
-from 0.3.0, hiring the headhunters' candidates and moving staff between businesses (see
-"What it changes" below).
+from 0.3.0, hiring the headhunters' candidates and moving staff between businesses and,
+from 0.4.0, the marketing campaigns each business runs (see "What it changes" below).
 
 **Players:** subscribe on the Steam Workshop,
 [Big Copilot Link: Live Business Dashboard](https://steamcommunity.com/sharedfiles/filedetails/?id=3806322395)
@@ -53,9 +53,9 @@ Mod Builder.
   `HKEY_CURRENT_USER\Software\Hovgaard Games\Big Ambitions`, a plist on a Mac), where the
   SDK keeps mod options too. **Forget approved browsers** in the mod's options empties it.
 
-## What it changes (0.2.0 and 0.3.0)
+## What it changes (0.2.0 to 0.4.0)
 
-Five `POST` endpoints, all in [`docs/game-link-api.md`](../../docs/game-link-api.md)
+Six `POST` endpoints, all in [`docs/game-link-api.md`](../../docs/game-link-api.md)
 under "Writes":
 
 | Endpoint | What it changes |
@@ -64,6 +64,7 @@ under "Writes":
 | `/write/imports` | Sets purchasing-agent contract amounts, switches a stopped contract back on (with Repeating), and reorders contracts in the plan order. It never stops a contract, and never adds or removes a product. |
 | `/write/schedule` | Replaces one business's seven days of shifts; with `openAllHours`, also opens every day 0 to 24. Never at a headquarters. |
 | `/write/hire` | From 0.3.0. Hires headhunter candidates into businesses, moves employees from one business to another, and writes the weeks of the businesses involved, in one call: what MyEmployees' "Assign business and hire" and "Assign business" do, then the schedule write for each week sent. A candidate who has left the game's list since the board read it is skipped, and their shifts are left empty; anything else refused refuses the whole call. Never undone. |
+| `/write/marketing` | From 0.4.0. Switches each business's marketing campaigns to the set the board sends, disabling the rest (never removing one), and sets the business up the way a call and a chat with each agency would: an entry for every campaign type the agency sells, the unused ones switched off, so BizMan's Marketing page shows every switch for that business from then on. A switch the business already has is turned on or off at any time, as the phone does. A new one is added only through an agency already in your phone's contacts (you visited it once) and only while it is open: a business whose plan needs a new switch no such agency sells is refused, naming the agency and, when closed, when it opens; set-up switches that cannot be added yet are listed as waiting. Never adds a contact or a chat message. A switched-off entry costs nothing. |
 | `/write/undo` | Puts back what the last write of a kind changed, in this city session, where the game still holds what that write left. A hire answers `no_undo`: let someone go in MyEmployees. |
 
 - **Approving a browser.** Every write needs `Authorization: Bearer <token>`, a token
@@ -192,7 +193,7 @@ the worker thread failed again on its second chance; serializing on the main thr
    | ModId | `BigCopilotLink` |
    | DisplayName | `Big Copilot Link` |
    | Author | `Peter Hartwieg` |
-   | Version | `0.3.1` |
+   | Version | `0.4.0` |
    | Mod Assembly | drag `BigCopilotLink.asmdef` into the field |
    | Locales Folder | drag the `Locales` folder into the field; the option labels are keys in `Locales/en.json` |
 
@@ -232,7 +233,7 @@ Launch the game, enable **Big Copilot Link** in the Mods menu, load a save, then
 curl http://127.0.0.1:8322/health
 ```
 
-Expect `{"ok":true,"schemaVersion":1,"modVersion":"0.3.1","source":"game",…,"writes":["uniforms","imports","schedule","hire"],"paired":false}` and a
+Expect `{"ok":true,"schemaVersion":1,"modVersion":"0.4.0","source":"game",…,"writes":["uniforms","imports","schedule","hire","marketing"],"paired":false}` and a
 `[BigCopilotLink] serving the game to Big Copilot on http://127.0.0.1:8322/` line in
 the player log (`%USERPROFILE%\AppData\LocalLow\Hovgaard Games\Big Ambitions\Player.log`;
 on a Mac, `~/Library/Logs/Hovgaard Games/Big Ambitions/Player.log`), then, a few
@@ -279,6 +280,9 @@ curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/js
   -d '{"kind":"uniforms","dryRun":false}' http://127.0.0.1:8322/write/undo
 curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
   --data-binary @hire.json http://127.0.0.1:8322/write/hire
+curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{"dryRun":true,"sites":[{"address":{"street":"ba:street_secondavenue","number":12},"on":["SmallInternet","SmallBillboard"],"was":["SmallBillboard"]}]}' \
+  http://127.0.0.1:8322/write/marketing
 ```
 
 The health call answers `"paired":true`. A POST with no body needs
@@ -426,6 +430,59 @@ http://127.0.0.1:8322/health` answers `"modVersion":"0.3.1"`.
    `changed`, and the apply (`"dryRun":false`) answers `409 {"error":"changed",…}` with
    nothing set in the Uniforms window. Leave `expect` out: it answers as in 0.3.0.
 
+### In-game checklist for 0.4.0
+
+The marketing write (`docs/marketing-write-scope.md`). Built as above; `curl
+http://127.0.0.1:8322/health` answers `"modVersion":"0.4.0"` and `"writes"` includes
+`"marketing"`. Forget approved browsers first, so the popup's new text ("…staff schedules and
+marketing…") is seen once. After each apply, check the notification ("Big Copilot updated
+marketing at …"), that `/health`'s stamp moved, and that the board rebuilt from the new bytes.
+
+1. **A new shop, both agencies known and open.** On a weekday between 8 and 17, with both
+   agencies in the phone's contacts, pick a shop with no campaigns. Dry run: `entriesAdded`
+   names all six types. Apply. Without calling anyone: no new chat messages from either agency;
+   BizMan → the shop → Marketing shows both agency blocks with a switch for each of the six
+   types, the planned ones on. The promotion in BizMan matches the answer's `promotion`, and
+   the daily marketing cost its `dailyCost`. The contacts list is unchanged.
+2. **Overspend.** A shop already at promotion 100 with more campaigns than it needs: apply the
+   board's cheaper mix. The dropped campaign's switch is off in BizMan (still listed), the
+   promotion stays at 100, and at midnight the shop's marketing expense is the new
+   `dailyCost`.
+3. **The dry run's promotion against the game's.** For three shops in different
+   neighbourhoods (Midtown, Hell's Kitchen, one at 1.0), compare the dry run's `promotion`
+   with what BizMan shows after the apply. They must be equal; note any that is off by one.
+4. **By hand afterwards.** After a write, flip one switch in BizMan: it works like any other
+   switch. Then undo from the board: `changed`, and nothing is put back. Flip it back, undo:
+   the flags return to what they were before the write, and the entries the write added stay.
+5. **Undo.** A plain write then its undo: every campaign the write switched is back as it was,
+   a campaign the write added and switched on is off again, the promotion returns. A second
+   undo answers `nothing_to_undo`.
+6. **Compare-and-set.** Dry run from the board, then switch a campaign in BizMan before
+   Apply: the apply answers `changed` and the board reads the game again.
+7. **Refusals.** A factory or a warehouse answers `no_promotion`; an address with no
+   registration `not_found`; a body with another company in `expect` answers every row
+   `changed`.
+8. **An agency you have not visited.** In a save (or a new game) where CityAds is not in the
+   phone's contacts, on a shop with no billboard entries: a plan that turns a billboard on
+   answers `no_contact` naming CityAds, and nothing changes; a plan for internet only goes
+   through, the shop gets the internet switches, and the answer's `waiting` lists the three
+   billboards at CityAds with `opens` null. Visit CityAds once (talk to its employee), then the
+   billboard plan goes through. Check the mod added no contact at any point.
+9. **A closed agency.** After 17:00, or on a Saturday or Sunday:
+   - On a shop that already has all six switches, any plan goes through, turning campaigns on
+     and off as the phone would, closed agencies and all.
+   - On a shop missing a switch its plan turns on, the plan answers `agency_closed` with
+     `opens` at the next day it opens at 8 (Monday for a weekend), and the board says when.
+     The same at 8:00 sharp goes through.
+   - A plan that needs no new switch goes through, and its answer's `waiting` lists the
+     switches the set-up could not add yet, with that `opens`.
+   - An undo while the agency is closed goes through: undo only flips existing switches.
+10. **BizMan open.** With BizMan's Marketing page open on the shop, apply: note whether the
+    page shows the new switches at once or only after it is reopened (it is not refreshed by
+    the mod), and that switching one there afterwards still acts on the right campaign.
+11. **Save and reload.** The campaigns and the switched-off entries persist; the next midnight
+    bills only the enabled campaigns (the day's marketing expense).
+
 ## Publish to the Workshop
 
 The Workshop item is 3806322395, owned by Peter's Steam account; its page, art and
@@ -484,6 +541,7 @@ Read by reflection and confirmed by the Mac compile. Public unless noted.
 | `GameInstance.CandidateEmployeeInstances` (`List<EmployeeInstance>`); `EmployeeInstance` fields `id`, `hourlyWage`, `assignedAddress`, `characterData` (`name`, `skills[].name`), `candidateInfo` (`CandidateInfo.hoursUntilExpiring`), properties `IsCandidate` (`candidateInfo != null`) and `IsTraining` (`trainingSession != null`), `IsAssignedToAnyBusiness()`, `AddTodoTask(TodoTaskType, bool)` with `TodoTaskType.EmployeeIdle` (5) and `EmployeeUnassigned` (13); static `EmployeeHelper.GetEmployeeById(id, false)`, `HireCandidate(EmployeeInstance)`, `UnassignEmployeeFromAllWorkshifts(EmployeeInstance)`; static `Entities.CustomerDemandHelper.ReloadCachedFulfilled(Address)`; the property `BuildingRegistration.Address` | 0.3.0, hire and move: the calls MyEmployees' mass actions make (`AssignToBusinessAndHireMassAction` and `AssignBusinessMassAction` closures). `GetEmployeeById` also finds candidates (the dictionary holds them; `DiscardCandidate` removes them), so the write treats an `IsCandidate` result as nobody's staff |
 | `Helpers.BusinessTypeHelper.GetData(reg)` (`BusinessType`: `employeePrimarySkills`, `HasTag(TagRef.Businesstag.allowtheft)`), `Buildings.BuildingTypeHelper.GetData(reg)` (`BuildingTypeData`: property `NeedsCleaning`, `requiredBuildingSkills`) | 0.3.0: the skills a business takes a person for, as the mass actions' assign check builds them |
 | `UIs.Instance.fullMenu.myEmployees` (`UI.Smartphone.Apps.MyEmployees.MyEmployees`, a `MonoBehaviour`) and its `isActiveAndEnabled` | 0.3.0: "is MyEmployees open". `FullMenu.SelectApp` activates only the chosen app under `appsContainer` and closing the menu deactivates it when the fade ends; the app reloads its lists in `OnEnable`, so the mod does not touch its scrollers. **Unverified in game**: 0.3.0 checklist item 2 |
+| `BuildingRegistration.marketingCampaigns` (`List<Entities.MarketingCampaign>`: `agencyAddress`, `marketingTypeName` (`Entities.MarketingTypeName`, 0 to 5), `enabled`), `promotion` (`Promotion`: `trafficIndex`, `marketing`, `total`), `GetDailyMarketingExpenses()`, `HasValidAddress`, `temporarilyClosed`, `scheduleDays` (`ScheduleDay`: `day`, `isOpen`, `openingHourSlots`); `Helpers.BusinessHelper.IsBusinessOpen(reg, -1)`; `TimeHelper.CurrentDay`, `TimeHelper.GetDayOfWeek(int)`; `Entities.MarketingTypeSettings.Get(type)` (`pricePerDay`, `sqmReach`); `Helpers.BuildingHelper.allBuildings`, `GetBuilding(Address)`; `Buildings.Building` (`SpecialService`, `StreetName`, `StreetNumber`, `BuildingType`, `BuildingSize`, `BuildingVersion`, `Neighbourhood`, `trafficIndex`); `Buildings.SpecialService` (`settings`, `businessName`); `Buildings.MarketingAgencySettings.marketingTypesAvailable`; `Buildings.BuildingTypeHelper.GetData(Building)` / `GetData(string)` (`BuildingTypeData.marketingReachMultiplier`, `HasTag(TagRef.Buildingtypetag.hasmarketingpromotion)`); `Buildings.BuildingSizeHelper.GetData` (`squareMeters`, `GetCustomerCapacity(type, version)`); `NeighborhoodHelper.GetData(name).marketingStrength`; `Helpers.BusinessHelper.UpdatePromotion(reg)`; `GameInstance.Contacts` (`Entities.Contact`: `streetName`, `streetNumber`); `GameEvent.Invoke("ba:gameevent_newmarketing")` | 0.4.0, marketing: what `BizManMarketing.UpdateCampaignEnabled` and `MarketingAgencyDialog.OnMarketingSettingsSet` do, a new entry only through an agency that is a phone contact (by address, as `Contact.Address` reads it) and open by the game's own `IsBusinessOpen` (existing entries are switched any time, as the phone does), the next opening worked out from the agency's `scheduleDays`, and the dry run's promotion worked out by `GetMarketingEfficiency`'s and `UpdatePromotion`'s own arithmetic. Read from build 3680's IL on 28 September 2026 and compiled against build 3682's DLLs with the system C# 5 compiler (`LinkMod.cs` stubbed); **unverified in game**: the 0.4.0 checklist |
 
 The 0.3.0 rows were read from build 3682's IL and by reflection on 25 September 2026 and
 have not been compiled yet.

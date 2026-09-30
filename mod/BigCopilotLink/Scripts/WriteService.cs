@@ -63,9 +63,9 @@ namespace BigCopilotLink
     /// <summary>
     /// POST /write/* (docs/game-link-api.md, "Writes"): the approval check, the body, the
     /// parse, and the trip to the main thread, for every kind; the kinds themselves are
-    /// UniformWrite, ImportWrite, ScheduleWrite and (from 0.3.0) HireWrite. One per city
-    /// load, like SaveService: the undo it keeps belongs to that city session. A hire has
-    /// no undo.
+    /// UniformWrite, ImportWrite, ScheduleWrite, (from 0.3.0) HireWrite and (from 0.4.0)
+    /// MarketingWrite. One per city load, like SaveService: the undo it keeps belongs to
+    /// that city session. A hire has no undo.
     ///
     /// Threading. The handler threads parse the body and touch nothing of the game. The
     /// check-and-apply runs whole on the main thread, and only while no refresh is in
@@ -79,7 +79,7 @@ namespace BigCopilotLink
     /// </summary>
     public sealed class WriteService
     {
-        public static readonly string[] Kinds = { "uniforms", "imports", "schedule", "hire" };
+        public static readonly string[] Kinds = { "uniforms", "imports", "schedule", "hire", "marketing" };
 
         private const int MaxBodyBytes = 256 * 1024;
 
@@ -101,6 +101,7 @@ namespace BigCopilotLink
         internal UniformWrite.UndoState UniformUndo;
         internal ImportWrite.UndoState ImportUndo;
         internal ScheduleWrite.UndoState ScheduleUndo;
+        internal MarketingWrite.UndoState MarketingUndo;
 
         public WriteService(SaveService saves, ApprovalService approvals)
         {
@@ -114,13 +115,14 @@ namespace BigCopilotLink
             UniformUndo = null;
             ImportUndo = null;
             ScheduleUndo = null;
+            MarketingUndo = null;
         }
 
         // ---- the HTTP side ---------------------------------------------------------
 
         /// <summary>
         /// An HTTP pool thread. <paramref name="kind"/> is "uniforms", "imports",
-        /// "schedule", "hire" or "undo". Every answer comes back as a status and a body;
+        /// "schedule", "hire", "marketing" or "undo". Every answer comes back as a status and a body;
         /// the listener writes it.
         /// </summary>
         public WriteAnswer Handle(HttpListenerRequest request, string kind)
@@ -177,11 +179,16 @@ namespace BigCopilotLink
                     var req = HireWrite.Parse(root);
                     return (ws, dryRun) => HireWrite.Run(ws, req, dryRun);
                 }
+                case "marketing":
+                {
+                    var req = MarketingWrite.Parse(root);
+                    return (ws, dryRun) => MarketingWrite.Run(ws, req, dryRun);
+                }
                 default:
                 {
                     var target = JsonReader.Str(root, "kind", "body", true);
                     if (Array.IndexOf(Kinds, target) < 0)
-                        throw new BadRequestException("body.kind must be one of uniforms, imports, schedule, hire");
+                        throw new BadRequestException("body.kind must be one of uniforms, imports, schedule, hire, marketing");
                     if (target == "hire") return NoUndo;
                     return (ws, dryRun) => ws.Undo(target, dryRun);
                 }
@@ -355,6 +362,9 @@ namespace BigCopilotLink
                 case "imports":
                     if (ImportUndo == null) return WriteAnswer.Error(409, "nothing_to_undo");
                     return ImportWrite.Undo(this, ImportUndo, dryRun);
+                case "marketing":
+                    if (MarketingUndo == null) return WriteAnswer.Error(409, "nothing_to_undo");
+                    return MarketingWrite.Undo(this, MarketingUndo, dryRun);
                 default:
                     if (ScheduleUndo == null) return WriteAnswer.Error(409, "nothing_to_undo");
                     return ScheduleWrite.Undo(this, ScheduleUndo, dryRun);

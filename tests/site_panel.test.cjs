@@ -138,11 +138,12 @@ test('a finding arrived at from the list is marked, and show all unfolds the res
   } finally { await page.close(); }
 });
 
-test('an office draws no amenity lamps and no Pull block', async () => {
+test('an office draws no amenity lamps, and its Promotion block', async () => {
   const page = await site({shop: {status: 'office', type: 'Law Firm', basket: 387.89}});
   try {
     assert.equal(await page.locator('#sitePanel [data-amenity]').count(), 0);
-    assert.equal(await page.locator('#sitePanel [data-block="pull"]').count(), 0);
+    // Offices run campaigns too (docs/marketing-write-scope.md, section 4).
+    assert.equal(await page.locator('#sitePanel [data-block="pull"]').count(), 1);
     // The standards it is asked about are the four satisfaction parts alone.
     const parts = await page.$$eval('#sitePanel [data-sat]', els => els.map(e => e.dataset.sat));
     assert.deepEqual(parts, ['service', 'pricing', 'cleanliness', 'facility']);
@@ -598,10 +599,10 @@ test('a name out of the save is text, in the row and in the read-out it feeds', 
   } finally { await page.close(); }
 });
 
-test('an office draws its workstations where a shop draws its pull', async () => {
+test('an office draws its workstations where a shop draws its pull, and its pull under them', async () => {
   const page = await site({shop: {status: 'office', type: 'Law Firm'}, hours: grid(true, 3)});
   try {
-    assert.equal(await page.locator('#sp-pull').count(), 0);
+    assert.equal(await page.locator('.sp-stack > #sp-desks + #sp-pull').count(), 1);
     const squares = await page.$$eval('#sp-desks .sp-m', els =>
       els.map(e => e.classList.contains('sp-z')));
     // Four workstations, three of them manned at the busiest hour.

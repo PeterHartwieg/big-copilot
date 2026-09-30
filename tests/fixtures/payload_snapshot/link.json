@@ -307,6 +307,49 @@
    "text": "Interior design falls short of what customers expect here",
    "unit": "",
    "worth": null
+  },
+  {
+   "group": "promotion",
+   "i18n": {
+    "site": [
+     "f.site.sites",
+     {
+      "n": 2
+     }
+    ],
+    "text": [
+     "f.promotion.visit",
+     {
+      "agencies": {
+       "m": [
+        "f.list.last",
+        {
+         "a": "CityAds",
+         "b": "McCain's eMarketing"
+        },
+        "CityAds, McCain's eMarketing"
+       ]
+      },
+      "sites": {
+       "m": [
+        "f.list.last",
+        {
+         "a": "HART. Gifts",
+         "b": "HART. Bare"
+        },
+        "HART. Gifts, HART. Bare"
+       ]
+      }
+     }
+    ]
+   },
+   "id": "5301e84e92",
+   "level": "info",
+   "site": "2 sites",
+   "siteKey": null,
+   "text": "Visit CityAds, McCain's eMarketing once: no campaign can be set at HART. Gifts, HART. Bare before that",
+   "unit": "",
+   "worth": null
   }
  ],
  "alertsDemand": {
@@ -618,6 +661,49 @@
     "text": "Interior design falls short of what customers expect here",
     "unit": "",
     "worth": null
+   },
+   {
+    "group": "promotion",
+    "i18n": {
+     "site": [
+      "f.site.sites",
+      {
+       "n": 2
+      }
+     ],
+     "text": [
+      "f.promotion.visit",
+      {
+       "agencies": {
+        "m": [
+         "f.list.last",
+         {
+          "a": "CityAds",
+          "b": "McCain's eMarketing"
+         },
+         "CityAds, McCain's eMarketing"
+        ]
+       },
+       "sites": {
+        "m": [
+         "f.list.last",
+         {
+          "a": "HART. Gifts",
+          "b": "HART. Bare"
+         },
+         "HART. Gifts, HART. Bare"
+        ]
+       }
+      }
+     ]
+    },
+    "id": "5301e84e92",
+    "level": "info",
+    "site": "2 sites",
+    "siteKey": null,
+    "text": "Visit CityAds, McCain's eMarketing once: no campaign can be set at HART. Gifts, HART. Bare before that",
+    "unit": "",
+    "worth": null
    }
   ],
   "minor": {
@@ -638,6 +724,7 @@
     "toiletprivacy": false
    },
    "basket": null,
+   "campaigns": [],
    "capacity": 0,
    "closed": false,
    "code": "HK",
@@ -661,6 +748,26 @@
    "margin": null,
    "marketing": 0.0,
    "marketingIndex": 0,
+   "marketingPlan": {
+    "agencies": [],
+    "costNow": 0,
+    "costPlan": null,
+    "marketingNow": 0,
+    "marketingPlan": null,
+    "needsSetup": false,
+    "on": null,
+    "promotionNow": 0,
+    "promotionPlan": null,
+    "setupAgencies": [],
+    "setupTypes": [],
+    "target": null,
+    "visit": [
+     "ba:street_secondavenue#5",
+     "ba:street_thirdavenue#17"
+    ],
+    "visitRaises": true,
+    "was": []
+   },
    "missingAmenities": [
     "ba:customerdemand_toilet",
     "ba:customerdemand_toiletprivacy",
@@ -736,6 +843,7 @@
     "toiletprivacy": false
    },
    "basket": null,
+   "campaigns": [],
    "capacity": 0,
    "closed": false,
    "code": "",
@@ -759,6 +867,7 @@
    "margin": null,
    "marketing": 0.0,
    "marketingIndex": 0,
+   "marketingPlan": null,
    "missingAmenities": [
     "ba:customerdemand_toilet",
     "ba:customerdemand_toiletprivacy",
@@ -828,6 +937,7 @@
     "toiletprivacy": false
    },
    "basket": null,
+   "campaigns": [],
    "capacity": 0,
    "closed": false,
    "code": "GD",
@@ -843,6 +953,25 @@
    "margin": null,
    "marketing": 0.0,
    "marketingIndex": 0,
+   "marketingPlan": {
+    "agencies": [],
+    "costNow": 0,
+    "costPlan": null,
+    "marketingNow": 0,
+    "marketingPlan": null,
+    "needsSetup": false,
+    "on": null,
+    "promotionNow": 0,
+    "promotionPlan": null,
+    "setupAgencies": [],
+    "setupTypes": [],
+    "target": null,
+    "visit": [
+     "ba:street_secondavenue#5"
+    ],
+    "visitRaises": true,
+    "was": []
+   },
    "missingAmenities": [
     "ba:customerdemand_toilet",
     "ba:customerdemand_toiletprivacy",
@@ -895,6 +1024,7 @@
    "address": "9 Pier",
    "amenities": null,
    "basket": null,
+   "campaigns": [],
    "capacity": 0,
    "closed": false,
    "code": "LM",
@@ -910,6 +1040,7 @@
    "margin": null,
    "marketing": 0.0,
    "marketingIndex": 0,
+   "marketingPlan": null,
    "missingAmenities": [],
    "missingUniformLocker": false,
    "name": "HART. Depot",
@@ -1296,6 +1427,54 @@
   "trendDays": 0,
   "types": []
  },
+ "marketingAgencies": [
+  {
+   "address": "17 Third Avenue",
+   "closed": false,
+   "contact": false,
+   "hours": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ],
+   "key": "ba:street_thirdavenue#17",
+   "name": "McCain's eMarketing",
+   "open": false,
+   "opens": null,
+   "types": [
+    "SmallInternet",
+    "MediumInternet",
+    "LargeInternet"
+   ]
+  },
+  {
+   "address": "5 Second Avenue",
+   "closed": false,
+   "contact": false,
+   "hours": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ],
+   "key": "ba:street_secondavenue#5",
+   "name": "CityAds",
+   "open": false,
+   "opens": null,
+   "types": [
+    "SmallBillboard",
+    "MediumBillboard",
+    "LargeBillboard"
+   ]
+  }
+ ],
  "meta": {
   "build": null,
   "character": "default",

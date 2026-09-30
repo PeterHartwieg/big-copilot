@@ -118,7 +118,7 @@ class MockContract(unittest.TestCase):
         self.assertEqual(status, 404)
         self.assertEqual(json.loads(body)["endpoints"], [
             "/health", "/save", "/refresh", "/write/uniforms", "/write/imports", "/write/schedule", "/write/hire",
-            "/write/undo",
+            "/write/marketing", "/write/undo",
             "/pair/request", "/pair/status"])
         self.assertEqual(call(self.url + "/refresh")[0], 405)
         for method, route in (("HEAD", "/health"), ("PUT", "/save"), ("POST", "/"), ("DELETE", "/refresh"), ("TRACE", "/health")):
@@ -244,7 +244,7 @@ class MockWrites(LinkedMock):
 
     def test_health_lists_the_writes_and_says_paired_only_with_a_token_for_its_origin(self):
         health = json.loads(call(self.url + "/health")[2])
-        self.assertEqual(health["writes"], ["uniforms", "imports", "schedule", "hire"])
+        self.assertEqual(health["writes"], ["uniforms", "imports", "schedule", "hire", "marketing"])
         self.assertIs(health["paired"], False)
         health = json.loads(call(self.url + "/health", headers={"Authorization": f"Bearer {TOKEN}"})[2])
         self.assertIs(health["paired"], True)
@@ -1199,3 +1199,311 @@ class MockOfficeSchedule(LinkedMock):
         self.assertEqual(status, 200)
         self.assertTrue(answer["ok"], answer)
         self.assertEqual((answer["added"], answer["openedHours"], answer["siteError"]), (2, False, None))
+
+
+THIRD_AVE = es3_fixture.address("ba:street_thirdavenue", 17)
+SECOND_AVE = es3_fixture.address("ba:street_secondavenue", 5)
+CITYADS = {"street": "ba:street_secondavenue", "number": 5}
+MCCAINS = {"street": "ba:street_thirdavenue", "number": 17}
+ALL_TYPES = ["SmallInternet", "MediumInternet", "LargeInternet", "SmallBillboard", "MediumBillboard", "LargeBillboard"]
+
+
+def week(days=range(1, 8), start=8, end=17):
+    """An agency's scheduleDays: open `days` (Monday 1 to Sunday 7) from start to end."""
+    return [{"day": d, "isOpen": d in days, "openingHourSlots": [{"startingHour": start, "endingHour": end}],
+             "workShifts": []} for d in range(1, 8)]
+
+
+class MarketingMock(LinkedMock):
+    """The synthetic company with marketing campaigns and both agencies. The
+    mock's clock is day 34 (a Saturday) at 14:00."""
+
+    CITYADS_WEEK = week()
+    CITYADS_TEMPORARILY_CLOSED = False
+
+    def setUp(self):
+        real = es3_fixture.write_link_save
+
+        def write(path):
+            with open(path, "wb") as fh:
+                fh.write(es3_fixture.encode(self.company()))
+        es3_fixture.write_link_save = write
+        try:
+            super().setUp()
+        finally:
+            es3_fixture.write_link_save = real
+
+    def company(self):
+        """The synthetic company, with Gifts (an office building in Hell's Kitchen,
+        660 m², foot traffic 74) running a large internet campaign and a small
+        billboard, and both agencies in the city, open and in the phone's contacts."""
+        company = es3_fixture.link_company()
+        gifts = company["BuildingRegistrations"][0]
+        gifts["marketingCampaigns"] = [
+            {"agencyAddress": THIRD_AVE, "marketingTypeName": 2, "enabled": True},
+            {"agencyAddress": SECOND_AVE, "marketingTypeName": 3, "enabled": True},
+        ]
+        gifts["promotion"] = {"trafficIndex": 74, "marketing": 24, "total": 91}
+        company["BuildingRegistrations"] += [
+            {"StreetName": "ba:street_thirdavenue", "StreetNumber": 17, "RentedByPlayer": False,
+             "BusinessName": "McCain's eMarketing", "businessTypeName": "ba:businesstype_marketingagency",
+             "temporarilyClosed": False, "scheduleDays": week()},
+            {"StreetName": "ba:street_secondavenue", "StreetNumber": 5, "RentedByPlayer": False,
+             "BusinessName": "CityAds", "businessTypeName": "ba:businesstype_marketingagency",
+             "temporarilyClosed": self.CITYADS_TEMPORARILY_CLOSED, "scheduleDays": self.CITYADS_WEEK},
+        ]
+        company["Contacts"] = [
+            {"id": "McCain's eMarketing", "streetName": "ba:street_thirdavenue", "streetNumber": 17,
+             "description": "ba:businesstype_marketingagency", "category": 1},
+            {"id": "CityAds", "streetName": "ba:street_secondavenue", "streetNumber": 5,
+             "description": "ba:businesstype_marketingagency", "category": 1},
+            {"id": "uncle_fred", "streetName": None, "streetNumber": 0, "description": "friends_and_family"},
+        ]
+        return company
+
+    def site(self, address=GIFTS, on=("SmallInternet", "SmallBillboard"), was=("LargeInternet", "SmallBillboard")):
+        return {"address": address, "on": list(on), "was": list(was)}
+
+    def config(self, body):
+        status, _, raw = call(self.url + "/debug/config", "POST", {"Content-Type": "application/json"},
+                              json.dumps(body).encode())
+        self.assertEqual(status, 200, raw)
+
+
+class MockMarketing(MarketingMock):
+    """POST /write/marketing: the cheapest mix set through agencies that are phone
+    contacts and open now, every site set up with their switches, and the enabled
+    flags undone (docs/game-link-api.md)."""
+
+    def test_health_and_the_endpoint_list_name_marketing(self):
+        self.assertIn("marketing", json.loads(call(self.url + "/health")[2])["writes"])
+        self.assertIn("/write/marketing", json.loads(call(self.url + "/nothing")[2])["endpoints"])
+
+    def test_a_dry_run_answers_the_mix_the_set_up_and_the_promotion(self):
+        status, answer = self.post("marketing", {"dryRun": True, "sites": [self.site()]})
+        self.assertEqual(status, 200)
+        self.assertEqual((answer["ok"], answer["kind"], answer["dryRun"]), (True, "marketing", True))
+        self.assertNotIn("contactsAdded", answer, "the write never adds a contact")
+        row = answer["rows"][0]
+        self.assertEqual((row["business"], row["error"], row["agency"], row["opens"], row["waiting"]),
+                         ("HART. Gifts", None, None, None, []), "nothing waits when both agencies are open")
+        self.assertEqual(row["before"], {"on": ["LargeInternet", "SmallBillboard"], "dailyCost": 1000.0,
+                                         "promotion": {"trafficIndex": 74, "marketing": 24, "total": 91}})
+        self.assertEqual((row["on"], row["dailyCost"]), (["SmallInternet", "SmallBillboard"], 600.0))
+        # 120 m² of reach over 660 m² is 18; 74 + 18 × 0.7 (Hell's Kitchen) rounds to 87.
+        self.assertEqual(row["promotion"], {"trafficIndex": 74, "marketing": 18, "total": 87})
+        self.assertEqual((row["turnedOn"], row["turnedOff"]), (["SmallInternet"], ["LargeInternet"]))
+        self.assertEqual(row["entriesAdded"], ["SmallInternet", "MediumInternet", "MediumBillboard", "LargeBillboard"])
+        self.assertEqual([(c["type"], c["agency"]["number"], c["enabled"]) for c in row["campaigns"]],
+                         [("SmallInternet", 17, True), ("MediumInternet", 17, False), ("LargeInternet", 17, False),
+                          ("SmallBillboard", 5, True), ("MediumBillboard", 5, False), ("LargeBillboard", 5, False)])
+        self.assertEqual(self.link.applied, [], "a dry run writes nothing")
+
+    def test_row_errors_in_the_contract_order(self):
+        status, answer = self.post("marketing", {"dryRun": True, "sites": [
+            self.site(),
+            self.site({"street": "ba:street_nowhere", "number": 1}, was=()),
+            self.site(BARE, was=("SmallInternet",)),   # the game runs nothing there
+            self.site(DEPOT, was=()),                   # a building the game never scores
+            self.site(CORNER, was=())]})               # a building the table does not know
+        self.assertEqual(status, 200)
+        self.assertFalse(answer["ok"])
+        self.assertEqual([row["error"] for row in answer["rows"]], [None, "not_found", "changed", "no_promotion", None])
+        self.assertIsNone(answer["rows"][4]["promotion"], "the mock cannot model a building it has no row for")
+        refused = answer["rows"][2]
+        self.assertEqual((refused["on"], refused["campaigns"], refused["entriesAdded"], refused["agency"]), ([], [], [], None))
+        status, answer = self.post("marketing", {"sites": [self.site(), self.site(DEPOT, was=())]})
+        self.assertEqual((status, answer["error"]), (409, "refused"))
+        status, answer = self.post("marketing", {"sites": [self.site(), self.site(BARE, was=("SmallInternet",))]})
+        self.assertEqual((status, answer["error"]), (409, "changed"))
+        self.assertEqual(self.link.applied, [])
+        self.assertEqual(self.link.campaigns, {}, "a refused apply writes nothing")
+
+    def test_an_agency_that_is_no_contact_refuses_only_a_new_switch_the_plan_needs(self):
+        self.config({"noContact": [CITYADS]})
+        # Gifts keeps its small billboard as it is: CityAds is not touched, and gets
+        # no switches either, since the set-up only uses agencies the player knows.
+        _, answer = self.post("marketing", {"dryRun": True, "sites": [self.site()]})
+        row = answer["rows"][0]
+        self.assertEqual((row["error"], row["entriesAdded"]), (None, ["SmallInternet", "MediumInternet"]))
+        self.assertEqual({c["agency"]["number"] for c in row["campaigns"] if c["type"].endswith("Billboard")}, {5})
+        cityads = {"name": "CityAds", "address": CITYADS}
+        self.assertEqual(row["waiting"], [{"type": "MediumBillboard", "agency": cityads, "opens": None},
+                                          {"type": "LargeBillboard", "agency": cityads, "opens": None}],
+                         "the billboard switches wait for the player to know CityAds")
+        # Gifts' existing billboard switch is flipped off like the phone does, contact or not.
+        _, answer = self.post("marketing", {"dryRun": True, "sites": [self.site(on=("SmallInternet",))]})
+        row = answer["rows"][0]
+        self.assertEqual((row["error"], row["turnedOff"]), (None, ["LargeInternet", "SmallBillboard"]))
+        # Bare has no billboard switch: turning one on needs a new entry at CityAds.
+        bare = self.site(BARE, on=("MediumBillboard",), was=())
+        status, answer = self.post("marketing", {"dryRun": True, "sites": [bare]})
+        row = answer["rows"][0]
+        self.assertEqual((status, answer["ok"], row["error"]), (200, False, "no_contact"))
+        self.assertEqual((row["agency"], row["opens"]), (cityads, None))
+        self.assertEqual((row["on"], row["entriesAdded"], row["campaigns"], row["waiting"]),
+                         ([], [], [], []), "a refused row lists nothing")
+        status, answer = self.post("marketing", {"sites": [bare]})
+        self.assertEqual((status, answer["error"], answer["rows"][0]["error"]), (409, "refused", "no_contact"))
+        self.assertEqual(self.link.campaigns, {})
+
+    def test_a_switch_waits_for_an_agency_closed_by_the_knob_or_the_clock(self):
+        # CityAds forced closed: Gifts' plan leaves its billboard alone, so it goes
+        # through, and the two billboard switches wait for tomorrow at 8.
+        self.config({"agencyClosed": [CITYADS]})
+        _, answer = self.post("marketing", {"dryRun": True, "sites": [self.site()]})
+        row = answer["rows"][0]
+        self.assertEqual(row["error"], None)
+        self.assertEqual([(w["type"], w["agency"]["name"], w["opens"]) for w in row["waiting"]],
+                         [("MediumBillboard", "CityAds", {"day": 35, "hour": 8}),
+                          ("LargeBillboard", "CityAds", {"day": 35, "hour": 8})])
+        # Both open again, but the clock past 17:00: every switch to add waits for 8.
+        self.config({"agencyClosed": [], "hour": 19})
+        _, answer = self.post("marketing", {"dryRun": True, "sites": [self.site(BARE, on=(), was=())]})
+        row = answer["rows"][0]
+        self.assertEqual((row["error"], row["entriesAdded"]), (None, []))
+        self.assertEqual([w["type"] for w in row["waiting"]], ALL_TYPES)
+        self.assertEqual({(w["agency"]["address"]["number"], str(w["opens"])) for w in row["waiting"]},
+                         {(17, str({"day": 35, "hour": 8})), (5, str({"day": 35, "hour": 8}))})
+        # The apply answers the same list.
+        status, answer = self.post("marketing", {"sites": [self.site(BARE, on=(), was=())]})
+        self.assertEqual((status, len(answer["rows"][0]["waiting"])), (200, 6))
+
+    def test_a_closed_agency_names_its_next_opening(self):
+        self.config({"agencyClosed": [MCCAINS]})
+        _, answer = self.post("marketing", {"dryRun": True, "sites": [self.site()]})
+        row = answer["rows"][0]
+        self.assertEqual((row["error"], row["agency"]["name"]), ("agency_closed", "McCain's eMarketing"))
+        self.assertEqual(row["opens"], {"day": 35, "hour": 8})
+        self.config({"agencyClosed": [], "agencyOpen": [MCCAINS]})
+        self.assertTrue(self.post("marketing", {"dryRun": True, "sites": [self.site()]})[1]["ok"])
+        # Evening: past both agencies' 17:00.
+        self.config({"agencyOpen": [], "hour": 19})
+        _, answer = self.post("marketing", {"dryRun": True, "sites": [self.site()]})
+        self.assertEqual((answer["rows"][0]["error"], answer["rows"][0]["opens"]), ("agency_closed", {"day": 35, "hour": 8}))
+
+    def test_an_apply_is_kept_and_its_flags_undone_while_the_set_up_stays(self):
+        before = self.stamp()
+        status, answer = self.post("marketing", {"sites": [self.site()]})
+        self.assertEqual(status, 200)
+        self.assertEqual(answer["stamp"], before)
+        self.assertNotEqual(self.stamp(), before)
+        # The next write sees it: what runs now, and all six entries.
+        status, again = self.post("marketing", {"dryRun": True, "sites": [
+            self.site(on=("SmallInternet", "SmallBillboard"), was=("SmallInternet", "SmallBillboard"))]})
+        row = again["rows"][0]
+        self.assertEqual((row["error"], row["before"]["on"], row["entriesAdded"]),
+                         (None, ["SmallInternet", "SmallBillboard"], []))
+        self.assertEqual(row["before"]["promotion"], {"trafficIndex": 74, "marketing": 18, "total": 87})
+        self.assertEqual((row["turnedOn"], row["turnedOff"]), ([], []))
+
+        status, undone = self.post("undo", {"kind": "marketing"})
+        self.assertEqual(status, 200)
+        self.assertTrue(undone["undo"])
+        row = undone["rows"][0]
+        self.assertEqual((row["before"]["on"], row["on"]), (["SmallInternet", "SmallBillboard"], ["LargeInternet", "SmallBillboard"]))
+        self.assertEqual(row["promotion"], {"trafficIndex": 74, "marketing": 24, "total": 91})
+        self.assertEqual(len(row["campaigns"]), 6, "the entries the set-up added stay")
+        self.assertEqual(row["waiting"], [], "an undo adds no switches")
+        self.assertEqual(self.post("undo", {"kind": "marketing"}), (409, {"error": "nothing_to_undo"}))
+
+    def test_an_undo_only_flips_existing_switches_so_closed_agencies_do_not_matter(self):
+        self.assertEqual(self.post("marketing", {"sites": [self.site()]})[0], 200)
+        self.config({"agencyClosed": [MCCAINS], "noContact": [CITYADS]})
+        status, answer = self.post("undo", {"kind": "marketing", "dryRun": True})
+        self.assertEqual((status, answer["ok"], answer["rows"][0]["error"]), (200, True, None))
+        status, answer = self.post("undo", {"kind": "marketing"})
+        self.assertEqual((status, answer["rows"][0]["on"]), (200, ["LargeInternet", "SmallBillboard"]))
+
+    def test_existing_switches_flip_while_every_agency_is_closed(self):
+        # Gifts runs a large internet campaign and a small billboard: switching the
+        # small billboard off and the large internet on again needs no new entry.
+        self.config({"agencyClosed": [MCCAINS, CITYADS]})
+        status, answer = self.post("marketing", {"sites": [self.site(on=("LargeInternet",))]})
+        row = answer["rows"][0]
+        self.assertEqual((status, row["error"], row["turnedOff"], row["entriesAdded"]), (200, None, ["SmallBillboard"], []))
+        self.assertEqual([w["type"] for w in row["waiting"]],
+                         ["SmallInternet", "MediumInternet", "MediumBillboard", "LargeBillboard"])
+
+    def test_an_undo_after_a_switch_by_hand_is_changed_and_undoes_nothing(self):
+        self.assertEqual(self.post("marketing", {"sites": [self.site()]})[0], 200)
+        by_hand = self.link.campaigns[("ba:street_secondavenue", 10)]
+        next(c for c in by_hand if c["type"] == 0)["enabled"] = False  # small internet off in BizMan
+        status, answer = self.post("undo", {"kind": "marketing", "dryRun": True})
+        self.assertEqual((status, answer["ok"], answer["rows"][0]["error"]), (200, False, "changed"))
+        status, answer = self.post("undo", {"kind": "marketing"})
+        self.assertEqual((status, answer["error"]), (409, "changed"))
+        self.assertFalse(next(c for c in by_hand if c["type"] == 2)["enabled"], "nothing was put back")
+
+    def test_an_apply_that_switches_nothing_sets_up_and_leaves_nothing_to_undo(self):
+        status, answer = self.post("marketing", {"sites": [
+            self.site(on=("LargeInternet", "SmallBillboard"), was=("SmallBillboard", "LargeInternet"))]})
+        self.assertEqual(status, 200)
+        self.assertIn("stamp", answer)
+        row = answer["rows"][0]
+        self.assertEqual((row["turnedOn"], row["turnedOff"], len(row["entriesAdded"])), ([], [], 4))
+        self.assertEqual(self.post("undo", {"kind": "marketing"}), (409, {"error": "nothing_to_undo"}))
+
+    def test_a_site_with_no_campaigns_is_set_up_from_the_agencies(self):
+        _, answer = self.post("marketing", {"dryRun": True, "sites": [self.site(BARE, on=("MediumBillboard",), was=())]})
+        row = answer["rows"][0]
+        self.assertEqual((row["error"], row["on"], row["dailyCost"], row["entriesAdded"]),
+                         (None, ["MediumBillboard"], 2500.0, ALL_TYPES))
+        # 250 m² of reach covers the 225 m² shop: marketing 100, × 0.9 in the Garment District.
+        self.assertEqual(row["promotion"]["marketing"], 100)
+
+    def test_bad_bodies(self):
+        for body in ({"sites": [self.site(on=("HugeBillboard",))]},
+                     {"sites": [{"address": GIFTS, "on": []}]},
+                     {"sites": [self.site(), self.site()]},
+                     {"sites": [self.site(on="SmallInternet")]},
+                     {"sites": None}):
+            status, answer = self.post("marketing", dict(body, dryRun=True))
+            self.assertEqual((status, answer["error"]), (400, "bad_request"), body)
+
+    def test_refuse_write_answers_each_row_with_the_rule_and_its_agency(self):
+        self.link.refuse_write = "refused"
+        status, answer = self.post("marketing", {"sites": [self.site()]})
+        row = answer["rows"][0]
+        self.assertEqual((status, answer["error"], row["error"]), (409, "refused", "agency_closed"))
+        self.assertEqual((row["agency"]["name"], row["opens"]), ("CityAds", {"day": 35, "hour": 8}))
+        self.link.refuse_write = "refused:no_promotion"
+        row = self.post("marketing", {"sites": [self.site()]})[1]["rows"][0]
+        self.assertEqual((row["error"], row["agency"]), ("no_promotion", None))
+
+
+class MockMarketingWeekdays(MarketingMock):
+    """CityAds keeps the game's own hours, Monday to Friday 8 to 17: on the mock's
+    Saturday it is closed, and opens on Monday, day 36, at 8."""
+
+    CITYADS_WEEK = week(days=range(1, 6))
+
+    def test_a_closed_agency_names_its_next_opening(self):
+        _, answer = self.post("marketing", {"dryRun": True, "sites": [self.site(BARE, on=("SmallBillboard",), was=())]})
+        row = answer["rows"][0]
+        self.assertEqual((row["error"], row["agency"], row["opens"]),
+                         ("agency_closed", {"name": "CityAds", "address": CITYADS}, {"day": 36, "hour": 8}))
+        # Gifts' own billboard switch flips off while CityAds is closed.
+        _, answer = self.post("marketing", {"dryRun": True, "sites": [self.site(on=("SmallInternet",))]})
+        self.assertEqual(answer["rows"][0]["error"], None)
+        # A row that needs no new CityAds switch goes through, without billboard switches.
+        _, answer = self.post("marketing", {"dryRun": True, "sites": [self.site()]})
+        self.assertEqual((answer["rows"][0]["error"], answer["rows"][0]["entriesAdded"]),
+                         (None, ["SmallInternet", "MediumInternet"]))
+        self.assertEqual([(w["type"], w["opens"]) for w in answer["rows"][0]["waiting"]],
+                         [("MediumBillboard", {"day": 36, "hour": 8}), ("LargeBillboard", {"day": 36, "hour": 8})])
+
+
+class MockMarketingTemporarilyClosed(MarketingMock):
+    """A temporarily closed agency: closed, and no schedule says until when."""
+
+    CITYADS_WEEK = week()
+    CITYADS_TEMPORARILY_CLOSED = True
+
+    def test_a_closed_agency_names_its_next_opening(self):
+        _, answer = self.post("marketing", {"dryRun": True, "sites": [self.site(BARE, on=("SmallBillboard",), was=())]})
+        row = answer["rows"][0]
+        self.assertEqual((row["error"], row["agency"]["name"], row["opens"]), ("agency_closed", "CityAds", None))
+        _, answer = self.post("marketing", {"dryRun": True, "sites": [self.site()]})
+        self.assertEqual([(w["type"], w["opens"]) for w in answer["rows"][0]["waiting"]],
+                         [("MediumBillboard", None), ("LargeBillboard", None)], "no schedule says until when")
