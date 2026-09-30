@@ -3125,20 +3125,21 @@
         "now": 84
        },
        {
-        "hours": 35.0,
-        "id": "EMPana",
-        "name": "Ana Silva",
+        "hours": 32.0,
+        "id": "EMPben",
+        "name": "Ben Ode",
         "now": 56
        },
        {
-        "hours": 49.0,
-        "id": "EMPben",
-        "name": "Ben Ode",
+        "hours": 35.0,
+        "id": "EMPana",
+        "name": "Ana Silva",
         "now": 56
        }
       ],
       "hireWeeks": [
        {
+        "band": "full",
         "days": 7,
         "hours": 49,
         "skill": "ba:skill_cleaning",
@@ -3146,76 +3147,99 @@
          {
           "d": 0,
           "f": 15,
-          "shift": 2,
+          "shift": 3,
           "station": "CLEANliquor",
           "t": 22
          },
          {
           "d": 1,
           "f": 15,
-          "shift": 6,
+          "shift": 7,
           "station": "CLEANliquor",
           "t": 22
          },
          {
           "d": 2,
           "f": 15,
-          "shift": 10,
+          "shift": 11,
           "station": "CLEANliquor",
           "t": 22
          },
          {
           "d": 3,
           "f": 15,
-          "shift": 14,
+          "shift": 15,
           "station": "CLEANliquor",
           "t": 22
          },
          {
           "d": 4,
           "f": 15,
-          "shift": 18,
+          "shift": 19,
           "station": "CLEANliquor",
           "t": 22
          },
          {
           "d": 5,
           "f": 15,
-          "shift": 22,
+          "shift": 23,
           "station": "CLEANliquor",
-          "t": 22
-         },
-         {
-          "d": 6,
-          "f": 15,
-          "shift": 26,
-          "station": "CLEANliquor",
-          "t": 22
-         }
-        ]
-       },
-       {
-        "days": 2,
-        "hours": 14,
-        "skill": "ba:skill_customerservice",
-        "slots": [
-         {
-          "d": 0,
-          "f": 15,
-          "shift": 3,
-          "station": "REGliquor",
           "t": 22
          },
          {
           "d": 6,
           "f": 15,
           "shift": 27,
+          "station": "CLEANliquor",
+          "t": 22
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 4,
+        "hours": 31,
+        "skill": "ba:skill_customerservice",
+        "slots": [
+         {
+          "d": 0,
+          "f": 12,
+          "shift": 2,
+          "station": "REGliquor",
+          "t": 15
+         },
+         {
+          "d": 0,
+          "f": 15,
+          "shift": 4,
+          "station": "REGliquor",
+          "t": 22
+         },
+         {
+          "d": 1,
+          "f": 8,
+          "shift": 6,
+          "station": "REGliquor",
+          "t": 15
+         },
+         {
+          "d": 2,
+          "f": 15,
+          "shift": 12,
+          "station": "REGliquor",
+          "t": 22
+         },
+         {
+          "d": 6,
+          "f": 15,
+          "shift": 28,
           "station": "REGliquor",
           "t": 22
          }
         ]
        }
       ],
+      "shortHires": [],
       "spare": [],
       "spareSkills": {}
      },
@@ -3229,20 +3253,21 @@
         "now": 84
        },
        {
-        "hours": 35.0,
-        "id": "EMPana",
-        "name": "Ana Silva",
+        "hours": 32.0,
+        "id": "EMPben",
+        "name": "Ben Ode",
         "now": 56
        },
        {
-        "hours": 49.0,
-        "id": "EMPben",
-        "name": "Ben Ode",
+        "hours": 35.0,
+        "id": "EMPana",
+        "name": "Ana Silva",
         "now": 56
        }
       ],
       "hireWeeks": [
        {
+        "band": "full",
         "days": 7,
         "hours": 49,
         "skill": "ba:skill_cleaning",
@@ -3250,76 +3275,99 @@
          {
           "d": 0,
           "f": 15,
-          "shift": 2,
+          "shift": 3,
           "station": "CLEANliquor",
           "t": 22
          },
          {
           "d": 1,
           "f": 15,
-          "shift": 6,
+          "shift": 7,
           "station": "CLEANliquor",
           "t": 22
          },
          {
           "d": 2,
           "f": 15,
-          "shift": 10,
+          "shift": 11,
           "station": "CLEANliquor",
           "t": 22
          },
          {
           "d": 3,
           "f": 15,
-          "shift": 14,
+          "shift": 15,
           "station": "CLEANliquor",
           "t": 22
          },
          {
           "d": 4,
           "f": 15,
-          "shift": 18,
+          "shift": 19,
           "station": "CLEANliquor",
           "t": 22
          },
          {
           "d": 5,
           "f": 15,
-          "shift": 22,
+          "shift": 23,
           "station": "CLEANliquor",
-          "t": 22
-         },
-         {
-          "d": 6,
-          "f": 15,
-          "shift": 26,
-          "station": "CLEANliquor",
-          "t": 22
-         }
-        ]
-       },
-       {
-        "days": 2,
-        "hours": 14,
-        "skill": "ba:skill_customerservice",
-        "slots": [
-         {
-          "d": 0,
-          "f": 15,
-          "shift": 3,
-          "station": "REGliquor",
           "t": 22
          },
          {
           "d": 6,
           "f": 15,
           "shift": 27,
+          "station": "CLEANliquor",
+          "t": 22
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 4,
+        "hours": 31,
+        "skill": "ba:skill_customerservice",
+        "slots": [
+         {
+          "d": 0,
+          "f": 12,
+          "shift": 2,
+          "station": "REGliquor",
+          "t": 15
+         },
+         {
+          "d": 0,
+          "f": 15,
+          "shift": 4,
+          "station": "REGliquor",
+          "t": 22
+         },
+         {
+          "d": 1,
+          "f": 8,
+          "shift": 6,
+          "station": "REGliquor",
+          "t": 15
+         },
+         {
+          "d": 2,
+          "f": 15,
+          "shift": 12,
+          "station": "REGliquor",
+          "t": 22
+         },
+         {
+          "d": 6,
+          "f": 15,
+          "shift": 28,
           "station": "REGliquor",
           "t": 22
          }
         ]
        }
       ],
+      "shortHires": [],
       "spare": [],
       "spareSkills": {}
      }
@@ -3355,7 +3403,7 @@
       "bench": [],
       "fewer": [
        {
-        "hours": 50.0,
+        "hours": 40.0,
         "id": "EMPdee",
         "name": "Dee Park",
         "now": 70
@@ -3363,10 +3411,18 @@
       ],
       "hireWeeks": [
        {
-        "days": 2,
-        "hours": 20,
+        "band": "full",
+        "days": 3,
+        "hours": 30,
         "skill": "ba:skill_customerservice",
         "slots": [
+         {
+          "d": 0,
+          "f": 9,
+          "shift": 0,
+          "station": "REGgifts",
+          "t": 19
+         },
          {
           "d": 5,
           "f": 9,
@@ -3384,6 +3440,7 @@
         ]
        }
       ],
+      "shortHires": [],
       "spare": [],
       "spareSkills": {}
      },
@@ -3391,7 +3448,7 @@
       "bench": [],
       "fewer": [
        {
-        "hours": 50.0,
+        "hours": 40.0,
         "id": "EMPdee",
         "name": "Dee Park",
         "now": 70
@@ -3399,10 +3456,18 @@
       ],
       "hireWeeks": [
        {
-        "days": 2,
-        "hours": 20,
+        "band": "full",
+        "days": 3,
+        "hours": 30,
         "skill": "ba:skill_customerservice",
         "slots": [
+         {
+          "d": 0,
+          "f": 9,
+          "shift": 0,
+          "station": "REGgifts",
+          "t": 19
+         },
          {
           "d": 5,
           "f": 9,
@@ -3420,6 +3485,7 @@
         ]
        }
       ],
+      "shortHires": [],
       "spare": [],
       "spareSkills": {}
      }
@@ -3487,6 +3553,7 @@
       ],
       "hireWeeks": [
        {
+        "band": "full",
         "days": 4,
         "hours": 48,
         "skill": "ba:skill_factoryworker",
@@ -3522,6 +3589,7 @@
         ]
        },
        {
+        "band": "full",
         "days": 4,
         "hours": 48,
         "skill": "ba:skill_factoryworker",
@@ -3557,6 +3625,7 @@
         ]
        },
        {
+        "band": "full",
         "days": 4,
         "hours": 48,
         "skill": "ba:skill_factoryworker",
@@ -3592,6 +3661,7 @@
         ]
        },
        {
+        "band": "full",
         "days": 4,
         "hours": 48,
         "skill": "ba:skill_factoryworker",
@@ -3627,6 +3697,7 @@
         ]
        },
        {
+        "band": "full",
         "days": 4,
         "hours": 48,
         "skill": "ba:skill_factoryworker",
@@ -3662,6 +3733,7 @@
         ]
        },
        {
+        "band": "full",
         "days": 4,
         "hours": 48,
         "skill": "ba:skill_factoryworker",
@@ -3697,6 +3769,7 @@
         ]
        }
       ],
+      "shortHires": [],
       "spare": [],
       "spareSkills": {}
      },
@@ -3712,6 +3785,7 @@
       ],
       "hireWeeks": [
        {
+        "band": "full",
         "days": 7,
         "hours": 49,
         "skill": "ba:skill_factoryworker",
@@ -3768,6 +3842,7 @@
         ]
        }
       ],
+      "shortHires": [],
       "spare": [],
       "spareSkills": {}
      }
@@ -8007,7 +8082,7 @@
       "skill": "ba:skill_customerservice"
      }
     ],
-    "hoursUncovered": 20,
+    "hoursUncovered": 30,
     "people": 1
    },
    "basis": {
@@ -8384,7 +8459,7 @@
    "cost": {
     "current": 1260.0,
     "currentCover": 0.0,
-    "weekly": 900.0
+    "weekly": 720.0
    },
    "current": {
     "cleaning": 0,
@@ -8455,14 +8530,14 @@
        "skill": "ba:skill_customerservice"
       }
      ],
-     "hoursUncovered": 120,
+     "hoursUncovered": 132,
      "people": 3
     },
     "bench": [],
     "cost": {
      "current": 1260.0,
      "currentCover": 0.0,
-     "weekly": 864.0
+     "weekly": 648.0
     },
     "daysMeasured": 14,
     "daysNeeded": 9,
@@ -8470,7 +8545,7 @@
      "ba:skill_customerservice": {
       "have": 1,
       "hire": 3,
-      "hireHours": 90,
+      "hireHours": 132,
       "kind": "serve",
       "max": 5,
       "min": 4,
@@ -8530,7 +8605,7 @@
      {
       "d": 0,
       "f": 0,
-      "p": 0,
+      "p": null,
       "s": 0,
       "t": 12
      },
@@ -8893,7 +8968,7 @@
        "skill": "ba:skill_customerservice"
       }
      ],
-     "hoursUncovered": 20,
+     "hoursUncovered": 30,
      "people": 1
     },
     "bench": [],
@@ -8901,7 +8976,7 @@
     "cost": {
      "current": 1260.0,
      "currentCover": 0.0,
-     "weekly": 900.0
+     "weekly": 720.0
     },
     "headcount": {
      "ba:skill_customerservice": {
@@ -8965,7 +9040,7 @@
      {
       "d": 0,
       "f": 9,
-      "p": 0,
+      "p": null,
       "s": 0,
       "t": 19
      },
@@ -9040,7 +9115,7 @@
     {
      "d": 0,
      "f": 9,
-     "p": 0,
+     "p": null,
      "s": 0,
      "t": 19
     },
@@ -9128,7 +9203,7 @@
       "skill": "ba:skill_customerservice"
      }
     ],
-    "hoursUncovered": 63,
+    "hoursUncovered": 80,
     "people": 2
    },
    "basis": {
@@ -9505,7 +9580,7 @@
    "cost": {
     "current": 3192.0,
     "currentCover": 1176.0,
-    "weekly": 2198.0
+    "weekly": 1892.0
    },
    "current": {
     "cleaning": 7,
@@ -9686,14 +9761,14 @@
        "skill": "ba:skill_customerservice"
       }
      ],
-     "hoursUncovered": 192,
+     "hoursUncovered": 204,
      "people": 5
     },
     "bench": [],
     "cost": {
      "current": 3192.0,
      "currentCover": 1176.0,
-     "weekly": 2400.0
+     "weekly": 2184.0
     },
     "daysMeasured": 14,
     "daysNeeded": 9,
@@ -9701,7 +9776,7 @@
      "ba:skill_cleaning": {
       "have": 1,
       "hire": 3,
-      "hireHours": 90,
+      "hireHours": 120,
       "kind": "clean",
       "max": 5,
       "min": 4,
@@ -9711,7 +9786,7 @@
      "ba:skill_customerservice": {
       "have": 2,
       "hire": 2,
-      "hireHours": 60,
+      "hireHours": 84,
       "kind": "serve",
       "max": 5,
       "min": 4,
@@ -9812,7 +9887,7 @@
      {
       "d": 0,
       "f": 0,
-      "p": 1,
+      "p": null,
       "s": 0,
       "t": 12
      },
@@ -10024,7 +10099,7 @@
     "ba:skill_cleaning": {
      "have": 1,
      "hire": 1,
-     "hireHours": 30,
+     "hireHours": 49,
      "kind": "clean",
      "max": 3,
      "min": 2,
@@ -10034,7 +10109,7 @@
     "ba:skill_customerservice": {
      "have": 2,
      "hire": 1,
-     "hireHours": 30,
+     "hireHours": 31,
      "kind": "serve",
      "max": 3,
      "min": 2,
@@ -10294,7 +10369,7 @@
        "skill": "ba:skill_customerservice"
       }
      ],
-     "hoursUncovered": 63,
+     "hoursUncovered": 80,
      "people": 2
     },
     "bench": [],
@@ -10302,13 +10377,13 @@
     "cost": {
      "current": 3192.0,
      "currentCover": 1176.0,
-     "weekly": 2198.0
+     "weekly": 1892.0
     },
     "headcount": {
      "ba:skill_cleaning": {
       "have": 1,
       "hire": 1,
-      "hireHours": 30,
+      "hireHours": 49,
       "kind": "clean",
       "max": 3,
       "min": 2,
@@ -10318,7 +10393,7 @@
      "ba:skill_customerservice": {
       "have": 2,
       "hire": 1,
-      "hireHours": 30,
+      "hireHours": 31,
       "kind": "serve",
       "max": 3,
       "min": 2,
@@ -10417,6 +10492,13 @@
      {
       "d": 0,
       "f": 8,
+      "p": 1,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 0,
+      "f": 8,
       "k": "clean",
       "p": 2,
       "s": 1,
@@ -10424,8 +10506,8 @@
      },
      {
       "d": 0,
-      "f": 8,
-      "p": 1,
+      "f": 12,
+      "p": null,
       "s": 0,
       "t": 15
      },
@@ -10455,7 +10537,7 @@
      {
       "d": 1,
       "f": 8,
-      "p": 1,
+      "p": null,
       "s": 0,
       "t": 15
      },
@@ -10500,7 +10582,7 @@
      {
       "d": 2,
       "f": 15,
-      "p": 1,
+      "p": null,
       "s": 0,
       "t": 22
      },
@@ -10705,6 +10787,13 @@
     {
      "d": 0,
      "f": 8,
+     "p": 1,
+     "s": 0,
+     "t": 12
+    },
+    {
+     "d": 0,
+     "f": 8,
      "k": "clean",
      "p": 2,
      "s": 1,
@@ -10712,8 +10801,8 @@
     },
     {
      "d": 0,
-     "f": 8,
-     "p": 1,
+     "f": 12,
+     "p": null,
      "s": 0,
      "t": 15
     },
@@ -10743,7 +10832,7 @@
     {
      "d": 1,
      "f": 8,
-     "p": 1,
+     "p": null,
      "s": 0,
      "t": 15
     },
@@ -10788,7 +10877,7 @@
     {
      "d": 2,
      "f": 15,
-     "p": 1,
+     "p": null,
      "s": 0,
      "t": 22
     },

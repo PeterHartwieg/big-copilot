@@ -6,7 +6,7 @@
 // over them, and this suite runs that module once and reads the rows off its
 // stdout. A hand-written fixture drifts from what the Python emits — a
 // `current.shifts` that does not match `current.list`, a `hireHours` that is
-// not `hire * 30`, a `p: null` the planner never wrote — and a block that
+// not its hire weeks' hours, a `p: null` the planner never wrote — and a block that
 // passes on those is not known to work on anything.
 //
 // Install Playwright and its Chromium browser to run; NODE_PATH may point at an
@@ -170,19 +170,19 @@ test('the planner writes the hiring lines the block draws', () => {
   // The whole block rests on this: if `shifts` never carried a `p: null` row,
   // every dashed bar below would be testing a shape that cannot happen.
   const open = ROWS.full.shifts.filter(s => s.p === null);
-  // Nobody may be given more than full time's 50 hours, so one guard covers
-  // four of the locker's seven days and the other ten twelve-hour lines are
-  // hires. The cleaning station has two people on it -- CLEAN1 and the bench
-  // member -- so eight of its days are covered and six lines are hires.
+  // Nobody may be given more than full time's 50 hours: the guard covers four
+  // of the locker's twelve-hour lines, CLEAN1 four of the cleaning station's,
+  // and the bench member, who holds both skills, two of each. Eight lines of
+  // each are left to hires, two hires a role.
   assert.equal(open.length, 16, 'the cover nobody left here may work');
   assert.deepEqual(
     [open.filter(s => s.k === 'security').length, open.filter(s => s.k === 'clean').length],
-    [10, 6]);
+    [8, 8]);
   // And the fixtures are internally consistent, which a hand-made one is not.
   for(const [name, row] of Object.entries(ROWS)){
     assert.equal(row.current.shifts, row.current.list.length, name);
-    for(const h of Object.values(row.headcount))
-      assert.equal(h.hireHours, h.hire * 30, `${name} ${h.kind}`);
+    for(const [skill, h] of Object.entries(row.headcount))
+      assert.equal(h.hireHours, (row._hire.hireWeeks || []).filter(w => w.skill === skill).reduce((n, w) => n + w.hours, 0), `${name} ${h.kind}`);
     for(const s of row.shifts){
       assert.ok(row.stations[s.s], `${name}: station ${s.s}`);
       assert.ok(s.p === null || row.people[s.p], `${name}: person ${s.p}`);
@@ -404,7 +404,7 @@ test('a shift bar wears its kind, its pin and the bench mark', async () => {
     assert.match(await bar.getAttribute('data-read'), /the plan works around it/);
     // BENCH is not this shop's yet, so their bar and a MyEmployees step say so.
     const bench = ROWS.pinned.bench[0].p;
-    assert.match(await page.locator(`${mon}.sp-shift[data-p="${bench}"]`).getAttribute('data-read'),
+    assert.match(await page.locator(`#sp-roster .sp-shift[data-p="${bench}"]`).first().getAttribute('data-read'),
       /from the bench.*assign them here in MyEmployees first/);
     // One step names everybody to add first, the bench member among them.
     const add = page.locator('#sp-roster .sp-step.sp-add');
@@ -416,8 +416,7 @@ test('a shift bar wears its kind, its pin and the bench mark', async () => {
 test('a line nobody can be given is a dashed anticipated hire, and cannot be ticked', async () => {
   const page = await shop('full');
   try {
-    const hire = page.locator(mon + '.sp-shift.sp-hire');
-    assert.equal(await hire.count(), 1);
+    const hire = page.locator(mon + '.sp-shift.sp-hire').first();
     assert.equal(await hire.evaluate(el => el.tagName), 'SPAN', 'nothing to type yet');
     // It is part of the week, drawn in its own hours, and carries no name
     // because there is nobody on it yet.
@@ -520,6 +519,38 @@ test('a tick kept from a plan that has changed does not count', async () => {
 
 // --- the rest of the block ---------------------------------------------------
 
+test("a locker line in the game's week with nobody on it is not a guard", async () => {
+  const page = await shop('full', row => {
+    const locker = row.stations.findIndex(st => st.skill === 'ba:skill_securityguard');
+    const cur = row.current || {list: []};
+    row.current = Object.assign({}, cur, {security: 1,
+      list: (cur.list || []).concat([{d: 0, s: locker, f: 8, t: 14, p: null, k: 'security'}])});
+  });
+  try {
+    const guard = page.locator('#sp-roster .sp-hc .sp-new').first();
+    assert.match(await guard.getAttribute('data-read'), /nobody covers this locker today/);
+  } finally { await page.close(); }
+});
+
+test("a locker the game's own week has guards on is not called uncovered", async () => {
+  // QA on a real save: the plan hired for a locker two guards were covering,
+  // and the line said nobody covers it today. That is the game's week to say,
+  // locker by locker; the new wages are still new wages.
+  const page = await shop('full', row => {
+    const locker = row.stations.findIndex(st => st.skill === 'ba:skill_securityguard');
+    const cur = row.current || {list: []};
+    row.current = Object.assign({}, cur, {security: 1,
+      list: (cur.list || []).concat([{d: 0, s: locker, f: 8, t: 14, p: 0, k: 'security'}])});
+  });
+  try {
+    const guard = page.locator('#sp-roster .sp-hc .sp-new').first();
+    assert.match(await guard.innerText(), /\+96 h\/wk/);
+    const read = await guard.getAttribute('data-read');
+    assert.match(read, /new wages/);
+    assert.doesNotMatch(read, /nobody covers this locker/);
+  } finally { await page.close(); }
+});
+
 test('a day that is an earlier day again is marked as its copy', async () => {
   const page = await shop('shut');
   try {
@@ -536,7 +567,8 @@ test('a security locker nobody staffs is shown as new spending, in hours it can 
   const page = await shop('full');
   try {
     const guard = page.locator('#sp-roster .sp-hc .sp-new').first();
-    assert.match(await guard.innerText(), /\+90 h\/wk/);
+    // The hires' weeks' own hours (eight twelve-hour lines), not 30 a hire.
+    assert.match(await guard.innerText(), /\+96 h\/wk/);
     assert.match(await guard.getAttribute('data-read'), /new wages.*nobody covers this locker today/);
     // "Customer Service" and "Cleaning station" are both CS: the codes on the
     // line have to stay apart or the shop looks like it has two of one role.
@@ -563,7 +595,7 @@ test('a bench member is counted off every role they hold, not just the first', a
     // take the three-letter fallback; the locker keeps its initials.
     const security = rows.find(r => r[0] === 'SG');
     assert.deepEqual(cleaning.slice(1), [4, 1], 'have 2, one of them the bench, plus 2 to hire');
-    assert.deepEqual(security.slice(1), [5, 1], 'have 2, the same bench member, plus 3 to hire');
+    assert.deepEqual(security.slice(1), [4, 1], 'have 2, the same bench member, plus 2 to hire');
   } finally { await page.close(); }
 });
 
@@ -1598,7 +1630,7 @@ test('the Optimize staffing card opens the shop with most work to save', async (
       return [card.querySelector('.soon').textContent, card.querySelector('.what').textContent, card.dataset.site];
     });
     assert.equal(shown[0], '−174 ENTRIES');
-    assert.match(shown[1], /Big saving: 200 entries become 26, and 5 people to hire\./);
+    assert.match(shown[1], /Big saving: 200 entries become 26, and 4 people to hire\./);
     assert.equal(shown[2], 'b');
   } finally { await page.close(); }
 });
@@ -1638,7 +1670,7 @@ test('the card measures a saving in lines to enter, not in lines the plan drew',
     }, [a, b]);
     assert.equal(shown[3], '[70,70]', 'both plans are 70 blocks to drag in');
     assert.equal(shown[0], '\u221230 ENTRIES');
-    assert.match(shown[1], /shop-a: 100 entries become 70, and 5 people to hire\./);
+    assert.match(shown[1], /shop-a: 100 entries become 70, and 4 people to hire\./);
     assert.equal(shown[2], 'shop-a', 'not shop-b, which saves ten');
   } finally { await page.close(); }
 });
@@ -1656,7 +1688,7 @@ test('the card scores the saving on the lines somebody can be put on', async () 
 ];
     });
     assert.equal(shown[0], '−16 ENTRIES');
-    assert.match(shown[1], /42 entries become 26, and 5 people to hire\./);
+    assert.match(shown[1], /42 entries become 26, and 4 people to hire\./);
     assert.doesNotMatch(shown[1], /become 42/);
   } finally { await page.close(); }
 });
@@ -1673,7 +1705,7 @@ test('the card sizes a plan with nothing to save on the same week', async () => 
     });
     assert.equal(shown[0], `${shown[2]} HOURS`, 'the hours somebody can be put on');
     assert.match(shown[1], new RegExp(
-      `a week of ${shown[2]} hours to set, in 26 entries, and 5 people to hire[.]`));
+      `a week of ${shown[2]} hours to set, in 26 entries, and 4 people to hire[.]`));
   } finally { await page.close(); }
 });
 
@@ -1697,7 +1729,7 @@ test('a player who never opened BizMan is offered the plan, not told they are un
     });
     assert.equal(shown[0], `${shown[3]} HOURS`);
     assert.match(shown[1], new RegExp(
-      `Big shop: a week of ${shown[3]} hours to set, in 26 entries, and 5 people to hire[.]`));
+      `Big shop: a week of ${shown[3]} hours to set, in 26 entries, and 4 people to hire[.]`));
     assert.doesNotMatch(shown[1], /measured/);
     assert.equal(shown[2], 'b');
   } finally { await page.close(); }

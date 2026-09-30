@@ -16,7 +16,6 @@ from ba_save import Save
 from ba_dashboard import (
     ALL_DAY_OPEN,
     DEMAND_RUN_DAYS,
-    HIRE_ORDERS,
     FULL_TIME,
     JOB_DEMANDS,
     SHIFT_CAP,
@@ -24,13 +23,11 @@ from ba_dashboard import (
     _full_cover_in_game,
     _full_need,
     _hourly,
-    _hires_for,
     _keeps_floors,
     _open_all_hours,
     _days_open,
     _open_day_average,
     _run_measured,
-    _pack_hires,
 )
 from tests.test_staffing import (
     CLEAN_STATION,
@@ -268,7 +265,8 @@ class FullCoverRulesTest(unittest.TestCase):
         rows = plan_sites(
             [
                 dict(items=[(1, REGISTER)], hourly={}, weeks=0, number=12),
-                dict(items=[(2, REGISTER)], hourly={h: 1 for h in range(24)}, number=14),
+                dict(items=[(2, REGISTER)], hourly={h: 1 for h in range(24)}, number=14,
+                     staff=1),
             ],
             [employee("free", [SERVICE], here=False)],
         )
@@ -639,8 +637,9 @@ class AddPeopleTest(unittest.TestCase):
     def test_a_hand_worked_site(self):
         row = self.row()
         add = row["addPeople"]
-        # "a" works 48 of the register's 168 hours; the bench cleaner 48 of the
-        # mop's. The rest is ten twelve-hour entries each, three hires each.
+        # "a" works at least 30 of the register's 168 hours (48 of them before
+        # a hire is lifted to a full week out of the rest); the bench cleaner
+        # 48 of the mop's. The rest is three hires each.
         self.assertEqual([(r["id"], r["name"], r["skill"], r["role"]) for r in add["assign"]],
                          [("b", "B", CLEANING, "Cleaning")])
         self.assertEqual(row["people"][add["assign"][0]["p"]]["id"], "b")
@@ -651,7 +650,8 @@ class AddPeopleTest(unittest.TestCase):
         self.assertEqual(add["people"], 7)
         own = sum(hours(s) for s in row["shifts"] if s["p"] is not None
                   and row["people"][s["p"]]["id"] == "a")
-        self.assertEqual(own, 48)
+        self.assertGreaterEqual(own, FULL_TIME[0])
+        self.assertLessEqual(own, 48)
         self.assertEqual(add["hoursUncovered"], 2 * WEEK - own)
 
     def test_the_count_agrees_with_the_plan_in_both_plans(self):
@@ -714,55 +714,155 @@ class AddPeopleTest(unittest.TestCase):
         self.assertEqual(promised, [[], ["free"]])
 
 
+def place_runs(runs, people=(), hires=True):
+    """_place_week() over stations of one skill wanted the given runs.
+
+    `runs` is {station: [(weekday, from, to)]}, handed to the placer as a
+    factory hands it a line's hours (need `stations`), so the week is exactly
+    the lines asked for.
+    """
+    stations = sorted(runs, key=str)
+    grid = {"roles": [{"skill": "x", "label": "x"}],
+            "stations": [{"id": st, "skill": "x", "rate": 1, "name": str(st)} for st in stations]}
+    wanted = {}
+    for index, st in enumerate(stations):
+        wanted[index] = [set() for _ in range(7)]
+        for wd, start, end in runs[st]:
+            wanted[index][wd].update(range(start, end))
+    need = {"x": {"need": [[sum(1 for days in wanted.values() if h in days[wd]) for h in range(24)]
+                           for wd in range(7)],
+                  "basis": [["test"] * 24 for _ in range(7)], "stations": wanted}}
+    people = list(people)
+    state = {p["id"]: ba_dashboard._fresh_state() for p in people}
+    return ba_dashboard._place_week(grid, need, ALL_DAY_OPEN, [], people,
+                                    {p["id"]: p for p in people}, {"key": "k", "name": "k"}, [],
+                                    state, hires=hires)
+
+
+def first_fit(week):
+    """How many people the old packer's first fit by the clock took for a week's open lines.
+
+    `week` is the week before any hire (_place_week(..., hires=False)).
+    """
+    hires = []
+    for s in sorted((s for s in week["shifts"] if s["employee"] is None),
+                    key=lambda s: (s["wd"], s["from"], s["to"], str(s["station"]))):
+        span = set(range(s["from"], s["to"]))
+        for hire in hires:
+            busy = hire["busy"][s["wd"]]
+            if hire["hours"] + len(span) <= FULL_TIME[1] and len(busy) + len(span) <= SHIFT_CAP \
+                    and busy.isdisjoint(span):
+                break
+        else:
+            hire = {"hours": 0, "busy": [set() for _ in range(7)]}
+            hires.append(hire)
+        hire["hours"] += len(span)
+        hire["busy"][s["wd"]].update(span)
+    return len(hires)
+
+
 class HireCountTest(unittest.TestCase):
-    """The hire count is never worse than the first-fit count it replaced."""
+    """Hires are placeholder people in the one placer (_place_hires()).
+
+    The count is never above what the old packer's first fit by the clock
+    took, and each hire's week keeps the rules anybody's keeps.
+    """
+
+    def hire_weeks(self, week):
+        return [w for weeks in week["hireWeeks"].values() for w in weeks]
+
+    def assert_legal(self, week):
+        for hire in self.hire_weeks(week):
+            self.assertLessEqual(hire["hours"], FULL_TIME[1])
+            by_day = collections.defaultdict(set)
+            for s in hire["slots"]:
+                span = set(range(s["from"], s["to"]))
+                self.assertFalse(by_day[s["wd"]] & span, "a hire in two places at once")
+                by_day[s["wd"]] |= span
+                self.assertIsNone(s["employee"], "a hire's line is an open line")
+            self.assertTrue(all(len(day) <= SHIFT_CAP for day in by_day.values()))
 
     def test_the_smallest_case_the_review_found(self):
-        # A week where first fit by the clock takes two and longest-first takes
-        # three, under the 12-hour day. (The review's own case put 23 hours on
-        # one day, which two people can no longer work.)
+        # A week where first fit by the clock takes two and longest-first took
+        # three, under the 12-hour day.
         cases = [(1, 0, 20, 22), (1, 1, 11, 15), (3, 1, 17, 21), (4, 0, 7, 9), (4, 0, 12, 17),
                  (4, 2, 5, 9), (4, 2, 17, 24), (6, 1, 2, 9)]
-        slots = [{"wd": wd, "station": st, "from": f, "to": t, "skill": "x", "kind": "serve"}
-                 for wd, st, f, t in cases]
-        clock = _pack_hires(slots, None, HIRE_ORDERS[0])
-        self.assertEqual(clock, 2)
-        self.assertEqual(_pack_hires(slots, None, HIRE_ORDERS[1]), 3)
-        self.assertEqual(_hires_for(slots), 2)
+        runs = collections.defaultdict(list)
+        for wd, st, f, t in cases:
+            runs[st].append((wd, f, t))
+        week = place_runs(runs)
+        self.assertEqual(first_fit(place_runs(runs, hires=False)), 2)
+        self.assertEqual(len(self.hire_weeks(week)), 2)
+        self.assert_legal(week)
 
-    def test_at_first_fit_s_own_count_the_week_is_still_balanced(self):
+    def test_one_register_nine_to_six_is_two_full_weeks(self):
         """One register open 9 to 18 every day is 63 hours, two hires at the
-        least. First fit packs them 45 and 18 (the second on two days); the
-        balanced packing at the same count was never tried and should be."""
-        slots = [{"wd": wd, "station": 1, "from": f, "to": t, "skill": "x", "kind": "serve"}
-                 for wd in range(7) for f, t in _cut_run(9, 18)]
-        self.assertEqual(min(_pack_hires(slots, None, o) for o in HIRE_ORDERS), 2)
-        weeks = ba_dashboard._hire_weeks(slots)
-        self.assertEqual(sorted(w["hours"] for w in weeks), [27, 36])
-        self.assertEqual(sorted(len({s["wd"] for s in w["slots"]}) for w in weeks), [3, 4])
+        least. The old first fit packed them 45 and 18 (the second on two
+        days), and the balanced packing 36 and 27; the placer settles both
+        hires past full time's 30, cutting one line to do it."""
+        week = place_runs({1: [(wd, 9, 18) for wd in range(7)]})
+        weeks = self.hire_weeks(week)
+        self.assertEqual(len(weeks), 2)
+        self.assertTrue(all(w["hours"] >= FULL_TIME[0] for w in weeks),
+                        [w["hours"] for w in weeks])
+        self.assertEqual(sum(w["hours"] for w in weeks), 63)
+        self.assert_legal(week)
 
-    def test_never_above_either_first_fit_order(self):
+    def test_never_above_first_fit(self):
         rng = random.Random(5)
-        for _ in range(300):
-            slots = []
+        for _ in range(150):
+            runs = {}
             for st in range(rng.randint(1, 4)):
+                runs[st] = []
                 for wd in range(7):
                     if rng.random() < .25:
                         continue
                     a = rng.randint(0, 20)
-                    b = rng.randint(a + 1, 24)
-                    for f, t in _cut_run(a, b):
-                        slots.append({"wd": wd, "station": st, "from": f, "to": t,
-                                      "skill": "x", "kind": "serve"})
-            if not slots:
+                    runs[st].append((wd, a, rng.randint(a + 1, 24)))
+            if not any(runs.values()):
                 continue
-            count = _hires_for(slots)
-            first_fit = min(_pack_hires(slots, None, o) for o in HIRE_ORDERS)
-            self.assertLessEqual(count, first_fit)
-            # And the count is one a packing reaches: first fit's own, or a
-            # balanced packing at that count.
-            self.assertTrue(count == first_fit or any(
-                _pack_hires(slots, count, o) is not None for o in HIRE_ORDERS))
+            week = place_runs(runs)
+            self.assertLessEqual(len(self.hire_weeks(week)), first_fit(place_runs(runs, hires=False)))
+            self.assertEqual(sum(1 for s in week["shifts"] if s["employee"] is not None), 0)
+            self.assert_legal(week)
+
+
+class OpenIsFullTest(unittest.TestCase):
+    """A measured shop already open around the clock: its open-hours plan is full cover's."""
+
+    def row(self, **kw):
+        crew_ = [employee(f"s{i}", [SERVICE], demands=(FULLTIME,)) for i in range(3)] + \
+            [employee("c0", [CLEANING])]
+        return plan([(1, REGISTER), (2, REGISTER), (8, CLEAN_STATION)], crew_, BUSY,
+                    opens=((0, 12), (12, 24)), **kw)
+
+    def test_it_is_copied_and_the_copy_is_the_plan_placed_again(self):
+        row = self.row()
+        self.assertTrue(row["openCover"]["complete"])
+        with unittest.mock.patch.object(ba_dashboard, "_open_is_full", lambda site: False):
+            placed = self.row()
+        self.assertEqual(row["openCover"], placed["openCover"])
+        # The open-hours plan keeps its own frame: the doors as they are.
+        self.assertFalse(row["openCover"]["openAllHours"])
+        self.assertEqual(row["openCover"]["open"], placed["openCover"]["open"])
+        self.assertEqual(row["openCover"]["shifts"], row["fullCover"]["shifts"])
+        self.assertIsNot(row["openCover"]["_hire"], row["fullCover"]["_hire"])
+
+    def test_only_where_the_data_is_complete_and_the_doors_never_shut(self):
+        calls = []
+        real = ba_dashboard._place_week
+
+        def counting(*a, **k):
+            calls.append(a[2])  # the hours it is cut against
+            return real(*a, **k)
+
+        with unittest.mock.patch.object(ba_dashboard, "_place_week", counting):
+            self.row()
+        self.assertEqual(len(calls), 2)  # the demand plan and full cover
+        calls.clear()
+        with unittest.mock.patch.object(ba_dashboard, "_place_week", counting):
+            plan([(1, REGISTER)], [employee("s0", [SERVICE])], BUSY, opens=((8, 20),))
+        self.assertEqual(len(calls), 3)
 
 
 class ExchangeKeepsDemandsTest(unittest.TestCase):
@@ -845,15 +945,23 @@ class ExchangeKeepsDemandsTest(unittest.TestCase):
 
     def test_random_plans(self):
         # Seeds 2 and 4 hold the two cases the review found (plans 116 and 97).
+        # Without hires in either: the swaps leave fewer lines open, so fewer
+        # hires, and with more hires to share days with the week without the
+        # swaps can meet a day count the week with them cannot. That is the
+        # player's first priority, the fewest people, bought with the second,
+        # which is the order he asked for; this is about the swaps alone.
+        no_hires = unittest.mock.patch.object(ba_dashboard, "_place_hires",
+                                              lambda shifts, *a, **k: (shifts, {}))
         for seed in (2, 4):
             rng = random.Random(seed)
             for _ in range(120):
                 sc = self.scenario(rng)
                 args = (sc["items"], sc["employees"], sc["hourly"])
                 kw = dict(opens=sc["opens"], weeks=sc["weeks"])
-                row = plan(*args, **kw)
-                with unittest.mock.patch.object(ba_dashboard, "_fill_by_exchange",
-                                                lambda *a, **k: 0):
+                with no_hires:
+                    row = plan(*args, **kw)
+                with no_hires, unittest.mock.patch.object(ba_dashboard, "_fill_by_exchange",
+                                                          lambda *a, **k: 0):
                     base = plan(*args, **kw)
                 for which in (lambda r: r, lambda r: r["fullCover"]):
                     hours_now, days_now = self.broken(row, which(row))

@@ -2,7 +2,7 @@
 
 The roster block is easy to test against a shape the Python cannot produce —
 a `current.shifts` that does not match `current.list`, a `hireHours` that is
-not `hire * 30`, a hand-written `p: null` — and a block that passes on those is
+not its hire weeks' hours, a hand-written `p: null` — and a block that passes on those is
 not known to work on anything. So nothing here is hand-written: each row comes
 out of `_staffing()` on a synthetic save, built with the same helpers
 tests/test_staffing.py uses, and the JS suite runs this module once and reads
