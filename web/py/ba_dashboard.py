@@ -1956,6 +1956,7 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
     character = root.get("characterId") or "default"
     rhythm = _chain_rhythm(save, buildings, daily, day)
     supply = _supply(save, names, businesses, day, rhythm, recipes, history, character)
+    _order_says(businesses, supply)
     product_rhythm = _product_rhythm(save, buildings)
     for entry in products:
         beat = product_rhythm.get(entry["slug"])
@@ -16337,44 +16338,89 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
                 notes.append(_finding(fact["lvl"], site, "paused", text,
                                       key=key, rank=cover, subject=item, named=named, ev=ev))
                 continue
-            brought = entry.get("weekly", 0)
-            said = dict(item=named, smart=smart, brought=brought, use=fact["use"], short=fact["use"] - brought)
-            if row and row["coverFit"] == "short":
-                said.update(when=_runs_dry_when(row), by=row["shortBy"],
-                            arrives=row.get("coverageUntil", row["arrives"]))
-                text = (msg("f.order.smart.dry", "{item}: {smart} against a {use:,} week of use, {short:,} short; "
-                            "already runs dry {when}, {by:.1f} days before {arrives:day}'s import", **said)
-                        if entry.get("smart") else
-                        msg("f.order.dry", "{item} orders {brought:,} a week against a {use:,} week of use, "
-                            "{short:,} short; already runs dry {when}, {by:.1f} days before {arrives:day}'s import",
-                            **said))
-            elif fact.get("passes") is not None:
-                # The route into the depot only passes on what its sender
-                # holds: how long that lasts is how soon the order bites.
-                said.update(sender=businesses[fact["passes"]]["name"], lasts=_lasts_msg(fact.get("lasts")))
-                text = (msg("f.order.smart.passes", "{item}: {smart} against a {use:,} week of use, {short:,} "
-                            "short; the route from {sender} only passes on what it holds, {lasts} of it",
-                            **said)
-                        if entry.get("smart") else
-                        msg("f.order.passes", "{item} orders {brought:,} a week against a {use:,} week of use, "
-                            "{short:,} short; the route from {sender} only passes on what it holds, {lasts} "
-                            "of it", **said))
-            elif fact["lvl"] == "warn" and fact.get("lasts") is not None:
-                # Short of its week, but what is held here lasts beyond it.
-                said.update(lasts=_lasts_msg(fact["lasts"]))
-                text = (msg("f.order.smart.lasts", "{item}: {smart} against a {use:,} week of use, {short:,} "
-                            "short; what is held here lasts {lasts}", **said)
-                        if entry.get("smart") else
-                        msg("f.order.lasts", "{item} orders {brought:,} a week against a {use:,} week of use, "
-                            "{short:,} short; what is held here lasts {lasts}", **said))
-            elif entry.get("smart"):
-                text = msg("f.order.smart", "{item}: {smart} against a {use:,} week of use, {short:,} short", **said)
-            else:
-                text = msg("f.order", "{item} orders {brought:,} a week against a {use:,} week of use, {short:,} "
-                           "short", **said)
+            text = _order_text(businesses, fact, entry, row, named)
             notes.append(_finding(fact["lvl"], site, "order", text,
                                   key=key, rank=cover, subject=item, named=named, ev=ev))
     return notes
+
+
+def _order_text(businesses: list, fact: dict, entry: dict, row: dict | None, named) -> "Msg":
+    """An import order short of its week, as its finding says it: how soon
+    it bites (the stock runs dry before the drop, the route that only passes
+    on what its sender holds, or what is held here), or the order alone."""
+    smart = _smart_words(entry.get("target") or 0, entry.get("plainAfter", 0),
+                         entry.get("plainBefore", 0)) if entry.get("smart") else ""
+    brought = entry.get("weekly", 0)
+    said = dict(item=named, smart=smart, brought=brought, use=fact["use"], short=fact["use"] - brought)
+    if row and row["coverFit"] == "short":
+        said.update(when=_runs_dry_when(row), by=row["shortBy"],
+                    arrives=row.get("coverageUntil", row["arrives"]))
+        text = (msg("f.order.smart.dry", "{item}: {smart} against a {use:,} week of use, {short:,} short; "
+                    "already runs dry {when}, {by:.1f} days before {arrives:day}'s import", **said)
+                if entry.get("smart") else
+                msg("f.order.dry", "{item} orders {brought:,} a week against a {use:,} week of use, "
+                    "{short:,} short; already runs dry {when}, {by:.1f} days before {arrives:day}'s import",
+                    **said))
+    elif fact.get("passes") is not None:
+        # The route into the depot only passes on what its sender
+        # holds: how long that lasts is how soon the order bites.
+        said.update(sender=businesses[fact["passes"]]["name"], lasts=_lasts_msg(fact.get("lasts")))
+        text = (msg("f.order.smart.passes", "{item}: {smart} against a {use:,} week of use, {short:,} "
+                    "short; the route from {sender} only passes on what it holds, {lasts} of it",
+                    **said)
+                if entry.get("smart") else
+                msg("f.order.passes", "{item} orders {brought:,} a week against a {use:,} week of use, "
+                    "{short:,} short; the route from {sender} only passes on what it holds, {lasts} "
+                    "of it", **said))
+    elif fact["lvl"] == "warn" and fact.get("lasts") is not None:
+        # Short of its week, but what is held here lasts beyond it.
+        said.update(lasts=_lasts_msg(fact["lasts"]))
+        text = (msg("f.order.smart.lasts", "{item}: {smart} against a {use:,} week of use, {short:,} "
+                    "short; what is held here lasts {lasts}", **said)
+                if entry.get("smart") else
+                msg("f.order.lasts", "{item} orders {brought:,} a week against a {use:,} week of use, "
+                    "{short:,} short; what is held here lasts {lasts}", **said))
+    elif entry.get("smart"):
+        text = msg("f.order.smart", "{item}: {smart} against a {use:,} week of use, {short:,} short", **said)
+    else:
+        text = msg("f.order", "{item} orders {brought:,} a week against a {use:,} week of use, {short:,} "
+                   "short", **said)
+    return text
+
+
+def _order_says(businesses: list, supply: dict) -> None:
+    """The order finding's sentence on each short import line whose finding
+    says how long its stock lasts or which route only passes on what it
+    holds (fact `says`, and under `dem` where Demand sizing says it
+    differently): the Supply table's status tip gives it for every line,
+    where the findings list gives one line of a site. In place."""
+    facts = supply.get("facts", {})
+    depots = supply.get("factories", {}).get("depots", {})
+    labels = _fact_labels(businesses, supply)
+    rows = {mode: {(r["s"], r["slug"]): r for r in (supply.get("importsDem", supply.get("imports", []))
+                                                    if mode == "dem" else supply.get("imports", []))}
+            for mode in SIZING_MODES}
+    for s_key in _in_order(facts):
+        s = int(s_key)
+        for slug in _in_order(facts[s_key]):
+            entry = depots.get(s, {}).get(slug) or {}
+            said = {}
+            for mode in SIZING_MODES:
+                fact = _supply_fact(facts, s, slug, mode)
+                row = rows[mode].get((s, slug))
+                if (fact.get("role") != "depot" or fact.get("cad") != "weekly" or fact.get("st") != "short"
+                        or fact.get("why") != "order" or not entry
+                        or (row and row["coverFit"] == "short")
+                        or not (fact.get("passes") is not None
+                                or (fact.get("lvl") == "warn" and fact.get("lasts") is not None))):
+                    said[mode] = None
+                    continue
+                said[mode] = _order_text(businesses, fact, entry, row, tok(slug, labels.get((s, slug), slug)))
+            base = facts[s_key][slug]
+            if said["cap"] is not None:
+                base["says"] = said["cap"]
+            if said["dem"] != said["cap"]:
+                base.setdefault("dem", {})["says"] = said["dem"]
 
 
 def _runs_dry_when(row: dict):
@@ -16812,9 +16858,12 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
                 named=tok(slug_of[items[0]], items[0]), worth=worth,
                 # One target set too high can span several shops; the panel can
                 # only point at a row when a single site owns the finding, and
-                # the row it points at is the one the sentence names.
+                # the row it points at is the one the sentence names. Across
+                # several shops Supply still lands on a row: the named item's
+                # biggest holding (`s`, the shop's index).
                 ev={"slug": next(r["slug"] for r in rows if r["item"] == items[0])}
-                if one else None,
+                if one else {"slug": slug_of[items[0]], "s": max(
+                    (r for r in rows if r["item"] == items[0]), key=lambda r: (r["stock"], -r["s"]))["s"]},
             )
         )
     return notes
@@ -23797,9 +23846,24 @@ function alertLanding(a, link){
   }
   /* A supply kind lands on its view, on the row it is about, lit, with a
      crumb back: the view the route names. */
+  /* Idle stock at a factory: Production holds the factory, and the row where
+     the item is one of its lines or inputs; stock no line of its own draws
+     on has no row, so the factory itself is lit. */
+  if(a.group === "dead" && ovAtFactory(a)){
+    const b = alertSite(a), s = D.businesses.indexOf(b), slug = (a.ev || {}).slug || null;
+    const site = ((D.supply.factories || {}).sites || []).find(f => f.s === s) || {};
+    const rowed = slug && [...(site.lines || []), ...(site.needs || [])].some(r => r.slug === slug);
+    const g = ALERT_GROUPS.find(x => x.id === a.group);
+    sbLand("production", s, rowed ? slug : null,
+      g ? tt("today.crumb", "from Needs attention · {kind}", {kind: g.label}) : tt("today.crumb.any", "from Needs attention · a finding"));
+    return;
+  }
   if(link.view){
     const b = alertSite(a);
-    const s = b ? D.businesses.indexOf(b) : -1;
+    /* A finding across several shops (a target set too high in each) has no
+       site of its own; Python names the shop holding most of it (`ev.s`). */
+    const at = (a.ev || {}).s;
+    const s = b ? D.businesses.indexOf(b) : Number.isInteger(at) && D.businesses[at] ? at : -1;
     const view = link.view === "route" ? findingRoute(a).route.split("/")[1] : link.view;
     const g = ALERT_GROUPS.find(x => x.id === a.group);
     sbLand(view, s >= 0 ? s : null, (a.ev || {}).slug || null,
@@ -24167,7 +24231,8 @@ const FINDING_ROUTES = {
   topup: {route: "supply/deliveries", act: "delivery"},
   wholesale: {route: "supply/deliveries", act: "delivery"},
   target: {route: "supply/deliveries", act: "target"},
-  dead: {route: "supply/deliveries", act: "idle"},
+  /* Idle stock at a factory is read on Production, where the factory is. */
+  dead: {route: "supply/deliveries", act: "idle", pick: a => ovAtFactory(a) ? {route: "supply/production", act: "idle"} : null},
   notrouted: {route: "supply/deliveries", act: "routes"},
   /* A depot a route feeds runs dry before the route's round: its fix is the
      route, not an import (f.shortfall.route*). */
@@ -30310,7 +30375,8 @@ function sbDepotRow(d, ctx, r, kid){
     <td class="l">${cover}</td>
     <td class="imp-to">${setting}${once ? `<span class="sub r">${sbOnce(once)}</span>` : ""}</td>
     <td>${week}</td>
-    <td class="l st">${sbStatus(f, reason, (r.chk[0] || {}).reason || "")}</td></tr>`;
+    <td class="l st">${sbStatus(f, reason, [f.says ? `${sbCap(String(f.says))}${/[.!?]$/.test(String(f.says)) ? "" : "."}` : "",
+      (r.chk[0] || {}).reason || ""].filter(Boolean).join(" "))}</td></tr>`;
 }
 /* Who draws a line, for its tip: [site name, units a day] each. */
 const sbDrawnBy = users => tt("sb.wh.drawnBy", "Drawn by {users}", {users: sbList(users.map(([site, n]) =>
@@ -30329,12 +30395,16 @@ function sbDepotTable(d, ctx, rows){
 /* Whether a site's line is an import line (Imports) or a delivery (the rest,
    on Deliveries): Python marks the lines an import brings or a factory line
    needs (`imp`). Idle and stalled lines are on Deliveries too, where the
-   stock and what moves it are read; an imported one is on both. */
+   stock and what moves it are read; an imported one is on both. So is an
+   imported line with an idle-stock row of its own though its fact says
+   something else (an order short of its week while the depot still holds
+   months of it): the idle and target findings land on Deliveries. */
 function sbIsImport(d, s, slug){
   const f = szFact(s, slug);
   return !!(f && (f.imp || f.import)) || d.importRows.some(x => x.s === s && x.rows.some(r => r.slug === slug));
 }
-const sbIsDelivery = (d, s, slug) => !sbIsImport(d, s, slug) || ["idle", "stalled"].includes((szFact(s, slug) || {}).st);
+const sbIsDelivery = (d, s, slug) => !sbIsImport(d, s, slug) || ["idle", "stalled"].includes((szFact(s, slug) || {}).st)
+  || idleRows().some(r => r.s === s && r.slug === slug);
 /* The warehouses' part of a view: every depot in its scope with the lines the
    view reads (`want`: "imports" or "deliveries"), first tier or second. */
 function sbDepotPart(d, claimed, ctx, view, want){

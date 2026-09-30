@@ -15,7 +15,7 @@ C. a Smart Delivery import beside a factory route that covers the week.
 import itertools
 import unittest
 
-from ba_dashboard import plain, Names, RECIPE_ITEMS, WEEKDAYS, _import_notes, _shelf_notes, _supply, _supply_fact
+from ba_dashboard import plain, Names, RECIPE_ITEMS, WEEKDAYS, _idle_notes, _import_notes, _order_says, _shelf_notes, _supply, _supply_fact
 from test_supply_facts import BEER, RECIPES, WATER, Company
 
 WH, BREWERY, SHOP, CAFE = ("wh_road", 1), ("brew_lane", 2), ("main_street", 3), ("bean_street", 4)
@@ -699,6 +699,74 @@ class EffectiveSenderTests(unittest.TestCase):
                 fact = c.fact(SHOP, BEER)
                 self.assertEqual((fact["have"], fact["st"]), (400, "covered"))
                 self.assertEqual(c.notes(SHOP, "outruns"), [])
+
+
+def idle_but_short_board(target_high=False):
+    """A depot whose order is short of its week while it still holds months
+    of stock: its fact says short, its idle-stock row overstock (or, with
+    `target_high`, a plan that tops it up to 10,000 against a shop selling
+    100 a day: its target finding). tests/import_routes.test.cjs lands the
+    idle and target findings on the depot's row on Deliveries (QA of PR
+    #195: they opened Deliveries with the row missing), and, with
+    `target_high`, reads the order finding's sentence (the route that only
+    passes on what its sender holds) in the Imports row's status tip."""
+    c = Chain()
+    if target_high:
+        c.site(BREWERY, "Holder")
+        c.hold(BREWERY, BEER, 5000)
+        c.plan(BREWERY, WH, BEER, 10000)
+        c.site(WH, "Depot")
+        c.hold(WH, BEER, 9000)
+        c.contract(WH, BEER, 300)
+        c.plan(WH, SHOP, BEER, 500)
+        c.shop(SHOP, "Shop")
+        c.hold(SHOP, BEER, 300, 100)
+    else:
+        c.site(WH, "Depot")
+        c.hold(WH, BEER, 30000)
+        c.contract(WH, BEER, 700)
+        c.plan(WH, SHOP, BEER, 100000)
+        c.shop(SHOP, "Shop")
+        c.hold(SHOP, BEER, 2000, 300)
+    c.run()
+    _order_says(c.business_list, c.supply)
+    alerts = [{k: v for k, v in n.items() if k not in ("rank", "subject", "named")}
+              for n in _idle_notes(c.business_list, c.supply["idle"], set())
+              + _import_notes(c.business_list, c.supply, set())]
+    return {"meta": {"character": "bottom-up", "day": c.day, "save": "Fixture"},
+            "supply": c.supply, "businesses": c.business_list, "alerts": alerts,
+            "plan": {"recipes": []}}
+
+
+def idle_landing_board(kind):
+    """Findings whose links QA of PR #195 found landing on nothing, as the
+    board reads them; tests/import_routes.test.cjs lands each on a lit row or
+    object. `kind` "factory": a brewery holding 5,000 sugar no line of its own
+    draws on (its idle stock, read on Production). "shops": a depot topping
+    two shops up to 10,000 beer each, selling 50 a day (one target finding
+    across both shops, landing on the shop holding most)."""
+    c = Chain()
+    if kind == "factory":
+        c.factory(BREWERY, "Brewery")
+        c.hold(BREWERY, "ba:itemname_sugar", 5000)
+        c.hold(BREWERY, BEER, 100)
+        c.plan(BREWERY, SHOP, BEER, 1000)
+        c.shop(SHOP, "Shop")
+        c.hold(SHOP, BEER, 500, 300)
+    else:
+        c.site(WH, "Depot")
+        c.hold(WH, BEER, 20000)
+        c.contract(WH, BEER, 700)
+        for shop, name, stock in ((SHOP, "Shop a", 8000), (CAFE, "Shop b", 9000)):
+            c.plan(WH, shop, BEER, 10000)
+            c.shop(shop, name)
+            c.hold(shop, BEER, stock, 50)
+    c.run()
+    alerts = [{k: v for k, v in n.items() if k not in ("rank", "subject", "named")}
+              for n in _idle_notes(c.business_list, c.supply["idle"], set())]
+    return {"meta": {"character": "bottom-up", "day": c.day, "save": "Fixture"},
+            "supply": c.supply, "businesses": c.business_list, "alerts": alerts,
+            "plan": {"recipes": []}}
 
 
 def depot_board():

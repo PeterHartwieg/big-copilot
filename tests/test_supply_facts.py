@@ -27,7 +27,7 @@ RECIPES = {BEER: {"slug": BEER, "item": "Beer", "out": 30, "workstation": "bottl
                   "ingredients": [{"slug": WATER, "item": "Water", "per": 10}]}}
 FACT_KEYS = {"st", "why", "lvl", "role", "cad", "use", "need", "have", "setTo", "parts",
              "lower", "imp", "ramp", "unfed", "via", "dem", "import", "from", "wholesale", "day",
-             "catchUp", "lowers", "lasts", "passes", "raise"}
+             "catchUp", "lowers", "lasts", "passes", "raise", "says", "i18n"}
 BASE_KEYS = {"st", "why", "lvl", "role", "cad", "use", "need", "have", "setTo", "imp"}
 
 
