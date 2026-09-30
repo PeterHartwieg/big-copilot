@@ -264,9 +264,15 @@ const wanted = page => page.evaluate(() => { const M = osFacts().market || {}; r
 const FULL = {placed: 61, req: [['pointofsales', 1, 1], ['anyprimaryproduct', 1, 1]], seating: false};
 const HIRES = {planned: true, variant: 'open', weeks: [['ba:skill_cleaning', 'hire'], ['ba:skill_customerservice', 'hire'], ['ba:skill_customerservice', 'hire'], ['ba:skill_securityguard', null]]};
 /* The hiring model stubbed as it would read with candidates for the plan's building. */
+/* A week is [skill, who, w]: who is 'hire', 'move', 'moveoff' (a reassign the player unticked) or null; w adds to the week
+   (a short one: {band: 'short', hours: 6}). `work` is what Staff this site would do there (osStaffWork()), by default its hires and moves. */
 const hiring = (page, h = HIRES) => page.evaluate(({site, h}) => {
-  window.hrModel = () => ({sites: [{key: site, planned: h.planned, variant: h.variant, site: h.site || {}, weeks: h.weeks.map(([skill, type]) => ({w: {skill}, who: type ? {type} : null}))}],
+  const weeks = h.weeks.map(([skill, type, w]) => ({w: Object.assign({skill, hours: 40, band: 'full'}, w || {}),
+    who: type ? {type: type === 'moveoff' ? 'move' : type, m: {off: type === 'moveoff'}} : null}));
+  window.hrModel = () => ({sites: [{key: site, planned: h.planned, variant: h.variant, site: h.site || {}, weeks}],
     moves: [], roles: [], overs: [], cands: [], byId: new Map(), used: new Set(), quick: []});
+  hrSiteMemo = null;
+  window.osStaffWork = () => h.work ?? weeks.filter(x => x.who && !x.who.m.off).length;
   drawOpenStore();
 }, {site: SITE, h});
 /* The real hrModel over the payload's hiring: the rival shop's own plan under the plan's key, and a candidate for every week of it. */
@@ -275,6 +281,7 @@ const realHiring = (page, {noHours = false, candidates = true, demand = false} =
   const plans = noHours ? {} : demand ? {demand: {bench: [], fewer: [], hireWeeks: [], spare: [], spareSkills: {}}} : {open: base.plans.open};
   D.hiring.sites.unshift(Object.assign({}, base, {key: site, name: 'Liquor', new: !demand, plans}, noHours ? {noHours: true} : {}));
   D.candidates = candidates && !noHours && !demand ? base.plans.open.hireWeeks.map((w, i) => ({id: `cand${i}`, name: `Candidate ${i}`, wage: 12, hoursLeft: 40, skills: [{skill: w.skill, level: 70}], demands: []})) : [];
+  hrSiteMemo = null;
   drawOpenStore();
   return base.plans.open.hireWeeks.length;
 }, {site: SITE, noHours, candidates, demand});
@@ -467,6 +474,85 @@ test('weeks filled by moving people offer the full staff review, or a way to do 
   await page.evaluate(() => { window.__calls = []; window.hrReview = o => window.__calls.push(o); });
   await page.locator('#osBody [data-os-write="hire"]').click();
   assert.deepEqual(await page.evaluate(() => window.__calls), [{scope: 'site', site: SITE}]);
+});
+
+test('a week too short for a hire is hours left open, not a place: no "1 more", no headhunter, and the row stays pending', async t => {
+  const page = await board(t);
+  await until(page);
+  await opened(page, {staff: 2, stationShifts: 3}, FULL);
+  /* main's six-hour remainder (tests/staff_hire.test.cjs): Customer Service, 6 h on one day, band "short" */
+  await hiring(page, {planned: true, variant: 'open', weeks: [['ba:skill_customerservice', null, {band: 'short', hours: 6, days: 1}]]});
+  let r = (await rows(page))[2];
+  assert.equal(r.state, 'todo');
+  assert.match(r.sub, /2 people on staff · 6 h a week too few for a hire/);
+  assert.doesNotMatch(r.sub, /more:|without a candidate/);
+  assert.doesNotMatch(r.act, /headhunter/);
+  /* beside a real place, the short hours are said apart and not counted */
+  await hiring(page, {planned: true, variant: 'open', weeks: [['ba:skill_cleaning', 'hire'], ['ba:skill_customerservice', null, {band: 'short', hours: 6, days: 1}]]});
+  r = (await rows(page))[2];
+  assert.match(r.sub, /2 of 3 people · 1 more: 1 Cleaning[^·]*· 6 h a week too few for a hire/);
+  assert.doesNotMatch(r.sub, /without a candidate/);
+  /* once a person here takes the short week (a spare's reassign), it is covered */
+  await hiring(page, {planned: true, variant: 'open', weeks: [['ba:skill_customerservice', 'move', {band: 'short', hours: 6, days: 1}]]});
+  assert.equal((await rows(page))[2].state, 'done');
+});
+
+test('scheduling only: staff without hours get Staff this site linked, and the BizMan › Schedule step without the link', async t => {
+  const page = await board(t);
+  await until(page);
+  await opened(page, {staff: 3, stationShifts: 0}, FULL);
+  await hiring(page, {...HIRES, weeks: [], work: 1});
+  let r = (await rows(page))[2];
+  assert.match(r.sub, /no hours scheduled yet/);
+  assert.match(r.act, /BizMan › Schedule: give your staff at .* their hours\./);
+  await linked(page);
+  await page.evaluate(() => { window.__calls = []; window.hrReview = o => window.__calls.push(o); });
+  assert.equal((await page.locator('#osBody [data-os-write="hire"]').innerText()).trim(), 'Staff this site');
+  await page.locator('#osBody [data-os-write="hire"]').click();
+  assert.deepEqual(await page.evaluate(() => window.__calls), [{scope: 'site', site: SITE}]);
+  /* the plan's own people with no hours in the week: the same */
+  await page.evaluate(() => { D.businesses.find(x => x.key === osPlan().key).stationShifts = 4; });
+  await hiring(page, {...HIRES, weeks: [], work: 1, site: {kind: 'shop', unstaffed: {demand: {hours: 12, roles: [{skill: 'ba:skill_cleaning', idle: 1}]}}}});
+  r = (await rows(page))[2];
+  assert.match(r.sub, /1 person has no hours/);
+  assert.equal(await page.locator('#osBody [data-os-write="hire"]').count(), 1);
+  /* nothing for the action to do: no button */
+  await hiring(page, {...HIRES, weeks: [], work: 0, site: {kind: 'shop', unstaffed: {demand: {hours: 12, roles: [{skill: 'ba:skill_cleaning', idle: 1}]}}}});
+  assert.equal(await page.locator('#osBody [data-os-write="hire"]').count(), 0);
+});
+
+test('nobody hired yet but the plan assigns bench people: Staff this site is offered', async t => {
+  const page = await board(t);
+  await until(page);
+  await opened(page, {staff: 0, stationShifts: 0}, FULL);
+  await linked(page);
+  await hiring(page, {planned: true, variant: 'demand', weeks: [], work: 2});
+  const r = (await rows(page))[2];
+  assert.equal(r.state, 'todo');
+  assert.match(r.sub, /Nobody is hired yet/);
+  assert.equal((await page.locator('#osBody [data-os-write="hire"]').innerText()).trim(), 'Staff this site');
+});
+
+test('an unticked reassign moves nobody: the place is open, and not counted as a move', async t => {
+  const page = await board(t);
+  await until(page);
+  await opened(page, {staff: 1, stationShifts: 2}, FULL);
+  await hiring(page, {planned: true, variant: 'open', weeks: [['ba:skill_cleaning', 'moveoff'], ['ba:skill_customerservice', 'hire']]});
+  const r = (await rows(page))[2];
+  assert.match(r.sub, /1 without a candidate/);
+  assert.doesNotMatch(r.act, /move/i);
+  assert.match(r.act, /hire 1 Customer Service/);
+});
+
+test('spare people the plan gives no week are left out of "n of m" and the progress bar', async t => {
+  const page = await board(t);
+  await until(page);
+  await opened(page, {staff: 3, stationShifts: 2, staffIdle: ['spare1', 'spare2']}, FULL);
+  await hiring(page);
+  const r = (await rows(page))[2];
+  assert.match(r.sub, /^1 of 5 people · 4 more/);
+  assert.equal(r.p, '20%');
+  assert.doesNotMatch(r.sub, /spare|no hours/i);
 });
 
 test('nobody to hire says to ask a headhunter', async t => {
@@ -706,6 +792,17 @@ test('a running campaign, from the save\'s enabled set, leaves the marketing row
   const done = (await rows(page))[5];
   assert.equal(done.state, 'done');
   assert.match(done.sub, /No campaign needed/);
+});
+
+test('a mix the write would not change has no button', async t => {
+  const page = await board(t);
+  await until(page);
+  await opened(page, {staff: 1, marketingPlan: {...MKPLAN, on: [], promotionPlan: 80}}, FULL);
+  await linked(page);
+  const r = (await rows(page))[5];
+  assert.equal(r.state, 'todo');
+  assert.equal(await page.locator('#osBody [data-os-write="marketing"]').count(), 0);
+  assert.match(r.act, /BizMan › Marketing/);
 });
 
 test('an unmet hairdresser shelf is named in words, not by its id', async t => {

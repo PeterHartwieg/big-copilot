@@ -1047,6 +1047,7 @@
  "gr.os.ck.paybackGo": "After opening: the payback",
  "gr.os.ck.read": "from the save · day {day}, {time}",
  "gr.os.ck.staff": "Staff for the opening hours",
+ "gr.os.ck.staff.count_other": "{n} people on staff",
  "gr.os.ck.staff.done_other": "{n} people · <span class=\"ok\">the opening hours are covered</span>",
  "gr.os.ck.staff.headhunter": "No candidate fits yet: ask a <b>headhunter</b> for {roles}, at {address}.",
  "gr.os.ck.staff.idle_other": "{n} people on staff · <span class=\"w\">no hours scheduled yet</span>",

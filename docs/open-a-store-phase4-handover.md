@@ -24,6 +24,12 @@ spare staff and planner) merged. Main wins on staffing and marketing; step 5 ada
   more is scoped by its `site|role` keys. People the plan gives no week (`spSpareIds()`) are
   spare: not counted in "n of m people", never a warning. A gap the plan's own people would
   work (`hrUnstaffedOf()`, kept) offers Staff this site too, which writes the week.
+  Review round 1: every pending path offers Staff this site when the site-scoped action does
+  anything (`osStaffAct()`, bench assignments and week-only writes included), else the
+  in-game step (BizMan › Schedule without the link). Main's short weeks (`band: "short"`)
+  are no places: said as "n h a week too few for a hire", and the row stays pending until
+  someone here works them. Unticked reassigns count as open places, not moves; the row
+  reads `hrMemoModel()`. A marketing mix the write would not change has no button.
 - **Marketing**: phase 3's own write (`osMarketingWrite`, `OS_MK_WIRE`, the `marketingOn`
   payload key) is gone. The row reads main's `campaigns` and `marketingPlan`, and the button,
   **Set the cheapest mix**, calls main's `gwMarketing([key], "mix")`; it is disabled with

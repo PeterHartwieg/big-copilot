@@ -33086,13 +33086,19 @@ function osAct(kind, label, ico, data, ingame){
     return `<button type="button" class="os-cta sm" data-os-write="${kind}" ${data || ""}>${osIcon(ico)}${spEsc(label)}</button>`;
   return osIngame(ingame);
 }
-/* What Staff this site would do at the plan's store (hrRequest(), as the
-   site panel's button asks it): people hired or reassigned in, and weeks written. */
+/* What Staff this site would do at the plan's store (hrRequest(), the site
+   panel's action): people hired or reassigned in or out, and weeks written. */
 function osStaffWork(key){
   if(!D.hiring || !hrCanHire()) return 0;
   const r = hrRequest(hrMemoModel(), {mode: "both", site: key, one: true});
   return r.body.hires.length + r.body.moves.length + r.weeks;
 }
+/* The row's action on every pending path: Staff this site where the mod
+   takes the hire write and the site-scoped action does something; without
+   that write, what to do in the game. */
+const osStaffAct = (plan, ingame) => hrCanHire()
+  ? (osStaffWork(plan.key) ? osAct("hire", tt("sp.gw.staff", "Staff this site"), "hire", "", ingame) : "")
+  : ingame ? osIngame(ingame) : "";
 function osReqName(plan, b, name){
   const out = osOutfit(plan, b), line = out && out.lines.find(l => l[3] === name);
   if(line) return spEsc(osItemName(line[0]));
@@ -33119,33 +33125,48 @@ function osCkStaff(plan, opened){
   const title = tt("gr.os.ck.staff", "Staff for the opening hours");
   if(!opened) return osCk("people", "todo", title, tt("gr.os.ck.staff.todo", "Hired once the business is set up"));
   const have = opened.staff || 0;
-  const S = hrModel().sites.find(s => s.key === plan.key);
+  const S = hrMemoModel().sites.find(s => s.key === plan.key);
   if(!S || !S.planned || S.site.noHours || !S.variant) return osCk("people", "todo", title,
     tt("gr.os.ck.staff.nohours", "No opening hours set yet: set them in BizMan, and the board plans the staff"));
-  const need = S.weeks.length;
+  const address = osCkAddress(plan);
+  const week = tt("gr.os.ck.staff.ingame.week", "<b>BizMan › Schedule</b>: give your staff at {address} their hours.", {address});
+  /* A week too short for any contract (band "short") is no place to hire
+     for: its hours stay open, said as the Staff page says them, and the row
+     stays pending until somebody here works them. */
+  const open = x => !x.who || (x.who.type === "move" && x.who.m.off);
+  const places = S.weeks.filter(x => x.w.band !== "short");
+  const shortH = S.weeks.filter(x => x.w.band === "short" && open(x)).reduce((n, x) => n + Number(x.w.hours || 0), 0);
+  const tooFew = shortH ? ` · <span class="w">${tt("co.hire.role.toofew", "{h} h a week too few for a hire", {h: hrNum(shortH)})}</span>` : "";
+  const need = places.length;
   const scheduled = opened.stationShifts > 0, gap = hrUnstaffedOf(S);
   if(!need){
-    if(have > 0 && scheduled && !gap && (S.variant !== "demand" || opened.hasTraded)) return osCk("people", "done", title, tt("gr.os.ck.staff.done",
+    const covered = have > 0 && scheduled && !gap && (S.variant !== "demand" || opened.hasTraded);
+    if(covered && !shortH) return osCk("people", "done", title, tt("gr.os.ck.staff.done",
       {one: "{n} person · <span class=\"ok\">the opening hours are covered</span>", other: "{n} people · <span class=\"ok\">the opening hours are covered</span>"}, {n: have}));
+    if(covered) return osCk("people", "todo", title, `${tt("gr.os.ck.staff.count", {one: "{n} person on staff", other: "{n} people on staff"}, {n: have})}${tooFew}`,
+      osStaffAct(plan, week));
     if(have > 0 && !scheduled) return osCk("people", "todo", title, tt("gr.os.ck.staff.idle",
-      {one: "{n} person on staff · <span class=\"w\">no hours scheduled yet</span>", other: "{n} people on staff · <span class=\"w\">no hours scheduled yet</span>"}, {n: have}));
+      {one: "{n} person on staff · <span class=\"w\">no hours scheduled yet</span>", other: "{n} people on staff · <span class=\"w\">no hours scheduled yet</span>"}, {n: have}) + tooFew,
+      osStaffAct(plan, week));
     if(have > 0 && gap){
       const idle = (gap.roles || []).reduce((a, r) => a + (r.idle || 0), 0) || have;
       return osCk("people", "todo", title, tt("gr.os.ck.staff.nohours2",
-        {one: "{have} on staff · <span class=\"w\">{n} person has no hours</span>", other: "{have} on staff · <span class=\"w\">{n} people have no hours</span>"}, {have, n: idle}),
-        osStaffWork(plan.key) ? osAct("hire", tt("sp.gw.staff", "Staff this site"), "hire", "",
-          tt("gr.os.ck.staff.ingame.week", "<b>BizMan › Schedule</b>: give your staff at {address} their hours.", {address: osCkAddress(plan)})) : "");
+        {one: "{have} on staff · <span class=\"w\">{n} person has no hours</span>", other: "{have} on staff · <span class=\"w\">{n} people have no hours</span>"}, {have, n: idle}) + tooFew,
+        osStaffAct(plan, week));
     }
-    return osCk("people", "todo", title, have > 0
+    /* Nobody hired here, or no sales to size the staff from yet: the site's
+       action may still assign bench people, so it is offered when it does. */
+    return osCk("people", "todo", title, (have > 0
       ? tt("gr.os.ck.staff.unsized", {one: "{n} person on staff · <span class=\"w\">the board sizes the staff once the shop has sales</span>",
         other: "{n} people on staff · <span class=\"w\">the board sizes the staff once the shop has sales</span>"}, {n: have})
-      : tt("gr.os.ck.staff.nobody", "Nobody is hired yet"));
+      : tt("gr.os.ck.staff.nobody", "Nobody is hired yet")) + tooFew, osStaffAct(plan, ""));
   }
   const bySkill = new Map(), hires = new Map(), moves = new Map();
-  S.weeks.forEach(x => {
+  places.forEach(x => {
     bySkill.set(x.w.skill, (bySkill.get(x.w.skill) || 0) + 1);
     if(x.who && x.who.type === "hire") hires.set(x.w.skill, (hires.get(x.w.skill) || 0) + 1);
-    if(x.who && x.who.type === "move") moves.set(x.w.skill, (moves.get(x.w.skill) || 0) + 1);
+    /* A reassign the player unticked on the Staff page moves nobody. */
+    if(x.who && x.who.type === "move" && !x.who.m.off) moves.set(x.w.skill, (moves.get(x.w.skill) || 0) + 1);
   });
   const roles = m => osNames([...m].map(([skill, n]) => `${n} ${hrRoles(skill, n)}`));
   const count = m => [...m.values()].reduce((a, n) => a + n, 0);
@@ -33153,23 +33174,22 @@ function osCkStaff(plan, opened){
   /* People the plan gives no week (spSpareIds()) are spare, not staff it
      counts on: they neither fill a place nor make one. */
   const used = Math.max(0, have - spSpareIds(opened).length);
-  const total = used + need, address = osCkAddress(plan);
+  const total = used + need;
   let sub = tt("gr.os.ck.staff.need", "{have} of {total} people · <span class=\"w\">{need} more: {roles}</span>",
     {have: used, total, need, roles: roles(bySkill)});
-  const bare = S.weeks.filter(x => !x.who).length;
+  const bare = places.filter(open).length;
   if(bare) sub += ` · ${tt("gr.os.ck.staff.nocand", {one: "{n} without a candidate in your headhunters' lists", other: "{n} without a candidate in your headhunters' lists"}, {n: bare})}`;
+  sub += tooFew;
   /* Staff this site, the Staff page's one action (hrReview()): who it hires
      and reassigns here, and the week it writes. */
-  let act = "";
-  if(nHire || nMove){
-    const ingame = nMove && nHire
-      ? tt("gr.os.ck.staff.ingame.mixed", "<b>MyEmployees</b> on your phone: hire {roles} from your headhunters' candidates and move {moves}, at {address}.", {roles: roles(hires), moves: roles(moves), address})
-      : nMove ? tt("gr.os.ck.staff.ingame.move", "<b>MyEmployees</b> on your phone: move {moves} to {address}.", {moves: roles(moves), address})
-      : tt("gr.os.ck.staff.ingame", "<b>MyEmployees</b> on your phone: hire {roles} from your headhunters' candidates, at {address}.", {roles: roles(hires), address});
-    act = osAct("hire", tt("sp.gw.staff", "Staff this site"), "hire", "", ingame);
-  } else if(bare){
+  const ingame = nMove && nHire
+    ? tt("gr.os.ck.staff.ingame.mixed", "<b>MyEmployees</b> on your phone: hire {roles} from your headhunters' candidates and move {moves}, at {address}.", {roles: roles(hires), moves: roles(moves), address})
+    : nMove ? tt("gr.os.ck.staff.ingame.move", "<b>MyEmployees</b> on your phone: move {moves} to {address}.", {moves: roles(moves), address})
+    : nHire ? tt("gr.os.ck.staff.ingame", "<b>MyEmployees</b> on your phone: hire {roles} from your headhunters' candidates, at {address}.", {roles: roles(hires), address})
+    : "";
+  let act = osStaffAct(plan, ingame);
+  if(!act && bare)
     act = osIngame(tt("gr.os.ck.staff.headhunter", "No candidate fits yet: ask a <b>headhunter</b> for {roles}, at {address}.", {roles: roles(bySkill), address}));
-  }
   return osCk("people", used > 0 ? "part" : "todo", title, sub, act, Math.round(100 * used / total));
 }
 function osCkUniforms(plan, opened){
@@ -33225,6 +33245,9 @@ function osCkMarketing(plan, b, opened){
   const p = opened.marketingPlan, address = osCkAddress(plan);
   if(p && p.on && !p.on.length && p.promotionPlan >= 100)
     return osCk("megaphone", "done", title, tt("gr.os.ck.mk.unneeded", "<span class=\"ok\">No campaign needed</span> · promotion is full without one"));
+  /* A mix the write would not change: nothing to set. */
+  if(p && gwMkSame(p)) return osCk("megaphone", "todo", title, tt("gr.os.ck.mk.none", "<span class=\"w\">No campaign</span> for {address}", {address}),
+    osIngame(tt("gr.os.ck.mk.ingame", "<b>BizMan › Marketing</b>: start a campaign for {address}.", {address})));
   const none = tt("gr.os.ck.mk.none", "<span class=\"w\">No campaign</span> for {address}", {address});
   const ingame = tt("gr.os.ck.mk.ingame", "<b>BizMan › Marketing</b>: start a campaign for {address}.", {address});
   if(!p) return osCk("megaphone", "todo", title, none, osIngame(ingame));

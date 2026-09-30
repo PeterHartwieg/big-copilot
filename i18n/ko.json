@@ -1047,6 +1047,7 @@
  "gr.os.ck.paybackGo": "개업 후: 투자금 회수",
  "gr.os.ck.read": "저장 파일 기준 · {day}일째, {time}",
  "gr.os.ck.staff": "영업시간에 필요한 직원",
+ "gr.os.ck.staff.count_other": "직원 {n}명",
  "gr.os.ck.staff.done_other": "{n}명 · <span class=\"ok\">영업시간에 필요한 인력 확보</span>",
  "gr.os.ck.staff.headhunter": "아직 맞는 지원자가 없어요. 주소 {address}에 필요한 직무 {roles}: <b>헤드헌터</b>에게 요청하세요.",
  "gr.os.ck.staff.idle_other": "직원 {n}명 · <span class=\"w\">아직 근무 시간 없음</span>",

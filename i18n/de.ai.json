@@ -499,6 +499,8 @@
  "gr.os.ck.paybackGo": "gpt-6-sol",
  "gr.os.ck.read": "gpt-6-sol",
  "gr.os.ck.staff": "gpt-6-sol",
+ "gr.os.ck.staff.count_one": "gpt-6.1-sol",
+ "gr.os.ck.staff.count_other": "gpt-6.1-sol",
  "gr.os.ck.staff.done_one": "gpt-6-sol",
  "gr.os.ck.staff.done_other": "gpt-6-sol",
  "gr.os.ck.staff.headhunter": "gpt-6-sol",

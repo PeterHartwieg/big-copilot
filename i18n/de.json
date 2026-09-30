@@ -1217,6 +1217,8 @@
  "gr.os.ck.paybackGo": "Nach Eröffnung: Amortisation",
  "gr.os.ck.read": "aus dem Spielstand · Tag {day}, {time}",
  "gr.os.ck.staff": "Personal für die Öffnungszeiten",
+ "gr.os.ck.staff.count_one": "{n} Person im Personal",
+ "gr.os.ck.staff.count_other": "{n} Personen im Personal",
  "gr.os.ck.staff.done_one": "{n} Person · <span class=\"ok\">Öffnungszeiten abgedeckt</span>",
  "gr.os.ck.staff.done_other": "{n} Personen · <span class=\"ok\">Öffnungszeiten abgedeckt</span>",
  "gr.os.ck.staff.headhunter": "Noch kein Kandidat passt: Frag einen <b>Headhunter</b> nach {roles} für {address}.",
