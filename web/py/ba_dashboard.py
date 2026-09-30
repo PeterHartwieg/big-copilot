@@ -3822,6 +3822,8 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
             "inbound": bool(legs),
             "targets": top,
             "reach": max((t for _s, t in legs), default=0),
+            # Each sender's own target into it: what its round brings at most.
+            "routeTargets": {s: max(t for s2, t in legs if s2 == s) for s, _t in legs},
             "senders": _in_order({s for s, _t in legs}),
             "passing": _in_order({s for s, _t in legs if not capable(s, n[1])}),
             "demand": {s: asked.get((s, n[1]), {}).get(n[0], (0.0, 0.0)) for s, _t in legs},
@@ -4680,6 +4682,9 @@ def _supply(
         cap = dem_graph["cap"](sender, item)
         if cap is None:
             return 1.0
+        # The line is sized on its share plus the margin (_line_hours), so
+        # the share it can take is what it makes less that margin.
+        cap = cap / (1 + SUPPLY_MARGIN)
         asked_all = demand(sender, item, eats=eats, held_down=False)[0]
         return 1.0 if asked_all <= cap or asked_all <= 0 else cap / asked_all
 
@@ -5763,9 +5768,30 @@ def _supply_facts(ctx: dict) -> dict:
         return daily_route(key, slug, node, use_day, need_day)
 
     def daily_route(key, slug, node, use_day, need_day):
-        """A route-fed depot's daily top-up against its busiest day's use."""
+        """A route-fed depot's daily top-up against its busiest day's use.
+
+        With several sites topping it up, each round brings no more than its
+        own target, whatever its sender could spare: where the share of the
+        need a sender with room is asked for (the walk's hand-over) passes
+        its target, the routes together carry less than the day, and it is
+        that sender's target to raise (named in `from`)."""
         factor, _day = ctx["peak"](businesses[index[key]])
         use, need = round(use_day * factor), round(need_day * factor)
+        targets = node.get("routeTargets") or {}
+        asks = node.get("demand") or {}
+        if len(targets) > 1 and asks:
+            carry = sum(min(targets[s], asks.get(s, (0.0, 0.0))[1]) for s in targets)
+            over = {s: asks.get(s, (0.0, 0.0))[1] - targets[s] for s in targets
+                    if asks.get(s, (0.0, 0.0))[1] > targets[s] * (1 + FIT_NOISE)}
+            if over:
+                s_short = max(_in_order(over), key=lambda s: over[s])
+                carry_peak = round(carry * factor)
+                p = {"short": ["target"] if _below(carry_peak, use) else []}
+                if not p["short"]:
+                    p["tight"] = "target"
+                set_to = _ceil_ten((targets[s_short] + over[s_short]) * factor)
+                return p, {"use": use, "need": need, "have": carry_peak, "setTo": set_to, "imp": False,
+                           "from": index.get(s_short)}, "daily"
         top = node.get("targets") or node.get("reach") or target_at[(key, slug)][0]
         source = target_at[(key, slug)][1]
         p = {"short": []}

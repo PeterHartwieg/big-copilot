@@ -1033,4 +1033,53 @@ class RoundFiveTests(unittest.TestCase):
         made = {c.business_list[site["s"]]["name"]: line["needHours"]["dem"] * 30 * line["machines"]
                 for site in c.supply["factories"]["sites"] for line in site["lines"]}
         self.assertEqual(made["Small"], 720)
-        self.assertGreaterEqual(sum(made.values()), 2400)
+        self.assertGreaterEqual(sum(made.values()), 2760)
+
+
+class RoundSixTests(unittest.TestCase):
+    """Review round 6: need handed to a sender with room never passes the
+    target of its route."""
+
+    def test_a_low_target_from_the_hub_with_room_is_the_one_to_raise(self):
+        """A brewery (720 a day) tops the warehouse up to 10,000; a hub
+        importing 20,000 a week tops it up to only 1,000; the shop sells
+        2,400 a day. The rounds bring at most 1,720: the hub's target is
+        short, raised to 2,040, and the finding names the hub's plan."""
+        c = Chain()
+        hub = ("hub_road", 9)
+        c.factory(BREWERY, "Brewery", machines=1)
+        c.site(hub, "Hub")
+        c.hold(hub, BEER, 5000)
+        c.contract(hub, BEER, 20000)
+        c.site(WH, "WH")
+        c.hold(WH, BEER, 5000)
+        c.plan(BREWERY, WH, BEER, 10000)
+        c.plan(hub, WH, BEER, 1000)
+        c.plan(WH, SHOP, BEER, 3000)
+        c.shop(SHOP, "Shop")
+        c.hold(SHOP, BEER, 1000, 2400)
+        c.run()
+        fact = c.fact(WH, BEER)
+        self.assertEqual((fact["st"], fact["why"], fact["have"], fact["setTo"], fact["from"]),
+                         ("short", "target", 1720, 2040, c.index(hub)))
+        self.assertEqual(len(c.notes(WH, "topup")), 1)
+
+    def test_two_hubs_the_one_with_room_on_a_small_target(self):
+        """Hub A imports 100 a week, hub B 20,000 but tops the depot up to
+        only 500; the shop sells 1,000 a day: B's target is the one to raise."""
+        c = Chain()
+        a, b = ("hub_a", 7), ("hub_b", 8)
+        for hub, imported, target, name in ((a, 100, 5000, "HubA"), (b, 20000, 500, "HubB")):
+            c.site(hub, name)
+            c.hold(hub, BEER, 3000)
+            c.contract(hub, BEER, imported)
+            c.plan(hub, WH, BEER, target)
+        c.site(WH, "Depot")
+        c.hold(WH, BEER, 3000)
+        c.plan(WH, SHOP, BEER, 5000)
+        c.shop(SHOP, "Shop")
+        c.hold(SHOP, BEER, 2000, 1000)
+        c.run()
+        fact = c.fact(WH, BEER)
+        self.assertEqual((fact["st"], fact["why"], fact["from"]), ("short", "target", c.index(b)))
+        self.assertGreater(fact["setTo"], 500)

@@ -1435,8 +1435,10 @@ asks, then what is left over for the routes alone to cover a depot whose import 
 a backup, so one factory's output is never counted at two depots. A site with a supply of
 its own is asked by a route for no more than the route's target a day: what it needs beyond
 that is its own import's to bring, and raising the target (its own finding) is the other
-way, never both. A shop or a depot with nothing else is asked for all it needs, where it
-has one supply only, so raising its target and the import behind it together cover it.
+way, never both. A shop or a depot with no supply of its own is asked for all it needs, so
+raising its target and the import behind it together cover it. Where several sites top a
+depot up, each round brings no more than its own target: where the share the one with
+room is asked for passes its target, that target is the one to raise.
 Two sites topping one up split its need by their targets, but one asked across its routes
 for more than it has hands the rest to the others with room, in both bases alike (and a
 factory in Shop demand is held to what it can make across all the sites it tops up). What a sender merely holds is no supply, and what a line at the
