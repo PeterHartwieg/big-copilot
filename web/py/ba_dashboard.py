@@ -3532,22 +3532,83 @@ def _share_with_room(total: float, weights: dict, caps: dict) -> dict:
     return parts
 
 
-HAND_ON_PASSES = 50  # the most passes _supply_walk() hands a short sender's rest on in
+HAND_ON_PASSES = 50  # the most passes a hand-on is solved in
 
 
-def _held_share(limit: float, fixed: float, shared: float) -> float | None:
-    """The most a sender with a known supply takes of the sites it tops up
-    beside other senders, as a multiple of its weighted share there: the one
-    rule the chain's walk and Demand sizing both share a site's need out
-    with. What it is asked where it is the only sender (`fixed`) comes first,
-    as no one else can bring it; what is left of its `limit` (within
-    FIT_NOISE) goes to its weighted shares beside others (`shared`). Under 1,
-    the rest of those shares goes to the other senders with room; over 1, it
-    has room to take what others hand on, up to its limit. None where it
-    tops up no site beside another sender."""
-    if shared <= 0:
+def _pooled_level(room: float, wants: list) -> float | None:
+    """The level a sender's room fills its shares up to, water-filling: at
+    each site it tops up beside others it takes what it would be given there
+    (`desired`, what is left once the others with room have theirs, never
+    past the route's target) or `level` times its weighted share there,
+    whichever is less, and the level is set so that together that is its
+    `room`. Room a site does not use goes to the sites that need it. `wants`
+    [(share, desired)]; None where its room holds all it would be given."""
+    if sum(desired for _share, desired in wants) <= room:
         return None
-    return max(0.0, (limit * (1 + FIT_NOISE) - fixed) / shared)
+    room = max(0.0, room)
+    left, level = room, 0.0
+    # Sites by the level at which they stop drawing on it.
+    open_sites = sorted((desired / share, share, desired) for share, desired in wants if share > 0)
+    weight = sum(share for _stop, share, _desired in open_sites)
+    for stop, share, desired in open_sites:
+        if weight <= 0 or left <= stop * weight - level * weight:
+            break
+        left -= (stop - level) * weight
+        level = stop
+        weight -= share
+    return level + (left / weight if weight > 0 else 0.0)
+
+
+def _held_levels(sites: dict, limits: dict, fixed: dict, route_caps: dict | None = None) -> dict:
+    """How far each sender with a known supply holds its shares down at the
+    sites it tops up beside other senders, the one allocation the chain's
+    walk and Demand sizing both share a site's need out with. `sites`
+    {site: (residual, {sender: weight})}: what the site needs beyond its own
+    supply and how its senders split it by target; `limits` {sender: what it
+    can send a day, or None where unknown}; `fixed` {sender: what it is asked
+    where it is the only sender, and its own use}, which comes first, as no
+    one else can bring it; `route_caps` {(sender, site): the most its round
+    brings there}. What is left of a sender's limit (within FIT_NOISE) fills
+    its shares by _pooled_level(); what it cannot bring goes to the others
+    with room (_share_with_room()). Solved by passes over the senders until
+    no level moves. Returns {sender: level}: its part at a site is at most
+    level x residual x weight."""
+    route_caps = route_caps or {}
+    shared = {site: (residual, {s: w for s, w in weights.items() if w > 0})
+              for site, (residual, weights) in sites.items()
+              if residual > 0 and sum(1 for w in weights.values() if w > 0) > 1}
+    by_sender = collections.defaultdict(list)
+    for site, (_residual, weights) in shared.items():
+        for sender in weights:
+            if limits.get(sender) is not None:
+                by_sender[sender].append(site)
+    levels = {}
+    for _pass in range(HAND_ON_PASSES):
+        moved = False
+        for sender in _in_order(by_sender):
+            wants = []
+            for site in by_sender[sender]:
+                residual, weights = shared[site]
+                whole = sum(weights.values())
+                caps = {s: levels[s] * residual * w / whole for s, w in weights.items()
+                        if s != sender and s in levels}
+                desired = _share_with_room(residual, weights, caps).get(sender, 0.0)
+                if (sender, site) in route_caps:
+                    desired = min(desired, route_caps[(sender, site)])
+                wants.append((residual * weights[sender] / whole, desired))
+            level = _pooled_level(limits[sender] * (1 + FIT_NOISE) - fixed.get(sender, 0.0), wants)
+            was = levels.get(sender)
+            if level is None:
+                if was is not None:
+                    del levels[sender]
+                    moved = True
+            elif was is None or abs(level - was) > 1e-6 * max(1.0, was):
+                levels[sender] = level
+                moved = True
+        if not moved:
+            break
+    return levels
+
 
 
 def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dict,
@@ -3731,36 +3792,32 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
 
     # A sender asked for more than it has, across all its routes, hands the
     # rest to the other senders of the sites it tops up, as far as they have
-    # room (_held_share(), solved for each sender at once, not stepped
-    # towards). A pass can change what the sites further up are asked, so
-    # passes run until no sender's hold moves; a sender that is the only one
-    # topping its sites up has no one to hand to and never holds anything
-    # down. HAND_ON_PASSES only bounds it.
+    # room (_held_levels(), the allocation Demand sizing shares out by too).
+    # A pass can change what the sites further up are asked, so passes run
+    # until no sender's level moves; a sender that is the only one topping
+    # its sites up has no one to hand to and never holds anything down.
+    # HAND_ON_PASSES only bounds it.
     for _pass in range(HAND_ON_PASSES):
         for n in _in_order(nodes):
             total(n)
-        changed = False
+        sites, limits, fixed, caps_at = {}, {}, collections.defaultdict(float), {}
+        for d, residual in residual_at.items():
+            sites[d] = (residual, {(s, d[1]): w for s, w in shares(d).items()})
         for n in _in_order(asked):
-            limit = has(n)
-            if limit is None:
-                continue
-            fixed = shared = 0.0
+            limits[n] = has(n)
             for dest, (_use, need) in asked[n].items():
                 d = (dest, n[1])
-                weights = shares(d)
-                if sum(1 for w in weights.values() if w > 0) > 1:
-                    shared += residual_at.get(d, 0.0) * weights.get(n[0], 0.0)
+                if sum(1 for w in shares(d).values() if w > 0) > 1:
+                    cap = route_cap.get((n[0], dest, n[1]), 0)
+                    if cap > 0 and supplied(dest, n[1]):
+                        caps_at[(n, d)] = cap
                 else:
-                    fixed += need
-            k = _held_share(limit, fixed, shared)
-            was = scale.get(n)
-            if k is None:
-                if was is not None:
-                    del scale[n]
-                    changed = True
-            elif was is None or abs(k - was) > 1e-6 * max(1.0, was):
-                scale[n] = k
-                changed = True
+                    fixed[n] += need
+        levels = _held_levels(sites, limits, fixed, caps_at)
+        changed = levels.keys() != scale.keys() or any(
+            abs(levels[n] - scale[n]) > 1e-6 * max(1.0, scale[n]) for n in levels)
+        scale.clear()
+        scale.update(levels)
         if not changed:
             break
         need_memo.clear()
@@ -4678,7 +4735,7 @@ def _supply(
                 if dest == key and not rates.get(item):
                     rates[item] = use
         sold_dem[key] = rates
-    dem_drawn = {}
+    dem_drawn, dem_levels_at = {}, {}
     # The plans with their loops cut as the chain's walk cuts them, and each
     # plan's share of what the site it tops up draws: two factories topping
     # one shop up split its demand by their targets, never both taking all.
@@ -4716,7 +4773,7 @@ def _supply(
         # What a sender can bring of it a day: what a factory can make, or
         # what an import or a wholesale delivery brings a site (the walk's
         # has() in 24/7). A sender whose shares would pass it hands the rest
-        # to the others (dem_scale()). None is no cap: a site that brings
+        # to the others (dem_levels()). None is no cap: a site that brings
         # none of its own, or a line the board cannot read, taken to send
         # what it is asked with no known capacity.
         def own_supply(site, item):
@@ -4733,39 +4790,62 @@ def _supply(
             return brought if (n in imports or n in wholesale) else None
         dem_graph["cap"] = own_supply
         dem_drawn.clear()
+        dem_levels_at.clear()
 
     dem_made(lambda _site, _item: False)
 
-    def dem_scale(sender: str, item: str, eats) -> float | None:
-        """The most a sender with a known capacity takes of the sites it tops
-        up beside other senders, as a multiple of its weighted share there
-        (_held_share(), the rule the chain's walk shares need out by): what
-        it can make or bring in, less its own use and what it alone tops up,
-        spread over those shares. None where it has no known capacity or
-        tops up no site beside another sender."""
-        cap = dem_graph["cap"](sender, item)
-        if cap is None:
-            return None
-        # The line is sized on its share plus the margin (_line_hours), and
-        # an import is judged against the need, so the share it can take is
-        # what it brings less that margin.
-        cap = cap / (1 + SUPPLY_MARGIN)
-        fixed = sold_dem.get(sender, {}).get(item, 0.0) + (eats(sender, item) if eats is not None else 0.0)
-        shared = 0.0
-        for dest_key in _in_order({d for d, i, _a in dem_graph["edges"].get(sender, []) if i == item and d != sender}):
-            weights = dem_graph["share"][(dest_key, item)]
-            if not weights.get(sender):
+    def dem_own(site: str, item: str) -> float:
+        """What a site's own import and wholesale delivery bring it a day, less
+        the margin: what Demand sizing takes off its draw before the senders
+        topping it up share the rest, as the chain's walk does."""
+        n = (site, item)
+        # A Smart Delivery level at or under the routes' target brings
+        # nothing (the walk's own(): _import_drop() against that stock).
+        able = dem_graph["share"].get(n) or {}
+        reach = max((a for source, legs in dem_graph["edges"].items() if source in able
+                     for d, i, a in legs if d == site and i == item), default=0)
+        brought = ((_import_drop(reach, drops[n]) / 7 if drops.get(n) else 0.0)
+                   + (wholesale[n]["weekly"] / 7 if n in wholesale else 0.0))
+        return brought / (1 + SUPPLY_MARGIN)
+
+    def dem_levels(item: str, eats) -> dict:
+        """How far each sender with a known capacity holds its shares down,
+        {sender: level}: the chain's walk's own allocation (_held_levels()),
+        on what the sites down the plan draw (before any holding down), net
+        of their own supply. A factory's capacity and an import are taken
+        less the margin (the line is sized on its share plus the margin,
+        _line_hours(), and an import is judged against the need)."""
+        memo = (item, eats is not None)
+        if memo in dem_levels_at:
+            return dem_levels_at[memo]
+        dem_levels_at[memo] = {}  # a loop back into this item holds nothing down
+        sites, limits, fixed, caps_at = {}, {}, collections.defaultdict(float), {}
+        for (dest, it), weights in dem_graph["share"].items():
+            if it != item or dest not in index:
                 continue
-            more, _behind = demand(dest_key, item, frozenset({sender}), eats, held_down=False)
-            part = more * weights[sender] / sum(weights.values())
-            if sum(1 for w in weights.values() if w > 0) > 1:
-                shared += part
-            else:
-                fixed += part
-        return _held_share(cap, fixed, shared)
+            more, _behind = demand(dest, item, eats=eats, held_down=False)
+            sites[dest] = (max(0.0, more - dem_own(dest, item)), dict(weights))
+        for dest, (residual, weights) in sites.items():
+            whole = sum(weights.values())
+            several = sum(1 for w in weights.values() if w > 0) > 1
+            for sender, w in weights.items():
+                if sender not in limits:
+                    cap = dem_graph["cap"](sender, item)
+                    limits[sender] = None if cap is None else cap / (1 + SUPPLY_MARGIN)
+                    fixed[sender] += sold_dem.get(sender, {}).get(item, 0.0) + (
+                        eats(sender, item) if eats is not None else 0.0)
+                if not several:
+                    fixed[sender] += residual * w / whole if whole else 0.0
+                elif dem_own(dest, item) > 0:
+                    target = max((a for d, i, a in dem_graph["edges"].get(sender, []) if d == dest and i == item),
+                                 default=0)
+                    if target:
+                        caps_at[(sender, dest)] = target / (1 + SUPPLY_MARGIN)
+        dem_levels_at[memo] = _held_levels(sites, limits, fixed, caps_at)
+        return dem_levels_at[memo]
 
     def demand(key: str, item: str, seen: frozenset = frozenset(), eats=None,
-               held_down: bool = True) -> tuple:
+               held_down: bool = True, net: bool = True) -> tuple:
         """What the ends draw of `item` a day from this site down the plan, as
         Demand sizing reads it, and the young shops behind that figure. The
         ends are the shelves and, given `eats(site, item)`, the factory lines
@@ -4774,7 +4854,7 @@ def _supply(
         chain's walk reads it, and sizes nothing."""
         if key not in index or key in seen:
             return 0.0, frozenset()
-        memo = (key, item, eats is not None, held_down)
+        memo = (key, item, eats is not None, held_down, net)
         if memo in dem_drawn:
             return dem_drawn[memo]
         total = sold_dem.get(key, {}).get(item, 0.0)
@@ -4785,19 +4865,22 @@ def _supply(
             weights = dem_graph["share"][(dest_key, item)]
             if not weights.get(key):
                 continue
-            more, behind = demand(dest_key, item, seen | {key}, eats, held_down)
+            more, behind = demand(dest_key, item, seen | {key}, eats, held_down, net)
+            # What the site's own import brings comes off first, as in the
+            # chain's walk; its senders share the rest. (`net` False: what
+            # the ends draw however it is brought.)
+            residual = max(0.0, more - dem_own(dest_key, item)) if net else more
             if held_down:
-                # A factory asked for more than it can make across all the
-                # sites it tops up is held to its part of that here, and the
-                # rest goes to the other senders with room (_share_with_room).
-                caps = {}
-                for sender, w in weights.items():
-                    k = dem_scale(sender, item, eats)
-                    if k is not None:
-                        caps[sender] = k * more * w / sum(weights.values())
-                total += _share_with_room(more, weights, caps).get(key, 0.0)
+                # A sender asked for more than it can make or bring in across
+                # all the sites it tops up is held to its level here
+                # (dem_levels()), and the rest goes to the other senders with
+                # room (_share_with_room).
+                levels = dem_levels(item, eats)
+                caps = {sender: levels[sender] * residual * w / sum(weights.values())
+                        for sender, w in weights.items() if sender in levels}
+                total += _share_with_room(residual, weights, caps).get(key, 0.0)
             else:
-                total += more * weights[key] / sum(weights.values())
+                total += residual * weights[key] / sum(weights.values())
             ramp |= behind
         dem_drawn[memo] = (total, frozenset(ramp))
         return dem_drawn[memo]
@@ -6877,6 +6960,10 @@ def _factories(
                 if wanted > 0 and capacity[slug]:
                     dem_makes = min(makes, wanted * makes / capacity[slug])
                     dem_basis = "sales"
+                elif capacity[slug] and demand(key, slug, eats=dem_eats, held_down=False, net=False)[0] > 0:
+                    # The ends draw it, and the imports at the sites it tops
+                    # up bring all of that: nothing is left for the line.
+                    dem_makes, dem_basis = 0.0, "sales"
             # What the line makes run the hours Demand sizes it to (its share
             # plus the margin, _line_hours()): what the chain's Demand walk
             # takes it to send, so the walk and the sizing agree on who

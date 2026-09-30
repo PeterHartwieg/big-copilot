@@ -1456,8 +1456,10 @@ Two sites topping one up split its need by their targets, but one asked across i
 for more than it has hands the rest to the others with room, by one rule in both bases and
 in Shop demand's sizing alike: what it supplies (a factory's output, an import or wholesale
 delivery, both where it has both) goes first to the sites only it tops up, and what is
-left is its share of the sites it tops up beside others; the rest goes to a sender with
-room, a factory with spare hours among them. A site routes also bring it to is judged
+left is pooled over the sites it tops up beside others, going where the other senders
+leave a need (room one site does not use goes to another); the rest goes to a sender with
+room, a factory with spare hours among them. A site's own import comes off its need
+first, in Shop demand's sizing as in both bases. A site routes also bring it to is judged
 further up. In Shop demand a line sends what it makes in the hours it is sized to, margin
 included. What a sender merely holds is no supply, and what a line at the
 site itself makes comes off its import's week. Two sites topping each other up with the

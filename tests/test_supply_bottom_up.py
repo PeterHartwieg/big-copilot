@@ -12,6 +12,7 @@ A. a warehouse fed by a factory route: read off what the factory makes, not
 B. a new shop topped up from a warehouse that has none of the item coming;
 C. a Smart Delivery import beside a factory route that covers the week.
 """
+import itertools
 import unittest
 
 from ba_dashboard import plain, Names, RECIPE_ITEMS, WEEKDAYS, _import_notes, _shelf_notes, _supply, _supply_fact
@@ -664,7 +665,9 @@ class EffectiveSenderTests(unittest.TestCase):
     def test_a_loop_keeps_the_brewerys_demand(self):
         """The brewery tops a warehouse up, which imports too and tops a bar
         selling 300 a day up, and sends some back to the brewery: Demand
-        still sizes the line on the bar, twelve hours, not all 24."""
+        still sizes the line on the bar, not all 24 hours. The warehouse's
+        own import (100 a day) comes off first, as in the chain's walk
+        (round 12): (300 x 1.15 - 100) / 30 = 8.2, nine hours."""
         c = Chain()
         c.factory(BREWERY, "Brewery", machines=1)
         c.site(WH, "Warehouse")
@@ -676,7 +679,7 @@ class EffectiveSenderTests(unittest.TestCase):
         c.hold(SHOP, BEER, 400, 300)
         c.run()
         [line] = [l for site in c.supply["factories"]["sites"] for l in site["lines"]]
-        self.assertEqual((line["demBasis"], line["needHours"]["dem"]), ("sales", 12))
+        self.assertEqual((line["demBasis"], line["needHours"]["dem"]), ("sales", 9))
 
     def test_the_shelf_is_sized_on_the_supplying_target_whatever_the_plan_order(self):
         """An importing warehouse tops the shop up to 400; an empty depot's
@@ -1228,6 +1231,128 @@ def simulate_days(senders, targets, depot_stock, sales, profile, days=42, order=
     return dry
 
 
+def simulate_network(senders, routes, sales, profile, days=42, judge_from=21):
+    """simulate_days() for several depots: every morning each route (sender,
+    depot, target) in the order given tops its depot up to the target from
+    what the sender holds; then each depot's shop draws its day (`sales`
+    {depot: a day} times the weekday's share of `profile`); then each sender
+    makes its day ("made") and its weekly import ("import") lands on the
+    fourth day. Starts empty; returns [(depot, day)] from `judge_from` on
+    that a depot could not meet the draw."""
+    stock = {name: 0.0 for name in senders}
+    depot = {name: 0.0 for name in sales}
+    dry = []
+    for day in range(days):
+        weekday = day % 7
+        for sender, dest, target in routes:
+            give = max(0.0, min(target - depot[dest], stock[sender]))
+            depot[dest] += give
+            stock[sender] -= give
+        for dest, per_day in sales.items():
+            draw = per_day * profile[weekday] / 100
+            if depot[dest] + 1e-6 < draw:
+                if day >= judge_from:
+                    dry.append((dest, day))
+                depot[dest] = 0.0
+            else:
+                depot[dest] -= draw
+        for sender, spec in senders.items():
+            stock[sender] += spec.get("made", 0.0)
+            if spec.get("import") and weekday == 3:
+                stock[sender] += spec["import"]
+    return dry
+
+
+class PooledRoomTests(unittest.TestCase):
+    """Round 12: a sender's room is pooled across the sites it tops up beside
+    others (_held_levels()), in the walk and in Demand sizing alike."""
+
+    def hours(self, c, addr, mode):
+        [line] = [l for site in c.supply["factories"]["sites"] if site["s"] == c.index(addr)
+                  for l in site["lines"]]
+        return line["needHours"][mode]
+
+    def asks(self, c, sites, mode):
+        return {a: c.fact(a, BEER, mode)["setTo"] for a in sites if c.fact(a, BEER, mode)}
+
+    def test_a_factory_feeding_two_depots_uses_its_room_where_it_is_needed(self):
+        """A four-machine brewery (2,880 a day) tops two depots up, each
+        feeding a shop selling 1,800 a day; hub 1 (2,100 a week) helps at
+        depot 1, hub 2 (14,000 a week) at depot 2. Pooled, the brewery brings
+        2,070 - 300 at depot 1 and what hub 2 leaves at depot 2: 2,805 a
+        day with the margin, within its 2,880. Nothing asks, in both bases.
+        Replayed at the hours each basis gives, with hub 2's round before the
+        brewery's into depot 2 (a brewery round that fills depot 2 first
+        leaves depot 1 short: the level model's known limit)."""
+        brew, hub1, hub2 = ("brew_a", 5), ("hub_a", 7), ("hub_b", 8)
+        depots = (("dep_a", 11), ("dep_b", 12))
+        c = Chain()
+        c.profile = BUSY_WEEK
+        c.factory(brew, "Brewery a", machines=4)
+        for hub, name, weekly in ((hub1, "Hub 1", 2100), (hub2, "Hub 2", 14000)):
+            c.site(hub, name)
+            c.contract(hub, BEER, weekly)
+            c.hold(hub, BEER, 3000)
+        for dep, shop, name in ((depots[0], ("shop_a", 21), "1"), (depots[1], ("shop_b", 22), "2")):
+            c.site(dep, "Depot " + name)
+            c.hold(dep, BEER, 5000)
+            c.plan(dep, shop, BEER, 100000)
+            c.shop(shop, "Shop " + name)
+            c.hold(shop, BEER, 2000, 1800)
+            c.plan(brew, dep, BEER, 10000)
+        c.plan(hub1, depots[0], BEER, 10000)
+        c.plan(hub2, depots[1], BEER, 10000)
+        c.run()
+        for mode in ("cap", "dem"):
+            with self.subTest(mode=mode):
+                self.assertEqual(set(self.asks(c, (hub1, hub2) + depots, mode).values()), {None})
+                self.assertEqual([c.fact(d, BEER, mode)["st"] for d in depots], ["covered", "covered"])
+                self.assertEqual(self.hours(c, brew, mode), 24)
+                made = 30 * 4 * self.hours(c, brew, mode)
+                senders = {"brew": {"made": made}, "hub1": {"import": 2100}, "hub2": {"import": 14000}}
+                to_1 = [("brew", "d1", 10000), ("hub1", "d1", 10000)]
+                for into_1 in (to_1, to_1[::-1]):
+                    routes = [("hub2", "d2", 10000), ("brew", "d2", 10000)] + into_1
+                    self.assertEqual(simulate_network(senders, routes, {"d1": 1800, "d2": 1800}, BUSY_WEEK), [])
+
+    def test_crossed_primary_and_backup_targets(self):
+        """Breweries of 720 and 2,160 a day each top two depots up, one as
+        the primary (20,000) and the other as backup (2,000), crossed; each
+        depot's shop sells 1,200 a day. Pooled, they bring the 2,760 a day
+        with the margin: nothing asks, in both bases, Demand gives 24 and 23
+        hours (2,790 a day), and every order of the four rounds holds."""
+        small, large = ("brew_a", 1), ("brew_b", 2)
+        c = Chain()
+        c.factory(small, "Small brewery", machines=1)
+        c.factory(large, "Large brewery", machines=3)
+        depots = []
+        for i, (to_small, to_large) in enumerate(((20000, 2000), (2000, 20000))):
+            dep, shop = ("depot", 30 + i), ("shop", 40 + i)
+            depots.append(dep)
+            c.site(dep, "Depot %d" % i)
+            c.hold(dep, BEER, 4000)
+            c.shop(shop, "Shop %d" % i)
+            c.hold(shop, BEER, 2000, 1200)
+            c.plan(dep, shop, BEER, 5000)
+            c.plan(small, dep, BEER, to_small)
+            c.plan(large, dep, BEER, to_large)
+        c.run()
+        for mode in ("cap", "dem"):
+            with self.subTest(mode=mode):
+                self.assertEqual(set(self.asks(c, depots, mode).values()), {None})
+                self.assertEqual([c.fact(d, BEER, mode)["st"] for d in depots], ["covered", "covered"])
+                hours = (self.hours(c, small, mode), self.hours(c, large, mode))
+                self.assertEqual(hours, (24, 24) if mode == "cap" else (24, 23))
+                senders = {"small": {"made": 30 * hours[0]}, "large": {"made": 90 * hours[1]}}
+                routes = [("small", "d0", 20000), ("large", "d0", 2000),
+                          ("small", "d1", 2000), ("large", "d1", 20000)]
+                # Ten weeks, the last four judged: a primary depot fills to
+                # its 20,000 first, which takes over three weeks from empty.
+                for order in itertools.permutations(routes):
+                    self.assertEqual(simulate_network(senders, list(order), {"d0": 1200, "d1": 1200}, [100] * 7,
+                                                      days=70, judge_from=42), [])
+
+
 class RoundEightTests(unittest.TestCase):
     """Several sites topping one depot up, judged as two questions (targets
     on the busiest day, supply on an average day) and checked by applying
@@ -1509,12 +1634,25 @@ class RoundEightTests(unittest.TestCase):
         """Round 11: a sender that is the only one topping its sites up has
         no one to hand its shortfall to: the walk settles at once rather
         than holding it down pass after pass."""
-        from ba_dashboard import _supply_walk
-        c = self.build([(self.HUB_A, "hub", 7000, 10000, 5000)], 2400)
-        self.assertEqual(c.fact(self.HUB_A, BEER)["st"], "short")
-        self.assertEqual(_supply_walk.passes, 1)
-        self.build([(self.HUB_A, "hub", 7000, 10000, 5000), (self.HUB_B, "hub", 7000, 10000, 5000)], 2400)
-        self.assertLessEqual(_supply_walk.passes, 3)
+        import ba_dashboard
+        walk, passes = ba_dashboard._supply_walk, []
+
+        def counted(*args, **kwargs):
+            got = walk(*args, **kwargs)
+            passes.append(counted.passes)
+            return got
+
+        ba_dashboard._supply_walk = counted
+        try:
+            c = self.build([(self.HUB_A, "hub", 7000, 10000, 5000)], 2400)
+            self.assertEqual(c.fact(self.HUB_A, BEER)["st"], "short")
+            self.assertEqual(passes, [1, 1])  # 24/7 and Demand
+            passes.clear()
+            self.build([(self.HUB_A, "hub", 7000, 10000, 5000), (self.HUB_B, "hub", 7000, 10000, 5000)], 2400)
+            self.assertEqual(len(passes), 2)
+            self.assertLessEqual(max(passes), 3)
+        finally:
+            ba_dashboard._supply_walk = walk
 
     def test_a_factory_lines_gap_is_asked_for_once(self):
         """Round 10: the one-ask rule where the depot's need is factory
