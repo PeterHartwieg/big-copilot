@@ -18,10 +18,12 @@ from __future__ import annotations
 
 import argparse
 import collections
+import contextlib
 import copy
 import datetime as dt
 import decimal
 import fractions
+import gc
 import hashlib
 import http.client
 import http.server
@@ -1988,13 +1990,14 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
     # office default, then factory lines in each sizing (which takes the
     # lines' _posts); then the Staff page's key, which takes every plan's
     # private `_hire` part off its row.
-    staffing, office_staffing, factory_staffing = _staff_plans(
-        save, names, businesses, all_grids, supply.get("factories", {}), staff,
-        (save.deref(root.get("gameVariables")) or {}).get(
-            "baseCustomerPromotionMultiplier", 0.55
-        ),
-    )
-    hiring = _hiring(save, businesses, staffing, factory_staffing, office_staffing)
+    with _collector_paused():
+        staffing, office_staffing, factory_staffing = _staff_plans(
+            save, names, businesses, all_grids, supply.get("factories", {}), staff,
+            (save.deref(root.get("gameVariables")) or {}).get(
+                "baseCustomerPromotionMultiplier", 0.55
+            ),
+        )
+        hiring = _hiring(save, businesses, staffing, factory_staffing, office_staffing)
     alerts = _alerts(
         businesses, supply, chains, trends, hype, hour_findings, grids, day, gate, agencies=agencies
     )
@@ -7614,8 +7617,11 @@ def _hire_bound(lines: list, people: list) -> int:
         if not day:
             continue
         bound = max(bound, math.ceil(sum(s["to"] - s["from"] for s in day) / SHIFT_CAP) - helpers)
-        at = max(sum(1 for s in day if s["from"] <= hour < s["to"]) for hour in range(24))
-        bound = max(bound, at - helpers)
+        running = [0] * 24
+        for s in day:
+            for hour in range(max(s["from"], 0), min(s["to"], 24)):
+                running[hour] += 1
+        bound = max(bound, max(running) - helpers)
     return max(bound, 0)
 
 
@@ -7650,11 +7656,12 @@ WEEKEND_FIRST = (lambda s: (s["wd"] not in WEEKEND_WEEKDAYS, s["wd"], s["from"],
 
 
 def _deal_hires(rows: list, hires: list, state: dict, here: dict, order, balanced,
-                allowed: dict) -> None:
+                allowed: dict, ordered: bool = False) -> None:
     """Deal the open lines out to the hires, in `order`, first fit or balanced.
 
     `allowed` keeps `_may_take()`'s answer for a placeholder by slot shape,
-    the same for every deal of one search.
+    the same for every deal of one search; `ordered` says `rows` already
+    stand in `order`.
     """
     by_skill = collections.defaultdict(list)
     for hire in hires:
@@ -7666,7 +7673,7 @@ def _deal_hires(rows: list, hires: list, state: dict, here: dict, order, balance
     for row in rows:
         if row["employee"] is None:
             shortest[row["skill"]] = min(shortest.get(row["skill"], 24), row["to"] - row["from"])
-    for row in sorted(rows, key=order):
+    for row in (rows if ordered else sorted(rows, key=order)):
         if row["employee"] is not None:
             continue
         # Placeholders of one skill hold no demand, so one answers for all.
@@ -7886,6 +7893,20 @@ def _split_for(row: dict, mine: list, state: dict, start: int, end: int):
     return None
 
 
+def _open_crowded(residue: list, limit: int) -> bool:
+    """Whether _spread_open() would look for a swap at all: an hour more open
+    lines of a role run at than `limit` hires, or a day with more of them
+    than `limit` twelve-hour days, as its first pass reads them."""
+    at = [[0] * 24 for _ in range(7)]
+    day = [0] * 7
+    for s in residue:
+        day[s["wd"]] += s["to"] - s["from"]
+        for hour in range(s["from"], s["to"]):
+            at[s["wd"]][hour] += 1
+    return any(at[wd][hour] and (at[wd][hour] > limit or day[wd] > limit * SHIFT_CAP)
+               for wd in range(7) for hour in range(24))
+
+
 def _spread_open(residue: list, shifts: list, pool: list, state: dict, before: dict,
                  limit: int) -> list:
     """Move the open shifts off the day they pile up on, by swapping days with staff.
@@ -7925,17 +7946,29 @@ def _spread_open(residue: list, shifts: list, pool: list, state: dict, before: d
         rows = sorted((s for s in residue if s["wd"] == wd and s["from"] <= hour < s["to"]),
                       key=lambda s: (s["from"], s["to"], str(s["station"])))
         free = sorted((pid for pid in by_id if not state[pid]["busy"][wd]), key=str)
+        # Everybody's own lines of the role on the other days, read once: the
+        # search below only reads the week.
+        theirs = collections.defaultdict(list)
+        for s in shifts:
+            if s["skill"] == skill and s["wd"] != wd and s["employee"] in by_id:
+                theirs[s["employee"]].append(s)
+        for mine_list in theirs.values():
+            mine_list.sort(key=lambda s: (s["wd"], s["from"]))
         for open_row in rows:
             for pid in free:
                 person = by_id[pid]
                 if not _usable(person, skill, open_row["kind"]):
                     continue
-                own = sorted((s for s in shifts if s["employee"] == pid and s["skill"] == skill
-                              and s["wd"] != wd), key=lambda s: (s["wd"], s["from"]))
-                for mine in own:
+                for mine in theirs.get(pid, ()):
                     if any(at[mine["wd"]][h] + 1 > limit for h in range(mine["from"], mine["to"])):
                         continue
                     if day[mine["wd"]] + (mine["to"] - mine["from"]) > limit * SHIFT_CAP:
+                        continue
+                    # The floor first: it reads the hours alone.
+                    here = state[pid]["hours"] - before[pid][0]
+                    after = here - (mine["to"] - mine["from"]) + (open_row["to"] - open_row["from"])
+                    floor = person["band"][0] if person["band"] else 0
+                    if after < min(floor, here):
                         continue
                     trial = _copy_state(state[pid])
                     trial["hours"] -= mine["to"] - mine["from"]
@@ -7943,11 +7976,6 @@ def _spread_open(residue: list, shifts: list, pool: list, state: dict, before: d
                     if not trial["busy"][mine["wd"]]:
                         trial["days"].discard(mine["wd"])
                     if not _can_work(person, trial, open_row):
-                        continue
-                    here = state[pid]["hours"] - before[pid][0]
-                    after = here - (mine["to"] - mine["from"]) + (open_row["to"] - open_row["from"])
-                    floor = person["band"][0] if person["band"] else 0
-                    if after < min(floor, here):
                         continue
                     days_after = len(trial["days"] | {wd}) - before[pid][1]
                     if person["days"] is not None and days_after < min(
@@ -8338,6 +8366,23 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
                 return [], None, known[key, settle][0]
             if settle == "swaps" and (key, False) in known and not known[key, False][0]:
                 return [], None, set()
+            if settle is False and not split:
+                read = dealt_again(packing, spread)
+                if read is not None:
+                    known[key, settle] = read
+                    return [], None, read[0]
+            # Two tries that dealt the same lines to the same hires -- first
+            # fit and balanced with one hire, or the weekend first with no
+            # weekend -- start the swaps from the same week, so they end the
+            # same: asked once.
+            memo = dealt.get((counted(), same_packing(packing), spread)) if settle == "swaps" else None
+            sig = None if memo is None else (counted(), spread, split, tuple(memo))
+            if sig in same_deal:
+                left, near, kept = same_deal[sig]
+                known[key, settle] = (left, near)
+                if kept is not None:
+                    swapped[key] = kept
+                return [], None, left
             hires, rows, left = attempt_now(packing, spread, split, settle)
             near = bool(left) and _may_split(rows, hires, state)
             known[key, settle] = (left, near)
@@ -8348,6 +8393,8 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
                                 {pid: _copy_state(state[pid])
                                  for pid in list(saved) + [hire["id"] for hire in hires]},
                                 set(here["rostered"]))
+            if sig is not None:
+                same_deal[sig] = (left, near, swapped.get(key))
             return hires, rows, left
         return attempt_now(packing, spread, split, settle, how)
 
@@ -8355,6 +8402,59 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
         """Whether the whole-line try left lines its hires could take in pieces."""
         entry = known.get(((counted(), packing, spread, False), settle))
         return bool(entry and entry[1])
+
+    dealt = {}
+    same_deal = {}
+    sorted_at = {}
+    shares = {}
+
+    def same_packing(packing):
+        """Balanced is first fit where no role has two hires to balance between."""
+        return (packing[0], False) if packing[1] and all(n <= 1 for n in count.values()) else packing
+
+    def deal(open_rows, hires, key, packing, spread):
+        """_deal_hires(), or the same deal again from what it gave last time.
+
+        A deal reads only the open lines (the pool's, or the spread's at this
+        count, in the same order either way) and the hires, fresh each time,
+        so the lines it gave which hire are the same at a count and a try.
+        And a role's hires take only the role's lines, so each role's share
+        of it depends on that role's count alone: the search moves one
+        role's count at a time, and the others' shares are looked up.
+        """
+        packing = same_packing(packing)
+        memo = dealt.get((key, packing, spread))
+        by_id = {hire["id"]: hire for hire in hires}
+        if memo is None:
+            # The open lines stand in the same order at every count: sorted once.
+            by = (key if spread else None, spread, packing[0])
+            if by not in sorted_at:
+                sorted_at[by] = sorted(range(len(open_rows)), key=lambda i: packing[0](open_rows[i]))
+            memo = []
+            for skill in _in_order(count):
+                if not count[skill]:
+                    continue
+                own = (packing[0], packing[1] and count[skill] > 1)
+                part_key = (skill, count[skill], own, key if spread else None, spread)
+                part = shares.get(part_key)
+                if part is None:
+                    mine = [i for i in sorted_at[by] if open_rows[i]["skill"] == skill]
+                    _deal_hires([open_rows[i] for i in mine],
+                                [hire for hire in hires if hire["skill"] == skill],
+                                state, here, *own, hire_may, ordered=True)
+                    shares[part_key] = [(i, open_rows[i]["employee"]) for i in mine
+                                        if open_rows[i]["employee"] is not None]
+                else:
+                    for index, hid in part:
+                        here["rostered"].add(hid)
+                        _take_over(open_rows[index], by_id[hid], state)
+            memo = sorted((index, row["employee"]) for index, row in enumerate(open_rows)
+                          if row["employee"] is not None)
+            dealt[key, packing, spread] = memo
+            return
+        for index, hid in memo:
+            here["rostered"].add(hid)
+            _take_over(open_rows[index], by_id[hid], state)
 
     def attempt_now(packing, spread, split, settle, how=None):
         hires = [_placeholder(skill, n) for skill in _in_order(count) for n in range(count[skill])]
@@ -8375,7 +8475,7 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
             # lines, so nobody else's week is set back and nothing else copied.
             source = spreads_done[key][0] if spread else first
             open_rows = [dict(row) for row in source if row["employee"] is None]
-            _deal_hires(open_rows, hires, state, here, *packing, hire_may)
+            deal(open_rows, hires, key, packing, spread)
             if split:
                 _split_open(open_rows, hires, state, here)
             return hires, open_rows, {row["skill"] for row in open_rows if row["employee"] is None}
@@ -8394,13 +8494,17 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
                                  count[skill])
                 spreads_done[key] = ([dict(row) for row in rows],
                                      {pid: _copy_state(state[pid]) for pid in saved})
+                # No swap made: no line moved and nobody's week either.
+                if len(rows) == len(first) and all(
+                        row["employee"] == was["employee"] for row, was in zip(rows, first)):
+                    moot[key] = True
             else:
                 spread_rows, spread_state = spreads_done[key]
                 rows = [dict(row) for row in spread_rows]
                 for pid, entry in spread_state.items():
                     state[pid] = _copy_state(entry)
             open_rows = [row for row in rows if row["employee"] is None]
-        _deal_hires(open_rows, hires, state, here, *packing, hire_may)
+        deal(open_rows, hires, key, packing, spread)
         if not settle:
             if split:
                 _split_open(rows, hires, state, here)
@@ -8440,12 +8544,62 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
              for packing in (WEEKEND_FIRST,) + HIRE_PACKINGS]
 
     def distinct(among):
-        """The tries that can differ: with no hire to deal to, how is moot."""
+        """The tries that can differ: with no hire to deal to, how is moot;
+        and where the spread would move nothing, its tries are the others
+        again, each after its twin, so never the first to cover."""
+        if spread_moot():
+            among = [(packing, spread) for packing, spread in among if not spread]
         if any(count.values()):
             return among
         seen = set()
         return [(packing, spread) for packing, spread in among
                 if spread not in seen and not seen.add(spread)]
+
+    moot = {}
+
+    def dealt_again(packing, spread):
+        """A deal given before, read without dealing it: (lines' roles left
+        open, _may_split() of it), or None where it has not been dealt."""
+        at = counted()
+        memo = dealt.get((at, same_packing(packing), spread))
+        source = first if not spread else (spreads_done[at][0] if at in spreads_done else None)
+        if memo is None or source is None:
+            return None
+        open_rows = [row for row in source if row["employee"] is None]
+        worked = collections.Counter()
+        for index, hid in memo:
+            worked[hid] += open_rows[index]["to"] - open_rows[index]["from"]
+        taken = {index for index, _ in memo}
+        left_rows = [row for index, row in enumerate(open_rows) if index not in taken]
+        left = {row["skill"] for row in left_rows}
+        room = collections.Counter()
+        for skill in _in_order(count):
+            for n in range(count[skill]):
+                room[skill] += max(0, FULL_TIME[1] - worked[_placeholder(skill, n)["id"]])
+        owed = collections.Counter()
+        near = bool(left)
+        for row in left_rows:
+            if row["to"] - row["from"] < 2 * MIN_SPLIT or not room[row["skill"]]:
+                near = False
+                break
+            owed[row["skill"]] += row["to"] - row["from"]
+        near = near and bool(owed) and all(hours <= room[skill] for skill, hours in owed.items())
+        return left, near
+
+    def spread_moot():
+        """Whether the spread leaves the week as it is at this count.
+
+        _spread_open() only moves a line off an hour or a day that more of
+        them crowd than the role's hires could take; with none such for any
+        role, it returns at once. Where it ran and found no swap, the same.
+        """
+        key = counted()
+        if key not in moot:
+            moot[key] = not any(
+                _open_crowded([row for row in first if row["employee"] is None
+                               and row["skill"] == skill], count[skill])
+                for skill in _in_order(count))
+        return moot[key]
 
     def run_all(modes):
         """The skills some try covers, and the first (try, how) covering all.
@@ -8456,8 +8610,10 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
         room for.
         """
         covered = set()
-        among = distinct(tries)
         for split, settle in modes:
+            # Asked again each way round: a spread tried in the first may
+            # have turned out to move nothing (spread_moot()).
+            among = distinct(tries)
             for packing, spread in among:
                 if split and not may_split(packing, spread, settle):
                     continue
@@ -9052,8 +9208,10 @@ def _fill_by_exchange(shifts: list, pool: list, state: dict, rostered: set,
     takers, by_person = {}, None
     # And who on the roster `_may_take()` passes at all, by slot shape, which no
     # swap changes.
-    allowed = {}
     answers = {} if answers is None else answers
+    # Kept with the answers, by who is on the roster: the same people ask the
+    # same of a shape on every call over one search.
+    allowed = answers.setdefault(("allowed", tuple(p["id"] for p in people)), {})
 
     def asked(person, slot, shape) -> bool:
         key = (person["id"], shape)
@@ -9061,8 +9219,8 @@ def _fill_by_exchange(shifts: list, pool: list, state: dict, rostered: set,
             answers[key] = _may_take(person, slot)
         return answers[key]
 
-    def may_take(slot) -> list:
-        shape = _slot_shape(slot)
+    def may_take(slot, shape=None) -> list:
+        shape = shape or _slot_shape(slot)
         if shape not in allowed:
             allowed[shape] = [person for person in people if asked(person, slot, shape)]
         return allowed[shape]
@@ -9081,31 +9239,44 @@ def _fill_by_exchange(shifts: list, pool: list, state: dict, rostered: set,
                 by_person[s["employee"]].append(s)
             for entries in by_person.values():
                 entries.sort(key=clock)
+            # Each entry beside its shape, which the loop below asks of all.
+            for pid in by_person:
+                by_person[pid] = [(s, _slot_shape(s)) for s in by_person[pid]]
         # The givers: only what no handed-over entry could change is asked
         # here, the role, free weekends and blackout windows (`_may_take()`).
         span = range(hole["from"], hole["to"])
         for giver in may_take(hole):
             # Busy at the line's hours, or over twelve with it, that day: only
             # an entry of that day handed over could free them.
-            busy = state[giver["id"]]["busy"][hole["wd"]]
+            week = state[giver["id"]]
+            busy = week["busy"][hole["wd"]]
             day_full = (len(busy) + len(span) > SHIFT_CAP or not busy.isdisjoint(span))
-            for given in by_person[giver["id"]]:
+            # _has_room()'s ceiling and _keeps_floors()' floor, which read the
+            # hours alone, asked before the trial week is built: the entry
+            # handed over has to be long enough to make room for the line,
+            # and short enough to leave the floor standing.
+            ceiling = (giver["band"] or FULL_TIME)[1]
+            keep = min(week["hours"], giver["band"][0] if giver["band"] else 0)
+            for given, shape in by_person[giver["id"]]:
                 if day_full and given["wd"] != hole["wd"]:
+                    continue
+                after = week["hours"] - (given["to"] - given["from"]) + len(span)
+                if after > ceiling or after < keep:
+                    continue
+                # Whoever may take an entry depends on its shape alone, so the
+                # first two with room are kept a shape: one of them is not
+                # the giver. Asked first, as it is most often what fails and
+                # reads nothing the trial week below would change.
+                if shape not in takers:
+                    room = (q for q in may_take(given, shape) if _has_room(q, state[q["id"]], given))
+                    takers[shape] = [q for q, _ in zip(room, range(2))]
+                taker = next((q for q in takers[shape] if q["id"] != giver["id"]), None)
+                if taker is None:
                     continue
                 trial = _week_without(state[giver["id"]], given)
                 if not _has_room(giver, trial, hole):
                     continue
                 if not _keeps_floors(giver, state[giver["id"]], trial, hole):
-                    continue
-                # Whoever may take an entry depends on its shape alone, so the
-                # first two with room are kept a shape: one of them is not
-                # the giver.
-                shape = _slot_shape(given)
-                if shape not in takers:
-                    room = (q for q in may_take(given) if _has_room(q, state[q["id"]], given))
-                    takers[shape] = [q for q, _ in zip(room, range(2))]
-                taker = next((q for q in takers[shape] if q["id"] != giver["id"]), None)
-                if taker is None:
                     continue
                 _hand_over(given, giver, taker, state, shifts)
                 _take_over(hole, giver, state)
@@ -9825,6 +9996,27 @@ def _plan_world(save: Save, staff: list) -> dict:
         "bench": [people[pid] for pid in _in_order(people)
                   if not people[pid]["addr"] and not people[pid]["training"]],
     }
+
+
+@contextlib.contextmanager
+def _collector_paused():
+    """Python's cycle collector off while the staffing is planned, and back as it was.
+
+    The planner copies thousands of small weeks and throws them away, and every
+    so often the collector walks everything alive -- on a big save, the whole
+    save as well -- to find cycles that are not there: a sixth of the step's
+    time on Jacob Maynard's hub-and-spoke save. Reference counting still frees
+    every week the moment it is dropped; what cycles there are (the search's
+    own closures) wait for the next collection after it. Nothing planned
+    changes.
+    """
+    was = gc.isenabled()
+    gc.disable()
+    try:
+        yield
+    finally:
+        if was:
+            gc.enable()
 
 
 def _staff_plans(save: Save, names: Names, businesses: list, grids: list, factories: dict,
