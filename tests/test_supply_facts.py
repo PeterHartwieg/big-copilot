@@ -851,8 +851,10 @@ class RoundOneFixTests(unittest.TestCase):
         self.assertEqual(c.fact(FACTORY, WATER)["st"], "short")
         own = c.fact(FACTORY, WATER)["import"]
         self.assertEqual((own["st"], own["why"], own["lvl"], own["have"]), ("paused", "order", "critical", 1000))
-        # A paused contract brings nothing: the Hub carries the Mill's whole week.
-        self.assertEqual((c.fact(HUB, WATER)["st"], c.fact(HUB, WATER)["use"]), ("short", 1680))
+        # A paused contract brings nothing: the Hub carries the Mill's week, as
+        # far as a top-up of 200 a day can carry it (the target's own finding
+        # says to raise it, which the Hub is then asked for).
+        self.assertEqual((c.fact(HUB, WATER)["st"], c.fact(HUB, WATER)["use"]), ("short", 1400))
         # One finding, with the input, naming both ways out.
         [feed] = [f for f in c.findings() if f["siteKey"] == site_key(FACTORY) and f["group"] == "feed"]
         self.assertEqual(plain(feed["text"]), "Water top-up of 200 covers 20 hours of a 240/day line; raise it "

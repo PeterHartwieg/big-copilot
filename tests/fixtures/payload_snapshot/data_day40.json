@@ -47,8 +47,8 @@
      {
       "item": "⟦ba:itemname_water|Water⟧",
       "order": 3000,
-      "set": 8400,
-      "use": 8400
+      "set": 5600,
+      "use": 5600
      }
     ]
    },
@@ -56,7 +56,7 @@
    "level": "critical",
    "site": "HART. Hub",
    "siteKey": "ba:street_eighthavenue#4",
-   "text": "⟦ba:itemname_water|Water⟧: this import needs to cover 8,400 a week and the import order is 3,000; raise it to 8,400",
+   "text": "⟦ba:itemname_water|Water⟧: this import needs to cover 5,600 a week and the import order is 3,000; raise it to 5,600",
    "unit": "",
    "worth": null
   },
@@ -11187,7 +11187,7 @@
        "madeAt": [],
        "perDay": 1200,
        "perWeek": 8400,
-       "raiseImport": 8400,
+       "raiseImport": 5600,
        "raiseTarget": 1200,
        "slug": "ba:itemname_water",
        "staffedShare": 0.25,
@@ -11292,18 +11292,18 @@
      },
      "have": 3000,
      "imp": true,
-     "lasts": 1.9,
+     "lasts": 4.0,
      "lvl": "critical",
-     "need": 8400,
+     "need": 5600,
      "parts": {
-      "lines": 8400,
+      "lines": 5600,
       "route": 0,
       "sites": 0
      },
      "role": "depot",
-     "setTo": 8400,
+     "setTo": 5600,
      "st": "short",
-     "use": 8400,
+     "use": 5600,
      "why": "order"
     }
    },
@@ -11469,13 +11469,13 @@
      "items": [
       {
        "cadence": "weekly",
-       "cycleNeed": 8400,
+       "cycleNeed": 5600,
        "fit": "short",
        "item": "Water",
        "keeps": false,
        "low": true,
        "made": false,
-       "need": 4800,
+       "need": 3200,
        "provision": 3000,
        "short": true,
        "slug": "ba:itemname_water",
@@ -11568,7 +11568,7 @@
     "arrives": 43,
     "basis": "sales",
     "carry": null,
-    "catchUp": 3300,
+    "catchUp": 1700,
     "contracts": [
      {
       "active": true,
@@ -11584,15 +11584,15 @@
       "smart": false
      }
     ],
-    "cover": 1.2,
+    "cover": 1.9,
     "coverFit": "short",
     "coverageUntil": 43,
     "covered": false,
-    "daysOnHand": 1.2,
+    "daysOnHand": 1.9,
     "due": 4.0,
-    "dueNeed": 4800,
+    "dueNeed": 3200,
     "from": "1 Pier",
-    "importPerDay": 1200,
+    "importPerDay": 800,
     "item": "Water",
     "lastWeek": 3000,
     "level": "critical",
@@ -11609,8 +11609,8 @@
     ],
     "paused": false,
     "peakDay": null,
-    "peakPerDay": 1200,
-    "perDay": 1200,
+    "peakPerDay": 800,
+    "perDay": 800,
     "plain": 3000,
     "plainAfter": 0,
     "plainBefore": 0,
@@ -11619,13 +11619,13 @@
     "routed": 0,
     "runsOut": "Saturday",
     "s": 2,
-    "shortBy": 2.75,
+    "shortBy": 2.12,
     "slug": "ba:itemname_water",
     "smart": false,
     "stock": 1500,
-    "stockCover": 1.2,
+    "stockCover": 1.9,
     "target": null,
-    "weekNeed": 8400,
+    "weekNeed": 5600,
     "weekly": 3000
    }
   ],

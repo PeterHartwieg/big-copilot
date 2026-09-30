@@ -855,3 +855,98 @@ def walked_nodes(c):
     finally:
         ba_dashboard._supply_walk = real
     return seen[0]
+
+
+class RoundFourTests(unittest.TestCase):
+    """Review round 4: one Weekly imports entry per gap, routes capped at
+    their targets upstream, closed shops asked nothing, capacity handed on."""
+
+    def test_a_hub_passing_stock_to_an_importing_depot_is_no_import_line(self):
+        """The hub holds stock, imports none, and tops up a depot that imports
+        (Safara's factories and Bangtan Stuff). The depot's import is the one
+        ask; the hub is a note with no Weekly imports entry."""
+        c = Chain()
+        c.site(CAFE, "Hub")
+        c.hold(CAFE, BEER, 5000)
+        c.site(WH, "Depot")
+        c.contract(WH, BEER, 700, smart=True)
+        c.hold(WH, BEER, 1000)
+        c.shop(SHOP, "Shop")
+        c.hold(SHOP, BEER, 400, 300)
+        c.plan(CAFE, WH, BEER, 10000)
+        c.plan(WH, SHOP, BEER, 800)
+        c.run()
+        lines = [(s, slug) for s, items in c.supply["facts"].items() for slug, f in items.items()
+                 if f.get("imp") and f.get("setTo") is not None]
+        self.assertEqual(lines, [(str(c.index(WH)), BEER)])
+        self.assertFalse(c.fact(CAFE, BEER).get("imp"))
+
+    def test_a_small_route_is_asked_of_the_hub_only_up_to_its_target(self):
+        """Hub and spoke each import 700 a week; the hub tops the spoke up to
+        50 a day and the shop sells 300. The hub is asked for at most the
+        route's 350 a week; the spoke's own import brings the rest. Every
+        set-to applied together buys about the 2,415 needed, not twice it."""
+        c = Chain()
+        hub, spoke = ("hub_road", 1), ("spoke_road", 2)
+        for site, name in ((hub, "Hub"), (spoke, "Spoke")):
+            c.site(site, name)
+            c.hold(site, BEER, 500)
+            c.contract(site, BEER, 700)
+        c.shop(SHOP, "Shop")
+        c.hold(SHOP, BEER, 400, 300)
+        c.plan(hub, spoke, BEER, 50)
+        c.plan(spoke, SHOP, BEER, 800)
+        c.run()
+        bought = sum(c.verdict(site)["setTo"] or 700 for site in (hub, spoke))
+        self.assertLess(bought, 2415 * 1.15)
+        self.assertGreaterEqual(bought, 2415 * 0.95)
+
+    def test_a_closed_shop_has_no_shelf_to_change(self):
+        c = Chain()
+        c.site(WH, "Hub")
+        c.contract(WH, BEER, 3000)
+        c.shop(SHOP, "Shop")
+        c.hold(SHOP, BEER, 0, 300)
+        c.plan(WH, SHOP, BEER, 100)
+        c.closed = {SHOP}
+        c.run()
+        self.assertIsNone(c.fact(SHOP, BEER))
+        self.assertEqual([r for r in c.supply["shops"] if r["s"] == c.index(SHOP)], [])
+
+    def test_demand_hands_a_full_factorys_share_to_one_with_room(self):
+        """Breweries making 720 and 2,160 a day each top a shop selling 2,400
+        up to 3,000. Split evenly the small one would be held at 720 and the
+        other asked for only 1,200: the 480 left goes to the big one, and
+        the two make the 2,400 between them."""
+        c = Chain()
+        small, big = ("brew_small", 1), ("brew_big", 2)
+        c.factory(small, "Small", machines=1)
+        c.factory(big, "Big", machines=3)
+        c.plan(small, SHOP, BEER, 3000)
+        c.plan(big, SHOP, BEER, 3000)
+        c.shop(SHOP, "Shop")
+        c.hold(SHOP, BEER, 1000, 2400)
+        c.run()
+        made = {}
+        for site in c.supply["factories"]["sites"]:
+            for line in site["lines"]:
+                made[c.business_list[site["s"]]["name"]] = line["needHours"]["dem"] * 30 * line["machines"]
+        self.assertGreaterEqual(sum(made.values()), 2400)
+        self.assertEqual(made["Small"], 720)
+
+    def test_a_loop_reads_the_same_in_both_sizings(self):
+        """A brewery tops a warehouse up and the warehouse sends some back:
+        the one cut of the loop serves both sizings, which agree."""
+        c = Chain()
+        c.factory(BREWERY, "Brewery")
+        c.hold(BREWERY, BEER, 500)
+        c.site(WH, "WH")
+        c.hold(WH, BEER, 1000)
+        c.contract(WH, BEER, 4200)
+        c.shop(SHOP, "Shop")
+        c.hold(SHOP, BEER, 400, 300)
+        c.plan(BREWERY, WH, BEER, 2000)
+        c.plan(WH, BREWERY, BEER, 100)
+        c.plan(WH, SHOP, BEER, 500)
+        c.run()
+        self.assertEqual(c.fact(WH, BEER, "cap")["st"], c.fact(WH, BEER, "dem")["st"])

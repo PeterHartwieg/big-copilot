@@ -341,7 +341,7 @@ What is on the list is what moves the number:
   leave an import to add, said as an order. A shelf holding stock is never unsourced
   (the depot it comes from says what is missing), and a shop shut with the game's
   temporarily closed switch needs nothing: neither its sales nor its targets size a
-  supply, and its shelves are no finding.
+  supply, and its shelves have no row, no figure to set and no finding.
 - **Shops and offices at their ceiling, and staff standing idle.** Both come out of the
   hourly grid described below, and both carry the money they are worth. Every kind of
   site that serves a queue is in it, not only the ones with registers: a gym's boards, a
@@ -1201,7 +1201,8 @@ the set-up for running flat out. **Shop demand** sizes each line on what the sho
 plan sell of its product, and what the factory lines along the way eat of it, plus the
 margin, never past capacity; two sites topping one shop up split its demand by their
 targets, among those with anything coming in, on the same plans, loops cut the same way,
-as the supply walk reads. Where several plans top one shelf up, the highest target of a
+as the supply walk reads (one cut serves both bases). A factory whose share passes what
+its machines can make is held to that, and the rest goes to the others with room. Where several plans top one shelf up, the highest target of a
 site that has the item (holds it, imports it, is routed it, or has a machine making it)
 is the one it is judged on, whatever the plan order. A factory's own sales and an export (a plan to an address not yours, a pier)
 take what is left and size nothing. Each basis walks its own import rows, so a depot
@@ -1431,7 +1432,9 @@ brings what the site it tops up needs, never more than its target a day (two rou
 one line reach the higher target, not the sum), and no more than its sender's own
 supply lets it, shared between the sender's routes out of one budget, first what each
 asks, then what is left over for the routes alone to cover a depot whose import becomes
-a backup, so one factory's output is never counted at two depots. What a sender merely holds is no supply, and what a line at the
+a backup, so one factory's output is never counted at two depots. A site is asked for no
+more than the route's target a day: what a depot needs beyond that is its own import's to
+bring, and raising the target (its own finding) is the other way, never both. What a sender merely holds is no supply, and what a line at the
 site itself makes comes off its import's week. Two sites topping each other up with the
 same item form a loop, which counts one way only: from the site with a supply of its own
 toward the one without, then from the one with more left over after its own use to the
