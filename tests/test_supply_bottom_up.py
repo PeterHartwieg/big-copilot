@@ -1373,7 +1373,10 @@ class ThroughputTests(unittest.TestCase):
         if central_import:
             c.contract(self.CENTRAL, BEER, central_import)
         c.site(self.REGIONAL, "Regional")
-        c.hold(self.REGIONAL, BEER, 5000)
+        # At its round's target (round 15): Central's timing charges the
+        # first fill-up of a depot under its target, which is not what this
+        # test is about.
+        c.hold(self.REGIONAL, BEER, 10000)
         c.contract(self.REGIONAL, BEER, 7000)
         c.shop(self.SHOP_R, "Shop")
         c.hold(self.SHOP_R, BEER, 2000, 1200)
@@ -1464,13 +1467,29 @@ class ThroughputTests(unittest.TestCase):
 
     def test_a_hubs_timing_counts_the_plain_import_that_lands_below_it(self):
         """A hub importing 7,000 a week feeds its own shop (500 a day) and
-        tops Regional up; Regional's plain import of 12,000 a week lands
-        whatever it holds, so the hub's round brings little. The hub's
-        import is not read as running dry."""
+        tops Regional up to 10,000; Regional's plain import of 12,000 a week
+        lands whatever it holds, so once it has landed the hub's round
+        brings little.
+
+        Changed in round 15: the timing replays the rounds until the import
+        lands. Regional holds 5,000 under its 10,000 target, so the hub's
+        first morning round fills it up by 5,000, more than the 3,000 the
+        hub holds: it runs dry before its own import (a shortfall, no ask).
+        Holding enough to carry those rounds (14,000), the hub reads covered:
+        after the landing it is charged only the reduced draw."""
         hub, hub_shop = ("hub_a", 7), ("shop_h", 8)
+        for hub_stock, verdict in ((3000, ("short", "shortfall")), (14000, ("covered", None))):
+            with self.subTest(hub_stock=hub_stock):
+                c = self.hub_chain(hub, hub_shop, hub_stock)
+                for mode in ("cap", "dem"):
+                    fact = c.fact(hub, BEER, mode)
+                    self.assertEqual((fact["st"], fact["why"], fact["setTo"]), verdict + (None,))
+                self.assertEqual(len(c.notes(hub, "shortfall")), 1 if verdict[0] == "short" else 0)
+
+    def hub_chain(self, hub, hub_shop, hub_stock):
         c = Chain()
         c.site(hub, "Hub")
-        c.hold(hub, BEER, 3000)
+        c.hold(hub, BEER, hub_stock)
         c.contract(hub, BEER, 7000)
         c.shop(hub_shop, "Hub shop")
         c.hold(hub_shop, BEER, 1000, 500)
@@ -1483,87 +1502,127 @@ class ThroughputTests(unittest.TestCase):
         c.plan(hub, self.REGIONAL, BEER, 10000)
         c.plan(self.REGIONAL, self.SHOP_R, BEER, 100000)
         c.run()
-        for mode in ("cap", "dem"):
-            with self.subTest(mode=mode):
-                self.assertEqual(c.fact(hub, BEER, mode)["st"], "covered")
-        self.assertEqual(c.notes(hub, "shortfall"), [])
+        return c
 
     def test_a_downstream_import_counts_only_once_it_lands(self):
         """Round 14: day 20; the hub holds 3,000, feeds its own shop 500 a
         day and tops Regional up to 1,500; Regional holds 1,500 and its shop
         sells 1,200 a day; both imports (7,000 and 12,000) land on day 24.
-        Until Regional's lands, its round draws what its stock cannot cover,
-        so the hub runs dry before its own import: a shortfall."""
+        Until Regional's lands, each morning's round tops it up to its target
+        from the hub, so the hub runs dry before its own import: a
+        shortfall. Round 15 adds the cases an independent replay of the
+        rounds settles: sol's (hub 4,000, Regional 500 under 1,500), dry on
+        day 22; and one the landing morning decides (hub 6,000, Regional at
+        its 10,000), dry on day 24, whose round leaves before the imports
+        land. With 14,000 at the hub the rounds are carried: covered."""
         hub, hub_shop = ("hub_a", 7), ("shop_h", 8)
-        c = Chain()
-        c.site(hub, "Hub")
-        c.hold(hub, BEER, 3000)
-        c.contract(hub, BEER, 7000)
-        c.shop(hub_shop, "Hub shop")
-        c.hold(hub_shop, BEER, 1000, 500)
-        c.plan(hub, hub_shop, BEER, 100000)
-        c.site(self.REGIONAL, "Regional")
-        c.hold(self.REGIONAL, BEER, 1500)
-        c.contract(self.REGIONAL, BEER, 12000)
-        c.shop(self.SHOP_R, "Shop")
-        c.hold(self.SHOP_R, BEER, 2000, 1200)
-        c.plan(hub, self.REGIONAL, BEER, 1500)
-        c.plan(self.REGIONAL, self.SHOP_R, BEER, 100000)
-        c.run()
-        self.assertEqual(c.day + 4, 24)
-        for mode in ("cap", "dem"):
-            with self.subTest(mode=mode):
-                self.assertEqual((c.fact(hub, BEER, mode)["st"], c.fact(hub, BEER, mode)["why"]),
-                                 ("short", "shortfall"))
-        self.assertEqual(len(c.notes(hub, "shortfall")), 1)
+        for hub_stock, reg_stock, target, verdict in ((3000, 1500, 1500, "short"), (4000, 500, 1500, "short"),
+                                                      (6000, 10000, 10000, "short"),
+                                                      (14000, 5000, 10000, "covered")):
+            with self.subTest(hub_stock=hub_stock, reg_stock=reg_stock, target=target):
+                c = Chain()
+                c.site(hub, "Hub")
+                c.hold(hub, BEER, hub_stock)
+                c.contract(hub, BEER, 7000)
+                c.shop(hub_shop, "Hub shop")
+                c.hold(hub_shop, BEER, 1000, 500)
+                c.plan(hub, hub_shop, BEER, 100000)
+                c.site(self.REGIONAL, "Regional")
+                c.hold(self.REGIONAL, BEER, reg_stock)
+                c.contract(self.REGIONAL, BEER, 12000)
+                c.shop(self.SHOP_R, "Shop")
+                c.hold(self.SHOP_R, BEER, 2000, 1200)
+                c.plan(hub, self.REGIONAL, BEER, target)
+                c.plan(self.REGIONAL, self.SHOP_R, BEER, 100000)
+                c.run()
+                self.assertEqual(c.day + 4, 24)
+                for mode in ("cap", "dem"):
+                    self.assertEqual(c.fact(hub, BEER, mode)["st"], verdict, mode)
+                self.assertEqual(len(c.notes(hub, "shortfall")), 1 if verdict == "short" else 0)
 
     def test_a_relay_beside_an_importing_depot_settles(self):
-        """Round 14: a two-machine brewery (1,440 a day) tops Xdepot up (it
-        imports 14,000 a week; its shop sells 2,000 a day) and Central (no
-        import), which tops Regional up (it imports 7,000 a week; its shop
-        sells 1,000 a day). The brewery's split is solved before Central's
-        limit is read from it, so the passes settle well inside the bound
-        and nothing asks, in both bases."""
+        """Round 14: a two-machine brewery (1,440 a day) tops Xdepot up to
+        10,000 (it imports 14,000 a week; its shop sells 2,000 a day) and
+        Central (no import), which tops Regional up (it imports 7,000 a
+        week; its shop sells 1,000 a day). The brewery's split is solved
+        before Central's limit is read from it, so the passes settle well
+        inside the bound and nothing asks, in both bases.
+
+        Round 15: the same with Xdepot's round at 1,000 and Central importing
+        2,100 a week. Central's true limit (780 a day) is below Regional's
+        ask while its damped limit is not yet; the walk keeps going until the
+        limit has settled, and Central reads covered, not short by 166."""
         import ba_dashboard
         xdep, shop_x = ("xdep", 35), ("shop_x", 36)
         walk, passes = ba_dashboard._supply_walk, []
 
         def counted(*args, **kwargs):
             got = walk(*args, **kwargs)
-            passes.append(counted.passes)
+            passes.append((counted.passes, counted.capped))
             return got
 
-        ba_dashboard._supply_walk = counted
-        try:
-            c = Chain()
-            c.factory(BREWERY, "Brewery", machines=2)
-            c.hold(BREWERY, BEER, 500)
-            c.site(xdep, "Xdepot")
-            c.hold(xdep, BEER, 20000)
-            c.contract(xdep, BEER, 14000)
-            c.shop(shop_x, "Shop X")
-            c.hold(shop_x, BEER, 2000, 2000)
-            c.site(self.CENTRAL, "Central")
-            c.hold(self.CENTRAL, BEER, 20000)
-            c.site(self.REGIONAL, "Regional")
-            c.hold(self.REGIONAL, BEER, 20000)
-            c.contract(self.REGIONAL, BEER, 7000)
-            c.shop(self.SHOP_R, "Shop R")
-            c.hold(self.SHOP_R, BEER, 2000, 1000)
-            c.plan(BREWERY, xdep, BEER, 10000)
-            c.plan(xdep, shop_x, BEER, 100000)
-            c.plan(BREWERY, self.CENTRAL, BEER, 10000)
-            c.plan(self.CENTRAL, self.REGIONAL, BEER, 10000)
-            c.plan(self.REGIONAL, self.SHOP_R, BEER, 100000)
-            c.run()
-        finally:
-            ba_dashboard._supply_walk = walk
-        self.assertEqual(len(passes), 2)
-        self.assertLess(max(passes), ba_dashboard.HAND_ON_PASSES)
-        for mode in ("cap", "dem"):
-            with self.subTest(mode=mode):
-                self.assertEqual([c.fact(a, BEER, mode)["setTo"] for a in (xdep, self.CENTRAL, self.REGIONAL)],
-                                 [None, None, None])
+        for x_target, central_import in ((10000, 0), (1000, 2100)):
+            with self.subTest(x_target=x_target, central_import=central_import):
+                passes.clear()
+                ba_dashboard._supply_walk = counted
+                try:
+                    c = Chain()
+                    c.factory(BREWERY, "Brewery", machines=2)
+                    c.hold(BREWERY, BEER, 500)
+                    c.site(xdep, "Xdepot")
+                    c.hold(xdep, BEER, 20000)
+                    c.contract(xdep, BEER, 14000)
+                    c.shop(shop_x, "Shop X")
+                    c.hold(shop_x, BEER, 2000, 2000)
+                    c.site(self.CENTRAL, "Central")
+                    c.hold(self.CENTRAL, BEER, 20000)
+                    if central_import:
+                        c.contract(self.CENTRAL, BEER, central_import)
+                    c.site(self.REGIONAL, "Regional")
+                    c.hold(self.REGIONAL, BEER, 20000)
+                    c.contract(self.REGIONAL, BEER, 7000)
+                    c.shop(self.SHOP_R, "Shop R")
+                    c.hold(self.SHOP_R, BEER, 2000, 1000)
+                    c.plan(BREWERY, xdep, BEER, x_target)
+                    c.plan(xdep, shop_x, BEER, 100000)
+                    c.plan(BREWERY, self.CENTRAL, BEER, 10000)
+                    c.plan(self.CENTRAL, self.REGIONAL, BEER, 10000)
+                    c.plan(self.REGIONAL, self.SHOP_R, BEER, 100000)
+                    c.run()
+                finally:
+                    ba_dashboard._supply_walk = walk
+                self.assertEqual(len(passes), 2)
+                self.assertLess(max(p for p, _capped in passes), ba_dashboard.HAND_ON_PASSES)
+                self.assertFalse(any(capped for _p, capped in passes))
+                for mode in ("cap", "dem"):
+                    self.assertEqual([c.fact(a, BEER, mode)["setTo"] for a in (xdep, self.CENTRAL, self.REGIONAL)],
+                                     [None, None, None], mode)
+                    central = c.fact(self.CENTRAL, BEER, mode)
+                    self.assertEqual((central["st"], central["setTo"]), ("covered", None), mode)
+
+    def test_a_wholesale_contract_beside_a_covering_route_gets_no_word(self):
+        """Round 15: a brewery (720 a day) tops a depot up to 5,000; the depot
+        has a wholesale contract of 100 (or 20) a week too, and its shop
+        sells 660 or 700 a day. The route brings the use, so the contract is
+        a backup: covered by the route, nothing to set, whatever share of
+        the margin its figures show."""
+        shop = ("shop_w", 37)
+        for weekly, sales in ((100, 660), (100, 700), (20, 700)):
+            with self.subTest(weekly=weekly, sales=sales):
+                c = Chain()
+                c.factory(BREWERY, "Brewery", machines=1)
+                c.hold(BREWERY, BEER, 500)
+                c.site(WH, "Depot")
+                c.hold(WH, BEER, 3000)
+                c.wholesale(WH, BEER, weekly)
+                c.plan(BREWERY, WH, BEER, 5000)
+                c.plan(WH, shop, BEER, 100000)
+                c.shop(shop, "Shop")
+                c.hold(shop, BEER, 2000, sales)
+                c.run()
+                for mode in ("cap", "dem"):
+                    fact = c.fact(WH, BEER, mode)
+                    self.assertEqual((fact["st"], fact["why"], fact["setTo"]), ("covered", "route", None), mode)
 
 
 class RoundEightTests(unittest.TestCase):
@@ -1928,8 +1987,15 @@ class RoundEightTests(unittest.TestCase):
                 # With a week's stock in hand, so the first import's timing
                 # (a finding of its own) is not what is judged.
                 settled = chain(depot_import=fact["setTo"], depot_stock=15000)
-                self.assertEqual([(settled.fact(a, BEER, mode)["st"], settled.fact(a, BEER, mode)["setTo"])
-                                  for a in (WH, self.HUB_A)], [("covered", None), ("covered", None)])
+                # Changed in round 15: the hub's timing replays its rounds
+                # until the depot's import lands. The depot holds 15,000
+                # under the hub's 20,000 target, so the first morning's round
+                # takes all 5,000 the hub holds and the hub runs dry before
+                # its own import: a shortfall with nothing to set. Its import
+                # is still asked for nothing, and the depot is covered.
+                self.assertEqual([(settled.fact(a, BEER, mode)["st"], settled.fact(a, BEER, mode)["why"],
+                                   settled.fact(a, BEER, mode)["setTo"]) for a in (WH, self.HUB_A)],
+                                 [("covered", None, None), ("short", "shortfall", None)])
 
     def test_demand_sizing_keeps_only_its_own_plan_changes(self):
         """Round 9: two hubs top a water depot up to 100 each; it feeds a

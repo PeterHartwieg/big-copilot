@@ -1469,9 +1469,11 @@ that import brings now (a Smart Delivery level at or under the target included).
 import the routes fully cover gets no word; its figures show the share the routes leave it
 (the margin, where they bring the use). In Shop demand a line sends what it makes in
 the hours it is sized to, margin included. A sender's import row is sized on its planned
-share, but its run-dry timing charges what physically leaves it: until a plain import at
-a depot it tops up lands, the round brings what that depot's own stock cannot cover, and
-from the day it lands, only what it leaves. What a sender merely holds is no supply, and what a line at the
+share, but its run-dry timing replays what physically leaves it: until a plain import at
+a depot it tops up lands, and on its morning too (the round leaves before the import
+lands), each round tops that depot up to its target from what the sender holds (a first
+fill-up of a depot well under its target included) while the depot's own draw takes it
+down again, and from the day it lands, the round brings only what the import leaves. What a sender merely holds is no supply, and what a line at the
 site itself makes comes off its import's week. Two sites topping each other up with the
 same item form a loop, which counts one way only: from the site with a supply of its own
 toward the one without, then from the one with more left over after its own use to the

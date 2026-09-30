@@ -3874,8 +3874,12 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
                 else:
                     fixed[n] += need
         levels = _held_levels(sites, limits, fixed, caps_at)
+        # A routed sender's damped limit still moving is a change too: it may
+        # hold no level yet while its limit is still coming down to its ask.
+        moved = any(n in last_limits and abs(v - last_limits[n]) > 1e-6 * max(1.0, v)
+                    for n, v in limits.items() if v is not None and senders.get(n))
         last_limits = {n: v for n, v in limits.items() if v is not None}
-        changed = levels.keys() != scale.keys() or any(
+        changed = moved or levels.keys() != scale.keys() or any(
             abs(levels[n] - scale[n]) > 1e-6 * max(1.0, scale[n]) for n in levels)
         scale.clear()
         scale.update(levels)
@@ -3885,8 +3889,13 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
         asked.clear()
         asked_raw.clear()
         portions.clear()
-    # How many passes the last walk took, for the tests to hold it to.
+    # How many passes the last walk took, for the tests to hold it to. A walk
+    # that used every one of HAND_ON_PASSES stopped before it settled (a
+    # damped limit or a level still moving): its figures are the last pass's,
+    # and `capped` says so for debugging; the tests hold the synthetic chains
+    # well inside the bound.
     _supply_walk.passes = _pass + 1
+    _supply_walk.capped = _pass + 1 == HAND_ON_PASSES and changed
     for n in _in_order(nodes):
         total(n)
 
@@ -4507,9 +4516,14 @@ def _supply(
                 # below charges this line what physically leaves it, its share
                 # of what the depots' plain imports leave (`physical`, a
                 # fraction of the draw).
-                # Until that import lands the round brings what the depot's own
-                # stock cannot cover of what it sends on (`before`, a day's
-                # units added to the walk's reduced draw, by day).
+                # Until that import lands, and on its morning too (the round
+                # leaves before the import lands), each morning's round tops
+                # the depot up to its target from what this line holds, and
+                # the depot's own draw takes it down again: the walk charges
+                # those rounds as they fall, the first fill-up included
+                # (`before`, a day's units added to the walk's reduced draw,
+                # by day). Sizing keeps the standing shares; only the timing
+                # replays the rounds.
                 off, before = 0.0, collections.defaultdict(float)
                 for dest, (asked_use, _asked_need) in node.get("asked", {}).items():
                     dnode = walked[mode].get((dest, item)) or {}
@@ -4523,12 +4537,17 @@ def _supply(
                     off += reduced
                     dest_use = dnode.get("use", 0.0)
                     dest_stock = held.get(dest, {}).get(item, 0)
-                    for when in range(day, max(day, there["arrives"])):
-                        short = max(0.0, dest_use - dest_stock)
-                        dest_stock = max(0.0, dest_stock - dest_use)
-                        # What this route brings of it, less the reduced
-                        # draw the walk already charges.
-                        before[when] += asked_use * min(1.0, short / routes_use) - (asked_use - reduced)
+                    target = max((a or 0 for d, i, a in edges.get(business["key"], ())
+                                  if d == dest and i == item), default=0)
+                    for when in range(day, max(day, there["arrives"] + 1)):
+                        # This morning's round: up to the target, or where the
+                        # plan has none, what the day's draw leaves missing.
+                        fill = (max(0.0, target - dest_stock) if target
+                                else max(0.0, dest_use - dest_stock))
+                        dest_stock = max(dest_stock + fill - dest_use, 0.0)
+                        # This line's part of it, less the reduced draw the
+                        # walk already charges.
+                        before[when] += fill * asked_use / routes_use - (asked_use - reduced)
                 physical = max(0.0, 1 - off / per_day)
 
                 # Walk real days forward rather than dividing by an average: three
@@ -4985,7 +5004,7 @@ def _supply(
         # Passes, as the walk's: a sender's limit at a site it shares is the
         # part the last pass allocated it there, so the upstream split is
         # solved first; they stop when no part moves.
-        allotted, levels = {}, {}
+        allotted, levels, last_levels, last_limits = {}, {}, {}, {}
         for _pass in range(HAND_ON_PASSES):
             through_at.clear()
             limits, fixed, caps_at = {}, collections.defaultdict(float), {}
@@ -5014,10 +5033,16 @@ def _supply(
                     # Its part as allocated: its level of its share, not what
                     # is left with it when no one else brings it.
                     parts[(dest, sender)] = min(part, caps[sender]) if sender in caps else part
-            if levels and all(abs(parts[k] - allotted.get(k, -1.0)) <= 1e-6 * max(1.0, parts[k]) for k in parts):
+            # The walk's stop rule: no level and no limit moved since the
+            # last pass (a sender with no level yet can still have a limit
+            # coming down to its ask).
+            same = (levels.keys() == last_levels.keys()
+                    and all(abs(levels[k] - last_levels[k]) <= 1e-6 * max(1.0, levels[k]) for k in levels)
+                    and all(abs((limits[k] or 0.0) - (last_limits.get(k) or 0.0)) <= 1e-6 * max(1.0, limits[k] or 0.0)
+                            for k in limits))
+            if _pass and same:
                 break
-            if not levels:
-                break
+            last_levels, last_limits = levels, dict(limits)
             allotted = parts
         dem_levels_at[memo] = levels
         return dem_levels_at[memo]
@@ -6061,12 +6086,16 @@ def _supply_facts(ctx: dict) -> dict:
             # judged against the week as an import is, and a top-up from your
             # own site comes off the week on top of it.
             brings = deal["weekly"]
-            p = {"short": ["order"] if use and _below(brings, use) else []}
-            if need and _below(brings, need):
+            # A route that covers the week makes the contract a backup, as
+            # beside an import: no word, only its share on show.
+            p = {"short": ["order"] if use and not covered and _below(brings, use) else []}
+            if need and not covered and _below(brings, need):
                 p["tight"] = "order"
+            if covered:
+                p["covered"] = "route"
             return p, {
                 "use": use, "need": need, "have": brings,
-                "setTo": _ceil_ten(need) if need and _below(brings, need) else None,
+                "setTo": _ceil_ten(need) if need and not covered and _below(brings, need) else None,
                 "parts": parts, "imp": False, "wholesale": True, "day": deal["day"],
             }, "weekly"
         p = {}
