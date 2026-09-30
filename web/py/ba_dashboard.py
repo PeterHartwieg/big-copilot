@@ -33180,15 +33180,15 @@ function osCkStaff(plan, opened){
      who are not assigned here yet. */
   const benchTxt = benched ? ` · <span class="w">${tt("gr.os.ck.staff.bench", {one: "{n} from the bench to assign", other: "{n} from the bench to assign"}, {n: benched})}</span>` : "";
   if(!need){
-    const covered = have > 0 && scheduled && !gap && !benched && (S.variant !== "demand" || opened.hasTraded);
+    /* A demand plan sizes the staff from sales: before any, somebody hired
+       early reads as spare, and the unsized reason is what to say. */
+    const sized = S.variant !== "demand" || opened.hasTraded;
+    const covered = have > 0 && scheduled && !gap && !benched && sized;
     if(covered && !anyShort) return osCk("people", "done", title, tt("gr.os.ck.staff.done",
       {one: "{n} person · <span class=\"ok\">the opening hours are covered</span>", other: "{n} people · <span class=\"ok\">the opening hours are covered</span>"}, {n: have}));
     /* Hired before opening and not assigned anywhere yet: on the bench. */
     if(!have && benched) return osCk("people", "todo", title, tt("gr.os.ck.staff.benchonly",
       {one: "{n} person hired, on the bench · <span class=\"w\">assign them here</span>", other: "{n} people hired, on the bench · <span class=\"w\">assign them here</span>"}, {n: benched}) + tooFew, act);
-    /* A demand plan sizes the staff from sales: before any, somebody hired
-       early reads as spare, and the unsized reason is what to say. */
-    const sized = S.variant !== "demand" || opened.hasTraded;
     let sub;
     if(have > 0 && sized && (!usedHere || scheduled && !gap)) sub = tt("gr.os.ck.staff.count", {one: "{n} person on staff", other: "{n} people on staff"}, {n: have});
     else if(have > 0 && usedHere && !scheduled) sub = tt("gr.os.ck.staff.idle",
