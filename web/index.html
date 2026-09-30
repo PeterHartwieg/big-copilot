@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "e0077117e1";</script>
-<link rel="stylesheet" href="community.css?v=e0077117e1">
+<script>window.LEDGER_BUILD = "ee190cda21";</script>
+<link rel="stylesheet" href="community.css?v=ee190cda21">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=e0077117e1">
+<link rel="stylesheet" href="fonts/fonts.css?v=ee190cda21">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -5895,7 +5895,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"e0077117e1","latest":{"pr":175,"date":"2026-09-29","title":"Open a new store: plan it, open it, and watch it earn the investment back","summary":"Expansion has a new view, Open a store. Pick a type from the neighbourhoods with the most demand, from any type, or from a Demand cell's new Open a store here, then pick the building in Find a location, fixed to that type. The board lists everything a fully outfitted store of that type needs in that building: what the type requires to open, an item for each customer demand, enough tills for the building's capacity and shelving copied from your own store of the same layout, with the installation firm's price or, for self-installation, a shopping list by furniture store on the map, and the deposit. It then estimates the profit a day from the game's own rules for customers, prices, demand and wages, with the best marketing mix, and shows how many days it takes to earn the investment back, as a range, after tax, against what your own stores of that type earn, and with an optional bank loan. Offices are estimated too; cinemas and theatres show the investment only. A checklist then follows the store until it opens, ticking itself from the save: the lease, furniture, staff for the opening hours, uniforms, customer demands, marketing and logistics, with buttons to staff the store, assign uniforms and set the cheapest marketing mix through the game link. Once the store trades, the plan compares itself with it: the investment, the profit a day and the first days against the plan, the share paid back, the day it breaks even, and any loan it was planned with. Your plans are kept per character, opened stores included. Businesses › Results also has a Payback column: for each shop, office and chain, the day its setup was earned back or how many days are still to go, with the same line on a business's own page."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"ee190cda21","latest":{"pr":175,"date":"2026-09-29","title":"Open a new store: plan it, open it, and watch it earn the investment back","summary":"Expansion has a new view, Open a store. Pick a type from the neighbourhoods with the most demand, from any type, or from a Demand cell's new Open a store here, then pick the building in Find a location, fixed to that type. The board lists everything a fully outfitted store of that type needs in that building: what the type requires to open, an item for each customer demand, enough tills for the building's capacity and shelving copied from your own store of the same layout, with the installation firm's price or, for self-installation, a shopping list by furniture store on the map, and the deposit. It then estimates the profit a day from the game's own rules for customers, prices, demand and wages, with the best marketing mix, and shows how many days it takes to earn the investment back, as a range, after tax, against what your own stores of that type earn, and with an optional bank loan. Offices are estimated too; cinemas and theatres show the investment only. A checklist then follows the store until it opens, ticking itself from the save: the lease, furniture, staff for the opening hours, uniforms, customer demands, marketing and logistics, with buttons to staff the store, assign uniforms and set the cheapest marketing mix through the game link. Once the store trades, the plan compares itself with it: the investment, the profit a day and the first days against the plan, the share paid back, the day it breaks even, and any loan it was planned with. Your plans are kept per character, opened stores included. Businesses › Results also has a Payback column: for each shop, office and chain, the day its setup was earned back or how many days are still to go, with the same line on a business's own page."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -5983,8 +5983,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=e0077117e1"></script>
-<script src="community.js?v=e0077117e1"></script>
+<script src="app.js?v=ee190cda21"></script>
+<script src="community.js?v=ee190cda21"></script>
 
 <script>
 
@@ -17587,10 +17587,25 @@ function osCkStaff(plan, opened){
      for: its hours are said as the Staff page says them (open ones only, as
      role.tooFew), and any short week at all keeps the row pending, planned
      move included, until a later save shows the hours worked. */
-  const open = x => !x.who || (x.who.type === "move" && x.who.m.off);
+  /* An unticked reassign leaves its week with nobody (hrModel()). A padded
+     week with no hours is "short" too, and no hours at all (shortHires). */
+  const open = x => !x.who;
+  const isShort = x => x.w.band === "short" && (x.w.slots || []).length > 0;
   const places = S.weeks.filter(x => x.w.band !== "short");
-  const anyShort = S.weeks.some(x => x.w.band === "short");
-  const shortH = S.weeks.filter(x => x.w.band === "short" && open(x)).reduce((n, x) => n + Number(x.w.hours || 0), 0);
+  const shorts = S.weeks.filter(isShort), anyShort = shorts.length > 0;
+  const shortH = shorts.filter(open).reduce((n, x) => n + Number(x.w.hours || 0), 0);
+  const roles = m => osNames([...m].map(([skill, n]) => `${n} ${hrRoles(skill, n)}`));
+  const bySkillOf = (list, f = () => true) => list.filter(f).reduce((m, x) => m.set(x.w.skill, (m.get(x.w.skill) || 0) + 1), new Map());
+  /* Without the link, the step that clears a placed week is the hire or the
+     move itself; an open one is hours to schedule. */
+  const handStep = (list, fallback) => {
+    const hires = bySkillOf(list, x => x.who && x.who.type === "hire"), moves = bySkillOf(list, x => x.who && x.who.type === "move");
+    return hires.size && moves.size
+      ? tt("gr.os.ck.staff.ingame.mixed", "<b>MyEmployees</b> on your phone: hire {roles} from your headhunters' candidates and move {moves}, at {address}.", {roles: roles(hires), moves: roles(moves), address})
+      : moves.size ? tt("gr.os.ck.staff.ingame.move", "<b>MyEmployees</b> on your phone: move {moves} to {address}.", {moves: roles(moves), address})
+      : hires.size ? tt("gr.os.ck.staff.ingame", "<b>MyEmployees</b> on your phone: hire {roles} from your headhunters' candidates, at {address}.", {roles: roles(hires), address})
+      : fallback;
+  };
   const tooFew = shortH ? ` · <span class="w">${tt("co.hire.role.toofew", "{h} h a week too few for a hire", {h: hrNum(shortH)})}</span>` : "";
   const need = places.length;
   const scheduled = opened.stationShifts > 0, gap = hrUnstaffedOf(S);
@@ -17599,7 +17614,7 @@ function osCkStaff(plan, opened){
     if(covered && !anyShort) return osCk("people", "done", title, tt("gr.os.ck.staff.done",
       {one: "{n} person · <span class=\"ok\">the opening hours are covered</span>", other: "{n} people · <span class=\"ok\">the opening hours are covered</span>"}, {n: have}));
     if(covered) return osCk("people", "todo", title, `${tt("gr.os.ck.staff.count", {one: "{n} person on staff", other: "{n} people on staff"}, {n: have})}${tooFew}`,
-      osStaffAct(plan, week));
+      osStaffAct(plan, handStep(shorts, week)));
     if(have > 0 && !scheduled) return osCk("people", "todo", title, tt("gr.os.ck.staff.idle",
       {one: "{n} person on staff · <span class=\"w\">no hours scheduled yet</span>", other: "{n} people on staff · <span class=\"w\">no hours scheduled yet</span>"}, {n: have}) + tooFew,
       osStaffAct(plan, week));
@@ -17616,38 +17631,25 @@ function osCkStaff(plan, opened){
         other: "{n} people on staff · <span class=\"w\">the board sizes the staff once the shop has sales</span>"}, {n: have})
       : tt("gr.os.ck.staff.nobody", "Nobody is hired yet")) + tooFew, osStaffAct(plan, ""));
   }
-  const bySkill = new Map(), hires = new Map(), moves = new Map();
-  places.forEach(x => {
-    bySkill.set(x.w.skill, (bySkill.get(x.w.skill) || 0) + 1);
-    if(x.who && x.who.type === "hire") hires.set(x.w.skill, (hires.get(x.w.skill) || 0) + 1);
-    /* A reassign the player unticked on the Staff page moves nobody. */
-    if(x.who && x.who.type === "move" && !x.who.m.off) moves.set(x.w.skill, (moves.get(x.w.skill) || 0) + 1);
-  });
-  const roles = m => osNames([...m].map(([skill, n]) => `${n} ${hrRoles(skill, n)}`));
+  const bySkill = bySkillOf(places);
   const count = m => [...m.values()].reduce((a, n) => a + n, 0);
-  const nHire = count(hires), nMove = count(moves);
   /* People the plan gives no week (spSpareIds()) are spare, not staff it
      counts on: they neither fill a place nor make one. */
   const used = Math.max(0, have - spSpareIds(opened).length);
   const total = used + need;
   let sub = tt("gr.os.ck.staff.need", "{have} of {total} people · <span class=\"w\">{need} more: {roles}</span>",
     {have: used, total, need, roles: roles(bySkill)});
-  const bare = places.filter(open).length;
-  if(bare) sub += ` · ${tt("gr.os.ck.staff.nocand", {one: "{n} without a candidate in your headhunters' lists", other: "{n} without a candidate in your headhunters' lists"}, {n: bare})}`;
+  const bare = bySkillOf(places, open);
+  if(bare.size) sub += ` · ${tt("gr.os.ck.staff.nocand", {one: "{n} without a candidate in your headhunters' lists", other: "{n} without a candidate in your headhunters' lists"}, {n: count(bare)})}`;
   sub += tooFew;
   /* Staff this site, the Staff page's one action (hrReview()): who it hires
      and reassigns here, and the week it writes. */
-  const ingame = nMove && nHire
-    ? tt("gr.os.ck.staff.ingame.mixed", "<b>MyEmployees</b> on your phone: hire {roles} from your headhunters' candidates and move {moves}, at {address}.", {roles: roles(hires), moves: roles(moves), address})
-    : nMove ? tt("gr.os.ck.staff.ingame.move", "<b>MyEmployees</b> on your phone: move {moves} to {address}.", {moves: roles(moves), address})
-    : nHire ? tt("gr.os.ck.staff.ingame", "<b>MyEmployees</b> on your phone: hire {roles} from your headhunters' candidates, at {address}.", {roles: roles(hires), address})
-    : "";
+  const ingame = handStep(places, "");
   const work = hrCanHire() && osStaffWork(plan.key);
   let act = work ? osAct("hire", tt("sp.gw.staff", "Staff this site"), "hire", "", ingame) : ingame ? osIngame(ingame) : "";
-  /* Places nobody can fill: the headhunter, beside the button too, but not
-     beside the in-game hiring step, which already names the roles. */
-  if(bare && (work || !ingame))
-    act += osIngame(tt("gr.os.ck.staff.headhunter", "No candidate fits yet: ask a <b>headhunter</b> for {roles}, at {address}.", {roles: roles(bySkill), address}));
+  /* The places nobody can fill, and only those: the headhunter. */
+  if(bare.size)
+    act += osIngame(tt("gr.os.ck.staff.headhunter", "No candidate fits yet: ask a <b>headhunter</b> for {roles}, at {address}.", {roles: roles(bare), address}));
   return osCk("people", used > 0 ? "part" : "todo", title, sub, act, Math.round(100 * used / total));
 }
 function osCkUniforms(plan, opened){
@@ -17711,13 +17713,18 @@ function osCkMarketing(plan, b, opened){
      not visited yet may sell a better one. */
   if(p && gwMkSame(p)){
     const useless = tt("gr.os.ck.mk.useless", "No campaign would raise promotion here");
-    if(p.needsSetup){
-      const from = [...new Set(p.setupAgencies || [])];
-      const why = gwMkCan() && from.length && gwMkBlocked(from).length === from.length ? gwMkWhy(from) : "";
+    /* A missing BizMan switch is set up through the write, as the site
+       panel offers it; without the write the panel says nothing there. */
+    if(p.needsSetup && gwMkCan()){
+      const from = [...new Set(p.setupAgencies || [])], blocked = gwMkBlocked(from).length;
+      const why = from.length && blocked === from.length ? gwMkWhy(from) : "";
+      const label = !why && blocked ? tt("sp.mk.setup.now", "Add the campaign switches open agencies can add now")
+        : tt("sp.mk.setup.name", "Add every campaign switch to BizMan");
       return osCk("megaphone", "todo", title, `${useless}${why ? ` · <span class="w">${why}</span>` : ""}`,
-        osAct("marketing", tt("sp.mk.setup.name", "Add every campaign switch to BizMan"), "megaphone", `data-os-mode="setup"${why ? ` aria-disabled="true"` : ""}`, ingame));
+        osAct("marketing", label, "megaphone", `data-os-mk-mode="setup"${why ? ` aria-disabled="true"` : ""}`, ""));
     }
-    if(p.visit.length) return osCk("megaphone", "todo", title, useless,
+    /* An agency not visited yet may sell one that would: not "none would". */
+    if(p.visit.length) return osCk("megaphone", "todo", title, none,
       osIngame(tt("sp.mk.better2", "Visit {agencies} once for a better mix.", {agencies: gwMkVisit(p.visit)})));
     return osCk("megaphone", "done", title, `<span class="ok">${useless}</span>`);
   }
@@ -18217,7 +18224,7 @@ function wireOpenStore(){
     if(!plan || osClosed(plan)) return;
     if(kind === "hire") hrReview({scope: "site", site: plan.key});
     else if(kind === "uniforms") gwUniforms([plan.key]);
-    else if(kind === "marketing") gwMarketing([plan.key], el.dataset.osMode || "mix");
+    else if(kind === "marketing") gwMarketing([plan.key], el.dataset.osMkMode || "mix");
   });
   on("click", "[data-os-howlink]", () => {
     const a = document.querySelector('a[data-visit-feature="game-link"]');

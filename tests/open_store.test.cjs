@@ -266,6 +266,8 @@ const HIRES = {planned: true, variant: 'open', weeks: [['ba:skill_cleaning', 'hi
 /* The hiring model stubbed as it would read with candidates for the plan's building. */
 /* A week is [skill, who, w]: who is 'hire', 'move', or null (open; an unticked reassign leaves it so, as hrModel() builds it); w adds to the week
    (a short one: {band: 'short', hours: 6}). `work` is what Staff this site would do there (osStaffWork()), by default its hires and moves. */
+/* main's six-hour remainder (tests/staff_hire.test.cjs): one day of 6 h, band "short" */
+const SHORT6 = {band: 'short', hours: 6, days: 1, slots: [{d: 2, f: 8, t: 14}]};
 const hiring = (page, h = HIRES) => page.evaluate(({site, h}) => {
   const weeks = h.weeks.map(([skill, type, w]) => ({w: Object.assign({skill, hours: 40, band: 'full'}, w || {}),
     who: type ? {type, m: {off: false}} : null}));
@@ -481,24 +483,32 @@ test('a week too short for a hire is hours left open, not a place: no "1 more", 
   await until(page);
   await opened(page, {staff: 2, stationShifts: 3}, FULL);
   /* main's six-hour remainder (tests/staff_hire.test.cjs): Customer Service, 6 h on one day, band "short" */
-  await hiring(page, {planned: true, variant: 'open', weeks: [['ba:skill_customerservice', null, {band: 'short', hours: 6, days: 1}]]});
+  await hiring(page, {planned: true, variant: 'open', weeks: [['ba:skill_customerservice', null, SHORT6]]});
   let r = (await rows(page))[2];
   assert.equal(r.state, 'todo');
   assert.match(r.sub, /2 people on staff · 6 h a week too few for a hire/);
   assert.doesNotMatch(r.sub, /more:|without a candidate/);
   assert.doesNotMatch(r.act, /headhunter/);
   /* beside a real place, the short hours are said apart and not counted */
-  await hiring(page, {planned: true, variant: 'open', weeks: [['ba:skill_cleaning', 'hire'], ['ba:skill_customerservice', null, {band: 'short', hours: 6, days: 1}]]});
+  await hiring(page, {planned: true, variant: 'open', weeks: [['ba:skill_cleaning', 'hire'], ['ba:skill_customerservice', null, SHORT6]]});
   r = (await rows(page))[2];
   assert.match(r.sub, /2 of 3 people · 1 more: 1 Cleaning[^·]*· 6 h a week too few for a hire/);
   assert.doesNotMatch(r.sub, /without a candidate/);
   /* a planned reassign onto the short week is not the hours worked: pending, with Staff this site */
   await linked(page);
-  await hiring(page, {planned: true, variant: 'open', weeks: [['ba:skill_customerservice', 'move', {band: 'short', hours: 6, days: 1}]]});
+  await hiring(page, {planned: true, variant: 'open', weeks: [['ba:skill_customerservice', 'move', SHORT6]]});
   r = (await rows(page))[2];
   assert.equal(r.state, 'todo');
   assert.doesNotMatch(r.sub, /too few for a hire/);
   assert.equal((await page.locator('#osBody [data-os-write="hire"]').innerText()).trim(), 'Staff this site');
+  /* without the link, the step that clears it is the move, not the schedule */
+  await linked(page, null);
+  r = (await rows(page))[2];
+  assert.match(r.act, /move 1 Customer Service to/);
+  assert.doesNotMatch(r.act, /Schedule/);
+  /* a padded week with no hours is no short week */
+  await hiring(page, {planned: true, variant: 'open', weeks: [['ba:skill_customerservice', null, {band: 'short', hours: 0, days: 0, slots: []}]]});
+  assert.equal((await rows(page))[2].state, 'done');
   /* a later save where the week is worked: the plan has no short week left */
   await hiring(page, {planned: true, variant: 'open', weeks: []});
   assert.equal((await rows(page))[2].state, 'done');
@@ -509,7 +519,7 @@ test('linked, with nothing for Staff this site to do, the row still says the ste
   await until(page);
   await opened(page, {staff: 2, stationShifts: 3}, FULL);
   await linked(page);
-  await hiring(page, {planned: true, variant: 'open', work: 0, weeks: [['ba:skill_customerservice', null, {band: 'short', hours: 6, days: 1}]]});
+  await hiring(page, {planned: true, variant: 'open', work: 0, weeks: [['ba:skill_customerservice', null, SHORT6]]});
   const r = (await rows(page))[2];
   assert.equal(r.state, 'todo');
   assert.equal(await page.locator('#osBody [data-os-write="hire"]').count(), 0);
@@ -564,7 +574,14 @@ test('an open place beside a hire: the hire is the step, and the headhunter hint
   await linked(page);
   r = (await rows(page))[2];
   assert.match(r.act, /Staff this site/);
-  assert.match(r.act, /ask a headhunter/);
+  assert.match(r.act, /ask a headhunter for 1 Cleaning,/);
+  /* with no link, both steps: the hire and the headhunter for the open place only */
+  await hiring(page, {planned: true, variant: 'open', weeks: [['ba:skill_cleaning', null], ['ba:skill_customerservice', 'hire'], ['ba:skill_customerservice', 'hire']]});
+  await linked(page, null);
+  r = (await rows(page))[2];
+  assert.match(r.act, /hire 2 Customer Service/);
+  assert.match(r.act, /ask a headhunter for 1 Cleaning,/);
+  assert.doesNotMatch(r.act, /headhunter for [^.]*Customer Service/);
 });
 
 test('spare people the plan gives no week are left out of "n of m" and the progress bar', async t => {
@@ -623,7 +640,7 @@ test('without the game link every write is an instruction in the game, under a l
   await opened(page, {staff: 1, stationShifts: 2, uniformGaps: ['Customer Service']}, FULL);
   await hiring(page);
   assert.equal(await page.locator('#osBody [data-os-write]').count(), 0);
-  assert.equal(await page.locator('#osBody .os-ck .os-ingame').count(), 3);
+  assert.equal(await page.locator('#osBody .os-ck .os-ingame', {hasNotText: /ask a headhunter/}).count(), 3);
   assert.match(await page.locator('#osBody .os-gate').innerText(), /Link the game and these become buttons\./);
   assert.equal(await page.locator('#osBody [data-os-howlink]').count(), 1);
 });
@@ -643,7 +660,7 @@ test('with the game link the same rows carry buttons', async t => {
   await opened(page, {staff: 1, stationShifts: 2, uniformGaps: ['Customer Service']}, FULL);
   await hiring(page);
   await linked(page);
-  assert.equal(await page.locator('#osBody .os-ck .os-ingame', {hasNotText: /headhunter/}).count(), 0);
+  assert.equal(await page.locator('#osBody .os-ck .os-ingame', {hasNotText: /ask a headhunter/}).count(), 0);
   assert.equal(await page.locator('#osBody .os-gate').count(), 0);
   assert.deepEqual(await page.$$eval('#osBody [data-os-write]', bs => bs.map(b => [b.dataset.osWrite, b.innerText.trim()])),
     [['hire', 'Staff this site'], ['uniforms', 'Assign uniforms'], ['marketing', 'Set the cheapest mix']]);
@@ -656,7 +673,7 @@ test('a write the mod lacks turns only its own button into the instruction', asy
   await hiring(page);
   await linked(page, {...LINK, writes: ['hire', 'uniforms']});
   assert.deepEqual(await page.$$eval('#osBody [data-os-write]', bs => bs.map(b => b.dataset.osWrite)), ['hire', 'uniforms']);
-  assert.equal(await page.locator('#osBody .os-ck .os-ingame', {hasNotText: /headhunter/}).count(), 1);
+  assert.equal(await page.locator('#osBody .os-ck .os-ingame', {hasNotText: /ask a headhunter/}).count(), 1);
   assert.equal(await page.locator('#osBody .os-gate').count(), 0);
 });
 
@@ -860,14 +877,22 @@ test('a mix of no campaigns says none would raise promotion; a missing switch is
     window.gwMarketing = (keys, mode) => window.__mk.push([keys, mode]); drawOpenStore(); });
   r = (await rows(page))[5];
   assert.equal(r.state, 'todo');
+  const before = await page.evaluate(() => [osPlan().mode, paybackMode()]);
   await page.locator('#osBody [data-os-write="marketing"]').click();
   assert.deepEqual(await page.evaluate(() => window.__mk), [[[SITE], 'setup']]);
+  assert.deepEqual(await page.evaluate(() => [osPlan().mode, paybackMode()]), before, 'the set-up is not the install-mode toggle');
+  /* without the write the site panel says nothing there: done */
+  await linked(page, {...LINK, writes: ['hire', 'uniforms']});
+  assert.equal((await rows(page))[5].state, 'done');
+  await linked(page);
   /* an agency not visited yet may sell a better mix */
   await page.evaluate(() => { D.marketingAgencies = [{key: 'ba:street_secondavenue#5', name: 'CityAds', address: '5 Second Avenue', contact: false, types: ['SmallInternet'], hours: []}];
     const b = D.businesses.find(x => x.key === osPlan().key); b.marketingPlan = {...b.marketingPlan, needsSetup: false, visit: ['ba:street_secondavenue#5']}; drawOpenStore(); });
   r = (await rows(page))[5];
   assert.equal(r.state, 'todo');
   assert.match(r.act, /Visit CityAds \(5 Second Avenue\) once for a better mix/);
+  assert.doesNotMatch(r.sub, /would raise/);
+  assert.match(r.sub, /No campaign for/);
 });
 
 test('an unmet hairdresser shelf is named in words, not by its id', async t => {

@@ -35,6 +35,11 @@ spare staff and planner) merged. Main wins on staffing and marketing; step 5 ada
   for the action to do still sees the in-game step; the headhunter hint stays beside the
   button. A mix of no campaigns reads "No campaign would raise promotion here" (done), but
   keeps spMkLine's set-up button (`needsSetup`, mode "setup") and a better-mix visit hint.
+  Review round 3: the set-up button carries `data-os-mk-mode`, never `data-os-mode` (the
+  install-mode toggle); without the write a set-up reads done, as the site panel shows nothing
+  there; with an unvisited agency the row says "No campaign for …", not "none would". The
+  headhunter hint names only the places with nobody; a placed short week's in-game step is its
+  hire or move; a padded short week with no slots is none.
 - **Marketing**: phase 3's own write (`osMarketingWrite`, `OS_MK_WIRE`, the `marketingOn`
   payload key) is gone. The row reads main's `campaigns` and `marketingPlan`, and the button,
   **Set the cheapest mix**, calls main's `gwMarketing([key], "mix")`; it is disabled with
