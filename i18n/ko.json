@@ -263,7 +263,7 @@
  "co.hire.done.none": "게임에서 변경된 내용이 없습니다.",
  "co.hire.done.people_other": "게임에서 {n}명을 채용하거나 재배치했습니다.",
  "co.hire.done.weeks_other": "주간 근무표 {n}개를 적용했습니다.",
- "co.hire.elsewhere.hand_other": "<b>다른 사업장의 {n}명이 이 근무 시간에 맞습니다</b>: MyEmployees에서 재배치하세요. 인력 배치 › 필요 인력에 이름이 표시됩니다.",
+ "co.hire.elsewhere.hand_other": "<b>다른 사업장의 {n}명이 이 근무 시간에 맞습니다</b>: MyEmployees에서 재배치하세요. 인력 › 필요 인력에 이름이 표시됩니다.",
  "co.hire.elsewhere_other": "<b>다른 사업장에서 {n}명을 데려올 수 있습니다</b>: ‘이 사업장에 직원 배치’로 재배치합니다.",
  "co.hire.emptied": "<b>비어 있는 근무 시간</b>: {who} 직원을 다른 사업장으로 재배치한 뒤 주간 일정을 대체하지 않은 시간입니다. 해당 시간에는 아무도 근무하지 않습니다.",
  "co.hire.emptied.one_other": "{name} ({site}에서 근무 시간대 {n}개)",

@@ -3284,3 +3284,60 @@ test('an open week an unticked reassign would take says so, and Quick hire count
   await box.locator('[data-hq-site]').selectOption(G);
   assert.match(await box.locator('.hs-match summary').textContent(), /^0 fit an open week · 1 would join with no hours/);
 });
+
+test('on a phone, the schedule dialog keeps the from-other-sites note in the fixed strip with the add box', async (t) => {
+  const page = await board(t, {link: ONE, data: giftsHiring(), viewport: {width: 390, height: 700}});
+  const block = await siteBlock(page, G);
+  await page.evaluate(() => {
+    window.hrAnswer = async (kind, body, o) => ({status: 200, error: null, body: {ok: true, kind: 'schedule', dryRun: !!o.dryRun, stamp: 's',
+      before: {shifts: 1, print: 'a'}, after: {shifts: 2, print: 'b'}, removed: 1, added: 2, openedHours: false, leftWithout: [], warnings: [], siteError: null, rows: []}});
+  });
+  await block.locator('[data-gw="schedule"]').first().click();
+  await phase(page, 'ready');
+  const dlg = page.locator('dialog.gw-dlg');
+  const fixed = dlg.locator('.gw-fix');
+  assert.match(await fixed.textContent(), /1 person can come from another site/);
+  assert.match(await fixed.locator('.gw-box.gw-warn').textContent(), /Add 1 person to fill this plan/);
+  assert.equal(await dlg.locator('.gw-week').count(), 1);
+  assert.equal(await dlg.locator('.gw-body .gw-week').count(), 1);
+  const foot = await dlg.locator('.gw-foot, .gw-foot button').evaluateAll(els => els.map(el => {
+    const {top, bottom} = el.getBoundingClientRect();
+    return {top, bottom, height: innerHeight};
+  }));
+  assert.ok(foot.length > 0);
+  for(const {top, bottom, height} of foot) {
+    assert.ok(bottom <= height + 0.5, 'the foot and its buttons end on screen');
+    assert.ok(top >= 0, 'the foot and its buttons start on screen');
+  }
+});
+
+test('on a phone, Staff all sites keeps its foot on screen and scrolls its rows', async (t) => {
+  const page = await board(t, {link: ONE, viewport: {width: 390, height: 700}});
+  await answering(page, []);
+  await page.locator(REVIEW).click();
+  await phase(page, 'ready');
+  const dlg = page.locator('dialog.gw-dlg');
+  const foot = await dlg.locator('.gw-foot').evaluate(el => {
+    const {top, bottom} = el.getBoundingClientRect();
+    return {top, bottom, height: innerHeight};
+  });
+  assert.ok(foot.bottom <= foot.height, 'the foot ends on screen');
+  assert.ok(foot.top >= 0, 'the foot starts on screen');
+  const body = await dlg.locator('.gw-body').evaluate(el => ({scrollHeight: el.scrollHeight, clientHeight: el.clientHeight}));
+  assert.ok(body.scrollHeight > body.clientHeight, 'the rows scroll');
+  assert.ok(body.clientHeight >= 150, 'the rows have at least 150 px of space');
+  await page.evaluate(() => {
+    window.hrAnswer = async (kind, body, o) => o.dryRun
+      ? {status: 200, error: null, body: {ok: true, kind: 'hire', dryRun: true, stamp: 's', hired: [], moved: [], skipped: [], sites: [], wageAdded: 0, rows: []}}
+      : {status: 409, error: 'refused', body: {ok: false, kind: 'hire', rows: [{scope: 'site', address: {street: 'ba:street_secondavenue', number: 10}, error: 'screen_open'}]}};
+  });
+  await dlg.locator('.gw-foot [data-gw-b="apply"]').click();
+  await phase(page, 'failed');
+  const failedFoot = await dlg.locator('.gw-foot').evaluate(el => {
+    const {top, bottom} = el.getBoundingClientRect();
+    return {top, bottom, height: innerHeight};
+  });
+  assert.ok(failedFoot.bottom <= failedFoot.height, 'the failed foot ends on screen');
+  assert.ok(failedFoot.top >= 0, 'the failed foot starts on screen');
+  assert.equal(await dlg.locator('.gw-foot').getByRole('button', {name: 'Try again', exact: true}).count(), 1);
+});
