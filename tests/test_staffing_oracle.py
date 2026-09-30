@@ -844,6 +844,177 @@ class HireCountTest(unittest.TestCase):
         ba_dashboard._split_open(rows, placeholders, state, {"rostered": set()})
         return sorted((r["from"], r["to"], r["employee"] and r["employee"][-1]) for r in rows)
 
+    def test_a_scrap_goes_only_to_somebody_already_working(self):
+        """A works Monday to Friday but cannot work evenings, while C is idle and
+        could take the hire's four evening hours. Giving C those hours would
+        start somebody on a scrap, so the evening line must stay with the hire."""
+        pool = [dict(ba_dashboard._placeholder(SERVICE, 0), id=pid, name=pid,
+                     addr=("st", 1), demands=["ba:jobdemand_fulltime"],
+                     blackouts=blackouts, hire=False)
+                for pid, blackouts in (("a", [(18, 22)]), ("c", []))]
+        hires = [ba_dashboard._placeholder(SERVICE, 0)]
+        state = {p["id"]: ba_dashboard._fresh_state() for p in pool + hires}
+        rows = []
+        for person, lines in ((pool[0], [(wd, 6, 14) for wd in range(1, 6)]),
+                              (hires[0], [(3, 18, 22)])):
+            for wd, start, end in lines:
+                row = dict(self.line(wd, start, end), employee=None, name=None,
+                           hours=0, fromBench=False)
+                ba_dashboard._take_over(row, person, state)
+                rows.append(row)
+        here = {"rostered": {"a", hires[0]["id"]},
+                "flex": {p["id"]: 1 for p in pool + hires}, "groups": {}}
+        ba_dashboard._absorb_scraps(rows, hires, pool, state, here)
+        self.assertNotIn("c", [row["employee"] for row in rows])
+        self.assertEqual(rows[-1]["employee"], hires[0]["id"])
+
+    def lifted(self, weeks, blackouts, **people):
+        """_place_hires() on a week of held and open lines: (hours worked by id, hire weeks' hours).
+
+        `weeks` maps an id (None for the open lines) to its lines; `people`
+        adds people with no lines, or overrides a field of somebody's.
+        """
+        def person(pid, **fields):
+            base = dict(ba_dashboard._placeholder(SERVICE, 0), id=pid, name=pid, addr=("st", 1),
+                        demands=["ba:jobdemand_fulltime"], blackouts=blackouts.get(pid, []),
+                        hire=False)
+            return dict(base, **fields)
+        ids = [pid for pid in weeks if pid] + [pid for pid in people if pid not in weeks]
+        pool = [person(pid, **people.get(pid, {})) for pid in ids]
+        state = {p["id"]: ba_dashboard._fresh_state() for p in pool}
+        shifts = []
+        for pid, lines in weeks.items():
+            for wd, start, end in lines:
+                row = dict(self.line(wd, start, end), station=1 if end <= 15 else 2,
+                           employee=None, name=None, hours=0, fromBench=False)
+                if pid:
+                    ba_dashboard._take_over(row, next(p for p in pool if p["id"] == pid), state)
+                shifts.append(row)
+        here = {"rostered": {pid for pid in weeks if pid}, "flex": {p["id"]: 1 for p in pool},
+                "groups": {}}
+        rows, hires = ba_dashboard._place_hires(shifts, pool, state, here,
+                                                {p["id"]: (0.0, 0) for p in pool})
+        worked = collections.Counter()
+        for row in rows:
+            if row["employee"] in state:
+                worked[row["employee"]] += row["to"] - row["from"]
+        return worked, [week["hours"] for found in hires.values() for week in found]
+
+    def test_nobody_is_started_on_a_scrap_to_lift_a_hire(self):
+        """Review round 1 (gpt-6.1-sol): standing A down (31 h) put a
+        Saturday 10-17 and a Sunday 06-14 on C and D, who had no hours
+        here: two people started on 7 and 8 hours for one stood down. Only
+        people already working here take a line, so A keeps their week."""
+        worked, hires = self.lifted(
+            {"a": [(1, 6, 14), (2, 6, 14), (6, 10, 17), (0, 6, 14)],
+             None: [(6, 17, 24), (0, 16, 24)]},
+            {"a": [(18, 22)], "c": [(18, 22)], "d": [(18, 22)]}, c={}, d={})
+        self.assertEqual(dict(worked), {"a": 31})
+        self.assertEqual(hires, [15])
+
+    def test_a_bench_member_stands_down_before_the_site_s_own(self):
+        """The same supermarket with Neal off the bench: the bench member is
+        stood down first, as the placer ranks them, and Ricky keeps his week."""
+        worked, hires = self.lifted(
+            {"neal": [(1, 6, 11), (2, 6, 15), (3, 6, 15), (4, 6, 15)],
+             "eva": [(wd, 15, 23) for wd in range(1, 6)],
+             "ricky": [(0, 6, 15), (1, 11, 15), (5, 6, 15), (6, 6, 15)],
+             None: [(0, 15, 23), (6, 15, 23)]},
+            {"neal": [(18, 22)], "ricky": [(18, 22)]}, neal={"addr": None})
+        self.assertNotIn("neal", worked)
+        self.assertEqual(worked["ricky"], 31)
+        self.assertGreaterEqual(hires[0], 30)
+
+    def test_somebody_with_no_hours_demand_is_not_trimmed_part_way(self):
+        """Review round 1 (gpt-6.1-sol): a server with no hours demand and no
+        evenings works three days 06-16, and the weekend's evenings are a
+        16-hour hire. Trimming the server to 10 hours kept two people where
+        the hire can work all 46: the server is stood down whole."""
+        worked, hires = self.lifted(
+            {"e": [(1, 6, 16), (2, 6, 16), (3, 6, 16)], None: [(6, 16, 24), (0, 16, 24)]},
+            {"e": [(18, 22)]}, e={"band": None, "demands": []})
+        self.assertNotIn("e", worked)
+        self.assertEqual(hires, [46])
+
+    def test_without_a_full_week_to_trim_a_week_with_no_demand_gives(self):
+        """Review round 2: a server with no hours demand and no evenings
+        works Saturday, Sunday and Monday 06-16 and Tuesday 06-10, 34 hours;
+        the weekend's evenings are a 16-hour hire. The server cannot be stood
+        down (the hire has no room on the weekend mornings) and has no full
+        week to trim, but no demand either: the hire takes Monday and
+        Tuesday, 30 hours, and the server keeps 20."""
+        worked, hires = self.lifted(
+            {"e": [(6, 6, 16), (0, 6, 16), (1, 6, 16), (2, 6, 10)],
+             None: [(6, 16, 24), (0, 16, 24)]},
+            {"e": [(18, 22)]}, e={"band": None, "demands": []})
+        self.assertEqual(hires, [30])
+        self.assertEqual(dict(worked), {"e": 20})
+
+    def test_a_part_timer_is_stood_down_rather_than_trimmed(self):
+        """Review round 2: a part-timer (10 to 30 hours) with no evenings
+        works four mornings, 28 hours; the weekend's evenings are a 16-hour
+        hire. The hire works all 44 hours alone, one person fewer, rather
+        than 30 beside a part-timer cut to 14."""
+        worked, hires = self.lifted(
+            {"p": [(wd, 6, 13) for wd in range(1, 5)], None: [(6, 16, 24), (0, 16, 24)]},
+            {"p": [(18, 22)]}, p={"band": (10, 30), "demands": ["ba:jobdemand_parttime"]})
+        self.assertEqual(hires, [44])
+        self.assertNotIn("p", worked)
+
+    def test_hires_level_between_themselves(self):
+        """Review round 2 (gpt-6.1-sol): a full-timer with no evenings works
+        Tuesday to Friday 06-14, 32 hours; Saturday and Sunday are open 12-24
+        on one register and 16-24 on the other. Standing the full-timer down
+        gave one hire 48 hours and left the other at 24; a hire that works
+        gives too, so both reach 30."""
+        worked, hires = self.lifted(
+            {"f": [(wd, 6, 14) for wd in range(2, 6)],
+             None: [(6, 12, 24), (0, 12, 24), (6, 16, 24), (0, 16, 24)]},
+            {"f": [(18, 22)]})
+        self.assertEqual(len(hires), 2)
+        self.assertTrue(all(hours >= 30 for hours in hires), hires)
+        self.assertTrue(all(hours >= 30 for hours in worked.values()), worked)
+
+    def test_idle_people_with_no_demands_take_no_scrap(self):
+        """Review round 2 (Opus): the register case with C and D holding no
+        demands at all. Only people already working here take a line, so A
+        keeps 31 hours and the hire 15; C and D were started on 8 and 7."""
+        worked, hires = self.lifted(
+            {"a": [(1, 6, 14), (2, 6, 14), (6, 10, 17), (0, 6, 14)],
+             None: [(6, 17, 24), (0, 16, 24)]},
+            {"a": [(18, 22)], "c": [(18, 22)], "d": [(18, 22)]},
+            c={"band": None, "demands": []}, d={"band": None, "demands": []})
+        self.assertEqual(dict(worked), {"a": 31})
+        self.assertEqual(hires, [15])
+
+    def test_a_hire_week_takes_hours_off_the_longest_week(self):
+        """A server with no evenings works five mornings, 45 hours; the
+        weekend's evenings are a 16-hour hire. The hire takes a whole morning
+        and the end of another, 30 hours, and the server keeps 31."""
+        worked, hires = self.lifted({"a": [(wd, 6, 15) for wd in range(5)],
+                                     None: [(5, 15, 23), (6, 15, 23)]}, {"a": [(18, 22)]})
+        self.assertEqual(hires, [30])
+        self.assertEqual(dict(worked), {"a": 31})
+
+    def test_a_short_hire_week_is_lifted_to_full_time(self):
+        """Peter's supermarket (Costy Co, 29 September 2026): three servers,
+        two who will not work evenings, hold 32, 40 and 31 hours, and the
+        weekend's two evenings are left to a hire: 16 hours, a week no
+        full-time candidate takes. 119 hours are one short of four full
+        weeks, so the server with the fewest hours gives theirs up and is
+        spare, and the hire works 30 or more; nobody else drops under 30."""
+        worked, hires = self.lifted(
+            {"neal": [(1, 6, 11), (2, 6, 15), (3, 6, 15), (4, 6, 15)],
+             "eva": [(wd, 15, 23) for wd in range(1, 6)],
+             "ricky": [(0, 6, 15), (1, 11, 15), (5, 6, 15), (6, 6, 15)],
+             None: [(0, 15, 23), (6, 15, 23)]},
+            {"neal": [(18, 22)], "ricky": [(18, 22)]})
+        self.assertEqual(len(hires), 1)
+        self.assertGreaterEqual(hires[0], 30)
+        self.assertNotIn("ricky", worked)
+        self.assertTrue(all(hours >= 30 for hours in worked.values()), worked)
+        self.assertEqual(sum(worked.values()) + sum(hires), 119)
+
     def test_a_piece_either_end_of_the_line(self):
         """Round 5: hires at 44 and 43 hours, at work 05-09 and 00-04 that
         day. The first hire's 6 hours clash at either end, its 5-hour head
