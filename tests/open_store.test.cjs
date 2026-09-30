@@ -150,6 +150,11 @@ test('Break even shows both install modes from the game\'s rules, a range, tax, 
   // The range behind the single figure is on hover.
   assert.match(await page.locator('#osBody .os-note .os-rng').first().getAttribute('data-tip'), /^\$[\d,]+–\$[\d,]+$/);
   assert.match(notes[1], /^After 5% tax: \$[\d,]+ a day\.$/);
+  // After tax is the shown figure (the range's middle) less the tax, not the top of the range.
+  const taxed = await page.evaluate(() => { const plan = osPlan(), est = osEstimate(plan, osBuilding(plan.key));
+    return fmt(est.profit * OS_MID * (1 - osFacts().game.tax / 100)); });
+  assert.equal(notes[1], `After 5% tax: ${taxed} a day.`);
+  assert.equal(await page.locator('#osBody .os-ownc h3').innerText(), 'Your shop of this type, by the same rules');
   // The player's own liquor store against the same rules, as a line and its own card.
   assert.ok(notes.some(n => /Your shop of this type earns \d+% of its estimate\./.test(n)), notes.join('\n'));
   assert.equal(await page.locator('#osBody .os-ownc .os-site').count(), 1);
@@ -291,6 +296,24 @@ const realHiring = (page, {noHours = false, candidates = true, demand = false} =
 }, {site: SITE, noHours, candidates, demand});
 const spy = page => page.evaluate(() => { window.__writes = [];
   SOURCE.write = async (kind, body, o) => { window.__writes.push({kind, body, dryRun: o && o.dryRun}); return {body: {ok: true, skipped: [], rows: []}}; }; });
+
+test('a redraw of every page (a language switch) keeps Plan a factory\'s Ingredients off Open a store', async t => {
+  const page = await board(t);
+  await planned(page);
+  /* A type with a product a factory line can make, so Plan a factory shows Ingredients. */
+  const made = await page.evaluate(() => { indexPlan(); return planTypes().find(k => D.plan.catalogue[k].products.some(p => RECIPE_BY[p])) || null; });
+  assert.ok(made, 'the fixture plans something to make');
+  await page.evaluate(k => { planType = k; planCounts = {}; openRoute('expansion/factory'); renderCalm(false); }, made);
+  const onFactory = await page.evaluate(() => $('secIngredients').hidden);
+  assert.equal(onFactory, false, 'Plan a factory has ingredients to show here');
+  await page.evaluate(() => openRoute('expansion/open'));
+  await page.evaluate(() => renderCalm(false));
+  assert.equal(await page.evaluate(() => route), 'expansion/open');
+  assert.equal(await page.locator('#secIngredients').isVisible(), false);
+  await page.evaluate(() => openRoute('expansion/factory'));
+  await page.evaluate(() => renderCalm(false));
+  assert.equal(await page.evaluate(() => $('secIngredients').hidden), onFactory, 'Plan a factory shows it as before');
+});
 
 test('the Until opening step opens with a plan\'s building; Open stays for payback', async t => {
   const page = await board(t);

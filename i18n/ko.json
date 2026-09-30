@@ -1147,7 +1147,7 @@
  "gr.os.none.type": "이 업종은 모델에 반영되지 않았어요",
  "gr.os.none.venue": "화면, 좌석, 배우에 관한 게임 규칙은 모델에 반영되지 않았어요",
  "gr.os.own.note": "지난 2주간의 일일 이익을 수입 가격으로 계산한 상품 원가와 함께 보여 주고, 각 사업체의 건물·영업시간·마케팅을 적용한 규칙상 수치와 나란히 비교해요.",
- "gr.os.own.title": "같은 규칙으로 비교한 내 {types}",
+ "gr.os.own.title_other": "이 유형의 내 매장, 같은 기준 적용",
  "gr.os.plan.name": "{type} · {address}",
  "gr.os.plan.nameClosed": "{type} · {address} · 영업 종료",
  "gr.os.plan.nameOpen": "{type} · {address} · 영업 중",

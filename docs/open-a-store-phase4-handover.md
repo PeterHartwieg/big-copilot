@@ -53,6 +53,16 @@ spare staff and planner) merged. Main wins on staffing and marketing; step 5 ada
   bench · assign them here".
   Review round 8: with only spares at 0 h the row says "n people on staff", no warning;
   bench people count in "n of m" and the bar.
+
+## Release QA (30 Sep 2026)
+
+- After tax is the shown forecast (the range's middle, `OS_MID`) less the tax, with the range
+  on hover; the financing panel and step 6 already used `OS_MID`.
+- `drawPlan()` keeps `#secIngredients` hidden unless Expansion's view is Plan a factory, so a
+  redraw of every page (a language switch) no longer shows it under Open a store. The same
+  line exists on main.
+- The own-shops heading needs no plural type name: "Your shops of this type, by the same
+  rules"; `osTypePlural()` is gone.
 - **Marketing**: phase 3's own write (`osMarketingWrite`, `OS_MK_WIRE`, the `marketingOn`
   payload key) is gone. The row reads main's `campaigns` and `marketingPlan`, and the button,
   **Set the cheapest mix**, calls main's `gwMarketing([key], "mix")`; it is disabled with

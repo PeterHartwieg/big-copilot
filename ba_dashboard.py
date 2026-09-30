@@ -32251,15 +32251,8 @@ const osCap = b => { const v = b && (osFacts().venues || {})[b.key];
   return v && v[1] ? v[1] : Array.isArray(b && b.cap) ? b.cap[0] : (b && b.cap) || 0; };
 const osTypeName = slug => gameName(slug) || String(slug || "").replace(/^ba:businesstype_/, "");
 const osItemName = item => gameName(item) || prettySlug(String(item || ""));
-/* A type's name, lowered, and for more than one in English its plural
-   ("liquor stores", "travel agencies"); another language's sentence has the
-   name as the game gives it. */
+/* A type's name, lowered. */
 const osTypeLower = slug => gnLower(osTypeName(slug));
-function osTypePlural(slug){
-  const w = osTypeLower(slug);
-  if(typeof gnLang !== "undefined" && gnLang !== "en") return w;
-  return /s$/.test(w) ? w : /(sh|ch|x|z)$/.test(w) ? `${w}es` : /[^aeiou]y$/.test(w) ? `${w.slice(0, -1)}ies` : `${w}s`;
-}
 /* The outfit for the building's layout: its lines and furniture total. */
 /* The key an outfit is kept by: the layout, or a cinema's or theatre's size
    (Python's plan_layout()). */
@@ -32919,7 +32912,8 @@ function osBreakHtml(plan){
   ].join("");
   const lines = [
     `<p class="os-note">${tt("gr.os.be.mid", "About {w} a day if it is priced, stocked and staffed as planned.", {w: osMidMoney(p * OS_LOW, p * OS_HIGH)})}</p>`,
-    tax ? `<p class="os-note">${tt("gr.os.be.tax", "After {n}% tax: {w} a day.", {n: tax, w: fmt(p * (1 - tax / 100))})}</p>` : "",
+    /* The same basis as the line above: the range's middle, less the tax. */
+    tax ? `<p class="os-note">${tt("gr.os.be.tax", "After {n}% tax: {w} a day.", {n: tax, w: osMidMoney(p * OS_LOW * (1 - tax / 100), p * OS_HIGH * (1 - tax / 100))})}</p>` : "",
     own ? `<p class="os-note">${tt("gr.os.be.own", {one: "Your shop of this type earns {pct}% of its estimate.",
       other: "Your {n} shops of this type earn {pct}% of their estimate."},
       {n: own.rows.length, pct: Math.round(own.ratio * 100)})}</p>` : "",
@@ -32956,7 +32950,7 @@ function osOwnHtml(plan, own){
   const rows = own.rows.map(r => { const b = byKey.get(r.key) || {};
     return `<div class="os-site"><span><b>${spEsc(b.address || r.key)}</b><small><span class="hood">${spEsc(HOOD_TAGS[r.hood] || "")}</span> ${spEsc(r.layout || "")}</small></span>
       <span class="bar"><i style="width:${Math.max(2, r.actual / top * 100).toFixed(0)}%"></i></span><span class="v">${fmt(r.actual)}</span><span class="v os-dim">${Math.round(r.ratio * 100)}%</span></div>`; }).join("");
-  return `<div class="os-card os-ownc"><h3>${tt("gr.os.own.title", "Your {types} against the same rules", {types: own.rows.length > 1 ? osTypePlural(plan.type) : osTypeLower(plan.type)})}</h3>
+  return `<div class="os-card os-ownc"><h3>${tt("gr.os.own.title", {one: "Your shop of this type, by the same rules", other: "Your shops of this type, by the same rules"}, {n: own.rows.length})}</h3>
     <p class="quiet">${tt("gr.os.own.note", "Profit a day over their last two weeks, goods at import prices, beside the rules' figure for each one's own building, hours and marketing.")}</p>
     <div class="os-sites os-own">${rows}</div></div>`;
 }
@@ -34028,7 +34022,10 @@ function drawPlan(){
   /* Every product bought in: the table and its notes say so, and nothing
      can be made, so no tiles, no ingredients, no sentence (declutter E7). */
   const none = bought === cat[planType].products.length;
-  if($("secIngredients")) $("secIngredients").hidden = none;
+  /* Hidden also while another Expansion view is on screen: a redraw of every
+     page (renderCalm(), a language switch) must not show it under that view. */
+  const ing = $("secIngredients");
+  if(ing) ing.hidden = none || !String(ing.dataset.sub || "").split(" ").includes(sub.growth);
   $("planBody").innerHTML = none ? `
     <table data-pershop="${perShop}" data-shops="${shops}" data-peak="${D.plan.peak || 1}" data-products="${cat[planType].products.length}" data-ingmeta="${attr(JSON.stringify(meta))}">
       <thead><tr><th>${tt("gr.col.product", "Product")}</th><th class="l" colspan="4"></th></tr></thead>
