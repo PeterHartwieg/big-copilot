@@ -704,3 +704,154 @@ def depot_board():
     return {"meta": {"character": "bottom-up", "day": c.day, "save": "Fixture"},
             "supply": c.supply, "businesses": c.business_list, "alerts": alerts,
             "plan": {"recipes": []}}
+
+
+class RoundThreeTests(unittest.TestCase):
+    """Review round 3: one budget per sender, one ask per gap, closed shops,
+    stale routes and loops between two importing depots."""
+
+    def test_a_backup_import_and_a_route_share_one_output(self):
+        """A 720 a day brewery tops up a depot that also imports 700 a week
+        (a shop selling 100 a day) and a route-only depot (a shop selling 650
+        a day). What its routes are credited stays within the 720."""
+        c = Chain()
+        c.factory(BREWERY, "Brewery")
+        c.site(WH, "Backup")
+        c.contract(WH, BEER, 700)
+        c.hold(WH, BEER, 1000)
+        c.site(CAFE, "Route only")
+        c.hold(CAFE, BEER, 1000)
+        other = ("shop", 9)
+        for depot, shop, rate in ((WH, SHOP, 100), (CAFE, other, 650)):
+            c.shop(shop, "Shop " + str(rate))
+            c.hold(shop, BEER, 1000, rate)
+            c.plan(BREWERY, depot, BEER, 2000)
+            c.plan(depot, shop, BEER, 1000)
+        c.run()
+        credits = [n["credit"] for (site, item), n in walked_nodes(c).items()
+                   if item == BEER and site in (key(WH), key(CAFE))]
+        self.assertLessEqual(sum(credits), 720 + 1)
+        self.assertNotEqual(c.verdict(WH)["why"], "route")
+
+    def spoke_with_import(self, hub_import=700):
+        c = Chain()
+        hub, spoke = ("hub_road", 1), ("spoke_road", 2)
+        c.site(hub, "Hub")
+        c.hold(hub, BEER, 500)
+        c.contract(hub, BEER, hub_import)
+        c.site(spoke, "Spoke")
+        c.hold(spoke, BEER, 200)
+        c.contract(spoke, BEER, 700)
+        c.shop(SHOP, "Shop")
+        c.hold(SHOP, BEER, 400, 300)
+        c.plan(hub, spoke, BEER, 2000)
+        c.plan(spoke, SHOP, BEER, 800)
+        c.run()
+        return c, hub, spoke
+
+    def test_a_spoke_with_its_own_import_is_not_asked_again(self):
+        """Hub and spoke each import 700 a week; the shop needs 2,415. The
+        hub is asked to raise; the spoke is not. Applying every set-to on
+        the list buys about the need, not twice the gap."""
+        c, hub, spoke = self.spoke_with_import()
+        self.assertEqual(c.verdict(hub)["st"], "short")
+        self.assertIsNone(c.verdict(spoke)["setTo"])
+        bought = c.verdict(hub)["setTo"] + 700
+        self.assertLess(abs(bought - 2415), 2415 * 0.1)
+
+    def test_a_route_too_small_is_said_whatever_the_hub_lacks(self):
+        """The hub imports 350 a week and tops the spoke up to 30 a day for a
+        shop selling 100: raising the hub cannot make 30 carry the day."""
+        c = Chain()
+        c.site(WH, "Hub")
+        c.contract(WH, BEER, 350)
+        c.site(CAFE, "Spoke")
+        c.hold(CAFE, BEER, 100)
+        c.shop(SHOP, "Shop")
+        c.hold(SHOP, BEER, 300, 100)
+        c.plan(WH, CAFE, BEER, 30)
+        c.plan(CAFE, SHOP, BEER, 200)
+        c.run()
+        self.assertEqual((c.verdict(CAFE)["st"], c.verdict(CAFE)["why"], c.verdict(CAFE)["setTo"]),
+                         ("short", "target", 120))
+        self.assertEqual(len(c.notes(CAFE, "topup")), 1)
+
+    def test_a_closed_shop_needs_nothing(self):
+        """The shop sold 300 a day and is shut with the game's switch: the
+        hub's 500 a week import is not asked to grow for it."""
+        c = Chain()
+        c.site(WH, "Hub")
+        c.contract(WH, BEER, 500)
+        c.hold(WH, BEER, 500)
+        c.shop(SHOP, "Shop")
+        c.hold(SHOP, BEER, 0, 300)
+        c.plan(WH, SHOP, BEER, 100)
+        c.closed = {SHOP}
+        c.run()
+        self.assertIsNone(c.verdict(WH)["setTo"])
+        self.assertEqual(c.notes(SHOP, "outruns") + c.notes(SHOP, "unsourced"), [])
+
+    def test_a_shelf_holding_stock_is_never_unsourced(self):
+        """800 on the shelf, a target from an empty depot: the shelf came by
+        its stock somehow; the depot says what is missing."""
+        c = UnsourcedTests().cafe()
+        c.hold(CAFE, BEER, 800, 100)
+        c.run()
+        self.assertEqual(c.notes(CAFE, "unsourced"), [])
+        self.assertEqual(c.verdict(WH)["st"], "noplan")
+        self.assertNotEqual(c.verdict(WH)["lvl"], "info")
+
+    def test_a_stale_route_from_a_factory_that_makes_none_does_not_count(self):
+        """An importer tops the shop up with water to 400; a brewery's old
+        plan says 1,000 but it makes beer and holds no water. The shop,
+        selling 500 a day, is judged on the 400."""
+        c = Chain()
+        c.site(WH, "Importer")
+        c.contract(WH, WATER, 3500)
+        c.hold(WH, WATER, 3000)
+        c.factory(BREWERY, "Brewery")
+        c.shop(SHOP, "Shop")
+        c.hold(SHOP, WATER, 400, 500)
+        c.plan(WH, SHOP, WATER, 400)
+        c.plan(BREWERY, SHOP, WATER, 1000)
+        c.run()
+        fact = c.fact(SHOP, WATER)
+        self.assertEqual((fact["have"], fact["st"]), (400, "short"))
+
+    def test_two_importing_depots_topping_each_other_up_read_the_same_either_way(self):
+        """Depots importing 2,100 and 700 a week, each with a shop selling
+        150 a day, top each other up. Together they bring the 2,415 needed,
+        whichever sorts first: the goods go from the one with more over."""
+        for high in (("aa", 1), ("zz", 1)):
+            with self.subTest(high=high):
+                c = Chain()
+                low, shop2 = ("mm", 2), ("shop2", 9)
+                for depot, amount, shop in ((high, 2100, SHOP), (low, 700, shop2)):
+                    c.site(depot, "High" if depot == high else "Low")
+                    c.contract(depot, BEER, amount)
+                    c.hold(depot, BEER, 1500)
+                    c.shop(shop, "Shop")
+                    c.hold(shop, BEER, 300, 150)
+                    c.plan(depot, shop, BEER, 300)
+                c.plan(high, low, BEER, 500)
+                c.plan(low, high, BEER, 500)
+                c.run()
+                self.assertEqual((c.verdict(high)["st"], c.verdict(low)["st"]), ("covered", "covered"))
+
+
+def key(addr):
+    from ba_dashboard import site_key
+    return site_key(addr)
+
+
+def walked_nodes(c):
+    """The 24/7 walk for a Chain, rebuilt through a spy on _supply_walk."""
+    import ba_dashboard
+    seen = []
+    real = ba_dashboard._supply_walk
+    ba_dashboard._supply_walk = lambda *a: seen.append(real(*a)) or seen[-1]
+    try:
+        c.run()
+    finally:
+        ba_dashboard._supply_walk = real
+    return seen[0]

@@ -872,8 +872,11 @@ test('an unsourced finding on a depot lands on Imports', async () => {
       const summary = {...a, i18n: {text: ['f.sum.unsourced', {}]}};
       const routes = [findingRoute(a).route, findingRoute(summary).route];
       goToAlert(a);
-      return {routes, tab: sub.supply};
+      const at = document.querySelector(`#${SB_SEC[sub.supply]} tr.sb-arrived`);
+      return {routes, tab: sub.supply, at: at ? `${at.dataset.s}:${at.dataset.slug}` : null};
     });
-    assert.deepEqual(got, {routes: ['supply/imports', 'supply/imports'], tab: 'imports'});
+    // The depot's line, with the import to add, is a row of Imports to land on.
+    assert.deepEqual(got, {routes: ['supply/imports', 'supply/imports'], tab: 'imports', at: '0:ba:itemname_beer'});
+    assert.equal(await page.locator('#secImports tr.sb-arrived').getAttribute('data-slug'), 'ba:itemname_beer');
   } finally { await page.close(); }
 });

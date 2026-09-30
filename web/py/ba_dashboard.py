@@ -3383,7 +3383,8 @@ def _coming_week(points: list, day: int) -> float | None:
     return max(0.0, my + slope * (day + 3 - mx))
 
 
-def _plan_dag(edges: dict, index: dict, supplied, uses=lambda _site, _item: False) -> dict:
+def _plan_dag(edges: dict, index: dict, supplied, uses=lambda _site, _item: False,
+              surplus=lambda _site, _item: 0.0) -> dict:
     """The logistics plans with every loop cut the same way whatever order the
     sites are read in: {source: [(dest, item, target), ...]} as `edges`.
 
@@ -3392,8 +3393,10 @@ def _plan_dag(edges: dict, index: dict, supplied, uses=lambda _site, _item: Fals
     so inside each strongly connected set of sites (per item) a plan counts
     only where it runs away from the supply and toward the use: from a site
     with a supply of its own (`supplied(site, item)`: an import, a wholesale
-    delivery, a line making it) to one without; then from fewer hops from
-    such a site to more; then from further from the use (a site using it
+    delivery, a line making it) to one without; then from the site whose own
+    supply leaves more over after its own use (`surplus(site, item)`) to the
+    one short of it, so two importing depots topping each other up count the
+    way the goods have to go; then from fewer hops from such a site to more; then from further from the use (a site using it
     itself, `uses(site, item)`, or sending it out of the loop) to nearer;
     then by the site key, so a tie always breaks the same way. A plan to an
     address not the company's is kept as it is.
@@ -3478,8 +3481,8 @@ def _plan_dag(edges: dict, index: dict, supplied, uses=lambda _site, _item: Fals
                             dist[b] = dist[m] + 1
                             nxt_frontier.append(b)
                 frontier = nxt_frontier
-            rank = {m: (0 if supplied(m, item) else 1, hops.get(m, len(members)),
-                        -dist.get(m, -1), m) for m in members}
+            rank = {m: (0 if supplied(m, item) else 1, -round(surplus(m, item), 6),
+                        hops.get(m, len(members)), -dist.get(m, -1), m) for m in members}
             for m in members:
                 for d in graph.get(m, ()):
                     if d in members and not rank[m] < rank[d]:
@@ -3508,9 +3511,9 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
     import line's active contracts in delivery order, replayed through
     _import_drop() against the stock the routes into the site keep there: a
     Smart Delivery level at or under a route's target brings nothing, a plain
-    amount always its amount. `unknown` holds sites whose lines the board
-    cannot read (a recipe it cannot name): what they send is taken as made
-    there.
+    amount always its amount. `unknown` holds the (site, item) pairs a site
+    whose lines the board cannot read (a recipe it cannot name) holds: what
+    it sends of those is taken as made there.
 
     Loops in the plans are cut first (_plan_dag()), the same way whatever the
     order the sites are read in.
@@ -3548,10 +3551,15 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
     """
     def supplied(site, item):
         n = (site, item)
-        return bool(drops.get(n) or steady.get(n) or site in unknown)
+        return bool(drops.get(n) or steady.get(n) or n in unknown)
+
+    def surplus(site, item):
+        n = (site, item)
+        brought = _import_drop(0, drops[n]) / 7 if drops.get(n) else 0.0
+        return brought + steady.get(n, 0.0) - eats.get(n, (0.0, 0.0))[1] - leaves.get(n, (0.0, 0.0))[1]
 
     edges = _plan_dag(edges, index, supplied,
-                      lambda site, item: (site, item) in leaves or (site, item) in eats)
+                      lambda site, item: (site, item) in leaves or (site, item) in eats, surplus)
     senders = collections.defaultdict(list)  # (dest, item) -> [(source, target)]
     for source, legs in edges.items():
         if source not in index:
@@ -3633,7 +3641,7 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
                                     for s in {s for s, _t in senders.get(n, ())}))
         _lu, ln = eats.get(n, (0.0, 0.0))
         _su, sn = leaves.get(n, (0.0, 0.0))
-        if key in unknown and not own(n) and not inbound:
+        if n in unknown and not own(n) and not inbound:
             spare_memo[n] = None
         else:
             spare_memo[n] = own(n) + inbound - ln - sn
@@ -3641,8 +3649,11 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
 
     def sends(source, item, seen=frozenset()):
         """{dest: (credit, supplied, potential)} a day on every route from
-        `source` of `item`, its spare shared between them: what each asks,
-        then, for what the routes alone could bring, each one's whole need."""
+        `source` of `item`, out of one budget, its spare: first what each
+        asks (its need beyond its own supply), then what is left over, shared
+        by what each still lacks of its whole need, for what the routes alone
+        could bring (an import beside them then a backup). Never more in all
+        than the sender has."""
         s_node = (source, item)
         if s_node in out_memo:
             return out_memo[s_node]
@@ -3659,12 +3670,16 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
             for d, target in legs.items():
                 result[d] = (min(target, want[d]), want[d], min(target, whole[d]))
         else:
-            asks, wholes = sum(want.values()), sum(whole.values())
-            ratio = 1.0 if asks <= 0 else min(1.0, max(0.0, have) / asks)
-            pot = 1.0 if wholes <= 0 else min(1.0, max(0.0, have) / wholes)
-            for d, target in legs.items():
-                result[d] = (min(target, want[d] * ratio), want[d] * ratio,
-                             min(target, whole[d] * pot))
+            have = max(0.0, have)
+            asks = sum(want.values())
+            ratio = 1.0 if asks <= 0 else min(1.0, have / asks)
+            credit = {d: min(target, want[d] * ratio) for d, target in legs.items()}
+            left = max(0.0, have - sum(credit.values()))
+            lack = {d: max(0.0, min(legs[d], whole[d]) - credit[d]) for d in legs}
+            lacking = sum(lack.values())
+            extra = 1.0 if lacking <= 0 else min(1.0, left / lacking)
+            for d in legs:
+                result[d] = (credit[d], want[d] * ratio, credit[d] + lack[d] * extra)
         if not seen or s_node not in seen:
             out_memo[s_node] = result
         return result
@@ -3778,11 +3793,22 @@ def _supply(
                 for product in save.items(partnership.get("products")) if product.get("amount")}
     routed_to = {(d, i) for legs in edges.values() for d, i, _a in legs}
     held_here = {(b["key"], line["slug"]) for b in businesses for line in b["lines"] if line["units"] > 0}
-    factory_sites = {b["key"] for b in businesses if b.get("typeSlug") in FACTORY_TYPES}
+    # What a factory's machines make, as far as the recipe table names them:
+    # a factory is a sender of that, not of everything (a line the table
+    # cannot name makes at most what the factory holds, counted above).
+    makes_here = set()
+    for building in save.items(save.root["BuildingRegistrations"]):
+        if not building.get("RentedByPlayer"):
+            continue
+        for holder in save.items(building.get("itemInstances")):
+            machine = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
+            if machine and machine.get("workstationType") and RECIPE_ITEMS.get(machine.get("selectedRecipeId")):
+                makes_here.add((site_key((building["StreetName"], building["StreetNumber"])),
+                                RECIPE_ITEMS[machine["selectedRecipeId"]]))
 
     def has_it(source, item):
         return ((source, item) in imported or (source, item) in routed_to
-                or (source, item) in held_here or source in factory_sites)
+                or (source, item) in held_here or (source, item) in makes_here)
 
     for line, offers in list(target_at.items()):
         able = [o for o in offers if has_it(o[1], line[1])] or offers
@@ -3819,8 +3845,8 @@ def _supply(
     for business in businesses:
         # A factory's or a depot's own "sales" are the goods its rounds take
         # away, which the plans already count: only a shop's are an end.
-        if business["status"] != "retail":
-            continue
+        if business["status"] != "retail" or business.get("closed"):
+            continue  # a shop shut with the game's switch needs nothing either
         key = business["key"]
         for slug, per_day in sold_week.get(key, {}).items():
             if per_day > 0:
@@ -4158,7 +4184,7 @@ def _supply(
     weekly_use = {}  # (depot, item) -> a week of the draw the 24/7 rows judge
     walked = {}  # sizing mode -> {(site, item): node}, from _supply_walk()
     made_day = {}  # (factory, item) -> what its lines make a day at capacity
-    unread = set()  # factories with a line the board cannot name
+    unread = set()  # (factory, item) a line the board cannot name may make: what it holds
     eats_now = {}  # sizing mode -> what factory lines draw, from walk()
     made_now = {}  # sizing mode -> what factory lines make a day, from walk()
     # What arrives whatever the stock: a wholesale store's weekly delivery,
@@ -4426,8 +4452,8 @@ def _supply(
         each factory's lines make a day in each sizing mode, {mode: {(factory,
         item): units}} (24/7 at capacity, Demand what the ends draw);
         `eats` what they draw a day in each sizing mode, {mode: {(factory,
-        item): (use, need)}}; `unknown` the factories with a line the board
-        cannot name. Walks the chain in each mode, builds the import rows,
+        item): (use, need)}}; `unknown` the (factory, item) pairs a factory
+        with a line the board cannot name holds, taken as made there. Walks the chain in each mode, builds the import rows,
         and returns what routes from the company's own sites bring each depot
         line a week, for the factory view: `routed` where an import brings
         it too, `routeOnly` where none does, each as (a week of what the
@@ -4463,9 +4489,10 @@ def _supply(
     sold_dem, ramping = {}, set()
     for business in businesses:
         key = business["key"]
-        if business["status"] != "retail":
+        if business["status"] != "retail" or business.get("closed"):
             # A factory's or a depot's own "sales" are the goods its rounds
-            # take away: only a shop's sales are an end.
+            # take away: only a shop's sales are an end, and not a shop shut
+            # with the game's temporarily closed switch.
             continue
         young = (business["status"] == "retail"
                  and day - business.get("opened", day) < NEW_SITE_DAYS)
@@ -4494,11 +4521,18 @@ def _supply(
     # _factories() names (dem_made) before it sizes a line.
     dem_graph = {}
 
-    def dem_made(made) -> None:
-        """Say which (site, item) a line makes, and build the graph from it."""
+    def dem_made(made, amount=lambda _site, _item: 0.0) -> None:
+        """Say which (site, item) a line makes, and how much a day at most,
+        and build the graph from it."""
         def supplied(site, item):
             return bool((site, item) in drops or (site, item) in wholesale or made(site, item))
-        dem_graph["edges"] = cut = _plan_dag(edges, index, supplied, lambda site, item: (site, item) in leaves)
+        def surplus(site, item):
+            n = (site, item)
+            own = (imports[n]["weekly"] / 7 if n in imports else 0.0) + (
+                wholesale[n]["weekly"] / 7 if n in wholesale else 0.0) + amount(site, item)
+            return own - leaves.get(n, (0.0, 0.0))[1]
+        dem_graph["edges"] = cut = _plan_dag(edges, index, supplied, lambda site, item: (site, item) in leaves,
+                                             surplus)
         senders = collections.defaultdict(list)
         for source, legs in cut.items():
             if source not in index:
@@ -4809,7 +4843,7 @@ def _supply(
         node = walked.get("cap", {}).get((key, item)) or {}
         return bool(held.get(key, {}).get(item, 0) > 0 or (key, item) in imports
                     or (key, item) in wholesale or made_day.get((key, item))
-                    or (key, item) in made_at or key in unread or node.get("inbound"))
+                    or (key, item) in made_at or (key, item) in unread or node.get("inbound"))
 
     facts = _supply_facts({
         "businesses": businesses, "index": index, "factories": factories,
@@ -5425,6 +5459,15 @@ def _supply_facts(ctx: dict) -> dict:
         # their targets and than their senders' supply lets them; covering
         # all of it, the import beside them is a backup and answers for none.
         routed = 7 * node.get("credit", 0.0)
+        # Where the sites topping it up fall short only because a site
+        # further up is short of its own import, that import is asked for the
+        # whole chain: the route here is taken at what it asks of them (up to
+        # its target), so the same gap is never asked for twice.
+        able = [s for s in node.get("senders", ()) if s not in node.get("passing", ())]
+        upstream = bool(able) and all(upstream_asks(s, slug, mode) for s in able)
+        if upstream:
+            routed = max(routed, 7 * min(node.get("targets", 0),
+                                         sum(node.get("demand", {}).get(s, (0.0, 0.0))[1] for s in able)))
         # What lines at the site itself make of it comes off the week too.
         made = 7 * ctx.get("made", {}).get(mode, {}).get((key, slug), 0.0)
         covered = bool(node.get("covered"))
@@ -5464,7 +5507,9 @@ def _supply_facts(ctx: dict) -> dict:
             # or its own fact asks for one); a shelf or a factory line does not.
             # Where the site holds none and only shelves draw on it, each
             # shelf's own finding says so, naming this site (unsourced).
-            said = (not lines_use and not sourced(key, slug)) or said_downstream(node, slug, use)
+            shelves_say = not lines_use and not sourced(key, slug) and not any(
+                stocks.get(dest, {}).get(slug, 0) > 0 for dest in node.get("asked", {}))
+            said = shelves_say or said_downstream(node, slug, use)
             days, _passes = behind(node, slug, stock, use / 7)
             p["noplan"] = "order"
             # Stock never hides a missing supply: it only grades how soon.
@@ -5497,7 +5542,7 @@ def _supply_facts(ctx: dict) -> dict:
             have = (entry.get("target") if entry.get("smart")
                     else entry.get("pausedWeekly") if paused else brought)
         fields = {"use": use, "need": need, "have": have, "setTo": set_to,
-                  "parts": parts, "imp": bool(entry) or lines_use > 0}
+                  "parts": parts, "imp": bool(entry) or lines_use > 0 or bool(p.get("noplan"))}
         if p.get("noplan") or "order" in short:
             # How long the stock lasts, and the route that only passes on
             # what its sender holds, for the finding to say.
@@ -5531,25 +5576,36 @@ def _supply_facts(ctx: dict) -> dict:
             days, passes = behind(node, slug, stock, use / 7)
             # The senders with anything coming in fall short because a site
             # further up is short, and that site's own import is judged on
-            # this one's need too: it asks, once; this is a note naming it.
+            # this one's need too: it asks, once. Here the route is judged on
+            # its target alone (a target too small is a finding of its own,
+            # which no import further up can fix), and otherwise the fact is
+            # a note naming that site (why upstream).
             able = [s for s in node.get("senders", ()) if s not in node.get("passing", ())]
-            upstream = bool(able) and all(upstream_asks(s, slug, mode) for s in able)
+            if able and all(upstream_asks(s, slug, mode) for s in able):
+                p, fields, cad = daily_route(key, slug, node, use_day, need_day)
+                if not p.get("short") and not p.get("tight"):
+                    p = {"noplan": "upstream", "noplanLvl": "info", "short": []}
+                fields["from"] = index.get(able[0])
+                return p, fields, cad
             p = {"noplan": "order", "short": [],
-                 "noplanLvl": ("info" if upstream or said_downstream(node, slug, use)
-                               else graded(days))}
+                 "noplanLvl": "info" if said_downstream(node, slug, use) else graded(days)}
             set_to = (_raise_import(entry, need) if entry else _ceil_ten(need)) if need else None
             return p, {
                 "use": use, "need": need, "setTo": set_to,
                 "have": (entry.get("target") if entry.get("smart") else 0) if entry else None,
                 "parts": {"lines": round(lines_use), "sites": round(7 * use_day - lines_use),
                           "route": round(7 * credit)},
-                "imp": bool(entry) or lines, "lasts": round(days, 1),
+                # An import to add is an import line: Weekly imports lists it.
+                "imp": True, "lasts": round(days, 1),
                 **({"passes": index.get(passes)} if passes is not None else {}),
-                **({"from": index.get(able[0])} if upstream else {}),
             }, "weekly"
+        return daily_route(key, slug, node, use_day, need_day)
+
+    def daily_route(key, slug, node, use_day, need_day):
+        """A route-fed depot's daily top-up against its busiest day's use."""
         factor, _day = ctx["peak"](businesses[index[key]])
         use, need = round(use_day * factor), round(need_day * factor)
-        top = node.get("targets") or target_at[(key, slug)][0]
+        top = node.get("targets") or node.get("reach") or target_at[(key, slug)][0]
         source = target_at[(key, slug)][1]
         p = {"short": []}
         if use and _below(top, use):
@@ -5654,13 +5710,13 @@ def _supply_facts(ctx: dict) -> dict:
         own_range = catalogue.get(business.get("typeSlug"))
         added = bool(own_range) and slug not in own_range and slug in goods
         priced = line.get("configuredPrice", line.get("price") or None) is not None
-        if stockable and target and sources and not any(sourced(src, slug) for src in sources):
+        if (stockable and target and sources and not line["units"]
+                and not any(sourced(src, slug) for src in sources)):
             # Nothing upstream supplies it: no site that tops it up holds any,
             # imports it (a paused contract counts), makes it or is brought it
-            # by a route. Whatever the shop's type, age or sales, it is said;
-            # the shelf's own stock only says how soon (critical under a week).
-            days = line["units"] / peak if peak else 60.0
-            p["noplan"], p["noplanLvl"] = "source", graded(days)
+            # by a route, and the shelf is empty. Whatever the shop's type,
+            # age or sales, it is said: critical where it has been selling.
+            p["noplan"], p["noplanLvl"] = "source", "critical" if peak else "warn"
             extra_fields["from"] = index.get(sources[0])
         elif stockable and not target and added and priced and not line["units"]:
             # Goods the player added to the price list, with nothing on the
@@ -6206,7 +6262,9 @@ def _factories(
         # with), but current import contracts and the plans are known; a
         # factory whose lines cannot be read is taken to make what it sends.
         if flow.get("walk"):
-            flow.update(flow["walk"]({}, {}, set(machines)))
+            flow.update(flow["walk"]({}, {}, {(key, item) for key in machines
+                                              for item, units in flow["held"].get(key, {}).items()
+                                              if units > 0}))
         return {
             **empty,
             "character": character,
@@ -6292,8 +6350,15 @@ def _factories(
             if named:
                 specs[key].append((named, n))
                 capacity_at[key][named] += n * recipes[named]["out"] * 24
+    # A factory running a recipe the board cannot name may make what it
+    # holds: it is taken to have those items coming in, and nothing else.
+    unread_pairs = {(key, item) for key, counter in machines.items()
+                    if any(rid and not _recipe_identity(rid, station, recipes, chosen)[0]
+                           for station, rid in counter)
+                    for item, units in flow["held"].get(key, {}).items() if units > 0}
     if flow.get("demandMade"):
-        flow["demandMade"](lambda site, item: capacity_at[site][item] > 0)
+        flow["demandMade"](lambda site, item: capacity_at[site][item] > 0 or (site, item) in unread_pairs,
+                           lambda site, item: capacity_at[site][item])
     dem_made = {}
 
     def dem_output(key, slug):
@@ -6632,9 +6697,7 @@ def _factories(
                     dem_day, min(dem_day * (1 + SUPPLY_MARGIN), cap_day))
         for line, per_day in dem_out.items():
             makes_at["dem"][line] += per_day
-        unknown = {businesses[site["s"]]["key"] for site in sites
-                   if any(u["rid"] for u in site["unnamed"])}
-        flow.update(flow["walk"]({mode: dict(by) for mode, by in makes_at.items()}, eats_at, unknown))
+        flow.update(flow["walk"]({mode: dict(by) for mode, by in makes_at.items()}, eats_at, unread_pairs))
 
     # --- the verdict on each input, once the depot totals are known
     for site in sites:
@@ -14671,7 +14734,9 @@ def _shelf_notes(businesses: list, supply: dict, silent: set, mode: str = "cap")
     for s_key in _in_order(facts):
         s = int(s_key)
         b = businesses[s]
-        if b["key"] in silent:
+        # A shop shut with the game's temporarily closed switch sells nothing:
+        # its shelves are no finding (the not-trading finding names it).
+        if b["key"] in silent or b.get("closed"):
             continue
         # Nothing upstream supplies it (_supply_facts' shelf()): one finding
         # per shop, however many of its goods it is (a shop pricing a dozen
@@ -21715,6 +21780,7 @@ const SZ_WHY = {
   get "noplan:target"(){ return tt("sb.why.noplan.target", "No daily top-up plan brings it"); },
   get "noplan:order"(){ return tt("sb.why.noplan.order", "No standing import brings it"); },
   get "noplan:source"(){ return tt("sb.why.noplan.source", "Nothing brings it to the site that tops it up"); },
+  get "noplan:upstream"(){ return tt("sb.why.noplan.upstream", "The site that tops it up is short of its own import: raise that import"); },
   get "noplan:priced"(){ return tt("sb.why.noplan.priced", "Priced here, but no top-up, wholesale delivery or import brings it"); },
   get "new:young"(){ return tt("sb.why.new.young", "Too young to judge yet"); },
   get "new:firstFill"(){ return tt("sb.why.new.firstFill", "A first fill: one-off fills never count as use"); },

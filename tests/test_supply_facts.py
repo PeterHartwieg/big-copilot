@@ -171,6 +171,7 @@ class Company:
                 "key": site_key(site["addr"]), "name": site["name"], "code": "", "neighbourhood": "",
                 "type": site["kind"], "typeSlug": site["kind"], "status": site["status"],
                 "lines": lines, "opened": site["opened"], "tradeDays": site["tradeDays"],
+                "closed": site["addr"] in getattr(self, "closed", ()),
                 "revenue": 100.0, "profit": 10.0, "costCentre": False, "rent": 0.0, "staff": 1,
                 "customers": 10, "satisfaction": {"overall": 100}, "promotion": 100,
                 "marketingIndex": 100, "traffic": 0, "missingAmenities": [],
@@ -1349,7 +1350,7 @@ class FixtureKeyTests(unittest.TestCase):
     # Every (status word, reason) _supply_status() can send, and the fields the
     # rows Python sends always carry (a row may carry more).
     WHYS = {
-        "made": {None}, "paused": {"order", "topup"}, "noplan": {"target", "order", "source", "priced"},
+        "made": {None}, "paused": {"order", "topup"}, "noplan": {"target", "order", "source", "priced", "upstream"},
         "new": {"young", "firstFill"}, "short": {"order", "shortfall", "target", "dry"},
         "stalled": {"notDrawn", "waiting"},
         "idle": {"notMoving", "notRouted", "targetHigh", "importHigh", "overstock"},
