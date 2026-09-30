@@ -38685,16 +38685,20 @@ const GW_REFUSE = {
 /* A hire's rows name their scope: a candidate hired, an employee moved, a
    site, or one shift of a site's week (the schedule's own codes). */
 GW_REFUSE.hire = Object.assign({}, GW_REFUSE.schedule, {
-  not_found: r => r.scope === "hire" ? {rule: "No longer among the headhunters' candidates", fix: "Refresh the board."}
-    : r.scope === "move" ? {rule: "Nobody by that id works for you any more", fix: "Refresh the board."} : GW_REFUSE.any.not_found,
-  changed: r => r.scope === "hire" ? {rule: "The candidate's wage has changed since this board was read", fix: "Refresh the board: the page picks again."}
-    : r.scope === "move" ? {rule: "Not where this board read them any more", fix: "Refresh the board."} : GW_REFUSE.any.changed,
+  not_found: r => r.scope === "hire" ? {rule: tt("sp.gw.hire.refuse.gone.rule", "No longer among the headhunters' candidates"), fix: tt("sp.gw.hire.refuse.refresh", "Refresh the board.")}
+    : r.scope === "move" ? {rule: tt("sp.gw.hire.refuse.noone.rule", "Nobody by that id works for you any more"), fix: tt("sp.gw.hire.refuse.refresh", "Refresh the board.")} : GW_REFUSE.any.not_found,
+  changed: r => r.scope === "hire" ? {rule: tt("sp.gw.hire.refuse.wage.rule", "The candidate's wage has changed since this board was read"), fix: tt("sp.gw.hire.refuse.wage.fix", "Refresh the board: the page picks again.")}
+    : r.scope === "move" ? {rule: tt("sp.gw.hire.refuse.moved.rule", "Not where this board read them any more"), fix: tt("sp.gw.hire.refuse.refresh", "Refresh the board.")} : GW_REFUSE.any.changed,
   no_skill: r => r.scope === "shift" ? GW_REFUSE.schedule.no_skill
-    : {rule: "Has none of the skills this business takes", fix: "Refresh the board."},
-  in_training: {rule: "In training: the game moves nobody who is training", fix: "Wait for the training to end, or untick the move."},
-  no_business: {rule: "No business is set up here", fix: "Set one up in BizMan first."},
-  screen_open: {rule: "Open in BizMan right now, or being filled in automatically", fix: "Close that BizMan screen in the game, then try again."},
-  headquarters: {rule: "A headquarters' hours are not written from here", fix: "Refresh the board."},
+    : {rule: tt("sp.gw.hire.refuse.skill.rule", "Has none of the skills this business takes"), fix: tt("sp.gw.hire.refuse.refresh", "Refresh the board.")},
+  in_training: {get rule(){ return tt("sp.gw.hire.refuse.training.rule", "In training: the game moves nobody who is training"); },
+    get fix(){ return tt("sp.gw.hire.refuse.training.fix", "Wait for the training to end, or untick the move."); }},
+  no_business: {get rule(){ return tt("sp.gw.hire.refuse.nobusiness.rule", "No business is set up here"); },
+    get fix(){ return tt("sp.gw.hire.refuse.nobusiness.fix", "Set one up in BizMan first."); }},
+  screen_open: {get rule(){ return tt("sp.gw.hire.refuse.screen.rule", "Open in BizMan right now, or being filled in automatically"); },
+    get fix(){ return tt("nav.dlg.refuse.screen.fix", "Close that BizMan screen in the game, then try again."); }},
+  headquarters: {get rule(){ return tt("sp.gw.hire.refuse.hq.rule", "A headquarters' hours are not written from here"); },
+    get fix(){ return tt("sp.gw.hire.refuse.refresh", "Refresh the board."); }},
 });
 /* The lock window, Sunday 16:00 to Monday 09:00 an hour a cell: shut from
    20:00 to 08:00, and now ringed when it falls inside. */
