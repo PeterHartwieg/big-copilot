@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "ee190cda21";</script>
-<link rel="stylesheet" href="community.css?v=ee190cda21">
+<script>window.LEDGER_BUILD = "c28a5d01c4";</script>
+<link rel="stylesheet" href="community.css?v=c28a5d01c4">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=ee190cda21">
+<link rel="stylesheet" href="fonts/fonts.css?v=c28a5d01c4">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -5895,7 +5895,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"ee190cda21","latest":{"pr":175,"date":"2026-09-29","title":"Open a new store: plan it, open it, and watch it earn the investment back","summary":"Expansion has a new view, Open a store. Pick a type from the neighbourhoods with the most demand, from any type, or from a Demand cell's new Open a store here, then pick the building in Find a location, fixed to that type. The board lists everything a fully outfitted store of that type needs in that building: what the type requires to open, an item for each customer demand, enough tills for the building's capacity and shelving copied from your own store of the same layout, with the installation firm's price or, for self-installation, a shopping list by furniture store on the map, and the deposit. It then estimates the profit a day from the game's own rules for customers, prices, demand and wages, with the best marketing mix, and shows how many days it takes to earn the investment back, as a range, after tax, against what your own stores of that type earn, and with an optional bank loan. Offices are estimated too; cinemas and theatres show the investment only. A checklist then follows the store until it opens, ticking itself from the save: the lease, furniture, staff for the opening hours, uniforms, customer demands, marketing and logistics, with buttons to staff the store, assign uniforms and set the cheapest marketing mix through the game link. Once the store trades, the plan compares itself with it: the investment, the profit a day and the first days against the plan, the share paid back, the day it breaks even, and any loan it was planned with. Your plans are kept per character, opened stores included. Businesses › Results also has a Payback column: for each shop, office and chain, the day its setup was earned back or how many days are still to go, with the same line on a business's own page."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"c28a5d01c4","latest":{"pr":175,"date":"2026-09-29","title":"Open a new store: plan it, open it, and watch it earn the investment back","summary":"Expansion has a new view, Open a store. Pick a type from the neighbourhoods with the most demand, from any type, or from a Demand cell's new Open a store here, then pick the building in Find a location, fixed to that type. The board lists everything a fully outfitted store of that type needs in that building: what the type requires to open, an item for each customer demand, enough tills for the building's capacity and shelving copied from your own store of the same layout, with the installation firm's price or, for self-installation, a shopping list by furniture store on the map, and the deposit. It then estimates the profit a day from the game's own rules for customers, prices, demand and wages, with the best marketing mix, and shows how many days it takes to earn the investment back, as a range, after tax, against what your own stores of that type earn, and with an optional bank loan. Offices are estimated too; cinemas and theatres show the investment only. A checklist then follows the store until it opens, ticking itself from the save: the lease, furniture, staff for the opening hours, uniforms, customer demands, marketing and logistics, with buttons to staff the store, assign uniforms and set the cheapest marketing mix through the game link. Once the store trades, the plan compares itself with it: the investment, the profit a day and the first days against the plan, the share paid back, the day it breaks even, and any loan it was planned with. Your plans are kept per character, opened stores included. Businesses › Results also has a Payback column: for each shop, office and chain, the day its setup was earned back or how many days are still to go, with the same line on a business's own page."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -5983,8 +5983,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=ee190cda21"></script>
-<script src="community.js?v=ee190cda21"></script>
+<script src="app.js?v=c28a5d01c4"></script>
+<script src="community.js?v=c28a5d01c4"></script>
 
 <script>
 
@@ -17594,6 +17594,7 @@ function osCkStaff(plan, opened){
   const places = S.weeks.filter(x => x.w.band !== "short");
   const shorts = S.weeks.filter(isShort), anyShort = shorts.length > 0;
   const shortH = shorts.filter(open).reduce((n, x) => n + Number(x.w.hours || 0), 0);
+  const placedShorts = shorts.filter(x => !open(x));
   const roles = m => osNames([...m].map(([skill, n]) => `${n} ${hrRoles(skill, n)}`));
   const bySkillOf = (list, f = () => true) => list.filter(f).reduce((m, x) => m.set(x.w.skill, (m.get(x.w.skill) || 0) + 1), new Map());
   /* Without the link, the step that clears a placed week is the hire or the
@@ -17644,7 +17645,9 @@ function osCkStaff(plan, opened){
   sub += tooFew;
   /* Staff this site, the Staff page's one action (hrReview()): who it hires
      and reassigns here, and the week it writes. */
-  const ingame = handStep(places, "");
+  /* The in-game step names every planned hire and move, short weeks' too;
+     the counts and the headhunter stay with the regular places. */
+  const ingame = handStep(places.concat(placedShorts), "");
   const work = hrCanHire() && osStaffWork(plan.key);
   let act = work ? osAct("hire", tt("sp.gw.staff", "Staff this site"), "hire", "", ingame) : ingame ? osIngame(ingame) : "";
   /* The places nobody can fill, and only those: the headhunter. */
@@ -17714,14 +17717,16 @@ function osCkMarketing(plan, b, opened){
   if(p && gwMkSame(p)){
     const useless = tt("gr.os.ck.mk.useless", "No campaign would raise promotion here");
     /* A missing BizMan switch is set up through the write, as the site
-       panel offers it; without the write the panel says nothing there. */
+       panel offers it; without the write the set-up is optional: promotion
+       is unchanged. */
     if(p.needsSetup && gwMkCan()){
       const from = [...new Set(p.setupAgencies || [])], blocked = gwMkBlocked(from).length;
       const why = from.length && blocked === from.length ? gwMkWhy(from) : "";
       const label = !why && blocked ? tt("sp.mk.setup.now", "Add the campaign switches open agencies can add now")
         : tt("sp.mk.setup.name", "Add every campaign switch to BizMan");
-      return osCk("megaphone", "todo", title, `${useless}${why ? ` · <span class="w">${why}</span>` : ""}`,
-        osAct("marketing", label, "megaphone", `data-os-mk-mode="setup"${why ? ` aria-disabled="true"` : ""}`, ""));
+      return osCk("megaphone", "todo", title, `${p.visit.length ? none : useless}${why ? ` · <span class="w">${why}</span>` : ""}`,
+        osAct("marketing", label, "megaphone", `data-os-mk-mode="setup"${why ? ` aria-disabled="true"` : ""}`, "")
+        + (p.visit.length ? osIngame(tt("sp.mk.better2", "Visit {agencies} once for a better mix.", {agencies: gwMkVisit(p.visit)})) : ""));
     }
     /* An agency not visited yet may sell one that would: not "none would". */
     if(p.visit.length) return osCk("megaphone", "todo", title, none,

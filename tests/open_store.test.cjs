@@ -506,6 +506,12 @@ test('a week too short for a hire is hours left open, not a place: no "1 more", 
   r = (await rows(page))[2];
   assert.match(r.act, /move 1 Customer Service to/);
   assert.doesNotMatch(r.act, /Schedule/);
+  /* beside a regular hire, the step names both the hire and the short week's move */
+  await hiring(page, {planned: true, variant: 'open', weeks: [['ba:skill_cleaning', 'hire'], ['ba:skill_customerservice', 'move', SHORT6]]});
+  r = (await rows(page))[2];
+  assert.match(r.act, /hire 1 Cleaning[^.]*and move 1 Customer Service/);
+  assert.match(r.sub, /1 more: 1 Cleaning/);
+  assert.doesNotMatch(r.sub, /Customer Service/);
   /* a padded week with no hours is no short week */
   await hiring(page, {planned: true, variant: 'open', weeks: [['ba:skill_customerservice', null, {band: 'short', hours: 0, days: 0, slots: []}]]});
   assert.equal((await rows(page))[2].state, 'done');
@@ -881,7 +887,7 @@ test('a mix of no campaigns says none would raise promotion; a missing switch is
   await page.locator('#osBody [data-os-write="marketing"]').click();
   assert.deepEqual(await page.evaluate(() => window.__mk), [[[SITE], 'setup']]);
   assert.deepEqual(await page.evaluate(() => [osPlan().mode, paybackMode()]), before, 'the set-up is not the install-mode toggle');
-  /* without the write the site panel says nothing there: done */
+  /* without the write the set-up is optional, promotion unchanged: done */
   await linked(page, {...LINK, writes: ['hire', 'uniforms']});
   assert.equal((await rows(page))[5].state, 'done');
   await linked(page);
@@ -893,6 +899,13 @@ test('a mix of no campaigns says none would raise promotion; a missing switch is
   assert.match(r.act, /Visit CityAds \(5 Second Avenue\) once for a better mix/);
   assert.doesNotMatch(r.sub, /would raise/);
   assert.match(r.sub, /No campaign for/);
+  /* a switch to set up and an agency to visit: the button, and the visit hint after it */
+  await page.evaluate(() => { const b = D.businesses.find(x => x.key === osPlan().key); b.marketingPlan = {...b.marketingPlan, needsSetup: true}; drawOpenStore(); });
+  r = (await rows(page))[5];
+  assert.match(r.sub, /No campaign for/);
+  assert.doesNotMatch(r.sub, /would raise/);
+  assert.equal(await page.locator('#osBody [data-os-write="marketing"]').count(), 1);
+  assert.match(r.act, /Visit CityAds \(5 Second Avenue\) once for a better mix/);
 });
 
 test('an unmet hairdresser shelf is named in words, not by its id', async t => {

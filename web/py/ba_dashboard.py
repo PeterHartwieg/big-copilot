@@ -33141,6 +33141,7 @@ function osCkStaff(plan, opened){
   const places = S.weeks.filter(x => x.w.band !== "short");
   const shorts = S.weeks.filter(isShort), anyShort = shorts.length > 0;
   const shortH = shorts.filter(open).reduce((n, x) => n + Number(x.w.hours || 0), 0);
+  const placedShorts = shorts.filter(x => !open(x));
   const roles = m => osNames([...m].map(([skill, n]) => `${n} ${hrRoles(skill, n)}`));
   const bySkillOf = (list, f = () => true) => list.filter(f).reduce((m, x) => m.set(x.w.skill, (m.get(x.w.skill) || 0) + 1), new Map());
   /* Without the link, the step that clears a placed week is the hire or the
@@ -33191,7 +33192,9 @@ function osCkStaff(plan, opened){
   sub += tooFew;
   /* Staff this site, the Staff page's one action (hrReview()): who it hires
      and reassigns here, and the week it writes. */
-  const ingame = handStep(places, "");
+  /* The in-game step names every planned hire and move, short weeks' too;
+     the counts and the headhunter stay with the regular places. */
+  const ingame = handStep(places.concat(placedShorts), "");
   const work = hrCanHire() && osStaffWork(plan.key);
   let act = work ? osAct("hire", tt("sp.gw.staff", "Staff this site"), "hire", "", ingame) : ingame ? osIngame(ingame) : "";
   /* The places nobody can fill, and only those: the headhunter. */
@@ -33261,14 +33264,16 @@ function osCkMarketing(plan, b, opened){
   if(p && gwMkSame(p)){
     const useless = tt("gr.os.ck.mk.useless", "No campaign would raise promotion here");
     /* A missing BizMan switch is set up through the write, as the site
-       panel offers it; without the write the panel says nothing there. */
+       panel offers it; without the write the set-up is optional: promotion
+       is unchanged. */
     if(p.needsSetup && gwMkCan()){
       const from = [...new Set(p.setupAgencies || [])], blocked = gwMkBlocked(from).length;
       const why = from.length && blocked === from.length ? gwMkWhy(from) : "";
       const label = !why && blocked ? tt("sp.mk.setup.now", "Add the campaign switches open agencies can add now")
         : tt("sp.mk.setup.name", "Add every campaign switch to BizMan");
-      return osCk("megaphone", "todo", title, `${useless}${why ? ` · <span class="w">${why}</span>` : ""}`,
-        osAct("marketing", label, "megaphone", `data-os-mk-mode="setup"${why ? ` aria-disabled="true"` : ""}`, ""));
+      return osCk("megaphone", "todo", title, `${p.visit.length ? none : useless}${why ? ` · <span class="w">${why}</span>` : ""}`,
+        osAct("marketing", label, "megaphone", `data-os-mk-mode="setup"${why ? ` aria-disabled="true"` : ""}`, "")
+        + (p.visit.length ? osIngame(tt("sp.mk.better2", "Visit {agencies} once for a better mix.", {agencies: gwMkVisit(p.visit)})) : ""));
     }
     /* An agency not visited yet may sell one that would: not "none would". */
     if(p.visit.length) return osCk("megaphone", "todo", title, none,
