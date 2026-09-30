@@ -2385,8 +2385,10 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
     September 2026: "this should not be a warning, more an opportunity. You can
     reduce your headcount"): a full-time or four-day demand is only unmet once
     they have a week, and a desk, a building or insurance only matter while
-    they work. They are counted as staffIdle instead, the people the site
-    could move or let go.
+    they work, and a quit warning from one of them is somebody the site can
+    do without leaving. Their ids are listed as staffIdle instead, the people
+    the site could move or let go; the board keeps those the plan on screen
+    gives no week either (spSpareIds()).
     """
     root = save.root
     by_key = {b["key"]: b for b in businesses}
@@ -2468,12 +2470,13 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
     # give, how many lack something only the owner can, and how many of those
     # with anything unmet have warned they will quit.
     people = collections.defaultdict(collections.Counter)
+    idle = collections.defaultdict(list)
     for e in employees:
         key = site_key(save.address(e.get("assignedAddress")))
         if key not in by_key or key not in regs:
             continue
         if not (e.get("assignedWeeklyHours") or 0) > 0:
-            people[key]["idle"] += 1
+            idle[key].append(e.get("id"))
             continue
         lacks = set()
         for slug in dict.fromkeys(save.items(e.get("demands"))):  # one person, one count
@@ -2514,7 +2517,7 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
         b["staffLackingCompany"] = people[b["key"]]["company"]
         b["staffLackingAny"] = people[b["key"]]["any"]
         b["quitWarnings"] = people[b["key"]]["quitting"]
-        b["staffIdle"] = people[b["key"]]["idle"]
+        b["staffIdle"] = sorted(idle[b["key"]], key=str)
 
 
 def _uniform_gaps(save: Save, b: dict, crew: list, names: Names) -> list:
@@ -24095,6 +24098,25 @@ const spOpenNeed = row => {
    does for full cover. It keeps the shop's own opening hours. */
 const spOpenRow = row => Object.assign({}, row, spOpenNeed(row), row.openCover,
   {openCover: null, full: false, variant: "open", openComplete: !!(row.openCover || {}).complete});
+/* The people a site has with no hours in the game's week (`staffIdle`,
+   _job_demands()) whom the plan on screen gives no week either: the ones to
+   move elsewhere or let go. Somebody the plan does use is a week to write
+   (hrIdleHtml()), not a person to let go. A site with no plan keeps them all. */
+const spSpareIds = b => {
+  const ids = Array.isArray(b.staffIdle) ? b.staffIdle : [];
+  if(!ids.length) return ids;
+  const base = spRosterRow(b.key);
+  // An office's plan, or a factory's at its rated capacity, the one its
+  // Staffing block draws first.
+  const office = base ? null : [...(Array.isArray(D.officeStaffing) ? D.officeStaffing : []),
+    ...(((D.factoryStaffing || {}).cap) || [])].find(r => r.key === b.key);
+  const row = base && !base.failed ? spShownRow(base) : office;
+  if(!row) return ids;
+  const people = row.people || (base || {}).people || [];
+  const used = new Set((row.shifts || []).filter(s => s.p !== null && s.p !== undefined)
+    .map(s => (people[s.p] || {}).id));
+  return ids.filter(id => !used.has(id));
+};
 const spShownRow = base => {
   const plan = spPlanOf(base);
   return plan === "full" ? spFullRow(base) : plan === "open" ? spOpenRow(base) : base;
@@ -26350,9 +26372,10 @@ function drawSite(){
   /* The people given no hours here: no demand of theirs is a warning while
      they have no week (_job_demands()), and one fewer on the payroll is a
      good thing in this game. */
-  const spareNote = b.staffIdle ? `<p class="quiet sp-idle" data-el="idle" style="margin:12px 0 0">${tt("sp.idle", {
+  const spareN = spSpareIds(b).length;
+  const spareNote = spareN ? `<p class="quiet sp-spare" data-el="spare" style="margin:12px 0 0">${tt("sp.spare", {
     one: "{n} person here has no hours: move them to a site that needs them, or let them go",
-    other: "{n} people here have no hours: move them to a site that needs them, or let them go"}, {n: b.staffIdle})}</p>` : "";
+    other: "{n} people here have no hours: move them to a site that needs them, or let them go"}, {n: spareN})}</p>` : "";
 
   const vacant = b.status === "vacant";
   /* A shop under two weeks old that the not-trading finding speaks for: the
@@ -31338,14 +31361,16 @@ function hrIdleHtml(m){
   }).join("");
   return rows ? `<div class="hs-find hs-idle"><h4>Staff with no hours</h4><ul>${rows}</ul></div>` : "";
 }
-/* The people the game's week gives no hours: no demand of theirs is a
-   warning (_job_demands() counts them as `staffIdle` instead), and fewer on
-   the payroll is a good thing in this game, so they are one neutral note. */
+/* The people the game's week gives no hours and the plan on screen none
+   either (spSpareIds()): no demand of theirs is a warning, and fewer on the
+   payroll is a good thing in this game, so they are one neutral note. Those
+   the plan does use are Staff with no hours (hrIdleHtml()), to be given
+   their week, not let go. */
 function hrSpareHtml(){
-  const sites = (D.businesses || []).filter(b => b.staffIdle > 0);
-  const n = sites.reduce((t, b) => t + b.staffIdle, 0);
+  const sites = (D.businesses || []).map(b => [b, spSpareIds(b).length]).filter(([, n]) => n);
+  const n = sites.reduce((t, [, k]) => t + k, 0);
   return n ? `<p class="hs-note hs-spare">${hrNum(n)} ${n === 1 ? "person has" : "people have"} no hours: move them to a site that needs them, or let them go · ${
-    sites.map(b => `${spEsc(shortName(b))} ${hrNum(b.staffIdle)}`).join(", ")}</p>` : "";
+    sites.map(([b, k]) => `${spEsc(shortName(b))} ${hrNum(k)}`).join(", ")}</p>` : "";
 }
 /* Where to find them: for each role places stay open in, how many and where
    the people come from, for an early company whose headhunters recruit few

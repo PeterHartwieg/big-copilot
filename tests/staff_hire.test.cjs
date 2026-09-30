@@ -1488,16 +1488,34 @@ test('the Staff page opens a shop only on the full cover picked there, and a sho
 
 test('staff with no hours are one neutral line on the Staff page, site by site', async (t) => {
   // Peter, 30 September 2026: people given no hours are a chance to cut the
-  // headcount, not unmet demands (_job_demands() counts them as staffIdle).
+  // headcount, not unmet demands (_job_demands() lists them as staffIdle).
+  // Ids no plan uses: all of them are spare.
   const page = await board(t);
   const note = await page.evaluate(() => {
-    D.businesses.forEach((b, i) => { b.staffIdle = i < 2 ? i + 1 : 0; });
+    D.businesses.forEach((b, i) => { b.staffIdle = [...Array(i < 2 ? i + 1 : 0)].map((_, k) => `idle${i}-${k}`); });
     drawStaff(); wireStaff();
     const el = document.querySelector('#secStaff .hs-spare');
     return el && el.textContent;
   });
   const names = await page.evaluate(() => D.businesses.slice(0, 2).map(b => shortName(b)));
   assert.equal(note, `3 people have no hours: move them to a site that needs them, or let them go · ${names[0]} 1, ${names[1]} 2`);
+});
+
+test('somebody idle in the game whom the plan on screen uses is not a person to let go', async (t) => {
+  // Review: Costco Cloth had five people with no hours in the game whom its
+  // plan puts to work -- a week to write (Staff with no hours), not five to
+  // let go. Neither the Staff page nor the site's Crew may say so.
+  const page = await board(t);
+  const out = await page.evaluate(() => {
+    const row = D.staffing.find(r => (r.shifts || []).some(s => s.p !== null && s.p !== undefined));
+    const used = row.people[row.shifts.find(s => s.p !== null && s.p !== undefined).p].id;
+    const b = D.businesses.find(x => x.key === row.key);
+    D.businesses.forEach(x => { x.staffIdle = []; });
+    b.staffIdle = [used];
+    drawStaff(); wireStaff();
+    return {staff: !!document.querySelector('#secStaff .hs-spare'), ids: spSpareIds(b)};
+  });
+  assert.deepEqual(out, {staff: false, ids: []});
 });
 
 test('a desk demand at a site with no plan is met at a desk there: seat them there', async (t) => {

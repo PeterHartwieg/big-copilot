@@ -50,13 +50,13 @@ async function site(demands, quit = 0, extra = {}) {
 test('staff with no hours are a quiet note under the crew, not a demand', async () => {
   // Peter, 30 September 2026: people given no hours are a chance to cut the
   // headcount. _job_demands() leaves their demands out and counts them.
-  const page = await site([], 0, {staffIdle: 2});
+  const page = await site([], 0, {staffIdle: ['e1', 'e2']});
   try {
     assert.equal(await page.locator('#sitePanel .sp-dem').count(), 0);
-    const note = page.locator('#sitePanel .sp-idle');
+    const note = page.locator('#sitePanel .sp-spare');
     assert.equal((await note.textContent()).trim(),
                  '2 people here have no hours: move them to a site that needs them, or let them go');
-    assert.equal(await note.getAttribute('data-el'), 'idle');
+    assert.equal(await note.getAttribute('data-el'), 'spare');
   } finally { await page.close(); }
 });
 

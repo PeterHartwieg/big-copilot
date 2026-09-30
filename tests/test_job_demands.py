@@ -231,12 +231,12 @@ class JobDemandFindingTests(unittest.TestCase):
                 employee(["ba:jobdemand_hasmousepad"], eid="b", assignedWeeklyHours=0)]
         b = evaluate(idle)
         self.assertEqual((b["staffDemands"], b["staffLackingAny"], b["quitWarnings"],
-                          b["staffIdle"]), ([], 0, 0, 2))
+                          b["staffIdle"]), ([], 0, 0, ["a", "b"]))
         self.assertEqual(self.alerts(b), [])
         working = employee(["ba:jobdemand_hasmousepad"], eid="c")
         b = evaluate(idle + [working])
         self.assertEqual(([d["slug"] for d in b["staffDemands"]], b["staffIdle"]),
-                         (["ba:jobdemand_hasmousepad"], 2))
+                         (["ba:jobdemand_hasmousepad"], ["a", "b"]))
 
     def test_hours_and_days_have_upper_bounds_too(self):
         self.assertEqual(unmet("ba:jobdemand_fulltime", employee={"assignedWeeklyHours": 55}),
