@@ -3371,7 +3371,6 @@
   "factories": {
    "aliases": {},
    "character": "default",
-   "depotOther": {},
    "depotRoutes": {},
    "depots": {
     "3": {
@@ -3587,6 +3586,7 @@
   "idle": [],
   "idleWeeks": 4.0,
   "imports": [],
+  "importsDem": [],
   "leftToday": 0.417,
   "margin": 0.15,
   "nextImportDay": 36,

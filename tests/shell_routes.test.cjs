@@ -69,7 +69,7 @@ test('every finding kind names a real route, and every route is a view of its ar
     bad: Object.entries(FINDING_ROUTES).filter(([, f]) => !ROUTES[f.route]).map(([k]) => k),
     views: AREAS.flatMap(a => (a.views || []).map(v => `${a.id}/${v}`)).filter(id => !ROUTES[id]),
   }));
-  assert.equal(got.kinds.length, 31, 'the finding catalogue is 31 kinds');
+  assert.equal(got.kinds.length, 32, 'the finding catalogue is 32 kinds');
   assert.deepEqual([...got.routed].sort(), [...got.kinds].sort());
   assert.deepEqual(got.bad, []);
   assert.deepEqual(got.views, []);

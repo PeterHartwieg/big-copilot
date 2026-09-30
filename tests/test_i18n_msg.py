@@ -42,7 +42,7 @@ SUPPLY = {"graph": {"links": []}, "shops": [], "idle": [], "imports": []}
 FINDINGS_5A = {
     "notrading", "vacant", "loss", "satisfaction", "uniform", "bathroom", "toiletprivacy", "sink",
     "music", "interior", "jobdemand", "companydemand", "promotion", "hype", "trend", "atcap",
-    "idlestaff", "unplanned",
+    "idlestaff", "unplanned", "unsourced",
 }
 
 

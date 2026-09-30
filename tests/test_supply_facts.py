@@ -27,7 +27,7 @@ RECIPES = {BEER: {"slug": BEER, "item": "Beer", "out": 30, "workstation": "bottl
                   "ingredients": [{"slug": WATER, "item": "Water", "per": 10}]}}
 FACT_KEYS = {"st", "why", "lvl", "role", "cad", "use", "need", "have", "setTo", "parts",
              "lower", "imp", "ramp", "unfed", "via", "dem", "import", "from", "wholesale", "day",
-             "catchUp", "lowers"}
+             "catchUp", "lowers", "lasts", "passes", "raise", "says", "i18n"}
 BASE_KEYS = {"st", "why", "lvl", "role", "cad", "use", "need", "have", "setTo", "imp"}
 
 
@@ -171,6 +171,7 @@ class Company:
                 "key": site_key(site["addr"]), "name": site["name"], "code": "", "neighbourhood": "",
                 "type": site["kind"], "typeSlug": site["kind"], "status": site["status"],
                 "lines": lines, "opened": site["opened"], "tradeDays": site["tradeDays"],
+                "closed": site["addr"] in getattr(self, "closed", ()),
                 "revenue": 100.0, "profit": 10.0, "costCentre": False, "rent": 0.0, "staff": 1,
                 "customers": 10, "satisfaction": {"overall": 100}, "promotion": 100,
                 "marketingIndex": 100, "traffic": 0, "missingAmenities": [],
@@ -321,8 +322,17 @@ class ShelfTests(unittest.TestCase):
         self.assertEqual(c.supply["routed"], [])
 
     def test_a_shop_under_five_trading_days_is_new(self):
-        _c, fact = self.verdict(target=50, trade_days=3)
+        _c, fact = self.verdict(target=120, trade_days=3)
         self.assertEqual((fact["st"], fact["why"], fact["lvl"]), ("new", "young", "info"))
+
+    def test_a_new_shop_whose_top_up_is_already_below_its_sales_is_told(self):
+        # Three trading days at 100 a day against a 50 top-up: short already,
+        # whatever its age, with the figure to set.
+        c, fact = self.verdict(target=50, trade_days=3)
+        self.assertEqual((fact["st"], fact["why"], fact["lvl"], fact["setTo"]),
+                         ("short", "target", "critical", 120))
+        [finding] = [f for f in c.findings() if f["siteKey"] == site_key(SHOP_A)]
+        self.assertEqual(finding["group"], "outruns")
 
 
 class WholesaleTests(unittest.TestCase):
@@ -668,6 +678,7 @@ class IdleRuleTests(unittest.TestCase):
         c.hold(GYM, SODA, 1200, 120)
         c.hold(DISTRIB, WATER, 5000)              # not moving
         c.hold(SHOP_A, BEER, 6300, 225)           # a top-up target too high
+        c.hold(DISTRIB, BEER, 100)                # something for the top-up to send
         c.plan(DISTRIB, SHOP_A, BEER, 6300)
         c.run()
         idle = {(c.business_list[int(s)]["key"], slug)
@@ -834,11 +845,13 @@ class RoundOneFixTests(unittest.TestCase):
         # One daily word for the input, and its own contract judged beside it.
         self.assertEqual((fact["role"], fact["cad"], fact["imp"]), ("input", "daily", True))
         own = fact["import"]
-        self.assertEqual((own["cad"], own["have"], own["use"]), ("weekly", 1000, 1000))
+        # The route comes first (round 12, factory first): the Hub sends all
+        # 800 it imports, and the Mill's own contract brings the rest of the
+        # 1,680, 880 of its 1,000.
+        self.assertEqual((own["cad"], own["have"], own["use"]), ("weekly", 1000, 880))
         self.assertEqual(own["st"], "covered")
         self.assertEqual(set(own) - FACT_KEYS, set())
-        # The Hub answers for the rest of the 1,680.
-        self.assertEqual(c.fact(HUB, WATER)["use"], 680)
+        self.assertEqual(c.fact(HUB, WATER)["use"], 800)
 
     def test_m1_a_paused_own_import_the_input_is_short_without_warns_and_the_hub_carries_the_week(self):
         c = Company()
@@ -902,10 +915,17 @@ class RoundOneFixTests(unittest.TestCase):
         self.assertEqual((c.fact(GYM, SODA)["st"], c.fact(GYM, SODA)["lvl"]), ("short", "critical"))
 
     def test_s4_a_new_fact_carries_no_figure_to_set(self):
-        c = shelf_company(target=50, trade_days=3)
+        # A 110 top-up covers the 100 a day, not the margin: tight on an old
+        # shop, but a shop three trading days old is new, and asks nothing.
+        c = shelf_company(target=110, trade_days=3)
         c.run()
         fact = c.fact(SHOP_A, SODA)
         self.assertEqual((fact["st"], fact["setTo"]), ("new", None))
+        # Its top-up already below what it sells is short, young or not.
+        c = shelf_company(target=50, trade_days=3)
+        c.run()
+        fact = c.fact(SHOP_A, SODA)
+        self.assertEqual((fact["st"], fact["setTo"]), ("short", 120))
 
     def starved(self, earlier):
         """A brewery fed 60 a day on days 16-19 of a 240 a day line; `earlier`
@@ -943,8 +963,9 @@ class RoundOneFixTests(unittest.TestCase):
         self.assertEqual((fact["use"], fact["st"]), (200, "covered"))
 
     def depot_fed(self, target):
-        """Distrib, topped up from the Hub to `target`, sends 100 a day to a
-        shop; the Hub's route brought 50 a day of it."""
+        """Distrib, topped up from the Hub to `target`, sends a shop selling
+        100 a day its soda; the Hub imports 5,000 a week, so the route is
+        limited by its target alone. No delivery log is needed."""
         c = Company()
         c.site(HUB, "Import Hub")
         c.site(DISTRIB, "Distrib")
@@ -954,11 +975,30 @@ class RoundOneFixTests(unittest.TestCase):
         c.hold(SHOP_A, SODA, 100, 100)
         c.plan(HUB, DISTRIB, SODA, target)
         c.plan(DISTRIB, SHOP_A, SODA, 150)
-        for d in range(13, 20):
-            c.ship(d, HUB, DISTRIB, {SODA: 50})
-            c.ship(d, DISTRIB, SHOP_A, {SODA: 100})
+        c.contract(HUB, SODA, 5000)
         c.run()
         return c.fact(DISTRIB, SODA)
+
+    def test_n3_a_depot_whose_sender_only_holds_stock_asks_for_an_import(self):
+        """The Hub holds 5,000 and nothing brings it any: a holding runs out,
+        so the route is no standing supply, and Distrib's inbound falls short
+        of the 700 a week it sends on."""
+        c = Company()
+        c.site(HUB, "Import Hub")
+        c.site(DISTRIB, "Distrib")
+        c.shop(SHOP_A, "Soda Shop")
+        c.hold(HUB, SODA, 5000)
+        c.hold(DISTRIB, SODA, 300)
+        c.hold(SHOP_A, SODA, 100, 100)
+        c.plan(HUB, DISTRIB, SODA, 200)
+        c.plan(DISTRIB, SHOP_A, SODA, 150)
+        c.run()
+        fact = c.fact(DISTRIB, SODA)
+        self.assertEqual((fact["st"], fact["why"], fact["cad"], fact["use"], fact["need"], fact["setTo"]),
+                         ("noplan", "order", "weekly", 700, 805, 810))
+        # 5,300 held between them is weeks of it: still a finding, a warning
+        # saying how long it lasts and naming the Hub's route.
+        self.assertEqual((fact["lvl"], fact["lasts"], fact["passes"]), ("warn", 53.0, c.index(HUB)))
 
     def test_n3_a_depot_only_a_route_feeds_is_judged_on_its_top_up(self):
         self.assertEqual((self.depot_fed(80)["st"], self.depot_fed(80)["why"]), ("short", "target"))
@@ -1020,9 +1060,7 @@ class RoundTwoFixTests(unittest.TestCase):
                 c.hold(SHOP_A, SODA, 100, 100)
                 c.plan(HUB, DISTRIB, SODA, target)
                 c.plan(DISTRIB, SHOP_A, SODA, 150)
-                for d in range(13, 20):
-                    c.ship(d, HUB, DISTRIB, {SODA: 50})
-                    c.ship(d, DISTRIB, SHOP_A, {SODA: 100})
+                c.contract(HUB, SODA, 5000)
                 c.run()
                 notes = [f for f in c.findings() if f["siteKey"] == site_key(DISTRIB)]
                 self.assertEqual(len(notes), found, notes)
@@ -1144,8 +1182,9 @@ class RoundThreeFixTests(unittest.TestCase):
         self.assertEqual(run(2000).fact(DISTRIB, WATER)["st"], "covered")
 
     def wholesale_distrib(self, amount, top_up=None):
-        """Distrib gets `amount` soda a week wholesale and sends 100 a day to a
-        shop; `top_up`, the Hub's route to it, brings 50 a day of it."""
+        """Distrib gets `amount` soda a week wholesale and sends a shop
+        selling 100 a day its soda; `top_up`, the Hub's route to it, tops it
+        up to that target each morning from the Hub's own weekly import."""
         c = Company()
         c.site(HUB, "Import Hub")
         c.site(DISTRIB, "Distrib")
@@ -1157,10 +1196,7 @@ class RoundThreeFixTests(unittest.TestCase):
         c.wholesale(DISTRIB, SODA, amount)
         if top_up:
             c.plan(HUB, DISTRIB, SODA, top_up)
-        for d in range(13, 20):
-            c.ship(d, DISTRIB, SHOP_A, {SODA: 100})
-            if top_up:
-                c.ship(d, HUB, DISTRIB, {SODA: 50})
+            c.contract(HUB, SODA, 5000)
         c.run()
         return c
 
@@ -1174,18 +1210,23 @@ class RoundThreeFixTests(unittest.TestCase):
             "raise the contract to 810"))
 
     def test_a_wholesale_depot_topped_up_as_well_is_judged_on_its_contract_with_the_top_up_on_it(self):
-        # The route brings 350 of the 700 a week used: the contract answers
-        # for the other 350, 455 with the margin on the shops' week.
-        fact = self.wholesale_distrib(400, top_up=200).fact(DISTRIB, SODA)
+        # A route topping Distrib up to 20 a day brings 140 of the 700 a week
+        # used: the contract answers for the other 560, 665 with the margin
+        # on the shops' week.
+        fact = self.wholesale_distrib(400, top_up=20).fact(DISTRIB, SODA)
         self.assertEqual((fact["cad"], fact["have"], fact["use"], fact["need"], fact["st"]),
-                         ("weekly", 400, 350, 455, "tight"))
-        self.assertEqual(self.wholesale_distrib(500, top_up=200).fact(DISTRIB, SODA)["st"], "covered")
+                         ("weekly", 400, 560, 665, "short"))
+        self.assertEqual(self.wholesale_distrib(600, top_up=20).fact(DISTRIB, SODA)["st"], "tight")
+        self.assertEqual(self.wholesale_distrib(700, top_up=20).fact(DISTRIB, SODA)["st"], "covered")
+        # A route whose target can bring what the contract leaves covers it:
+        # the morning round tops up whatever the week's delivery did not.
+        self.assertEqual(self.wholesale_distrib(200, top_up=200).fact(DISTRIB, SODA)["st"], "covered")
         # Short beside the route: the route's week is named.
-        c = self.wholesale_distrib(200, top_up=200)
+        c = self.wholesale_distrib(200, top_up=20)
         [note] = [f for f in c.findings() if f["siteKey"] == site_key(DISTRIB)]
         self.assertEqual((note["group"], plain(note["text"])), (
-            "wholesale", "Soda's wholesale delivery brings 200 a week against 350 used beyond the "
-            "350 a week a route brings; raise the contract to 460"))
+            "wholesale", "Soda's wholesale delivery brings 200 a week against 560 used beyond the "
+            "140 a week a route brings; raise the contract to 670"))
 
     def test_a_route_fed_depot_names_the_site_whose_plan_tops_it_up(self):
         c = RoundOneFixTests().depot_fed(80)
@@ -1290,10 +1331,21 @@ class RoundTenFixTests(unittest.TestCase):
         self.assertEqual((fact["setTo"], fact["catchUp"]), (1420, 164))
 
     def test_a_new_shop_carries_no_figure_to_bring_in(self):
-        fact = self.gym(100, trade_days=3)
+        # A 1,500 contract and stock that reaches Monday's drop, on a shop
+        # three trading days old: nothing to say yet.
+        c = Company()
+        c.shop(GYM, "Gym", trade_days=3)
+        c.hold(GYM, SODA, 1000, 176)
+        c.wholesale(GYM, SODA, 1500, due=22)
+        c.run()
+        fact = c.fact(GYM, SODA)
         self.assertEqual(fact["st"], "new")
         self.assertNotIn("catchUp", fact)
         self.assertIsNone(fact["setTo"])
+
+    def test_a_new_shop_that_runs_dry_before_the_drop_is_told(self):
+        fact = self.gym(100, trade_days=3)
+        self.assertEqual((fact["st"], fact["why"], fact["catchUp"]), ("short", "shortfall", 164))
 
 
 class StableOrderTests(unittest.TestCase):
@@ -1317,7 +1369,7 @@ class FixtureKeyTests(unittest.TestCase):
     # Every (status word, reason) _supply_status() can send, and the fields the
     # rows Python sends always carry (a row may carry more).
     WHYS = {
-        "made": {None}, "paused": {"order", "topup"}, "noplan": {"target", "order"},
+        "made": {None}, "paused": {"order", "topup"}, "noplan": {"target", "order", "source", "priced", "upstream"},
         "new": {"young", "firstFill"}, "short": {"order", "shortfall", "target", "dry"},
         "stalled": {"notDrawn", "waiting"},
         "idle": {"notMoving", "notRouted", "targetHigh", "importHigh", "overstock"},

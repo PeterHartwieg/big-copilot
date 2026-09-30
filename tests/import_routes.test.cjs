@@ -805,7 +805,7 @@ for (const scenario of [
   {name: 'a short daily top-up', code: 'from test_import_routes import ImportRoutesTests,contract; '
     + 'd = ImportRoutesTests().build([contract(840,destination=("factory",0)),contract(900)],routed=True,target=130)'},
   {name: 'a line the route covers half of', code: 'from test_routed_supply import board_data,contract; '
-    + 'd = board_data(0.5,[contract(5000,5000,smart=False)],import_days=(7,))'},
+    + 'd = board_data(0.5,[contract(5000,5000,smart=False)])'},
   {name: 'a paused backup the route covers', code: 'from test_routed_supply import board_data,contract; '
     + 'd = board_data(1.0,[contract(5200,0,smart=True,active=False)])'},
 ]) {
@@ -840,3 +840,162 @@ for (const scenario of [
     } finally { await page.close(); }
   });
 }
+
+/* A shelf nothing upstream supplies has sold nothing, yet its finding lands
+   on its row: Python sends the shelf a row of its own (supply.shops). */
+test('an unsourced finding lands on its shelf on Deliveries', async () => {
+  const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
+    + 'from test_supply_bottom_up import cafe_board; print(json.dumps(cafe_board()))'));
+  const page = await board(data, {which: 'changes', tab: 'deliveries'});
+  try {
+    const got = await page.evaluate(() => {
+      const a = D.alerts.find(x => x.group === 'unsourced');
+      goToAlert(a);
+      const at = document.querySelector(`#${SB_SEC[sub.supply]} [data-sb-at]`);
+      return {tab: sub.supply, at: at ? `${at.dataset.s}:${at.dataset.slug}` : null};
+    });
+    assert.deepEqual(got, {tab: 'deliveries', at: '1:ba:itemname_beer'});
+    assert.equal(await page.locator('#secDeliveries tr.sb-arrived').getAttribute('data-slug'), 'ba:itemname_beer');
+  } finally { await page.close(); }
+});
+
+/* A depot nothing brings its goods to is unsourced too, and its fix is an
+   import: its finding lands on Imports, whatever key its text has (a
+   condensed row carries f.sum.unsourced). */
+test('an unsourced finding on a depot lands on Imports', async () => {
+  const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
+    + 'from test_supply_bottom_up import depot_board; print(json.dumps(depot_board()))'));
+  const page = await board(data, {which: 'changes', tab: 'deliveries'});
+  try {
+    const got = await page.evaluate(() => {
+      const a = D.alerts.find(x => x.group === 'unsourced');
+      const summary = {...a, i18n: {text: ['f.sum.unsourced', {}]}};
+      const routes = [findingRoute(a).route, findingRoute(summary).route];
+      goToAlert(a);
+      const at = document.querySelector(`#${SB_SEC[sub.supply]} tr.sb-arrived`);
+      return {routes, tab: sub.supply, at: at ? `${at.dataset.s}:${at.dataset.slug}` : null};
+    });
+    // The depot's line, with the import to add, is a row of Imports to land on.
+    assert.deepEqual(got, {routes: ['supply/imports', 'supply/imports'], tab: 'imports', at: '0:ba:itemname_beer'});
+    assert.equal(await page.locator('#secImports tr.sb-arrived').getAttribute('data-slug'), 'ba:itemname_beer');
+  } finally { await page.close(); }
+});
+
+/* Several sites top a depot up and both targets have to rise: each plan is a
+   change of its own on the checklist, to the same level. */
+test('a depot two plans have to rise for lists both on the checklist', async () => {
+  const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
+    + 'from test_supply_bottom_up import two_breweries_board; print(json.dumps(two_breweries_board()))'));
+  const page = await board(data, {which: 'changes', tab: 'deliveries'});
+  try {
+    const got = await page.evaluate(() => supplyChecklistRows().rows
+      .filter(r => r.kind === 'Depot daily top-ups').map(r => [D.businesses[r.source].name, r.current, r.proposed]));
+    assert.deepEqual(got.sort(), [['Brewery a', 500, 1500], ['Brewery b', 500, 1500]]);
+  } finally { await page.close(); }
+});
+
+/* Round 9: a depot's row in the Supply table names every plan a finding
+   raises, not the first alone. */
+test('the depot row names both plans a finding raises', async () => {
+  const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
+    + 'from test_supply_bottom_up import two_breweries_board; print(json.dumps(two_breweries_board()))'));
+  const page = await board(data, {tab: 'deliveries'});
+  try {
+    const cells = await page.$$eval('#pageSupply tr[data-slug]', trs => trs.map(r => r.innerText).filter(t => t.includes('the plans of')));
+    assert.equal(cells.length, 1, JSON.stringify(cells));
+    assert.match(cells[0], /Brewery a, Brewery b/);
+  } finally { await page.close(); }
+});
+
+/* Round 9: Demand sizing lists only its own plan changes. Two hubs top a
+   water depot up; full production raises both plans, shop demand one, and
+   no 24/7 change shows through when the basis switches. */
+test('each basis lists only its own depot top-up changes', async () => {
+  const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
+    + 'from test_supply_bottom_up import water_depot_board; print(json.dumps(water_depot_board()))'));
+  const page = await board(data, {which: 'changes', tab: 'deliveries'});
+  try {
+    const plans = mode => page.evaluate(mode => { sizing = mode; return supplyChecklistRows().rows
+      .filter(r => r.kind === 'Depot daily top-ups').map(r => [D.businesses[r.source].name, r.current, r.proposed]).sort(); }, mode);
+    assert.deepEqual(await plans('cap'), [['Hub a', 100, 2400], ['Hub b', 100, 2400]]);
+    assert.deepEqual(await plans('dem'), [['Hub a', 100, 120]]);
+    assert.deepEqual(await plans('cap'), [['Hub a', 100, 2400], ['Hub b', 100, 2400]]);
+  } finally { await page.close(); }
+});
+
+/* QA of PR #195: a depot whose order is short of its week while it still
+   holds months of stock reads short, so its line sits on Imports; its idle
+   and target findings land on Deliveries, which shows it too, lit. */
+for (const [name, targetHigh, group, at] of [
+  ['an idle-stock finding on a depot whose order is short', false, 'dead', '0:ba:itemname_beer'],
+  ['a target finding on a depot whose order is short', true, 'target', '1:ba:itemname_beer'],
+]) {
+  test(`${name} lands on its row on Deliveries`, async () => {
+    const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
+      + `from test_supply_bottom_up import idle_but_short_board; print(json.dumps(idle_but_short_board(${targetHigh ? 'True' : 'False'})))`));
+    const page = await board(data, {which: 'changes', tab: 'imports'});
+    try {
+      const got = await page.evaluate(([group, at]) => {
+        const [s] = at.split(':');
+        const fact = szFact(Number(s), 'ba:itemname_beer');
+        goToAlert(D.alerts.find(x => x.group === group));
+        const lit = document.querySelector(`#${SB_SEC[sub.supply]} tr.sb-arrived`);
+        return {st: fact.st, tab: sub.supply, at: lit ? `${lit.dataset.s}:${lit.dataset.slug}` : null};
+      }, [group, at]);
+      assert.deepEqual(got, {st: 'short', tab: 'deliveries', at});
+    } finally { await page.close(); }
+  });
+}
+
+/* QA of PR #195: an Imports row's status tip gives the order finding's own
+   sentence, the route that only passes on what its sender holds and how long
+   that lasts, as the finding does for its site's worst line. */
+test('a short import row says in its tip how long the passing route lasts', async () => {
+  const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
+    + 'from test_supply_bottom_up import idle_but_short_board; print(json.dumps(idle_but_short_board(True)))'));
+  const page = await board(data, {which: 'all', tab: 'imports'});
+  try {
+    const tip = await page.evaluate(() => {
+      const tr = document.querySelector('#secImports tr[data-s="1"][data-slug="ba:itemname_beer"]');
+      return tr && tr.querySelector('td.st .sb-v').dataset.tip;
+    });
+    assert.match(tip, /^The order does not bring the week it has to cover\. /);
+    assert.match(tip, /the route from Holder only passes on what it holds, over 60 days of it\./);
+  } finally { await page.close(); }
+});
+
+/* QA of PR #195: idle stock at a factory lands on Production, on the
+   factory itself where no line of its own draws on the item (no row lists
+   it), lit, with a crumb back. */
+test('an idle-stock finding at a factory lands on the factory on Production', async () => {
+  const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
+    + 'from test_supply_bottom_up import idle_landing_board; print(json.dumps(idle_landing_board("factory")))'));
+  const page = await board(data, {which: 'changes', tab: 'deliveries'});
+  try {
+    const got = await page.evaluate(() => {
+      const a = D.alerts.find(x => x.group === 'dead');
+      const route = findingRoute(a).route;
+      goToAlert(a);
+      const lit = document.querySelector('#secProduction [data-sb-at]');
+      return {route, tab: sub.supply, lit: lit ? lit.dataset.sbObj : null, crumb: !!document.querySelector('#secProduction .sb-crumb')};
+    });
+    assert.deepEqual(got, {route: 'supply/production', tab: 'production', lit: 'production|brew_lane#2', crumb: true});
+  } finally { await page.close(); }
+});
+
+/* QA of PR #195: one target set too high across two shops has no site of
+   its own; it lands on the shop holding most of it, lit. */
+test('a target finding across two shops lands on the shop holding most', async () => {
+  const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
+    + 'from test_supply_bottom_up import idle_landing_board; print(json.dumps(idle_landing_board("shops")))'));
+  const page = await board(data, {which: 'changes', tab: 'imports'});
+  try {
+    const got = await page.evaluate(() => {
+      const a = D.alerts.find(x => x.group === 'target');
+      goToAlert(a);
+      const lit = document.querySelector(`#${SB_SEC[sub.supply]} tr.sb-arrived`);
+      return {site: a.site, tab: sub.supply, at: lit ? `${D.businesses[Number(lit.dataset.s)].name}:${lit.dataset.slug}` : null};
+    });
+    assert.deepEqual(got, {site: '2 shops', tab: 'deliveries', at: 'Shop b:ba:itemname_beer'});
+  } finally { await page.close(); }
+});

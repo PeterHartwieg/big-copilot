@@ -17547,14 +17547,6 @@
   "factories": {
    "aliases": {},
    "character": "PAYLOADco",
-   "depotOther": {
-    "2": {
-     "ba:itemname_water": 0
-    },
-    "3": {
-     "ba:itemname_beer": 1750
-    }
-   },
    "depotRoutes": {},
    "depots": {
     "2": {
@@ -17898,20 +17890,22 @@
     "ba:itemname_water": {
      "cad": "weekly",
      "dem": {
-      "lvl": "warn",
-      "need": 2588,
+      "lasts": null,
+      "lvl": "ok",
+      "need": 2584,
       "parts": {
-       "lines": 2250,
+       "lines": 2247,
        "route": 0,
        "sites": 0
       },
       "setTo": null,
-      "st": "tight",
-      "use": 2250,
-      "why": "shortfall"
+      "st": "covered",
+      "use": 2247,
+      "why": null
      },
      "have": 3000,
      "imp": true,
+     "lasts": 1.9,
      "lvl": "critical",
      "need": 8400,
      "parts": {
@@ -18088,13 +18082,13 @@
      "items": [
       {
        "cadence": "weekly",
-       "cycleNeed": 2800,
+       "cycleNeed": 8400,
        "fit": "short",
        "item": "Water",
        "keeps": false,
        "low": true,
        "made": false,
-       "need": 1600,
+       "need": 4800,
        "provision": 3000,
        "short": true,
        "slug": "ba:itemname_water",
@@ -18185,9 +18179,9 @@
    {
     "arrivedLastWeek": 3000,
     "arrives": 50,
-    "basis": "shipped",
+    "basis": "sales",
     "carry": null,
-    "catchUp": 100,
+    "catchUp": 3300,
     "contracts": [
      {
       "active": true,
@@ -18203,18 +18197,85 @@
       "smart": false
      }
     ],
-    "cover": 3.8,
-    "coverFit": "tight",
+    "cover": 1.2,
+    "coverFit": "short",
     "coverageUntil": 50,
     "covered": false,
-    "daysOnHand": 3.8,
+    "daysOnHand": 1.2,
     "due": 4.0,
-    "dueNeed": 1600,
+    "dueNeed": 4800,
     "from": "1 Pier",
-    "importPerDay": 400,
+    "importPerDay": 1200,
     "item": "Water",
     "lastWeek": 3000,
-    "level": "warn",
+    "level": "critical",
+    "levelAt": null,
+    "levelId": null,
+    "levelImporter": null,
+    "levelName": null,
+    "orderFit": "short",
+    "pass": [
+     {
+      "amount": 3000,
+      "smart": false
+     }
+    ],
+    "paused": false,
+    "peakDay": null,
+    "peakPerDay": 1200,
+    "perDay": 1200,
+    "plain": 3000,
+    "plainAfter": 0,
+    "plainBefore": 0,
+    "reason": "order",
+    "rounds": true,
+    "routed": 0,
+    "runsOut": "Saturday",
+    "s": 2,
+    "shortBy": 2.75,
+    "slug": "ba:itemname_water",
+    "smart": false,
+    "stock": 1500,
+    "stockCover": 1.2,
+    "target": null,
+    "weekNeed": 8400,
+    "weekly": 3000
+   }
+  ],
+  "importsDem": [
+   {
+    "arrivedLastWeek": 3000,
+    "arrives": 50,
+    "basis": "sales",
+    "carry": null,
+    "catchUp": 0,
+    "contracts": [
+     {
+      "active": true,
+      "agent": false,
+      "amount": 3000,
+      "group": 0,
+      "id": "IMPORTwater",
+      "importer": "1 Pier",
+      "lastWeek": 3000,
+      "order": 0,
+      "product": 0,
+      "repeating": true,
+      "smart": false
+     }
+    ],
+    "cover": 4.7,
+    "coverFit": "ok",
+    "coverageUntil": 50,
+    "covered": false,
+    "daysOnHand": 4.7,
+    "due": 4.0,
+    "dueNeed": 1284,
+    "from": "1 Pier",
+    "importPerDay": 321,
+    "item": "Water",
+    "lastWeek": 3000,
+    "level": "ok",
     "levelAt": null,
     "levelId": null,
     "levelImporter": null,
@@ -18228,23 +18289,23 @@
     ],
     "paused": false,
     "peakDay": null,
-    "peakPerDay": 400,
-    "perDay": 400,
+    "peakPerDay": 321,
+    "perDay": 321,
     "plain": 3000,
     "plainAfter": 0,
     "plainBefore": 0,
-    "reason": "shortfall",
+    "reason": null,
     "rounds": true,
     "routed": 0,
-    "runsOut": "Monday",
+    "runsOut": "Tuesday",
     "s": 2,
-    "shortBy": 0.25,
+    "shortBy": 0.0,
     "slug": "ba:itemname_water",
     "smart": false,
     "stock": 1500,
-    "stockCover": 3.8,
+    "stockCover": 4.7,
     "target": null,
-    "weekNeed": 2800,
+    "weekNeed": 2247,
     "weekly": 3000
    }
   ],

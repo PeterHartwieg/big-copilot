@@ -9,7 +9,8 @@ from unittest.mock import patch
 
 import test_import_routes as fixtures
 from ba_dashboard import (_alerts, _import_drop, _import_level, _import_notes, _import_pass,
-                          _level_for, _raise_import, _scheduled_import_gap, _smart_words, _supply)
+                          _level_for, _raise_import, _scheduled_import_gap, _smart_words, _supply,
+                          site_key)
 from test_import_routes import contract
 from test_recipe_identity import WATER
 
@@ -331,11 +332,20 @@ class SmartSupplyTests(unittest.TestCase):
         self.assertIn("import order is 700", note["text"])
 
     def measured(self, contracts):
-        """The depot sells 200 a day itself, so its draw is measured."""
+        """The depot tops up a shop selling 200 a day, so its draw is known
+        from the plan."""
         real = _supply
 
         def supply(save, names, businesses, *args, **kwargs):
-            businesses[1]["lines"][0].update(rate=200, units=20000)
+            businesses[1]["lines"][0].update(units=20000)
+            businesses.append({
+                "key": site_key(("shop", 7)), "name": "Water Bar", "code": "", "neighbourhood": "",
+                "type": "bar", "typeSlug": "bar", "status": "retail",
+                "lines": [{"slug": WATER, "item": "Water", "units": 500, "rate": 200, "price": 1}]})
+            save.root["logisticsManagerPlans"] = save.root["logisticsManagerPlans"] + [{
+                "targetAddress": ("depot", 1), "destinations": [{
+                    "deliveryTargetAddress": ("shop", 7),
+                    "stockTargets": [{"itemName": WATER, "targetAmount": 400}]}]}]
             return real(save, names, businesses, *args, **kwargs)
 
         with patch.object(fixtures, "_supply", supply):

@@ -122,7 +122,7 @@ landing is `ALERT_LINKS` / `ALERT_EVIDENCE`; every landing is final since chunk 
 | `jobdemand` | Resolve staff demand | `staffing/needs` | its page, crew block |
 | `companydemand` | Resolve staff demand | `staffing/needs` | the site that shows it most (`ALERT_SITE_PICK`), crew block; else Staff needs (`secNeeds`) |
 | `hype` | Review demand wave | `expansion/demand` | `secMarket`, the wave among the market changes; the shop's page carries its exposure (`spHypeRow`) |
-| `unplanned`, `outruns` | Review delivery | `supply/deliveries` | Deliveries, the shelf's row, lit |
+| `unplanned`, `unsourced`, `outruns` | Review delivery | `supply/deliveries` | Deliveries, the shelf's row, lit |
 | `topup` | Review delivery | `supply/deliveries` | Deliveries, the depot's row, lit (the depot's page still lights its stock row from its own findings) |
 | `wholesale` | Review delivery | `supply/deliveries` | Deliveries, the shop's or depot's row, lit |
 | `target` | Review target | `supply/deliveries` | Deliveries, its row |

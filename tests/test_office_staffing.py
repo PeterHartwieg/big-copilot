@@ -227,7 +227,7 @@ class OfficeBusinessTests(unittest.TestCase):
         self.assertIn("staff", groups)
         self.assertIn("satisfaction", groups)
         self.assertFalse(groups & {"uniform", "bathroom", "sink", "music", "interior",
-                                   "toiletprivacy", "unplanned", "outruns"})
+                                   "toiletprivacy", "unplanned", "unsourced", "outruns"})
 
     def test_an_office_short_of_promotion_is_told_which_agency_to_visit(self):
         # Offices run campaigns too (docs/marketing-write-scope.md): with no

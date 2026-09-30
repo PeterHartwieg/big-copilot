@@ -130,7 +130,27 @@ Four indirect routes an agent would otherwise miss:
   `parts` is on a week's facts only. The board reads the unit through `szWeekly()`,
   `szDaily()` and `szWeekOf()`. Every (`st`, `why`) pair `_supply_status()` can send
   has a line in `SZ_WHY`; `named` and `unjudged` are the board's own, for a row Python
-  has not judged. `tests/fixtures/r8_supply.json` is the board's synthetic payload, and
+  has not judged.
+- The facts are sized from the sources, never from the delivery log. `_plan_dag()` first
+  cuts every loop in the plans the same way whatever the read order (from supply toward
+  use), then `_supply_walk()`
+  (module level, called from `_supply()`'s `walk()`) carries need up the logistics plans
+  from the ends (each shop's week of sales, or its top-up target before it has sold any,
+  with `SUPPLY_MARGIN` added there only; each factory line's draw in each sizing mode) and
+  supply down from the imports (replayed through `_import_drop()` against the stock the
+  routes keep), wholesale deliveries and factory output, giving every (site, item) its
+  need, what its routes bring (capped by their targets and by the sender's own supply;
+  what a sender merely holds is no supply) and whether they cover it. `_factories()` calls
+  `walk()` back through `flow["walk"]` once its lines are known, before its input
+  verdicts, since both need the other: the walk needs what the lines make and eat, the
+  verdicts what the routes bring. It walks once per sizing mode; the import rows are
+  walked per mode too (`supply.imports` for 24/7, `supply.importsDem` for Demand, which
+  the board reads through `supplyImports()`), and the facts read the walk of their mode. The delivery log (`deliveryTransactions`, only a site's last sixty) is
+  still read for what it describes and nothing it sizes: a factory input's arrivals and a
+  line's shipments (`_factories()`: stalled, dry, Produce up to, piling), a first fill,
+  whether today's round has left (the import rows' round walk), the weekdays rounds leave
+  on (`round_gap()`, a lowered top-up), and a depot line nothing on the plans draws on
+  (idle stock). `tests/fixtures/r8_supply.json` is the board's synthetic payload, and
   `tests/test_supply_facts.py` holds its keys, units and reasons to what `extract()`
   sends.
 - The site panel and the map cards are filled from data already in hand, so they do not
@@ -276,8 +296,8 @@ JSON-serialisable breaks **both** doors, not just the browser.
 The payload is also meant to be identical across runs of the same save. Set iteration order
 follows Python's per-process hash seed, so anywhere a set decides the order of something
 that reaches the payload, sort it through `_in_order()` — which puts `None` last, because
-real saves hold items with no name. Business lines, factory `arrivals` and `depotOther`
-already go through it.
+real saves hold items with no name. Business lines, factory `arrivals` and the chain's
+walk (`_supply_walk()`) already go through it.
 
 Game names are words; the game's keys are identities. Every payload row that shows an
 item, a business type, a skill or a neighbourhood carries its key beside the name

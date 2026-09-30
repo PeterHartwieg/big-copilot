@@ -48,7 +48,7 @@ class Rostered(Company):
         return stub
 
 
-def rostered_chain(hours, machines=None, sold_a=200, sold_b=100):
+def rostered_chain(hours, machines=None, sold_a=200, sold_b=100, bar_target=400, bar_units=200):
     """beer_chain()'s company (one machine makes 720 beer a day), with the
     factory's machines rostered `hours` a day and the shops selling what
     they are given."""
@@ -60,9 +60,9 @@ def rostered_chain(hours, machines=None, sold_a=200, sold_b=100):
     c.hold(HUB, WATER, 2000)
     c.hold(FACTORY, WATER, 250)
     c.hold(FACTORY, BEER, 300)
-    c.hold(SHOP_A, BEER, 200, sold_a)
+    c.hold(SHOP_A, BEER, bar_units, sold_a)
     c.plan(HUB, FACTORY, WATER, 300 * len(hours))
-    c.plan(FACTORY, SHOP_A, BEER, 400)
+    c.plan(FACTORY, SHOP_A, BEER, bar_target)
     c.contract(HUB, WATER, 1700 * len(hours))
     for d in range(13, 20):
         c.ship(d, HUB, FACTORY, {WATER: 240 * len(hours)})
@@ -240,10 +240,19 @@ class LineHoursTests(unittest.TestCase):
         self.assertEqual(_line_hours([], 1, 30, 720, "sales")["needHours"]["dem"], 24)
 
     def test_nothing_drawn_sizes_demand_at_24(self):
-        c = rostered_chain([24], sold_a=0)
+        c = rostered_chain([24], sold_a=0, bar_target=0)
         _site, line = line_of(c)
         self.assertEqual((line["demBasis"], line["needHours"]), ("none", {"cap": 24, "dem": 24}))
         self.assertEqual(line["dem"], {"status": "covered", "why": None, "level": "ok"})
+
+    def test_a_shelf_with_no_sales_yet_asks_for_its_target(self):
+        # The bar has never held or sold beer but is topped up to 400 a day:
+        # that is its need until it sells, 400 x 1.15 / 30 = 15.3, so 16 hours.
+        _site, line = line_of(rostered_chain([24], sold_a=0, bar_units=0))
+        self.assertEqual((line["demBasis"], line["needHours"]), ("sales", {"cap": 24, "dem": 16}))
+        # A bar trading for weeks with beer on the shelf and none sold needs none.
+        _site, line = line_of(rostered_chain([24], sold_a=0))
+        self.assertEqual(line["demBasis"], "none")
 
     def test_too_few_hours_are_short_in_both_sizings(self):
         # Rostered 3 a day, needed 24 (24/7) and 8 (Demand).
