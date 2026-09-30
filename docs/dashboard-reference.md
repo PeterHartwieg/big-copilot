@@ -887,6 +887,211 @@ say so. The cash figure states its own coverage: *one week of stock costs $X acr
 of 22 ingredients this company already buys*. Estimating the other ten would be inventing
 a price list.
 
+## Open a store
+
+Expansion › Open a store plans a store that does not exist yet, in four steps: what to
+open, where, the investment, and when it breaks even. A plan is kept per character in this
+browser. Start one from the neighbourhoods with the most demand for a type you do not run
+there, from the grid of types, or from a Demand cell's **Open a store here**. The board
+never suggests opening a store on its own.
+
+**Where** is Find a location, fixed to the plan's type. It lists buildings to rent;
+**Plan here** on a building's card picks it.
+
+**The investment** is a 100% outfitted store in that building:
+
+- the type's requirements (the Wiki's "To open" list), one of each; the point of sale is
+  the cheapest that covers the building's customer capacity, and more of them where one
+  does not;
+- one item per customer demand the type makes: music, seating, a sink, a toilet, a toilet
+  stall for privacy (one stall meets both), a uniform locker;
+- a gym's machines: five distinct workout types, the cheapest machine of each type the
+  gym does not train yet (each machine's type is its prefab's WorkoutExercise);
+- the displays: copied from your own store of the same type and layout when you run one,
+  and for every product those do not hold, as for a type you do not run, enough of its
+  cheapest display for the building's customers an hour;
+- what a station must be attached to, one piece per placement requirement: a computer
+  takes a desk and a chair, from its own store where that store sells one;
+- a cinema's or a theatre's seats, made for the venue, enough for its version's customers an
+  hour (S1 150 down to S3 100; R1 200 down to R3 150), shared across a cinema's screens, in the
+  cheapest mix of rows and single seats;
+- only items a furniture store sells, and, where the game says what an item is for, only
+  items made for this type (those tags only sort the catalogue, so an item that answers a
+  customer demand, such as a speaker or a sink, is any a store sells);
+- the deposit, as the finder estimates it: about 60 days of rent, with the building's own
+  fittings.
+
+The **installation firm** charges 586 a square metre on top of every item at its default
+price, and lays the walls and floors free. **Self-installation** is the items, $250 a
+delivery per furniture store (the list is grouped by store, the fewest stores that sell
+everything, with the stores pinned on the map), and, in Midtown, the walls and floors that
+reach its interior score of 50: the cheapest floors first, then the cheapest walls, until
+the score's two halves (spend per interior element, and the share of slots painted) average
+50. The toggle is the same one Businesses › Results uses.
+
+**Break even** is the investment divided by the expected profit a day. Everywhere Open a
+store shows a range of profit or of days, it shows the middle as one figure and the range on
+hover (a dotted underline). The single figure of days is the day the running profit at the
+middle of the profit range covers the investment, which is also the point the chart marks
+and what the financing panel counts. The range:
+the profit times 0.80 to 1.05, the spread of real shops against these rules. The profit is
+the game's own arithmetic for a store run well, not an average of your other stores:
+
+- **Customers.** Every open hour starts from the building's customer capacity (in a game
+  started before build 2847, from the best primary product's sales ratio times the floor),
+  times the promotion multiplier, the day's and the hour's multipliers, never more than the
+  capacity. Promotion is the building's traffic plus the share of the floor the marketing
+  reaches times the neighbourhood's marketing strength. The board tries all 64 marketing
+  mixes and keeps the most profitable.
+- **What each customer buys.** Per product: the sales ratio × the neighbourhood's demand ×
+  the satisfaction multiplier × the product's weight for the type × the amount a customer
+  takes. The new store counts as one more seller, so demand is a step lower than today's.
+  Satisfaction is the median of your own stores of the type, else 95.
+- **Price.** The highest price every customer in the neighbourhood accepts: the default
+  price, or the lowest price asked there (a rival's for what it stocks, yours as you set it),
+  times the neighbourhood's price level, plus 0.3 while no rival company sells it.
+- **Cost of goods** is always the import price: wholesale × the save's import price index ×
+  the difficulty's price multiplier × your best purchasing agent's discount. Never the
+  income statement's goods, which are near zero where your own factories supply a shop.
+- **Wages**: open hours × (a cashier per 30 customers an hour at the building's capacity, a
+  cleaner and a security guard), each at a skill of 100. Rent is the building's.
+- **Offices** bill one client an hour per staffed computer. Clients come at the building's
+  capacity × satisfaction × promotion × the day's and the hour's multipliers × the fee's
+  neighbourhood demand, whatever build the game started on. The computers are staffed as
+  the board's office default (3 around the clock in a building for 50, fewer in smaller
+  ones, at least 1; every computer from 8 to 22 on weekdays, half of them at the weekend),
+  each paid for every hour it is staffed, with a cleaner through the open hours.
+- **The first days.** A new store earns less at first: the opening day is a partial day at
+  satisfaction 50 all round (taken as 0.8 of a day), and new staff start at 50 satisfaction
+  and climb 0.6 an hour, which the shop's customer service follows a day late. The gross
+  margin runs at 0.55, 0.92, 0.94, 0.97 and 0.99 of the steady one on the opening day and the
+  four after it; rent, wages and marketing are paid in full. The first store in a
+  neighbourhood to sell a product nobody has sold there for 21 days gets +20 demand on it for
+  14 days; the plan counts that for every product nobody sells there now and nobody has sold
+  for 21 days (the save's last day sold; a save from before the builds the board reads (MIN_BUILD), which lacks it, counts
+  a product nobody sells as never sold). The days to break even add the running profit up day
+  by day.
+- Cinemas and theatres show the investment only: their screens, seats and actors cap them in
+  ways the rules here do not follow.
+
+Under the estimate: the profit after tax, and, where you run the type, "your stores of this
+type earn x% of their estimate", each store measured against the rules' figure for its own
+building, hours and marketing. It is a line, not a correction. Where your
+own stores in the neighbourhood sell the same products, the demand the new store takes from
+them is said too, for every product it sells; so is being the first to sell a product there.
+
+`check_profit_model.py` runs this model over every store you run, on every save on the
+machine, from each store's first day with sales. On 29 September 2026 (no save ran a mod that
+changes the game), stores open 14 days or more: 94 shops at a median of 0.96 (p25 0.80, p90
+1.08; 59% within 15%, 82% within 30%), 12 offices at 0.99 (75% within 15%). Stores in their
+first 14 days, held to the ramp above: 8 at a median of 0.97. The shops that fall far short
+priced below what customers accept, ran out of stock or had too little shelving.
+
+**Financing** is for a planned store only, since the game books a loan to the company. Pick
+a lender and an amount up to what it lends you now: the lower of its cap less what you owe
+it, and the largest of your wealth (cash, investments, motor vehicles and boats at their
+prices, and property), a quarter of last week's average daily profit over the loan's term,
+and $15,500 while the tutorial still asks for its first loan, less everything you owe. Interest is flat on the
+amount borrowed, floor(amount × rate × the difficulty's multiplier / 100 / days a year) a
+day, and the repayment max(5, amount / the term's days) a day, both at midnight. The panel
+shows the cash upfront, the loan's cost a day against the expected profit, the interest over
+the term and if paid off at break even, and the day your own cash is back with and without
+the loan.
+
+**Until opening** (step 5) is a checklist of seven rows for the plan's building: Lease,
+Furniture, Staff for the opening hours, Uniforms, Customer demands, Marketing and
+Logistics. A row reads done only when the save proves it; whatever the save cannot say stays
+a to-do with "check in the game". Lease ticks only once a business of the planned type stands
+at the address: a rented address that is still vacant, or holds another type, reads "Rented"
+and stays a to-do (the other type also gets a note, and its business is ignored). Before that
+business exists every row is a to-do (Furniture is judged from `openStore.built`).
+
+- **Furniture**: the required items placed (`openStore.built.req`); a requirement that names
+  a product (a hairdresser's shelf of hair-care products) is met only by the product being
+  available to the player or by cargo of it on a display that can hold it; an empty shelf and
+  stock in storage shelving do not count. The "any primary product" requirement still counts a display that can hold one.
+- **Staff**: done only with opening hours set (BizMan), somebody hired, hours on the schedule
+  (`stationShifts > 0`, and nobody the plan uses left without hours in the plan mode the shop
+  uses; spare people the plan gives no week are neither counted nor warned about) and, on a
+  demand plan, a trading history (`hasTraded`: any day with sales since this business opened,
+  not the last statement and not an earlier business at the address). A shop with no
+  hours or a never-traded shop is a to-do. Where the Staff page's plan hires or moves people
+  into the site, or writes its week, the row offers **Staff this site**, the site panel's own
+  action; with nobody to hire it says to ask a headhunter.
+- **Uniforms**: done when the type asks for none, or staff have station hours and every role
+  has one; without hours yet it says "Set once staff have hours". `stationShifts` counts only
+  hours on open days, for people on staff, the same shifts the uniform gaps look at.
+- **Customer demands**: every demand the type makes. Amenities, uniforms and seating
+  (`built.seating`, any placed seat) come from the save; workout variety and any demand the
+  save cannot answer stay unchecked with an in-game instruction, so the row cannot be done.
+- **Marketing**: done when a campaign is enabled (`campaigns`), not from money spent, or
+  when the site's cheapest mix (`marketingPlan`) is no campaign at all because promotion is
+  full without one. Otherwise the row names the cheapest mix, and why it waits on an agency;
+  with no agency in the phone yet it says which to visit.
+- **Logistics**: an office needs no deliveries, before opening too (no factory button). A
+  shop is set up when every product the type sells, not only those already on its shelves,
+  has a delivery route: a logistics plan with a stock target above zero, or a weekly
+  wholesale contract, whatever the shop's sales rate (`supply.routed`). A graph link, a
+  zero target and a supply status are not routes.
+
+A row that needs a write has a button when the game link's `writes` lists it: **Staff this
+site** opens the Staff page's review for this site (`hrReview({scope: "site"})`), **Assign
+uniforms** the uniforms write, **Set the cheapest mix** the site panel's marketing write
+(`gwMarketing()`), disabled while an agency it needs cannot add a switch. Otherwise the button is a short
+instruction for the game, and a strip under the list says the game can be linked and where
+to find the mod. **Plan a factory** goes to Expansion › Plan a factory. Once the store trades, a button
+under the list goes to step 6.
+
+**After opening** (step 6) opens once a business of the planned type stands at the plan's
+address. It holds the plan against the site's own payback, the same row Businesses › Results
+and the site's page show (`payback.sites`); nothing is estimated again. The "now" figures
+follow the install mode Results uses, so a link from step 6 lands on the same numbers. The
+plan column keeps the plan's own mode; where the two differ, both headings name their mode, a
+line says so, and no difference is drawn.
+
+What the plan said is kept in the plan while the address is still empty (its investment by
+part, profit a day, days to break even and the first 30 days one by one). The first time the
+store is seen, the plan keeps its opening day and never takes figures again. If that store
+closes, or another business opens in its place (of another type, or the same type opened on
+another day), the plan reads **Closed**, says what stands there now, and attaches to nothing;
+its checklist then writes nothing to the game. A save from before the opening shows the plan
+as not open yet and changes nothing in it.
+A plan made before its figures were kept compares the investment only.
+
+- **The strip** shows only what and where; the tiles carry the numbers.
+- **Tiles**: the investment ("as planned" within 1%, else the plan's figure), profit so far
+  with the days since the opening, the share paid back, and break even: the day it was reached
+  and how many days after opening, the days to go at recent profit and the calendar day that
+  lands on, "Not paying back" at recent profit, or nothing before a day with sales.
+- **Past the record's reach.** The save keeps 61 days of statements. The board keeps the
+  site's days from the opening in its history and every later save adds the record's newer
+  days to them (up to break even plus 30 days, 180 at most), so the run stays whole, for the
+  Payback column too; a chain whose sites all have whole runs is judged on their sum. Where
+  the kept days and the record no longer meet, the kept days are dropped, the tile reads
+  "Profit in the record" and the share paid back is unknown, unless break even was reached
+  and remembered (then 100%).
+- **Chart**: profit since the opening day by day (`payback.sites[key].days`, with the lease's
+  cost before the opening as `before`), a bar per day, the investment, the plan's line from
+  the first day with sales at the middle of its profit range, and while it pays back a dashed
+  line on at recent profit. Its x axis and its points are days after opening (the opening
+  day is 0), the same count as the tile's "n days after opening"; the calendar day is the
+  tile's. It is drawn only where the whole run from the opening is known.
+- **Plan and now**: furniture, the installation fee (or the firm's real bill where the save
+  holds it, or walls and floors for self-installation), the deposit and the total; the profit
+  a day against the recent days; the first five days with sales against the plan's first days,
+  which count the ramp and a first seller's hype; and the days to break even, both counted
+  from the first day with sales as day 1.
+- **Financing**, where the plan had a loan: the loan as planned (bank, amount, repayment and
+  interest a day) beside what the save says that bank is owed now and charges a day, called
+  the bank's total, not this store's: the game books loans to the company.
+- **Links**: Site page, Payback in Businesses › Results, and, while the checklist has rows
+  left, Until opening with how many are done. Paid back, a strip says the day and the plan's
+  figure and carries the same links.
+
+A plan stays in Your plans after its store opens, marked **Open** with the share paid back
+(or **Closed**), and opens on step 6. Twelve plans that have not opened are the limit; opened
+plans are history, kept apart up to 24, the oldest paid-back one making room first.
+
 ## The portfolio, by chain
 
 A shop, the depot that fills it and the factory behind that depot are one trading

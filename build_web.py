@@ -403,8 +403,8 @@ details.help[open] summary::after{content:"\2013"}
 <!-- One-time news strip. For the next announcement replace data-news-id and the
      copy, and give the copy a new data-tt key: a new id shows again to everyone
      who dismissed this one (web/update.js). -->
-<aside class="news-strip" id="newsStrip" data-news-id="lang-tr" aria-label="News" data-tt-aria-label="upd.news" hidden>
-  <p class="news-copy"><b class="news-tag" data-tt="upd.news.tag">New</b><span data-tt="upd.news.lang-tr">Big Copilot now comes in Turkish, thanks to Hakan (HakanGorkem), who added it. Thank you! Speak another language? Your translation is welcome too.</span><a id="newsLink" href="https://github.com/PeterHartwieg/big-copilot/blob/main/docs/translating.md" target="_blank" rel="noopener" data-tt="upd.news.help-translate">Help translate Big Copilot</a></p>
+<aside class="news-strip" id="newsStrip" data-news-id="open-store" aria-label="News" data-tt-aria-label="upd.news" hidden>
+  <p class="news-copy"><b class="news-tag" data-tt="upd.news.tag">New</b><span data-tt="upd.news.open-store">Plan your next store: Expansion › Open a store prices a fully outfitted store in the building you pick and estimates the days it takes to earn that back.</span><a id="newsLink" href="#expansion/open" data-tt="upd.news.open-store-go">Open a store</a></p>
   <button type="button" class="news-dismiss" id="newsDismiss" aria-label="Dismiss this news" title="Dismiss this news" data-tt-aria-label="upd.news.dismiss" data-tt-title="upd.news.dismiss"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button>
 </aside>
 <section class="landing" id="landing">
@@ -505,6 +505,10 @@ STAMP_INPUTS = (
     # Big Copilot's own text: tt() (inlined in the page) and each language's
     # table, which the page fetches (tools/i18n.py ship writes them).
     "web/i18n.js", *(f"web/i18n/{lang}.json" for lang in ui_text.languages()),
+    # The furniture and material prices the payback figures read (make_item_prices.py).
+    "web/py/ba_item_prices.json",
+    # What a store sells, needs and can buy where, for the store planner (make_store_rules.py).
+    "web/py/ba_store_rules.json",
 )
 
 
@@ -652,7 +656,8 @@ def check(root: str = HERE) -> list[str]:
         except FileNotFoundError:
             return True
 
-    for name in ("ba_save.py", "ba_dashboard.py", "ba_buildings.json", "ba_demand_curves.json"):
+    for name in ("ba_save.py", "ba_dashboard.py", "ba_buildings.json", "ba_demand_curves.json",
+                 "ba_item_prices.json", "ba_store_rules.json"):
         copied = "web/py/" + name
         if differs(copied, read_text(os.path.join(root, name))):
             stale.append(copied)
@@ -745,10 +750,12 @@ def main() -> None:
     print(f"web/wiki/: {pages} static pages, sitemap.xml and robots.txt")
     for name in ("ba_save.py", "ba_dashboard.py"):
         shutil.copyfile(os.path.join(HERE, name), os.path.join(WEB, "py", name))
-    # The building table and the arrival curves travel with the code;
-    # make_buildings.py and make_demand_curves.py have to have been run, since
-    # the worker hands both to Python as data.
-    for name in ("ba_buildings.json", "ba_demand_curves.json"):
+    # The building table, the arrival curves, the item prices and the store
+    # rules travel with the code; make_buildings.py, make_demand_curves.py,
+    # make_item_prices.py and make_store_rules.py have to have been run, since
+    # the worker hands them to Python as data.
+    for name in ("ba_buildings.json", "ba_demand_curves.json", "ba_item_prices.json",
+                 "ba_store_rules.json"):
         shutil.copyfile(os.path.join(HERE, name), os.path.join(WEB, "py", name))
     text = {k: v for k, v in locale.items() if ships(k, v)}
     with open(os.path.join(WEB, "py", "gametext.json"), "w", encoding="utf-8", newline=chr(10)) as fh:

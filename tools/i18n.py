@@ -212,7 +212,9 @@ def js_calls(src: str, where: str, first_line: int = 1) -> list[dict]:
         if i and toks[i - 1][1] in (".", "function", "?."):
             continue
         place = f"{where}:{line_at(at)}"
-        args = toks[i + 2:i + 40]
+        # Enough tokens for the English and a long params object: a window that
+        # ends inside the params reads them as unknown (_js_params).
+        args = toks[i + 2:i + 400]
 
         def literal(t):
             return t[0] in ("str", "tmpl") and t[1] is not None

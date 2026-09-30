@@ -73,12 +73,14 @@ this column is where to look when you change a key's shape — not a complete ca
 | `homes` | `_homes()`, with `m` and `hood` from `load_buildings()` | `spHome`, `siteKeys`; `web/map.js` `CityMapView.update`, `openLocationMap` |
 | `products` | `_products()`, with `peak`/`swing`/`weeks` from `_product_rhythm()` | `drawProducts`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn` |
 | `staff` | `_staff_summary()` | `drawKpis`, `drawPayroll` |
-| `loans` | `_loans()` | `drawKpis`, and the `SS_VIEWS` `cash` entry's `live()` |
-| `supply` | `_supply()`; its `facts` from `_supply_facts()`, each fact's status word from `_supply_status()`; `margin` and `roundTo` are `SUPPLY_MARGIN` and `SUPPLY_ROUND_TO`; `roundTo` has no board reader, since the rounding is done in Python before the numbers ship | `supplyChecklistRows`, `sbData`, Supply's five view drawers (with `sbDepotRows`, `sbTabOf`, `sbDeps`, `sbNodeOpen`, `drawFlowPanel`), `pgEvaluate` (a later board's evidence for an applied write), `drawSite`, `drawFlow`, `flowLayout` (its columns are `flowStages`' stages), the phone chain's `flowStages`, `drawFlowChain`, `drawFlowFocus` and `flowPipeProblem` (which reads each `graph.links` entry's `slugs`, the products its pipe carries), `factoryView`; `web/map.js` `refreshCityMaps`. `supply.facts` only through `supplyFact()` (below), and `supply.idle` only through `idleRows()`, which keeps the rows idle under the sizing on screen (`modes`) with their `dem` laid over. `supply.wholesaleShops` (the shops a repeating wholesale contract delivers to) has no board reader: `_alerts()` counts it as a delivery plan |
+| `loans` | `_loans()`; each loan carries its bank's site `key` | `drawKpis`, the `SS_VIEWS` `cash` entry's `live()`, and `osRoiLoan()` (Open a store, step 6) |
+| `supply` | `_supply()`; its `facts` from `_supply_facts()`, each fact's status word from `_supply_status()`; `margin` and `roundTo` are `SUPPLY_MARGIN` and `SUPPLY_ROUND_TO`; `roundTo` has no board reader, since the rounding is done in Python before the numbers ship | `supplyChecklistRows`, `sbData`, Supply's five view drawers (with `sbDepotRows`, `sbTabOf`, `sbDeps`, `sbNodeOpen`, `drawFlowPanel`), `pgEvaluate` (a later board's evidence for an applied write), `drawSite`, `drawFlow`, `flowLayout` (its columns are `flowStages`' stages), the phone chain's `flowStages`, `drawFlowChain`, `drawFlowFocus` and `flowPipeProblem` (which reads each `graph.links` entry's `slugs`, the products its pipe carries), `factoryView`; `web/map.js` `refreshCityMaps`. `supply.facts` only through `supplyFact()` (below), and `supply.idle` only through `idleRows()`, which keeps the rows idle under the sizing on screen (`modes`) with their `dem` laid over. `supply.wholesaleShops` (the shops a repeating wholesale contract delivers to) has no board reader: `_alerts()` counts it as a delivery plan. `supply.routed` (the `[shop index, product]` pairs a stock target above zero or a weekly wholesale contract delivers, whatever the shop sells) is read only by the Open a store checklist's Logistics row, `osRoutes()` |
 | `rhythm` | `_chain_rhythm()`; its `recent` key holds the same three series over the last `RHYTHM_RECENT_DAYS` (28) calendar days before the last finished day, which the chart draws, while the full-length ones feed `_supply()` | `weekdaySeries` (which `drawChart` asks), `drawSite` |
 | `market` | `_market()`; its `catalogue` key is popped out and handed to `_plan()` | `drawMovers`, `drawMarket`; `web/wiki.js` `wikiOwn`, `wikiGuidePrices` |
 | `premises` | `_premises()`, with `_premises_status()`, `_premises_demand()`, `_rent_estimate()`, `_deposit_estimate()`, `_deposit_check()`, `_door_caps()`, `_rival_numbers()`, `_rival_names()` | `drawFindLocation`, `finderPreset`, `wireCards`; `web/map.js` `premises` |
 | `chains` | `_chains()` | `drawPortfolio`, `siteCrumbs` |
+| `payback` | `_payback()`, with `_site_setup()` and `setup_cost()` (the investment in both install modes, reusable for a store not yet rented), `_install_bills()`, `_payback_row()`, `payback_outcome()` and `_payback_rate()`; `History.payback()` keeps the firm's bill and each reached break-even day after the save forgets them (an older save of the same character reads it and writes nothing). An outcome is `reached`, `latest`, `togo`, `never`, `unknown`, or `window` for a lease older than the statements: the whole payback period at recent profit, since what it earned before is unknown. `{sites: {key: …}, chains: {first site key: …}, recentDays}`; a trading site whose run from the opening is known also carries `days` (`[day, profit, sales]` from the opening) and `before` (the lease's cost before it); `_payback_trail()` keeps and extends those days in the history after the record stops reaching the opening, and a site whose kept days no longer meet the record says `rolled` | `paybackSite`, `paybackChain`, through `drawPortfolio`'s Payback column, `spPayback()` in `drawSite()` and `osRoiHtml()` (Open a store, step 6) |
+| `openStore` | `_open_store()`, in the "open a store" section after `_payback()`: `load_store_rules()` (`ba_store_rules.json`), `outfit_lines()` (a 100% outfitted store per type and layout, `setup_cost()` pricing it), `decor_route()` (the cheapest walls and floors to each neighbourhood's interior score, kept per layout and score), `_layout_slots()`, `_copied_shelving()`, `_store_market()` (per product: import cost, sellers and rival prices per neighbourhood, `demand_with()`/`optimal_providers()`), `_plan_initial()` (the arrivals each hour starts from, `_initial_customers()` shared with the staffing assistant), `_own_shops()` (the player's shops as the model sees them, measured from each one's first day with sales; `k` for one still in its first days) and `_own_sales()` (what they sell), `_opened_stores()` (per business of a planned type: the furniture standing in it and which opening requirements it meets, `required_placed()`), `_finance_facts()` (banks, wealth with vehicles and boats, the tutorial's floor, and borrowing room). The facts only; the arithmetic the reader moves runs in the board. `{game, types, market, hoods, decor, items, vendors, own, sales, built, campaigns, finance}`, or `{}` when the store rules are missing | `drawOpenStore` (Expansion › Open a store), with `osModel()`/`osOfficeModel()`, `osBestModel()`, `osDayProfit()` (the first days' ramp and a first seller's hype), `osBreakDay()`, `osOwnRatio()`, `osCannibal()` and `osLoan()`; `demCellPop()` (a Demand cell's Open a store here) |
 | `trends` | `_site_trends()` | `indexTrends` |
 | `hypeExposure` | `_hype_exposure()`; `extract()` also passes the same list to `_alerts()`, where the `hype` findings come from | `spHypeRow` (a `const` arrow function, called from `spPull()` for the site panel's Promotion block) |
 | `hours` | `_hourly()`, the sites with hour reports behind them | `drawSite` |
@@ -604,7 +606,7 @@ What `page_html()` produces, top of the file down:
 5. The board script, the last `<script>` block of `TEMPLATE`.
 
 Before any of that, `main()` refreshes `web/wiki-data.json`, copies `ba_save.py`,
-`ba_dashboard.py`, `ba_buildings.json` and `ba_demand_curves.json` into `web/py/`, and
+`ba_dashboard.py`, `ba_buildings.json`, `ba_demand_curves.json`, `ba_item_prices.json` and `ba_store_rules.json` into `web/py/`, and
 writes `web/py/gametext.json` and `web/names/<lang>.json` (`write_name_tables()`) from the installed locale — everything `stamp()` hashes has to be in place before
 `release_info()` runs. `main()` then writes `web/index.html` and `web/version.json`.
 
@@ -755,7 +757,8 @@ Growth's views (Expansion; Find a location is the Map page's finder):
 
 | View | Section | Drawn by |
 | --- | --- | --- |
-| Demand | `secMarket` | `drawMovers` (`#movers`) and `drawMarket` (`#market`) |
+| Demand | `secMarket` | `drawMovers` (`#movers`) and `drawMarket` (`#market`); a cell with a type opens `#demCellPop` (`demCellPop()`, at body level): Open a store here and Find a location |
+| Open a store (`open`) | `secOpen` | `drawOpenStore`: the steps and plan picker (`#osCtl`, beside the tabs), the plan's strip (`#osStrip`), the finder in plan mode for step 2 (`#osFinderMap`, a `CityMapView` with `options.plan`, kept between draws and never storing filters), and the step's body (`#osBody`). Plans are kept per character in `localStorage` under `ba_open_store_v1:<character>`. Its New badge is `VIEW_NEW` in `paintLocal()` |
 | Plan a factory (`plan`) | `secPlan`, `secIngredients` | `drawPlan` |
 
 Outside the pages, `drawMast` and `drawFooter` own the sidebar's name and clock and the footer, and
@@ -1083,10 +1086,13 @@ the unstamped `dev` build):
 
 - `ba_save.py` and `ba_dashboard.py` — a failed fetch throws and the worker never becomes
   ready.
-- `gametext.json`, `ba_buildings.json` and `ba_demand_curves.json` — written into the
-  virtual filesystem only when the fetch succeeds, so a build missing one still boots and
-  degrades instead: without the curves the board states no arrival ceiling, and every number
-  it does state still comes off the measured hour grid.
+- `gametext.json`, `ba_buildings.json`, `ba_demand_curves.json`, `ba_item_prices.json` and
+  `ba_store_rules.json` —
+  written into the virtual filesystem only when the fetch succeeds, so a build missing one
+  still boots and degrades instead: without the curves the board states no arrival ceiling,
+  and every number it does state still comes off the measured hour grid; without the prices
+  furniture counts at what the save says was paid, and walls and floors at nothing; without
+  the store rules the store planner has no game data to plan a new store with.
 
 Gradual (percentage) deployments are unsupported for that reason: while two versions serve
 side by side, a `/py/` file from the old one could be cached immutably under the new stamp.

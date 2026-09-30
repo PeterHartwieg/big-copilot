@@ -620,6 +620,43 @@ def load_demand_curves() -> dict:
     return _demand_curves
 
 
+# The game's furniture prices and wall and floor materials, from its bundles:
+# make_item_prices.py generates ba_item_prices.json beside this file and the
+# browser worker writes it to /data/, as with the curves. Read lazily, never at
+# import time.
+_item_prices = None
+
+
+def load_item_prices() -> dict:
+    """ba_item_prices.json as {"items": {...}, "materials": {...}}, read once.
+
+    Per item name: `p` Item.defaultMarketPrice, `t` its type bit flags. Per
+    material uuid (the MaterialID a save's interiorDesigns slots hold): `t` 1
+    floor or 2 wall, `p` InteriorMaterialPreset.price, `b` whether it can be
+    bought. A missing file is not an error: an item then counts at what the
+    save says was paid for it, and materials at nothing.
+    """
+    global _item_prices
+    if _item_prices is None:
+        for path in (
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "ba_item_prices.json"),
+            "/data/ba_item_prices.json",  # where the worker puts it in a browser
+        ):
+            try:
+                with open(path, encoding="utf-8") as fh:
+                    loaded = json.load(fh)
+                _item_prices = {
+                    "items": loaded.get("items") or {},
+                    "materials": loaded.get("materials") or {},
+                }
+                break
+            except (OSError, ValueError, AttributeError):
+                continue  # not here, or unreadable: try the next place
+        else:
+            _item_prices = {"items": {}, "materials": {}}
+    return _item_prices
+
+
 # ---------------------------------------------------------------- game tables
 # Business types that sell to walk-in customers; the rest are support sites.
 # Every physical retail floor the game documents with an F1 help page (the
@@ -1952,6 +1989,8 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
 
     trends = _site_trends(businesses, day)
     chains = _chains(save, businesses, trends)
+    # Before history.write(): it remembers bills and break-even days.
+    payback = _payback(save, names, buildings, businesses, chains, stmt_history, history, character)
     hype = _hype_exposure(businesses, market)
 
     # Every trading site, measured or not. The page's hour grid takes only the
@@ -1975,6 +2014,11 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         _ingredient_prices(save, names, supply, businesses),
         rhythm,
     )
+    premises = _premises(save, names, market)
+    # Expansion › Open a store: the facts a plan for a new store is worked
+    # out from (_open_store(), docs/open-a-store-scope.md).
+    open_store = _open_store(save, names, buildings, businesses, premises, all_grids,
+                             stmt_history, daily, staff)
     net_worth = _net_worth(root, history, character, day)
     entry = {
         "hour": root["Hour"],
@@ -2059,8 +2103,14 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         "supply": supply,
         "rhythm": rhythm,
         "market": market,
-        "premises": _premises(save, names, market),
+        "premises": premises,
         "chains": chains,
+        # Investment, profit so far and break-even, per site and per chain
+        # (_payback(), docs/open-a-store-scope.md).
+        "payback": payback,
+        # Expansion › Open a store: outfits, market, own shops, loans
+        # (_open_store()).
+        "openStore": open_store,
         "trends": trends,
         "hypeExposure": hype,
         "hours": grids,
@@ -2523,6 +2573,23 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
         b["staffIdle"] = sorted(idle[b["key"]], key=str)
 
 
+def _station_shifts(save: Save, b: dict, crew: list):
+    """(shift, person) for every station shift on an open day worked by someone
+    on the staff: the shifts the game's uniform demand walks."""
+    by_id = {p["id"]: p for p in crew if p.get("id") is not None}
+    for schedule_day in save.items(b.get("scheduleDays")):
+        if not schedule_day.get("isOpen"):
+            continue
+        for shift in save.items(schedule_day.get("workShifts")):
+            # The game asks for a Default shift by type, not for "not cleaning",
+            # so a type a later build adds is left out rather than counted in.
+            if shift.get("type") != STATION_SHIFT:
+                continue
+            person = by_id.get(shift.get("employeeId"))
+            if person:
+                yield shift, person
+
+
 def _uniform_gaps(save: Save, b: dict, crew: list, names: Names) -> list:
     """The skill ids working this floor that have no uniform, as the game scores it.
 
@@ -2550,26 +2617,14 @@ def _uniform_gaps(save: Save, b: dict, crew: list, names: Names) -> list:
         item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
         if item:
             stations[holder.get("$k")] = item.get("itemName")
-    by_id = {p["id"]: p for p in crew if p.get("id") is not None}
-
     gaps = set()
-    for schedule_day in save.items(b.get("scheduleDays")):
-        if not schedule_day.get("isOpen"):
-            continue
-        for shift in save.items(schedule_day.get("workShifts")):
-            # The game asks for a Default shift by type, not for "not cleaning",
-            # so a type a later build adds is left out rather than counted in.
-            if shift.get("type") != STATION_SHIFT:
-                continue
-            person = by_id.get(shift.get("employeeId"))
-            if not person:
-                continue
-            held = set(person.get("skills") or ())
-            for skill in STATION_SKILLS.get(stations.get(shift.get("itemInstanceId")), ()):
-                if skill in held:
-                    if skill not in uniforms:
-                        gaps.add(skill)
-                    break  # the game checks the first match and stops
+    for shift, person in _station_shifts(save, b, crew):
+        held = set(person.get("skills") or ())
+        for skill in STATION_SKILLS.get(stations.get(shift.get("itemInstanceId")), ()):
+            if skill in held:
+                if skill not in uniforms:
+                    gaps.add(skill)
+                break  # the game checks the first match and stops
     # A set decides these, so sort before they reach the payload. The caller
     # labels them; the ids stay for a write that sets the uniforms.
     return sorted(gaps)
@@ -2612,7 +2667,11 @@ def shift_print(entries) -> str:
 
 
 def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencies=None) -> dict:
-    st = latest.get(addr, {})
+    # The address keeps its takings after a business closes: a statement from
+    # before this business opened (or from a day it did not exist) is the old
+    # tenant's, not this one's.
+    since = b.get("creationDay", 0)
+    st = latest.get(addr, {}) if not history or history[-1][0] >= since else {}
     name = b.get("BusinessName")
     tag = ""
     if name and name.startswith("[") and "]" in name:
@@ -2857,6 +2916,12 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
         # directly rather than through any demand; one still in cargo is boxed.
         # A type whose customers never ask about uniforms needs neither.
         "missingUniformLocker": wants_uniforms and not has_uniform_locker,
+        # Shifts at a named station: without one no uniform is asked for yet.
+        "stationShifts": sum(1 for _ in _station_shifts(save, b, crew)),
+        # Whether the shop has ever booked a sale: the last statement alone is
+        # zero on a day the shop stood closed.
+        "hasTraded": revenue > 0
+        or any(dayno >= since and by_addr.get(addr, {}).get("TotalSales", 0) > 0 for dayno, by_addr in history),
         "staff": len(crew),
         "staffCost": sum(c["daily"] for c in crew),
         "crew": _crew(crew),
@@ -3172,9 +3237,13 @@ def _loans(save: Save, names: Names) -> list:
     for l in save.items(save.root["Loans"]):
         remaining = money(l.get("remainingAmount", 0))
         total = money(l.get("totalAmount", 0))
+        bank = save.address(l.get("bankAddress"))
         out.append(
             {
-                "bank": names.addr(save.address(l.get("bankAddress"))),
+                "bank": names.addr(bank),
+                # The bank's site key, as openStore.finance names each bank: a
+                # plan's loan is looked up by it (Open a store, step 6).
+                "key": site_key(bank),
                 "total": total,
                 "remaining": remaining,
                 "repaid": round((1 - remaining / total) * 100, 1) if total else 0,
@@ -5084,6 +5153,17 @@ def _supply(
         # The shops a repeating wholesale contract delivers to: a standing
         # supply that draws no link on the graph.
         "wholesaleShops": sorted({index[shop] for shop, _item in wholesale}),
+        # The (shop index, product) pairs a plan or a wholesale contract really
+        # delivers: a stock target above zero, or a repeating contract, whatever
+        # the shop's sales rate. shops[] holds a row only for a selling line.
+        "routed": sorted(
+            [index[shop], item]
+            for shop, item in (
+                {k for k, (amount, _src) in target_at.items() if amount > 0}
+                | set(wholesale)
+            )
+            if shop in index
+        ),
         "imports": import_rows,
         "idle": idle_rows,
         "idleWeeks": IDLE_WEEKS,
@@ -13183,6 +13263,24 @@ class History:
         # when that later save is opened again, but never read as today's run.
         return [dict(store[d], day=int(d)) for d in sorted(store, key=int) if int(d) <= day]
 
+    def payback(self, character: str) -> dict:
+        """What the statements forget after 61 days, kept for _payback(): per
+        site key, {"opened", "bill", "firm": [day, investment], "self": [...]},
+        and for a trading site its run from the opening (_payback_trail()):
+        "trail" ([day, profit, sales] from the opening, capped), "before" (the
+        lease's cost before the opening), "since" (the first day the record
+        held), or "rolled" once the record moved past the trail; per chain
+        name the same without the bill and the trail. Changed in place; a
+        record whose `opened` no longer matches is a new business at that
+        address."""
+        store = self._for(character).setdefault("payback", {})
+        if not isinstance(store, dict):
+            store = self._for(character)["payback"] = {}
+        for part in ("sites", "chains"):
+            if not isinstance(store.get(part), dict):
+                store[part] = {}
+        return store
+
     def named(self, character: str, updates: dict | None = None) -> dict:
         """Lines the player named by hand, by recipe id; a None clears one."""
         store = self._for(character).setdefault("lineNames", {})
@@ -13611,6 +13709,1414 @@ def _site_trends(businesses: list, day: int) -> list:
         )
         out.append(row)
     return out
+
+
+# ------------------------------------------------------------------- payback
+# What a site cost to set up, and when its profit paid that back
+# (docs/open-a-store-scope.md, "Phase 1"). The rules are the game's own, read
+# from its code on 28 Sep 2026 and checked against six real bills to the coin:
+#   installation firm  586 x the building's m² + every item at its default
+#                      price; walls and floors cost nothing
+#                      (InteriorInstallationFirmHelper.GetInstallationFee)
+#   self-installation  every item at its default price + each paid wall and
+#                      floor slot at its material's price
+# and the deposit in both, although the game refunds it when the lease ends.
+# The firm's real bill also credits a trade-in of what stood in the building
+# (sellingMultiplier x its worth, stock included). An estimate leaves that out
+# on purpose: it depends on what the building held, not on the store.
+INSTALL_FEE_PER_M2 = 586
+# The forward estimate's rate: the average day over the last this many finished
+# days since the site first sold anything, closed days included, because rent
+# is paid on those too and the estimate counts calendar days.
+PAYBACK_RECENT_DAYS = 14
+# How many finished days of statements the game keeps (Safara on day 185 holds
+# days 124 to 184); a shorter run has lost nothing yet.
+STATEMENT_WINDOW = 61
+# A remembered break-even day stands while the investment it was reached
+# against moves by less than this share (a painting added, a plant sold).
+PAYBACK_REMEMBER_SLACK = 0.01
+
+_ORDINAL_WORDS = (
+    "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth",
+    "ninth", "tenth", "eleventh", "twelfth", "thirteenth", "fourteenth",
+    "fifteenth", "sixteenth", "seventeenth", "eighteenth", "nineteenth", "twentieth",
+)
+
+
+def _ordinal(n: int) -> str:
+    return f"{n}{'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
+
+
+_ORDINALS = {word: _ordinal(i) for i, word in enumerate(_ORDINAL_WORDS, 1)}
+
+
+def _address_words(text: str) -> str:
+    """An address as comparable words: "4 Third Avenue" and the game's own
+    "4 3rd Avenue" (the text a transaction carries) read the same."""
+    words = re.findall(r"[a-z0-9]+", str(text or "").lower())
+    return " ".join(_ORDINALS.get(w, w) for w in words)
+
+
+def item_price(name: str, paid, prices: dict | None = None) -> float:
+    """What a piece of furniture is worth: what was paid for it, or its default
+    price where the save records nothing, as the game's ItemHelper.GetWorth does."""
+    if paid:
+        return float(paid)
+    table = (prices if prices is not None else load_item_prices())["items"]
+    return float((table.get(name) or {}).get("p") or 0)
+
+
+def setup_cost(items, materials, square_metres, deposit, prices: dict | None = None) -> dict:
+    """What a store costs to set up, in both install modes.
+
+    `items` are (item name, price paid) pairs, the paid price 0 or None where
+    nothing was paid yet; `materials` the MaterialIDs of the wall and floor
+    slots; `square_metres` the building's floor (ba_buildings.json `m`). A store
+    that exists passes its save's furniture and slots and its lastDeposit; a
+    planned one passes its shopping list and its deposit estimate. `firm` and
+    `self` are the investment in each mode, deposit included.
+    """
+    prices = prices if prices is not None else load_item_prices()
+    furniture = sum(item_price(name, paid, prices) for name, paid in items)
+    table = prices["materials"]
+    walls = sum(float((table.get(m) or {}).get("p") or 0) for m in materials)
+    fee = INSTALL_FEE_PER_M2 * float(square_metres or 0)
+    deposit = float(deposit or 0)
+    return {
+        "furniture": money(furniture),
+        "materials": money(walls),
+        "fee": money(fee),
+        "deposit": money(deposit),
+        "firm": money(furniture + fee + deposit),
+        "self": money(furniture + walls + deposit),
+    }
+
+
+def _site_setup(save: Save, registration: dict, addr, prices: dict) -> dict:
+    """setup_cost() for a rented building, read off its registration."""
+    items = []
+    # Stacked items are top-level instances too; stackedItems only points at them.
+    for holder in save.items(registration.get("itemInstances")):
+        item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
+        if item and item.get("itemName"):
+            items.append((item["itemName"], item.get("priceOnPurchase")))
+    materials = []
+    for design in save.items(registration.get("interiorDesigns")):
+        for slot in save.items((save.deref(design) or {}).get("materials")):
+            if isinstance(slot, dict) and slot.get("MaterialID"):
+                materials.append(slot["MaterialID"])
+    building = load_buildings().get(addr) or {}
+    return setup_cost(items, materials, building.get("m"), registration.get("lastDeposit"), prices)
+
+
+def _install_bills(save: Save, names: Names, addresses: dict) -> dict:
+    """The installation firm's bills the transaction log still holds (about a
+    week), per site key: [(day, amount)]. A bill names its address as text,
+    "4 3rd Avenue"; `addresses` maps each site key to its (street, number)."""
+    by_words = {_address_words(names.addr(addr)): key for key, addr in addresses.items()
+                if isinstance(addr[0], str)}
+    by_addr = {addr: key for key, addr in addresses.items()}
+    out = collections.defaultdict(list)
+    for t in save.items(save.root.get("Transactions")):
+        if not isinstance(t, dict) or t.get("transactionType") != "ba:transaction_interiorinstallation":
+            continue
+        key = by_addr.get(save.address(t.get("address")))
+        if key is None:
+            data = {e.get("$k"): e.get("$v") for e in save.items(t.get("transactionData"))
+                    if isinstance(e, dict)}
+            key = by_words.get(_address_words(data.get("address")))
+        if key is None:
+            continue
+        day = (save.deref(t.get("timestamp")) or {}).get("Day")
+        out[key].append((day, -float(t.get("amount") or 0)))
+    return out
+
+
+def payback_outcome(investment: float, days: list, exact: bool, opened: int, rate, not_before=None) -> dict:
+    """When `days` of profit, (day, profit) oldest first, pay `investment` back.
+
+    `reached`: the first day the running total reached it, and how many days
+    after opening, where `days` start with the lease. `latest`: the same day
+    where they start inside it, so the site paid back by then at the latest.
+    Otherwise, from the lease's start, `togo`: the days still needed at `rate`
+    a day, or `never` when the rate earns nothing. From inside the lease the
+    profit before the record is unknown, so neither can be said: `window`
+    gives the whole payback period at `rate` instead (`days`, and `day`, the
+    opening plus that; both absent when the rate earns nothing). `unknown`
+    with no rate at all, from the lease's start.
+
+    `not_before`: no day earlier counts as the crossing -- a chain's newest
+    member's opening, before which its investment was not yet spent.
+    """
+    total = 0.0
+    for day, profit in days:
+        total += profit
+        if total >= investment and (not_before is None or day >= not_before):
+            if exact:
+                return {"state": "reached", "day": day, "after": day - opened}
+            return {"state": "latest", "day": day}
+    if not exact:
+        if rate is not None and rate > 0:
+            days = max(1, math.ceil(investment / rate))
+            return {"state": "window", "days": days, "day": opened + days}
+        return {"state": "window"}
+    if rate is None:
+        return {"state": "unknown"}
+    if rate <= 0:
+        return {"state": "never"}
+    return {"state": "togo", "days": max(1, math.ceil((investment - total) / rate))}
+
+
+def _payback_rate(days: list, opened: int):
+    """The average day over the last PAYBACK_RECENT_DAYS finished days after
+    opening, counted from the first day anything sold; None before that.
+    `days` are (day, profit, sales)."""
+    selling = [i for i, (day, _p, sales) in enumerate(days) if day > opened and sales > 0]
+    if not selling:
+        return None
+    recent = [p for day, p, _s in days[selling[0]:] if day > opened][-PAYBACK_RECENT_DAYS:]
+    return sum(recent) / len(recent) if recent else None
+
+
+def chain_window_day(members: list):
+    """The day a chain that grew over time pays back at recent profit: the
+    first day t, no earlier than its newest member's opening, on which
+    sum(rate x (t - opened)) over its members reaches sum(investment).
+    `members` are (opened, rate, investment); a rate of None earns nothing.
+    The newest member's opening when the members before it had already
+    covered the investment by then; None when they had not and together
+    earn nothing a day."""
+    if not members:
+        return None
+    newest = max(opened for opened, _r, _i in members)
+    invested = sum(inv for _o, _r, inv in members)
+    # The members that opened first may have paid it all back by the day
+    # the newest opened, whatever the rate together is now.
+    if sum((rate or 0) * (newest - opened) for opened, rate, _i in members) >= invested:
+        return newest
+    slope = sum(rate or 0 for _o, rate, _i in members)
+    if slope <= 0:
+        return None
+    need = invested + sum((rate or 0) * opened for opened, rate, _i in members)
+    return max(newest, math.ceil(need / slope - 1e-9))
+
+
+def _member_rate(days: list, opened: int):
+    """A chain member's recent daily profit, sales or none (a cost centre, or
+    a site with no sale yet): the average of its
+    last PAYBACK_RECENT_DAYS days after opening; None before that."""
+    recent = [p for day, p, _s in days if day > opened][-PAYBACK_RECENT_DAYS:]
+    return sum(recent) / len(recent) if recent else None
+
+
+# How long a site's day-by-day trail is kept once the record no longer reaches
+# its opening: up to break even plus PAYBACK_TRAIL_AFTER days, and never more
+# than PAYBACK_TRAIL_DAYS days from the opening.
+PAYBACK_TRAIL_DAYS = 180
+PAYBACK_TRAIL_AFTER = 30
+
+
+def _payback_trail(days: list, exact: bool, opened: int, memory: dict, invest: float, last_day=None):
+    """A trading site's days from its opening, beyond the record's 61.
+
+    The whole run from the opening is the record's own days while the record
+    reaches the opening (`exact`), and after that the kept trail with the
+    record's newer days after it, as long as the two meet. Every save that
+    knows the whole run writes it back to `memory["trail"]` ([day, profit,
+    sales] from the opening), with the lease's cost before the opening as
+    `memory["before"]` and the first day the record held as `memory["since"]`,
+    capped at PAYBACK_TRAIL_DAYS days, and at PAYBACK_TRAIL_AFTER days past the
+    day the larger investment, `invest`, is covered.
+
+    Once the record starts after the trail's last day, the days between are
+    lost: the trail is dropped and `memory["rolled"]` set, for good.
+
+    A trail a newer save wrote may run past this save's last statement,
+    `last_day`: only the days up to it are this save's, so the rest is left
+    out before the two are joined and before the gap is judged.
+
+    Returns ((trail, before, since), rolled): the whole run where it is known,
+    else None; `rolled` is True for a site whose trail rolled off.
+    """
+    if exact:
+        full = [[d, money(p), money(s)] for d, p, s in days if d >= opened]
+        before = money(sum(p for d, p, _s in days if d < opened))
+        since = days[0][0] if days else None
+        memory.pop("rolled", None)
+    else:
+        if memory.get("rolled"):
+            return None, True
+        kept = memory.get("trail")
+        try:
+            kept = [[int(d), float(p), float(s)] for d, p, s in kept] if isinstance(kept, list) else []
+        except (TypeError, ValueError):
+            kept = []
+        if last_day is not None:
+            kept = [d for d in kept if d[0] <= last_day]
+        if not kept:
+            return None, False
+        # The record must pick up the day after the trail ends, or the days
+        # between are unknown.
+        if days and days[0][0] > kept[-1][0] + 1:
+            for field in ("trail", "before", "since"):
+                memory.pop(field, None)
+            memory["rolled"] = True
+            return None, True
+        full = kept + [[d, money(p), money(s)] for d, p, s in days if d > kept[-1][0]]
+        before = money(memory.get("before") or 0)
+        since = memory.get("since") if isinstance(memory.get("since"), int) else None
+    capped, reached, total = [], None, before
+    for d in full:
+        total += d[1]
+        if reached is None and total >= invest:
+            reached = d[0]
+        if len(capped) >= PAYBACK_TRAIL_DAYS or (reached is not None and d[0] > reached + PAYBACK_TRAIL_AFTER):
+            break
+        capped.append(d)
+    memory["trail"], memory["before"], memory["since"] = capped, before, since
+    return (full, before, since), False
+
+
+def _payback_row(days: list, cost: dict, exact: bool, opened: int, memory: dict, last_day,
+                 not_before=None) -> dict:
+    """Profit so far, the recent rate and the outcome in each install mode,
+    with a break-even day remembered from an earlier save where the statements
+    no longer reach it. `not_before` as payback_outcome() takes it."""
+    rate = _payback_rate(days, opened)
+    row = {
+        "since": days[0][0] if days else None,
+        "exact": exact,
+        "opened": opened,
+        "profit": money(sum(p for _d, p, _s in days)),
+        "rate": money(rate) if rate is not None else None,
+    }
+    for mode in ("firm", "self"):
+        outcome = payback_outcome(cost[mode], [(d, p) for d, p, _s in days], exact, opened, rate, not_before)
+        kept = memory.get(mode)
+        if outcome["state"] == "reached":
+            memory[mode] = [outcome["day"], cost[mode]]
+        elif (isinstance(kept, list) and len(kept) == 2 and last_day is not None
+              and kept[0] <= last_day and (not_before is None or kept[0] >= not_before)
+              and abs(kept[1] - cost[mode]) <= PAYBACK_REMEMBER_SLACK * max(cost[mode], 1)):
+            outcome = {"state": "reached", "day": kept[0], "after": kept[0] - opened, "kept": True}
+        row[mode] = outcome
+    return row
+
+
+def _payback(save: Save, names: Names, buildings: list, businesses: list, chains: list,
+             stmt_history: list, history, character: str) -> dict:
+    """Investment, profit so far and break-even per site and per chain.
+
+    A factory, a depot and a head office are cost centres: they get no payback
+    of their own, and their investment counts in their chain, where a shop fed
+    by its own factory stops looking free of goods costs. A chain's investment
+    and profit are the sums over its sites. A chain of cost centres alone has a
+    row only when it sells something (a factory selling outside the company);
+    one that sells nothing has nothing to pay anything back with.
+
+    The history keeps what the statements forget. An older save of the same
+    character reads it and changes nothing, as the ledger does, so going back
+    to an earlier save and forward again loses no remembered day.
+    """
+    prices = load_item_prices()
+    regs = {site_key((b["StreetName"], b["StreetNumber"])): b for b in buildings}
+    addresses = {key: (b["StreetName"], b["StreetNumber"]) for key, b in regs.items()}
+    bills = _install_bills(save, names, addresses)
+    start = stmt_history[0][0] if stmt_history else None
+    last_day = stmt_history[-1][0] if stmt_history else None
+    # Fewer statements than the game keeps: nothing has dropped out yet.
+    whole = len(stmt_history) < STATEMENT_WINDOW
+    store = history.payback(character)
+    # How far this save reaches: its last statement, or the day before its
+    # own for a save with none yet (a first day), to compare with the newest
+    # save the memory has seen before anything in it changes.
+    today = save.root.get("Day")
+    now = last_day if last_day is not None else (today - 1 if isinstance(today, int) else None)
+    kept_day = store.get("day") if isinstance(store.get("day"), int) else None
+    older = kept_day is not None and (now is None or now < kept_day)
+    if older:  # read the newer save's memory, write none of it
+        store = json.loads(json.dumps(store))
+    elif now is not None:
+        store["day"] = now
+    kept_sites, kept_chains = store["sites"], store["chains"]
+
+    sites, series, window_exact, runs = {}, {}, {}, {}
+    for b in businesses:
+        key = b["key"]
+        if b["status"] == "vacant" or key not in regs:
+            continue
+        addr = addresses[key]
+        days = [(day, by[addr].get("TotalProfit", 0), by[addr].get("TotalSales", 0))
+                for day, by in stmt_history if addr in by]
+        opened = b["opened"]
+        # The record reaches back to the lease, or at least to the opening:
+        # rent paid on an empty lease before the record is the lease's own,
+        # not trading the record has lost.
+        exact = not days or whole or days[0][0] > start or opened > start
+        # Sales before the opening day were another business on the same
+        # lease, whose setup is not this one's: count from the day after them.
+        prior = [i for i, (day, _p, sales) in enumerate(days) if day < opened and sales > 0]
+        if prior:
+            days, exact = days[prior[-1] + 1:], True
+        first = days[0][0] if days else None
+        memory = kept_sites.get(key)
+        if not isinstance(memory, dict) or memory.get("opened") != opened:
+            memory = {"opened": opened}
+        cost = _site_setup(save, regs[key], addr, prices)
+        # The firm's real bill where the log still holds it, and remembered
+        # after it drops out, so the investment does not jump a week later.
+        # Only the bill that set the site up counts: the lease starts inside
+        # the record and the bill comes no later than the first day with
+        # sales. A re-layout months on is a new bill for an old site.
+        lease = min(opened, first) if first is not None else opened
+        selling = next((day for day, _p, sales in days if sales > 0), None)
+        billed = sum(amount for day, amount in bills.get(key, ())
+                     if exact and (day is None or (day >= lease and (selling is None or day <= selling))))
+        if billed:
+            memory["bill"] = money(billed)
+        billed = memory.get("bill") or 0
+        if billed:
+            cost["billed"] = money(billed)
+            cost["firm"] = money(cost["deposit"] + billed)
+        kept_sites[key] = memory
+        series[key] = days
+        row = {"costCentre": b["costCentre"], "cost": cost}
+        if b["costCentre"]:
+            row.update(since=first, exact=exact, opened=opened,
+                       profit=money(sum(p for _d, p, _s in days)))
+            if exact:
+                runs[key] = days
+        else:
+            window_exact[key] = exact
+            full, rolled = _payback_trail(days, exact, opened, memory, max(cost["firm"], cost["self"]), last_day)
+            if full is not None:
+                trail, before, since = full
+                # The whole run from the lease on: the record's own days, or
+                # the kept trail with the record's newer days after it.
+                run = ([(since, before, 0)] if since is not None and since < opened else []) + [tuple(d) for d in trail]
+                runs[key] = run
+                row.update(_payback_row(run, cost, True, opened, memory, last_day))
+                row["since"] = since if since is not None else row["since"]
+                # Day by day from the opening, for a plan's After opening
+                # (Open a store, step 6): [day, profit, sales]. What the lease
+                # cost before the opening day is one sum, `before`; both add up
+                # to `profit`.
+                row["days"] = [list(d) for d in trail]
+                row["before"] = before
+            else:
+                row.update(_payback_row(days, cost, exact, opened, memory, last_day))
+                if rolled:
+                    # The site was seen from its opening once, but the days
+                    # between the kept trail and the record were lost.
+                    row["rolled"] = True
+        sites[key] = row
+    # A site given up since the last save leaves the memory with it.
+    for key in [k for k in kept_sites if k not in sites]:
+        del kept_sites[key]
+
+    out_chains = {}
+    for chain in chains:
+        members = [k for k in chain["sites"] if k in sites]
+        if not members or (all(sites[k]["costCentre"] for k in members)
+                           and not any(sales > 0 for k in members for _d, _p, sales in series[k])):
+            continue
+        cost = {field: money(sum(sites[k]["cost"].get(field, 0) for k in members))
+                for field in ("furniture", "materials", "fee", "deposit", "billed", "firm", "self")}
+        # Every member's whole run known (the record's, or a kept trail): the
+        # chain's is their sum and exact. Otherwise the record's days, and
+        # the record's own reach.
+        whole = all(k in runs for k in members)
+        by_day = collections.defaultdict(lambda: [0.0, 0.0])
+        for k in members:
+            for day, profit, sales in (runs[k] if whole else series[k]):
+                by_day[day][0] += profit
+                by_day[day][1] += sales
+        days = [(day, p, s) for day, (p, s) in sorted(by_day.items())]
+        opened = min(sites[k]["opened"] for k in members)
+        exact = whole or all(window_exact.get(k, sites[k]["exact"]) for k in members)
+        name = str(chain["name"])
+        memory = kept_chains.get(name)
+        if not isinstance(memory, dict) or memory.get("opened") != opened:
+            memory = {"opened": opened}
+        # Each member's investment is spent on its own opening day: the whole
+        # is not paid back before the newest member has opened, whatever the
+        # others earned before it (as chain_window_day() counts it).
+        newest = max(sites[k]["opened"] for k in members)
+        row = {"sites": members, "cost": cost, **_payback_row(days, cost, exact, opened, memory, last_day, newest)}
+        # A chain that grew over time: each member pays from its own opening,
+        # at its own rate, so the day is not the first opening plus the whole.
+        for mode in ("firm", "self"):
+            if row[mode]["state"] == "window":
+                # A member with no sales yet still pays rent and wages: its
+                # recent days count, as a cost centre's do.
+                rates = [(sites[k]["opened"],
+                          sites[k].get("rate") if sites[k].get("rate") is not None
+                          else _member_rate(series[k], sites[k]["opened"]),
+                          sites[k]["cost"][mode]) for k in members]
+                day = chain_window_day(rates)
+                row[mode] = {"state": "window", "day": day} if day is not None else {"state": "window"}
+        kept_chains[name] = memory
+        out_chains[chain["sites"][0]] = row
+    for name in [n for n in kept_chains if n not in {str(c["name"]) for c in chains}]:
+        del kept_chains[name]
+    return {"sites": sites, "chains": out_chains, "recentDays": PAYBACK_RECENT_DAYS}
+
+
+# ------------------------------------------------------------- open a store
+# Expansion › Open a store (docs/open-a-store-scope.md, phase 2): the facts a
+# plan for a store that does not exist yet is worked out from. Python says what
+# the save and the game's tables hold -- what a type needs to be fully outfitted
+# in each layout, what every product meets in every neighbourhood, the player's
+# own shops of the type and what they really earn, the company's borrowing room
+# -- and the board script does the arithmetic the reader moves: the building,
+# the install mode, the marketing mix and the loan, as Plan a factory does.
+# The profit rules are the game's own, read from its code and checked against
+# 108 real shops; docs/dashboard-reference.md, "Open a store", writes them out.
+
+_store_rules = None
+
+
+def load_store_rules() -> dict:
+    """ba_store_rules.json, read once: the game's tables a plan needs.
+
+    `products` per item (wholesale and default price, sales ratio, whether it
+    has a neighbourhood demand, a service, a ticket), `furniture` per item (the
+    customers an hour it adds, the products it holds, its tags, what it stands
+    on, who sells it), `types` per business type (products and their impact,
+    requirements, customer demands), `hoods`, `banks` and `vendors`. Generated
+    by make_store_rules.py and written to /data/ by the browser worker. A
+    missing file is not an error: the view then has nothing to plan with.
+    """
+    global _store_rules
+    if _store_rules is None:
+        for path in (
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "ba_store_rules.json"),
+            "/data/ba_store_rules.json",  # where the worker puts it in a browser
+        ):
+            try:
+                with open(path, encoding="utf-8") as fh:
+                    loaded = json.load(fh)
+                _store_rules = {part: loaded.get(part) or {} for part in STORE_RULE_PARTS}
+                break
+            except (OSError, ValueError, AttributeError):
+                continue  # not here, or unreadable: try the next place
+        else:
+            _store_rules = {part: {} for part in STORE_RULE_PARTS}
+    return _store_rules
+
+
+STORE_RULE_PARTS = ("products", "furniture", "types", "hoods", "banks", "vendors", "vehicles")
+# The building kinds a store can be planned in.
+PLAN_KINDS = ("retail", "office", "cinema", "theater")
+# The structural wage estimate (research PROFIT_MODEL.md, "Costs"): base
+# hourly wages of a cashier, a cleaner and a security guard, which a skill of
+# 100 lifts by 1 + 1.05^100 / 100, and the customers an hour one cashier serves.
+PLAN_WAGES = {"cashier": 16, "cleaner": 12, "guard": 15, "perCashier": 30}
+# An office's staff are its own profession (SkillData.baseHourlyWage, research
+# PROFIT_COSTS.md, C1): one person at a computer bills one client an hour.
+PLAN_OFFICE_WAGES = {
+    "ba:skill_lawyer": 50, "ba:skill_programmer": 36, "ba:skill_graphicdesigner": 35,
+    "ba:skill_eventplanner": 33, "ba:skill_travelagent": 31,
+}
+# The six campaigns (MARKETING_TYPES) by the plan's lowercase ids: price a
+# day and the square metres each reaches. One of each at most per business.
+MARKETING_CAMPAIGNS = tuple((name.lower(), price, reach) for name, price, reach in MARKETING_TYPES)
+# The lenders' BankSettings assets carry rates and caps but no name and no
+# address; these are the banks the game shows (research LOANS.md, section 1).
+BANK_PLACES = {
+    "VantanderBankSettings": ("Vantander Bank", ("ba:street_secondavenue", 6)),
+    "JensenCapitalSettings": ("Jensen Capital", ("ba:street_fourthavenue", 17)),
+}
+LOAN_MINIMUM = 500  # Dialogs.BankDialog: less is "too low"
+# Dialogs.BankDialog: while the tutorial is on and its objective "Get a $15,000
+# loan from Jensen Capital" is open, a bank lends against at least this.
+TUTORIAL_LOAN_FLOOR = 15500
+TUTORIAL_LOAN_OBJECTIVE = "tutorial_quest_establish_first_business_objective_1"
+# BoatTypes..cctor: each BoatData.type's price, which counts as the player's
+# wealth. Hard-coded in the game, as the marketing campaigns are.
+BOAT_PRICES = {0: 3_200_000, 1: 2_500_000, 2: 90_000_000}
+# The satisfaction a well-run new shop settles at (all four parts near 95)
+# where the player runs none of the type to take it from.
+PLAN_SATISFACTION = 95
+# What a shop of the player's own is measured over: its last finished trading
+# days after the opening, the window the profit model was validated on.
+OWN_PROFIT_DAYS = 14
+# The days after its first sale a new shop still earns below its steady
+# state (research RAMP.md: satisfaction starts at 50, new staff climb 0.6 an
+# hour); the board's OS_RAMP holds the factors.
+RAMP_DAYS = 5
+# The shops a new one would take demand from, measured over their last week.
+SALES_DAYS = 7
+# FurnitureStoreManagerDialog: one flat fee per furniture delivery contract.
+FURNITURE_DELIVERY_FEE = 250
+# The item type bits that meet a customer demand (the items bundle's flags).
+MUSIC_FLAG, SEATING_FLAG, SINK_FLAG, TOILET_FLAG = 1024, 4096, 16777216, 33554432
+# WorkoutVarietyCustomerDemand: a gym's machines train this many distinct
+# WorkoutExercise.workoutTypes (research NOTES.md, customer demands).
+WORKOUT_VARIETY = 5
+# Interior elements, floor slots and wall slots of each layout, read from the
+# interiorDesigns of real saves (research NOTES.md, section 3); a layout the
+# player rents is read from their own save instead. Wall counts vary by one or
+# two between saves of the same layout.
+LAYOUT_SLOTS = {
+    "A1": (121, 75, 61), "A2": (176, 120, 74), "B1": (102, 54, 49), "C1": (290, 225, 84),
+    "C2": (306, 225, 114), "D2": (416, 345, 95), "F1": (158, 96, 82), "J1": (444, 360, 107),
+    "K1": (789, 660, 183), "L1": (294, 204, 114), "M1": (1296, 1131, 212),
+    "R1": (2575, 1947, 1019), "S1": (2356, 1821, 943),
+}
+
+
+def _plan_initial(build_at_start, model: str | None, size_cap, type_slug: str, sqm, products) -> float:
+    """The start of every open hour's arrivals for a store the model plans:
+    _initial_customers(), shared with the staffing assistant's ceiling. An
+    office starts from its building's customer capacity whatever build the
+    game started on: every office in the saves checked on 29 Sep 2026, a game
+    started on build 2701 among them, bills at the rate that capacity gives
+    (check_profit_model.py), not its floor times the fee's sales ratio."""
+    if model == "office":
+        return _initial_customers(CAPPED_INITIAL_BUILD, size_cap, type_slug, sqm, products)
+    return _initial_customers(build_at_start, size_cap, type_slug, sqm, products)
+
+
+def demand_with(providers: int, default_price: float) -> float:
+    """A product's expected neighbourhood demand with `providers` sellers
+    (ProductMarketHelper.CalculateDemand): 100 less a step per seller past the
+    few the item's price makes room for, drawn one below or at it, and 29 to
+    34 once it bottoms out."""
+    opt = optimal_providers(default_price)
+    base = 100 - (providers * 100) // opt
+    return min(100.0, base - 0.5) if base >= 30 else 31.5
+
+
+def optimal_providers(default_price: float) -> int:
+    """Item.GetOptimalProviders: how many sellers a neighbourhood holds before
+    demand starts to fall, fewer for dear goods."""
+    if not default_price:
+        return 7
+    return min(math.ceil(math.sqrt(1300 / default_price)), 7)
+
+
+def decor_route(elements: int, floor_slots: int, wall_slots: int, materials: dict, target: int) -> dict | None:
+    """The cheapest paid walls and floors that lift a bare shell to `target`.
+
+    The game's score (InteriorScoreCalculator) is the floor of the average of
+    two parts: the spend per interior element, at most 100, and the share of
+    slots with a paid material. Every paid slot adds to both, so the cheapest
+    route paints the cheapest kind of slot first. `materials` is
+    ba_item_prices.json's table; only materials the designer sells count. None
+    when the layout's slots are unknown or the target cannot be reached.
+    """
+    if not elements or not floor_slots and not wall_slots:
+        return None
+    if target <= 0:
+        return {"floors": 0, "walls": 0, "floor": None, "wall": None, "cost": 0, "score": 0}
+
+    def cheapest(kind):
+        paid = [(m["p"], uuid) for uuid, m in materials.items()
+                if m.get("t") == kind and m.get("b") and (m.get("p") or 0) > 0]
+        return min(paid) if paid else None
+
+    floor, wall = cheapest(1), cheapest(2)
+    kinds = sorted([k for k in ((floor, floor_slots, "floor"), (wall, wall_slots, "wall")) if k[0]],
+                   key=lambda k: k[0][0])
+    slots = floor_slots + wall_slots
+    painted = {"floor": 0, "wall": 0}
+    spend = 0.0
+    for (price, _uuid), room, kind in kinds:
+        for _ in range(room):
+            if math.floor((min(spend / elements, 100) + 100 * sum(painted.values()) / slots) / 2) >= target:
+                break
+            painted[kind] += 1
+            spend += price
+    score = math.floor((min(spend / elements, 100) + 100 * sum(painted.values()) / slots) / 2)
+    if score < target:
+        return None
+    return {"floors": painted["floor"], "walls": painted["wall"],
+            "floor": floor[1] if floor and painted["floor"] else None,
+            "wall": wall[1] if wall and painted["wall"] else None,
+            "floorPrice": floor[0] if floor else None, "wallPrice": wall[0] if wall else None,
+            "cost": money(spend), "score": score}
+
+
+def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=None) -> list:
+    """What a 100% outfitted store of a type holds, as shopping-list lines.
+
+    Each line is {"item", "qty", "group", "why"}: `group` is "req" (the
+    type's requirements, one each), "cap" (the more of a capacity station it
+    takes for its customers an hour to cover the building's `cap`), "dem" (one
+    item per customer demand the type makes) or "shelf" (the displays), and
+    `why` what the line answers: a requirement's name, a demand, or the
+    products a display holds. Every item is one somebody sells, at its default
+    price, and made for the type where the item names the types it is for;
+    the cheapest one that does the job wins.
+
+    The displays are `copied` -- (item, qty, products) from the player's own
+    site of the type and layout -- and, for every product the type sells that
+    those do not hold (all of them with nothing to copy), enough of its
+    cheapest display for the building's customers an hour: a single one would
+    cap the whole shop at its own rate (the game groups shelf capacity per
+    product), and the profit model sells the type's whole range. A station
+    that must stand on or beside other furniture (a computer on a desk, with a
+    chair) takes the cheapest of each placement requirement's group. A gym's
+    workout variety is WORKOUT_VARIETY distinct workout types among its
+    machines. The interior-design demand is walls and floors, not an item.
+    """
+    t = (rules.get("types") or {}).get(type_slug) or {}
+    furniture = rules.get("furniture") or {}
+    table = prices.get("items") or {}
+    products = rules.get("products") or {}
+    cap = cap[0] if isinstance(cap, (list, tuple)) else cap
+    cap = int(cap or 0)
+
+    def price(name):
+        return float((table.get(name) or {}).get("p") or 0)
+
+    def flags(name):
+        return int((table.get(name) or {}).get("t") or 0)
+
+    def facts(name):
+        return furniture.get(name) or {}
+
+    kind = type_slug.removeprefix("ba:businesstype_")
+
+    def sold(name, typed=True):
+        """On sale, and made for this type where the item says what it is for
+        (the designer's categories): a liquor store gets no cinema register.
+        Those tags only sort the catalogue (FurnitureTagMatcher), never where
+        a piece may stand, so an item that answers a customer demand (a
+        speaker, a sink) is any the stores sell: `typed` False."""
+        fits = facts(name).get("bt")
+        return price(name) > 0 and bool(facts(name).get("v")) and (not typed or not fits or kind in fits)
+
+    def mounts(name):
+        """What a station has to be attached to: the cheapest sold piece of
+        each placement requirement's group (a desk and a chair for a
+        computer). A table written before the groups is one group."""
+        groups = facts(name).get("m") or []
+        if groups and not isinstance(groups[0], list):
+            groups = [groups]
+        out = []
+        for group in groups:
+            under = [m for m in group if sold(m)]
+            # Where the designer made pieces for this type, one of those; else
+            # one the station's own store sells, bought with it on the same
+            # delivery (a computer's chair from the computer shop, not the
+            # beach towel that also seats and costs least).
+            stores = set(facts(name).get("v") or ())
+            under = ([m for m in under if kind in (facts(m).get("bt") or ())]
+                     or [m for m in under if stores & set(facts(m).get("v") or ())] or under)
+            if under:
+                out.append(min(under, key=lambda m: (price(m), m)))
+        return out
+
+    def unit_cost(name):
+        return price(name) + sum(price(under) for under in mounts(name))
+
+    def cheapest(names, typed=True):
+        names = [n for n in names if sold(n, typed)]
+        return min(names, key=lambda n: (unit_cost(n), n)) if names else None
+
+    def sized(names):
+        """The station that covers `cap` customers an hour for the least."""
+        best = None
+        for n in _in_order(set(names)):
+            if not sold(n):
+                continue
+            rate = facts(n).get("c") or 0
+            qty = max(1, math.ceil(cap / rate)) if rate and cap else 1
+            key = (qty * unit_cost(n), -rate, n)
+            if best is None or key < best[0]:
+                best = (key, n, qty)
+        return (best[1], best[2]) if best else (None, 0)
+
+    lines = []
+
+    def add(item, qty, group, why):
+        if not item or qty <= 0:
+            return
+        lines.append({"item": item, "qty": int(qty), "group": group, "why": why})
+        for under in mounts(item):
+            lines.append({"item": under, "qty": int(qty), "group": group, "why": "mount"})
+
+    def held():
+        return {line["item"] for line in lines}
+
+    shelf_products = []
+    for req in t.get("rq") or ():
+        if req.get("any") or req.get("lic"):
+            continue  # a product on a shelf (the displays), or a fee paid in game
+        if req.get("i"):
+            names = [n for n in req["i"] if n in furniture]
+            if not names:
+                # A requirement for stock on a shelf (a hairdresser's hair-care
+                # product) is a display for that product.
+                shelf_products.extend(n for n in req["i"] if n in products)
+                continue
+        elif req.get("t"):
+            names = [n for n, row in table.items() if flags(n) & req["t"] and n in furniture]
+        else:
+            continue
+        name = req.get("n") or ""
+        if req.get("sq"):
+            item = cheapest(names)
+            qty = min(math.ceil(float(sqm or 0) / req["sq"]), req.get("mx") or 1) if sqm else 1
+            add(item, max(1, qty), "req", name)
+            continue
+        item, qty = sized(names)
+        add(item, 1, "req", name)
+        if qty > 1:
+            add(item, qty - 1, "cap", name)
+
+    demands = [d for d, weight in t.get("dm") or () if weight and weight > 0]
+
+    def has(pred):
+        return any(pred(n) for n in held())
+
+    for demand in demands:
+        if demand == "music" and not has(lambda n: flags(n) & MUSIC_FLAG):
+            add(cheapest([n for n in furniture if flags(n) & MUSIC_FLAG], False), 1, "dem", demand)
+        elif demand == "seating" and not has(lambda n: flags(n) & SEATING_FLAG):
+            add(cheapest([n for n in furniture if flags(n) & SEATING_FLAG], False), 1, "dem", demand)
+        elif demand == "sink" and not has(lambda n: flags(n) & SINK_FLAG):
+            add(cheapest([n for n in furniture if flags(n) & SINK_FLAG], False), 1, "dem", demand)
+        elif demand == "employeeuniforms" and not has(lambda n: "uniform" in (facts(n).get("x") or ())):
+            add(cheapest([n for n in furniture if "uniform" in (facts(n).get("x") or ())], False), 1, "dem", demand)
+        elif demand in ("toilet", "toiletprivacy") and not has(lambda n: flags(n) & TOILET_FLAG):
+            # One stall meets both: it is a toilet, and the first toilet found
+            # carries the privacy tag. A plain toilet beside it could be the
+            # one found first and fail the privacy demand.
+            private = "toiletprivacy" in demands
+            pool = [n for n in furniture if flags(n) & TOILET_FLAG
+                    and (not private or "privacy" in (facts(n).get("x") or ()))]
+            add(cheapest(pool, False), 1, "dem", "toilet+privacy" if private and "toilet" in demands else demand)
+        elif demand == "workoutvariety":
+            # The cheapest machine of each workout type the gym does not train
+            # yet, until WORKOUT_VARIETY distinct types stand in it.
+            trained = {facts(n).get("wt") for n in held() if facts(n).get("wt") is not None}
+            offer = {}
+            for n in _in_order({n for n in furniture if facts(n).get("wt") is not None}):
+                if sold(n) and facts(n)["wt"] not in trained:
+                    key = (unit_cost(n), n)
+                    if facts(n)["wt"] not in offer or key < offer[facts(n)["wt"]][0]:
+                        offer[facts(n)["wt"]] = (key, n)
+            for _key, n in sorted(offer.values())[:max(0, WORKOUT_VARIETY - len(trained))]:
+                add(n, 1, "dem", demand)
+
+    # A cinema's or a theatre's audience sits: the seats made for the venue
+    # (the cheapest a seat), enough for the building's customers an hour,
+    # shared across a cinema's screens so each screen seats its part.
+    if t.get("b") in ("cinema", "theater") and cap:
+        seats = [n for n in furniture if (facts(n).get("st") or 0) > 0 and kind in (facts(n).get("bt") or ()) and sold(n)]
+        if seats:
+            screens = sum(line["qty"] for line in lines if line["why"] == "cinemascreen") or 1
+            for seat, qty in _cheapest_cover(math.ceil(cap / screens), {n: (facts(n)["st"], unit_cost(n)) for n in seats}):
+                add(seat, screens * qty, "cap", "seats")
+
+    covered = set()
+    for item, qty, held_products in copied or ():
+        add(item, qty, "shelf", list(held_products) or "storage")
+        covered.update(held_products)
+    # Every product the model sells needs a display: the copied shelves' own,
+    # else enough of its cheapest. A display several products share is summed
+    # first and added once, so what it stands on counts it whole.
+    shelves = {}
+    for p in [*(p for p, _impact in t.get("i") or ()), *shelf_products]:
+        row = products.get(p) or {}
+        if p in covered or row.get("s") or row.get("k") or p in (t.get("f"), t.get("fw")):
+            continue  # shown already, or a service, a ticket or an entrance fee: no shelf
+        shows = [n for n, f in furniture.items() if p in (f.get("h") or ()) and (f.get("c") or 0) > 0]
+        item, qty = sized(shows)
+        if not item:
+            continue
+        got = shelves.setdefault(item, [0, []])
+        got[0] += qty
+        got[1].append(p)
+    for item, (qty, held_products) in shelves.items():
+        add(item, qty, "shelf", held_products)
+    return lines
+
+
+def plan_layout(row: dict) -> str | None:
+    """What a plan's outfit is kept by: a building's layout (size and version,
+    a premises row's `layout` or a ba_buildings.json row). A cinema or a
+    theatre has no floor plan, so no `layout`, but each version seats its own
+    crowd (S1 150, S3 100): its size and version from the building table.
+    The board reads the same key (osLayout(), from `venues`)."""
+    if "layout" in row or "size" in row:
+        if row.get("layout"):
+            return row["layout"]
+        street, _, number = str(row.get("key") or "").partition("#")
+        found = load_buildings().get((street, int(number))) if number.isdigit() else None
+        return plan_layout(found) if found else row.get("size")
+    if row.get("z") and row.get("v") is not None and not _layout(row):
+        return f"{row['z']}{row['v']}"
+    return _layout(row) or row.get("z")
+
+
+def _venue_caps(names: Names) -> dict:
+    """{size and version: customer capacity} for the cinemas and theatres
+    (S1 150, S2 125, S3 100; R1 200 ...), from the help text _door_caps()
+    reads by letter alone."""
+    out, section = {}, None
+    code = re.compile(r"^\*\s*\*\*([A-Z]+\d+)\*\*:.*?/\s*([\d,]+)\s*customer capacity", re.I)
+    for line in (names.locale.get("help_building_types_content") or "").split("\n"):
+        line = line.strip()
+        head = _CAP_SECTION_RE.match(line)
+        if head:
+            section = head.group(1).strip().lower()
+            continue
+        size = code.match(line)
+        if size and section in ("cinema", "theater"):
+            out[size.group(1).upper()] = int(size.group(2).replace(",", ""))
+    return out
+
+
+def _building_row(reg: dict) -> dict:
+    return load_buildings().get((reg.get("StreetName"), reg.get("StreetNumber"))) or {}
+
+
+def _cheapest_cover(need: int, pieces: dict) -> list:
+    """[(piece, count)] whose places add up to `need` or more for the least:
+    `pieces` is {piece: (places, price)}. Six four-seat rows and a single seat
+    can beat seven rows."""
+    if need <= 0 or not pieces:
+        return []
+    top = need + max(places for places, _price in pieces.values())
+    best = [(0.0, None)] + [(math.inf, None)] * top
+    for total in range(1, top + 1):
+        for name in sorted(pieces):
+            places, price = pieces[name]
+            if places <= total and best[total - places][0] + price < best[total][0]:
+                best[total] = (best[total - places][0] + price, name)
+    total = min(range(need, top + 1), key=lambda n: (best[n][0], n))
+    counts = collections.Counter()
+    while total > 0 and best[total][1]:
+        name = best[total][1]
+        counts[name] += 1
+        total -= pieces[name][0]
+    return sorted(counts.items())
+
+
+def _setup_items(lines: list) -> list:
+    """Outfit lines as setup_cost()'s (item, price paid) pairs: nothing is paid
+    yet, so every piece counts at its default price."""
+    return [(line["item"], None) for line in lines for _ in range(line["qty"])]
+
+
+def _layout_slots(save: Save, regs: list, prices: dict) -> dict:
+    """{layout: (elements, floor slots, wall slots)}: LAYOUT_SLOTS, with each
+    layout the player rents read off its own interiorDesigns."""
+    table = load_buildings()
+    materials = prices.get("materials") or {}
+    out = dict(LAYOUT_SLOTS)
+    for reg in regs:
+        layout = _layout(table.get((reg.get("StreetName"), reg.get("StreetNumber"))) or {})
+        if not layout:
+            continue
+        designs = list(save.items(reg.get("interiorDesigns")))
+        floors = walls = 0
+        for design in designs:
+            for slot in save.items((save.deref(design) or {}).get("materials")):
+                kind = (materials.get(slot.get("MaterialID")) or {}).get("t") if isinstance(slot, dict) else None
+                floors += kind == 1
+                walls += kind == 2
+        if designs and floors:
+            out[layout] = (len(designs), floors, walls)
+    return out
+
+
+def _copied_shelving(save: Save, reg: dict, type_slug: str, rules: dict) -> list:
+    """The displays and stock shelves at one of the player's own sites, as
+    (item, count, products it holds for the type) -- what a plan of the same
+    type and layout copies."""
+    furniture = rules.get("furniture") or {}
+    sells = {p for p, _impact in ((rules.get("types") or {}).get(type_slug) or {}).get("i") or ()}
+    counts = collections.Counter()
+    for holder in save.items(reg.get("itemInstances")):
+        item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
+        name = (item or {}).get("itemName")
+        if name:
+            counts[name] += 1
+    out = []
+    for name in _in_order(counts):
+        facts = furniture.get(name) or {}
+        holds = sorted(sells & set(facts.get("h") or ()))
+        if holds or "storage" in (facts.get("x") or ()):
+            out.append((name, counts[name], holds))
+    return out
+
+
+def required_placed(placed: collections.Counter, type_slug: str, rules: dict, prices: dict, sqm,
+                    available=None, stocked=None) -> list:
+    """What a business of a type still lacks of its opening requirements.
+
+    `placed` counts the item names standing in it. Each row is [requirement
+    name, needed, placed]: a requirement is met by any item of its named set
+    or carrying its tag, one of them, or for a per-area one (sinks and toilet
+    stalls in an office) one per `sq` m², at most `mx` when the rule has one.
+    The stock shelf every shop needs (`any`) is met by a display for a product
+    the type sells. `available` is
+    the registration's cachedAvailableProducts, when the save has it: a
+    product the shop lists as available meets either requirement even where
+    the displays are not known to hold it. A requirement that names a product
+    is met only by that availability or by the product actually on a display
+    (`stocked`, the cargo in the placed items): an empty shelf can hold it but
+    does not. A fee paid in game (`lic`) is not furniture and has no row.
+    """
+    t = (rules.get("types") or {}).get(type_slug) or {}
+    furniture = rules.get("furniture") or {}
+    table = prices.get("items") or {}
+    sells = {p for p, _impact in t.get("i") or ()}
+    offered = set(available or ())
+
+    def holding(products) -> int:
+        return sum(n for name, n in placed.items() if products & set((furniture.get(name) or {}).get("h") or ()))
+
+    on_display = set(stocked or ())
+
+    out = []
+    for req in t.get("rq") or ():
+        if req.get("lic"):
+            continue
+        if req.get("any"):
+            have = holding(sells)
+            if not have and sells & offered:
+                have = 1
+            out.append([req.get("n") or "", 1, have])
+            continue
+        if req.get("i") and any(n not in furniture for n in req["i"]):
+            products = {n for n in req["i"] if n not in furniture}
+            have = sum(placed[n] for n in req["i"] if n in furniture and n in placed)
+            if not have and products & (offered | on_display):
+                have = 1
+            out.append([req.get("n") or "", 1, have])
+            continue
+        if req.get("i"):
+            names = set(req["i"])
+        elif req.get("t"):
+            names = {n for n in placed if int((table.get(n) or {}).get("t") or 0) & req["t"]}
+        else:
+            continue
+        need = 1
+        if req.get("sq"):
+            need = max(1, math.ceil(float(sqm) / req["sq"])) if sqm else 1
+            if req.get("mx"):
+                need = min(need, req["mx"])
+        out.append([req.get("n") or "", need, sum(placed[n] for n in names if n in placed)])
+    return out
+
+
+def _placed_items(save: Save, reg: dict) -> collections.Counter:
+    """The furniture standing in a rented building, per item name."""
+    placed = collections.Counter()
+    for holder in save.items(reg.get("itemInstances")):
+        item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
+        if item and item.get("itemName"):
+            placed[item["itemName"]] += 1
+    return placed
+
+
+def _stocked_products(save: Save, reg: dict, furniture: dict) -> set:
+    """The products actually on a building's displays: cargo with an amount,
+    held by an item whose furniture facts (`h`) list that product. Stock in
+    storage shelving is not on display."""
+    out = set()
+    for holder in save.items(reg.get("itemInstances")):
+        item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
+        shows = set((furniture.get((item or {}).get("itemName")) or {}).get("h") or ())
+        for cargo in save.items((item or {}).get("cargoInstances")):
+            if cargo.get("itemName") in shows and (cargo.get("amount") or 0) > 0:
+                out.add(cargo["itemName"])
+    return out
+
+
+def _opened_stores(save: Save, regs: dict, businesses: list, types: dict, rules: dict, prices: dict) -> dict:
+    """{site key: {"placed", "req", "seating"}} for every business of a planned
+    type: how much furniture stands in it, which opening requirements it meets
+    and whether anything to sit on does. The checklist until opening reads it
+    (Open a store, step 5)."""
+    out = {}
+    table = prices.get("items") or {}
+    for b in businesses:
+        reg = regs.get(b.get("key"))
+        if reg is None or b.get("typeSlug") not in types or b.get("status") == "vacant":
+            continue
+        placed = _placed_items(save, reg)
+        available = {n for n in save.items(reg.get("cachedAvailableProducts")) if isinstance(n, str)}
+        out[b["key"]] = {
+            "placed": sum(placed.values()),
+            "req": required_placed(placed, b["typeSlug"], rules, prices, _building_row(reg).get("m"), available,
+                                   _stocked_products(save, reg, rules.get("furniture") or {})),
+            "seating": any(int((table.get(n) or {}).get("t") or 0) & SEATING_FLAG for n in placed),
+        }
+    return out
+
+
+def _store_market(save: Save, rules: dict, items: set, mpm: float, agent: int) -> dict:
+    """What each product meets in each neighbourhood today.
+
+    Per item: its default price, sales ratio, whether it has a neighbourhood
+    demand, whether it is a service, how many sellers the market holds before
+    demand falls (`opt`) and the import unit cost -- wholesale x the save's
+    import price index x the difficulty's price multiplier x the best
+    purchasing agent's discount, never the income statement's goods, which
+    are near nothing where the player's own factories supply. Per
+    neighbourhood: the sellers there now (the player's included), whether a
+    rival company sells it (no monopoly bonus then), the lowest price asked
+    there (a rival's for what it stocks, the player's as set), and the last day
+    anyone sold it there (NeighborhoodDemand.lastDaySold), which a first
+    seller's hype waits on.
+    """
+    table = load_buildings()
+    products = rules.get("products") or {}
+    idx, sellers, last_sold = {}, {}, {}
+    for entry in save.items(save.root.get("productMarketEntries")):
+        name = entry.get("itemName") if isinstance(entry, dict) else None
+        if name not in items:
+            continue
+        idx[name] = entry.get("importPriceIndex") or 1.0
+        for value in save.items(entry.get("demandValues")):
+            hood = value.get("neighborhood")
+            if hood and hood != GLOBAL_HOOD:
+                sellers[(name, hood)] = int(value.get("providers") or 0)
+                # NeighborhoodDemand.lastDaySold: a hype waits on 21 days without
+                # it. Every save the board reads (MIN_BUILD on) has it; None where one does not.
+                last = value.get("lastDaySold")
+                last_sold[(name, hood)] = int(last) if isinstance(last, (int, float)) else None
+    # The lowest price a customer sees there: the player's own shops at their
+    # configured price, stocked or not (PROFIT_MODEL.md), and a rival's only
+    # for an item on its shelves (cachedAvailableProducts).
+    rival_sells, lowest = set(), {}
+    for reg in save.items(save.root.get("BuildingRegistrations")):
+        if not reg or not reg.get("BusinessName") or reg.get("temporarilyClosed"):
+            continue
+        hood = hood_key(table.get((reg.get("StreetName"), reg.get("StreetNumber"))))
+        if not hood:
+            continue
+        stocked = {n for n in save.items(reg.get("cachedAvailableProducts")) if isinstance(n, str) and n in items}
+        for line in save.items(reg.get("retailPrices")):
+            name = line.get("itemName") if isinstance(line, dict) else None
+            price = _configured_price(line.get("price")) if name in stocked or (
+                reg.get("RentedByPlayer") and name in items) else None
+            if price:
+                lowest[(name, hood)] = min(lowest.get((name, hood), price), price)
+        if reg.get("businessOwnerRivalId"):
+            rival_sells.update((name, hood) for name in stocked)
+    discount = 1 - 0.25 * max(0, min(100, agent)) / 100
+    hoods = _in_order({h for (_n, h) in sellers} | {h for (_n, h) in lowest})
+    out = {}
+    for name in _in_order(items):
+        row = products.get(name) or {}
+        out[name] = {
+            "p": row.get("p") or 0,
+            "r": row.get("r") or 0,
+            "d": row.get("d") or 0,
+            "s": row.get("s") or 0,
+            "opt": optimal_providers(row.get("p") or 0),
+            "cost": round((row.get("w") or 0) * idx.get(name, 1.0) * mpm * discount, 4),
+            **({"only": row["l"]} if row.get("l") else {}),
+            "hoods": {hood: [sellers.get((name, hood), 0), int((name, hood) in rival_sells),
+                             lowest.get((name, hood)), last_sold.get((name, hood))] for hood in hoods},
+        }
+    return out
+
+
+def _own_shops(save: Save, regs: dict, businesses: list, grids: list, stmt_history: list,
+               market: dict, caps: dict, day: int, models: dict) -> dict:
+    """Per business type, each of the player's trading shops as the profit
+    model sees it, with what it really earned.
+
+    What it earned is the average of its last OWN_PROFIT_DAYS finished days
+    after its first day with sales: sales less every unit sold at the import
+    cost, wages, rent, marketing and licensing fees. A shop can stand a few
+    days between its setup and its first sale, and those days hold costs and
+    no sales, so the window starts from the sales, not the lease (research
+    RAMP.md, 3c). The board runs the model over the shop's own building,
+    hours and marketing and puts the two side by side; `k`, for a shop still
+    in its first days, is each window day's distance from that first sale, so
+    the board holds it to its ramp (osDayProfit()).
+    """
+    table = load_buildings()
+    hours = {g["key"]: g.get("open") for g in grids}
+    # An office bills one client an hour per staffed computer, so its own
+    # staffing bounds what it can earn; a shop's stations are the model's.
+    staffed = {g["key"]: g.get("staffed") for g in grids if g.get("office")}
+    out = collections.defaultdict(list)
+    for b in businesses:
+        slug = b.get("typeSlug")
+        reg = regs.get(b["key"])
+        if b.get("status") not in ("retail", "office") or not reg:
+            continue
+        addr = (reg["StreetName"], reg["StreetNumber"])
+        row = table.get(addr) or {}
+        opened = b.get("opened") or 0
+        orders = {e.get("dayNumber"): e for e in save.items(reg.get("orderHistory"))}
+        sold_on = [d for d, by in stmt_history if addr in by and d >= opened and (by[addr].get("TotalSales") or 0) > 0]
+        sold_on += [d for d, e in orders.items() if isinstance(d, int) and d >= opened
+                    and any((s.get("amountSold") or 0) > 0 for s in save.items(e.get("itemSales")))]
+        first = min(sold_on) if sold_on else opened + 1
+        by_day = {d: by[addr] for d, by in stmt_history if addr in by and first < d < day}
+        days = sorted(d for d in by_day if d in orders)[-OWN_PROFIT_DAYS:]
+        if len(days) < 3:
+            continue
+        cost = 0.0
+        sold = collections.Counter()
+        for d in days:
+            for sale in save.items(orders[d].get("itemSales")):
+                name = sale.get("itemName")
+                sold[name] += sale.get("amountSold", 0)
+                cost += sale.get("amountSold", 0) * ((market.get(name) or {}).get("cost") or 0)
+        n = len(days)
+        total = sum(by_day[d].get("TotalSales", 0) - by_day[d].get("SalaryExpenses", 0)
+                    - by_day[d].get("RentExpenses", 0) - by_day[d].get("MarketingExpenses", 0)
+                    - by_day[d].get("LicensingFees", 0) for d in days)
+        door = caps.get(row.get("t"), {}).get(row.get("z"))
+        # What the game starts each hour from for this shop: its own shelves
+        # in an old game, as _plan_site() reads them.
+        initial = _plan_initial(save.root.get("buildNumberAtStart"), models.get(slug), door, slug,
+                                row.get("m") or 0, save.items(reg.get("cachedAvailableProducts")))
+        out[slug].append({
+            "key": b["key"],
+            "hood": b.get("neighbourhood"),
+            "layout": plan_layout(row),
+            "m2": row.get("m"),
+            "cap": door[0] if isinstance(door, list) else door,
+            "initial": round(initial, 4),
+            "promo": b.get("promotion") or 0,
+            "marketing": money(sum(by_day[d].get("MarketingExpenses", 0) for d in days) / n),
+            "open": hours.get(b["key"]),
+            "sat": (b.get("satisfaction") or {}).get("overall"),
+            "actual": money((total - cost) / n),
+            "days": n,
+            **({"k": [d - first for d in days]} if days[0] - first < RAMP_DAYS else {}),
+            **({"staffed": staffed[b["key"]]} if models.get(slug) == "office" and staffed.get(b["key"]) else {}),
+        })
+    return {slug: sorted(rows, key=lambda r: r["key"]) for slug, rows in out.items()}
+
+
+def _own_sales(save: Save, regs: dict, businesses: list, market: dict, day: int) -> dict:
+    """{hood: {item: [[site key, units a day, margin a unit]]}}: what the
+    player's own shops sell of each planned product in each neighbourhood over
+    their last SALES_DAYS days, for the demand a new shop there takes away."""
+    out = collections.defaultdict(lambda: collections.defaultdict(list))
+    for b in businesses:
+        reg = regs.get(b["key"])
+        hood = b.get("neighbourhood")
+        if not reg or not hood or b.get("status") != "retail":
+            continue
+        recent = [e for e in save.items(reg.get("orderHistory")) if e.get("dayNumber", day) < day][-SALES_DAYS:]
+        if not recent:
+            continue
+        units, takings = collections.Counter(), collections.Counter()
+        for entry in recent:
+            for sale in save.items(entry.get("itemSales")):
+                name = sale.get("itemName")
+                if name in market:
+                    units[name] += sale.get("amountSold", 0)
+                    takings[name] += sale.get("totalPrice", 0)
+        for name in _in_order(units):
+            if units[name] <= 0:
+                continue
+            per_unit = takings[name] / units[name] - market[name]["cost"]
+            out[hood][name].append([b["key"], round(units[name] / len(recent), 2), round(per_unit, 2)])
+    return {hood: dict(items) for hood, items in sorted(out.items())}
+
+
+def _finance_facts(save: Save, daily: list, rules: dict) -> dict:
+    """What the banks weigh before they lend (Dialogs.BankDialog.LoanRequest),
+    and their terms.
+
+    The most a bank lends is the lower of its own cap less what the company
+    owes it, and the largest of the player's wealth, a quarter of the last
+    seven days' average profit over the loan's term and, while the tutorial
+    still asks for the first loan, TUTORIAL_LOAN_FLOOR, less everything owed.
+    Wealth (PlayerHelper.GetPersonalWealth) is cash, investment funds, the
+    motor vehicles at their type's price (ba_store_rules.json), the boats at
+    theirs (BOAT_PRICES) and the property bought. A loan is the bank's whose
+    address it names; one at an address that is no bank still counts in
+    what is owed overall.
+    """
+    root = save.root
+    gv = save.deref(root.get("gameVariables")) or {}
+    funds = 0.0
+    for fund in save.items(root.get("investmentFunds")):
+        fund = save.deref(fund) or {}
+        funds += (fund.get("initialDeposit") or 0) + (fund.get("additionalInvestment") or 0) \
+            - (fund.get("withdrawal") or 0) + (fund.get("interestPayment") or 0)
+    property_ = sum((save.deref(e) or {}).get("purchasePrice") or 0 for e in save.items(root.get("realEstate")))
+    prices = rules.get("vehicles") or {}
+    vehicles = sum(prices.get((save.deref(v) or {}).get("vehicleTypeName"), 0)
+                   for v in save.items(root.get("VehicleInstances")))
+    boats = sum(BOAT_PRICES.get((save.deref(b) or {}).get("type"), 0) for b in save.items(root.get("playerBoats")))
+    done = set(save.items(root.get("CompletedQuestEntries")))
+    tutorial = bool(gv.get("tutorialEnabled")) and TUTORIAL_LOAN_OBJECTIVE not in done
+    places = {site_key(addr): bank for bank, (_n, addr) in BANK_PLACES.items()}
+    owed = collections.Counter()
+    for loan in save.items(root.get("Loans")):
+        loan = save.deref(loan) or {}
+        addr = save.address(loan.get("bankAddress"))
+        owed[places.get(site_key(addr)) if addr else None] += loan.get("remainingAmount") or 0
+    last = [d["profit"] for d in daily[-7:]]
+    per_year = gv.get("daysPerYear") or 60
+    banks = []
+    for bank, terms in sorted((rules.get("banks") or {}).items()):
+        name, addr = BANK_PLACES.get(bank, (bank, None))
+        banks.append({
+            "id": bank, "name": name, "key": site_key(addr) if addr else None,
+            "rate": terms.get("r") or 0, "years": terms.get("y") or 0, "max": terms.get("x") or 0,
+            "term": per_year * (terms.get("y") or 0), "owed": money(owed.get(bank, 0)),
+        })
+    return {
+        "cash": money(root.get("Money") or 0),
+        "wealth": money((root.get("Money") or 0) + funds + vehicles + boats + property_),
+        "floor": TUTORIAL_LOAN_FLOOR if tutorial else 0,
+        "profit7": money(sum(last) / 7) if last else 0,
+        "owed": money(sum(owed.values())),
+        "multiplier": round(gv.get("bankInterestMultiplier") or 0.7, 4),
+        "year": per_year,
+        "minimum": LOAN_MINIMUM,
+        "banks": banks,
+    }
+
+
+def _open_store(save: Save, names: Names, regs_list: list, businesses: list, premises: dict,
+                grids: list, stmt_history: list, daily: list, staff: list) -> dict:
+    """The facts Expansion › Open a store plans with (see the section note)."""
+    rules = load_store_rules()
+    if not rules.get("types"):
+        return {}
+    prices = load_item_prices()
+    root = save.root
+    day = root["Day"]
+    gv = save.deref(root.get("gameVariables")) or {}
+    mpm = gv.get("marketPriceMultiplier") or 1.0
+    # The best purchasing agent's skill sets the import discount; a company
+    # with none yet is planned as if it hires a good one, as its shops will.
+    agents = [p.get("level") or 0 for p in staff if p.get("skill") == "ba:skill_purchasingagent"]
+    agent = int(max(agents)) if agents else 100
+    regs = {site_key((r["StreetName"], r["StreetNumber"])): r for r in regs_list}
+    caps = premises.get("caps") or {}
+    buildings = premises.get("buildings") or []
+
+    types, items_used, product_items, models = {}, set(), set(), {}
+    venue_caps = _venue_caps(names)
+    slots = _layout_slots(save, regs_list, prices)
+    build_at_start = root.get("buildNumberAtStart")
+    for slug, t in sorted((rules.get("types") or {}).items()):
+        cat = t.get("b")
+        if not t.get("c") or slug not in RETAIL_TYPES | OFFICE_TYPES or cat not in PLAN_KINDS:
+            continue
+        # The rules reproduce shops and offices; a cinema's screens and seats
+        # and a theatre's actors cap them in ways the model does not follow.
+        model = "office" if slug in OFFICE_TYPES else None if cat in ("cinema", "theater") else "retail"
+        models[slug] = model
+        sells = [[p, round(impact, 4)] for p, impact in t.get("i") or ()]
+        own = [b for b in businesses if b.get("typeSlug") == slug and b.get("status") != "vacant"]
+        layouts, initial = {}, {}
+        for layout in _in_order({plan_layout(b) for b in buildings if b["type"] == cat and plan_layout(b)
+                                 and b["status"] in ("vacant", "rival")}):
+            sample = next(b for b in buildings if b["type"] == cat and plan_layout(b) == layout)
+            source = None
+            same = [b for b in own if b["key"] in regs and plan_layout(_building_row(regs[b["key"]])) == layout]
+            if same:
+                source = max(same, key=lambda b: (sum(s["profit"] for s in (b.get("series") or [])[-7:]), b["key"]))
+            copied = _copied_shelving(save, regs[source["key"]], slug, rules) if source else None
+            # A venue's own version seats its own crowd, not the size's lowest.
+            cap = venue_caps.get(layout, sample.get("cap")) if cat in ("cinema", "theater") else sample.get("cap")
+            lines = outfit_lines(slug, rules, prices, cap, sample.get("m2"), copied)
+            cost = setup_cost(_setup_items(lines), [], sample.get("m2"), 0, prices)
+            items_used.update(line["item"] for line in lines)
+            layouts[layout] = {
+                "lines": [[line["item"], line["qty"], line["group"], line["why"]] for line in lines],
+                "furniture": cost["furniture"],
+                "fee": cost["fee"],
+                "from": source["key"] if source else None,
+            }
+            # The shop fully stocked with the type's range, as the plan has it.
+            initial[layout] = round(_plan_initial(build_at_start, model, cap, slug,
+                                                  sample.get("m2"), [p for p, _i in sells]), 4)
+        if not layouts:
+            continue
+        product_items.update(p for p, _i in sells)
+        product_items.update(x for x in (t.get("f"), t.get("fw")) if x)
+        curve = load_demand_curves()["types"].get(slug) or {}
+        types[slug] = {
+            "cat": cat,
+            "model": model,
+            "products": sells,
+            "fee": t.get("f"),
+            "feeWeekend": t.get("fw"),
+            "amt": t.get("a") or 1,
+            "noOrder": bool(t.get("n")),
+            "days": curve.get("d") or [1.0] * 7,
+            "hours": curve.get("h") or [1.0] * 24,
+            "demands": [[d, w] for d, w in t.get("dm") or ()],
+            "run": len(own),
+            "layouts": layouts,
+            "initial": initial,
+            # An office's hourly wage at skill 0 for the profession it bills.
+            **({"wage": max((PLAN_OFFICE_WAGES.get(k, 0) for k in t.get("sk") or ()), default=0)}
+               if model == "office" else {}),
+        }
+
+    market = _store_market(save, rules, product_items, mpm, agent)
+    # The cheapest walls and floors to each interior score a neighbourhood
+    # asks for (Midtown's 50 today), per layout: {layout: {score: route}}.
+    decor = {}
+    materials = prices.get("materials") or {}
+    targets = sorted({int(h.get("mi") or 0) for h in (rules.get("hoods") or {}).values()} - {0})
+    for layout in _in_order({layout for t in types.values() for layout in t["layouts"]}):
+        # A layout nobody has read is costed as another version of its size.
+        near = layout if layout in slots else next((k for k in sorted(slots) if k[:1] == layout[:1]), None)
+        for target in targets:
+            route = decor_route(*slots[near], materials, target) if near else None
+            if route:
+                decor.setdefault(layout, {})[str(target)] = {**route, **({"like": near} if near != layout else {})}
+    hoods = {}
+    for hood, h in sorted((rules.get("hoods") or {}).items()):
+        shares = (h.get("w") or 0, h.get("m") or 0, h.get("u") or 0)
+        total = sum(shares) or 1
+        hoods[hood] = {
+            # CitizenHelper.Init: the price everyone accepts, as a multiple of
+            # the reference price.
+            "idx": round((1.2 * shares[0] + 1.4 * shares[1] + 1.7 * shares[2]) / total, 4),
+            "strength": h.get("ms") or 0,
+            "demands": h.get("cw") or 0,
+            "interior": h.get("mi") or 0,
+        }
+    furniture = rules.get("furniture") or {}
+    table = prices.get("items") or {}
+    vendors = rules.get("vendors") or {}
+    used_vendors = {v for item in items_used for v in (furniture.get(item) or {}).get("v") or ()}
+    return {
+        "game": {
+            "promo": round(gv.get("baseCustomerPromotionMultiplier") or 0.55, 4),
+            "prices": round(mpm, 4),
+            "wages": round(gv.get("employeeHourlySalaryMultiplier") or 0.7, 4),
+            "tax": gv.get("taxPercentage") or 0,
+            "capInitial": (build_at_start or 0) >= CAPPED_INITIAL_BUILD,
+            "agent": agent,
+            "installFee": INSTALL_FEE_PER_M2,
+            "delivery": FURNITURE_DELIVERY_FEE,
+            "satisfaction": PLAN_SATISFACTION,
+            "wageBase": PLAN_WAGES,
+        },
+        "types": types,
+        "market": market,
+        "hoods": hoods,
+        "decor": decor,
+        "items": {item: {"p": float((table.get(item) or {}).get("p") or 0),
+                         "v": (furniture.get(item) or {}).get("v") or []} for item in _in_order(items_used)},
+        "vendors": {key: vendors[key] for key in _in_order(used_vendors) if key in vendors},
+        "own": _own_shops(save, regs, businesses, grids, stmt_history, market, caps, day, models),
+        "sales": _own_sales(save, regs, businesses, market, day),
+        "built": _opened_stores(save, regs, businesses, types, rules, prices),
+        "campaigns": [list(c) for c in MARKETING_CAMPAIGNS],
+        # Each cinema and theatre: its size and version, and what that seats.
+        "venues": {b["key"]: [plan_layout(b), venue_caps.get(plan_layout(b))]
+                   for b in buildings if b["type"] in ("cinema", "theater") and plan_layout(b)},
+        "finance": _finance_facts(save, daily, rules),
+    }
 
 
 def _hype_exposure(businesses: list, market: dict) -> list:
@@ -17194,6 +18700,14 @@ tr.kid{display:none}
 tr.kid.show{display:table-row;animation:rowin .3s ease}
 @keyframes rowin{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
 tr.kid td:first-child{padding-left:42px}
+/* The portfolio is eleven columns beside the sidebar: tighter cells keep it,
+   Payback included, inside 1280 px, and a chain's name room not to stack. */
+#portfolio th,#portfolio td{padding:10px 6px}
+#portfolio th:first-child,#portfolio td:first-child{padding-left:12px}
+#portfolio tbody td,#portfolio tfoot td{font-size:12.5px}
+#portfolio tbody td.l{font-size:13.5px;min-width:180px}
+#portfolio tr.kid td:first-child{padding-left:36px}
+#portfolio .pb-cell{cursor:help}
 tr.bump td{animation:bump .6s ease}
 @keyframes bump{0%{background:var(--accent-soft)}100%{background:transparent}}
 .grp td{background:var(--raised);font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.06em;color:var(--ink-2);padding:7px 12px}
@@ -19403,6 +20917,315 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
   body:not(.sd-rail) .nx-ctl{margin-left:0}
 }
 @media (prefers-reduced-motion:reduce){.sd,body.sd-open .sd,.sd-scrim,.sd .ss-q{transition:none}.sd .ss-q:hover .ss-lens{animation:none}}
+/* ----- Expansion › Open a store (drawOpenStore()), ported from the approved
+   canvas (mockup/open-store on branch open-store-canvas, OS_CSS); every class
+   is os-, and #demCellPop is the Demand cell's popover ----- */
+.os-ico{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.os-lab{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.os-dim{color:var(--ink-3)}
+.os-gap{margin:22px 0 0}
+/* Buttons read as text until a class says otherwise; :where() keeps this below every os- rule. */
+:where(#secOpen) button{font:inherit;color:inherit}
+/* the six steps, and the plan picker ------------------------------------------ */
+.os-ctl{display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px;margin:0}
+.os-ctl{min-width:0;max-width:100%}
+.os-ctl .aside{margin-left:auto;display:flex;align-items:center;gap:10px;min-width:0;max-width:100%}
+.os-steps{display:flex;align-items:center;flex-wrap:wrap;gap:2px}
+.os-steps button{display:flex;align-items:center;gap:8px;height:34px;padding:0 12px 0 6px;border:0;border-radius:17px;background:none;color:var(--ink-3);font-size:13px;font-weight:500;white-space:nowrap;cursor:pointer}
+.os-steps button:hover:not(:disabled){color:var(--ink)}
+.os-steps button:disabled{cursor:default;opacity:.75}
+.os-steps button i{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;border:1px solid var(--rule);font:600 11px/1 "IBM Plex Mono",monospace;font-style:normal}
+.os-steps button i svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.os-steps button.done{color:var(--ink-2)}
+.os-steps button.done i{background:var(--accent-soft);border-color:transparent;color:var(--accent)}
+.os-steps button.on{background:var(--surface);color:var(--ink);box-shadow:inset 0 0 0 1px var(--rule)}
+.os-steps button.on i{background:var(--ink);border-color:var(--ink);color:var(--ground)}
+.os-steps button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.os-steps .sep{width:10px;height:1px;background:var(--rule)}
+.os-planpick{position:relative;display:inline-flex;align-items:center;gap:8px;min-width:0;max-width:100%;height:34px;padding:0 10px 0 12px;border:1px solid var(--rule);border-radius:9px;background:var(--surface);color:var(--ink-2);font-size:12.5px;white-space:nowrap}
+.os-planpick select{appearance:none;-webkit-appearance:none;min-width:0;max-width:200px;text-overflow:ellipsis;padding:0 16px 0 0;border:0;background:none;color:var(--ink);font:600 12.5px/1 Archivo,sans-serif;cursor:pointer}
+.os-planpick select:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:3px}
+.os-planpick option{background:var(--surface);color:var(--ink)}
+.os-planpick svg{position:absolute;right:10px;width:12px;height:12px;stroke:var(--ink-3);fill:none;stroke-width:2;transform:rotate(90deg);pointer-events:none}
+/* the plan, one strip ---------------------------------------------------------- */
+.os-pb{display:grid;grid-template-columns:1fr 1.5fr 1.15fr 1.15fr;margin-top:22px;border:1px solid var(--rule-soft);border-radius:12px;background:var(--surface)}
+.os-pb>div{display:flex;flex-direction:column;gap:6px;min-width:0;padding:13px 16px 12px;border-left:1px solid var(--rule-soft)}
+.os-pb>div:first-child{border-left:0}
+.os-pb b{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.os-pb b.m{font:500 17px/1.1 "IBM Plex Mono",monospace;letter-spacing:-.01em}
+.os-pb small{font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.os-pb .dim{color:var(--ink-3);font-weight:500}
+/* buttons and links -------------------------------------------------------------- */
+.os-cta{display:inline-flex;align-items:center;justify-content:center;gap:9px;height:40px;padding:0 16px;border-radius:10px;border:1px solid var(--accent);background:var(--accent);color:var(--on-accent);font:600 13.5px/1 Archivo,sans-serif;text-decoration:none;white-space:nowrap;cursor:pointer}
+.os-cta:hover{filter:brightness(1.08);color:var(--on-accent)}
+.os-cta svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.os-cta.sm{height:34px;padding:0 13px;font-size:12.5px;border-radius:9px}
+.os-cta[aria-disabled="true"]{opacity:.5;cursor:default;filter:none}
+.os-btn{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 12px;border-radius:9px;border:1px solid var(--rule);background:var(--surface);color:var(--ink);font:500 12.5px/1 Archivo,sans-serif;text-decoration:none;white-space:nowrap;cursor:pointer}
+.os-btn:hover{border-color:var(--ink-3);color:var(--ink)}
+.os-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.os-cta:focus-visible,.os-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.os-link{color:var(--ink-2);text-decoration:none;border-bottom:1px solid var(--rule);font-size:12.5px}
+.os-link:hover{color:var(--ink);border-color:var(--ink-3)}
+/* step 5: until opening ------------------------------------------------------------- */
+.os-prog{display:flex;align-items:center;gap:14px;margin-top:26px}
+.os-prog h2{margin:0;font-size:17px;font-weight:600}
+.os-prog .m{flex:0 0 180px;height:6px;border-radius:3px;background:var(--rule);overflow:hidden}
+.os-prog .m i{display:block;height:100%;width:var(--w);background:var(--accent);border-radius:3px}
+.os-prog .c{font:500 13px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.os-prog .aside{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--ink-3)}
+.os-live{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-2);white-space:nowrap}
+.os-live i{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
+.os-live.off i{background:var(--ink-3);box-shadow:0 0 0 4px color-mix(in srgb,var(--ink-3) 20%,transparent)}
+.os-cks{display:flex;flex-direction:column;margin-top:14px;border-top:1px solid var(--rule)}
+.os-ck{display:grid;grid-template-columns:30px 34px minmax(0,1fr) auto;gap:14px;align-items:center;min-height:68px;padding:10px 4px;border-bottom:1px solid var(--rule-soft)}
+.os-ck .st{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;border:1.5px solid var(--rule)}
+.os-ck .st svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.os-ck.done .st{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.os-ck.part .st{border-color:var(--warn);background:conic-gradient(var(--warn) 0 var(--p),transparent var(--p) 100%)}
+.os-ck .ic{display:grid;place-items:center;width:34px;height:34px;border-radius:9px;background:var(--raised);color:var(--ink-2)}
+.os-ck .ic svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.os-ck.done .ic{color:var(--ink-3)}
+.os-ck .tx b{display:block;font-size:14px;font-weight:600}
+.os-ck.done .tx b{color:var(--ink-2);font-weight:500}
+.os-ck .tx small{display:block;margin-top:3px;font-size:12.5px;color:var(--ink-3);line-height:1.4}
+.os-ck .tx small .w{color:var(--warn)}
+.os-ck .tx small .ok{color:var(--accent)}
+.os-ck .act{display:flex;align-items:center;gap:8px;justify-content:flex-end}
+.os-ingame{display:flex;align-items:flex-start;gap:9px;max-width:360px;padding:9px 12px;border-radius:9px;border:1px dashed var(--rule);font-size:12.5px;line-height:1.45;color:var(--ink-2);text-align:left}
+.os-ingame svg{width:15px;height:15px;margin-top:1px;flex:none;stroke:var(--ink-3);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.os-ingame b{color:var(--ink);font-weight:600}
+.os-gate{display:flex;align-items:center;gap:12px;margin-top:18px;padding:12px 14px;border-radius:10px;border:1px dashed var(--rule);font-size:12.5px;color:var(--ink-2)}
+.os-gate b{color:var(--ink);font-weight:600}
+.os-gate .os-btn{margin-left:auto}
+.os-payback{margin-top:18px;font-size:12.5px;color:var(--ink-3)}
+.os-payback button.os-link{padding:0;border:0;border-bottom:1px solid var(--rule);background:none;cursor:pointer}
+@media(max-width:760px){.os-prog{flex-wrap:wrap}.os-prog .aside{margin-left:0;flex-wrap:wrap}.os-ck{grid-template-columns:30px minmax(0,1fr)}.os-ck .ic{display:none}.os-ck .act{grid-column:2;justify-content:flex-start}}
+/* cards and headings ---------------------------------------------------------------- */
+.os-h{display:flex;align-items:center;gap:12px;margin:34px 0 14px}
+.os-h h2{margin:0;font-size:17px;font-weight:600;letter-spacing:-.01em}
+.os-h .c{font:500 12.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.os-card{padding:18px 20px;border-radius:12px;background:var(--surface);border:1px solid var(--rule-soft);min-width:0}
+.os-card h3{display:flex;align-items:center;gap:8px;margin:0 0 12px;font-size:14.5px;font-weight:600}
+.os-two{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:24px;align-items:start;margin-top:28px}
+.os-tag{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 7px;border-radius:5px;background:var(--raised);border:1px solid var(--rule-soft);color:var(--ink-2);font:500 11.5px/1 Archivo,sans-serif;white-space:nowrap}
+.os-tag.dem{background:var(--info-soft);border-color:transparent;color:var(--info)}
+.os-tag.req{background:var(--accent-soft);border-color:transparent;color:var(--accent)}
+.os-tag.cap{background:var(--warn-soft);border-color:transparent;color:var(--warn)}
+/* step 1: what ------------------------------------------------------------------------ */
+.os-dl td{padding:11px 10px}
+.os-dl td.l b{display:block;font-family:Archivo,sans-serif;font-weight:600;color:var(--ink)}
+.os-dl td.l{font-family:Archivo,sans-serif}
+.os-dl .sc{display:inline-grid;place-items:center;width:40px;height:26px;border-radius:6px;font:500 12px/1 "IBM Plex Mono",monospace;color:var(--ink)}
+.os-dl td.go{width:1%;padding-right:2px}
+.os-dl td.go button{display:inline-grid;place-items:center;width:30px;height:30px;padding:0;border-radius:8px;border:1px solid var(--rule);background:none;color:var(--ink-2);cursor:pointer}
+.os-dl td.go button:hover{border-color:var(--ink-3);color:var(--ink)}
+.os-dl td.go button svg{width:14px;height:14px}
+.os-more{margin:12px 0 0}
+.os-types{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.os-type{display:flex;align-items:center;gap:8px;min-height:40px;padding:0 12px;border-radius:9px;border:1px solid var(--rule-soft);background:var(--ground);color:var(--ink);font-size:13px;font-weight:500;text-align:left;cursor:pointer}
+.os-type:hover{border-color:var(--ink-3)}
+.os-type small{margin-left:auto;font:500 11px/1 "IBM Plex Mono",monospace;color:var(--accent)}
+.os-sub{margin:16px 0 8px;font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.os-plans{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
+.os-plan{display:flex;align-items:center;border-bottom:1px solid var(--rule-soft)}
+.os-plango{flex:1;display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1.2fr) 130px 20px;gap:16px;align-items:center;min-height:62px;padding:8px 6px;border:0;background:none;text-align:left;cursor:pointer}
+.os-plango:hover{background:var(--surface)}
+.os-plango b{display:block;font-size:14px;font-weight:600}
+.os-plango small{display:block;margin-top:3px;font-size:12px;color:var(--ink-3)}
+.os-plango .v{font:500 13px/1.3 "IBM Plex Mono",monospace;text-align:right}
+.os-plango>svg{width:14px;height:14px;stroke:var(--ink-3)}
+.os-x{width:30px;height:30px;margin:0 4px;padding:0;border:0;border-radius:8px;background:none;color:var(--ink-3);font-size:18px;line-height:1;cursor:pointer}
+.os-x:hover{background:var(--surface);color:var(--neg)}
+.os-meter{display:block;height:4px;margin-top:7px;border-radius:2px;background:var(--rule);overflow:hidden}
+.os-meter i{display:block;height:100%;width:var(--w);background:var(--accent);border-radius:2px}
+/* the Demand cell's popover -------------------------------------------------------------- */
+.os-pop{position:fixed;z-index:60;width:300px;padding:16px;border-radius:12px;background:var(--surface);border:1px solid var(--rule);box-shadow:0 24px 60px -18px #000d}
+:root[data-theme="light"] .os-pop{box-shadow:0 24px 60px -24px #1a1f1c77}
+.os-pop[hidden]{display:none}
+.os-pop::before{content:"";position:absolute;left:calc(var(--arrow,150px) - 6px);top:-7px;width:12px;height:12px;background:var(--surface);border-left:1px solid var(--rule);border-top:1px solid var(--rule);transform:rotate(45deg)}
+.os-pop.up::before{top:auto;bottom:-7px;transform:rotate(225deg)}
+.os-pop h4{margin:0;font-size:15px;font-weight:600}
+.os-pop .fx{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0 14px}
+.os-pop .fx div{display:flex;flex-direction:column;gap:5px}
+.os-pop .fx b{font:500 16px/1 "IBM Plex Mono",monospace}
+.os-pop .acts{display:flex;flex-direction:column;gap:8px}
+.os-pop .acts .os-cta,.os-pop .acts .os-btn{justify-content:center}
+.heat .cell[aria-expanded="true"]{outline:2px solid var(--ink);outline-offset:-2px;z-index:2}
+.os-pop .acts svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+/* step 2: where, the finder in plan mode ------------------------------------------------ */
+.os-where{margin-top:22px}
+.os-finder{position:relative;border-radius:14px}
+/* step 3: investment ------------------------------------------------------------------ */
+.os-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:16px;margin-top:26px}
+.os-toolbar .aside{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--ink-3)}
+.os-toolbar .aside b{font:500 13px/1 "IBM Plex Mono",monospace;color:var(--ink)}
+.os-seg{display:inline-flex;padding:3px;gap:2px;border:1px solid var(--rule);border-radius:9px;background:var(--surface)}
+.os-seg button{display:inline-flex;align-items:center;gap:8px;height:30px;padding:0 12px;border:0;border-radius:6px;background:none;color:var(--ink-2);font-size:12.5px;font-weight:500;white-space:nowrap;cursor:pointer}
+.os-seg button:hover{color:var(--ink)}
+.os-seg button.on{background:var(--ink);color:var(--ground)}
+.os-seg button b{font:500 12px/1 "IBM Plex Mono",monospace}
+.os-seg button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.os-seg.big button{height:40px;padding:0 16px;font-size:13.5px}
+.os-seg.big button b{font-size:13.5px}
+.os-inv{margin-top:16px}
+.os-inv th,.os-inv td{padding:9px 12px}
+.os-inv td.l{font-family:Archivo,sans-serif;font-size:13.5px}
+.os-inv td.w{text-align:left;font-family:Archivo,sans-serif}
+.os-inv td .sub{margin-top:2px}
+.os-inv tr.grp td{padding:14px 12px 7px;background:none;border-bottom:1px solid var(--rule);font:500 10.5px/1.3 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);text-align:left;white-space:normal}
+.os-inv tr.grp td span{margin-left:10px;letter-spacing:0;text-transform:none;font-family:Archivo,sans-serif;font-size:12px;color:var(--ink-3)}
+.os-inv tr.grp td b{float:right;letter-spacing:0;color:var(--ink-2);font-weight:500}
+.os-inv td.free{color:var(--accent)}
+.os-inv tfoot td{padding:14px 12px;font:500 15px/1.2 "IBM Plex Mono",monospace;border-bottom:0}
+.os-inv tfoot td.l{font-family:Archivo,sans-serif;font-weight:600}
+.os-self{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:24px;align-items:start;margin-top:16px}
+.os-store{border:1px solid var(--rule-soft);border-radius:12px;background:var(--surface);overflow:hidden}
+.os-store+.os-store,.os-store+.os-gap{margin-top:14px}
+.os-sh{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--rule-soft)}
+.os-store>.os-sh:last-child{border-bottom:0}
+.os-sh .k{display:grid;place-items:center;flex:none;width:26px;height:26px;border-radius:13px;background:#6ea8ff;color:#0d100f;font:600 12px/1 "IBM Plex Mono",monospace}
+.os-sh .k.p{background:var(--ink-2);color:var(--ground)}
+.os-sh b{font-size:14px;font-weight:600}
+.os-sh small{display:block;margin-top:2px;font-size:12px;color:var(--ink-3)}
+.os-sh .t{margin-left:auto;font:500 15px/1 "IBM Plex Mono",monospace}
+.os-store table th,.os-store table td{padding:7px 16px;font-size:12.5px}
+.os-store table td.l{font-family:Archivo,sans-serif}
+.os-store table td.w{text-align:left;font-family:Archivo,sans-serif}
+.os-store table tr.del td{color:var(--ink-3);border-bottom:0}
+.os-total{display:flex;align-items:baseline;gap:14px;margin-top:18px;padding:16px;border-radius:12px;border:1px solid var(--rule);background:var(--surface)}
+.os-total b{margin-left:auto;font:500 22px/1 "IBM Plex Mono",monospace}
+.os-total span{font-size:14px;font-weight:600}
+.os-total small{font-size:12px;color:var(--ink-3)}
+.os-mini{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;border:1px solid var(--rule-soft);background:#0d100f}
+.os-mini svg{display:block;width:100%;height:100%}
+.os-pin{position:absolute;transform:translate(-50%,-100%);display:flex;flex-direction:column;align-items:center;pointer-events:none}
+.os-pin b{display:grid;place-items:center;min-width:22px;height:22px;padding:0 5px;border-radius:11px;background:#6ea8ff;color:#0d100f;font:600 11px/1 "IBM Plex Mono",monospace;box-shadow:0 0 0 3px #0d100fcc}
+.os-pin i{width:2px;height:8px;background:#6ea8ff}
+.os-pin.new b{background:#e9ece6;color:#0d100f;letter-spacing:.08em;font-size:10px}
+.os-pin.new i{background:#e9ece6}
+.os-pin em{margin-top:3px;padding:2px 6px;border-radius:4px;background:#0d100fdd;color:#e9ece6;font:500 10.5px/1.2 Archivo,sans-serif;font-style:normal;white-space:nowrap}
+.os-maplist{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.os-maplist div{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:center;font-size:12.5px;color:var(--ink-2)}
+.os-maplist i{display:grid;place-items:center;width:20px;height:20px;border-radius:10px;background:#6ea8ff;color:#0d100f;font:600 10.5px/1 "IBM Plex Mono",monospace;font-style:normal}
+.os-maplist i.n{background:var(--ink);color:var(--ground);font-size:8.5px}
+.os-maplist b{font:500 12.5px/1 "IBM Plex Mono",monospace;color:var(--ink)}
+/* step 4: break even ----------------------------------------------------------------- */
+.os-be{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:22px;margin-top:22px;align-items:start}
+.os-big{display:flex;flex-wrap:wrap;gap:12px 28px;margin-bottom:12px}
+.os-big div{display:flex;flex-direction:column;gap:6px}
+.os-big b{font:500 30px/1 "IBM Plex Mono",monospace;letter-spacing:-.02em}
+.os-big .alt b{color:var(--ink-2);font-size:22px}
+.os-chart{display:block;width:100%;height:auto;overflow:visible}
+.os-chart text{font:500 10.5px "IBM Plex Mono",monospace;fill:var(--ink-3)}
+.os-chart .ax{stroke:var(--rule);stroke-width:1}
+.os-chart .grid{stroke:var(--rule-soft);stroke-width:1}
+.os-chart .line{fill:none;stroke:var(--accent);stroke-width:2.2;stroke-linejoin:round;stroke-linecap:round}
+.os-chart .band{fill:var(--accent);opacity:.1}
+.os-chart .inv{stroke:var(--warn);stroke-width:1.5;stroke-dasharray:3 4}
+.os-chart .inv2{stroke:var(--ink-2);stroke-width:1.5;stroke-dasharray:3 4}
+.os-chart .hit{fill:var(--ground);stroke:var(--accent);stroke-width:2}
+.os-chart .lbl{fill:var(--ink);font-size:11.5px}
+.os-chart .lbl.w{fill:var(--warn)}
+.os-chart .lbl.i{fill:var(--ink-2)}
+.os-sites{display:flex;flex-direction:column}
+.os-site{display:grid;grid-template-columns:minmax(0,1fr) 110px;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--rule-soft);font-size:13px}
+.os-site b{display:block;font-weight:600}
+.os-site small{display:block;margin-top:2px;font-size:11.5px;color:var(--ink-3)}
+.os-site .v{font:500 13px/1 "IBM Plex Mono",monospace;text-align:right}
+.os-site .v.neg{color:var(--neg)}
+.os-site.avg{border-bottom:0;padding-top:12px}
+.os-site.avg .v{font-size:15px;color:var(--accent)}
+.os-site.avg .v.neg{color:var(--neg)}
+.os-own .os-site{grid-template-columns:minmax(0,1fr) 110px 76px 48px}
+.os-site .bar{display:block;height:6px;border-radius:3px;background:var(--rule);overflow:hidden}
+.os-site .bar i{display:block;height:100%;background:var(--accent);border-radius:3px}
+.os-ownc{margin-top:22px}
+.os-ownc .quiet{margin:0 0 6px}
+.os-note{margin:12px 0 0;font-size:12.5px;line-height:1.5;color:var(--ink-2)}
+.os-assume{display:inline-block;margin:12px 0 0;font-size:12.5px;color:var(--ink-3);border-bottom:1px dotted var(--ink-3);cursor:help}
+.os-none{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:22px;border:1px dashed var(--rule);border-radius:12px}
+.os-none>div{display:flex;flex-direction:column;gap:7px;padding:16px 18px;border-left:1px dashed var(--rule)}
+.os-none>div:first-child{border-left:0}
+.os-none b{font:500 20px/1.1 "IBM Plex Mono",monospace}
+.os-none b.dim{color:var(--ink-3);font-family:Archivo,sans-serif;font-size:15px;font-weight:600}
+.os-none small{font-size:12px;color:var(--ink-3)}
+/* the financing panel, in the break-even step --------------------------------------------- */
+.os-fin{margin-top:22px}
+.os-finhead{display:flex;align-items:center;gap:14px}
+.os-finhead h3{margin:0}
+.os-finhead h3 svg{width:17px;height:17px;stroke:var(--ink-2)}
+.os-switch{margin-left:auto;display:inline-flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-2);cursor:pointer}
+.os-switch input{width:16px;height:16px;accent-color:var(--accent)}
+.os-fin>.quiet{margin:10px 0 0}
+.os-finctl{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.os-fr{display:grid;grid-template-columns:78px minmax(0,1fr);gap:10px;align-items:center;min-height:34px}
+.os-fr>span:first-child{font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.os-fr .os-seg{justify-self:start;flex-wrap:wrap}
+.os-amount{display:flex;align-items:center;flex-wrap:wrap;gap:10px 14px}
+.os-num{display:inline-flex;align-items:center;gap:4px;height:34px;padding:0 10px;border:1px solid var(--rule);border-radius:9px;background:var(--ground);font:500 13px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.os-num input{width:110px;border:0;background:none;color:var(--ink);font:inherit}
+.os-num input:focus{outline:none}
+.os-num:focus-within{border-color:var(--accent)}
+.os-amount input[type=range]{flex:1;min-width:160px;accent-color:var(--accent)}
+.os-amount small{flex-basis:100%;font-size:12px;color:var(--ink-3)}
+.os-finfacts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin-top:16px;border:1px solid var(--rule-soft);border-radius:12px;background:var(--ground)}
+.os-finfacts>div{display:flex;flex-direction:column;gap:6px;min-width:0;padding:13px 16px 12px;border-left:1px solid var(--rule-soft)}
+.os-finfacts>div:first-child{border-left:0}
+.os-finfacts b{font:500 17px/1.1 "IBM Plex Mono",monospace}
+.os-finfacts small{font-size:12px;line-height:1.4;color:var(--ink-3)}
+/* step 6: after opening ------------------------------------------------------------------ */
+.os-roi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-top:22px}
+.os-roi .kpi .v{font-size:25px}
+.os-roi .kpi .v small{font-family:Archivo,sans-serif;font-size:13px;letter-spacing:0;color:var(--ink-3)}
+.os-roi .kpi .v.os-word{font-size:17px;line-height:1.25;letter-spacing:-.01em}
+.os-roi .kpi .sub small{color:var(--ink-3)}
+.os-roi .kpi .os-meter{height:5px;margin-top:10px}
+.os-roic{margin-top:18px}
+.os-chart .plan{fill:none;stroke:var(--ink-3);stroke-width:1.6;stroke-dasharray:5 5}
+.os-chart .fc{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-dasharray:5 5;opacity:.7}
+.os-chart .today{stroke:var(--ink-2);stroke-width:1}
+.os-chart .os-dbar{fill:var(--accent);opacity:.3}
+.os-chart .os-dbar.neg{fill:var(--neg)}
+.os-pvsa{margin-top:0}
+.os-pvsa th,.os-pvsa td{padding:10px 12px}
+.os-pvsa td.l{font-family:Archivo,sans-serif;font-size:13.5px}
+.os-pvsa td .sub{margin-top:2px}
+.os-pvsa tr.os-sum td{font-weight:600}
+.os-pvsa td.d{color:var(--accent)}
+.os-pvsa td.dn{color:var(--warn)}
+.os-state{display:flex;align-items:baseline;gap:12px;margin:34px 0 12px}
+.os-state b{font:600 11px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;color:var(--accent)}
+.os-state b.w{color:var(--warn)}
+.os-state span{font-size:13px;color:var(--ink-2)}
+.os-done{display:flex;align-items:center;flex-wrap:wrap;gap:14px;padding:14px 16px;border-radius:12px;border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);background:color-mix(in srgb,var(--accent) 7%,transparent);font-size:13px;color:var(--ink-2)}
+.os-done .ic{display:grid;place-items:center;flex:none;width:30px;height:30px;border-radius:50%;background:var(--accent);color:var(--on-accent)}
+.os-done .ic svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.os-done b{color:var(--ink);font-weight:600;font-size:14px}
+.os-done>span:nth-child(2){flex:1;min-width:220px}
+.os-done .os-btn,.os-links .os-btn{gap:4px}
+.os-done .os-btn svg,.os-links .os-btn svg{width:12px;height:12px}
+.os-links{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:22px}
+.os-pb.os-pb2{grid-template-columns:1fr 1.5fr}
+.os-rng{border-bottom:1px dotted currentColor;cursor:help}
+.os-plan.closed .os-plango>span:first-child b{color:var(--ink-2)}
+.os-roiloan .os-meter{margin-top:4px}
+@media (max-width:1100px){
+  .os-two,.os-be,.os-self{grid-template-columns:minmax(0,1fr)}
+  .os-roi{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .os-pb,.os-finfacts{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .os-pb>div:nth-child(3),.os-finfacts>div:nth-child(3){border-left:0}
+  .os-pb>div:nth-child(n+3),.os-finfacts>div:nth-child(n+3){border-top:1px solid var(--rule-soft)}
+}
+@media (max-width:620px){
+  .os-types{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .os-none{grid-template-columns:minmax(0,1fr)}
+  .os-none>div{border-left:0;border-top:1px dashed var(--rule)}
+  .os-none>div:first-child{border-top:0}
+  .os-plango{grid-template-columns:minmax(0,1fr) 90px 16px}
+  .os-plango>span:nth-child(2){display:none}
+  .os-inv,.os-dl,.os-pvsa{display:block;overflow-x:auto}
+}
 
 </style>
 <script>
@@ -19532,6 +21355,18 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
         <div class="aside"><span class="seg" id="marketTools" aria-label="Market views" data-tt-aria-label="gr.market.views"></span></div></div>
       <div class="waves" id="movers"></div>
       <div class="heat" id="market"></div>
+    </section>
+
+    <!-- Expansion › Open a store (drawOpenStore(), docs/open-a-store-scope.md):
+         the steps and the plan picker in #osCtl (beside the view's tabs), the
+         plan's strip, the embedded finder for step 2 (#osFinderMap, a
+         CityMapView in plan mode, kept between draws) and the step's body. -->
+    <section class="sec rv" id="secOpen" data-sub="open">
+      <h2 class="nx-sr" data-tt="gr.os.title">Open a store</h2>
+      <div class="sechead os-ctl" id="osCtl" data-view-ctl="expansion/open"></div>
+      <div id="osStrip"></div>
+      <div id="osWhere" class="os-where" hidden><div class="os-finder" id="osFinderMap"></div></div>
+      <div id="osBody"></div>
     </section>
 
     <section class="sec rv" id="secPlan" data-sub="plan">
@@ -20588,6 +22423,9 @@ const VIEWS = {
       [tt("co.col.theft", "Theft"), b=>b.theft?fmt(-b.theft):"—", "", b=>b.theft],
       [tt("co.col.profit", "Profit"), b=>`<span class="${sign(b.profit)}">${fmt(b.profit)}</span>`, "", b=>b.profit],
       [tt("co.col.margin", "Margin"), b=>b.margin===null?"—":`${b.margin.toFixed(1)}%`, "", b=>b.margin??-999],
+      /* When the investment is earned back (paybackCell()); a cost centre's
+         counts in its chain's row, not its own. */
+      [tt("co.col.payback", "Payback"), b=>paybackCell(paybackSite(b.key)), "", b=>paybackRank(paybackSite(b.key))],
     ]; },
     /* The point of the chain row: revenue, every cost, and the margin the whole
        operation actually runs at. */
@@ -20596,11 +22434,12 @@ const VIEWS = {
                  fmt(-c.cogs), fmt(-c.wages), fmt(-c.rent),
                  fmt(-c.marketing), c.theft?fmt(-c.theft):"—",
                  `<b class="${sign(c.profit)}">${fmt(c.profit)}</b>`,
-                 c.margin===null?"—":`${c.margin.toFixed(1)}%`],
-    chainKey: (c, i) => i === 2 ? c.change ?? -999 : VIEWS.pnl.cols[i][3](c),
+                 c.margin===null?"—":`${c.margin.toFixed(1)}%`,
+                 paybackCell(paybackChain(c), true)],
+    chainKey: (c, i) => i === 2 ? c.change ?? -999 : i === 10 ? paybackRank(paybackChain(c)) : VIEWS.pnl.cols[i][3](c),
     total: bs => ["", fmt(sum(bs,"revenue")), "", fmt(-sum(bs,"cogs")), fmt(-sum(bs,"wages")),
                   fmt(-sum(bs,"rent")), fmt(-sum(bs,"marketing")), fmt(-sum(bs,"theft")),
-                  `<span class="${sign(sum(bs,"profit"))}">${fmt(sum(bs,"profit"))}</span>`, ""],
+                  `<span class="${sign(sum(bs,"profit"))}">${fmt(sum(bs,"profit"))}</span>`, "", ""],
   },
   ops: {
     get label(){ return tt("co.ops.label", "Operations"); },
@@ -22266,7 +24105,7 @@ const SEC_PAGE = {
      opens the view that took their place. */
   secShops:["supply","deliveries"], secWarehouses:["supply","imports"], secFactories:["supply","production"],
   secLogistics:["supply","imports"], secStock:["supply","deliveries"], sbStrip:["supply","changes"],
-  secMarket:["growth","market"], secPlan:["growth","plan"], secIngredients:["growth","plan"],  // changed for growth: no secExpand
+  secMarket:["growth","market"], secOpen:["growth","open"], secPlan:["growth","plan"], secIngredients:["growth","plan"],  // changed for growth: no secExpand
   secProducts:["company","products"], secPrices:["company","products"], secStandards:["company","standards"],
   secGoals:["company","milestones"],
   /* Staffing: the schedules, the staff needs (main's Staff page, issue #89,
@@ -23514,6 +25353,101 @@ function xlKind(w, n, slug){
   const type = /^ba:[a-z0-9_]+$/i.test(slug || "") ? `\u27e6${slug}|${w}\u27e7` : w;
   return tt("co.chain.kind", {one: "{n} {kind}", other: "{n} {kinds}"}, {n, kind: w, kinds: many, kind_name: type});
 }
+/* --- payback: the investment against the profit so far ----------------------
+   _payback() sends every site's and chain's outcome in both install modes;
+   the reader picks the mode, kept per character. The installation firm is the
+   default: the higher, more careful figure. */
+const PAYBACK_KEY = "ba_dash_payback";
+const paybackStore = () => `${PAYBACK_KEY}:${(D && D.meta && D.meta.character) || "default"}`;
+function paybackMode(){
+  try { if(localStorage.getItem(paybackStore()) === "self") return "self"; } catch(e) {}
+  return "firm";
+}
+function paybackSetMode(mode){
+  try { localStorage.setItem(paybackStore(), mode); } catch(e) {}
+}
+const paybackSite = key => ((D.payback || {}).sites || {})[key] || null;
+/* A chain is filed under its first site's key. */
+const paybackChain = c => ((D.payback || {}).chains || {})[(c.sites || [])[0]] || null;
+/* The outcome in the mode on screen; null for a cost centre and a vacant lease. */
+const paybackOf = row => row && row[paybackMode()] || null;
+/* Python sends it: the opening plus the payback period for a site, and for a
+   chain the first day its members, each from its own opening, pay it back. */
+const paybackWindowDay = o => o && o.state === "window" && Number.isFinite(o.day) ? o.day : null;
+function paybackSentence(o, row){
+  switch(o && o.state){
+    case "reached": return tt("co.payback.reached", {one: "Break even on day {day}, {n} day after opening",
+      other: "Break even on day {day}, {n} days after opening"}, {day: o.day, n: o.after});
+    case "latest": return tt("co.payback.latest", "Paid back by day {day} at the latest", {day: o.day});
+    case "togo": return tt("co.payback.togo", {one: "{n} day to go at recent profit", other: "{n} days to go at recent profit"}, {n: o.days});
+    case "never": return tt("co.payback.never", "Not paying back at current profit");
+    /* Opened before the save's record: what it earned before is unknown, so
+       the whole payback period at recent profit stands in. */
+    case "window": {
+      const day = paybackWindowDay(o);
+      if(day === null) return tt("co.payback.window.none", "Opened before the save's record");
+      return day <= ((D.meta || {}).day || 0)
+        ? tt("co.payback.window.past", "Paid back around day {day}, an estimate from recent profit: earlier profit is outside the save's record", {day})
+        : row && row.sites && row.sites.length > 1
+          ? tt("co.payback.window.ahead.chain", "Pays back around day {day} at recent profit, counted from each site's opening: earlier profit is outside the save's record", {day})
+          : tt("co.payback.window.ahead", "Pays back around day {day} at recent profit, counted from the opening: earlier profit is outside the save's record", {day});
+    }
+    case "unknown": return tt("co.payback.unknown", "No trading day finished yet");
+  }
+  return "";
+}
+/* The column's short form; the sentence is the cell's tip. */
+function paybackShort(o){
+  switch(o && o.state){
+    case "reached": return tt("co.payback.cell.reached", "day {day}", {day: o.day});
+    case "latest": return tt("co.payback.cell.latest", "≤ day {day}", {day: o.day});
+    case "togo": return tt("co.payback.cell.togo", "{n:,} d", {n: o.days});
+    case "never": return tt("co.payback.cell.never", "no payback");
+    case "window": { const day = paybackWindowDay(o); return day === null ? "—" : tt("co.payback.cell.window", "~day {day}", {day}); }
+  }
+  return "—";
+}
+/* What the figure rests on, for a tip: the investment and its parts in the
+   mode on screen, the profit so far, the recent rate. */
+function paybackTip(row, chain){
+  const c = row.cost || {}, mode = paybackMode(), w = c[mode] || 0;
+  const cost = chain ? tt("co.payback.cost.chain", "Invested {w:$} across the chain's sites, deposits included.", {w})
+    : c.billed && mode === "firm" ? tt("co.payback.cost.billed", "Invested {w:$}: the installation firm's bill {bill:$} and the deposit {dep:$}.", {w, bill: c.billed, dep: c.deposit})
+    : mode === "self" ? tt("co.payback.cost.self", "Invested {w:$}: furniture {f:$}, walls and floors {m:$}, deposit {dep:$}.", {w, f: c.furniture, m: c.materials, dep: c.deposit})
+    : tt("co.payback.cost.firm", "Invested {w:$}: furniture {f:$}, the installation firm's fee {fee:$}, deposit {dep:$}.", {w, f: c.furniture, fee: c.fee, dep: c.deposit});
+  const profit = row.since === null || row.since === undefined ? ""
+    : row.exact ? tt("co.payback.profit", "Profit since day {day}: {w:$}.", {day: row.since, w: row.profit})
+    : tt("co.payback.profit.window", "Profit since day {day}, the oldest day the save keeps: {w:$}.", {day: row.since, w: row.profit});
+  const rate = row.rate === null || row.rate === undefined ? ""
+    : tt("co.payback.rate", "Recent profit {w:$} a day.", {w: row.rate});
+  const o = paybackOf(row);
+  const kept = o && o.kept ? tt("co.payback.kept", "The break-even day is remembered from an earlier save.") : "";
+  return [cost, profit, rate, kept].filter(Boolean).join(" ");
+}
+/* A table cell: the short form, the whole sentence and its basis on hover. */
+function paybackCell(row, chain){
+  const o = paybackOf(row);
+  if(!o) return "—";
+  if(o.state === "unknown" || (o.state === "window" && paybackWindowDay(o) === null))
+    return `<span class="pb-cell quiet" data-tip="${attr(tt("co.payback.tip", "{what}. {basis}", {what: paybackSentence(o, row), basis: paybackTip(row, chain)}))}" tabindex="0">—</span>`;
+  return `<span class="pb-cell${o.state === "never" ? " neg" : ""}" data-tip="${attr(tt("co.payback.tip", "{what}. {basis}", {what: paybackSentence(o, row), basis: paybackTip(row, chain)}))}" tabindex="0">${paybackShort(o)}</span>`;
+}
+/* Sorting: the day it paid back or will, the ones that never will last. */
+function paybackRank(row){
+  const o = paybackOf(row);
+  if(!o) return -1;
+  if(o.state === "reached" || o.state === "latest") return o.day;
+  if(o.state === "togo") return ((D.meta || {}).day || 0) + o.days;
+  if(paybackWindowDay(o) !== null) return paybackWindowDay(o);
+  return o.state === "never" ? 1e9 : -1;
+}
+/* Arrived from search: the table may be wider than the page, so the Payback
+   column is scrolled into sight. */
+function paybackIntoView(){
+  const t = $("portfolio"), wrap = t && t.parentElement;
+  if(wrap && wrap.scrollWidth > wrap.clientWidth) wrap.scrollLeft = wrap.scrollWidth;
+}
+
 function chainRow(c, v){
   const cells = v.chain(c);
   const note = c.external
@@ -23551,8 +25485,9 @@ function outsideRows(span){
     : tt("co.outside.other", "other {w:$}", {w});
   const tip = tt("co.outside.tip", "Day {day}: {parts}. The company pays these, no site does.",
     {day: last.day, parts: parts.map(([id, n]) => part(id, n)).join(", ")});
-  const row = (label, n, cls, t) => `<tr class="td-outside${cls}"><td class="l" colspan="${span - 2}"${
-    t ? ` data-tip="${attr(t)}" tabindex="0"` : ""}>${label}</td><td><span class="${sign(n)}">${fmt(n)}</span></td><td></td></tr>`;
+  /* The profit column is the third from the end, before Margin and Payback. */
+  const row = (label, n, cls, t) => `<tr class="td-outside${cls}"><td class="l" colspan="${span - 3}"${
+    t ? ` data-tip="${attr(t)}" tabindex="0"` : ""}>${label}</td><td><span class="${sign(n)}">${fmt(n)}</span></td><td></td><td></td></tr>`;
   return row(tt("co.outside.costs", "Company costs outside sites"), -outside, "", tip)
     + row(tt("co.outside.profit", "Company profit"), last.profit, " td-net",
       tt("co.outside.profit.tip", "The same figure as the Overview's Profit yesterday"));
@@ -23560,10 +25495,15 @@ function outsideRows(span){
 
 function drawPortfolio(){
   const v = VIEWS[view];
+  /* Profit & loss carries the Payback column, and with it the install mode. */
+  const payback = view === "pnl" && !!D.payback;
   $("portHead").innerHTML = sechead(tt("co.port.title", "Portfolio"), {
     why: tt("co.port.why", "{note}. Click a chain to open its sites, a site to open its detail. Click a column to sort chains and their sites by it.",
       {note: v.note}),
+    aside: payback ? `<span id="paybackMode" aria-label="${attr(tt("co.payback.mode.label", "How the setup is valued"))}"></span>` : null,
   });
+  if(payback) seg("paybackMode", [["firm", tt("co.payback.mode.firm", "Installation firm")], ["self", tt("co.payback.mode.self", "Self-installation")]],
+    paybackMode, paybackSetMode, () => { drawPortfolio(); if(siteOpen) drawSite(); });
   /* Profit & loss on Results, Operations on Standards: the view's tab is the
      switch (ROUTES["businesses/standards"]). */
   const byKey = {};
@@ -26284,6 +28224,14 @@ function xlArrive(sel, hit = ""){
   setTimeout(() => lit.forEach(el => el.classList.remove("sp-hit")), 3200);
 }
 
+/* The site's payback in the install mode the portfolio shows, one line under
+   its tiles; its basis on hover. A cost centre has none of its own. */
+function spPayback(b){
+  const row = paybackSite(b.key), o = paybackOf(row);
+  if(!o) return "";
+  return `<p class="sp-read sp-pay" data-tip="${attr(paybackTip(row))}" tabindex="0">${
+    tt("sp.payback.line", "Payback: {what}", {what: paybackSentence(o, row)})}</p>`;
+}
 function drawSite(){
   const sec = $("secDetail");
   spViewCache = null;
@@ -26743,6 +28691,7 @@ function drawSite(){
     ${spFinds(finds, b, kind)}
     ${vacant ? "" : spBody || `
     <div class="sstats rv" data-block="tiles" id="sp-tiles">${stats}</div>
+    ${sp ? spPayback(b) : ""}
     ${sp ? `<div class="duo sec"${kind === "retail" ? ` style="grid-template-columns:3fr 2fr"` : ""}>
       <section class="rv" data-block="standards" id="sp-standards" data-readzone>
         ${sechead(tt("sp.sat.title", "Satisfaction"), {icon: "standards", why: office
@@ -30160,6 +32109,1692 @@ function drawMarket(){
   wireTips();
 }
 
+/* --- Expansion › Open a store ------------------------------------------------
+   docs/open-a-store-scope.md, phase 2. A plan walks four steps: what to open
+   (a type, or a Demand cell), where (Find a location, embedded and fixed to
+   the type), the investment for a 100% outfitted store in that building in
+   either install mode, and when it breaks even, with a loan if the reader
+   wants one. Step 5 is the checklist until opening (osUntilHtml()); step 6,
+   after opening (osRoiHtml()), holds the plan against the payback once a
+   business of the planned type stands at its address. A plan stays after its
+   store opens: the list keeps it, marked open, as the plan history.
+
+   Python sends the facts (_open_store(): each type's outfit per layout, what
+   every product meets in every neighbourhood, the player's own shops, the
+   banks); everything the reader moves is worked out here: the profit model
+   runs in osModel() over the building on screen, the best of the 64
+   marketing mixes is picked for it, and the loan is priced as the game does.
+   The plans are kept per character in localStorage, like the finder's saved
+   searches, and every read and write is guarded: a browser that refuses
+   storage keeps the plans for the visit. */
+const OS_KEY = "ba_open_store_v1";
+/* Twelve plans still on their way to opening; the plans whose store opened
+   are history, kept apart up to OS_MAX_HISTORY (osCapPlans()). */
+const OS_MAX_PLANS = 12, OS_MAX_HISTORY = 24;
+const OS_STEPS = ["what", "where", "investment", "breakeven", "opening", "open"];
+/* The range the estimate is shown as: the p25 and p90 of the validation's
+   actual ÷ model on real shops (research PROFIT_MODEL.md, section 6). */
+const OS_LOW = 0.8, OS_HIGH = 1.05;
+let osPlans = [], osPlansFor = null, osCur = null, osStep = "what", osFinder = null, osBest = new Map(), osBestFor = null, osNotice = "";
+const osFacts = () => (typeof D !== "undefined" && D && D.openStore) || {};
+const osStore = () => `${OS_KEY}:${(D && D.meta && D.meta.character) || "default"}`;
+const OS_ICON = {
+  store: '<path d="M4 10v10h16V10"></path><path d="M3 10l2-6h14l2 6"></path><path d="M3 10c0 1.7 1.3 3 3 3s3-1.3 3-3c0 1.7 1.3 3 3 3s3-1.3 3-3c0 1.7 1.3 3 3 3s3-1.3 3-3"></path><path d="M10 20v-5h4v5"></path>',
+  paint: '<rect x="4" y="3" width="14" height="6" rx="1.5"></rect><path d="M18 6h2v5h-8v3"></path><rect x="10.5" y="14" width="3" height="7" rx="1"></rect>',
+  key: '<circle cx="8" cy="15" r="4"></circle><path d="M11 12l9-9M16 7l3 3"></path>',
+  bank: '<path d="M3 10h18L12 4z"></path><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18"></path>',
+  shelves: '<path d="M4 3v18M20 3v18M4 8h16M4 14h16M4 20h16"></path><path d="M8 8V5.5M12 8V5M16 14v-2.5M9 14v-3"></path>',
+  people: '<circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path>',
+  shirt: '<path d="M8 4L3 7l2 4 2-1v10h10V10l2 1 2-4-5-3a4 4 0 0 1-8 0z"></path>',
+  heart: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"></path>',
+  megaphone: '<path d="M3 10v4h3l6 4V6L6 10z"></path><path d="M16 9a4 4 0 0 1 0 6M19 6.5a8 8 0 0 1 0 11"></path>',
+  truck: '<path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.5" cy="17.5" r="1.8"></circle><circle cx="16.5" cy="17.5" r="1.8"></circle>',
+  factory: '<path d="M3 20V10l5 3V10l5 3V6h4v14z"></path><path d="M17 20h4V4h-4M3 20h18"></path>',
+  hire: '<circle cx="10" cy="8" r="3.5"></circle><path d="M3.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6"></path>',
+  game: '<path d="M7 8.5h10a4.5 4.5 0 0 1 4.4 5.4l-.6 2.9a2.2 2.2 0 0 1-3.8 1L15 15.5H9l-2 2.3a2.2 2.2 0 0 1-3.8-1l-.6-2.9A4.5 4.5 0 0 1 7 8.5z"></path><path d="M8.5 11.5v3M7 13h3M15.5 12.3v.01M17.3 13.8v.01"></path>',
+  plug: '<path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"></path>',
+  tick: '<path d="M5 12.5l4.5 4.5L19 7"></path>',
+  chev: '<path d="M9 6l6 6-6 6"></path>',
+};
+const osIcon = name => OS_ICON[name] ? `<svg class="os-ico" viewBox="0 0 24 24" aria-hidden="true">${OS_ICON[name]}</svg>` : icon(name);
+
+/* --- the plans, per character -------------------------------------------- */
+function osLoad(){
+  const who = osStore();
+  if(osPlansFor === who) return;
+  osPlansFor = who; osPlans = []; osCur = null; osStep = "what"; osBest = new Map();
+  let dirty = false;
+  try{
+    const raw = JSON.parse(localStorage.getItem(who));
+    if(raw && Array.isArray(raw.plans)){
+      osPlans = raw.plans.filter(p => p && typeof p.id === "string" && typeof p.type === "string")
+        .map(p => ({id: p.id, type: p.type, hood: typeof p.hood === "string" ? p.hood : null,
+          key: typeof p.key === "string" ? p.key : null, mode: p.mode === "self" ? "self" : p.mode === "firm" ? "firm" : null,
+          finance: p.finance && typeof p.finance === "object" ? {on: !!p.finance.on,
+            amount: p.finance.amount == null || !Number.isFinite(+p.finance.amount) ? null : Math.max(0, +p.finance.amount),
+            bank: typeof p.finance.bank === "string" ? p.finance.bank : null} : {on: false, amount: null, bank: null},
+          step: OS_STEPS.includes(p.step) ? p.step : "what", made: +p.made || null, snap: osSnapClean(p.snap),
+          opened: Number.isFinite(p.opened) ? p.opened : null, paid: !!p.paid}));
+      /* The stores that opened since the last visit are history before the caps count. */
+      dirty = osReconcile();
+      const before = osPlans.length;
+      osPlans = osCapPlans(osPlans);
+      if(osPlans.length !== before) dirty = true;
+      osCur = osPlans.some(p => p.id === raw.current) ? raw.current : null;
+    }
+  }catch(e){}
+  const plan = osPlan();
+  osStep = plan ? plan.step : "what";
+  /* What the save told (an opening, a plan paid back) is kept straight away. */
+  if(dirty) osSave();
+}
+function osSave(){
+  const plan = osPlan();
+  if(plan) plan.step = osStep;
+  try{ localStorage.setItem(osStore(), JSON.stringify({plans: osPlans, current: osCur})); }catch(e){}
+}
+const osPlan = () => osPlans.find(p => p.id === osCur) || null;
+/* The list kept to its limits, newest first as it stands: twelve unfinished
+   plans, and OS_MAX_HISTORY plans whose store opened, where the oldest paid-back
+   one makes room first, then the oldest. */
+function osCapPlans(list){
+  const live = list.filter(p => p.opened == null).slice(0, OS_MAX_PLANS), past = list.filter(p => p.opened != null);
+  while(past.length > OS_MAX_HISTORY){
+    const i = past.map(p => !!p.paid).lastIndexOf(true);
+    past.splice(i < 0 ? past.length - 1 : i, 1);
+  }
+  const keep = new Set([...live, ...past]);
+  return list.filter(p => keep.has(p));
+}
+/* A plan for a type, from a Demand cell (its neighbourhood preselected) or
+   the type grid. A plan for the same type and neighbourhood that has no
+   building yet is taken up again rather than doubled. The newest plan comes
+   first; past twelve unfinished plans, the oldest with no building makes room,
+   and twelve that all have one take no more (osNew() answers null). A plan
+   whose store opened no longer counts: it is history (osCapPlans()). */
+function osNew(type, hood){
+  if(osReconcile()) osSave();
+  const same = osPlans.find(p => p.type === type && (p.hood || null) === (hood || null) && !p.key);
+  if(same){
+    osPlans = [same, ...osPlans.filter(p => p !== same)];
+    osCur = same.id; osStep = "where";
+    osSave();
+    return same;
+  }
+  if(osPlans.filter(p => p.opened == null).length >= OS_MAX_PLANS){
+    const spare = [...osPlans].reverse().find(p => !p.key && p.opened == null);
+    if(!spare) return null;
+    osPlans = osPlans.filter(p => p !== spare);
+  }
+  const id = `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  osPlans.unshift({id, type, hood: hood || null, key: null, mode: null, finance: {on: false, amount: null, bank: null},
+    step: "where", made: (D.meta || {}).day || null, snap: null, opened: null, paid: false});
+  osPlans = osCapPlans(osPlans);
+  osCur = id; osStep = "where";
+  osSave();
+  return osPlan();
+}
+/* The install mode: the plan's own once chosen, else the portfolio's
+   (paybackMode(), kept per character); a switch here moves both. */
+const osMode = plan => (plan && plan.mode) || paybackMode();
+function osSetMode(mode){
+  const plan = osPlan();
+  if(plan) plan.mode = mode;
+  paybackSetMode(mode);
+  osSave();
+}
+
+/* --- what the plan stands on ---------------------------------------------- */
+const osType = slug => (osFacts().types || {})[slug] || null;
+const osBuilding = key => key && typeof premises === "function" && premises() ? premises().buildings.find(b => b.key === key) || null : null;
+const osCap = b => { const v = b && (osFacts().venues || {})[b.key];
+  return v && v[1] ? v[1] : Array.isArray(b && b.cap) ? b.cap[0] : (b && b.cap) || 0; };
+const osTypeName = slug => gameName(slug) || String(slug || "").replace(/^ba:businesstype_/, "");
+const osItemName = item => gameName(item) || prettySlug(String(item || ""));
+/* A type's name, lowered. */
+const osTypeLower = slug => gnLower(osTypeName(slug));
+/* The outfit for the building's layout: its lines and furniture total. */
+/* The key an outfit is kept by: the layout, or a cinema's or theatre's size
+   (Python's plan_layout()). */
+const osLayout = b => (b && (b.layout || ((osFacts().venues || {})[b.key] || [])[0] || b.size)) || "";
+const osOutfit = (plan, b) => { const t = plan && osType(plan.type); return t && b ? (t.layouts || {})[osLayout(b)] || null : null; };
+/* The interior score the neighbourhood asks for (Midtown's 50), and the
+   cheapest walls and floors that reach it in this layout. */
+const osDecor = b => { const need = b && ((osFacts().hoods || {})[b.hood] || {}).interior;
+  return need > 0 ? ((osFacts().decor || {})[osLayout(b)] || {})[String(need)] || null : null; };
+
+/* The investment in each mode, as setup_cost() counts it: the firm's fee on
+   the floor, every item at its default price, the deposit; self-installation
+   the items, a delivery per store, and the walls and floors where the
+   neighbourhood asks for them. */
+function osInvestment(plan, b){
+  const out = osOutfit(plan, b);
+  if(!out || !b) return null;
+  const deposit = b.deposit || 0, decor = osDecor(b);
+  const stores = osStores(out).length;
+  const delivery = stores * ((osFacts().game || {}).delivery || 0);
+  return {furniture: out.furniture, fee: out.fee, deposit, stores, delivery, decor: decor ? decor.cost : 0,
+    firm: out.furniture + out.fee + deposit, self: out.furniture + delivery + (decor ? decor.cost : 0) + deposit,
+    items: out.lines.reduce((n, l) => n + l[1], 0)};
+}
+/* Self-installation's shopping list by store: each item from a store that
+   sells it, as few stores as will do, the one that sells the most first. */
+function osStores(out){
+  const items = osFacts().items || {};
+  let left = out.lines.map((l, i) => i);
+  const stores = [];
+  while(left.length){
+    const count = new Map();
+    left.forEach(i => ((items[out.lines[i][0]] || {}).v || []).forEach(v => count.set(v, (count.get(v) || 0) + 1)));
+    if(!count.size) break;
+    const [best] = [...count.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+    const mine = left.filter(i => ((items[out.lines[i][0]] || {}).v || []).includes(best));
+    stores.push({key: best, lines: mine});
+    left = left.filter(i => !mine.includes(i));
+  }
+  return stores;
+}
+
+/* --- the profit model ------------------------------------------------------
+   CustomerEntriesCalculatorRetail, per open hour: arrivals are the building's
+   capacity (or, in a game started before build 2847, the best primary
+   product's sales ratio times the floor) times the promotion, the day's and
+   the hour's multipliers, never above the capacity. Each product then sells
+   arrivals x its sales ratio x the neighbourhood's demand x the satisfaction
+   multiplier x its impact for the type x the amount a customer takes, 30% of
+   the time rounded up and otherwise to the nearest. Arrivals with nothing to
+   buy leave (not at a gym, a nightclub or a cinema). The price is the highest
+   every customer accepts: the default, or a rival's lower one, times the
+   neighbourhood's price index, +0.3 while no rival company sells it. Goods
+   cost the import price; wages are the structural estimate. */
+const osUnits = x => x <= 0 ? 0 : 0.3 * Math.ceil(x) + 0.7 * Math.floor(x + 0.5);
+const osDemandWith = (n, price) => {
+  const opt = !price ? 7 : Math.min(Math.ceil(Math.sqrt(1300 / price)), 7);
+  const base = 100 - Math.floor(n * 100 / opt);
+  return base >= 30 ? Math.min(100, base - 0.5) : 31.5;
+};
+/* The price everyone in the neighbourhood accepts, and whether it carries
+   the monopoly's +0.3. */
+function osPrice(item, hood){
+  const m = (osFacts().market || {})[item], h = (osFacts().hoods || {})[hood];
+  if(!m || !h) return {price: 0, mono: false};
+  const row = (m.hoods || {})[hood] || [0, 0, null];
+  const mono = !!m.d && !row[1];
+  const ref = row[2] ? Math.min(m.p, row[2]) : m.p;
+  return {price: ref * (h.idx + (mono ? 0.3 : 0)), mono};
+}
+/* A new shop counts itself among the sellers; an existing one already is. */
+function osDemand(item, hood, existing){
+  const m = (osFacts().market || {})[item];
+  if(!m) return 0;
+  if(!m.d) return 100;
+  if(m.only && !m.only.includes(hood)) return 0;
+  const row = (m.hoods || {})[hood] || [0];
+  return osDemandWith((row[0] || 0) + (existing ? 0 : 1), m.p);
+}
+/* The satisfaction the plan settles at: the player's own shops of the type,
+   their median, else a well-run shop's. */
+function osSatisfaction(slug){
+  const seen = ((osFacts().own || {})[slug] || []).map(s => s.sat).filter(v => Number.isFinite(v)).sort((a, b) => a - b);
+  return seen.length ? seen[Math.floor(seen.length / 2)] : ((osFacts().game || {}).satisfaction || 95);
+}
+/* One day of a store of type `slug` in building `b`. `o`: reach (m² of
+   marketing) and cost, or promoTotal for a shop whose promotion is known;
+   open (per weekday [start, end) slots, 24/7 by default); sat; existing. */
+/* What every open hour starts from (Python's _plan_initial(), shared with the
+   staffing assistant): the shop's own figure where it is known, else the
+   layout's, else the building's capacity (a current game) or the floor. */
+function osInitial(t, b, o){
+  const known = o.initial ?? (t.initial || {})[osLayout(b)];
+  if(known > 0) return known;
+  return (osFacts().game || {}).capInitial || t.model === "office" ? osCap(b) : (b.m2 || 0);
+}
+/* The promotion total a building reaches with `reach` m² of marketing:
+   its traffic plus the share of the floor the campaigns cover times the
+   neighbourhood's marketing strength, never above 100. */
+const osPromo = (b, h, o) => o.promoTotal ?? Math.min(100, Math.round((b.traffic || 0)
+  + Math.round(Math.min((o.reach || 0) / (b.m2 || 1), 1) * 100) * h.strength));
+function osModel(slug, b, o = {}){
+  const F = osFacts(), t = osType(slug), g = F.game || {}, h = (F.hoods || {})[b.hood];
+  if(!t || !h) return null;
+  if(t.model === "office") return osOfficeModel(slug, t, b, h, o);
+  if(t.model !== "retail") return null;
+  const cap = osCap(b);
+  const total = osPromo(b, h, o);
+  const promo = (g.promo || 0) + 0.75 * total / 100;
+  /* The whole range the type sells, as the outfit stocks it: the validation's
+     planner default. */
+  const range = t.products.filter(([p]) => p !== t.fee && p !== t.feeWeekend);
+  const initial = osInitial(t, b, o);
+  const sat = 1 + ((o.sat ?? osSatisfaction(slug)) - 50) / 100;
+  const lines = range.map(([p, impact]) => {
+    const m = F.market[p] || {};
+    const amt = t.amt <= 1 ? t.amt : impact >= 1 ? (1 + t.amt) / 2 : 1;
+    const hyped = (o.hype || []).includes(p);
+    return {p, impact, amt, r: m.r || 1, demand: Math.min(100, osDemand(p, b.hood, o.existing) + (hyped ? OS_HYPE.demand : 0)), hyped,
+      service: !!m.s, cost: m.cost || 0, ...osPrice(p, b.hood), units: 0};
+  });
+  const slots = o.open || Array.from({length: 7}, () => [[0, 24]]);
+  let customers = 0, fees = 0, open = 0;
+  const feePrice = wd => { const f = t.feeWeekend && (wd === 0 || wd === 6) ? t.feeWeekend : t.fee; return f ? osPrice(f, b.hood).price : 0; };
+  for(let wd = 0; wd < 7; wd++){
+    for(const [a, z] of slots[wd] || []){
+      for(let hr = a; hr < z; hr++){
+        open++;
+        const raw = initial * promo * (t.days[wd] || 0) * (t.hours[hr] || 0);
+        const n = raw > 0 ? Math.ceil(Math.min(raw, cap)) : 0;
+        if(n <= 0) continue;
+        let none = 1;
+        lines.forEach(l => {
+          const u = osUnits(n * l.r * l.demand / 100 * sat * l.impact * l.amt);
+          l.units += u;
+          none *= l.service ? Math.max(0, 1 - Math.min(u, n) / n) : n > 1 ? Math.pow(1 - 1 / n, u) : (u >= 1 ? 0 : 1 - u);
+        });
+        const served = t.noOrder ? n : n * (1 - none);
+        customers += served;
+        fees += served * feePrice(wd);
+      }
+    }
+  }
+  let revenue = fees / 7, cogs = 0;
+  lines.forEach(l => { l.units /= 7; revenue += l.units * l.price; cogs += l.units * l.cost; });
+  /* A hairdresser's service uses one hair-care product at its cost. */
+  const care = (F.market || {})["ba:itemname_haircareproduct"];
+  if(slug === "ba:businesstype_hairdresser" && care) cogs += lines.filter(l => l.service).reduce((s, l) => s + l.units, 0) * care.cost;
+  const w = g.wageBase || {}, rate = (1 + Math.pow(1.05, 100) / 100) * (g.wages || 0);
+  const wages = open / 7 * (Math.ceil(cap / (w.perCashier || 30)) * (w.cashier || 0) + (w.cleaner || 0) + (w.guard || 0)) * rate;
+  const rent = o.rent ?? (b.rent || 0), marketing = o.cost || 0;
+  return {revenue, cogs, wages, rent, marketing, profit: revenue - cogs - wages - rent - marketing,
+    customers: customers / 7, fees: fees / 7, lines, promo: total};
+}
+/* CustomerEntriesCalculatorOffice, per open hour: the clients who come are
+   ceil(initial x satisfaction x promotion x the day's and the hour's
+   multipliers x the fee's neighbourhood demand / 100 - 0.2), never more than
+   the computers staffed that hour, one client each. The computers are staffed
+   as the board's office default writes them (_office_runs() in Python: a few
+   around the clock, every computer 8 to 22 on weekdays, half of them 8 to 22
+   at the weekend), and each is paid for every hour it is staffed, busy or
+   not, with a cleaner through every open hour as in a shop. The fee is priced
+   as a shop's goods are: the highest every client accepts. */
+const OS_OFFICE = {always: 3, fullDoor: 50, day: [8, 22]};
+function osOfficeStaffed(computers, cap, wd, hr){
+  const always = Math.min(computers, Math.max(1, Math.round(OS_OFFICE.always * cap / OS_OFFICE.fullDoor)));
+  if(hr < OS_OFFICE.day[0] || hr >= OS_OFFICE.day[1]) return always;
+  return wd === 0 || wd === 6 ? Math.max(always, Math.ceil(computers / 2)) : computers;
+}
+function osOfficeModel(slug, t, b, h, o){
+  const F = osFacts(), g = F.game || {};
+  const fee = (t.products[0] || [])[0];
+  if(!fee || !(F.market || {})[fee]) return null;
+  const cap = osCap(b);
+  const total = osPromo(b, h, o);
+  const promo = (g.promo || 0) + 0.75 * total / 100;
+  const initial = osInitial(t, b, o);
+  const sat = 1 + ((o.sat ?? osSatisfaction(slug)) - 50) / 100;
+  const demand = osDemand(fee, b.hood, o.existing), {price, mono} = osPrice(fee, b.hood);
+  const wage = (t.wage || 0) * (1 + Math.pow(1.05, 100) / 100) * (g.wages || 0);
+  const slots = o.open || Array.from({length: 7}, () => [[0, 24]]);
+  const computers = o.computers || cap;
+  let billed = 0, staffed = 0, open = 0;
+  for(let wd = 0; wd < 7; wd++){
+    for(const [a, z] of slots[wd] || []){
+      for(let hr = a; hr < z; hr++){
+        const on = o.staffed ? ((o.staffed[wd] || [])[hr] || 0) : osOfficeStaffed(computers, cap, wd, hr);
+        const raw = Math.ceil(initial * sat * promo * (t.days[wd] || 0) * (t.hours[hr] || 0) * demand / 100 - 0.2);
+        staffed += on; open++;
+        if(raw > 0) billed += Math.min(raw, on, cap);
+      }
+    }
+  }
+  const units = billed / 7;
+  const skill = 1 + Math.pow(1.05, 100) / 100;
+  const revenue = units * price, wages = (staffed * wage + open * ((g.wageBase || {}).cleaner || 0) * skill * (g.wages || 0)) / 7;
+  const rent = o.rent ?? (b.rent || 0), marketing = o.cost || 0;
+  return {revenue, cogs: 0, wages, rent, marketing, profit: revenue - wages - rent - marketing,
+    customers: units, fees: 0, office: true, lines: [{p: fee, impact: 1, amt: 1, r: 1, demand, service: true, cost: 0, price, mono, units}], promo: total};
+}
+/* The best of the 64 marketing mixes for this building: one of each
+   campaign at most, kept when it adds more than it costs. */
+function osBestModel(slug, b){
+  /* A new board (a refresh, another save) starts the cache afresh. */
+  if(osBestFor !== D){ osBest = new Map(); osBestFor = D; }
+  const id = `${slug}|${b.key}`;
+  if(osBest.has(id)) return osBest.get(id);
+  const camps = osFacts().campaigns || [];
+  let best = null;
+  for(let mask = 0; mask < 1 << camps.length; mask++){
+    let reach = 0, cost = 0;
+    camps.forEach(([, price, sqm], i) => { if(mask >> i & 1){ reach += sqm; cost += price; } });
+    const m = osModel(slug, b, {reach, cost});
+    if(m && (!best || m.profit > best.profit)) best = {...m, reach, mix: camps.filter((c, i) => mask >> i & 1).map(c => c[0])};
+  }
+  osBest.set(id, best);
+  return best;
+}
+/* How the player's own shops of the type do against the same rules on their
+   own buildings, hours and marketing: the median of actual ÷ model. */
+function osOwnRatio(slug){
+  const own = (osFacts().own || {})[slug] || [];
+  const byKey = new Map((D.businesses || []).map(b => [b.key, b]));
+  const rows = own.map(s => {
+    const m = osModel(slug, {hood: s.hood, cap: s.cap, m2: s.m2, key: s.key, layout: s.layout}, {promoTotal: s.promo, cost: s.marketing,
+      open: s.open, sat: s.sat, existing: true, initial: s.initial, staffed: s.staffed, rent: (byKey.get(s.key) || {}).rent || 0});
+    /* A shop in its first days is held to its ramp over the very days measured. */
+    const expect = m && Array.isArray(s.k) && s.k.length ? s.k.reduce((t, k) => t + osDayProfit(m, null, k), 0) / s.k.length : m && m.profit;
+    return m && expect > 0 ? {...s, model: expect, ratio: s.actual / expect} : null;
+  }).filter(Boolean);
+  if(!rows.length) return null;
+  const sorted = rows.map(r => r.ratio).sort((a, b) => a - b);
+  const mid = sorted.length % 2 ? sorted[(sorted.length - 1) / 2] : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
+  return {ratio: mid, rows};
+}
+/* What the player's own shops in the neighbourhood lose: a new seller moves
+   the demand for every product it sells one step down there, for them too,
+   whatever the product's weight for either type. */
+function osCannibal(slug, hood){
+  const t = osType(slug), sales = ((osFacts().sales || {})[hood]) || {};
+  const shops = new Set(), items = [];
+  let loss = 0;
+  (t ? t.products : []).forEach(([p]) => {
+    const rows = sales[p];
+    const m = (osFacts().market || {})[p];
+    if(!rows || !m || !m.d) return;
+    const n = ((m.hoods || {})[hood] || [0])[0] || 0;
+    const now = osDemandWith(n, m.p), after = osDemandWith(n + 1, m.p);
+    if(now <= 0 || after >= now) return;
+    rows.forEach(([key, units, margin]) => { loss += units * Math.max(0, margin) * (1 - after / now); shops.add(key); });
+    items.push(p);
+  });
+  return shops.size ? {loss, shops: shops.size, items} : null;
+}
+/* Days to earn `inv` back at `profit` a day; null when it never does. */
+const osDays = (inv, profit) => profit > 0 ? Math.max(1, Math.ceil(inv / profit)) : null;
+
+/* --- the first days (research RAMP.md) ---------------------------------------
+   A new store earns less at first. The opening day is a partial day at
+   satisfaction 50 all round, taken as 0.8 of a day; new staff start at 50
+   satisfaction and climb 0.6 an hour, and the shop's customer service
+   follows them a day late. OS_RAMP is each day's gross margin as a share of
+   the steady one, from the opening day (0) on; rent, wages and marketing are
+   paid in full from the start. The first shop in a neighbourhood to sell a
+   product nobody has sold there for 21 days gets +20 demand on it for 14
+   days (ProductMarketHelper.CreateHypeEventsForNewItemsAddedToANeighbourhood,
+   NeighborhoodDemand.IsHypeEventAvailable: lastDaySold + 21 <= Day). */
+const OS_RAMP = [0.55, 0.92, 0.94, 0.97, 0.99];
+const OS_HYPE = {demand: 20, days: 14, idle: 21};
+/* The products a new store of `slug` would be the first to sell in `hood`:
+   demanded goods with a wholesale price (a service or a fee never hypes),
+   nobody selling them there now and nobody for the last 21 days. */
+function osHyped(slug, hood){
+  const t = osType(slug), M = osFacts().market || {};
+  return (t ? t.products : []).map(([p]) => p).filter(p => {
+    const m = M[p];
+    if(!m || !m.d || !(m.cost > 0) || (m.only && !m.only.includes(hood))) return false;
+    /* A save without the last day sold (older than MIN_BUILD) reads as never
+       sold: nobody selling now, and the game 21 days old or more. */
+    const row = (m.hoods || {})[hood] || [0, 0, null, null];
+    return !(row[0] > 0) && (row[3] ?? 0) + OS_HYPE.idle <= ((D && D.meta) || {}).day;
+  });
+}
+/* Day k's profit after the opening (k = 0 is the opening day): the steady
+   model `m`, the hyped one `mh` on days 1 to 14, each day's gross margin
+   ramped, the fixed costs whole. */
+function osDayProfit(m, mh, k){
+  const x = mh && k >= 1 && k <= OS_HYPE.days ? mh : m;
+  if(x === m && k >= OS_RAMP.length) return m.profit;
+  const r = k < OS_RAMP.length ? OS_RAMP[k] : 1;
+  return r * (x.revenue - x.cogs) - (x.wages + x.rent + x.marketing);
+}
+/* The day the running profit first covers `inv`, day by day: 1 is the
+   opening day. `factor` scales every day, for the range. Null when the
+   steady profit never gets there. */
+function osBreakDay(inv, day, factor = 1){
+  let got = 0;
+  for(let k = 0; k < 20000; k++){
+    got += factor * day(k);
+    if(got >= inv) return k + 1;
+    if(k > OS_HYPE.days && day(k) <= 0) return null;
+  }
+  return null;
+}
+
+/* --- financing ---------------------------------------------------------------
+   LoanHelper: flat interest on the amount borrowed, floor(L x rate x the
+   difficulty's multiplier / 100 / days a year) a day, and max(5, floor(L /
+   term)) of the principal, both at midnight. A bank lends up to its cap less
+   what it is owed, and the company up to the largest of its wealth, a
+   quarter of last week's daily profit over the term and the tutorial's floor
+   while its first-loan objective is open, less all it owes. */
+function osLoanLimit(bank){
+  const f = osFacts().finance || {};
+  if(!bank) return 0;
+  const room = Math.max(0, bank.max - (bank.owed || 0));
+  const economy = Math.floor(Math.max(0, Math.max(f.floor || 0, f.wealth || 0, 0.25 * (f.profit7 || 0) * bank.term) - (f.owed || 0)));
+  return Math.min(room, economy);
+}
+function osLoan(amount, bank){
+  const f = osFacts().finance || {};
+  if(!bank || amount < (f.minimum || 0)) return null;
+  const interest = Math.floor(amount * bank.rate * (f.multiplier || 0) / 100 / (f.year || 60) + 1e-6);
+  const repay = Math.max(5, Math.floor(amount / (bank.term || 1)));
+  const days = Math.ceil(amount / repay);
+  return {amount, interest, repay, days, total: days * interest};
+}
+/* The day the owner's own cash is back: the profit less the installments
+   while the loan runs, the whole profit after it. */
+function osLoanDays(own, profit, loan){
+  if(own <= 0) return 0;
+  /* `profit` is a day's profit, or osDayProfit() for the day after the opening. */
+  const day = typeof profit === "function" ? profit : () => profit;
+  let got = 0;
+  for(let d = 1; d <= 20000; d++){
+    got += day(d - 1) - (d <= loan.days ? loan.interest + loan.repay : 0);
+    if(got >= own) return d;
+    if(d > loan.days && d > OS_HYPE.days + 1 && day(d - 1) <= 0) return null;
+  }
+  return null;
+}
+
+/* --- the view ----------------------------------------------------------------- */
+const osStepLabel = s => ({what: tt("gr.os.step.what", "What"), where: tt("gr.os.step.where", "Where"),
+  investment: tt("gr.os.step.investment", "Investment"), breakeven: tt("gr.os.step.breakeven", "Break even"),
+  opening: tt("gr.os.step.opening", "Until opening"), open: tt("gr.os.step.open", "Open")})[s];
+/* A step can be opened once what it needs is chosen; the last once the
+   store trades. */
+function osStepReady(s, plan){
+  if(s === "what") return true;
+  if(s === "where") return !!plan;
+  if(s === "investment" || s === "breakeven" || s === "opening") return !!(plan && osBuilding(plan.key));
+  return !!(plan && plan.key && (osAttached(plan) || osClosed(plan)));
+}
+function osCtlHtml(plan){
+  const at = OS_STEPS.indexOf(osStep);
+  const steps = OS_STEPS.map((s, i) => {
+    const ready = osStepReady(s, plan), done = i < at && ready, cls = s === osStep ? "on" : done ? "done" : "";
+    const mark = done ? icon("tick") : String(i + 1);
+    const later = s === "open" && !ready;
+    return `${i ? `<span class="sep" aria-hidden="true"></span>` : ""}<button type="button" class="${cls}" data-os-step="${s}"${
+      ready ? "" : ` disabled`}${s === osStep ? ` aria-current="step"` : ""}${later ? ` data-tip="${attr(tt("gr.os.step.payback",
+      "Payback monitoring comes once the store trades."))}"` : ""}><i>${mark}</i>${osStepLabel(s)}</button>`;
+  }).join("");
+  const opts = osPlans.map(p => `<option value="${attr(p.id)}"${p.id === osCur ? " selected" : ""}>${spEsc(osPlanName(p))}</option>`).join("");
+  return `<nav class="os-steps" aria-label="${attr(tt("gr.os.steps.label", "Open a store, step by step"))}">${steps}</nav>
+    <div class="aside"><label class="os-planpick"><span>${tt("gr.os.plan.pick", "Plan")}</span><select data-os-plan aria-label="${attr(tt("gr.os.plan.pickAria", "Which plan"))}">
+      <option value=""${osCur ? "" : " selected"}>${tt("gr.os.plan.new", "New plan")}</option>${opts}</select>${icon("chev")}</label></div>`;
+}
+const osPlanName = p => {
+  const b = osBuilding(p.key);
+  if(b && osClosed(p)) return tt("gr.os.plan.nameClosed", "{type} · {address} · closed", {type: osTypeName(p.type), address: b.address});
+  if(b && osAttached(p)) return tt("gr.os.plan.nameOpen", "{type} · {address} · open", {type: osTypeName(p.type), address: b.address});
+  return b ? tt("gr.os.plan.name", "{type} · {address}", {type: osTypeName(p.type), address: b.address}) : osTypeName(p.type);
+};
+/* The plan, one strip under the steps: what, where, how much, how long. */
+function osStripHtml(plan){
+  const b = osBuilding(plan.key), inv = osInvestment(plan, b), mode = osMode(plan);
+  const cell = (lab, body) => `<div><span class="os-lab">${lab}</span>${body}</div>`;
+  const demand = plan.hood ? ((((D.premises || {}).demand || {})[plan.hood] || []).find(d => d.slug === plan.type) || {}).demand : null;
+  const anyHood = tt("gr.os.strip.anyhood", "any neighbourhood");
+  const what = `<b>${spEsc(osTypeName(plan.type))}</b><small>${plan.hood && demand != null
+    ? tt("gr.os.strip.demand", "Demand in {hood} {n}", {hood: hoodName(plan.hood), n: demand}) : anyHood}</small>`;
+  const where = b ? `<b>${spEsc(b.address)}</b><small>${tt("gr.os.strip.where", "{hood} · {layout} · {m2} m² · rent {rent}/day",
+      {hood: hoodName(b.hood), layout: osLayout(b), m2: num(b.m2), rent: fmt(b.rent || 0)})}</small>`
+    : `<b class="dim">${tt("gr.os.strip.nowhere", "Not picked yet")}</b><small>${tt("gr.os.strip.nowhere.sub", "{type}, {where}",
+      {type: osTypeName(plan.type), where: plan.hood ? hoodName(plan.hood) : anyHood})}</small>`;
+  const invest = inv ? `<b class="m">${fmt(inv[mode])}</b><small>${mode === "self" ? tt("gr.os.strip.self", "Self-installation · deposit included")
+    : tt("gr.os.strip.firm", "Installation firm · deposit included")}</small>` : `<b class="dim">–</b><small>${tt("gr.os.strip.afterWhere", "after the location")}</small>`;
+  /* After opening the tiles carry the numbers: the strip says what and where. */
+  if(osStep === "open") return `<div class="os-pb os-pb2">${cell(tt("gr.os.strip.open", "Open"), what)}${cell(tt("gr.os.strip.whereLab", "Where"), where)}</div>`;
+  const est = b && inv ? osEstimate(plan, b) : null;
+  const be = est && est.days ? `<b class="m">${osRange(est.days[mode])}</b><small>${tt("gr.os.strip.be2", "after opening · at {w}/day", {w: osMidMoney(est.profit * OS_LOW, est.profit * OS_HIGH)})}</small>`
+    : est && est.none ? `<b class="dim">${tt("gr.os.none.short", "No estimate")}</b><small>${est.none}</small>`
+    : `<b class="dim">–</b><small>${tt("gr.os.strip.afterInvest", "after the investment")}</small>`;
+  return `<div class="os-pb">${cell(tt("gr.os.strip.open", "Open"), what)}${cell(tt("gr.os.strip.whereLab", "Where"), where)}${
+    cell(tt("gr.os.strip.invest", "Investment"), invest)}${cell(tt("gr.os.strip.beLab", "Break even"), be)}</div>`;
+}
+/* A range shown as its middle, the range itself on hover: "30 days" over
+   "26–33 days". One figure where the range closes up. */
+const osMid = d => d && d.mid != null ? d.mid : d && d.low != null && d.high != null ? Math.round((d.low + d.high) / 2) : d && d.low != null ? d.low : null;
+const osTipped = (shown, whole) => `<span class="os-rng" data-tip="${attr(whole)}" tabindex="0">${shown}</span>`;
+function osMidMoney(lo, hi){
+  return Math.round(lo) === Math.round(hi) ? fmt(lo) : osTipped(fmt((lo + hi) / 2), tt("gr.os.money.range", "{lo}–{hi}", {lo: fmt(lo), hi: fmt(hi)}));
+}
+function osRange(d){
+  if(!d || d.low == null) return tt("gr.os.be.never", "not at this profit");
+  if(d.high == null) return tt("gr.os.days.from", "from {n} days", {n: num(d.low)});
+  return d.low === d.high ? tt("gr.os.days", {one: "{n} day", other: "{n} days"}, {n: d.low})
+    : osTipped(tt("gr.os.days", {one: "{n} day", other: "{n} days"}, {n: osMid(d)}), tt("gr.os.days.range", "{lo}–{hi} days", {lo: num(d.low), hi: num(d.high)}));
+}
+/* The estimate behind steps 3 and 4 for a plan in its building. */
+function osEstimate(plan, b){
+  const t = osType(plan.type), inv = osInvestment(plan, b);
+  if(!t || !inv) return null;
+  if(t.model !== "retail" && t.model !== "office") return {inv, none: t.cat === "cinema" || t.cat === "theater"
+    ? tt("gr.os.none.venue", "the game's rules for screens, seats and actors are not modelled") : tt("gr.os.none.type", "this type is not modelled")};
+  const m = osBestModel(plan.type, b);
+  if(!m) return {inv, none: tt("gr.os.none.data", "the save lacks what the estimate needs")};
+  const hyped = m.office ? [] : osHyped(plan.type, b.hood);
+  const mh = hyped.length ? osModel(plan.type, b, {reach: m.reach, cost: m.marketing, hype: hyped}) : null;
+  const day = k => osDayProfit(m, mh, k);
+  /* `mid` is the day at the middle of the profit range, the one figure shown
+     (the range is on hover), and the chart's point. */
+  const days = mode => ({low: osBreakDay(inv[mode], day, OS_HIGH), mid: osBreakDay(inv[mode], day, OS_MID), high: osBreakDay(inv[mode], day, OS_LOW)});
+  return {model: m, profit: m.profit, inv, day, hyped: mh ? hyped : [], days: {firm: days("firm"), self: days("self")}};
+}
+
+/* Step 1: what to open. */
+function osWhatHtml(){
+  const F = osFacts(), M = D.market || {};
+  const hoods = M.hoods || [];
+  const rows = [];
+  [...(M.types || []), ...(M.offices || [])].forEach(r => {
+    if(!(F.types || {})[r.slug]) return;
+    (r.cells || []).forEach((c, i) => { if(c && !c.here && hoods[i]) rows.push({slug: r.slug, hood: hoods[i], demand: c.demand, rivals: c.providers || 0}); });
+  });
+  rows.sort((a, b) => b.demand - a.demand || a.rivals - b.rivals || gnCompare(osTypeName(a.slug), osTypeName(b.slug)));
+  const top = rows.slice(0, 6);
+  const shade = v => `background:color-mix(in srgb,var(--accent) ${Math.max(8, Math.min(78, Math.round((v - 40) / 60 * 70 + 8)))}%,var(--surface))`;
+  const runs = slug => ((F.types || {})[slug] || {}).run || 0;
+  const demandRows = top.map(r => `<tr><td class="l"><b>${spEsc(osTypeName(r.slug))}</b><span class="sub">${runs(r.slug)
+      ? tt("gr.os.what.run", {one: "You run {n} elsewhere", other: "You run {n} elsewhere"}, {n: runs(r.slug)}) : tt("gr.os.what.none", "You run none")}</span></td>
+    <td class="l"><span class="hood">${spEsc(HOOD_TAGS[r.hood] || "")}</span> <span class="os-dim">${spEsc(hoodName(r.hood))}</span></td>
+    <td><span class="sc" style="${shade(r.demand)}">${r.demand}</span></td><td>${r.rivals}</td>
+    <td class="go"><button type="button" data-os-new="${attr(r.slug)}" data-os-hood="${attr(r.hood)}" aria-label="${attr(tt("gr.os.what.go",
+      "Plan a {type} in {hood}", {type: osTypeName(r.slug), hood: hoodName(r.hood)}))}">${icon("chev")}</button></td></tr>`).join("");
+  const kinds = Object.entries(F.types || {}).sort((a, b) => gnCompare(osTypeName(a[0]), osTypeName(b[0])));
+  const typeBtn = ([slug, t]) => `<button type="button" class="os-type" data-os-new="${attr(slug)}">${spEsc(osTypeName(slug))}${
+    t.run ? `<small>${t.run}</small>` : ""}</button>`;
+  const shops = kinds.filter(([, t]) => t.cat !== "office").map(typeBtn).join("");
+  const offices = kinds.filter(([, t]) => t.cat === "office").map(typeBtn).join("");
+  const notice = osNotice ? `<p class="os-note os-full" role="status">${osNotice}</p>` : "";
+  osNotice = "";
+  return `${notice}<div class="os-two os-start">
+  <div class="os-card"><h3>${tt("gr.os.what.demand", "From demand")}</h3>
+    ${top.length ? `<table class="os-dl"><thead><tr><th class="l">${tt("gr.os.what.col.type", "Type")}</th><th class="l">${tt("gr.os.what.col.where", "Where")}</th>
+      <th>${tt("gr.os.what.col.demand", "Demand")}</th><th>${tt("gr.os.what.col.rivals", "Rivals")}</th><th></th></tr></thead><tbody>${demandRows}</tbody></table>`
+      : `<p class="quiet">${tt("gr.os.what.demand.none", "No neighbourhood reading yet.")}</p>`}
+    <p class="os-more"><a class="os-link" href="#expansion/demand" data-os-route="expansion/demand">${tt("gr.os.what.grid", "Demand grid")}</a></p>
+  </div>
+  <div class="os-card"><h3>${tt("gr.os.what.pick", "Or pick a type")}</h3>
+    <div class="os-types">${shops}</div>
+    ${offices ? `<div class="os-sub">${tt("gr.os.what.offices", "Offices")}</div><div class="os-types">${offices}</div>` : ""}
+  </div></div>
+  ${osPlansHtml()}`;
+}
+function osPlansHtml(){
+  if(!osPlans.length) return "";
+  const rows = osPlans.map(p => {
+    const b = osBuilding(p.key), inv = osInvestment(p, b), mode = osMode(p);
+    /* A plan whose store trades is marked open, its bar the share paid back
+       as Results counts it; one whose store is gone, closed. */
+    const closed = osClosed(p), open = !closed && osAttached(p), row = open && paybackSite(p.key), cost = row && (row.cost || {})[paybackMode()];
+    const o = osNowOf(row), prog = row ? osProgress(row, o, cost || 0) : null;
+    const stage = closed ? [0, tt("gr.os.stage.closed", "Closed")]
+      : open ? (osPaidBack(o) ? [100, tt("gr.os.stage.paid", "Open · paid back")] : prog && prog.pct != null
+        ? [Math.floor(prog.pct), tt("gr.os.stage.open", "Open · {n}% paid back", {n: Math.floor(prog.pct)})] : [0, tt("gr.os.stage.openOnly", "Open")])
+      : !b ? [17, tt("gr.os.stage.where", "Where")] : p.step === "opening" ? [67, tt("gr.os.stage.opening", "Until opening")]
+      : p.step === "breakeven" ? [50, tt("gr.os.stage.be", "Break even")] : [33, tt("gr.os.stage.invest", "Investment")];
+    const sub = b ? tt("gr.os.plans.at", "{address} · {hood}", {address: b.address, hood: hoodName(b.hood)})
+      : p.hood ? tt("gr.os.plans.hood", "{hood} · no location yet", {hood: hoodName(p.hood)}) : tt("gr.os.plans.none", "no location yet");
+    return `<div class="os-plan${open ? " open" : closed ? " closed" : ""}"><button type="button" class="os-plango" data-os-open="${attr(p.id)}"><span><b>${spEsc(osTypeName(p.type))}${
+      open ? ` <span class="os-tag req">${tt("gr.os.plans.open", "Open")}</span>` : closed ? ` <span class="os-tag">${tt("gr.os.plans.closed", "Closed")}</span>` : ""}</b><small>${spEsc(sub)}</small></span>
+      <span><span class="os-lab">${stage[1]}</span><span class="os-meter" style="--w:${stage[0]}%"><i></i></span></span>
+      <span class="v">${cost ? fmt(cost) : inv ? fmt(inv[mode]) : `<span class="os-dim">–</span>`}</span>${icon("chev")}</button>
+      <button type="button" class="os-x" data-os-drop="${attr(p.id)}" aria-label="${attr(tt("gr.os.plans.drop", "Delete the plan {name}", {name: osPlanName(p)}))}" data-tip="${
+        attr(tt("gr.os.plans.dropTip", "Delete this plan"))}">×</button></div>`;
+  }).join("");
+  return `<div class="os-h"><h2>${tt("gr.os.plans.title", "Your plans")}</h2><span class="c">${osPlans.length}</span></div><div class="os-plans">${rows}</div>`;
+}
+
+/* Step 2: Find a location, embedded, fixed to the plan's type. */
+function osShowFinder(plan){
+  if(typeof CityMapView !== "function" || !premises()) return;
+  const t = osType(plan.type);
+  const preset = {cat: t ? t.cat : "retail", type: plan.type, hoods: plan.hood ? [plan.hood] : null};
+  if(!osFinder || !osFinder.root.isConnected){
+    osFinder = new CityMapView($("osFinderMap"), {plan: {preset, onPlan: key => osPick(key), label: () => tt("gr.os.where.go", "Plan here")}});
+  } else osFinder.planFor(preset);
+}
+function osPick(key){
+  const plan = osPlan();
+  if(!plan) return;
+  plan.key = key;
+  if(!plan.hood){ const b = osBuilding(key); if(b) plan.hood = b.hood; }
+  osStep = "investment";
+  osSave();
+  drawOpenStore();
+  if(typeof settleScroll === "function") settleScroll($("secOpen"));
+}
+
+/* Step 3: the investment. */
+/* A display that holds many products names two and counts the rest; its tag's
+   tip names them all (osTag()). */
+function osWhy(group, why){
+  if(group === "shelf"){
+    if(!Array.isArray(why) || !why.length) return tt("gr.os.why.stock", "Stock");
+    const names = why.map(osItemName);
+    return names.length > 2 ? tt("gr.os.why.more", "{items} +{n}", {items: names.slice(0, 2).join(", "), n: names.length - 2}) : names.join(", ");
+  }
+  if(why === "mount") return tt("gr.os.why.mount", "Stands on it");
+  if(group === "cap") return why === "seats" ? tt("gr.os.why.seats", "Seats") : tt("gr.os.why.cap", "Capacity");
+  if(group === "req") return why === "pointofsales" ? tt("gr.os.why.pos", "Point of sale") : tt("gr.os.why.req", "Required");
+  return ({music: tt("gr.os.why.music", "Music"), seating: tt("gr.os.why.seating", "Seating"), sink: tt("gr.os.why.sink", "Sink"),
+    toilet: tt("gr.os.why.toilet", "Toilet"), toiletprivacy: tt("gr.os.why.privacy", "Privacy"), "toilet+privacy": tt("gr.os.why.toiletPrivacy", "Toilet, privacy"),
+    employeeuniforms: tt("gr.os.why.uniforms", "Uniforms"), seats: tt("gr.os.why.seats", "Seats"), workoutvariety: tt("gr.os.why.workout", "Workout variety")})[why] || String(why);
+}
+const osTag = (group, why) => `<span class="os-tag ${group === "req" ? "req" : group === "dem" ? "dem" : group === "cap" ? "cap" : ""}"${
+  group === "shelf" && Array.isArray(why) && why.length > 2 ? ` data-tip="${attr(why.map(osItemName).join(", "))}" tabindex="0"` : ""}>${spEsc(osWhy(group, why))}</span>`;
+function osToolbar(plan, inv, out){
+  const mode = osMode(plan);
+  return `<div class="os-toolbar"><nav class="os-seg big" aria-label="${attr(tt("gr.os.inv.mode", "Interior"))}">
+    <button type="button" class="${mode === "firm" ? "on" : ""}" data-os-mode="firm" aria-pressed="${mode === "firm"}">${tt("gr.os.inv.firm", "Installation firm")} <b>${fmt(inv.firm)}</b></button>
+    <button type="button" class="${mode === "self" ? "on" : ""}" data-os-mode="self" aria-pressed="${mode === "self"}">${tt("gr.os.inv.self", "Self-installation")} <b>${fmt(inv.self)}</b></button></nav>
+    <div class="aside"><span>${tt("gr.os.inv.outfitted", "100% outfitted")}</span><b>${tt("gr.os.inv.items", {one: "{n} item", other: "{n} items"}, {n: inv.items})}</b>
+    <span>${tt("gr.os.inv.itemsLab", "Items")}</span><b>${fmt(out.furniture)}</b></div></div>`;
+}
+function osGroupNote(group, b, out){
+  const h = (osFacts().hoods || {})[b.hood] || {};
+  if(group === "req") return tt("gr.os.grp.req.note", "what the type needs to open");
+  if(group === "dem") return tt("gr.os.grp.dem.note", "{hood}: each customer asks with a {n}% chance times the demand's weight", {hood: hoodName(b.hood), n: Math.round((h.demands || 0) * 100)});
+  if(group === "cap") return tt("gr.os.grp.cap.note", "stations for {n} customers an hour", {n: osCap(b)});
+  const from = out.from && (D.businesses || []).find(x => x.key === out.from);
+  return from ? tt("gr.os.grp.shelf.copied", "as at {address}, same layout {layout}", {address: from.address, layout: osLayout(b)})
+    : tt("gr.os.grp.shelf.note", "per product, enough for {n} customers an hour", {n: osCap(b)});
+}
+const OS_GROUPS = [["req", () => tt("gr.os.grp.req", "Required to open")], ["dem", () => tt("gr.os.grp.dem", "Customer demands")],
+  ["cap", () => tt("gr.os.grp.cap", "Building capacity")], ["shelf", () => tt("gr.os.grp.shelf", "Shelves and displays")]];
+function osInvestHtml(plan){
+  const b = osBuilding(plan.key), out = osOutfit(plan, b), inv = osInvestment(plan, b);
+  if(!b || !out || !inv) return `<p class="quiet os-gap">${tt("gr.os.inv.none", "No outfit is known for this building's layout.")}</p>`;
+  return osToolbar(plan, inv, out) + (osMode(plan) === "self" ? osSelfHtml(b, out, inv) : osFirmHtml(b, out, inv));
+}
+function osFirmHtml(b, out, inv){
+  const items = osFacts().items || {}, decor = osDecor(b), fee = (osFacts().game || {}).installFee || 586;
+  const grp = (title, note, total) => `<tr class="grp"><td colspan="5">${title}${note ? `<span>${note}</span>` : ""}<b>${fmt(total)}</b></td></tr>`;
+  const rows = [grp(tt("gr.os.inv.firm", "Installation firm"), "", inv.fee),
+    `<tr><td class="l">${tt("gr.os.inv.fee", "Installation fee")}<span class="sub">${tt("gr.os.inv.fee.sub", "{fee} × {m2} m²", {fee: num(fee), m2: num(b.m2)})}</span></td><td class="w"></td><td></td><td></td><td>${fmt(inv.fee)}</td></tr>`,
+    `<tr><td class="l">${tt("gr.os.inv.walls", "Walls and floors")}<span class="sub">${decor ? tt("gr.os.inv.walls.met", "{hood} asks for an interior score of {n}: the firm lays them",
+      {hood: hoodName(b.hood), n: ((osFacts().hoods || {})[b.hood] || {}).interior}) : tt("gr.os.inv.walls.free", "the firm lays them at no charge")}</span></td>
+      <td class="w">${decor ? `<span class="os-tag dem">${tt("gr.os.why.interior", "Interior")}</span>` : ""}</td><td></td><td></td><td class="free">${tt("gr.os.inv.free", "free")}</td></tr>`];
+  OS_GROUPS.forEach(([g, title]) => {
+    const lines = out.lines.filter(l => l[2] === g);
+    if(!lines.length) return;
+    const total = lines.reduce((s, l) => s + l[1] * ((items[l[0]] || {}).p || 0), 0);
+    rows.push(grp(title(), osGroupNote(g, b, out), total));
+    lines.forEach(([item, qty, group, why]) => {
+      const each = (items[item] || {}).p || 0;
+      rows.push(`<tr><td class="l">${spEsc(osItemName(item))}</td><td class="w">${osTag(group, why)}</td><td>${qty}</td><td>${fmt(each)}</td><td>${fmt(each * qty)}</td></tr>`);
+    });
+  });
+  rows.push(grp(tt("gr.os.inv.deposit", "Deposit"), tt("gr.os.inv.deposit.note", "refunded when the lease ends"), inv.deposit));
+  rows.push(`<tr><td class="l">${tt("gr.os.inv.deposit.est", "Estimated deposit")}<span class="sub">${tt("gr.os.inv.deposit.estSub", "about 60 days of rent, with the building's own fittings")}</span></td><td class="w"></td><td></td><td></td><td>${fmt(inv.deposit)}</td></tr>`);
+  return `<table class="os-inv"><thead><tr><th class="l">${tt("gr.os.inv.col.item", "Item")}</th><th class="l">${tt("gr.os.inv.col.why", "Why")}</th>
+    <th>${tt("gr.os.inv.col.qty", "Qty")}</th><th>${tt("gr.os.inv.col.each", "Each")}</th><th>${tt("gr.os.inv.col.total", "Total")}</th></tr></thead>
+    <tbody>${rows.join("")}</tbody><tfoot><tr><td class="l">${tt("gr.os.inv.total", "Investment")}</td><td></td><td></td><td></td><td>${fmt(inv.firm)}</td></tr></tfoot></table>`;
+}
+const osLetter = i => String.fromCharCode(65 + i);
+function osSelfHtml(b, out, inv){
+  const F = osFacts(), items = F.items || {}, vendors = F.vendors || {}, fee = (F.game || {}).delivery || 0, decor = osDecor(b);
+  const stores = osStores(out);
+  const storeTotal = s => s.lines.reduce((t, k) => t + out.lines[k][1] * ((items[out.lines[k][0]] || {}).p || 0), 0) + fee;
+  const tagCell = (group, why) => `<td class="w">${osTag(group, why)}</td>`;
+  const cards = stores.map((s, i) => {
+    const v = vendors[s.key] || {};
+    const rows = s.lines.map(k => { const [item, qty, group, why] = out.lines[k];
+      return `<tr><td class="l">${tt("gr.os.self.line", "{n} × {item}", {n: qty, item: osItemName(item)})}</td>${tagCell(group, why)}<td>${fmt(qty * ((items[item] || {}).p || 0))}</td></tr>`; }).join("");
+    return `<div class="os-store"><div class="os-sh"><span class="k">${osLetter(i)}</span><span><b>${spEsc(v.n || s.key)}</b><small>${spEsc(v.a || "")}${
+      v.h ? ` · ${spEsc(hoodName(v.h))}` : ""}</small></span><span class="t">${fmt(storeTotal(s))}</span></div>
+      <table><tbody>${rows}<tr class="del"><td class="l">${tt("gr.os.self.delivery", "Delivery")}</td><td class="w"></td><td>${fmt(fee)}</td></tr></tbody></table></div>`;
+  }).join("");
+  const unsold = out.lines.filter((l, k) => !stores.some(s => s.lines.includes(k)));
+  const interior = `<span class="os-tag dem">${tt("gr.os.why.interior", "Interior")}</span>`;
+  const paint = decor ? `<div class="os-store"><div class="os-sh"><span class="k p">${osIcon("paint")}</span><span><b>${tt("gr.os.self.walls", "Walls and floors")}</b><small>${
+      tt("gr.os.self.walls.sub", "Interior Designer · {hood} asks for a score of {n}", {hood: hoodName(b.hood), n: ((F.hoods || {})[b.hood] || {}).interior})}</small></span><span class="t">${fmt(decor.cost)}</span></div>
+    <table><tbody>${decor.floors ? `<tr><td class="l">${tt("gr.os.self.floors", "{n} floor tiles at {p}", {n: num(decor.floors), p: fmt(decor.floorPrice)})}</td><td class="w">${interior}</td><td>${fmt(decor.floors * decor.floorPrice)}</td></tr>` : ""}${
+      decor.walls ? `<tr><td class="l">${tt("gr.os.self.wallslots", "{n} wall slots at {p}", {n: num(decor.walls), p: fmt(decor.wallPrice)})}</td><td class="w">${interior}</td><td>${fmt(decor.walls * decor.wallPrice)}</td></tr>` : ""}</tbody></table></div>` : "";
+  const dep = `<div class="os-store"><div class="os-sh"><span class="k p">${osIcon("key")}</span><span><b>${tt("gr.os.inv.deposit", "Deposit")}</b><small>${
+    tt("gr.os.self.deposit.est", "estimated: about 60 days of rent, with the building's own fittings · refunded when the lease ends")}</small></span><span class="t">${fmt(inv.deposit)}</span></div></div>`;
+  const legend = stores.map((s, i) => `<div><i>${osLetter(i)}</i><span>${spEsc((vendors[s.key] || {}).n || s.key)}</span><b>${fmt(storeTotal(s))}</b></div>`).join("")
+    + `<div><i class="n">${tt("gr.os.map.new", "NEW")}</i><span>${spEsc(b.address)}</span><b></b></div>`;
+  const note = unsold.length ? `<p class="quiet os-gap">${tt("gr.os.self.unsold", "No store the game's help names sells these: {items}.", {items: unsold.map(l => osItemName(l[0])).join(", ")})}</p>` : "";
+  const pins = JSON.stringify([...stores.map((s, i) => [s.key, osLetter(i), "store"]), [b.key, tt("gr.os.map.new", "NEW"), "new"]]);
+  const sub = decor ? tt("gr.os.self.total.subWalls", "{n} items · {d} deliveries · walls and floors · deposit", {n: inv.items, d: stores.length})
+    : tt("gr.os.self.total.sub", "{n} items · {d} deliveries · deposit", {n: inv.items, d: stores.length});
+  return `<div class="os-self"><div>${cards}${paint}${dep}${note}
+    <div class="os-total"><span>${tt("gr.os.inv.total", "Investment")}</span><small>${sub}</small><b>${fmt(inv.self)}</b></div></div>
+    <div><div class="os-mini" id="osMini" data-pins="${attr(pins)}"></div><div class="os-maplist">${legend}</div></div></div>`;
+}
+/* The city with the stores and the new site pinned at their addresses: a
+   still crop of the map around them, not the whole interactive map. */
+function osPaintMini(){
+  const host = $("osMini");
+  if(!host || typeof loadCityMap !== "function") return;
+  let pins = [];
+  try{ pins = JSON.parse(host.dataset.pins || "[]"); }catch(e){}
+  loadCityMap().then(a => {
+    if(!host.isConnected) return;
+    const at = pins.map(([key, label, kind]) => ({key, label, kind, b: a.byKey.get(key)})).filter(p => p.b && p.b.anchor);
+    if(!at.length){ host.hidden = true; return; }
+    const xs = at.map(p => p.b.anchor[0]), ys = at.map(p => p.b.anchor[1]);
+    const pad = 60, side = Math.max(Math.max(...xs) - Math.min(...xs) + 2 * pad, Math.max(...ys) - Math.min(...ys) + 2 * pad, 260);
+    /* Centred on the pins, kept inside the map where the map is big enough. */
+    const fit = (mid, size) => size > side ? Math.max(0, Math.min(mid - side / 2, size - side)) : mid - side / 2;
+    const x = fit((Math.min(...xs) + Math.max(...xs)) / 2, a.viewBox[2]), y = fit((Math.min(...ys) + Math.max(...ys)) / 2, a.viewBox[3]);
+    host.innerHTML = `<svg viewBox="${x.toFixed(1)} ${y.toFixed(1)} ${side.toFixed(1)} ${side.toFixed(1)}" aria-hidden="true"><image href="${attr(a.imageUrl)}" x="0" y="0" width="${a.viewBox[2]}" height="${a.viewBox[3]}"></image></svg>`
+      + at.map(p => `<span class="os-pin ${p.kind}" style="left:${((p.b.anchor[0] - x) / side * 100).toFixed(2)}%;top:${((p.b.anchor[1] - y) / side * 100).toFixed(2)}%"><b>${spEsc(p.label)}</b><i></i>${
+        p.kind === "new" ? `<em>${spEsc(p.b.address)}</em>` : ""}</span>`).join("");
+    host.setAttribute("role", "img");
+    host.setAttribute("aria-label", tt("gr.os.map.aria", "The stores and the new site on the city map"));
+  }).catch(() => { host.hidden = true; });
+}
+
+/* Step 4: break even. */
+function osBreakHtml(plan){
+  const b = osBuilding(plan.key), est = b && osEstimate(plan, b), mode = osMode(plan);
+  if(!b || !est) return `<p class="quiet os-gap">${tt("gr.os.be.nowhere", "Pick a location first.")}</p>`;
+  const inv = est.inv;
+  if(est.none) return `<div class="os-none">
+    <div><span class="os-lab">${tt("gr.os.inv.firm", "Installation firm")}</span><b>${fmt(inv.firm)}</b><small>${tt("gr.os.be.investment", "investment")}</small></div>
+    <div><span class="os-lab">${tt("gr.os.inv.self", "Self-installation")}</span><b>${fmt(inv.self)}</b><small>${tt("gr.os.be.investment", "investment")}</small></div>
+    <div><span class="os-lab">${tt("gr.os.strip.beLab", "Break even")}</span><b class="dim">${tt("gr.os.none.short", "No estimate")}</b><small>${est.none}</small></div></div>`;
+  const m = est.model, p = est.profit, other = mode === "firm" ? "self" : "firm";
+  const big = (key, alt) => `<div${alt ? ` class="alt"` : ""}><span class="os-lab">${key === "firm" ? tt("gr.os.inv.firm", "Installation firm") : tt("gr.os.inv.self", "Self-installation")}</span><b>${
+    p > 0 ? osRange(est.days[key]) : tt("gr.os.be.never", "not at this profit")}</b></div>`;
+  const tax = (osFacts().game || {}).tax || 0;
+  const t = osType(plan.type), own = osOwnRatio(plan.type), cann = osCannibal(plan.type, b.hood);
+  const row = (label, value, cls = "") => `<div class="os-site${cls}"><span><b>${label}</b></span><span class="v">${value}</span></div>`;
+  const mix = (m.mix || []).length ? m.mix.map(osCampaignName).join(", ") : tt("gr.os.be.mix.none", "none");
+  const detail = [
+    row(m.office ? tt("gr.os.be.fees", "Fees billed") : tt("gr.os.be.revenue", "Sales"), fmt(m.revenue)),
+    m.office ? "" : row(tt("gr.os.be.goods", "Goods, at import prices"), fmt(-m.cogs)),
+    row(tt("gr.os.be.wages", "Wages"), fmt(-m.wages)),
+    row(tt("gr.os.be.rent", "Rent"), fmt(-m.rent)),
+    row(tt("gr.os.be.marketing", "Marketing"), fmt(-m.marketing)),
+  ].join("");
+  const lines = [
+    `<p class="os-note">${tt("gr.os.be.mid", "About {w} a day if it is priced, stocked and staffed as planned.", {w: osMidMoney(p * OS_LOW, p * OS_HIGH)})}</p>`,
+    /* The same basis as the line above: the range's middle, less the tax. */
+    tax ? `<p class="os-note">${tt("gr.os.be.tax", "After {n}% tax: {w} a day.", {n: tax, w: osMidMoney(p * OS_LOW * (1 - tax / 100), p * OS_HIGH * (1 - tax / 100))})}</p>` : "",
+    own ? `<p class="os-note">${tt("gr.os.be.own", {one: "Your shop of this type earns {pct}% of its estimate.",
+      other: "Your {n} shops of this type earn {pct}% of their estimate."},
+      {n: own.rows.length, pct: Math.round(own.ratio * 100)})}</p>` : "",
+    est.hyped.length ? `<p class="os-note">${tt("gr.os.be.hype", "First to sell {items} in {hood}: extra demand on them for the first 14 days.",
+      {items: est.hyped.map(osItemName).join(", "), hood: hoodName(b.hood)})}</p>` : "",
+    cann ? `<p class="os-note">${tt("gr.os.be.cannibal", {one: "Your shop in {hood} that sells {items} loses about {w} a day: a new seller moves demand down there too.",
+      other: "Your {n} shops in {hood} that sell {items} lose about {w} a day between them: a new seller moves demand down there too."},
+      {n: cann.shops, hood: hoodName(b.hood), items: cann.items.map(osItemName).join(", "), w: fmt(cann.loss)})}</p>` : "",
+  ].join("");
+  const assume = m.office
+    ? tt("gr.os.be.assumeOffice2", "Open 24/7: {always} of the {n2} computers staffed around the clock, every computer 8 to 22 on weekdays and half of them at weekends. The fee at the highest price every client in {hood} accepts, satisfaction {sat}, the best marketing: {mix}. Bills {n} hours a day. The first five days earn less while satisfaction and new staff settle, and the days to break even count that.",
+      {hood: hoodName(b.hood), sat: osSatisfaction(plan.type), mix, n: num(Math.round(m.customers)), n2: osCap(b),
+        always: osOfficeStaffed(osCap(b), osCap(b), 1, 3)})
+    : tt("gr.os.be.assume2", "Open 24/7, the type's whole range at the highest price every customer in {hood} accepts, satisfaction {sat}, the best marketing: {mix}. Sold {units} units to {n} customers a day. The first five days earn less while satisfaction and new staff settle, and the days to break even count that.",
+      {hood: hoodName(b.hood), sat: osSatisfaction(plan.type), mix, units: num(Math.round(m.lines.reduce((s, l) => s + l.units, 0))), n: num(Math.round(m.customers))});
+  return `<div class="os-be">
+  <div class="os-card"><div class="os-big">${big(mode)}${big(other, true)}</div>${osChart(est, mode)}</div>
+  <div class="os-card"><h3>${tt("gr.os.be.profit", "Expected profit a day")}</h3>
+    <div class="os-sites">${detail}<div class="os-site avg"><span><b>${tt("gr.os.be.estimate", "The game's rules")}</b><small>${
+      tt("gr.os.be.estimate.sub", "{hood}, {layout}, {cap} customers an hour at most", {hood: hoodName(b.hood), layout: osLayout(b), cap: osCap(b)})}</small></span><span class="v${p < 0 ? " neg" : ""}">${fmt(p)}</span></div></div>
+    ${lines}<p class="os-assume" data-tip="${attr(assume)}" tabindex="0">${tt("gr.os.be.assumeLab", "What the estimate assumes")}</p>
+  </div></div>
+  ${own ? osOwnHtml(plan, own) : ""}
+  ${osFinHtml(plan, est)}`;
+}
+const osCampaignName = id => ({smallinternet: tt("gr.os.mk.smallinternet", "Small internet"), mediuminternet: tt("gr.os.mk.mediuminternet", "Medium internet"),
+  largeinternet: tt("gr.os.mk.largeinternet", "Large internet"), smallbillboard: tt("gr.os.mk.smallbillboard", "Small billboard"),
+  mediumbillboard: tt("gr.os.mk.mediumbillboard", "Medium billboard"), largebillboard: tt("gr.os.mk.largebillboard", "Large billboard")})[id] || id;
+/* Your own shops of the type: what each really earns beside what the same
+   rules give its building. */
+function osOwnHtml(plan, own){
+  const byKey = new Map((D.businesses || []).map(b => [b.key, b]));
+  const top = Math.max(...own.rows.map(r => Math.max(r.actual, r.model)), 1);
+  const rows = own.rows.map(r => { const b = byKey.get(r.key) || {};
+    return `<div class="os-site"><span><b>${spEsc(b.address || r.key)}</b><small><span class="hood">${spEsc(HOOD_TAGS[r.hood] || "")}</span> ${spEsc(r.layout || "")}</small></span>
+      <span class="bar"><i style="width:${Math.max(2, r.actual / top * 100).toFixed(0)}%"></i></span><span class="v">${fmt(r.actual)}</span><span class="v os-dim">${Math.round(r.ratio * 100)}%</span></div>`; }).join("");
+  return `<div class="os-card os-ownc"><h3>${tt("gr.os.own.title", {one: "Your shop of this type, by the same rules", other: "Your shops of this type, by the same rules"}, {n: own.rows.length})}</h3>
+    <p class="quiet">${tt("gr.os.own.note", "Profit a day over their last two weeks, goods at import prices, beside the rules' figure for each one's own building, hours and marketing.")}</p>
+    <div class="os-sites os-own">${rows}</div></div>`;
+}
+/* Cumulative profit from the opening against both investments, the range as
+   a band and its middle as the line, whose crossings are the days the
+   headline gives. The first days bend the line: the ramp, and a first seller's hype. */
+function osChart(est, mode){
+  const W = 560, H = 262, x0 = 58, y0 = 16, x1 = W - 16, y1 = H - 40, p = est.profit;
+  if(!(p > 0)) return `<p class="quiet">${tt("gr.os.be.noChart", "At this profit the store does not earn its investment back.")}</p>`;
+  const inv = est.inv, hi = Math.max(inv.firm, inv.self);
+  const last = osBreakDay(hi, est.day, OS_LOW) || Math.ceil(hi / (p * OS_LOW));
+  const dmax = Math.max(10, Math.ceil(last * 1.15 / 5) * 5);
+  const cum = [0];
+  for(let d = 1; d <= dmax; d++) cum.push(cum[d - 1] + est.day(d - 1));
+  const vmax = Math.max(cum[dmax] * OS_HIGH, hi * 1.05, 1);
+  const X = d => x0 + (x1 - x0) * d / dmax, Y = v => y1 - (y1 - y0) * Math.max(0, Math.min(v, vmax)) / vmax;
+  const step = osNiceStep(vmax / 4), dstep = osNiceStep(dmax / 5);
+  const g = [];
+  for(let v = 0; v <= vmax + 1e-6; v += step) g.push(`<line class="grid" x1="${x0}" x2="${x1}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"></line><text x="${x0 - 8}" y="${(Y(v) + 3.5).toFixed(1)}" text-anchor="end">${money(v)}</text>`);
+  for(let d = 0; d <= dmax; d += dstep) g.push(`<text x="${X(d).toFixed(1)}" y="${y1 + 18}" text-anchor="middle">${d}</text>`);
+  const pts = k => cum.map((v, d) => `${X(d).toFixed(1)},${Y(v * k).toFixed(1)}`);
+  const band = `M${pts(OS_HIGH).join(" L")} L${pts(OS_LOW).reverse().join(" L")} Z`;
+  /* A line crossed early runs through the left of its label, which then
+     stands at the right edge. Two investments close together (a store that
+     pays back in a day or two) would print over each other: the second's
+     label takes the other edge from the first's, and its day goes above its
+     point. */
+  const other = mode === "firm" ? "self" : "firm";
+  const near = Math.abs(Y(inv.firm) - Y(inv.self)) < 18;
+  const early = key => { const d = osBreakDay(inv[key], est.day, OS_MID); return !!d && d <= dmax * 0.4; };
+  const mark = (key, cls, alt) => { const v = inv[key], d = osBreakDay(v, est.day, OS_MID);
+    const right = alt ? !early(mode) : early(key);
+    const label = `${key === "firm" ? tt("gr.os.inv.firm", "Installation firm") : tt("gr.os.inv.self", "Self-installation")} ${fmt(v)}`;
+    return `<line class="${cls}" x1="${x0}" x2="${x1}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"></line><text class="lbl ${cls === "inv" ? "w" : "i"}" x="${right ? x1 - 6 : x0 + 6}" y="${(Y(v) - 7).toFixed(1)}"${
+      right ? ` text-anchor="end"` : ""}>${label}</text>${
+      d && d <= dmax ? `<circle class="hit" cx="${X(d).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="5"></circle><text class="lbl" x="${(X(d) + 9).toFixed(1)}" y="${(Y(v) + (alt ? -20 : 16)).toFixed(1)}">${
+      tt("gr.os.days", {one: "{n} day", other: "{n} days"}, {n: d})}</text>` : ""}`; };
+  return `<svg class="os-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${attr(tt("gr.os.be.chart", "Profit from the opening against the investment"))}">
+    ${g.join("")}<line class="ax" x1="${x0}" x2="${x1}" y1="${y1}" y2="${y1}"></line>
+    <path class="band" d="${band}"></path>${mark(mode, "inv", false)}${mark(other, "inv2", near)}
+    <path class="line" d="M${pts(OS_MID).join(" L")}"></path><text x="${x1}" y="${y1 + 34}" text-anchor="end">${tt("gr.os.be.axis", "days after opening")}</text></svg>`;
+}
+const osNiceStep = v => { const e = Math.pow(10, Math.floor(Math.log10(Math.max(v, 1)))); const f = v / e; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * e; };
+
+/* The financing panel: part of the investment borrowed, what that costs a
+   day against the expected profit, and break even with and without it. */
+function osFinHtml(plan, est){
+  const f = osFacts().finance || {}, banks = f.banks || [];
+  if(!banks.length) return "";
+  const fin = plan.finance || (plan.finance = {on: false, amount: 0, bank: null});
+  const on = !!fin.on;
+  const head = `<div class="os-finhead"><h3>${osIcon("bank")}${tt("gr.os.fin.title", "Financing")}</h3>
+    <label class="os-switch"><input type="checkbox" data-os-fin-on${on ? " checked" : ""}><span>${tt("gr.os.fin.on", "Borrow part of it")}</span></label></div>`;
+  if(!on) return `<div class="os-card os-fin" id="osFin">${head}<p class="quiet">${tt("gr.os.fin.off",
+    "A bank loan pays part of the investment now and costs interest every day until it is repaid. The game books the loan to the company, not to the store.")}</p></div>`;
+  const bank = banks.find(b => b.id === fin.bank) || banks.find(b => b.id === "VantanderBankSettings") || banks[0];
+  const lenders = banks.map(b => `<button type="button" class="${b.id === bank.id ? "on" : ""}" data-os-bank="${attr(b.id)}" aria-pressed="${b.id === bank.id}">${spEsc(b.name)} <b>${
+    tt("gr.os.fin.rate", "{r}% a year · {d} days", {r: num(Math.round(b.rate * (f.multiplier || 0) * 10) / 10), d: b.term})}</b></button>`).join("");
+  const mode = osMode(plan), inv = est.inv[mode];
+  const limit = Math.min(osLoanLimit(bank), Math.floor(inv));
+  /* Half the investment until the reader picks an amount; 0 is a choice too. */
+  const amount = Math.max(0, Math.min(limit, fin.amount ?? Math.round(inv / 2)));
+  return `<div class="os-card os-fin" id="osFin">${head}
+    <div class="os-finctl"><div class="os-fr"><span>${tt("gr.os.fin.lender", "Lender")}</span><nav class="os-seg">${lenders}</nav></div>
+    <div class="os-fr"><span>${tt("gr.os.fin.amount", "Amount")}</span><div class="os-amount"><label class="os-num">$<input type="number" min="0" max="${limit}" step="1000" value="${Math.round(amount)}" data-os-fin-amount aria-label="${attr(tt("gr.os.fin.amountAria", "Amount to borrow"))}"></label>
+      <input type="range" min="0" max="${limit}" step="${Math.max(500, osNiceStep(limit / 100))}" value="${Math.round(amount)}" data-os-fin-range aria-label="${attr(tt("gr.os.fin.amountAria", "Amount to borrow"))}">
+      <small>${tt("gr.os.fin.limit", "{bank} lends you up to {w} now", {bank: bank.name, w: fmt(osLoanLimit(bank))})}</small></div></div></div>
+    <div class="os-finfacts" id="osFinFacts">${osFinFacts(plan, est, bank, amount)}</div></div>`;
+}
+function osFinFacts(plan, est, bank, amount){
+  /* On the same basis as the headline: the middle of the profit range. */
+  const f = osFacts().finance || {}, mode = osMode(plan), inv = est.inv[mode], p = est.profit * OS_MID, day = k => est.day(k) * OS_MID;
+  const loan = osLoan(amount, bank);
+  const cell = (lab, value, sub) => `<div><span class="os-lab">${lab}</span><b>${value}</b><small>${sub}</small></div>`;
+  if(!loan) return cell(tt("gr.os.fin.upfront", "Cash upfront"), fmt(inv), tt("gr.os.fin.min", "a bank lends {w} at least", {w: fmt(f.minimum || 0)}));
+  const own = inv - amount, daily = loan.interest + loan.repay;
+  const without = osBreakDay(inv, day), with_ = osLoanDays(own, day, loan);
+  const payoff = without != null && without < loan.days ? without * loan.interest : null;
+  const dayText = n => n == null ? tt("gr.os.be.never", "not at this profit") : tt("gr.os.days", {one: "{n} day", other: "{n} days"}, {n: num(n)});
+  return cell(tt("gr.os.fin.upfront", "Cash upfront"), fmt(own), tt("gr.os.fin.upfront.sub", "{w} borrowed", {w: fmt(amount)}))
+    + cell(tt("gr.os.fin.daily", "A day while it runs"), fmt(daily), tt("gr.os.fin.daily.sub", "{r} repaid + {i} interest, against {p} profit", {r: fmt(loan.repay), i: fmt(loan.interest), p: fmt(p)}))
+    + cell(tt("gr.os.fin.interest", "Interest"), fmt(loan.total), payoff != null ? tt("gr.os.fin.interest.early", "over {n} days; {w} if paid off at break even", {n: num(loan.days), w: fmt(payoff)})
+      : tt("gr.os.fin.interest.term", "over {n} days, flat on the amount borrowed", {n: num(loan.days)}))
+    + cell(tt("gr.os.fin.be", "Your own cash back"), dayText(with_), tt("gr.os.fin.be.sub", "{d} without the loan", {d: dayText(without)}));
+}
+/* Only the figures move while the amount is typed or dragged. */
+function osFinUpdate(amount){
+  const plan = osPlan(), b = plan && osBuilding(plan.key), est = b && osEstimate(plan, b);
+  if(!plan || !est || !est.inv) return;
+  const banks = (osFacts().finance || {}).banks || [];
+  const bank = banks.find(x => x.id === (plan.finance || {}).bank) || banks.find(x => x.id === "VantanderBankSettings") || banks[0];
+  const limit = Math.min(osLoanLimit(bank), Math.floor(est.inv[osMode(plan)]));
+  const asked = Math.round(+amount || 0);
+  amount = Math.max(0, Math.min(limit, asked));
+  plan.finance.amount = amount;
+  osSave();
+  const facts = $("osFinFacts");
+  if(facts) facts.innerHTML = osFinFacts(plan, est, bank, amount);
+  /* The field says the loan the figures use: past the limit it snaps back,
+     even while it is being typed in. */
+  const fin = $("osFin");
+  if(fin) fin.querySelectorAll("[data-os-fin-amount], [data-os-fin-range]").forEach(i => {
+    if(document.activeElement !== i || asked !== amount) i.value = amount; });
+}
+
+/* --- step 5: until opening ---------------------------------------------------
+   The seven rows tick from the save once a business stands at the plan's
+   address; before that they are to-dos. A button writes through the game link
+   when the mod lists the write, and is a short in-game instruction otherwise. */
+const OS_DEMAND_GROUP = {toilet: "bathroom", toiletprivacy: "toiletprivacy", sink: "sink", music: "music", interiordesign: "interior"};
+let osLinkHint = false;
+const osRented = plan => (D.businesses || []).find(b => b.key === plan.key) || null;
+/* A business stands at the address and is the type that was planned: only then does the save tell anything about the plan. */
+const osOpenedAt = plan => { const b = osRented(plan); return b && b.status !== "vacant" && (!b.typeSlug || b.typeSlug === plan.type) ? b : null; };
+const osOtherType = plan => { const b = osRented(plan); return b && b.status !== "vacant" && b.typeSlug && b.typeSlug !== plan.type ? b : null; };
+const osBuilt = plan => osOtherType(plan) ? null : ((D.openStore || {}).built || {})[plan.key] || null;
+const osCk = (icon, state, title, sub, act, p) => ({icon, state, title, sub, act: act || "", p: p || 0});
+const osCkAddress = plan => { const b = osBuilding(plan.key); return spEsc(b ? b.address : plan.key); };
+/* Names in a sentence: the first two, and how many more. */
+const osNames = names => names.length > 2
+  ? tt("gr.os.why.more", "{items} +{n}", {items: names.slice(0, 2).join(", "), n: names.length - 2}) : names.join(", ");
+const osIngame = html => `<div class="os-ingame">${osIcon("game")}<span>${html}</span></div>`;
+/* A write as a button when the game link lists it, else what to do in the game. */
+function osAct(kind, label, ico, data, ingame){
+  const link = gwLink();
+  if(link && (link.writes || []).includes(kind))
+    return `<button type="button" class="os-cta sm" data-os-write="${kind}" ${data || ""}>${osIcon(ico)}${spEsc(label)}</button>`;
+  return osIngame(ingame);
+}
+/* What Staff this site would do at the plan's store (hrRequest(), the site
+   panel's action): people hired or reassigned in or out, and weeks written. */
+function osStaffWork(key){
+  if(!D.hiring || !hrCanHire()) return 0;
+  const r = hrRequest(hrMemoModel(), {mode: "both", site: key, one: true});
+  return r.body.hires.length + r.body.moves.length + r.weeks;
+}
+/* The row's action on every pending path: Staff this site where the mod
+   takes the hire write and the site-scoped action does something; else
+   what to do in the game. */
+const osStaffAct = (plan, ingame) => hrCanHire() && osStaffWork(plan.key)
+  ? osAct("hire", tt("sp.gw.staff", "Staff this site"), "hire", "", ingame)
+  : ingame ? osIngame(ingame) : "";
+function osReqName(plan, b, name){
+  const out = osOutfit(plan, b), line = out && out.lines.find(l => l[3] === name);
+  if(line) return spEsc(osItemName(line[0]));
+  if(name === "anyprimaryproduct") return tt("gr.os.ck.furn.product", "A shelf holding a product it sells");
+  if(name === "shelfwithhaircareproducts") return tt("gr.os.ck.furn.haircare", "A shelf with hair-care products on it");
+  return spEsc(prettySlug(name));
+}
+function osCkFurniture(plan, b){
+  const title = tt("gr.os.ck.furn", "Furniture");
+  const built = osBuilt(plan);
+  if(!built){
+    const inv = osInvestment(plan, b);
+    return osCk("shelves", "todo", title, inv ? tt("gr.os.ck.furn.todo", {one: "{n} item to place", other: "{n} items to place"}, {n: inv.items}) : "");
+  }
+  const req = built.req || [], met = req.filter(r => r[2] >= r[1]).length;
+  const missing = req.filter(r => r[2] < r[1]).map(r => osReqName(plan, b, r[0]));
+  if(!missing.length) return osCk("shelves", "done", title, tt("gr.os.ck.furn.done",
+    {one: "{n} item placed · <span class=\"ok\">every required item is there</span>", other: "{n} items placed · <span class=\"ok\">every required item is there</span>"}, {n: built.placed}));
+  return osCk("shelves", built.placed > 0 ? "part" : "todo", title, tt("gr.os.ck.furn.part",
+    {one: "{n} item placed · <span class=\"w\">missing {items}</span>", other: "{n} items placed · <span class=\"w\">missing {items}</span>"},
+    {n: built.placed, items: osNames(missing)}), "", req.length ? Math.round(100 * met / req.length) : 0);
+}
+function osCkStaff(plan, opened){
+  const title = tt("gr.os.ck.staff", "Staff for the opening hours");
+  if(!opened) return osCk("people", "todo", title, tt("gr.os.ck.staff.todo", "Hired once the business is set up"));
+  const have = opened.staff || 0;
+  const M = hrMemoModel(), S = M.sites.find(s => s.key === plan.key);
+  if(!S || !S.planned || S.site.noHours || !S.variant) return osCk("people", "todo", title,
+    tt("gr.os.ck.staff.nohours", "No opening hours set yet: set them in BizMan, and the board plans the staff"));
+  const address = osCkAddress(plan);
+  const week = tt("gr.os.ck.staff.ingame.week", "<b>BizMan › Schedule</b>: give your staff at {address} their hours.", {address});
+  /* A week too short for any contract (band "short") is no place to hire
+     for: its hours are said as the Staff page says them (open ones only, as
+     role.tooFew), and any short week at all keeps the row pending, planned
+     move included, until a later save shows the hours worked. */
+  /* An unticked reassign leaves its week with nobody (hrModel()). A padded
+     week with no hours is "short" too, and no hours at all (shortHires). */
+  const open = x => !x.who;
+  const isShort = x => x.w.band === "short" && (x.w.slots || []).length > 0;
+  const places = S.weeks.filter(x => x.w.band !== "short");
+  const shorts = S.weeks.filter(isShort), anyShort = shorts.length > 0;
+  const shortH = shorts.filter(open).reduce((n, x) => n + Number(x.w.hours || 0), 0);
+  const placedShorts = shorts.filter(x => !open(x));
+  const roles = m => osNames([...m].map(([skill, n]) => `${n} ${hrRoles(skill, n)}`));
+  const bySkillOf = (list, f = () => true) => list.filter(f).reduce((m, x) => m.set(x.w.skill, (m.get(x.w.skill) || 0) + 1), new Map());
+  /* Without the link, the step that clears a placed week is the hire or the
+     move itself. */
+  const handStep = list => {
+    const hires = bySkillOf(list, x => x.who && x.who.type === "hire"), moves = bySkillOf(list, x => x.who && x.who.type === "move");
+    return hires.size && moves.size
+      ? tt("gr.os.ck.staff.ingame.mixed", "<b>MyEmployees</b> on your phone: hire {roles} from your headhunters' candidates and move {moves}, at {address}.", {roles: roles(hires), moves: roles(moves), address})
+      : moves.size ? tt("gr.os.ck.staff.ingame.move", "<b>MyEmployees</b> on your phone: move {moves} to {address}.", {moves: roles(moves), address})
+      : hires.size ? tt("gr.os.ck.staff.ingame", "<b>MyEmployees</b> on your phone: hire {roles} from your headhunters' candidates, at {address}.", {roles: roles(hires), address})
+      : "";
+  };
+  const tooFew = shortH ? ` · <span class="w">${tt("co.hire.role.toofew", "{h} h a week too few for a hire", {h: hrNum(shortH)})}</span>` : "";
+  const need = places.length;
+  const scheduled = opened.stationShifts > 0, gap = hrUnstaffedOf(S);
+  const count = m => [...m.values()].reduce((a, n) => a + n, 0);
+  const bare = bySkillOf(places, open);
+  /* One action for the row, whatever its text: Staff this site where the
+     link can do something (osStaffAct()), else the steps in the game --
+     every planned hire and move, regular or short, then the schedule where
+     people here have no hours or short hours stay open -- and, for regular
+     places nobody can fill, the headhunter. */
+  const handAll = handStep(places.concat(placedShorts));
+  /* The unassigned people the plan already counts on (its bench): moves
+     with no week of their own (hrModel()), assigned here in MyEmployees. */
+  const benched = (M.moves || []).filter(m => m.fixed && !m.off && m.to && m.to.key === plan.key).length;
+  const benchStep = benched ? tt("gr.os.ck.staff.ingame.bench", {one: "<b>MyEmployees</b> on your phone: assign {n} person from the bench to {address}.",
+    other: "<b>MyEmployees</b> on your phone: assign {n} people from the bench to {address}."}, {n: benched, address}) : "";
+  /* Hours are asked for the people the plan uses, never for spares: 0 h
+     is no warning for them. */
+  const usedHere = have - spSpareIds(opened).length > 0;
+  const weekStep = usedHere && (!scheduled || gap || shortH) ? week : "";
+  const act = osStaffAct(plan, [handAll, benchStep, weekStep].filter(Boolean).join(" "))
+    + (bare.size ? osIngame(tt("gr.os.ck.staff.headhunter", "No candidate fits yet: ask a <b>headhunter</b> for {roles}, at {address}.", {roles: roles(bare), address})) : "");
+  /* Said in every text but the bench-only one: people the plan counts on
+     who are not assigned here yet. */
+  const benchTxt = benched ? ` · <span class="w">${tt("gr.os.ck.staff.bench", {one: "{n} from the bench to assign", other: "{n} from the bench to assign"}, {n: benched})}</span>` : "";
+  if(!need){
+    /* A demand plan sizes the staff from sales: before any, somebody hired
+       early reads as spare, and the unsized reason is what to say. */
+    const sized = S.variant !== "demand" || opened.hasTraded;
+    const covered = have > 0 && scheduled && !gap && !benched && sized;
+    if(covered && !anyShort) return osCk("people", "done", title, tt("gr.os.ck.staff.done",
+      {one: "{n} person · <span class=\"ok\">the opening hours are covered</span>", other: "{n} people · <span class=\"ok\">the opening hours are covered</span>"}, {n: have}));
+    /* Hired before opening and not assigned anywhere yet: on the bench. */
+    if(!have && benched) return osCk("people", "todo", title, tt("gr.os.ck.staff.benchonly",
+      {one: "{n} person hired, on the bench · <span class=\"w\">assign them here</span>", other: "{n} people hired, on the bench · <span class=\"w\">assign them here</span>"}, {n: benched}) + tooFew, act);
+    let sub;
+    if(have > 0 && sized && (!usedHere || scheduled && !gap)) sub = tt("gr.os.ck.staff.count", {one: "{n} person on staff", other: "{n} people on staff"}, {n: have});
+    else if(have > 0 && usedHere && !scheduled) sub = tt("gr.os.ck.staff.idle",
+      {one: "{n} person on staff · <span class=\"w\">no hours scheduled yet</span>", other: "{n} people on staff · <span class=\"w\">no hours scheduled yet</span>"}, {n: have});
+    else if(have > 0 && usedHere && gap){
+      const idle = (gap.roles || []).reduce((a, r) => a + (r.idle || 0), 0) || have;
+      sub = tt("gr.os.ck.staff.nohours2",
+        {one: "{have} on staff · <span class=\"w\">{n} person has no hours</span>", other: "{have} on staff · <span class=\"w\">{n} people have no hours</span>"}, {have, n: idle});
+    } else sub = have > 0
+      ? tt("gr.os.ck.staff.unsized", {one: "{n} person on staff · <span class=\"w\">the board sizes the staff once the shop has sales</span>",
+        other: "{n} people on staff · <span class=\"w\">the board sizes the staff once the shop has sales</span>"}, {n: have})
+      : tt("gr.os.ck.staff.nobody", "Nobody is hired yet");
+    return osCk("people", "todo", title, sub + benchTxt + tooFew, act);
+  }
+  const bySkill = bySkillOf(places);
+  /* People the plan gives no week (spSpareIds()) are spare, not staff it
+     counts on: they neither fill a place nor make one. */
+  const used = Math.max(0, have - spSpareIds(opened).length);
+  /* The bench people are places the plan counts on, not assigned yet. */
+  const total = used + need + benched;
+  let sub = tt("gr.os.ck.staff.need", "{have} of {total} people · <span class=\"w\">{need} more: {roles}</span>",
+    {have: used, total, need, roles: roles(bySkill)});
+  if(bare.size) sub += ` · ${tt("gr.os.ck.staff.nocand", {one: "{n} without a candidate in your headhunters' lists", other: "{n} without a candidate in your headhunters' lists"}, {n: count(bare)})}`;
+  return osCk("people", used > 0 ? "part" : "todo", title, sub + benchTxt + tooFew, act, Math.round(100 * used / total));
+}
+function osCkUniforms(plan, opened){
+  const title = tt("gr.os.ck.uni", "Uniforms");
+  const asks = ((osType(plan.type) || {}).demands || []).some(d => d[0] === "employeeuniforms");
+  if(!opened) return osCk("shirt", "todo", title, asks ? tt("gr.os.ck.uni.todo", "Set for each role once the shop has staff")
+    : tt("gr.os.ck.uni.none.todo", "This type does not ask for uniforms: nothing to set"));
+  if(!asks) return osCk("shirt", "done", title, tt("gr.os.ck.uni.none", "This type does not ask for uniforms"));
+  if(opened.missingUniformLocker) return osCk("shirt", "todo", title, tt("gr.os.ck.uni.locker", "<span class=\"w\">No uniform locker</span> · the game sets uniforms only where one stands"),
+    osIngame(tt("gr.os.ck.uni.locker.ingame", "Place a <b>Uniform locker</b> in the shop, then set the uniforms.")));
+  if(!opened.staff) return osCk("shirt", "todo", title, tt("gr.os.ck.uni.nostaff", "Set once the shop has staff"));
+  if(!(opened.stationShifts > 0)) return osCk("shirt", "todo", title, tt("gr.os.ck.uni.noshifts", "Set once staff have hours"));
+  const gaps = opened.uniformGaps || [];
+  if(!gaps.length) return osCk("shirt", "done", title, tt("gr.os.ck.uni.done", "<span class=\"ok\">Every role has one</span>"));
+  const roles = osNames(gaps.map(spEsc));
+  return osCk("shirt", "todo", title, tt("gr.os.ck.uni.gaps", "<span class=\"w\">None set for {roles}</span>", {roles}),
+    osAct("uniforms", tt("gr.os.ck.uni.assign", "Assign uniforms"), "shirt", `data-os-key="${attr(plan.key)}"`,
+      tt("gr.os.ck.uni.ingame", "<b>BizMan › {address} › Uniforms</b>: set one for {roles}.", {address: osCkAddress(plan), roles})));
+}
+function osCkDemands(plan, opened, uni){
+  const title = tt("gr.os.ck.dem", "Customer demands");
+  const built = osBuilt(plan);
+  const items = [], unchecked = [];
+  for(const [slug] of (osType(plan.type) || {}).demands || []){
+    if(slug === "employeeuniforms"){ items.push([tt("gr.os.ck.dem.uniforms", "Uniforms"), !!opened && uni.state === "done"]); continue; }
+    if(slug === "seating"){ items.push([tt("gr.os.ck.dem.seating", "Seating"), !!opened && !!built && built.seating === true]); continue; }
+    if(slug === "workoutvariety"){ unchecked.push(tt("gr.os.ck.dem.variety", "Workout variety")); continue; }
+    const g = OS_DEMAND_GROUP[slug];
+    if(!g){ unchecked.push(spEsc(prettySlug(slug))); continue; }
+    const met = !!opened && (opened.amenities ? opened.amenities[g] !== false : !(opened.missingAmenities || []).includes(`ba:customerdemand_${slug}`));
+    items.push([SP_AMENITY_WORD[g] || spEsc(prettySlug(slug)), met]);
+  }
+  const all = items.length + unchecked.length;
+  if(!all) return osCk("heart", opened ? "done" : "todo", title, tt("gr.os.ck.dem.none", "This type makes no demands beyond its products"));
+  if(!opened) return osCk("heart", "todo", title, tt("gr.os.ck.dem.todo", {one: "{n} demand to meet", other: "{n} demands to meet"}, {n: all}));
+  const met = items.filter(x => x[1]).length, missing = items.filter(x => !x[1]).map(x => x[0]);
+  const ingame = unchecked.length ? osIngame(tt("gr.os.ck.dem.ingame", "Check {items} in the game: the save does not say whether {address} meets it.",
+    {items: `<b>${osNames(unchecked)}</b>`, address: osCkAddress(plan)})) : "";
+  if(!missing.length && !unchecked.length) return osCk("heart", "done", title, tt("gr.os.ck.dem.done", {one: "<span class=\"ok\">{n} demand met</span>", other: "<span class=\"ok\">All {n} demands met</span>"}, {n: items.length}));
+  const sub = missing.length
+    ? tt("gr.os.ck.dem.part", "{met} of {total} met · <span class=\"w\">missing {items}</span>", {met, total: all, items: osNames(missing)})
+    : tt("gr.os.ck.dem.check", "{met} of {total} met · <span class=\"w\">check {items} in the game</span>", {met, total: all, items: osNames(unchecked)});
+  return osCk("heart", met ? "part" : "todo", title, sub, ingame, Math.round(100 * met / all));
+}
+function osCkMarketing(plan, b, opened){
+  const title = tt("gr.os.ck.mk", "Marketing");
+  if(!opened) return osCk("megaphone", "todo", title, tt("gr.os.ck.mk.todo", "A campaign can start once the business exists"));
+  if((opened.campaigns || []).some(c => c.enabled))
+    return osCk("megaphone", "done", title, tt("gr.os.ck.mk.done", "<span class=\"ok\">A campaign is running</span>"));
+  /* The site's cheapest mix (_marketing(), marketingPlan), the one the site
+     panel's Promotion block sets: no campaign at all when promotion is full
+     without one. */
+  const p = opened.marketingPlan, address = osCkAddress(plan);
+  const none = tt("gr.os.ck.mk.none", "<span class=\"w\">No campaign</span> for {address}", {address});
+  const ingame = tt("gr.os.ck.mk.ingame", "<b>BizMan › Marketing</b>: start a campaign for {address}.", {address});
+  if(p && p.on && !p.on.length && p.promotionPlan >= 100)
+    return osCk("megaphone", "done", title, tt("gr.os.ck.mk.unneeded", "<span class=\"ok\">No campaign needed</span> · promotion is full without one"));
+  /* A mix the write would not change is no campaign at all (none runs):
+     none of the campaigns the site can book would raise its promotion. As
+     spMkLine() does, a missing BizMan switch is still set up, and an agency
+     not visited yet may sell a better one. */
+  if(p && gwMkSame(p)){
+    const useless = tt("gr.os.ck.mk.useless", "No campaign would raise promotion here");
+    /* A missing BizMan switch is set up through the write, as the site
+       panel offers it; without the write the set-up is optional: promotion
+       is unchanged. */
+    if(p.needsSetup && gwMkCan()){
+      const from = [...new Set(p.setupAgencies || [])], blocked = gwMkBlocked(from).length;
+      const why = from.length && blocked === from.length ? gwMkWhy(from) : "";
+      const label = !why && blocked ? tt("sp.mk.setup.now", "Add the campaign switches open agencies can add now")
+        : tt("sp.mk.setup.name", "Add every campaign switch to BizMan");
+      return osCk("megaphone", "todo", title, `${p.visit.length ? none : useless}${why ? ` · <span class="w">${why}</span>` : ""}`,
+        osAct("marketing", label, "megaphone", `data-os-mk-mode="setup"${why ? ` aria-disabled="true"` : ""}`, "")
+        + (p.visit.length ? osIngame(tt("sp.mk.better2", "Visit {agencies} once for a better mix.", {agencies: gwMkVisit(p.visit)})) : ""));
+    }
+    /* An agency not visited yet may sell one that would: not "none would". */
+    if(p.visit.length) return osCk("megaphone", "todo", title, none,
+      osIngame(tt("sp.mk.better2", "Visit {agencies} once for a better mix.", {agencies: gwMkVisit(p.visit)})));
+    return osCk("megaphone", "done", title, `<span class="ok">${useless}</span>`);
+  }
+  if(!p) return osCk("megaphone", "todo", title, none, osIngame(ingame));
+  /* No agency is a phone contact yet: the mix waits on a first visit. */
+  if(!p.on) return osCk("megaphone", "todo", title, none,
+    osIngame(p.visit.length ? tt("sp.mk.novisit2", "Visit {agencies} once to book campaigns.", {agencies: gwMkVisit(p.visit)}) : ingame));
+  const why = gwMkCan() ? gwMkWhy(p.agencies || []) : "";
+  const sub = `${none} · ${tt("sp.mk.line", "Cheapest mix: {mix} · {cost:$}/day · {p}%", {mix: `<b>${gwMkMix(p.on)}</b>`, cost: p.costPlan, p: p.promotionPlan})}${
+    why ? ` · <span class="w">${why}</span>` : ""}`;
+  return osCk("megaphone", "todo", title, sub,
+    osAct("marketing", tt("sp.mk.set.name", "Set the cheapest mix"), "megaphone", why ? `aria-disabled="true"` : "", gwMkHand(opened) || ingame));
+}
+/* The products a plan or a weekly wholesale contract delivers to the plan's business: supply.routed holds the (shop, product) pairs
+   with a stock target above zero or a contract, whatever the shop sells. A supply status (covered, short, idle) is not a route. */
+function osRoutes(opened, key){
+  const idx = (D.businesses || []).indexOf(opened);
+  return new Set(((D.supply || {}).routed || []).filter(r => r[0] === idx).map(r => r[1]));
+}
+function osCkLogistics(plan, opened){
+  const title = tt("gr.os.ck.log", "Logistics");
+  const go = `<button type="button" class="os-btn" data-os-route="expansion/factory">${osIcon("factory")}${tt("gr.os.ck.log.go", "Plan a factory")}${osIcon("chev")}</button>`;
+  const t = osType(plan.type) || {};
+  if(t.model === "office") return osCk("truck", opened ? "done" : "todo", title, opened
+    ? tt("gr.os.ck.log.office", "<span class=\"ok\">No deliveries needed</span> · an office holds no stock")
+    : tt("gr.os.ck.log.office.todo", "No deliveries needed · an office holds no stock"));
+  if(!opened) return osCk("truck", "todo", title, tt("gr.os.ck.log.todo", "Deliveries are set up once the business exists"), go);
+  const M = osFacts().market || {};
+  const wanted = [...new Set((t.products || []).map(([p]) => p).filter(p => M[p] && !M[p].s))];
+  if(!wanted.length) return osCk("truck", "done", title, tt("gr.os.ck.log.nostock", "<span class=\"ok\">No deliveries needed</span> · this type sells no stock"));
+  const routed = osRoutes(opened, plan.key), bare = wanted.filter(p => !routed.has(p));
+  if(bare.length === wanted.length) return osCk("truck", "todo", title, tt("gr.os.ck.log.none", "<span class=\"w\">No delivery route or import for {items}</span>",
+    {items: osNames(bare.map(s => spEsc(itemName(s))))}), go);
+  if(!bare.length) return osCk("truck", "done", title, tt("gr.os.ck.log.done", "<span class=\"ok\">Every product it holds has a delivery route or an import</span>"));
+  return osCk("truck", "part", title, tt("gr.os.ck.log.part", "<span class=\"w\">No delivery route or import for {items}</span>",
+    {items: osNames(bare.map(s => spEsc(itemName(s))))}), go, Math.round(100 * (wanted.length - bare.length) / wanted.length));
+}
+function osUntilRows(plan){
+  const b = osBuilding(plan.key), rented = osRented(plan), opened = osClosed(plan) ? null : osAttached(plan), address = osCkAddress(plan);
+  const uni = osCkUniforms(plan, opened);
+  return [
+    osCk("key", opened ? "done" : "todo", tt("gr.os.ck.lease", "Lease"), opened
+      ? tt("gr.os.ck.lease.done", "<span class=\"ok\">Rented</span> · {address}", {address})
+      : !rented ? tt("gr.os.ck.lease.todo", "{address} · not rented yet", {address})
+      : osOtherType(plan) ? tt("gr.os.ck.lease.rented", "Rented · {address}", {address})
+      : tt("gr.os.ck.lease.vacant", "Rented · {address} · <span class=\"w\">nothing opened there yet</span>", {address})),
+    osCkFurniture(plan, b), osCkStaff(plan, opened), uni, osCkDemands(plan, opened, uni),
+    osCkMarketing(plan, b, opened), osCkLogistics(plan, opened)];
+}
+function osUntilHtml(plan){
+  if(osClosed(plan)) return osRoiClosed(plan);
+  const rows = osUntilRows(plan), done = rows.filter(r => r.state === "done").length, link = gwLink(), m = D.meta || {};
+  const clock = Number.isFinite(Number(m.day)) ? tt("gr.os.ck.read", "from the save · day {day}, {time}",
+    {day: num(m.day), time: `${String(Number(m.hour) || 0).padStart(2, "0")}:${String(Math.floor(Number(m.minute) || 0)).padStart(2, "0")}`}) : "";
+  const live = link ? `<span class="os-live"><i></i>${tt("gr.os.ck.live", "Game linked")}</span>`
+    : `<span class="os-live off"><i></i>${tt("gr.os.ck.live.off", "Save file · game not linked")}</span>`;
+  const gate = link ? "" : `<div class="os-gate">${osIcon("plug")}<span>${tt("gr.os.ck.gate", "<b>Link the game</b> and these become buttons.")}${
+    osLinkHint ? ` ${tt("gr.os.ck.gate.hint", "Find <b>Big Copilot Link</b> on the Steam Workshop.")}` : ""}</span><button type="button" class="os-btn" data-os-howlink>${
+    tt("gr.os.ck.gate.how", "How to link")}</button></div>`;
+  const other = osOtherType(plan);
+  const note = other ? `<p class="os-payback">${tt("gr.os.ck.othertype", "The business at {address} is a {type}, not the {planned} you planned, so these rows wait for the planned one.",
+    {address: osCkAddress(plan), type: spEsc(other.type || osTypeName(other.typeSlug)), planned: spEsc(osTypeName(plan.type))})}</p>` : "";
+  return `<div class="os-prog"><h2>${tt("gr.os.ck.title", "Until opening")}</h2><span class="m" style="--w:${Math.round(100 * done / rows.length)}%"><i></i></span><span class="c">${
+    tt("gr.os.ck.count", "{n} of {of}", {n: done, of: rows.length})}</span><div class="aside">${live}<span>${clock}</span></div></div>
+    <div class="os-cks">${rows.map(r => `<div class="os-ck ${r.state}"${r.state === "part" ? ` style="--p:${r.p}%"` : ""}><span class="st">${
+      r.state === "done" ? osIcon("tick") : ""}</span><span class="ic">${osIcon(r.icon)}</span><div class="tx"><b>${r.title}</b><small>${r.sub}</small></div><div class="act">${r.act}</div></div>`).join("")}</div>
+    ${gate}${note}${osAttached(plan) ? `<div class="os-links"><button type="button" class="os-btn" data-os-step="open">${tt("gr.os.ck.paybackGo", "After opening: the payback")}${icon("chev")}</button></div>`
+      : `<p class="os-payback">${tt("gr.os.ck.payback", "Once the store trades, the payback shows here.")}</p>`}`;
+}
+/* --- step 6: after opening ---------------------------------------------------
+   Once a business of the planned type stands at the plan's address, the plan
+   attaches to it (osAttached()) and is held against phase 1's payback for the
+   site (_payback(), paybackSite()): the investment, the daily profit since the
+   opening, break even. Nothing is worked out again here. The "now" side is the
+   payback row in the install mode Businesses › Results and the site's page
+   use (paybackMode()), so every figure a link leads to agrees; the plan's own
+   mode is the Plan column's, and labelled so.
+
+   The plan's side is what it said before the store opened: osSnapTake() keeps
+   its figures in the plan while the address holds nothing of the planned type.
+   The first time the store is seen, the plan keeps its opening day
+   (`plan.opened`) and never takes figures again. If that store closes, or
+   another business opens in its place, the plan says so and attaches to
+   nothing: it is history. A plan made before any of this was kept compares
+   the investment only. */
+const OS_SNAP_DAYS = 30, OS_RAMP_SHOWN = 5;
+const OS_SNAP_INV = ["furniture", "fee", "deposit", "decor", "delivery", "firm", "self"];
+/* The single figure a range is shown as: its middle (the range is on hover). */
+const OS_MID = (OS_LOW + OS_HIGH) / 2;
+/* The plan's figures as osEstimate() gives them now: the investment's parts,
+   the steady profit a day, the days to break even in each mode, and the first
+   OS_SNAP_DAYS days one by one (the ramp and a first seller's hype). */
+function osSnapOf(plan, b){
+  const est = osEstimate(plan, b);
+  if(!est || !est.inv) return null;
+  const inv = {};
+  OS_SNAP_INV.forEach(k => inv[k] = Math.round(est.inv[k] || 0));
+  if(est.none) return {inv, profit: null, days: null, curve: null};
+  return {inv, profit: Math.round(est.profit), days: est.days,
+    curve: Array.from({length: OS_SNAP_DAYS}, (_, k) => Math.round(est.day(k)))};
+}
+/* A stored snapshot, checked field by field as osLoad() checks the rest. */
+function osSnapClean(s){
+  if(!s || typeof s !== "object" || !s.inv || typeof s.inv !== "object") return null;
+  const n = v => Number.isFinite(+v) ? +v : 0, day = v => Number.isFinite(v) ? v : null;
+  const inv = {};
+  OS_SNAP_INV.forEach(k => inv[k] = n(s.inv[k]));
+  const range = d => d && typeof d === "object" ? {low: day(d.low), mid: day(d.mid), high: day(d.high)} : {low: null, mid: null, high: null};
+  return {inv, profit: Number.isFinite(s.profit) ? s.profit : null,
+    days: s.days && typeof s.days === "object" ? {firm: range(s.days.firm), self: range(s.days.self)} : null,
+    curve: Array.isArray(s.curve) ? s.curve.filter(Number.isFinite).slice(0, OS_SNAP_DAYS) : null};
+}
+/* The business the plan attached to: the planned type at its address, and,
+   once seen, the same one (its opening day, `plan.opened`). */
+function osAttached(plan){
+  const b = plan && plan.key ? osOpenedAt(plan) : null;
+  return b && (plan.opened == null || b.opened === plan.opened) ? b : null;
+}
+/* A plan whose store opened and no longer trades there: closed, or replaced.
+   A save from before the opening says nothing either way: the plan is then
+   simply not open yet. */
+const osClosed = plan => !!plan && plan.opened != null && !osAttached(plan) && ((D.meta || {}).day || 0) > plan.opened;
+/* Kept while the address holds nothing of the planned type; never after. */
+function osSnapTake(plan){
+  if(!plan || !plan.key || plan.opened != null || osOpenedAt(plan)) return false;
+  const b = osBuilding(plan.key), snap = b && osSnapOf(plan, b);
+  if(!snap || JSON.stringify(snap) === JSON.stringify(plan.snap || null)) return false;
+  plan.snap = snap;
+  return true;
+}
+const osBank = id => { const banks = (osFacts().finance || {}).banks || [];
+  return banks.find(x => x.id === id) || banks.find(x => x.id === "VantanderBankSettings") || banks[0] || null; };
+/* Every plan, on every draw: its store's opening day and paid-back mark
+   (osReconcile()), and its figures while its address is empty, taken again
+   only when the board or the plan's building changed. Saved only when
+   something changed. */
+function osMarkPlans(){
+  let changed = osReconcile();
+  if(osSnapFor !== D){ osSnapSeen = new Map(); osSnapFor = D; }
+  osPlans.forEach(p => {
+    /* The inputs a snapshot rests on: the board read and the plan's type and building. */
+    const seen = `${p.type}|${p.key}`;
+    if(osSnapSeen.get(p.id) === seen) return;
+    osSnapSeen.set(p.id, seen);
+    if(osSnapTake(p)) changed = true;
+  });
+  if(changed) osSave();
+}
+/* Each plan's store as the save shows it: its opening day kept the first
+   time it trades, and the paid-back mark. Before the caps, so a store that
+   opened counts as history, not as a plan on its way. */
+function osReconcile(){
+  let changed = false;
+  osPlans.forEach(p => {
+    const b = osAttached(p);
+    if(b && p.opened == null){ p.opened = b.opened; changed = true; }
+    if(b && !p.paid && osPaidBack(osNowOf(paybackSite(p.key)))){ p.paid = true; changed = true; }
+  });
+  return changed;
+}
+let osSnapSeen = new Map(), osSnapFor = null;
+/* The plan's side of step 6: the kept figures, else the investment alone. */
+function osPlanned(plan){
+  if(plan.snap) return {snap: plan.snap, live: false};
+  const inv = osInvestment(plan, osBuilding(plan.key));
+  if(!inv) return {snap: null, live: true};
+  const parts = {};
+  OS_SNAP_INV.forEach(k => parts[k] = Math.round(inv[k] || 0));
+  return {snap: {inv: parts, profit: null, days: null, curve: null}, live: true};
+}
+/* The payback outcome in the mode Results and the site's page show. */
+const osNowOf = row => row ? row[paybackMode()] || null : null;
+const osModeName = mode => mode === "self" ? tt("gr.os.inv.self", "Self-installation") : tt("gr.os.inv.firm", "Installation firm");
+const osSigned = v => `${v > 0 ? "+" : ""}${fmt(v)}`;
+const osLastDay = row => (row.days || []).length ? row.days[row.days.length - 1][0] : ((D.meta || {}).day || 1) - 1;
+/* The payback row's days from the first with sales on: the plan's day 1. */
+const osSelling = row => { const d = row.days || [], i = d.findIndex(x => x[2] > 0); return i < 0 ? [] : d.slice(i); };
+/* Days to break even counted as the plan counts them, the first day with
+   sales as day 1; null where the payback row cannot say. */
+function osNowDays(row, o){
+  const sold = osSelling(row);
+  if(!sold.length || !o) return null;
+  const first = sold[0][0];
+  if(o.state === "reached") return o.day - first + 1;
+  if(o.state === "togo") return osLastDay(row) - first + 1 + o.days;
+  return null;
+}
+/* The break-even tile: what the payback says, short. */
+function osRoiBe(row, o){
+  switch(o && o.state){
+    case "reached": case "latest": return {v: tt("gr.os.be.day", "day {n}", {n: o.day}), sub: o.state === "reached"
+      ? tt("gr.os.roi.after", {one: "{n} day after opening", other: "{n} days after opening"}, {n: o.after}) : tt("gr.os.roi.latest", "at the latest")};
+    case "togo": return {v: `${num(o.days)} <small>${tt("gr.os.roi.togo", {one: "day to go", other: "days to go"}, {n: o.days})}</small>`,
+      sub: tt("gr.os.roi.about", "about day {n}", {n: osLastDay(row) + o.days})};
+    case "never": return {v: tt("gr.os.roi.never", "Not paying back"), word: true, sub: tt("gr.os.roi.never.sub", "at recent profit")};
+    case "window": return {v: paybackShort(o), sub: tt("gr.os.roi.window", "an estimate from recent profit")};
+  }
+  return {v: "–", sub: tt("gr.os.roi.unknown", "no day with sales yet")};
+}
+/* Paid back, as the site's page and the portfolio say it. */
+const osPaidBack = o => !!o && (o.state === "reached" || o.state === "latest"
+  || (paybackWindowDay(o) !== null && paybackWindowDay(o) <= ((D.meta || {}).day || 0)));
+/* Profit so far and the share paid back. Where the record no longer reaches
+   the opening and no kept trail fills the gap, the profit is the record's
+   alone and the share is unknown, unless break even was reached. */
+function osProgress(row, o, inv){
+  const whole = row.exact !== false;
+  if(whole) return {whole, got: row.profit || 0, pct: inv > 0 ? Math.max(0, Math.min(100, (row.profit || 0) / inv * 100)) : 0};
+  return {whole, got: row.profit || 0, pct: osPaidBack(o) ? 100 : null};
+}
+
+/* Cumulative profit from the opening and each day's profit as a bar, against
+   the investment and the plan's line from the first day with sales; while it
+   pays back, a dashed line on at recent profit to the day it gets there. Days
+   on the chart are days after opening, as its axis and the tile's sentence
+   say; the plan's line is the middle of its profit range. */
+function osRoiChart(row, snap, planMode, inv, o, opened){
+  const days = row.days || [];
+  if(!days.length) return "";
+  const W = 900, H = 282, x0 = 64, y0 = 18, x1 = W - 18, y1 = H - 42;
+  /* x is days after opening: the opening day's close at 0, the lease's cost
+     before it included. */
+  const cum = [];
+  days.forEach((d, i) => cum.push((i ? cum[i - 1] : row.before || 0) + d[1]));
+  const last = days.length - 1, got = cum[last];
+  const first = days.findIndex(d => d[2] > 0), anchor = first < 0 ? null : first;
+  const curve = snap && snap.curve && snap.curve.length ? snap.curve : null, steady = snap && snap.profit != null ? snap.profit * OS_MID : null;
+  const planAt = k => curve && k < curve.length ? curve[k] * OS_MID : steady || 0;
+  const range = snap && snap.days ? snap.days[planMode] : null, planDay = osMid(range);
+  const fcEnd = o && o.state === "togo" ? last + o.days : null;
+  const hit = o && o.state === "reached" ? o.day - opened : fcEnd;
+  const want = Math.max(10, last, fcEnd || 0, anchor !== null && planDay ? anchor + planDay - 1 : 0, hit || 0);
+  const dmax = Math.min(Math.ceil(want * 1.1 / 5) * 5, Math.max(40, Math.ceil(last * 4 / 5) * 5));
+  const vmin = Math.min(0, ...cum), vmax = Math.max(inv * 1.15, Math.max(...cum) * 1.05, 1);
+  /* Yu is not held inside the chart: the lines past its top are clipped, not flattened. */
+  const X = d => x0 + (x1 - x0) * d / dmax, Yu = v => y1 - (y1 - y0) * (v - vmin) / (vmax - vmin), Y = v => Yu(Math.max(vmin, Math.min(v, vmax)));
+  const step = osNiceStep((vmax - vmin) / 4), dstep = osNiceStep(dmax / 8);
+  const g = [];
+  for(let v = Math.ceil(vmin / step) * step; v <= vmax + 1e-6; v += step) g.push(`<line class="grid" x1="${x0}" x2="${x1}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"></line><text x="${x0 - 8}" y="${(Y(v) + 3.5).toFixed(1)}" text-anchor="end">${money(v)}</text>`);
+  for(let d = 0; d <= dmax; d += dstep) g.push(`<text x="${X(d).toFixed(1)}" y="${y1 + 18}" text-anchor="middle">${d}</text>`);
+  /* The bars share the money axis, scaled so the biggest day is a third of it. */
+  const big = Math.max(...days.map(d => Math.abs(d[1])), 1), k = (vmax - vmin) * 0.3 / big, bw = Math.max(1.5, (x1 - x0) / dmax * 0.8);
+  const bars = days.map((d, i) => { if(i > dmax) return ""; const top = Y(Math.max(0, d[1] * k)), bot = Y(Math.min(0, d[1] * k));
+    return `<rect class="os-dbar${d[1] < 0 ? " neg" : ""}" x="${(X(i) - bw / 2).toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0.5, bot - top).toFixed(1)}"></rect>`; }).join("");
+  const line = cum.map((v, d) => `${X(d).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
+  const todayRight = X(Math.min(last, dmax)) > x1 - 190;
+  let planLine = "", planLbl = "";
+  if(anchor !== null && steady != null){
+    const pts = [];
+    let run = 0;
+    for(let j = 0; anchor + j <= dmax; j++){ run += planAt(j); pts.push(`${X(anchor + j).toFixed(1)},${Yu(run).toFixed(1)}`); }
+    planLine = `<polyline class="plan" points="${pts.join(" ")}"></polyline>`;
+    planLbl = `<text class="lbl i" x="${x1 - 6}" y="${y0 + (todayRight ? 28 : 10)}" text-anchor="end">${tt("gr.os.roi.planLine", "plan {w}/day", {w: fmt(steady)})}</text>`;
+  }
+  const fcTo = fcEnd && fcEnd > dmax ? got + (inv - got) * (dmax - last) / (fcEnd - last) : inv;
+  const fc = fcEnd && last < dmax ? `<line class="fc" x1="${X(last).toFixed(1)}" y1="${Y(got).toFixed(1)}" x2="${X(Math.min(fcEnd, dmax)).toFixed(1)}" y2="${Yu(fcTo).toFixed(1)}"></line>` : "";
+  /* The chart's own words for a point: days after opening, as its axis and the tile's sentence. */
+  const after = n => tt("gr.os.roi.chart.after", {one: "{n} day after opening", other: "{n} days after opening"}, {n});
+  const mark = hit != null && hit <= dmax ? `<circle class="hit" cx="${X(hit).toFixed(1)}" cy="${Y(inv).toFixed(1)}" r="5"></circle><text class="lbl" x="${(X(hit) + (X(hit) > x1 - 170 ? -9 : 9)).toFixed(1)}" y="${(Y(inv) + 16).toFixed(1)}"${
+    X(hit) > x1 - 170 ? ` text-anchor="end"` : ""}>${after(hit)}</text>` : "";
+  const today = last <= dmax ? `<line class="today" x1="${X(last).toFixed(1)}" x2="${X(last).toFixed(1)}" y1="${y0}" y2="${y1}"></line>
+    <text class="lbl" x="${(X(last) + (todayRight ? -6 : 6)).toFixed(1)}" y="${y0 + 10}"${todayRight ? ` text-anchor="end"` : ""}>${tt("gr.os.roi.chart.today", "today, {after}", {after: after(last)})}</text>` : "";
+  return `<div class="os-card os-roic"><svg class="os-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${attr(tt("gr.os.roi.chart", "Profit since the opening against the investment and the plan"))}">
+    <defs><clipPath id="osRoiClip"><rect x="${x0}" y="${y0 - 4}" width="${x1 - x0}" height="${y1 - y0 + 4}"></rect></clipPath></defs>
+    ${g.join("")}<g clip-path="url(#osRoiClip)">${bars}</g><line class="ax" x1="${x0}" x2="${x1}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}"></line>
+    <line class="inv" x1="${x0}" x2="${x1}" y1="${Y(inv).toFixed(1)}" y2="${Y(inv).toFixed(1)}"></line>
+    <text class="lbl w" x="${x0 + 6}" y="${(Y(inv) - 7).toFixed(1)}">${tt("gr.os.roi.invested.line", "Invested {w}", {w: fmt(inv)})}</text>
+    <g clip-path="url(#osRoiClip)">${planLine}<polyline class="line" points="${line}"></polyline>${fc}</g>${planLbl}
+    ${today}${mark}<text x="${x1}" y="${y1 + 34}" text-anchor="end">${tt("gr.os.be.axis", "days after opening")}</text></svg></div>`;
+}
+
+/* Plan and now: the investment's parts, the profit a day, the first days
+   against the ramp, and the days to break even. Now is the payback in the
+   portfolio's mode; the plan column is in the plan's own mode, and where the
+   two differ no difference is drawn. */
+function osRoiTable(row, snap, planMode, o){
+  const nowMode = paybackMode(), same = planMode === nowMode;
+  const c = row.cost || {}, p = snap ? snap.inv : null, recent = (D.payback || {}).recentDays || 14;
+  const diff = (now, was, costly, ok) => {
+    if(now == null || was == null || !same) return `<td></td>`;
+    const d = now - was;
+    if(Math.abs(d) < 0.5) return `<td>–</td>`;
+    return `<td class="${(ok ?? ((d > 0) !== costly)) ? "d" : "dn"}">${osSigned(d)}</td>`;
+  };
+  const tr = (label, sub, was, now, cell, cls = "") => `<tr${cls ? ` class="${cls}"` : ""}><td class="l">${label}${sub ? `<span class="sub">${sub}</span>` : ""}</td><td>${was}</td><td>${now}</td>${cell}</tr>`;
+  const m = v => v == null ? "–" : fmt(v);
+  /* The fitting: the firm's fee (or its real bill, which takes the furniture
+     in too), or the walls and floors for self-installation. */
+  const planFurn = p ? p.furniture + (planMode === "self" ? p.delivery : 0) : null;
+  const planFit = p ? (planMode === "self" ? p.decor : p.fee) : null;
+  const billed = nowMode === "firm" && c.billed;
+  const rows = [];
+  if(billed){
+    rows.push(tr(tt("gr.os.roi.bill", "Installation firm's bill"), tt("gr.os.roi.bill.sub", "furniture and the fee, less the trade-in"),
+      m(p && planFurn + planFit), m(c.billed), diff(c.billed, p && planFurn + planFit, true)));
+  } else {
+    rows.push(tr(tt("gr.os.roi.furn", "Furniture"), tt("gr.os.roi.furn.sub", "at the game's default prices"), m(planFurn), m(c.furniture), diff(c.furniture, planFurn, true)));
+    rows.push(tr(nowMode === "self" ? tt("gr.os.inv.walls", "Walls and floors") : tt("gr.os.inv.fee", "Installation fee"),
+      same ? "" : planMode === "self" ? tt("gr.os.roi.fit.planSelf", "the plan: walls and floors") : tt("gr.os.roi.fit.planFirm", "the plan: the installation fee"),
+      m(planFit), m(nowMode === "self" ? c.materials : c.fee), diff(nowMode === "self" ? c.materials : c.fee, planFit, true)));
+  }
+  rows.push(tr(tt("gr.os.inv.deposit", "Deposit"), "", m(p && p.deposit), m(c.deposit), diff(c.deposit, p && p.deposit, true)));
+  rows.push(tr(tt("gr.os.inv.total", "Investment"), "", m(p && p[planMode]), m(c[nowMode]), diff(c[nowMode], p && p[planMode], true), "os-sum"));
+  const steady = snap ? snap.profit : null;
+  if(steady != null){
+    const lo = steady * OS_LOW, hi = steady * OS_HIGH, mid = steady * OS_MID, rate = row.rate;
+    rows.push(tr(tt("gr.os.roi.day", "Profit a day"), tt("gr.os.roi.day.sub", {one: "the last day", other: "the last {n} days"}, {n: recent}),
+      osMidMoney(lo, hi), m(rate), rate == null ? `<td></td>` : Math.abs(rate - mid) < 0.5 ? `<td class="d">${tt("gr.os.roi.onPlan", "on plan")}</td>`
+        : `<td class="${rate >= lo ? "d" : "dn"}">${osSigned(rate - mid)}</td>`));
+    const sold = osSelling(row), n = Math.min(OS_RAMP_SHOWN, sold.length);
+    if(n && snap.curve && snap.curve.length >= n){
+      const was = Math.round(snap.curve.slice(0, n).reduce((a, b) => a + b, 0) * OS_MID), now = sold.slice(0, n).reduce((a, d) => a + d[1], 0);
+      rows.push(tr(tt("gr.os.roi.ramp", {one: "The first day", other: "The first {n} days"}, {n}),
+        tt("gr.os.roi.ramp.sub", "from the first day with sales; the plan's first days earn less while the store settles"), fmt(was), fmt(now),
+        Math.abs(now - was) < 0.5 ? `<td>–</td>` : `<td class="${now >= was ? "d" : "dn"}">${osSigned(now - was)}</td>`));
+    }
+    const range = snap.days && snap.days[planMode], nowDays = osNowDays(row, o), mD = osMid(range);
+    if(range && range.low != null){
+      const cell = nowDays == null || mD == null || !same ? `<td></td>` : nowDays === mD ? `<td class="d">${tt("gr.os.roi.onPlan", "on plan")}</td>`
+        : `<td class="${nowDays <= (range.high ?? range.low) ? "d" : "dn"}">${nowDays < mD
+          ? tt("gr.os.roi.sooner", {one: "{n} day sooner", other: "{n} days sooner"}, {n: mD - nowDays})
+          : tt("gr.os.roi.later", {one: "{n} day later", other: "{n} days later"}, {n: nowDays - mD})}</td>`;
+      const nowText = nowDays == null ? (o && o.state === "never" ? tt("gr.os.be.never", "not at this profit") : "–")
+        : o.state === "togo" ? tt("gr.os.roi.aboutDays", {one: "about {n} day", other: "about {n} days"}, {n: nowDays}) : tt("gr.os.days", {one: "{n} day", other: "{n} days"}, {n: nowDays});
+      rows.push(tr(tt("gr.os.roi.be", "Days to break even"), tt("gr.os.roi.be.sub", "the first day with sales is day 1"), osRange(range), nowText, cell));
+    }
+  }
+  const planHead = same ? tt("gr.os.roi.col.plan", "Plan") : tt("gr.os.roi.col.planMode", "Plan · {mode}", {mode: osModeName(planMode)});
+  const nowHead = same ? tt("gr.os.roi.col.now", "Now") : tt("gr.os.roi.col.nowMode", "Now · {mode}", {mode: osModeName(nowMode)});
+  const note = same ? "" : `<p class="os-payback">${tt("gr.os.roi.modes", "The plan was made for {plan}; now follows Businesses › Results, set to {now}. Switch it there to compare like with like.",
+    {plan: osModeName(planMode), now: osModeName(nowMode)})}</p>`;
+  return `<div class="os-h"><h2>${tt("gr.os.roi.pvsa", "Plan and now")}</h2></div>${note}
+    <table class="os-pvsa"><thead><tr><th class="l"></th><th>${planHead}</th><th>${nowHead}</th><th>${
+      tt("gr.os.roi.col.diff", "Difference")}</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
+}
+/* The plan's loan as planned, beside what the save says the bank is owed
+   now: the game books loans to the company, so the bank's debt is its total,
+   not this store's, and is called that. */
+function osRoiLoan(plan, snap, mode){
+  const fin = plan.finance || {}, bank = osBank(fin.bank);
+  if(!fin.on || !bank) return "";
+  const inv = snap ? snap.inv[mode] : 0, amount = fin.amount ?? Math.round(inv / 2), planned = osLoan(amount, bank);
+  const cell = (lab, value, sub) => `<div><span class="os-lab">${lab}</span><b>${value}</b><small>${sub}</small></div>`;
+  const plannedCell = cell(tt("gr.os.roi.loan.plan", "Planned"), fmt(amount), planned ? tt("gr.os.roi.loan.plan.sub", "{bank} · {r} repaid + {i} interest a day for {n} days",
+    {bank: bank.name, r: fmt(planned.repay), i: fmt(planned.interest), n: num(planned.days)}) : spEsc(bank.name));
+  const atBank = (D.loans || []).filter(x => x.key === bank.key);
+  const owed = atBank.reduce((a, x) => a + (x.remaining || 0), 0);
+  const pay = atBank.reduce((a, x) => a + (x.dailyPayment || 0), 0), interest = atBank.reduce((a, x) => a + (x.dailyInterest || 0), 0);
+  const bankCells = atBank.length
+    ? cell(tt("gr.os.roi.loan.owed", "Owed to {bank} now", {bank: bank.name}), fmt(owed), tt("gr.os.roi.loan.owed.sub",
+        {one: "{n} loan · the bank's total, not this store's", other: "{n} loans · the bank's total, not this store's"}, {n: atBank.length}))
+      + cell(tt("gr.os.roi.loan.daily", "A day now"), fmt(pay + interest), tt("gr.os.roi.loan.daily.sub2", "{r} repaid + {i} interest, to the bank in all", {r: fmt(pay), i: fmt(interest)}))
+    : cell(tt("gr.os.roi.loan.owed", "Owed to {bank} now", {bank: bank.name}), "–", tt("gr.os.roi.loan.nothing", "no loan from the bank in the save"));
+  return `<div class="os-card os-fin os-roiloan"><div class="os-finhead"><h3>${osIcon("bank")}${tt("gr.os.fin.title", "Financing")}</h3></div>
+    <div class="os-finfacts">${plannedCell}${bankCells}</div></div>`;
+}
+const osRoiSiteBtn = key => `<a class="os-btn" href="${attr(siteHref(key) || "#")}" data-os-site="${attr(key)}">${tt("gr.os.roi.site", "Site page")}${icon("chev")}</a>`;
+const osRoiResultsBtn = () => `<button type="button" class="os-btn" data-os-results>${tt("gr.os.roi.results", "Payback in Businesses › Results")}${icon("chev")}</button>`;
+/* Back to the checklist, while it has rows left. */
+function osRoiUntilBtn(plan){
+  const rows = osUntilRows(plan), done = rows.filter(r => r.state === "done").length;
+  return done < rows.length ? `<button type="button" class="os-btn" data-os-step="opening">${tt("gr.os.roi.until", "Until opening · {n} of {of}", {n: done, of: rows.length})}${icon("chev")}</button>` : "";
+}
+/* A plan whose store is gone: what stands there now, if anything. */
+function osRoiClosed(plan){
+  const now = osRented(plan), address = osCkAddress(plan);
+  const what = now && now.status !== "vacant"
+    ? tt("gr.os.roi.replaced", "{address} now holds a {type}, opened on day {day}. This plan stays as it was; plan the new business separately.",
+      {address, type: spEsc(now.type || osTypeName(now.typeSlug)), day: now.opened})
+    : tt("gr.os.roi.closedNow", "Nothing trades at {address} now.", {address});
+  return `<div class="os-state"><b class="w">${tt("gr.os.roi.closed", "CLOSED")}</b><span>${tt("gr.os.roi.closedText", "The {type} this plan opened on day {day} no longer trades.",
+    {type: spEsc(osTypeLower(plan.type)), day: plan.opened})}</span></div><p class="os-payback">${what}</p>${
+    now && now.status !== "vacant" ? `<div class="os-links">${osRoiSiteBtn(plan.key)}</div>` : ""}`;
+}
+
+function osRoiHtml(plan){
+  if(osClosed(plan)) return osRoiClosed(plan);
+  const site = osAttached(plan);
+  if(!site) return `<p class="quiet os-gap">${tt("gr.os.roi.none", "Nothing of the planned type trades at this address yet.")}</p>`;
+  const row = paybackSite(plan.key), nowMode = paybackMode(), planMode = osMode(plan);
+  if(!row || row.costCentre) return `<p class="quiet os-gap">${tt("gr.os.roi.norow", "The save holds no payback for {address} yet.", {address: osCkAddress(plan)})}</p>`;
+  const {snap, live} = osPlanned(plan);
+  const inv = (row.cost || {})[nowMode] || 0, o = osNowOf(row), opened = site.opened;
+  const {whole, got, pct} = osProgress(row, o, inv);
+  const was = snap && planMode === nowMode ? snap.inv[planMode] : null;
+  const invSub = was == null ? osModeName(nowMode) : Math.abs(inv - was) <= 0.01 * Math.max(was, 1)
+    ? tt("gr.os.roi.asPlanned", "as planned") : tt("gr.os.roi.plannedAt", "plan {w}", {w: fmt(was)});
+  const n = (row.days || []).length;
+  const soFarSub = !whole ? tt("gr.os.roi.record.sub", "since day {n}, the oldest the save keeps", {n: row.since ?? opened})
+    : n ? `${tt("gr.os.roi.days", {one: "{n} day", other: "{n} days"}, {n})} · <small>${tt("gr.os.roi.since", "since day {n}", {n: opened})}</small>`
+    : tt("gr.os.roi.since", "since day {n}", {n: opened});
+  const be = osRoiBe(row, o);
+  const kpi = (lab, v, sub, cls = "", extra = "") => `<div class="kpi"><span class="lab">${lab}</span><span class="v${cls}">${v}</span>${extra}${sub ? `<span class="sub">${sub}</span>` : ""}</div>`;
+  const tiles = `<div class="os-roi">${kpi(tt("gr.os.roi.invested", "Invested"), fmt(inv), invSub)}${
+    kpi(whole ? tt("gr.os.roi.soFar", "Profit so far") : tt("gr.os.roi.record", "Profit in the record"), fmt(got), soFarSub, got < 0 ? " neg" : got > 0 ? " pos" : "")}${
+    kpi(tt("gr.os.roi.paid", "Paid back"), pct == null ? "–" : `${Math.floor(pct)}%`, pct == null ? tt("gr.os.roi.paid.unknown", "the days since the opening are not all in the save") : "", "",
+      pct == null ? "" : `<span class="os-meter" style="--w:${pct.toFixed(1)}%"><i></i></span>`)}${
+    kpi(tt("gr.os.strip.beLab", "Break even"), be.v, be.sub, be.word ? " os-word" : "")}</div>`;
+  const notes = [];
+  if(live) notes.push(tt("gr.os.roi.live2", "This plan was made before its figures were kept, so the plan column has the investment only."));
+  if(!whole) notes.push(row.rolled
+    ? tt("gr.os.roi.rolled", "The save's record no longer reaches the opening, and the days between were not kept, so the days since are not drawn.")
+    : tt("gr.os.roi.old", "The save's record starts after the opening, so the days since are not drawn."));
+  let state = "";
+  const until = osRoiUntilBtn(plan);
+  if(osPaidBack(o)){
+    const range = snap && snap.days && snap.days[planMode];
+    state = `<div class="os-state"><b>${tt("gr.os.roi.paidBack", "PAID BACK")}</b></div><div class="os-done"><span class="ic">${osIcon("tick")}</span><span><b>${paybackSentence(o, row)}</b><br>${
+      range && range.low != null ? tt("gr.os.roi.done.plan", "Plan {range}. The site page keeps the row; the plan is done.", {range: osRange(range)}) : tt("gr.os.roi.done", "The site page keeps the row; the plan is done.")}</span>${
+      osRoiSiteBtn(plan.key)}${osRoiResultsBtn()}${until}</div>`;
+  } else if(o && o.state === "never"){
+    state = `<div class="os-state"><b class="w">${tt("gr.os.roi.notPaying", "NOT PAYING BACK")}</b><span>${tt("gr.os.roi.never.note",
+      "At recent profit, {w} a day, the store does not earn its investment back.", {w: fmt(row.rate || 0)})}</span></div>`;
+  } else if(!o || o.state === "unknown"){
+    state = `<p class="os-payback">${tt("gr.os.roi.noSales", "No day with sales has finished yet: the recent profit and the days to go start with the first one.")}</p>`;
+  }
+  const links = osPaidBack(o) ? "" : `<div class="os-links">${osRoiSiteBtn(plan.key)}${osRoiResultsBtn()}${until}</div>`;
+  return `${tiles}${whole ? osRoiChart(row, snap, planMode, inv, o, opened) : ""}${notes.map(t => `<p class="os-payback">${t}</p>`).join("")}${
+    osRoiTable(row, snap, planMode, o)}${state}${osRoiLoan(plan, snap, planMode)}${links}`;
+}
+/* Businesses › Results with the Payback column in sight, as search goes there. */
+function osToResults(){
+  if(typeof siteShut === "function") siteShut();
+  view = "pnl"; sortKey = null;
+  drawPortfolio();
+  reveal("secPortfolio");
+  paybackIntoView();
+}
+
+/* The whole view, drawn for the step on screen. The embedded finder is kept
+   between draws: it is built once and handed the plan's type again. */
+function drawOpenStore(){
+  const sec = $("secOpen");
+  if(!sec || !hasData()) return;
+  osLoad();
+  const F = osFacts(), plan = osPlan();
+  if(!OS_STEPS.includes(osStep) || !osStepReady(osStep, plan)) osStep = plan ? (osBuilding(plan.key) ? "investment" : "where") : "what";
+  if(F.types) osMarkPlans();
+  $("osCtl").innerHTML = F.types ? osCtlHtml(plan) : "";
+  $("osStrip").innerHTML = plan && osStep !== "what" ? osStripHtml(plan) : "";
+  const where = osStep === "where" && !!plan;
+  $("osWhere").hidden = !where;
+  $("osBody").innerHTML = !F.types ? `<p class="quiet os-gap">${tt("gr.os.nodata", "This build carries no store rules, so there is nothing to plan with.")}</p>`
+    : osStep === "what" ? osWhatHtml() : osStep === "investment" ? osInvestHtml(plan) : osStep === "breakeven" ? osBreakHtml(plan)
+    : osStep === "opening" ? osUntilHtml(plan) : osStep === "open" ? osRoiHtml(plan) : "";
+  if(where) osShowFinder(plan);
+  if(osStep === "investment" && plan && osMode(plan) === "self") osPaintMini();
+  if(typeof wireTips === "function") wireTips();
+}
+function osGo(step){
+  const plan = osPlan();
+  if(!osStepReady(step, plan)) return;
+  osStep = step;
+  osSave();
+  drawOpenStore();
+  if(typeof settleScroll === "function") settleScroll($("secOpen"));
+}
+/* A new plan for a type, from a Demand cell, the grid of types or search. */
+function osStart(type, hood){
+  osLoad();
+  if(!osNew(type, hood)){
+    osCur = null; osStep = "what";
+    osNotice = tt("gr.os.plans.full", "All twelve plans have a building. Delete one to start another.");
+  }
+  drawOpenStore();
+}
+/* A function, not once(): the helper is declared further down the script,
+   and this runs at its first call from wireAll(). */
+let osWired = false;
+function wireOpenStore(){
+  if(osWired) return;
+  osWired = true;
+  on("click", "[data-os-step]", el => osGo(el.dataset.osStep));
+  on("change", "[data-os-plan]", el => {
+    osCur = el.value || null;
+    const plan = osPlan();
+    osStep = plan ? plan.step : "what";
+    osSave(); drawOpenStore();
+  });
+  on("click", "[data-os-new]", (el, e) => { e.preventDefault(); osStart(el.dataset.osNew, el.dataset.osHood || null); if(typeof settleScroll === "function") settleScroll($("secOpen")); });
+  /* A plan whose store trades opens on After opening. */
+  on("click", "[data-os-open]", (el, e) => { e.preventDefault(); osCur = el.dataset.osOpen; const plan = osPlan();
+    osStep = plan ? (osAttached(plan) || osClosed(plan) ? "open" : plan.step) : "what"; osSave(); drawOpenStore(); });
+  on("click", "[data-os-site]", (el, e) => { if(e.metaKey || e.ctrlKey || e.shiftKey || e.button) return; e.preventDefault(); openSite(el.dataset.osSite); });
+  on("click", "[data-os-results]", () => osToResults());
+  on("click", "[data-os-drop]", (el, e) => {
+    e.preventDefault();
+    osPlans = osPlans.filter(p => p.id !== el.dataset.osDrop);
+    if(!osPlan()) osCur = null;
+    osSave(); drawOpenStore();
+  });
+  on("click", "[data-os-route]", (el, e) => { e.preventDefault(); openRoute(el.dataset.osRoute); });
+  on("click", "[data-os-write]", el => {
+    const plan = osPlan(), kind = el.dataset.osWrite;
+    if(el.getAttribute("aria-disabled") === "true") return;
+    /* A write acts on the plan's own store only, never on one that replaced it. */
+    if(!plan || osClosed(plan)) return;
+    if(kind === "hire") hrReview({scope: "site", site: plan.key});
+    else if(kind === "uniforms") gwUniforms([plan.key]);
+    else if(kind === "marketing") gwMarketing([plan.key], el.dataset.osMkMode || "mix");
+  });
+  on("click", "[data-os-howlink]", () => {
+    const a = document.querySelector('a[data-visit-feature="game-link"]');
+    if(a && a.href) window.open(a.href, "_blank", "noopener");
+    else { osLinkHint = true; drawOpenStore(); }
+  });
+  on("click", "[data-os-mode]", el => { osSetMode(el.dataset.osMode); drawOpenStore(); });
+  on("change", "[data-os-fin-on]", el => { const plan = osPlan(); if(!plan) return; plan.finance = {...(plan.finance || {}), on: el.checked}; osSave(); drawOpenStore(); });
+  on("click", "[data-os-bank]", el => { const plan = osPlan(); if(!plan) return; plan.finance = {...(plan.finance || {}), bank: el.dataset.osBank}; osSave(); drawOpenStore(); });
+  on("input", "[data-os-fin-amount], [data-os-fin-range]", el => osFinUpdate(el.value));
+}
+
 /* --- plan a chain -----------------------------------------------------
    The recipes, the workstations and the prices come across from the save as
    they were read; every number is worked out in the browser, so a stepper is
@@ -30387,7 +34022,10 @@ function drawPlan(){
   /* Every product bought in: the table and its notes say so, and nothing
      can be made, so no tiles, no ingredients, no sentence (declutter E7). */
   const none = bought === cat[planType].products.length;
-  if($("secIngredients")) $("secIngredients").hidden = none;
+  /* Hidden also while another Expansion view is on screen: a redraw of every
+     page (renderCalm(), a language switch) must not show it under that view. */
+  const ing = $("secIngredients");
+  if(ing) ing.hidden = none || !String(ing.dataset.sub || "").split(" ").includes(sub.growth);
   $("planBody").innerHTML = none ? `
     <table data-pershop="${perShop}" data-shops="${shops}" data-peak="${D.plan.peak || 1}" data-products="${cat[planType].products.length}" data-ingmeta="${attr(JSON.stringify(meta))}">
       <thead><tr><th>${tt("gr.col.product", "Product")}</th><th class="l" colspan="4"></th></tr></thead>
@@ -31545,10 +35183,13 @@ function hrNoHoursHtml(){
    hours with nobody on, where the site's own people would work them (the
    plan's `unstaffed`); nothing is hired for those, so the order would say
    nothing. The link opens the site's Staffing, whose write puts the week in. */
+/* The plan the site's Staffing block shows and writes (spPlanOf()): its gap of people with no hours, or undefined. */
+function hrUnstaffedOf(S){
+  const u = S.site.unstaffed || {};
+  return S.site.kind === "office" ? u.office : u[spPlanOf(spRosterRow(S.key)) || "demand"];
+}
 function hrIdleHtml(m){
-  /* The plan the site's Staffing block shows and writes (spPlanOf()). */
-  const of = S => { const u = S.site.unstaffed || {};
-    return S.site.kind === "office" ? u.office : u[spPlanOf(spRosterRow(S.key)) || "demand"]; };
+  const of = hrUnstaffedOf;
   const rows = m.sites.filter(S => (S.site.kind === "shop" || S.site.kind === "office") && of(S)).map(S => {
     const u = of(S), name = spEsc(S.b ? shortName(S.b) : S.site.name || "A site");
     const who = (u.roles || []).filter(r => r.idle).map(r => `your ${hrNum(r.idle)} ${hrRole(r.skill)} staff ${r.idle === 1 ? "has" : "have"} no hours`);
@@ -33988,6 +37629,7 @@ const SUBS = {
                     navView("payroll", () => tt("nav.view.payroll", "Payroll"), "secPayroll")]},
   growth: {host:"pageGrowth", nav:"growthNav", key:"ba_dash_growth", start:"market",
            items:[navView("market", () => tt("nav.view.demand", "Demand"), "secMarket"),
+                  navView("open", () => tt("nav.view.open", "Open a store"), "secOpen"),
                   navView("plan", () => tt("nav.view.factory", "Plan a factory"), "secPlan")]},
 };
 const PAGE_KEY = "ba_dash_page";
@@ -34035,7 +37677,7 @@ const AREAS = [
   {id:"staffing", icon:"people", get label(){ return tt("nav.area.staffing", "Staffing"); },
    views:["schedules", "needs", "payroll"], start:"schedules"},
   {id:"expansion", icon:"growth", get label(){ return tt("nav.area.expansion", "Expansion"); },
-   views:["demand", "finder", "factory"], start:"demand"},
+   views:["demand", "finder", "open", "factory"], start:"demand"},
 ];
 const REFS = [
   {id:"map", icon:"map", newFeature:"map", get label(){ return tt("nav.ref.map", "City map"); }},
@@ -34102,6 +37744,12 @@ const ROUTES = {
     if(o.preset && typeof openFinder === "function") openFinder(o.preset, !!o.focus);
     else if(typeof showFinder === "function") showFinder(o.historyMode || "push");
     if(typeof cityMapPage !== "undefined" && cityMapPage) cityMapPage.ready.then(() => drawFinderCtx()); }},
+  /* A Demand cell's "Open a store here" starts a plan for its type and
+     neighbourhood (o.osType, o.osHood); any visit marks the view's New badge seen. */
+  "expansion/open": {host: ["growth", "open"], after(o){
+    featureDiscovery.visit("open-store");
+    if(o.osType && typeof osStart === "function" && hasData()) osStart(o.osType, o.osHood || null);
+  }},
   "expansion/factory": {host: ["growth", "plan"]},
   /* The map as the reader left it: with the finder on, that is Find a
      location, and the address says so (routeFor()). */
@@ -34122,7 +37770,7 @@ const HOST_ROUTES = {today: "overview", map: "map", wiki: "wiki",
   "supply/changes": "supply/changes", "supply/imports": "supply/imports", "supply/deliveries": "supply/deliveries",
   "supply/production": "supply/production", "supply/flow": "supply/flow",
   "staffing/schedules": "staffing/schedules", "staffing/needs": "staffing/needs", "staffing/payroll": "staffing/payroll",
-  "growth/market": "expansion/demand", "growth/plan": "expansion/factory"};
+  "growth/market": "expansion/demand", "growth/open": "expansion/open", "growth/plan": "expansion/factory"};
 const ROUTE_KEY = "ba_dash_route";
 /* The portfolio's view before Standards switched it to Operations. */
 let routeStdWas = null;
@@ -34159,6 +37807,7 @@ function routeViewLabel(id){
     case "staffing/payroll": return tt("nav.view.payroll", "Payroll");
     case "expansion/demand": return tt("nav.view.demand", "Demand");
     case "expansion/finder": return tt("nav.view.finder", "Find a location");
+    case "expansion/open": return tt("nav.view.open", "Open a store");
     case "expansion/factory": return tt("nav.view.factory", "Plan a factory");
     case "map": return tt("nav.ref.map", "City map");
     case "wiki": return tt("nav.ref.wiki2", "Wiki");
@@ -34315,7 +37964,8 @@ const PAGE_DRAWS = [
   ["today supply/changes supply/imports supply/deliveries supply/production supply/flow", () => drawSupplyStrip()],
   ["supply/changes", () => drawChangesView()], ["supply/imports", () => drawImportsView()], ["supply/deliveries", () => drawDeliveriesView()],
   ["supply/production", () => drawProductionView()], ["supply/flow", () => drawFlowView()], ["supply/flow", () => drawFlow()],
-  ["growth/market", () => drawMovers()], ["growth/market", () => drawMarket()], ["growth/plan", () => drawPlan()],  // changed for growth: no drawExpansion()
+  ["growth/market", () => drawMovers()], ["growth/market", () => drawMarket()], ["growth/open", () => drawOpenStore()],
+  ["growth/plan", () => drawPlan()],  // changed for growth: no drawExpansion()
   ["company/products", () => drawPriceShops()], ["company/products", () => drawProducts()],
   // A third element names a row other code marks stale on its own (hrStale(), nxSchedStale()).
   ["staffing/schedules", () => drawSchedules(), "schedules"], ["staffing/needs", () => drawNeeds()], ["staffing/needs", () => drawStaff(), "staff"],
@@ -34678,6 +38328,10 @@ function paintShell(){
   /* A place picked in the phone's drawer is where the reader is going. */
   sdDrawer(false);
 }
+/* A view that is new carries the New badge in its area's row until it is
+   opened (featureDiscovery); docs/contributing.md, "New feature badges". A var:
+   paintLocal() runs before this line on load, as viewTips below does. */
+var VIEW_NEW = {"expansion/open": "open-store"};
 function paintLocal(){
   const host = $("localNav");
   if(!host) return;
@@ -34690,9 +38344,12 @@ function paintLocal(){
   host.innerHTML = a.views.map(v => {
     const id = `${a.id}/${v}`, n = routeCount(id);
     const tip = viewTips[id];
+    const fresh = (VIEW_NEW || {})[id];
     return `<a href="#${id}" data-route="${id}"${id === r ? ` class="on" aria-current="page"` : ""}${tip ? ` data-tip="${attr(tip)}"` : ""}>${spEsc(routeViewLabel(id))}${
-      n ? `<small aria-label="${attr(tt("nav.local.count", {one: "{n} to do", other: "{n} to do"}, {n}))}">${n}</small>` : ""}</a>`;
+      n ? `<small aria-label="${attr(tt("nav.local.count", {one: "{n} to do", other: "{n} to do"}, {n}))}">${n}</small>` : ""}${
+      fresh ? `<span class="feature-new" data-new-feature="${fresh}" hidden>${tt("nav.new", "New")}</span>` : ""}</a>`;
   }).join("");
+  featureDiscovery.refresh();
   sdPlaceViews();
   ctlHoist();
 }
@@ -36248,11 +39905,10 @@ const SS_VIEWS = [
   {id: "portfolio", get t(){ return tt("nav.search.portfolio.title", "Portfolio"); },
    get p(){ return tt("nav.search.portfolio.line", "Businesses › Results · profit and loss by chain"); }, ic: "company",
    syn: ["sites", "chains", "margin", "break even", "payback", "losing money"],
-   /* The board has no break-even figure yet, and says so rather than land the
-      player on a table that looks as if it should hold one. */
-   synP: {get "break even"(){ return tt("nav.search.portfolio.breakeven", "no break-even figure yet · Businesses › Results · profit and loss by chain"); },
-          get "payback"(){ return tt("nav.search.portfolio.payback", "no payback figure yet · Businesses › Results · profit and loss by chain"); }},
-   go(){ view = "pnl"; sortKey = null; drawPortfolio(); reveal("secPortfolio"); }},
+   /* Break-even is the portfolio's Payback column, per chain and per site. */
+   synP: {get "break even"(){ return tt("nav.search.portfolio.breakeven", "the Payback column · Businesses › Results · break-even day by chain and site"); },
+          get "payback"(){ return tt("nav.search.portfolio.payback", "the Payback column · Businesses › Results · break-even day by chain and site"); }},
+   go(){ view = "pnl"; sortKey = null; drawPortfolio(); reveal("secPortfolio"); paybackIntoView(); }},
   {id: "ops", get t(){ return tt("nav.search.ops.title", "Standards"); },
    get p(){ return tt("nav.search.ops.line", "Businesses › Standards · satisfaction, promotion, amenities, uniforms"); }, ic: "company",
    syn: ["satisfaction", "promotion", "foot traffic", "marketing", "security", "standards", "pull", "operations", "amenities", "uniforms"],
@@ -36323,6 +39979,10 @@ const SS_VIEWS = [
   {id: "market", get t(){ return tt("nav.search.market.title", "Market demand"); },
    get p(){ return tt("nav.search.market.line", "Expansion › Demand"); }, ic: "growth", syn: ["demand", "hype", "waves", "neighbourhood", "market"],
    go: () => openRoute("expansion/demand")},
+  {id: "open", get t(){ return tt("nav.search.open.title", "Open a store"); },
+   get p(){ return tt("nav.search.open.line", "Expansion › Open a store · investment and break even"); }, ic: "growth",
+   syn: ["new store", "new shop", "open a shop", "break even", "investment", "outfit", "installation firm", "loan", "second store"],
+   go: () => openRoute("expansion/open")},
   {id: "plan", get t(){ return tt("nav.search.plan.title", "Plan a factory"); },
    get p(){ return tt("nav.search.plan.line", "Expansion › Plan a factory"); }, ic: "growth", syn: ["new factory", "recipe plan", "expand", "plan a chain"],
    go: () => openRoute("expansion/factory")},
@@ -37734,18 +41394,20 @@ const wireHeat = once(() => {
     $$(`.heat .h[data-c="${CSS.escape(c.dataset.c)}"], .heat .r[data-r="${CSS.escape(c.dataset.r)}"]`).forEach(x => x.classList.add("hl"));
   });
   onLeave(".heat .cell", () => $$(".hl").forEach(x => x.classList.remove("hl")));
-  /* A cell opens the map with the finder on, this type chosen and only this
-     neighbourhood left standing; Enter and Space do what a click does. */
+  /* A cell asks what to do there (demCellPop()): open a store of this type
+     here, or find a location; Enter and Space do what a click does. */
   on("click", ".heat .cell", c => {
-    const go = finderPreset(c.dataset.slug, c.dataset.hood);
-    if(!go) return;
-    /* The cell's own question: its type and its neighbourhood go to the one
-       finder, and the way back returns to this cell (nxDem on Demand's
-       entry). */
-    const type = demTypeName(c.dataset.slug, c.dataset.hood);
-    demRemember({slug: c.dataset.slug, hood: c.dataset.hood, view: marketView});
-    openRoute("expansion/finder", {preset: go, focus: true, arrival: {what: tt("gr.arrive.cell", "Demand for {type} in {hood}",
-      {type, hood: hoodName(c.dataset.hood)}), pos: "", back: "expansion/demand", backLabel: tt("nav.view.demand", "Demand"), depth: 1}});
+    if(!finderPreset(c.dataset.slug, c.dataset.hood)) return;
+    if(demPopCell === c && demPop && !demPop.hidden){ demPopClose(true); return; }
+    demCellPop(c);
+  });
+  on("click", "#demCellPop [data-dem-go]", (el, e) => {
+    e.preventDefault();
+    const cell = demPopCell;
+    if(!cell) return;
+    const slug = cell.dataset.slug, hood = cell.dataset.hood;
+    demPopClose(false);
+    if(el.dataset.demGo === "open") demOpenStore(slug, hood); else demFindLocation(slug, hood);
   });
   on("keydown", ".heat .cell[role=button]", (c, e) => {
     if(e.key !== "Enter" && e.key !== " ") return;
@@ -37759,6 +41421,95 @@ const wireHeat = once(() => {
     reveal("secPlan");
   });
 });
+/* A cell's two ways on, the way back returning to it (nxDem on Demand's
+   entry): the finder on its type with only its neighbourhood left standing,
+   or a new plan in Expansion › Open a store. */
+function demFindLocation(slug, hood){
+  const go = finderPreset(slug, hood);
+  if(!go) return;
+  const type = demTypeName(slug, hood);
+  demRemember({slug, hood, view: marketView});
+  openRoute("expansion/finder", {preset: go, focus: true, arrival: {what: tt("gr.arrive.cell", "Demand for {type} in {hood}",
+    {type, hood: hoodName(hood)}), pos: "", back: "expansion/demand", backLabel: tt("nav.view.demand", "Demand"), depth: 1}});
+}
+function demOpenStore(slug, hood){
+  const type = demTypeName(slug, hood);
+  demRemember({slug, hood, view: marketView});
+  openRoute("expansion/open", {osType: slug, osHood: hood, arrival: {what: tt("gr.arrive.cell", "Demand for {type} in {hood}",
+    {type, hood: hoodName(hood)}), pos: "", back: "expansion/demand", backLabel: tt("nav.view.demand", "Demand"), depth: 1}});
+}
+/* The cell's popover: its demand, the sellers there and the buildings of its
+   kind to rent, then Open a store here (where Open a store knows the type)
+   and Find a location. One element at body level, placed against the cell,
+   the way #alertPop is: a section's paint containment would clip it. */
+let demPop = null, demPopCell = null;
+function demCellPop(cell){
+  const slug = cell.dataset.slug, hood = cell.dataset.hood, go = finderPreset(slug, hood);
+  if(!go) return;
+  if(!demPop){
+    demPop = document.createElement("div");
+    demPop.id = "demCellPop";
+    demPop.className = "os-pop";
+    demPop.setAttribute("role", "dialog");
+    demPop.tabIndex = -1;
+    demPop.hidden = true;
+    document.body.appendChild(demPop);
+    /* An outside press closes it; mousedown, so the click that follows lands
+       on whatever was pressed. */
+    document.addEventListener("mousedown", e => {
+      if(demPop.hidden || demPop.contains(e.target) || (demPopCell && demPopCell.contains(e.target))) return;
+      demPopClose(false);
+    });
+    document.addEventListener("keydown", e => { if(e.key === "Escape" && !demPop.hidden){ e.preventDefault(); demPopClose(true); } });
+    window.addEventListener("resize", () => demPopClose(false));
+    document.addEventListener("scroll", () => { if(!demPop.hidden) demPopPlace(); }, true);
+  }
+  if(demPopCell && demPopCell !== cell) demPopCell.setAttribute("aria-expanded", "false");
+  demPopCell = cell;
+  const M = D.market || {}, at = (M.hoods || []).indexOf(hood);
+  const row = [...(M.types || []), ...(M.offices || [])].find(r => r.slug === slug);
+  const c = row && at >= 0 ? row.cells[at] : null;
+  const rent = ((D.premises || {}).buildings || []).filter(b => b.type === go.cat && b.hood === hood && b.status === "vacant").length;
+  const type = demTypeName(slug, hood);
+  const plan = typeof osType === "function" && !!osType(slug);
+  const fact = (lab, v) => `<div><span class="os-lab">${lab}</span><b>${v}</b></div>`;
+  demPop.setAttribute("aria-label", tt("gr.pop.aria", "{type} in {hood}", {type, hood: hoodName(hood)}));
+  demPop.innerHTML = `<h4>${spEsc(tt("gr.pop.title", "{type} · {hood}", {type, hood: hoodName(hood)}))}</h4>
+    <div class="fx">${fact(tt("gr.pop.demand", "Demand"), c ? c.demand : "–")}${fact(tt("gr.pop.rivals", "Sellers"), c ? c.providers || 0 : "–")}${
+      fact(tt("gr.pop.rent", "To rent"), rent)}</div>
+    <div class="acts">${plan ? `<button type="button" class="os-cta" data-dem-go="open">${osIcon("store")}${tt("gr.pop.open", "Open a store here")}</button>` : ""}
+      <button type="button" class="os-btn" data-dem-go="find">${icon("pin")}${tt("gr.pop.find", "Find a location")}</button></div>`;
+  demPop.hidden = false;
+  cell.setAttribute("aria-expanded", "true");
+  if(typeof hideTip === "function") hideTip();
+  demPopPlace();
+  (demPop.querySelector("[data-dem-go]") || demPop).focus({preventScroll: true});
+}
+function demPopPlace(){
+  if(!demPop || demPop.hidden || !demPopCell) return;
+  if(!demPopCell.isConnected || !demPopCell.getClientRects().length){ demPopClose(false); return; }
+  const vw = document.documentElement.clientWidth || window.innerWidth;
+  const vh = document.documentElement.clientHeight || window.innerHeight;
+  const r = demPopCell.getBoundingClientRect(), w = demPop.offsetWidth, h = demPop.offsetHeight;
+  /* Under the cell, its arrow on the cell's middle; above it when the window
+     has no room below. */
+  let y = r.bottom + 10;
+  const up = y + h > vh - 12 && r.top - 10 - h >= 12;
+  if(up) y = r.top - 10 - h;
+  const x = Math.max(12, Math.min(r.left + r.width / 2 - w / 2, vw - w - 12));
+  demPop.classList.toggle("up", up);
+  demPop.style.left = `${x}px`;
+  demPop.style.top = `${Math.max(12, y)}px`;
+  demPop.style.setProperty("--arrow", `${Math.max(16, Math.min(w - 16, r.left + r.width / 2 - x))}px`);
+}
+/* `restore` hands focus back to the cell (Esc, or the cell clicked again). */
+function demPopClose(restore){
+  if(!demPop || demPop.hidden) return;
+  demPop.hidden = true;
+  const cell = demPopCell;
+  if(cell) cell.setAttribute("aria-expanded", "false");
+  if(restore && cell && cell.isConnected){ cell.focus({preventScroll: true}); if(typeof hideTip === "function") hideTip(); }
+}
 /* The finder preset a Growth cell opens: its type, the type's category and
    only its neighbourhood. A cell with no demand reading has no type to look
    for, and a board built before the premises payload has nowhere to send it. */
@@ -37809,8 +41560,8 @@ function demArrive(cell){
   if(!at.hasAttribute("tabindex")) at.setAttribute("tabindex", "-1");
   at.focus({preventScroll: true});
 }
-/* A cell that opens the finder is a button to the keyboard as well. */
-const cellGo = (slug, hood) => finderPreset(slug, hood) ? ` role="button" tabindex="0"` : "";
+/* A cell that opens its popover (the finder, a new store) is a button to the keyboard as well. */
+const cellGo = (slug, hood) => finderPreset(slug, hood) ? ` role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false"` : "";
 /* The finder's Demand figure comes back here: the By type view, the type's row
    scrolled to and ringed once, its cells with it. A type the grid has no row
    for lands on the grid itself. */
@@ -38577,6 +42328,22 @@ const gwMkVisit = keys => todayList(keys.map(gwMkAgency).filter(Boolean).map(a =
   tt("sp.mk.agency", "{agency} ({address})", {agency: spEsc(a.name), address: spEsc(a.address || "")})));
 /* The Promotion block's last line: the plan, and its Set button with, when it
    waits, why. Where the board cannot write it, what to switch in BizMan. */
+/* What to switch in BizMan for a site's cheapest mix, where the board cannot
+   write it. BizMan shows a switch only for a type the site already has an
+   entry for; any other is booked at a marketing agency. */
+function gwMkHand(b){
+  const p = b.marketingPlan;
+  if(!p || !p.on) return "";
+  const entered = new Set((b.campaigns || []).map(c => c.type));
+  const add = p.on.filter(t => !p.was.includes(t));
+  const on = add.filter(t => entered.has(t)).map(gwMkName), visit = add.filter(t => !entered.has(t)).map(gwMkName);
+  const off = p.was.filter(t => !p.on.includes(t)).map(gwMkName);
+  const flip = on.length && off.length ? tt("sp.mk.hand.both", "In BizMan › Marketing, switch on {on} and switch off {off}.", {on: todayList(on), off: todayList(off)})
+    : on.length ? tt("sp.mk.hand.on", "In BizMan › Marketing, switch on {on}.", {on: todayList(on)})
+    : off.length ? tt("sp.mk.hand.off", "In BizMan › Marketing, switch off {off}.", {off: todayList(off)}) : "";
+  const book = visit.length ? tt("sp.mk.hand.visit", "Book {types} at a marketing agency: BizMan has no switch for them yet.", {types: todayList(visit)}) : "";
+  return [flip, book].filter(Boolean).join(" ");
+}
 function spMkLine(b){
   const p = b.marketingPlan;
   if(!p) return "";
@@ -38588,18 +42355,8 @@ function spMkLine(b){
     : tt("sp.mk.line", "Cheapest mix: {mix} · {cost:$}/day · {p}%", {mix, cost: p.costPlan, p: p.promotionPlan});
   /* A better mix needs an agency not in the phone's contacts yet. */
   const better = p.visit.length ? tt("sp.mk.better2", "Visit {agencies} once for a better mix.", {agencies: gwMkVisit(p.visit)}) : "";
-  /* BizMan shows a switch only for a type the site already has an entry
-     for; any other is booked at a marketing agency. */
-  const entered = new Set((b.campaigns || []).map(c => c.type));
-  const add = p.on.filter(t => !p.was.includes(t));
-  const on = add.filter(t => entered.has(t)).map(gwMkName), visit = add.filter(t => !entered.has(t)).map(gwMkName);
-  const off = p.was.filter(t => !p.on.includes(t)).map(gwMkName);
-  const flip = on.length && off.length ? tt("sp.mk.hand.both", "In BizMan › Marketing, switch on {on} and switch off {off}.", {on: todayList(on), off: todayList(off)})
-    : on.length ? tt("sp.mk.hand.on", "In BizMan › Marketing, switch on {on}.", {on: todayList(on)})
-    : off.length ? tt("sp.mk.hand.off", "In BizMan › Marketing, switch off {off}.", {off: todayList(off)}) : "";
-  const book = visit.length ? tt("sp.mk.hand.visit", "Book {types} at a marketing agency: BizMan has no switch for them yet.", {types: todayList(visit)}) : "";
   const can = gwMkCan();
-  const hand = same || can ? "" : [flip, book].filter(Boolean).join(" ");
+  const hand = same || can ? "" : gwMkHand(b);
   /* Switches the site has flip at any time. The button waits only while a
      new switch the plan needs has no agency to add it now, and a set-up
      only while none of its agencies can; the line beside it says why. */
@@ -40556,7 +44313,7 @@ function wireAll(){
      not a business's page has been drawn in this visit. */
   wireRoster();
   wireFlow(); bindSupply();
-  wireHeat(); wirePlan();
+  wireHeat(); wirePlan(); wireOpenStore();
   wireReveal(); wireWrites(); wireStaff();
 }
 

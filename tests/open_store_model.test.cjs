@@ -1,0 +1,184 @@
+// Expansion › Open a store's arithmetic, pinned by hand: the retail profit
+// model on a one-product type with flat curves, the borrowing limit with each
+// of its limits binding, the day the owner's cash is back with a loan, what a
+// new seller takes from the player's own shops, and how plans are started.
+// The board's own code runs in a VM: the "Expansion › Open a store" section of
+// the board script in ba_dashboard.py, sliced out between its banner and the
+// next one (the anchors are `/* --- Expansion › Open a store` and
+// `/* --- plan a chain`), with the few board helpers it reaches stubbed.
+const {test} = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const {between} = require('./_slice.cjs');
+
+const SRC = fs.readFileSync(path.join(__dirname, '..', 'ba_dashboard.py'), 'utf8');
+const CODE = between(SRC, '/* --- Expansion › Open a store', '/* --- plan a chain');
+
+function model(facts, extra = {}){
+  const store = new Map();
+  const D = {openStore: facts, meta: {day: 40, character: 'c1'}, businesses: [], ...extra};
+  const ctx = {D, gameName: () => '', icon: () => '', prettySlug: s => s, paybackMode: () => 'firm', paybackSetMode(){},
+    premises: () => ({buildings: []}), tt: (k, en) => typeof en === 'string' ? en : en.other, gnLower: s => String(s).toLowerCase(),
+    localStorage: {getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, v)},
+    Map, Math, JSON, Number, Array, String, Object, Set};
+  vm.createContext(ctx);
+  vm.runInContext(CODE, ctx);
+  return ctx;
+}
+const close = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9, `${msg}: ${a} vs ${b}`);
+
+/* One product, flat curves, one open hour a week. */
+const RETAIL = {
+  game: {promo: 0.5, wages: 0.7, capInitial: true, wageBase: {cashier: 16, cleaner: 12, guard: 15, perCashier: 30}},
+  hoods: {H: {idx: 1.2, strength: 1, demands: 0, interior: 0}},
+  types: {T: {model: 'retail', products: [['P', 1]], amt: 1, days: Array(7).fill(1), hours: Array(24).fill(1), layouts: {}}},
+  market: {P: {p: 10, r: 0.5, d: 1, s: 0, cost: 4, hoods: {H: [0, 0, null]}}},
+};
+const SHOP = {hood: 'H', cap: 20, m2: 100, traffic: 20, layout: 'C1', rent: 50, key: 'k'};
+const HOUR = [[[10, 11]], [], [], [], [], [], []];
+
+test('the retail model, worked by hand for one product and one open hour', () => {
+  const m = model(RETAIL).osModel('T', SHOP, {sat: 50, open: HOUR});
+  // Promotion 20 (traffic, no marketing): 0.5 + 0.75 x 0.2 = 0.65; a current
+  // game starts the hour from the capacity, 20: ceil(20 x 0.65) = 13 arrive.
+  assert.equal(m.promo, 20);
+  // The new shop is the product's one seller: price 10 leaves room for 7, so
+  // demand is 100 - floor(100 / 7) - 0.5 = 85.5. No rival sells it: the
+  // price is 10 x (1.2 + 0.3) = 15.
+  assert.equal(m.lines[0].demand, 85.5);
+  assert.equal(m.lines[0].price, 15);
+  // 13 x 0.5 x 0.855 x satisfaction 1 = 5.5575 units, rounded up 30% of the
+  // time and to the nearest otherwise: 0.3 x 6 + 0.7 x 6 = 6 a week.
+  close(m.lines[0].units, 6 / 7, 'units a day');
+  close(m.revenue, 6 / 7 * 15, 'sales');
+  close(m.cogs, 6 / 7 * 4, 'goods at the import cost');
+  // One cashier (20 an hour at most), a cleaner and a guard, at skill 100.
+  const rate = (1 + Math.pow(1.05, 100) / 100) * 0.7;
+  close(m.wages, (16 + 12 + 15) * rate / 7, 'wages');
+  close(m.profit, 6 / 7 * 15 - 6 / 7 * 4 - 43 * rate / 7 - 50, 'profit');
+  // Customers who bought something: each of the 13 missed by all 6 units with (12/13)^6.
+  close(m.customers, 13 * (1 - Math.pow(12 / 13, 6)) / 7, 'buyers a day');
+});
+
+test('a rival that sells the product takes the monopoly bonus and caps the price', () => {
+  const facts = JSON.parse(JSON.stringify(RETAIL));
+  facts.market.P.hoods.H = [2, 1, 8];
+  const m = model(facts).osModel('T', SHOP, {sat: 50, open: HOUR});
+  assert.equal(m.lines[0].price, 8 * 1.2);
+  assert.equal(m.lines[0].demand, 100 - Math.floor(300 / 7) - 0.5);
+});
+
+test('the borrowing limit: whichever of the bank\'s room and the company\'s means binds', () => {
+  const limit = (finance, bank) => model({...RETAIL, finance}).osLoanLimit({term: 240, owed: 0, max: 2000000, ...bank});
+  // The bank's own cap less what it is owed.
+  assert.equal(limit({wealth: 10e6}, {max: 40000, owed: 10000}), 30000);
+  // Wealth less everything owed.
+  assert.equal(limit({wealth: 20000, owed: 5000}), 15000);
+  // A quarter of last week's daily profit over the term.
+  assert.equal(limit({wealth: 0, profit7: 1000}), 60000);
+  // The tutorial's floor while its first-loan objective is open.
+  assert.equal(limit({wealth: 0, profit7: 0, floor: 15500}), 15500);
+  // Owing more than it is worth: nothing.
+  assert.equal(limit({wealth: 1000, owed: 5000}), 0);
+});
+
+test('a loan: flat interest, straight repayment, and the day the owner\'s own cash is back', () => {
+  const ctx = model({...RETAIL, finance: {multiplier: 0.7, year: 60, minimum: 500}});
+  const loan = ctx.osLoan(20000, {rate: 12, term: 240});
+  assert.deepEqual([loan.interest, loan.repay, loan.days, loan.total], [28, 83, 241, 28 * 241]);
+  assert.equal(ctx.osLoan(400, {rate: 12, term: 240}), null, 'under the minimum');
+  // 1,000 of own cash at 300 a day, 100 a day to the bank for two days: 200, 400, 700, 1,000.
+  assert.equal(ctx.osLoanDays(1000, 300, {days: 2, interest: 20, repay: 80}), 4);
+  assert.equal(ctx.osLoanDays(0, 300, {days: 2, interest: 20, repay: 80}), 0);
+  assert.equal(ctx.osLoanDays(1000, 0, {days: 2, interest: 20, repay: 80}), null, 'never at no profit');
+});
+
+test('what a new seller takes from the player\'s shops nearby, secondary products included', () => {
+  const facts = JSON.parse(JSON.stringify(RETAIL));
+  facts.types.T.products = [['P', 1], ['Q', 0.5]];
+  facts.market.Q = {p: 10, r: 0.5, d: 1, cost: 4, hoods: {H: [1, 0, null]}};
+  facts.sales = {H: {Q: [['k1', 10, 2]]}};
+  const c = model(facts).osCannibal('T', 'H');
+  // One seller now (85.5), two after (100 - floor(200 / 7) - 0.5 = 71.5): 10 units at 2 each lose that share.
+  close(c.loss, 10 * 2 * (1 - 71.5 / 85.5), 'the loss a day');
+  assert.equal(JSON.stringify([c.shops, c.items]), JSON.stringify([1, ['Q']]));
+  assert.equal(model(RETAIL).osCannibal('T', 'H'), null, 'nothing sold nearby');
+});
+
+test('a plan for the same type and neighbourhood is taken up again; a full list never drops a planned building', () => {
+  const ctx = model(RETAIL);
+  vm.runInContext('osLoad()', ctx);
+  const first = ctx.osNew('T', 'H');
+  assert.equal(ctx.osNew('T', 'H').id, first.id, 'no second plan for the same question');
+  assert.notEqual(ctx.osNew('T', 'G').id, first.id);
+  vm.runInContext('osPlans = Array.from({length: 12}, (_, i) => ({id: "p" + i, type: "T", hood: null, key: "b" + i, finance: {}, step: "investment"}))', ctx);
+  assert.equal(ctx.osNew('T', 'H'), null, 'twelve plans with buildings: none is dropped');
+  vm.runInContext('osPlans[5].key = null', ctx);
+  const made = ctx.osNew('T', 'H');
+  assert.ok(made);
+  assert.equal(vm.runInContext('osPlans.length', ctx), 12);
+  assert.equal(vm.runInContext('osPlans.some(p => p.id === "p5")', ctx), false, 'the plan with no building made room');
+  assert.equal(made.finance.amount, null, 'no loan amount chosen yet');
+});
+
+test('the first days: the ramp on the gross margin, fixed costs whole, and break even counted day by day', () => {
+  const ctx = model(RETAIL);
+  const m = {revenue: 1000, cogs: 400, wages: 100, rent: 50, marketing: 50, profit: 400};
+  const days = [0, 1, 2, 3, 4, 5, 6].map(k => ctx.osDayProfit(m, null, k));
+  // Gross margin 600 at 0.55, 0.92, 0.94, 0.97, 0.99, then whole; 200 of costs every day.
+  [130, 352, 364, 382, 394, 400, 400].forEach((want, k) => close(days[k], want, `day ${k}`));
+  // 2,000 is covered on day 6 (130 + 352 + 364 + 382 + 394 + 400 = 2,022), not day 5 as 2,000 / 400 would say.
+  const day = k => ctx.osDayProfit(m, null, k);
+  assert.equal(ctx.osBreakDay(2000, day), 6);
+  assert.equal(vm.runInContext('osDays(2000, 400)', ctx), 5);
+  assert.equal(ctx.osBreakDay(1e9, k => ctx.osDayProfit({...m, profit: -1, revenue: 100}, null, k)), null);
+});
+
+test('the first seller in a neighbourhood gets +20 demand on the product for its first 14 days', () => {
+  const facts = JSON.parse(JSON.stringify(RETAIL));
+  facts.types.T.products = [['P', 1], ['Q', 1], ['S', 1]];
+  facts.market.Q = {p: 10, r: 0.5, d: 1, cost: 4, hoods: {H: [2, 1, null]}};   // two sellers there already
+  facts.market.S = {p: 10, r: 0.5, d: 1, s: 1, cost: 0, hoods: {H: [0, 0, null]}}; // a service never hypes
+  facts.market.R = {p: 10, r: 0.5, d: 1, cost: 4, hoods: {H: [0, 0, null, 30]}};  // nobody now, but sold on day 30
+  facts.types.T.products.push(['R', 1]);
+  const ctx = model(facts);
+  // Day 40: P was last sold on day 0 (21 days ago or more), R on day 30.
+  assert.equal(JSON.stringify(ctx.osHyped('T', 'H')), JSON.stringify(['P']));
+  ctx.D.meta.day = 51;
+  assert.equal(JSON.stringify(ctx.osHyped('T', 'H')), JSON.stringify(['P', 'R']), '21 days after its last sale R hypes too');
+  ctx.D.meta.day = 40;
+  const plain = ctx.osModel('T', SHOP, {sat: 50, open: HOUR});
+  const hyped = ctx.osModel('T', SHOP, {sat: 50, open: HOUR, hype: ['P']});
+  assert.equal(hyped.lines[0].demand, Math.min(100, plain.lines[0].demand + 20));
+  assert.equal(hyped.lines[1].demand, plain.lines[1].demand, 'only the hyped product');
+  // Days 1 to 14 run on the hyped model, the opening day and day 15 on the plain one.
+  const gm = x => x.revenue - x.cogs, fixed = x => x.wages + x.rent + x.marketing;
+  close(ctx.osDayProfit(plain, hyped, 0), 0.55 * gm(plain) - fixed(plain), 'opening day');
+  close(ctx.osDayProfit(plain, hyped, 2), 0.94 * gm(hyped) - fixed(hyped), 'day 2');
+  close(ctx.osDayProfit(plain, hyped, 14), gm(hyped) - fixed(hyped), 'day 14');
+  close(ctx.osDayProfit(plain, hyped, 15), plain.profit, 'day 15');
+});
+
+test('a cinema or a theatre shows its investment and no estimate', () => {
+  const facts = JSON.parse(JSON.stringify(RETAIL));
+  facts.types.C = {cat: 'cinema', model: null, products: [], layouts: {S: {lines: [], furniture: 1000, fee: 500}}};
+  const ctx = model(facts);
+  ctx.premises = () => ({buildings: [{key: 'c', hood: 'H', size: 'S', layout: null, deposit: 100, m2: 900, cap: [100, 150]}]});
+  const est = vm.runInContext('osEstimate({type: "C", key: "c", mode: "firm"}, osBuilding("c"))', ctx);
+  assert.equal(est.inv.firm, 1600, 'kept by the building\'s size, having no layout');
+  assert.match(est.none, /screens, seats and actors/);
+});
+
+test('a store that pays back in a day or two keeps its two investment labels on opposite edges', () => {
+  const ctx = model(RETAIL);
+  Object.assign(ctx, {fmt: n => `$${Math.round(n)}`, money: n => `$${Math.round(n)}`, attr: s => s});
+  const m = {revenue: 12000, cogs: 2000, wages: 500, rent: 200, marketing: 300, profit: 9000};
+  const est = {profit: m.profit, inv: {firm: 12000, self: 10000}, day: k => ctx.osDayProfit(m, null, k)};
+  const svg = vm.runInContext('osChart', ctx)(est, 'firm');
+  const label = cls => (svg.match(new RegExp(`<text class="lbl ${cls}"[^>]*>`)) || [''])[0];
+  const w = label('w'), i = label('i');
+  assert.ok(w && i, 'both labels drawn');
+  assert.notEqual(/text-anchor="end"/.test(w), /text-anchor="end"/.test(i), `${w} ${i}`);
+});

@@ -91,9 +91,9 @@ class Headers(unittest.TestCase):
             text = (WEB / name).read_text(encoding="utf-8")
             fetches = re.findall(r"""fetch\(\s*[`'"]py/[^`'"]*[`'"]""", text)
             if name == "worker.js":
-                # The two modules in a loop, then the three data files: a
+                # The two modules in a loop, then the five data files: a
                 # pattern that stopped matching would pass the check vacuously.
-                self.assertEqual(len(fetches), 4, f"worker.js py/ fetches: {fetches}")
+                self.assertEqual(len(fetches), 6, f"worker.js py/ fetches: {fetches}")
             for fetch in fetches:
                 with self.subTest(script=name, fetch=fetch):
                     self.assertIn("?v=${stamp}", fetch)

@@ -123,7 +123,7 @@ class Build(unittest.TestCase):
 
     def test_check_reports_a_missing_table(self):
         with tempfile.TemporaryDirectory() as tmp:
-            for name in build_web.STAMP_INPUTS + ("ba_buildings.json", "ba_demand_curves.json",
+            for name in build_web.STAMP_INPUTS + ("ba_buildings.json", "ba_demand_curves.json", "ba_item_prices.json", "ba_store_rules.json",
                                                    "web/py/ba_buildings.json", "web/py/ba_demand_curves.json",
                                                    "web/py/ba_save.py", "web/py/ba_dashboard.py"):
                 dest = Path(tmp, name)

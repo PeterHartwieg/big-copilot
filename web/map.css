@@ -249,6 +249,14 @@
    board's .ss-pagego. */
 .city-map .site .go2{display:flex;width:max-content;margin:12px 0 0 auto}
 .city-map .site .go2[hidden]{display:none}
+/* A plan's finder (Expansion › Open a store): the type is the plan's, named
+   on a chip that is not a control, and the card's last word is the plan's
+   button. Its look is the board's .os-cta; only its place is set here. */
+.fchip.fplan-type{cursor:default}
+.fchip.fplan-type:hover{color:var(--ink);border-color:var(--accent)}
+.fplan-note{font-size:11px;color:var(--ink-3)}
+.city-map .site .fplan-go{display:flex;width:max-content;margin:12px 0 0 auto}
+.city-map .site .fplan-go[hidden]{display:none}
 .city-map .site .tail{position:absolute;left:-7px;top:22px;width:12px;height:12px;background:var(--surface);border-left:1px solid var(--rule);border-bottom:1px solid var(--rule);transform:rotate(45deg)}
 .city-map .site.flip .tail{left:auto;right:-7px;transform:rotate(-135deg)}
 

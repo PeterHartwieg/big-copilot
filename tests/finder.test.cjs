@@ -1436,11 +1436,25 @@ test('a column header sorts from the keyboard as well as the mouse', async () =>
   } finally { await page.close(); }
 });
 
-test('a Growth cell opens the finder on its own type and neighbourhood', async () => {
+test('a Growth cell opens its popover, whose Find a location opens the finder on its own type and neighbourhood', async () => {
   const {page, errors} = await fixture();
   try{
     await page.evaluate(() => { showPage('growth'); drawMarket(); wireHeat(); });
-    await page.locator(`#market .cell[data-slug="${CLOTHES}"][data-hood="${HK_HOOD}"]`).click();
+    const clothes = page.locator(`#market .cell[data-slug="${CLOTHES}"][data-hood="${HK_HOOD}"]`);
+    await clothes.click();
+    // The popover names the cell and its facts; with no store rules in the
+    // payload it offers the finder alone. Esc closes it, back on the cell.
+    const pop = page.locator('#demCellPop');
+    assert.equal(await pop.isVisible(), true);
+    assert.match(await pop.innerText(), /Clothing Store · Hell's Kitchen[\s\S]*Demand[\s\S]*Sellers[\s\S]*To rent/i);
+    assert.equal(await pop.locator('[data-dem-go="open"]').count(), 0);
+    assert.equal(await clothes.getAttribute('aria-expanded'), 'true');
+    assert.equal(await page.evaluate(() => document.activeElement?.dataset.demGo), 'find');
+    await page.keyboard.press('Escape');
+    assert.equal(await pop.isVisible(), false);
+    assert.equal(await page.evaluate(() => document.activeElement?.dataset.hood), HK_HOOD);
+    await clothes.click();
+    await pop.locator('[data-dem-go="find"]').click();
     await page.locator('#cityMapPage .place.fr').first().waitFor();
     // The cell is on a hidden page now, so the keyboard lands on the first result.
     await page.waitForFunction(() => document.activeElement?.matches('#cityMapPage .place.fr'));
@@ -1452,6 +1466,7 @@ test('a Growth cell opens the finder on its own type and neighbourhood', async (
     await page.evaluate(() => showPage('growth'));
     await page.locator(`#market .cell[data-slug="${LAW}"]`).first().focus();
     await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');   // the popover's Find a location, which has the focus
     await page.locator('#cityMapPage .place.fr').first().waitFor();
     assert.equal(await page.locator('#cityMapPage .fchip.cat.on').textContent(), 'Office');
     assert.deepEqual(await rowKeys(page), [HK[4]]);
@@ -1477,6 +1492,7 @@ async function scrolledFinderToGrowthCell(width, scroller){
     assert.ok(before > 0, 'the panel scrolls');
     await page.evaluate(() => { showPage('growth'); drawMarket(); wireHeat(); });
     await page.locator(`#market .cell[data-slug="${CLOTHES}"][data-hood="${HK_HOOD}"]`).click();
+    await page.locator('#demCellPop [data-dem-go="find"]').click();
     await page.waitForFunction(() => document.activeElement?.matches('#cityMapPage .place.fr'));
     // The panel's scroll comes to rest: the same for three frames in a row.
     await page.evaluate(() => { window.panelRest = null; });
@@ -1519,6 +1535,7 @@ test('a finder the player left while it loaded never reaches for the focus', asy
       };
       // Leave for Today before the map has loaded, then let it finish.
       document.querySelector('#market .cell[role=button]').click();
+      document.querySelector('#demCellPop [data-dem-go="find"]').click();
       showPage('today');
       await cityMapPage.ready;
       await new Promise(r => setTimeout(r, 50));
