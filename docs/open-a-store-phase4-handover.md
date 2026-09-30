@@ -51,6 +51,8 @@ spare staff and planner) merged. Main wins on staffing and marketing; step 5 ada
   Review round 7: the bench is state too: it blocks "covered", every text adds "n from the
   bench to assign", and a store whose only people are on the bench says "n hired, on the
   bench · assign them here".
+  Review round 8: with only spares at 0 h the row says "n people on staff", no warning;
+  bench people count in "n of m" and the bar.
 - **Marketing**: phase 3's own write (`osMarketingWrite`, `OS_MK_WIRE`, the `marketingOn`
   payload key) is gone. The row reads main's `campaigns` and `marketingPlan`, and the button,
   **Set the cheapest mix**, calls main's `gwMarketing([key], "mix")`; it is disabled with

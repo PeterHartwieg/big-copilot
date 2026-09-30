@@ -531,10 +531,10 @@ test('every pending path names the short week\'s planned hire or move in the gam
     {name: 'need > 0', biz: {staff: 1, stationShifts: 2}, weeks: [['ba:skill_cleaning', 'hire']], text: /1 of 2 people/, schedule: false},
     {name: 'nobody hired', biz: {staff: 0, stationShifts: 0}, weeks: [], text: /Nobody is hired yet/, schedule: false},
     {name: 'nobody hired, bench', biz: {staff: 0, stationShifts: 0}, weeks: [], bench: 2, text: /^2 people hired, on the bench · assign them here$/, schedule: false},
-    {name: 'need > 0, bench', biz: {staff: 1, stationShifts: 2}, weeks: [['ba:skill_cleaning', 'hire']], bench: 1, text: /1 of 2 people .* · 1 from the bench to assign/, schedule: false},
+    {name: 'need > 0, bench', biz: {staff: 1, stationShifts: 2}, weeks: [['ba:skill_cleaning', 'hire']], bench: 1, text: /^1 of 3 people .* · 1 from the bench to assign/, p: '33%', schedule: false},
     {name: 'covered, bench', biz: {staff: 2, stationShifts: 3}, weeks: [], bench: 1, text: /^2 people on staff · 1 from the bench to assign$/, schedule: false},
     /* the schedule step is for the people the plan uses: a spare alone gets none */
-    {name: 'no hours, only a spare', biz: {staff: 1, stationShifts: 0, staffIdle: ['sp1']}, weeks: [], text: /no hours scheduled yet/, schedule: false},
+    {name: 'no hours, only a spare', biz: {staff: 1, stationShifts: 0, staffIdle: ['sp1']}, weeks: [], text: /^1 person on staff$/, schedule: false},
     {name: 'no hours, one used and a spare', biz: {staff: 2, stationShifts: 0, staffIdle: ['sp1']}, weeks: [], text: /no hours scheduled yet/, schedule: true},
     {name: 'no hours scheduled', biz: {staff: 2, stationShifts: 0, staffIdle: []}, weeks: [], text: /no hours scheduled yet/, schedule: true},
     {name: 'has no hours', biz: {staff: 2, stationShifts: 3}, weeks: [], site: GAP, text: /1 person has no hours/, schedule: true},
@@ -548,12 +548,25 @@ test('every pending path names the short week\'s planned hire or move in the gam
       const label = `${c.name}, short week ${who}`;
       assert.equal(r.state, c.name.startsWith('need > 0') ? 'part' : 'todo', label);
       assert.match(r.sub, c.text, label);
+      if(c.p) assert.equal(r.p, c.p, label);
       assert.match(r.act, who === 'hire' ? /hire (1 Cleaning, )?1 Customer Service from/ : /move 1 Customer Service to|and move 1 Customer Service,/, label);
       if(c.bench) assert.match(r.act, new RegExp(`assign ${c.bench} ${c.bench === 1 ? 'person' : 'people'} from the bench to`), label);
       else assert.doesNotMatch(r.act, /from the bench/, label);
       assert[c.schedule ? 'match' : 'doesNotMatch'](r.act, /BizMan › Schedule/, label);
     }
   }
+});
+
+test('a bench person the plan counts on keeps a covered shop pending, with no short week to do it', async t => {
+  const page = await board(t);
+  await until(page);
+  await opened(page, {staff: 2, stationShifts: 3}, FULL);
+  await hiring(page, {planned: true, variant: 'open', weeks: [], bench: 1});
+  const r = (await rows(page))[2];
+  assert.equal(r.state, 'todo');
+  assert.match(r.sub, /^2 people on staff · 1 from the bench to assign$/);
+  await hiring(page, {planned: true, variant: 'open', weeks: [], bench: 0});
+  assert.equal((await rows(page))[2].state, 'done');
 });
 
 test('linked, with nothing for Staff this site to do, the row still says the step in the game', async t => {
