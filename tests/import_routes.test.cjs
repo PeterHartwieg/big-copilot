@@ -893,3 +893,32 @@ test('a depot two plans have to rise for lists both on the checklist', async () 
     assert.deepEqual(got.sort(), [['Brewery a', 500, 1500], ['Brewery b', 500, 1500]]);
   } finally { await page.close(); }
 });
+
+/* Round 9: a depot's row in the Supply table names every plan a finding
+   raises, not the first alone. */
+test('the depot row names both plans a finding raises', async () => {
+  const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
+    + 'from test_supply_bottom_up import two_breweries_board; print(json.dumps(two_breweries_board()))'));
+  const page = await board(data, {tab: 'deliveries'});
+  try {
+    const cells = await page.$$eval('#pageSupply tr[data-slug]', trs => trs.map(r => r.innerText).filter(t => t.includes('the plans of')));
+    assert.equal(cells.length, 1, JSON.stringify(cells));
+    assert.match(cells[0], /Brewery a, Brewery b/);
+  } finally { await page.close(); }
+});
+
+/* Round 9: Demand sizing lists only its own plan changes. Two hubs top a
+   water depot up; full production raises both plans, shop demand one, and
+   no 24/7 change shows through when the basis switches. */
+test('each basis lists only its own depot top-up changes', async () => {
+  const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
+    + 'from test_supply_bottom_up import water_depot_board; print(json.dumps(water_depot_board()))'));
+  const page = await board(data, {which: 'changes', tab: 'deliveries'});
+  try {
+    const plans = mode => page.evaluate(mode => { sizing = mode; return supplyChecklistRows().rows
+      .filter(r => r.kind === 'Depot daily top-ups').map(r => [D.businesses[r.source].name, r.current, r.proposed]).sort(); }, mode);
+    assert.deepEqual(await plans('cap'), [['Hub a', 100, 2400], ['Hub b', 100, 2400]]);
+    assert.deepEqual(await plans('dem'), [['Hub a', 100, 120]]);
+    assert.deepEqual(await plans('cap'), [['Hub a', 100, 2400], ['Hub b', 100, 2400]]);
+  } finally { await page.close(); }
+});

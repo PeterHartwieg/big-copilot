@@ -11372,6 +11372,7 @@
     "ba:itemname_water": {
      "cad": "weekly",
      "dem": {
+      "lasts": null,
       "lvl": "ok",
       "need": 2584,
       "parts": {

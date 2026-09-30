@@ -14,7 +14,7 @@ C. a Smart Delivery import beside a factory route that covers the week.
 """
 import unittest
 
-from ba_dashboard import plain, Names, WEEKDAYS, _import_notes, _shelf_notes, _supply
+from ba_dashboard import plain, Names, WEEKDAYS, _import_notes, _shelf_notes, _supply, _supply_fact
 from test_supply_facts import BEER, RECIPES, WATER, Company
 
 WH, BREWERY, SHOP, CAFE = ("wh_road", 1), ("brew_lane", 2), ("main_street", 3), ("bean_street", 4)
@@ -1160,88 +1160,138 @@ class RoundSevenTests(unittest.TestCase):
 BUSY_WEEK = [95, 90, 90, 95, 100, 130, 100]
 
 
-def simulate_days(senders, targets, depot_stock, sales, profile, days=21, order=None):
+def simulate_days(senders, targets, depot_stock, sales, profile, days=42, order=None,
+                  own_first=False, judge_from=21, depot_import=None):
     """A plain day-by-day account of a depot several sites top up, written
     from the game's rules and not from the board's code.
 
     `senders` {name: {"stock": held, "made": a day made there, "import":
-    (units a week, landing weekday)}}. Every morning each sender in `order`
-    tops the depot up to its target from what it holds; then the depot's
-    shop draws its day (`sales` times the weekday's share of `profile`);
-    then each sender makes its day and an import lands on its weekday.
-    Returns the days the depot could not meet the draw."""
+    (units a week, landing weekday), "own": a day its own shop sells}}.
+    Every morning each sender in `order` tops the depot up to its target
+    from what it holds, and a sender with a shop of its own tops that shop
+    up to two busiest days (before the depot's rounds with `own_first`,
+    after them otherwise); then the shops draw their day (the day's sales
+    times the weekday's share of `profile`); then each sender makes its day
+    and an import lands on its weekday (the depot's own, `depot_import`,
+    too). Returns [(where, day)]: each day from `judge_from` on that the
+    depot's shop ("depot") or a sender's own shop (its name) could not
+    meet the draw."""
     stock = {name: float(spec.get("stock", 0)) for name, spec in senders.items()}
+    shelf = {name: 0.0 for name, spec in senders.items() if spec.get("own")}
     depot = float(depot_stock)
     order = list(order or senders)
+    busiest = max(profile) / 100
     dry = []
+
+    def own_rounds():
+        for name in shelf:
+            give = max(0.0, min(2 * busiest * senders[name]["own"] - shelf[name], stock[name]))
+            shelf[name] += give
+            stock[name] -= give
+
     for day in range(days):
         weekday = day % 7
+        if own_first:
+            own_rounds()
         for name in order:
             give = max(0.0, min(targets[name] - depot, stock[name]))
             depot += give
             stock[name] -= give
-        draw = sales * profile[weekday] / 100
+        if not own_first:
+            own_rounds()
+        share = profile[weekday] / 100
+        draw = sales * share
         if depot + 1e-6 < draw:
-            dry.append(day)
+            if day >= judge_from:
+                dry.append(("depot", day))
             depot = 0.0
         else:
             depot -= draw
+        for name in shelf:
+            draw = senders[name]["own"] * share
+            if shelf[name] + 1e-6 < draw:
+                if day >= judge_from:
+                    dry.append((name, day))
+                shelf[name] = 0.0
+            else:
+                shelf[name] -= draw
         for name, spec in senders.items():
             stock[name] += spec.get("made", 0)
             weekly = spec.get("import")
             if weekly and weekday == weekly[1]:
                 stock[name] += weekly[0]
+        if depot_import and weekday == depot_import[1]:
+            depot += depot_import[0]
     return dry
 
 
 class RoundEightTests(unittest.TestCase):
     """Several sites topping one depot up, judged as two questions (targets
     on the busiest day, supply on an average day) and checked by applying
-    every change the board suggests and replaying three weeks of rounds, in
-    both orders, against a week with a busy Friday."""
+    every change the board suggests and replaying six weeks of rounds from
+    empty stock, in both orders, against a week with a busy Friday, judged
+    on the last three."""
 
     HUB_A, HUB_B, BREW_A, BREW_B = ("hub_a", 7), ("hub_b", 8), ("brew_a", 5), ("brew_b", 6)
 
-    def build(self, senders, sales, depot_stock=3000):
+    def build(self, senders, sales, depot_stock=3000, depot_import=0):
         """`senders` [(addr, "hub" or "brewery", imported a week or
-        machines, target, stock)]; the depot tops a shop selling `sales` a
-        day up."""
+        machines, target, stock[, what its own shop sells a day])]; the
+        depot, importing `depot_import` a week, tops a shop selling `sales`
+        a day up."""
         c = Chain()
         c.profile = BUSY_WEEK
-        for addr, kind, amount, target, held in senders:
+        for addr, kind, amount, target, held, *own in senders:
             if kind == "hub":
                 c.site(addr, "Hub " + addr[0][-1])
-                c.contract(addr, BEER, amount)
+                if amount:
+                    c.contract(addr, BEER, amount)
             else:
                 c.factory(addr, "Brewery " + addr[0][-1], machines=amount)
             c.hold(addr, BEER, held)
             c.plan(addr, WH, BEER, target)
+            if own and own[0]:
+                shop = ("own_" + addr[0], 20 + addr[1])
+                c.plan(addr, shop, BEER, 100000)
+                c.shop(shop, "Shop " + addr[0][-1])
+                c.hold(shop, BEER, 2000, own[0])
         c.site(WH, "Depot")
         c.hold(WH, BEER, depot_stock)
+        if depot_import:
+            c.contract(WH, BEER, depot_import)
         c.plan(WH, SHOP, BEER, 100000)
         c.shop(SHOP, "Shop")
         c.hold(SHOP, BEER, 2000, sales)
         c.run()
         return c
 
-    def settle(self, senders, sales):
-        """Apply every change the board suggests (each plan's top-up, each
-        hub's import) until it suggests none; returns the settled senders,
-        the board, and how many rounds of changes it took."""
+    def suggestions(self, c, senders, mode="cap"):
+        """{(what, site index): figure}: every change the board suggests in
+        `mode`, a plan's top-up target, a hub's import or the depot's own."""
+        changes = {}
+        depot = c.fact(WH, BEER, mode)
+        if depot["setTo"] is not None and depot["cad"] == "daily":
+            for index, _have, level in [[depot["from"], None, depot["setTo"]]] + (depot.get("raise") or []):
+                changes[("target", index)] = level
+        elif depot["setTo"] is not None and depot["cad"] == "weekly":
+            changes[("import", c.index(WH))] = depot["setTo"]
+        for spec in senders:
+            fact = c.fact(tuple(spec[0]), BEER, mode)
+            if spec[1] == "hub" and fact and fact["setTo"] is not None and fact["cad"] == "weekly":
+                changes[("import", c.index(tuple(spec[0])))] = fact["setTo"]
+        return changes
+
+    def settle(self, senders, sales, mode="cap", depot_import=0):
+        """Apply every change the board suggests until it suggests none;
+        returns the settled senders, the depot's import, the board, and how
+        many rounds of changes it took."""
         senders = [list(s) for s in senders]
         for rounds in range(4):
-            c = self.build(senders, sales)
-            depot = c.fact(WH, BEER)
-            changes = {}
-            if depot["setTo"] is not None and depot["role"] == "depot" and depot["cad"] == "daily":
-                for index, _have, level in [[depot["from"], None, depot["setTo"]]] + (depot.get("raise") or []):
-                    changes[("target", index)] = level
-            for spec in senders:
-                fact = c.fact(tuple(spec[0]), BEER)
-                if spec[1] == "hub" and fact and fact["setTo"] is not None and fact["cad"] == "weekly":
-                    changes[("import", c.index(tuple(spec[0])))] = fact["setTo"]
+            c = self.build(senders, sales, depot_import=depot_import)
+            changes = self.suggestions(c, senders, mode)
             if not changes:
-                return senders, c, rounds
+                return senders, depot_import, c, rounds
+            depot_import = changes.get(("import", c.index(WH)), depot_import)
             for spec in senders:
                 index = c.index(tuple(spec[0]))
                 if ("target", index) in changes:
@@ -1251,34 +1301,57 @@ class RoundEightTests(unittest.TestCase):
                     spec[2] = changes[("import", index)]
         self.fail("the suggestions never settle")
 
-    def replay(self, senders, sales):
-        """Three weeks of rounds with the settled figures, in both orders."""
-        spec = {tuple(s[0]): {"stock": s[4], **({"import": (s[2], 3)} if s[1] == "hub" else {"made": 720 * s[2]})}
+    def replay(self, senders, sales, depot_import=0):
+        """Six weeks of rounds from empty stock, in both orders, a sender's
+        own shop topped up before and after the depot; the last three judged."""
+        spec = {tuple(s[0]): {**({"import": (s[2], 3)} if s[1] == "hub" else {"made": 720 * s[2]}),
+                              **({"own": s[5]} if len(s) > 5 and s[5] else {})}
                 for s in senders}
         targets = {tuple(s[0]): s[3] for s in senders}
-        return [simulate_days(spec, targets, 3000, sales, BUSY_WEEK, order=order)
-                for order in (list(spec), list(spec)[::-1])]
+        return [simulate_days(spec, targets, 0, sales, BUSY_WEEK, order=order, own_first=own_first,
+                              depot_import=(depot_import, 3) if depot_import else None)
+                for order in (list(spec), list(spec)[::-1]) for own_first in (False, True)]
 
     def check(self, senders, sales, most_rounds=1):
-        settled, board, rounds = self.settle(senders, sales)
-        self.assertLessEqual(rounds, most_rounds, "one pass of changes should do")
-        self.assertEqual(self.replay(settled, sales), [[], []], settled)
+        """Settle and replay in both sizings: the depot feeds a shop, which
+        each sizes alike, so both must settle the same way."""
+        for mode in ("cap", "dem"):
+            with self.subTest(mode=mode):
+                settled, depot_import, board, rounds = self.settle(senders, sales, mode)
+                self.assertLessEqual(rounds, most_rounds, "one pass of changes should do")
+                self.assertEqual(self.replay(settled, sales, depot_import), [[]] * 4, settled)
         return settled, board
+
+    def test_the_replay_catches_a_setup_left_short(self):
+        """The simulator can fail: the short setups below, left as they are,
+        run the depot's shop dry, and so does raising a sender whose own
+        shop then goes without (round 9)."""
+        for senders, sales in (([(self.HUB_A, "hub", 7000, 10000, 0), (self.HUB_B, "hub", 7000, 10000, 0)], 2400),
+                               ([(self.HUB_A, "hub", 700, 500, 0), (self.HUB_B, "hub", 700, 500, 0)], 300),
+                               ([(self.BREW_A, "brewery", 1, 500, 0), (self.BREW_B, "brewery", 1, 500, 0)], 1000)):
+            with self.subTest(sales=sales):
+                runs = self.replay(senders, sales)
+                self.assertTrue(all(any(where == "depot" for where, _day in run) for run in runs), runs)
+        both = [(self.HUB_A, "hub", 21000, 3590, 0), (self.HUB_B, "hub", 8080, 3590, 0, 780)]
+        self.assertTrue(any(any(where == tuple(self.HUB_B) for where, _day in run)
+                            for run in self.replay(both, 2400)))
 
     def test_two_hubs_short_of_imports_ask_there_not_at_the_depot(self):
         """Two hubs importing 7,000 a week each top the depot up to 10,000;
         the shop sells 2,400 a day. The targets hold the day; the imports do
-        not: a note at the depot, and each hub's import asks."""
+        not: a note at the depot, and each hub's import asks for 9,660."""
         senders = [(self.HUB_A, "hub", 7000, 10000, 5000), (self.HUB_B, "hub", 7000, 10000, 5000)]
         c = self.build(senders, 2400)
         self.assertEqual((c.fact(WH, BEER)["st"], c.fact(WH, BEER)["why"]), ("noplan", "upstream"))
         self.assertEqual(c.notes(WH, "topup"), [])
+        self.assertEqual([c.fact(hub, BEER)["setTo"] for hub in (self.HUB_A, self.HUB_B)], [9660, 9660])
         self.check(senders, 2400)
 
     def test_hubs_at_9000_a_week_are_not_a_tight_target(self):
         senders = [(self.HUB_A, "hub", 9000, 10000, 5000), (self.HUB_B, "hub", 9000, 10000, 5000)]
         c = self.build(senders, 2400)
         self.assertNotIn(c.fact(WH, BEER)["st"], ("short", "tight"))
+        self.assertEqual([c.fact(hub, BEER)["setTo"] for hub in (self.HUB_A, self.HUB_B)], [9660, 9660])
         self.check(senders, 2400)
 
     def test_the_boards_own_import_setting_reads_covered(self):
@@ -1291,22 +1364,23 @@ class RoundEightTests(unittest.TestCase):
     def test_hubs_short_behind_targets_that_hold_is_an_upstream_note(self):
         """Hubs importing 700 a week top the depot up to 500; the shop sells
         300 a day. The targets hold the day, the imports do not: no target
-        finding."""
+        finding, and each hub's import asks for 1,210."""
         senders = [(self.HUB_A, "hub", 700, 500, 1000), (self.HUB_B, "hub", 700, 500, 1000)]
         c = self.build(senders, 300)
         self.assertEqual((c.fact(WH, BEER)["st"], c.fact(WH, BEER)["why"]), ("noplan", "upstream"))
         self.assertEqual(c.notes(WH, "topup"), [])
+        self.assertEqual([c.fact(hub, BEER)["setTo"] for hub in (self.HUB_A, self.HUB_B)], [1210, 1210])
         self.check(senders, 300)
 
     def test_two_breweries_both_raised_when_neither_can_carry_the_day(self):
         """Breweries making 720 a day each top the depot up to 500; the shop
-        sells 1,000 a day. Neither alone can make the busiest day: both
-        plans rise, to the same level, named in one finding."""
+        sells 1,000 a day. Neither alone can bring the day: both plans rise,
+        to the same level, named in one finding."""
         senders = [(self.BREW_A, "brewery", 1, 500, 0), (self.BREW_B, "brewery", 1, 500, 0)]
         c = self.build(senders, 1000)
         fact = c.fact(WH, BEER)
-        self.assertEqual((fact["st"], fact["why"]), ("short", "target"))
-        self.assertEqual(len(fact.get("raise") or []), 1)
+        self.assertEqual((fact["st"], fact["why"], fact["setTo"]), ("short", "target", 1500))
+        self.assertEqual(fact.get("raise"), [[c.index(self.BREW_B), 500, 1500]])
         [note] = c.notes(WH, "topup")
         self.assertIn("raise the top-ups on the plans of", plain(note["text"]))
         self.check(senders, 1000)
@@ -1317,8 +1391,8 @@ class RoundEightTests(unittest.TestCase):
         senders = [(self.BREW_A, "brewery", 1, 10000, 0), (self.HUB_A, "hub", 20000, 1000, 5000)]
         c = self.build(senders, 2400)
         fact = c.fact(WH, BEER)
-        self.assertEqual((fact["st"], fact["why"], fact["from"], fact["have"]),
-                         ("short", "target", c.index(self.HUB_A), 1000))
+        self.assertEqual((fact["st"], fact["why"], fact["from"], fact["have"], fact.get("raise")),
+                         ("short", "target", c.index(self.HUB_A), 1000, None))
         self.check(senders, 2400)
 
     def test_targets_are_levels_not_a_sum(self):
@@ -1330,6 +1404,105 @@ class RoundEightTests(unittest.TestCase):
                 c = self.build(senders, sales)
                 self.assertEqual((c.fact(WH, BEER)["st"], c.fact(WH, BEER)["why"]), ("short", "target"))
                 self.check(senders, sales)
+
+    def test_supply_that_covers_the_use_is_judged_as_one_senders_is(self):
+        """Round 9: two breweries (1,440 a day in all) against 1,400 a day
+        read covered, as one brewery against 650 does; a leftover plan from
+        a site with nothing coming in changes nothing."""
+        senders = [(self.BREW_A, "brewery", 1, 5000, 0), (self.BREW_B, "brewery", 1, 5000, 0)]
+        self.assertEqual(self.build(senders, 1400).fact(WH, BEER)["st"], "covered")
+        self.check(senders, 1400, most_rounds=0)
+        alone = self.build([(self.BREW_A, "brewery", 1, 5000, 0)], 650).fact(WH, BEER)
+        beside = self.build([(self.BREW_A, "brewery", 1, 5000, 0), (self.HUB_A, "hub", 0, 5000, 0)], 650)
+        self.assertEqual((alone["st"], alone["setTo"]), ("covered", None))
+        self.assertEqual((beside.fact(WH, BEER)["st"], beside.fact(WH, BEER)["setTo"]), ("covered", None))
+        self.assertEqual(beside.notes(WH, "order"), [])
+
+    def test_the_sender_that_alone_holds_an_average_day_is_the_one_raised(self):
+        """Round 9: hub A (21,000 a week) and hub B (7,000 a week, also
+        feeding its own shop 780 a day) both at 1,000; the depot's shop sells
+        2,400 a day. A alone brings an average day: only A's plan rises,
+        after which the depot is covered, and B's own shop keeps its beer
+        whichever order the rounds run in. (B's own import is asked for a
+        little more each time it rises, the share the plans split by target
+        growing with its room: not replayed here.)"""
+        senders = [(self.HUB_A, "hub", 21000, 1000, 5000), (self.HUB_B, "hub", 7000, 1000, 5000, 780)]
+        c = self.build(senders, 2400)
+        fact = c.fact(WH, BEER)
+        self.assertEqual((fact["st"], fact["from"], fact["setTo"], fact.get("raise")),
+                         ("short", c.index(self.HUB_A), 3590, None))
+        raised = [(self.HUB_A, "hub", 21000, 3590, 5000), (self.HUB_B, "hub", 7000, 1000, 5000, 780)]
+        for mode in ("cap", "dem"):
+            after = self.build(raised, 2400).fact(WH, BEER, mode)
+            self.assertEqual((after["st"], after["setTo"]), ("covered", None), mode)
+        self.assertEqual(self.replay(raised, 2400), [[]] * 4)
+
+    def test_a_hub_short_beside_a_brewery_is_asked_for_once(self):
+        """Round 9: a hub importing 7,000 a week and a brewery (720) both at
+        10,000; 2,400 a day. The depot asks for an import of its own for the
+        gap, and the hub's import is not asked for the same units."""
+        senders = [(self.HUB_A, "hub", 7000, 10000, 5000), (self.BREW_A, "brewery", 1, 10000, 0)]
+        c = self.build(senders, 2400)
+        fact = c.fact(WH, BEER)
+        self.assertEqual((fact["st"], fact["why"], fact["setTo"]), ("noplan", "order", 7280))
+        self.assertIsNone(c.fact(self.HUB_A, BEER)["setTo"])
+        self.check(senders, 2400)
+
+    def test_demand_sizing_keeps_only_its_own_plan_changes(self):
+        """Round 9: two hubs top a water depot up to 100 each; it feeds a
+        ten-machine brewery whose shop sells 300 a day. Full production
+        raises both plans to 2,400; shop demand only hub A's, to 120, and no
+        24/7 change shows through."""
+        c = water_depot_chain()
+        a, b = c.index(("hub_a", 11)), c.index(("hub_b", 12))
+
+        def plans(mode):
+            fact = _supply_fact(c.supply["facts"], c.index(WH), WATER, mode)
+            return [[fact["from"], fact["have"], fact["setTo"]]] + (fact.get("raise") or [])
+
+        self.assertEqual(plans("cap"), [[a, 100, 2400], [b, 100, 2400]])
+        self.assertEqual(plans("dem"), [[a, 100, 120]])
+        # Each basis replayed on its own draw, the brewery's water a day.
+        for mode, draw in (("cap", 2400), ("dem", 100)):
+            with self.subTest(mode=mode):
+                targets = {"a": 100, "b": 100}
+                for index, _have, level in plans(mode):
+                    targets["a" if index == a else "b"] = level
+                spec = {name: {"import": (14000, 3)} for name in ("a", "b")}
+                runs = [simulate_days(spec, targets, 0, draw, [100] * 7, order=order)
+                        for order in (["a", "b"], ["b", "a"])]
+                self.assertEqual(runs, [[], []])
+
+
+def water_depot_chain():
+    """RoundEightTests' Demand case: two hubs importing 14,000 water a week
+    top a depot holding 100 up to 100 each; the depot feeds a ten-machine
+    brewery, whose shop sells 300 beer a day."""
+    c = Chain()
+    for addr, name in ((("hub_a", 11), "Hub a"), (("hub_b", 12), "Hub b")):
+        c.site(addr, name)
+        c.contract(addr, WATER, 14000)
+        c.hold(addr, WATER, 14000)
+        c.plan(addr, WH, WATER, 100)
+    c.site(WH, "Water depot")
+    c.hold(WH, WATER, 100)
+    c.factory(BREWERY, "Brewery", machines=10)
+    c.hold(BREWERY, WATER, 2000)
+    c.hold(BREWERY, BEER, 2000)
+    c.plan(WH, BREWERY, WATER, 3000)
+    c.shop(SHOP, "Shop")
+    c.hold(SHOP, BEER, 1000, 300)
+    c.plan(BREWERY, SHOP, BEER, 1000)
+    c.run()
+    return c
+
+
+def water_depot_board():
+    """water_depot_chain() as the board reads it: tests/import_routes.test.cjs
+    lists its top-up changes in each sizing."""
+    c = water_depot_chain()
+    return {"meta": {"character": "bottom-up", "day": c.day, "save": "Fixture"},
+            "supply": c.supply, "businesses": c.business_list, "alerts": [], "plan": {"recipes": []}}
 
 
 def two_breweries_board():

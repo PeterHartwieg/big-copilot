@@ -3802,7 +3802,8 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
     for n in _in_order(nodes):
         lu, ln, su, sn = total(n)
         legs = senders.get(n, ())
-        got = [sends(s, n[1]).get(n[0], (0.0, 0.0, 0.0)) for s in _in_order({s for s, _t in legs})]
+        from_each = {s: sends(s, n[1]).get(n[0], (0.0, 0.0, 0.0)) for s in _in_order({s for s, _t in legs})}
+        got = list(from_each.values())
         use = lu + su
         top = reach(n)
         potential = min(top, sum(g[2] for g in got))
@@ -3833,6 +3834,8 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
             "senders": _in_order({s for s, _t in legs}),
             "passing": _in_order({s for s, _t in legs if not capable(s, n[1])}),
             "demand": {s: asked.get((s, n[1]), {}).get(n[0], (0.0, 0.0)) for s, _t in legs},
+            # What each sender's round brings it a day out of its budget.
+            "brings": {s: g[0] for s, g in from_each.items()},
             "asked": dict(asked.get(n, {})),
         }
     return out
@@ -4943,7 +4946,7 @@ def _supply(
                **base, "modes": [mode for mode in SIZING_MODES if mode in by_mode]}
         dem = by_mode.get("dem")
         if dem and "cap" in by_mode:
-            changed = {k: v for k, v in dem.items() if base.get(k) != v}
+            changed = _mode_changes(base, dem)
             if changed:
                 row["dem"] = changed
         idle_rows.append(row)
@@ -5484,6 +5487,16 @@ def _week_sold(business: dict, line: dict) -> float:
 SET_WORDS = ("short", "tight", "noplan")  # the words whose fact carries a figure to set
 
 
+def _mode_changes(base: dict, other: dict) -> dict:
+    """What another sizing mode changes on a record, as the overlay the page
+    spreads over it ({...base, ...changes}): the fields that differ, and None
+    for a field the other mode leaves out, so a 24/7-only field (a second
+    plan to raise, how long stock lasts) never shows through in Demand."""
+    changed = {k: v for k, v in other.items() if base.get(k) != v}
+    changed.update({k: None for k in base if k not in other and base[k] is not None})
+    return changed
+
+
 def _supply_fact(facts: dict, s, slug: str, mode: str = "cap") -> dict | None:
     """One fact as the chosen sizing mode sees it: the 24/7 fields with the
     Demand mode's changes laid over them (the page's supplyFact())."""
@@ -5609,6 +5622,34 @@ def _supply_facts(ctx: dict) -> dict:
         able = [s for s in node.get("senders", ()) if s not in node.get("passing", ())]
         return upstream_root(able[0], slug, mode, seen | {sender}) if able else sender
 
+    def route_short(key, slug, node, mode):
+        """Whether a depot only routes feed has senders that cannot bring
+        its day's use (several: multi_route() finds no target to raise and
+        the room short), so nothing brings the rest (route_fed())."""
+        use_day = node.get("use", 0.0)
+        if not use_day:
+            return False
+        if len(node.get("routeTargets") or {}) > 1:
+            return multi_route(key, slug, node, use_day, node.get("need", 0.0)) is None
+        made = ctx.get("made", {}).get(mode, {}).get((key, slug), 0.0)
+        return _below(node.get("supplied", 0.0) + made, use_day)
+
+    def asks_itself(dest, slug, mode):
+        """Whether `dest`, a depot only routes feed, asks for an import of its
+        own for what its senders cannot bring: short of supply, with a sender
+        whose shortfall no import further up asks for (route_fed())."""
+        if dest not in index:
+            return False
+        s = index[dest]
+        entry = depots.get(s, {}).get(slug)
+        if (entry and (entry.get("weekly") or entry.get("pausedWeekly"))) or wholesale.get((dest, slug)):
+            return False
+        node = walked.get(mode, {}).get((dest, slug)) or {}
+        if not node.get("inbound") or not route_short(dest, slug, node, mode):
+            return False
+        able = [x for x in node.get("senders", ()) if x not in node.get("passing", ())]
+        return not (able and all(upstream_asks(x, slug, mode) for x in able))
+
     def weekly(key, slug, mode, stock):
         """A line an import brings, judged on its week: what the ends use,
         summed up the plans (the chain's walk, `walk`), less what the routes
@@ -5618,6 +5659,17 @@ def _supply_facts(ctx: dict) -> dict:
         node = walked.get(mode, {}).get((key, slug)) or {}
         lines_use, lines_need = (7 * x for x in node.get("lines", (0.0, 0.0)))
         sites_use, sites_need = (7 * x for x in node.get("sites", (0.0, 0.0)))
+        # A depot this one's import tops up beside a sender with no import
+        # behind it (a factory) asks for an import of its own for all it
+        # lacks (route_fed()): this one's share of it is what the route
+        # brings now, so the one gap is asked for once. (With no import
+        # here, said_downstream() already makes this one a note.)
+        for dest, (asked_use, asked_need) in node.get("asked", {}).items():
+            if (entry or {}).get("weekly") and asks_itself(dest, slug, mode):
+                now = (walked.get(mode, {}).get((dest, slug)) or {}).get("brings", {}).get(key, 0.0)
+                sites_use -= 7 * max(0.0, asked_use - now)
+                sites_need -= 7 * max(0.0, asked_need - now)
+        sites_use, sites_need = max(0.0, sites_use), max(0.0, sites_need)
         gross, gross_need = lines_use + sites_use, lines_need + sites_need
         row = import_rows_by.get(mode, import_rows_by["cap"]).get((s, slug))
         # What the routes from your own sites bring a week, never more than
@@ -5736,15 +5788,13 @@ def _supply_facts(ctx: dict) -> dict:
         (noplan, cad weekly), whatever they hold, since a holding runs out and
         a standing order does not; only the severity reads what they hold."""
         use_day, need_day = node.get("use", 0.0), node.get("need", 0.0)
-        made = ctx.get("made", {}).get(mode, {}).get((key, slug), 0.0)
         several = len(node.get("routeTargets") or {}) > 1
-        supply_short = False
         if several:
             got = multi_route(key, slug, node, use_day, need_day)
             if got is not None:
                 return got
-            supply_short = True  # the senders cannot bring the day: below
-        if use_day and (supply_short or _below(node.get("supplied", 0.0) + made, use_day)):
+        if route_short(key, slug, node, mode):
+            made = ctx.get("made", {}).get(mode, {}).get((key, slug), 0.0)
             credit = node.get("credit", 0.0) + made
             lines_use = 7 * node.get("lines", (0.0, 0.0))[0]
             use = round(max(0.0, use_day - credit) * 7)
@@ -5804,9 +5854,10 @@ def _supply_facts(ctx: dict) -> dict:
 
         Targets short on either count are a top-up finding, naming every
         sender whose target has to rise (the fewest, those with the most
-        room first, that between them can bring the busiest day) and the
-        level each rises to: the busiest day's need, which then holds the
-        day whichever order the rounds run in. Room short with the targets
+        room first, whose room between them brings an average day's need:
+        the week's stock behind it carries the busy day) and the level each
+        rises to: the busiest day's need, which then holds the day whichever
+        order the rounds run in. Room short with the targets
         holding is no target finding: returns None, and route_fed() says
         it as the supply's (the senders' own import or line findings ask).
         Otherwise covered, holding what the rounds bring."""
@@ -5816,7 +5867,10 @@ def _supply_facts(ctx: dict) -> dict:
         room = node.get("room") or {}
         capable = [s for s in _in_order(targets) if room.get(s) is None or room[s] > 0]
         cap = {s: float("inf") if room.get(s) is None else room[s] for s in capable}
-        enough = not _below(sum(cap.values()), need_day)
+        # Supply is judged on the day's use, as one sender's is (route_fed()):
+        # room short of only the margin is no missing supply, and a leftover
+        # plan from a site with nothing coming in changes nothing.
+        enough = not _below(sum(cap.values()), use_day)
 
         def replay(levels):
             held = []
@@ -5835,7 +5889,7 @@ def _supply_facts(ctx: dict) -> dict:
             level = _ceil_ten(need)
             chosen, room_sum = [], 0.0
             for sender in sorted(capable, key=lambda s: (-cap[s], -targets[s], s)):
-                if room_sum >= need:
+                if chosen and not _below(room_sum, need_day):
                     break
                 chosen.append(sender)
                 room_sum += cap[sender]
@@ -6132,7 +6186,7 @@ def _supply_facts(ctx: dict) -> dict:
         if not by_mode:
             continue
         base = by_mode["cap"]
-        dem = {k: v for k, v in by_mode["dem"].items() if base.get(k) != v}
+        dem = _mode_changes(base, by_mode["dem"])
         if dem:
             base["dem"] = dem
         facts[str(index[key])][slug] = base
@@ -29133,10 +29187,13 @@ function sbDepotRow(d, ctx, r, kid){
   const set = r.chk.find(c => c.kind === "Depot daily top-ups" || c.kind === "Wholesale deliveries");
   const once = r.chk.find(c => c.kind === "Before the next delivery");
   const from = Number.isInteger(f.from) && D.businesses[f.from] ? D.businesses[f.from] : null;
+  /* Several plans to raise together: the setting names every one. */
+  const plans = from ? [from, ...(f.raise || []).map(x => D.businesses[x[0]]).filter(Boolean)] : [];
   const setting = r.imp ? ctx.cell(r.imp)
     : f.wholesale ? sbChg(f.have, set ? set.proposed : null, tt("sb.unit.week", "a week"), sbWholesale(f.day))
     : f.role === "depot" && f.cad === "daily" ? sbChg(f.have, set ? set.proposed : null, tt("sb.unit.day", "a day"),
-      from ? tt("sb.where.plan", "{site}'s plan", {site: spEsc(shortName(from))}) : "")
+      plans.length > 1 ? tt("sb.where.plans", "the plans of {sites}", {sites: sbList(plans.map(x => spEsc(shortName(x))))})
+        : from ? tt("sb.where.plan", "{site}'s plan", {site: spEsc(shortName(from))}) : "")
     : "—";
   const parts = szParts(f.parts);
   const week = r.week === null ? "—" : `<span class="sb-uses"${parts ? ` data-tip="${attr(parts)}"` : ""}>${num(r.week)}</span>${szRamp(f)}`;
