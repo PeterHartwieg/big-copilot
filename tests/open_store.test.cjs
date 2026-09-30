@@ -520,6 +520,32 @@ test('a week too short for a hire is hours left open, not a place: no "1 more", 
   assert.equal((await rows(page))[2].state, 'done');
 });
 
+test('every pending path names the short week\'s planned hire or move in the game, and the schedule where hours are missing', async t => {
+  const page = await board(t);
+  await until(page);
+  await opened(page, {staff: 0, stationShifts: 0}, FULL);
+  const GAP = {kind: 'shop', unstaffed: {demand: {hours: 12, roles: [{skill: 'ba:skill_cleaning', idle: 1}]}}};
+  const cases = [
+    {name: 'need > 0', biz: {staff: 1, stationShifts: 2}, weeks: [['ba:skill_cleaning', 'hire']], text: /1 of 2 people/, schedule: false},
+    {name: 'nobody hired', biz: {staff: 0, stationShifts: 0}, weeks: [], text: /Nobody is hired yet/, schedule: false},
+    {name: 'no hours scheduled', biz: {staff: 2, stationShifts: 0}, weeks: [], text: /no hours scheduled yet/, schedule: true},
+    {name: 'has no hours', biz: {staff: 2, stationShifts: 3}, weeks: [], site: GAP, text: /1 person has no hours/, schedule: true},
+    {name: 'covered, short only', biz: {staff: 2, stationShifts: 3}, weeks: [], text: /^2 people on staff$/, schedule: false},
+  ];
+  for (const who of ['hire', 'move']) {
+    for (const c of cases) {
+      await page.evaluate(biz => { Object.assign(D.businesses.find(x => x.key === osPlan().key), biz); }, c.biz);
+      await hiring(page, {planned: true, variant: 'open', site: c.site, weeks: [...c.weeks, ['ba:skill_customerservice', who, SHORT6]]});
+      const r = (await rows(page))[2];
+      const label = `${c.name}, short week ${who}`;
+      assert.equal(r.state, c.name === 'need > 0' ? 'part' : 'todo', label);
+      assert.match(r.sub, c.text, label);
+      assert.match(r.act, who === 'hire' ? /hire (1 Cleaning and )?1 Customer Service|hire 1 Cleaning, 1 Customer Service|hire [^.]*Customer Service/ : /move 1 Customer Service/, label);
+      assert[c.schedule ? 'match' : 'doesNotMatch'](r.act, /BizMan › Schedule/, label);
+    }
+  }
+});
+
 test('linked, with nothing for Staff this site to do, the row still says the step in the game', async t => {
   const page = await board(t);
   await until(page);
@@ -905,6 +931,12 @@ test('a mix of no campaigns says none would raise promotion; a missing switch is
   assert.match(r.sub, /No campaign for/);
   assert.doesNotMatch(r.sub, /would raise/);
   assert.equal(await page.locator('#osBody [data-os-write="marketing"]').count(), 1);
+  assert.match(r.act, /Visit CityAds \(5 Second Avenue\) once for a better mix/);
+  /* linked, but a mod without the marketing write: the set-up is optional, the better mix still needs the visit */
+  await linked(page, {...LINK, writes: ['hire', 'uniforms']});
+  r = (await rows(page))[5];
+  assert.equal(r.state, 'todo');
+  assert.equal(await page.locator('#osBody [data-os-write="marketing"]').count(), 0);
   assert.match(r.act, /Visit CityAds \(5 Second Avenue\) once for a better mix/);
 });
 

@@ -33145,62 +33145,56 @@ function osCkStaff(plan, opened){
   const roles = m => osNames([...m].map(([skill, n]) => `${n} ${hrRoles(skill, n)}`));
   const bySkillOf = (list, f = () => true) => list.filter(f).reduce((m, x) => m.set(x.w.skill, (m.get(x.w.skill) || 0) + 1), new Map());
   /* Without the link, the step that clears a placed week is the hire or the
-     move itself; an open one is hours to schedule. */
-  const handStep = (list, fallback) => {
+     move itself. */
+  const handStep = list => {
     const hires = bySkillOf(list, x => x.who && x.who.type === "hire"), moves = bySkillOf(list, x => x.who && x.who.type === "move");
     return hires.size && moves.size
       ? tt("gr.os.ck.staff.ingame.mixed", "<b>MyEmployees</b> on your phone: hire {roles} from your headhunters' candidates and move {moves}, at {address}.", {roles: roles(hires), moves: roles(moves), address})
       : moves.size ? tt("gr.os.ck.staff.ingame.move", "<b>MyEmployees</b> on your phone: move {moves} to {address}.", {moves: roles(moves), address})
       : hires.size ? tt("gr.os.ck.staff.ingame", "<b>MyEmployees</b> on your phone: hire {roles} from your headhunters' candidates, at {address}.", {roles: roles(hires), address})
-      : fallback;
+      : "";
   };
   const tooFew = shortH ? ` · <span class="w">${tt("co.hire.role.toofew", "{h} h a week too few for a hire", {h: hrNum(shortH)})}</span>` : "";
   const need = places.length;
   const scheduled = opened.stationShifts > 0, gap = hrUnstaffedOf(S);
+  const count = m => [...m.values()].reduce((a, n) => a + n, 0);
+  const bare = bySkillOf(places, open);
+  /* One action for the row, whatever its text: Staff this site where the
+     link can do something (osStaffAct()), else the steps in the game --
+     every planned hire and move, regular or short, then the schedule where
+     people here have no hours or short hours stay open -- and, for regular
+     places nobody can fill, the headhunter. */
+  const handAll = handStep(places.concat(placedShorts));
+  const weekStep = have > 0 && (!scheduled || gap || shortH) ? week : "";
+  const act = osStaffAct(plan, [handAll, weekStep].filter(Boolean).join(" "))
+    + (bare.size ? osIngame(tt("gr.os.ck.staff.headhunter", "No candidate fits yet: ask a <b>headhunter</b> for {roles}, at {address}.", {roles: roles(bare), address})) : "");
   if(!need){
     const covered = have > 0 && scheduled && !gap && (S.variant !== "demand" || opened.hasTraded);
     if(covered && !anyShort) return osCk("people", "done", title, tt("gr.os.ck.staff.done",
       {one: "{n} person · <span class=\"ok\">the opening hours are covered</span>", other: "{n} people · <span class=\"ok\">the opening hours are covered</span>"}, {n: have}));
-    if(covered) return osCk("people", "todo", title, `${tt("gr.os.ck.staff.count", {one: "{n} person on staff", other: "{n} people on staff"}, {n: have})}${tooFew}`,
-      osStaffAct(plan, handStep(shorts, week)));
-    if(have > 0 && !scheduled) return osCk("people", "todo", title, tt("gr.os.ck.staff.idle",
-      {one: "{n} person on staff · <span class=\"w\">no hours scheduled yet</span>", other: "{n} people on staff · <span class=\"w\">no hours scheduled yet</span>"}, {n: have}) + tooFew,
-      osStaffAct(plan, week));
-    if(have > 0 && gap){
+    let sub;
+    if(covered) sub = tt("gr.os.ck.staff.count", {one: "{n} person on staff", other: "{n} people on staff"}, {n: have});
+    else if(have > 0 && !scheduled) sub = tt("gr.os.ck.staff.idle",
+      {one: "{n} person on staff · <span class=\"w\">no hours scheduled yet</span>", other: "{n} people on staff · <span class=\"w\">no hours scheduled yet</span>"}, {n: have});
+    else if(have > 0 && gap){
       const idle = (gap.roles || []).reduce((a, r) => a + (r.idle || 0), 0) || have;
-      return osCk("people", "todo", title, tt("gr.os.ck.staff.nohours2",
-        {one: "{have} on staff · <span class=\"w\">{n} person has no hours</span>", other: "{have} on staff · <span class=\"w\">{n} people have no hours</span>"}, {have, n: idle}) + tooFew,
-        osStaffAct(plan, week));
-    }
-    /* Nobody hired here, or no sales to size the staff from yet: the site's
-       action may still assign bench people, so it is offered when it does. */
-    return osCk("people", "todo", title, (have > 0
+      sub = tt("gr.os.ck.staff.nohours2",
+        {one: "{have} on staff · <span class=\"w\">{n} person has no hours</span>", other: "{have} on staff · <span class=\"w\">{n} people have no hours</span>"}, {have, n: idle});
+    } else sub = have > 0
       ? tt("gr.os.ck.staff.unsized", {one: "{n} person on staff · <span class=\"w\">the board sizes the staff once the shop has sales</span>",
         other: "{n} people on staff · <span class=\"w\">the board sizes the staff once the shop has sales</span>"}, {n: have})
-      : tt("gr.os.ck.staff.nobody", "Nobody is hired yet")) + tooFew, osStaffAct(plan, ""));
+      : tt("gr.os.ck.staff.nobody", "Nobody is hired yet");
+    return osCk("people", "todo", title, sub + tooFew, act);
   }
   const bySkill = bySkillOf(places);
-  const count = m => [...m.values()].reduce((a, n) => a + n, 0);
   /* People the plan gives no week (spSpareIds()) are spare, not staff it
      counts on: they neither fill a place nor make one. */
   const used = Math.max(0, have - spSpareIds(opened).length);
   const total = used + need;
   let sub = tt("gr.os.ck.staff.need", "{have} of {total} people · <span class=\"w\">{need} more: {roles}</span>",
     {have: used, total, need, roles: roles(bySkill)});
-  const bare = bySkillOf(places, open);
   if(bare.size) sub += ` · ${tt("gr.os.ck.staff.nocand", {one: "{n} without a candidate in your headhunters' lists", other: "{n} without a candidate in your headhunters' lists"}, {n: count(bare)})}`;
-  sub += tooFew;
-  /* Staff this site, the Staff page's one action (hrReview()): who it hires
-     and reassigns here, and the week it writes. */
-  /* The in-game step names every planned hire and move, short weeks' too;
-     the counts and the headhunter stay with the regular places. */
-  const ingame = handStep(places.concat(placedShorts), "");
-  const work = hrCanHire() && osStaffWork(plan.key);
-  let act = work ? osAct("hire", tt("sp.gw.staff", "Staff this site"), "hire", "", ingame) : ingame ? osIngame(ingame) : "";
-  /* The places nobody can fill, and only those: the headhunter. */
-  if(bare.size)
-    act += osIngame(tt("gr.os.ck.staff.headhunter", "No candidate fits yet: ask a <b>headhunter</b> for {roles}, at {address}.", {roles: roles(bare), address}));
-  return osCk("people", used > 0 ? "part" : "todo", title, sub, act, Math.round(100 * used / total));
+  return osCk("people", used > 0 ? "part" : "todo", title, sub + tooFew, act, Math.round(100 * used / total));
 }
 function osCkUniforms(plan, opened){
   const title = tt("gr.os.ck.uni", "Uniforms");

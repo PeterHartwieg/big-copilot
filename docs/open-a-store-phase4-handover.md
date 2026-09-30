@@ -42,6 +42,10 @@ spare staff and planner) merged. Main wins on staffing and marketing; step 5 ada
   hire or move; a padded short week with no slots is none.
   Review round 4: the in-game step names short weeks' planned hires and moves too; a set-up
   with an unvisited agency says "No campaign for …" and keeps the better-mix visit hint.
+  Review round 5: `osCkStaff()` builds one action for the row: Staff this site where the
+  link can act, else every planned hire and move (regular or short) plus BizMan › Schedule
+  where people here have no hours or short hours stay open, plus the headhunter for regular
+  places with nobody. Only the row's text differs by path; a table-driven test covers them.
 - **Marketing**: phase 3's own write (`osMarketingWrite`, `OS_MK_WIRE`, the `marketingOn`
   payload key) is gone. The row reads main's `campaigns` and `marketingPlan`, and the button,
   **Set the cheapest mix**, calls main's `gwMarketing([key], "mix")`; it is disabled with
