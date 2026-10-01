@@ -1581,17 +1581,24 @@ DEPOSIT_TRANSACTION = "ba:transaction_deposit"
 # en.json wins over it); this is the same table as builds 3675 and 3680 ship, and
 # it stands for any category the page does not yield. A local run without the game
 # reads the page from the bundle, so this is reached only when there is no game
-# text at all. A letter whose variants disagree carries [min, max].
+# text at all. A letter whose variants disagree carries [min, max]; in a
+# LAYOUT_CAP_CATEGORIES category each layout code (S1) carries its own number
+# beside it.
 CAP_CATEGORIES = ("retail", "office", "cinema", "theater")
 FALLBACK_CAPS = {
     "retail": {"A": 15, "C": 30, "D": 40, "M": 75},
     "office": {"A": 4, "C": 8, "D": 10, "J": 10, "K": 50},
-    "cinema": {"S": [100, 150]},
+    "cinema": {"S": [100, 150], "S1": 150, "S2": 125, "S3": 100},
     "theater": {"R": [150, 200]},
 }
+# Where the help page's per-layout number is the building's own, confirmed by
+# the saves: every player cinema reads customerCapacity exactly its layout's
+# (4 Broadway S1 150, 5 Sixth Street S2 125, 15 Third Avenue S3 100), and no
+# rival's reads above it. A building row's version (`v`) names its layout.
+LAYOUT_CAP_CATEGORIES = ("cinema",)
 _CAP_SECTION_RE = re.compile(r"^\*\*([A-Za-z][A-Za-z /]*)\*\*$")
 _CAP_SIZE_RE = re.compile(
-    r"^\*\s*\*\*([A-Z]+)\d+\*\*:.*?/\s*([\d,]+)\s*customer capacity", re.I
+    r"^\*\s*\*\*([A-Z]+)(\d+)\*\*:.*?/\s*([\d,]+)\s*customer capacity", re.I
 )
 # Types whose own building class is neither a shop floor nor an office.
 VENUE_TYPES = {
@@ -1600,16 +1607,10 @@ VENUE_TYPES = {
 }
 
 
-def _door_caps(names: Names) -> dict:
-    """{building type: {size letter: capacity}} from help_building_types_content.
-
-    The page lists a code per layout — C1 and C2 are both 225 m2 retail floors —
-    so the codes collapse to their letter, which is what ba_buildings.json
-    records. A cinema's three auditorium layouts really do seat different
-    crowds, so a letter whose variants disagree keeps [min, max] rather than
-    pretending to a single number.
-    """
-    found: dict[str, dict[str, list]] = {}
+def _cap_rows(names: Names):
+    """(category, size letter, layout code, customer capacity) for each size row
+    of help_building_types_content, in a CAP_CATEGORIES section: the one parse
+    _door_caps() and _venue_caps() both read."""
     section = None
     for line in (names.locale.get("help_building_types_content") or "").split("\n"):
         line = line.strip()
@@ -1619,25 +1620,50 @@ def _door_caps(names: Names) -> dict:
             continue
         size = _CAP_SIZE_RE.match(line)
         if size and section in CAP_CATEGORIES:
-            found.setdefault(section, {}).setdefault(size.group(1), []).append(
-                int(size.group(2).replace(",", ""))
-            )
+            letter = size.group(1).upper()
+            yield section, letter, letter + size.group(2), int(size.group(3).replace(",", ""))
+
+
+def _door_caps(names: Names) -> dict:
+    """{building type: {size letter: capacity}} from help_building_types_content.
+
+    The page lists a code per layout — C1 and C2 are both 225 m2 retail floors —
+    so the codes collapse to their letter, which is what ba_buildings.json
+    records as `z`. A theatre's three layouts seat different crowds, so a
+    letter whose variants disagree keeps [min, max] rather than pretending to
+    a single number. A cinema's do too, and there the saves confirm the page's
+    number per layout, so each code is also kept as its own key (S1: 150),
+    which _size_cap() reads off the row's `z` and `v`.
+    """
+    found: dict[str, dict[str, list]] = {}
+    codes: dict[str, dict[str, int]] = {}
+    for section, letter, code, cap in _cap_rows(names):
+        found.setdefault(section, {}).setdefault(letter, []).append(cap)
+        if section in LAYOUT_CAP_CATEGORIES:
+            codes.setdefault(section, {})[code] = cap
     caps = {kind: dict(letters) for kind, letters in FALLBACK_CAPS.items()}
     for kind, letters in found.items():
         caps[kind] = {
             letter: (min(seen) if min(seen) == max(seen) else [min(seen), max(seen)])
             for letter, seen in sorted(letters.items())
         }
+        caps[kind].update(sorted(codes.get(kind, {}).items()))
     return caps
 
 
 def _size_cap(row: dict, caps: dict):
     """The customer capacity a building row's size buys, out of _door_caps().
 
-    A number, [min, max] for a venue whose layouts seat different crowds, or
-    None for a type or size the table does not know.
+    A number: the layout's own (S1 150) where the table keys the layout, else
+    the size letter's. [min, max] for a theatre, whose layouts seat different
+    crowds; None for a type or size the table does not know.
     """
-    return caps.get(row.get("t"), {}).get(row.get("z"))
+    kind = caps.get(row.get("t"), {})
+    if row.get("z") and row.get("v") is not None:
+        exact = kind.get(f"{row['z']}{row['v']}")
+        if exact is not None:
+            return exact
+    return kind.get(row.get("z"))
 
 
 def _rent_estimate(row: dict) -> int | None:
@@ -5290,6 +5316,9 @@ def _supply(
     # coming week is read off a straight line through its trading days
     # (_coming_week), and every such shop behind a figure is named (ramp).
     sold_dem, ramping = {}, set()
+    # What each shop measurably sells a day, before any coming week or target
+    # stands in for it: the Sold / day a factory line shows (demand(measured)).
+    sold_measured = {}
     for business in businesses:
         key = business["key"]
         if business["status"] != "retail" or business.get("closed"):
@@ -5302,6 +5331,7 @@ def _supply(
         # A shop a week old sells its week; one younger its trading-day rate
         # until its coming week can be read off a line.
         rates = dict((sold if young else sold_week).get(key, {}))
+        sold_measured[key] = dict(rates)
         for line in business["lines"]:
             if young and rates.get(line["slug"], 0) > 0:
                 ramping.add(key)
@@ -5516,27 +5546,31 @@ def _supply(
         return dem_levels_at[memo]
 
     def demand(key: str, item: str, seen: frozenset = frozenset(), eats=None,
-               held_down: bool = True) -> tuple:
+               held_down: bool = True, measured: bool = False) -> tuple:
         """What the ends draw of `item` a day from this site down the plan, as
         Demand sizing reads it, and the young shops behind that figure. The
         ends are the shelves and, given `eats(site, item)`, the factory lines
         along the way that draw on it; never what the delivery log saw leave.
         A plan to an address not ours (an export) takes the surplus, as the
-        chain's walk reads it, and sizes nothing."""
+        chain's walk reads it, and sizes nothing. With `measured`, the
+        shelves' measured sales alone (sold_measured: no coming week, no
+        target in their place, and `eats` not added), shared out between the
+        senders as Demand sizing shares its own figure (the same levels and
+        targets), for display; it sizes nothing."""
         if key not in index or key in seen:
             return 0.0, frozenset()
-        memo = (key, item, eats is not None, held_down)
+        memo = (key, item, eats is not None, held_down, measured)
         if memo in dem_drawn:
             return dem_drawn[memo]
-        total = sold_dem.get(key, {}).get(item, 0.0)
+        total = (sold_measured if measured else sold_dem).get(key, {}).get(item, 0.0)
         ramp = {index[key]} if key in ramping and total > 0 else set()
-        if eats is not None:
+        if eats is not None and not measured:
             total += eats(key, item)
         for dest_key in _in_order({d for d, i, _a in dem_graph["edges"].get(key, []) if i == item and d != key}):
             weights = dem_graph["share"][(dest_key, item)]
             if not weights.get(key):
                 continue
-            more, behind = demand(dest_key, item, seen | {key}, eats, held_down)
+            more, behind = demand(dest_key, item, seen | {key}, eats, held_down, measured)
             # The routes come first, as in the chain's walk: the site's own
             # import brings only what the senders' room leaves.
             residual = more
@@ -6048,6 +6082,10 @@ def _supply(
         weekly = beat(business)
         factor, _peak_day = peak_of(business)
         for line in business["lines"]:
+            # A ticket is issued at the booth, never held: no stock, need or
+            # refill belongs on the node (issue #159).
+            if line.get("issued"):
+                continue
             shop = shop_need[business["key"]].get(line["item"])
             depot = depot_need[business["key"]].get(line["item"])
             own = (business["key"], line["slug"])
@@ -7364,6 +7402,35 @@ def _line_hours(posted: list, machines: int, rate: float, dem_makes: float, basi
     }
 
 
+def _line_use(machines: int, rate: float, makes: float, sold: float | None,
+              use: float | None) -> dict:
+    """A factory line's use against what it makes at 24 h, for display only:
+    staffing and sizing keep _line_hours()'s 24 h cap.
+
+    `soldDay` is `sold`, the line's share of what the shops down its plan
+    measurably sell a day: no margin, no target or coming week in place of
+    sales, no factory line eating it. `needDay` is `use`, the figure Demand
+    sizing works from (demand(): those, the new shops' coming week or target
+    and the factory lines that eat the product), plus the margin once, never
+    capped. Both read the same in either sizing. `production` is short where
+    `needDay` is past what the line makes at 24 h: a line at 24 h cannot gain
+    hours, so it is a machine gap, `more` machines at the recipe's rate,
+    making `makesWith` a day with them; critical where `use` alone is past
+    it, a warning where only the margin is. A line nothing draws on reads 0,
+    0 and covered. All three are None where no demand can be read at all
+    (no plan walk: `sold` and `use` None)."""
+    if sold is None or use is None:
+        return {"soldDay": None, "needDay": None, "production": None}
+    need = use * (1 + SUPPLY_MARGIN)
+    out = {"soldDay": round(sold), "needDay": round(need), "production": {"status": "covered", "level": "ok"}}
+    each = rate * 24
+    if each and round(need, 6) > round(makes, 6):
+        total = max(machines + 1, math.ceil(round(need / each, 6)))
+        out["production"] = {"status": "short", "level": "critical" if round(use, 6) > round(makes, 6) else "warn",
+                             "more": total - machines, "makesWith": round(total * each)}
+    return out
+
+
 def _factories(
     save: Save,
     names: Names,
@@ -7657,9 +7724,18 @@ def _factories(
             # eat it, dem_eats(); an export takes the surplus), this line's
             # share of it, never past capacity. With nothing drawn there is
             # no demand to read, and the line is taken at capacity.
-            dem_makes, ramp, dem_basis = makes, (), "none"
+            dem_makes, ramp, dem_basis, sold, use = makes, (), "none", None, None
             if demand:
                 wanted, ramp = demand(key, slug, eats=dem_eats)
+                # Two figures for _line_use(), each this line's share as the
+                # makers of the product split it: `use`, what Demand sizing
+                # works from (new shops' coming week and targets, the factory
+                # lines that eat it), uncapped and without the margin; `sold`,
+                # what the shops down the plan measurably sell, split by the
+                # same routing, and nothing else.
+                split = makes / capacity[slug] if capacity[slug] else 0.0
+                use = wanted * split
+                sold = demand(key, slug, eats=dem_eats, measured=True)[0] * split
                 if wanted > 0 and capacity[slug]:
                     dem_makes = min(makes, wanted * makes / capacity[slug])
                     dem_basis = "sales"
@@ -7696,6 +7772,7 @@ def _factories(
                     "atRoster": round(makes * share),
                     **staffing,
                     **_line_hours(posted[key][(station, rid)], n, rec["out"], dem_makes, dem_basis),
+                    **_line_use(n, rec["out"], makes, sold, use),
                 }
             )
             made_by[slug].add(key)
@@ -8339,8 +8416,8 @@ def _initial_customers(
     largest productSalesRatio among the products the shop has on hand that are
     primary for its type, times the building's square metres. `build_at_start`
     is the save's buildNumberAtStart; a save without one reads as 0, the old
-    rule, the way the game's own default does. A cinema or theater size whose
-    layouts seat different crowds comes as [min, max]; its top is taken, which
+    rule, the way the game's own default does. A theater size whose layouts
+    seat different crowds comes as [min, max]; its top is taken, which
     keeps the ceiling an upper bound, and the door clips it to the building's
     own number anyway.
 
@@ -8389,7 +8466,7 @@ def _arrival_ceiling(
     baseCustomerPromotionMultiplier plus 0.75 x the promotion total over 100.
     `door` is the registration's customerCapacity, the grid's door. The game
     sends arrivals in open hours only; which those are is the caller's to know.
-    Where `initial` is the top of a cinema's or theater's capacity range, the
+    Where `initial` is the top of a theater's capacity range, the
     grid is a bound on that venue's arrivals rather than the game's exact number.
 
     **These are the game's arrivals, an upper bound on customers served, never
@@ -13761,7 +13838,7 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
     """The two things an hourly grid can tell you that a daily total cannot.
 
     Each role is judged on the roster that was on for it, so a gym short of
-    trainers and a theatre short of projectionists get the line that fits them,
+    trainers and a cinema short of projectionists get the line that fits them,
     while a shop's counters and an office's workstations keep the words they
     have always had. Wages arrive per role, as ``{site key: {skill: wage}}``.
     """
@@ -15941,20 +16018,11 @@ def plan_layout(row: dict) -> str | None:
 
 def _venue_caps(names: Names) -> dict:
     """{size and version: customer capacity} for the cinemas and theatres
-    (S1 150, S2 125, S3 100; R1 200 ...), from the help text _door_caps()
-    reads by letter alone."""
-    out, section = {}, None
-    code = re.compile(r"^\*\s*\*\*([A-Z]+\d+)\*\*:.*?/\s*([\d,]+)\s*customer capacity", re.I)
-    for line in (names.locale.get("help_building_types_content") or "").split("\n"):
-        line = line.strip()
-        head = _CAP_SECTION_RE.match(line)
-        if head:
-            section = head.group(1).strip().lower()
-            continue
-        size = code.match(line)
-        if size and section in ("cinema", "theater"):
-            out[size.group(1).upper()] = int(size.group(2).replace(",", ""))
-    return out
+    (S1 150, S2 125, S3 100; R1 200 ...), from the same rows _door_caps()
+    reads (_cap_rows()). An outfit is planned per layout, so a theatre's are
+    kept exact here even where the finder shows its letter's range."""
+    return {code: cap for section, _letter, code, cap in _cap_rows(names)
+            if section in ("cinema", "theater")}
 
 
 def _building_row(reg: dict) -> dict:
@@ -16262,7 +16330,7 @@ def _own_shops(save: Save, regs: dict, businesses: list, grids: list, stmt_histo
         total = sum(by_day[d].get("TotalSales", 0) - by_day[d].get("SalaryExpenses", 0)
                     - by_day[d].get("RentExpenses", 0) - by_day[d].get("MarketingExpenses", 0)
                     - by_day[d].get("LicensingFees", 0) for d in days)
-        door = caps.get(row.get("t"), {}).get(row.get("z"))
+        door = _size_cap(row, caps)
         # What the game starts each hour from for this shop: its own shelves
         # in an old game, as _plan_site() reads them.
         initial = _plan_initial(save.root.get("buildNumberAtStart"), models.get(slug), door, slug,

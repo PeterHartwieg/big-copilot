@@ -1278,6 +1278,12 @@
         "why": null,
         "level": "ok",
         "lower": 10
+       },
+       "soldDay": 170,
+       "needDay": 196,
+       "production": {
+        "status": "covered",
+        "level": "ok"
        }
       },
       {
@@ -1320,6 +1326,12 @@
        "dem": {
         "status": "covered",
         "why": null,
+        "level": "ok"
+       },
+       "soldDay": 826,
+       "needDay": 950,
+       "production": {
+        "status": "covered",
         "level": "ok"
        }
       }

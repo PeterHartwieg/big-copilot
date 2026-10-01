@@ -458,6 +458,25 @@ class PayloadTests(unittest.TestCase):
 
 
 
+class OwnShopCapTests(unittest.TestCase):
+    """_own_shops() reads a building's capacity by its layout (issue #159)."""
+
+    def test_an_owned_s2_cinema_reads_125(self):
+        addr = ("ba:street_sixthstreet", 5)  # S2 in ba_buildings.json
+        key = ba_dashboard.site_key(addr)
+        sale = {"itemName": "ba:itemname_cinematicket", "amountSold": 100}
+        orders = [{"dayNumber": d, "itemSales": {"$items": [sale]}} for d in range(2, 12)]
+        reg = {"StreetName": addr[0], "StreetNumber": addr[1],
+               "orderHistory": {"$items": orders}, "cachedAvailableProducts": {"$items": []}}
+        stmts = [(d, {addr: {"TotalSales": 1000.0}}) for d in range(2, 12)]
+        business = {"key": key, "typeSlug": "ba:businesstype_cinema", "status": "retail", "opened": 1}
+        caps = ba_dashboard._door_caps(Names({}))
+        out = ba_dashboard._own_shops(Save({}, {}, ""), {key: reg}, [business], [], stmts, {},
+                                      caps, 12, {})
+        [row] = out["ba:businesstype_cinema"]
+        self.assertEqual(row["cap"], 125)
+
+
 class WorksInTests(unittest.TestCase):
     """"Can only be used in ...": a piece the game will not let work in the
     type is never planned, and does not meet an opening requirement here."""

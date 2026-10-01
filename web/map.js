@@ -152,11 +152,12 @@ const premises = () => D?.premises || null;
 /* Names sort in the language the board shows them in (gnCompare()). */
 const mapCompare = (a, b) => typeof gnCompare === 'function' ? gnCompare(a, b) : String(a).localeCompare(String(b));
 const mapCharacter = () => D?.meta?.character || D?.supply?.factories?.character || D?.meta?.save || "";
-/* A size letter whose layouts disagree carries [min, max] rather than a number. */
+/* A size letter whose layouts disagree carries [min, max] rather than a number:
+   a theatre today, since a cinema's cap comes by its own layout (S1 150). */
 const capText = c => c == null ? "—" : Array.isArray(c) ? `${c[0]}–${c[1]}` : String(c);
 /* A cap you can count on is the smallest the size letter's variants give, so
-   both ends of the filter read a range by its lower bound: a cinema seating
-   100 to 150 is not a building that seats 125. */
+   both ends of the filter read a range by its lower bound: a theatre seating
+   150 to 200 is not a building that seats 175. */
 const capMin = c => Array.isArray(c) ? c[0] : c;
 /* A number filter left at 0 is no limit; one that is set turns away a building
    with no reading, since nothing is known about it either way. */
@@ -1036,9 +1037,9 @@ class CityMapView {
       if(!this.candidate(b)) continue;
       if(!this.hoodOn(b.hood) || !this.layoutOn(b.layout) || b.traffic < fs.minTraffic) continue;
       if(!finderFits(b.m2, fs.minM2, fs.maxM2)) continue;
-      // Both ends judge a range by its smallest variant: a cinema seating 100
-      // to 150 clears a minimum of 100 and fits under a maximum of 120, but a
-      // building with no door cap at all can promise neither.
+      // Both ends judge a range by its smallest variant: a theatre seating 150
+      // to 200 clears a minimum of 150 and fits under a maximum of 170, but a
+      // building with no building capacity at all can promise neither.
       if(!finderFits(capMin(b.cap), fs.minCap, fs.maxCap)) continue;
       const loc = this.assets.byKey.get(b.key);
       out.push({key:b.key, address:b.address, hood:b.hood, bld:b, f:this.fitFor(b), region:loc?.region, bounds:loc?.bounds});
