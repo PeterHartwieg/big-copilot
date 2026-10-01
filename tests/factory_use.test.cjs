@@ -139,14 +139,20 @@ test('a factory with a line critically short of machines opens, and its head say
       open: d.open, head: d.querySelector('summary').textContent.replace(/\s+/g, ' ')}));
     assert.ok(obj.open, JSON.stringify(obj));
     assert.match(obj.head, /1 line short of machines/);
+    // The head's chip has a tip of its own, counting the lines.
+    assert.match(await page.$eval('#secProduction details.sb-obj summary .sb-v', v => v.dataset.tip),
+      /^1 line here makes less round the clock than it needs with the margin/);
   } finally { await page.close(); }
 });
 
-test('the factory page names the line furthest short of machines, in plain words in its tips', async () => {
+test('the factory page and the head name the line furthest short of machines: critical first', async () => {
+  // Cake comes first in the list and has more machines to add, but only the
+  // margin is past it (warn); Bread, second, is critical, so Bread is named.
   const data = shortOfMachines(fixture());
   const site = data.supply.factories.sites[0];
-  Object.assign(site.lines.find(l => l.slug === 'cake'), {soldDay: 900, needDay: 1035,
-    production: {status: 'short', level: 'critical', more: 2, makesWith: 960}});
+  assert.equal(site.lines[0].slug, 'cake');
+  Object.assign(site.lines[0], {soldDay: 900, needDay: 1035,
+    production: {status: 'short', level: 'warn', more: 3, makesWith: 1200}});
   site.needs.find(n => n.slug === 'flour').item = 'Flour & Salt';
   Object.assign(data.supply.facts['1'].flour, {st: 'short', why: 'order', lvl: 'critical', cad: 'weekly'});
   const page = await board(data);
@@ -157,9 +163,13 @@ test('the factory page names the line furthest short of machines, in plain words
       el.innerHTML = spLines(site);
       const row = [...el.querySelectorAll('.sp-line:not(.sp-head)')].find(r => r.textContent.includes('Bread'));
       const order = [...row.querySelectorAll('.chip')].find(c => c.textContent.trim() === 'order short');
-      return {read: spLinesRead(site), tip: order.dataset.tip};
+      return {read: spLinesRead(site), tip: order.dataset.tip,
+        head: sbProdWorst(sbData().f.sites[0].lines.map(l => ({...l, prod: sbProdFact(l)}))).item};
     });
-    assert.match(got.read, /<b>Cake<\/b> needs 2 more machines to cover the 1,035 a day it needs with the margin/);
+    assert.match(got.read, /<b>Bread<\/b> needs 1 more machine to cover the 1,150 a day it needs with the margin/);
+    assert.equal(got.head, 'Bread');
+    // The head's chip takes the critical line's colour.
+    assert.match(await page.$eval('#secProduction details.sb-obj summary .sb-v', v => v.className), /\bbad\b/);
     assert.equal(got.tip, 'Short of Flour & Salt');
   } finally { await page.close(); }
 });

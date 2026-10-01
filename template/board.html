@@ -10828,10 +10828,7 @@ function spLinesRead(site){
       ? tt("sp.lines.idle", "Making nothing · Machine {slot} is staffed and rented with <b>no recipe</b>", {slot: spEsc(slot)})
       : tt("sp.lines.idle.any", "Making nothing · a machine is staffed and rented with <b>no recipe</b>");
   }
-  /* The line furthest short of machines: the most to add, then the most
-     need past what it makes. */
-  const lacking = (site.lines || []).filter(l => sbProdFact(l)).sort((a, b) => b.production.more - a.production.more
-    || ((b.needDay || 0) - (b.makes || 0)) - ((a.needDay || 0) - (a.makes || 0)))[0];
+  const lacking = sbProdWorst(site.lines || []);
   if(lacking) return tt("sp.lines.machines", {one: "Short of machines · <b>{item}</b> needs {n} more machine to cover the {need} a day it needs with the margin: what its shops sell and other lines use",
     other: "Short of machines · <b>{item}</b> needs {n} more machines to cover the {need} a day it needs with the margin: what its shops sell and other lines use"},
     {item: spEsc(lacking.item), n: lacking.production.more, need: spNum(lacking.needDay)});
@@ -13047,6 +13044,15 @@ function sbLineInputsFact(site, l){
   return {st: "short", why: "inputs", lvl: bad.some(([, f]) => f.lvl === "critical") ? "critical" : "warn",
     order: bad.every(([, f]) => f.st === "short" && f.why === "order"), items: bad.map(([n]) => n.item)};
 }
+/* The line furthest short of machines, the one a factory's head and its
+   page name: a critical one first, then the most machines to add, then the
+   most need past what it makes. Null where none is short. */
+function sbProdWorst(lines){
+  const key = l => [sbProdFact(l), (l.needDay || 0) - (l.makes || 0)];
+  return lines.filter(l => sbProdFact(l)).map(l => [l, ...key(l)])
+    .sort(([, p, x], [, q, y]) => (q.lvl === "critical") - (p.lvl === "critical") || q.more - p.more || y - x)
+    .map(([l]) => l)[0] || null;
+}
 /* "short" never stands alone on a factory row: it names what is short. */
 function szShortWord(f){
   if(!f || f.st !== "short") return "";
@@ -14049,9 +14055,10 @@ function sbFactoryPart(d, claimed, ctx, view, o){
         tt("sb.fac.staffed.tip", "Hours a day someone is scheduled on a machine, all lines together"));
     /* Lines short of machines keep their hours covered and carry no change to
        type, so the head says how many there are, and a critical one opens it. */
-    const lacking = lines.filter(r => r.prod);
-    const worst = lacking.find(r => r.prod.lvl === "critical") || lacking[0];
-    const short = worst ? " " + sbStatus(worst.prod, "", "", tt("sb.fac.machines.chip",
+    const lacking = lines.filter(r => r.prod), worst = sbProdWorst(lacking);
+    const lackTip = worst ? tt("sb.fac.machines.chip.tip", {one: "{n} line here makes less round the clock than it needs with the margin: more machines close that, more hours cannot",
+      other: "{n} lines here make less round the clock than they need with the margin: more machines close that, more hours cannot"}, {n: lacking.length}) : "";
+    const short = worst ? " " + sbStatus(sbProdFact(worst), lackTip, lackTip, tt("sb.fac.machines.chip",
       {one: "{n} line short of machines", other: "{n} lines short of machines"}, {n: lacking.length})) : "";
     return sbObject(view, s, {icon: "gear", how, stats: stats + short, left,
       open: left > 0 || keep.some(r => (r.fact && r.fact.lvl === "critical") || (r.prod && r.prod.lvl === "critical")), body});
