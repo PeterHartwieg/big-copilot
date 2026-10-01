@@ -47,15 +47,15 @@ checklist rows and finder plan mode. What only a factory needs is `ff-`.
     price, the installation fee (firm) or the furniture delivery (self-installation), the
     deposit, vehicles. No raw material or stock, wages, rent beyond the deposit, import costs
     or first-weeks buffer. The drawn totals already held only one-off items, so no figure
-    changed: $562,070 self and $1,318,932 firm for a new factory, $275,250 and $1,032,112 for
-    the owned-factory addition, $688,830 with a new depot, loan $280,000 with $282,070 cash
+    changed: $542,070 self and $1,298,932 firm for a new factory, $272,750 and $1,029,612 for
+    the owned-factory addition, $668,830 with a new depot, loan $280,000 with $262,070 cash
     upfront. What changed is the separation: the plan strip's fourth cell is now **Running
     costs** (raw material a week, marked "not in the investment", set apart with a dashed
     edge), every investment total says "one-off, upfront", the loan's day figure reads "Repaid
     a day", and the no-depot step says the depot's rent and driver are running costs.
 12. **Vehicles are investment**, in the plan and in Results: a business's own vehicles count
     at their purchase price plus their delivery, if one was paid. Results' Invested for the
-    factory is $561,820 (furniture $427,500 + deposit $36,320 + Freight Truck T1 $98,000; the
+    factory is $541,820 (furniture $407,500 + deposit $36,320 + Freight Truck T1 $98,000; the
     plan's $250 furniture delivery is a plan figure the save does not show), and the chain's
     total includes it. No "proposed" marker.
 13. **Size is the player's call.** Even a small warehouse can be made to work, so the Where
@@ -82,6 +82,22 @@ checklist rows and finder plan mode. What only a factory needs is `ff-`.
       subtracts wages, rent and marketing), and nothing else in the plan counts it.
     - An owned factory shows only what the change adds: the added raw material and the new
       workers' wages, no rent.
+16. **Pallet shelves sized from the game's storage**: a week of raw material (a plain import
+    contract delivers once a week) plus two days of output (the factory ships daily at 08:00).
+    The board has no storage rule of its own (`docs/dashboard-reference.md`: "Storage and
+    transport limits are not modelled"), so this is the canvas's rule.
+    - A Pallet Shelf holds 60 boxes (the game's help page, `furniture-palletshelf` in
+      `web/wiki-data.json`; no Pallet Shelf in Peter's saves holds more than 60 cargo
+      instances; a Storage Shelf holds 16).
+    - A box holds `Item.boxSize` units (a field of the game's `Item`, `research/headhunter/
+      il_all.txt`). Read off the saves as the fullest box seen: Whisky, Bottle of Wine, Beer
+      300; Barley, Water, Yeast, Grapes, Hops, Carbon Dioxide 500; Sugar 1,500. Not read from
+      the bundle (UnityPy is not installed here); the porting step reads it there.
+    - New factory: 193 boxes of raw material + 24 of output = 217 boxes → 4 shelves (was 12):
+      $10,000 instead of $30,000. Owned factory with Beer ×2: 401 boxes → 7 shelves, so 3 more
+      (was 4): $7,500 instead of $10,000.
+    - The depot in the no-depot artboard keeps its 8 shelves as drawn; a depot's storage follows
+      its own imports, not the factory plan.
 
 ## One menu point: Plan a factory
 
@@ -107,7 +123,7 @@ then one segment per factory you run).
   steppers show the change (+2), the shortage row as above, then today's **Ingredients** table
   (order ahead: company target, on order now, change, cash a week) across all your factories.
   Step 2 is ticked and reads "4 22nd Street · yours". Step 3 is the new machines and shelves
-  only ($275,250; the firm would charge $757,112 for the floor again). Step 4 is the change's
+  only ($272,750; the firm would charge $757,112 for the floor again). Step 4 is the change's
   own rows: machines and recipes in the game, Hire 6, Hops and Carbon Dioxide onto the contract
   in the game, Set 5 amounts, Beer onto the delivery plan in the game, then the depot's Beer
   import lowered. Step 5 compares output with the new plan, Beer's ramp-up included.
@@ -181,11 +197,11 @@ Every page is 1280 px wide with the shipped sidebar. Each has a `dark` Tweak.
   $2,909 → $2,182, Cigarettes $2,128 → $1,596, Cigar $1,445 → $1,084. Lines, saves a week:
   Whisky $63,739 → $47,804, Wine $32,364 → $24,273.
 - Surplus 3,850 Whisky a week × $3.49 ($8 × 0.96 × 0.7 × 0.65) = $13,453 a week.
-- 4 22nd Street, I3, 1,292 m², rent $388, deposit $36,320. Self $562,070 = 427,500 items +
-  250 delivery + 98,000 truck + 36,320 deposit. Firm $1,318,932.
+- 4 22nd Street, I3, 1,292 m², rent $388, deposit $36,320. Self $542,070 = 407,500 items +
+  250 delivery + 98,000 truck + 36,320 deposit. Firm $1,298,932.
 - Loan $280,000 at Vantander: 392 interest + 1,166 back a day, $94,472 interest over 241 days.
 - Results: shops 12,010 + 16,640 + 10,980 + 13,874, depot −980, factory −4,060 = $48,464 a day;
-  Invested 200,770 + 211,290 + 199,690 + 99,115 + 83,770 + 561,820 = $1,356,455.
+  Invested 200,770 + 211,290 + 199,690 + 99,115 + 83,770 + 541,820 = $1,336,455.
 
 ## Other decisions taken
 
@@ -208,8 +224,7 @@ Every page is 1280 px wide with the shipped sidebar. Each has a `dark` Tweak.
 
 ## Open questions for Peter
 
-1. **Pallet shelves**: 12 is a placeholder; size them to raw material and output once the
-   units per box are known.
+None left: every question on this canvas has been answered (decisions 8 to 16).
 
 ## Porting plan
 
@@ -310,6 +325,10 @@ Every page is 1280 px wide with the shipped sidebar. Each has a `dark` Tweak.
   `make_store_rules.py` (today only `PLAN_WAGES` and `PLAN_OFFICE_WAGES` are hand-kept), the
   board's `(1 + 1.05^100 / 100) × wages` factor as `osOfficeModel()` uses it; drivers at the
   game's flat 5.7 h a day; HQ staff the plan adds at the HQ's scheduled hours.
+- Storage: `make_store_rules.py` adds `Item.boxSize` per product and ingredient and the
+  shelves' box capacity (`ba:itemtag_isbusinessstorage` items: Pallet Shelf 60, Storage Shelf
+  16) to `ba_store_rules.json`; the plan sizes shelves to a week of ingredients and two days of
+  output, and an owned factory's addition subtracts the shelves already placed there.
 - Write buttons: `hrReview({scope:"site"})` for the factory, Quick hire for the HQ agent,
   `gwImports()` for amounts and the depot's own lines.
 

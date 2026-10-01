@@ -792,7 +792,30 @@ NEW = {"addr": "4 22nd Street", "hood": "Industry City", "size": "I3", "m2": 129
 FEE = 586 * NEW["m2"]                                      # 757,112
 DELIVERY = 250
 TRUCK = ("Freight Truck T1", 98_000)
-SHELVES = ("Pallet Shelf", 2_500, 12)
+# Storage: a Pallet Shelf holds 60 boxes (the game's help page; saves never hold more than 60 cargo
+# instances on one), a box holds Item.boxSize units (read off saves as the fullest box seen: bottled
+# goods 300, raw material 500, Sugar 1,500). The rule: a week of raw material, since a plain import
+# contract delivers once a week, plus two days of output, which ships to the depot daily at 08:00.
+SHELF_BOXES = 60
+BOX = {"Whisky": 300, "Bottle of Wine": 300, "Beer": 300, "Barley": 500, "Water": 500, "Yeast": 500,
+       "Grapes": 500, "Hops": 500, "Carbon Dioxide": 500, "Sugar": 1500}
+
+
+def boxes(lines) -> int:
+    """Boxes for a week of each ingredient and two days of each product the lines make."""
+    raw, out = {}, {}
+    for p_, k in lines:
+        if not k:
+            continue
+        rate = RECIPES[p_][1]
+        out[p_] = out.get(p_, 0) + rate * 24 * 2 * k
+        for m, q in RECIPES[p_][2]:
+            raw[m] = raw.get(m, 0) + q * 168 * k
+    return sum(-(-v // BOX[m]) for m, v in raw.items()) + sum(-(-v // BOX[p_]) for p_, v in out.items())
+
+
+SHELF_NEED = boxes(LINES)                                   # 217 boxes
+SHELVES = ("Pallet Shelf", 2_500, -(-SHELF_NEED // SHELF_BOXES))   # 4
 ITEMS = [(m, p, KITS) for m, p in WS["bottled"][1]] + [(SHELVES[0], SHELVES[1], SHELVES[2])]
 ITEMS_TOTAL = sum(p * q for _, p, q in ITEMS)              # 427,500
 SELF = ITEMS_TOTAL + DELIVERY + TRUCK[1] + NEW["deposit"]  # 562,070
@@ -1153,7 +1176,8 @@ def grow_ingredients() -> str:
 
 
 GROW_ADDED = sum(k - now for _p, now, k in GROW)                     # 2 workstations
-GROW_SHELVES = 4
+GROW_BOXES = boxes([(p_, k) for p_, _now, k in GROW])     # 401 boxes for the grown factory
+GROW_SHELVES = -(-GROW_BOXES // SHELF_BOXES) - SHELVES[2]    # 7 in all, 3 more
 GROW_ITEMS = [(m, p_, GROW_ADDED) for m, p_ in WS["bottled"][1]] + [(SHELVES[0], SHELVES[1], GROW_SHELVES)]
 GROW_TOTAL = sum(p_ * q for _m, p_, q in GROW_ITEMS) + DELIVERY        # 275,250
 GROW_FIRM = FEE + sum(p_ * q for _m, p_, q in GROW_ITEMS)               # the firm prices the whole floor again
@@ -1193,7 +1217,7 @@ def grow_what() -> str:
 
 def grow_invest() -> str:
     a = VENDORS["fsd"]
-    rows = "".join(f'<tr><td class="l">{q} × {m}</td><td class="w">{tag("req", "Workstation") if m != SHELVES[0] else tag("req", "Holds stock")}</td><td>{money(p_ * q)}</td></tr>'
+    rows = "".join(f'<tr><td class="l">{q} × {m}</td><td class="w">{tag("req", "Workstation") if m != SHELVES[0] else tag("req", f"{GROW_BOXES} boxes in all")}</td><td>{money(p_ * q)}</td></tr>'
                    for m, p_, q in GROW_ITEMS)
     tog = (f'<div class="os-toolbar"><nav class="os-seg big" aria-label="Interior"><a href="#">Installation firm <b>{money(GROW_FIRM)}</b></a>'
            f'<a class="on" href="#">Self-installation <b>{money(GROW_TOTAL)}</b></a></nav>'
@@ -1324,7 +1348,7 @@ def toolbar(mode: str) -> str:
 def item_rows(fmt: str = "self") -> str:
     out = []
     for m, p, q in ITEMS:
-        why = tag("req", "Workstation") if m != SHELVES[0] else tag("req", "Holds stock")
+        why = tag("req", "Workstation") if m != SHELVES[0] else tag("req", f"{SHELF_NEED} boxes: a week in, two days out")
         if fmt == "self":
             out.append(f'<tr><td class="l">{q} × {m}</td><td class="w">{why}</td><td>{money(p * q)}</td></tr>')
         else:
