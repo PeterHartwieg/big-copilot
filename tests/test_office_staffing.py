@@ -280,7 +280,8 @@ class OfficeBusinessTests(MsgAsserts, unittest.TestCase):
 class OfficeAlertTextTests(MsgAsserts, unittest.TestCase):
     def cap(self, key, name, office, limit="staffing", cap=1, top=2):
         return {"kind": "cap", "key": key, "site": name, "office": office, "hours": 9,
-                "when": "Mon 0-9", "limit": limit, "fix": "more staff at the computers on those hours",
+                "when": "Mon 0-9", "limit": limit,
+                "heldBy": [["door"] if limit == "the building" else ["staff", None]], "fix": "more staff at the computers on those hours",
                 "cap": cap, "capTop": top, "basket": 388.0, "throughput": 776.0}
 
     def test_offices_fill_workstations_and_never_merge_with_shops(self):
