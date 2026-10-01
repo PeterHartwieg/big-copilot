@@ -1581,17 +1581,24 @@ DEPOSIT_TRANSACTION = "ba:transaction_deposit"
 # en.json wins over it); this is the same table as builds 3675 and 3680 ship, and
 # it stands for any category the page does not yield. A local run without the game
 # reads the page from the bundle, so this is reached only when there is no game
-# text at all. A letter whose variants disagree carries [min, max].
+# text at all. A letter whose variants disagree carries [min, max]; in a
+# LAYOUT_CAP_CATEGORIES category each layout code (S1) carries its own number
+# beside it.
 CAP_CATEGORIES = ("retail", "office", "cinema", "theater")
 FALLBACK_CAPS = {
     "retail": {"A": 15, "C": 30, "D": 40, "M": 75},
     "office": {"A": 4, "C": 8, "D": 10, "J": 10, "K": 50},
-    "cinema": {"S": [100, 150]},
+    "cinema": {"S": [100, 150], "S1": 150, "S2": 125, "S3": 100},
     "theater": {"R": [150, 200]},
 }
+# Where the help page's per-layout number is the building's own, confirmed by
+# the saves: every player cinema reads customerCapacity exactly its layout's
+# (4 Broadway S1 150, 5 Sixth Street S2 125, 15 Third Avenue S3 100), and no
+# rival's reads above it. A building row's version (`v`) names its layout.
+LAYOUT_CAP_CATEGORIES = ("cinema",)
 _CAP_SECTION_RE = re.compile(r"^\*\*([A-Za-z][A-Za-z /]*)\*\*$")
 _CAP_SIZE_RE = re.compile(
-    r"^\*\s*\*\*([A-Z]+)\d+\*\*:.*?/\s*([\d,]+)\s*customer capacity", re.I
+    r"^\*\s*\*\*([A-Z]+)(\d+)\*\*:.*?/\s*([\d,]+)\s*customer capacity", re.I
 )
 # Types whose own building class is neither a shop floor nor an office.
 VENUE_TYPES = {
@@ -1600,16 +1607,10 @@ VENUE_TYPES = {
 }
 
 
-def _door_caps(names: Names) -> dict:
-    """{building type: {size letter: capacity}} from help_building_types_content.
-
-    The page lists a code per layout — C1 and C2 are both 225 m2 retail floors —
-    so the codes collapse to their letter, which is what ba_buildings.json
-    records. A cinema's three auditorium layouts really do seat different
-    crowds, so a letter whose variants disagree keeps [min, max] rather than
-    pretending to a single number.
-    """
-    found: dict[str, dict[str, list]] = {}
+def _cap_rows(names: Names):
+    """(category, size letter, layout code, customer capacity) for each size row
+    of help_building_types_content, in a CAP_CATEGORIES section: the one parse
+    _door_caps() and _venue_caps() both read."""
     section = None
     for line in (names.locale.get("help_building_types_content") or "").split("\n"):
         line = line.strip()
@@ -1619,25 +1620,50 @@ def _door_caps(names: Names) -> dict:
             continue
         size = _CAP_SIZE_RE.match(line)
         if size and section in CAP_CATEGORIES:
-            found.setdefault(section, {}).setdefault(size.group(1), []).append(
-                int(size.group(2).replace(",", ""))
-            )
+            letter = size.group(1).upper()
+            yield section, letter, letter + size.group(2), int(size.group(3).replace(",", ""))
+
+
+def _door_caps(names: Names) -> dict:
+    """{building type: {size letter: capacity}} from help_building_types_content.
+
+    The page lists a code per layout — C1 and C2 are both 225 m2 retail floors —
+    so the codes collapse to their letter, which is what ba_buildings.json
+    records as `z`. A theatre's three layouts seat different crowds, so a
+    letter whose variants disagree keeps [min, max] rather than pretending to
+    a single number. A cinema's do too, and there the saves confirm the page's
+    number per layout, so each code is also kept as its own key (S1: 150),
+    which _size_cap() reads off the row's `z` and `v`.
+    """
+    found: dict[str, dict[str, list]] = {}
+    codes: dict[str, dict[str, int]] = {}
+    for section, letter, code, cap in _cap_rows(names):
+        found.setdefault(section, {}).setdefault(letter, []).append(cap)
+        if section in LAYOUT_CAP_CATEGORIES:
+            codes.setdefault(section, {})[code] = cap
     caps = {kind: dict(letters) for kind, letters in FALLBACK_CAPS.items()}
     for kind, letters in found.items():
         caps[kind] = {
             letter: (min(seen) if min(seen) == max(seen) else [min(seen), max(seen)])
             for letter, seen in sorted(letters.items())
         }
+        caps[kind].update(sorted(codes.get(kind, {}).items()))
     return caps
 
 
 def _size_cap(row: dict, caps: dict):
     """The customer capacity a building row's size buys, out of _door_caps().
 
-    A number, [min, max] for a venue whose layouts seat different crowds, or
-    None for a type or size the table does not know.
+    A number: the layout's own (S1 150) where the table keys the layout, else
+    the size letter's. [min, max] for a theatre, whose layouts seat different
+    crowds; None for a type or size the table does not know.
     """
-    return caps.get(row.get("t"), {}).get(row.get("z"))
+    kind = caps.get(row.get("t"), {})
+    if row.get("z") and row.get("v") is not None:
+        exact = kind.get(f"{row['z']}{row['v']}")
+        if exact is not None:
+            return exact
+    return kind.get(row.get("z"))
 
 
 def _rent_estimate(row: dict) -> int | None:
@@ -8294,8 +8320,8 @@ def _initial_customers(
     largest productSalesRatio among the products the shop has on hand that are
     primary for its type, times the building's square metres. `build_at_start`
     is the save's buildNumberAtStart; a save without one reads as 0, the old
-    rule, the way the game's own default does. A cinema or theater size whose
-    layouts seat different crowds comes as [min, max]; its top is taken, which
+    rule, the way the game's own default does. A theater size whose layouts
+    seat different crowds comes as [min, max]; its top is taken, which
     keeps the ceiling an upper bound, and the door clips it to the building's
     own number anyway.
 
@@ -8344,7 +8370,7 @@ def _arrival_ceiling(
     baseCustomerPromotionMultiplier plus 0.75 x the promotion total over 100.
     `door` is the registration's customerCapacity, the grid's door. The game
     sends arrivals in open hours only; which those are is the caller's to know.
-    Where `initial` is the top of a cinema's or theater's capacity range, the
+    Where `initial` is the top of a theater's capacity range, the
     grid is a bound on that venue's arrivals rather than the game's exact number.
 
     **These are the game's arrivals, an upper bound on customers served, never
@@ -13716,7 +13742,7 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
     """The two things an hourly grid can tell you that a daily total cannot.
 
     Each role is judged on the roster that was on for it, so a gym short of
-    trainers and a theatre short of projectionists get the line that fits them,
+    trainers and a cinema short of projectionists get the line that fits them,
     while a shop's counters and an office's workstations keep the words they
     have always had. Wages arrive per role, as ``{site key: {skill: wage}}``.
     """
@@ -15896,20 +15922,11 @@ def plan_layout(row: dict) -> str | None:
 
 def _venue_caps(names: Names) -> dict:
     """{size and version: customer capacity} for the cinemas and theatres
-    (S1 150, S2 125, S3 100; R1 200 ...), from the help text _door_caps()
-    reads by letter alone."""
-    out, section = {}, None
-    code = re.compile(r"^\*\s*\*\*([A-Z]+\d+)\*\*:.*?/\s*([\d,]+)\s*customer capacity", re.I)
-    for line in (names.locale.get("help_building_types_content") or "").split("\n"):
-        line = line.strip()
-        head = _CAP_SECTION_RE.match(line)
-        if head:
-            section = head.group(1).strip().lower()
-            continue
-        size = code.match(line)
-        if size and section in ("cinema", "theater"):
-            out[size.group(1).upper()] = int(size.group(2).replace(",", ""))
-    return out
+    (S1 150, S2 125, S3 100; R1 200 ...), from the same rows _door_caps()
+    reads (_cap_rows()). An outfit is planned per layout, so a theatre's are
+    kept exact here even where the finder shows its letter's range."""
+    return {code: cap for section, _letter, code, cap in _cap_rows(names)
+            if section in ("cinema", "theater")}
 
 
 def _building_row(reg: dict) -> dict:
@@ -16217,7 +16234,7 @@ def _own_shops(save: Save, regs: dict, businesses: list, grids: list, stmt_histo
         total = sum(by_day[d].get("TotalSales", 0) - by_day[d].get("SalaryExpenses", 0)
                     - by_day[d].get("RentExpenses", 0) - by_day[d].get("MarketingExpenses", 0)
                     - by_day[d].get("LicensingFees", 0) for d in days)
-        door = caps.get(row.get("t"), {}).get(row.get("z"))
+        door = _size_cap(row, caps)
         # What the game starts each hour from for this shop: its own shelves
         # in an old game, as _plan_site() reads them.
         initial = _plan_initial(save.root.get("buildNumberAtStart"), models.get(slug), door, slug,
