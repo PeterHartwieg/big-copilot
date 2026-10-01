@@ -703,7 +703,7 @@ def raw_unit(product: str) -> float:
 
 def machines_for(product: str) -> int:
     rate = RECIPES[product][1] * 24
-    return max(1, -(-SOLD_BY[product] // rate)) if product != "Bottle of Wine" else 1
+    return max(1, -(-SOLD_BY[product] // rate))
 
 
 def saves_a_day(product: str, k: int) -> float:
@@ -752,9 +752,11 @@ ITEMS = [(m, p, KITS) for m, p in WS["bottled"][1]] + [(SHELVES[0], SHELVES[1], 
 ITEMS_TOTAL = sum(p * q for _, p, q in ITEMS)              # 427,500
 SELF = ITEMS_TOTAL + DELIVERY + TRUCK[1] + NEW["deposit"]  # 562,070
 FIRM = FEE + ITEMS_TOTAL + TRUCK[1] + NEW["deposit"]       # 1,318,932
-DAYS_SELF = -(-SELF // GAIN)                               # 33
-DAYS_FIRM = -(-FIRM // GAIN)                               # 76
 LOW, HIGH = 0.8, 1.05                                      # the store flow's band (OS_LOW, OS_HIGH)
+MID = (LOW + HIGH) / 2                                     # OS_MID: the headline and the loan
+GAIN_MID = round(GAIN * MID)                               # 16,069
+DAYS_SELF = -(-SELF // GAIN_MID)                           # 35
+DAYS_FIRM = -(-FIRM // GAIN_MID)                           # 83
 RANGE_SELF = (-(-SELF // round(GAIN * HIGH)), -(-SELF // round(GAIN * LOW)))
 CHAIN_DAY = 31_224                                         # the chain's profit a day before the factory
 CHAIN_INV = 794_635                                        # 4 shops and the depot, deposits included
@@ -772,7 +774,7 @@ LOAN = 280_000
 LOAN_INT = int(LOAN * 12 * 0.7 / 100 / 60)                 # 392 a day
 LOAN_REPAY = max(5, LOAN // 240)                           # 1,166 a day
 LOAN_DAYS = -(-LOAN // LOAN_REPAY)
-LOAN_OWN = -(-(SELF - LOAN) // (GAIN - LOAN_INT - LOAN_REPAY))
+LOAN_OWN = -(-(SELF - LOAN) // (GAIN_MID - LOAN_INT - LOAN_REPAY))
 
 # after: production started day 176, today day 192
 STARTED, TODAY = 176, 192
@@ -898,7 +900,7 @@ def planbar(where: bool = True, inv: str = "self", be: bool = True, stage: str =
         total, how = (FIRM, "Installation firm") if inv == "firm" else (SELF, "Self-installation")
         i = f'<b class="m">{money(total)}</b><small>{how} · all in</small>'
     days = DAYS_FIRM if inv == "firm" else DAYS_SELF
-    b = (f'<b class="m">~{days} days</b><small>adds {money(GAIN)} a day to the chain</small>' if be and inv != "none"
+    b = (f'<b class="m">~{days} days</b><small>adds about {money(GAIN_MID)} a day to the chain</small>' if be and inv != "none"
          else '<b class="dim">–</b><small>after the investment</small>')
     if stage:
         b = stage
@@ -944,12 +946,12 @@ def make_table(pick: str = "") -> str:
         k = machines_for(p)
         kit = KIT[ws] * k
         save = saves_a_day(p, k)
-        days = kit / save
+        days = -(-kit // save)
         w = min(100, days / 200 * 100)
         cls = "pick" if p in pick.split("|") else ""
         rows.append(f'<tr class="{cls}"><td class="l"><b>{p}</b><span class="sub">{WS[ws][0]} · {rate}/h each</span></td>'
                     f'<td>{n(SOLD_BY[p] * 7)}</td><td>{money(SOLD_BY[p] * 7 * WHOLESALE[p])}</td><td>{k}</td><td>{money(kit)}</td>'
-                    f'<td>{money(save)}</td><td><span class="ff-days{" w" if days > 60 else ""}"><i style="--w:{w:.0f}%"></i>{days:.0f} days</span></td>'
+                    f'<td>{money(save)}</td><td><span class="ff-days{" w" if days > 60 else ""}"><i style="--w:{w:.0f}%"></i>{days} days</span></td>'
                     f'<td class="go"><a href="Recipe.dc.html" aria-label="Plan {p}">{svg("chev")}</a></td></tr>')
     rows.append('<tr class="none"><td class="l"><b>Margarita, Martini</b><span class="sub">Bottled Goods Workstation · your shops sell none yet</span></td>'
                 '<td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>no estimate</td><td></td></tr>')
@@ -960,8 +962,8 @@ def make_table(pick: str = "") -> str:
 def plans_list() -> str:
     return f"""<div class="os-plans">
   <a class="os-plan" href="Checklist.dc.html"><span><b>Whisky and Wine</b><small>4 22nd Street · Industry City · for Brightwater Spirits</small></span>
-    <span><span class="os-lab">Until production</span><span class="os-meter w" style="--w:33%"><i></i></span></span>
-    <span class="v">2 of 9</span><span class="v">{money(SELF)}</span>{svg("chev")}</a>
+    <span><span class="os-lab">Until production</span><span class="os-meter w" style="--w:20%"><i></i></span></span>
+    <span class="v">2 of 10</span><span class="v">{money(SELF)}</span>{svg("chev")}</a>
   <a class="os-plan" href="#"><span><b>Novel</b><small>no location yet · for Brightwater Books</small></span>
     <span><span class="os-lab">Where</span><span class="os-meter" style="--w:17%"><i></i></span></span>
     <span class="v os-dim">–</span><span class="v os-dim">–</span>{svg("chev")}</a>
@@ -1003,7 +1005,7 @@ def links() -> str:
 <div class="os-kpis ff-ghost" style="margin-top:12px;grid-template-columns:repeat(3,minmax(0,1fr))">
   <div class="kpi"><span class="lab">Machines</span><span class="v">3</span></div>
   <div class="kpi"><span class="lab">Made / week</span><span class="v">25,200</span></div>
-  <div class="kpi"><span class="lab">Raw material / week</span><span class="v">75,600</span></div></div>"""
+  <div class="kpi"><span class="lab">Raw material / week</span><span class="v">{n(sum(RAW_WK.values()))}</span></div></div>"""
     over = f"""<div class="ff-frame" style="padding-top:14px"><div class="ff-planhead" style="margin-top:0"><h3 style="font-size:15px">Overview · tasks</h3></div>
 <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px">
   <a class="os-type" href="#">Find a suitable location</a>
@@ -1070,7 +1072,8 @@ def recipe() -> str:
     return f"""{ctl(0)}
 {planbar(where=False, inv="none", be=False)}
 <div class="os-h"><h2>Lines</h2><span class="c">Brightwater Spirits · 4 liquor stores</span>
-  <div class="aside"><span class="os-lab">Size to</span><nav class="os-seg"><a class="on" href="#">Peak day</a><a href="#">Average day</a></nav></div></div>
+  <div class="aside"><span class="os-lab">Size to</span><nav class="os-seg"><a href="#">Peak day</a><a href="#">Average day</a><a class="on" href="#">Custom</a></nav>
+  <span class="os-dim" style="font-size:12px">peak day: Wine ×2</span></div></div>
 {lines_table()}
 <div class="ff-kit">{svg("gear", "os-ico")}<span><b>One Bottled Goods Workstation</b> = {kit} = <span class="m">{money(KIT["bottled"])}</span></span>
   <span class="aside">Factory Supply Depot · 2 25th Street</span></div>
@@ -1083,8 +1086,8 @@ def recipe() -> str:
 def no_depot() -> str:
     return f"""{ctl(0, "Whisky and Wine")}
 {planbar(where=False, inv="none", be=False)}
-<div class="ff-note warn">{svg("crate")}<span><b>No depot yet.</b> Your liquor stores are stocked by hand from wholesalers. A factory delivers only to depots
-  (and piers), so this plan adds one: a warehouse building, pallet shelves to receive, a van and a driver, and a Logistics Manager for its delivery plan.</span>
+<div class="ff-note warn">{svg("crate")}<span><b>No depot yet.</b> Your liquor stores are stocked by hand from wholesalers. To supply these shops, the
+  factory needs a depot, so this plan adds one: a warehouse building, pallet shelves to receive, a van and a driver, and a Logistics Manager for its delivery plan.</span>
   <a class="os-btn" href="#">Without a depot</a></div>
 {flow("none")}
 <div class="os-h"><h2>What the depot adds</h2><span class="c">step 3 counts it</span></div>
@@ -1233,8 +1236,8 @@ def be_chart(w: int = 520, h: int = 250) -> str:
     lo = f'M{X(0):.1f},{Y(0):.1f} L{X(dmax):.1f},{Y(GAIN * LOW * dmax):.1f}'
     hi = f'L{X(dmax):.1f},{Y(GAIN * HIGH * dmax):.1f}'
     band = f'M{X(0):.1f},{Y(0):.1f} L{X(dmax):.1f},{Y(GAIN * HIGH * dmax):.1f} L{X(dmax):.1f},{Y(GAIN * LOW * dmax):.1f} Z'
-    line = f'M{X(0):.1f},{Y(0):.1f} L{X(dmax):.1f},{Y(GAIN * dmax):.1f}'
-    df, ds = FIRM / GAIN, SELF / GAIN
+    line = f'M{X(0):.1f},{Y(0):.1f} L{X(dmax):.1f},{Y(GAIN_MID * dmax):.1f}'
+    df, ds = FIRM / GAIN_MID, SELF / GAIN_MID
     return f"""<svg class="os-chart" viewBox="0 0 {w} {h}" role="img" aria-label="What the factory adds to the chain, against the investment">
 {"".join(g)}
 <line class="ax" x1="{x0}" x2="{x1}" y1="{y1}" y2="{y1}"></line>
@@ -1263,7 +1266,8 @@ def gain_table() -> str:
             ("Headquarters", "a Purchasing Agent and a Logistics Manager", -COST_DAY["hq"], "n"),
             ("Rent", NEW["addr"], -COST_DAY["rent"], "n")]
     body = "".join(f'<tr><td class="l">{t}<small>{s}</small></td><td class="v {c}">{money(v, True) if v > 0 else money(v)}</td></tr>' for t, s, v, c in rows)
-    return f'<table class="ff-gain"><tbody>{body}<tr class="tot"><td class="l">Added to the chain a day</td><td class="v">{money(GAIN, True)}</td></tr></tbody></table>'
+    return (f'<table class="ff-gain"><tbody>{body}<tr class="tot"><td class="l">Added to the chain a day, as planned</td><td class="v">{money(GAIN, True)}</td></tr>'
+            f'<tr><td class="l">The estimate<small>the middle of 80–105% of plan, as for a store</small></td><td class="v p">{money(GAIN_MID, True)}</td></tr></tbody></table>')
 
 
 def young_chain() -> dict:
@@ -1273,7 +1277,7 @@ def young_chain() -> dict:
     start = 175
     at_start = so_far + (start - DAY_NOW) * CHAIN_DAY
     inv = CHAIN_INV + SELF
-    with_ = start + -(-(inv - at_start) // (CHAIN_DAY + GAIN))
+    with_ = start + -(-(inv - at_start) // (CHAIN_DAY + GAIN_MID))
     return {"without": int(without), "with": int(with_), "start": start, "pct_at_start": at_start / inv * 100}
 
 
@@ -1281,11 +1285,11 @@ def chain_rows(young: bool = False) -> str:
     if young:
         y = young_chain()
         rows = [("Without the factory", "the chain as it runs", money(CHAIN_DAY), "71%", f'<span class="v w">day {y["without"]}</span>'),
-                ("With the factory", f"production from day {y['start']} · +{money(SELF)} invested", money(CHAIN_DAY + GAIN),
+                ("With the factory", f"production from day {y['start']} · +{money(SELF)} invested", money(CHAIN_DAY + GAIN_MID),
                  f'{y["pct_at_start"]:.0f}% on day {y["start"]}', f'<span class="v w">day {y["with"]}</span>')]
     else:
         rows = [("Without the factory", f"4 shops and the depot · {money(CHAIN_INV)} invested", money(CHAIN_DAY), "190%", '<span class="v ok">day 118</span>'),
-                ("With the factory", f"{money(CHAIN_INV + SELF)} invested", money(CHAIN_DAY + GAIN), "111%", '<span class="v ok">stays paid back</span>')]
+                ("With the factory", f"{money(CHAIN_INV + SELF)} invested", money(CHAIN_DAY + GAIN_MID), "111%", '<span class="v ok">day 170 · stays paid back</span>')]
     out = '<div class="ff-chainrow h"><span></span><span class="v">Profit a day</span><span class="v">Paid back</span><span class="v">Break even</span></div>'
     for t, s, p, pct, d in rows:
         out += f'<div class="ff-chainrow"><span><b>{t}</b><small>{s}</small></span><span class="v">{p}</span><span class="v">{pct}</span>{d}</div>'
@@ -1321,7 +1325,7 @@ def break_even() -> str:
   </section>
 </div>
 <section class="os-card" style="margin-top:18px">
-  <div class="ff-abh"><span class="ff-ab">B</span><b>The chain as one</b><small>Businesses › Results: the chain's whole investment against its whole profit (_chains, _payback)</small></div>
+  <div class="ff-abh"><span class="ff-ab">B</span><b>The chain as one</b><small>Businesses › Results: the chain's whole investment against its whole profit</small></div>
   {chain_rows()}
 </section>
 {finance()}"""
@@ -1330,10 +1334,12 @@ def break_even() -> str:
 def break_even_states() -> str:
     def blk(label: str, sub: str, inner: str) -> str:
         return f'<div><div class="os-state" style="margin:0 0 12px"><b>{label}</b><span>{sub}</span></div>{inner}</div>'
-    young = f'<section class="os-card">{chain_rows(True)}<p class="os-dim" style="font-size:12px;margin:10px 0 0">The factory pushes the chain\'s break even back 11 days, then adds {money(GAIN)} a day. A alone reads {DAYS_SELF} days.</p></section>'
+    y = young_chain()
+    young = (f'<section class="os-card">{chain_rows(True)}<p class="os-dim" style="font-size:12px;margin:10px 0 0">The factory pushes the chain\'s break even back '
+             f'{y["with"] - y["without"]} days, then adds about {money(GAIN_MID)} a day. A alone reads {DAYS_SELF} days.</p></section>')
     big = (f'<div class="ff-note neg" style="margin-top:0">{svg("alert")}<span><b>Not paying back at this size.</b> Brightwater Wear\'s 2 clothing stores take 600 Clothing (Modern Cheap Female) '
            f'a day; one Clothing Workstation makes 1,440 and eats Fabric (Cheap) for all of it: {money(-1080)} a day before wages. '
-           f'Send the rest to a pier from the delivery plan, or keep buying it in.</span><a class="os-btn" href="#">Send the surplus to a pier</a></div>')
+           f'Send the rest to a pier from the delivery plan, or keep buying it in.</span>{ingame("<b>BizMan › Logistics</b>: add a pier to the factory\'s delivery plan.")}</div>')
     none = (f'<div class="os-none"><div><span class="os-lab">Self-installation</span><b>{money(KIT["bottled"] + 30_000 + DELIVERY + TRUCK[1] + 36_320)}</b><small>investment</small></div>'
             f'<div><span class="os-lab">Added to a chain</span><b class="dim">No estimate</b><small>none of your shops sells Margarita</small></div>'
             f'<div><span class="os-lab">Break even</span><b class="dim">–</b><small>pier export prices are not in the save</small></div></div>')
@@ -1377,6 +1383,8 @@ def checklist(linked: bool = True) -> str:
         ck("", "list", f"Recipes {hand()}", "Whisky on workstations 1 and 2, Bottle of Wine on 3 · none set",
            ingame(f"<b>BizMan › {NEW['addr']} › Production</b>: pick each workstation's recipe.")),
         ck("done", "truck", "Truck", f"{TRUCK[0]} parked at {NEW['addr']}", when("day 171")),
+        ck("", "key", f"Driver on the truck {hand()}", f"The {TRUCK[0]} has no driver assigned",
+           ingame(f"<b>BizMan › {NEW['addr']} › Vehicles</b>: assign the Delivery Driver to the {TRUCK[0]}, once hired.")),
     ])
     people = "".join([
         ck("", "people", "Staff for the machines", f"0 of {WORKERS} Factory Workers · {MACHINE_H} h a week, 3 machines around the clock · 1 Delivery Driver at 95% skill or more · "
@@ -1398,7 +1406,7 @@ def checklist(linked: bool = True) -> str:
                               '<a class="os-btn" href="#">How to link</a></div>')
     return f"""{ctl(4)}
 {planbar(inv="self")}
-<div class="os-prog"><h2>Until production</h2><span class="m" style="--w:22%"><i></i></span><span class="c">2 of 9</span>
+<div class="os-prog"><h2>Until production</h2><span class="m" style="--w:20%"><i></i></span><span class="c">2 of 10</span>
   <div class="aside">{live}<span>from the save · day 171, 14:05</span></div></div>
 <div class="ff-sub">The site</div><div class="os-cks">{setup}</div>
 <div class="ff-sub">People</div><div class="os-cks">{people}</div>
@@ -1411,7 +1419,7 @@ def hire_dialogs() -> str:
     sites = f"""<div class="ff-sites">
 <div class="ff-site"><div>{hood("Industry City")}{NEW["addr"]} · factory<small>3 machines · 24/7</small></div>
   <div class="ff-hr"><span><b>{WORKERS} Factory Workers</b><small>skill 85–100% · best first, equal skill to the lower wage</small></span><span class="v">{MACHINE_H} h</span><span class="v">{money(COST_DAY["workers"])}/d</span></div>
-  <div class="ff-hr"><span><b>1 Delivery Driver</b><small>96% · drives the {TRUCK[0]}</small></span><span class="v">{DRIVER_H} h</span><span class="v">{money(COST_DAY["driver"])}/d</span></div>
+  <div class="ff-hr"><span><b>1 Delivery Driver</b><small>96% · qualified for the {TRUCK[0]} (95%)</small></span><span class="v">{DRIVER_H} h</span><span class="v">{money(COST_DAY["driver"])}/d</span></div>
   <div class="ff-week">{week}</div></div>
 </div>"""
     hire = gw.dialog("hire", "Staff this factory", gw.where("IC", f"{NEW['addr']} · factory"),
@@ -1454,14 +1462,14 @@ def roi_chart(daily: list, w: int = 900, h: int = 270) -> str:
     recent = round(sum(daily[-7:]) / 7)
     fc_days = len(daily) + -(-(SELF - run) // recent)
     fc = f'M{X(len(daily)):.1f},{Y(run):.1f} L{X(fc_days):.1f},{Y(SELF):.1f}'
-    plan = f'M{X(0):.1f},{Y(0):.1f} L{X(dmax):.1f},{Y(GAIN * dmax):.1f}'
+    plan = f'M{X(0):.1f},{Y(0):.1f} L{X(dmax):.1f},{Y(GAIN_MID * dmax):.1f}'
     return f"""<svg class="os-chart" viewBox="0 0 {w} {h}" role="img" aria-label="What the factory added so far, against the plan">
 {"".join(g)}{bars}
 <line class="ax" x1="{x0}" x2="{x1}" y1="{y1}" y2="{y1}"></line>
 <line class="inv" x1="{x0}" x2="{x1}" y1="{Y(SELF):.1f}" y2="{Y(SELF):.1f}"></line>
 <text class="lbl w" x="{x0 + 6}" y="{Y(SELF) - 7:.1f}">Invested {money(SELF)}</text>
 <path class="plan" d="{plan}"></path>
-<text class="lbl i" x="{X(41):.1f}" y="{Y(GAIN * 41) - 10:.1f}" text-anchor="end">plan {money(GAIN)}/day</text>
+<text class="lbl i" x="{X(41):.1f}" y="{Y(GAIN_MID * 41) - 10:.1f}" text-anchor="end">plan {money(GAIN_MID)}/day</text>
 <polyline class="line" points="{" ".join(pts)}"></polyline>
 <path class="plan" style="stroke:var(--accent);opacity:.7" d="{fc}"></path>
 <line class="today" x1="{X(len(daily)):.1f}" x2="{X(len(daily)):.1f}" y1="{y0}" y2="{y1}"></line>
@@ -1522,7 +1530,7 @@ def running(low: bool = False) -> str:
 <div class="os-h"><h2>Plan and now</h2></div>
 <table class="os-pvsa"><thead><tr><th class="l"></th><th>Plan</th><th>Now</th><th>Difference</th></tr></thead><tbody>
 <tr><td class="l">Investment</td><td>{money(SELF)}</td><td>{money(SELF)}</td><td>–</td></tr>
-<tr><td class="l">Added a day<span class="sub">last 7 days</span></td><td>{money(GAIN)}</td><td>{money(recent)}</td><td class="{"dn" if recent < GAIN else "d"}">{money(recent - GAIN, True)}</td></tr>
+<tr><td class="l">Added a day<span class="sub">last 7 days</span></td><td>{money(GAIN_MID)}</td><td>{money(recent)}</td><td class="{"dn" if recent < GAIN_MID else "d"}">{money(recent - GAIN_MID, True)}</td></tr>
 <tr><td class="l">Break even</td><td>{DAYS_SELF} days after production starts</td><td>{fc} days</td><td class="{"dn" if fc > DAYS_SELF else "d"}">{fc - DAYS_SELF:+d} day{"" if abs(fc - DAYS_SELF) == 1 else "s"}</td></tr>
 </tbody></table>
 {done}"""
@@ -1537,34 +1545,44 @@ def be_cell(kind: str, big: str, small: str = "", meter: int | None = None) -> s
     return f'<td class="be"><b class="{kind}">{big}</b>{s}{m}</td>'
 
 
+FACTORY_OPENED = 170   # the lease (creationDay); production from STARTED
+
+
 def results() -> str:
     fday = STARTED + FC_DAYS
-    port = [
-        ("chain", CHAIN, "4 shops, 1 depot, 1 factory", CHAIN_DAY + RECENT, CHAIN_INV + SELF, be_cell("ok", "Day 118", f"the factory: day {fday}")),
-        ("kid", "36 Fifth Avenue", "Garment District · opened day 61", 7_890, 200_770, be_cell("ok", "Day 92", "31 days after opening")),
-        ("kid", "14 First Avenue", "Hell's Kitchen · opened day 88", 10_940, 211_290, be_cell("ok", "Day 113", "25 days after opening")),
-        ("kid", "8 Sixth Avenue", "Murray Hill · opened day 118", 7_210, 199_690, be_cell("ok", "Day 146", "28 days after opening")),
-        ("kid", "18 Second Avenue", "Midtown · opened day 147", 9_120, 99_115, be_cell("ok", "Day 159", "12 days after opening")),
+    # the shops' goods bill fell when the factory began delivering, so their profit rose
+    kids = [
+        ("kid", "36 Fifth Avenue", "Garment District · opened day 61", 12_010, 200_770, be_cell("ok", "Day 92", "31 days after opening")),
+        ("kid", "14 First Avenue", "Hell's Kitchen · opened day 88", 16_640, 211_290, be_cell("ok", "Day 113", "25 days after opening")),
+        ("kid", "8 Sixth Avenue", "Murray Hill · opened day 118", 10_980, 199_690, be_cell("ok", "Day 146", "28 days after opening")),
+        ("kid", "18 Second Avenue", "Midtown · opened day 147", 13_874, 99_115, be_cell("ok", "Day 159", "12 days after opening")),
         ("kid", DEPOT["name"], f"{DEPOT['addr']} · depot", -980, 83_770, be_cell("dim", "Cost centre", "counted in the chain")),
-        ("kid", NEW["addr"], f"factory · production since day {STARTED}", -4_060, SELF, be_cell("ok", f"Day {fday}", f"{FC_DAYS} days · what it adds to the chain")),
+        ("kid", NEW["addr"], f"factory · opened day {FACTORY_OPENED}, producing since {STARTED}", -4_060, SELF,
+         be_cell("ok", f"Day {fday}", f"{FC_DAYS} days · what it adds to the chain")),
     ]
+    port = [("chain", CHAIN, "4 shops, 1 depot, 1 factory", sum(k[3] for k in kids), sum(k[4] for k in kids),
+             be_cell("ok", f"Day {FACTORY_OPENED}", "covered when the factory opened · day 118 before it"))] + kids
     rows = []
     for kind, name, sub, prof, inv, be in port:
         chev = f'<span class="chev">{svg("chev")}</span>' if kind == "chain" else ""
+        inv_cell = (f'{money(inv)}<span class="sub">with the truck · proposed</span>' if name == NEW["addr"]
+                    else f'{money(inv)}<span class="sub">with the truck · proposed</span>' if kind == "chain" else money(inv))
         rows.append(f'<tr class="{kind}{" open" if kind == "chain" else ""}"><td class="l">{chev}<b>{name}</b><span class="sub">{sub}</span></td>'
-                    f'<td class="{"pos" if prof > 0 else "neg"}">{money(prof)}</td><td>{money(inv)}</td>{be}</tr>')
+                    f'<td class="{"pos" if prof > 0 else "neg"}">{money(prof)}</td><td>{inv_cell}</td>{be}</tr>')
     hist = f"""<div class="ff-hist">
   <div class="ok"><span class="d">day {fday}</span><b>The factory broke even</b>, {FC_DAYS} days after production started (plan {DAYS_SELF})</div>
   <div><span class="d">day {STARTED}</span>Production started at {NEW["addr"]}: Whisky ×2, Wine ×1</div>
+  <div class="ok"><span class="d">day {FACTORY_OPENED}</span><b>The chain stays paid back</b> with the factory's {money(SELF)}: its profit so far already covers it</div>
   <div class="ok"><span class="d">day 159</span><b>18 Second Avenue broke even</b>, 12 days after opening</div>
-  <div class="ok"><span class="d">day 118</span><b>The chain broke even</b>, 57 days after its first opening</div></div>"""
+  <div class="ok"><span class="d">day 118</span><b>The chain broke even</b>, 57 days after its first opening (before the factory)</div></div>
+<p class="os-dim" style="font-size:11.5px;margin:12px 0 0">Invested counts the factory's truck and delivery ({money(TRUCK[1] + DELIVERY)}), which Results leaves out today: {money(SELF - TRUCK[1] - DELIVERY)} for the factory.</p>"""
     return f"""<div class="os-ctl"><nav class="os-seg" aria-label="Period"><a class="on" href="#">30 days</a><a href="#">All</a><a href="#">By weekday</a></nav>
   <div class="aside"><span class="os-lab">Interior</span><nav class="os-seg" aria-label="Interior counted as"><a href="#">Installation firm</a><a class="on" href="#">Self-installation</a></nav></div></div>
-<div class="os-two" style="margin-top:8px;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)">
+<div style="margin-top:8px">
   <div><div class="os-h"><h2>Portfolio</h2></div>
     <table class="os-port"><thead><tr><th class="l">Business</th><th>Profit a day</th><th>Invested</th><th class="l">Break even</th></tr></thead>
     <tbody>{"".join(rows)}</tbody></table></div>
-  <div><div class="os-h"><h2>{CHAIN} · history</h2></div><section class="os-card">{hist}</section></div>
+  <div style="max-width:720px"><div class="os-h"><h2>{CHAIN} · history</h2></div><section class="os-card">{hist}</section></div>
 </div>"""
 
 
@@ -1625,14 +1643,14 @@ BOARDS = [
     ("LocationFar.dc.html", "2b · Where: across the river from the depot", lambda: page(E, "openf", location(True)), W, 1200, 1, ""),
     ("Investment.dc.html", "3 · Investment: self-installation", lambda: page(E, "openf", investment_self()), W, 1180, 2, ""),
     ("InvestmentFirm.dc.html", "3b · Investment: installation firm", lambda: page(E, "openf", investment_firm()), W, 1000, 2, ""),
-    ("BreakEven.dc.html", "4 · Break even: A what the factory adds, B the chain as one", lambda: page(E, "openf", break_even()), W, 1130, 2, ""),
+    ("BreakEven.dc.html", "4 · Break even: A what the factory adds, B the chain as one", lambda: page(E, "openf", break_even()), W, 1200, 2, ""),
     ("BreakEvenStates.dc.html", "4b · Break even: chain not paid back, too big, nothing to replace", break_even_states, 1000, 800, 2, ""),
-    ("Checklist.dc.html", "5 · Until production · game linked", lambda: page(E, "openf", checklist(True), "Day 171 · Fri 14:05"), W, 1380, 3, ""),
-    ("ChecklistNoLink.dc.html", "5b · Until production · not linked", lambda: page(E, "openf", checklist(False), "Day 171 · Fri 14:05"), W, 1480, 3, ""),
+    ("Checklist.dc.html", "5 · Until production · game linked", lambda: page(E, "openf", checklist(True), "Day 171 · Fri 14:05"), W, 1450, 3, ""),
+    ("ChecklistNoLink.dc.html", "5b · Until production · not linked", lambda: page(E, "openf", checklist(False), "Day 171 · Fri 14:05"), W, 1560, 3, ""),
     ("Hire.dc.html", "5c, 5d · The quick buttons' dialogs", hire_dialogs, 1120, 900, 3, "gw-board"),
     ("Running.dc.html", "6 · Running: output and payback", lambda: page(E, "openf", running(), f"Day {TODAY} · Sun 09:40"), W, 1240, 4, ""),
     ("RunningBelow.dc.html", "6b · Running: output below plan", lambda: page(E, "openf", running(True), f"Day {TODAY} · Sun 09:40"), W, 1280, 4, ""),
-    ("Results.dc.html", "7 · Businesses › Results: the chain row and its history", lambda: page("businesses", "results", results(), f"Day {STARTED + FC_DAYS + 3} · Wed 11:00"), W, 820, 4, ""),
+    ("Results.dc.html", "7 · Businesses › Results: the chain row and its history", lambda: page("businesses", "results", results(), f"Day {STARTED + FC_DAYS + 3} · Wed 11:00"), W, 1180, 4, ""),
 ]
 
 ROW_TITLES = ["Open a factory: where it lives", "What to make, and where", "The investment and its break even",
@@ -1691,7 +1709,7 @@ def build(preview: bool = False) -> None:
              "pages": [], "boards": boards, "order": order, "notes": notes, "designSystems": []}
     (ROOT / "canvas.json").write_text(json.dumps(index, indent=1, ensure_ascii=False), encoding="utf-8", newline="\n")
     print("wrote", len(order), "artboards;", f"self {SELF:,} firm {FIRM:,} items {ITEMS_TOTAL:,} gain {GAIN:,}/day "
-          f"days {DAYS_SELF}/{DAYS_FIRM} range {RANGE_SELF}; raw {RAW_COST_WK:,.0f}/wk {RAW_WK}; workers {WORKERS}; "
+          f"mid {GAIN_MID:,} days {DAYS_SELF}/{DAYS_FIRM} range {RANGE_SELF}; raw {RAW_COST_WK:,.0f}/wk {RAW_WK}; workers {WORKERS}; "
           f"loan {LOAN_INT}+{LOAN_REPAY}/day own {LOAN_OWN} d; so far {SO_FAR:,} recent {RECENT:,} forecast {FC_DAYS}; low {FC_LOW}")
 
 

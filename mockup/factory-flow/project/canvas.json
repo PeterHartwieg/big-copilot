@@ -86,7 +86,7 @@
    "x": 2720,
    "y": 2940,
    "w": 1280,
-   "h": 1130,
+   "h": 1200,
    "title": "4 · Break even: A what the factory adds, B the chain as one",
    "is_interactive": true
   },
@@ -100,23 +100,23 @@
   },
   "Checklist.dc.html": {
    "x": 0,
-   "y": 4540,
+   "y": 4560,
    "w": 1280,
-   "h": 1380,
+   "h": 1450,
    "title": "5 · Until production · game linked",
    "is_interactive": true
   },
   "ChecklistNoLink.dc.html": {
    "x": 1360,
-   "y": 4540,
+   "y": 4560,
    "w": 1280,
-   "h": 1480,
+   "h": 1560,
    "title": "5b · Until production · not linked",
    "is_interactive": true
   },
   "Hire.dc.html": {
    "x": 2720,
-   "y": 4540,
+   "y": 4560,
    "w": 1120,
    "h": 900,
    "title": "5c, 5d · The quick buttons' dialogs",
@@ -124,7 +124,7 @@
   },
   "Running.dc.html": {
    "x": 0,
-   "y": 6440,
+   "y": 6540,
    "w": 1280,
    "h": 1240,
    "title": "6 · Running: output and payback",
@@ -132,7 +132,7 @@
   },
   "RunningBelow.dc.html": {
    "x": 1360,
-   "y": 6440,
+   "y": 6540,
    "w": 1280,
    "h": 1280,
    "title": "6b · Running: output below plan",
@@ -140,9 +140,9 @@
   },
   "Results.dc.html": {
    "x": 2720,
-   "y": 6440,
+   "y": 6540,
    "w": 1280,
-   "h": 820,
+   "h": 1180,
    "title": "7 · Businesses › Results: the chain row and its history",
    "is_interactive": true
   }
@@ -190,14 +190,14 @@
   },
   "row3": {
    "x": 0,
-   "y": 4300,
+   "y": 4320,
    "text": "Until production runs",
    "kind": "title1",
    "maxW": 5440
   },
   "row4": {
    "x": 0,
-   "y": 6200,
+   "y": 6300,
    "text": "Running, and paid back",
    "kind": "title1",
    "maxW": 5440
