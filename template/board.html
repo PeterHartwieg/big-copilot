@@ -2727,7 +2727,7 @@ body:has(#changelogDialog[open]){overflow:hidden}
   .heat .cell .rv2{left:2px;right:2px;gap:1px;justify-content:flex-end;overflow:hidden}
   .heat .cell .rv2 i{width:2px;height:2px}
   .planstats{grid-template-columns:minmax(0,1fr);gap:10px}
-  #planBody > table, #ingTable{display:block;overflow-x:auto;max-width:100%}
+  #planBody .scrollx > table, #ingTable{display:block;overflow-x:auto;max-width:100%}
 }
 /* Today's figures are sized by their own length (--n, set by drawKpis()):
    a figure keeps its 30 px (24 on a phone) until it would fill more than
@@ -4091,7 +4091,7 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
 .ff-make td.go{width:1%;padding-right:2px}
 .ff-make td.go button{display:inline-grid;place-items:center;width:30px;height:30px;padding:0;border-radius:8px;border:1px solid var(--rule);background:none;color:var(--ink-2);cursor:pointer}
 .ff-make td.go button:hover{border-color:var(--ink-3);color:var(--ink)}
-.ff-delta{margin-left:8px;font:500 11.5px/1 "IBM Plex Mono",monospace;color:var(--accent);white-space:nowrap}
+.ff-delta{display:block;margin-top:4px;font:500 11.5px/1 "IBM Plex Mono",monospace;color:var(--accent);white-space:nowrap}
 .ff-delta.same{color:var(--ink-3)}
 .ff-saves{margin:12px 0 0;font-size:12.5px;line-height:1.45;color:var(--ink-3)}
 .ff-short{display:grid;grid-template-columns:14px 18px minmax(0,1fr) auto;gap:12px;align-items:center;min-height:54px;margin-top:12px;padding:8px 4px;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}

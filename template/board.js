@@ -12810,21 +12810,22 @@ function drawPlan(){
   /* The order-ahead table belongs to a factory the player runs, in step 1. */
   ofIngNone = none;
   if(ing) ing.hidden = none || !String(ing.dataset.sub || "").split(" ").includes(sub.growth) || ofStep !== "what" || !ofIsOwned();
+  /* The table scrolls inside its own box on a narrow window (.scrollx). */
   $("planBody").innerHTML = none ? `
-    <table data-pershop="${perShop}" data-shops="${shops}" data-peak="${D.plan.peak || 1}" data-products="${cat[planType].products.length + added.length}" data-ingmeta="${attr(JSON.stringify(meta))}">
+    <div class="scrollx"><table data-pershop="${perShop}" data-shops="${shops}" data-peak="${D.plan.peak || 1}" data-products="${cat[planType].products.length + added.length}" data-ingmeta="${attr(JSON.stringify(meta))}">
       <thead><tr><th>${tt("gr.col.product", "Product")}</th><th class="l" colspan="4"></th></tr></thead>
       <tbody>${lines.join("")}</tbody>
-    </table>` : `
+    </table></div>` : `
     <div class="planstats">
       <div class="planstat"><span class="lab">${tt("gr.stat.machines", "Machines")}</span><div class="v" id="vMachines"></div></div>
       <div class="planstat" id="vMadeTile"><span class="lab">${tt("gr.stat.made", "Made / week")}</span><div class="v"><span id="vMade"></span><small>${tt("gr.stat.units", "units")}</small></div></div>
       <div class="planstat"><span class="lab">${tt("gr.stat.raw", "Raw material / week")}</span><div class="v"><span id="vRaw"></span><small>${tt("gr.stat.import", "units to import")}</small></div></div>
     </div>
-    <table data-pershop="${perShop}" data-shops="${shops}" data-peak="${D.plan.peak || 1}" data-products="${cat[planType].products.length + added.length}" data-ingmeta="${attr(JSON.stringify(meta))}">
+    <div class="scrollx"><table data-pershop="${perShop}" data-shops="${shops}" data-peak="${D.plan.peak || 1}" data-products="${cat[planType].products.length + added.length}" data-ingmeta="${attr(JSON.stringify(meta))}">
       <thead><tr><th>${tt("gr.col.product", "Product")}</th><th class="l">${tt("gr.col.machines", "Machines")}</th><th>${tt("gr.col.made", "Made / week")}</th><th>${
         tt("gr.col.supplies", "Supplies")}</th><th class="l">${tt("gr.col.raw", "Raw material / week")}</th></tr></thead>
       <tbody>${lines.join("")}</tbody>
-    </table>
+    </table></div>
     <p class="quiet" id="vKit" style="margin:12px 0 0"></p>`;
   /* No sentence under the table (Peter's testing, A14): each row's Supplies
      cell says what the shops take and what is over, and the Made tile's tip
@@ -13196,7 +13197,7 @@ function ofForHtml(){
   const owned = ofOwned();
   const btn = (key, label, ico) => `<button type="button" class="${planTarget === key ? "on" : ""}" data-of-for="${attr(key)}" aria-pressed="${planTarget === key}">${ofIcon(ico)}${label}</button>`;
   return `<span class="os-lab">${tt("gr.of.for", "For")}</span><nav class="ff-kind" aria-label="${attr(tt("gr.of.forAria", "What the plan is for"))}">${
-    btn("new", tt("gr.of.for.new", "New factory"), "plus")}${owned.map(f => btn(f.key, spEsc(f.b.address || shortName(f.b)), "factory")).join("")}</nav>`;
+    btn("new", tt("gr.of.for.new", "New factory"), "plus")}${owned.map(f => btn(f.key, `<span translate="no">${spEsc(f.b.address || shortName(f.b))}</span>`, "factory")).join("")}</nav>`;
 }
 /* The plan in one strip: what, where, the investment and the running costs,
    which sit apart behind a dashed edge because they are not part of it. */
@@ -13216,8 +13217,8 @@ function ofStripHtml(plan){
       tt("gr.of.strip.ws", {one: "{n} workstation · for your {type} shops", other: "{n} workstations · for your {type} shops"}, {n: ws, type: spEsc(typeName)})}</small>`
     : `<b class="dim">${tt("gr.of.strip.none", "No machines yet")}</b><small>${tt("gr.of.strip.shops", "for your {type} shops", {type: spEsc(typeName)})}</small>`;
   const home = owned ? ofTargetBuilding() : null, b = owned ? null : plan && ofBuilding(plan.key);
-  const where = owned ? `<b>${spEsc(home ? home.address : planTarget)}</b><small>${tt("gr.of.strip.yours", "yours · nothing to rent")}</small>`
-    : b ? `<b>${spEsc(b.address)}</b><small>${tt("gr.os.strip.where", "{hood} · {layout} · {m2} m² · rent {rent}/day",
+  const where = owned ? `<b translate="no">${spEsc(home ? home.address : planTarget)}</b><small>${tt("gr.of.strip.yours", "yours · nothing to rent")}</small>`
+    : b ? `<b translate="no">${spEsc(b.address)}</b><small>${tt("gr.os.strip.where", "{hood} · {layout} · {m2} m² · rent {rent}/day",
       {hood: hoodName(b.hood), layout: osLayout(b), m2: num(b.m2), rent: fmt(b.rent || 0)})}</small>`
     : `<b class="dim">${tt("gr.os.strip.nowhere", "Not picked yet")}</b><small>${tt("gr.of.strip.anysize", "a warehouse building, any size")}</small>`;
   const inv = ofInvestment(plan), mode = ofMode(plan);
@@ -13302,13 +13303,13 @@ function ofFlowHtml(plan){
   const depots = (D.businesses || []).filter(x => x.typeSlug === OF_DEPOT && x.status !== "vacant");
   const shops = (D.businesses || []).filter(x => x.typeSlug === planType && x.status !== "vacant");
   if(!shops.length) return "";
-  const node = (cls, ico, title, sub) => `<div class="ff-node ${cls}"><span class="ic">${ofIcon(ico)}</span><span><b>${title}</b><small>${sub}</small></span></div>`;
+  const node = (cls, ico, title, sub, named) => `<div class="ff-node ${cls}"><span class="ic">${ofIcon(ico)}</span><span><b${named ? ` translate="no"` : ""}>${title}</b><small>${sub}</small></span></div>`;
   const fac = node(owned ? "" : "new", "factory", spEsc(b ? b.address : tt("gr.of.flow.newFactory", "A new factory")),
-    owned ? tt("gr.of.flow.yours", "your factory") : b ? tt("gr.of.flow.new", "new factory · {hood}", {hood: hoodName(b.hood)}) : tt("gr.of.flow.where", "location not picked yet"));
-  const dep = depots.length === 1 ? node("", "crate", spEsc(depots[0].name), spEsc(depots[0].address || ""))
+    owned ? tt("gr.of.flow.yours", "your factory") : b ? tt("gr.of.flow.new", "new factory · {hood}", {hood: hoodName(b.hood)}) : tt("gr.of.flow.where", "location not picked yet"), !!b);
+  const dep = depots.length === 1 ? node("", "crate", spEsc(depots[0].name), `<span translate="no">${spEsc(depots[0].address || "")}</span>`, true)
     : depots.length ? node("", "crate", tt("gr.of.flow.depots", {one: "{n} depot", other: "{n} depots"}, {n: depots.length}), tt("gr.of.flow.depots.sub", "your depots"))
     : node("miss", "crate", tt("gr.of.flow.depot", "A depot"), ofWantsDepot(plan) ? tt("gr.of.flow.depot.adds", "none yet · the plan adds one") : tt("gr.of.flow.depot.none", "none yet"));
-  const chips = shops.slice(0, 5).map(s => `<span>${hoodHtml(s)}${spEsc(s.address || shortName(s))}</span>`).join("")
+  const chips = shops.slice(0, 5).map(s => `<span translate="no">${hoodHtml(s)}${spEsc(s.address || shortName(s))}</span>`).join("")
     + (shops.length > 5 ? `<span>${tt("gr.of.flow.more", "+{n} more", {n: shops.length - 5})}</span>` : "");
   return `<div class="ff-flow">${fac}<span class="ff-arrow" aria-hidden="true"></span>${dep}<span class="ff-arrow" aria-hidden="true"></span><div class="ff-shops">${chips}</div></div>`;
 }
@@ -13409,10 +13410,10 @@ function ofSelfHtml(inv){
     : tt("gr.of.inv.total.sub", {one: "one-off, upfront · {items} · {n} delivery · a truck · deposit", other: "one-off, upfront · {items} · {n} deliveries · a truck · deposit"},
       {n: inv.stores.length, items: tt("gr.os.inv.items", {one: "{n} item", other: "{n} items"}, {n: inv.items})});
   const pins = [...inv.stores.map((s, i) => [s.key, osLetter(i), "store"]), ...(inv.truck && truck.at ? [[truck.at, osLetter(inv.stores.length), "store"]] : []),
-    [inv.b.key, owned ? tt("gr.of.map.yours", "YOURS") : tt("gr.os.map.new", "NEW"), "new"], ...(inv.depot ? [[inv.depot.b.key, "D", "new"]] : [])];
+    [inv.b.key, owned ? tt("gr.of.map.yours", "F") : tt("gr.os.map.new", "NEW"), "new"], ...(inv.depot ? [[inv.depot.b.key, "D", "new"]] : [])];
   const legend = inv.stores.map((s, i) => `<div><i>${osLetter(i)}</i><span>${spEsc(((F.vendors || {})[s.key] || {}).n || s.key)}</span><b>${fmt(storeTotal(s))}</b></div>`).join("")
     + (inv.truck ? `<div><i>${osLetter(inv.stores.length)}</i><span>${spEsc(truck.dealer || "")}</span><b>${fmt(inv.truck)}</b></div>` : "")
-    + `<div><i class="n">${owned ? tt("gr.of.map.yours", "YOURS") : tt("gr.os.map.new", "NEW")}</i><span>${spEsc(inv.b.address)}</span><b></b></div>`;
+    + `<div><i class="n">${owned ? tt("gr.of.map.yours", "F") : tt("gr.os.map.new", "NEW")}</i><span>${spEsc(inv.b.address)}</span><b></b></div>`;
   return `<div class="os-self"><div>${cards}${dealer}${dep}${depot}${nothing}
     <div class="os-total"><span>${tt("gr.os.inv.total", "Investment")}</span><small>${sub}</small><b>${fmt(inv.self)}</b></div></div>
     <div><div class="os-mini" id="ofMini" data-pins="${attr(JSON.stringify(pins))}"></div><div class="os-maplist">${legend}</div></div></div>`;
