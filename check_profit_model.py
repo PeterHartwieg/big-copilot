@@ -6,7 +6,7 @@
 
 For each character's newest save at or above MIN_BUILD, extract() builds the payload
 and the board's own model (the "Expansion › Open a store" section of the board
-script in ba_dashboard.py, run in Node) prices each of the player's trading shops
+script in template/board.html, run in Node) prices each of the player's trading shops
 and offices on its own building, hours, promotion and satisfaction. The ratio is
 what the shop really earned a day over its last finished days
 (_own_shops(), goods at import prices) against what the rules give it. Above 1
@@ -85,7 +85,7 @@ def modded(save, path: str) -> bool:
 
 def board_model() -> str:
     """The Open a store section of the board script, as the page runs it."""
-    with open(os.path.join(HERE, "ba_dashboard.py"), encoding="utf-8") as fh:
+    with open(os.path.join(HERE, "template", "board.html"), encoding="utf-8") as fh:
         text = fh.read()
     start = text.index(START)
     return text[start:text.index(END, start)]

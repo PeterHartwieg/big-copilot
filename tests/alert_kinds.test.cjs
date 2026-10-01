@@ -8,7 +8,8 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 
-const source = fs.readFileSync(path.join(__dirname, '..', 'ba_dashboard.py'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.html'), 'utf8');
+const python = fs.readFileSync(path.join(__dirname, '..', 'ba_dashboard.py'), 'utf8');
 const {between} = require('./_slice.cjs');
 /* The board's words go through tt() (web/i18n.js), which every slice that
    writes them needs beside it. */
@@ -371,7 +372,7 @@ test('every finding kind with a site panel has an ALERT_EVIDENCE entry', () => {
 
 test('every finding kind has an ALERT_UNITS unit or is listed as carrying no money', () => {
   // The Python dict, from its opening line to its closing brace at column 0.
-  const table = between(source, 'ALERT_UNITS = {', '\n}');
+  const table = between(python, 'ALERT_UNITS = {', '\n}');
   const keys = [...table.matchAll(/^\s+"(\w+)":/gm)].map(m => m[1]);
   assert.ok(keys.length, 'no keys read out of ALERT_UNITS');
   registryGaps('ALERT_UNITS', keys, NOT_MONEY);

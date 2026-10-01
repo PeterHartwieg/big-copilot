@@ -13,7 +13,7 @@ The English is never kept in a file: it stays at the call site, beside its key
 (docs/architecture.md, "UI text"), and `extract` reads it from there:
 
 - scripts: tt("key", "English") and tt("key", {one: "...", other: "..."}) in the
-  board script (ba_dashboard.py's TEMPLATE), the landing (build_web.py's BANNER)
+  board script (template/board.html), the landing (build_web.py's BANNER)
   and web/*.js;
 - markup: data-tt="key" around English, and data-tt-title, -aria-label,
   -placeholder and -tip beside the attribute they fill;
@@ -57,7 +57,7 @@ if ROOT not in sys.path:
 SOURCE_DIR = os.path.join(ROOT, "i18n")
 # Beside <lang>.json and <lang>.base.json: the machine-drafted keys awaiting review.
 AI_SUFFIX = ".ai.json"
-# The scripts a page runs, beside the board script inside ba_dashboard.py.
+# The scripts a page runs, beside the board script in template/board.html.
 JS_FILES = ("web/i18n.js", "web/app.js", "web/update.js", "web/community.js", "web/map.js", "web/wiki.js")
 # A key is <area>.<thing>[.<part>]; the area names the page, and the pull
 # request that owns it (docs/architecture.md, "UI text").
@@ -399,7 +399,7 @@ def calls() -> list[dict]:
     import ba_dashboard
     import build_web
     found = []
-    found += markup_calls(ba_dashboard.TEMPLATE, "ba_dashboard.py", _file_line("ba_dashboard.py", 'TEMPLATE = r"""'))
+    found += markup_calls(ba_dashboard.load_template(), "template/board.html")
     found += markup_calls(build_web.BANNER, "build_web.py", _file_line("build_web.py", "BANNER = "))
     for landing in (False, True):
         found += markup_calls(ba_dashboard.footer_html(landing=landing, site=True), "ba_dashboard.py",

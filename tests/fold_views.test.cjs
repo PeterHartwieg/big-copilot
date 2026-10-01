@@ -475,7 +475,7 @@ test('a live refresh gives focus back to the chip that had it, and to nothing el
 test('renderAll asks which chip has focus before the chips are replaced', () => {
   // The order the refresh test above stands in for: fvChipFocus() read before
   // drawMast() and drawFooter(), and handed to drawDifficulty().
-  const src = fs.readFileSync(path.join(__dirname, '..', 'ba_dashboard.py'), 'utf8');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.html'), 'utf8');
   // The function up to its closing brace, the first "\n}" after the anchor.
   const body = require('./_slice.cjs').between(src, 'function renderAll(){', '\n}');
   const at = needle => { const i = body.indexOf(needle); assert.ok(i >= 0, needle); return i; };
