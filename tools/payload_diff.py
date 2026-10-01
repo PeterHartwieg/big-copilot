@@ -27,6 +27,7 @@ import json
 import multiprocessing
 import os
 import re
+import subprocess
 import sys
 import time
 from concurrent.futures import ProcessPoolExecutor
@@ -88,8 +89,12 @@ def _check_outdir(outdir: str) -> str | None:
     # research/ by name, not resolved: a research/ that links into tests/ does not count.
     repo = fold(os.path.realpath(ROOT))
     research = os.path.join(repo, "research")
-    if (full == repo or full.startswith(repo + os.sep)) and not full.startswith(research + os.sep):
-        return f"{outdir} is inside the repository; use research/<name> or a folder outside it"
+    if full == repo or full.startswith(repo + os.sep):
+        # Inside the checkout: under research/, and git must agree it is ignored there.
+        ignored = subprocess.run(["git", "-C", ROOT, "check-ignore", "-q", os.path.abspath(outdir)],
+                                 capture_output=True).returncode == 0
+        if not (full.startswith(research + os.sep) and ignored):
+            return f"{outdir} is inside the repository; use research/<name> or a folder outside it"
     if os.path.exists(outdir) and (not os.path.isdir(outdir) or os.listdir(outdir)):
         return f"{outdir} exists and is not an empty folder"
     return None
